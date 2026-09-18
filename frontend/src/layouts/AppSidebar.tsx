@@ -17,7 +17,6 @@ import {
   ExportOutlined,
   GithubOutlined,
   GlobalOutlined,
-  HeartOutlined,
   ImportOutlined,
   LogoutOutlined,
   MailOutlined,
@@ -41,16 +40,16 @@ import {
 import { HttpUtil } from '@/utils';
 import { formatPanelVersion } from '@/lib/panel-version';
 import { pauseAnimationsUntilLeave, useTheme } from '@/hooks/useTheme';
+import type { ThemeMode } from '@/hooks/useTheme';
 import { useAllSettings } from '@/api/queries/useAllSettings';
 import { useCommandPalette } from '@/components/command-palette/useCommandPalette';
 import './AppSidebar.css';
 
-const DONATE_URL = 'https://donate.sanaei.dev/';
 // The palette listens for Ctrl as well as Cmd, so the chip must not show a
 // Mac glyph to the Linux and Windows operators who are most of this panel's.
 const SHORTCUT_MODIFIER = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent) ? '⌘' : 'Ctrl';
 const DOCS_URL = 'https://docs.sanaei.dev/';
-const REPO_URL = 'https://github.com/MHSanaei/3x-ui';
+const REPO_URL = 'https://github.com/SawaMEN/3x-ui';
 const LOGOUT_KEY = '__logout__';
 const RAIL_WIDTH = 72;
 const SIDER_WIDTH = 220;
@@ -87,21 +86,6 @@ const iconByName: Record<IconName, ComponentType> = {
   routing: SwapOutlined,
 };
 
-function DonateButton({ ariaLabel }: { ariaLabel: string }) {
-  return (
-    <a
-      href={DONATE_URL}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="sidebar-donate"
-      aria-label={ariaLabel}
-      title={ariaLabel}
-    >
-      <HeartOutlined />
-    </a>
-  );
-}
-
 function DocsButton({ ariaLabel }: { ariaLabel: string }) {
   return (
     <a
@@ -137,18 +121,16 @@ function VersionBadge({ version, collapsed }: { version: string; collapsed?: boo
 
 function ThemeCycleButton({
   id,
-  isDark,
-  isUltra,
+  mode,
   onCycle,
   ariaLabel,
 }: {
   id: string;
-  isDark: boolean;
-  isUltra: boolean;
+  mode: ThemeMode;
   onCycle: () => void;
   ariaLabel: string;
 }) {
-  const icon = !isDark ? <SunOutlined /> : !isUltra ? <MoonOutlined /> : <MoonFilled />;
+  const icon = mode === 'light' ? <SunOutlined /> : mode === 'dark' ? <MoonOutlined /> : mode === 'ultra-dark' ? <MoonFilled /> : mode === 'colorful' ? <TagsOutlined /> : <CloudServerOutlined />;
   return (
     <button
       id={id}
@@ -179,7 +161,7 @@ function saveSidebarPinned(pinned: boolean) {
 
 export default function AppSidebar() {
   const { t } = useTranslation();
-  const { isDark, isUltra, toggleTheme, toggleUltra } = useTheme();
+  const { mode, setThemeMode } = useTheme();
   const { open: openCommandPalette } = useCommandPalette();
   const navigate = useNavigate();
   const { pathname, hash } = useLocation();
@@ -216,7 +198,7 @@ export default function AppSidebar() {
     return () => window.clearTimeout(timer);
   }, [updateHovered]);
 
-  const currentTheme: 'light' | 'dark' = isDark ? 'dark' : 'light';
+  const currentTheme: 'light' | 'dark' = mode === 'dark' || mode === 'ultra-dark' || mode === 'blue-gray' ? 'dark' : 'light';
   const panelVersion = window.X_UI_CUR_VER || '';
 
   const tabs = useMemo<{ key: string; icon: IconName; title: string }[]>(
@@ -308,9 +290,11 @@ export default function AppSidebar() {
 
   const openSubmenu = settingsActive ? '/settings' : xrayActive ? '/xray' : null;
   const [openKeys, setOpenKeys] = useState<string[]>(() => (openSubmenu ? [openSubmenu] : []));
-  if (openSubmenu && !openKeys.includes(openSubmenu)) {
-    setOpenKeys([...openKeys, openSubmenu]);
-  }
+  useEffect(() => {
+    if (openSubmenu && !openKeys.includes(openSubmenu)) {
+      setOpenKeys((keys) => (keys.includes(openSubmenu) ? keys : [...keys, openSubmenu]));
+    }
+  }, [openSubmenu, openKeys]);
 
   const toMenuItems = useCallback(
     (items: typeof tabs): MenuProps['items'] =>
@@ -349,17 +333,16 @@ export default function AppSidebar() {
   const cycleTheme = useCallback(
     (id: string) => {
       pauseAnimationsUntilLeave(id);
-      if (!isDark) {
-        toggleTheme();
-        if (isUltra) toggleUltra();
-      } else if (!isUltra) {
-        toggleUltra();
-      } else {
-        toggleUltra();
-        toggleTheme();
-      }
+      const next: Record<ThemeMode, ThemeMode> = {
+        light: 'dark',
+        dark: 'ultra-dark',
+        'ultra-dark': 'colorful',
+        colorful: 'blue-gray',
+        'blue-gray': 'light',
+      };
+      setThemeMode(next[mode]);
     },
-    [isDark, isUltra, toggleTheme, toggleUltra],
+    [mode, setThemeMode],
   );
 
   return (
@@ -393,11 +376,9 @@ export default function AppSidebar() {
                 {pinned ? <PushpinFilled /> : <PushpinOutlined />}
               </button>
               <DocsButton ariaLabel={t('menu.docs') || 'Documentation'} />
-              <DonateButton ariaLabel={t('menu.donate') || 'Donate'} />
               <ThemeCycleButton
                 id="theme-cycle"
-                isDark={isDark}
-                isUltra={isUltra}
+                mode={mode}
                 onCycle={() => cycleTheme('theme-cycle')}
                 ariaLabel={t('menu.theme')}
               />
@@ -470,11 +451,9 @@ export default function AppSidebar() {
           </div>
           <div className="drawer-header-actions">
             <DocsButton ariaLabel={t('menu.docs') || 'Documentation'} />
-            <DonateButton ariaLabel={t('menu.donate') || 'Donate'} />
             <ThemeCycleButton
               id="theme-cycle-drawer"
-              isDark={isDark}
-              isUltra={isUltra}
+              mode={mode}
               onCycle={() => cycleTheme('theme-cycle-drawer')}
               ariaLabel={t('menu.theme')}
             />

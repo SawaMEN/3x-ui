@@ -41,10 +41,7 @@ jobs:
           - amd64
           - arm64
           - armv7
-          - armv6
           - 386
-          - armv5
-          - s390x
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -170,7 +167,7 @@ jobs:
           # github.com — the host the downloads need anyway — because api.github.com
           # has 503'd whole release runs while asset downloads kept working.
           case "${{ matrix.platform }}" in
-            amd64|arm64|armv7|armv6|386)
+            amd64|arm64|armv7|386)
               MTG_MULTI_VER=$(curl -sf $CURL_RETRY -o /dev/null -w '%{redirect_url}' "https://github.com/mhsanaei/mtg-multi/releases/latest" | sed -n 's#.*/releases/tag/##p')
               if [ -z "$MTG_MULTI_VER" ]; then echo "could not resolve the latest mtg-multi release tag"; exit 1; fi
               MTG_PKG="mtg-multi-${MTG_MULTI_VER#v}-linux-${{ matrix.platform }}"
