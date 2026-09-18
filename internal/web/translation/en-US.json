@@ -124,7 +124,8 @@
     "openMenu": "Open menu",
     "pinSidebar": "Pin sidebar",
     "unpinSidebar": "Unpin sidebar",
-    "subFormats": "Sub Formats"
+    "subFormats": "Sub Formats",
+    "telemt": "Telemt"
   },
   "pages": {
     "login": {
@@ -2540,5 +2541,12 @@
     "restartXray": "Restart Xray Service",
     "restartXraySuccess": "Xray has been successfully relaunched",
     "settings": "Settings"
+  },
+  "telemt": {
+    "title": "Telemt — MTProto",
+    "installed": "Binary installed",
+    "service": "Service",
+    "running": "running",
+    "stopped": "stopped"
   }
 }
