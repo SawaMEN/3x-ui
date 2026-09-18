@@ -80,7 +80,7 @@ func (TelemtService) SaveConfig(c TelemtConfig) error {
 }
 
 func (TelemtService) Apply(action string) error {
-  switch action { case "start","stop","restart": return systemctl(action,telemtServiceName); default: return errors.New("telemt: unsupported action") }
+  switch action { case "start","stop","restart","enable","disable": return systemctl(action,telemtServiceName); default: return errors.New("telemt: unsupported action") }
 }
 
 func systemctl(args ...string) error {
