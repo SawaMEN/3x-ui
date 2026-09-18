@@ -112,6 +112,9 @@ jobs:
           cp x-ui.service.arch x-ui/
           cp x-ui.service.rhel x-ui/
           cp telemt.service x-ui/
+          cp telemt-update.service x-ui/
+          cp telemt-update.timer x-ui/
+          cp telemt-update.sh x-ui/
           cp telemt.toml.example x-ui/
           cp x-ui.sh x-ui/
           mv x-ui/xui-release x-ui/x-ui
