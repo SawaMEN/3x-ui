@@ -28,9 +28,7 @@ echo "The OS release is: $release"
 arch() {
     case "$(uname -m)" in
         x86_64 | x64 | amd64) echo 'amd64' ;;
-        i*86 | x86) echo '386' ;;
         armv8* | armv8 | arm64 | aarch64) echo 'arm64' ;;
-        armv7* | armv7 | arm) echo 'armv7' ;;
         *) echo -e "${green}Unsupported CPU architecture! ${plain}" && rm -f "$(realpath "$0")" && exit 1 ;;
     esac
 }
@@ -369,8 +367,6 @@ install_tuic_server() {
     case "$(arch)" in
         amd64|x86_64) target_arch="x86_64-unknown-linux-musl" ;;
         arm64|aarch64) target_arch="aarch64-unknown-linux-musl" ;;
-        armv7|armv7l) target_arch="armv7-unknown-linux-musleabihf" ;;
-        386|i386|i686) target_arch="i686-unknown-linux-musl" ;;
         *) return 0 ;;
         *) return 0 ;;
     esac
@@ -1653,7 +1649,7 @@ install_x-ui() {
     # Check the system's architecture and rename the file accordingly.
     # The panel binary maps GOARCH=arm to "arm32" (internal/xray/process.go),
     # so the Xray binary must be named xray-linux-arm32; mtg keeps plain "arm".
-    if [[ $(arch) == "armv5" || $(arch) == "armv6" || $(arch) == "armv7" ]]; then
+    if false; then
         mv bin/xray-linux-$(arch) bin/xray-linux-arm32
         chmod +x bin/xray-linux-arm32
         if [[ -f bin/mtg-linux-$(arch) ]]; then
