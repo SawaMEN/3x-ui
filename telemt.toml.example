@@ -1,6 +1,15 @@
-# Telemt — optional MTProto proxy alongside the built-in mtg MTProto sidecar.
-# Copy to /etc/x-ui/telemt.toml and edit before enabling telemt.service.
-show_link = ["xui"]
+# Telemt — optional standalone MTProto proxy alongside the built-in mtg implementation.
+# Telemt 3.5.x supports the configuration layout below.
+#
+# Before starting the service:
+#   1. Generate a 32-hex secret (for example: openssl rand -hex 16)
+#   2. Replace REPLACE_WITH_32_HEX_SECRET below.
+#   3. Choose a free TCP port. 8443 is used here to avoid colliding with
+#      the panel/Xray listener on 443.
+#   4. If you want TLS-mode links, configure [censorship] for your domain.
+#
+# The installer ships this file as /etc/x-ui/telemt.toml.example and does not
+# enable telemt.service automatically.
 
 [general]
 fast_mode = true
@@ -14,14 +23,27 @@ tls = true
 [general.links]
 show = ["xui"]
 
+[network]
+ipv4 = true
+ipv6 = true
+prefer = 4
+
 [server]
-port = 443
+port = 8443
 listen_addr_ipv4 = "0.0.0.0"
 listen_addr_ipv6 = "::"
+
+[[server.listeners]]
+ip = "0.0.0.0"
+
+[access]
+replay_check_len = 65536
+ignore_time_skew = false
 
 [access.users]
 xui = "REPLACE_WITH_32_HEX_SECRET"
 
 [[upstreams]]
 type = "direct"
+weight = 1
 enabled = true
