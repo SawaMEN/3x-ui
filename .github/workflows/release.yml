@@ -115,6 +115,8 @@ jobs:
           cp x-ui.service.debian x-ui/
           cp x-ui.service.arch x-ui/
           cp x-ui.service.rhel x-ui/
+          cp telemt.service x-ui/
+          cp telemt.toml.example x-ui/
           cp x-ui.sh x-ui/
           mv x-ui/xui-release x-ui/x-ui
           mkdir x-ui/bin
@@ -177,6 +179,23 @@ jobs:
               rm -rf "${MTG_PKG}" "${MTG_PKG}.tar.gz"
               ;;
           esac
+          # Telemt (Rust MTProto alternative). Official release artifacts currently
+          # cover x86_64 and aarch64 Linux; 32-bit targets remain unsupported upstream.
+          TELEMT_ARCH=""
+          case "${{ matrix.platform }}" in
+            amd64) TELEMT_ARCH="x86_64" ;;
+            arm64) TELEMT_ARCH="aarch64" ;;
+          esac
+          if [ -n "$TELEMT_ARCH" ]; then
+            TELEMT_VER=$(curl -sf $CURL_RETRY -o /dev/null -w '%{redirect_url}' "https://github.com/telemt/telemt/releases/latest" | sed -n 's#.*/releases/tag/##p')
+            if [ -z "$TELEMT_VER" ]; then echo "could not resolve the latest Telemt release tag"; exit 1; fi
+            TELEMT_PKG="telemt-${TELEMT_ARCH}-linux-musl.tar.gz"
+            curl -sfLRO $CURL_RETRY "https://github.com/telemt/telemt/releases/download/${TELEMT_VER}/${TELEMT_PKG}"
+            tar -xzf "${TELEMT_PKG}"
+            mv telemt "telemt-${{ matrix.platform }}"
+            chmod +x "telemt-${{ matrix.platform }}"
+            rm -f "${TELEMT_PKG}"
+          fi
           case "${{ matrix.platform }}" in
             amd64)
               curl -sfLRO $CURL_RETRY "https://github.com/EAimTY/tuic/releases/download/tuic-server-1.0.0/tuic-server-1.0.0-x86_64-unknown-linux-musl"
