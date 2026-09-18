@@ -1,0 +1,27 @@
+# Telemt — optional MTProto proxy alongside the built-in mtg MTProto sidecar.
+# Copy to /etc/x-ui/telemt.toml and edit before enabling telemt.service.
+show_link = ["xui"]
+
+[general]
+fast_mode = true
+use_middle_proxy = false
+
+[general.modes]
+classic = false
+secure = false
+tls = true
+
+[general.links]
+show = ["xui"]
+
+[server]
+port = 443
+listen_addr_ipv4 = "0.0.0.0"
+listen_addr_ipv6 = "::"
+
+[access.users]
+xui = "REPLACE_WITH_32_HEX_SECRET"
+
+[[upstreams]]
+type = "direct"
+enabled = true
