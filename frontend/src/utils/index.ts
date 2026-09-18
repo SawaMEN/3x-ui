@@ -888,8 +888,8 @@ const languageCookieNames: Record<LanguageScope, string> = {
 
 export class LanguageManager {
   static readonly supportedLanguages: readonly SupportedLanguage[] = [
-    { name: 'English', value: 'en-US', icon: '🇺🇸' },
     { name: 'Русский', value: 'ru-RU', icon: '🇷🇺' },
+    { name: 'English', value: 'en-US', icon: '🇺🇸' },
   ];
 
   static getLanguage(scope: LanguageScope = 'panel'): string {
@@ -915,11 +915,11 @@ export class LanguageManager {
       if (LanguageManager.isSupportLanguage(lang)) {
         CookieManager.setCookie(cookieName, lang, 365);
       } else {
-        lang = 'en-US';
+        lang = 'ru-RU';
         CookieManager.setCookie(cookieName, lang, 365);
       }
     } else {
-      lang = 'en-US';
+      lang = 'ru-RU';
       CookieManager.setCookie(cookieName, lang, 365);
     }
 
@@ -928,7 +928,7 @@ export class LanguageManager {
 
   static setLanguage(language: string, scope: LanguageScope = 'panel'): void {
     if (!LanguageManager.isSupportLanguage(language)) {
-      language = 'en-US';
+      language = 'ru-RU';
     }
     CookieManager.setCookie(languageCookieNames[scope], language, 365);
     window.location.reload();
