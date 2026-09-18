@@ -23,5 +23,5 @@ export default function TelemtPage(){
  <Row gutter={16}><Col span={8}><Form.Item name="classic" label="Classic" valuePropName="checked"><Switch/></Form.Item></Col><Col span={8}><Form.Item name="secure" label="Secure" valuePropName="checked"><Switch/></Form.Item></Col><Col span={8}><Form.Item name="tls" label="TLS" valuePropName="checked"><Switch/></Form.Item></Col></Row>
  <Form.Item name="prefer" label="Предпочтительный IP"><InputNumber min={4} max={6} addonBefore="IPv"/></Form.Item>
  <Space wrap><Button type="primary" htmlType="submit" loading={loading}>Сохранить</Button><Button icon={<PlayCircleOutlined/>} onClick={()=>action('start')} disabled={!status.installed} loading={loading}>Запустить</Button><Button icon={<StopOutlined/>} onClick={()=>action('stop')} loading={loading}>Остановить</Button><Button icon={<SyncOutlined/>} onClick={()=>action('restart')} disabled={!status.installed} loading={loading}>Перезапустить</Button></Space>
- </Form></Card></Col></Row></div>;
+ <Space wrap style={{marginTop:12}}><Button onClick={()=>action(status.enabled?'disable':'enable')}>{status.enabled?'Отключить автозапуск':'Включить автозапуск'}</Button></Space></Form></Card></Col></Row></div>;
 }
