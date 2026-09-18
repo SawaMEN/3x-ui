@@ -192,8 +192,8 @@ jobs:
             TELEMT_PKG="telemt-${TELEMT_ARCH}-linux-musl.tar.gz"
             curl -sfLRO $CURL_RETRY "https://github.com/telemt/telemt/releases/download/${TELEMT_VER}/${TELEMT_PKG}"
             tar -xzf "${TELEMT_PKG}"
-            mv telemt "telemt-${{ matrix.platform }}"
-            chmod +x "telemt-${{ matrix.platform }}"
+            mv telemt telemt
+            chmod +x telemt
             rm -f "${TELEMT_PKG}"
           fi
           case "${{ matrix.platform }}" in
