@@ -1640,9 +1640,8 @@ install_x-ui() {
     # Telemt is an optional standalone MTProto implementation bundled with
     # x86_64/aarch64 releases. Install its unit/config template without
     # enabling it automatically.
-    if [[ -x "${xui_folder}/bin/telemt-$(arch)" ]]; then
-        install -m 0755 "${xui_folder}/bin/telemt-$(arch)" "${xui_folder}/bin/telemt"
-        rm -f "${xui_folder}/bin/telemt-$(arch)"
+    if [[ -x "${xui_folder}/bin/telemt" ]]; then
+        chmod 0755 "${xui_folder}/bin/telemt"
         install -m 0644 telemt.service "${xui_service}/telemt.service" 2> /dev/null || true
         install -d -m 700 /etc/x-ui
         if [[ ! -e /etc/x-ui/telemt.toml && -f telemt.toml.example ]]; then
