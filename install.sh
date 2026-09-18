@@ -1637,12 +1637,31 @@ install_x-ui() {
     # x86_64/aarch64 releases. Install its unit/config template without
     # enabling it automatically.
     if [[ -x "${xui_folder}/bin/telemt" ]]; then
+        # Telemt is installed as a root-owned executable. The service runs as
+        # root so it can bind privileged ports (for example 443) and manage
+        # its own network sockets without granting extra capabilities.
+        chown root:root "${xui_folder}/bin/telemt" 2> /dev/null || true
         chmod 0755 "${xui_folder}/bin/telemt"
-        install -m 0644 telemt.service "${xui_service}/telemt.service" 2> /dev/null || true
-        install -d -m 700 /etc/x-ui
-        if [[ ! -e /etc/x-ui/telemt.toml && -f telemt.toml.example ]]; then
-            install -m 600 telemt.toml.example /etc/x-ui/telemt.toml.example
+
+        # Install the systemd unit with explicit root ownership/read-only
+        # permissions. ProtectSystem=strict + ReadWritePaths=/etc/x-ui in the
+        # unit limits Telemt's filesystem write access to its configuration
+        # directory.
+        if install -m 0644 -o root -g root telemt.service "${xui_service}/telemt.service" 2> /dev/null; then
+            :
+        else
+            echo -e "${yellow}Warning: failed to install telemt.service; Telemt binary was installed but the service is unavailable.${plain}" >&2
         fi
+
+        install -d -m 700 -o root -g root /etc/x-ui
+        if [[ ! -e /etc/x-ui/telemt.toml && -f telemt.toml.example ]]; then
+            install -m 600 -o root -g root telemt.toml.example /etc/x-ui/telemt.toml.example
+        elif [[ -f /etc/x-ui/telemt.toml ]]; then
+            # Never overwrite an administrator's Telemt configuration.
+            chown root:root /etc/x-ui/telemt.toml 2> /dev/null || true
+            chmod 0600 /etc/x-ui/telemt.toml 2> /dev/null || true
+        fi
+
         systemctl daemon-reload 2> /dev/null || true
     fi
 
