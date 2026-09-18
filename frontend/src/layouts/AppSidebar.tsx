@@ -69,7 +69,8 @@ type IconName =
   | 'logout'
   | 'apidocs'
   | 'outbound'
-  | 'routing';
+  | 'routing'
+  | 'telemt';
 
 const iconByName: Record<IconName, ComponentType> = {
   dashboard: DashboardOutlined,
