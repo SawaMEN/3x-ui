@@ -1439,14 +1439,23 @@ _install_xui_service_unit() {
 # 60 req/h-per-IP limit that trips shared CI/CGNAT addresses (the install then
 # fails with "Failed to fetch x-ui version"), and falls back to the API.
 resolve_latest_tag() {
-    local url tag
-    url=$(curl -sSLI -o /dev/null -w '%{url_effective}' --retry 5 --retry-delay 3 --connect-timeout 15 --max-time 60 "https://github.com/SawaMEN/3x-ui/releases/latest" 2>/dev/null)
+    local url tag page
+
+    # Prefer GitHub's public /releases/latest redirect. This does not require
+    # the REST API and therefore avoids the unauthenticated API rate limit.
+    url=$(curl -sSLI -o /dev/null -w '%{url_effective}'         --retry 5 --retry-delay 3 --connect-timeout 15 --max-time 60         "https://github.com/SawaMEN/3x-ui/releases/latest" 2>/dev/null)
     tag=${url##*/tag/}
     if [[ "$tag" != "$url" && -n "$tag" && "$tag" != "latest" ]]; then
-        echo "$tag"
+        printf '%s\n' "$tag"
         return 0
     fi
-    curl -Ls --retry 5 --retry-delay 3 --connect-timeout 15 --max-time 60 "https://api.github.com/repos/SawaMEN/3x-ui/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/'
+
+    # Some proxies/CDNs do not expose the final URL for HEAD requests.
+    # Fall back to the public release HTML page, still without using the API.
+    page=$(curl -fsSL         --retry 5 --retry-delay 3 --connect-timeout 15 --max-time 60         "https://github.com/SawaMEN/3x-ui/releases/latest" 2>/dev/null) || return 1
+    tag=$(printf '%s' "$page"         | grep -oE '/SawaMEN/3x-ui/releases/tag/[^"?#]+'         | head -n 1         | sed 's#.*/tag/##')
+    [[ -n "$tag" ]] || return 1
+    printf '%s\n' "$tag"
 }
 
 # Releases publish <asset>.sha256 next to each archive. A mismatch or a failed
