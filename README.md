@@ -10,7 +10,7 @@
 <p align="center">
   <a href="https://github.com/SawaMEN/3x-ui/releases"><img src="https://img.shields.io/github/v/release/SawaMEN/3x-ui" alt="Release"></a>
   <a href="https://github.com/SawaMEN/3x-ui/actions"><img src="https://img.shields.io/github/actions/workflow/status/SawaMEN/3x-ui/release.yml.svg" alt="Build"></a>
-  <a href="#"><img src="https://img.shields.io/github/go-mod/go-version/mhsanaei/3x-ui.svg" alt="GO Version"></a>
+  <a href="#"><img src="https://img.shields.io/github/go-mod/go-version/SawaMEN/3x-ui.svg" alt="GO Version"></a>
   <a href="https://github.com/SawaMEN/3x-ui/releases/latest"><img src="https://img.shields.io/github/downloads/SawaMEN/3x-ui/total.svg" alt="Downloads"></a>
   <a href="https://www.gnu.org/licenses/gpl-3.0.en.html"><img src="https://img.shields.io/badge/license-GPL%20V3-blue.svg?longCache=true" alt="License"></a>
   <a href="https://pkg.go.dev/github.com/SawaMEN/3x-ui/v3"><img src="https://pkg.go.dev/badge/github.com/SawaMEN/3x-ui/v3.svg" alt="Go Reference"></a>
