@@ -84,6 +84,7 @@ const iconByName: Record<IconName, ComponentType> = {
   apidocs: ApiOutlined,
   outbound: ExportOutlined,
   routing: SwapOutlined,
+  telemt: MessageOutlined,
 };
 
 function DocsButton({ ariaLabel }: { ariaLabel: string }) {
@@ -211,6 +212,7 @@ export default function AppSidebar() {
       { key: '/hosts', icon: 'hosts', title: t('menu.hosts') },
       { key: '/outbound', icon: 'outbound', title: t('menu.outbounds') },
       { key: '/routing', icon: 'routing', title: t('menu.routing') },
+      { key: '/telemt', icon: 'telemt', title: t('menu.telemt') },
       { key: '/settings', icon: 'setting', title: t('menu.settings') },
       { key: '/xray', icon: 'tool', title: t('menu.xray') },
       { key: '/api-docs', icon: 'apidocs', title: t('menu.apiDocs') },
