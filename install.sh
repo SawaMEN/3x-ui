@@ -1637,6 +1637,19 @@ install_x-ui() {
     fi
     chmod +x x-ui
     chmod +x x-ui.sh
+    # Telemt is an optional standalone MTProto implementation bundled with
+    # x86_64/aarch64 releases. Install its unit/config template without
+    # enabling it automatically.
+    if [[ -x "${xui_folder}/bin/telemt-$(arch)" ]]; then
+        install -m 0755 "${xui_folder}/bin/telemt-$(arch)" "${xui_folder}/bin/telemt"
+        rm -f "${xui_folder}/bin/telemt-$(arch)"
+        install -m 0644 telemt.service "${xui_service}/telemt.service" 2> /dev/null || true
+        install -d -m 700 /etc/x-ui
+        if [[ ! -e /etc/x-ui/telemt.toml && -f telemt.toml.example ]]; then
+            install -m 600 telemt.toml.example /etc/x-ui/telemt.toml.example
+        fi
+        systemctl daemon-reload 2> /dev/null || true
+    fi
 
     # Check the system's architecture and rename the file accordingly.
     # The panel binary maps GOARCH=arm to "arm32" (internal/xray/process.go),
