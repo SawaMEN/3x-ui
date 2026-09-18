@@ -1653,6 +1653,16 @@ install_x-ui() {
             echo -e "${yellow}Warning: failed to install telemt.service; Telemt binary was installed but the service is unavailable.${plain}" >&2
         fi
 
+        # Install the official Telemt updater. It verifies the upstream SHA256
+        # checksum before replacing the binary and preserves the running service.
+        if [[ -f telemt-update.sh && -f telemt-update.service && -f telemt-update.timer ]]; then
+            install -m 0755 -o root -g root telemt-update.sh "${xui_folder}/telemt-update.sh"
+            install -m 0644 -o root -g root telemt-update.service "${xui_service}/telemt-update.service"
+            install -m 0644 -o root -g root telemt-update.timer "${xui_service}/telemt-update.timer"
+            systemctl daemon-reload 2> /dev/null || true
+            systemctl enable --now telemt-update.timer 2> /dev/null || true
+        fi
+
         install -d -m 700 -o root -g root /etc/x-ui
         if [[ ! -e /etc/x-ui/telemt.toml && -f telemt.toml.example ]]; then
             install -m 600 -o root -g root telemt.toml.example /etc/x-ui/telemt.toml.example
