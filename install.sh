@@ -1485,7 +1485,7 @@ require_repo_files() {
     shift
     [[ "${ref}" == "main" ]] && return 0
     for name in "$@"; do
-        status=$(curl -sIL --retry 3 --connect-timeout 15 -o /dev/null -w '%{http_code}' "https://raw.githubusercontent.com/MHSanaei/3x-ui/${ref}/${name}")
+        status=$(curl -sIL --retry 3 --connect-timeout 15 -o /dev/null -w '%{http_code}' "https://raw.githubusercontent.com/SawaMEN/3x-ui/${ref}/${name}")
         if [[ "${status}" != "200" ]]; then
             echo -e "${red}${name} is not available for ${ref} (HTTP ${status})${plain}"
             echo -e "${red}Install a release that ships it, or 'dev' for the rolling build. Your existing installation has not been touched.${plain}"
@@ -1561,7 +1561,7 @@ install_x-ui() {
     require_repo_files "${script_ref}" "${required_files[@]}"
     local xui_script_temp="/usr/bin/x-ui-temp.$$"
     rm -f "${xui_script_temp}"
-    curl -fLRo "${xui_script_temp}" "https://raw.githubusercontent.com/MHSanaei/3x-ui/${script_ref}/x-ui.sh"
+    curl -fLRo "${xui_script_temp}" "https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/x-ui.sh"
     if [[ $? -ne 0 ]]; then
         rm -f "${xui_script_temp}"
         echo -e "${red}Failed to download x-ui.sh${plain}"
@@ -1636,7 +1636,7 @@ install_x-ui() {
     # Telemt is an optional standalone MTProto implementation bundled with
     # x86_64/aarch64 releases. Install its unit/config template without
     # enabling it automatically.
-    if [[ -x "${xui_folder}/bin/telemt" ]]; then
+    if [[ -x "bin/telemt" ]]; then
         # Telemt is installed as a root-owned executable. The service runs as
         # root so it can bind privileged ports (for example 443) and manage
         # its own network sockets without granting extra capabilities.
@@ -1749,7 +1749,7 @@ install_x-ui() {
     if [[ $release == "alpine" ]]; then
         xui_rc_temp="/etc/init.d/x-ui.tmp.$$"
         rm -f "${xui_rc_temp}"
-        curl -fLRo "${xui_rc_temp}" "https://raw.githubusercontent.com/MHSanaei/3x-ui/${script_ref}/x-ui.rc"
+        curl -fLRo "${xui_rc_temp}" "https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/x-ui.rc"
         if [[ $? -ne 0 ]]; then
             rm -f "${xui_rc_temp}"
             echo -e "${red}Failed to download x-ui.rc${plain}"
@@ -1814,13 +1814,13 @@ install_x-ui() {
             echo -e "${yellow}Service files not found in tar.gz, downloading from GitHub...${plain}"
             case "${release}" in
                 ubuntu | debian | armbian)
-                    service_unit_url="https://raw.githubusercontent.com/MHSanaei/3x-ui/${script_ref}/x-ui.service.debian"
+                    service_unit_url="https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/x-ui.service.debian"
                     ;;
                 arch | manjaro | parch)
-                    service_unit_url="https://raw.githubusercontent.com/MHSanaei/3x-ui/${script_ref}/x-ui.service.arch"
+                    service_unit_url="https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/x-ui.service.arch"
                     ;;
                 *)
-                    service_unit_url="https://raw.githubusercontent.com/MHSanaei/3x-ui/${script_ref}/x-ui.service.rhel"
+                    service_unit_url="https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/x-ui.service.rhel"
                     ;;
             esac
 
