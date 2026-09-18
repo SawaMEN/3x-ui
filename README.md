@@ -38,10 +38,9 @@
 bash <(curl -Ls https://raw.githubusercontent.com/SawaMEN/3x-ui/main/install.sh)
 ```
 
-> [!NOTE]
-> Текущий `install.sh` использует релизные архивы и связанные файлы из upstream-репозитория **MHSanaei/3x-ui**. Поэтому команда выше устанавливает актуальную upstream-сборку, а не отдельный бинарный релиз этого форка.
+По умолчанию установщик берёт релиз из **SawaMEN/3x-ui**. Установщик и обновляющий скрипт поддерживают только `amd64` и `arm64`.
 
-Для установки конкретной версии upstream:
+Для установки конкретной версии:
 
 ```bash
 bash <(curl -Ls https://raw.githubusercontent.com/SawaMEN/3x-ui/main/install.sh) v3.8.5
@@ -53,6 +52,8 @@ bash <(curl -Ls https://raw.githubusercontent.com/SawaMEN/3x-ui/main/install.sh)
 bash <(curl -Ls https://raw.githubusercontent.com/SawaMEN/3x-ui/main/install.sh) dev-latest
 ```
 
+После установки, если Telemt входит в установленный релиз, для него автоматически устанавливается ежедневная проверка обновлений.
+
 После установки управление панелью доступно через команду:
 
 ```bash
@@ -60,6 +61,20 @@ x-ui
 ```
 
 Установщик генерирует или принимает параметры учётной записи и сохраняет результат установки в защищённом файле `/etc/x-ui/install-result.env`.
+
+### Обновление
+
+Обновить панель можно через:
+
+```bash
+x-ui update
+```
+
+Для Telemt обновления проверяются автоматически через systemd timer. Ручная проверка:
+
+```bash
+/usr/local/x-ui/telemt-update.sh --check
+```
 
 ### Ручная разработка
 
@@ -92,7 +107,7 @@ npm run format:check
 
 Установщик рассчитан прежде всего на Linux-системы. Для конкретной ОС проверяйте логику `install.sh` и соответствующий systemd/OpenRC unit.
 
-Telemt сейчас поставляется вместе с релизами для `amd64` и `armv8` (`x86_64`/`aarch64`).
+Telemt поставляется вместе с Linux-релизами для `amd64` и `arm64` (`x86_64`/`aarch64`). Его отдельный updater ежедневно проверяет последнюю официальную версию Telemt, проверяет SHA-256 архива перед заменой бинарника и не изменяет существующий `/etc/x-ui/telemt.toml`.
 
 ## Базы данных
 
