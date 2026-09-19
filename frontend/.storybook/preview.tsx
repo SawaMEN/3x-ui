@@ -26,7 +26,7 @@ export const withTheme: Decorator = (Story, context) => {
     document.documentElement.removeAttribute('data-theme');
   }, [dark]);
   return (
-    <ConfigProvider theme={buildAntdThemeConfig(dark, false)}>
+    <ConfigProvider theme={buildAntdThemeConfig(dark)}>
       <div style={{ padding: 24, minWidth: 320 }}>
         <Story />
       </div>
