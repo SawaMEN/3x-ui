@@ -5,7 +5,10 @@ import (
   "crypto/rand"
   "encoding/hex"
   "errors"
+  "encoding/json"
   "fmt"
+  "net/http"
+  "net/url"
   "os"
   "os/exec"
   "path/filepath"
@@ -82,7 +85,7 @@ func renderTelemtConfig(c TelemtConfig) (string, error) {
     censorship = fmt.Sprintf("[censorship]\ntls_domain = \"%s\"\n\n", sni)
   }
 
-  return fmt.Sprintf("[general]\nfast_mode = %t\nuse_middle_proxy = false\nlog_level = \"normal\"\n\n[general.modes]\nclassic = %t\nsecure = %t\ntls = %t\n\n[general.links]\nshow = [\"xui\"]\n\n[network]\nipv4 = %t\nipv6 = %t\n\n[server]\nport = %d\n\n%s%s[access]\nreplay_check_len = 65536\nignore_time_skew = false\n\n[access.users]\nxui = \"%s\"\n\n[[upstreams]]\ntype = \"direct\"\nweight = 1\nenabled = true\n", c.FastMode, c.Classic, c.Secure, c.TLS, c.IPv4, c.IPv6, c.Port, listeners, censorship, strings.ToLower(c.Secret)), nil
+  return fmt.Sprintf("[general]\nfast_mode = %t\nuse_middle_proxy = false\nlog_level = \"normal\"\n\n[general.modes]\nclassic = %t\nsecure = %t\ntls = %t\n\n[general.links]\nshow = [\"xui\"]\n\n[server.api]\nenabled = true\nlisten = \"127.0.0.1:9091\"\nwhitelist = [\"127.0.0.1/32\", \"::1/128\"]\nread_only = false\n\n[network]\nipv4 = %t\nipv6 = %t\n\n[server]\nport = %d\n\n%s%s[access]\nreplay_check_len = 65536\nignore_time_skew = false\n\n[access.users]\nxui = \"%s\"\n\n[[upstreams]]\ntype = \"direct\"\nweight = 1\nenabled = true\n", c.FastMode, c.Classic, c.Secure, c.TLS, c.IPv4, c.IPv6, c.Port, listeners, censorship, strings.ToLower(c.Secret)), nil
 }
 
 func ensureTelemtConfig() error {
@@ -156,10 +159,6 @@ func (TelemtService) SaveConfig(c TelemtConfig) error {
   return nil
 }
 
-func telemtTLSSecret(secret, sni string) string {
-  return "ee" + strings.ToLower(secret) + hex.EncodeToString([]byte(strings.ToLower(sni)))
-}
-
 func (TelemtService) CreateProxy(req TelemtCreateRequest) (TelemtProxy, error) {
   name := strings.TrimSpace(req.Name)
   host := strings.TrimSpace(req.Host)
@@ -169,16 +168,19 @@ func (TelemtService) CreateProxy(req TelemtCreateRequest) (TelemtProxy, error) {
   if err := ensureTelemtConfig(); err != nil { return TelemtProxy{}, err }
   b, err := os.ReadFile(telemtConfigPath)
   if err != nil { return TelemtProxy{}, err }
+
   secretBytes := make([]byte, 16)
   if _, err := rand.Read(secretBytes); err != nil { return TelemtProxy{}, err }
   secret := hex.EncodeToString(secretBytes)
+
   username := strings.ToLower(strings.Map(func(r rune) rune {
     if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '_' || r == '-' { return r }
     if r >= 'A' && r <= 'Z' { return r + ('a' - 'A') }
-    return '_'
+    return "_"
   }, name))
   username = strings.Trim(username, "_-")
   if username == "" { username = "proxy" }
+
   text := string(b)
   section := "[access.users]"
   idx := strings.Index(text, section)
@@ -186,24 +188,71 @@ func (TelemtService) CreateProxy(req TelemtCreateRequest) (TelemtProxy, error) {
   insertAt := len(text)
   if next := strings.Index(text[idx+len(section):], "\n["); next >= 0 { insertAt = idx + len(section) + next + 1 }
   for i := 2; strings.Contains(text[idx:insertAt], username+" = "); i++ { username = fmt.Sprintf("%s-%d", username, i) }
+
   entry := fmt.Sprintf("%s = \"%s\"\n", username, secret)
   old := append([]byte(nil), b...)
   text = text[:insertAt] + entry + text[insertAt:]
   if err := os.WriteFile(telemtConfigPath, []byte(text), 0600); err != nil { return TelemtProxy{}, err }
   if err := systemctl("daemon-reload"); err != nil { return TelemtProxy{}, err }
+
   if systemctl("is-active", "--quiet", telemtServiceName) == nil {
     if err := systemctl("restart", telemtServiceName); err != nil {
-      _ = os.WriteFile(telemtConfigPath, old, 0600); _ = systemctl("daemon-reload"); _ = systemctl("restart", telemtServiceName)
+      _ = os.WriteFile(telemtConfigPath, old, 0600)
+      _ = systemctl("daemon-reload")
+      _ = systemctl("restart", telemtServiceName)
       return TelemtProxy{}, fmt.Errorf("telemt: proxy configuration was rejected: %w", err)
     }
+  } else {
+    if err := systemctl("start", telemtServiceName); err != nil {
+      _ = os.WriteFile(telemtConfigPath, old, 0600)
+      _ = systemctl("daemon-reload")
+      return TelemtProxy{}, fmt.Errorf("telemt: failed to start service: %w", err)
+    }
   }
+
   cfg, err := TelemtService{}.GetConfig()
   if err != nil { return TelemtProxy{}, err }
-  linkSecret := strings.ToLower(secret)
-  if cfg.TLS {
-    linkSecret = telemtTLSSecret(linkSecret, cfg.SNI)
+
+  link, err := telemtGeneratedLink(username, cfg.TLS)
+  if err != nil {
+    return TelemtProxy{}, fmt.Errorf("telemt: failed to obtain generated link: %w", err)
   }
-  return TelemtProxy{Name: name, Secret: secret, Host: host, Port: cfg.Port, TLS: cfg.TLS, Link: fmt.Sprintf("tg://proxy?server=%s&port=%d&secret=%s", host, cfg.Port, linkSecret)}, nil
+  if u, err := url.Parse(link); err == nil && u.Query().Get("server") != "" {
+    q := u.Query()
+    q.Set("server", host)
+    u.RawQuery = q.Encode()
+    link = u.String()
+  }
+
+  return TelemtProxy{Name: name, Secret: secret, Host: host, Port: cfg.Port, TLS: cfg.TLS, Link: link}, nil
+}
+
+func telemtGeneratedLink(username string, tls bool) (string, error) {
+  client := &http.Client{Timeout: 5 * time.Second}
+  endpoint := "http://127.0.0.1:9091/v1/users/" + url.PathEscape(username)
+  var lastErr error
+  for i := 0; i < 10; i++ {
+    resp, err := client.Get(endpoint)
+    if err != nil { lastErr = err; time.Sleep(300 * time.Millisecond); continue }
+    var envelope map[string]interface{}
+    err = json.NewDecoder(resp.Body).Decode(&envelope)
+    resp.Body.Close()
+    if err != nil { lastErr = err; time.Sleep(300 * time.Millisecond); continue }
+    ok, _ := envelope["ok"].(bool)
+    if !ok { lastErr = errors.New("Telemt API returned an error"); time.Sleep(300 * time.Millisecond); continue }
+    data, _ := envelope["data"].(map[string]interface{})
+    linksObj, _ := data["links"].(map[string]interface{})
+    key := "classic"
+    if tls { key = "tls" } else if _, ok := linksObj["secure"]; ok { key = "secure" }
+    links, _ := linksObj[key].([]interface{})
+    if len(links) > 0 {
+      if link, ok := links[0].(string); ok && link != "" { return link, nil }
+    }
+    lastErr = errors.New("Telemt API returned no client link")
+    time.Sleep(300 * time.Millisecond)
+  }
+  if lastErr == nil { lastErr = errors.New("Telemt API is unavailable") }
+  return "", lastErr
 }
 
 func (TelemtService) Apply(action string) error {
