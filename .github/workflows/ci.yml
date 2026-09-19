@@ -180,6 +180,9 @@ jobs:
           shellcheck --shell=bash --severity=error install.sh x-ui.sh
       - name: Validate Arch systemd unit
         run: |
+          mkdir -p /usr/local/x-ui
+          printf '#!/bin/sh\nexit 0\n' > /usr/local/x-ui/x-ui
+          chmod +x /usr/local/x-ui/x-ui
           cp x-ui.service.arch /tmp/x-ui.service
           systemd-analyze verify /tmp/x-ui.service
       - name: Guard against pacman partial upgrades
