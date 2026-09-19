@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Card, Popover, Space, Switch, Table, Tag, Tooltip } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
@@ -55,7 +55,7 @@ export function sortHosts(hosts: HostRecord[]): HostRecord[] {
   });
 }
 
-export default function HostList(props: HostListProps) {
+function HostList(props: HostListProps) {
   const { t } = useTranslation();
   const {
     hosts,
@@ -324,3 +324,5 @@ export default function HostList(props: HostListProps) {
     </Card>
   );
 }
+
+export default memo(HostList);
