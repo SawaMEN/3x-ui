@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Alert, Button, Card, Col, ConfigProvider, Form, Input, InputNumber, Layout, Row, Space, Switch, Tag, Typography, message } from 'antd';
-import { CopyOutlined, PlusOutlined, ReloadOutlined, PlayCircleOutlined, StopOutlined, SyncOutlined, ApiOutlined, SettingOutlined } from '@ant-design/icons';
+import { CopyOutlined, PlusOutlined, ReloadOutlined, PlayCircleOutlined, StopOutlined, SyncOutlined, ApiOutlined, SettingOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router';
-import { HttpUtil } from '@/utils';
+import { HttpUtil, RandomUtil } from '@/utils';
 import AppSidebar from '@/layouts/AppSidebar';
 import { useTheme } from '@/hooks/useTheme';
 import './TelemtPage.css';
@@ -31,6 +31,12 @@ export default function TelemtPage() {
   };
 
   useEffect(() => { void refresh(); }, []);
+
+  const generateSecret = () => {
+    const secret = RandomUtil.randomSeq(32, { type: 'hex' });
+    form.setFieldValue('secret', secret);
+    message.success('Новый 32-символьный hex-секрет сгенерирован');
+  };
 
   const save = async (v: Config) => {
     setLoading(true);
@@ -110,7 +116,14 @@ export default function TelemtPage() {
                 <Form form={form} layout="vertical" onFinish={save} initialValues={defaults}>
                   <Row gutter={16}>
                     <Col xs={24} md={8}><Form.Item name="port" label="Порт" rules={[{ required: true }, { type: 'number', min: 1, max: 65535 }]}><InputNumber style={{ width: '100%' }} /></Form.Item></Col>
-                    <Col xs={24} md={16}><Form.Item name="secret" label="Секрет (32 hex-символа)" rules={[{ required: true }, { pattern: /^[0-9a-fA-F]{32}$/, message: 'Нужно ровно 32 hex-символа' }]}><Input.Password placeholder="Например: 0123456789abcdef0123456789abcdef" /></Form.Item></Col>
+                    <Col xs={24} md={16}>
+                      <Form.Item name="secret" label="Секрет (32 hex-символа)" rules={[{ required: true }, { pattern: /^[0-9a-fA-F]{32}$/, message: 'Нужно ровно 32 hex-символа' }]}>
+                        <Space.Compact block>
+                          <Input.Password placeholder="0123456789abcdef0123456789abcdef" />
+                          <Button icon={<SafetyCertificateOutlined />} onClick={generateSecret}>Сгенерировать 32 hex</Button>
+                        </Space.Compact>
+                      </Form.Item>
+                    </Col>
                   </Row>
                   <Row gutter={16}>
                     <Col xs={24} md={8}><Form.Item name="ipv4" label="Разрешить IPv4" valuePropName="checked"><Switch /></Form.Item></Col>
