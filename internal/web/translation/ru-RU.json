@@ -22,7 +22,6 @@
   "remark": "Примечание",
   "enable": "Включить",
   "protocol": "Протокол",
-  "search": "Поиск",
   "filter": "Фильтр",
   "all": "Все",
   "from": "От",
@@ -120,7 +119,6 @@
     "outbounds": "Исходящие",
     "apiDocs": "Документация API",
     "hosts": "Хосты",
-    "docs": "Документация",
     "openMenu": "Открыть меню",
     "pinSidebar": "Закрепить боковую панель",
     "unpinSidebar": "Открепить боковую панель",
@@ -2543,10 +2541,7 @@
     "settings": "Настройки"
   },
   "telemt": {
-    "title": "Telemt — MTProto",
-    "installed": "Бинарник установлен",
     "service": "Сервис",
-    "running": "запущен",
     "stopped": "остановлен"
   }
 }
