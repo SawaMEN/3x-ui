@@ -1672,6 +1672,16 @@ install_x-ui() {
             systemctl enable --now telemt-update.timer 2> /dev/null || true
         fi
 
+        # Install the optional MEKO V3 TCP fix for Telemt. The service is tied
+        # to telemt.service and applies the firewall rules only while Telemt
+        # is running. It is deliberately non-fatal when xt_u32 is unavailable.
+        if [[ -f telemt-meko-fix.sh && -f telemt-meko-fix.service ]]; then
+            install -m 0755 -o root -g root telemt-meko-fix.sh "${xui_folder}/telemt-meko-fix.sh"
+            install -m 0644 -o root -g root telemt-meko-fix.service "${xui_service}/telemt-meko-fix.service"
+            systemctl daemon-reload 2> /dev/null || true
+            systemctl enable telemt-meko-fix.service 2> /dev/null || true
+        fi
+
         install -d -m 700 -o root -g root /etc/x-ui
         if [[ ! -e /etc/x-ui/telemt.toml && -f telemt.toml.example ]]; then
             install -m 600 -o root -g root telemt.toml.example /etc/x-ui/telemt.toml.example
