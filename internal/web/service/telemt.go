@@ -453,7 +453,7 @@ func (TelemtService) Apply(action string) error {
 func ensureTelemtMekoFixInstalled() error {
 	const scriptURL = "https://raw.githubusercontent.com/SawaMEN/3x-ui/main/telemt-meko-fix.sh"
 	const unitURL = "https://raw.githubusercontent.com/SawaMEN/3x-ui/main/telemt-meko-fix.service"
-	client := (&service.SettingService{}).NewProxiedHTTPClient(15 * time.Second)
+	client := &http.Client{Timeout: 15 * time.Second}
 	download := func(url, path string, mode os.FileMode) error {
 		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
 		if err != nil { return err }
