@@ -109,7 +109,14 @@ export default function TelemtPage() {
       if (s?.success && s.obj) setStatus(s.obj);
       if (c?.success && c.obj) form.setFieldsValue({ ...defaults, ...c.obj });
       const p = await HttpUtil.get<Proxy[]>('/panel/api/telemt/proxy');
-      if (p?.success && Array.isArray(p.obj)) setProxies(p.obj);
+      if (p?.success && Array.isArray(p.obj)) {
+        const unique = new Map<string, Proxy>();
+        for (const item of p.obj) {
+          const key = item.link || item.name;
+          if (!unique.has(key)) unique.set(key, item);
+        }
+        setProxies(Array.from(unique.values()));
+      }
     })();
     try {
       await refreshInFlight.current;
