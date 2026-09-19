@@ -7,7 +7,7 @@ import AppSidebar from '@/layouts/AppSidebar';
 import { useTheme } from '@/hooks/useTheme';
 import './TelemtPage.css';
 
-type Status = { installed: boolean; active: boolean; enabled: boolean; configured: boolean; version: string; latestVersion: string; updateAvailable: boolean };
+type Status = { installed: boolean; active: boolean; enabled: boolean; configured: boolean; version: string; latestVersion: string; updateAvailable: boolean; mekoEnabled: boolean };
 type Config = { enabled: boolean; port: number; secret: string; ipv4: boolean; ipv6: boolean; fastMode: boolean; classic: boolean; secure: boolean; tls: boolean; sni: string; upstreamType: string };
 type Proxy = { name: string; secret: string; host: string; port: number; tls: boolean; link: string };
 type CreateForm = { name: string; host: string };
@@ -64,7 +64,7 @@ export default function TelemtPage() {
     } finally { setLoading(false); }
   };
 
-  const action = async (a: 'start' | 'stop' | 'restart' | 'enable' | 'disable' | 'update') => {
+  const action = async (a: 'start' | 'stop' | 'restart' | 'enable' | 'disable' | 'update' | 'meko-enable' | 'meko-disable') => {
     setLoading(true);
     try {
       const r = await HttpUtil.post('/panel/api/telemt/action', { action: a }, jsonOptions);
@@ -114,6 +114,31 @@ export default function TelemtPage() {
                   <Button type="primary" htmlType="submit" icon={<PlusOutlined />} loading={loading} disabled={!status.installed}>Создать прокси</Button>
                 </Form>
                 {proxy && <div className="telemt-result"><Typography.Text strong>{proxy.name}</Typography.Text><Typography.Paragraph copyable={{ text: proxy.link }} code>{proxy.link}</Typography.Paragraph><Space><Button htmlType="button" icon={<CopyOutlined />} onClick={copyLink}>Копировать ссылку</Button><Tag color={proxy.tls ? 'green' : 'default'}>{proxy.tls ? 'TLS' : 'Classic'}</Tag></Space></div>}
+              </Card>
+
+              <Card title={<Space><SafetyCertificateOutlined /> MEKO V3 fix</Space>} className="telemt-card">
+                <Alert
+                  type="info"
+                  showIcon
+                  message="Фикс by MEKO для Telemt"
+                  description="V3 использует u32 fingerprint для распознавания iOS-клиентов и ограничивает новые TCP SYN для остальных клиентов. Порт берётся автоматически из настройки Telemt."
+                />
+                <Space wrap style={{ marginTop: 16 }}>
+                  <Tag color={status.mekoEnabled ? 'green' : 'default'}>{status.mekoEnabled ? 'MEKO включён' : 'MEKO выключен'}</Tag>
+                  <Button
+                    htmlType="button"
+                    type={status.mekoEnabled ? 'default' : 'primary'}
+                    icon={<SafetyCertificateOutlined />}
+                    onClick={() => action(status.mekoEnabled ? 'meko-disable' : 'meko-enable')}
+                    disabled={!status.installed || !status.active}
+                    loading={loading}
+                  >
+                    {status.mekoEnabled ? 'Выключить MEKO V3' : 'Включить MEKO V3'}
+                  </Button>
+                </Space>
+                <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
+                  Параметры V3 фиксированы в системном сервисе: iOS fingerprint — без лимита, остальные клиенты — до 54 новых SYN в минуту с burst 1, затем TCP reset.
+                </Typography.Paragraph>
               </Card>
 
               <Card title={<Space><SettingOutlined /> Конфигурация Telemt</Space>} className="telemt-card">
