@@ -33,7 +33,9 @@ export default function TelemtConnectionsCard() {
             silent: true,
           },
         );
-        if (!disposed && msg?.success && Array.isArray(msg.obj)) setRows(msg.obj);
+        if (!disposed && msg?.success && Array.isArray(msg.obj)) {
+          setRows(msg.obj);
+        }
       } finally {
         if (!disposed) {
           setLoading(false);
@@ -84,7 +86,9 @@ export default function TelemtConnectionsCard() {
         key: 'country',
         render: (_: unknown, row: TelemtConnection) => (
           <span>
-            {row.countryCode ? <Tag bordered={false}>{row.countryCode}</Tag> : null}
+{row.countryCode ? (
+              <Tag bordered={false}>{row.countryCode}</Tag>
+            ) : null}
             {row.country}
           </span>
         ),
