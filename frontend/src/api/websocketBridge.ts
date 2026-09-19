@@ -19,14 +19,18 @@ export function useWebSocketBridge() {
     const onInvalidate: Handler = (payload) => {
       const p = payload as { type?: string } | undefined;
       if (!p || (p.type !== 'inbounds' && p.type !== 'clients')) return;
+      pendingInvalidations.add(p.type);
       if (invalidateTimer != null) clearTimeout(invalidateTimer);
       invalidateTimer = window.setTimeout(() => {
         invalidateTimer = null;
-        if (isRecentLocalInvalidate()) return;
-        if (p.type === 'inbounds') {
-          queryClient.invalidateQueries({ queryKey: ['inbounds'] });
-        } else {
-          queryClient.invalidateQueries({ queryKey: ['clients'] });
+        if (isRecentLocalInvalidate()) {
+          pendingInvalidations.clear();
+          return;
+        }
+        const pending = new Set(pendingInvalidations);
+        pendingInvalidations.clear();
+        for (const type of pending) {
+          void queryClient.invalidateQueries({ queryKey: [type] });
         }
       }, 200);
     };
@@ -61,6 +65,7 @@ export function useWebSocketBridge() {
         clearTimeout(invalidateTimer);
         invalidateTimer = null;
       }
+      pendingInvalidations.clear();
     };
   }, [queryClient]);
 }
