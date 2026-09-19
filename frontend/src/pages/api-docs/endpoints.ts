@@ -2761,7 +2761,8 @@ export const sections: readonly Section[] = [
       {
         method: 'POST',
         path: '/panel/api/telemt/action',
-        summary: 'Perform a Telemt service action such as start, stop, restart, update, or MEKO toggle.',
+        summary:
+          'Perform a Telemt service action such as start, stop, restart, update, or MEKO toggle.',
         body: '{ "action": "restart" }',
       },
     ],

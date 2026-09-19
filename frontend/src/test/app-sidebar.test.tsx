@@ -65,4 +65,3 @@ test('returns to the compact rail after unpinning', () => {
   expect(sidebarRoot?.getAttribute('style')).toContain('--sider-rail: 72px');
   expect(localStorage.getItem('sidebar-pinned')).toBe('false');
 });
-;
