@@ -21,17 +21,17 @@ import (
 )
 
 var telemtLatestCache struct {
-		sync.Mutex
-		latest string
-		checked time.Time
-		current string
-	}
+	sync.Mutex
+	latest  string
+	checked time.Time
+	current string
+}
 
 const (
-	telemtConfigPath  = "/etc/x-ui/telemt.toml"
-	telemtServiceName = "telemt.service"
+	telemtConfigPath     = "/etc/x-ui/telemt.toml"
+	telemtServiceName    = "telemt.service"
 	telemtMekoServiceName = "telemt-meko-fix.service"
-	telemtBinaryPath  = "/usr/local/x-ui/bin/telemt"
+	telemtBinaryPath     = "/usr/local/x-ui/bin/telemt"
 )
 
 type TelemtConfig struct {
@@ -280,7 +280,11 @@ type telemtRuntimeConfigResponse struct {
 
 func fetchTelemtRuntimeConfig() (telemtRuntimeConfigResponse, error) {
 	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Get("http://127.0.0.1:9091/v1/config")
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://127.0.0.1:9091/v1/config", nil)
+	if err != nil {
+		return telemtRuntimeConfigResponse{}, err
+	}
+	resp, err := client.Do(req)
 	if err != nil { return telemtRuntimeConfigResponse{}, err }
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -507,7 +511,13 @@ func telemtGeneratedLink(username string, tls bool) (string, error) {
 	endpoint := "http://127.0.0.1:9091/v1/users/" + url.PathEscape(username)
 	var lastErr error
 	for i := 0; i < 10; i++ {
-		resp, err := client.Get(endpoint)
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, endpoint, nil)
+		if err != nil {
+			lastErr = err
+			time.Sleep(300 * time.Millisecond)
+			continue
+		}
+		resp, err := client.Do(req)
 		if err != nil {
 			lastErr = err
 			time.Sleep(300 * time.Millisecond)
