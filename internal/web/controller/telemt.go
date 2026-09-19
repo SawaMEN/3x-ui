@@ -3,6 +3,7 @@ package controller
 import (
   "net"
   "net/http"
+  "net/url"
   "strings"
 
   "github.com/gin-gonic/gin"
@@ -41,6 +42,18 @@ func (a *TelemtController) saveConfig(c *gin.Context) {
 func (a *TelemtController) listProxy(c *gin.Context) {
   proxies, err := a.service.ListProxies()
   if err != nil { jsonMsg(c, "failed to read Telemt proxies", err); return }
+  host := publicHostFromRequest(c)
+  if host != "" {
+    for i := range proxies {
+      if u, err := url.Parse(proxies[i].Link); err == nil {
+        q := u.Query()
+        q.Set("server", host)
+        u.RawQuery = q.Encode()
+        proxies[i].Link = u.String()
+        proxies[i].Host = host
+      }
+    }
+  }
   jsonObj(c, proxies, nil)
 }
 
