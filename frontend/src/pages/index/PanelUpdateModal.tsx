@@ -80,7 +80,45 @@ export default function PanelUpdateModal({
     }
   }
 
+  async function runUpdate() {
+    const baseTip = t('pages.index.dontRefresh');
+    const tip = info.latestVersion ? `${baseTip} (${info.latestVersion})` : baseTip;
+    onClose();
+    onBusy({ busy: true, tip });
+    const result = await HttpUtil.post<{ runId: string }>('/panel/api/server/updatePanel');
+    if (!result?.success) {
+      onBusy({ busy: false });
+      return;
+    }
+    const outcome = await pollUpdateStatus(result.obj?.runId ?? '');
+    onBusy({ busy: false });
+    if (outcome === 'success') {
+      await PromiseUtil.sleep(800);
+      window.location.reload();
+      return;
+    }
+    modal[outcome === 'failed' ? 'error' : 'warning']({
+      title: t(
+        outcome === 'failed'
+          ? 'pages.index.panelUpdateFailedTitle'
+          : 'pages.index.panelUpdateUnknownTitle',
+      ),
+      content: t(
+        outcome === 'failed'
+          ? 'pages.index.panelUpdateFailedDesc'
+          : 'pages.index.panelUpdateUnknownDesc',
+      ),
+      okText: t('refresh'),
+      onOk: () => window.location.reload(),
+    });
+  }
+
   function updatePanel() {
+    if (isDev) {
+      void runUpdate();
+      return;
+    }
+
     modal.confirm({
       title: t('pages.index.panelUpdateDialog'),
       content: t('pages.index.panelUpdateDialogDesc').replace(
@@ -89,38 +127,7 @@ export default function PanelUpdateModal({
       ),
       okText: t('confirm'),
       cancelText: t('cancel'),
-      onOk: async () => {
-        const baseTip = t('pages.index.dontRefresh');
-        const tip = info.latestVersion ? `${baseTip} (${info.latestVersion})` : baseTip;
-        onClose();
-        onBusy({ busy: true, tip });
-        const result = await HttpUtil.post<{ runId: string }>('/panel/api/server/updatePanel');
-        if (!result?.success) {
-          onBusy({ busy: false });
-          return;
-        }
-        const outcome = await pollUpdateStatus(result.obj?.runId ?? '');
-        onBusy({ busy: false });
-        if (outcome === 'success') {
-          await PromiseUtil.sleep(800);
-          window.location.reload();
-          return;
-        }
-        modal[outcome === 'failed' ? 'error' : 'warning']({
-          title: t(
-            outcome === 'failed'
-              ? 'pages.index.panelUpdateFailedTitle'
-              : 'pages.index.panelUpdateUnknownTitle',
-          ),
-          content: t(
-            outcome === 'failed'
-              ? 'pages.index.panelUpdateFailedDesc'
-              : 'pages.index.panelUpdateUnknownDesc',
-          ),
-          okText: t('refresh'),
-          onOk: () => window.location.reload(),
-        });
-      },
+      onOk: runUpdate,
     });
   }
 
