@@ -112,7 +112,7 @@ func (TelemtService) ConnectedClients() ([]TelemtConnection, error) {
 }
 
 func telemtGeoLookup(client *http.Client, ip string) TelemtConnection {
-	if parsed := net.ParseIP(ip); parsed != nil && (parsed.IsPrivate() || parsed.IsLoopback() || parsed.IsLinkLocal() || parsed.IsUnspecified()) {
+	if parsed := net.ParseIP(ip); parsed != nil && (parsed.IsPrivate() || parsed.IsLoopback() || parsed.IsLinkLocalUnicast() || parsed.IsUnspecified()) {
 		return TelemtConnection{IP: ip, City: "Локальная сеть", Country: "—"}
 	}
 
