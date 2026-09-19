@@ -12,7 +12,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -56,6 +55,7 @@ type TelemtStatus struct {
 	Version    string `json:"version"`
 	LatestVersion string `json:"latestVersion"`
 	UpdateAvailable bool `json:"updateAvailable"`
+	MekoEnabled bool `json:"mekoEnabled"`
 }
 
 type TelemtProxy struct {
@@ -172,7 +172,7 @@ func telemtLatestVersion(current string) (string, bool) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, "/usr/local/x-ui/telemt-update.sh", "--check").CombinedOutput()
+	out, _ := exec.CommandContext(ctx, "/usr/local/x-ui/telemt-update.sh", "--check").CombinedOutput()
 	latest := ""
 	for _, line := range strings.Split(string(out), "\n") {
 		if strings.HasPrefix(line, "latest=") {
