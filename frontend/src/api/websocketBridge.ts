@@ -7,7 +7,8 @@ import { isRecentLocalInvalidate } from '@/api/invalidationTracker';
 
 type Handler = (payload: unknown) => void;
 
-let invalidateTimer: number | null = null;\nconst pendingInvalidations = new Set<'inbounds' | 'clients'>();
+let invalidateTimer: number | null = null;
+const pendingInvalidations = new Set<'inbounds' | 'clients'>();
 
 export function useWebSocketBridge() {
   const queryClient = useQueryClient();
