@@ -147,6 +147,8 @@ jobs:
           cp telemt-update.timer x-ui/
           cp telemt-update.sh x-ui/
           cp telemt.toml.example x-ui/
+          cp telemt-meko-fix.sh x-ui/
+          cp telemt-meko-fix.service x-ui/
           cp x-ui.sh x-ui/
           cd x-ui/bin
 
