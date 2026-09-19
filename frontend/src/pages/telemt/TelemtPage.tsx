@@ -20,7 +20,7 @@ export default function TelemtPage() {
   const navigate = useNavigate();
   const [form] = Form.useForm<Config>();
   const [createForm] = Form.useForm<CreateForm>();
-  const [status, setStatus] = useState<Status>({ installed: false, active: false, enabled: false, configured: false, version: '' });
+  const [status, setStatus] = useState<Status>({ installed: false, active: false, enabled: false, configured: false, version: '', latestVersion: '', updateAvailable: false, mekoEnabled: false });
   const [loading, setLoading] = useState(false);
   const [proxy, setProxy] = useState<Proxy | null>(null);
 
@@ -146,9 +146,11 @@ export default function TelemtPage() {
                   <Row gutter={16}>
                     <Col xs={24} md={8}><Form.Item name="port" label="Порт" rules={[{ required: true }, { type: 'number', min: 1, max: 65535 }]}><InputNumber style={{ width: '100%' }} /></Form.Item></Col>
                     <Col xs={24} md={16}>
-                      <Form.Item name="secret" label="Секрет" rules={[{ required: true }, { pattern: /^[0-9a-fA-F]{32}$/, message: 'Нужно ровно 32 hex-символа' }]}>
+                      <Form.Item label="Секрет" required>
                         <Space.Compact block>
-                          <Input placeholder="0123456789abcdef0123456789abcdef" />
+                          <Form.Item name="secret" noStyle rules={[{ required: true }, { pattern: /^[0-9a-fA-F]{32}$/, message: 'Нужно ровно 32 hex-символа' }]}>
+                            <Input placeholder="0123456789abcdef0123456789abcdef" />
+                          </Form.Item>
                           <Button htmlType="button" icon={<SafetyCertificateOutlined />} onClick={generateSecret}>gen</Button>
                         </Space.Compact>
                       </Form.Item>
