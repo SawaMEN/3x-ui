@@ -104,20 +104,21 @@ func (a *ServerController) startTask() {
 		}
 	})
 
-	// A machine that has explicitly selected the dev channel follows the
-	// rolling dev-latest release automatically. The check is deliberately
-	// infrequent so a normal panel status cycle never performs a GitHub API
-	// request or starts an update process.
-	_, _ = c.AddFunc("@every 15m", func() {
-		if err := a.panelService.AutoUpdateDevChannel(); err != nil {
-			logger.Warning("automatic dev panel update check failed:", err)
-		}
-	})
-
+	// Keep the rolling dev updater independent from the shared cron scheduler.
+	// This guarantees that dev checks still run even if another cron task fails
+	// to register or the scheduler is not started yet.
 	go func() {
 		time.Sleep(30 * time.Second)
-		if err := a.panelService.AutoUpdateDevChannel(); err != nil {
-			logger.Warning("initial automatic dev panel update check failed:", err)
+		check := func() {
+			if err := a.panelService.AutoUpdateDevChannel(); err != nil {
+				logger.Warning("automatic dev panel update check failed:", err)
+			}
+		}
+		check()
+		ticker := time.NewTicker(15 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			check()
 		}
 	}()
 }
