@@ -95,11 +95,11 @@ function defaultTcpMaskSettings(type: string): Record<string, unknown> {
     case 'sudoku':
       return {
         password: '',
-        ascii: '',
+        ascii: 'prefer_entropy',
         customTable: '',
         customTables: [],
-        paddingMin: 0,
-        paddingMax: 0,
+        paddingMin: 7,
+        paddingMax: 17,
       };
     case 'header-custom':
       return { clients: [], servers: [] };
@@ -948,23 +948,78 @@ function UdpMaskItem({
           if (type === 'sudoku') {
             return (
               <>
-                <Form.Item label="Password" name={[fieldName, 'settings', 'password']}>
-                  <Input />
+                <Form.Item
+                  label="Password"
+                  name={[fieldName, 'settings', 'password']}
+                  rules={[{ required: true, message: 'Password is required' }]}
+                  extra="Shared secret. It must be identical on the client and server."
+                >
+                  <Input.Password placeholder="Shared Sudoku secret" />
                 </Form.Item>
-                <Form.Item label="ASCII" name={[fieldName, 'settings', 'ascii']}>
-                  <Input placeholder="prefer_entropy / prefer_printable" />
+                <Form.Item
+                  label="ASCII mode"
+                  name={[fieldName, 'settings', 'ascii']}
+                  extra="prefer_entropy is the default. prefer_ascii favors printable output."
+                >
+                  <Select
+                    allowClear
+                    options={[
+                      { value: 'prefer_entropy', label: 'Prefer entropy (recommended default)' },
+                      { value: 'prefer_ascii', label: 'Prefer ASCII / printable' },
+                    ]}
+                  />
                 </Form.Item>
-                <Form.Item label="Custom Table" name={[fieldName, 'settings', 'customTable']}>
-                  <Input />
+                <Form.Item
+                  label="Padding"
+                  extra="Random padding added to masked packets. Keep Min ≤ Max; 7–17 is a practical default."
+                >
+                  <Space.Compact block>
+                    <Form.Item
+                      name={[fieldName, 'settings', 'paddingMin']}
+                      noStyle
+                      rules={[{ type: 'number', min: 0, max: 100 }]}
+                    >
+                      <InputNumber min={0} max={100} placeholder="Min" style={{ width: '50%' }} />
+                    </Form.Item>
+                    <Form.Item
+                      name={[fieldName, 'settings', 'paddingMax']}
+                      noStyle
+                      rules={[
+                        ({ getFieldValue }) => ({
+                          validator: async (_rule, value) => {
+                            const min = getFieldValue([
+                              ...absolutePath,
+                              'settings',
+                              'paddingMin',
+                            ]);
+                            if (value == null || min == null || Number(value) >= Number(min)) return;
+                            throw new Error('Padding Max must be greater than or equal to Min');
+                          },
+                        }),
+                      ]}
+                    >
+                      <InputNumber min={0} max={100} placeholder="Max" style={{ width: '50%' }} />
+                    </Form.Item>
+                  </Space.Compact>
                 </Form.Item>
-                <Form.Item label="Custom Tables" name={[fieldName, 'settings', 'customTables']}>
-                  <Select mode="tags" style={{ width: '100%' }} tokenSeparators={[',']} />
+                <Form.Item
+                  label="Custom Table"
+                  name={[fieldName, 'settings', 'customTable']}
+                  extra="Optional single Sudoku table. Leave empty to use the built-in table."
+                >
+                  <Input placeholder="e.g. xpxvvpvv" />
                 </Form.Item>
-                <Form.Item label="Padding Min" name={[fieldName, 'settings', 'paddingMin']}>
-                  <InputNumber min={0} />
-                </Form.Item>
-                <Form.Item label="Padding Max" name={[fieldName, 'settings', 'paddingMax']}>
-                  <InputNumber min={0} />
+                <Form.Item
+                  label="Custom Tables"
+                  name={[fieldName, 'settings', 'customTables']}
+                  extra="Optional rotating table set. If set, it takes precedence over Custom Table."
+                >
+                  <Select
+                    mode="tags"
+                    style={{ width: '100%' }}
+                    tokenSeparators={[',']}
+                    placeholder="xpxvvpvv, vxpvxvvp, pxvvxvvp"
+                  />
                 </Form.Item>
               </>
             );
