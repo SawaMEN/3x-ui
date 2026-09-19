@@ -987,12 +987,9 @@ function UdpMaskItem({
                       rules={[
                         ({ getFieldValue }) => ({
                           validator: async (_rule, value) => {
-                            const min = getFieldValue([
-                              ...absolutePath,
-                              'settings',
-                              'paddingMin',
-                            ]);
-                            if (value == null || min == null || Number(value) >= Number(min)) return;
+                            const min = getFieldValue([...absolutePath, 'settings', 'paddingMin']);
+                            if (value == null || min == null || Number(value) >= Number(min))
+                              return;
                             throw new Error('Padding Max must be greater than or equal to Min');
                           },
                         }),
