@@ -86,9 +86,7 @@ export default function TelemtConnectionsCard() {
         key: 'country',
         render: (_: unknown, row: TelemtConnection) => (
           <span>
-{row.countryCode ? (
-              <Tag bordered={false}>{row.countryCode}</Tag>
-            ) : null}
+            {row.countryCode ? <Tag bordered={false}>{row.countryCode}</Tag> : null}
             {row.country}
           </span>
         ),
