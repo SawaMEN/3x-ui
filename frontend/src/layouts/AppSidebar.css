@@ -193,25 +193,85 @@ body.dark .ant-sidebar > .ant-layout-sider {
   cursor: pointer;
 }
 @media (max-width: 768px) {
-  .ant-sidebar > .ant-layout-sider {
-    display: none;
+  .ant-sidebar {
+    position: fixed;
+    inset: 0;
+    width: 0;
+    height: 0;
+    flex: 0 0 0;
+    z-index: 1100;
+    pointer-events: none;
   }
+
+  .ant-sidebar > .ant-layout-sider,
   .sider-brand {
     display: none;
-  }
-}
-
-@media (max-width: 768px) {
-  .ant-sidebar {
-    position: relative;
-    z-index: 1100;
-    width: 0;
-    flex: 0 0 0;
   }
 
   .drawer-handle {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    pointer-events: auto;
+  }
+
+  .content-shell {
+    width: 100%;
+    min-width: 0;
+    margin-left: 0 !important;
+  }
+
+  .content-area {
+    width: 100%;
+    min-width: 0;
+    padding: 12px !important;
+    overflow-x: hidden;
+  }
+
+  .page-layout,
+  .telemt-page {
+    width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
+  }
+
+  .telemt-shell {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .ant-card,
+  .ant-card-body,
+  .ant-form,
+  .ant-form-item,
+  .ant-input,
+  .ant-input-affix-wrapper,
+  .ant-select,
+  .ant-picker,
+  .ant-table-wrapper {
+    max-width: 100%;
+  }
+
+  .ant-table-wrapper {
+    overflow-x: auto;
+  }
+
+  .drawer-handle {
+    left: 12px;
+    bottom: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .content-area {
+    padding: 10px !important;
+  }
+
+  .ant-card-body {
+    padding: 14px !important;
+  }
+
+  .ant-typography {
+    overflow-wrap: anywhere;
   }
 }
