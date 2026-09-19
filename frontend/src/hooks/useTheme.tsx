@@ -150,7 +150,7 @@ const STATISTIC_TOKENS = {
 const LIGHT_CONTRAST_TOKENS = {
   colorTextDescription: 'rgba(0, 0, 0, 0.58)',
   colorTextTertiary: 'rgba(0, 0, 0, 0.58)',
-  colorTextPlaceholder: '#767676',
+  colorTextPlaceholder: '#737078',
   colorError: '#cf1322',
   colorErrorText: '#cf1322',
   colorSuccessText: '#237804',
