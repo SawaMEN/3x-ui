@@ -1,26 +1,33 @@
 import { useEffect, useState } from 'react';
-import { Alert, Button, Card, Col, Form, Input, InputNumber, Row, Space, Switch, Tag, Typography, message } from 'antd';
-import { CopyOutlined, PlusOutlined, ReloadOutlined, PlayCircleOutlined, StopOutlined, SyncOutlined } from '@ant-design/icons';
+import { Alert, Button, Card, Col, ConfigProvider, Form, Input, InputNumber, Layout, Row, Space, Switch, Tag, Typography, message } from 'antd';
+import { CopyOutlined, PlusOutlined, ReloadOutlined, PlayCircleOutlined, StopOutlined, SyncOutlined, ApiOutlined, SettingOutlined } from '@ant-design/icons';
+import { useNavigate } from 'react-router';
 import { HttpUtil } from '@/utils';
+import AppSidebar from '@/layouts/AppSidebar';
+import { useTheme } from '@/hooks/useTheme';
+import './TelemtPage.css';
 
-type Status = { installed: boolean; active: boolean; enabled: boolean; configured: boolean };
+type Status = { installed: boolean; active: boolean; enabled: boolean; configured: boolean; version: string };
 type Config = { enabled: boolean; port: number; secret: string; ipv4: boolean; ipv6: boolean; prefer: number; fastMode: boolean; classic: boolean; secure: boolean; tls: boolean; upstreamType: string };
 type Proxy = { name: string; secret: string; host: string; port: number; tls: boolean; link: string };
 type CreateForm = { name: string; host: string };
 
 const defaults: Config = { enabled: false, port: 8443, secret: '', ipv4: true, ipv6: true, prefer: 4, fastMode: true, classic: false, secure: false, tls: true, upstreamType: 'direct' };
+const jsonOptions = { headers: { 'Content-Type': 'application/json' } };
 
 export default function TelemtPage() {
+  const { antdThemeConfig } = useTheme();
+  const navigate = useNavigate();
   const [form] = Form.useForm<Config>();
   const [createForm] = Form.useForm<CreateForm>();
-  const [status, setStatus] = useState<Status>({ installed: false, active: false, enabled: false, configured: false });
+  const [status, setStatus] = useState<Status>({ installed: false, active: false, enabled: false, configured: false, version: '' });
   const [loading, setLoading] = useState(false);
   const [proxy, setProxy] = useState<Proxy | null>(null);
 
   const refresh = async () => {
-    const [s, c] = await Promise.all([HttpUtil.get('/panel/api/telemt/status'), HttpUtil.get('/panel/api/telemt/config')]);
-    if (s?.success) setStatus(s.obj);
-    if (c?.success) form.setFieldsValue({ ...defaults, ...c.obj });
+    const [s, c] = await Promise.all([HttpUtil.get<Status>('/panel/api/telemt/status'), HttpUtil.get<Config>('/panel/api/telemt/config')]);
+    if (s?.success && s.obj) setStatus(s.obj);
+    if (c?.success && c.obj) form.setFieldsValue({ ...defaults, ...c.obj });
   };
 
   useEffect(() => { void refresh(); }, []);
@@ -28,21 +35,21 @@ export default function TelemtPage() {
   const save = async (v: Config) => {
     setLoading(true);
     try {
-      const r = await HttpUtil.post('/panel/api/telemt/config', v);
+      const r = await HttpUtil.post('/panel/api/telemt/config', v, jsonOptions);
       if (r?.success) { message.success('Конфигурация Telemt сохранена'); await refresh(); }
-      else message.error(r?.msg || 'Не удалось сохранить');
+      else message.error(r?.msg || 'Не удалось сохранить конфигурацию');
     } finally { setLoading(false); }
   };
 
   const createProxy = async (v: CreateForm) => {
     setLoading(true);
     try {
-      const r = await HttpUtil.post('/panel/api/telemt/proxy', v);
-      if (r?.success) {
+      const r = await HttpUtil.post<Proxy>('/panel/api/telemt/proxy', v, jsonOptions);
+      if (r?.success && r.obj) {
         setProxy(r.obj);
         message.success('Прокси создан');
         await refresh();
-        if (!status.active) await action('restart');
+        await action(status.active ? 'restart' : 'start');
       } else message.error(r?.msg || 'Не удалось создать прокси');
     } finally { setLoading(false); }
   };
@@ -50,7 +57,7 @@ export default function TelemtPage() {
   const action = async (a: 'start' | 'stop' | 'restart' | 'enable' | 'disable') => {
     setLoading(true);
     try {
-      const r = await HttpUtil.post('/panel/api/telemt/action', { action: a });
+      const r = await HttpUtil.post('/panel/api/telemt/action', { action: a }, jsonOptions);
       if (r?.success) { message.success('Команда выполнена'); await refresh(); }
       else message.error(r?.msg || 'Команда не выполнена');
     } finally { setLoading(false); }
@@ -62,75 +69,84 @@ export default function TelemtPage() {
     message.success('Ссылка скопирована');
   };
 
-  return <div className="page-shell">
-    <Row gutter={[16, 16]}>
-      <Col xs={24}>
-        <Card title="Telemt — MTProto" extra={<Button icon={<ReloadOutlined />} onClick={refresh}>Обновить</Button>}>
-          {!status.installed && <Alert type="warning" showIcon message="Telemt не установлен. Установите последнюю сборку проекта, чтобы получить бинарник и systemd-сервис." style={{ marginBottom: 16 }} />}
-          <Space wrap style={{ marginBottom: 16 }}>
-            <Tag color={status.installed ? 'green' : 'red'}>Бинарник: {status.installed ? 'установлен' : 'нет'}</Tag>
-            <Tag color={status.active ? 'green' : 'default'}>Сервис: {status.active ? 'запущен' : 'остановлен'}</Tag>
-            <Tag color={status.enabled ? 'green' : 'default'}>Автозапуск: {status.enabled ? 'да' : 'нет'}</Tag>
-            <Tag>Конфиг: {status.configured ? 'есть' : 'нет'}</Tag>
-          </Space>
+  return (
+    <ConfigProvider theme={antdThemeConfig}>
+      <Layout className="page-layout telemt-page">
+        <AppSidebar />
+        <Layout className="content-shell">
+          <Layout.Content className="content-area">
+            <div className="telemt-shell">
+              <div className="telemt-header">
+                <div>
+                  <Typography.Title level={2} className="telemt-title">Telemt</Typography.Title>
+                  <Typography.Text type="secondary">MTProto-прокси в составе панели 3X-UI</Typography.Text>
+                </div>
+                <Button icon={<ReloadOutlined />} onClick={refresh}>Обновить</Button>
+              </div>
 
-          <Card type="inner" title="Быстрое создание прокси" style={{ marginBottom: 16 }}>
-            <Form form={createForm} layout="vertical" onFinish={createProxy}>
-              <Row gutter={16}>
-                <Col xs={24} md={8}>
-                  <Form.Item name="name" label="Название" rules={[{ required: true, message: 'Введите название' }]}>
-                    <Input placeholder="Telegram Proxy 1" />
-                  </Form.Item>
-                </Col>
-                <Col xs={24} md={16}>
-                  <Form.Item name="host" label="Публичный адрес сервера" rules={[{ required: true, message: 'Введите IP или домен' }]}>
-                    <Input placeholder="proxy.example.com или IP" />
-                  </Form.Item>
-                </Col>
+              {!status.installed && (
+                <Alert type="warning" showIcon message="Бинарник Telemt не установлен" description="Установите актуальную сборку проекта — бинарник и systemd-служба будут установлены автоматически." />
+              )}
+
+              <Row gutter={[16, 16]} className="telemt-status-grid">
+                <Col xs={24} sm={12} lg={6}><Card className="telemt-status-card"><Typography.Text type="secondary">Версия бинарника</Typography.Text><Typography.Title level={4}>{status.version || '—'}</Typography.Title></Card></Col>
+                <Col xs={24} sm={12} lg={6}><Card className="telemt-status-card"><Typography.Text type="secondary">Бинарник</Typography.Text><Typography.Title level={4}><Tag color={status.installed ? 'green' : 'red'}>{status.installed ? 'Установлен' : 'Не установлен'}</Tag></Typography.Title></Card></Col>
+                <Col xs={24} sm={12} lg={6}><Card className="telemt-status-card"><Typography.Text type="secondary">Сервис</Typography.Text><Typography.Title level={4}><Tag color={status.active ? 'green' : 'default'}>{status.active ? 'Запущен' : 'Остановлен'}</Tag></Typography.Title></Card></Col>
+                <Col xs={24} sm={12} lg={6}><Card className="telemt-status-card"><Typography.Text type="secondary">Автозапуск</Typography.Text><Typography.Title level={4}><Tag color={status.enabled ? 'green' : 'default'}>{status.enabled ? 'Включён' : 'Выключен'}</Tag></Typography.Title></Card></Col>
               </Row>
-              <Button type="primary" icon={<PlusOutlined />} htmlType="submit" loading={loading} disabled={!status.installed}>
-                Создать прокси и получить ссылку
-              </Button>
-            </Form>
 
-            {proxy && <Card size="small" style={{ marginTop: 16 }}>
-              <Typography.Text strong>{proxy.name}</Typography.Text>
-              <div style={{ marginTop: 8 }}><Typography.Text code copyable={{ text: proxy.link }}>{proxy.link}</Typography.Text></div>
-              <Space style={{ marginTop: 12 }}>
-                <Button icon={<CopyOutlined />} onClick={copyLink}>Копировать ссылку</Button>
-                <Tag color={proxy.tls ? 'green' : 'default'}>{proxy.tls ? 'TLS' : 'Classic'}</Tag>
-              </Space>
-            </Card>}
-          </Card>
+              <Card title={<Space><ApiOutlined /> Управление прокси</Space>} className="telemt-card">
+                <Form form={createForm} layout="vertical" onFinish={createProxy}>
+                  <Row gutter={16}>
+                    <Col xs={24} md={8}><Form.Item name="name" label="Название прокси" rules={[{ required: true, message: 'Введите название' }]}><Input placeholder="Telegram Proxy" /></Form.Item></Col>
+                    <Col xs={24} md={16}><Form.Item name="host" label="Публичный адрес" rules={[{ required: true, message: 'Введите IP или домен' }]}><Input placeholder="proxy.example.com или IP-адрес" /></Form.Item></Col>
+                  </Row>
+                  <Button type="primary" icon={<PlusOutlined />} htmlType="submit" loading={loading} disabled={!status.installed}>Создать прокси</Button>
+                </Form>
+                {proxy && <div className="telemt-result"><Typography.Text strong>{proxy.name}</Typography.Text><Typography.Paragraph copyable={{ text: proxy.link }} code>{proxy.link}</Typography.Paragraph><Space><Button icon={<CopyOutlined />} onClick={copyLink}>Копировать ссылку</Button><Tag color={proxy.tls ? 'green' : 'default'}>{proxy.tls ? 'TLS' : 'Classic'}</Tag></Space></div>}
+              </Card>
 
-          <Form form={form} layout="vertical" onFinish={save} initialValues={defaults}>
-            <Row gutter={16}>
-              <Col xs={24} md={8}><Form.Item name="port" label="Порт" rules={[{ required: true }, { type: 'number', min: 1, max: 65535 }]}><InputNumber style={{ width: '100%' }} /></Form.Item></Col>
-              <Col xs={24} md={16}><Form.Item name="secret" label="Секрет (32 hex)" rules={[{ required: true }, { pattern: /^[0-9a-fA-F]{32}$/, message: 'Нужны ровно 32 hex-символа' }]}><Input.Password placeholder="32 hex символа" /></Form.Item></Col>
-            </Row>
-            <Row gutter={16}>
-              <Col span={8}><Form.Item name="ipv4" label="IPv4" valuePropName="checked"><Switch /></Form.Item></Col>
-              <Col span={8}><Form.Item name="ipv6" label="IPv6" valuePropName="checked"><Switch /></Form.Item></Col>
-              <Col span={8}><Form.Item name="fastMode" label="Fast mode" valuePropName="checked"><Switch /></Form.Item></Col>
-            </Row>
-            <Row gutter={16}>
-              <Col span={8}><Form.Item name="classic" label="Classic" valuePropName="checked"><Switch /></Form.Item></Col>
-              <Col span={8}><Form.Item name="secure" label="Secure" valuePropName="checked"><Switch /></Form.Item></Col>
-              <Col span={8}><Form.Item name="tls" label="TLS" valuePropName="checked"><Switch /></Form.Item></Col>
-            </Row>
-            <Form.Item name="prefer" label="Предпочтительный IP"><InputNumber min={4} max={6} addonBefore="IPv" /></Form.Item>
-            <Space wrap>
-              <Button type="primary" htmlType="submit" loading={loading}>Сохранить</Button>
-              <Button icon={<PlayCircleOutlined />} onClick={() => action('start')} disabled={!status.installed} loading={loading}>Запустить</Button>
-              <Button icon={<StopOutlined />} onClick={() => action('stop')} loading={loading}>Остановить</Button>
-              <Button icon={<SyncOutlined />} onClick={() => action('restart')} disabled={!status.installed} loading={loading}>Перезапустить</Button>
-            </Space>
-            <Space wrap style={{ marginTop: 12 }}>
-              <Button onClick={() => action(status.enabled ? 'disable' : 'enable')}>{status.enabled ? 'Отключить автозапуск' : 'Включить автозапуск'}</Button>
-            </Space>
-          </Form>
-        </Card>
-      </Col>
-    </Row>
-  </div>;
+              <Card title={<Space><SettingOutlined /> Конфигурация Telemt</Space>} className="telemt-card">
+                <Form form={form} layout="vertical" onFinish={save} initialValues={defaults}>
+                  <Row gutter={16}>
+                    <Col xs={24} md={8}><Form.Item name="port" label="Порт" rules={[{ required: true }, { type: 'number', min: 1, max: 65535 }]}><InputNumber style={{ width: '100%' }} /></Form.Item></Col>
+                    <Col xs={24} md={16}><Form.Item name="secret" label="Секрет (32 hex-символа)" rules={[{ required: true }, { pattern: /^[0-9a-fA-F]{32}$/, message: 'Нужно ровно 32 hex-символа' }]}><Input.Password placeholder="Например: 0123456789abcdef0123456789abcdef" /></Form.Item></Col>
+                  </Row>
+                  <Row gutter={16}>
+                    <Col xs={24} md={8}><Form.Item name="ipv4" label="Разрешить IPv4" valuePropName="checked"><Switch /></Form.Item></Col>
+                    <Col xs={24} md={8}><Form.Item name="ipv6" label="Разрешить IPv6" valuePropName="checked"><Switch /></Form.Item></Col>
+                    <Col xs={24} md={8}><Form.Item name="fastMode" label="Fast mode" valuePropName="checked"><Switch /></Form.Item></Col>
+                  </Row>
+                  <Row gutter={16}>
+                    <Col xs={24} md={8}><Form.Item name="classic" label="Classic" valuePropName="checked"><Switch /></Form.Item></Col>
+                    <Col xs={24} md={8}><Form.Item name="secure" label="Secure" valuePropName="checked"><Switch /></Form.Item></Col>
+                    <Col xs={24} md={8}><Form.Item name="tls" label="TLS" valuePropName="checked"><Switch /></Form.Item></Col>
+                  </Row>
+                  <Form.Item name="prefer" label="Предпочтительный IP"><InputNumber min={4} max={6} addonBefore="IPv" /></Form.Item>
+                  <Space wrap>
+                    <Button type="primary" htmlType="submit" loading={loading}>Сохранить</Button>
+                    <Button icon={<PlayCircleOutlined />} onClick={() => action('start')} disabled={!status.installed}>Запустить</Button>
+                    <Button icon={<StopOutlined />} onClick={() => action('stop')} disabled={!status.active}>Остановить</Button>
+                    <Button icon={<SyncOutlined />} onClick={() => action('restart')} disabled={!status.installed}>Перезапустить</Button>
+                    <Button onClick={() => action(status.enabled ? 'disable' : 'enable')}>{status.enabled ? 'Отключить автозапуск' : 'Включить автозапуск'}</Button>
+                  </Space>
+                </Form>
+              </Card>
+
+              <Card title="Переходы" className="telemt-card telemt-navigation-card">
+                <Space wrap>
+                  <Button onClick={() => navigate('/')}>Главная</Button>
+                  <Button onClick={() => navigate('/inbounds')}>Входящие</Button>
+                  <Button onClick={() => navigate('/clients')}>Клиенты</Button>
+                  <Button onClick={() => navigate('/nodes')}>Ноды</Button>
+                  <Button onClick={() => navigate('/settings')}>Настройки</Button>
+                  <Button onClick={() => navigate('/xray')}>Xray</Button>
+                </Space>
+              </Card>
+            </div>
+          </Layout.Content>
+        </Layout>
+      </Layout>
+    </ConfigProvider>
+  );
 }
