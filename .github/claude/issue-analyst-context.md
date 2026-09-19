@@ -88,8 +88,7 @@ question it already answers.
      `docs/public/openapi.json` and the MDX regenerated with
      `cd docs && pnpm gen:api`, because `docs-ci.yml` fires only on `docs/**`.
      Step 4 is the one that reaches production wrong.
-- **i18n.** The repository currently has 2 locale JSON files in
-  `internal/web/translation/`; a new English key goes in every locale JSON there
+- **i18n.** The repository currently has `internal/web/translation/` (2 files). a new English key goes in every locale JSON there
   and must be referenced from `frontend/src` or Go in the SAME change.
   `frontend/src/test/i18n-dead-keys.test.ts` checks the locale set and orphan keys.
 - **Migrations.** Schema changes are GORM `AutoMigrate` PLUS hand-written
