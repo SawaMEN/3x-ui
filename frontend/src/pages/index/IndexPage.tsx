@@ -27,6 +27,7 @@ import OverviewActionBar from './OverviewActionBar';
 import VitalTile from './VitalTile';
 import ThroughputCard from './ThroughputCard';
 import ConnectionsCard from './ConnectionsCard';
+import TelemtConnectionsCard from './TelemtConnectionsCard';
 import SystemStrip from './SystemStrip';
 import { mean, peak, useOverviewHistory } from './useOverviewHistory';
 import type { PanelUpdateInfo } from './PanelUpdateModal';
@@ -285,6 +286,8 @@ export default function IndexPage() {
                       isMobile={isMobile}
                     />
                   </div>
+
+                  <TelemtConnectionsCard />
 
                   <SystemStrip
                     status={status}
