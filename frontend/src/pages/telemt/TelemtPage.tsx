@@ -120,7 +120,7 @@ export default function TelemtPage() {
                       <Form.Item name="secret" label="Секрет" rules={[{ required: true }, { pattern: /^[0-9a-fA-F]{32}$/, message: 'Нужно ровно 32 hex-символа' }]}>
                         <Space.Compact block>
                           <Input placeholder="0123456789abcdef0123456789abcdef" />
-                          <Button icon={<SafetyCertificateOutlined />} onClick={generateSecret}>gen</Button>
+                          <Button htmlType="button" icon={<SafetyCertificateOutlined />} onClick={generateSecret}>gen</Button>
                         </Space.Compact>
                       </Form.Item>
                     </Col>
@@ -137,22 +137,22 @@ export default function TelemtPage() {
                   </Row>
                   <Space wrap>
                     <Button type="primary" htmlType="submit" loading={loading}>Сохранить</Button>
-                    <Button icon={<PlayCircleOutlined />} onClick={() => action('start')} disabled={!status.installed}>Запустить</Button>
-                    <Button icon={<StopOutlined />} onClick={() => action('stop')} disabled={!status.active}>Остановить</Button>
-                    <Button icon={<SyncOutlined />} onClick={() => action('restart')} disabled={!status.installed}>Перезапустить</Button>
-                    <Button onClick={() => action(status.enabled ? 'disable' : 'enable')}>{status.enabled ? 'Отключить автозапуск' : 'Включить автозапуск'}</Button>
+                    <Button htmlType="button" icon={<PlayCircleOutlined />} onClick={() => action('start')} disabled={!status.installed}>Запустить</Button>
+                    <Button htmlType="button" icon={<StopOutlined />} onClick={() => action('stop')} disabled={!status.active}>Остановить</Button>
+                    <Button htmlType="button" icon={<SyncOutlined />} onClick={() => action('restart')} disabled={!status.installed}>Перезапустить</Button>
+                    <Button htmlType="button" onClick={() => action(status.enabled ? 'disable' : 'enable')}>{status.enabled ? 'Отключить автозапуск' : 'Включить автозапуск'}</Button>
                   </Space>
                 </Form>
               </Card>
 
               <Card title="Переходы" className="telemt-card telemt-navigation-card">
                 <Space wrap>
-                  <Button onClick={() => navigate('/')}>Главная</Button>
-                  <Button onClick={() => navigate('/inbounds')}>Входящие</Button>
-                  <Button onClick={() => navigate('/clients')}>Клиенты</Button>
-                  <Button onClick={() => navigate('/nodes')}>Ноды</Button>
-                  <Button onClick={() => navigate('/settings')}>Настройки</Button>
-                  <Button onClick={() => navigate('/xray')}>Xray</Button>
+                  <Button htmlType="button" onClick={() => navigate('/')}>Главная</Button>
+                  <Button htmlType="button" onClick={() => navigate('/inbounds')}>Входящие</Button>
+                  <Button htmlType="button" onClick={() => navigate('/clients')}>Клиенты</Button>
+                  <Button htmlType="button" onClick={() => navigate('/nodes')}>Ноды</Button>
+                  <Button htmlType="button" onClick={() => navigate('/settings')}>Настройки</Button>
+                  <Button htmlType="button" onClick={() => navigate('/xray')}>Xray</Button>
                 </Space>
               </Card>
             </div>
