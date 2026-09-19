@@ -16,6 +16,7 @@ import (
 const (
   telemtConfigPath = "/etc/x-ui/telemt.toml"
   telemtServiceName = "telemt.service"
+  telemtBinaryPath = "/usr/local/x-ui/bin/telemt"
 )
 
 type TelemtConfig struct {
@@ -37,6 +38,7 @@ type TelemtStatus struct {
   Active bool `json:"active"`
   Enabled bool `json:"enabled"`
   Configured bool `json:"configured"`
+  Version string `json:"version"`
 }
 
 type TelemtProxy struct {
@@ -56,14 +58,34 @@ type TelemtCreateRequest struct {
 type TelemtService struct{}
 
 func (TelemtService) Status() TelemtStatus {
-  _, binErr := os.Stat("/usr/local/x-ui/bin/telemt")
+  _, binErr := os.Stat(telemtBinaryPath)
   _, cfgErr := os.Stat(telemtConfigPath)
+  version := ""
+  if binErr == nil {
+    version = telemtVersion()
+  }
   return TelemtStatus{
     Installed: binErr == nil,
     Active: systemctl("is-active", "--quiet", telemtServiceName) == nil,
     Enabled: systemctl("is-enabled", "--quiet", telemtServiceName) == nil,
     Configured: cfgErr == nil,
+    Version: version,
   }
+}
+
+func telemtVersion() string {
+  for _, arg := range []string{"--version", "-V"} {
+    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+    out, err := exec.CommandContext(ctx, telemtBinaryPath, arg).CombinedOutput()
+    cancel()
+    if err == nil {
+      value := strings.TrimSpace(string(out))
+      if value != "" {
+        return value
+      }
+    }
+  }
+  return ""
 }
 
 func (TelemtService) GetConfig() (TelemtConfig, error) {
@@ -99,7 +121,17 @@ func (TelemtService) SaveConfig(c TelemtConfig) error {
   if len(c.Secret) != 32 { return errors.New("telemt: secret must contain exactly 32 hexadecimal characters") }
   if _, err := hex.DecodeString(c.Secret); err != nil { return errors.New("telemt: secret must be hexadecimal") }
   if c.UpstreamType != "direct" { return errors.New("telemt: only direct upstream is supported by the panel") }
-  data := fmt.Sprintf("[general]\nfast_mode = %t\nuse_middle_proxy = false\n\n[general.modes]\nclassic = %t\nsecure = %t\ntls = %t\n\n[general.links]\nshow = [\"xui\"]\n\n[network]\nipv4 = %t\nipv6 = %t\nprefer = %d\n\n[server]\nport = %d\nlisten_addr_ipv4 = \"0.0.0.0\"\nlisten_addr_ipv6 = \"::\"\n\n[[server.listeners]]\nip = \"0.0.0.0\"\n\n[access]\nreplay_check_len = 65536\nignore_time_skew = false\n\n[access.users]\nxui = \"%s\"\n\n[[upstreams]]\ntype = \"direct\"\nweight = 1\nenabled = true\n", c.FastMode, c.Classic, c.Secure, c.TLS, c.IPv4, c.IPv6, c.Prefer, c.Port, strings.ToLower(c.Secret))
+
+  listeners := ""
+  if c.IPv4 {
+    listeners += "[[server.listeners]]\nip = \"0.0.0.0\"\n\n"
+  }
+  if c.IPv6 {
+    listeners += "[[server.listeners]]\nip = \"::\"\n\n"
+  }
+
+  data := fmt.Sprintf("[general]\nfast_mode = %t\nuse_middle_proxy = false\nlog_level = \"normal\"\n\n[general.modes]\nclassic = %t\nsecure = %t\ntls = %t\n\n[general.links]\nshow = [\"xui\"]\n\n[network]\nipv4 = %t\nipv6 = %t\nprefer = %d\n\n[server]\nport = %d\n\n%s[access]\nreplay_check_len = 65536\nignore_time_skew = false\n\n[access.users]\nxui = \"%s\"\n\n[[upstreams]]\ntype = \"direct\"\nweight = 1\nenabled = true\n", c.FastMode, c.Classic, c.Secure, c.TLS, c.IPv4, c.IPv6, c.Prefer, c.Port, listeners, strings.ToLower(c.Secret))
+
   if err := os.WriteFile(telemtConfigPath, []byte(data), 0600); err != nil { return err }
   return systemctl("daemon-reload")
 }
