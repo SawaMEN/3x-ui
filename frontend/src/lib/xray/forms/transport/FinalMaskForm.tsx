@@ -446,30 +446,6 @@ function TcpMaskItem({
               </>
             );
           }
-          if (type === 'sudoku') {
-            return (
-              <>
-                <Form.Item label="Password" name={[fieldName, 'settings', 'password']}>
-                  <Input />
-                </Form.Item>
-                <Form.Item label="ASCII" name={[fieldName, 'settings', 'ascii']}>
-                  <Input />
-                </Form.Item>
-                <Form.Item label="Custom Table" name={[fieldName, 'settings', 'customTable']}>
-                  <Input />
-                </Form.Item>
-                <Form.Item label="Custom Tables" name={[fieldName, 'settings', 'customTables']}>
-                  <Select mode="tags" style={{ width: '100%' }} tokenSeparators={[',']} />
-                </Form.Item>
-                <Form.Item label="Padding Min" name={[fieldName, 'settings', 'paddingMin']}>
-                  <InputNumber min={0} />
-                </Form.Item>
-                <Form.Item label="Padding Max" name={[fieldName, 'settings', 'paddingMax']}>
-                  <InputNumber min={0} />
-                </Form.Item>
-              </>
-            );
-          }
           if (type === 'header-custom') {
             return (
               <HeaderCustomGroups
