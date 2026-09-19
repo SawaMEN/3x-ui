@@ -92,6 +92,7 @@ func ensureTelemtConfig() error {
   if _, err := rand.Read(secretBytes); err != nil { return fmt.Errorf("telemt: generate secret: %w", err) }
   c := defaultTelemtConfig()
   c.Secret = hex.EncodeToString(secretBytes)
+  c.SNI = "petrovich.ru"
   data, err := renderTelemtConfig(c)
   if err != nil { return err }
   if err := os.WriteFile(telemtConfigPath, []byte(data), 0600); err != nil { return fmt.Errorf("telemt: create config: %w", err) }
@@ -155,6 +156,10 @@ func (TelemtService) SaveConfig(c TelemtConfig) error {
   return nil
 }
 
+func telemtTLSSecret(secret, sni string) string {
+  return "ee" + strings.ToLower(secret) + hex.EncodeToString([]byte(strings.ToLower(sni)))
+}
+
 func (TelemtService) CreateProxy(req TelemtCreateRequest) (TelemtProxy, error) {
   name := strings.TrimSpace(req.Name)
   host := strings.TrimSpace(req.Host)
@@ -194,7 +199,11 @@ func (TelemtService) CreateProxy(req TelemtCreateRequest) (TelemtProxy, error) {
   }
   cfg, err := TelemtService{}.GetConfig()
   if err != nil { return TelemtProxy{}, err }
-  return TelemtProxy{Name: name, Secret: secret, Host: host, Port: cfg.Port, TLS: cfg.TLS, Link: fmt.Sprintf("tg://proxy?server=%s&port=%d&secret=%s", host, cfg.Port, secret)}, nil
+  linkSecret := strings.ToLower(secret)
+  if cfg.TLS {
+    linkSecret = telemtTLSSecret(linkSecret, cfg.SNI)
+  }
+  return TelemtProxy{Name: name, Secret: secret, Host: host, Port: cfg.Port, TLS: cfg.TLS, Link: fmt.Sprintf("tg://proxy?server=%s&port=%d&secret=%s", host, cfg.Port, linkSecret)}, nil
 }
 
 func (TelemtService) Apply(action string) error {
