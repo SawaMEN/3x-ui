@@ -1,6 +1,6 @@
 import { createRoot } from 'react-dom/client';
 import { RouterProvider } from 'react-router/dom';
-import { message } from 'antd';
+import { ConfigProvider, message } from 'antd';
 import 'antd/dist/reset.css';
 import '@/styles/utils.css';
 import '@/styles/page-shell.css';
@@ -20,14 +20,23 @@ if (messageContainer) {
   message.config({ getContainer: () => messageContainer });
 }
 
+function AppProviders() {
+  const { antdThemeConfig } = useTheme();
+  return (
+    <ConfigProvider theme={antdThemeConfig}>
+      <QueryProvider>
+        <RouterProvider router={router} />
+      </QueryProvider>
+    </ConfigProvider>
+  );
+}
+
 readyI18n().then(() => {
   const root = document.getElementById('app');
   if (root) {
     createRoot(root).render(
       <ThemeProvider>
-        <QueryProvider>
-          <RouterProvider router={router} />
-        </QueryProvider>
+        <AppProviders />
       </ThemeProvider>,
     );
   }
