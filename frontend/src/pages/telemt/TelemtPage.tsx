@@ -1,7 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Button, Card, Col, ConfigProvider, Form, Input, InputNumber, Layout, Row, Space, Switch, Tag, Typography, message } from 'antd';
 import { CopyOutlined, PlusOutlined, ReloadOutlined, PlayCircleOutlined, StopOutlined, SyncOutlined, ApiOutlined, SettingOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
-import { useNavigate } from 'react-router';
 import { HttpUtil, RandomUtil } from '@/utils';
 import AppSidebar from '@/layouts/AppSidebar';
 import { useTheme } from '@/hooks/useTheme';
@@ -17,7 +16,6 @@ const jsonOptions = { headers: { 'Content-Type': 'application/json' } };
 
 export default function TelemtPage() {
   const { antdThemeConfig } = useTheme();
-  const navigate = useNavigate();
   const [form] = Form.useForm<Config>();
   const [createForm] = Form.useForm<CreateForm>();
   const [status, setStatus] = useState<Status>({ installed: false, active: false, enabled: false, configured: false, version: '', latestVersion: '', updateAvailable: false, mekoEnabled: false });
@@ -25,7 +23,7 @@ export default function TelemtPage() {
   const [proxy, setProxy] = useState<Proxy | null>(null);
   const refreshInFlight = useRef<Promise<void> | null>(null);
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     // Prevent a manual refresh and the 60s poller from issuing duplicate requests.
     if (refreshInFlight.current) return refreshInFlight.current;
 
@@ -43,13 +41,13 @@ export default function TelemtPage() {
     } finally {
       refreshInFlight.current = null;
     }
-  };
+  }, [form]);
 
   useEffect(() => {
     void refresh();
     const timer = window.setInterval(() => void refresh(), 60000);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [refresh]);
 
   const generateSecret = () => {
     const secret = RandomUtil.randomSeq(32, { type: 'hex' });
