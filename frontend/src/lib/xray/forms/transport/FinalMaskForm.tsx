@@ -457,12 +457,10 @@ function TcpMaskItem({
                   extra="The same password must be used on both sides."
                 >
                   <Space.Compact block>
-                    <Form.Item name={[fieldName, 'settings', 'password']} noStyle>
-                      <Input.Password
-                        placeholder="Shared Sudoku password"
-                        style={{ width: '100%' }}
-                      />
-                    </Form.Item>
+                    <Input.Password
+                      placeholder="Shared Sudoku password"
+                      style={{ width: '100%' }}
+                    />
                     <Button
                       icon={<ReloadOutlined />}
                       aria-label="Generate password"
@@ -474,6 +472,32 @@ function TcpMaskItem({
                       }
                     />
                   </Space.Compact>
+                </Form.Item>
+
+                <Form.Item
+                  label="Quick Profile"
+                  extra="Shortcut for common output styles; this selector is not saved to Xray."
+                >
+                  <Select
+                    allowClear
+                    placeholder="Choose a profile"
+                    options={[
+                      { value: 'entropy', label: 'Low entropy — prefer_entropy' },
+                      { value: 'ascii', label: 'Printable — prefer_ascii' },
+                      { value: 'custom', label: 'Custom — keep manual settings' },
+                    ]}
+                    onChange={(profile: string | undefined) => {
+                      if (profile === 'entropy' || profile === 'ascii') {
+                        const settings = form.getFieldValue(sudokuSettingsPath) || {};
+                        form.setFieldValue(sudokuSettingsPath, {
+                          ...settings,
+                          ascii: profile === 'ascii' ? 'prefer_ascii' : 'prefer_entropy',
+                          customTable: '',
+                          customTables: [],
+                        });
+                      }
+                    }}
+                  />
                 </Form.Item>
 
                 <Form.Item
@@ -516,7 +540,8 @@ function TcpMaskItem({
                 <Form.Item
                   label="Custom Tables"
                   name={[fieldName, 'settings', 'customTables']}
-                  extra="Optional rotation pool. Each entry uses the same 8-character x/p/v format."
+                  rules={[{ validator: validateSudokuCustomTables }]}
+                  extra="Optional rotation pool. Every entry must contain exactly 8 characters: 2x, 2p and 4v."
                 >
                   <Select
                     mode="tags"
@@ -752,6 +777,25 @@ function validateSudokuCustomTable(_rule: unknown, value: unknown): Promise<void
     [...str].filter((ch) => ch === 'v').length !== 4
   ) {
     return Promise.reject(new Error('Use exactly 8 characters: 2x, 2p and 4v, e.g. vxvpxvvp'));
+  }
+  return Promise.resolve();
+}
+
+function validateSudokuCustomTables(_rule: unknown, value: unknown): Promise<void> {
+  if (value === undefined || value === null || value === '') return Promise.resolve();
+  const values = Array.isArray(value) ? value : [value];
+  for (const item of values) {
+    const str = typeof item === 'string' ? item.trim().toLowerCase() : '';
+    if (
+      !/^[xpv]{8}$/.test(str) ||
+      [...str].filter((ch) => ch === 'x').length !== 2 ||
+      [...str].filter((ch) => ch === 'p').length !== 2 ||
+      [...str].filter((ch) => ch === 'v').length !== 4
+    ) {
+      return Promise.reject(
+        new Error('Every custom table must contain exactly 8 characters: 2x, 2p and 4v'),
+      );
+    }
   }
   return Promise.resolve();
 }
