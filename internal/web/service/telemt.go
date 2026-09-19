@@ -393,6 +393,9 @@ func (TelemtService) ListProxies() ([]TelemtProxy, error) {
 	if err := toml.Unmarshal(b, &raw); err != nil { return nil, fmt.Errorf("telemt: parse config: %w", err) }
 	out := make([]TelemtProxy, 0, len(raw.Access.Users))
 	for username, secret := range raw.Access.Users {
+		if username == "xui" {
+			continue
+		}
 		link, linkErr := telemtGeneratedLink(username, raw.General.Modes.TLS)
 		if linkErr != nil { continue }
 		host := ""
@@ -403,6 +406,40 @@ func (TelemtService) ListProxies() ([]TelemtProxy, error) {
 		out = append(out, TelemtProxy{Name: username, Secret: secret, Host: host, Port: raw.Server.Port, TLS: raw.General.Modes.TLS, Link: link})
 	}
 	return out, nil
+}
+
+func (TelemtService) DeleteProxy(username string) error {
+	username = strings.TrimSpace(username)
+	if username == "" || username == "xui" || strings.ContainsAny(username, "/\\\r\n") {
+		return errors.New("telemt: invalid proxy username")
+	}
+	client := &http.Client{Timeout: 10 * time.Second}
+	endpoint := "http://127.0.0.1:9091/v1/users/" + url.PathEscape(username)
+	req, err := http.NewRequest(http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return fmt.Errorf("telemt: create delete request: %w", err)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("telemt: delete proxy: %w", err)
+	}
+	defer resp.Body.Close()
+	var envelope map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil {
+		return fmt.Errorf("telemt: decode delete response: %w", err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		if data, ok := envelope["error"].(map[string]interface{}); ok {
+			if msg, ok := data["message"].(string); ok && msg != "" {
+				return fmt.Errorf("telemt: delete proxy: %s", msg)
+			}
+		}
+		return fmt.Errorf("telemt: delete proxy: HTTP %d", resp.StatusCode)
+	}
+	if ok, exists := envelope["ok"].(bool); exists && !ok {
+		return errors.New("telemt: delete proxy rejected by API")
+	}
+	return nil
 }
 
 func telemtGeneratedLink(username string, tls bool) (string, error) {
