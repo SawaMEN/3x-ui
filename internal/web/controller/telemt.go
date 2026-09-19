@@ -1,9 +1,12 @@
 package controller
 
 import (
+  "net"
   "net/http"
-  "github.com/mhsanaei/3x-ui/v3/internal/web/service"
+  "strings"
+
   "github.com/gin-gonic/gin"
+  "github.com/mhsanaei/3x-ui/v3/internal/web/service"
 )
 
 type TelemtController struct { service service.TelemtService }
@@ -41,17 +44,27 @@ func (a *TelemtController) listProxy(c *gin.Context) {
   jsonObj(c, proxies, nil)
 }
 
-func (a *TelemtController) deleteProxy(c *gin.Context) {
-  if err := a.service.DeleteProxy(c.Param("name")); err != nil { jsonMsg(c, err.Error(), err); return }
-  jsonObj(c, a.service.Status(), nil)
+func publicHostFromRequest(c *gin.Context) string {
+  host := strings.TrimSpace(c.GetHeader("X-Forwarded-Host"))
+  if i := strings.IndexByte(host, ','); i >= 0 { host = strings.TrimSpace(host[:i]) }
+  if host == "" { host = strings.TrimSpace(c.Request.Host) }
+  if h, _, err := net.SplitHostPort(host); err == nil { return strings.Trim(h, "[]") }
+  return strings.Trim(host, "[]")
 }
 
 func (a *TelemtController) createProxy(c *gin.Context) {
   var req service.TelemtCreateRequest
   if err := c.ShouldBindJSON(&req); err != nil { jsonMsg(c, "invalid Telemt proxy request", err); return }
+  req.Host = publicHostFromRequest(c)
+  if req.Host == "" { jsonMsg(c, "unable to determine public host", nil); return }
   proxy, err := a.service.CreateProxy(req)
   if err != nil { jsonMsg(c, err.Error(), err); return }
   jsonObj(c, proxy, nil)
+}
+
+func (a *TelemtController) deleteProxy(c *gin.Context) {
+  if err := a.service.DeleteProxy(c.Param("name")); err != nil { jsonMsg(c, err.Error(), err); return }
+  jsonObj(c, a.service.Status(), nil)
 }
 
 func (a *TelemtController) action(c *gin.Context) {
