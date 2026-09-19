@@ -14,10 +14,18 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pelletier/go-toml/v2"
 )
+
+var telemtLatestCache struct {
+		sync.Mutex
+		latest string
+		checked time.Time
+		current string
+	}
 
 const (
 	telemtConfigPath  = "/etc/x-ui/telemt.toml"
@@ -149,17 +157,36 @@ func (TelemtService) Status() TelemtStatus {
 }
 
 func telemtLatestVersion(current string) (string, bool) {
-	if _, err := os.Stat("/usr/local/x-ui/telemt-update.sh"); err != nil { return "", false }
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	if _, err := os.Stat("/usr/local/x-ui/telemt-update.sh"); err != nil {
+		return "", false
+	}
+
+	telemtLatestCache.Lock()
+	defer telemtLatestCache.Unlock()
+
+	// The updater performs a network request. Do not run it on every panel refresh.
+	if telemtLatestCache.latest != "" && telemtLatestCache.current == current && time.Since(telemtLatestCache.checked) < 10*time.Minute {
+		latest := telemtLatestCache.latest
+		return latest, current != "" && strings.TrimPrefix(current, "v") != strings.TrimPrefix(latest, "v")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 	out, err := exec.CommandContext(ctx, "/usr/local/x-ui/telemt-update.sh", "--check").CombinedOutput()
-	text := string(out)
 	latest := ""
-	for _, line := range strings.Split(text, "\n") {
-		if strings.HasPrefix(line, "latest=") { latest = strings.TrimSpace(strings.TrimPrefix(line, "latest=")); break }
+	for _, line := range strings.Split(string(out), "\n") {
+		if strings.HasPrefix(line, "latest=") {
+			latest = strings.TrimSpace(strings.TrimPrefix(line, "latest="))
+			break
+		}
 	}
-	if err != nil && latest == "" { return "", false }
-	if latest == "" { return "", false }
+	if latest == "" {
+		return "", false
+	}
+
+	telemtLatestCache.latest = latest
+	telemtLatestCache.checked = time.Now()
+	telemtLatestCache.current = current
 	return latest, current != "" && strings.TrimPrefix(current, "v") != strings.TrimPrefix(latest, "v")
 }
 
@@ -222,7 +249,7 @@ func (TelemtService) GetConfig() (TelemtConfig, error) {
 	c.SNI = raw.Censorship.TLSDomain
 	c.Secret = strings.TrimSpace(raw.Access.Users["xui"])
 	if len(raw.Upstreams) > 0 && raw.Upstreams[0].Type != "" { c.UpstreamType = raw.Upstreams[0].Type } else { c.UpstreamType = "direct" }
-	c.Enabled = TelemtService{}.Status().Enabled
+	c.Enabled = systemctl("is-enabled", "--quiet", telemtServiceName) == nil
 	return c, nil
 }
 func (TelemtService) SaveConfig(c TelemtConfig) error {
