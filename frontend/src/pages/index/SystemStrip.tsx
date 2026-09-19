@@ -100,4 +100,12 @@ function SystemStrip({ status, showIp, onToggleIp }: SystemStripProps) {
 }
 
 
-export default memo(SystemStrip, (prev, next) =>\n  prev.showIp === next.showIp &&\n  prev.status.uptime === next.status.uptime &&\n  prev.status.appStats.uptime === next.status.appStats.uptime &&\n  prev.status.appStats.mem === next.status.appStats.mem &&\n  prev.status.appStats.threads === next.status.appStats.threads &&\n  prev.status.publicIP.ipv4 === next.status.publicIP.ipv4 &&\n  prev.status.publicIP.ipv6 === next.status.publicIP.ipv6,\n);
+export default memo(SystemStrip, (prev, next) =>
+  prev.showIp === next.showIp &&
+  prev.status.uptime === next.status.uptime &&
+  prev.status.appStats.uptime === next.status.appStats.uptime &&
+  prev.status.appStats.mem === next.status.appStats.mem &&
+  prev.status.appStats.threads === next.status.appStats.threads &&
+  prev.status.publicIP.ipv4 === next.status.publicIP.ipv4 &&
+  prev.status.publicIP.ipv6 === next.status.publicIP.ipv6,
+);
