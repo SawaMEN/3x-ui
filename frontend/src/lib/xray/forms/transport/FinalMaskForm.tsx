@@ -181,6 +181,15 @@ function defaultUdpMaskSettings(type: string): Record<string, unknown> {
   switch (type) {
     case 'salamander':
       return { password: '' };
+    case 'sudoku':
+      return {
+        password: '',
+        ascii: '',
+        customTable: '',
+        customTables: [],
+        paddingMin: 0,
+        paddingMax: 0,
+      };
     case 'mkcp-legacy':
       return { header: '', value: '' };
     case 'xdns':
@@ -893,6 +902,7 @@ function UdpMaskItem({
         // uses; it stays hysteria-only elsewhere to keep legacy parity.
         ...(isWireguard ? [{ value: 'salamander', label: 'Salamander' }] : []),
         { value: 'mkcp-legacy', label: 'mKCP Legacy' },
+        { value: 'sudoku', label: 'Sudoku' },
         { value: 'xdns', label: 'xDNS' },
         { value: 'xicmp', label: 'xICMP' },
         { value: 'realm', label: 'Realm' },
@@ -933,6 +943,30 @@ function UdpMaskItem({
                 form={form}
                 absolutePath={absolutePath}
               />
+            );
+          }
+          if (type === 'sudoku') {
+            return (
+              <>
+                <Form.Item label="Password" name={[fieldName, 'settings', 'password']}>
+                  <Input />
+                </Form.Item>
+                <Form.Item label="ASCII" name={[fieldName, 'settings', 'ascii']}>
+                  <Input placeholder="prefer_entropy / prefer_printable" />
+                </Form.Item>
+                <Form.Item label="Custom Table" name={[fieldName, 'settings', 'customTable']}>
+                  <Input />
+                </Form.Item>
+                <Form.Item label="Custom Tables" name={[fieldName, 'settings', 'customTables']}>
+                  <Select mode="tags" style={{ width: '100%' }} tokenSeparators={[',']} />
+                </Form.Item>
+                <Form.Item label="Padding Min" name={[fieldName, 'settings', 'paddingMin']}>
+                  <InputNumber min={0} />
+                </Form.Item>
+                <Form.Item label="Padding Max" name={[fieldName, 'settings', 'paddingMax']}>
+                  <InputNumber min={0} />
+                </Form.Item>
+              </>
             );
           }
           if (type === 'mkcp-legacy') {
