@@ -380,6 +380,31 @@ func (TelemtService) CreateProxy(req TelemtCreateRequest) (TelemtProxy, error) {
 	return TelemtProxy{Name: name, Secret: secret, Host: host, Port: cfg.Port, TLS: cfg.TLS, Link: link}, nil
 }
 
+func (TelemtService) ListProxies() ([]TelemtProxy, error) {
+	if err := ensureTelemtConfig(); err != nil { return nil, err }
+	b, err := os.ReadFile(telemtConfigPath)
+	if err != nil { return nil, err }
+	var raw struct {
+		Server struct { Port int `toml:"port"` } `toml:"server"`
+		Censorship struct { TLSDomain string `toml:"tls_domain"` } `toml:"censorship"`
+		Access struct { Users map[string]string `toml:"users"` } `toml:"access"`
+		General struct { Modes struct { TLS bool `toml:"tls"` } `toml:"modes"` } `toml:"general"`
+	}
+	if err := toml.Unmarshal(b, &raw); err != nil { return nil, fmt.Errorf("telemt: parse config: %w", err) }
+	out := make([]TelemtProxy, 0, len(raw.Access.Users))
+	for username, secret := range raw.Access.Users {
+		link, linkErr := telemtGeneratedLink(username, raw.General.Modes.TLS)
+		if linkErr != nil { continue }
+		host := ""
+		if u, err := url.Parse(link); err == nil {
+			host = u.Query().Get("server")
+		}
+		if host == "" { host = "—" }
+		out = append(out, TelemtProxy{Name: username, Secret: secret, Host: host, Port: raw.Server.Port, TLS: raw.General.Modes.TLS, Link: link})
+	}
+	return out, nil
+}
+
 func telemtGeneratedLink(username string, tls bool) (string, error) {
 	client := &http.Client{Timeout: 5 * time.Second}
 	endpoint := "http://127.0.0.1:9091/v1/users/" + url.PathEscape(username)
