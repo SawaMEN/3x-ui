@@ -1,0 +1,117 @@
+name: Repair v3.8.7 amd64
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    if: github.event.head_commit.message != 'chore: remove temporary v3.8.7 repair workflow'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          check-latest: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build amd64 package
+        shell: bash
+        run: |
+          set -euo pipefail
+          export CGO_ENABLED=1
+          export GOOS=linux
+          export GOARCH=amd64
+          TARBALL_BASE="https://toolchains.bootlin.com/downloads/releases/toolchains/x86-64/tarballs/"
+          TARBALL_URL=$(curl -fsSL --retry 5 --retry-all-errors --retry-delay 3 "$TARBALL_BASE" | grep -oE 'x86-64--musl--stable-[^\"]+\.tar\.xz' | sort -r | head -n1)
+          test -n "$TARBALL_URL"
+          cd /tmp
+          curl -fL --retry 5 --retry-all-errors --retry-delay 3 -o "$(basename "$TARBALL_URL")" "$TARBALL_BASE/$TARBALL_URL"
+          tar -xf "$(basename "$TARBALL_URL")"
+          TOOLCHAIN_DIR=$(find . -maxdepth 1 -type d -name 'x86-64--musl--stable-*' | head -n1)
+          test -n "$TOOLCHAIN_DIR"
+          export PATH="$(realpath "$TOOLCHAIN_DIR")/bin:$PATH"
+          export CC=$(realpath "$(find "$TOOLCHAIN_DIR/bin" -name '*-gcc.br_real' -type f -executable | head -n1)")
+          test -n "$CC"
+          cd -
+          LDFLAGS="-w -s -linkmode external -extldflags '-static'"
+          go build -buildvcs=true -ldflags "$LDFLAGS" -o xui-release -v .
+          rm -rf x-ui
+          mkdir -p x-ui/bin
+          mv xui-release x-ui/x-ui
+          cp x-ui.service.debian x-ui/
+          cp x-ui.service.arch x-ui/
+          cp x-ui.service.rhel x-ui/
+          cp telemt.service x-ui/
+          cp telemt-update.service x-ui/
+          cp telemt-update.timer x-ui/
+          cp telemt-update.sh x-ui/
+          cp telemt.toml.example x-ui/
+          cp x-ui.sh x-ui/
+          cd x-ui/bin
+          Xray_URL="https://github.com/XTLS/Xray-core/releases/download/v26.9.9/"
+          curl -fL --retry 5 --retry-all-errors --retry-delay 3 -o Xray-linux-64.zip "${Xray_URL}Xray-linux-64.zip"
+          unzip -q Xray-linux-64.zip
+          rm -f Xray-linux-64.zip
+          curl -fL --retry 5 --retry-all-errors --retry-delay 3 -o geoip.dat https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat
+          curl -fL --retry 5 --retry-all-errors --retry-delay 3 -o geosite.dat https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat
+          curl -fL --retry 5 --retry-all-errors --retry-delay 3 -o geoip_IR.dat https://github.com/chocolate4u/Iran-v2ray-rules/releases/latest/download/geoip.dat
+          curl -fL --retry 5 --retry-all-errors --retry-delay 3 -o geosite_IR.dat https://github.com/chocolate4u/Iran-v2ray-rules/releases/latest/download/geosite.dat
+          curl -fL --retry 5 --retry-all-errors --retry-delay 3 -o geoip_RU.dat https://github.com/runetfreedom/russia-v2ray-rules-dat/releases/latest/download/geoip.dat
+          curl -fL --retry 5 --retry-all-errors --retry-delay 3 -o geosite_RU.dat https://github.com/runetfreedom/russia-v2ray-rules-dat/releases/latest/download/geosite.dat
+          mv xray xray-linux-amd64
+          MTG_MULTI_VER=$(curl -sf --retry 5 --retry-all-errors --retry-delay 3 -o /dev/null -w '%{redirect_url}' https://github.com/mhsanaei/mtg-multi/releases/latest | sed -n 's#.*/releases/tag/##p')
+          test -n "$MTG_MULTI_VER"
+          MTG_PKG="mtg-multi-${MTG_MULTI_VER#v}-linux-amd64"
+          curl -sfL --retry 5 --retry-all-errors --retry-delay 3 -O "https://github.com/mhsanaei/mtg-multi/releases/download/${MTG_MULTI_VER}/${MTG_PKG}.tar.gz"
+          tar -xzf "${MTG_PKG}.tar.gz"
+          mv "${MTG_PKG}/mtg-multi" mtg-linux-amd64
+          rm -rf "$MTG_PKG" "${MTG_PKG}.tar.gz"
+          TELEMT_VER=$(curl -sf --retry 5 --retry-all-errors --retry-delay 3 -o /dev/null -w '%{redirect_url}' https://github.com/telemt/telemt/releases/latest | sed -n 's#.*/releases/tag/##p')
+          test -n "$TELEMT_VER"
+          curl -sfL --retry 5 --retry-all-errors --retry-delay 3 -O "https://github.com/telemt/telemt/releases/download/${TELEMT_VER}/telemt-x86_64-linux-musl.tar.gz"
+          tar -xzf telemt-x86_64-linux-musl.tar.gz
+          chmod +x telemt
+          rm -f telemt-x86_64-linux-musl.tar.gz
+          curl -sfL --retry 5 --retry-all-errors --retry-delay 3 -o tuic-server "https://github.com/EAimTY/tuic/releases/download/tuic-server-1.0.0/tuic-server-1.0.0-x86_64-unknown-linux-musl"
+          chmod +x tuic-server
+          cd ../..
+          tar -zcf x-ui-linux-amd64.tar.gz x-ui
+          sha256sum x-ui-linux-amd64.tar.gz > x-ui-linux-amd64.tar.gz.sha256
+
+      - name: Upload amd64 assets to v3.8.7
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          tag: v3.8.7
+          file: x-ui-linux-amd64.tar.gz
+          asset_name: x-ui-linux-amd64.tar.gz
+          overwrite: true
+
+      - name: Upload amd64 checksum to v3.8.7
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          tag: v3.8.7
+          file: x-ui-linux-amd64.tar.gz.sha256
+          asset_name: x-ui-linux-amd64.tar.gz.sha256
+          overwrite: true
