@@ -15,6 +15,7 @@ import {
   Spin,
   message,
 } from 'antd';
+import { CheckOutlined, MoonOutlined, SunOutlined, BgColorsOutlined, CloudOutlined } from '@ant-design/icons';
 
 import { HttpUtil, PromiseUtil } from '@/utils';
 import { setMessageInstance } from '@/utils/messageBus';
@@ -70,7 +71,7 @@ function scrollTarget() {
 
 export default function SettingsPage() {
   const { t } = useTranslation();
-  const { isDark, isUltra, lowPower, toggleLowPower, antdThemeConfig } = useTheme();
+  const { isDark, isUltra, mode, setThemeMode, lowPower, toggleLowPower, antdThemeConfig } = useTheme();
   const { isMobile } = useMediaQuery();
   const [modal, modalContextHolder] = Modal.useModal();
   const [messageApi, messageContextHolder] = message.useMessage();
@@ -98,6 +99,14 @@ export default function SettingsPage() {
   const location = useLocation();
   const slug = location.hash.replace(/^#/, '');
   const activeSlug = tabSlugs.includes(slug) ? slug : 'general';
+
+  const themeOptions = [
+    { mode: 'light' as const, label: 'Светлая', icon: <SunOutlined />, description: 'Чистая и светлая' },
+    { mode: 'dark' as const, label: 'Тёмная', icon: <MoonOutlined />, description: 'Спокойная и контрастная' },
+    { mode: 'blue-gray' as const, label: 'Blue Gray', icon: <CloudOutlined />, description: 'Холодная тёмная' },
+    { mode: 'colorful' as const, label: 'Colorful', icon: <BgColorsOutlined />, description: 'Более выразительная' },
+    { mode: 'ultra-dark' as const, label: 'Ultra Dark', icon: <MoonOutlined />, description: 'Максимально тёмная' },
+  ];
 
   function rebuildUrlAfterRestart(): string {
     const { webDomain, webPort, webBasePath, webCertFile, webKeyFile } = allSetting;
@@ -298,6 +307,46 @@ export default function SettingsPage() {
                             <Alert type="warning" showIcon title={t('pages.settings.infoDesc')} />
                           </Col>
                         </Row>
+                      </Card>
+                    </Col>
+
+                    <Col span={24}>
+                      <Card className="theme-picker-card">
+                        <div className="theme-picker-header">
+                          <div>
+                            <div className="theme-picker-title">Оформление</div>
+                            <div className="theme-picker-subtitle">Выберите внешний вид панели</div>
+                          </div>
+                        </div>
+                        <div className="theme-picker-grid" role="radiogroup" aria-label="Тема панели">
+                          {themeOptions.map((option) => {
+                            const selected = mode === option.mode;
+                            return (
+                              <button
+                                key={option.mode}
+                                type="button"
+                                className={`theme-picker-option theme-${option.mode} ${selected ? 'is-selected' : ''}`}
+                                aria-checked={selected}
+                                role="radio"
+                                onClick={() => setThemeMode(option.mode)}
+                              >
+                                <span className="theme-picker-preview" aria-hidden="true">
+                                  <span className="theme-preview-sidebar" />
+                                  <span className="theme-preview-content">
+                                    <span />
+                                    <span />
+                                    <span />
+                                  </span>
+                                </span>
+                                <span className="theme-picker-meta">
+                                  <span className="theme-picker-name">{option.icon} {option.label}</span>
+                                  <span className="theme-picker-description">{option.description}</span>
+                                </span>
+                                <span className="theme-picker-check">{selected && <CheckOutlined />}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
                       </Card>
                     </Col>
 
