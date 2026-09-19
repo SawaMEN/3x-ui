@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Card, Col, ConfigProvider, Form, Input, InputNumber, Layout, Row, Space, Switch, Tag, Typography, message } from 'antd';
 import { CopyOutlined, PlusOutlined, ReloadOutlined, PlayCircleOutlined, StopOutlined, SyncOutlined, ApiOutlined, SettingOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router';
@@ -23,11 +23,26 @@ export default function TelemtPage() {
   const [status, setStatus] = useState<Status>({ installed: false, active: false, enabled: false, configured: false, version: '', latestVersion: '', updateAvailable: false, mekoEnabled: false });
   const [loading, setLoading] = useState(false);
   const [proxy, setProxy] = useState<Proxy | null>(null);
+  const refreshInFlight = useRef<Promise<void> | null>(null);
 
   const refresh = async () => {
-    const [s, c] = await Promise.all([HttpUtil.get<Status>('/panel/api/telemt/status'), HttpUtil.get<Config>('/panel/api/telemt/config')]);
-    if (s?.success && s.obj) setStatus(s.obj);
-    if (c?.success && c.obj) form.setFieldsValue({ ...defaults, ...c.obj });
+    // Prevent a manual refresh and the 60s poller from issuing duplicate requests.
+    if (refreshInFlight.current) return refreshInFlight.current;
+
+    refreshInFlight.current = (async () => {
+      const [s, c] = await Promise.all([
+        HttpUtil.get<Status>('/panel/api/telemt/status'),
+        HttpUtil.get<Config>('/panel/api/telemt/config'),
+      ]);
+      if (s?.success && s.obj) setStatus(s.obj);
+      if (c?.success && c.obj) form.setFieldsValue({ ...defaults, ...c.obj });
+    })();
+
+    try {
+      await refreshInFlight.current;
+    } finally {
+      refreshInFlight.current = null;
+    }
   };
 
   useEffect(() => {
