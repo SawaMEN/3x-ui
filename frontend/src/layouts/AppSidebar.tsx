@@ -194,10 +194,10 @@ function AppSidebar() {
   const selectedKey = settingsActive ? `/settings${hash || '#general'}` : xrayActive ? `/xray${hash || '#basic'}` : pathname === '' ? '/' : pathname;
   const openSubmenu = settingsActive ? '/settings' : xrayActive ? '/xray' : null;
   const [openKeys, setOpenKeys] = useState<string[]>(() => (openSubmenu ? [openSubmenu] : []));
-
-  useEffect(() => {
-    if (openSubmenu && !openKeys.includes(openSubmenu)) setOpenKeys((keys) => keys.includes(openSubmenu) ? keys : [...keys, openSubmenu]);
-  }, [openSubmenu, openKeys]);
+  const visibleOpenKeys = useMemo(() => {
+    if (!openSubmenu || openKeys.includes(openSubmenu)) return openKeys;
+    return [...openKeys, openSubmenu];
+  }, [openKeys, openSubmenu]);
 
   const toMenuItems = useCallback((items: typeof tabs): MenuProps['items'] => items.map((tab) => {
     const Icon = iconByName[tab.icon];
@@ -229,7 +229,7 @@ function AppSidebar() {
             </div>
           </div>
         </div>
-        <Menu theme={currentTheme} mode="inline" selectedKeys={[selectedKey]} openKeys={railCollapsed ? undefined : openKeys} onOpenChange={(keys) => setOpenKeys(keys as string[])} className="sider-nav" items={toMenuItems(navItems)} onClick={onMenuClick} />
+        <Menu theme={currentTheme} mode="inline" selectedKeys={[selectedKey]} openKeys={railCollapsed ? undefined : visibleOpenKeys} onOpenChange={(keys) => setOpenKeys(keys as string[])} className="sider-nav" items={toMenuItems(navItems)} onClick={onMenuClick} />
         <Menu theme={currentTheme} mode="inline" selectedKeys={[selectedKey]} className="sider-utility" items={toMenuItems(utilItems)} onClick={onMenuClick} />
       </Layout.Sider>
 
@@ -241,7 +241,7 @@ function AppSidebar() {
             <button className="drawer-close" type="button" aria-label={t('close')} onClick={() => setDrawerOpen(false)}><CloseOutlined /></button>
           </div>
         </div>
-        <Menu theme={currentTheme} mode="inline" selectedKeys={[selectedKey]} openKeys={openKeys} onOpenChange={(keys) => setOpenKeys(keys as string[])} className="drawer-menu drawer-nav" items={toMenuItems(navItems)} onClick={(info) => { onMenuClick(info); setDrawerOpen(false); }} />
+        <Menu theme={currentTheme} mode="inline" selectedKeys={[selectedKey]} openKeys={visibleOpenKeys} onOpenChange={(keys) => setOpenKeys(keys as string[])} className="drawer-menu drawer-nav" items={toMenuItems(navItems)} onClick={(info) => { onMenuClick(info); setDrawerOpen(false); }} />
         <Menu theme={currentTheme} mode="inline" selectedKeys={[selectedKey]} className="drawer-menu drawer-utility" items={toMenuItems(utilItems)} onClick={(info) => { onMenuClick(info); setDrawerOpen(false); }} />
       </Drawer>
 
