@@ -64,11 +64,25 @@ const ULTRA_DARK_MENU_TOKENS = {
   darkSubMenuItemBg: '#0a0b0e',
   darkPopupBg: '#111318',
 };
+const LIGHT_TOKENS = {
+  colorBgBase: '#fffbfe',
+  colorBgLayout: '#fffbfe',
+  colorBgContainer: '#fffbfe',
+  colorBgElevated: '#f7f2fa',
+  colorText: '#1d1b20',
+  colorTextSecondary: '#49454f',
+  colorBorder: '#79747e',
+  colorBorderSecondary: '#cac4d0',
+};
 const DARK_TOKENS = {
-  colorBgBase: '#1a1b1f',
-  colorBgLayout: '#1a1b1f',
-  colorBgContainer: '#23252b',
-  colorBgElevated: '#2d2f37',
+  colorBgBase: '#141218',
+  colorBgLayout: '#141218',
+  colorBgContainer: '#211f26',
+  colorBgElevated: '#2b2930',
+  colorText: '#e6e0e9',
+  colorTextSecondary: '#cac4d0',
+  colorBorder: '#938f99',
+  colorBorderSecondary: '#49454f',
 };
 const BLUE_GRAY_TOKENS = {
   colorBgBase: '#101722',
@@ -83,12 +97,12 @@ const COLORFUL_TOKENS = {
   colorBgElevated: '#f1ecff',
 };
 const DARK_LAYOUT_TOKENS = {
-  bodyBg: '#1a1b1f',
-  headerBg: '#15161a',
+  bodyBg: '#141218',
+  headerBg: '#1d1b20',
   headerColor: '#ffffff',
-  footerBg: '#1a1b1f',
-  siderBg: '#15161a',
-  triggerBg: '#23252b',
+  footerBg: '#141218',
+  siderBg: '#1d1b20',
+  triggerBg: '#2b2930',
   triggerColor: '#ffffff',
 };
 const BLUE_GRAY_LAYOUT_TOKENS = {
@@ -196,7 +210,7 @@ export function buildAntdThemeConfig(mode: ThemeMode): ThemeConfig {
     return {
       ...SHARED_STYLE_CONFIG,
       algorithm: antdTheme.defaultAlgorithm,
-      token: { ...LIGHT_CONTRAST_TOKENS, ...MATERIAL_TOKENS },
+      token: { ...LIGHT_TOKENS, ...LIGHT_CONTRAST_TOKENS, ...MATERIAL_TOKENS },
       components: { Statistic: STATISTIC_TOKENS },
     };
   }
