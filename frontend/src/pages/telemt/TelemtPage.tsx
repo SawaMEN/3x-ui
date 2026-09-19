@@ -8,11 +8,11 @@ import { useTheme } from '@/hooks/useTheme';
 import './TelemtPage.css';
 
 type Status = { installed: boolean; active: boolean; enabled: boolean; configured: boolean; version: string };
-type Config = { enabled: boolean; port: number; secret: string; ipv4: boolean; ipv6: boolean; prefer: number; fastMode: boolean; classic: boolean; secure: boolean; tls: boolean; upstreamType: string };
+type Config = { enabled: boolean; port: number; secret: string; ipv4: boolean; ipv6: boolean; fastMode: boolean; classic: boolean; secure: boolean; tls: boolean; upstreamType: string };
 type Proxy = { name: string; secret: string; host: string; port: number; tls: boolean; link: string };
 type CreateForm = { name: string; host: string };
 
-const defaults: Config = { enabled: false, port: 8443, secret: '', ipv4: true, ipv6: true, prefer: 4, fastMode: true, classic: false, secure: false, tls: true, upstreamType: 'direct' };
+const defaults: Config = { enabled: false, port: 8443, secret: '', ipv4: true, ipv6: true, fastMode: true, classic: false, secure: false, tls: true, upstreamType: 'direct' };
 const jsonOptions = { headers: { 'Content-Type': 'application/json' } };
 
 export default function TelemtPage() {
@@ -117,10 +117,10 @@ export default function TelemtPage() {
                   <Row gutter={16}>
                     <Col xs={24} md={8}><Form.Item name="port" label="Порт" rules={[{ required: true }, { type: 'number', min: 1, max: 65535 }]}><InputNumber style={{ width: '100%' }} /></Form.Item></Col>
                     <Col xs={24} md={16}>
-                      <Form.Item name="secret" label="Секрет (32 hex-символа)" rules={[{ required: true }, { pattern: /^[0-9a-fA-F]{32}$/, message: 'Нужно ровно 32 hex-символа' }]}>
+                      <Form.Item name="secret" label="Секрет" rules={[{ required: true }, { pattern: /^[0-9a-fA-F]{32}$/, message: 'Нужно ровно 32 hex-символа' }]}>
                         <Space.Compact block>
-                          <Input.Password placeholder="0123456789abcdef0123456789abcdef" />
-                          <Button icon={<SafetyCertificateOutlined />} onClick={generateSecret}>Сгенерировать 32 hex</Button>
+                          <Input placeholder="0123456789abcdef0123456789abcdef" />
+                          <Button icon={<SafetyCertificateOutlined />} onClick={generateSecret}>gen</Button>
                         </Space.Compact>
                       </Form.Item>
                     </Col>
@@ -135,7 +135,6 @@ export default function TelemtPage() {
                     <Col xs={24} md={8}><Form.Item name="secure" label="Secure" valuePropName="checked"><Switch /></Form.Item></Col>
                     <Col xs={24} md={8}><Form.Item name="tls" label="TLS" valuePropName="checked"><Switch /></Form.Item></Col>
                   </Row>
-                  <Form.Item name="prefer" label="Предпочтительный IP"><InputNumber min={4} max={6} addonBefore="IPv" /></Form.Item>
                   <Space wrap>
                     <Button type="primary" htmlType="submit" loading={loading}>Сохранить</Button>
                     <Button icon={<PlayCircleOutlined />} onClick={() => action('start')} disabled={!status.installed}>Запустить</Button>

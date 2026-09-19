@@ -26,7 +26,6 @@ type TelemtConfig struct {
   Secret string `json:"secret"`
   IPv4 bool `json:"ipv4"`
   IPv6 bool `json:"ipv6"`
-  Prefer int `json:"prefer"`
   FastMode bool `json:"fastMode"`
   Classic bool `json:"classic"`
   Secure bool `json:"secure"`
@@ -59,13 +58,12 @@ type TelemtCreateRequest struct {
 type TelemtService struct{}
 
 func defaultTelemtConfig() TelemtConfig {
-  return TelemtConfig{Port: 8443, IPv4: true, IPv6: true, Prefer: 4, FastMode: true, TLS: true, UpstreamType: "direct"}
+  return TelemtConfig{Port: 8443, IPv4: true, IPv6: true, FastMode: true, TLS: true, UpstreamType: "direct"}
 }
 
 func renderTelemtConfig(c TelemtConfig) (string, error) {
   if c.Port < 1 || c.Port > 65535 { return "", errors.New("telemt: invalid port") }
   if !c.IPv4 && !c.IPv6 { return "", errors.New("telemt: enable IPv4 or IPv6") }
-  if c.Prefer != 4 && c.Prefer != 6 { return "", errors.New("telemt: prefer must be 4 or 6") }
   if len(c.Secret) != 32 { return "", errors.New("telemt: secret must contain exactly 32 hexadecimal characters") }
   if _, err := hex.DecodeString(c.Secret); err != nil { return "", errors.New("telemt: secret must be hexadecimal") }
   if c.UpstreamType != "direct" { return "", errors.New("telemt: only direct upstream is supported by the panel") }
@@ -73,7 +71,7 @@ func renderTelemtConfig(c TelemtConfig) (string, error) {
   listeners := ""
   if c.IPv4 { listeners += "[[server.listeners]]\nip = \"0.0.0.0\"\n\n" }
   if c.IPv6 { listeners += "[[server.listeners]]\nip = \"::\"\n\n" }
-  return fmt.Sprintf("[general]\nfast_mode = %t\nuse_middle_proxy = false\nlog_level = \"normal\"\n\n[general.modes]\nclassic = %t\nsecure = %t\ntls = %t\n\n[general.links]\nshow = [\"xui\"]\n\n[network]\nipv4 = %t\nipv6 = %t\nprefer = %d\n\n[server]\nport = %d\n\n%s[access]\nreplay_check_len = 65536\nignore_time_skew = false\n\n[access.users]\nxui = \"%s\"\n\n[[upstreams]]\ntype = \"direct\"\nweight = 1\nenabled = true\n", c.FastMode, c.Classic, c.Secure, c.TLS, c.IPv4, c.IPv6, c.Prefer, c.Port, listeners, strings.ToLower(c.Secret)), nil
+  return fmt.Sprintf("[general]\nfast_mode = %t\nuse_middle_proxy = false\nlog_level = \"normal\"\n\n[general.modes]\nclassic = %t\nsecure = %t\ntls = %t\n\n[general.links]\nshow = [\"xui\"]\n\n[network]\nipv4 = %t\nipv6 = %t\n\n[server]\nport = %d\n\n%s[access]\nreplay_check_len = 65536\nignore_time_skew = false\n\n[access.users]\nxui = \"%s\"\n\n[[upstreams]]\ntype = \"direct\"\nweight = 1\nenabled = true\n", c.FastMode, c.Classic, c.Secure, c.TLS, c.IPv4, c.IPv6, c.Port, listeners, strings.ToLower(c.Secret)), nil
 }
 
 func ensureTelemtConfig() error {
@@ -123,7 +121,6 @@ func (TelemtService) GetConfig() (TelemtConfig, error) {
     if strings.HasPrefix(line, "xui = ") { c.Secret = strings.Trim(strings.TrimPrefix(line, "xui = "), `"`) }
     if strings.HasPrefix(line, "ipv4 = ") { c.IPv4 = strings.TrimSpace(strings.TrimPrefix(line, "ipv4 = ")) == "true" }
     if strings.HasPrefix(line, "ipv6 = ") { c.IPv6 = strings.TrimSpace(strings.TrimPrefix(line, "ipv6 = ")) == "true" }
-    if strings.HasPrefix(line, "prefer = ") { c.Prefer, _ = strconv.Atoi(strings.TrimSpace(strings.TrimPrefix(line, "prefer = "))) }
     if strings.HasPrefix(line, "fast_mode = ") { c.FastMode = strings.TrimSpace(strings.TrimPrefix(line, "fast_mode = ")) == "true" }
     if strings.HasPrefix(line, "classic = ") { c.Classic = strings.TrimSpace(strings.TrimPrefix(line, "classic = ")) == "true" }
     if strings.HasPrefix(line, "secure = ") { c.Secure = strings.TrimSpace(strings.TrimPrefix(line, "secure = ")) == "true" }
