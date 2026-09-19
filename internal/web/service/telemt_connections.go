@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -38,7 +39,11 @@ func (TelemtService) ConnectedClients() ([]TelemtConnection, error) {
 	}
 
 	client := &http.Client{Timeout: 4 * time.Second}
-	resp, err := client.Get("http://127.0.0.1:9091/v1/stats/users/active-ips")
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://127.0.0.1:9091/v1/stats/users/active-ips", nil)
+	if err != nil {
+		return nil, fmt.Errorf("telemt: create active client request: %w", err)
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("telemt: active client API: %w", err)
 	}
@@ -107,31 +112,34 @@ func telemtGeoLookup(client *http.Client, ip string) TelemtConnection {
 
 	result := TelemtConnection{IP: ip, City: "Неизвестно", Country: "—"}
 	endpoint := "https://ipwho.is/" + url.PathEscape(ip)
-	resp, err := client.Get(endpoint)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, endpoint, nil)
 	if err == nil {
-		defer resp.Body.Close()
-		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-			var geo struct {
-				Success     bool    `json:"success"`
-				City        string  `json:"city"`
-				Region      string  `json:"region"`
-				Country     string  `json:"country"`
-				CountryCode string  `json:"country_code"`
-				Latitude    float64 `json:"latitude"`
-				Longitude   float64 `json:"longitude"`
-			}
-			if json.NewDecoder(resp.Body).Decode(&geo) == nil && geo.Success {
-				result.City = strings.TrimSpace(geo.City)
-				result.Region = strings.TrimSpace(geo.Region)
-				result.Country = strings.TrimSpace(geo.Country)
-				result.CountryCode = strings.TrimSpace(geo.CountryCode)
-				result.Latitude = geo.Latitude
-				result.Longitude = geo.Longitude
-				if result.City == "" {
-					result.City = "Неизвестно"
+		resp, err := client.Do(req)
+		if err == nil {
+			defer resp.Body.Close()
+			if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+				var geo struct {
+					Success     bool    `json:"success"`
+					City        string  `json:"city"`
+					Region      string  `json:"region"`
+					Country     string  `json:"country"`
+					CountryCode string  `json:"country_code"`
+					Latitude    float64 `json:"latitude"`
+					Longitude   float64 `json:"longitude"`
 				}
-				if result.Country == "" {
-					result.Country = "—"
+				if json.NewDecoder(resp.Body).Decode(&geo) == nil && geo.Success {
+					result.City = strings.TrimSpace(geo.City)
+					result.Region = strings.TrimSpace(geo.Region)
+					result.Country = strings.TrimSpace(geo.Country)
+					result.CountryCode = strings.TrimSpace(geo.CountryCode)
+					result.Latitude = geo.Latitude
+					result.Longitude = geo.Longitude
+					if result.City == "" {
+						result.City = "Неизвестно"
+					}
+					if result.Country == "" {
+						result.Country = "—"
+					}
 				}
 			}
 		}
