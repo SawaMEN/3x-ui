@@ -13,6 +13,7 @@ func NewTelemtController(g *gin.RouterGroup) *TelemtController {
   g.GET("/status", a.status)
   g.GET("/config", a.config)
   g.POST("/config", a.saveConfig)
+  g.GET("/proxy", a.listProxy)
   g.POST("/proxy", a.createProxy)
   g.POST("/action", a.action)
   return a
@@ -31,6 +32,12 @@ func (a *TelemtController) saveConfig(c *gin.Context) {
   if err:=c.ShouldBindJSON(&cfg); err!=nil { jsonMsg(c,"invalid Telemt configuration",err); return }
   if err:=a.service.SaveConfig(cfg); err!=nil { jsonMsg(c,err.Error(),err); return }
   jsonObj(c,a.service.Status(),nil)
+}
+
+func (a *TelemtController) listProxy(c *gin.Context) {
+  proxies, err := a.service.ListProxies()
+  if err != nil { jsonMsg(c, "failed to read Telemt proxies", err); return }
+  jsonObj(c, proxies, nil)
 }
 
 func (a *TelemtController) createProxy(c *gin.Context) {
