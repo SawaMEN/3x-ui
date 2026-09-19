@@ -26,9 +26,13 @@ export default function TelemtConnectionsCard() {
     const load = async () => {
       setLoading(true);
       try {
-        const msg = await HttpUtil.get<TelemtConnection[]>('/panel/api/telemt/connections', undefined, {
-          silent: true,
-        });
+        const msg = await HttpUtil.get<TelemtConnection[]>(
+          '/panel/api/telemt/connections',
+          undefined,
+          {
+            silent: true,
+          },
+        );
         if (!disposed && msg?.success && Array.isArray(msg.obj)) setRows(msg.obj);
       } finally {
         if (!disposed) {
@@ -69,7 +73,9 @@ export default function TelemtConnectionsCard() {
         render: (_: unknown, row: TelemtConnection) => (
           <span>
             {row.city}
-            {row.region ? <Typography.Text type="secondary"> · {row.region}</Typography.Text> : null}
+            {row.region ? (
+              <Typography.Text type="secondary"> · {row.region}</Typography.Text>
+            ) : null}
           </span>
         ),
       },
