@@ -15,7 +15,6 @@ import {
   DatabaseOutlined,
   DiscordOutlined,
   ExportOutlined,
-  GithubOutlined,
   GlobalOutlined,
   ImportOutlined,
   LogoutOutlined,
@@ -26,7 +25,6 @@ import {
   MoonOutlined,
   PushpinFilled,
   PushpinOutlined,
-  ReadOutlined,
   SafetyOutlined,
   SettingOutlined,
   SunOutlined,
@@ -37,14 +35,11 @@ import {
 } from '@ant-design/icons';
 
 import { HttpUtil } from '@/utils';
-import { formatPanelVersion } from '@/lib/panel-version';
 import { useTheme } from '@/hooks/useTheme';
 import type { ThemeMode } from '@/hooks/useTheme';
 import { useAllSettings } from '@/api/queries/useAllSettings';
 import './AppSidebar.css';
 
-const DOCS_URL = 'https://docs.sanaei.dev/';
-const REPO_URL = 'https://github.com/SawaMEN/3x-ui';
 const LOGOUT_KEY = '__logout__';
 const RAIL_WIDTH = 72;
 const SIDER_WIDTH = 220;
@@ -72,25 +67,6 @@ const iconByName: Record<IconName, ComponentType> = {
   telemt: MessageOutlined,
 };
 
-function DocsButton({ ariaLabel }: { ariaLabel: string }) {
-  return (
-    <a href={DOCS_URL} target="_blank" rel="noopener noreferrer" className="sidebar-docs" aria-label={ariaLabel} title={ariaLabel}>
-      <ReadOutlined />
-    </a>
-  );
-}
-
-function VersionBadge({ version, collapsed }: { version: string; collapsed?: boolean }) {
-  if (!version) return null;
-  const label = formatPanelVersion(version);
-  return (
-    <a href={REPO_URL} target="_blank" rel="noopener noreferrer" className="sider-version" aria-label={`GitHub ${label}`} title={label}>
-      <GithubOutlined />
-      {!collapsed && <span className="sider-version-text">{label}</span>}
-    </a>
-  );
-}
-
 const THEME_OPTIONS: { value: ThemeMode; label: string }[] = [
   { value: 'light', label: 'Светлая' },
   { value: 'dark', label: 'Тёмная' },
@@ -100,7 +76,6 @@ const THEME_OPTIONS: { value: ThemeMode; label: string }[] = [
 ];
 
 function ThemeSelector({ mode }: { mode: ThemeMode }) {
-  const icon = mode === 'light' ? <SunOutlined /> : mode === 'dark' ? <MoonOutlined /> : mode === 'ultra-dark' ? <MoonFilled /> : mode === 'colorful' ? <TagsOutlined /> : <CloudServerOutlined />;
   const selectTheme = (next: ThemeMode) => {
     localStorage.setItem('xui-theme', next);
     localStorage.setItem('dark-mode', String(next !== 'light' && next !== 'colorful'));
@@ -168,7 +143,6 @@ export default function AppSidebar() {
   }, [updateHovered]);
 
   const currentTheme: 'light' | 'dark' = mode === 'light' || mode === 'colorful' ? 'light' : 'dark';
-  const panelVersion = window.X_UI_CUR_VER || '';
 
   const tabs = useMemo<{ key: string; icon: IconName; title: string }[]>(
     () => [
@@ -250,7 +224,6 @@ export default function AppSidebar() {
           <div className="brand-block"><span className="brand-text">{railCollapsed ? '3X' : '3X-UI'}</span></div>
           <div className="brand-actions">
             {!railCollapsed && <button type="button" className="sidebar-pin" aria-label={t('menu.pinSidebar')} aria-pressed={pinned} title={t(pinned ? 'menu.unpinSidebar' : 'menu.pinSidebar')} onClick={togglePinned}>{pinned ? <PushpinFilled /> : <PushpinOutlined />}</button>}
-            {!railCollapsed && <DocsButton ariaLabel={t('menu.docs') || 'Documentation'} />}
             <div className={`sidebar-theme-picker${railCollapsed ? ' collapsed' : ''}`}>
               {railCollapsed ? <span className="sidebar-theme-icon" title="Выбор темы"><ThemeIcon mode={mode} /></span> : <ThemeSelector mode={mode} />}
             </div>
@@ -258,21 +231,18 @@ export default function AppSidebar() {
         </div>
         <Menu theme={currentTheme} mode="inline" selectedKeys={[selectedKey]} openKeys={railCollapsed ? undefined : openKeys} onOpenChange={(keys) => setOpenKeys(keys as string[])} className="sider-nav" items={toMenuItems(navItems)} onClick={onMenuClick} />
         <Menu theme={currentTheme} mode="inline" selectedKeys={[selectedKey]} className="sider-utility" items={toMenuItems(utilItems)} onClick={onMenuClick} />
-        <div className="sider-footer"><VersionBadge version={panelVersion} collapsed={railCollapsed} /></div>
       </Layout.Sider>
 
       <Drawer placement="left" closable={false} open={drawerOpen} rootClassName={currentTheme} size="min(82vw, 320px)" styles={{ wrapper: { padding: 0 }, body: { padding: 0, display: 'flex', flexDirection: 'column', height: '100%' }, header: { display: 'none' } }} onClose={() => setDrawerOpen(false)}>
         <div className="drawer-header">
           <div className="brand-block"><span className="drawer-brand">3X-UI</span></div>
           <div className="drawer-header-actions">
-            <DocsButton ariaLabel={t('menu.docs') || 'Documentation'} />
             <ThemeSelector mode={mode} />
             <button className="drawer-close" type="button" aria-label={t('close')} onClick={() => setDrawerOpen(false)}><CloseOutlined /></button>
           </div>
         </div>
         <Menu theme={currentTheme} mode="inline" selectedKeys={[selectedKey]} openKeys={openKeys} onOpenChange={(keys) => setOpenKeys(keys as string[])} className="drawer-menu drawer-nav" items={toMenuItems(navItems)} onClick={(info) => { onMenuClick(info); setDrawerOpen(false); }} />
         <Menu theme={currentTheme} mode="inline" selectedKeys={[selectedKey]} className="drawer-menu drawer-utility" items={toMenuItems(utilItems)} onClick={(info) => { onMenuClick(info); setDrawerOpen(false); }} />
-        <div className="drawer-footer"><VersionBadge version={panelVersion} /></div>
       </Drawer>
 
       {!drawerOpen && <button className="drawer-handle" type="button" aria-label={t('menu.openMenu')} onClick={() => setDrawerOpen(true)}><MenuOutlined /></button>}
