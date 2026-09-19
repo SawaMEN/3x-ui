@@ -162,44 +162,59 @@ func (TelemtService) GetConfig() (TelemtConfig, error) {
 	if err != nil {
 		return TelemtConfig{}, err
 	}
+
 	c := defaultTelemtConfig()
-	inAccessUsers := false
-	for _, line := range strings.Split(string(b), "\n") {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "[") {
-			inAccessUsers = line == "[access.users]"
+	section := ""
+	for _, rawLine := range strings.Split(string(b), "\n") {
+		line := strings.TrimSpace(rawLine)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
 		}
-		if inAccessUsers && strings.HasPrefix(line, "xui = ") {
-			c.Secret = strings.Trim(strings.TrimPrefix(line, "xui = "), `"`)
+		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
+			section = strings.TrimSuffix(strings.TrimPrefix(line, "["), "]")
+			continue
 		}
-		if strings.HasPrefix(line, "port = ") {
-			c.Port, _ = strconv.Atoi(strings.Trim(strings.TrimPrefix(line, "port = "), `"`))
-		}
-		if strings.HasPrefix(line, "ipv4 = ") {
-			c.IPv4 = strings.TrimSpace(strings.TrimPrefix(line, "ipv4 = ")) == "true"
-		}
-		if strings.HasPrefix(line, "ipv6 = ") {
-			c.IPv6 = strings.TrimSpace(strings.TrimPrefix(line, "ipv6 = ")) == "true"
-		}
-		if strings.HasPrefix(line, "fast_mode = ") {
-			c.FastMode = strings.TrimSpace(strings.TrimPrefix(line, "fast_mode = ")) == "true"
-		}
-		if strings.HasPrefix(line, "classic = ") {
-			c.Classic = strings.TrimSpace(strings.TrimPrefix(line, "classic = ")) == "true"
-		}
-		if strings.HasPrefix(line, "secure = ") {
-			c.Secure = strings.TrimSpace(strings.TrimPrefix(line, "secure = ")) == "true"
-		}
-		if strings.HasPrefix(line, "tls = ") {
-			c.TLS = strings.TrimSpace(strings.TrimPrefix(line, "tls = ")) == "true"
-		}
-		if strings.HasPrefix(line, "tls_domain = ") {
-			c.SNI = strings.Trim(strings.TrimPrefix(line, "tls_domain = "), `"`)
-		}
-		if strings.HasPrefix(line, "type = ") {
-			c.UpstreamType = strings.Trim(strings.TrimPrefix(line, "type = "), `"`)
+
+		switch section {
+		case "general":
+			if strings.HasPrefix(line, "fast_mode = ") {
+				c.FastMode = strings.TrimSpace(strings.TrimPrefix(line, "fast_mode = ")) == "true"
+			}
+		case "general.modes":
+			switch {
+			case strings.HasPrefix(line, "classic = "):
+				c.Classic = strings.TrimSpace(strings.TrimPrefix(line, "classic = ")) == "true"
+			case strings.HasPrefix(line, "secure = "):
+				c.Secure = strings.TrimSpace(strings.TrimPrefix(line, "secure = ")) == "true"
+			case strings.HasPrefix(line, "tls = "):
+				c.TLS = strings.TrimSpace(strings.TrimPrefix(line, "tls = ")) == "true"
+			}
+		case "network":
+			switch {
+			case strings.HasPrefix(line, "ipv4 = "):
+				c.IPv4 = strings.TrimSpace(strings.TrimPrefix(line, "ipv4 = ")) == "true"
+			case strings.HasPrefix(line, "ipv6 = "):
+				c.IPv6 = strings.TrimSpace(strings.TrimPrefix(line, "ipv6 = ")) == "true"
+			}
+		case "server":
+			if strings.HasPrefix(line, "port = ") {
+				c.Port, _ = strconv.Atoi(strings.TrimSpace(strings.TrimPrefix(line, "port = ")))
+			}
+		case "censorship":
+			if strings.HasPrefix(line, "tls_domain = ") {
+				c.SNI = strings.Trim(strings.TrimSpace(strings.TrimPrefix(line, "tls_domain = ")), `"`)
+			}
+		case "access.users":
+			if strings.HasPrefix(line, "xui = ") {
+				c.Secret = strings.Trim(strings.TrimSpace(strings.TrimPrefix(line, "xui = ")), `"`)
+			}
+		case "upstreams":
+			if strings.HasPrefix(line, "type = ") {
+				c.UpstreamType = strings.Trim(strings.TrimSpace(strings.TrimPrefix(line, "type = ")), `"`)
+			}
 		}
 	}
+
 	c.Enabled = TelemtService{}.Status().Enabled
 	return c, nil
 }
