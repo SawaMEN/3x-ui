@@ -15,6 +15,7 @@ func NewTelemtController(g *gin.RouterGroup) *TelemtController {
   g.POST("/config", a.saveConfig)
   g.GET("/proxy", a.listProxy)
   g.POST("/proxy", a.createProxy)
+  g.DELETE("/proxy/:name", a.deleteProxy)
   g.POST("/action", a.action)
   return a
 }
@@ -38,6 +39,11 @@ func (a *TelemtController) listProxy(c *gin.Context) {
   proxies, err := a.service.ListProxies()
   if err != nil { jsonMsg(c, "failed to read Telemt proxies", err); return }
   jsonObj(c, proxies, nil)
+}
+
+func (a *TelemtController) deleteProxy(c *gin.Context) {
+  if err := a.service.DeleteProxy(c.Param("name")); err != nil { jsonMsg(c, err.Error(), err); return }
+  jsonObj(c, a.service.Status(), nil)
 }
 
 func (a *TelemtController) createProxy(c *gin.Context) {
