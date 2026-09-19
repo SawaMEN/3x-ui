@@ -123,7 +123,7 @@ the code already handles is not a finding at all.
 - Missing tests for getters, constants, renames or pure map lookups —
   `CLAUDE.md` rejects such tests outright.
 - A missing or unreferenced i18n key.
-  `frontend/src/test/i18n-dead-keys.test.ts` checks the 2 locale JSON files in
+  `frontend/src/test/i18n-dead-keys.test.ts` checks the 2 locale files in
   `internal/web/translation/` in both directions.
 
 ## A higher bar, not silence
