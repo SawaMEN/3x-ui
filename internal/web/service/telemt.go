@@ -183,6 +183,7 @@ func telemtVersion() string {
 	return ""
 }
 
+// fix by meko
 func (TelemtService) GetConfig() (TelemtConfig, error) {
 	if err := ensureTelemtConfig(); err != nil { return TelemtConfig{}, err }
 	b, err := os.ReadFile(telemtConfigPath)
