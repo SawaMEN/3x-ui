@@ -28,10 +28,10 @@ var telemtLatestCache struct {
 }
 
 const (
-	telemtConfigPath     = "/etc/x-ui/telemt.toml"
-	telemtServiceName    = "telemt.service"
+	telemtConfigPath      = "/etc/x-ui/telemt.toml"
+	telemtServiceName     = "telemt.service"
 	telemtMekoServiceName = "telemt-meko-fix.service"
-	telemtBinaryPath     = "/usr/local/x-ui/bin/telemt"
+	telemtBinaryPath      = "/usr/local/x-ui/bin/telemt"
 )
 
 type TelemtConfig struct {
