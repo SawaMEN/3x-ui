@@ -70,7 +70,7 @@ function scrollTarget() {
 
 export default function SettingsPage() {
   const { t } = useTranslation();
-  const { isDark, isUltra, antdThemeConfig } = useTheme();
+  const { isDark, isUltra, lowPower, toggleLowPower, antdThemeConfig } = useTheme();
   const { isMobile } = useMediaQuery();
   const [modal, modalContextHolder] = Modal.useModal();
   const [messageApi, messageContextHolder] = message.useMessage();
@@ -279,6 +279,9 @@ export default function SettingsPage() {
                             <Space>
                               <Button type="primary" disabled={saveDisabled} onClick={onSave}>
                                 {t('pages.settings.save')}
+                              </Button>
+                              <Button onClick={toggleLowPower} aria-pressed={lowPower}>
+                                {lowPower ? 'Обычный режим' : 'Режим слабого ПК'}
                               </Button>
                               <Button
                                 type="primary"
