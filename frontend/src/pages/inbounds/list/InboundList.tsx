@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type Key } from 'react';
+import { memo, useCallback, useMemo, useState, type Key } from 'react';
 import { useLocation, useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import {
@@ -47,7 +47,7 @@ function HostRemarksSuffix({ remarks }: { remarks: string[] }) {
   );
 }
 
-export default function InboundList({
+function InboundList({
   dbInbounds,
   clientCount,
   lastOnlineMap: _lastOnlineMap,
@@ -400,3 +400,5 @@ export default function InboundList({
     </Card>
   );
 }
+
+export default memo(InboundList);
