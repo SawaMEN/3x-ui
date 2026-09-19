@@ -43,6 +43,8 @@ type TelemtStatus struct {
 	Enabled    bool   `json:"enabled"`
 	Configured bool   `json:"configured"`
 	Version    string `json:"version"`
+	LatestVersion string `json:"latestVersion"`
+	UpdateAvailable bool `json:"updateAvailable"`
 }
 
 type TelemtProxy struct {
@@ -139,7 +141,32 @@ func (TelemtService) Status() TelemtStatus {
 	if binErr == nil {
 		version = telemtVersion()
 	}
-	return TelemtStatus{Installed: binErr == nil, Active: systemctl("is-active", "--quiet", telemtServiceName) == nil, Enabled: systemctl("is-enabled", "--quiet", telemtServiceName) == nil, Configured: cfgErr == nil, Version: version}
+	latest, available := telemtLatestVersion(version)
+	return TelemtStatus{Installed: binErr == nil, Active: systemctl("is-active", "--quiet", telemtServiceName) == nil, Enabled: systemctl("is-enabled", "--quiet", telemtServiceName) == nil, Configured: cfgErr == nil, Version: version, LatestVersion: latest, UpdateAvailable: available}
+}
+
+func telemtLatestVersion(current string) (string, bool) {
+	if _, err := os.Stat("/usr/local/x-ui/telemt-update.sh"); err != nil { return "", false }
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "/usr/local/x-ui/telemt-update.sh", "--check").CombinedOutput()
+	text := string(out)
+	latest := ""
+	for _, line := range strings.Split(text, "\n") {
+		if strings.HasPrefix(line, "latest=") { latest = strings.TrimSpace(strings.TrimPrefix(line, "latest=")); break }
+	}
+	if err != nil && latest == "" { return "", false }
+	if latest == "" { return "", false }
+	return latest, current != "" && strings.TrimPrefix(current, "v") != strings.TrimPrefix(latest, "v")
+}
+
+func telemtUpdate() error {
+	if _, err := os.Stat("/usr/local/x-ui/telemt-update.sh"); err != nil { return errors.New("telemt: updater is not installed") }
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "/usr/local/x-ui/telemt-update.sh").CombinedOutput()
+	if err != nil { return fmt.Errorf("telemt: update failed: %s: %w", strings.TrimSpace(string(out)), err) }
+	return nil
 }
 
 func telemtVersion() string {
@@ -398,6 +425,8 @@ func (TelemtService) Apply(action string) error {
 	switch action {
 	case "start", "stop", "restart", "enable", "disable":
 		return systemctl(action, telemtServiceName)
+	case "update":
+		return telemtUpdate()
 	default:
 		return errors.New("telemt: unsupported action")
 	}
