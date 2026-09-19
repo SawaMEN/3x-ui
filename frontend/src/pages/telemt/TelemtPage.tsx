@@ -21,6 +21,7 @@ export default function TelemtPage() {
   const [status, setStatus] = useState<Status>({ installed: false, active: false, enabled: false, configured: false, version: '', latestVersion: '', updateAvailable: false, mekoEnabled: false });
   const [loading, setLoading] = useState(false);
   const [proxy, setProxy] = useState<Proxy | null>(null);
+  const [proxies, setProxies] = useState<Proxy[]>([]);
   const refreshInFlight = useRef<Promise<void> | null>(null);
 
   const refresh = useCallback(async () => {
@@ -34,6 +35,8 @@ export default function TelemtPage() {
       ]);
       if (s?.success && s.obj) setStatus(s.obj);
       if (c?.success && c.obj) form.setFieldsValue({ ...defaults, ...c.obj });
+      const p = await HttpUtil.get<Proxy[]>('/panel/api/telemt/proxy');
+      if (p?.success && Array.isArray(p.obj)) setProxies(p.obj);
     })();
 
     try {
@@ -127,6 +130,22 @@ export default function TelemtPage() {
                   <Button type="primary" htmlType="submit" icon={<PlusOutlined />} loading={loading} disabled={!status.installed}>Создать прокси</Button>
                 </Form>
                 {proxy && <div className="telemt-result"><Typography.Text strong>{proxy.name}</Typography.Text><Typography.Paragraph copyable={{ text: proxy.link }} code>{proxy.link}</Typography.Paragraph><Space><Button htmlType="button" icon={<CopyOutlined />} onClick={copyLink}>Копировать ссылку</Button><Tag color={proxy.tls ? 'green' : 'default'}>{proxy.tls ? 'TLS' : 'Classic'}</Tag></Space></div>}
+                {proxies.length > 0 && (
+                  <div className="telemt-proxy-list">
+                    {proxies.map((item) => (
+                      <div className="telemt-proxy-item" key={item.name}>
+                        <div>
+                          <Typography.Text strong>{item.name}</Typography.Text>
+                          <Typography.Paragraph copyable={{ text: item.link }} ellipsis={{ rows: 1 }} code style={{ margin: '4px 0 0' }}>{item.link}</Typography.Paragraph>
+                        </div>
+                        <Space wrap>
+                          <Tag>{item.host}:{item.port}</Tag>
+                          <Button htmlType="button" icon={<CopyOutlined />} onClick={() => navigator.clipboard.writeText(item.link)}>Копировать</Button>
+                        </Space>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </Card>
 
               <Card title={<Space><SafetyCertificateOutlined /> MEKO V3 fix</Space>} className="telemt-card">
