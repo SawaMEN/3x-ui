@@ -33,7 +33,7 @@ function applyDom(mode: ThemeMode, lowPower: boolean) {
   document.body.classList.add(isDark ? 'dark' : 'light', 'theme-' + mode);
   document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
   document.documentElement.setAttribute('data-theme', mode);
-  document.documentElement.toggleAttribute('data-low-power', lowPower);
+  document.documentElement.setAttribute('data-low-power', String(lowPower));
   const msg = document.getElementById('message');
   if (msg) {
     msg.classList.remove('dark', 'light');
