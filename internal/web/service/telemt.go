@@ -448,7 +448,24 @@ func (TelemtService) ListProxies() ([]TelemtProxy, error) {
 		if host == "" { host = "—" }
 		out = append(out, TelemtProxy{Name: username, Secret: secret, Host: host, Port: raw.Server.Port, TLS: raw.General.Modes.TLS, Link: link})
 	}
-	return out, nil
+
+	// A Telemt user must be represented only once in the panel. This also
+	// protects the UI from duplicate entries if an old config contains
+	// repeated/generated users that resolve to the same client link.
+	seen := make(map[string]struct{}, len(out))
+	unique := out[:0]
+	for _, item := range out {
+		key := item.Link
+		if key == "" {
+			key = item.Name
+		}
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		unique = append(unique, item)
+	}
+	return unique, nil
 }
 
 func (TelemtService) DeleteProxy(username string) error {
