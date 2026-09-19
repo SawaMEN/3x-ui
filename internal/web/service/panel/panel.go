@@ -143,7 +143,10 @@ func getDevUpdateInfo() (*PanelUpdateInfo, error) {
 // AutoUpdateDevChannel checks the rolling dev release and starts a detached
 // update only when the dev channel is enabled and a newer commit is available.
 func (s *PanelService) AutoUpdateDevChannel() error {
-	if !devChannelActive() {
+	// Automatic rolling updates are only for an already installed dev build.
+	// A stable build may opt into dev manually, but it must not be silently
+	// treated as stale just because the dev channel is enabled.
+	if !devChannelActive() || !config.IsDevBuild() {
 		return nil
 	}
 	info, err := getDevUpdateInfo()
