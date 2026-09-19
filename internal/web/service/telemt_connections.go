@@ -56,7 +56,7 @@ func (TelemtService) ConnectedClients() ([]TelemtConnection, error) {
 	var envelope struct {
 		OK   bool `json:"ok"`
 		Data []struct {
-			Username string   `json:"username"`
+			Username  string   `json:"username"`
 			ActiveIPs []string `json:"active_ips"`
 		} `json:"data"`
 	}
