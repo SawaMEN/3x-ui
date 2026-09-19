@@ -72,20 +72,15 @@ jobs:
         run: |
           set -o pipefail
           go test ./internal/web/service -run 'PostgresCommitFailure' -count=1 -v | tee /tmp/postgres-durable-first.log
-          # Count passes rather than assert no SKIP: a renamed or deleted test
-          # prints "no tests to run" and exits 0, leaving the step green for nothing.
           passed=$(grep -c -- '--- PASS' /tmp/postgres-durable-first.log || true)
           if [ "$passed" -lt 1 ]; then
             echo "expected at least 1 passing durable-first test, got $passed" >&2
             exit 1
           fi
-
       - name: PostgreSQL schema and migration tests
         run: |
           set -o pipefail
           go test ./internal/database -run '^(TestHostAutoMigrateCreatesColumns_Postgres|TestMigrate_Postgres)$' -count=1 -v | tee /tmp/postgres-schema.log
-          # Both must pass. Counting, not SKIP-matching: renaming either test would
-          # otherwise leave this step green while testing nothing.
           passed=$(grep -c -- '--- PASS' /tmp/postgres-schema.log || true)
           if [ "$passed" -lt 2 ]; then
             echo "expected 2 passing PostgreSQL schema tests, got $passed" >&2
@@ -124,7 +119,6 @@ jobs:
       - name: Run govulncheck
         run: govulncheck ./...
 
-  # Race + shuffle hygiene gate: data races and order-dependent tests fail the build.
   race:
     runs-on: ubuntu-latest
     steps:
@@ -138,11 +132,8 @@ jobs:
       - name: Race + shuffle
         run: |
           go list ./... | grep -v '/frontend/node_modules/' > /tmp/go-packages.txt
-          # internal/web/service runs ~10x slower under -race and overruns the 10m default.
           go test -race -shuffle=on -count=1 -timeout 25m $(cat /tmp/go-packages.txt)
 
-  # Brief native-fuzz smoke on the security-/parser-critical decoders. Each runs the
-  # generated corpus plus 30s of exploration; a crash here is a real input-handling bug.
   fuzz-smoke:
     runs-on: ubuntu-latest
     steps:
@@ -188,7 +179,9 @@ jobs:
           bash -n x-ui.sh
           shellcheck --shell=bash --severity=error install.sh x-ui.sh
       - name: Validate Arch systemd unit
-        run: systemd-analyze verify x-ui.service.arch
+        run: |
+          cp x-ui.service.arch /tmp/x-ui.service
+          systemd-analyze verify /tmp/x-ui.service
       - name: Guard against pacman partial upgrades
         run: |
           if grep -nE 'pacman[[:space:]]+-S(y|yy)([[:space:]]|$)' install.sh; then
