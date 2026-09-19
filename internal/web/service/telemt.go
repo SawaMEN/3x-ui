@@ -22,6 +22,7 @@ import (
 const (
 	telemtConfigPath  = "/etc/x-ui/telemt.toml"
 	telemtServiceName = "telemt.service"
+	telemtMekoServiceName = "telemt-meko-fix.service"
 	telemtBinaryPath  = "/usr/local/x-ui/bin/telemt"
 )
 
@@ -144,7 +145,7 @@ func (TelemtService) Status() TelemtStatus {
 		version = telemtVersion()
 	}
 	latest, available := telemtLatestVersion(version)
-	return TelemtStatus{Installed: binErr == nil, Active: systemctl("is-active", "--quiet", telemtServiceName) == nil, Enabled: systemctl("is-enabled", "--quiet", telemtServiceName) == nil, Configured: cfgErr == nil, Version: version, LatestVersion: latest, UpdateAvailable: available}
+	return TelemtStatus{Installed: binErr == nil, Active: systemctl("is-active", "--quiet", telemtServiceName) == nil, Enabled: systemctl("is-enabled", "--quiet", telemtServiceName) == nil, Configured: cfgErr == nil, Version: version, LatestVersion: latest, UpdateAvailable: available, MekoEnabled: systemctl("is-enabled", "--quiet", telemtMekoServiceName) == nil}
 }
 
 func telemtLatestVersion(current string) (string, bool) {
@@ -405,6 +406,11 @@ func (TelemtService) Apply(action string) error {
 		return systemctl(action, telemtServiceName)
 	case "update":
 		return telemtUpdate()
+	case "meko-enable":
+		return systemctl("enable", "--now", telemtMekoServiceName)
+	case "meko-disable":
+		_ = systemctl("disable", "--now", telemtMekoServiceName)
+		return nil
 	default:
 		return errors.New("telemt: unsupported action")
 	}
