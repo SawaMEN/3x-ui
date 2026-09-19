@@ -4,7 +4,7 @@ import { HttpUtil, TimeFormatter } from '@/utils';
 import type { Status } from '@/models/status';
 
 const OVERVIEW_WINDOW = 72;
-const SEED_BUCKET_SECONDS = 2;
+const SEED_BUCKET_SECONDS = 5;
 
 const SERIES_KEYS = [
   'cpu',
@@ -76,7 +76,7 @@ export function peak(values: number[]): number {
 }
 
 /* the seed bucket must be in the backend's allowedHistoryBuckets whitelist;
-   2s is the smallest and matches the status poll cadence */
+   5s matches the dashboard status poll cadence */
 export function useOverviewHistory(status: Status, hasData: boolean): OverviewHistory {
   const [trend, setTrend] = useState<HistoryWindow>(emptyWindow);
 
