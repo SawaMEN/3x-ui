@@ -1150,10 +1150,7 @@ function UdpMaskItem({
                   }
                 >
                   <Space.Compact block>
-                    <Input.Password
-                      placeholder="Shared Sudoku secret"
-                      style={{ width: '100%' }}
-                    />
+                    <Input.Password placeholder="Shared Sudoku secret" style={{ width: '100%' }} />
                     <Button
                       icon={<ReloadOutlined />}
                       aria-label="Generate password"
@@ -1167,7 +1164,10 @@ function UdpMaskItem({
                   </Space.Compact>
                 </Form.Item>
 
-                <Form.Item label="Quick Profile" extra="Convenience preset; it is not saved to Xray.">
+                <Form.Item
+                  label="Quick Profile"
+                  extra="Convenience preset; it is not saved to Xray."
+                >
                   <Select
                     allowClear
                     placeholder="Choose a profile"
@@ -1205,7 +1205,9 @@ function UdpMaskItem({
                   />
                 </Form.Item>
 
-                <Divider plain style={{ margin: '8px 0' }}>Traffic profile</Divider>
+                <Divider plain style={{ margin: '8px 0' }}>
+                  Traffic profile
+                </Divider>
 
                 <Form.Item
                   label="Custom Table"
@@ -1239,7 +1241,9 @@ function UdpMaskItem({
                   />
                 </Form.Item>
 
-                <Divider plain style={{ margin: '8px 0' }}>Padding</Divider>
+                <Divider plain style={{ margin: '8px 0' }}>
+                  Padding
+                </Divider>
 
                 <Form.Item
                   label="Padding"
@@ -1251,7 +1255,13 @@ function UdpMaskItem({
                       noStyle
                       rules={[{ validator: validateSudokuPaddingRange }]}
                     >
-                      <InputNumber min={0} max={100} precision={0} placeholder="Min" style={{ width: '50%' }} />
+                      <InputNumber
+                        min={0}
+                        max={100}
+                        precision={0}
+                        placeholder="Min"
+                        style={{ width: '50%' }}
+                      />
                     </Form.Item>
                     <Form.Item
                       name={[fieldName, 'settings', 'paddingMax']}
@@ -1266,7 +1276,13 @@ function UdpMaskItem({
                         },
                       ]}
                     >
-                      <InputNumber min={0} max={100} precision={0} placeholder="Max" style={{ width: '50%' }} />
+                      <InputNumber
+                        min={0}
+                        max={100}
+                        precision={0}
+                        placeholder="Max"
+                        style={{ width: '50%' }}
+                      />
                     </Form.Item>
                   </Space.Compact>
                 </Form.Item>
