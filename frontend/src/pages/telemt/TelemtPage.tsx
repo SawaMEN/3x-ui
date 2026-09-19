@@ -193,8 +193,6 @@ export default function TelemtPage() {
     }
   };
 
-
-
   return (
     <ConfigProvider theme={antdThemeConfig}>
       <Layout className="page-layout telemt-page">
