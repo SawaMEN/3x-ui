@@ -447,25 +447,116 @@ function TcpMaskItem({
             );
           }
           if (type === 'sudoku') {
+            const sudokuSettingsPath = [...absolutePath, 'settings'];
             return (
               <>
-                <Form.Item label="Password" name={[fieldName, 'settings', 'password']}>
-                  <Input />
+                <Form.Item
+                  label="Password"
+                  name={[fieldName, 'settings', 'password']}
+                  rules={[{ required: true, message: 'Password is required' }]}
+                  extra="The same password must be used on both sides."
+                >
+                  <Space.Compact block>
+                    <Form.Item name={[fieldName, 'settings', 'password']} noStyle>
+                      <Input.Password
+                        placeholder="Shared Sudoku password"
+                        style={{ width: '100%' }}
+                      />
+                    </Form.Item>
+                    <Button
+                      icon={<ReloadOutlined />}
+                      aria-label="Generate password"
+                      onClick={() =>
+                        form.setFieldValue(
+                          [...sudokuSettingsPath, 'password'],
+                          RandomUtil.randomLowerAndNum(32),
+                        )
+                      }
+                    />
+                  </Space.Compact>
                 </Form.Item>
-                <Form.Item label="ASCII" name={[fieldName, 'settings', 'ascii']}>
-                  <Input />
+
+                <Form.Item
+                  label="ASCII"
+                  name={[fieldName, 'settings', 'ascii']}
+                  extra="prefer_entropy is the default low-entropy profile; prefer_ascii favors printable ASCII."
+                >
+                  <Select
+                    allowClear
+                    placeholder="prefer_entropy"
+                    options={[
+                      { value: 'prefer_entropy', label: 'Prefer entropy (default)' },
+                      { value: 'prefer_ascii', label: 'Prefer ASCII' },
+                    ]}
+                  />
                 </Form.Item>
-                <Form.Item label="Custom Table" name={[fieldName, 'settings', 'customTable']}>
-                  <Input />
+
+                <Divider plain style={{ margin: '8px 0' }}>
+                  Traffic profile
+                </Divider>
+
+                <Form.Item
+                  label="Custom Table"
+                  name={[fieldName, 'settings', 'customTable']}
+                  rules={[{ validator: validateSudokuCustomTable }]}
+                  extra="8 characters: exactly 2× x, 2× p and 4× v. Example: vxvpxvvp."
+                >
+                  <Input
+                    maxLength={8}
+                    placeholder="vxvpxvvp"
+                    onChange={(e) =>
+                      form.setFieldValue(
+                        [...sudokuSettingsPath, 'customTable'],
+                        e.target.value.toLowerCase(),
+                      )
+                    }
+                  />
                 </Form.Item>
-                <Form.Item label="Custom Tables" name={[fieldName, 'settings', 'customTables']}>
-                  <Select mode="tags" style={{ width: '100%' }} tokenSeparators={[',']} />
+
+                <Form.Item
+                  label="Custom Tables"
+                  name={[fieldName, 'settings', 'customTables']}
+                  extra="Optional rotation pool. Each entry uses the same 8-character x/p/v format."
+                >
+                  <Select
+                    mode="tags"
+                    style={{ width: '100%' }}
+                    tokenSeparators={[',']}
+                    placeholder="vxvpxvvp, xpvxvvpv"
+                  />
                 </Form.Item>
-                <Form.Item label="Padding Min" name={[fieldName, 'settings', 'paddingMin']}>
-                  <InputNumber min={0} />
+
+                <Divider plain style={{ margin: '8px 0' }}>
+                  Padding
+                </Divider>
+
+                <Form.Item
+                  label="Padding Min"
+                  name={[fieldName, 'settings', 'paddingMin']}
+                  rules={[{ validator: validateSudokuPaddingRange }]}
+                  extra="Minimum padding probability, in percent (0–100)."
+                >
+                  <InputNumber min={0} max={100} precision={0} style={{ width: '100%' }} />
                 </Form.Item>
-                <Form.Item label="Padding Max" name={[fieldName, 'settings', 'paddingMax']}>
-                  <InputNumber min={0} />
+
+                <Form.Item
+                  label="Padding Max"
+                  name={[fieldName, 'settings', 'paddingMax']}
+                  dependencies={[[fieldName, 'settings', 'paddingMin']]}
+                  rules={[
+                    { validator: validateSudokuPaddingRange },
+                    {
+                      validator: (_rule, value) =>
+                        validateSudokuPaddingMax(
+                          _rule,
+                          value,
+                          () => form.getFieldValue([...sudokuSettingsPath, 'paddingMin']),
+                        ),
+                    },
+                  ]}
+                  extra="Maximum padding probability, in percent (0–100), and must be ≥ Min."
+                >
+                  <InputNumber min={0} max={100} precision={0} style={{ width: '100%' }} />
                 </Form.Item>
               </>
             );
@@ -652,6 +743,41 @@ function getDeep(obj: unknown, path: (string | number)[]): unknown {
 const XMC_UUID_PATTERN =
   /^(?:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}|[0-9a-fA-F]{32})$/;
 const XMC_USERNAME_PATTERN = /^[A-Za-z0-9_]{3,16}$/;
+
+function validateSudokuCustomTable(_rule: unknown, value: unknown): Promise<void> {
+  const str = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  if (str.length === 0) return Promise.resolve();
+  if (!/^[xpv]{8}$/.test(str) || [...str].filter((ch) => ch === 'x').length !== 2 ||
+      [...str].filter((ch) => ch === 'p').length !== 2 ||
+      [...str].filter((ch) => ch === 'v').length !== 4) {
+    return Promise.reject(new Error('Use exactly 8 characters: 2x, 2p and 4v, e.g. vxvpxvvp'));
+  }
+  return Promise.resolve();
+}
+
+function validateSudokuPaddingRange(_rule: unknown, value: unknown): Promise<void> {
+  if (value === undefined || value === null || value === '') return Promise.resolve();
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 0 || n > 100) {
+    return Promise.reject(new Error('Padding must be a percentage from 0 to 100'));
+  }
+  return Promise.resolve();
+}
+
+function validateSudokuPaddingMax(
+  _rule: unknown,
+  value: unknown,
+  getMin: () => unknown,
+): Promise<void> {
+  if (value === undefined || value === null || value === '') return Promise.resolve();
+  const max = Number(value);
+  const min = Number(getMin() ?? 0);
+  if (!Number.isInteger(max) || max < 0 || max > 100) {
+    return Promise.reject(new Error('Padding must be a percentage from 0 to 100'));
+  }
+  if (max < min) return Promise.reject(new Error('Padding Max must be greater than or equal to Padding Min'));
+  return Promise.resolve();
+}
 
 function validateXmcUsername(_rule: unknown, value: unknown): Promise<void> {
   if (typeof value === 'string' && XMC_USERNAME_PATTERN.test(value)) return Promise.resolve();
