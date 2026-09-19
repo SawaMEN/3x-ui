@@ -140,6 +140,33 @@ func getDevUpdateInfo() (*PanelUpdateInfo, error) {
 	}, nil
 }
 
+// AutoUpdateDevChannel checks the rolling dev release and starts a detached
+// update only when the dev channel is enabled and a newer commit is available.
+func (s *PanelService) AutoUpdateDevChannel() error {
+	if !devChannelActive() {
+		return nil
+	}
+	info, err := getDevUpdateInfo()
+	if err != nil {
+		return err
+	}
+	if !info.UpdateAvailable {
+		return nil
+	}
+
+	runID, err := s.StartUpdateChannel(true)
+	if err != nil {
+		// Another update already running is a normal race with a manual update;
+		// don't turn it into a noisy periodic error.
+		if strings.Contains(err.Error(), "already in progress") {
+			return nil
+		}
+		return err
+	}
+	logger.Infof("automatic dev panel update started: current=%s latest=%s run=%d", info.CurrentCommit, info.LatestCommit, runID)
+	return nil
+}
+
 func (s *PanelService) StartUpdate() (int64, error) {
 	return s.startUpdate(devChannelActive())
 }
