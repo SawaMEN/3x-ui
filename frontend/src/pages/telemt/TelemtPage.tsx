@@ -96,7 +96,6 @@ export default function TelemtPage() {
     mekoEnabled: false,
   });
   const [loading, setLoading] = useState(false);
-  const [proxy, setProxy] = useState<Proxy | null>(null);
   const [proxies, setProxies] = useState<Proxy[]>([]);
   const refreshInFlight = useRef<Promise<void> | null>(null);
 
@@ -149,7 +148,6 @@ export default function TelemtPage() {
     try {
       const r = await HttpUtil.post<Proxy>('/panel/api/telemt/proxy', v, jsonOptions);
       if (r?.success && r.obj) {
-        setProxy(r.obj);
         message.success('Прокси создан');
         await refresh();
         await action(status.active ? 'restart' : 'start');
@@ -188,7 +186,6 @@ export default function TelemtPage() {
       const r = await HttpUtil.delete('/panel/api/telemt/proxy/' + encodeURIComponent(name));
       if (r?.success) {
         message.success('Ссылка удалена');
-        if (proxy?.name === name) setProxy(null);
         await refresh();
       } else message.error(r?.msg || 'Не удалось удалить ссылку');
     } finally {
@@ -196,11 +193,7 @@ export default function TelemtPage() {
     }
   };
 
-  const copyLink = async () => {
-    if (!proxy) return;
-    await navigator.clipboard.writeText(proxy.link);
-    message.success('Ссылка скопирована');
-  };
+
 
   return (
     <ConfigProvider theme={antdThemeConfig}>
@@ -305,22 +298,6 @@ export default function TelemtPage() {
                     </Button>
                   </div>
                 </Form>
-                {proxy && (
-                  <div className="telemt-result">
-                    <Typography.Text strong>{proxy.name}</Typography.Text>
-                    <Typography.Paragraph copyable={{ text: proxy.link }} code>
-                      {proxy.link}
-                    </Typography.Paragraph>
-                    <Space>
-                      <Button htmlType="button" icon={<CopyOutlined />} onClick={copyLink}>
-                        Копировать ссылку
-                      </Button>
-                      <Tag color={proxy.tls ? 'green' : 'default'}>
-                        {proxy.tls ? 'TLS' : 'Classic'}
-                      </Tag>
-                    </Space>
-                  </div>
-                )}
                 {proxies.length > 0 && (
                   <div className="telemt-proxy-list">
                     {proxies.map((item) => (
