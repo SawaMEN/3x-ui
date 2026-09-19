@@ -8,11 +8,11 @@ import { useTheme } from '@/hooks/useTheme';
 import './TelemtPage.css';
 
 type Status = { installed: boolean; active: boolean; enabled: boolean; configured: boolean; version: string };
-type Config = { enabled: boolean; port: number; secret: string; ipv4: boolean; ipv6: boolean; fastMode: boolean; classic: boolean; secure: boolean; tls: boolean; upstreamType: string };
+type Config = { enabled: boolean; port: number; secret: string; ipv4: boolean; ipv6: boolean; fastMode: boolean; classic: boolean; secure: boolean; tls: boolean; sni: string; upstreamType: string };
 type Proxy = { name: string; secret: string; host: string; port: number; tls: boolean; link: string };
 type CreateForm = { name: string; host: string };
 
-const defaults: Config = { enabled: false, port: 8443, secret: '', ipv4: true, ipv6: true, fastMode: true, classic: false, secure: false, tls: true, upstreamType: 'direct' };
+const defaults: Config = { enabled: false, port: 8443, secret: '', ipv4: true, ipv6: true, fastMode: true, classic: false, secure: false, tls: true, sni: '', upstreamType: 'direct' };
 const jsonOptions = { headers: { 'Content-Type': 'application/json' } };
 
 export default function TelemtPage() {
@@ -87,7 +87,7 @@ export default function TelemtPage() {
                   <Typography.Title level={2} className="telemt-title">Telemt</Typography.Title>
                   <Typography.Text type="secondary">MTProto-прокси в составе панели 3X-UI</Typography.Text>
                 </div>
-                <Button icon={<ReloadOutlined />} onClick={refresh}>Обновить</Button>
+                <Button htmlType="button" icon={<ReloadOutlined />} onClick={refresh}>Обновить</Button>
               </div>
 
               {!status.installed && (
@@ -107,9 +107,9 @@ export default function TelemtPage() {
                     <Col xs={24} md={8}><Form.Item name="name" label="Название прокси" rules={[{ required: true, message: 'Введите название' }]}><Input placeholder="Telegram Proxy" /></Form.Item></Col>
                     <Col xs={24} md={16}><Form.Item name="host" label="Публичный адрес" rules={[{ required: true, message: 'Введите IP или домен' }]}><Input placeholder="proxy.example.com или IP-адрес" /></Form.Item></Col>
                   </Row>
-                  <Button type="primary" icon={<PlusOutlined />} htmlType="submit" loading={loading} disabled={!status.installed}>Создать прокси</Button>
+                  <Button type="primary" htmlType="submit" icon={<PlusOutlined />} loading={loading} disabled={!status.installed}>Создать прокси</Button>
                 </Form>
-                {proxy && <div className="telemt-result"><Typography.Text strong>{proxy.name}</Typography.Text><Typography.Paragraph copyable={{ text: proxy.link }} code>{proxy.link}</Typography.Paragraph><Space><Button icon={<CopyOutlined />} onClick={copyLink}>Копировать ссылку</Button><Tag color={proxy.tls ? 'green' : 'default'}>{proxy.tls ? 'TLS' : 'Classic'}</Tag></Space></div>}
+                {proxy && <div className="telemt-result"><Typography.Text strong>{proxy.name}</Typography.Text><Typography.Paragraph copyable={{ text: proxy.link }} code>{proxy.link}</Typography.Paragraph><Space><Button htmlType="button" icon={<CopyOutlined />} onClick={copyLink}>Копировать ссылку</Button><Tag color={proxy.tls ? 'green' : 'default'}>{proxy.tls ? 'TLS' : 'Classic'}</Tag></Space></div>}
               </Card>
 
               <Card title={<Space><SettingOutlined /> Конфигурация Telemt</Space>} className="telemt-card">
@@ -126,6 +126,10 @@ export default function TelemtPage() {
                     </Col>
                   </Row>
                   <Row gutter={16}>
+                    <Col xs={24} md={12}><Form.Item name="sni" label="SNI" tooltip="Домен, который используется как tls_domain для Fake-TLS"><Input placeholder="www.example.com" /></Form.Item></Col>
+                    <Col xs={24} md={12}><Form.Item name="tls" label="Fake-TLS (ee)" valuePropName="checked"><Switch /></Form.Item></Col>
+                  </Row>
+                  <Row gutter={16}>
                     <Col xs={24} md={8}><Form.Item name="ipv4" label="Разрешить IPv4" valuePropName="checked"><Switch /></Form.Item></Col>
                     <Col xs={24} md={8}><Form.Item name="ipv6" label="Разрешить IPv6" valuePropName="checked"><Switch /></Form.Item></Col>
                     <Col xs={24} md={8}><Form.Item name="fastMode" label="Fast mode" valuePropName="checked"><Switch /></Form.Item></Col>
@@ -133,7 +137,6 @@ export default function TelemtPage() {
                   <Row gutter={16}>
                     <Col xs={24} md={8}><Form.Item name="classic" label="Classic" valuePropName="checked"><Switch /></Form.Item></Col>
                     <Col xs={24} md={8}><Form.Item name="secure" label="Secure" valuePropName="checked"><Switch /></Form.Item></Col>
-                    <Col xs={24} md={8}><Form.Item name="tls" label="TLS" valuePropName="checked"><Switch /></Form.Item></Col>
                   </Row>
                   <Space wrap>
                     <Button type="primary" htmlType="submit" loading={loading}>Сохранить</Button>
@@ -143,17 +146,6 @@ export default function TelemtPage() {
                     <Button htmlType="button" onClick={() => action(status.enabled ? 'disable' : 'enable')}>{status.enabled ? 'Отключить автозапуск' : 'Включить автозапуск'}</Button>
                   </Space>
                 </Form>
-              </Card>
-
-              <Card title="Переходы" className="telemt-card telemt-navigation-card">
-                <Space wrap>
-                  <Button htmlType="button" onClick={() => navigate('/')}>Главная</Button>
-                  <Button htmlType="button" onClick={() => navigate('/inbounds')}>Входящие</Button>
-                  <Button htmlType="button" onClick={() => navigate('/clients')}>Клиенты</Button>
-                  <Button htmlType="button" onClick={() => navigate('/nodes')}>Ноды</Button>
-                  <Button htmlType="button" onClick={() => navigate('/settings')}>Настройки</Button>
-                  <Button htmlType="button" onClick={() => navigate('/xray')}>Xray</Button>
-                </Space>
               </Card>
             </div>
           </Layout.Content>
