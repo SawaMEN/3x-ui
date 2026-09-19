@@ -252,7 +252,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(STORAGE_LOW_POWER, String(lowPower));
     localStorage.setItem(STORAGE_DARK, String(isDark));
     localStorage.setItem(STORAGE_ULTRA, String(isUltra));
-  }, [mode, isDark, lowPower]);
+  }, [mode, isDark, isUltra, lowPower]);
 
   const toggleTheme = useCallback(() => setMode((v) => (v === 'light' ? 'dark' : v === 'dark' || v === 'ultra-dark' ? 'light' : v)), []);
   const toggleUltra = useCallback(() => setMode((v) => (v === 'dark' ? 'ultra-dark' : v === 'ultra-dark' ? 'dark' : v)), []);
