@@ -544,7 +544,7 @@ export default function NodeList({
         columns={columns}
         pagination={false}
         loading={loading}
-        scroll={{ x: 'max-content' }}
+        virtual={dataSource.length > 50}\n        scroll={{ x: 'max-content', y: 600 }}
         size="middle"
         rowKey="key"
         rowSelection={
