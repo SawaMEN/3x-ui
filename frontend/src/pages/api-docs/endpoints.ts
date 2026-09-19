@@ -2716,6 +2716,58 @@ export const sections: readonly Section[] = [
   },
 
   {
+    id: 'telemt',
+    title: 'Telemt',
+    description: 'Manage the Telemt service, proxies, configuration, and active client IPs.',
+    endpoints: [
+      {
+        method: 'GET',
+        path: '/panel/api/telemt/status',
+        summary: 'Return Telemt installation, service, version, update, and MEKO status.',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/telemt/config',
+        summary: 'Return the current Telemt configuration.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/telemt/config',
+        summary: 'Save the Telemt configuration.',
+        body: '{ "enabled": true, "port": 8443, "secret": "...", "tls": true, "sni": "example.com" }',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/telemt/proxy',
+        summary: 'List configured Telemt proxy users and generated client links.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/telemt/proxy',
+        summary: 'Create a Telemt proxy user.',
+        body: '{ "name": "mobile", "host": "example.com" }',
+      },
+      {
+        method: 'DELETE',
+        path: '/panel/api/telemt/proxy/:name',
+        summary: 'Delete a Telemt proxy user by username.',
+        params: [{ name: 'name', in: 'path', type: 'string', desc: 'Telemt username.' }],
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/telemt/connections',
+        summary: 'Return active Telemt client IPs with cached geolocation and associated users.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/telemt/action',
+        summary: 'Perform a Telemt service action such as start, stop, restart, update, or MEKO toggle.',
+        body: '{ "action": "restart" }',
+      },
+    ],
+  },
+
+  {
     id: 'websocket',
     title: 'WebSocket',
     description:
