@@ -801,3 +801,62 @@ body.theme-blue-gray .ant-card:hover {
     0 4px 10px rgba(0,0,0,.24),
     0 16px 38px rgba(28,65,105,.26) !important;
 }
+
+
+/* ── Low-power mode ────────────────────────────────────────────────────────
+   Removes paint/compositor-heavy visual effects while keeping layout and
+   functionality unchanged. Persisted by the theme provider. */
+html[data-low-power='true'] *,
+html[data-low-power='true'] *::before,
+html[data-low-power='true'] *::after {
+  animation-duration: 0s !important;
+  animation-delay: 0s !important;
+  transition-duration: 0s !important;
+  transition-delay: 0s !important;
+  scroll-behavior: auto !important;
+}
+
+html[data-low-power='true'] body::before,
+html[data-low-power='true'] .content-area::before,
+html[data-low-power='true'] .ant-card::after,
+html[data-low-power='true'] .sidebar-command-trigger::after,
+html[data-low-power='true'] .ant-btn::before {
+  display: none !important;
+}
+
+html[data-low-power='true'] .ant-card,
+html[data-low-power='true'] .ant-card:hover,
+html[data-low-power='true'] .ant-btn-primary:hover,
+html[data-low-power='true'] .ant-table-tbody > tr:hover,
+html[data-low-power='true'] .ant-menu-item:hover,
+html[data-low-power='true'] .ant-menu-submenu-title:hover,
+html[data-low-power='true'] .ant-tag:hover {
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+html[data-low-power='true'] .ant-card,
+html[data-low-power='true'] .ant-table-wrapper,
+html[data-low-power='true'] .ant-alert,
+html[data-low-power='true'] .ant-notification-notice,
+html[data-low-power='true'] .ant-message-notice-content,
+html[data-low-power='true'] .ant-progress-bg {
+  box-shadow: none !important;
+}
+
+html[data-low-power='true'] .ant-dropdown,
+html[data-low-power='true'] .ant-select-dropdown,
+html[data-low-power='true'] .ant-picker-dropdown,
+html[data-low-power='true'] .ant-popover,
+html[data-low-power='true'] .ant-modal-wrap,
+html[data-low-power='true'] .ant-drawer {
+  backdrop-filter: none !important;
+}
+
+html[data-low-power='true'] .ant-table-wrapper {
+  overflow: auto;
+}
+
+html[data-low-power='true'] .ant-card {
+  background-image: none !important;
+}
