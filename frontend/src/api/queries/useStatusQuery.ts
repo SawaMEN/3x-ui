@@ -7,7 +7,8 @@ import { Status } from '@/models/status';
 import { StatusSchema } from '@/schemas/status';
 import { keys } from '@/api/queryKeys';
 
-// Keep the dashboard responsive without polling the server every 2 seconds.\nconst POLL_INTERVAL_MS = 5000;
+// Keep the dashboard responsive without polling the server every 2 seconds.
+const POLL_INTERVAL_MS = 5000;
 
 async function fetchStatus(): Promise<Status> {
   const msg = await HttpUtil.get('/panel/api/server/status', undefined, { silent: true });
