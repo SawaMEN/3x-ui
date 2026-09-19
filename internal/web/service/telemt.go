@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -434,13 +435,52 @@ func (TelemtService) Apply(action string) error {
 	case "update":
 		return telemtUpdate()
 	case "meko-enable":
-		return systemctl("enable", "--now", telemtMekoServiceName)
+		if err := ensureTelemtMekoFixInstalled(); err != nil {
+			return err
+		}
+		if err := systemctl("enable", "--now", telemtMekoServiceName); err != nil {
+			return fmt.Errorf("telemt meko: enable failed: %w", err)
+		}
+		return nil
 	case "meko-disable":
 		_ = systemctl("disable", "--now", telemtMekoServiceName)
 		return nil
 	default:
 		return errors.New("telemt: unsupported action")
 	}
+}
+
+func ensureTelemtMekoFixInstalled() error {
+	const scriptURL = "https://raw.githubusercontent.com/SawaMEN/3x-ui/main/telemt-meko-fix.sh"
+	const unitURL = "https://raw.githubusercontent.com/SawaMEN/3x-ui/main/telemt-meko-fix.service"
+	client := (&service.SettingService{}).NewProxiedHTTPClient(15 * time.Second)
+	download := func(url, path string, mode os.FileMode) error {
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
+		if err != nil { return err }
+		resp, err := client.Do(req)
+		if err != nil { return fmt.Errorf("download %s: %w", url, err) }
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK { return fmt.Errorf("download %s: HTTP %d", url, resp.StatusCode) }
+		data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+		if err != nil { return err }
+		if len(data) == 0 { return errors.New("downloaded file is empty") }
+		if err := os.WriteFile(path, data, mode); err != nil { return err }
+		return os.Chmod(path, mode)
+	}
+	if _, err := os.Stat("/usr/local/x-ui/telemt-meko-fix.sh"); errors.Is(err, os.ErrNotExist) {
+		if err := download(scriptURL, "/usr/local/x-ui/telemt-meko-fix.sh", 0700); err != nil {
+			return fmt.Errorf("install MEKO fix script: %w", err)
+		}
+	}
+	if _, err := os.Stat("/etc/systemd/system/telemt-meko-fix.service"); errors.Is(err, os.ErrNotExist) {
+		if err := download(unitURL, "/etc/systemd/system/telemt-meko-fix.service", 0644); err != nil {
+			return fmt.Errorf("install MEKO fix service: %w", err)
+		}
+	}
+	if err := systemctl("daemon-reload"); err != nil {
+		return fmt.Errorf("telemt meko: daemon-reload failed: %w", err)
+	}
+	return nil
 }
 
 func systemctl(args ...string) error {
