@@ -22,7 +22,6 @@
   "remark": "Remark",
   "enable": "Enabled",
   "protocol": "Protocol",
-  "search": "Search",
   "filter": "Filter",
   "all": "All",
   "from": "From",
@@ -120,7 +119,6 @@
     "routing": "Routing",
     "outbounds": "Outbounds",
     "apiDocs": "API Docs",
-    "docs": "Documentation",
     "openMenu": "Open menu",
     "pinSidebar": "Pin sidebar",
     "unpinSidebar": "Unpin sidebar",
@@ -2543,10 +2541,7 @@
     "settings": "Settings"
   },
   "telemt": {
-    "title": "Telemt — MTProto",
-    "installed": "Binary installed",
     "service": "Service",
-    "running": "running",
     "stopped": "stopped"
   }
 }
