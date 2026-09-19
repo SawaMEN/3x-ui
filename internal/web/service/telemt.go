@@ -15,6 +15,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/pelletier/go-toml/v2"
 )
 
 const (
@@ -182,70 +184,45 @@ func telemtVersion() string {
 }
 
 func (TelemtService) GetConfig() (TelemtConfig, error) {
-	if err := ensureTelemtConfig(); err != nil {
-		return TelemtConfig{}, err
-	}
+	if err := ensureTelemtConfig(); err != nil { return TelemtConfig{}, err }
 	b, err := os.ReadFile(telemtConfigPath)
-	if err != nil {
-		return TelemtConfig{}, err
+	if err != nil { return TelemtConfig{}, err }
+
+	// Parse the real TOML structure so panel values match the file on disk.
+	var raw struct {
+		General struct {
+			FastMode bool `toml:"fast_mode"`
+			Modes struct {
+				Classic bool `toml:"classic"`
+				Secure bool `toml:"secure"`
+				TLS bool `toml:"tls"`
+			} `toml:"modes"`
+		} `toml:"general"`
+		Network struct {
+			IPv4 bool `toml:"ipv4"`
+			IPv6 bool `toml:"ipv6"`
+		} `toml:"network"`
+		Server struct { Port int `toml:"port"` } `toml:"server"`
+		Censorship struct { TLSDomain string `toml:"tls_domain"` } `toml:"censorship"`
+		Access struct { Users map[string]string `toml:"users"` } `toml:"access"`
+		Upstreams []struct { Type string `toml:"type"` } `toml:"upstreams"`
 	}
+	if err := toml.Unmarshal(b, &raw); err != nil { return TelemtConfig{}, fmt.Errorf("telemt: parse config: %w", err) }
 
 	c := defaultTelemtConfig()
-	section := ""
-	for _, rawLine := range strings.Split(string(b), "\n") {
-		line := strings.TrimSpace(rawLine)
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
-			section = strings.TrimSuffix(strings.TrimPrefix(line, "["), "]")
-			continue
-		}
-
-		switch section {
-		case "general":
-			if strings.HasPrefix(line, "fast_mode = ") {
-				c.FastMode = strings.TrimSpace(strings.TrimPrefix(line, "fast_mode = ")) == "true"
-			}
-		case "general.modes":
-			switch {
-			case strings.HasPrefix(line, "classic = "):
-				c.Classic = strings.TrimSpace(strings.TrimPrefix(line, "classic = ")) == "true"
-			case strings.HasPrefix(line, "secure = "):
-				c.Secure = strings.TrimSpace(strings.TrimPrefix(line, "secure = ")) == "true"
-			case strings.HasPrefix(line, "tls = "):
-				c.TLS = strings.TrimSpace(strings.TrimPrefix(line, "tls = ")) == "true"
-			}
-		case "network":
-			switch {
-			case strings.HasPrefix(line, "ipv4 = "):
-				c.IPv4 = strings.TrimSpace(strings.TrimPrefix(line, "ipv4 = ")) == "true"
-			case strings.HasPrefix(line, "ipv6 = "):
-				c.IPv6 = strings.TrimSpace(strings.TrimPrefix(line, "ipv6 = ")) == "true"
-			}
-		case "server":
-			if strings.HasPrefix(line, "port = ") {
-				c.Port, _ = strconv.Atoi(strings.TrimSpace(strings.TrimPrefix(line, "port = ")))
-			}
-		case "censorship":
-			if strings.HasPrefix(line, "tls_domain = ") {
-				c.SNI = strings.Trim(strings.TrimSpace(strings.TrimPrefix(line, "tls_domain = ")), `"`)
-			}
-		case "access.users":
-			if strings.HasPrefix(line, "xui = ") {
-				c.Secret = strings.Trim(strings.TrimSpace(strings.TrimPrefix(line, "xui = ")), `"`)
-			}
-		case "upstreams":
-			if strings.HasPrefix(line, "type = ") {
-				c.UpstreamType = strings.Trim(strings.TrimSpace(strings.TrimPrefix(line, "type = ")), `"`)
-			}
-		}
-	}
-
+	c.Port = raw.Server.Port
+	c.IPv4 = raw.Network.IPv4
+	c.IPv6 = raw.Network.IPv6
+	c.FastMode = raw.General.FastMode
+	c.Classic = raw.General.Modes.Classic
+	c.Secure = raw.General.Modes.Secure
+	c.TLS = raw.General.Modes.TLS
+	c.SNI = raw.Censorship.TLSDomain
+	c.Secret = strings.TrimSpace(raw.Access.Users["xui"])
+	if len(raw.Upstreams) > 0 && raw.Upstreams[0].Type != "" { c.UpstreamType = raw.Upstreams[0].Type } else { c.UpstreamType = "direct" }
 	c.Enabled = TelemtService{}.Status().Enabled
 	return c, nil
 }
-
 func (TelemtService) SaveConfig(c TelemtConfig) error {
 	data, err := renderTelemtConfig(c)
 	if err != nil {
