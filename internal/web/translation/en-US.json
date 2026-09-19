@@ -18,6 +18,7 @@
   "regenerate": "Regenerate",
   "jsonEditor": "JSON editor",
   "downloadImage": "Download Image",
+  "search": "Search",
   "sort": "Sort",
   "remark": "Remark",
   "enable": "Enabled",
@@ -2530,7 +2531,6 @@
   "commandPalette": {
     "title": "Command Palette",
     "placeholder": "Type a command or search clients, inbounds, pages...",
-    "search": "Search...",
     "navigation": "Navigation",
     "actions": "Actions",
     "navigate": "Navigate",
