@@ -132,8 +132,21 @@ func (TelemtService) SaveConfig(c TelemtConfig) error {
 
   data := fmt.Sprintf("[general]\nfast_mode = %t\nuse_middle_proxy = false\nlog_level = \"normal\"\n\n[general.modes]\nclassic = %t\nsecure = %t\ntls = %t\n\n[general.links]\nshow = [\"xui\"]\n\n[network]\nipv4 = %t\nipv6 = %t\nprefer = %d\n\n[server]\nport = %d\n\n%s[access]\nreplay_check_len = 65536\nignore_time_skew = false\n\n[access.users]\nxui = \"%s\"\n\n[[upstreams]]\ntype = \"direct\"\nweight = 1\nenabled = true\n", c.FastMode, c.Classic, c.Secure, c.TLS, c.IPv4, c.IPv6, c.Prefer, c.Port, listeners, strings.ToLower(c.Secret))
 
+  old, oldErr := os.ReadFile(telemtConfigPath)
+  wasActive := systemctl("is-active", "--quiet", telemtServiceName) == nil
   if err := os.WriteFile(telemtConfigPath, []byte(data), 0600); err != nil { return err }
-  return systemctl("daemon-reload")
+  if err := systemctl("daemon-reload"); err != nil { return err }
+  if wasActive {
+    if err := systemctl("restart", telemtServiceName); err != nil {
+      if oldErr == nil {
+        _ = os.WriteFile(telemtConfigPath, old, 0600)
+        _ = systemctl("daemon-reload")
+        _ = systemctl("restart", telemtServiceName)
+      }
+      return fmt.Errorf("telemt: new configuration was rejected: %w", err)
+    }
+  }
+  return nil
 }
 
 func (TelemtService) CreateProxy(req TelemtCreateRequest) (TelemtProxy, error) {
@@ -171,9 +184,18 @@ func (TelemtService) CreateProxy(req TelemtCreateRequest) (TelemtProxy, error) {
     username = fmt.Sprintf("%s-%d", username, i)
   }
   entry := fmt.Sprintf("%s = \"%s\"\n", username, secret)
+  old := append([]byte(nil), b...)
   text = text[:insertAt] + entry + text[insertAt:]
   if err := os.WriteFile(telemtConfigPath, []byte(text), 0600); err != nil { return TelemtProxy{}, err }
   if err := systemctl("daemon-reload"); err != nil { return TelemtProxy{}, err }
+  if systemctl("is-active", "--quiet", telemtServiceName) == nil {
+    if err := systemctl("restart", telemtServiceName); err != nil {
+      _ = os.WriteFile(telemtConfigPath, old, 0600)
+      _ = systemctl("daemon-reload")
+      _ = systemctl("restart", telemtServiceName)
+      return TelemtProxy{}, fmt.Errorf("telemt: proxy configuration was rejected: %w", err)
+    }
+  }
 
   cfg, err := TelemtService{}.GetConfig()
   if err != nil { return TelemtProxy{}, err }
