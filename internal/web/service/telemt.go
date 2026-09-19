@@ -163,13 +163,17 @@ func (TelemtService) GetConfig() (TelemtConfig, error) {
 		return TelemtConfig{}, err
 	}
 	c := defaultTelemtConfig()
+	inAccessUsers := false
 	for _, line := range strings.Split(string(b), "\n") {
 		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "[") {
+			inAccessUsers = line == "[access.users]"
+		}
+		if inAccessUsers && strings.HasPrefix(line, "xui = ") {
+			c.Secret = strings.Trim(strings.TrimPrefix(line, "xui = "), `"`)
+		}
 		if strings.HasPrefix(line, "port = ") {
 			c.Port, _ = strconv.Atoi(strings.Trim(strings.TrimPrefix(line, "port = "), `"`))
-		}
-		if strings.HasPrefix(line, "xui = ") {
-			c.Secret = strings.Trim(strings.TrimPrefix(line, "xui = "), `"`)
 		}
 		if strings.HasPrefix(line, "ipv4 = ") {
 			c.IPv4 = strings.TrimSpace(strings.TrimPrefix(line, "ipv4 = ")) == "true"
