@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ComponentType, CSSProperties } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
@@ -107,7 +107,7 @@ function saveSidebarPinned(pinned: boolean) {
   try { localStorage.setItem(SIDEBAR_PINNED_KEY, String(pinned)); } catch {}
 }
 
-export default function AppSidebar() {
+function AppSidebar() {
   const { t } = useTranslation();
   const { mode } = useTheme();
   const navigate = useNavigate();
@@ -249,3 +249,6 @@ export default function AppSidebar() {
     </div>
   );
 }
+
+
+export default memo(AppSidebar);
