@@ -30,6 +30,7 @@ type TelemtConfig struct {
   Classic bool `json:"classic"`
   Secure bool `json:"secure"`
   TLS bool `json:"tls"`
+  SNI string `json:"sni"`
   UpstreamType string `json:"upstreamType"`
 }
 
@@ -68,27 +69,32 @@ func renderTelemtConfig(c TelemtConfig) (string, error) {
   if _, err := hex.DecodeString(c.Secret); err != nil { return "", errors.New("telemt: secret must be hexadecimal") }
   if c.UpstreamType != "direct" { return "", errors.New("telemt: only direct upstream is supported by the panel") }
 
+  sni := strings.TrimSpace(c.SNI)
+  if c.TLS && sni == "" { return "", errors.New("telemt: SNI is required when Fake-TLS is enabled") }
+  if strings.ContainsAny(sni, "\"\r\n\t ") { return "", errors.New("telemt: invalid SNI") }
+
   listeners := ""
   if c.IPv4 { listeners += "[[server.listeners]]\nip = \"0.0.0.0\"\n\n" }
   if c.IPv6 { listeners += "[[server.listeners]]\nip = \"::\"\n\n" }
-  return fmt.Sprintf("[general]\nfast_mode = %t\nuse_middle_proxy = false\nlog_level = \"normal\"\n\n[general.modes]\nclassic = %t\nsecure = %t\ntls = %t\n\n[general.links]\nshow = [\"xui\"]\n\n[network]\nipv4 = %t\nipv6 = %t\n\n[server]\nport = %d\n\n%s[access]\nreplay_check_len = 65536\nignore_time_skew = false\n\n[access.users]\nxui = \"%s\"\n\n[[upstreams]]\ntype = \"direct\"\nweight = 1\nenabled = true\n", c.FastMode, c.Classic, c.Secure, c.TLS, c.IPv4, c.IPv6, c.Port, listeners, strings.ToLower(c.Secret)), nil
+
+  censorship := ""
+  if c.TLS {
+    censorship = fmt.Sprintf("[censorship]\ntls_domain = \"%s\"\n\n", sni)
+  }
+
+  return fmt.Sprintf("[general]\nfast_mode = %t\nuse_middle_proxy = false\nlog_level = \"normal\"\n\n[general.modes]\nclassic = %t\nsecure = %t\ntls = %t\n\n[general.links]\nshow = [\"xui\"]\n\n[network]\nipv4 = %t\nipv6 = %t\n\n[server]\nport = %d\n\n%s%s[access]\nreplay_check_len = 65536\nignore_time_skew = false\n\n[access.users]\nxui = \"%s\"\n\n[[upstreams]]\ntype = \"direct\"\nweight = 1\nenabled = true\n", c.FastMode, c.Classic, c.Secure, c.TLS, c.IPv4, c.IPv6, c.Port, listeners, censorship, strings.ToLower(c.Secret)), nil
 }
 
 func ensureTelemtConfig() error {
-  if err := os.MkdirAll(filepath.Dir(telemtConfigPath), 0700); err != nil {
-    return fmt.Errorf("telemt: create config directory: %w", err)
-  }
+  if err := os.MkdirAll(filepath.Dir(telemtConfigPath), 0700); err != nil { return fmt.Errorf("telemt: create config directory: %w", err) }
   if _, err := os.Stat(telemtConfigPath); err == nil { return nil } else if !errors.Is(err, os.ErrNotExist) { return err }
-
   secretBytes := make([]byte, 16)
   if _, err := rand.Read(secretBytes); err != nil { return fmt.Errorf("telemt: generate secret: %w", err) }
   c := defaultTelemtConfig()
   c.Secret = hex.EncodeToString(secretBytes)
   data, err := renderTelemtConfig(c)
   if err != nil { return err }
-  if err := os.WriteFile(telemtConfigPath, []byte(data), 0600); err != nil {
-    return fmt.Errorf("telemt: create config: %w", err)
-  }
+  if err := os.WriteFile(telemtConfigPath, []byte(data), 0600); err != nil { return fmt.Errorf("telemt: create config: %w", err) }
   return nil
 }
 
@@ -125,6 +131,7 @@ func (TelemtService) GetConfig() (TelemtConfig, error) {
     if strings.HasPrefix(line, "classic = ") { c.Classic = strings.TrimSpace(strings.TrimPrefix(line, "classic = ")) == "true" }
     if strings.HasPrefix(line, "secure = ") { c.Secure = strings.TrimSpace(strings.TrimPrefix(line, "secure = ")) == "true" }
     if strings.HasPrefix(line, "tls = ") { c.TLS = strings.TrimSpace(strings.TrimPrefix(line, "tls = ")) == "true" }
+    if strings.HasPrefix(line, "tls_domain = ") { c.SNI = strings.Trim(strings.TrimPrefix(line, "tls_domain = "), `"`) }
     if strings.HasPrefix(line, "type = ") { c.UpstreamType = strings.Trim(strings.TrimPrefix(line, "type = "), `"`) }
   }
   c.Enabled = TelemtService{}.Status().Enabled
@@ -154,14 +161,12 @@ func (TelemtService) CreateProxy(req TelemtCreateRequest) (TelemtProxy, error) {
   if name == "" { return TelemtProxy{}, errors.New("telemt: proxy name is required") }
   if host == "" { return TelemtProxy{}, errors.New("telemt: public host is required") }
   if strings.ContainsAny(name, "=\n\r\"") || strings.ContainsAny(host, " \t\n\r\"") { return TelemtProxy{}, errors.New("telemt: invalid proxy name or host") }
-
   if err := ensureTelemtConfig(); err != nil { return TelemtProxy{}, err }
   b, err := os.ReadFile(telemtConfigPath)
   if err != nil { return TelemtProxy{}, err }
   secretBytes := make([]byte, 16)
   if _, err := rand.Read(secretBytes); err != nil { return TelemtProxy{}, err }
   secret := hex.EncodeToString(secretBytes)
-
   username := strings.ToLower(strings.Map(func(r rune) rune {
     if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '_' || r == '-' { return r }
     if r >= 'A' && r <= 'Z' { return r + ('a' - 'A') }
@@ -169,7 +174,6 @@ func (TelemtService) CreateProxy(req TelemtCreateRequest) (TelemtProxy, error) {
   }, name))
   username = strings.Trim(username, "_-")
   if username == "" { username = "proxy" }
-
   text := string(b)
   section := "[access.users]"
   idx := strings.Index(text, section)
