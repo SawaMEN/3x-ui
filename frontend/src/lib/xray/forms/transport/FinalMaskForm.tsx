@@ -284,10 +284,8 @@ export default function FinalMaskForm({
   // wrap anything even though the leftover network value may be 'tcp'.
   const isWireguard = protocol === 'wireguard';
   const showTcp = showAll || (!isWireguard && TCP_NETWORKS.includes(network));
-  // UDP finalmask is usable for KCP, Hysteria2, WireGuard and XHTTP/3
-  // packet-up. XHTTP/3 is QUIC/UDP only when the XHTTP mode actually uses
-  // packet-up; the panel exposes the section for xhttp and explains that
-  // constraint in the Sudoku editor rather than silently hiding it.
+  // UDP finalmask is used by UDP-backed transports. XHTTP/3 can carry UDP
+  // through packet-up, so keep the UDP section available for xhttp as well.
   const showUdp = showAll || isHysteria || isWireguard || network === 'kcp' || network === 'xhttp';
   const showQuic = showAll || isHysteria || network === 'xhttp';
   const quicParams = Form.useWatch([...base, 'quicParams'], { form, preserve: true });
@@ -488,14 +486,28 @@ function TcpMaskItem({
                     options={[
                       { value: 'entropy', label: 'Low entropy — prefer_entropy' },
                       { value: 'ascii', label: 'Printable — prefer_ascii' },
+                      { value: 'up_ascii_down_entropy', label: 'Up ASCII / Down entropy' },
+                      { value: 'up_entropy_down_ascii', label: 'Up entropy / Down ASCII' },
                       { value: 'custom', label: 'Custom — keep manual settings' },
                     ]}
                     onChange={(profile: string | undefined) => {
-                      if (profile === 'entropy' || profile === 'ascii') {
+                      if (
+                        profile === 'entropy' ||
+                        profile === 'ascii' ||
+                        profile === 'up_ascii_down_entropy' ||
+                        profile === 'up_entropy_down_ascii'
+                      ) {
                         const settings = form.getFieldValue(sudokuSettingsPath) || {};
                         form.setFieldValue(sudokuSettingsPath, {
                           ...settings,
-                          ascii: profile === 'ascii' ? 'prefer_ascii' : 'prefer_entropy',
+                          ascii:
+                            profile === 'ascii'
+                              ? 'prefer_ascii'
+                              : profile === 'up_ascii_down_entropy'
+                                ? 'up_ascii_down_entropy'
+                                : profile === 'up_entropy_down_ascii'
+                                  ? 'up_entropy_down_ascii'
+                                  : 'prefer_entropy',
                           customTable: '',
                           customTables: [],
                         });
@@ -507,7 +519,7 @@ function TcpMaskItem({
                 <Form.Item
                   label="ASCII"
                   name={[fieldName, 'settings', 'ascii']}
-                  extra="prefer_entropy is the default low-entropy profile; prefer_ascii favors printable ASCII."
+                  extra="Controls byte appearance by direction. Custom Table(s) override this selection when provided."
                 >
                   <Select
                     allowClear
@@ -515,6 +527,8 @@ function TcpMaskItem({
                     options={[
                       { value: 'prefer_entropy', label: 'Prefer entropy (default)' },
                       { value: 'prefer_ascii', label: 'Prefer ASCII' },
+                      { value: 'up_ascii_down_entropy', label: 'Up ASCII / Down entropy' },
+                      { value: 'up_entropy_down_ascii', label: 'Up entropy / Down ASCII' },
                     ]}
                   />
                 </Form.Item>
