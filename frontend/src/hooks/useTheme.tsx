@@ -6,6 +6,7 @@ import type { ThemeConfig } from 'antd';
 const STORAGE_DARK = 'dark-mode';
 const STORAGE_ULTRA = 'isUltraDarkThemeEnabled';
 const STORAGE_THEME = 'xui-theme';
+const STORAGE_LOW_POWER = 'xui-low-power';
 
 export type ThemeMode = 'light' | 'dark' | 'ultra-dark' | 'colorful' | 'blue-gray';
 
@@ -15,6 +16,10 @@ function readBool(key: string, fallback: boolean): boolean {
   return raw === 'true';
 }
 
+function readLowPower(): boolean {
+  return readBool(STORAGE_LOW_POWER, false);
+}
+
 function readThemeMode(): ThemeMode {
   const saved = localStorage.getItem(STORAGE_THEME);
   if (saved === 'light' || saved === 'dark' || saved === 'ultra-dark' || saved === 'colorful' || saved === 'blue-gray') return saved;
@@ -22,12 +27,13 @@ function readThemeMode(): ThemeMode {
   return readBool(STORAGE_DARK, true) ? 'dark' : 'light';
 }
 
-function applyDom(mode: ThemeMode) {
+function applyDom(mode: ThemeMode, lowPower: boolean) {
   const isDark = mode === 'dark' || mode === 'ultra-dark' || mode === 'blue-gray';
   document.body.classList.remove('dark', 'light', 'theme-ultra-dark', 'theme-colorful', 'theme-blue-gray');
   document.body.classList.add(isDark ? 'dark' : 'light', 'theme-' + mode);
   document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
   document.documentElement.setAttribute('data-theme', mode);
+  document.documentElement.toggleAttribute('data-low-power', lowPower);
   const msg = document.getElementById('message');
   if (msg) {
     msg.classList.remove('dark', 'light');
@@ -36,7 +42,7 @@ function applyDom(mode: ThemeMode) {
 }
 
 const initialMode = readThemeMode();
-applyDom(initialMode);
+applyDom(initialMode, readLowPower());
 
 const ULTRA_DARK_TOKENS = {
   colorBgBase: '#000000',
@@ -228,31 +234,36 @@ interface ThemeContextValue {
   toggleUltra: () => void;
   setThemeMode: (mode: ThemeMode) => void;
   antdThemeConfig: ThemeConfig;
+  lowPower: boolean;
+  toggleLowPower: () => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [mode, setMode] = useState<ThemeMode>(initialMode);
+  const [lowPower, setLowPower] = useState<boolean>(() => readLowPower());
   const isDark = mode === 'dark' || mode === 'ultra-dark' || mode === 'blue-gray';
   const isUltra = mode === 'ultra-dark';
 
   useLayoutEffect(() => {
-    applyDom(mode);
+    applyDom(mode, lowPower);
     localStorage.setItem(STORAGE_THEME, mode);
+    localStorage.setItem(STORAGE_LOW_POWER, String(lowPower));
     localStorage.setItem(STORAGE_DARK, String(isDark));
     localStorage.setItem(STORAGE_ULTRA, String(isUltra));
-  }, [mode, isDark]);
+  }, [mode, isDark, lowPower]);
 
   const toggleTheme = useCallback(() => setMode((v) => (v === 'light' ? 'dark' : v === 'dark' || v === 'ultra-dark' ? 'light' : v)), []);
   const toggleUltra = useCallback(() => setMode((v) => (v === 'dark' ? 'ultra-dark' : v === 'ultra-dark' ? 'dark' : v)), []);
   const setThemeMode = useCallback((next: ThemeMode) => setMode(next), []);
+  const toggleLowPower = useCallback(() => setLowPower((v) => !v), []);
 
   const antdThemeConfig = useMemo(() => buildAntdThemeConfig(mode), [mode]);
 
   const value = useMemo<ThemeContextValue>(
-    () => ({ mode, isDark, isUltra, toggleTheme, toggleUltra, setThemeMode, antdThemeConfig }),
-    [mode, isDark, isUltra, toggleTheme, toggleUltra, setThemeMode, antdThemeConfig],
+    () => ({ mode, isDark, isUltra, toggleTheme, toggleUltra, setThemeMode, antdThemeConfig, lowPower, toggleLowPower }),
+    [mode, isDark, isUltra, toggleTheme, toggleUltra, setThemeMode, antdThemeConfig, lowPower, toggleLowPower],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
