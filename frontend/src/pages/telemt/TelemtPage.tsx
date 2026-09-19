@@ -7,7 +7,7 @@ import AppSidebar from '@/layouts/AppSidebar';
 import { useTheme } from '@/hooks/useTheme';
 import './TelemtPage.css';
 
-type Status = { installed: boolean; active: boolean; enabled: boolean; configured: boolean; version: string };
+type Status = { installed: boolean; active: boolean; enabled: boolean; configured: boolean; version: string; latestVersion: string; updateAvailable: boolean };
 type Config = { enabled: boolean; port: number; secret: string; ipv4: boolean; ipv6: boolean; fastMode: boolean; classic: boolean; secure: boolean; tls: boolean; sni: string; upstreamType: string };
 type Proxy = { name: string; secret: string; host: string; port: number; tls: boolean; link: string };
 type CreateForm = { name: string; host: string };
@@ -30,7 +30,11 @@ export default function TelemtPage() {
     if (c?.success && c.obj) form.setFieldsValue({ ...defaults, ...c.obj });
   };
 
-  useEffect(() => { void refresh(); }, []);
+  useEffect(() => {
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 60000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const generateSecret = () => {
     const secret = RandomUtil.randomSeq(32, { type: 'hex' });
@@ -60,7 +64,7 @@ export default function TelemtPage() {
     } finally { setLoading(false); }
   };
 
-  const action = async (a: 'start' | 'stop' | 'restart' | 'enable' | 'disable') => {
+  const action = async (a: 'start' | 'stop' | 'restart' | 'enable' | 'disable' | 'update') => {
     setLoading(true);
     try {
       const r = await HttpUtil.post('/panel/api/telemt/action', { action: a }, jsonOptions);
@@ -95,7 +99,7 @@ export default function TelemtPage() {
               )}
 
               <Row gutter={[16, 16]} className="telemt-status-grid">
-                <Col xs={24} sm={12} lg={6}><Card className="telemt-status-card"><Typography.Text type="secondary">Версия бинарника</Typography.Text><Typography.Title level={4}>{status.version || '—'}</Typography.Title></Card></Col>
+                <Col xs={24} sm={12} lg={6}><Card className="telemt-status-card"><Typography.Text type="secondary">Версия бинарника</Typography.Text><Typography.Title level={4}>{status.version || '—'}</Typography.Title>{status.updateAvailable && <Typography.Text type="warning">Доступна {status.latestVersion}</Typography.Text>}</Card></Col>
                 <Col xs={24} sm={12} lg={6}><Card className="telemt-status-card"><Typography.Text type="secondary">Бинарник</Typography.Text><Typography.Title level={4}><Tag color={status.installed ? 'green' : 'red'}>{status.installed ? 'Установлен' : 'Не установлен'}</Tag></Typography.Title></Card></Col>
                 <Col xs={24} sm={12} lg={6}><Card className="telemt-status-card"><Typography.Text type="secondary">Сервис</Typography.Text><Typography.Title level={4}><Tag color={status.active ? 'green' : 'default'}>{status.active ? 'Запущен' : 'Остановлен'}</Tag></Typography.Title></Card></Col>
                 <Col xs={24} sm={12} lg={6}><Card className="telemt-status-card"><Typography.Text type="secondary">Автозапуск</Typography.Text><Typography.Title level={4}><Tag color={status.enabled ? 'green' : 'default'}>{status.enabled ? 'Включён' : 'Выключен'}</Tag></Typography.Title></Card></Col>
@@ -144,6 +148,7 @@ export default function TelemtPage() {
                     <Button htmlType="button" icon={<StopOutlined />} onClick={() => action('stop')} disabled={!status.active}>Остановить</Button>
                     <Button htmlType="button" icon={<SyncOutlined />} onClick={() => action('restart')} disabled={!status.installed}>Перезапустить</Button>
                     <Button htmlType="button" onClick={() => action(status.enabled ? 'disable' : 'enable')}>{status.enabled ? 'Отключить автозапуск' : 'Включить автозапуск'}</Button>
+                    <Button htmlType="button" icon={<SyncOutlined />} onClick={() => action('update')} loading={loading} disabled={!status.installed || !status.updateAvailable}>Обновить Telemt</Button>
                   </Space>
                 </Form>
               </Card>
