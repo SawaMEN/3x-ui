@@ -182,7 +182,7 @@ body.dark .ant-sidebar > .ant-layout-sider {
   position: fixed;
   left: 12px;
   bottom: 16px;
-  z-index: 220;
+  z-index: 1100;
   width: 42px;
   height: 42px;
   border: 1px solid var(--ant-color-border);
@@ -198,5 +198,20 @@ body.dark .ant-sidebar > .ant-layout-sider {
   }
   .sider-brand {
     display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .ant-sidebar {
+    position: relative;
+    z-index: 1100;
+    width: 0;
+    flex: 0 0 0;
+  }
+
+  .drawer-handle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 }
