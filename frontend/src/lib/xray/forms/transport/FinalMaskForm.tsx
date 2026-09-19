@@ -547,10 +547,8 @@ function TcpMaskItem({
                     { validator: validateSudokuPaddingRange },
                     {
                       validator: (_rule, value) =>
-                        validateSudokuPaddingMax(
-                          _rule,
-                          value,
-                          () => form.getFieldValue([...sudokuSettingsPath, 'paddingMin']),
+                        validateSudokuPaddingMax(_rule, value, () =>
+                          form.getFieldValue([...sudokuSettingsPath, 'paddingMin']),
                         ),
                     },
                   ]}
@@ -747,9 +745,12 @@ const XMC_USERNAME_PATTERN = /^[A-Za-z0-9_]{3,16}$/;
 function validateSudokuCustomTable(_rule: unknown, value: unknown): Promise<void> {
   const str = typeof value === 'string' ? value.trim().toLowerCase() : '';
   if (str.length === 0) return Promise.resolve();
-  if (!/^[xpv]{8}$/.test(str) || [...str].filter((ch) => ch === 'x').length !== 2 ||
-      [...str].filter((ch) => ch === 'p').length !== 2 ||
-      [...str].filter((ch) => ch === 'v').length !== 4) {
+  if (
+    !/^[xpv]{8}$/.test(str) ||
+    [...str].filter((ch) => ch === 'x').length !== 2 ||
+    [...str].filter((ch) => ch === 'p').length !== 2 ||
+    [...str].filter((ch) => ch === 'v').length !== 4
+  ) {
     return Promise.reject(new Error('Use exactly 8 characters: 2x, 2p and 4v, e.g. vxvpxvvp'));
   }
   return Promise.resolve();
@@ -775,7 +776,8 @@ function validateSudokuPaddingMax(
   if (!Number.isInteger(max) || max < 0 || max > 100) {
     return Promise.reject(new Error('Padding must be a percentage from 0 to 100'));
   }
-  if (max < min) return Promise.reject(new Error('Padding Max must be greater than or equal to Padding Min'));
+  if (max < min)
+    return Promise.reject(new Error('Padding Max must be greater than or equal to Padding Min'));
   return Promise.resolve();
 }
 
