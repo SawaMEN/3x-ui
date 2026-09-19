@@ -255,7 +255,7 @@ func (TelemtService) GetConfig() (TelemtConfig, error) {
 	// Prefer Telemt live configuration while the service is running. The TOML
 	// file remains the fallback for fields hidden by /v1/config.
 	if c.Enabled && systemctl("is-active", "--quiet", telemtServiceName) == nil {
-		if live, err := telemtRuntimeConfigResponse(); err == nil {
+		if live, err := fetchTelemtRuntimeConfig(); err == nil {
 			if live.General.FastMode != nil { c.FastMode = *live.General.FastMode }
 			if live.General.Modes.Classic != nil { c.Classic = *live.General.Modes.Classic }
 			if live.General.Modes.Secure != nil { c.Secure = *live.General.Modes.Secure }
@@ -278,7 +278,7 @@ type telemtRuntimeConfigResponse struct {
 	Censorship struct { TLSDomain string `json:"tls_domain"` } `json:"censorship"`
 }
 
-func telemtRuntimeConfigResponse() (telemtRuntimeConfigResponse, error) {
+func fetchTelemtRuntimeConfig() (telemtRuntimeConfigResponse, error) {
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Get("http://127.0.0.1:9091/v1/config")
 	if err != nil { return telemtRuntimeConfigResponse{}, err }
