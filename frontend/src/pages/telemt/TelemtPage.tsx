@@ -12,7 +12,7 @@ type Config = { enabled: boolean; port: number; secret: string; ipv4: boolean; i
 type Proxy = { name: string; secret: string; host: string; port: number; tls: boolean; link: string };
 type CreateForm = { name: string; host: string };
 
-const defaults: Config = { enabled: false, port: 8443, secret: '', ipv4: true, ipv6: true, fastMode: true, classic: false, secure: false, tls: true, sni: '', upstreamType: 'direct' };
+const defaults: Config = { enabled: false, port: 8443, secret: '', ipv4: true, ipv6: true, fastMode: true, classic: false, secure: false, tls: true, sni: 'petrovich.ru', upstreamType: 'direct' };
 const jsonOptions = { headers: { 'Content-Type': 'application/json' } };
 
 export default function TelemtPage() {
@@ -127,7 +127,7 @@ export default function TelemtPage() {
                   </Row>
                   <Row gutter={16}>
                     <Col xs={24} md={12}><Form.Item name="sni" label="SNI" tooltip="Домен, который используется как tls_domain для Fake-TLS"><Input placeholder="www.example.com" /></Form.Item></Col>
-                    <Col xs={24} md={12}><Form.Item name="tls" label="Fake-TLS (ee)" valuePropName="checked"><Switch /></Form.Item></Col>
+                    <Col xs={24} md={12}><Form.Item name="tls" label="Fake-TLS (ee)" valuePropName="checked"><Switch onChange={(checked) => { if (checked && !form.getFieldValue("sni")) form.setFieldValue("sni", "petrovich.ru"); }} /></Form.Item></Col>
                   </Row>
                   <Row gutter={16}>
                     <Col xs={24} md={8}><Form.Item name="ipv4" label="Разрешить IPv4" valuePropName="checked"><Switch /></Form.Item></Col>
