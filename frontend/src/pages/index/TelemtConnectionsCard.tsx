@@ -6,6 +6,7 @@ import { HttpUtil } from '@/utils';
 
 interface TelemtConnection {
   ip: string;
+  users: string[];
   city: string;
   region: string;
   country: string;
@@ -50,7 +51,17 @@ export default function TelemtConnectionsCard() {
         title: 'IP',
         dataIndex: 'ip',
         key: 'ip',
-        render: (ip: string) => <Typography.Text code copyable={{ text: ip }}>{ip}</Typography.Text>,
+        render: (ip: string) => (
+          <Typography.Text code copyable={{ text: ip }}>
+            {ip}
+          </Typography.Text>
+        ),
+      },
+      {
+        title: 'Пользователь',
+        key: 'users',
+        render: (_: unknown, row: TelemtConnection) =>
+          row.users?.length ? row.users.join(', ') : '—',
       },
       {
         title: 'Город',
@@ -99,7 +110,7 @@ export default function TelemtConnectionsCard() {
           size="small"
           pagination={false}
           virtual={rows.length > 30}
-          scroll={{ y: 360, x: 520 }}
+          scroll={{ y: 360, x: 720 }}
           dataSource={rows}
           columns={columns}
         />
