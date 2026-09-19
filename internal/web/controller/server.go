@@ -108,14 +108,14 @@ func (a *ServerController) startTask() {
 	// This guarantees that dev checks still run even if another cron task fails
 	// to register or the scheduler is not started yet.
 	go func() {
-		time.Sleep(30 * time.Second)
+		time.Sleep(15 * time.Second)
 		check := func() {
 			if err := a.panelService.AutoUpdateDevChannel(); err != nil {
 				logger.Warning("automatic dev panel update check failed:", err)
 			}
 		}
 		check()
-		ticker := time.NewTicker(15 * time.Minute)
+		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()
 		for range ticker.C {
 			check()
