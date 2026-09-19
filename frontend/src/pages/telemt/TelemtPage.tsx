@@ -18,6 +18,7 @@ import {
 } from 'antd';
 import {
   CopyOutlined,
+  DeleteOutlined,
   PlusOutlined,
   ReloadOutlined,
   PlayCircleOutlined,
@@ -184,6 +185,20 @@ export default function TelemtPage() {
     }
   };
 
+  const deleteProxy = async (name: string) => {
+    setLoading(true);
+    try {
+      const r = await HttpUtil.delete('/panel/api/telemt/proxy/' + encodeURIComponent(name));
+      if (r?.success) {
+        message.success('Ссылка удалена');
+        if (proxy?.name === name) setProxy(null);
+        await refresh();
+      } else message.error(r?.msg || 'Не удалось удалить ссылку');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const copyLink = async () => {
     if (!proxy) return;
     await navigator.clipboard.writeText(proxy.link);
@@ -344,6 +359,15 @@ export default function TelemtPage() {
                             onClick={() => navigator.clipboard.writeText(item.link)}
                           >
                             Копировать
+                          </Button>
+                          <Button
+                            htmlType="button"
+                            danger
+                            icon={<DeleteOutlined />}
+                            loading={loading}
+                            onClick={() => void deleteProxy(item.name)}
+                          >
+                            Удалить
                           </Button>
                         </Space>
                       </div>
