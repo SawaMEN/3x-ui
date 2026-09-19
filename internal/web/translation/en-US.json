@@ -2541,7 +2541,6 @@
     "settings": "Settings"
   },
   "telemt": {
-    "service": "Service",
-    "stopped": "stopped"
+    "service": "Service"
   }
 }
