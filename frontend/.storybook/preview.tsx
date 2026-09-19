@@ -18,7 +18,8 @@ if (!i18next.isInitialized) {
 }
 
 export const withTheme: Decorator = (Story, context) => {
-  const dark = context.globals.theme === 'dark';
+  const themeMode = context.globals.theme === 'dark' ? 'dark' : 'light';
+  const dark = themeMode === 'dark';
   useLayoutEffect(() => {
     document.body.classList.remove('dark', 'light');
     document.body.classList.add(dark ? 'dark' : 'light');
@@ -26,7 +27,7 @@ export const withTheme: Decorator = (Story, context) => {
     document.documentElement.removeAttribute('data-theme');
   }, [dark]);
   return (
-    <ConfigProvider theme={buildAntdThemeConfig(dark)}>
+    <ConfigProvider theme={buildAntdThemeConfig(themeMode)}>
       <div style={{ padding: 24, minWidth: 320 }}>
         <Story />
       </div>
