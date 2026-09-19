@@ -8,7 +8,6 @@
   font-size: 12px;
 }
 
-
 .theme-picker-card {
   overflow: hidden;
 }
@@ -47,13 +46,16 @@
   border: 1px solid var(--ant-color-border-secondary);
   border-radius: 16px;
   cursor: pointer;
-  transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease;
+  transition:
+    border-color 0.18s ease,
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
 .theme-picker-option:hover {
   border-color: var(--ant-color-primary);
   transform: translateY(-2px);
-  box-shadow: 0 6px 18px rgba(0,0,0,.10);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1);
 }
 
 .theme-picker-option.is-selected {
@@ -99,30 +101,54 @@
 .theme-picker-option.theme-dark .theme-picker-preview {
   background: #141218;
 }
-.theme-picker-option.theme-dark .theme-preview-sidebar { background: #2b2930; }
-.theme-picker-option.theme-dark .theme-preview-content span { background: #39363d; }
-.theme-picker-option.theme-dark .theme-preview-content span:first-child { background: #6750a4; }
+.theme-picker-option.theme-dark .theme-preview-sidebar {
+  background: #2b2930;
+}
+.theme-picker-option.theme-dark .theme-preview-content span {
+  background: #39363d;
+}
+.theme-picker-option.theme-dark .theme-preview-content span:first-child {
+  background: #6750a4;
+}
 
 .theme-picker-option.theme-blue-gray .theme-picker-preview {
   background: #101722;
 }
-.theme-picker-option.theme-blue-gray .theme-preview-sidebar { background: #182333; }
-.theme-picker-option.theme-blue-gray .theme-preview-content span { background: #2a394d; }
-.theme-picker-option.theme-blue-gray .theme-preview-content span:first-child { background: #8ab4f8; }
+.theme-picker-option.theme-blue-gray .theme-preview-sidebar {
+  background: #182333;
+}
+.theme-picker-option.theme-blue-gray .theme-preview-content span {
+  background: #2a394d;
+}
+.theme-picker-option.theme-blue-gray .theme-preview-content span:first-child {
+  background: #8ab4f8;
+}
 
 .theme-picker-option.theme-colorful .theme-picker-preview {
   background: #f8f5ff;
 }
-.theme-picker-option.theme-colorful .theme-preview-sidebar { background: #e9ddff; }
-.theme-picker-option.theme-colorful .theme-preview-content span { background: #e8def8; }
-.theme-picker-option.theme-colorful .theme-preview-content span:first-child { background: #8b5cf6; }
+.theme-picker-option.theme-colorful .theme-preview-sidebar {
+  background: #e9ddff;
+}
+.theme-picker-option.theme-colorful .theme-preview-content span {
+  background: #e8def8;
+}
+.theme-picker-option.theme-colorful .theme-preview-content span:first-child {
+  background: #8b5cf6;
+}
 
 .theme-picker-option.theme-ultra-dark .theme-picker-preview {
   background: #000;
 }
-.theme-picker-option.theme-ultra-dark .theme-preview-sidebar { background: #111318; }
-.theme-picker-option.theme-ultra-dark .theme-preview-content span { background: #1e2025; }
-.theme-picker-option.theme-ultra-dark .theme-preview-content span:first-child { background: #6750a4; }
+.theme-picker-option.theme-ultra-dark .theme-preview-sidebar {
+  background: #111318;
+}
+.theme-picker-option.theme-ultra-dark .theme-preview-content span {
+  background: #1e2025;
+}
+.theme-picker-option.theme-ultra-dark .theme-preview-content span:first-child {
+  background: #6750a4;
+}
 
 .theme-picker-meta {
   display: flex;

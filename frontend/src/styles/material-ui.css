@@ -20,16 +20,23 @@
   --xui-radius-md: 12px;
   --xui-radius-lg: 16px;
   --xui-radius-xl: 28px;
-  --xui-elevation-1: 0 1px 2px rgba(0,0,0,.08);
-  --xui-elevation-2: 0 1px 3px rgba(0,0,0,.12), 0 4px 8px rgba(0,0,0,.08);
-  --xui-state-hover: rgba(29,27,32,.08);
-  --xui-state-focus: rgba(103,80,164,.12);
+  --xui-elevation-1: 0 1px 2px rgba(0, 0, 0, 0.08);
+  --xui-elevation-2: 0 1px 3px rgba(0, 0, 0, 0.12), 0 4px 8px rgba(0, 0, 0, 0.08);
+  --xui-state-hover: rgba(29, 27, 32, 0.08);
+  --xui-state-focus: rgba(103, 80, 164, 0.12);
 }
 
 html,
 body,
 #app {
-  font-family: Roboto, Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family:
+    Roboto,
+    Inter,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
 }
 
 body {
@@ -79,7 +86,11 @@ body {
   border-width: 1px;
   font-weight: 650;
   box-shadow: none !important;
-  transition: background-color .18s ease, border-color .18s ease, color .18s ease, box-shadow .18s ease;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
 .ant-btn:not(.ant-btn-link):not(.ant-btn-text):not(.ant-btn-primary) {
@@ -173,7 +184,9 @@ body {
   border-radius: 999px;
   padding: 9px 16px !important;
   margin-inline-end: 4px !important;
-  transition: background-color .18s ease, color .18s ease;
+  transition:
+    background-color 0.18s ease,
+    color 0.18s ease;
 }
 
 .ant-tabs-tab:hover {
@@ -317,7 +330,9 @@ body {
   color: var(--xui-on-surface-variant);
   cursor: pointer;
   box-shadow: none;
-  transition: background-color .18s ease, border-color .18s ease;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease;
 }
 
 .sidebar-command-trigger:hover,
@@ -383,8 +398,8 @@ body.dark {
   --xui-outline: #938f99;
   --xui-outline-variant: #49454f;
   --xui-error: #ffb4ab;
-  --xui-state-hover: rgba(230,224,233,.08);
-  --xui-state-focus: rgba(208,188,255,.12);
+  --xui-state-hover: rgba(230, 224, 233, 0.08);
+  --xui-state-focus: rgba(208, 188, 255, 0.12);
 }
 
 body.dark .ant-card,
@@ -425,37 +440,59 @@ html[data-theme='ultra-dark'] body.dark {
 
 /* Mobile density. */
 @media (max-width: 768px) {
-  .ant-card-head { padding-inline: 16px; }
-  .ant-card-body { padding: 16px; }
-  .ant-btn { min-height: 40px; padding-inline: 16px; }
+  .ant-card-head {
+    padding-inline: 16px;
+  }
+  .ant-card-body {
+    padding: 16px;
+  }
+  .ant-btn {
+    min-height: 40px;
+    padding-inline: 16px;
+  }
 }
 
 /* Respect accessibility settings. */
 @media (prefers-reduced-motion: reduce) {
   .ant-btn,
   .ant-tabs-tab,
-  .sidebar-command-trigger { transition: none; }
+  .sidebar-command-trigger {
+    transition: none;
+  }
 }
 
-
 /* ── Premium motion / glass / ambient depth ─────────────────────────────── */
-html { scroll-behavior: smooth; }
+html {
+  scroll-behavior: smooth;
+}
 
 body::before {
-  content: "";
+  content: '';
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: -1;
   background:
-    radial-gradient(circle at 8% 8%, color-mix(in srgb, var(--xui-primary) 10%, transparent), transparent 32%),
-    radial-gradient(circle at 92% 14%, color-mix(in srgb, #7c4dff 8%, transparent), transparent 28%),
-    radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--xui-secondary) 7%, transparent), transparent 34%);
-  opacity: .9;
+    radial-gradient(
+      circle at 8% 8%,
+      color-mix(in srgb, var(--xui-primary) 10%, transparent),
+      transparent 32%
+    ),
+    radial-gradient(
+      circle at 92% 14%,
+      color-mix(in srgb, #7c4dff 8%, transparent),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at 50% 100%,
+      color-mix(in srgb, var(--xui-secondary) 7%, transparent),
+      transparent 34%
+    );
+  opacity: 0.9;
 }
 
 body.dark::before {
-  opacity: .55;
+  opacity: 0.55;
 }
 
 .ant-layout-content {
@@ -468,48 +505,52 @@ body.dark::before {
 }
 
 .content-area::before {
-  content: "";
+  content: '';
   position: absolute;
   inset: 8px 8px auto;
   height: 180px;
   pointer-events: none;
   z-index: -1;
   border-radius: 40px;
-  background: radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--xui-primary) 7%, transparent), transparent 70%);
+  background: radial-gradient(
+    circle at 50% 0%,
+    color-mix(in srgb, var(--xui-primary) 7%, transparent),
+    transparent 70%
+  );
   filter: blur(18px);
 }
 
 .ant-card {
   position: relative;
   transition:
-    transform .28s cubic-bezier(.2,.8,.2,1),
-    box-shadow .28s cubic-bezier(.2,.8,.2,1),
-    border-color .2s ease,
-    background-color .2s ease !important;
+    transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 0.28s cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 0.2s ease,
+    background-color 0.2s ease !important;
 }
 
 .ant-card::after {
-  content: "";
+  content: '';
   position: absolute;
   inset: 0;
   pointer-events: none;
   border-radius: inherit;
-  background: linear-gradient(120deg, rgba(255,255,255,.10), transparent 32%);
-  opacity: .45;
+  background: linear-gradient(120deg, rgba(255, 255, 255, 0.1), transparent 32%);
+  opacity: 0.45;
 }
 
 .ant-card:hover {
   transform: translateY(-2px);
   box-shadow:
-    0 2px 4px rgba(0,0,0,.08),
-    0 12px 30px rgba(0,0,0,.10) !important;
+    0 2px 4px rgba(0, 0, 0, 0.08),
+    0 12px 30px rgba(0, 0, 0, 0.1) !important;
   border-color: color-mix(in srgb, var(--xui-primary) 25%, var(--xui-outline-variant)) !important;
 }
 
 body.dark .ant-card:hover {
   box-shadow:
-    0 4px 8px rgba(0,0,0,.24),
-    0 18px 42px rgba(0,0,0,.30) !important;
+    0 4px 8px rgba(0, 0, 0, 0.24),
+    0 18px 42px rgba(0, 0, 0, 0.3) !important;
 }
 
 .ant-btn {
@@ -519,18 +560,22 @@ body.dark .ant-card:hover {
 }
 
 .ant-btn::before {
-  content: "";
+  content: '';
   position: absolute;
   inset: 0;
   border-radius: inherit;
   background: currentColor;
   opacity: 0;
-  transition: opacity .16s ease;
+  transition: opacity 0.16s ease;
   pointer-events: none;
 }
 
-.ant-btn:hover::before { opacity: .06; }
-.ant-btn:active::before { opacity: .12; }
+.ant-btn:hover::before {
+  opacity: 0.06;
+}
+.ant-btn:active::before {
+  opacity: 0.12;
+}
 
 .ant-btn-primary {
   box-shadow: 0 4px 12px color-mix(in srgb, var(--xui-primary) 25%, transparent) !important;
@@ -548,10 +593,10 @@ body.dark .ant-card:hover {
 .ant-picker,
 .ant-select-selector {
   transition:
-    border-color .18s ease,
-    box-shadow .18s ease,
-    background-color .18s ease,
-    transform .18s ease !important;
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    background-color 0.18s ease,
+    transform 0.18s ease !important;
 }
 
 .ant-input:focus,
@@ -570,7 +615,9 @@ body.dark .ant-card:hover {
 }
 
 .ant-table-tbody > tr {
-  transition: background-color .16s ease, transform .16s ease;
+  transition:
+    background-color 0.16s ease,
+    transform 0.16s ease;
 }
 
 .ant-table-tbody > tr:hover {
@@ -596,7 +643,7 @@ body.dark .ant-card:hover {
 .ant-modal-mask,
 .ant-drawer-mask {
   backdrop-filter: blur(4px);
-  background: rgba(10, 8, 14, .32) !important;
+  background: rgba(10, 8, 14, 0.32) !important;
 }
 
 .ant-modal .ant-modal-content,
@@ -612,20 +659,22 @@ body.dark .ant-card:hover {
 }
 
 .ant-tag {
-  transition: transform .16s ease, box-shadow .16s ease;
+  transition:
+    transform 0.16s ease,
+    box-shadow 0.16s ease;
 }
 
 .ant-tag:hover {
   transform: translateY(-1px);
-  box-shadow: 0 3px 8px rgba(0,0,0,.08);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.08);
 }
 
 .ant-menu-item,
 .ant-menu-submenu-title {
   transition:
-    background-color .18s ease,
-    color .18s ease,
-    transform .18s ease !important;
+    background-color 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease !important;
 }
 
 .ant-menu-item:hover,
@@ -637,21 +686,23 @@ body.dark .ant-card:hover {
   position: relative;
   overflow: hidden;
   box-shadow:
-    0 1px 2px rgba(0,0,0,.04),
-    inset 0 1px 0 rgba(255,255,255,.16);
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
 }
 
 .sidebar-command-trigger::after {
-  content: "";
+  content: '';
   position: absolute;
   top: -50%;
   left: -30%;
   width: 35%;
   height: 200%;
   transform: rotate(20deg);
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,.20), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
   opacity: 0;
-  transition: left .6s ease, opacity .2s ease;
+  transition:
+    left 0.6s ease,
+    opacity 0.2s ease;
   pointer-events: none;
 }
 
@@ -670,30 +721,43 @@ body.dark .ant-card:hover {
 }
 
 @keyframes xui-float-in {
-  from { opacity: 0; transform: translateY(8px) scale(.985); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .ant-card,
 .ant-alert,
 .ant-table-wrapper {
-  animation: xui-float-in .28s cubic-bezier(.2,.8,.2,1) both;
+  animation: xui-float-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html { scroll-behavior: auto; }
+  html {
+    scroll-behavior: auto;
+  }
   .ant-card,
   .ant-alert,
-  .ant-table-wrapper { animation: none; }
+  .ant-table-wrapper {
+    animation: none;
+  }
   .ant-card:hover,
   .ant-btn-primary:hover,
   .ant-table-tbody > tr:hover,
   .ant-menu-item:hover,
   .ant-menu-submenu-title:hover,
-  .ant-tag:hover { transform: none; }
-  .sidebar-command-trigger::after { display: none; }
+  .ant-tag:hover {
+    transform: none;
+  }
+  .sidebar-command-trigger::after {
+    display: none;
+  }
 }
-
 
 /* ── Additional palettes ─────────────────────────────────────────────────── */
 
@@ -713,15 +777,15 @@ body.theme-colorful {
   --xui-on-surface-variant: #574968;
   --xui-outline: #817493;
   --xui-outline-variant: #d0c4df;
-  --xui-state-hover: rgba(124,58,237,.08);
-  --xui-state-focus: rgba(8,145,178,.14);
+  --xui-state-hover: rgba(124, 58, 237, 0.08);
+  --xui-state-focus: rgba(8, 145, 178, 0.14);
 }
 
 body.theme-colorful::before {
   background:
-    radial-gradient(circle at 8% 10%, rgba(124,58,237,.16), transparent 30%),
-    radial-gradient(circle at 92% 12%, rgba(6,182,212,.14), transparent 28%),
-    radial-gradient(circle at 52% 100%, rgba(245,158,11,.10), transparent 34%);
+    radial-gradient(circle at 8% 10%, rgba(124, 58, 237, 0.16), transparent 30%),
+    radial-gradient(circle at 92% 12%, rgba(6, 182, 212, 0.14), transparent 28%),
+    radial-gradient(circle at 52% 100%, rgba(245, 158, 11, 0.1), transparent 34%);
 }
 
 body.theme-colorful .ant-btn-primary {
@@ -743,8 +807,8 @@ body.theme-colorful .ant-tabs-tab-active {
 
 body.theme-colorful .ant-card:hover {
   box-shadow:
-    0 4px 10px rgba(124,58,237,.10),
-    0 16px 38px rgba(8,145,178,.12) !important;
+    0 4px 10px rgba(124, 58, 237, 0.1),
+    0 16px 38px rgba(8, 145, 178, 0.12) !important;
 }
 
 /* Blue-gray: calm slate surfaces with cool blue M3 accents. */
@@ -764,16 +828,16 @@ body.theme-blue-gray {
   --xui-outline: #8292a8;
   --xui-outline-variant: #3c4b60;
   --xui-error: #ffb4ab;
-  --xui-state-hover: rgba(138,180,248,.09);
-  --xui-state-focus: rgba(138,180,248,.14);
+  --xui-state-hover: rgba(138, 180, 248, 0.09);
+  --xui-state-focus: rgba(138, 180, 248, 0.14);
 }
 
 body.theme-blue-gray::before {
   background:
-    radial-gradient(circle at 8% 8%, rgba(96,165,250,.13), transparent 32%),
-    radial-gradient(circle at 92% 14%, rgba(129,140,248,.10), transparent 28%),
-    radial-gradient(circle at 50% 100%, rgba(148,163,184,.08), transparent 34%);
-  opacity: .7;
+    radial-gradient(circle at 8% 8%, rgba(96, 165, 250, 0.13), transparent 32%),
+    radial-gradient(circle at 92% 14%, rgba(129, 140, 248, 0.1), transparent 28%),
+    radial-gradient(circle at 50% 100%, rgba(148, 163, 184, 0.08), transparent 34%);
+  opacity: 0.7;
 }
 
 body.theme-blue-gray .ant-card,
@@ -798,10 +862,9 @@ body.theme-blue-gray .ant-btn-primary {
 
 body.theme-blue-gray .ant-card:hover {
   box-shadow:
-    0 4px 10px rgba(0,0,0,.24),
-    0 16px 38px rgba(28,65,105,.26) !important;
+    0 4px 10px rgba(0, 0, 0, 0.24),
+    0 16px 38px rgba(28, 65, 105, 0.26) !important;
 }
-
 
 /* ── Low-power mode ────────────────────────────────────────────────────────
    Removes paint/compositor-heavy visual effects while keeping layout and

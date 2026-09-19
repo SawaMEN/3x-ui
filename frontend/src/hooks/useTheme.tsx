@@ -22,14 +22,27 @@ function readLowPower(): boolean {
 
 function readThemeMode(): ThemeMode {
   const saved = localStorage.getItem(STORAGE_THEME);
-  if (saved === 'light' || saved === 'dark' || saved === 'ultra-dark' || saved === 'colorful' || saved === 'blue-gray') return saved;
+  if (
+    saved === 'light' ||
+    saved === 'dark' ||
+    saved === 'ultra-dark' ||
+    saved === 'colorful' ||
+    saved === 'blue-gray'
+  )
+    return saved;
   if (readBool(STORAGE_ULTRA, false)) return 'ultra-dark';
   return readBool(STORAGE_DARK, true) ? 'dark' : 'light';
 }
 
 function applyDom(mode: ThemeMode, lowPower: boolean) {
   const isDark = mode === 'dark' || mode === 'ultra-dark' || mode === 'blue-gray';
-  document.body.classList.remove('dark', 'light', 'theme-ultra-dark', 'theme-colorful', 'theme-blue-gray');
+  document.body.classList.remove(
+    'dark',
+    'light',
+    'theme-ultra-dark',
+    'theme-colorful',
+    'theme-blue-gray',
+  );
   document.body.classList.add(isDark ? 'dark' : 'light', 'theme-' + mode);
   document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
   document.documentElement.setAttribute('data-theme', mode);
@@ -268,16 +281,43 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(STORAGE_ULTRA, String(isUltra));
   }, [mode, isDark, isUltra, lowPower]);
 
-  const toggleTheme = useCallback(() => setMode((v) => (v === 'light' ? 'dark' : v === 'dark' || v === 'ultra-dark' ? 'light' : v)), []);
-  const toggleUltra = useCallback(() => setMode((v) => (v === 'dark' ? 'ultra-dark' : v === 'ultra-dark' ? 'dark' : v)), []);
+  const toggleTheme = useCallback(
+    () =>
+      setMode((v) => (v === 'light' ? 'dark' : v === 'dark' || v === 'ultra-dark' ? 'light' : v)),
+    [],
+  );
+  const toggleUltra = useCallback(
+    () => setMode((v) => (v === 'dark' ? 'ultra-dark' : v === 'ultra-dark' ? 'dark' : v)),
+    [],
+  );
   const setThemeMode = useCallback((next: ThemeMode) => setMode(next), []);
   const toggleLowPower = useCallback(() => setLowPower((v) => !v), []);
 
   const antdThemeConfig = useMemo(() => buildAntdThemeConfig(mode), [mode]);
 
   const value = useMemo<ThemeContextValue>(
-    () => ({ mode, isDark, isUltra, toggleTheme, toggleUltra, setThemeMode, antdThemeConfig, lowPower, toggleLowPower }),
-    [mode, isDark, isUltra, toggleTheme, toggleUltra, setThemeMode, antdThemeConfig, lowPower, toggleLowPower],
+    () => ({
+      mode,
+      isDark,
+      isUltra,
+      toggleTheme,
+      toggleUltra,
+      setThemeMode,
+      antdThemeConfig,
+      lowPower,
+      toggleLowPower,
+    }),
+    [
+      mode,
+      isDark,
+      isUltra,
+      toggleTheme,
+      toggleUltra,
+      setThemeMode,
+      antdThemeConfig,
+      lowPower,
+      toggleLowPower,
+    ],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

@@ -99,13 +99,14 @@ function SystemStrip({ status, showIp, onToggleIp }: SystemStripProps) {
   );
 }
 
-
-export default memo(SystemStrip, (prev, next) =>
-  prev.showIp === next.showIp &&
-  prev.status.uptime === next.status.uptime &&
-  prev.status.appStats.uptime === next.status.appStats.uptime &&
-  prev.status.appStats.mem === next.status.appStats.mem &&
-  prev.status.appStats.threads === next.status.appStats.threads &&
-  prev.status.publicIP.ipv4 === next.status.publicIP.ipv4 &&
-  prev.status.publicIP.ipv6 === next.status.publicIP.ipv6,
+export default memo(
+  SystemStrip,
+  (prev, next) =>
+    prev.showIp === next.showIp &&
+    prev.status.uptime === next.status.uptime &&
+    prev.status.appStats.uptime === next.status.appStats.uptime &&
+    prev.status.appStats.mem === next.status.appStats.mem &&
+    prev.status.appStats.threads === next.status.appStats.threads &&
+    prev.status.publicIP.ipv4 === next.status.publicIP.ipv4 &&
+    prev.status.publicIP.ipv6 === next.status.publicIP.ipv6,
 );
