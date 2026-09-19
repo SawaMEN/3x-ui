@@ -98,6 +98,12 @@ function AppSidebar() {
   const [hovered, setHovered] = useState(() => hoveredAcrossRemounts);
   const [pinned, setPinned] = useState(readSidebarPinned);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const closeDrawer = useCallback(() => {
+    setDrawerOpen(false);
+    document.documentElement.style.removeProperty("overflow");
+    document.body.style.removeProperty("overflow");
+    document.body.style.removeProperty("touch-action");
+  }, []);
   const railCollapsed = !hovered && !pinned;
   const railStyle = useMemo(
     () => ({ '--sider-rail': `${pinned ? SIDER_WIDTH : RAIL_WIDTH}px` }) as CSSProperties,
@@ -304,7 +310,7 @@ function AppSidebar() {
           body: { padding: 0, display: 'flex', flexDirection: 'column', height: '100%' },
           header: { display: 'none' },
         }}
-        onClose={() => setDrawerOpen(false)}
+        onClose={closeDrawer}
       >
         <div className="drawer-header">
           <div className="brand-block">
@@ -315,7 +321,7 @@ function AppSidebar() {
               className="drawer-close"
               type="button"
               aria-label={t('close')}
-              onClick={() => setDrawerOpen(false)}
+              onClick={closeDrawer}
             >
               <CloseOutlined />
             </button>
@@ -331,7 +337,7 @@ function AppSidebar() {
           items={toMenuItems(navItems)}
           onClick={(info) => {
             onMenuClick(info);
-            setDrawerOpen(false);
+            closeDrawer();
           }}
         />
         <Menu
