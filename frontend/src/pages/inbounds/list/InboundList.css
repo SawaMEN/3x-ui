@@ -33,12 +33,12 @@
 }
 
 .inbounds-page .ant-table {
-  border-radius: 8px;
+  border-radius: var(--xui-radius-md, 8px);
   overflow: hidden;
 }
 
 .inbounds-page .ant-table-container {
-  border-radius: 8px;
+  border-radius: var(--xui-radius-md, 8px);
   overflow: hidden;
 }
 
@@ -67,7 +67,7 @@
 
 .inbound-card {
   border: 1px solid var(--ant-color-border-secondary);
-  border-radius: 10px;
+  border-radius: var(--xui-radius-md, 8px);
   padding: 12px;
   background: var(--ant-color-fill-quaternary);
   display: flex;
@@ -92,7 +92,7 @@
   background: color-mix(in srgb, var(--ant-color-primary) 12%, transparent);
   color: var(--ant-color-primary);
   padding: 1px 8px;
-  border-radius: 10px;
+  border-radius: var(--xui-radius-md, 8px);
 }
 
 .card-head {
