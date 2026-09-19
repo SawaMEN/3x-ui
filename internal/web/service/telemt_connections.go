@@ -15,6 +15,7 @@ import (
 
 type TelemtConnection struct {
 	IP          string  `json:"ip"`
+	Users       []string `json:"users"`
 	City        string  `json:"city"`
 	Region      string  `json:"region"`
 	Country     string  `json:"country"`
@@ -54,8 +55,9 @@ func (TelemtService) ConnectedClients() ([]TelemtConnection, error) {
 
 	var envelope struct {
 		OK   bool `json:"ok"`
-		Data struct {
-			ActiveIPs map[string][]string `json:"active_ips"`
+		Data []struct {
+			Username string   `json:"username"`
+			ActiveIPs []string `json:"active_ips"`
 		} `json:"data"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil {
@@ -65,10 +67,9 @@ func (TelemtService) ConnectedClients() ([]TelemtConnection, error) {
 		return nil, fmt.Errorf("telemt: active client API rejected request")
 	}
 
-	seen := make(map[string]struct{})
-	ips := make([]string, 0)
-	for _, values := range envelope.Data.ActiveIPs {
-		for _, rawIP := range values {
+	usersByIP := make(map[string]map[string]struct{})
+	for _, user := range envelope.Data {
+		for _, rawIP := range user.ActiveIPs {
 			ip := strings.TrimSpace(rawIP)
 			if ip == "" {
 				continue
@@ -81,18 +82,31 @@ func (TelemtService) ConnectedClients() ([]TelemtConnection, error) {
 			if net.ParseIP(ip) == nil {
 				continue
 			}
-			if _, ok := seen[ip]; ok {
-				continue
+			if usersByIP[ip] == nil {
+				usersByIP[ip] = make(map[string]struct{})
 			}
-			seen[ip] = struct{}{}
-			ips = append(ips, ip)
+			if user.Username != "" {
+				usersByIP[ip][user.Username] = struct{}{}
+			}
 		}
+	}
+
+	ips := make([]string, 0, len(usersByIP))
+	for ip := range usersByIP {
+		ips = append(ips, ip)
 	}
 	sort.Strings(ips)
 
 	out := make([]TelemtConnection, 0, len(ips))
 	for _, ip := range ips {
-		out = append(out, telemtGeoLookup(client, ip))
+		users := make([]string, 0, len(usersByIP[ip]))
+		for username := range usersByIP[ip] {
+			users = append(users, username)
+		}
+		sort.Strings(users)
+		row := telemtGeoLookup(client, ip)
+		row.Users = users
+		out = append(out, row)
 	}
 	return out, nil
 }
