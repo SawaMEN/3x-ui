@@ -544,7 +544,8 @@ function NodeList({
         columns={columns}
         pagination={false}
         loading={loading}
-        virtual={dataSource.length > 50}\n        scroll={{ x: 'max-content', y: 600 }}
+        virtual={dataSource.length > 50}
+        scroll={{ x: 'max-content', y: 600 }}
         size="middle"
         rowKey="key"
         rowSelection={
