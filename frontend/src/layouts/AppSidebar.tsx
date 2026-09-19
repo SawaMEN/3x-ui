@@ -100,9 +100,9 @@ function AppSidebar() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const closeDrawer = useCallback(() => {
     setDrawerOpen(false);
-    document.documentElement.style.removeProperty("overflow");
-    document.body.style.removeProperty("overflow");
-    document.body.style.removeProperty("touch-action");
+    document.documentElement.style.removeProperty('overflow');
+    document.body.style.removeProperty('overflow');
+    document.body.style.removeProperty('touch-action');
   }, []);
   const railCollapsed = !hovered && !pinned;
   const railStyle = useMemo(
