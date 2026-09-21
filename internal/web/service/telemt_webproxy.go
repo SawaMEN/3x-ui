@@ -31,6 +31,7 @@ const (
 
 var telemtWebDomainPattern = regexp.MustCompile(`^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$`)
 var telemtWebVersionPattern = regexp.MustCompile(`(?i)v?([0-9]+)\.([0-9]+)\.([0-9]+)`)
+var telemtWebPortOwnerPattern = regexp.MustCompile(`users:\(\("([^"]+)"`)
 
 type TelemtWebProxyState struct {
 	Enabled    bool   `json:"enabled"`
@@ -310,10 +311,9 @@ func telemtWebPortOwner(port int) string {
 	if err != nil {
 		return ""
 	}
-	re := regexp.MustCompile(`users:\(\("([^"]+)"`)
 	seen := map[string]struct{}{}
 	owners := make([]string, 0, 2)
-	for _, match := range re.FindAllStringSubmatch(string(output), -1) {
+	for _, match := range telemtWebPortOwnerPattern.FindAllStringSubmatch(string(output), -1) {
 		if len(match) < 2 || match[1] == "" {
 			continue
 		}
