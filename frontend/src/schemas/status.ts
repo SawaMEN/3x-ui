@@ -51,6 +51,7 @@ export const StatusSchema = z.object({
   udpCount: z.number().optional(),
   uptime: z.number().optional(),
   appUptime: z.number().optional(),
+  coreUptime: z.number().optional(),
   appStats: AppStatsSchema.optional(),
   xray: XrayInfoSchema.optional(),
 });

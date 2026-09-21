@@ -15,12 +15,14 @@ import type { Status } from '@/models/status';
 
 interface SystemStripProps {
   status: Status;
+  coreType: string;
   showIp: boolean;
   onToggleIp: () => void;
 }
 
-function SystemStrip({ status, showIp, onToggleIp }: SystemStripProps) {
+function SystemStrip({ status, coreType, showIp, onToggleIp }: SystemStripProps) {
   const { t } = useTranslation();
+  const activeCore = coreType === 'sing-box' ? 'sing-box' : 'Xray';
 
   return (
     <Card hoverable styles={{ body: { padding: 0 } }}>
@@ -32,9 +34,9 @@ function SystemStrip({ status, showIp, onToggleIp }: SystemStripProps) {
           </div>
           <div className="ov-strip-split">
             <div>
-              <div className="ov-strip-sub">Xray</div>
+              <div className="ov-strip-sub">{activeCore}</div>
               <div className="ov-strip-value">
-                {TimeFormatter.formatSecond(status.appStats.uptime)}
+                {TimeFormatter.formatSecond(status.coreUptime)}
               </div>
             </div>
             <span className="ov-strip-split-sep" />
@@ -102,9 +104,10 @@ function SystemStrip({ status, showIp, onToggleIp }: SystemStripProps) {
 export default memo(
   SystemStrip,
   (prev, next) =>
+    prev.coreType === next.coreType &&
     prev.showIp === next.showIp &&
     prev.status.uptime === next.status.uptime &&
-    prev.status.appStats.uptime === next.status.appStats.uptime &&
+    prev.status.coreUptime === next.status.coreUptime &&
     prev.status.appStats.mem === next.status.appStats.mem &&
     prev.status.appStats.threads === next.status.appStats.threads &&
     prev.status.publicIP.ipv4 === next.status.publicIP.ipv4 &&

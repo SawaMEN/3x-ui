@@ -131,6 +131,7 @@ type Status struct {
 		Mem     uint64 `json:"mem"`
 		Uptime  uint64 `json:"uptime"`
 	} `json:"appStats"`
+	CoreUptime uint64 `json:"coreUptime"`
 }
 
 // Release represents information about a software release from GitHub.
@@ -689,6 +690,19 @@ func (s *ServerService) GetStatus(lastStatus *Status) *Status {
 
 	s.resolvePublicIPsInBackground()
 	status.PublicIP.IPv4, status.PublicIP.IPv6 = s.publicIPs()
+
+	// Active core uptime
+	coreType, err := s.settingService.GetCoreType()
+	if err != nil {
+		coreType = CoreTypeXray
+	}
+	if coreType == CoreTypeSingBox {
+		if singBoxProcess.IsRunning() {
+			status.CoreUptime = singBoxProcess.GetUptime()
+		}
+	} else if process := currentXrayProcess(); process != nil && process.IsRunning() {
+		status.CoreUptime = process.GetUptime()
+	}
 
 	// Xray status
 	if s.xrayService.IsXrayRunning() {
