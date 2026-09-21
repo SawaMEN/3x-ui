@@ -48,7 +48,7 @@ jobs:
       - name: Test
         run: |
           go list ./... | grep -v '/frontend/node_modules/' > /tmp/go-packages.txt
-          go test -shuffle=on -count=1 $(cat /tmp/go-packages.txt)
+          go test -p 12 -shuffle=on -count=1 $(cat /tmp/go-packages.txt)
 
   postgres-durable-first:
     if: ${{ github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):') }}
@@ -160,7 +160,709 @@ jobs:
         run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
       - name: Fuzz critical parsers (smoke)
         run: |
-          go test -run '^$' -fuzz 'FuzzParseLink$' -fuzztime=30s ./internal/util/link/
+          go test -p 12 -run '^
+          go test -p 12 -run '^
+
+  golangci:
+    if: ${{ github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Stub internal/web/dist for go:embed
+        run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: latest
+
+  arch-linux:
+    if: ${{ github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):') }}
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Full Arch package upgrade
+        run: pacman -Syu --noconfirm
+      - name: Install Arch validation tools
+        run: pacman -S --noconfirm --needed bash shellcheck systemd
+      - name: Validate Arch installer scripts
+        run: |
+          bash -n install.sh
+          bash -n x-ui.sh
+          shellcheck --shell=bash --severity=error install.sh x-ui.sh
+      - name: Validate Arch systemd unit
+        run: |
+          cp x-ui.service.arch /tmp/x-ui.service
+          sed -i 's#^ExecStart=.*#ExecStart=/bin/true#' /tmp/x-ui.service
+          systemd-analyze verify /tmp/x-ui.service
+      - name: Guard against pacman partial upgrades
+        run: |
+          if grep -nE 'pacman[[:space:]]+-S(y|yy)([[:space:]]|$)' install.sh; then
+            echo "Unsupported pacman partial-upgrade command found in install.sh" >&2
+            exit 1
+          fi
+
+  frontend:
+    if: ${{ github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install
+        run: npm ci --no-audit --no-fund
+        working-directory: frontend
+      - name: Verify generated MSW worker is current
+        run: git diff --exit-code -- public/mockServiceWorker.js package-lock.json
+        working-directory: frontend
+      - name: Lint
+        run: npm run lint
+        working-directory: frontend
+      - name: Format check
+        run: npm run format:check
+        working-directory: frontend
+      - name: Typecheck
+        run: npm run typecheck
+        working-directory: frontend
+      - name: Install Playwright Chromium (Storybook story tests)
+        run: npx playwright install chromium
+        working-directory: frontend
+      - name: Test
+        run: npm test
+        working-directory: frontend
+      - name: Build
+        if: github.event_name == 'pull_request'
+        run: npm run build:ci
+        working-directory: frontend
+      - name: Build Storybook
+        if: github.event_name == 'pull_request'
+        run: npm run build-storybook
+        working-directory: frontend
+      - name: Audit
+        run: npm audit --omit=dev --audit-level=high
+        working-directory: frontend
+ -fuzz 'FuzzParseLink
+          go test -run '^$' -fuzz 'FuzzDecodeCertPin$' -fuzztime=30s ./internal/web/runtime/
+
+  golangci:
+    if: ${{ github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Stub internal/web/dist for go:embed
+        run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: latest
+
+  arch-linux:
+    if: ${{ github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):') }}
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Full Arch package upgrade
+        run: pacman -Syu --noconfirm
+      - name: Install Arch validation tools
+        run: pacman -S --noconfirm --needed bash shellcheck systemd
+      - name: Validate Arch installer scripts
+        run: |
+          bash -n install.sh
+          bash -n x-ui.sh
+          shellcheck --shell=bash --severity=error install.sh x-ui.sh
+      - name: Validate Arch systemd unit
+        run: |
+          cp x-ui.service.arch /tmp/x-ui.service
+          sed -i 's#^ExecStart=.*#ExecStart=/bin/true#' /tmp/x-ui.service
+          systemd-analyze verify /tmp/x-ui.service
+      - name: Guard against pacman partial upgrades
+        run: |
+          if grep -nE 'pacman[[:space:]]+-S(y|yy)([[:space:]]|$)' install.sh; then
+            echo "Unsupported pacman partial-upgrade command found in install.sh" >&2
+            exit 1
+          fi
+
+  frontend:
+    if: ${{ github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install
+        run: npm ci --no-audit --no-fund
+        working-directory: frontend
+      - name: Verify generated MSW worker is current
+        run: git diff --exit-code -- public/mockServiceWorker.js package-lock.json
+        working-directory: frontend
+      - name: Lint
+        run: npm run lint
+        working-directory: frontend
+      - name: Format check
+        run: npm run format:check
+        working-directory: frontend
+      - name: Typecheck
+        run: npm run typecheck
+        working-directory: frontend
+      - name: Install Playwright Chromium (Storybook story tests)
+        run: npx playwright install chromium
+        working-directory: frontend
+      - name: Test
+        run: npm test
+        working-directory: frontend
+      - name: Build
+        if: github.event_name == 'pull_request'
+        run: npm run build:ci
+        working-directory: frontend
+      - name: Build Storybook
+        if: github.event_name == 'pull_request'
+        run: npm run build-storybook
+        working-directory: frontend
+      - name: Audit
+        run: npm audit --omit=dev --audit-level=high
+        working-directory: frontend
+ -fuzztime=30s ./internal/util/link/
+          go test -run '^$' -fuzz 'FuzzDecodeCertPin$' -fuzztime=30s ./internal/web/runtime/
+
+  golangci:
+    if: ${{ github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Stub internal/web/dist for go:embed
+        run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: latest
+
+  arch-linux:
+    if: ${{ github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):') }}
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Full Arch package upgrade
+        run: pacman -Syu --noconfirm
+      - name: Install Arch validation tools
+        run: pacman -S --noconfirm --needed bash shellcheck systemd
+      - name: Validate Arch installer scripts
+        run: |
+          bash -n install.sh
+          bash -n x-ui.sh
+          shellcheck --shell=bash --severity=error install.sh x-ui.sh
+      - name: Validate Arch systemd unit
+        run: |
+          cp x-ui.service.arch /tmp/x-ui.service
+          sed -i 's#^ExecStart=.*#ExecStart=/bin/true#' /tmp/x-ui.service
+          systemd-analyze verify /tmp/x-ui.service
+      - name: Guard against pacman partial upgrades
+        run: |
+          if grep -nE 'pacman[[:space:]]+-S(y|yy)([[:space:]]|$)' install.sh; then
+            echo "Unsupported pacman partial-upgrade command found in install.sh" >&2
+            exit 1
+          fi
+
+  frontend:
+    if: ${{ github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install
+        run: npm ci --no-audit --no-fund
+        working-directory: frontend
+      - name: Verify generated MSW worker is current
+        run: git diff --exit-code -- public/mockServiceWorker.js package-lock.json
+        working-directory: frontend
+      - name: Lint
+        run: npm run lint
+        working-directory: frontend
+      - name: Format check
+        run: npm run format:check
+        working-directory: frontend
+      - name: Typecheck
+        run: npm run typecheck
+        working-directory: frontend
+      - name: Install Playwright Chromium (Storybook story tests)
+        run: npx playwright install chromium
+        working-directory: frontend
+      - name: Test
+        run: npm test
+        working-directory: frontend
+      - name: Build
+        if: github.event_name == 'pull_request'
+        run: npm run build:ci
+        working-directory: frontend
+      - name: Build Storybook
+        if: github.event_name == 'pull_request'
+        run: npm run build-storybook
+        working-directory: frontend
+      - name: Audit
+        run: npm audit --omit=dev --audit-level=high
+        working-directory: frontend
+ -fuzz 'FuzzDecodeCertPin
+
+  golangci:
+    if: ${{ github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Stub internal/web/dist for go:embed
+        run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: latest
+
+  arch-linux:
+    if: ${{ github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):') }}
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Full Arch package upgrade
+        run: pacman -Syu --noconfirm
+      - name: Install Arch validation tools
+        run: pacman -S --noconfirm --needed bash shellcheck systemd
+      - name: Validate Arch installer scripts
+        run: |
+          bash -n install.sh
+          bash -n x-ui.sh
+          shellcheck --shell=bash --severity=error install.sh x-ui.sh
+      - name: Validate Arch systemd unit
+        run: |
+          cp x-ui.service.arch /tmp/x-ui.service
+          sed -i 's#^ExecStart=.*#ExecStart=/bin/true#' /tmp/x-ui.service
+          systemd-analyze verify /tmp/x-ui.service
+      - name: Guard against pacman partial upgrades
+        run: |
+          if grep -nE 'pacman[[:space:]]+-S(y|yy)([[:space:]]|$)' install.sh; then
+            echo "Unsupported pacman partial-upgrade command found in install.sh" >&2
+            exit 1
+          fi
+
+  frontend:
+    if: ${{ github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install
+        run: npm ci --no-audit --no-fund
+        working-directory: frontend
+      - name: Verify generated MSW worker is current
+        run: git diff --exit-code -- public/mockServiceWorker.js package-lock.json
+        working-directory: frontend
+      - name: Lint
+        run: npm run lint
+        working-directory: frontend
+      - name: Format check
+        run: npm run format:check
+        working-directory: frontend
+      - name: Typecheck
+        run: npm run typecheck
+        working-directory: frontend
+      - name: Install Playwright Chromium (Storybook story tests)
+        run: npx playwright install chromium
+        working-directory: frontend
+      - name: Test
+        run: npm test
+        working-directory: frontend
+      - name: Build
+        if: github.event_name == 'pull_request'
+        run: npm run build:ci
+        working-directory: frontend
+      - name: Build Storybook
+        if: github.event_name == 'pull_request'
+        run: npm run build-storybook
+        working-directory: frontend
+      - name: Audit
+        run: npm audit --omit=dev --audit-level=high
+        working-directory: frontend
+ -fuzz 'FuzzParseLink
+          go test -run '^$' -fuzz 'FuzzDecodeCertPin$' -fuzztime=30s ./internal/web/runtime/
+
+  golangci:
+    if: ${{ github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Stub internal/web/dist for go:embed
+        run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: latest
+
+  arch-linux:
+    if: ${{ github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):') }}
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Full Arch package upgrade
+        run: pacman -Syu --noconfirm
+      - name: Install Arch validation tools
+        run: pacman -S --noconfirm --needed bash shellcheck systemd
+      - name: Validate Arch installer scripts
+        run: |
+          bash -n install.sh
+          bash -n x-ui.sh
+          shellcheck --shell=bash --severity=error install.sh x-ui.sh
+      - name: Validate Arch systemd unit
+        run: |
+          cp x-ui.service.arch /tmp/x-ui.service
+          sed -i 's#^ExecStart=.*#ExecStart=/bin/true#' /tmp/x-ui.service
+          systemd-analyze verify /tmp/x-ui.service
+      - name: Guard against pacman partial upgrades
+        run: |
+          if grep -nE 'pacman[[:space:]]+-S(y|yy)([[:space:]]|$)' install.sh; then
+            echo "Unsupported pacman partial-upgrade command found in install.sh" >&2
+            exit 1
+          fi
+
+  frontend:
+    if: ${{ github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install
+        run: npm ci --no-audit --no-fund
+        working-directory: frontend
+      - name: Verify generated MSW worker is current
+        run: git diff --exit-code -- public/mockServiceWorker.js package-lock.json
+        working-directory: frontend
+      - name: Lint
+        run: npm run lint
+        working-directory: frontend
+      - name: Format check
+        run: npm run format:check
+        working-directory: frontend
+      - name: Typecheck
+        run: npm run typecheck
+        working-directory: frontend
+      - name: Install Playwright Chromium (Storybook story tests)
+        run: npx playwright install chromium
+        working-directory: frontend
+      - name: Test
+        run: npm test
+        working-directory: frontend
+      - name: Build
+        if: github.event_name == 'pull_request'
+        run: npm run build:ci
+        working-directory: frontend
+      - name: Build Storybook
+        if: github.event_name == 'pull_request'
+        run: npm run build-storybook
+        working-directory: frontend
+      - name: Audit
+        run: npm audit --omit=dev --audit-level=high
+        working-directory: frontend
+ -fuzztime=30s ./internal/util/link/
+          go test -run '^$' -fuzz 'FuzzDecodeCertPin$' -fuzztime=30s ./internal/web/runtime/
+
+  golangci:
+    if: ${{ github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Stub internal/web/dist for go:embed
+        run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: latest
+
+  arch-linux:
+    if: ${{ github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):') }}
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Full Arch package upgrade
+        run: pacman -Syu --noconfirm
+      - name: Install Arch validation tools
+        run: pacman -S --noconfirm --needed bash shellcheck systemd
+      - name: Validate Arch installer scripts
+        run: |
+          bash -n install.sh
+          bash -n x-ui.sh
+          shellcheck --shell=bash --severity=error install.sh x-ui.sh
+      - name: Validate Arch systemd unit
+        run: |
+          cp x-ui.service.arch /tmp/x-ui.service
+          sed -i 's#^ExecStart=.*#ExecStart=/bin/true#' /tmp/x-ui.service
+          systemd-analyze verify /tmp/x-ui.service
+      - name: Guard against pacman partial upgrades
+        run: |
+          if grep -nE 'pacman[[:space:]]+-S(y|yy)([[:space:]]|$)' install.sh; then
+            echo "Unsupported pacman partial-upgrade command found in install.sh" >&2
+            exit 1
+          fi
+
+  frontend:
+    if: ${{ github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install
+        run: npm ci --no-audit --no-fund
+        working-directory: frontend
+      - name: Verify generated MSW worker is current
+        run: git diff --exit-code -- public/mockServiceWorker.js package-lock.json
+        working-directory: frontend
+      - name: Lint
+        run: npm run lint
+        working-directory: frontend
+      - name: Format check
+        run: npm run format:check
+        working-directory: frontend
+      - name: Typecheck
+        run: npm run typecheck
+        working-directory: frontend
+      - name: Install Playwright Chromium (Storybook story tests)
+        run: npx playwright install chromium
+        working-directory: frontend
+      - name: Test
+        run: npm test
+        working-directory: frontend
+      - name: Build
+        if: github.event_name == 'pull_request'
+        run: npm run build:ci
+        working-directory: frontend
+      - name: Build Storybook
+        if: github.event_name == 'pull_request'
+        run: npm run build-storybook
+        working-directory: frontend
+      - name: Audit
+        run: npm audit --omit=dev --audit-level=high
+        working-directory: frontend
+ -fuzztime=30s ./internal/web/runtime/
+
+  golangci:
+    if: ${{ github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Stub internal/web/dist for go:embed
+        run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: latest
+
+  arch-linux:
+    if: ${{ github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):') }}
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Full Arch package upgrade
+        run: pacman -Syu --noconfirm
+      - name: Install Arch validation tools
+        run: pacman -S --noconfirm --needed bash shellcheck systemd
+      - name: Validate Arch installer scripts
+        run: |
+          bash -n install.sh
+          bash -n x-ui.sh
+          shellcheck --shell=bash --severity=error install.sh x-ui.sh
+      - name: Validate Arch systemd unit
+        run: |
+          cp x-ui.service.arch /tmp/x-ui.service
+          sed -i 's#^ExecStart=.*#ExecStart=/bin/true#' /tmp/x-ui.service
+          systemd-analyze verify /tmp/x-ui.service
+      - name: Guard against pacman partial upgrades
+        run: |
+          if grep -nE 'pacman[[:space:]]+-S(y|yy)([[:space:]]|$)' install.sh; then
+            echo "Unsupported pacman partial-upgrade command found in install.sh" >&2
+            exit 1
+          fi
+
+  frontend:
+    if: ${{ github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install
+        run: npm ci --no-audit --no-fund
+        working-directory: frontend
+      - name: Verify generated MSW worker is current
+        run: git diff --exit-code -- public/mockServiceWorker.js package-lock.json
+        working-directory: frontend
+      - name: Lint
+        run: npm run lint
+        working-directory: frontend
+      - name: Format check
+        run: npm run format:check
+        working-directory: frontend
+      - name: Typecheck
+        run: npm run typecheck
+        working-directory: frontend
+      - name: Install Playwright Chromium (Storybook story tests)
+        run: npx playwright install chromium
+        working-directory: frontend
+      - name: Test
+        run: npm test
+        working-directory: frontend
+      - name: Build
+        if: github.event_name == 'pull_request'
+        run: npm run build:ci
+        working-directory: frontend
+      - name: Build Storybook
+        if: github.event_name == 'pull_request'
+        run: npm run build-storybook
+        working-directory: frontend
+      - name: Audit
+        run: npm audit --omit=dev --audit-level=high
+        working-directory: frontend
+ -fuzz 'FuzzParseLink
+          go test -run '^$' -fuzz 'FuzzDecodeCertPin$' -fuzztime=30s ./internal/web/runtime/
+
+  golangci:
+    if: ${{ github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Stub internal/web/dist for go:embed
+        run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: latest
+
+  arch-linux:
+    if: ${{ github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):') }}
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Full Arch package upgrade
+        run: pacman -Syu --noconfirm
+      - name: Install Arch validation tools
+        run: pacman -S --noconfirm --needed bash shellcheck systemd
+      - name: Validate Arch installer scripts
+        run: |
+          bash -n install.sh
+          bash -n x-ui.sh
+          shellcheck --shell=bash --severity=error install.sh x-ui.sh
+      - name: Validate Arch systemd unit
+        run: |
+          cp x-ui.service.arch /tmp/x-ui.service
+          sed -i 's#^ExecStart=.*#ExecStart=/bin/true#' /tmp/x-ui.service
+          systemd-analyze verify /tmp/x-ui.service
+      - name: Guard against pacman partial upgrades
+        run: |
+          if grep -nE 'pacman[[:space:]]+-S(y|yy)([[:space:]]|$)' install.sh; then
+            echo "Unsupported pacman partial-upgrade command found in install.sh" >&2
+            exit 1
+          fi
+
+  frontend:
+    if: ${{ github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install
+        run: npm ci --no-audit --no-fund
+        working-directory: frontend
+      - name: Verify generated MSW worker is current
+        run: git diff --exit-code -- public/mockServiceWorker.js package-lock.json
+        working-directory: frontend
+      - name: Lint
+        run: npm run lint
+        working-directory: frontend
+      - name: Format check
+        run: npm run format:check
+        working-directory: frontend
+      - name: Typecheck
+        run: npm run typecheck
+        working-directory: frontend
+      - name: Install Playwright Chromium (Storybook story tests)
+        run: npx playwright install chromium
+        working-directory: frontend
+      - name: Test
+        run: npm test
+        working-directory: frontend
+      - name: Build
+        if: github.event_name == 'pull_request'
+        run: npm run build:ci
+        working-directory: frontend
+      - name: Build Storybook
+        if: github.event_name == 'pull_request'
+        run: npm run build-storybook
+        working-directory: frontend
+      - name: Audit
+        run: npm audit --omit=dev --audit-level=high
+        working-directory: frontend
+ -fuzztime=30s ./internal/util/link/
           go test -run '^$' -fuzz 'FuzzDecodeCertPin$' -fuzztime=30s ./internal/web/runtime/
 
   golangci:
