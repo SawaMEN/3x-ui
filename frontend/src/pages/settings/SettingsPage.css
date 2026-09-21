@@ -580,3 +580,172 @@ body.theme-cyberpunk .low-power-toggle.is-active {
     margin-right: 0 !important;
   }
 }
+
+
+.swap-mobile-toolbar {
+  display: none;
+}
+
+.swap-action-row {
+  width: 100%;
+}
+
+.swap-system-update-actions {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+@media (max-width: 700px) {
+  .swap-settings-modal .ant-modal-content {
+    border-radius: 14px;
+  }
+
+  .swap-settings-modal .ant-modal-header {
+    padding: 14px 16px 10px;
+  }
+
+  .swap-settings-modal .ant-modal-title {
+    font-size: 17px;
+  }
+
+  .swap-settings-modal .ant-modal-body {
+    padding: 10px 10px 14px;
+  }
+
+  .swap-settings-tabs .ant-tabs-nav {
+    margin-bottom: 10px;
+  }
+
+  .swap-settings-tabs .ant-tabs-nav-wrap {
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .swap-settings-tabs .ant-tabs-nav-wrap::-webkit-scrollbar {
+    display: none;
+  }
+
+  .swap-settings-tabs .ant-tabs-nav-list {
+    flex-wrap: nowrap;
+    min-width: max-content;
+  }
+
+  .swap-settings-tabs .ant-tabs-tab {
+    flex: 0 0 auto;
+    min-height: 40px;
+    padding: 8px 10px;
+    border-radius: 9px;
+    font-size: 12px;
+  }
+
+  .swap-mobile-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    min-width: 0;
+    margin: 0 0 10px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .swap-mobile-toolbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .swap-mobile-toolbar .ant-tag {
+    margin-inline-end: 0;
+    white-space: nowrap;
+  }
+
+  .swap-mobile-toolbar .ant-btn {
+    flex: 0 0 auto;
+  }
+
+  .swap-settings-modal .ant-card {
+    border-radius: 12px;
+  }
+
+  .swap-settings-modal .ant-card-head {
+    min-height: 44px;
+    padding-inline: 12px;
+  }
+
+  .swap-settings-modal .ant-card-body {
+    padding: 12px !important;
+  }
+
+  .swap-settings-modal .ant-statistic-title {
+    font-size: 11px;
+    line-height: 1.25;
+  }
+
+  .swap-settings-modal .ant-statistic-content {
+    font-size: 18px;
+  }
+
+  .swap-action-row {
+    display: flex !important;
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 10px;
+  }
+
+  .swap-action-row > * {
+    width: 100%;
+  }
+
+  .swap-action-row .ant-input-number,
+  .swap-action-row .ant-select {
+    width: 100% !important;
+  }
+
+  .swap-action-row .ant-btn {
+    width: 100%;
+    min-height: 40px;
+  }
+
+  .swap-system-update-actions {
+    display: flex !important;
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 8px;
+  }
+
+  .swap-system-update-actions .ant-btn {
+    width: 100%;
+  }
+
+  .swap-settings-modal .ant-alert {
+    margin-bottom: 10px;
+  }
+
+  .swap-settings-modal .ant-descriptions-view {
+    overflow-x: auto;
+  }
+
+  .swap-settings-modal .ant-table-wrapper {
+    max-width: 100%;
+    overflow-x: auto !important;
+  }
+
+  .swap-settings-modal .ant-table {
+    min-width: 680px;
+  }
+}
+
+@media (max-width: 430px) {
+  .swap-settings-modal .ant-modal-body {
+    padding-inline: 8px;
+  }
+
+  .swap-settings-modal .ant-card-body {
+    padding: 10px !important;
+  }
+
+  .swap-settings-modal .ant-tabs-tab {
+    padding-inline: 9px;
+  }
+}

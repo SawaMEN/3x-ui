@@ -9,6 +9,7 @@ import {
   GlobalOutlined,
   SafetyCertificateOutlined,
   SettingOutlined,
+  ReloadOutlined,
   SwapOutlined,
 } from '@ant-design/icons';
 import type { AllSetting } from '@/models/setting';
@@ -43,11 +44,29 @@ export default function GeneralTab({
   const { isMobile } = useMediaQuery();
   const location = useLocation();
   const navigate = useNavigate();
-  const activeTab = location.hash === '#core' ? 'core' : '1';
+  const hashToTab: Record<string, string> = {
+    '#general': '1',
+    '#core': 'core',
+    '#notifications': '2',
+    '#certs': '3',
+    '#external': '4',
+    '#datetime': '5',
+    '#ldap': '6',
+  };
+  const activeTab = hashToTab[location.hash] ?? '1';
 
   const onTabChange = (key: string) => {
-    if (key === 'core') navigate('/settings#core');
-    else if (key === '1') navigate('/settings#general');
+    const tabToHash: Record<string, string> = {
+      '1': 'general',
+      core: 'core',
+      '2': 'notifications',
+      '3': 'certs',
+      '4': 'external',
+      '5': 'datetime',
+      '6': 'ldap',
+    };
+    const hash = tabToHash[key];
+    if (hash) navigate('/settings#' + hash);
   };
 
   const [lang, setLang] = useState<string>(() => LanguageManager.getLanguage());
@@ -549,9 +568,14 @@ export default function GeneralTab({
                           Сначала переключите ядро на Xray и сохраните настройки.
                         </div>
                       )}
-                    <Button block icon={<SwapOutlined />} onClick={() => onOpenSwap?.()}>
-                      {t('pages.settings.swap.openFromCore')}
-                    </Button>
+                    <Space wrap style={{ width: '100%' }}>
+                      <Button icon={<SwapOutlined />} onClick={() => onOpenSwap?.()}>
+                        {t('pages.settings.swap.openFromCore')}
+                      </Button>
+                      <Button icon={<ReloadOutlined />} onClick={() => onOpenSwap?.()}>
+                        {t('pages.settings.swap.systemUpdates')}
+                      </Button>
+                    </Space>
                   </Space>
                 </div>
               </SettingListItem>
