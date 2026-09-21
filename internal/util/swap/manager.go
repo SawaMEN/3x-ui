@@ -68,7 +68,7 @@ type ZramInstallInfo struct {
 	PackageManager       string        `json:"packageManager"`
 	Package              string        `json:"package"`
 	Installed            bool          `json:"installed"`
-	Supported             bool          `json:"supported"`
+	Supported            bool          `json:"supported"`
 	UsingGenerator       bool          `json:"usingGenerator"`
 	InstalledPackages    []ZramPackage `json:"installedPackages"`
 	RecommendedPackage   string        `json:"recommendedPackage"`

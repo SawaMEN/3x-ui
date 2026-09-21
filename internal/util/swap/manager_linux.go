@@ -189,7 +189,8 @@ func queryInstalledPackage(manager, packageName string) (string, bool) {
 		if _, err := exec.LookPath("dpkg-query"); err != nil {
 			return "", false
 		}
-		output, err := exec.Command("dpkg-query", "-f="+ "$" + "{Status}\t" + "$" + "{Version}\n", packageName).Output()
+		queryFormat := `$` + "{Status}\t" + "$" + "{Version}\n"
+		output, err := exec.Command("dpkg-query", "-f="+queryFormat, packageName).Output()
 		if err != nil {
 			return "", false
 		}

@@ -377,7 +377,7 @@ func installedPackageVersion(manager, name string) (string, bool) {
 		}
 		return fields[1], true
 	case "apk":
-		output, err := exec.Command("apk", "info", "-e", name).Output()
+		output, err := exec.CommandContext(context.Background(), "apk", "info", "-e", name).Output()
 		if err != nil {
 			return "", false
 		}
@@ -510,7 +510,7 @@ func isKernelPackage(name string) bool {
 }
 
 func runtimeKernelVersion() string {
-	output, err := exec.Command("uname", "-r").Output()
+	output, err := exec.CommandContext(context.Background(), "uname", "-r").Output()
 	if err != nil {
 		return ""
 	}
@@ -525,7 +525,7 @@ func rebootRequired(manager string) bool {
 	}
 	if manager == "dnf" || manager == "yum" {
 		if commandExists("needs-restarting") {
-			return exec.Command("needs-restarting", "-r").Run() != nil
+			return exec.CommandContext(context.Background(), "needs-restarting", "-r").Run() != nil
 		}
 	}
 	return false

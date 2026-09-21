@@ -29,7 +29,7 @@ type Status struct {
 	UpdatesAvailable bool            `json:"updatesAvailable"`
 	MissingPackages  bool            `json:"missingPackages"`
 	CanUpdate        bool            `json:"canUpdate"`
-	Notes             []string        `json:"notes"`
+	Notes            []string        `json:"notes"`
 }
 
 type UpdateResult struct {
