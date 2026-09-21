@@ -1,0 +1,914 @@
+package singbox
+
+import (
+	"encoding/json"
+	"fmt"
+	"net"
+	"net/url"
+	"path/filepath"
+	"strconv"
+	"strings"
+)
+
+type Config struct {
+	Log          map[string]any   `json:"log,omitempty"`
+	DNS          map[string]any   `json:"dns,omitempty"`
+	Inbounds     []map[string]any `json:"inbounds,omitempty"`
+	Outbounds    []map[string]any `json:"outbounds,omitempty"`
+	Route        map[string]any   `json:"route,omitempty"`
+	Endpoints    []map[string]any `json:"endpoints,omitempty"`
+	Services     []map[string]any `json:"services,omitempty"`
+	Experimental map[string]any   `json:"experimental,omitempty"`
+}
+
+func NewConfig() *Config {
+	return &Config{
+		Log:       map[string]any{"level": "info", "output": filepath.Join(filepath.Dir(GetConfigPath()), "sing-box.log")},
+		DNS:       map[string]any{"servers": []map[string]any{{"type": "local", "tag": "local"}}, "final": "local", "strategy": "ipv4_only"},
+		Inbounds:  []map[string]any{},
+		Outbounds: []map[string]any{{"type": "direct", "tag": "direct"}, {"type": "block", "tag": "block"}},
+		Route:     map[string]any{"final": "direct"},
+	}
+}
+
+func (c *Config) Marshal() ([]byte, error) {
+	seen := make(map[string]bool, len(c.Outbounds))
+	outbounds := make([]map[string]any, 0, len(c.Outbounds))
+	for _, outbound := range c.Outbounds {
+		tag := rawString(outbound, "tag")
+		if tag != "" && seen[tag] {
+			continue
+		}
+		if tag != "" {
+			seen[tag] = true
+		}
+		outbounds = append(outbounds, outbound)
+	}
+	c.Outbounds = outbounds
+	return json.MarshalIndent(c, "", "  ")
+}
+
+func TranslateXrayOutbound(raw map[string]any) (map[string]any, error) {
+	protocol := strings.ToLower(strings.TrimSpace(rawString(raw, "protocol")))
+	tag := rawString(raw, "tag")
+	if tag == "" {
+		return nil, fmt.Errorf("outbound tag is empty")
+	}
+	out := map[string]any{"tag": tag}
+	switch protocol {
+	case "freedom":
+		out["type"] = "direct"
+	case "blackhole":
+		out["type"] = "block"
+	case "socks", "http", "shadowsocks", "vmess", "vless", "trojan", "hysteria", "hysteria2", "tuic":
+		out["type"] = protocol
+	case "wireguard":
+		return nil, fmt.Errorf("outbound %q is migrated to a sing-box WireGuard endpoint", tag)
+	default:
+		return nil, fmt.Errorf("sing-box does not support Xray outbound protocol %q through the compatibility translator", protocol)
+	}
+	settings := rawObject(raw, "settings")
+	switch protocol {
+	case "socks", "http":
+		server := firstObject(settings, "servers")
+		if server == nil {
+			return nil, fmt.Errorf("outbound %q has no server", tag)
+		}
+		if address := rawString(server, "address"); address != "" {
+			out["server"] = address
+		} else {
+			return nil, fmt.Errorf("outbound %q has an empty server address", tag)
+		}
+		port := rawInt(server, "port")
+		if port <= 0 {
+			return nil, fmt.Errorf("outbound %q has an invalid server port", tag)
+		}
+		out["server_port"] = port
+		if users, _ := server["users"].([]any); len(users) > 0 {
+			user, _ := users[0].(map[string]any)
+			if username := rawString(user, "user"); username != "" {
+				out["username"] = username
+			}
+			if password := rawString(user, "pass"); password != "" {
+				out["password"] = password
+			} else if password := rawString(user, "password"); password != "" {
+				out["password"] = password
+			}
+		}
+	case "shadowsocks":
+		server := firstObject(settings, "servers")
+		if server == nil {
+			return nil, fmt.Errorf("outbound %q has no server", tag)
+		}
+		if address := rawString(server, "address"); address != "" {
+			out["server"] = address
+		} else {
+			return nil, fmt.Errorf("outbound %q has an empty server address", tag)
+		}
+		port := rawInt(server, "port")
+		if port <= 0 {
+			return nil, fmt.Errorf("outbound %q has an invalid server port", tag)
+		}
+		out["server_port"] = port
+		for _, key := range []string{"method", "password"} {
+			if value := rawString(server, key); value != "" {
+				out[key] = value
+			}
+		}
+	case "vmess", "vless":
+		server := firstObject(settings, "vnext")
+		address := ""
+		port := 0
+		user := map[string]any(nil)
+		if server != nil {
+			address = rawString(server, "address")
+			port = rawInt(server, "port")
+			if users, _ := server["users"].([]any); len(users) > 0 {
+				user, _ = users[0].(map[string]any)
+			}
+		} else if protocol == "vless" {
+			// The panel's modern VLESS form stores the single target flat in
+			// settings rather than using Xray's legacy vnext wrapper.
+			address = rawString(settings, "address")
+			port = rawInt(settings, "port")
+			user = settings
+		} else {
+			return nil, fmt.Errorf("outbound %q has no vnext server", tag)
+		}
+		if address == "" {
+			return nil, fmt.Errorf("outbound %q has an empty server address", tag)
+		}
+		if port <= 0 {
+			return nil, fmt.Errorf("outbound %q has an invalid server port", tag)
+		}
+		if user == nil {
+			return nil, fmt.Errorf("outbound %q has no user", tag)
+		}
+		out["server"] = address
+		out["server_port"] = port
+		id := rawString(user, "id")
+		if id == "" {
+			return nil, fmt.Errorf("outbound %q has an empty user id", tag)
+		}
+		out["uuid"] = id
+		if protocol == "vmess" {
+			security := rawString(user, "security")
+			if security == "" {
+				security = "auto"
+			}
+			out["security"] = security
+			out["alter_id"] = rawInt(user, "alterId")
+		} else if encryption := rawString(user, "encryption"); encryption != "" && encryption != "none" {
+			return nil, fmt.Errorf("outbound %q uses unsupported VLESS encryption %q", tag, encryption)
+		}
+		if protocol == "vless" {
+			if flow := rawString(user, "flow"); flow != "" {
+				out["flow"] = flow
+			}
+		}
+	case "trojan":
+		server := firstObject(settings, "servers")
+		if server == nil {
+			return nil, fmt.Errorf("outbound %q has no server", tag)
+		}
+		if address := rawString(server, "address"); address != "" {
+			out["server"] = address
+		} else {
+			return nil, fmt.Errorf("outbound %q has an empty server address", tag)
+		}
+		port := rawInt(server, "port")
+		if port <= 0 {
+			return nil, fmt.Errorf("outbound %q has an invalid server port", tag)
+		}
+		out["server_port"] = port
+		if password := rawString(server, "password"); password != "" {
+			out["password"] = password
+		} else {
+			return nil, fmt.Errorf("outbound %q has an empty password", tag)
+		}
+	case "hysteria", "hysteria2":
+		server := firstObject(settings, "servers")
+		address := ""
+		port := 0
+		if server != nil {
+			address = rawString(server, "address")
+			port = rawInt(server, "port")
+		} else {
+			// The panel's Hysteria form stores the target as flat settings.
+			address = rawString(settings, "address")
+			port = rawInt(settings, "port")
+		}
+		if address == "" {
+			return nil, fmt.Errorf("outbound %q has an empty server address", tag)
+		}
+		if port <= 0 {
+			return nil, fmt.Errorf("outbound %q has an invalid server port", tag)
+		}
+		out["server"] = address
+		out["server_port"] = port
+		if protocol == "hysteria2" {
+			if password := rawString(server, "password"); password != "" {
+				out["password"] = password
+			} else if password := rawString(settings, "password"); password != "" {
+				out["password"] = password
+			}
+			for _, key := range []string{"up_mbps", "down_mbps", "hop_interval", "hop_interval_max", "bbr_profile", "disable_chrome_parrot", "ignore_client_bandwidth"} {
+				if value, ok := settings[key]; ok {
+					out[key] = value
+				}
+			}
+			if obfs := rawObject(settings, "obfs"); len(obfs) > 0 {
+				out["obfs"] = obfs
+			}
+		}
+	case "tuic":
+		server := firstObject(settings, "servers")
+		if server == nil {
+			return nil, fmt.Errorf("outbound %q has no server", tag)
+		}
+		address := rawString(server, "address")
+		port := rawInt(server, "port")
+		if address == "" {
+			return nil, fmt.Errorf("outbound %q has an empty server address", tag)
+		}
+		if port <= 0 {
+			return nil, fmt.Errorf("outbound %q has an invalid server port", tag)
+		}
+		out["server"] = address
+		out["server_port"] = port
+		uuid := rawString(server, "uuid")
+		if uuid == "" {
+			uuid = rawString(server, "id")
+		}
+		if uuid != "" {
+			out["uuid"] = uuid
+		}
+		if password := rawString(server, "password"); password != "" {
+			out["password"] = password
+		}
+		for _, key := range []string{"congestion_control", "udp_relay_mode", "zero_rtt_handshake", "heartbeat"} {
+			if value, ok := settings[key]; ok {
+				out[key] = value
+			}
+		}
+	}
+	streamSettings := rawObject(raw, "streamSettings")
+	singProtocol := protocol
+	if protocol == "hysteria" {
+		hysteriaSettings := rawObject(streamSettings, "hysteriaSettings")
+		version := rawInt(hysteriaSettings, "version")
+		if version == 0 {
+			version = 2
+		}
+		switch version {
+		case 2:
+			out["type"] = "hysteria2"
+			auth := rawString(hysteriaSettings, "auth")
+			if auth == "" {
+				auth = rawString(firstObject(settings, "servers"), "password")
+			}
+			if auth != "" {
+				out["password"] = auth
+			}
+			singProtocol = "hysteria2"
+		case 1:
+			auth := rawString(hysteriaSettings, "auth")
+			if auth == "" {
+				auth = rawString(firstObject(settings, "servers"), "auth")
+			}
+			if auth != "" {
+				out["auth_str"] = auth
+			}
+		default:
+			return nil, fmt.Errorf("outbound %q has unsupported Hysteria version %d", tag, version)
+		}
+	}
+	if err := translateStream(out, singProtocol, streamSettings, false); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// TranslateXrayWireGuardEndpoint converts the panel's Xray WireGuard
+// outbound settings to the native sing-box endpoint format.
+func TranslateXrayWireGuardEndpoint(raw map[string]any) (map[string]any, error) {
+	tag := rawString(raw, "tag")
+	if tag == "" {
+		return nil, fmt.Errorf("wireguard outbound tag is empty")
+	}
+	settings := rawObject(raw, "settings")
+	privateKey := strings.TrimSpace(rawString(settings, "secretKey"))
+	if privateKey == "" {
+		return nil, fmt.Errorf("wireguard outbound %q has no private key", tag)
+	}
+	addresses, err := normalizeWireGuardAddresses(compatStringSlice(settings["address"]))
+	if err != nil {
+		return nil, fmt.Errorf("wireguard outbound %q: %w", tag, err)
+	}
+	if len(addresses) == 0 {
+		return nil, fmt.Errorf("wireguard outbound %q has no local address", tag)
+	}
+	peerRaw, _ := settings["peers"].([]any)
+	if len(peerRaw) == 0 {
+		return nil, fmt.Errorf("wireguard outbound %q has no peers", tag)
+	}
+	peers := make([]map[string]any, 0, len(peerRaw))
+	for i, item := range peerRaw {
+		peer, ok := item.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("wireguard outbound %q peer %d is invalid", tag, i+1)
+		}
+		publicKey := strings.TrimSpace(rawString(peer, "publicKey"))
+		if publicKey == "" {
+			return nil, fmt.Errorf("wireguard outbound %q peer %d has no public key", tag, i+1)
+		}
+		host, port, err := parseWireGuardEndpoint(rawString(peer, "endpoint"))
+		if err != nil {
+			return nil, fmt.Errorf("wireguard outbound %q peer %d: %w", tag, i+1, err)
+		}
+		allowed, err := normalizeWireGuardAddresses(rawStrings(peer, "allowedIPs"))
+		if err != nil {
+			return nil, fmt.Errorf("wireguard outbound %q peer %d: %w", tag, i+1, err)
+		}
+		if len(allowed) == 0 {
+			allowed = []string{"0.0.0.0/0", "::/0"}
+		}
+		p := map[string]any{
+			"address":     host,
+			"port":        port,
+			"public_key":  publicKey,
+			"allowed_ips": allowed,
+		}
+		if psk := strings.TrimSpace(rawString(peer, "psk")); psk != "" {
+			p["pre_shared_key"] = psk
+		}
+		if keepAlive := rawInt(peer, "keepAlive"); keepAlive > 0 {
+			p["persistent_keepalive_interval"] = keepAlive
+		}
+		peers = append(peers, p)
+	}
+	endpoint := map[string]any{
+		"type":        "wireguard",
+		"tag":         tag,
+		"system":      !rawBool(settings, "noKernelTun"),
+		"name":        tag,
+		"address":     addresses,
+		"private_key": privateKey,
+		"peers":       peers,
+	}
+	if mtu := rawInt(settings, "mtu"); mtu > 0 {
+		endpoint["mtu"] = mtu
+	}
+	if reserved := compatIntSlice(settings["reserved"]); len(reserved) > 0 {
+		endpoint["reserved"] = reserved
+		for _, peer := range peers {
+			peer["reserved"] = reserved
+		}
+	}
+	return endpoint, nil
+}
+
+func parseWireGuardEndpoint(value string) (string, int, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", 0, fmt.Errorf("endpoint is empty")
+	}
+	if strings.Contains(value, "://") {
+		u, err := url.Parse(value)
+		if err != nil || u.Hostname() == "" || u.Port() == "" {
+			return "", 0, fmt.Errorf("invalid endpoint %q", value)
+		}
+		port, err := strconv.Atoi(u.Port())
+		if err != nil || port < 1 || port > 65535 {
+			return "", 0, fmt.Errorf("invalid endpoint port %q", u.Port())
+		}
+		return u.Hostname(), port, nil
+	}
+	host, portText, err := net.SplitHostPort(value)
+	if err != nil {
+		return "", 0, fmt.Errorf("endpoint must be host:port or [IPv6]:port")
+	}
+	port, err := strconv.Atoi(portText)
+	if err != nil || port < 1 || port > 65535 {
+		return "", 0, fmt.Errorf("invalid endpoint port %q", portText)
+	}
+	return host, port, nil
+}
+
+func normalizeWireGuardAddresses(values []string) ([]string, error) {
+	out := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, network, err := net.ParseCIDR(value); err == nil {
+			value = network.String()
+		} else if ip := net.ParseIP(value); ip != nil {
+			if ip.To4() != nil {
+				value = ip.String() + "/32"
+			} else {
+				value = ip.String() + "/128"
+			}
+		} else {
+			return nil, fmt.Errorf("invalid address %q", value)
+		}
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	return out, nil
+}
+
+func compatIntSlice(v any) []int {
+	switch values := v.(type) {
+	case []any:
+		out := make([]int, 0, len(values))
+		for _, value := range values {
+			switch n := value.(type) {
+			case float64:
+				out = append(out, int(n))
+			case int:
+				out = append(out, n)
+			case string:
+				parsed, err := strconv.Atoi(strings.TrimSpace(n))
+				if err != nil {
+					return nil
+				}
+				out = append(out, parsed)
+			}
+		}
+		return out
+	case []int:
+		return append([]int(nil), values...)
+	default:
+		return nil
+	}
+}
+
+func rawBool(m map[string]any, key string) bool {
+	v, _ := m[key].(bool)
+	return v
+}
+
+func TranslateXrayInbound(raw map[string]any) (map[string]any, error) {
+	protocol := strings.ToLower(strings.TrimSpace(rawString(raw, "protocol")))
+	if protocol == "tunnel" || protocol == "wireguard" || protocol == "mtproto" || protocol == "amneziawg" {
+		return nil, fmt.Errorf("sing-box does not support Xray inbound protocol %q", protocol)
+	}
+	out := map[string]any{"tag": rawString(raw, "tag")}
+	settings := rawObject(raw, "settings")
+	stream := rawObject(raw, "streamSettings")
+	singProtocol := protocol
+	if protocol == "hysteria" {
+		version := rawInt(rawObject(stream, "hysteriaSettings"), "version")
+		if version == 0 {
+			version = 2
+		}
+		if version == 2 {
+			singProtocol = "hysteria2"
+		}
+	}
+	out["type"] = singProtocol
+	if listen := rawString(raw, "listen"); listen != "" {
+		out["listen"] = normalizeListen(listen)
+	}
+	if port := rawInt(raw, "port"); port > 0 {
+		out["listen_port"] = port
+	}
+	if err := translateUsers(out, singProtocol, settings); err != nil {
+		return nil, err
+	}
+	if err := translateStream(out, singProtocol, stream, true); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func translateUsers(out map[string]any, protocol string, settings map[string]any) error {
+	clients, _ := settings["clients"].([]any)
+	users := make([]map[string]any, 0, len(clients))
+	for _, item := range clients {
+		client, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		user := map[string]any{}
+		if email, ok := client["email"].(string); ok && email != "" {
+			user["name"] = email
+		}
+		switch protocol {
+		case "vless", "vmess":
+			if id, ok := client["id"].(string); ok && id != "" {
+				user["uuid"] = id
+			}
+			if flow, ok := client["flow"].(string); ok && flow != "" && protocol == "vless" {
+				user["flow"] = flow
+			}
+		case "trojan", "shadowsocks", "hysteria2":
+			if password, ok := client["password"].(string); ok && password != "" {
+				user["password"] = password
+			} else if auth := rawString(client, "auth"); auth != "" && protocol == "hysteria2" {
+				user["password"] = auth
+			}
+		case "hysteria":
+			if auth := rawString(client, "auth"); auth != "" {
+				user["auth_str"] = auth
+			}
+		case "tuic":
+			if id, ok := client["id"].(string); ok && id != "" {
+				user["uuid"] = id
+			}
+			if password, ok := client["password"].(string); ok && password != "" {
+				user["password"] = password
+			}
+		}
+		users = append(users, user)
+	}
+	if len(users) > 0 {
+		out["users"] = users
+	}
+	switch protocol {
+	case "shadowsocks":
+		if method := rawString(settings, "method"); method != "" {
+			out["method"] = method
+		}
+		if password := rawString(settings, "password"); password != "" {
+			out["password"] = password
+		}
+	case "http", "socks", "mixed":
+		mapped := make([]map[string]any, 0, len(clients))
+		for _, item := range clients {
+			client, ok := item.(map[string]any)
+			if !ok {
+				continue
+			}
+			user := map[string]any{}
+			if username := rawString(client, "email"); username != "" {
+				user["username"] = username
+			}
+			if password := rawString(client, "password"); password != "" {
+				user["password"] = password
+			}
+			if len(user) > 0 {
+				mapped = append(mapped, user)
+			}
+		}
+		if len(mapped) > 0 {
+			out["users"] = mapped
+		}
+	}
+	return nil
+}
+
+func translateStream(out map[string]any, protocol string, stream map[string]any, inbound bool) error {
+	if len(stream) == 0 {
+		return nil
+	}
+	security := strings.ToLower(strings.TrimSpace(rawString(stream, "security")))
+	switch security {
+	case "tls":
+		tls := rawObject(stream, "tlsSettings")
+		t := map[string]any{"enabled": true}
+		if alpn := rawStrings(tls, "alpn"); len(alpn) > 0 {
+			t["alpn"] = alpn
+		}
+		if !inbound {
+			if insecure, ok := tls["allowInsecure"].(bool); ok {
+				t["insecure"] = insecure
+			}
+			if fingerprint := rawString(tls, "fingerprint"); fingerprint != "" {
+				t["utls"] = map[string]any{"enabled": true, "fingerprint": fingerprint}
+			}
+		}
+		if serverName := rawString(tls, "serverName"); serverName != "" {
+			t["server_name"] = serverName
+		}
+		if certs, ok := tls["certificates"].([]any); ok && len(certs) > 0 {
+			for _, item := range certs {
+				cert, ok := item.(map[string]any)
+				if !ok {
+					continue
+				}
+				if path := rawString(cert, "certificateFile"); path != "" {
+					t["certificate_path"] = path
+				} else if value := rawString(cert, "certificate"); value != "" {
+					t["certificate"] = []string{value}
+				}
+				if path := rawString(cert, "keyFile"); path != "" {
+					t["key_path"] = path
+				} else if value := rawString(cert, "key"); value != "" {
+					t["key"] = []string{value}
+				}
+				break
+			}
+		}
+		out["tls"] = t
+	case "reality":
+		reality := rawObject(stream, "realitySettings")
+		tlsSettings := rawObject(stream, "tlsSettings")
+		t := map[string]any{"enabled": true}
+		r := map[string]any{"enabled": true}
+		serverName := normalizeRealityServerName(rawString(tlsSettings, "serverName"))
+		if serverName == "" {
+			serverNames := rawStrings(reality, "serverNames")
+			if len(serverNames) > 0 {
+				serverName = normalizeRealityServerName(serverNames[0])
+			}
+		}
+		if serverName == "" {
+			serverName = normalizeRealityServerName(rawString(reality, "serverName"))
+		}
+		if serverName != "" {
+			t["server_name"] = serverName
+		}
+		if publicKey := rawString(reality, "publicKey"); publicKey != "" {
+			r["public_key"] = publicKey
+		}
+		if privateKey := rawString(reality, "privateKey"); privateKey != "" {
+			r["private_key"] = privateKey
+		}
+		if inbound {
+			dest := strings.TrimSpace(rawString(reality, "target"))
+			if dest == "" {
+				dest = strings.TrimSpace(rawString(reality, "dest"))
+			}
+			if dest == "" {
+				dest = serverName
+			}
+			if dest == "" {
+				return fmt.Errorf("inbound %q has REALITY enabled but no destination or serverName", rawString(out, "tag"))
+			}
+			host, port, err := parseRealityDestination(dest)
+			if err != nil {
+				return fmt.Errorf("inbound %q has invalid REALITY destination %q: %w", rawString(out, "tag"), dest, err)
+			}
+			r["handshake"] = map[string]any{
+				"server":          host,
+				"server_port":     port,
+				"domain_resolver": "local",
+			}
+			if shortIDs, ok := reality["shortIds"].([]any); ok && len(shortIDs) > 0 {
+				ids := make([]string, 0, len(shortIDs))
+				for _, id := range shortIDs {
+					if value, ok := id.(string); ok && value != "" {
+						ids = append(ids, value)
+					}
+				}
+				if len(ids) > 0 {
+					r["short_id"] = ids
+				}
+			} else if shortID := rawString(reality, "shortId"); shortID != "" {
+				r["short_id"] = []string{shortID}
+			}
+			if rawString(reality, "privateKey") == "" {
+				return fmt.Errorf("inbound %q has REALITY enabled but no private key", rawString(out, "tag"))
+			}
+		} else {
+			publicKey := rawString(reality, "publicKey")
+			if publicKey == "" {
+				return fmt.Errorf("outbound %q has REALITY enabled but no public key", rawString(out, "tag"))
+			}
+			r["public_key"] = publicKey
+			if shortID := rawString(reality, "shortId"); shortID != "" {
+				r["short_id"] = shortID
+			} else if shortIDs := rawStrings(reality, "shortIds"); len(shortIDs) > 0 {
+				r["short_id"] = shortIDs[0]
+			} else {
+				return fmt.Errorf("outbound %q has REALITY enabled but no short id", rawString(out, "tag"))
+			}
+		}
+		t["reality"] = r
+		out["tls"] = t
+	}
+	network := strings.ToLower(strings.TrimSpace(rawString(stream, "network")))
+	if protocol == "hysteria2" || protocol == "hysteria" {
+		if network == "hysteria" || network == "" {
+			return translateHysteriaStream(out, protocol, stream, inbound)
+		}
+	}
+	switch network {
+	case "", "tcp", "raw":
+		// Xray's "raw" is its current name for the plain TCP transport.
+		// sing-box represents the same stream without an explicit transport.
+		return nil
+	case "ws":
+		ws := rawObject(stream, "wsSettings")
+		transport := map[string]any{"type": "ws"}
+		if path := rawString(ws, "path"); path != "" {
+			transport["path"] = path
+		}
+		if headers, ok := ws["headers"].(map[string]any); ok && len(headers) > 0 {
+			transport["headers"] = headers
+		}
+		if maxEarlyData := rawInt(ws, "maxEarlyData"); maxEarlyData > 0 {
+			transport["max_early_data"] = maxEarlyData
+		}
+		if earlyDataHeaderName := rawString(ws, "earlyDataHeaderName"); earlyDataHeaderName != "" {
+			transport["early_data_header_name"] = earlyDataHeaderName
+		}
+		out["transport"] = transport
+	case "grpc":
+		grpc := rawObject(stream, "grpcSettings")
+		transport := map[string]any{"type": "grpc"}
+		if name := rawString(grpc, "serviceName"); name != "" {
+			transport["service_name"] = name
+		}
+		out["transport"] = transport
+	case "http":
+		httpSettings := rawObject(stream, "httpSettings")
+		transport := map[string]any{"type": "http"}
+		if hosts := rawStrings(httpSettings, "host"); len(hosts) > 0 {
+			transport["host"] = hosts
+		}
+		if path := rawString(httpSettings, "path"); path != "" {
+			transport["path"] = path
+		}
+		if method := rawString(httpSettings, "method"); method != "" {
+			transport["method"] = method
+		}
+		if headers, ok := httpSettings["headers"].(map[string]any); ok && len(headers) > 0 {
+			transport["headers"] = headers
+		}
+		out["transport"] = transport
+	case "httpupgrade":
+		upgrade := rawObject(stream, "httpupgradeSettings")
+		transport := map[string]any{"type": "httpupgrade"}
+		if host := rawString(upgrade, "host"); host != "" {
+			transport["host"] = host
+		}
+		if path := rawString(upgrade, "path"); path != "" {
+			transport["path"] = path
+		}
+		if headers, ok := upgrade["headers"].(map[string]any); ok && len(headers) > 0 {
+			transport["headers"] = headers
+		}
+		out["transport"] = transport
+	default:
+		return fmt.Errorf("inbound %q uses unsupported Xray transport %q", rawString(out, "tag"), network)
+	}
+	return nil
+}
+
+func normalizeRealityServerName(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	if host, _, err := net.SplitHostPort(value); err == nil {
+		return host
+	}
+	if strings.HasPrefix(value, "[") && strings.HasSuffix(value, "]") {
+		return strings.Trim(value, "[]")
+	}
+	return value
+}
+
+func parseRealityDestination(dest string) (string, int, error) {
+	dest = strings.TrimSpace(dest)
+	if dest == "" {
+		return "", 0, fmt.Errorf("destination is empty")
+	}
+	if strings.Contains(dest, "://") {
+		u, err := url.Parse(dest)
+		if err != nil || u.Hostname() == "" {
+			return "", 0, fmt.Errorf("invalid URL")
+		}
+		dest = u.Host
+	}
+	if host, port, err := net.SplitHostPort(dest); err == nil {
+		n, err := strconv.Atoi(port)
+		if err != nil || n <= 0 || n > 65535 {
+			return "", 0, fmt.Errorf("invalid port")
+		}
+		host = strings.TrimSpace(host)
+		if host == "" {
+			return "", 0, fmt.Errorf("invalid host")
+		}
+		return host, n, nil
+	}
+	if strings.HasPrefix(dest, "[") && strings.HasSuffix(dest, "]") {
+		dest = strings.Trim(dest, "[]")
+	}
+	if net.ParseIP(dest) != nil {
+		return dest, 443, nil
+	}
+	if strings.Count(dest, ":") > 0 {
+		return "", 0, fmt.Errorf("invalid host:port")
+	}
+	if strings.TrimSpace(dest) == "" {
+		return "", 0, fmt.Errorf("invalid host")
+	}
+	return dest, 443, nil
+}
+
+func translateHysteriaStream(out map[string]any, protocol string, stream map[string]any, inbound bool) error {
+	settings := rawObject(stream, "hysteriaSettings")
+	version := rawInt(settings, "version")
+	if version == 0 {
+		version = 2
+	}
+	if protocol == "hysteria2" && version != 2 {
+		return fmt.Errorf("inbound %q uses Hysteria version %d, expected version 2 for hysteria2", rawString(out, "tag"), version)
+	}
+	if protocol == "hysteria" && version != 1 {
+		return fmt.Errorf("inbound %q has inconsistent Hysteria version %d", rawString(out, "tag"), version)
+	}
+	if idle := rawInt(settings, "udpIdleTimeout"); idle > 0 && protocol == "hysteria2" {
+		out["idle_timeout"] = fmt.Sprintf("%ds", idle)
+	}
+	if masquerade := rawObject(settings, "masquerade"); inbound && len(masquerade) > 0 && protocol == "hysteria2" {
+		if _, hasUsers := out["users"]; !hasUsers {
+			m := map[string]any{}
+			switch rawString(masquerade, "type") {
+			case "proxy":
+				m["type"] = "proxy"
+				if value := rawString(masquerade, "url"); value != "" {
+					m["url"] = value
+				}
+				if rewriteHost, ok := masquerade["rewriteHost"].(bool); ok {
+					m["rewrite_host"] = rewriteHost
+				} else if rawString(masquerade, "rewriteHost") == "true" {
+					m["rewrite_host"] = true
+				}
+			case "file":
+				m["type"] = "file"
+				if dir := rawString(masquerade, "dir"); dir != "" {
+					m["directory"] = dir
+				}
+			case "string":
+				m["type"] = "string"
+				if content := rawString(masquerade, "content"); content != "" {
+					m["content"] = content
+				}
+				if status := rawInt(masquerade, "statusCode"); status > 0 {
+					m["status_code"] = status
+				}
+				if headers, ok := masquerade["headers"].(map[string]any); ok && len(headers) > 0 {
+					m["headers"] = headers
+				}
+			}
+			out["masquerade"] = m
+		}
+	}
+	return nil
+}
+
+func normalizeListen(value string) string {
+	if value == "" {
+		return "::"
+	}
+	return value
+}
+
+func rawString(m map[string]any, key string) string {
+	v, _ := m[key].(string)
+	return v
+}
+
+func rawStrings(m map[string]any, key string) []string {
+	values, _ := m[key].([]any)
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		if s, ok := value.(string); ok && strings.TrimSpace(s) != "" {
+			result = append(result, strings.TrimSpace(s))
+		}
+	}
+	return result
+}
+
+func rawInt(m map[string]any, key string) int {
+	switch v := m[key].(type) {
+	case int:
+		return v
+	case int64:
+		return int(v)
+	case float64:
+		return int(v)
+	case string:
+		n, _ := strconv.Atoi(v)
+		return n
+	default:
+		return 0
+	}
+}
+
+func rawObject(m map[string]any, key string) map[string]any {
+	v, _ := m[key].(map[string]any)
+	if v == nil {
+		return map[string]any{}
+	}
+	return v
+}
+
+func firstObject(m map[string]any, key string) map[string]any {
+	values, _ := m[key].([]any)
+	if len(values) == 0 {
+		return nil
+	}
+	value, _ := values[0].(map[string]any)
+	return value
+}

@@ -20,11 +20,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/config"
-	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
-	"github.com/mhsanaei/3x-ui/v3/internal/util/crypto"
-	"github.com/mhsanaei/3x-ui/v3/internal/util/random"
-	"github.com/mhsanaei/3x-ui/v3/internal/xray"
+	"github.com/SawaMEN/3x-ui/v3/internal/config"
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/crypto"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/random"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/sys"
+	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 
 	"github.com/mattn/go-sqlite3"
 	"gorm.io/driver/postgres"
@@ -83,6 +84,9 @@ func allModels() []any {
 		&model.NodeClientTraffic{},
 		&model.NodeClientIp{},
 		&model.ClientGlobalTraffic{},
+		&model.TelemtIPHistory{},
+		&model.TelemtUserHistory{},
+		&model.TelemtIPGeo{},
 		&model.OutboundSubscription{},
 		&model.SubBalancer{},
 	}
@@ -1254,7 +1258,7 @@ func runSeeders(isUsersEmpty bool) error {
 	}
 
 	if empty && isUsersEmpty {
-		seeders := []string{"UserPasswordHash", "ClientsTable", "InboundClientsArrayFix", "InboundClientTgIdFix2", "InboundClientSubIdFix", "FreedomFinalRulesReverseFix", "FreedomFinalRulesPrivateEgressBlock", "UppercaseFreedomFinalRulesFix", "InboundRealityFinalmaskTcpStrip", "ApiTokensHash", "LegacyProxySettingsCleanup", "OutboundRemovedKeysFix", "FreedomDomainStrategyFix", "DNSOutboundLegacyKeysFix", "DNSOutboundQTypeZeroFix", "WireguardPeersToClients", "MtprotoSecretsToClients", "NodeInboundsAdopted", "ResetIpLimitNoFail2ban"}
+		seeders := []string{"UserPasswordHash", "ClientsTable", "InboundClientsArrayFix", "InboundClientTgIdFix2", "InboundClientSubIdFix", "FreedomFinalRulesReverseFix", "FreedomFinalRulesPrivateEgressBlock", "UppercaseFreedomFinalRulesFix", "InboundRealityFinalmaskTcpStrip", "ApiTokensHash", "LegacyProxySettingsCleanup", "OutboundRemovedKeysFix", "FreedomDomainStrategyFix", "DNSOutboundLegacyKeysFix", "DNSOutboundQTypeZeroFix", "WireguardPeersToClients", "MtprotoSecretsToClients", "NodeInboundsAdopted", "ResetIpLimitNoFail2ban", "VKTurnAcceptClientKeysDefaultOn"}
 		for _, name := range seeders {
 			if err := db.Create(&model.HistoryOfSeeders{SeederName: name}).Error; err != nil {
 				return err
@@ -1428,6 +1432,10 @@ func runSeeders(isUsersEmpty bool) error {
 		return err
 	}
 
+	if err := migrateVKTurnAcceptClientKeysDefaultOn(); err != nil {
+		return err
+	}
+
 	// Idempotent, not seeder-gated: bad values can re-enter via a restored
 	// backup, so re-check on every start.
 	return normalizeSettingPaths()
@@ -1465,6 +1473,27 @@ func backfillEmptyHostGroupIds() error {
 		}
 		return nil
 	})
+}
+
+func migrateVKTurnAcceptClientKeysDefaultOn() error {
+	const seederName = "VKTurnAcceptClientKeysDefaultOn"
+	var history []string
+	if err := db.Model(&model.HistoryOfSeeders{}).Pluck("seeder_name", &history).Error; err != nil {
+		return err
+	}
+	if slices.Contains(history, seederName) {
+		return nil
+	}
+	var sql string
+	if IsPostgres() {
+		sql = `UPDATE inbounds SET settings = jsonb_set(settings::jsonb, '{wrapAcceptClientKeys}', 'true'::jsonb)::text WHERE protocol = ?`
+	} else {
+		sql = `UPDATE inbounds SET settings = json_set(settings, '$.wrapAcceptClientKeys', json('true')) WHERE protocol = ?`
+	}
+	if err := db.Exec(sql, model.VKTurnProxy).Error; err != nil {
+		return err
+	}
+	return db.Create(&model.HistoryOfSeeders{SeederName: seederName}).Error
 }
 
 func resetIpLimitsWithoutFail2ban() error {
@@ -2708,13 +2737,25 @@ func InitDB(dbPath string) error {
 			return err
 		}
 
+		// Keep the baseline footprint bounded even on medium VDS hosts. Low-resource
+		// mode tightens these further and uses file-backed temporary tables.
+		cacheMB := envInt("XUI_DB_CACHE_MB", 16)
+		mmapMB := envInt("XUI_DB_MMAP_MB", 64)
+		tempStore := "MEMORY"
+		if sys.IsLowResourceMode() {
+			// SQLite cache and mmap settings are per connection. Keeping them small
+			// prevents several concurrent panel requests from multiplying RSS.
+			cacheMB = envInt("XUI_DB_CACHE_MB", 8)
+			mmapMB = envInt("XUI_DB_MMAP_MB", 32)
+			tempStore = "FILE"
+		}
 		pragmas := []string{
 			"PRAGMA journal_mode=" + journal,
 			"PRAGMA busy_timeout=10000",
 			"PRAGMA synchronous=" + sync,
-			fmt.Sprintf("PRAGMA cache_size=-%d", envInt("XUI_DB_CACHE_MB", 32)*1024),
-			fmt.Sprintf("PRAGMA mmap_size=%d", int64(envInt("XUI_DB_MMAP_MB", 256))*1024*1024),
-			"PRAGMA temp_store=MEMORY",
+			fmt.Sprintf("PRAGMA cache_size=-%d", cacheMB*1024),
+			fmt.Sprintf("PRAGMA mmap_size=%d", int64(mmapMB)*1024*1024),
+			"PRAGMA temp_store=" + tempStore,
 		}
 		for _, p := range pragmas {
 			if _, err := sqlDB.ExecContext(context.Background(), p); err != nil {
@@ -2733,13 +2774,21 @@ func InitDB(dbPath string) error {
 		maxOpen = envInt("XUI_DB_MAX_OPEN_CONNS", 25)
 		maxIdle = envInt("XUI_DB_MAX_IDLE_CONNS", 25)
 	default:
-		maxOpen = envInt("XUI_DB_MAX_OPEN_CONNS", 8)
-		maxIdle = envInt("XUI_DB_MAX_IDLE_CONNS", 4)
+		maxOpen = envInt("XUI_DB_MAX_OPEN_CONNS", 4)
+		maxIdle = envInt("XUI_DB_MAX_IDLE_CONNS", 2)
+		if sys.IsLowResourceMode() {
+			maxOpen = envInt("XUI_DB_MAX_OPEN_CONNS", 2)
+			maxIdle = envInt("XUI_DB_MAX_IDLE_CONNS", 1)
+		}
 	}
 	sqlDB.SetMaxOpenConns(maxOpen)
 	sqlDB.SetMaxIdleConns(maxIdle)
 	sqlDB.SetConnMaxLifetime(time.Hour)
-	sqlDB.SetConnMaxIdleTime(30 * time.Minute)
+	if sys.IsLowResourceMode() {
+		sqlDB.SetConnMaxIdleTime(5 * time.Minute)
+	} else {
+		sqlDB.SetConnMaxIdleTime(30 * time.Minute)
+	}
 
 	if err := initModels(); err != nil {
 		return err

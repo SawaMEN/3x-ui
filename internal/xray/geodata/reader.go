@@ -1,6 +1,7 @@
 package geodata
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"io"
@@ -48,13 +49,107 @@ type byteSpan struct {
 	length int64
 }
 
-// scanIndex walks the database once and reports every category with its entry
-// count and attribute keys, holding nothing else in memory.
-func scanIndex(data []byte, kind GeoKind) (*categoryScan, error) {
+// scanEntries walks the database once and materialises only the requested page
+// of one category, so browsing a category with hundreds of thousands of rules
+// costs no more than browsing a small one.
+func scanEntriesFromSpans(dir, name string, spans []byteSpan, kind GeoKind, code, query string, offset, limit int) (GeoEntryPage, error) {
+	page := GeoEntryPage{Items: []GeoEntry{}}
+	matched := 0
+
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return GeoEntryPage{}, err
+	}
+	defer root.Close()
+
+	file, err := root.Open(name)
+	if err != nil {
+		return GeoEntryPage{}, err
+	}
+	defer file.Close()
+
+	for _, span := range spans {
+		if span.length <= 0 || span.length > MaxFileSize {
+			return GeoEntryPage{}, ErrUnrecognized
+		}
+		record := make([]byte, span.length)
+		if _, err := file.ReadAt(record, span.offset); err != nil {
+			return GeoEntryPage{}, err
+		}
+
+		if _, err := walkEntry(record, func(payload []byte) error {
+			var raw []byte
+			var ok bool
+			var err error
+			if kind == KindSite {
+				raw, _, err = domainValue(payload)
+				if err != nil {
+					return err
+				}
+				ok = len(raw) > 0
+			} else {
+				raw, ok, err = cidrBytes(payload)
+				if err != nil {
+					return err
+				}
+			}
+			if !ok {
+				return nil
+			}
+			if query != "" && !containsFold(raw, query) {
+				return nil
+			}
+			if matched >= offset && len(page.Items) < limit {
+				if kind == KindSite {
+					page.Items = append(page.Items, GeoEntry{Kind: domainKind(payload), Value: string(raw)})
+				} else {
+					page.Items = append(page.Items, GeoEntry{Kind: "cidr", Value: string(raw)})
+				}
+			}
+			matched++
+			return nil
+		}); err != nil {
+			return GeoEntryPage{}, err
+		}
+	}
+	page.Total = matched
+	return page, nil
+}
+
+// detectKind reports which layout the file uses. The two share a wire layout
+// whose field types disagree, so decoding one as the other yields no usable
+// values at all — the count of readable entries is what tells them apart. The
+// file name only picks which layout to try first, so the common case scans once.
+const maxIndexEntrySize = 32 << 20 // 32 MiB; keeps peak index memory bounded on small VDS.
+
+func detectKindFile(dir, name string) (GeoKind, *categoryScan, error) {
+	first, second := KindSite, KindIP
+	if strings.Contains(strings.ToLower(name), "ip") {
+		first, second = KindIP, KindSite
+	}
+	var firstErr error
+	for _, kind := range [...]GeoKind{first, second} {
+		scan, err := scanIndexFile(dir, name, kind)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		if scan.usable > 0 {
+			return kind, scan, nil
+		}
+	}
+	if firstErr != nil {
+		return "", nil, fmt.Errorf("%w: %w", ErrUnrecognized, firstErr)
+	}
+	return "", nil, ErrUnrecognized
+}
+
+func scanIndexFile(dir, name string, kind GeoKind) (*categoryScan, error) {
 	scan := &categoryScan{kind: kind, spans: make(map[string][]byteSpan)}
 	byCode := make(map[string]int)
-
-	err := eachListEntry(data, func(entry []byte, span byteSpan) error {
+	err := eachListEntryFile(dir, name, func(entry []byte, span byteSpan) error {
 		count := 0
 		attributes := make(map[string]struct{})
 		code, err := walkEntry(entry, func(payload []byte) error {
@@ -106,175 +201,115 @@ func scanIndex(data []byte, kind GeoKind) (*categoryScan, error) {
 	return scan, nil
 }
 
-// scanEntries walks the database once and materialises only the requested page
-// of one category, so browsing a category with hundreds of thousands of rules
-// costs no more than browsing a small one.
-func scanEntries(records [][]byte, kind GeoKind, code, query string, offset, limit int) (GeoEntryPage, error) {
-	page := GeoEntryPage{Items: []GeoEntry{}}
-	matched := 0
-
-	for _, entry := range records {
-		// Values stay as raw bytes until a row is known to belong on the
-		// requested page: turning all 170k rules of a category into strings
-		// to serve one screenful is what made this expensive.
-		if _, err := walkEntry(entry, func(payload []byte) error {
-			var raw []byte
-			var ok bool
-			var err error
-			if kind == KindSite {
-				raw, _, err = domainValue(payload)
-				if err != nil {
-					return err
-				}
-				ok = len(raw) > 0
-			} else {
-				raw, ok, err = cidrBytes(payload)
-				if err != nil {
-					return err
-				}
-			}
-			if !ok {
-				return nil
-			}
-			if query != "" && !containsFold(raw, query) {
-				return nil
-			}
-			if matched >= offset && len(page.Items) < limit {
-				if kind == KindSite {
-					page.Items = append(page.Items, GeoEntry{Kind: domainKind(payload), Value: string(raw)})
-				} else {
-					page.Items = append(page.Items, GeoEntry{Kind: "cidr", Value: string(raw)})
-				}
-			}
-			matched++
-			return nil
-		}); err != nil {
-			return GeoEntryPage{}, err
-		}
-	}
-	page.Total = matched
-	return page, nil
-}
-
-// detectKind reports which layout the file uses. The two share a wire layout
-// whose field types disagree, so decoding one as the other yields no usable
-// values at all — the count of readable entries is what tells them apart. The
-// file name only picks which layout to try first, so the common case scans once.
-func detectKind(data []byte, name string) (GeoKind, *categoryScan, error) {
-	first, second := KindSite, KindIP
-	if strings.Contains(strings.ToLower(name), "ip") {
-		first, second = KindIP, KindSite
-	}
-	var firstErr error
-	for _, kind := range [...]GeoKind{first, second} {
-		scan, err := scanIndex(data, kind)
-		if err != nil {
-			if firstErr == nil {
-				firstErr = err
-			}
-			continue
-		}
-		if scan.usable > 0 {
-			return kind, scan, nil
-		}
-	}
-	if firstErr != nil {
-		// A truncated download is the common case here, and it reads very
-		// differently to the user than "this is not a geo database at all".
-		return "", nil, fmt.Errorf("%w: %w", ErrUnrecognized, firstErr)
-	}
-	return "", nil, ErrUnrecognized
-}
-
-// readSpans reads only the recorded slices of the file, so serving a page of a
-// category costs its own record rather than the whole database. The handle is
-// opened through an os.Root for the same reason readDatabase is.
-func readSpans(dir, name string, spans []byteSpan) ([][]byte, error) {
+// eachListEntryFile streams the top-level protobuf message and materialises only
+// one GeoSite/GeoIP entry at a time. The index retains spans into the file, so
+// serving pages can reopen the asset later without keeping the database bytes.
+func eachListEntryFile(dir, name string, visit func(entry []byte, span byteSpan) error) error {
 	root, err := os.OpenRoot(dir)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer root.Close()
 
 	file, err := root.Open(name)
 	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	records := make([][]byte, 0, len(spans))
-	for _, span := range spans {
-		if span.length <= 0 || span.length > MaxFileSize {
-			return nil, ErrUnrecognized
-		}
-		record := make([]byte, span.length)
-		if _, err := file.ReadAt(record, span.offset); err != nil {
-			return nil, err
-		}
-		records = append(records, record)
-	}
-	return records, nil
-}
-
-// readDatabase reads one database through an os.Root rooted at the asset
-// directory. Going through the root rather than a joined path means the file
-// name — which arrives from an HTTP request — never becomes a path this code
-// resolves itself: a symlink planted in the folder, or swapped in between the
-// check and the read, cannot pull in a file from elsewhere on disk.
-func readDatabase(dir, name string) ([]byte, error) {
-	root, err := os.OpenRoot(dir)
-	if err != nil {
-		return nil, err
-	}
-	defer root.Close()
-
-	file, err := root.Open(name)
-	if err != nil {
-		return nil, err
+		return err
 	}
 	defer file.Close()
 
 	info, err := file.Stat()
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if !info.Mode().IsRegular() {
-		return nil, ErrInvalidName
+		return ErrInvalidName
 	}
 	if info.Size() > MaxFileSize {
-		return nil, ErrFileTooLarge
+		return ErrFileTooLarge
 	}
-	return io.ReadAll(io.LimitReader(file, MaxFileSize))
-}
 
-func eachListEntry(data []byte, visit func(entry []byte, span byteSpan) error) error {
-	total := int64(len(data))
-	for len(data) > 0 {
-		consumedSoFar := total - int64(len(data))
-		number, wireType, consumed := protowire.ConsumeTag(data)
-		if consumed < 0 {
-			return protowire.ParseError(consumed)
+	reader := bufio.NewReaderSize(file, 32*1024)
+	var offset int64
+	for offset < info.Size() {
+		tag, n, err := readVarint(reader)
+		if err != nil {
+			return err
 		}
-		data = data[consumed:]
-		if number == fieldListEntry && wireType == protowire.BytesType {
-			entry, size := protowire.ConsumeBytes(data)
-			if size < 0 {
-				return protowire.ParseError(size)
-			}
-			span := byteSpan{offset: consumedSoFar + int64(consumed) + int64(size) - int64(len(entry)), length: int64(len(entry))}
-			if err := visit(entry, span); err != nil {
+		offset += int64(n)
+		number := tag >> 3
+		wireType := int(tag & 7)
+		if number <= 0 {
+			return ErrUnrecognized
+		}
+
+		switch wireType {
+		case 0:
+			n, err := skipVarint(reader)
+			if err != nil {
 				return err
 			}
-			data = data[size:]
-			continue
+			offset += int64(n)
+		case 1:
+			if _, err := io.CopyN(io.Discard, reader, 8); err != nil {
+				return err
+			}
+			offset += 8
+		case 2:
+			length, n, err := readVarint(reader)
+			if err != nil {
+				return err
+			}
+			offset += int64(n)
+			if length > uint64(info.Size()) || length > uint64(maxIndexEntrySize) {
+				return ErrFileTooLarge
+			}
+			entryOffset := offset
+			entry := make([]byte, int(length))
+			if _, err := io.ReadFull(reader, entry); err != nil {
+				return err
+			}
+			offset += int64(length)
+			if number == fieldListEntry {
+				if err := visit(entry, byteSpan{offset: entryOffset, length: int64(length)}); err != nil {
+					return err
+				}
+			}
+		case 5:
+			if _, err := io.CopyN(io.Discard, reader, 4); err != nil {
+				return err
+			}
+			offset += 4
+		default:
+			return ErrUnrecognized
 		}
-		size := protowire.ConsumeFieldValue(number, wireType, data)
-		if size < 0 {
-			return protowire.ParseError(size)
-		}
-		data = data[size:]
+	}
+	if offset != info.Size() {
+		return io.ErrUnexpectedEOF
 	}
 	return nil
+}
+
+func readVarint(r *bufio.Reader) (uint64, int, error) {
+	var value uint64
+	for i := 0; i < 10; i++ {
+		b, err := r.ReadByte()
+		if err != nil {
+			return 0, 0, err
+		}
+		if b < 0x80 {
+			if i == 9 && b > 1 {
+				return 0, 0, ErrUnrecognized
+			}
+			return value | uint64(b)<<(7*i), i + 1, nil
+		}
+		value |= uint64(b&0x7f) << (7 * i)
+	}
+	return 0, 0, ErrUnrecognized
+}
+
+func skipVarint(r *bufio.Reader) (int, error) {
+	_, n, err := readVarint(r)
+	return n, err
 }
 
 // walkEntry reports a record's category code and hands each rule to visit.

@@ -15,10 +15,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/config"
-	"github.com/mhsanaei/3x-ui/v3/internal/logger"
-	"github.com/mhsanaei/3x-ui/v3/internal/util/common"
-	wgutil "github.com/mhsanaei/3x-ui/v3/internal/util/wireguard"
+	"github.com/SawaMEN/3x-ui/v3/internal/config"
+	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
+	wgutil "github.com/SawaMEN/3x-ui/v3/internal/util/wireguard"
 
 	"github.com/xtls/xray-core/app/proxyman/command"
 	routerService "github.com/xtls/xray-core/app/router/command"
@@ -53,6 +53,7 @@ type XrayAPI struct {
 	StatsServiceClient   *statsService.StatsServiceClient
 	RoutingServiceClient *routerService.RoutingServiceClient
 	grpcClient           *grpc.ClientConn
+	apiAddr              string
 	isConnected          bool
 	StatsLastValues      map[string]int64
 }
@@ -92,12 +93,19 @@ func (x *XrayAPI) Init(apiPort int) error {
 	}
 
 	addr := fmt.Sprintf("127.0.0.1:%d", apiPort)
+	if x.isConnected && x.grpcClient != nil && x.apiAddr == addr {
+		return nil
+	}
+	// Re-initialisation with another port must not leave the previous transport
+	// reachable from this long-lived client.
+	x.Close()
 	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return fmt.Errorf("failed to connect to Xray API: %w", err)
 	}
 
 	x.grpcClient = conn
+	x.apiAddr = addr
 	x.isConnected = true
 	if x.StatsLastValues == nil {
 		x.StatsLastValues = make(map[string]int64)
@@ -117,8 +125,10 @@ func (x *XrayAPI) Init(apiPort int) error {
 // Close closes the gRPC connection and resets the XrayAPI client state.
 func (x *XrayAPI) Close() {
 	if x.grpcClient != nil {
-		x.grpcClient.Close()
+		_ = x.grpcClient.Close()
 	}
+	x.grpcClient = nil
+	x.apiAddr = ""
 	x.HandlerServiceClient = nil
 	x.StatsServiceClient = nil
 	x.RoutingServiceClient = nil

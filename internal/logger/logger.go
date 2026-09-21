@@ -7,19 +7,21 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/op/go-logging"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/config"
+	"github.com/SawaMEN/3x-ui/v3/internal/config"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/tail"
 
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 const (
-	maxLogBufferSize = 10240                 // Maximum log entries kept in memory
+	maxLogBufferSize = 4096                  // Maximum log entries kept in memory
 	logFileName      = "3xui.log"            // Log file name
 	timeFormat       = "2006/01/02 15:04:05" // Log timestamp format
 
@@ -231,14 +233,13 @@ func addToBuffer(level string, newLog string) {
 	})
 }
 
-// GetLogs retrieves up to c log entries from the buffer that are at or below the specified level.
+// GetLogs retrieves up to c log entries from the in-memory buffer.
 func GetLogs(c int, level string) []string {
-	var output []string
+	if c < 1 {
+		return nil
+	}
 	logLevel, _ := logging.LogLevel(level)
 
-	// Snapshot (copy) under the lock, then filter/format unlocked: a UI log fetch
-	// must not block addToBuffer — and thus all logging — for the formatting loop.
-	// A copy (not a reslice) is required, since addToBuffer can append in place.
 	logBufferMu.Lock()
 	snapshot := make([]struct {
 		time  string
@@ -248,9 +249,45 @@ func GetLogs(c int, level string) []string {
 	copy(snapshot, logBuffer)
 	logBufferMu.Unlock()
 
+	output := make([]string, 0, min(c, len(snapshot)))
 	for i := len(snapshot) - 1; i >= 0 && len(output) < c; i-- {
 		if snapshot[i].level <= logLevel {
 			output = append(output, fmt.Sprintf("%s %s - %s", snapshot[i].time, snapshot[i].level, snapshot[i].log))
+		}
+	}
+	return output
+}
+
+// GetFileLogs retrieves up to c panel-log file entries, newest first.
+func GetFileLogs(c int, level string) []string {
+	if c < 1 {
+		return nil
+	}
+	logLevel, _ := logging.LogLevel(level)
+	return getFileLogs(c, logLevel)
+}
+
+func getFileLogs(c int, logLevel logging.Level) []string {
+	lines, err := tail.ReadTailLines(filepath.Join(config.GetLogFolder(), logFileName), 0, tail.DefaultTailBytes)
+	if err != nil {
+		return nil
+	}
+	output := make([]string, 0, min(c, len(lines)))
+	for _, line := range lines {
+		if len(output) >= c {
+			break
+		}
+		line = strings.TrimRight(line, "\r")
+		if line == "" {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) >= 3 {
+			entryLevel, err := logging.LogLevel(strings.ToLower(fields[2]))
+			if err == nil && entryLevel > logLevel {
+				continue
+			}
+			output = append(output, line)
 		}
 	}
 	return output

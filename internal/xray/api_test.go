@@ -87,3 +87,24 @@ func TestGetOptionalUserString_WrongTypeErrors(t *testing.T) {
 		t.Fatal("expected error for non-string optional value")
 	}
 }
+
+func TestXrayAPIReusesConnectionForSamePort(t *testing.T) {
+	var api XrayAPI
+	if err := api.Init(10085); err != nil {
+		t.Fatalf("first Init() error = %v", err)
+	}
+	first := api.grpcClient
+	if first == nil {
+		t.Fatal("first Init() did not create a gRPC client")
+	}
+	if err := api.Init(10085); err != nil {
+		t.Fatalf("second Init() error = %v", err)
+	}
+	if api.grpcClient != first {
+		t.Fatal("Init() recreated the gRPC client for the same API port")
+	}
+	api.Close()
+	if api.grpcClient != nil || api.HandlerServiceClient != nil || api.isConnected {
+		t.Fatal("Close() retained Xray API client state")
+	}
+}

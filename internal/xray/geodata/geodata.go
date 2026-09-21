@@ -114,16 +114,6 @@ type Store struct {
 	indexes map[fileKey]*index
 
 	scan sync.Mutex
-	// hot holds the records of the category being paged through, so a browsing
-	// session reads them once instead of once per page. Only one category is
-	// kept: paging is the repeated operation, switching categories is not.
-	hot hotRecord
-}
-
-type hotRecord struct {
-	key     fileKey
-	code    string
-	records [][]byte
 }
 
 // NewStore returns a Store reading databases from dir.
@@ -240,11 +230,7 @@ func (s *Store) cachedIndex(key fileKey) (*index, bool) {
 // a failed index, so a broken download is reported without being re-parsed on
 // every request.
 func buildIndex(dir, name string) *index {
-	data, err := readDatabase(dir, name)
-	if err != nil {
-		return &index{err: err}
-	}
-	kind, scan, err := detectKind(data, name)
+	kind, scan, err := detectKindFile(dir, name)
 	if err != nil {
 		return &index{err: err}
 	}

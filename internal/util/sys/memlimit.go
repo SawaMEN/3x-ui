@@ -2,6 +2,7 @@ package sys
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"runtime/debug"
 	"strconv"
@@ -11,14 +12,17 @@ import (
 const (
 	memLimitHeadroomPercent = 90
 	defaultGCPercent        = 75
+	lowResourceGCPercent    = 50
 	defaultReleaseMinutes   = 10
+	lowResourceReleaseMin   = 5
+	lowResourceSoftLimitMiB = 256
+	bytesPerMiB             = int64(1 << 20)
 )
 
-// ApplyMemoryTuning configures the Go runtime for a lower, steadier footprint and
-// returns one log line per decision. It does NOT derive a soft limit from total
-// system RAM: on a shared or uncontrolled host that gives no benefit (GOGC, not
-// the limit, paces GC while the heap is far below it) and risks GC thrashing, so
-// memory is kept low via GOGC plus the periodic release job instead.
+// ApplyMemoryTuning configures the Go runtime for a lower, steadier footprint.
+// Explicit GOMEMLIMIT/XUI_MEMORY_LIMIT always wins. On small VDS hosts, a
+// conservative soft heap budget is applied automatically so short-lived
+// allocation bursts do not permanently inflate RSS.
 func ApplyMemoryTuning() []string {
 	lines := []string{applyGCPercent()}
 	if limit, source := applyMemoryLimit(); limit > 0 {
@@ -37,6 +41,9 @@ func applyGCPercent() string {
 	}
 
 	pct := defaultGCPercent
+	if IsLowResourceMode() {
+		pct = lowResourceGCPercent
+	}
 	if v := strings.TrimSpace(os.Getenv("XUI_GOGC")); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			pct = n
@@ -50,17 +57,17 @@ func applyGCPercent() string {
 	return fmt.Sprintf("GC percent set to %d", pct)
 }
 
-// applyMemoryLimit sets the soft limit only from an explicit budget: GOMEMLIMIT
-// env (left to the runtime), XUI_MEMORY_LIMIT in MiB, or a real cgroup limit at
-// 90% to leave headroom for non-heap and the xray child. No budget -> Go default.
+// applyMemoryLimit respects explicit budgets first, then a real cgroup limit.
+// On small VDS hosts the automatic budget is capped at 256 MiB to keep heap
+// growth from dominating process RSS.
 func applyMemoryLimit() (int64, string) {
 	if strings.TrimSpace(os.Getenv("GOMEMLIMIT")) != "" {
 		return 0, "GOMEMLIMIT env (handled by the Go runtime)"
 	}
 
 	if v := strings.TrimSpace(os.Getenv("XUI_MEMORY_LIMIT")); v != "" {
-		if mb, err := strconv.ParseInt(v, 10, 64); err == nil && mb > 0 {
-			limit := mb << 20
+		if mb, err := strconv.ParseInt(v, 10, 64); err == nil && mb > 0 && mb <= math.MaxInt64/bytesPerMiB {
+			limit := mb * bytesPerMiB
 			debug.SetMemoryLimit(limit)
 			return limit, "XUI_MEMORY_LIMIT=" + v + "MiB"
 		}
@@ -68,8 +75,17 @@ func applyMemoryLimit() (int64, string) {
 
 	if v, ok := cgroupMemoryLimit(); ok {
 		limit := v / 100 * memLimitHeadroomPercent
+		if IsLowResourceMode() && limit > lowResourceSoftLimitMiB*bytesPerMiB {
+			limit = lowResourceSoftLimitMiB * bytesPerMiB
+		}
 		debug.SetMemoryLimit(limit)
 		return limit, "cgroup limit"
+	}
+
+	if IsLowResourceMode() {
+		limit := int64(lowResourceSoftLimitMiB) * bytesPerMiB
+		debug.SetMemoryLimit(limit)
+		return limit, "automatic low-resource profile"
 	}
 
 	return 0, "no explicit budget; soft limit left at Go default"
@@ -81,6 +97,9 @@ func applyMemoryLimit() (int64, string) {
 func MemoryReleaseIntervalMinutes() int {
 	v := strings.TrimSpace(os.Getenv("XUI_MEMORY_RELEASE_INTERVAL"))
 	if v == "" {
+		if IsLowResourceMode() {
+			return lowResourceReleaseMin
+		}
 		return defaultReleaseMinutes
 	}
 	if n, err := strconv.Atoi(v); err == nil && n >= 0 {
