@@ -883,3 +883,89 @@ body.theme-cyberpunk .sider-brand .brand-text-compact {
     animation: none;
   }
 }
+
+
+/* Final cyberpunk graffiti wordmark fix. */
+body.theme-cyberpunk .sider-brand .brand-text {
+  font-family: Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif;
+  font-size: 29px;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+  line-height: 0.95;
+  text-transform: uppercase;
+  transform: skewX(-7deg) rotate(-1deg);
+  color: #ffffff;
+  -webkit-text-fill-color: transparent;
+  background: linear-gradient(
+    105deg,
+    #ffffff 0%,
+    #a8fbff 18%,
+    #00f6ff 42%,
+    #7f8cff 64%,
+    #ff55e5 84%,
+    #ffffff 100%
+  );
+  background-size: 220% 100%;
+  background-position: 0% 50%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-stroke: 0.45px rgba(255, 255, 255, 0.7);
+  text-shadow:
+    0 0 2px rgba(255, 255, 255, 1),
+    0 0 7px rgba(0, 246, 255, 1),
+    0 0 15px rgba(0, 246, 255, 0.9),
+    0 0 28px rgba(255, 43, 214, 0.75),
+    0 0 44px rgba(255, 43, 214, 0.38);
+  filter: brightness(1.08) saturate(1.15);
+  animation: cyberpunk-graffiti-glow 2.8s ease-in-out infinite alternate;
+}
+
+/* In the expanded rail show only 3X-UI. In the collapsed rail show only 3X. */
+body.theme-cyberpunk .sider-brand .brand-text-full {
+  display: inline;
+}
+body.theme-cyberpunk .sider-brand .brand-text-compact {
+  display: none;
+}
+body.theme-cyberpunk .ant-layout-sider-collapsed .sider-brand .brand-text {
+  width: auto;
+  max-width: 100%;
+  font-size: 28px;
+  letter-spacing: 0;
+  transform: skewX(-6deg);
+  white-space: nowrap;
+}
+body.theme-cyberpunk .ant-layout-sider-collapsed .sider-brand .brand-text-full {
+  display: none;
+}
+body.theme-cyberpunk .ant-layout-sider-collapsed .sider-brand .brand-text-compact {
+  display: inline;
+}
+
+/* Remove all decorative lines around the desktop cyberpunk wordmark. */
+body.theme-cyberpunk .sider-brand .brand-text::before,
+body.theme-cyberpunk .sider-brand .brand-text::after {
+  content: none !important;
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  box-shadow: none !important;
+  background: none !important;
+}
+
+@keyframes cyberpunk-graffiti-glow {
+  0% {
+    background-position: 0% 50%;
+    filter: brightness(0.98) saturate(1.05);
+  }
+  100% {
+    background-position: 100% 50%;
+    filter: brightness(1.2) saturate(1.25);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.theme-cyberpunk .sider-brand .brand-text {
+    animation: none;
+  }
+}
