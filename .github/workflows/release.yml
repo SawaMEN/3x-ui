@@ -309,7 +309,20 @@ jobs:
             stable-artifacts/x-ui-linux-arm64.tar.gz \
             stable-artifacts/x-ui-linux-arm64.tar.gz.sha256; do
             test -f "${asset}"
-            gh release upload "${TAG}" "${asset}" --clobber
+            uploaded=false
+            for attempt in {1..5}; do
+              if gh release upload "${TAG}" "${asset}" --clobber; then
+                uploaded=true
+                break
+              fi
+              if (( attempt < 5 )); then
+                sleep $((attempt * 3))
+              fi
+            done
+            if [[ "${uploaded}" != true ]]; then
+              echo "Failed to upload ${asset} to ${TAG} after 5 attempts" >&2
+              exit 1
+            fi
           done
 
   publish-dev:
