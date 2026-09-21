@@ -28,6 +28,7 @@ test('uses a single wordmark with full and compact labels', () => {
 
   expect(view.container.querySelector('.brand-text-full')?.textContent).toBe('3X-UI');
   expect(view.container.querySelector('.brand-text-compact')?.textContent).toBe('3X');
+  expect(view.container.querySelector('.sider-brand .brand-mark')).toBeNull();
 
   fireEvent.mouseEnter(sidebarRoot!);
   expect(view.container.querySelector('.sider-brand-content')).toHaveClass('brand-is-expanded');

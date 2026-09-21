@@ -769,3 +769,117 @@ body.theme-cyberpunk .drawer-brand {
     animation: none;
   }
 }
+
+/* Final sidebar wordmark treatment. The desktop sidebar uses one centered wordmark in both states. */
+.sider-brand .sider-brand-content {
+  left: 0;
+  right: 0;
+  inset: 0;
+  width: 100%;
+  max-width: none;
+  margin: auto;
+  gap: 0;
+  transform: none;
+}
+
+.sider-brand .brand-text {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  font-family: 'Arial Black', 'Segoe UI', sans-serif;
+  font-size: 27px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -0.045em;
+  text-transform: none;
+  transform: none;
+  background: none;
+  -webkit-background-clip: initial;
+  background-clip: initial;
+  -webkit-text-fill-color: currentColor;
+  color: var(--ant-color-text);
+  text-shadow: none;
+  animation: none;
+}
+
+.sider-brand .brand-text::before,
+.sider-brand .brand-text::after {
+  display: none;
+}
+
+.sider-brand .brand-text-full {
+  display: inline;
+}
+
+.sider-brand .brand-text-compact {
+  display: none;
+}
+
+.ant-layout-sider-collapsed .sider-brand .brand-text {
+  width: 100%;
+  font-size: 27px;
+  letter-spacing: -0.045em;
+}
+
+.ant-layout-sider-collapsed .sider-brand .brand-text-full {
+  display: none;
+}
+
+.ant-layout-sider-collapsed .sider-brand .brand-text-compact {
+  display: inline;
+}
+
+/* Cyberpunk: same centered wordmark, but neon and visually stronger. */
+body.theme-cyberpunk .sider-brand .brand-text {
+  position: relative;
+  width: 100%;
+  font-family: 'Arial Black', 'Segoe UI', sans-serif;
+  font-size: 27px;
+  font-weight: 950;
+  letter-spacing: -0.04em;
+  color: #f8feff;
+  -webkit-text-fill-color: transparent;
+  background: linear-gradient(
+    100deg,
+    #ffffff 0%,
+    #79f7ff 23%,
+    #00f6ff 47%,
+    #9f8cff 71%,
+    #ff2bd6 100%
+  );
+  background-size: 180% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  text-shadow:
+    0 0 3px rgba(255, 255, 255, 0.98),
+    0 0 8px rgba(0, 246, 255, 0.95),
+    0 0 18px rgba(0, 246, 255, 0.75),
+    0 0 32px rgba(255, 43, 214, 0.6);
+  filter: brightness(1.08);
+  animation: cyberpunk-wordmark-glow 3.2s ease-in-out infinite alternate;
+}
+
+body.theme-cyberpunk .sider-brand .brand-text-full,
+body.theme-cyberpunk .sider-brand .brand-text-compact {
+  display: inline;
+}
+
+body.theme-cyberpunk .sider-brand .brand-text-compact {
+  font-size: 29px;
+}
+
+@keyframes cyberpunk-wordmark-glow {
+  0% {
+    filter: brightness(0.98);
+  }
+  100% {
+    filter: brightness(1.18);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.theme-cyberpunk .sider-brand .brand-text {
+    animation: none;
+  }
+}
