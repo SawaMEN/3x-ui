@@ -3,11 +3,13 @@ export type GeoKind = string;
 export type OnlineAPISupport = number;
 export type ProcessState = string;
 export type Protocol = string;
+export type VKTurnProxyForwardType = string;
 export type staticEgressResolver = string;
 export type trafficLocalApplyAction = number;
 export type transportBits = number;
 
 export interface AllSetting {
+  coreType: string;
   datepicker: string;
   discordAdminIds: string;
   discordBotBackup: boolean;
@@ -158,6 +160,7 @@ export interface AllSetting {
 }
 
 export interface AllSettingView {
+  coreType: string;
   datepicker: string;
   discordAdminIds: string;
   discordBotBackup: boolean;
@@ -839,6 +842,8 @@ export interface OutboundTraffics {
 export interface PanelUpdateStatus {
   exitCode: number;
   finishedAt: number;
+  logFile?: string;
+  message?: string;
   runId: string;
   state: string;
 }

@@ -3,10 +3,11 @@ import { MemoryRouter } from 'react-router';
 import { afterEach, expect, test, vi } from 'vitest';
 
 import AppSidebar from '@/layouts/AppSidebar';
+import { useAllSettings } from '@/api/queries/useAllSettings';
 import { renderWithProviders } from './test-utils';
 
 vi.mock('@/api/queries/useAllSettings', () => ({
-  useAllSettings: () => ({ allSetting: {} }),
+  useAllSettings: vi.fn(() => ({ allSetting: {} })),
 }));
 
 afterEach(() => {
@@ -66,8 +67,53 @@ test('returns to the compact rail after unpinning', () => {
   expect(localStorage.getItem('sidebar-pinned')).toBe('false');
 });
 
-test('labels the palette shortcut with the modifier the platform actually uses', () => {
-  const view = renderSidebar();
-  const chip = view.container.querySelector('.sidebar-command-kbd');
-  expect(chip?.textContent).toBe('CtrlK');
+test('keeps core and swap controls in general settings, not the sidebar submenu', () => {
+  vi.mocked(useAllSettings).mockReturnValue({ allSetting: { coreType: 'xray' } } as never);
+  const view = renderWithProviders(
+    <MemoryRouter initialEntries={['/settings#general']}>
+      <AppSidebar />
+    </MemoryRouter>,
+  );
+
+  const sidebarRoot = view.container.querySelector('.ant-sidebar');
+  fireEvent.mouseEnter(sidebarRoot!);
+  expect(screen.getByText('General')).toBeTruthy();
+  expect(screen.queryByText('Proxy Core')).toBeNull();
+  expect(screen.queryByText('Swap / ZRAM')).toBeNull();
+  expect(screen.queryByText('API Docs')).toBeNull();
+  expect(screen.getByText('Xray Configs')).toBeTruthy();
+});
+
+test('shows only the active core configuration menu', () => {
+  vi.mocked(useAllSettings).mockReturnValue({ allSetting: { coreType: 'xray' } } as never);
+  const xrayView = renderWithProviders(
+    <MemoryRouter initialEntries={['/xray#basic']}>
+      <AppSidebar />
+    </MemoryRouter>,
+  );
+
+  const xrayRoot = xrayView.container.querySelector('.ant-sidebar');
+  fireEvent.mouseEnter(xrayRoot!);
+  expect(screen.getByText('Xray Configs')).toBeTruthy();
+  expect(screen.getByText('Basics')).toBeTruthy();
+  expect(screen.queryByText('sing-box Configs')).toBeNull();
+  expect(screen.queryByText('Proxy Core')).toBeNull();
+  expect(screen.queryByText('Swap / ZRAM')).toBeNull();
+  expect(screen.queryByText('API Docs')).toBeNull();
+  xrayView.unmount();
+
+  vi.mocked(useAllSettings).mockReturnValue({ allSetting: { coreType: 'sing-box' } } as never);
+  const singBoxView = renderWithProviders(
+    <MemoryRouter initialEntries={['/singbox#basic']}>
+      <AppSidebar />
+    </MemoryRouter>,
+  );
+
+  const singBoxRoot = singBoxView.container.querySelector('.ant-sidebar');
+  fireEvent.mouseEnter(singBoxRoot!);
+  expect(screen.getByText('sing-box Configs')).toBeTruthy();
+  expect(screen.queryByText('Xray Configs')).toBeNull();
+  expect(screen.queryByText('Proxy Core')).toBeNull();
+  expect(screen.queryByText('Swap / ZRAM')).toBeNull();
+  expect(screen.queryByText('API Docs')).toBeNull();
 });

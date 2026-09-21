@@ -80,7 +80,10 @@ export function canEnableStream(values: { protocol: string }): boolean {
 // inbound supports sniffing.
 export function canEnableSniffing(values: { protocol: string }): boolean {
   return (
-    values.protocol !== 'mtproto' && values.protocol !== 'amneziawg' && values.protocol !== 'tuic'
+    values.protocol !== 'mtproto' &&
+    values.protocol !== 'amneziawg' &&
+    values.protocol !== 'tuic' &&
+    values.protocol !== 'vk-turn-proxy'
   );
 }
 

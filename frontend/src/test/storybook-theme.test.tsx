@@ -15,11 +15,17 @@ function StorybookTheme({ theme }: { theme: 'light' | 'dark' }) {
 }
 
 function ThemeToggle() {
-  const { toggleTheme } = useTheme();
-  return <button onClick={toggleTheme}>toggle</button>;
+  const { setThemeMode, toggleTheme } = useTheme();
+  return (
+    <>
+      <button onClick={() => setThemeMode('dark')}>dark</button>
+      <button onClick={toggleTheme}>toggle</button>
+    </>
+  );
 }
 
 afterEach(() => {
+  localStorage.clear();
   document.body.className = '';
   document.documentElement.removeAttribute('data-theme');
   document.documentElement.style.colorScheme = '';
@@ -33,9 +39,11 @@ test('native scrollbars follow the panel theme', () => {
       <ThemeToggle />
     </ThemeProvider>,
   );
+
+  fireEvent.click(getByRole('button', { name: 'dark' }));
   expect(document.documentElement.style.colorScheme).toBe('dark');
 
-  fireEvent.click(getByRole('button'));
+  fireEvent.click(getByRole('button', { name: 'toggle' }));
   expect(document.documentElement.style.colorScheme).toBe('light');
 });
 

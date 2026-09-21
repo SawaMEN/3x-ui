@@ -95,11 +95,11 @@ function defaultTcpMaskSettings(type: string): Record<string, unknown> {
     case 'sudoku':
       return {
         password: '',
-        ascii: '',
+        ascii: 'prefer_entropy',
         customTable: '',
         customTables: [],
-        paddingMin: 0,
-        paddingMax: 0,
+        paddingMin: 7,
+        paddingMax: 17,
       };
     case 'header-custom':
       return { clients: [], servers: [] };
@@ -177,10 +177,45 @@ function migrateFragmentSettings(settings: Record<string, unknown>): {
   return { next: out, changed };
 }
 
+type SudokuPreset = 'balanced' | 'low_overhead' | 'strong_padding' | 'custom';
+
+function applySudokuPreset(
+  form: FormInstance,
+  settingsPath: (string | number)[],
+  preset: SudokuPreset,
+): void {
+  if (preset === 'custom') return;
+
+  const settings = form.getFieldValue(settingsPath) || {};
+  const padding =
+    preset === 'low_overhead'
+      ? { paddingMin: 0, paddingMax: 3 }
+      : preset === 'strong_padding'
+        ? { paddingMin: 20, paddingMax: 40 }
+        : { paddingMin: 7, paddingMax: 17 };
+
+  form.setFieldValue(settingsPath, {
+    ...settings,
+    ascii: 'prefer_entropy',
+    customTable: '',
+    customTables: [],
+    ...padding,
+  });
+}
+
 function defaultUdpMaskSettings(type: string): Record<string, unknown> {
   switch (type) {
     case 'salamander':
       return { password: '' };
+    case 'sudoku':
+      return {
+        password: '',
+        ascii: 'prefer_entropy',
+        customTable: '',
+        customTables: [],
+        paddingMin: 7,
+        paddingMax: 17,
+      };
     case 'mkcp-legacy':
       return { header: '', value: '' };
     case 'xdns':
@@ -275,7 +310,9 @@ export default function FinalMaskForm({
   // wrap anything even though the leftover network value may be 'tcp'.
   const isWireguard = protocol === 'wireguard';
   const showTcp = showAll || (!isWireguard && TCP_NETWORKS.includes(network));
-  const showUdp = showAll || isHysteria || isWireguard || network === 'kcp';
+  // UDP finalmask is used by UDP-backed transports. XHTTP/3 can carry UDP
+  // through packet-up, so keep the UDP section available for xhttp as well.
+  const showUdp = showAll || isHysteria || isWireguard || network === 'kcp' || network === 'xhttp';
   const showQuic = showAll || isHysteria || network === 'xhttp';
   const quicParams = Form.useWatch([...base, 'quicParams'], { form, preserve: true });
   const hasQuicParams = quicParams != null;
@@ -438,25 +475,134 @@ function TcpMaskItem({
             );
           }
           if (type === 'sudoku') {
+            const sudokuSettingsPath = [...absolutePath, 'settings'];
             return (
               <>
-                <Form.Item label="Password" name={[fieldName, 'settings', 'password']}>
-                  <Input />
+                <Form.Item
+                  label="Password"
+                  name={[fieldName, 'settings', 'password']}
+                  rules={[{ required: true, message: 'Password is required' }]}
+                  extra="The same password must be used on both sides."
+                >
+                  <Space.Compact block>
+                    <Input.Password
+                      placeholder="Shared Sudoku password"
+                      style={{ width: '100%' }}
+                    />
+                    <Button
+                      icon={<ReloadOutlined />}
+                      aria-label="Generate password"
+                      onClick={() =>
+                        form.setFieldValue(
+                          [...sudokuSettingsPath, 'password'],
+                          RandomUtil.randomLowerAndNum(32),
+                        )
+                      }
+                    />
+                  </Space.Compact>
                 </Form.Item>
-                <Form.Item label="ASCII" name={[fieldName, 'settings', 'ascii']}>
-                  <Input />
+
+                <Form.Item
+                  label="Sudoku Preset"
+                  extra="UI preset: it writes ASCII mode and padding values to the mask. Custom keeps the current manual settings."
+                >
+                  <Select
+                    allowClear
+                    placeholder="Choose a preset"
+                    options={[
+                      { value: 'balanced', label: 'Balanced — 7–17% padding' },
+                      { value: 'low_overhead', label: 'Low overhead — 0–3% padding' },
+                      { value: 'strong_padding', label: 'Strong padding — 20–40% padding' },
+                      { value: 'custom', label: 'Custom — keep manual settings' },
+                    ]}
+                    onChange={(preset: SudokuPreset | undefined) => {
+                      if (preset) applySudokuPreset(form, sudokuSettingsPath, preset);
+                    }}
+                  />
                 </Form.Item>
-                <Form.Item label="Custom Table" name={[fieldName, 'settings', 'customTable']}>
-                  <Input />
+
+                <Form.Item
+                  label="ASCII"
+                  name={[fieldName, 'settings', 'ascii']}
+                  extra="Controls byte appearance by direction. Custom Table(s) override this selection when provided."
+                >
+                  <Select
+                    allowClear
+                    placeholder="prefer_entropy"
+                    options={[
+                      { value: 'prefer_entropy', label: 'Prefer entropy (default)' },
+                      { value: 'prefer_ascii', label: 'Prefer ASCII' },
+                      { value: 'up_ascii_down_entropy', label: 'Up ASCII / Down entropy' },
+                      { value: 'up_entropy_down_ascii', label: 'Up entropy / Down ASCII' },
+                    ]}
+                  />
                 </Form.Item>
-                <Form.Item label="Custom Tables" name={[fieldName, 'settings', 'customTables']}>
-                  <Select mode="tags" style={{ width: '100%' }} tokenSeparators={[',']} />
+
+                <Divider plain style={{ margin: '8px 0' }}>
+                  Traffic profile
+                </Divider>
+
+                <Form.Item
+                  label="Custom Table"
+                  name={[fieldName, 'settings', 'customTable']}
+                  rules={[{ validator: validateSudokuCustomTable }]}
+                  extra="8 characters: exactly 2× x, 2× p and 4× v. Example: vxvpxvvp."
+                >
+                  <Input
+                    maxLength={8}
+                    placeholder="vxvpxvvp"
+                    onChange={(e) =>
+                      form.setFieldValue(
+                        [...sudokuSettingsPath, 'customTable'],
+                        e.target.value.toLowerCase(),
+                      )
+                    }
+                  />
                 </Form.Item>
-                <Form.Item label="Padding Min" name={[fieldName, 'settings', 'paddingMin']}>
-                  <InputNumber min={0} />
+
+                <Form.Item
+                  label="Custom Tables"
+                  name={[fieldName, 'settings', 'customTables']}
+                  rules={[{ validator: validateSudokuCustomTables }]}
+                  extra="Optional rotation pool. Every entry must contain exactly 8 characters: 2x, 2p and 4v."
+                >
+                  <Select
+                    mode="tags"
+                    style={{ width: '100%' }}
+                    tokenSeparators={[',']}
+                    placeholder="vxvpxvvp, xpvxvvpv"
+                  />
                 </Form.Item>
-                <Form.Item label="Padding Max" name={[fieldName, 'settings', 'paddingMax']}>
-                  <InputNumber min={0} />
+
+                <Divider plain style={{ margin: '8px 0' }}>
+                  Padding
+                </Divider>
+
+                <Form.Item
+                  label="Padding Min"
+                  name={[fieldName, 'settings', 'paddingMin']}
+                  rules={[{ validator: validateSudokuPaddingRange }]}
+                  extra="Minimum padding probability, in percent (0–100)."
+                >
+                  <InputNumber min={0} max={100} precision={0} style={{ width: '100%' }} />
+                </Form.Item>
+
+                <Form.Item
+                  label="Padding Max"
+                  name={[fieldName, 'settings', 'paddingMax']}
+                  dependencies={[[fieldName, 'settings', 'paddingMin']]}
+                  rules={[
+                    { validator: validateSudokuPaddingRange },
+                    {
+                      validator: (_rule, value) =>
+                        validateSudokuPaddingMax(_rule, value, () =>
+                          form.getFieldValue([...sudokuSettingsPath, 'paddingMin']),
+                        ),
+                    },
+                  ]}
+                  extra="Maximum padding probability, in percent (0–100), and must be ≥ Min."
+                >
+                  <InputNumber min={0} max={100} precision={0} style={{ width: '100%' }} />
                 </Form.Item>
               </>
             );
@@ -643,6 +789,64 @@ function getDeep(obj: unknown, path: (string | number)[]): unknown {
 const XMC_UUID_PATTERN =
   /^(?:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}|[0-9a-fA-F]{32})$/;
 const XMC_USERNAME_PATTERN = /^[A-Za-z0-9_]{3,16}$/;
+
+function validateSudokuCustomTable(_rule: unknown, value: unknown): Promise<void> {
+  const str = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  if (str.length === 0) return Promise.resolve();
+  if (
+    !/^[xpv]{8}$/.test(str) ||
+    [...str].filter((ch) => ch === 'x').length !== 2 ||
+    [...str].filter((ch) => ch === 'p').length !== 2 ||
+    [...str].filter((ch) => ch === 'v').length !== 4
+  ) {
+    return Promise.reject(new Error('Use exactly 8 characters: 2x, 2p and 4v, e.g. vxvpxvvp'));
+  }
+  return Promise.resolve();
+}
+
+function validateSudokuCustomTables(_rule: unknown, value: unknown): Promise<void> {
+  if (value === undefined || value === null || value === '') return Promise.resolve();
+  const values = Array.isArray(value) ? value : [value];
+  for (const item of values) {
+    const str = typeof item === 'string' ? item.trim().toLowerCase() : '';
+    if (
+      !/^[xpv]{8}$/.test(str) ||
+      [...str].filter((ch) => ch === 'x').length !== 2 ||
+      [...str].filter((ch) => ch === 'p').length !== 2 ||
+      [...str].filter((ch) => ch === 'v').length !== 4
+    ) {
+      return Promise.reject(
+        new Error('Every custom table must contain exactly 8 characters: 2x, 2p and 4v'),
+      );
+    }
+  }
+  return Promise.resolve();
+}
+
+function validateSudokuPaddingRange(_rule: unknown, value: unknown): Promise<void> {
+  if (value === undefined || value === null || value === '') return Promise.resolve();
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 0 || n > 100) {
+    return Promise.reject(new Error('Padding must be a percentage from 0 to 100'));
+  }
+  return Promise.resolve();
+}
+
+function validateSudokuPaddingMax(
+  _rule: unknown,
+  value: unknown,
+  getMin: () => unknown,
+): Promise<void> {
+  if (value === undefined || value === null || value === '') return Promise.resolve();
+  const max = Number(value);
+  const min = Number(getMin() ?? 0);
+  if (!Number.isInteger(max) || max < 0 || max > 100) {
+    return Promise.reject(new Error('Padding must be a percentage from 0 to 100'));
+  }
+  if (max < min)
+    return Promise.reject(new Error('Padding Max must be greater than or equal to Padding Min'));
+  return Promise.resolve();
+}
 
 function validateXmcUsername(_rule: unknown, value: unknown): Promise<void> {
   if (typeof value === 'string' && XMC_USERNAME_PATTERN.test(value)) return Promise.resolve();
@@ -893,11 +1097,13 @@ function UdpMaskItem({
         // uses; it stays hysteria-only elsewhere to keep legacy parity.
         ...(isWireguard ? [{ value: 'salamander', label: 'Salamander' }] : []),
         { value: 'mkcp-legacy', label: 'mKCP Legacy' },
+        { value: 'sudoku', label: 'Sudoku' },
         { value: 'xdns', label: 'xDNS' },
         { value: 'xicmp', label: 'xICMP' },
         { value: 'realm', label: 'Realm' },
         { value: 'header-custom', label: 'Header Custom' },
         { value: 'noise', label: 'Noise' },
+        { value: 'sudoku', label: 'Sudoku' },
       ];
 
   return (
@@ -933,6 +1139,162 @@ function UdpMaskItem({
                 form={form}
                 absolutePath={absolutePath}
               />
+            );
+          }
+          if (type === 'sudoku') {
+            const sudokuSettingsPath = [...absolutePath, 'settings'];
+            return (
+              <>
+                <Form.Item
+                  label="Password"
+                  name={[fieldName, 'settings', 'password']}
+                  rules={[{ required: true, message: 'Password is required' }]}
+                  extra={
+                    network === 'xhttp'
+                      ? 'Shared secret. Use the same settings on both ends. For XHTTP this applies to HTTP/3 packet-up.'
+                      : 'Shared secret. It must be identical on the client and server.'
+                  }
+                >
+                  <Space.Compact block>
+                    <Input.Password placeholder="Shared Sudoku secret" style={{ width: '100%' }} />
+                    <Button
+                      icon={<ReloadOutlined />}
+                      aria-label="Generate password"
+                      onClick={() =>
+                        form.setFieldValue(
+                          [...sudokuSettingsPath, 'password'],
+                          RandomUtil.randomLowerAndNum(32),
+                        )
+                      }
+                    />
+                  </Space.Compact>
+                </Form.Item>
+
+                <Form.Item
+                  label="Sudoku Preset"
+                  extra="UI preset: it writes ASCII mode and padding values to the mask. Custom keeps the current manual settings."
+                >
+                  <Select
+                    allowClear
+                    placeholder="Choose a preset"
+                    options={[
+                      { value: 'balanced', label: 'Balanced — 7–17% padding' },
+                      { value: 'low_overhead', label: 'Low overhead — 0–3% padding' },
+                      { value: 'strong_padding', label: 'Strong padding — 20–40% padding' },
+                      { value: 'custom', label: 'Custom — keep manual settings' },
+                    ]}
+                    onChange={(preset: SudokuPreset | undefined) => {
+                      if (preset) applySudokuPreset(form, sudokuSettingsPath, preset);
+                    }}
+                  />
+                </Form.Item>
+
+                <Form.Item
+                  label="ASCII mode"
+                  name={[fieldName, 'settings', 'ascii']}
+                  extra="prefer_entropy is the normal binary-like mode; prefer_ascii emits printable ASCII-oriented bytes."
+                >
+                  <Select
+                    allowClear
+                    placeholder="prefer_entropy"
+                    options={[
+                      { value: 'prefer_entropy', label: 'Prefer entropy' },
+                      { value: 'prefer_ascii', label: 'Prefer ASCII / printable' },
+                    ]}
+                  />
+                </Form.Item>
+
+                <Divider plain style={{ margin: '8px 0' }}>
+                  Traffic profile
+                </Divider>
+
+                <Form.Item
+                  label="Custom Table"
+                  name={[fieldName, 'settings', 'customTable']}
+                  rules={[{ validator: validateSudokuCustomTable }]}
+                  extra="Optional. Exactly 8 characters: 2× x, 2× p and 4× v. Leave empty for the built-in table."
+                >
+                  <Input
+                    maxLength={8}
+                    placeholder="vxvpxvvp"
+                    onChange={(e) =>
+                      form.setFieldValue(
+                        [...sudokuSettingsPath, 'customTable'],
+                        e.target.value.toLowerCase(),
+                      )
+                    }
+                  />
+                </Form.Item>
+
+                <Form.Item
+                  label="Custom Tables"
+                  name={[fieldName, 'settings', 'customTables']}
+                  rules={[{ validator: validateSudokuCustomTables }]}
+                  extra="Optional rotation pool. Each entry must contain exactly 8 characters: 2× x, 2× p and 4× v."
+                >
+                  <Select
+                    mode="tags"
+                    style={{ width: '100%' }}
+                    tokenSeparators={[',']}
+                    placeholder="vxvpxvvp, xpvxvvpv"
+                  />
+                </Form.Item>
+
+                <Divider plain style={{ margin: '8px 0' }}>
+                  Padding
+                </Divider>
+
+                <Form.Item
+                  label="Padding"
+                  extra="Random padding probability in percent. 7–17 is a practical starting profile; 0 disables extra padding."
+                >
+                  <Space.Compact block>
+                    <Form.Item
+                      name={[fieldName, 'settings', 'paddingMin']}
+                      noStyle
+                      rules={[{ validator: validateSudokuPaddingRange }]}
+                    >
+                      <InputNumber
+                        min={0}
+                        max={100}
+                        precision={0}
+                        placeholder="Min"
+                        style={{ width: '50%' }}
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      name={[fieldName, 'settings', 'paddingMax']}
+                      noStyle
+                      rules={[
+                        { validator: validateSudokuPaddingRange },
+                        {
+                          validator: (_rule, value) =>
+                            validateSudokuPaddingMax(_rule, value, () =>
+                              form.getFieldValue([...sudokuSettingsPath, 'paddingMin']),
+                            ),
+                        },
+                      ]}
+                    >
+                      <InputNumber
+                        min={0}
+                        max={100}
+                        precision={0}
+                        placeholder="Max"
+                        style={{ width: '50%' }}
+                      />
+                    </Form.Item>
+                  </Space.Compact>
+                </Form.Item>
+
+                {network === 'xhttp' && (
+                  <Form.Item
+                    label="XHTTP/3"
+                    extra="Sudoku UDP masking is relevant to XHTTP/3 packet-up (QUIC). It does not apply to XHTTP H2/stream modes."
+                  >
+                    <Switch disabled checked />
+                  </Form.Item>
+                )}
+              </>
             );
           }
           if (type === 'mkcp-legacy') {
@@ -1067,6 +1429,30 @@ function UdpMaskItem({
                 form={form}
                 absoluteSettingsPath={[...absolutePath, 'settings']}
               />
+            );
+          }
+          if (type === 'sudoku') {
+            return (
+              <>
+                <Form.Item label="Password" name={[fieldName, 'settings', 'password']}>
+                  <Input />
+                </Form.Item>
+                <Form.Item label="ASCII" name={[fieldName, 'settings', 'ascii']}>
+                  <Input />
+                </Form.Item>
+                <Form.Item label="Custom Table" name={[fieldName, 'settings', 'customTable']}>
+                  <Input />
+                </Form.Item>
+                <Form.Item label="Custom Tables" name={[fieldName, 'settings', 'customTables']}>
+                  <Select mode="tags" style={{ width: '100%' }} tokenSeparators={[',']} />
+                </Form.Item>
+                <Form.Item label="Padding Min" name={[fieldName, 'settings', 'paddingMin']}>
+                  <InputNumber min={0} />
+                </Form.Item>
+                <Form.Item label="Padding Max" name={[fieldName, 'settings', 'paddingMax']}>
+                  <InputNumber min={0} />
+                </Form.Item>
+              </>
             );
           }
           if (type === 'noise') {

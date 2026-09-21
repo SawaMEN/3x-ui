@@ -37,18 +37,19 @@ describe('NodeHistoryPanel', () => {
 
     render(<NodeHistoryPanel node={{ id: 7 }} />);
 
-    await waitFor(() => expect(screen.getAllByRole('img')).toHaveLength(4));
-    expect(screen.getAllByRole('img').map((el) => el.getAttribute('aria-label'))).toEqual([
-      '40%',
-      '60%',
-      '512',
-      '200',
-    ]);
-    expect(plots.map((p) => p.scales.y.range())).toEqual([
-      [0, 100],
-      [0, 100],
-      [0, 512 * 1.1],
-      [0, 200 * 1.1],
-    ]);
+    await waitFor(() => {
+      expect(screen.getAllByRole('img').map((el) => el.getAttribute('aria-label'))).toEqual([
+        '40%',
+        '60%',
+        '512',
+        '200',
+      ]);
+      expect(plots.map((p) => p.scales.y.range())).toEqual([
+        [0, 100],
+        [0, 100],
+        [0, 512 * 1.1],
+        [0, 200 * 1.1],
+      ]);
+    });
   });
 });

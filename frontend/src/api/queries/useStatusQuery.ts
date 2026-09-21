@@ -7,7 +7,9 @@ import { Status } from '@/models/status';
 import { StatusSchema } from '@/schemas/status';
 import { keys } from '@/api/queryKeys';
 
-const POLL_INTERVAL_MS = 2000;
+// WebSocket is the primary live transport; keep a slow REST fallback so a
+// broken socket does not leave the dashboard permanently stale.
+const POLL_INTERVAL_MS = 15000;
 
 async function fetchStatus(): Promise<Status> {
   const msg = await HttpUtil.get('/panel/api/server/status', undefined, { silent: true });
@@ -22,7 +24,7 @@ export function useStatusQuery() {
     queryFn: fetchStatus,
     refetchInterval: POLL_INTERVAL_MS,
     refetchIntervalInBackground: false,
-    staleTime: 0,
+    staleTime: POLL_INTERVAL_MS,
   });
 
   const status = useMemo(() => query.data ?? new Status(), [query.data]);

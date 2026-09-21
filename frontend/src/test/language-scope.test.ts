@@ -26,9 +26,9 @@ describe('subscription language scope', () => {
     await readyI18n('subscription');
     expect(cookies.get('subLang')).toBe('en-US');
 
-    utils.LanguageManager.setLanguage('fa-IR', 'subscription');
+    utils.LanguageManager.setLanguage('ru-RU', 'subscription');
     expect(cookies.get('lang')).toBe('en-US');
-    expect(cookies.get('subLang')).toBe('fa-IR');
+    expect(cookies.get('subLang')).toBe('ru-RU');
     expect(reload).toHaveBeenCalledOnce();
 
     const dateTimeFormat = vi.spyOn(Intl, 'DateTimeFormat').mockImplementation(function (

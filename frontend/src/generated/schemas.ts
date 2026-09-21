@@ -2,6 +2,9 @@
 export const SCHEMAS: Record<string, unknown> = {
   "AllSetting": {
     "properties": {
+      "coreType": {
+        "type": "string"
+      },
       "datepicker": {
         "type": "string"
       },
@@ -481,6 +484,7 @@ export const SCHEMAS: Record<string, unknown> = {
       }
     },
     "required": [
+      "coreType",
       "datepicker",
       "discordAdminIds",
       "discordBotBackup",
@@ -633,6 +637,9 @@ export const SCHEMAS: Record<string, unknown> = {
   },
   "AllSettingView": {
     "properties": {
+      "coreType": {
+        "type": "string"
+      },
       "datepicker": {
         "type": "string"
       },
@@ -1136,6 +1143,7 @@ export const SCHEMAS: Record<string, unknown> = {
       }
     },
     "required": [
+      "coreType",
       "datepicker",
       "discordAdminIds",
       "discordBotBackup",
@@ -2731,7 +2739,8 @@ export const SCHEMAS: Record<string, unknown> = {
           "tun",
           "mtproto",
           "amneziawg",
-          "tuic"
+          "tuic",
+          "vk-turn-proxy"
         ],
         "example": "vless",
         "type": "string"
@@ -3683,7 +3692,7 @@ export const SCHEMAS: Record<string, unknown> = {
     "type": "object"
   },
   "PanelUpdateStatus": {
-    "description": "PanelUpdateStatus reports the outcome of the most recently launched panel\nself-update. RunID lets the caller confirm this status belongs to the\nupdate it started rather than a stale result left over from an earlier\nrun; State is one of \"pending\", \"success\", or \"failed\". RunID is a decimal\nstring, not a JSON number: it's a formatted UnixNano timestamp, and\nJavaScript's number type can't represent that precisely (it exceeds\nNumber.MAX_SAFE_INTEGER), which would let two different runs round to the\nsame value on the wire and defeat the whole point of this field.",
+    "description": "PanelUpdateStatus reports the outcome of the most recently launched panel\nself-update. RunID lets the caller confirm this status belongs to the\nupdate it started rather than a stale one.",
     "properties": {
       "exitCode": {
         "example": 0,
@@ -3693,6 +3702,14 @@ export const SCHEMAS: Record<string, unknown> = {
         "example": 1735689612,
         "format": "int64",
         "type": "integer"
+      },
+      "logFile": {
+        "example": "/var/log/x-ui/update.log",
+        "type": "string"
+      },
+      "message": {
+        "example": "failed to download x-ui release archive",
+        "type": "string"
       },
       "runId": {
         "example": "1735689600123456789",

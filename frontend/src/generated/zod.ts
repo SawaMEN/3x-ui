@@ -12,6 +12,9 @@ export type ProcessState = z.infer<typeof ProcessStateSchema>;
 export const ProtocolSchema = z.string();
 export type Protocol = z.infer<typeof ProtocolSchema>;
 
+export const VKTurnProxyForwardTypeSchema = z.string();
+export type VKTurnProxyForwardType = z.infer<typeof VKTurnProxyForwardTypeSchema>;
+
 export const staticEgressResolverSchema = z.string();
 export type staticEgressResolver = z.infer<typeof staticEgressResolverSchema>;
 
@@ -22,6 +25,7 @@ export const transportBitsSchema = z.number().int();
 export type transportBits = z.infer<typeof transportBitsSchema>;
 
 export const AllSettingSchema = z.object({
+  coreType: z.string(),
   datepicker: z.string(),
   discordAdminIds: z.string(),
   discordBotBackup: z.boolean(),
@@ -173,6 +177,7 @@ export const AllSettingSchema = z.object({
 export type AllSetting = z.infer<typeof AllSettingSchema>;
 
 export const AllSettingViewSchema = z.object({
+  coreType: z.string(),
   datepicker: z.string(),
   discordAdminIds: z.string(),
   discordBotBackup: z.boolean(),
@@ -666,7 +671,7 @@ export const InboundSchema = z.object({
   nodeId: z.number().int().nullable().optional(),
   originNodeGuid: z.string().optional(),
   port: z.number().int().min(0).max(65535),
-  protocol: z.enum(['vmess', 'vless', 'trojan', 'shadowsocks', 'wireguard', 'hysteria', 'http', 'mixed', 'tunnel', 'tun', 'mtproto', 'amneziawg', 'tuic']),
+  protocol: z.enum(['vmess', 'vless', 'trojan', 'shadowsocks', 'wireguard', 'hysteria', 'http', 'mixed', 'tunnel', 'tun', 'mtproto', 'amneziawg', 'tuic', 'vk-turn-proxy']),
   remark: z.string(),
   settings: z.unknown(),
   shareAddr: z.string(),
@@ -892,6 +897,8 @@ export type OutboundTraffics = z.infer<typeof OutboundTrafficsSchema>;
 export const PanelUpdateStatusSchema = z.object({
   exitCode: z.number().int(),
   finishedAt: z.number().int(),
+  logFile: z.string().optional(),
+  message: z.string().optional(),
   runId: z.string(),
   state: z.string(),
 });

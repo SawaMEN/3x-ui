@@ -16,6 +16,7 @@ import type { TunInboundSettings } from '@/schemas/protocols/inbound/tun';
 import type { TunnelInboundSettings } from '@/schemas/protocols/inbound/tunnel';
 import type { VlessClient, VlessInboundSettings } from '@/schemas/protocols/inbound/vless';
 import type { VmessClient, VmessInboundSettings } from '@/schemas/protocols/inbound/vmess';
+import type { VkTurnProxyInboundSettings } from '@/schemas/protocols/inbound/vk-turn-proxy';
 import type { WireguardInboundSettings } from '@/schemas/protocols/inbound/wireguard';
 
 // Plain-object factories for protocol clients. Each returns a Zod-parsable
@@ -310,6 +311,22 @@ export function createDefaultWireguardInboundSettings(
   };
 }
 
+// vk-turn-proxy is a standalone relay listener (not Xray): it forwards decrypted
+// traffic to a WireGuard/Hysteria2 inbound or a raw host:port.
+export function createDefaultVkTurnProxyInboundSettings(): VkTurnProxyInboundSettings {
+  return {
+    forward: { type: 'host' },
+    sessionMode: '',
+    wgMtu: 1420,
+    threads: 1,
+    useUdp: false,
+    noObfuscation: false,
+    wrapMode: 'off',
+    wrapAcceptClientKeys: true,
+    clients: [],
+  };
+}
+
 // AmneziaWG is multi-client, like WireGuard, and uses the same Curve25519
 // keypair format — Wireguard.generateKeypair() works unchanged. Unlike
 // WireGuard's Xray-native inbound, the server's publicKey is a real
@@ -374,6 +391,7 @@ export type AnyInboundSettings =
   | TunnelInboundSettings
   | WireguardInboundSettings
   | MtprotoInboundSettings
+  | VkTurnProxyInboundSettings
   | AmneziawgInboundSettings
   | TuicInboundSettings;
 
@@ -401,6 +419,8 @@ export function createDefaultInboundSettings(protocol: string): AnyInboundSettin
       return createDefaultWireguardInboundSettings();
     case 'mtproto':
       return createDefaultMtprotoInboundSettings();
+    case 'vk-turn-proxy':
+      return createDefaultVkTurnProxyInboundSettings();
     case 'amneziawg':
       return createDefaultAmneziawgInboundSettings();
     case 'tuic':
