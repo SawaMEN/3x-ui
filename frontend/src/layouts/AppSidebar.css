@@ -557,13 +557,7 @@ html[data-low-power='true'] .drawer-brand {
   line-height: 1;
   letter-spacing: 0.065em;
   text-transform: uppercase;
-  background: linear-gradient(
-    90deg,
-    #f4fbff 0%,
-    #00f6ff 34%,
-    #9f8cff 67%,
-    #ff2bd6 100%
-  );
+  background: linear-gradient(90deg, #f4fbff 0%, #00f6ff 34%, #9f8cff 67%, #ff2bd6 100%);
   background-size: 160% 100%;
   background-position: 0% 50%;
   -webkit-background-clip: text;
@@ -593,12 +587,7 @@ html[data-low-power='true'] .drawer-brand {
   line-height: 1;
   letter-spacing: -0.09em;
   text-transform: none;
-  background: linear-gradient(
-    135deg,
-    #00f6ff 0%,
-    #9f8cff 48%,
-    #ff2bd6 100%
-  );
+  background: linear-gradient(135deg, #00f6ff 0%, #9f8cff 48%, #ff2bd6 100%);
   background-size: auto;
   background-position: 0 0;
   -webkit-background-clip: text;
