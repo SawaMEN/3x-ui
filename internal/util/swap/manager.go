@@ -56,16 +56,28 @@ type Recommendation struct {
 	Reason                string `json:"reason"`
 }
 
+type ZramPackage struct {
+	Name      string `json:"name"`
+	Version   string `json:"version"`
+	Installed bool   `json:"installed"`
+}
+
 type ZramInstallInfo struct {
-	Distribution   string `json:"distribution"`
-	Version        string `json:"version"`
-	PackageManager string `json:"packageManager"`
-	Package        string `json:"package"`
-	Installed      bool   `json:"installed"`
-	Supported      bool   `json:"supported"`
-	UsingGenerator bool   `json:"usingGenerator"`
-	InstallCommand string `json:"installCommand"`
-	ConfigPath     string `json:"configPath"`
+	Distribution         string        `json:"distribution"`
+	Version             string        `json:"version"`
+	PackageManager      string        `json:"packageManager"`
+	Package             string        `json:"package"`
+	Installed            bool          `json:"installed"`
+	Supported            bool          `json:"supported"`
+	UsingGenerator       bool          `json:"usingGenerator"`
+	InstalledPackages    []ZramPackage `json:"installedPackages"`
+	RecommendedPackage   string        `json:"recommendedPackage"`
+	RecommendedVersion   string        `json:"recommendedVersion"`
+	RecommendedInstalled bool          `json:"recommendedInstalled"`
+	ActiveBackend        string        `json:"activeBackend"`
+	InstallCommand       string        `json:"installCommand"`
+	ReinstallCommand     string        `json:"reinstallCommand"`
+	ConfigPath           string        `json:"configPath"`
 }
 
 type Config struct {

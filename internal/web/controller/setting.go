@@ -12,6 +12,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/crypto"
 	systemswap "github.com/SawaMEN/3x-ui/v3/internal/util/swap"
+	systemupdate "github.com/SawaMEN/3x-ui/v3/internal/util/systemupdate"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/entity"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/middleware"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
@@ -107,11 +108,15 @@ func (a *SettingController) initRouter(g *gin.RouterGroup) {
 	g.POST("/singbox/config/reset", a.resetSingBoxConfig)
 	g.GET("/swap/status", a.swapStatus)
 	g.POST("/swap/zram/install", a.installZram)
+	g.POST("/swap/zram/reinstall", a.reinstallZram)
 	g.POST("/swap/create", a.createSwap)
 	g.POST("/swap/delete", a.deleteSwap)
 	g.POST("/swap/zram/create", a.createZram)
 	g.POST("/swap/zram/delete", a.deleteZram)
 	g.POST("/swap/swappiness", a.setSwappiness)
+	g.GET("/system/update/status", a.systemUpdateStatus)
+	g.POST("/system/update/check", a.systemUpdateCheck)
+	g.POST("/system/update/apply", a.systemUpdateApply)
 	g.GET("/getDefaultJsonConfig", a.getDefaultXrayConfig)
 	g.GET("/apiTokens", a.listApiTokens)
 	g.POST("/apiTokens/create", a.createApiToken)
@@ -473,6 +478,14 @@ func (a *SettingController) installZram(c *gin.Context) {
 	jsonObj(c, gin.H{"installed": true}, nil)
 }
 
+func (a *SettingController) reinstallZram(c *gin.Context) {
+	if err := systemswap.ReinstallZram(c.Request.Context()); err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
+		return
+	}
+	jsonObj(c, gin.H{"reinstalled": true}, nil)
+}
+
 func (a *SettingController) swapStatus(c *gin.Context) {
 	status, err := systemswap.GetStatus()
 	if err != nil {
@@ -535,6 +548,33 @@ func (a *SettingController) setSwappiness(c *gin.Context) {
 		return
 	}
 	jsonObj(c, gin.H{"value": form.Value}, nil)
+}
+
+func (a *SettingController) systemUpdateStatus(c *gin.Context) {
+	status, err := systemupdate.GetStatus(c.Request.Context())
+	if err != nil {
+		jsonObj(c, status, err)
+		return
+	}
+	jsonObj(c, status, nil)
+}
+
+func (a *SettingController) systemUpdateCheck(c *gin.Context) {
+	status, err := systemupdate.Refresh(c.Request.Context())
+	if err != nil {
+		jsonObj(c, status, err)
+		return
+	}
+	jsonObj(c, status, nil)
+}
+
+func (a *SettingController) systemUpdateApply(c *gin.Context) {
+	result, err := systemupdate.Apply(c.Request.Context())
+	if err != nil {
+		jsonObj(c, result, err)
+		return
+	}
+	jsonObj(c, result, nil)
 }
 
 func (a *SettingController) singBoxConfig(c *gin.Context) {

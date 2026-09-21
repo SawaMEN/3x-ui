@@ -2,102 +2,256 @@
   min-height: 100vh;
   background: var(--page-bg, var(--ant-color-bg-layout));
 }
+
 .telemt-page .content-shell {
   min-width: 0;
 }
+
 .telemt-page .content-area {
   min-height: 100vh;
   padding: 24px;
 }
+
 .telemt-shell {
   width: min(1180px, 100%);
   margin: 0 auto;
 }
+
 .telemt-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: 20px;
   margin-bottom: 20px;
 }
+
+.telemt-header-main {
+  min-width: 0;
+}
+
 .telemt-title {
-  margin: 0 0 6px !important;
+  margin: 0 !important;
   letter-spacing: -0.02em;
 }
+
 .telemt-header .ant-typography {
   line-height: 1.55;
 }
-.telemt-status-grid {
-  margin-top: 16px;
-}
-.telemt-status-card {
-  height: 100%;
-  border-radius: var(--xui-radius-lg, 12px);
-}
-.telemt-status-card .ant-typography {
+
+.telemt-header-main > .ant-typography {
   display: block;
-  line-height: 1.45;
+  margin-top: 8px;
 }
-.telemt-status-card .ant-typography-secondary {
-  margin-bottom: 8px;
-  font-size: 13px;
-}
-.telemt-status-card .ant-typography-title {
-  margin: 0 !important;
-  font-weight: 650;
-  line-height: 1.3;
-}
+
 .telemt-card {
   margin-top: 16px;
   border-radius: var(--xui-radius-xl, 16px);
   overflow: hidden;
 }
+
 .telemt-card .ant-card-head-title {
   font-weight: 650;
   line-height: 1.4;
 }
+
 .telemt-card .ant-form-item-label > label {
   font-weight: 600;
   line-height: 1.4;
 }
+
 .telemt-card .ant-form-item-explain-error {
   line-height: 1.45;
 }
+
 .telemt-card .ant-input,
 .telemt-card .ant-input-number,
 .telemt-card .ant-select-selector {
   font-size: 14px;
 }
-.telemt-result {
-  margin-top: 18px;
-  padding: 16px;
+
+.telemt-service-card {
+  margin-top: 0;
+}
+
+.telemt-service-card .ant-card-body {
+  padding-bottom: 18px;
+}
+
+.telemt-metric {
+  min-height: 86px;
+  padding: 14px;
   border: 1px solid var(--ant-color-border-secondary);
   border-radius: var(--xui-radius-lg, 12px);
   background: var(--ant-color-fill-quaternary);
 }
-.telemt-result .ant-typography {
-  line-height: 1.55;
+
+.telemt-metric .ant-typography-secondary {
+  display: block;
+  font-size: 13px;
 }
-.telemt-result .ant-typography-copy {
-  white-space: normal;
+
+.telemt-metric .ant-typography-title {
+  margin: 7px 0 3px !important;
+  line-height: 1.25;
+}
+
+.telemt-service-actions {
+  margin-top: 16px;
+}
+
+.telemt-web-card {
+  margin-top: 0;
+  height: 100%;
+}
+
+.telemt-web-card .ant-card-body {
+  display: flex;
+  min-height: 220px;
+  flex-direction: column;
+}
+
+.telemt-web-card .ant-card-body > .ant-btn {
+  margin-top: auto;
+}
+
+.telemt-web-meta {
+  margin-bottom: 14px;
+}
+
+.telemt-link-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin: 8px 0 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: var(--xui-radius-lg, 10px);
+  background: var(--ant-color-fill-quaternary);
+}
+
+.telemt-link-box .ant-typography {
+  min-width: 0;
+  flex: 1;
+  margin: 0;
+}
+
+.telemt-link-box-large {
+  margin-top: 8px;
+}
+
+.telemt-link-box-large .ant-typography {
   overflow-wrap: anywhere;
   word-break: break-word;
 }
-.telemt-navigation-card {
-  margin-bottom: 24px;
+
+.telemt-alert-compact {
+  margin-bottom: 12px;
 }
-.sidebar-theme-select {
-  color-scheme: light dark;
+
+.telemt-card-hint {
+  margin-bottom: 14px !important;
 }
+
+.telemt-proxy-list {
+  display: grid;
+  gap: 10px;
+}
+
+.telemt-proxy-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: var(--xui-radius-lg, 12px);
+  background: var(--ant-color-fill-quaternary);
+}
+
+.telemt-proxy-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.telemt-proxy-main .ant-typography-copy {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.telemt-empty-state {
+  display: grid;
+  min-height: 82px;
+  place-items: center;
+  padding: 16px;
+  border: 1px dashed var(--ant-color-border);
+  border-radius: var(--xui-radius-lg, 12px);
+  background: var(--ant-color-fill-quaternary);
+}
+
+.telemt-advanced {
+  padding: 0;
+}
+
+.telemt-advanced.ant-collapse {
+  border: 0;
+  background: transparent;
+}
+
+.telemt-advanced .ant-collapse-item {
+  overflow: hidden;
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: var(--xui-radius-xl, 16px);
+  background: var(--ant-color-bg-container);
+}
+
+.telemt-advanced .ant-collapse-header {
+  font-weight: 650;
+}
+
+.telemt-advanced .ant-collapse-content {
+  border-top: 1px solid var(--ant-color-border-secondary);
+}
+
+.telemt-advanced .ant-collapse-content-box {
+  padding: 20px;
+}
+
+.telemt-footnote {
+  margin: 12px 2px 0 !important;
+  font-size: 12px;
+}
+
 @media (max-width: 768px) {
   .telemt-page .content-area {
     padding: 14px;
   }
+
   .telemt-header {
     align-items: stretch;
     flex-direction: column;
+    gap: 12px;
   }
-  .telemt-header .ant-btn {
+
+  .telemt-header > .ant-btn {
     width: 100%;
+  }
+
+  .telemt-proxy-item {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .telemt-proxy-item > .ant-popconfirm {
+    align-self: flex-end;
+  }
+
+  .telemt-service-actions {
+    width: 100%;
+  }
+
+  .telemt-service-actions .ant-btn {
+    flex: 1;
   }
 }

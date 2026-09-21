@@ -12,13 +12,17 @@ import (
 )
 
 type TelemtController struct {
-	service service.TelemtService
+	service       service.TelemtService
+	settingService service.SettingService
 }
 
-func NewTelemtController(g *gin.RouterGroup) *TelemtController {
+func NewTelemtController(g *gin.RouterGroup, settingService service.SettingService) *TelemtController {
 	service.StartTelemtConnectionMonitor()
-	a := &TelemtController{}
+	a := &TelemtController{settingService: settingService}
 	g.GET("/status", a.status)
+	g.GET("/webproxy/status", a.webProxyStatus)
+	g.POST("/webproxy/enable", a.enableWebProxy)
+	g.POST("/webproxy/disable", a.disableWebProxy)
 	g.GET("/config", a.config)
 	g.POST("/config", a.saveConfig)
 	g.GET("/proxy", a.listProxy)
@@ -29,7 +33,59 @@ func NewTelemtController(g *gin.RouterGroup) *TelemtController {
 	return a
 }
 
-func (a *TelemtController) status(c *gin.Context) { jsonObj(c, a.service.Status(), nil) }
+func (a *TelemtController) status(c *gin.Context) {
+	status := a.service.Status()
+	status.WebProxy = a.getWebProxyStatus(c)
+	jsonObj(c, status, nil)
+}
+
+func (a *TelemtController) getWebProxyStatus(c *gin.Context) service.TelemtWebProxyStatus {
+	defaultDomain, _ := a.settingService.GetWebDomain()
+	if strings.TrimSpace(defaultDomain) == "" {
+		defaultDomain = publicHostFromRequest(c)
+	}
+	certFile, _ := a.settingService.GetCertFile()
+	keyFile, _ := a.settingService.GetKeyFile()
+	webStatus, err := a.service.WebProxyStatus(defaultDomain, certFile, keyFile)
+	if err != nil {
+		webStatus.Error = err.Error()
+	}
+	return webStatus
+}
+
+func (a *TelemtController) webProxyStatus(c *gin.Context) {
+	jsonObj(c, a.getWebProxyStatus(c), nil)
+}
+
+func (a *TelemtController) enableWebProxy(c *gin.Context) {
+	var req struct {
+		Domain string `json:"domain"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		jsonMsg(c, "invalid WEB Proxy request", err)
+		return
+	}
+	if strings.TrimSpace(req.Domain) == "" {
+		req.Domain = a.getWebProxyStatus(c).DefaultDomain
+	}
+	certFile, _ := a.settingService.GetCertFile()
+	keyFile, _ := a.settingService.GetKeyFile()
+	status, err := a.service.EnableWebProxy(c.Request.Context(), req.Domain, certFile, keyFile)
+	if err != nil {
+		jsonMsg(c, err.Error(), err)
+		return
+	}
+	status.DefaultDomain = req.Domain
+	jsonObj(c, status, nil)
+}
+
+func (a *TelemtController) disableWebProxy(c *gin.Context) {
+	if err := a.service.DisableWebProxy(); err != nil {
+		jsonMsg(c, "failed to disable WEB Proxy", err)
+		return
+	}
+	jsonObj(c, a.getWebProxyStatus(c), nil)
+}
 
 func (a *TelemtController) config(c *gin.Context) {
 	cfg, err := a.service.GetConfig()

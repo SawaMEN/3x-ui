@@ -8,6 +8,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/web/middleware"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service/panel"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service/tgbot"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/session"
 
 	"github.com/gin-gonic/gin"
@@ -24,12 +25,13 @@ type APIController struct {
 	xraySettingController *XraySettingController
 	userService           panel.UserService
 	apiTokenService       panel.ApiTokenService
+	settingService        service.SettingService
 	Tgbot                 tgbot.Tgbot
 }
 
 // NewAPIController creates a new APIController instance and initializes its routes.
-func NewAPIController(g *gin.RouterGroup) *APIController {
-	a := &APIController{}
+func NewAPIController(g *gin.RouterGroup, settingService service.SettingService) *APIController {
+	a := &APIController{settingService: settingService}
 	a.initRouter(g)
 	return a
 }
@@ -201,7 +203,7 @@ func (a *APIController) initRouter(g *gin.RouterGroup) {
 
 	// Telemt standalone MTProto service
 	telemt := api.Group("/telemt")
-	NewTelemtController(telemt)
+	NewTelemtController(telemt, a.settingService)
 
 	// Settings + Xray config management live under the API surface too, so the
 	// same API token drives them. Paths are /panel/api/setting/* and
