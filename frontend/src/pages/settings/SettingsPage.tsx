@@ -364,14 +364,12 @@ export default function SettingsPage() {
                     </Col>
 
 
-                    )}
 
                     <Col span={24}>
                       <Card hoverable>{categoryBody}</Card>
                     </Col>
 
-                    {(activeSlug === 'general' && (slug === '' || slug === 'general')) && (
-                      <div>
+                    {activeSlug === 'general' && (slug === '' || slug === 'general') && (
                       <Col span={24}>
                         <Card className="theme-picker-card">
                           <div className="theme-picker-header">
@@ -447,6 +445,7 @@ export default function SettingsPage() {
                           </div>
                         </Card>
                       </Col>
+                    )}
                   </Row>
                 </>
               )}
