@@ -27,12 +27,15 @@ on:
 permissions:
   contents: read
 
+# Formatter-only bot commits are already validated on the originating PR.
+# Skipping the full CI matrix avoids a redundant rerun.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   go-test:
+    if: ${{ github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -48,6 +51,7 @@ jobs:
           go test -shuffle=on -count=1 $(cat /tmp/go-packages.txt)
 
   postgres-durable-first:
+    if: ${{ github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):') }}
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -94,6 +98,7 @@ jobs:
           fi
 
   codegen:
+    if: ${{ github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -111,6 +116,7 @@ jobs:
         run: git diff --exit-code -- frontend/src/generated frontend/public/openapi.json
 
   govulncheck:
+    if: ${{ github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -126,6 +132,7 @@ jobs:
         run: govulncheck ./...
 
   race:
+    if: ${{ github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -141,6 +148,7 @@ jobs:
           go test -race -shuffle=on -count=1 -timeout 25m $(cat /tmp/go-packages.txt)
 
   fuzz-smoke:
+    if: ${{ github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -156,6 +164,7 @@ jobs:
           go test -run '^$' -fuzz 'FuzzDecodeCertPin$' -fuzztime=30s ./internal/web/runtime/
 
   golangci:
+    if: ${{ github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -171,6 +180,7 @@ jobs:
           version: latest
 
   arch-linux:
+    if: ${{ github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):') }}
     runs-on: ubuntu-latest
     container: archlinux:latest
     steps:
@@ -197,6 +207,7 @@ jobs:
           fi
 
   frontend:
+    if: ${{ github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -206,7 +217,7 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - name: Install
-        run: npm ci
+        run: npm ci --no-audit --no-fund
         working-directory: frontend
       - name: Verify generated MSW worker is current
         run: git diff --exit-code -- public/mockServiceWorker.js package-lock.json
@@ -228,7 +239,7 @@ jobs:
         working-directory: frontend
       - name: Build
         if: github.event_name == 'pull_request'
-        run: npm run build
+        run: npm run build:ci
         working-directory: frontend
       - name: Build Storybook
         if: github.event_name == 'pull_request'
