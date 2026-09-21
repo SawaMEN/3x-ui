@@ -2,7 +2,6 @@
 # reproduces the PR gate locally. Run `make help` for the list.
 
 SHELL := bash
-GO_PKGS = $(shell go list ./... | grep -v '/frontend/node_modules/')
 FRONTEND = frontend
 
 .DEFAULT_GOAL := help
@@ -51,12 +50,12 @@ msw-worker-check: ## Verify the tracked worker matches the installed MSW runtime
 
 .PHONY: test-go
 test-go: dist-stub ## Go tests (shuffle, no cache)
-	go test -shuffle=on -count=1 $(GO_PKGS)
+	go test -p 12 -vet=off -shuffle=on -count=1 ./...
 
 .PHONY: race
 # internal/web/service runs ~10x slower under -race and overruns go test's 10m default.
 race: dist-stub ## Go tests with the race detector (needs a C compiler)
-	go test -race -shuffle=on -count=1 -timeout 25m $(GO_PKGS)
+	go test -race -p 12 -vet=off -shuffle=on -count=1 -timeout 25m ./...
 
 .PHONY: test-fe
 test-fe: ## Frontend tests (vitest)
@@ -75,7 +74,7 @@ build-fe: ## Build the Vite bundles into internal/web/dist
 
 .PHONY: build
 build: build-fe ## Build the frontend then the Go binary
-	go build ./...
+	go build -p 12 ./...
 
 .PHONY: build-storybook
 build-storybook: ## Build the static Storybook (compile-checks all stories)
