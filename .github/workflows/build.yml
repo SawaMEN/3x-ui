@@ -1,0 +1,60 @@
+name: Build binary
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "**.go"
+      - "go.mod"
+      - "go.sum"
+      - "frontend/**"
+      - "Makefile"
+      - ".nvmrc"
+      - ".github/workflows/build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build Linux amd64 with embedded frontend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+      - name: Build Go binary
+        env:
+          CGO_ENABLED: "1"
+          GOOS: linux
+          GOARCH: amd64
+        run: |
+          set -euo pipefail
+          go build -buildvcs=true -ldflags "-w -s -X github.com/SawaMEN/3x-ui/v3/internal/config.buildCommit=${GITHUB_SHA::8} -X github.com/SawaMEN/3x-ui/v3/internal/config.buildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o x-ui
+      - name: Verify binary
+        run: test -s x-ui
+      - name: Upload binary
+        uses: actions/upload-artifact@v7
+        with:
+          name: x-ui-linux-amd64-${{ github.sha }}
+          path: x-ui
+          if-no-files-found: error
+          retention-days: 14

@@ -16,7 +16,7 @@ question it already answers.
 
 3x-ui is an open-source web control panel for managing Xray-core servers.
 
-- Backend: Go 1.27, module `github.com/mhsanaei/3x-ui/v3`, Gin and GORM.
+- Backend: Go 1.27, module `github.com/SawaMEN/3x-ui/v3`, Gin and GORM.
 - It runs Xray-core as a managed child process (`internal/xray/process.go`) and
   imports `github.com/xtls/xray-core` for config types and the gRPC
   stats/handler/router API. The release the panel BUNDLES is pinned in
@@ -29,8 +29,8 @@ question it already answers.
   restart as the fallback on older binaries.
 - AmneziaWG inbounds run IN-PROCESS, not as a child: `internal/amneziawgnet/`
   drives an amneziawg-go device over a gVisor userspace netstack and relays into a
-  loopback SOCKS5 Xray inbound. `internal/amneziawg/` derives the instance and peers
-  from an inbound and generates + validates the 3.1 obfuscation parameters.
+  loopback SOCKS5 Xray inbound. `internal/amneziawg/` derives the instance and
+  peers from an inbound and generates + validates the 3.1 obfuscation parameters.
 - Storage: SQLite by default (`/etc/x-ui/x-ui.db` on Linux, the executable
   directory on Windows) or PostgreSQL (`XUI_DB_TYPE` / `XUI_DB_DSN`). The SQLite
   driver is CGo, so `CGO_ENABLED=0` builds fail.
@@ -81,25 +81,23 @@ question it already answers.
      job fails on a dirty `frontend/src/generated` or
      `frontend/public/openapi.json`;
   3. a NEW struct crossing the API boundary must be added to the `StructAllow`
-     allowlist in `tools/openapigen/main.go`, or it is SILENTLY dropped from the
-     schemas and `frontend/scripts/build-openapi.mjs` then fails — a guaranteed
+     allowlist in `tools/openapigen/main.go`, or it is SILENTLY dropped from
+     the schemas and `frontend/scripts/build-openapi.mjs` then fails — a guaranteed
      CI break, not a style nit;
   4. the step NOTHING checks — `frontend/public/openapi.json` must be copied to
      `docs/public/openapi.json` and the MDX regenerated with
      `cd docs && pnpm gen:api`, because `docs-ci.yml` fires only on `docs/**`.
      Step 4 is the one that reaches production wrong.
-- **i18n.** A new English key goes in EVERY locale JSON in
-  `internal/web/translation/` (13 files) AND must be referenced from
-  `frontend/src` or Go in the SAME change.
-  `frontend/src/test/i18n-dead-keys.test.ts` fails on a missing locale file and
-  on an orphan key alike.
+- **i18n.** The repository currently has `internal/web/translation/` (2 files). a new English key goes in every locale JSON there
+  and must be referenced from `frontend/src` or Go in the SAME change.
+  `frontend/src/test/i18n-dead-keys.test.ts` checks the locale set and orphan keys.
 - **Migrations.** Schema changes are GORM `AutoMigrate` PLUS hand-written
   migrations in `internal/database/db.go`. There are no migration files and no
   down-migrations, and everything has to work on SQLite AND PostgreSQL.
-- **Tests.** Stdlib `testing` only (no testify), table-driven with `t.Run`
-  subtests and `t.Helper()` on helpers. An assertion must pin the exact value,
-  typed error or emitted string — `err != nil` and `len(x) > 0` are findings,
-  not nits. Prefer real dependencies: a throwaway DB via
+- **Tests.** Stdlib `testing` only (no testify), table-driven with `t.Run` subtests
+  and `t.Helper()` on helpers. An assertion must pin the exact value, typed error
+  or emitted string — `err != nil` and `len(x) > 0` are findings, not nits. Prefer
+  real dependencies: a throwaway DB via
   `database.InitDB(filepath.Join(t.TempDir(), "x-ui.db"))` with `t.Cleanup`, and
   `httptest` for HTTP. `internal/sub`'s `initSubDB(t)` is the template.
   A test must FAIL without its fix; one that passes either way certifies
@@ -191,7 +189,7 @@ test that cannot fail is invisible to CI. `make verify` is the local gate.
   `XUI_TUNNEL_HEALTH_*` family is the usual answer to "the panel restarts Xray
   every few minutes".
 - Security per inbound is none / tls / reality. XTLS is a VLESS *flow*
-  (`xtls-rprx-vision`), not a security setting — never tell anyone to pick XTLS
-  in the security dropdown.
+  (`xtls-rprx-vision`), not a security setting — never tell anyone to pick
+  XTLS in the security dropdown.
 - Never hardcode a version. For "is this already fixed" use
   `gh release list -L 10`, `gh search commits`, and `git log -S`.

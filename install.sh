@@ -28,12 +28,7 @@ echo "The OS release is: $release"
 arch() {
     case "$(uname -m)" in
         x86_64 | x64 | amd64) echo 'amd64' ;;
-        i*86 | x86) echo '386' ;;
         armv8* | armv8 | arm64 | aarch64) echo 'arm64' ;;
-        armv7* | armv7 | arm) echo 'armv7' ;;
-        armv6* | armv6) echo 'armv6' ;;
-        armv5* | armv5) echo 'armv5' ;;
-        s390x) echo 's390x' ;;
         *) echo -e "${green}Unsupported CPU architecture! ${plain}" && rm -f "$(realpath "$0")" && exit 1 ;;
     esac
 }
@@ -109,7 +104,7 @@ install_base() {
             fi
             ;;
         arch | manjaro | parch)
-            pacman -Sy --noconfirm cronie curl tar tzdata socat ca-certificates openssl
+            pacman -Syu --noconfirm --needed cronie curl tar tzdata socat ca-certificates openssl
             ;;
         opensuse-tumbleweed | opensuse-leap)
             zypper refresh && zypper -q install -y cron curl tar timezone socat ca-certificates openssl
@@ -232,7 +227,7 @@ install_postgres_local() {
             [[ -d /var/lib/pgsql/data && -f /var/lib/pgsql/data/PG_VERSION ]] || postgresql-setup --initdb >&2 || return 1
             ;;
         arch | manjaro | parch)
-            pacman -Sy --noconfirm postgresql >&2 || return 1
+            pacman -Syu --noconfirm --needed postgresql >&2 || return 1
             if [[ ! -f /var/lib/postgres/data/PG_VERSION ]]; then
                 sudo -u postgres initdb -D /var/lib/postgres/data >&2 || return 1
             fi
@@ -339,7 +334,7 @@ ensure_pg_client() {
             fi
             ;;
         arch | manjaro | parch)
-            pacman -Sy --noconfirm postgresql >&2 || return 1
+            pacman -Syu --noconfirm --needed postgresql >&2 || return 1
             ;;
         opensuse-tumbleweed | opensuse-leap)
             zypper -q install -y postgresql >&2 || return 1
@@ -372,12 +367,7 @@ install_tuic_server() {
     case "$(arch)" in
         amd64|x86_64) target_arch="x86_64-unknown-linux-musl" ;;
         arm64|aarch64) target_arch="aarch64-unknown-linux-musl" ;;
-        armv7|armv7l) target_arch="armv7-unknown-linux-musleabihf" ;;
-        386|i386|i686) target_arch="i686-unknown-linux-musl" ;;
-        armv6|armv6l|armv5|armv5l|s390x)
-            echo -e "${yellow}tuic-server does not provide prebuilt binaries for $(arch); TUIC inbounds will be unavailable on this machine${plain}"
-            return 0
-            ;;
+        *) return 0 ;;
         *) return 0 ;;
     esac
 
@@ -1449,14 +1439,23 @@ _install_xui_service_unit() {
 # 60 req/h-per-IP limit that trips shared CI/CGNAT addresses (the install then
 # fails with "Failed to fetch x-ui version"), and falls back to the API.
 resolve_latest_tag() {
-    local url tag
-    url=$(curl -sSLI -o /dev/null -w '%{url_effective}' --retry 5 --retry-delay 3 --connect-timeout 15 --max-time 60 "https://github.com/MHSanaei/3x-ui/releases/latest" 2>/dev/null)
+    local url tag page
+
+    # Prefer GitHub's public /releases/latest redirect. This does not require
+    # the REST API and therefore avoids the unauthenticated API rate limit.
+    url=$(curl -sSLI -o /dev/null -w '%{url_effective}'         --retry 5 --retry-delay 3 --connect-timeout 15 --max-time 60         "https://github.com/SawaMEN/3x-ui/releases/latest" 2>/dev/null)
     tag=${url##*/tag/}
     if [[ "$tag" != "$url" && -n "$tag" && "$tag" != "latest" ]]; then
-        echo "$tag"
+        printf '%s\n' "$tag"
         return 0
     fi
-    curl -Ls --retry 5 --retry-delay 3 --connect-timeout 15 --max-time 60 "https://api.github.com/repos/MHSanaei/3x-ui/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/'
+
+    # Some proxies/CDNs do not expose the final URL for HEAD requests.
+    # Fall back to the public release HTML page, still without using the API.
+    page=$(curl -fsSL         --retry 5 --retry-delay 3 --connect-timeout 15 --max-time 60         "https://github.com/SawaMEN/3x-ui/releases/latest" 2>/dev/null) || return 1
+    tag=$(printf '%s' "$page"         | grep -oE '/SawaMEN/3x-ui/releases/tag/[^"?#]+'         | head -n 1         | sed 's#.*/tag/##')
+    [[ -n "$tag" ]] || return 1
+    printf '%s\n' "$tag"
 }
 
 # Releases publish <asset>.sha256 next to each archive. A mismatch or a failed
@@ -1495,7 +1494,7 @@ require_repo_files() {
     shift
     [[ "${ref}" == "main" ]] && return 0
     for name in "$@"; do
-        status=$(curl -sIL --retry 3 --connect-timeout 15 -o /dev/null -w '%{http_code}' "https://raw.githubusercontent.com/MHSanaei/3x-ui/${ref}/${name}")
+        status=$(curl -sIL --retry 3 --connect-timeout 15 -o /dev/null -w '%{http_code}' "https://raw.githubusercontent.com/SawaMEN/3x-ui/${ref}/${name}")
         if [[ "${status}" != "200" ]]; then
             echo -e "${red}${name} is not available for ${ref} (HTTP ${status})${plain}"
             echo -e "${red}Install a release that ships it, or 'dev' for the rolling build. Your existing installation has not been touched.${plain}"
@@ -1515,7 +1514,7 @@ install_x-ui() {
             exit 1
         fi
         echo -e "Got x-ui latest version: ${tag_version}, beginning the installation..."
-        curl -fLR --retry 5 --retry-delay 3 --connect-timeout 15 --speed-limit 1 --speed-time 300 -o ${xui_folder}-linux-$(arch).tar.gz https://github.com/MHSanaei/3x-ui/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz
+        curl -fLR --retry 5 --retry-delay 3 --connect-timeout 15 --speed-limit 1 --speed-time 300 -o ${xui_folder}-linux-$(arch).tar.gz https://github.com/SawaMEN/3x-ui/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz
         if [[ $? -ne 0 ]]; then
             echo -e "${red}Downloading x-ui failed, please be sure that your server can access GitHub ${plain}"
             exit 1
@@ -1525,7 +1524,7 @@ install_x-ui() {
             echo -e "${red}Downloaded x-ui release archive is empty${plain}"
             exit 1
         fi
-        verify_release_checksum "https://github.com/MHSanaei/3x-ui/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz" "${xui_folder}-linux-$(arch).tar.gz"
+        verify_release_checksum "https://github.com/SawaMEN/3x-ui/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz" "${xui_folder}-linux-$(arch).tar.gz"
     else
         tag_version=$1
         # The rolling dev channel ships under a fixed, non-semver tag that is
@@ -1544,7 +1543,7 @@ install_x-ui() {
             fi
         fi
 
-        url="https://github.com/MHSanaei/3x-ui/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz"
+        url="https://github.com/SawaMEN/3x-ui/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz"
         echo -e "Beginning to install x-ui ${tag_version}"
         curl -fLR --retry 5 --retry-delay 3 --connect-timeout 15 --speed-limit 1 --speed-time 300 -o ${xui_folder}-linux-$(arch).tar.gz ${url}
         if [[ $? -ne 0 ]]; then
@@ -1571,7 +1570,7 @@ install_x-ui() {
     require_repo_files "${script_ref}" "${required_files[@]}"
     local xui_script_temp="/usr/bin/x-ui-temp.$$"
     rm -f "${xui_script_temp}"
-    curl -fLRo "${xui_script_temp}" "https://raw.githubusercontent.com/MHSanaei/3x-ui/${script_ref}/x-ui.sh"
+    curl -fLRo "${xui_script_temp}" "https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/x-ui.sh"
     if [[ $? -ne 0 ]]; then
         rm -f "${xui_script_temp}"
         echo -e "${red}Failed to download x-ui.sh${plain}"
@@ -1643,18 +1642,59 @@ install_x-ui() {
     fi
     chmod +x x-ui
     chmod +x x-ui.sh
+    # Telemt is an optional standalone MTProto implementation bundled with
+    # x86_64/aarch64 releases. Install its unit/config template without
+    # enabling it automatically.
+    if [[ -x "bin/telemt" ]]; then
+        # Telemt is installed as a root-owned executable. The service runs as
+        # root so it can bind privileged ports (for example 443) and manage
+        # its own network sockets without granting extra capabilities.
+        chown root:root "${xui_folder}/bin/telemt" 2> /dev/null || true
+        chmod 0755 "${xui_folder}/bin/telemt"
+
+        # Install the systemd unit with explicit root ownership/read-only
+        # permissions. ProtectSystem=strict + ReadWritePaths=/etc/x-ui in the
+        # unit limits Telemt's filesystem write access to its configuration
+        # directory.
+        if install -m 0644 -o root -g root telemt.service "${xui_service}/telemt.service" 2> /dev/null; then
+            :
+        else
+            echo -e "${yellow}Warning: failed to install telemt.service; Telemt binary was installed but the service is unavailable.${plain}" >&2
+        fi
+
+        # Install the official Telemt updater. It verifies the upstream SHA256
+        # checksum before replacing the binary and preserves the running service.
+        if [[ -f telemt-update.sh && -f telemt-update.service && -f telemt-update.timer ]]; then
+            install -m 0755 -o root -g root telemt-update.sh "${xui_folder}/telemt-update.sh"
+            install -m 0644 -o root -g root telemt-update.service "${xui_service}/telemt-update.service"
+            install -m 0644 -o root -g root telemt-update.timer "${xui_service}/telemt-update.timer"
+            systemctl daemon-reload 2> /dev/null || true
+            systemctl enable --now telemt-update.timer 2> /dev/null || true
+        fi
+
+        # Install the optional MEKO V3 TCP fix for Telemt. The service is tied
+        # to telemt.service and applies the firewall rules only while Telemt
+        # is running. It is deliberately non-fatal when xt_u32 is unavailable.
+        if [[ -f telemt-meko-fix.sh && -f telemt-meko-fix.service ]]; then
+            install -m 0755 -o root -g root telemt-meko-fix.sh "${xui_folder}/telemt-meko-fix.sh"
+            install -m 0644 -o root -g root telemt-meko-fix.service "${xui_service}/telemt-meko-fix.service"
+            systemctl daemon-reload 2> /dev/null || true
+            systemctl enable telemt-meko-fix.service 2> /dev/null || true
+        fi
+
+        install -d -m 700 -o root -g root /etc/x-ui
+        if [[ ! -e /etc/x-ui/telemt.toml && -f telemt.toml.example ]]; then
+            install -m 600 -o root -g root telemt.toml.example /etc/x-ui/telemt.toml.example
+        elif [[ -f /etc/x-ui/telemt.toml ]]; then
+            # Never overwrite an administrator's Telemt configuration.
+            chown root:root /etc/x-ui/telemt.toml 2> /dev/null || true
+            chmod 0600 /etc/x-ui/telemt.toml 2> /dev/null || true
+        fi
+
+        systemctl daemon-reload 2> /dev/null || true
+    fi
 
     # Check the system's architecture and rename the file accordingly.
-    # The panel binary maps GOARCH=arm to "arm32" (internal/xray/process.go),
-    # so the Xray binary must be named xray-linux-arm32; mtg keeps plain "arm".
-    if [[ $(arch) == "armv5" || $(arch) == "armv6" || $(arch) == "armv7" ]]; then
-        mv bin/xray-linux-$(arch) bin/xray-linux-arm32
-        chmod +x bin/xray-linux-arm32
-        if [[ -f bin/mtg-linux-$(arch) ]]; then
-            mv bin/mtg-linux-$(arch) bin/mtg-linux-arm
-            chmod +x bin/mtg-linux-arm
-        fi
-    fi
     chmod +x x-ui bin/xray-linux-$(arch)
     if [[ -f bin/mtg-linux-arm ]]; then
         chmod +x bin/mtg-linux-arm
@@ -1728,7 +1768,7 @@ install_x-ui() {
     if [[ $release == "alpine" ]]; then
         xui_rc_temp="/etc/init.d/x-ui.tmp.$$"
         rm -f "${xui_rc_temp}"
-        curl -fLRo "${xui_rc_temp}" "https://raw.githubusercontent.com/MHSanaei/3x-ui/${script_ref}/x-ui.rc"
+        curl -fLRo "${xui_rc_temp}" "https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/x-ui.rc"
         if [[ $? -ne 0 ]]; then
             rm -f "${xui_rc_temp}"
             echo -e "${red}Failed to download x-ui.rc${plain}"
@@ -1793,13 +1833,13 @@ install_x-ui() {
             echo -e "${yellow}Service files not found in tar.gz, downloading from GitHub...${plain}"
             case "${release}" in
                 ubuntu | debian | armbian)
-                    service_unit_url="https://raw.githubusercontent.com/MHSanaei/3x-ui/${script_ref}/x-ui.service.debian"
+                    service_unit_url="https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/x-ui.service.debian"
                     ;;
                 arch | manjaro | parch)
-                    service_unit_url="https://raw.githubusercontent.com/MHSanaei/3x-ui/${script_ref}/x-ui.service.arch"
+                    service_unit_url="https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/x-ui.service.arch"
                     ;;
                 *)
-                    service_unit_url="https://raw.githubusercontent.com/MHSanaei/3x-ui/${script_ref}/x-ui.service.rhel"
+                    service_unit_url="https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/x-ui.service.rhel"
                     ;;
             esac
 

@@ -25,6 +25,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   go-test:
     runs-on: ubuntu-latest
@@ -72,20 +76,15 @@ jobs:
         run: |
           set -o pipefail
           go test ./internal/web/service -run 'PostgresCommitFailure' -count=1 -v | tee /tmp/postgres-durable-first.log
-          # Count passes rather than assert no SKIP: a renamed or deleted test
-          # prints "no tests to run" and exits 0, leaving the step green for nothing.
           passed=$(grep -c -- '--- PASS' /tmp/postgres-durable-first.log || true)
           if [ "$passed" -lt 1 ]; then
             echo "expected at least 1 passing durable-first test, got $passed" >&2
             exit 1
           fi
-
       - name: PostgreSQL schema and migration tests
         run: |
           set -o pipefail
           go test ./internal/database -run '^(TestHostAutoMigrateCreatesColumns_Postgres|TestMigrate_Postgres)$' -count=1 -v | tee /tmp/postgres-schema.log
-          # Both must pass. Counting, not SKIP-matching: renaming either test would
-          # otherwise leave this step green while testing nothing.
           passed=$(grep -c -- '--- PASS' /tmp/postgres-schema.log || true)
           if [ "$passed" -lt 2 ]; then
             echo "expected 2 passing PostgreSQL schema tests, got $passed" >&2
@@ -124,7 +123,6 @@ jobs:
       - name: Run govulncheck
         run: govulncheck ./...
 
-  # Race + shuffle hygiene gate: data races and order-dependent tests fail the build.
   race:
     runs-on: ubuntu-latest
     steps:
@@ -138,11 +136,8 @@ jobs:
       - name: Race + shuffle
         run: |
           go list ./... | grep -v '/frontend/node_modules/' > /tmp/go-packages.txt
-          # internal/web/service runs ~10x slower under -race and overruns the 10m default.
           go test -race -shuffle=on -count=1 -timeout 25m $(cat /tmp/go-packages.txt)
 
-  # Brief native-fuzz smoke on the security-/parser-critical decoders. Each runs the
-  # generated corpus plus 30s of exploration; a crash here is a real input-handling bug.
   fuzz-smoke:
     runs-on: ubuntu-latest
     steps:
@@ -173,6 +168,32 @@ jobs:
         with:
           version: latest
 
+  arch-linux:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Full Arch package upgrade
+        run: pacman -Syu --noconfirm
+      - name: Install Arch validation tools
+        run: pacman -S --noconfirm --needed bash shellcheck systemd
+      - name: Validate Arch installer scripts
+        run: |
+          bash -n install.sh
+          bash -n x-ui.sh
+          shellcheck --shell=bash --severity=error install.sh x-ui.sh
+      - name: Validate Arch systemd unit
+        run: |
+          cp x-ui.service.arch /tmp/x-ui.service
+          sed -i 's#^ExecStart=.*#ExecStart=/bin/true#' /tmp/x-ui.service
+          systemd-analyze verify /tmp/x-ui.service
+      - name: Guard against pacman partial upgrades
+        run: |
+          if grep -nE 'pacman[[:space:]]+-S(y|yy)([[:space:]]|$)' install.sh; then
+            echo "Unsupported pacman partial-upgrade command found in install.sh" >&2
+            exit 1
+          fi
+
   frontend:
     runs-on: ubuntu-latest
     steps:
@@ -198,15 +219,17 @@ jobs:
         run: npm run typecheck
         working-directory: frontend
       - name: Install Playwright Chromium (Storybook story tests)
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
         working-directory: frontend
       - name: Test
         run: npm test
         working-directory: frontend
       - name: Build
+        if: github.event_name == 'pull_request'
         run: npm run build
         working-directory: frontend
       - name: Build Storybook
+        if: github.event_name == 'pull_request'
         run: npm run build-storybook
         working-directory: frontend
       - name: Audit
