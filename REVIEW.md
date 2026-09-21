@@ -52,8 +52,8 @@ surface — still pre-existing, but open the summary with it.
   links, subscription/Clash YAML, mtg-multi TOML, AmneziaWG obfuscation
   parameters — that a downstream client would reject or read differently, or
   that makes two independent implementations of the same output diverge: the
-  three link implementations (Go `internal/util/link/` + `internal/sub/`, TS
-  `frontend/src/lib/xray/`, TS `docs/lib/xray/`), and the AmneziaWG 3.1
+  three link implementations (Go `internal/util/link/` + `internal/sub/`,
+  TS `frontend/src/lib/xray/`, `docs/lib/xray/`), and the AmneziaWG 3.1
   generator in Go (`internal/amneziawg/params.go`) versus TS
   (`frontend/src/lib/xray/amneziawg-obfuscation.ts`).
 - Any edit to `.github/workflows/`: this repository runs workflows with
@@ -90,9 +90,9 @@ than the happy path the author had in mind:
   never set, a settings blob in the older shape. And the way back, because
   there are no down-migrations — an operator who rolls the binary back reads
   the same rows.
-- **A restart.** Anything held only in memory is gone when the panel or the
-  Xray child restarts, and the cron jobs in `internal/web/job/` then fire
-  against whatever survived.
+- **A restart.** Anything held only in memory is gone when the panel or the Xray
+  child restarts, and the cron jobs in `internal/web/job/` then fire against
+  whatever survived.
 - **A second actor at the same instant.** Two panel requests, a request racing
   a cron job, or a sub-node syncing while the master writes. Read-modify-write
   on the same row is where this surfaces.
@@ -123,9 +123,8 @@ the code already handles is not a finding at all.
 - Missing tests for getters, constants, renames or pure map lookups —
   `CLAUDE.md` rejects such tests outright.
 - A missing or unreferenced i18n key.
-  `frontend/src/test/i18n-dead-keys.test.ts` pins the 13 locale files in
-  `internal/web/translation/` in both directions, so the `frontend` job is
-  already red. Report the failing check, not the key.
+  `frontend/src/test/i18n-dead-keys.test.ts` checks the 2 locale files in
+  `internal/web/translation/` in both directions.
 
 ## A higher bar, not silence
 
@@ -202,15 +201,15 @@ evidence, not a retelling of the pull request.
 A finding says what is wrong, where (`file:line`), what triggers it and what
 breaks. It never carries the fix: no `suggestion` block, no patch, no
 replacement snippet, no rewritten function, no "suggested fix" section — in
-the summary and in an inline comment alike. One clause naming WHERE the fix
+both the summary and an inline comment alike. One clause naming WHERE the fix
 belongs is the most it may add — a file, a function, a symbol, a layer — and
 nothing about what happens there. Prose is a patch too the moment a verb
 describes the change: "move the lookup inside the body", "spend the comment
 on the invariant instead" hand it over as surely as a diff would, and so does
 holding up an existing symbol as the model to copy. A clause the maintainer
 could apply as written is the fix, however it is punctuated. The maintainer
-decides the change; a review that writes it out puts unreviewed code one
-click from the branch.
+decides the change; a review that writes it out puts unreviewed code one click
+from the branch.
 
 A finding that is not pre-existing also says, in one clause, what this pull
 request did to the code it is about — the line it added, the call it moved,
