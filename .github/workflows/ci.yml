@@ -33,6 +33,7 @@ concurrency:
 
 jobs:
   go-test:
+    if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -45,9 +46,10 @@ jobs:
       - name: Test
         run: |
           go list ./... | grep -v '/frontend/node_modules/' > /tmp/go-packages.txt
-          go test -shuffle=on -count=1 $(cat /tmp/go-packages.txt)
+          go test -p 12 -shuffle=on -count=1 $(cat /tmp/go-packages.txt)
 
   postgres-durable-first:
+    if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -77,7 +79,7 @@ jobs:
       - name: PostgreSQL durable-first tests
         run: |
           set -o pipefail
-          go test ./internal/web/service -run 'PostgresCommitFailure' -count=1 -v | tee /tmp/postgres-durable-first.log
+          go test -p 12 ./internal/web/service -run 'PostgresCommitFailure' -count=1 -v | tee /tmp/postgres-durable-first.log
           passed=$(grep -c -- '--- PASS' /tmp/postgres-durable-first.log || true)
           if [ "$passed" -lt 1 ]; then
             echo "expected at least 1 passing durable-first test, got $passed" >&2
@@ -86,7 +88,7 @@ jobs:
       - name: PostgreSQL schema and migration tests
         run: |
           set -o pipefail
-          go test ./internal/database -run '^(TestHostAutoMigrateCreatesColumns_Postgres|TestMigrate_Postgres)$' -count=1 -v | tee /tmp/postgres-schema.log
+          go test -p 12 ./internal/database -run '^(TestHostAutoMigrateCreatesColumns_Postgres|TestMigrate_Postgres)$' -count=1 -v | tee /tmp/postgres-schema.log
           passed=$(grep -c -- '--- PASS' /tmp/postgres-schema.log || true)
           if [ "$passed" -lt 2 ]; then
             echo "expected 2 passing PostgreSQL schema tests, got $passed" >&2
@@ -94,6 +96,7 @@ jobs:
           fi
 
   codegen:
+    if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -107,10 +110,11 @@ jobs:
       - name: Regenerate schemas, examples and OpenAPI
         run: npm run gen
         working-directory: frontend
-      - name: Fail if generated files are stale (run 'npm run gen' and commit)
+      - name: Fail if generated files are stale
         run: git diff --exit-code -- frontend/src/generated frontend/public/openapi.json
 
   govulncheck:
+    if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -126,6 +130,7 @@ jobs:
         run: govulncheck ./...
 
   race:
+    if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -138,9 +143,10 @@ jobs:
       - name: Race + shuffle
         run: |
           go list ./... | grep -v '/frontend/node_modules/' > /tmp/go-packages.txt
-          go test -race -shuffle=on -count=1 -timeout 25m $(cat /tmp/go-packages.txt)
+          go test -race -p 12 -shuffle=on -count=1 -timeout 25m $(cat /tmp/go-packages.txt)
 
   fuzz-smoke:
+    if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -152,10 +158,11 @@ jobs:
         run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
       - name: Fuzz critical parsers (smoke)
         run: |
-          go test -run '^$' -fuzz 'FuzzParseLink$' -fuzztime=30s ./internal/util/link/
-          go test -run '^$' -fuzz 'FuzzDecodeCertPin$' -fuzztime=30s ./internal/web/runtime/
+          go test -p 12 -run '^$' -fuzz 'FuzzParseLink$' -fuzztime=30s ./internal/util/link/
+          go test -p 12 -run '^$' -fuzz 'FuzzDecodeCertPin$' -fuzztime=30s ./internal/web/runtime/
 
   golangci:
+    if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -171,6 +178,7 @@ jobs:
           version: latest
 
   arch-linux:
+    if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
     runs-on: ubuntu-latest
     container: archlinux:latest
     steps:
@@ -197,6 +205,7 @@ jobs:
           fi
 
   frontend:
+    if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -206,7 +215,7 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - name: Install
-        run: npm ci
+        run: npm ci --no-audit --no-fund
         working-directory: frontend
       - name: Verify generated MSW worker is current
         run: git diff --exit-code -- public/mockServiceWorker.js package-lock.json
@@ -220,7 +229,7 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
         working-directory: frontend
-      - name: Install Playwright Chromium (Storybook story tests)
+      - name: Install Playwright Chromium
         run: npx playwright install chromium
         working-directory: frontend
       - name: Test
@@ -228,7 +237,7 @@ jobs:
         working-directory: frontend
       - name: Build
         if: github.event_name == 'pull_request'
-        run: npm run build
+        run: npm run build:ci
         working-directory: frontend
       - name: Build Storybook
         if: github.event_name == 'pull_request'

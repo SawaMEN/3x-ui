@@ -25,7 +25,8 @@
     "gen": "npm run gen:zod && npm run gen:api",
     "gen:api": "node scripts/build-openapi.mjs",
     "gen:zod": "cd .. && go run ./tools/openapigen",
-    "prepare": "cd .. && husky frontend/.husky || true"
+    "prepare": "cd .. && husky frontend/.husky || true",
+    "build:ci": "vite build"
   },
   "lint-staged": {
     "src/**/*.{ts,tsx}": [

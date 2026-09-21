@@ -158,7 +158,7 @@ jobs:
           if [[ "$GITHUB_REF" != refs/tags/* ]]; then
             LDFLAGS="$LDFLAGS -X github.com/SawaMEN/3x-ui/v3/internal/config.buildCommit=${GITHUB_SHA::8} -X github.com/SawaMEN/3x-ui/v3/internal/config.buildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           fi
-          go build -buildvcs=true -ldflags "$LDFLAGS" -o xui-release -v .
+          go build -p 12 -buildvcs=true -ldflags "$LDFLAGS" -o xui-release -v .
 
           rm -rf x-ui
           mkdir -p x-ui/bin

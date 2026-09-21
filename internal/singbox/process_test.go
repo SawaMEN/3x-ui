@@ -41,7 +41,6 @@ func TestManagedPathsAreAbsolute(t *testing.T) {
 	}
 }
 
-
 func TestProcessGetUptimeWithoutStartTime(t *testing.T) {
 	p := &Process{}
 	if got := p.GetUptime(); got != 0 {

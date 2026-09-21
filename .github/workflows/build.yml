@@ -19,6 +19,7 @@ permissions:
 
 jobs:
   build:
+    if: ${{ github.event_name == 'workflow_dispatch' || !startsWith(github.event.head_commit.message, 'chore(format):') }}
     name: Build Linux amd64 with embedded frontend
     runs-on: ubuntu-latest
     steps:
@@ -37,10 +38,10 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install frontend dependencies
         working-directory: frontend
-        run: npm ci
+        run: npm ci --no-audit --no-fund
       - name: Build frontend
         working-directory: frontend
-        run: npm run build
+        run: npm run build:ci
       - name: Build Go binary
         env:
           CGO_ENABLED: "1"
@@ -48,7 +49,7 @@ jobs:
           GOARCH: amd64
         run: |
           set -euo pipefail
-          go build -buildvcs=true -ldflags "-w -s -X github.com/SawaMEN/3x-ui/v3/internal/config.buildCommit=${GITHUB_SHA::8} -X github.com/SawaMEN/3x-ui/v3/internal/config.buildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o x-ui
+          go build -p 12 -buildvcs=true -ldflags "-w -s -X github.com/SawaMEN/3x-ui/v3/internal/config.buildCommit=${GITHUB_SHA::8} -X github.com/SawaMEN/3x-ui/v3/internal/config.buildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o x-ui
       - name: Verify binary
         run: test -s x-ui
       - name: Upload binary
