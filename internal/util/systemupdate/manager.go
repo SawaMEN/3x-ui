@@ -19,17 +19,17 @@ type KernelStatus struct {
 }
 
 type Status struct {
-	Distribution      string         `json:"distribution"`
-	Version           string         `json:"version"`
-	PackageManager    string         `json:"packageManager"`
-	Supported         bool           `json:"supported"`
-	RunningAsRoot     bool           `json:"runningAsRoot"`
-	Packages          []PackageStatus `json:"packages"`
-	Kernel            KernelStatus   `json:"kernel"`
-	UpdatesAvailable  bool           `json:"updatesAvailable"`
-	MissingPackages   bool           `json:"missingPackages"`
-	CanUpdate         bool           `json:"canUpdate"`
-	Notes             []string       `json:"notes"`
+	Distribution     string          `json:"distribution"`
+	Version          string          `json:"version"`
+	PackageManager   string          `json:"packageManager"`
+	Supported        bool            `json:"supported"`
+	RunningAsRoot    bool            `json:"runningAsRoot"`
+	Packages         []PackageStatus `json:"packages"`
+	Kernel           KernelStatus    `json:"kernel"`
+	UpdatesAvailable bool            `json:"updatesAvailable"`
+	MissingPackages  bool            `json:"missingPackages"`
+	CanUpdate        bool            `json:"canUpdate"`
+	Notes            []string        `json:"notes"`
 }
 
 type UpdateResult struct {

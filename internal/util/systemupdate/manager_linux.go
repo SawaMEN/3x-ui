@@ -360,14 +360,14 @@ func installedPackageVersion(manager, name string) (string, bool) {
 		}
 		return fields[1], true
 	case "dnf", "yum", "zypper":
-		output, err := exec.Command("rpm", "-q", "--qf", "%{VERSION}-%{RELEASE}", name).Output()
+		output, err := exec.CommandContext(context.Background(), "rpm", "-q", "--qf", "%{VERSION}-%{RELEASE}", name).Output()
 		if err != nil {
 			return "", false
 		}
 		version := strings.TrimSpace(string(output))
 		return version, version != ""
 	case "pacman":
-		output, err := exec.Command("pacman", "-Q", name).Output()
+		output, err := exec.CommandContext(context.Background(), "pacman", "-Q", name).Output()
 		if err != nil {
 			return "", false
 		}

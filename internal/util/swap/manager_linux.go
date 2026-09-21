@@ -122,11 +122,11 @@ func GetZramInstallInfo() (ZramInstallInfo, error) {
 		configPath = "/etc/conf.d/zram-init"
 	}
 	info := ZramInstallInfo{
-		Distribution:       id,
-		Version:            version,
-		PackageManager:     packageManager,
-		Package:             packageName,
-		Supported:           packageManager != "" && packageName != "",
+		Distribution:      id,
+		Version:           version,
+		PackageManager:    packageManager,
+		Package:            packageName,
+		Supported:          packageManager != "" && packageName != "",
 		RecommendedPackage: packageName,
 		ConfigPath:         configPath,
 	}
@@ -265,7 +265,7 @@ func detectActiveZramBackend(info ZramInstallInfo) string {
 }
 
 func commandSucceeded(command string, args ...string) bool {
-	return exec.Command(command, args...).Run() == nil
+	return exec.CommandContext(context.Background(), command, args...).Run() == nil
 }
 
 func installZramPackage(ctx context.Context, info ZramInstallInfo, reinstall bool) error {

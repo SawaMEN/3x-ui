@@ -2944,6 +2944,41 @@ export const sections: readonly Section[] = [
         path: '/panel/api/setting/swap/zram/install',
         summary: 'Install or enable the supported ZRAM integration.',
       },
+      {
+        method: 'POST',
+        path: '/panel/api/setting/swap/zram/reinstall',
+        summary: 'Reinstall the supported ZRAM integration.',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/setting/system/update/status',
+        summary: 'Return available system package and kernel updates.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/setting/system/update/check',
+        summary: 'Refresh system package and kernel update information.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/setting/system/update/apply',
+        summary: 'Apply the selected system package updates.',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/telemt/webproxy/status',
+        summary: 'Return the Telemt Web Proxy and external port 443 status.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/telemt/webproxy/enable',
+        summary: 'Enable the Telemt Web Proxy.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/telemt/webproxy/disable',
+        summary: 'Disable the Telemt Web Proxy.',
+      },
     ],
   },
 ];
