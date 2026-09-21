@@ -1132,28 +1132,32 @@ export default function SwapSettingsTab() {
           { key: 'zram', label: 'ZRAM', children: zramTab },
           { key: 'areas', label: t('pages.settings.swap.allAreas'), children: areasTab },
         ]}
-        tabBarExtraContent={!isMobile ? {
-          right: (
-            <Space wrap>
-              <Tag color="processing">
-                {t('pages.settings.swap.areasCount', { count: status?.areas.length ?? 0 })}
-              </Tag>
-              {installInfo?.distribution && (
-                <Tag>
-                  {installInfo.distribution} {installInfo.version}
-                </Tag>
-              )}
-              <Button
-                size="small"
-                icon={<ReloadOutlined />}
-                onClick={() => void refresh()}
-                loading={loading}
-              >
-                {t('pages.settings.swap.refresh')}
-              </Button>
-            </Space>
-          ),
-        } : undefined}
+        tabBarExtraContent={
+          !isMobile
+            ? {
+                right: (
+                  <Space wrap>
+                    <Tag color="processing">
+                      {t('pages.settings.swap.areasCount', { count: status?.areas.length ?? 0 })}
+                    </Tag>
+                    {installInfo?.distribution && (
+                      <Tag>
+                        {installInfo.distribution} {installInfo.version}
+                      </Tag>
+                    )}
+                    <Button
+                      size="small"
+                      icon={<ReloadOutlined />}
+                      onClick={() => void refresh()}
+                      loading={loading}
+                    >
+                      {t('pages.settings.swap.refresh')}
+                    </Button>
+                  </Space>
+                ),
+              }
+            : undefined
+        }
       />
     </>
   );
