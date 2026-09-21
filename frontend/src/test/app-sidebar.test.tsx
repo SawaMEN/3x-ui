@@ -22,6 +22,19 @@ function renderSidebar() {
   );
 }
 
+test('uses a single wordmark with full and compact labels', () => {
+  const view = renderSidebar();
+  const sidebarRoot = view.container.querySelector('.ant-sidebar');
+
+  expect(view.container.querySelector('.brand-text-full')?.textContent).toBe('3X-UI');
+  expect(view.container.querySelector('.brand-text-compact')?.textContent).toBe('3X');
+
+  fireEvent.mouseEnter(sidebarRoot!);
+  fireEvent.mouseLeave(sidebarRoot!);
+  expect(view.container.querySelectorAll('.brand-text-full')).toHaveLength(1);
+  expect(view.container.querySelectorAll('.brand-text-compact')).toHaveLength(1);
+});
+
 test('keeps the sidebar expanded after pinning it from the header and restores the choice', () => {
   const first = renderSidebar();
   const sidebar = first.container.querySelector('.ant-layout-sider');

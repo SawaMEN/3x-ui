@@ -1641,7 +1641,7 @@
       "discordNotifyBackup": "Резервное копирование базы данных",
       "discordNotifyBackupDesc": "Отправлять уведомление с файлом резервной копии базы данных",
       "discordEventBusNotifyDesc": "Выберите события для Discord уведомлений",
-      "openFromCore": "Подкачка / ZRAM",
+      "openFromCore": "Настройки подкачки",
       "swap": {
         "menu": "Подкачка / ZRAM",
         "overview": "Обзор",

@@ -546,3 +546,99 @@ html[data-low-power='true'] .drawer-brand {
     animation: none;
   }
 }
+
+
+/* Refined 3X-UI wordmark */
+.brand-text,
+.drawer-brand {
+  display: inline-flex;
+  align-items: center;
+  font-family: Orbitron, 'Rajdhani', 'Segoe UI', sans-serif;
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0.065em;
+  text-transform: uppercase;
+  background: linear-gradient(
+    90deg,
+    #00f6ff 0%,
+    #5fd6ff 24%,
+    #e8b52a 57%,
+    #ff2bd6 100%
+  );
+  background-size: 140% 100%;
+  background-position: 0% 50%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow:
+    0 0 9px rgba(0, 246, 255, 0.28),
+    0 0 18px rgba(255, 43, 214, 0.08);
+}
+
+.brand-text-full {
+  display: inline;
+}
+
+.brand-text-compact {
+  display: none;
+}
+
+.ant-layout-sider-collapsed .brand-mark {
+  display: none;
+}
+
+.ant-layout-sider-collapsed .brand-text {
+  display: inline-flex;
+  justify-content: center;
+  width: 100%;
+  font-size: 22px;
+  letter-spacing: 0.08em;
+}
+
+.ant-layout-sider-collapsed .brand-text-full {
+  display: none;
+}
+
+.ant-layout-sider-collapsed .brand-text-compact {
+  display: inline;
+}
+
+.drawer-brand {
+  font-size: 21px;
+}
+
+body.theme-cyberpunk .brand-text,
+body.theme-cyberpunk .drawer-brand {
+  font-family: Orbitron, 'Rajdhani', 'Courier New', monospace;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  background: linear-gradient(
+    90deg,
+    #f4fbff 0%,
+    #00f6ff 35%,
+    #9f8cff 68%,
+    #ff2bd6 100%
+  );
+  background-size: 160% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow:
+    0 0 10px rgba(0, 246, 255, 0.34),
+    0 0 24px rgba(255, 43, 214, 0.12);
+  animation: cyber-brand-wordmark 7s ease-in-out infinite alternate;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.theme-cyberpunk .brand-text,
+  body.theme-cyberpunk .drawer-brand {
+    animation: none;
+  }
+}
+
+@media (max-width: 460px) {
+  .drawer-brand {
+    font-size: 19px;
+  }
+}
