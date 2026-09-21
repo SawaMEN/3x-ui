@@ -125,8 +125,8 @@ func GetZramInstallInfo() (ZramInstallInfo, error) {
 		Distribution:       id,
 		Version:            version,
 		PackageManager:     packageManager,
-		Package:             packageName,
-		Supported:           packageManager != "" && packageName != "",
+		Package:            packageName,
+		Supported:          packageManager != "" && packageName != "",
 		RecommendedPackage: packageName,
 		ConfigPath:         configPath,
 	}
@@ -189,7 +189,8 @@ func queryInstalledPackage(manager, packageName string) (string, bool) {
 		if _, err := exec.LookPath("dpkg-query"); err != nil {
 			return "", false
 		}
-		output, err := exec.Command("dpkg-query", "-f="+ "$" + "{Status}\t" + "$" + "{Version}\n", packageName).Output()
+		queryFormat := `$` + "{Status}\t" + "$" + "{Version}\n"
+		output, err := exec.Command("dpkg-query", "-f="+queryFormat, packageName).Output()
 		if err != nil {
 			return "", false
 		}
@@ -265,7 +266,7 @@ func detectActiveZramBackend(info ZramInstallInfo) string {
 }
 
 func commandSucceeded(command string, args ...string) bool {
-	return exec.Command(command, args...).Run() == nil
+	return exec.CommandContext(context.Background(), command, args...).Run() == nil
 }
 
 func installZramPackage(ctx context.Context, info ZramInstallInfo, reinstall bool) error {

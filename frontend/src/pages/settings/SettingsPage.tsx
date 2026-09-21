@@ -40,6 +40,7 @@ import SubscriptionGeneralTab from './SubscriptionGeneralTab';
 import SubscriptionFormatsTab from './SubscriptionFormatsTab';
 import SubscriptionBalancersTab from './SubscriptionBalancersTab';
 import SwapSettingsTab from './SwapSettingsTab';
+import SystemUpdateModal from './SystemUpdateModal';
 import './SettingsPage.css';
 
 interface ApiMsg {
@@ -48,7 +49,6 @@ interface ApiMsg {
 
 const tabSlugs = [
   'general',
-  'core',
   'security',
   'telegram',
   'email',
@@ -107,6 +107,7 @@ export default function SettingsPage() {
 
   const [alertVisible, setAlertVisible] = useState(true);
   const [swapOpen, setSwapOpen] = useState(false);
+  const [systemUpdateOpen, setSystemUpdateOpen] = useState(false);
   const location = useLocation();
   const slug = location.hash.replace(/^#/, '');
   const activeSlug = tabSlugs.includes(slug) ? slug : 'general';
@@ -290,6 +291,7 @@ export default function SettingsPage() {
             updateSetting={updateSetting}
             saveSettings={saveAll}
             onOpenSwap={() => setSwapOpen(true)}
+            onOpenSystemUpdate={() => setSystemUpdateOpen(true)}
           />
         );
     }
@@ -361,7 +363,13 @@ export default function SettingsPage() {
                       </Card>
                     </Col>
 
-                    {activeSlug === 'general' && (
+
+
+                    <Col span={24}>
+                      <Card hoverable>{categoryBody}</Card>
+                    </Col>
+
+                    {activeSlug === 'general' && (slug === '' || slug === 'general') && (
                       <Col span={24}>
                         <Card className="theme-picker-card">
                           <div className="theme-picker-header">
@@ -438,10 +446,6 @@ export default function SettingsPage() {
                         </Card>
                       </Col>
                     )}
-
-                    <Col span={24}>
-                      <Card hoverable>{categoryBody}</Card>
-                    </Col>
                   </Row>
                 </>
               )}
@@ -467,6 +471,7 @@ export default function SettingsPage() {
       >
         <SwapSettingsTab />
       </Modal>
+      <SystemUpdateModal open={systemUpdateOpen} onClose={() => setSystemUpdateOpen(false)} />
     </ConfigProvider>
   );
 }

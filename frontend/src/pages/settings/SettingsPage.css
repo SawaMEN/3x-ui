@@ -9,6 +9,7 @@
 }
 
 .theme-picker-card {
+  margin-top: 12px;
   overflow: hidden;
 }
 
@@ -580,7 +581,6 @@ body.theme-cyberpunk .low-power-toggle.is-active {
     margin-right: 0 !important;
   }
 }
-
 
 .swap-mobile-toolbar {
   display: none;

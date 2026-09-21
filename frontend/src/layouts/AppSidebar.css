@@ -970,14 +970,36 @@ body.theme-cyberpunk .sider-brand .brand-text::after {
 }
 
 @media (max-width: 768px) {
+  .drawer-header {
+    position: relative;
+    display: flex;
+    align-items: center;
+    min-height: 72px;
+    padding: 14px 12px;
+  }
+
   .drawer-header .brand-block {
     position: absolute;
     top: 50%;
     left: 50%;
-    width: auto;
+    width: max-content;
+    max-width: calc(100% - 96px);
     margin: 0;
     transform: translate(-50%, -50%);
   }
-  .drawer-header .brand-mark { flex: 0 0 38px; }
-  .drawer-header .drawer-brand { white-space: nowrap; }
+
+  .drawer-header .brand-mark {
+    flex: 0 0 38px;
+  }
+
+  .drawer-header .drawer-brand {
+    white-space: nowrap;
+  }
+
+  .drawer-header-actions {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+  }
 }

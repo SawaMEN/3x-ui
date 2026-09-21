@@ -1,5 +1,6 @@
-
-.singbox-page .content-area { min-height: 100vh; }
+.singbox-page .content-area {
+  min-height: 100vh;
+}
 .singbox-page .singbox-section-header,
 .singbox-page .singbox-list-toolbar {
   display: flex;
@@ -53,12 +54,24 @@
 .singbox-page .singbox-main-tabs > .ant-tabs-nav .ant-tabs-tab {
   padding: 10px 12px;
 }
-.singbox-page .ant-card { border-radius: 12px; }
-.singbox-page .ant-card-head { min-height: 48px; }
-.singbox-page .ant-table-wrapper { overflow-x: auto; }
-.singbox-page .ant-alert { border-radius: 10px; }
-.singbox-page .ant-btn + .ant-btn { margin-inline-start: 0; }
-.singbox-editor-wrap { min-height: 62vh; }
+.singbox-page .ant-card {
+  border-radius: 12px;
+}
+.singbox-page .ant-card-head {
+  min-height: 48px;
+}
+.singbox-page .ant-table-wrapper {
+  overflow-x: auto;
+}
+.singbox-page .ant-alert {
+  border-radius: 10px;
+}
+.singbox-page .ant-btn + .ant-btn {
+  margin-inline-start: 0;
+}
+.singbox-editor-wrap {
+  min-height: 62vh;
+}
 .singbox-editor {
   width: 100%;
   min-height: 62vh;
@@ -84,9 +97,10 @@
     align-items: stretch;
     flex-direction: column;
   }
-  .singbox-page .singbox-main-tabs > .ant-tabs-nav-wrap { overflow-x: auto; }
+  .singbox-page .singbox-main-tabs > .ant-tabs-nav-wrap {
+    overflow-x: auto;
+  }
 }
-
 
 .singbox-page .singbox-item-card {
   border-color: var(--ant-color-border-secondary);

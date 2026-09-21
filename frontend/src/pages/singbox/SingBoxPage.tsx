@@ -83,45 +83,6 @@ const sectionFallbacks: Record<SectionKey, unknown> = {
   experimental: {},
 };
 
-const outboundTypes = [
-  'direct',
-  'block',
-  'dns',
-  'http',
-  'socks',
-  'shadowsocks',
-  'vmess',
-  'vless',
-  'trojan',
-  'hysteria2',
-  'tuic',
-  'selector',
-  'urltest',
-  'tun',
-  'redirect',
-  'tproxy',
-  'shadowtls',
-  'ssh',
-] as const;
-
-const dnsTypes = [
-  'local',
-  'hosts',
-  'tcp',
-  'udp',
-  'tls',
-  'quic',
-  'https',
-  'h3',
-  'dhcp',
-  'mdns',
-  'fakeip',
-  'tailscale',
-  'openconnect',
-  'openvpn',
-  'resolved',
-] as const;
-
 function asObject(value: unknown): JsonObject {
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as JsonObject) : {};
 }
@@ -156,15 +117,18 @@ function Field({
   label,
   children,
   span = 12,
+  hint,
 }: {
   label: string;
   children: ReactNode;
   span?: number;
+  hint?: string;
 }) {
   return (
     <Col xs={24} md={span}>
       <div className="singbox-field">
         <div className="singbox-field-label">{label}</div>
+        {hint && <div className="singbox-field-hint">{hint}</div>}
         {children}
       </div>
     </Col>
@@ -250,10 +214,12 @@ function JsonModal({
   title,
   value,
   onApply,
+  buttonText = 'JSON',
 }: {
   title: string;
   value: unknown;
   onApply: (value: unknown) => void;
+  buttonText?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
@@ -278,7 +244,7 @@ function JsonModal({
   return (
     <>
       <Button icon={<CodeOutlined />} onClick={openEditor}>
-        JSON
+        {buttonText}
       </Button>
       <Modal
         open={open}
@@ -393,8 +359,6 @@ function CommonListItem({
   );
 }
 
-
-
 function singBoxHealthIssues(config: ConfigMap) {
   const issues: string[] = [];
   const outbounds = asObjectArray(config.outbounds);
@@ -410,16 +374,21 @@ function singBoxHealthIssues(config: ConfigMap) {
   outbounds.forEach((item) => {
     const type = asString(item.type);
     const name = asString(item.tag) || 'без tag';
-    if (['vless','vmess','trojan','shadowsocks','http','socks','hysteria2','tuic'].includes(type)) {
+    if (
+      ['vless', 'vmess', 'trojan', 'shadowsocks', 'http', 'socks', 'hysteria2', 'tuic'].includes(
+        type,
+      )
+    ) {
       if (!asString(item.server)) issues.push(type + ' "' + name + '": не указан сервер');
       if (!asNumber(item.server_port)) issues.push(type + ' "' + name + '": не указан порт');
     }
-    if (['vless','vmess'].includes(type) && !asString(item.uuid)) {
+    if (['vless', 'vmess'].includes(type) && !asString(item.uuid)) {
       issues.push(type + ' "' + name + '": не указан UUID');
     }
-    if (['selector','urltest'].includes(type)) {
+    if (['selector', 'urltest'].includes(type)) {
       asStringArray(item.outbounds).forEach((target) => {
-        if (!tagSet.has(target)) issues.push(type + ' "' + name + '": отсутствует outbound "' + target + '"');
+        if (!tagSet.has(target))
+          issues.push(type + ' "' + name + '": отсутствует outbound "' + target + '"');
       });
     }
   });
@@ -433,7 +402,13 @@ function singBoxHealthIssues(config: ConfigMap) {
   rules.forEach((raw, index) => {
     const rule = asObject(raw);
     if (asString(rule.outbound) && !tagSet.has(asString(rule.outbound))) {
-      issues.push('Route rule #' + (index + 1) + ' ссылается на отсутствующий outbound "' + asString(rule.outbound) + '"');
+      issues.push(
+        'Route rule #' +
+          (index + 1) +
+          ' ссылается на отсутствующий outbound "' +
+          asString(rule.outbound) +
+          '"',
+      );
     }
   });
 
@@ -544,7 +519,14 @@ function SingBoxOutboundEditor({
 
   return (
     <>
-      {duplicated && <Alert type="warning" showIcon message="Tag уже используется. Укажите уникальное имя." style={{ marginBottom: 12 }} />}
+      {duplicated && (
+        <Alert
+          type="warning"
+          showIcon
+          message="Tag уже используется. Укажите уникальное имя."
+          style={{ marginBottom: 12 }}
+        />
+      )}
       <Tabs
         items={[
           {
@@ -557,22 +539,55 @@ function SingBoxOutboundEditor({
                     <Select
                       value={type}
                       style={{ width: '100%' }}
-                      options={['direct','block','dns','http','socks','shadowsocks','vmess','vless','trojan','hysteria2','tuic','selector','urltest','tun','redirect','tproxy','shadowtls','ssh'].map((v) => ({ value: v, label: v }))}
-                      onChange={(next) => onChange({ type: next, tag: asString(value.tag) || next, ...(next === 'selector' || next === 'urltest' ? { outbounds: asStringArray(value.outbounds) } : {}) })}
+                      options={[
+                        'direct',
+                        'block',
+                        'dns',
+                        'http',
+                        'socks',
+                        'shadowsocks',
+                        'vmess',
+                        'vless',
+                        'trojan',
+                        'hysteria2',
+                        'tuic',
+                        'selector',
+                        'urltest',
+                        'tun',
+                        'redirect',
+                        'tproxy',
+                        'shadowtls',
+                        'ssh',
+                      ].map((v) => ({ value: v, label: v }))}
+                      onChange={(next) =>
+                        onChange({
+                          type: next,
+                          tag: asString(value.tag) || next,
+                          ...(next === 'selector' || next === 'urltest'
+                            ? { outbounds: asStringArray(value.outbounds) }
+                            : {}),
+                        })
+                      }
                     />
                   </Field>
                   <Field label="Tag" hint="Уникальное имя для routing, selector и urltest.">
-                    <TextField value={asString(value.tag)} onChange={(v) => patch('tag', v)} placeholder="proxy-1" />
+                    <TextField
+                      value={asString(value.tag)}
+                      onChange={(v) => patch('tag', v)}
+                      placeholder="proxy-1"
+                    />
                   </Field>
 
-                  {['selector','urltest'].includes(type) ? (
+                  {['selector', 'urltest'].includes(type) ? (
                     <>
                       <Field label="Outbounds группы" span={24}>
                         <Select
                           mode="multiple"
                           style={{ width: '100%' }}
                           value={asStringArray(value.outbounds)}
-                          options={existingTags.filter((tag) => tag !== asString(value.tag)).map((tag) => ({ value: tag, label: tag }))}
+                          options={existingTags
+                            .filter((tag) => tag !== asString(value.tag))
+                            .map((tag) => ({ value: tag, label: tag }))}
                           onChange={(v) => patch('outbounds', v)}
                           placeholder="Выберите исходящие"
                         />
@@ -580,42 +595,133 @@ function SingBoxOutboundEditor({
                       {type === 'urltest' && (
                         <>
                           <Field label="URL проверки">
-                            <TextField value={asString(value.url)} onChange={(v) => patch('url', v)} placeholder="https://www.gstatic.com/generate_204" />
+                            <TextField
+                              value={asString(value.url)}
+                              onChange={(v) => patch('url', v)}
+                              placeholder="https://www.gstatic.com/generate_204"
+                            />
                           </Field>
                           <Field label="Интервал">
-                            <TextField value={asString(value.interval)} onChange={(v) => patch('interval', v)} placeholder="3m" />
+                            <TextField
+                              value={asString(value.interval)}
+                              onChange={(v) => patch('interval', v)}
+                              placeholder="3m"
+                            />
                           </Field>
                           <Field label="Допуск">
-                            <NumberField value={asNumber(value.tolerance)} onChange={(v) => patch('tolerance', v)} />
+                            <NumberField
+                              value={asNumber(value.tolerance)}
+                              onChange={(v) => patch('tolerance', v)}
+                            />
                           </Field>
                         </>
                       )}
                     </>
                   ) : (
                     <>
-                      {['http','socks','shadowsocks','vmess','vless','trojan','hysteria2','tuic','shadowtls','ssh'].includes(type) && (
+                      {[
+                        'http',
+                        'socks',
+                        'shadowsocks',
+                        'vmess',
+                        'vless',
+                        'trojan',
+                        'hysteria2',
+                        'tuic',
+                        'shadowtls',
+                        'ssh',
+                      ].includes(type) && (
                         <>
-                          <Field label="Сервер"><TextField value={asString(value.server)} onChange={(v) => patch('server', v)} placeholder="example.com" /></Field>
-                          <Field label="Порт"><NumberField value={asNumber(value.server_port)} onChange={(v) => patch('server_port', v)} min={1} max={65535} /></Field>
+                          <Field label="Сервер">
+                            <TextField
+                              value={asString(value.server)}
+                              onChange={(v) => patch('server', v)}
+                              placeholder="example.com"
+                            />
+                          </Field>
+                          <Field label="Порт">
+                            <NumberField
+                              value={asNumber(value.server_port)}
+                              onChange={(v) => patch('server_port', v)}
+                              min={1}
+                              max={65535}
+                            />
+                          </Field>
                         </>
                       )}
-                      {['vless','vmess'].includes(type) && <Field label="UUID"><TextField value={asString(value.uuid)} onChange={(v) => patch('uuid', v)} /></Field>}
-                      {type === 'vless' && <Field label="Flow"><TextField value={asString(value.flow)} onChange={(v) => patch('flow', v)} placeholder="xtls-rprx-vision" /></Field>}
-                      {['trojan','hysteria2','tuic'].includes(type) && <Field label="Пароль"><Input.Password value={asString(value.password)} onChange={(e) => patch('password', e.target.value)} /></Field>}
-                      {['http','socks'].includes(type) && (
+                      {['vless', 'vmess'].includes(type) && (
+                        <Field label="UUID">
+                          <TextField
+                            value={asString(value.uuid)}
+                            onChange={(v) => patch('uuid', v)}
+                          />
+                        </Field>
+                      )}
+                      {type === 'vless' && (
+                        <Field label="Flow">
+                          <TextField
+                            value={asString(value.flow)}
+                            onChange={(v) => patch('flow', v)}
+                            placeholder="xtls-rprx-vision"
+                          />
+                        </Field>
+                      )}
+                      {['trojan', 'hysteria2', 'tuic'].includes(type) && (
+                        <Field label="Пароль">
+                          <Input.Password
+                            value={asString(value.password)}
+                            onChange={(e) => patch('password', e.target.value)}
+                          />
+                        </Field>
+                      )}
+                      {['http', 'socks'].includes(type) && (
                         <>
-                          <Field label="Логин"><TextField value={asString(value.username)} onChange={(v) => patch('username', v)} /></Field>
-                          <Field label="Пароль"><Input.Password value={asString(value.password)} onChange={(e) => patch('password', e.target.value)} /></Field>
+                          <Field label="Логин">
+                            <TextField
+                              value={asString(value.username)}
+                              onChange={(v) => patch('username', v)}
+                            />
+                          </Field>
+                          <Field label="Пароль">
+                            <Input.Password
+                              value={asString(value.password)}
+                              onChange={(e) => patch('password', e.target.value)}
+                            />
+                          </Field>
                         </>
                       )}
                       {type === 'shadowsocks' && (
                         <>
-                          <Field label="Метод"><TextField value={asString(value.method)} onChange={(v) => patch('method', v)} placeholder="2022-blake3-aes-128-gcm" /></Field>
-                          <Field label="Пароль"><Input.Password value={asString(value.password)} onChange={(e) => patch('password', e.target.value)} /></Field>
+                          <Field label="Метод">
+                            <TextField
+                              value={asString(value.method)}
+                              onChange={(v) => patch('method', v)}
+                              placeholder="2022-blake3-aes-128-gcm"
+                            />
+                          </Field>
+                          <Field label="Пароль">
+                            <Input.Password
+                              value={asString(value.password)}
+                              onChange={(e) => patch('password', e.target.value)}
+                            />
+                          </Field>
                         </>
                       )}
-                      {type === 'ssh' && <Field label="Пользователь"><TextField value={asString(value.user)} onChange={(v) => patch('user', v)} placeholder="root" /></Field>}
-                      <Field label="Detour" hint="Провести соединение через другой outbound."><TextField value={asString(value.detour)} onChange={(v) => patch('detour', v)} /></Field>
+                      {type === 'ssh' && (
+                        <Field label="Пользователь">
+                          <TextField
+                            value={asString(value.user)}
+                            onChange={(v) => patch('user', v)}
+                            placeholder="root"
+                          />
+                        </Field>
+                      )}
+                      <Field label="Detour" hint="Провести соединение через другой outbound.">
+                        <TextField
+                          value={asString(value.detour)}
+                          onChange={(v) => patch('detour', v)}
+                        />
+                      </Field>
                     </>
                   )}
                 </Row>
@@ -633,17 +739,65 @@ function SingBoxOutboundEditor({
                       checked={!!value.tls}
                       onChange={(checked) => {
                         if (checked) onChange({ ...value, tls: { enabled: true } });
-                        else onChange((() => { const next = { ...value }; delete next.tls; return next; })());
+                        else
+                          onChange(
+                            (() => {
+                              const next = { ...value };
+                              delete next.tls;
+                              return next;
+                            })(),
+                          );
                       }}
                     />
                   </Field>
-                  <Field label="SNI"><TextField value={asString(tls.server_name)} onChange={(v) => nested('tls', 'server_name', v)} placeholder="example.com" /></Field>
-                  <Field label="Insecure"><Switch checked={!!tls.insecure} disabled={!value.tls} onChange={(v) => nested('tls', 'insecure', v)} /></Field>
-                  <Field label="ALPN"><Select mode="tags" style={{ width: '100%' }} disabled={!value.tls} value={asStringArray(tls.alpn)} onChange={(v) => nested('tls', 'alpn', v)} /></Field>
-                  <Field label="Reality"><Switch checked={!!reality.enabled} disabled={!value.tls} onChange={(v) => nested('tls', 'reality', { ...reality, enabled: v })} /></Field>
-                  <Field label="Public key"><TextField value={asString(reality.public_key)} onChange={(v) => nested('tls', 'reality', { ...reality, public_key: v })} /></Field>
-                  <Field label="Short ID"><TextField value={asString(reality.short_id)} onChange={(v) => nested('tls', 'reality', { ...reality, short_id: v })} /></Field>
-                  <Field label="Certificate path"><TextField value={asString(tls.certificate_path)} onChange={(v) => nested('tls', 'certificate_path', v)} /></Field>
+                  <Field label="SNI">
+                    <TextField
+                      value={asString(tls.server_name)}
+                      onChange={(v) => nested('tls', 'server_name', v)}
+                      placeholder="example.com"
+                    />
+                  </Field>
+                  <Field label="Insecure">
+                    <Switch
+                      checked={!!tls.insecure}
+                      disabled={!value.tls}
+                      onChange={(v) => nested('tls', 'insecure', v)}
+                    />
+                  </Field>
+                  <Field label="ALPN">
+                    <Select
+                      mode="tags"
+                      style={{ width: '100%' }}
+                      disabled={!value.tls}
+                      value={asStringArray(tls.alpn)}
+                      onChange={(v) => nested('tls', 'alpn', v)}
+                    />
+                  </Field>
+                  <Field label="Reality">
+                    <Switch
+                      checked={!!reality.enabled}
+                      disabled={!value.tls}
+                      onChange={(v) => nested('tls', 'reality', { ...reality, enabled: v })}
+                    />
+                  </Field>
+                  <Field label="Public key">
+                    <TextField
+                      value={asString(reality.public_key)}
+                      onChange={(v) => nested('tls', 'reality', { ...reality, public_key: v })}
+                    />
+                  </Field>
+                  <Field label="Short ID">
+                    <TextField
+                      value={asString(reality.short_id)}
+                      onChange={(v) => nested('tls', 'reality', { ...reality, short_id: v })}
+                    />
+                  </Field>
+                  <Field label="Certificate path">
+                    <TextField
+                      value={asString(tls.certificate_path)}
+                      onChange={(v) => nested('tls', 'certificate_path', v)}
+                    />
+                  </Field>
                 </Row>
               </Card>
             ),
@@ -659,21 +813,64 @@ function SingBoxOutboundEditor({
                       allowClear
                       style={{ width: '100%' }}
                       value={asString(transport.type) || undefined}
-                      options={['http','ws','grpc','httpupgrade','quic'].map((v) => ({ value: v, label: v }))}
+                      options={['http', 'ws', 'grpc', 'httpupgrade', 'quic'].map((v) => ({
+                        value: v,
+                        label: v,
+                      }))}
                       onChange={(v) => {
-                        if (!v) onChange((() => { const next = { ...value }; delete next.transport; return next; })());
+                        if (!v)
+                          onChange(
+                            (() => {
+                              const next = { ...value };
+                              delete next.transport;
+                              return next;
+                            })(),
+                          );
                         else onChange({ ...value, transport: { ...transport, type: v } });
                       }}
                     />
                   </Field>
-                  {['http','ws','httpupgrade'].includes(asString(transport.type)) && <Field label="Path"><TextField value={asString(transport.path)} onChange={(v) => nested('transport', 'path', v)} placeholder="/" /></Field>}
-                  {['http','ws'].includes(asString(transport.type)) && <Field label="Host"><TextField value={asString(asObject(transport.headers).Host)} onChange={(v) => nested('transport', 'headers', { ...asObject(transport.headers), Host: v })} /></Field>}
-                  {['grpc','quic'].includes(asString(transport.type)) && <Field label="Service name"><TextField value={asString(transport.service_name)} onChange={(v) => nested('transport', 'service_name', v)} /></Field>}
+                  {['http', 'ws', 'httpupgrade'].includes(asString(transport.type)) && (
+                    <Field label="Path">
+                      <TextField
+                        value={asString(transport.path)}
+                        onChange={(v) => nested('transport', 'path', v)}
+                        placeholder="/"
+                      />
+                    </Field>
+                  )}
+                  {['http', 'ws'].includes(asString(transport.type)) && (
+                    <Field label="Host">
+                      <TextField
+                        value={asString(asObject(transport.headers).Host)}
+                        onChange={(v) =>
+                          nested('transport', 'headers', {
+                            ...asObject(transport.headers),
+                            Host: v,
+                          })
+                        }
+                      />
+                    </Field>
+                  )}
+                  {['grpc', 'quic'].includes(asString(transport.type)) && (
+                    <Field label="Service name">
+                      <TextField
+                        value={asString(transport.service_name)}
+                        onChange={(v) => nested('transport', 'service_name', v)}
+                      />
+                    </Field>
+                  )}
                   <Field label="Headers JSON" span={24}>
                     <Input.TextArea
                       autoSize={{ minRows: 3, maxRows: 8 }}
                       value={JSON.stringify(asObject(transport.headers), null, 2)}
-                      onChange={(e) => { try { nested('transport', 'headers', JSON.parse(e.target.value || '{}')); } catch { /* wait for valid json */ } }}
+                      onChange={(e) => {
+                        try {
+                          nested('transport', 'headers', JSON.parse(e.target.value || '{}'));
+                        } catch {
+                          /* wait for valid json */
+                        }
+                      }}
                     />
                   </Field>
                 </Row>
@@ -685,12 +882,26 @@ function SingBoxOutboundEditor({
             label: 'JSON',
             children: (
               <Card size="small">
-                <Alert type="info" showIcon message="Расширенный режим" description="Любой параметр sing-box можно задать вручную, не теряя остальную форму." style={{ marginBottom: 12 }} />
+                <Alert
+                  type="info"
+                  showIcon
+                  message="Расширенный режим"
+                  description="Любой параметр sing-box можно задать вручную, не теряя остальную форму."
+                  style={{ marginBottom: 12 }}
+                />
                 <Input.TextArea
                   autoSize={{ minRows: 16, maxRows: 30 }}
                   spellCheck={false}
                   value={prettyJson(value)}
-                  onChange={(e) => { try { const parsed = JSON.parse(e.target.value); if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) onChange(parsed); } catch { /* wait for valid json */ } }}
+                  onChange={(e) => {
+                    try {
+                      const parsed = JSON.parse(e.target.value);
+                      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed))
+                        onChange(parsed);
+                    } catch {
+                      /* wait for valid json */
+                    }
+                  }}
                   style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
                 />
               </Card>
@@ -717,11 +928,25 @@ function SingBoxOutboundModal({
 }) {
   const [draft, setDraft] = useState<JsonObject>({});
   useEffect(() => {
-    if (open) setDraft(value ? JSON.parse(JSON.stringify(value)) : { type: 'direct', tag: 'direct-' + (existingTags.length + 1) });
+    if (!open) return;
+    const nextDraft = value
+      ? JSON.parse(JSON.stringify(value))
+      : { type: 'direct', tag: 'direct-' + (existingTags.length + 1) };
+    const timer = window.setTimeout(() => setDraft(nextDraft), 0);
+    return () => window.clearTimeout(timer);
   }, [open, value, existingTags.length]);
 
   return (
-    <Modal open={open} width={980} title={value ? 'Изменение outbound' : 'Новый outbound'} okText="Сохранить" cancelText="Отмена" onCancel={onCancel} onOk={() => onSave(draft)} destroyOnClose>
+    <Modal
+      open={open}
+      width={980}
+      title={value ? 'Изменение outbound' : 'Новый outbound'}
+      okText="Сохранить"
+      cancelText="Отмена"
+      onCancel={onCancel}
+      onOk={() => onSave(draft)}
+      destroyOnClose
+    >
       <SingBoxOutboundEditor value={draft} existingTags={existingTags} onChange={setDraft} />
     </Modal>
   );
@@ -746,21 +971,43 @@ function SingBoxRouteRuleModal({
 }) {
   const [draft, setDraft] = useState<JsonObject>({});
   useEffect(() => {
-    if (open) setDraft(value ? JSON.parse(JSON.stringify(value)) : {});
+    if (!open) return;
+    const nextDraft = value ? JSON.parse(JSON.stringify(value)) : {};
+    const timer = window.setTimeout(() => setDraft(nextDraft), 0);
+    return () => window.clearTimeout(timer);
   }, [open, value]);
 
   const patch = (key: string, nextValue: unknown) => {
     setDraft((current) => {
       const next = { ...current };
-      if (nextValue === '' || nextValue === undefined || (Array.isArray(nextValue) && nextValue.length === 0)) delete next[key];
+      if (
+        nextValue === '' ||
+        nextValue === undefined ||
+        (Array.isArray(nextValue) && nextValue.length === 0)
+      )
+        delete next[key];
       else next[key] = nextValue;
       return next;
     });
   };
 
   return (
-    <Modal open={open} width={920} title={value ? 'Изменение правила' : 'Новое правило'} okText="Сохранить" cancelText="Отмена" onCancel={onCancel} onOk={() => onSave(draft)}>
-      <Alert type="info" showIcon message="Фильтр → назначение" description="Правила редактируются так же, как в Xray: условия собираются полями, JSON оставлен для редких параметров." style={{ marginBottom: 12 }} />
+    <Modal
+      open={open}
+      width={920}
+      title={value ? 'Изменение правила' : 'Новое правило'}
+      okText="Сохранить"
+      cancelText="Отмена"
+      onCancel={onCancel}
+      onOk={() => onSave(draft)}
+    >
+      <Alert
+        type="info"
+        showIcon
+        message="Фильтр → назначение"
+        description="Правила редактируются так же, как в Xray: условия собираются полями, JSON оставлен для редких параметров."
+        style={{ marginBottom: 12 }}
+      />
       <Tabs
         items={[
           {
@@ -769,17 +1016,105 @@ function SingBoxRouteRuleModal({
             children: (
               <Card size="small">
                 <Row gutter={[12, 14]}>
-                  <Field label="Домены"><Select mode="tags" style={{ width: '100%' }} value={asStringArray(draft.domain)} onChange={(v) => patch('domain', v)} placeholder="example.com" /></Field>
-                  <Field label="Domain suffix"><Select mode="tags" style={{ width: '100%' }} value={asStringArray(draft.domain_suffix)} onChange={(v) => patch('domain_suffix', v)} /></Field>
-                  <Field label="Domain keyword"><Select mode="tags" style={{ width: '100%' }} value={asStringArray(draft.domain_keyword)} onChange={(v) => patch('domain_keyword', v)} /></Field>
-                  <Field label="IP / CIDR"><Select mode="tags" style={{ width: '100%' }} value={asStringArray(draft.ip_cidr)} onChange={(v) => patch('ip_cidr', v)} /></Field>
-                  <Field label="Source IP / CIDR"><Select mode="tags" style={{ width: '100%' }} value={asStringArray(draft.source_ip_cidr)} onChange={(v) => patch('source_ip_cidr', v)} /></Field>
-                  <Field label="Ports"><Input value={Array.isArray(draft.port) ? draft.port.join(', ') : asString(draft.port)} onChange={(e) => patch('port', e.target.value)} placeholder="80, 443, 1000:2000" /></Field>
-                  <Field label="Source ports"><Input value={Array.isArray(draft.source_port) ? draft.source_port.join(', ') : asString(draft.source_port)} onChange={(e) => patch('source_port', e.target.value)} /></Field>
-                  <Field label="Protocol"><Select mode="multiple" style={{ width: '100%' }} value={asStringArray(draft.protocol)} options={['http','tls','quic','dns','bittorrent'].map((v) => ({ value: v, label: v }))} onChange={(v) => patch('protocol', v)} /></Field>
-                  <Field label="Network"><Select mode="multiple" style={{ width: '100%' }} value={asStringArray(draft.network)} options={['tcp','udp'].map((v) => ({ value: v, label: v }))} onChange={(v) => patch('network', v)} /></Field>
-                  <Field label="Inbound"><Select mode="multiple" style={{ width: '100%' }} value={asStringArray(draft.inbound)} options={inboundTags.map((v) => ({ value: v, label: v }))} onChange={(v) => patch('inbound', v)} /></Field>
-                  <Field label="Rule-set"><Select mode="multiple" style={{ width: '100%' }} value={asStringArray(draft.rule_set)} options={ruleSetTags.map((v) => ({ value: v, label: v }))} onChange={(v) => patch('rule_set', v)} /></Field>
+                  <Field label="Домены">
+                    <Select
+                      mode="tags"
+                      style={{ width: '100%' }}
+                      value={asStringArray(draft.domain)}
+                      onChange={(v) => patch('domain', v)}
+                      placeholder="example.com"
+                    />
+                  </Field>
+                  <Field label="Domain suffix">
+                    <Select
+                      mode="tags"
+                      style={{ width: '100%' }}
+                      value={asStringArray(draft.domain_suffix)}
+                      onChange={(v) => patch('domain_suffix', v)}
+                    />
+                  </Field>
+                  <Field label="Domain keyword">
+                    <Select
+                      mode="tags"
+                      style={{ width: '100%' }}
+                      value={asStringArray(draft.domain_keyword)}
+                      onChange={(v) => patch('domain_keyword', v)}
+                    />
+                  </Field>
+                  <Field label="IP / CIDR">
+                    <Select
+                      mode="tags"
+                      style={{ width: '100%' }}
+                      value={asStringArray(draft.ip_cidr)}
+                      onChange={(v) => patch('ip_cidr', v)}
+                    />
+                  </Field>
+                  <Field label="Source IP / CIDR">
+                    <Select
+                      mode="tags"
+                      style={{ width: '100%' }}
+                      value={asStringArray(draft.source_ip_cidr)}
+                      onChange={(v) => patch('source_ip_cidr', v)}
+                    />
+                  </Field>
+                  <Field label="Ports">
+                    <Input
+                      value={
+                        Array.isArray(draft.port) ? draft.port.join(', ') : asString(draft.port)
+                      }
+                      onChange={(e) => patch('port', e.target.value)}
+                      placeholder="80, 443, 1000:2000"
+                    />
+                  </Field>
+                  <Field label="Source ports">
+                    <Input
+                      value={
+                        Array.isArray(draft.source_port)
+                          ? draft.source_port.join(', ')
+                          : asString(draft.source_port)
+                      }
+                      onChange={(e) => patch('source_port', e.target.value)}
+                    />
+                  </Field>
+                  <Field label="Protocol">
+                    <Select
+                      mode="multiple"
+                      style={{ width: '100%' }}
+                      value={asStringArray(draft.protocol)}
+                      options={['http', 'tls', 'quic', 'dns', 'bittorrent'].map((v) => ({
+                        value: v,
+                        label: v,
+                      }))}
+                      onChange={(v) => patch('protocol', v)}
+                    />
+                  </Field>
+                  <Field label="Network">
+                    <Select
+                      mode="multiple"
+                      style={{ width: '100%' }}
+                      value={asStringArray(draft.network)}
+                      options={['tcp', 'udp'].map((v) => ({ value: v, label: v }))}
+                      onChange={(v) => patch('network', v)}
+                    />
+                  </Field>
+                  <Field label="Inbound">
+                    <Select
+                      mode="multiple"
+                      style={{ width: '100%' }}
+                      value={asStringArray(draft.inbound)}
+                      options={inboundTags.map((v) => ({ value: v, label: v }))}
+                      onChange={(v) => patch('inbound', v)}
+                    />
+                  </Field>
+                  <Field label="Rule-set">
+                    <Select
+                      mode="multiple"
+                      style={{ width: '100%' }}
+                      value={asStringArray(draft.rule_set)}
+                      options={ruleSetTags.map((v) => ({ value: v, label: v }))}
+                      onChange={(v) => patch('rule_set', v)}
+                    />
+                  </Field>
                 </Row>
               </Card>
             ),
@@ -790,9 +1125,38 @@ function SingBoxRouteRuleModal({
             children: (
               <Card size="small">
                 <Row gutter={[12, 14]}>
-                  <Field label="Outbound"><Select allowClear style={{ width: '100%' }} value={asString(draft.outbound) || undefined} options={outboundTags.map((v) => ({ value: v, label: v }))} onChange={(v) => patch('outbound', v)} /></Field>
-                  <Field label="Action"><Select allowClear style={{ width: '100%' }} value={asString(draft.action) || undefined} options={['route','sniff','resolve','hijack-dns','reject','selector'].map((v) => ({ value: v, label: v }))} onChange={(v) => patch('action', v)} /></Field>
-                  <Field label="Комментарий" span={24}><Input value={asString(draft.comment)} onChange={(e) => patch('comment', e.target.value)} placeholder="Telegram через proxy" /></Field>
+                  <Field label="Outbound">
+                    <Select
+                      allowClear
+                      style={{ width: '100%' }}
+                      value={asString(draft.outbound) || undefined}
+                      options={outboundTags.map((v) => ({ value: v, label: v }))}
+                      onChange={(v) => patch('outbound', v)}
+                    />
+                  </Field>
+                  <Field label="Action">
+                    <Select
+                      allowClear
+                      style={{ width: '100%' }}
+                      value={asString(draft.action) || undefined}
+                      options={[
+                        'route',
+                        'sniff',
+                        'resolve',
+                        'hijack-dns',
+                        'reject',
+                        'selector',
+                      ].map((v) => ({ value: v, label: v }))}
+                      onChange={(v) => patch('action', v)}
+                    />
+                  </Field>
+                  <Field label="Комментарий" span={24}>
+                    <Input
+                      value={asString(draft.comment)}
+                      onChange={(e) => patch('comment', e.target.value)}
+                      placeholder="Telegram через proxy"
+                    />
+                  </Field>
                 </Row>
               </Card>
             ),
@@ -802,7 +1166,21 @@ function SingBoxRouteRuleModal({
             label: 'JSON',
             children: (
               <Card size="small">
-                <Input.TextArea autoSize={{ minRows: 16, maxRows: 28 }} spellCheck={false} value={prettyJson(draft)} onChange={(e) => { try { const parsed = JSON.parse(e.target.value); if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) setDraft(parsed); } catch { /* wait for valid json */ } }} style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }} />
+                <Input.TextArea
+                  autoSize={{ minRows: 16, maxRows: 28 }}
+                  spellCheck={false}
+                  value={prettyJson(draft)}
+                  onChange={(e) => {
+                    try {
+                      const parsed = JSON.parse(e.target.value);
+                      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed))
+                        setDraft(parsed);
+                    } catch {
+                      /* wait for valid json */
+                    }
+                  }}
+                  style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
+                />
               </Card>
             ),
           },
@@ -990,7 +1368,6 @@ export default function SingBoxPage() {
     );
   };
 
-
   const renderDns = () => {
     const value = asObject(sectionValue('dns', config));
     const servers = asObjectArray(value.servers);
@@ -1004,18 +1381,59 @@ export default function SingBoxPage() {
     return (
       <Space direction="vertical" size={12} style={{ width: '100%' }}>
         <Card>
-          <SectionHeader title="DNS" description="Базовые параметры вынесены в понятные поля, отдельные DNS-серверы редактируются как записи." />
+          <SectionHeader
+            title="DNS"
+            description="Базовые параметры вынесены в понятные поля, отдельные DNS-серверы редактируются как записи."
+          />
           <Row gutter={[12, 16]}>
             <Field label="Финальный DNS">
-              <Select allowClear style={{ width: '100%' }} value={asString(value.final) || undefined} options={servers.map((s) => ({ value: asString(s.tag), label: asString(s.tag) || asString(s.server) || 'DNS' }))} onChange={(v) => patchSection('dns', { final: v })} />
+              <Select
+                allowClear
+                style={{ width: '100%' }}
+                value={asString(value.final) || undefined}
+                options={servers.map((s) => ({
+                  value: asString(s.tag),
+                  label: asString(s.tag) || asString(s.server) || 'DNS',
+                }))}
+                onChange={(v) => patchSection('dns', { final: v })}
+              />
             </Field>
             <Field label="Стратегия">
-              <Select allowClear style={{ width: '100%' }} value={asString(value.strategy) || undefined} options={['prefer_ipv4','prefer_ipv6','ipv4_only','ipv6_only'].map((v) => ({ value: v, label: v }))} onChange={(v) => patchSection('dns', { strategy: v })} />
+              <Select
+                allowClear
+                style={{ width: '100%' }}
+                value={asString(value.strategy) || undefined}
+                options={['prefer_ipv4', 'prefer_ipv6', 'ipv4_only', 'ipv6_only'].map((v) => ({
+                  value: v,
+                  label: v,
+                }))}
+                onChange={(v) => patchSection('dns', { strategy: v })}
+              />
             </Field>
-            <Field label="Кэш"><Switch checked={!asBoolean(value.disable_cache)} onChange={(v) => patchSection('dns', { disable_cache: !v })} /></Field>
-            <Field label="Оптимистический кэш"><Switch checked={asBoolean(value.optimistic)} onChange={(v) => patchSection('dns', { optimistic: v })} /></Field>
-            <Field label="Client subnet"><TextField value={asString(value.client_subnet)} onChange={(v) => patchSection('dns', { client_subnet: v })} /></Field>
-            <Field label="Cache capacity"><NumberField value={asNumber(value.cache_capacity)} onChange={(v) => patchSection('dns', { cache_capacity: v })} /></Field>
+            <Field label="Кэш">
+              <Switch
+                checked={!asBoolean(value.disable_cache)}
+                onChange={(v) => patchSection('dns', { disable_cache: !v })}
+              />
+            </Field>
+            <Field label="Оптимистический кэш">
+              <Switch
+                checked={asBoolean(value.optimistic)}
+                onChange={(v) => patchSection('dns', { optimistic: v })}
+              />
+            </Field>
+            <Field label="Client subnet">
+              <TextField
+                value={asString(value.client_subnet)}
+                onChange={(v) => patchSection('dns', { client_subnet: v })}
+              />
+            </Field>
+            <Field label="Cache capacity">
+              <NumberField
+                value={asNumber(value.cache_capacity)}
+                onChange={(v) => patchSection('dns', { cache_capacity: v })}
+              />
+            </Field>
           </Row>
         </Card>
 
@@ -1023,9 +1441,23 @@ export default function SingBoxPage() {
           <div className="singbox-list-toolbar">
             <div>
               <div className="singbox-card-title">DNS-серверы</div>
-              <div className="singbox-card-subtitle">Частые поля доступны прямо в таблице. Для TLS, HTTPS, fakeip и специальных параметров есть JSON записи.</div>
+              <div className="singbox-card-subtitle">
+                Частые поля доступны прямо в таблице. Для TLS, HTTPS, fakeip и специальных
+                параметров есть JSON записи.
+              </div>
             </div>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => updateSection('dns', { ...value, servers: [...servers, { type: 'local', tag: 'dns-' + (servers.length + 1) }] })}>Добавить DNS</Button>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() =>
+                updateSection('dns', {
+                  ...value,
+                  servers: [...servers, { type: 'local', tag: 'dns-' + (servers.length + 1) }],
+                })
+              }
+            >
+              Добавить DNS
+            </Button>
           </div>
           <Table
             size="small"
@@ -1034,26 +1466,110 @@ export default function SingBoxPage() {
             dataSource={servers}
             locale={{ emptyText: <Empty description="DNS-серверы ещё не добавлены" /> }}
             columns={[
-              { title: 'Tag', render: (_: unknown, row: JsonObject) => <Tag color="blue">{asString(row.tag) || 'без tag'}</Tag> },
-              { title: 'Тип', render: (_: unknown, row: JsonObject, index: number) => <Select size="small" value={asString(row.type) || 'local'} style={{ minWidth: 150 }} options={['local','hosts','tcp','udp','tls','quic','https','h3','dhcp','mdns','fakeip','tailscale','openconnect','openvpn','resolved'].map((v) => ({ value: v, label: v }))} onChange={(v) => updateServer(index, { type: v })} /> },
-              { title: 'Server', render: (_: unknown, row: JsonObject, index: number) => <TextField value={asString(row.server)} onChange={(v) => updateServer(index, { server: v })} placeholder="1.1.1.1 / https://..." /> },
-              { title: 'Port', width: 90, render: (_: unknown, row: JsonObject, index: number) => <NumberField value={asNumber(row.server_port)} onChange={(v) => updateServer(index, { server_port: v })} min={1} max={65535} /> },
-              { title: 'Detour', render: (_: unknown, row: JsonObject, index: number) => <TextField value={asString(row.detour)} onChange={(v) => updateServer(index, { detour: v })} /> },
+              {
+                title: 'Tag',
+                render: (_: unknown, row: JsonObject) => (
+                  <Tag color="blue">{asString(row.tag) || 'без tag'}</Tag>
+                ),
+              },
+              {
+                title: 'Тип',
+                render: (_: unknown, row: JsonObject, index: number) => (
+                  <Select
+                    size="small"
+                    value={asString(row.type) || 'local'}
+                    style={{ minWidth: 150 }}
+                    options={[
+                      'local',
+                      'hosts',
+                      'tcp',
+                      'udp',
+                      'tls',
+                      'quic',
+                      'https',
+                      'h3',
+                      'dhcp',
+                      'mdns',
+                      'fakeip',
+                      'tailscale',
+                      'openconnect',
+                      'openvpn',
+                      'resolved',
+                    ].map((v) => ({ value: v, label: v }))}
+                    onChange={(v) => updateServer(index, { type: v })}
+                  />
+                ),
+              },
+              {
+                title: 'Server',
+                render: (_: unknown, row: JsonObject, index: number) => (
+                  <TextField
+                    value={asString(row.server)}
+                    onChange={(v) => updateServer(index, { server: v })}
+                    placeholder="1.1.1.1 / https://..."
+                  />
+                ),
+              },
+              {
+                title: 'Port',
+                width: 90,
+                render: (_: unknown, row: JsonObject, index: number) => (
+                  <NumberField
+                    value={asNumber(row.server_port)}
+                    onChange={(v) => updateServer(index, { server_port: v })}
+                    min={1}
+                    max={65535}
+                  />
+                ),
+              },
+              {
+                title: 'Detour',
+                render: (_: unknown, row: JsonObject, index: number) => (
+                  <TextField
+                    value={asString(row.detour)}
+                    onChange={(v) => updateServer(index, { detour: v })}
+                  />
+                ),
+              },
               {
                 title: '',
                 width: 170,
                 render: (_: unknown, row: JsonObject, index: number) => (
                   <Space>
-                    <JsonModal title={(asString(row.tag) || 'DNS') + ' — JSON'} value={row} onApply={(next) => updateServer(index, asObject(next))} />
-                    <Button size="small" danger icon={<DeleteOutlined />} onClick={() => updateSection('dns', { ...value, servers: servers.filter((_, i) => i !== index) })} />
+                    <JsonModal
+                      title={(asString(row.tag) || 'DNS') + ' — JSON'}
+                      value={row}
+                      onApply={(next) => updateServer(index, asObject(next))}
+                    />
+                    <Button
+                      size="small"
+                      danger
+                      icon={<DeleteOutlined />}
+                      onClick={() =>
+                        updateSection('dns', {
+                          ...value,
+                          servers: servers.filter((_, i) => i !== index),
+                        })
+                      }
+                    />
                   </Space>
                 ),
               },
             ]}
           />
           <div className="singbox-inline-actions">
-            <JsonModal title="DNS rules" value={rules} onApply={(next) => patchSection('dns', { rules: Array.isArray(next) ? next : [] })} buttonText="DNS rules" />
-            <JsonModal title="DNS целиком" value={value} onApply={(next) => updateSection('dns', asObject(next))} buttonText="Весь DNS" />
+            <JsonModal
+              title="DNS rules"
+              value={rules}
+              onApply={(next) => patchSection('dns', { rules: Array.isArray(next) ? next : [] })}
+              buttonText="DNS rules"
+            />
+            <JsonModal
+              title="DNS целиком"
+              value={value}
+              onApply={(next) => updateSection('dns', asObject(next))}
+              buttonText="Весь DNS"
+            />
           </div>
         </Card>
       </Space>
@@ -1562,29 +2078,31 @@ export default function SingBoxPage() {
     );
   };
 
-
   const renderOutbounds = () => {
     const items = asObjectArray(sectionValue('outbounds', config));
-    const tags = items.map((item) => asString(item.tag)).filter(Boolean);
-
-    const saveOutbound = (next: JsonObject) => {
-      const copy = [...items];
-      if (editingOutbound == null) copy.push(next);
-      else copy[editingOutbound] = next;
-      updateSection('outbounds', copy);
-      setOutboundModalOpen(false);
-    };
 
     return (
       <Card>
         <div className="singbox-section-header">
           <div>
             <div className="singbox-section-title">Исходящие</div>
-            <div className="singbox-section-description">Теперь это список как в Xray: отдельный мастер для протокола, серверных параметров, TLS/Reality и транспорта.</div>
+            <div className="singbox-section-description">
+              Теперь это список как в Xray: отдельный мастер для протокола, серверных параметров,
+              TLS/Reality и транспорта.
+            </div>
           </div>
           <Space wrap>
             <Button onClick={() => setShareLinkOpen(true)}>Импорт ссылки</Button>
-            <Button icon={<PlusOutlined />} type="primary" onClick={() => { setEditingOutbound(null); setOutboundModalOpen(true); }}>Добавить outbound</Button>
+            <Button
+              icon={<PlusOutlined />}
+              type="primary"
+              onClick={() => {
+                setEditingOutbound(null);
+                setOutboundModalOpen(true);
+              }}
+            >
+              Добавить outbound
+            </Button>
           </Space>
         </div>
         <Table
@@ -1592,26 +2110,50 @@ export default function SingBoxPage() {
           pagination={false}
           rowKey={(_, index) => String(index)}
           dataSource={items}
-          locale={{ emptyText: <Empty description="Нет исходящих. Начните с direct, VLESS, VMess или Trojan." /> }}
+          locale={{
+            emptyText: (
+              <Empty description="Нет исходящих. Начните с direct, VLESS, VMess или Trojan." />
+            ),
+          }}
           columns={[
-            { title: 'Tag', width: 200, render: (_: unknown, row: JsonObject) => <Tag color="blue">{asString(row.tag) || 'без tag'}</Tag> },
-            { title: 'Протокол', width: 130, render: (_: unknown, row: JsonObject) => asString(row.type) || '—' },
+            {
+              title: 'Tag',
+              width: 200,
+              render: (_: unknown, row: JsonObject) => (
+                <Tag color="blue">{asString(row.tag) || 'без tag'}</Tag>
+              ),
+            },
+            {
+              title: 'Протокол',
+              width: 130,
+              render: (_: unknown, row: JsonObject) => asString(row.type) || '—',
+            },
             {
               title: 'Endpoint',
               render: (_: unknown, row: JsonObject) => {
                 const type = asString(row.type);
-                if (['selector','urltest'].includes(type)) return asStringArray(row.outbounds).length + ' outbound в группе';
-                if (row.server) return asString(row.server) + (row.server_port ? ':' + row.server_port : '');
+                if (['selector', 'urltest'].includes(type))
+                  return asStringArray(row.outbounds).length + ' outbound в группе';
+                if (row.server)
+                  return asString(row.server) + (row.server_port ? ':' + row.server_port : '');
                 return 'Локальный';
               },
             },
-            { title: 'TLS', width: 70, align: 'center', render: (_: unknown, row: JsonObject) => row.tls ? <Tag color="green">TLS</Tag> : '—' },
+            {
+              title: 'TLS',
+              width: 70,
+              align: 'center',
+              render: (_: unknown, row: JsonObject) =>
+                row.tls ? <Tag color="green">TLS</Tag> : '—',
+            },
             {
               title: 'Проверка',
               width: 100,
               render: (_: unknown, row: JsonObject) => {
                 const name = asString(row.tag);
-                const broken = singBoxHealthIssues(config).some((issue) => issue.includes('"' + name + '"'));
+                const broken = singBoxHealthIssues(config).some((issue) =>
+                  issue.includes('"' + name + '"'),
+                );
                 return broken ? <Tag color="error">Проверить</Tag> : <Tag color="success">ОК</Tag>;
               },
             },
@@ -1620,43 +2162,72 @@ export default function SingBoxPage() {
               width: 180,
               render: (_: unknown, _row: JsonObject, index: number) => (
                 <Space>
-                  <Button size="small" onClick={() => { setEditingOutbound(index); setOutboundModalOpen(true); }}>Изменить</Button>
-                  <JsonModal title={(asString(items[index].tag) || 'Outbound') + ' — JSON'} value={items[index]} onApply={(next) => { const copy = [...items]; copy[index] = asObject(next); updateSection('outbounds', copy); }} />
-                  <Button size="small" danger icon={<DeleteOutlined />} onClick={() => updateSection('outbounds', items.filter((_, i) => i !== index))} />
+                  <Button
+                    size="small"
+                    onClick={() => {
+                      setEditingOutbound(index);
+                      setOutboundModalOpen(true);
+                    }}
+                  >
+                    Изменить
+                  </Button>
+                  <JsonModal
+                    title={(asString(items[index].tag) || 'Outbound') + ' — JSON'}
+                    value={items[index]}
+                    onApply={(next) => {
+                      const copy = [...items];
+                      copy[index] = asObject(next);
+                      updateSection('outbounds', copy);
+                    }}
+                  />
+                  <Button
+                    size="small"
+                    danger
+                    icon={<DeleteOutlined />}
+                    onClick={() =>
+                      updateSection(
+                        'outbounds',
+                        items.filter((_, i) => i !== index),
+                      )
+                    }
+                  />
                 </Space>
               ),
             },
           ]}
         />
         <div className="singbox-inline-actions">
-          <Button icon={<ExportOutlined />} onClick={() => {
-            const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const anchor = document.createElement('a');
-            anchor.href = url;
-            anchor.download = 'singbox-outbounds.json';
-            anchor.click();
-            URL.revokeObjectURL(url);
-          }}>Экспорт JSON</Button>
-          <JsonModal title="Все outbounds" value={items} onApply={(next) => updateSection('outbounds', Array.isArray(next) ? next : [])} buttonText="Массовый JSON" />
-        </div>      </Card>
+          <Button
+            icon={<ExportOutlined />}
+            onClick={() => {
+              const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const anchor = document.createElement('a');
+              anchor.href = url;
+              anchor.download = 'singbox-outbounds.json';
+              anchor.click();
+              URL.revokeObjectURL(url);
+            }}
+          >
+            Экспорт JSON
+          </Button>
+          <JsonModal
+            title="Все outbounds"
+            value={items}
+            onApply={(next) => updateSection('outbounds', Array.isArray(next) ? next : [])}
+            buttonText="Массовый JSON"
+          />
+        </div>{' '}
+      </Card>
     );
   };
-
 
   const renderRoute = () => {
     const value = asObject(sectionValue('route', config));
     const rules = Array.isArray(value.rules) ? value.rules.map(asObject) : [];
-    const outTags = asObjectArray(config.outbounds).map((item) => asString(item.tag)).filter(Boolean);
-    const ruleSetTags = Array.isArray(value.rule_set) ? value.rule_set.map(asObject).map((item) => asString(item.tag)).filter(Boolean) : [];
-
-    const saveRule = (next: JsonObject) => {
-      const copy = [...rules];
-      if (editingRouteRule == null) copy.push(next);
-      else copy[editingRouteRule] = next;
-      patchSection('route', { rules: copy });
-      setRouteRuleModalOpen(false);
-    };
+    const outTags = asObjectArray(config.outbounds)
+      .map((item) => asString(item.tag))
+      .filter(Boolean);
 
     return (
       <>
@@ -1664,17 +2235,62 @@ export default function SingBoxPage() {
           <div className="singbox-section-header">
             <div>
               <div className="singbox-section-title">Маршрутизация</div>
-              <div className="singbox-section-description">Фильтр → назначение. Домены, IP, порты, protocol/network и inbound собираются формой, без запоминания JSON-ключей.</div>
+              <div className="singbox-section-description">
+                Фильтр → назначение. Домены, IP, порты, protocol/network и inbound собираются
+                формой, без запоминания JSON-ключей.
+              </div>
             </div>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingRouteRule(null); setRouteRuleModalOpen(true); }}>Добавить правило</Button>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => {
+                setEditingRouteRule(null);
+                setRouteRuleModalOpen(true);
+              }}
+            >
+              Добавить правило
+            </Button>
           </div>
           <Row gutter={[12, 16]}>
-            <Field label="Final outbound"><Select allowClear value={asString(value.final) || undefined} options={outTags.map((v) => ({ value: v, label: v }))} style={{ width: '100%' }} onChange={(v) => patchSection('route', { final: v })} /></Field>
-            <Field label="Default domain resolver"><TextField value={asString(value.default_domain_resolver)} onChange={(v) => patchSection('route', { default_domain_resolver: v })} /></Field>
-            <Field label="Default HTTP client"><TextField value={asString(value.default_http_client)} onChange={(v) => patchSection('route', { default_http_client: v })} /></Field>
-            <Field label="Auto detect interface"><ToggleField checked={asBoolean(value.auto_detect_interface)} onChange={(v) => patchSection('route', { auto_detect_interface: v })} /></Field>
-            <Field label="Find process"><ToggleField checked={asBoolean(value.find_process)} onChange={(v) => patchSection('route', { find_process: v })} /></Field>
-            <Field label="Find neighbor"><ToggleField checked={asBoolean(value.find_neighbor)} onChange={(v) => patchSection('route', { find_neighbor: v })} /></Field>
+            <Field label="Final outbound">
+              <Select
+                allowClear
+                value={asString(value.final) || undefined}
+                options={outTags.map((v) => ({ value: v, label: v }))}
+                style={{ width: '100%' }}
+                onChange={(v) => patchSection('route', { final: v })}
+              />
+            </Field>
+            <Field label="Default domain resolver">
+              <TextField
+                value={asString(value.default_domain_resolver)}
+                onChange={(v) => patchSection('route', { default_domain_resolver: v })}
+              />
+            </Field>
+            <Field label="Default HTTP client">
+              <TextField
+                value={asString(value.default_http_client)}
+                onChange={(v) => patchSection('route', { default_http_client: v })}
+              />
+            </Field>
+            <Field label="Auto detect interface">
+              <ToggleField
+                checked={asBoolean(value.auto_detect_interface)}
+                onChange={(v) => patchSection('route', { auto_detect_interface: v })}
+              />
+            </Field>
+            <Field label="Find process">
+              <ToggleField
+                checked={asBoolean(value.find_process)}
+                onChange={(v) => patchSection('route', { find_process: v })}
+              />
+            </Field>
+            <Field label="Find neighbor">
+              <ToggleField
+                checked={asBoolean(value.find_neighbor)}
+                onChange={(v) => patchSection('route', { find_neighbor: v })}
+              />
+            </Field>
           </Row>
 
           <Divider />
@@ -1683,9 +2299,17 @@ export default function SingBoxPage() {
             pagination={false}
             rowKey={(_, index) => String(index)}
             dataSource={rules}
-            locale={{ emptyText: <Empty description="Правил нет. Весь трафик используется через Final outbound." /> }}
+            locale={{
+              emptyText: (
+                <Empty description="Правил нет. Весь трафик используется через Final outbound." />
+              ),
+            }}
             columns={[
-              { title: '#', width: 50, render: (_: unknown, _row: JsonObject, index: number) => index + 1 },
+              {
+                title: '#',
+                width: 50,
+                render: (_: unknown, _row: JsonObject, index: number) => index + 1,
+              },
               {
                 title: 'Условия',
                 render: (_: unknown, row: JsonObject) => {
@@ -1700,15 +2324,38 @@ export default function SingBoxPage() {
                   return pieces.length ? pieces.join(' · ') : 'Любой трафик';
                 },
               },
-              { title: 'Outbound', width: 160, render: (_: unknown, row: JsonObject) => asString(row.outbound) ? <Tag color="blue">{asString(row.outbound)}</Tag> : '—' },
-              { title: 'Комментарий', render: (_: unknown, row: JsonObject) => asString(row.comment) || '—' },
+              {
+                title: 'Outbound',
+                width: 160,
+                render: (_: unknown, row: JsonObject) =>
+                  asString(row.outbound) ? <Tag color="blue">{asString(row.outbound)}</Tag> : '—',
+              },
+              {
+                title: 'Комментарий',
+                render: (_: unknown, row: JsonObject) => asString(row.comment) || '—',
+              },
               {
                 title: '',
                 width: 150,
                 render: (_: unknown, _row: JsonObject, index: number) => (
                   <Space>
-                    <Button size="small" onClick={() => { setEditingRouteRule(index); setRouteRuleModalOpen(true); }}>Изменить</Button>
-                    <Button size="small" danger icon={<DeleteOutlined />} onClick={() => patchSection('route', { rules: rules.filter((_, i) => i !== index) })} />
+                    <Button
+                      size="small"
+                      onClick={() => {
+                        setEditingRouteRule(index);
+                        setRouteRuleModalOpen(true);
+                      }}
+                    >
+                      Изменить
+                    </Button>
+                    <Button
+                      size="small"
+                      danger
+                      icon={<DeleteOutlined />}
+                      onClick={() =>
+                        patchSection('route', { rules: rules.filter((_, i) => i !== index) })
+                      }
+                    />
                   </Space>
                 ),
               },
@@ -1718,11 +2365,31 @@ export default function SingBoxPage() {
 
         <Card>
           <div className="singbox-card-title">Rule-set и расширенные правила</div>
-          <div className="singbox-section-description">Сложные наборы остаются редактируемыми вручную, но основная маршрутизация больше не требует ручной сборки JSON.</div>
+          <div className="singbox-section-description">
+            Сложные наборы остаются редактируемыми вручную, но основная маршрутизация больше не
+            требует ручной сборки JSON.
+          </div>
           <div className="singbox-inline-actions">
-            <JsonModal title="Route rules" value={rules} onApply={(next) => patchSection('route', { rules: Array.isArray(next) ? next : [] })} buttonText="Все rules" />
-            <JsonModal title="Rule-set" value={Array.isArray(value.rule_set) ? value.rule_set : []} onApply={(next) => patchSection('route', { rule_set: Array.isArray(next) ? next : [] })} buttonText="Rule-set" />
-            <JsonModal title="Route" value={value} onApply={(next) => updateSection('route', asObject(next))} buttonText="Расширенный JSON" />
+            <JsonModal
+              title="Route rules"
+              value={rules}
+              onApply={(next) => patchSection('route', { rules: Array.isArray(next) ? next : [] })}
+              buttonText="Все rules"
+            />
+            <JsonModal
+              title="Rule-set"
+              value={Array.isArray(value.rule_set) ? value.rule_set : []}
+              onApply={(next) =>
+                patchSection('route', { rule_set: Array.isArray(next) ? next : [] })
+              }
+              buttonText="Rule-set"
+            />
+            <JsonModal
+              title="Route"
+              value={value}
+              onApply={(next) => updateSection('route', asObject(next))}
+              buttonText="Расширенный JSON"
+            />
           </div>
         </Card>
       </>
@@ -2006,7 +2673,6 @@ export default function SingBoxPage() {
                     </Row>
                   </Card>
 
-
                   {healthIssues.length > 0 && (
                     <Alert
                       type="warning"
@@ -2014,7 +2680,9 @@ export default function SingBoxPage() {
                       message={'Проверка конфигурации: ' + healthIssues.length + ' предупреждений'}
                       description={
                         <ul className="singbox-issue-list">
-                          {healthIssues.slice(0, 8).map((issue) => <li key={issue}>{issue}</li>)}
+                          {healthIssues.slice(0, 8).map((issue) => (
+                            <li key={issue}>{issue}</li>
+                          ))}
                           {healthIssues.length > 8 && <li>И ещё {healthIssues.length - 8}...</li>}
                         </ul>
                       }
@@ -2046,7 +2714,11 @@ export default function SingBoxPage() {
                       if (sectionKeys.has(key)) navigate('/singbox#' + key);
                     }}
                     className="singbox-main-tabs"
-                    items={sectionKeys.map((key) => ({ key, label: SECTION_LABELS[key], children: key === activeSection ? sectionBody : null }))}
+                    items={Array.from(sectionKeys).map((key) => ({
+                      key,
+                      label: SECTION_LABELS[key],
+                      children: key === activeSection ? sectionBody : null,
+                    }))}
                   />
                 </Space>
               )}
@@ -2064,12 +2736,15 @@ export default function SingBoxPage() {
         onOk={() => {
           const parsed = singBoxParseShareLink(shareLink);
           if (!parsed) {
-            messageApi.error('Не удалось распознать ссылку. Поддерживаются VLESS, Trojan, HTTP и SOCKS5.');
+            messageApi.error(
+              'Не удалось распознать ссылку. Поддерживаются VLESS, Trojan, HTTP и SOCKS5.',
+            );
             return;
           }
           const current = asObjectArray(sectionValue('outbounds', config));
           let tag = asString(parsed.tag) || 'outbound';
-          if (current.some((item) => asString(item.tag) === tag)) tag = tag + '-' + (current.length + 1);
+          if (current.some((item) => asString(item.tag) === tag))
+            tag = tag + '-' + (current.length + 1);
           updateSection('outbounds', [...current, { ...parsed, tag }]);
           setShareLink('');
           setShareLinkOpen(false);
@@ -2083,13 +2758,24 @@ export default function SingBoxPage() {
           description="TLS, Reality и базовый WebSocket/gRPC transport переносятся из VLESS/Trojan ссылок."
           style={{ marginBottom: 12 }}
         />
-        <Input.TextArea value={shareLink} onChange={(e) => setShareLink(e.target.value)} autoSize={{ minRows: 5, maxRows: 10 }} placeholder="vless://..." />
+        <Input.TextArea
+          value={shareLink}
+          onChange={(e) => setShareLink(e.target.value)}
+          autoSize={{ minRows: 5, maxRows: 10 }}
+          placeholder="vless://..."
+        />
       </Modal>
 
       <SingBoxOutboundModal
         open={outboundModalOpen}
-        value={editingOutbound == null ? null : asObjectArray(sectionValue('outbounds', config))[editingOutbound]}
-        existingTags={asObjectArray(sectionValue('outbounds', config)).map((item) => asString(item.tag)).filter(Boolean)}
+        value={
+          editingOutbound == null
+            ? null
+            : asObjectArray(sectionValue('outbounds', config))[editingOutbound]
+        }
+        existingTags={asObjectArray(sectionValue('outbounds', config))
+          .map((item) => asString(item.tag))
+          .filter(Boolean)}
         onCancel={() => setOutboundModalOpen(false)}
         onSave={(next) => {
           const current = asObjectArray(sectionValue('outbounds', config));
@@ -2102,10 +2788,26 @@ export default function SingBoxPage() {
 
       <SingBoxRouteRuleModal
         open={routeRuleModalOpen}
-        value={editingRouteRule == null ? null : asObjectArray(asObject(sectionValue('route', config)).rules)[editingRouteRule]}
-        inboundTags={arrObj(config.inbounds).map((item) => asString(item.tag)).filter(Boolean)}
-        outboundTags={asObjectArray(sectionValue('outbounds', config)).map((item) => asString(item.tag)).filter(Boolean)}
-        ruleSetTags={Array.isArray(asObject(sectionValue('route', config)).rule_set) ? asObject(sectionValue('route', config)).rule_set.map(asObject).map((item) => asString(item.tag)).filter(Boolean) : []}
+        value={
+          editingRouteRule == null
+            ? null
+            : asObjectArray(asObject(sectionValue('route', config)).rules)[editingRouteRule]
+        }
+        inboundTags={asObjectArray(config.inbounds)
+          .map((item) => asString(item.tag))
+          .filter(Boolean)}
+        outboundTags={asObjectArray(sectionValue('outbounds', config))
+          .map((item) => asString(item.tag))
+          .filter(Boolean)}
+        ruleSetTags={(() => {
+          const ruleSet = asObject(sectionValue('route', config)).rule_set;
+          return Array.isArray(ruleSet)
+            ? ruleSet
+                .map(asObject)
+                .map((item) => asString(item.tag))
+                .filter(Boolean)
+            : [];
+        })()}
         onCancel={() => setRouteRuleModalOpen(false)}
         onSave={(next) => {
           const routeValue = asObject(sectionValue('route', config));
@@ -2116,7 +2818,6 @@ export default function SingBoxPage() {
           setRouteRuleModalOpen(false);
         }}
       />
-
     </ConfigProvider>
   );
 }

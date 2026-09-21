@@ -300,10 +300,21 @@ func (s *SingBoxService) GetEditorConfig(ctx context.Context) (*SingBoxEditorSna
 	source := "disk"
 	if os.IsNotExist(err) {
 		cfg, cfgErr := s.GetConfig()
-		if cfgErr != nil {
-			return nil, cfgErr
+		if cfgErr == nil {
+			data, err = cfg.Marshal()
+		} else {
+			rawTemplate, templateErr := singBoxSettingService.GetSingBoxConfigTemplate()
+			if templateErr != nil {
+				return nil, cfgErr
+			}
+			rawTemplate = strings.TrimSpace(rawTemplate)
+			if rawTemplate == "" {
+				data, err = singbox.NewConfig().Marshal()
+			} else {
+				data = []byte(rawTemplate)
+				err = nil
+			}
 		}
-		data, err = cfg.Marshal()
 		source = "generated"
 	}
 	if err != nil {
@@ -319,7 +330,10 @@ func (s *SingBoxService) GetEditorConfig(ctx context.Context) (*SingBoxEditorSna
 	if info, statErr := os.Stat(path); statErr == nil {
 		modified = info.ModTime().UTC().Format(time.RFC3339)
 	}
-	version, _ := s.CachedVersion(ctx)
+	version := "Unknown"
+	if v, versionErr := s.CachedVersion(ctx); versionErr == nil && strings.TrimSpace(v) != "" {
+		version = v
+	}
 	return &SingBoxEditorSnapshot{
 		Config:          raw,
 		Running:         s.IsRunning(),

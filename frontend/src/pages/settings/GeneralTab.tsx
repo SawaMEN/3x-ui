@@ -32,6 +32,7 @@ interface GeneralTabProps {
   updateSetting: (patch: Partial<AllSetting>) => void;
   saveSettings?: () => Promise<{ success?: boolean; msg?: string }>;
   onOpenSwap?: () => void;
+  onOpenSystemUpdate?: () => void;
 }
 
 export default function GeneralTab({
@@ -39,6 +40,7 @@ export default function GeneralTab({
   updateSetting,
   saveSettings,
   onOpenSwap,
+  onOpenSystemUpdate,
 }: GeneralTabProps) {
   const { t } = useTranslation();
   const { isMobile } = useMediaQuery();
@@ -572,7 +574,7 @@ export default function GeneralTab({
                       <Button icon={<SwapOutlined />} onClick={() => onOpenSwap?.()}>
                         {t('pages.settings.swap.openFromCore')}
                       </Button>
-                      <Button icon={<ReloadOutlined />} onClick={() => onOpenSwap?.()}>
+                      <Button icon={<ReloadOutlined />} onClick={() => onOpenSystemUpdate?.()}>
                         {t('pages.settings.swap.systemUpdates')}
                       </Button>
                     </Space>

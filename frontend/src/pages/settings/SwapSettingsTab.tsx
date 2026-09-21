@@ -7,8 +7,6 @@ import {
   Col,
   InputNumber,
   Result,
-  Modal,
-  Descriptions,
   Popconfirm,
   Row,
   Select,
@@ -30,6 +28,7 @@ import {
 import { HttpUtil } from '@/utils';
 import { onNumber } from '@/utils/onNumber';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import SystemUpdateModal from './SystemUpdateModal';
 
 type SwapArea = {
   path: string;
@@ -107,45 +106,6 @@ type SwapStatus = {
   recommendation: Recommendation;
   zramInstall: ZramInstallInfo;
 };
-
-type SystemUpdatePackage = {
-  name: string;
-  installedVersion: string;
-  availableVersion: string;
-  installed: boolean;
-  required: boolean;
-  kernel: boolean;
-  updateAvailable: boolean;
-};
-
-type SystemUpdateStatus = {
-  distribution: string;
-  version: string;
-  packageManager: string;
-  supported: boolean;
-  runningAsRoot: boolean;
-  packages: SystemUpdatePackage[];
-  kernel: {
-    runningVersion: string;
-    updateAvailable: boolean;
-    availableVersion: string;
-    packageNames: string[];
-    rebootRequired: boolean;
-  };
-  updatesAvailable: boolean;
-  missingPackages: boolean;
-  canUpdate: boolean;
-  notes: string[];
-};
-
-type SystemUpdateResult = {
-  updated: boolean;
-  rebootRequired: boolean;
-  output: string;
-  error: string;
-};
-
-type ApiMsg<T = unknown> = { success?: boolean; msg?: string; obj?: T };
 
 function toFiniteNumber(value: unknown, fallback = 0) {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
@@ -288,65 +248,6 @@ function gib(bytes: number) {
   return (bytes / 1024 / 1024 / 1024).toFixed(2) + ' GiB';
 }
 
-function normalizeSystemUpdate(value: unknown): SystemUpdateStatus {
-  const raw =
-    value && typeof value === 'object' && !Array.isArray(value)
-      ? (value as Record<string, unknown>)
-      : {};
-  const kernel =
-    raw.kernel && typeof raw.kernel === 'object' ? (raw.kernel as Record<string, unknown>) : {};
-  const packages = Array.isArray(raw.packages) ? raw.packages : [];
-  return {
-    distribution: typeof raw.distribution === 'string' ? raw.distribution : '',
-    version: typeof raw.version === 'string' ? raw.version : '',
-    packageManager: typeof raw.packageManager === 'string' ? raw.packageManager : '',
-    supported: raw.supported !== false,
-    runningAsRoot: raw.runningAsRoot === true,
-    packages: packages
-      .filter((item) => item && typeof item === 'object')
-      .map((item) => {
-        const row = item as Record<string, unknown>;
-        return {
-          name: typeof row.name === 'string' ? row.name : '',
-          installedVersion: typeof row.installedVersion === 'string' ? row.installedVersion : '',
-          availableVersion: typeof row.availableVersion === 'string' ? row.availableVersion : '',
-          installed: row.installed === true,
-          required: row.required === true,
-          kernel: row.kernel === true,
-          updateAvailable: row.updateAvailable === true,
-        };
-      }),
-    kernel: {
-      runningVersion: typeof kernel.runningVersion === 'string' ? kernel.runningVersion : '',
-      updateAvailable: kernel.updateAvailable === true,
-      availableVersion: typeof kernel.availableVersion === 'string' ? kernel.availableVersion : '',
-      packageNames: Array.isArray(kernel.packageNames)
-        ? kernel.packageNames.filter((item): item is string => typeof item === 'string')
-        : [],
-      rebootRequired: kernel.rebootRequired === true,
-    },
-    updatesAvailable: raw.updatesAvailable === true,
-    missingPackages: raw.missingPackages === true,
-    canUpdate: raw.canUpdate === true,
-    notes: Array.isArray(raw.notes)
-      ? raw.notes.filter((item): item is string => typeof item === 'string')
-      : [],
-  };
-}
-
-function normalizeSystemUpdateResult(value: unknown): SystemUpdateResult {
-  const raw =
-    value && typeof value === 'object' && !Array.isArray(value)
-      ? (value as Record<string, unknown>)
-      : {};
-  return {
-    updated: raw.updated === true,
-    rebootRequired: raw.rebootRequired === true,
-    output: typeof raw.output === 'string' ? raw.output : '',
-    error: typeof raw.error === 'string' ? raw.error : '',
-  };
-}
-
 export default function SwapSettingsTab() {
   const { t } = useTranslation();
   const { isMobile } = useMediaQuery();
@@ -364,24 +265,6 @@ export default function SwapSettingsTab() {
   const [zramAlgorithm, setZramAlgorithm] = useState('');
   const [swappiness, setSwappiness] = useState(60);
   const [systemUpdateOpen, setSystemUpdateOpen] = useState(false);
-  const [systemUpdateBusy, setSystemUpdateBusy] = useState(false);
-  const [systemUpdate, setSystemUpdate] = useState<SystemUpdateStatus | null>(null);
-  const [systemUpdateResult, setSystemUpdateResult] = useState<SystemUpdateResult | null>(null);
-
-  const refreshSystemUpdateCapability = useCallback(async () => {
-    try {
-      const msg = (await HttpUtil.get(
-        '/panel/api/setting/system/update/status',
-      )) as ApiMsg<unknown>;
-      if (!msg?.success) {
-        setSystemUpdate(null);
-        return;
-      }
-      setSystemUpdate(normalizeSystemUpdate(msg.obj));
-    } catch {
-      setSystemUpdate(null);
-    }
-  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -415,18 +298,13 @@ export default function SwapSettingsTab() {
   }, [messageApi]);
 
   useEffect(() => {
-    const initial = window.setTimeout(() => {
-      void refresh();
-      void refreshSystemUpdateCapability();
-    }, 0);
+    const initial = window.setTimeout(() => void refresh(), 0);
     const timer = window.setInterval(() => void refresh(), 4000);
-    const systemTimer = window.setInterval(() => void refreshSystemUpdateCapability(), 30000);
     return () => {
       window.clearTimeout(initial);
       window.clearInterval(timer);
-      window.clearInterval(systemTimer);
     };
-  }, [refresh, refreshSystemUpdateCapability]);
+  }, [refresh]);
 
   const action = async (fn: () => Promise<ApiMsg>) => {
     setBusy(true);
@@ -446,52 +324,6 @@ export default function SwapSettingsTab() {
 
   const reinstallZram = () =>
     action(() => HttpUtil.post('/panel/api/setting/swap/zram/reinstall') as Promise<ApiMsg>);
-
-  const checkSystemUpdates = async () => {
-    setSystemUpdateBusy(true);
-    try {
-      const msg = (await HttpUtil.post(
-        '/panel/api/setting/system/update/check',
-      )) as ApiMsg<unknown>;
-      if (!msg?.success) throw new Error(msg?.msg || 'Failed to check system updates');
-      const next = normalizeSystemUpdate(msg.obj);
-      setSystemUpdate(next);
-      setSystemUpdateResult(null);
-    } catch (error) {
-      messageApi.error(error instanceof Error ? error.message : String(error));
-    } finally {
-      setSystemUpdateBusy(false);
-    }
-  };
-
-  const openSystemUpdate = () => {
-    if (systemUpdate?.supported !== true) return;
-    setSystemUpdateOpen(true);
-    void checkSystemUpdates();
-  };
-
-  const applySystemUpdates = async () => {
-    setSystemUpdateBusy(true);
-    try {
-      const msg = (await HttpUtil.post(
-        '/panel/api/setting/system/update/apply',
-      )) as ApiMsg<unknown>;
-      if (!msg?.success) {
-        const result = normalizeSystemUpdateResult(msg.obj);
-        setSystemUpdateResult(result);
-        throw new Error(msg?.msg || result.error || 'System update failed');
-      }
-      const result = normalizeSystemUpdateResult(msg.obj);
-      setSystemUpdateResult(result);
-      await checkSystemUpdates();
-      await refresh();
-      messageApi.success(t('pages.settings.swap.updateDone'));
-    } catch (error) {
-      messageApi.error(error instanceof Error ? error.message : String(error));
-    } finally {
-      setSystemUpdateBusy(false);
-    }
-  };
 
   const algorithmOptions = (status?.zramAlgorithms ?? []).map((value) => ({ label: value, value }));
 
@@ -613,7 +445,11 @@ export default function SwapSettingsTab() {
             >
               {t('pages.settings.swap.apply')}
             </Button>
-            <Button icon={<ReloadOutlined />} onClick={openSystemUpdate} disabled={busy}>
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={() => setSystemUpdateOpen(true)}
+              disabled={busy}
+            >
               {t('pages.settings.swap.systemUpdates')}
             </Button>
           </Space>
@@ -911,174 +747,6 @@ export default function SwapSettingsTab() {
     </Card>
   );
 
-  const systemUpdatePackages = systemUpdate?.packages ?? [];
-  const systemUpdateRows = systemUpdatePackages.map((item) => ({
-    ...item,
-    key: item.kernel ? 'kernel:' + item.name : 'package:' + item.name,
-  }));
-
-  const systemUpdateModal = (
-    <Modal
-      open={systemUpdateOpen}
-      title={t('pages.settings.swap.systemUpdatesTitle')}
-      width={isMobile ? 'calc(100vw - 24px)' : 900}
-      onCancel={() => {
-        if (!systemUpdateBusy) setSystemUpdateOpen(false);
-      }}
-      footer={
-        <Space>
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={() => void checkSystemUpdates()}
-            loading={systemUpdateBusy}
-          >
-            {t('pages.settings.swap.checkUpdates')}
-          </Button>
-          <Popconfirm
-            title={t('pages.settings.swap.updateConfirm')}
-            onConfirm={() => void applySystemUpdates()}
-            disabled={
-              !systemUpdate?.canUpdate ||
-              systemUpdateBusy ||
-              !systemUpdate?.supported ||
-              !systemUpdate?.runningAsRoot
-            }
-          >
-            <Button
-              type="primary"
-              icon={<DownloadOutlined />}
-              loading={systemUpdateBusy}
-              disabled={
-                !systemUpdate?.canUpdate || !systemUpdate?.supported || !systemUpdate?.runningAsRoot
-              }
-            >
-              {t('pages.settings.swap.updateNow')}
-            </Button>
-          </Popconfirm>
-        </Space>
-      }
-    >
-      {!systemUpdate ? (
-        <Alert type="info" showIcon title={t('pages.settings.swap.checkUpdates')} />
-      ) : (
-        <Space direction="vertical" size={12} style={{ width: '100%' }}>
-          <Descriptions size="small" bordered column={{ xs: 1, sm: 2, md: 3 }}>
-            <Descriptions.Item label={t('pages.settings.swap.distro')}>
-              {systemUpdate.distribution} {systemUpdate.version}
-            </Descriptions.Item>
-            <Descriptions.Item label={t('pages.settings.swap.packageManager')}>
-              {systemUpdate.packageManager}
-            </Descriptions.Item>
-            <Descriptions.Item label={t('pages.settings.swap.currentKernel')}>
-              {systemUpdate.kernel.runningVersion || '—'}
-            </Descriptions.Item>
-          </Descriptions>
-
-          {!systemUpdate.runningAsRoot && (
-            <Alert type="error" showIcon title={t('pages.settings.swap.notRoot')} />
-          )}
-          {systemUpdate.missingPackages && (
-            <Alert type="warning" showIcon title={t('pages.settings.swap.missingPackages')} />
-          )}
-          {systemUpdate.updatesAvailable ? (
-            <Alert
-              type="warning"
-              showIcon
-              title={t('pages.settings.swap.updatesAvailable')}
-              description={
-                systemUpdate.kernel.updateAvailable
-                  ? t('pages.settings.swap.rebootAfterKernel')
-                  : undefined
-              }
-            />
-          ) : (
-            !systemUpdate.missingPackages && (
-              <Alert type="success" showIcon title={t('pages.settings.swap.noUpdates')} />
-            )
-          )}
-          {systemUpdate.kernel.updateAvailable && (
-            <Alert
-              type="warning"
-              showIcon
-              title={
-                t('pages.settings.swap.availableKernel') +
-                ': ' +
-                (systemUpdate.kernel.availableVersion ||
-                  systemUpdate.kernel.packageNames.join(', '))
-              }
-            />
-          )}
-          {systemUpdate.kernel.rebootRequired && (
-            <Alert type="warning" showIcon title={t('pages.settings.swap.rebootRequired')} />
-          )}
-
-          <Table
-            size="small"
-            pagination={false}
-            scroll={{ y: 360 }}
-            rowKey="key"
-            dataSource={systemUpdateRows}
-            columns={[
-              {
-                title: t('pages.settings.swap.device'),
-                dataIndex: 'name',
-                key: 'name',
-              },
-              {
-                title: t('pages.settings.swap.installedVersion'),
-                key: 'installedVersion',
-                render: (_: unknown, row: SystemUpdatePackage) =>
-                  row.installed
-                    ? row.installedVersion || '—'
-                    : t('pages.settings.swap.notInstalled'),
-              },
-              {
-                title: t('pages.settings.swap.availableVersion'),
-                key: 'availableVersion',
-                render: (_: unknown, row: SystemUpdatePackage) =>
-                  row.updateAvailable ? row.availableVersion || '—' : '—',
-              },
-              {
-                title: t('pages.settings.swap.status'),
-                key: 'status',
-                render: (_: unknown, row: SystemUpdatePackage) => (
-                  <Space wrap>
-                    <Tag color={row.kernel ? 'geekblue' : 'blue'}>
-                      {row.kernel
-                        ? t('pages.settings.swap.kernelPackage')
-                        : t('pages.settings.swap.dependency')}
-                    </Tag>
-                    {row.updateAvailable && (
-                      <Tag color="warning">{t('pages.settings.swap.updatesAvailable')}</Tag>
-                    )}
-                    {!row.installed && (
-                      <Tag color="error">{t('pages.settings.swap.notInstalled')}</Tag>
-                    )}
-                  </Space>
-                ),
-              },
-            ]}
-          />
-
-          {systemUpdate.notes.map((note) => (
-            <Alert key={note} type="info" showIcon title={note} />
-          ))}
-
-          {systemUpdateResult?.output && (
-            <Card size="small" title={t('pages.settings.swap.updateOutput')}>
-              <pre style={{ maxHeight: 260, overflow: 'auto', margin: 0, whiteSpace: 'pre-wrap' }}>
-                {systemUpdateResult.output}
-              </pre>
-            </Card>
-          )}
-          {systemUpdateResult?.rebootRequired && (
-            <Alert type="warning" showIcon title={t('pages.settings.swap.rebootAfterKernel')} />
-          )}
-        </Space>
-      )}
-    </Modal>
-  );
-
   if (loadError && !status) {
     return (
       <>
@@ -1097,10 +765,11 @@ export default function SwapSettingsTab() {
     );
   }
 
+
   return (
     <>
       {contextHolder}
-      {systemUpdateModal}
+      <SystemUpdateModal open={systemUpdateOpen} onClose={() => setSystemUpdateOpen(false)} />
       {loadError && (
         <Alert type="warning" showIcon closable style={{ marginBottom: 12 }} title={loadError} />
       )}
@@ -1132,28 +801,32 @@ export default function SwapSettingsTab() {
           { key: 'zram', label: 'ZRAM', children: zramTab },
           { key: 'areas', label: t('pages.settings.swap.allAreas'), children: areasTab },
         ]}
-        tabBarExtraContent={!isMobile ? {
-          right: (
-            <Space wrap>
-              <Tag color="processing">
-                {t('pages.settings.swap.areasCount', { count: status?.areas.length ?? 0 })}
-              </Tag>
-              {installInfo?.distribution && (
-                <Tag>
-                  {installInfo.distribution} {installInfo.version}
-                </Tag>
-              )}
-              <Button
-                size="small"
-                icon={<ReloadOutlined />}
-                onClick={() => void refresh()}
-                loading={loading}
-              >
-                {t('pages.settings.swap.refresh')}
-              </Button>
-            </Space>
-          ),
-        } : undefined}
+        tabBarExtraContent={
+          !isMobile
+            ? {
+                right: (
+                  <Space wrap>
+                    <Tag color="processing">
+                      {t('pages.settings.swap.areasCount', { count: status?.areas.length ?? 0 })}
+                    </Tag>
+                    {installInfo?.distribution && (
+                      <Tag>
+                        {installInfo.distribution} {installInfo.version}
+                      </Tag>
+                    )}
+                    <Button
+                      size="small"
+                      icon={<ReloadOutlined />}
+                      onClick={() => void refresh()}
+                      loading={loading}
+                    >
+                      {t('pages.settings.swap.refresh')}
+                    </Button>
+                  </Space>
+                ),
+              }
+            : undefined
+        }
       />
     </>
   );

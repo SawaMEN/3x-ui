@@ -17187,6 +17187,216 @@
           }
         }
       }
+    },
+    "/panel/api/setting/swap/zram/reinstall": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Reinstall the supported ZRAM integration.",
+        "operationId": "post_panel_api_setting_swap_zram_reinstall",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/setting/system/update/status": {
+      "get": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Return available system package and kernel updates.",
+        "operationId": "get_panel_api_setting_system_update_status",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/setting/system/update/check": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Refresh system package and kernel update information.",
+        "operationId": "post_panel_api_setting_system_update_check",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/setting/system/update/apply": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Apply the selected system package updates.",
+        "operationId": "post_panel_api_setting_system_update_apply",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/telemt/webproxy/status": {
+      "get": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Return the Telemt Web Proxy and external port 443 status.",
+        "operationId": "get_panel_api_telemt_webproxy_status",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/telemt/webproxy/enable": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Enable the Telemt Web Proxy.",
+        "operationId": "post_panel_api_telemt_webproxy_enable",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/telemt/webproxy/disable": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Disable the Telemt Web Proxy.",
+        "operationId": "post_panel_api_telemt_webproxy_disable",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 }
