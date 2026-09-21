@@ -40,15 +40,18 @@ function BrandMark() {
   return (
     <span className="brand-mark" aria-hidden="true">
       <span className="brand-mark-default">
-        <svg viewBox="0 0 72 72" role="presentation">
-          <path className="brand-mark-default-frame" d="M22 5h28l17 17v28L50 67H22L5 50V22L22 5Z" />
-          <path className="brand-mark-default-accent" d="M10 20h10M52 52h10" />
-          <path
-            className="brand-mark-default-three"
-            d="M22 20h15c5 0 9 4 9 9s-4 9-9 9H25m12 0h3c5 0 9 4 9 9s-4 9-9 9H22"
+        <svg viewBox="0 0 64 64" role="presentation">
+          <path className="brand-mark-default-frame" d="M20 6h24l14 14v24L44 58H20L6 44V20L20 6Z" />
+          <path className="brand-mark-default-core" d="M20 20h24M17 32h30M20 44h24" />
+          <path className="brand-mark-default-x" d="m24 24 16 16M40 24 24 40" />
+          <path className="brand-mark-default-node" d="M6 22h7M51 22h7M6 42h7M51 42h7" />
+          <circle className="brand-mark-default-dot" cx="32" cy="12" r="2" />
+          <circle
+            className="brand-mark-default-dot brand-mark-default-dot-pink"
+            cx="32"
+            cy="52"
+            r="2"
           />
-          <path className="brand-mark-default-x" d="m28 25 17 22M45 25 28 47" />
-          <path className="brand-mark-default-scan" d="M16 58h14M42 14h14" />
         </svg>
       </span>
     </span>
