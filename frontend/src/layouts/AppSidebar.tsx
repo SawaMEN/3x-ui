@@ -43,7 +43,10 @@ function BrandMark() {
         <svg viewBox="0 0 72 72" role="presentation">
           <path className="brand-mark-default-frame" d="M22 5h28l17 17v28L50 67H22L5 50V22L22 5Z" />
           <path className="brand-mark-default-accent" d="M10 20h10M52 52h10" />
-          <path className="brand-mark-default-three" d="M22 20h15c5 0 9 4 9 9s-4 9-9 9H25m12 0h3c5 0 9 4 9 9s-4 9-9 9H22" />
+          <path
+            className="brand-mark-default-three"
+            d="M22 20h15c5 0 9 4 9 9s-4 9-9 9H25m12 0h3c5 0 9 4 9 9s-4 9-9 9H22"
+          />
           <path className="brand-mark-default-x" d="m28 25 17 22M45 25 28 47" />
           <path className="brand-mark-default-scan" d="M16 58h14M42 14h14" />
         </svg>
@@ -362,7 +365,9 @@ function AppSidebar() {
         collapsed={railCollapsed}
       >
         <div className="sider-brand">
-          <div className={`brand-block sider-brand-content ${railCollapsed ? "brand-is-compact" : "brand-is-expanded"}`}>
+          <div
+            className={`brand-block sider-brand-content ${railCollapsed ? 'brand-is-compact' : 'brand-is-expanded'}`}
+          >
             {!railCollapsed && <BrandMark />}
             <span className="brand-text" aria-label="3X-UI">
               <span className="brand-text-full">3X-UI</span>
