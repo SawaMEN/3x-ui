@@ -547,99 +547,21 @@ html[data-low-power='true'] .drawer-brand {
   }
 }
 
-/* Neon cyberpunk-graffiti branding */
-.sider-brand {
-  position: relative;
-}
-
-.sider-brand .sider-brand-content {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  width: max-content;
-  max-width: calc(100% - 72px);
-  transform: translate(-50%, -50%);
-}
-
-.brand-mark {
-  flex: 0 0 42px;
-  width: 42px;
-  height: 42px;
-  filter: drop-shadow(0 0 4px rgba(0, 246, 255, 0.95)) drop-shadow(0 0 10px rgba(0, 246, 255, 0.72))
-    drop-shadow(0 0 18px rgba(255, 43, 214, 0.6));
-}
-
-.brand-mark-default {
-  display: inline-flex;
-}
-
-.brand-mark-default svg {
-  overflow: visible;
-}
-
-.brand-mark-default-frame {
-  fill: rgba(4, 9, 18, 0.94);
-  stroke: #00f6ff;
-  stroke-width: 2.6;
-  stroke-linejoin: round;
-  filter: drop-shadow(0 0 2px #00f6ff) drop-shadow(0 0 7px rgba(0, 246, 255, 0.86));
-}
-
-.brand-mark-default-core {
-  fill: none;
-  stroke: rgba(93, 224, 255, 0.86);
-  stroke-width: 1.4;
-  stroke-linecap: round;
-  filter: drop-shadow(0 0 4px rgba(0, 246, 255, 0.7));
-}
-
-.brand-mark-default-x {
-  fill: none;
-  stroke: #ff2bd6;
-  stroke-width: 3.6;
-  stroke-linecap: round;
-  filter: drop-shadow(0 0 2px #ff2bd6) drop-shadow(0 0 7px rgba(255, 43, 214, 0.9));
-}
-
-.brand-mark-default-node {
-  fill: none;
-  stroke: #00f6ff;
-  stroke-width: 2.2;
-  stroke-linecap: round;
-  filter: drop-shadow(0 0 4px rgba(0, 246, 255, 0.78));
-}
-
-.brand-mark-default-dot {
-  fill: #00f6ff;
-  filter: drop-shadow(0 0 2px #00f6ff) drop-shadow(0 0 7px rgba(0, 246, 255, 0.98));
-}
-
-.brand-mark-default-dot-pink {
-  fill: #ff2bd6;
-  filter: drop-shadow(0 0 2px #ff2bd6) drop-shadow(0 0 7px rgba(255, 43, 214, 0.98));
-}
-
+/* Refined 3X-UI wordmark */
 .brand-text {
-  position: relative;
   display: inline-flex;
   align-items: center;
   font-family: Orbitron, 'Rajdhani', 'Segoe UI', sans-serif;
-  font-size: 21px;
-  font-weight: 950;
+  font-size: 20px;
+  font-weight: 900;
   line-height: 1;
-  letter-spacing: 0.075em;
+  letter-spacing: 0.065em;
   text-transform: uppercase;
-  transform: skewX(-4deg);
   background: linear-gradient(
     90deg,
-    #f8feff 0%,
-    #00f6ff 24%,
-    #64dfff 45%,
-    #a78bfa 69%,
+    #f4fbff 0%,
+    #00f6ff 34%,
+    #9f8cff 67%,
     #ff2bd6 100%
   );
   background-size: 160% 100%;
@@ -648,54 +570,12 @@ html[data-low-power='true'] .drawer-brand {
   background-clip: text;
   -webkit-text-fill-color: transparent;
   text-shadow:
-    0 0 4px rgba(244, 251, 255, 0.95),
-    0 0 10px rgba(0, 246, 255, 0.9),
-    0 0 22px rgba(0, 246, 255, 0.55),
-    0 0 34px rgba(255, 43, 214, 0.34);
-  animation: neon-graffiti-pulse 3.6s ease-in-out infinite alternate;
+    0 0 10px rgba(0, 246, 255, 0.34),
+    0 0 24px rgba(255, 43, 214, 0.12);
+  animation: cyber-brand-wordmark 7s ease-in-out infinite alternate;
 }
 
-.brand-text::before,
-.brand-text::after {
-  content: '';
-  position: absolute;
-  pointer-events: none;
-}
-
-.brand-text::before {
-  left: -6px;
-  right: -5px;
-  bottom: -5px;
-  height: 2px;
-  border-radius: 999px;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(0, 246, 255, 0.8) 18%,
-    #00f6ff 40%,
-    #ff2bd6 78%,
-    transparent 100%
-  );
-  box-shadow:
-    0 0 5px rgba(0, 246, 255, 0.9),
-    0 0 12px rgba(255, 43, 214, 0.55);
-  transform: skewX(14deg) rotate(-1deg);
-  opacity: 0.9;
-}
-
-.brand-text::after {
-  left: 12%;
-  right: 2%;
-  top: -5px;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255, 43, 214, 0.75), transparent);
-  box-shadow: 0 0 7px rgba(255, 43, 214, 0.6);
-  transform: rotate(-2deg);
-  opacity: 0.75;
-}
-
-.brand-text-full,
-.brand-text-compact {
+.brand-text-full {
   display: inline;
 }
 
@@ -703,34 +583,31 @@ html[data-low-power='true'] .drawer-brand {
   display: none;
 }
 
-.ant-layout-sider-collapsed .sider-brand .sider-brand-content {
-  max-width: 100%;
-  width: 100%;
-  gap: 0;
-}
-
-.ant-layout-sider-collapsed .brand-mark {
-  display: none;
-}
-
 .ant-layout-sider-collapsed .brand-text {
+  display: inline-flex;
+  justify-content: center;
+  width: 100%;
   font-family: Orbitron, 'Rajdhani', 'Courier New', monospace;
-  font-size: 29px;
+  font-size: 27px;
+  font-weight: 950;
+  line-height: 1;
   letter-spacing: -0.09em;
   text-transform: none;
-  transform: skewX(-6deg);
-  background: linear-gradient(135deg, #f4fbff 0%, #00f6ff 34%, #9f8cff 64%, #ff2bd6 100%);
-  background-size: 140% 140%;
+  background: linear-gradient(
+    135deg,
+    #00f6ff 0%,
+    #9f8cff 48%,
+    #ff2bd6 100%
+  );
+  background-size: auto;
+  background-position: 0 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
   text-shadow:
-    0 0 5px rgba(244, 251, 255, 0.95),
-    0 0 13px rgba(0, 246, 255, 0.95),
-    0 0 26px rgba(0, 246, 255, 0.65),
-    0 0 38px rgba(255, 43, 214, 0.5);
+    0 0 12px rgba(0, 246, 255, 0.45),
+    0 0 18px rgba(255, 43, 214, 0.14);
   animation: none;
-}
-
-.ant-layout-sider-collapsed .brand-text::before {
-  bottom: -7px;
 }
 
 .ant-layout-sider-collapsed .brand-text-full {
@@ -741,54 +618,13 @@ html[data-low-power='true'] .drawer-brand {
   display: inline;
 }
 
-.drawer-header .brand-block {
-  gap: 11px;
-}
-
-.drawer-header .brand-mark {
-  flex-basis: 42px;
-  width: 42px;
-  height: 42px;
-}
-
-.drawer-header .drawer-brand {
-  font-size: 21px;
-}
-
 .drawer-brand {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  font-family: Orbitron, 'Rajdhani', 'Segoe UI', sans-serif;
-  font-weight: 950;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: transparent;
-  background: linear-gradient(90deg, #f8feff 0%, #00f6ff 28%, #9f8cff 65%, #ff2bd6 100%);
-  background-size: 160% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  text-shadow:
-    0 0 4px rgba(244, 251, 255, 0.95),
-    0 0 11px rgba(0, 246, 255, 0.9),
-    0 0 24px rgba(255, 43, 214, 0.42);
-  animation: neon-graffiti-pulse 3.6s ease-in-out infinite alternate;
-}
-
-@keyframes neon-graffiti-pulse {
-  0% {
-    filter: brightness(0.95);
-  }
-
-  100% {
-    filter: brightness(1.14);
-  }
+  font-size: 20px;
+  letter-spacing: 0.11em;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .brand-text,
-  .drawer-brand {
+  .brand-text {
     animation: none;
   }
 }
@@ -799,7 +635,7 @@ html[data-low-power='true'] .drawer-brand {
   }
 }
 
-/* Final brand centering and compact wordmark overrides. */
+/* Theme-aware brand layout. */
 .sider-brand .sider-brand-content {
   position: absolute;
   inset: 0;
@@ -807,7 +643,7 @@ html[data-low-power='true'] .drawer-brand {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 11px;
   width: fit-content;
   height: fit-content;
   max-width: calc(100% - 74px);
@@ -815,139 +651,103 @@ html[data-low-power='true'] .drawer-brand {
   padding: 0;
   transform: none;
 }
-.sider-brand .brand-actions {
-  z-index: 2;
-}
-.sider-brand .brand-is-compact {
+.sider-brand .brand-actions { z-index: 2; }
+.ant-layout-sider-collapsed .sider-brand .sider-brand-content {
+  width: 100%;
   max-width: 100%;
   gap: 0;
 }
-.sider-brand .brand-is-compact .brand-text {
+.ant-layout-sider-collapsed .sider-brand .brand-text {
   display: inline-flex;
-}
-.sider-brand .brand-is-compact .brand-text-full {
-  display: none;
-}
-.sider-brand .brand-is-compact .brand-text-compact {
-  display: inline;
-}
-.sider-brand .brand-is-expanded .brand-text-full {
-  display: inline;
-}
-.sider-brand .brand-is-expanded .brand-text-compact {
-  display: none;
+  width: auto;
 }
 
-.brand-mark {
-  flex: 0 0 44px;
+/* Neon treatment is exclusively enabled in the cyberpunk theme. */
+body.theme-cyberpunk .brand-mark {
+  flex-basis: 44px;
   width: 44px;
   height: 44px;
-  filter: drop-shadow(0 0 4px rgba(0, 246, 255, 0.95)) drop-shadow(0 0 10px rgba(0, 246, 255, 0.65))
-    drop-shadow(0 0 18px rgba(255, 43, 214, 0.55));
+  filter: drop-shadow(0 0 4px rgba(0,246,255,.98)) drop-shadow(0 0 10px rgba(0,246,255,.8)) drop-shadow(0 0 20px rgba(255,43,214,.64));
 }
-.brand-mark-default {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+body.theme-cyberpunk .brand-mark-default {
+  filter: drop-shadow(0 0 2px #00f6ff) drop-shadow(0 0 7px rgba(0,246,255,.86));
 }
-.brand-mark-default svg {
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-}
-.brand-mark-default-frame {
-  fill: rgba(3, 8, 16, 0.92);
+body.theme-cyberpunk .brand-mark-default-frame {
+  fill: rgba(3,8,16,.94);
   stroke: #00f6ff;
-  stroke-width: 2;
-  stroke-linejoin: round;
-  filter: drop-shadow(0 0 2px #00f6ff) drop-shadow(0 0 6px rgba(0, 246, 255, 0.85));
+  stroke-width: 2.6;
 }
-.brand-mark-default-three {
-  fill: none;
-  stroke: #f7fdff;
-  stroke-width: 3.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  filter: drop-shadow(0 0 2px #f7fdff) drop-shadow(0 0 6px rgba(0, 246, 255, 0.95))
-    drop-shadow(0 0 10px rgba(0, 246, 255, 0.42));
+body.theme-cyberpunk .brand-mark-default-core {
+  stroke: rgba(110,239,255,.95);
+  stroke-width: 1.5;
+  filter: drop-shadow(0 0 4px rgba(0,246,255,.9));
 }
-.brand-mark-default-x {
-  fill: none;
+body.theme-cyberpunk .brand-mark-default-x {
   stroke: #ff2bd6;
-  stroke-width: 4;
-  stroke-linecap: round;
-  filter: drop-shadow(0 0 2px #ff2bd6) drop-shadow(0 0 8px rgba(255, 43, 214, 0.95))
-    drop-shadow(0 0 14px rgba(255, 43, 214, 0.4));
+  stroke-width: 3.8;
+  filter: drop-shadow(0 0 2px #ff2bd6) drop-shadow(0 0 8px rgba(255,43,214,.95)) drop-shadow(0 0 14px rgba(255,43,214,.48));
 }
-.brand-mark-default-accent {
-  fill: none;
-  stroke: #7ff8ff;
-  stroke-width: 2;
-  stroke-linecap: round;
-  filter: drop-shadow(0 0 4px rgba(0, 246, 255, 0.8));
+body.theme-cyberpunk .brand-mark-default-node {
+  stroke: #00f6ff;
+  stroke-width: 2.2;
+  filter: drop-shadow(0 0 4px rgba(0,246,255,.82));
 }
-.brand-mark-default-scan {
-  fill: none;
-  stroke: rgba(255, 43, 214, 0.92);
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  filter: drop-shadow(0 0 4px rgba(255, 43, 214, 0.7));
+body.theme-cyberpunk .brand-mark-default-dot {
+  filter: drop-shadow(0 0 2px #00f6ff) drop-shadow(0 0 8px rgba(0,246,255,.98));
 }
-.sider-brand .brand-is-compact .brand-text {
-  position: relative;
-  display: inline-flex;
-  font-size: 30px;
+body.theme-cyberpunk .brand-mark-default-dot-pink {
+  filter: drop-shadow(0 0 2px #ff2bd6) drop-shadow(0 0 8px rgba(255,43,214,.98));
+}
+body.theme-cyberpunk .brand-text {
+  font-family: Orbitron, 'Rajdhani', 'Courier New', monospace;
+  font-size: 21px;
   font-weight: 950;
-  letter-spacing: -0.11em;
-  line-height: 1;
-  transform: skewX(-5deg);
-  background: linear-gradient(
-    120deg,
-    #f9fdff 0%,
-    #7ff8ff 28%,
-    #00f6ff 52%,
-    #b78dff 75%,
-    #ff2bd6 100%
-  );
-  background-size: 160% 120%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  text-shadow:
-    0 0 4px rgba(249, 253, 255, 0.98),
-    0 0 10px rgba(0, 246, 255, 0.95),
-    0 0 22px rgba(0, 246, 255, 0.7),
-    0 0 34px rgba(255, 43, 214, 0.48);
-  animation: neon-graffiti-pulse 3.4s ease-in-out infinite alternate;
+  letter-spacing: .075em;
+  text-transform: uppercase;
+  transform: skewX(-4deg);
+  background: linear-gradient(90deg,#f8feff 0%,#00f6ff 24%,#64dfff 45%,#a78bfa 69%,#ff2bd6 100%);
+  background-size: 160% 100%;
+  background-position: 0 50%;
+  text-shadow: 0 0 4px rgba(244,251,255,.95),0 0 10px rgba(0,246,255,.9),0 0 22px rgba(0,246,255,.55),0 0 34px rgba(255,43,214,.34);
 }
-.sider-brand .brand-is-compact .brand-text::before,
-.sider-brand .brand-is-compact .brand-text::after {
+body.theme-cyberpunk .brand-text::before,
+body.theme-cyberpunk .brand-text::after {
   content: '';
   position: absolute;
   pointer-events: none;
 }
-.sider-brand .brand-is-compact .brand-text::before {
-  left: -5px;
-  right: -4px;
-  bottom: -6px;
+body.theme-cyberpunk .brand-text::before {
+  left: -6px;
+  right: -5px;
+  bottom: -5px;
   height: 2px;
-  background: linear-gradient(90deg, transparent, #00f6ff 28%, #ff2bd6 76%, transparent);
-  box-shadow:
-    0 0 5px rgba(0, 246, 255, 0.85),
-    0 0 12px rgba(255, 43, 214, 0.42);
-  transform: skewX(12deg);
+  background: linear-gradient(90deg,transparent,rgba(0,246,255,.8) 18%,#00f6ff 40%,#ff2bd6 78%,transparent);
+  box-shadow: 0 0 5px rgba(0,246,255,.9),0 0 12px rgba(255,43,214,.55);
+  transform: skewX(14deg) rotate(-1deg);
 }
-.sider-brand .brand-is-compact .brand-text::after {
-  left: 25%;
-  right: 4%;
-  top: -6px;
+body.theme-cyberpunk .brand-text::after {
+  left: 12%;
+  right: 2%;
+  top: -5px;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255, 43, 214, 0.75), transparent);
-  box-shadow: 0 0 7px rgba(255, 43, 214, 0.55);
-  transform: rotate(-3deg);
+  background: linear-gradient(90deg,transparent,rgba(255,43,214,.75),transparent);
+  box-shadow: 0 0 7px rgba(255,43,214,.6);
+  transform: rotate(-2deg);
+}
+body.theme-cyberpunk .drawer-brand {
+  font-family: Orbitron, 'Rajdhani', 'Courier New', monospace;
+  font-size: 21px;
+  font-weight: 950;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: transparent;
+  background: linear-gradient(90deg,#f8feff 0%,#00f6ff 28%,#9f8cff 65%,#ff2bd6 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 4px rgba(244,251,255,.95),0 0 11px rgba(0,246,255,.9),0 0 24px rgba(255,43,214,.42);
 }
 @media (prefers-reduced-motion: reduce) {
-  .sider-brand .brand-is-compact .brand-text {
-    animation: none;
-  }
+  body.theme-cyberpunk .brand-text,
+  body.theme-cyberpunk .drawer-brand { animation: none; }
 }
