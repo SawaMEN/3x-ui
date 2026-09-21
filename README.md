@@ -213,7 +213,7 @@ npm run format
 
 ## Участие в разработке
 
-Этот репозиторий является форком основного проекта [MHSanaei/3x-ui](https://github.com/MHSanaei/3x-ui).
+Этот репозиторий является форком основного проекта [https://github.com/MHSanaei/3x-ui](https://github.com/MHSanaei/3x-ui).
 
 Вклад приветствуется. Перед открытием issue или pull request ознакомьтесь с [CONTRIBUTING.md](CONTRIBUTING.md).
 
