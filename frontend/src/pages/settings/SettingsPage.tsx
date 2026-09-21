@@ -40,6 +40,7 @@ import SubscriptionGeneralTab from './SubscriptionGeneralTab';
 import SubscriptionFormatsTab from './SubscriptionFormatsTab';
 import SubscriptionBalancersTab from './SubscriptionBalancersTab';
 import SwapSettingsTab from './SwapSettingsTab';
+import SystemUpdateModal from './SystemUpdateModal';
 import './SettingsPage.css';
 
 interface ApiMsg {
@@ -48,7 +49,6 @@ interface ApiMsg {
 
 const tabSlugs = [
   'general',
-  'core',
   'security',
   'telegram',
   'email',
@@ -471,12 +471,7 @@ export default function SettingsPage() {
       >
         <SwapSettingsTab />
       </Modal>
-      {systemUpdateOpen && (
-        <SwapSettingsTab
-          systemUpdateOnly
-          onSystemUpdateClose={() => setSystemUpdateOpen(false)}
-        />
-      )}
+      <SystemUpdateModal open={systemUpdateOpen} onClose={() => setSystemUpdateOpen(false)} />
     </ConfigProvider>
   );
 }
