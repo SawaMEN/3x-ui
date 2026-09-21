@@ -29,13 +29,12 @@ type Status struct {
 	UpdatesAvailable bool            `json:"updatesAvailable"`
 	MissingPackages  bool            `json:"missingPackages"`
 	CanUpdate        bool            `json:"canUpdate"`
-	Notes            []string        `json:"notes"`
+	Notes             []string        `json:"notes"`
 }
 
 type UpdateResult struct {
-	Updated         bool   `json:"updated"`
-	RebootRequired  bool   `json:"rebootRequired"`
-	Output          string `json:"output"`
-	Error           string `json:"error"`
+	Updated        bool   `json:"updated"`
+	RebootRequired bool   `json:"rebootRequired"`
+	Output         string `json:"output"`
+	Error          string `json:"error"`
 }
-
