@@ -1759,7 +1759,6 @@
       "discordNotifyBackup": "Database Backup",
       "discordNotifyBackupDesc": "Send a database backup file with a report.",
       "discordEventBusNotifyDesc": "Select which events trigger Discord notifications",
-      "openFromCore": "Swap settings",
       "swap": {
         "menu": "Swap / ZRAM",
         "overview": "Overview",
@@ -1805,7 +1804,8 @@
         "installZram": "Install ZRAM",
         "enableZram": "Enable ZRAM",
         "generatorManaged": "ZRAM is managed by systemd-zram-generator",
-        "memoryUsed": "Memory used"
+        "memoryUsed": "Memory used",
+        "openFromCore": "Swap settings"
       }
     },
     "xray": {
