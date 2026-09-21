@@ -83,45 +83,6 @@ const sectionFallbacks: Record<SectionKey, unknown> = {
   experimental: {},
 };
 
-const outboundTypes = [
-  'direct',
-  'block',
-  'dns',
-  'http',
-  'socks',
-  'shadowsocks',
-  'vmess',
-  'vless',
-  'trojan',
-  'hysteria2',
-  'tuic',
-  'selector',
-  'urltest',
-  'tun',
-  'redirect',
-  'tproxy',
-  'shadowtls',
-  'ssh',
-] as const;
-
-const dnsTypes = [
-  'local',
-  'hosts',
-  'tcp',
-  'udp',
-  'tls',
-  'quic',
-  'https',
-  'h3',
-  'dhcp',
-  'mdns',
-  'fakeip',
-  'tailscale',
-  'openconnect',
-  'openvpn',
-  'resolved',
-] as const;
-
 function asObject(value: unknown): JsonObject {
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as JsonObject) : {};
 }
@@ -717,7 +678,12 @@ function SingBoxOutboundModal({
 }) {
   const [draft, setDraft] = useState<JsonObject>({});
   useEffect(() => {
-    if (open) setDraft(value ? JSON.parse(JSON.stringify(value)) : { type: 'direct', tag: 'direct-' + (existingTags.length + 1) });
+    if (!open) return;
+    const nextDraft = value
+      ? JSON.parse(JSON.stringify(value))
+      : { type: 'direct', tag: 'direct-' + (existingTags.length + 1) };
+    const timer = window.setTimeout(() => setDraft(nextDraft), 0);
+    return () => window.clearTimeout(timer);
   }, [open, value, existingTags.length]);
 
   return (
@@ -746,7 +712,10 @@ function SingBoxRouteRuleModal({
 }) {
   const [draft, setDraft] = useState<JsonObject>({});
   useEffect(() => {
-    if (open) setDraft(value ? JSON.parse(JSON.stringify(value)) : {});
+    if (!open) return;
+    const nextDraft = value ? JSON.parse(JSON.stringify(value)) : {};
+    const timer = window.setTimeout(() => setDraft(nextDraft), 0);
+    return () => window.clearTimeout(timer);
   }, [open, value]);
 
   const patch = (key: string, nextValue: unknown) => {
@@ -1565,15 +1534,6 @@ export default function SingBoxPage() {
 
   const renderOutbounds = () => {
     const items = asObjectArray(sectionValue('outbounds', config));
-    const tags = items.map((item) => asString(item.tag)).filter(Boolean);
-
-    const saveOutbound = (next: JsonObject) => {
-      const copy = [...items];
-      if (editingOutbound == null) copy.push(next);
-      else copy[editingOutbound] = next;
-      updateSection('outbounds', copy);
-      setOutboundModalOpen(false);
-    };
 
     return (
       <Card>
@@ -1648,15 +1608,6 @@ export default function SingBoxPage() {
     const value = asObject(sectionValue('route', config));
     const rules = Array.isArray(value.rules) ? value.rules.map(asObject) : [];
     const outTags = asObjectArray(config.outbounds).map((item) => asString(item.tag)).filter(Boolean);
-    const ruleSetTags = Array.isArray(value.rule_set) ? value.rule_set.map(asObject).map((item) => asString(item.tag)).filter(Boolean) : [];
-
-    const saveRule = (next: JsonObject) => {
-      const copy = [...rules];
-      if (editingRouteRule == null) copy.push(next);
-      else copy[editingRouteRule] = next;
-      patchSection('route', { rules: copy });
-      setRouteRuleModalOpen(false);
-    };
 
     return (
       <>
