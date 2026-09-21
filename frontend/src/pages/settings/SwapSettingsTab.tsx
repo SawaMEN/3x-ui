@@ -1127,10 +1127,10 @@ export default function SwapSettingsTab() {
       <Tabs
         className="swap-settings-tabs"
         items={[
-          { key: 'overview', label: isMobile ? 'Обзор' : t('pages.settings.swap.overview'), children: overviewTab },
-          { key: 'swap-file', label: isMobile ? 'Swap-файл' : t('pages.settings.swap.fileTitle'), children: swapFileTab },
+          { key: 'overview', label: t('pages.settings.swap.overview'), children: overviewTab },
+          { key: 'swap-file', label: t('pages.settings.swap.fileTitle'), children: swapFileTab },
           { key: 'zram', label: 'ZRAM', children: zramTab },
-          { key: 'areas', label: isMobile ? 'Состояние' : t('pages.settings.swap.allAreas'), children: areasTab },
+          { key: 'areas', label: t('pages.settings.swap.allAreas'), children: areasTab },
         ]}
         tabBarExtraContent={!isMobile ? {
           right: (
