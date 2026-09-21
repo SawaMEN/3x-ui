@@ -347,6 +347,7 @@ export default function IndexPage() {
                   <TelemtConnectionsCard />
                   <SystemStrip
                     status={status}
+                    coreType={allSetting.coreType}
                     showIp={showIp}
                     onToggleIp={() => setShowIp((v) => !v)}
                   />

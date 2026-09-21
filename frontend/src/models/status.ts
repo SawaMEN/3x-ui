@@ -91,6 +91,7 @@ interface StatusInput {
   udpCount?: number;
   uptime?: number;
   appUptime?: number;
+  coreUptime?: number;
   appStats?: AppStats;
   xray?: Partial<XrayInfo>;
   vkTurnProxy?: Partial<VkTurnProxyInfo>;
@@ -113,6 +114,7 @@ export class Status {
   udpCount = 0;
   uptime = 0;
   appUptime = 0;
+  coreUptime = 0;
   appStats: AppStats = { threads: 0, mem: 0, uptime: 0 };
   xray: XrayInfo = { state: 'stop', errorMsg: '', version: '', color: '' };
   vkTurnProxy: VkTurnProxyInfo = {
@@ -143,6 +145,7 @@ export class Status {
     this.udpCount = data.udpCount ?? 0;
     this.uptime = data.uptime ?? 0;
     this.appUptime = data.appUptime ?? 0;
+    this.coreUptime = data.coreUptime ?? 0;
     this.appStats = data.appStats ?? this.appStats;
     this.xray = { ...this.xray, ...(data.xray || {}) };
     this.xray.color = XRAY_STATE_COLORS[this.xray.state] ?? 'gray';
