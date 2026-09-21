@@ -35,9 +35,7 @@ function SystemStrip({ status, coreType, showIp, onToggleIp }: SystemStripProps)
           <div className="ov-strip-split">
             <div>
               <div className="ov-strip-sub">{activeCore}</div>
-              <div className="ov-strip-value">
-                {TimeFormatter.formatSecond(status.coreUptime)}
-              </div>
+              <div className="ov-strip-value">{TimeFormatter.formatSecond(status.coreUptime)}</div>
             </div>
             <span className="ov-strip-split-sep" />
             <div>
