@@ -30,6 +30,7 @@ test('uses a single wordmark with full and compact labels', () => {
   expect(view.container.querySelector('.brand-text-compact')?.textContent).toBe('3X');
 
   fireEvent.mouseEnter(sidebarRoot!);
+  expect(view.container.querySelector('.sider-brand-content')).toHaveClass('sider-brand-content');
   fireEvent.mouseLeave(sidebarRoot!);
   expect(view.container.querySelectorAll('.brand-text-full')).toHaveLength(1);
   expect(view.container.querySelectorAll('.brand-text-compact')).toHaveLength(1);
