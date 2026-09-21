@@ -853,10 +853,10 @@ export default function TelemtPage() {
                   : 'сертификат будет получен автоматически'}
               </Descriptions.Item>
               <Descriptions.Item label="443">
-                {status.webProxy.port443Available
-                  ? 'порт свободен'
-                  : status.webProxy.nginxActive && status.webProxy.port443Owner === 'nginx'
-                    ? 'порт уже использует nginx — это нормально'
+                {status.webProxy.nginxActive && status.webProxy.port443Owner === 'nginx'
+                  ? 'порт уже использует nginx — это нормально'
+                  : status.webProxy.port443Available
+                    ? 'порт свободен'
                     : status.webProxy.port443Owner
                       ? 'занят: ' + status.webProxy.port443Owner
                       : 'занят другим сервисом'}
