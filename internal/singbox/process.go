@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
+	gprocess "github.com/shirou/gopsutil/v4/process"
 )
 
 const (
@@ -154,6 +155,36 @@ func (p *Process) GetStartTime() time.Time {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.startTime
+}
+
+// GetUptime returns the uptime of the sing-box process in seconds.
+func (p *Process) GetUptime() uint64 {
+	p.mu.RLock()
+	startTime, externalPID := p.startTime, p.externalPID
+	p.mu.RUnlock()
+
+	if !startTime.IsZero() {
+		return uint64(time.Since(startTime).Seconds())
+	}
+	if externalPID <= 0 {
+		externalPID = findRunningPID(GetBinaryPath())
+	}
+	if externalPID <= 0 {
+		return 0
+	}
+	proc, err := gprocess.NewProcess(int32(externalPID))
+	if err != nil {
+		return 0
+	}
+	createdMs, err := proc.CreateTime()
+	if err != nil || createdMs <= 0 {
+		return 0
+	}
+	started := time.UnixMilli(createdMs)
+	if started.After(time.Now()) {
+		return 0
+	}
+	return uint64(time.Since(started).Seconds())
 }
 
 func (p *Process) ConfigPath() string { return p.config }

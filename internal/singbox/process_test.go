@@ -40,3 +40,11 @@ func TestManagedPathsAreAbsolute(t *testing.T) {
 		t.Fatalf("managed sing-box paths must be absolute: binary=%q config=%q", GetBinaryPath(), GetConfigPath())
 	}
 }
+
+
+func TestProcessGetUptimeWithoutStartTime(t *testing.T) {
+	p := &Process{}
+	if got := p.GetUptime(); got != 0 {
+		t.Fatalf("expected zero uptime for a process without start metadata, got %d", got)
+	}
+}
