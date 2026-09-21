@@ -3,6 +3,9 @@ name: Format main
 on:
   push:
     branches: [main]
+    paths:
+      - "frontend/src/**"
+      - "frontend/tools/**"
 
 permissions:
   contents: write
@@ -21,7 +24,7 @@ jobs:
       - name: Format frontend
         working-directory: frontend
         run: |
-          npm ci
+          npm ci --no-audit --no-fund
           npm run format
       - name: Commit formatted files
         run: |
