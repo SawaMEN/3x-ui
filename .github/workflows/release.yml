@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - "**"
+      - main
     tags:
       - "v*.*.*"
     paths:
@@ -23,17 +23,6 @@ on:
       - "internal/Telemt/telemt.toml.example"
       - ".github/workflows/release.yml"
       - "internal/config/version"
-  pull_request:
-    paths:
-      - "**.go"
-      - "go.mod"
-      - "go.sum"
-      - "**.sh"
-      - "frontend/**"
-      - "x-ui.service.debian"
-      - "x-ui.service.arch"
-      - "x-ui.service.rhel"
-      - ".github/workflows/release.yml"
 
 jobs:
   frontend:
@@ -57,7 +46,7 @@ jobs:
 
       - name: Build frontend bundle
         run: |
-          npm ci
+          npm ci --no-audit --no-fund
           npm run build
         working-directory: frontend
 
