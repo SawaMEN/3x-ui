@@ -110,7 +110,7 @@ bash <(curl -Ls https://raw.githubusercontent.com/SawaMEN/3x-ui/main/install.sh)
 Для установки конкретной версии:
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/SawaMEN/3x-ui/main/install.sh) v3.8.5
+bash <(curl -Ls https://raw.githubusercontent.com/SawaMEN/3x-ui/main/install.sh) v3.9.2
 ```
 
 Для rolling dev-сборки:

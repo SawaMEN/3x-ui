@@ -421,6 +421,9 @@ export default function SwapSettingsTab({
   }, [messageApi]);
 
   useEffect(() => {
+    if (systemUpdateOnly) {
+      return;
+    }
     const initial = window.setTimeout(() => {
       void refresh();
       void refreshSystemUpdateCapability();
@@ -432,7 +435,7 @@ export default function SwapSettingsTab({
       window.clearInterval(timer);
       window.clearInterval(systemTimer);
     };
-  }, [refresh, refreshSystemUpdateCapability]);
+  }, [refresh, refreshSystemUpdateCapability, systemUpdateOnly]);
 
   const action = async (fn: () => Promise<ApiMsg>) => {
     setBusy(true);
@@ -453,7 +456,7 @@ export default function SwapSettingsTab({
   const reinstallZram = () =>
     action(() => HttpUtil.post('/panel/api/setting/swap/zram/reinstall') as Promise<ApiMsg>);
 
-  const checkSystemUpdates = async () => {
+  const checkSystemUpdates = useCallback(async () => {
     setSystemUpdateBusy(true);
     try {
       const msg = (await HttpUtil.post(
@@ -468,7 +471,7 @@ export default function SwapSettingsTab({
     } finally {
       setSystemUpdateBusy(false);
     }
-  };
+  }, [messageApi]);
 
   const openSystemUpdate = () => {
     if (systemUpdate?.supported !== true) return;
