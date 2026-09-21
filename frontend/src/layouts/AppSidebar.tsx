@@ -368,7 +368,7 @@ function AppSidebar() {
         collapsed={railCollapsed}
       >
         <div className="sider-brand">
-          <div className="brand-block">
+          <div className="brand-block sider-brand-content">
             {!railCollapsed && <BrandMark />}
             <span className="brand-text" aria-label="3X-UI">
               <span className="brand-text-full">3X-UI</span>
