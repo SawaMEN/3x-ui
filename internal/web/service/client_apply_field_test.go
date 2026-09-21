@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/database"
-	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
-	"github.com/mhsanaei/3x-ui/v3/internal/xray"
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // TestResetClientExpiryTimeByEmail_MultiInbound reproduces #5039: a client

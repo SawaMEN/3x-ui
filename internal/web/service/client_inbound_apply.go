@@ -8,13 +8,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/database"
-	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
-	"github.com/mhsanaei/3x-ui/v3/internal/logger"
-	"github.com/mhsanaei/3x-ui/v3/internal/util/common"
-	"github.com/mhsanaei/3x-ui/v3/internal/util/random"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/runtime"
-	"github.com/mhsanaei/3x-ui/v3/internal/xray"
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/random"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
+	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 
 	"gorm.io/gorm"
 )
@@ -323,6 +323,10 @@ func (s *ClientService) checkEmailsExistForClients(inboundSvc *InboundService, c
 }
 
 func (s *ClientService) AddInboundClient(inboundSvc *InboundService, data *model.Inbound) (bool, error) {
+	if oldInbound, err := inboundSvc.GetInbound(data.Id); err == nil && oldInbound.Protocol == model.VKTurnProxy {
+		return inboundSvc.AddVKTurnProxyClient(data)
+	}
+
 	defer lockInbound(data.Id).Unlock()
 
 	clients, err := inboundSvc.GetClients(data)
@@ -653,6 +657,13 @@ func (s *ClientService) AddInboundClient(inboundSvc *InboundService, data *model
 }
 
 func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *model.Inbound, oldEmail string) (bool, error) {
+	if oldInbound, err := inboundSvc.GetInbound(data.Id); err == nil && oldInbound.Protocol == model.VKTurnProxy {
+		if clientID, ok := inboundSvc.vkTurnProxyClientIDByEmail(data.Id, oldEmail); ok {
+			return inboundSvc.UpdateVKTurnProxyClient(data, clientID)
+		}
+		return false, common.NewError("vk-turn-proxy client not found for email:", oldEmail)
+	}
+
 	defer lockInbound(data.Id).Unlock()
 
 	clients, err := inboundSvc.GetClients(data)

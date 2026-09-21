@@ -32,15 +32,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/amneziawg"
-	"github.com/mhsanaei/3x-ui/v3/internal/amneziawgnet"
-	"github.com/mhsanaei/3x-ui/v3/internal/config"
-	"github.com/mhsanaei/3x-ui/v3/internal/database"
-	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
-	"github.com/mhsanaei/3x-ui/v3/internal/logger"
-	"github.com/mhsanaei/3x-ui/v3/internal/util/common"
-	"github.com/mhsanaei/3x-ui/v3/internal/util/sys"
-	"github.com/mhsanaei/3x-ui/v3/internal/xray"
+	"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
+	"github.com/SawaMEN/3x-ui/v3/internal/amneziawgnet"
+	"github.com/SawaMEN/3x-ui/v3/internal/config"
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
+	systemswap "github.com/SawaMEN/3x-ui/v3/internal/util/swap"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/sys"
+	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 
 	"github.com/google/uuid"
 	utls "github.com/refraction-networking/utls"
@@ -95,6 +96,7 @@ type Status struct {
 		ErrorMsg string       `json:"errorMsg"`
 		Version  string       `json:"version"`
 	} `json:"xray"`
+	VKTurnProxy VKTurnProxyRuntimeStatus `json:"vkTurnProxy"`
 	// AmneziaWG gates the overview's AmneziaWG log view: Configured stays true
 	// while an inbound exists but its embedded interface isn't up yet, which
 	// is exactly when that view's event lines are worth reading.
@@ -213,13 +215,15 @@ func (s *ServerService) LastStatus() *Status {
 // CurrentStatus never reports "no status yet": the @2s ticker leaves LastStatus
 // nil for the first seconds after a restart, and a master probing a node then
 // reads the empty snapshot as an offline panel.
+const statusFreshnessTTL = 5 * time.Second
+
 func (s *ServerService) CurrentStatus() *Status {
-	if status := s.LastStatus(); status != nil {
+	if status := s.LastStatus(); status != nil && time.Since(status.T) <= statusFreshnessTTL {
 		return status
 	}
 	s.coldStatusMu.Lock()
 	defer s.coldStatusMu.Unlock()
-	if status := s.LastStatus(); status != nil {
+	if status := s.LastStatus(); status != nil && time.Since(status.T) <= statusFreshnessTTL {
 		return status
 	}
 	return s.RefreshStatus()
@@ -583,9 +587,12 @@ func (s *ServerService) GetStatus(lastStatus *Status) *Status {
 		status.Mem.Total = memInfo.Total
 	}
 
-	swapInfo, err := mem.SwapMemory()
-	if err != nil {
-		logger.Warning("get swap memory failed:", err)
+	if total, used, swapErr := systemswap.Summary(); swapErr == nil {
+		// /proc/swaps is authoritative for Linux and includes zram swap devices.
+		status.Swap.Current = used
+		status.Swap.Total = total
+	} else if swapInfo, fallbackErr := mem.SwapMemory(); fallbackErr != nil {
+		logger.Warning("get swap memory failed:", fallbackErr)
 	} else {
 		status.Swap.Current = swapInfo.Used
 		status.Swap.Total = swapInfo.Total
@@ -699,6 +706,7 @@ func (s *ServerService) GetStatus(lastStatus *Status) *Status {
 		status.Xray.ErrorMsg = s.xrayService.GetXrayResult()
 	}
 	status.Xray.Version = s.xrayService.GetXrayVersion()
+	status.VKTurnProxy = VKTurnProxyRuntime().GetStatus()
 
 	var amneziawgCount int64
 	if err := database.GetDB().Model(model.Inbound{}).
@@ -1225,7 +1233,10 @@ func (s *ServerService) GetLogs(count string, level string, syslog string) []str
 		}
 		lines = strings.Split(out.String(), "\n")
 	} else {
-		lines = logger.GetLogs(c, level)
+		lines = logger.GetFileLogs(c, level)
+		if len(lines) == 0 {
+			lines = logger.GetLogs(c, level)
+		}
 	}
 
 	return lines

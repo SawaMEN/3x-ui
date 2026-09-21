@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
 
 // TestExportImportPreservesDisabledEnable covers #6478: ExportAll keeps the

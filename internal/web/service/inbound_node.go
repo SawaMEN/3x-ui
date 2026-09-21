@@ -9,20 +9,54 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/database"
-	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
-	"github.com/mhsanaei/3x-ui/v3/internal/logger"
-	"github.com/mhsanaei/3x-ui/v3/internal/util/common"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/runtime"
-	"github.com/mhsanaei/3x-ui/v3/internal/xray"
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
+	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
-var reportedRemoteTagConflict sync.Map
+const inboundNodeWarningCacheSize = 4096
 
-var reportedForeignClientClaim sync.Map
+type inboundNodeWarningCache struct {
+	mu    sync.Mutex
+	seen  map[string]struct{}
+	order []string
+}
+
+func (c *inboundNodeWarningCache) mark(key string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if _, ok := c.seen[key]; ok {
+		return false
+	}
+	if len(c.order) >= inboundNodeWarningCacheSize {
+		oldest := c.order[0]
+		delete(c.seen, oldest)
+		c.order = c.order[1:]
+	}
+	if c.seen == nil {
+		c.seen = make(map[string]struct{}, inboundNodeWarningCacheSize)
+	}
+	c.seen[key] = struct{}{}
+	c.order = append(c.order, key)
+	return true
+}
+
+func (c *inboundNodeWarningCache) delete(key string) {
+	c.mu.Lock()
+	delete(c.seen, key)
+	c.mu.Unlock()
+}
+
+var (
+	reportedRemoteTagConflict  inboundNodeWarningCache
+	reportedForeignClientClaim inboundNodeWarningCache
+)
 
 // nodeBulkPushThreshold caps how many per-client RPCs a single operation will
 // stream to a remote node. Above it, the panel marks the node dirty instead and
@@ -710,7 +744,7 @@ func (s *InboundService) setRemoteTrafficLocked(nodeID int, snap *runtime.Traffi
 			}
 			if chosenTag == "" {
 				key := fmt.Sprintf("%d:%s", nodeID, snapIb.Tag)
-				if _, seen := reportedRemoteTagConflict.LoadOrStore(key, struct{}{}); !seen {
+				if reportedRemoteTagConflict.mark(key) {
 					logger.Warningf(
 						"setRemoteTraffic: tag %q from node %d collides with an existing inbound even after the n%d- prefix — skipping (rename one side to remove the duplicate)",
 						snapIb.Tag, nodeID, nodeID,
@@ -718,7 +752,7 @@ func (s *InboundService) setRemoteTrafficLocked(nodeID int, snap *runtime.Traffi
 				}
 				continue
 			}
-			reportedRemoteTagConflict.Delete(fmt.Sprintf("%d:%s", nodeID, snapIb.Tag))
+			reportedRemoteTagConflict.delete(fmt.Sprintf("%d:%s", nodeID, snapIb.Tag))
 			newIb := model.Inbound{
 				UserId:               defaultUserId,
 				NodeID:               &nodeID,
@@ -1250,7 +1284,7 @@ func (s *InboundService) setRemoteTrafficLocked(nodeID int, snap *runtime.Traffi
 						continue
 					}
 					key := fmt.Sprintf("%d:%s", nodeID, filtered[i].Email)
-					if _, seen := reportedForeignClientClaim.LoadOrStore(key, struct{}{}); !seen {
+					if reportedForeignClientClaim.mark(key) {
 						logger.Warningf(
 							"setRemoteTraffic: node %d reported client %q, which is attached only to inbounds of another node — not adopting (rename one side to remove the duplicate email)",
 							nodeID, filtered[i].Email,
@@ -1402,11 +1436,25 @@ func (s *InboundService) restartRemoteNodesOnDisable(nodeIDs []int) {
 }
 
 func (s *InboundService) GetOnlineClients() []string {
-	process := currentXrayProcess()
-	if process == nil {
-		return []string{}
+	var emails []string
+	if process := currentXrayProcess(); process != nil {
+		emails = process.GetOnlineClients()
 	}
-	return process.GetOnlineClients()
+	if onlineEmails, _, _, err := s.getVKTurnProxyHeartbeatPresence(time.Now()); err == nil && len(onlineEmails) > 0 {
+		seen := make(map[string]struct{}, len(emails))
+		for _, email := range emails {
+			seen[email] = struct{}{}
+		}
+		for email := range onlineEmails {
+			if _, ok := seen[email]; !ok {
+				emails = append(emails, email)
+			}
+		}
+	}
+	if emails == nil {
+		emails = []string{}
+	}
+	return emails
 }
 
 // GetOnlineClientsByGuid returns online emails keyed by the panelGuid of the
@@ -1602,6 +1650,13 @@ func (s *InboundService) GetClientsLastOnline() (map[string]int64, error) {
 	result := make(map[string]int64, len(rows))
 	for _, r := range rows {
 		result[r.Email] = r.LastOnline
+	}
+	if _, _, lastOnline, hbErr := s.getVKTurnProxyHeartbeatPresence(time.Now()); hbErr == nil {
+		for email, lastSeen := range lastOnline {
+			if lastSeen > result[email] {
+				result[email] = lastSeen
+			}
+		}
 	}
 	return result, nil
 }

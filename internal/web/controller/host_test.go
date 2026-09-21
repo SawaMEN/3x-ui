@@ -13,10 +13,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/op/go-logging"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/database"
-	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
-	xuilogger "github.com/mhsanaei/3x-ui/v3/internal/logger"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/entity"
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	xuilogger "github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/entity"
 )
 
 func newHostTestDB(t *testing.T) {

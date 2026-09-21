@@ -6,12 +6,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/middleware"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/session"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/websocket"
-	"github.com/mhsanaei/3x-ui/v3/internal/xray"
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/middleware"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/session"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/websocket"
+	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 
 	"github.com/gin-gonic/gin"
 )
@@ -89,6 +89,8 @@ func (a *InboundController) initRouter(g *gin.RouterGroup) {
 	g.POST("/import", a.importInbound)
 	g.POST("/:id/fallbacks", a.setFallbacks)
 	g.POST("/pushClientTraffics", a.pushClientTraffics)
+
+	a.initVKTurnProxyRouter(g)
 }
 
 // getInbounds retrieves the list of inbounds for the logged-in user.

@@ -16,11 +16,11 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/config"
-	"github.com/mhsanaei/3x-ui/v3/internal/logger"
-	"github.com/mhsanaei/3x-ui/v3/internal/util/common"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
-	"github.com/mhsanaei/3x-ui/v3/internal/xray"
+	"github.com/SawaMEN/3x-ui/v3/internal/config"
+	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
+	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 const (
@@ -44,6 +44,11 @@ const (
 	// How long a 429 may ask a paged reply to wait before it gives up on the
 	// page: longer than this and the operator is staring at a dead command.
 	discordRateLimitWait = 5 * time.Second
+
+	// Bound command-handler fan-out so a Discord message burst cannot retain an
+	// unbounded number of goroutines and MessageCreateData values while the
+	// gateway reader must remain responsive for heartbeats.
+	discordHandlerConcurrency = 8
 )
 
 // GatewayPayload represents a Discord Gateway WebSocket frame.
@@ -100,12 +105,13 @@ type GatewayClient struct {
 	gatewayURL     string
 	egressProxyURL func() string
 
-	mu      sync.Mutex
-	writeMu sync.Mutex // gorilla panics on concurrent writes; the ticker and op 1 replies both write
-	conn    *websocket.Conn
-	cancel  context.CancelFunc
-	running bool
-	lastSeq *int64
+	mu         sync.Mutex
+	writeMu    sync.Mutex // gorilla panics on concurrent writes; the ticker and op 1 replies both write
+	conn       *websocket.Conn
+	cancel     context.CancelFunc
+	running    bool
+	lastSeq    *int64
+	messageSem chan struct{}
 }
 
 // NewGatewayClient creates a new Discord Gateway client instance.
@@ -124,6 +130,7 @@ func NewGatewayClient(
 		xrayService:    xray,
 		gatewayURL:     defaultGatewayURL,
 		egressProxyURL: settingService.PanelEgressProxyURL,
+		messageSem:     make(chan struct{}, discordHandlerConcurrency),
 	}
 }
 
@@ -371,14 +378,22 @@ func (g *GatewayClient) connectAndListen(ctx context.Context) error {
 			if payload.T == "MESSAGE_CREATE" {
 				var msg MessageCreateData
 				if err := json.Unmarshal(payload.D, &msg); err == nil {
-					go func(m MessageCreateData) {
-						defer func() {
-							if r := recover(); r != nil {
-								logger.Error("Recovered panic in Discord message handler: ", r)
-							}
-						}()
-						g.handleMessage(ctx, m)
-					}(msg)
+					select {
+					case g.messageSem <- struct{}{}:
+						go func(m MessageCreateData) {
+							defer func() {
+								<-g.messageSem
+								if r := recover(); r != nil {
+									logger.Error("Recovered panic in Discord message handler: ", r)
+								}
+							}()
+							g.handleMessage(ctx, m)
+						}(msg)
+					default:
+						// Keep the gateway reader free for heartbeat traffic rather than
+						// queueing unbounded command work in goroutines.
+						logger.Warning("Discord message handler pool is full; dropping command event")
+					}
 				}
 			}
 		}

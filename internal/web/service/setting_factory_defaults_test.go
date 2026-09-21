@@ -4,8 +4,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/util/reflect_util"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/entity"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/reflect_util"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/entity"
 )
 
 func allSettingJSONTags(t *testing.T) map[string]bool {
@@ -81,5 +81,11 @@ func TestGetFactoryDefaultsInvariant(t *testing.T) {
 				t.Errorf("key %q is in the credential deny-list and must not be returned", key)
 			}
 		})
+	}
+}
+
+func TestSingBoxConfigTemplateDefault(t *testing.T) {
+	if value, ok := defaultValueMap["singBoxConfigTemplate"]; !ok || value != "" {
+		t.Fatalf("singBoxConfigTemplate default must exist and be empty, got %q, present=%v", value, ok)
 	}
 }

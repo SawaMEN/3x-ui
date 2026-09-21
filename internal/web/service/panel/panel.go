@@ -17,10 +17,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/config"
-	"github.com/mhsanaei/3x-ui/v3/internal/logger"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/global"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
+	"github.com/SawaMEN/3x-ui/v3/internal/config"
+	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/global"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 )
 
 // PanelService provides business logic for panel management operations.
@@ -40,7 +40,7 @@ type PanelUpdateInfo struct {
 }
 
 const (
-	panelUpdaterURL      = "https://raw.githubusercontent.com/MHSanaei/3x-ui/main/update.sh"
+	panelUpdaterURL      = "https://raw.githubusercontent.com/SawaMEN/3x-ui/main/update.sh"
 	maxPanelUpdaterBytes = 2 << 20
 	// devReleaseTag is the fixed-tag rolling pre-release the CI force-moves to the
 	// newest main commit; the dev update channel installs from it.
@@ -53,43 +53,18 @@ const (
 
 // PanelUpdateStatus reports the outcome of the most recently launched panel
 // self-update. RunID lets the caller confirm this status belongs to the
-// update it started rather than a stale result left over from an earlier
-// run; State is one of "pending", "success", or "failed". RunID is a decimal
-// string, not a JSON number: it's a formatted UnixNano timestamp, and
-// JavaScript's number type can't represent that precisely (it exceeds
-// Number.MAX_SAFE_INTEGER), which would let two different runs round to the
-// same value on the wire and defeat the whole point of this field.
+// update it started rather than a stale one.
 type PanelUpdateStatus struct {
 	RunID      string `json:"runId" example:"1735689600123456789"`
 	State      string `json:"state" example:"success"`
 	ExitCode   int    `json:"exitCode" example:"0"`
+	Message    string `json:"message,omitempty" example:"failed to download x-ui release archive"`
+	LogFile    string `json:"logFile,omitempty" example:"/var/log/x-ui/update.log"`
 	FinishedAt int64  `json:"finishedAt" example:"1735689612"`
 }
 
 var releaseCommitRegex = regexp.MustCompile(`(?i)commit=([0-9a-f]{7,40})`)
 
-// updateMu guards updateRunning/updateStarted/updateRunID/updatePID, which
-// stop a second self-update from launching while one is still in flight (two
-// concurrent update.sh runs would race each other extracting the release
-// tarball and swapping the service unit). A slot is released as soon as the
-// in-flight run's own status file reports success or failure -- checked
-// against updateRunID so a stale file from an even earlier run can't be
-// mistaken for this one finishing -- so a fast failure doesn't lock out a
-// retry.
-//
-// For a run that never reaches a terminal state at all, staleness is judged
-// primarily by whether the process we actually launched is still alive
-// (updatePID, via processAlive), not by wall-clock time alone: update.sh
-// runs install_base() (a package-manager update+install) before anything
-// else, plus several downloads, which can legitimately run past a short
-// fixed timeout on a slow or throttled host without anything being wrong.
-// updateStaleAfter/updatePID together are only a fallback for the systemd-run
-// launch path, where the process we can observe (systemd-run itself) has
-// already exited by the time startUpdate returns and the actual update.sh
-// unit's PID is never recorded -- for that path this is still a pure
-// wall-clock heuristic. updateHardCeiling is an absolute backstop so a
-// genuinely wedged run (alive but hung forever) can never lock out retries
-// permanently, even on the PID-tracked path.
 var (
 	updateMu      sync.Mutex
 	updateRunning bool
@@ -125,9 +100,6 @@ func (s *PanelService) RestartPanel(delay time.Duration) error {
 	return nil
 }
 
-// GetUpdateInfo checks GitHub for the latest 3x-ui release. When the dev channel
-// is enabled on a dev build it compares commits against the rolling dev release;
-// otherwise it compares versions against the latest stable tag.
 func (s *PanelService) GetUpdateInfo() (*PanelUpdateInfo, error) {
 	if devChannelActive() {
 		return getDevUpdateInfo()
@@ -145,18 +117,11 @@ func (s *PanelService) GetUpdateInfo() (*PanelUpdateInfo, error) {
 	}, nil
 }
 
-// devChannelActive reports whether self-update should track the rolling dev
-// release. It is driven solely by the opt-in setting so the panel can
-// cross-grade a stable build onto the dev channel once the user enables it;
-// nothing updates without an explicit user action, so an unattended stable
-// binary with the toggle off stays on the stable channel.
 func devChannelActive() bool {
 	enabled, err := (&service.SettingService{}).GetDevChannelEnable()
 	return err == nil && enabled
 }
 
-// getDevUpdateInfo compares the running commit against the commit recorded in the
-// rolling dev release.
 func getDevUpdateInfo() (*PanelUpdateInfo, error) {
 	release, err := fetchPanelRelease(devReleaseTag)
 	if err != nil {
@@ -177,26 +142,44 @@ func getDevUpdateInfo() (*PanelUpdateInfo, error) {
 	}, nil
 }
 
-// StartUpdate starts the official updater using this panel's own channel
-// setting. Returns the run ID to pass to GetUpdateStatus so the caller can
-// tell this run's result apart from a stale one.
+// AutoUpdateDevChannel checks the rolling dev release and starts a detached
+// update only when the dev channel is enabled and a newer commit is available.
+func (s *PanelService) AutoUpdateDevChannel() error {
+	// Automatic rolling updates are only for an already installed dev build.
+	// A stable build may opt into dev manually, but it must not be silently
+	// treated as stale just because the dev channel is enabled.
+	if !devChannelActive() || !config.IsDevBuild() {
+		return nil
+	}
+	info, err := getDevUpdateInfo()
+	if err != nil {
+		return err
+	}
+	if !info.UpdateAvailable {
+		return nil
+	}
+
+	runID, err := s.StartUpdateChannel(true)
+	if err != nil {
+		// Another update already running is a normal race with a manual update;
+		// don't turn it into a noisy periodic error.
+		if strings.Contains(err.Error(), "already in progress") {
+			return nil
+		}
+		return err
+	}
+	logger.Infof("automatic dev panel update started: current=%s latest=%s run=%d", info.CurrentCommit, info.LatestCommit, runID)
+	return nil
+}
+
 func (s *PanelService) StartUpdate() (int64, error) {
 	return s.startUpdate(devChannelActive())
 }
 
-// StartUpdateChannel runs the updater against an explicitly chosen channel,
-// overriding the local dev-channel setting. Used by the master node updater so
-// a node can be moved to the dev channel from the central panel.
 func (s *PanelService) StartUpdateChannel(dev bool) (int64, error) {
 	return s.startUpdate(dev)
 }
 
-// GetUpdateStatus reports the outcome of the most recently launched panel
-// self-update, as recorded by update.sh's EXIT trap (see the script for why
-// that covers every exit path, not just the happy one). This is a best-effort
-// side channel: a missing or unreadable status file reads as "pending"
-// rather than an error, since the update itself is what matters, not this
-// status file.
 func (s *PanelService) GetUpdateStatus() *PanelUpdateStatus {
 	data, err := os.ReadFile(config.GetUpdateStatusFilePath())
 	if err != nil {
@@ -239,13 +222,20 @@ func (s *PanelService) startUpdate(useDev bool) (int64, error) {
 	}
 
 	statusFile := config.GetUpdateStatusFilePath()
-
 	mainFolder, serviceFolder := resolveUpdateFolders()
 	updateTag := ""
 	if useDev {
 		updateTag = devReleaseTag
 	}
-	updateScript := fmt.Sprintf("set -e; trap 'rm -f %s' EXIT; %s %s", shellQuote(scriptPath), shellQuote(bash), shellQuote(scriptPath))
+	const updateLogFile = "/var/log/x-ui/update.log"
+	_ = os.MkdirAll(filepath.Dir(updateLogFile), 0o755)
+	updateScript := fmt.Sprintf(
+		"set -e; exec >>%s 2>&1; trap 'rm -f %s' EXIT; echo '[x-ui] panel update started at '$(date -Is); %s %s",
+		shellQuote(updateLogFile),
+		shellQuote(scriptPath),
+		shellQuote(bash),
+		shellQuote(scriptPath),
+	)
 	runIDEnv := "XUI_UPDATE_RUN_ID=" + strconv.FormatInt(runID, 10)
 	statusFileEnv := "XUI_UPDATE_STATUS_FILE=" + statusFile
 	proxyEnv := updateProxyEnvVars()
@@ -259,6 +249,7 @@ func (s *PanelService) startUpdate(useDev bool) (int64, error) {
 			"--setenv", "XUI_UPDATE_TAG=" + updateTag,
 			"--setenv", runIDEnv,
 			"--setenv", statusFileEnv,
+			"--setenv", "XUI_NONINTERACTIVE=1",
 		}
 		for _, kv := range proxyEnv {
 			args = append(args, "--setenv", kv)
@@ -268,8 +259,7 @@ func (s *PanelService) startUpdate(useDev bool) (int64, error) {
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			output := strings.TrimSpace(string(out))
-			if !strings.Contains(output, "System has not been booted with systemd") &&
-				!strings.Contains(output, "Failed to connect to bus") {
+			if !strings.Contains(output, "System has not been booted with systemd") && !strings.Contains(output, "Failed to connect to bus") {
 				_ = os.Remove(scriptPath)
 				return 0, fmt.Errorf("failed to start panel update job: %w: %s", err, output)
 			}
@@ -288,6 +278,7 @@ func (s *PanelService) startUpdate(useDev bool) (int64, error) {
 		"XUI_UPDATE_TAG="+updateTag,
 		runIDEnv,
 		statusFileEnv,
+		"XUI_NONINTERACTIVE=1",
 	)
 	setDetachedProcess(cmd)
 	if err := cmd.Start(); err != nil {
@@ -303,8 +294,6 @@ func (s *PanelService) startUpdate(useDev bool) (int64, error) {
 	return runID, nil
 }
 
-// updateProxyEnvVars forwards ambient proxy env vars to systemd-run's child,
-// which (unlike the bash fallback) inherits nothing but --setenv.
 func updateProxyEnvVars() []string {
 	var out []string
 	for _, key := range []string{"https_proxy", "HTTPS_PROXY", "all_proxy", "ALL_PROXY", "http_proxy", "HTTP_PROXY", "no_proxy", "NO_PROXY"} {
@@ -315,16 +304,6 @@ func updateProxyEnvVars() []string {
 	return out
 }
 
-// acquireUpdateSlot claims the single in-flight-update slot for runID. It
-// refuses while another run is genuinely still in flight, but grants the
-// slot immediately once that run's own status file reports a terminal
-// result (success or failure) -- a fast failure shouldn't force the next
-// attempt to wait out updateStaleAfter for no reason. Past updateStaleAfter
-// with no terminal status yet, it grants the slot anyway UNLESS the process
-// we recorded (updatePID) is confirmed still alive, so a merely-slow run
-// isn't mistaken for a crashed one; past updateHardCeiling it grants the
-// slot unconditionally regardless of liveness, so a truly wedged run can
-// never lock out retries forever.
 func acquireUpdateSlot(runID int64) bool {
 	updateMu.Lock()
 	defer updateMu.Unlock()
@@ -345,21 +324,12 @@ func acquireUpdateSlot(runID int64) bool {
 	return true
 }
 
-// recordUpdatePID notes the PID of the detached update.sh process the
-// current slot is tracking, so a later acquireUpdateSlot call can check
-// whether it is actually still running instead of only how long ago it
-// started. Only reachable for the detached-fallback launch path -- the
-// systemd-run path never learns update.sh's own PID, since the process it
-// directly observes (systemd-run) has already exited by the time it returns.
 func recordUpdatePID(pid int) {
 	updateMu.Lock()
 	updatePID = pid
 	updateMu.Unlock()
 }
 
-// previousRunIsTerminal reports whether the run currently recorded in
-// updateRunID has reached success or failure per its status file. Must be
-// called with updateMu held.
 func previousRunIsTerminal() bool {
 	status := (&PanelService{}).GetUpdateStatus()
 	return status.RunID == strconv.FormatInt(updateRunID, 10) && status.State != updateStatePending
@@ -427,12 +397,10 @@ func fetchLatestPanelVersion() (string, error) {
 	return release.TagName, nil
 }
 
-// fetchPanelRelease fetches a release from GitHub. An empty tag resolves the
-// latest stable release; a non-empty tag (e.g. dev-latest) resolves that tag.
 func fetchPanelRelease(tag string) (*service.Release, error) {
-	url := "https://api.github.com/repos/MHSanaei/3x-ui/releases/latest"
+	url := "https://api.github.com/repos/SawaMEN/3x-ui/releases/latest"
 	if tag != "" {
-		url = "https://api.github.com/repos/MHSanaei/3x-ui/releases/tags/" + tag
+		url = "https://api.github.com/repos/SawaMEN/3x-ui/releases/tags/" + tag
 	}
 	client := (&service.SettingService{}).NewProxiedHTTPClient(10 * time.Second)
 	req, reqErr := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
@@ -455,9 +423,6 @@ func fetchPanelRelease(tag string) (*service.Release, error) {
 	return &release, nil
 }
 
-// extractReleaseCommit reads the build commit recorded in the dev release: first
-// the `commit=<sha>` marker the CI writes into the body, falling back to the
-// tag's target commit.
 func extractReleaseCommit(release *service.Release) string {
 	if m := releaseCommitRegex.FindStringSubmatch(release.Body); m != nil {
 		return strings.ToLower(m[1])
@@ -489,8 +454,6 @@ func shortCommit(sha string) string {
 	return sha
 }
 
-// commitsEqual compares a short (injected) commit against a full release commit
-// by prefix, so an 8-char build stamp matches the 40-char release SHA.
 func commitsEqual(a, b string) bool {
 	a = strings.ToLower(strings.TrimSpace(a))
 	b = strings.ToLower(strings.TrimSpace(b))
@@ -529,7 +492,7 @@ func isNewerVersion(latest string, current string) bool {
 	return cmp > 0
 }
 
-func compareVersionStrings(a string, b string) (int, bool) {
+func compareVersionStrings(a, b string) (int, bool) {
 	aParts, okA := parseVersionParts(a)
 	bParts, okB := parseVersionParts(b)
 	if !okA || !okB {

@@ -18,15 +18,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/crypto/nodetoken"
-	"github.com/mhsanaei/3x-ui/v3/internal/database"
-	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
-	"github.com/mhsanaei/3x-ui/v3/internal/logger"
-	"github.com/mhsanaei/3x-ui/v3/internal/util/common"
-	"github.com/mhsanaei/3x-ui/v3/internal/util/json_util"
-	"github.com/mhsanaei/3x-ui/v3/internal/util/netsafe"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/runtime"
-	"github.com/mhsanaei/3x-ui/v3/internal/xray"
+	"github.com/SawaMEN/3x-ui/v3/internal/crypto/nodetoken"
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/json_util"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
+	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 
 	"gorm.io/gorm"
 )
@@ -878,6 +878,9 @@ func (s *NodeService) Delete(id int) error {
 	if mgr := runtime.GetManager(); mgr != nil {
 		mgr.InvalidateNode(id)
 	}
+	warnedDupGuidMu.Lock()
+	delete(warnedDupGuid, id)
+	warnedDupGuidMu.Unlock()
 	for _, metric := range NodeMetricKeys {
 		nodeMetrics.drop(nodeMetricKey(id, metric))
 	}
@@ -1011,7 +1014,10 @@ func (s *NodeService) UpdateHeartbeat(id int, p HeartbeatPatch) error {
 
 // warnedDupGuid remembers the (nodeID -> guid) pairs already warned about so a
 // cloned-server collision is logged once, not every heartbeat.
-var warnedDupGuid sync.Map
+var (
+	warnedDupGuidMu sync.Mutex
+	warnedDupGuid   = make(map[int]string)
+)
 
 // warnOnDuplicateGuid logs once when a node reports a panelGuid already held by
 // another node or by the master itself (the cloned-server footgun). Attribution
@@ -1022,14 +1028,16 @@ func (s *NodeService) warnOnDuplicateGuid(id int, guid string) {
 	var clash int64
 	database.GetDB().Model(&model.Node{}).Where("guid = ? AND id <> ?", guid, id).Count(&clash)
 	masterGuid, _ := (&SettingService{}).GetPanelGuid()
+	warnedDupGuidMu.Lock()
+	defer warnedDupGuidMu.Unlock()
 	if clash == 0 && guid != masterGuid {
-		warnedDupGuid.Delete(id)
+		delete(warnedDupGuid, id)
 		return
 	}
-	if prev, ok := warnedDupGuid.Load(id); ok && prev == guid {
+	if prev, ok := warnedDupGuid[id]; ok && prev == guid {
 		return
 	}
-	warnedDupGuid.Store(id, guid)
+	warnedDupGuid[id] = guid
 	logger.Warningf("node %d reports panelGuid %s already used by another node or the master (cloned server?) — regenerate it on that node so online and IP attribution stay per-node", id, guid)
 }
 

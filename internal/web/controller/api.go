@@ -4,11 +4,11 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/middleware"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/service/panel"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/service/tgbot"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/session"
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/middleware"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service/panel"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service/tgbot"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/session"
 
 	"github.com/gin-gonic/gin"
 )
@@ -198,6 +198,10 @@ func (a *APIController) initRouter(g *gin.RouterGroup) {
 	// Hosts API — per-inbound override endpoints for subscription links
 	hosts := api.Group("/hosts")
 	a.hostController = NewHostController(hosts)
+
+	// Telemt standalone MTProto service
+	telemt := api.Group("/telemt")
+	NewTelemtController(telemt)
 
 	// Settings + Xray config management live under the API surface too, so the
 	// same API token drives them. Paths are /panel/api/setting/* and

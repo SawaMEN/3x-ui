@@ -1,21 +1,24 @@
 package controller
 
 import (
+	"context"
 	"errors"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/logger"
-	"github.com/mhsanaei/3x-ui/v3/internal/util/crypto"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/entity"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/middleware"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/service/discord"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/service/email"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/service/panel"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/session"
+	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/crypto"
+	systemswap "github.com/SawaMEN/3x-ui/v3/internal/util/swap"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/entity"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/middleware"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service/discord"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service/email"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service/panel"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/session"
 
 	"github.com/gin-gonic/gin"
 )
@@ -42,6 +45,26 @@ type updateSettingForm struct {
 	ClearDiscordBotToken bool   `json:"clearDiscordBotToken" form:"clearDiscordBotToken"`
 }
 
+type singBoxConfigForm struct {
+	Config string `json:"config" form:"config"`
+}
+
+type swapCreateForm struct {
+	SizeMiB  int `json:"sizeMiB" form:"sizeMiB"`
+	Priority int `json:"priority" form:"priority"`
+}
+
+type zramCreateForm struct {
+	SizeMiB        int    `json:"sizeMiB" form:"sizeMiB"`
+	Algorithm      string `json:"algorithm" form:"algorithm"`
+	Streams        int    `json:"streams" form:"streams"`
+	MemoryLimitMiB int    `json:"memoryLimitMiB" form:"memoryLimitMiB"`
+	Priority       int    `json:"priority" form:"priority"`
+}
+
+type swappinessForm struct {
+	Value int `json:"value" form:"value"`
+}
 type validateRegexForm struct {
 	Regex string `json:"regex" form:"regex"`
 }
@@ -53,6 +76,7 @@ type SettingController struct {
 	panelService    panel.PanelService
 	apiTokenService panel.ApiTokenService
 	xrayService     service.XrayService
+	singBoxService  service.SingBoxService
 }
 
 // NewSettingController creates a new SettingController and initializes its routes.
@@ -73,6 +97,21 @@ func (a *SettingController) initRouter(g *gin.RouterGroup) {
 	g.POST("/validateRegex", a.validateRegex)
 	g.POST("/updateUser", a.updateUser)
 	g.POST("/restartPanel", a.restartPanel)
+	g.GET("/singbox/status", a.singBoxStatus)
+	g.POST("/singbox/install", a.installSingBox)
+	g.GET("/singbox/versions", a.singBoxVersions)
+	g.POST("/singbox/install/:version", a.installSingBoxVersion)
+	g.POST("/singbox/uninstall", a.uninstallSingBox)
+	g.GET("/singbox/config", a.singBoxConfig)
+	g.POST("/singbox/config", a.saveSingBoxConfig)
+	g.POST("/singbox/config/reset", a.resetSingBoxConfig)
+	g.GET("/swap/status", a.swapStatus)
+	g.POST("/swap/zram/install", a.installZram)
+	g.POST("/swap/create", a.createSwap)
+	g.POST("/swap/delete", a.deleteSwap)
+	g.POST("/swap/zram/create", a.createZram)
+	g.POST("/swap/zram/delete", a.deleteZram)
+	g.POST("/swap/swappiness", a.setSwappiness)
 	g.GET("/getDefaultJsonConfig", a.getDefaultXrayConfig)
 	g.GET("/apiTokens", a.listApiTokens)
 	g.POST("/apiTokens/create", a.createApiToken)
@@ -130,6 +169,7 @@ func (a *SettingController) updateSetting(c *gin.Context) {
 	allSetting := &form.AllSetting
 	oldTwoFactor, twoFactorErr := a.settingService.GetTwoFactorEnable()
 	oldPanelOutbound, _ := a.settingService.GetPanelOutbound()
+	oldCoreType, _ := a.settingService.GetCoreType()
 	oldTgEnable, _ := a.settingService.GetTgbotEnabled()
 	oldTgToken, _ := a.settingService.GetTgBotToken()
 	oldTgChatId, _ := a.settingService.GetTgBotChatId()
@@ -161,10 +201,42 @@ func (a *SettingController) updateSetting(c *gin.Context) {
 			err = bumpErr
 		}
 	}
-	if err == nil && form.PanelOutbound != oldPanelOutbound {
-		// The egress bridge lives in the generated config; reconcile the
-		// running core. One SOCKS inbound plus one routing rule — both
-		// hot-appliable, so this normally does not restart Xray.
+	if err == nil && oldCoreType != allSetting.CoreType {
+		// Switching cores is a transaction: never let two engines own the same
+		// listener, and never leave the panel configured for a core that failed
+		// to start. UpdateAllSetting already persisted the requested value, so
+		// restore the old value if the new runtime cannot start.
+		ctx := c.Request.Context()
+		if oldCoreType == service.CoreTypeSingBox {
+			_ = a.singBoxService.Stop(ctx)
+		} else {
+			_ = a.xrayService.StopXray()
+		}
+		var restartErr error
+		if allSetting.CoreType == service.CoreTypeSingBox {
+			restartErr = a.singBoxService.Restart(ctx)
+		} else {
+			restartErr = a.xrayService.RestartXray(true)
+		}
+		if restartErr != nil {
+			err = restartErr
+			if rollbackErr := a.settingService.SetCoreType(oldCoreType); rollbackErr != nil {
+				logger.Error("core switch failed and rollback could not be persisted:", rollbackErr)
+			} else {
+				// Best effort: bring the previously working engine back.
+				if oldCoreType == service.CoreTypeSingBox {
+					if startErr := a.singBoxService.Restart(ctx); startErr != nil {
+						logger.Error("failed to restore sing-box after core switch failure:", startErr)
+					}
+				} else if startErr := a.xrayService.RestartXray(true); startErr != nil {
+					logger.Error("failed to restore xray after core switch failure:", startErr)
+				}
+			}
+		}
+	}
+	if err == nil && form.PanelOutbound != oldPanelOutbound && allSetting.CoreType == service.CoreTypeXray {
+		// Panel egress is currently implemented by an Xray loopback bridge.
+		// Do not restart/touch Xray while sing-box is selected.
 		if applyErr := a.xrayService.RestartXray(false); applyErr != nil {
 			logger.Warning("apply panel outbound change failed:", applyErr)
 		}
@@ -391,4 +463,190 @@ func (a *SettingController) testDiscord(c *gin.Context) {
 		return
 	}
 	jsonMsg(c, I18nWeb(c, "pages.settings.discordTestSuccess"), nil)
+}
+
+func (a *SettingController) installZram(c *gin.Context) {
+	if err := systemswap.InstallZram(c.Request.Context()); err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
+		return
+	}
+	jsonObj(c, gin.H{"installed": true}, nil)
+}
+
+func (a *SettingController) swapStatus(c *gin.Context) {
+	status, err := systemswap.GetStatus()
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.getSettings"), err)
+		return
+	}
+	jsonObj(c, status, nil)
+}
+
+func (a *SettingController) createSwap(c *gin.Context) {
+	form := &swapCreateForm{}
+	if err := c.ShouldBind(form); err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
+		return
+	}
+	if err := systemswap.CreateSwap(form.SizeMiB, form.Priority); err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
+		return
+	}
+	jsonObj(c, gin.H{"created": true}, nil)
+}
+
+func (a *SettingController) deleteSwap(c *gin.Context) {
+	if err := systemswap.DeleteSwap(); err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
+		return
+	}
+	jsonObj(c, gin.H{"deleted": true}, nil)
+}
+
+func (a *SettingController) createZram(c *gin.Context) {
+	form := &zramCreateForm{}
+	if err := c.ShouldBind(form); err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
+		return
+	}
+	if err := systemswap.CreateZram(form.SizeMiB, form.Algorithm, form.Streams, form.MemoryLimitMiB, form.Priority); err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
+		return
+	}
+	jsonObj(c, gin.H{"created": true}, nil)
+}
+
+func (a *SettingController) deleteZram(c *gin.Context) {
+	if err := systemswap.DeleteZram(); err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
+		return
+	}
+	jsonObj(c, gin.H{"deleted": true}, nil)
+}
+
+func (a *SettingController) setSwappiness(c *gin.Context) {
+	form := &swappinessForm{}
+	if err := c.ShouldBind(form); err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
+		return
+	}
+	if err := systemswap.SetSwappiness(form.Value); err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
+		return
+	}
+	jsonObj(c, gin.H{"value": form.Value}, nil)
+}
+
+func (a *SettingController) singBoxConfig(c *gin.Context) {
+	snapshot, err := a.singBoxService.GetEditorConfig(c.Request.Context())
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.getSettings"), err)
+		return
+	}
+	jsonObj(c, snapshot, nil)
+}
+
+func (a *SettingController) saveSingBoxConfig(c *gin.Context) {
+	form := &singBoxConfigForm{}
+	if err := c.ShouldBind(form); err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
+		return
+	}
+	if strings.TrimSpace(form.Config) == "" {
+		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), errors.New("sing-box config is empty"))
+		return
+	}
+	if err := a.singBoxService.SaveTemplate(c.Request.Context(), form.Config); err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
+		return
+	}
+	jsonObj(c, gin.H{"saved": true}, nil)
+}
+
+func (a *SettingController) resetSingBoxConfig(c *gin.Context) {
+	if err := a.singBoxService.ResetTemplate(c.Request.Context()); err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
+		return
+	}
+	jsonObj(c, gin.H{"reset": true}, nil)
+}
+
+func (a *SettingController) singBoxStatus(c *gin.Context) {
+	svc := &a.singBoxService
+	_, statErr := os.Stat(svc.BinaryPath())
+	running := svc.IsRunning()
+	connections := 0
+	if running {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
+		defer cancel()
+		connections, _ = svc.ConnectionCount(ctx)
+	}
+	version := "Unknown"
+	if running {
+		if v, err := svc.CachedVersion(c.Request.Context()); err == nil {
+			version = v
+		}
+	}
+	lastError := ""
+	// The dashboard treats this field as the current core error. Do not surface
+	// a previous crash once the process has recovered and is running again.
+	if !running {
+		if err := svc.LastError(); err != nil {
+			lastError = err.Error()
+		}
+	}
+	jsonObj(c, gin.H{
+		"installed":   statErr == nil,
+		"running":     running,
+		"version":     version,
+		"binary":      svc.BinaryPath(),
+		"config":      svc.ProcessConfigPath(),
+		"connections": connections,
+		"error":       lastError,
+	}, nil)
+}
+
+func (a *SettingController) singBoxVersions(c *gin.Context) {
+	versions, err := a.singBoxService.ListVersions(c.Request.Context())
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.getSettings"), err)
+		return
+	}
+	jsonObj(c, versions, nil)
+}
+
+func (a *SettingController) installSingBoxVersion(c *gin.Context) {
+	version := strings.TrimSpace(c.Param("version"))
+	if version == "" {
+		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), errors.New("sing-box version is empty"))
+		return
+	}
+	installed, err := a.singBoxService.InstallVersion(c.Request.Context(), version)
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
+		return
+	}
+	jsonObj(c, gin.H{"version": installed}, nil)
+}
+
+func (a *SettingController) uninstallSingBox(c *gin.Context) {
+	if err := a.singBoxService.Uninstall(c.Request.Context()); err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
+		return
+	}
+	jsonObj(c, gin.H{"installed": false}, nil)
+}
+
+func (a *SettingController) installSingBox(c *gin.Context) {
+	// Installation is deliberately independent from configuration generation.
+	// A panel may contain Xray-only inbounds (for example a legacy or custom
+	// transport) that sing-box cannot represent yet; that must not make the
+	// binary installation itself fail. Configuration is generated and validated
+	// when the operator actually switches the running core.
+	version, err := a.singBoxService.InstallLatest(c.Request.Context())
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
+		return
+	}
+	jsonObj(c, gin.H{"version": version}, nil)
 }

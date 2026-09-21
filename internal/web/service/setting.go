@@ -17,18 +17,18 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/config"
-	"github.com/mhsanaei/3x-ui/v3/internal/database"
-	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
-	"github.com/mhsanaei/3x-ui/v3/internal/logger"
-	"github.com/mhsanaei/3x-ui/v3/internal/util/common"
-	"github.com/mhsanaei/3x-ui/v3/internal/util/netproxy"
-	"github.com/mhsanaei/3x-ui/v3/internal/util/random"
-	"github.com/mhsanaei/3x-ui/v3/internal/util/reflect_util"
-	"github.com/mhsanaei/3x-ui/v3/internal/util/totp"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/entity"
-	"github.com/mhsanaei/3x-ui/v3/internal/xray"
-	"github.com/mhsanaei/3x-ui/v3/internal/xray/dnsconf"
+	"github.com/SawaMEN/3x-ui/v3/internal/config"
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/netproxy"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/random"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/reflect_util"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/totp"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/entity"
+	"github.com/SawaMEN/3x-ui/v3/internal/xray"
+	"github.com/SawaMEN/3x-ui/v3/internal/xray/dnsconf"
 )
 
 //go:embed config.json
@@ -53,6 +53,7 @@ const (
 
 var defaultValueMap = map[string]string{
 	"xrayTemplateConfig": xrayTemplateConfig,
+	"coreType":           "xray",
 	"webListen":          "",
 	"webDomain":          "",
 	"webPort":            "2053",
@@ -173,6 +174,8 @@ var defaultValueMap = map[string]string{
 	"xrayOutboundTestUrl":         "https://www.google.com/generate_204",
 	"panelOutbound":               "",
 	"devChannelEnable":            "false",
+	"vkTurnProxyReleaseTag":       "",
+	"vkTurnProxyManualStop":       "false",
 
 	// LDAP defaults
 	"ldapEnable":             "false",
@@ -228,6 +231,8 @@ var defaultValueMap = map[string]string{
 	"discordMemory":        "80",
 	"discordLang":          "en-US",
 	"discordEnabledEvents": "login.attempt,cpu.high",
+
+	"singBoxConfigTemplate": "",
 }
 
 // SettingService provides business logic for application settings management.
@@ -471,6 +476,29 @@ func (s *SettingService) SetWarpLastUpdate(val int64) error {
 
 func (s *SettingService) SetWarpUpdateInterval(val int) error {
 	return s.setInt("warpUpdateInterval", val)
+}
+
+const (
+	CoreTypeXray    = "xray"
+	CoreTypeSingBox = "sing-box"
+)
+
+func (s *SettingService) GetCoreType() (string, error) {
+	coreType, err := s.getString("coreType")
+	if err != nil {
+		return "", err
+	}
+	if coreType != CoreTypeXray && coreType != CoreTypeSingBox {
+		return CoreTypeXray, nil
+	}
+	return coreType, nil
+}
+
+func (s *SettingService) SetCoreType(coreType string) error {
+	if coreType != CoreTypeXray && coreType != CoreTypeSingBox {
+		return common.NewError("core type is not supported:", coreType)
+	}
+	return s.setString("coreType", coreType)
 }
 
 func (s *SettingService) GetXrayConfigTemplate() (string, error) {
@@ -1703,6 +1731,14 @@ func (s *SettingService) UpdateSecret(key string, value string) error {
 	default:
 		return common.NewError("secret key is not replaceable:", key)
 	}
+}
+
+func (s *SettingService) GetSingBoxConfigTemplate() (string, error) {
+	return s.getString("singBoxConfigTemplate")
+}
+
+func (s *SettingService) SetSingBoxConfigTemplate(value string) error {
+	return s.setString("singBoxConfigTemplate", value)
 }
 
 func (s *SettingService) GetDefaultXrayConfig() (any, error) {

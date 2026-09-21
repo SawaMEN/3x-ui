@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/util/common"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 )
 
 type Msg struct {
@@ -19,6 +19,7 @@ type Msg struct {
 }
 
 type AllSetting struct {
+	CoreType              string `json:"coreType" form:"coreType"`
 	WebListen             string `json:"webListen" form:"webListen"`
 	WebDomain             string `json:"webDomain" form:"webDomain"`
 	WebPort               int    `json:"webPort" form:"webPort" validate:"gte=1,lte=65535"`
@@ -238,6 +239,10 @@ func checkIPOrCIDRList(list, message string) error {
 }
 
 func (s *AllSetting) CheckValid() error {
+	if s.CoreType != "" && s.CoreType != "xray" && s.CoreType != "sing-box" {
+		return common.NewError("core type is not supported:", s.CoreType)
+	}
+
 	if s.WebListen != "" {
 		ip := net.ParseIP(s.WebListen)
 		if ip == nil {

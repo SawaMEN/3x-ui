@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/database"
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
 )
 
 func TestDoWarpRequestCapsResponseBody(t *testing.T) {

@@ -6,9 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
-	"github.com/mhsanaei/3x-ui/v3/internal/logger"
-	"github.com/mhsanaei/3x-ui/v3/internal/xray"
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 
 	"gorm.io/gorm"
 )
@@ -22,21 +22,46 @@ var (
 
 const deleteTombstoneTTL = 90 * time.Second
 
+type inboundMutationLock struct {
+	mu   sync.Mutex
+	refs int
+}
+
+type inboundMutationGuard struct {
+	id    int
+	entry *inboundMutationLock
+}
+
 var (
 	inboundMutationLocksMu sync.Mutex
-	inboundMutationLocks   = map[int]*sync.Mutex{}
+	inboundMutationLocks   = map[int]*inboundMutationLock{}
 )
 
-func lockInbound(inboundId int) *sync.Mutex {
+func lockInbound(inboundId int) *inboundMutationGuard {
 	inboundMutationLocksMu.Lock()
-	m, ok := inboundMutationLocks[inboundId]
+	entry, ok := inboundMutationLocks[inboundId]
 	if !ok {
-		m = &sync.Mutex{}
-		inboundMutationLocks[inboundId] = m
+		entry = &inboundMutationLock{}
+		inboundMutationLocks[inboundId] = entry
+	}
+	entry.refs++
+	inboundMutationLocksMu.Unlock()
+
+	entry.mu.Lock()
+	return &inboundMutationGuard{id: inboundId, entry: entry}
+}
+
+func (g *inboundMutationGuard) Unlock() {
+	g.entry.mu.Unlock()
+
+	inboundMutationLocksMu.Lock()
+	if current, ok := inboundMutationLocks[g.id]; ok && current == g.entry {
+		g.entry.refs--
+		if g.entry.refs == 0 {
+			delete(inboundMutationLocks, g.id)
+		}
 	}
 	inboundMutationLocksMu.Unlock()
-	m.Lock()
-	return m
 }
 
 func compactOrphans(db *gorm.DB, clients []any) []any {

@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/database"
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
 )
 
 // A panel restarts with an empty snapshot until the @2s ticker fires, and a

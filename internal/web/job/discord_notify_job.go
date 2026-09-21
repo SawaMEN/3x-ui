@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/logger"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/service/discord"
+	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service/discord"
 )
 
 // DiscordNotifyJob sends periodic status reports and database backups via Discord bot.

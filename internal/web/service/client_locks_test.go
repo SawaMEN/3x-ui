@@ -24,3 +24,18 @@ func TestLockInboundReleasesRegistryMutexWhileWaiting(t *testing.T) {
 	inboundMutationLocksMu.Unlock()
 	held.Unlock()
 }
+
+func TestLockInboundReclaimsIdleRegistryEntry(t *testing.T) {
+	const id = 990007
+	guard := lockInbound(id)
+	if len(inboundMutationLocks) == 0 {
+		t.Fatal("lockInbound did not register the active lock")
+	}
+	guard.Unlock()
+	inboundMutationLocksMu.Lock()
+	_, ok := inboundMutationLocks[id]
+	inboundMutationLocksMu.Unlock()
+	if ok {
+		t.Fatal("idle inbound mutation lock remained in the registry")
+	}
+}

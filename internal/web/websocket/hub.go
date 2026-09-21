@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 )
 
 // MessageType identifies the kind of WebSocket message.
@@ -24,12 +24,12 @@ const (
 	MessageTypeClientStats  MessageType = "client_stats"
 	MessageTypeClients      MessageType = "clients"
 	MessageTypeInvalidate   MessageType = "invalidate"
-	maxMessageSize                      = 10 * 1024 * 1024 // 10MB
+	maxMessageSize                      = 4 * 1024 * 1024 // 4MB; larger payloads fall back to REST invalidation.
 
 	enqueueTimeout       = 100 * time.Millisecond
-	clientSendQueue      = 512  // ~50s of buffering for a momentarily slow browser.
-	hubBroadcastQueue    = 2048 // Headroom for cron-storm + admin-mutation bursts.
-	hubOpsQueue          = 128  // Backlog for register+unregister bursts (page reloads, disconnect storms).
+	clientSendQueue      = 64  // Slow clients are evicted sooner to cap retained payloads.
+	hubBroadcastQueue    = 256 // Bounded burst buffer; REST invalidation handles oversized state pushes.
+	hubOpsQueue          = 32  // Small lifecycle backlog is enough for page/disconnect bursts.
 	minBroadcastInterval = 250 * time.Millisecond
 	hubRestartAttempts   = 3
 )

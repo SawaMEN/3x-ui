@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/amneziawgnet"
-	"github.com/mhsanaei/3x-ui/v3/internal/database"
-	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
-	wgutil "github.com/mhsanaei/3x-ui/v3/internal/util/wireguard"
+	"github.com/SawaMEN/3x-ui/v3/internal/amneziawgnet"
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	wgutil "github.com/SawaMEN/3x-ui/v3/internal/util/wireguard"
 )
 
 // awgRelayWindowSettings builds an AmneziaWG settings blob AddInbound accepts:

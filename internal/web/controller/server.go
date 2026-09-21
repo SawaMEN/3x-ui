@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -8,13 +9,13 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
-	"github.com/mhsanaei/3x-ui/v3/internal/logger"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/entity"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/global"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/service/panel"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/websocket"
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/entity"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/global"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service/panel"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/websocket"
 
 	"github.com/gin-gonic/gin"
 )
@@ -29,6 +30,7 @@ type ServerController struct {
 	settingService     service.SettingService
 	panelService       panel.PanelService
 	xrayMetricsService service.XrayMetricsService
+	singBoxService     service.SingBoxService
 }
 
 // NewServerController creates a new ServerController, initializes routes, and starts background tasks.
@@ -67,6 +69,9 @@ func (a *ServerController) initRouter(g *gin.RouterGroup) {
 
 	g.POST("/stopXrayService", a.stopXrayService)
 	g.POST("/restartXrayService", a.restartXrayService)
+	g.POST("/stopCoreService", a.stopCoreService)
+	g.POST("/restartCoreService", a.restartCoreService)
+	g.GET("/coreConfigJson", a.getCoreConfigJson)
 	g.POST("/installXray/:version", a.installXray)
 	g.POST("/updatePanel", a.updatePanel)
 	g.POST("/setUpdateChannel", a.setUpdateChannel)
@@ -82,6 +87,8 @@ func (a *ServerController) initRouter(g *gin.RouterGroup) {
 	g.POST("/scanRealityTarget", a.scanRealityTarget)
 	g.POST("/scanRealityTargets", a.scanRealityTargets)
 	g.POST("/clientIps", a.setClientIps)
+
+	a.initVKTurnProxyRouter(g)
 }
 
 // startTask registers the @2s ticker that refreshes server status, samples
@@ -91,6 +98,11 @@ func (a *ServerController) initRouter(g *gin.RouterGroup) {
 func (a *ServerController) startTask() {
 	c := global.GetWebServer().GetCron()
 	_, _ = c.AddFunc("@every 2s", func() {
+		// Status collection reads CPU, disk, network and connection counters.
+		// Skip the expensive work completely when no browser is connected.
+		if !websocket.HasClients() {
+			return
+		}
 		status := a.serverService.RefreshStatus()
 		if status == nil {
 			return
@@ -103,6 +115,24 @@ func (a *ServerController) startTask() {
 			logger.Warning("persist system metrics failed:", err)
 		}
 	})
+
+	// Keep the rolling dev updater independent from the shared cron scheduler.
+	// This guarantees that dev checks still run even if another cron task fails
+	// to register or the scheduler is not started yet.
+	go func() {
+		time.Sleep(15 * time.Second)
+		check := func() {
+			if err := a.panelService.AutoUpdateDevChannel(); err != nil {
+				logger.Warning("automatic dev panel update check failed:", err)
+			}
+		}
+		check()
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			check()
+		}
+	}()
 }
 
 // status returns the current server status information.
@@ -266,6 +296,63 @@ func (a *ServerController) updateGeofile(c *gin.Context) {
 	jsonMsg(c, I18nWeb(c, "pages.index.geofileUpdatePopover"), err)
 }
 
+func (a *ServerController) stopCoreService(c *gin.Context) {
+	coreType, err := a.settingService.GetCoreType()
+	if err != nil {
+		jsonMsg(c, "", err)
+		return
+	}
+	if coreType == service.CoreTypeSingBox {
+		err = a.singBoxService.Stop(c.Request.Context())
+	} else {
+		err = a.serverService.StopXrayService()
+	}
+	jsonMsg(c, "", err)
+}
+
+func (a *ServerController) restartCoreService(c *gin.Context) {
+	coreType, err := a.settingService.GetCoreType()
+	if err != nil {
+		jsonMsg(c, "", err)
+		return
+	}
+	if coreType == service.CoreTypeSingBox {
+		err = a.singBoxService.Restart(c.Request.Context())
+	} else {
+		err = a.serverService.RestartXrayService()
+	}
+	jsonMsg(c, "", err)
+}
+
+func (a *ServerController) getCoreConfigJson(c *gin.Context) {
+	coreType, err := a.settingService.GetCoreType()
+	if err != nil {
+		jsonMsg(c, "", err)
+		return
+	}
+	if coreType == service.CoreTypeSingBox {
+		cfg, cfgErr := a.singBoxService.GetConfig()
+		if cfgErr != nil {
+			jsonMsg(c, "", cfgErr)
+			return
+		}
+		data, marshalErr := cfg.Marshal()
+		if marshalErr != nil {
+			jsonMsg(c, "", marshalErr)
+			return
+		}
+		var obj any
+		if json.Unmarshal(data, &obj) != nil {
+			jsonMsg(c, "", fmt.Errorf("invalid sing-box config"))
+			return
+		}
+		jsonObj(c, obj, nil)
+		return
+	}
+	cfg, cfgErr := a.serverService.GetConfigJson()
+	jsonObj(c, cfg, cfgErr)
+}
+
 // stopXrayService stops the Xray service.
 func (a *ServerController) stopXrayService(c *gin.Context) {
 	err := a.serverService.StopXrayService()
@@ -308,6 +395,12 @@ func (a *ServerController) getLogs(c *gin.Context) {
 
 // getXrayLogs retrieves Xray logs with filtering options for direct, blocked, and proxy traffic.
 func (a *ServerController) getXrayLogs(c *gin.Context) {
+	coreType, err := a.settingService.GetCoreType()
+	if err == nil && coreType == service.CoreTypeSingBox {
+		logs := a.singBoxService.GetLogs(c.Param("count"), c.PostForm("filter"))
+		jsonObj(c, logs, nil)
+		return
+	}
 	freedoms, blackholes := a.serverService.GetDefaultLogOutboundTags()
 	logs := a.serverService.GetXrayLogs(
 		c.Param("count"),

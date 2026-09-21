@@ -15,12 +15,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/eventbus"
-	"github.com/mhsanaei/3x-ui/v3/internal/logger"
-	"github.com/mhsanaei/3x-ui/v3/internal/util/common"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/global"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/locale"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
+	"github.com/SawaMEN/3x-ui/v3/internal/eventbus"
+	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/global"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/locale"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 
 	"github.com/mymmrac/telego"
 	th "github.com/mymmrac/telego/telegohandler"
@@ -85,20 +85,38 @@ type clientDraft struct {
 // clientDrafts keys a draft by chat: the steps arrive on the worker pool, so a
 // single draft let two admins fill in one client between them.
 type clientDrafts struct {
-	mu     sync.Mutex
-	drafts map[int64]*clientDraft
+	mu        sync.Mutex
+	drafts    map[int64]*clientDraft
+	lastUsed  map[int64]time.Time
+	lastPrune time.Time
 }
 
-var addClientDrafts = &clientDrafts{drafts: make(map[int64]*clientDraft)}
+const clientDraftMaxAge = time.Hour
+
+var addClientDrafts = &clientDrafts{
+	drafts:   make(map[int64]*clientDraft),
+	lastUsed: make(map[int64]time.Time),
+}
 
 func (s *clientDrafts) forChat(chatID int64) *clientDraft {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	now := time.Now()
+	if now.Sub(s.lastPrune) >= clientDraftMaxAge {
+		s.lastPrune = now
+		for id, last := range s.lastUsed {
+			if now.Sub(last) > clientDraftMaxAge {
+				delete(s.lastUsed, id)
+				delete(s.drafts, id)
+			}
+		}
+	}
 	draft, ok := s.drafts[chatID]
 	if !ok {
 		draft = &clientDraft{}
 		s.drafts[chatID] = draft
 	}
+	s.lastUsed[chatID] = now
 	return draft
 }
 
@@ -106,6 +124,7 @@ func (s *clientDrafts) reset(chatID int64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.drafts, chatID)
+	delete(s.lastUsed, chatID)
 }
 
 // isAddClientStep reports whether callback data belongs to the add-client
@@ -118,6 +137,19 @@ func (s *clientDrafts) resetAll() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.drafts = make(map[int64]*clientDraft)
+	s.lastUsed = make(map[int64]time.Time)
+	s.lastPrune = time.Time{}
+}
+
+func (s *clientDrafts) pruneExpired(now time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for id, last := range s.lastUsed {
+		if now.Sub(last) > clientDraftMaxAge {
+			delete(s.lastUsed, id)
+			delete(s.drafts, id)
+		}
+	}
 }
 
 // userStateStore guards the per-chat conversation states. The Telegram command
@@ -165,6 +197,13 @@ func (s *userStateStore) reset() {
 
 // maybePrune drops conversations older than maxAge, at most once per maxAge so a
 // busy bot doesn't sweep the whole map on every message.
+// PruneExpiredState removes abandoned Telegram conversation state and client drafts.
+func (t *Tgbot) PruneExpiredState() {
+	now := time.Now()
+	addClientDrafts.pruneExpired(now)
+	userStateMgr.maybePrune(clientDraftMaxAge)
+}
+
 func (s *userStateStore) maybePrune(maxAge time.Duration) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

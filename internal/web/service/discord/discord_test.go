@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/database"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 )
 
 func setupTestDB(t *testing.T) service.SettingService {

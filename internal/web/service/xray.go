@@ -11,13 +11,13 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/amneziawg"
-	"github.com/mhsanaei/3x-ui/v3/internal/amneziawgnet"
-	"github.com/mhsanaei/3x-ui/v3/internal/config"
-	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
-	"github.com/mhsanaei/3x-ui/v3/internal/logger"
-	"github.com/mhsanaei/3x-ui/v3/internal/util/json_util"
-	"github.com/mhsanaei/3x-ui/v3/internal/xray"
+	"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
+	"github.com/SawaMEN/3x-ui/v3/internal/amneziawgnet"
+	"github.com/SawaMEN/3x-ui/v3/internal/config"
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/json_util"
+	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 
 	"go.uber.org/atomic"
 )
@@ -83,6 +83,7 @@ type XrayService struct {
 	settingService SettingService
 	nodeService    NodeService
 	xrayAPI        xray.XrayAPI
+	xrayTrafficMu  sync.Mutex
 }
 
 // IsXrayRunning checks if the Xray process is currently running.
@@ -201,7 +202,7 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 		if inbound.NodeID != nil {
 			continue
 		}
-		if inbound.Protocol == model.MTProto || inbound.Protocol == model.AmneziaWG || inbound.Protocol == model.TUIC {
+		if inbound.Protocol == model.MTProto || inbound.Protocol == model.AmneziaWG || inbound.Protocol == model.TUIC || inbound.Protocol == model.VKTurnProxy {
 			continue
 		}
 		settings := map[string]any{}
@@ -1195,12 +1196,13 @@ func (s *XrayService) GetXrayTraffic() ([]*xray.Traffic, []*xray.ClientTraffic, 
 		logger.Debug("Attempted to fetch Xray traffic, but Xray is not running:", err)
 		return nil, nil, err
 	}
+	s.xrayTrafficMu.Lock()
+	defer s.xrayTrafficMu.Unlock()
 	apiPort := process.GetAPIPort()
 	if err := s.xrayAPI.Init(apiPort); err != nil {
 		logger.Debug("Failed to initialize Xray API:", err)
 		return nil, nil, err
 	}
-	defer s.xrayAPI.Close()
 
 	traffic, clientTraffic, err := s.xrayAPI.GetTraffic()
 	if err != nil {
@@ -1225,13 +1227,14 @@ func (s *XrayService) GetOnlineUsers() ([]xray.OnlineUser, bool, error) {
 	if process.OnlineAPISupport() == xray.OnlineAPIUnsupported {
 		return nil, false, nil
 	}
-	if err := s.xrayAPI.Init(process.GetAPIPort()); err != nil {
+	apiClient := xray.XrayAPI{}
+	if err := apiClient.Init(process.GetAPIPort()); err != nil {
 		logger.Debug("Failed to initialize Xray API:", err)
 		return nil, false, err
 	}
-	defer s.xrayAPI.Close()
+	defer apiClient.Close()
 
-	users, err := s.xrayAPI.GetOnlineUsers()
+	users, err := apiClient.GetOnlineUsers()
 	if err != nil {
 		if xray.IsUnimplementedErr(err) {
 			process.SetOnlineAPISupport(xray.OnlineAPIUnsupported)
@@ -1271,13 +1274,14 @@ func (s *XrayService) GetBalancersStatus(tags []string) ([]BalancerStatus, error
 		}
 		return statuses, nil
 	}
-	if err := s.xrayAPI.Init(process.GetAPIPort()); err != nil {
+	apiClient := xray.XrayAPI{}
+	if err := apiClient.Init(process.GetAPIPort()); err != nil {
 		return nil, err
 	}
-	defer s.xrayAPI.Close()
+	defer apiClient.Close()
 
 	for _, tag := range tags {
-		info, err := s.xrayAPI.GetBalancerInfo(tag)
+		info, err := apiClient.GetBalancerInfo(tag)
 		if err != nil {
 			logger.Debug("get balancer info [", tag, "] failed:", err)
 			statuses = append(statuses, BalancerStatus{Tag: tag})
@@ -1311,11 +1315,12 @@ func (s *XrayService) OverrideBalancer(tag, target string) error {
 			target = resolved
 		}
 	}
-	if err := s.xrayAPI.Init(process.GetAPIPort()); err != nil {
+	apiClient := xray.XrayAPI{}
+	if err := apiClient.Init(process.GetAPIPort()); err != nil {
 		return err
 	}
-	defer s.xrayAPI.Close()
-	return s.xrayAPI.SetBalancerTarget(tag, target)
+	defer apiClient.Close()
+	return apiClient.SetBalancerTarget(tag, target)
 }
 
 // resolveOverrideTarget checks if target names a balancer and, if so,
@@ -1361,11 +1366,12 @@ func (s *XrayService) TestRoute(req xray.RouteTestRequest) (*xray.RouteTestResul
 	if process == nil || !process.IsRunning() {
 		return nil, errors.New("xray is not running")
 	}
-	if err := s.xrayAPI.Init(process.GetAPIPort()); err != nil {
+	apiClient := xray.XrayAPI{}
+	if err := apiClient.Init(process.GetAPIPort()); err != nil {
 		return nil, err
 	}
-	defer s.xrayAPI.Close()
-	return s.xrayAPI.TestRoute(req)
+	defer apiClient.Close()
+	return apiClient.TestRoute(req)
 }
 
 // RestartXray reconciles the running Xray process with the current desired
@@ -1410,16 +1416,25 @@ func (s *XrayService) RestartXray(isForce bool) error {
 			logger.Info("Xray config changes applied through the core API, no restart needed")
 			return nil
 		}
+		s.xrayTrafficMu.Lock()
+		s.xrayAPI.Close()
+		s.xrayAPI.StatsLastValues = nil
+		s.xrayTrafficMu.Unlock()
 		_ = process.Stop()
-	} else if conflicts := bindConflicts(xrayConfig, nil); len(conflicts) > 0 {
-		// Nothing is running to protect and the core is the authority on what it
-		// can bind: start it and let its own error name the port it lost.
-		logger.Warning("xray config may not start:", conflicts[0].String())
+	} else {
+		s.xrayTrafficMu.Lock()
+		s.xrayAPI.Close()
+		s.xrayAPI.StatsLastValues = nil
+		s.xrayTrafficMu.Unlock()
+		if conflicts := bindConflicts(xrayConfig, nil); len(conflicts) > 0 {
+			// Nothing is running to protect and the core is the authority on what it
+			// can bind: start it and let its own error name the port it lost.
+			logger.Warning("xray config may not start:", conflicts[0].String())
+		}
 	}
 
 	process = xray.NewProcess(xrayConfig)
 	xrayState.replace(process)
-	s.xrayAPI.StatsLastValues = nil
 	err = process.Start()
 	if err != nil {
 		return err
@@ -1586,6 +1601,10 @@ func (s *XrayService) StopXray() error {
 	isManuallyStopped.Store(true)
 	logger.Debug("Attempting to stop Xray...")
 	process := currentXrayProcess()
+	s.xrayTrafficMu.Lock()
+	s.xrayAPI.Close()
+	s.xrayAPI.StatsLastValues = nil
+	s.xrayTrafficMu.Unlock()
 	if process != nil && process.IsRunning() {
 		return process.Stop()
 	}

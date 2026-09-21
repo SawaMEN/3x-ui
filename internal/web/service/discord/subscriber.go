@@ -8,9 +8,9 @@ import (
 	"time"
 	"unicode/utf16"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/eventbus"
-	"github.com/mhsanaei/3x-ui/v3/internal/logger"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
+	"github.com/SawaMEN/3x-ui/v3/internal/eventbus"
+	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 )
 
 // Subscriber handles event bus messages and forwards them to Discord.

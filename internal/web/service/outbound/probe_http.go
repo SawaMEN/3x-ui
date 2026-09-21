@@ -18,10 +18,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/amneziawgnet"
-	"github.com/mhsanaei/3x-ui/v3/internal/config"
-	"github.com/mhsanaei/3x-ui/v3/internal/util/json_util"
-	"github.com/mhsanaei/3x-ui/v3/internal/xray"
+	"github.com/SawaMEN/3x-ui/v3/internal/amneziawgnet"
+	"github.com/SawaMEN/3x-ui/v3/internal/config"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/json_util"
+	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // HTTP-mode probing works by spinning up ONE temporary xray instance per

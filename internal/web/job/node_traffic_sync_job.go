@@ -6,13 +6,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
-	"github.com/mhsanaei/3x-ui/v3/internal/logger"
-	"github.com/mhsanaei/3x-ui/v3/internal/util/common"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/runtime"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/websocket"
-	"github.com/mhsanaei/3x-ui/v3/internal/xray"
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/websocket"
+	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 const (
@@ -98,8 +98,31 @@ func (j *NodeTrafficSyncJob) Run() {
 	}
 	j.inboundService.RetainSyncedNodeOnlineClients(nodes)
 	if len(nodes) == 0 {
+		j.noGuidIpEndpoint.Range(func(key, _ any) bool {
+			j.noGuidIpEndpoint.Delete(key)
+			return true
+		})
 		return
 	}
+
+	// Keep the one-time 404 suppression map bounded to nodes that still exist.
+	activeNodeIDs := make(map[int]struct{}, len(nodes))
+	for _, n := range nodes {
+		if n != nil {
+			activeNodeIDs[n.Id] = struct{}{}
+		}
+	}
+	j.noGuidIpEndpoint.Range(func(key, _ any) bool {
+		id, ok := key.(int)
+		if !ok {
+			j.noGuidIpEndpoint.Delete(key)
+			return true
+		}
+		if _, keep := activeNodeIDs[id]; !keep {
+			j.noGuidIpEndpoint.Delete(key)
+		}
+		return true
+	})
 
 	// Decide once per tick whether this run also syncs client IPs, and stamp the
 	// clock before the loop so two back-to-back 5s ticks can't both qualify.

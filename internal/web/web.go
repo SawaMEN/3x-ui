@@ -17,27 +17,28 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/amneziawgnet"
-	"github.com/mhsanaei/3x-ui/v3/internal/config"
-	"github.com/mhsanaei/3x-ui/v3/internal/eventbus"
-	"github.com/mhsanaei/3x-ui/v3/internal/logger"
-	"github.com/mhsanaei/3x-ui/v3/internal/mtproto"
-	"github.com/mhsanaei/3x-ui/v3/internal/tuic"
-	"github.com/mhsanaei/3x-ui/v3/internal/util/common"
-	"github.com/mhsanaei/3x-ui/v3/internal/util/sys"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/controller"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/job"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/locale"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/middleware"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/network"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/runtime"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/service/discord"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/service/email"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/service/panel"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/service/tgbot"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/websocket"
-	"github.com/mhsanaei/3x-ui/v3/internal/xray"
+	"github.com/SawaMEN/3x-ui/v3/internal/amneziawgnet"
+	"github.com/SawaMEN/3x-ui/v3/internal/config"
+	"github.com/SawaMEN/3x-ui/v3/internal/eventbus"
+	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/mtproto"
+	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
+	systemswap "github.com/SawaMEN/3x-ui/v3/internal/util/swap"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/sys"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/controller"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/job"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/locale"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/middleware"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/network"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service/discord"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service/email"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service/panel"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service/tgbot"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/websocket"
+	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-contrib/sessions"
@@ -294,7 +295,7 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 // node/xray state is unchanged, and export per-job duration/skipped/error
 // counters.
 const (
-	cadenceXrayRunning   = "@every 1s"
+	cadenceXrayRunning   = "@every 3s"
 	cadenceXrayRestart   = "@every 30s"
 	cadenceXrayTraffic   = "@every 5s"
 	cadenceMtproto       = "@every 10s"
@@ -317,24 +318,46 @@ const (
 // startTask schedules background jobs (Xray checks, traffic jobs, cron
 // jobs) which the panel relies on for periodic maintenance and monitoring.
 func (s *Server) startTask(restartXray bool, loc *time.Location) {
-	if restartXray {
-		err := s.xrayService.RestartXray(true)
-		if err != nil {
-			logger.Warning("start xray failed:", err)
+	coreType, coreErr := s.settingService.GetCoreType()
+	if coreErr != nil {
+		logger.Warning("get selected core failed, falling back to Xray:", coreErr)
+		coreType = service.CoreTypeXray
+	}
+	useXray := coreType != service.CoreTypeSingBox
+	if useXray {
+		if restartXray {
+			if err := s.xrayService.RestartXray(true); err != nil {
+				logger.Warning("start xray failed:", err)
+			}
+		}
+	} else if restartXray {
+		if err := (&service.SingBoxService{}).Restart(s.ctx); err != nil {
+			logger.Warning("start sing-box failed:", err)
 		}
 	}
-	// Check whether xray is running every second
+	// Keep the scheduler core-agnostic: the operator can switch engines
+	// without restarting the panel. The watchdog selects the persisted core on
+	// every tick, while each traffic collector cheaply no-ops when unselected.
 	_, _ = s.cron.AddJob(cadenceXrayRunning, job.NewCheckXrayRunningJob())
 
-	// Check if xray needs to be restarted every 30 seconds
+	_, _ = s.cron.AddJob(cadenceXrayTraffic, job.NewXrayTrafficJob())
+	_, _ = s.cron.AddFunc(cadenceXrayTraffic, func() {
+		singTraffic := &service.SingBoxService{}
+		ctx, cancel := context.WithTimeout(s.ctx, 4*time.Second)
+		defer cancel()
+		if core, err := s.settingService.GetCoreType(); err == nil && core == service.CoreTypeSingBox {
+			if err := singTraffic.PollTraffic(ctx); err != nil {
+				logger.Debug("sing-box traffic poll failed:", err)
+			}
+		}
+	})
+
+	// Xray has a separate pending-restart flag used by hot-apply paths.
+	// This can remain scheduled even while sing-box is selected: ApplyPendingRestart
+	// is inert unless an Xray mutation has explicitly armed the flag.
 	_, _ = s.cron.AddFunc(cadenceXrayRestart, func() {
 		s.xrayService.ApplyPendingRestart()
 	})
-
-	go func() {
-		time.Sleep(time.Second * 5)
-		_, _ = s.cron.AddJob(cadenceXrayTraffic, job.NewXrayTrafficJob())
-	}()
 
 	// Reconcile mtproto (mtg) sidecars and scrape their traffic
 	mtJob := job.NewMtprotoJob()
@@ -356,6 +379,17 @@ func (s *Server) startTask(restartXray bool, loc *time.Location) {
 	_, _ = s.cron.AddJob(cadenceNodeHeartbeat, job.NewNodeHeartbeatJob())
 
 	_, _ = s.cron.AddJob(cadenceNodeTraffic, job.NewNodeTrafficSyncJob())
+
+	// Keep the VK TURN sidecar reconciled with the saved inbounds. It is not
+	// part of Xray, so its lifecycle is managed independently.
+	_, _ = s.cron.AddFunc("@every 5s", func() {
+		if err := service.VKTurnProxyRuntime().ReconcileClientPeers(); err != nil {
+			logger.Debug("vk-turn-proxy reconcile client peers:", err)
+		}
+		if err := service.VKTurnProxyRuntime().EnsureRunning(); err != nil {
+			logger.Debug("vk-turn-proxy ensure running:", err)
+		}
+	})
 
 	// Outbound subscription auto-refresh (respects per-sub updateInterval)
 	_, _ = s.cron.AddJob(cadenceOutboundSub, job.NewOutboundSubscriptionJob())
@@ -570,7 +604,25 @@ func (s *Server) start(restartXray bool, startTgBot bool) (err error) {
 	// The closures bridge into XrayService (which owns the running xray
 	// process state) without forcing the runtime package to import service.
 	runtime.SetManager(runtime.NewManager(runtime.LocalDeps{
-		APIPort:        func() int { return s.xrayService.GetXrayAPIPort() },
+		APIPort: func() int { return s.xrayService.GetXrayAPIPort() },
+		CoreType: func() string {
+			core, err := s.settingService.GetCoreType()
+			if err != nil {
+				return service.CoreTypeXray
+			}
+			return core
+		},
+		RestartCore: func(ctx context.Context) error {
+			core, err := s.settingService.GetCoreType()
+			if err != nil {
+				return err
+			}
+			if core == service.CoreTypeSingBox {
+				return (&service.SingBoxService{}).Restart(ctx)
+			}
+			s.xrayService.SetToNeedRestart()
+			return nil
+		},
 		SetNeedRestart: func() { s.xrayService.SetToNeedRestart() },
 	}))
 	runtime.GetManager().SetNodeEgressResolver(&s.settingService)
@@ -694,6 +746,13 @@ func (s *Server) start(restartXray bool, startTgBot bool) (err error) {
 
 	serverService := &service.ServerService{}
 	inboundService := &service.InboundService{}
+	// Wire sing-box to the same initialized inbound service used by the panel.
+	// Do not construct a second empty InboundService: it would lose the panel's
+	// client/runtime state and make generated sing-box configs incomplete.
+	service.SetSingBoxDependencies(inboundService, &s.settingService)
+	if err := systemswap.Ensure(s.ctx); err != nil && !errors.Is(err, systemswap.ErrUnsupported) {
+		logger.Warning("restore managed swap/zram state failed:", err)
+	}
 	s.discordGateway = discord.NewGatewayClient(s.discordService, s.settingService, serverService, inboundService, &s.xrayService)
 
 	// Wire reload discord callback for settings updates
@@ -792,11 +851,18 @@ func (s *Server) StopPanelOnly() error {
 func (s *Server) stop(stopXray bool, stopTgBot bool) error {
 	s.cancel()
 	if stopXray {
-		_ = s.xrayService.StopXray()
+		if coreType, _ := s.settingService.GetCoreType(); coreType == service.CoreTypeSingBox {
+			_ = (&service.SingBoxService{}).Stop(s.ctx)
+		} else {
+			_ = s.xrayService.StopXray()
+		}
 		mtproto.GetManager().StopAll()
 		amneziawgnet.GetManager().StopAll()
 		tuic.GetManager().StopAll()
 		amneziawgnet.GetOutboundManager().StopAll()
+	}
+	if err := service.VKTurnProxyRuntime().ShutdownForRestart(); err != nil {
+		logger.Warning("vk-turn-proxy shutdown failed:", err)
 	}
 	if s.cron != nil {
 		s.cron.Stop()

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/config"
-	"github.com/mhsanaei/3x-ui/v3/internal/xray/geodata"
+	"github.com/SawaMEN/3x-ui/v3/internal/config"
+	"github.com/SawaMEN/3x-ui/v3/internal/xray/geodata"
 )
 
 // GeodataTokenIssue reports a routing token the running core would reject,
@@ -30,15 +30,22 @@ const (
 // geodataStores keys the cache by asset directory rather than holding a single
 // store, so a changed XUI_BIN_FOLDER is picked up instead of being pinned to
 // whatever the first call saw.
-var geodataStores sync.Map
+var geodataStoreCache struct {
+	mu    sync.Mutex
+	dir   string
+	store *geodata.Store
+}
 
 func assetStore() *geodata.Store {
 	dir := assetDir()
-	if cached, ok := geodataStores.Load(dir); ok {
-		return cached.(*geodata.Store)
+	geodataStoreCache.mu.Lock()
+	defer geodataStoreCache.mu.Unlock()
+	if geodataStoreCache.store != nil && geodataStoreCache.dir == dir {
+		return geodataStoreCache.store
 	}
-	store, _ := geodataStores.LoadOrStore(dir, geodata.NewStore(dir))
-	return store.(*geodata.Store)
+	geodataStoreCache.dir = dir
+	geodataStoreCache.store = geodata.NewStore(dir)
+	return geodataStoreCache.store
 }
 
 // assetDir resolves the folder the running core reads its databases from,

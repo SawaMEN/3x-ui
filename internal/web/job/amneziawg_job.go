@@ -2,24 +2,114 @@ package job
 
 import (
 	"encoding/json"
+	"fmt"
+	"sync"
+	"time"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/amneziawg"
-	"github.com/mhsanaei/3x-ui/v3/internal/amneziawgnet"
-	"github.com/mhsanaei/3x-ui/v3/internal/logger"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
-	"github.com/mhsanaei/3x-ui/v3/internal/xray"
+	"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
+	"github.com/SawaMEN/3x-ui/v3/internal/amneziawgnet"
+	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
+	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // AmneziaWGJob converges embedded AmneziaWG interfaces (inbounds AND the
-// template's "amneziawg" outbounds) every 10s; stats stay with Xray.
+// template's "amneziawg" outbounds) every 10s. When sing-box is selected,
+// traffic is sampled directly from each embedded device; Xray already owns
+// accounting when Xray is the selected core.
 type AmneziaWGJob struct {
 	inboundService service.InboundService
 	settingService service.SettingService
+	mu             sync.Mutex
+	lastTraffic    map[string]amneziaWGTrafficSample
+}
+
+type amneziaWGTrafficSample struct {
+	rx uint64
+	tx uint64
 }
 
 // NewAmneziaWGJob creates a new AmneziaWG reconcile job instance.
 func NewAmneziaWGJob() *AmneziaWGJob {
-	return new(AmneziaWGJob)
+	return &AmneziaWGJob{lastTraffic: make(map[string]amneziaWGTrafficSample)}
+}
+
+const amneziaWGOnlineWindow = 3 * time.Minute
+
+func (j *AmneziaWGJob) collectTraffic(coreType string, desired []amneziawg.Instance) {
+	if coreType != service.CoreTypeSingBox || len(desired) == 0 {
+		return
+	}
+	now := time.Now()
+	var traffic []*xray.Traffic
+	var clientTraffic []*xray.ClientTraffic
+	activeEmails := make([]string, 0)
+	activeTags := make([]string, 0)
+	seenActiveTags := make(map[string]struct{})
+	current := make(map[string]struct{})
+
+	for _, inst := range desired {
+		diag, err := j.inboundService.GetAmneziaWGDiagnostics(inst.Id)
+		if err != nil || !diag.Running {
+			continue
+		}
+		for _, client := range diag.Clients {
+			key := fmt.Sprintf("%d:%s", inst.Id, client.Email)
+			current[key] = struct{}{}
+			j.mu.Lock()
+			prev := j.lastTraffic[key]
+			j.lastTraffic[key] = amneziaWGTrafficSample{rx: client.RxBytes, tx: client.TxBytes}
+			j.mu.Unlock()
+
+			deltaRx, deltaTx := client.RxBytes, client.TxBytes
+			if prev.rx <= client.RxBytes {
+				deltaRx = client.RxBytes - prev.rx
+			}
+			if prev.tx <= client.TxBytes {
+				deltaTx = client.TxBytes - prev.tx
+			}
+			if deltaRx > 0 || deltaTx > 0 {
+				traffic = append(traffic, &xray.Traffic{
+					IsInbound: true,
+					Tag:       inst.Tag,
+					Up:        int64(deltaRx),
+					Down:      int64(deltaTx),
+				})
+				clientTraffic = append(clientTraffic, &xray.ClientTraffic{
+					Email: client.Email,
+					Up:    int64(deltaRx),
+					Down:  int64(deltaTx),
+				})
+			}
+			if !client.LastHandshake.IsZero() && now.Sub(client.LastHandshake) <= amneziaWGOnlineWindow {
+				activeEmails = append(activeEmails, client.Email)
+				if _, ok := seenActiveTags[inst.Tag]; !ok {
+					seenActiveTags[inst.Tag] = struct{}{}
+					activeTags = append(activeTags, inst.Tag)
+				}
+			}
+		}
+	}
+
+	j.mu.Lock()
+	for key := range j.lastTraffic {
+		if _, ok := current[key]; !ok {
+			delete(j.lastTraffic, key)
+		}
+	}
+	j.mu.Unlock()
+
+	if len(traffic) > 0 || len(clientTraffic) > 0 {
+		if _, _, err := j.inboundService.AddTraffic(traffic, clientTraffic); err != nil {
+			logger.Warning("amneziawg job: add traffic failed:", err)
+		}
+	}
+	if len(activeEmails) > 0 {
+		if err := j.inboundService.BumpClientsLastOnline(activeEmails); err != nil {
+			logger.Warning("amneziawg job: bump last online failed:", err)
+		}
+	}
+	j.inboundService.RefreshLocalOnlineClients(activeEmails, activeTags)
 }
 
 // Run reconciles desired AmneziaWG inbounds with running embedded interfaces.
@@ -48,6 +138,9 @@ func (j *AmneziaWGJob) Run() {
 		})
 	}
 	amneziawgnet.GetManager().Reconcile(wanted)
+
+	coreType, _ := j.settingService.GetCoreType()
+	j.collectTraffic(coreType, desired)
 
 	outboundDesired, err := j.desiredOutboundInstances()
 	if err != nil {

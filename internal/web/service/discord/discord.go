@@ -14,13 +14,13 @@ import (
 	"time"
 	"unicode/utf16"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/web/locale"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/locale"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 )
 
 const (
 	defaultDiscordBaseURL = "https://discord.com/api/v10"
-	discordUserAgent      = "DiscordBot (https://github.com/mhsanaei/3x-ui, 3.x)"
+	discordUserAgent      = "DiscordBot (https://github.com/SawaMEN/3x-ui, 3.x)"
 
 	ColorGreen  = 0x2ECC71
 	ColorRed    = 0xE74C3C

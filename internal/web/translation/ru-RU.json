@@ -18,11 +18,11 @@
   "regenerate": "Сгенерировать заново",
   "jsonEditor": "Редактор JSON",
   "downloadImage": "Скачать изображение",
+  "search": "Поиск",
   "sort": "Сортировка",
   "remark": "Примечание",
   "enable": "Включить",
   "protocol": "Протокол",
-  "search": "Поиск",
   "filter": "Фильтр",
   "all": "Все",
   "from": "От",
@@ -119,13 +119,13 @@
     "routing": "Маршрутизация",
     "outbounds": "Исходящие",
     "apiDocs": "Документация API",
-    "donate": "Поддержать",
     "hosts": "Хосты",
-    "docs": "Документация",
     "openMenu": "Открыть меню",
     "pinSidebar": "Закрепить боковую панель",
     "unpinSidebar": "Открепить боковую панель",
-    "subFormats": "Форматы подписки"
+    "subFormats": "Форматы подписки",
+    "telemt": "Telemt",
+    "singBox": "Настройки sing-box"
   },
   "pages": {
     "login": {
@@ -145,7 +145,6 @@
       "swap": "Подкачка",
       "storage": "Диск",
       "memory": "Память",
-      "xrayStatus": "Xray",
       "stopXray": "Стоп",
       "restartXray": "Перезапуск",
       "xraySwitch": "Выбор версии",
@@ -220,6 +219,8 @@
       "panelUpdateStartedPopover": "Обновление панели началось",
       "panelUpdateFailedTitle": "Не удалось обновить панель",
       "panelUpdateFailedDesc": "Обновление не завершилось успешно. Проверьте журналы сервера или выполните 'x-ui update' в командной строке.",
+      "panelUpdateReason": "Причина:",
+      "panelUpdateLog": "Журнал:",
       "panelUpdateUnknownTitle": "Не удалось подтвердить завершение обновления",
       "panelUpdateUnknownDesc": "Панель не сообщила результат вовремя. Перезагрузите страницу, чтобы проверить текущую версию, или проверьте журналы сервера.",
       "geofileUpdateDialog": "Вы действительно хотите обновить геофайл?",
@@ -1128,6 +1129,11 @@
       "panelListeningDomainDesc": "Оставьте пустым для подключения с любых доменов и IP.",
       "panelPort": "Порт панели",
       "panelPortDesc": "Порт, на котором работает панель",
+      "coreType": "Ядро прокси",
+      "coreTypeDesc": "Выберите движок, которым управляет панель. По умолчанию используется Xray; sing-box работает через нативную JSON-конфигурацию.",
+      "singBoxInstalled": "sing-box установлен",
+      "installSingBox": "Установить sing-box",
+      "panelOutboundXrayOnly": "Доступно только при выборе Xray.",
       "publicKeyPath": "Путь к файлу публичного ключа сертификата панели",
       "publicKeyPathDesc": "Введите полный путь, начинающийся с '/'",
       "privateKeyPath": "Путь к файлу приватного ключа сертификата панели",
@@ -1634,7 +1640,55 @@
       "discordNotifyTimeDesc": "Как часто бот Discord отправляет периодические отчёты. Выберите готовый интервал или «Произвольный», чтобы ввести выражение crontab.",
       "discordNotifyBackup": "Резервное копирование базы данных",
       "discordNotifyBackupDesc": "Отправлять уведомление с файлом резервной копии базы данных",
-      "discordEventBusNotifyDesc": "Выберите события для Discord уведомлений"
+      "discordEventBusNotifyDesc": "Выберите события для Discord уведомлений",
+      "openFromCore": "Подкачка / ZRAM",
+      "swap": {
+        "menu": "Подкачка / ZRAM",
+        "overview": "Обзор",
+        "refresh": "Обновить статус",
+        "areasCount": "Областей подкачки: {count}",
+        "total": "Всего подкачки",
+        "used": "Используется",
+        "swappiness": "vm.swappiness",
+        "apply": "Применить",
+        "systemTitle": "Системные настройки подкачки",
+        "fileTitle": "Swap-файл",
+        "zramTitle": "ZRAM",
+        "allAreas": "Все активные области подкачки",
+        "sizeMiB": "Размер, МиБ",
+        "priority": "Приоритет",
+        "algorithm": "Алгоритм сжатия",
+        "algorithmPlaceholder": "Выберите алгоритм",
+        "streams": "Потоки сжатия",
+        "memoryLimitMiB": "Лимит памяти, МиБ",
+        "createSwap": "Создать swap",
+        "createZram": "Создать ZRAM",
+        "delete": "Удалить",
+        "deleteConfirm": "Удалить управляемый swap-файл?",
+        "deleteZramConfirm": "Отключить и удалить управляемое устройство ZRAM?",
+        "device": "Устройство",
+        "type": "Тип",
+        "compressed": "Сжатые данные",
+        "status": "Статус",
+        "active": "Активна",
+        "inactive": "Неактивна",
+        "managed": "Управляется 3x-ui",
+        "actions": "Действия",
+        "ramTotal": "Всего RAM",
+        "ramAvailable": "Доступно RAM",
+        "cpu": "Ядра CPU",
+        "recommendedSwap": "Рекомендуемый swap",
+        "recommendedZram": "Рекомендуемый ZRAM",
+        "recommendedSwappiness": "Рекомендуемый swappiness",
+        "zramInstallTitle": "Установка ZRAM",
+        "zramMissing": "ZRAM не активирован в системе",
+        "zramUnsupported": "Для этого дистрибутива автоматическая установка не поддерживается",
+        "zramUnsupportedDesc": "Установите ZRAM через пакетный менеджер дистрибутива и обновите статус.",
+        "installZram": "Установить ZRAM",
+        "enableZram": "Включить ZRAM",
+        "generatorManaged": "ZRAM управляется systemd-zram-generator",
+        "memoryUsed": "Использование памяти"
+      }
     },
     "xray": {
       "importRules": "Импорт правил",
@@ -2256,6 +2310,30 @@
         "badTag": "Недопустимый тег",
         "badVlessRoute": "Введите одно число от 0 до 65535"
       }
+    },
+    "singBox": {
+      "save": "Сохранить",
+      "refresh": "Обновить",
+      "reset": "Вернуть сгенерированные настройки",
+      "saved": "Настройки sing-box сохранены",
+      "resetDone": "Сгенерированные настройки sing-box восстановлены",
+      "managedTitle": "Разделы под управлением панели",
+      "managedDesc": "Входящие подключения и API панели генерируются 3x-ui и здесь не редактируются. DNS, маршрутизация, исходящие подключения, endpoints и experimental — нативные настройки sing-box.",
+      "sections": {
+        "basic": "Основные",
+        "dns": "DNS",
+        "route": "Маршрутизация",
+        "outbounds": "Исходящие",
+        "endpoints": "Endpoints",
+        "certificates": "Сертификаты",
+        "network": "Сеть",
+        "advanced": "Расширенные"
+      },
+      "running": "Запущено",
+      "stopped": "Остановлено",
+      "sourceDisk": "Фактический файл",
+      "sourceGenerated": "Сгенерировано",
+      "actualTitle": "Фактическая конфигурация sing-box"
     }
   },
   "tgbot": {
@@ -2532,7 +2610,6 @@
   "commandPalette": {
     "title": "Командная строка",
     "placeholder": "Введите команду или найдите клиентов, инбаунды, страницы...",
-    "search": "Поиск...",
     "navigation": "Навигация",
     "actions": "Действия",
     "navigate": "Перейти",
@@ -2541,5 +2618,8 @@
     "restartXray": "Перезапустить службу Xray",
     "restartXraySuccess": "Служба Xray успешно перезапущена",
     "settings": "Настройки"
+  },
+  "telemt": {
+    "service": "Сервис"
   }
 }
