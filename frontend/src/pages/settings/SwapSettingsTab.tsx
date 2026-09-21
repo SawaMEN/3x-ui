@@ -318,8 +318,7 @@ function normalizeSystemUpdate(value: unknown): SystemUpdateStatus {
     kernel: {
       runningVersion: typeof kernel.runningVersion === 'string' ? kernel.runningVersion : '',
       updateAvailable: kernel.updateAvailable === true,
-      availableVersion:
-        typeof kernel.availableVersion === 'string' ? kernel.availableVersion : '',
+      availableVersion: typeof kernel.availableVersion === 'string' ? kernel.availableVersion : '',
       packageNames: Array.isArray(kernel.packageNames)
         ? kernel.packageNames.filter((item): item is string => typeof item === 'string')
         : [],
@@ -947,7 +946,9 @@ export default function SwapSettingsTab() {
               type="primary"
               icon={<DownloadOutlined />}
               loading={systemUpdateBusy}
-              disabled={!systemUpdate?.canUpdate || !systemUpdate?.supported || !systemUpdate?.runningAsRoot}
+              disabled={
+                !systemUpdate?.canUpdate || !systemUpdate?.supported || !systemUpdate?.runningAsRoot
+              }
             >
               {t('pages.settings.swap.updateNow')}
             </Button>
