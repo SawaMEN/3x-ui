@@ -411,3 +411,129 @@
 .submit-row {
   margin-bottom: 0;
 }
+
+/* Cyberpunk identity: reuse the global theme while keeping the login card
+   readable above animated cyan/magenta/gold ambience. */
+body.theme-cyberpunk .login-app {
+  --bg-page: #05060b;
+  --bg-card: rgba(8, 11, 19, 0.66);
+  --bg-card-solid: #0b0e17;
+  --color-text: #f5f7ff;
+  --color-text-subtle: #a8b0c8;
+  --color-accent: #00eeff;
+  --color-border: rgba(0, 238, 255, 0.16);
+  --shadow-card:
+    0 0 0 1px rgba(0, 238, 255, 0.055), 0 24px 70px rgba(0, 0, 0, 0.52),
+    0 0 38px rgba(0, 238, 255, 0.08);
+  --blob-1: rgba(0, 238, 255, 0.34);
+  --blob-2: rgba(255, 43, 214, 0.28);
+  --blob-3: rgba(73, 70, 255, 0.22);
+  --blob-4: rgba(212, 160, 23, 0.18);
+  --blob-5: rgba(0, 238, 255, 0.16);
+  --grid-color: rgba(0, 238, 255, 0.045);
+  --vignette: radial-gradient(ellipse at center, transparent 22%, rgba(0, 0, 0, 0.76) 100%);
+  background:
+    radial-gradient(circle at 12% 12%, rgba(0, 238, 255, 0.12), transparent 24%),
+    radial-gradient(circle at 88% 14%, rgba(255, 43, 214, 0.11), transparent 22%),
+    radial-gradient(circle at 50% 100%, rgba(212, 160, 23, 0.08), transparent 32%), #05060b;
+}
+
+body.theme-cyberpunk .login-app::before,
+body.theme-cyberpunk .login-app::after,
+body.theme-cyberpunk .login-content::before,
+body.theme-cyberpunk .login-content::after,
+body.theme-cyberpunk .login-wrapper::before {
+  filter: blur(112px) saturate(125%);
+}
+
+body.theme-cyberpunk .login-wrapper::after {
+  background-image:
+    linear-gradient(var(--grid-color) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 43, 214, 0.032) 1px, transparent 1px),
+    linear-gradient(
+      to bottom,
+      transparent 0%,
+      transparent 48%,
+      rgba(0, 238, 255, 0.025) 49%,
+      rgba(0, 238, 255, 0.07) 50%,
+      rgba(0, 238, 255, 0.025) 51%,
+      transparent 52%,
+      transparent 100%
+    );
+  background-size:
+    48px 48px,
+    48px 48px,
+    100% 180px;
+  background-position:
+    center,
+    center,
+    0 -180px;
+  animation: login-cyber-scan 18s linear infinite;
+}
+
+body.theme-cyberpunk .login-card {
+  border-color: rgba(0, 238, 255, 0.15);
+}
+
+body.theme-cyberpunk .login-card::before {
+  background:
+    linear-gradient(135deg, rgba(0, 238, 255, 0.42), transparent 35%),
+    linear-gradient(320deg, rgba(255, 43, 214, 0.25), transparent 58%),
+    linear-gradient(145deg, transparent 62%, rgba(212, 160, 23, 0.23));
+}
+
+body.theme-cyberpunk .brand-name {
+  background: linear-gradient(135deg, #00eeff 0%, #7d7bff 46%, #ff2bd6 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 28px rgba(0, 238, 255, 0.12);
+}
+
+body.theme-cyberpunk .brand-accent {
+  width: 56px;
+  background: linear-gradient(90deg, #00eeff, #ff2bd6, #d4a017);
+  box-shadow:
+    0 0 12px rgba(0, 238, 255, 0.28),
+    0 0 20px rgba(255, 43, 214, 0.16);
+}
+
+body.theme-cyberpunk .toolbar-btn {
+  border-color: rgba(0, 238, 255, 0.18);
+  background: rgba(8, 11, 19, 0.52);
+  color: #00eeff;
+  box-shadow: 0 0 16px rgba(0, 238, 255, 0.05);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+body.theme-cyberpunk .toolbar-btn:hover {
+  color: #ff2bd6;
+  border-color: rgba(255, 43, 214, 0.36);
+  background: rgba(12, 15, 25, 0.72);
+}
+
+body.theme-cyberpunk .login-form .ant-form-item-label > label {
+  color: #d9e4ff;
+}
+
+@keyframes login-cyber-scan {
+  from {
+    background-position:
+      center,
+      center,
+      0 -180px;
+  }
+  to {
+    background-position:
+      center,
+      center,
+      0 180px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.theme-cyberpunk .login-wrapper::after {
+    animation: none;
+  }
+}

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Input, InputNumber, Select, Switch, Tabs } from 'antd';
+import { useLocation, useNavigate } from 'react-router';
+import { Button, Input, InputNumber, Radio, Select, Space, Switch, Tabs, Tag } from 'antd';
 import {
   ApartmentOutlined,
   BellOutlined,
@@ -8,6 +9,7 @@ import {
   GlobalOutlined,
   SafetyCertificateOutlined,
   SettingOutlined,
+  SwapOutlined,
 } from '@ant-design/icons';
 import type { AllSetting } from '@/models/setting';
 import { isOutboundProtocol } from '@/schemas/primitives';
@@ -27,16 +29,113 @@ interface ApiMsg<T = unknown> {
 interface GeneralTabProps {
   allSetting: AllSetting;
   updateSetting: (patch: Partial<AllSetting>) => void;
+  saveSettings?: () => Promise<{ success?: boolean; msg?: string }>;
+  onOpenSwap?: () => void;
 }
 
-export default function GeneralTab({ allSetting, updateSetting }: GeneralTabProps) {
+export default function GeneralTab({
+  allSetting,
+  updateSetting,
+  saveSettings,
+  onOpenSwap,
+}: GeneralTabProps) {
   const { t } = useTranslation();
   const { isMobile } = useMediaQuery();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const activeTab = location.hash === '#core' ? 'core' : '1';
+
+  const onTabChange = (key: string) => {
+    if (key === 'core') navigate('/settings#core');
+    else if (key === '1') navigate('/settings#general');
+  };
 
   const [lang, setLang] = useState<string>(() => LanguageManager.getLanguage());
   const [inboundOptions, setInboundOptions] = useState<{ label: string; value: string }[]>([]);
   const [outboundTagList, setOutboundTagList] = useState<string[]>([]);
   const [balancerTagList, setBalancerTagList] = useState<string[]>([]);
+  const [singBoxInstalled, setSingBoxInstalled] = useState<boolean | null>(null);
+  const [singBoxInstalling, setSingBoxInstalling] = useState(false);
+  const [runningCore, setRunningCore] = useState<'xray' | 'sing-box' | 'none'>('none');
+
+  useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setInterval> | undefined;
+
+    const refreshCoreStatus = async () => {
+      try {
+        const [singMsg, serverMsg] = await Promise.all([
+          HttpUtil.get('/panel/api/setting/singbox/status') as Promise<
+            ApiMsg<{ installed: boolean; running: boolean }>
+          >,
+          HttpUtil.get('/panel/api/server/status') as Promise<
+            ApiMsg<{ xray?: { state?: string } }>
+          >,
+        ]);
+        if (cancelled) return false;
+        setSingBoxInstalled(Boolean(singMsg?.success && singMsg.obj?.installed));
+        const singRunning = Boolean(singMsg?.success && singMsg.obj?.running);
+        const xrayRunning = Boolean(serverMsg?.success && serverMsg.obj?.xray?.state === 'running');
+        const actualCore = singRunning ? 'sing-box' : xrayRunning ? 'xray' : 'none';
+        setRunningCore(actualCore);
+        return actualCore === allSetting.coreType;
+      } catch {
+        if (!cancelled) setRunningCore('none');
+        return false;
+      }
+    };
+
+    void refreshCoreStatus().then((matched) => {
+      if (cancelled || matched) return;
+      // Core restart happens on the server after settings are saved. Poll only
+      // while the selected core and the actually running core differ, so the
+      // status card updates immediately after the switch completes.
+      timer = setInterval(() => {
+        void refreshCoreStatus().then((done) => {
+          if (done && timer) {
+            clearInterval(timer);
+            timer = undefined;
+          }
+        });
+      }, 1000);
+    });
+
+    const onCoreSettingsSaved = () => {
+      void refreshCoreStatus();
+    };
+    window.addEventListener('xui-core-settings-saved', onCoreSettingsSaved);
+
+    return () => {
+      cancelled = true;
+      if (timer) clearInterval(timer);
+      window.removeEventListener('xui-core-settings-saved', onCoreSettingsSaved);
+    };
+  }, [allSetting.coreType]);
+
+  const installSingBox = async () => {
+    setSingBoxInstalling(true);
+    try {
+      const msg = (await HttpUtil.post('/panel/api/setting/singbox/install')) as ApiMsg;
+      if (!msg?.success) return;
+      setSingBoxInstalled(true);
+
+      // The radio choice is kept as a draft until the normal settings save.
+      // Once the binary is installed, finish that pending core switch here so
+      // the selected engine becomes the actually running engine immediately.
+      if (allSetting.coreType === 'sing-box' && saveSettings) {
+        await saveSettings();
+      }
+    } finally {
+      setSingBoxInstalling(false);
+    }
+  };
+
+  const uninstallSingBox = async () => {
+    const msg = (await HttpUtil.post('/panel/api/setting/singbox/uninstall')) as ApiMsg;
+    if (!msg?.success) return;
+    setSingBoxInstalled(false);
+    setRunningCore('none');
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -176,13 +275,14 @@ export default function GeneralTab({ allSetting, updateSetting }: GeneralTabProp
 
   return (
     <Tabs
-      defaultActiveKey="1"
+      activeKey={activeTab}
+      onChange={onTabChange}
       items={[
         {
           key: '1',
           label: catTabLabel(<SettingOutlined />, t('pages.settings.panelSettings'), isMobile),
           children: (
-            <>
+            <div>
               <SettingListItem
                 paddings="small"
                 title={t('pages.settings.panelListeningIP')}
@@ -291,23 +391,25 @@ export default function GeneralTab({ allSetting, updateSetting }: GeneralTabProp
                 />
               </SettingListItem>
 
-              <SettingListItem
-                paddings="small"
-                title={t('pages.settings.panelOutbound')}
-                description={t('pages.settings.panelOutboundDesc')}
-              >
-                <Select
-                  style={{ width: '100%' }}
-                  allowClear
-                  showSearch
-                  value={allSetting.panelOutbound || undefined}
-                  placeholder={t('pages.settings.panelOutboundPh')}
-                  options={outboundOptions}
-                  onChange={(v) =>
-                    updateSetting({ panelOutbound: (v as string | undefined) || '' })
-                  }
-                />
-              </SettingListItem>
+              {allSetting.coreType !== 'sing-box' && (
+                <SettingListItem
+                  paddings="small"
+                  title={t('pages.settings.panelOutbound')}
+                  description={t('pages.settings.panelOutboundDesc')}
+                >
+                  <Select
+                    style={{ width: '100%' }}
+                    allowClear
+                    showSearch
+                    value={allSetting.panelOutbound || undefined}
+                    placeholder={t('pages.settings.panelOutboundPh')}
+                    options={outboundOptions}
+                    onChange={(v) =>
+                      updateSetting({ panelOutbound: (v as string | undefined) || '' })
+                    }
+                  />
+                </SettingListItem>
+              )}
 
               <SettingListItem
                 paddings="small"
@@ -325,16 +427,18 @@ export default function GeneralTab({ allSetting, updateSetting }: GeneralTabProp
                 />
               </SettingListItem>
 
-              <SettingListItem
-                paddings="small"
-                title={t('pages.settings.restartXrayOnClientDisable')}
-                description={t('pages.settings.restartXrayOnClientDisableDesc')}
-              >
-                <Switch
-                  checked={allSetting.restartXrayOnClientDisable}
-                  onChange={(v) => updateSetting({ restartXrayOnClientDisable: v })}
-                />
-              </SettingListItem>
+              {allSetting.coreType !== 'sing-box' && (
+                <SettingListItem
+                  paddings="small"
+                  title={t('pages.settings.restartXrayOnClientDisable')}
+                  description={t('pages.settings.restartXrayOnClientDisableDesc')}
+                >
+                  <Switch
+                    checked={allSetting.restartXrayOnClientDisable}
+                    onChange={(v) => updateSetting({ restartXrayOnClientDisable: v })}
+                  />
+                </SettingListItem>
+              )}
 
               <SettingListItem paddings="small" title={t('pages.settings.language')}>
                 <Select
@@ -344,7 +448,114 @@ export default function GeneralTab({ allSetting, updateSetting }: GeneralTabProp
                   options={langOptions}
                 />
               </SettingListItem>
-            </>
+            </div>
+          ),
+        },
+        {
+          key: 'core',
+          label: catTabLabel(<SettingOutlined />, t('pages.settings.coreType'), isMobile),
+          children: (
+            <div>
+              <SettingListItem
+                paddings="small"
+                title={t('pages.settings.coreType')}
+                description={t('pages.settings.coreTypeDesc')}
+              >
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
+                  <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                    <Radio.Group
+                      value={allSetting.coreType || 'xray'}
+                      onChange={(e) =>
+                        updateSetting({ coreType: e.target.value as 'xray' | 'sing-box' })
+                      }
+                      optionType="button"
+                      buttonStyle="solid"
+                      size="large"
+                      style={{ display: 'flex', width: '100%' }}
+                    >
+                      <Radio.Button value="xray" style={{ flex: 1, textAlign: 'center' }}>
+                        <strong>Xray</strong>
+                      </Radio.Button>
+                      <Radio.Button value="sing-box" style={{ flex: 1, textAlign: 'center' }}>
+                        <strong>sing-box</strong>
+                      </Radio.Button>
+                    </Radio.Group>
+
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 12,
+                        padding: '10px 12px',
+                        borderRadius: 10,
+                        background: 'var(--ant-color-fill-quaternary)',
+                      }}
+                    >
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 600 }}>
+                          {allSetting.coreType === 'sing-box' ? 'sing-box' : 'Xray'}
+                        </div>
+                        <div style={{ fontSize: 12, opacity: 0.65 }}>
+                          {allSetting.coreType === 'sing-box'
+                            ? singBoxInstalled
+                              ? t('pages.settings.singBoxInstalled')
+                              : t('pages.settings.installSingBox')
+                            : t('pages.settings.coreTypeDesc')}
+                        </div>
+                        <div style={{ fontSize: 12, marginTop: 4 }}>
+                          Работает сейчас:{' '}
+                          <strong>
+                            {runningCore === 'sing-box'
+                              ? 'sing-box'
+                              : runningCore === 'xray'
+                                ? 'Xray'
+                                : 'нет'}
+                          </strong>
+                        </div>
+                      </div>
+                      {allSetting.coreType === 'sing-box' && (
+                        <Tag color={singBoxInstalled ? 'success' : 'warning'}>
+                          {singBoxInstalled ? 'Installed' : 'Not installed'}
+                        </Tag>
+                      )}
+                    </div>
+
+                    {allSetting.coreType === 'sing-box' && !singBoxInstalled && (
+                      <Button
+                        type="primary"
+                        block
+                        loading={singBoxInstalling}
+                        onClick={installSingBox}
+                      >
+                        {t('pages.settings.installSingBox')}
+                      </Button>
+                    )}
+
+                    {allSetting.coreType === 'sing-box' && singBoxInstalled && (
+                      <Button
+                        block
+                        danger
+                        onClick={uninstallSingBox}
+                        disabled={runningCore === 'sing-box'}
+                      >
+                        Удалить sing-box
+                      </Button>
+                    )}
+                    {allSetting.coreType === 'sing-box' &&
+                      singBoxInstalled &&
+                      runningCore === 'sing-box' && (
+                        <div style={{ fontSize: 12, opacity: 0.65 }}>
+                          Сначала переключите ядро на Xray и сохраните настройки.
+                        </div>
+                      )}
+                    <Button block icon={<SwapOutlined />} onClick={() => onOpenSwap?.()}>
+                      {t('pages.settings.swap.openFromCore')}
+                    </Button>
+                  </Space>
+                </div>
+              </SettingListItem>
+            </div>
           ),
         },
         {

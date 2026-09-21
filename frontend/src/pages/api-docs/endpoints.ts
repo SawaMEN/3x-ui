@@ -2716,6 +2716,59 @@ export const sections: readonly Section[] = [
   },
 
   {
+    id: 'telemt',
+    title: 'Telemt',
+    description: 'Manage the Telemt service, proxies, configuration, and active client IPs.',
+    endpoints: [
+      {
+        method: 'GET',
+        path: '/panel/api/telemt/status',
+        summary: 'Return Telemt installation, service, version, update, and MEKO status.',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/telemt/config',
+        summary: 'Return the current Telemt configuration.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/telemt/config',
+        summary: 'Save the Telemt configuration.',
+        body: '{ "enabled": true, "port": 8443, "secret": "...", "tls": true, "sni": "example.com" }',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/telemt/proxy',
+        summary: 'List configured Telemt proxy users and generated client links.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/telemt/proxy',
+        summary: 'Create a Telemt proxy user.',
+        body: '{ "name": "mobile", "host": "example.com" }',
+      },
+      {
+        method: 'DELETE',
+        path: '/panel/api/telemt/proxy/:name',
+        summary: 'Delete a Telemt proxy user by username.',
+        params: [{ name: 'name', in: 'path', type: 'string', desc: 'Telemt username.' }],
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/telemt/connections',
+        summary: 'Return active Telemt client IPs with cached geolocation and associated users.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/telemt/action',
+        summary:
+          'Perform a Telemt service action such as start, stop, restart, update, or MEKO toggle.',
+        body: '{ "action": "restart" }',
+      },
+    ],
+  },
+
+  {
     id: 'websocket',
     title: 'WebSocket',
     description:
@@ -2731,6 +2784,165 @@ export const sections: readonly Section[] = [
           '401': { description: 'No authenticated panel session cookie.' },
         },
         security: [{ cookieAuth: [] }],
+      },
+    ],
+  },
+  // Runtime routes are kept in sync with the panel router contract.
+  {
+    id: 'runtime-services',
+    title: 'Runtime services',
+    description:
+      'Administrative runtime endpoints for core status, version information, and VK TURN proxy management.',
+    endpoints: [
+      {
+        method: 'GET',
+        path: '/panel/api/inbounds/:id/vk-turn-proxy/export-all',
+        summary: 'Export all VK TURN proxy client links for an inbound.',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/inbounds/:id/vk-turn-proxy/export/:clientId',
+        summary: 'Export one VK TURN proxy client link for an inbound.',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/inbounds/:id/vk-turn-proxy/peer-options',
+        summary: 'List peer options used by VK TURN proxy clients.',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/server/coreConfigJson',
+        summary: 'Return the active core configuration as JSON.',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/server/vk-turn-proxy/status',
+        summary: 'Return VK TURN proxy runtime status.',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/server/vk-turn-proxy/versions',
+        summary: 'Return available VK TURN proxy versions.',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/setting/singbox/status',
+        summary: 'Return sing-box installation and runtime status.',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/setting/singbox/versions',
+        summary: 'Return available sing-box versions.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/inbounds/:id/vk-turn-proxy/clients/:clientId/enable',
+        summary: 'Enable or disable a VK TURN proxy client for an inbound.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/server/restartCoreService',
+        summary: 'Restart the active core service.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/server/stopCoreService',
+        summary: 'Stop the active core service.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/server/vk-turn-proxy/install/:version',
+        summary: 'Install a VK TURN proxy version.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/server/vk-turn-proxy/logs/:count',
+        summary: 'Return VK TURN proxy logs.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/server/vk-turn-proxy/restart',
+        summary: 'Restart the VK TURN proxy service.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/server/vk-turn-proxy/start',
+        summary: 'Start the VK TURN proxy service.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/server/vk-turn-proxy/stop',
+        summary: 'Stop the VK TURN proxy service.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/server/vk-turn-proxy/upload',
+        summary: 'Upload a VK TURN proxy package.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/setting/singbox/install',
+        summary: 'Install sing-box using the configured channel.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/setting/singbox/install/:version',
+        summary: 'Install a specific sing-box version.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/setting/singbox/uninstall',
+        summary: 'Uninstall sing-box.',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/setting/singbox/config',
+        summary: 'Return the editable sing-box configuration.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/setting/singbox/config',
+        summary: 'Save the editable sing-box configuration.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/setting/singbox/config/reset',
+        summary: 'Reset the editable sing-box configuration to generated defaults.',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/setting/swap/status',
+        summary: 'Return current swap and ZRAM status.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/setting/swap/create',
+        summary: 'Create the managed swap file.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/setting/swap/delete',
+        summary: 'Delete the managed swap file.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/setting/swap/swappiness',
+        summary: 'Set vm.swappiness.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/setting/swap/zram/create',
+        summary: 'Create managed ZRAM swap.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/setting/swap/zram/delete',
+        summary: 'Delete managed ZRAM swap.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/setting/swap/zram/install',
+        summary: 'Install or enable the supported ZRAM integration.',
       },
     ],
   },

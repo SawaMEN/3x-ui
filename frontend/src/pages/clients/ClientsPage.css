@@ -54,7 +54,7 @@
   margin: 0 0 12px;
   padding: 6px 8px;
   background: var(--ant-color-fill-quaternary);
-  border-radius: 8px;
+  border-radius: var(--xui-radius-md, 8px);
 }
 
 .filter-chips .ant-tag {
@@ -64,7 +64,7 @@
 .summary-stat {
   margin: -4px -8px;
   padding: 4px 8px;
-  border-radius: 8px;
+  border-radius: var(--xui-radius-md, 8px);
   cursor: pointer;
   transition: background-color 120ms ease;
 }
@@ -117,7 +117,7 @@
   margin-bottom: 12px;
   padding: 10px;
   border: 1px solid var(--ant-color-border-secondary);
-  border-radius: 6px;
+  border-radius: var(--xui-radius-sm, 6px);
   background: var(--ant-color-fill-quaternary);
 }
 
@@ -251,12 +251,12 @@
   background: color-mix(in srgb, var(--ant-color-primary) 12%, transparent);
   color: var(--ant-color-primary);
   padding: 1px 8px;
-  border-radius: 10px;
+  border-radius: var(--xui-radius-md, 8px);
 }
 
 .client-card {
   border: 1px solid var(--ant-color-border-secondary);
-  border-radius: 10px;
+  border-radius: var(--xui-radius-md, 8px);
   padding: 10px 12px;
   background: var(--ant-color-fill-quaternary);
 }

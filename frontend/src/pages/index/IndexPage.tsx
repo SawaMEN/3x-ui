@@ -19,6 +19,12 @@ import {
 } from '@/models/status';
 import { useTheme } from '@/hooks/useTheme';
 import { useStatusQuery } from '@/api/queries/useStatusQuery';
+import { useAllSettings } from '@/api/queries/useAllSettings';
+import { useQueryClient } from '@tanstack/react-query';
+import { useWebSocket } from '@/hooks/useWebSocket';
+import { Status } from '@/models/status';
+import { StatusSchema } from '@/schemas/status';
+import { keys } from '@/api/queryKeys';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import AppSidebar from '@/layouts/AppSidebar';
 import { LazyMount } from '@/components/utility';
@@ -27,6 +33,7 @@ import OverviewActionBar from './OverviewActionBar';
 import VitalTile from './VitalTile';
 import ThroughputCard from './ThroughputCard';
 import ConnectionsCard from './ConnectionsCard';
+import TelemtConnectionsCard from './TelemtConnectionsCard';
 import SystemStrip from './SystemStrip';
 import { mean, peak, useOverviewHistory } from './useOverviewHistory';
 import type { PanelUpdateInfo } from './PanelUpdateModal';
@@ -43,8 +50,17 @@ import './IndexPage.css';
 
 export default function IndexPage() {
   const { t } = useTranslation();
-  const { isDark, isUltra, antdThemeConfig } = useTheme();
+  const { isDark, isUltra, antdThemeConfig, lowPower } = useTheme();
   const { status, fetched, fetchError, refresh } = useStatusQuery();
+  const { allSetting } = useAllSettings();
+  const queryClient = useQueryClient();
+  useWebSocket({
+    status: (payload) => {
+      const parsed = StatusSchema.safeParse(payload);
+      if (!parsed.success) return;
+      queryClient.setQueryData(keys.server.status(), new Status(parsed.data));
+    },
+  });
   const { isMobile } = useMediaQuery();
   const [messageApi, messageContextHolder] = message.useMessage();
   useEffect(() => {
@@ -52,6 +68,10 @@ export default function IndexPage() {
   }, [messageApi]);
 
   const [accessLogEnable, setAccessLogEnable] = useState(false);
+  const [coreVersion, setCoreVersion] = useState('');
+  const [coreRunning, setCoreRunning] = useState(false);
+  const [coreError, setCoreError] = useState('');
+  const [coreColor, setCoreColor] = useState('');
   const [devChannelEnable, setDevChannelEnable] = useState(false);
   const [panelUpdateInfo, setPanelUpdateInfo] = useState<PanelUpdateInfo>({
     currentVersion: '',
@@ -75,8 +95,39 @@ export default function IndexPage() {
   const [loading, setLoading] = useState(false);
   const [loadingTip, setLoadingTip] = useState(t('loading'));
 
-  const history = useOverviewHistory(status, fetched && !fetchError);
+  const history = useOverviewHistory(status, fetched && !fetchError, lowPower);
 
+  const coreType = allSetting.coreType === 'sing-box' ? 'sing-box' : 'xray';
+  const displayCoreRunning =
+    coreType === 'sing-box' ? coreRunning : status.xray.state === 'running';
+  const displayCoreVersion = coreType === 'sing-box' ? coreVersion : status.xray.version;
+  const displayCoreError = coreType === 'sing-box' ? coreError : status.xray.errorMsg || '';
+  const displayCoreColor = coreType === 'sing-box' ? coreColor : status.xray.color;
+
+  useEffect(() => {
+    if (coreType !== 'sing-box') return;
+
+    let cancelled = false;
+    const syncSingBoxStatus = async () => {
+      const msg = await HttpUtil.get<{
+        running?: boolean;
+        version?: string;
+        error?: string;
+      }>('/panel/api/setting/singbox/status');
+      if (cancelled) return;
+      setCoreRunning(!!msg?.success && !!msg.obj?.running);
+      setCoreVersion(msg?.success && msg.obj?.version ? msg.obj.version : '');
+      setCoreError(msg?.success && msg.obj?.error ? msg.obj.error : '');
+      setCoreColor(msg?.success && msg.obj?.running ? 'green' : 'red');
+    };
+
+    void syncSingBoxStatus();
+    const timer = window.setInterval(() => void syncSingBoxStatus(), 10000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [coreType]);
   useEffect(() => {
     HttpUtil.post<{ accessLogEnable?: boolean; devChannelEnable?: boolean }>(
       '/panel/api/setting/defaultSettings',
@@ -102,12 +153,12 @@ export default function IndexPage() {
   }, []);
 
   const stopXray = useCallback(async () => {
-    await HttpUtil.post('/panel/api/server/stopXrayService');
+    await HttpUtil.post('/panel/api/server/stopCoreService');
     await refresh();
   }, [refresh]);
 
   const restartXray = useCallback(async () => {
-    await HttpUtil.post('/panel/api/server/restartXrayService');
+    await HttpUtil.post('/panel/api/server/restartCoreService');
     await refresh();
   }, [refresh]);
 
@@ -122,7 +173,7 @@ export default function IndexPage() {
   async function openConfig() {
     setLoading(true);
     try {
-      const msg = await HttpUtil.get('/panel/api/server/getConfigJson');
+      const msg = await HttpUtil.get('/panel/api/server/coreConfigJson');
       if (!msg?.success) return;
       setConfigText(JSON.stringify(msg.obj, null, 2));
       setConfigTextOpen(true);
@@ -195,6 +246,11 @@ export default function IndexPage() {
                 <div className="ov-page">
                   <OverviewActionBar
                     status={status}
+                    coreType={coreType}
+                    coreVersion={displayCoreVersion}
+                    coreRunning={displayCoreRunning}
+                    coreError={displayCoreError}
+                    coreColor={displayCoreColor}
                     isMobile={isMobile}
                     accessLogEnable={accessLogEnable}
                     panelVersion={displayVersion}
@@ -211,6 +267,8 @@ export default function IndexPage() {
                     onOpenXrayMetrics={() => setXrayMetricsOpen(true)}
                     onOpenPanelUpdate={() => setPanelUpdateOpen(true)}
                     onOpenVersionSwitch={() => setVersionOpen(true)}
+                    lowPower={lowPower}
+                    onRefreshHistory={history.refreshHistory}
                   />
 
                   {health && (
@@ -286,6 +344,7 @@ export default function IndexPage() {
                     />
                   </div>
 
+                  <TelemtConnectionsCard />
                   <SystemStrip
                     status={status}
                     showIp={showIp}

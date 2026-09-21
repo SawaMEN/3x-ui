@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { HttpUtil, TimeFormatter } from '@/utils';
 import type { Status } from '@/models/status';
@@ -22,6 +22,7 @@ export type OverviewSeriesKey = (typeof SERIES_KEYS)[number];
 export interface OverviewHistory {
   series: Record<OverviewSeriesKey, number[]>;
   labels: string[];
+  refreshHistory: () => void;
 }
 
 interface HistoryPoint {
@@ -75,13 +76,17 @@ export function peak(values: number[]): number {
   return max;
 }
 
-/* the seed bucket must be in the backend's allowedHistoryBuckets whitelist;
-   2s is the smallest and matches the status poll cadence */
-export function useOverviewHistory(status: Status, hasData: boolean): OverviewHistory {
+/* The history endpoint accepts only backend-whitelisted bucket values. */
+export function useOverviewHistory(
+  status: Status,
+  hasData: boolean,
+  lowPower: boolean,
+): OverviewHistory {
   const [trend, setTrend] = useState<HistoryWindow>(emptyWindow);
+  const refreshGeneration = useRef(0);
 
-  useEffect(() => {
-    let cancelled = false;
+  const refreshHistory = useCallback(() => {
+    const generation = ++refreshGeneration.current;
 
     const seed = async () => {
       const responses = new Map<OverviewSeriesKey, HistoryPoint[]>();
@@ -95,7 +100,7 @@ export function useOverviewHistory(status: Status, hasData: boolean): OverviewHi
           if (msg?.success && Array.isArray(msg.obj)) responses.set(key, msg.obj);
         }),
       );
-      if (cancelled || responses.size === 0) return;
+      if (generation !== refreshGeneration.current || responses.size === 0) return;
 
       let axis: HistoryPoint[] = [];
       for (const points of responses.values()) {
@@ -108,11 +113,14 @@ export function useOverviewHistory(status: Status, hasData: boolean): OverviewHi
       const seedSeries = emptySeries();
       for (const key of SERIES_KEYS) {
         const byTs = new Map<number, number>();
-        for (const p of responses.get(key) ?? []) byTs.set(Number(p.t) || 0, Number(p.v) || 0);
+        for (const p of responses.get(key) ?? []) {
+          byTs.set(Number(p.t) || 0, Number(p.v) || 0);
+        }
         seedSeries[key] = seedTimes.map((ts) => byTs.get(ts) ?? 0);
       }
 
       setTrend((prev) => {
+        if (generation !== refreshGeneration.current) return prev;
         const merged = emptyWindow();
         merged.times = tailWindow(seedTimes.concat(prev.times));
         for (const key of SERIES_KEYS) {
@@ -122,29 +130,45 @@ export function useOverviewHistory(status: Status, hasData: boolean): OverviewHi
       });
     };
 
-    seed().catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
+    void seed().catch(() => undefined);
   }, []);
 
-  // Each polled status is appended during render; an effect would show the
-  // chart one sample behind the numbers beside it.
-  const [sampledStatus, setSampledStatus] = useState<Status | null>(null);
-  if (hasData && status !== sampledStatus) {
-    setSampledStatus(status);
+  useEffect(() => {
+    refreshHistory();
+  }, [refreshHistory, lowPower]);
+
+  const lastSampleRef = useRef<{ status: Status | null; at: number }>({
+    status: null,
+    at: 0,
+  });
+
+  useEffect(() => {
+    if (lowPower || !hasData || lastSampleRef.current.status === status) return;
+
+    const now = Date.now();
+    // The status poll can occasionally fire twice in the same task. Keep one
+    // chart sample per refreshed status object so the history window stays
+    // stable and does not grow from duplicate renders.
+    if (now - lastSampleRef.current.at < 100) return;
+
+    lastSampleRef.current = { status, at: now };
+    // Build the next window once. Keeping the state update as a single
+    // immutable operation avoids eight separate array updates per status tick.
+    const point = sampleOf(status);
     setTrend((prev) => {
-      const point = sampleOf(status);
       const next = emptyWindow();
-      next.times = tailWindow(prev.times.concat(Math.floor(Date.now() / 1000)));
+      next.times = tailWindow(prev.times.concat(Math.floor(now / 1000)));
       for (const key of SERIES_KEYS) {
         next.series[key] = tailWindow(prev.series[key].concat(point[key]));
       }
       return next;
     });
-  }
+  }, [status, hasData, lowPower]);
 
   const labels = useMemo(() => trend.times.map(TimeFormatter.formatClock), [trend.times]);
 
-  return useMemo(() => ({ series: trend.series, labels }), [trend.series, labels]);
+  return useMemo(
+    () => ({ series: trend.series, labels, refreshHistory }),
+    [trend.series, labels, refreshHistory],
+  );
 }

@@ -35,12 +35,30 @@ export default function VersionModal({ open, status, onClose, onBusy }: VersionM
   const [modal, modalContextHolder] = Modal.useModal();
   const [activeKey, setActiveKey] = useState<string | string[]>('1');
   const [versions, setVersions] = useState<string[]>([]);
+  const [coreType, setCoreType] = useState<'xray' | 'sing-box'>('xray');
+  const [singBoxVersion, setSingBoxVersion] = useState('');
   const [loading, setLoading] = useState(false);
 
   const fetchVersions = useCallback(async () => {
     try {
-      const msg = await HttpUtil.get<string[]>('/panel/api/server/getXrayVersion');
-      if (msg?.success) setVersions(msg.obj || []);
+      const settingsMsg = await HttpUtil.post<{ coreType?: 'xray' | 'sing-box' }>(
+        '/panel/api/setting/all',
+      );
+      const selectedCore =
+        settingsMsg?.success && settingsMsg.obj?.coreType === 'sing-box' ? 'sing-box' : 'xray';
+      setCoreType(selectedCore);
+
+      if (selectedCore === 'sing-box') {
+        const [versionMsg, statusMsg] = await Promise.all([
+          HttpUtil.get<string[]>('/panel/api/setting/singbox/versions'),
+          HttpUtil.get<{ version?: string }>('/panel/api/setting/singbox/status'),
+        ]);
+        if (versionMsg?.success) setVersions(versionMsg.obj || []);
+        if (statusMsg?.success) setSingBoxVersion(statusMsg.obj?.version || '');
+      } else {
+        const msg = await HttpUtil.get<string[]>('/panel/api/server/getXrayVersion');
+        if (msg?.success) setVersions(msg.obj || []);
+      }
     } finally {
       setLoading(false);
     }
@@ -56,17 +74,24 @@ export default function VersionModal({ open, status, onClose, onBusy }: VersionM
     if (open) void fetchVersions();
   }, [open, fetchVersions]);
 
-  function switchXrayVersion(version: string) {
+  function switchCoreVersion(version: string) {
+    const isSingBox = coreType === 'sing-box';
     modal.confirm({
-      title: t('pages.index.xraySwitchVersionDialog'),
-      content: t('pages.index.xraySwitchVersionDialogDesc').replace('#version#', version),
+      title: isSingBox ? 'Переключить версию sing-box?' : t('pages.index.xraySwitchVersionDialog'),
+      content: isSingBox
+        ? `Установить sing-box ${version} и заменить текущую версию?`
+        : t('pages.index.xraySwitchVersionDialogDesc').replace('#version#', version),
       okText: t('confirm'),
       cancelText: t('cancel'),
       onOk: async () => {
         onClose();
         onBusy({ busy: true, tip: t('pages.index.dontRefresh') });
         try {
-          await HttpUtil.post(`/panel/api/server/installXray/${version}`);
+          if (isSingBox) {
+            await HttpUtil.post(`/panel/api/setting/singbox/install/${version}`);
+          } else {
+            await HttpUtil.post(`/panel/api/server/installXray/${version}`);
+          }
         } finally {
           onBusy({ busy: false });
         }
@@ -101,7 +126,12 @@ export default function VersionModal({ open, status, onClose, onBusy }: VersionM
   const activeKeyStr = Array.isArray(activeKey) ? activeKey[0] : activeKey;
 
   return (
-    <Modal open={open} title={t('pages.index.xrayUpdates')} footer={null} onCancel={onClose}>
+    <Modal
+      open={open}
+      title={coreType === 'sing-box' ? 'Обновления sing-box' : t('pages.index.xrayUpdates')}
+      footer={null}
+      onCancel={onClose}
+    >
       {modalContextHolder}
       <Spin spinning={loading}>
         <Collapse
@@ -111,13 +141,17 @@ export default function VersionModal({ open, status, onClose, onBusy }: VersionM
           items={[
             {
               key: '1',
-              label: 'Xray',
+              label: coreType === 'sing-box' ? 'sing-box' : 'Xray',
               children: (
                 <>
                   <Alert
                     type="warning"
                     className="mb-12"
-                    title={t('pages.index.xraySwitchClickDesk')}
+                    title={
+                      coreType === 'sing-box'
+                        ? 'Выберите версию sing-box'
+                        : t('pages.index.xraySwitchClickDesk')
+                    }
                     showIcon
                   />
                   <div className="version-list">
@@ -125,8 +159,12 @@ export default function VersionModal({ open, status, onClose, onBusy }: VersionM
                       <div key={version} className="version-list-item">
                         <Tag color={index % 2 === 0 ? 'purple' : 'green'}>{version}</Tag>
                         <Radio
-                          checked={version === `v${status?.xray?.version}`}
-                          onClick={() => switchXrayVersion(version)}
+                          checked={
+                            coreType === 'sing-box'
+                              ? singBoxVersion.includes(version.replace(/^v/, ''))
+                              : version === `v${status?.xray?.version}`
+                          }
+                          onClick={() => switchCoreVersion(version)}
                         />
                       </div>
                     ))}

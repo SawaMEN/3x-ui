@@ -42,7 +42,6 @@ export default function ConnectionsCard({
           <span className="ov-tile-unit">{t('pages.index.openSockets')}</span>
         </div>
       </div>
-
       <div className="ov-conn-legend">
         <div className="ov-legend-label">
           <span className="ov-swatch" style={{ background: accent }} />
@@ -55,7 +54,6 @@ export default function ConnectionsCard({
           <span className="ov-legend-num">{status.udpCount.toLocaleString()}</span>
         </div>
       </div>
-
       <div className="ov-wide-chart">
         <Sparkline
           data={tcp}
@@ -74,7 +72,7 @@ export default function ConnectionsCard({
           yFormatter={(v) => Math.round(v).toLocaleString()}
           referenceLines={referenceLines}
         />
-      </div>
+      </div>{' '}
     </Card>
   );
 }

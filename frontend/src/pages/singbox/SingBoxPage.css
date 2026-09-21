@@ -1,0 +1,168 @@
+.singbox-page .content-area {
+  min-height: 100vh;
+}
+
+.singbox-page .singbox-section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.singbox-page .singbox-section-title {
+  color: var(--ant-color-text);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.singbox-page .singbox-section-description {
+  max-width: 780px;
+  margin-top: 4px;
+  color: var(--ant-color-text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.singbox-page .singbox-field-label {
+  margin-bottom: 6px;
+  color: var(--ant-color-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.singbox-page .singbox-list-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.singbox-page .singbox-item-card {
+  border-color: var(--ant-color-border-secondary);
+}
+
+.singbox-page .singbox-item-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.singbox-page .singbox-item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--ant-color-border-secondary);
+}
+
+.singbox-page .singbox-inline-extra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.singbox-page .singbox-json-action {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.singbox-page .singbox-list-card > .ant-card-body {
+  padding-top: 14px;
+}
+
+.singbox-page .ant-alert {
+  border-radius: 10px;
+}
+
+.singbox-page .ant-card {
+  border-radius: 12px;
+}
+
+.singbox-page .ant-card-head {
+  min-height: 48px;
+}
+
+.singbox-page .ant-card-head-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.singbox-page .ant-tabs-nav {
+  margin-bottom: 12px;
+}
+
+.singbox-page .ant-btn + .ant-btn {
+  margin-inline-start: 0;
+}
+
+.singbox-editor-wrap {
+  min-height: 62vh;
+}
+
+.singbox-editor {
+  width: 100%;
+  min-height: 62vh;
+  resize: vertical;
+  padding: 16px;
+  border: 1px solid var(--ant-color-border);
+  border-radius: 10px;
+  background: var(--ant-color-bg-container);
+  color: var(--ant-color-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  tab-size: 2;
+  outline: none;
+}
+
+.singbox-editor:focus {
+  border-color: var(--ant-color-primary);
+  box-shadow: 0 0 0 2px var(--ant-color-primary-bg);
+}
+
+.singbox-schema-input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--ant-color-border);
+  border-radius: 8px;
+  background: var(--ant-color-bg-container);
+  color: var(--ant-color-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 14px;
+  outline: none;
+}
+
+.singbox-schema-input:focus {
+  border-color: var(--ant-color-primary);
+  box-shadow: 0 0 0 2px var(--ant-color-primary-bg);
+}
+
+@media (max-width: 640px) {
+  .singbox-page .singbox-section-header {
+    flex-direction: column;
+  }
+
+  .singbox-page .singbox-list-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .singbox-page .singbox-list-toolbar > .ant-btn {
+    width: 100%;
+  }
+
+  .singbox-page .singbox-item-actions {
+    justify-content: flex-start;
+  }
+}

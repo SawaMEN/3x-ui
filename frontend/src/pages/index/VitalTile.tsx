@@ -42,19 +42,15 @@ export default function VitalTile({
         <span className="ov-tile-icon">{icon}</span>
         <span className="ov-kicker">{label}</span>
       </div>
-
       <div className="ov-tile-value">
         <span className="ov-tile-number">{percent.toFixed(1)}</span>
         <span className="ov-tile-unit">%</span>
       </div>
-
       <div className="ov-tile-detail">{detail}</div>
-
       <div className="ov-tile-foot">
         <span>{footLeft}</span>
         <span>{footRight}</span>
       </div>
-
       <div className="ov-tile-chart">
         <Sparkline
           data={data}
@@ -69,7 +65,7 @@ export default function VitalTile({
           yFormatter={(v) => `${v.toFixed(0)}%`}
           name1={label}
         />
-      </div>
+      </div>{' '}
     </Card>
   );
 }

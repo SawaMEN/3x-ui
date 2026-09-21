@@ -68,6 +68,7 @@ import {
   TunnelFields,
   VlessFields,
   WireguardFields,
+  VkTurnProxyFields,
 } from './protocols';
 import {
   GrpcForm,
@@ -809,6 +810,8 @@ export default function InboundFormModal({
       {protocol === Protocols.MIXED && <MixedFields mixedUdpOn={mixedUdpOn} />}
 
       {protocol === Protocols.MTPROTO && <MtprotoFields />}
+
+      {protocol === Protocols.VK_TURN_PROXY && <VkTurnProxyFields />}
 
       {protocol === Protocols.SHADOWSOCKS && <ShadowsocksFields isSSWith2022={isSSWith2022} />}
 

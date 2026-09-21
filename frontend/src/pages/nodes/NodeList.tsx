@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Badge, Button, Card, Dropdown, Modal, Space, Switch, Table, Tag, Tooltip } from 'antd';
 import type { BadgeProps } from 'antd';
@@ -163,7 +163,7 @@ function useRelativeTime() {
   );
 }
 
-export default function NodeList({
+function NodeList({
   nodes,
   loading = false,
   isMobile = false,
@@ -544,7 +544,8 @@ export default function NodeList({
         columns={columns}
         pagination={false}
         loading={loading}
-        scroll={{ x: 'max-content' }}
+        virtual={dataSource.length > 50}
+        scroll={{ x: 'max-content', y: 600 }}
         size="middle"
         rowKey="key"
         rowSelection={
@@ -857,3 +858,5 @@ export default function NodeList({
     </Card>
   );
 }
+
+export default memo(NodeList);

@@ -10,7 +10,6 @@ import {
   CloudDownloadOutlined,
   CloudServerOutlined,
   ControlOutlined,
-  FileTextOutlined,
   PoweroffOutlined,
   ReloadOutlined,
 } from '@ant-design/icons';
@@ -20,6 +19,11 @@ import type { Status } from '@/models/status';
 
 interface OverviewActionBarProps {
   status: Status;
+  coreType: 'xray' | 'sing-box';
+  coreVersion: string;
+  coreRunning: boolean;
+  coreError: string;
+  coreColor: string;
   isMobile: boolean;
   accessLogEnable: boolean;
   panelVersion: string;
@@ -36,6 +40,8 @@ interface OverviewActionBarProps {
   onOpenXrayMetrics: () => void;
   onOpenPanelUpdate: () => void;
   onOpenVersionSwitch: () => void;
+  lowPower: boolean;
+  onRefreshHistory: () => void;
 }
 
 interface BarAction {
@@ -54,6 +60,11 @@ const XRAY_STATE_KEYS: Record<string, string> = {
 
 export default function OverviewActionBar({
   status,
+  coreType,
+  coreVersion,
+  coreRunning,
+  coreError,
+  coreColor,
   isMobile,
   accessLogEnable,
   panelVersion,
@@ -70,10 +81,23 @@ export default function OverviewActionBar({
   onOpenXrayMetrics,
   onOpenPanelUpdate,
   onOpenVersionSwitch,
+  lowPower,
+  onRefreshHistory,
 }: OverviewActionBarProps) {
   const { t } = useTranslation();
-  const stateText = t(XRAY_STATE_KEYS[status.xray.state] ?? 'pages.index.xrayStatusUnknown');
-  const hasVersion = !!status.xray.version && status.xray.version !== 'Unknown';
+  const effectiveState =
+    coreType === 'sing-box' ? (coreRunning ? 'running' : 'stop') : status.xray.state;
+  const stateText =
+    coreType === 'sing-box'
+      ? coreRunning
+        ? 'Работает'
+        : coreError
+          ? 'Ошибка'
+          : 'Остановлен'
+      : t(XRAY_STATE_KEYS[status.xray.state] ?? 'pages.index.xrayStatusUnknown');
+  const coreName = coreType === 'sing-box' ? 'sing-box' : 'Xray';
+  const displayedVersion = coreType === 'sing-box' ? coreVersion : status.xray.version;
+  const hasVersion = !!displayedVersion && displayedVersion !== 'Unknown';
   const size = isMobile ? ('small' as const) : ('middle' as const);
 
   const actionGroups: BarAction[][] = [
@@ -81,24 +105,29 @@ export default function OverviewActionBar({
       {
         key: 'restart',
         icon: <ReloadOutlined />,
-        text: t('pages.index.restartXray'),
+        text: coreType === 'sing-box' ? 'Перезапустить sing-box' : t('pages.index.restartXray'),
         onClick: onRestartXray,
         primary: true,
       },
       {
         key: 'stop',
         icon: <PoweroffOutlined />,
-        text: t('pages.index.stopXray'),
+        text: coreType === 'sing-box' ? 'Остановить sing-box' : t('pages.index.stopXray'),
         onClick: onStopXray,
       },
     ],
     [
-      { key: 'logs', icon: <BarsOutlined />, text: t('pages.index.logs'), onClick: onOpenLogs },
-      ...(accessLogEnable
+      {
+        key: 'logs',
+        icon: <BarsOutlined />,
+        text: t('pages.index.logs'),
+        onClick: coreType === 'sing-box' ? onOpenXrayLogs : onOpenLogs,
+      },
+      ...(coreType === 'xray' && accessLogEnable
         ? [
             {
               key: 'accessLogs',
-              icon: <FileTextOutlined />,
+              icon: <BarsOutlined />,
               text: t('pages.index.accessLogs'),
               onClick: onOpenXrayLogs,
             },
@@ -134,23 +163,37 @@ export default function OverviewActionBar({
         text: t('pages.index.systemHistoryTitle'),
         onClick: onOpenSystemHistory,
       },
-      {
-        key: 'metrics',
-        icon: <ArrowUpOutlined />,
-        text: t('pages.index.xrayMetricsTitle'),
-        onClick: onOpenXrayMetrics,
-      },
+      ...(coreType === 'xray'
+        ? [
+            {
+              key: 'metrics',
+              icon: <ArrowUpOutlined />,
+              text: t('pages.index.xrayMetricsTitle'),
+              onClick: onOpenXrayMetrics,
+            },
+          ]
+        : []),
+      ...(lowPower
+        ? [
+            {
+              key: 'refreshHistory',
+              icon: <ReloadOutlined />,
+              text: 'Обновить графики',
+              onClick: onRefreshHistory,
+            },
+          ]
+        : []),
     ],
   ];
 
   const statePill = (
-    <span className="ov-state" data-state={status.xray.state}>
-      <span className="ov-state-dot" style={{ color: status.xray.color }} />
-      <span>{`${t('pages.index.xrayStatus')} · ${stateText}`}</span>
+    <span className="ov-state" data-state={effectiveState}>
+      <span className="ov-state-dot" style={{ color: coreColor || status.xray.color }} />
+      <span>{`${coreName} · ${stateText}`}</span>
       {hasVersion && (
         <Tooltip title={t('pages.index.xraySwitch')}>
           <button type="button" className="ov-state-version" onClick={onOpenVersionSwitch}>
-            {`v${status.xray.version}`}
+            {displayedVersion}
           </button>
         </Tooltip>
       )}
@@ -159,16 +202,14 @@ export default function OverviewActionBar({
 
   return (
     <div className="ov-bar">
-      {status.xray.errorMsg ? (
-        <Tooltip title={<span className="ov-error-detail">{status.xray.errorMsg}</span>}>
-          {statePill}
-        </Tooltip>
+      {coreError ? (
+        <Tooltip title={<span className="ov-error-detail">{coreError}</span>}>{statePill}</Tooltip>
       ) : (
         statePill
       )}
 
-      {status.xray.state === 'running' && status.xray.errorMsg ? (
-        <Tooltip title={<span className="ov-error-detail">{status.xray.errorMsg}</span>}>
+      {effectiveState === 'running' && coreError ? (
+        <Tooltip title={<span className="ov-error-detail">{coreError}</span>}>
           <Tag color="error">{t('pages.index.xrayStatusError')}</Tag>
         </Tooltip>
       ) : null}

@@ -722,3 +722,126 @@ a.sub-row-title:hover {
     display: none;
   }
 }
+
+/* Cyberpunk identity: public subscriptions get the same neon atmosphere as
+   the panel and login, while preserving the subscription card's glass layer. */
+body.theme-cyberpunk .subscription-page {
+  --sub-grad-from: #00eeff;
+  --sub-grad-to: #ff2bd6;
+  --sub-ink-from: #7df8ff;
+  --sub-ink-to: #ff78e7;
+  --sub-accent: #00eeff;
+  --bg-page:
+    radial-gradient(ellipse 120% 95% at 8% -8%, rgba(0, 238, 255, 0.13) 0%, transparent 42%),
+    radial-gradient(ellipse 110% 90% at 94% 8%, rgba(255, 43, 214, 0.12) 0%, transparent 40%),
+    radial-gradient(ellipse 100% 80% at 50% 110%, rgba(212, 160, 23, 0.08) 0%, transparent 44%),
+    #05060b;
+  --sub-card-bg: rgba(8, 11, 19, 0.68);
+  --sub-card-border: rgba(0, 238, 255, 0.14);
+  --sub-card-shadow:
+    0 0 0 1px rgba(0, 238, 255, 0.04), 0 24px 64px rgba(0, 0, 0, 0.52),
+    0 0 34px rgba(0, 238, 255, 0.07);
+  --sub-card-sheen: linear-gradient(
+    135deg,
+    rgba(0, 238, 255, 0.34),
+    rgba(255, 255, 255, 0) 34%,
+    rgba(255, 43, 214, 0.22) 68%,
+    rgba(212, 160, 23, 0.18) 100%
+  );
+  --sub-blob-1: rgba(0, 238, 255, 0.3);
+  --sub-blob-2: rgba(255, 43, 214, 0.24);
+  --sub-grid: rgba(0, 238, 255, 0.04);
+  --sub-hairline: linear-gradient(90deg, rgba(0, 238, 255, 0.45), rgba(255, 43, 214, 0.4));
+  --sub-tile-bg: rgba(0, 238, 255, 0.045);
+  --sub-tile-border: rgba(0, 238, 255, 0.12);
+  --sub-row-bg: rgba(8, 15, 27, 0.68);
+  --sub-row-border: rgba(0, 238, 255, 0.1);
+  --sub-row-bg-hover: rgba(0, 238, 255, 0.08);
+  --sub-row-border-hover: rgba(255, 43, 214, 0.3);
+  --sub-row-glow: rgba(0, 238, 255, 0.2);
+  --sub-glass-bg: rgba(7, 11, 20, 0.5);
+}
+
+body.theme-cyberpunk .subscription-page .sub-aurora::before,
+body.theme-cyberpunk .subscription-page .sub-aurora::after {
+  filter: blur(96px) saturate(130%);
+}
+
+body.theme-cyberpunk .subscription-page::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(var(--sub-grid) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 43, 214, 0.028) 1px, transparent 1px),
+    linear-gradient(
+      to bottom,
+      transparent 0%,
+      transparent 48%,
+      rgba(0, 238, 255, 0.022) 49%,
+      rgba(0, 238, 255, 0.065) 50%,
+      rgba(0, 238, 255, 0.022) 51%,
+      transparent 52%,
+      transparent 100%
+    );
+  background-size:
+    48px 48px,
+    48px 48px,
+    100% 180px;
+  background-position:
+    center,
+    center,
+    0 -180px;
+  opacity: 0.65;
+  animation: sub-cyber-scan 18s linear infinite;
+}
+
+body.theme-cyberpunk .subscription-page .sub-card {
+  border-color: rgba(0, 238, 255, 0.15);
+}
+
+body.theme-cyberpunk .subscription-page .sub-brand-mark {
+  background: linear-gradient(135deg, #00eeff, #7d7bff 46%, #ff2bd6);
+  box-shadow:
+    0 0 18px rgba(0, 238, 255, 0.18),
+    0 10px 24px -12px rgba(255, 43, 214, 0.34);
+}
+
+body.theme-cyberpunk .subscription-page .sub-tabs.ant-tabs .ant-tabs-ink-bar {
+  background: linear-gradient(90deg, #00eeff, #ff2bd6) !important;
+  box-shadow: 0 0 12px rgba(0, 238, 255, 0.24);
+}
+
+body.theme-cyberpunk .subscription-page .toolbar-btn {
+  border-color: rgba(0, 238, 255, 0.16);
+  color: #00eeff;
+  background: rgba(7, 11, 20, 0.5);
+}
+
+body.theme-cyberpunk .subscription-page .toolbar-btn:hover {
+  border-color: rgba(255, 43, 214, 0.34);
+  color: #ff2bd6;
+}
+
+@keyframes sub-cyber-scan {
+  from {
+    background-position:
+      center,
+      center,
+      0 -180px;
+  }
+  to {
+    background-position:
+      center,
+      center,
+      0 180px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.theme-cyberpunk .subscription-page::after {
+    animation: none;
+  }
+}

@@ -78,7 +78,6 @@ export default function ThroughputCard({
           referenceLines={referenceLines}
         />
       </div>
-
       <div className="ov-wide-foot">
         <div>
           <div className="ov-kicker">{t('pages.index.sent')}</div>

@@ -15,6 +15,14 @@ import {
   Spin,
   message,
 } from 'antd';
+import {
+  CheckOutlined,
+  MoonOutlined,
+  SunOutlined,
+  BgColorsOutlined,
+  CloudOutlined,
+  ThunderboltOutlined,
+} from '@ant-design/icons';
 
 import { HttpUtil, PromiseUtil } from '@/utils';
 import { setMessageInstance } from '@/utils/messageBus';
@@ -31,6 +39,7 @@ import DiscordTab from './DiscordTab';
 import SubscriptionGeneralTab from './SubscriptionGeneralTab';
 import SubscriptionFormatsTab from './SubscriptionFormatsTab';
 import SubscriptionBalancersTab from './SubscriptionBalancersTab';
+import SwapSettingsTab from './SwapSettingsTab';
 import './SettingsPage.css';
 
 interface ApiMsg {
@@ -39,6 +48,7 @@ interface ApiMsg {
 
 const tabSlugs = [
   'general',
+  'core',
   'security',
   'telegram',
   'email',
@@ -70,7 +80,8 @@ function scrollTarget() {
 
 export default function SettingsPage() {
   const { t } = useTranslation();
-  const { isDark, isUltra, antdThemeConfig } = useTheme();
+  const { isDark, isUltra, mode, setThemeMode, lowPower, toggleLowPower, antdThemeConfig } =
+    useTheme();
   const { isMobile } = useMediaQuery();
   const [modal, modalContextHolder] = Modal.useModal();
   const [messageApi, messageContextHolder] = message.useMessage();
@@ -95,9 +106,51 @@ export default function SettingsPage() {
   const [entryIsIP] = useState(() => isIp(window.location.hostname));
 
   const [alertVisible, setAlertVisible] = useState(true);
+  const [swapOpen, setSwapOpen] = useState(false);
   const location = useLocation();
   const slug = location.hash.replace(/^#/, '');
   const activeSlug = tabSlugs.includes(slug) ? slug : 'general';
+
+  const activeThemeMode = lowPower ? 'dark' : mode;
+
+  const themeOptions = [
+    {
+      mode: 'cyberpunk' as const,
+      label: 'Cyberpunk',
+      icon: <ThunderboltOutlined />,
+      description: 'Неон и технологичный контраст',
+    },
+    {
+      mode: 'light' as const,
+      label: 'Светлая',
+      icon: <SunOutlined />,
+      description: 'Чистая и светлая',
+    },
+    {
+      mode: 'dark' as const,
+      label: 'Тёмная',
+      icon: <MoonOutlined />,
+      description: 'Спокойная и контрастная',
+    },
+    {
+      mode: 'blue-gray' as const,
+      label: 'Blue Gray',
+      icon: <CloudOutlined />,
+      description: 'Холодная тёмная',
+    },
+    {
+      mode: 'colorful' as const,
+      label: 'Colorful',
+      icon: <BgColorsOutlined />,
+      description: 'Более выразительная',
+    },
+    {
+      mode: 'ultra-dark' as const,
+      label: 'Ultra Dark',
+      icon: <MoonOutlined />,
+      description: 'Максимально тёмная',
+    },
+  ];
 
   function rebuildUrlAfterRestart(): string {
     const { webDomain, webPort, webBasePath, webCertFile, webKeyFile } = allSetting;
@@ -133,7 +186,10 @@ export default function SettingsPage() {
       messageApi.error(`${fieldPath}: ${t(msgKey, { defaultValue: msgKey })}`);
       return;
     }
-    await saveAll();
+    const saveResult = await saveAll();
+    if (saveResult?.success) {
+      window.dispatchEvent(new Event('xui-core-settings-saved'));
+    }
   }
 
   function restartPanel() {
@@ -228,9 +284,16 @@ export default function SettingsPage() {
       case 'subscription-balancers':
         return <SubscriptionBalancersTab allSetting={allSetting} updateSetting={updateSetting} />;
       default:
-        return <GeneralTab allSetting={allSetting} updateSetting={updateSetting} />;
+        return (
+          <GeneralTab
+            allSetting={allSetting}
+            updateSetting={updateSetting}
+            saveSettings={saveAll}
+            onOpenSwap={() => setSwapOpen(true)}
+          />
+        );
     }
-  }, [activeSlug, allSetting, updateSetting, savePayload]);
+  }, [activeSlug, allSetting, updateSetting, saveAll, savePayload]);
 
   return (
     <ConfigProvider theme={antdThemeConfig}>
@@ -298,6 +361,84 @@ export default function SettingsPage() {
                       </Card>
                     </Col>
 
+                    {activeSlug === 'general' && (
+                      <Col span={24}>
+                        <Card className="theme-picker-card">
+                          <div className="theme-picker-header">
+                            <div>
+                              <div className="theme-picker-title">Оформление</div>
+                              <div className="theme-picker-subtitle">
+                                Выберите внешний вид панели
+                              </div>
+                            </div>
+                          </div>
+                          <div
+                            className="theme-picker-grid"
+                            role="radiogroup"
+                            aria-label="Тема панели"
+                          >
+                            {themeOptions.map((option) => {
+                              const selected = activeThemeMode === option.mode;
+                              const unavailable = lowPower && option.mode === 'cyberpunk';
+                              return (
+                                <button
+                                  key={option.mode}
+                                  type="button"
+                                  className={`theme-picker-option theme-${option.mode} ${selected ? 'is-selected' : ''} ${unavailable ? 'is-unavailable' : ''}`}
+                                  aria-checked={selected}
+                                  role="radio"
+                                  aria-disabled={unavailable}
+                                  disabled={unavailable}
+                                  onClick={() => setThemeMode(option.mode)}
+                                >
+                                  <span className="theme-picker-preview" aria-hidden="true">
+                                    <span className="theme-preview-sidebar" />
+                                    <span className="theme-preview-content">
+                                      <span />
+                                      <span />
+                                      <span />
+                                    </span>
+                                  </span>
+                                  <span className="theme-picker-meta">
+                                    <span className="theme-picker-name">
+                                      {option.icon} {option.label}
+                                    </span>
+                                    <span className="theme-picker-description">
+                                      {option.description}
+                                    </span>
+                                  </span>
+                                  <span className="theme-picker-check">
+                                    {selected && <CheckOutlined />}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <div className="theme-picker-footer">
+                            <Button
+                              className={`low-power-toggle ${lowPower ? 'is-active' : ''}`}
+                              onClick={toggleLowPower}
+                              aria-pressed={lowPower}
+                            >
+                              <span className="low-power-toggle-icon" aria-hidden="true">
+                                <ThunderboltOutlined />
+                              </span>
+                              <span className="low-power-toggle-copy">
+                                <span className="low-power-toggle-title">
+                                  {lowPower ? 'Режим слабого ПК включён' : 'Режим слабого ПК'}
+                                </span>
+                                <span className="low-power-toggle-description">
+                                  {lowPower
+                                    ? 'Cyberpunk временно отключён'
+                                    : 'Отключает тяжёлые эффекты'}
+                                </span>
+                              </span>
+                            </Button>
+                          </div>
+                        </Card>
+                      </Col>
+                    )}
+
                     <Col span={24}>
                       <Card hoverable>{categoryBody}</Card>
                     </Col>
@@ -308,6 +449,18 @@ export default function SettingsPage() {
           </Layout.Content>
         </Layout>
       </Layout>
+      <Modal
+        open={swapOpen}
+        title={t('pages.settings.swap.menu')}
+        width={1120}
+        rootClassName="swap-settings-modal"
+        destroyOnClose
+        footer={null}
+        styles={{ body: { maxHeight: 'calc(100vh - 180px)', overflowY: 'auto' } }}
+        onCancel={() => setSwapOpen(false)}
+      >
+        <SwapSettingsTab />
+      </Modal>
     </ConfigProvider>
   );
 }

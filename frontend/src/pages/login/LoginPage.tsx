@@ -14,6 +14,7 @@ import {
 } from 'antd';
 import {
   KeyOutlined,
+  ThunderboltOutlined,
   LockOutlined,
   MoonFilled,
   MoonOutlined,
@@ -38,7 +39,7 @@ const basePath = window.X_UI_BASE_PATH || '';
 
 export default function LoginPage() {
   const { t } = useTranslation();
-  const { isDark, isUltra, toggleTheme, toggleUltra, antdThemeConfig } = useTheme();
+  const { isDark, isUltra, mode, setThemeMode, antdThemeConfig } = useTheme();
   const [messageApi, messageContextHolder] = message.useMessage();
 
   useEffect(() => {
@@ -93,16 +94,18 @@ export default function LoginPage() {
 
   const cycleTheme = useCallback(() => {
     pauseAnimationsUntilLeave('login-theme-cycle');
-    if (!isDark) {
-      toggleTheme();
-      if (isUltra) toggleUltra();
-    } else if (!isUltra) {
-      toggleUltra();
+    if (mode === 'light') {
+      setThemeMode('dark');
+    } else if (mode === 'dark') {
+      setThemeMode('ultra-dark');
+    } else if (mode === 'ultra-dark') {
+      setThemeMode('cyberpunk');
+    } else if (mode === 'cyberpunk') {
+      setThemeMode('light');
     } else {
-      toggleUltra();
-      toggleTheme();
+      setThemeMode('cyberpunk');
     }
-  }, [isDark, isUltra, toggleTheme, toggleUltra]);
+  }, [mode, setThemeMode]);
 
   const pageClass = useMemo(() => {
     const classes = ['login-app'];
@@ -127,7 +130,16 @@ export default function LoginPage() {
     [],
   );
 
-  const themeIcon = !isDark ? <SunOutlined /> : !isUltra ? <MoonOutlined /> : <MoonFilled />;
+  const themeIcon =
+    mode === 'cyberpunk' ? (
+      <ThunderboltOutlined />
+    ) : !isDark ? (
+      <SunOutlined />
+    ) : !isUltra ? (
+      <MoonOutlined />
+    ) : (
+      <MoonFilled />
+    );
 
   return (
     <ConfigProvider theme={antdThemeConfig}>

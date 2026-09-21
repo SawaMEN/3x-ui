@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, Tooltip } from 'antd';
 import {
@@ -18,7 +19,7 @@ interface SystemStripProps {
   onToggleIp: () => void;
 }
 
-export default function SystemStrip({ status, showIp, onToggleIp }: SystemStripProps) {
+function SystemStrip({ status, showIp, onToggleIp }: SystemStripProps) {
   const { t } = useTranslation();
 
   return (
@@ -97,3 +98,15 @@ export default function SystemStrip({ status, showIp, onToggleIp }: SystemStripP
     </Card>
   );
 }
+
+export default memo(
+  SystemStrip,
+  (prev, next) =>
+    prev.showIp === next.showIp &&
+    prev.status.uptime === next.status.uptime &&
+    prev.status.appStats.uptime === next.status.appStats.uptime &&
+    prev.status.appStats.mem === next.status.appStats.mem &&
+    prev.status.appStats.threads === next.status.appStats.threads &&
+    prev.status.publicIP.ipv4 === next.status.publicIP.ipv4 &&
+    prev.status.publicIP.ipv6 === next.status.publicIP.ipv6,
+);
