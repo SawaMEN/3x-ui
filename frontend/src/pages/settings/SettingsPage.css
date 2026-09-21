@@ -493,6 +493,7 @@ body.theme-cyberpunk .low-power-toggle.is-active {
 .swap-settings-modal .ant-alert { border-radius: 12px; }
 @media (max-width: 900px) {
   .swap-settings-modal .ant-modal-body { padding: 12px 12px 16px; }
-  .swap-settings-tabs .ant-tabs-nav-wrap { overflow-x: auto; }
-  .swap-settings-tabs .ant-tabs-nav-list { min-width: max-content; }
+  .swap-settings-tabs .ant-tabs-nav-wrap { overflow-x: visible; }
+  .swap-settings-tabs .ant-tabs-nav-list { min-width: 0; flex-wrap: wrap; gap: 4px; }
+  .swap-settings-tabs .ant-tabs-tab { margin-right: 0 !important; }
 }

@@ -569,7 +569,6 @@ html[data-low-power='true'] .drawer-brand {
 }
 .brand-text-full { display: inline; }
 .brand-text-compact { display: none; }
-.ant-layout-sider-collapsed .brand-block-collapsed { gap: 0; }
 .ant-layout-sider-collapsed .brand-mark { display: none; }
 .ant-layout-sider-collapsed .brand-text {
   display: inline-flex;
