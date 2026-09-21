@@ -21,8 +21,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/logger"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
+	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 )
 
 const (
@@ -784,6 +784,14 @@ func (a *SUBController) loadSubTemplate(themeDir string) (*template.Template, er
 	}
 
 	a.subTemplateMu.Lock()
+	// Only the active custom theme path is useful at a time. Drop stale
+	// paths so repeated theme-directory changes cannot accumulate parsed
+	// templates for old locations.
+	for cachedPath := range a.subTemplateCache {
+		if cachedPath != templatePath {
+			delete(a.subTemplateCache, cachedPath)
+		}
+	}
 	a.subTemplateCache[templatePath] = &cachedSubTemplate{tmpl: tmpl, modTime: modTime}
 	a.subTemplateMu.Unlock()
 	return tmpl, nil
@@ -821,7 +829,13 @@ func (a *SUBController) serveJson(c *gin.Context, alwaysReturnArray bool, conten
 func (a *SUBController) serveJsonBody(c *gin.Context, alwaysReturnArray bool, contentType string, rawDownload bool) bool {
 	subId := c.Param("subid")
 	scheme, host, hostWithPort, _ := a.subService.ResolveRequest(c)
-	jsonSub, header, err := a.subJsonService.GetJson(subId, host, alwaysReturnArray)
+	var jsonSub, header string
+	var err error
+	if strings.EqualFold(c.Query("format"), "sing-box") {
+		jsonSub, header, err = a.subJsonService.GetSingBoxJson(subId, host, alwaysReturnArray)
+	} else {
+		jsonSub, header, err = a.subJsonService.GetJson(subId, host, alwaysReturnArray)
+	}
 	if err != nil {
 		writeSubError(c, err)
 		return true

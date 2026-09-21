@@ -18,19 +18,44 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/goccy/go-json"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/amneziawg"
-	"github.com/mhsanaei/3x-ui/v3/internal/database"
-	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
-	"github.com/mhsanaei/3x-ui/v3/internal/logger"
-	"github.com/mhsanaei/3x-ui/v3/internal/tuic"
-	"github.com/mhsanaei/3x-ui/v3/internal/util/common"
-	"github.com/mhsanaei/3x-ui/v3/internal/util/random"
-	wgutil "github.com/mhsanaei/3x-ui/v3/internal/util/wireguard"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
-	"github.com/mhsanaei/3x-ui/v3/internal/xray"
+	"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/random"
+	wgutil "github.com/SawaMEN/3x-ui/v3/internal/util/wireguard"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
+	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
-var salamanderWarningSeen sync.Map
+const salamanderWarningCacheSize = 2048
+
+var salamanderWarningSeen = struct {
+	mu      sync.Mutex
+	entries map[string]struct{}
+	order   []string
+}{
+	entries: make(map[string]struct{}, salamanderWarningCacheSize),
+	order:   make([]string, 0, salamanderWarningCacheSize),
+}
+
+func markSalamanderWarningSeen(key string) bool {
+	salamanderWarningSeen.mu.Lock()
+	defer salamanderWarningSeen.mu.Unlock()
+	if _, ok := salamanderWarningSeen.entries[key]; ok {
+		return false
+	}
+	if len(salamanderWarningSeen.order) >= salamanderWarningCacheSize {
+		oldest := salamanderWarningSeen.order[0]
+		delete(salamanderWarningSeen.entries, oldest)
+		salamanderWarningSeen.order = salamanderWarningSeen.order[1:]
+	}
+	salamanderWarningSeen.entries[key] = struct{}{}
+	salamanderWarningSeen.order = append(salamanderWarningSeen.order, key)
+	return true
+}
 
 // SubService provides business logic for generating subscription links and managing subscription data.
 type SubService struct {
@@ -775,12 +800,35 @@ func (s *SubService) GetLink(inbound *model.Inbound, email string) string {
 		return s.genHysteriaLink(inbound, email)
 	case "mtproto":
 		return s.genMtprotoLink(inbound, email)
+	case "vk-turn-proxy":
+		return s.genVKTurnProxyLink(inbound, email)
 	case "wireguard":
 		return s.genWireguardLink(inbound, email)
 	case "amneziawg":
 		return s.genAmneziaWGLink(inbound, email)
 	case "tuic":
 		return s.genTuicLink(inbound, email)
+	}
+	return ""
+}
+
+func (s *SubService) genVKTurnProxyLink(inbound *model.Inbound, email string) string {
+	if inbound.Protocol != model.VKTurnProxy {
+		return ""
+	}
+	clients, err := s.inboundService.GetClients(inbound)
+	if err != nil {
+		return ""
+	}
+	for _, client := range clients {
+		if client.Email != email {
+			continue
+		}
+		link, err := s.inboundService.ExportVKTurnProxyClient(inbound.Id, client.ID, s.address)
+		if err != nil {
+			return ""
+		}
+		return link
 	}
 	return ""
 }
@@ -1428,7 +1476,7 @@ func (s *SubService) genHysteriaLink(inbound *model.Inbound, email string) strin
 					// breaks standard clients and must warn even when gecko fires.
 					if extra := extraSalamanderKeys(settings, gecko != ""); len(extra) > 0 {
 						warningKey := fmt.Sprintf("%d:%v", inbound.Id, extra)
-						if _, loaded := salamanderWarningSeen.LoadOrStore(warningKey, struct{}{}); !loaded {
+						if markSalamanderWarningSeen(warningKey) {
 							logger.Warningf("SubService - inbound %d: salamander settings %v cannot be expressed in a hysteria2 URI; standard clients will fail the handshake", inbound.Id, extra)
 						}
 					}

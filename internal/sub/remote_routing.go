@@ -16,11 +16,11 @@ import (
 
 	yaml "github.com/goccy/go-yaml"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/database"
-	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
-	"github.com/mhsanaei/3x-ui/v3/internal/logger"
-	"github.com/mhsanaei/3x-ui/v3/internal/util/common"
-	"github.com/mhsanaei/3x-ui/v3/internal/util/netsafe"
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
 )
 
 // Remote sources reuse the existing settings fields (one HTTPS URL = remote,
@@ -33,12 +33,13 @@ const (
 	remoteRoutingJson  remoteRoutingKind = "jsonhapp"
 	remoteRoutingClash remoteRoutingKind = "clash"
 
-	remoteRoutingCacheTTL     = 10 * time.Minute
-	remoteRoutingRetryDelay   = 30 * time.Second
-	remoteRoutingHTTPTimeout  = 6 * time.Second
-	remoteRoutingHappMaxBody  = 16 << 10 // 16 KiB; Happ emits the result in a response header
-	remoteRoutingHappMaxValue = 8 << 10  // normalized Routing header value
-	remoteRoutingClashMaxBody = 2 << 20  // 2 MiB
+	remoteRoutingCacheTTL      = 10 * time.Minute
+	remoteRoutingRetryDelay    = 30 * time.Second
+	remoteRoutingHTTPTimeout   = 6 * time.Second
+	remoteRoutingHappMaxBody   = 16 << 10 // 16 KiB; Happ emits the result in a response header
+	remoteRoutingHappMaxValue  = 8 << 10  // normalized Routing header value
+	remoteRoutingClashMaxBody  = 2 << 20  // 2 MiB
+	remoteRoutingCacheCapacity = 128
 )
 
 // isHappPayloadKind reports whether the kind carries a happ-payload source:
@@ -236,8 +237,9 @@ func (r *remoteRoutingResolver) refresh(key remoteRoutingKey, previous remoteRou
 	if err == nil {
 		r.entries[key] = entry
 	}
-	fetch.err = err
 	delete(r.inflight, key)
+	r.trimLocked()
+	fetch.err = err
 	close(fetch.done)
 	r.mu.Unlock()
 
@@ -251,6 +253,48 @@ func (r *remoteRoutingResolver) refresh(key remoteRoutingKey, previous remoteRou
 	}
 	if r.persist {
 		r.persistEntry(key.kind, entry)
+	}
+}
+
+func (r *remoteRoutingResolver) trimLocked() {
+	for len(r.entries) > remoteRoutingCacheCapacity {
+		var oldestKey remoteRoutingKey
+		var oldestAt int64
+		found := false
+		for key, entry := range r.entries {
+			if _, busy := r.inflight[key]; busy {
+				continue
+			}
+			if !found || entry.FetchedAt < oldestAt {
+				oldestKey = key
+				oldestAt = entry.FetchedAt
+				found = true
+			}
+		}
+		if !found {
+			break
+		}
+		delete(r.entries, oldestKey)
+		delete(r.lastAttempt, oldestKey)
+	}
+	for len(r.lastAttempt) > remoteRoutingCacheCapacity {
+		var oldestKey remoteRoutingKey
+		var oldestAt time.Time
+		found := false
+		for key, attemptedAt := range r.lastAttempt {
+			if _, busy := r.inflight[key]; busy {
+				continue
+			}
+			if !found || attemptedAt.Before(oldestAt) {
+				oldestKey = key
+				oldestAt = attemptedAt
+				found = true
+			}
+		}
+		if !found {
+			break
+		}
+		delete(r.lastAttempt, oldestKey)
 	}
 }
 

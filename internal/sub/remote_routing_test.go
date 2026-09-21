@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -16,7 +17,7 @@ import (
 	"github.com/gin-gonic/gin"
 	yaml "github.com/goccy/go-yaml"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/database"
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
 )
 
 func mergeRemoteClashRulesYAML(base map[string]any, raw string) error {
@@ -748,5 +749,31 @@ rules:
 	}
 	if requests.Load() != 1 {
 		t.Fatalf("requests=%d, want 1", requests.Load())
+	}
+}
+
+func TestRemoteRoutingResolverBoundsMemoryCache(t *testing.T) {
+	resolver := newRemoteRoutingResolver(nil, false)
+	base := time.Unix(1_800_000_000, 0)
+	resolver.mu.Lock()
+	for i := 0; i < remoteRoutingCacheCapacity+32; i++ {
+		key := remoteRoutingKey{kind: remoteRoutingHapp, source: "https://example.com/" + strconv.Itoa(i)}
+		resolver.entries[key] = remoteRoutingCacheEntry{
+			Source:    key.source,
+			Content:   "happ://routing/onadd/test",
+			FetchedAt: base.Add(time.Duration(i) * time.Second).Unix(),
+		}
+		resolver.lastAttempt[key] = base.Add(time.Duration(i) * time.Second)
+	}
+	resolver.trimLocked()
+	entries := len(resolver.entries)
+	attempts := len(resolver.lastAttempt)
+	resolver.mu.Unlock()
+
+	if entries > remoteRoutingCacheCapacity {
+		t.Fatalf("entries=%d, want <= %d", entries, remoteRoutingCacheCapacity)
+	}
+	if attempts > remoteRoutingCacheCapacity {
+		t.Fatalf("lastAttempt=%d, want <= %d", attempts, remoteRoutingCacheCapacity)
 	}
 }
