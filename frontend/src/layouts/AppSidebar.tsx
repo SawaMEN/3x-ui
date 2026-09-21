@@ -54,7 +54,6 @@ function BrandMark() {
           />
         </svg>
       </span>
-      
     </span>
   );
 }
