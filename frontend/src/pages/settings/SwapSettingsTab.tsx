@@ -347,7 +347,13 @@ function normalizeSystemUpdateResult(value: unknown): SystemUpdateResult {
   };
 }
 
-export default function SwapSettingsTab() {
+export default function SwapSettingsTab({
+  systemUpdateOnly = false,
+  onSystemUpdateClose,
+}: {
+  systemUpdateOnly?: boolean;
+  onSystemUpdateClose?: () => void;
+}) {
   const { t } = useTranslation();
   const { isMobile } = useMediaQuery();
   const [messageApi, contextHolder] = message.useMessage();
@@ -492,6 +498,12 @@ export default function SwapSettingsTab() {
       setSystemUpdateBusy(false);
     }
   };
+
+  useEffect(() => {
+    if (!systemUpdateOnly) return;
+    setSystemUpdateOpen(true);
+    void checkSystemUpdates();
+  }, [checkSystemUpdates, systemUpdateOnly]);
 
   const algorithmOptions = (status?.zramAlgorithms ?? []).map((value) => ({ label: value, value }));
 
@@ -923,7 +935,10 @@ export default function SwapSettingsTab() {
       title={t('pages.settings.swap.systemUpdatesTitle')}
       width={isMobile ? 'calc(100vw - 24px)' : 900}
       onCancel={() => {
-        if (!systemUpdateBusy) setSystemUpdateOpen(false);
+        if (!systemUpdateBusy) {
+          setSystemUpdateOpen(false);
+          onSystemUpdateClose?.();
+        }
       }}
       footer={
         <Space>
@@ -1093,6 +1108,15 @@ export default function SwapSettingsTab() {
             </Button>
           }
         />
+      </>
+    );
+  }
+
+  if (systemUpdateOnly) {
+    return (
+      <>
+        {contextHolder}
+        {systemUpdateModal}
       </>
     );
   }
