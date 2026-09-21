@@ -29,6 +29,7 @@ import {
 
 import { HttpUtil } from '@/utils';
 import { onNumber } from '@/utils/onNumber';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 type SwapArea = {
   path: string;
@@ -348,6 +349,7 @@ function normalizeSystemUpdateResult(value: unknown): SystemUpdateResult {
 
 export default function SwapSettingsTab() {
   const { t } = useTranslation();
+  const { isMobile } = useMediaQuery();
   const [messageApi, contextHolder] = message.useMessage();
   const [status, setStatus] = useState<SwapStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -586,7 +588,7 @@ export default function SwapSettingsTab() {
 
       <Card size="small" title={t('pages.settings.swap.systemTitle')}>
         <Space direction="vertical" size={10} style={{ width: '100%' }}>
-          <Space wrap align="end">
+          <Space wrap align="end" className="swap-action-row">
             <div>
               <div>{t('pages.settings.swap.swappiness')}</div>
               <InputNumber
@@ -862,7 +864,7 @@ export default function SwapSettingsTab() {
           size="small"
           rowKey="device"
           pagination={false}
-          scroll={{ y: 360 }}
+          scroll={{ x: isMobile ? 760 : undefined, y: 360 }}
           columns={zramColumns}
           dataSource={status?.zram ?? []}
         />
@@ -876,7 +878,7 @@ export default function SwapSettingsTab() {
         rowKey="path"
         pagination={false}
         size="small"
-        scroll={{ y: 300 }}
+        scroll={{ x: isMobile ? 700 : undefined, y: 300 }}
         dataSource={status?.areas ?? []}
         columns={[
           { title: t('pages.settings.swap.device'), dataIndex: 'path', key: 'path' },
@@ -919,7 +921,7 @@ export default function SwapSettingsTab() {
     <Modal
       open={systemUpdateOpen}
       title={t('pages.settings.swap.systemUpdatesTitle')}
-      width={900}
+      width={isMobile ? 'calc(100vw - 24px)' : 900}
       onCancel={() => {
         if (!systemUpdateBusy) setSystemUpdateOpen(false);
       }}
@@ -1102,15 +1104,35 @@ export default function SwapSettingsTab() {
       {loadError && (
         <Alert type="warning" showIcon closable style={{ marginBottom: 12 }} title={loadError} />
       )}
+      {isMobile && (
+        <div className="swap-mobile-toolbar">
+          <Tag color="processing">
+            {t('pages.settings.swap.areasCount', { count: status?.areas.length ?? 0 })}
+          </Tag>
+          {installInfo?.distribution && (
+            <Tag>
+              {installInfo.distribution} {installInfo.version}
+            </Tag>
+          )}
+          <Button
+            size="small"
+            icon={<ReloadOutlined />}
+            onClick={() => void refresh()}
+            loading={loading}
+          >
+            {t('pages.settings.swap.refresh')}
+          </Button>
+        </div>
+      )}
       <Tabs
         className="swap-settings-tabs"
         items={[
-          { key: 'overview', label: t('pages.settings.swap.overview'), children: overviewTab },
-          { key: 'swap-file', label: t('pages.settings.swap.fileTitle'), children: swapFileTab },
-          { key: 'zram', label: t('pages.settings.swap.zramTitle'), children: zramTab },
-          { key: 'areas', label: t('pages.settings.swap.allAreas'), children: areasTab },
+          { key: 'overview', label: isMobile ? 'Обзор' : t('pages.settings.swap.overview'), children: overviewTab },
+          { key: 'swap-file', label: isMobile ? 'Swap-файл' : t('pages.settings.swap.fileTitle'), children: swapFileTab },
+          { key: 'zram', label: 'ZRAM', children: zramTab },
+          { key: 'areas', label: isMobile ? 'Состояние' : t('pages.settings.swap.allAreas'), children: areasTab },
         ]}
-        tabBarExtraContent={{
+        tabBarExtraContent={!isMobile ? {
           right: (
             <Space wrap>
               <Tag color="processing">
@@ -1131,7 +1153,7 @@ export default function SwapSettingsTab() {
               </Button>
             </Space>
           ),
-        }}
+        } : undefined}
       />
     </>
   );
