@@ -1641,7 +1641,6 @@
       "discordNotifyBackup": "Резервное копирование базы данных",
       "discordNotifyBackupDesc": "Отправлять уведомление с файлом резервной копии базы данных",
       "discordEventBusNotifyDesc": "Выберите события для Discord уведомлений",
-      "openFromCore": "Настройки подкачки",
       "swap": {
         "menu": "Подкачка / ZRAM",
         "overview": "Обзор",
@@ -1687,7 +1686,8 @@
         "installZram": "Установить ZRAM",
         "enableZram": "Включить ZRAM",
         "generatorManaged": "ZRAM управляется systemd-zram-generator",
-        "memoryUsed": "Использование памяти"
+        "memoryUsed": "Использование памяти",
+        "openFromCore": "Настройки подкачки"
       }
     },
     "xray": {
