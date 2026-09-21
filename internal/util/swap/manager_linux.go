@@ -117,29 +117,180 @@ func GetRecommendations() (Recommendation, error) {
 
 func GetZramInstallInfo() (ZramInstallInfo, error) {
 	id, version, packageManager, packageName := detectDistribution()
+	configPath := "/etc/systemd/zram-generator.conf.d/60-3x-ui.conf"
+	if id == "alpine" {
+		configPath = "/etc/conf.d/zram-init"
+	}
 	info := ZramInstallInfo{
-		Distribution:   id,
-		Version:        version,
-		PackageManager: packageManager,
-		Package:        packageName,
-		Supported:      packageManager != "" && packageName != "",
-		ConfigPath:     "/etc/systemd/zram-generator.conf.d/60-3x-ui.conf",
+		Distribution:       id,
+		Version:            version,
+		PackageManager:     packageManager,
+		Package:             packageName,
+		Supported:           packageManager != "" && packageName != "",
+		RecommendedPackage: packageName,
+		ConfigPath:         configPath,
 	}
+	for _, candidate := range zramPackageCandidates(id, packageName) {
+		version, installed := queryInstalledPackage(packageManager, candidate)
+		info.InstalledPackages = append(info.InstalledPackages, ZramPackage{
+			Name:      candidate,
+			Version:   version,
+			Installed: installed,
+		})
+		if candidate == packageName {
+			info.RecommendedInstalled = installed
+			info.RecommendedVersion = version
+		}
+	}
+	info.Installed = info.RecommendedInstalled
 	info.UsingGenerator = generatorInstalled()
-	info.Installed = info.UsingGenerator
-	if _, err := exec.LookPath("zramswap"); err == nil {
-		info.Installed = true
-	}
-	if _, err := exec.LookPath("zram-init"); err == nil {
-		info.Installed = true
-	}
+	info.ActiveBackend = detectActiveZramBackend(info)
 	if info.Supported {
 		info.InstallCommand = installCommand(info.PackageManager, info.Package)
+		info.ReinstallCommand = reinstallCommand(info.PackageManager, info.Package)
 	}
 	return info, nil
 }
 
+func zramPackageCandidates(distribution, recommended string) []string {
+	seen := map[string]bool{}
+	result := make([]string, 0, 4)
+	add := func(name string) {
+		if name == "" || seen[name] {
+			return
+		}
+		seen[name] = true
+		result = append(result, name)
+	}
+	add(recommended)
+	switch distribution {
+	case "ubuntu", "debian":
+		add("systemd-zram-generator")
+		add("zram-config")
+		add("zram-tools")
+	case "fedora":
+		add("zram-generator-defaults")
+		add("zram-generator")
+	case "rhel", "rocky", "alma":
+		add("zram-generator")
+		add("zram-generator-defaults")
+	default:
+		add(recommended)
+	}
+	return result
+}
+
+func queryInstalledPackage(manager, packageName string) (string, bool) {
+	if manager == "" || packageName == "" {
+		return "", false
+	}
+	switch manager {
+	case "apt-get":
+		if _, err := exec.LookPath("dpkg-query"); err != nil {
+			return "", false
+		}
+		output, err := exec.Command("dpkg-query", "-f="+ "$" + "{Status}\t" + "$" + "{Version}\n", packageName).Output()
+		if err != nil {
+			return "", false
+		}
+		fields := strings.Split(strings.TrimSpace(string(output)), "\t")
+		if len(fields) < 2 || fields[0] != "install ok installed" {
+			return "", false
+		}
+		return fields[1], true
+	case "dnf", "yum", "zypper":
+		if _, err := exec.LookPath("rpm"); err != nil {
+			return "", false
+		}
+		output, err := exec.CommandContext(context.Background(), "rpm", "-q", "--qf", "%{VERSION}-%{RELEASE}", packageName).Output()
+		if err != nil {
+			return "", false
+		}
+		version := strings.TrimSpace(string(output))
+		return version, version != ""
+	case "pacman":
+		if _, err := exec.LookPath("pacman"); err != nil {
+			return "", false
+		}
+		output, err := exec.CommandContext(context.Background(), "pacman", "-Q", packageName).Output()
+		if err != nil {
+			return "", false
+		}
+		fields := strings.Fields(string(output))
+		if len(fields) < 2 {
+			return "", false
+		}
+		return fields[1], true
+	case "apk":
+		if _, err := exec.LookPath("apk"); err != nil {
+			return "", false
+		}
+		output, err := exec.CommandContext(context.Background(), "apk", "info", "-e", packageName).Output()
+		if err != nil {
+			return "", false
+		}
+		line := strings.TrimSpace(strings.SplitN(string(output), "\n", 2)[0])
+		if line == "" {
+			return "", false
+		}
+		version := strings.TrimPrefix(line, packageName+"-")
+		if version == line {
+			version = ""
+		}
+		return version, true
+	default:
+		return "", false
+	}
+}
+
+func detectActiveZramBackend(info ZramInstallInfo) string {
+	if _, err := exec.LookPath("systemctl"); err == nil {
+		if commandSucceeded("systemctl", "is-active", "--quiet", "zram-config.service") {
+			return "zram-config"
+		}
+		if commandSucceeded("systemctl", "is-active", "--quiet", "zramswap.service") {
+			return "zram-tools"
+		}
+	}
+	if len(zramIDs()) == 0 {
+		return ""
+	}
+	if info.UsingGenerator {
+		return "systemd-zram-generator"
+	}
+	if info.Distribution == "alpine" && info.RecommendedInstalled {
+		return "zram-init"
+	}
+	return ""
+}
+
+func commandSucceeded(command string, args ...string) bool {
+	return exec.Command(command, args...).Run() == nil
+}
+
+func installZramPackage(ctx context.Context, info ZramInstallInfo, reinstall bool) error {
+	if !info.Supported {
+		return fmt.Errorf("unsupported Linux distribution or package manager")
+	}
+	args := packageInstallArgs(info.PackageManager, info.Package)
+	if reinstall && info.RecommendedInstalled {
+		args = packageReinstallArgs(info.PackageManager, info.Package)
+	}
+	if len(args) == 0 {
+		return fmt.Errorf("no supported package manager")
+	}
+	return runContext(ctx, args[0], args[1:]...)
+}
+
 func InstallZram(ctx context.Context) error {
+	return configureZram(ctx, false)
+}
+
+func ReinstallZram(ctx context.Context) error {
+	return configureZram(ctx, true)
+}
+
+func configureZram(ctx context.Context, reinstall bool) error {
 	info, err := GetZramInstallInfo()
 	if err != nil {
 		return err
@@ -147,21 +298,31 @@ func InstallZram(ctx context.Context) error {
 	if !info.Supported {
 		return fmt.Errorf("unsupported Linux distribution or package manager")
 	}
-	if !info.Installed {
-		args := packageInstallArgs(info.PackageManager, info.Package)
-		if len(args) == 0 {
-			return fmt.Errorf("no supported package manager")
-		}
-		if err := runContext(ctx, args[0], args[1:]...); err != nil {
+
+	if info.ActiveBackend != "" && info.ActiveBackend != "systemd-zram-generator" && info.ActiveBackend != "zram-init" {
+		return fmt.Errorf("another ZRAM backend is active: %s; disable it before switching to %s", info.ActiveBackend, info.Package)
+	}
+
+	if reinstall || !info.RecommendedInstalled {
+		if err := installZramPackage(ctx, info, reinstall); err != nil {
 			return err
 		}
 	}
-	if _, err := os.Stat("/sys/class/zram-control/hot_add"); err != nil {
-		_ = runContext(ctx, "modprobe", "zram")
-	}
+
 	if info.Distribution == "alpine" {
 		return installAlpineZram(ctx)
 	}
+
+	// Re-detect after package installation. Some distributions install the
+	// generator in a path that was not present when the initial status was read.
+	info, err = GetZramInstallInfo()
+	if err != nil {
+		return err
+	}
+	if !info.UsingGenerator {
+		return fmt.Errorf("zram-generator was installed, but the systemd generator was not found")
+	}
+
 	configDir := filepath.Dir(info.ConfigPath)
 	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		return err
@@ -172,13 +333,20 @@ func InstallZram(ctx context.Context) error {
 	if err := os.WriteFile(info.ConfigPath, []byte(config), 0o644); err != nil {
 		return err
 	}
-	if _, err := exec.LookPath("systemctl"); err == nil {
-		if err := runContext(ctx, "systemctl", "daemon-reload"); err != nil {
-			return err
-		}
-		if err := runContext(ctx, "systemctl", "start", "dev-zram0.swap"); err != nil {
-			_ = runContext(ctx, "systemctl", "start", "systemd-zram-setup@zram0.service")
-		}
+
+	systemctl, err := exec.LookPath("systemctl")
+	if err != nil {
+		return fmt.Errorf("systemd is required to activate zram: %w", err)
+	}
+
+	if err := runContext(ctx, systemctl, "daemon-reload"); err != nil {
+		return err
+	}
+	if err := runContext(ctx, systemctl, "start", "dev-zram0.swap"); err != nil {
+		return fmt.Errorf("failed to activate zram swap: %w", err)
+	}
+	if !isSwapActive("/dev/zram0") {
+		return fmt.Errorf("zram generator completed, but /dev/zram0 is not active swap")
 	}
 	return nil
 }
@@ -295,8 +463,10 @@ func detectDistribution() (string, string, string, string) {
 	version := values["VERSION_ID"]
 	like := strings.ToLower(values["ID_LIKE"])
 	switch {
-	case id == "fedora" || strings.Contains(like, "fedora") || strings.Contains(like, "rhel"):
+	case id == "fedora":
 		return id, version, firstExistingCommand("dnf", "yum"), "zram-generator-defaults"
+	case strings.Contains(like, "fedora") || strings.Contains(like, "rhel") || id == "rhel" || strings.Contains(id, "rocky") || strings.Contains(id, "alma"):
+		return id, version, firstExistingCommand("dnf", "yum"), "zram-generator"
 	case id == "ubuntu" || id == "debian" || strings.Contains(like, "debian"):
 		return id, version, "apt-get", "systemd-zram-generator"
 	case id == "arch" || strings.Contains(like, "arch"):
@@ -323,8 +493,6 @@ func generatorInstalled() bool {
 	for _, path := range []string{
 		"/usr/lib/systemd/system-generators/zram-generator",
 		"/lib/systemd/system-generators/zram-generator",
-		"/usr/lib/systemd/system-generators/zramswap",
-		"/lib/systemd/system-generators/zramswap",
 	} {
 		if _, err := os.Stat(path); err == nil {
 			return true
@@ -342,11 +510,30 @@ func installCommand(manager, packageName string) string {
 	case "yum":
 		return "yum install -y " + packageName
 	case "pacman":
-		return "pacman -Sy --noconfirm " + packageName
+		return "pacman -S --noconfirm " + packageName
 	case "zypper":
 		return "zypper --non-interactive install " + packageName
 	case "apk":
-		return "apk add " + packageName
+		return "apk add --no-cache " + packageName
+	default:
+		return ""
+	}
+}
+
+func reinstallCommand(manager, packageName string) string {
+	switch manager {
+	case "apt-get":
+		return "apt-get install -y --reinstall " + packageName
+	case "dnf":
+		return "dnf reinstall -y " + packageName
+	case "yum":
+		return "yum reinstall -y " + packageName
+	case "pacman":
+		return "pacman -S --noconfirm " + packageName
+	case "zypper":
+		return "zypper --non-interactive install --force " + packageName
+	case "apk":
+		return "apk fix --no-cache " + packageName
 	default:
 		return ""
 	}
@@ -361,11 +548,30 @@ func packageInstallArgs(manager, packageName string) []string {
 	case "yum":
 		return []string{"yum", "install", "-y", packageName}
 	case "pacman":
-		return []string{"pacman", "-Sy", "--noconfirm", packageName}
+		return []string{"pacman", "-S", "--noconfirm", packageName}
 	case "zypper":
 		return []string{"zypper", "--non-interactive", "install", packageName}
 	case "apk":
-		return []string{"apk", "add", packageName}
+		return []string{"apk", "add", "--no-cache", packageName}
+	default:
+		return nil
+	}
+}
+
+func packageReinstallArgs(manager, packageName string) []string {
+	switch manager {
+	case "apt-get":
+		return []string{"apt-get", "install", "-y", "--reinstall", packageName}
+	case "dnf":
+		return []string{"dnf", "reinstall", "-y", packageName}
+	case "yum":
+		return []string{"yum", "reinstall", "-y", packageName}
+	case "pacman":
+		return []string{"pacman", "-S", "--noconfirm", packageName}
+	case "zypper":
+		return []string{"zypper", "--non-interactive", "install", "--force", packageName}
+	case "apk":
+		return []string{"apk", "fix", "--no-cache", packageName}
 	default:
 		return nil
 	}

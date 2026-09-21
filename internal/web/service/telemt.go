@@ -51,14 +51,15 @@ type TelemtConfig struct {
 }
 
 type TelemtStatus struct {
-	Installed       bool   `json:"installed"`
-	Active          bool   `json:"active"`
-	Enabled         bool   `json:"enabled"`
-	Configured      bool   `json:"configured"`
-	Version         string `json:"version"`
-	LatestVersion   string `json:"latestVersion"`
-	UpdateAvailable bool   `json:"updateAvailable"`
-	MekoEnabled     bool   `json:"mekoEnabled"`
+	Installed       bool                 `json:"installed"`
+	Active          bool                 `json:"active"`
+	Enabled         bool                 `json:"enabled"`
+	Configured      bool                 `json:"configured"`
+	Version         string               `json:"version"`
+	LatestVersion   string               `json:"latestVersion"`
+	UpdateAvailable bool                 `json:"updateAvailable"`
+	MekoEnabled     bool                 `json:"mekoEnabled"`
+	WebProxy        TelemtWebProxyStatus `json:"webProxy"`
 }
 
 type TelemtProxy struct {
@@ -119,7 +120,49 @@ func renderTelemtConfig(c TelemtConfig) (string, error) {
 		censorship = fmt.Sprintf("[censorship]\ntls_domain = \"%s\"\nmask = true\ntls_emulation = true\ntls_front_dir = \"tlsfront\"\n\n", sni)
 	}
 
-	return fmt.Sprintf("[general]\nfast_mode = %t\nuse_middle_proxy = false\nlog_level = \"normal\"\n\n[general.modes]\nclassic = %t\nsecure = %t\ntls = %t\n\n[general.links]\nshow = \"*\"\n\n[server.api]\nenabled = true\nlisten = \"127.0.0.1:9091\"\nwhitelist = [\"127.0.0.1/32\", \"::1/128\"]\nread_only = false\n\n[network]\nipv4 = %t\nipv6 = %t\n\n[server]\nport = %d\n\n%s%s[access]\nreplay_check_len = 65536\nignore_time_skew = false\n\n[access.users]\nxui = \"%s\"\n\n[[upstreams]]\ntype = \"direct\"\nweight = 1\nenabled = true\n", c.FastMode, c.Classic, c.Secure, c.TLS, c.IPv4, c.IPv6, c.Port, listeners, censorship, strings.ToLower(c.Secret)), nil
+	base := fmt.Sprintf("[general]\nfast_mode = %t\nuse_middle_proxy = false\nlog_level = \"normal\"\n\n[general.modes]\nclassic = %t\nsecure = %t\ntls = %t\n\n[general.links]\nshow = \"*\"\n\n[server.api]\nenabled = true\nlisten = \"127.0.0.1:9091\"\nwhitelist = [\"127.0.0.1/32\", \"::1/128\"]\nread_only = false\n\n[network]\nipv4 = %t\nipv6 = %t\n\n[server]\nport = %d\n\n%s%s[access]\nreplay_check_len = 65536\nignore_time_skew = false\n\n[access.users]\nxui = \"%s\"\n\n[[upstreams]]\ntype = \"direct\"\nweight = 1\nenabled = true\n", c.FastMode, c.Classic, c.Secure, c.TLS, c.IPv4, c.IPv6, c.Port, listeners, censorship, strings.ToLower(c.Secret))
+	base = preserveTelemtUsers(base)
+	state, err := readTelemtWebState()
+	if err != nil {
+		return "", err
+	}
+	return appendTelemtWebProxyConfig(base, state)
+}
+
+func preserveTelemtUsers(base string) string {
+	old, err := os.ReadFile(telemtConfigPath)
+	if err != nil {
+		return base
+	}
+	text := string(old)
+	section := "[access.users]"
+	idx := strings.Index(text, section)
+	if idx < 0 {
+		return base
+	}
+	sectionStart := idx + len(section)
+	sectionEnd := len(text)
+	if next := strings.Index(text[sectionStart:], "\n["); next >= 0 {
+		sectionEnd = sectionStart + next
+	}
+	lines := strings.Split(text[sectionStart:sectionEnd], "\n")
+	preserved := make([]string, 0, len(lines))
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "xui = ") || strings.HasPrefix(trimmed, telemtWebUser+" = ") {
+			continue
+		}
+		preserved = append(preserved, line)
+	}
+	if len(preserved) == 0 {
+		return base
+	}
+	baseIdx := strings.Index(base, section)
+	if baseIdx < 0 {
+		return base
+	}
+	baseStart := baseIdx + len(section)
+	return base[:baseStart] + "\n" + strings.Join(preserved, "\n") + base[baseStart:]
 }
 
 func ensureTelemtSNI() error {
@@ -540,7 +583,7 @@ func (TelemtService) ListProxies() ([]TelemtProxy, error) {
 	}
 	out := make([]TelemtProxy, 0, len(raw.Access.Users))
 	for username, secret := range raw.Access.Users {
-		if username == "xui" {
+		if username == "xui" || username == telemtWebUser {
 			continue
 		}
 		link, linkErr := telemtGeneratedLink(username, raw.General.Modes.TLS)
@@ -578,7 +621,7 @@ func (TelemtService) ListProxies() ([]TelemtProxy, error) {
 
 func (TelemtService) DeleteProxy(username string) error {
 	username = strings.TrimSpace(username)
-	if username == "" || username == "xui" || strings.ContainsAny(username, "/\\\r\n") {
+	if username == "" || username == "xui" || username == telemtWebUser || strings.ContainsAny(username, "/\\\r\n") {
 		return errors.New("telemt: invalid proxy username")
 	}
 	client := &http.Client{Timeout: 10 * time.Second}
