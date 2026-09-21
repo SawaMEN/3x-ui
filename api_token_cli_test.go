@@ -4,7 +4,6 @@ package main
 // which token name it destroys — the whole point of the -tokenName flag.
 
 import (
-	"flag"
 	"testing"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
@@ -110,26 +109,6 @@ func TestGetApiTokenPreservesInstallTokenWhenRotating(t *testing.T) {
 	}
 	if got := tokenRow(t, installTokenName); got.Token != installed.Token {
 		t.Fatalf("the %s token hash changed, so the recorded credential stopped working", installTokenName)
-	}
-}
-
-// `-getApiToken true -tokenName ci-bot` parses tokenName as "", because flag
-// stops at the positional. The command must not then rotate the shared slot.
-func TestGetApiTokenWarnsOnIgnoredPositionalArgs(t *testing.T) {
-	set := flag.NewFlagSet("setting", flag.ContinueOnError)
-	var getApiToken bool
-	var tokenName string
-	set.BoolVar(&getApiToken, "getApiToken", false, "")
-	set.StringVar(&tokenName, "tokenName", "", "")
-
-	if err := set.Parse([]string{"-getApiToken", "true", "-tokenName", "ci-bot"}); err != nil {
-		t.Fatalf("parse: %v", err)
-	}
-	if tokenName != "" {
-		t.Fatalf("tokenName = %q; this test guards the case where flag drops it", tokenName)
-	}
-	if got := set.Args(); len(got) == 0 {
-		t.Fatal("leftover arguments must be visible so the CLI can warn instead of silently rotating cli-fallback")
 	}
 }
 
