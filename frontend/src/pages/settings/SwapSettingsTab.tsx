@@ -619,7 +619,7 @@ export default function SwapSettingsTab() {
           size="small"
           rowKey="device"
           pagination={false}
-          scroll={{ x: 860 }}
+          scroll={{ y: 360 }}
           columns={zramColumns}
           dataSource={status?.zram ?? []}
         />
@@ -633,7 +633,7 @@ export default function SwapSettingsTab() {
         rowKey="path"
         pagination={false}
         size="small"
-        scroll={{ x: 820 }}
+        scroll={{ y: 300 }}
         dataSource={status?.areas ?? []}
         columns={[
           { title: t('pages.settings.swap.device'), dataIndex: 'path', key: 'path' },
@@ -691,6 +691,7 @@ export default function SwapSettingsTab() {
         <Alert type="warning" showIcon closable style={{ marginBottom: 12 }} title={loadError} />
       )}
       <Tabs
+        className="swap-settings-tabs"
         items={[
           { key: 'overview', label: t('pages.settings.swap.overview'), children: overviewTab },
           { key: 'swap-file', label: t('pages.settings.swap.fileTitle'), children: swapFileTab },

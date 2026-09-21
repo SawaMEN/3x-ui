@@ -470,3 +470,29 @@ body.theme-cyberpunk .low-power-toggle.is-active {
 .swap-settings-modal .ant-alert {
   border-radius: 10px;
 }
+
+
+/* Swap / ZRAM modal */
+.swap-settings-modal .ant-modal-content { overflow: hidden; border-radius: 20px; }
+.swap-settings-modal .ant-modal-header { margin-bottom: 0; padding: 18px 24px 14px; border-bottom: 1px solid var(--ant-color-border-secondary); }
+.swap-settings-modal .ant-modal-title { font-size: 19px; font-weight: 750; letter-spacing: -0.015em; }
+.swap-settings-modal .ant-modal-body { padding: 16px 20px 22px; background: color-mix(in srgb, var(--ant-color-bg-container) 94%, var(--ant-color-fill-quaternary)); }
+.swap-settings-tabs .ant-tabs-nav { margin-bottom: 16px; }
+.swap-settings-tabs .ant-tabs-nav::before { border-bottom-color: var(--ant-color-border-secondary); }
+.swap-settings-tabs .ant-tabs-tab { margin: 0 4px 0 0 !important; padding: 9px 13px; border-radius: 10px; transition: color 0.18s ease, background 0.18s ease; }
+.swap-settings-tabs .ant-tabs-tab:hover { background: var(--ant-color-fill-tertiary); }
+.swap-settings-tabs .ant-tabs-tab-active { background: color-mix(in srgb, var(--ant-color-primary) 10%, transparent); }
+.swap-settings-tabs .ant-tabs-tab-btn { font-weight: 600; }
+.swap-settings-tabs .ant-tabs-ink-bar { height: 3px; border-radius: 999px; }
+.swap-settings-modal .ant-card { border-radius: 14px; }
+.swap-settings-modal .ant-card-head { min-height: 50px; }
+.swap-settings-modal .ant-table-wrapper { width: 100%; }
+.swap-settings-modal .ant-table-container { overflow-x: hidden !important; }
+.swap-settings-modal .ant-table { table-layout: auto; }
+.swap-settings-modal .ant-table-cell { white-space: normal; word-break: break-word; }
+.swap-settings-modal .ant-alert { border-radius: 12px; }
+@media (max-width: 900px) {
+  .swap-settings-modal .ant-modal-body { padding: 12px 12px 16px; }
+  .swap-settings-tabs .ant-tabs-nav-wrap { overflow-x: auto; }
+  .swap-settings-tabs .ant-tabs-nav-list { min-width: max-content; }
+}

@@ -1759,7 +1759,7 @@
       "discordNotifyBackup": "Database Backup",
       "discordNotifyBackupDesc": "Send a database backup file with a report.",
       "discordEventBusNotifyDesc": "Select which events trigger Discord notifications",
-      "openFromCore": "Swap / ZRAM",
+      "openFromCore": "Swap settings",
       "swap": {
         "menu": "Swap / ZRAM",
         "overview": "Overview",

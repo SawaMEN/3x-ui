@@ -452,11 +452,17 @@ export default function SettingsPage() {
       <Modal
         open={swapOpen}
         title={t('pages.settings.swap.menu')}
-        width={1120}
+        width={isMobile ? 'calc(100vw - 16px)' : 'min(1360px, calc(100vw - 32px))'}
         rootClassName="swap-settings-modal"
         destroyOnClose
         footer={null}
-        styles={{ body: { maxHeight: 'calc(100vh - 180px)', overflowY: 'auto' } }}
+        styles={{
+          body: {
+            maxHeight: 'calc(100vh - 160px)',
+            overflowY: 'auto',
+            overflowX: 'hidden',
+          },
+        }}
         onCancel={() => setSwapOpen(false)}
       >
         <SwapSettingsTab />
