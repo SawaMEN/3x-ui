@@ -2801,7 +2801,10 @@ export default function SingBoxPage() {
         ruleSetTags={(() => {
           const ruleSet = asObject(sectionValue('route', config)).rule_set;
           return Array.isArray(ruleSet)
-            ? ruleSet.map(asObject).map((item) => asString(item.tag)).filter(Boolean)
+            ? ruleSet
+                .map(asObject)
+                .map((item) => asString(item.tag))
+                .filter(Boolean)
             : [];
         })()}
         onCancel={() => setRouteRuleModalOpen(false)}
