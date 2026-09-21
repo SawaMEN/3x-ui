@@ -1,6 +1,8 @@
 import { useTranslation } from 'react-i18next';
 import { Button } from 'antd';
 
+import './SelectAllClearButtons.css';
+
 interface SelectAllClearButtonsProps<T extends string | number = number> {
   options: Array<{ value: T }>;
   value: T[];
@@ -28,6 +30,7 @@ export default function SelectAllClearButtons<T extends string | number = number
   return (
     <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
       <Button
+        className="select-all-clear-button"
         size="small"
         disabled={allSelected}
         // Union with the current value so selections outside `options` are kept.
@@ -35,7 +38,12 @@ export default function SelectAllClearButtons<T extends string | number = number
       >
         {selectAllLabel ?? t('pages.clients.selectAllInbounds')}
       </Button>
-      <Button size="small" disabled={value.length === 0} onClick={() => onChange([])}>
+      <Button
+        className="select-all-clear-button"
+        size="small"
+        disabled={value.length === 0}
+        onClick={() => onChange([])}
+      >
         {clearLabel ?? t('pages.clients.clearAllInbounds')}
       </Button>
     </div>
