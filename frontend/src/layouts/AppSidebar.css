@@ -569,9 +569,7 @@ html[data-low-power='true'] .drawer-brand {
   flex: 0 0 42px;
   width: 42px;
   height: 42px;
-  filter:
-    drop-shadow(0 0 4px rgba(0, 246, 255, 0.95))
-    drop-shadow(0 0 10px rgba(0, 246, 255, 0.72))
+  filter: drop-shadow(0 0 4px rgba(0, 246, 255, 0.95)) drop-shadow(0 0 10px rgba(0, 246, 255, 0.72))
     drop-shadow(0 0 18px rgba(255, 43, 214, 0.6));
 }
 
@@ -588,9 +586,7 @@ html[data-low-power='true'] .drawer-brand {
   stroke: #00f6ff;
   stroke-width: 2.6;
   stroke-linejoin: round;
-  filter:
-    drop-shadow(0 0 2px #00f6ff)
-    drop-shadow(0 0 7px rgba(0, 246, 255, 0.86));
+  filter: drop-shadow(0 0 2px #00f6ff) drop-shadow(0 0 7px rgba(0, 246, 255, 0.86));
 }
 
 .brand-mark-default-core {
@@ -606,9 +602,7 @@ html[data-low-power='true'] .drawer-brand {
   stroke: #ff2bd6;
   stroke-width: 3.6;
   stroke-linecap: round;
-  filter:
-    drop-shadow(0 0 2px #ff2bd6)
-    drop-shadow(0 0 7px rgba(255, 43, 214, 0.9));
+  filter: drop-shadow(0 0 2px #ff2bd6) drop-shadow(0 0 7px rgba(255, 43, 214, 0.9));
 }
 
 .brand-mark-default-node {
@@ -621,42 +615,33 @@ html[data-low-power='true'] .drawer-brand {
 
 .brand-mark-default-dot {
   fill: #00f6ff;
-  filter:
-    drop-shadow(0 0 2px #00f6ff)
-    drop-shadow(0 0 7px rgba(0, 246, 255, 0.98));
+  filter: drop-shadow(0 0 2px #00f6ff) drop-shadow(0 0 7px rgba(0, 246, 255, 0.98));
 }
 
 .brand-mark-default-dot-pink {
   fill: #ff2bd6;
-  filter:
-    drop-shadow(0 0 2px #ff2bd6)
-    drop-shadow(0 0 7px rgba(255, 43, 214, 0.98));
+  filter: drop-shadow(0 0 2px #ff2bd6) drop-shadow(0 0 7px rgba(255, 43, 214, 0.98));
 }
 
 .brand-text {
   position: relative;
   display: inline-flex;
   align-items: center;
-  font-family:
-    Orbitron,
-    'Rajdhani',
-    'Segoe UI',
-    sans-serif;
+  font-family: Orbitron, 'Rajdhani', 'Segoe UI', sans-serif;
   font-size: 21px;
   font-weight: 950;
   line-height: 1;
   letter-spacing: 0.075em;
   text-transform: uppercase;
   transform: skewX(-4deg);
-  background:
-    linear-gradient(
-      90deg,
-      #f8feff 0%,
-      #00f6ff 24%,
-      #64dfff 45%,
-      #a78bfa 69%,
-      #ff2bd6 100%
-    );
+  background: linear-gradient(
+    90deg,
+    #f8feff 0%,
+    #00f6ff 24%,
+    #64dfff 45%,
+    #a78bfa 69%,
+    #ff2bd6 100%
+  );
   background-size: 160% 100%;
   background-position: 0% 50%;
   -webkit-background-clip: text;
@@ -703,12 +688,7 @@ html[data-low-power='true'] .drawer-brand {
   right: 2%;
   top: -5px;
   height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 43, 214, 0.75),
-    transparent
-  );
+  background: linear-gradient(90deg, transparent, rgba(255, 43, 214, 0.75), transparent);
   box-shadow: 0 0 7px rgba(255, 43, 214, 0.6);
   transform: rotate(-2deg);
   opacity: 0.75;
@@ -739,14 +719,7 @@ html[data-low-power='true'] .drawer-brand {
   letter-spacing: -0.09em;
   text-transform: none;
   transform: skewX(-6deg);
-  background:
-    linear-gradient(
-      135deg,
-      #f4fbff 0%,
-      #00f6ff 34%,
-      #9f8cff 64%,
-      #ff2bd6 100%
-    );
+  background: linear-gradient(135deg, #f4fbff 0%, #00f6ff 34%, #9f8cff 64%, #ff2bd6 100%);
   background-size: 140% 140%;
   text-shadow:
     0 0 5px rgba(244, 251, 255, 0.95),
@@ -786,23 +759,12 @@ html[data-low-power='true'] .drawer-brand {
   position: relative;
   display: inline-flex;
   align-items: center;
-  font-family:
-    Orbitron,
-    'Rajdhani',
-    'Segoe UI',
-    sans-serif;
+  font-family: Orbitron, 'Rajdhani', 'Segoe UI', sans-serif;
   font-weight: 950;
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: transparent;
-  background:
-    linear-gradient(
-      90deg,
-      #f8feff 0%,
-      #00f6ff 28%,
-      #9f8cff 65%,
-      #ff2bd6 100%
-    );
+  background: linear-gradient(90deg, #f8feff 0%, #00f6ff 28%, #9f8cff 65%, #ff2bd6 100%);
   background-size: 160% 100%;
   -webkit-background-clip: text;
   background-clip: text;
