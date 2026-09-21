@@ -51,6 +51,7 @@ type WebProxyStatus = {
   certificateFile: string;
   listenPort: number;
   port443Available: boolean;
+  port443Owner: string;
   error: string;
 };
 
@@ -140,6 +141,7 @@ export default function TelemtPage() {
       certificateFile: '',
       listenPort: 15080,
       port443Available: true,
+      port443Owner: '',
       error: '',
     },
   });
@@ -853,10 +855,17 @@ export default function TelemtPage() {
               <Descriptions.Item label="443">
                 {status.webProxy.port443Available
                   ? 'порт свободен'
-                  : status.webProxy.nginxActive
-                    ? 'порт занят nginx — это нормально'
-                    : 'порт занят другим сервисом'}
+                  : status.webProxy.nginxActive && status.webProxy.port443Owner === 'nginx'
+                    ? 'порт уже использует nginx — это нормально'
+                    : status.webProxy.port443Owner
+                      ? 'занят: ' + status.webProxy.port443Owner
+                      : 'занят другим сервисом'}
               </Descriptions.Item>
+              {status.webProxy.port443Owner && status.webProxy.port443Owner !== 'nginx' && (
+                <Descriptions.Item label="Причина">
+                  Остановите «{status.webProxy.port443Owner}» или перенесите его с порта 443.
+                </Descriptions.Item>
+              )}
             </Descriptions>
 
             {status.webProxy.error && (
