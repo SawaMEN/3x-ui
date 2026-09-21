@@ -556,7 +556,7 @@ function SingBoxOutboundEditor({
                     <Select
                       value={type}
                       style={{ width: '100%' }}
-                      options={['direct','block','dns','http','socks','shadowsocks','vmess','vless','trojan','hysteria2','tuic','selector','urltest','redirect','tproxy','shadowtls','ssh'].map((v) => ({ value: v, label: v }))}
+                      options={['direct','block','dns','http','socks','shadowsocks','vmess','vless','trojan','hysteria2','tuic','selector','urltest','tun','redirect','tproxy','shadowtls','ssh'].map((v) => ({ value: v, label: v }))}
                       onChange={(next) => onChange({ type: next, tag: asString(value.tag) || next, ...(next === 'selector' || next === 'urltest' ? { outbounds: asStringArray(value.outbounds) } : {}) })}
                     />
                   </Field>
@@ -1911,6 +1911,7 @@ export default function SingBoxPage() {
   );
 
   const healthIssues = singBoxHealthIssues(config);
+  const dirty = !!snapshot && JSON.stringify(snapshot.config) !== JSON.stringify(config);
 
   const sectionBody = (() => {
     switch (activeSection) {
@@ -1997,6 +1998,7 @@ export default function SingBoxPage() {
                                 ? t('pages.singBox.sourceDisk')
                                 : t('pages.singBox.sourceGenerated')}
                             </Tag>
+                            {dirty && <Tag color="warning">Есть несохранённые изменения</Tag>}
                           </Space>
                         </div>
                       </Col>
@@ -2043,7 +2045,7 @@ export default function SingBoxPage() {
                       if (sectionKeys.has(key)) navigate('/singbox#' + key);
                     }}
                     className="singbox-main-tabs"
-                    items={sectionKeys.map((key) => ({ key, label: SECTION_LABELS[key], children: sectionBody }))}
+                    items={sectionKeys.map((key) => ({ key, label: SECTION_LABELS[key], children: key === activeSection ? sectionBody : null }))}
                   />
                 </Space>
               )}
