@@ -1,0 +1,43 @@
+name: Temporary generate and format update
+
+on:
+  push:
+    branches: [update]
+    paths:
+      - "frontend/src/**"
+      - "frontend/tools/**"
+      - "frontend/public/openapi.json"
+      - ".github/workflows/gen-format-update-temp.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  gen-format:
+    if: "!startsWith(github.event.head_commit.message, 'chore(gen):') && !startsWith(github.event.head_commit.message, 'chore(format):')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Generate and format
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run gen
+          npm run format
+      - name: Commit generated and formatted files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/src/generated frontend/public/openapi.json frontend/src frontend/tools
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "chore(gen): refresh generated API artifacts"
+          git push origin HEAD:update
