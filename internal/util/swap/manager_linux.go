@@ -122,9 +122,9 @@ func GetZramInstallInfo() (ZramInstallInfo, error) {
 		configPath = "/etc/conf.d/zram-init"
 	}
 	info := ZramInstallInfo{
-		Distribution:      id,
-		Version:           version,
-		PackageManager:    packageManager,
+		Distribution:       id,
+		Version:            version,
+		PackageManager:     packageManager,
 		Package:            packageName,
 		Supported:          packageManager != "" && packageName != "",
 		RecommendedPackage: packageName,
