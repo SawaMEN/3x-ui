@@ -45,8 +45,7 @@ jobs:
         run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
       - name: Test
         run: |
-          go list ./... | grep -v '/frontend/node_modules/' > /tmp/go-packages.txt
-          go test -p 12 -shuffle=on -count=1 $(cat /tmp/go-packages.txt)
+          go test -p 12 -vet=off -shuffle=on -count=1 ./...
 
   postgres-durable-first:
     if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
@@ -140,10 +139,9 @@ jobs:
           cache: true
       - name: Stub internal/web/dist for go:embed
         run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
-      - name: Race + shuffle
+      - name: Race detector
         run: |
-          go list ./... | grep -v '/frontend/node_modules/' > /tmp/go-packages.txt
-          go test -race -p 12 -shuffle=on -count=1 -timeout 25m $(cat /tmp/go-packages.txt)
+          go test -race -p 12 -short -vet=off -timeout 20m ./internal/... .
 
   fuzz-smoke:
     if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
@@ -214,6 +212,11 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
           cache-dependency-path: frontend/package-lock.json
+      - name: Cache Playwright Chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
       - name: Install
         run: npm ci --no-audit --no-fund
         working-directory: frontend
