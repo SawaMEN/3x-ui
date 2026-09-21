@@ -539,7 +539,8 @@ function SingBoxOutboundEditor({
     onChange(next);
   };
 
-  const duplicated = asString(value.tag) && existingTags.includes(asString(value.tag));
+  const tag = asString(value.tag);
+  const duplicated = !!tag && existingTags.filter((item) => item === tag).length > (value ? 1 : 0);
 
   return (
     <>
