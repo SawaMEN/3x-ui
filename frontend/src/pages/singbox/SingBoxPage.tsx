@@ -121,11 +121,13 @@ function Field({
   label: string;
   children: ReactNode;
   span?: number;
+  hint?: string;
 }) {
   return (
     <Col xs={24} md={span}>
       <div className="singbox-field">
         <div className="singbox-field-label">{label}</div>
+        {hint && <div className="singbox-field-hint">{hint}</div>}
         {children}
       </div>
     </Col>
@@ -211,10 +213,12 @@ function JsonModal({
   title,
   value,
   onApply,
+  buttonText = 'JSON',
 }: {
   title: string;
   value: unknown;
   onApply: (value: unknown) => void;
+  buttonText?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
@@ -239,7 +243,7 @@ function JsonModal({
   return (
     <>
       <Button icon={<CodeOutlined />} onClick={openEditor}>
-        JSON
+        {buttonText}
       </Button>
       <Modal
         open={open}
@@ -2709,7 +2713,7 @@ export default function SingBoxPage() {
                       if (sectionKeys.has(key)) navigate('/singbox#' + key);
                     }}
                     className="singbox-main-tabs"
-                    items={sectionKeys.map((key) => ({
+                    items={Array.from(sectionKeys).map((key) => ({
                       key,
                       label: SECTION_LABELS[key],
                       children: key === activeSection ? sectionBody : null,
@@ -2788,20 +2792,18 @@ export default function SingBoxPage() {
             ? null
             : asObjectArray(asObject(sectionValue('route', config)).rules)[editingRouteRule]
         }
-        inboundTags={arrObj(config.inbounds)
+        inboundTags={asObjectArray(config.inbounds)
           .map((item) => asString(item.tag))
           .filter(Boolean)}
         outboundTags={asObjectArray(sectionValue('outbounds', config))
           .map((item) => asString(item.tag))
           .filter(Boolean)}
-        ruleSetTags={
-          Array.isArray(asObject(sectionValue('route', config)).rule_set)
-            ? asObject(sectionValue('route', config))
-                .rule_set.map(asObject)
-                .map((item) => asString(item.tag))
-                .filter(Boolean)
-            : []
-        }
+        ruleSetTags={(() => {
+          const ruleSet = asObject(sectionValue('route', config)).rule_set;
+          return Array.isArray(ruleSet)
+            ? ruleSet.map(asObject).map((item) => asString(item.tag)).filter(Boolean)
+            : [];
+        })()}
         onCancel={() => setRouteRuleModalOpen(false)}
         onSave={(next) => {
           const routeValue = asObject(sectionValue('route', config));
