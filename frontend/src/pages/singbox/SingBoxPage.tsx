@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { useLocation } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import {
   Alert,
@@ -816,6 +816,7 @@ export default function SingBoxPage() {
   const [messageApi, contextHolder] = message.useMessage();
   const { antdThemeConfig, isDark, isUltra } = useTheme();
   const location = useLocation();
+  const navigate = useNavigate();
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [config, setConfig] = useState<ConfigMap>({});
   const sectionSlug = location.hash.replace(/^#/, '');
@@ -1637,15 +1638,7 @@ export default function SingBoxPage() {
             URL.revokeObjectURL(url);
           }}>Экспорт JSON</Button>
           <JsonModal title="Все outbounds" value={items} onApply={(next) => updateSection('outbounds', Array.isArray(next) ? next : [])} buttonText="Массовый JSON" />
-        </div>
-        <SingBoxOutboundModal
-          open={outboundModalOpen}
-          value={editingOutbound == null ? null : items[editingOutbound]}
-          existingTags={tags}
-          onCancel={() => setOutboundModalOpen(false)}
-          onSave={saveOutbound}
-        />
-      </Card>
+        </div>      </Card>
     );
   };
 
@@ -1731,16 +1724,6 @@ export default function SingBoxPage() {
             <JsonModal title="Route" value={value} onApply={(next) => updateSection('route', asObject(next))} buttonText="Расширенный JSON" />
           </div>
         </Card>
-
-        <SingBoxRouteRuleModal
-          open={routeRuleModalOpen}
-          value={editingRouteRule == null ? null : rules[editingRouteRule]}
-          inboundTags={arrObj(config.inbounds).map((item) => asString(item.tag)).filter(Boolean)}
-          outboundTags={outTags}
-          ruleSetTags={ruleSetTags}
-          onCancel={() => setRouteRuleModalOpen(false)}
-          onSave={saveRule}
-        />
       </>
     );
   };
@@ -2116,7 +2099,7 @@ export default function SingBoxPage() {
 
       <SingBoxRouteRuleModal
         open={routeRuleModalOpen}
-        value={editingRouteRule == null ? null : asObjectArray(sectionValue('route', config).rules)[editingRouteRule]}
+        value={editingRouteRule == null ? null : asObjectArray(asObject(sectionValue('route', config)).rules)[editingRouteRule]}
         inboundTags={arrObj(config.inbounds).map((item) => asString(item.tag)).filter(Boolean)}
         outboundTags={asObjectArray(sectionValue('outbounds', config)).map((item) => asString(item.tag)).filter(Boolean)}
         ruleSetTags={Array.isArray(asObject(sectionValue('route', config)).rule_set) ? asObject(sectionValue('route', config)).rule_set.map(asObject).map((item) => asString(item.tag)).filter(Boolean) : []}
