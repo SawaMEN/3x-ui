@@ -9,11 +9,23 @@
 
 **3X-UI** — веб-панель управления Xray-core и Sing-box с веб-интерфейсом для управления inbound'ами, клиентами, подписками, маршрутизацией, статистикой и настройками сервера.
 
-Этот репозиторий — форк основного проекта [https://github.com/MHSanaei/3x-ui](https://github.com/MHSanaei/3x-ui).
 Интерфейс по умолчанию использует русский язык; английский также доступен. UI построен на Ant Design и адаптирован для desktop и mobile.
 
 > [!IMPORTANT]
 > Проект предназначен для личного использования и тестирования. Перед эксплуатацией на реальном сервере проверьте конфигурацию, сетевые правила, доступ к панели, TLS и остальные параметры безопасности.
+
+## Благодарности
+
+Этот репозиторий является форком основного проекта [https://github.com/MHSanaei/3x-ui](https://github.com/MHSanaei/3x-ui).
+
+Отдельная благодарность авторам и участникам следующих проектов:
+
+- [telemt/telemt](https://github.com/telemt/telemt) — за **Telemt**.
+- [WINGS-N/3x-ui](https://github.com/WINGS-N/3x-ui) — за **vk-turn-proxy**.
+- [Liafanx/MTProxyL](https://github.com/Liafanx/MTProxyL) — за **MTProxyL**.
+- [Mekotofeuka/MTPROTO_FIX_By_MEKO](https://github.com/Mekotofeuka/MTPROTO_FIX_By_MEKO) — за фикс **MTPROTO**.
+- Основному проекту [MHSanaei/3x-ui](https://github.com/MHSanaei/3x-ui) — за исходную кодовую базу и развитие проекта.
+
 
 ## Возможности
 
@@ -116,26 +128,6 @@ x-ui update
 
 Установщик сохраняет пользовательские файлы в `bin/`, которые не входят в новый релиз, и не перезаписывает существующую конфигурацию Telemt.
 
-## Telemt
-
-Telemt устанавливается как отдельный сервис, если его бинарник входит в релиз.
-
-Конфигурация:
-
-```text
-/etc/x-ui/telemt.toml
-```
-
-Updater Telemt устанавливается отдельно и ежедневно проверяет новую официальную версию. Перед заменой бинарника проверяется SHA-256 архива.
-
-Ручная проверка:
-
-```bash
-/usr/local/x-ui/telemt-update.sh --check
-```
-
-Конфигурация `telemt.toml` существующей установки не перезаписывается при обновлении.
-
 ## Базы данных
 
 По умолчанию используется **SQLite**.
@@ -153,22 +145,6 @@ XUI_DB_DSN=postgres://xui:password@127.0.0.1:5432/xui?sslmode=disable
 XUI_DB_CACHE_MB=16
 XUI_DB_MMAP_MB=64
 ```
-
-## Arch Linux
-
-Для Arch Linux предусмотрен отдельный systemd unit и профиль установки.
-
-Установщик использует полное обновление:
-
-```bash
-pacman -Syu
-```
-
-чтобы не выполнять partial upgrades.
-
-Для Arch Linux доступны отдельные настройки systemd и документация:
-
-[docs/archlinux.md](docs/archlinux.md)
 
 ## Разработка
 
@@ -210,24 +186,6 @@ npm run format
 Часть изменений в этом форке — включая код, UI, документацию, рефакторинг и обслуживание репозитория — выполнена с помощью **ChatGPT и других инструментов искусственного интеллекта (AI)**.
 
 Использование AI не заменяет проверку человеком. Изменения перед релизом необходимо проверять, тестировать и валидировать.
-
-## Участие в разработке
-
-Этот репозиторий является форком основного проекта [https://github.com/MHSanaei/3x-ui](https://github.com/MHSanaei/3x-ui).
-
-Вклад приветствуется. Перед открытием issue или pull request ознакомьтесь с [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## Благодарности
-
-Отдельная благодарность авторам **Telemt** и **mtproxyl** за наработки в области MTProxy.
-
-Также благодарим авторов и контрибьюторов:
-
-- [WINGS-N/3x-ui](https://github.com/WINGS-N/3x-ui) — за **vk-turn-proxy**.
-- [Liafanx/MTProxyL](https://github.com/Liafanx/MTProxyL) — за **MTProxyL**.
-- [Mekotofeuka/MTPROTO_FIX_By_MEKO](https://github.com/Mekotofeuka/MTPROTO_FIX_By_MEKO) — за фикс **MTPROTO**.
-
-Проект также основан на работе участников основного проекта 3X-UI.
 
 ## Лицензия
 
