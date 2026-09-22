@@ -35,7 +35,9 @@ const telemtWebPortOwnerPatternSource = "users:\\(\\(\"([^\"]+)\""
 
 var telemtWebDomainPattern = regexp.MustCompile(telemtWebDomainPatternSource)
 var telemtWebVersionPattern = regexp.MustCompile(telemtWebVersionPatternSource)
-var telemtWebPortOwnerPattern = regexp.MustCompile(telemtWebPortOwnerPatternSource)type TelemtWebProxyState struct {
+var telemtWebPortOwnerPattern = regexp.MustCompile(telemtWebPortOwnerPatternSource)
+
+type TelemtWebProxyState struct {
 	Enabled    bool   `json:"enabled"`
 	Domain     string `json:"domain"`
 	Secret     string `json:"secret"`
