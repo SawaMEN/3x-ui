@@ -17,6 +17,11 @@ import (
 )
 
 const (
+	zramBackendGenerator = "systemd-zram-generator"
+	zramBackendConfig    = "zram-config"
+	zramBackendTools     = "zram-tools"
+	zramBackendInit      = "zram-init"
+
 	managedSwapPath = "/var/lib/3x-ui/swapfile"
 	configPath      = "/etc/x-ui/swap.json"
 	sysctlPath      = "/etc/sysctl.d/99-3x-ui-swap.conf"
@@ -120,6 +125,10 @@ func GetZramInstallInfo() (ZramInstallInfo, error) {
 	configPath := "/etc/systemd/zram-generator.conf.d/60-3x-ui.conf"
 	if id == "alpine" {
 		configPath = "/etc/conf.d/zram-init"
+	} else if packageName == zramBackendConfig {
+		configPath = "/etc/default/zram-config"
+	} else if packageName == zramBackendTools {
+		configPath = "/etc/default/zramswap"
 	}
 	info := ZramInstallInfo{
 		Distribution:       id,
@@ -130,6 +139,7 @@ func GetZramInstallInfo() (ZramInstallInfo, error) {
 		RecommendedPackage: packageName,
 		ConfigPath:         configPath,
 	}
+
 	for _, candidate := range zramPackageCandidates(id, packageName) {
 		version, installed := queryInstalledPackage(packageManager, candidate)
 		info.InstalledPackages = append(info.InstalledPackages, ZramPackage{
@@ -142,14 +152,63 @@ func GetZramInstallInfo() (ZramInstallInfo, error) {
 			info.RecommendedVersion = version
 		}
 	}
-	info.Installed = info.RecommendedInstalled
-	info.UsingGenerator = generatorInstalled()
+
 	info.ActiveBackend = detectActiveZramBackend(info)
+	selected := ""
+	if info.ActiveBackend != "" {
+		for _, candidate := range info.InstalledPackages {
+			if candidate.Installed && zramBackendForPackage(candidate.Name) == info.ActiveBackend {
+				selected = candidate.Name
+				break
+			}
+		}
+	}
+	if selected == "" {
+		for _, candidate := range info.InstalledPackages {
+			if candidate.Installed {
+				selected = candidate.Name
+				break
+			}
+		}
+	}
+	if selected != "" {
+		info.Package = selected
+		info.Installed = true
+	} else {
+		info.Installed = false
+	}
+
+	info.UsingGenerator = info.ActiveBackend == zramBackendGenerator
+	if info.Package == zramBackendConfig {
+		info.ConfigPath = "/etc/default/zram-config"
+	} else if info.Package == zramBackendTools {
+		info.ConfigPath = "/etc/default/zramswap"
+	} else if info.Package == zramBackendInit {
+		info.ConfigPath = "/etc/conf.d/zram-init"
+	} else {
+		info.ConfigPath = "/etc/systemd/zram-generator.conf.d/60-3x-ui.conf"
+	}
+
 	if info.Supported {
 		info.InstallCommand = installCommand(info.PackageManager, info.Package)
 		info.ReinstallCommand = reinstallCommand(info.PackageManager, info.Package)
 	}
 	return info, nil
+}
+
+func zramBackendForPackage(packageName string) string {
+	switch packageName {
+	case "systemd-zram-generator", "zram-generator", "zram-generator-defaults":
+		return zramBackendGenerator
+	case "zram-config":
+		return zramBackendConfig
+	case "zram-tools":
+		return zramBackendTools
+	case "zram-init":
+		return zramBackendInit
+	default:
+		return ""
+	}
 }
 
 func zramPackageCandidates(distribution, recommended string) []string {
@@ -164,16 +223,18 @@ func zramPackageCandidates(distribution, recommended string) []string {
 	}
 	add(recommended)
 	switch distribution {
-	case "ubuntu", "debian":
+	case "ubuntu", "debian", "armbian":
 		add("systemd-zram-generator")
 		add("zram-config")
 		add("zram-tools")
 	case "fedora":
 		add("zram-generator-defaults")
 		add("zram-generator")
-	case "rhel", "rocky", "alma":
+	case "rhel", "rocky", "alma", "amzn", "centos", "ol":
 		add("zram-generator")
 		add("zram-generator-defaults")
+	case "arch", "manjaro", "parch", "opensuse-tumbleweed", "opensuse-leap":
+		add("zram-generator")
 	default:
 		add(recommended)
 	}
@@ -247,20 +308,33 @@ func queryInstalledPackage(manager, packageName string) (string, bool) {
 func detectActiveZramBackend(info ZramInstallInfo) string {
 	if _, err := exec.LookPath("systemctl"); err == nil {
 		if commandSucceeded("systemctl", "is-active", "--quiet", "zram-config.service") {
-			return "zram-config"
+			return zramBackendConfig
 		}
 		if commandSucceeded("systemctl", "is-active", "--quiet", "zramswap.service") {
-			return "zram-tools"
+			return zramBackendTools
+		}
+		if commandSucceeded("systemctl", "is-active", "--quiet", "dev-zram0.swap") {
+			return zramBackendGenerator
 		}
 	}
 	if len(zramIDs()) == 0 {
 		return ""
 	}
-	if info.UsingGenerator {
-		return "systemd-zram-generator"
+	for _, candidate := range info.InstalledPackages {
+		if !candidate.Installed {
+			continue
+		}
+		switch zramBackendForPackage(candidate.Name) {
+		case zramBackendTools:
+			return zramBackendTools
+		case zramBackendConfig:
+			return zramBackendConfig
+		case zramBackendGenerator:
+			return zramBackendGenerator
+		}
 	}
 	if info.Distribution == "alpine" && info.RecommendedInstalled {
-		return "zram-init"
+		return zramBackendInit
 	}
 	return ""
 }
@@ -300,30 +374,71 @@ func configureZram(ctx context.Context, reinstall bool) error {
 		return fmt.Errorf("unsupported Linux distribution or package manager")
 	}
 
-	if info.ActiveBackend != "" && info.ActiveBackend != "systemd-zram-generator" && info.ActiveBackend != "zram-init" {
+	targetBackend := zramBackendForPackage(info.Package)
+	if info.ActiveBackend != "" && targetBackend != "" && info.ActiveBackend != targetBackend {
 		return fmt.Errorf("another ZRAM backend is active: %s; disable it before switching to %s", info.ActiveBackend, info.Package)
 	}
 
-	if reinstall || !info.RecommendedInstalled {
-		if err := installZramPackage(ctx, info, reinstall); err != nil {
-			return err
+	if reinstall || !info.Installed {
+		if err := refreshPackageDatabase(ctx, info.PackageManager); err != nil {
+			return fmt.Errorf("failed to refresh package database: %w", err)
+		}
+
+		if reinstall && info.Installed {
+			if err := installZramPackage(ctx, info, true); err != nil {
+				return err
+			}
+		} else {
+			var lastErr error
+			installed := false
+			for _, candidate := range info.InstalledPackages {
+				if candidate.Installed {
+					continue
+				}
+				candidateInfo := info
+				candidateInfo.Package = candidate.Name
+				if err := installZramPackage(ctx, candidateInfo, false); err != nil {
+					lastErr = err
+					continue
+				}
+				installed = true
+				break
+			}
+			if !installed {
+				if lastErr != nil {
+					return fmt.Errorf("failed to install any supported ZRAM package: %w", lastErr)
+				}
+				return fmt.Errorf("no supported ZRAM package is available in configured repositories")
+			}
 		}
 	}
 
-	if info.Distribution == "alpine" {
-		return installAlpineZram(ctx)
-	}
-
-	// Re-detect after package installation. Some distributions install the
-	// generator in a path that was not present when the initial status was read.
 	info, err = GetZramInstallInfo()
 	if err != nil {
 		return err
 	}
-	if !info.UsingGenerator {
-		return fmt.Errorf("zram-generator was installed, but the systemd generator was not found")
+	if !info.Installed {
+		return fmt.Errorf("ZRAM package installation completed, but no supported ZRAM package is detected")
 	}
 
+	switch zramBackendForPackage(info.Package) {
+	case zramBackendGenerator:
+		return configureGeneratorZram(ctx, info)
+	case zramBackendTools:
+		return configureToolsZram(ctx, info)
+	case zramBackendConfig:
+		return configureConfigZram(ctx, info)
+	case zramBackendInit:
+		return installAlpineZram(ctx)
+	default:
+		return fmt.Errorf("unsupported ZRAM backend: %s", info.Package)
+	}
+}
+
+func configureGeneratorZram(ctx context.Context, info ZramInstallInfo) error {
+	if !generatorInstalled() {
+		return fmt.Errorf("zram-generator package is installed, but the systemd generator was not found")
+	}
 	configDir := filepath.Dir(info.ConfigPath)
 	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		return err
@@ -335,21 +450,68 @@ func configureZram(ctx context.Context, reinstall bool) error {
 		return err
 	}
 
-	systemctl, err := exec.LookPath("systemctl")
+	systemctlPath, err := exec.LookPath("systemctl")
 	if err != nil {
 		return fmt.Errorf("systemd is required to activate zram: %w", err)
 	}
-
-	if err := runContext(ctx, systemctl, "daemon-reload"); err != nil {
+	if err := runContext(ctx, systemctlPath, "daemon-reload"); err != nil {
 		return err
 	}
-	if err := runContext(ctx, systemctl, "start", "dev-zram0.swap"); err != nil {
+	if err := runContext(ctx, systemctlPath, "start", "dev-zram0.swap"); err != nil {
 		return fmt.Errorf("failed to activate zram swap: %w", err)
 	}
-	if !isSwapActive("/dev/zram0") {
-		return fmt.Errorf("zram generator completed, but /dev/zram0 is not active swap")
+	if !hasActiveZramSwap() {
+		return fmt.Errorf("zram generator completed, but no active zram swap was detected")
 	}
 	return nil
+}
+
+func configureToolsZram(ctx context.Context, info ZramInstallInfo) error {
+	if err := os.MkdirAll(filepath.Dir(info.ConfigPath), 0o755); err != nil {
+		return err
+	}
+	config := "ALGO=lz4\nPERCENT=50\nPERCENTAGE=50\nPRIORITY=100\n"
+	if err := os.WriteFile(info.ConfigPath, []byte(config), 0o644); err != nil {
+		return err
+	}
+
+	systemctlPath, err := exec.LookPath("systemctl")
+	if err != nil {
+		return fmt.Errorf("systemd is required to activate zram-tools: %w", err)
+	}
+	if err := runContext(ctx, systemctlPath, "enable", "--now", "zramswap.service"); err != nil {
+		return fmt.Errorf("failed to activate zram-tools: %w", err)
+	}
+	if !hasActiveZramSwap() {
+		return fmt.Errorf("zram-tools completed, but no active zram swap was detected")
+	}
+	return nil
+}
+
+func configureConfigZram(ctx context.Context, info ZramInstallInfo) error {
+	if _, err := exec.LookPath("systemctl"); err != nil {
+		return fmt.Errorf("systemd is required to activate zram-config: %w", err)
+	}
+	if err := runContext(ctx, "systemctl", "enable", "--now", "zram-config.service"); err != nil {
+		return fmt.Errorf("failed to activate zram-config: %w", err)
+	}
+	if !hasActiveZramSwap() {
+		return fmt.Errorf("zram-config completed, but no active zram swap was detected")
+	}
+	return nil
+}
+
+func hasActiveZramSwap() bool {
+	areas, err := readProcSwaps()
+	if err != nil {
+		return false
+	}
+	for _, area := range areas {
+		if area.Active && strings.HasPrefix(area.Path, "/dev/zram") {
+			return true
+		}
+	}
+	return false
 }
 
 func installAlpineZram(ctx context.Context) error {
