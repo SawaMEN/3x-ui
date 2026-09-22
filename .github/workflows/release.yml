@@ -219,7 +219,8 @@ jobs:
           chmod +x mita
           rm -f "$MIERU_PKG"
 
-          PSIPHON_VER="v2.0.41"
+          PSIPHON_VER=$(curl -sf "${CURL_RETRY[@]}" -o /dev/null -w '%{redirect_url}' https://github.com/Psiphon-Labs/psiphon-tunnel-core/releases/latest | sed -n 's#.*/releases/tag/##p')
+          test -n "$PSIPHON_VER"
           if [[ "${{ matrix.platform }}" == "amd64" ]]; then
             curl -sfLRo psiphond "${CURL_RETRY[@]}" "https://raw.githubusercontent.com/Psiphon-Labs/psiphon-tunnel-core-binaries/master/psiphond/psiphond"
           else
