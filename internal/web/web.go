@@ -21,7 +21,9 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/eventbus"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/mieru"
 	"github.com/SawaMEN/3x-ui/v3/internal/mtproto"
+	"github.com/SawaMEN/3x-ui/v3/internal/psiphon"
 	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	systemswap "github.com/SawaMEN/3x-ui/v3/internal/util/swap"
@@ -301,6 +303,8 @@ const (
 	cadenceMtproto       = "@every 10s"
 	cadenceAmneziaWG     = "@every 10s"
 	cadenceTuic          = "@every 10s"
+	cadenceMieru         = "@every 10s"
+	cadencePsiphon       = "@every 10s"
 	cadenceClientIPScan  = "@every 10s"
 	cadenceNodeHeartbeat = "@every 5s"
 	cadenceNodeTraffic   = "@every 5s"
@@ -372,6 +376,14 @@ func (s *Server) startTask(restartXray bool, loc *time.Location) {
 	tuicJob := job.NewTuicJob()
 	_, _ = s.cron.AddJob(cadenceTuic, tuicJob)
 	go tuicJob.Run()
+
+	mieruJob := job.NewMieruJob()
+	_, _ = s.cron.AddJob(cadenceMieru, mieruJob)
+	go mieruJob.Run()
+
+	psiphonJob := job.NewPsiphonJob()
+	_, _ = s.cron.AddJob(cadencePsiphon, psiphonJob)
+	go psiphonJob.Run()
 
 	// check client ips from log file every 10 sec
 	_, _ = s.cron.AddJob(cadenceClientIPScan, job.NewCheckClientIpJob())
@@ -859,6 +871,8 @@ func (s *Server) stop(stopXray bool, stopTgBot bool) error {
 		mtproto.GetManager().StopAll()
 		amneziawgnet.GetManager().StopAll()
 		tuic.GetManager().StopAll()
+		mieru.GetManager().StopAll()
+		psiphon.GetManager().StopAll()
 		amneziawgnet.GetOutboundManager().StopAll()
 	}
 	if err := service.VKTurnProxyRuntime().ShutdownForRestart(); err != nil {
