@@ -714,7 +714,12 @@
           "node": "Node address",
           "listen": "Inbound listen",
           "custom": "Custom"
-        }
+        },
+        "mieruTcpPorts": "TCP ports / ranges",
+        "mieruUdpPorts": "UDP ports / ranges",
+        "mieruPortRangesHint": "Use individual ports or ranges such as 2012-2022. Mieru supports separate TCP and UDP bindings.",
+        "mieruMultiplexing": "Multiplexing",
+        "mieruHandshakeMode": "Handshake mode"
       },
       "info": {
         "mode": "Mode",
