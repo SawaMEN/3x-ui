@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/config"
 )
 
 const commandTimeout = 30 * time.Minute
@@ -75,7 +77,7 @@ func GetStatus(ctx context.Context) (Status, error) {
 			AvailableVersion: version,
 			Installed:        installed,
 			Kernel:           true,
-			UpdateAvailable:  installed,
+			UpdateAvailable: packageUpdateAvailable(installed, installedVersion, version),
 		})
 	}
 	sort.Slice(kernelPackages, func(i, j int) bool { return kernelPackages[i].Name < kernelPackages[j].Name })
@@ -265,6 +267,7 @@ func detectDistribution() distroInfo {
 }
 
 func requiredPackages(distribution string) []string {
+	var packages []string
 	switch distribution {
 	case "ubuntu", "debian", "armbian":
 		return []string{"cron", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl"}
@@ -277,8 +280,49 @@ func requiredPackages(distribution string) []string {
 	case "alpine":
 		return []string{"dcron", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl"}
 	default:
-		return []string{"cron", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl"}
+		packages = []string{"cron", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl", "util-linux"}
 	}
+
+	// Swap management uses mkswap/swapon from util-linux. Keep it visible in the
+	// system dependency inventory even on minimal distributions where it may be
+	// omitted from the base image.
+	addPackage := func(name string) {
+		if name == "" {
+			return
+		}
+		for _, existing := range packages {
+			if existing == name {
+				return
+			}
+		}
+		packages = append(packages, name)
+	}
+
+	// The panel can use pg_dump/pg_restore when PostgreSQL is selected. Mirror
+	// the package names used by install.sh/update.sh so the system update page
+	// can repair a missing client as well.
+	if config.GetDBKind() == "postgres" {
+		switch distribution {
+		case "ubuntu", "debian", "armbian", "alpine":
+			addPackage("postgresql-client")
+		case "fedora", "amzn", "rhel", "almalinux", "rocky", "ol", "centos", "arch", "manjaro", "parch", "opensuse-tumbleweed", "opensuse-leap":
+			addPackage("postgresql")
+		}
+	}
+
+	// Fail2ban is an optional module, but when it is already present its nftables
+	// backend is a runtime dependency on minimal images. Show both packages so a
+	// missing nftables package is visible instead of failing later in the module.
+	if commandExists("fail2ban-client") {
+		addPackage("fail2ban")
+		addPackage("nftables")
+	}
+
+	return packages
+}
+
+func packageUpdateAvailable(installed bool, installedVersion, availableVersion string) bool {
+	return installed && availableVersion != "" && installedVersion != "" && installedVersion != availableVersion
 }
 
 func refreshPackageDatabase(ctx context.Context, manager string) error {
@@ -502,6 +546,11 @@ func isRPMArch(value string) bool {
 
 func isKernelPackage(name string) bool {
 	lower := strings.ToLower(name)
+	for _, exact := range []string{"linux", "linux-hardened", "linux-zen", "linux-rt"} {
+		if lower == exact {
+			return true
+		}
+	}
 	for _, prefix := range []string{
 		"linux-image", "linux-generic", "linux-virtual", "linux-azure",
 		"linux-oem", "linux-lowlatency", "linux-kvm", "linux-lts", "kernel",
