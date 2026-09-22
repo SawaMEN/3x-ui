@@ -714,7 +714,12 @@
           "node": "Адрес узла",
           "listen": "Адрес прослушивания inbound",
           "custom": "Пользовательская"
-        }
+        },
+        "mieruTcpPorts": "TCP-порты / диапазоны",
+        "mieruUdpPorts": "UDP-порты / диапазоны",
+        "mieruPortRangesHint": "Можно указать отдельные порты или диапазоны, например 2012-2022. Для TCP и UDP задаются отдельные bindings.",
+        "mieruMultiplexing": "Мультиплексирование",
+        "mieruHandshakeMode": "Режим рукопожатия"
       },
       "info": {
         "mode": "Режим",
