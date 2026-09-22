@@ -270,22 +270,19 @@ func requiredPackages(distribution string) []string {
 	var packages []string
 	switch distribution {
 	case "ubuntu", "debian", "armbian":
-		return []string{"cron", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl"}
+		packages = []string{"cron", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl", "util-linux"}
 	case "fedora", "amzn", "rhel", "almalinux", "rocky", "ol", "centos":
-		return []string{"cronie", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl"}
+		packages = []string{"cronie", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl", "util-linux"}
 	case "arch", "manjaro", "parch":
-		return []string{"cronie", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl"}
+		packages = []string{"cronie", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl", "util-linux"}
 	case "opensuse-tumbleweed", "opensuse-leap":
-		return []string{"cron", "curl", "tar", "timezone", "socat", "ca-certificates", "openssl"}
+		packages = []string{"cron", "curl", "tar", "timezone", "socat", "ca-certificates", "openssl", "util-linux"}
 	case "alpine":
-		return []string{"dcron", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl"}
+		packages = []string{"dcron", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl", "util-linux"}
 	default:
 		packages = []string{"cron", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl", "util-linux"}
 	}
 
-	// Swap management uses mkswap/swapon from util-linux. Keep it visible in the
-	// system dependency inventory even on minimal distributions where it may be
-	// omitted from the base image.
 	addPackage := func(name string) {
 		if name == "" {
 			return
@@ -305,14 +302,14 @@ func requiredPackages(distribution string) []string {
 		switch distribution {
 		case "ubuntu", "debian", "armbian", "alpine":
 			addPackage("postgresql-client")
-		case "fedora", "amzn", "rhel", "almalinux", "rocky", "ol", "centos", "arch", "manjaro", "parch", "opensuse-tumbleweed", "opensuse-leap":
+		case "fedora", "amzn", "rhel", "almalinux", "rocky", "ol", "centos",
+			"arch", "manjaro", "parch", "opensuse-tumbleweed", "opensuse-leap":
 			addPackage("postgresql")
 		}
 	}
 
-	// Fail2ban is an optional module, but when it is already present its nftables
-	// backend is a runtime dependency on minimal images. Show both packages so a
-	// missing nftables package is visible instead of failing later in the module.
+	// Fail2ban is optional. When the module is installed, nftables is needed on
+	// minimal images because recent fail2ban defaults use its nftables action.
 	if commandExists("fail2ban-client") {
 		addPackage("fail2ban")
 		addPackage("nftables")
@@ -320,7 +317,6 @@ func requiredPackages(distribution string) []string {
 
 	return packages
 }
-
 func packageUpdateAvailable(installed bool, installedVersion, availableVersion string) bool {
 	return installed && availableVersion != "" && installedVersion != "" && installedVersion != availableVersion
 }
