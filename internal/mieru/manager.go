@@ -350,6 +350,6 @@ func (m *Manager) Reconcile(desired []Instance) {
   for id,cur:=range m.procs { if _,ok:=want[id];!ok { _=cur.proc.Stop(); delete(m.procs,id); delete(m.traffic,id); _=os.Remove(configPathForID(id)); _=os.Remove(socketPathForID(id)) } }
   for _,inst:=range desired { if err:=m.ensureLocked(inst);err!=nil && m.lastErr[inst.Id]!=err.Error(){m.lastErr[inst.Id]=err.Error();logger.Warningf("mieru: failed to start inbound %d (%s): %v",inst.Id,inst.Tag,err)} }
 }
-func (m *Manager) Remove(id int) {m.mu.Lock();defer m.mu.Unlock();if cur:=m.procs[id];cur!=nil{_ = cur.proc.Stop();delete(m.procs,id)};_ = os.Remove(configPathForID(id));_ = os.Remove(socketPathForID(id))}
+func (m *Manager) Remove(id int) {m.mu.Lock();defer m.mu.Unlock();if cur:=m.procs[id];cur!=nil{_ = cur.proc.Stop();delete(m.procs,id)};delete(m.traffic,id);_ = os.Remove(configPathForID(id));_ = os.Remove(socketPathForID(id))}
 func (m *Manager) StopAll() {m.mu.Lock();defer m.mu.Unlock();for id,cur:=range m.procs{_=cur.proc.Stop();_=os.Remove(configPathForID(id));_=os.Remove(socketPathForID(id));delete(m.procs,id);delete(m.traffic,id)}}
 func (m *Manager) HasRunning() bool {m.mu.Lock();defer m.mu.Unlock();for _,cur:=range m.procs{if cur.proc!=nil&&cur.proc.IsRunning(){return true}};return false}
