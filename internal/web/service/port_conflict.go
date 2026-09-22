@@ -184,6 +184,24 @@ func (s *InboundService) checkPortConflict(inbound *model.Inbound, ignoreId int)
 func checkPortConflictTx(db *gorm.DB, inbound *model.Inbound, ignoreId int) (*portConflictDetail, error) {
 	newBits := inboundTransports(inbound.Protocol, inbound.StreamSettings, inbound.Settings)
 
+	// The panel itself owns its configured web port outside the inbounds table.
+	// Reserve that listener so a newly added inbound cannot be saved successfully
+	// only to fail later when the panel and core try to bind the same TCP socket.
+	if inbound.NodeID == nil {
+		panelSettings := &SettingService{}
+		if panelPort, portErr := panelSettings.GetPort(); portErr == nil && panelPort > 0 && inbound.Port == panelPort {
+			panelListen, _ := panelSettings.GetListen()
+			if listenOverlaps(panelListen, inbound.Listen) {
+				return &portConflictDetail{
+					Tag:        "3x-ui",
+					Listen:     panelListen,
+					Port:       panelPort,
+					Transports: transportTCP,
+				}, nil
+			}
+		}
+	}
+
 	// The internal Xray API inbound (tag "api", loopback TCP) isn't a DB row,
 	// so a local user inbound reusing its port would leave Xray binding the
 	// port twice (#5304). Nodes run their own Xray, so this only applies to
