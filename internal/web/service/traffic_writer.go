@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"runtime/debug"
 	"sync"
 	"time"
 
@@ -133,7 +132,7 @@ func runSerializedTx(fn func(tx *gorm.DB) error) error {
 func safeApply(fn func() error) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("traffic writer panic: %v\n%s", r, debug.Stack())
+			err = fmt.Errorf("traffic writer panic: %v", r)
 			logger.Error(err.Error())
 		}
 	}()
