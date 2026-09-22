@@ -350,7 +350,7 @@ func listAvailableUpdates(ctx context.Context, manager string) (map[string]strin
 func installedPackageVersion(manager, name string) (string, bool) {
 	switch manager {
 	case "apt-get":
-		output, err := exec.Command("dpkg-query", "-W", "-f=${Status}\t${Version}\n", name).Output()
+		output, err := exec.CommandContext(context.Background(), "dpkg-query", "-W", "-f=${Status}\t${Version}\n", name).Output()
 		if err != nil {
 			return "", false
 		}
