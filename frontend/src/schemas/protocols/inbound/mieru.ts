@@ -34,7 +34,23 @@ const MieruPortEntrySchema = z
 
 const MieruPortListSchema = z.array(MieruPortEntrySchema).default([]);
 
-export const MieruInboundSettingsSchema = z.object({
+export const MieruInboundSettingsSchema = z.preprocess(
+  (value) => {
+    if (!value || typeof value !== 'object') return value;
+    const raw = { ...(value as Record<string, unknown>) };
+    const hasTcp = Array.isArray(raw.tcpPorts) && raw.tcpPorts.length > 0;
+    const hasUdp = Array.isArray(raw.udpPorts) && raw.udpPorts.length > 0;
+    if (!hasTcp && !hasUdp && Array.isArray(raw.additionalPorts) && raw.additionalPorts.length > 0) {
+      const protocols = Array.isArray(raw.protocols) ? raw.protocols : ['TCP', 'UDP'];
+      const ports = raw.additionalPorts
+        .map((port) => String(port).trim())
+        .filter(Boolean);
+      if (protocols.includes('TCP')) raw.tcpPorts = ports;
+      if (protocols.includes('UDP')) raw.udpPorts = ports;
+    }
+    return raw;
+  },
+  export const MieruInboundSettingsSchema = z.object({
   // New native mita bindings. Empty lists fall back to the legacy fields below
   // so existing inbounds continue to work unchanged.
   tcpPorts: MieruPortListSchema,
@@ -60,4 +76,5 @@ export const MieruInboundSettingsSchema = z.object({
   userHintIsMandatory: z.boolean().default(false),
   clients: z.array(MieruClientSchema).default([]),
 });
+);
 export type MieruInboundSettings = z.infer<typeof MieruInboundSettingsSchema>;
