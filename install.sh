@@ -1706,6 +1706,8 @@ install_x-ui() {
     else
         install_tuic_server
     fi
+    [[ -f bin/mita ]] && chmod +x bin/mita
+    [[ -f bin/psiphond ]] && chmod +x bin/psiphond
 
     # Restore anything from the old bin/ that the fresh release doesn't ship
     # (custom geoip/geosite files, or anything else an admin hand-placed
@@ -1724,7 +1726,7 @@ install_x-ui() {
         while IFS= read -r -d '' f; do
             local rel="${f#"${custom_bin_backup}"/}"
             case "${rel}" in
-                config.json | mtproto | mtproto/* | tuic | tuic/*) continue ;;
+                config.json | mtproto | mtproto/* | tuic | tuic/* | mieru | mieru/* | psiphon | psiphon/*) continue ;;
             esac
             if [[ ! -e "bin/${rel}" ]]; then
                 mkdir -p "bin/$(dirname "${rel}")"
