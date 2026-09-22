@@ -263,6 +263,9 @@ func renderConfig(inst Instance) map[string]any {
 		"users": users,
 		"loggingLevel": inst.LoggingLevel,
 		"mtu": inst.MTU,
+		"dns": map[string]any{
+			"dualStack": "PREFER_IPv4",
+		},
 	}
 	if inst.Listen != "" {
 		out["listenIPAddress"] = inst.Listen
