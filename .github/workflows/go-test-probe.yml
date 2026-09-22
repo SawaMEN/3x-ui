@@ -1,4 +1,4 @@
-name: Temp Go Test Probe
+name: Temp MTProto Debug Probe
 
 on:
   push:
@@ -16,4 +16,4 @@ jobs:
       - name: Stub internal/web/dist for go:embed
         run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
       - name: Go tests
-        run: go test -p 12 -vet=off -shuffle=on -count=1 ./...
+        run: go test -p 1 -vet=off -count=1 ./internal/web/service -run 'TestUpdateInboundMtprotoUnchangedDoesNotRestart/unchangedSaveKeepsProcess'
