@@ -1234,6 +1234,13 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 			if client.Email == "" {
 				return inbound, false, common.NewError("empty client email")
 			}
+		case "naive", "mieru":
+			if client.Email == "" {
+				return inbound, false, common.NewError("empty client email")
+			}
+			if client.Password == "" {
+				return inbound, false, common.NewError("client requires a password")
+			}
 		default:
 			if client.ID == "" {
 				return inbound, false, common.NewError("empty client ID")
@@ -1744,6 +1751,16 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 			}
 			if client.Email == "" {
 				return inbound, false, common.NewError("empty client email")
+			}
+		}
+	}
+	if inbound.Protocol == model.NaiveProxy || inbound.Protocol == model.Mieru {
+		for _, client := range clients {
+			if client.Email == "" {
+				return inbound, false, common.NewError("empty client email")
+			}
+			if client.Password == "" {
+				return inbound, false, common.NewError("client requires a password")
 			}
 		}
 	}
