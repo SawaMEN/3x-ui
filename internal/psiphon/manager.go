@@ -38,7 +38,13 @@ func (m *Manager)ensureLocked(inst Instance)error{
   _=os.RemoveAll(configPathForID(inst.Id))
   if err:=os.MkdirAll(configPathForID(inst.Id),0750);err!=nil{return err}
   proc:=newProcess(configPathForID(inst.Id),inst.Tag,inst);if err:=proc.Start();err!=nil{return err}
-  if entry:=proc.ServerEntry();entry!=""{persistServerEntry(inst.Id,entry)}
+  if entry:=proc.ServerEntry();entry!=""{
+    if inst.ServerEntry == "" {
+      persistServerEntry(inst.Id,entry)
+      inst.ServerEntry = entry
+      fp = inst.fingerprint()
+    }
+  }
   m.procs[inst.Id]=&managed{proc:proc,tag:inst.Tag,fp:fp};delete(m.lastErr,inst.Id);logger.Infof("psiphon: started psiphond for inbound %d (%s)",inst.Id,inst.Tag);return nil
 }
 func(m *Manager)Ensure(inst Instance)error{m.mu.Lock();defer m.mu.Unlock();return m.ensureLocked(inst)}
