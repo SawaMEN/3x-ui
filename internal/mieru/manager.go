@@ -15,84 +15,225 @@ import (
   "github.com/SawaMEN/3x-ui/v3/internal/logger"
 )
 
-type PortBinding struct { Port int; Protocol string }
-type User struct { Name string; Password string }
+type PortBinding struct {
+	Port      int
+	PortRange string
+	Protocol  string
+}
+
+type User struct {
+	Name     string
+	Password string
+}
 
 type Instance struct {
-  Id int
-  Tag string
-  Listen string
-  PortBindings []PortBinding
-  Users []User
-  MTU int
-  LoggingLevel string
-  UserHintIsMandatory bool
+	Id                    int
+	Tag                   string
+	Listen                string
+	PortBindings          []PortBinding
+	Users                 []User
+	MTU                   int
+	LoggingLevel          string
+	UserHintIsMandatory   bool
+	Multiplexing          string
+	HandshakeMode         string
 }
 
 func stringSlice(v any) []string {
-  raw, _ := v.([]any)
-  out := make([]string, 0, len(raw))
-  for _, x := range raw { if s, ok := x.(string); ok { out = append(out, s) } }
-  return out
+	raw, _ := v.([]any)
+	out := make([]string, 0, len(raw))
+	for _, x := range raw {
+		if s, ok := x.(string); ok {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
-func intSlice(v any) []int {
-  raw, _ := v.([]any)
-  out := make([]int, 0, len(raw))
-  for _, x := range raw {
-    switch n := x.(type) {
-    case float64: out = append(out, int(n))
-    case int: out = append(out, n)
-    }
-  }
-  return out
+func portEntryString(v any) string {
+	switch n := v.(type) {
+	case float64:
+		if n == float64(int(n)) {
+			return strconv.Itoa(int(n))
+		}
+	case int:
+		return strconv.Itoa(n)
+	case string:
+		return strings.TrimSpace(n)
+	}
+	return ""
+}
+
+func parsePortBinding(value string, protocol string) (PortBinding, bool) {
+	value = strings.TrimSpace(value)
+	protocol = strings.ToUpper(strings.TrimSpace(protocol))
+	if protocol != "TCP" && protocol != "UDP" || value == "" {
+		return PortBinding{}, false
+	}
+	if strings.Contains(value, "-") {
+		parts := strings.SplitN(value, "-", 2)
+		if len(parts) != 2 {
+			return PortBinding{}, false
+		}
+		start, err1 := strconv.Atoi(strings.TrimSpace(parts[0]))
+		end, err2 := strconv.Atoi(strings.TrimSpace(parts[1]))
+		if err1 != nil || err2 != nil || start < 1025 || end > 65535 || end < start {
+			return PortBinding{}, false
+		}
+		return PortBinding{PortRange: fmt.Sprintf("%d-%d", start, end), Protocol: protocol}, true
+	}
+	port, err := strconv.Atoi(value)
+	if err != nil || port < 1025 || port > 65535 {
+		return PortBinding{}, false
+	}
+	return PortBinding{Port: port, Protocol: protocol}, true
+}
+
+func addPortBindings(dst *[]PortBinding, seen map[string]struct{}, values []any, protocol string) {
+	for _, raw := range values {
+		value := portEntryString(raw)
+		binding, ok := parsePortBinding(value, protocol)
+		if !ok {
+			continue
+		}
+		key := binding.Protocol + ":"
+		if binding.PortRange != "" {
+			key += binding.PortRange
+		} else {
+			key += strconv.Itoa(binding.Port)
+		}
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		*dst = append(*dst, binding)
+	}
 }
 
 func InstanceFromInbound(ib *model.Inbound) (Instance, bool) {
-  if ib == nil || ib.Protocol != model.Mieru { return Instance{}, false }
-  var raw map[string]any
-  if err := json.Unmarshal([]byte(ib.Settings), &raw); err != nil { return Instance{}, false }
-  protocols := stringSlice(raw["protocols"])
-  if len(protocols) == 0 { protocols = []string{"TCP", "UDP"} }
-  ports := append([]int{ib.Port}, intSlice(raw["additionalPorts"])...)
-  seen := map[string]struct{}{}
-  bindings := make([]PortBinding, 0, len(ports)*len(protocols))
-  for _, port := range ports {
-    if port < 1 || port > 65535 { continue }
-    for _, proto := range protocols {
-      proto = strings.ToUpper(strings.TrimSpace(proto))
-      if proto != "TCP" && proto != "UDP" { continue }
-      key := strconv.Itoa(port)+":"+proto
-      if _, ok := seen[key]; ok { continue }
-      seen[key] = struct{}{}
-      bindings = append(bindings, PortBinding{Port: port, Protocol: proto})
-    }
-  }
-  clients, _ := raw["clients"].([]any)
-  users := make([]User, 0, len(clients))
-  for _, item := range clients {
-    client, _ := item.(map[string]any)
-    enabled, _ := client["enable"].(bool)
-    email, _ := client["email"].(string)
-    password, _ := client["password"].(string)
-    if enabled && strings.TrimSpace(email) != "" && password != "" { users = append(users, User{Name: strings.TrimSpace(email), Password: password}) }
-  }
-  if len(bindings) == 0 || len(users) == 0 { return Instance{}, false }
-  mtu, _ := raw["mtu"].(float64)
-  if int(mtu) < 1280 || int(mtu) > 1400 { mtu = 1400 }
-  level, _ := raw["loggingLevel"].(string)
-  level = strings.ToUpper(strings.TrimSpace(level))
-  switch level { case "OFF", "ERROR", "WARN", "INFO", "DEBUG": default: level = "INFO" }
-  mandatory, _ := raw["userHintIsMandatory"].(bool)
-  return Instance{Id:ib.Id, Tag:ib.Tag, Listen:strings.TrimSpace(ib.Listen), PortBindings:bindings, Users:users, MTU:int(mtu), LoggingLevel:level, UserHintIsMandatory:mandatory}, true
+	if ib == nil || ib.Protocol != model.Mieru {
+		return Instance{}, false
+	}
+	var raw map[string]any
+	if err := json.Unmarshal([]byte(ib.Settings), &raw); err != nil {
+		return Instance{}, false
+	}
+
+	var bindings []PortBinding
+	seen := map[string]struct{}{}
+	if values, ok := raw["tcpPorts"].([]any); ok {
+		addPortBindings(&bindings, seen, values, "TCP")
+	}
+	if values, ok := raw["udpPorts"].([]any); ok {
+		addPortBindings(&bindings, seen, values, "UDP")
+	}
+
+	// Backward compatibility for inbounds created before protocol-specific
+	// port bindings were added.
+	if len(bindings) == 0 {
+		protocols := stringSlice(raw["protocols"])
+		if len(protocols) == 0 {
+			protocols = []string{"TCP", "UDP"}
+		}
+		var legacyPorts []string
+		legacyPorts = append(legacyPorts, strconv.Itoa(ib.Port))
+		if rawPorts, ok := raw["additionalPorts"].([]any); ok {
+			for _, value := range rawPorts {
+				if s := portEntryString(value); s != "" {
+					legacyPorts = append(legacyPorts, s)
+				}
+			}
+		}
+		for _, port := range legacyPorts {
+			for _, protocol := range protocols {
+				if binding, ok := parsePortBinding(port, protocol); ok {
+					key := binding.Protocol + ":" + strconv.Itoa(binding.Port)
+					if _, exists := seen[key]; exists {
+						continue
+					}
+					seen[key] = struct{}{}
+					bindings = append(bindings, binding)
+				}
+			}
+		}
+	}
+
+	clients, _ := raw["clients"].([]any)
+	users := make([]User, 0, len(clients))
+	for _, item := range clients {
+		client, _ := item.(map[string]any)
+		enabled, _ := client["enable"].(bool)
+		email, _ := client["email"].(string)
+		password, _ := client["password"].(string)
+		if enabled && strings.TrimSpace(email) != "" && password != "" {
+			users = append(users, User{Name: strings.TrimSpace(email), Password: password})
+		}
+	}
+	if len(bindings) == 0 || len(users) == 0 {
+		return Instance{}, false
+	}
+
+	mtu, _ := raw["mtu"].(float64)
+	if int(mtu) < 1280 || int(mtu) > 1400 {
+		mtu = 1400
+	}
+	level, _ := raw["loggingLevel"].(string)
+	level = strings.ToUpper(strings.TrimSpace(level))
+	switch level {
+	case "OFF", "ERROR", "WARN", "INFO", "DEBUG":
+	default:
+		level = "INFO"
+	}
+	mandatory, _ := raw["userHintIsMandatory"].(bool)
+
+	multiplexing, _ := raw["multiplexing"].(string)
+	switch multiplexing {
+	case "MULTIPLEXING_OFF", "MULTIPLEXING_LOW", "MULTIPLEXING_MIDDLE", "MULTIPLEXING_HIGH":
+	default:
+		multiplexing = "MULTIPLEXING_HIGH"
+	}
+	handshakeMode, _ := raw["handshakeMode"].(string)
+	switch handshakeMode {
+	case "HANDSHAKE_STANDARD", "HANDSHAKE_NO_WAIT":
+	default:
+		handshakeMode = "HANDSHAKE_STANDARD"
+	}
+
+	return Instance{
+		Id:                  ib.Id,
+		Tag:                 ib.Tag,
+		Listen:              strings.TrimSpace(ib.Listen),
+		PortBindings:        bindings,
+		Users:               users,
+		MTU:                 int(mtu),
+		LoggingLevel:        level,
+		UserHintIsMandatory: mandatory,
+		Multiplexing:        multiplexing,
+		HandshakeMode:       handshakeMode,
+	}, true
 }
 
 func (inst Instance) fingerprint() string {
-  parts := []string{inst.Listen, strconv.Itoa(inst.MTU), inst.LoggingLevel, strconv.FormatBool(inst.UserHintIsMandatory)}
-  for _, b := range inst.PortBindings { parts = append(parts, fmt.Sprintf("%d/%s", b.Port, b.Protocol)) }
-  for _, u := range inst.Users { parts = append(parts, u.Name+"="+u.Password) }
-  slices.Sort(parts)
-  return strings.Join(parts, "|")
+	parts := []string{
+		inst.Listen,
+		strconv.Itoa(inst.MTU),
+		inst.LoggingLevel,
+		strconv.FormatBool(inst.UserHintIsMandatory),
+		inst.Multiplexing,
+		inst.HandshakeMode,
+	}
+	for _, b := range inst.PortBindings {
+		if b.PortRange != "" {
+			parts = append(parts, b.Protocol+":"+b.PortRange)
+		} else {
+			parts = append(parts, fmt.Sprintf("%s:%d", b.Protocol, b.Port))
+		}
+	}
+	for _, u := range inst.Users {
+		parts = append(parts, u.Name+"="+u.Password)
+	}
+	slices.Sort(parts)
+	return strings.Join(parts, "|")
 }
 
 type managed struct { proc *Process; tag string; fp string }
@@ -103,12 +244,39 @@ func configDir() string { return filepath.Join(config.GetBinFolderPath(), "mieru
 func configPathForID(id int) string { return filepath.Join(configDir(), fmt.Sprintf("mita-%d.json", id)) }
 func socketPathForID(id int) string { return filepath.Join(configDir(), fmt.Sprintf("mita-%d.sock", id)) }
 func renderConfig(inst Instance) map[string]any {
-  bindings:=make([]any,0,len(inst.PortBindings)); for _, b:=range inst.PortBindings { bindings=append(bindings,map[string]any{"port":b.Port,"protocol":b.Protocol}) }
-  users:=make([]any,0,len(inst.Users)); for _, u:=range inst.Users { users=append(users,map[string]any{"name":u.Name,"password":u.Password}) }
-  out:=map[string]any{"portBindings":bindings,"users":users,"loggingLevel":inst.LoggingLevel,"mtu":inst.MTU}
-  if inst.Listen!="" { out["listenIPAddress"]=inst.Listen }
-  if inst.UserHintIsMandatory { out["advancedSettings"]=map[string]any{"userHintIsMandatory":true} }
-  return out
+	bindings := make([]any, 0, len(inst.PortBindings))
+	for _, b := range inst.PortBindings {
+		entry := map[string]any{"protocol": b.Protocol}
+		if b.PortRange != "" {
+			entry["portRange"] = b.PortRange
+		} else {
+			entry["port"] = b.Port
+		}
+		bindings = append(bindings, entry)
+	}
+	users := make([]any, 0, len(inst.Users))
+	for _, u := range inst.Users {
+		users = append(users, map[string]any{"name": u.Name, "password": u.Password})
+	}
+	out := map[string]any{
+		"portBindings": bindings,
+		"users": users,
+		"loggingLevel": inst.LoggingLevel,
+		"mtu": inst.MTU,
+	}
+	if inst.Listen != "" {
+		out["listenIPAddress"] = inst.Listen
+	}
+	advanced := map[string]any{}
+	if inst.UserHintIsMandatory {
+		advanced["userHintIsMandatory"] = true
+	}
+	// Mieru's server config does not use these client-side tuning values;
+	// they are exported to the shared link/client config below.
+	if len(advanced) > 0 {
+		out["advancedSettings"] = advanced
+	}
+	return out
 }
 func writeConfig(inst Instance) (string,error) {
   if err:=os.MkdirAll(configDir(),0750); err!=nil{return "",err}
