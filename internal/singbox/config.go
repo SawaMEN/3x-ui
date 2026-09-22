@@ -483,7 +483,9 @@ func TranslateXrayInbound(raw map[string]any) (map[string]any, error) {
 			out["quic_congestion_control"] = cc
 		}
 		if tls := rawObject(settings, "tls"); len(tls) > 0 {
-			t := map[string]any{"enabled": rawBool(tls, "enabled")}
+			// NaiveProxy requires TLS; the panel may accept legacy/imported
+			// settings where the old toggle was absent or false.
+			t := map[string]any{"enabled": true}
 			if serverName := rawString(tls, "serverName"); serverName != "" {
 				t["server_name"] = serverName
 			}
