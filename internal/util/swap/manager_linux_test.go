@@ -121,6 +121,18 @@ func TestZramPackageCandidates(t *testing.T) {
 			want:         []string{"zram-generator-defaults", "zram-generator"},
 		},
 		{
+			name:         "armbian",
+			distribution: "armbian",
+			recommended:  "systemd-zram-generator",
+			want:         []string{"systemd-zram-generator", "zram-config", "zram-tools"},
+		},
+		{
+			name:         "arch",
+			distribution: "arch",
+			recommended:  "zram-generator",
+			want:         []string{"zram-generator"},
+		},
+		{
 			name:         "alpine",
 			distribution: "alpine",
 			recommended:  "zram-init",
@@ -140,5 +152,22 @@ func TestZramPackageCandidates(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestZramBackendForPackage(t *testing.T) {
+	tests := map[string]string{
+		"systemd-zram-generator":  zramBackendGenerator,
+		"zram-generator":          zramBackendGenerator,
+		"zram-generator-defaults": zramBackendGenerator,
+		"zram-config":              zramBackendConfig,
+		"zram-tools":               zramBackendTools,
+		"zram-init":                zramBackendInit,
+		"unrelated":                "",
+	}
+	for packageName, want := range tests {
+		if got := zramBackendForPackage(packageName); got != want {
+			t.Fatalf("zramBackendForPackage(%q) = %q, want %q", packageName, got, want)
+		}
 	}
 }
