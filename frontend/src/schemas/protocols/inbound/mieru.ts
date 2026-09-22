@@ -24,10 +24,10 @@ const MieruPortEntrySchema = z
     const [startRaw, endRaw = startRaw] = value.split('-');
     const start = Number(startRaw);
     const end = Number(endRaw);
-    if (!Number.isInteger(start) || !Number.isInteger(end) || start < 1 || end > 65535 || end < start) {
+    if (!Number.isInteger(start) || !Number.isInteger(end) || start < 1025 || end > 65535 || end < start) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'Ports must be in 1-65535 here; Mieru server runtime accepts 1025-65535',
+        message: 'Ports must be in 1025-65535',
       });
     }
   });
