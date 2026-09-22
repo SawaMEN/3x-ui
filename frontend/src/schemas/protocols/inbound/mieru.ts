@@ -24,7 +24,13 @@ const MieruPortEntrySchema = z
     const [startRaw, endRaw = startRaw] = value.split('-');
     const start = Number(startRaw);
     const end = Number(endRaw);
-    if (!Number.isInteger(start) || !Number.isInteger(end) || start < 1025 || end > 65535 || end < start) {
+    if (
+      !Number.isInteger(start) ||
+      !Number.isInteger(end) ||
+      start < 1025 ||
+      end > 65535 ||
+      end < start
+    ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'Ports must be in 1025-65535',
@@ -68,15 +74,15 @@ export const MieruInboundSettingsSchema = z.preprocess(
             .map((item) => (typeof item === 'string' ? Number(item.trim()) : item))
             .filter((item) => Number.isFinite(item))
         : value,
-    z.array(z.number().int().min(1).max(65535)).optional(),
-  ),
-  mtu: z.number().int().min(1280).max(1400).default(1400),
-  loggingLevel: z.preprocess(
-    (value) => (value === 'OFF' ? 'FATAL' : value),
-    z.enum(['FATAL', 'ERROR', 'WARN', 'INFO', 'DEBUG', 'TRACE']).default('INFO'),
-  ),
-  userHintIsMandatory: z.boolean().default(false),
-  clients: z.array(MieruClientSchema).default([]),
+      z.array(z.number().int().min(1).max(65535)).optional(),
+    ),
+    mtu: z.number().int().min(1280).max(1400).default(1400),
+    loggingLevel: z.preprocess(
+      (value) => (value === 'OFF' ? 'FATAL' : value),
+      z.enum(['FATAL', 'ERROR', 'WARN', 'INFO', 'DEBUG', 'TRACE']).default('INFO'),
+    ),
+    userHintIsMandatory: z.boolean().default(false),
+    clients: z.array(MieruClientSchema).default([]),
   }),
 );
 export type MieruInboundSettings = z.infer<typeof MieruInboundSettingsSchema>;
