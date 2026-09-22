@@ -217,7 +217,7 @@ export default function SystemUpdateModal({
       {
         key: 'telemt',
         label: 'Telemt',
-        installed: telemtStatus.success && telemtStatus.obj?.installed === true,
+        installed: telemtStatus.success === true && telemtStatus.obj?.installed === true,
         installedVersion: telemtCurrent,
         availableVersion: telemtLatest,
         updateAvailable:
