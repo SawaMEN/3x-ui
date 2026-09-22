@@ -895,7 +895,7 @@ func mieruSharePortEntry(value string) bool {
 	}
 	parts := strings.SplitN(value, "-", 2)
 	start, err := strconv.Atoi(strings.TrimSpace(parts[0]))
-	if err != nil || start < 1 || start > 65535 {
+	if err != nil || start < 1025 || start > 65535 {
 		return false
 	}
 	if len(parts) == 1 {
