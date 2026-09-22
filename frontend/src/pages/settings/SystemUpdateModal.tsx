@@ -333,9 +333,7 @@ export default function SystemUpdateModal({
           systemUpdateRecovered = recoveredStatus !== null;
 
           if (systemUpdateRecovered) {
-            messageApi.info(
-              'Соединение с панелью восстановлено; состояние обновления проверено.',
-            );
+            messageApi.info('Соединение с панелью восстановлено; состояние обновления проверено.');
           }
         }
 
