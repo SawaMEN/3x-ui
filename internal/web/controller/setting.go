@@ -631,7 +631,7 @@ func (a *SettingController) singBoxStatus(c *gin.Context) {
 		connections, _ = svc.ConnectionCount(ctx)
 	}
 	version := "Unknown"
-	if running {
+	if statErr == nil {
 		if v, err := svc.CachedVersion(c.Request.Context()); err == nil {
 			version = v
 		}
