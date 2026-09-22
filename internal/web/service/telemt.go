@@ -246,28 +246,36 @@ func (TelemtService) Status() TelemtStatus {
 }
 
 func telemtLatestVersion(current string) (string, bool) {
-	if _, err := os.Stat("/usr/local/x-ui/telemt-update.sh"); err != nil {
-		return "", false
-	}
-
 	telemtLatestCache.Lock()
 	defer telemtLatestCache.Unlock()
 
-	// The updater performs a network request. Do not run it on every panel refresh.
-	if telemtLatestCache.latest != "" && telemtLatestCache.current == current && time.Since(telemtLatestCache.checked) < 10*time.Minute {
+	// Do not perform a network request on every status refresh.
+	if telemtLatestCache.latest != "" &&
+		telemtLatestCache.current == current &&
+		time.Since(telemtLatestCache.checked) < 10*time.Minute {
 		latest := telemtLatestCache.latest
-		return latest, current != "" && strings.TrimPrefix(current, "v") != strings.TrimPrefix(latest, "v")
+		return latest, current != "" && normalizeTelemtVersion(current) != normalizeTelemtVersion(latest)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-	defer cancel()
-	out, _ := exec.CommandContext(ctx, "/usr/local/x-ui/telemt-update.sh", "--check").CombinedOutput()
 	latest := ""
-	for _, line := range strings.Split(string(out), "\n") {
-		if strings.HasPrefix(line, "latest=") {
-			latest = strings.TrimSpace(strings.TrimPrefix(line, "latest="))
-			break
+	if _, err := os.Stat("/usr/local/x-ui/telemt-update.sh"); err == nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+		out, _ := exec.CommandContext(ctx, "/usr/local/x-ui/telemt-update.sh", "--check").CombinedOutput()
+		cancel()
+
+		for _, line := range strings.Split(string(out), "\n") {
+			if strings.HasPrefix(line, "latest=") {
+				latest = strings.TrimSpace(strings.TrimPrefix(line, "latest="))
+				break
+			}
 		}
+	}
+
+	// The bundled updater is optional and its output format has changed across
+	// releases. Fall back to the official Telemt release API so the panel can
+	// always display the latest published version independently of the updater.
+	if latest == "" {
+		latest = fetchTelemtLatestRelease()
 	}
 	if latest == "" {
 		return "", false
@@ -276,9 +284,41 @@ func telemtLatestVersion(current string) (string, bool) {
 	telemtLatestCache.latest = latest
 	telemtLatestCache.checked = time.Now()
 	telemtLatestCache.current = current
-	return latest, current != "" && strings.TrimPrefix(current, "v") != strings.TrimPrefix(latest, "v")
+	return latest, current != "" && normalizeTelemtVersion(current) != normalizeTelemtVersion(latest)
 }
 
+func normalizeTelemtVersion(value string) string {
+	return strings.TrimPrefix(strings.TrimSpace(value), "v")
+}
+
+func fetchTelemtLatestRelease() string {
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.github.com/repos/telemt/telemt/releases/latest", nil)
+	if err != nil {
+		return ""
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("User-Agent", "3x-ui")
+
+	resp, err := (&http.Client{Timeout: 8 * time.Second}).Do(req)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return ""
+	}
+
+	var release struct {
+		TagName string `json:"tag_name"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(release.TagName)
+}
 func telemtUpdate() error {
 	if _, err := os.Stat("/usr/local/x-ui/telemt-update.sh"); err != nil {
 		return errors.New("telemt: updater is not installed")

@@ -2,7 +2,13 @@
 
 package systemupdate
 
-import "testing"
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+)
 
 func TestParseAptUpdates(t *testing.T) {
 	got := parseAptUpdates(`Listing... Done
@@ -72,4 +78,23 @@ func TestIsKernelPackage(t *testing.T) {
 			t.Fatalf("isKernelPackage(%q) = true", name)
 		}
 	}
+}
+
+func TestStartAsyncCommandIgnoresCancelledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	marker := filepath.Join(t.TempDir(), "started")
+	err := startAsyncCommand(ctx, "sh", "-c", "printf started > \"$1\"", "sh", marker)
+	if err != nil {
+		t.Fatalf("startAsyncCommand() error = %v", err)
+	}
+
+	for i := 0; i < 50; i++ {
+		if data, err := os.ReadFile(marker); err == nil && string(data) == "started" {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("async command did not run after context cancellation")
 }

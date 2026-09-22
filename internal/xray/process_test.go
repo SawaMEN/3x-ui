@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"syscall"
 	"testing"
 	"time"
@@ -16,6 +17,25 @@ import (
 
 	xuilogger "github.com/SawaMEN/3x-ui/v3/internal/logger"
 )
+
+func TestGetInstalledVersionReadsBinaryVersion(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("test helper uses a POSIX shell")
+	}
+
+	dir := t.TempDir()
+	binaryPath := filepath.Join(dir, GetBinaryName())
+	script := "#!/bin/sh\necho 'Xray 26.6.27 (Xray, Penetrates Everything.)'\n"
+	if err := os.WriteFile(binaryPath, []byte(script), 0o755); err != nil {
+		t.Fatalf("write fake xray binary: %v", err)
+	}
+
+	t.Setenv("XUI_BIN_FOLDER", dir)
+
+	if got := GetInstalledVersion(); got != "26.6.27" {
+		t.Fatalf("GetInstalledVersion() = %q, want %q", got, "26.6.27")
+	}
+}
 
 func TestWriteFileAtomicModeAndRenameFailure(t *testing.T) {
 	dir := t.TempDir()

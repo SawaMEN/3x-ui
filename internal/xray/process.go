@@ -293,6 +293,24 @@ func (p *process) GetXrayVersion() string {
 	return p.version
 }
 
+// GetInstalledVersion reads the installed Xray binary version without starting Xray.
+// This is used by the UI when Xray is installed but is not the selected/running core.
+func GetInstalledVersion() string {
+	ctx, cancel := context.WithTimeout(context.Background(), xrayVersionTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, GetBinaryPath(), "-version")
+	data, err := cmd.Output()
+	if err != nil {
+		return "Unknown"
+	}
+	fields := strings.Fields(string(data))
+	if len(fields) < 2 {
+		return "Unknown"
+	}
+	return fields[1]
+}
+
 // GetAPIPort returns the API port used by the Xray process.
 func (p *Process) GetAPIPort() int {
 	p.mu.RLock()
