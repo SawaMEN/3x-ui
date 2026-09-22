@@ -311,8 +311,9 @@ export default function InboundFormModal({
         .filter((port) => Number.isInteger(port) && port > 0),
     );
 
-    if (!usedPorts.has(443)) {
-      setV('port', 443);
+    const preferredPort = protocol === Protocols.MIERU ? 8443 : 443;
+    if (!usedPorts.has(preferredPort)) {
+      setV('port', preferredPort);
     }
   }, [dbInbounds, mode, protocol, setV, wListen]);
 
