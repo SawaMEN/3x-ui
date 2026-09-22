@@ -1007,7 +1007,7 @@ func (s *SubService) genMieruLink(inbound *model.Inbound, email string) string {
 	}
 	multiplexing, _ := settings["multiplexing"].(string)
 	if multiplexing == "" {
-		multiplexing = "MULTIPLEXING_HIGH"
+		multiplexing = "MULTIPLEXING_LOW"
 	}
 	handshakeMode, _ := settings["handshakeMode"].(string)
 	if handshakeMode == "" {
