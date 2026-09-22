@@ -291,6 +291,31 @@ export default function InboundFormModal({
   const wPort = useWatch({ control, name: 'port' });
   const wListen = (useWatch({ control, name: 'listen' }) ?? '') as string;
   const isUdsListen = wListen.startsWith('/') || wListen.startsWith('@');
+  const autoPortSeedRef = useRef('');
+  useEffect(() => {
+    if (mode !== 'add') {
+      autoPortSeedRef.current = '';
+      return;
+    }
+
+    const autoPortProtocols = new Set([Protocols.NAIVE, Protocols.PSIPHON, Protocols.MIERU]);
+    if (!autoPortProtocols.has(protocol) || autoPortSeedRef.current === protocol) return;
+    autoPortSeedRef.current = protocol;
+
+    if (wListen) return;
+
+    const usedPorts = new Set(
+      dbInbounds
+        .filter((ib) => ib.enable && !ib.nodeId)
+        .map((ib) => Number(ib.port))
+        .filter((port) => Number.isInteger(port) && port > 0),
+    );
+
+    if (!usedPorts.has(443)) {
+      setV('port', 443);
+    }
+  }, [dbInbounds, mode, protocol, setV, wListen]);
+
   const wNodeId = useWatch({ control, name: 'nodeId' }) ?? null;
   const shareAddrStrategy = useWatch({ control, name: 'shareAddrStrategy' }) ?? 'node';
   const wTag = (useWatch({ control, name: 'tag' }) ?? '') as string;
