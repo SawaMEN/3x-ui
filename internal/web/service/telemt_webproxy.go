@@ -35,7 +35,9 @@ func telemtWebDomainPatternSource() string {
 		`\.)+[A-Za-z]{2,63}$`
 }
 
-var telemtWebDomainPattern = regexp.MustCompile(telemtWebDomainPatternSource())
+var telemtWebDomainPattern = regexp.MustCompile(
+	telemtWebDomainPatternSource(),
+)
 var telemtWebVersionPattern = regexp.MustCompile(
 	`(?i)v?([0-9]+)` +
 		`\.([0-9]+)` +
