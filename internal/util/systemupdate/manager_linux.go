@@ -132,6 +132,10 @@ func Refresh(ctx context.Context) (Status, error) {
 	return GetStatus(ctx)
 }
 
+func newUpdateContext(_ context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), commandTimeout)
+}
+
 func Apply(ctx context.Context) (UpdateResult, error) {
 	updateMu.Lock()
 	defer updateMu.Unlock()
@@ -145,13 +149,13 @@ func Apply(ctx context.Context) (UpdateResult, error) {
 		return UpdateResult{}, fmt.Errorf("unsupported Linux distribution or package manager")
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, commandTimeout)
+	updateCtx, cancel := newUpdateContext(ctx)
 	defer cancel()
 
-	if err := refreshPackageDatabase(ctx, info.manager); err != nil {
+	if err := refreshPackageDatabase(updateCtx, info.manager); err != nil {
 		return UpdateResult{}, err
 	}
-	status, err := GetStatus(ctx)
+	status, err := GetStatus(updateCtx)
 	if err != nil {
 		return UpdateResult{}, err
 	}
@@ -203,7 +207,7 @@ func Apply(ctx context.Context) (UpdateResult, error) {
 		return UpdateResult{}, fmt.Errorf("unsupported package manager: %s", info.manager)
 	}
 
-	output, err := runCommand(ctx, args[0], args[1:]...)
+	output, err := runCommand(updateCtx, args[0], args[1:]...)
 	result := UpdateResult{
 		Updated:        err == nil,
 		Output:         truncateOutput(output, 20000),

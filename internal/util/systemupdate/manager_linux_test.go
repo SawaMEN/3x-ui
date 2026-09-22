@@ -98,3 +98,17 @@ func TestStartAsyncCommandIgnoresCancelledContext(t *testing.T) {
 	}
 	t.Fatalf("async command did not run after context cancellation")
 }
+
+func TestUpdateContextIgnoresCallerCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	updateCtx, updateCancel := newUpdateContext(ctx)
+	defer updateCancel()
+
+	select {
+	case <-updateCtx.Done():
+		t.Fatalf("update context was canceled with the request context")
+	default:
+	}
+}
