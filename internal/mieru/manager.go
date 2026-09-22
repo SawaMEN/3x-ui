@@ -192,7 +192,7 @@ func InstanceFromInbound(ib *model.Inbound) (Instance, bool) {
 	switch multiplexing {
 	case "MULTIPLEXING_OFF", "MULTIPLEXING_LOW", "MULTIPLEXING_MIDDLE", "MULTIPLEXING_HIGH":
 	default:
-		multiplexing = "MULTIPLEXING_HIGH"
+		multiplexing = "MULTIPLEXING_LOW"
 	}
 	handshakeMode, _ := raw["handshakeMode"].(string)
 	switch handshakeMode {
