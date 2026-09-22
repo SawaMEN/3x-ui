@@ -227,10 +227,7 @@ jobs:
         run: npm run lint
         working-directory: frontend
       - name: Format check
-        run: |
-          npm run format
-          git diff -- src/pages/settings/SettingsPage.tsx src/pages/settings/SwapSettingsTab.tsx src/pages/settings/SystemUpdateModal.tsx
-          exit 1
+        run: npm run format:check
         working-directory: frontend
       - name: Typecheck
         run: npm run typecheck

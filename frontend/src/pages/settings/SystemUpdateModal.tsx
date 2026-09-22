@@ -196,7 +196,9 @@ export default function SystemUpdateModal({
         installed: Boolean(xrayCurrent),
         installedVersion: xrayCurrent,
         availableVersion: xrayLatest,
-        updateAvailable: Boolean(xrayCurrent && xrayLatest && versionsDiffer(xrayCurrent, xrayLatest)),
+        updateAvailable: Boolean(
+          xrayCurrent && xrayLatest && versionsDiffer(xrayCurrent, xrayLatest),
+        ),
       },
       {
         key: 'sing-box',
@@ -205,7 +207,10 @@ export default function SystemUpdateModal({
         installedVersion: singBoxCurrent,
         availableVersion: singBoxLatest,
         updateAvailable: Boolean(
-          singBoxInstalled && singBoxCurrent && singBoxLatest && versionsDiffer(singBoxCurrent, singBoxLatest),
+          singBoxInstalled &&
+          singBoxCurrent &&
+          singBoxLatest &&
+          versionsDiffer(singBoxCurrent, singBoxLatest),
         ),
       },
       {
@@ -334,7 +339,9 @@ export default function SystemUpdateModal({
       await loadDependencyUpdates();
 
       if (failed.length) {
-        messageApi.warning(t('pages.settings.swap.partialUpdate', { components: failed.join(', ') }));
+        messageApi.warning(
+          t('pages.settings.swap.partialUpdate', { components: failed.join(', ') }),
+        );
       } else {
         messageApi.success(t('pages.settings.swap.updateDone'));
       }
@@ -349,9 +356,9 @@ export default function SystemUpdateModal({
   const rebootSystem = async () => {
     setSystemUpdateBusy(true);
     try {
-      const response = (await HttpUtil.post(
-        '/panel/api/setting/system/update/reboot',
-      )) as ApiMsg<{ rebooting?: boolean }>;
+      const response = (await HttpUtil.post('/panel/api/setting/system/update/reboot')) as ApiMsg<{
+        rebooting?: boolean;
+      }>;
       if (!response?.success) {
         throw new Error(response?.msg || t('pages.settings.swap.rebootFailed'));
       }
@@ -429,9 +436,7 @@ export default function SystemUpdateModal({
                 icon={<PoweroffOutlined />}
                 onClick={() => void rebootSystem()}
                 loading={systemUpdateBusy}
-                disabled={
-                  !systemUpdate?.runningAsRoot || dependencyBusy !== null
-                }
+                disabled={!systemUpdate?.runningAsRoot || dependencyBusy !== null}
               >
                 {t('pages.settings.swap.rebootSystem')}
               </Button>
@@ -569,7 +574,9 @@ export default function SystemUpdateModal({
                       size="small"
                       icon={<DownloadOutlined />}
                       loading={dependencyBusy === dependency.key}
-                      disabled={!dependency.updateAvailable || dependencyBusy !== null || systemUpdateBusy}
+                      disabled={
+                        !dependency.updateAvailable || dependencyBusy !== null || systemUpdateBusy
+                      }
                       onClick={() => void updateDependency(dependency)}
                     >
                       {dependency.updateAvailable
