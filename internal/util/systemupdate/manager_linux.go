@@ -534,7 +534,7 @@ func Reboot(ctx context.Context) error {
 		if !commandExists(args[0]) {
 			continue
 		}
-		if err := exec.Command(args[0], args[1:]...).Start(); err == nil {
+		if err := exec.CommandContext(ctx, args[0], args[1:]...).Start(); err == nil {
 			return nil
 		}
 	}
