@@ -456,7 +456,7 @@ func rawBool(m map[string]any, key string) bool {
 
 func TranslateXrayInbound(raw map[string]any) (map[string]any, error) {
 	protocol := strings.ToLower(strings.TrimSpace(rawString(raw, "protocol")))
-	if protocol == "tunnel" || protocol == "wireguard" || protocol == "mtproto" || protocol == "amneziawg" {
+	if protocol == "tunnel" || protocol == "wireguard" || protocol == "mtproto" || protocol == "amneziawg" || protocol == "tuic" || protocol == "psiphon" || protocol == "mieru" {
 		return nil, fmt.Errorf("sing-box does not support Xray inbound protocol %q", protocol)
 	}
 	out := map[string]any{"tag": rawString(raw, "tag")}
@@ -470,6 +470,30 @@ func TranslateXrayInbound(raw map[string]any) (map[string]any, error) {
 		}
 		if version == 2 {
 			singProtocol = "hysteria2"
+		}
+	}
+	if protocol == "naive" {
+		if network := rawString(settings, "network"); network != "" {
+			if network != "tcp" && network != "udp" {
+				return nil, fmt.Errorf("inbound %q has invalid NaiveProxy network %q", rawString(raw, "tag"), network)
+			}
+			out["network"] = network
+		}
+		if cc := rawString(settings, "quicCongestionControl"); cc != "" {
+			out["quic_congestion_control"] = cc
+		}
+		if tls := rawObject(settings, "tls"); len(tls) > 0 {
+			t := map[string]any{"enabled": rawBool(tls, "enabled")}
+			if serverName := rawString(tls, "serverName"); serverName != "" {
+				t["server_name"] = serverName
+			}
+			if cert := rawString(tls, "certificatePath"); cert != "" {
+				t["certificate_path"] = cert
+			}
+			if key := rawString(tls, "keyPath"); key != "" {
+				t["key_path"] = key
+			}
+			out["tls"] = t
 		}
 	}
 	out["type"] = singProtocol
@@ -523,6 +547,13 @@ func translateUsers(out map[string]any, protocol string, settings map[string]any
 				user["uuid"] = id
 			}
 			if password, ok := client["password"].(string); ok && password != "" {
+				user["password"] = password
+			}
+		case "naive":
+			if email := rawString(client, "email"); email != "" {
+				user["username"] = email
+			}
+			if password := rawString(client, "password"); password != "" {
 				user["password"] = password
 			}
 		}
