@@ -1,7 +1,7 @@
 package service
 
 import (
-	"github.com/SawaMEN/3x-ui/v3/internal/common"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
 
