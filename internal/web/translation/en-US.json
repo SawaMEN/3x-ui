@@ -1817,7 +1817,7 @@
         "systemUpdates": "System updates",
         "systemUpdatesTitle": "System packages & Linux kernel",
         "checkUpdates": "Check for updates",
-        "updateNow": "Update dependencies and kernel",
+        "updateNow": "Update everything available",
         "updating": "Updating…",
         "noUpdates": "Everything required by 3x-ui is up to date",
         "updatesAvailable": "Updates available",
@@ -1834,7 +1834,7 @@
         "availableVersion": "Available",
         "dependency": "3x-ui dependency",
         "kernelPackage": "Kernel package",
-        "updateConfirm": "Install the listed 3x-ui dependency and kernel updates? On Arch Linux this performs the required full system upgrade.",
+        "updateConfirm": "Install all available system package, kernel, and panel dependency updates? On Arch Linux this performs the required full system upgrade.",
         "updateDone": "System packages were updated successfully.",
         "updateFailed": "System update failed",
         "updateOutput": "Update output",
@@ -1845,7 +1845,8 @@
         "updateComponent": "Update",
         "upToDate": "Up to date",
         "rebootSystem": "Reboot server",
-        "rebootStarted": "Server reboot started. The page will refresh after the connection is restored."
+        "rebootStarted": "Server reboot started. The page will refresh after the connection is restored.",
+        "unsupportedSystemUpdate": "System updates are not supported for this operating system."
       }
     },
     "xray": {
