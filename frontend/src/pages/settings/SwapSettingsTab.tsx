@@ -522,8 +522,9 @@ export default function SwapSettingsTab() {
               }
             />
             {installInfo.activeBackend &&
-              installInfo.activeBackend !== 'systemd-zram-generator' &&
-              installInfo.activeBackend !== 'zram-init' && (
+              !['systemd-zram-generator', 'zram-config', 'zram-tools', 'zram-init'].includes(
+                installInfo.activeBackend,
+              ) && (
                 <Alert type="warning" showIcon title={t('pages.settings.swap.backendConflict')} />
               )}
             <Space wrap>
