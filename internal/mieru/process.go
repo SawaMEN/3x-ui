@@ -32,10 +32,14 @@ func (p *Process) Start() error {
   if p.IsRunning(){return errors.New("mita is already running")}
   cmd:=exec.CommandContext(context.Background(),GetBinaryPath(),"run")
   socketPath := p.socketPath
+  configPath := p.configPath
   if abs, err := filepath.Abs(socketPath); err == nil {
     socketPath = abs
   }
-  cmd.Env=append(os.Environ(),"MITA_CONFIG_JSON_FILE="+p.configPath,"MITA_UDS_PATH="+socketPath,"MITA_INSECURE_UDS=true","MITA_LOG_NO_TIMESTAMP=true")
+  if abs, err := filepath.Abs(configPath); err == nil {
+    configPath = abs
+  }
+  cmd.Env=append(os.Environ(),"MITA_CONFIG_JSON_FILE="+configPath,"MITA_UDS_PATH="+socketPath,"MITA_INSECURE_UDS=true","MITA_LOG_NO_TIMESTAMP=true")
   lw:=&logWriter{label:p.label};cmd.Stdout=lw;cmd.Stderr=lw
   done:=make(chan struct{});p.mu.Lock();p.cmd,p.done,p.exitErr=cmd,done,nil;p.mu.Unlock();p.intentionalStop.Store(false)
   if err:=cmd.Start();err!=nil{close(done);p.mu.Lock();p.cmd=nil;p.mu.Unlock();return err};go p.wait(cmd,done);return nil
