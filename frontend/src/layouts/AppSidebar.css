@@ -1004,7 +1004,6 @@ body.theme-cyberpunk .sider-brand .brand-text::after {
   }
 }
 
-
 /* Keep the mobile drawer title centered even with the absolute close button. */
 @media (max-width: 768px) {
   .drawer-header .brand-block {
