@@ -183,6 +183,8 @@ func GetZramInstallInfo() (ZramInstallInfo, error) {
 		info.ConfigPath = "/etc/default/zram-config"
 	} else if info.Package == zramBackendTools {
 		info.ConfigPath = "/etc/default/zramswap"
+	} else if info.Package == zramBackendConfig {
+		info.ConfigPath = ""
 	} else if info.Package == zramBackendInit {
 		info.ConfigPath = "/etc/conf.d/zram-init"
 	} else {
