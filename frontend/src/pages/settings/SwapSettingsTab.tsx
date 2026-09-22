@@ -535,8 +535,8 @@ export default function SwapSettingsTab() {
                 disabled={!installInfo.supported}
               >
                 {zramMissing
-                  ? installInfo.recommendedInstalled
-                    ? t('pages.settings.swap.enableZram')
+                  ? installInfo.installed
+                    ? t('pages.settings.swap.configureZram')
                     : t('pages.settings.swap.installZram')
                   : t('pages.settings.swap.configureZram')}
               </Button>
