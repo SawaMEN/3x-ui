@@ -1939,7 +1939,8 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 		oldInbound.Tag = resolvedTag
 		inbound.Tag = oldInbound.Tag
 
-		if oldInbound.NodeID == nil && isXrayManagedProtocol(oldInbound.Protocol) {
+		localSidecarTransition := oldProtocol == model.MTProto || oldInbound.Protocol == model.MTProto || oldProtocol == model.TUIC || oldInbound.Protocol == model.TUIC
+		if oldInbound.NodeID == nil && (isXrayManagedProtocol(oldInbound.Protocol) || localSidecarTransition) {
 			rt, push, _, perr := s.nodePushPlan(oldInbound)
 			if perr != nil {
 				return perr
