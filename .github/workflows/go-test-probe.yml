@@ -1,0 +1,19 @@
+name: Temp Go Test Probe
+
+on:
+  push:
+    branches: [update]
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Stub internal/web/dist for go:embed
+        run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+      - name: Go tests
+        run: go test -p 12 -vet=off -shuffle=on -count=1 ./...
