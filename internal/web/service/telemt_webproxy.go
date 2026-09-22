@@ -29,18 +29,17 @@ const (
 	telemtWebMinEngine  = "3.5.1"
 )
 
-const telemtWebDomainPatternSourcePrefix = "^(?:[A-Za-z0-9]"
-const telemtWebDomainPatternSourceLabel = "(?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
-const telemtWebDomainPatternSourceDot = "\\.)+"
-const telemtWebDomainPatternSourceSuffix = "[A-Za-z]{2,63}$"
-const telemtWebVersionPatternSource = "(?i)v?([0-9]+)" +
-	"\\.([0-9]+)" +
-	"\\.([0-9]+)"
-const telemtWebPortOwnerPatternSource = "users:\\(\\(\"([^\"]+)\""
-
-var telemtWebDomainPattern = regexp.MustCompile(telemtWebDomainPatternSourcePrefix + telemtWebDomainPatternSourceLabel + telemtWebDomainPatternSourceDot + telemtWebDomainPatternSourceSuffix)
-var telemtWebVersionPattern = regexp.MustCompile(telemtWebVersionPatternSource)
-var telemtWebPortOwnerPattern = regexp.MustCompile(telemtWebPortOwnerPatternSource)
+var telemtWebDomainPattern = regexp.MustCompile(
+	`^(?:[A-Za-z0-9]` +
+		`(?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?` +
+		`\.)+[A-Za-z]{2,63}$`,
+)
+var telemtWebVersionPattern = regexp.MustCompile(
+	`(?i)v?([0-9]+)` +
+		`\.([0-9]+)` +
+		`\.([0-9]+)`,
+)
+var telemtWebPortOwnerPattern = regexp.MustCompile(`users:\(\("([^"]+)"`)
 
 type TelemtWebProxyState struct {
 	Enabled    bool   `json:"enabled"`
