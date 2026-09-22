@@ -270,6 +270,34 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 			settings = map[string]any{}
 		}
 		settings["clients"] = clients
+
+		// NaiveProxy is a native TLS protocol in sing-box. Keep the ordinary
+		// inbound form simple by reusing the panel's HTTPS certificate/key when
+		// the inbound does not explicitly provide its own pair.
+		if inbound.Protocol == model.NaiveProxy {
+			tls, _ := settings["tls"].(map[string]any)
+			if tls == nil {
+				tls = map[string]any{}
+			}
+			tls["enabled"] = true
+			certPath := strings.TrimSpace(fmt.Sprint(tls["certificatePath"]))
+			keyPath := strings.TrimSpace(fmt.Sprint(tls["keyPath"]))
+			if certPath == "" {
+				certPath, _ = singBoxSettingService.GetCertFile()
+				certPath = strings.TrimSpace(certPath)
+			}
+			if keyPath == "" {
+				keyPath, _ = singBoxSettingService.GetKeyFile()
+				keyPath = strings.TrimSpace(keyPath)
+			}
+			if certPath == "" || keyPath == "" {
+				return nil, fmt.Errorf("NaiveProxy inbound %q requires the panel TLS certificate and private key", inbound.Tag)
+			}
+			tls["certificatePath"] = certPath
+			tls["keyPath"] = keyPath
+			settings["tls"] = tls
+		}
+
 		raw["settings"] = settings
 
 		translated, err := singbox.TranslateXrayInbound(raw)
