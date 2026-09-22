@@ -10,6 +10,29 @@ import (
 	"time"
 )
 
+func TestPackageUpdateAvailable(t *testing.T) {
+	tests := []struct {
+		name      string
+		installed bool
+		current   string
+		available string
+		want      bool
+	}{
+		{name: "same version", installed: true, current: "6.8.0-31-generic", available: "6.8.0-31-generic", want: false},
+		{name: "different version", installed: true, current: "6.8.0-30-generic", available: "6.8.0-31-generic", want: true},
+		{name: "not installed", installed: false, current: "", available: "6.8.0-31-generic", want: false},
+		{name: "missing available", installed: true, current: "6.8.0-31-generic", available: "", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := packageUpdateAvailable(tt.installed, tt.current, tt.available); got != tt.want {
+				t.Fatalf("packageUpdateAvailable(%t, %q, %q) = %t, want %t", tt.installed, tt.current, tt.available, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestParseAptUpdates(t *testing.T) {
 	got := parseAptUpdates(`Listing... Done
 curl/noble-updates 8.5.0-1 amd64 [upgradable from: 8.4.0-1]
@@ -110,5 +133,13 @@ func TestUpdateContextIgnoresCallerCancellation(t *testing.T) {
 	case <-updateCtx.Done():
 		t.Fatalf("update context was canceled with the request context")
 	default:
+	}
+}
+
+func TestIsKernelPackageIncludesCommonArchKernels(t *testing.T) {
+	for _, name := range []string{"linux", "linux-zen", "linux-hardened", "linux-rt"} {
+		if !isKernelPackage(name) {
+			t.Fatalf("isKernelPackage(%q) = false", name)
+		}
 	}
 }
