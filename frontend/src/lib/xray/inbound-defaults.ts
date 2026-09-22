@@ -263,7 +263,12 @@ export function createDefaultMtprotoClient(domain: string): Partial<MtprotoClien
 }
 
 export function createDefaultNaiveInboundSettings(): NaiveInboundSettings {
-  return { network: '', quicCongestionControl: 'bbr', tls: { enabled: true, serverName: '', certificatePath: '', keyPath: '' }, clients: [] };
+  return {
+    network: 'tcp',
+    quicCongestionControl: 'bbr',
+    tls: { enabled: true, serverName: '', certificatePath: '', keyPath: '' },
+    clients: [],
+  };
 }
 
 export function createDefaultPsiphonInboundSettings(): PsiphonInboundSettings {
