@@ -105,6 +105,11 @@ func (m *Manager) CollectTraffic(desired []Instance) ([]TrafficDelta, []string) 
 				onlineSet[email] = struct{}{}
 			}
 		}
+		for user := range cursors {
+			if _, present := result.stats[user]; !present {
+				delete(cursors, user)
+			}
+		}
 		m.mu.Unlock()
 	}
 
