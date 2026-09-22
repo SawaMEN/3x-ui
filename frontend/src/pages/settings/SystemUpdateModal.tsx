@@ -325,10 +325,13 @@ export default function SystemUpdateModal({
         }
       }
 
-      await Promise.all([
-        HttpUtil.post('/panel/api/setting/system/update/check'),
-        loadDependencyUpdates(),
-      ]);
+      const refreshed = (await HttpUtil.post(
+        '/panel/api/setting/system/update/check',
+      )) as ApiMsg<unknown>;
+      if (refreshed?.success) {
+        setSystemUpdate(normalizeSystemUpdate(refreshed.obj));
+      }
+      await loadDependencyUpdates();
 
       if (failed.length) {
         messageApi.warning(t('pages.settings.swap.partialUpdate', { components: failed.join(', ') }));
