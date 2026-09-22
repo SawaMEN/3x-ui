@@ -14,7 +14,7 @@ func validateInboundRuntimeProtocol(protocol model.Protocol) error {
 		return err
 	}
 	if core != CoreTypeSingBox {
-		return common.NewError("NaïveProxy requires sing-box as the selected core")
+		return common.NewErrorf("NaïveProxy requires sing-box as the selected core")
 	}
 	return nil
 }
