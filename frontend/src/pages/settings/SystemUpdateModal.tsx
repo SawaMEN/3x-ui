@@ -233,9 +233,7 @@ export default function SystemUpdateModal({
         updateAvailable:
           telemtStatus.success && telemtStatus.obj?.updateAvailable === true
             ? true
-            : Boolean(
-                telemtCurrent && telemtLatest && versionsDiffer(telemtCurrent, telemtLatest),
-              ),
+            : Boolean(telemtCurrent && telemtLatest && versionsDiffer(telemtCurrent, telemtLatest)),
       },
     ]);
   }, []);
