@@ -77,7 +77,7 @@ func parsePortBinding(value string, protocol string) (PortBinding, bool) {
 		}
 		start, err1 := strconv.Atoi(strings.TrimSpace(parts[0]))
 		end, err2 := strconv.Atoi(strings.TrimSpace(parts[1]))
-		if err1 != nil || err2 != nil || start < 1 || end > 65535 || end < start {
+		if err1 != nil || err2 != nil || start < 1025 || end > 65535 || end < start {
 			return PortBinding{}, false
 		}
 		return PortBinding{PortRange: fmt.Sprintf("%d-%d", start, end), Protocol: protocol}, true
