@@ -433,29 +433,10 @@ function AppSidebar() {
           onClose={closeDrawer}
         >
           <div className="drawer-header">
-            <div className="brand-block">
-              <span
-                style={{
-                  position: 'absolute',
-                  left: 18,
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                }}
-              >
-                <BrandMark />
-              </span>
-              <span
-                className="drawer-brand"
-                style={{
-                  position: 'absolute',
-                  left: '50%',
-                  top: '50%',
-                  transform: 'translate(-50%, -50%)',
-                }}
-              >
-                3X-UI
-              </span>
+            <div className="drawer-header-brand-mark">
+              <BrandMark />
             </div>
+            <span className="drawer-brand">3X-UI</span>
             <div className="drawer-header-actions">
               <button
                 className="drawer-close"

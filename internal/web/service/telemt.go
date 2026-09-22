@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -287,8 +288,14 @@ func telemtLatestVersion(current string) (string, bool) {
 	return latest, current != "" && normalizeTelemtVersion(current) != normalizeTelemtVersion(latest)
 }
 
+var telemtVersionPattern = regexp.MustCompile(`(?i)v?(\\d+\\.\\d+\\.\\d+(?:[-+][0-9a-z.-]+)?)`)
+
 func normalizeTelemtVersion(value string) string {
-	return strings.TrimPrefix(strings.TrimSpace(value), "v")
+	value = strings.TrimSpace(value)
+	if match := telemtVersionPattern.FindStringSubmatch(value); len(match) > 1 {
+		return match[1]
+	}
+	return strings.TrimPrefix(value, "v")
 }
 
 func fetchTelemtLatestRelease() string {
