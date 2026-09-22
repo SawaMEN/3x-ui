@@ -276,7 +276,16 @@ export function createDefaultPsiphonInboundSettings(): PsiphonInboundSettings {
 }
 
 export function createDefaultMieruInboundSettings(): MieruInboundSettings {
-  return { tcpPorts: [], udpPorts: [], multiplexing: 'MULTIPLEXING_HIGH', handshakeMode: 'HANDSHAKE_STANDARD', protocols: ['TCP', 'UDP'], additionalPorts: [], mtu: 1400, loggingLevel: 'INFO', userHintIsMandatory: false, clients: [] };
+  return {
+    tcpPorts: [],
+    udpPorts: [],
+    multiplexing: 'MULTIPLEXING_HIGH',
+    handshakeMode: 'HANDSHAKE_STANDARD',
+    mtu: 1400,
+    loggingLevel: 'INFO',
+    userHintIsMandatory: false,
+    clients: [],
+  };
 }
 
 export function createDefaultTunnelInboundSettings(): TunnelInboundSettings {
