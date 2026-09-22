@@ -20,7 +20,7 @@ func InstanceFromInbound(ib *model.Inbound)(Instance,bool){
   if ib==nil||ib.Protocol!=model.Psiphon{return Instance{},false};var raw map[string]any;if json.Unmarshal([]byte(ib.Settings),&raw)!=nil{return Instance{},false}
   addr,_:=raw["serverAddress"].(string);addr=strings.TrimSpace(addr);proto,_:=raw["tunnelProtocol"].(string);proto=strings.ToUpper(strings.TrimSpace(proto));if proto==""{proto="OSSH"}
   entry,_:=raw["serverEntry"].(string);args:=[]string{};if a,ok:=raw["additionalArguments"].([]any);ok{for _,v:=range a{if s,ok:=v.(string);ok&&strings.TrimSpace(s)!=""{args=append(args,s)}}}
-  if ib.Port<1||ib.Port>65535||addr==""{return Instance{},false};return Instance{Id:ib.Id,Tag:ib.Tag,ServerAddress:addr,Protocol:proto,Port:ib.Port,ServerEntry:entry,AdditionalArguments:args},true
+  if ib.Port<1||ib.Port>65535|| (addr=="" && strings.TrimSpace(entry)==""){return Instance{},false};return Instance{Id:ib.Id,Tag:ib.Tag,ServerAddress:addr,Protocol:proto,Port:ib.Port,ServerEntry:entry,AdditionalArguments:args},true
 }
 func (inst Instance) fingerprint()string{return fmt.Sprintf("%s|%s|%d|%s|%s",inst.ServerAddress,inst.Protocol,inst.Port,inst.ServerEntry,strings.Join(inst.AdditionalArguments,"\x00"))}
 
@@ -36,6 +36,7 @@ func persistServerEntry(id int,entry string){
 func (m *Manager)ensureLocked(inst Instance)error{
   fp:=inst.fingerprint();if cur:=m.procs[inst.Id];cur!=nil&&cur.proc!=nil&&cur.proc.IsRunning()&&cur.fp==fp{cur.tag=inst.Tag;return nil}
   if cur:=m.procs[inst.Id];cur!=nil{_=cur.proc.Stop();delete(m.procs,inst.Id)}
+  _=os.RemoveAll(configPathForID(inst.Id))
   if err:=os.MkdirAll(configPathForID(inst.Id),0750);err!=nil{return err}
   proc:=newProcess(configPathForID(inst.Id),inst.Tag,inst);if err:=proc.Start();err!=nil{return err}
   if entry:=proc.ServerEntry();entry!=""{persistServerEntry(inst.Id,entry)}
