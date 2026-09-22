@@ -33,9 +33,11 @@ const telemtWebDomainPatternSource = "^(?:[A-Za-z0-9]" +
 	"(?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?" +
 	"\\.)+[A-Za-z]{2,63}$"
 
-var telemtWebDomainPattern = regexp.MustCompile(telemtWebDomainPatternSource)
-var telemtWebVersionPattern = regexp.MustCompile(`(?i)v?([0-9]+)\.([0-9]+)\.([0-9]+)`)
-var telemtWebPortOwnerPattern = regexp.MustCompile(`users:\(\("([^"]+)"`)
+var (
+	telemtWebDomainPattern    = regexp.MustCompile(telemtWebDomainPatternSource)
+	telemtWebVersionPattern   = regexp.MustCompile(`(?i)v?([0-9]+)\.([0-9]+)\.([0-9]+)`)
+	telemtWebPortOwnerPattern = regexp.MustCompile(`users:\(\("([^"]+)"`)
+)
 
 type TelemtWebProxyState struct {
 	Enabled    bool   `json:"enabled"`
