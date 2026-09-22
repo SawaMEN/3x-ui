@@ -282,11 +282,12 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 			tls["enabled"] = true
 			certPath := strings.TrimSpace(fmt.Sprint(tls["certificatePath"]))
 			keyPath := strings.TrimSpace(fmt.Sprint(tls["keyPath"]))
+			if (certPath == "") != (keyPath == "") {
+				return nil, fmt.Errorf("NaiveProxy inbound %q must provide both TLS certificate and private key, or neither", inbound.Tag)
+			}
 			if certPath == "" {
 				certPath, _ = singBoxSettingService.GetCertFile()
 				certPath = strings.TrimSpace(certPath)
-			}
-			if keyPath == "" {
 				keyPath, _ = singBoxSettingService.GetKeyFile()
 				keyPath = strings.TrimSpace(keyPath)
 			}
