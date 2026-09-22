@@ -27,7 +27,7 @@ func(p *Process)IsRunning()bool{p.mu.RLock();cmd,done:=p.cmd,p.done;p.mu.RUnlock
 func(p *Process)Start()error{
   if p.IsRunning(){return errors.New("psiphond is already running")}
   entry:=filepath.Join(p.dir,"server-entry.dat");if _,err:=os.Stat(entry);os.IsNotExist(err){
-    args:=[]string{"generate","-ipaddress",p.inst.ServerAddress,"-protocol",fmt.Sprintf("%s:%d",p.inst.Protocol,p.inst.Port)};args=append(args,p.inst.AdditionalArguments...)
+    args:=[]string{"-ipaddress",p.inst.ServerAddress,"-protocol",fmt.Sprintf("%s:%d",p.inst.Protocol,p.inst.Port),"generate"};args=append(args,p.inst.AdditionalArguments...)
     gen:=exec.Command(GetBinaryPath(),args...);gen.Dir=p.dir;gen.Stdout=&logWriter{label:p.label+" generate"};gen.Stderr=gen.Stdout
     if err:=gen.Run();err!=nil{return fmt.Errorf("psiphon generate failed: %w",err)}
   }
