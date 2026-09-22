@@ -10,17 +10,17 @@ func TestInstanceFromInbound(t *testing.T) {
 	inbound := &model.Inbound{
 		Id:       42,
 		Tag:      "mieru-test",
-		Port:     443,
+		Port:     8443,
 		Listen:   "0.0.0.0",
 		Protocol: model.Mieru,
-		Settings: `{"protocols":["TCP","UDP"],"additionalPorts":[8443],"mtu":1400,"loggingLevel":"DEBUG","userHintIsMandatory":true,"clients":[{"email":"alice","password":"secret","enable":true},{"email":"disabled","password":"x","enable":false}]}`,
+		Settings: `{"protocols":["TCP","UDP"],"additionalPorts":[9443],"mtu":1400,"loggingLevel":"DEBUG","userHintIsMandatory":true,"clients":[{"email":"alice","password":"secret","enable":true},{"email":"disabled","password":"x","enable":false}]}`,
 	}
 	inst, ok := InstanceFromInbound(inbound)
 	if !ok {
 		t.Fatal("InstanceFromInbound returned false")
 	}
-	if len(inst.PortBindings) != 3 {
-		t.Fatalf("port bindings = %d, want 3", len(inst.PortBindings))
+	if len(inst.PortBindings) != 4 {
+		t.Fatalf("port bindings = %d, want 4", len(inst.PortBindings))
 	}
 	if len(inst.Users) != 1 || inst.Users[0].Name != "alice" {
 		t.Fatalf("users = %#v, want alice only", inst.Users)
