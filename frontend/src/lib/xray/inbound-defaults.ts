@@ -279,7 +279,7 @@ export function createDefaultMieruInboundSettings(): MieruInboundSettings {
   return {
     tcpPorts: [],
     udpPorts: [],
-    multiplexing: 'MULTIPLEXING_HIGH',
+    multiplexing: 'MULTIPLEXING_LOW',
     handshakeMode: 'HANDSHAKE_STANDARD',
     mtu: 1400,
     loggingLevel: 'INFO',
