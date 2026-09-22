@@ -41,6 +41,38 @@ func (p *Process) Start() error {
   if err:=cmd.Start();err!=nil{close(done);p.mu.Lock();p.cmd=nil;p.mu.Unlock();return err};go p.wait(cmd,done);return nil
 }
 func (p *Process) wait(cmd *exec.Cmd,done chan struct{}){defer close(done);err:=cmd.Wait();if err==nil||p.intentionalStop.Load(){return};logger.Errorf("mieru: mita %s exited: %v",p.label,err);p.mu.Lock();p.exitErr=err;p.mu.Unlock()}
+
+func (p *Process) Reload() error {
+  if !p.IsRunning() {
+    return errors.New("mita is not running")
+  }
+  ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+  defer cancel()
+  socketPath := p.socketPath
+  configPath := p.configPath
+  if abs, err := filepath.Abs(socketPath); err == nil {
+    socketPath = abs
+  }
+  if abs, err := filepath.Abs(configPath); err == nil {
+    configPath = abs
+  }
+  cmd := exec.CommandContext(ctx, GetBinaryPath(), "reload")
+  cmd.Env = append(os.Environ(),
+    "MITA_CONFIG_JSON_FILE="+configPath,
+    "MITA_UDS_PATH="+socketPath,
+    "MITA_INSECURE_UDS=true",
+    "MITA_LOG_NO_TIMESTAMP=true",
+  )
+  lw := &logWriter{label: p.label + " reload"}
+  cmd.Stdout, cmd.Stderr = lw, lw
+  if err := cmd.Run(); err != nil {
+    if ctx.Err() != nil {
+      return fmt.Errorf("mita reload timed out: %w", ctx.Err())
+    }
+    return fmt.Errorf("mita reload failed: %w", err)
+  }
+  return nil
+}
 func (p *Process) Stop() error {
   if !p.IsRunning(){return errors.New("mita is not running")};p.intentionalStop.Store(true);p.mu.RLock();cmd,done:=p.cmd,p.done;p.mu.RUnlock();if cmd==nil||cmd.Process==nil{return errors.New("mita is not running")}
   if runtime.GOOS=="windows"{_ = cmd.Process.Kill();return waitForExit(done,2*time.Second)}
