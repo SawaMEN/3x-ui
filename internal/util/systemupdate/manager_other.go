@@ -18,3 +18,7 @@ func Refresh(ctx context.Context) (Status, error) {
 func Apply(ctx context.Context) (UpdateResult, error) {
 	return UpdateResult{}, fmt.Errorf("system package management is only supported on Linux")
 }
+
+func Reboot(ctx context.Context) error {
+	return fmt.Errorf("system reboot is only supported on Linux")
+}
