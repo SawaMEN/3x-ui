@@ -180,7 +180,7 @@ func InstanceFromInbound(ib *model.Inbound) (Instance, bool) {
 	level, _ := raw["loggingLevel"].(string)
 	level = strings.ToUpper(strings.TrimSpace(level))
 	switch level {
-	case "OFF", "ERROR", "WARN", "INFO", "DEBUG":
+	case "FATAL", "ERROR", "WARN", "INFO", "DEBUG", "TRACE":
 	default:
 		level = "INFO"
 	}
@@ -213,14 +213,11 @@ func InstanceFromInbound(ib *model.Inbound) (Instance, bool) {
 	}, true
 }
 
-func (inst Instance) fingerprint() string {
+func (inst Instance) restartFingerprint() string {
 	parts := []string{
 		inst.Listen,
 		strconv.Itoa(inst.MTU),
-		inst.LoggingLevel,
 		strconv.FormatBool(inst.UserHintIsMandatory),
-		inst.Multiplexing,
-		inst.HandshakeMode,
 	}
 	for _, b := range inst.PortBindings {
 		if b.PortRange != "" {
@@ -229,6 +226,12 @@ func (inst Instance) fingerprint() string {
 			parts = append(parts, fmt.Sprintf("%s:%d", b.Protocol, b.Port))
 		}
 	}
+	slices.Sort(parts)
+	return strings.Join(parts, "|")
+}
+
+func (inst Instance) fingerprint() string {
+	parts := []string{inst.restartFingerprint(), inst.LoggingLevel}
 	for _, u := range inst.Users {
 		parts = append(parts, u.Name+"="+u.Password)
 	}
@@ -296,20 +299,55 @@ func writeConfig(inst Instance) (string,error) {
   path:=configPathForID(inst.Id); if err:=os.WriteFile(path,append(data,'\n'),0640);err!=nil{return "",err}; return path,nil
 }
 func (m *Manager) ensureLocked(inst Instance) error {
-  fp:=inst.fingerprint()
-  if cur:=m.procs[inst.Id]; cur!=nil && cur.proc!=nil && cur.proc.IsRunning() && cur.fp==fp { cur.tag=inst.Tag; return nil }
-  if cur:=m.procs[inst.Id]; cur!=nil { _=cur.proc.Stop(); delete(m.procs,inst.Id) }
-  path,err:=writeConfig(inst); if err!=nil{return err}
-  proc:=newProcess(path,inst.Tag,socketPathForID(inst.Id)); if err:=proc.Start();err!=nil{return err}
-  m.procs[inst.Id]=&managed{proc:proc,tag:inst.Tag,fp:fp}; delete(m.lastErr,inst.Id)
-  logger.Infof("mieru: started mita for inbound %d (%s)",inst.Id,inst.Tag); return nil
+  fp := inst.fingerprint()
+  restartFP := inst.restartFingerprint()
+  if cur := m.procs[inst.Id]; cur != nil && cur.proc != nil && cur.proc.IsRunning() {
+    if cur.fp == fp {
+      cur.tag = inst.Tag
+      return nil
+    }
+    // Upstream mita allows users and loggingLevel to be reloaded without
+    // disturbing active connections. Reuse that path when no restart-only
+    // server setting changed (ports/MTU/listen/advanced settings).
+    if cur.restartFP == restartFP {
+      if _, err := writeConfig(inst); err == nil {
+        if err := cur.proc.Reload(); err == nil {
+          cur.tag = inst.Tag
+          cur.fp = fp
+          delete(m.lastErr, inst.Id)
+          logger.Debugf("mieru: reloaded mita for inbound %d (%s)", inst.Id, inst.Tag)
+          return nil
+        } else {
+          logger.Debug("mieru: mita reload failed, falling back to restart:", err)
+        }
+      }
+    }
+  }
+
+  if cur := m.procs[inst.Id]; cur != nil {
+    _ = cur.proc.Stop()
+    delete(m.procs, inst.Id)
+    delete(m.traffic, inst.Id)
+  }
+  path, err := writeConfig(inst)
+  if err != nil {
+    return err
+  }
+  proc := newProcess(path, inst.Tag, socketPathForID(inst.Id))
+  if err := proc.Start(); err != nil {
+    return err
+  }
+  m.procs[inst.Id] = &managed{proc: proc, tag: inst.Tag, fp: fp, restartFP: restartFP}
+  delete(m.lastErr, inst.Id)
+  logger.Infof("mieru: started mita for inbound %d (%s)", inst.Id, inst.Tag)
+  return nil
 }
 func (m *Manager) Ensure(inst Instance) error {m.mu.Lock();defer m.mu.Unlock();return m.ensureLocked(inst)}
 func (m *Manager) Reconcile(desired []Instance) {
   m.mu.Lock();defer m.mu.Unlock(); want:=map[int]Instance{}; for _,inst:=range desired{want[inst.Id]=inst}
-  for id,cur:=range m.procs { if _,ok:=want[id];!ok { _=cur.proc.Stop(); delete(m.procs,id); _=os.Remove(configPathForID(id)); _=os.Remove(socketPathForID(id)) } }
+  for id,cur:=range m.procs { if _,ok:=want[id];!ok { _=cur.proc.Stop(); delete(m.procs,id); delete(m.traffic,id); _=os.Remove(configPathForID(id)); _=os.Remove(socketPathForID(id)) } }
   for _,inst:=range desired { if err:=m.ensureLocked(inst);err!=nil && m.lastErr[inst.Id]!=err.Error(){m.lastErr[inst.Id]=err.Error();logger.Warningf("mieru: failed to start inbound %d (%s): %v",inst.Id,inst.Tag,err)} }
 }
 func (m *Manager) Remove(id int) {m.mu.Lock();defer m.mu.Unlock();if cur:=m.procs[id];cur!=nil{_ = cur.proc.Stop();delete(m.procs,id)};_ = os.Remove(configPathForID(id));_ = os.Remove(socketPathForID(id))}
-func (m *Manager) StopAll() {m.mu.Lock();defer m.mu.Unlock();for id,cur:=range m.procs{_=cur.proc.Stop();_=os.Remove(configPathForID(id));_=os.Remove(socketPathForID(id));delete(m.procs,id)}}
+func (m *Manager) StopAll() {m.mu.Lock();defer m.mu.Unlock();for id,cur:=range m.procs{_=cur.proc.Stop();_=os.Remove(configPathForID(id));_=os.Remove(socketPathForID(id));delete(m.procs,id);delete(m.traffic,id)}}
 func (m *Manager) HasRunning() bool {m.mu.Lock();defer m.mu.Unlock();for _,cur:=range m.procs{if cur.proc!=nil&&cur.proc.IsRunning(){return true}};return false}
