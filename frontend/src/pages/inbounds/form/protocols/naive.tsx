@@ -58,9 +58,6 @@ export default function NaiveFields() {
         <Input placeholder="/root/cert/example.com/privkey.pem" />
       </FormField>
 
-      <FormField name={['settings', 'clients']} hidden>
-        <Input />
-      </FormField>
 
       <div style={{ color: 'var(--ant-color-text-secondary)', fontSize: 12, marginTop: 4 }}>
         {t('pages.inbounds.form.naiveHint')}
