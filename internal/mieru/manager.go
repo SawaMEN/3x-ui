@@ -236,10 +236,19 @@ func (inst Instance) fingerprint() string {
 	return strings.Join(parts, "|")
 }
 
-type managed struct { proc *Process; tag string; fp string }
-type Manager struct { mu sync.Mutex; procs map[int]*managed; lastErr map[int]string }
+type managed struct { proc *Process; tag string; fp string; restartFP string }
+type Manager struct { mu sync.Mutex; procs map[int]*managed; lastErr map[int]string; traffic map[int]map[string]trafficCursor }
 var ( once sync.Once; singleton *Manager )
-func GetManager() *Manager { once.Do(func(){ singleton=&Manager{procs:map[int]*managed{}, lastErr:map[int]string{}} }); return singleton }
+func GetManager() *Manager {
+  once.Do(func(){
+    singleton=&Manager{
+      procs: map[int]*managed{},
+      lastErr: map[int]string{},
+      traffic: map[int]map[string]trafficCursor{},
+    }
+  })
+  return singleton
+}
 func configDir() string { return filepath.Join(config.GetBinFolderPath(), "mieru") }
 func configPathForID(id int) string { return filepath.Join(configDir(), fmt.Sprintf("mita-%d.json", id)) }
 func socketPathForID(id int) string { return filepath.Join(configDir(), fmt.Sprintf("mita-%d.sock", id)) }
