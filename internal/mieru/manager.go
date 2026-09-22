@@ -180,6 +180,8 @@ func InstanceFromInbound(ib *model.Inbound) (Instance, bool) {
 	level, _ := raw["loggingLevel"].(string)
 	level = strings.ToUpper(strings.TrimSpace(level))
 	switch level {
+	case "OFF":
+		level = "FATAL"
 	case "FATAL", "ERROR", "WARN", "INFO", "DEBUG", "TRACE":
 	default:
 		level = "INFO"
