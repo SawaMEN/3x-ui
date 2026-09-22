@@ -181,7 +181,8 @@ export default function SystemUpdateModal({
     const xrayLatest =
       xrayVersions.success && Array.isArray(xrayVersions.obj) ? xrayVersions.obj[0] || '' : '';
     const singBoxCurrent = singBoxStatus.success ? singBoxStatus.obj?.version || '' : '';
-    const singBoxInstalled = singBoxStatus.success === true && singBoxStatus.obj?.installed === true;
+    const singBoxInstalled =
+      singBoxStatus.success === true && singBoxStatus.obj?.installed === true;
     const singBoxLatest =
       singBoxVersions.success && Array.isArray(singBoxVersions.obj)
         ? singBoxVersions.obj[0] || ''
