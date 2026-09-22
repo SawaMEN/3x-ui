@@ -1,12 +1,9 @@
 import { useTranslation } from 'react-i18next';
 import { Input, Select, Switch } from 'antd';
-import { useFormContext } from 'react-hook-form';
-
 import { FormField } from '@/components/form/rhf';
 
 export default function NaiveFields() {
   const { t } = useTranslation();
-  const { control } = useFormContext();
 
   return (
     <>
