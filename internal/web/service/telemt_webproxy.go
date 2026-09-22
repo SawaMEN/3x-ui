@@ -29,11 +29,13 @@ const (
 	telemtWebMinEngine  = "3.5.1"
 )
 
-var telemtWebDomainPattern = regexp.MustCompile(strings.Join([]string{
-	`^(?:[A-Za-z0-9]`,
-	`(?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?`,
-	`\.)+[A-Za-z]{2,63}$`,
-}, ""))
+func telemtWebDomainPatternSource() string {
+	return `^(?:[A-Za-z0-9]` +
+		`(?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?` +
+		`\.)+[A-Za-z]{2,63}$`
+}
+
+var telemtWebDomainPattern = regexp.MustCompile(telemtWebDomainPatternSource())
 var telemtWebVersionPattern = regexp.MustCompile(
 	`(?i)v?([0-9]+)` +
 		`\.([0-9]+)` +
