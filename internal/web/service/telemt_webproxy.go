@@ -19,14 +19,14 @@ import (
 )
 
 const (
-	telemtWebStatePath = "/etc/x-ui/telemt-web.json"
-	telemtWebNginxConf = "/etc/nginx/conf.d/3x-ui-telemt-web.conf"
-	telemtWebAcmeConf = "/etc/nginx/conf.d/3x-ui-telemt-web-acme.conf"
-	telemtWebDecoyDir = "/var/lib/x-ui/telemt-web"
-	telemtWebListenIP = "127.0.0.1"
+	telemtWebStatePath  = "/etc/x-ui/telemt-web.json"
+	telemtWebNginxConf  = "/etc/nginx/conf.d/3x-ui-telemt-web.conf"
+	telemtWebAcmeConf   = "/etc/nginx/conf.d/3x-ui-telemt-web-acme.conf"
+	telemtWebDecoyDir   = "/var/lib/x-ui/telemt-web"
+	telemtWebListenIP   = "127.0.0.1"
 	telemtWebListenPort = 15080
-	telemtWebUser = "webproxy"
-	telemtWebMinEngine = "3.5.1"
+	telemtWebUser       = "webproxy"
+	telemtWebMinEngine  = "3.5.1"
 )
 
 var telemtWebDomainPattern = regexp.MustCompile(`^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$`)
