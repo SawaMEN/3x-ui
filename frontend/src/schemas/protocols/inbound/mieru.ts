@@ -22,7 +22,7 @@ export type MieruClient = z.infer<typeof MieruClientSchema>;
 const MieruPortEntrySchema = z
   .string()
   .trim()
-  .regex(/^d+(?:-d+)?$/, 'Use a port or a port range such as 2012-2022')
+  .regex(/^\d+(?:-\d+)?$/, 'Use a port or a port range such as 2012-2022')
   .superRefine((value, ctx) => {
     const [startRaw, endRaw = startRaw] = value.split('-');
     const start = Number(startRaw);
