@@ -512,6 +512,28 @@ func hasActiveZramSwap() bool {
 	return false
 }
 
+func refreshPackageDatabase(ctx context.Context, manager string) error {
+	switch manager {
+	case "apt-get":
+		return runContext(ctx, "apt-get", "update")
+	case "dnf":
+		return runContext(ctx, "dnf", "makecache", "-y")
+	case "yum":
+		return runContext(ctx, "yum", "makecache", "-y")
+	case "zypper":
+		return runContext(ctx, "zypper", "refresh")
+	case "pacman":
+		// Avoid a partial upgrade with pacman -Sy. Package installation below
+		// uses the system's current package database and lets pacman enforce its
+		// normal dependency checks.
+		return nil
+	case "apk":
+		return runContext(ctx, "apk", "update")
+	default:
+		return fmt.Errorf("unsupported package manager: %s", manager)
+	}
+}
+
 func installAlpineZram(ctx context.Context) error {
 	total, _ := readMemoryInfo()
 	recommended := int(total / 1024 / 1024 / 2)
