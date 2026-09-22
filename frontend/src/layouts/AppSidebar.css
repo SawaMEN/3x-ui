@@ -786,7 +786,8 @@ body.theme-cyberpunk .drawer-brand {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
+  width: max-content;
+  max-width: 100%;
   font-family: 'Arial Black', 'Segoe UI', sans-serif;
   font-size: 27px;
   font-weight: 900;
@@ -817,7 +818,8 @@ body.theme-cyberpunk .drawer-brand {
 }
 
 .ant-layout-sider-collapsed .sider-brand .brand-text {
-  width: 100%;
+  width: max-content;
+  max-width: 100%;
   font-size: 27px;
   letter-spacing: -0.045em;
 }
