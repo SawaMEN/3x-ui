@@ -849,17 +849,7 @@ func (s *SubService) genNaiveLink(inbound *model.Inbound, email string) string {
 	if inbound.Protocol != model.NaiveProxy {
 		return ""
 	}
-	client, ok := s.clientForLink(inbound, email)
-	if !ok || client.Password == "" {
-		return ""
-	}
-	host := s.resolveInboundAddress(inbound)
-	link := fmt.Sprintf("naive+https://%s:%s@%s",
-		encodeUserinfo(client.Email),
-		encodeUserinfo(client.Password),
-		joinHostPort(host, inbound.Port),
-	)
-	return buildLinkWithParams(link, nil, s.genRemark(inbound, email, "", ""))
+	return s.genNaiveSubscriptionLink(inbound, email)
 }
 
 // genNaiveSubscriptionLink returns the HTTPS-proxy form used by the raw
