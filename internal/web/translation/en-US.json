@@ -1846,7 +1846,10 @@
         "upToDate": "Up to date",
         "rebootSystem": "Reboot server",
         "rebootStarted": "Server reboot started. The page will refresh after the connection is restored.",
-        "unsupportedSystemUpdate": "System updates are not supported for this operating system."
+        "unsupportedSystemUpdate": "System updates are not supported for this operating system.",
+        "updateComponentFailed": "Could not update {component}.",
+        "partialUpdate": "System packages were updated, but these components could not be updated: {components}.",
+        "rebootFailed": "Could not start the server reboot."
       }
     },
     "xray": {
