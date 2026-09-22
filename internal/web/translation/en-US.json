@@ -516,7 +516,7 @@
         "naiveNetworkUdp": "QUIC / UDP",
         "naiveCertificatePath": "TLS certificate",
         "naiveKeyPath": "TLS private key",
-        "naiveHint": "Native NaïveProxy through sing-box. Users are managed by the normal client editor.",
+        "naiveHint": "TLS and safe defaults are automatic. TCP is used by default; QUIC uses BBR. The port comes from the main inbound settings. Users are managed by the normal client editor.",
         "psiphonServerEntry": "Server entry",
         "psiphonServerEntryHint": "Optional. Paste an existing server-entry.dat, otherwise it is generated automatically.",
         "visionTestseed": "Vision testseed",
@@ -702,7 +702,6 @@
           "listen": "Inbound listen",
           "custom": "Custom"
         },
-        "naiveAutoHint": "TLS and safe defaults are automatic. TCP is used by default; QUIC uses BBR. The port comes from the main inbound settings.",
         "mieruAutoHint": "The regular inbound port is used for both TCP and UDP. MTU 1400 and baseline Mieru settings are automatic; uncommon options remain available in JSON.",
         "psiphonAutoHint": "Leave Server entry empty: psiphond generates it and detects the VPS public address automatically. OSSH on the inbound port is used by default."
       },
