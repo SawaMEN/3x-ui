@@ -517,6 +517,33 @@ func runtimeKernelVersion() string {
 	return strings.TrimSpace(string(output))
 }
 
+// Reboot schedules a system reboot without waiting for the shutdown to finish.
+// This is intentionally asynchronous because the HTTP request will be terminated
+// by the reboot itself.
+func Reboot(ctx context.Context) error {
+	if os.Geteuid() != 0 {
+		return fmt.Errorf("system reboot requires root privileges")
+	}
+
+	if commandExists("systemctl") {
+		cmd := exec.CommandContext(ctx, "systemctl", "reboot")
+		if err := cmd.Start(); err == nil {
+			return nil
+		}
+	}
+
+	for _, command := range []string{"reboot", "/sbin/reboot"} {
+		if !commandExists(command) && command != "/sbin/reboot" {
+			continue
+		}
+		cmd := exec.CommandContext(ctx, command)
+		if err := cmd.Start(); err == nil {
+			return nil
+		}
+	}
+	return fmt.Errorf("failed to start system reboot command")
+}
+
 func rebootRequired(manager string) bool {
 	for _, path := range []string{"/var/run/reboot-required", "/run/reboot-required"} {
 		if _, err := os.Stat(path); err == nil {
