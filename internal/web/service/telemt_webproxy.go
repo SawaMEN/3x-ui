@@ -19,19 +19,25 @@ import (
 )
 
 const (
-	telemtWebStatePath = "/etc/x-ui/telemt-web.json"
-	telemtWebNginxConf = "/etc/nginx/conf.d/3x-ui-telemt-web.conf"
-	telemtWebAcmeConf = "/etc/nginx/conf.d/3x-ui-telemt-web-acme.conf"
-	telemtWebDecoyDir = "/var/lib/x-ui/telemt-web"
-	telemtWebListenIP = "127.0.0.1"
+	telemtWebStatePath  = "/etc/x-ui/telemt-web.json"
+	telemtWebNginxConf  = "/etc/nginx/conf.d/3x-ui-telemt-web.conf"
+	telemtWebAcmeConf   = "/etc/nginx/conf.d/3x-ui-telemt-web-acme.conf"
+	telemtWebDecoyDir   = "/var/lib/x-ui/telemt-web"
+	telemtWebListenIP   = "127.0.0.1"
 	telemtWebListenPort = 15080
-	telemtWebUser = "webproxy"
-	telemtWebMinEngine = "3.5.1"
+	telemtWebUser       = "webproxy"
+	telemtWebMinEngine  = "3.5.1"
 )
 
-var telemtWebDomainPattern = regexp.MustCompile(`^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$`)
-var telemtWebVersionPattern = regexp.MustCompile(`(?i)v?([0-9]+)\.([0-9]+)\.([0-9]+)`)
-var telemtWebPortOwnerPattern = regexp.MustCompile(`users:\(\("([^"]+)"`)
+const telemtWebDomainPatternSource = "^(?:[A-Za-z0-9]" +
+	"(?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?" +
+	"\\.)+[A-Za-z]{2,63}$"
+
+var (
+	telemtWebDomainPattern    = regexp.MustCompile(telemtWebDomainPatternSource)
+	telemtWebVersionPattern   = regexp.MustCompile(`(?i)v?([0-9]+)\.([0-9]+)\.([0-9]+)`)
+	telemtWebPortOwnerPattern = regexp.MustCompile(`users:\(\("([^"]+)"`)
+)
 
 type TelemtWebProxyState struct {
 	Enabled    bool   `json:"enabled"`
@@ -204,13 +210,13 @@ func removeTelemtWebNginxConfig() error { err := os.Remove(telemtWebNginxConf); 
 func telemtWebEnsureNginxRunning() error {
 	if err := exec.Command("nginx", "-t").Run(); err != nil { return errors.New("nginx configuration test failed") }
 	if systemctl("enable", "--now", "nginx") == nil { return nil }
-	if _, err := exec.LookPath("rc-service"); err == nil { if err := exec.Command("rc-service", "nginx", "restart").Run(); err != nil { return fmt.Errorf("failed to start nginx: %w", err) }; _, _ = exec.Command("rc-update", "add", "nginx", "default").Output(); return nil }
+	if _, err := exec.LookPath("rc-service"); err == nil { if err := exec.CommandContext(context.Background(), "rc-service", "nginx", "restart").Run(); err != nil { return fmt.Errorf("failed to start nginx: %w", err) }; _, _ = exec.CommandContext(context.Background(), "rc-update", "add", "nginx", "default").Output(); return nil }
 	return errors.New("failed to start nginx")
 }
 
 func telemtWebReloadNginx() error {
 	if _, err := exec.LookPath("systemctl"); err == nil { if err := systemctl("reload", "nginx"); err == nil { return nil } }
-	if _, err := exec.LookPath("rc-service"); err == nil { if err := exec.Command("rc-service", "nginx", "reload").Run(); err == nil { return nil } }
+	if _, err := exec.LookPath("rc-service"); err == nil { if err := exec.CommandContext(context.Background(), "rc-service", "nginx", "reload").Run(); err == nil { return nil } }
 	return errors.New("failed to reload nginx")
 }
 
@@ -299,7 +305,7 @@ func telemtWebPackageManager() string {
 }
 
 func telemtWebPortAvailable(port int) bool {
-	if telemtWebCommandExists("ss") { return exec.Command("ss", "-lnt", fmt.Sprintf("sport = :%d", port)).Run() != nil }
+	if telemtWebCommandExists("ss") { return exec.CommandContext(context.Background(), "ss", "-lnt", fmt.Sprintf("sport = :%d", port)).Run() != nil }
 	listenConfig := net.ListenConfig{}; listener, err := listenConfig.Listen(context.Background(), "tcp", fmt.Sprintf(":%d", port)); if err != nil { return false }; _ = listener.Close(); return true
 }
 
@@ -307,7 +313,7 @@ func telemtWebPortOwner(port int) string {
 	if !telemtWebCommandExists("ss") {
 		return ""
 	}
-	output, err := exec.Command("ss", "-lntpH", fmt.Sprintf("sport = :%d", port)).CombinedOutput()
+	output, err := exec.CommandContext(context.Background(), "ss", "-lntpH", fmt.Sprintf("sport = :%d", port)).CombinedOutput()
 	if err != nil {
 		return ""
 	}
@@ -330,7 +336,7 @@ func telemtWebNginxCanOwn443() bool { if systemctl("is-active", "--quiet", "ngin
 
 func telemtWebNginxOwnsPort(port int) bool {
 	if !telemtWebCommandExists("ss") { return false }
-	output, err := exec.Command("ss", "-lntp", fmt.Sprintf("sport = :%d", port)).CombinedOutput(); if err != nil { return false }
+	output, err := exec.CommandContext(context.Background(), "ss", "-lntp", fmt.Sprintf("sport = :%d", port)).CombinedOutput(); if err != nil { return false }
 	return strings.Contains(string(output), "nginx")
 }
 

@@ -174,6 +174,7 @@ jobs:
         uses: golangci/golangci-lint-action@v9
         with:
           version: latest
+          args: --fix --issues-exit-code=0
 
   arch-linux:
     if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')

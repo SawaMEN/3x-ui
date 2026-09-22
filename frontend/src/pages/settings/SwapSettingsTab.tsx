@@ -30,6 +30,8 @@ import { onNumber } from '@/utils/onNumber';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import SystemUpdateModal from './SystemUpdateModal';
 
+type ApiMsg<T = unknown> = { success?: boolean; msg?: string; obj?: T };
+
 type SwapArea = {
   path: string;
   type: string;
@@ -764,7 +766,6 @@ export default function SwapSettingsTab() {
       </>
     );
   }
-
 
   return (
     <>

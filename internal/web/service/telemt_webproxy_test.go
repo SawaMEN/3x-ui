@@ -42,9 +42,9 @@ func TestAppendTelemtWebProxyConfigDisabled(t *testing.T) {
 
 func TestTelemtWebVersionAtLeast(t *testing.T) {
 	tests := []struct {
-		current string
+		current  string
 		required string
-		want bool
+		want     bool
 	}{
 		{"3.5.1", "3.5.1", true},
 		{"v3.6.0", "3.5.1", true},

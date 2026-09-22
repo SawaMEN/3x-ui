@@ -2965,6 +2965,11 @@ export const sections: readonly Section[] = [
         summary: 'Apply the selected system package updates.',
       },
       {
+        method: 'POST',
+        path: '/panel/api/setting/system/update/reboot',
+        summary: 'Reboot the panel host after system updates.',
+      },
+      {
         method: 'GET',
         path: '/panel/api/telemt/webproxy/status',
         summary: 'Return the Telemt Web Proxy and external port 443 status.',

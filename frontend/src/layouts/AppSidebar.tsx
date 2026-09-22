@@ -434,8 +434,27 @@ function AppSidebar() {
         >
           <div className="drawer-header">
             <div className="brand-block">
-              <BrandMark />
-              <span className="drawer-brand">3X-UI</span>
+              <span
+                style={{
+                  position: 'absolute',
+                  left: 18,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                }}
+              >
+                <BrandMark />
+              </span>
+              <span
+                className="drawer-brand"
+                style={{
+                  position: 'absolute',
+                  left: '50%',
+                  top: '50%',
+                  transform: 'translate(-50%, -50%)',
+                }}
+              >
+                3X-UI
+              </span>
             </div>
             <div className="drawer-header-actions">
               <button

@@ -363,8 +363,6 @@ export default function SettingsPage() {
                       </Card>
                     </Col>
 
-
-
                     <Col span={24}>
                       <Card hoverable>{categoryBody}</Card>
                     </Col>

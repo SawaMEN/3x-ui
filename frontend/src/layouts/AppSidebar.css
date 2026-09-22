@@ -1003,3 +1003,24 @@ body.theme-cyberpunk .sider-brand .brand-text::after {
     transform: translateY(-50%);
   }
 }
+
+
+/* Keep the mobile drawer title centered even with the absolute close button. */
+@media (max-width: 768px) {
+  .drawer-header .brand-block {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 72px;
+    padding: 0 54px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .drawer-header .drawer-brand {
+    flex: 0 0 auto;
+    text-align: center;
+  }
+}

@@ -350,7 +350,7 @@ func listAvailableUpdates(ctx context.Context, manager string) (map[string]strin
 func installedPackageVersion(manager, name string) (string, bool) {
 	switch manager {
 	case "apt-get":
-		output, err := exec.Command("dpkg-query", "-W", "-f="+ "$" + "{Status}\\t" + "$" + "{Version}\\n", name).Output()
+		output, err := exec.CommandContext(context.Background(), "dpkg-query", "-W", "-f=${Status}\t${Version}\n", name).Output()
 		if err != nil {
 			return "", false
 		}
@@ -515,6 +515,30 @@ func runtimeKernelVersion() string {
 		return ""
 	}
 	return strings.TrimSpace(string(output))
+}
+
+// Reboot schedules a system reboot without waiting for the shutdown to finish.
+// This is intentionally asynchronous because the HTTP request will be terminated
+// by the reboot itself.
+func Reboot(ctx context.Context) error {
+	if os.Geteuid() != 0 {
+		return fmt.Errorf("system reboot requires root privileges")
+	}
+
+	commands := [][]string{
+		{"systemctl", "reboot"},
+		{"reboot"},
+		{"shutdown", "-r", "now"},
+	}
+	for _, args := range commands {
+		if !commandExists(args[0]) {
+			continue
+		}
+		if err := exec.CommandContext(ctx, args[0], args[1:]...).Start(); err == nil {
+			return nil
+		}
+	}
+	return fmt.Errorf("failed to start system reboot command")
 }
 
 func rebootRequired(manager string) bool {

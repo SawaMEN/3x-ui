@@ -12,7 +12,7 @@ import (
 )
 
 type TelemtController struct {
-	service       service.TelemtService
+	service        service.TelemtService
 	settingService service.SettingService
 }
 

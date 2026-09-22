@@ -17308,6 +17308,36 @@
         }
       }
     },
+    "/panel/api/setting/system/update/reboot": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Reboot the panel host after system updates.",
+        "operationId": "post_panel_api_setting_system_update_reboot",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/panel/api/telemt/webproxy/status": {
       "get": {
         "tags": [
