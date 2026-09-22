@@ -60,7 +60,7 @@ export const MieruInboundSettingsSchema = z.preprocess(
     .default('MULTIPLEXING_HIGH'),
   handshakeMode: z.enum(['HANDSHAKE_STANDARD', 'HANDSHAKE_NO_WAIT']).default('HANDSHAKE_STANDARD'),
   // Legacy compatibility fields kept for old saved inbounds.
-  protocols: z.array(z.enum(['TCP', 'UDP'])).min(1).default(['TCP', 'UDP']),
+  protocols: z.array(z.enum(['TCP', 'UDP'])).min(1).optional(),
   additionalPorts: z.preprocess(
     (value) =>
       Array.isArray(value)
@@ -69,7 +69,7 @@ export const MieruInboundSettingsSchema = z.preprocess(
             .filter((item) => Number.isFinite(item)),
       value,
     ),
-    z.array(z.number().int().min(1025).max(65535)).default([]),
+    z.array(z.number().int().min(1).max(65535)).optional(),
   ),
   mtu: z.number().int().min(1280).max(1400).default(1400),
   loggingLevel: z.enum(['FATAL', 'ERROR', 'WARN', 'INFO', 'DEBUG', 'TRACE']).default('INFO'),
