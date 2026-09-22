@@ -1,6 +1,23 @@
 package service
 
-import "github.com/SawaMEN/3x-ui/v3/internal/database/model"
+import (
+	"github.com/SawaMEN/3x-ui/v3/internal/common"
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+)
+
+func validateInboundRuntimeProtocol(protocol model.Protocol) error {
+	if protocol != model.NaiveProxy {
+		return nil
+	}
+	core, err := (&SettingService{}).GetCoreType()
+	if err != nil {
+		return err
+	}
+	if core != CoreTypeSingBox {
+		return common.NewError("NaïveProxy requires sing-box as the selected core")
+	}
+	return nil
+}
 
 func isXrayManagedProtocol(protocol model.Protocol) bool {
 	return protocol != model.VKTurnProxy &&
