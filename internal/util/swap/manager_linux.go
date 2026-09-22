@@ -125,8 +125,6 @@ func GetZramInstallInfo() (ZramInstallInfo, error) {
 	configPath := "/etc/systemd/zram-generator.conf.d/60-3x-ui.conf"
 	if id == "alpine" {
 		configPath = "/etc/conf.d/zram-init"
-	} else if packageName == zramBackendConfig {
-		configPath = "/etc/default/zram-config"
 	} else if packageName == zramBackendTools {
 		configPath = "/etc/default/zramswap"
 	}
@@ -179,9 +177,7 @@ func GetZramInstallInfo() (ZramInstallInfo, error) {
 	}
 
 	info.UsingGenerator = info.ActiveBackend == zramBackendGenerator
-	if info.Package == zramBackendConfig {
-		info.ConfigPath = "/etc/default/zram-config"
-	} else if info.Package == zramBackendTools {
+	if info.Package == zramBackendTools {
 		info.ConfigPath = "/etc/default/zramswap"
 	} else if info.Package == zramBackendConfig {
 		info.ConfigPath = ""
@@ -350,7 +346,7 @@ func installZramPackage(ctx context.Context, info ZramInstallInfo, reinstall boo
 		return fmt.Errorf("unsupported Linux distribution or package manager")
 	}
 	args := packageInstallArgs(info.PackageManager, info.Package)
-	if reinstall && info.RecommendedInstalled {
+	if reinstall && info.Installed {
 		args = packageReinstallArgs(info.PackageManager, info.Package)
 	}
 	if len(args) == 0 {
