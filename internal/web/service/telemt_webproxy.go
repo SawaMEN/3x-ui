@@ -29,9 +29,10 @@ const (
 	telemtWebMinEngine  = "3.5.1"
 )
 
-const telemtWebDomainPatternSource = "^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?" +
-	"\\.)+[A-Za-z]{2,63}$"
-const telemtWebVersionPatternSource = "(?i)v?([0-9]+)\\.([0-9]+)\\.([0-9]+)"
+const telemtWebDomainPatternSource = "^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\\.)+[A-Za-z]{2,63}$"
+const telemtWebVersionPatternSource = "(?i)v?([0-9]+)" +
+	"\\.([0-9]+)" +
+	"\\.([0-9]+)"
 const telemtWebPortOwnerPatternSource = "users:\\(\\(\"([^\"]+)\""
 
 var telemtWebDomainPattern = regexp.MustCompile(telemtWebDomainPatternSource)
