@@ -217,7 +217,7 @@ jobs:
           test -n "$MITA_BIN"
           cp "$MITA_BIN" mita
           chmod +x mita
-          rm -rf "$MIERU_PKG" "$(dirname "$MITA_BIN")"
+          rm -f "$MIERU_PKG"
 
           PSIPHON_VER="v2.0.41"
           if [[ "${{ matrix.platform }}" == "amd64" ]]; then
@@ -227,7 +227,7 @@ jobs:
             git clone --depth 1 --branch "$PSIPHON_VER" https://github.com/Psiphon-Labs/psiphon-tunnel-core.git /tmp/psiphon-tunnel-core
             ( cd /tmp/psiphon-tunnel-core/Server && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o "$GITHUB_WORKSPACE/x-ui/bin/psiphond" main.go )
           fi
-          [[ -f psiphond ]] && chmod +x psiphond
+          chmod +x "$GITHUB_WORKSPACE/x-ui/bin/psiphond"
 
           cd ../..
 
