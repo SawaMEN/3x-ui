@@ -765,7 +765,6 @@ export default function SwapSettingsTab() {
     );
   }
 
-
   return (
     <>
       {contextHolder}
