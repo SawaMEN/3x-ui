@@ -79,6 +79,16 @@ const normalizeVersion = (value: string) => value.trim().replace(/^v/i, '');
 const versionsDiffer = (installed: string, available: string) =>
   normalizeVersion(installed) !== normalizeVersion(available);
 
+function waitForUpdateRecovery(delayMs: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, delayMs);
+  });
+}
+
+function isTransientFetchFailure(message: string): boolean {
+  return /failed to fetch|networkerror|network error|load failed/i.test(message);
+}
+
 function normalizeSystemUpdate(value: unknown): SystemUpdateStatus {
   const raw =
     value && typeof value === 'object' && !Array.isArray(value)
@@ -282,19 +292,58 @@ export default function SystemUpdateModal({
     }
   };
 
+  const recoverSystemUpdateStatus = useCallback(async (): Promise<SystemUpdateStatus | null> => {
+    const delays = [0, 1000, 2000, 4000, 6000];
+
+    for (const delay of delays) {
+      if (delay > 0) {
+        await waitForUpdateRecovery(delay);
+      }
+
+      const status = await HttpUtil.get('/panel/api/setting/system/update/status', undefined, {
+        silent: true,
+        timeout: 15000,
+      });
+      if (status.success) {
+        const normalized = normalizeSystemUpdate(status.obj);
+        setSystemUpdate(normalized);
+        return normalized;
+      }
+    }
+
+    return null;
+  }, []);
+
   const applyAllUpdates = async () => {
     setSystemUpdateBusy(true);
     try {
       const systemMsg = (await HttpUtil.post(
         '/panel/api/setting/system/update/apply',
       )) as ApiMsg<unknown>;
+      let systemUpdateRecovered = Boolean(systemMsg?.success);
+
       if (!systemMsg?.success) {
         const result = normalizeSystemUpdateResult(systemMsg.obj);
         setSystemUpdateResult(result);
-        throw new Error(systemMsg?.msg || result.error || t('pages.settings.swap.updateFailed'));
+
+        const errorMessage = systemMsg?.msg || result.error || t('pages.settings.swap.updateFailed');
+        if (isTransientFetchFailure(errorMessage)) {
+          const recoveredStatus = await recoverSystemUpdateStatus();
+          systemUpdateRecovered = recoveredStatus !== null;
+
+          if (systemUpdateRecovered) {
+            messageApi.info('Соединение с панелью восстановлено; состояние обновления проверено.');
+          }
+        }
+
+        if (!systemUpdateRecovered) {
+          throw new Error(errorMessage);
+        }
       }
 
-      setSystemUpdateResult(normalizeSystemUpdateResult(systemMsg.obj));
+      if (systemMsg?.success) {
+        setSystemUpdateResult(normalizeSystemUpdateResult(systemMsg.obj));
+      }
 
       const pending = dependencies.filter(
         (dependency) =>
@@ -331,12 +380,7 @@ export default function SystemUpdateModal({
         }
       }
 
-      const refreshed = (await HttpUtil.post(
-        '/panel/api/setting/system/update/check',
-      )) as ApiMsg<unknown>;
-      if (refreshed?.success) {
-        setSystemUpdate(normalizeSystemUpdate(refreshed.obj));
-      }
+      await recoverSystemUpdateStatus();
       await loadDependencyUpdates();
 
       if (failed.length) {
