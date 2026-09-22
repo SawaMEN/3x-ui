@@ -221,6 +221,12 @@ npm run format
 
 Отдельная благодарность авторам **Telemt** и **mtproxyl** за наработки в области MTProxy.
 
+Также благодарим авторов и контрибьюторов:
+
+- [WINGS-N/3x-ui](https://github.com/WINGS-N/3x-ui) — за **vk-turn-proxy**.
+- [Liafanx/MTProxyL](https://github.com/Liafanx/MTProxyL) — за **MTProxyL**.
+- [Mekotofeuka/MTPROTO_FIX_By_MEKO](https://github.com/Mekotofeuka/MTPROTO_FIX_By_MEKO) — за фикс **MTPROTO**.
+
 Проект также основан на работе участников основного проекта 3X-UI.
 
 ## Лицензия
