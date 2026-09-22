@@ -117,6 +117,7 @@ func (a *SettingController) initRouter(g *gin.RouterGroup) {
 	g.GET("/system/update/status", a.systemUpdateStatus)
 	g.POST("/system/update/check", a.systemUpdateCheck)
 	g.POST("/system/update/apply", a.systemUpdateApply)
+	g.POST("/system/update/reboot", a.systemUpdateReboot)
 	g.GET("/getDefaultJsonConfig", a.getDefaultXrayConfig)
 	g.GET("/apiTokens", a.listApiTokens)
 	g.POST("/apiTokens/create", a.createApiToken)
@@ -575,6 +576,14 @@ func (a *SettingController) systemUpdateApply(c *gin.Context) {
 		return
 	}
 	jsonObj(c, result, nil)
+}
+
+func (a *SettingController) systemUpdateReboot(c *gin.Context) {
+	if err := systemupdate.Reboot(c.Request.Context()); err != nil {
+		jsonObj(c, gin.H{"rebooting": false}, err)
+		return
+	}
+	jsonObj(c, gin.H{"rebooting": true}, nil)
 }
 
 func (a *SettingController) singBoxConfig(c *gin.Context) {
