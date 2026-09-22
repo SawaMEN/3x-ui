@@ -50,7 +50,7 @@ export const MieruInboundSettingsSchema = z.preprocess(
     }
     return raw;
   },
-  export const MieruInboundSettingsSchema = z.object({
+  z.object({
   // New native mita bindings. Empty lists fall back to the legacy fields below
   // so existing inbounds continue to work unchanged.
   tcpPorts: MieruPortListSchema,
