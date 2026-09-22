@@ -229,7 +229,7 @@ jobs:
         working-directory: frontend
       # Keep formatting as a hard gate; formatter-only commits are still validated on PRs.
       - name: Format check
-        run: npm run format:check
+        run: npm run format:check || (npx oxfmt src/pages/settings/SystemUpdateModal.tsx && git diff -- src/pages/settings/SystemUpdateModal.tsx && exit 1)
         working-directory: frontend
       - name: Typecheck
         run: npm run typecheck
