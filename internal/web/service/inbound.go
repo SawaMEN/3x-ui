@@ -1331,7 +1331,10 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 				return err
 			}
 		}
-		if inbound.Enable && isXrayManagedProtocol(inbound.Protocol) {
+		if inbound.Enable && (isXrayManagedProtocol(inbound.Protocol) ||
+			inbound.Protocol == model.MTProto ||
+			inbound.Protocol == model.TUIC ||
+			inbound.Protocol == model.AmneziaWG) {
 			if inbound.NodeID != nil {
 				markDirty = true
 			} else {
@@ -1405,7 +1408,11 @@ func (s *InboundService) delInbound(id int) (bool, func(), error) {
 	var ib model.Inbound
 	loadErr := db.Model(model.Inbound{}).Where("id = ?", id).First(&ib).Error
 	if loadErr == nil {
-		shouldPushToRuntime := (ib.NodeID != nil || ib.Enable) && isXrayManagedProtocol(ib.Protocol)
+		shouldPushToRuntime := (ib.NodeID != nil || ib.Enable) &&
+			(isXrayManagedProtocol(ib.Protocol) ||
+				ib.Protocol == model.MTProto ||
+				ib.Protocol == model.TUIC ||
+				ib.Protocol == model.AmneziaWG)
 		if shouldPushToRuntime {
 			if ib.NodeID != nil {
 				rt, push, _, perr := s.nodePushPlan(&ib)
