@@ -702,7 +702,7 @@
           "listen": "Inbound listen",
           "custom": "Custom"
         },
-        "mieruAutoHint": "The regular inbound port is used for both TCP and UDP. MTU 1400 and baseline Mieru settings are automatic; uncommon options remain available in JSON.",
+        "mieruAutoHint": "Port 8443 is selected automatically for a new inbound when free; Mieru server ports use 1025–65535. TCP and UDP use the same port, MTU 1400 and baseline parameters are automatic; uncommon options remain available in JSON.",
         "psiphonAutoHint": "Leave Server entry empty: psiphond generates it and detects the VPS public address automatically. OSSH on the inbound port is used by default."
       },
       "info": {
