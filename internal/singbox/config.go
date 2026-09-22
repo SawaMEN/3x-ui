@@ -482,21 +482,21 @@ func TranslateXrayInbound(raw map[string]any) (map[string]any, error) {
 		if cc := rawString(settings, "quicCongestionControl"); cc != "" {
 			out["quic_congestion_control"] = cc
 		}
-		if tls := rawObject(settings, "tls"); len(tls) > 0 {
-			// NaiveProxy requires TLS; the panel may accept legacy/imported
-			// settings where the old toggle was absent or false.
-			t := map[string]any{"enabled": true}
-			if serverName := rawString(tls, "serverName"); serverName != "" {
-				t["server_name"] = serverName
-			}
-			if cert := rawString(tls, "certificatePath"); cert != "" {
-				t["certificate_path"] = cert
-			}
-			if key := rawString(tls, "keyPath"); key != "" {
-				t["key_path"] = key
-			}
-			out["tls"] = t
+		tls := rawObject(settings, "tls")
+		// NaiveProxy always uses TLS. Imported configs may omit the TLS object,
+		// so synthesize the required block instead of generating an invalid
+		// sing-box inbound.
+		t := map[string]any{"enabled": true}
+		if serverName := rawString(tls, "serverName"); serverName != "" {
+			t["server_name"] = serverName
 		}
+		if cert := rawString(tls, "certificatePath"); cert != "" {
+			t["certificate_path"] = cert
+		}
+		if key := rawString(tls, "keyPath"); key != "" {
+			t["key_path"] = key
+		}
+		out["tls"] = t
 	}
 	out["type"] = singProtocol
 	if listen := rawString(raw, "listen"); listen != "" {
