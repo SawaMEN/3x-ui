@@ -873,7 +873,10 @@ func (s *SubService) genNaiveSubscriptionLink(inbound *model.Inbound, email stri
 	if tls, ok := settings["tls"].(map[string]any); ok {
 		if sni, _ := tls["serverName"].(string); strings.TrimSpace(sni) != "" {
 			params["sni"] = strings.TrimSpace(sni)
-		} else if sni := s.configuredPublicHost(); sni != "" {
+		}
+	}
+	if _, ok := params["sni"]; !ok {
+		if sni := s.configuredPublicHost(); sni != "" {
 			// The native Naive inbound reuses the panel HTTPS certificate when
 			// no custom certificate is configured, so use the same public host
 			// as the default client SNI.
