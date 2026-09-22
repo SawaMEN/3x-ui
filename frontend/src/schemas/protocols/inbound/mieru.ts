@@ -56,8 +56,8 @@ export const MieruInboundSettingsSchema = z.preprocess(
   tcpPorts: MieruPortListSchema,
   udpPorts: MieruPortListSchema,
   multiplexing: z
-    .enum(['MULTIPLEXING_OFF', 'MULTIPLEXING_LOW', 'MULTIPLEXING_MIDDLE', 'MULTIPLEXING_HIGH'])
-    .default('MULTIPLEXING_HIGH'),
+    .enum(['MULTIPLEXING_OFF', 'MULTIPLEXING_LOW', 'MULTIPLEXING_MIDDLE', 'MULTIPLEXING_LOW'])
+    .default('MULTIPLEXING_LOW'),
   handshakeMode: z.enum(['HANDSHAKE_STANDARD', 'HANDSHAKE_NO_WAIT']).default('HANDSHAKE_STANDARD'),
   // Legacy compatibility fields kept for old saved inbounds.
   protocols: z.array(z.enum(['TCP', 'UDP'])).min(1).optional(),
