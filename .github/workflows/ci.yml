@@ -175,10 +175,6 @@ jobs:
         with:
           version: latest
           args: --fix --issues-exit-code=0
-      - name: Capture gofumpt diff
-        run: |
-          git diff -- internal/web/service/telemt_webproxy.go
-          exit 1
 
   arch-linux:
     if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
