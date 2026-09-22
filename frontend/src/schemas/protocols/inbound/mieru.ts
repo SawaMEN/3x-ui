@@ -56,9 +56,7 @@ export const MieruInboundSettingsSchema = z.preprocess(
       raw.additionalPorts.length > 0
     ) {
       const protocols = Array.isArray(raw.protocols) ? raw.protocols : ['TCP', 'UDP'];
-      const ports = raw.additionalPorts
-        .map((port) => String(port).trim())
-        .filter(Boolean);
+      const ports = raw.additionalPorts.map((port) => String(port).trim()).filter(Boolean);
       if (protocols.includes('TCP')) raw.tcpPorts = ports;
       if (protocols.includes('UDP')) raw.udpPorts = ports;
     }
@@ -69,19 +67,16 @@ export const MieruInboundSettingsSchema = z.preprocess(
     // so existing inbounds continue to work unchanged.
     tcpPorts: MieruPortListSchema,
     udpPorts: MieruPortListSchema,
-    multiplexing: z
-      .enum([
-        'MULTIPLEXING_OFF',
-        'MULTIPLEXING_LOW',
-        'MULTIPLEXING_MIDDLE',
-        'MULTIPLEXING_HIGH',
-      ])
+    multiplexing: z.enum(['MULTIPLEXING_OFF', 'MULTIPLEXING_LOW', 'MULTIPLEXING_MIDDLE', 'MULTIPLEXING_HIGH'])
       .default('MULTIPLEXING_LOW'),
     handshakeMode: z
       .enum(['HANDSHAKE_STANDARD', 'HANDSHAKE_NO_WAIT'])
       .default('HANDSHAKE_STANDARD'),
     // Legacy compatibility fields kept for old saved inbounds.
-    protocols: z.array(z.enum(['TCP', 'UDP'])).min(1).optional(),
+    protocols: z
+      .array(z.enum(['TCP', 'UDP']))
+      .min(1)
+      .optional(),
     additionalPorts: z.preprocess(
       (value) =>
         Array.isArray(value)
