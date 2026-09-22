@@ -62,6 +62,9 @@ import {
   HysteriaFields,
   MixedFields,
   MtprotoFields,
+  NaiveFields,
+  PsiphonFields,
+  MieruFields,
   ShadowsocksFields,
   TuicFields,
   TunFields,
@@ -280,7 +283,10 @@ export default function InboundFormModal({
     protocol !== Protocols.HYSTERIA &&
     protocol !== Protocols.WIREGUARD &&
     protocol !== Protocols.TUNNEL &&
-    protocol !== Protocols.TUIC;
+    protocol !== Protocols.TUIC &&
+    protocol !== Protocols.NAIVE &&
+    protocol !== Protocols.PSIPHON &&
+    protocol !== Protocols.MIERU;
 
   const wPort = useWatch({ control, name: 'port' });
   const wListen = (useWatch({ control, name: 'listen' }) ?? '') as string;
@@ -801,6 +807,9 @@ export default function InboundFormModal({
       )}
 
       {protocol === Protocols.TUIC && <TuicFields />}
+      {protocol === Protocols.NAIVE && <NaiveFields />}
+      {protocol === Protocols.PSIPHON && <PsiphonFields />}
+      {protocol === Protocols.MIERU && <MieruFields />}
 
       {protocol === Protocols.TUN && <TunFields />}
 
@@ -1143,6 +1152,9 @@ export default function InboundFormModal({
                     Protocols.MTPROTO,
                     Protocols.AMNEZIAWG,
                     Protocols.TUIC,
+                    Protocols.NAIVE,
+                    Protocols.PSIPHON,
+                    Protocols.MIERU,
                   ] as string[]
                 ).includes(protocol) || isFallbackHost
                   ? [
