@@ -68,7 +68,6 @@ export const MieruInboundSettingsSchema = z.preprocess(
             .map((item) => (typeof item === 'string' ? Number(item.trim()) : item))
             .filter((item) => Number.isFinite(item))
         : value,
-    ),
     z.array(z.number().int().min(1).max(65535)).optional(),
   ),
   mtu: z.number().int().min(1280).max(1400).default(1400),
