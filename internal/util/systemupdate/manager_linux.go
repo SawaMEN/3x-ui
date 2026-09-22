@@ -314,6 +314,15 @@ func requiredPackages(distribution string) []string {
 		addPackage("fail2ban")
 		addPackage("nftables")
 	}
+	if commandExists("nft") {
+		addPackage("nftables")
+	}
+	if commandExists("ufw") && (distribution == "ubuntu" || distribution == "debian" || distribution == "armbian") {
+		addPackage("ufw")
+	}
+	if commandExists("nginx") {
+		addPackage("nginx")
+	}
 
 	return packages
 }
