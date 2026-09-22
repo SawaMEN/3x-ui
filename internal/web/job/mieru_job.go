@@ -7,9 +7,13 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
-type MieruJob struct{ inboundService service.InboundService }
+type MieruJob struct {
+	inboundService service.InboundService
+}
 
-func NewMieruJob() *MieruJob { return new(MieruJob) }
+func NewMieruJob() *MieruJob {
+	return new(MieruJob)
+}
 
 func (j *MieruJob) Run() {
 	desired, err := j.inboundService.DesiredMieruInstances()
@@ -27,9 +31,10 @@ func (j *MieruJob) Run() {
 	mgr.Reconcile(desired)
 
 	deltas, onlineEmails := mgr.CollectTraffic(desired)
-	if len(deltas) > 0 {
+	if len(deltas) > 0 || len(onlineEmails) > 0 {
 		inboundByTag := make(map[string]*xray.Traffic)
-		clientTraffic := make([]*xray.ClientTraffic, 0, len(deltas))
+		clientTraffic := make([]*xray.ClientTraffic, 0, len(deltas)+len(onlineEmails))
+		seenClients := make(map[string]struct{}, len(deltas)+len(onlineEmails))
 
 		for _, delta := range deltas {
 			clientTraffic = append(clientTraffic, &xray.ClientTraffic{
@@ -37,6 +42,7 @@ func (j *MieruJob) Run() {
 				Up:    delta.Up,
 				Down:  delta.Down,
 			})
+			seenClients[delta.Email] = struct{}{}
 
 			traffic := inboundByTag[delta.Tag]
 			if traffic == nil {
@@ -48,6 +54,20 @@ func (j *MieruJob) Run() {
 			}
 			traffic.Up += delta.Up
 			traffic.Down += delta.Down
+		}
+
+		// Feed zero-byte activity for connected clients as well. This lets the
+		// shared traffic layer convert delayed-start expiries on first use even
+		// when the first poll observes no payload bytes.
+		for _, email := range onlineEmails {
+			if _, exists := seenClients[email]; exists {
+				continue
+			}
+			clientTraffic = append(clientTraffic, &xray.ClientTraffic{
+				Email: email,
+				Up:    0,
+				Down:  0,
+			})
 		}
 
 		traffics := make([]*xray.Traffic, 0, len(inboundByTag))
