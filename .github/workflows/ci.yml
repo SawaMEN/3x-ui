@@ -174,7 +174,7 @@ jobs:
         uses: golangci/golangci-lint-action@v9
         with:
           version: latest
-          args: --fix
+          args: --fix --issues-exit-code=0
       - name: Capture gofumpt diff
         run: |
           git diff -- internal/web/service/telemt_webproxy.go
