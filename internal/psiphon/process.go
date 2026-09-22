@@ -26,7 +26,10 @@ func newProcess(dir,label string,inst Instance)*Process{return &Process{dir:dir,
 func(p *Process)IsRunning()bool{p.mu.RLock();cmd,done:=p.cmd,p.done;p.mu.RUnlock();if cmd==nil||cmd.Process==nil{return false};if done!=nil{select{case<-done:return false;default:}};return true}
 func(p *Process)Start()error{
   if p.IsRunning(){return errors.New("psiphond is already running")}
-  entry:=filepath.Join(p.dir,"server-entry.dat");if _,err:=os.Stat(entry);os.IsNotExist(err){
+  entry:=filepath.Join(p.dir,"server-entry.dat")
+  if strings.TrimSpace(p.inst.ServerEntry) != "" {
+    if err:=os.WriteFile(entry,[]byte(strings.TrimSpace(p.inst.ServerEntry)+"\n"),0600);err!=nil{return fmt.Errorf("psiphon write server entry: %w",err)}
+  } else if _,err:=os.Stat(entry);os.IsNotExist(err){
     args:=[]string{"-ipaddress",p.inst.ServerAddress,"-protocol",fmt.Sprintf("%s:%d",p.inst.Protocol,p.inst.Port),"generate"};args=append(args,p.inst.AdditionalArguments...)
     gen:=exec.Command(GetBinaryPath(),args...);gen.Dir=p.dir;gen.Stdout=&logWriter{label:p.label+" generate"};gen.Stderr=gen.Stdout
     if err:=gen.Run();err!=nil{return fmt.Errorf("psiphon generate failed: %w",err)}
