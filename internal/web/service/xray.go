@@ -1,6 +1,7 @@
 package service
 
 import (
+	"os"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -84,6 +85,12 @@ type XrayService struct {
 	nodeService    NodeService
 	xrayAPI        xray.XrayAPI
 	xrayTrafficMu  sync.Mutex
+
+	installedVersionMu       sync.Mutex
+	installedVersionPath     string
+	installedVersionModTime  time.Time
+	installedVersionSize     int64
+	installedVersion          string
 }
 
 // IsXrayRunning checks if the Xray process is currently running.
@@ -150,11 +157,40 @@ func (s *XrayService) GetXrayResult() string {
 
 // GetXrayVersion returns the version of the running Xray process.
 func (s *XrayService) GetXrayVersion() string {
-	process := currentXrayProcess()
-	if process == nil {
+	if process := currentXrayProcess(); process != nil {
+		if version := process.GetXrayVersion(); version != "" && version != "Unknown" {
+			return version
+		}
+	}
+
+	// Xray may be installed but completely unused (for example when sing-box
+	// is selected as the active core). In that case there is no process object
+	// carrying a cached version, so read the installed binary directly.
+	binaryPath := xray.GetBinaryPath()
+	info, err := os.Stat(binaryPath)
+	if err != nil {
 		return "Unknown"
 	}
-	return process.GetXrayVersion()
+
+	s.installedVersionMu.Lock()
+	defer s.installedVersionMu.Unlock()
+
+	if s.installedVersion != "" &&
+		s.installedVersionPath == binaryPath &&
+		s.installedVersionModTime.Equal(info.ModTime()) &&
+		s.installedVersionSize == info.Size() {
+		return s.installedVersion
+	}
+
+	version := xray.GetInstalledVersion()
+	if version == "" {
+		version = "Unknown"
+	}
+	s.installedVersionPath = binaryPath
+	s.installedVersionModTime = info.ModTime()
+	s.installedVersionSize = info.Size()
+	s.installedVersion = version
+	return version
 }
 
 // RemoveIndex removes an element at the specified index from a slice.
