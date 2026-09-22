@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -40,22 +41,42 @@ func (m *Manager) CollectTraffic(desired []Instance) ([]TrafficDelta, []string) 
 	onlineSet := make(map[string]struct{})
 	deltas := make([]TrafficDelta, 0)
 
+	type scrapeResult struct {
+		inst  Instance
+		stats map[string]userTrafficStats
+		ok    bool
+	}
+
+	results := make(chan scrapeResult, len(desired))
+	sem := make(chan struct{}, 4)
+	var wg sync.WaitGroup
 	for _, inst := range desired {
 		if !m.isRunning(inst.Id) {
 			continue
 		}
-		stats, ok := scrapeUsers(socketPathForID(inst.Id), configPathForID(inst.Id))
-		if !ok {
+		wg.Add(1)
+		go func(inst Instance) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			stats, ok := scrapeUsers(socketPathForID(inst.Id), configPathForID(inst.Id))
+			results <- scrapeResult{inst: inst, stats: stats, ok: ok}
+		}(inst)
+	}
+	wg.Wait()
+	close(results)
+
+	for result := range results {
+		if !result.ok {
 			continue
 		}
-
 		m.mu.Lock()
-		cursors := m.traffic[inst.Id]
+		cursors := m.traffic[result.inst.Id]
 		if cursors == nil {
 			cursors = make(map[string]trafficCursor)
-			m.traffic[inst.Id] = cursors
+			m.traffic[result.inst.Id] = cursors
 		}
-		for user, st := range stats {
+		for user, st := range result.stats {
 			email := strings.TrimSpace(user)
 			if email == "" {
 				continue
@@ -76,7 +97,7 @@ func (m *Manager) CollectTraffic(desired []Instance) ([]TrafficDelta, []string) 
 			cursors[user] = cur
 
 			if delta.Up > 0 || delta.Down > 0 {
-				delta.Tag = inst.Tag
+				delta.Tag = result.inst.Tag
 				delta.Email = email
 				deltas = append(deltas, delta)
 			}
@@ -107,7 +128,7 @@ func scrapeUsers(socketPath, configPath string) (map[string]userTrafficStats, bo
 		return nil, false
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
 	absSocket, err := filepath.Abs(socketPath)
