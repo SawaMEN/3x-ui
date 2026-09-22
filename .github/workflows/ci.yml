@@ -227,10 +227,7 @@ jobs:
         run: npm run lint
         working-directory: frontend
       - name: Format check
-        run: |
-          npm run format
-          git diff -- src/layouts/AppSidebar.css
-          exit 1
+        run: npm run format:check
         working-directory: frontend
       - name: Typecheck
         run: npm run typecheck

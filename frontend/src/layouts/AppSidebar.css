@@ -379,7 +379,9 @@ body.dark .ant-sidebar > .ant-layout-sider {
   display: none;
 }
 .sider-brand-content {
-  transition: opacity 160ms ease, transform 160ms ease;
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
 }
 .brand-is-compact {
   gap: 0;
