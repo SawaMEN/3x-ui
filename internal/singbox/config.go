@@ -521,8 +521,10 @@ func translateUsers(out map[string]any, protocol string, settings map[string]any
 			continue
 		}
 		user := map[string]any{}
-		if email, ok := client["email"].(string); ok && email != "" {
-			user["name"] = email
+		if protocol != "naive" {
+			if email, ok := client["email"].(string); ok && email != "" {
+				user["name"] = email
+			}
 		}
 		switch protocol {
 		case "vless", "vmess":
