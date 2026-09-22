@@ -66,7 +66,8 @@ export const MieruInboundSettingsSchema = z.preprocess(
       Array.isArray(value)
         ? value
             .map((item) => (typeof item === 'string' ? Number(item.trim()) : item))
-            .filter((item) => Number.isFinite(item)),
+            .filter((item) => Number.isFinite(item))
+        : value,
       value,
     ),
     z.array(z.number().int().min(1).max(65535)).optional(),
