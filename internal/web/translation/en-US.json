@@ -1839,7 +1839,13 @@
         "updateFailed": "System update failed",
         "updateOutput": "Update output",
         "noPackages": "No package updates are currently available.",
-        "systemUpdateNote": "Only packages required by the 3x-ui installer and available Linux kernel packages are managed here. Arch Linux is the exception because partial upgrades are unsupported."
+        "systemUpdateNote": "This manager checks the system packages required by 3x-ui, Linux kernel packages, and installed panel dependencies such as Xray, sing-box, and Telemt. Arch Linux is the exception because partial upgrades are unsupported.",
+        "componentUpdatesTitle": "Panel dependencies",
+        "systemPackagesTitle": "System packages",
+        "updateComponent": "Update",
+        "upToDate": "Up to date",
+        "rebootSystem": "Reboot server",
+        "rebootStarted": "Server reboot started. The page will refresh after the connection is restored."
       }
     },
     "xray": {
