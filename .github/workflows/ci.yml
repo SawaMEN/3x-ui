@@ -227,12 +227,9 @@ jobs:
       - name: Lint
         run: npm run lint
         working-directory: frontend
-      # Temporary formatter probe; revert after applying the formatter diff.
+      # Keep formatting as a hard gate; formatter-only commits are still validated on PRs.
       - name: Format check
-        run: |
-          npm run format
-          git diff -- src/schemas/protocols/inbound/mieru.ts src/schemas/protocols/inbound/naive.ts
-          exit 1
+        run: npm run format:check
         working-directory: frontend
       - name: Typecheck
         run: npm run typecheck
