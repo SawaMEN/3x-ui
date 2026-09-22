@@ -3,20 +3,31 @@ import { fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import ClientFormModal from '@/pages/clients/ClientFormModal';
-import type { InboundOption } from '@/schemas/client';
+import type { ClientRecord, InboundOption } from '@/schemas/client';
 import { renderWithProviders } from './test-utils';
 
 // ClientFormModal reads server state via react-query (useFail2banStatusQuery),
 // so it needs a QueryClientProvider on top of the shared ThemeProvider wrapper.
-function renderModal(inbounds: InboundOption[] = []) {
+function renderModal({
+  inbounds = [],
+  mode = 'add',
+  client = null,
+  attachedIds = [],
+}: {
+  inbounds?: InboundOption[];
+  mode?: 'add' | 'edit';
+  client?: ClientRecord | null;
+  attachedIds?: number[];
+} = {}) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   renderWithProviders(
     <QueryClientProvider client={queryClient}>
       <ClientFormModal
         open
-        mode="add"
-        client={null}
+        mode={mode}
+        client={client}
         inbounds={inbounds}
+        attachedIds={attachedIds}
         save={vi.fn().mockResolvedValue(null)}
         onOpenChange={() => {}}
       />
@@ -59,7 +70,12 @@ describe('ClientFormModal credential tooltips', () => {
   });
 
   it('explains that Hysteria Auth is the credential Hysteria actually uses', async () => {
-    renderModal([{ id: 1, protocol: 'hysteria', enable: true }]);
+    renderModal({
+      inbounds: [{ id: 1, protocol: 'hysteria', enable: true }],
+      mode: 'edit',
+      client: { email: 'hysteria-client', enable: true },
+      attachedIds: [1],
+    });
     openCredentialsTab();
 
     const tip = tooltipIconForLabel('Hysteria Auth');
