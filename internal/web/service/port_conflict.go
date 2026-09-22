@@ -22,11 +22,38 @@ const (
 )
 
 func inboundTransports(protocol model.Protocol, streamSettings, settings string) transportBits {
-	// protocols that ignore streamSettings entirely.
+	// Native sidecars expose their transport choice in protocol settings rather
+	// than Xray streamSettings.
 	switch protocol {
 	case model.Hysteria, model.WireGuard, model.AmneziaWG, model.TUIC:
 		return transportUDP
 	case model.MTProto:
+		return transportTCP
+	case model.Mieru:
+		// The automatic Mieru profile uses one port for both TCP and UDP.
+		return transportTCP | transportUDP
+	}
+
+	if protocol == model.NaiveProxy {
+		var st map[string]any
+		if json.Unmarshal([]byte(settings), &st) == nil {
+			switch strings.ToLower(strings.TrimSpace(fmt.Sprint(st["network"]))) {
+			case "udp":
+				return transportUDP
+			case "tcp":
+				return transportTCP
+			}
+		}
+		// Empty Naive network means sing-box accepts both transports.
+		return transportTCP | transportUDP
+	}
+	if protocol == model.Psiphon {
+		var st map[string]any
+		if json.Unmarshal([]byte(settings), &st) == nil {
+			if proto, _ := st["tunnelProtocol"].(string); strings.EqualFold(strings.TrimSpace(proto), "QUIC-OSSH") {
+				return transportUDP
+			}
+		}
 		return transportTCP
 	}
 
