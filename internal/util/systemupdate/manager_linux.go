@@ -517,9 +517,14 @@ func runtimeKernelVersion() string {
 	return strings.TrimSpace(string(output))
 }
 
+var startAsyncCommand = func(_ context.Context, command string, args ...string) error {
+	return exec.Command(command, args...).Start()
+}
+
 // Reboot schedules a system reboot without waiting for the shutdown to finish.
 // This is intentionally asynchronous because the HTTP request will be terminated
-// by the reboot itself.
+// by the reboot itself. The spawned process must not inherit the HTTP request
+// context: that context is canceled as soon as the response is returned.
 func Reboot(ctx context.Context) error {
 	if os.Geteuid() != 0 {
 		return fmt.Errorf("system reboot requires root privileges")
@@ -534,7 +539,7 @@ func Reboot(ctx context.Context) error {
 		if !commandExists(args[0]) {
 			continue
 		}
-		if err := exec.CommandContext(ctx, args[0], args[1:]...).Start(); err == nil {
+		if err := startAsyncCommand(ctx, args[0], args[1:]...); err == nil {
 			return nil
 		}
 	}
