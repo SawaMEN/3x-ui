@@ -67,7 +67,8 @@ export const MieruInboundSettingsSchema = z.preprocess(
     // so existing inbounds continue to work unchanged.
     tcpPorts: MieruPortListSchema,
     udpPorts: MieruPortListSchema,
-    multiplexing: z.enum(['MULTIPLEXING_OFF', 'MULTIPLEXING_LOW', 'MULTIPLEXING_MIDDLE', 'MULTIPLEXING_HIGH'])
+    multiplexing: z
+      .enum(['MULTIPLEXING_OFF', 'MULTIPLEXING_LOW', 'MULTIPLEXING_MIDDLE', 'MULTIPLEXING_HIGH'])
       .default('MULTIPLEXING_LOW'),
     handshakeMode: z
       .enum(['HANDSHAKE_STANDARD', 'HANDSHAKE_NO_WAIT'])
