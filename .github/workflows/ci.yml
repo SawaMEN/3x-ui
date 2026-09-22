@@ -227,11 +227,9 @@ jobs:
       - name: Lint
         run: npm run lint
         working-directory: frontend
-      # Temporary formatter probe for inbound schemas.
+      # Keep formatting as a hard gate; formatter-only commits are still validated on PRs.
       - name: Format check
-        run: |
-          npx --no-install oxfmt src/schemas/protocols/inbound/mieru.ts src/schemas/protocols/inbound/naive.ts
-          git diff --exit-code -- src/schemas/protocols/inbound/mieru.ts src/schemas/protocols/inbound/naive.ts
+        run: npm run format:check
         working-directory: frontend
       - name: Typecheck
         run: npm run typecheck
