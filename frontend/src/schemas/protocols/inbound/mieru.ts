@@ -75,6 +75,6 @@ export const MieruInboundSettingsSchema = z.preprocess(
   loggingLevel: z.enum(['OFF', 'ERROR', 'WARN', 'INFO', 'DEBUG']).default('INFO'),
   userHintIsMandatory: z.boolean().default(false),
   clients: z.array(MieruClientSchema).default([]),
-});
+  }),
 );
 export type MieruInboundSettings = z.infer<typeof MieruInboundSettingsSchema>;
