@@ -525,19 +525,16 @@ func Reboot(ctx context.Context) error {
 		return fmt.Errorf("system reboot requires root privileges")
 	}
 
-	if commandExists("systemctl") {
-		cmd := exec.CommandContext(ctx, "systemctl", "reboot")
-		if err := cmd.Start(); err == nil {
-			return nil
-		}
+	commands := [][]string{
+		{"systemctl", "reboot"},
+		{"reboot"},
+		{"shutdown", "-r", "now"},
 	}
-
-	for _, command := range []string{"reboot", "/sbin/reboot"} {
-		if !commandExists(command) && command != "/sbin/reboot" {
+	for _, args := range commands {
+		if !commandExists(args[0]) {
 			continue
 		}
-		cmd := exec.CommandContext(ctx, command)
-		if err := cmd.Start(); err == nil {
+		if err := exec.Command(args[0], args[1:]...).Start(); err == nil {
 			return nil
 		}
 	}
