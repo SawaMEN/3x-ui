@@ -368,7 +368,10 @@ export default function SystemUpdateModal({
 
   useEffect(() => {
     if (!open) return;
-    void checkSystemUpdates();
+    const timer = window.setTimeout(() => {
+      void checkSystemUpdates();
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [checkSystemUpdates, open]);
 
   const systemUpdateRows = useMemo(

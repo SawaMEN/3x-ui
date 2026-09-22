@@ -204,13 +204,13 @@ func removeTelemtWebNginxConfig() error { err := os.Remove(telemtWebNginxConf); 
 func telemtWebEnsureNginxRunning() error {
 	if err := exec.Command("nginx", "-t").Run(); err != nil { return errors.New("nginx configuration test failed") }
 	if systemctl("enable", "--now", "nginx") == nil { return nil }
-	if _, err := exec.LookPath("rc-service"); err == nil { if err := exec.Command("rc-service", "nginx", "restart").Run(); err != nil { return fmt.Errorf("failed to start nginx: %w", err) }; _, _ = exec.Command("rc-update", "add", "nginx", "default").Output(); return nil }
+	if _, err := exec.LookPath("rc-service"); err == nil { if err := exec.CommandContext(context.Background(), "rc-service", "nginx", "restart").Run(); err != nil { return fmt.Errorf("failed to start nginx: %w", err) }; _, _ = exec.CommandContext(context.Background(), "rc-update", "add", "nginx", "default").Output(); return nil }
 	return errors.New("failed to start nginx")
 }
 
 func telemtWebReloadNginx() error {
 	if _, err := exec.LookPath("systemctl"); err == nil { if err := systemctl("reload", "nginx"); err == nil { return nil } }
-	if _, err := exec.LookPath("rc-service"); err == nil { if err := exec.Command("rc-service", "nginx", "reload").Run(); err == nil { return nil } }
+	if _, err := exec.LookPath("rc-service"); err == nil { if err := exec.CommandContext(context.Background(), "rc-service", "nginx", "reload").Run(); err == nil { return nil } }
 	return errors.New("failed to reload nginx")
 }
 

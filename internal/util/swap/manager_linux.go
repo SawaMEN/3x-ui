@@ -190,7 +190,7 @@ func queryInstalledPackage(manager, packageName string) (string, bool) {
 			return "", false
 		}
 		queryFormat := `$` + "{Status}\t" + "$" + "{Version}\n"
-		output, err := exec.Command("dpkg-query", "-f="+queryFormat, packageName).Output()
+		output, err := exec.CommandContext(context.Background(), "dpkg-query", "-f="+queryFormat, packageName).Output()
 		if err != nil {
 			return "", false
 		}
