@@ -185,7 +185,7 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 		// MTProto, AmneziaWG and TUIC are managed by their dedicated local
 		// sidecars. Emitting them into sing-box as well would either use an
 		// unsupported protocol or create a port conflict with the sidecar.
-		if inbound.Protocol == model.MTProto || inbound.Protocol == model.AmneziaWG || inbound.Protocol == model.TUIC {
+		if inbound.Protocol == model.MTProto || inbound.Protocol == model.AmneziaWG || inbound.Protocol == model.TUIC || inbound.Protocol == model.Psiphon || inbound.Protocol == model.Mieru {
 			continue
 		}
 		rawBytes, err := json.Marshal(inbound)
@@ -255,6 +255,10 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 				if client.ID != "" {
 					entry["uuid"] = client.ID
 				}
+				if client.Password != "" {
+					entry["password"] = client.Password
+				}
+			case model.NaiveProxy, model.Mieru:
 				if client.Password != "" {
 					entry["password"] = client.Password
 				}
