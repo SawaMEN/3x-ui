@@ -1033,7 +1033,6 @@ body.theme-cyberpunk .sider-brand .brand-text::after {
   }
 }
 
-
 /* Mobile drawer header: fixed three-column layout keeps 3X-UI centered across the full header. */
 @media (max-width: 768px) {
   .drawer-header {
