@@ -230,7 +230,7 @@ jobs:
       # Temporary formatter probe for inbound schemas.
       - name: Format check
         run: |
-          oxfmt src/schemas/protocols/inbound/mieru.ts src/schemas/protocols/inbound/naive.ts
+          npx --no-install oxfmt src/schemas/protocols/inbound/mieru.ts src/schemas/protocols/inbound/naive.ts
           git diff --exit-code -- src/schemas/protocols/inbound/mieru.ts src/schemas/protocols/inbound/naive.ts
         working-directory: frontend
       - name: Typecheck
