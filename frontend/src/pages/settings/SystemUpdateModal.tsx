@@ -331,9 +331,7 @@ export default function SystemUpdateModal({
       ]);
 
       if (failed.length) {
-        messageApi.warning(
-          `Системные пакеты обновлены, но не удалось обновить: ${failed.join(', ')}`,
-        );
+        messageApi.warning(t('pages.settings.swap.partialUpdate', { components: failed.join(', ') }));
       } else {
         messageApi.success(t('pages.settings.swap.updateDone'));
       }
@@ -352,7 +350,7 @@ export default function SystemUpdateModal({
         '/panel/api/setting/system/update/reboot',
       )) as ApiMsg<{ rebooting?: boolean }>;
       if (!response?.success) {
-        throw new Error(response?.msg || 'Не удалось запустить перезагрузку');
+        throw new Error(response?.msg || t('pages.settings.swap.rebootFailed'));
       }
 
       messageApi.info(t('pages.settings.swap.rebootStarted'));
@@ -425,7 +423,9 @@ export default function SystemUpdateModal({
                 icon={<PoweroffOutlined />}
                 onClick={() => void rebootSystem()}
                 loading={systemUpdateBusy}
-                disabled={dependencyBusy !== null}
+                disabled={
+                  !systemUpdate?.runningAsRoot || dependencyBusy !== null
+                }
               >
                 {t('pages.settings.swap.rebootSystem')}
               </Button>
@@ -484,7 +484,7 @@ export default function SystemUpdateModal({
               <Alert
                 type="error"
                 showIcon
-                title="Обновление системы не поддерживается для этой ОС."
+                title={t('pages.settings.swap.unsupportedSystemUpdate')}
               />
             )}
             {!systemUpdate.runningAsRoot && (
