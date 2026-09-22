@@ -326,13 +326,16 @@ export default function SystemUpdateModal({
         const result = normalizeSystemUpdateResult(systemMsg.obj);
         setSystemUpdateResult(result);
 
-        const errorMessage = systemMsg?.msg || result.error || t('pages.settings.swap.updateFailed');
+        const errorMessage =
+          systemMsg?.msg || result.error || t('pages.settings.swap.updateFailed');
         if (isTransientFetchFailure(errorMessage)) {
           const recoveredStatus = await recoverSystemUpdateStatus();
           systemUpdateRecovered = recoveredStatus !== null;
 
           if (systemUpdateRecovered) {
-            messageApi.info('Соединение с панелью восстановлено; состояние обновления проверено.');
+            messageApi.info(
+              'Соединение с панелью восстановлено; состояние обновления проверено.',
+            );
           }
         }
 
