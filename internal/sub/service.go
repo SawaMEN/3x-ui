@@ -855,7 +855,7 @@ func (s *SubService) genNaiveLink(inbound *model.Inbound, email string) string {
 	}
 	host := s.resolveInboundAddress(inbound)
 	link := fmt.Sprintf("naive+https://%s:%s@%s",
-		url.QueryEscape(client.Email),
+		encodeUserinfo(client.Email),
 		encodeUserinfo(client.Password),
 		joinHostPort(host, inbound.Port),
 	)
@@ -951,8 +951,8 @@ func (s *SubService) genMieruLink(inbound *model.Inbound, email string) string {
 
 	host := s.resolveInboundAddress(inbound)
 	return fmt.Sprintf("mierus://%s:%s@%s?profile=default&%s#%s",
-		url.QueryEscape(client.Email),
-		url.QueryEscape(client.Password),
+		encodeUserinfo(client.Email),
+		encodeUserinfo(client.Password),
 		host,
 		strings.Join(pairs, "&"),
 		url.QueryEscape(s.genRemark(inbound, email, "", "")),
