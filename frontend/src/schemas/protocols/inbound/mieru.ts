@@ -16,9 +16,19 @@ export const MieruClientSchema = z.object({
 });
 export type MieruClient = z.infer<typeof MieruClientSchema>;
 
+const MieruPortSchema = z.preprocess(
+  (value) =>
+    Array.isArray(value)
+      ? value
+          .map((item) => (typeof item === 'string' ? Number(item.trim()) : item))
+          .filter((item) => Number.isFinite(item))
+      : value,
+  z.array(z.number().int().min(1).max(65535)).default([]),
+);
+
 export const MieruInboundSettingsSchema = z.object({
   protocols: z.array(z.enum(['TCP', 'UDP'])).min(1).default(['TCP', 'UDP']),
-  additionalPorts: z.array(z.number().int().min(1).max(65535)).default([]),
+  additionalPorts: MieruPortSchema,
   mtu: z.number().int().min(1280).max(1400).default(1400),
   loggingLevel: z.enum(['OFF', 'ERROR', 'WARN', 'INFO', 'DEBUG']).default('INFO'),
   userHintIsMandatory: z.boolean().default(false),
