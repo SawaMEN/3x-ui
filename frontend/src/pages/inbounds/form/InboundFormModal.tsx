@@ -298,7 +298,7 @@ export default function InboundFormModal({
       return;
     }
 
-    const autoPortProtocols = new Set([Protocols.NAIVE, Protocols.PSIPHON, Protocols.MIERU]);
+    const autoPortProtocols = new Set<string>([Protocols.NAIVE, Protocols.PSIPHON, Protocols.MIERU]);
     if (!autoPortProtocols.has(protocol) || autoPortSeedRef.current === protocol) return;
     autoPortSeedRef.current = protocol;
 
