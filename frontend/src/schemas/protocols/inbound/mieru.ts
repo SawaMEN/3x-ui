@@ -24,7 +24,7 @@ const MieruPortEntrySchema = z
     const [startRaw, endRaw = startRaw] = value.split('-');
     const start = Number(startRaw);
     const end = Number(endRaw);
-    if (!Number.isInteger(start) || !Number.isInteger(end) || start < 1 || end > 65535 || end < start) {
+    if (!Number.isInteger(start) || !Number.isInteger(end) || start < 1025 || end > 65535 || end < start) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'Ports must be in 1-65535 and ranges must be ascending',
@@ -69,7 +69,7 @@ export const MieruInboundSettingsSchema = z.preprocess(
             .filter((item) => Number.isFinite(item)),
       value,
     ),
-    z.array(z.number().int().min(1).max(65535)).default([]),
+    z.array(z.number().int().min(1025).max(65535)).default([]),
   ),
   mtu: z.number().int().min(1280).max(1400).default(1400),
   loggingLevel: z.enum(['OFF', 'ERROR', 'WARN', 'INFO', 'DEBUG']).default('INFO'),
