@@ -1480,7 +1480,8 @@ func TestBuildHysteriaProxyExternalTLSOverrides(t *testing.T) {
 	if got := proxy["sni"]; got != "edge.example.com" {
 		t.Fatalf("sni = %v, want edge.example.com", got)
 	}
-	if got, ok := proxy["alpn"].([]string); !ok || !reflect.DeepEqual(got, []string{"h2", "http/1.1"}) {
+	gotALPN, ok := proxy["alpn"].([]any)
+	if !ok || len(gotALPN) != 2 || gotALPN[0] != "h2" || gotALPN[1] != "http/1.1" {
 		t.Fatalf("alpn = %v, want [h2 http/1.1]", proxy["alpn"])
 	}
 	if got := proxy["client-fingerprint"]; got != "firefox" {
