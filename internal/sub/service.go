@@ -2501,13 +2501,23 @@ func applyExternalProxyTLSParams(ep map[string]any, params map[string]string, se
 	}
 }
 
-// applyExternalProxyHysteriaParams overrides the cert pin for a single
-// external-proxy entry on a Hysteria link. Hysteria carries the pin as a hex
-// `pinSHA256` (not the `pcs` the URL-param protocols use), so each entry is
-// coerced through hysteriaPinHex like the main pin. sni/fp/alpn are left as
-// the inbound's own — Hysteria external proxies are typically alternate
-// endpoints (port-hop / CDN) fronting the same certificate.
+// applyExternalProxyHysteriaParams applies every TLS-level override that
+// Hysteria share URIs can carry: SNI, uTLS fingerprint, ALPN, ECH, pin and
+// certificate-verification mode. Keeping these here makes externalProxy
+// behavior consistent with VLESS/Trojan/SS and the Clash Hysteria renderer.
 func applyExternalProxyHysteriaParams(ep map[string]any, params map[string]string) {
+	if sni, ok := externalProxySNI(ep); ok {
+		params["sni"] = sni
+	}
+	if fp, ok := ep["fingerprint"].(string); ok && strings.TrimSpace(fp) != "" {
+		params["fp"] = strings.TrimSpace(fp)
+	}
+	if alpn, ok := externalProxyALPN(ep["alpn"]); ok {
+		params["alpn"] = alpn
+	}
+	if ech, ok := ep["echConfigList"].(string); ok && strings.TrimSpace(ech) != "" {
+		params["ech"] = strings.TrimSpace(ech)
+	}
 	if pins, ok := externalProxyPins(ep["pinnedPeerCertSha256"]); ok {
 		hexPins := make([]string, 0, len(pins))
 		for _, p := range pins {
@@ -2515,7 +2525,9 @@ func applyExternalProxyHysteriaParams(ep map[string]any, params map[string]strin
 				hexPins = append(hexPins, hysteriaPinHex(s))
 			}
 		}
-		params["pinSHA256"] = strings.Join(hexPins, ",")
+		if len(hexPins) > 0 {
+			params["pinSHA256"] = strings.Join(hexPins, ",")
+		}
 	}
 	if ai, ok := ep["allowInsecure"].(bool); ok && ai {
 		params["insecure"] = "1"
