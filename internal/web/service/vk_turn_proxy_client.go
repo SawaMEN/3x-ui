@@ -247,8 +247,7 @@ func dedupedClientLinks(client *VKTurnProxyClient) []string {
 
 func sanitizeVKTurnEndpointHost(raw string) string {
 	host := strings.TrimSpace(strings.Trim(raw, "[]"))
-	if host == "" || strings.ContainsAny(host, "
-	 /\\") {
+	if host == "" || strings.ContainsAny(host, "\r\n\t /\\") {
 		return ""
 	}
 	if strings.Contains(host, ":") && net.ParseIP(host) == nil {
