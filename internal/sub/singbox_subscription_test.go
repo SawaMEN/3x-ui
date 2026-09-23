@@ -111,8 +111,8 @@ func TestGenNativeNaivePreservesNativeType(t *testing.T) {
 	if got["type"] != "naive" {
 		t.Fatalf("type = %v, want naive; config=%#v", got["type"], got)
 	}
-	if got["server_port"] != float64(443) {
-		t.Fatalf("server_port = %v, want 443", got["server_port"])
+	if port, ok := got["server_port"].(int); !ok || port != 443 {
+		t.Fatalf("server_port = %v, want int(443)", got["server_port"])
 	}
 	if got["username"] != "user" || got["password"] != "secret" {
 		t.Fatalf("credentials = (%v, %v), want user/secret", got["username"], got["password"])
