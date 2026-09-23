@@ -270,17 +270,17 @@ func requiredPackages(distribution string) []string {
 	var packages []string
 	switch distribution {
 	case "ubuntu", "debian", "armbian":
-		packages = []string{"cron", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl", "util-linux"}
+		packages = []string{"cron", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl", "util-linux", "iproute2", "iptables"}
 	case "fedora", "amzn", "rhel", "almalinux", "rocky", "ol", "centos":
-		packages = []string{"cronie", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl", "util-linux"}
+		packages = []string{"cronie", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl", "util-linux", "iproute", "iptables"}
 	case "arch", "manjaro", "parch":
-		packages = []string{"cronie", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl", "util-linux"}
+		packages = []string{"cronie", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl", "util-linux", "iproute2", "iptables"}
 	case "opensuse-tumbleweed", "opensuse-leap":
-		packages = []string{"cron", "curl", "tar", "timezone", "socat", "ca-certificates", "openssl", "util-linux"}
+		packages = []string{"cron", "curl", "tar", "timezone", "socat", "ca-certificates", "openssl", "util-linux", "iproute2", "iptables"}
 	case "alpine":
-		packages = []string{"dcron", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl", "util-linux"}
+		packages = []string{"dcron", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl", "util-linux", "iproute2", "iptables"}
 	default:
-		packages = []string{"cron", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl", "util-linux"}
+		packages = []string{"cron", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl", "util-linux", "iproute2", "iptables"}
 	}
 
 	addPackage := func(name string) {

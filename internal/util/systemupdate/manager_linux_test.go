@@ -10,6 +10,26 @@ import (
 	"time"
 )
 
+func TestRequiredPackagesIncludeNetworkProtocolDependencies(t *testing.T) {
+	for _, distro := range []string{"ubuntu", "debian", "armbian", "fedora", "rhel", "arch", "opensuse-leap", "alpine"} {
+		packages := requiredPackages(distro)
+		seen := map[string]bool{}
+		for _, name := range packages {
+			seen[name] = true
+		}
+		for _, want := range []string{"iproute2", "iptables"} {
+			if distro == "fedora" || distro == "rhel" {
+				if want == "iproute2" {
+					want = "iproute"
+				}
+			}
+			if !seen[want] {
+				t.Fatalf("%s requiredPackages() missing %s: %#v", distro, want, packages)
+			}
+		}
+	}
+}
+
 func TestPackageUpdateAvailable(t *testing.T) {
 	tests := []struct {
 		name      string

@@ -185,29 +185,29 @@ install_base() {
     echo -e "${green}Updating and install dependency packages...${plain}"
     case "${release}" in
         ubuntu | debian | armbian)
-            apt-get update > /dev/null 2>&1 && apt-get install -y -q cron curl tar tzdata socat ca-certificates openssl > /dev/null 2>&1
+            apt-get update > /dev/null 2>&1 && apt-get install -y -q cron curl tar tzdata socat ca-certificates openssl iproute2 iptables > /dev/null 2>&1
             ;;
         fedora | amzn | virtuozzo | rhel | almalinux | rocky | ol)
-            dnf makecache -y > /dev/null 2>&1 && dnf install -y -q cronie curl tar tzdata socat ca-certificates openssl > /dev/null 2>&1
+            dnf makecache -y > /dev/null 2>&1 && dnf install -y -q cronie curl tar tzdata socat ca-certificates openssl iproute iptables > /dev/null 2>&1
             ;;
         centos)
             if [[ "${VERSION_ID}" =~ ^7 ]]; then
-                yum makecache -y > /dev/null 2>&1 && yum install -y -q cronie curl tar tzdata socat ca-certificates openssl > /dev/null 2>&1
+                yum makecache -y > /dev/null 2>&1 && yum install -y -q cronie curl tar tzdata socat ca-certificates openssl iproute iptables > /dev/null 2>&1
             else
-                dnf makecache -y > /dev/null 2>&1 && dnf install -y -q cronie curl tar tzdata socat ca-certificates openssl > /dev/null 2>&1
+                dnf makecache -y > /dev/null 2>&1 && dnf install -y -q cronie curl tar tzdata socat ca-certificates openssl iproute iptables > /dev/null 2>&1
             fi
             ;;
         arch | manjaro | parch)
-            pacman -Sy --noconfirm cronie curl tar tzdata socat ca-certificates openssl > /dev/null 2>&1
+            pacman -Sy --noconfirm cronie curl tar tzdata socat ca-certificates openssl iproute2 iptables > /dev/null 2>&1
             ;;
         opensuse-tumbleweed | opensuse-leap)
-            zypper refresh > /dev/null 2>&1 && zypper -q install -y cron curl tar timezone socat ca-certificates openssl > /dev/null 2>&1
+            zypper refresh > /dev/null 2>&1 && zypper -q install -y cron curl tar timezone socat ca-certificates openssl iproute2 iptables > /dev/null 2>&1
             ;;
         alpine)
-            apk update > /dev/null 2>&1 && apk add dcron curl tar tzdata socat ca-certificates openssl > /dev/null 2>&1
+            apk update > /dev/null 2>&1 && apk add dcron curl tar tzdata socat ca-certificates openssl iproute2 iptables > /dev/null 2>&1
             ;;
         *)
-            apt-get update > /dev/null 2>&1 && apt install -y -q cron curl tar tzdata socat ca-certificates openssl > /dev/null 2>&1
+            apt-get update > /dev/null 2>&1 && apt install -y -q cron curl tar tzdata socat ca-certificates openssl iproute2 iptables > /dev/null 2>&1
             ;;
     esac
 }
