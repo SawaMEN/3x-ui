@@ -585,3 +585,51 @@ func TestTranslateXrayRealityOutboundUsesClientFields(t *testing.T) {
 		t.Fatal("outbound Reality must not contain a server handshake")
 	}
 }
+
+
+func TestTranslateXrayNaiveInbound(t *testing.T) {
+	raw := map[string]any{
+		"protocol": "naive",
+		"tag":      "naive-443",
+		"port":     443,
+		"settings": map[string]any{
+			"network":               "tcp",
+			"quicCongestionControl": "cubic",
+			"clients": []any{
+				map[string]any{
+					"email":    "alice@example.com",
+					"password": "secret",
+				},
+			},
+			"tls": map[string]any{
+				"serverName":     "example.com",
+				"certificatePath": "/etc/3x-ui/fullchain.pem",
+				"keyPath":         "/etc/3x-ui/key.pem",
+			},
+		},
+	}
+
+	got, err := TranslateXrayInbound(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got["type"] != "naive" || got["listen"] != "::" || got["listen_port"] != 443 ||
+		got["network"] != "tcp" || got["quic_congestion_control"] != "cubic" {
+		t.Fatalf("unexpected Naive base config: %#v", got)
+	}
+
+	users, ok := got["users"].([]map[string]any)
+	if !ok || len(users) != 1 ||
+		users[0]["username"] != "alice@example.com" ||
+		users[0]["password"] != "secret" {
+		t.Fatalf("unexpected Naive users: %#v", got["users"])
+	}
+
+	tls, ok := got["tls"].(map[string]any)
+	if !ok || tls["enabled"] != true ||
+		tls["server_name"] != "example.com" ||
+		tls["certificate_path"] != "/etc/3x-ui/fullchain.pem" ||
+		tls["key_path"] != "/etc/3x-ui/key.pem" {
+		t.Fatalf("unexpected Naive TLS: %#v", got["tls"])
+	}
+}

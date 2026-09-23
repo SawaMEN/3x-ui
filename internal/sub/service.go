@@ -1076,18 +1076,26 @@ func (s *SubService) genNaiveSubscriptionLink(inbound *model.Inbound, email stri
 			}
 			if sni, ok := externalProxySNI(ep); ok {
 				params["sni"] = sni
-			} else if tls, ok := ep["tlsSettings"].(map[string]any); ok {
-				if serverName, ok := tls["serverName"].(string); ok && strings.TrimSpace(serverName) != "" {
-					params["sni"] = strings.TrimSpace(serverName)
-				}
-			} else if tls, ok := settings["tls"].(map[string]any); ok {
-				if serverName, ok := tls["serverName"].(string); ok && strings.TrimSpace(serverName) != "" {
-					params["sni"] = strings.TrimSpace(serverName)
+			}
+			if _, ok := params["sni"]; !ok {
+				if tls, ok := ep["tlsSettings"].(map[string]any); ok {
+					if serverName, ok := tls["serverName"].(string); ok && strings.TrimSpace(serverName) != "" {
+						params["sni"] = strings.TrimSpace(serverName)
+					}
 				}
 			}
-		}
-		if host, ok := ep["hostHeader"].(string); ok && strings.TrimSpace(host) != "" {
-			params["host"] = strings.TrimSpace(host)
+			if _, ok := params["sni"]; !ok {
+				if tls, ok := settings["tls"].(map[string]any); ok {
+					if serverName, ok := tls["serverName"].(string); ok && strings.TrimSpace(serverName) != "" {
+						params["sni"] = strings.TrimSpace(serverName)
+					}
+				}
+			}
+			// `host` is a Hiddify/ray2sing compatibility parameter. Standard
+			// NaiveProxy URIs intentionally do not emit non-standard query fields.
+			if host, ok := ep["hostHeader"].(string); ok && strings.TrimSpace(host) != "" {
+				params["host"] = strings.TrimSpace(host)
+			}
 		}
 
 		remark := s.endpointRemark(inbound, email, ep, network)

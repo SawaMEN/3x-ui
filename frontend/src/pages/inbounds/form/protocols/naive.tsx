@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { Input, Select } from 'antd';
+import { Input, Select, Switch } from 'antd';
 import { FormField } from '@/components/form/rhf';
 
 export default function NaiveFields() {
@@ -19,18 +19,16 @@ export default function NaiveFields() {
       <FormField
         name={['settings', 'shareLinkFormat']}
         label={t('pages.inbounds.form.naiveShareLinkFormat')}
+        tooltip={t('pages.inbounds.form.naiveShareLinkFormatHint')}
+        valueProp="checked"
+        transform={{
+          input: (value) => value === 'hiddify',
+          output: (value) => (value ? 'hiddify' : 'standard'),
+        }}
       >
-        <Select
-          options={[
-            {
-              value: 'standard',
-              label: t('pages.inbounds.form.naiveShareLinkFormatStandard'),
-            },
-            {
-              value: 'hiddify',
-              label: t('pages.inbounds.form.naiveShareLinkFormatHiddify'),
-            },
-          ]}
+        <Switch
+          checkedChildren={t('pages.inbounds.form.naiveShareLinkFormatHiddify')}
+          unCheckedChildren={t('pages.inbounds.form.naiveShareLinkFormatStandard')}
         />
       </FormField>
 

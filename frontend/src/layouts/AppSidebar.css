@@ -850,7 +850,7 @@ body.theme-cyberpunk .sider-brand .brand-text {
   line-height: 1;
   letter-spacing: 0.075em;
   text-transform: uppercase;
-  transform: none;
+  transform: translateY(2px);
   color: #f4fbff;
   background: linear-gradient(90deg, #f4fbff 0%, #00f6ff 42%, #9f8cff 72%, #ff2bd6 100%);
   background-size: 100% 100%;
@@ -880,8 +880,9 @@ body.theme-cyberpunk .ant-layout-sider-collapsed .sider-brand .brand-text {
   max-width: 100%;
   font-size: 23px;
   letter-spacing: 0.055em;
-  transform: none;
+  transform: translateY(1px);
   white-space: nowrap;
+  text-shadow: 0 0 4px rgba(0, 246, 255, 0.42);
 }
 
 body.theme-cyberpunk .ant-layout-sider-collapsed .sider-brand .brand-text-full {

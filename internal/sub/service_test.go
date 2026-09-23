@@ -1278,6 +1278,7 @@ func TestGenNaiveSubscriptionLinkUsesStandardScheme(t *testing.T) {
 		Protocol: model.NaiveProxy,
 		Remark:   "naive",
 		Settings: `{"network":"tcp","tls":{"serverName":"naive.example.com"}}`,
+		StreamSettings: `{"externalProxy":[{"dest":"203.0.113.10","port":443,"forceTls":"same","hostHeader":"site.example.com"}]}`,
 	}
 	got := s.genNaiveSubscriptionLink(in, "user@example.com")
 	if got == "" {
@@ -1296,8 +1297,34 @@ func TestGenNaiveSubscriptionLinkUsesStandardScheme(t *testing.T) {
 	if gotPadding := u.Query().Get("padding"); gotPadding != "true" {
 		t.Fatalf("padding = %q, want true", gotPadding)
 	}
+	if gotHost := u.Query().Get("host"); gotHost != "" {
+		t.Fatalf("standard Naive link must not emit non-standard host, got %q", gotHost)
+	}
 }
 
+func TestGenNaiveSubscriptionLinkFallsBackToInboundSNI(t *testing.T) {
+	s := &SubService{
+		clientsByInbound: map[int]map[string]model.Client{
+			4: {"user@example.com": {Email: "user@example.com", Password: "secret"}},
+		},
+	}
+	in := &model.Inbound{
+		Id:       4,
+		Listen:   "203.0.113.10",
+		Port:     443,
+		Protocol: model.NaiveProxy,
+		Settings: `{"network":"tcp","shareLinkFormat":"hiddify","tls":{"serverName":"naive.example.com"}}`,
+		StreamSettings: `{"externalProxy":[{"dest":"203.0.113.10","port":443,"forceTls":"same","tlsSettings":{}}]}`,
+	}
+	got := s.genNaiveSubscriptionLink(in, "user@example.com")
+	u, err := url.Parse(got)
+	if err != nil {
+		t.Fatalf("parse Hiddify Naive link: %v", err)
+	}
+	if gotSNI := u.Query().Get("sni"); gotSNI != "naive.example.com" {
+		t.Fatalf("sni = %q, want naive.example.com", gotSNI)
+	}
+}
 func TestGenNaiveSubscriptionLinkUsesHiddifyScheme(t *testing.T) {
 	s := &SubService{
 		clientsByInbound: map[int]map[string]model.Client{
