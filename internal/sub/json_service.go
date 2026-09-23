@@ -409,6 +409,12 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 					}
 
 					clone := *inbound
+					// Native sing-box clients must receive the advertised server
+					// address, never the server-side wildcard/loopback bind.
+					clone.Listen = subReq.resolveInboundAddress(inbound)
+					if clone.Listen == "" {
+						clone.Listen = inbound.Listen
+					}
 					newStream := cloneStreamForExternalProxy(stream)
 					delete(newStream, "externalProxy")
 					if endpoint != nil {
@@ -979,8 +985,14 @@ func (s *SubJsonService) getConfig(subReq *SubService, inbound *model.Inbound, c
 		// subsequent generators and can make a different protocol (notably VLESS)
 		// connect to the wrong host/port.
 		proxyInbound := *inbound
+		// External proxy entries are optional overrides. A partial entry must
+		// inherit the same advertised endpoint as the synthetic fallback rather
+		// than producing an empty host or port 0.
 		proxyInbound.Listen, _ = extPrxy["dest"].(string)
-		if port, ok := extPrxy["port"].(float64); ok {
+		if strings.TrimSpace(proxyInbound.Listen) == "" {
+			proxyInbound.Listen = defaultDest
+		}
+		if port, ok := extPrxy["port"].(float64); ok && int(port) > 0 {
 			proxyInbound.Port = int(port)
 		}
 		newStream := cloneStreamForExternalProxy(stream)
