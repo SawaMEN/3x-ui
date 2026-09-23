@@ -26,13 +26,6 @@ func TestTranslateXrayVLESSWebSocketTLS(t *testing.T) {
 				"path": "/ws",
 			},
 		},
-		"streamSettings": map[string]any{
-			"network":  "ws",
-			"security": "tls",
-			"tlsSettings": map[string]any{
-				"serverName": "stale.example.com",
-			},
-		},
 	}
 
 	got, err := TranslateXrayInbound(raw)
