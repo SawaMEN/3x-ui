@@ -836,8 +836,41 @@ func (s *SubService) genNaiveLink(inbound *model.Inbound, email string) string {
 	return s.genNaiveSubscriptionLink(inbound, email)
 }
 
-// genNaiveSubscriptionLink returns Naïve's compatible URI form used by the
-// raw subscription. The naive+quic scheme selects HTTP/3 transport.
+// naiveShareEndpoints returns the concrete dial endpoints that belong to a Naive
+// link. Host rows are projected into StreamSettings["externalProxy"] by the
+// subscription callers, so keeping this helper on the serialized endpoint path
+// makes raw links, QR/export links, and host-aware subscriptions agree.
+func (s *SubService) naiveShareEndpoints(inbound *model.Inbound) []map[string]any {
+	stream := unmarshalStreamSettings(inbound.StreamSettings)
+	if raw, ok := stream["externalProxy"].([]any); ok && len(raw) > 0 {
+		eps := make([]map[string]any, 0, len(raw))
+		for _, item := range raw {
+			ep, ok := item.(map[string]any)
+			if !ok {
+				continue
+			}
+			cp := maps.Clone(ep)
+			if strings.TrimSpace(fmt.Sprint(cp["dest"])) == "" {
+				cp["dest"] = s.resolveInboundAddress(inbound)
+			}
+			if rawPort, ok := cp["port"].(float64); !ok || int(rawPort) <= 0 {
+				cp["port"] = float64(inbound.Port)
+			}
+			eps = append(eps, cp)
+		}
+		if len(eps) > 0 {
+			return eps
+		}
+	}
+	return []map[string]any{{
+		"dest":     s.resolveInboundAddress(inbound),
+		"port":     float64(inbound.Port),
+		"forceTls": "same",
+	}}
+}
+
+// genNaiveSubscriptionLink returns Naïve's compatible URI form used by the raw
+// subscription. The naive+quic scheme selects HTTP/3 transport.
 func (s *SubService) genNaiveSubscriptionLink(inbound *model.Inbound, email string) string {
 	if inbound.Protocol != model.NaiveProxy {
 		return ""
@@ -846,33 +879,73 @@ func (s *SubService) genNaiveSubscriptionLink(inbound *model.Inbound, email stri
 	if !ok || client.Password == "" {
 		return ""
 	}
+
 	settings := s.linkSettings(inbound)
 	network, _ := settings["network"].(string)
 	scheme := "naive+https"
-	params := map[string]string{"padding": "true"}
 	if strings.EqualFold(strings.TrimSpace(network), "udp") {
 		scheme = "naive+quic"
 	}
-	if tls, ok := settings["tls"].(map[string]any); ok {
-		if sni, _ := tls["serverName"].(string); strings.TrimSpace(sni) != "" {
+
+	links := make([]string, 0)
+	for _, ep := range s.naiveShareEndpoints(inbound) {
+		forceTLS, _ := ep["forceTls"].(string)
+		if strings.EqualFold(strings.TrimSpace(forceTLS), "none") {
+			// NaiveProxy is TLS-only; a host explicitly forcing plaintext cannot
+			// represent this protocol and must not receive a misleading link.
+			continue
+		}
+
+		if isHostEndpoint(ep) {
+			ep = maps.Clone(ep)
+			s.renderHostRemark(inbound, client, ep, network)
+		}
+
+		address, _ := ep["dest"].(string)
+		address = strings.TrimSpace(address)
+		if address == "" {
+			address = s.resolveInboundAddress(inbound)
+		}
+		port := inbound.Port
+		if rawPort, ok := ep["port"].(float64); ok && int(rawPort) > 0 {
+			port = int(rawPort)
+		} else if rawPort, ok := ep["port"].(int); ok && rawPort > 0 {
+			port = rawPort
+		}
+
+		params := map[string]string{"padding": "true"}
+		if sni, ok := externalProxySNI(ep); ok {
 			params["sni"] = strings.TrimSpace(sni)
+		} else if tls, ok := settings["tls"].(map[string]any); ok {
+			if sni, _ := tls["serverName"].(string); strings.TrimSpace(sni) != "" {
+				params["sni"] = strings.TrimSpace(sni)
+			}
 		}
-	}
-	if _, ok := params["sni"]; !ok {
-		if sni := s.configuredPublicHost(); sni != "" {
-			// The native Naive inbound reuses the panel HTTPS certificate when
-			// no custom certificate is configured, so use the same public host
-			// as the default client SNI.
-			params["sni"] = sni
+		if _, ok := params["sni"]; !ok {
+			if sni := s.configuredPublicHost(); sni != "" {
+				// The native Naive inbound reuses the panel HTTPS certificate when
+				// no custom certificate is configured, so use the same public host
+				// as the default client SNI.
+				params["sni"] = sni
+			}
 		}
+		if host, ok := ep["hostHeader"].(string); ok && strings.TrimSpace(host) != "" {
+			params["host"] = strings.TrimSpace(host)
+		}
+
+		remark := s.endpointRemark(inbound, email, ep, network)
+		if desc, _ := ep["serverDescription"].(string); desc != "" {
+			remark = appendHappServerDescription(remark, desc)
+		}
+		link := fmt.Sprintf("%s://%s:%s@%s",
+			scheme,
+			encodeUserinfo(client.Email),
+			encodeUserinfo(client.Password),
+			joinHostPort(address, port),
+		)
+		links = append(links, buildLinkWithParams(link, params, remark))
 	}
-	link := fmt.Sprintf("%s://%s:%s@%s",
-		scheme,
-		encodeUserinfo(client.Email),
-		encodeUserinfo(client.Password),
-		joinHostPort(s.resolveInboundAddress(inbound), inbound.Port),
-	)
-	return buildLinkWithParams(link, params, s.genRemark(inbound, email, "naive", ""))
+	return strings.Join(links, "\n")
 }
 
 // genMieruLink builds a native Mieru share link.
