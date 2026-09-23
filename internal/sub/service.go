@@ -1057,22 +1057,11 @@ func (s *SubService) genNaiveSubscriptionLink(inbound *model.Inbound, email stri
 			port = rawPort
 		}
 
+		// NaiveProxy's standard URI intentionally has no separate SNI field:
+		// the HTTPS authority is the TLS server name. Keeping a non-standard
+		// sni= query parameter makes some clients misclassify the URI as
+		// Hysteria2, so emit only parameters defined by the Naive URI scheme.
 		params := map[string]string{"padding": "true"}
-		if sni, ok := externalProxySNI(ep); ok {
-			params["sni"] = strings.TrimSpace(sni)
-		} else if tls, ok := settings["tls"].(map[string]any); ok {
-			if sni, _ := tls["serverName"].(string); strings.TrimSpace(sni) != "" {
-				params["sni"] = strings.TrimSpace(sni)
-			}
-		}
-		if _, ok := params["sni"]; !ok {
-			if sni := s.configuredPublicHost(); sni != "" {
-				// The native Naive inbound reuses the panel HTTPS certificate when
-				// no custom certificate is configured, so use the same public host
-				// as the default client SNI.
-				params["sni"] = sni
-			}
-		}
 		if host, ok := ep["hostHeader"].(string); ok && strings.TrimSpace(host) != "" {
 			params["host"] = strings.TrimSpace(host)
 		}

@@ -1293,8 +1293,8 @@ func TestGenNaiveSubscriptionLinkUsesCompatibleScheme(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse Naive link: %v", err)
 	}
-	if gotSNI := u.Query().Get("sni"); gotSNI != "naive.example.com" {
-		t.Fatalf("sni = %q, want naive.example.com", gotSNI)
+	if gotSNI := u.Query().Get("sni"); gotSNI != "" {
+		t.Fatalf("non-standard sni parameter must be omitted, got %q", gotSNI)
 	}
 	if gotPadding := u.Query().Get("padding"); gotPadding != "true" {
 		t.Fatalf("padding = %q, want true", gotPadding)

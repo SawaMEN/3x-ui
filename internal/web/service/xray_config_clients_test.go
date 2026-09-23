@@ -107,3 +107,32 @@ func TestGetXrayConfig_EnabledClientsStillEmitted(t *testing.T) {
 		t.Errorf("client id not carried through: %#v", entry)
 	}
 }
+
+
+func TestGetXrayConfig_SkipsMieruInbound(t *testing.T) {
+	setupSettingTestDB(t)
+	db := database.GetDB()
+
+	const tag = "mieru-8443"
+	in := &model.Inbound{
+		Tag:      tag,
+		Enable:   true,
+		Port:     8443,
+		Protocol: model.Mieru,
+		Settings: \`{"tcpPorts":["8443"],"udpPorts":[]}\`,
+	}
+	if err := db.Create(in).Error; err != nil {
+		t.Fatalf("create mieru inbound: %v", err)
+	}
+
+	cfg, err := (&XrayService{}).GetXrayConfig()
+	if err != nil {
+		t.Fatalf("GetXrayConfig: %v", err)
+	}
+
+	for i := range cfg.InboundConfigs {
+		if cfg.InboundConfigs[i].Tag == tag || cfg.InboundConfigs[i].Protocol == string(model.Mieru) {
+			t.Fatalf("Mieru inbound leaked into Xray config: %+v", cfg.InboundConfigs[i])
+		}
+	}
+}

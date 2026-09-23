@@ -1361,71 +1361,56 @@ body.theme-cyberpunk .ov-legend-num {
   text-shadow: 0 0 18px rgba(212, 160, 23, 0.12);
 }
 
-/* Cyberpunk logo: neon but calm enough to keep the wordmark readable. */
+/* Cyberpunk wordmark: one readable neon treatment for desktop and the mobile drawer. */
 body.theme-cyberpunk .brand-text,
 body.theme-cyberpunk .drawer-brand {
   position: relative;
   font-family: Orbitron, 'Rajdhani', 'Courier New', monospace;
-  font-size: 20px;
-  font-weight: 800;
-  letter-spacing: 0.055em;
+  font-size: 21px;
+  font-weight: 900;
+  letter-spacing: 0.075em;
   line-height: 1;
   text-transform: uppercase;
-  color: transparent !important;
-  background: linear-gradient(90deg, #f4fbff 0%, #8ce8ef 30%, #b8adff 62%, #ff98e9 100%) !important;
-  background-size: 160% 100% !important;
+  color: #f4fbff !important;
+  background: linear-gradient(90deg, #f4fbff 0%, #00f6ff 36%, #9f8cff 68%, #ff2bd6 100%) !important;
+  background-size: 100% 100% !important;
   background-position: 0 50% !important;
   -webkit-background-clip: text !important;
   background-clip: text !important;
   -webkit-text-fill-color: transparent !important;
-  -webkit-text-stroke: 0.2px rgba(255, 255, 255, 0.46);
+  -webkit-text-stroke: 0 !important;
   text-shadow:
-    0 0 2px rgba(255, 255, 255, 0.82),
-    0 0 5px rgba(0, 246, 255, 0.46),
-    0 0 10px rgba(255, 43, 214, 0.2);
-  filter: none;
-  animation: none;
+    0 0 4px rgba(244, 251, 255, 0.9),
+    0 0 10px rgba(0, 246, 255, 0.72),
+    0 0 22px rgba(0, 246, 255, 0.38),
+    0 0 30px rgba(255, 43, 214, 0.2);
+  filter: none !important;
+  animation: none !important;
 }
 
 body.theme-cyberpunk .sider-brand {
-  border-bottom: 1px solid rgba(0, 246, 255, 0.12);
+  border-bottom: none;
 }
 
-body.theme-cyberpunk .brand-block {
-  position: relative;
-}
-
+body.theme-cyberpunk .sider-brand .brand-text::before,
+body.theme-cyberpunk .sider-brand .brand-text::after,
 body.theme-cyberpunk .brand-block::after {
-  content: '';
-  position: absolute;
-  left: 50%;
-  bottom: -7px;
-  width: 28px;
-  height: 1px;
-  transform: translateX(-50%) skewX(-12deg);
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(0, 246, 255, 0.68),
-    rgba(255, 43, 214, 0.48),
-    transparent
-  );
-  box-shadow: 0 0 6px rgba(0, 246, 255, 0.28);
+  content: none !important;
+  display: none !important;
+  box-shadow: none !important;
 }
 
 @media (min-width: 769px) {
-  body.theme-cyberpunk .brand-text {
-    background: linear-gradient(
-      90deg,
-      #d8edf0 0%,
-      #77c6cd 32%,
-      #9690ca 64%,
-      #d17dbe 100%
-    ) !important;
-    text-shadow:
-      0 0 1px rgba(255, 255, 255, 0.34),
-      0 0 3px rgba(0, 246, 255, 0.12),
-      0 0 6px rgba(255, 43, 214, 0.05);
+  body.theme-cyberpunk .sider-brand .brand-text {
+    font-family: Orbitron, 'Rajdhani', 'Segoe UI', sans-serif;
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: 0.075em;
+  }
+
+  body.theme-cyberpunk .ant-layout-sider-collapsed .sider-brand .brand-text {
+    font-size: 23px;
+    letter-spacing: 0.055em;
   }
 }
 
