@@ -453,61 +453,13 @@ func dedupeEmails(emails []string) []string {
 	return out
 }
 
-func formatRawSubscriptionLinks(subs []string) string {
+func buildRawSubscriptionBody(subs []string) string {
 	var result strings.Builder
-	for _, entry := range subs {
-		for _, link := range splitLinkLines(entry) {
-			link = strings.TrimSpace(link)
-			if link == "" {
-				continue
-			}
-			result.WriteString(link)
-			result.WriteString("\n")
-		}
+	for _, sub := range subs {
+		result.WriteString(sub)
+		result.WriteString("\n")
 	}
 	return result.String()
-}
-
-func rawSubscriptionScheme(link string) string {
-	u, err := url.Parse(link)
-	if err != nil {
-		return ""
-	}
-	return strings.ToLower(strings.TrimSpace(u.Scheme))
-}
-
-func rawSubscriptionProtocolLabel(scheme string) string {
-	switch scheme {
-	case "vless":
-		return "VLESS"
-	case "vmess":
-		return "VMess"
-	case "trojan":
-		return "Trojan"
-	case "ss":
-		return "Shadowsocks"
-	case "hysteria", "hysteria2", "hy2":
-		return "Hysteria2"
-	case "tuic":
-		return "TUIC"
-	case "wireguard", "wg":
-		return "WireGuard"
-	case "awg", "amneziawg":
-		return "AmneziaWG"
-	case "mtproto":
-		return "MTProto"
-	case "naive+https":
-		return "NaiveProxy TCP"
-	case "naive+quic":
-		return "NaiveProxy QUIC"
-	case "mieru", "mierus":
-		return "Mieru"
-	default:
-		if scheme == "" {
-			return "Other"
-		}
-		return strings.ToUpper(scheme)
-	}
 }
 
 // subs handles HTTP requests for subscription links, returning either HTML page or base64-encoded subscription data.
@@ -543,7 +495,7 @@ func (a *SUBController) subs(c *gin.Context) {
 	if err != nil || subs == nil {
 		writeSubError(c, err)
 	} else {
-		result := formatRawSubscriptionLinks(subs)
+		result := buildRawSubscriptionBody(subs)
 
 		// Add headers
 		header := subReq.subscriptionUserinfo(traffic)
