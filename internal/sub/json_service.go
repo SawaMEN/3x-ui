@@ -331,54 +331,59 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 			if len(addresses) == 0 {
 				continue
 			}
-			peerAddress := wireguardPeerAddress(inbound, subReq.resolveInboundAddress(inbound), nil)
-			peer := map[string]any{
-				"address":     peerAddress,
-				"port":        inbound.Port,
-				"public_key":  serverPublicKey,
-				"allowed_ips": []string{"0.0.0.0/0", "::/0"},
-			}
-			if client.PreSharedKey != "" {
-				peer["pre_shared_key"] = client.PreSharedKey
-			}
-			if client.KeepAlive != nil && *client.KeepAlive > 0 {
-				peer["persistent_keepalive_interval"] = *client.KeepAlive
-			}
-			endpoint := map[string]any{
-				"type":        "wireguard",
-				"tag":         "wg-endpoint",
-				"address":     addresses,
-				"private_key": client.PrivateKey,
-				"peers":       []any{peer},
-			}
-			if mtu, ok := settings["mtu"].(float64); ok && mtu > 0 {
-				endpoint["mtu"] = int(mtu)
-			}
+			for _, shareEndpoint := range subReq.shareEndpointsForInbound(inbound) {
+				peerAddress := shareEndpoint.Address
+				if peerAddress == "" {
+					peerAddress = wireguardPeerAddress(inbound, subReq.resolveInboundAddress(inbound), nil)
+				}
+				peer := map[string]any{
+					"address":     peerAddress,
+					"port":        shareEndpoint.Port,
+					"public_key":  serverPublicKey,
+					"allowed_ips": []string{"0.0.0.0/0", "::/0"},
+				}
+				if client.PreSharedKey != "" {
+					peer["pre_shared_key"] = client.PreSharedKey
+				}
+				if client.KeepAlive != nil && *client.KeepAlive > 0 {
+					peer["persistent_keepalive_interval"] = *client.KeepAlive
+				}
+				endpoint := map[string]any{
+					"type":        "wireguard",
+					"tag":         "wg-endpoint",
+					"address":     addresses,
+					"private_key": client.PrivateKey,
+					"peers":       []any{peer},
+				}
+				if mtu, ok := settings["mtu"].(float64); ok && mtu > 0 {
+					endpoint["mtu"] = int(mtu)
+				}
 
-			cfg := map[string]any{
-				"$schema": "https://sing-box.sagernet.org/schema.json",
-				"endpoints": []any{endpoint},
-				"inbounds": []any{map[string]any{
-					"type":       "tun",
-					"tag":        "tun-in",
-					"address":    addresses,
-					"auto_route": true,
-					"strict_route": true,
-				}},
-				"outbounds": []any{
-					map[string]any{"type": "direct", "tag": "direct"},
-					map[string]any{"type": "block", "tag": "blocked"},
-				},
-				"route": map[string]any{
-					"rules": []any{map[string]any{"action": "route", "outbound": "wg-endpoint"}},
-					"final": "direct",
-					"auto_detect_interface": true,
-				},
-			}
-			encoded, err := json.MarshalIndent(cfg, "", "  ")
-			if err == nil {
-				wireguardConfigs = append(wireguardConfigs, encoded)
-				hasEnabledClient = true
+				cfg := map[string]any{
+					"$schema": "https://sing-box.sagernet.org/schema.json",
+					"endpoints": []any{endpoint},
+					"inbounds": []any{map[string]any{
+						"type":       "tun",
+						"tag":        "tun-in",
+						"address":    addresses,
+						"auto_route": true,
+						"strict_route": true,
+					}},
+					"outbounds": []any{
+						map[string]any{"type": "direct", "tag": "direct"},
+						map[string]any{"type": "block", "tag": "blocked"},
+					},
+					"route": map[string]any{
+						"rules": []any{map[string]any{"action": "route", "outbound": "wg-endpoint"}},
+						"final": "direct",
+						"auto_detect_interface": true,
+					},
+				}
+				encoded, err := json.MarshalIndent(cfg, "", "  ")
+				if err == nil {
+					wireguardConfigs = append(wireguardConfigs, encoded)
+					hasEnabledClient = true
+				}
 			}
 		}
 	}
