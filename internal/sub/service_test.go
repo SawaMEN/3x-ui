@@ -1294,8 +1294,8 @@ func TestGenNaiveSubscriptionLinkUsesStandardScheme(t *testing.T) {
 	if gotSNI := u.Query().Get("sni"); gotSNI != "" {
 		t.Fatalf("standard Naive link must not emit non-standard sni, got %q", gotSNI)
 	}
-	if gotPadding := u.Query().Get("padding"); gotPadding != "true" {
-		t.Fatalf("padding = %q, want true", gotPadding)
+	if gotPadding := u.Query().Get("padding"); gotPadding != "" {
+		t.Fatalf("padding = %q, want omitted", gotPadding)
 	}
 	if gotHost := u.Query().Get("host"); gotHost != "" {
 		t.Fatalf("standard Naive link must not emit non-standard host, got %q", gotHost)
@@ -1325,6 +1325,29 @@ func TestGenNaiveSubscriptionLinkFallsBackToInboundSNI(t *testing.T) {
 		t.Fatalf("sni = %q, want naive.example.com", gotSNI)
 	}
 }
+func TestGenNaiveSubscriptionLinkAutoSNIFromAdvertisedHost(t *testing.T) {
+	s := &SubService{
+		clientsByInbound: map[int]map[string]model.Client{
+			5: {"user@example.com": {Email: "user@example.com", Password: "secret"}},
+		},
+	}
+	in := &model.Inbound{
+		Id:       5,
+		Port:     443,
+		Protocol: model.NaiveProxy,
+		Settings: `{"network":"tcp","shareLinkFormat":"hiddify","tls":{}}`,
+		StreamSettings: `{"externalProxy":[{"dest":"naive.example.com","port":443,"forceTls":"same"}]}`,
+	}
+	got := s.genNaiveSubscriptionLink(in, "user@example.com")
+	u, err := url.Parse(got)
+	if err != nil {
+		t.Fatalf("parse Hiddify Naive link: %v", err)
+	}
+	if gotSNI := u.Query().Get("sni"); gotSNI != "naive.example.com" {
+		t.Fatalf("sni = %q, want naive.example.com", gotSNI)
+	}
+}
+
 func TestGenNaiveSubscriptionLinkUsesHiddifyScheme(t *testing.T) {
 	s := &SubService{
 		clientsByInbound: map[int]map[string]model.Client{
@@ -1349,8 +1372,8 @@ func TestGenNaiveSubscriptionLinkUsesHiddifyScheme(t *testing.T) {
 	if gotSNI := u.Query().Get("sni"); gotSNI != "naive.example.com" {
 		t.Fatalf("sni = %q, want naive.example.com", gotSNI)
 	}
-	if gotPadding := u.Query().Get("padding"); gotPadding != "true" {
-		t.Fatalf("padding = %q, want true", gotPadding)
+	if gotPadding := u.Query().Get("padding"); gotPadding != "" {
+		t.Fatalf("padding = %q, want omitted", gotPadding)
 	}
 }
 

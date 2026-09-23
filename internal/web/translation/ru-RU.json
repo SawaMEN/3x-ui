@@ -539,7 +539,7 @@
 "naiveShareLinkFormatHint": "Переключает только формат ссылок в подписке. Выключено — стандартные naive+https/naive+quic. Включено — совместимый с Hiddify naive://. В стандартном формате адрес сервера в ссылке должен соответствовать TLS/SNI; если адрес и SNI различаются, используйте Hiddify.",
         "naiveShareLinkFormatStandard": "Стандартный NaiveProxy",
         "naiveShareLinkFormatHiddify": "Hiddify",
-        "naiveHint": "TLS берётся из сертификата панели автоматически. TCP используется по умолчанию; для QUIC применяется BBR. SNI можно задать явно. Убедитесь, что в настройках ядра панели выбран sing-box версии 1.13.0 или новее.",
+        "naiveHint": "SNI можно не заполнять. В Hiddify-ссылке SNI автоматически берётся из домена ссылки; укажите его вручную только если сертификат использует другое имя.",
         "visionTestseed": "Vision testseed",
         "version": "Версия",
         "udpIdleTimeout": "UDP idle timeout (с)",

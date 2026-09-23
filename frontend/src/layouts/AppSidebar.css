@@ -859,10 +859,7 @@ body.theme-cyberpunk .sider-brand .brand-text {
   background-clip: text;
   -webkit-text-fill-color: transparent;
   -webkit-text-stroke: 0;
-  text-shadow:
-    0 0 6px rgba(0, 246, 255, 0.55),
-    0 0 14px rgba(0, 246, 255, 0.26),
-    0 0 24px rgba(255, 43, 214, 0.16);
+  text-shadow: none;
   filter: none;
   animation: none;
 }
@@ -882,7 +879,8 @@ body.theme-cyberpunk .ant-layout-sider-collapsed .sider-brand .brand-text {
   letter-spacing: 0.055em;
   transform: translateY(1px);
   white-space: nowrap;
-  text-shadow: 0 0 4px rgba(0, 246, 255, 0.42);
+  text-shadow: none;
+  filter: none;
 }
 
 body.theme-cyberpunk .ant-layout-sider-collapsed .sider-brand .brand-text-full {
@@ -1015,5 +1013,48 @@ body.theme-cyberpunk .sider-brand .brand-text::after {
   .drawer-header .drawer-brand {
     font-size: 19px;
     letter-spacing: 0.08em;
+  }
+}
+/* Desktop cyberpunk wordmark: lock the text to the exact center of the sidebar in both collapsed and expanded states. */
+@media (min-width: 769px) {
+  body.theme-cyberpunk .sider-brand {
+    position: relative;
+  }
+
+  body.theme-cyberpunk .sider-brand .sider-brand-content {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    right: auto;
+    bottom: auto;
+    width: max-content;
+    max-width: 100%;
+    height: 72px;
+    margin: 0;
+    padding: 0;
+    gap: 0;
+    transform: translate(-50%, -50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+  }
+
+  body.theme-cyberpunk .sider-brand .brand-text {
+    position: relative;
+    width: max-content;
+    max-width: 100%;
+    margin: 0;
+    transform: none;
+    white-space: nowrap;
+    text-align: center;
+  }
+
+  body.theme-cyberpunk .ant-layout-sider-collapsed .sider-brand .brand-text {
+    width: max-content;
+    max-width: 100%;
+    font-size: 23px;
+    letter-spacing: 0.055em;
+    transform: none;
   }
 }

@@ -518,7 +518,7 @@
 "naiveShareLinkFormatHint": "Switches only the subscription link format. Off uses standard naive+https/naive+quic. On uses the Hiddify-compatible naive:// format. With the standard format, the server address in the link must match the TLS/SNI name; when they differ, use Hiddify.",
         "naiveShareLinkFormatStandard": "Standard NaiveProxy",
         "naiveShareLinkFormatHiddify": "Hiddify",
-        "naiveHint": "The panel TLS certificate is reused automatically. TCP is used by default; QUIC uses BBR. SNI can be set explicitly. Make sure sing-box 1.13.0 or newer is selected as the panel core.",
+        "naiveHint": "SNI can be left empty. In Hiddify links, SNI is automatically taken from the link domain; set it manually only when the certificate uses a different hostname.",
         "visionTestseed": "Vision testseed",
         "version": "Version",
         "udpIdleTimeout": "UDP idle timeout (s)",

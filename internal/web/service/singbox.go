@@ -288,13 +288,29 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 				return nil, fmt.Errorf("NaiveProxy inbound %q must provide both TLS certificate and private key, or neither", inbound.Tag)
 			}
 			if certPath == "" {
-				certPath, _ = singBoxSettingService.GetCertFile()
-				certPath = strings.TrimSpace(certPath)
-				keyPath, _ = singBoxSettingService.GetKeyFile()
-				keyPath = strings.TrimSpace(keyPath)
+				// Prefer the panel HTTPS certificate, then fall back to the
+				// dedicated subscription HTTPS certificate. Both are valid
+				// certificate sources for a native Naive TLS listener.
+				webCertPath, _ := singBoxSettingService.GetCertFile()
+				webKeyPath, _ := singBoxSettingService.GetKeyFile()
+				webCertPath = strings.TrimSpace(webCertPath)
+				webKeyPath = strings.TrimSpace(webKeyPath)
+				if webCertPath != "" && webKeyPath != "" {
+					certPath = webCertPath
+					keyPath = webKeyPath
+				} else {
+					subCertPath, _ := singBoxSettingService.GetSubCertFile()
+					subKeyPath, _ := singBoxSettingService.GetSubKeyFile()
+					subCertPath = strings.TrimSpace(subCertPath)
+					subKeyPath = strings.TrimSpace(subKeyPath)
+					if subCertPath != "" && subKeyPath != "" {
+						certPath = subCertPath
+						keyPath = subKeyPath
+					}
+				}
 			}
 			if certPath == "" || keyPath == "" {
-				return nil, fmt.Errorf("NaiveProxy inbound %q requires the panel TLS certificate and private key", inbound.Tag)
+				return nil, fmt.Errorf("NaiveProxy inbound %q requires a complete TLS certificate/private-key pair (inbound, panel HTTPS, or subscription HTTPS)", inbound.Tag)
 			}
 			tls["certificatePath"] = certPath
 			tls["keyPath"] = keyPath

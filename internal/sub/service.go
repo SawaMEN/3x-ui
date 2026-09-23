@@ -1064,7 +1064,7 @@ func (s *SubService) genNaiveSubscriptionLink(inbound *model.Inbound, email stri
 			port = rawPort
 		}
 
-		params := map[string]string{"padding": "true"}
+		params := map[string]string{}
 		if useHiddifyFormat {
 			// Hiddify's ray2sing parser uses naive:// and reads the TLS
 			// hostname/transport from query parameters.
@@ -1090,6 +1090,12 @@ func (s *SubService) genNaiveSubscriptionLink(inbound *model.Inbound, email stri
 						params["sni"] = strings.TrimSpace(serverName)
 					}
 				}
+			}
+			if _, ok := params["sni"]; !ok && !strings.Contains(address, ":") && net.ParseIP(strings.TrimSpace(address)) == nil {
+				// Hiddify-compatible clients need the TLS SNI in the URI when it
+				// is not carried by a standard URL scheme. When no custom SNI is
+				// configured, the advertised DNS name is the natural default.
+				params["sni"] = strings.TrimSpace(address)
 			}
 			// `host` is a Hiddify/ray2sing compatibility parameter. Standard
 			// NaiveProxy URIs intentionally do not emit non-standard query fields.

@@ -16,12 +16,9 @@ func validateInboundRuntimeProtocol(protocol model.Protocol, existing *model.Inb
 	if core == CoreTypeSingBox {
 		return nil
 	}
-	// A NaïveProxy row created under sing-box must remain editable while the
-	// administrator has temporarily switched to Xray, otherwise it becomes
-	// impossible to correct or disable the stored row.
-	if existing != nil && existing.Protocol == model.NaiveProxy {
-		return nil
-	}
+	// NaïveProxy is not an Xray-managed protocol. Keeping an existing Naïve
+	// row while Xray is selected makes it look enabled in the UI while the
+	// Xray config silently omits it.
 	return common.NewErrorf("NaïveProxy requires sing-box as the selected core")
 }
 
