@@ -1194,6 +1194,35 @@ func TestHysteriaHopPorts(t *testing.T) {
 	}
 }
 
+func TestGenNaiveSubscriptionLinkKeepsNaiveScheme(t *testing.T) {
+	s := &SubService{
+		clientsByInbound: map[int]map[string]model.Client{
+			1: {"user@example.com": {Email: "user@example.com", Password: "secret"}},
+		},
+	}
+	in := &model.Inbound{
+		Id:       1,
+		Listen:   "203.0.113.10",
+		Port:     443,
+		Protocol: model.NaiveProxy,
+		Remark:   "naive",
+		Settings: `{"network":"tcp","tls":{"serverName":"naive.example.com"}}`,
+	}
+	got := s.genNaiveSubscriptionLink(in, "user@example.com")
+	if got == "" {
+		t.Fatal("expected Naive subscription link")
+	}
+	if !strings.HasPrefix(got, "naive+https://") {
+		t.Fatalf("scheme = %q, want naive+https", got)
+	}
+	if strings.HasPrefix(got, "vless://") || strings.Contains(got, "type=tcp") {
+		t.Fatalf("Naive link must not be emitted as VLESS: %s", got)
+	}
+	if !strings.Contains(got, "sni=naive.example.com") {
+		t.Fatalf("missing Naive SNI: %s", got)
+	}
+}
+
 func TestGenHysteriaLinkOmitsFinalMaskQueryParam(t *testing.T) {
 	stream := `{
 		"security":"tls",
