@@ -9,6 +9,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
+	wgutil "github.com/SawaMEN/3x-ui/v3/internal/util/wireguard"
 )
 
 
@@ -66,6 +67,77 @@ func TestGetInboundsBySubIdIndexesTrafficByEmail(t *testing.T) {
 	}
 }
 
+
+func TestGetSingBoxJsonKeepsTUIC(t *testing.T) {
+	dbDir := t.TempDir()
+	t.Setenv("XUI_DB_FOLDER", dbDir)
+	if err := database.InitDB(filepath.Join(dbDir, "x-ui.db")); err != nil {
+		t.Fatalf("InitDB: %v", err)
+	}
+	t.Cleanup(func() { _ = database.CloseDB() })
+
+	const subID = "sub-tuic-singbox"
+	db := database.GetDB()
+	inbound := &model.Inbound{
+		UserId: 1, Tag: "tuic-singbox", Enable: true, Port: 443, Protocol: model.TUIC,
+		Settings: `{"clients":[{"id":"11111111-2222-4333-8444-555555555555","email":"tuic@example.com","subId":"sub-tuic-singbox","password":"secret","enable":true}]}`,
+		StreamSettings: `{"network":"tcp","security":"tls","tlsSettings":{"serverName":"tuic.example.com"}}`,
+	}
+	if err := db.Create(inbound).Error; err != nil {
+		t.Fatalf("seed inbound: %v", err)
+	}
+	client := &model.ClientRecord{Email: "tuic@example.com", SubID: subID, UUID: "11111111-2222-4333-8444-555555555555", Password: "secret", Enable: true}
+	if err := db.Create(client).Error; err != nil {
+		t.Fatalf("seed client: %v", err)
+	}
+	if err := db.Create(&model.ClientInbound{ClientId: client.Id, InboundId: inbound.Id}).Error; err != nil {
+		t.Fatalf("attach client: %v", err)
+	}
+
+	out, _, err := NewSubJsonService("", "", "", "", NewSubService("")).GetSingBoxJson(subID, "sub.example.com", false)
+	if err != nil {
+		t.Fatalf("GetSingBoxJson: %v", err)
+	}
+	if !strings.Contains(out, `"type": "tuic"`) {
+		t.Fatalf("sing-box subscription dropped TUIC:\n%s", out)
+	}
+	if strings.Contains(out, `"protocol": "tuic"`) {
+		t.Fatalf("Xray TUIC shape leaked into sing-box subscription:\n%s", out)
+	}
+}
+
+func TestGetSingBoxJsonDoesNotCollapseMultipleWireGuardInbounds(t *testing.T) {
+	dbDir := t.TempDir()
+	t.Setenv("XUI_DB_FOLDER", dbDir)
+	if err := database.InitDB(filepath.Join(dbDir, "x-ui.db")); err != nil {
+		t.Fatalf("InitDB: %v", err)
+	}
+	t.Cleanup(func() { _ = database.CloseDB() })
+
+	serverPrivA, _, err := wgutil.GenerateWireguardKeypair()
+	if err != nil { t.Fatalf("server keypair A: %v", err) }
+	serverPrivB, _, err := wgutil.GenerateWireguardKeypair()
+	if err != nil { t.Fatalf("server keypair B: %v", err) }
+	clientPriv, _, err := wgutil.GenerateWireguardKeypair()
+	if err != nil { t.Fatalf("client keypair: %v", err) }
+
+	const subID = "sub-wg-singbox"
+	db := database.GetDB()
+	inboundA := &model.Inbound{UserId: 1, Tag: "wg-a", Enable: true, Listen: "0.0.0.0", Port: 51820, Protocol: model.WireGuard, Settings: `{"secretKey":"` + serverPrivA + `"}`}
+	inboundB := &model.Inbound{UserId: 1, Tag: "wg-b", Enable: true, Listen: "0.0.0.0", Port: 51821, Protocol: model.WireGuard, Settings: `{"secretKey":"` + serverPrivB + `"}`}
+	if err := db.Create(inboundA).Error; err != nil { t.Fatalf("seed inbound A: %v", err) }
+	if err := db.Create(inboundB).Error; err != nil { t.Fatalf("seed inbound B: %v", err) }
+	client := &model.ClientRecord{Email: "wg@example.com", SubID: subID, UUID: "11111111-2222-4333-8444-555555555555", PrivateKey: clientPriv, AllowedIPs: "10.0.0.2/32", Enable: true}
+	if err := db.Create(client).Error; err != nil { t.Fatalf("seed client: %v", err) }
+	if err := db.Create(&model.ClientInbound{ClientId: client.Id, InboundId: inboundA.Id}).Error; err != nil { t.Fatalf("attach A: %v", err) }
+	if err := db.Create(&model.ClientInbound{ClientId: client.Id, InboundId: inboundB.Id}).Error; err != nil { t.Fatalf("attach B: %v", err) }
+
+	out, _, err := NewSubJsonService("", "", "", "", NewSubService("")).GetSingBoxJson(subID, "wg.example.com", false)
+	if err != nil { t.Fatalf("GetSingBoxJson: %v", err) }
+	if got := strings.Count(out, `"type": "wireguard"`); got < 2 {
+		t.Fatalf("sing-box subscription collapsed WireGuard inbounds: found %d wireguard outbounds\n%s", got, out)
+	}
+}
 func TestGetSubsSkipsEmptyRenderedLinksButKeepsTraffic(t *testing.T) {
 	dbDir := t.TempDir()
 	t.Setenv("XUI_DB_FOLDER", dbDir)
