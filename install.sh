@@ -94,13 +94,13 @@ install_base() {
             apt-get update && apt-get install -y -q cron curl tar tzdata socat ca-certificates openssl iproute2 iptables
             ;;
         fedora | amzn | virtuozzo | rhel | almalinux | rocky | ol)
-            dnf makecache -y && dnf install -y -q cronie curl tar tzdata socat ca-certificates openssl iproute iptables iproute iptables
+            dnf makecache -y && dnf install -y -q cronie curl tar tzdata socat ca-certificates openssl iproute iptables
             ;;
         centos)
             if [[ "${VERSION_ID}" =~ ^7 ]]; then
                 yum makecache -y && yum install -y cronie curl tar tzdata socat ca-certificates openssl iproute iptables
             else
-                dnf makecache -y && dnf install -y -q cronie curl tar tzdata socat ca-certificates openssl iproute iptables iproute iptables
+                dnf makecache -y && dnf install -y -q cronie curl tar tzdata socat ca-certificates openssl iproute iptables
             fi
             ;;
         arch | manjaro | parch)
