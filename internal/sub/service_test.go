@@ -2,6 +2,7 @@ package sub
 
 import (
 	"encoding/base64"
+	"net/url"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -1281,7 +1282,8 @@ func TestGenMieruLinkUsesNativeScheme(t *testing.T) {
 		t.Fatalf("first port = %q, want 2101", got)
 	}
 }
-\nfunc TestGenHysteriaLinkOmitsFinalMaskQueryParam(t *testing.T) {
+
+func TestGenHysteriaLinkOmitsFinalMaskQueryParam(t *testing.T) {
 	stream := `{
 		"security":"tls",
 		"tlsSettings":{"serverName":"hy.sni","alpn":["h3"],"settings":{"fingerprint":"chrome"}},
