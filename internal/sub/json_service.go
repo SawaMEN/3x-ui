@@ -1607,9 +1607,6 @@ func (s *SubJsonService) genWireguard(inbound *model.Inbound, client model.Clien
 	}
 
 	addresses := append([]string(nil), client.AllowedIPs...)
-	if len(addresses) == 0 {
-		addresses = []string{"10.0.0.2/32"}
-	}
 	peer := map[string]any{
 		"publicKey":  serverPublicKey,
 		"endpoint":   fmt.Sprintf("%s:%d", wireguardPeerAddress(inbound, inbound.Listen, nil), inbound.Port),
