@@ -3,6 +3,7 @@
 package systemupdate
 
 import (
+	"strings"
 	"context"
 	"os"
 	"path/filepath"
@@ -23,6 +24,41 @@ func TestRequiredPackagesIncludeNetworkProtocolDependencies(t *testing.T) {
 					want = "iproute"
 				}
 			}
+			if !seen[want] {
+				t.Fatalf("%s requiredPackages() missing %s: %#v", distro, want, packages)
+			}
+		}
+	}
+}
+
+func TestSystemUpdateProtocolDependencyDocumentation(t *testing.T) {
+	const note = "Зависимости новых протоколов: WireGuard, AmneziaWG и VK-Turn используют iproute2/iproute и iptables для сетевого стека и маршрутизации; MTProto/Telemt, TUIC, Naive, Mieru и Psiphon используют curl, tar, ca-certificates, openssl и socat для загрузки/запуска и TLS/туннельного окружения."
+	for _, want := range []string{"WireGuard", "AmneziaWG", "VK-Turn", "MTProto/Telemt", "TUIC", "Naive", "Mieru", "Psiphon", "iproute2/iproute", "iptables", "curl", "tar", "ca-certificates", "openssl", "socat"} {
+		if !strings.Contains(note, want) {
+			t.Fatalf("protocol dependency note missing %q: %s", want, note)
+		}
+	}
+}
+
+func TestRequiredPackagesCoverProtocolRuntimeDependencies(t *testing.T) {
+	cases := map[string][]string{
+		"ubuntu":        {"iproute2", "iptables", "socat", "curl", "tar", "ca-certificates", "openssl"},
+		"debian":        {"iproute2", "iptables", "socat", "curl", "tar", "ca-certificates", "openssl"},
+		"armbian":       {"iproute2", "iptables", "socat", "curl", "tar", "ca-certificates", "openssl"},
+		"fedora":        {"iproute", "iptables", "socat", "curl", "tar", "ca-certificates", "openssl"},
+		"rhel":          {"iproute", "iptables", "socat", "curl", "tar", "ca-certificates", "openssl"},
+		"centos":        {"iproute", "iptables", "socat", "curl", "tar", "ca-certificates", "openssl"},
+		"arch":          {"iproute2", "iptables", "socat", "curl", "tar", "ca-certificates", "openssl"},
+		"opensuse-leap": {"iproute2", "iptables", "socat", "curl", "tar", "ca-certificates", "openssl"},
+		"alpine":        {"iproute2", "iptables", "socat", "curl", "tar", "ca-certificates", "openssl"},
+	}
+	for distro, wantPackages := range cases {
+		packages := requiredPackages(distro)
+		seen := map[string]bool{}
+		for _, name := range packages {
+			seen[name] = true
+		}
+		for _, want := range wantPackages {
 			if !seen[want] {
 				t.Fatalf("%s requiredPackages() missing %s: %#v", distro, want, packages)
 			}

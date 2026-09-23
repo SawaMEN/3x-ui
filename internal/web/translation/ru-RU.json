@@ -1729,7 +1729,7 @@
         "updateFailed": "Ошибка обновления системы",
         "updateOutput": "Результат обновления",
         "noPackages": "Сейчас доступных обновлений пакетов нет.",
-        "systemUpdateNote": "Здесь управляются системные пакеты, необходимые 3x-ui, пакеты ядра Linux и версии установленных зависимых инструментов панели (Xray, sing-box и Telemt). Исключение — Arch Linux, где частичные обновления не поддерживаются.",
+        "systemUpdateNote": "Здесь управляются системные пакеты 3x-ui и ядро Linux. Для WireGuard, AmneziaWG и VK-Turn используются iproute2/iproute и iptables; для MTProto, TUIC, Naive, Mieru и Psiphon — общие curl, tar, ca-certificates, openssl и socat. Сами серверные реализации этих протоколов поставляются панелью отдельно. Исключение — Arch Linux, где частичные обновления не поддерживаются.",
         "componentUpdatesTitle": "Зависимые инструменты панели",
         "systemPackagesTitle": "Системные пакеты",
         "updateComponent": "Обновить",

@@ -111,6 +111,10 @@ func GetStatus(ctx context.Context) (Status, error) {
 	if info.manager == "pacman" {
 		status.Notes = append(status.Notes, "Arch Linux требует полного обновления системы через pacman -Syu; частичные обновления не поддерживаются.")
 	}
+	status.Notes = append(status.Notes,
+		"Зависимости новых протоколов: WireGuard, AmneziaWG и VK-Turn используют iproute2/iproute и iptables для сетевого стека и маршрутизации; MTProto/Telemt, TUIC, Naive, Mieru и Psiphon используют curl, tar, ca-certificates, openssl и socat для загрузки/запуска и TLS/туннельного окружения.",
+		"Для Hysteria/TUIC/Naive и TLS-протоколов требуются актуальные ca-certificates и openssl; для UDP-маршрутизации и порт-хоппинга используются iproute2/iproute и iptables. Отдельные wireguard-tools и kernel-модули WireGuard здесь не требуются: соответствующие протоколы обслуживаются самим Xray/sidecar.",
+	)
 	if kernel.UpdateAvailable {
 		status.Notes = append(status.Notes, "После обновления ядра потребуется перезагрузка сервера, чтобы запустить новое ядро.")
 	}
