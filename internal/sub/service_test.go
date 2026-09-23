@@ -1195,7 +1195,7 @@ func TestHysteriaHopPorts(t *testing.T) {
 	}
 }
 
-func TestGenNaiveSubscriptionLinkKeepsNaiveScheme(t *testing.T) {
+func TestGenNaiveSubscriptionLinkUsesCompatibleScheme(t *testing.T) {
 	s := &SubService{
 		clientsByInbound: map[int]map[string]model.Client{
 			1: {"user@example.com": {Email: "user@example.com", Password: "secret"}},
@@ -1213,8 +1213,8 @@ func TestGenNaiveSubscriptionLinkKeepsNaiveScheme(t *testing.T) {
 	if got == "" {
 		t.Fatal("expected Naive subscription link")
 	}
-	if !strings.HasPrefix(got, "naive://") {
-		t.Fatalf("scheme = %q, want naive://", got)
+	if !strings.HasPrefix(got, "naive+https://") {
+		t.Fatalf("scheme = %q, want naive+https://", got)
 	}
 	if strings.HasPrefix(got, "vless://") || strings.Contains(got, "type=tcp") {
 		t.Fatalf("Naive link must not be emitted as VLESS: %s", got)
@@ -1226,12 +1226,12 @@ func TestGenNaiveSubscriptionLinkKeepsNaiveScheme(t *testing.T) {
 	if gotSNI := u.Query().Get("sni"); gotSNI != "naive.example.com" {
 		t.Fatalf("sni = %q, want naive.example.com", gotSNI)
 	}
-	if gotSecurity := u.Query().Get("security"); gotSecurity != "tls" {
-		t.Fatalf("security = %q, want tls", gotSecurity)
+	if gotPadding := u.Query().Get("padding"); gotPadding != "true" {
+		t.Fatalf("padding = %q, want true", gotPadding)
 	}
 }
 
-func TestGenNaiveSubscriptionLinkUsesQuicFlag(t *testing.T) {
+func TestGenNaiveSubscriptionLinkUsesQuicScheme(t *testing.T) {
 	s := &SubService{
 		clientsByInbound: map[int]map[string]model.Client{
 			2: {"user@example.com": {Email: "user@example.com", Password: "secret"}},
@@ -1249,12 +1249,12 @@ func TestGenNaiveSubscriptionLinkUsesQuicFlag(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse Naive QUIC link: %v", err)
 	}
-	if u.Scheme != "naive" || u.Query().Get("quic") != "1" {
-		t.Fatalf("link = %q, want naive:// with quic=1", got)
+	if u.Scheme != "naive+quic" {
+		t.Fatalf("link = %q, want naive+quic://", got)
 	}
 }
 
-func TestGenMieruLinkUsesNativeScheme(t *testing.T) {
+func TestGenMieruLinkUsesSimpleScheme(t *testing.T) {
 	s := &SubService{
 		clientsByInbound: map[int]map[string]model.Client{
 			3: {"user@example.com": {Email: "user@example.com", Password: "secret"}},
@@ -1272,8 +1272,8 @@ func TestGenMieruLinkUsesNativeScheme(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse Mieru link: %v", err)
 	}
-	if u.Scheme != "mieru" {
-		t.Fatalf("scheme = %q, want mieru", u.Scheme)
+	if u.Scheme != "mierus" {
+		t.Fatalf("scheme = %q, want mierus", u.Scheme)
 	}
 	if got := u.Query().Get("protocol"); got != "TCP" {
 		t.Fatalf("first protocol = %q, want TCP", got)
