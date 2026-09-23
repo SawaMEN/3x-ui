@@ -1,6 +1,7 @@
 package sub
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -588,5 +589,106 @@ func TestGetSubs_NaiveUsesHostEndpoints(t *testing.T) {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("Naive host override missing %q in %v", want, all)
 		}
+	}
+}
+
+
+func TestGetSingBoxJsonResolvesTUICWildcardListen(t *testing.T) {
+	dbDir := t.TempDir()
+	t.Setenv("XUI_DB_FOLDER", dbDir)
+	if err := database.InitDB(filepath.Join(dbDir, "x-ui.db")); err != nil {
+		t.Fatalf("InitDB: %v", err)
+	}
+	t.Cleanup(func() { _ = database.CloseDB() })
+
+	const subID = "sub-tuic-wildcard"
+	db := database.GetDB()
+	inbound := &model.Inbound{
+		UserId: 1, Tag: "tuic-wildcard", Enable: true, Listen: "0.0.0.0", Port: 443,
+		Protocol: model.TUIC,
+		Settings: `{"clients":[{"id":"11111111-2222-4333-8444-555555555555","email":"tuic-wildcard@example.com","password":"secret","enable":true}]}`,
+		StreamSettings: `{"network":"tcp","security":"tls","tlsSettings":{"serverName":"tuic.example.com"}}`,
+	}
+	if err := db.Create(inbound).Error; err != nil {
+		t.Fatalf("seed inbound: %v", err)
+	}
+	client := &model.ClientRecord{
+		Email: "tuic-wildcard@example.com", SubID: subID,
+		UUID: "11111111-2222-4333-8444-555555555555", Password: "secret", Enable: true,
+	}
+	if err := db.Create(client).Error; err != nil {
+		t.Fatalf("seed client: %v", err)
+	}
+	if err := db.Create(&model.ClientInbound{ClientId: client.Id, InboundId: inbound.Id}).Error; err != nil {
+		t.Fatalf("attach client: %v", err)
+	}
+
+	out, _, err := NewSubJsonService("", "", "", "", NewSubService("")).GetSingBoxJson(subID, "sub.example.com", false)
+	if err != nil {
+		t.Fatalf("GetSingBoxJson: %v", err)
+	}
+	var config map[string]any
+	if err := json.Unmarshal([]byte(out), &config); err != nil {
+		t.Fatalf("unmarshal sing-box config: %v", err)
+	}
+	outbounds, _ := config["outbounds"].([]any)
+	if len(outbounds) == 0 {
+		t.Fatalf("sing-box config has no outbounds: %s", out)
+	}
+	proxy, _ := outbounds[0].(map[string]any)
+	if got := proxy["server"]; got != "sub.example.com" {
+		t.Fatalf("TUIC server = %v, want advertised request host instead of wildcard listen", got)
+	}
+}
+
+func TestGetJsonFallsBackFromPartialExternalProxy(t *testing.T) {
+	dbDir := t.TempDir()
+	t.Setenv("XUI_DB_FOLDER", dbDir)
+	if err := database.InitDB(filepath.Join(dbDir, "x-ui.db")); err != nil {
+		t.Fatalf("InitDB: %v", err)
+	}
+	t.Cleanup(func() { _ = database.CloseDB() })
+
+	const subID = "sub-partial-external"
+	db := database.GetDB()
+	inbound := &model.Inbound{
+		UserId: 1, Tag: "vless-partial", Enable: true, Listen: "0.0.0.0", Port: 443,
+		Protocol: model.VLESS,
+		Settings: `{"clients":[{"id":"22222222-3333-4444-8555-666666666666","email":"partial@example.com","subId":"sub-partial-external","enable":true}]}`,
+		StreamSettings: `{"network":"tcp","security":"tls","tlsSettings":{"serverName":"partial.example.com"},"externalProxy":[{"remark":"fallback"}]}`,
+	}
+	if err := db.Create(inbound).Error; err != nil {
+		t.Fatalf("seed inbound: %v", err)
+	}
+	client := &model.ClientRecord{
+		Email: "partial@example.com", SubID: subID,
+		UUID: "22222222-3333-4444-8555-666666666666", Enable: true,
+	}
+	if err := db.Create(client).Error; err != nil {
+		t.Fatalf("seed client: %v", err)
+	}
+	if err := db.Create(&model.ClientInbound{ClientId: client.Id, InboundId: inbound.Id}).Error; err != nil {
+		t.Fatalf("attach client: %v", err)
+	}
+
+	out, _, err := NewSubJsonService("", "", "", "", NewSubService("")).GetJson(subID, "sub.example.com", false)
+	if err != nil {
+		t.Fatalf("GetJson: %v", err)
+	}
+	var config map[string]any
+	if err := json.Unmarshal([]byte(out), &config); err != nil {
+		t.Fatalf("unmarshal JSON subscription: %v", err)
+	}
+	outbounds, _ := config["outbounds"].([]any)
+	if len(outbounds) == 0 {
+		t.Fatalf("JSON subscription has no outbounds: %s", out)
+	}
+	proxy, _ := outbounds[0].(map[string]any)
+	settings, _ := proxy["settings"].(map[string]any)
+	if got := settings["address"]; got != "sub.example.com" {
+		t.Fatalf("partial externalProxy address = %v, want advertised request host", got)
+	}
+	if got := settings["port"]; got != float64(443) {
+		t.Fatalf("partial externalProxy port = %v, want 443", got)
 	}
 }
