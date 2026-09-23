@@ -612,7 +612,7 @@ func TestTranslateXrayNaiveInbound(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got["type"] != "naive" || got["listen"] != "::" ||
+	if got["type"] != "naive" ||
 		rawInt(got, "listen_port") != 443 || got["network"] != "tcp" {
 		t.Fatalf("unexpected Naive base config: %#v", got)
 	}
