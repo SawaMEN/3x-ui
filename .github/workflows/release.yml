@@ -219,8 +219,7 @@ jobs:
           MITA_BIN=$(find . -type f -name mita -perm -111 | head -n1)
           test -n "$MITA_BIN"
           echo "Mieru asset verified: $MIERU_PKG"
-          cp "$MITA_BIN" mita
-          chmod +x mita
+          chmod +x "$MITA_BIN"
           rm -f "$MIERU_PKG"
 
           PSIPHON_VER=$(gh api repos/Psiphon-Labs/psiphon-tunnel-core/releases/latest --jq '.tag_name')
