@@ -851,8 +851,8 @@ func (s *SubService) genNaiveLink(inbound *model.Inbound, email string) string {
 	return s.genNaiveSubscriptionLink(inbound, email)
 }
 
-// genNaiveSubscriptionLink returns Naïve's native URI form used by the
-// raw subscription. TLS is explicit and QUIC is selected with quic=1.
+// genNaiveSubscriptionLink returns Naïve's compatible URI form used by the
+// raw subscription. The naive+quic scheme selects HTTP/3 transport.
 func (s *SubService) genNaiveSubscriptionLink(inbound *model.Inbound, email string) string {
 	if inbound.Protocol != model.NaiveProxy {
 		return ""
