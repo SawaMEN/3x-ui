@@ -422,7 +422,7 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 						applyExternalProxyTLSToStream(endpoint, newStream, security)
 						applyHostStreamOverrides(endpoint, newStream)
 					}
-				nativeRaw := s.genNativeTUIC(&clone, newStream, client)
+					nativeRaw := s.genNativeTUIC(&clone, newStream, client)(&clone, newStream, client)
 					if nativeRaw == nil {
 						continue
 					}
@@ -457,7 +457,7 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 					if strings.EqualFold(strings.TrimSpace(forceTLS), "none") {
 						continue
 					}
-				native := s.genNativeNaive(subReq, inbound, client, endpoint)
+						native := s.genNativeNaive(subReq, inbound, client, endpoint)
 					if native == nil {
 						continue
 					}
