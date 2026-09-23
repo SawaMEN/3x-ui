@@ -1,18 +1,15 @@
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./media/3x-ui-dark.png">
-    <img alt="3x-ui" src="./media/3x-ui-light.png">
-  </picture>
-</p>
-
 # 3X-UI
 
-**3X-UI** — веб-панель управления Xray-core и Sing-box с веб-интерфейсом для управления inbound'ами, клиентами, подписками, маршрутизацией, статистикой и настройками сервера.
+**3X-UI** — веб-панель управления **Xray-core** и **sing-box** с веб-интерфейсом для управления inbound'ами, клиентами, подписками, маршрутизацией, статистикой и настройками сервера.
 
 Интерфейс по умолчанию использует русский язык; английский также доступен. UI построен на Ant Design и адаптирован для desktop и mobile.
 
 > [!IMPORTANT]
 > Проект предназначен для личного использования и тестирования. Перед эксплуатацией на реальном сервере проверьте конфигурацию, сетевые правила, доступ к панели, TLS и остальные параметры безопасности.
+
+## Текущая версия
+
+Текущая версия панели: **v3.9.3**.
 
 ## Быстрый старт
 
@@ -29,7 +26,7 @@ bash <(curl -Ls https://raw.githubusercontent.com/SawaMEN/3x-ui/main/install.sh)
 Для установки конкретной версии:
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/SawaMEN/3x-ui/main/install.sh) v3.9.2
+bash <(curl -Ls https://raw.githubusercontent.com/SawaMEN/3x-ui/main/install.sh) v3.9.3
 ```
 
 Для rolling dev-сборки:
@@ -58,7 +55,7 @@ x-ui settings     # текущие настройки
 x-ui enable       # включить автозапуск
 x-ui disable      # отключить автозапуск
 x-ui log          # логи панели
-x-ui banlog       # логи Fail2ban
+x-ui banlog        # логи Fail2ban
 x-ui update       # обновление
 x-ui install      # установка
 x-ui uninstall    # удаление
@@ -78,34 +75,23 @@ x-ui uninstall    # удаление
 x-ui update
 ```
 
-Установщик сохраняет пользовательские файлы в `bin/`, которые не входят в новый релиз, и не перезаписывает существующую конфигурацию Telemt.
-
-## Благодарности
-
-Этот репозиторий является форком основного проекта [https://github.com/MHSanaei/3x-ui](https://github.com/MHSanaei/3x-ui).
-
-Отдельная благодарность авторам и участникам следующих проектов:
-
-- [telemt/telemt](https://github.com/telemt/telemt) — за **Telemt**.
-- [WINGS-N/3x-ui](https://github.com/WINGS-N/3x-ui) — за **vk-turn-proxy**.
-- [Liafanx/MTProxyL](https://github.com/Liafanx/MTProxyL) — за **MTProxyL**.
-- [Mekotofeuka/MTPROTO_FIX_By_MEKO](https://github.com/Mekotofeuka/MTPROTO_FIX_By_MEKO) — за фикс **MTPROTO**.
-- Основному проекту [MHSanaei/3x-ui](https://github.com/MHSanaei/3x-ui) — за исходную кодовую базу и развитие проекта.
-
+Панель также предоставляет интерфейс для проверки системных обновлений и обновления управляемых компонентов **Xray**, **sing-box** и **Telemt**. Для системных обновлений поддерживается восстановление состояния панели после перезапуска во время применения обновлений.
 
 ## Возможности
 
-- Управление `Xray-core` и `Sing-box`.
+- Управление **Xray-core** и **sing-box**, включая переключение активного ядра.
 - Создание и управление inbound'ами и клиентами.
-- Лимиты трафика, срок действия, IP-лимиты и статистика.
-- Поддержка подписок и REST API.
-- Управление узлами и просмотр системной статистики.
+- Поддержка **VMess, VLESS, Trojan, Shadowsocks, WireGuard, Hysteria, HTTP, Mixed, Tunnel, TUN, MTProto, AmneziaWG, TUIC, Naive, Psiphon, Mieru** и **vk-turn-proxy**.
+- Локальное управление отдельными sidecar-сервисами **Mieru** и **Psiphon**; их конфигурации и процессы синхронизируются с активными inbound'ами.
+- MTProto через встроенный **mtg** и отдельный **Telemt**.
+- Лимиты трафика, срок действия, IP/HWID-лимиты и статистика.
+- Поддержка клиентских подписок, JSON/Clash-экспорта и внешних ссылок/удалённых подписок, привязанных к клиенту.
+- Управление исходящими подписками и их автоматическим обновлением.
+- Управление узлами, синхронизация конфигурации и просмотр системной статистики.
 - SQLite по умолчанию и PostgreSQL в качестве альтернативной БД.
 - Интеграции с Telegram, Discord и Fail2ban.
-- MTProto через встроенный `mtg` и отдельный **Telemt**.
-- TUIC и AmneziaWG.
-- Управление версиями Xray.
 - Темы: светлая, тёмная, ultra-dark, colorful и blue-gray.
+- Адаптивный интерфейс для desktop и mobile.
 - Русский интерфейс по умолчанию, английский — дополнительный язык.
 
 ## Поддержка ядер
@@ -125,8 +111,7 @@ Sing-box также запускается как отдельный проце�
 - в traffic polling не декодируются поля соединения, которые не нужны для статистики;
 - события закрытых соединений не удерживаются панелью после обработки.
 
-При этом **RSS процесса Sing-box и RSS панели — разные величины**. Сам Sing-box может потреблять дополнительную память в зависимости от количества соединений, DNS-кэша, конфигурации маршрутизации и других факторов.
-
+При этом **RSS процесса sing-box и RSS панели — разные величины**. Сам sing-box может потреблять дополнительную память в зависимости от количества соединений, DNS-кэша, конфигурации маршрутизации и других факторов.
 
 ## Базы данных
 
@@ -153,6 +138,18 @@ XUI_DB_MMAP_MB=64
 Английский (`en-US`) — дополнительный язык.
 
 Если язык браузера не поддерживается, интерфейс использует русский.
+
+## Благодарности
+
+Этот репозиторий является форком основного проекта [https://github.com/MHSanaei/3x-ui](https://github.com/MHSanaei/3x-ui).
+
+Отдельная благодарность авторам и участникам следующих проектов:
+
+- [telemt/telemt](https://github.com/telemt/telemt) — за **Telemt**.
+- [WINGS-N/3x-ui](https://github.com/WINGS-N/3x-ui) — за **vk-turn-proxy**.
+- [Liafanx/MTProxyL](https://github.com/Liafanx/MTProxyL) — за **MTProxyL**.
+- [Mekotofeuka/MTPROTO_FIX_By_MEKO](https://github.com/Mekotofeuka/MTPROTO_FIX_By_MEKO) — за фикс **MTPROTO**.
+- Основному проекту [MHSanaei/3x-ui](https://github.com/MHSanaei/3x-ui) — за исходную кодовую базу и развитие проекта.
 
 ## Лицензия
 
