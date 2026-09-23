@@ -874,10 +874,9 @@ func mergeStreamFromMaster(childStream, masterStream string) string {
 	return string(out)
 }
 
-// GetLink dispatches to the protocol-specific generator for one (inbound, client)
-// pair. Returns "" when the inbound's protocol doesn't produce a subscription URL
-// (socks, http, mixed, wireguard, dokodemo, tunnel). The returned string may
-// contain multiple `\n`-separated URLs when the inbound has externalProxy set.
+// shareEndpointsForInbound resolves legacy externalProxy/default endpoints into
+// one render-target list shared by raw subscription link generators.
+func (s *SubService) shareEndpointsForInbound(inbound *model.Inbound) []ShareEndpoint {
 func (s *SubService) shareEndpointsForInbound(inbound *model.Inbound) []ShareEndpoint {
 	if inbound == nil {
 		return nil
@@ -902,6 +901,10 @@ func (s *SubService) shareEndpointsForInbound(inbound *model.Inbound) []ShareEnd
 	return endpoints
 }
 
+// GetLink dispatches to the protocol-specific generator for one (inbound, client)
+// pair. Returns "" when the inbound's protocol doesn't produce a subscription URL
+// (socks, http, mixed, dokodemo, tunnel). The returned string may contain multiple
+// `\n`-separated URLs when externalProxy/host endpoints fan out.
 func (s *SubService) GetLink(inbound *model.Inbound, email string) string {
 	switch inbound.Protocol {
 	case "vmess":
