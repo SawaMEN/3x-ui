@@ -295,22 +295,20 @@ func (s *SubService) clientsForLinkExport(inbound *model.Inbound) ([]model.Clien
 // fields from it and resolve clients via clientForLink. The shallow
 // RawMessage pass skips materializing a huge clients array entirely.
 func (s *SubService) linkSettings(inbound *model.Inbound) map[string]any {
+	if inbound == nil {
+		return nil
+	}
 	if inbound.Id > 0 {
 		if cached, ok := s.settingsByInbound[inbound.Id]; ok {
 			return cached
 		}
 	}
-	shallow := map[string]json.RawMessage{}
-	_ = json.Unmarshal([]byte(inbound.Settings), &shallow)
-	out := make(map[string]any, len(shallow))
-	for key, raw := range shallow {
-		if key == "clients" {
-			continue
-		}
-		var value any
-		_ = json.Unmarshal(raw, &value)
-		out[key] = value
+	var out map[string]any
+	if err := json.Unmarshal([]byte(inbound.Settings), &out); err != nil || out == nil {
+		out = make(map[string]any)
 	}
+	delete(out, "clients")
+
 	if inbound.Id > 0 {
 		if s.settingsByInbound == nil {
 			s.settingsByInbound = map[int]map[string]any{}
