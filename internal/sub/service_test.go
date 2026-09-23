@@ -1212,18 +1212,76 @@ func TestGenNaiveSubscriptionLinkKeepsNaiveScheme(t *testing.T) {
 	if got == "" {
 		t.Fatal("expected Naive subscription link")
 	}
-	if !strings.HasPrefix(got, "naive+https://") {
-		t.Fatalf("scheme = %q, want naive+https", got)
+	if !strings.HasPrefix(got, "naive://") {
+		t.Fatalf("scheme = %q, want naive://", got)
 	}
 	if strings.HasPrefix(got, "vless://") || strings.Contains(got, "type=tcp") {
 		t.Fatalf("Naive link must not be emitted as VLESS: %s", got)
 	}
-	if !strings.Contains(got, "sni=naive.example.com") {
-		t.Fatalf("missing Naive SNI: %s", got)
+	u, err := url.Parse(got)
+	if err != nil {
+		t.Fatalf("parse Naive link: %v", err)
+	}
+	if gotSNI := u.Query().Get("sni"); gotSNI != "naive.example.com" {
+		t.Fatalf("sni = %q, want naive.example.com", gotSNI)
+	}
+	if gotSecurity := u.Query().Get("security"); gotSecurity != "tls" {
+		t.Fatalf("security = %q, want tls", gotSecurity)
 	}
 }
 
-func TestGenHysteriaLinkOmitsFinalMaskQueryParam(t *testing.T) {
+func TestGenNaiveSubscriptionLinkUsesQuicFlag(t *testing.T) {
+	s := &SubService{
+		clientsByInbound: map[int]map[string]model.Client{
+			2: {"user@example.com": {Email: "user@example.com", Password: "secret"}},
+		},
+	}
+	in := &model.Inbound{
+		Id:       2,
+		Listen:   "203.0.113.10",
+		Port:     443,
+		Protocol: model.NaiveProxy,
+		Settings: `{"network":"udp","tls":{"serverName":"naive.example.com"}}`,
+	}
+	got := s.genNaiveSubscriptionLink(in, "user@example.com")
+	u, err := url.Parse(got)
+	if err != nil {
+		t.Fatalf("parse Naive QUIC link: %v", err)
+	}
+	if u.Scheme != "naive" || u.Query().Get("quic") != "1" {
+		t.Fatalf("link = %q, want naive:// with quic=1", got)
+	}
+}
+
+func TestGenMieruLinkUsesNativeScheme(t *testing.T) {
+	s := &SubService{
+		clientsByInbound: map[int]map[string]model.Client{
+			3: {"user@example.com": {Email: "user@example.com", Password: "secret"}},
+		},
+	}
+	in := &model.Inbound{
+		Id:       3,
+		Listen:   "203.0.113.20",
+		Port:     2101,
+		Protocol: model.Mieru,
+		Settings: `{"tcpPorts":["2101"],"udpPorts":["2202"],"multiplexing":"MULTIPLEXING_LOW","handshakeMode":"HANDSHAKE_STANDARD","mtu":1400}`,
+	}
+	got := s.genMieruLink(in, "user@example.com")
+	u, err := url.Parse(got)
+	if err != nil {
+		t.Fatalf("parse Mieru link: %v", err)
+	}
+	if u.Scheme != "mieru" {
+		t.Fatalf("scheme = %q, want mieru", u.Scheme)
+	}
+	if got := u.Query().Get("protocol"); got != "TCP" {
+		t.Fatalf("first protocol = %q, want TCP", got)
+	}
+	if got := u.Query().Get("port"); got != "2101" {
+		t.Fatalf("first port = %q, want 2101", got)
+	}
+}
+\nfunc TestGenHysteriaLinkOmitsFinalMaskQueryParam(t *testing.T) {
 	stream := `{
 		"security":"tls",
 		"tlsSettings":{"serverName":"hy.sni","alpn":["h3"],"settings":{"fingerprint":"chrome"}},
