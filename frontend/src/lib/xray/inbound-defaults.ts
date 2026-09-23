@@ -418,7 +418,8 @@ export type AnyInboundSettings =
   | VkTurnProxyInboundSettings
   | AmneziawgInboundSettings
   | TuicInboundSettings
-  | NaiveInboundSettings  | MieruInboundSettings;
+  | NaiveInboundSettings
+  | MieruInboundSettings;
 
 export function createDefaultInboundSettings(protocol: string): AnyInboundSettings | null {
   switch (protocol) {

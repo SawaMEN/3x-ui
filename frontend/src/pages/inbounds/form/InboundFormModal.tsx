@@ -296,10 +296,7 @@ export default function InboundFormModal({
       return;
     }
 
-    const autoPortProtocols = new Set<string>([
-      Protocols.NAIVE,
-      Protocols.MIERU,
-    ]);
+    const autoPortProtocols = new Set<string>([Protocols.NAIVE, Protocols.MIERU]);
     if (!autoPortProtocols.has(protocol) || autoPortSeedRef.current === protocol) return;
     autoPortSeedRef.current = protocol;
 
@@ -835,7 +832,7 @@ export default function InboundFormModal({
 
       {protocol === Protocols.TUIC && <TuicFields />}
       {protocol === Protocols.NAIVE && <NaiveFields />}
-            {protocol === Protocols.MIERU && <MieruFields />}
+      {protocol === Protocols.MIERU && <MieruFields />}
 
       {protocol === Protocols.TUN && <TunFields />}
 
