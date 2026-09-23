@@ -108,4 +108,24 @@ describe('link-label parseLinkParts', () => {
     expect(parts?.port).toBe('443');
     expect(parts && linkMetaText(parts)).toBe(`naive-${_name}:443`);
   });
+  it('labels the native Naive scheme from raw subscriptions', () => {
+    const parts = parseLinkParts(
+      'naive://user:password@naive.example.com:443/?security=tls&sni=naive.example.com#native-naive',
+    );
+    expect(parts?.protocol).toBe('Naive');
+    expect(parts?.network).toBe('HTTPS');
+    expect(parts?.security).toBe('TLS');
+    expect(parts?.remark).toBe('native-naive');
+    expect(parts?.port).toBe('443');
+  });
+
+  it('labels Mieru links and keeps all advertised ports', () => {
+    const parts = parseLinkParts(
+      'mieru://user:password@mieru.example.com?port=2101&protocol=TCP&port=2202&protocol=UDP#mieru-node',
+    );
+    expect(parts?.protocol).toBe('Mieru');
+    expect(parts?.network).toBe('TCP/UDP');
+    expect(parts?.port).toBe('2101,2202');
+    expect(parts?.remark).toBe('mieru-node');
+  });
 });
