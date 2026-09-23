@@ -1407,6 +1407,15 @@ body.theme-cyberpunk .brand-block::after {
   box-shadow: 0 0 6px rgba(0, 246, 255, 0.28);
 }
 
+@media (min-width: 769px) {
+  body.theme-cyberpunk .brand-text {
+    text-shadow:
+      0 0 1px rgba(255, 255, 255, 0.66),
+      0 0 3px rgba(0, 246, 255, 0.26),
+      0 0 7px rgba(255, 43, 214, 0.1);
+  }
+}
+
 @media (max-width: 768px) {
   body.theme-cyberpunk .drawer-brand {
     font-size: 19px;
