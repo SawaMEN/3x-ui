@@ -376,6 +376,11 @@ func (s *SubClashService) getProxies(subReq *SubService, inbound *model.Inbound,
 		workingStream := cloneStreamForExternalProxy(stream)
 
 		forceTls, _ := extPrxy["forceTls"].(string)
+		if inbound.Protocol == model.Hysteria && strings.EqualFold(strings.TrimSpace(forceTls), "none") {
+			// Hysteria is TLS/QUIC only; do not emit a misleading plaintext
+			// Clash proxy for an endpoint explicitly forcing TLS off.
+			continue
+		}
 		switch forceTls {
 		case "tls":
 			if workingStream["security"] != "tls" {
