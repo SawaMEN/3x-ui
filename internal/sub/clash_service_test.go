@@ -1493,3 +1493,18 @@ func TestBuildHysteriaProxyExternalTLSOverrides(t *testing.T) {
 		t.Fatalf("salamander obfs lost: %#v", proxy)
 }
 }
+
+
+func TestGetProxiesSkipsPlaintextHysteriaExternalProxy(t *testing.T) {
+	inbound := &model.Inbound{
+		Protocol: model.Hysteria, Listen: "203.0.113.1", Port: 443,
+		Settings: `{"version":2,"clients":[{"email":"user","auth":"secret","enable":true}]}`,
+		StreamSettings: `{"security":"tls","externalProxy":[{"forceTls":"none","dest":"plain.example.com","port":80}]}`,
+	}
+	client := model.Client{Email:"user", Auth:"secret", Enable:true}
+	svc := &SubClashService{SubService:&SubService{address:"sub.example.com"}}
+	proxies := svc.getProxies(svc.SubService, inbound, client, "sub.example.com")
+	if len(proxies) != 0 {
+		t.Fatalf("plaintext Hysteria external endpoint must be skipped from Clash output, got %d proxies", len(proxies))
+	}
+}
