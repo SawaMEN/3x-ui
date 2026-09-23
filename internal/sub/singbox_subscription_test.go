@@ -89,3 +89,32 @@ func TestBuildSeparatedSingBoxSubscriptionFailsClosedOnRoutingTranslation(t *tes
 		t.Fatalf("error = %v, want errSubscriptionFormatUnsupported", err)
 	}
 }
+
+
+func TestGenNativeTUICPreservesClientSettings(t *testing.T) {
+	svc := &SubJsonService{}
+	inbound := &model.Inbound{
+		Protocol: model.TUIC,
+		Listen: "tuic.example.com",
+		Port: 443,
+		Settings: `{"certificate":"/cert.pem","private_key":"/key.pem","congestion_control":"bbr","udp_relay_mode":"quic","zero_rtt_handshake":true,"clients":[{"uuid":"11111111-2222-3333-4444-555555555555","password":"secret","email":"user","enable":true}]}`,
+		StreamSettings: `{"security":"tls","tlsSettings":{"serverName":"tuic.example.com","alpn":["h3"]}}`,
+	}
+	raw := svc.genNativeTUIC(inbound, unmarshalStreamSettings(inbound.StreamSettings), model.Client{ID:"11111111-2222-3333-4444-555555555555",Password:"secret",Email:"user"})
+	if raw == nil {
+		t.Fatal("genNativeTUIC returned nil")
+	}
+	var got map[string]any
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatalf("unmarshal native TUIC: %v", err)
+	}
+	for key, want := range map[string]any{
+		"congestion_control": "bbr",
+		"udp_relay_mode":     "quic",
+		"zero_rtt_handshake":  true,
+	} {
+		if got[key] != want {
+			t.Fatalf("%s = %v, want %v; config=%#v", key, got[key], want, got)
+		}
+	}
+}
