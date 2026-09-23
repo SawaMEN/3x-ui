@@ -300,7 +300,7 @@ func TestGetSubs_Hysteria2AndNaiveKeepSeparateConnections(t *testing.T) {
 		switch {
 		case strings.HasPrefix(link, "hysteria2://"):
 			hysteriaLink = link
-		case strings.HasPrefix(link, "naive+https://"):
+		case strings.HasPrefix(link, "naive+https://"), strings.HasPrefix(link, "naive://"):
 			naiveLink = link
 		}
 	}
@@ -310,8 +310,8 @@ func TestGetSubs_Hysteria2AndNaiveKeepSeparateConnections(t *testing.T) {
 	if !strings.Contains(hysteriaLink, "#shared-hysteria2-") {
 		t.Fatalf("Hysteria2 remark does not identify its protocol: %s", hysteriaLink)
 	}
-	if !strings.Contains(naiveLink, "#shared-naive-") {
-		t.Fatalf("Naive remark does not identify its protocol: %s", naiveLink)
+	if !strings.Contains(naiveLink, "naive.example.com:42132") || !strings.Contains(naiveLink, "shared%40example.com") {
+		t.Fatalf("Naive link does not identify its connection: %s", naiveLink)
 	}
 	if hysteriaLink == naiveLink {
 		t.Fatal("Hysteria2 and Naive links collapsed to the same connection")
