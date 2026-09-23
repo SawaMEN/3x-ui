@@ -1283,10 +1283,14 @@ func (s *SubService) genMieruLink(inbound *model.Inbound, email string) string {
 			}
 		}
 
+		host := formatShareHost(endpoint.Address)
+		if endpoint.ep != nil {
+			host = joinHostPort(endpoint.Address, endpoint.Port)
+		}
 		link := fmt.Sprintf("mierus://%s:%s@%s?%s",
 			encodeUserinfo(client.Email),
 			encodeUserinfo(client.Password),
-			formatShareHost(endpoint.Address),
+			host,
 			values.Encode(),
 		)
 		links = append(links, link+"#"+strings.ReplaceAll(url.QueryEscape(s.endpointRemark(inbound, email, endpoint.ep, "")), "+", "%20"))
@@ -2015,6 +2019,11 @@ func (s *SubService) genHysteriaLink(inbound *model.Inbound, email string) strin
 		for _, externalProxy := range externalProxies {
 			ep, ok := externalProxy.(map[string]any)
 			if !ok {
+				continue
+			}
+			if forceTLS, _ := ep["forceTls"].(string); strings.EqualFold(strings.TrimSpace(forceTLS), "none") {
+				// Hysteria is TLS/QUIC-only; a plaintext external endpoint
+				// cannot be represented by a valid Hysteria URI.
 				continue
 			}
 			dest, _ := ep["dest"].(string)
