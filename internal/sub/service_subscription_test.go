@@ -8,8 +8,63 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
+
+// Subscription traffic is indexed once per subscriber so traffic-aware
+// remark templates do not fall back to one DB query per client/link.
+func TestGetInboundsBySubIdIndexesTrafficByEmail(t *testing.T) {
+	dbDir := t.TempDir()
+	t.Setenv("XUI_DB_FOLDER", dbDir)
+	if err := database.InitDB(filepath.Join(dbDir, "x-ui.db")); err != nil {
+		t.Fatalf("InitDB: %v", err)
+	}
+	t.Cleanup(func() { _ = database.CloseDB() })
+
+	const subID = "sub-stats-index"
+	db := database.GetDB()
+	inbound := &model.Inbound{
+		UserId: 1, Tag: "stats-index", Enable: true, Port: 43101, Protocol: model.VLESS,
+		Settings: `{"clients":[{"id":"11111111-2222-4333-8444-555555555555","email":"stats@example.com","subId":"sub-stats-index","enable":true}]}`,
+		StreamSettings: `{"network":"tcp","security":"none"}`,
+	}
+	if err := db.Create(inbound).Error; err != nil {
+		t.Fatalf("seed inbound: %v", err)
+	}
+	client := &model.ClientRecord{
+		Email: "stats@example.com", SubID: subID,
+		UUID: "11111111-2222-4333-8444-555555555555", Enable: true,
+	}
+	if err := db.Create(client).Error; err != nil {
+		t.Fatalf("seed client: %v", err)
+	}
+	if err := db.Create(&model.ClientInbound{ClientId: client.Id, InboundId: inbound.Id}).Error; err != nil {
+		t.Fatalf("attach client: %v", err)
+	}
+	if err := db.Create(&xray.ClientTraffic{
+		InboundId: inbound.Id, Email: client.Email, Up: 1234, Down: 5678, Enable: true,
+	}).Error; err != nil {
+		t.Fatalf("seed traffic: %v", err)
+	}
+
+	svc := NewSubService("")
+	svc.PrepareForRequest("sub.example.com")
+	inbounds, err := svc.getInboundsBySubId(subID)
+	if err != nil {
+		t.Fatalf("getInboundsBySubId: %v", err)
+	}
+	if len(inbounds) != 1 {
+		t.Fatalf("inbounds = %d, want 1", len(inbounds))
+	}
+	stats, ok := svc.statsByEmail[client.Email]
+	if !ok {
+		t.Fatalf("statsByEmail missing %q after subscription preload", client.Email)
+	}
+	if stats.Up != 1234 || stats.Down != 5678 {
+		t.Fatalf("statsByEmail[%q] = %+v, want up=1234 down=5678", client.Email, stats)
+	}
+}
 func TestGetSubs_MixedNormalizedProtocols(t *testing.T) {
 	dbDir := t.TempDir()
 	t.Setenv("XUI_DB_FOLDER", dbDir)
