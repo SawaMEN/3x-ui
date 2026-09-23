@@ -944,11 +944,16 @@ func (s *SubService) genVKTurnProxyLink(inbound *model.Inbound, email string) st
 		if client.Email != email {
 			continue
 		}
-		link, err := s.inboundService.ExportVKTurnProxyClient(inbound.Id, client.ID, s.address)
-		if err != nil {
-			return ""
+		endpoints := s.shareEndpointsForInbound(inbound)
+		links := make([]string, 0, len(endpoints))
+		for _, endpoint := range endpoints {
+			link, err := s.inboundService.ExportVKTurnProxyClientForEndpoint(inbound.Id, client.ID, endpoint.Address, endpoint.Port)
+			if err != nil {
+				continue
+			}
+			links = append(links, link)
 		}
-		return link
+		return strings.Join(links, "\n")
 	}
 	return ""
 }
