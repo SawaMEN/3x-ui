@@ -518,6 +518,29 @@ func TestSubJsonServiceWireguard(t *testing.T) {
 	}
 }
 
+func TestSubJsonServiceWireguardDoesNotInventAddress(t *testing.T) {
+	serverPriv, _, err := wgutil.GenerateWireguardKeypair()
+	if err != nil {
+		t.Fatalf("server keypair: %v", err)
+	}
+	clientPriv, _, err := wgutil.GenerateWireguardKeypair()
+	if err != nil {
+		t.Fatalf("client keypair: %v", err)
+	}
+	inbound := &model.Inbound{
+		Listen: "203.0.113.9", Port: 51820, Protocol: model.WireGuard,
+		Settings: `{"secretKey":"` + serverPriv + `"}`,
+	}
+	client := model.Client{Email: "user", PrivateKey: clientPriv}
+	raw := NewSubJsonService("", "", "", "", nil).genWireguard(inbound, client)
+	if raw == nil {
+		t.Fatal("genWireguard returned nil for valid client credentials")
+	}
+	settings := outboundSettings(t, raw)
+	if _, exists := settings["address"]; exists {
+		t.Fatalf("genWireguard invented an address: %v", settings["address"])
+	}
+}
 func TestSubJsonServiceWireguardNoKey(t *testing.T) {
 	inbound := &model.Inbound{Listen: "203.0.113.9", Port: 51820, Protocol: model.WireGuard, Settings: `{}`}
 	client := model.Client{Email: "user"}
