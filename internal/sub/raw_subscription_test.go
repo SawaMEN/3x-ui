@@ -5,49 +5,46 @@ import (
 	"testing"
 )
 
-func TestFormatRawSubscriptionLinksGroupsByProtocol(t *testing.T) {
-	links := []string{
+func TestBuildRawSubscriptionBodyPreservesConnectionOrder(t *testing.T) {
+	got := buildRawSubscriptionBody([]string{
 		"vless://one@example.com",
 		"trojan://two@example.com",
 		"vless://three@example.com",
 		"mierus://four@example.com",
-		"trojan://five@example.com",
-	}
+	})
 
-	got := formatRawSubscriptionLinks(links)
-
-	wantSections := []string{
-		"# VLESS",
+	want := strings.Join([]string{
 		"vless://one@example.com",
-		"vless://three@example.com",
-		"# Trojan",
 		"trojan://two@example.com",
-		"trojan://five@example.com",
-		"# Mieru",
+		"vless://three@example.com",
 		"mierus://four@example.com",
-	}
-	pos := -1
-	for _, want := range wantSections {
-		next := strings.Index(got, want)
-		if next == -1 {
-			t.Fatalf("subscription is missing %q:\n%s", want, got)
-		}
-		if next < pos {
-			t.Fatalf("subscription section/link order is wrong around %q:\n%s", want, got)
-		}
-		pos = next
+		"",
+	}, "\n")
+	if got != want {
+		t.Fatalf("subscription body = %q, want %q", got, want)
 	}
 
-	if strings.Contains(got, "vless://one@example.com\ntrojan://two@example.com") {
-		t.Fatalf("VLESS and Trojan links must not be interleaved:\n%s", got)
-	}
-	if strings.Contains(got, "trojan://two@example.com\nvless://three@example.com") {
-		t.Fatalf("protocol groups must stay separate:\n%s", got)
+	if strings.Contains(got, "# VLESS") || strings.Contains(got, "# Trojan") || strings.Contains(got, "# Mieru") {
+		t.Fatalf("subscription body must contain only importable connection lines: %q", got)
 	}
 }
 
-func TestFormatRawSubscriptionLinksEmpty(t *testing.T) {
-	if got := formatRawSubscriptionLinks(nil); got != "" {
-		t.Fatalf("empty subscription = %q, want empty", got)
+func TestBuildRawSubscriptionBodyKeepsMultiLinkEntrySeparate(t *testing.T) {
+	got := buildRawSubscriptionBody([]string{
+		"vless://one.example:443#one\n vless://two.example:443#two ",
+		"trojan://secret@trojan.example:443#trojan",
+	})
+
+	want := "vless://one.example:443#one\n" +
+		"vless://two.example:443#two\n" +
+		"trojan://secret@trojan.example:443#trojan\n"
+	if got != want {
+		t.Fatalf("subscription body = %q, want %q", got, want)
+	}
+}
+
+func TestBuildRawSubscriptionBodyEmpty(t *testing.T) {
+	if got := buildRawSubscriptionBody(nil); got != "" {
+		t.Fatalf("empty subscription body = %q, want empty", got)
 	}
 }
