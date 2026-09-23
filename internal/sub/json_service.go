@@ -129,11 +129,19 @@ func (s *SubJsonService) GetJson(subId string, host string, alwaysReturnArray bo
 	if len(inbounds) == 0 && len(externalLinks) == 0 {
 		return "", "", nil
 	}
-	// NaiveProxy has no Xray /json outbound representation in this service.
-	// Refuse to emit a partial structured subscription so auto-detection can
+	// These protocols have no complete Xray /json outbound representation
+	// in this service. Refuse partial structured output so auto-detection can
 	// fall back to the raw profile and preserve every connection.
-	if containsSubscriptionProtocol(inbounds, model.NaiveProxy) {
-		return "", "", errSubscriptionFormatUnsupported
+	for _, protocol := range []model.Protocol{
+		model.NaiveProxy,
+		model.TUIC,
+		model.AmneziaWG,
+		model.Mieru,
+		model.VKTurnProxy,
+	} {
+		if containsSubscriptionProtocol(inbounds, protocol) {
+			return "", "", errSubscriptionFormatUnsupported
+		}
 	}
 
 	var header string
@@ -363,6 +371,19 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 			return string(arr), header, nil
 		}
 		return string(encoded), header, nil
+	}
+
+	// The sing-box path currently has no complete native representation for
+	// these panel-only protocols. Do not silently drop them from a mixed profile.
+	for _, protocol := range []model.Protocol{
+		model.TUIC,
+		model.AmneziaWG,
+		model.Mieru,
+		model.VKTurnProxy,
+	} {
+		if containsSubscriptionProtocol(inbounds, protocol) {
+			return "", "", errSubscriptionFormatUnsupported
+		}
 	}
 
 	for _, inbound := range inbounds {
