@@ -719,14 +719,7 @@ func (s *SubService) repairLegacySubscriptionInbounds(subId string) error {
 	if err := db.Model(&model.ClientRecord{}).Where("sub_id = ?", subId).Find(&subscriptionClients).Error; err != nil {
 		return err
 	}
-	byEmail := make(map[string]model.ClientRecord, len(subscriptionClients))
-	for _, client := range subscriptionClients {
-		email := strings.ToLower(strings.TrimSpace(client.Email))
-		if email != "" {
-			byEmail[email] = client
-		}
-	}
-	if len(byEmail) == 0 {
+	if len(subscriptionClients) == 0 {
 		return nil
 	}
 
@@ -752,21 +745,50 @@ func (s *SubService) repairLegacySubscriptionInbounds(subId string) error {
 			continue
 		}
 		for _, settingsClient := range clients {
-			normalized, ok := byEmail[strings.ToLower(strings.TrimSpace(settingsClient.Email))]
-			if !ok {
-				continue
-			}
+			for i := range subscriptionClients {
+				normalized := subscriptionClients[i]
+				if !legacySubscriptionClientMatches(settingsClient, normalized, subId) {
+					continue
+				}
 			link := model.ClientInbound{
-				ClientId:  normalized.Id,
-				InboundId: inbound.Id,
-			}
-			if err := db.Where("client_id = ? AND inbound_id = ?", normalized.Id, inbound.Id).
-				FirstOrCreate(&link).Error; err != nil {
-				return err
+					ClientId:  normalized.Id,
+					InboundId: inbound.Id,
+				}
+				if err := db.Where("client_id = ? AND inbound_id = ?", normalized.Id, inbound.Id).
+					FirstOrCreate(&link).Error; err != nil {
+					return err
+				}
+				break
 			}
 		}
 	}
 	return nil
+}
+
+func legacySubscriptionClientMatches(settingsClient model.Client, normalized model.ClientRecord, subId string) bool {
+	if settingsClient.SubID != "" && settingsClient.SubID == subId {
+		return true
+	}
+	if email := strings.TrimSpace(settingsClient.Email); email != "" &&
+		strings.EqualFold(email, normalized.Email) {
+		return true
+	}
+	if id := strings.TrimSpace(settingsClient.ID); id != "" &&
+		strings.TrimSpace(normalized.UUID) != "" &&
+		strings.EqualFold(id, normalized.UUID) {
+		return true
+	}
+	if key := strings.TrimSpace(settingsClient.PublicKey); key != "" &&
+		strings.TrimSpace(normalized.PublicKey) != "" &&
+		key == strings.TrimSpace(normalized.PublicKey) {
+		return true
+	}
+	if secret := strings.TrimSpace(settingsClient.Secret); secret != "" &&
+		strings.TrimSpace(normalized.Secret) != "" &&
+		secret == strings.TrimSpace(normalized.Secret) {
+		return true
+	}
+	return false
 }
 
 // indexStatsBySubId loads the traffic rows for just this subscriber's clients

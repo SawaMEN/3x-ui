@@ -66,6 +66,54 @@ func TestGetSubs_MixedNormalizedAndSettingsOnlyInbounds(t *testing.T) {
 	}
 }
 
+func TestRepairLegacySubscriptionInboundsMatchesLegacyIdentity(t *testing.T) {
+	dbDir := t.TempDir()
+	t.Setenv("XUI_DB_FOLDER", dbDir)
+	if err := database.InitDB(filepath.Join(dbDir, "x-ui.db")); err != nil {
+		t.Fatalf("InitDB: %v", err)
+	}
+	t.Cleanup(func() { _ = database.CloseDB() })
+
+	const subID = "sub-identity"
+	const email = "legacy-vless@example.com"
+	const uuid = "55555555-2222-4333-8444-999999999999"
+
+	vless := &model.Inbound{
+		UserId: 1, Tag: "identity-vless", Enable: true, Port: 42108, Protocol: model.VLESS,
+		Settings: fmt.Sprintf(`{"clients":[{"id":%q,"email":%q,"subId":%q,"enable":true}]}`, uuid, email, subID),
+		StreamSettings: `{"network":"tcp","security":"none"}`,
+	}
+	trojan := &model.Inbound{
+		UserId: 1, Tag: "identity-trojan", Enable: true, Port: 42109, Protocol: model.Trojan,
+		Settings: fmt.Sprintf(`{"clients":[{"id":%q,"email":"stale@example.com","password":"secret","enable":true}]}`, uuid),
+		StreamSettings: `{"network":"tcp","security":"none"}`,
+	}
+	db := database.GetDB()
+	if err := db.Create(vless).Error; err != nil {
+		t.Fatalf("seed vless: %v", err)
+	}
+	if err := db.Create(trojan).Error; err != nil {
+		t.Fatalf("seed trojan: %v", err)
+	}
+	client := &model.ClientRecord{Email: email, SubID: subID, UUID: uuid, Password: "secret", Enable: true}
+	if err := db.Create(client).Error; err != nil {
+		t.Fatalf("seed client: %v", err)
+	}
+	if err := db.Create(&model.ClientInbound{ClientId: client.Id, InboundId: vless.Id}).Error; err != nil {
+		t.Fatalf("seed vless link: %v", err)
+	}
+
+	s := NewSubService("")
+	links, _, _, _, err := s.GetSubs(subID, "sub.example.com")
+	if err != nil {
+		t.Fatalf("GetSubs: %v", err)
+	}
+	joined := strings.Join(links, "\n")
+	if len(links) != 2 || !strings.Contains(joined, "vless://") || !strings.Contains(joined, "trojan://") {
+		t.Fatalf("links = %v, want VLESS + Trojan", links)
+	}
+}
+
 func TestGetSubs_SettingsOnlyUsesGlobalSubscriptionEmail(t *testing.T) {
 	dbDir := t.TempDir()
 	t.Setenv("XUI_DB_FOLDER", dbDir)
