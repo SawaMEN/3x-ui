@@ -877,7 +877,6 @@ func mergeStreamFromMaster(childStream, masterStream string) string {
 // shareEndpointsForInbound resolves legacy externalProxy/default endpoints into
 // one render-target list shared by raw subscription link generators.
 func (s *SubService) shareEndpointsForInbound(inbound *model.Inbound) []ShareEndpoint {
-func (s *SubService) shareEndpointsForInbound(inbound *model.Inbound) []ShareEndpoint {
 	if inbound == nil {
 		return nil
 	}
