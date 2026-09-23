@@ -96,4 +96,16 @@ describe('link-label parseLinkParts', () => {
     expect(parts?.port).toBe('8443');
     expect(parts?.remark).toBe('tuic-remark');
   });
+  it.each([
+    ['https', 'naive+https://user:password@naive.example.com:443?padding=true&sni=naive.example.com#naive-https', 'HTTPS'],
+    ['quic', 'naive+quic://user:password@naive.example.com:443?padding=true&sni=naive.example.com#naive-quic', 'QUIC'],
+  ])('labels Naive %s subscriptions as Naive', (_name, link, network) => {
+    const parts = parseLinkParts(link);
+    expect(parts?.protocol).toBe('Naive');
+    expect(parts?.network).toBe(network);
+    expect(parts?.security).toBe('TLS');
+    expect(parts?.remark).toBe(`naive-${_name}`);
+    expect(parts?.port).toBe('443');
+    expect(parts && linkMetaText(parts)).toBe(`naive-${_name}:443`);
+  });
 });
