@@ -338,18 +338,39 @@ func (s *SubService) matchingClients(inbound *model.Inbound, subId string) []mod
 	clients, err := s.inboundService.GetClientsBySubId(inbound.Id, subId)
 	if err != nil {
 		logger.Error("SubService - GetClientsBySubId: Unable to get clients from inbound")
-		return nil
+		clients = nil
 	}
-	var out []model.Client
+
+	out := make([]model.Client, 0, len(clients))
 	seen := make(map[string]struct{}, len(clients))
-	for _, client := range clients {
+	appendUnique := func(client model.Client) {
 		key := strings.ToLower(client.Email)
 		if _, dup := seen[key]; dup {
-			continue
+			return
 		}
 		seen[key] = struct{}{}
 		out = append(out, client)
 	}
+
+	for _, client := range clients {
+		appendUnique(client)
+	}
+
+	// Keep legacy/settings-only attachments working when a client_inbounds row
+	// was not persisted during migration/import. Normalized rows win by email,
+	// while settings.clients fills only the missing entries for this inbound.
+	settingsClients, settingsErr := s.inboundService.GetClients(inbound)
+	if settingsErr != nil {
+		logger.Error("SubService - GetClients: Unable to load legacy clients from inbound")
+	} else {
+		for _, client := range settingsClients {
+			if client.SubID != subId {
+				continue
+			}
+			appendUnique(client)
+		}
+	}
+
 	s.primeLinkClients(inbound.Id, out, false)
 	return out
 }
@@ -649,19 +670,68 @@ func subscriptionExpiryFromClient(nowMs, expiryTime int64) int64 {
 
 func (s *SubService) getInboundsBySubId(subId string) ([]*model.Inbound, error) {
 	db := database.GetDB()
+	protocols := "'vmess','vless','trojan','shadowsocks','hysteria','wireguard','amneziawg','mtproto','tuic','naive','mieru','vk-turn-proxy'"
 	var inbounds []*model.Inbound
-	err := db.Model(model.Inbound{}).Where(`id in (
+	err := db.Model(model.Inbound{}).Where(fmt.Sprintf(`id in (
 		SELECT DISTINCT inbounds.id
 		FROM inbounds
 		JOIN client_inbounds ON client_inbounds.inbound_id = inbounds.id
 		JOIN clients ON clients.id = client_inbounds.client_id
 		WHERE
-			inbounds.protocol in ('vmess','vless','trojan','shadowsocks','hysteria','wireguard','amneziawg','mtproto','tuic','naive','mieru','vk-turn-proxy')
+			inbounds.protocol in (%s)
 			AND clients.sub_id = ? AND inbounds.enable = ?
-	)`, subId, true).Order("sub_sort_index ASC").Order("id ASC").Find(&inbounds).Error
+	)`, protocols), subId, true).Find(&inbounds).Error
 	if err != nil {
 		return nil, err
 	}
+
+	// Some older imports/migrations can leave the subscription identity in
+	// settings.clients without a matching client_inbounds row. Include those
+	// enabled inbounds as a compatibility fallback; matchingClients then merges
+	// normalized clients with any missing settings.clients entries.
+	legacyFrom := database.JSONClientsFromInbound()
+	legacySubID := database.JSONFieldText("client.value", "subId")
+	legacyQuery := fmt.Sprintf(`
+		SELECT DISTINCT inbounds.id
+		%s
+		WHERE inbounds.protocol in (%s)
+		  AND inbounds.enable = ? AND %s = ?
+	`, legacyFrom, protocols, legacySubID)
+
+	var legacyIDs []int
+	if err := db.Raw(legacyQuery, true, subId).Scan(&legacyIDs).Error; err != nil {
+		return nil, err
+	}
+
+	seen := make(map[int]struct{}, len(inbounds)+len(legacyIDs))
+	for _, inbound := range inbounds {
+		if inbound != nil {
+			seen[inbound.Id] = struct{}{}
+		}
+	}
+	if len(legacyIDs) > 0 {
+		var legacyInbounds []*model.Inbound
+		if err := db.Model(model.Inbound{}).Where("id IN ?", legacyIDs).Find(&legacyInbounds).Error; err != nil {
+			return nil, err
+		}
+		for _, inbound := range legacyInbounds {
+			if inbound == nil {
+				continue
+			}
+			if _, ok := seen[inbound.Id]; ok {
+				continue
+			}
+			seen[inbound.Id] = struct{}{}
+			inbounds = append(inbounds, inbound)
+		}
+	}
+
+	sort.SliceStable(inbounds, func(i, j int) bool {
+		if inbounds[i].SubSortIndex != inbounds[j].SubSortIndex {
+			return inbounds[i].SubSortIndex < inbounds[j].SubSortIndex
+		}
+		return inbounds[i].Id < inbounds[j].Id
+	})
 	s.indexStatsBySubId(subId)
 	return inbounds, nil
 }
