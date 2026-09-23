@@ -944,7 +944,13 @@ func (s *SubJsonService) getConfig(subReq *SubService, inbound *model.Inbound, c
 			// genHy already emits the version-specific Hysteria outbound, including
 			// version 2. Do not silently discard Hysteria2 from legacy JSON.
 			newOutbounds = append(newOutbounds, s.genHy(&proxyInbound, newStream, client, jsonMux(mux, hostMux)))
-		case "tuic", "wireguard", "amneziawg":
+		case "wireguard":
+			wgOutbound := s.genWireguard(&proxyInbound, client)
+			if wgOutbound == nil {
+				continue
+			}
+			newOutbounds = append(newOutbounds, wgOutbound)
+		case "tuic", "amneziawg":
 			// These protocols do not have an Xray-compatible /json outbound.
 			continue
 		}
