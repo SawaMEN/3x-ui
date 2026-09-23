@@ -28,6 +28,8 @@ const PROTOCOL_LABELS: Record<string, string> = {
   tg: 'MTProto',
   vpn: 'AmneziaWG',
   tuic: 'TUIC',
+  'naive+https': 'Naive',
+  'naive+quic': 'Naive',
 };
 
 const PROTOCOL_COLORS: Record<string, string> = {
@@ -41,6 +43,7 @@ const PROTOCOL_COLORS: Record<string, string> = {
   MTProto: 'blue',
   AmneziaWG: 'yellow',
   TUIC: 'orange',
+  Naive: 'orange',
 };
 
 const SECURITY_COLORS: Record<string, string> = {
@@ -77,7 +80,7 @@ function fromBase64Url(value: string): string {
    into the body a client app imports, so there is nothing to strip here. */
 export function parseLinkParts(link: string): LinkParts | null {
   const trimmed = link.trim();
-  const scheme = /^([a-z0-9]+):\/\//i.exec(trimmed)?.[1]?.toLowerCase() ?? '';
+  const scheme = /^([a-z][a-z0-9+.-]*):\/\//i.exec(trimmed)?.[1]?.toLowerCase() ?? '';
   if (!scheme) return null;
   const protocol = PROTOCOL_LABELS[scheme] ?? scheme.charAt(0).toUpperCase() + scheme.slice(1);
   let network = '';
@@ -112,6 +115,21 @@ export function parseLinkParts(link: string): LinkParts | null {
       port = /^Endpoint\s*=\s*.+:(\d+)\s*$/m.exec(cfgText)?.[1] ?? '';
     } catch {
       /* unparseable payload, fall back to protocol only */
+    }
+  } else if (scheme === 'naive+https' || scheme === 'naive+quic') {
+    network = scheme === 'naive+quic' ? 'quic' : 'https';
+    security = 'tls';
+    try {
+      const url = new URL(trimmed);
+      const hash = url.hash.replace(/^#/, '');
+      try {
+        remark = decodeURIComponent(hash);
+      } catch {
+        remark = hash;
+      }
+      port = url.port;
+    } catch {
+      /* malformed Naive URL, keep protocol label */
     }
   } else {
     try {
