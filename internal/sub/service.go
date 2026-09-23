@@ -1224,8 +1224,11 @@ func (s *SubService) genTuicLink(inbound *model.Inbound, email string) string {
 			}
 			dest, _ := ep["dest"].(string)
 			portF, okPort := ep["port"].(float64)
-			if dest == "" || !okPort {
-				continue
+			if strings.TrimSpace(dest) == "" {
+				dest = s.resolveInboundAddress(inbound)
+			}
+			if !okPort || int(portF) <= 0 {
+				portF = float64(inbound.Port)
 			}
 			epParams := cloneStringMap(params)
 			if sni, ok := externalProxySNI(ep); ok {
@@ -1440,6 +1443,10 @@ func (s *SubService) genMtprotoLink(inbound *model.Inbound, email string) string
 			}
 		}
 		if len(overrides) > 0 {
+			fallback := s.inboundDefaultEndpoint(inbound)
+			for i := range overrides {
+				overrides[i] = normalizeShareEndpoint(overrides[i], fallback)
+			}
 			endpoints = overrides
 		}
 	}
@@ -1589,6 +1596,7 @@ func (s *SubService) genVlessLink(inbound *model.Inbound, email string) string {
 			externalProxies,
 			params,
 			security,
+			s.inboundDefaultEndpoint(inbound),
 			func(ep map[string]any, dest string, port int) string {
 				return fmt.Sprintf("vless://%s@%s", applyVlessRoute(uuid, hostVlessRoute(ep)), joinHostPort(dest, port))
 			},
@@ -1642,6 +1650,7 @@ func (s *SubService) genTrojanLink(inbound *model.Inbound, email string) string 
 			externalProxies,
 			params,
 			security,
+			s.inboundDefaultEndpoint(inbound),
 			func(_ map[string]any, dest string, port int) string {
 				return fmt.Sprintf("trojan://%s@%s", password, joinHostPort(dest, port))
 			},
@@ -1863,8 +1872,11 @@ func (s *SubService) genHysteriaLink(inbound *model.Inbound, email string) strin
 			}
 			dest, _ := ep["dest"].(string)
 			portF, okPort := ep["port"].(float64)
-			if dest == "" || !okPort {
-				continue
+			if strings.TrimSpace(dest) == "" {
+				dest = s.resolveInboundAddress(inbound)
+			}
+			if !okPort || int(portF) <= 0 {
+				portF = float64(inbound.Port)
 			}
 			epParams := cloneStringMap(params)
 			applyExternalProxyHysteriaParams(ep, epParams)
@@ -2628,9 +2640,10 @@ func joinAnyStrings(items []any) string {
 // genVmessLink keeps calling one helper (now threading transport through).
 func (s *SubService) buildVmessExternalProxyLinks(externalProxies []any, baseObj map[string]any, inbound *model.Inbound, email string, transport string) string {
 	eps := make([]ShareEndpoint, 0, len(externalProxies))
+	fallback := s.inboundDefaultEndpoint(inbound)
 	for _, externalProxy := range externalProxies {
 		ep, _ := externalProxy.(map[string]any)
-		eps = append(eps, externalProxyToEndpoint(ep))
+		eps = append(eps, normalizeShareEndpoint(externalProxyToEndpoint(ep), fallback))
 	}
 	return s.buildEndpointVmessLinks(eps, baseObj, inbound, email, transport)
 }
@@ -2705,13 +2718,14 @@ func (s *SubService) buildExternalProxyURLLinks(
 	externalProxies []any,
 	params map[string]string,
 	baseSecurity string,
+	fallback ShareEndpoint,
 	makeLink func(ep map[string]any, dest string, port int) string,
 	makeRemark func(ep map[string]any) string,
 ) string {
 	eps := make([]ShareEndpoint, 0, len(externalProxies))
 	for _, externalProxy := range externalProxies {
 		ep, _ := externalProxy.(map[string]any)
-		eps = append(eps, externalProxyToEndpoint(ep))
+		eps = append(eps, normalizeShareEndpoint(externalProxyToEndpoint(ep), fallback))
 	}
 	return s.buildEndpointLinks(eps, params, baseSecurity, func(e ShareEndpoint) string {
 		return makeLink(e.ep, e.Address, e.Port)
