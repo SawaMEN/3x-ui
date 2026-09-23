@@ -63,18 +63,24 @@ func newSubscriptionTestRouter(config subscriptionTestRouterConfig) *gin.Engine 
 	return router
 }
 
-func TestBuildRawSubscriptionBodyKeepsEachConnectionSeparate(t *testing.T) {
-	got := buildRawSubscriptionBody([]string{
+func TestFormatRawSubscriptionLinksKeepsAllProtocolsInOneSubscription(t *testing.T) {
+	got := formatRawSubscriptionLinks([]string{
 		"vless://uuid@vless.example.com:443?type=tcp#VLESS",
 		"trojan://password@trojan.example.com:443?type=tcp#Trojan",
 	})
-	want := "vless://uuid@vless.example.com:443?type=tcp#VLESS\n" +
-		"trojan://password@trojan.example.com:443?type=tcp#Trojan\n"
-	if got != want {
-		t.Fatalf("raw subscription body = %q, want %q", got, want)
+	if !strings.Contains(got, "vless://uuid@vless.example.com:443?type=tcp#VLESS") {
+		t.Fatalf("raw subscription lost VLESS link: %q", got)
+	}
+	if !strings.Contains(got, "trojan://password@trojan.example.com:443?type=tcp#Trojan") {
+		t.Fatalf("raw subscription lost Trojan link: %q", got)
 	}
 	if strings.Contains(got, "# VLESS\n") || strings.Contains(got, "# Trojan\n") {
 		t.Fatalf("raw subscription must not add protocol section headers: %q", got)
+	}
+	want := "vless://uuid@vless.example.com:443?type=tcp#VLESS\n" +
+		"trojan://password@trojan.example.com:443?type=tcp#Trojan\n"
+	if got != want {
+		t.Fatalf("raw subscription order/body = %q, want %q", got, want)
 	}
 }
 

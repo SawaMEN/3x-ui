@@ -676,9 +676,10 @@ func subscriptionExpiryFromClient(nowMs, expiryTime int64) int64 {
 
 func (s *SubService) getInboundsBySubId(subId string) ([]*model.Inbound, error) {
 	db := database.GetDB()
-	// Upstream 3X-UI resolves subscription inbounds from the normalized
-	// clients/client_inbounds relation. Repair legacy settings-only attachments
-	// first so old imports use the same selection path.
+	// The normalized clients/client_inbounds relation is the primary source,
+	// matching upstream 3X-UI. Repair old settings-only attachments first, but
+	// keep the direct settings fallback below: imported databases can contain
+	// valid subscription identities that have not yet been normalized.
 	if err := s.repairLegacySubscriptionInbounds(subId); err != nil {
 		logger.Warning("SubService - repair legacy subscription inbounds:", err)
 	}
@@ -689,7 +690,7 @@ func (s *SubService) getInboundsBySubId(subId string) ([]*model.Inbound, error) 
 		"wireguard", "amneziawg", "mtproto", "tuic", "naive", "mieru",
 		"vk-turn-proxy",
 	}
-	err := db.Model(model.Inbound{}).
+	if err := db.Model(model.Inbound{}).
 		Where(`id in (
 			SELECT DISTINCT inbounds.id
 			FROM inbounds
@@ -699,12 +700,69 @@ func (s *SubService) getInboundsBySubId(subId string) ([]*model.Inbound, error) 
 				inbounds.protocol IN ?
 				AND clients.sub_id = ? AND inbounds.enable = ?
 		)`, protocols, subId, true).
-		Order("sub_sort_index ASC").
-		Order("id ASC").
-		Find(&inbounds).Error
-	if err != nil {
+		Find(&inbounds).Error; err != nil {
 		return nil, err
 	}
+
+	// Compatibility fallback for legacy/imported inbounds. Some databases keep
+	// the subscription identity in settings.clients even when the normalized
+	// client_inbounds row is missing or could not be repaired. Select those
+	// inbounds directly by subId or by the email of a normalized subscriber.
+	legacyFrom := database.JSONClientsFromInbound()
+	legacySubID := database.JSONFieldText("client.value", "subId")
+	legacyEmail := database.JSONFieldText("client.value", "email")
+	legacyQuery := fmt.Sprintf(`
+		SELECT DISTINCT inbounds.id
+		%s
+		WHERE inbounds.protocol IN ('%s')
+		  AND inbounds.enable = ?
+		  AND (
+			%s = ?
+			OR EXISTS (
+				SELECT 1
+				FROM clients AS subscription_clients
+				WHERE subscription_clients.sub_id = ?
+				  AND LOWER(subscription_clients.email) = LOWER(%s)
+			)
+		)
+	`, legacyFrom, strings.Join(protocols, "','"), legacySubID, legacyEmail)
+
+	var legacyIDs []int
+	if err := db.Raw(legacyQuery, true, subId, subId).Scan(&legacyIDs).Error; err != nil {
+		// Keep the normalized path authoritative if the legacy JSON query is not
+		// supported by a particular DB/fixture.
+		logger.Warning("SubService - legacy subscription inbound lookup:", err)
+	} else if len(legacyIDs) > 0 {
+		seen := make(map[int]struct{}, len(inbounds)+len(legacyIDs))
+		for _, inbound := range inbounds {
+			if inbound != nil {
+				seen[inbound.Id] = struct{}{}
+			}
+		}
+		var legacyInbounds []*model.Inbound
+		if err := db.Model(&model.Inbound{}).Where("id IN ?", legacyIDs).Find(&legacyInbounds).Error; err == nil {
+			for _, inbound := range legacyInbounds {
+				if inbound == nil {
+					continue
+				}
+				if _, exists := seen[inbound.Id]; exists {
+					continue
+				}
+				seen[inbound.Id] = struct{}{}
+				inbounds = append(inbounds, inbound)
+			}
+		} else {
+			logger.Warning("SubService - legacy subscription inbound load:", err)
+		}
+	}
+
+	sort.SliceStable(inbounds, func(i, j int) bool {
+		if inbounds[i].SubSortIndex != inbounds[j].SubSortIndex {
+			return inbounds[i].SubSortIndex < inbounds[j].SubSortIndex
+		}
+		return inbounds[i].Id < inbounds[j].Id
+	})
+
 	s.indexStatsBySubId(subId)
 	return inbounds, nil
 }
