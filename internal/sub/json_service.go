@@ -408,7 +408,11 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 	// Refuse partial sing-box output for protocols this renderer cannot represent.
 	// Returning the format-unsupported sentinel preserves the complete raw profile
 	// instead of silently dropping an inbound during auto-detection.
-	if containsUnsupportedSingBoxProtocol(inbounds) {
+	// WireGuard endpoint profiles are emitted separately above. A mixed
+	// WireGuard + proxy subscription cannot be represented by the current
+	// separated-profile builder without routing one profile through another,
+	// so reject it instead of falling back to the deprecated WireGuard outbound.
+	if containsSubscriptionProtocol(inbounds, model.WireGuard) || containsUnsupportedSingBoxProtocol(inbounds) {
 		return "", "", errSubscriptionFormatUnsupported
 	}
 
