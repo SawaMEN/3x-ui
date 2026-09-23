@@ -112,4 +112,13 @@ func TestGetSubs_SettingsOnlyUsesGlobalSubscriptionEmail(t *testing.T) {
 	if len(links) != 2 || !strings.Contains(joined, "vless://") || !strings.Contains(joined, "trojan://") {
 		t.Fatalf("links = %v, want VLESS + Trojan", links)
 	}
+	var linksCount int64
+	if err := db.Model(&model.ClientInbound{}).
+		Where("client_id = ? AND inbound_id = ?", client.Id, trojan.Id).
+		Count(&linksCount).Error; err != nil {
+		t.Fatalf("count repaired client_inbounds: %v", err)
+	}
+	if linksCount != 1 {
+		t.Fatalf("repaired client_inbounds = %d, want 1", linksCount)
+	}
 }

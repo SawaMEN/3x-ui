@@ -676,80 +676,97 @@ func subscriptionExpiryFromClient(nowMs, expiryTime int64) int64 {
 
 func (s *SubService) getInboundsBySubId(subId string) ([]*model.Inbound, error) {
 	db := database.GetDB()
-	protocols := "'vmess','vless','trojan','shadowsocks','hysteria','wireguard','amneziawg','mtproto','tuic','naive','mieru','vk-turn-proxy'"
+	// Upstream 3X-UI resolves subscription inbounds from the normalized
+	// clients/client_inbounds relation. Repair legacy settings-only attachments
+	// first so old imports use the same selection path.
+	if err := s.repairLegacySubscriptionInbounds(subId); err != nil {
+		logger.Warning("SubService - repair legacy subscription inbounds:", err)
+	}
+
 	var inbounds []*model.Inbound
-	err := db.Model(model.Inbound{}).Where(fmt.Sprintf(`id in (
-		SELECT DISTINCT inbounds.id
-		FROM inbounds
-		JOIN client_inbounds ON client_inbounds.inbound_id = inbounds.id
-		JOIN clients ON clients.id = client_inbounds.client_id
-		WHERE
-			inbounds.protocol in (%s)
-			AND clients.sub_id = ? AND inbounds.enable = ?
-	)`, protocols), subId, true).Find(&inbounds).Error
+	protocols := []string{
+		"vmess", "vless", "trojan", "shadowsocks", "hysteria",
+		"wireguard", "amneziawg", "mtproto", "tuic", "naive", "mieru",
+		"vk-turn-proxy",
+	}
+	err := db.Model(model.Inbound{}).
+		Where(`id in (
+			SELECT DISTINCT inbounds.id
+			FROM inbounds
+			JOIN client_inbounds ON client_inbounds.inbound_id = inbounds.id
+			JOIN clients ON clients.id = client_inbounds.client_id
+			WHERE
+				inbounds.protocol IN ?
+				AND clients.sub_id = ? AND inbounds.enable = ?
+		)`, protocols, subId, true).
+		Order("sub_sort_index ASC").
+		Order("id ASC").
+		Find(&inbounds).Error
 	if err != nil {
 		return nil, err
 	}
-
-	// Some older imports/migrations can leave the subscription identity in
-	// settings.clients without a matching client_inbounds row. Include those
-	// enabled inbounds as a compatibility fallback; matchingClients then merges
-	// normalized clients with any missing settings.clients entries.
-	legacyFrom := database.JSONClientsFromInbound()
-	legacySubID := database.JSONFieldText("client.value", "subId")
-	legacyEmail := database.JSONFieldText("client.value", "email")
-	legacyQuery := fmt.Sprintf(`
-		SELECT DISTINCT inbounds.id
-		%s
-		WHERE inbounds.protocol in (%s)
-		  AND inbounds.enable = ?
-		  AND (
-			%s = ?
-			OR EXISTS (
-				SELECT 1
-				FROM clients AS subscription_clients
-				WHERE subscription_clients.sub_id = ?
-				  AND LOWER(subscription_clients.email) = LOWER(%s)
-			)
-		)
-	`, legacyFrom, protocols, legacySubID, legacyEmail)
-
-	var legacyIDs []int
-	if err := db.Raw(legacyQuery, true, subId, subId).Scan(&legacyIDs).Error; err != nil {
-		return nil, err
-	}
-
-	seen := make(map[int]struct{}, len(inbounds)+len(legacyIDs))
-	for _, inbound := range inbounds {
-		if inbound != nil {
-			seen[inbound.Id] = struct{}{}
-		}
-	}
-	if len(legacyIDs) > 0 {
-		var legacyInbounds []*model.Inbound
-		if err := db.Model(model.Inbound{}).Where("id IN ?", legacyIDs).Find(&legacyInbounds).Error; err != nil {
-			return nil, err
-		}
-		for _, inbound := range legacyInbounds {
-			if inbound == nil {
-				continue
-			}
-			if _, ok := seen[inbound.Id]; ok {
-				continue
-			}
-			seen[inbound.Id] = struct{}{}
-			inbounds = append(inbounds, inbound)
-		}
-	}
-
-	sort.SliceStable(inbounds, func(i, j int) bool {
-		if inbounds[i].SubSortIndex != inbounds[j].SubSortIndex {
-			return inbounds[i].SubSortIndex < inbounds[j].SubSortIndex
-		}
-		return inbounds[i].Id < inbounds[j].Id
-	})
 	s.indexStatsBySubId(subId)
 	return inbounds, nil
+}
+
+func (s *SubService) repairLegacySubscriptionInbounds(subId string) error {
+	subId = strings.TrimSpace(subId)
+	if subId == "" {
+		return nil
+	}
+	db := database.GetDB()
+	var subscriptionClients []model.ClientRecord
+	if err := db.Model(&model.ClientRecord{}).Where("sub_id = ?", subId).Find(&subscriptionClients).Error; err != nil {
+		return err
+	}
+	byEmail := make(map[string]model.ClientRecord, len(subscriptionClients))
+	for _, client := range subscriptionClients {
+		email := strings.ToLower(strings.TrimSpace(client.Email))
+		if email != "" {
+			byEmail[email] = client
+		}
+	}
+	if len(byEmail) == 0 {
+		return nil
+	}
+
+	protocols := []string{
+		"vmess", "vless", "trojan", "shadowsocks", "hysteria",
+		"wireguard", "amneziawg", "mtproto", "tuic", "naive", "mieru",
+		"vk-turn-proxy",
+	}
+	var inbounds []*model.Inbound
+	if err := db.Model(&model.Inbound{}).
+		Where("protocol IN ? AND enable = ?", protocols, true).
+		Find(&inbounds).Error; err != nil {
+		return err
+	}
+
+	for _, inbound := range inbounds {
+		if inbound == nil {
+			continue
+		}
+		clients, err := s.inboundService.GetClients(inbound)
+		if err != nil {
+			logger.Debug("SubService - repair legacy inbound clients:", inbound.Id, err)
+			continue
+		}
+		for _, settingsClient := range clients {
+			normalized, ok := byEmail[strings.ToLower(strings.TrimSpace(settingsClient.Email))]
+			if !ok {
+				continue
+			}
+			link := model.ClientInbound{
+				ClientId:  normalized.Id,
+				InboundId: inbound.Id,
+			}
+			if err := db.Where("client_id = ? AND inbound_id = ?", normalized.Id, inbound.Id).
+				FirstOrCreate(&link).Error; err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // indexStatsBySubId loads the traffic rows for just this subscriber's clients
