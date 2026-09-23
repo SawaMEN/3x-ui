@@ -452,6 +452,30 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 		return "", "", nil
 	}
 
+	emails := make([]string, 0, len(seenEmails))
+	for email := range seenEmails {
+		emails = append(emails, email)
+	}
+	slices.Sort(emails)
+	traffic, _ := subReq.AggregateTrafficByEmails(emails)
+	traffic.Enable = hasEnabledClient
+	header := subReq.subscriptionUserinfo(traffic)
+
+	if mode, remark := subReq.resolveInfoNodeRemark(subId, emails, traffic, len(proxies) > 0); mode != infoNodeNone {
+		dummyProxy := map[string]any{
+			"type": "socks",
+			"tag":  "subscription-status",
+			"server": "127.0.0.1",
+			"server_port": 1080,
+		}
+		_ = remark
+		if mode == infoNodeExpired || mode == infoNodeDepleted {
+			proxies = []nativeOutbound{{tag: "subscription-status", out: dummyProxy}}
+		} else {
+			proxies = append([]nativeOutbound{{tag: "subscription-status", out: dummyProxy}}, proxies...)
+		}
+	}
+
 	proxyConfigs := make([]map[string]any, 0, len(proxies))
 	for _, proxy := range proxies {
 		proxyConfigs = append(proxyConfigs, proxy.out)
@@ -464,7 +488,7 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 	return encoded, header, nil
 }
 
-// subConfigEntry// subConfigEntry is one ordered block of the JSON subscription: an inbound's
+// subConfigEntry is one ordered block of the JSON subscription: an inbound's
 // configs (kind 0) or a balancer config (kind 1).
 type subConfigEntry struct {
 	sortIndex int
