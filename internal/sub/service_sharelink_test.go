@@ -176,3 +176,21 @@ func TestDeriveSpiderXMatchesFrontendVectors(t *testing.T) {
 		})
 	}
 }
+
+
+func TestGenMieruLinkExternalProxyFanOut(t *testing.T) {
+	inbound := &model.Inbound{
+		Protocol: model.Mieru,
+		Listen: "0.0.0.0",
+		Port: 20000,
+		Remark: "mieru",
+		Settings: `{"tcpPorts":["20001"],"udpPorts":["20002"],"multiplexing":"MULTIPLEXING_LOW","handshakeMode":"HANDSHAKE_STANDARD","clients":[{"email":"user","password":"secret"}]}`,
+		StreamSettings: `{"externalProxy":[{"dest":"edge.example.com","port":443,"remark":"EDGE"}]}`,
+	}
+	client := model.Client{Email:"user",Password:"secret"}
+	s := &SubService{address:"mieru.example.com",clientsByInbound:map[int]map[string]model.Client{0:{client.Email:client}},fullyPrimedInbounds:map[int]bool{0:true},settingsByInbound:map[int]map[string]any{}}
+	link := s.genMieruLink(inbound, "user")
+	if !strings.Contains(link, "mierus://user:secret@edge.example.com:443") { t.Fatalf("external endpoint missing: %s", link) }
+	if !strings.Contains(link, "port=443") || !strings.Contains(link, "protocol=TCP") || !strings.Contains(link, "protocol=UDP") { t.Fatalf("external endpoint must reuse both protocols on the public port: %s", link) }
+	if !strings.Contains(link, "#mieru-EDGE-user") { t.Fatalf("endpoint remark missing: %s", link) }
+}
