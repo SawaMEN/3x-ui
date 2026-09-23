@@ -107,10 +107,7 @@ func TestGenNativeNaivePreservesNativeType(t *testing.T) {
 	if raw == nil {
 		t.Fatal("genNativeNaive returned nil")
 	}
-	var got map[string]any
-	if err := json.Unmarshal(raw, &got); err != nil {
-		t.Fatalf("unmarshal native Naive: %v", err)
-	}
+	got := raw
 	if got["type"] != "naive" {
 		t.Fatalf("type = %v, want naive; config=%#v", got["type"], got)
 	}
