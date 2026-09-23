@@ -932,11 +932,17 @@ func TestNativeHysteria2Outbound(t *testing.T) {
 	raw := NewSubJsonService("", "", "", "", nil).genHy(inbound, stream, client, "")
 	got := translateNativeXrayOutbound(t, raw)
 
-	if got["type"] != "hysteria2" || got["server"] != "hy2.example.com" || got["server_port"] != float64(443) || got["password"] != "secret" {
+	if got["type"] != "hysteria2" || got["server"] != "hy2.example.com" || got["password"] != "secret" {
 		t.Fatalf("unexpected hysteria2 outbound: %#v", got)
 	}
-	if got["up_mbps"] != float64(100) || got["down_mbps"] != float64(50) {
-		t.Fatalf("bandwidth lost: %#v", got)
+	if port, ok := got["server_port"].(int); !ok || port != 443 {
+		t.Fatalf("server_port = %v, want int(443)", got["server_port"])
+	}
+	if up, ok := got["up_mbps"].(int); !ok || up != 100 {
+		t.Fatalf("up_mbps = %v, want int(100)", got["up_mbps"])
+	}
+	if down, ok := got["down_mbps"].(int); !ok || down != 50 {
+		t.Fatalf("down_mbps = %v, want int(50)", got["down_mbps"])
 	}
 	obfs, ok := got["obfs"].(map[string]any)
 	if !ok || obfs["type"] != "salamander" || obfs["password"] != "obfs" {
