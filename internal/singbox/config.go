@@ -296,6 +296,17 @@ func TranslateXrayOutbound(raw map[string]any) (map[string]any, error) {
 			return nil, fmt.Errorf("outbound %q has unsupported Hysteria version %d", tag, version)
 		}
 	}
+	if singProtocol == "hysteria2" {
+		hySettings := rawObject(streamSettings, "hysteriaSettings")
+		for _, key := range []string{"up_mbps", "down_mbps", "hop_interval", "hop_interval_max", "bbr_profile", "disable_chrome_parrot", "ignore_client_bandwidth"} {
+			if value, ok := hySettings[key]; ok {
+				out[key] = value
+			}
+		}
+		if obfs := rawObject(hySettings, "obfs"); len(obfs) > 0 {
+			out["obfs"] = obfs
+		}
+	}
 	if err := translateStream(out, singProtocol, streamSettings, false); err != nil {
 		return nil, err
 	}
