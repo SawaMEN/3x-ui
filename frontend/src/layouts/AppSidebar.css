@@ -859,10 +859,7 @@ body.theme-cyberpunk .sider-brand .brand-text {
   background-clip: text;
   -webkit-text-fill-color: transparent;
   -webkit-text-stroke: 0;
-  text-shadow:
-    0 0 6px rgba(0, 246, 255, 0.55),
-    0 0 14px rgba(0, 246, 255, 0.26),
-    0 0 24px rgba(255, 43, 214, 0.16);
+  text-shadow: none;
   filter: none;
   animation: none;
 }
@@ -882,7 +879,8 @@ body.theme-cyberpunk .ant-layout-sider-collapsed .sider-brand .brand-text {
   letter-spacing: 0.055em;
   transform: translateY(1px);
   white-space: nowrap;
-  text-shadow: 0 0 4px rgba(0, 246, 255, 0.42);
+  text-shadow: none;
+  filter: none;
 }
 
 body.theme-cyberpunk .ant-layout-sider-collapsed .sider-brand .brand-text-full {
