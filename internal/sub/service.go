@@ -843,8 +843,7 @@ func (s *SubService) genVKTurnProxyLink(inbound *model.Inbound, email string) st
 }
 
 // genNaiveLink builds the canonical NaïveProxy client link for the panel's
-// single-link/QR views. The raw subscription uses genNaiveSubscriptionLink below
-// so clients such as Shadowrocket can import Naïve as an HTTPS proxy entry.
+// single-link/QR views. The same native URI is used in raw subscriptions.
 func (s *SubService) genNaiveLink(inbound *model.Inbound, email string) string {
 	if inbound.Protocol != model.NaiveProxy {
 		return ""
@@ -852,9 +851,8 @@ func (s *SubService) genNaiveLink(inbound *model.Inbound, email string) string {
 	return s.genNaiveSubscriptionLink(inbound, email)
 }
 
-// genNaiveSubscriptionLink returns the HTTPS-proxy form used by the raw
-// base64 subscription. NaïveProxy is HTTP CONNECT over TLS, so this form is
-// understood by clients that accept generic HTTPS proxy subscription entries.
+// genNaiveSubscriptionLink returns Naïve's native URI form used by the
+// raw subscription. TLS is explicit and QUIC is selected with quic=1.
 func (s *SubService) genNaiveSubscriptionLink(inbound *model.Inbound, email string) string {
 	if inbound.Protocol != model.NaiveProxy {
 		return ""
