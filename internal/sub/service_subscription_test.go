@@ -263,7 +263,7 @@ func TestGetSubs_Hysteria2AndNaiveKeepSeparateConnections(t *testing.T) {
 		StreamSettings: `{"network":"hysteria","security":"tls","tlsSettings":{"serverName":"hy.example.com"}}`,
 	}
 	naive := &model.Inbound{
-		UserId: 1, Tag: "shared", Remark: "shared", Enable: true,
+		UserId: 1, Tag: "shared-naive", Remark: "shared", Enable: true,
 		Port: 42132, Listen: "naive.example.com", Protocol: model.NaiveProxy,
 		Settings: fmt.Sprintf(`{"network":"tcp","tls":{"serverName":"naive.example.com"},"clients":[{"email":%q,"subId":%q,"enable":true}]}`, email, subID),
 		StreamSettings: `{}`,
@@ -539,7 +539,7 @@ func TestGetSubs_NaiveUsesHostEndpoints(t *testing.T) {
 	inbound := &model.Inbound{
 		UserId: 1, Tag: "naive-hosts", Remark: "naive", Enable: true,
 		Port: 443, Listen: "origin.example.com", Protocol: model.NaiveProxy,
-		Settings: fmt.Sprintf(`{"network":"tcp","tls":{"serverName":"origin.example.com"},"clients":[{"email":%q,"subId":%q,"enable":true}]}`, email, subID),
+		Settings: fmt.Sprintf(`{"network":"tcp","shareLinkFormat":"hiddify","tls":{"serverName":"origin.example.com"},"clients":[{"email":%q,"subId":%q,"enable":true}]}`, email, subID),
 		StreamSettings: `{}`,
 	}
 	if err := db.Create(inbound).Error; err != nil {
