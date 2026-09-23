@@ -510,8 +510,10 @@ func TranslateXrayInbound(raw map[string]any) (map[string]any, error) {
 	if err := translateUsers(out, singProtocol, settings); err != nil {
 		return nil, err
 	}
-	if err := translateStream(out, singProtocol, stream, true); err != nil {
-		return nil, err
+	if protocol != "naive" {
+		if err := translateStream(out, singProtocol, stream, true); err != nil {
+			return nil, err
+		}
 	}
 	return out, nil
 }
