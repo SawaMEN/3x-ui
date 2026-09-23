@@ -848,6 +848,30 @@ func mergeStreamFromMaster(childStream, masterStream string) string {
 // pair. Returns "" when the inbound's protocol doesn't produce a subscription URL
 // (socks, http, mixed, wireguard, dokodemo, tunnel). The returned string may
 // contain multiple `\n`-separated URLs when the inbound has externalProxy set.
+func (s *SubService) shareEndpointsForInbound(inbound *model.Inbound) []ShareEndpoint {
+	if inbound == nil {
+		return nil
+	}
+	fallback := s.inboundDefaultEndpoint(inbound)
+	stream := unmarshalStreamSettings(inbound.StreamSettings)
+	raw, ok := stream["externalProxy"].([]any)
+	if !ok || len(raw) == 0 {
+		return []ShareEndpoint{fallback}
+	}
+	endpoints := make([]ShareEndpoint, 0, len(raw))
+	for _, item := range raw {
+		ep, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		endpoints = append(endpoints, normalizeShareEndpoint(externalProxyToEndpoint(ep), fallback))
+	}
+	if len(endpoints) == 0 {
+		return []ShareEndpoint{fallback}
+	}
+	return endpoints
+}
+
 func (s *SubService) GetLink(inbound *model.Inbound, email string) string {
 	switch inbound.Protocol {
 	case "vmess":
@@ -1268,7 +1292,6 @@ func (s *SubService) genWireguardLink(inbound *model.Inbound, email string) stri
 	}
 	client := &resolved
 
-	link := fmt.Sprintf("wireguard://%s@%s", encodeUserinfo(client.PrivateKey), joinHostPort(s.resolveInboundAddress(inbound), inbound.Port))
 	params := make(map[string]string)
 	if secretKey != "" {
 		if pub, err := wgutil.PublicKeyFromPrivate(secretKey); err == nil {
@@ -1290,7 +1313,14 @@ func (s *SubService) genWireguardLink(inbound *model.Inbound, email string) stri
 	if ka := client.KeepAliveSeconds(); ka > 0 {
 		params["keepalive"] = strconv.Itoa(ka)
 	}
-	return buildLinkWithParams(link, params, s.genRemark(inbound, email, "", ""))
+
+	endpoints := s.shareEndpointsForInbound(inbound)
+	links := make([]string, 0, len(endpoints))
+	for _, endpoint := range endpoints {
+		link := fmt.Sprintf("wireguard://%s@%s", encodeUserinfo(client.PrivateKey), joinHostPort(endpoint.Address, endpoint.Port))
+		links = append(links, buildLinkWithParams(link, params, s.endpointRemark(inbound, email, endpoint.ep, "")))
+	}
+	return strings.Join(links, "\n")
 }
 
 // amneziaWGHeaderOrDefault mirrors the frontend's amneziaWGHLine: AmneziaWG's
@@ -1416,11 +1446,16 @@ func (s *SubService) genAmneziaWGLink(inbound *model.Inbound, email string) stri
 	}
 	client := &resolved
 
-	text := amneziaWGConfigText(server, client, s.resolveInboundAddress(inbound), inbound.Port, s.genRemark(inbound, email, "", ""))
-	if text == "" {
-		return ""
+	endpoints := s.shareEndpointsForInbound(inbound)
+	links := make([]string, 0, len(endpoints))
+	for _, endpoint := range endpoints {
+		text := amneziaWGConfigText(server, client, endpoint.Address, endpoint.Port, s.endpointRemark(inbound, email, endpoint.ep, ""))
+		if text == "" {
+			continue
+		}
+		links = append(links, "vpn://"+base64.RawURLEncoding.EncodeToString([]byte(text)))
 	}
-	return "vpn://" + base64.RawURLEncoding.EncodeToString([]byte(text))
+	return strings.Join(links, "\n")
 }
 
 // genMtprotoLink builds one Telegram link per advertised endpoint with the client's FakeTLS secret.
