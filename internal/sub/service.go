@@ -38,6 +38,36 @@ const salamanderWarningCacheSize = 2048
 // instead of silently dropping a connection from the subscriber profile.
 var errSubscriptionFormatUnsupported = errors.New("subscription format cannot represent all configured protocols")
 
+func containsUnsupportedJSONProtocol(inbounds []*model.Inbound) bool {
+	for _, inbound := range inbounds {
+		switch inbound.Protocol {
+		case model.NaiveProxy, model.AmneziaWG, model.TUIC, model.MTProto, model.VKTurnProxy, model.Mieru:
+			return true
+		}
+	}
+	return false
+}
+
+func containsUnsupportedSingBoxProtocol(inbounds []*model.Inbound) bool {
+	for _, inbound := range inbounds {
+		switch inbound.Protocol {
+		case model.AmneziaWG, model.MTProto, model.VKTurnProxy, model.Mieru, model.TUIC:
+			return true
+		}
+	}
+	return false
+}
+
+func containsUnsupportedClashProtocol(inbounds []*model.Inbound) bool {
+	for _, inbound := range inbounds {
+		switch inbound.Protocol {
+		case model.NaiveProxy, model.MTProto, model.VKTurnProxy, model.Mieru:
+			return true
+		}
+	}
+	return false
+}
+
 var salamanderWarningSeen = struct {
 	mu      sync.Mutex
 	entries map[string]struct{}
