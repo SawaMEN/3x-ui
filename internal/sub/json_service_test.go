@@ -753,9 +753,8 @@ func TestNativeRealityTLS(t *testing.T) {
 	if tls["enabled"] != true || tls["server_name"] != "www.example.com" {
 		t.Fatalf("unexpected TLS: %#v", got)
 	}
-	utls, _ := tls["utls"].(map[string]any)
-	if utls["fingerprint"] != "chrome" {
-		t.Fatalf("unexpected uTLS: %#v", tls)
+	if _, exists := tls["utls"]; exists {
+		t.Fatalf("Reality TLS must not emit a separate uTLS block: %#v", tls)
 	}
 	reality, _ := tls["reality"].(map[string]any)
 	if reality["enabled"] != true || reality["public_key"] != "public-key" || reality["short_id"] != "0123456789abcdef" {
@@ -925,6 +924,11 @@ func TestNativeHysteria2Outbound(t *testing.T) {
 			"obfs":      map[string]any{"type": "salamander", "password": "obfs"},
 		},
 	}
+	streamJSON, err := json.Marshal(stream)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inbound.StreamSettings = string(streamJSON)
 	raw := NewSubJsonService("", "", "", "", nil).genHy(inbound, stream, client, "")
 	got := translateNativeXrayOutbound(t, raw)
 
