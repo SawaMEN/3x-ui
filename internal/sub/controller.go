@@ -486,11 +486,7 @@ func (a *SUBController) subs(c *gin.Context) {
 	if err != nil || subs == nil {
 		writeSubError(c, err)
 	} else {
-		var result strings.Builder
-		for _, sub := range subs {
-			result.WriteString(sub)
-			result.WriteString("\n")
-		}
+		result := formatRawSubscriptionLinks(subs)
 
 		// Add headers
 		header := subReq.subscriptionUserinfo(traffic)
