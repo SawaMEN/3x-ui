@@ -28,8 +28,11 @@ const PROTOCOL_LABELS: Record<string, string> = {
   tg: 'MTProto',
   vpn: 'AmneziaWG',
   tuic: 'TUIC',
+  naive: 'Naive',
   'naive+https': 'Naive',
   'naive+quic': 'Naive',
+  mieru: 'Mieru',
+  mierus: 'Mieru',
 };
 
 const PROTOCOL_COLORS: Record<string, string> = {
@@ -44,6 +47,7 @@ const PROTOCOL_COLORS: Record<string, string> = {
   AmneziaWG: 'yellow',
   TUIC: 'orange',
   Naive: 'orange',
+  Mieru: 'purple',
 };
 
 const SECURITY_COLORS: Record<string, string> = {
@@ -116,11 +120,13 @@ export function parseLinkParts(link: string): LinkParts | null {
     } catch {
       /* unparseable payload, fall back to protocol only */
     }
-  } else if (scheme === 'naive+https' || scheme === 'naive+quic') {
+  } else if (scheme === 'naive' || scheme === 'naive+https' || scheme === 'naive+quic') {
     network = scheme === 'naive+quic' ? 'quic' : 'https';
     security = 'tls';
     try {
       const url = new URL(trimmed);
+      network = scheme === 'naive+quic' || url.searchParams.get('quic') === '1' ? 'quic' : 'https';
+      security = url.searchParams.get('security') || 'tls';
       const hash = url.hash.replace(/^#/, '');
       try {
         remark = decodeURIComponent(hash);
@@ -130,6 +136,21 @@ export function parseLinkParts(link: string): LinkParts | null {
       port = url.port;
     } catch {
       /* malformed Naive URL, keep protocol label */
+    }
+  } else if (scheme === 'mieru' || scheme === 'mierus') {
+    try {
+      const url = new URL(trimmed);
+      const protocols = [...new Set(url.searchParams.getAll('protocol').map((v) => v.trim().toUpperCase()).filter(Boolean))];
+      network = protocols.join('/');
+      port = url.searchParams.getAll('port').filter(Boolean).join(',') || url.port;
+      const hash = url.hash.replace(/^#/, '');
+      try {
+        remark = decodeURIComponent(hash);
+      } catch {
+        remark = hash;
+      }
+    } catch {
+      /* malformed Mieru URL, keep protocol label */
     }
   } else {
     try {
