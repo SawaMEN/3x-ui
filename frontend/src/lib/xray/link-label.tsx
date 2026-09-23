@@ -125,8 +125,7 @@ export function parseLinkParts(link: string): LinkParts | null {
     security = 'tls';
     try {
       const url = new URL(trimmed);
-      network =
-        scheme === 'naive+quic' || url.searchParams.get('quic') === '1' ? 'quic' : 'https';
+      network = scheme === 'naive+quic' || url.searchParams.get('quic') === '1' ? 'quic' : 'https';
       security = url.searchParams.get('security') || 'tls';
       const hash = url.hash.replace(/^#/, '');
       try {

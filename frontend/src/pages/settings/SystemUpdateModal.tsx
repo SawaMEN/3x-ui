@@ -547,11 +547,7 @@ export default function SystemUpdateModal({
             {!systemUpdate.runningAsRoot && (
               <Alert type="error" showIcon title={t('pages.settings.swap.notRoot')} />
             )}
-            <Alert
-              type="info"
-              showIcon
-              title={t('pages.settings.swap.systemUpdateNote')}
-            />
+            <Alert type="info" showIcon title={t('pages.settings.swap.systemUpdateNote')} />
             {systemUpdate.missingPackages && (
               <Alert type="warning" showIcon title={t('pages.settings.swap.missingPackages')} />
             )}
