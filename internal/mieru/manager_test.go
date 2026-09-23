@@ -40,3 +40,19 @@ func TestInstanceFromInboundRejectsWithoutUsers(t *testing.T) {
 		t.Fatal("expected inbound without enabled users to be rejected")
 	}
 }
+
+func TestRenderConfigUsesServerSettingsOnly(t *testing.T) {
+	inst := Instance{
+		PortBindings: []PortBinding{{Port: 8443, Protocol: "TCP"}},
+		Users:        []User{{Name: "alice", Password: "secret"}},
+		MTU:          1400,
+		LoggingLevel: "INFO",
+	}
+	cfg := renderConfig(inst)
+	if _, ok := cfg["multiplexing"]; ok {
+		t.Fatal("server config must not contain client-only multiplexing")
+	}
+	if _, ok := cfg["handshakeMode"]; ok {
+		t.Fatal("server config must not contain client-only handshakeMode")
+	}
+}

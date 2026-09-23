@@ -59,9 +59,14 @@ export function buildSubApps({
     name: 'V2Box',
     url: `v2box://install-sub?url=${encSub}&name=${encodeURIComponent(sId)}`,
   };
+  // sing-box imports a remote sing-box configuration, not the raw link list.
+  // The explicit format selector is handled by the subscription endpoint so the
+  // one-tap importer always receives a native sing-box document.
+  const singBoxSubUrl = `${subUrl}${subUrl.includes('?') ? '&' : '?'}format=sing-box`;
+  const encSingBoxSub = encodeURIComponent(singBoxSubUrl);
   const singBox = {
     name: 'Sing-box',
-    url: `sing-box://import-remote-profile?url=${encSub}#${profileName}`,
+    url: `sing-box://import-remote-profile?url=${encSingBoxSub}#${profileName}`,
   };
   const v2raytun = { name: 'V2RayTun', url: `v2raytun://import/${subUrl}` };
   const happ = { name: 'Happ', url: `happ://add/${subUrl}` };

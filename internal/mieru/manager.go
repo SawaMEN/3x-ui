@@ -35,8 +35,6 @@ type Instance struct {
 	MTU                   int
 	LoggingLevel          string
 	UserHintIsMandatory   bool
-	Multiplexing          string
-	HandshakeMode         string
 }
 
 func stringSlice(v any) []string {
@@ -188,18 +186,6 @@ func InstanceFromInbound(ib *model.Inbound) (Instance, bool) {
 	}
 	mandatory, _ := raw["userHintIsMandatory"].(bool)
 
-	multiplexing, _ := raw["multiplexing"].(string)
-	switch multiplexing {
-	case "MULTIPLEXING_OFF", "MULTIPLEXING_LOW", "MULTIPLEXING_MIDDLE", "MULTIPLEXING_HIGH":
-	default:
-		multiplexing = "MULTIPLEXING_LOW"
-	}
-	handshakeMode, _ := raw["handshakeMode"].(string)
-	switch handshakeMode {
-	case "HANDSHAKE_STANDARD", "HANDSHAKE_NO_WAIT":
-	default:
-		handshakeMode = "HANDSHAKE_STANDARD"
-	}
 
 	return Instance{
 		Id:                  ib.Id,
@@ -210,8 +196,6 @@ func InstanceFromInbound(ib *model.Inbound) (Instance, bool) {
 		MTU:                 int(mtu),
 		LoggingLevel:        level,
 		UserHintIsMandatory: mandatory,
-		Multiplexing:        multiplexing,
-		HandshakeMode:       handshakeMode,
 	}, true
 }
 

@@ -100,7 +100,10 @@ describe('buildSubApps', () => {
     expect(buildSubApps(sub).android).toEqual([
       { name: 'V2Box', url: `v2box://install-sub?url=${encSub}&name=abc` },
       { name: 'V2RayNG', url: `v2rayng://install-config?url=${encSub}` },
-      { name: 'Sing-box', url: `sing-box://import-remote-profile?url=${encSub}#Nova%20Net` },
+      {
+        name: 'Sing-box',
+        url: `sing-box://import-remote-profile?url=${encodeURIComponent(`${subUrl}?format=sing-box`)}#Nova%20Net`,
+      },
       { name: 'V2RayTun', url: `v2raytun://import/${subUrl}` },
       { name: 'Happ', url: `happ://add/${subUrl}` },
       { name: 'Incy', url: `incy://add/${subUrl}` },
@@ -121,7 +124,7 @@ describe('buildSubApps', () => {
 
   it('names the sing-box profile after the subscription id when there is no title', () => {
     expect(buildSubApps({ ...sub, subTitle: '' }).android[2].url).toBe(
-      `sing-box://import-remote-profile?url=${encSub}#abc`,
+      `sing-box://import-remote-profile?url=${encodeURIComponent(`${subUrl}?format=sing-box`)}#abc`,
     );
   });
 

@@ -475,6 +475,20 @@ func (a *SUBController) subs(c *gin.Context) {
 		logSubscriptionRoute(userAgent, "html")
 		return
 	}
+	// An explicit format selector on the main subscription URL must be honored
+	// before user-agent auto-detection. sing-box imports a remote profile and
+	// therefore needs the native JSON document instead of the raw link list.
+	if strings.EqualFold(c.Query("format"), "sing-box") {
+		if !a.enforceHwid(c) {
+			return
+		}
+		if !a.serveJsonBody(c, a.jsonAlwaysArray, "application/json; charset=utf-8", false) {
+			writeSubError(c, nil)
+		}
+		a.recordSubscriptionFetch(c)
+		logSubscriptionRoute(userAgent, "sing-box-json")
+		return
+	}
 	if !a.enforceHwid(c) {
 		return
 	}

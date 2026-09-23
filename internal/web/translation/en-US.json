@@ -515,8 +515,6 @@
         "naiveNetworkTcp": "TCP",
         "naiveNetworkUdp": "QUIC / UDP",
         "naiveHint": "The panel TLS certificate is reused automatically. TCP is used by default; QUIC uses BBR. SNI can be set explicitly. Users are managed by the normal client editor.",
-        "psiphonServerEntry": "Server entry",
-        "psiphonServerEntryHint": "Optional. Paste an existing server-entry.dat, otherwise it is generated automatically.",
         "visionTestseed": "Vision testseed",
         "version": "Version",
         "udpIdleTimeout": "UDP idle timeout (s)",
@@ -700,8 +698,28 @@
           "listen": "Inbound listen",
           "custom": "Custom"
         },
-        "mieruAutoHint": "Port 8443 is selected automatically for a new inbound when free; Mieru server ports use 1025–65535. TCP and UDP use the same port, MTU 1400 and baseline parameters are automatic; uncommon options remain available in JSON.",
-        "psiphonAutoHint": "Leave Server entry empty: psiphond generates it and detects the VPS public address automatically. OSSH on the inbound port is used by default."
+        "mieruAutoHint": "Mieru uses separate TCP/UDP server bindings. Ports must be 1025–65535; MTU must be 1280–1400.",
+        "mieruTcpPorts": "TCP ports",
+        "mieruUdpPorts": "UDP ports",
+        "mieruPortRangesHint": "Enter individual ports or ranges, for example 2012-2022. Allowed range: 1025–65535.",
+        "mieruMtu": "Server MTU",
+        "mieruLoggingLevel": "Log level",
+        "mieruClientSettings": "Client and link settings",
+        "mieruMultiplexing": "Multiplexing",
+        "mieruMultiplexingHint": "Stored in mierus:// links and applied by the client, not by the mita server.",
+        "mieruMultiplexingOptions": {
+          "MULTIPLEXING_OFF": "Disabled",
+          "MULTIPLEXING_LOW": "Low",
+          "MULTIPLEXING_MIDDLE": "Medium",
+          "MULTIPLEXING_HIGH": "High"
+        },
+        "mieruHandshakeMode": "Handshake mode",
+        "mieruHandshakeModeHint": "Stored in mierus:// links and applied by the client, not by the mita server.",
+        "mieruHandshakeOptions": {
+          "HANDSHAKE_STANDARD": "Standard",
+          "HANDSHAKE_NO_WAIT": "No-wait"
+        },
+        "mieruUserHintMandatory": "Require User Hint"
       },
       "info": {
         "mode": "Mode",
@@ -1847,7 +1865,7 @@
         "updateFailed": "System update failed",
         "updateOutput": "Update output",
         "noPackages": "No package updates are currently available.",
-        "systemUpdateNote": "This manager updates the Linux packages and kernel required by 3x-ui. WireGuard, AmneziaWG and VK-Turn use iproute2/iproute and iptables; MTProto, TUIC, Naive, Mieru and Psiphon use the common curl, tar, ca-certificates, openssl and socat runtime tools. The protocol server implementations themselves are bundled separately with the panel. Arch Linux is the exception because partial upgrades are unsupported.",
+        "systemUpdateNote": "This manager updates the Linux packages and kernel required by 3x-ui. WireGuard, AmneziaWG and VK-Turn use iproute2/iproute and iptables; MTProto, TUIC, Naive and Mieru use the common curl, tar, ca-certificates, openssl and socat runtime tools. The protocol server implementations themselves are bundled separately with the panel. Arch Linux is the exception because partial upgrades are unsupported.",
         "componentUpdatesTitle": "Panel dependencies",
         "systemPackagesTitle": "System packages",
         "updateComponent": "Update",

@@ -6,7 +6,6 @@ import { HysteriaInboundSettingsSchema } from './hysteria';
 import { MixedInboundSettingsSchema } from './mixed';
 import { MtprotoInboundSettingsSchema } from './mtproto';
 import { NaiveInboundSettingsSchema } from './naive';
-import { PsiphonInboundSettingsSchema } from './psiphon';
 import { MieruInboundSettingsSchema } from './mieru';
 import { ShadowsocksInboundSettingsSchema } from './shadowsocks';
 import { TrojanInboundSettingsSchema } from './trojan';
@@ -24,7 +23,6 @@ export * from './hysteria';
 export * from './mixed';
 export * from './mtproto';
 export * from './naive';
-export * from './psiphon';
 export * from './mieru';
 export * from './shadowsocks';
 export * from './trojan';
@@ -57,7 +55,6 @@ export const InboundSettingsSchema = z.discriminatedUnion('protocol', [
   z.object({ protocol: z.literal('amneziawg'), settings: AmneziawgInboundSettingsSchema }),
   z.object({ protocol: z.literal('tuic'), settings: TuicInboundSettingsSchema }),
   z.object({ protocol: z.literal('naive'), settings: NaiveInboundSettingsSchema }),
-  z.object({ protocol: z.literal('psiphon'), settings: PsiphonInboundSettingsSchema }),
   z.object({ protocol: z.literal('mieru'), settings: MieruInboundSettingsSchema }),
 ]);
 export type InboundSettings = z.infer<typeof InboundSettingsSchema>;

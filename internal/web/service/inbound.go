@@ -1106,7 +1106,7 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 	inbound.TrafficResetDay = normalizeTrafficResetDay(inbound.TrafficResetDay)
 	// Normalize streamSettings based on protocol
 	s.normalizeStreamSettings(inbound)
-	if err := validateInboundRuntimeProtocol(inbound.Protocol); err != nil {
+	if err := validateInboundRuntimeProtocol(inbound.Protocol, nil); err != nil {
 		return inbound, false, err
 	}
 	if !s.FromNodeSync {
@@ -1334,7 +1334,8 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 		if inbound.Enable && (isXrayManagedProtocol(inbound.Protocol) ||
 			inbound.Protocol == model.MTProto ||
 			inbound.Protocol == model.TUIC ||
-			inbound.Protocol == model.AmneziaWG) {
+			inbound.Protocol == model.AmneziaWG ||
+			inbound.Protocol == model.NaiveProxy) {
 			if inbound.NodeID != nil {
 				markDirty = true
 			} else {
@@ -1408,11 +1409,18 @@ func (s *InboundService) delInbound(id int) (bool, func(), error) {
 	var ib model.Inbound
 	loadErr := db.Model(model.Inbound{}).Where("id = ?", id).First(&ib).Error
 	if loadErr == nil {
+		naiveSingBox := false
+		if ib.Protocol == model.NaiveProxy {
+			if core, coreErr := (&SettingService{}).GetCoreType(); coreErr == nil {
+				naiveSingBox = core == CoreTypeSingBox
+			}
+		}
 		shouldPushToRuntime := (ib.NodeID != nil || ib.Enable) &&
 			(isXrayManagedProtocol(ib.Protocol) ||
 				ib.Protocol == model.MTProto ||
 				ib.Protocol == model.TUIC ||
-				ib.Protocol == model.AmneziaWG)
+				ib.Protocol == model.AmneziaWG ||
+				naiveSingBox)
 		if shouldPushToRuntime {
 			if ib.NodeID != nil {
 				rt, push, _, perr := s.nodePushPlan(&ib)
@@ -1663,6 +1671,16 @@ func (s *InboundService) SetInboundEnable(id int, enable bool) (bool, error) {
 	}
 	inbound.Enable = enable
 
+	if inbound.Protocol == model.NaiveProxy {
+		core, coreErr := (&SettingService{}).GetCoreType()
+		if coreErr != nil {
+			return false, coreErr
+		}
+		if core != CoreTypeSingBox {
+			return false, nil
+		}
+	}
+
 	needRestart := false
 	rt, push, _, perr := s.nodePushPlan(inbound)
 	if perr != nil {
@@ -1717,9 +1735,7 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 	inbound.TrafficResetDay = normalizeTrafficResetDay(inbound.TrafficResetDay)
 	// Normalize streamSettings based on protocol
 	s.normalizeStreamSettings(inbound)
-	if err := validateInboundRuntimeProtocol(inbound.Protocol); err != nil {
-		return inbound, false, err
-	}
+
 	if err := validateFinalMaskRealityCombo(inbound.StreamSettings); err != nil {
 		return inbound, false, err
 	}
@@ -1730,6 +1746,9 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 
 	oldInbound, err := s.GetInbound(inbound.Id)
 	if err != nil {
+		return inbound, false, err
+	}
+	if err := validateInboundRuntimeProtocol(inbound.Protocol, oldInbound); err != nil {
 		return inbound, false, err
 	}
 	if err := s.normalizeAmneziaWGSettings(inbound, oldInbound.Settings); err != nil {
@@ -1947,13 +1966,34 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 		inbound.Tag = oldInbound.Tag
 
 		localSidecarTransition := oldProtocol == model.MTProto || oldInbound.Protocol == model.MTProto || oldProtocol == model.TUIC || oldInbound.Protocol == model.TUIC
-		if oldInbound.NodeID == nil && (isXrayManagedProtocol(oldInbound.Protocol) || localSidecarTransition) {
+		naiveSingBoxRuntime := false
+		if oldProtocol == model.NaiveProxy || oldInbound.Protocol == model.NaiveProxy {
+			core, coreErr := (&SettingService{}).GetCoreType()
+			if coreErr != nil {
+				return coreErr
+			}
+			naiveSingBoxRuntime = core == CoreTypeSingBox
+		}
+		if oldInbound.NodeID == nil && (isXrayManagedProtocol(oldInbound.Protocol) || localSidecarTransition || naiveSingBoxRuntime) {
 			rt, push, _, perr := s.nodePushPlan(oldInbound)
 			if perr != nil {
 				return perr
 			}
 			if !push {
 				needRestart = true
+			} else if naiveSingBoxRuntime {
+				oldSnapshot := *oldInbound
+				oldSnapshot.Tag = tag
+				oldSnapshot.Protocol = oldProtocol
+				payload := oldInbound
+				postCommitApply = func() {
+					if err2 := rt.UpdateInbound(context.Background(), &oldSnapshot, payload); err2 != nil {
+						logger.Debug("Unable to update Naive inbound on", rt.Name(), ":", err2)
+						needRestart = true
+					} else {
+						logger.Debug("Updated Naive inbound applied on", rt.Name(), ":", oldInbound.Tag)
+					}
+				}
 			} else if oldProtocol == model.MTProto || oldInbound.Protocol == model.MTProto || oldProtocol == model.TUIC || oldInbound.Protocol == model.TUIC {
 				oldSnapshot := *oldInbound
 				oldSnapshot.Tag = tag

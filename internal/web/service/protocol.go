@@ -5,7 +5,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
 
-func validateInboundRuntimeProtocol(protocol model.Protocol) error {
+func validateInboundRuntimeProtocol(protocol model.Protocol, existing *model.Inbound) error {
 	if protocol != model.NaiveProxy {
 		return nil
 	}
@@ -13,10 +13,16 @@ func validateInboundRuntimeProtocol(protocol model.Protocol) error {
 	if err != nil {
 		return err
 	}
-	if core != CoreTypeSingBox {
-		return common.NewErrorf("NaïveProxy requires sing-box as the selected core")
+	if core == CoreTypeSingBox {
+		return nil
 	}
-	return nil
+	// A NaïveProxy row created under sing-box must remain editable while the
+	// administrator has temporarily switched to Xray, otherwise it becomes
+	// impossible to correct or disable the stored row.
+	if existing != nil && existing.Protocol == model.NaiveProxy {
+		return nil
+	}
+	return common.NewErrorf("NaïveProxy requires sing-box as the selected core")
 }
 
 func isXrayManagedProtocol(protocol model.Protocol) bool {
@@ -25,7 +31,6 @@ func isXrayManagedProtocol(protocol model.Protocol) bool {
 		protocol != model.MTProto &&
 		protocol != model.AmneziaWG &&
 		protocol != model.TUIC &&
-		protocol != model.Psiphon &&
 		protocol != model.Mieru
 }
 

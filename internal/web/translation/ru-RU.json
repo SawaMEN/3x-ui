@@ -536,8 +536,6 @@
         "naiveNetworkTcp": "TCP",
         "naiveNetworkUdp": "QUIC / UDP",
         "naiveHint": "TLS берётся из сертификата панели автоматически. TCP используется по умолчанию; для QUIC применяется BBR. SNI можно задать явно. Пользователи добавляются обычным редактором клиентов.",
-        "psiphonServerEntry": "Server entry",
-        "psiphonServerEntryHint": "Необязательно. Можно вставить готовый server-entry.dat; иначе он создастся автоматически.",
         "visionTestseed": "Vision testseed",
         "version": "Версия",
         "udpIdleTimeout": "UDP idle timeout (с)",
@@ -700,8 +698,28 @@
           "listen": "Адрес прослушивания inbound",
           "custom": "Пользовательская"
         },
-        "mieruAutoHint": "Порт 8443 автоматически используется для нового входящего (если свободен); Mieru поддерживает серверные порты 1025–65535. TCP и UDP работают на одном порту, MTU 1400 и базовые параметры применяются автоматически; редкие настройки доступны через JSON.",
-        "psiphonAutoHint": "Оставьте Server entry пустым: psiphond сам создаст его и подставит публичный адрес VPS. Для обычной установки используется OSSH на порту входящего."
+        "mieruAutoHint": "Сервер Mieru использует отдельные TCP/UDP bindings. Порты должны быть в диапазоне 1025–65535; MTU — 1280–1400.",
+        "mieruTcpPorts": "TCP-порты",
+        "mieruUdpPorts": "UDP-порты",
+        "mieruPortRangesHint": "Укажите отдельные порты или диапазоны, например 2012-2022. Допустимый диапазон: 1025–65535.",
+        "mieruMtu": "MTU сервера",
+        "mieruLoggingLevel": "Уровень журнала",
+        "mieruClientSettings": "Настройки клиента и ссылок",
+        "mieruMultiplexing": "Мультиплексирование",
+        "mieruMultiplexingHint": "Параметр записывается в ссылку mierus:// и настраивает клиент, а не сервер mita.",
+        "mieruMultiplexingOptions": {
+          "MULTIPLEXING_OFF": "Выключено",
+          "MULTIPLEXING_LOW": "Низкий уровень",
+          "MULTIPLEXING_MIDDLE": "Средний уровень",
+          "MULTIPLEXING_HIGH": "Высокий уровень"
+        },
+        "mieruHandshakeMode": "Режим рукопожатия",
+        "mieruHandshakeModeHint": "Параметр записывается в ссылку mierus:// и настраивает клиент, а не сервер mita.",
+        "mieruHandshakeOptions": {
+          "HANDSHAKE_STANDARD": "Стандартный",
+          "HANDSHAKE_NO_WAIT": "Без ожидания"
+        },
+        "mieruUserHintMandatory": "Требовать User Hint"
       },
       "info": {
         "mode": "Режим",
@@ -1729,7 +1747,7 @@
         "updateFailed": "Ошибка обновления системы",
         "updateOutput": "Результат обновления",
         "noPackages": "Сейчас доступных обновлений пакетов нет.",
-        "systemUpdateNote": "Здесь управляются системные пакеты 3x-ui и ядро Linux. Для WireGuard, AmneziaWG и VK-Turn используются iproute2/iproute и iptables; для MTProto, TUIC, Naive, Mieru и Psiphon — общие curl, tar, ca-certificates, openssl и socat. Сами серверные реализации этих протоколов поставляются панелью отдельно. Исключение — Arch Linux, где частичные обновления не поддерживаются.",
+        "systemUpdateNote": "Здесь управляются системные пакеты 3x-ui и ядро Linux. Для WireGuard, AmneziaWG и VK-Turn используются iproute2/iproute и iptables; для MTProto, TUIC, Naive и Mieru — общие curl, tar, ca-certificates, openssl и socat. Сами серверные реализации этих протоколов поставляются панелью отдельно. Исключение — Arch Linux, где частичные обновления не поддерживаются.",
         "componentUpdatesTitle": "Зависимые инструменты панели",
         "systemPackagesTitle": "Системные пакеты",
         "updateComponent": "Обновить",

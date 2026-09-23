@@ -7,7 +7,6 @@ import type { HysteriaClient, HysteriaInboundSettings } from '@/schemas/protocol
 import type { MixedInboundSettings } from '@/schemas/protocols/inbound/mixed';
 import type { MtprotoClient, MtprotoInboundSettings } from '@/schemas/protocols/inbound/mtproto';
 import type { NaiveInboundSettings } from '@/schemas/protocols/inbound/naive';
-import type { PsiphonInboundSettings } from '@/schemas/protocols/inbound/psiphon';
 import type { MieruInboundSettings } from '@/schemas/protocols/inbound/mieru';
 import type {
   ShadowsocksClient,
@@ -271,10 +270,6 @@ export function createDefaultNaiveInboundSettings(): NaiveInboundSettings {
   };
 }
 
-export function createDefaultPsiphonInboundSettings(): PsiphonInboundSettings {
-  return { serverAddress: '', tunnelProtocol: 'OSSH', serverEntry: '', additionalArguments: [] };
-}
-
 export function createDefaultMieruInboundSettings(): MieruInboundSettings {
   return {
     tcpPorts: [],
@@ -423,9 +418,7 @@ export type AnyInboundSettings =
   | VkTurnProxyInboundSettings
   | AmneziawgInboundSettings
   | TuicInboundSettings
-  | NaiveInboundSettings
-  | PsiphonInboundSettings
-  | MieruInboundSettings;
+  | NaiveInboundSettings  | MieruInboundSettings;
 
 export function createDefaultInboundSettings(protocol: string): AnyInboundSettings | null {
   switch (protocol) {
@@ -459,8 +452,6 @@ export function createDefaultInboundSettings(protocol: string): AnyInboundSettin
       return createDefaultTuicInboundSettings();
     case 'naive':
       return createDefaultNaiveInboundSettings();
-    case 'psiphon':
-      return createDefaultPsiphonInboundSettings();
     case 'mieru':
       return createDefaultMieruInboundSettings();
     default:

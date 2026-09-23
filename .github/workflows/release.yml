@@ -222,17 +222,6 @@ jobs:
           chmod +x "$MITA_BIN"
           rm -f "$MIERU_PKG"
 
-          PSIPHON_VER=$(gh api repos/Psiphon-Labs/psiphon-tunnel-core/releases/latest --jq '.tag_name')
-          test -n "$PSIPHON_VER"
-          if [[ "${{ matrix.platform }}" == "amd64" ]]; then
-            curl -sfLRo psiphond "${CURL_RETRY[@]}" "https://raw.githubusercontent.com/Psiphon-Labs/psiphon-tunnel-core-binaries/master/psiphond/psiphond"
-          else
-            rm -rf /tmp/psiphon-tunnel-core
-            git clone --depth 1 --branch "$PSIPHON_VER" https://github.com/Psiphon-Labs/psiphon-tunnel-core.git /tmp/psiphon-tunnel-core
-            ( cd /tmp/psiphon-tunnel-core/Server && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o "$GITHUB_WORKSPACE/x-ui/bin/psiphond" main.go )
-          fi
-          chmod +x "$GITHUB_WORKSPACE/x-ui/bin/psiphond"
-
           cd ../..
 
       - name: Package

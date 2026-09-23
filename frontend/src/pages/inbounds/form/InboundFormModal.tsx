@@ -63,7 +63,6 @@ import {
   MixedFields,
   MtprotoFields,
   NaiveFields,
-  PsiphonFields,
   MieruFields,
   ShadowsocksFields,
   TuicFields,
@@ -285,7 +284,6 @@ export default function InboundFormModal({
     protocol !== Protocols.TUNNEL &&
     protocol !== Protocols.TUIC &&
     protocol !== Protocols.NAIVE &&
-    protocol !== Protocols.PSIPHON &&
     protocol !== Protocols.MIERU;
 
   const wPort = useWatch({ control, name: 'port' });
@@ -300,7 +298,6 @@ export default function InboundFormModal({
 
     const autoPortProtocols = new Set<string>([
       Protocols.NAIVE,
-      Protocols.PSIPHON,
       Protocols.MIERU,
     ]);
     if (!autoPortProtocols.has(protocol) || autoPortSeedRef.current === protocol) return;
@@ -838,8 +835,7 @@ export default function InboundFormModal({
 
       {protocol === Protocols.TUIC && <TuicFields />}
       {protocol === Protocols.NAIVE && <NaiveFields />}
-      {protocol === Protocols.PSIPHON && <PsiphonFields />}
-      {protocol === Protocols.MIERU && <MieruFields />}
+            {protocol === Protocols.MIERU && <MieruFields />}
 
       {protocol === Protocols.TUN && <TunFields />}
 

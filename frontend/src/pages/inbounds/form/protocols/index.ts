@@ -12,5 +12,4 @@ export { default as TuicFields } from './tuic';
 export { default as VkTurnProxyFields } from './vk-turn-proxy';
 
 export { default as NaiveFields } from './naive';
-export { default as PsiphonFields } from './psiphon';
 export { default as MieruFields } from './mieru';

@@ -1,24 +1,21 @@
 import { useTranslation } from 'react-i18next';
-import { InputNumber, Select, Switch } from 'antd';
+import { Divider, InputNumber, Select, Switch } from 'antd';
 
 import { FormField } from '@/components/form/rhf';
-
-const multiplexingOptions = [
-  'MULTIPLEXING_OFF',
-  'MULTIPLEXING_LOW',
-  'MULTIPLEXING_MIDDLE',
-  'MULTIPLEXING_HIGH',
-].map((value) => ({ value, label: value }));
-
-const handshakeOptions = ['HANDSHAKE_STANDARD', 'HANDSHAKE_NO_WAIT'].map((value) => ({
-  value,
-  label: value,
-}));
 
 const loggingOptions = ['FATAL', 'ERROR', 'WARN', 'INFO', 'DEBUG', 'TRACE'].map((value) => ({
   value,
   label: value,
 }));
+
+const multiplexingValues = [
+  'MULTIPLEXING_OFF',
+  'MULTIPLEXING_LOW',
+  'MULTIPLEXING_MIDDLE',
+  'MULTIPLEXING_HIGH',
+] as const;
+
+const handshakeValues = ['HANDSHAKE_STANDARD', 'HANDSHAKE_NO_WAIT'] as const;
 
 export default function MieruFields() {
   const { t } = useTranslation();
@@ -61,18 +58,34 @@ export default function MieruFields() {
         />
       </FormField>
 
+      <Divider plain orientation="left" style={{ margin: '8px 0 12px' }}>
+        {t('pages.inbounds.form.mieruClientSettings')}
+      </Divider>
+
       <FormField
         name={['settings', 'multiplexing']}
         label={t('pages.inbounds.form.mieruMultiplexing')}
+        tooltip={t('pages.inbounds.form.mieruMultiplexingHint')}
       >
-        <Select options={multiplexingOptions} />
+        <Select
+          options={multiplexingValues.map((value) => ({
+            value,
+            label: t(`pages.inbounds.form.mieruMultiplexingOptions.${value}`),
+          }))}
+        />
       </FormField>
 
       <FormField
         name={['settings', 'handshakeMode']}
         label={t('pages.inbounds.form.mieruHandshakeMode')}
+        tooltip={t('pages.inbounds.form.mieruHandshakeModeHint')}
       >
-        <Select options={handshakeOptions} />
+        <Select
+          options={handshakeValues.map((value) => ({
+            value,
+            label: t(`pages.inbounds.form.mieruHandshakeOptions.${value}`),
+          }))}
+        />
       </FormField>
 
       <FormField name={['settings', 'mtu']} label={t('pages.inbounds.form.mieruMtu')}>

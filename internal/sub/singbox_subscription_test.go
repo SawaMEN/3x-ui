@@ -93,6 +93,39 @@ func TestBuildSeparatedSingBoxSubscriptionFailsClosedOnRoutingTranslation(t *tes
 }
 
 
+func TestGenNativeNaivePreservesNativeType(t *testing.T) {
+	service := &SubJsonService{}
+	inbound := &model.Inbound{
+		Protocol: model.NaiveProxy,
+		Listen:   "naive.example.com",
+		Port:     443,
+		Settings: `{"network":"tcp","tls":{"serverName":"naive.example.com","certificatePath":"/cert.pem","keyPath":"/key.pem"},"clients":[{"email":"user","password":"secret"}]}`,
+		StreamSettings: `{"security":"tls"}`,
+	}
+	subReq := &SubService{}
+	raw := service.genNativeNaive(subReq, inbound, model.Client{Email: "user", Password: "secret"}, nil)
+	if raw == nil {
+		t.Fatal("genNativeNaive returned nil")
+	}
+	var got map[string]any
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatalf("unmarshal native Naive: %v", err)
+	}
+	if got["type"] != "naive" {
+		t.Fatalf("type = %v, want naive; config=%#v", got["type"], got)
+	}
+	if got["server_port"] != float64(443) {
+		t.Fatalf("server_port = %v, want 443", got["server_port"])
+	}
+	if got["username"] != "user" || got["password"] != "secret" {
+		t.Fatalf("credentials = (%v, %v), want user/secret", got["username"], got["password"])
+	}
+	tls, ok := got["tls"].(map[string]any)
+	if !ok || tls["enabled"] != true {
+		t.Fatalf("tls = %#v, want enabled=true", got["tls"])
+	}
+}
+
 func TestGenNativeTUICPreservesClientSettings(t *testing.T) {
 	svc := &SubJsonService{}
 	inbound := &model.Inbound{

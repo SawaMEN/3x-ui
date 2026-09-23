@@ -15,7 +15,6 @@ export const ProtocolSchema = z.enum([
   'amneziawg',
   'tuic',
   'naive',
-  'psiphon',
   'mieru',
   'vk-turn-proxy',
 ]);
@@ -42,7 +41,6 @@ export const Protocols = Object.freeze({
   AMNEZIAWG: 'amneziawg',
   TUIC: 'tuic',
   NAIVE: 'naive',
-  PSIPHON: 'psiphon',
   MIERU: 'mieru',
   VK_TURN_PROXY: 'vk-turn-proxy',
 });
