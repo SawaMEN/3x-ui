@@ -2,6 +2,7 @@ package sub
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -690,5 +691,47 @@ func TestGetJsonFallsBackFromPartialExternalProxy(t *testing.T) {
 	}
 	if got := settings["port"]; got != float64(443) {
 		t.Fatalf("partial externalProxy port = %v, want 443", got)
+	}
+}
+
+
+func TestGetSingBoxJsonRejectsMixedWireGuard(t *testing.T) {
+	dbDir := t.TempDir()
+	t.Setenv("XUI_DB_FOLDER", dbDir)
+	if err := database.InitDB(filepath.Join(dbDir, "x-ui.db")); err != nil {
+		t.Fatalf("InitDB: %v", err)
+	}
+	t.Cleanup(func() { _ = database.CloseDB() })
+
+	serverPriv, _, err := wgutil.GenerateWireguardKeypair()
+	if err != nil { t.Fatalf("server keypair: %v", err) }
+	clientPriv, _, err := wgutil.GenerateWireguardKeypair()
+	if err != nil { t.Fatalf("client keypair: %v", err) }
+
+	const subID = "sub-mixed-wg"
+	db := database.GetDB()
+	wgInbound := &model.Inbound{
+		UserId: 1, Tag: "mixed-wg", Enable: true, Listen: "0.0.0.0", Port: 51820,
+		Protocol: model.WireGuard, Settings: "{\"secretKey\":\"" + serverPriv + "\"}",
+	}
+	vlessInbound := &model.Inbound{
+		UserId: 1, Tag: "mixed-vless", Enable: true, Listen: "0.0.0.0", Port: 443,
+		Protocol: model.VLESS,
+		Settings: "{\"clients\":[{\"id\":\"33333333-4444-4555-8666-777777777777\",\"email\":\"mixed@example.com\",\"subId\":\"" + subID + "\",\"enable\":true}]}",
+		StreamSettings: "{\"network\":\"tcp\",\"security\":\"none\"}",
+	}
+	if err := db.Create(wgInbound).Error; err != nil { t.Fatalf("seed WireGuard inbound: %v", err) }
+	if err := db.Create(vlessInbound).Error; err != nil { t.Fatalf("seed VLESS inbound: %v", err) }
+	client := &model.ClientRecord{
+		Email: "mixed@example.com", SubID: subID, UUID: "33333333-4444-4555-8666-777777777777",
+		PrivateKey: clientPriv, AllowedIPs: "10.0.0.2/32", Enable: true,
+	}
+	if err := db.Create(client).Error; err != nil { t.Fatalf("seed client: %v", err) }
+	if err := db.Create(&model.ClientInbound{ClientId: client.Id, InboundId: wgInbound.Id}).Error; err != nil { t.Fatalf("attach WireGuard: %v", err) }
+	if err := db.Create(&model.ClientInbound{ClientId: client.Id, InboundId: vlessInbound.Id}).Error; err != nil { t.Fatalf("attach VLESS: %v", err) }
+
+	_, _, err = NewSubJsonService("", "", "", "", NewSubService("")).GetSingBoxJson(subID, "sub.example.com", false)
+	if !errors.Is(err, errSubscriptionFormatUnsupported) {
+		t.Fatalf("GetSingBoxJson error = %v, want errSubscriptionFormatUnsupported", err)
 	}
 }
