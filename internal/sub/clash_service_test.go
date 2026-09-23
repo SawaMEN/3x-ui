@@ -1431,3 +1431,65 @@ func TestBuildAmneziaWGProxyForClashEffectiveMTU(t *testing.T) {
 		}
 	})
 }
+
+
+func TestGetProxiesPartialExternalProxyFallsBack(t *testing.T) {
+	svc := &SubClashService{SubService: &SubService{address: "sub.example.com"}}
+	inbound := &model.Inbound{
+		Protocol:       model.VLESS,
+		Listen:         "0.0.0.0",
+		Port:           443,
+		Remark:         "partial",
+		Settings:       `{"encryption":"none"}`,
+		StreamSettings: `{"network":"tcp","security":"none","externalProxy":[{"remark":"fallback-only"}]}`,
+	}
+	client := model.Client{Email: "user@example.com", ID: "11111111-2222-4333-8444-555555555555"}
+
+	proxies := svc.getProxies(svc.SubService, inbound, client, "sub.example.com")
+	if len(proxies) != 1 {
+		t.Fatalf("getProxies returned %d proxies, want 1", len(proxies))
+	}
+	if got := proxies[0]["server"]; got != "sub.example.com" {
+		t.Fatalf("server = %v, want sub.example.com", got)
+	}
+	if got := proxies[0]["port"]; got != 443 {
+		t.Fatalf("port = %v, want 443", got)
+	}
+}
+
+func TestBuildHysteriaProxyExternalTLSOverrides(t *testing.T) {
+	svc := &SubClashService{SubService: &SubService{}}
+	inbound := &model.Inbound{
+		Protocol: model.Hysteria,
+		Listen:   "198.51.100.10",
+		Port:     443,
+		Settings: `{"version":2,"clients":[{"email":"user@example.com","auth":"secret","enable":true}]}`,
+		StreamSettings: `{"security":"tls","tlsSettings":{"serverName":"base.example.com","alpn":["h3"],"settings":{"fingerprint":"chrome"}},"finalmask":{"udp":[{"type":"salamander","settings":{"password":"obfs"}}]}}`,
+	}
+	client := model.Client{Email: "user@example.com", Auth: "secret"}
+	ep := map[string]any{
+		"sni":           "edge.example.com",
+		"alpn":          "h2,http/1.1",
+		"fingerprint":   "firefox",
+		"allowInsecure": true,
+	}
+	proxy := svc.buildHysteriaProxy(svc.SubService, inbound, client, ep)
+	if proxy == nil {
+		t.Fatal("buildHysteriaProxy returned nil")
+	}
+	if got := proxy["sni"]; got != "edge.example.com" {
+		t.Fatalf("sni = %v, want edge.example.com", got)
+	}
+	if got, ok := proxy["alpn"].([]string); !ok || !reflect.DeepEqual(got, []string{"h2", "http/1.1"}) {
+		t.Fatalf("alpn = %v, want [h2 http/1.1]", proxy["alpn"])
+	}
+	if got := proxy["client-fingerprint"]; got != "firefox" {
+		t.Fatalf("client-fingerprint = %v, want firefox", got)
+	}
+	if proxy["skip-cert-verify"] != true {
+		t.Fatalf("skip-cert-verify = %v, want true", proxy["skip-cert-verify"])
+	}
+	if proxy["obfs"] != "salamander" || proxy["obfs-password"] != "obfs" {
+		t.Fatalf("salamander obfs lost: %#v", proxy)
+}
+}
