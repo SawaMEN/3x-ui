@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
 
 func TestBuildSeparatedSingBoxSubscription_MultipleProxies(t *testing.T) {
