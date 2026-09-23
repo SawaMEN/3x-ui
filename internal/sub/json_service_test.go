@@ -658,7 +658,7 @@ func TestNativeNaiveOutbound(t *testing.T) {
 	if raw == nil {
 		t.Fatal("genNativeNaive returned nil")
 	}
-	if raw["type"] != "naive" || raw["server"] != "naive.example.com" || raw["server_port"] != 443 {
+	if raw["type"] != "naive" || raw["server"] != "edge.example.com" || raw["server_port"] != 8443 {
 		t.Fatalf("unexpected Naive outbound endpoint: %#v", raw)
 	}
 	if raw["username"] != client.Email || raw["password"] != client.Password {
