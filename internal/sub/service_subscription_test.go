@@ -1,6 +1,8 @@
 package sub
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -8,8 +10,179 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/xray"
+	wgutil "github.com/SawaMEN/3x-ui/v3/internal/util/wireguard"
 )
 
+
+// Subscription traffic is indexed once per subscriber so traffic-aware
+// remark templates do not fall back to one DB query per client/link.
+func TestGetInboundsBySubIdIndexesTrafficByEmail(t *testing.T) {
+	dbDir := t.TempDir()
+	t.Setenv("XUI_DB_FOLDER", dbDir)
+	if err := database.InitDB(filepath.Join(dbDir, "x-ui.db")); err != nil {
+		t.Fatalf("InitDB: %v", err)
+	}
+	t.Cleanup(func() { _ = database.CloseDB() })
+
+	const subID = "sub-stats-index"
+	db := database.GetDB()
+	inbound := &model.Inbound{
+		UserId: 1, Tag: "stats-index", Enable: true, Port: 43101, Protocol: model.VLESS,
+		Settings: `{"clients":[{"id":"11111111-2222-4333-8444-555555555555","email":"stats@example.com","subId":"sub-stats-index","enable":true}]}`,
+		StreamSettings: `{"network":"tcp","security":"none"}`,
+	}
+	if err := db.Create(inbound).Error; err != nil {
+		t.Fatalf("seed inbound: %v", err)
+	}
+	client := &model.ClientRecord{
+		Email: "stats@example.com", SubID: subID,
+		UUID: "11111111-2222-4333-8444-555555555555", Enable: true,
+	}
+	if err := db.Create(client).Error; err != nil {
+		t.Fatalf("seed client: %v", err)
+	}
+	if err := db.Create(&model.ClientInbound{ClientId: client.Id, InboundId: inbound.Id}).Error; err != nil {
+		t.Fatalf("attach client: %v", err)
+	}
+	if err := db.Create(&xray.ClientTraffic{
+		InboundId: inbound.Id, Email: client.Email, Up: 1234, Down: 5678, Enable: true,
+	}).Error; err != nil {
+		t.Fatalf("seed traffic: %v", err)
+	}
+
+	svc := NewSubService("")
+	svc.PrepareForRequest("sub.example.com")
+	inbounds, err := svc.getInboundsBySubId(subID)
+	if err != nil {
+		t.Fatalf("getInboundsBySubId: %v", err)
+	}
+	if len(inbounds) != 1 {
+		t.Fatalf("inbounds = %d, want 1", len(inbounds))
+	}
+	stats, ok := svc.statsByEmail[client.Email]
+	if !ok {
+		t.Fatalf("statsByEmail missing %q after subscription preload", client.Email)
+	}
+	if stats.Up != 1234 || stats.Down != 5678 {
+		t.Fatalf("statsByEmail[%q] = %+v, want up=1234 down=5678", client.Email, stats)
+	}
+}
+
+
+func TestGetSingBoxJsonKeepsTUIC(t *testing.T) {
+	dbDir := t.TempDir()
+	t.Setenv("XUI_DB_FOLDER", dbDir)
+	if err := database.InitDB(filepath.Join(dbDir, "x-ui.db")); err != nil {
+		t.Fatalf("InitDB: %v", err)
+	}
+	t.Cleanup(func() { _ = database.CloseDB() })
+
+	const subID = "sub-tuic-singbox"
+	db := database.GetDB()
+	inbound := &model.Inbound{
+		UserId: 1, Tag: "tuic-singbox", Enable: true, Port: 443, Protocol: model.TUIC,
+		Settings: `{"clients":[{"id":"11111111-2222-4333-8444-555555555555","email":"tuic@example.com","subId":"sub-tuic-singbox","password":"secret","enable":true}]}`,
+		StreamSettings: `{"network":"tcp","security":"tls","tlsSettings":{"serverName":"tuic.example.com"}}`,
+	}
+	if err := db.Create(inbound).Error; err != nil {
+		t.Fatalf("seed inbound: %v", err)
+	}
+	client := &model.ClientRecord{Email: "tuic@example.com", SubID: subID, UUID: "11111111-2222-4333-8444-555555555555", Password: "secret", Enable: true}
+	if err := db.Create(client).Error; err != nil {
+		t.Fatalf("seed client: %v", err)
+	}
+	if err := db.Create(&model.ClientInbound{ClientId: client.Id, InboundId: inbound.Id}).Error; err != nil {
+		t.Fatalf("attach client: %v", err)
+	}
+
+	out, _, err := NewSubJsonService("", "", "", "", NewSubService("")).GetSingBoxJson(subID, "sub.example.com", false)
+	if err != nil {
+		t.Fatalf("GetSingBoxJson: %v", err)
+	}
+	if !strings.Contains(out, `"type": "tuic"`) {
+		t.Fatalf("sing-box subscription dropped TUIC:\n%s", out)
+	}
+	if strings.Contains(out, `"protocol": "tuic"`) {
+		t.Fatalf("Xray TUIC shape leaked into sing-box subscription:\n%s", out)
+	}
+}
+
+func TestGetSingBoxJsonDoesNotCollapseMultipleWireGuardInbounds(t *testing.T) {
+	dbDir := t.TempDir()
+	t.Setenv("XUI_DB_FOLDER", dbDir)
+	if err := database.InitDB(filepath.Join(dbDir, "x-ui.db")); err != nil {
+		t.Fatalf("InitDB: %v", err)
+	}
+	t.Cleanup(func() { _ = database.CloseDB() })
+
+	serverPrivA, _, err := wgutil.GenerateWireguardKeypair()
+	if err != nil { t.Fatalf("server keypair A: %v", err) }
+	serverPrivB, _, err := wgutil.GenerateWireguardKeypair()
+	if err != nil { t.Fatalf("server keypair B: %v", err) }
+	clientPriv, _, err := wgutil.GenerateWireguardKeypair()
+	if err != nil { t.Fatalf("client keypair: %v", err) }
+
+	const subID = "sub-wg-singbox"
+	db := database.GetDB()
+	inboundA := &model.Inbound{UserId: 1, Tag: "wg-a", Enable: true, Listen: "0.0.0.0", Port: 51820, Protocol: model.WireGuard, Settings: `{"secretKey":"` + serverPrivA + `"}`}
+	inboundB := &model.Inbound{UserId: 1, Tag: "wg-b", Enable: true, Listen: "0.0.0.0", Port: 51821, Protocol: model.WireGuard, Settings: `{"secretKey":"` + serverPrivB + `"}`}
+	if err := db.Create(inboundA).Error; err != nil { t.Fatalf("seed inbound A: %v", err) }
+	if err := db.Create(inboundB).Error; err != nil { t.Fatalf("seed inbound B: %v", err) }
+	client := &model.ClientRecord{Email: "wg@example.com", SubID: subID, UUID: "11111111-2222-4333-8444-555555555555", PrivateKey: clientPriv, AllowedIPs: "10.0.0.2/32", Enable: true}
+	if err := db.Create(client).Error; err != nil { t.Fatalf("seed client: %v", err) }
+	if err := db.Create(&model.ClientInbound{ClientId: client.Id, InboundId: inboundA.Id}).Error; err != nil { t.Fatalf("attach A: %v", err) }
+	if err := db.Create(&model.ClientInbound{ClientId: client.Id, InboundId: inboundB.Id}).Error; err != nil { t.Fatalf("attach B: %v", err) }
+
+	out, _, err := NewSubJsonService("", "", "", "", NewSubService("")).GetSingBoxJson(subID, "wg.example.com", false)
+	if err != nil { t.Fatalf("GetSingBoxJson: %v", err) }
+	if got := strings.Count(out, `"type": "wireguard"`); got < 2 {
+		t.Fatalf("sing-box subscription collapsed WireGuard inbounds: found %d wireguard outbounds\n%s", got, out)
+	}
+}
+func TestGetSubsSkipsEmptyRenderedLinksButKeepsTraffic(t *testing.T) {
+	dbDir := t.TempDir()
+	t.Setenv("XUI_DB_FOLDER", dbDir)
+	if err := database.InitDB(filepath.Join(dbDir, "x-ui.db")); err != nil {
+		t.Fatalf("InitDB: %v", err)
+	}
+	t.Cleanup(func() { _ = database.CloseDB() })
+
+	const subID = "sub-empty-link"
+	db := database.GetDB()
+	inbound := &model.Inbound{
+		UserId: 1, Tag: "naive-empty", Enable: true, Port: 8443, Protocol: model.NaiveProxy,
+		Settings: `{"network":"tcp"}`,
+		StreamSettings: `{"security":"tls","tlsSettings":{"serverName":"naive.example.com"}}`,
+	}
+	if err := db.Create(inbound).Error; err != nil {
+		t.Fatalf("seed inbound: %v", err)
+	}
+	client := &model.ClientRecord{
+		Email: "naive@example.com", SubID: subID, Enable: true,
+		UUID: "11111111-2222-4333-8444-555555555555", Password: "",
+	}
+	if err := db.Create(client).Error; err != nil {
+		t.Fatalf("seed client: %v", err)
+	}
+	if err := db.Create(&model.ClientInbound{ClientId: client.Id, InboundId: inbound.Id}).Error; err != nil {
+		t.Fatalf("attach client: %v", err)
+	}
+	if err := db.Create(&xray.ClientTraffic{Email: client.Email, Up: 10, Down: 20, Enable: true}).Error; err != nil {
+		t.Fatalf("seed traffic: %v", err)
+	}
+
+	links, _, _, traffic, err := NewSubService("").GetSubs(subID, "sub.example.com")
+	if err != nil {
+		t.Fatalf("GetSubs: %v", err)
+	}
+	if len(links) != 0 {
+		t.Fatalf("links = %v, want no blank entry", links)
+	}
+	if traffic.Up != 10 || traffic.Down != 20 {
+		t.Fatalf("traffic = up:%d down:%d, want up:10 down:20", traffic.Up, traffic.Down)
+	}
+}
 func TestGetSubs_MixedNormalizedProtocols(t *testing.T) {
 	dbDir := t.TempDir()
 	t.Setenv("XUI_DB_FOLDER", dbDir)
@@ -417,5 +590,148 @@ func TestGetSubs_NaiveUsesHostEndpoints(t *testing.T) {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("Naive host override missing %q in %v", want, all)
 		}
+	}
+}
+
+
+func TestGetSingBoxJsonResolvesTUICWildcardListen(t *testing.T) {
+	dbDir := t.TempDir()
+	t.Setenv("XUI_DB_FOLDER", dbDir)
+	if err := database.InitDB(filepath.Join(dbDir, "x-ui.db")); err != nil {
+		t.Fatalf("InitDB: %v", err)
+	}
+	t.Cleanup(func() { _ = database.CloseDB() })
+
+	const subID = "sub-tuic-wildcard"
+	db := database.GetDB()
+	inbound := &model.Inbound{
+		UserId: 1, Tag: "tuic-wildcard", Enable: true, Listen: "0.0.0.0", Port: 443,
+		Protocol: model.TUIC,
+		Settings: `{"clients":[{"id":"11111111-2222-4333-8444-555555555555","email":"tuic-wildcard@example.com","password":"secret","enable":true}]}`,
+		StreamSettings: `{"network":"tcp","security":"tls","tlsSettings":{"serverName":"tuic.example.com"}}`,
+	}
+	if err := db.Create(inbound).Error; err != nil {
+		t.Fatalf("seed inbound: %v", err)
+	}
+	client := &model.ClientRecord{
+		Email: "tuic-wildcard@example.com", SubID: subID,
+		UUID: "11111111-2222-4333-8444-555555555555", Password: "secret", Enable: true,
+	}
+	if err := db.Create(client).Error; err != nil {
+		t.Fatalf("seed client: %v", err)
+	}
+	if err := db.Create(&model.ClientInbound{ClientId: client.Id, InboundId: inbound.Id}).Error; err != nil {
+		t.Fatalf("attach client: %v", err)
+	}
+
+	out, _, err := NewSubJsonService("", "", "", "", NewSubService("")).GetSingBoxJson(subID, "sub.example.com", false)
+	if err != nil {
+		t.Fatalf("GetSingBoxJson: %v", err)
+	}
+	var config map[string]any
+	if err := json.Unmarshal([]byte(out), &config); err != nil {
+		t.Fatalf("unmarshal sing-box config: %v", err)
+	}
+	outbounds, _ := config["outbounds"].([]any)
+	if len(outbounds) == 0 {
+		t.Fatalf("sing-box config has no outbounds: %s", out)
+	}
+	proxy, _ := outbounds[0].(map[string]any)
+	if got := proxy["server"]; got != "sub.example.com" {
+		t.Fatalf("TUIC server = %v, want advertised request host instead of wildcard listen", got)
+	}
+}
+
+func TestGetJsonFallsBackFromPartialExternalProxy(t *testing.T) {
+	dbDir := t.TempDir()
+	t.Setenv("XUI_DB_FOLDER", dbDir)
+	if err := database.InitDB(filepath.Join(dbDir, "x-ui.db")); err != nil {
+		t.Fatalf("InitDB: %v", err)
+	}
+	t.Cleanup(func() { _ = database.CloseDB() })
+
+	const subID = "sub-partial-external"
+	db := database.GetDB()
+	inbound := &model.Inbound{
+		UserId: 1, Tag: "vless-partial", Enable: true, Listen: "0.0.0.0", Port: 443,
+		Protocol: model.VLESS,
+		Settings: `{"clients":[{"id":"22222222-3333-4444-8555-666666666666","email":"partial@example.com","subId":"sub-partial-external","enable":true}]}`,
+		StreamSettings: `{"network":"tcp","security":"tls","tlsSettings":{"serverName":"partial.example.com"},"externalProxy":[{"remark":"fallback"}]}`,
+	}
+	if err := db.Create(inbound).Error; err != nil {
+		t.Fatalf("seed inbound: %v", err)
+	}
+	client := &model.ClientRecord{
+		Email: "partial@example.com", SubID: subID,
+		UUID: "22222222-3333-4444-8555-666666666666", Enable: true,
+	}
+	if err := db.Create(client).Error; err != nil {
+		t.Fatalf("seed client: %v", err)
+	}
+	if err := db.Create(&model.ClientInbound{ClientId: client.Id, InboundId: inbound.Id}).Error; err != nil {
+		t.Fatalf("attach client: %v", err)
+	}
+
+	out, _, err := NewSubJsonService("", "", "", "", NewSubService("")).GetJson(subID, "sub.example.com", false)
+	if err != nil {
+		t.Fatalf("GetJson: %v", err)
+	}
+	var config map[string]any
+	if err := json.Unmarshal([]byte(out), &config); err != nil {
+		t.Fatalf("unmarshal JSON subscription: %v", err)
+	}
+	outbounds, _ := config["outbounds"].([]any)
+	if len(outbounds) == 0 {
+		t.Fatalf("JSON subscription has no outbounds: %s", out)
+	}
+	proxy, _ := outbounds[0].(map[string]any)
+	settings, _ := proxy["settings"].(map[string]any)
+	if got := settings["address"]; got != "sub.example.com" {
+		t.Fatalf("partial externalProxy address = %v, want advertised request host", got)
+	}
+	if got := settings["port"]; got != float64(443) {
+		t.Fatalf("partial externalProxy port = %v, want 443", got)
+	}
+}
+
+
+func TestGetSingBoxJsonRejectsMixedWireGuard(t *testing.T) {
+	dbDir := t.TempDir()
+	t.Setenv("XUI_DB_FOLDER", dbDir)
+	if err := database.InitDB(filepath.Join(dbDir, "x-ui.db")); err != nil {
+		t.Fatalf("InitDB: %v", err)
+	}
+	t.Cleanup(func() { _ = database.CloseDB() })
+
+	serverPriv, _, err := wgutil.GenerateWireguardKeypair()
+	if err != nil { t.Fatalf("server keypair: %v", err) }
+	clientPriv, _, err := wgutil.GenerateWireguardKeypair()
+	if err != nil { t.Fatalf("client keypair: %v", err) }
+
+	const subID = "sub-mixed-wg"
+	db := database.GetDB()
+	wgInbound := &model.Inbound{
+		UserId: 1, Tag: "mixed-wg", Enable: true, Listen: "0.0.0.0", Port: 51820,
+		Protocol: model.WireGuard, Settings: "{\"secretKey\":\"" + serverPriv + "\"}",
+	}
+	vlessInbound := &model.Inbound{
+		UserId: 1, Tag: "mixed-vless", Enable: true, Listen: "0.0.0.0", Port: 443,
+		Protocol: model.VLESS,
+		Settings: "{\"clients\":[{\"id\":\"33333333-4444-4555-8666-777777777777\",\"email\":\"mixed@example.com\",\"subId\":\"" + subID + "\",\"enable\":true}]}",
+		StreamSettings: "{\"network\":\"tcp\",\"security\":\"none\"}",
+	}
+	if err := db.Create(wgInbound).Error; err != nil { t.Fatalf("seed WireGuard inbound: %v", err) }
+	if err := db.Create(vlessInbound).Error; err != nil { t.Fatalf("seed VLESS inbound: %v", err) }
+	client := &model.ClientRecord{
+		Email: "mixed@example.com", SubID: subID, UUID: "33333333-4444-4555-8666-777777777777",
+		PrivateKey: clientPriv, AllowedIPs: "10.0.0.2/32", Enable: true,
+	}
+	if err := db.Create(client).Error; err != nil { t.Fatalf("seed client: %v", err) }
+	if err := db.Create(&model.ClientInbound{ClientId: client.Id, InboundId: wgInbound.Id}).Error; err != nil { t.Fatalf("attach WireGuard: %v", err) }
+	if err := db.Create(&model.ClientInbound{ClientId: client.Id, InboundId: vlessInbound.Id}).Error; err != nil { t.Fatalf("attach VLESS: %v", err) }
+
+	_, _, err = NewSubJsonService("", "", "", "", NewSubService("")).GetSingBoxJson(subID, "sub.example.com", false)
+	if !errors.Is(err, errSubscriptionFormatUnsupported) {
+		t.Fatalf("GetSingBoxJson error = %v, want errSubscriptionFormatUnsupported", err)
 	}
 }

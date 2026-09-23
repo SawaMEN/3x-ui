@@ -806,6 +806,30 @@ func (s *InboundService) normalizeVKTurnProxyClient(client *VKTurnProxyClient, i
 	client.UpdatedAt = now
 }
 
+func isHysteria2Inbound(inbound *model.Inbound) bool {
+	if inbound == nil || inbound.Protocol != model.Hysteria {
+		return false
+	}
+	var settings map[string]any
+	if err := json.Unmarshal([]byte(inbound.Settings), &settings); err != nil {
+		return false
+	}
+	version, ok := settings["version"]
+	if !ok {
+		return true
+	}
+	switch v := version.(type) {
+	case float64:
+		return int(v) == 2
+	case int:
+		return v == 2
+	case string:
+		return strings.TrimSpace(v) == "2"
+	default:
+		return false
+	}
+}
+
 func (s *InboundService) validateVKTurnProxySettings(settings *VKTurnProxySettings, allowClients bool) error {
 	switch settings.Forward.Type {
 	case VKTurnProxyForwardWireGuardInbound:
@@ -827,8 +851,8 @@ func (s *InboundService) validateVKTurnProxySettings(settings *VKTurnProxySettin
 		if err != nil {
 			return err
 		}
-		if target.Protocol != model.Hysteria2 {
-			return common.NewError("selected forward target is not a hysteria2 inbound")
+		if !isHysteria2Inbound(target) {
+			return common.NewError("selected forward target is not a Hysteria2 inbound")
 		}
 	case VKTurnProxyForwardExternal:
 		if strings.TrimSpace(settings.Forward.Host) == "" {
@@ -878,8 +902,8 @@ func (s *InboundService) resolveVKTurnProxyForwardAddress(settings *VKTurnProxyS
 		if err != nil {
 			return "", err
 		}
-		if inbound.Protocol != model.Hysteria2 {
-			return "", common.NewError("selected inbound is not hysteria2")
+		if !isHysteria2Inbound(inbound) {
+			return "", common.NewError("selected inbound is not Hysteria2")
 		}
 		host := strings.TrimSpace(inbound.Listen)
 		switch host {

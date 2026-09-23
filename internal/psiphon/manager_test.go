@@ -26,14 +26,22 @@ func TestInstanceFromInboundWithGeneratedEntry(t *testing.T) {
 	}
 }
 
-func TestInstanceFromInboundAllowsProvidedEntryWithoutPublicAddress(t *testing.T) {
+func TestInstanceFromInboundRejectsEntryWithoutServerAddress(t *testing.T) {
 	inbound := &model.Inbound{
 		Port:     443,
 		Protocol: model.Psiphon,
 		Settings: `{"tunnelProtocol":"TLS-OSSH","serverEntry":"existing-entry"}`,
 	}
-	inst, ok := InstanceFromInbound(inbound)
-	if !ok || inst.ServerEntry != "existing-entry" {
-		t.Fatalf("expected provided server entry to be sufficient: %#v, %v", inst, ok)
+	if _, ok := InstanceFromInbound(inbound); ok {
+		t.Fatal("serverEntry is client metadata and must not replace the server address")
+	}
+}
+
+func TestInstanceFingerprintIgnoresServerEntry(t *testing.T) {
+	base := Instance{ServerAddress:"203.0.113.10", Protocol:"OSSH", Port:443}
+	withEntry := base
+	withEntry.ServerEntry = "different-client-metadata"
+	if base.fingerprint() != withEntry.fingerprint() {
+		t.Fatal("server-entry changes must not restart the Psiphon server process")
 	}
 }

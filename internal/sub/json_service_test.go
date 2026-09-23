@@ -518,6 +518,91 @@ func TestSubJsonServiceWireguard(t *testing.T) {
 	}
 }
 
+func TestSubJsonServiceWireguardDoesNotInventAddress(t *testing.T) {
+	serverPriv, _, err := wgutil.GenerateWireguardKeypair()
+	if err != nil {
+		t.Fatalf("server keypair: %v", err)
+	}
+	clientPriv, _, err := wgutil.GenerateWireguardKeypair()
+	if err != nil {
+		t.Fatalf("client keypair: %v", err)
+	}
+	inbound := &model.Inbound{
+		Listen: "203.0.113.9", Port: 51820, Protocol: model.WireGuard,
+		Settings: `{"secretKey":"` + serverPriv + `"}`,
+	}
+	client := model.Client{Email: "user", PrivateKey: clientPriv}
+	raw := NewSubJsonService("", "", "", "", nil).genWireguard(inbound, client)
+	if raw == nil {
+		t.Fatal("genWireguard returned nil for valid client credentials")
+	}
+	settings := outboundSettings(t, raw)
+	if _, exists := settings["address"]; exists {
+		t.Fatalf("genWireguard invented an address: %v", settings["address"])
+	}
+}
+func TestSubJsonServiceGetConfigKeepsWireguard(t *testing.T) {
+	serverPriv, _, err := wgutil.GenerateWireguardKeypair()
+	if err != nil {
+		t.Fatalf("server keypair: %v", err)
+	}
+	clientPriv, _, err := wgutil.GenerateWireguardKeypair()
+	if err != nil {
+		t.Fatalf("client keypair: %v", err)
+	}
+	inbound := &model.Inbound{
+		Listen: "203.0.113.9", Port: 51820, Protocol: model.WireGuard,
+		Settings: `{"secretKey":"` + serverPriv + `","mtu":1420}`,
+	}
+	client := model.Client{Email: "user", PrivateKey: clientPriv, AllowedIPs: []string{"10.0.0.2/32"}}
+
+	configs := NewSubJsonService("", "", "", "", nil).getConfig(&SubService{address: "sub.example.com"}, inbound, client, "sub.example.com")
+	if len(configs) != 1 {
+		t.Fatalf("JSON configs = %d, want 1", len(configs))
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(configs[0], &doc); err != nil {
+		t.Fatalf("unmarshal config: %v", err)
+	}
+	outbounds, _ := doc["outbounds"].([]any)
+	if len(outbounds) == 0 {
+		t.Fatal("JSON config has no outbounds")
+	}
+	outbound, _ := outbounds[0].(map[string]any)
+	if outbound["protocol"] != "wireguard" {
+		t.Fatalf("outbound protocol = %v, want wireguard", outbound["protocol"])
+	}
+}
+
+func TestSubJsonServiceWireguardMissingServerKeyKeepsClientProfile(t *testing.T) {
+	clientPriv, _, err := wgutil.GenerateWireguardKeypair()
+	if err != nil {
+		t.Fatalf("client keypair: %v", err)
+	}
+	inbound := &model.Inbound{Listen: "203.0.113.9", Port: 51820, Protocol: model.WireGuard, Settings: `{}`
+	client := model.Client{Email: "user", PrivateKey: clientPriv}
+
+	raw := NewSubJsonService("", "", "", "", nil).genWireguard(inbound, client)
+	if raw == nil {
+		t.Fatal("genWireguard returned nil when only server public key is unavailable")
+	}
+	settings := outboundSettings(t, raw)
+	if _, exists := settings["address"]; exists {
+		t.Fatalf("unexpected invented client address: %v", settings["address"])
+	}
+	peers, _ := settings["peers"].([]any)
+	if len(peers) != 1 {
+		t.Fatalf("peers len = %d, want 1", len(peers))
+	}
+	peer, _ := peers[0].(map[string]any)
+	if _, exists := peer["publicKey"]; exists {
+		t.Fatalf("unexpected publicKey with missing server secretKey: %v", peer["publicKey"])
+	}
+	if peer["endpoint"] != "203.0.113.9:51820" {
+		t.Fatalf("peer endpoint = %v, want 203.0.113.9:51820", peer["endpoint"])
+	}
+}
+
 func TestSubJsonServiceWireguardNoKey(t *testing.T) {
 	inbound := &model.Inbound{Listen: "203.0.113.9", Port: 51820, Protocol: model.WireGuard, Settings: `{}`}
 	client := model.Client{Email: "user"}
@@ -834,4 +919,19 @@ func TestGetSingBoxJsonEmitsNativeOutbound(t *testing.T) {
 		t.Fatal("fixture sanity check failed")
 	}
 	_ = svc
+}
+
+
+func TestGetConfigSkipsPlaintextHysteriaExternalProxy(t *testing.T) {
+	inbound := &model.Inbound{
+		Protocol: model.Hysteria, Listen: "203.0.113.1", Port: 443,
+		Settings: `{"version":2}`,
+		StreamSettings: `{"network":"hysteria","security":"tls","hysteriaSettings":{"version":2},"externalProxy":[{"forceTls":"none","dest":"plain.example.com","port":80}]}`,
+	}
+	client := model.Client{Email:"user", Auth:"secret"}
+	svc := NewSubJsonService("", "", "", "", nil)
+	subReq := NewSubService("").ForRequest("sub.example.com")
+	if raws := svc.getConfig(subReq, inbound, client, "sub.example.com"); len(raws) != 0 {
+		t.Fatalf("plaintext Hysteria external endpoint must be skipped from JSON output, got %d configs", len(raws))
+	}
 }

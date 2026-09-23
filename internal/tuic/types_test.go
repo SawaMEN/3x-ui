@@ -32,6 +32,9 @@ func TestInstanceFromInbound(t *testing.T) {
 		if inst.Clients[0].UUID != "11111111-2222-3333-4444-555555555555" || inst.Clients[0].Password != "pass1" {
 			t.Fatalf("unexpected client: %+v", inst.Clients[0])
 		}
+		if inst.ZeroRTTHandshake {
+			t.Fatal("zero-rtt handshake must default to disabled")
+		}
 	})
 
 	t.Run("normalizes uuid to lowercase and trims space", func(t *testing.T) {

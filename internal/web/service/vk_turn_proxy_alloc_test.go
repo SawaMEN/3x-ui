@@ -99,3 +99,48 @@ func TestVKTurnProxyAllocatorReusesFreedHole(t *testing.T) {
 		t.Fatalf("expected freed hole 10.0.0.3/32 to be reused, got %s", got)
 	}
 }
+
+
+func TestSanitizeVKTurnEndpointHost(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"hostname", "edge.example.com", "edge.example.com"},
+		{"hostname with spaces", "  edge.example.com  ", "edge.example.com"},
+		{"ipv4", "203.0.113.10", "203.0.113.10"},
+		{"ipv6", "2001:db8::10", "2001:db8::10"},
+		{"bracketed ipv6", "[2001:db8::10]", "2001:db8::10"},
+		{"invalid control", "edge.example.com\n", ""},
+		{"invalid colon hostname", "bad:name", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := sanitizeVKTurnEndpointHost(tc.in); got != tc.want {
+				t.Fatalf("sanitizeVKTurnEndpointHost(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+
+func TestIsHysteria2Inbound(t *testing.T) {
+	cases := []struct {
+		name string
+		ib   *model.Inbound
+		want bool
+	}{
+		{"v2", &model.Inbound{Protocol:model.Hysteria, Settings:`{"version":2}`}, true},
+		{"v1", &model.Inbound{Protocol:model.Hysteria, Settings:`{"version":1}`}, false},
+		{"default", &model.Inbound{Protocol:model.Hysteria, Settings:`{}`}, true},
+		{"other", &model.Inbound{Protocol:model.VLESS, Settings:`{"version":2}`}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isHysteria2Inbound(tc.ib); got != tc.want {
+				t.Fatalf("isHysteria2Inbound(%+v) = %v, want %v", tc.ib, got, tc.want)
+			}
+		})
+	}
+}

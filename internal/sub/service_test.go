@@ -10,6 +10,76 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
 
+func TestClashTransportCapabilities(t *testing.T) {
+	kcp := &model.Inbound{
+		Protocol: model.VLESS,
+		StreamSettings: `{"network":"kcp","kcpSettings":{"mtu":1350}}`,
+	}
+	if !containsUnsupportedClashProtocol([]*model.Inbound{kcp}) {
+		t.Fatal("Clash capability map must reject KCP transport")
+	}
+
+	tcpHTTPHeader := &model.Inbound{
+		Protocol: model.VLESS,
+		StreamSettings: `{"network":"tcp","tcpSettings":{"header":{"type":"http"}}}`,
+	}
+	if !containsUnsupportedClashProtocol([]*model.Inbound{tcpHTTPHeader}) {
+		t.Fatal("Clash capability map must reject TCP HTTP-header transport when no compatible renderer exists")
+	}
+
+	ws := &model.Inbound{
+		Protocol: model.VLESS,
+		StreamSettings: `{"network":"ws","wsSettings":{"path":"/ws"}}`,
+	}
+	grpc := &model.Inbound{
+		Protocol: model.VLESS,
+		StreamSettings: `{"network":"grpc","grpcSettings":{"serviceName":"svc"}}`,
+	}
+	xhttp := &model.Inbound{
+		Protocol: model.VLESS,
+		StreamSettings: `{"network":"xhttp","xhttpSettings":{"path":"/xhttp","mode":"auto"}}`,
+	}
+	for name, inbound := range map[string]*model.Inbound{
+		"ws": ws, "grpc": grpc, "xhttp": xhttp,
+	} {
+		if containsUnsupportedClashProtocol([]*model.Inbound{inbound}) {
+			t.Fatalf("Clash capability map must keep supported transport %s", name)
+		}
+	}
+
+	hysteria := &model.Inbound{
+		Protocol: model.Hysteria,
+		StreamSettings: `{"network":"kcp"}`,
+	}
+	if containsUnsupportedClashProtocol([]*model.Inbound{hysteria}) {
+		t.Fatal("Hysteria must use its dedicated Clash renderer and not be rejected by generic transport gating")
+	}
+}
+
+func TestSubscriptionFormatCapabilities(t *testing.T) {
+	naive := &model.Inbound{Protocol: model.NaiveProxy}
+	tuic := &model.Inbound{Protocol: model.TUIC}
+	mtproto := &model.Inbound{Protocol: model.MTProto}
+	awg := &model.Inbound{Protocol: model.AmneziaWG}
+	mieru := &model.Inbound{Protocol: model.Mieru}
+	vless := &model.Inbound{Protocol: model.VLESS}
+
+	if !containsUnsupportedJSONProtocol([]*model.Inbound{naive}) || !containsUnsupportedJSONProtocol([]*model.Inbound{tuic}) || !containsUnsupportedJSONProtocol([]*model.Inbound{mtproto}) {
+		t.Fatal("JSON capability map must reject Naive, TUIC and MTProto")
+	}
+	if !containsUnsupportedSingBoxProtocol([]*model.Inbound{mtproto}) || !containsUnsupportedSingBoxProtocol([]*model.Inbound{awg}) || !containsUnsupportedSingBoxProtocol([]*model.Inbound{mieru}) {
+		t.Fatal("sing-box capability map must reject panel-only protocols")
+	}
+	if containsUnsupportedSingBoxProtocol([]*model.Inbound{naive}) || containsUnsupportedSingBoxProtocol([]*model.Inbound{tuic}) || containsUnsupportedSingBoxProtocol([]*model.Inbound{vless}) {
+		t.Fatal("sing-box capability map must keep native Naive/TUIC/VLESS support")
+	}
+	if !containsUnsupportedClashProtocol([]*model.Inbound{naive}) || !containsUnsupportedClashProtocol([]*model.Inbound{mtproto}) || !containsUnsupportedClashProtocol([]*model.Inbound{mieru}) {
+		t.Fatal("Clash capability map must reject unsupported protocols")
+	}
+	if containsUnsupportedClashProtocol([]*model.Inbound{tuic}) || containsUnsupportedClashProtocol([]*model.Inbound{awg}) || containsUnsupportedClashProtocol([]*model.Inbound{vless}) {
+		t.Fatal("Clash capability map must keep TUIC/AWG/VLESS support")
+	}
+}
 func TestSubscriptionExpiryFromClient(t *testing.T) {
 	const now = int64(1_700_000_000_000)
 	const oneDayMs = int64(86_400_000)

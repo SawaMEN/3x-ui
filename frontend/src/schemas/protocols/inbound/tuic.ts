@@ -33,7 +33,8 @@ export const TuicServerSchema = z.object({
   congestion_control: z.enum(['bbr', 'cubic', 'new_reno']).default('bbr'),
   alpn: z.array(z.string()).default(['h3', 'spdy/3.1']),
   udp_relay_mode: z.enum(['native', 'quic']).default('native'),
-  zero_rtt_handshake: z.boolean().default(true),
+  // 0-RTT is vulnerable to replay attacks; keep it opt-in.
+  zero_rtt_handshake: z.boolean().default(false),
   log_level: z.enum(['info', 'warn', 'error', 'debug']).default('info'),
   max_idle_time: clearedToDefault(z.number().int().min(1).default(15)),
   authentication_timeout: clearedToDefault(z.number().int().min(1).default(3)),

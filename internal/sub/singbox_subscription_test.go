@@ -2,7 +2,10 @@ package sub
 
 import (
 	"encoding/json"
+	"errors"
 	"testing"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
 
 func TestBuildSeparatedSingBoxSubscription_MultipleProxies(t *testing.T) {
@@ -66,5 +69,54 @@ func TestBuildSeparatedSingBoxSubscription_AlwaysReturnArrayForSingleProxy(t *te
 	}
 	if len(docs) != 1 {
 		t.Fatalf("profile count = %d, want 1", len(docs))
+	}
+}
+
+
+func TestBuildSeparatedSingBoxSubscriptionFailsClosedOnRoutingTranslation(t *testing.T) {
+	template := map[string]any{
+		"routing": map[string]any{
+			"rules": []any{
+				map[string]any{
+					"network":     "icmp",
+					"outboundTag": "direct",
+				},
+			},
+		},
+	}
+	_, err := buildSeparatedSingBoxSubscription(template, []map[string]any{
+		{"type": "vless", "tag": "vless-user", "server": "example.com", "server_port": 443},
+	}, false)
+	if !errors.Is(err, errSubscriptionFormatUnsupported) {
+		t.Fatalf("error = %v, want errSubscriptionFormatUnsupported", err)
+	}
+}
+
+
+func TestGenNativeTUICPreservesClientSettings(t *testing.T) {
+	svc := &SubJsonService{}
+	inbound := &model.Inbound{
+		Protocol: model.TUIC,
+		Listen: "tuic.example.com",
+		Port: 443,
+		Settings: `{"certificate":"/cert.pem","private_key":"/key.pem","congestion_control":"bbr","udp_relay_mode":"quic","zero_rtt_handshake":true,"clients":[{"uuid":"11111111-2222-3333-4444-555555555555","password":"secret","email":"user","enable":true}]}`,
+		StreamSettings: `{"security":"tls","tlsSettings":{"serverName":"tuic.example.com","alpn":["h3"]}}`,
+	}
+	raw := svc.genNativeTUIC(inbound, unmarshalStreamSettings(inbound.StreamSettings), model.Client{ID:"11111111-2222-3333-4444-555555555555",Password:"secret",Email:"user"})
+	if raw == nil {
+		t.Fatal("genNativeTUIC returned nil")
+	}
+	var got map[string]any
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatalf("unmarshal native TUIC: %v", err)
+	}
+	for key, want := range map[string]any{
+		"congestion_control": "bbr",
+		"udp_relay_mode":     "quic",
+		"zero_rtt_handshake":  true,
+	} {
+		if got[key] != want {
+			t.Fatalf("%s = %v, want %v; config=%#v", key, got[key], want, got)
+		}
 	}
 }

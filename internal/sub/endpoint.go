@@ -2,6 +2,7 @@ package sub
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"strings"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
@@ -33,11 +34,30 @@ type ShareEndpoint struct {
 
 // externalProxyToEndpoint maps one externalProxy entry to an endpoint that
 // carries the entry for delegated, provably-identical TLS application.
+func normalizeShareEndpoint(e, fallback ShareEndpoint) ShareEndpoint {
+	if strings.TrimSpace(e.Address) == "" {
+		e.Address = fallback.Address
+	}
+	if e.Port <= 0 {
+		e.Port = fallback.Port
+	}
+	return e
+}
+
 func externalProxyToEndpoint(ep map[string]any) ShareEndpoint {
 	e := ShareEndpoint{ep: ep}
 	e.Address, _ = ep["dest"].(string)
-	if p, ok := ep["port"].(float64); ok {
+	switch p := ep["port"].(type) {
+	case float64:
 		e.Port = int(p)
+	case int:
+		e.Port = p
+	case int64:
+		e.Port = int(p)
+	case json.Number:
+		if n, err := p.Int64(); err == nil {
+			e.Port = int(n)
+		}
 	}
 	e.Remark, _ = ep["remark"].(string)
 	e.ServerDescription, _ = ep["serverDescription"].(string)

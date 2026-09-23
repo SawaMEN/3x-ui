@@ -51,10 +51,10 @@ func (s *SubClashService) getClash(subId string, host string, legacy bool) (stri
 	if len(inbounds) == 0 && len(externalLinks) == 0 {
 		return "", "", nil
 	}
-	// Mihomo/Clash has no native NaiveProxy outbound in the profile schema
-	// used here. Refuse partial output so auto-detection can fall back to raw
-	// links and keep Naive alongside Hysteria2.
-	if containsSubscriptionProtocol(inbounds, model.NaiveProxy) {
+	// Refuse partial Clash output for protocols this renderer cannot represent.
+	// Returning the format-unsupported sentinel makes auto-detection keep the
+	// complete raw subscription instead of silently dropping an inbound.
+	if containsUnsupportedClashProtocol(inbounds) {
 		return "", "", errSubscriptionFormatUnsupported
 	}
 
@@ -96,9 +96,11 @@ func (s *SubClashService) getClash(subId string, host string, legacy bool) (stri
 			if name == "" {
 				name = ext.Email
 			}
-			if proxy := s.clashProxyFromExternal(el.Link, name); proxy != nil {
-				proxies = append(proxies, proxy)
+			proxy := s.clashProxyFromExternal(el.Link, name)
+			if proxy == nil {
+				return "", "", errSubscriptionFormatUnsupported
 			}
+			proxies = append(proxies, proxy)
 		}
 	}
 
@@ -358,16 +360,27 @@ func (s *SubClashService) getProxies(subReq *SubService, inbound *model.Inbound,
 		// the synthetic/legacy entry) before it becomes the proxy name.
 		subReq.renderHostRemark(inbound, client, extPrxy, network)
 		workingInbound := *inbound
+		// External proxy entries are optional overrides. A partial entry must
+		// inherit the resolved subscriber endpoint instead of emitting an empty
+		// server or port 0 into the Clash profile.
 		// A Clash "server" is a bare host, not a URI authority, and the custom
 		// share address stores IPv6 literals bracketed.
 		dest, _ := extPrxy["dest"].(string)
 		workingInbound.Listen = strings.Trim(dest, "[]")
-		if port, ok := extPrxy["port"].(float64); ok {
+		if strings.TrimSpace(workingInbound.Listen) == "" {
+			workingInbound.Listen = strings.Trim(defaultDest, "[]")
+		}
+		if port, ok := extPrxy["port"].(float64); ok && int(port) > 0 {
 			workingInbound.Port = int(port)
 		}
 		workingStream := cloneStreamForExternalProxy(stream)
 
 		forceTls, _ := extPrxy["forceTls"].(string)
+		if inbound.Protocol == model.Hysteria && strings.EqualFold(strings.TrimSpace(forceTls), "none") {
+			// Hysteria is TLS/QUIC only; do not emit a misleading plaintext
+			// Clash proxy for an endpoint explicitly forcing TLS off.
+			continue
+		}
 		switch forceTls {
 		case "tls":
 			if workingStream["security"] != "tls" {
@@ -528,6 +541,18 @@ func (s *SubClashService) buildHysteriaProxy(subReq *SubService, inbound *model.
 				proxy["client-fingerprint"] = fp
 			}
 		}
+	}
+	// External proxy TLS fields override the base Hysteria client just as
+	// they do for VLESS/Trojan. The raw inbound stream remains the source for
+	// finalmask/obfs, because streamData intentionally prunes those fields.
+	if sni, ok := externalProxySNI(ep); ok {
+		proxy["sni"] = sni
+	}
+	if alpn, ok := externalProxyALPNList(ep["alpn"]); ok {
+		proxy["alpn"] = alpn
+	}
+	if fp, ok := ep["fingerprint"].(string); ok && strings.TrimSpace(fp) != "" {
+		proxy["client-fingerprint"] = strings.TrimSpace(fp)
 	}
 	if insecure, ok := ep["allowInsecure"].(bool); ok && insecure {
 		proxy["skip-cert-verify"] = true

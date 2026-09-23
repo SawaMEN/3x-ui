@@ -245,6 +245,17 @@ func dedupedClientLinks(client *VKTurnProxyClient) []string {
 	return out
 }
 
+func sanitizeVKTurnEndpointHost(raw string) string {
+	host := strings.TrimSpace(strings.Trim(raw, "[]"))
+	if host == "" || strings.ContainsAny(host, "\r\n\t /\\") {
+		return ""
+	}
+	if strings.Contains(host, ":") && net.ParseIP(host) == nil {
+		return ""
+	}
+	return host
+}
+
 func sanitizeIPv4Host(raw string) string {
 	host := strings.TrimSpace(strings.Trim(raw, "[]"))
 	if host == "" {
@@ -1120,10 +1131,17 @@ func (s *InboundService) GetVKTurnProxyPeerOptions(inboundID int) (*VKTurnProxyP
 	return resp, nil
 }
 
-func (s *InboundService) buildVKTurnProxyExportConfig(inbound *model.Inbound, settings *VKTurnProxySettings, client *VKTurnProxyClient, peer *wireguardPeer, requestHost string) (*wingsvproto.Config, error) {
+func (s *InboundService) buildVKTurnProxyExportConfig(inbound *model.Inbound, settings *VKTurnProxySettings, client *VKTurnProxyClient, peer *wireguardPeer, requestHost string, endpointHost string, endpointPort int) (*wingsvproto.Config, error) {
 	host := resolveVKTurnProxyExportIPv4(inbound, requestHost)
+	if strings.TrimSpace(endpointHost) != "" {
+		host = sanitizeVKTurnEndpointHost(endpointHost)
+	}
 	if host == "" {
 		return nil, common.NewError("unable to determine export host for vk-turn-proxy")
+	}
+	port := inbound.Port
+	if endpointPort > 0 {
+		port = endpointPort
 	}
 
 	wgInbound, err := s.GetInbound(settings.Forward.WireGuardInboundID)
@@ -1166,7 +1184,7 @@ func (s *InboundService) buildVKTurnProxyExportConfig(inbound *model.Inbound, se
 		Turn: &wingsvproto.Turn{
 			Endpoint: &wingsvproto.Endpoint{
 				Host: host,
-				Port: uint32(inbound.Port),
+				Port: uint32(port),
 			},
 			Link:        primaryLink,
 			SessionMode: wingsvproto.TurnSessionMode_TURN_SESSION_MODE_AUTO,
@@ -1278,7 +1296,42 @@ func (s *InboundService) ExportVKTurnProxyClient(inboundID int, clientID string,
 		return "", err
 	}
 
-	config, err := s.buildVKTurnProxyExportConfig(inbound, settings, &client, peer, requestHost)
+	config, err := s.buildVKTurnProxyExportConfig(inbound, settings, &client, peer, requestHost, "", 0)
+	if err != nil {
+		return "", err
+	}
+	return encodeVKTurnProxyConfig(config)
+}
+
+// ExportVKTurnProxyClientForEndpoint exports one client using an explicit public
+// Host endpoint. Subscription Host rows use this instead of requestHost so the
+// binary TURN config dials the configured address/port rather than the inbound
+// bind or panel host.
+func (s *InboundService) ExportVKTurnProxyClientForEndpoint(inboundID int, clientID string, endpointHost string, endpointPort int) (string, error) {
+	inbound, err := s.GetInbound(inboundID)
+	if err != nil {
+		return "", err
+	}
+	if inbound.Protocol != model.VKTurnProxy {
+		return "", common.NewError("inbound is not vk-turn-proxy")
+	}
+	settings, err := s.getVKTurnProxySettings(inbound.Settings)
+	if err != nil {
+		return "", err
+	}
+	if settings.Forward.Type != VKTurnProxyForwardWireGuardInbound {
+		return "", common.NewError("vk-turn-proxy export requires a wireguard inbound target")
+	}
+	index := s.findVKTurnProxyClientIndex(settings.Clients, clientID)
+	if index < 0 {
+		return "", common.NewError("vk-turn-proxy client not found:", clientID)
+	}
+	client := settings.Clients[index]
+	peer, _, err := s.getWireguardPeerByPublicKey(settings.Forward.WireGuardInboundID, client.PeerPublicKey)
+	if err != nil {
+		return "", err
+	}
+	config, err := s.buildVKTurnProxyExportConfig(inbound, settings, &client, peer, "", endpointHost, endpointPort)
 	if err != nil {
 		return "", err
 	}

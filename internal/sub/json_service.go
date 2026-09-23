@@ -16,6 +16,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
+	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/json_util"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/random"
 	wgutil "github.com/SawaMEN/3x-ui/v3/internal/util/wireguard"
@@ -129,10 +130,10 @@ func (s *SubJsonService) GetJson(subId string, host string, alwaysReturnArray bo
 	if len(inbounds) == 0 && len(externalLinks) == 0 {
 		return "", "", nil
 	}
-	// NaiveProxy has no Xray /json outbound representation in this service.
-	// Refuse to emit a partial structured subscription so auto-detection can
-	// fall back to the raw profile and preserve every connection.
-	if containsSubscriptionProtocol(inbounds, model.NaiveProxy) {
+	// JSON uses Xray's outbound model. Refuse the whole format when any linked
+	// inbound cannot be represented, otherwise auto-detection could silently
+	// drop one connection and still return HTTP 200.
+	if containsUnsupportedJSONProtocol(inbounds) {
 		return "", "", errSubscriptionFormatUnsupported
 	}
 
@@ -198,7 +199,7 @@ func (s *SubJsonService) GetJson(subId string, host string, alwaysReturnArray bo
 		for _, el := range expandEntry(ext) {
 			outbound := parsedExternalOutbound(el.Link)
 			if outbound == nil {
-				continue
+				return "", "", errSubscriptionFormatUnsupported
 			}
 			seenEmails[ext.Email] = struct{}{}
 			remark := el.Name
@@ -285,17 +286,29 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 	hasEnabledClient := false
 	hasInactiveExternal := false
 
-	var wireguardEndpoint map[string]any
-	var wireguardAddresses []string
+	// Cache matched clients across the WireGuard pre-pass and the generic
+	// renderer. Without this, multi-protocol subscriptions query the same
+	// client_inbounds relation twice per inbound.
+	matchedClients := make(map[*model.Inbound][]model.Client, len(inbounds))
+	clientsFor := func(inbound *model.Inbound) []model.Client {
+		if clients, ok := matchedClients[inbound]; ok {
+			return clients
+		}
+		clients := subReq.matchingClients(inbound, subId)
+		matchedClients[inbound] = clients
+		return clients
+	}
+
 	wireguardOnly := len(externalLinks) == 0
+	var wireguardConfigs []json.RawMessage
 	for _, inbound := range inbounds {
+		clients := clientsFor(inbound)
 		if inbound.Protocol != model.WireGuard {
-			if len(subReq.matchingClients(inbound, subId)) > 0 {
+			if len(clients) > 0 {
 				wireguardOnly = false
 			}
 			continue
 		}
-		clients := subReq.matchingClients(inbound, subId)
 		if len(clients) == 0 {
 			continue
 		}
@@ -317,38 +330,68 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 			}
 			addresses := append([]string(nil), client.AllowedIPs...)
 			if len(addresses) == 0 {
-				addresses = []string{"10.0.0.2/32"}
+				continue
 			}
-			peer := map[string]any{"address": inbound.Listen, "port": inbound.Port, "public_key": serverPublicKey, "allowed_ips": []string{"0.0.0.0/0", "::/0"}}
-			if client.PreSharedKey != "" {
-				peer["pre_shared_key"] = client.PreSharedKey
+			for _, shareEndpoint := range subReq.shareEndpointsForInbound(inbound) {
+				peerAddress := shareEndpoint.Address
+				if peerAddress == "" {
+					peerAddress = wireguardPeerAddress(inbound, subReq.resolveInboundAddress(inbound), nil)
+				}
+				peer := map[string]any{
+					"address":     peerAddress,
+					"port":        shareEndpoint.Port,
+					"public_key":  serverPublicKey,
+					"allowed_ips": []string{"0.0.0.0/0", "::/0"},
+				}
+				if client.PreSharedKey != "" {
+					peer["pre_shared_key"] = client.PreSharedKey
+				}
+				if client.KeepAlive != nil && *client.KeepAlive > 0 {
+					peer["persistent_keepalive_interval"] = *client.KeepAlive
+				}
+				endpoint := map[string]any{
+					"type":        "wireguard",
+					"tag":         "wg-endpoint",
+					"address":     addresses,
+					"private_key": client.PrivateKey,
+					"peers":       []any{peer},
+				}
+				if mtu, ok := settings["mtu"].(float64); ok && mtu > 0 {
+					endpoint["mtu"] = int(mtu)
+				}
+
+				cfg := map[string]any{
+					"$schema": "https://sing-box.sagernet.org/schema.json",
+					"endpoints": []any{endpoint},
+					"inbounds": []any{map[string]any{
+						"type":       "tun",
+						"tag":        "tun-in",
+						"address":    addresses,
+						"auto_route": true,
+						"strict_route": true,
+					}},
+					"outbounds": []any{
+						map[string]any{"type": "direct", "tag": "direct"},
+						map[string]any{"type": "block", "tag": "blocked"},
+					},
+					"route": map[string]any{
+						"rules": []any{map[string]any{"action": "route", "outbound": "wg-endpoint"}},
+						"final": "direct",
+						"auto_detect_interface": true,
+					},
+				}
+				encoded, err := json.MarshalIndent(cfg, "", "  ")
+				if err == nil {
+					wireguardConfigs = append(wireguardConfigs, encoded)
+					hasEnabledClient = true
+				}
 			}
-			if client.KeepAlive != nil && *client.KeepAlive > 0 {
-				peer["persistent_keepalive_interval"] = *client.KeepAlive
-			}
-			wireguardEndpoint = map[string]any{"type": "wireguard", "tag": "wg-endpoint", "address": addresses, "private_key": client.PrivateKey, "peers": []any{peer}}
-			if mtu, ok := settings["mtu"].(float64); ok && mtu > 0 {
-				wireguardEndpoint["mtu"] = int(mtu)
-			}
-			wireguardAddresses = addresses
-			hasEnabledClient = true
-			break
-		}
-		if wireguardEndpoint != nil {
-			break
 		}
 	}
-	if wireguardEndpoint != nil && wireguardOnly {
-		cfg := map[string]any{
-			"$schema":   "https://sing-box.sagernet.org/schema.json",
-			"endpoints": []any{wireguardEndpoint},
-			"inbounds":  []any{map[string]any{"type": "tun", "tag": "tun-in", "address": wireguardAddresses, "auto_route": true, "strict_route": true}},
-			"outbounds": []any{map[string]any{"type": "direct", "tag": "direct"}, map[string]any{"type": "block", "tag": "blocked"}},
-			"route":     map[string]any{"rules": []any{map[string]any{"action": "route", "outbound": "wg-endpoint"}}, "final": "direct", "auto_detect_interface": true},
-		}
-		encoded, err := json.MarshalIndent(cfg, "", "  ")
-		if err != nil {
-			return "", "", err
+
+	if wireguardOnly {
+		if len(wireguardConfigs) == 0 {
+			return "", "", errSubscriptionFormatUnsupported
 		}
 		emails := make([]string, 0, len(seenEmails))
 		for email := range seenEmails {
@@ -358,15 +401,30 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 		traffic, _ := subReq.AggregateTrafficByEmails(emails)
 		traffic.Enable = hasEnabledClient
 		header := subReq.subscriptionUserinfo(traffic)
-		if alwaysReturnArray {
-			arr, _ := json.MarshalIndent([]json.RawMessage{encoded}, "", "  ")
-			return string(arr), header, nil
+		if len(wireguardConfigs) == 1 && !alwaysReturnArray {
+			return string(wireguardConfigs[0]), header, nil
 		}
-		return string(encoded), header, nil
+		arr, err := json.MarshalIndent(wireguardConfigs, "", "  ")
+		if err != nil {
+			return "", header, err
+		}
+		return string(arr), header, nil
 	}
 
+	// Refuse partial sing-box output for protocols this renderer cannot represent.
+	// Returning the format-unsupported sentinel preserves the complete raw profile
+	// instead of silently dropping an inbound during auto-detection.
+	// WireGuard endpoint profiles are emitted separately above. A mixed
+	// WireGuard + proxy subscription cannot be represented by the current
+	// separated-profile builder without routing one profile through another,
+	// so reject it instead of falling back to the deprecated WireGuard outbound.
+	if containsSubscriptionProtocol(inbounds, model.WireGuard) || containsUnsupportedSingBoxProtocol(inbounds) {
+		return "", "", errSubscriptionFormatUnsupported
+	}
+
+	formatUnsupported := false
 	for _, inbound := range inbounds {
-		clients := subReq.matchingClients(inbound, subId)
+		clients := clientsFor(inbound)
 		if len(clients) == 0 {
 			continue
 		}
@@ -379,17 +437,82 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 			if client.Enable {
 				hasEnabledClient = true
 			}
+			if inbound.Protocol == model.TUIC {
+				stream := unmarshalStreamSettings(inbound.StreamSettings)
+				externalProxies, _ := stream["externalProxy"].([]any)
+				if len(externalProxies) == 0 {
+					externalProxies = []any{nil}
+				}
+				generated := 0
+				for _, rawEndpoint := range externalProxies {
+					var endpoint map[string]any
+					if rawEndpoint != nil {
+						endpoint, _ = rawEndpoint.(map[string]any)
+						if endpoint == nil {
+							continue
+						}
+						forceTLS, _ := endpoint["forceTls"].(string)
+						if strings.EqualFold(strings.TrimSpace(forceTLS), "none") {
+							continue
+						}
+					}
+
+					clone := *inbound
+					// Native sing-box clients must receive the advertised server
+					// address, never the server-side wildcard/loopback bind.
+					clone.Listen = subReq.resolveInboundAddress(inbound)
+					if clone.Listen == "" {
+						clone.Listen = inbound.Listen
+					}
+					newStream := cloneStreamForExternalProxy(stream)
+					delete(newStream, "externalProxy")
+					if endpoint != nil {
+						if dest, ok := endpoint["dest"].(string); ok && strings.TrimSpace(dest) != "" {
+							clone.Listen = strings.TrimSpace(dest)
+						}
+						if rawPort, ok := endpoint["port"].(float64); ok && int(rawPort) > 0 {
+							clone.Port = int(rawPort)
+						}
+						security, _ := newStream["security"].(string)
+						applyExternalProxyTLSToStream(endpoint, newStream, security)
+						applyHostStreamOverrides(endpoint, newStream)
+					}
+					nativeRaw := s.genNativeTUIC(&clone, newStream, client)
+					if nativeRaw == nil {
+						continue
+					}
+					var native map[string]any
+					if err := json.Unmarshal(nativeRaw, &native); err != nil || native == nil {
+						continue
+					}
+					tag := client.Email
+					if tag == "" {
+						tag = fmt.Sprintf("proxy-%d", len(proxies)+1)
+					}
+					if len(proxies) > 0 {
+						tag = fmt.Sprintf("%s-%d", tag, len(proxies)+1)
+					}
+					native["tag"] = tag
+					proxies = append(proxies, nativeOutbound{tag: tag, out: native})
+					generated++
+				}
+				if generated == 0 {
+					formatUnsupported = true
+				}
+				continue
+			}
 			if inbound.Protocol == model.NaiveProxy {
 				// Naive is not an Xray outbound, but sing-box has a native
 				// representation. Keep it in the structured profile instead of
 				// forcing the whole subscription back to raw links. Host/external
 				// endpoints must fan out here just like raw subscriptions.
+				generated := 0
 				for _, endpoint := range subReq.naiveShareEndpoints(inbound) {
 					forceTLS, _ := endpoint["forceTls"].(string)
 					if strings.EqualFold(strings.TrimSpace(forceTLS), "none") {
 						continue
 					}
-				native := s.genNativeNaive(subReq, inbound, client, endpoint)
+					native := s.genNativeNaive(subReq, inbound, client, endpoint)
 					if native == nil {
 						continue
 					}
@@ -402,10 +525,19 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 					}
 					native["tag"] = tag
 					proxies = append(proxies, nativeOutbound{tag: tag, out: native})
+					generated++
+				}
+				if generated == 0 {
+					formatUnsupported = true
 				}
 				continue
 			}
-			for _, raw := range s.getConfig(subReq, inbound, client, host) {
+			raws := s.getConfig(subReq, inbound, client, host)
+			if len(raws) == 0 && inbound.Protocol != model.WireGuard {
+				formatUnsupported = true
+				continue
+			}
+			for _, raw := range raws {
 				var xrayCfg map[string]any
 				if err := json.Unmarshal(raw, &xrayCfg); err != nil {
 					return "", "", err
@@ -424,7 +556,8 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 				} else {
 					translated, err := singbox.TranslateXrayOutbound(proxy)
 					if err != nil {
-						return "", "", fmt.Errorf("client %q: %w", client.Email, err)
+						formatUnsupported = true
+						continue
 					}
 					native = translated
 				}
@@ -453,7 +586,7 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 		for _, el := range expandEntry(ext) {
 			outbound := parsedExternalOutbound(el.Link)
 			if outbound == nil {
-				continue
+				return "", "", errSubscriptionFormatUnsupported
 			}
 			rawOutbound, err := json.Marshal(outbound)
 			if err != nil {
@@ -465,7 +598,8 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 			}
 			native, err := singbox.TranslateXrayOutbound(xrayOutbound)
 			if err != nil {
-				return "", "", err
+				formatUnsupported = true
+				continue
 			}
 			seenEmails[ext.Email] = struct{}{}
 			tag := el.Name
@@ -478,6 +612,10 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 			native["tag"] = tag
 			proxies = append(proxies, nativeOutbound{tag: tag, out: native})
 		}
+	}
+
+	if formatUnsupported {
+		return "", "", errSubscriptionFormatUnsupported
 	}
 
 	if len(proxies) == 0 && !hasInactiveExternal {
@@ -896,8 +1034,14 @@ func (s *SubJsonService) getConfig(subReq *SubService, inbound *model.Inbound, c
 		// subsequent generators and can make a different protocol (notably VLESS)
 		// connect to the wrong host/port.
 		proxyInbound := *inbound
+		// External proxy entries are optional overrides. A partial entry must
+		// inherit the same advertised endpoint as the synthetic fallback rather
+		// than producing an empty host or port 0.
 		proxyInbound.Listen, _ = extPrxy["dest"].(string)
-		if port, ok := extPrxy["port"].(float64); ok {
+		if strings.TrimSpace(proxyInbound.Listen) == "" {
+			proxyInbound.Listen = defaultDest
+		}
+		if port, ok := extPrxy["port"].(float64); ok && int(port) > 0 {
 			proxyInbound.Port = int(port)
 		}
 		newStream := cloneStreamForExternalProxy(stream)
@@ -941,10 +1085,22 @@ func (s *SubJsonService) getConfig(subReq *SubService, inbound *model.Inbound, c
 		case "trojan", "shadowsocks":
 			newOutbounds = append(newOutbounds, s.genServer(subReq, &proxyInbound, streamSettings, client, jsonMux(mux, hostMux)))
 		case "hysteria":
+			// Hysteria is always TLS/QUIC. forceTls=none cannot produce a
+			// valid Xray Hysteria client, so skip that external endpoint rather
+			// than silently turning it back into TLS inside genHy.
+			if forceTls == "none" {
+				continue
+			}
 			// genHy already emits the version-specific Hysteria outbound, including
 			// version 2. Do not silently discard Hysteria2 from legacy JSON.
 			newOutbounds = append(newOutbounds, s.genHy(&proxyInbound, newStream, client, jsonMux(mux, hostMux)))
-		case "tuic", "wireguard", "amneziawg":
+		case "wireguard":
+			wgOutbound := s.genWireguard(&proxyInbound, client)
+			if wgOutbound == nil {
+				continue
+			}
+			newOutbounds = append(newOutbounds, wgOutbound)
+		case "tuic", "amneziawg":
 			// These protocols do not have an Xray-compatible /json outbound.
 			continue
 		}
@@ -1226,180 +1382,6 @@ func (s *SubJsonService) genServer(subReq *SubService, inbound *model.Inbound, s
 	return result
 }
 
-func nativeVMessOutbound(inbound *model.Inbound, stream map[string]any, client model.Client) json_util.RawMessage {
-	out := map[string]any{
-		"type":        "vmess",
-		"tag":         "proxy",
-		"server":      inbound.Listen,
-		"server_port": inbound.Port,
-		"uuid":        client.ID,
-	}
-	if security := normalizeVmessSecurity(client.Security); security != "" {
-		out["security"] = security
-	}
-	for key, value := range nativeTLSAndTransport(stream) {
-		out[key] = value
-	}
-	result, _ := json.MarshalIndent(out, "", "  ")
-	return result
-}
-
-func nativeVLESSOutbound(inbound *model.Inbound, stream map[string]any, client model.Client, subReq *SubService) json_util.RawMessage {
-	out := map[string]any{
-		"type":        "vless",
-		"tag":         "proxy",
-		"server":      inbound.Listen,
-		"server_port": inbound.Port,
-		"uuid":        client.ID,
-		"encryption":  "none",
-	}
-	if client.Flow != "" && !inbound.DisableFlow {
-		out["flow"] = client.Flow
-	}
-	for key, value := range nativeTLSAndTransport(stream) {
-		out[key] = value
-	}
-	_ = subReq
-	result, _ := json.MarshalIndent(out, "", "  ")
-	return result
-}
-
-func nativeServerOutbound(inbound *model.Inbound, stream map[string]any, client model.Client, subReq *SubService) json_util.RawMessage {
-	protocol := strings.ToLower(string(inbound.Protocol))
-	out := map[string]any{
-		"type":        protocol,
-		"tag":         "proxy",
-		"server":      inbound.Listen,
-		"server_port": inbound.Port,
-	}
-	switch protocol {
-	case "trojan":
-		out["password"] = client.Password
-	case "shadowsocks":
-		settings := subReq.linkSettings(inbound)
-		method, _ := settings["method"].(string)
-		out["method"] = method
-		out["password"] = client.Password
-		if strings.HasPrefix(method, "2022") {
-			if serverPassword, ok := settings["password"].(string); ok && serverPassword != "" {
-				out["password"] = fmt.Sprintf("%s:%s", serverPassword, client.Password)
-			}
-		}
-	}
-	for key, value := range nativeTLSAndTransport(stream) {
-		out[key] = value
-	}
-	result, _ := json.MarshalIndent(out, "", "  ")
-	return result
-}
-
-func nativeTLSAndTransport(stream map[string]any) map[string]any {
-	out := map[string]any{}
-	security, _ := stream["security"].(string)
-	if security == "tls" || security == "reality" {
-		tlsSettings, _ := stream["tlsSettings"].(map[string]any)
-		tls := map[string]any{"enabled": true}
-		if v, _ := tlsSettings["serverName"].(string); v != "" {
-			tls["server_name"] = v
-		}
-		if v, ok := tlsSettings["alpn"].([]any); ok && len(v) > 0 {
-			tls["alpn"] = v
-		}
-		if v, ok := tlsSettings["allowInsecure"].(bool); ok {
-			tls["insecure"] = v
-		}
-		if v, _ := tlsSettings["fingerprint"].(string); v != "" {
-			tls["utls"] = map[string]any{"enabled": true, "fingerprint": v}
-		}
-		if security == "reality" {
-			realitySettings, _ := tlsSettings["realitySettings"].(map[string]any)
-			reality := map[string]any{"enabled": true}
-			if v, _ := realitySettings["publicKey"].(string); v != "" {
-				reality["public_key"] = v
-			}
-			if v, _ := realitySettings["shortId"].(string); v != "" {
-				reality["short_id"] = v
-			}
-			if len(reality) > 1 {
-				tls["reality"] = reality
-			}
-		}
-		out["tls"] = tls
-	}
-	network, _ := stream["network"].(string)
-	switch network {
-	case "ws":
-		ws, _ := stream["wsSettings"].(map[string]any)
-		tr := map[string]any{"type": "ws"}
-		if v, _ := ws["path"].(string); v != "" {
-			tr["path"] = v
-		}
-		if v, ok := ws["headers"].(map[string]any); ok && len(v) > 0 {
-			tr["headers"] = v
-		}
-		out["transport"] = tr
-	case "grpc":
-		grpc, _ := stream["grpcSettings"].(map[string]any)
-		tr := map[string]any{"type": "grpc"}
-		if v, _ := grpc["serviceName"].(string); v != "" {
-			tr["service_name"] = v
-		}
-		out["transport"] = tr
-	case "http", "h2":
-		httpSettings, _ := stream["httpSettings"].(map[string]any)
-		tr := map[string]any{"type": "http"}
-		if v, ok := httpSettings["host"].([]any); ok && len(v) > 0 {
-			tr["host"] = v
-		}
-		if v, _ := httpSettings["path"].(string); v != "" {
-			tr["path"] = v
-		}
-		if v, _ := httpSettings["method"].(string); v != "" {
-			tr["method"] = v
-		}
-		if v, ok := httpSettings["headers"].(map[string]any); ok && len(v) > 0 {
-			tr["headers"] = v
-		}
-		out["transport"] = tr
-	case "httpupgrade":
-		settings, _ := stream["httpupgradeSettings"].(map[string]any)
-		tr := map[string]any{"type": "httpupgrade"}
-		if v, _ := settings["host"].(string); v != "" {
-			tr["host"] = v
-		}
-		if v, _ := settings["path"].(string); v != "" {
-			tr["path"] = v
-		}
-		if v, ok := settings["headers"].(map[string]any); ok && len(v) > 0 {
-			tr["headers"] = v
-		}
-		out["transport"] = tr
-	case "quic":
-		settings, _ := stream["quicSettings"].(map[string]any)
-		tr := map[string]any{"type": "quic"}
-		if v, ok := settings["initial_packet_size"]; ok {
-			tr["initial_packet_size"] = v
-		}
-		if v, ok := settings["disable_path_mtu_discovery"]; ok {
-			tr["disable_path_mtu_discovery"] = v
-		}
-		out["transport"] = tr
-	}
-	return out
-}
-
-func hysteriaVersion(settingsJSON string, stream map[string]any) int {
-	var settings map[string]any
-	_ = json.Unmarshal([]byte(settingsJSON), &settings)
-	if version, ok := settings["version"].(float64); ok && int(version) == 2 {
-		return 2
-	}
-	if version, ok := stream["version"].(float64); ok && int(version) == 2 {
-		return 2
-	}
-	return 1
-}
-
 func (s *SubJsonService) genNativeNaive(subReq *SubService, inbound *model.Inbound, client model.Client, endpoint map[string]any) map[string]any {
 	if inbound.Protocol != model.NaiveProxy || client.Email == "" || client.Password == "" {
 		return nil
@@ -1456,72 +1438,28 @@ func (s *SubJsonService) genNativeNaive(subReq *SubService, inbound *model.Inbou
 	return out
 }
 
-func (s *SubJsonService) genNativeHysteria2(inbound *model.Inbound, stream map[string]any, client model.Client) json_util.RawMessage {
-	var settings map[string]any
-	_ = json.Unmarshal([]byte(inbound.Settings), &settings)
-	var hy map[string]any
-	if v, ok := stream["hysteriaSettings"].(map[string]any); ok {
-		hy = v
-	}
-	raw := map[string]any{
-		"protocol": "hysteria2",
-		"tag":      "proxy",
-		"settings": map[string]any{
-			"servers": []any{map[string]any{
-				"address":  inbound.Listen,
-				"port":     inbound.Port,
-				"password": client.Auth,
-			}},
-		},
-		"streamSettings": stream,
-	}
-	if rawSettings, ok := raw["settings"].(map[string]any); ok {
-		for _, key := range []string{"up_mbps", "down_mbps", "hop_interval", "hop_interval_max", "bbr_profile", "disable_chrome_parrot"} {
-			if v, exists := hy[key]; exists {
-				rawSettings[key] = v
-			}
-		}
-		if obfs, ok := hy["obfs"].(map[string]any); ok {
-			rawSettings["obfs"] = obfs
-		}
-		if v, ok := hy["masquerade"]; ok {
-			rawSettings["masquerade"] = v
-		}
-		if v, ok := hy["ignoreClientBandwidth"]; ok {
-			rawSettings["ignore_client_bandwidth"] = v
-		}
-		if v, ok := hy["ignore_client_bandwidth"]; ok {
-			rawSettings["ignore_client_bandwidth"] = v
-		}
-		if v, ok := hy["bbr_profile"]; ok {
-			rawSettings["bbr_profile"] = v
-		}
-		if v, ok := hy["disable_chrome_parrot"]; ok {
-			rawSettings["disable_chrome_parrot"] = v
-		}
-	}
-	translated, err := singbox.TranslateXrayOutbound(raw)
-	if err != nil {
-		return nil
-	}
-	translated["tag"] = "proxy"
-	b, _ := json.MarshalIndent(translated, "", "  ")
-	return b
-}
-
 func (s *SubJsonService) genNativeTUIC(inbound *model.Inbound, stream map[string]any, client model.Client) json_util.RawMessage {
+	settings := map[string]any{
+		"servers": []any{map[string]any{
+			"address":  inbound.Listen,
+			"port":     inbound.Port,
+			"id":       client.ID,
+			"uuid":     client.ID,
+			"password": client.Password,
+		}},
+	}
+	// These are client-side TUIC knobs stored with the inbound and must survive
+	// conversion into a native sing-box outbound. Without this, structured
+	// subscriptions silently fall back to sing-box defaults.
+	if inst, ok := tuic.InstanceFromInbound(inbound); ok {
+		settings["congestion_control"] = inst.CongestionControl
+		settings["udp_relay_mode"] = inst.UDPRelayMode
+		settings["zero_rtt_handshake"] = inst.ZeroRTTHandshake
+	}
 	raw := map[string]any{
-		"protocol": "tuic",
-		"tag":      "proxy",
-		"settings": map[string]any{
-			"servers": []any{map[string]any{
-				"address":  inbound.Listen,
-				"port":     inbound.Port,
-				"id":       client.ID,
-				"uuid":     client.ID,
-				"password": client.Password,
-			}},
-		},
+		"protocol":       "tuic",
+		"tag":            "proxy",
+		"settings":       settings,
 		"streamSettings": stream,
 	}
 	translated, err := singbox.TranslateXrayOutbound(raw)
@@ -1601,19 +1539,16 @@ func (s *SubJsonService) genWireguard(inbound *model.Inbound, client model.Clien
 	_ = json.Unmarshal([]byte(inbound.Settings), &settings)
 
 	serverPrivateKey, _ := settings["secretKey"].(string)
-	serverPublicKey, err := wgutil.PublicKeyFromPrivate(serverPrivateKey)
-	if err != nil {
-		return nil
-	}
 
 	addresses := append([]string(nil), client.AllowedIPs...)
-	if len(addresses) == 0 {
-		addresses = []string{"10.0.0.2/32"}
-	}
 	peer := map[string]any{
-		"publicKey":  serverPublicKey,
-		"endpoint":   fmt.Sprintf("%s:%d", wireguardPeerAddress(inbound, inbound.Listen, nil), inbound.Port),
+		"endpoint":   joinHostPort(wireguardPeerAddress(inbound, inbound.Listen, nil), inbound.Port),
 		"allowedIPs": []string{"0.0.0.0/0", "::/0"},
+	}
+	if serverPrivateKey != "" {
+		if publicKey, err := wgutil.PublicKeyFromPrivate(serverPrivateKey); err == nil {
+			peer["publicKey"] = publicKey
+		}
 	}
 	if client.PreSharedKey != "" {
 		peer["preSharedKey"] = client.PreSharedKey
@@ -1622,14 +1557,17 @@ func (s *SubJsonService) genWireguard(inbound *model.Inbound, client model.Clien
 		peer["keepAlive"] = ka
 	}
 
+	settingsOut := map[string]any{
+		"secretKey": client.PrivateKey,
+		"peers":     []any{peer},
+	}
+	if len(addresses) > 0 {
+		settingsOut["address"] = addresses
+	}
 	outbound := map[string]any{
 		"protocol": "wireguard",
 		"tag":      "proxy",
-		"settings": map[string]any{
-			"secretKey": client.PrivateKey,
-			"address":   addresses,
-			"peers":     []any{peer},
-		},
+		"settings": settingsOut,
 	}
 	if mtu, ok := settings["mtu"].(float64); ok && mtu > 0 {
 		outbound["settings"].(map[string]any)["mtu"] = int(mtu)
