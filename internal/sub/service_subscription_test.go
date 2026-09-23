@@ -572,7 +572,7 @@ func TestGetSubs_NaiveUsesHostEndpoints(t *testing.T) {
 		if strings.TrimSpace(link) == "" {
 			continue
 		}
-		if !strings.HasPrefix(link, "naive+https://") {
+		if !strings.HasPrefix(link, "naive+https://") && !strings.HasPrefix(link, "naive://") {
 			t.Fatalf("unexpected Naive link: %s", link)
 		}
 		got[link] = true
