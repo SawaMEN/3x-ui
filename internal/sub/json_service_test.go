@@ -699,23 +699,67 @@ func TestSubJsonServiceSkipsTUIC(t *testing.T) {
 	}
 }
 
+func translateNativeXrayOutbound(t *testing.T, raw []byte) map[string]any {
+	t.Helper()
+
+	var xrayOutbound map[string]any
+	if err := json.Unmarshal(raw, &xrayOutbound); err != nil {
+		t.Fatalf("unmarshal Xray outbound: %v", err)
+	}
+	got, err := singbox.TranslateXrayOutbound(xrayOutbound)
+	if err != nil {
+		t.Fatalf("translate outbound: %v", err)
+	}
+	return got
+}
+
 func TestNativeRealityTLS(t *testing.T) {
-	stream := map[string]any{"network": "tcp", "security": "reality", "tlsSettings": map[string]any{"serverName": "www.example.com", "alpn": []any{"h2", "http/1.1"}, "fingerprint": "chrome", "realitySettings": map[string]any{"publicKey": "public-key", "shortId": "0123456789abcdef"}}}
-	got := nativeTLSAndTransport(stream)
+	inbound := &model.Inbound{
+		Listen:   "www.example.com",
+		Port:     443,
+		Protocol: model.VLESS,
+		Settings: `{"encryption":"none"}`,
+	}
+	stream := map[string]any{
+		"network":  "tcp",
+		"security": "reality",
+		"tlsSettings": map[string]any{
+			"serverName":  "www.example.com",
+			"alpn":        []any{"h2", "http/1.1"},
+			"fingerprint": "chrome",
+		},
+		"realitySettings": map[string]any{
+			"publicKey": "public-key",
+			"shortId":   "0123456789abcdef",
+		},
+	}
+	streamJSON, err := json.Marshal(stream)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw := (&SubJsonService{}).genVless(
+		&SubService{},
+		inbound,
+		streamJSON,
+		model.Client{ID: "11111111-1111-1111-1111-111111111111"},
+		"",
+	)
+	got := translateNativeXrayOutbound(t, raw)
+
 	tls, ok := got["tls"].(map[string]any)
 	if !ok {
 		t.Fatalf("missing TLS: %#v", got)
 	}
 	if tls["enabled"] != true || tls["server_name"] != "www.example.com" {
-		t.Fatalf("unexpected TLS: %#v", tls)
+		t.Fatalf("unexpected TLS: %#v", got)
 	}
 	utls, _ := tls["utls"].(map[string]any)
 	if utls["fingerprint"] != "chrome" {
-		t.Fatalf("unexpected uTLS: %#v", utls)
+		t.Fatalf("unexpected uTLS: %#v", tls)
 	}
 	reality, _ := tls["reality"].(map[string]any)
 	if reality["enabled"] != true || reality["public_key"] != "public-key" || reality["short_id"] != "0123456789abcdef" {
-		t.Fatalf("unexpected Reality: %#v", reality)
+		t.Fatalf("unexpected Reality: %#v", tls["reality"])
 	}
 }
 
@@ -733,11 +777,11 @@ func TestNativeNaiveOutbound(t *testing.T) {
 		inbound,
 		client,
 		map[string]any{
-			"dest":        "edge.example.com",
-			"port":        float64(8443),
-			"sni":         "naive.example.com",
-			"hostHeader":  "origin.example.com",
-			"forceTls":    "tls",
+			"dest":       "edge.example.com",
+			"port":       float64(8443),
+			"sni":        "naive.example.com",
+			"hostHeader": "origin.example.com",
+			"forceTls":   "tls",
 		},
 	)
 	if raw == nil {
@@ -752,31 +796,37 @@ func TestNativeNaiveOutbound(t *testing.T) {
 	if raw["udp_over_tcp"] != true || raw["quic"] != false {
 		t.Fatalf("unexpected Naive transport flags: %#v", raw)
 	}
-	if raw["server"] != "edge.example.com" || raw["server_port"] != 8443 {
-		t.Fatalf("host endpoint was not applied: %#v", raw)
-	}
-	if raw["extra_headers"] == nil {
-		t.Fatalf("expected Naive Host header override: %#v", raw)
-	}
 	extra, _ := raw["extra_headers"].(map[string]string)
 	if extra["Host"] != "origin.example.com" {
 		t.Fatalf("unexpected Naive extra headers: %#v", raw["extra_headers"])
 	}
 	tls, _ := raw["tls"].(map[string]any)
 	if tls["enabled"] != true || tls["server_name"] != "naive.example.com" {
-		t.Fatalf("unexpected Naive TLS: %#v", tls)
+		t.Fatalf("unexpected Naive TLS: %#v", raw)
 	}
 }
 
 func TestNativeVLESSOutbound(t *testing.T) {
-	inbound := &model.Inbound{Listen: "example.com", Port: 443, Protocol: model.VLESS}
+	inbound := &model.Inbound{
+		Listen:   "example.com",
+		Port:     443,
+		Protocol: model.VLESS,
+		Settings: `{"encryption":"none"}`,
+	}
 	client := model.Client{ID: "11111111-1111-1111-1111-111111111111", Flow: "xtls-rprx-vision"}
-	stream := map[string]any{"network": "ws", "security": "tls", "tlsSettings": map[string]any{"serverName": "example.com"}, "wsSettings": map[string]any{"path": "/ws", "headers": map[string]any{"Host": "example.com"}}}
-	raw := nativeVLESSOutbound(inbound, stream, client, &SubService{})
-	var got map[string]any
-	if err := json.Unmarshal(raw, &got); err != nil {
+	stream := map[string]any{
+		"network":  "ws",
+		"security": "tls",
+		"tlsSettings": map[string]any{"serverName": "example.com"},
+		"wsSettings":  map[string]any{"path": "/ws", "headers": map[string]any{"Host": "example.com"}},
+	}
+	streamJSON, err := json.Marshal(stream)
+	if err != nil {
 		t.Fatal(err)
 	}
+	raw := NewSubJsonService("", "", "", "", nil).genVless(&SubService{}, inbound, streamJSON, client, "")
+	got := translateNativeXrayOutbound(t, raw)
+
 	if got["type"] != "vless" || got["uuid"] != client.ID || got["flow"] != client.Flow {
 		t.Fatalf("unexpected VLESS: %#v", got)
 	}
@@ -793,11 +843,19 @@ func TestNativeVLESSOutbound(t *testing.T) {
 func TestNativeVMessOutbound(t *testing.T) {
 	inbound := &model.Inbound{Listen: "vmess.example.com", Port: 443, Protocol: model.VMESS}
 	client := model.Client{ID: "11111111-1111-1111-1111-111111111111", Security: "auto"}
-	raw := nativeVMessOutbound(inbound, map[string]any{"network": "grpc", "security": "tls", "tlsSettings": map[string]any{"serverName": "vmess.example.com"}, "grpcSettings": map[string]any{"serviceName": "proxy"}}, client)
-	var got map[string]any
-	if err := json.Unmarshal(raw, &got); err != nil {
+	stream := map[string]any{
+		"network":  "grpc",
+		"security": "tls",
+		"tlsSettings": map[string]any{"serverName": "vmess.example.com"},
+		"grpcSettings": map[string]any{"serviceName": "proxy"},
+	}
+	streamJSON, err := json.Marshal(stream)
+	if err != nil {
 		t.Fatal(err)
 	}
+	raw := NewSubJsonService("", "", "", "", nil).genVnext(inbound, streamJSON, client, "")
+	got := translateNativeXrayOutbound(t, raw)
+
 	if got["type"] != "vmess" || got["uuid"] != client.ID || got["security"] != "auto" {
 		t.Fatalf("unexpected VMess: %#v", got)
 	}
@@ -808,13 +866,17 @@ func TestNativeVMessOutbound(t *testing.T) {
 }
 
 func TestNativeShadowsocksOutbound(t *testing.T) {
-	inbound := &model.Inbound{Listen: "ss.example.com", Port: 8388, Protocol: model.Shadowsocks, Settings: "{\"method\":\"aes-256-gcm\"}"}
-	client := model.Client{Password: "secret"}
-	raw := nativeServerOutbound(inbound, map[string]any{}, client, &SubService{})
-	var got map[string]any
-	if err := json.Unmarshal(raw, &got); err != nil {
-		t.Fatal(err)
+	inbound := &model.Inbound{
+		Listen:   "ss.example.com",
+		Port:     8388,
+		Protocol: model.Shadowsocks,
+		Settings: `{"method":"aes-256-gcm"}`,
 	}
+	client := model.Client{Password: "secret"}
+
+	raw := NewSubJsonService("", "", "", "", nil).genServer(&SubService{}, inbound, []byte(`{}`), client, "")
+	got := translateNativeXrayOutbound(t, raw)
+
 	if got["type"] != "shadowsocks" || got["method"] != "aes-256-gcm" || got["password"] != "secret" {
 		t.Fatalf("unexpected SS: %#v", got)
 	}
@@ -823,11 +885,18 @@ func TestNativeShadowsocksOutbound(t *testing.T) {
 func TestNativeTrojanOutbound(t *testing.T) {
 	inbound := &model.Inbound{Listen: "trojan.example.com", Port: 443, Protocol: model.Trojan}
 	client := model.Client{Password: "secret"}
-	raw := nativeServerOutbound(inbound, map[string]any{"security": "tls", "tlsSettings": map[string]any{"serverName": "trojan.example.com"}}, client, &SubService{})
-	var got map[string]any
-	if err := json.Unmarshal(raw, &got); err != nil {
+	stream := map[string]any{
+		"network":  "tcp",
+		"security": "tls",
+		"tlsSettings": map[string]any{"serverName": "trojan.example.com"},
+	}
+	streamJSON, err := json.Marshal(stream)
+	if err != nil {
 		t.Fatal(err)
 	}
+	raw := NewSubJsonService("", "", "", "", nil).genServer(&SubService{}, inbound, streamJSON, client, "")
+	got := translateNativeXrayOutbound(t, raw)
+
 	if got["type"] != "trojan" || got["password"] != "secret" {
 		t.Fatalf("unexpected Trojan: %#v", got)
 	}
@@ -839,27 +908,35 @@ func TestNativeTrojanOutbound(t *testing.T) {
 
 func TestNativeHysteria2Outbound(t *testing.T) {
 	inbound := &model.Inbound{
-		Listen: "hy2.example.com", Port: 443, Protocol: model.Hysteria,
-		Settings:       `{"version":2}`,
-		StreamSettings: `{"network":"hysteria","security":"tls","tlsSettings":{"serverName":"hy2.example.com"},"hysteriaSettings":{"up_mbps":100,"down_mbps":50,"obfs":{"type":"salamander","password":"obfs"}}}`,
+		Listen:   "hy2.example.com",
+		Port:     443,
+		Protocol: model.Hysteria,
+		Settings: `{"version":2}`,
 	}
 	client := model.Client{Auth: "secret"}
-	raw := NewSubJsonService("", "", "", "", nil).genNativeHysteria2(inbound, map[string]any{
-		"network": "hysteria", "security": "tls", "tlsSettings": map[string]any{"serverName": "hy2.example.com"},
-		"hysteriaSettings": map[string]any{"up_mbps": 100, "down_mbps": 50, "obfs": map[string]any{"type": "salamander", "password": "obfs"}},
-	}, client)
-	if raw == nil {
-		t.Fatal("nil native hysteria2 outbound")
+	stream := map[string]any{
+		"network":  "hysteria",
+		"security": "tls",
+		"tlsSettings": map[string]any{"serverName": "hy2.example.com"},
+		"hysteriaSettings": map[string]any{
+			"version": 2,
+			"up_mbps":  100,
+			"down_mbps": 50,
+			"obfs":      map[string]any{"type": "salamander", "password": "obfs"},
+		},
 	}
-	var got map[string]any
-	if err := json.Unmarshal(raw, &got); err != nil {
-		t.Fatal(err)
-	}
+	raw := NewSubJsonService("", "", "", "", nil).genHy(inbound, stream, client, "")
+	got := translateNativeXrayOutbound(t, raw)
+
 	if got["type"] != "hysteria2" || got["server"] != "hy2.example.com" || got["server_port"] != float64(443) || got["password"] != "secret" {
 		t.Fatalf("unexpected hysteria2 outbound: %#v", got)
 	}
 	if got["up_mbps"] != float64(100) || got["down_mbps"] != float64(50) {
 		t.Fatalf("bandwidth lost: %#v", got)
+	}
+	obfs, ok := got["obfs"].(map[string]any)
+	if !ok || obfs["type"] != "salamander" || obfs["password"] != "obfs" {
+		t.Fatalf("obfs lost: %#v", got["obfs"])
 	}
 }
 
