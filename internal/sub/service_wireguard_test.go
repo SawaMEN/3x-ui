@@ -131,7 +131,6 @@ func TestGetInboundsBySubIdIncludesWireguard(t *testing.T) {
 	}
 }
 
-
 func TestGetInboundsBySubIdIncludesVKTurnProxy(t *testing.T) {
 	initSubDB(t)
 	db := database.GetDB()
