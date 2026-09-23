@@ -366,17 +366,11 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 		return string(encoded), header, nil
 	}
 
-	// The sing-box path currently has no complete native representation for
-	// these panel-only protocols. Do not silently drop them from a mixed profile.
-	for _, protocol := range []model.Protocol{
-		model.MTProto,
-		model.AmneziaWG,
-		model.Mieru,
-		model.VKTurnProxy,
-	} {
-		if containsSubscriptionProtocol(inbounds, protocol) {
-			return "", "", errSubscriptionFormatUnsupported
-		}
+	// Refuse partial sing-box output for protocols this renderer cannot represent.
+	// Returning the format-unsupported sentinel preserves the complete raw profile
+	// instead of silently dropping an inbound during auto-detection.
+	if containsUnsupportedSingBoxProtocol(inbounds) {
+		return "", "", errSubscriptionFormatUnsupported
 	}
 
 	formatUnsupported := false
