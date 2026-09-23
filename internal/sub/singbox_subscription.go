@@ -33,12 +33,20 @@ func buildSeparatedSingBoxSubscription(template map[string]any, proxies []map[st
 
 		if template != nil {
 			if rawDNS, ok := template["dns"].(map[string]any); ok {
-				if dns, err := singbox.TranslateXrayDNS(rawDNS); err == nil && len(dns) > 0 {
+				dns, err := singbox.TranslateXrayDNS(rawDNS)
+				if err != nil {
+					return "", fmt.Errorf("%w: translate DNS: %v", errSubscriptionFormatUnsupported, err)
+				}
+				if len(dns) > 0 {
 					cfg["dns"] = dns
 				}
 			}
 			if rawRouting, ok := template["routing"].(map[string]any); ok {
-				if route, err := singbox.TranslateXrayRouting(rawRouting); err == nil && len(route) > 0 {
+				route, err := singbox.TranslateXrayRouting(rawRouting)
+				if err != nil {
+					return "", fmt.Errorf("%w: translate routing: %v", errSubscriptionFormatUnsupported, err)
+				}
+				if len(route) > 0 {
 					cfg["route"] = route
 				}
 			}
