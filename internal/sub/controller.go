@@ -843,6 +843,9 @@ func (a *SUBController) serveJsonBody(c *gin.Context, alwaysReturnArray bool, co
 		jsonSub, header, err = a.subJsonService.GetJson(subId, host, alwaysReturnArray)
 	}
 	if err != nil {
+		if errors.Is(err, errSubscriptionFormatUnsupported) {
+			return false
+		}
 		writeSubError(c, err)
 		return true
 	}
@@ -907,6 +910,9 @@ func (a *SUBController) serveClashBody(c *gin.Context, rawDownload bool, legacy 
 		clashSub, header, err = a.subClashService.GetClash(subId, host)
 	}
 	if err != nil {
+		if errors.Is(err, errSubscriptionFormatUnsupported) {
+			return false
+		}
 		if errors.Is(err, errNoLegacyClashProxies) {
 			c.String(http.StatusUnprocessableEntity, err.Error())
 			return true

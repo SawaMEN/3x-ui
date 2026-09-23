@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"maps"
 	"net"
@@ -31,6 +32,11 @@ import (
 )
 
 const salamanderWarningCacheSize = 2048
+
+// errSubscriptionFormatUnsupported signals that a structured subscription format
+// cannot represent every enabled inbound. Callers may fall back to raw links
+// instead of silently dropping a connection from the subscriber profile.
+var errSubscriptionFormatUnsupported = errors.New("subscription format cannot represent all configured protocols")
 
 var salamanderWarningSeen = struct {
 	mu      sync.Mutex
@@ -866,7 +872,7 @@ func (s *SubService) genNaiveSubscriptionLink(inbound *model.Inbound, email stri
 		encodeUserinfo(client.Password),
 		joinHostPort(s.resolveInboundAddress(inbound), inbound.Port),
 	)
-	return buildLinkWithParams(link, params, s.genRemark(inbound, email, "", ""))
+	return buildLinkWithParams(link, params, s.genRemark(inbound, email, "naive", ""))
 }
 
 // genMieruLink builds a native Mieru share link.
@@ -1685,6 +1691,7 @@ func (s *SubService) genHysteriaLink(inbound *model.Inbound, email string) strin
 	if int(version) == 1 {
 		protocol = "hysteria"
 	}
+	remarkProtocol := protocol
 
 	// Set before the externalProxy fan-out: a Host overrides only the
 	// address, so every endpoint inherits the inbound's UDP hop range.
@@ -1722,7 +1729,7 @@ func (s *SubService) genHysteriaLink(inbound *model.Inbound, email string) strin
 	// No external proxy configured — use the inbound's resolved address so
 	// node-managed inbounds get the node's host instead of the central panel's.
 	link := fmt.Sprintf("%s://%s@%s", protocol, auth, joinHostPort(s.resolveInboundAddress(inbound), inbound.Port))
-	return buildLinkWithParams(link, params, s.genRemark(inbound, email, "", "quic"))
+	return buildLinkWithParams(link, params, s.genRemark(inbound, email, remarkProtocol, "quic"))
 }
 
 // hysteriaHopPorts returns the configured Hysteria2 UDP port-hopping range, or

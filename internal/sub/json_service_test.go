@@ -517,6 +517,40 @@ func TestSubJsonServiceWireguardNoKey(t *testing.T) {
 	}
 }
 
+
+func TestSubJsonServiceHysteria2IsNotDropped(t *testing.T) {
+	svc := NewSubJsonService("", "", "", "", nil)
+	inbound := &model.Inbound{
+		Listen:   "hy.example.com",
+		Port:     443,
+		Protocol: model.Hysteria,
+		Settings: `{"version":2}`,
+		StreamSettings: `{"network":"hysteria","security":"tls","tlsSettings":{"serverName":"hy.example.com"}}`,
+	}
+	client := model.Client{Email: "user@example.com", Auth: "hysteria-auth"}
+
+	configs := svc.getConfig(&SubService{address: "sub.example.com"}, inbound, client, "sub.example.com")
+	if len(configs) != 1 {
+		t.Fatalf("Hysteria2 JSON configs = %d, want 1", len(configs))
+	}
+
+	var doc map[string]any
+	if err := json.Unmarshal(configs[0], &doc); err != nil {
+		t.Fatalf("unmarshal config: %v", err)
+	}
+	outbounds, _ := doc["outbounds"].([]any)
+	if len(outbounds) == 0 {
+		t.Fatal("Hysteria2 JSON config has no outbounds")
+	}
+	outbound, _ := outbounds[0].(map[string]any)
+	if outbound["protocol"] != "hysteria" {
+		t.Fatalf("outbound protocol = %v, want hysteria", outbound["protocol"])
+	}
+	settings, _ := outbound["settings"].(map[string]any)
+	if settings["version"] != float64(2) {
+		t.Fatalf("Hysteria outbound version = %v, want 2", settings["version"])
+	}
+}
 func TestSubJsonServiceSkipsAmneziaWG(t *testing.T) {
 	if got := NewSubJsonService("", "", "", "", nil).getConfig(&SubService{address: "sub.example.com"}, &model.Inbound{Listen: "203.0.113.8", Port: 51820, Protocol: model.AmneziaWG}, model.Client{}, "sub.example.com"); len(got) != 0 {
 		t.Fatalf("getConfig emitted %d unsupported AmneziaWG Xray config(s)", len(got))

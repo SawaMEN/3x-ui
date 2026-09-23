@@ -129,6 +129,12 @@ func (s *SubJsonService) GetJson(subId string, host string, alwaysReturnArray bo
 	if len(inbounds) == 0 && len(externalLinks) == 0 {
 		return "", "", nil
 	}
+	// NaiveProxy has no Xray /json outbound representation in this service.
+	// Refuse to emit a partial structured subscription so auto-detection can
+	// fall back to the raw profile and preserve every connection.
+	if containsSubscriptionProtocol(inbounds, model.NaiveProxy) {
+		return "", "", errSubscriptionFormatUnsupported
+	}
 
 	var header string
 	var hasInactiveExternal bool
@@ -268,6 +274,11 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 	}
 	if len(inbounds) == 0 && len(externalLinks) == 0 {
 		return "", "", nil
+	}
+	// The current native builder has no NaiveProxy generator. Never emit a
+	// truncated sing-box profile: preserve the complete raw subscription.
+	if containsSubscriptionProtocol(inbounds, model.NaiveProxy) {
+		return "", "", errSubscriptionFormatUnsupported
 	}
 
 	type nativeOutbound struct {
@@ -486,6 +497,15 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 		return "", header, err
 	}
 	return encoded, header, nil
+}
+
+func containsSubscriptionProtocol(inbounds []*model.Inbound, protocol model.Protocol) bool {
+	for _, inbound := range inbounds {
+		if inbound != nil && inbound.Protocol == protocol {
+			return true
+		}
+	}
+	return false
 }
 
 // subConfigEntry is one ordered block of the JSON subscription: an inbound's
@@ -895,9 +915,9 @@ func (s *SubJsonService) getConfig(subReq *SubService, inbound *model.Inbound, c
 		case "trojan", "shadowsocks":
 			newOutbounds = append(newOutbounds, s.genServer(subReq, inbound, streamSettings, client, jsonMux(mux, hostMux)))
 		case "hysteria":
-			if version := hysteriaVersion(inbound.Settings, newStream); version != 2 {
-				newOutbounds = append(newOutbounds, s.genHy(inbound, newStream, client, jsonMux(mux, hostMux)))
-			}
+			// genHy already emits the version-specific Hysteria outbound, including
+			// version 2. Do not silently discard Hysteria2 from legacy JSON.
+			newOutbounds = append(newOutbounds, s.genHy(inbound, newStream, client, jsonMux(mux, hostMux)))
 		case "tuic", "wireguard", "amneziawg":
 			// These protocols do not have an Xray-compatible /json outbound.
 			continue

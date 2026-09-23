@@ -51,6 +51,12 @@ func (s *SubClashService) getClash(subId string, host string, legacy bool) (stri
 	if len(inbounds) == 0 && len(externalLinks) == 0 {
 		return "", "", nil
 	}
+	// Mihomo/Clash has no native NaiveProxy outbound in the profile schema
+	// used here. Refuse partial output so auto-detection can fall back to raw
+	// links and keep Naive alongside Hysteria2.
+	if containsSubscriptionProtocol(inbounds, model.NaiveProxy) {
+		return "", "", errSubscriptionFormatUnsupported
+	}
 
 	var proxies []map[string]any
 	var hasInactiveExternal bool

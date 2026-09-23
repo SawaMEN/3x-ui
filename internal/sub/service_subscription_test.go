@@ -69,6 +69,82 @@ func TestGetSubs_MixedNormalizedProtocols(t *testing.T) {
 	}
 }
 
+
+func TestGetSubs_Hysteria2AndNaiveKeepSeparateConnections(t *testing.T) {
+	dbDir := t.TempDir()
+	t.Setenv("XUI_DB_FOLDER", dbDir)
+	if err := database.InitDB(filepath.Join(dbDir, "x-ui.db")); err != nil {
+		t.Fatalf("InitDB: %v", err)
+	}
+	t.Cleanup(func() { _ = database.CloseDB() })
+
+	const subID = "sub-hy-naive"
+	const email = "shared@example.com"
+	const uuid = "44444444-5555-4666-8777-888888888888"
+	db := database.GetDB()
+
+	hysteria := &model.Inbound{
+		UserId: 1, Tag: "shared", Remark: "shared", Enable: true,
+		Port: 42131, Listen: "hy.example.com", Protocol: model.Hysteria,
+		Settings: fmt.Sprintf(`{"version":2,"clients":[{"email":%q,"subId":%q,"enable":true}]}`, email, subID),
+		StreamSettings: `{"network":"hysteria","security":"tls","tlsSettings":{"serverName":"hy.example.com"}}`,
+	}
+	naive := &model.Inbound{
+		UserId: 1, Tag: "shared", Remark: "shared", Enable: true,
+		Port: 42132, Listen: "naive.example.com", Protocol: model.NaiveProxy,
+		Settings: fmt.Sprintf(`{"network":"tcp","tls":{"serverName":"naive.example.com"},"clients":[{"email":%q,"subId":%q,"enable":true}]}`, email, subID),
+		StreamSettings: `{}`,
+	}
+	for _, inbound := range []*model.Inbound{hysteria, naive} {
+		if err := db.Create(inbound).Error; err != nil {
+			t.Fatalf("seed inbound %s: %v", inbound.Tag, err)
+		}
+	}
+
+	client := &model.ClientRecord{
+		Email: email, SubID: subID, UUID: uuid, Password: "naive-password",
+		Auth: "hysteria-auth", Enable: true,
+	}
+	if err := db.Create(client).Error; err != nil {
+		t.Fatalf("seed client: %v", err)
+	}
+	for _, inbound := range []*model.Inbound{hysteria, naive} {
+		if err := db.Create(&model.ClientInbound{ClientId: client.Id, InboundId: inbound.Id}).Error; err != nil {
+			t.Fatalf("attach %s: %v", inbound.Protocol, err)
+		}
+	}
+
+	links, _, _, _, err := NewSubService("").GetSubs(subID, "sub.example.com")
+	if err != nil {
+		t.Fatalf("GetSubs: %v", err)
+	}
+	if len(links) != 2 {
+		t.Fatalf("links = %d, want 2: %v", len(links), links)
+	}
+
+	var hysteriaLink, naiveLink string
+	for _, link := range links {
+		switch {
+		case strings.HasPrefix(link, "hysteria2://"):
+			hysteriaLink = link
+		case strings.HasPrefix(link, "naive+https://"):
+			naiveLink = link
+		}
+	}
+	if hysteriaLink == "" || naiveLink == "" {
+		t.Fatalf("subscription must contain one Hysteria2 and one Naive link: %v", links)
+	}
+	if !strings.Contains(hysteriaLink, "#shared-hysteria2-") {
+		t.Fatalf("Hysteria2 remark does not identify its protocol: %s", hysteriaLink)
+	}
+	if !strings.Contains(naiveLink, "#shared-naive-") {
+		t.Fatalf("Naive remark does not identify its protocol: %s", naiveLink)
+	}
+	if hysteriaLink == naiveLink {
+		t.Fatal("Hysteria2 and Naive links collapsed to the same connection")
+	}
+}
+
 func TestGetSubs_MultipleConnectionsSameProtocol(t *testing.T) {
 	dbDir := t.TempDir()
 	t.Setenv("XUI_DB_FOLDER", dbDir)
