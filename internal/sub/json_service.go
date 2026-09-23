@@ -296,6 +296,8 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 	var wireguardEndpoint map[string]any
 	var wireguardAddresses []string
 	wireguardOnly := len(externalLinks) == 0
+	wireguardInboundCount := 0
+	wireguardCandidates := 0
 	for _, inbound := range inbounds {
 		if inbound.Protocol != model.WireGuard {
 			if len(subReq.matchingClients(inbound, subId)) > 0 {
@@ -303,6 +305,7 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 			}
 			continue
 		}
+		wireguardInboundCount++
 		clients := subReq.matchingClients(inbound, subId)
 		if len(clients) == 0 {
 			continue
@@ -325,9 +328,11 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 			}
 			addresses := append([]string(nil), client.AllowedIPs...)
 			if len(addresses) == 0 {
-				addresses = []string{"10.0.0.2/32"}
+				continue
 			}
-			peer := map[string]any{"address": inbound.Listen, "port": inbound.Port, "public_key": serverPublicKey, "allowed_ips": []string{"0.0.0.0/0", "::/0"}}
+			wireguardCandidates++
+			peerAddress := wireguardPeerAddress(inbound, subReq.resolveInboundAddress(inbound), nil)
+			peer := map[string]any{"address": peerAddress, "port": inbound.Port, "public_key": serverPublicKey, "allowed_ips": []string{"0.0.0.0/0", "::/0"}}
 			if client.PreSharedKey != "" {
 				peer["pre_shared_key"] = client.PreSharedKey
 			}
@@ -340,13 +345,9 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 			}
 			wireguardAddresses = addresses
 			hasEnabledClient = true
-			break
-		}
-		if wireguardEndpoint != nil {
-			break
 		}
 	}
-	if wireguardEndpoint != nil && wireguardOnly {
+	if wireguardEndpoint != nil && wireguardOnly && wireguardInboundCount == 1 && wireguardCandidates == 1 {
 		cfg := map[string]any{
 			"$schema":   "https://sing-box.sagernet.org/schema.json",
 			"endpoints": []any{wireguardEndpoint},
@@ -386,6 +387,7 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 		}
 	}
 
+	formatUnsupported := false
 	for _, inbound := range inbounds {
 		clients := subReq.matchingClients(inbound, subId)
 		if len(clients) == 0 {
@@ -400,6 +402,64 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 			if client.Enable {
 				hasEnabledClient = true
 			}
+			if inbound.Protocol == model.TUIC {
+				stream := unmarshalStreamSettings(inbound.StreamSettings)
+				externalProxies, _ := stream["externalProxy"].([]any)
+				if len(externalProxies) == 0 {
+					externalProxies = []any{nil}
+				}
+				generated := 0
+				for _, rawEndpoint := range externalProxies {
+					var endpoint map[string]any
+					if rawEndpoint != nil {
+						endpoint, _ = rawEndpoint.(map[string]any)
+						if endpoint == nil {
+							continue
+						}
+						forceTLS, _ := endpoint["forceTls"].(string)
+						if strings.EqualFold(strings.TrimSpace(forceTLS), "none") {
+							continue
+						}
+					}
+
+					clone := *inbound
+					newStream := cloneStreamForExternalProxy(stream)
+					delete(newStream, "externalProxy")
+					if endpoint != nil {
+						if dest, ok := endpoint["dest"].(string); ok && strings.TrimSpace(dest) != "" {
+							clone.Listen = strings.TrimSpace(dest)
+						}
+						if rawPort, ok := endpoint["port"].(float64); ok && int(rawPort) > 0 {
+							clone.Port = int(rawPort)
+						}
+						security, _ := newStream["security"].(string)
+						applyExternalProxyTLSToStream(endpoint, newStream, security)
+						applyHostStreamOverrides(endpoint, newStream)
+					}
+				nativeRaw := s.genNativeTUIC(&clone, newStream, client)
+					if nativeRaw == nil {
+						continue
+					}
+					var native map[string]any
+					if err := json.Unmarshal(nativeRaw, &native); err != nil || native == nil {
+						continue
+					}
+					tag := client.Email
+					if tag == "" {
+						tag = fmt.Sprintf("proxy-%d", len(proxies)+1)
+					}
+					if len(proxies) > 0 {
+						tag = fmt.Sprintf("%s-%d", tag, len(proxies)+1)
+					}
+					native["tag"] = tag
+					proxies = append(proxies, nativeOutbound{tag: tag, out: native})
+					generated++
+				}
+				if generated == 0 {
+					formatUnsupported = true
+				}
+				continue
+			}
 			if inbound.Protocol == model.NaiveProxy {
 				// Naive is not an Xray outbound, but sing-box has a native
 				// representation. Keep it in the structured profile instead of
@@ -412,6 +472,7 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 					}
 				native := s.genNativeNaive(subReq, inbound, client, endpoint)
 					if native == nil {
+						formatUnsupported = true
 						continue
 					}
 					tag := client.Email
@@ -426,7 +487,12 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 				}
 				continue
 			}
-			for _, raw := range s.getConfig(subReq, inbound, client, host) {
+			raws := s.getConfig(subReq, inbound, client, host)
+			if len(raws) == 0 && inbound.Protocol != model.WireGuard {
+				formatUnsupported = true
+				continue
+			}
+			for _, raw := range raws {
 				var xrayCfg map[string]any
 				if err := json.Unmarshal(raw, &xrayCfg); err != nil {
 					return "", "", err
@@ -445,7 +511,8 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 				} else {
 					translated, err := singbox.TranslateXrayOutbound(proxy)
 					if err != nil {
-						return "", "", fmt.Errorf("client %q: %w", client.Email, err)
+						formatUnsupported = true
+						continue
 					}
 					native = translated
 				}
@@ -486,7 +553,8 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 			}
 			native, err := singbox.TranslateXrayOutbound(xrayOutbound)
 			if err != nil {
-				return "", "", err
+				formatUnsupported = true
+				continue
 			}
 			seenEmails[ext.Email] = struct{}{}
 			tag := el.Name
@@ -499,6 +567,10 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 			native["tag"] = tag
 			proxies = append(proxies, nativeOutbound{tag: tag, out: native})
 		}
+	}
+
+	if formatUnsupported {
+		return "", "", errSubscriptionFormatUnsupported
 	}
 
 	if len(proxies) == 0 && !hasInactiveExternal {
