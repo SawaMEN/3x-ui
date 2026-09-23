@@ -4,14 +4,6 @@ on:
   push:
     branches:
       - main
-    paths:
-      - "**.go"
-      - "go.mod"
-      - "go.sum"
-      - "frontend/**"
-      - "Makefile"
-      - ".nvmrc"
-      - ".github/workflows/build.yml"
   workflow_dispatch:
 
 permissions:

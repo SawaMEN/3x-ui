@@ -22,6 +22,7 @@ on:
       - "internal/Telemt/telemt-update.sh"
       - "internal/Telemt/telemt.toml.example"
       - ".github/workflows/release.yml"
+      - ".github/workflows/build.yml"
       - "internal/config/version"
 
 jobs:
@@ -62,6 +63,8 @@ jobs:
     needs: [frontend]
     permissions:
       contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
     strategy:
       fail-fast: false
       matrix:
@@ -184,7 +187,7 @@ jobs:
           fetch -O geosite_RU.dat https://github.com/runetfreedom/russia-v2ray-rules-dat/releases/latest/download/geosite.dat
           mv xray xray-linux-${{ matrix.platform }}
 
-          MTG_MULTI_VER=$(curl -sf "${CURL_RETRY[@]}" -o /dev/null -w '%{redirect_url}' https://github.com/mhsanaei/mtg-multi/releases/latest | sed -n 's#.*/releases/tag/##p')
+          MTG_MULTI_VER=$(gh api repos/mhsanaei/mtg-multi/releases/latest --jq '.tag_name')
           test -n "$MTG_MULTI_VER"
           MTG_PKG="mtg-multi-${MTG_MULTI_VER#v}-linux-${{ matrix.platform }}"
           curl -sfLRO "${CURL_RETRY[@]}" "https://github.com/mhsanaei/mtg-multi/releases/download/${MTG_MULTI_VER}/${MTG_PKG}.tar.gz"
@@ -196,7 +199,7 @@ jobs:
             amd64) TELEMT_ARCH=x86_64 ; TUIC_ARCH=x86_64-unknown-linux-musl ;;
             arm64) TELEMT_ARCH=aarch64 ; TUIC_ARCH=aarch64-unknown-linux-musl ;;
           esac
-          TELEMT_VER=$(curl -sf "${CURL_RETRY[@]}" -o /dev/null -w '%{redirect_url}' https://github.com/telemt/telemt/releases/latest | sed -n 's#.*/releases/tag/##p')
+          TELEMT_VER=$(gh api repos/telemt/telemt/releases/latest --jq '.tag_name')
           test -n "$TELEMT_VER"
           TELEMT_PKG="telemt-${TELEMT_ARCH}-linux-musl.tar.gz"
           curl -sfLRO "${CURL_RETRY[@]}" "https://github.com/telemt/telemt/releases/download/${TELEMT_VER}/${TELEMT_PKG}"
@@ -207,7 +210,7 @@ jobs:
           curl -sfLRo tuic-server "${CURL_RETRY[@]}" "https://github.com/EAimTY/tuic/releases/download/tuic-server-1.0.0/tuic-server-1.0.0-${TUIC_ARCH}"
           chmod +x tuic-server
 
-          MIERU_VER=$(curl -sf "${CURL_RETRY[@]}" -o /dev/null -w '%{redirect_url}' https://github.com/enfein/mieru/releases/latest | sed -n 's#.*/releases/tag/##p')
+          MIERU_VER=$(gh api repos/enfein/mieru/releases/latest --jq '.tag_name')
           test -n "$MIERU_VER"
           case "${{ matrix.platform }}" in amd64) MIERU_ARCH=linux_amd64 ;; arm64) MIERU_ARCH=linux_arm64 ;; esac
           MIERU_PKG="mieru_${MIERU_VER#v}_${MIERU_ARCH}.tar.gz"
@@ -219,7 +222,7 @@ jobs:
           chmod +x mita
           rm -f "$MIERU_PKG"
 
-          PSIPHON_VER=$(curl -sf "${CURL_RETRY[@]}" -o /dev/null -w '%{redirect_url}' https://github.com/Psiphon-Labs/psiphon-tunnel-core/releases/latest | sed -n 's#.*/releases/tag/##p')
+          PSIPHON_VER=$(gh api repos/Psiphon-Labs/psiphon-tunnel-core/releases/latest --jq '.tag_name')
           test -n "$PSIPHON_VER"
           if [[ "${{ matrix.platform }}" == "amd64" ]]; then
             curl -sfLRo psiphond "${CURL_RETRY[@]}" "https://raw.githubusercontent.com/Psiphon-Labs/psiphon-tunnel-core-binaries/master/psiphond/psiphond"
