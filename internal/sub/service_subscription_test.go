@@ -350,3 +350,72 @@ func TestGetSubs_DoesNotIncludeUnattachedSettingsOnlyInbound(t *testing.T) {
 		t.Fatalf("subscription fetch unexpectedly created a client_inbound row: %d", attachments)
 	}
 }
+
+func TestGetSubs_NaiveUsesHostEndpoints(t *testing.T) {
+	dbDir := t.TempDir()
+	t.Setenv("XUI_DB_FOLDER", dbDir)
+	if err := database.InitDB(filepath.Join(dbDir, "x-ui.db")); err != nil {
+		t.Fatalf("InitDB: %v", err)
+	}
+	t.Cleanup(func() { _ = database.CloseDB() })
+
+	const subID = "sub-naive-hosts"
+	const email = "naive-host@example.com"
+	db := database.GetDB()
+
+	inbound := &model.Inbound{
+		UserId: 1, Tag: "naive-hosts", Remark: "naive", Enable: true,
+		Port: 443, Listen: "origin.example.com", Protocol: model.NaiveProxy,
+		Settings: fmt.Sprintf(`{"network":"tcp","tls":{"serverName":"origin.example.com"},"clients":[{"email":%q,"subId":%q,"enable":true}]}`, email, subID),
+		StreamSettings: `{}`,
+	}
+	if err := db.Create(inbound).Error; err != nil {
+		t.Fatalf("seed inbound: %v", err)
+	}
+	client := &model.ClientRecord{Email: email, SubID: subID, Password: "naive-secret", Enable: true}
+	if err := db.Create(client).Error; err != nil {
+		t.Fatalf("seed client: %v", err)
+	}
+	if err := db.Create(&model.ClientInbound{ClientId: client.Id, InboundId: inbound.Id}).Error; err != nil {
+		t.Fatalf("attach client: %v", err)
+	}
+	hosts := []*model.Host{
+		{InboundId: inbound.Id, Remark: "edge-a", Address: "edge-a.example.com", Port: 8443, Security: "tls", Sni: "origin.example.com", HostHeader: "origin.example.com"},
+		{InboundId: inbound.Id, Remark: "edge-b", Address: "edge-b.example.com", Port: 9443, Security: "tls", Sni: "origin.example.com", HostHeader: "origin.example.com"},
+	}
+	for _, host := range hosts {
+		if err := db.Create(host).Error; err != nil {
+			t.Fatalf("seed host %s: %v", host.Remark, err)
+		}
+	}
+
+	links, _, _, _, err := NewSubService("").GetSubs(subID, "sub.example.com")
+	if err != nil {
+		t.Fatalf("GetSubs: %v", err)
+	}
+	all := strings.Split(strings.Join(links, "\n"), "\n")
+	got := make(map[string]bool)
+	for _, link := range all {
+		if strings.TrimSpace(link) == "" {
+			continue
+		}
+		if !strings.HasPrefix(link, "naive+https://") {
+			t.Fatalf("unexpected Naive link: %s", link)
+		}
+		got[link] = true
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %d Naive links, want 2: %v", len(got), all)
+	}
+	joined := strings.Join(all, "\n")
+	for _, want := range []string{
+		"edge-a.example.com:8443",
+		"edge-b.example.com:9443",
+		"sni=origin.example.com",
+		"host=origin.example.com",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("Naive host override missing %q in %v", want, all)
+		}
+	}
+}

@@ -647,11 +647,18 @@ func TestNativeNaiveOutbound(t *testing.T) {
 		&SubService{address: "sub.example.com"},
 		inbound,
 		client,
+		map[string]any{
+			"dest":        "edge.example.com",
+			"port":        float64(8443),
+			"sni":         "naive.example.com",
+			"hostHeader":  "origin.example.com",
+			"forceTls":    "tls",
+		},
 	)
 	if raw == nil {
 		t.Fatal("genNativeNaive returned nil")
 	}
-	if raw["type"] != "naive" || raw["server"] != "naive.example.com" || raw["server_port"] != 443 {
+	if raw["type"] != "naive" || raw["server"] != "edge.example.com" || raw["server_port"] != 8443 {
 		t.Fatalf("unexpected Naive outbound endpoint: %#v", raw)
 	}
 	if raw["username"] != client.Email || raw["password"] != client.Password {
@@ -659,6 +666,16 @@ func TestNativeNaiveOutbound(t *testing.T) {
 	}
 	if raw["udp_over_tcp"] != true || raw["quic"] != false {
 		t.Fatalf("unexpected Naive transport flags: %#v", raw)
+	}
+	if raw["server"] != "edge.example.com" || raw["server_port"] != 8443 {
+		t.Fatalf("host endpoint was not applied: %#v", raw)
+	}
+	if raw["extra_headers"] == nil {
+		t.Fatalf("expected Naive Host header override: %#v", raw)
+	}
+	extra, _ := raw["extra_headers"].(map[string]string)
+	if extra["Host"] != "origin.example.com" {
+		t.Fatalf("unexpected Naive extra headers: %#v", raw["extra_headers"])
 	}
 	tls, _ := raw["tls"].(map[string]any)
 	if tls["enabled"] != true || tls["server_name"] != "naive.example.com" {

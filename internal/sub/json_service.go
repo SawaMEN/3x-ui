@@ -382,9 +382,17 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 			if inbound.Protocol == model.NaiveProxy {
 				// Naive is not an Xray outbound, but sing-box has a native
 				// representation. Keep it in the structured profile instead of
-				// forcing the whole subscription back to raw links.
-				native := s.genNativeNaive(subReq, inbound, client)
-				if native != nil {
+				// forcing the whole subscription back to raw links. Host/external
+				// endpoints must fan out here just like raw subscriptions.
+				for _, endpoint := range subReq.naiveShareEndpoints(inbound) {
+					forceTLS, _ := endpoint["forceTls"].(string)
+					if strings.EqualFold(strings.TrimSpace(forceTLS), "none") {
+						continue
+					}
+				native := s.genNativeNaive(subReq, inbound, client, endpoint)
+					if native == nil {
+						continue
+					}
 					tag := client.Email
 					if tag == "" {
 						tag = fmt.Sprintf("proxy-%d", len(proxies)+1)
@@ -1392,7 +1400,7 @@ func hysteriaVersion(settingsJSON string, stream map[string]any) int {
 	return 1
 }
 
-func (s *SubJsonService) genNativeNaive(subReq *SubService, inbound *model.Inbound, client model.Client) map[string]any {
+func (s *SubJsonService) genNativeNaive(subReq *SubService, inbound *model.Inbound, client model.Client, endpoint map[string]any) map[string]any {
 	if inbound.Protocol != model.NaiveProxy || client.Email == "" || client.Password == "" {
 		return nil
 	}
@@ -1404,25 +1412,47 @@ func (s *SubJsonService) genNativeNaive(subReq *SubService, inbound *model.Inbou
 		serverName, _ = tlsSettings["serverName"].(string)
 	}
 	serverName = strings.TrimSpace(serverName)
+
+	server := subReq.resolveInboundAddress(inbound)
+	serverPort := inbound.Port
+	if endpoint != nil {
+		if dest, ok := endpoint["dest"].(string); ok && strings.TrimSpace(dest) != "" {
+			server = strings.TrimSpace(dest)
+		}
+		if rawPort, ok := endpoint["port"].(float64); ok && int(rawPort) > 0 {
+			serverPort = int(rawPort)
+		} else if rawPort, ok := endpoint["port"].(int); ok && rawPort > 0 {
+			serverPort = rawPort
+		}
+		if sni, ok := endpoint["sni"].(string); ok && strings.TrimSpace(sni) != "" {
+			serverName = strings.TrimSpace(sni)
+		}
+	}
 	if serverName == "" {
 		serverName = subReq.configuredPublicHost()
 	}
 
 	out := map[string]any{
 		"type":          "naive",
-		"server":        subReq.resolveInboundAddress(inbound),
-		"server_port":   inbound.Port,
+		"server":        server,
+		"server_port":   serverPort,
 		"username":      client.Email,
 		"password":      client.Password,
 		"udp_over_tcp":  true,
 		"quic":          strings.EqualFold(strings.TrimSpace(network), "udp"),
 	}
-	if tls := map[string]any{"enabled": true}; serverName != "" {
-		tls["server_name"] = serverName
-		out["tls"] = tls
-	} else {
-		out["tls"] = map[string]any{"enabled": true}
+
+	if cc, ok := settings["quicCongestionControl"].(string); ok && strings.TrimSpace(cc) != "" {
+		out["quic_congestion_control"] = strings.TrimSpace(cc)
 	}
+	if host, ok := endpoint["hostHeader"].(string); ok && strings.TrimSpace(host) != "" {
+		out["extra_headers"] = map[string]string{"Host": strings.TrimSpace(host)}
+	}
+	tls := map[string]any{"enabled": true}
+	if serverName != "" {
+		tls["server_name"] = serverName
+	}
+	out["tls"] = tls
 	return out
 }
 
