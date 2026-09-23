@@ -938,11 +938,11 @@ func TestNativeHysteria2Outbound(t *testing.T) {
 	if port, ok := got["server_port"].(int); !ok || port != 443 {
 		t.Fatalf("server_port = %v, want int(443)", got["server_port"])
 	}
-	if up, ok := got["up_mbps"].(int); !ok || up != 100 {
-		t.Fatalf("up_mbps = %v, want int(100)", got["up_mbps"])
+	if up, ok := got["up_mbps"].(float64); !ok || up != 100 {
+		t.Fatalf("up_mbps = %v, want float64(100)", got["up_mbps"])
 	}
-	if down, ok := got["down_mbps"].(int); !ok || down != 50 {
-		t.Fatalf("down_mbps = %v, want int(50)", got["down_mbps"])
+	if down, ok := got["down_mbps"].(float64); !ok || down != 50 {
+		t.Fatalf("down_mbps = %v, want float64(50)", got["down_mbps"])
 	}
 	obfs, ok := got["obfs"].(map[string]any)
 	if !ok || obfs["type"] != "salamander" || obfs["password"] != "obfs" {
