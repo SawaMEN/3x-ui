@@ -61,14 +61,14 @@ func InstanceFromInbound(ib *model.Inbound) (Instance, bool) {
 		}
 	}
 
-	// When the user does not provide a reusable server entry or an explicit
-	// advertised address, detect a public IP from the VPS interfaces. This
-	// keeps the common VPS setup as simple as VLESS: choose the port and start.
-	if addr == "" && entry == "" {
+	// server-entry.dat is client-facing Psiphon metadata, not the server's
+	// private runtime configuration. A reusable entry therefore never replaces
+	// the need for an advertised server address when generating psiphond.conf.
+	if addr == "" {
 		addr = detectPublicAddress()
 	}
 
-	if ib.Port < 1 || ib.Port > 65535 || (addr == "" && entry == "") {
+	if ib.Port < 1 || ib.Port > 65535 || addr == "" {
 		return Instance{}, false
 	}
 
@@ -141,7 +141,9 @@ func parseInterfaceIP(addr net.Addr) net.IP {
 }
 
 func (inst Instance) fingerprint() string {
-	return fmt.Sprintf("%s|%s|%d|%s|%s", inst.ServerAddress, inst.Protocol, inst.Port, inst.ServerEntry, strings.Join(inst.AdditionalArguments, "\x00"))
+	// ServerEntry is generated client metadata and must not cause a psiphond
+	// restart when it changes or is refreshed in the database.
+	return fmt.Sprintf("%s|%s|%d|%s", inst.ServerAddress, inst.Protocol, inst.Port, strings.Join(inst.AdditionalArguments, "\x00"))
 }
 
 type managed struct {
