@@ -1847,7 +1847,7 @@
         "updateFailed": "System update failed",
         "updateOutput": "Update output",
         "noPackages": "No package updates are currently available.",
-        "systemUpdateNote": "This manager checks the system packages required by 3x-ui, Linux kernel packages, and installed panel dependencies such as Xray, sing-box, and Telemt. Arch Linux is the exception because partial upgrades are unsupported.",
+        "systemUpdateNote": "This manager updates the Linux packages and kernel required by 3x-ui. WireGuard, AmneziaWG and VK-Turn use iproute2/iproute and iptables; MTProto, TUIC, Naive, Mieru and Psiphon use the common curl, tar, ca-certificates, openssl and socat runtime tools. The protocol server implementations themselves are bundled separately with the panel. Arch Linux is the exception because partial upgrades are unsupported."
         "componentUpdatesTitle": "Panel dependencies",
         "systemPackagesTitle": "System packages",
         "updateComponent": "Update",
