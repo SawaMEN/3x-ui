@@ -351,7 +351,7 @@ func (s *SubService) loadRemarkSettings() {
 }
 
 func (s *SubService) configuredPublicHost() string {
-	if s.settingService == nil {
+	if database.GetDB() == nil {
 		return ""
 	}
 	if d, err := s.settingService.GetSubDomain(); err == nil && d != "" {
