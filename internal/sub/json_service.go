@@ -452,38 +452,6 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 		return "", "", nil
 	}
 
-	outbounds := make([]any, 0, len(proxies)+4)
-	proxyTags := make([]string, 0, len(proxies))
-	for _, proxy := range proxies {
-		outbounds = append(outbounds, proxy.out)
-		proxyTags = append(proxyTags, proxy.tag)
-	}
-	outbounds = append(outbounds, map[string]any{"type": "direct", "tag": "direct"})
-	outbounds = append(outbounds, map[string]any{"type": "block", "tag": "blocked"})
-	if len(proxyTags) > 1 {
-		outbounds = append(outbounds,
-			map[string]any{"type": "urltest", "tag": "auto", "outbounds": proxyTags},
-			map[string]any{"type": "selector", "tag": "select", "outbounds": proxyTags, "default": proxyTags[0]},
-		)
-	}
-
-	sbCfg := map[string]any{
-		"$schema":   "https://sing-box.sagernet.org/schema.json",
-		"outbounds": outbounds,
-	}
-	if template := s.bakedTemplate(); template != nil {
-		if rawDNS, ok := template["dns"].(map[string]any); ok {
-			if dns, err := singbox.TranslateXrayDNS(rawDNS); err == nil && len(dns) > 0 {
-				sbCfg["dns"] = dns
-			}
-		}
-		if rawRouting, ok := template["routing"].(map[string]any); ok {
-			if route, err := singbox.TranslateXrayRouting(rawRouting); err == nil && len(route) > 0 {
-				sbCfg["route"] = route
-			}
-		}
-	}
-
 	emails := make([]string, 0, len(seenEmails))
 	for email := range seenEmails {
 		emails = append(emails, email)
@@ -493,15 +461,31 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 	traffic.Enable = hasEnabledClient
 	header := subReq.subscriptionUserinfo(traffic)
 
-	encoded, err := json.MarshalIndent(sbCfg, "", "  ")
+	if mode, remark := subReq.resolveInfoNodeRemark(subId, emails, traffic, len(proxies) > 0); mode != infoNodeNone {
+		dummyConfig := s.genDummySocksConfig(remark)
+		var dummy map[string]any
+		if err := json.Unmarshal(dummyConfig, &dummy); err == nil {
+			if outbounds, ok := dummy["outbounds"].([]any); ok && len(outbounds) > 0 {
+				if proxy, ok := outbounds[0].(map[string]any); ok {
+					proxies = append([]nativeOutbound{{tag: "subscription-status", out: proxy}}, proxies...)
+				}
+			}
+		}
+		if mode == infoNodeExpired || mode == infoNodeDepleted {
+			proxies = proxies[:1]
+		}
+	}
+
+	proxyConfigs := make([]map[string]any, 0, len(proxies))
+	for _, proxy := range proxies {
+		proxyConfigs = append(proxyConfigs, proxy.out)
+	}
+
+	encoded, err := buildSeparatedSingBoxSubscription(s.bakedTemplate(), proxyConfigs, alwaysReturnArray)
 	if err != nil {
 		return "", header, err
 	}
-	if alwaysReturnArray {
-		arr, _ := json.MarshalIndent([]json.RawMessage{encoded}, "", "  ")
-		return string(arr), header, nil
-	}
-	return string(encoded), header, nil
+	return encoded, header, nil
 }
 
 // subConfigEntry is one ordered block of the JSON subscription: an inbound's
