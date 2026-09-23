@@ -1403,7 +1403,13 @@ body.theme-cyberpunk .brand-block::after {
   width: 28px;
   height: 1px;
   transform: translateX(-50%) skewX(-12deg);
-  background: linear-gradient(90deg, transparent, rgba(0, 246, 255, 0.68), rgba(255, 43, 214, 0.48), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(0, 246, 255, 0.68),
+    rgba(255, 43, 214, 0.48),
+    transparent
+  );
   box-shadow: 0 0 6px rgba(0, 246, 255, 0.28);
 }
 
