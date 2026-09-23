@@ -285,20 +285,29 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 	hasEnabledClient := false
 	hasInactiveExternal := false
 
-	var wireguardEndpoint map[string]any
-	var wireguardAddresses []string
+	// Cache matched clients across the WireGuard pre-pass and the generic
+	// renderer. Without this, multi-protocol subscriptions query the same
+	// client_inbounds relation twice per inbound.
+	matchedClients := make(map[*model.Inbound][]model.Client, len(inbounds))
+	clientsFor := func(inbound *model.Inbound) []model.Client {
+		if clients, ok := matchedClients[inbound]; ok {
+			return clients
+		}
+		clients := subReq.matchingClients(inbound, subId)
+		matchedClients[inbound] = clients
+		return clients
+	}
+
 	wireguardOnly := len(externalLinks) == 0
-	wireguardInboundCount := 0
-	wireguardCandidates := 0
+	var wireguardConfigs []json.RawMessage
 	for _, inbound := range inbounds {
+		clients := clientsFor(inbound)
 		if inbound.Protocol != model.WireGuard {
-			if len(subReq.matchingClients(inbound, subId)) > 0 {
+			if len(clients) > 0 {
 				wireguardOnly = false
 			}
 			continue
 		}
-		wireguardInboundCount++
-		clients := subReq.matchingClients(inbound, subId)
 		if len(clients) == 0 {
 			continue
 		}
@@ -322,34 +331,61 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 			if len(addresses) == 0 {
 				continue
 			}
-			wireguardCandidates++
 			peerAddress := wireguardPeerAddress(inbound, subReq.resolveInboundAddress(inbound), nil)
-			peer := map[string]any{"address": peerAddress, "port": inbound.Port, "public_key": serverPublicKey, "allowed_ips": []string{"0.0.0.0/0", "::/0"}}
+			peer := map[string]any{
+				"address":     peerAddress,
+				"port":        inbound.Port,
+				"public_key":  serverPublicKey,
+				"allowed_ips": []string{"0.0.0.0/0", "::/0"},
+			}
 			if client.PreSharedKey != "" {
 				peer["pre_shared_key"] = client.PreSharedKey
 			}
 			if client.KeepAlive != nil && *client.KeepAlive > 0 {
 				peer["persistent_keepalive_interval"] = *client.KeepAlive
 			}
-			wireguardEndpoint = map[string]any{"type": "wireguard", "tag": "wg-endpoint", "address": addresses, "private_key": client.PrivateKey, "peers": []any{peer}}
-			if mtu, ok := settings["mtu"].(float64); ok && mtu > 0 {
-				wireguardEndpoint["mtu"] = int(mtu)
+			endpoint := map[string]any{
+				"type":        "wireguard",
+				"tag":         "wg-endpoint",
+				"address":     addresses,
+				"private_key": client.PrivateKey,
+				"peers":       []any{peer},
 			}
-			wireguardAddresses = addresses
-			hasEnabledClient = true
+			if mtu, ok := settings["mtu"].(float64); ok && mtu > 0 {
+				endpoint["mtu"] = int(mtu)
+			}
+
+			cfg := map[string]any{
+				"$schema": "https://sing-box.sagernet.org/schema.json",
+				"endpoints": []any{endpoint},
+				"inbounds": []any{map[string]any{
+					"type":       "tun",
+					"tag":        "tun-in",
+					"address":    addresses,
+					"auto_route": true,
+					"strict_route": true,
+				}},
+				"outbounds": []any{
+					map[string]any{"type": "direct", "tag": "direct"},
+					map[string]any{"type": "block", "tag": "blocked"},
+				},
+				"route": map[string]any{
+					"rules": []any{map[string]any{"action": "route", "outbound": "wg-endpoint"}},
+					"final": "direct",
+					"auto_detect_interface": true,
+				},
+			}
+			encoded, err := json.MarshalIndent(cfg, "", "  ")
+			if err == nil {
+				wireguardConfigs = append(wireguardConfigs, encoded)
+				hasEnabledClient = true
+			}
 		}
 	}
-	if wireguardEndpoint != nil && wireguardOnly && wireguardInboundCount == 1 && wireguardCandidates == 1 {
-		cfg := map[string]any{
-			"$schema":   "https://sing-box.sagernet.org/schema.json",
-			"endpoints": []any{wireguardEndpoint},
-			"inbounds":  []any{map[string]any{"type": "tun", "tag": "tun-in", "address": wireguardAddresses, "auto_route": true, "strict_route": true}},
-			"outbounds": []any{map[string]any{"type": "direct", "tag": "direct"}, map[string]any{"type": "block", "tag": "blocked"}},
-			"route":     map[string]any{"rules": []any{map[string]any{"action": "route", "outbound": "wg-endpoint"}}, "final": "direct", "auto_detect_interface": true},
-		}
-		encoded, err := json.MarshalIndent(cfg, "", "  ")
-		if err != nil {
-			return "", "", err
+
+	if wireguardOnly {
+		if len(wireguardConfigs) == 0 {
+			return "", "", errSubscriptionFormatUnsupported
 		}
 		emails := make([]string, 0, len(seenEmails))
 		for email := range seenEmails {
@@ -359,11 +395,14 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 		traffic, _ := subReq.AggregateTrafficByEmails(emails)
 		traffic.Enable = hasEnabledClient
 		header := subReq.subscriptionUserinfo(traffic)
-		if alwaysReturnArray {
-			arr, _ := json.MarshalIndent([]json.RawMessage{encoded}, "", "  ")
-			return string(arr), header, nil
+		if len(wireguardConfigs) == 1 && !alwaysReturnArray {
+			return string(wireguardConfigs[0]), header, nil
 		}
-		return string(encoded), header, nil
+		arr, err := json.MarshalIndent(wireguardConfigs, "", "  ")
+		if err != nil {
+			return "", header, err
+		}
+		return string(arr), header, nil
 	}
 
 	// Refuse partial sing-box output for protocols this renderer cannot represent.
@@ -375,7 +414,7 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 
 	formatUnsupported := false
 	for _, inbound := range inbounds {
-		clients := subReq.matchingClients(inbound, subId)
+		clients := clientsFor(inbound)
 		if len(clients) == 0 {
 			continue
 		}
