@@ -141,7 +141,10 @@ func InstanceFromInbound(ib *model.Inbound) (Instance, bool) {
 	cc := parsed.CongestionControl
 	alpn := parsed.ALPN
 	udpRelayMode := parsed.UDPRelayMode
-	zeroRtt := true
+	// TUIC 0-RTT is intentionally disabled by default: the upstream
+	// specification allows it, but replay attacks are possible and the
+	// current sing-box documentation strongly recommends disabling it.
+	zeroRtt := false
 	if parsed.ZeroRTTHandshake != nil {
 		zeroRtt = *parsed.ZeroRTTHandshake
 	}
