@@ -656,7 +656,7 @@ func (s *SubService) getInboundsBySubId(subId string) ([]*model.Inbound, error) 
 		JOIN client_inbounds ON client_inbounds.inbound_id = inbounds.id
 		JOIN clients ON clients.id = client_inbounds.client_id
 		WHERE
-			inbounds.protocol in ('vmess','vless','trojan','shadowsocks','hysteria','wireguard','amneziawg','mtproto','tuic','naive','mieru')
+			inbounds.protocol in ('vmess','vless','trojan','shadowsocks','hysteria','wireguard','amneziawg','mtproto','tuic','naive','mieru','vk-turn-proxy')
 			AND clients.sub_id = ? AND inbounds.enable = ?
 	)`, subId, true).Order("sub_sort_index ASC").Order("id ASC").Find(&inbounds).Error
 	if err != nil {
@@ -865,11 +865,10 @@ func (s *SubService) genNaiveSubscriptionLink(inbound *model.Inbound, email stri
 	}
 	settings := s.linkSettings(inbound)
 	network, _ := settings["network"].(string)
-	scheme := "naive+https"
+	params := map[string]string{"security": "tls"}
 	if strings.EqualFold(strings.TrimSpace(network), "udp") {
-		scheme = "naive+quic"
+		params["quic"] = "1"
 	}
-	params := map[string]string{"padding": "true"}
 	if tls, ok := settings["tls"].(map[string]any); ok {
 		if sni, _ := tls["serverName"].(string); strings.TrimSpace(sni) != "" {
 			params["sni"] = strings.TrimSpace(sni)
@@ -883,8 +882,7 @@ func (s *SubService) genNaiveSubscriptionLink(inbound *model.Inbound, email stri
 			params["sni"] = sni
 		}
 	}
-	link := fmt.Sprintf("%s://%s:%s@%s",
-		scheme,
+	link := fmt.Sprintf("naive://%s:%s@%s/?",
 		encodeUserinfo(client.Email),
 		encodeUserinfo(client.Password),
 		joinHostPort(s.resolveInboundAddress(inbound), inbound.Port),
@@ -1036,7 +1034,7 @@ func (s *SubService) genMieruLink(inbound *model.Inbound, email string) string {
 		values.Add("protocol", entry.protocol)
 	}
 
-	link := fmt.Sprintf("mierus://%s:%s@%s?%s",
+	link := fmt.Sprintf("mieru://%s:%s@%s?%s",
 		encodeUserinfo(client.Email),
 		encodeUserinfo(client.Password),
 		s.resolveInboundAddress(inbound),
