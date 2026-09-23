@@ -265,6 +265,7 @@ export function createDefaultNaiveInboundSettings(): NaiveInboundSettings {
   return {
     network: 'tcp',
     quicCongestionControl: 'bbr',
+    shareLinkFormat: 'standard',
     tls: { enabled: true, serverName: '', certificatePath: '', keyPath: '' },
     clients: [],
   };

@@ -58,7 +58,7 @@ export default function MieruFields() {
         />
       </FormField>
 
-      <Divider plain orientation="left" style={{ margin: '8px 0 12px' }}>
+      <Divider plain titlePlacement="start" style={{ margin: '8px 0 12px' }}>
         {t('pages.inbounds.form.mieruClientSettings')}
       </Divider>
 

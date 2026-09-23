@@ -119,7 +119,7 @@ func TestGetXrayConfig_SkipsMieruInbound(t *testing.T) {
 		Enable:   true,
 		Port:     8443,
 		Protocol: model.Mieru,
-		Settings: \`{"tcpPorts":["8443"],"udpPorts":[]}\`,
+		Settings: `{"tcpPorts":["8443"],"udpPorts":[]}`,
 	}
 	if err := db.Create(in).Error; err != nil {
 		t.Fatalf("create mieru inbound: %v", err)

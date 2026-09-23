@@ -2741,7 +2741,6 @@ export const SCHEMAS: Record<string, unknown> = {
           "amneziawg",
           "tuic",
           "naive",
-          "psiphon",
           "mieru",
           "vk-turn-proxy"
         ],

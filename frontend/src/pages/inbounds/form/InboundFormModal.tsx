@@ -1176,7 +1176,6 @@ export default function InboundFormModal({
                     Protocols.AMNEZIAWG,
                     Protocols.TUIC,
                     Protocols.NAIVE,
-                    Protocols.PSIPHON,
                     Protocols.MIERU,
                   ] as string[]
                 ).includes(protocol) || isFallbackHost
