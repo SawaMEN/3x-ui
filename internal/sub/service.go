@@ -1864,6 +1864,7 @@ func (s *SubService) genShadowsocksLink(inbound *model.Inbound, email string) st
 			externalProxies,
 			proxyParams,
 			security,
+			s.inboundDefaultEndpoint(inbound),
 			func(_ map[string]any, dest string, port int) string {
 				return fmt.Sprintf("ss://%s@%s", userInfo, joinHostPort(dest, port))
 			},
