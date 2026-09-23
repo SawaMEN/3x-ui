@@ -579,7 +579,7 @@ func TestSubJsonServiceWireguardMissingServerKeyKeepsClientProfile(t *testing.T)
 	if err != nil {
 		t.Fatalf("client keypair: %v", err)
 	}
-	inbound := &model.Inbound{Listen: "203.0.113.9", Port: 51820, Protocol: model.WireGuard, Settings: `{}`,
+	inbound := &model.Inbound{Listen: "203.0.113.9", Port: 51820, Protocol: model.WireGuard, Settings: `{}`}
 	client := model.Client{Email: "user", PrivateKey: clientPriv}
 
 	raw := NewSubJsonService("", "", "", "", nil).genWireguard(inbound, client)
