@@ -130,3 +130,35 @@ func TestGetInboundsBySubIdIncludesWireguard(t *testing.T) {
 		t.Fatalf("wireguard inbound not returned for subId: %+v", inbounds)
 	}
 }
+
+
+func TestGetInboundsBySubIdIncludesVKTurnProxy(t *testing.T) {
+	initSubDB(t)
+	db := database.GetDB()
+
+	in := &model.Inbound{
+		Port:     443,
+		Protocol: model.VKTurnProxy,
+		Enable:   true,
+		Tag:      "vk-turn-sub",
+		Settings: `{"clients":[]}`,
+	}
+	if err := db.Create(in).Error; err != nil {
+		t.Fatalf("create inbound: %v", err)
+	}
+	rec := &model.ClientRecord{Email: "u@vk", SubID: "subvk", Enable: true}
+	if err := db.Create(rec).Error; err != nil {
+		t.Fatalf("create client: %v", err)
+	}
+	if err := db.Create(&model.ClientInbound{ClientId: rec.Id, InboundId: in.Id}).Error; err != nil {
+		t.Fatalf("create link: %v", err)
+	}
+
+	inbounds, err := (&SubService{}).getInboundsBySubId("subvk")
+	if err != nil {
+		t.Fatalf("getInboundsBySubId: %v", err)
+	}
+	if len(inbounds) != 1 || inbounds[0].Id != in.Id {
+		t.Fatalf("vk-turn-proxy inbound not returned for subId: %+v", inbounds)
+	}
+}
