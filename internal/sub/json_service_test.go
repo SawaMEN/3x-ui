@@ -541,6 +541,35 @@ func TestSubJsonServiceWireguardDoesNotInventAddress(t *testing.T) {
 		t.Fatalf("genWireguard invented an address: %v", settings["address"])
 	}
 }
+func TestSubJsonServiceWireguardMissingServerKeyKeepsClientProfile(t *testing.T) {
+	clientPriv, _, err := wgutil.GenerateWireguardKeypair()
+	if err != nil {
+		t.Fatalf("client keypair: %v", err)
+	}
+	inbound := &model.Inbound{Listen: "203.0.113.9", Port: 51820, Protocol: model.WireGuard, Settings: `{}}`
+	client := model.Client{Email: "user", PrivateKey: clientPriv}
+
+	raw := NewSubJsonService("", "", "", "", nil).genWireguard(inbound, client)
+	if raw == nil {
+		t.Fatal("genWireguard returned nil when only server public key is unavailable")
+	}
+	settings := outboundSettings(t, raw)
+	if _, exists := settings["address"]; exists {
+		t.Fatalf("unexpected invented client address: %v", settings["address"])
+	}
+	peers, _ := settings["peers"].([]any)
+	if len(peers) != 1 {
+		t.Fatalf("peers len = %d, want 1", len(peers))
+	}
+	peer, _ := peers[0].(map[string]any)
+	if _, exists := peer["publicKey"]; exists {
+		t.Fatalf("unexpected publicKey with missing server secretKey: %v", peer["publicKey"])
+	}
+	if peer["endpoint"] != "203.0.113.9:51820" {
+		t.Fatalf("peer endpoint = %v, want 203.0.113.9:51820", peer["endpoint"])
+	}
+}
+
 func TestSubJsonServiceWireguardNoKey(t *testing.T) {
 	inbound := &model.Inbound{Listen: "203.0.113.9", Port: 51820, Protocol: model.WireGuard, Settings: `{}`}
 	client := model.Client{Email: "user"}
