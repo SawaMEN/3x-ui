@@ -129,19 +129,11 @@ func (s *SubJsonService) GetJson(subId string, host string, alwaysReturnArray bo
 	if len(inbounds) == 0 && len(externalLinks) == 0 {
 		return "", "", nil
 	}
-	// These protocols have no complete Xray /json outbound representation
-	// in this service. Refuse partial structured output so auto-detection can
-	// fall back to the raw profile and preserve every connection.
-	for _, protocol := range []model.Protocol{
-		model.NaiveProxy,
-		model.TUIC,
-		model.AmneziaWG,
-		model.Mieru,
-		model.VKTurnProxy,
-	} {
-		if containsSubscriptionProtocol(inbounds, protocol) {
-			return "", "", errSubscriptionFormatUnsupported
-		}
+	// JSON uses Xray's outbound model. Refuse the whole format when any linked
+	// inbound cannot be represented, otherwise auto-detection could silently
+	// drop one connection and still return HTTP 200.
+	if containsUnsupportedJSONProtocol(inbounds) {
+		return "", "", errSubscriptionFormatUnsupported
 	}
 
 	var header string
@@ -206,7 +198,7 @@ func (s *SubJsonService) GetJson(subId string, host string, alwaysReturnArray bo
 		for _, el := range expandEntry(ext) {
 			outbound := parsedExternalOutbound(el.Link)
 			if outbound == nil {
-				continue
+				return "", "", errSubscriptionFormatUnsupported
 			}
 			seenEmails[ext.Email] = struct{}{}
 			remark := el.Name
