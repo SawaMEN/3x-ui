@@ -178,3 +178,15 @@ func TestGenHysteriaLinkExternalProxyTLSOverrides(t *testing.T) {
 		t.Fatalf("base TLS values leaked instead of external overrides: %s", got)
 	}
 }
+
+
+func TestGenHysteriaLinkSkipsPlaintextExternalProxy(t *testing.T) {
+	in := &model.Inbound{
+		Listen: "203.0.113.1", Port: 443, Protocol: model.Hysteria,
+		Settings: `{"version":2,"clients":[{"auth":"secret","email":"user"}]}`,
+		StreamSettings: `{"security":"tls","externalProxy":[{"forceTls":"none","dest":"plain.example.com","port":80}]}`,
+	}
+	if got := (&SubService{}).genHysteriaLink(in, "user"); got != "" {
+		t.Fatalf("plaintext Hysteria external endpoint must be skipped, got %q", got)
+	}
+}
