@@ -343,3 +343,13 @@ func TestGenAmneziaWGLinkExternalProxyFanOut(t *testing.T) {
 	if !strings.Contains(second, "Endpoint = vpn.example.com:51820") { t.Fatalf("partial endpoint must fall back to inbound endpoint: %s", second) }
 	if !strings.Contains(first, "# EDGE") || !strings.Contains(second, "# FALLBACK") { t.Fatalf("endpoint remarks missing: %q / %q", first, second) }
 }
+
+
+func TestAmneziaWGConfigTextIPv6Endpoint(t *testing.T) {
+	server := &amneziawg.ServerSettings{PublicKey:"serverPub", MTU:1420}
+	client := &model.Client{PrivateKey:"clientPriv", AllowedIPs:[]string{"fd00::2/128"}}
+	conf := amneziaWGConfigText(server, client, "2001:db8::7", 51820, "ipv6")
+	if !strings.Contains(conf, "Endpoint = [2001:db8::7]:51820") {
+		t.Fatalf("IPv6 endpoint is not bracketed in AmneziaWG config: %s", conf)
+	}
+}
