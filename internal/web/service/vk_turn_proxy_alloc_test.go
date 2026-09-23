@@ -1,6 +1,10 @@
 package service
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+)
 
 // clientWithPeer builds a VK-TURN client holding a single managed peer
 // pinned to the given 10.0.0.X octet, with the requested enable state.
