@@ -83,3 +83,30 @@ func TestGenWireguardLinkExternalProxyFanOut(t *testing.T) {
 	if !strings.Contains(parts[0],"@edge1.example.com:443") { t.Fatalf("first endpoint mismatch: %s", parts[0]) }
 	if !strings.Contains(parts[1],"@vpn.example.com:51820") { t.Fatalf("partial endpoint must fall back to inbound endpoint: %s", parts[1]) }
 }
+
+
+func TestGenWireguardLinkJSONIPv6Endpoint(t *testing.T) {
+	inbound := &model.Inbound{
+		Protocol: model.WireGuard,
+		Listen: "::",
+		Port: 51820,
+		Settings: `{"secretKey":""}`,
+	}
+	client := model.Client{
+		PrivateKey: "client-private-key",
+		AllowedIPs: []string{"fd00::2/128"},
+		Email: "wg6@example.com",
+	}
+	svc := NewSubJsonService("", "", "", "", nil)
+	body := svc.genWireguard(inbound, client)
+	if body == nil {
+		t.Fatal("genWireguard returned nil")
+	}
+	if !strings.Contains(string(body), "\"endpoint\": \"[2001:db8::") && !strings.Contains(string(body), "\"endpoint\": \"[::]") {
+		// The helper uses the inbound's resolved address; with no service address
+		// it falls back to the bind address "::" and must still bracket it.
+		if !strings.Contains(string(body), "\"endpoint\": \"[::]:51820\"") {
+			t.Fatalf("WireGuard JSON IPv6 endpoint is not bracketed: %s", body)
+		}
+	}
+}
