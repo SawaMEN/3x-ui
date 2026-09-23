@@ -954,6 +954,26 @@ body.theme-cyberpunk .sider-brand .brand-text::after {
 }
 
 /* Mobile drawer header: fixed three-column layout keeps 3X-UI centered across the full header. */
+/* Keep the cyberpunk desktop wordmark on the exact center line of the full sidebar. */
+@media (min-width: 769px) {
+  body.theme-cyberpunk .sider-brand .sider-brand-content {
+    inset: 0 auto 0 50%;
+    width: max-content;
+    max-width: calc(100% - 92px);
+    margin: 0;
+    padding: 0;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  body.theme-cyberpunk .sider-brand .brand-text {
+    margin: 0;
+    text-align: center;
+  }
+}
+
 @media (max-width: 768px) {
   .drawer-header {
     display: grid;

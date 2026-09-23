@@ -1265,7 +1265,7 @@ func TestHysteriaHopPorts(t *testing.T) {
 	}
 }
 
-func TestGenNaiveSubscriptionLinkUsesCompatibleScheme(t *testing.T) {
+func TestGenNaiveSubscriptionLinkUsesStandardScheme(t *testing.T) {
 	s := &SubService{
 		clientsByInbound: map[int]map[string]model.Client{
 			1: {"user@example.com": {Email: "user@example.com", Password: "secret"}},
@@ -1286,22 +1286,19 @@ func TestGenNaiveSubscriptionLinkUsesCompatibleScheme(t *testing.T) {
 	if !strings.HasPrefix(got, "naive+https://") {
 		t.Fatalf("scheme = %q, want naive+https://", got)
 	}
-	if strings.HasPrefix(got, "vless://") || strings.Contains(got, "type=tcp") {
-		t.Fatalf("Naive link must not be emitted as VLESS: %s", got)
-	}
 	u, err := url.Parse(got)
 	if err != nil {
 		t.Fatalf("parse Naive link: %v", err)
 	}
 	if gotSNI := u.Query().Get("sni"); gotSNI != "" {
-		t.Fatalf("non-standard sni parameter must be omitted, got %q", gotSNI)
+		t.Fatalf("standard Naive link must not emit non-standard sni, got %q", gotSNI)
 	}
 	if gotPadding := u.Query().Get("padding"); gotPadding != "true" {
 		t.Fatalf("padding = %q, want true", gotPadding)
 	}
 }
 
-func TestGenNaiveSubscriptionLinkUsesQuicScheme(t *testing.T) {
+func TestGenNaiveSubscriptionLinkUsesHiddifyScheme(t *testing.T) {
 	s := &SubService{
 		clientsByInbound: map[int]map[string]model.Client{
 			2: {"user@example.com": {Email: "user@example.com", Password: "secret"}},
@@ -1312,15 +1309,50 @@ func TestGenNaiveSubscriptionLinkUsesQuicScheme(t *testing.T) {
 		Listen:   "203.0.113.10",
 		Port:     443,
 		Protocol: model.NaiveProxy,
-		Settings: `{"network":"udp","tls":{"serverName":"naive.example.com"}}`,
+		Settings: `{"network":"tcp","shareLinkFormat":"hiddify","tls":{"serverName":"naive.example.com"}}`,
 	}
 	got := s.genNaiveSubscriptionLink(in, "user@example.com")
 	u, err := url.Parse(got)
 	if err != nil {
-		t.Fatalf("parse Naive QUIC link: %v", err)
+		t.Fatalf("parse Hiddify Naive link: %v", err)
 	}
-	if u.Scheme != "naive+quic" {
-		t.Fatalf("link = %q, want naive+quic://", got)
+	if u.Scheme != "naive" {
+		t.Fatalf("link = %q, want naive://", got)
+	}
+	if gotSNI := u.Query().Get("sni"); gotSNI != "naive.example.com" {
+		t.Fatalf("sni = %q, want naive.example.com", gotSNI)
+	}
+	if gotPadding := u.Query().Get("padding"); gotPadding != "true" {
+		t.Fatalf("padding = %q, want true", gotPadding)
+	}
+}
+
+func TestGenNaiveSubscriptionLinkUsesHiddifyQuicScheme(t *testing.T) {
+	s := &SubService{
+		clientsByInbound: map[int]map[string]model.Client{
+			3: {"user@example.com": {Email: "user@example.com", Password: "secret"}},
+		},
+	}
+	in := &model.Inbound{
+		Id:       3,
+		Listen:   "203.0.113.10",
+		Port:     443,
+		Protocol: model.NaiveProxy,
+		Settings: `{"network":"udp","shareLinkFormat":"hiddify","quicCongestionControl":"cubic","tls":{"serverName":"naive.example.com"}}`,
+	}
+	got := s.genNaiveSubscriptionLink(in, "user@example.com")
+	u, err := url.Parse(got)
+	if err != nil {
+		t.Fatalf("parse Hiddify QUIC Naive link: %v", err)
+	}
+	if u.Scheme != "naive" {
+		t.Fatalf("link = %q, want naive://", got)
+	}
+	if gotQUIC := u.Query().Get("quic"); gotQUIC != "1" {
+		t.Fatalf("quic = %q, want 1", gotQUIC)
+	}
+	if gotCC := u.Query().Get("quic_congestion_control"); gotCC != "cubic" {
+		t.Fatalf("quic_congestion_control = %q, want cubic", gotCC)
 	}
 }
 

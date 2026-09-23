@@ -30,6 +30,7 @@ export type NaiveTls = z.infer<typeof NaiveTlsSchema>;
 export const NaiveInboundSettingsSchema = z.object({
   network: z.enum(['', 'tcp', 'udp']).default('tcp'),
   quicCongestionControl: z.enum(['bbr', 'cubic', 'reno']).default('bbr'),
+  shareLinkFormat: z.enum(['standard', 'hiddify']).default('standard'),
   tls: NaiveTlsSchema.default({
     enabled: true,
     serverName: '',

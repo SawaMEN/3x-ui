@@ -1014,7 +1014,8 @@ func (s *SubService) naiveShareEndpoints(inbound *model.Inbound) []map[string]an
 }
 
 // genNaiveSubscriptionLink returns Naïve's compatible URI form used by the raw
-// subscription. The naive+quic scheme selects HTTP/3 transport.
+// subscription. Hiddify's ray2sing parser recognizes naive://; the quic=1
+// parameter selects HTTP/3 transport.
 func (s *SubService) genNaiveSubscriptionLink(inbound *model.Inbound, email string) string {
 	if inbound.Protocol != model.NaiveProxy {
 		return ""
@@ -1026,9 +1027,15 @@ func (s *SubService) genNaiveSubscriptionLink(inbound *model.Inbound, email stri
 
 	settings := s.linkSettings(inbound)
 	network, _ := settings["network"].(string)
+	linkFormat, _ := settings["shareLinkFormat"].(string)
+	useHiddifyFormat := strings.EqualFold(strings.TrimSpace(linkFormat), "hiddify")
+	isQUIC := strings.EqualFold(strings.TrimSpace(network), "udp")
 	scheme := "naive+https"
-	if strings.EqualFold(strings.TrimSpace(network), "udp") {
+	if isQUIC {
 		scheme = "naive+quic"
+	}
+	if useHiddifyFormat {
+		scheme = "naive"
 	}
 
 	links := make([]string, 0)
@@ -1057,11 +1064,28 @@ func (s *SubService) genNaiveSubscriptionLink(inbound *model.Inbound, email stri
 			port = rawPort
 		}
 
-		// NaiveProxy's standard URI intentionally has no separate SNI field:
-		// the HTTPS authority is the TLS server name. Keeping a non-standard
-		// sni= query parameter makes some clients misclassify the URI as
-		// Hysteria2, so emit only parameters defined by the Naive URI scheme.
 		params := map[string]string{"padding": "true"}
+		if useHiddifyFormat {
+			// Hiddify's ray2sing parser uses naive:// and reads the TLS
+			// hostname/transport from query parameters.
+			if isQUIC {
+				params["quic"] = "1"
+				if cc, ok := settings["quicCongestionControl"].(string); ok && strings.TrimSpace(cc) != "" {
+					params["quic_congestion_control"] = strings.TrimSpace(cc)
+				}
+			}
+			if sni, ok := externalProxySNI(ep); ok {
+				params["sni"] = sni
+			} else if tls, ok := ep["tlsSettings"].(map[string]any); ok {
+				if serverName, ok := tls["serverName"].(string); ok && strings.TrimSpace(serverName) != "" {
+					params["sni"] = strings.TrimSpace(serverName)
+				}
+			} else if tls, ok := settings["tls"].(map[string]any); ok {
+				if serverName, ok := tls["serverName"].(string); ok && strings.TrimSpace(serverName) != "" {
+					params["sni"] = strings.TrimSpace(serverName)
+				}
+			}
+		}
 		if host, ok := ep["hostHeader"].(string); ok && strings.TrimSpace(host) != "" {
 			params["host"] = strings.TrimSpace(host)
 		}

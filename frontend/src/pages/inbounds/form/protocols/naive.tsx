@@ -16,6 +16,24 @@ export default function NaiveFields() {
         />
       </FormField>
 
+      <FormField
+        name={['settings', 'shareLinkFormat']}
+        label={t('pages.inbounds.form.naiveShareLinkFormat')}
+      >
+        <Select
+          options={[
+            {
+              value: 'standard',
+              label: t('pages.inbounds.form.naiveShareLinkFormatStandard'),
+            },
+            {
+              value: 'hiddify',
+              label: t('pages.inbounds.form.naiveShareLinkFormatHiddify'),
+            },
+          ]}
+        />
+      </FormField>
+
       <FormField name={['settings', 'tls', 'serverName']} label="SNI">
         <Input placeholder="example.com" />
       </FormField>
