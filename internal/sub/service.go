@@ -1091,6 +1091,12 @@ func (s *SubService) genNaiveSubscriptionLink(inbound *model.Inbound, email stri
 					}
 				}
 			}
+			if _, ok := params["sni"]; !ok && !strings.Contains(address, ":") && net.ParseIP(strings.TrimSpace(address)) == nil {
+				// Hiddify-compatible clients need the TLS SNI in the URI when it
+				// is not carried by a standard URL scheme. When no custom SNI is
+				// configured, the advertised DNS name is the natural default.
+				params["sni"] = strings.TrimSpace(address)
+			}
 			// `host` is a Hiddify/ray2sing compatibility parameter. Standard
 			// NaiveProxy URIs intentionally do not emit non-standard query fields.
 			if host, ok := ep["hostHeader"].(string); ok && strings.TrimSpace(host) != "" {
