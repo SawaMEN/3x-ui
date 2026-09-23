@@ -213,11 +213,12 @@ jobs:
           MIERU_VER=$(gh api repos/enfein/mieru/releases/latest --jq '.tag_name')
           test -n "$MIERU_VER"
           case "${{ matrix.platform }}" in amd64) MIERU_ARCH=linux_amd64 ;; arm64) MIERU_ARCH=linux_arm64 ;; esac
-          MIERU_PKG="mieru_${MIERU_VER#v}_${MIERU_ARCH}.tar.gz"
-          curl -sfLRO "${CURL_RETRY[@]}" "https://github.com/enfein/mieru/releases/download/${MIERU_VER}/${MIERU_PKG}"
+          MIERU_PKG="mita_${MIERU_VER#v}_linux_${{ matrix.platform }}.tar.gz"
+          curl -fL --show-error --retry 8 --retry-all-errors --retry-delay 5 -o "$MIERU_PKG" "https://github.com/enfein/mieru/releases/download/${MIERU_VER}/${MIERU_PKG}"
           tar -xzf "$MIERU_PKG"
           MITA_BIN=$(find . -type f -name mita -perm -111 | head -n1)
           test -n "$MITA_BIN"
+          echo "Mieru asset verified: $MIERU_PKG"
           cp "$MITA_BIN" mita
           chmod +x mita
           rm -f "$MIERU_PKG"
