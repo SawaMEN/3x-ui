@@ -3,7 +3,6 @@ package sub
 import (
 	"encoding/json"
 	"fmt"
-	"slices"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 )
@@ -59,10 +58,7 @@ func buildSeparatedSingBoxSubscription(template map[string]any, proxies []map[st
 		return string(configs[0]), nil
 	}
 
-	// Keep the array deterministic and independent of caller map iteration.
-	result := make([]json.RawMessage, len(configs))
-	slices.Copy(result, configs)
-	encoded, err := json.MarshalIndent(result, "", "  ")
+	encoded, err := json.MarshalIndent(configs, "", "  ")
 	if err != nil {
 		return "", fmt.Errorf("marshal sing-box subscription array: %w", err)
 	}
