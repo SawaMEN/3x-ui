@@ -483,9 +483,16 @@ func (s *SubService) getSubs(subId string) ([]string, []string, int64, xray.Clie
 				// endpoints, so do not overwrite it with the base inbound again.
 				link = s.genNaiveSubscriptionLink(inbound, client.Email)
 			}
+			// A client can legitimately remain part of the subscription while
+			// its current protocol settings produce no share-link (for example,
+			// a malformed/unsupported endpoint). Keep its usage in the
+			// Subscription-Userinfo header, but never emit a blank profile line.
+			seenEmails[client.Email] = struct{}{}
+			if strings.TrimSpace(link) == "" {
+				continue
+			}
 			result = append(result, link)
 			emails = append(emails, client.Email)
-			seenEmails[client.Email] = struct{}{}
 		}
 	}
 	for _, ext := range externalLinks {
