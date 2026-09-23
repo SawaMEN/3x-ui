@@ -377,7 +377,7 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 	// The sing-box path currently has no complete native representation for
 	// these panel-only protocols. Do not silently drop them from a mixed profile.
 	for _, protocol := range []model.Protocol{
-		model.TUIC,
+		model.MTProto,
 		model.AmneziaWG,
 		model.Mieru,
 		model.VKTurnProxy,
