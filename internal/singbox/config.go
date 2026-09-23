@@ -212,26 +212,12 @@ func TranslateXrayOutbound(raw map[string]any) (map[string]any, error) {
 			} else if password := rawString(settings, "password"); password != "" {
 				out["password"] = password
 			}
-			for _, key := range []string{"up_mbps", "down_mbps", "hop_interval", "hop_interval_max", "bbr_profile", "disable_chrome_parrot", "ignore_client_bandwidth"} {
-				if value, ok := settings[key]; ok {
-					out[key] = value
-				}
-			}
 			hysteriaSettings := rawObject(streamSettings, "hysteriaSettings")
 			if password := rawString(hysteriaSettings, "auth"); password != "" && out["password"] == nil {
 				out["password"] = password
 			}
-			for _, key := range []string{"up_mbps", "down_mbps", "hop_interval", "hop_interval_max", "bbr_profile", "disable_chrome_parrot", "ignore_client_bandwidth"} {
-				if _, exists := out[key]; !exists {
-					if value, ok := hysteriaSettings[key]; ok {
-						out[key] = value
-					}
-				}
-			}
-			if obfs := rawObject(settings, "obfs"); len(obfs) > 0 {
-				out["obfs"] = obfs
-			} else if obfs := rawObject(hysteriaSettings, "obfs"); len(obfs) > 0 {
-				out["obfs"] = obfs
+			if password := rawString(settings, "password"); password != "" {
+				out["password"] = password
 			}
 		}
 	case "tuic":
