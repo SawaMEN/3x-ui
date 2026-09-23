@@ -2,6 +2,7 @@ package sub
 
 import (
 	"encoding/json"
+	"errors"
 	"testing"
 )
 
@@ -66,5 +67,25 @@ func TestBuildSeparatedSingBoxSubscription_AlwaysReturnArrayForSingleProxy(t *te
 	}
 	if len(docs) != 1 {
 		t.Fatalf("profile count = %d, want 1", len(docs))
+	}
+}
+
+
+func TestBuildSeparatedSingBoxSubscriptionFailsClosedOnRoutingTranslation(t *testing.T) {
+	template := map[string]any{
+		"routing": map[string]any{
+			"rules": []any{
+				map[string]any{
+					"network":     "icmp",
+					"outboundTag": "direct",
+				},
+			},
+		},
+	}
+	_, err := buildSeparatedSingBoxSubscription(template, []map[string]any{
+		{"type": "vless", "tag": "vless-user", "server": "example.com", "server_port": 443},
+	}, false)
+	if !errors.Is(err, errSubscriptionFormatUnsupported) {
+		t.Fatalf("error = %v, want errSubscriptionFormatUnsupported", err)
 	}
 }
