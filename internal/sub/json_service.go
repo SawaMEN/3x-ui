@@ -1427,13 +1427,6 @@ func (s *SubJsonService) genNativeNaive(subReq *SubService, inbound *model.Inbou
 		if sni, ok := endpoint["sni"].(string); ok && strings.TrimSpace(sni) != "" {
 			serverName = strings.TrimSpace(sni)
 		}
-		if host, ok := endpoint["hostHeader"].(string); ok && strings.TrimSpace(host) != "" {
-			// sing-box exposes Naive's HTTP Host override as an extra header.
-			// This is the native equivalent of the URI's host parameter.
-			// See: https://sing-box.sagernet.org/configuration/outbound/naive/
-			// (kept as a plain map so the generated JSON matches the schema).
-			_ = host
-		}
 	}
 	if serverName == "" {
 		serverName = subReq.configuredPublicHost()
