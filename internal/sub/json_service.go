@@ -462,17 +462,17 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 	header := subReq.subscriptionUserinfo(traffic)
 
 	if mode, remark := subReq.resolveInfoNodeRemark(subId, emails, traffic, len(proxies) > 0); mode != infoNodeNone {
-		dummyProxy := map[string]any{
-			"type": "socks",
-			"tag":  "subscription-status",
-			"server": "127.0.0.1",
-			"server_port": 1080,
+		dummyConfig := s.genDummySocksConfig(remark)
+		var dummy map[string]any
+		if err := json.Unmarshal(dummyConfig, &dummy); err == nil {
+			if outbounds, ok := dummy["outbounds"].([]any); ok && len(outbounds) > 0 {
+				if proxy, ok := outbounds[0].(map[string]any); ok {
+					proxies = append([]nativeOutbound{{tag: "subscription-status", out: proxy}}, proxies...)
+				}
+			}
 		}
-		_ = remark
 		if mode == infoNodeExpired || mode == infoNodeDepleted {
-			proxies = []nativeOutbound{{tag: "subscription-status", out: dummyProxy}}
-		} else {
-			proxies = append([]nativeOutbound{{tag: "subscription-status", out: dummyProxy}}, proxies...)
+			proxies = proxies[:1]
 		}
 	}
 
