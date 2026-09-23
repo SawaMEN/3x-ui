@@ -51,10 +51,10 @@ func (s *SubClashService) getClash(subId string, host string, legacy bool) (stri
 	if len(inbounds) == 0 && len(externalLinks) == 0 {
 		return "", "", nil
 	}
-	// Mihomo/Clash has no native NaiveProxy outbound in the profile schema
-	// used here. Refuse partial output so auto-detection can fall back to raw
-	// links and keep Naive alongside Hysteria2.
-	if containsSubscriptionProtocol(inbounds, model.NaiveProxy) {
+	// Refuse partial Clash output for protocols this renderer cannot represent.
+	// Returning the format-unsupported sentinel makes auto-detection keep the
+	// complete raw subscription instead of silently dropping an inbound.
+	if containsUnsupportedClashProtocol(inbounds) {
 		return "", "", errSubscriptionFormatUnsupported
 	}
 
@@ -96,9 +96,11 @@ func (s *SubClashService) getClash(subId string, host string, legacy bool) (stri
 			if name == "" {
 				name = ext.Email
 			}
-			if proxy := s.clashProxyFromExternal(el.Link, name); proxy != nil {
-				proxies = append(proxies, proxy)
+			proxy := s.clashProxyFromExternal(el.Link, name)
+			if proxy == nil {
+				return "", "", errSubscriptionFormatUnsupported
 			}
+			proxies = append(proxies, proxy)
 		}
 	}
 
