@@ -477,9 +477,10 @@ func (s *SubService) getSubs(subId string) ([]string, []string, int64, xray.Clie
 			} else {
 				link = s.GetLink(inbound, client.Email)
 			}
-			if inbound.Protocol == model.NaiveProxy {
-				// The raw subscription uses the HTTPS-proxy URI form for Naïve
-				// so clients such as Shadowrocket import it as an HTTPS proxy.
+			if inbound.Protocol == model.NaiveProxy && len(hostEps) == 0 {
+				// Without Host rows, render the plain inbound endpoint. When Host
+				// rows exist, linkFromHosts already rendered a clone carrying those
+				// endpoints, so do not overwrite it with the base inbound again.
 				link = s.genNaiveSubscriptionLink(inbound, client.Email)
 			}
 			result = append(result, link)
