@@ -527,7 +527,7 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 		for _, el := range expandEntry(ext) {
 			outbound := parsedExternalOutbound(el.Link)
 			if outbound == nil {
-				continue
+				return "", "", errSubscriptionFormatUnsupported
 			}
 			rawOutbound, err := json.Marshal(outbound)
 			if err != nil {
