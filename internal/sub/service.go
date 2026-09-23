@@ -97,8 +97,6 @@ type SubService struct {
 	// (a miss there is authoritative). Reset per request in PrepareForRequest.
 	clientsByInbound    map[int]map[string]model.Client
 	fullyPrimedInbounds map[int]bool
-	// subscriptionClientEmails contains normalized client emails for the current sub_id.
-	subscriptionClientEmails map[string]struct{}
 	// settingsByInbound caches each inbound's settings decoded once per request
 	// with the clients array left out; generators read only inbound-level
 	// fields (encryption, method, version, …) from it.
@@ -137,7 +135,6 @@ func (s *SubService) PrepareForRequest(host string) {
 	s.statsByEmail = map[string]xray.ClientTraffic{}
 	s.clientsByInbound = map[int]map[string]model.Client{}
 	s.fullyPrimedInbounds = map[int]bool{}
-	s.subscriptionClientEmails = map[string]struct{}{}
 	s.settingsByInbound = map[int]map[string]any{}
 	s.loadNodes()
 	s.loadRemarkSettings()
@@ -341,42 +338,18 @@ func (s *SubService) matchingClients(inbound *model.Inbound, subId string) []mod
 	clients, err := s.inboundService.GetClientsBySubId(inbound.Id, subId)
 	if err != nil {
 		logger.Error("SubService - GetClientsBySubId: Unable to get clients from inbound")
-		clients = nil
+		return nil
 	}
-
-	out := make([]model.Client, 0, len(clients))
+	var out []model.Client
 	seen := make(map[string]struct{}, len(clients))
-	appendUnique := func(client model.Client) {
+	for _, client := range clients {
 		key := strings.ToLower(client.Email)
 		if _, dup := seen[key]; dup {
-			return
+			continue
 		}
 		seen[key] = struct{}{}
 		out = append(out, client)
 	}
-
-	for _, client := range clients {
-		appendUnique(client)
-	}
-
-	// Keep legacy/settings-only attachments working when a client_inbounds row
-	// was not persisted during migration/import. Normalized rows win by email,
-	// while settings.clients fills only the missing entries for this inbound.
-	settingsClients, settingsErr := s.inboundService.GetClients(inbound)
-	if settingsErr != nil {
-		logger.Error("SubService - GetClients: Unable to load legacy clients from inbound")
-	} else {
-		for _, client := range settingsClients {
-			if client.SubID == subId {
-				appendUnique(client)
-				continue
-			}
-			if _, ok := s.subscriptionClientEmails[strings.ToLower(strings.TrimSpace(client.Email))]; ok {
-				appendUnique(client)
-			}
-		}
-	}
-
 	s.primeLinkClients(inbound.Id, out, false)
 	return out
 }
@@ -676,21 +649,13 @@ func subscriptionExpiryFromClient(nowMs, expiryTime int64) int64 {
 
 func (s *SubService) getInboundsBySubId(subId string) ([]*model.Inbound, error) {
 	db := database.GetDB()
-	// The normalized clients/client_inbounds relation is the primary source,
-	// matching upstream 3X-UI. Repair old settings-only attachments first, but
-	// keep the direct settings fallback below: imported databases can contain
-	// valid subscription identities that have not yet been normalized.
-	if err := s.repairLegacySubscriptionInbounds(subId); err != nil {
-		logger.Warning("SubService - repair legacy subscription inbounds:", err)
-	}
-
 	var inbounds []*model.Inbound
 	protocols := []string{
 		"vmess", "vless", "trojan", "shadowsocks", "hysteria",
 		"wireguard", "amneziawg", "mtproto", "tuic", "naive", "mieru",
 		"vk-turn-proxy",
 	}
-	if err := db.Model(model.Inbound{}).
+	err := db.Model(model.Inbound{}).
 		Where(`id in (
 			SELECT DISTINCT inbounds.id
 			FROM inbounds
@@ -700,188 +665,14 @@ func (s *SubService) getInboundsBySubId(subId string) ([]*model.Inbound, error) 
 				inbounds.protocol IN ?
 				AND clients.sub_id = ? AND inbounds.enable = ?
 		)`, protocols, subId, true).
-		Find(&inbounds).Error; err != nil {
+		Order("sub_sort_index ASC").
+		Order("id ASC").
+		Find(&inbounds).Error
+	if err != nil {
 		return nil, err
 	}
-
-	// Compatibility fallback for legacy/imported inbounds. Some databases keep
-	// the subscription identity in settings.clients even when the normalized
-	// client_inbounds row is missing or could not be repaired. Select those
-	// inbounds directly by subId or by the email of a normalized subscriber.
-	legacyFrom := database.JSONClientsFromInbound()
-	legacySubID := database.JSONFieldText("client.value", "subId")
-	legacyEmail := database.JSONFieldText("client.value", "email")
-	legacyQuery := fmt.Sprintf(`
-		SELECT DISTINCT inbounds.id
-		%s
-		WHERE inbounds.protocol IN ('%s')
-		  AND inbounds.enable = ?
-		  AND (
-			%s = ?
-			OR EXISTS (
-				SELECT 1
-				FROM clients AS subscription_clients
-				WHERE subscription_clients.sub_id = ?
-				  AND LOWER(subscription_clients.email) = LOWER(%s)
-			)
-		)
-	`, legacyFrom, strings.Join(protocols, "','"), legacySubID, legacyEmail)
-
-	var legacyIDs []int
-	if err := db.Raw(legacyQuery, true, subId, subId).Scan(&legacyIDs).Error; err != nil {
-		// Keep the normalized path authoritative if the legacy JSON query is not
-		// supported by a particular DB/fixture.
-		logger.Warning("SubService - legacy subscription inbound lookup:", err)
-	} else if len(legacyIDs) > 0 {
-		seen := make(map[int]struct{}, len(inbounds)+len(legacyIDs))
-		for _, inbound := range inbounds {
-			if inbound != nil {
-				seen[inbound.Id] = struct{}{}
-			}
-		}
-		var legacyInbounds []*model.Inbound
-		if err := db.Model(&model.Inbound{}).Where("id IN ?", legacyIDs).Find(&legacyInbounds).Error; err == nil {
-			for _, inbound := range legacyInbounds {
-				if inbound == nil {
-					continue
-				}
-				if _, exists := seen[inbound.Id]; exists {
-					continue
-				}
-				seen[inbound.Id] = struct{}{}
-				inbounds = append(inbounds, inbound)
-			}
-		} else {
-			logger.Warning("SubService - legacy subscription inbound load:", err)
-		}
-	}
-
-	sort.SliceStable(inbounds, func(i, j int) bool {
-		if inbounds[i].SubSortIndex != inbounds[j].SubSortIndex {
-			return inbounds[i].SubSortIndex < inbounds[j].SubSortIndex
-		}
-		return inbounds[i].Id < inbounds[j].Id
-	})
-
 	s.indexStatsBySubId(subId)
 	return inbounds, nil
-}
-
-func (s *SubService) repairLegacySubscriptionInbounds(subId string) error {
-	subId = strings.TrimSpace(subId)
-	if subId == "" {
-		return nil
-	}
-	db := database.GetDB()
-	var subscriptionClients []model.ClientRecord
-	if err := db.Model(&model.ClientRecord{}).Where("sub_id = ?", subId).Find(&subscriptionClients).Error; err != nil {
-		return err
-	}
-	if len(subscriptionClients) == 0 {
-		return nil
-	}
-
-	protocols := []string{
-		"vmess", "vless", "trojan", "shadowsocks", "hysteria",
-		"wireguard", "amneziawg", "mtproto", "tuic", "naive", "mieru",
-		"vk-turn-proxy",
-	}
-	var inbounds []*model.Inbound
-	if err := db.Model(&model.Inbound{}).
-		Where("protocol IN ? AND enable = ?", protocols, true).
-		Find(&inbounds).Error; err != nil {
-		return err
-	}
-
-	for _, inbound := range inbounds {
-		if inbound == nil {
-			continue
-		}
-		clients, err := s.inboundService.GetClients(inbound)
-		if err != nil {
-			logger.Debug("SubService - repair legacy inbound clients:", inbound.Id, err)
-			continue
-		}
-		for _, settingsClient := range clients {
-			for i := range subscriptionClients {
-				normalized := subscriptionClients[i]
-				if !legacySubscriptionClientMatches(settingsClient, normalized, subId) {
-					continue
-				}
-			link := model.ClientInbound{
-					ClientId:  normalized.Id,
-					InboundId: inbound.Id,
-				}
-				if err := db.Where("client_id = ? AND inbound_id = ?", normalized.Id, inbound.Id).
-					FirstOrCreate(&link).Error; err != nil {
-					return err
-				}
-				break
-			}
-		}
-	}
-	return nil
-}
-
-func legacySubscriptionClientMatches(settingsClient model.Client, normalized model.ClientRecord, subId string) bool {
-	if settingsClient.SubID != "" && settingsClient.SubID == subId {
-		return true
-	}
-	if email := strings.TrimSpace(settingsClient.Email); email != "" &&
-		strings.EqualFold(email, normalized.Email) {
-		return true
-	}
-	if id := strings.TrimSpace(settingsClient.ID); id != "" &&
-		strings.TrimSpace(normalized.UUID) != "" &&
-		strings.EqualFold(id, normalized.UUID) {
-		return true
-	}
-	if key := strings.TrimSpace(settingsClient.PublicKey); key != "" &&
-		strings.TrimSpace(normalized.PublicKey) != "" &&
-		key == strings.TrimSpace(normalized.PublicKey) {
-		return true
-	}
-	if secret := strings.TrimSpace(settingsClient.Secret); secret != "" &&
-		strings.TrimSpace(normalized.Secret) != "" &&
-		secret == strings.TrimSpace(normalized.Secret) {
-		return true
-	}
-	return false
-}
-
-// indexStatsBySubId loads the traffic rows for just this subscriber's clients
-// into statsByEmail so statsForClient can resolve a client's usage on any of
-// its inbounds. It replaces preloading every matched inbound's ClientStats,
-// which read the entire client_traffics table on every subscription fetch of
-// a large inbound; statsForClient's per-email DB fallback covers any miss.
-func (s *SubService) indexStatsBySubId(subId string) {
-	if s.statsByEmail == nil {
-		s.statsByEmail = map[string]xray.ClientTraffic{}
-	}
-	db := database.GetDB()
-	var emails []string
-	if err := db.Model(&model.ClientRecord{}).Where("sub_id = ?", subId).Pluck("email", &emails).Error; err != nil {
-		logger.Error("SubService - indexStatsBySubId: load emails:", err)
-		return
-	}
-	for _, email := range emails {
-		email = strings.ToLower(strings.TrimSpace(email))
-		if email != "" {
-			s.subscriptionClientEmails[email] = struct{}{}
-		}
-	}
-	const chunk = 400
-	for lo := 0; lo < len(emails); lo += chunk {
-		hi := min(lo+chunk, len(emails))
-		var rows []xray.ClientTraffic
-		if err := db.Where("email IN ?", emails[lo:hi]).Find(&rows).Error; err != nil {
-			logger.Error("SubService - indexStatsBySubId: load traffics:", err)
-			return
-		}
-		for _, st := range rows {
-			s.statsByEmail[st.Email] = st
-		}
-	}
 }
 
 // projectThroughFallbackMaster mutates the inbound in place so its
