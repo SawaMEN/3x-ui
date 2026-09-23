@@ -1260,7 +1260,7 @@ func (s *SubService) genMieruLink(inbound *model.Inbound, email string) string {
 		link := fmt.Sprintf("mierus://%s:%s@%s?%s",
 			encodeUserinfo(client.Email),
 			encodeUserinfo(client.Password),
-			endpoint.Address,
+			formatShareHost(endpoint.Address),
 			values.Encode(),
 		)
 		links = append(links, link+"#"+strings.ReplaceAll(url.QueryEscape(s.endpointRemark(inbound, email, endpoint.ep, "")), "+", "%20"))
@@ -1495,7 +1495,7 @@ func amneziaWGConfigText(server *amneziawg.ServerSettings, client *model.Client,
 		fmt.Fprintf(&b, "PresharedKey = %s\n", client.PreSharedKey)
 	}
 	b.WriteString("AllowedIPs = 0.0.0.0/0, ::/0\n")
-	fmt.Fprintf(&b, "Endpoint = %s:%d", host, port)
+	fmt.Fprintf(&b, "Endpoint = %s", joinHostPort(host, port))
 	if ka := client.KeepAliveSeconds(); ka > 0 {
 		fmt.Fprintf(&b, "\nPersistentKeepalive = %d", ka)
 	}
@@ -1794,6 +1794,14 @@ func encodeUserinfo(s string) string {
 func joinHostPort(host string, port int) string {
 	host = strings.Trim(host, "[]")
 	return net.JoinHostPort(host, strconv.Itoa(port))
+}
+
+func formatShareHost(host string) string {
+	host = strings.TrimSpace(strings.Trim(host, "[]"))
+	if net.ParseIP(host) != nil && strings.Contains(host, ":") {
+		return "[" + host + "]"
+	}
+	return host
 }
 
 func (s *SubService) genShadowsocksLink(inbound *model.Inbound, email string) string {
