@@ -882,7 +882,7 @@ func (s *SubService) genNaiveSubscriptionLink(inbound *model.Inbound, email stri
 			params["sni"] = sni
 		}
 	}
-	link := fmt.Sprintf("naive://%s:%s@%s/?",
+	link := fmt.Sprintf("naive://%s:%s@%s/",
 		encodeUserinfo(client.Email),
 		encodeUserinfo(client.Password),
 		joinHostPort(s.resolveInboundAddress(inbound), inbound.Port),
