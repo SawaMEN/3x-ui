@@ -851,8 +851,8 @@ func (s *SubService) genNaiveLink(inbound *model.Inbound, email string) string {
 	return s.genNaiveSubscriptionLink(inbound, email)
 }
 
-// genNaiveSubscriptionLink returns Naïve's native URI form used by the
-// raw subscription. TLS is explicit and QUIC is selected with quic=1.
+// genNaiveSubscriptionLink returns Naïve's compatible URI form used by the
+// raw subscription. The naive+quic scheme selects HTTP/3 transport.
 func (s *SubService) genNaiveSubscriptionLink(inbound *model.Inbound, email string) string {
 	if inbound.Protocol != model.NaiveProxy {
 		return ""
@@ -863,9 +863,10 @@ func (s *SubService) genNaiveSubscriptionLink(inbound *model.Inbound, email stri
 	}
 	settings := s.linkSettings(inbound)
 	network, _ := settings["network"].(string)
-	params := map[string]string{"security": "tls"}
+	scheme := "naive+https"
+	params := map[string]string{"padding": "true"}
 	if strings.EqualFold(strings.TrimSpace(network), "udp") {
-		params["quic"] = "1"
+		scheme = "naive+quic"
 	}
 	if tls, ok := settings["tls"].(map[string]any); ok {
 		if sni, _ := tls["serverName"].(string); strings.TrimSpace(sni) != "" {
@@ -880,7 +881,8 @@ func (s *SubService) genNaiveSubscriptionLink(inbound *model.Inbound, email stri
 			params["sni"] = sni
 		}
 	}
-	link := fmt.Sprintf("naive://%s:%s@%s/",
+	link := fmt.Sprintf("%s://%s:%s@%s",
+		scheme,
 		encodeUserinfo(client.Email),
 		encodeUserinfo(client.Password),
 		joinHostPort(s.resolveInboundAddress(inbound), inbound.Port),
@@ -1032,7 +1034,7 @@ func (s *SubService) genMieruLink(inbound *model.Inbound, email string) string {
 		values.Add("protocol", entry.protocol)
 	}
 
-	link := fmt.Sprintf("mieru://%s:%s@%s?%s",
+	link := fmt.Sprintf("mierus://%s:%s@%s?%s",
 		encodeUserinfo(client.Email),
 		encodeUserinfo(client.Password),
 		s.resolveInboundAddress(inbound),
