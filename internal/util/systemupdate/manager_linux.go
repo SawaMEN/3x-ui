@@ -111,6 +111,9 @@ func GetStatus(ctx context.Context) (Status, error) {
 	if info.manager == "pacman" {
 		status.Notes = append(status.Notes, "Arch Linux требует полного обновления системы через pacman -Syu; частичные обновления не поддерживаются.")
 	}
+	status.Notes = append(status.Notes,
+		"Сетевые зависимости для WireGuard/AmneziaWG/VK-Turn: iproute2/iproute и iptables; для встроенных sidecar-протоколов MTProto, TUIC, Naive, Mieru и Psiphon нужны общие curl/tar/ca-certificates/openssl/socat.",
+	)
 	if kernel.UpdateAvailable {
 		status.Notes = append(status.Notes, "После обновления ядра потребуется перезагрузка сервера, чтобы запустить новое ядро.")
 	}
