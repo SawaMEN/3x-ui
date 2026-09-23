@@ -2,8 +2,8 @@ package sub
 
 import (
 	"encoding/base64"
-	"net/url"
 	"encoding/json"
+	"net/url"
 	"strings"
 	"testing"
 
