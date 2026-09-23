@@ -245,6 +245,18 @@ func dedupedClientLinks(client *VKTurnProxyClient) []string {
 	return out
 }
 
+func sanitizeVKTurnEndpointHost(raw string) string {
+	host := strings.TrimSpace(strings.Trim(raw, "[]"))
+	if host == "" || strings.ContainsAny(host, "
+	 /\\") {
+		return ""
+	}
+	if strings.Contains(host, ":") && net.ParseIP(host) == nil {
+		return ""
+	}
+	return host
+}
+
 func sanitizeIPv4Host(raw string) string {
 	host := strings.TrimSpace(strings.Trim(raw, "[]"))
 	if host == "" {
@@ -1123,7 +1135,7 @@ func (s *InboundService) GetVKTurnProxyPeerOptions(inboundID int) (*VKTurnProxyP
 func (s *InboundService) buildVKTurnProxyExportConfig(inbound *model.Inbound, settings *VKTurnProxySettings, client *VKTurnProxyClient, peer *wireguardPeer, requestHost string, endpointHost string, endpointPort int) (*wingsvproto.Config, error) {
 	host := resolveVKTurnProxyExportIPv4(inbound, requestHost)
 	if strings.TrimSpace(endpointHost) != "" {
-		host = sanitizeIPv4Host(endpointHost)
+		host = sanitizeVKTurnEndpointHost(endpointHost)
 	}
 	if host == "" {
 		return nil, common.NewError("unable to determine export host for vk-turn-proxy")
