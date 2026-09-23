@@ -46,8 +46,17 @@ func normalizeShareEndpoint(e, fallback ShareEndpoint) ShareEndpoint {
 func externalProxyToEndpoint(ep map[string]any) ShareEndpoint {
 	e := ShareEndpoint{ep: ep}
 	e.Address, _ = ep["dest"].(string)
-	if p, ok := ep["port"].(float64); ok {
+	switch p := ep["port"].(type) {
+	case float64:
 		e.Port = int(p)
+	case int:
+		e.Port = p
+	case int64:
+		e.Port = int(p)
+	case json.Number:
+		if n, err := p.Int64(); err == nil {
+			e.Port = int(n)
+		}
 	}
 	e.Remark, _ = ep["remark"].(string)
 	e.ServerDescription, _ = ep["serverDescription"].(string)
