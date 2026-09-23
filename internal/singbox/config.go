@@ -68,6 +68,7 @@ func TranslateXrayOutbound(raw map[string]any) (map[string]any, error) {
 		return nil, fmt.Errorf("sing-box does not support Xray outbound protocol %q through the compatibility translator", protocol)
 	}
 	settings := rawObject(raw, "settings")
+	streamSettings := rawObject(raw, "streamSettings")
 	switch protocol {
 	case "socks", "http":
 		server := firstObject(settings, "servers")
@@ -251,7 +252,6 @@ func TranslateXrayOutbound(raw map[string]any) (map[string]any, error) {
 			}
 		}
 	}
-	streamSettings := rawObject(raw, "streamSettings")
 	singProtocol := protocol
 	if protocol == "hysteria" {
 		hysteriaSettings := rawObject(streamSettings, "hysteriaSettings")
