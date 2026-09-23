@@ -1294,8 +1294,8 @@ func TestGenNaiveSubscriptionLinkUsesStandardScheme(t *testing.T) {
 	if gotSNI := u.Query().Get("sni"); gotSNI != "" {
 		t.Fatalf("standard Naive link must not emit non-standard sni, got %q", gotSNI)
 	}
-	if gotPadding := u.Query().Get("padding"); gotPadding != "true" {
-		t.Fatalf("padding = %q, want true", gotPadding)
+	if gotPadding := u.Query().Get("padding"); gotPadding != "" {
+		t.Fatalf("padding = %q, want omitted", gotPadding)
 	}
 	if gotHost := u.Query().Get("host"); gotHost != "" {
 		t.Fatalf("standard Naive link must not emit non-standard host, got %q", gotHost)
@@ -1349,8 +1349,8 @@ func TestGenNaiveSubscriptionLinkUsesHiddifyScheme(t *testing.T) {
 	if gotSNI := u.Query().Get("sni"); gotSNI != "naive.example.com" {
 		t.Fatalf("sni = %q, want naive.example.com", gotSNI)
 	}
-	if gotPadding := u.Query().Get("padding"); gotPadding != "true" {
-		t.Fatalf("padding = %q, want true", gotPadding)
+	if gotPadding := u.Query().Get("padding"); gotPadding != "" {
+		t.Fatalf("padding = %q, want omitted", gotPadding)
 	}
 }
 
