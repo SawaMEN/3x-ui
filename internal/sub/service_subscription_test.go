@@ -65,3 +65,51 @@ func TestGetSubs_MixedNormalizedAndSettingsOnlyInbounds(t *testing.T) {
 		t.Fatalf("subscription missing Trojan link: %v", links)
 	}
 }
+
+func TestGetSubs_SettingsOnlyUsesGlobalSubscriptionEmail(t *testing.T) {
+	dbDir := t.TempDir()
+	t.Setenv("XUI_DB_FOLDER", dbDir)
+	if err := database.InitDB(filepath.Join(dbDir, "x-ui.db")); err != nil {
+		t.Fatalf("InitDB: %v", err)
+	}
+	t.Cleanup(func() { _ = database.CloseDB() })
+
+	const subID = "sub-global"
+	const email = "legacy-global@example.com"
+	const uuid = "44444444-2222-4333-8444-888888888888"
+
+	vlessSettings := fmt.Sprintf(`{"clients":[{"id":%q,"email":%q,"subId":%q,"enable":true}]}`, uuid, email, subID)
+	legacySettings := fmt.Sprintf(`{"clients":[{"id":%q,"email":%q,"enable":true}]}`, uuid, email)
+
+	vless := &model.Inbound{
+		UserId: 1, Tag: "global-vless", Enable: true, Port: 42106, Protocol: model.VLESS,
+		Settings: vlessSettings, StreamSettings: `{"network":"tcp","security":"none"}`,
+	}
+	legacy := &model.Inbound{
+		UserId: 1, Tag: "global-trojan", Enable: true, Port: 42107, Protocol: model.Trojan,
+		Settings: legacySettings, StreamSettings: `{"network":"tcp","security":"none"}`,
+	}
+	db := database.GetDB()
+	if err := db.Create(vless).Error; err != nil {
+		t.Fatalf("seed vless: %v", err)
+	}
+	if err := db.Create(legacy).Error; err != nil {
+		t.Fatalf("seed legacy inbound: %v", err)
+	}
+	client := &model.ClientRecord{Email: email, SubID: subID, UUID: uuid, Password: "secret", Enable: true}
+	if err := db.Create(client).Error; err != nil {
+		t.Fatalf("seed client: %v", err)
+	}
+	if err := db.Create(&model.ClientInbound{ClientId: client.Id, InboundId: vless.Id}).Error; err != nil {
+		t.Fatalf("seed normalized link: %v", err)
+	}
+
+	links, _, _, _, err := NewSubService("").GetSubs(subID, "sub.example.com")
+	if err != nil {
+		t.Fatalf("GetSubs: %v", err)
+	}
+	joined := strings.Join(links, "\n")
+	if len(links) != 2 || !strings.Contains(joined, "vless://") || !strings.Contains(joined, "trojan://") {
+		t.Fatalf("links = %v, want VLESS + Trojan", links)
+	}
+}

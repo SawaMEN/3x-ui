@@ -97,6 +97,8 @@ type SubService struct {
 	// (a miss there is authoritative). Reset per request in PrepareForRequest.
 	clientsByInbound    map[int]map[string]model.Client
 	fullyPrimedInbounds map[int]bool
+	// subscriptionClientEmails contains normalized client emails for the current sub_id.
+	subscriptionClientEmails map[string]struct{}
 	// settingsByInbound caches each inbound's settings decoded once per request
 	// with the clients array left out; generators read only inbound-level
 	// fields (encryption, method, version, …) from it.
@@ -135,6 +137,7 @@ func (s *SubService) PrepareForRequest(host string) {
 	s.statsByEmail = map[string]xray.ClientTraffic{}
 	s.clientsByInbound = map[int]map[string]model.Client{}
 	s.fullyPrimedInbounds = map[int]bool{}
+	s.subscriptionClientEmails = map[string]struct{}{}
 	s.settingsByInbound = map[int]map[string]any{}
 	s.loadNodes()
 	s.loadRemarkSettings()
@@ -364,10 +367,13 @@ func (s *SubService) matchingClients(inbound *model.Inbound, subId string) []mod
 		logger.Error("SubService - GetClients: Unable to load legacy clients from inbound")
 	} else {
 		for _, client := range settingsClients {
-			if client.SubID != subId {
+			if client.SubID == subId {
+				appendUnique(client)
 				continue
 			}
-			appendUnique(client)
+			if _, ok := s.subscriptionClientEmails[strings.ToLower(strings.TrimSpace(client.Email))]; ok {
+				appendUnique(client)
+			}
 		}
 	}
 
@@ -691,15 +697,25 @@ func (s *SubService) getInboundsBySubId(subId string) ([]*model.Inbound, error) 
 	// normalized clients with any missing settings.clients entries.
 	legacyFrom := database.JSONClientsFromInbound()
 	legacySubID := database.JSONFieldText("client.value", "subId")
+	legacyEmail := database.JSONFieldText("client.value", "email")
 	legacyQuery := fmt.Sprintf(`
 		SELECT DISTINCT inbounds.id
 		%s
 		WHERE inbounds.protocol in (%s)
-		  AND inbounds.enable = ? AND %s = ?
-	`, legacyFrom, protocols, legacySubID)
+		  AND inbounds.enable = ?
+		  AND (
+			%s = ?
+			OR EXISTS (
+				SELECT 1
+				FROM clients AS subscription_clients
+				WHERE subscription_clients.sub_id = ?
+				  AND LOWER(subscription_clients.email) = LOWER(%s)
+			)
+		)
+	`, legacyFrom, protocols, legacySubID, legacyEmail)
 
 	var legacyIDs []int
-	if err := db.Raw(legacyQuery, true, subId).Scan(&legacyIDs).Error; err != nil {
+	if err := db.Raw(legacyQuery, true, subId, subId).Scan(&legacyIDs).Error; err != nil {
 		return nil, err
 	}
 
@@ -750,6 +766,12 @@ func (s *SubService) indexStatsBySubId(subId string) {
 	if err := db.Model(&model.ClientRecord{}).Where("sub_id = ?", subId).Pluck("email", &emails).Error; err != nil {
 		logger.Error("SubService - indexStatsBySubId: load emails:", err)
 		return
+	}
+	for _, email := range emails {
+		email = strings.ToLower(strings.TrimSpace(email))
+		if email != "" {
+			s.subscriptionClientEmails[email] = struct{}{}
+		}
 	}
 	const chunk = 400
 	for lo := 0; lo < len(emails); lo += chunk {
