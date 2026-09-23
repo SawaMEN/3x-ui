@@ -65,6 +65,50 @@ func TestGetInboundsBySubIdIndexesTrafficByEmail(t *testing.T) {
 		t.Fatalf("statsByEmail[%q] = %+v, want up=1234 down=5678", client.Email, stats)
 	}
 }
+
+func TestGetSubsSkipsEmptyRenderedLinksButKeepsTraffic(t *testing.T) {
+	dbDir := t.TempDir()
+	t.Setenv("XUI_DB_FOLDER", dbDir)
+	if err := database.InitDB(filepath.Join(dbDir, "x-ui.db")); err != nil {
+		t.Fatalf("InitDB: %v", err)
+	}
+	t.Cleanup(func() { _ = database.CloseDB() })
+
+	const subID = "sub-empty-link"
+	db := database.GetDB()
+	inbound := &model.Inbound{
+		UserId: 1, Tag: "naive-empty", Enable: true, Port: 8443, Protocol: model.NaiveProxy,
+		Settings: `{"network":"tcp"}`,
+		StreamSettings: `{"security":"tls","tlsSettings":{"serverName":"naive.example.com"}}`,
+	}
+	if err := db.Create(inbound).Error; err != nil {
+		t.Fatalf("seed inbound: %v", err)
+	}
+	client := &model.ClientRecord{
+		Email: "naive@example.com", SubID: subID, Enable: true,
+		UUID: "11111111-2222-4333-8444-555555555555", Password: "",
+	}
+	if err := db.Create(client).Error; err != nil {
+		t.Fatalf("seed client: %v", err)
+	}
+	if err := db.Create(&model.ClientInbound{ClientId: client.Id, InboundId: inbound.Id}).Error; err != nil {
+		t.Fatalf("attach client: %v", err)
+	}
+	if err := db.Create(&xray.ClientTraffic{Email: client.Email, Up: 10, Down: 20, Enable: true}).Error; err != nil {
+		t.Fatalf("seed traffic: %v", err)
+	}
+
+	links, _, _, traffic, err := NewSubService("").GetSubs(subID, "sub.example.com")
+	if err != nil {
+		t.Fatalf("GetSubs: %v", err)
+	}
+	if len(links) != 0 {
+		t.Fatalf("links = %v, want no blank entry", links)
+	}
+	if traffic.Up != 10 || traffic.Down != 20 {
+		t.Fatalf("traffic = up:%d down:%d, want up:10 down:20", traffic.Up, traffic.Down)
+	}
+}
 func TestGetSubs_MixedNormalizedProtocols(t *testing.T) {
 	dbDir := t.TempDir()
 	t.Setenv("XUI_DB_FOLDER", dbDir)
