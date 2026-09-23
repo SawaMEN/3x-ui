@@ -451,6 +451,7 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 				// representation. Keep it in the structured profile instead of
 				// forcing the whole subscription back to raw links. Host/external
 				// endpoints must fan out here just like raw subscriptions.
+				generated := 0
 				for _, endpoint := range subReq.naiveShareEndpoints(inbound) {
 					forceTLS, _ := endpoint["forceTls"].(string)
 					if strings.EqualFold(strings.TrimSpace(forceTLS), "none") {
@@ -458,7 +459,6 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 					}
 				native := s.genNativeNaive(subReq, inbound, client, endpoint)
 					if native == nil {
-						formatUnsupported = true
 						continue
 					}
 					tag := client.Email
@@ -470,6 +470,10 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 					}
 					native["tag"] = tag
 					proxies = append(proxies, nativeOutbound{tag: tag, out: native})
+					generated++
+				}
+				if generated == 0 {
+					formatUnsupported = true
 				}
 				continue
 			}
