@@ -10,6 +10,52 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
 
+func TestClashTransportCapabilities(t *testing.T) {
+	kcp := &model.Inbound{
+		Protocol: model.VLESS,
+		StreamSettings: `{"network":"kcp","kcpSettings":{"mtu":1350}}`,
+	}
+	if !containsUnsupportedClashProtocol([]*model.Inbound{kcp}) {
+		t.Fatal("Clash capability map must reject KCP transport")
+	}
+
+	tcpHTTPHeader := &model.Inbound{
+		Protocol: model.VLESS,
+		StreamSettings: `{"network":"tcp","tcpSettings":{"header":{"type":"http"}}}`,
+	}
+	if !containsUnsupportedClashProtocol([]*model.Inbound{tcpHTTPHeader}) {
+		t.Fatal("Clash capability map must reject TCP HTTP-header transport when no compatible renderer exists")
+	}
+
+	ws := &model.Inbound{
+		Protocol: model.VLESS,
+		StreamSettings: `{"network":"ws","wsSettings":{"path":"/ws"}}`,
+	}
+	grpc := &model.Inbound{
+		Protocol: model.VLESS,
+		StreamSettings: `{"network":"grpc","grpcSettings":{"serviceName":"svc"}}`,
+	}
+	xhttp := &model.Inbound{
+		Protocol: model.VLESS,
+		StreamSettings: `{"network":"xhttp","xhttpSettings":{"path":"/xhttp","mode":"auto"}}`,
+	}
+	for name, inbound := range map[string]*model.Inbound{
+		"ws": ws, "grpc": grpc, "xhttp": xhttp,
+	} {
+		if containsUnsupportedClashProtocol([]*model.Inbound{inbound}) {
+			t.Fatalf("Clash capability map must keep supported transport %s", name)
+		}
+	}
+
+	hysteria := &model.Inbound{
+		Protocol: model.Hysteria,
+		StreamSettings: `{"network":"kcp"}`,
+	}
+	if containsUnsupportedClashProtocol([]*model.Inbound{hysteria}) {
+		t.Fatal("Hysteria must use its dedicated Clash renderer and not be rejected by generic transport gating")
+	}
+}
+
 func TestSubscriptionFormatCapabilities(t *testing.T) {
 	naive := &model.Inbound{Protocol: model.NaiveProxy}
 	tuic := &model.Inbound{Protocol: model.TUIC}
