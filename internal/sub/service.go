@@ -1208,23 +1208,45 @@ func (s *SubService) genMieruLink(inbound *model.Inbound, email string) string {
 		mtu = int(raw)
 	}
 
-	values := url.Values{}
-	values.Set("profile", "default")
-	values.Set("mtu", strconv.Itoa(mtu))
-	values.Set("multiplexing", multiplexing)
-	values.Set("handshake-mode", handshakeMode)
-	for _, entry := range entries {
-		values.Add("port", entry.port)
-		values.Add("protocol", entry.protocol)
-	}
+	endpoints := s.shareEndpointsForInbound(inbound)
+	links := make([]string, 0, len(endpoints))
+	for _, endpoint := range endpoints {
+		values := url.Values{}
+		values.Set("profile", "default")
+		values.Set("mtu", strconv.Itoa(mtu))
+		values.Set("multiplexing", multiplexing)
+		values.Set("handshake-mode", handshakeMode)
 
-	link := fmt.Sprintf("mierus://%s:%s@%s?%s",
-		encodeUserinfo(client.Email),
-		encodeUserinfo(client.Password),
-		s.resolveInboundAddress(inbound),
-		values.Encode(),
-	)
-	return link + "#" + strings.ReplaceAll(url.QueryEscape(s.genRemark(inbound, email, "", "")), "+", "%20")
+		// A Host/externalProxy endpoint describes the public Mieru listener,
+		// so its port replaces the server-side binding port(s). Keep the
+		// configured transport protocol set but avoid advertising private
+		// port ranges through a public front.
+		if endpoint.ep != nil {
+			seenProtocols := make(map[string]struct{})
+			for _, entry := range entries {
+				if _, exists := seenProtocols[entry.protocol]; exists {
+					continue
+				}
+				seenProtocols[entry.protocol] = struct{}{}
+				values.Add("port", strconv.Itoa(endpoint.Port))
+				values.Add("protocol", entry.protocol)
+			}
+		} else {
+			for _, entry := range entries {
+				values.Add("port", entry.port)
+				values.Add("protocol", entry.protocol)
+			}
+		}
+
+		link := fmt.Sprintf("mierus://%s:%s@%s?%s",
+			encodeUserinfo(client.Email),
+			encodeUserinfo(client.Password),
+			endpoint.Address,
+			values.Encode(),
+		)
+		links = append(links, link+"#"+strings.ReplaceAll(url.QueryEscape(s.endpointRemark(inbound, email, endpoint.ep, "")), "+", "%20"))
+	}
+	return strings.Join(links, "\n")
 }
 
 func (s *SubService) genTuicLink(inbound *model.Inbound, email string) string {
