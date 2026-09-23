@@ -950,7 +950,18 @@ func (s *SubService) genVKTurnProxyLink(inbound *model.Inbound, email string) st
 		endpoints := s.shareEndpointsForInbound(inbound)
 		links := make([]string, 0, len(endpoints))
 		for _, endpoint := range endpoints {
-			link, err := s.inboundService.ExportVKTurnProxyClientForEndpoint(inbound.Id, client.ID, endpoint.Address, endpoint.Port)
+			var (
+				link string
+				err  error
+			)
+			// Keep the legacy exporter for the default endpoint: it resolves a
+			// usable IPv4 address from the inbound/request context. Only Host or
+			// externalProxy endpoints use the explicit endpoint override.
+			if endpoint.ep == nil {
+				link, err = s.inboundService.ExportVKTurnProxyClient(inbound.Id, client.ID, s.address)
+			} else {
+				link, err = s.inboundService.ExportVKTurnProxyClientForEndpoint(inbound.Id, client.ID, endpoint.Address, endpoint.Port)
+			}
 			if err != nil {
 				continue
 			}
