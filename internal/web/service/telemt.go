@@ -288,7 +288,7 @@ func telemtLatestVersion(current string) (string, bool) {
 	return latest, current != "" && normalizeTelemtVersion(current) != normalizeTelemtVersion(latest)
 }
 
-var telemtVersionPattern = regexp.MustCompile(`(?i)v?(\\d+\\.\\d+\\.\\d+(?:[-+][0-9a-z.-]+)?)`)
+var telemtVersionPattern = regexp.MustCompile(`(?i)v?(\d+\.\d+\.\d+(?:[-+][0-9a-z.-]+)?)`)
 
 func normalizeTelemtVersion(value string) string {
 	value = strings.TrimSpace(value)

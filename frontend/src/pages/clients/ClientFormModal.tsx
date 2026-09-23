@@ -64,6 +64,8 @@ const MULTI_CLIENT_PROTOCOLS = new Set([
   'mtproto',
   'amneziawg',
   'tuic',
+  'naive',
+  'mieru',
   'vk-turn-proxy',
 ]);
 
@@ -457,9 +459,35 @@ export default function ClientFormModal({
     return ids;
   }, [inbounds]);
 
+  const uuidCapableIds = useMemo(() => {
+    const ids = new Set<number>();
+    for (const row of inbounds || []) {
+      if (row && ['vless', 'vmess', 'tuic'].includes(row.protocol || '')) ids.add(row.id);
+    }
+    return ids;
+  }, [inbounds]);
+
+  const hysteriaIds = useMemo(() => {
+    const ids = new Set<number>();
+    for (const row of inbounds || []) {
+      if (row && row.protocol === 'hysteria') ids.add(row.id);
+    }
+    return ids;
+  }, [inbounds]);
+
   const hasTuic = useMemo(
     () => (inboundIds || []).some((id) => tuicIds.has(id)),
     [inboundIds, tuicIds],
+  );
+
+  const showUuid = useMemo(
+    () => (inboundIds || []).some((id) => uuidCapableIds.has(id)),
+    [inboundIds, uuidCapableIds],
+  );
+
+  const showHysteria = useMemo(
+    () => (inboundIds || []).some((id) => hysteriaIds.has(id)),
+    [inboundIds, hysteriaIds],
   );
 
   const mtprotoDomain = useMemo(() => {
@@ -1132,20 +1160,22 @@ export default function ClientFormModal({
                   label: t('pages.clients.tabCredentials'),
                   children: (
                     <>
-                      <Form.Item label={t('pages.clients.uuid')}>
-                        <Space.Compact style={{ display: 'flex' }}>
-                          <Input
-                            value={uuid}
-                            style={{ flex: 1 }}
-                            onChange={(e) => methods.setValue('uuid', e.target.value)}
-                          />
-                          <Button
-                            aria-label={t('regenerate')}
-                            icon={<ReloadOutlined />}
-                            onClick={() => methods.setValue('uuid', RandomUtil.randomUUID())}
-                          />
-                        </Space.Compact>
-                      </Form.Item>
+                      {showUuid && (
+                        <Form.Item label={t('pages.clients.uuid')}>
+                          <Space.Compact style={{ display: 'flex' }}>
+                            <Input
+                              value={uuid}
+                              style={{ flex: 1 }}
+                              onChange={(e) => methods.setValue('uuid', e.target.value)}
+                            />
+                            <Button
+                              aria-label={t('regenerate')}
+                              icon={<ReloadOutlined />}
+                              onClick={() => methods.setValue('uuid', RandomUtil.randomUUID())}
+                            />
+                          </Space.Compact>
+                        </Form.Item>
+                      )}
 
                       <Form.Item
                         label={t('pages.clients.password')}
@@ -1182,25 +1212,27 @@ export default function ClientFormModal({
                         </Space.Compact>
                       </Form.Item>
 
-                      <Form.Item
-                        label={t('pages.clients.hysteriaAuth')}
-                        tooltip={t('pages.clients.hysteriaAuthDesc')}
-                      >
-                        <Space.Compact style={{ display: 'flex' }}>
-                          <Input
-                            value={auth}
-                            style={{ flex: 1 }}
-                            onChange={(e) => methods.setValue('auth', e.target.value)}
-                          />
-                          <Button
-                            aria-label={t('regenerate')}
-                            icon={<ReloadOutlined />}
-                            onClick={() =>
-                              methods.setValue('auth', RandomUtil.randomLowerAndNum(16))
-                            }
-                          />
-                        </Space.Compact>
-                      </Form.Item>
+                      {showHysteria && (
+                        <Form.Item
+                          label={t('pages.clients.hysteriaAuth')}
+                          tooltip={t('pages.clients.hysteriaAuthDesc')}
+                        >
+                          <Space.Compact style={{ display: 'flex' }}>
+                            <Input
+                              value={auth}
+                              style={{ flex: 1 }}
+                              onChange={(e) => methods.setValue('auth', e.target.value)}
+                            />
+                            <Button
+                              aria-label={t('regenerate')}
+                              icon={<ReloadOutlined />}
+                              onClick={() =>
+                                methods.setValue('auth', RandomUtil.randomLowerAndNum(16))
+                              }
+                            />
+                          </Space.Compact>
+                        </Form.Item>
+                      )}
 
                       {showFlow && (
                         <FormField name="flow" label={t('pages.clients.flow')}>

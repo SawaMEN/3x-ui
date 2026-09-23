@@ -185,7 +185,7 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 		// MTProto, AmneziaWG and TUIC are managed by their dedicated local
 		// sidecars. Emitting them into sing-box as well would either use an
 		// unsupported protocol or create a port conflict with the sidecar.
-		if inbound.Protocol == model.MTProto || inbound.Protocol == model.AmneziaWG || inbound.Protocol == model.TUIC {
+		if inbound.Protocol == model.MTProto || inbound.Protocol == model.AmneziaWG || inbound.Protocol == model.TUIC || inbound.Protocol == model.Psiphon || inbound.Protocol == model.Mieru {
 			continue
 		}
 		rawBytes, err := json.Marshal(inbound)
@@ -258,6 +258,10 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 				if client.Password != "" {
 					entry["password"] = client.Password
 				}
+			case model.NaiveProxy, model.Mieru:
+				if client.Password != "" {
+					entry["password"] = client.Password
+				}
 			}
 			clients = append(clients, entry)
 		}
@@ -266,6 +270,37 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 			settings = map[string]any{}
 		}
 		settings["clients"] = clients
+
+		// NaiveProxy is a native TLS protocol in sing-box. Keep the ordinary
+		// inbound form simple by reusing the panel's HTTPS certificate/key when
+		// the inbound does not explicitly provide its own pair.
+		if inbound.Protocol == model.NaiveProxy {
+			tls, _ := settings["tls"].(map[string]any)
+			if tls == nil {
+				tls = map[string]any{}
+			}
+			tls["enabled"] = true
+			certPath, _ := tls["certificatePath"].(string)
+			certPath = strings.TrimSpace(certPath)
+			keyPath, _ := tls["keyPath"].(string)
+			keyPath = strings.TrimSpace(keyPath)
+			if (certPath == "") != (keyPath == "") {
+				return nil, fmt.Errorf("NaiveProxy inbound %q must provide both TLS certificate and private key, or neither", inbound.Tag)
+			}
+			if certPath == "" {
+				certPath, _ = singBoxSettingService.GetCertFile()
+				certPath = strings.TrimSpace(certPath)
+				keyPath, _ = singBoxSettingService.GetKeyFile()
+				keyPath = strings.TrimSpace(keyPath)
+			}
+			if certPath == "" || keyPath == "" {
+				return nil, fmt.Errorf("NaiveProxy inbound %q requires the panel TLS certificate and private key", inbound.Tag)
+			}
+			tls["certificatePath"] = certPath
+			tls["keyPath"] = keyPath
+			settings["tls"] = tls
+		}
+
 		raw["settings"] = settings
 
 		translated, err := singbox.TranslateXrayInbound(raw)

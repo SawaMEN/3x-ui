@@ -532,6 +532,12 @@
         "mtgPublicIpv4": "Публичный IPv4",
         "mtgPublicIpv6": "Публичный IPv6",
         "mtgPublicIpHint": "Доступный публичный адрес этого сервера, используемый промежуточным прокси рекламного тега. Оставьте пустым, чтобы mtg определил его автоматически.",
+        "naiveNetwork": "Транспорт",
+        "naiveNetworkTcp": "TCP",
+        "naiveNetworkUdp": "QUIC / UDP",
+        "naiveHint": "TLS берётся из сертификата панели автоматически. TCP используется по умолчанию; для QUIC применяется BBR. SNI можно задать явно. Пользователи добавляются обычным редактором клиентов.",
+        "psiphonServerEntry": "Server entry",
+        "psiphonServerEntryHint": "Необязательно. Можно вставить готовый server-entry.dat; иначе он создастся автоматически.",
         "visionTestseed": "Vision testseed",
         "version": "Версия",
         "udpIdleTimeout": "UDP idle timeout (с)",
@@ -693,7 +699,9 @@
           "node": "Адрес узла",
           "listen": "Адрес прослушивания inbound",
           "custom": "Пользовательская"
-        }
+        },
+        "mieruAutoHint": "Порт 8443 автоматически используется для нового входящего (если свободен); Mieru поддерживает серверные порты 1025–65535. TCP и UDP работают на одном порту, MTU 1400 и базовые параметры применяются автоматически; редкие настройки доступны через JSON.",
+        "psiphonAutoHint": "Оставьте Server entry пустым: psiphond сам создаст его и подставит публичный адрес VPS. Для обычной установки используется OSSH на порту входящего."
       },
       "info": {
         "mode": "Режим",
@@ -787,7 +795,7 @@
       "limitIpFail2banWindows": "Fail2ban недоступен в Windows, поэтому ограничение по IP не может быть применено.",
       "limitIpDisabled": "Функция ограничения по IP отключена на этом сервере.",
       "password": "Пароль",
-      "passwordDesc": "Используется клиентами Trojan, Shadowsocks и TUIC; игнорируется для VLESS, VMess, Hysteria и WireGuard.",
+      "passwordDesc": "Используется клиентами Trojan, Shadowsocks, TUIC, NaïveProxy и Mieru; игнорируется для VLESS, VMess, Hysteria и WireGuard.",
       "subId": "ID подписки",
       "online": "В сети",
       "email": "Email",

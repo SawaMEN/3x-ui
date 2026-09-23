@@ -6,6 +6,9 @@ import type { HttpInboundSettings } from '@/schemas/protocols/inbound/http';
 import type { HysteriaClient, HysteriaInboundSettings } from '@/schemas/protocols/inbound/hysteria';
 import type { MixedInboundSettings } from '@/schemas/protocols/inbound/mixed';
 import type { MtprotoClient, MtprotoInboundSettings } from '@/schemas/protocols/inbound/mtproto';
+import type { NaiveInboundSettings } from '@/schemas/protocols/inbound/naive';
+import type { PsiphonInboundSettings } from '@/schemas/protocols/inbound/psiphon';
+import type { MieruInboundSettings } from '@/schemas/protocols/inbound/mieru';
 import type {
   ShadowsocksClient,
   ShadowsocksInboundSettings,
@@ -259,6 +262,32 @@ export function createDefaultMtprotoClient(domain: string): Partial<MtprotoClien
   };
 }
 
+export function createDefaultNaiveInboundSettings(): NaiveInboundSettings {
+  return {
+    network: 'tcp',
+    quicCongestionControl: 'bbr',
+    tls: { enabled: true, serverName: '', certificatePath: '', keyPath: '' },
+    clients: [],
+  };
+}
+
+export function createDefaultPsiphonInboundSettings(): PsiphonInboundSettings {
+  return { serverAddress: '', tunnelProtocol: 'OSSH', serverEntry: '', additionalArguments: [] };
+}
+
+export function createDefaultMieruInboundSettings(): MieruInboundSettings {
+  return {
+    tcpPorts: [],
+    udpPorts: [],
+    multiplexing: 'MULTIPLEXING_LOW',
+    handshakeMode: 'HANDSHAKE_STANDARD',
+    mtu: 1400,
+    loggingLevel: 'INFO',
+    userHintIsMandatory: false,
+    clients: [],
+  };
+}
+
 export function createDefaultTunnelInboundSettings(): TunnelInboundSettings {
   return {
     portMap: {},
@@ -393,7 +422,10 @@ export type AnyInboundSettings =
   | MtprotoInboundSettings
   | VkTurnProxyInboundSettings
   | AmneziawgInboundSettings
-  | TuicInboundSettings;
+  | TuicInboundSettings
+  | NaiveInboundSettings
+  | PsiphonInboundSettings
+  | MieruInboundSettings;
 
 export function createDefaultInboundSettings(protocol: string): AnyInboundSettings | null {
   switch (protocol) {
@@ -425,6 +457,12 @@ export function createDefaultInboundSettings(protocol: string): AnyInboundSettin
       return createDefaultAmneziawgInboundSettings();
     case 'tuic':
       return createDefaultTuicInboundSettings();
+    case 'naive':
+      return createDefaultNaiveInboundSettings();
+    case 'psiphon':
+      return createDefaultPsiphonInboundSettings();
+    case 'mieru':
+      return createDefaultMieruInboundSettings();
     default:
       return null;
   }

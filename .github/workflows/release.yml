@@ -206,6 +206,30 @@ jobs:
 
           curl -sfLRo tuic-server "${CURL_RETRY[@]}" "https://github.com/EAimTY/tuic/releases/download/tuic-server-1.0.0/tuic-server-1.0.0-${TUIC_ARCH}"
           chmod +x tuic-server
+
+          MIERU_VER=$(curl -sf "${CURL_RETRY[@]}" -o /dev/null -w '%{redirect_url}' https://github.com/enfein/mieru/releases/latest | sed -n 's#.*/releases/tag/##p')
+          test -n "$MIERU_VER"
+          case "${{ matrix.platform }}" in amd64) MIERU_ARCH=linux_amd64 ;; arm64) MIERU_ARCH=linux_arm64 ;; esac
+          MIERU_PKG="mieru_${MIERU_VER#v}_${MIERU_ARCH}.tar.gz"
+          curl -sfLRO "${CURL_RETRY[@]}" "https://github.com/enfein/mieru/releases/download/${MIERU_VER}/${MIERU_PKG}"
+          tar -xzf "$MIERU_PKG"
+          MITA_BIN=$(find . -type f -name mita -perm -111 | head -n1)
+          test -n "$MITA_BIN"
+          cp "$MITA_BIN" mita
+          chmod +x mita
+          rm -f "$MIERU_PKG"
+
+          PSIPHON_VER=$(curl -sf "${CURL_RETRY[@]}" -o /dev/null -w '%{redirect_url}' https://github.com/Psiphon-Labs/psiphon-tunnel-core/releases/latest | sed -n 's#.*/releases/tag/##p')
+          test -n "$PSIPHON_VER"
+          if [[ "${{ matrix.platform }}" == "amd64" ]]; then
+            curl -sfLRo psiphond "${CURL_RETRY[@]}" "https://raw.githubusercontent.com/Psiphon-Labs/psiphon-tunnel-core-binaries/master/psiphond/psiphond"
+          else
+            rm -rf /tmp/psiphon-tunnel-core
+            git clone --depth 1 --branch "$PSIPHON_VER" https://github.com/Psiphon-Labs/psiphon-tunnel-core.git /tmp/psiphon-tunnel-core
+            ( cd /tmp/psiphon-tunnel-core/Server && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o "$GITHUB_WORKSPACE/x-ui/bin/psiphond" main.go )
+          fi
+          chmod +x "$GITHUB_WORKSPACE/x-ui/bin/psiphond"
+
           cd ../..
 
       - name: Package

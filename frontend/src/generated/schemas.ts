@@ -2740,6 +2740,9 @@ export const SCHEMAS: Record<string, unknown> = {
           "mtproto",
           "amneziawg",
           "tuic",
+          "naive",
+          "psiphon",
+          "mieru",
           "vk-turn-proxy"
         ],
         "example": "vless",

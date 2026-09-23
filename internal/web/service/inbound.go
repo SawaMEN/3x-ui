@@ -1106,6 +1106,9 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 	inbound.TrafficResetDay = normalizeTrafficResetDay(inbound.TrafficResetDay)
 	// Normalize streamSettings based on protocol
 	s.normalizeStreamSettings(inbound)
+	if err := validateInboundRuntimeProtocol(inbound.Protocol); err != nil {
+		return inbound, false, err
+	}
 	if !s.FromNodeSync {
 		if err := validateInboundTLSCertificates(inbound.StreamSettings); err != nil {
 			return inbound, false, err
@@ -1231,6 +1234,13 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 			if client.Email == "" {
 				return inbound, false, common.NewError("empty client email")
 			}
+		case "naive", "mieru":
+			if client.Email == "" {
+				return inbound, false, common.NewError("empty client email")
+			}
+			if client.Password == "" {
+				return inbound, false, common.NewError("client requires a password")
+			}
 		default:
 			if client.ID == "" {
 				return inbound, false, common.NewError("empty client ID")
@@ -1321,7 +1331,10 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 				return err
 			}
 		}
-		if inbound.Enable && isXrayManagedProtocol(inbound.Protocol) {
+		if inbound.Enable && (isXrayManagedProtocol(inbound.Protocol) ||
+			inbound.Protocol == model.MTProto ||
+			inbound.Protocol == model.TUIC ||
+			inbound.Protocol == model.AmneziaWG) {
 			if inbound.NodeID != nil {
 				markDirty = true
 			} else {
@@ -1395,7 +1408,11 @@ func (s *InboundService) delInbound(id int) (bool, func(), error) {
 	var ib model.Inbound
 	loadErr := db.Model(model.Inbound{}).Where("id = ?", id).First(&ib).Error
 	if loadErr == nil {
-		shouldPushToRuntime := (ib.NodeID != nil || ib.Enable) && isXrayManagedProtocol(ib.Protocol)
+		shouldPushToRuntime := (ib.NodeID != nil || ib.Enable) &&
+			(isXrayManagedProtocol(ib.Protocol) ||
+				ib.Protocol == model.MTProto ||
+				ib.Protocol == model.TUIC ||
+				ib.Protocol == model.AmneziaWG)
 		if shouldPushToRuntime {
 			if ib.NodeID != nil {
 				rt, push, _, perr := s.nodePushPlan(&ib)
@@ -1700,6 +1717,9 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 	inbound.TrafficResetDay = normalizeTrafficResetDay(inbound.TrafficResetDay)
 	// Normalize streamSettings based on protocol
 	s.normalizeStreamSettings(inbound)
+	if err := validateInboundRuntimeProtocol(inbound.Protocol); err != nil {
+		return inbound, false, err
+	}
 	if err := validateFinalMaskRealityCombo(inbound.StreamSettings); err != nil {
 		return inbound, false, err
 	}
@@ -1738,6 +1758,16 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 			}
 			if client.Email == "" {
 				return inbound, false, common.NewError("empty client email")
+			}
+		}
+	}
+	if inbound.Protocol == model.NaiveProxy || inbound.Protocol == model.Mieru {
+		for _, client := range clients {
+			if client.Email == "" {
+				return inbound, false, common.NewError("empty client email")
+			}
+			if client.Password == "" {
+				return inbound, false, common.NewError("client requires a password")
 			}
 		}
 	}
@@ -1916,7 +1946,8 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 		oldInbound.Tag = resolvedTag
 		inbound.Tag = oldInbound.Tag
 
-		if oldInbound.NodeID == nil && isXrayManagedProtocol(oldInbound.Protocol) {
+		localSidecarTransition := oldProtocol == model.MTProto || oldInbound.Protocol == model.MTProto || oldProtocol == model.TUIC || oldInbound.Protocol == model.TUIC
+		if oldInbound.NodeID == nil && (isXrayManagedProtocol(oldInbound.Protocol) || localSidecarTransition) {
 			rt, push, _, perr := s.nodePushPlan(oldInbound)
 			if perr != nil {
 				return perr

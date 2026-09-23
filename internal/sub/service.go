@@ -471,6 +471,11 @@ func (s *SubService) getSubs(subId string) ([]string, []string, int64, xray.Clie
 			} else {
 				link = s.GetLink(inbound, client.Email)
 			}
+			if inbound.Protocol == model.NaiveProxy {
+				// The raw subscription uses the HTTPS-proxy URI form for Naïve
+				// so clients such as Shadowrocket import it as an HTTPS proxy.
+				link = s.genNaiveSubscriptionLink(inbound, client.Email)
+			}
 			result = append(result, link)
 			emails = append(emails, client.Email)
 			seenEmails[client.Email] = struct{}{}
@@ -651,7 +656,7 @@ func (s *SubService) getInboundsBySubId(subId string) ([]*model.Inbound, error) 
 		JOIN client_inbounds ON client_inbounds.inbound_id = inbounds.id
 		JOIN clients ON clients.id = client_inbounds.client_id
 		WHERE
-			inbounds.protocol in ('vmess','vless','trojan','shadowsocks','hysteria','wireguard','amneziawg','mtproto','tuic')
+			inbounds.protocol in ('vmess','vless','trojan','shadowsocks','hysteria','wireguard','amneziawg','mtproto','tuic','naive','mieru')
 			AND clients.sub_id = ? AND inbounds.enable = ?
 	)`, subId, true).Order("sub_sort_index ASC").Order("id ASC").Find(&inbounds).Error
 	if err != nil {
@@ -808,6 +813,10 @@ func (s *SubService) GetLink(inbound *model.Inbound, email string) string {
 		return s.genAmneziaWGLink(inbound, email)
 	case "tuic":
 		return s.genTuicLink(inbound, email)
+	case model.NaiveProxy:
+		return s.genNaiveLink(inbound, email)
+	case model.Mieru:
+		return s.genMieruLink(inbound, email)
 	}
 	return ""
 }
@@ -831,6 +840,209 @@ func (s *SubService) genVKTurnProxyLink(inbound *model.Inbound, email string) st
 		return link
 	}
 	return ""
+}
+
+// genNaiveLink builds the canonical NaïveProxy client link for the panel's
+// single-link/QR views. The raw subscription uses genNaiveSubscriptionLink below
+// so clients such as Shadowrocket can import Naïve as an HTTPS proxy entry.
+func (s *SubService) genNaiveLink(inbound *model.Inbound, email string) string {
+	if inbound.Protocol != model.NaiveProxy {
+		return ""
+	}
+	return s.genNaiveSubscriptionLink(inbound, email)
+}
+
+// genNaiveSubscriptionLink returns the HTTPS-proxy form used by the raw
+// base64 subscription. NaïveProxy is HTTP CONNECT over TLS, so this form is
+// understood by clients that accept generic HTTPS proxy subscription entries.
+func (s *SubService) genNaiveSubscriptionLink(inbound *model.Inbound, email string) string {
+	if inbound.Protocol != model.NaiveProxy {
+		return ""
+	}
+	client, ok := s.clientForLink(inbound, email)
+	if !ok || client.Password == "" {
+		return ""
+	}
+	settings := s.linkSettings(inbound)
+	network, _ := settings["network"].(string)
+	scheme := "naive+https"
+	if strings.EqualFold(strings.TrimSpace(network), "udp") {
+		scheme = "naive+quic"
+	}
+	params := map[string]string{"padding": "true"}
+	if tls, ok := settings["tls"].(map[string]any); ok {
+		if sni, _ := tls["serverName"].(string); strings.TrimSpace(sni) != "" {
+			params["sni"] = strings.TrimSpace(sni)
+		}
+	}
+	if _, ok := params["sni"]; !ok {
+		if sni := s.configuredPublicHost(); sni != "" {
+			// The native Naive inbound reuses the panel HTTPS certificate when
+			// no custom certificate is configured, so use the same public host
+			// as the default client SNI.
+			params["sni"] = sni
+		}
+	}
+	link := fmt.Sprintf("%s://%s:%s@%s",
+		scheme,
+		encodeUserinfo(client.Email),
+		encodeUserinfo(client.Password),
+		joinHostPort(s.resolveInboundAddress(inbound), inbound.Port),
+	)
+	return buildLinkWithParams(link, params, s.genRemark(inbound, email, "", ""))
+}
+
+// genMieruLink builds a native Mieru share link.
+// Each advertised port is paired with each enabled Mieru transport protocol.
+// The primary inbound port is always included first, followed by any
+// additionalPorts configured in the inbound settings.
+func mieruSharePortEntry(value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return false
+	}
+	parts := strings.SplitN(value, "-", 2)
+	start, err := strconv.Atoi(strings.TrimSpace(parts[0]))
+	if err != nil || start < 1025 || start > 65535 {
+		return false
+	}
+	if len(parts) == 1 {
+		return true
+	}
+	end, err := strconv.Atoi(strings.TrimSpace(parts[1]))
+	return err == nil && end >= start && end <= 65535
+}
+
+func mieruShareEntries(settings map[string]any, inboundPort int) []struct {
+	port     string
+	protocol string
+} {
+	out := make([]struct {
+		port     string
+		protocol string
+	}, 0)
+	seen := make(map[string]struct{})
+
+	add := func(values []any, protocol string) {
+		for _, raw := range values {
+			value := ""
+			switch v := raw.(type) {
+			case string:
+				value = strings.TrimSpace(v)
+			case float64:
+				if v == float64(int(v)) {
+					value = strconv.Itoa(int(v))
+				}
+			case int:
+				value = strconv.Itoa(v)
+			}
+			if !mieruSharePortEntry(value) {
+				continue
+			}
+			key := protocol + ":" + value
+			if _, exists := seen[key]; exists {
+				continue
+			}
+			seen[key] = struct{}{}
+			out = append(out, struct {
+				port     string
+				protocol string
+			}{port: value, protocol: protocol})
+		}
+	}
+
+	tcpPorts, _ := settings["tcpPorts"].([]any)
+	udpPorts, _ := settings["udpPorts"].([]any)
+	add(tcpPorts, "TCP")
+	add(udpPorts, "UDP")
+
+	// Existing inbounds created before protocol-specific bindings were added
+	// use protocols + additionalPorts. Keep those links fully compatible.
+	if len(out) == 0 {
+		protocols, _ := settings["protocols"].([]any)
+		if len(protocols) == 0 {
+			protocols = []any{"TCP", "UDP"}
+		}
+		legacyPorts := []string{strconv.Itoa(inboundPort)}
+		if additional, ok := settings["additionalPorts"].([]any); ok {
+			for _, raw := range additional {
+				switch v := raw.(type) {
+				case float64:
+					if v == float64(int(v)) {
+						legacyPorts = append(legacyPorts, strconv.Itoa(int(v)))
+					}
+				case int:
+					legacyPorts = append(legacyPorts, strconv.Itoa(v))
+				case string:
+					legacyPorts = append(legacyPorts, strings.TrimSpace(v))
+				}
+			}
+		}
+		for _, port := range legacyPorts {
+			for _, raw := range protocols {
+				protocol, _ := raw.(string)
+				protocol = strings.ToUpper(strings.TrimSpace(protocol))
+				if (protocol == "TCP" || protocol == "UDP") && mieruSharePortEntry(port) {
+					key := protocol + ":" + port
+					if _, exists := seen[key]; exists {
+						continue
+					}
+					seen[key] = struct{}{}
+					out = append(out, struct {
+						port     string
+						protocol string
+					}{port: port, protocol: protocol})
+				}
+			}
+		}
+	}
+	return out
+}
+
+func (s *SubService) genMieruLink(inbound *model.Inbound, email string) string {
+	if inbound.Protocol != model.Mieru {
+		return ""
+	}
+	client, ok := s.clientForLink(inbound, email)
+	if !ok || client.Password == "" {
+		return ""
+	}
+
+	settings := s.linkSettings(inbound)
+	entries := mieruShareEntries(settings, inbound.Port)
+	if len(entries) == 0 {
+		return ""
+	}
+	multiplexing, _ := settings["multiplexing"].(string)
+	if multiplexing == "" {
+		multiplexing = "MULTIPLEXING_LOW"
+	}
+	handshakeMode, _ := settings["handshakeMode"].(string)
+	if handshakeMode == "" {
+		handshakeMode = "HANDSHAKE_STANDARD"
+	}
+	mtu := 1400
+	if raw, ok := settings["mtu"].(float64); ok && int(raw) >= 1280 && int(raw) <= 1400 {
+		mtu = int(raw)
+	}
+
+	values := url.Values{}
+	values.Set("profile", "default")
+	values.Set("mtu", strconv.Itoa(mtu))
+	values.Set("multiplexing", multiplexing)
+	values.Set("handshake-mode", handshakeMode)
+	for _, entry := range entries {
+		values.Add("port", entry.port)
+		values.Add("protocol", entry.protocol)
+	}
+
+	link := fmt.Sprintf("mierus://%s:%s@%s?%s",
+		encodeUserinfo(client.Email),
+		encodeUserinfo(client.Password),
+		s.resolveInboundAddress(inbound),
+		values.Encode(),
+	)
+	return link + "#" + strings.ReplaceAll(url.QueryEscape(s.genRemark(inbound, email, "", "")), "+", "%20")
 }
 
 func (s *SubService) genTuicLink(inbound *model.Inbound, email string) string {

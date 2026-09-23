@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/config"
 )
 
 const commandTimeout = 30 * time.Minute
@@ -75,7 +77,7 @@ func GetStatus(ctx context.Context) (Status, error) {
 			AvailableVersion: version,
 			Installed:        installed,
 			Kernel:           true,
-			UpdateAvailable:  installed,
+			UpdateAvailable: packageUpdateAvailable(installed, installedVersion, version),
 		})
 	}
 	sort.Slice(kernelPackages, func(i, j int) bool { return kernelPackages[i].Name < kernelPackages[j].Name })
@@ -265,20 +267,67 @@ func detectDistribution() distroInfo {
 }
 
 func requiredPackages(distribution string) []string {
+	var packages []string
 	switch distribution {
 	case "ubuntu", "debian", "armbian":
-		return []string{"cron", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl"}
+		packages = []string{"cron", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl", "util-linux"}
 	case "fedora", "amzn", "rhel", "almalinux", "rocky", "ol", "centos":
-		return []string{"cronie", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl"}
+		packages = []string{"cronie", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl", "util-linux"}
 	case "arch", "manjaro", "parch":
-		return []string{"cronie", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl"}
+		packages = []string{"cronie", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl", "util-linux"}
 	case "opensuse-tumbleweed", "opensuse-leap":
-		return []string{"cron", "curl", "tar", "timezone", "socat", "ca-certificates", "openssl"}
+		packages = []string{"cron", "curl", "tar", "timezone", "socat", "ca-certificates", "openssl", "util-linux"}
 	case "alpine":
-		return []string{"dcron", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl"}
+		packages = []string{"dcron", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl", "util-linux"}
 	default:
-		return []string{"cron", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl"}
+		packages = []string{"cron", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl", "util-linux"}
 	}
+
+	addPackage := func(name string) {
+		if name == "" {
+			return
+		}
+		for _, existing := range packages {
+			if existing == name {
+				return
+			}
+		}
+		packages = append(packages, name)
+	}
+
+	// The panel can use pg_dump/pg_restore when PostgreSQL is selected. Mirror
+	// the package names used by install.sh/update.sh so the system update page
+	// can repair a missing client as well.
+	if config.GetDBKind() == "postgres" {
+		switch distribution {
+		case "ubuntu", "debian", "armbian", "alpine":
+			addPackage("postgresql-client")
+		case "fedora", "amzn", "rhel", "almalinux", "rocky", "ol", "centos",
+			"arch", "manjaro", "parch", "opensuse-tumbleweed", "opensuse-leap":
+			addPackage("postgresql")
+		}
+	}
+
+	// Fail2ban is optional. When the module is installed, nftables is needed on
+	// minimal images because recent fail2ban defaults use its nftables action.
+	if commandExists("fail2ban-client") {
+		addPackage("fail2ban")
+		addPackage("nftables")
+	}
+	if commandExists("nft") {
+		addPackage("nftables")
+	}
+	if commandExists("ufw") && (distribution == "ubuntu" || distribution == "debian" || distribution == "armbian") {
+		addPackage("ufw")
+	}
+	if commandExists("nginx") {
+		addPackage("nginx")
+	}
+
+	return packages
+}
+func packageUpdateAvailable(installed bool, installedVersion, availableVersion string) bool {
+	return installed && availableVersion != "" && installedVersion != "" && installedVersion != availableVersion
 }
 
 func refreshPackageDatabase(ctx context.Context, manager string) error {
@@ -502,6 +551,11 @@ func isRPMArch(value string) bool {
 
 func isKernelPackage(name string) bool {
 	lower := strings.ToLower(name)
+	for _, exact := range []string{"linux", "linux-hardened", "linux-zen", "linux-rt"} {
+		if lower == exact {
+			return true
+		}
+	}
 	for _, prefix := range []string{
 		"linux-image", "linux-generic", "linux-virtual", "linux-azure",
 		"linux-oem", "linux-lowlatency", "linux-kvm", "linux-lts", "kernel",

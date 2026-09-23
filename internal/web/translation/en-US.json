@@ -511,6 +511,12 @@
         "mtgPublicIpv4": "Public IPv4",
         "mtgPublicIpv6": "Public IPv6",
         "mtgPublicIpHint": "This server's reachable public address, used by the ad-tag middle proxy. Leave blank to let mtg auto-detect it.",
+        "naiveNetwork": "Transport",
+        "naiveNetworkTcp": "TCP",
+        "naiveNetworkUdp": "QUIC / UDP",
+        "naiveHint": "The panel TLS certificate is reused automatically. TCP is used by default; QUIC uses BBR. SNI can be set explicitly. Users are managed by the normal client editor.",
+        "psiphonServerEntry": "Server entry",
+        "psiphonServerEntryHint": "Optional. Paste an existing server-entry.dat, otherwise it is generated automatically.",
         "visionTestseed": "Vision testseed",
         "version": "Version",
         "udpIdleTimeout": "UDP idle timeout (s)",
@@ -693,7 +699,9 @@
           "node": "Node address",
           "listen": "Inbound listen",
           "custom": "Custom"
-        }
+        },
+        "mieruAutoHint": "Port 8443 is selected automatically for a new inbound when free; Mieru server ports use 1025–65535. TCP and UDP use the same port, MTU 1400 and baseline parameters are automatic; uncommon options remain available in JSON.",
+        "psiphonAutoHint": "Leave Server entry empty: psiphond generates it and detects the VPS public address automatically. OSSH on the inbound port is used by default."
       },
       "info": {
         "mode": "Mode",
@@ -787,7 +795,7 @@
       "limitIpFail2banWindows": "Fail2ban is not available on Windows, so the IP limit cannot be enforced.",
       "limitIpDisabled": "The IP limit feature is disabled on this server.",
       "password": "Password",
-      "passwordDesc": "Used by Trojan, Shadowsocks, and TUIC clients; ignored for VLESS, VMess, Hysteria, and WireGuard.",
+      "passwordDesc": "Used by Trojan, Shadowsocks, TUIC, NaïveProxy, and Mieru clients; ignored for VLESS, VMess, Hysteria, and WireGuard.",
       "subId": "Subscription ID",
       "online": "Online",
       "email": "Email",

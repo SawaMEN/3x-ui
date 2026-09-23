@@ -62,6 +62,9 @@ import {
   HysteriaFields,
   MixedFields,
   MtprotoFields,
+  NaiveFields,
+  PsiphonFields,
+  MieruFields,
   ShadowsocksFields,
   TuicFields,
   TunFields,
@@ -280,11 +283,44 @@ export default function InboundFormModal({
     protocol !== Protocols.HYSTERIA &&
     protocol !== Protocols.WIREGUARD &&
     protocol !== Protocols.TUNNEL &&
-    protocol !== Protocols.TUIC;
+    protocol !== Protocols.TUIC &&
+    protocol !== Protocols.NAIVE &&
+    protocol !== Protocols.PSIPHON &&
+    protocol !== Protocols.MIERU;
 
   const wPort = useWatch({ control, name: 'port' });
   const wListen = (useWatch({ control, name: 'listen' }) ?? '') as string;
   const isUdsListen = wListen.startsWith('/') || wListen.startsWith('@');
+  const autoPortSeedRef = useRef('');
+  useEffect(() => {
+    if (mode !== 'add') {
+      autoPortSeedRef.current = '';
+      return;
+    }
+
+    const autoPortProtocols = new Set<string>([
+      Protocols.NAIVE,
+      Protocols.PSIPHON,
+      Protocols.MIERU,
+    ]);
+    if (!autoPortProtocols.has(protocol) || autoPortSeedRef.current === protocol) return;
+    autoPortSeedRef.current = protocol;
+
+    if (wListen) return;
+
+    const usedPorts = new Set(
+      dbInbounds
+        .filter((ib) => ib.enable && !ib.nodeId)
+        .map((ib) => Number(ib.port))
+        .filter((port) => Number.isInteger(port) && port > 0),
+    );
+
+    const preferredPort = protocol === Protocols.MIERU ? 8443 : 443;
+    if (!usedPorts.has(preferredPort)) {
+      setV('port', preferredPort);
+    }
+  }, [dbInbounds, mode, protocol, setV, wListen]);
+
   const wNodeId = useWatch({ control, name: 'nodeId' }) ?? null;
   const shareAddrStrategy = useWatch({ control, name: 'shareAddrStrategy' }) ?? 'node';
   const wTag = (useWatch({ control, name: 'tag' }) ?? '') as string;
@@ -801,6 +837,9 @@ export default function InboundFormModal({
       )}
 
       {protocol === Protocols.TUIC && <TuicFields />}
+      {protocol === Protocols.NAIVE && <NaiveFields />}
+      {protocol === Protocols.PSIPHON && <PsiphonFields />}
+      {protocol === Protocols.MIERU && <MieruFields />}
 
       {protocol === Protocols.TUN && <TunFields />}
 
@@ -1143,6 +1182,9 @@ export default function InboundFormModal({
                     Protocols.MTPROTO,
                     Protocols.AMNEZIAWG,
                     Protocols.TUIC,
+                    Protocols.NAIVE,
+                    Protocols.PSIPHON,
+                    Protocols.MIERU,
                   ] as string[]
                 ).includes(protocol) || isFallbackHost
                   ? [

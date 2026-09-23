@@ -83,7 +83,10 @@ export function canEnableSniffing(values: { protocol: string }): boolean {
     values.protocol !== 'mtproto' &&
     values.protocol !== 'amneziawg' &&
     values.protocol !== 'tuic' &&
-    values.protocol !== 'vk-turn-proxy'
+    values.protocol !== 'vk-turn-proxy' &&
+    values.protocol !== 'naive' &&
+    values.protocol !== 'psiphon' &&
+    values.protocol !== 'mieru'
   );
 }
 

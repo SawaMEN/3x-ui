@@ -231,8 +231,8 @@ export default function SystemUpdateModal({
         installedVersion: telemtCurrent,
         availableVersion: telemtLatest,
         updateAvailable:
-          telemtStatus.success && telemtStatus.obj?.updateAvailable === true
-            ? true
+          telemtStatus.success && telemtStatus.obj
+            ? telemtStatus.obj.updateAvailable === true
             : Boolean(telemtCurrent && telemtLatest && versionsDiffer(telemtCurrent, telemtLatest)),
       },
     ]);
