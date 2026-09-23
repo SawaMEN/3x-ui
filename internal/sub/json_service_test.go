@@ -233,6 +233,16 @@ func TestSubJsonServiceVlessFlattened(t *testing.T) {
 	}
 }
 
+func TestSubJsonServiceVlessDefaultsEncryptionToNone(t *testing.T) {
+	inbound := &model.Inbound{Listen: "1.2.3.4", Port: 443, Protocol: model.VLESS, Settings: `{}`}
+	client := model.Client{ID: "uuid-1"}
+
+	settings := outboundSettings(t, NewSubJsonService("", "", "", "", nil).genVless(&SubService{}, inbound, nil, client, ""))
+	if settings["encryption"] != "none" {
+		t.Fatalf("VLESS encryption = %v, want none", settings["encryption"])
+	}
+}
+
 func TestSubJsonServiceVlessFlowSuppressedByDisableFlow(t *testing.T) {
 	inbound := &model.Inbound{Listen: "1.2.3.4", Port: 443, Protocol: model.VLESS, Settings: `{"encryption":"none"}`, DisableFlow: true}
 	client := model.Client{ID: "uuid-1", Flow: "xtls-rprx-vision"}
@@ -518,6 +528,42 @@ func TestSubJsonServiceWireguardNoKey(t *testing.T) {
 }
 
 
+
+func TestSubJsonServiceExternalProxyDoesNotMutateInbound(t *testing.T) {
+	inbound := &model.Inbound{
+		Listen:   "origin.example.com",
+		Port:     443,
+		Protocol: model.VLESS,
+		Settings: `{"encryption":"none"}`,
+		StreamSettings: `{"network":"tcp","security":"tls","tlsSettings":{"serverName":"origin.example.com"},"externalProxy":[{"dest":"edge-one.example.com","port":8443,"forceTls":"tls"},{"dest":"edge-two.example.com","port":9443,"forceTls":"tls"}]}`,
+	}
+	client := model.Client{ID: "11111111-2222-4333-8444-555555555555", Email: "user@example.com"}
+
+	configs := NewSubJsonService("", "", "", "", nil).getConfig(&SubService{address: "sub.example.com"}, inbound, client, "sub.example.com")
+	if len(configs) != 2 {
+		t.Fatalf("JSON configs = %d, want 2", len(configs))
+	}
+	if inbound.Listen != "origin.example.com" || inbound.Port != 443 {
+		t.Fatalf("getConfig mutated inbound endpoint to %s:%d", inbound.Listen, inbound.Port)
+	}
+
+	for i, want := range []string{"edge-one.example.com", "edge-two.example.com"} {
+		var doc map[string]any
+		if err := json.Unmarshal(configs[i], &doc); err != nil {
+			t.Fatalf("config %d: %v", i, err)
+		}
+		outbounds, _ := doc["outbounds"].([]any)
+		if len(outbounds) == 0 {
+			t.Fatalf("config %d has no outbound", i)
+		}
+		outbound, _ := outbounds[0].(map[string]any)
+		settings, _ := outbound["settings"].(map[string]any)
+		if settings["address"] != want {
+			t.Fatalf("config %d address = %v, want %s", i, settings["address"], want)
+		}
+	}
+}
+
 func TestSubJsonServiceHysteria2IsNotDropped(t *testing.T) {
 	svc := NewSubJsonService("", "", "", "", nil)
 	inbound := &model.Inbound{
@@ -585,6 +631,38 @@ func TestNativeRealityTLS(t *testing.T) {
 	reality, _ := tls["reality"].(map[string]any)
 	if reality["enabled"] != true || reality["public_key"] != "public-key" || reality["short_id"] != "0123456789abcdef" {
 		t.Fatalf("unexpected Reality: %#v", reality)
+	}
+}
+
+func TestNativeNaiveOutbound(t *testing.T) {
+	inbound := &model.Inbound{
+		Listen:   "naive.example.com",
+		Port:     443,
+		Protocol: model.NaiveProxy,
+		Settings: `{"network":"tcp","tls":{"serverName":"naive.example.com"}}`,
+	}
+	client := model.Client{Email: "user@example.com", Password: "secret"}
+
+	raw := NewSubJsonService("", "", "", "", nil).genNativeNaive(
+		&SubService{address: "sub.example.com"},
+		inbound,
+		client,
+	)
+	if raw == nil {
+		t.Fatal("genNativeNaive returned nil")
+	}
+	if raw["type"] != "naive" || raw["server"] != "naive.example.com" || raw["server_port"] != 443 {
+		t.Fatalf("unexpected Naive outbound endpoint: %#v", raw)
+	}
+	if raw["username"] != client.Email || raw["password"] != client.Password {
+		t.Fatalf("unexpected Naive credentials: %#v", raw)
+	}
+	if raw["udp_over_tcp"] != true || raw["quic"] != false {
+		t.Fatalf("unexpected Naive transport flags: %#v", raw)
+	}
+	tls, _ := raw["tls"].(map[string]any)
+	if tls["enabled"] != true || tls["server_name"] != "naive.example.com" {
+		t.Fatalf("unexpected Naive TLS: %#v", tls)
 	}
 }
 

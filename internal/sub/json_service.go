@@ -275,11 +275,6 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 	if len(inbounds) == 0 && len(externalLinks) == 0 {
 		return "", "", nil
 	}
-	// The current native builder has no NaiveProxy generator. Never emit a
-	// truncated sing-box profile: preserve the complete raw subscription.
-	if containsSubscriptionProtocol(inbounds, model.NaiveProxy) {
-		return "", "", errSubscriptionFormatUnsupported
-	}
 
 	type nativeOutbound struct {
 		tag string
@@ -383,6 +378,24 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 			seenEmails[client.Email] = struct{}{}
 			if client.Enable {
 				hasEnabledClient = true
+			}
+			if inbound.Protocol == model.NaiveProxy {
+				// Naive is not an Xray outbound, but sing-box has a native
+				// representation. Keep it in the structured profile instead of
+				// forcing the whole subscription back to raw links.
+				native := s.genNativeNaive(subReq, inbound, client)
+				if native != nil {
+					tag := client.Email
+					if tag == "" {
+						tag = fmt.Sprintf("proxy-%d", len(proxies)+1)
+					}
+					if len(proxies) > 0 {
+						tag = fmt.Sprintf("%s-%d", tag, len(proxies)+1)
+					}
+					native["tag"] = tag
+					proxies = append(proxies, nativeOutbound{tag: tag, out: native})
+				}
+				continue
 			}
 			for _, raw := range s.getConfig(subReq, inbound, client, host) {
 				var xrayCfg map[string]any
@@ -870,9 +883,14 @@ func (s *SubJsonService) getConfig(subReq *SubService, inbound *model.Inbound, c
 		// Expand the host's {{VAR}} remark template for this client (no-op for
 		// the synthetic/legacy entry) before it's used as the config remark.
 		subReq.renderHostRemark(inbound, client, extPrxy, network)
-		inbound.Listen, _ = extPrxy["dest"].(string)
+		// Keep the DB-backed inbound immutable while expanding external
+		// endpoints. Mutating Listen/Port here leaks the previous endpoint into
+		// subsequent generators and can make a different protocol (notably VLESS)
+		// connect to the wrong host/port.
+		proxyInbound := *inbound
+		proxyInbound.Listen, _ = extPrxy["dest"].(string)
 		if port, ok := extPrxy["port"].(float64); ok {
-			inbound.Port = int(port)
+			proxyInbound.Port = int(port)
 		}
 		newStream := cloneStreamForExternalProxy(stream)
 		forceTls, _ := extPrxy["forceTls"].(string)
@@ -900,7 +918,7 @@ func (s *SubJsonService) getConfig(subReq *SubService, inbound *model.Inbound, c
 
 		switch inbound.Protocol {
 		case "vmess":
-			newOutbounds = append(newOutbounds, s.genVnext(inbound, streamSettings, client, jsonMux(mux, hostMux)))
+			newOutbounds = append(newOutbounds, s.genVnext(&proxyInbound, streamSettings, client, jsonMux(mux, hostMux)))
 		case "vless":
 			vc := client
 			vc.ID = applyVlessRoute(client.ID, hostVlessRoute(extPrxy))
@@ -911,13 +929,13 @@ func (s *SubJsonService) getConfig(subReq *SubService, inbound *model.Inbound, c
 			if vc.Flow != "" && !vlessFlowAllowed(newNetwork, security, subReq.linkSettings(inbound)) {
 				vc.Flow = ""
 			}
-			newOutbounds = append(newOutbounds, s.genVless(subReq, inbound, streamSettings, vc, jsonMux(mux, hostMux)))
+			newOutbounds = append(newOutbounds, s.genVless(subReq, &proxyInbound, streamSettings, vc, jsonMux(mux, hostMux)))
 		case "trojan", "shadowsocks":
-			newOutbounds = append(newOutbounds, s.genServer(subReq, inbound, streamSettings, client, jsonMux(mux, hostMux)))
+			newOutbounds = append(newOutbounds, s.genServer(subReq, &proxyInbound, streamSettings, client, jsonMux(mux, hostMux)))
 		case "hysteria":
 			// genHy already emits the version-specific Hysteria outbound, including
 			// version 2. Do not silently discard Hysteria2 from legacy JSON.
-			newOutbounds = append(newOutbounds, s.genHy(inbound, newStream, client, jsonMux(mux, hostMux)))
+			newOutbounds = append(newOutbounds, s.genHy(&proxyInbound, newStream, client, jsonMux(mux, hostMux)))
 		case "tuic", "wireguard", "amneziawg":
 			// These protocols do not have an Xray-compatible /json outbound.
 			continue
@@ -929,7 +947,7 @@ func (s *SubJsonService) getConfig(subReq *SubService, inbound *model.Inbound, c
 
 		transport, _ := newStream["network"].(string)
 		newConfigJson["outbounds"] = newOutbounds
-		newConfigJson["remarks"] = subReq.endpointRemark(inbound, client.Email, extPrxy, transport)
+		newConfigJson["remarks"] = subReq.endpointRemark(&proxyInbound, client.Email, extPrxy, transport)
 
 		newConfig, _ := json.MarshalIndent(newConfigJson, "", "  ")
 		newJsonArray = append(newJsonArray, newConfig)
@@ -1109,7 +1127,10 @@ func (s *SubJsonService) genVless(subReq *SubService, inbound *model.Inbound, st
 
 	// Add encryption for VLESS outbound from inbound settings
 	inboundSettings := subReq.linkSettings(inbound)
-	encryption, _ := inboundSettings["encryption"].(string)
+	encryption := "none"
+	if configured, ok := inboundSettings["encryption"].(string); ok && strings.TrimSpace(configured) != "" {
+		encryption = strings.TrimSpace(configured)
+	}
 
 	settings := map[string]any{
 		"address":    inbound.Listen,
@@ -1222,6 +1243,7 @@ func nativeVLESSOutbound(inbound *model.Inbound, stream map[string]any, client m
 		"server":      inbound.Listen,
 		"server_port": inbound.Port,
 		"uuid":        client.ID,
+		"encryption":  "none",
 	}
 	if client.Flow != "" && !inbound.DisableFlow {
 		out["flow"] = client.Flow
@@ -1368,6 +1390,40 @@ func hysteriaVersion(settingsJSON string, stream map[string]any) int {
 		return 2
 	}
 	return 1
+}
+
+func (s *SubJsonService) genNativeNaive(subReq *SubService, inbound *model.Inbound, client model.Client) map[string]any {
+	if inbound.Protocol != model.NaiveProxy || client.Email == "" || client.Password == "" {
+		return nil
+	}
+
+	settings := subReq.linkSettings(inbound)
+	network, _ := settings["network"].(string)
+	serverName := ""
+	if tlsSettings, ok := settings["tls"].(map[string]any); ok {
+		serverName, _ = tlsSettings["serverName"].(string)
+	}
+	serverName = strings.TrimSpace(serverName)
+	if serverName == "" {
+		serverName = subReq.configuredPublicHost()
+	}
+
+	out := map[string]any{
+		"type":          "naive",
+		"server":        subReq.resolveInboundAddress(inbound),
+		"server_port":   inbound.Port,
+		"username":      client.Email,
+		"password":      client.Password,
+		"udp_over_tcp":  true,
+		"quic":          strings.EqualFold(strings.TrimSpace(network), "udp"),
+	}
+	if tls := map[string]any{"enabled": true}; serverName != "" {
+		tls["server_name"] = serverName
+		out["tls"] = tls
+	} else {
+		out["tls"] = map[string]any{"enabled": true}
+	}
+	return out
 }
 
 func (s *SubJsonService) genNativeHysteria2(inbound *model.Inbound, stream map[string]any, client model.Client) json_util.RawMessage {

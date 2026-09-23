@@ -1412,9 +1412,13 @@ func (s *SubService) genVlessLink(inbound *model.Inbound, email string) string {
 
 	// Add encryption parameter for VLESS from inbound settings
 	settings := s.linkSettings(inbound)
-	if encryption, ok := settings["encryption"].(string); ok {
-		params["encryption"] = encryption
+	// Xray requires VLESS share links to carry an explicit encryption value.
+	// Hiddify always emits "none" when the server does not use vlessenc.
+	encryption := "none"
+	if configured, ok := settings["encryption"].(string); ok && strings.TrimSpace(configured) != "" {
+		encryption = strings.TrimSpace(configured)
 	}
+	params["encryption"] = encryption
 
 	applyShareNetworkParams(stream, streamNetwork, params)
 	if finalmask, ok := stream["finalmask"].(map[string]any); ok {

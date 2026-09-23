@@ -145,6 +145,97 @@ func TestGetSubs_Hysteria2AndNaiveKeepSeparateConnections(t *testing.T) {
 	}
 }
 
+func TestGetSubs_VlessHysteria2AndNaiveStayIndependent(t *testing.T) {
+	dbDir := t.TempDir()
+	t.Setenv("XUI_DB_FOLDER", dbDir)
+	if err := database.InitDB(filepath.Join(dbDir, "x-ui.db")); err != nil {
+		t.Fatalf("InitDB: %v", err)
+	}
+	t.Cleanup(func() { _ = database.CloseDB() })
+
+	const subID = "sub-vless-hy-naive"
+	const email = "shared-vh@example.com"
+	const uuid = "11111111-2222-4333-8444-555555555555"
+	db := database.GetDB()
+
+	inbounds := []*model.Inbound{
+		{
+			UserId: 1, Tag: "vless", Remark: "shared", Enable: true,
+			Port: 42130, Listen: "vless.example.com", Protocol: model.VLESS,
+			Settings: fmt.Sprintf(`{"encryption":"none","clients":[{"id":%q,"email":%q,"subId":%q,"enable":true}]}`, uuid, email, subID),
+			StreamSettings: `{"network":"tcp","security":"none"}`,
+		},
+		{
+			UserId: 1, Tag: "hysteria", Remark: "shared", Enable: true,
+			Port: 42131, Listen: "hy.example.com", Protocol: model.Hysteria,
+			Settings: fmt.Sprintf(`{"version":2,"clients":[{"email":%q,"subId":%q,"enable":true}]}`, email, subID),
+			StreamSettings: `{"network":"hysteria","security":"tls","tlsSettings":{"serverName":"hy.example.com"}}`,
+		},
+		{
+			UserId: 1, Tag: "naive", Remark: "shared", Enable: true,
+			Port: 42132, Listen: "naive.example.com", Protocol: model.NaiveProxy,
+			Settings: fmt.Sprintf(`{"network":"tcp","tls":{"serverName":"naive.example.com"},"clients":[{"email":%q,"subId":%q,"enable":true}]}`, email, subID),
+			StreamSettings: `{}`,
+		},
+	}
+	for _, inbound := range inbounds {
+		if err := db.Create(inbound).Error; err != nil {
+			t.Fatalf("seed inbound %s: %v", inbound.Tag, err)
+		}
+	}
+
+	client := &model.ClientRecord{
+		Email: email, SubID: subID, UUID: uuid, Password: "naive-password",
+		Auth: "hysteria-auth", Enable: true,
+	}
+	if err := db.Create(client).Error; err != nil {
+		t.Fatalf("seed client: %v", err)
+	}
+	for _, inbound := range inbounds {
+		if err := db.Create(&model.ClientInbound{ClientId: client.Id, InboundId: inbound.Id}).Error; err != nil {
+			t.Fatalf("attach %s: %v", inbound.Protocol, err)
+		}
+	}
+
+	links, _, _, _, err := NewSubService("").GetSubs(subID, "sub.example.com")
+	if err != nil {
+		t.Fatalf("GetSubs: %v", err)
+	}
+	if len(links) != 3 {
+		t.Fatalf("links = %d, want 3: %v", len(links), links)
+	}
+
+	var vlessLink, hysteriaLink, naiveLink string
+	for _, link := range links {
+		switch {
+		case strings.HasPrefix(link, "vless://"):
+			vlessLink = link
+		case strings.HasPrefix(link, "hysteria2://"):
+			hysteriaLink = link
+		case strings.HasPrefix(link, "naive+https://"):
+			naiveLink = link
+		}
+	}
+	if vlessLink == "" || hysteriaLink == "" || naiveLink == "" {
+		t.Fatalf("subscription must contain VLESS, Hysteria2 and Naive links: %v", links)
+	}
+	if !strings.Contains(vlessLink, uuid+"@vless.example.com:42130") {
+		t.Fatalf("VLESS endpoint/UUID is wrong: %s", vlessLink)
+	}
+	if !strings.Contains(vlessLink, "encryption=none") {
+		t.Fatalf("VLESS link must explicitly disable vlessenc when no encryption is configured: %s", vlessLink)
+	}
+	if !strings.Contains(hysteriaLink, "hysteria-auth@hy.example.com:42131") {
+		t.Fatalf("Hysteria2 endpoint/auth is wrong: %s", hysteriaLink)
+	}
+	if !strings.Contains(naiveLink, "naive-password@naive.example.com:42132") {
+		t.Fatalf("Naive endpoint/password is wrong: %s", naiveLink)
+	}
+	if vlessLink == hysteriaLink || vlessLink == naiveLink || hysteriaLink == naiveLink {
+		t.Fatal("VLESS, Hysteria2 and Naive links must not collapse into one connection")
+	}
+}
+
 func TestGetSubs_MultipleConnectionsSameProtocol(t *testing.T) {
 	dbDir := t.TempDir()
 	t.Setenv("XUI_DB_FOLDER", dbDir)
