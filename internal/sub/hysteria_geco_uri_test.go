@@ -150,3 +150,31 @@ func TestParseHysteriaPacketSizeBounds(t *testing.T) {
 		t.Fatalf("valid range = %q", got)
 	}
 }
+
+
+func TestGenHysteriaLinkExternalProxyTLSOverrides(t *testing.T) {
+	in := &model.Inbound{
+		Listen:   "203.0.113.1",
+		Port:     443,
+		Protocol: model.Hysteria,
+		Remark:   "hy",
+		Settings: `{"version":2,"clients":[{"auth":"secret","email":"user"}]}`,
+		StreamSettings: `{"security":"tls","tlsSettings":{"serverName":"base.example.com","alpn":["h3"],"settings":{"fingerprint":"chrome"}},"externalProxy":[{"forceTls":"same","dest":"edge.example.com","port":8443,"remark":"EDGE","sni":"edge.sni","fingerprint":"firefox","alpn":["h2","http/1.1"],"allowInsecure":true}]}`,
+	}
+	got := (&SubService{}).genHysteriaLink(in, "user")
+	for _, want := range []string{
+		"hysteria2://secret@edge.example.com:8443",
+		"sni=edge.sni",
+		"fp=firefox",
+		"alpn=h2%2Chttp%2F1.1",
+		"insecure=1",
+		"#hy-EDGE-user",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing external TLS override %q\n got: %s", want, got)
+		}
+	}
+	if strings.Contains(got, "sni=base.example.com") || strings.Contains(got, "fp=chrome") {
+		t.Fatalf("base TLS values leaked instead of external overrides: %s", got)
+	}
+}
