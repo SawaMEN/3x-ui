@@ -678,7 +678,41 @@ func (s *SubService) getInboundsBySubId(subId string) ([]*model.Inbound, error) 
 	if err != nil {
 		return nil, err
 	}
+	s.indexStatsBySubId(subId)
 	return inbounds, nil
+}
+
+// indexStatsBySubId preloads traffic only for clients belonging to this
+// subscription. This avoids re-querying client_traffics once per rendered
+// link when remark templates use traffic variables, while the existing
+// statsByEmailFromDB fallback still covers orphaned/missing rows.
+func (s *SubService) indexStatsBySubId(subId string) {
+	if s.statsByEmail == nil {
+		s.statsByEmail = map[string]xray.ClientTraffic{}
+	}
+	db := database.GetDB()
+	var emails []string
+	if err := db.Model(&model.ClientRecord{}).
+		Where("sub_id = ?", subId).
+		Pluck("email", &emails).Error; err != nil {
+		logger.Error("SubService - indexStatsBySubId: load emails:", err)
+		return
+	}
+	const chunk = 400
+	for lo := 0; lo < len(emails); lo += chunk {
+		hi := lo + chunk
+		if hi > len(emails) {
+			hi = len(emails)
+		}
+		var rows []xray.ClientTraffic
+		if err := db.Where("email IN ?", emails[lo:hi]).Find(&rows).Error; err != nil {
+			logger.Error("SubService - indexStatsBySubId: load traffics:", err)
+			return
+		}
+		for _, st := range rows {
+			s.statsByEmail[st.Email] = st
+		}
+	}
 }
 
 // projectThroughFallbackMaster mutates the inbound in place so its
