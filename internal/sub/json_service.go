@@ -1084,6 +1084,12 @@ func (s *SubJsonService) getConfig(subReq *SubService, inbound *model.Inbound, c
 		case "trojan", "shadowsocks":
 			newOutbounds = append(newOutbounds, s.genServer(subReq, &proxyInbound, streamSettings, client, jsonMux(mux, hostMux)))
 		case "hysteria":
+			// Hysteria is always TLS/QUIC. forceTls=none cannot produce a
+			// valid Xray Hysteria client, so skip that external endpoint rather
+			// than silently turning it back into TLS inside genHy.
+			if forceTls == "none" {
+				continue
+			}
 			// genHy already emits the version-specific Hysteria outbound, including
 			// version 2. Do not silently discard Hysteria2 from legacy JSON.
 			newOutbounds = append(newOutbounds, s.genHy(&proxyInbound, newStream, client, jsonMux(mux, hostMux)))
