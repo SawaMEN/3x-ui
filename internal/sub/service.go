@@ -63,9 +63,39 @@ func containsUnsupportedClashProtocol(inbounds []*model.Inbound) bool {
 		switch inbound.Protocol {
 		case model.NaiveProxy, model.MTProto, model.VKTurnProxy, model.Mieru:
 			return true
+		case model.Hysteria, model.WireGuard, model.TUIC, model.AmneziaWG:
+			// These protocols have dedicated Clash/Mihomo emitters.
+			continue
+		default:
+			if !clashTransportSupported(inbound) {
+				return true
+			}
 		}
 	}
 	return false
+}
+
+func clashTransportSupported(inbound *model.Inbound) bool {
+	if inbound == nil {
+		return false
+	}
+	stream := unmarshalStreamSettings(inbound.StreamSettings)
+	network, _ := stream["network"].(string)
+	switch network {
+	case "", "tcp", "ws", "grpc", "httpupgrade", "xhttp":
+		if network != "tcp" {
+			return true
+		}
+		tcp, _ := stream["tcpSettings"].(map[string]any)
+		header, _ := tcp["header"].(map[string]any)
+		typeName, _ := header["type"].(string)
+		return typeName == "" || typeName == "none"
+	case "kcp":
+		// Mihomo/Clash does not expose Xray mKCP as a generic proxy transport.
+		return false
+	default:
+		return false
+	}
 }
 
 var salamanderWarningSeen = struct {
