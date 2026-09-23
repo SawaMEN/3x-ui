@@ -671,7 +671,6 @@ func (s *SubService) getInboundsBySubId(subId string) ([]*model.Inbound, error) 
 	if err != nil {
 		return nil, err
 	}
-	s.indexStatsBySubId(subId)
 	return inbounds, nil
 }
 
