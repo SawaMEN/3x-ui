@@ -479,8 +479,10 @@ func TranslateXrayInbound(raw map[string]any) (map[string]any, error) {
 			}
 			out["network"] = network
 		}
-		if cc := rawString(settings, "quicCongestionControl"); cc != "" {
-			out["quic_congestion_control"] = cc
+		if network := rawString(settings, "network"); network == "udp" {
+			if cc := rawString(settings, "quicCongestionControl"); cc != "" {
+				out["quic_congestion_control"] = cc
+			}
 		}
 		tls := rawObject(settings, "tls")
 		// NaiveProxy always uses TLS. Imported configs may omit the TLS object,
