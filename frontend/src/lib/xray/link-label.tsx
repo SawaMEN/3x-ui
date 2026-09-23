@@ -125,7 +125,8 @@ export function parseLinkParts(link: string): LinkParts | null {
     security = 'tls';
     try {
       const url = new URL(trimmed);
-      network = scheme === 'naive+quic' || url.searchParams.get('quic') === '1' ? 'quic' : 'https';
+      network =
+        scheme === 'naive+quic' || url.searchParams.get('quic') === '1' ? 'quic' : 'https';
       security = url.searchParams.get('security') || 'tls';
       const hash = url.hash.replace(/^#/, '');
       try {
@@ -140,7 +141,14 @@ export function parseLinkParts(link: string): LinkParts | null {
   } else if (scheme === 'mieru' || scheme === 'mierus') {
     try {
       const url = new URL(trimmed);
-      const protocols = [...new Set(url.searchParams.getAll('protocol').map((v) => v.trim().toUpperCase()).filter(Boolean))];
+      const protocols = [
+        ...new Set(
+          url.searchParams
+            .getAll('protocol')
+            .map((v) => v.trim().toUpperCase())
+            .filter(Boolean),
+        ),
+      ];
       network = protocols.join('/');
       port = url.searchParams.getAll('port').filter(Boolean).join(',') || url.port;
       const hash = url.hash.replace(/^#/, '');
