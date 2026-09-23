@@ -16,6 +16,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
+	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/json_util"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/random"
 	wgutil "github.com/SawaMEN/3x-ui/v3/internal/util/wireguard"
@@ -1438,18 +1439,27 @@ func (s *SubJsonService) genNativeNaive(subReq *SubService, inbound *model.Inbou
 }
 
 func (s *SubJsonService) genNativeTUIC(inbound *model.Inbound, stream map[string]any, client model.Client) json_util.RawMessage {
+	settings := map[string]any{
+		"servers": []any{map[string]any{
+			"address":  inbound.Listen,
+			"port":     inbound.Port,
+			"id":       client.ID,
+			"uuid":     client.ID,
+			"password": client.Password,
+		}},
+	}
+	// These are client-side TUIC knobs stored with the inbound and must survive
+	// conversion into a native sing-box outbound. Without this, structured
+	// subscriptions silently fall back to sing-box defaults.
+	if inst, ok := tuic.InstanceFromInbound(inbound); ok {
+		settings["congestion_control"] = inst.CongestionControl
+		settings["udp_relay_mode"] = inst.UDPRelayMode
+		settings["zero_rtt_handshake"] = inst.ZeroRTTHandshake
+	}
 	raw := map[string]any{
-		"protocol": "tuic",
-		"tag":      "proxy",
-		"settings": map[string]any{
-			"servers": []any{map[string]any{
-				"address":  inbound.Listen,
-				"port":     inbound.Port,
-				"id":       client.ID,
-				"uuid":     client.ID,
-				"password": client.Password,
-			}},
-		},
+		"protocol":       "tuic",
+		"tag":            "proxy",
+		"settings":       settings,
 		"streamSettings": stream,
 	}
 	translated, err := singbox.TranslateXrayOutbound(raw)
