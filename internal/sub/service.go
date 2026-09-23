@@ -1064,7 +1064,7 @@ func (s *SubService) genNaiveSubscriptionLink(inbound *model.Inbound, email stri
 			port = rawPort
 		}
 
-		params := map[string]string{"padding": "true"}
+		params := map[string]string{}
 		if useHiddifyFormat {
 			// Hiddify's ray2sing parser uses naive:// and reads the TLS
 			// hostname/transport from query parameters.
