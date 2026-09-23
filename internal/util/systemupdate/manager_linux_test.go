@@ -30,6 +30,32 @@ func TestRequiredPackagesIncludeNetworkProtocolDependencies(t *testing.T) {
 	}
 }
 
+func TestRequiredPackagesCoverProtocolRuntimeDependencies(t *testing.T) {
+	cases := map[string][]string{
+		"ubuntu":        {"iproute2", "iptables", "socat", "curl", "tar", "ca-certificates", "openssl"},
+		"debian":        {"iproute2", "iptables", "socat", "curl", "tar", "ca-certificates", "openssl"},
+		"armbian":       {"iproute2", "iptables", "socat", "curl", "tar", "ca-certificates", "openssl"},
+		"fedora":        {"iproute", "iptables", "socat", "curl", "tar", "ca-certificates", "openssl"},
+		"rhel":          {"iproute", "iptables", "socat", "curl", "tar", "ca-certificates", "openssl"},
+		"centos":        {"iproute", "iptables", "socat", "curl", "tar", "ca-certificates", "openssl"},
+		"arch":          {"iproute2", "iptables", "socat", "curl", "tar", "ca-certificates", "openssl"},
+		"opensuse-leap": {"iproute2", "iptables", "socat", "curl", "tar", "ca-certificates", "openssl"},
+		"alpine":        {"iproute2", "iptables", "socat", "curl", "tar", "ca-certificates", "openssl"},
+	}
+	for distro, wantPackages := range cases {
+		packages := requiredPackages(distro)
+		seen := map[string]bool{}
+		for _, name := range packages {
+			seen[name] = true
+		}
+		for _, want := range wantPackages {
+			if !seen[want] {
+				t.Fatalf("%s requiredPackages() missing %s: %#v", distro, want, packages)
+			}
+		}
+	}
+}
+
 func TestPackageUpdateAvailable(t *testing.T) {
 	tests := []struct {
 		name      string
