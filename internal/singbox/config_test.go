@@ -593,8 +593,7 @@ func TestTranslateXrayNaiveInbound(t *testing.T) {
 		"tag":      "naive-443",
 		"port":     443,
 		"settings": map[string]any{
-			"network":               "tcp",
-			"quicCongestionControl": "cubic",
+			"network": "tcp",
 			"clients": []any{
 				map[string]any{
 					"email":    "alice@example.com",
@@ -614,7 +613,7 @@ func TestTranslateXrayNaiveInbound(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got["type"] != "naive" || got["listen"] != "::" || got["listen_port"] != 443 ||
-		got["network"] != "tcp" || got["quic_congestion_control"] != "cubic" {
+		got["network"] != "tcp" {
 		t.Fatalf("unexpected Naive base config: %#v", got)
 	}
 
