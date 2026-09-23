@@ -920,3 +920,18 @@ func TestGetSingBoxJsonEmitsNativeOutbound(t *testing.T) {
 	}
 	_ = svc
 }
+
+
+func TestGetConfigSkipsPlaintextHysteriaExternalProxy(t *testing.T) {
+	inbound := &model.Inbound{
+		Protocol: model.Hysteria, Listen: "203.0.113.1", Port: 443,
+		Settings: `{"version":2}`,
+		StreamSettings: `{"network":"hysteria","security":"tls","hysteriaSettings":{"version":2},"externalProxy":[{"forceTls":"none","dest":"plain.example.com","port":80}]}`,
+	}
+	client := model.Client{Email:"user", Auth:"secret"}
+	svc := NewSubJsonService("", "", "", "", nil)
+	subReq := NewSubService("").ForRequest("sub.example.com")
+	if raws := svc.getConfig(subReq, inbound, client, "sub.example.com"); len(raws) != 0 {
+		t.Fatalf("plaintext Hysteria external endpoint must be skipped from JSON output, got %d configs", len(raws))
+	}
+}
