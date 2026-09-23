@@ -453,6 +453,89 @@ func dedupeEmails(emails []string) []string {
 	return out
 }
 
+func formatRawSubscriptionLinks(subs []string) string {
+	groups := make(map[string][]string)
+	order := make([]string, 0, len(subs))
+
+	for _, entry := range subs {
+		for _, link := range splitLinkLines(entry) {
+			link = strings.TrimSpace(link)
+			if link == "" {
+				continue
+			}
+			scheme := rawSubscriptionScheme(link)
+			if scheme == "" {
+				continue
+			}
+			if _, exists := groups[scheme]; !exists {
+				order = append(order, scheme)
+			}
+			groups[scheme] = append(groups[scheme], link)
+		}
+	}
+
+	if len(order) == 0 {
+		return ""
+	}
+
+	var result strings.Builder
+	for i, scheme := range order {
+		if i > 0 {
+			result.WriteString("\n")
+		}
+		result.WriteString("# ")
+		result.WriteString(rawSubscriptionProtocolLabel(scheme))
+		result.WriteString("\n")
+		for _, link := range groups[scheme] {
+			result.WriteString(link)
+			result.WriteString("\n")
+		}
+	}
+	return result.String()
+}
+
+func rawSubscriptionScheme(link string) string {
+	u, err := url.Parse(link)
+	if err != nil {
+		return ""
+	}
+	return strings.ToLower(strings.TrimSpace(u.Scheme))
+}
+
+func rawSubscriptionProtocolLabel(scheme string) string {
+	switch scheme {
+	case "vless":
+		return "VLESS"
+	case "vmess":
+		return "VMess"
+	case "trojan":
+		return "Trojan"
+	case "ss":
+		return "Shadowsocks"
+	case "hysteria", "hysteria2", "hy2":
+		return "Hysteria2"
+	case "tuic":
+		return "TUIC"
+	case "wireguard", "wg":
+		return "WireGuard"
+	case "awg", "amneziawg":
+		return "AmneziaWG"
+	case "mtproto":
+		return "MTProto"
+	case "naive+https":
+		return "NaiveProxy TCP"
+	case "naive+quic":
+		return "NaiveProxy QUIC"
+	case "mieru", "mierus":
+		return "Mieru"
+	default:
+		if scheme == "" {
+			return "Other"
+		}
+		return strings.ToUpper(scheme)
+	}
+}
+
 // subs handles HTTP requests for subscription links, returning either HTML page or base64-encoded subscription data.
 func (a *SUBController) subs(c *gin.Context) {
 	userAgent := c.GetHeader("User-Agent")
