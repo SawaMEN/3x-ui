@@ -1276,6 +1276,12 @@ func (s *SubService) genTuicLink(inbound *model.Inbound, email string) string {
 			if !ok {
 				continue
 			}
+			forceTLS, _ := ep["forceTls"].(string)
+			if strings.EqualFold(strings.TrimSpace(forceTLS), "none") {
+				// Hysteria is TLS/QUIC only; a plaintext external endpoint
+				// cannot be represented by a valid Hysteria URI.
+				continue
+			}
 			dest, _ := ep["dest"].(string)
 			portF, okPort := ep["port"].(float64)
 			if strings.TrimSpace(dest) == "" {
