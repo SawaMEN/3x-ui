@@ -126,8 +126,8 @@ func TranslateXrayOutbound(raw map[string]any) (map[string]any, error) {
 			if users, _ := server["users"].([]any); len(users) > 0 {
 				user, _ = users[0].(map[string]any)
 			}
-		} else if protocol == "vless" {
-			// The panel's modern VLESS form stores the single target flat in
+		} else if protocol == "vless" || protocol == "vmess" {
+			// The panel's modern VLESS/VMess forms store a single target flat in
 			// settings rather than using Xray's legacy vnext wrapper.
 			address = rawString(settings, "address")
 			port = rawInt(settings, "port")
