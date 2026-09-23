@@ -588,7 +588,11 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 			if outbound == nil {
 				return "", "", errSubscriptionFormatUnsupported
 			}
-			native, err := singbox.TranslateXrayOutbound(outbound)
+			var xrayOutbound map[string]any
+			if err := json.Unmarshal(outbound, &xrayOutbound); err != nil {
+				return "", "", err
+			}
+			native, err := singbox.TranslateXrayOutbound(xrayOutbound)
 			if err != nil {
 				formatUnsupported = true
 				continue
