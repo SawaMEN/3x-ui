@@ -579,15 +579,14 @@ func (a *SUBController) subs(c *gin.Context) {
 		if a.subIncyEnableRouting && a.subIncyRoutingRules != "" {
 			incyRules, _, err := resolveIncyRoutingSource(a.subIncyRoutingRules)
 			if err == nil && strings.TrimSpace(incyRules) != "" {
-				result.WriteString(incyRules)
-				result.WriteString("\n")
+				result += incyRules + "\n"
 			}
 		}
 
 		if a.subEncrypt {
-			c.String(200, base64.StdEncoding.EncodeToString([]byte(result.String())))
+			c.String(200, base64.StdEncoding.EncodeToString([]byte(result)))
 		} else {
-			c.String(200, result.String())
+			c.String(200, result)
 		}
 		a.recordSubscriptionFetch(c)
 	}
