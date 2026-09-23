@@ -454,39 +454,13 @@ func dedupeEmails(emails []string) []string {
 }
 
 func formatRawSubscriptionLinks(subs []string) string {
-	groups := make(map[string][]string)
-	order := make([]string, 0, len(subs))
-
+	var result strings.Builder
 	for _, entry := range subs {
 		for _, link := range splitLinkLines(entry) {
 			link = strings.TrimSpace(link)
 			if link == "" {
 				continue
 			}
-			scheme := rawSubscriptionScheme(link)
-			if scheme == "" {
-				continue
-			}
-			if _, exists := groups[scheme]; !exists {
-				order = append(order, scheme)
-			}
-			groups[scheme] = append(groups[scheme], link)
-		}
-	}
-
-	if len(order) == 0 {
-		return ""
-	}
-
-	var result strings.Builder
-	for i, scheme := range order {
-		if i > 0 {
-			result.WriteString("\n")
-		}
-		result.WriteString("# ")
-		result.WriteString(rawSubscriptionProtocolLabel(scheme))
-		result.WriteString("\n")
-		for _, link := range groups[scheme] {
 			result.WriteString(link)
 			result.WriteString("\n")
 		}
