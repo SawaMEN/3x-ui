@@ -194,3 +194,19 @@ func TestGenMieruLinkExternalProxyFanOut(t *testing.T) {
 	if !strings.Contains(link, "port=443") || !strings.Contains(link, "protocol=TCP") || !strings.Contains(link, "protocol=UDP") { t.Fatalf("external endpoint must reuse both protocols on the public port: %s", link) }
 	if !strings.Contains(link, "#mieru-EDGE-user") { t.Fatalf("endpoint remark missing: %s", link) }
 }
+
+
+func TestGenMieruLinkFormatsIPv6Host(t *testing.T) {
+	inbound := &model.Inbound{
+		Protocol: model.Mieru,
+		Listen: "::",
+		Port: 20000,
+		Settings: `{"tcpPorts":["20000"],"clients":[{"email":"user","password":"secret"}]}`,
+	}
+	client := model.Client{Email:"user",Password:"secret"}
+	s := &SubService{address:"2001:db8::7",clientsByInbound:map[int]map[string]model.Client{0:{client.Email:client}},fullyPrimedInbounds:map[int]bool{0:true},settingsByInbound:map[int]map[string]any{}}
+	got := s.genMieruLink(inbound, "user")
+	if !strings.Contains(got, "@[2001:db8::7]?") {
+		t.Fatalf("Mieru IPv6 authority is not bracketed: %s", got)
+	}
+}
