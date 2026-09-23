@@ -1601,16 +1601,16 @@ func (s *SubJsonService) genWireguard(inbound *model.Inbound, client model.Clien
 	_ = json.Unmarshal([]byte(inbound.Settings), &settings)
 
 	serverPrivateKey, _ := settings["secretKey"].(string)
-	serverPublicKey, err := wgutil.PublicKeyFromPrivate(serverPrivateKey)
-	if err != nil {
-		return nil
-	}
 
 	addresses := append([]string(nil), client.AllowedIPs...)
 	peer := map[string]any{
-		"publicKey":  serverPublicKey,
 		"endpoint":   fmt.Sprintf("%s:%d", wireguardPeerAddress(inbound, inbound.Listen, nil), inbound.Port),
 		"allowedIPs": []string{"0.0.0.0/0", "::/0"},
+	}
+	if serverPrivateKey != "" {
+		if publicKey, err := wgutil.PublicKeyFromPrivate(serverPrivateKey); err == nil {
+			peer["publicKey"] = publicKey
+		}
 	}
 	if client.PreSharedKey != "" {
 		peer["preSharedKey"] = client.PreSharedKey
