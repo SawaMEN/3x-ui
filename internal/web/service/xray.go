@@ -239,7 +239,10 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 		if inbound.NodeID != nil {
 			continue
 		}
-		if inbound.Protocol == model.MTProto || inbound.Protocol == model.AmneziaWG || inbound.Protocol == model.TUIC || inbound.Protocol == model.VKTurnProxy {
+		if inbound.Protocol == model.MTProto || inbound.Protocol == model.AmneziaWG || inbound.Protocol == model.TUIC || inbound.Protocol == model.VKTurnProxy || inbound.Protocol == model.NaiveProxy {
+			// NaiveProxy is a sing-box-only inbound. A legacy Naive row may still
+			// exist when the selected core was switched back to Xray; never emit it
+			// into an Xray config because xray-core has no Naive inbound handler.
 			continue
 		}
 		settings := map[string]any{}
