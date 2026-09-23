@@ -10,6 +10,30 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
 
+func TestSubscriptionFormatCapabilities(t *testing.T) {
+	naive := &model.Inbound{Protocol: model.NaiveProxy}
+	tuic := &model.Inbound{Protocol: model.TUIC}
+	mtproto := &model.Inbound{Protocol: model.MTProto}
+	awg := &model.Inbound{Protocol: model.AmneziaWG}
+	mieru := &model.Inbound{Protocol: model.Mieru}
+	vless := &model.Inbound{Protocol: model.VLESS}
+
+	if !containsUnsupportedJSONProtocol([]*model.Inbound{naive}) || !containsUnsupportedJSONProtocol([]*model.Inbound{tuic}) || !containsUnsupportedJSONProtocol([]*model.Inbound{mtproto}) {
+		t.Fatal("JSON capability map must reject Naive, TUIC and MTProto")
+	}
+	if !containsUnsupportedSingBoxProtocol([]*model.Inbound{mtproto}) || !containsUnsupportedSingBoxProtocol([]*model.Inbound{awg}) || !containsUnsupportedSingBoxProtocol([]*model.Inbound{mieru}) {
+		t.Fatal("sing-box capability map must reject panel-only protocols")
+	}
+	if containsUnsupportedSingBoxProtocol([]*model.Inbound{naive}) || containsUnsupportedSingBoxProtocol([]*model.Inbound{tuic}) || containsUnsupportedSingBoxProtocol([]*model.Inbound{vless}) {
+		t.Fatal("sing-box capability map must keep native Naive/TUIC/VLESS support")
+	}
+	if !containsUnsupportedClashProtocol([]*model.Inbound{naive}) || !containsUnsupportedClashProtocol([]*model.Inbound{mtproto}) || !containsUnsupportedClashProtocol([]*model.Inbound{mieru}) {
+		t.Fatal("Clash capability map must reject unsupported protocols")
+	}
+	if containsUnsupportedClashProtocol([]*model.Inbound{tuic}) || containsUnsupportedClashProtocol([]*model.Inbound{awg}) || containsUnsupportedClashProtocol([]*model.Inbound{vless}) {
+		t.Fatal("Clash capability map must keep TUIC/AWG/VLESS support")
+	}
+}
 func TestSubscriptionExpiryFromClient(t *testing.T) {
 	const now = int64(1_700_000_000_000)
 	const oneDayMs = int64(86_400_000)
