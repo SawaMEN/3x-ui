@@ -226,10 +226,9 @@ func (m *Manager) ensureLocked(inst Instance) error {
 		return err
 	}
 
-	if entry := proc.ServerEntry(); entry != "" && inst.ServerEntry == "" {
+	if entry := proc.ServerEntry(); entry != "" {
+		// Keep the DB copy synchronized with the actual generated server config.
 		persistServerEntry(inst.Id, entry)
-		inst.ServerEntry = entry
-		fp = inst.fingerprint()
 	}
 
 	m.procs[inst.Id] = &managed{proc: proc, tag: inst.Tag, fp: fp}
