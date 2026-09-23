@@ -1532,7 +1532,7 @@ func (s *SubJsonService) genWireguard(inbound *model.Inbound, client model.Clien
 
 	addresses := append([]string(nil), client.AllowedIPs...)
 	peer := map[string]any{
-		"endpoint":   fmt.Sprintf("%s:%d", wireguardPeerAddress(inbound, inbound.Listen, nil), inbound.Port),
+		"endpoint":   joinHostPort(wireguardPeerAddress(inbound, inbound.Listen, nil), inbound.Port),
 		"allowedIPs": []string{"0.0.0.0/0", "::/0"},
 	}
 	if serverPrivateKey != "" {
