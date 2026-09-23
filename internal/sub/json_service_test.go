@@ -541,6 +541,39 @@ func TestSubJsonServiceWireguardDoesNotInventAddress(t *testing.T) {
 		t.Fatalf("genWireguard invented an address: %v", settings["address"])
 	}
 }
+func TestSubJsonServiceGetConfigKeepsWireguard(t *testing.T) {
+	serverPriv, _, err := wgutil.GenerateWireguardKeypair()
+	if err != nil {
+		t.Fatalf("server keypair: %v", err)
+	}
+	clientPriv, _, err := wgutil.GenerateWireguardKeypair()
+	if err != nil {
+		t.Fatalf("client keypair: %v", err)
+	}
+	inbound := &model.Inbound{
+		Listen: "203.0.113.9", Port: 51820, Protocol: model.WireGuard,
+		Settings: `{"secretKey":"` + serverPriv + `","mtu":1420}`,
+	}
+	client := model.Client{Email: "user", PrivateKey: clientPriv, AllowedIPs: []string{"10.0.0.2/32"}}
+
+	configs := NewSubJsonService("", "", "", "", nil).getConfig(&SubService{address: "sub.example.com"}, inbound, client, "sub.example.com")
+	if len(configs) != 1 {
+		t.Fatalf("JSON configs = %d, want 1", len(configs))
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(configs[0], &doc); err != nil {
+		t.Fatalf("unmarshal config: %v", err)
+	}
+	outbounds, _ := doc["outbounds"].([]any)
+	if len(outbounds) == 0 {
+		t.Fatal("JSON config has no outbounds")
+	}
+	outbound, _ := outbounds[0].(map[string]any)
+	if outbound["protocol"] != "wireguard" {
+		t.Fatalf("outbound protocol = %v, want wireguard", outbound["protocol"])
+	}
+}
+
 func TestSubJsonServiceWireguardMissingServerKeyKeepsClientProfile(t *testing.T) {
 	clientPriv, _, err := wgutil.GenerateWireguardKeypair()
 	if err != nil {
