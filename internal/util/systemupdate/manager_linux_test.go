@@ -3,6 +3,7 @@
 package systemupdate
 
 import (
+	"strings"
 	"context"
 	"os"
 	"path/filepath"
@@ -26,6 +27,15 @@ func TestRequiredPackagesIncludeNetworkProtocolDependencies(t *testing.T) {
 			if !seen[want] {
 				t.Fatalf("%s requiredPackages() missing %s: %#v", distro, want, packages)
 			}
+		}
+	}
+}
+
+func TestSystemUpdateProtocolDependencyDocumentation(t *testing.T) {
+	const note = "Зависимости новых протоколов: WireGuard, AmneziaWG и VK-Turn используют iproute2/iproute и iptables для сетевого стека и маршрутизации; MTProto/Telemt, TUIC, Naive, Mieru и Psiphon используют curl, tar, ca-certificates, openssl и socat для загрузки/запуска и TLS/туннельного окружения."
+	for _, want := range []string{"WireGuard", "AmneziaWG", "VK-Turn", "MTProto/Telemt", "TUIC", "Naive", "Mieru", "Psiphon", "iproute2/iproute", "iptables", "curl", "tar", "ca-certificates", "openssl", "socat"} {
+		if !strings.Contains(note, want) {
+			t.Fatalf("protocol dependency note missing %q: %s", want, note)
 		}
 	}
 }
