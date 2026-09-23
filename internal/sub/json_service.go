@@ -1619,14 +1619,17 @@ func (s *SubJsonService) genWireguard(inbound *model.Inbound, client model.Clien
 		peer["keepAlive"] = ka
 	}
 
+	settingsOut := map[string]any{
+		"secretKey": client.PrivateKey,
+		"peers":     []any{peer},
+	}
+	if len(addresses) > 0 {
+		settingsOut["address"] = addresses
+	}
 	outbound := map[string]any{
 		"protocol": "wireguard",
 		"tag":      "proxy",
-		"settings": map[string]any{
-			"secretKey": client.PrivateKey,
-			"address":   addresses,
-			"peers":     []any{peer},
-		},
+		"settings": settingsOut,
 	}
 	if mtu, ok := settings["mtu"].(float64); ok && mtu > 0 {
 		outbound["settings"].(map[string]any)["mtu"] = int(mtu)
