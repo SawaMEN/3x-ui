@@ -1106,9 +1106,6 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 	inbound.TrafficResetDay = normalizeTrafficResetDay(inbound.TrafficResetDay)
 	// Normalize streamSettings based on protocol
 	s.normalizeStreamSettings(inbound)
-	if err := validateInboundRuntimeProtocol(inbound.Protocol, nil); err != nil {
-		return inbound, false, err
-	}
 	if !s.FromNodeSync {
 		if err := validateInboundTLSCertificates(inbound.StreamSettings); err != nil {
 			return inbound, false, err
@@ -1249,6 +1246,15 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 			if client.ID == "" {
 				return inbound, false, common.NewError("empty client ID")
 			}
+		}
+	}
+
+	if inbound.Enable {
+		if err := ensureInboundRuntimeProtocol(inbound.Protocol); err != nil {
+			return inbound, false, err
+		}
+		if err := validateInboundRuntimeProtocol(inbound.Protocol, nil); err != nil {
+			return inbound, false, err
 		}
 	}
 
@@ -1668,6 +1674,12 @@ func (s *InboundService) SetInboundEnable(id int, enable bool) (bool, error) {
 			return false, common.NewError(conflict.String())
 		}
 	}
+	if enable && isSingBoxOnlyInboundProtocol(inbound.Protocol) {
+		if err := ensureInboundRuntimeProtocol(inbound.Protocol); err != nil {
+			return false, err
+		}
+	}
+
 	if err := db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(model.Inbound{}).Where("id = ?", id).
 			Update("enable", enable).Error; err != nil {
@@ -1681,16 +1693,6 @@ func (s *InboundService) SetInboundEnable(id int, enable bool) (bool, error) {
 		return false, err
 	}
 	inbound.Enable = enable
-
-	if inbound.Protocol == model.NaiveProxy || inbound.Protocol == model.AnyTLS || inbound.Protocol == model.ShadowTLS {
-		core, coreErr := (&SettingService{}).GetCoreType()
-		if coreErr != nil {
-			return false, coreErr
-		}
-		if core != CoreTypeSingBox {
-			return false, nil
-		}
-	}
 
 	needRestart := false
 	rt, push, _, perr := s.nodePushPlan(inbound)
@@ -1757,9 +1759,6 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 
 	oldInbound, err := s.GetInbound(inbound.Id)
 	if err != nil {
-		return inbound, false, err
-	}
-	if err := validateInboundRuntimeProtocol(inbound.Protocol, oldInbound); err != nil {
 		return inbound, false, err
 	}
 	if err := s.normalizeAmneziaWGSettings(inbound, oldInbound.Settings); err != nil {
@@ -1840,6 +1839,15 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 			return inbound, false, vkErr
 		}
 		vkNeedRestart = restart
+	}
+
+	if inbound.Enable {
+		if err := ensureInboundRuntimeProtocol(inbound.Protocol); err != nil {
+			return inbound, false, err
+		}
+		if err := validateInboundRuntimeProtocol(inbound.Protocol, oldInbound); err != nil {
+			return inbound, false, err
+		}
 	}
 
 	needRestart := false

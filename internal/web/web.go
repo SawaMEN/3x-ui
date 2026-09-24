@@ -637,6 +637,45 @@ func (s *Server) start(restartXray bool, startTgBot bool) (err error) {
 		},
 		SetNeedRestart: func() { s.xrayService.SetToNeedRestart() },
 	}))
+	service.SetInboundCoreSwitcher(func(ctx context.Context, target string) error {
+		if target != service.CoreTypeSingBox {
+			return fmt.Errorf("inbound core switch supports sing-box only, got %q", target)
+		}
+		oldCore, err := s.settingService.GetCoreType()
+		if err != nil {
+			return err
+		}
+		if oldCore == target {
+			return nil
+		}
+
+		// Match the settings-page core switch transaction: stop the selected
+		// engine first, persist the new core, start it, and roll back on failure.
+		if oldCore == service.CoreTypeSingBox {
+			_ = (&service.SingBoxService{}).Stop(ctx)
+		} else {
+			_ = s.xrayService.StopXray()
+		}
+		if err := s.settingService.SetCoreType(target); err != nil {
+			if oldCore == service.CoreTypeSingBox {
+				_ = (&service.SingBoxService{}).Restart(ctx)
+			} else {
+				_ = s.xrayService.RestartXray(true)
+			}
+			return err
+		}
+
+		if err := (&service.SingBoxService{}).Restart(ctx); err != nil {
+			_ = s.settingService.SetCoreType(oldCore)
+			if oldCore == service.CoreTypeSingBox {
+				_ = (&service.SingBoxService{}).Restart(ctx)
+			} else {
+				_ = s.xrayService.RestartXray(true)
+			}
+			return err
+		}
+		return nil
+	})
 	runtime.GetManager().SetNodeEgressResolver(&s.settingService)
 	// Supply the master client certificate for nodes in mtls mode. Issued lazily
 	// from the node CA on first use; runtime stays free of a service import.
