@@ -208,6 +208,7 @@ function InboundList({
     trafficDiff,
     onRowAction,
     onSwitchEnable,
+    reorderEnabled,
   });
 
   const tableScrollX = useMemo(
