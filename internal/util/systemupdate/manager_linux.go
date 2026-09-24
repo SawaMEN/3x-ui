@@ -50,7 +50,7 @@ func (d distroInfo) distributionForPackages() string {
 	return d.id
 }
 
-var packageVersionPattern = regexp.MustCompile(`^(.+)-([0-9][^[:space:]]*)[[:space:]]+<[[:space:]]+(.+)$`)
+var packageVersionPattern = regexp.MustCompile("^(.+)-([0-9][^[:space:]]*)[[:space:]]+<[[:space:]]+(.+)$")
 
 func GetStatus(ctx context.Context) (Status, error) {
 	info := detectDistribution()
