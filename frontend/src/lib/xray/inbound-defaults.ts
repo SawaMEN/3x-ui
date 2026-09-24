@@ -291,7 +291,7 @@ export function createDefaultShadowTlsInboundSettings(): ShadowTlsInboundSetting
   return {
     version: 3,
     handshake: {
-      server: '',
+      server: 'cloudflare.com',
       serverPort: 443,
     },
     strictMode: false,

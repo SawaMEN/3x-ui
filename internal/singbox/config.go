@@ -534,11 +534,22 @@ func TranslateXrayInbound(raw map[string]any) (map[string]any, error) {
 		if version != 3 {
 			return nil, fmt.Errorf("inbound %q ShadowTLS requires protocol version 3", rawString(raw, "tag"))
 		}
+
+		wildcard := strings.TrimSpace(rawString(settings, "wildcardSni"))
+		if wildcard != "" {
+			if wildcard != "off" && wildcard != "authed" && wildcard != "all" {
+				return nil, fmt.Errorf("inbound %q has invalid ShadowTLS wildcardSni %q", rawString(raw, "tag"), wildcard)
+			}
+		}
+
 		handshake := rawObject(settings, "handshake")
 		server := strings.TrimSpace(rawString(handshake, "server"))
 		if server == "" {
 			// Accept the common normalized alias used by imported/translated configs.
 			server = strings.TrimSpace(rawString(handshake, "address"))
+		}
+		if server == "" && wildcard != "all" {
+			server = "cloudflare.com"
 		}
 		serverPort := rawInt(handshake, "serverPort")
 		if serverPort <= 0 {
@@ -549,20 +560,26 @@ func TranslateXrayInbound(raw map[string]any) (map[string]any, error) {
 		if serverPort <= 0 {
 			serverPort = rawInt(handshake, "port")
 		}
-		if server == "" || serverPort <= 0 || serverPort > 65535 {
+		if serverPort <= 0 && wildcard == "all" {
+			// sing-box uses (servername):443 for wildcard_sni=all, so the
+			// configured handshake server may omit both address and port.
+			serverPort = 443
+		}
+		if (server == "" && wildcard != "all") || serverPort <= 0 || serverPort > 65535 {
 			return nil, fmt.Errorf("inbound %q ShadowTLS requires a valid handshake server and port", rawString(raw, "tag"))
 		}
+
 		out["version"] = 3
-		out["handshake"] = map[string]any{
-			"server": server,
+		handshakeOut := map[string]any{
 			"server_port": serverPort,
-			"domain_resolver": "local",
 		}
+		if server != "" {
+			handshakeOut["server"] = server
+			handshakeOut["domain_resolver"] = "local"
+		}
+		out["handshake"] = handshakeOut
 		out["strict_mode"] = rawBool(settings, "strictMode")
-		if wildcard := strings.TrimSpace(rawString(settings, "wildcardSni")); wildcard != "" {
-			if wildcard != "off" && wildcard != "authed" && wildcard != "all" {
-				return nil, fmt.Errorf("inbound %q has invalid ShadowTLS wildcardSni %q", rawString(raw, "tag"), wildcard)
-			}
+		if wildcard != "" {
 			out["wildcard_sni"] = wildcard
 		}
 	}

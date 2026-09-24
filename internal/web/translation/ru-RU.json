@@ -723,9 +723,9 @@
           "HANDSHAKE_STANDARD": "Стандартный",
           "HANDSHAKE_NO_WAIT": "Без ожидания"
         },
-    "shadowTlsHandshakeServer": "Сервер рукопожатия",
-    "shadowTlsHandshakeServerHint": "Сервер для внешнего TLS-рукопожатия. Укажите реальное имя HTTPS-сервера, например cloudflare.com.",
-    "shadowTlsHandshakeServerRequired": "Укажите сервер рукопожатия.",
+    "shadowTlsHandshakeServer": "Сервер рукопожатия (обязателен)",
+    "shadowTlsHandshakeServerHint": "Рукопожатие — это подключение ShadowTLS к внешнему HTTPS-серверу для имитации обычного TLS-трафика. По умолчанию: cloudflare.com. Адрес можно оставить пустым только при Wildcard SNI = «Все».",
+    "shadowTlsHandshakeServerRequired": "Сервер рукопожатия обязателен. По умолчанию используется cloudflare.com.",
     "shadowTlsHandshakePort": "Порт рукопожатия",
     "shadowTlsHandshakePortHint": "Порт сервера рукопожатия. Обычно используется 443.",
     "shadowTlsStrictMode": "Строгий режим",

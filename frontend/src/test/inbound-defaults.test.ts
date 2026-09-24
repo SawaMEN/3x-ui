@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   createDefaultHttpInboundSettings,
+  createDefaultShadowTlsInboundSettings,
   createDefaultHysteriaClient,
   createDefaultHysteriaInboundSettings,
   createDefaultMixedInboundSettings,
@@ -104,6 +105,12 @@ describe('createDefaultTuicClient', () => {
 });
 
 describe('createDefault*InboundSettings factories', () => {
+  it('shadowtls uses a default handshake server', () => {
+    const s = createDefaultShadowTlsInboundSettings();
+    expect(s.handshake.server).toBe('cloudflare.com');
+    expect(s.handshake.serverPort).toBe(443);
+  });
+
   it('vless', () => {
     const s = createDefaultVlessInboundSettings();
     expect(s).toMatchSnapshot();

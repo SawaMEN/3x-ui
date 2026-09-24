@@ -723,9 +723,9 @@
           "HANDSHAKE_STANDARD": "Standard",
           "HANDSHAKE_NO_WAIT": "No-wait"
         },
-    "shadowTlsHandshakeServer": "Handshake server",
-    "shadowTlsHandshakeServerHint": "Server used for the outer TLS handshake. Use a real HTTPS hostname, for example cloudflare.com.",
-    "shadowTlsHandshakeServerRequired": "Handshake server is required.",
+    "shadowTlsHandshakeServer": "Handshake server (required)",
+    "shadowTlsHandshakeServerHint": "The handshake is the external HTTPS server ShadowTLS connects to to imitate normal TLS traffic. Default: cloudflare.com. The address may be empty only when Wildcard SNI = All.",
+    "shadowTlsHandshakeServerRequired": "Handshake server is required. The default is cloudflare.com.",
     "shadowTlsHandshakePort": "Handshake port",
     "shadowTlsHandshakePortHint": "Port of the handshake server. Usually 443.",
     "shadowTlsStrictMode": "Strict mode",
