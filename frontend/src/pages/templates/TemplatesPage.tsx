@@ -30,7 +30,7 @@ import {
 } from '@ant-design/icons';
 
 import AppSidebar from '@/layouts/AppSidebar';
-import { HttpUtil, ClipboardManager, FileManager } from '@/utils';
+import { HttpUtil, ClipboardManager } from '@/utils';
 import { useTheme } from '@/hooks/useTheme';
 import './TemplatesPage.css';
 
@@ -254,11 +254,17 @@ export default function TemplatesPage() {
 
   const exportDetail = useCallback(async () => {
     if (!detail) return;
-    FileManager.downloadTextFile(
-      pretty(detail.content),
-      `${detail.title.replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '') || 'template'}.json`,
-      { type: 'application/json;charset=utf-8' },
-    );
+    const safeName =
+      detail.title.replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '') || 'template';
+    const blob = new Blob([pretty(detail.content)], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${safeName}.json`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
   }, [detail]);
 
   const copyDetail = useCallback(async () => {
