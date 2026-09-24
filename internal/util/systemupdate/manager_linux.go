@@ -110,530 +110,6 @@ func GetStatus(ctx context.Context) (Status, error) {
 	status.CanUpdate = status.RunningAsRoot && (status.UpdatesAvailable || status.MissingPackages)
 
 	if info.manager == "pacman" {
-		status.Notes = append(status.Notes, "Arch Linux требует согласованного обновления через pacman -Syu; даже при выборе только зависимостей 3x-ui менеджер может обновить связанные системные пакеты.")
-	}
-	status.Notes = append(status.Notes,
-		"Зависимости новых протоколов: WireGuard, AmneziaWG и VK-Turn используют iproute2/iproute и iptables для сетевого стека и маршрутизации; MTProto/Telemt, TUIC, Naive, Mieru и Psiphon используют curl, tar, ca-certificates, openssl и socat для загрузки/запуска и TLS/туннельного окружения.",
-		"Для Hysteria/TUIC/Naive и TLS-протоколов требуются актуальные ca-certificates и openssl; для UDP-маршрутизации и порт-хоппинга используются iproute2/iproute и iptables. Отдельные wireguard-tools и kernel-модули WireGuard здесь не требуются: соответствующие протоколы обслуживаются самим Xray/sidecar.",
-	)
-	if kernel.UpdateAvailable {
-		status.Notes = append(status.Notes, "После обновления ядра потребуется перезагрузка сервера, чтобы запустить новое ядро.")
-	}
-	if kernel.RebootRequired {
-		status.Notes = append(status.Notes, "Для применения уже установленного обновления системы требуется перезагрузка.")
-	}
-	if !status.RunningAsRoot {
-		status.Notes = append(status.Notes, "Для установки обновлений панель должна работать с root-правами.")
-	}
-	return status, nil
-}
-func Refresh(ctx context.Context) (Status, error) {
-	info := detectDistribution()
-	if info.manager == "" {
-		return Status{}, fmt.Errorf("unsupported Linux distribution or package manager")
-	}
-
-	refreshErr := refreshPackageDatabase(ctx, info.manager)
-	status, statusErr := GetStatus(ctx)
-	if statusErr != nil {
-		if refreshErr != nil {
-			return status, fmt.Errorf("package metadata refresh failed: %w; status check failed: %v", refreshErr, statusErr)
-		}
-		return status, statusErr
-	}
-	if refreshErr != nil {
-		status.Notes = append(status.Notes,
-			"Не удалось обновить локальный индекс пакетов; ниже показаны обновления из уже сохранённого кэша. Проверьте сетевое соединение и повторите проверку.",
-		)
-	}
-	return status, nil
-}
-
-func newUpdateContext(_ context.Context) (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.Background(), commandTimeout)
-}
-
-func Apply(ctx context.Context) (UpdateResult, error) {
-	updateMu.Lock()
-	defer updateMu.Unlock()
-
-	if os.Geteuid() != 0 {
-		return UpdateResult{}, fmt.Errorf("system updates require root privileges")
-	}
-
-	info := detectDistribution()
-	if info.manager == "" {
-		return UpdateResult{}, fmt.Errorf("unsupported Linux distribution or package manager")
-	}
-
-	updateCtx, cancel := newUpdateContext(ctx)
-	defer cancel()
-
-	if err := refreshPackageDatabase(updateCtx, info.manager); err != nil {
-		return UpdateResult{}, err
-	}
-	status, err := GetStatus(updateCtx)
-	if err != nil {
-		return UpdateResult{}, err
-	}
-
-	missing := make([]string, 0)
-	updates := make([]string, 0)
-	for _, item := range status.Packages {
-		if item.Required && !item.Installed {
-			missing = append(missing, item.Name)
-			continue
-		}
-		if (item.Required || item.Kernel) && item.UpdateAvailable {
-			updates = append(updates, item.Name)
-		}
-	}
-	sort.Strings(missing)
-	sort.Strings(updates)
-
-	// Keep the update scope limited to dependencies required by 3x-ui and its
-	// supported runtime features. On Arch Linux, pacman requires -Syu for a
-	// consistent upgrade and may therefore refresh other packages as part of the
-	// transaction; this is a package-manager constraint, not our selection scope.
-	outputs := make([]string, 0, 2)
-	if len(missing) > 0 && info.manager != "pacman" {
-		args, ok := packageInstallCommand(info.manager, missing)
-		if !ok {
-			return UpdateResult{}, fmt.Errorf("unsupported package install command for %s", info.manager)
-		}
-		output, installErr := runCommand(updateCtx, args[0], args[1:]...)
-		outputs = append(outputs, output)
-		if installErr != nil {
-			result := UpdateResult{
-				Updated:        false,
-				Output:         truncateOutput(strings.Join(outputs, "\n"), 20000),
-				RebootRequired: status.Kernel.RebootRequired,
-				Error:          truncateOutput(installErr.Error(), 4000),
-			}
-			return result, fmt.Errorf("required package installation failed: %s", result.Error)
-		}
-	}
-
-	if info.manager == "pacman" && len(missing) > 0 {
-		updates = append(updates, missing...)
-		sort.Strings(updates)
-	}
-
-	if len(updates) == 0 {
-		return UpdateResult{
-			Updated:        len(missing) > 0,
-			Output:         truncateOutput(strings.Join(outputs, "\n"), 20000),
-			RebootRequired: status.Kernel.RebootRequired,
-		}, nil
-	}
-
-	upgradeArgs := packageUpgradeCommand(info.manager, updates)
-	if len(upgradeArgs) == 0 {
-		return UpdateResult{}, fmt.Errorf("unsupported package manager: %s", info.manager)
-	}
-	output, upgradeErr := runCommand(updateCtx, upgradeArgs[0], upgradeArgs[1:]...)
-	outputs = append(outputs, output)
-
-	result := UpdateResult{
-		Updated:        upgradeErr == nil,
-		Output:         truncateOutput(strings.Join(outputs, "\n"), 20000),
-		RebootRequired: status.Kernel.UpdateAvailable || status.Kernel.RebootRequired,
-	}
-	if upgradeErr != nil {
-		result.Error = truncateOutput(upgradeErr.Error(), 4000)
-		return result, fmt.Errorf("system update failed: %s", result.Error)
-	}
-
-	result.RebootRequired = result.RebootRequired || rebootRequired(info.manager)
-	return result, nil
-}
-
-func packageInstallCommand(manager string, names []string) ([]string, bool) {
-	if len(names) == 0 {
-		return nil, true
-	}
-	switch manager {
-	case "apt-get":
-		return append([]string{"apt-get", "install", "-y", "--no-install-recommends"}, names...), true
-	case "dnf":
-		return append([]string{"dnf", "install", "-y"}, names...), true
-	case "yum":
-		return append([]string{"yum", "install", "-y"}, names...), true
-	case "zypper":
-		return append([]string{"zypper", "--non-interactive", "install", "-y"}, names...), true
-	case "apk":
-		return append([]string{"apk", "add", "--no-cache"}, names...), true
-	default:
-		return nil, false
-	}
-}
-
-func packageUpgradeCommand(manager string, names []string) []string {
-	if len(names) == 0 {
-		return []string{}
-	}
-	switch manager {
-	case "apt-get":
-		return append([]string{"apt-get", "install", "-y", "--no-install-recommends"}, names...)
-	case "dnf":
-		return append([]string{"dnf", "upgrade", "-y"}, names...)
-	case "yum":
-		return append([]string{"yum", "update", "-y"}, names...)
-	case "zypper":
-		return append([]string{"zypper", "--non-interactive", "update", "-y"}, names...)
-	case "apk":
-		return append([]string{"apk", "upgrade", "--no-cache"}, names...)
-	case "pacman":
-		return append([]string{"pacman", "-Syu", "--noconfirm", "--needed"}, names...)
-	default:
-		return []string{}
-	}
-}
-
-func detectDistribution() distroInfo {
-	data, err := os.ReadFile("/etc/os-release")
-	if err != nil {
-		return distroInfo{}
-	}
-	values := map[string]string{}
-	for _, line := range strings.Split(string(data), "\n") {
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) != 2 {
-			continue
-		}
-		values[parts[0]] = strings.Trim(strings.TrimSpace(parts[1]), "\"")
-	}
-	id := strings.ToLower(values["ID"])
-	like := strings.ToLower(values["ID_LIKE"])
-	switch {
-	case id == "ubuntu" || id == "debian" || strings.Contains(like, "debian"):
-		return distroInfo{id: id, version: values["VERSION_ID"], manager: "apt-get"}
-	case id == "fedora":
-		return distroInfo{id: id, version: values["VERSION_ID"], manager: "dnf"}
-	case id == "amzn" || id == "rhel" || id == "almalinux" || id == "rocky" || id == "ol" || strings.Contains(like, "rhel") || strings.Contains(like, "fedora"):
-		if commandExists("dnf") {
-			return distroInfo{id: id, version: values["VERSION_ID"], manager: "dnf"}
-		}
-		return distroInfo{id: id, version: values["VERSION_ID"], manager: "yum"}
-	case id == "centos":
-		if commandExists("dnf") {
-			return distroInfo{id: id, version: values["VERSION_ID"], manager: "dnf"}
-		}
-		return distroInfo{id: id, version: values["VERSION_ID"], manager: "yum"}
-	case id == "arch" || strings.Contains(like, "arch") || id == "manjaro" || id == "parch":
-		return distroInfo{id: id, version: values["VERSION_ID"], manager: "pacman"}
-	case id == "opensuse-tumbleweed" || id == "opensuse-leap" || strings.Contains(id, "opensuse") || strings.Contains(like, "suse"):
-		return distroInfo{id: id, version: values["VERSION_ID"], manager: "zypper"}
-	case id == "alpine":
-		return distroInfo{id: id, version: values["VERSION_ID"], manager: "apk"}
-	default:
-		if commandExists("apt-get") {
-			return distroInfo{id: id, version: values["VERSION_ID"], manager: "apt-get"}
-		}
-		return distroInfo{}
-	}
-}
-
-func requiredPackages(distribution string) []string {
-	var packages []string
-	switch distribution {
-	case "ubuntu", "debian", "armbian":
-		packages = []string{"cron", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl", "util-linux", "iproute2", "iptables"}
-	case "fedora", "amzn", "rhel", "almalinux", "rocky", "ol", "centos":
-		packages = []string{"cronie", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl", "util-linux", "iproute", "iptables"}
-	case "arch", "manjaro", "parch":
-		packages = []string{"cronie", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl", "util-linux", "iproute2", "iptables"}
-	case "opensuse-tumbleweed", "opensuse-leap":
-		packages = []string{"cron", "curl", "tar", "timezone", "socat", "ca-certificates", "openssl", "util-linux", "iproute2", "iptables"}
-	case "alpine":
-		packages = []string{"dcron", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl", "util-linux", "iproute2", "iptables"}
-	default:
-		packages = []string{"cron", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl", "util-linux", "iproute2", "iptables"}
-	}
-
-	addPackage := func(name string) {
-		if name == "" {
-			return
-		}
-		for _, existing := range packages {
-			if existing == name {
-				return
-			}
-		}
-		packages = append(packages, name)
-	}
-
-	// The panel can use pg_dump/pg_restore when PostgreSQL is selected. Mirror
-	// the package names used by install.sh/update.sh so the system update page
-	// can repair a missing client as well.
-	if config.GetDBKind() == "postgres" {
-		switch distribution {
-		case "ubuntu", "debian", "armbian", "alpine":
-			addPackage("postgresql-client")
-		case "fedora", "amzn", "rhel", "almalinux", "rocky", "ol", "centos",
-			"arch", "manjaro", "parch", "opensuse-tumbleweed", "opensuse-leap":
-			addPackage("postgresql")
-		}
-	}
-
-	return packages
-}
-func collectPackageStatuses(
-	distribution string,
-	upgrades map[string]string,
-	lookup func(string) (string, bool),
-) ([]PackageStatus, []PackageStatus, bool) {
-	packages := make([]PackageStatus, 0, len(requiredPackages(distribution))+len(upgrades))
-	seen := make(map[string]bool)
-	missing := false
-
-	appendPackage := func(name, availableVersion string, required, kernel bool) {
-		if name == "" || seen[name] {
-			return
-		}
-		installedVersion, installed := lookup(name)
-		item := PackageStatus{
-			Name:             name,
-			InstalledVersion: installedVersion,
-			AvailableVersion: availableVersion,
-			Installed:        installed,
-			Required:         required,
-			Kernel:           kernel,
-			UpdateAvailable:  packageUpdateAvailable(installed, installedVersion, availableVersion),
-		}
-		if required && !installed {
-			missing = true
-		}
-		packages = append(packages, item)
-		seen[name] = true
-	}
-
-	// Only dependencies that 3x-ui and its supported runtime features rely on
-	// are displayed here. Unrelated OS updates are intentionally omitted.
-	for _, name := range requiredPackages(distribution) {
-		appendPackage(name, upgrades[name], true, isKernelPackage(name))
-	}
-
-	// Kernel packages are relevant independently of whether they are a direct
-	// userspace dependency, because network/runtime features may require the
-	// updated kernel and a reboot.
-	for name, availableVersion := range upgrades {
-		if seen[name] || !isKernelPackage(name) {
-			continue
-		}
-		installedVersion, installed := lookup(name)
-		if !installed {
-			continue
-		}
-		appendPackage(name, availableVersion, false, true)
-	}
-
-	sort.Slice(packages, func(i, j int) bool {
-		if packages[i].UpdateAvailable != packages[j].UpdateAvailable {
-			return packages[i].UpdateAvailable
-		}
-		if packages[i].Kernel != packages[j].Kernel {
-			return packages[i].Kernel
-		}
-		return packages[i].Name < packages[j].Name
-	})
-
-	kernelPackages := make([]PackageStatus, 0)
-	for _, item := range packages {
-		if item.Kernel {
-			kernelPackages = append(kernelPackages, item)
-		}
-	}
-	return packages, kernelPackages, missing
-}
-
-func packageUpdateAvailable(installed bool, installedVersion, availableVersion string) bool {
-	return installed && availableVersion != "" && installedVersion != "" && installedVersion != availableVersion
-}
-
-func refreshPackageDatabase(ctx context.Context, manager string) error {
-	switch manager {
-	case "apt-get":
-		_, err := runCommand(ctx, "apt-get", "update")
-		return err
-	case "dnf":
-		_, err := runCommand(ctx, "dnf", "makecache", "-y")
-		return err
-	case "yum":
-		_, err := runCommand(ctx, "yum", "makecache", "-y")
-		return err
-	case "zypper":
-		_, err := runCommand(ctx, "zypper", "refresh")
-		return err
-	case "pacman":
-		return nil
-	case "apk":
-		_, err := runCommand(ctx, "apk", "update")
-		return err
-	default:
-		return fmt.Errorf("unsupported package manager: %s", manager)
-	}
-}
-
-func listAvailableUpdates(ctx context.Context, manager string) (map[string]string, error) {
-	switch manager {
-	case "apt-get":
-		output, err := runCommand(ctx, "apt", "list", "--upgradable")
-		return parseAptUpdates(output), err
-	case "dnf", "yum":
-		output, err := runCommand(ctx, manager, "-q", "check-update")
-		if err != nil {
-			var exitErr *exec.ExitError
-			if !errors.As(err, &exitErr) || exitErr.ExitCode() != 100 {
-				if strings.TrimSpace(output) == "" {
-					return nil, err
-				}
-			}
-		}
-		return parseDnfUpdates(output), nil
-	case "zypper":
-		output, err := runCommand(ctx, "zypper", "--non-interactive", "list-updates")
-		if err != nil && strings.TrimSpace(output) == "" {
-			return nil, err
-		}
-		return parseZypperUpdates(output), nil
-	case "pacman":
-		if commandExists("checkupdates") {
-			output, err := runCommand(ctx, "checkupdates")
-			if err != nil && strings.TrimSpace(output) == "" {
-				return nil, err
-			}
-			return parsePacmanUpdates(output), nil
-		}
-		output, err := runCommand(ctx, "pacman", "-Qu")
-		if err != nil && strings.TrimSpace(output) == "" {
-			return nil, err
-		}
-		return parsePacmanQueryUpdates(output), nil
-	case "apk":
-		output, err := runCommand(ctx, "apk", "version", "-l", "<")
-		if err != nil {
-			return nil, err
-		}
-		return parseApkUpdates(output), nil
-	default:
-		return nil, fmt.Errorf("unsupported package manager: %s", manager)
-	}
-}
-
-var installedApkPackagePattern = regexp.MustCompile(`^(.+)-([0-9][^[:space:]]*)//go:build linux
-
-package systemupdate
-
-import (
-	"bufio"
-	"context"
-	"errors"
-	"fmt"
-	"os"
-	"os/exec"
-	"regexp"
-	"sort"
-	"strings"
-	"sync"
-	"time"
-
-	"github.com/SawaMEN/3x-ui/v3/internal/config"
-)
-
-const commandTimeout = 30 * time.Minute
-
-var updateMu sync.Mutex
-
-type distroInfo struct {
-	id      string
-	version string
-	manager string
-}
-
-func (d distroInfo) distributionForPackages() string {
-	if d.id == "armbian" {
-		return "armbian"
-	}
-	if d.manager == "apt-get" {
-		return "ubuntu"
-	}
-	if d.manager == "dnf" || d.manager == "yum" {
-		return "rhel"
-	}
-	if d.manager == "pacman" {
-		return "arch"
-	}
-	if d.manager == "zypper" {
-		return "opensuse-leap"
-	}
-	if d.manager == "apk" {
-		return "alpine"
-	}
-	return d.id
-}
-
-var packageVersionPattern = regexp.MustCompile(`^(.+)-([0-9][^[:space:]]*)[[:space:]]+<[[:space:]]+(.+)$`)
-
-func GetStatus(ctx context.Context) (Status, error) {
-	info := detectDistribution()
-	status := Status{
-		Distribution:   info.id,
-		Version:        info.version,
-		PackageManager: info.manager,
-		Supported:      info.manager != "",
-		RunningAsRoot:  os.Geteuid() == 0,
-	}
-	if !status.Supported {
-		return status, fmt.Errorf("unsupported Linux distribution or package manager")
-	}
-
-	upgrades, err := listAvailableUpdates(ctx, info.manager)
-	if err != nil {
-		return status, err
-	}
-
-	installedVersions, _ := installedPackageVersions(info.manager)
-	packages, kernelPackages, missingPackages := collectPackageStatuses(
-		info.distributionForPackages(),
-		info.manager,
-		upgrades,
-		func(name string) (string, bool) {
-			if version, ok := installedVersions[name]; ok {
-				return version, true
-			}
-			return installedPackageVersion(info.manager, name)
-		},
-	)
-	status.Packages = packages
-	status.MissingPackages = missingPackages
-
-	kernel := KernelStatus{RunningVersion: runtimeKernelVersion()}
-	kernel.RebootRequired = rebootRequired(info.manager)
-
-	for _, item := range kernelPackages {
-		if !item.UpdateAvailable {
-			continue
-		}
-		kernel.UpdateAvailable = true
-		kernel.PackageNames = append(kernel.PackageNames, item.Name)
-		if kernel.AvailableVersion == "" {
-			kernel.AvailableVersion = item.AvailableVersion
-		} else if strings.Compare(kernel.AvailableVersion, item.AvailableVersion) < 0 {
-			kernel.AvailableVersion = item.AvailableVersion
-		}
-	}
-	sort.Strings(kernel.PackageNames)
-	status.Kernel = kernel
-	status.UpdatesAvailable = kernel.UpdateAvailable
-	for _, item := range status.Packages {
-		if item.UpdateAvailable {
-			status.UpdatesAvailable = true
-		}
-	}
-	status.CanUpdate = status.RunningAsRoot && (status.UpdatesAvailable || status.MissingPackages)
-
-	if info.manager == "pacman" {
 		status.Notes = append(status.Notes, "Arch Linux требует полного обновления системы через pacman -Syu; частичные обновления не поддерживаются.")
 	}
 	status.Notes = append(status.Notes,
@@ -729,12 +205,6 @@ func Apply(ctx context.Context) (UpdateResult, error) {
 	}
 
 	upgradeArgs := packageUpgradeCommand(info.manager)
-	if info.manager == "pacman" && len(missing) > 0 {
-		upgradeArgs = append(upgradeArgs, missing...)
-	}
-	if len(upgradeArgs) == 0 {
-		return UpdateResult{}, fmt.Errorf("unsupported package manager: %s", info.manager)
-	}
 	output, upgradeErr := runCommand(updateCtx, upgradeArgs[0], upgradeArgs[1:]...)
 	outputs = append(outputs, output)
 
@@ -772,19 +242,30 @@ func packageInstallCommand(manager string, names []string) ([]string, bool) {
 	}
 }
 
-func packageUpgradeCommand(manager string) []string {
+func packageUpgradeCommand(manager string, names ...[]string) []string {
+	selected := []string{}
+	if len(names) > 0 {
+		selected = names[0]
+	}
+
 	switch manager {
 	case "apt-get":
-		return []string{"apt-get", "upgrade", "-y", "--no-install-recommends"}
+		if len(selected) > 0 { return append([]string{"apt-get", "install", "-y", "--no-install-recommends"}, selected...) }
+		return []string{"apt-get", "upgrade", "-y", "--with-new-pkgs", "--no-install-recommends"}
 	case "dnf":
+		if len(selected) > 0 { return append([]string{"dnf", "upgrade", "-y"}, selected...) }
 		return []string{"dnf", "upgrade", "-y"}
 	case "yum":
+		if len(selected) > 0 { return append([]string{"yum", "update", "-y"}, selected...) }
 		return []string{"yum", "update", "-y"}
 	case "zypper":
+		if len(selected) > 0 { return append([]string{"zypper", "--non-interactive", "update", "-y"}, selected...) }
 		return []string{"zypper", "--non-interactive", "update", "-y"}
 	case "apk":
+		if len(selected) > 0 { return append([]string{"apk", "upgrade", "--no-cache"}, selected...) }
 		return []string{"apk", "upgrade", "--no-cache"}
 	case "pacman":
+		if len(selected) > 0 { return append([]string{"pacman", "-Syu", "--noconfirm", "--needed"}, selected...) }
 		return []string{"pacman", "-Syu", "--noconfirm", "--needed"}
 	default:
 		return []string{}
@@ -897,7 +378,6 @@ func requiredPackages(distribution string) []string {
 }
 func collectPackageStatuses(
 	distribution string,
-	manager string,
 	upgrades map[string]string,
 	lookup func(string) (string, bool),
 ) ([]PackageStatus, []PackageStatus, bool) {
@@ -931,25 +411,14 @@ func collectPackageStatuses(
 	}
 
 	for name, availableVersion := range upgrades {
-		if seen[name] {
+		if seen[name] || !isKernelPackage(name) {
 			continue
 		}
 		installedVersion, installed := lookup(name)
 		if !installed {
-			// An update list should normally contain installed packages only.
-			// Ignore malformed/package-manager-specific entries instead of
-			// presenting them as missing dependencies.
 			continue
 		}
-		packages = append(packages, PackageStatus{
-			Name:             name,
-			InstalledVersion: installedVersion,
-			AvailableVersion: availableVersion,
-			Installed:        true,
-			Kernel:           isKernelPackage(name),
-			UpdateAvailable:  packageUpdateAvailable(true, installedVersion, availableVersion),
-		})
-		seen[name] = true
+		appendPackage(name, availableVersion, false, true)
 	}
 
 	sort.Slice(packages, func(i, j int) bool {
@@ -1045,7 +514,7 @@ func listAvailableUpdates(ctx context.Context, manager string) (map[string]strin
 	}
 }
 
-)
+var installedApkPackagePattern = regexp.MustCompile("^(.+)-([0-9][^[:space:]]*)$")
 
 func installedPackageVersions(manager string) (map[string]string, error) {
 	result := map[string]string{}
@@ -1094,6 +563,7 @@ func installedPackageVersions(manager string) (map[string]string, error) {
 	}
 	return result, scanner.Err()
 }
+
 func installedPackageVersion(manager, name string) (string, bool) {
 	switch manager {
 	case "apt-get":
