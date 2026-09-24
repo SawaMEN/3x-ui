@@ -76,6 +76,7 @@ func allModels() []any {
 		&model.ApiToken{},
 		&model.LocalTemplate{},
 		&model.RoutingPreset{},
+		&model.UserSession{},
 		&model.ClientRecord{},
 		&model.ClientInbound{},
 		&model.ClientHwid{},
