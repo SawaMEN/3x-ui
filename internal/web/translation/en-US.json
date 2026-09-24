@@ -2430,7 +2430,7 @@
       "descriptionPlaceholder": "What this template is for",
       "tagsPlaceholder": "Tags separated by commas: vless, reality, xhttp",
       "previewSanitize": "Preview sanitization",
-      "sanitizeResult": "Sanitized size: {{.size}}",
+      "sanitizeResult": "Sanitized size: {{size}}",
       "noWarnings": "No secrets or host-specific values were found.",
       "invalidJson": "Configuration must be valid JSON.",
       "sanitizeFailed": "Failed to sanitize template.",
