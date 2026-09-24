@@ -677,6 +677,29 @@ func TestTranslateXrayAnyTLSInbound(t *testing.T) {
 	}
 }
 
+func TestTranslateXrayShadowTLSInboundAcceptsNormalizedHandshake(t *testing.T) {
+	raw := map[string]any{
+		"protocol": "shadowtls",
+		"tag":      "shadowtls-normalized",
+		"port":     443,
+		"settings": map[string]any{
+			"version": 3,
+			"handshake": map[string]any{
+				"address":    "cloudflare.com",
+				"server_port": "443",
+			},
+		},
+	}
+	got, err := TranslateXrayInbound(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handshake, ok := got["handshake"].(map[string]any)
+	if !ok || handshake["server"] != "cloudflare.com" || handshake["server_port"] != 443 {
+		t.Fatalf("unexpected normalized ShadowTLS handshake: %#v", got["handshake"])
+	}
+}
+
 func TestTranslateXrayShadowTLSInbound(t *testing.T) {
 	raw := map[string]any{
 		"protocol": "shadowtls",
