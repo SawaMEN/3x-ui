@@ -493,10 +493,16 @@ export default function SystemUpdateModal({
 
   const systemUpdateRows = useMemo(
     () =>
-      (systemUpdate?.packages ?? []).map((item) => ({
-        ...item,
-        key: item.kernel ? 'kernel:' + item.name : 'package:' + item.name,
-      })),
+      (systemUpdate?.packages ?? [])
+        .map((item) => ({
+          ...item,
+          key: item.kernel ? 'kernel:' + item.name : 'package:' + item.name,
+        }))
+        .sort((a, b) => {
+          if (a.updateAvailable !== b.updateAvailable) return a.updateAvailable ? -1 : 1;
+          if (a.kernel !== b.kernel) return a.kernel ? -1 : 1;
+          return a.name.localeCompare(b.name);
+        }),
     [systemUpdate],
   );
 

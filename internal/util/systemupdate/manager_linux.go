@@ -28,6 +28,28 @@ type distroInfo struct {
 	manager string
 }
 
+func (d distroInfo) distributionForPackages() string {
+	if d.id == "armbian" {
+		return "armbian"
+	}
+	if d.manager == "apt-get" {
+		return "ubuntu"
+	}
+	if d.manager == "dnf" || d.manager == "yum" {
+		return "rhel"
+	}
+	if d.manager == "pacman" {
+		return "arch"
+	}
+	if d.manager == "zypper" {
+		return "opensuse-leap"
+	}
+	if d.manager == "apk" {
+		return "alpine"
+	}
+	return d.id
+}
+
 var packageVersionPattern = regexp.MustCompile(`^(.+)-([0-9][^[:space:]]*)[[:space:]]+<[[:space:]]+(.+)$`)
 
 func GetStatus(ctx context.Context) (Status, error) {
@@ -48,40 +70,14 @@ func GetStatus(ctx context.Context) (Status, error) {
 		return status, err
 	}
 
-	required := requiredPackages(info.id)
-	for _, name := range required {
-		installedVersion, installed := installedPackageVersion(info.manager, name)
-		availableVersion := upgrades[name]
-		status.Packages = append(status.Packages, PackageStatus{
-			Name:             name,
-			InstalledVersion: installedVersion,
-			AvailableVersion: availableVersion,
-			Installed:        installed,
-			Required:         true,
-			UpdateAvailable:  installed && availableVersion != "" && availableVersion != installedVersion,
-		})
-		if !installed {
-			status.MissingPackages = true
-		}
-	}
-
-	kernelPackages := make([]PackageStatus, 0)
-	for name, version := range upgrades {
-		if !isKernelPackage(name) {
-			continue
-		}
-		installedVersion, installed := installedPackageVersion(info.manager, name)
-		kernelPackages = append(kernelPackages, PackageStatus{
-			Name:             name,
-			InstalledVersion: installedVersion,
-			AvailableVersion: version,
-			Installed:        installed,
-			Kernel:           true,
-			UpdateAvailable: packageUpdateAvailable(installed, installedVersion, version),
-		})
-	}
-	sort.Slice(kernelPackages, func(i, j int) bool { return kernelPackages[i].Name < kernelPackages[j].Name })
-	status.Packages = append(status.Packages, kernelPackages...)
+	packages, kernelPackages, missingPackages := collectPackageStatuses(
+		info.distributionForPackages(),
+		info.manager,
+		upgrades,
+		func(name string) (string, bool) { return installedPackageVersion(info.manager, name) },
+	)
+	status.Packages = packages
+	status.MissingPackages = missingPackages
 
 	kernel := KernelStatus{RunningVersion: runtimeKernelVersion()}
 	kernel.RebootRequired = rebootRequired(info.manager)
@@ -126,16 +122,26 @@ func GetStatus(ctx context.Context) (Status, error) {
 	}
 	return status, nil
 }
-
 func Refresh(ctx context.Context) (Status, error) {
 	info := detectDistribution()
 	if info.manager == "" {
 		return Status{}, fmt.Errorf("unsupported Linux distribution or package manager")
 	}
-	if err := refreshPackageDatabase(ctx, info.manager); err != nil {
-		return Status{}, err
+
+	refreshErr := refreshPackageDatabase(ctx, info.manager)
+	status, statusErr := GetStatus(ctx)
+	if statusErr != nil {
+		if refreshErr != nil {
+			return status, fmt.Errorf("package metadata refresh failed: %w; status check failed: %v", refreshErr, statusErr)
+		}
+		return status, statusErr
 	}
-	return GetStatus(ctx)
+	if refreshErr != nil {
+		status.Notes = append(status.Notes,
+			"Не удалось обновить локальный индекс пакетов; ниже показаны обновления из уже сохранённого кэша. Проверьте сетевое соединение и повторите проверку.",
+		)
+	}
+	return status, nil
 }
 
 func newUpdateContext(_ context.Context) (context.Context, context.CancelFunc) {
@@ -166,64 +172,88 @@ func Apply(ctx context.Context) (UpdateResult, error) {
 		return UpdateResult{}, err
 	}
 
-	packageNames := make([]string, 0)
-	seen := map[string]bool{}
+	missing := make([]string, 0)
 	for _, item := range status.Packages {
-		if item.Required && !seen[item.Name] && (!item.Installed || item.UpdateAvailable) {
-			seen[item.Name] = true
-			packageNames = append(packageNames, item.Name)
-		}
-		if item.Kernel && item.UpdateAvailable && !seen[item.Name] {
-			seen[item.Name] = true
-			packageNames = append(packageNames, item.Name)
+		if item.Required && !item.Installed {
+			missing = append(missing, item.Name)
 		}
 	}
-	sort.Strings(packageNames)
+	sort.Strings(missing)
 
-	var args []string
-	switch info.manager {
-	case "apt-get":
-		if len(packageNames) == 0 {
-			return UpdateResult{Updated: false, RebootRequired: status.Kernel.RebootRequired}, nil
+	outputs := make([]string, 0, 2)
+	if len(missing) > 0 && info.manager != "pacman" {
+		args, ok := packageInstallCommand(info.manager, missing)
+		if !ok {
+			return UpdateResult{}, fmt.Errorf("unsupported package install command for %s", info.manager)
 		}
-		args = append([]string{"apt-get", "install", "-y", "--no-install-recommends"}, packageNames...)
-	case "dnf":
-		if len(packageNames) == 0 {
-			return UpdateResult{Updated: false, RebootRequired: status.Kernel.RebootRequired}, nil
+		output, installErr := runCommand(updateCtx, args[0], args[1:]...)
+		outputs = append(outputs, output)
+		if installErr != nil {
+			result := UpdateResult{
+				Updated:        false,
+				Output:         truncateOutput(strings.Join(outputs, "\n"), 20000),
+				RebootRequired: status.Kernel.RebootRequired,
+				Error:          truncateOutput(installErr.Error(), 4000),
+			}
+			return result, fmt.Errorf("required package installation failed: %s", result.Error)
 		}
-		args = append([]string{"dnf", "install", "-y"}, packageNames...)
-	case "yum":
-		if len(packageNames) == 0 {
-			return UpdateResult{Updated: false, RebootRequired: status.Kernel.RebootRequired}, nil
-		}
-		args = append([]string{"yum", "install", "-y"}, packageNames...)
-	case "zypper":
-		if len(packageNames) == 0 {
-			return UpdateResult{Updated: false, RebootRequired: status.Kernel.RebootRequired}, nil
-		}
-		args = append([]string{"zypper", "--non-interactive", "install"}, packageNames...)
-	case "apk":
-		if len(packageNames) == 0 {
-			return UpdateResult{Updated: false, RebootRequired: status.Kernel.RebootRequired}, nil
-		}
-		args = append([]string{"apk", "add", "--no-cache", "--upgrade"}, packageNames...)
-	case "pacman":
-		args = append([]string{"pacman", "-Syu", "--noconfirm", "--needed"}, packageNames...)
-	default:
-		return UpdateResult{}, fmt.Errorf("unsupported package manager: %s", info.manager)
 	}
 
-	output, err := runCommand(updateCtx, args[0], args[1:]...)
+	upgradeArgs := packageUpgradeCommand(info.manager)
+	output, upgradeErr := runCommand(updateCtx, upgradeArgs[0], upgradeArgs[1:]...)
+	outputs = append(outputs, output)
+
 	result := UpdateResult{
-		Updated:        err == nil,
-		Output:         truncateOutput(output, 20000),
+		Updated:        upgradeErr == nil,
+		Output:         truncateOutput(strings.Join(outputs, "\n"), 20000),
 		RebootRequired: status.Kernel.UpdateAvailable || status.Kernel.RebootRequired,
 	}
-	if err != nil {
-		result.Error = truncateOutput(err.Error(), 4000)
+	if upgradeErr != nil {
+		result.Error = truncateOutput(upgradeErr.Error(), 4000)
 		return result, fmt.Errorf("system update failed: %s", result.Error)
 	}
+
+	result.RebootRequired = result.RebootRequired || rebootRequired(info.manager)
 	return result, nil
+}
+
+func packageInstallCommand(manager string, names []string) ([]string, bool) {
+	if len(names) == 0 {
+		return nil, true
+	}
+	switch manager {
+	case "apt-get":
+		return append([]string{"apt-get", "install", "-y", "--no-install-recommends"}, names...), true
+	case "dnf":
+		return append([]string{"dnf", "install", "-y"}, names...), true
+	case "yum":
+		return append([]string{"yum", "install", "-y"}, names...), true
+	case "zypper":
+		return append([]string{"zypper", "--non-interactive", "install", "-y"}, names...), true
+	case "apk":
+		return append([]string{"apk", "add", "--no-cache"}, names...), true
+	default:
+		return nil, false
+	}
+}
+
+func packageUpgradeCommand(manager string) []string {
+	switch manager {
+	case "apt-get":
+		return []string{"apt-get", "upgrade", "-y", "--no-install-recommends"}
+	case "dnf":
+		return []string{"dnf", "upgrade", "-y"}
+	case "yum":
+		return []string{"yum", "update", "-y"}
+	case "zypper":
+		return []string{"zypper", "--non-interactive", "update", "-y"}
+	case "apk":
+		return []string{"apk", "upgrade", "--no-cache"}
+	case "pacman":
+		return []string{"pacman", "-Syu", "--noconfirm", "--needed"}
+	default:
+		return []string{}
+	}
 }
 
 func detectDistribution() distroInfo {
@@ -330,6 +360,82 @@ func requiredPackages(distribution string) []string {
 
 	return packages
 }
+func collectPackageStatuses(
+	distribution string,
+	manager string,
+	upgrades map[string]string,
+	lookup func(string) (string, bool),
+) ([]PackageStatus, []PackageStatus, bool) {
+	packages := make([]PackageStatus, 0, len(upgrades)+len(requiredPackages(distribution)))
+	seen := make(map[string]bool)
+	missing := false
+
+	appendPackage := func(name, availableVersion string, required, kernel bool) {
+		if name == "" || seen[name] {
+			return
+		}
+		installedVersion, installed := lookup(name)
+		item := PackageStatus{
+			Name:             name,
+			InstalledVersion: installedVersion,
+			AvailableVersion: availableVersion,
+			Installed:        installed,
+			Required:         required,
+			Kernel:           kernel,
+			UpdateAvailable:  packageUpdateAvailable(installed, installedVersion, availableVersion),
+		}
+		if required && !installed {
+			missing = true
+		}
+		packages = append(packages, item)
+		seen[name] = true
+	}
+
+	for _, name := range requiredPackages(distribution) {
+		appendPackage(name, upgrades[name], true, isKernelPackage(name))
+	}
+
+	for name, availableVersion := range upgrades {
+		if seen[name] {
+			continue
+		}
+		installedVersion, installed := lookup(name)
+		if !installed {
+			// An update list should normally contain installed packages only.
+			// Ignore malformed/package-manager-specific entries instead of
+			// presenting them as missing dependencies.
+			continue
+		}
+		packages = append(packages, PackageStatus{
+			Name:             name,
+			InstalledVersion: installedVersion,
+			AvailableVersion: availableVersion,
+			Installed:        true,
+			Kernel:           isKernelPackage(name),
+			UpdateAvailable:  packageUpdateAvailable(true, installedVersion, availableVersion),
+		})
+		seen[name] = true
+	}
+
+	sort.Slice(packages, func(i, j int) bool {
+		if packages[i].UpdateAvailable != packages[j].UpdateAvailable {
+			return packages[i].UpdateAvailable
+		}
+		if packages[i].Kernel != packages[j].Kernel {
+			return packages[i].Kernel
+		}
+		return packages[i].Name < packages[j].Name
+	})
+
+	kernelPackages := make([]PackageStatus, 0)
+	for _, item := range packages {
+		if item.Kernel {
+			kernelPackages = append(kernelPackages, item)
+		}
+	}
+	return packages, kernelPackages, missing
+}
+
 func packageUpdateAvailable(installed bool, installedVersion, availableVersion string) bool {
 	return installed && availableVersion != "" && installedVersion != "" && installedVersion != availableVersion
 }
@@ -562,7 +668,8 @@ func isKernelPackage(name string) bool {
 	}
 	for _, prefix := range []string{
 		"linux-image", "linux-generic", "linux-virtual", "linux-azure",
-		"linux-oem", "linux-lowlatency", "linux-kvm", "linux-lts", "kernel",
+		"linux-oem", "linux-lowlatency", "linux-kvm", "linux-lts", "linux-headers",
+		"linux-modules", "kernel",
 	} {
 		if strings.HasPrefix(lower, prefix) {
 			return true
