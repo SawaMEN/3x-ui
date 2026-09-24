@@ -743,7 +743,8 @@
         "peerNumber": "Peer {n}",
         "peerNumberConfig": "Peer {n} config"
       },
-      "sniffingDestOverride": "Destination override"
+      "sniffingDestOverride": "Destination override",
+      "dragToReorder": "Drag to reorder"
     },
     "clients": {
       "tabBasics": "Basics",
@@ -1250,7 +1251,8 @@
       "pinnedCertPlaceholder": "base64 or hex SHA-256",
       "fetchPin": "Fetch",
       "pinFetched": "Fetched the node's current certificate",
-      "pinFetchFailed": "Could not fetch the certificate"
+      "pinFetchFailed": "Could not fetch the certificate",
+      "dragToReorder": "Drag to reorder"
     },
     "settings": {
       "defaultTag": "Default",
