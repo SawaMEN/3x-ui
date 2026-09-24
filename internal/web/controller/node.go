@@ -41,6 +41,7 @@ func (a *NodeController) initRouter(g *gin.RouterGroup) {
 	g.POST("/inbounds", a.inbounds)
 	g.POST("/probe/:id", a.probe)
 	g.POST("/updatePanel", a.updatePanel)
+	g.POST("/reorder", a.reorder)
 	g.GET("/history/:id/:metric/:bucket", a.history)
 	g.POST("/mtls/ca", a.mtlsCa)
 	g.POST("/mtls/trustCA", a.setMtlsTrustCA)
@@ -366,4 +367,19 @@ func (a *NodeController) history(c *gin.Context) {
 		return
 	}
 	jsonObj(c, a.nodeService.AggregateNodeMetric(id, metric, bucket, 60), nil)
+}
+
+func (a *NodeController) reorder(c *gin.Context) {
+	var req struct {
+		Ids []int json:"ids"
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		jsonMsg(c, "invalid reorder payload", err)
+		return
+	}
+	if err := a.nodeService.Reorder(req.Ids); err != nil {
+		jsonMsg(c, "failed to reorder nodes", err)
+		return
+	}
+	jsonMsg(c, "nodes reordered", nil)
 }
