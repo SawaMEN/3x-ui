@@ -1067,3 +1067,59 @@ body.theme-cyberpunk .sider-brand .brand-text::after {
     transform: none;
   }
 }
+
+
+/* Menu Style Gallery: the preference changes shape/selection treatment only;
+   theme colors continue to come from Ant Design/theme CSS variables. */
+.ant-sidebar.menu-style-solid .sider-nav .ant-menu-item,
+.ant-sidebar.menu-style-solid .sider-nav .ant-menu-submenu-title,
+.ant-sidebar.menu-style-solid .sider-utility .ant-menu-item {
+  border-radius: 10px !important;
+}
+
+.ant-sidebar.menu-style-solid .sider-nav .ant-menu-item-selected,
+.ant-sidebar.menu-style-solid .sider-utility .ant-menu-item-selected {
+  background-color: color-mix(in srgb, var(--ant-color-primary) 16%, var(--ant-color-bg-container)) !important;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ant-color-primary) 22%, transparent);
+}
+
+.ant-sidebar.menu-style-minimal .sider-nav .ant-menu-item,
+.ant-sidebar.menu-style-minimal .sider-nav .ant-menu-submenu-title,
+.ant-sidebar.menu-style-minimal .sider-utility .ant-menu-item {
+  border-radius: 8px !important;
+  background: transparent !important;
+}
+
+.ant-sidebar.menu-style-minimal .sider-nav .ant-menu-item-selected,
+.ant-sidebar.menu-style-minimal .sider-utility .ant-menu-item-selected {
+  position: relative;
+  background: transparent !important;
+  color: var(--ant-color-text) !important;
+}
+
+.ant-sidebar.menu-style-minimal .sider-nav .ant-menu-item-selected::before,
+.ant-sidebar.menu-style-minimal .sider-utility .ant-menu-item-selected::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--ant-color-primary);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--ant-color-primary) 34%, transparent);
+}
+
+.ant-sidebar.menu-style-minimal .sider-nav .ant-menu-item-selected::after,
+.ant-sidebar.menu-style-minimal .sider-utility .ant-menu-item-selected::after {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .ant-sidebar.menu-style-solid .sider-nav .ant-menu-item,
+  .ant-sidebar.menu-style-minimal .sider-nav .ant-menu-item,
+  .ant-sidebar.menu-style-solid .sider-nav .ant-menu-submenu-title,
+  .ant-sidebar.menu-style-minimal .sider-nav .ant-menu-submenu-title {
+    border-radius: 8px !important;
+  }
+}
