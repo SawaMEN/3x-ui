@@ -125,7 +125,8 @@
     "unpinSidebar": "Unpin sidebar",
     "subFormats": "Sub Formats",
     "telemt": "Telemt",
-    "singBox": "sing-box Configs"
+    "singBox": "sing-box Configs",
+    "templates": "Templates"
   },
   "pages": {
     "login": {
@@ -515,7 +516,7 @@
         "naiveNetworkTcp": "TCP",
         "naiveNetworkUdp": "QUIC / UDP",
         "naiveShareLinkFormat": "Hiddify link format",
-"naiveShareLinkFormatHint": "Switches only the subscription link format. Off uses standard naive+https/naive+quic. On uses the Hiddify-compatible naive:// format. With the standard format, the server address in the link must match the TLS/SNI name; when they differ, use Hiddify.",
+        "naiveShareLinkFormatHint": "Switches only the subscription link format. Off uses standard naive+https/naive+quic. On uses the Hiddify-compatible naive:// format. With the standard format, the server address in the link must match the TLS/SNI name; when they differ, use Hiddify.",
         "naiveShareLinkFormatStandard": "Standard NaiveProxy",
         "naiveShareLinkFormatHiddify": "Hiddify",
         "naiveHint": "SNI can be left empty. In Hiddify links, SNI is automatically taken from the link domain; set it manually only when the certificate uses a different hostname.",
@@ -2412,6 +2413,40 @@
       "sourceDisk": "Actual file",
       "sourceGenerated": "Generated",
       "actualTitle": "Actual sing-box configuration"
+    },
+    "templates": {
+      "title": "Template Library",
+      "subtitle": "Reusable Xray configurations with server-side secret sanitization.",
+      "add": "Add template",
+      "searchPlaceholder": "Search templates",
+      "allKinds": "All types",
+      "inbound": "Inbound",
+      "xrayConfig": "Xray config",
+      "empty": "No templates yet. Import a configuration to create your first sanitized template.",
+      "editorTitle": "Create template",
+      "kind": "Type",
+      "name": "Name",
+      "namePlaceholder": "VLESS Reality starter",
+      "descriptionPlaceholder": "What this template is for",
+      "tagsPlaceholder": "Tags separated by commas: vless, reality, xhttp",
+      "previewSanitize": "Preview sanitization",
+      "sanitizeResult": "Sanitized size: {{.size}}",
+      "noWarnings": "No secrets or host-specific values were found.",
+      "invalidJson": "Configuration must be valid JSON.",
+      "sanitizeFailed": "Failed to sanitize template.",
+      "saveFailed": "Failed to save template.",
+      "saved": "Template saved.",
+      "savedWithWarnings": "Template saved after removing sensitive values.",
+      "titleRequired": "Template name is required.",
+      "loadFailed": "Failed to load templates.",
+      "deleteTitle": "Delete this template?",
+      "deleteFailed": "Failed to delete template.",
+      "deleted": "Template deleted.",
+      "copy": "Copy JSON",
+      "copied": "JSON copied.",
+      "export": "Export JSON",
+      "noDescription": "No description.",
+      "namePlaceholderShort": "Template name"
     }
   },
   "tgbot": {
