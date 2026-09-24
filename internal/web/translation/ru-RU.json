@@ -2430,7 +2430,7 @@
       "descriptionPlaceholder": "Для чего нужен шаблон",
       "tagsPlaceholder": "Теги через запятую: vless, reality, xhttp",
       "previewSanitize": "Предпросмотр очистки",
-      "sanitizeResult": "Размер после очистки: {{.size}}",
+      "sanitizeResult": "Размер после очистки: {{size}}",
       "noWarnings": "Секретов и привязанных к хосту значений не найдено.",
       "invalidJson": "Конфигурация должна быть корректным JSON.",
       "sanitizeFailed": "Не удалось очистить шаблон.",
