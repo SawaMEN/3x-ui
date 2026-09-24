@@ -39,6 +39,7 @@ const (
 	Psiphon     Protocol = "psiphon"
 	Mieru       Protocol = "mieru"
 	VKTurnProxy Protocol = "vk-turn-proxy"
+	Sudoku       Protocol = "sudoku"
 )
 
 // User represents a user account in the 3x-ui panel.
@@ -68,7 +69,7 @@ type Inbound struct {
 	// Xray configuration fields
 	Listen            string   `json:"listen" form:"listen"`
 	Port              int      `json:"port" form:"port" validate:"gte=0,lte=65535" example:"443"`
-	Protocol          Protocol `json:"protocol" form:"protocol" validate:"required,oneof=vmess vless trojan shadowsocks wireguard hysteria http mixed tunnel tun mtproto amneziawg tuic naive mieru vk-turn-proxy" example:"vless"`
+	Protocol          Protocol `json:"protocol" form:"protocol" validate:"required,oneof=vmess vless trojan shadowsocks wireguard hysteria http mixed tunnel tun mtproto amneziawg tuic naive mieru vk-turn-proxy sudoku" example:"vless"`
 	Settings          string   `json:"settings" form:"settings"`
 	StreamSettings    string   `json:"streamSettings" form:"streamSettings"`
 	Tag               string   `json:"tag" form:"tag" gorm:"unique" example:"in-443-tcp"`
@@ -900,6 +901,7 @@ type Client struct {
 	ForwardedPorts      string           `json:"forwardedPorts,omitempty"` // AmneziaWG per-client port-forwarding spec, e.g. "80,443,8000-8100"
 	Secret              string           `json:"secret,omitempty" example:"ee1234567890abcdef1234567890abcd7777772e636c6f7564666c6172652e636f6d"`
 	AdTag               string           `json:"adTag,omitempty" example:"0123456789abcdef0123456789abcdef"`
+	SudokuPrivateKey    string           `json:"sudokuPrivateKey,omitempty" gorm:"-"`
 	Email               string           `json:"email"`                        // Client email identifier
 	LimitIP             int              `json:"limitIp"`                      // IP limit for this client
 	TotalGB             int64            `json:"totalGB" form:"totalGB"`       // Total traffic limit in GB

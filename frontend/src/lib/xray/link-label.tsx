@@ -33,6 +33,7 @@ const PROTOCOL_LABELS: Record<string, string> = {
   'naive+quic': 'Naive',
   mieru: 'Mieru',
   mierus: 'Mieru',
+  sudoku: 'Sudoku',
 };
 
 const PROTOCOL_COLORS: Record<string, string> = {
@@ -48,6 +49,7 @@ const PROTOCOL_COLORS: Record<string, string> = {
   TUIC: 'orange',
   Naive: 'orange',
   Mieru: 'purple',
+  Sudoku: 'gold',
 };
 
 const SECURITY_COLORS: Record<string, string> = {

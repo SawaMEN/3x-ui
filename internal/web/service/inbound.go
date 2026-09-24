@@ -1241,6 +1241,10 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 			if client.Password == "" {
 				return inbound, false, common.NewError("client requires a password")
 			}
+		case "sudoku":
+			if client.Email == "" {
+				return inbound, false, common.NewError("empty client email")
+			}
 		default:
 			if client.ID == "" {
 				return inbound, false, common.NewError("empty client ID")
@@ -1379,6 +1383,11 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 	}
 	if postCommitApply != nil {
 		postCommitApply()
+	}
+	if inbound.Protocol == model.Sudoku {
+		if err := RefreshSudokuCredentialsOnInbound(inbound); err != nil {
+			logger.Warning("AddInbound: Sudoku credentials initialization failed:", err)
+		}
 	}
 
 	// A routed mtproto inbound is not an Xray inbound itself, so the runtime
@@ -2083,6 +2092,11 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 	}
 	if postCommitApply != nil {
 		postCommitApply()
+	}
+	if inbound.Protocol == model.Sudoku {
+		if err := RefreshSudokuCredentialsOnInbound(inbound); err != nil {
+			logger.Warning("UpdateInbound: Sudoku credentials initialization failed:", err)
+		}
 	}
 	// After the rename is committed, point any routing rules / loopback outbounds
 	// in xrayTemplateConfig at the new tag (oldInbound.Tag now holds the resolved

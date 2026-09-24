@@ -67,6 +67,7 @@ const MULTI_CLIENT_PROTOCOLS = new Set([
   'naive',
   'mieru',
   'vk-turn-proxy',
+  'sudoku',
 ]);
 
 const CLIENT_FORM_MODAL_Z_INDEX = 1000;

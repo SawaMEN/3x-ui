@@ -303,6 +303,7 @@ const (
 	cadenceAmneziaWG     = "@every 10s"
 	cadenceTuic          = "@every 10s"
 	cadenceMieru         = "@every 10s"
+	cadenceSudoku        = "@every 10s"
 	cadenceClientIPScan  = "@every 10s"
 	cadenceNodeHeartbeat = "@every 5s"
 	cadenceNodeTraffic   = "@every 5s"
@@ -378,6 +379,10 @@ func (s *Server) startTask(restartXray bool, loc *time.Location) {
 	mieruJob := job.NewMieruJob()
 	_, _ = s.cron.AddJob(cadenceMieru, mieruJob)
 	go mieruJob.Run()
+
+	sudokuJob := job.NewSudokuJob(s.ctx)
+	_, _ = s.cron.AddJob(cadenceSudoku, sudokuJob)
+	go sudokuJob.Run()
 
 
 	// check client ips from log file every 10 sec

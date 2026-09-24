@@ -13,3 +13,4 @@ export { default as VkTurnProxyFields } from './vk-turn-proxy';
 
 export { default as NaiveFields } from './naive';
 export { default as MieruFields } from './mieru';
+export { default as SudokuFields } from './sudoku';

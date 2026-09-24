@@ -28,7 +28,8 @@ func isXrayManagedProtocol(protocol model.Protocol) bool {
 		protocol != model.MTProto &&
 		protocol != model.AmneziaWG &&
 		protocol != model.TUIC &&
-		protocol != model.Mieru
+		protocol != model.Mieru &&
+		protocol != model.Sudoku
 }
 
 func isVKTurnProxyProtocol(protocol model.Protocol) bool {

@@ -64,6 +64,7 @@ import {
   MtprotoFields,
   NaiveFields,
   MieruFields,
+  SudokuFields,
   ShadowsocksFields,
   TuicFields,
   TunFields,
@@ -284,7 +285,8 @@ export default function InboundFormModal({
     protocol !== Protocols.TUNNEL &&
     protocol !== Protocols.TUIC &&
     protocol !== Protocols.NAIVE &&
-    protocol !== Protocols.MIERU;
+    protocol !== Protocols.MIERU &&
+    protocol !== Protocols.SUDOKU;
 
   const wPort = useWatch({ control, name: 'port' });
   const wListen = (useWatch({ control, name: 'listen' }) ?? '') as string;
@@ -296,7 +298,7 @@ export default function InboundFormModal({
       return;
     }
 
-    const autoPortProtocols = new Set<string>([Protocols.NAIVE, Protocols.MIERU]);
+    const autoPortProtocols = new Set<string>([Protocols.NAIVE, Protocols.MIERU, Protocols.SUDOKU]);
     if (!autoPortProtocols.has(protocol) || autoPortSeedRef.current === protocol) return;
     autoPortSeedRef.current = protocol;
 
@@ -833,6 +835,7 @@ export default function InboundFormModal({
       {protocol === Protocols.TUIC && <TuicFields />}
       {protocol === Protocols.NAIVE && <NaiveFields />}
       {protocol === Protocols.MIERU && <MieruFields />}
+      {protocol === Protocols.SUDOKU && <SudokuFields />}
 
       {protocol === Protocols.TUN && <TunFields />}
 
@@ -1177,6 +1180,7 @@ export default function InboundFormModal({
                     Protocols.TUIC,
                     Protocols.NAIVE,
                     Protocols.MIERU,
+                    Protocols.SUDOKU,
                   ] as string[]
                 ).includes(protocol) || isFallbackHost
                   ? [

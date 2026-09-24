@@ -1378,6 +1378,7 @@ type ClientShape = {
   secret?: string;
   email?: string;
   subId?: string;
+  sudokuPrivateKey?: string;
 };
 
 // Mirror of the Go subKey: the stable per-client identity spx derivation
@@ -1399,6 +1400,8 @@ export function getInboundClients(inbound: Inbound): ClientShape[] | null {
     case 'mtproto':
       return (inbound.settings.clients ?? []) as ClientShape[];
     case 'tuic':
+      return (inbound.settings.clients ?? []) as ClientShape[];
+    case 'sudoku':
       return (inbound.settings.clients ?? []) as ClientShape[];
     case 'shadowsocks': {
       const isMultiUser = inbound.settings.method !== '2022-blake3-chacha20-poly1305';
@@ -1491,6 +1494,13 @@ export function genLink(input: GenLinkInput): string {
       });
     case 'mtproto':
       return genMtprotoLink({ inbound, address, port, clientSecret: client.secret ?? '' });
+    case 'sudoku':
+      return genSudokuLink({
+        address,
+        port,
+        clientKey: client.sudokuPrivateKey ?? '',
+        settings: inbound.settings as any,
+      });
     case 'tuic':
       return genTuicLink({
         inbound,
@@ -1503,6 +1513,55 @@ export function genLink(input: GenLinkInput): string {
       });
     default:
       return '';
+  }
+}
+
+
+function genSudokuLink(input: {
+  address: string;
+  port: number;
+  clientKey: string;
+  settings: {
+    ascii?: string;
+    aead?: string;
+    customTable?: string;
+    customTables?: string[];
+    enablePureDownlink?: boolean;
+    multiplex?: string;
+    httpmask?: {
+      disable?: boolean;
+      mode?: string;
+      tls?: boolean;
+      host?: string;
+      pathRoot?: string;
+      multiplex?: string;
+    };
+  };
+}): string {
+  const clientKey = input.clientKey?.trim() ?? '';
+  if (!clientKey || !input.address || !Number.isInteger(input.port) || input.port <= 0) return '';
+  const payload: Record<string, unknown> = {
+    h: input.address,
+    p: input.port,
+    k: clientKey,
+    a: input.settings.ascii || 'prefer_entropy',
+    e: input.settings.aead || 'chacha20-poly1305',
+  };
+  if (input.settings.enablePureDownlink === false) payload.x = true;
+  if (input.settings.customTable) payload.t = input.settings.customTable;
+  if (input.settings.customTables?.length) payload.ts = input.settings.customTables;
+  const mask = input.settings.httpmask;
+  if (mask?.disable) payload.hd = true;
+  if (mask?.mode && mask.mode !== 'legacy') payload.hm = mask.mode;
+  if (mask?.tls) payload.ht = true;
+  if (mask?.host) payload.hh = mask.host;
+  if (mask?.pathRoot) payload.hy = mask.pathRoot;
+  const mux = mask?.multiplex || input.settings.multiplex || 'off';
+  if (mux !== 'off') payload.hx = mux;
+  try {
+    return `sudoku://${toBase64Url(JSON.stringify(payload))}`;
+  } catch {
+    return '';
   }
 }
 

@@ -7,6 +7,7 @@ import { MixedInboundSettingsSchema } from './mixed';
 import { MtprotoInboundSettingsSchema } from './mtproto';
 import { NaiveInboundSettingsSchema } from './naive';
 import { MieruInboundSettingsSchema } from './mieru';
+import { SudokuInboundSettingsSchema } from './sudoku';
 import { ShadowsocksInboundSettingsSchema } from './shadowsocks';
 import { TrojanInboundSettingsSchema } from './trojan';
 import { TuicInboundSettingsSchema } from './tuic';
@@ -24,6 +25,7 @@ export * from './mixed';
 export * from './mtproto';
 export * from './naive';
 export * from './mieru';
+export * from './sudoku';
 export * from './shadowsocks';
 export * from './trojan';
 export * from './tuic';
@@ -56,5 +58,6 @@ export const InboundSettingsSchema = z.discriminatedUnion('protocol', [
   z.object({ protocol: z.literal('tuic'), settings: TuicInboundSettingsSchema }),
   z.object({ protocol: z.literal('naive'), settings: NaiveInboundSettingsSchema }),
   z.object({ protocol: z.literal('mieru'), settings: MieruInboundSettingsSchema }),
+  z.object({ protocol: z.literal('sudoku'), settings: SudokuInboundSettingsSchema }),
 ]);
 export type InboundSettings = z.infer<typeof InboundSettingsSchema>;

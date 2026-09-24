@@ -475,6 +475,8 @@ func (s *ClientService) AddInboundClient(inboundSvc *InboundService, data *model
 			if client.Email == "" {
 				return false, common.NewError("empty client email")
 			}
+		case "sudoku":
+			// Sudoku credentials are generated and persisted by the Sudoku reconciler.
 		default:
 			if client.ID == "" {
 				return false, common.NewError("empty client ID")
@@ -653,6 +655,11 @@ func (s *ClientService) AddInboundClient(inboundSvc *InboundService, data *model
 		}
 	}
 
+	if oldInbound.Protocol == model.Sudoku {
+		if err := RefreshSudokuCredentialsOnInbound(oldInbound); err != nil {
+			logger.Warning("AddInboundClient: Sudoku credentials refresh failed:", err)
+		}
+	}
 	return needRestart, nil
 }
 
@@ -740,6 +747,9 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 	// WireGuard/AmneziaWG keys are never rotated by an edit: when the incoming
 	// payload omits them (a metadata-only change), carry the stored credentials
 	// forward so the settings JSON and the running peer keep the client's identity.
+ 	if oldInbound.Protocol == model.Sudoku && clientIndex >= 0 && clientIndex < len(oldClients) && clients[0].SudokuPrivateKey == "" {
+		clients[0].SudokuPrivateKey = oldClients[clientIndex].SudokuPrivateKey
+	}
 	if (oldInbound.Protocol == model.WireGuard || oldInbound.Protocol == model.AmneziaWG) && clientIndex >= 0 && clientIndex < len(oldClients) {
 		old := oldClients[clientIndex]
 		if clients[0].PrivateKey == "" {
@@ -1087,6 +1097,11 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 		needRestart = true
 	}
 
+	if oldInbound.Protocol == model.Sudoku {
+		if err := RefreshSudokuCredentialsOnInbound(oldInbound); err != nil {
+			logger.Warning("UpdateInboundClient: Sudoku credentials refresh failed:", err)
+		}
+	}
 	return needRestart, nil
 }
 

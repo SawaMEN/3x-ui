@@ -30,6 +30,38 @@ type releaseInfo struct {
 		URL  string `json:"browser_download_url"`
 	} `json:"assets"`
 }
+type releaseListInfo struct {
+	TagName    string `json:"tag_name"`
+	Prerelease bool   `json:"prerelease"`
+}
+
+type ReleaseVersion struct {
+	Version    string `json:"version"`
+	Prerelease bool   `json:"prerelease"`
+}
+
+func releaseVersions(releases []releaseListInfo) []ReleaseVersion {
+	versions := make([]ReleaseVersion, 0, len(releases))
+	for _, release := range releases {
+		if release.TagName != "" {
+			versions = append(versions, ReleaseVersion{
+				Version:    release.TagName,
+				Prerelease: release.Prerelease || isPreReleaseVersion(release.TagName),
+			})
+		}
+	}
+	return versions
+}
+
+func isPreReleaseVersion(version string) bool {
+	lower := strings.ToLower(version)
+	for _, marker := range []string{"-alpha", "-beta", "-rc", "-pre", "-dev", "-nightly"} {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	return false
+}
 
 func InstallLatest(ctx context.Context) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, releaseAPI, nil)
@@ -53,7 +85,7 @@ func InstallLatest(ctx context.Context) (string, error) {
 	return installRelease(ctx, rel)
 }
 
-func ListVersions(ctx context.Context) ([]string, error) {
+func ListVersions(ctx context.Context) ([]ReleaseVersion, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, releasesAPI+"?per_page=30", nil)
 	if err != nil {
 		return nil, err
@@ -68,19 +100,11 @@ func ListVersions(ctx context.Context) ([]string, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("sing-box releases API returned %s", resp.Status)
 	}
-	var releases []map[string]any
+	var releases []releaseListInfo
 	if err := json.NewDecoder(resp.Body).Decode(&releases); err != nil {
 		return nil, err
 	}
-	versions := make([]string, 0, len(releases))
-	for _, release := range releases {
-		tag, _ := release["tag_name"].(string)
-		prerelease, _ := release["prerelease"].(bool)
-		if tag != "" && !prerelease {
-			versions = append(versions, tag)
-		}
-	}
-	return versions, nil
+	return releaseVersions(releases), nil
 }
 
 func InstallVersion(ctx context.Context, version string) (string, error) {

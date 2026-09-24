@@ -13,6 +13,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/util/crypto"
 	systemswap "github.com/SawaMEN/3x-ui/v3/internal/util/swap"
 	systemupdate "github.com/SawaMEN/3x-ui/v3/internal/util/systemupdate"
+	"github.com/SawaMEN/3x-ui/v3/internal/sudoku"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/entity"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/middleware"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
@@ -118,6 +119,8 @@ func (a *SettingController) initRouter(g *gin.RouterGroup) {
 	g.POST("/system/update/check", a.systemUpdateCheck)
 	g.POST("/system/update/apply", a.systemUpdateApply)
 	g.POST("/system/update/reboot", a.systemUpdateReboot)
+	g.GET("/sudoku/status", a.sudokuStatus)
+	g.POST("/sudoku/update", a.sudokuUpdate)
 	g.GET("/getDefaultJsonConfig", a.getDefaultXrayConfig)
 	g.GET("/apiTokens", a.listApiTokens)
 	g.POST("/apiTokens/create", a.createApiToken)
@@ -576,6 +579,28 @@ func (a *SettingController) systemUpdateApply(c *gin.Context) {
 		return
 	}
 	jsonObj(c, result, nil)
+}
+
+func (a *SettingController) sudokuStatus(c *gin.Context) {
+	status, err := sudoku.GetStatus(c.Request.Context())
+	if err != nil {
+		jsonObj(c, status, err)
+		return
+	}
+	jsonObj(c, status, nil)
+}
+
+func (a *SettingController) sudokuUpdate(c *gin.Context) {
+	if err := sudoku.Update(c.Request.Context()); err != nil {
+		jsonObj(c, gin.H{"updated": false}, err)
+		return
+	}
+	status, err := sudoku.GetStatus(c.Request.Context())
+	if err != nil {
+		jsonObj(c, gin.H{"updated": true}, nil)
+		return
+	}
+	jsonObj(c, status, nil)
 }
 
 func (a *SettingController) systemUpdateReboot(c *gin.Context) {

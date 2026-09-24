@@ -17,6 +17,7 @@ export const ProtocolSchema = z.enum([
   'naive',
   'mieru',
   'vk-turn-proxy',
+  'sudoku',
 ]);
 export type Protocol = z.infer<typeof ProtocolSchema>;
 
@@ -43,4 +44,5 @@ export const Protocols = Object.freeze({
   NAIVE: 'naive',
   MIERU: 'mieru',
   VK_TURN_PROXY: 'vk-turn-proxy',
+  SUDOKU: 'sudoku',
 });

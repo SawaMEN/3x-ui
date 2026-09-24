@@ -27,6 +27,7 @@ var (
 	singBoxProcess        = singbox.NewProcess(singbox.GetConfigPath())
 	singBoxTrafficAPI     = singbox.NewConnectionAPIClient()
 	singBoxTrafficMu      sync.Mutex
+	singBoxInstallMu      sync.Mutex
 )
 
 // SetSingBoxDependencies wires the panel services used by the sing-box
@@ -788,16 +789,60 @@ func (s *SingBoxService) GetLogs(count string, filter string) []LogEntry {
 	return entries
 }
 
-func (s *SingBoxService) InstallLatest(ctx context.Context) (string, error) {
-	return singbox.InstallLatest(ctx)
+func (s *SingBoxService) installVersion(ctx context.Context, installer func(context.Context) (string, error)) (string, error) {
+	singBoxInstallMu.Lock()
+	defer singBoxInstallMu.Unlock()
+
+	wasRunning := s.IsRunning()
+	if wasRunning {
+		if err := s.Stop(ctx); err != nil {
+			return "", fmt.Errorf("stop sing-box before update: %w", err)
+		}
+	}
+
+	installed, err := installer(ctx)
+	if err != nil {
+		if wasRunning {
+			if restartErr := s.Start(ctx); restartErr != nil {
+				return "", fmt.Errorf("install sing-box: %w; restore previous process failed: %v", err, restartErr)
+			}
+		}
+		return "", err
+	}
+
+	// Refresh the process-level version cache so the dashboard immediately
+	// reports the newly installed binary even when the core was not running.
+	currentVersion, err := s.Version(ctx)
+	if err != nil {
+		if wasRunning {
+			if restartErr := s.Start(ctx); restartErr != nil {
+				return "", fmt.Errorf("verify installed sing-box %q: %w; restart failed: %v", installed, err, restartErr)
+			}
+		}
+		return "", fmt.Errorf("verify installed sing-box %q: %w", installed, err)
+	}
+
+	if wasRunning {
+		if err := s.Start(ctx); err != nil {
+			return "", fmt.Errorf("start updated sing-box %s: %w", currentVersion, err)
+		}
+	}
+
+	return currentVersion, nil
 }
 
-func (s *SingBoxService) ListVersions(ctx context.Context) ([]string, error) {
+func (s *SingBoxService) InstallLatest(ctx context.Context) (string, error) {
+	return s.installVersion(ctx, singbox.InstallLatest)
+}
+
+func (s *SingBoxService) ListVersions(ctx context.Context) ([]singbox.ReleaseVersion, error) {
 	return singbox.ListVersions(ctx)
 }
 
 func (s *SingBoxService) InstallVersion(ctx context.Context, version string) (string, error) {
-	return singbox.InstallVersion(ctx, version)
+	return s.installVersion(ctx, func(ctx context.Context) (string, error) {
+		return singbox.InstallVersion(ctx, version)
+	})
 }
 
 func (s *SingBoxService) Uninstall(ctx context.Context) error {

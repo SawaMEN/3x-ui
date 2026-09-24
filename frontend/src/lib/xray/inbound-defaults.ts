@@ -8,6 +8,7 @@ import type { MixedInboundSettings } from '@/schemas/protocols/inbound/mixed';
 import type { MtprotoClient, MtprotoInboundSettings } from '@/schemas/protocols/inbound/mtproto';
 import type { NaiveInboundSettings } from '@/schemas/protocols/inbound/naive';
 import type { MieruInboundSettings } from '@/schemas/protocols/inbound/mieru';
+import type { SudokuInboundSettings } from '@/schemas/protocols/inbound/sudoku';
 import type {
   ShadowsocksClient,
   ShadowsocksInboundSettings,
@@ -284,6 +285,31 @@ export function createDefaultMieruInboundSettings(): MieruInboundSettings {
   };
 }
 
+export function createDefaultSudokuInboundSettings(): SudokuInboundSettings {
+  return {
+    fallbackAddress: '',
+    key: '',
+    aead: 'chacha20-poly1305',
+    suspiciousAction: 'fallback',
+    paddingMin: 5,
+    paddingMax: 15,
+    ascii: 'prefer_entropy',
+    customTable: '',
+    customTables: [],
+    enablePureDownlink: true,
+    multiplex: 'off',
+    httpmask: {
+      disable: false,
+      mode: 'legacy',
+      tls: false,
+      host: '',
+      pathRoot: '',
+      multiplex: 'off',
+    },
+    clients: [],
+  };
+}
+
 export function createDefaultTunnelInboundSettings(): TunnelInboundSettings {
   return {
     portMap: {},
@@ -420,7 +446,8 @@ export type AnyInboundSettings =
   | AmneziawgInboundSettings
   | TuicInboundSettings
   | NaiveInboundSettings
-  | MieruInboundSettings;
+  | MieruInboundSettings
+  | SudokuInboundSettings;
 
 export function createDefaultInboundSettings(protocol: string): AnyInboundSettings | null {
   switch (protocol) {
@@ -456,6 +483,8 @@ export function createDefaultInboundSettings(protocol: string): AnyInboundSettin
       return createDefaultNaiveInboundSettings();
     case 'mieru':
       return createDefaultMieruInboundSettings();
+    case 'sudoku':
+      return createDefaultSudokuInboundSettings();
     default:
       return null;
   }

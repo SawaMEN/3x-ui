@@ -8,6 +8,7 @@ import {
   AmneziawgClientSchema,
   HysteriaClientSchema,
   MieruClientSchema,
+  SudokuClientSchema,
   MtprotoClientSchema,
   NaiveClientSchema,
   ShadowsocksClientSchema,
@@ -282,6 +283,8 @@ function clientSchemaForProtocol(protocol: string): z.ZodType | null {
       return NaiveClientSchema;
     case 'mieru':
       return MieruClientSchema;
+    case 'sudoku':
+      return SudokuClientSchema;
     default:
       return null;
   }
