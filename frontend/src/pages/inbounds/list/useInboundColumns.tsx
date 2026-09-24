@@ -1,6 +1,6 @@
 import { useMemo, type ReactElement } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Popover, Switch, Tag, Tooltip, type TableColumnType } from 'antd';
+import { Popover, Space, Switch, Tag, Tooltip, type TableColumnType } from 'antd';
 import { HolderOutlined, TeamOutlined } from '@ant-design/icons';
 
 import { SizeFormatter, IntlUtil, ColorUtils } from '@/utils';
