@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Empty, Form, Input, Modal, Space, Spin, Switch, Tabs, message } from 'antd';
-import { ApiOutlined, SafetyOutlined, UserOutlined } from '@ant-design/icons';
+import { ApiOutlined, SafetyOutlined, UserOutlined, LoginOutlined, ReloadOutlined } from '@ant-design/icons';
 import { ClipboardManager, HttpUtil, IntlUtil, RandomUtil } from '@/utils';
 import type { AllSetting } from '@/models/setting';
 import { SettingListItem } from '@/components/ui';
@@ -78,6 +78,19 @@ export default function SecurityTab({ allSetting, updateSetting, saveSetting }: 
   const [createName, setCreateName] = useState('');
   const [creating, setCreating] = useState(false);
   const [createdToken, setCreatedToken] = useState<{ name: string; token: string } | null>(null);
+  const [sessions, setSessions] = useState<
+    {
+      id: number;
+      ipAddress: string;
+      userAgent: string;
+      createdAt: number;
+      lastSeenAt: number;
+      revokedAt?: number;
+      isCurrent: boolean;
+    }[]
+  >([]);
+  const [sessionsLoading, setSessionsLoading] = useState(true);
+  const [sessionsBusy, setSessionsBusy] = useState(false);
 
   const openTfa = useCallback((opts: Omit<TfaState, 'open'>) => {
     setTfa({ ...opts, open: true });
@@ -147,6 +160,57 @@ export default function SecurityTab({ allSetting, updateSetting, saveSetting }: 
   useEffect(() => {
     void fetchApiTokens();
   }, [fetchApiTokens]);
+
+  const fetchSessions = useCallback(async () => {
+    setSessionsLoading(true);
+    try {
+      const msg = (await HttpUtil.get('/panel/api/setting/sessions')) as ApiMsg<typeof sessions>;
+      if (msg?.success) setSessions(Array.isArray(msg.obj) ? msg.obj : []);
+    } finally {
+      setSessionsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchSessions();
+  }, [fetchSessions]);
+
+  const revokeSession = useCallback(
+    async (id: number) => {
+      setSessionsBusy(true);
+      try {
+        const msg = await HttpUtil.post('/panel/api/setting/sessions/revoke/' + id);
+        if (msg?.success) {
+          messageApi.success(t('pages.settings.security.sessionRevoked'));
+          await fetchSessions();
+        }
+      } finally {
+        setSessionsBusy(false);
+      }
+    },
+    [fetchSessions, messageApi, t],
+  );
+
+  const revokeOthers = useCallback(() => {
+    modal.confirm({
+      title: t('pages.settings.security.revokeOtherSessions'),
+      content: t('pages.settings.security.revokeOtherSessionsDesc'),
+      okText: t('confirm'),
+      cancelText: t('cancel'),
+      onOk: async () => {
+        setSessionsBusy(true);
+        try {
+          const msg = await HttpUtil.post('/panel/api/setting/sessions/revokeOthers');
+          if (msg?.success) {
+            messageApi.success(t('pages.settings.security.otherSessionsRevoked'));
+            await fetchSessions();
+          }
+        } finally {
+          setSessionsBusy(false);
+        }
+      },
+    });
+  }, [fetchSessions, messageApi, modal, t]);
 
   async function copyToken(token: string) {
     if (!token) return;
@@ -322,6 +386,85 @@ export default function SecurityTab({ allSetting, updateSetting, saveSetting }: 
               >
                 <Switch checked={allSetting.twoFactorEnable} onClick={toggleTwoFactor} />
               </SettingListItem>
+            ),
+          },
+          {
+            key: '4',
+            label: catTabLabel(<LoginOutlined />, t('pages.settings.security.sessions'), isMobile),
+            children: (
+              <div className="api-token-section">
+                <div className="api-token-header">
+                  <p className="api-token-hint">{t('pages.settings.security.sessionsHint')}</p>
+                  <Space>
+                    <Button size="small" icon={<ReloadOutlined />} onClick={() => void fetchSessions()}>
+                      {t('refresh')}
+                    </Button>
+                    <Button
+                      size="small"
+                      danger
+                      loading={sessionsBusy}
+                      disabled={sessions.filter((s) => !s.isCurrent && !s.revokedAt).length === 0}
+                      onClick={revokeOthers}
+                    >
+                      {t('pages.settings.security.revokeOtherSessions')}
+                    </Button>
+                  </Space>
+                </div>
+                <Spin spinning={sessionsLoading}>
+                  {!sessions.length && !sessionsLoading && (
+                    <Empty description={t('pages.settings.security.sessionsEmpty')} />
+                  )}
+                  {sessions.map((row) => (
+                    <div
+                      key={row.id}
+                      className={`api-token-row${row.revokedAt ? ' disabled' : ''}`}
+                    >
+                      <div className="api-token-row-head">
+                        <div className="api-token-name-wrap">
+                          <span className="api-token-name">
+                            {row.ipAddress || t('pages.settings.security.unknownAddress')}
+                            {row.isCurrent && (
+                              <span className="session-current-badge">
+                                {t('pages.settings.security.currentSession')}
+                              </span>
+                            )}
+                            {row.revokedAt && (
+                              <span className="session-revoked-badge">
+                                {t('pages.settings.security.revokedSession')}
+                              </span>
+                            )}
+                          </span>
+                          <span className="api-token-created">
+                            {t('pages.settings.security.lastSeen')}: {IntlUtil.formatDate(row.lastSeenAt * 1000)}
+                          </span>
+                          <span className="api-token-created" title={row.userAgent}>
+                            {row.userAgent || '-'}
+                          </span>
+                        </div>
+                        {!row.isCurrent && !row.revokedAt && (
+                          <Button
+                            size="small"
+                            danger
+                            type="text"
+                            loading={sessionsBusy}
+                            onClick={() =>
+                              modal.confirm({
+                                title: t('pages.settings.security.revokeSession'),
+                                okText: t('delete'),
+                                cancelText: t('cancel'),
+                                okType: 'danger',
+                                onOk: () => revokeSession(row.id),
+                              })
+                            }
+                          >
+                            {t('delete')}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </Spin>
+              </div>
             ),
           },
           {
