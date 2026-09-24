@@ -281,7 +281,11 @@ func (s *SubService) clientForLink(inbound *model.Inbound, email string) (model.
 // while the shared clients.wg_* columns collapse to whichever tunnel inbound
 // synced last (see TunnelAllowedIPsByInbound / amneziaWGClientAddresses).
 func (s *SubService) clientsForLinkExport(inbound *model.Inbound) ([]model.Client, error) {
-	if inbound.Protocol == model.WireGuard || inbound.Protocol == model.AmneziaWG {
+	if inbound.Protocol == model.WireGuard || inbound.Protocol == model.AmneziaWG ||
+		inbound.Protocol == model.AnyTLS || inbound.Protocol == model.ShadowTLS {
+		// These protocols keep the client password in the inbound settings JSON.
+		// Prefer that source so subscriptions also work for existing rows whose
+		// normalized clients record predates password persistence.
 		return s.inboundService.GetClients(inbound)
 	}
 	if database.GetDB() != nil {
@@ -956,6 +960,8 @@ func (s *SubService) GetLink(inbound *model.Inbound, email string) string {
 		return s.genNaiveLink(inbound, email)
 	case model.AnyTLS:
 		return s.genAnyTlsLink(inbound, email)
+	case model.ShadowTLS:
+		return s.genShadowTlsLink(inbound, email)
 	case model.Mieru:
 		return s.genMieruLink(inbound, email)
 	}
@@ -1064,6 +1070,61 @@ func (s *SubService) genNaiveLink(inbound *model.Inbound, email string) string {
 	return s.genNaiveSubscriptionLink(inbound, email)
 }
 
+func (s *SubService) genShadowTlsLink(inbound *model.Inbound, email string) string {
+	if inbound.Protocol != model.ShadowTLS {
+		return ""
+	}
+	client, ok := s.clientForLink(inbound, email)
+	if !ok || client.Password == "" {
+		return ""
+	}
+
+	settings := s.linkSettings(inbound)
+	handshake, _ := settings["handshake"].(map[string]any)
+	handshakeServer, _ := handshake["server"].(string)
+	handshakeServer = strings.TrimSpace(handshakeServer)
+
+	version := 3
+	if rawVersion, ok := settings["version"].(float64); ok && int(rawVersion) > 0 {
+		version = int(rawVersion)
+	}
+
+	links := make([]string, 0)
+	for _, ep := range s.shareEndpointsForInbound(inbound) {
+		address := strings.TrimSpace(ep.Address)
+		if address == "" {
+			address = s.resolveInboundAddress(inbound)
+		}
+		port := ep.Port
+		if port <= 0 {
+			port = inbound.Port
+		}
+		if address == "" || port <= 0 || handshakeServer == "" {
+			continue
+		}
+
+		params := map[string]string{
+			"version": strconv.Itoa(version),
+			"sni":     handshakeServer,
+		}
+		if ep.ep != nil {
+			if sni, ok := externalProxySNI(ep.ep); ok {
+				params["sni"] = sni
+			}
+			if isHostEndpoint(ep.ep) {
+				s.renderHostRemark(inbound, client, ep.ep, "")
+			}
+		}
+		var rawEndpoint map[string]any
+		if ep.ep != nil {
+			rawEndpoint = ep.ep
+		}
+		remark := s.endpointRemark(inbound, email, rawEndpoint, "")
+		link := fmt.Sprintf("shadowtls://%s@%s", encodeUserinfo(client.Password), joinHostPort(address, port))
+		links = append(links, buildLinkWithParams(link, params, remark))
+	}
+	return strings.Join(links, "\n")
+}
 // naiveShareEndpoints returns the concrete dial endpoints that belong to a Naive
 // link. Host rows are projected into StreamSettings["externalProxy"] by the
 // subscription callers, so keeping this helper on the serialized endpoint path

@@ -180,6 +180,15 @@ body.dark .ant-sidebar > .ant-layout-sider {
 .drawer-header .brand-block {
   width: 100%;
 }
+
+/* Keep the drawer wordmark optically centered vertically in the header. */
+.drawer-header .drawer-brand {
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  min-height: 38px;
+  line-height: 1;
+}
 .drawer-header-actions {
   position: absolute;
   right: 12px;

@@ -140,6 +140,64 @@ func TestGetSingBoxJsonDoesNotCollapseMultipleWireGuardInbounds(t *testing.T) {
 		t.Fatalf("sing-box subscription collapsed WireGuard inbounds: found %d wireguard outbounds\n%s", got, out)
 	}
 }
+func TestGetSubsIncludesAnyTLSAndShadowTLS(t *testing.T) {
+	dbDir := t.TempDir()
+	t.Setenv("XUI_DB_FOLDER", dbDir)
+	if err := database.InitDB(filepath.Join(dbDir, "x-ui.db")); err != nil {
+		t.Fatalf("InitDB: %v", err)
+	}
+	t.Cleanup(func() { _ = database.CloseDB() })
+
+	const subID = "sub-anytls-shadowtls"
+	db := database.GetDB()
+
+	anytls := &model.Inbound{
+		UserId: 1, Tag: "anytls", Enable: true, Listen: "anytls.example.com", Port: 8443, Protocol: model.AnyTLS,
+		Settings: fmt.Sprintf(`{"tls":{"serverName":"anytls.example.com"},"clients":[{"email":"anytls@example.com","password":"anytls-pass","subId":%q,"enable":true}]}`, subID),
+		StreamSettings: `{}`,
+	}
+	shadowtls := &model.Inbound{
+		UserId: 1, Tag: "shadowtls", Enable: true, Listen: "shadowtls.example.com", Port: 9443, Protocol: model.ShadowTLS,
+		Settings: fmt.Sprintf(`{"version":3,"handshake":{"server":"cloudflare.com","serverPort":443},"clients":[{"email":"shadowtls@example.com","password":"shadow-pass","subId":%q,"enable":true}]}`, subID),
+		StreamSettings: `{}`,
+	}
+	for _, inbound := range []*model.Inbound{anytls, shadowtls} {
+		if err := db.Create(inbound).Error; err != nil {
+			t.Fatalf("seed %s: %v", inbound.Protocol, err)
+		}
+	}
+
+	// Simulate legacy normalized rows: the protocol password is present in
+	// inbound settings but missing from clients.password.
+	anyClient := &model.ClientRecord{Email: "anytls@example.com", SubID: subID, Enable: true}
+	shadowClient := &model.ClientRecord{Email: "shadowtls@example.com", SubID: subID, Enable: true}
+	for _, client := range []*model.ClientRecord{anyClient, shadowClient} {
+		if err := db.Create(client).Error; err != nil {
+			t.Fatalf("seed client %s: %v", client.Email, err)
+		}
+	}
+	if err := db.Create(&model.ClientInbound{ClientId: anyClient.Id, InboundId: anytls.Id}).Error; err != nil {
+		t.Fatalf("attach AnyTLS: %v", err)
+	}
+	if err := db.Create(&model.ClientInbound{ClientId: shadowClient.Id, InboundId: shadowtls.Id}).Error; err != nil {
+		t.Fatalf("attach ShadowTLS: %v", err)
+	}
+
+	links, _, _, _, err := NewSubService("").GetSubs(subID, "sub.example.com")
+	if err != nil {
+		t.Fatalf("GetSubs: %v", err)
+	}
+	joined := strings.Join(links, "\n")
+	if !strings.Contains(joined, "anytls://anytls-pass@anytls.example.com:8443") {
+		t.Fatalf("raw subscription is missing AnyTLS: %v", links)
+	}
+	if !strings.Contains(joined, "shadowtls://shadow-pass@shadowtls.example.com:9443") {
+		t.Fatalf("raw subscription is missing ShadowTLS: %v", links)
+	}
+	if !strings.Contains(joined, "sni=cloudflare.com") {
+		t.Fatalf("ShadowTLS subscription link is missing handshake SNI: %v", links)
+	}
+}
 func TestGetSubsSkipsEmptyRenderedLinksButKeepsTraffic(t *testing.T) {
 	dbDir := t.TempDir()
 	t.Setenv("XUI_DB_FOLDER", dbDir)

@@ -413,7 +413,7 @@ func (s *ClientService) fillProtocolDefaults(c *model.Client, ib *model.Inbound)
 		if c.Password == "" {
 			c.Password = strings.ReplaceAll(uuid.NewString(), "-", "")
 		}
-	case model.NaiveProxy, model.Mieru:
+	case model.NaiveProxy, model.Mieru, model.AnyTLS, model.ShadowTLS:
 		if c.Password == "" {
 			c.Password = strings.ReplaceAll(uuid.NewString(), "-", "")
 		}

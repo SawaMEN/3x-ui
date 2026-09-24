@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Exo+2:wght@400;500;600;700;800;900&display=swap');
+
 /* Material 3 visual system layered over Ant Design primitives. */
 :root {
   --xui-primary: #6750a4;
@@ -1113,7 +1115,7 @@ body.theme-blue-gray {
 
 /* ── Cyberpunk: high-contrast neon, readable first, decoration second ─── */
 body.theme-cyberpunk {
-  font-family: Orbitron, 'Rajdhani', 'Courier New', monospace;
+  font-family: 'Exo 2', 'Segoe UI', system-ui, sans-serif;
   --xui-primary: #d4a017;
   --xui-secondary: #d6b13a;
   --xui-surface: #07070b;
@@ -1365,7 +1367,7 @@ body.theme-cyberpunk .ov-legend-num {
 body.theme-cyberpunk .brand-text,
 body.theme-cyberpunk .drawer-brand {
   position: relative;
-  font-family: Orbitron, 'Rajdhani', 'Courier New', monospace;
+  font-family: 'Exo 2', 'Segoe UI', system-ui, sans-serif;
   font-size: 21px;
   font-weight: 900;
   letter-spacing: 0.075em;
@@ -1402,7 +1404,7 @@ body.theme-cyberpunk .brand-block::after {
 
 @media (min-width: 769px) {
   body.theme-cyberpunk .sider-brand .brand-text {
-    font-family: Orbitron, 'Rajdhani', 'Segoe UI', sans-serif;
+    font-family: 'Exo 2', 'Segoe UI', system-ui, sans-serif;
     font-size: 24px;
     font-weight: 800;
     letter-spacing: 0.075em;

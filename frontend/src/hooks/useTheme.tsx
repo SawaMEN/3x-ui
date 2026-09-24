@@ -188,7 +188,7 @@ const THEME_FONTS = {
   'ultra-dark': '"IBM Plex Sans", "Segoe UI", Arial, sans-serif',
   colorful: '"Avenir Next", Avenir, "Trebuchet MS", sans-serif',
   'blue-gray': '"Source Sans 3", "Segoe UI", Arial, sans-serif',
-  cyberpunk: 'Orbitron, "Rajdhani", "Courier New", monospace',
+  cyberpunk: '"Exo 2", "Segoe UI", system-ui, sans-serif',
 } as const;
 const LIGHT_THEME_TOKENS = {
   colorPrimary: '#0071e3',

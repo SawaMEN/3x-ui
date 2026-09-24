@@ -236,8 +236,10 @@ func (s *InboundService) buildTargetClientFromSource(source model.Client, target
 		target.Auth = s.generateRandomCredential(targetProtocol)
 	case model.MTProto:
 		target.Secret = model.GenerateFakeTLSSecret(mtprotoDomainFromSettings(targetInbound.Settings))
-	case model.TUIC:
-		target.ID = uuid.NewString()
+	case model.TUIC, model.AnyTLS, model.ShadowTLS:
+		if targetProtocol == model.TUIC {
+			target.ID = uuid.NewString()
+		}
 		target.Password = s.generateRandomCredential(targetProtocol)
 	default:
 		target.ID = s.generateRandomCredential(targetProtocol)
