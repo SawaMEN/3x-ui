@@ -1055,9 +1055,9 @@ func installedPackageVersions(manager string) (map[string]string, error) {
 
 	switch manager {
 	case "apt-get":
-		output, err = exec.CommandContext(context.Background(), "dpkg-query", "-W", "-f=${Package}\\t${Version}\\t${Status}\\n").Output()
+		output, err = exec.CommandContext(context.Background(), "dpkg-query", "-W", "-f=${Package}\t${Version}\t${Status}\n").Output()
 	case "dnf", "yum", "zypper":
-		output, err = exec.CommandContext(context.Background(), "rpm", "-qa", "--qf", "%{NAME}\\t%{VERSION}-%{RELEASE}\\n").Output()
+		output, err = exec.CommandContext(context.Background(), "rpm", "-qa", "--qf", "%{NAME}\t%{VERSION}-%{RELEASE}\n").Output()
 	case "pacman":
 		output, err = exec.CommandContext(context.Background(), "pacman", "-Q").Output()
 	case "apk":
@@ -1077,7 +1077,7 @@ func installedPackageVersions(manager string) (map[string]string, error) {
 		}
 		switch manager {
 		case "apt-get":
-			fields := strings.Split(line, "\\t")
+			fields := strings.Split(line, "\t")
 			if len(fields) >= 3 && fields[2] == "install ok installed" {
 				result[fields[0]] = fields[1]
 			}
