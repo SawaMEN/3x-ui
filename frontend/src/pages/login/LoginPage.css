@@ -340,12 +340,6 @@
   text-transform: none;
 }
 
-
-
-
-
-
-
 body.theme-colorful .login-app {
   --bg-page: #f8f5ff;
   --bg-card: rgba(255, 250, 255, 0.76);
@@ -370,13 +364,6 @@ body.theme-colorful .login-app {
     linear-gradient(135deg, #f8f5ff 0%, #fff7fb 48%, #f0fdfa 100%);
 }
 
-
-
-
-
-
-
-
 body.theme-blue-gray .login-app {
   --bg-page: #101722;
   --bg-card: rgba(24, 35, 51, 0.78);
@@ -400,24 +387,6 @@ body.theme-blue-gray .login-app {
     radial-gradient(circle at 86% 18%, rgba(96, 125, 163, 0.09), transparent 26%),
     linear-gradient(145deg, #0f1723 0%, #101722 48%, #0d1520 100%);
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 .welcome {
   text-align: center;
@@ -555,8 +524,6 @@ body.theme-cyberpunk .login-card::before {
     linear-gradient(320deg, rgba(255, 43, 214, 0.25), transparent 58%),
     linear-gradient(145deg, transparent 62%, rgba(212, 160, 23, 0.23));
 }
-
-
 
 body.theme-cyberpunk .toolbar-btn {
   border-color: rgba(0, 238, 255, 0.18);
