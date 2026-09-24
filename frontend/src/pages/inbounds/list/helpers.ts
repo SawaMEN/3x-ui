@@ -112,7 +112,7 @@ export function inboundNetworkLabels(record: {
       return [commaNetworkLabel(settings.network || 'tcp')];
     }
     case 'mieru': {
-      const settings = readSettings(record.settings) as {
+      const settings = coerceInboundJsonField(record.settings) as {
         tcpPorts?: unknown;
         udpPorts?: unknown;
         protocols?: unknown;
