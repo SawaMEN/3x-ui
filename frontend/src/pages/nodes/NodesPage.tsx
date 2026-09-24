@@ -199,6 +199,22 @@ export default function NodesPage() {
     [probe, t, messageApi, refetch],
   );
 
+  const onReorder = useCallback(
+    async (ids: number[]) => {
+      try {
+        const msg = await HttpUtil.post('/panel/api/nodes/reorder', { ids });
+        if (!msg?.success) {
+          messageApi.error(msg?.msg || t('somethingWentWrong'));
+        }
+      } catch {
+        messageApi.error(t('somethingWentWrong'));
+      } finally {
+        await refetch();
+      }
+    },
+    [messageApi, refetch, t],
+  );
+
   const onToggleEnable = useCallback(
     async (node: NodeRecord, next: boolean) => {
       await setEnable(node.id, next);
@@ -361,6 +377,7 @@ export default function NodesPage() {
                       onToggleEnable={onToggleEnable}
                       onUpdateNode={onUpdateNode}
                       onUpdateSelected={onUpdateSelected}
+                      onReorder={onReorder}
                     />
                   </Col>
                 </Row>
