@@ -649,7 +649,9 @@ func translateUsers(out map[string]any, protocol string, settings map[string]any
 		}
 		users = append(users, user)
 	}
-	if len(users) > 0 {
+	if len(users) > 0 || protocol == "naive" || protocol == "anytls" || protocol == "shadowtls" {
+		// sing-box requires an explicit users array for these protocol inbounds,
+		// including when the panel currently has no active clients.
 		out["users"] = users
 	}
 	switch protocol {
