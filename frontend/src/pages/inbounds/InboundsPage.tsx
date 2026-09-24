@@ -601,7 +601,11 @@ export default function InboundsPage() {
   const onReorder = useCallback(
     async (ids: number[]) => {
       try {
-        const msg = await HttpUtil.post('/panel/api/inbounds/reorder', { ids });
+        const msg = await HttpUtil.post(
+          '/panel/api/inbounds/reorder',
+          { ids },
+          { headers: { 'Content-Type': 'application/json' } },
+        );
         if (!msg?.success) {
           messageApi.error(msg?.msg || t('somethingWentWrong'));
         }
