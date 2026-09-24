@@ -18,12 +18,8 @@ import {
 import { InboundSpeedTag, isActiveSpeed } from './InboundSpeedTag';
 import {
   readStreamHints,
-  networkLabel,
-  networkL4,
-  shadowsocksNetworkLabel,
-  tunnelNetworkLabel,
-  mixedNetworkLabel,
   formatHostRemarksLabel,
+  inboundNetworkLabels,
 } from './helpers';
 import type { ClientCountEntry, DBInboundRecord, InboundSpeedEntry, RowAction } from './types';
 
@@ -217,64 +213,34 @@ export function useInboundColumns({
               {record.protocol}
             </Tag>,
           ];
-          if (record.isWireguard || record.isAmneziawg || record.isHysteria || record.isTuic) {
+
+          inboundNetworkLabels(record).forEach((label, index) => {
             tags.push(
-              <Tag key="n" color="green">
-                UDP
+              <Tag key={'transport-' + index} color="green">
+                {label}
               </Tag>,
             );
-          } else if (record.isSS) {
-            const stream = readStreamHints(record.streamSettings);
+          });
+
+          const stream = readStreamHints(record.streamSettings);
+          if (
+            stream.isTls &&
+            ['vmess', 'vless', 'trojan', 'shadowsocks'].includes(record.protocol)
+          ) {
             tags.push(
-              <Tag key="n" color="green">
-                {shadowsocksNetworkLabel(record.settings)}
+              <Tag key="tls" color="blue">
+                TLS
               </Tag>,
             );
-            if (stream.isTls)
-              tags.push(
-                <Tag key="tls" color="blue">
-                  TLS
-                </Tag>,
-              );
-          } else if (record.isTunnel) {
-            tags.push(
-              <Tag key="n" color="green">
-                {tunnelNetworkLabel(record.settings)}
-              </Tag>,
-            );
-          } else if (record.isMixed) {
-            tags.push(
-              <Tag key="n" color="green">
-                {mixedNetworkLabel(record.settings)}
-              </Tag>,
-            );
-          } else if (record.isVMess || record.isVLess || record.isTrojan) {
-            const stream = readStreamHints(record.streamSettings);
-            tags.push(
-              <Tag key="n" color="green">
-                {networkLabel(stream.network)}
-              </Tag>,
-            );
-            const l4 = networkL4(stream.network);
-            if (l4)
-              tags.push(
-                <Tag key="l4" color="green">
-                  {l4}
-                </Tag>,
-              );
-            if (stream.isTls)
-              tags.push(
-                <Tag key="tls" color="blue">
-                  TLS
-                </Tag>,
-              );
-            if (stream.isReality)
-              tags.push(
-                <Tag key="reality" color="blue">
-                  Reality
-                </Tag>,
-              );
           }
+          if (stream.isReality && ['vmess', 'vless', 'trojan'].includes(record.protocol)) {
+            tags.push(
+              <Tag key="reality" color="blue">
+                Reality
+              </Tag>,
+            );
+          }
+
           return <div className="protocol-tags">{tags}</div>;
         },
       },

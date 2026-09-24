@@ -70,6 +70,72 @@ export function mixedNetworkLabel(settings: unknown): string {
   return st.udp ? 'TCP,UDP' : 'TCP';
 }
 
+export function inboundNetworkLabels(record: {
+  protocol: string;
+  settings: unknown;
+  streamSettings: unknown;
+}): string[] {
+  const protocol = (record.protocol || '').toLowerCase().trim();
+
+  if (protocol === 'vmess' || protocol === 'vless' || protocol === 'trojan') {
+    const stream = readStreamHints(record.streamSettings);
+    const labels = [networkLabel(stream.network)];
+    const l4 = networkL4(stream.network);
+    if (l4) labels.push(l4);
+    return labels;
+  }
+
+  switch (protocol) {
+    case 'shadowsocks': {
+      const labels = [shadowsocksNetworkLabel(record.settings)];
+      const stream = readStreamHints(record.streamSettings);
+      if (stream.isTls) labels.push('TLS');
+      return labels;
+    }
+    case 'tunnel':
+      return [tunnelNetworkLabel(record.settings)];
+    case 'mixed':
+      return [mixedNetworkLabel(record.settings)];
+    case 'hysteria':
+    case 'tuic':
+    case 'wireguard':
+    case 'amneziawg':
+      return ['UDP'];
+    case 'anytls':
+    case 'shadowtls':
+    case 'mtproto':
+    case 'http':
+    case 'sudoku':
+      return ['TCP'];
+    case 'naive': {
+      const settings = readSettings(record.settings);
+      return [commaNetworkLabel(settings.network || 'tcp')];
+    }
+    case 'mieru': {
+      const settings = readSettings(record.settings) as {
+        tcpPorts?: unknown;
+        udpPorts?: unknown;
+        protocols?: unknown;
+      };
+      const hasTcp = Array.isArray(settings.tcpPorts) && settings.tcpPorts.length > 0;
+      const hasUdp = Array.isArray(settings.udpPorts) && settings.udpPorts.length > 0;
+      if (hasTcp || hasUdp) {
+        return [hasTcp ? 'TCP' : '', hasUdp ? 'UDP' : ''].filter(Boolean);
+      }
+      const protocols = Array.isArray(settings.protocols)
+        ? settings.protocols.filter((item): item is string => typeof item === 'string')
+        : [];
+      return protocols.length > 0 ? protocols.map((item) => item.toUpperCase()) : ['TCP', 'UDP'];
+    }
+    case 'vk-turn-proxy':
+      return [coerceInboundJsonField(record.settings).useUdp === true ? 'UDP' : 'TCP'];
+    case 'tun':
+      return [];
+    default:
+      return [];
+  }
+}
+
 export function readSettings(settings: unknown): {
   method?: string;
   network?: string;
