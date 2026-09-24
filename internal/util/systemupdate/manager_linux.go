@@ -73,7 +73,6 @@ func GetStatus(ctx context.Context) (Status, error) {
 	installedVersions, _ := installedPackageVersions(info.manager)
 	packages, kernelPackages, missingPackages := collectPackageStatuses(
 		info.distributionForPackages(),
-		info.manager,
 		upgrades,
 		func(name string) (string, bool) {
 			if version, ok := installedVersions[name]; ok {
@@ -379,7 +378,6 @@ func requiredPackages(distribution string) []string {
 }
 func collectPackageStatuses(
 	distribution string,
-	manager string,
 	upgrades map[string]string,
 	lookup func(string) (string, bool),
 ) ([]PackageStatus, []PackageStatus, bool) {
