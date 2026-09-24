@@ -696,16 +696,16 @@ function NodeList({
                     {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events -- mouse click-to-expand mirrors the keyboard-accessible chevron disclosure button */}
                     <div
                       className="card-head"
-                      <HolderOutlined
-                        className="node-drag-handle"
-                        title={t('pages.nodes.dragToReorder')}
-                        aria-label={t('pages.nodes.dragToReorder')}
-                      />
                       onClick={(e) => {
                         if (!(e.target as HTMLElement).closest('.card-actions'))
                           toggleExpanded(record.id);
                       }}
                     >
+                      <HolderOutlined
+                        className="node-drag-handle"
+                        title={t('pages.nodes.dragToReorder')}
+                        aria-label={t('pages.nodes.dragToReorder')}
+                      />
                       <RightOutlined
                         className={`card-expand${expandedIds.has(record.id) ? ' is-expanded' : ''}`}
                         role="button"
