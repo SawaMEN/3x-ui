@@ -25,6 +25,7 @@ import {
   InfoCircleOutlined,
   DeleteOutlined,
   SearchOutlined,
+  HolderOutlined,
 } from '@ant-design/icons';
 
 import { HttpUtil } from '@/utils';
@@ -64,6 +65,7 @@ function InboundList({
   onGeneralAction,
   onRowAction,
   onBulkDelete,
+  onReorder,
 }: InboundListProps) {
   const { t } = useTranslation();
   const [statsRecord, setStatsRecord] = useState<DBInboundRecord | null>(null);
@@ -76,6 +78,7 @@ function InboundList({
   const searchParam = searchParams.get('search');
   const [searchKey, setSearchKey] = useState(() => searchParam || '');
   const [prevLocationKey, setPrevLocationKey] = useState(location.key);
+  const [draggedInboundId, setDraggedInboundId] = useState<number | null>(null);
 
   if (location.key !== prevLocationKey) {
     setPrevLocationKey(location.key);
@@ -114,6 +117,32 @@ function InboundList({
       return hostRemarks.some((remark) => remark.toLowerCase().includes(q));
     });
   }, [dbInbounds, nodeFilter, searchKey, hostRemarksByInboundId]);
+
+  const reorderEnabled =
+    nodeFilter === 'all' &&
+    searchKey.trim() === '' &&
+    (pageSize <= 0 || visibleInbounds.length <= pageSize);
+
+  const reorderInbound = useCallback(
+    async (targetId: number) => {
+      if (!reorderEnabled || draggedInboundId == null || draggedInboundId === targetId) {
+        setDraggedInboundId(null);
+        return;
+      }
+      const ids = visibleInbounds.map((row) => row.id);
+      const from = ids.indexOf(draggedInboundId);
+      const to = ids.indexOf(targetId);
+      if (from < 0 || to < 0) {
+        setDraggedInboundId(null);
+        return;
+      }
+      ids.splice(from, 1);
+      ids.splice(to, 0, draggedInboundId);
+      setDraggedInboundId(null);
+      await onReorder(ids);
+    },
+    [draggedInboundId, onReorder, reorderEnabled, visibleInbounds],
+  );
 
   const onSwitchEnable = useCallback(async (dbInbound: DBInboundRecord, next: boolean) => {
     const previous = dbInbound.enable;
@@ -303,13 +332,37 @@ function InboundList({
                 {visibleInbounds.map((record) => (
                   <div
                     key={record.id}
-                    className={`inbound-card${selectedRowKeys.includes(record.id) ? ' is-selected' : ''}`}
+                    className={`inbound-card${selectedRowKeys.includes(record.id) ? ' is-selected' : ''}${draggedInboundId === record.id ? ' is-dragged' : ''}`}
+                    draggable={reorderEnabled}
+                    onDragStart={(event) => {
+                      if (!reorderEnabled) return;
+                      setDraggedInboundId(record.id);
+                      event.dataTransfer.effectAllowed = 'move';
+                    }}
+                    onDragOver={(event) => {
+                      if (!reorderEnabled) return;
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = 'move';
+                    }}
+                    onDrop={(event) => {
+                      if (!reorderEnabled) return;
+                      event.preventDefault();
+                      void reorderInbound(record.id);
+                    }}
+                    onDragEnd={() => setDraggedInboundId(null)}
                   >
                     <div className="card-head">
                       <Checkbox
                         checked={selectedRowKeys.includes(record.id)}
                         onChange={(e) => toggleSelect(record.id, e.target.checked)}
                       />
+                      {reorderEnabled && (
+                        <HolderOutlined
+                          className="inbound-drag-handle"
+                          title={t('pages.inbounds.dragToReorder')}
+                          aria-label={t('pages.inbounds.dragToReorder')}
+                        />
+                      )}
                       <span className="card-id">#{record.id}</span>
                       <span className="tag-name">
                         <span className="inbound-remark">{record.remark}</span>
@@ -371,6 +424,27 @@ function InboundList({
               onChange: (keys: Key[]) => setSelectedRowKeys(keys as number[]),
             }}
             pagination={paginationFor(visibleInbounds)}
+            onRow={(record) =>
+              reorderEnabled
+                ? {
+                    draggable: true,
+                    className: draggedInboundId === record.id ? 'is-dragged' : undefined,
+                    onDragStart: (event) => {
+                      setDraggedInboundId(record.id);
+                      event.dataTransfer.effectAllowed = 'move';
+                    },
+                    onDragOver: (event) => {
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = 'move';
+                    },
+                    onDrop: (event) => {
+                      event.preventDefault();
+                      void reorderInbound(record.id);
+                    },
+                    onDragEnd: () => setDraggedInboundId(null),
+                  }
+                : {}
+            }
             scroll={{ x: tableScrollX }}
             style={{ marginTop: 10 }}
             size="small"
