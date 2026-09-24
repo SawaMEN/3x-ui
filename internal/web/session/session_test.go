@@ -2,6 +2,7 @@ package session
 
 import (
 	"net/http"
+	"strings"
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
@@ -90,6 +91,7 @@ func TestRevokedSessionIsNotAuthenticated(t *testing.T) {
 	if cookieHeader == "" {
 		t.Fatal("login response did not set a session cookie")
 	}
+	cookieHeader = strings.Split(cookieHeader, ";", 2)[0]
 
 	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
 	req.Header.Set("Cookie", cookieHeader)
