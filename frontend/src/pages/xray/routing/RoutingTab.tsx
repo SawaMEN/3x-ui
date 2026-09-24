@@ -130,6 +130,18 @@ export default function RoutingTab({
     };
   }, []);
 
+  const mutate = useCallback(
+    (mutator: (next: XraySettingsValue) => void) => {
+      setTemplateSettings((prev) => {
+        if (!prev) return prev;
+        const clone = JSON.parse(JSON.stringify(prev)) as XraySettingsValue;
+        mutator(clone);
+        return clone;
+      });
+    },
+    [setTemplateSettings],
+  );
+
   const refreshRoutingPresets = useCallback(async () => {
     const msg = await HttpUtil.get<
       { id: number; name: string; description: string; ruleCount: number }[]
@@ -161,7 +173,7 @@ export default function RoutingTab({
         setPresetBusy(false);
       }
     },
-    [t],
+    [mutate, t],
   );
 
   const saveRoutingPreset = useCallback(async () => {
@@ -210,18 +222,6 @@ export default function RoutingTab({
       }
     },
     [presetId, refreshRoutingPresets, t],
-  );
-
-  const mutate = useCallback(
-    (mutator: (next: XraySettingsValue) => void) => {
-      setTemplateSettings((prev) => {
-        if (!prev) return prev;
-        const clone = JSON.parse(JSON.stringify(prev)) as XraySettingsValue;
-        mutator(clone);
-        return clone;
-      });
-    },
-    [setTemplateSettings],
   );
 
   const inboundTagOptions = useMemo(() => {
