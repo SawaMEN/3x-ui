@@ -56,7 +56,7 @@ type TemplateSanitizeResult struct {
 }
 
 var templateSecretKeys = map[string]struct{}{
-	"password": {}, "secret": {}, "secretkey": {}, "privatekey": {}, "presharedkey": {},
+	"password": {}, "secret": {}, "secretkey": {}, "privatekey": {}, "publickey": {}, "presharedkey": {},
 	"psk": {}, "token": {}, "apikey": {}, "api_key": {}, "authtoken": {}, "authorization": {},
 }
 
