@@ -20,10 +20,7 @@ export default function AnyTlsFields() {
         <Input placeholder="example.com" />
       </FormField>
 
-      <FormField
-        name={['settings', 'tls', 'certificatePath']}
-        label="Certificate path"
-      >
+      <FormField name={['settings', 'tls', 'certificatePath']} label="Certificate path">
         <Input placeholder="/root/cert/example.com/fullchain.pem" />
       </FormField>
 
@@ -36,7 +33,9 @@ export default function AnyTlsFields() {
         label="Padding scheme"
         transform={{
           input: (value) =>
-            Array.isArray(value) && value.length > 0 ? value.join('\n') : DEFAULT_PADDING_SCHEME.join('\n'),
+            Array.isArray(value) && value.length > 0
+              ? value.join('\n')
+              : DEFAULT_PADDING_SCHEME.join('\n'),
           output: (value) =>
             String(value ?? '')
               .split(/\r?\n/)
@@ -49,8 +48,8 @@ export default function AnyTlsFields() {
 
       <Space direction="vertical" size={2} style={{ width: '100%' }}>
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          AnyTLS требует TLS. Если пути сертификата оставить пустыми, панель
-          использует сертификат HTTPS панели при генерации sing-box.
+          AnyTLS требует TLS. Если пути сертификата оставить пустыми, панель использует сертификат
+          HTTPS панели при генерации sing-box.
         </Typography.Text>
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
           Строки padding scheme вводятся по одной на строку.

@@ -87,7 +87,11 @@ export default function SudokuFields() {
         <Select mode="tags" tokenSeparators={[',', ';']} style={{ width: '100%' }} />
       </FormField>
 
-      <FormField name={['settings', 'enablePureDownlink']} label="Pure Sudoku downlink" valueProp="checked">
+      <FormField
+        name={['settings', 'enablePureDownlink']}
+        label="Pure Sudoku downlink"
+        valueProp="checked"
+      >
         <Switch />
       </FormField>
 
@@ -99,7 +103,11 @@ export default function SudokuFields() {
         HTTP mask
       </Divider>
 
-      <FormField name={['settings', 'httpmask', 'disable']} label="Disable HTTP mask" valueProp="checked">
+      <FormField
+        name={['settings', 'httpmask', 'disable']}
+        label="Disable HTTP mask"
+        valueProp="checked"
+      >
         <Switch />
       </FormField>
 

@@ -202,7 +202,8 @@ export default function SystemUpdateModal({
       ]);
 
     const coreType: CoreType | null =
-      settings.success && (settings.obj?.coreType === 'xray' || settings.obj?.coreType === 'sing-box')
+      settings.success &&
+      (settings.obj?.coreType === 'xray' || settings.obj?.coreType === 'sing-box')
         ? settings.obj.coreType
         : null;
     const xrayCurrent = serverStatus.success ? serverStatus.obj?.xray?.version || '' : '';
@@ -252,15 +253,17 @@ export default function SystemUpdateModal({
         key: 'hysteria2',
         label: 'Hysteria2',
         source: coreType || undefined,
-        installed: Boolean(
-          coreType && (coreType === 'sing-box' ? singBoxCurrent : xrayCurrent),
-        ),
-        installedVersion: coreType === 'sing-box' ? singBoxCurrent : coreType === 'xray' ? xrayCurrent : '',
-        availableVersion: coreType === 'sing-box' ? stableSingBoxVersion : coreType === 'xray' ? xrayLatest : '',
+        installed: Boolean(coreType && (coreType === 'sing-box' ? singBoxCurrent : xrayCurrent)),
+        installedVersion:
+          coreType === 'sing-box' ? singBoxCurrent : coreType === 'xray' ? xrayCurrent : '',
+        availableVersion:
+          coreType === 'sing-box' ? stableSingBoxVersion : coreType === 'xray' ? xrayLatest : '',
         updateAvailable: Boolean(
           coreType &&
           (coreType === 'sing-box'
-            ? singBoxCurrent && stableSingBoxVersion && versionsDiffer(singBoxCurrent, stableSingBoxVersion)
+            ? singBoxCurrent &&
+              stableSingBoxVersion &&
+              versionsDiffer(singBoxCurrent, stableSingBoxVersion)
             : xrayCurrent && xrayLatest && versionsDiffer(xrayCurrent, xrayLatest)),
         ),
       },
@@ -295,10 +298,9 @@ export default function SystemUpdateModal({
     }
   }, [loadDependencyUpdates, messageApi]);
 
-
-
   const updateDependency = async (dependency: DependencyStatus) => {
-    if (!dependency.availableVersion || (dependency.key !== 'sudoku' && !dependency.installed)) return;
+    if (!dependency.availableVersion || (dependency.key !== 'sudoku' && !dependency.installed))
+      return;
 
     setDependencyBusy(dependency.key);
     try {
@@ -674,15 +676,22 @@ export default function SystemUpdateModal({
                     }
                   >
                     {dependency.key === 'hysteria2' && (
-                      <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 10 }}>
+                      <Typography.Text
+                        type="secondary"
+                        style={{ display: 'block', marginBottom: 10 }}
+                      >
                         {dependency.source === 'sing-box'
                           ? 'Hysteria2 обновляется вместе с sing-box, поскольку используется реализация Hysteria2 из sing-box.'
                           : 'Hysteria2 обновляется вместе с Xray-core, поскольку используется реализация Hysteria2 из Xray.'}
                       </Typography.Text>
                     )}
                     {dependency.key === 'naiveproxy' && (
-                      <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 10 }}>
-                        NaiveProxy обновляется вместе с sing-box, поскольку Naive является встроенным протоколом sing-box.
+                      <Typography.Text
+                        type="secondary"
+                        style={{ display: 'block', marginBottom: 10 }}
+                      >
+                        NaiveProxy обновляется вместе с sing-box, поскольку Naive является
+                        встроенным протоколом sing-box.
                       </Typography.Text>
                     )}
                     <div className="system-component-meta">
@@ -708,9 +717,10 @@ export default function SystemUpdateModal({
                       icon={<DownloadOutlined />}
                       loading={dependencyBusy === dependency.key}
                       disabled={
-                        (!dependency.updateAvailable && !(dependency.key === 'sudoku' && !dependency.installed)) ||
-                      dependencyBusy !== null ||
-                      systemUpdateBusy
+                        (!dependency.updateAvailable &&
+                          !(dependency.key === 'sudoku' && !dependency.installed)) ||
+                        dependencyBusy !== null ||
+                        systemUpdateBusy
                       }
                       onClick={() => void updateDependency(dependency)}
                     >

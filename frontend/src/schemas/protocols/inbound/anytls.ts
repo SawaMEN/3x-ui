@@ -28,17 +28,19 @@ export const AnyTlsServerTlsSchema = z.object({
 export type AnyTlsServerTls = z.infer<typeof AnyTlsServerTlsSchema>;
 
 export const AnyTlsInboundSettingsSchema = z.object({
-  paddingScheme: z.array(z.string()).default([
-    'stop=8',
-    '0=30-30',
-    '1=100-400',
-    '2=400-500,c,500-1000,c,500-1000,c,500-1000,c,500-1000',
-    '3=9-9,500-1000',
-    '4=500-1000',
-    '5=500-1000',
-    '6=500-1000',
-    '7=500-1000',
-  ]),
+  paddingScheme: z
+    .array(z.string())
+    .default([
+      'stop=8',
+      '0=30-30',
+      '1=100-400',
+      '2=400-500,c,500-1000,c,500-1000,c,500-1000,c,500-1000',
+      '3=9-9,500-1000',
+      '4=500-1000',
+      '5=500-1000',
+      '6=500-1000',
+      '7=500-1000',
+    ]),
   tls: AnyTlsServerTlsSchema.default({
     enabled: true,
     serverName: '',

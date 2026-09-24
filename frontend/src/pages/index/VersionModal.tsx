@@ -118,7 +118,9 @@ export default function VersionModal({ open, status, onClose, onBusy }: VersionM
         onBusy({ busy: true, tip: t('pages.index.dontRefresh') });
         try {
           if (isSingBox) {
-            await HttpUtil.post(`/panel/api/setting/singbox/install/${encodeURIComponent(version)}`);
+            await HttpUtil.post(
+              `/panel/api/setting/singbox/install/${encodeURIComponent(version)}`,
+            );
           } else {
             await HttpUtil.post(`/panel/api/server/installXray/${encodeURIComponent(version)}`);
           }
@@ -154,12 +156,11 @@ export default function VersionModal({ open, status, onClose, onBusy }: VersionM
   }
 
   const activeKeyStr = Array.isArray(activeKey) ? activeKey[0] : activeKey;
-  const currentVersion = coreType === 'sing-box' ? singBoxVersion.replace(/^v/, '') : status?.xray?.version || '';
+  const currentVersion =
+    coreType === 'sing-box' ? singBoxVersion.replace(/^v/, '') : status?.xray?.version || '';
   const visibleVersions = versions.filter(
     (item) =>
-      showDevVersions ||
-      !item.prerelease ||
-      item.version.replace(/^v/, '') === currentVersion,
+      showDevVersions || !item.prerelease || item.version.replace(/^v/, '') === currentVersion,
   );
 
   return (
@@ -183,11 +184,7 @@ export default function VersionModal({ open, status, onClose, onBusy }: VersionM
                 <>
                   <div className="version-filter">
                     <span>Показывать dev версии</span>
-                    <Switch
-                      checked={showDevVersions}
-                      onChange={setShowDevVersions}
-                      size="small"
-                    />
+                    <Switch checked={showDevVersions} onChange={setShowDevVersions} size="small" />
                   </div>
                   <Alert
                     type="warning"

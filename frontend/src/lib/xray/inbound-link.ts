@@ -1516,7 +1516,6 @@ export function genLink(input: GenLinkInput): string {
   }
 }
 
-
 type SudokuLinkSettings = {
   ascii?: string;
   aead?: string;

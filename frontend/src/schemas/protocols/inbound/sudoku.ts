@@ -37,12 +37,9 @@ export const SudokuInboundSettingsSchema = z.object({
   suspiciousAction: z.enum(['fallback', 'silent']).default('fallback'),
   paddingMin: z.number().int().min(0).max(65535).default(5),
   paddingMax: z.number().int().min(0).max(65535).default(15),
-  ascii: z.enum([
-    'prefer_entropy',
-    'prefer_ascii',
-    'up_ascii_down_entropy',
-    'up_entropy_down_ascii',
-  ]).default('prefer_entropy'),
+  ascii: z
+    .enum(['prefer_entropy', 'prefer_ascii', 'up_ascii_down_entropy', 'up_entropy_down_ascii'])
+    .default('prefer_entropy'),
   customTable: z.string().default(''),
   customTables: z.array(z.string()).default([]),
   enablePureDownlink: z.boolean().default(true),
