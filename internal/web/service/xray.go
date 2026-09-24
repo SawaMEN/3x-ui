@@ -201,6 +201,16 @@ func RemoveIndex(s []any, index int) []any {
 }
 
 // GetXrayConfig retrieves and builds the Xray configuration from settings and inbounds.
+func isXrayUnsupportedInboundProtocol(protocol model.Protocol) bool {
+	switch protocol {
+	case model.MTProto, model.AmneziaWG, model.TUIC, model.VKTurnProxy,
+		model.NaiveProxy, model.Mieru, model.Sudoku, model.AnyTLS, model.ShadowTLS:
+		return true
+	default:
+		return false
+	}
+}
+
 func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 	templateConfig, err := s.settingService.GetXrayConfigTemplate()
 	if err != nil {
@@ -239,10 +249,10 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 		if inbound.NodeID != nil {
 			continue
 		}
-		if inbound.Protocol == model.MTProto || inbound.Protocol == model.AmneziaWG || inbound.Protocol == model.TUIC || inbound.Protocol == model.VKTurnProxy || inbound.Protocol == model.NaiveProxy || inbound.Protocol == model.Mieru || inbound.Protocol == model.Sudoku {
-			// NaiveProxy is a sing-box-only inbound. A legacy Naive row may still
-			// exist when the selected core was switched back to Xray; never emit it
-			// into an Xray config because xray-core has no Naive inbound handler.
+		if isXrayUnsupportedInboundProtocol(inbound.Protocol) {
+			// These protocols are implemented outside xray-core. In particular,
+			// AnyTLS and ShadowTLS are sing-box-only in the panel; emitting them
+			// into config.json makes xray-core fail with "unknown config id".
 			continue
 		}
 		settings := map[string]any{}

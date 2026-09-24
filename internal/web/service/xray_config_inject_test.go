@@ -1013,3 +1013,28 @@ func TestInjectAmneziawgV6Egress_RulesPrependedBeforeExistingRules(t *testing.T)
 		t.Fatalf("the pre-existing rule must survive, got %+v", routing.Rules[1])
 	}
 }
+
+func TestIsXrayUnsupportedInboundProtocol(t *testing.T) {
+	for _, protocol := range []model.Protocol{
+		model.AnyTLS,
+		model.ShadowTLS,
+		model.NaiveProxy,
+		model.MTProto,
+		model.TUIC,
+	} {
+		if !isXrayUnsupportedInboundProtocol(protocol) {
+			t.Fatalf("expected %q to be excluded from Xray config", protocol)
+		}
+	}
+	for _, protocol := range []model.Protocol{
+		model.VLESS,
+		model.VMESS,
+		model.Trojan,
+		model.Shadowsocks,
+		model.Hysteria,
+	} {
+		if isXrayUnsupportedInboundProtocol(protocol) {
+			t.Fatalf("expected %q to remain Xray-managed", protocol)
+		}
+	}
+}
