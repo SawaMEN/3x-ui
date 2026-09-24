@@ -252,7 +252,7 @@ func packageInstallCommand(manager string, names []string) ([]string, bool) {
 func packageUpgradeCommand(manager string) []string {
 	switch manager {
 	case "apt-get":
-		return []string{"apt-get", "upgrade", "-y", "--no-install-recommends"}
+		return []string{"apt-get", "upgrade", "-y", "--with-new-pkgs", "--no-install-recommends"}
 	case "dnf":
 		return []string{"dnf", "upgrade", "-y"}
 	case "yum":
@@ -1321,6 +1321,7 @@ func commandExists(name string) bool {
 
 func runCommand(ctx context.Context, command string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, command, args...)
+	cmd.Env = append(os.Environ(), "LC_ALL=C", "LANG=C", "LANGUAGE=C")
 	output, err := cmd.CombinedOutput()
 	return string(output), err
 }
