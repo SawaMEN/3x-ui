@@ -2321,6 +2321,16 @@ type stagedGeofile struct {
 // installed nothing also restarted nothing.
 var restartXrayAfterGeofileUpdate = (*ServerService).RestartXrayService
 
+// AutoUpdateGeofiles refreshes the standard geodata set only while Xray is
+// already running. The scheduled updater must never turn a deliberately stopped
+// core back on just because a new geosite/geoip release appeared.
+func (s *ServerService) AutoUpdateGeofiles() error {
+	if !s.xrayService.IsXrayRunning() {
+		return nil
+	}
+	return s.UpdateGeofile("")
+}
+
 func (s *ServerService) UpdateGeofile(fileName string) error {
 	// Strict allowlist check to avoid writing uncontrolled files
 	if fileName != "" {
