@@ -86,12 +86,8 @@ export function inboundNetworkLabels(record: {
   }
 
   switch (protocol) {
-    case 'shadowsocks': {
-      const labels = [shadowsocksNetworkLabel(record.settings)];
-      const stream = readStreamHints(record.streamSettings);
-      if (stream.isTls) labels.push('TLS');
-      return labels;
-    }
+    case 'shadowsocks':
+      return [shadowsocksNetworkLabel(record.settings)];
     case 'tunnel':
       return [tunnelNetworkLabel(record.settings)];
     case 'mixed':
