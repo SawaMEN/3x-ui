@@ -328,6 +328,65 @@
   margin-bottom: 8px;
 }
 
+.login-brand-mark {
+  display: grid;
+  width: 72px;
+  height: 72px;
+  place-items: center;
+  padding: 9px;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 24%, transparent);
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--bg-card-solid));
+  box-shadow:
+    0 10px 28px color-mix(in srgb, var(--color-accent) 15%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, #ffffff 24%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.login-brand-mark svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.login-brand-mark-frame {
+  fill: color-mix(in srgb, var(--color-accent) 8%, transparent);
+  stroke: var(--color-accent);
+  stroke-width: 2.4;
+}
+
+.login-brand-mark-core {
+  fill: none;
+  stroke: color-mix(in srgb, var(--color-text) 72%, var(--color-accent));
+  stroke-width: 1.35;
+  stroke-linecap: round;
+}
+
+.login-brand-mark-x {
+  fill: none;
+  stroke: var(--color-accent);
+  stroke-width: 3.4;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--color-accent) 62%, transparent));
+}
+
+.login-brand-mark-node {
+  fill: none;
+  stroke: color-mix(in srgb, var(--color-accent) 82%, var(--color-text));
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.login-brand-mark-dot {
+  fill: var(--color-accent);
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--color-accent) 72%, transparent));
+}
+
+.login-brand-mark-dot-pink {
+  fill: #ec4899;
+}
+
 .brand-name {
   font-size: 28px;
   font-weight: 700;
@@ -344,6 +403,228 @@
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
+}
+
+.login-app.is-ultra .login-brand-mark {
+  border-color: rgba(168, 85, 247, 0.28);
+  background: rgba(22, 16, 34, 0.74);
+  box-shadow:
+    0 12px 34px rgba(168, 85, 247, 0.18),
+    0 0 28px rgba(34, 211, 238, 0.08),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.login-app.is-ultra .login-brand-mark-frame {
+  stroke: #a855f7;
+}
+
+.login-app.is-ultra .login-brand-mark-x {
+  stroke: #22d3ee;
+}
+
+.login-app.is-ultra .login-brand-mark-node,
+.login-app.is-ultra .login-brand-mark-dot {
+  stroke: #c084fc;
+  fill: #c084fc;
+}
+
+.login-app.is-ultra .login-brand-mark-dot-pink {
+  fill: #ec4899;
+}
+
+body.theme-colorful .login-app {
+  --bg-page: #f8f5ff;
+  --bg-card: rgba(255, 250, 255, 0.76);
+  --bg-card-solid: #fffaff;
+  --color-text: #2b2238;
+  --color-text-subtle: rgba(56, 43, 74, 0.62);
+  --color-accent: #7c3aed;
+  --color-border: rgba(124, 58, 237, 0.14);
+  --shadow-card:
+    0 1px 3px rgba(76, 29, 149, 0.05),
+    0 20px 60px rgba(124, 58, 237, 0.16),
+    0 8px 30px rgba(236, 72, 153, 0.08);
+  --blob-1: rgba(124, 58, 237, 0.3);
+  --blob-2: rgba(236, 72, 153, 0.3);
+  --blob-3: rgba(59, 130, 246, 0.22);
+  --blob-4: rgba(245, 158, 11, 0.22);
+  --blob-5: rgba(20, 184, 166, 0.22);
+  --grid-color: rgba(124, 58, 237, 0.045);
+  --vignette: radial-gradient(ellipse at center, transparent 30%, rgba(76, 29, 149, 0.06) 100%);
+  background:
+    radial-gradient(circle at 15% 10%, rgba(124, 58, 237, 0.11), transparent 28%),
+    radial-gradient(circle at 88% 18%, rgba(236, 72, 153, 0.1), transparent 25%),
+    linear-gradient(135deg, #f8f5ff 0%, #fff7fb 48%, #f0fdfa 100%);
+}
+
+body.theme-colorful .brand-name {
+  background: linear-gradient(135deg, #7c3aed, #ec4899);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+body.theme-colorful .brand-accent {
+  background: linear-gradient(90deg, #7c3aed, #ec4899, #0ea5e9);
+}
+
+body.theme-colorful .login-brand-mark {
+  border-color: rgba(124, 58, 237, 0.2);
+  background:
+    radial-gradient(circle at 28% 24%, rgba(124, 58, 237, 0.12), transparent 46%),
+    radial-gradient(circle at 74% 74%, rgba(236, 72, 153, 0.1), transparent 44%),
+    rgba(255, 250, 255, 0.84);
+  box-shadow:
+    0 12px 32px rgba(124, 58, 237, 0.12),
+    0 0 24px rgba(236, 72, 153, 0.08),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.7);
+}
+
+body.theme-colorful .login-brand-mark-frame {
+  stroke: #7c3aed;
+  fill: rgba(124, 58, 237, 0.06);
+}
+
+body.theme-colorful .login-brand-mark-core {
+  stroke: #6d28d9;
+}
+
+body.theme-colorful .login-brand-mark-x {
+  stroke: #ec4899;
+  filter: drop-shadow(0 0 4px rgba(236, 72, 153, 0.42));
+}
+
+body.theme-colorful .login-brand-mark-node,
+body.theme-colorful .login-brand-mark-dot {
+  stroke: #0ea5e9;
+  fill: #0ea5e9;
+}
+
+body.theme-blue-gray .login-app {
+  --bg-page: #101722;
+  --bg-card: rgba(24, 35, 51, 0.78);
+  --bg-card-solid: #182333;
+  --color-text: #f2f6fb;
+  --color-text-subtle: rgba(220, 229, 240, 0.66);
+  --color-accent: #8ab4f8;
+  --color-border: rgba(190, 210, 235, 0.16);
+  --shadow-card:
+    0 1px 3px rgba(0, 0, 0, 0.34),
+    0 20px 58px rgba(4, 13, 24, 0.45),
+    0 0 26px rgba(138, 180, 248, 0.08);
+  --blob-1: rgba(82, 126, 184, 0.28);
+  --blob-2: rgba(76, 98, 130, 0.28);
+  --blob-3: rgba(113, 145, 187, 0.2);
+  --blob-4: rgba(148, 163, 184, 0.14);
+  --blob-5: rgba(56, 189, 248, 0.12);
+  --grid-color: rgba(190, 210, 235, 0.045);
+  --vignette: radial-gradient(ellipse at center, transparent 24%, rgba(0, 0, 0, 0.56) 100%);
+  background:
+    radial-gradient(circle at 18% 10%, rgba(138, 180, 248, 0.1), transparent 28%),
+    radial-gradient(circle at 86% 18%, rgba(96, 125, 163, 0.09), transparent 26%),
+    linear-gradient(145deg, #0f1723 0%, #101722 48%, #0d1520 100%);
+}
+
+body.theme-blue-gray .brand-name {
+  background: linear-gradient(135deg, #d5e2f2, #8ab4f8);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+body.theme-blue-gray .brand-accent {
+  background: linear-gradient(90deg, #6e93c7, #8ab4f8, #b7cdf0);
+}
+
+body.theme-blue-gray .login-brand-mark {
+  border-color: rgba(138, 180, 248, 0.24);
+  background:
+    radial-gradient(circle at 30% 25%, rgba(138, 180, 248, 0.1), transparent 44%),
+    radial-gradient(circle at 75% 75%, rgba(84, 110, 145, 0.12), transparent 46%),
+    rgba(18, 30, 45, 0.82);
+  box-shadow:
+    0 12px 34px rgba(0, 0, 0, 0.34),
+    0 0 24px rgba(138, 180, 248, 0.1),
+    inset 0 0 0 1px rgba(214, 226, 240, 0.06);
+}
+
+body.theme-blue-gray .login-brand-mark-frame {
+  stroke: #8ab4f8;
+  fill: rgba(138, 180, 248, 0.05);
+}
+
+body.theme-blue-gray .login-brand-mark-core {
+  stroke: #d5e2f2;
+}
+
+body.theme-blue-gray .login-brand-mark-x {
+  stroke: #a8c7fa;
+  filter: drop-shadow(0 0 5px rgba(138, 180, 248, 0.4));
+}
+
+body.theme-blue-gray .login-brand-mark-node,
+body.theme-blue-gray .login-brand-mark-dot {
+  stroke: #b7cdf0;
+  fill: #b7cdf0;
+}
+
+.login-app.is-ultra .brand-name {
+  background: linear-gradient(135deg, #c084fc, #22d3ee, #ec4899);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.login-app.is-ultra .brand-accent {
+  background: linear-gradient(90deg, #a855f7, #22d3ee, #ec4899);
+}
+
+body.theme-cyberpunk .login-brand-mark {
+  border-color: rgba(0, 246, 255, 0.28);
+  background:
+    radial-gradient(circle at 30% 25%, rgba(0, 246, 255, 0.11), transparent 42%),
+    radial-gradient(circle at 75% 75%, rgba(255, 43, 214, 0.11), transparent 44%),
+    rgba(6, 10, 18, 0.72);
+  box-shadow:
+    0 12px 36px rgba(0, 0, 0, 0.5),
+    0 0 26px rgba(0, 246, 255, 0.14),
+    inset 0 0 0 1px rgba(0, 246, 255, 0.08);
+}
+
+body.theme-cyberpunk .login-brand-mark-frame {
+  fill: rgba(0, 246, 255, 0.045);
+  stroke: #00f6ff;
+  stroke-width: 2.7;
+  filter: drop-shadow(0 0 5px rgba(0, 246, 255, 0.7));
+}
+
+body.theme-cyberpunk .login-brand-mark-core {
+  stroke: rgba(197, 249, 255, 0.95);
+  stroke-width: 1.45;
+}
+
+body.theme-cyberpunk .login-brand-mark-x {
+  stroke: #ff2bd6;
+  stroke-width: 3.8;
+  filter:
+    drop-shadow(0 0 3px rgba(255, 43, 214, 0.95))
+    drop-shadow(0 0 10px rgba(255, 43, 214, 0.48));
+}
+
+body.theme-cyberpunk .login-brand-mark-node {
+  stroke: #00f6ff;
+  stroke-width: 2.15;
+  filter: drop-shadow(0 0 4px rgba(0, 246, 255, 0.72));
+}
+
+body.theme-cyberpunk .login-brand-mark-dot {
+  fill: #00f6ff;
+  filter: drop-shadow(0 0 5px rgba(0, 246, 255, 0.95));
+}
+
+body.theme-cyberpunk .login-brand-mark-dot-pink {
+  fill: #ff2bd6;
+  filter: drop-shadow(0 0 5px rgba(255, 43, 214, 0.95));
 }
 
 .brand-accent {
