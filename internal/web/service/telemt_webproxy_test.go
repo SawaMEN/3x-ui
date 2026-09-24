@@ -55,7 +55,7 @@ func TestTelemtWebPortAvailabilityOutput(t *testing.T) {
 	}
 	for _, tt := range tests {
 		if got := strings.TrimSpace(tt.output) == ""; got != tt.want {
-			t.Fatalf("%s: strings.TrimSpace(%q) == "" = %v, want %v", tt.name, tt.output, got, tt.want)
+			t.Fatalf("%s: strings.TrimSpace(%q) == empty = %v, want %v", tt.name, tt.output, got, tt.want)
 		}
 	}
 }
