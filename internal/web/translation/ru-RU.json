@@ -743,7 +743,8 @@
         "peerNumber": "Peer {n}",
         "peerNumberConfig": "Конфиг Peer {n}"
       },
-      "sniffingDestOverride": "Переопределение назначения"
+      "sniffingDestOverride": "Переопределение назначения",
+      "dragToReorder": "Перетащите для изменения порядка"
     },
     "clients": {
       "tabBasics": "Основные",
@@ -1132,7 +1133,8 @@
       "pinnedCertPlaceholder": "SHA-256 в base64 или hex",
       "fetchPin": "Получить",
       "pinFetched": "Текущий сертификат узла получен",
-      "pinFetchFailed": "Не удалось получить сертификат"
+      "pinFetchFailed": "Не удалось получить сертификат",
+      "dragToReorder": "Перетащите для изменения порядка"
     },
     "settings": {
       "defaultTag": "По умолчанию",
