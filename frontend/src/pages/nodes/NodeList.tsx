@@ -26,6 +26,7 @@ import NodeHistoryPanel from './NodeHistoryPanel';
 import type { NodeRecord } from '@/api/queries/useNodesQuery';
 import { isPanelUpdateAvailable } from '@/lib/panel-version';
 import { activateOnKey } from '@/utils/a11y';
+import { SizeFormatter } from '@/utils';
 import './NodeList.css';
 
 interface NodeListProps {
@@ -791,6 +792,20 @@ function NodeList({
                       </div>
                     </div>
 
+                    <div className="node-load-grid">
+                      <span>
+                        CPU <b>{formatPct(record.cpuPct)}</b>
+                      </span>
+                      <span>
+                        RAM <b>{formatPct(record.memPct)}</b>
+                      </span>
+                      <span>
+                        NET ↑ <b>{SizeFormatter.speedFormat(record.netUp)}</b>
+                      </span>
+                      <span>
+                        NET ↓ <b>{SizeFormatter.speedFormat(record.netDown)}</b>
+                      </span>
+                    </div>
                     {expandedIds.has(record.id) && (
                       <div className="card-history">
                         <NodeHistoryPanel node={record} />
