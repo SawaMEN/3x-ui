@@ -16,11 +16,7 @@ import {
   SPEED_TAG_STYLE,
 } from '@/components/utility/speedTagStyle';
 import { InboundSpeedTag, isActiveSpeed } from './InboundSpeedTag';
-import {
-  readStreamHints,
-  formatHostRemarksLabel,
-  inboundNetworkLabels,
-} from './helpers';
+import { readStreamHints, formatHostRemarksLabel, inboundNetworkLabels } from './helpers';
 import type { ClientCountEntry, DBInboundRecord, InboundSpeedEntry, RowAction } from './types';
 
 interface UseInboundColumnsParams {
