@@ -2,6 +2,8 @@
 
 package systemupdate
 
+// CI diagnostic branch: no functional change.
+
 import (
 	"bufio"
 	"context"
