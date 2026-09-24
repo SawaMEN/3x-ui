@@ -560,9 +560,8 @@ func TranslateXrayInbound(raw map[string]any) (map[string]any, error) {
 		if serverPort <= 0 {
 			serverPort = rawInt(handshake, "port")
 		}
-		if serverPort <= 0 && wildcard == "all" {
-			// sing-box uses (servername):443 for wildcard_sni=all, so the
-			// configured handshake server may omit both address and port.
+		if serverPort <= 0 {
+			// ShadowTLS uses port 443 by default when no handshake port is configured.
 			serverPort = 443
 		}
 		if (server == "" && wildcard != "all") || serverPort <= 0 || serverPort > 65535 {
