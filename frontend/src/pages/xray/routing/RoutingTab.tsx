@@ -190,6 +190,7 @@ export default function RoutingTab({
           description: presetDescription.trim(),
           rules: JSON.parse(JSON.stringify(rules)),
         },
+        { headers: { 'Content-Type': 'application/json' } },
       );
       if (!msg?.success) {
         message.error(msg?.msg || t('pages.xray.routingPresetSaveFailed'));
