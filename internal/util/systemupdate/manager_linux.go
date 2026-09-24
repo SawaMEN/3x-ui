@@ -414,7 +414,7 @@ func collectPackageStatuses(
 		if seen[name] || !isKernelPackage(name) {
 			continue
 		}
-		installedVersion, installed := lookup(name)
+		_, installed := lookup(name)
 		if !installed {
 			continue
 		}
