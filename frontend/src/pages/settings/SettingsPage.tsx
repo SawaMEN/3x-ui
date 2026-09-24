@@ -80,8 +80,17 @@ function scrollTarget() {
 
 export default function SettingsPage() {
   const { t } = useTranslation();
-  const { isDark, isUltra, mode, setThemeMode, lowPower, toggleLowPower, antdThemeConfig } =
-    useTheme();
+  const {
+    isDark,
+    isUltra,
+    mode,
+    setThemeMode,
+    lowPower,
+    toggleLowPower,
+    menuStyle,
+    setMenuStyle,
+    antdThemeConfig,
+  } = useTheme();
   const { isMobile } = useMediaQuery();
   const [modal, modalContextHolder] = Modal.useModal();
   const [messageApi, messageContextHolder] = message.useMessage();
@@ -421,6 +430,50 @@ export default function SettingsPage() {
                             })}
                           </div>
                           <div className="theme-picker-footer">
+                            <div className="menu-style-picker">
+                              <div>
+                                <div className="theme-picker-title">
+                                  {t('pages.settings.menuStyle.title')}
+                                </div>
+                                <div className="theme-picker-subtitle">
+                                  {t('pages.settings.menuStyle.subtitle')}
+                                </div>
+                              </div>
+                              <div
+                                className="menu-style-grid"
+                                role="radiogroup"
+                                aria-label={t('pages.settings.menuStyle.title')}
+                              >
+                                {[
+                                  { key: 'pill', label: t('pages.settings.menuStyle.pill'), desc: t('pages.settings.menuStyle.pillDesc') },
+                                  { key: 'solid', label: t('pages.settings.menuStyle.solid'), desc: t('pages.settings.menuStyle.solidDesc') },
+                                  { key: 'minimal', label: t('pages.settings.menuStyle.minimal'), desc: t('pages.settings.menuStyle.minimalDesc') },
+                                ].map((option) => {
+                                  const selected = menuStyle === option.key;
+                                  return (
+                                    <button
+                                      key={option.key}
+                                      type="button"
+                                      role="radio"
+                                      aria-checked={selected}
+                                      className={`menu-style-option ${selected ? 'is-selected' : ''} menu-style-${option.key}`}
+                                      onClick={() => setMenuStyle(option.key as 'pill' | 'solid' | 'minimal')}
+                                    >
+                                      <span className="menu-style-preview" aria-hidden="true">
+                                        <span />
+                                        <span />
+                                        <span />
+                                      </span>
+                                      <span className="menu-style-copy">
+                                        <span>{option.label}</span>
+                                        <small>{option.desc}</small>
+                                      </span>
+                                      {selected && <CheckOutlined />}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
                             <Button
                               className={`low-power-toggle ${lowPower ? 'is-active' : ''}`}
                               onClick={toggleLowPower}
