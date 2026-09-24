@@ -1527,7 +1527,20 @@
         "apiTokenEmpty": "No tokens yet — create one to authenticate bots or remote panels.",
         "apiTokenDeleteWarning": "Any caller using this token will stop authenticating immediately.",
         "apiTokenCreatedTitle": "Token created",
-        "apiTokenCreatedNotice": "Copy this token now. For security it is not stored in readable form and will not be shown again."
+        "apiTokenCreatedNotice": "Copy this token now. For security it is not stored in readable form and will not be shown again.",
+        "sessions": "Active sessions",
+        "sessionsHint": "Review signed-in devices and revoke sessions you no longer trust.",
+        "sessionsEmpty": "No tracked sessions.",
+        "currentSession": "Current",
+        "revokedSession": "Revoked",
+        "lastSeen": "Last seen",
+        "unknownAddress": "Unknown address",
+        "revokeSession": "Revoke this session?",
+        "revokeOtherSessions": "Revoke other sessions",
+        "revokeOtherSessionsDesc": "All other sessions will be signed out. This device stays active.",
+        "otherSessionsRevoked": "Other sessions revoked.",
+        "sessionRevoked": "Session revoked.",
+        "sessionsUseLogout": "Use Logout to end the current session."
       },
       "toasts": {
         "modifySettings": "The parameters have been changed.",
