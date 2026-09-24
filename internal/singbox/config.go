@@ -536,7 +536,19 @@ func TranslateXrayInbound(raw map[string]any) (map[string]any, error) {
 		}
 		handshake := rawObject(settings, "handshake")
 		server := strings.TrimSpace(rawString(handshake, "server"))
+		if server == "" {
+			// Accept the common normalized alias used by imported/translated configs.
+			server = strings.TrimSpace(rawString(handshake, "address"))
+		}
 		serverPort := rawInt(handshake, "serverPort")
+		if serverPort <= 0 {
+			// Keep compatibility with configs that already use sing-box's snake_case
+			// name or the generic handshake port field.
+			serverPort = rawInt(handshake, "server_port")
+		}
+		if serverPort <= 0 {
+			serverPort = rawInt(handshake, "port")
+		}
 		if server == "" || serverPort <= 0 || serverPort > 65535 {
 			return nil, fmt.Errorf("inbound %q ShadowTLS requires a valid handshake server and port", rawString(raw, "tag"))
 		}
