@@ -588,12 +588,8 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 			if outbound == nil {
 				return "", "", errSubscriptionFormatUnsupported
 			}
-			rawOutbound, err := json.Marshal(outbound)
-			if err != nil {
-				return "", "", err
-			}
 			var xrayOutbound map[string]any
-			if err := json.Unmarshal(rawOutbound, &xrayOutbound); err != nil {
+			if err := json.Unmarshal(outbound, &xrayOutbound); err != nil {
 				return "", "", err
 			}
 			native, err := singbox.TranslateXrayOutbound(xrayOutbound)
@@ -1501,6 +1497,17 @@ func (s *SubJsonService) genHy(inbound *model.Inbound, newStream map[string]any,
 	}
 	if masquerade, ok := hyStream["masquerade"].(map[string]any); ok {
 		outHyStream["masquerade"] = masquerade
+	}
+	for _, key := range []string{
+		"up_mbps", "down_mbps", "hop_interval", "hop_interval_max",
+		"bbr_profile", "disable_chrome_parrot", "ignore_client_bandwidth",
+	} {
+		if value, ok := hyStream[key]; ok {
+			outHyStream[key] = value
+		}
+	}
+	if obfs, ok := hyStream["obfs"].(map[string]any); ok && len(obfs) > 0 {
+		outHyStream["obfs"] = obfs
 	}
 	newStream["hysteriaSettings"] = outHyStream
 

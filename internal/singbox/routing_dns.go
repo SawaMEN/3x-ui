@@ -57,10 +57,26 @@ func TranslateXrayRouting(raw map[string]any) (map[string]any, error) {
 			r["source_port"] = sourcePort
 		}
 		if network := compatString(xr["network"]); network != "" {
-			if network != "tcp" && network != "udp" {
-				return nil, fmt.Errorf("routing rule %d: unsupported network %q", i, network)
+			parts := strings.Split(network, ",")
+			validated := make([]string, 0, len(parts))
+			for _, part := range parts {
+				part = strings.TrimSpace(strings.ToLower(part))
+				if part == "" {
+					continue
+				}
+				if part != "tcp" && part != "udp" {
+					return nil, fmt.Errorf("routing rule %d: unsupported network %q", i, network)
+				}
+				validated = append(validated, part)
 			}
-			r["network"] = network
+			switch len(validated) {
+			case 0:
+				return nil, fmt.Errorf("routing rule %d: unsupported network %q", i, network)
+			case 1:
+				r["network"] = validated[0]
+			default:
+				r["network"] = validated
+			}
 		}
 		if users := compatStringSlice(xr["user"]); len(users) > 0 {
 			r["user"] = users

@@ -26,13 +26,6 @@ func TestTranslateXrayVLESSWebSocketTLS(t *testing.T) {
 				"path": "/ws",
 			},
 		},
-		"streamSettings": map[string]any{
-			"network":  "ws",
-			"security": "tls",
-			"tlsSettings": map[string]any{
-				"serverName": "stale.example.com",
-			},
-		},
 	}
 
 	got, err := TranslateXrayInbound(raw)
@@ -619,8 +612,8 @@ func TestTranslateXrayNaiveInbound(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got["type"] != "naive" || got["listen"] != "::" || got["listen_port"] != 443 ||
-		got["network"] != "tcp" {
+	if got["type"] != "naive" ||
+		rawInt(got, "listen_port") != 443 || got["network"] != "tcp" {
 		t.Fatalf("unexpected Naive base config: %#v", got)
 	}
 

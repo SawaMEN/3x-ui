@@ -166,7 +166,8 @@ type SubService struct {
 	// settingsByInbound caches each inbound's settings decoded once per request
 	// with the clients array left out; generators read only inbound-level
 	// fields (encryption, method, version, …) from it.
-	settingsByInbound map[int]map[string]any
+	settingsByInbound       map[int]map[string]any
+	streamSettingsByInbound map[int]map[string]any
 }
 
 // NewSubService creates a new subscription service with the given configuration.
@@ -202,6 +203,7 @@ func (s *SubService) PrepareForRequest(host string) {
 	s.clientsByInbound = map[int]map[string]model.Client{}
 	s.fullyPrimedInbounds = map[int]bool{}
 	s.settingsByInbound = map[int]map[string]any{}
+	s.streamSettingsByInbound = map[int]map[string]any{}
 	s.loadNodes()
 	s.loadRemarkSettings()
 	s.subCalendarExpireInclusive, _ = s.settingService.GetSubCalendarExpireInclusive()
@@ -294,6 +296,9 @@ func (s *SubService) clientsForLinkExport(inbound *model.Inbound) ([]model.Clien
 // fields from it and resolve clients via clientForLink. The shallow
 // RawMessage pass skips materializing a huge clients array entirely.
 func (s *SubService) linkSettings(inbound *model.Inbound) map[string]any {
+	if inbound == nil {
+		return nil
+	}
 	if inbound.Id > 0 {
 		if cached, ok := s.settingsByInbound[inbound.Id]; ok {
 			return cached
@@ -351,6 +356,9 @@ func (s *SubService) loadRemarkSettings() {
 }
 
 func (s *SubService) configuredPublicHost() string {
+	if database.GetDB() == nil {
+		return ""
+	}
 	if d, err := s.settingService.GetSubDomain(); err == nil && d != "" {
 		return d
 	}
@@ -881,7 +889,7 @@ func (s *SubService) shareEndpointsForInbound(inbound *model.Inbound) []ShareEnd
 		return nil
 	}
 	fallback := s.inboundDefaultEndpoint(inbound)
-	stream := unmarshalStreamSettings(inbound.StreamSettings)
+	stream := s.streamSettingsForInbound(inbound)
 	raw, ok := stream["externalProxy"].([]any)
 	if !ok || len(raw) == 0 {
 		return []ShareEndpoint{fallback}
@@ -985,7 +993,7 @@ func (s *SubService) genNaiveLink(inbound *model.Inbound, email string) string {
 // subscription callers, so keeping this helper on the serialized endpoint path
 // makes raw links, QR/export links, and host-aware subscriptions agree.
 func (s *SubService) naiveShareEndpoints(inbound *model.Inbound) []map[string]any {
-	stream := unmarshalStreamSettings(inbound.StreamSettings)
+	stream := s.streamSettingsForInbound(inbound)
 	if raw, ok := stream["externalProxy"].([]any); ok && len(raw) > 0 {
 		eps := make([]map[string]any, 0, len(raw))
 		for _, item := range raw {
@@ -1283,10 +1291,14 @@ func (s *SubService) genMieruLink(inbound *model.Inbound, email string) string {
 			}
 		}
 
+		host := formatShareHost(endpoint.Address)
+		if endpoint.ep != nil {
+			host = joinHostPort(endpoint.Address, endpoint.Port)
+		}
 		link := fmt.Sprintf("mierus://%s:%s@%s?%s",
 			encodeUserinfo(client.Email),
 			encodeUserinfo(client.Password),
-			formatShareHost(endpoint.Address),
+			host,
 			values.Encode(),
 		)
 		links = append(links, link+"#"+strings.ReplaceAll(url.QueryEscape(s.endpointRemark(inbound, email, endpoint.ep, "")), "+", "%20"))
@@ -1334,7 +1346,7 @@ func (s *SubService) genTuicLink(inbound *model.Inbound, email string) string {
 	}
 	params["allow_insecure"] = "0"
 
-	stream := unmarshalStreamSettings(inbound.StreamSettings)
+	stream := s.streamSettingsForInbound(inbound)
 	externalProxies, _ := stream["externalProxy"].([]any)
 	if len(externalProxies) > 0 {
 		links := make([]string, 0, len(externalProxies))
@@ -1572,7 +1584,7 @@ func (s *SubService) genMtprotoLink(inbound *model.Inbound, email string) string
 		return ""
 	}
 	endpoints := []ShareEndpoint{s.inboundDefaultEndpoint(inbound)}
-	stream := unmarshalStreamSettings(inbound.StreamSettings)
+	stream := s.streamSettingsForInbound(inbound)
 	if externalProxies, ok := stream["externalProxy"].([]any); ok && len(externalProxies) > 0 {
 		overrides := make([]ShareEndpoint, 0, len(externalProxies))
 		for _, raw := range externalProxies {
@@ -1612,7 +1624,7 @@ func (s *SubService) genVmessLink(inbound *model.Inbound, email string) string {
 		"port": inbound.Port,
 		"type": "none",
 	}
-	stream := unmarshalStreamSettings(inbound.StreamSettings)
+	stream := s.streamSettingsForInbound(inbound)
 	network, _ := stream["network"].(string)
 	applyVmessNetworkParams(stream, network, obj)
 	if finalmask, ok := stream["finalmask"].(map[string]any); ok {
@@ -1689,7 +1701,7 @@ func (s *SubService) genVlessLink(inbound *model.Inbound, email string) string {
 		return ""
 	}
 	address := s.resolveInboundAddress(inbound)
-	stream := unmarshalStreamSettings(inbound.StreamSettings)
+	stream := s.streamSettingsForInbound(inbound)
 	client, ok := s.clientForLink(inbound, email)
 	if !ok {
 		return ""
@@ -1753,7 +1765,7 @@ func (s *SubService) genTrojanLink(inbound *model.Inbound, email string) string 
 		return ""
 	}
 	address := s.resolveInboundAddress(inbound)
-	stream := unmarshalStreamSettings(inbound.StreamSettings)
+	stream := s.streamSettingsForInbound(inbound)
 	client, ok := s.clientForLink(inbound, email)
 	if !ok {
 		return ""
@@ -1835,7 +1847,7 @@ func (s *SubService) genShadowsocksLink(inbound *model.Inbound, email string) st
 		return ""
 	}
 	address := s.resolveInboundAddress(inbound)
-	stream := unmarshalStreamSettings(inbound.StreamSettings)
+	stream := s.streamSettingsForInbound(inbound)
 	client, ok := s.clientForLink(inbound, email)
 	if !ok {
 		return ""
@@ -2017,6 +2029,11 @@ func (s *SubService) genHysteriaLink(inbound *model.Inbound, email string) strin
 			if !ok {
 				continue
 			}
+			if forceTLS, _ := ep["forceTls"].(string); strings.EqualFold(strings.TrimSpace(forceTLS), "none") {
+				// Hysteria is TLS/QUIC-only; a plaintext external endpoint
+				// cannot be represented by a valid Hysteria URI.
+				continue
+			}
 			dest, _ := ep["dest"].(string)
 			portF, okPort := ep["port"].(float64)
 			if strings.TrimSpace(dest) == "" {
@@ -2188,6 +2205,29 @@ func findClientIndex(clients []model.Client, email string) int {
 func unmarshalStreamSettings(streamSettings string) map[string]any {
 	var stream map[string]any
 	_ = json.Unmarshal([]byte(streamSettings), &stream)
+	return stream
+}
+
+// streamSettingsForInbound caches the decoded stream settings for one request.
+// Subscription rendering can visit the same inbound through several exporters;
+// decoding its JSON once avoids repeated allocations without sharing state
+// between concurrent HTTP requests.
+func (s *SubService) streamSettingsForInbound(inbound *model.Inbound) map[string]any {
+	if inbound == nil {
+		return nil
+	}
+	if inbound.Id > 0 {
+		if cached, ok := s.streamSettingsByInbound[inbound.Id]; ok {
+			return cached
+		}
+	}
+	stream := unmarshalStreamSettings(inbound.StreamSettings)
+	if inbound.Id > 0 {
+		if s.streamSettingsByInbound == nil {
+			s.streamSettingsByInbound = map[int]map[string]any{}
+		}
+		s.streamSettingsByInbound[inbound.Id] = stream
+	}
 	return stream
 }
 

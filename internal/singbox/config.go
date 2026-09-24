@@ -68,6 +68,7 @@ func TranslateXrayOutbound(raw map[string]any) (map[string]any, error) {
 		return nil, fmt.Errorf("sing-box does not support Xray outbound protocol %q through the compatibility translator", protocol)
 	}
 	settings := rawObject(raw, "settings")
+	streamSettings := rawObject(raw, "streamSettings")
 	switch protocol {
 	case "socks", "http":
 		server := firstObject(settings, "servers")
@@ -126,8 +127,8 @@ func TranslateXrayOutbound(raw map[string]any) (map[string]any, error) {
 			if users, _ := server["users"].([]any); len(users) > 0 {
 				user, _ = users[0].(map[string]any)
 			}
-		} else if protocol == "vless" {
-			// The panel's modern VLESS form stores the single target flat in
+		} else if protocol == "vless" || protocol == "vmess" {
+			// The panel's modern VLESS/VMess forms store a single target flat in
 			// settings rather than using Xray's legacy vnext wrapper.
 			address = rawString(settings, "address")
 			port = rawInt(settings, "port")
@@ -212,13 +213,12 @@ func TranslateXrayOutbound(raw map[string]any) (map[string]any, error) {
 			} else if password := rawString(settings, "password"); password != "" {
 				out["password"] = password
 			}
-			for _, key := range []string{"up_mbps", "down_mbps", "hop_interval", "hop_interval_max", "bbr_profile", "disable_chrome_parrot", "ignore_client_bandwidth"} {
-				if value, ok := settings[key]; ok {
-					out[key] = value
-				}
+			hysteriaSettings := rawObject(streamSettings, "hysteriaSettings")
+			if password := rawString(hysteriaSettings, "auth"); password != "" && out["password"] == nil {
+				out["password"] = password
 			}
-			if obfs := rawObject(settings, "obfs"); len(obfs) > 0 {
-				out["obfs"] = obfs
+			if password := rawString(settings, "password"); password != "" {
+				out["password"] = password
 			}
 		}
 	case "tuic":
@@ -252,7 +252,6 @@ func TranslateXrayOutbound(raw map[string]any) (map[string]any, error) {
 			}
 		}
 	}
-	streamSettings := rawObject(raw, "streamSettings")
 	singProtocol := protocol
 	if protocol == "hysteria" {
 		hysteriaSettings := rawObject(streamSettings, "hysteriaSettings")
@@ -281,6 +280,17 @@ func TranslateXrayOutbound(raw map[string]any) (map[string]any, error) {
 			}
 		default:
 			return nil, fmt.Errorf("outbound %q has unsupported Hysteria version %d", tag, version)
+		}
+	}
+	if singProtocol == "hysteria2" {
+		hySettings := rawObject(streamSettings, "hysteriaSettings")
+		for _, key := range []string{"up_mbps", "down_mbps", "hop_interval", "hop_interval_max", "bbr_profile", "disable_chrome_parrot", "ignore_client_bandwidth"} {
+			if value, ok := hySettings[key]; ok {
+				out[key] = value
+			}
+		}
+		if obfs := rawObject(hySettings, "obfs"); len(obfs) > 0 {
+			out["obfs"] = obfs
 		}
 	}
 	if err := translateStream(out, singProtocol, streamSettings, false); err != nil {

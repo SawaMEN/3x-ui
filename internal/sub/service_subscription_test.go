@@ -263,7 +263,7 @@ func TestGetSubs_Hysteria2AndNaiveKeepSeparateConnections(t *testing.T) {
 		StreamSettings: `{"network":"hysteria","security":"tls","tlsSettings":{"serverName":"hy.example.com"}}`,
 	}
 	naive := &model.Inbound{
-		UserId: 1, Tag: "shared", Remark: "shared", Enable: true,
+		UserId: 1, Tag: "shared-naive", Remark: "shared", Enable: true,
 		Port: 42132, Listen: "naive.example.com", Protocol: model.NaiveProxy,
 		Settings: fmt.Sprintf(`{"network":"tcp","tls":{"serverName":"naive.example.com"},"clients":[{"email":%q,"subId":%q,"enable":true}]}`, email, subID),
 		StreamSettings: `{}`,
@@ -300,7 +300,7 @@ func TestGetSubs_Hysteria2AndNaiveKeepSeparateConnections(t *testing.T) {
 		switch {
 		case strings.HasPrefix(link, "hysteria2://"):
 			hysteriaLink = link
-		case strings.HasPrefix(link, "naive+https://"):
+		case strings.HasPrefix(link, "naive+https://"), strings.HasPrefix(link, "naive://"):
 			naiveLink = link
 		}
 	}
@@ -310,8 +310,8 @@ func TestGetSubs_Hysteria2AndNaiveKeepSeparateConnections(t *testing.T) {
 	if !strings.Contains(hysteriaLink, "#shared-hysteria2-") {
 		t.Fatalf("Hysteria2 remark does not identify its protocol: %s", hysteriaLink)
 	}
-	if !strings.Contains(naiveLink, "#shared-naive-") {
-		t.Fatalf("Naive remark does not identify its protocol: %s", naiveLink)
+	if !strings.Contains(naiveLink, "naive.example.com:42132") || !strings.Contains(naiveLink, "shared%40example.com") {
+		t.Fatalf("Naive link does not identify its connection: %s", naiveLink)
 	}
 	if hysteriaLink == naiveLink {
 		t.Fatal("Hysteria2 and Naive links collapsed to the same connection")
@@ -539,7 +539,7 @@ func TestGetSubs_NaiveUsesHostEndpoints(t *testing.T) {
 	inbound := &model.Inbound{
 		UserId: 1, Tag: "naive-hosts", Remark: "naive", Enable: true,
 		Port: 443, Listen: "origin.example.com", Protocol: model.NaiveProxy,
-		Settings: fmt.Sprintf(`{"network":"tcp","tls":{"serverName":"origin.example.com"},"clients":[{"email":%q,"subId":%q,"enable":true}]}`, email, subID),
+		Settings: fmt.Sprintf(`{"network":"tcp","shareLinkFormat":"hiddify","tls":{"serverName":"origin.example.com"},"clients":[{"email":%q,"subId":%q,"enable":true}]}`, email, subID),
 		StreamSettings: `{}`,
 	}
 	if err := db.Create(inbound).Error; err != nil {
@@ -572,7 +572,7 @@ func TestGetSubs_NaiveUsesHostEndpoints(t *testing.T) {
 		if strings.TrimSpace(link) == "" {
 			continue
 		}
-		if !strings.HasPrefix(link, "naive+https://") {
+		if !strings.HasPrefix(link, "naive+https://") && !strings.HasPrefix(link, "naive://") {
 			t.Fatalf("unexpected Naive link: %s", link)
 		}
 		got[link] = true

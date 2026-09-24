@@ -9,6 +9,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"gorm.io/gorm"
 
@@ -246,8 +247,11 @@ func dedupedClientLinks(client *VKTurnProxyClient) []string {
 }
 
 func sanitizeVKTurnEndpointHost(raw string) string {
+	if strings.IndexFunc(raw, unicode.IsControl) >= 0 {
+		return ""
+	}
 	host := strings.TrimSpace(strings.Trim(raw, "[]"))
-	if host == "" || strings.ContainsAny(host, "\r\n\t /\\") {
+	if host == "" || strings.ContainsAny(host, " /\\") {
 		return ""
 	}
 	if strings.Contains(host, ":") && net.ParseIP(host) == nil {
