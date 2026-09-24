@@ -371,6 +371,7 @@ export interface Client {
   secret?: string;
   security: string;
   subId: string;
+  sudokuPrivateKey?: string;
   tgId: number;
   totalGB: number;
   trafficReset?: string;

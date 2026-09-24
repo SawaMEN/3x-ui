@@ -1499,7 +1499,7 @@ export function genLink(input: GenLinkInput): string {
         address,
         port,
         clientKey: client.sudokuPrivateKey ?? '',
-        settings: inbound.settings as any,
+        settings: inbound.settings as SudokuLinkSettings,
       });
     case 'tuic':
       return genTuicLink({
@@ -1517,26 +1517,28 @@ export function genLink(input: GenLinkInput): string {
 }
 
 
+type SudokuLinkSettings = {
+  ascii?: string;
+  aead?: string;
+  customTable?: string;
+  customTables?: string[];
+  enablePureDownlink?: boolean;
+  multiplex?: string;
+  httpmask?: {
+    disable?: boolean;
+    mode?: string;
+    tls?: boolean;
+    host?: string;
+    pathRoot?: string;
+    multiplex?: string;
+  };
+};
+
 function genSudokuLink(input: {
   address: string;
   port: number;
   clientKey: string;
-  settings: {
-    ascii?: string;
-    aead?: string;
-    customTable?: string;
-    customTables?: string[];
-    enablePureDownlink?: boolean;
-    multiplex?: string;
-    httpmask?: {
-      disable?: boolean;
-      mode?: string;
-      tls?: boolean;
-      host?: string;
-      pathRoot?: string;
-      multiplex?: string;
-    };
-  };
+  settings: SudokuLinkSettings;
 }): string {
   const clientKey = input.clientKey?.trim() ?? '';
   if (!clientKey || !input.address || !Number.isInteger(input.port) || input.port <= 0) return '';

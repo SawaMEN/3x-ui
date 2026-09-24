@@ -1533,6 +1533,9 @@ export const SCHEMAS: Record<string, unknown> = {
         "description": "Subscription identifier",
         "type": "string"
       },
+      "sudokuPrivateKey": {
+        "type": "string"
+      },
       "tgId": {
         "description": "Telegram user ID for notifications",
         "format": "int64",
@@ -2741,8 +2744,11 @@ export const SCHEMAS: Record<string, unknown> = {
           "amneziawg",
           "tuic",
           "naive",
+          "anytls",
+          "shadowtls",
           "mieru",
-          "vk-turn-proxy"
+          "vk-turn-proxy",
+          "sudoku"
         ],
         "example": "vless",
         "type": "string"

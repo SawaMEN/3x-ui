@@ -1559,6 +1559,9 @@
             "description": "Subscription identifier",
             "type": "string"
           },
+          "sudokuPrivateKey": {
+            "type": "string"
+          },
           "tgId": {
             "description": "Telegram user ID for notifications",
             "format": "int64",
@@ -2767,8 +2770,11 @@
               "amneziawg",
               "tuic",
               "naive",
+              "anytls",
+              "shadowtls",
               "mieru",
-              "vk-turn-proxy"
+              "vk-turn-proxy",
+              "sudoku"
             ],
             "example": "vless",
             "type": "string"
@@ -16449,6 +16455,36 @@
         }
       }
     },
+    "/panel/api/setting/sudoku/status": {
+      "get": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Return Sudoku installation status.",
+        "operationId": "get_panel_api_setting_sudoku_status",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/panel/api/setting/singbox/versions": {
       "get": {
         "tags": [
@@ -16798,6 +16834,36 @@
         ],
         "summary": "Install sing-box using the configured channel.",
         "operationId": "post_panel_api_setting_singbox_install",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/setting/sudoku/update": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Install or update the managed Sudoku tunnel binary.",
+        "operationId": "post_panel_api_setting_sudoku_update",
         "responses": {
           "200": {
             "description": "Successful response",

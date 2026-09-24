@@ -420,6 +420,22 @@ func (s *SubService) matchingClients(inbound *model.Inbound, subId string) []mod
 		logger.Error("SubService - GetClientsBySubId: Unable to get clients from inbound")
 		return nil
 	}
+
+	if inbound.Protocol == model.AnyTLS || inbound.Protocol == model.ShadowTLS {
+		if settingsClients, settingsErr := s.inboundService.GetClients(inbound); settingsErr == nil {
+			passwordByEmail := make(map[string]string, len(settingsClients))
+			for _, settingsClient := range settingsClients {
+				if settingsClient.Password != "" {
+					passwordByEmail[strings.ToLower(settingsClient.Email)] = settingsClient.Password
+				}
+			}
+			for i := range clients {
+				if clients[i].Password == "" {
+					clients[i].Password = passwordByEmail[strings.ToLower(clients[i].Email)]
+				}
+			}
+		}
+	}
 	var out []model.Client
 	seen := make(map[string]struct{}, len(clients))
 	for _, client := range clients {
