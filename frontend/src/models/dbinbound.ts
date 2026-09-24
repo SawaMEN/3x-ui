@@ -22,6 +22,7 @@ export interface FallbackParentRef {
 
 export type DBInboundInit = Partial<{
   id: number;
+  sortOrder: number;
   userId: number;
   up: number;
   down: number;
@@ -70,6 +71,7 @@ export function coerceInboundJsonField(value: unknown): Record<string, unknown> 
 
 export class DBInbound {
   id: number;
+  sortOrder: number;
   userId: number;
   up: number;
   down: number;
@@ -101,6 +103,7 @@ export class DBInbound {
 
   constructor(data?: DBInboundInit) {
     this.id = 0;
+    this.sortOrder = 0;
     this.userId = 0;
     this.up = 0;
     this.down = 0;
