@@ -2390,7 +2390,19 @@
         "poolSize": "Pool Size"
       },
       "defaultOutbound": "Default Outbound",
-      "defaultOutboundDesc": "Traffic that does not match any routing rule uses this outbound (Xray uses the first outbound in the list)."
+      "defaultOutboundDesc": "Traffic that does not match any routing rule uses this outbound (Xray uses the first outbound in the list).",
+      "routingPreset": "Routing preset",
+      "saveRoutingPreset": "Save routing preset",
+      "routingPresetName": "Preset name",
+      "routingPresetDescription": "Optional description",
+      "routingPresetNameRequired": "Preset name is required.",
+      "routingPresetApplied": "Routing preset applied to the current configuration.",
+      "routingPresetLoadFailed": "Failed to load routing preset.",
+      "routingPresetSaveFailed": "Failed to save routing preset.",
+      "routingPresetSaved": "Routing preset saved.",
+      "deleteRoutingPreset": "Delete this routing preset?",
+      "routingPresetDeleteFailed": "Failed to delete routing preset.",
+      "routingPresetDeleted": "Routing preset deleted."
     },
     "singBox": {
       "save": "Save",
