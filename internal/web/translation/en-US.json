@@ -1900,6 +1900,16 @@
         "updateComponentFailed": "Could not update {component}.",
         "partialUpdate": "System packages were updated, but these components could not be updated: {components}.",
         "rebootFailed": "Could not start the server reboot."
+      },
+      "menuStyle": {
+        "title": "Menu style",
+        "subtitle": "Choose how sidebar navigation should look.",
+        "pill": "Pill",
+        "pillDesc": "Rounded capsules",
+        "solid": "Solid",
+        "solidDesc": "Compact filled items",
+        "minimal": "Minimal",
+        "minimalDesc": "Quiet navigation with a marker"
       }
     },
     "xray": {
