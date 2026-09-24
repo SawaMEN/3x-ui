@@ -110,6 +110,7 @@ function formatDate(unix: number): string {
 
 export default function TemplatesPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { antdThemeConfig, isDark, isUltra } = useTheme();
   const [messageApi, messageContextHolder] = message.useMessage();
   const [items, setItems] = useState<Template[]>([]);
@@ -266,6 +267,21 @@ export default function TemplatesPage() {
     anchor.remove();
     URL.revokeObjectURL(url);
   }, [detail]);
+
+  const applyInbound = useCallback(async () => {
+    if (!detail || detail.kind !== 'inbound') return;
+    const content =
+      detail.content && typeof detail.content === 'object'
+        ? { ...(detail.content as Record<string, unknown>), remark: detail.title }
+        : detail.content;
+    const msg = await HttpUtil.post('/panel/api/inbounds/import', {
+      data: JSON.stringify(content),
+    });
+    if (!msg?.success) return;
+    setDetailOpen(false);
+    messageApi.success(t('pages.templates.applied'));
+    navigate('/inbounds');
+  }, [detail, messageApi, navigate, t]);
 
   const copyDetail = useCallback(async () => {
     if (!detail) return;
@@ -494,6 +510,11 @@ export default function TemplatesPage() {
         width={980}
         footer={
           <Space>
+            {detail?.kind === 'inbound' && (
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => void applyInbound()}>
+                {t('pages.templates.applyInbound')}
+              </Button>
+            )}
             <Button icon={<CopyOutlined />} onClick={() => void copyDetail()}>
               {t('pages.templates.copy')}
             </Button>
