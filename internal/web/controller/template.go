@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"net/http"
 	"strconv"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
@@ -96,4 +95,3 @@ func (a *TemplateController) del(c *gin.Context) {
 	jsonMsg(c, "template deleted", nil)
 }
 
-var _ = http.StatusOK
