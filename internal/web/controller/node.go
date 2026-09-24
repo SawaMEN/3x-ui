@@ -371,7 +371,7 @@ func (a *NodeController) history(c *gin.Context) {
 
 func (a *NodeController) reorder(c *gin.Context) {
 	var req struct {
-		Ids []int json:"ids"
+		Ids []int `json:"ids"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		jsonMsg(c, "invalid reorder payload", err)
