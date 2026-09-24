@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
@@ -93,16 +94,78 @@ func ListVersions(ctx context.Context) ([]ReleaseVersion, error) {
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("User-Agent", "3x-ui")
 	resp, err := http.DefaultClient.Do(req)
+	if err == nil {
+		defer resp.Body.Close()
+		if resp.StatusCode == http.StatusOK {
+			var releases []releaseListInfo
+			if err := json.NewDecoder(resp.Body).Decode(&releases); err == nil {
+				return releaseVersions(releases), nil
+			}
+		}
+	}
+
+	// GitHub's unauthenticated REST API is rate-limited. The public releases
+	// Atom feed is served separately and provides the tag list we need for the
+	// version picker, including prereleases.
+	versions, feedErr := listVersionsFromAtom(ctx)
+	if feedErr == nil {
+		return versions, nil
+	}
 	if err != nil {
-		return nil, fmt.Errorf("fetch sing-box releases: %w", err)
+		return nil, fmt.Errorf("fetch sing-box releases: API: %w; Atom fallback: %v", err, feedErr)
+	}
+	return nil, fmt.Errorf("sing-box releases API returned %s; Atom fallback failed: %w", resp.Status, feedErr)
+}
+
+type releaseAtomFeed struct {
+	Entries []struct {
+		Title string `xml:"title"`
+		Links []struct {
+			Href string `xml:"href,attr"`
+		} `xml:"link"`
+	} `xml:"entry"`
+}
+
+func listVersionsFromAtom(ctx context.Context) ([]ReleaseVersion, error) {
+	const feedURL = "https://github.com/SagerNet/sing-box/releases.atom"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, feedURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/atom+xml, application/xml;q=0.9, text/xml;q=0.8")
+	req.Header.Set("User-Agent", "3x-ui")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fetch sing-box releases atom feed: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("sing-box releases API returned %s", resp.Status)
+		return nil, fmt.Errorf("sing-box releases atom feed returned %s", resp.Status)
 	}
-	var releases []releaseListInfo
-	if err := json.NewDecoder(resp.Body).Decode(&releases); err != nil {
-		return nil, err
+	var feed releaseAtomFeed
+	if err := xml.NewDecoder(resp.Body).Decode(&feed); err != nil {
+		return nil, fmt.Errorf("decode sing-box releases atom feed: %w", err)
+	}
+
+	releases := make([]releaseListInfo, 0, len(feed.Entries))
+	for _, entry := range feed.Entries {
+		tag := strings.TrimSpace(entry.Title)
+		for _, link := range entry.Links {
+			const marker = "/releases/tag/"
+			if idx := strings.Index(link.Href, marker); idx >= 0 {
+				tag = strings.Trim(strings.TrimSpace(link.Href[idx+len(marker):]), "/")
+				break
+			}
+		}
+		if tag != "" {
+			releases = append(releases, releaseListInfo{
+				TagName: tag,
+				Prerelease: isPreReleaseVersion(tag),
+			})
+		}
+	}
+	if len(releases) == 0 {
+		return nil, errors.New("sing-box releases atom feed contains no releases")
 	}
 	return releaseVersions(releases), nil
 }

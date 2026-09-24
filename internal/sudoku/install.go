@@ -210,7 +210,9 @@ func extractBinary(archivePath, dir string) (string, error) {
         }
         defer z.Close()
         for _, f := range z.File {
-            if filepath.Base(f.Name) == "sudoku-tunnel" || filepath.Base(f.Name) == "sudoku-tunnel.exe" {
+            baseName := filepath.Base(f.Name)
+            if baseName == "sudoku" || baseName == "sudoku.exe" ||
+                baseName == "sudoku-tunnel" || baseName == "sudoku-tunnel.exe" {
                 dst := filepath.Join(dir, filepath.Base(f.Name))
                 r, err := f.Open()
                 if err != nil {
@@ -255,7 +257,8 @@ func extractBinary(archivePath, dir string) (string, error) {
         if err != nil {
             return "", err
         }
-        if filepath.Base(h.Name) != "sudoku-tunnel" {
+        baseName := filepath.Base(h.Name)
+        if baseName != "sudoku" && baseName != "sudoku-tunnel" {
             continue
         }
         dst := filepath.Join(dir, "sudoku-tunnel")

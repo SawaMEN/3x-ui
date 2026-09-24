@@ -1,7 +1,9 @@
 package singbox
 
 import (
+	"encoding/xml"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -41,5 +43,45 @@ func TestIsPreReleaseVersion(t *testing.T) {
 		if !isPreReleaseVersion(version) {
 			t.Fatalf("isPreReleaseVersion(%q) = false", version)
 		}
+	}
+}
+
+
+func TestReleaseAtomFeedVersions(t *testing.T) {
+	feed := `<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <entry>
+    <title>1.14.1</title>
+    <link href="https://github.com/SagerNet/sing-box/releases/tag/v1.14.1"/>
+  </entry>
+  <entry>
+    <title>1.15.0-alpha.6</title>
+    <link href="https://github.com/SagerNet/sing-box/releases/tag/v1.15.0-alpha.6"/>
+  </entry>
+</feed>`
+	var parsed releaseAtomFeed
+	if err := xml.Unmarshal([]byte(feed), &parsed); err != nil {
+		t.Fatalf("xml.Unmarshal() error = %v", err)
+	}
+	var releases []releaseListInfo
+	for _, entry := range parsed.Entries {
+		tag := entry.Title
+		for _, link := range entry.Links {
+			const marker = "/releases/tag/"
+			if idx := strings.Index(link.Href, marker); idx >= 0 {
+				tag = strings.Trim(link.Href[idx+len(marker):], "/")
+				break
+			}
+		}
+		if tag != "" {
+			releases = append(releases, releaseListInfo{TagName: tag, Prerelease: isPreReleaseVersion(tag)})
+		}
+	}
+	want := []ReleaseVersion{
+		{Version: "v1.14.1", Prerelease: false},
+		{Version: "v1.15.0-alpha.6", Prerelease: true},
+	}
+	if got := releaseVersions(releases); !reflect.DeepEqual(got, want) {
+		t.Fatalf("versions = %#v, want %#v", got, want)
 	}
 }

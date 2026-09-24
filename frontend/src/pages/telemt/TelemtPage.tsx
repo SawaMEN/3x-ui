@@ -7,6 +7,7 @@ import {
   Collapse,
   ConfigProvider,
   Descriptions,
+  Dropdown,
   Form,
   Input,
   InputNumber,
@@ -26,6 +27,7 @@ import {
   CopyOutlined,
   DeleteOutlined,
   DownloadOutlined,
+  DownOutlined,
   LinkOutlined,
   PlusOutlined,
   ReloadOutlined,
@@ -334,6 +336,35 @@ export default function TelemtPage() {
       ? 'Работает'
       : 'Остановлен';
 
+  const updateMenuItems = [
+    {
+      key: 'current',
+      label: 'Текущая версия: ' + (status.version || 'не определена'),
+      disabled: true,
+    },
+    {
+      key: 'latest',
+      label: 'Последняя версия: ' + (status.latestVersion || 'не определена'),
+      disabled: true,
+    },
+    { type: 'divider' as const },
+    {
+      key: 'check',
+      label: 'Проверить обновление',
+      icon: <ReloadOutlined />,
+      onClick: () => void loadStatus(),
+    },
+    {
+      key: 'update',
+      label: status.updateAvailable
+        ? 'Обновить до ' + status.latestVersion
+        : 'Обновление не требуется',
+      icon: <DownloadOutlined />,
+      disabled: !status.installed || !status.updateAvailable || serviceAction !== null,
+      onClick: updateTelemt,
+    },
+  ];
+
   return (
     <ConfigProvider theme={antdThemeConfig}>
       <Layout className="page-layout telemt-page">
@@ -361,14 +392,31 @@ export default function TelemtPage() {
                     MTProto-прокси без лишних ручных действий: сервис сам применяет изменения.
                   </Typography.Text>
                 </div>
-                <Button
-                  htmlType="button"
-                  icon={<ReloadOutlined />}
-                  loading={refreshing}
-                  onClick={() => void refreshAll()}
-                >
-                  Обновить
-                </Button>
+                <Space wrap>
+                  <Dropdown
+                    menu={{ items: updateMenuItems }}
+                    trigger={['click']}
+                    disabled={serviceAction !== null}
+                  >
+                    <Button
+                      htmlType="button"
+                      type={status.updateAvailable ? 'primary' : 'default'}
+                      icon={<DownloadOutlined />}
+                      disabled={serviceAction !== null}
+                    >
+                      Обновление
+                      <DownOutlined />
+                    </Button>
+                  </Dropdown>
+                  <Button
+                    htmlType="button"
+                    icon={<ReloadOutlined />}
+                    loading={refreshing}
+                    onClick={() => void refreshAll()}
+                  >
+                    Обновить
+                  </Button>
+                </Space>
               </div>
 
               {!status.installed && (
