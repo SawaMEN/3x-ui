@@ -94,17 +94,15 @@ export default function LoginPage() {
 
   const cycleTheme = useCallback(() => {
     pauseAnimationsUntilLeave('login-theme-cycle');
-    if (mode === 'light') {
-      setThemeMode('dark');
-    } else if (mode === 'dark') {
-      setThemeMode('ultra-dark');
-    } else if (mode === 'ultra-dark') {
-      setThemeMode('cyberpunk');
-    } else if (mode === 'cyberpunk') {
-      setThemeMode('light');
-    } else {
-      setThemeMode('cyberpunk');
-    }
+    const nextMode = {
+      light: 'colorful',
+      colorful: 'blue-gray',
+      'blue-gray': 'dark',
+      dark: 'ultra-dark',
+      'ultra-dark': 'cyberpunk',
+      cyberpunk: 'light',
+    } as const;
+    setThemeMode(nextMode[mode]);
   }, [mode, setThemeMode]);
 
   const pageClass = useMemo(() => {
@@ -191,26 +189,9 @@ export default function LoginPage() {
             ) : (
               <div className="login-card">
                 <div className="brand">
-                  <span className="login-brand-mark" aria-hidden="true">
-                    <svg viewBox="0 0 64 64" role="presentation">
-                      <path
-                        className="login-brand-mark-frame"
-                        d="M20 6h24l14 14v24L44 58H20L6 44V20L20 6Z"
-                      />
-                      <path className="login-brand-mark-core" d="M20 20h24M17 32h30M20 44h24" />
-                      <path className="login-brand-mark-x" d="m24 24 16 16M40 24 24 40" />
-                      <path className="login-brand-mark-node" d="M6 22h7M51 22h7M6 42h7M51 42h7" />
-                      <circle className="login-brand-mark-dot" cx="32" cy="12" r="2" />
-                      <circle
-                        className="login-brand-mark-dot login-brand-mark-dot-pink"
-                        cx="32"
-                        cy="52"
-                        r="2"
-                      />
-                    </svg>
+                  <span className="brand-name" aria-label="3X-UI">
+                    3X-UI
                   </span>
-                  <span className="brand-name">3X-UI</span>
-                  <span className="brand-accent" aria-hidden="true" />
                 </div>
                 <h2 className="welcome">
                   <b key={headlineIndex}>{headlineWords[headlineIndex]}</b>
