@@ -304,12 +304,17 @@ func (s *SubService) linkSettings(inbound *model.Inbound) map[string]any {
 			return cached
 		}
 	}
-	var out map[string]any
-	if err := json.Unmarshal([]byte(inbound.Settings), &out); err != nil || out == nil {
-		out = make(map[string]any)
+	shallow := map[string]json.RawMessage{}
+	_ = json.Unmarshal([]byte(inbound.Settings), &shallow)
+	out := make(map[string]any, len(shallow))
+	for key, raw := range shallow {
+		if key == "clients" {
+			continue
+		}
+		var value any
+		_ = json.Unmarshal(raw, &value)
+		out[key] = value
 	}
-	delete(out, "clients")
-
 	if inbound.Id > 0 {
 		if s.settingsByInbound == nil {
 			s.settingsByInbound = map[int]map[string]any{}
