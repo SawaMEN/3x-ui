@@ -718,3 +718,64 @@ func TestTranslateXrayShadowTLSInbound(t *testing.T) {
 		t.Fatalf("unexpected ShadowTLS users: %#v", got["users"])
 	}
 }
+
+
+func TestTranslateXrayShadowTLSInboundWildcardSNIAllAllowsEmptyHandshakeServer(t *testing.T) {
+	raw := map[string]any{
+		"protocol": "shadowtls",
+		"tag":      "shadowtls-wildcard-all",
+		"port":     443,
+		"settings": map[string]any{
+			"version": 3,
+			"handshake": map[string]any{},
+			"wildcardSni": "all",
+			"clients": []any{
+				map[string]any{
+					"email":    "alice",
+					"password": "secret",
+				},
+			},
+		},
+	}
+	got, err := TranslateXrayInbound(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got["wildcard_sni"] != "all" {
+		t.Fatalf("unexpected wildcard_sni: %#v", got["wildcard_sni"])
+	}
+	handshake, ok := got["handshake"].(map[string]any)
+	if !ok {
+		t.Fatalf("unexpected ShadowTLS handshake: %#v", got["handshake"])
+	}
+	if _, ok := handshake["server"]; ok {
+		t.Fatalf("unexpected handshake server for wildcard_sni=all: %#v", handshake)
+	}
+	if handshake["server_port"] != 443 {
+		t.Fatalf("unexpected handshake port: %#v", handshake["server_port"])
+	}
+}
+
+func TestTranslateXrayShadowTLSEmptyHandshakeUsesDefaultServer(t *testing.T) {
+	raw := map[string]any{
+		"protocol": "shadowtls",
+		"tag":      "shadowtls-default-handshake",
+		"port":     443,
+		"settings": map[string]any{
+			"version": 3,
+			"handshake": map[string]any{},
+			"wildcardSni": "off",
+		},
+	}
+	got, err := TranslateXrayInbound(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handshake, ok := got["handshake"].(map[string]any)
+	if !ok {
+		t.Fatalf("unexpected ShadowTLS handshake: %#v", got["handshake"])
+	}
+	if handshake["server"] != "cloudflare.com" || handshake["server_port"] != 443 {
+		t.Fatalf("unexpected default handshake: %#v", handshake)
+	}
+}
