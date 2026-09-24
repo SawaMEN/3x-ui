@@ -208,6 +208,9 @@ func (a *APIController) initRouter(g *gin.RouterGroup) {
 	templates := api.Group("/templates")
 	NewTemplateController(templates)
 
+	routingPresets := api.Group("/xray/routingPresets")
+	NewRoutingPresetController(routingPresets)
+
 	// Settings + Xray config management live under the API surface too, so the
 	// same API token drives them. Paths are /panel/api/setting/* and
 	// /panel/api/xray/*.
