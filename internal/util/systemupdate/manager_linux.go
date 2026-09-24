@@ -243,19 +243,30 @@ func packageInstallCommand(manager string, names []string) ([]string, bool) {
 	}
 }
 
-func packageUpgradeCommand(manager string) []string {
+func packageUpgradeCommand(manager string, names ...[]string) []string {
+	selected := []string{}
+	if len(names) > 0 {
+		selected = names[0]
+	}
+
 	switch manager {
 	case "apt-get":
+		if len(selected) > 0 { return append([]string{"apt-get", "install", "-y", "--no-install-recommends"}, selected...) }
 		return []string{"apt-get", "upgrade", "-y", "--with-new-pkgs", "--no-install-recommends"}
 	case "dnf":
+		if len(selected) > 0 { return append([]string{"dnf", "upgrade", "-y"}, selected...) }
 		return []string{"dnf", "upgrade", "-y"}
 	case "yum":
+		if len(selected) > 0 { return append([]string{"yum", "update", "-y"}, selected...) }
 		return []string{"yum", "update", "-y"}
 	case "zypper":
+		if len(selected) > 0 { return append([]string{"zypper", "--non-interactive", "update", "-y"}, selected...) }
 		return []string{"zypper", "--non-interactive", "update", "-y"}
 	case "apk":
+		if len(selected) > 0 { return append([]string{"apk", "upgrade", "--no-cache"}, selected...) }
 		return []string{"apk", "upgrade", "--no-cache"}
 	case "pacman":
+		if len(selected) > 0 { return append([]string{"pacman", "-Syu", "--noconfirm", "--needed"}, selected...) }
 		return []string{"pacman", "-Syu", "--noconfirm", "--needed"}
 	default:
 		return []string{}
@@ -515,6 +526,8 @@ func listAvailableUpdates(ctx context.Context, manager string) (map[string]strin
 		return nil, fmt.Errorf("unsupported package manager: %s", manager)
 	}
 }
+
+var installedApkPackagePattern = regexp.MustCompile("^(.+)-([0-9][^[:space:]]*)$")
 
 func installedPackageVersions(manager string) (map[string]string, error) {
 	result := map[string]string{}
