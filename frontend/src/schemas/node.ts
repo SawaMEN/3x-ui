@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const NodeRecordSchema = z
   .object({
     id: z.number(),
+    sortOrder: z.number().optional(),
     name: z.string().optional(),
     remark: z.string().optional(),
     scheme: z.string().optional(),
