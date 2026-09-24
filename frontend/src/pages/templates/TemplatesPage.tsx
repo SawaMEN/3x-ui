@@ -308,7 +308,7 @@ export default function TemplatesPage() {
                 />
                 <Select
                   value={kind}
-                  onChange={setKind}
+                  onChange={(value) => setKind(value as '' | Template['kind'])}
                   style={{ minWidth: 180 }}
                   options={[
                     { value: '', label: t('pages.templates.allKinds') },
