@@ -521,8 +521,9 @@ func listAvailableUpdates(ctx context.Context, manager string) (map[string]strin
 		return nil, fmt.Errorf("unsupported package manager: %s", manager)
 	}
 }
-
 )
+
+var installedApkPackagePattern = regexp.MustCompile(`^(.+)-([0-9][^[:space:]]*)$`)
 
 func installedPackageVersions(manager string) (map[string]string, error) {
 	result := map[string]string{}

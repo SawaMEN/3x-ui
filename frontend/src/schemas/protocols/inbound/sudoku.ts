@@ -44,14 +44,7 @@ export const SudokuInboundSettingsSchema = z.object({
   customTables: z.array(z.string()).default([]),
   enablePureDownlink: z.boolean().default(true),
   multiplex: z.enum(['off', 'auto', 'on']).default('off'),
-  httpmask: SudokuHttpMaskSchema.default(() => ({
-    disable: false,
-    mode: 'legacy',
-    tls: false,
-    host: '',
-    pathRoot: '',
-    multiplex: 'off',
-  })),
+  httpmask: SudokuHttpMaskSchema.default(() => SudokuHttpMaskSchema.parse({})),
   clients: z.array(SudokuClientSchema).default([]),
 });
 export type SudokuInboundSettings = z.infer<typeof SudokuInboundSettingsSchema>;
