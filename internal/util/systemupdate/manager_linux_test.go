@@ -211,7 +211,7 @@ func TestCollectPackageStatusesIncludesOnlyRequiredAndKernelUpdates(t *testing.T
 		"bash":             "5.2.0",
 	}
 
-	packages, kernels, missing := collectPackageStatuses("ubuntu", upgrades, lookup)
+	packages, kernels, missing := collectPackageStatuses("ubuntu", "apt-get", upgrades, lookup)
 	if missing {
 		t.Fatalf("collectPackageStatuses() reported missing required packages")
 	}
