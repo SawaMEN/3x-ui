@@ -59,10 +59,10 @@ export default function HysteriaFields() {
           <FormField label={t('pages.inbounds.form.type')} name={[...MASQ_PATH, 'type']}>
             <Select
               options={[
-                { value: '', label: 'default (404 page)' },
-                { value: 'proxy', label: 'proxy (reverse proxy)' },
-                { value: 'file', label: 'file (serve directory)' },
-                { value: 'string', label: 'string (fixed body)' },
+                { value: '', label: t('pages.inbounds.form.hysteriaMasqueradeDefault') },
+                { value: 'proxy', label: t('pages.inbounds.form.hysteriaMasqueradeProxy') },
+                { value: 'file', label: t('pages.inbounds.form.hysteriaMasqueradeFile') },
+                { value: 'string', label: t('pages.inbounds.form.hysteriaMasqueradeString') },
               ]}
             />
           </FormField>

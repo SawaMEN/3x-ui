@@ -22,7 +22,7 @@ export type ShadowTlsClient = z.infer<typeof ShadowTlsClientSchema>;
 export const ShadowTlsInboundSettingsSchema = z.object({
   version: z.literal(3).default(3),
   handshake: z.object({
-    server: z.string().default(''),
+    server: z.string().min(1, 'pages.inbounds.form.shadowTlsHandshakeServerRequired').default(''),
     serverPort: z.number().int().min(1).max(65535).default(443),
   }),
   strictMode: z.boolean().default(false),
