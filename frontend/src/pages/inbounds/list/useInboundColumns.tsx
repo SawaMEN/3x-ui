@@ -1,7 +1,7 @@
 import { useMemo, type ReactElement } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Popover, Switch, Tag, Tooltip, type TableColumnType } from 'antd';
-import { TeamOutlined } from '@ant-design/icons';
+import { HolderOutlined, TeamOutlined } from '@ant-design/icons';
 
 import { SizeFormatter, IntlUtil, ColorUtils } from '@/utils';
 import { InfinityIcon } from '@/components/ui';
@@ -32,6 +32,7 @@ interface UseInboundColumnsParams {
   trafficDiff: number;
   onRowAction: (action: { key: RowAction; dbInbound: DBInboundRecord }) => void;
   onSwitchEnable: (dbInbound: DBInboundRecord, next: boolean) => void;
+  reorderEnabled: boolean;
 }
 
 export function useInboundColumns({
@@ -101,6 +102,19 @@ export function useInboundColumns({
         align: 'right',
         width: 60,
         sorter: (a, b) => a.id - b.id,
+        render: (_value, record) =>
+          reorderEnabled ? (
+            <Space size={4}>
+              <HolderOutlined
+                className="inbound-drag-handle"
+                title={t('pages.inbounds.dragToReorder')}
+                aria-label={t('pages.inbounds.dragToReorder')}
+              />
+              <span>{record.id}</span>
+            </Space>
+          ) : (
+            record.id
+          ),
       },
       {
         title: t('pages.inbounds.operate'),
@@ -442,5 +456,6 @@ export function useInboundColumns({
     datepicker,
     onRowAction,
     onSwitchEnable,
+    reorderEnabled,
   ]);
 }
