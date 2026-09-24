@@ -441,8 +441,7 @@ body.theme-colorful .login-app {
   --color-accent: #7c3aed;
   --color-border: rgba(124, 58, 237, 0.14);
   --shadow-card:
-    0 1px 3px rgba(76, 29, 149, 0.05),
-    0 20px 60px rgba(124, 58, 237, 0.16),
+    0 1px 3px rgba(76, 29, 149, 0.05), 0 20px 60px rgba(124, 58, 237, 0.16),
     0 8px 30px rgba(236, 72, 153, 0.08);
   --blob-1: rgba(124, 58, 237, 0.3);
   --blob-2: rgba(236, 72, 153, 0.3);
@@ -509,8 +508,7 @@ body.theme-blue-gray .login-app {
   --color-accent: #8ab4f8;
   --color-border: rgba(190, 210, 235, 0.16);
   --shadow-card:
-    0 1px 3px rgba(0, 0, 0, 0.34),
-    0 20px 58px rgba(4, 13, 24, 0.45),
+    0 1px 3px rgba(0, 0, 0, 0.34), 0 20px 58px rgba(4, 13, 24, 0.45),
     0 0 26px rgba(138, 180, 248, 0.08);
   --blob-1: rgba(82, 126, 184, 0.28);
   --blob-2: rgba(76, 98, 130, 0.28);
@@ -606,8 +604,7 @@ body.theme-cyberpunk .login-brand-mark-core {
 body.theme-cyberpunk .login-brand-mark-x {
   stroke: #ff2bd6;
   stroke-width: 3.8;
-  filter:
-    drop-shadow(0 0 3px rgba(255, 43, 214, 0.95))
+  filter: drop-shadow(0 0 3px rgba(255, 43, 214, 0.95))
     drop-shadow(0 0 10px rgba(255, 43, 214, 0.48));
 }
 

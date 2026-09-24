@@ -193,7 +193,10 @@ export default function LoginPage() {
                 <div className="brand">
                   <span className="login-brand-mark" aria-hidden="true">
                     <svg viewBox="0 0 64 64" role="presentation">
-                      <path className="login-brand-mark-frame" d="M20 6h24l14 14v24L44 58H20L6 44V20L20 6Z" />
+                      <path
+                        className="login-brand-mark-frame"
+                        d="M20 6h24l14 14v24L44 58H20L6 44V20L20 6Z"
+                      />
                       <path className="login-brand-mark-core" d="M20 20h24M17 32h30M20 44h24" />
                       <path className="login-brand-mark-x" d="m24 24 16 16M40 24 24 40" />
                       <path className="login-brand-mark-node" d="M6 22h7M51 22h7M6 42h7M51 42h7" />
