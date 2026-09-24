@@ -162,10 +162,11 @@ export default function TemplatesPage() {
       } catch {
         throw new Error(t('pages.templates.invalidJson'));
       }
-      const msg = await HttpUtil.post<SanitizeResponse>('/panel/api/templates/sanitize', {
-        kind: draft.kind,
-        content,
-      });
+      const msg = await HttpUtil.post<SanitizeResponse>(
+        '/panel/api/templates/sanitize',
+        { kind: draft.kind, content },
+        { headers: { 'Content-Type': 'application/json' } },
+      );
       if (!msg?.success || !msg.obj) throw new Error(msg?.msg || t('pages.templates.sanitizeFailed'));
       setPreview(msg.obj);
       return msg.obj;
@@ -190,16 +191,20 @@ export default function TemplatesPage() {
       } catch {
         throw new Error(t('pages.templates.invalidJson'));
       }
-      const msg = await HttpUtil.post<SaveResponse>('/panel/api/templates/save', {
-        kind: draft.kind,
-        title: draft.title,
-        description: draft.description,
-        tags: draft.tags
-          .split(',')
-          .map((tag) => tag.trim())
-          .filter(Boolean),
-        content,
-      });
+      const msg = await HttpUtil.post<SaveResponse>(
+        '/panel/api/templates/save',
+        {
+          kind: draft.kind,
+          title: draft.title,
+          description: draft.description,
+          tags: draft.tags
+            .split(',')
+            .map((tag) => tag.trim())
+            .filter(Boolean),
+          content,
+        },
+        { headers: { 'Content-Type': 'application/json' } },
+      );
       if (!msg?.success || !msg.obj?.template) {
         throw new Error(msg?.msg || t('pages.templates.saveFailed'));
       }
