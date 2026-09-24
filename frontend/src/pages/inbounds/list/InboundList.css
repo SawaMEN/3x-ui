@@ -211,3 +211,29 @@
 .tag-name .inbound-host-remarks {
   font-weight: 400;
 }
+
+.inbound-drag-handle {
+  opacity: 0.45;
+  cursor: grab;
+  flex: 0 0 auto;
+}
+
+.inbound-drag-handle:active {
+  cursor: grabbing;
+}
+
+.inbound-card.is-dragged {
+  opacity: 0.45;
+}
+
+.inbounds-page .ant-table-tbody > tr.is-dragged {
+  opacity: 0.45;
+}
+
+.inbounds-page .ant-table-tbody > tr[draggable='true'] {
+  cursor: grab;
+}
+
+.inbounds-page .ant-table-tbody > tr[draggable='true']:active {
+  cursor: grabbing;
+}
