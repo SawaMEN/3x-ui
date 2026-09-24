@@ -326,13 +326,66 @@ func fetchTelemtLatestRelease() string {
 	}
 	return strings.TrimSpace(release.TagName)
 }
+const telemtUpdaterPath = "/usr/local/x-ui/telemt-update.sh"
+const telemtUpdaterURL = "https://raw.githubusercontent.com/SawaMEN/3x-ui/main/internal/Telemt/telemt-update.sh"
+
+func ensureTelemtUpdater() error {
+	if _, err := os.Stat(telemtUpdaterPath); err == nil {
+		return nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("telemt: check updater: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, telemtUpdaterURL, nil)
+	if err != nil {
+		return fmt.Errorf("telemt: create updater request: %w", err)
+	}
+	req.Header.Set("User-Agent", "3x-ui")
+	resp, err := (&http.Client{Timeout: 15 * time.Second}).Do(req)
+	if err != nil {
+		return fmt.Errorf("telemt: download updater: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("telemt: download updater: HTTP %d", resp.StatusCode)
+	}
+
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return fmt.Errorf("telemt: read updater: %w", err)
+	}
+	text := strings.TrimSpace(string(data))
+	if text == "" || !strings.HasPrefix(text, "#!/") || !strings.Contains(text, "get_latest_tag()") {
+		return errors.New("telemt: downloaded updater has invalid content")
+	}
+
+	if err := os.MkdirAll(filepath.Dir(telemtUpdaterPath), 0o755); err != nil {
+		return fmt.Errorf("telemt: create updater directory: %w", err)
+	}
+	tmpPath := telemtUpdaterPath + ".new"
+	if err := os.WriteFile(tmpPath, data, 0o755); err != nil {
+		return fmt.Errorf("telemt: write updater: %w", err)
+	}
+	if err := os.Chmod(tmpPath, 0o755); err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("telemt: chmod updater: %w", err)
+	}
+	if err := os.Rename(tmpPath, telemtUpdaterPath); err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("telemt: install updater: %w", err)
+	}
+	return nil
+}
+
 func telemtUpdate() error {
-	if _, err := os.Stat("/usr/local/x-ui/telemt-update.sh"); err != nil {
-		return errors.New("telemt: updater is not installed")
+	if err := ensureTelemtUpdater(); err != nil {
+		return err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, "/usr/local/x-ui/telemt-update.sh").CombinedOutput()
+	out, err := exec.CommandContext(ctx, telemtUpdaterPath).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("telemt: update failed: %s: %w", strings.TrimSpace(string(out)), err)
 	}

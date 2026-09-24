@@ -498,16 +498,6 @@ export default function TelemtPage() {
                       >
                         Перезапустить
                       </Button>
-                      {status.updateAvailable && (
-                        <Button
-                          icon={<DownloadOutlined />}
-                          loading={serviceAction === 'update'}
-                          disabled={!status.installed || serviceAction !== null}
-                          onClick={updateTelemt}
-                        >
-                          Обновить до {status.latestVersion}
-                        </Button>
-                      )}
                     </Space>
                   </Card>
                 </Col>
@@ -583,6 +573,88 @@ export default function TelemtPage() {
                   </Card>
                 </Col>
               </Row>
+
+              <Card
+                className="telemt-card telemt-update-card"
+                title={
+                  <Space>
+                    <DownloadOutlined />
+                    Обновление Telemt
+                  </Space>
+                }
+              >
+                <Row gutter={[16, 16]} align="middle">
+                  <Col xs={24} md={8}>
+                    <Typography.Text type="secondary">Установленная версия</Typography.Text>
+                    <Typography.Title level={4} style={{ margin: '4px 0 0' }}>
+                      {status.installed ? status.version || 'не определена' : 'не установлена'}
+                    </Typography.Title>
+                  </Col>
+                  <Col xs={24} md={8}>
+                    <Typography.Text type="secondary">Последняя версия</Typography.Text>
+                    <Typography.Title level={4} style={{ margin: '4px 0 0' }}>
+                      {status.latestVersion || 'проверка недоступна'}
+                    </Typography.Title>
+                  </Col>
+                  <Col xs={24} md={8}>
+                    <Space wrap>
+                      {status.updateAvailable ? (
+                        <Button
+                          type="primary"
+                          icon={<DownloadOutlined />}
+                          loading={serviceAction === 'update'}
+                          disabled={!status.installed || serviceAction !== null}
+                          onClick={updateTelemt}
+                        >
+                          Обновить до {status.latestVersion}
+                        </Button>
+                      ) : (
+                        <Button
+                          icon={<ReloadOutlined />}
+                          disabled={!status.installed || serviceAction !== null}
+                          onClick={() => void loadStatus()}
+                        >
+                          Проверить обновление
+                        </Button>
+                      )}
+                    </Space>
+                  </Col>
+                </Row>
+
+                {!status.installed ? (
+                  <Alert
+                    style={{ marginTop: 16 }}
+                    type="info"
+                    showIcon
+                    message="Telemt ещё не установлен"
+                    description="После установки панель автоматически покажет текущую и последнюю доступную версию."
+                  />
+                ) : status.updateAvailable ? (
+                  <Alert
+                    style={{ marginTop: 16 }}
+                    type="warning"
+                    showIcon
+                    message={'Доступно обновление до ' + status.latestVersion}
+                    description="Обновление выполняется встроенным Telemt updater и после него возвращает сервис в рабочее состояние."
+                  />
+                ) : status.latestVersion ? (
+                  <Alert
+                    style={{ marginTop: 16 }}
+                    type="success"
+                    showIcon
+                    message="Установлена последняя версия Telemt"
+                    description="Новых опубликованных релизов для текущей проверки не найдено."
+                  />
+                ) : (
+                  <Alert
+                    style={{ marginTop: 16 }}
+                    type="info"
+                    showIcon
+                    message="Не удалось получить последнюю версию"
+                    description="Проверьте соединение сервера с GitHub и нажмите «Проверить» ещё раз."
+                  />
+                )}
+              </Card>
 
               <Card
                 className="telemt-card"
