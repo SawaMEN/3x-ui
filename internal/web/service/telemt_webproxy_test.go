@@ -1,6 +1,9 @@
 package service
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestAppendTelemtWebProxyConfig(t *testing.T) {
 	base := "[access]\nreplay_check_len = 10\n\n[access.users]\nxui = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"\n\n[[upstreams]]\ntype = \"direct\"\n"
@@ -37,6 +40,23 @@ func TestAppendTelemtWebProxyConfigDisabled(t *testing.T) {
 	}
 	if got != base {
 		t.Fatalf("disabled web proxy changed config")
+	}
+}
+
+func TestTelemtWebPortAvailabilityOutput(t *testing.T) {
+	tests := []struct {
+		name   string
+		output string
+		want   bool
+	}{
+		{name: "empty means available", output: "", want: true},
+		{name: "blank means available", output: " \n\t", want: true},
+		{name: "listener means occupied", output: "LISTEN 0 4096 0.0.0.0:443 0.0.0.0:*", want: false},
+	}
+	for _, tt := range tests {
+		if got := strings.TrimSpace(tt.output) == ""; got != tt.want {
+			t.Fatalf("%s: strings.TrimSpace(%q) == "" = %v, want %v", tt.name, tt.output, got, tt.want)
+		}
 	}
 }
 

@@ -305,8 +305,20 @@ func telemtWebPackageManager() string {
 }
 
 func telemtWebPortAvailable(port int) bool {
-	if telemtWebCommandExists("ss") { return exec.CommandContext(context.Background(), "ss", "-lnt", fmt.Sprintf("sport = :%d", port)).Run() != nil }
-	listenConfig := net.ListenConfig{}; listener, err := listenConfig.Listen(context.Background(), "tcp", fmt.Sprintf(":%d", port)); if err != nil { return false }; _ = listener.Close(); return true
+	if telemtWebCommandExists("ss") {
+		output, err := exec.CommandContext(context.Background(), "ss", "-lntH", fmt.Sprintf("sport = :%d", port)).CombinedOutput()
+		if err != nil {
+			return false
+		}
+		return strings.TrimSpace(string(output)) == ""
+	}
+	listenConfig := net.ListenConfig{}
+	listener, err := listenConfig.Listen(context.Background(), "tcp", fmt.Sprintf(":%d", port))
+	if err != nil {
+		return false
+	}
+	_ = listener.Close()
+	return true
 }
 
 func telemtWebPortOwner(port int) string {
