@@ -48,6 +48,42 @@ func mustJSON(value map[string]any) []byte {
 	return data
 }
 
+func decodeInboundJSONMap(value any) (map[string]any, error) {
+	switch v := value.(type) {
+	case nil:
+		return map[string]any{}, nil
+	case map[string]any:
+		return v, nil
+	case string:
+		text := strings.TrimSpace(v)
+		if text == "" {
+			return map[string]any{}, nil
+		}
+		var out map[string]any
+		if err := json.Unmarshal([]byte(text), &out); err != nil {
+			return nil, err
+		}
+		if out == nil {
+			return map[string]any{}, nil
+		}
+		return out, nil
+	case json.RawMessage:
+		if len(v) == 0 {
+			return map[string]any{}, nil
+		}
+		var out map[string]any
+		if err := json.Unmarshal(v, &out); err != nil {
+			return nil, err
+		}
+		if out == nil {
+			return map[string]any{}, nil
+		}
+		return out, nil
+	default:
+		return nil, fmt.Errorf("expected JSON object or JSON string, got %T", value)
+	}
+}
+
 func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 	inbounds, err := singBoxInboundService.GetAllInbounds()
 	if err != nil {
@@ -266,11 +302,16 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 			}
 			clients = append(clients, entry)
 		}
-		settings, _ := raw["settings"].(map[string]any)
-		if settings == nil {
-			settings = map[string]any{}
+		settings, err := decodeInboundJSONMap(raw["settings"])
+		if err != nil {
+			return nil, fmt.Errorf("inbound %q has invalid settings JSON: %w", inbound.Tag, err)
+		}
+		streamSettings, err := decodeInboundJSONMap(raw["streamSettings"])
+		if err != nil {
+			return nil, fmt.Errorf("inbound %q has invalid streamSettings JSON: %w", inbound.Tag, err)
 		}
 		settings["clients"] = clients
+		raw["streamSettings"] = streamSettings
 
 		// NaiveProxy is a native TLS protocol in sing-box. Keep the ordinary
 		// inbound form simple by reusing the panel's HTTPS certificate/key when
