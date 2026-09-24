@@ -73,7 +73,6 @@ func GetStatus(ctx context.Context) (Status, error) {
 	installedVersions, _ := installedPackageVersions(info.manager)
 	packages, kernelPackages, missingPackages := collectPackageStatuses(
 		info.distributionForPackages(),
-		info.manager,
 		upgrades,
 		func(name string) (string, bool) {
 			if version, ok := installedVersions[name]; ok {
@@ -111,7 +110,7 @@ func GetStatus(ctx context.Context) (Status, error) {
 	status.CanUpdate = status.RunningAsRoot && (status.UpdatesAvailable || status.MissingPackages)
 
 	if info.manager == "pacman" {
-		status.Notes = append(status.Notes, "Arch Linux требует полного обновления системы через pacman -Syu; частичные обновления не поддерживаются.")
+		status.Notes = append(status.Notes, "Arch Linux требует согласованного обновления через pacman -Syu; даже при выборе только зависимостей 3x-ui менеджер может обновить связанные системные пакеты.")
 	}
 	status.Notes = append(status.Notes,
 		"Зависимости новых протоколов: WireGuard, AmneziaWG и VK-Turn используют iproute2/iproute и iptables для сетевого стека и маршрутизации; MTProto/Telemt, TUIC, Naive, Mieru и Psiphon используют curl, tar, ca-certificates, openssl и socat для загрузки/запуска и TLS/туннельного окружения.",
@@ -179,13 +178,23 @@ func Apply(ctx context.Context) (UpdateResult, error) {
 	}
 
 	missing := make([]string, 0)
+	updates := make([]string, 0)
 	for _, item := range status.Packages {
 		if item.Required && !item.Installed {
 			missing = append(missing, item.Name)
+			continue
+		}
+		if (item.Required || item.Kernel) && item.UpdateAvailable {
+			updates = append(updates, item.Name)
 		}
 	}
 	sort.Strings(missing)
+	sort.Strings(updates)
 
+	// Keep the update scope limited to dependencies required by 3x-ui and its
+	// supported runtime features. On Arch Linux, pacman requires -Syu for a
+	// consistent upgrade and may therefore refresh other packages as part of the
+	// transaction; this is a package-manager constraint, not our selection scope.
 	outputs := make([]string, 0, 2)
 	if len(missing) > 0 && info.manager != "pacman" {
 		args, ok := packageInstallCommand(info.manager, missing)
@@ -205,10 +214,20 @@ func Apply(ctx context.Context) (UpdateResult, error) {
 		}
 	}
 
-	upgradeArgs := packageUpgradeCommand(info.manager)
 	if info.manager == "pacman" && len(missing) > 0 {
-		upgradeArgs = append(upgradeArgs, missing...)
+		updates = append(updates, missing...)
+		sort.Strings(updates)
 	}
+
+	if len(updates) == 0 {
+		return UpdateResult{
+			Updated:        len(missing) > 0,
+			Output:         truncateOutput(strings.Join(outputs, "\n"), 20000),
+			RebootRequired: status.Kernel.RebootRequired,
+		}, nil
+	}
+
+	upgradeArgs := packageUpgradeCommand(info.manager, updates)
 	if len(upgradeArgs) == 0 {
 		return UpdateResult{}, fmt.Errorf("unsupported package manager: %s", info.manager)
 	}
@@ -249,20 +268,23 @@ func packageInstallCommand(manager string, names []string) ([]string, bool) {
 	}
 }
 
-func packageUpgradeCommand(manager string) []string {
+func packageUpgradeCommand(manager string, names []string) []string {
+	if len(names) == 0 {
+		return []string{}
+	}
 	switch manager {
 	case "apt-get":
-		return []string{"apt-get", "upgrade", "-y", "--with-new-pkgs", "--no-install-recommends"}
+		return append([]string{"apt-get", "install", "-y", "--no-install-recommends"}, names...)
 	case "dnf":
-		return []string{"dnf", "upgrade", "-y"}
+		return append([]string{"dnf", "upgrade", "-y"}, names...)
 	case "yum":
-		return []string{"yum", "update", "-y"}
+		return append([]string{"yum", "update", "-y"}, names...)
 	case "zypper":
-		return []string{"zypper", "--non-interactive", "update", "-y"}
+		return append([]string{"zypper", "--non-interactive", "update", "-y"}, names...)
 	case "apk":
-		return []string{"apk", "upgrade", "--no-cache"}
+		return append([]string{"apk", "upgrade", "--no-cache"}, names...)
 	case "pacman":
-		return []string{"pacman", "-Syu", "--noconfirm", "--needed"}
+		return append([]string{"pacman", "-Syu", "--noconfirm", "--needed"}, names...)
 	default:
 		return []string{}
 	}
@@ -354,31 +376,14 @@ func requiredPackages(distribution string) []string {
 		}
 	}
 
-	// Fail2ban is optional. When the module is installed, nftables is needed on
-	// minimal images because recent fail2ban defaults use its nftables action.
-	if commandExists("fail2ban-client") {
-		addPackage("fail2ban")
-		addPackage("nftables")
-	}
-	if commandExists("nft") {
-		addPackage("nftables")
-	}
-	if commandExists("ufw") && (distribution == "ubuntu" || distribution == "debian" || distribution == "armbian") {
-		addPackage("ufw")
-	}
-	if commandExists("nginx") {
-		addPackage("nginx")
-	}
-
 	return packages
 }
 func collectPackageStatuses(
 	distribution string,
-	manager string,
 	upgrades map[string]string,
 	lookup func(string) (string, bool),
 ) ([]PackageStatus, []PackageStatus, bool) {
-	packages := make([]PackageStatus, 0, len(upgrades)+len(requiredPackages(distribution)))
+	packages := make([]PackageStatus, 0, len(requiredPackages(distribution))+len(upgrades))
 	seen := make(map[string]bool)
 	missing := false
 
@@ -403,30 +408,24 @@ func collectPackageStatuses(
 		seen[name] = true
 	}
 
+	// Only dependencies that 3x-ui and its supported runtime features rely on
+	// are displayed here. Unrelated OS updates are intentionally omitted.
 	for _, name := range requiredPackages(distribution) {
 		appendPackage(name, upgrades[name], true, isKernelPackage(name))
 	}
 
+	// Kernel packages are relevant independently of whether they are a direct
+	// userspace dependency, because network/runtime features may require the
+	// updated kernel and a reboot.
 	for name, availableVersion := range upgrades {
-		if seen[name] {
+		if seen[name] || !isKernelPackage(name) {
 			continue
 		}
 		installedVersion, installed := lookup(name)
 		if !installed {
-			// An update list should normally contain installed packages only.
-			// Ignore malformed/package-manager-specific entries instead of
-			// presenting them as missing dependencies.
 			continue
 		}
-		packages = append(packages, PackageStatus{
-			Name:             name,
-			InstalledVersion: installedVersion,
-			AvailableVersion: availableVersion,
-			Installed:        true,
-			Kernel:           isKernelPackage(name),
-			UpdateAvailable:  packageUpdateAvailable(true, installedVersion, availableVersion),
-		})
-		seen[name] = true
+		appendPackage(name, availableVersion, false, true)
 	}
 
 	sort.Slice(packages, func(i, j int) bool {

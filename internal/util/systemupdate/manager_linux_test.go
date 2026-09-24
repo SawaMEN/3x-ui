@@ -3,10 +3,10 @@
 package systemupdate
 
 import (
-	"strings"
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -200,7 +200,7 @@ func TestIsKernelPackageIncludesCommonArchKernels(t *testing.T) {
 	}
 }
 
-func TestCollectPackageStatusesIncludesAllAvailableUpdates(t *testing.T) {
+func TestCollectPackageStatusesIncludesOnlyRequiredAndKernelUpdates(t *testing.T) {
 	lookup := func(name string) (string, bool) {
 		return "1.0", true
 	}
@@ -211,7 +211,7 @@ func TestCollectPackageStatusesIncludesAllAvailableUpdates(t *testing.T) {
 		"bash":             "5.2.0",
 	}
 
-	packages, kernels, missing := collectPackageStatuses("ubuntu", "apt-get", upgrades, lookup)
+	packages, kernels, missing := collectPackageStatuses("ubuntu", upgrades, lookup)
 	if missing {
 		t.Fatalf("collectPackageStatuses() reported missing required packages")
 	}
@@ -220,14 +220,23 @@ func TestCollectPackageStatusesIncludesAllAvailableUpdates(t *testing.T) {
 	for _, item := range packages {
 		byName[item.Name] = item
 	}
-	for _, name := range []string{"curl", "openssl", "bash", "linux-image-test"} {
+	for _, name := range []string{"curl", "openssl"} {
 		item, ok := byName[name]
 		if !ok {
-			t.Fatalf("collectPackageStatuses() omitted available package %q: %#v", name, packages)
+			t.Fatalf("collectPackageStatuses() omitted required package %q: %#v", name, packages)
 		}
-		if !item.UpdateAvailable {
-			t.Fatalf("package %q was not marked updateAvailable: %#v", name, item)
+		if !item.UpdateAvailable || !item.Required {
+			t.Fatalf("required package %q was not marked correctly: %#v", name, item)
 		}
+	}
+	for _, name := range []string{"bash"} {
+		if _, ok := byName[name]; ok {
+			t.Fatalf("collectPackageStatuses() exposed unrelated package %q: %#v", name, packages)
+		}
+	}
+	kernel, ok := byName["linux-image-test"]
+	if !ok || !kernel.UpdateAvailable || !kernel.Kernel {
+		t.Fatalf("kernel package was not retained: %#v", packages)
 	}
 	if len(kernels) != 1 || kernels[0].Name != "linux-image-test" {
 		t.Fatalf("kernel packages = %#v", kernels)
@@ -235,16 +244,17 @@ func TestCollectPackageStatusesIncludesAllAvailableUpdates(t *testing.T) {
 }
 
 func TestPackageUpgradeCommand(t *testing.T) {
+	names := []string{"curl", "openssl"}
 	tests := map[string][]string{
-		"apt-get": {"apt-get", "upgrade", "-y", "--no-install-recommends"},
-		"dnf":     {"dnf", "upgrade", "-y"},
-		"yum":     {"yum", "update", "-y"},
-		"zypper":  {"zypper", "--non-interactive", "update", "-y"},
-		"apk":     {"apk", "upgrade", "--no-cache"},
-		"pacman":  {"pacman", "-Syu", "--noconfirm", "--needed"},
+		"apt-get": {"apt-get", "install", "-y", "--no-install-recommends", "curl", "openssl"},
+		"dnf":     {"dnf", "upgrade", "-y", "curl", "openssl"},
+		"yum":     {"yum", "update", "-y", "curl", "openssl"},
+		"zypper":  {"zypper", "--non-interactive", "update", "-y", "curl", "openssl"},
+		"apk":     {"apk", "upgrade", "--no-cache", "curl", "openssl"},
+		"pacman":  {"pacman", "-Syu", "--noconfirm", "--needed", "curl", "openssl"},
 	}
 	for manager, want := range tests {
-		got := packageUpgradeCommand(manager)
+		got := packageUpgradeCommand(manager, names)
 		if strings.Join(got, "\x00") != strings.Join(want, "\x00") {
 			t.Fatalf("packageUpgradeCommand(%q) = %#v, want %#v", manager, got, want)
 		}

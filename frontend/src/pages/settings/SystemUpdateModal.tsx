@@ -494,6 +494,7 @@ export default function SystemUpdateModal({
   const systemUpdateRows = useMemo(
     () =>
       (systemUpdate?.packages ?? [])
+        .filter((item) => item.required || item.kernel)
         .map((item) => ({
           ...item,
           key: item.kernel ? 'kernel:' + item.name : 'package:' + item.name,
