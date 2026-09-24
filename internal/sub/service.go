@@ -166,7 +166,8 @@ type SubService struct {
 	// settingsByInbound caches each inbound's settings decoded once per request
 	// with the clients array left out; generators read only inbound-level
 	// fields (encryption, method, version, …) from it.
-	settingsByInbound map[int]map[string]any
+	settingsByInbound       map[int]map[string]any
+	streamSettingsByInbound map[int]map[string]any
 }
 
 // NewSubService creates a new subscription service with the given configuration.
