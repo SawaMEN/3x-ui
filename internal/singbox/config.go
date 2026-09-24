@@ -649,10 +649,16 @@ func translateUsers(out map[string]any, protocol string, settings map[string]any
 		}
 		users = append(users, user)
 	}
-	if len(users) > 0 || protocol == "naive" || protocol == "anytls" || protocol == "shadowtls" {
-		// sing-box requires an explicit users array for these protocol inbounds,
-		// including when the panel currently has no active clients.
+	switch protocol {
+	case "vless", "vmess", "trojan", "naive", "hysteria", "hysteria2", "anytls", "shadowtls", "tuic", "http", "socks", "mixed":
+		// Emit an explicit users array even when there are no active clients.
+		// sing-box requires the field for authenticated inbounds and accepts an
+		// empty array for the unauthenticated SOCKS/HTTP variants.
 		out["users"] = users
+	default:
+		if len(users) > 0 {
+			out["users"] = users
+		}
 	}
 	switch protocol {
 	case "shadowsocks":
