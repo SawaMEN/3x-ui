@@ -19,11 +19,13 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/goccy/go-json"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
+	"github.com/SawaMEN/3x-ui/v3/internal/config"
+"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
-	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
+	"github.com/SawaMEN/3x-ui/v3/internal/sudoku"
+"github.com/SawaMEN/3x-ui/v3/internal/tuic"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/random"
 	wgutil "github.com/SawaMEN/3x-ui/v3/internal/util/wireguard"
@@ -609,7 +611,17 @@ func (s *SubService) getSubs(subId string) ([]string, []string, int64, xray.Clie
 // protocols match the running Xray config (#6436) while WireGuard/AmneziaWG
 // keep per-inbound tunnel identity from settings. Dedups by email (#5134).
 // Backs the panel's "Export all inbound links" and matches client/QR pages.
+func sudokuInboundUsable(inbound *model.Inbound) bool {
+	if inbound == nil || inbound.Protocol != model.Sudoku {
+		return true
+	}
+	return inbound.Enable && sudoku.IsInstalled(config.GetBinFolderPath())
+}
+
 func (s *SubService) inboundLinks(inbound *model.Inbound) []string {
+	if !sudokuInboundUsable(inbound) {
+		return nil
+	}
 	clients, err := s.clientsForLinkExport(inbound)
 	if err != nil {
 		return nil
@@ -736,6 +748,9 @@ func (s *SubService) getInboundsBySubId(subId string) ([]*model.Inbound, error) 
 		"vmess", "vless", "trojan", "shadowsocks", "hysteria",
 		"wireguard", "amneziawg", "mtproto", "tuic", "naive", "mieru",
 		"vk-turn-proxy",
+	}
+	if sudoku.IsInstalled(config.GetBinFolderPath()) {
+		protocols = append(protocols, string(model.Sudoku))
 	}
 	err := db.Model(model.Inbound{}).
 		Where(`id in (
@@ -913,6 +928,9 @@ func (s *SubService) shareEndpointsForInbound(inbound *model.Inbound) []ShareEnd
 // (socks, http, mixed, dokodemo, tunnel). The returned string may contain multiple
 // `\n`-separated URLs when externalProxy/host endpoints fan out.
 func (s *SubService) GetLink(inbound *model.Inbound, email string) string {
+	if !sudokuInboundUsable(inbound) {
+		return ""
+	}
 	switch inbound.Protocol {
 	case "vmess":
 		return s.genVmessLink(inbound, email)

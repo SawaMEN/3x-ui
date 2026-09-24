@@ -67,6 +67,12 @@ func GetBinaryPath(binDir string) string {
     return filepath.Join(binDir, name)
 }
 
+// IsInstalled reports whether the Sudoku tunnel binary is present.
+func IsInstalled(binDir string) bool {
+	st, err := os.Stat(GetBinaryPath(binDir))
+	return err == nil && !st.IsDir()
+}
+
 func EnsureInstalled(ctx context.Context, binDir string) (string, error) {
     path := GetBinaryPath(binDir)
     if st, err := os.Stat(path); err == nil && !st.IsDir() {

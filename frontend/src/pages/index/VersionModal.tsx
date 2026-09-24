@@ -30,6 +30,11 @@ const GEOFILES = [
   'geoip_RU.dat',
 ];
 
+type SingBoxReleaseVersion = {
+  version?: string;
+  prerelease?: boolean;
+};
+
 export default function VersionModal({ open, status, onClose, onBusy }: VersionModalProps) {
   const { t } = useTranslation();
   const [modal, modalContextHolder] = Modal.useModal();
@@ -50,10 +55,16 @@ export default function VersionModal({ open, status, onClose, onBusy }: VersionM
 
       if (selectedCore === 'sing-box') {
         const [versionMsg, statusMsg] = await Promise.all([
-          HttpUtil.get<string[]>('/panel/api/setting/singbox/versions'),
+          HttpUtil.get<Array<SingBoxReleaseVersion | string>>('/panel/api/setting/singbox/versions'),
           HttpUtil.get<{ version?: string }>('/panel/api/setting/singbox/status'),
         ]);
-        if (versionMsg?.success) setVersions(versionMsg.obj || []);
+        if (versionMsg?.success) {
+          setVersions(
+            (versionMsg.obj || [])
+              .map((item) => (typeof item === 'string' ? item : item?.version || ''))
+              .filter(Boolean),
+          );
+        }
         if (statusMsg?.success) setSingBoxVersion(statusMsg.obj?.version || '');
       } else {
         const msg = await HttpUtil.get<string[]>('/panel/api/server/getXrayVersion');
@@ -88,9 +99,9 @@ export default function VersionModal({ open, status, onClose, onBusy }: VersionM
         onBusy({ busy: true, tip: t('pages.index.dontRefresh') });
         try {
           if (isSingBox) {
-            await HttpUtil.post(`/panel/api/setting/singbox/install/${version}`);
+            await HttpUtil.post(`/panel/api/setting/singbox/install/${encodeURIComponent(version)}`);
           } else {
-            await HttpUtil.post(`/panel/api/server/installXray/${version}`);
+            await HttpUtil.post(`/panel/api/server/installXray/${encodeURIComponent(version)}`);
           }
         } finally {
           onBusy({ busy: false });

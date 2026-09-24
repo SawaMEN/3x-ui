@@ -51,11 +51,18 @@ func (m *Manager) Reconcile(ctx context.Context, desired []Instance) {
     defer m.mu.Unlock()
 
     binDir := config.GetBinFolderPath()
-    binary, err := EnsureInstalled(ctx, binDir)
-    if err != nil {
-        logger.Warning("sudoku: install failed:", err)
+    if !IsInstalled(binDir) {
+        for id, cur := range m.procs {
+            if cur != nil && cur.proc != nil {
+                _ = cur.proc.Stop()
+            }
+            delete(m.procs, id)
+            delete(m.lastErr, id)
+            _ = os.Remove(configPath(binDir, id))
+        }
         return
     }
+    binary := GetBinaryPath(binDir)
 
     want := make(map[int]Instance, len(desired))
     for _, inst := range desired {

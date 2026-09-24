@@ -298,7 +298,7 @@ export default function SystemUpdateModal({
 
 
   const updateDependency = async (dependency: DependencyStatus) => {
-    if (!dependency.installed || !dependency.availableVersion) return;
+    if (!dependency.availableVersion || (dependency.key !== 'sudoku' && !dependency.installed)) return;
 
     setDependencyBusy(dependency.key);
     try {
@@ -392,12 +392,13 @@ export default function SystemUpdateModal({
         setSystemUpdateResult(normalizeSystemUpdateResult(systemMsg.obj));
       }
 
-      const pending = dependencies.filter(
-        (dependency) =>
-          dependency.installed &&
-          dependency.updateAvailable &&
-          Boolean(dependency.availableVersion),
-      );
+      const pending = dependencies.filter((dependency) => {
+        if (!dependency.availableVersion) return false;
+        if (dependency.key === 'sudoku') {
+          return !dependency.installed || dependency.updateAvailable;
+        }
+        return dependency.installed && dependency.updateAvailable;
+      });
 
       const failed: string[] = [];
       const updatedTargets = new Set<string>();
@@ -707,13 +708,17 @@ export default function SystemUpdateModal({
                       icon={<DownloadOutlined />}
                       loading={dependencyBusy === dependency.key}
                       disabled={
-                        !dependency.updateAvailable || dependencyBusy !== null || systemUpdateBusy
+                        (!dependency.updateAvailable && !(dependency.key === 'sudoku' && !dependency.installed)) ||
+                      dependencyBusy !== null ||
+                      systemUpdateBusy
                       }
                       onClick={() => void updateDependency(dependency)}
                     >
-                      {dependency.updateAvailable
-                        ? t('pages.settings.swap.updateComponent')
-                        : t('pages.settings.swap.upToDate')}
+                      {!dependency.installed && dependency.key === 'sudoku'
+                        ? 'Установить'
+                        : dependency.updateAvailable
+                          ? t('pages.settings.swap.updateComponent')
+                          : t('pages.settings.swap.upToDate')}
                     </Button>
                   </Card>
                 ))}

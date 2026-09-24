@@ -36,6 +36,9 @@ func (p *LinkProvider) SubLinksForSubId(host, subId string) ([]string, error) {
 }
 
 func (p *LinkProvider) LinksForClient(host string, inbound *model.Inbound, email string) []string {
+	if !sudokuInboundUsable(inbound) {
+		return nil
+	}
 	svc := p.build(host)
 	svc.projectThroughFallbackMaster(inbound)
 	if endpoints := svc.hostEndpoints(inbound, "raw"); len(endpoints) > 0 {
@@ -50,6 +53,9 @@ func (p *LinkProvider) LinksForInbounds(host string, inbounds []*model.Inbound) 
 	svc := p.build(host)
 	var out []string
 	for _, inbound := range inbounds {
+		if !sudokuInboundUsable(inbound) {
+			continue
+		}
 		out = append(out, svc.inboundLinks(inbound)...)
 	}
 	return out

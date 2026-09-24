@@ -18,6 +18,17 @@ import (
 
 var sudokuCredentialsMu sync.Mutex
 
+func DisableUnavailableSudokuInbounds() error {
+	binDir := config.GetBinFolderPath()
+	if sudoku.IsInstalled(binDir) {
+		return nil
+	}
+	return database.GetDB().
+		Model(&model.Inbound{}).
+		Where("protocol = ? AND node_id IS NULL AND enable = ?", model.Sudoku, true).
+		Update("enable", false).Error
+}
+
 type sudokuHTTPMaskSettings struct {
     Disable   bool   `json:"disable"`
     Mode      string `json:"mode"`
@@ -103,10 +114,10 @@ func EnsureSudokuCredentials(inboundID int) error {
     defer cancel()
 
     binDir := config.GetBinFolderPath()
-    binary, err := sudoku.EnsureInstalled(ctx, binDir)
-    if err != nil {
-        return err
+    if !sudoku.IsInstalled(binDir) {
+        return os.ErrNotExist
     }
+    binary := sudoku.GetBinaryPath(binDir)
 
     settings, err := normalizeSudokuSettings(inbound.Settings)
     if err != nil {
@@ -179,6 +190,13 @@ func EnsureSudokuCredentials(inboundID int) error {
 }
 
 func DesiredSudokuInstances() ([]sudoku.Instance, error) {
+    if err := DisableUnavailableSudokuInbounds(); err != nil {
+        return nil, err
+    }
+    if !sudoku.IsInstalled(config.GetBinFolderPath()) {
+        return []sudoku.Instance{}, nil
+    }
+
     var inbounds []*model.Inbound
     if err := database.GetDB().
         Where("protocol = ? AND node_id IS NULL AND enable = ?", model.Sudoku, true).

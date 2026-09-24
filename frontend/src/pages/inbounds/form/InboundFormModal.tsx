@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { QuestionCircleOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -254,6 +254,33 @@ export default function InboundFormModal({
 
   const selectableNodes = (availableNodes || []).filter((n) => n.enable);
   const protocol = (useWatch({ control, name: 'protocol' }) ?? '') as string;
+  const [sudokuInstalled, setSudokuInstalled] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    void HttpUtil.get<{ installed?: boolean }>('/panel/api/setting/sudoku/status', undefined, {
+      silent: true,
+    }).then((msg) => {
+      if (!cancelled) {
+        setSudokuInstalled(msg?.success === true && msg.obj?.installed === true);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  const protocolOptions = useMemo(
+    () =>
+      PROTOCOL_OPTIONS.filter(
+        (option) =>
+          option.value !== Protocols.SUDOKU ||
+          sudokuInstalled ||
+          (mode === 'edit' && protocol === Protocols.SUDOKU),
+      ),
+    [mode, protocol, sudokuInstalled],
+  );
   const isNodeEligible = !!NODE_ELIGIBLE_PROTOCOLS[protocol];
   /*
    * The `node` share-address strategy only means something when the inbound can
@@ -675,7 +702,7 @@ export default function InboundFormModal({
       )}
 
       <FormField name="protocol" label={t('pages.inbounds.protocol')}>
-        <Select id="protocol" disabled={mode === 'edit'} options={PROTOCOL_OPTIONS} />
+        <Select id="protocol" disabled={mode === 'edit'} options={protocolOptions} />
       </FormField>
 
       <FormField
