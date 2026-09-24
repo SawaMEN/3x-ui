@@ -205,6 +205,9 @@ func (a *APIController) initRouter(g *gin.RouterGroup) {
 	telemt := api.Group("/telemt")
 	NewTelemtController(telemt, a.settingService)
 
+	templates := api.Group("/templates")
+	NewTemplateController(templates)
+
 	// Settings + Xray config management live under the API surface too, so the
 	// same API token drives them. Paths are /panel/api/setting/* and
 	// /panel/api/xray/*.
