@@ -126,6 +126,9 @@ func (a *SettingController) initRouter(g *gin.RouterGroup) {
 	g.POST("/apiTokens/create", a.createApiToken)
 	g.POST("/apiTokens/delete/:id", a.deleteApiToken)
 	g.POST("/apiTokens/setEnabled/:id", a.setApiTokenEnabled)
+	g.GET("/sessions", a.listSessions)
+	g.POST("/sessions/revoke/:id", a.revokeSession)
+	g.POST("/sessions/revokeOthers", a.revokeOtherSessions)
 	g.POST("/testSmtp", a.testSmtp)
 	g.POST("/testTgBot", a.testTgBot)
 	g.POST("/testDiscord", a.testDiscord)
@@ -333,6 +336,52 @@ type apiTokenEnabledForm struct {
 
 type apiTokenScopeForm struct {
 	ExpectedScope string `json:"expectedScope" form:"expectedScope"`
+}
+
+func (a *SettingController) listSessions(c *gin.Context) {
+	user := session.GetLoginUser(c)
+	if user == nil {
+		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.getSettings"), errors.New("not authenticated"))
+		return
+	}
+	current := session.CurrentSessionID(c)
+	rows, err := session.ListUserSessions(user.Id, current)
+	jsonObj(c, rows, err)
+}
+
+func (a *SettingController) revokeSession(c *gin.Context) {
+	user := session.GetLoginUser(c)
+	if user == nil {
+		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), errors.New("not authenticated"))
+		return
+	}
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id <= 0 {
+		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), errors.New("invalid session id"))
+		return
+	}
+	current := session.CurrentSessionID(c)
+	rows, listErr := session.ListUserSessions(user.Id, current)
+	if listErr != nil {
+		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), listErr)
+		return
+	}
+	for _, row := range rows {
+		if row.Id == id && row.IsCurrent {
+			jsonMsg(c, I18nWeb(c, "pages.settings.security.sessionsUseLogout"), errors.New("current session cannot be revoked here"))
+			return
+		}
+	}
+	jsonMsg(c, I18nWeb(c, "pages.settings.security.sessionRevoked"), session.RevokeUserSession(user.Id, id))
+}
+
+func (a *SettingController) revokeOtherSessions(c *gin.Context) {
+	user := session.GetLoginUser(c)
+	if user == nil {
+		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), errors.New("not authenticated"))
+		return
+	}
+	jsonMsg(c, I18nWeb(c, "pages.settings.security.otherSessionsRevoked"), session.RevokeOtherUserSessions(user.Id, session.CurrentSessionID(c)))
 }
 
 func (a *SettingController) listApiTokens(c *gin.Context) {
