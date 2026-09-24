@@ -43,7 +43,7 @@ var errSubscriptionFormatUnsupported = errors.New("subscription format cannot re
 func containsUnsupportedJSONProtocol(inbounds []*model.Inbound) bool {
 	for _, inbound := range inbounds {
 		switch inbound.Protocol {
-		case model.NaiveProxy, model.AmneziaWG, model.TUIC, model.MTProto, model.VKTurnProxy, model.Mieru:
+		case model.NaiveProxy, model.AnyTLS, model.ShadowTLS, model.AmneziaWG, model.TUIC, model.MTProto, model.VKTurnProxy, model.Mieru:
 			return true
 		}
 	}
@@ -63,7 +63,7 @@ func containsUnsupportedSingBoxProtocol(inbounds []*model.Inbound) bool {
 func containsUnsupportedClashProtocol(inbounds []*model.Inbound) bool {
 	for _, inbound := range inbounds {
 		switch inbound.Protocol {
-		case model.NaiveProxy, model.MTProto, model.VKTurnProxy, model.Mieru:
+		case model.NaiveProxy, model.AnyTLS, model.ShadowTLS, model.MTProto, model.VKTurnProxy, model.Mieru:
 			return true
 		case model.Hysteria, model.WireGuard, model.TUIC, model.AmneziaWG:
 			// These protocols have dedicated Clash/Mihomo emitters.
@@ -746,7 +746,7 @@ func (s *SubService) getInboundsBySubId(subId string) ([]*model.Inbound, error) 
 	var inbounds []*model.Inbound
 	protocols := []string{
 		"vmess", "vless", "trojan", "shadowsocks", "hysteria",
-		"wireguard", "amneziawg", "mtproto", "tuic", "naive", "mieru",
+		"wireguard", "amneziawg", "mtproto", "tuic", "naive", "anytls", "shadowtls", "mieru",
 		"vk-turn-proxy",
 	}
 	if sudoku.IsInstalled(config.GetBinFolderPath()) {
@@ -954,6 +954,8 @@ func (s *SubService) GetLink(inbound *model.Inbound, email string) string {
 		return s.genTuicLink(inbound, email)
 	case model.NaiveProxy:
 		return s.genNaiveLink(inbound, email)
+	case model.AnyTLS:
+		return s.genAnyTlsLink(inbound, email)
 	case model.Mieru:
 		return s.genMieruLink(inbound, email)
 	}
@@ -999,6 +1001,62 @@ func (s *SubService) genVKTurnProxyLink(inbound *model.Inbound, email string) st
 
 // genNaiveLink builds the canonical NaïveProxy client link for the panel's
 // single-link/QR views. The same native URI is used in raw subscriptions.
+func (s *SubService) genAnyTlsLink(inbound *model.Inbound, email string) string {
+	if inbound.Protocol != model.AnyTLS {
+		return ""
+	}
+	client, ok := s.clientForLink(inbound, email)
+	if !ok || client.Password == "" {
+		return ""
+	}
+
+	settings := s.linkSettings(inbound)
+	endpoints := s.naiveShareEndpoints(inbound)
+	links := make([]string, 0, len(endpoints))
+	for _, ep := range endpoints {
+		forceTLS, _ := ep["forceTls"].(string)
+		if strings.EqualFold(strings.TrimSpace(forceTLS), "none") {
+			continue
+		}
+		address, _ := ep["dest"].(string)
+		address = strings.TrimSpace(address)
+		if address == "" {
+			address = s.resolveInboundAddress(inbound)
+		}
+		port := inbound.Port
+		if rawPort, ok := ep["port"].(float64); ok && int(rawPort) > 0 {
+			port = int(rawPort)
+		} else if rawPort, ok := ep["port"].(int); ok && rawPort > 0 {
+			port = rawPort
+		}
+
+		params := map[string]string{}
+		if sni, ok := externalProxySNI(ep); ok {
+			params["sni"] = sni
+		}
+		if _, ok := params["sni"]; !ok {
+			if tls, ok := settings["tls"].(map[string]any); ok {
+				if serverName, ok := tls["serverName"].(string); ok && strings.TrimSpace(serverName) != "" {
+					params["sni"] = strings.TrimSpace(serverName)
+				}
+			}
+		}
+		if host := strings.TrimSpace(address); host != "" && !strings.Contains(host, ":") && net.ParseIP(host) == nil {
+			if _, exists := params["sni"]; !exists {
+				params["sni"] = host
+			}
+		}
+
+		if isHostEndpoint(ep) {
+			s.renderHostRemark(inbound, client, ep, "")
+		}
+		remark := s.endpointRemark(inbound, email, ep, "")
+		link := fmt.Sprintf("anytls://%s@%s", encodeUserinfo(client.Password), joinHostPort(address, port))
+		links = append(links, buildLinkWithParams(link, params, remark))
+	}
+	return strings.Join(links, "\n")
+}
+
 func (s *SubService) genNaiveLink(inbound *model.Inbound, email string) string {
 	if inbound.Protocol != model.NaiveProxy {
 		return ""

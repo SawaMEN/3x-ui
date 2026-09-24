@@ -501,6 +501,23 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 				}
 				continue
 			}
+			if inbound.Protocol == model.AnyTLS || inbound.Protocol == model.ShadowTLS {
+				native := s.genNativeTLSLike(subReq, inbound, client)
+				if native == nil {
+					formatUnsupported = true
+					continue
+				}
+				tag := client.Email
+				if tag == "" {
+					tag = fmt.Sprintf("proxy-%d", len(proxies)+1)
+				}
+				if len(proxies) > 0 {
+					tag = fmt.Sprintf("%s-%d", tag, len(proxies)+1)
+				}
+				native["tag"] = tag
+				proxies = append(proxies, nativeOutbound{tag: tag, out: native})
+				continue
+			}
 			if inbound.Protocol == model.NaiveProxy {
 				// Naive is not an Xray outbound, but sing-box has a native
 				// representation. Keep it in the structured profile instead of
@@ -1376,6 +1393,61 @@ func (s *SubJsonService) genServer(subReq *SubService, inbound *model.Inbound, s
 
 	result, _ := json.MarshalIndent(outbound, "", "  ")
 	return result
+}
+
+func (s *SubJsonService) genNativeTLSLike(subReq *SubService, inbound *model.Inbound, client model.Client) map[string]any {
+	if (inbound.Protocol != model.AnyTLS && inbound.Protocol != model.ShadowTLS) || client.Password == "" {
+		return nil
+	}
+
+	server := strings.TrimSpace(subReq.resolveInboundAddress(inbound))
+	if server == "" {
+		server = strings.TrimSpace(inbound.Listen)
+	}
+	if server == "" || inbound.Port <= 0 {
+		return nil
+	}
+
+	settings := subReq.linkSettings(inbound)
+	if inbound.Protocol == model.AnyTLS {
+		out := map[string]any{
+			"type":        "anytls",
+			"server":      server,
+			"server_port": inbound.Port,
+			"password":    client.Password,
+		}
+		tls := map[string]any{"enabled": true}
+		if rawTLS, ok := settings["tls"].(map[string]any); ok {
+			if serverName, ok := rawTLS["serverName"].(string); ok && strings.TrimSpace(serverName) != "" {
+				tls["server_name"] = strings.TrimSpace(serverName)
+			}
+		}
+		out["tls"] = tls
+		return out
+	}
+
+	handshake, _ := settings["handshake"].(map[string]any)
+	handshakeServer, _ := handshake["server"].(string)
+	handshakeServer = strings.TrimSpace(handshakeServer)
+	if handshakeServer == "" {
+		return nil
+	}
+	version := 3
+	if rawVersion, ok := settings["version"].(float64); ok && int(rawVersion) == 3 {
+		version = 3
+	}
+
+	return map[string]any{
+		"type":        "shadowtls",
+		"server":      server,
+		"server_port": inbound.Port,
+		"version":     version,
+		"password":    client.Password,
+		"tls": map[string]any{
+			"enabled":    true,
+			"server_name": handshakeServer,
+		},
+	}
 }
 
 func (s *SubJsonService) genNativeNaive(subReq *SubService, inbound *model.Inbound, client model.Client, endpoint map[string]any) map[string]any {

@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
 import { AmneziawgInboundSettingsSchema } from './amneziawg';
+import { AnyTlsInboundSettingsSchema } from './anytls';
+import { ShadowTlsInboundSettingsSchema } from './shadowtls';
 import { HttpInboundSettingsSchema } from './http';
 import { HysteriaInboundSettingsSchema } from './hysteria';
 import { MixedInboundSettingsSchema } from './mixed';
@@ -19,6 +21,8 @@ import { VkTurnProxyInboundSettingsSchema } from './vk-turn-proxy';
 import { WireguardInboundSettingsSchema } from './wireguard';
 
 export * from './amneziawg';
+export * from './anytls';
+export * from './shadowtls';
 export * from './http';
 export * from './hysteria';
 export * from './mixed';
@@ -55,6 +59,8 @@ export const InboundSettingsSchema = z.discriminatedUnion('protocol', [
   z.object({ protocol: z.literal('tun'), settings: TunInboundSettingsSchema }),
   z.object({ protocol: z.literal('mtproto'), settings: MtprotoInboundSettingsSchema }),
   z.object({ protocol: z.literal('amneziawg'), settings: AmneziawgInboundSettingsSchema }),
+  z.object({ protocol: z.literal('anytls'), settings: AnyTlsInboundSettingsSchema }),
+  z.object({ protocol: z.literal('shadowtls'), settings: ShadowTlsInboundSettingsSchema }),
   z.object({ protocol: z.literal('tuic'), settings: TuicInboundSettingsSchema }),
   z.object({ protocol: z.literal('naive'), settings: NaiveInboundSettingsSchema }),
   z.object({ protocol: z.literal('mieru'), settings: MieruInboundSettingsSchema }),

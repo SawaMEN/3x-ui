@@ -510,6 +510,50 @@ func TranslateXrayInbound(raw map[string]any) (map[string]any, error) {
 		}
 		out["tls"] = t
 	}
+	if protocol == "anytls" {
+		tls := rawObject(settings, "tls")
+		cert := strings.TrimSpace(rawString(tls, "certificatePath"))
+		key := strings.TrimSpace(rawString(tls, "keyPath"))
+		if cert == "" || key == "" {
+			return nil, fmt.Errorf("inbound %q AnyTLS requires both certificatePath and keyPath", rawString(raw, "tag"))
+		}
+		t := map[string]any{"enabled": true, "certificate_path": cert, "key_path": key}
+		if serverName := strings.TrimSpace(rawString(tls, "serverName")); serverName != "" {
+			t["server_name"] = serverName
+		}
+		out["tls"] = t
+		if padding := rawStrings(settings, "paddingScheme"); len(padding) > 0 {
+			out["padding_scheme"] = padding
+		}
+	}
+	if protocol == "shadowtls" {
+		version := rawInt(settings, "version")
+		if version == 0 {
+			version = 3
+		}
+		if version != 3 {
+			return nil, fmt.Errorf("inbound %q ShadowTLS requires protocol version 3", rawString(raw, "tag"))
+		}
+		handshake := rawObject(settings, "handshake")
+		server := strings.TrimSpace(rawString(handshake, "server"))
+		serverPort := rawInt(handshake, "serverPort")
+		if server == "" || serverPort <= 0 || serverPort > 65535 {
+			return nil, fmt.Errorf("inbound %q ShadowTLS requires a valid handshake server and port", rawString(raw, "tag"))
+		}
+		out["version"] = 3
+		out["handshake"] = map[string]any{
+			"server": server,
+			"server_port": serverPort,
+			"domain_resolver": "local",
+		}
+		out["strict_mode"] = rawBool(settings, "strictMode")
+		if wildcard := strings.TrimSpace(rawString(settings, "wildcardSni")); wildcard != "" {
+			if wildcard != "off" && wildcard != "authed" && wildcard != "all" {
+				return nil, fmt.Errorf("inbound %q has invalid ShadowTLS wildcardSni %q", rawString(raw, "tag"), wildcard)
+			}
+			out["wildcard_sni"] = wildcard
+		}
+	}
 	out["type"] = singProtocol
 	if listen := rawString(raw, "listen"); listen != "" {
 		out["listen"] = normalizeListen(listen)
@@ -520,7 +564,7 @@ func TranslateXrayInbound(raw map[string]any) (map[string]any, error) {
 	if err := translateUsers(out, singProtocol, settings); err != nil {
 		return nil, err
 	}
-	if protocol != "naive" {
+	if protocol != "naive" && protocol != "anytls" && protocol != "shadowtls" {
 		if err := translateStream(out, singProtocol, stream, true); err != nil {
 			return nil, err
 		}
@@ -567,7 +611,7 @@ func translateUsers(out map[string]any, protocol string, settings map[string]any
 			if password, ok := client["password"].(string); ok && password != "" {
 				user["password"] = password
 			}
-		case "naive":
+		case "naive", "anytls", "shadowtls":
 			if email := rawString(client, "email"); email != "" {
 				user["username"] = email
 			}

@@ -632,3 +632,89 @@ func TestTranslateXrayNaiveInbound(t *testing.T) {
 		t.Fatalf("unexpected Naive TLS: %#v", got["tls"])
 	}
 }
+
+
+func TestTranslateXrayAnyTLSInbound(t *testing.T) {
+	raw := map[string]any{
+		"protocol": "anytls",
+		"tag":      "anytls-443",
+		"listen":   "0.0.0.0",
+		"port":     443,
+		"settings": map[string]any{
+			"paddingScheme": []any{"stop=8", "0=30-30"},
+			"tls": map[string]any{
+				"serverName":     "example.com",
+				"certificatePath": "/cert/fullchain.pem",
+				"keyPath":         "/cert/privkey.pem",
+			},
+			"clients": []any{
+				map[string]any{
+					"email":    "alice",
+					"password": "secret",
+				},
+			},
+		},
+	}
+	got, err := TranslateXrayInbound(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got["type"] != "anytls" || got["listen_port"] != 443 {
+		t.Fatalf("unexpected AnyTLS config: %#v", got)
+	}
+	users, ok := got["users"].([]map[string]any)
+	if !ok || len(users) != 1 || users[0]["name"] != "alice" || users[0]["password"] != "secret" {
+		t.Fatalf("unexpected AnyTLS users: %#v", got["users"])
+	}
+	padding, ok := got["padding_scheme"].([]string)
+	if !ok || len(padding) != 2 || padding[0] != "stop=8" {
+		t.Fatalf("unexpected AnyTLS padding: %#v", got["padding_scheme"])
+	}
+	tls, ok := got["tls"].(map[string]any)
+	if !ok || tls["enabled"] != true || tls["server_name"] != "example.com" ||
+		tls["certificate_path"] != "/cert/fullchain.pem" || tls["key_path"] != "/cert/privkey.pem" {
+		t.Fatalf("unexpected AnyTLS TLS: %#v", got["tls"])
+	}
+}
+
+func TestTranslateXrayShadowTLSInbound(t *testing.T) {
+	raw := map[string]any{
+		"protocol": "shadowtls",
+		"tag":      "shadowtls-443",
+		"listen":   "0.0.0.0",
+		"port":     443,
+		"settings": map[string]any{
+			"version": 3,
+			"handshake": map[string]any{
+				"server":     "cloudflare.com",
+				"serverPort": 443,
+			},
+			"strictMode":  true,
+			"wildcardSni": "authed",
+			"clients": []any{
+				map[string]any{
+					"email":    "alice",
+					"password": "secret",
+				},
+			},
+		},
+	}
+	got, err := TranslateXrayInbound(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got["type"] != "shadowtls" || got["version"] != 3 || got["listen_port"] != 443 {
+		t.Fatalf("unexpected ShadowTLS config: %#v", got)
+	}
+	handshake, ok := got["handshake"].(map[string]any)
+	if !ok || handshake["server"] != "cloudflare.com" || handshake["server_port"] != 443 {
+		t.Fatalf("unexpected ShadowTLS handshake: %#v", got["handshake"])
+	}
+	if got["strict_mode"] != true || got["wildcard_sni"] != "authed" {
+		t.Fatalf("unexpected ShadowTLS options: %#v", got)
+	}
+	users, ok := got["users"].([]map[string]any)
+	if !ok || len(users) != 1 || users[0]["name"] != "alice" || users[0]["password"] != "secret" {
+		t.Fatalf("unexpected ShadowTLS users: %#v", got["users"])
+	}
+}

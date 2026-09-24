@@ -150,3 +150,50 @@ func TestGenNativeTUICPreservesClientSettings(t *testing.T) {
 		}
 	}
 }
+
+
+func TestGenNativeAnyTLSUsesClientPassword(t *testing.T) {
+	svc := &SubJsonService{}
+	inbound := &model.Inbound{
+		Protocol: model.AnyTLS,
+		Listen:   "anytls.example.com",
+		Port:     443,
+		Settings: `{"tls":{"serverName":"anytls.example.com"},"clients":[{"email":"user","password":"secret"}]}`,
+	}
+	subReq := &SubService{}
+	got := svc.genNativeTLSLike(subReq, inbound, model.Client{Email: "user", Password: "secret"})
+	if got == nil {
+		t.Fatal("genNativeTLSLike returned nil")
+	}
+	if got["type"] != "anytls" || got["server"] != "anytls.example.com" ||
+		got["server_port"] != 443 || got["password"] != "secret" {
+		t.Fatalf("unexpected AnyTLS outbound: %#v", got)
+	}
+	tls, ok := got["tls"].(map[string]any)
+	if !ok || tls["server_name"] != "anytls.example.com" {
+		t.Fatalf("unexpected AnyTLS TLS: %#v", got["tls"])
+	}
+}
+
+func TestGenNativeShadowTLSUsesHandshakeServer(t *testing.T) {
+	svc := &SubJsonService{}
+	inbound := &model.Inbound{
+		Protocol: model.ShadowTLS,
+		Listen:   "shadowtls.example.com",
+		Port:     443,
+		Settings: `{"version":3,"handshake":{"server":"cloudflare.com","serverPort":443},"clients":[{"email":"user","password":"secret"}]}`,
+	}
+	subReq := &SubService{}
+	got := svc.genNativeTLSLike(subReq, inbound, model.Client{Email: "user", Password: "secret"})
+	if got == nil {
+		t.Fatal("genNativeTLSLike returned nil")
+	}
+	if got["type"] != "shadowtls" || got["server"] != "shadowtls.example.com" ||
+		got["server_port"] != 443 || got["version"] != 3 || got["password"] != "secret" {
+		t.Fatalf("unexpected ShadowTLS outbound: %#v", got)
+	}
+	tls, ok := got["tls"].(map[string]any)
+	if !ok || tls["server_name"] != "cloudflare.com" {
+		t.Fatalf("unexpected ShadowTLS TLS: %#v", got["tls"])
+	}
+}

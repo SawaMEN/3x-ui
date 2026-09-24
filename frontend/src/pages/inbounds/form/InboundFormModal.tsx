@@ -58,6 +58,8 @@ import { AdvancedAllEditor, AdvancedSliceEditor } from './advanced-editors';
 import { formatInboundIssue, formatInboundValidation } from './formatValidationError';
 import {
   AmneziawgFields,
+  AnyTlsFields,
+  ShadowTlsFields,
   HttpFields,
   HysteriaFields,
   MixedFields,
@@ -313,7 +315,9 @@ export default function InboundFormModal({
     protocol !== Protocols.TUIC &&
     protocol !== Protocols.NAIVE &&
     protocol !== Protocols.MIERU &&
-    protocol !== Protocols.SUDOKU;
+    protocol !== Protocols.SUDOKU &&
+    protocol !== Protocols.ANYTLS &&
+    protocol !== Protocols.SHADOWTLS;
 
   const wPort = useWatch({ control, name: 'port' });
   const wListen = (useWatch({ control, name: 'listen' }) ?? '') as string;
@@ -325,7 +329,13 @@ export default function InboundFormModal({
       return;
     }
 
-    const autoPortProtocols = new Set<string>([Protocols.NAIVE, Protocols.MIERU, Protocols.SUDOKU]);
+    const autoPortProtocols = new Set<string>([
+      Protocols.NAIVE,
+      Protocols.MIERU,
+      Protocols.SUDOKU,
+      Protocols.ANYTLS,
+      Protocols.SHADOWTLS,
+    ]);
     if (!autoPortProtocols.has(protocol) || autoPortSeedRef.current === protocol) return;
     autoPortSeedRef.current = protocol;
 
@@ -602,7 +612,12 @@ export default function InboundFormModal({
             ],
           },
         });
-      } else if (next === Protocols.WIREGUARD || next === Protocols.TUNNEL) {
+      } else if (
+        next === Protocols.WIREGUARD ||
+        next === Protocols.TUNNEL ||
+        next === Protocols.ANYTLS ||
+        next === Protocols.SHADOWTLS
+      ) {
         setV('streamSettings', { security: 'none' });
       } else {
         const current = getV('streamSettings') as { network?: string } | undefined;
@@ -861,6 +876,8 @@ export default function InboundFormModal({
 
       {protocol === Protocols.TUIC && <TuicFields />}
       {protocol === Protocols.NAIVE && <NaiveFields />}
+      {protocol === Protocols.ANYTLS && <AnyTlsFields />}
+      {protocol === Protocols.SHADOWTLS && <ShadowTlsFields />}
       {protocol === Protocols.MIERU && <MieruFields />}
       {protocol === Protocols.SUDOKU && <SudokuFields />}
 
@@ -1204,6 +1221,8 @@ export default function InboundFormModal({
                     Protocols.WIREGUARD,
                     Protocols.MTPROTO,
                     Protocols.AMNEZIAWG,
+                    Protocols.ANYTLS,
+                    Protocols.SHADOWTLS,
                     Protocols.TUIC,
                     Protocols.NAIVE,
                     Protocols.MIERU,

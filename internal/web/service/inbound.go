@@ -1234,7 +1234,7 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 			if client.Email == "" {
 				return inbound, false, common.NewError("empty client email")
 			}
-		case "naive", "mieru":
+		case "naive", "mieru", "anytls", "shadowtls":
 			if client.Email == "" {
 				return inbound, false, common.NewError("empty client email")
 			}
@@ -1339,7 +1339,9 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 			inbound.Protocol == model.MTProto ||
 			inbound.Protocol == model.TUIC ||
 			inbound.Protocol == model.AmneziaWG ||
-			inbound.Protocol == model.NaiveProxy) {
+			inbound.Protocol == model.NaiveProxy ||
+			inbound.Protocol == model.AnyTLS ||
+			inbound.Protocol == model.ShadowTLS) {
 			if inbound.NodeID != nil {
 				markDirty = true
 			} else {
@@ -1419,7 +1421,7 @@ func (s *InboundService) delInbound(id int) (bool, func(), error) {
 	loadErr := db.Model(model.Inbound{}).Where("id = ?", id).First(&ib).Error
 	if loadErr == nil {
 		naiveSingBox := false
-		if ib.Protocol == model.NaiveProxy {
+		if ib.Protocol == model.NaiveProxy || ib.Protocol == model.AnyTLS || ib.Protocol == model.ShadowTLS {
 			if core, coreErr := (&SettingService{}).GetCoreType(); coreErr == nil {
 				naiveSingBox = core == CoreTypeSingBox
 			}
@@ -1680,7 +1682,7 @@ func (s *InboundService) SetInboundEnable(id int, enable bool) (bool, error) {
 	}
 	inbound.Enable = enable
 
-	if inbound.Protocol == model.NaiveProxy {
+	if inbound.Protocol == model.NaiveProxy || inbound.Protocol == model.AnyTLS || inbound.Protocol == model.ShadowTLS {
 		core, coreErr := (&SettingService{}).GetCoreType()
 		if coreErr != nil {
 			return false, coreErr
@@ -1789,7 +1791,7 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 			}
 		}
 	}
-	if inbound.Protocol == model.NaiveProxy || inbound.Protocol == model.Mieru {
+	if inbound.Protocol == model.NaiveProxy || inbound.Protocol == model.AnyTLS || inbound.Protocol == model.ShadowTLS || inbound.Protocol == model.Mieru {
 		for _, client := range clients {
 			if client.Email == "" {
 				return inbound, false, common.NewError("empty client email")
@@ -1976,7 +1978,9 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 
 		localSidecarTransition := oldProtocol == model.MTProto || oldInbound.Protocol == model.MTProto || oldProtocol == model.TUIC || oldInbound.Protocol == model.TUIC
 		naiveSingBoxRuntime := false
-		if oldProtocol == model.NaiveProxy || oldInbound.Protocol == model.NaiveProxy {
+		if oldProtocol == model.NaiveProxy || oldInbound.Protocol == model.NaiveProxy ||
+			oldProtocol == model.AnyTLS || oldInbound.Protocol == model.AnyTLS ||
+			oldProtocol == model.ShadowTLS || oldInbound.Protocol == model.ShadowTLS {
 			core, coreErr := (&SettingService{}).GetCoreType()
 			if coreErr != nil {
 				return coreErr

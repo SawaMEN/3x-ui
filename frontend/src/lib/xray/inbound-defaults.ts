@@ -2,6 +2,8 @@ import { RandomUtil, Wireguard } from '@/utils';
 import { generateAwgObfuscation } from '@/lib/xray/amneziawg-obfuscation';
 
 import type { AmneziawgInboundSettings } from '@/schemas/protocols/inbound/amneziawg';
+import type { AnyTlsInboundSettings } from '@/schemas/protocols/inbound/anytls';
+import type { ShadowTlsInboundSettings } from '@/schemas/protocols/inbound/shadowtls';
 import type { HttpInboundSettings } from '@/schemas/protocols/inbound/http';
 import type { HysteriaClient, HysteriaInboundSettings } from '@/schemas/protocols/inbound/hysteria';
 import type { MixedInboundSettings } from '@/schemas/protocols/inbound/mixed';
@@ -262,6 +264,42 @@ export function createDefaultMtprotoClient(domain: string): Partial<MtprotoClien
   };
 }
 
+export function createDefaultAnyTlsInboundSettings(): AnyTlsInboundSettings {
+  return {
+    paddingScheme: [
+      'stop=8',
+      '0=30-30',
+      '1=100-400',
+      '2=400-500,c,500-1000,c,500-1000,c,500-1000,c,500-1000',
+      '3=9-9,500-1000',
+      '4=500-1000',
+      '5=500-1000',
+      '6=500-1000',
+      '7=500-1000',
+    ],
+    tls: {
+      enabled: true,
+      serverName: '',
+      certificatePath: '',
+      keyPath: '',
+    },
+    clients: [],
+  };
+}
+
+export function createDefaultShadowTlsInboundSettings(): ShadowTlsInboundSettings {
+  return {
+    version: 3,
+    handshake: {
+      server: '',
+      serverPort: 443,
+    },
+    strictMode: false,
+    wildcardSni: 'off',
+    clients: [],
+  };
+}
+
 export function createDefaultNaiveInboundSettings(): NaiveInboundSettings {
   return {
     network: 'tcp',
@@ -444,6 +482,8 @@ export type AnyInboundSettings =
   | MtprotoInboundSettings
   | VkTurnProxyInboundSettings
   | AmneziawgInboundSettings
+  | AnyTlsInboundSettings
+  | ShadowTlsInboundSettings
   | TuicInboundSettings
   | NaiveInboundSettings
   | MieruInboundSettings
@@ -477,6 +517,10 @@ export function createDefaultInboundSettings(protocol: string): AnyInboundSettin
       return createDefaultVkTurnProxyInboundSettings();
     case 'amneziawg':
       return createDefaultAmneziawgInboundSettings();
+    case 'anytls':
+      return createDefaultAnyTlsInboundSettings();
+    case 'shadowtls':
+      return createDefaultShadowTlsInboundSettings();
     case 'tuic':
       return createDefaultTuicInboundSettings();
     case 'naive':

@@ -259,7 +259,7 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 				if client.Password != "" {
 					entry["password"] = client.Password
 				}
-			case model.NaiveProxy, model.Mieru:
+			case model.NaiveProxy, model.Mieru, model.AnyTLS, model.ShadowTLS:
 				if client.Password != "" {
 					entry["password"] = client.Password
 				}
@@ -275,7 +275,7 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 		// NaiveProxy is a native TLS protocol in sing-box. Keep the ordinary
 		// inbound form simple by reusing the panel's HTTPS certificate/key when
 		// the inbound does not explicitly provide its own pair.
-		if inbound.Protocol == model.NaiveProxy {
+		if inbound.Protocol == model.NaiveProxy || inbound.Protocol == model.AnyTLS {
 			tls, _ := settings["tls"].(map[string]any)
 			if tls == nil {
 				tls = map[string]any{}
@@ -286,7 +286,11 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 			keyPath, _ := tls["keyPath"].(string)
 			keyPath = strings.TrimSpace(keyPath)
 			if (certPath == "") != (keyPath == "") {
-				return nil, fmt.Errorf("NaiveProxy inbound %q must provide both TLS certificate and private key, or neither", inbound.Tag)
+				protocolName := "NaiveProxy"
+				if inbound.Protocol == model.AnyTLS {
+					protocolName = "AnyTLS"
+				}
+				return nil, fmt.Errorf("%s inbound %q must provide both TLS certificate and private key, or neither", protocolName, inbound.Tag)
 			}
 			if certPath == "" {
 				// Prefer the panel HTTPS certificate, then fall back to the
@@ -311,7 +315,11 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 				}
 			}
 			if certPath == "" || keyPath == "" {
-				return nil, fmt.Errorf("NaiveProxy inbound %q requires a complete TLS certificate/private-key pair (inbound, panel HTTPS, or subscription HTTPS)", inbound.Tag)
+				protocolName := "NaiveProxy"
+				if inbound.Protocol == model.AnyTLS {
+					protocolName = "AnyTLS"
+				}
+				return nil, fmt.Errorf("%s inbound %q requires a complete TLS certificate/private-key pair (inbound, panel HTTPS, or subscription HTTPS)", protocolName, inbound.Tag)
 			}
 			tls["certificatePath"] = certPath
 			tls["keyPath"] = keyPath

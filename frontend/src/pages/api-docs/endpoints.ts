@@ -2831,6 +2831,11 @@ export const sections: readonly Section[] = [
       },
       {
         method: 'GET',
+        path: '/panel/api/setting/sudoku/status',
+        summary: 'Return Sudoku installation status.',
+      },
+      {
+        method: 'GET',
         path: '/panel/api/setting/singbox/versions',
         summary: 'Return available sing-box versions.',
       },
@@ -2883,6 +2888,11 @@ export const sections: readonly Section[] = [
         method: 'POST',
         path: '/panel/api/setting/singbox/install',
         summary: 'Install sing-box using the configured channel.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/setting/sudoku/update',
+        summary: 'Install or update the managed Sudoku tunnel binary.',
       },
       {
         method: 'POST',
