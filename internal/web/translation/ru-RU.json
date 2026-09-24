@@ -536,7 +536,7 @@
         "naiveNetworkTcp": "TCP",
         "naiveNetworkUdp": "QUIC / UDP",
         "naiveShareLinkFormat": "Формат ссылок Hiddify",
-"naiveShareLinkFormatHint": "Переключает только формат ссылок в подписке. Выключено — стандартные naive+https/naive+quic. Включено — совместимый с Hiddify naive://. В стандартном формате адрес сервера в ссылке должен соответствовать TLS/SNI; если адрес и SNI различаются, используйте Hiddify.",
+        "naiveShareLinkFormatHint": "Переключает только формат ссылок в подписке. Выключено — стандартные naive+https/naive+quic. Включено — совместимый с Hiddify naive://. В стандартном формате адрес сервера в ссылке должен соответствовать TLS/SNI; если адрес и SNI различаются, используйте Hiddify.",
         "naiveShareLinkFormatStandard": "Стандартный NaiveProxy",
         "naiveShareLinkFormatHiddify": "Hiddify",
         "naiveHint": "SNI можно не заполнять. В Hiddify-ссылке SNI автоматически берётся из домена ссылки; укажите его вручную только если сертификат использует другое имя.",
@@ -723,7 +723,19 @@
           "HANDSHAKE_STANDARD": "Стандартный",
           "HANDSHAKE_NO_WAIT": "Без ожидания"
         },
-        "mieruUserHintMandatory": "Требовать User Hint"
+        "mieruUserHintMandatory": "Требовать User Hint",
+        "shadowTlsHandshakeServer": "Сервер рукопожатия",
+        "shadowTlsHandshakeServerHint": "Домен или IP-адрес сервера, который используется ShadowTLS для рукопожатия. По умолчанию: cloudflare.com.",
+        "shadowTlsHandshakePort": "Порт рукопожатия",
+        "shadowTlsHandshakePortHint": "Порт сервера рукопожатия. По умолчанию: 443.",
+        "shadowTlsStrictMode": "Строгий режим",
+        "shadowTlsStrictModeHint": "В строгом режиме сервер принимает только корректные ShadowTLS-соединения.",
+        "shadowTlsWildcardSni": "Wildcard SNI",
+        "shadowTlsWildcardSniHint": "Определяет, какие значения SNI разрешены сервером ShadowTLS.",
+        "shadowTlsWildcardSniOff": "Выключено",
+        "shadowTlsWildcardSniAuthed": "Только авторизованные",
+        "shadowTlsWildcardSniAll": "Все",
+        "shadowTlsHint": "ShadowTLS использует отдельный сервер рукопожатия. Для обычной конфигурации оставьте сервер cloudflare.com и порт 443."
       },
       "info": {
         "mode": "Режим",

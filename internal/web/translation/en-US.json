@@ -515,7 +515,7 @@
         "naiveNetworkTcp": "TCP",
         "naiveNetworkUdp": "QUIC / UDP",
         "naiveShareLinkFormat": "Hiddify link format",
-"naiveShareLinkFormatHint": "Switches only the subscription link format. Off uses standard naive+https/naive+quic. On uses the Hiddify-compatible naive:// format. With the standard format, the server address in the link must match the TLS/SNI name; when they differ, use Hiddify.",
+        "naiveShareLinkFormatHint": "Switches only the subscription link format. Off uses standard naive+https/naive+quic. On uses the Hiddify-compatible naive:// format. With the standard format, the server address in the link must match the TLS/SNI name; when they differ, use Hiddify.",
         "naiveShareLinkFormatStandard": "Standard NaiveProxy",
         "naiveShareLinkFormatHiddify": "Hiddify",
         "naiveHint": "SNI can be left empty. In Hiddify links, SNI is automatically taken from the link domain; set it manually only when the certificate uses a different hostname.",
@@ -723,7 +723,19 @@
           "HANDSHAKE_STANDARD": "Standard",
           "HANDSHAKE_NO_WAIT": "No-wait"
         },
-        "mieruUserHintMandatory": "Require User Hint"
+        "mieruUserHintMandatory": "Require User Hint",
+        "shadowTlsHandshakeServer": "Handshake server",
+        "shadowTlsHandshakeServerHint": "Domain or IP address of the server used by ShadowTLS for the handshake. Default: cloudflare.com.",
+        "shadowTlsHandshakePort": "Handshake port",
+        "shadowTlsHandshakePortHint": "Port of the handshake server. Default: 443.",
+        "shadowTlsStrictMode": "Strict mode",
+        "shadowTlsStrictModeHint": "In strict mode, the server accepts only valid ShadowTLS connections.",
+        "shadowTlsWildcardSni": "Wildcard SNI",
+        "shadowTlsWildcardSniHint": "Controls which SNI values are allowed by the ShadowTLS server.",
+        "shadowTlsWildcardSniOff": "Disabled",
+        "shadowTlsWildcardSniAuthed": "Authenticated only",
+        "shadowTlsWildcardSniAll": "All",
+        "shadowTlsHint": "ShadowTLS uses a separate handshake server. For a typical configuration, keep cloudflare.com and port 443."
       },
       "info": {
         "mode": "Mode",
