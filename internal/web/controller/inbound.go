@@ -513,7 +513,7 @@ func (a *InboundController) setFallbacks(c *gin.Context) {
 func (a *InboundController) reorder(c *gin.Context) {
 	user := session.GetLoginUser(c)
 	var req struct {
-		Ids []int json:"ids"
+		Ids []int `json:"ids"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		jsonMsg(c, "invalid reorder payload", err)
