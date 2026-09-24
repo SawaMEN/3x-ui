@@ -199,3 +199,86 @@ func TestIsKernelPackageIncludesCommonArchKernels(t *testing.T) {
 		}
 	}
 }
+
+func TestCollectPackageStatusesIncludesAllAvailableUpdates(t *testing.T) {
+	lookup := func(name string) (string, bool) {
+		return "1.0", true
+	}
+	upgrades := map[string]string{
+		"curl":             "8.5.0",
+		"linux-image-test": "6.2.0",
+		"openssl":          "3.0.1",
+		"bash":             "5.2.0",
+	}
+
+	packages, kernels, missing := collectPackageStatuses("ubuntu", "apt-get", upgrades, lookup)
+	if missing {
+		t.Fatalf("collectPackageStatuses() reported missing required packages")
+	}
+
+	byName := map[string]PackageStatus{}
+	for _, item := range packages {
+		byName[item.Name] = item
+	}
+	for _, name := range []string{"curl", "openssl", "bash", "linux-image-test"} {
+		item, ok := byName[name]
+		if !ok {
+			t.Fatalf("collectPackageStatuses() omitted available package %q: %#v", name, packages)
+		}
+		if !item.UpdateAvailable {
+			t.Fatalf("package %q was not marked updateAvailable: %#v", name, item)
+		}
+	}
+	if len(kernels) != 1 || kernels[0].Name != "linux-image-test" {
+		t.Fatalf("kernel packages = %#v", kernels)
+	}
+}
+
+func TestPackageUpgradeCommand(t *testing.T) {
+	tests := map[string][]string{
+		"apt-get": {"apt-get", "upgrade", "-y", "--no-install-recommends"},
+		"dnf":     {"dnf", "upgrade", "-y"},
+		"yum":     {"yum", "update", "-y"},
+		"zypper":  {"zypper", "--non-interactive", "update", "-y"},
+		"apk":     {"apk", "upgrade", "--no-cache"},
+		"pacman":  {"pacman", "-Syu", "--noconfirm", "--needed"},
+	}
+	for manager, want := range tests {
+		got := packageUpgradeCommand(manager)
+		if strings.Join(got, "\x00") != strings.Join(want, "\x00") {
+			t.Fatalf("packageUpgradeCommand(%q) = %#v, want %#v", manager, got, want)
+		}
+	}
+}
+
+func TestDistroInfoPackageFamily(t *testing.T) {
+	tests := []struct {
+		info distroInfo
+		want string
+	}{
+		{distroInfo{id: "ubuntu", manager: "apt-get"}, "ubuntu"},
+		{distroInfo{id: "linuxmint", manager: "apt-get"}, "ubuntu"},
+		{distroInfo{id: "rocky", manager: "dnf"}, "rhel"},
+		{distroInfo{id: "manjaro", manager: "pacman"}, "arch"},
+		{distroInfo{id: "opensuse-tumbleweed", manager: "zypper"}, "opensuse-leap"},
+	}
+	for _, tt := range tests {
+		if got := tt.info.distributionForPackages(); got != tt.want {
+			t.Fatalf("distributionForPackages() = %q, want %q for %#v", got, tt.want, tt.info)
+		}
+	}
+}
+
+func TestInstalledApkPackagePattern(t *testing.T) {
+	cases := map[string]string{
+		"curl-8.5.0-r0":          "curl",
+		"linux-lts-6.6.90-r0":     "linux-lts",
+		"ca-certificates-2025-r0": "ca-certificates",
+	}
+	for line, want := range cases {
+		match := installedApkPackagePattern.FindStringSubmatch(line)
+		if len(match) != 3 || match[1] != want || match[2] == "" {
+			t.Fatalf("installedApkPackagePattern(%q) = %#v, want package %q", line, match, want)
+		}
+	}
+}
