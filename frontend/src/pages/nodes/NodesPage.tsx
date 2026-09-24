@@ -202,7 +202,11 @@ export default function NodesPage() {
   const onReorder = useCallback(
     async (ids: number[]) => {
       try {
-        const msg = await HttpUtil.post('/panel/api/nodes/reorder', { ids });
+        const msg = await HttpUtil.post(
+          '/panel/api/nodes/reorder',
+          { ids },
+          { headers: { 'Content-Type': 'application/json' } },
+        );
         if (!msg?.success) {
           messageApi.error(msg?.msg || t('somethingWentWrong'));
         }
