@@ -2272,7 +2272,19 @@
         "poolSize": "Размер пула"
       },
       "defaultOutbound": "Исходящий по умолчанию",
-      "defaultOutboundDesc": "Трафик без совпадения с правилами маршрутизации идёт через этот исходящий (первый в списке)."
+      "defaultOutboundDesc": "Трафик без совпадения с правилами маршрутизации идёт через этот исходящий (первый в списке).",
+      "routingPreset": "Пресет маршрутизации",
+      "saveRoutingPreset": "Сохранить пресет маршрутизации",
+      "routingPresetName": "Название пресета",
+      "routingPresetDescription": "Необязательное описание",
+      "routingPresetNameRequired": "Укажите название пресета.",
+      "routingPresetApplied": "Пресет применён к текущей конфигурации.",
+      "routingPresetLoadFailed": "Не удалось загрузить пресет маршрутизации.",
+      "routingPresetSaveFailed": "Не удалось сохранить пресет маршрутизации.",
+      "routingPresetSaved": "Пресет маршрутизации сохранён.",
+      "deleteRoutingPreset": "Удалить этот пресет маршрутизации?",
+      "routingPresetDeleteFailed": "Не удалось удалить пресет маршрутизации.",
+      "routingPresetDeleted": "Пресет маршрутизации удалён."
     },
     "hosts": {
       "addHost": "Добавить хост",
