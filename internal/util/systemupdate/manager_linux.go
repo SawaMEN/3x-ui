@@ -50,7 +50,59 @@ func (d distroInfo) distributionForPackages() string {
 	return d.id
 }
 
-var packageVersionPattern = regexp.MustCompile("^(.+)-([0-9][^[:space:]]*)[[:space:]]+<[[:space:]]+(.+)$")
+var packageVersionPattern = regexp.MustCompile(`^(.+)-([0-9][^[:space:]]*)[[:space:]]+<[[:space:]]+(.+)//go:build linux
+
+package systemupdate
+
+import (
+	"bufio"
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+	"regexp"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/config"
+)
+
+const commandTimeout = 30 * time.Minute
+
+var updateMu sync.Mutex
+
+type distroInfo struct {
+	id      string
+	version string
+	manager string
+}
+
+func (d distroInfo) distributionForPackages() string {
+	if d.id == "armbian" {
+		return "armbian"
+	}
+	if d.manager == "apt-get" {
+		return "ubuntu"
+	}
+	if d.manager == "dnf" || d.manager == "yum" {
+		return "rhel"
+	}
+	if d.manager == "pacman" {
+		return "arch"
+	}
+	if d.manager == "zypper" {
+		return "opensuse-leap"
+	}
+	if d.manager == "apk" {
+		return "alpine"
+	}
+	return d.id
+}
+
+)
 
 func GetStatus(ctx context.Context) (Status, error) {
 	info := detectDistribution()
