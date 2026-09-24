@@ -14,6 +14,7 @@ import {
   DatabaseOutlined,
   DiscordOutlined,
   ExportOutlined,
+  FileProtectOutlined,
   GlobalOutlined,
   ImportOutlined,
   LogoutOutlined,
@@ -74,7 +75,8 @@ type IconName =
   | 'outbound'
   | 'routing'
   | 'telemt'
-  | 'tool';
+  | 'tool'
+  | 'templates';
 const iconByName: Record<IconName, ComponentType> = {
   dashboard: DashboardOutlined,
   inbound: ImportOutlined,
@@ -88,6 +90,7 @@ const iconByName: Record<IconName, ComponentType> = {
   routing: SwapOutlined,
   telemt: MessageOutlined,
   tool: ToolOutlined,
+  templates: FileProtectOutlined,
 };
 function readSidebarPinned() {
   try {
@@ -266,6 +269,7 @@ function AppSidebar() {
       { key: '/outbound', icon: 'outbound' as IconName, title: t('menu.outbounds') },
       { key: '/routing', icon: 'routing' as IconName, title: t('menu.routing') },
       { key: '/telemt', icon: 'telemt' as IconName, title: t('menu.telemt') },
+      { key: '/templates', icon: 'templates' as IconName, title: t('menu.templates') },
       { key: '/settings', icon: 'setting' as IconName, title: t('menu.settings') },
       ...(isXray
         ? [
