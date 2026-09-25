@@ -17,7 +17,7 @@ func NewNaiveProxyController(g *gin.RouterGroup) *NaiveProxyController {
 	group := g.Group("/naiveproxy")
 	group.GET("/status", a.status)
 	group.POST("/update", a.update)
-	naiveproxy.StartAutoReconciler()
+	naiveproxy.StartAutomaticLifecycle()
 	return a
 }
 
@@ -48,8 +48,8 @@ func (a *NaiveProxyController) update(c *gin.Context) {
 	}
 	status, err := naiveproxy.Update(c.Request.Context())
 	if err == nil {
-		if reconcileErr := naiveproxy.Reconcile(c.Request.Context()); reconcileErr != nil {
-			err = reconcileErr
+		if ensureErr := naiveproxy.Ensure(c.Request.Context()); ensureErr != nil {
+			err = ensureErr
 		} else if refreshed, statusErr := naiveproxy.GetStatus(c.Request.Context()); statusErr == nil {
 			status = refreshed
 		}
