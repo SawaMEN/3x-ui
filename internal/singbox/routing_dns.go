@@ -263,8 +263,6 @@ func TranslateXrayBalancers(raw map[string]any) ([]map[string]any, error) {
 	return result, nil
 }
 
-// RewriteWireGuardRoutes converts route references to Xray WireGuard
-// outbound tags into sing-box route targets that point to endpoints.
 func RewriteDNSOutboundRoutes(route map[string]any, dnsTags map[string]struct{}) {
 	if route == nil || len(dnsTags) == 0 {
 		return
@@ -289,31 +287,6 @@ func RewriteDNSOutboundRoutes(route map[string]any, dnsTags map[string]struct{})
 			rule["action"] = "hijack-dns"
 		}
 	}
-}
-
-func RewriteWireGuardRoutes(route map[string]any, endpointTags map[string]struct{}) {
-	if len(endpointTags) == 0 || route == nil {
-		return
-	}
-	rules, _ := route["rules"].([]map[string]any)
-	if final := compatString(route["final"]); final != "" {
-		if _, ok := endpointTags[final]; ok {
-			route["final"] = "direct"
-			rules = append([]map[string]any{{"action": "route", "endpoint": final}}, rules...)
-		}
-	}
-	for _, rule := range rules {
-		outbound := compatString(rule["outbound"])
-		if outbound == "" {
-			continue
-		}
-		if _, ok := endpointTags[outbound]; ok {
-			delete(rule, "outbound")
-			rule["action"] = "route"
-			rule["endpoint"] = outbound
-		}
-	}
-	route["rules"] = rules
 }
 
 func containsCompatString(values []string, want string) bool {

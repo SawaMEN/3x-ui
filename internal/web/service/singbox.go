@@ -74,7 +74,6 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 		}}
 	}
 
-	wireguardEndpoints := make(map[string]struct{})
 	dnsOutboundTags := make(map[string]struct{})
 	if template, err := singBoxSettingService.GetXrayConfigTemplate(); err == nil {
 		var xrayCfg map[string]any
@@ -147,9 +146,6 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 							return nil, err
 						}
 						cfg.Endpoints = append(cfg.Endpoints, endpoint)
-						if tag, _ := endpoint["tag"].(string); tag != "" {
-							wireguardEndpoints[tag] = struct{}{}
-						}
 						continue
 					}
 					if amneziawg.IsAmneziaWGOutbound(mustJSON(ob)) {
@@ -169,7 +165,6 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 				}
 			}
 			if cfg.Route != nil {
-				singbox.RewriteWireGuardRoutes(cfg.Route, wireguardEndpoints)
 				singbox.RewriteDNSOutboundRoutes(cfg.Route, dnsOutboundTags)
 			}
 		}

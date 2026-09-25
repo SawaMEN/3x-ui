@@ -132,30 +132,6 @@ func TestTranslateXrayWireGuardToEndpoint(t *testing.T) {
 	}
 }
 
-func TestRewriteWireGuardRoutes(t *testing.T) {
-	route := map[string]any{
-		"final": "warp",
-		"rules": []map[string]any{
-			{"action": "route", "outbound": "direct"},
-			{"action": "route", "outbound": "warp"},
-		},
-	}
-	RewriteWireGuardRoutes(route, map[string]struct{}{"warp": {}})
-	if route["final"] != "direct" {
-		t.Fatalf("unexpected final target: %#v", route["final"])
-	}
-	rules := route["rules"].([]map[string]any)
-	if rules[0]["endpoint"] != "warp" {
-		t.Fatalf("wireguard final endpoint rule missing: %#v", rules[0])
-	}
-	if _, ok := rules[2]["outbound"]; ok {
-		t.Fatalf("wireguard outbound target was not removed: %#v", rules[2])
-	}
-	if rules[2]["endpoint"] != "warp" {
-		t.Fatalf("wireguard endpoint target missing: %#v", rules[2])
-	}
-}
-
 func TestTranslateXrayVLESSRawTransportUsesPlainTCP(t *testing.T) {
 	raw := map[string]any{
 		"protocol": "vless",
@@ -586,7 +562,6 @@ func TestTranslateXrayRealityOutboundUsesClientFields(t *testing.T) {
 	}
 }
 
-
 func TestTranslateXrayNaiveInbound(t *testing.T) {
 	raw := map[string]any{
 		"protocol": "naive",
@@ -601,7 +576,7 @@ func TestTranslateXrayNaiveInbound(t *testing.T) {
 				},
 			},
 			"tls": map[string]any{
-				"serverName":     "example.com",
+				"serverName":      "example.com",
 				"certificatePath": "/etc/3x-ui/fullchain.pem",
 				"keyPath":         "/etc/3x-ui/key.pem",
 			},
@@ -633,7 +608,6 @@ func TestTranslateXrayNaiveInbound(t *testing.T) {
 	}
 }
 
-
 func TestTranslateXrayAnyTLSInbound(t *testing.T) {
 	raw := map[string]any{
 		"protocol": "anytls",
@@ -643,7 +617,7 @@ func TestTranslateXrayAnyTLSInbound(t *testing.T) {
 		"settings": map[string]any{
 			"paddingScheme": []any{"stop=8", "0=30-30"},
 			"tls": map[string]any{
-				"serverName":     "example.com",
+				"serverName":      "example.com",
 				"certificatePath": "/cert/fullchain.pem",
 				"keyPath":         "/cert/privkey.pem",
 			},
@@ -719,15 +693,14 @@ func TestTranslateXrayShadowTLSInbound(t *testing.T) {
 	}
 }
 
-
 func TestTranslateXrayShadowTLSInboundWildcardSNIAllAllowsEmptyHandshakeServer(t *testing.T) {
 	raw := map[string]any{
 		"protocol": "shadowtls",
 		"tag":      "shadowtls-wildcard-all",
 		"port":     443,
 		"settings": map[string]any{
-			"version": 3,
-			"handshake": map[string]any{},
+			"version":     3,
+			"handshake":   map[string]any{},
 			"wildcardSni": "all",
 			"clients": []any{
 				map[string]any{
@@ -762,8 +735,8 @@ func TestTranslateXrayShadowTLSEmptyHandshakeUsesDefaultServer(t *testing.T) {
 		"tag":      "shadowtls-default-handshake",
 		"port":     443,
 		"settings": map[string]any{
-			"version": 3,
-			"handshake": map[string]any{},
+			"version":     3,
+			"handshake":   map[string]any{},
 			"wildcardSni": "off",
 		},
 	}
