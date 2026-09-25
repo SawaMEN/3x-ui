@@ -233,8 +233,8 @@ func TestTranslateXrayHysteria2Inbound(t *testing.T) {
 	if !ok || len(users) != 1 || users[0]["password"] != "secret-auth" {
 		t.Fatalf("unexpected Hysteria2 users: %#v", got["users"])
 	}
-	if got["idle_timeout"] != "60s" {
-		t.Fatalf("unexpected Hysteria2 idle_timeout: %#v", got["idle_timeout"])
+	if _, ok := got["idle_timeout"]; ok {
+		t.Fatalf("udpIdleTimeout must not be mapped to QUIC idle_timeout: %#v", got["idle_timeout"])
 	}
 	tls, ok := got["tls"].(map[string]any)
 	if !ok || tls["enabled"] != true || tls["server_name"] != "example.com" {
@@ -400,7 +400,7 @@ func TestTranslateXrayVLESSOutboundMapsServer(t *testing.T) {
 	}
 }
 
-func TestTranslateXrayHysteria2InboundDropsMasqueradeWhenUsersExist(t *testing.T) {
+func TestTranslateXrayHysteria2InboundKeepsMasqueradeWhenUsersExist(t *testing.T) {
 	raw := map[string]any{
 		"protocol": "hysteria",
 		"tag":      "hy2-in",
@@ -410,7 +410,11 @@ func TestTranslateXrayHysteria2InboundDropsMasqueradeWhenUsersExist(t *testing.T
 			},
 		},
 		"streamSettings": map[string]any{
-			"network": "hysteria",
+			"network":  "hysteria",
+			"security": "tls",
+			"tlsSettings": map[string]any{
+				"serverName": "example.com",
+			},
 			"hysteriaSettings": map[string]any{
 				"version": 2,
 				"masquerade": map[string]any{
@@ -427,8 +431,9 @@ func TestTranslateXrayHysteria2InboundDropsMasqueradeWhenUsersExist(t *testing.T
 	if got["type"] != "hysteria2" {
 		t.Fatalf("unexpected Hysteria2 type: %#v", got["type"])
 	}
-	if _, ok := got["masquerade"]; ok {
-		t.Fatalf("masquerade must be omitted when users are configured: %#v", got["masquerade"])
+	masquerade, ok := got["masquerade"].(map[string]any)
+	if !ok || masquerade["type"] != "string" || masquerade["content"] != "hello" {
+		t.Fatalf("masquerade must be preserved when users are configured: %#v", got["masquerade"])
 	}
 }
 
@@ -479,6 +484,10 @@ func TestTranslatePanelHysteriaFlatOutbound(t *testing.T) {
 	if got["type"] != "hysteria2" || got["server"] != "example.com" || got["server_port"] != 443 ||
 		got["password"] != "secret" {
 		t.Fatalf("unexpected flat Hysteria2 outbound: %#v", got)
+	}
+	tls, ok := got["tls"].(map[string]any)
+	if !ok || tls["enabled"] != true {
+		t.Fatalf("flat Hysteria2 outbound must synthesize TLS: %#v", got["tls"])
 	}
 }
 

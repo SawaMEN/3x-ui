@@ -203,19 +203,35 @@ func TranslateXrayOutbound(raw map[string]any) (map[string]any, error) {
 		if address == "" {
 			return nil, fmt.Errorf("outbound %q has an empty server address", tag)
 		}
-		if port <= 0 {
-			return nil, fmt.Errorf("outbound %q has an invalid server port", tag)
+		hySettings := rawObject(streamSettings, "hysteriaSettings")
+		version := rawInt(hySettings, "version")
+		if version == 0 {
+			version = 2
+		}
+		isHysteria2 := protocol == "hysteria2" || (protocol == "hysteria" && version == 2)
+		serverPorts := []string(nil)
+		if isHysteria2 {
+			serverPorts = compatStringSlice(hySettings["server_ports"])
+			if len(serverPorts) == 0 {
+				serverPorts = compatStringSlice(hySettings["serverPorts"])
+			}
 		}
 		out["server"] = address
-		out["server_port"] = port
+		if len(serverPorts) > 0 {
+			out["server_ports"] = serverPorts
+		} else {
+			if port <= 0 {
+				return nil, fmt.Errorf("outbound %q has an invalid server port", tag)
+			}
+			out["server_port"] = port
+		}
 		if protocol == "hysteria2" {
 			if password := rawString(server, "password"); password != "" {
 				out["password"] = password
 			} else if password := rawString(settings, "password"); password != "" {
 				out["password"] = password
 			}
-			hysteriaSettings := rawObject(streamSettings, "hysteriaSettings")
-			if password := rawString(hysteriaSettings, "auth"); password != "" && out["password"] == nil {
+			if password := rawString(hySettings, "auth"); password != "" && out["password"] == nil {
 				out["password"] = password
 			}
 			if password := rawString(settings, "password"); password != "" {
@@ -285,13 +301,25 @@ func TranslateXrayOutbound(raw map[string]any) (map[string]any, error) {
 	}
 	if singProtocol == "hysteria2" {
 		hySettings := rawObject(streamSettings, "hysteriaSettings")
-		for _, key := range []string{"up_mbps", "down_mbps", "hop_interval", "hop_interval_max", "bbr_profile", "disable_chrome_parrot", "ignore_client_bandwidth"} {
+		for _, key := range []string{"hop_interval", "hop_interval_max", "disable_chrome_parrot"} {
 			if value, ok := hySettings[key]; ok {
 				out[key] = value
 			}
 		}
-		if obfs := rawObject(hySettings, "obfs"); len(obfs) > 0 {
-			out["obfs"] = obfs
+		if _, ok := out["hop_interval"]; !ok {
+			if value, ok := hySettings["hopInterval"]; ok {
+				out["hop_interval"] = value
+			}
+		}
+		if _, ok := out["hop_interval_max"]; !ok {
+			if value, ok := hySettings["hopIntervalMax"]; ok {
+				out["hop_interval_max"] = value
+			}
+		}
+		if _, ok := out["disable_chrome_parrot"]; !ok {
+			if value, ok := hySettings["disableChromeParrot"]; ok {
+				out["disable_chrome_parrot"] = value
+			}
 		}
 	}
 	if err := translateStream(out, singProtocol, streamSettings, false); err != nil {
@@ -695,10 +723,30 @@ func translateUsers(out map[string]any, protocol string, settings map[string]any
 }
 
 func translateStream(out map[string]any, protocol string, stream map[string]any, inbound bool) error {
+	security := strings.ToLower(strings.TrimSpace(rawString(stream, "security")))
+	if protocol == "hysteria2" {
+		if inbound {
+			if security != "tls" {
+				return fmt.Errorf("inbound %q uses Hysteria2 without required TLS", rawString(out, "tag"))
+			}
+		} else {
+			switch security {
+			case "":
+				// Hysteria2 always uses TLS. Legacy/flat panel outbounds may omit the
+				// stream security marker, so synthesize the minimal client TLS block.
+				out["tls"] = map[string]any{"enabled": true}
+			case "tls":
+			default:
+				return fmt.Errorf("outbound %q uses Hysteria2 with unsupported security %q", rawString(out, "tag"), security)
+			}
+		}
+	}
 	if len(stream) == 0 {
+		if protocol == "hysteria2" {
+			return translateHysteriaStream(out, protocol, stream, inbound)
+		}
 		return nil
 	}
-	security := strings.ToLower(strings.TrimSpace(rawString(stream, "security")))
 	switch security {
 	case "tls":
 		tls := rawObject(stream, "tlsSettings")
@@ -960,19 +1008,80 @@ func translateHysteriaStream(out map[string]any, protocol string, stream map[str
 	if version == 0 {
 		version = 2
 	}
+	direction := "outbound"
+	if inbound {
+		direction = "inbound"
+	}
 	if protocol == "hysteria2" && version != 2 {
-		return fmt.Errorf("inbound %q uses Hysteria version %d, expected version 2 for hysteria2", rawString(out, "tag"), version)
+		return fmt.Errorf("%s %q uses Hysteria version %d, expected version 2 for hysteria2", direction, rawString(out, "tag"), version)
 	}
 	if protocol == "hysteria" && version != 1 {
-		return fmt.Errorf("inbound %q has inconsistent Hysteria version %d", rawString(out, "tag"), version)
+		return fmt.Errorf("%s %q has inconsistent Hysteria version %d", direction, rawString(out, "tag"), version)
 	}
-	if idle := rawInt(settings, "udpIdleTimeout"); idle > 0 && protocol == "hysteria2" {
-		out["idle_timeout"] = fmt.Sprintf("%ds", idle)
+	if protocol == "hysteria2" {
+		up := rawInt(settings, "up_mbps")
+		if up <= 0 {
+			up = rawInt(settings, "up")
+		}
+		if up > 0 {
+			out["up_mbps"] = up
+		}
+		down := rawInt(settings, "down_mbps")
+		if down <= 0 {
+			down = rawInt(settings, "down")
+		}
+		if down > 0 {
+			out["down_mbps"] = down
+		}
+		if inbound {
+			if value, ok := settings["ignore_client_bandwidth"].(bool); ok {
+				out["ignore_client_bandwidth"] = value
+			} else if value, ok := settings["ignoreClientBandwidth"].(bool); ok {
+				out["ignore_client_bandwidth"] = value
+			}
+		}
+		profile := strings.ToLower(strings.TrimSpace(rawString(settings, "bbr_profile")))
+		if profile == "" {
+			profile = strings.ToLower(strings.TrimSpace(rawString(settings, "bbrProfile")))
+		}
+		if profile != "" {
+			switch profile {
+			case "conservative", "standard", "aggressive":
+				out["bbr_profile"] = profile
+			default:
+				return fmt.Errorf("%s %q has invalid Hysteria2 bbr_profile %q", direction, rawString(out, "tag"), profile)
+			}
+		}
+		if obfs := rawObject(settings, "obfs"); len(obfs) > 0 {
+			kind := strings.ToLower(strings.TrimSpace(rawString(obfs, "type")))
+			switch kind {
+			case "salamander", "gecko":
+				if strings.TrimSpace(rawString(obfs, "password")) == "" {
+					return fmt.Errorf("%s %q Hysteria2 %s obfs requires a password", direction, rawString(out, "tag"), kind)
+				}
+				normalized := maps.Clone(obfs)
+				normalized["type"] = kind
+				if kind == "gecko" {
+					if value := rawInt(obfs, "minPacketSize"); value > 0 {
+						normalized["min_packet_size"] = value
+						delete(normalized, "minPacketSize")
+					}
+					if value := rawInt(obfs, "maxPacketSize"); value > 0 {
+						normalized["max_packet_size"] = value
+						delete(normalized, "maxPacketSize")
+					}
+				}
+				out["obfs"] = normalized
+			case "":
+				// Empty type means obfuscation disabled.
+			default:
+				return fmt.Errorf("%s %q has invalid Hysteria2 obfs type %q", direction, rawString(out, "tag"), kind)
+			}
+		}
 	}
-	users, _ := out["users"].([]map[string]any)
-	if masquerade := rawObject(settings, "masquerade"); inbound && len(users) == 0 && len(masquerade) > 0 && protocol == "hysteria2" {
+	if masquerade := rawObject(settings, "masquerade"); inbound && len(masquerade) > 0 && protocol == "hysteria2" {
 		m := map[string]any{}
-		switch rawString(masquerade, "type") {
+		switch strings.ToLower(strings.TrimSpace(rawString(masquerade, "type"))) {
 		case "proxy":
 			m["type"] = "proxy"
 			if value := rawString(masquerade, "url"); value != "" {
@@ -980,12 +1089,16 @@ func translateHysteriaStream(out map[string]any, protocol string, stream map[str
 			}
 			if rewriteHost, ok := masquerade["rewriteHost"].(bool); ok {
 				m["rewrite_host"] = rewriteHost
+			} else if rewriteHost, ok := masquerade["rewrite_host"].(bool); ok {
+				m["rewrite_host"] = rewriteHost
 			} else if rawString(masquerade, "rewriteHost") == "true" {
 				m["rewrite_host"] = true
 			}
 		case "file":
 			m["type"] = "file"
 			if dir := rawString(masquerade, "dir"); dir != "" {
+				m["directory"] = dir
+			} else if dir := rawString(masquerade, "directory"); dir != "" {
 				m["directory"] = dir
 			}
 		case "string":
@@ -995,10 +1108,16 @@ func translateHysteriaStream(out map[string]any, protocol string, stream map[str
 			}
 			if status := rawInt(masquerade, "statusCode"); status > 0 {
 				m["status_code"] = status
+			} else if status := rawInt(masquerade, "status_code"); status > 0 {
+				m["status_code"] = status
 			}
 			if headers, ok := masquerade["headers"].(map[string]any); ok && len(headers) > 0 {
 				m["headers"] = headers
 			}
+		case "":
+			// Keep the default sing-box 404 behavior when masquerade is disabled.
+		default:
+			return fmt.Errorf("inbound %q has invalid Hysteria2 masquerade type %q", rawString(out, "tag"), rawString(masquerade, "type"))
 		}
 		if len(m) > 0 {
 			out["masquerade"] = m
