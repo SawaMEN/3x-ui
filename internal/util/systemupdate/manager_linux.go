@@ -191,6 +191,7 @@ func Apply(ctx context.Context) (UpdateResult, error) {
 				seenUpgrade[item.Name] = struct{}{}
 			}
 		}
+	}
 	sort.Strings(missing)
 	sort.Strings(upgradable)
 
