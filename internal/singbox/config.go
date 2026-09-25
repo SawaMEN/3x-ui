@@ -970,36 +970,36 @@ func translateHysteriaStream(out map[string]any, protocol string, stream map[str
 		out["idle_timeout"] = fmt.Sprintf("%ds", idle)
 	}
 	if masquerade := rawObject(settings, "masquerade"); inbound && len(masquerade) > 0 && protocol == "hysteria2" {
-		if _, hasUsers := out["users"]; !hasUsers {
-			m := map[string]any{}
-			switch rawString(masquerade, "type") {
-			case "proxy":
-				m["type"] = "proxy"
-				if value := rawString(masquerade, "url"); value != "" {
-					m["url"] = value
-				}
-				if rewriteHost, ok := masquerade["rewriteHost"].(bool); ok {
-					m["rewrite_host"] = rewriteHost
-				} else if rawString(masquerade, "rewriteHost") == "true" {
-					m["rewrite_host"] = true
-				}
-			case "file":
-				m["type"] = "file"
-				if dir := rawString(masquerade, "dir"); dir != "" {
-					m["directory"] = dir
-				}
-			case "string":
-				m["type"] = "string"
-				if content := rawString(masquerade, "content"); content != "" {
-					m["content"] = content
-				}
-				if status := rawInt(masquerade, "statusCode"); status > 0 {
-					m["status_code"] = status
-				}
-				if headers, ok := masquerade["headers"].(map[string]any); ok && len(headers) > 0 {
-					m["headers"] = headers
-				}
+		m := map[string]any{}
+		switch rawString(masquerade, "type") {
+		case "proxy":
+			m["type"] = "proxy"
+			if value := rawString(masquerade, "url"); value != "" {
+				m["url"] = value
 			}
+			if rewriteHost, ok := masquerade["rewriteHost"].(bool); ok {
+				m["rewrite_host"] = rewriteHost
+			} else if rawString(masquerade, "rewriteHost") == "true" {
+				m["rewrite_host"] = true
+			}
+		case "file":
+			m["type"] = "file"
+			if dir := rawString(masquerade, "dir"); dir != "" {
+				m["directory"] = dir
+			}
+		case "string":
+			m["type"] = "string"
+			if content := rawString(masquerade, "content"); content != "" {
+				m["content"] = content
+			}
+			if status := rawInt(masquerade, "statusCode"); status > 0 {
+				m["status_code"] = status
+			}
+			if headers, ok := masquerade["headers"].(map[string]any); ok && len(headers) > 0 {
+				m["headers"] = headers
+			}
+		}
+		if len(m) > 0 {
 			out["masquerade"] = m
 		}
 	}
