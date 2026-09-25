@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 import {
   Alert,
   Button,
@@ -111,7 +110,6 @@ function formatDate(unix: number): string {
 
 export default function TemplatesPage() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const { antdThemeConfig, isDark, isUltra } = useTheme();
   const [messageApi, messageContextHolder] = message.useMessage();
   const [items, setItems] = useState<Template[]>([]);
@@ -289,8 +287,8 @@ export default function TemplatesPage() {
     if (!msg?.success) return;
     setDetailOpen(false);
     messageApi.success(t('pages.templates.applied'));
-    navigate('/inbounds');
-  }, [detail, messageApi, navigate, t]);
+    window.location.assign('/inbounds');
+  }, [detail, messageApi, t]);
 
   const copyDetail = useCallback(async () => {
     if (!detail) return;
