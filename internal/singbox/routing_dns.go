@@ -14,12 +14,15 @@ import (
 // instead of being emitted as invalid sing-box fields.
 func TranslateXrayRouting(raw map[string]any) (map[string]any, error) {
 	out := map[string]any{}
-	rulesRaw, _ := raw["rules"].([]any)
+	rulesRaw, ok := raw["rules"].([]any)
+	if raw["rules"] != nil && !ok {
+		return nil, fmt.Errorf("routing rules has invalid configuration")
+	}
 	rules := make([]map[string]any, 0, len(rulesRaw))
 	for i, item := range rulesRaw {
 		xr, ok := item.(map[string]any)
 		if !ok {
-			continue
+			return nil, fmt.Errorf("routing rule %d has invalid configuration", i)
 		}
 		r := map[string]any{}
 		for _, key := range []string{"attrs", "vlessRoute", "localIP", "localPort", "process", "localOS", "webhook"} {
@@ -230,7 +233,10 @@ func TranslateXrayDomainStrategy(value string) string {
 // is used as the deterministic default unless Xray's fallbackTag is itself
 // one of the selected outbounds.
 func TranslateXrayBalancers(raw map[string]any) ([]map[string]any, error) {
-	items, _ := raw["balancers"].([]any)
+	items, ok := raw["balancers"].([]any)
+	if raw["balancers"] != nil && !ok {
+		return nil, fmt.Errorf("routing balancers has invalid configuration")
+	}
 	if len(items) == 0 {
 		return nil, nil
 	}
@@ -238,7 +244,7 @@ func TranslateXrayBalancers(raw map[string]any) ([]map[string]any, error) {
 	for i, item := range items {
 		balancer, ok := item.(map[string]any)
 		if !ok {
-			continue
+			return nil, fmt.Errorf("balancer %d has invalid configuration", i)
 		}
 		tag := compatString(balancer["tag"])
 		if tag == "" {
@@ -263,8 +269,6 @@ func TranslateXrayBalancers(raw map[string]any) ([]map[string]any, error) {
 	return result, nil
 }
 
-// RewriteWireGuardRoutes converts route references to Xray WireGuard
-// outbound tags into sing-box route targets that point to endpoints.
 func RewriteDNSOutboundRoutes(route map[string]any, dnsTags map[string]struct{}) {
 	if route == nil || len(dnsTags) == 0 {
 		return
@@ -289,31 +293,6 @@ func RewriteDNSOutboundRoutes(route map[string]any, dnsTags map[string]struct{})
 			rule["action"] = "hijack-dns"
 		}
 	}
-}
-
-func RewriteWireGuardRoutes(route map[string]any, endpointTags map[string]struct{}) {
-	if len(endpointTags) == 0 || route == nil {
-		return
-	}
-	rules, _ := route["rules"].([]map[string]any)
-	if final := compatString(route["final"]); final != "" {
-		if _, ok := endpointTags[final]; ok {
-			route["final"] = "direct"
-			rules = append([]map[string]any{{"action": "route", "endpoint": final}}, rules...)
-		}
-	}
-	for _, rule := range rules {
-		outbound := compatString(rule["outbound"])
-		if outbound == "" {
-			continue
-		}
-		if _, ok := endpointTags[outbound]; ok {
-			delete(rule, "outbound")
-			rule["action"] = "route"
-			rule["endpoint"] = outbound
-		}
-	}
-	route["rules"] = rules
 }
 
 func containsCompatString(values []string, want string) bool {
@@ -390,9 +369,13 @@ func TranslateXrayDNS(raw map[string]any) (map[string]any, error) {
 	if disableCache, ok := raw["disableCache"].(bool); ok && disableCache {
 		out["disable_cache"] = true
 	}
-	serversRaw, _ := raw["servers"].([]any)
+	serversRaw, ok := raw["servers"].([]any)
+	if raw["servers"] != nil && !ok {
+		return nil, fmt.Errorf("DNS servers has invalid configuration")
+	}
 	servers := make([]map[string]any, 0, len(serversRaw))
 	needsBootstrap := false
+	timeoutMillis := uint64(4000)
 	for i, item := range serversRaw {
 		var address string
 		var extra map[string]any
@@ -413,6 +396,25 @@ func TranslateXrayDNS(raw map[string]any) (map[string]any, error) {
 		default:
 			return nil, fmt.Errorf("DNS server %d has an invalid configuration", i)
 		}
+		serverTimeout := uint64(4000)
+		if extra["timeoutMs"] != nil {
+			switch extra["timeoutMs"].(type) {
+			case float64, int, json.Number:
+			default:
+				return nil, fmt.Errorf("DNS server %d has invalid timeoutMs", i)
+			}
+			value, err := strconv.ParseUint(fmt.Sprint(extra["timeoutMs"]), 10, 64)
+			if err != nil || value > uint64((1<<63-1)/1000000) {
+				return nil, fmt.Errorf("DNS server %d has invalid timeoutMs", i)
+			}
+			if value != 0 {
+				serverTimeout = value
+			}
+		}
+		if i > 0 && serverTimeout != timeoutMillis {
+			return nil, fmt.Errorf("DNS servers have different timeouts")
+		}
+		timeoutMillis = serverTimeout
 		if address == "" {
 			return nil, fmt.Errorf("DNS server %d has an empty address", i)
 		}
@@ -542,6 +544,7 @@ func TranslateXrayDNS(raw map[string]any) (map[string]any, error) {
 	}
 	if len(servers) > 0 {
 		out["servers"] = servers
+		out["timeout"] = fmt.Sprintf("%dms", timeoutMillis)
 		for _, server := range servers {
 			if server["type"] != "hosts" {
 				out["final"] = server["tag"]

@@ -42,7 +42,7 @@ type DnsServerForm = {
   disableCache: boolean;
   finalQuery: boolean;
   tag: string;
-  clientIP: string;
+  clientIp: string;
   serveStale: boolean;
   serveExpiredTTL: number;
   timeoutMs: number;
@@ -60,7 +60,7 @@ function defaultFormValues(): DnsServerForm {
     disableCache: false,
     finalQuery: false,
     tag: '',
-    clientIP: '',
+    clientIp: '',
     serveStale: false,
     serveExpiredTTL: 0,
     timeoutMs: 4000,
@@ -84,7 +84,10 @@ function valuesFromServer(server: DnsServerValue | null): DnsServerForm {
     disableCache: data?.disableCache ?? server.disableCache ?? false,
     finalQuery: data?.finalQuery ?? server.finalQuery ?? false,
     tag: data?.tag ?? server.tag ?? '',
-    clientIP: data?.clientIP ?? server.clientIP ?? '',
+    clientIp:
+      data?.clientIp ??
+      server.clientIp ??
+      (typeof server.clientIP === 'string' ? server.clientIP : ''),
     serveStale: data?.serveStale ?? server.serveStale ?? false,
     serveExpiredTTL: data?.serveExpiredTTL ?? server.serveExpiredTTL ?? 0,
     timeoutMs: data?.timeoutMs ?? server.timeoutMs ?? 4000,
@@ -102,7 +105,7 @@ function valuesToWire(values: DnsServerForm): DnsServerValue {
     values.disableCache === false &&
     values.finalQuery === false &&
     !values.tag &&
-    !values.clientIP &&
+    !values.clientIp &&
     values.serveStale === false &&
     values.serveExpiredTTL === 0 &&
     values.timeoutMs === 4000;
@@ -123,7 +126,7 @@ function valuesToWire(values: DnsServerForm): DnsServerValue {
   };
   if (!isEncryptedDnsAddress(values.address)) out.port = values.port;
   if (values.tag) out.tag = values.tag;
-  if (values.clientIP) out.clientIP = values.clientIP;
+  if (values.clientIp) out.clientIp = values.clientIp;
   return out as DnsServerValue;
 }
 
@@ -186,7 +189,7 @@ export default function DnsServerModal({
           <FormField label={t('pages.xray.dns.tag')} name="tag">
             <Input />
           </FormField>
-          <FormField label={t('pages.xray.dns.clientIp')} name="clientIP">
+          <FormField label={t('pages.xray.dns.clientIp')} name="clientIp">
             <Input />
           </FormField>
           <FormField label={t('pages.xray.dns.strategy')} name="queryStrategy">
