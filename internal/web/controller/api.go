@@ -110,10 +110,10 @@ var nodeSyncScopeAllow = map[string]map[string]struct{}{
 	"/clients/resetTraffic/:email": {http.MethodPost: {}},
 	"/inbounds/resetAllTraffics":   {http.MethodPost: {}},
 	"/inbounds/:id/resetTraffic":   {http.MethodPost: {}},
+	"/clients/pushClientTraffics":  {http.MethodPost: {}},
 	"/clients/onlinesByGuid":       {http.MethodPost: {}},
 	"/clients/onlines":             {http.MethodPost: {}},
 	"/clients/lastOnline":          {http.MethodPost: {}},
-	"/inbounds/pushClientTraffics": {http.MethodPost: {}},
 	"/server/clientIps":            {http.MethodGet: {}, http.MethodPost: {}},
 	"/clients/clientIpsByGuid":     {http.MethodPost: {}},
 	"/hosts/list":                  {http.MethodGet: {}},
@@ -204,6 +204,11 @@ func (a *APIController) initRouter(g *gin.RouterGroup) {
 	// Telemt standalone MTProto service
 	telemt := api.Group("/telemt")
 	NewTelemtController(telemt, a.settingService)
+
+	// Standalone NaiveProxy is used only when Xray is the selected core. The
+	// UI decides which implementation is active; these endpoints manage the
+	// official klzgrad/naiveproxy binary independently from sing-box.
+	NewNaiveProxyController(api)
 
 	templates := api.Group("/templates")
 	NewTemplateController(templates)
