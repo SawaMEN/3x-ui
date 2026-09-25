@@ -251,12 +251,20 @@ func TestPackageUpgradeCommand(t *testing.T) {
 		"yum":     {"yum", "update", "-y", "curl", "openssl"},
 		"zypper":  {"zypper", "--non-interactive", "update", "-y", "curl", "openssl"},
 		"apk":     {"apk", "upgrade", "--no-cache", "curl", "openssl"},
-		"pacman":  {"pacman", "-Syu", "--noconfirm", "--needed", "curl", "openssl"},
+		"pacman":  {"pacman", "-S", "--noconfirm", "--needed", "curl", "openssl"},
 	}
 	for manager, want := range tests {
 		got := packageUpgradeCommand(manager, names)
 		if strings.Join(got, "\x00") != strings.Join(want, "\x00") {
 			t.Fatalf("packageUpgradeCommand(%q) = %#v, want %#v", manager, got, want)
+		}
+	}
+}
+
+func TestPackageUpgradeCommandNeverFallsBackToFullSystemUpgrade(t *testing.T) {
+	for _, manager := range []string{"apt-get", "dnf", "yum", "zypper", "apk", "pacman"} {
+		if got := packageUpgradeCommand(manager); len(got) != 0 {
+			t.Fatalf("packageUpgradeCommand(%q) without selected packages = %#v, want nil", manager, got)
 		}
 	}
 }
