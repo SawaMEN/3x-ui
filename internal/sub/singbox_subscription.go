@@ -3,6 +3,7 @@ package sub
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 )
@@ -51,18 +52,33 @@ func buildSeparatedSingBoxSubscription(template map[string]any, proxies []map[st
 		if proxy == nil {
 			continue
 		}
+		proxyTag, _ := proxy["tag"].(string)
+		if proxyTag == "" {
+			return "", fmt.Errorf("%w: sing-box proxy has no tag", errSubscriptionFormatUnsupported)
+		}
+		directTag, blockedTag := "direct", "blocked"
+		if proxyTag == directTag {
+			directTag = "panel-direct"
+		}
+		if proxyTag == blockedTag {
+			blockedTag = "panel-blocked"
+		}
+		route, err := bindSingBoxProfileRoute(translatedRoute, proxyTag, directTag, blockedTag)
+		if err != nil {
+			return "", fmt.Errorf("%w: %w", errSubscriptionFormatUnsupported, err)
+		}
 
 		cfg := map[string]any{
 			"$schema": "https://sing-box.sagernet.org/schema.json",
 			"outbounds": []any{
 				proxy,
-				map[string]any{"type": "direct", "tag": "direct"},
-				map[string]any{"type": "block", "tag": "blocked"},
+				map[string]any{"type": "direct", "tag": directTag},
+				map[string]any{"type": "block", "tag": blockedTag},
 			},
 		}
 
 		cfg["dns"] = translatedDNS
-		cfg["route"] = translatedRoute
+		cfg["route"] = route
 
 		encoded, err := json.MarshalIndent(cfg, "", "  ")
 		if err != nil {
@@ -83,4 +99,43 @@ func buildSeparatedSingBoxSubscription(template map[string]any, proxies []map[st
 		return "", fmt.Errorf("marshal sing-box subscription array: %w", err)
 	}
 	return string(encoded), nil
+}
+
+func bindSingBoxProfileRoute(template map[string]any, proxyTag, directTag, blockedTag string) (map[string]any, error) {
+	route := maps.Clone(template)
+	resolve := func(tag string) (string, error) {
+		switch tag {
+		case "proxy":
+			return proxyTag, nil
+		case "direct":
+			return directTag, nil
+		case "block", "blocked":
+			return blockedTag, nil
+		default:
+			return "", fmt.Errorf("sing-box profile cannot route to outbound %q", tag)
+		}
+	}
+	if final, ok := route["final"].(string); ok && final != "" {
+		tag, err := resolve(final)
+		if err != nil {
+			return nil, err
+		}
+		route["final"] = tag
+	}
+	if original, ok := route["rules"].([]map[string]any); ok {
+		rules := make([]map[string]any, 0, len(original))
+		for _, rule := range original {
+			copy := maps.Clone(rule)
+			if target, ok := copy["outbound"].(string); ok {
+				tag, err := resolve(target)
+				if err != nil {
+					return nil, err
+				}
+				copy["outbound"] = tag
+			}
+			rules = append(rules, copy)
+		}
+		route["rules"] = rules
+	}
+	return route, nil
 }
