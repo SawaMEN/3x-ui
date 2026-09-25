@@ -11,6 +11,15 @@ def replace_exact(path: str, old: str, new: str = "") -> None:
     p.write_text(text.replace(old, new, 1))
 
 
+def remove_exact_count(path: str, needle: str, expected: int) -> None:
+    p = Path(path)
+    text = p.read_text()
+    count = text.count(needle)
+    if count != expected:
+        raise SystemExit(f"{path}: expected {expected} matches, got {count}: {needle!r}")
+    p.write_text(text.replace(needle, ""))
+
+
 # Frontend navigation and route.
 replace_exact("frontend/src/layouts/AppSidebar.tsx", "  FileProtectOutlined,\n")
 replace_exact(
@@ -32,12 +41,13 @@ replace_exact(
     "      { path: 'templates', element: withSuspense(<TemplatesPage />) },\n",
 )
 
-# Backend route and auto-migrated model registration.
+# Backend route and migration registrations.
 replace_exact(
     "internal/web/controller/api.go",
     "\ttemplates := api.Group(\"/templates\")\n\tNewTemplateController(templates)\n\n",
 )
 replace_exact("internal/database/db.go", "\t\t&model.LocalTemplate{},\n")
+remove_exact_count("internal/database/migrate_data.go", "\t\t&model.LocalTemplate{},\n", 2)
 
 # API docs source section.
 p = Path("frontend/src/pages/api-docs/endpoints.ts")
