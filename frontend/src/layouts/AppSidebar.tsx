@@ -107,7 +107,7 @@ function saveSidebarPinned(pinned: boolean) {
 
 function AppSidebar() {
   const { t } = useTranslation();
-  const { mode, menuStyle } = useTheme();
+  const { mode } = useTheme();
   const navigate = useNavigate();
   const { pathname, hash } = useLocation();
   const { allSetting } = useAllSettings();
@@ -360,7 +360,7 @@ function AppSidebar() {
   return (
     <div
       ref={rootRef}
-      className={`ant-sidebar menu-style-${menuStyle}${pinned ? ' sidebar-pinned' : ''}`}
+      className={`ant-sidebar${pinned ? ' sidebar-pinned' : ''}`}
       style={railStyle}
       onMouseEnter={() => updateHovered(true)}
       onMouseLeave={() => updateHovered(false)}
