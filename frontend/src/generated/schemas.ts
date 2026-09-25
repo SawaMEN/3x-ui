@@ -2771,6 +2771,10 @@ export const SCHEMAS: Record<string, unknown> = {
         "type": "string"
       },
       "sniffing": {},
+      "sortOrder": {
+        "description": "Manual panel ordering; ties fall back to id.",
+        "type": "integer"
+      },
       "streamSettings": {},
       "subSortIndex": {
         "description": "Sort order of this inbound's links in subscription output only (lower first; negatives allowed; 0/omitted → 1; ties by id)",
@@ -2826,6 +2830,7 @@ export const SCHEMAS: Record<string, unknown> = {
       "shareAddr",
       "shareAddrStrategy",
       "sniffing",
+      "sortOrder",
       "streamSettings",
       "subSortIndex",
       "tag",
@@ -3278,6 +3283,10 @@ export const SCHEMAS: Record<string, unknown> = {
         "example": "https",
         "type": "string"
       },
+      "sortOrder": {
+        "description": "Manual panel ordering; ties fall back to id.",
+        "type": "integer"
+      },
       "status": {
         "description": "Heartbeat-updated fields. UpdatedAt advances on every probe even when\nthe row is otherwise unchanged so the UI's \"last seen\" tooltip is\ntruthful without us having to read LastHeartbeat separately.\nonline|offline|unknown",
         "example": "online",
@@ -3349,6 +3358,7 @@ export const SCHEMAS: Record<string, unknown> = {
       "port",
       "remark",
       "scheme",
+      "sortOrder",
       "status",
       "tlsVerifyMode",
       "updatedAt",

@@ -456,6 +456,5 @@ export function useInboundColumns({
     datepicker,
     onRowAction,
     onSwitchEnable,
-    reorderEnabled,
   ]);
 }

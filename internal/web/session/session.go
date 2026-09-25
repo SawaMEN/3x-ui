@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
-	
+
 	"gorm.io/gorm"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
@@ -34,13 +34,13 @@ func init() {
 }
 
 type SessionView struct {
-	Id        int    `json:"id"`
-	IpAddress string `json:"ipAddress"`
-	UserAgent string `json:"userAgent"`
-	CreatedAt int64  `json:"createdAt"`
+	Id         int    `json:"id"`
+	IpAddress  string `json:"ipAddress"`
+	UserAgent  string `json:"userAgent"`
+	CreatedAt  int64  `json:"createdAt"`
 	LastSeenAt int64  `json:"lastSeenAt"`
-	RevokedAt int64  `json:"revokedAt,omitempty"`
-	IsCurrent bool   `json:"isCurrent"`
+	RevokedAt  int64  `json:"revokedAt,omitempty"`
+	IsCurrent  bool   `json:"isCurrent"`
 }
 
 func randomSessionID() (string, error) {

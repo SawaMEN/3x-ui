@@ -2797,6 +2797,10 @@
             "type": "string"
           },
           "sniffing": {},
+          "sortOrder": {
+            "description": "Manual panel ordering; ties fall back to id.",
+            "type": "integer"
+          },
           "streamSettings": {},
           "subSortIndex": {
             "description": "Sort order of this inbound's links in subscription output only (lower first; negatives allowed; 0/omitted → 1; ties by id)",
@@ -2852,6 +2856,7 @@
           "shareAddr",
           "shareAddrStrategy",
           "sniffing",
+          "sortOrder",
           "streamSettings",
           "subSortIndex",
           "tag",
@@ -3304,6 +3309,10 @@
             "example": "https",
             "type": "string"
           },
+          "sortOrder": {
+            "description": "Manual panel ordering; ties fall back to id.",
+            "type": "integer"
+          },
           "status": {
             "description": "Heartbeat-updated fields. UpdatedAt advances on every probe even when\nthe row is otherwise unchanged so the UI's \"last seen\" tooltip is\ntruthful without us having to read LastHeartbeat separately.\nonline|offline|unknown",
             "example": "online",
@@ -3375,6 +3384,7 @@
           "port",
           "remark",
           "scheme",
+          "sortOrder",
           "status",
           "tlsVerifyMode",
           "updatedAt",
@@ -4724,6 +4734,7 @@
                       "shareAddr": "",
                       "shareAddrStrategy": "node",
                       "sniffing": null,
+                      "sortOrder": 0,
                       "streamSettings": null,
                       "subSortIndex": 1,
                       "tag": "in-443-tcp",
@@ -16003,6 +16014,7 @@
                   "shareAddr": "",
                   "shareAddrStrategy": "node",
                   "sniffing": null,
+                  "sortOrder": 0,
                   "streamSettings": null,
                   "subSortIndex": 1,
                   "tag": "in-443-tcp",

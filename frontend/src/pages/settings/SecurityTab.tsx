@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Empty, Form, Input, Modal, Space, Spin, Switch, Tabs, message } from 'antd';
-import { ApiOutlined, SafetyOutlined, UserOutlined, LoginOutlined, ReloadOutlined } from '@ant-design/icons';
+import {
+  ApiOutlined,
+  SafetyOutlined,
+  UserOutlined,
+  LoginOutlined,
+  ReloadOutlined,
+} from '@ant-design/icons';
 import { ClipboardManager, HttpUtil, IntlUtil, RandomUtil } from '@/utils';
 import type { AllSetting } from '@/models/setting';
 import { SettingListItem } from '@/components/ui';
@@ -162,7 +168,6 @@ export default function SecurityTab({ allSetting, updateSetting, saveSetting }: 
   }, [fetchApiTokens]);
 
   const fetchSessions = useCallback(async () => {
-    setSessionsLoading(true);
     try {
       const msg = (await HttpUtil.get('/panel/api/setting/sessions')) as ApiMsg<typeof sessions>;
       if (msg?.success) setSessions(Array.isArray(msg.obj) ? msg.obj : []);
@@ -396,7 +401,14 @@ export default function SecurityTab({ allSetting, updateSetting, saveSetting }: 
                 <div className="api-token-header">
                   <p className="api-token-hint">{t('pages.settings.security.sessionsHint')}</p>
                   <Space>
-                    <Button size="small" icon={<ReloadOutlined />} onClick={() => void fetchSessions()}>
+                    <Button
+                      size="small"
+                      icon={<ReloadOutlined />}
+                      onClick={() => {
+                        setSessionsLoading(true);
+                        void fetchSessions();
+                      }}
+                    >
                       {t('refresh')}
                     </Button>
                     <Button
@@ -435,7 +447,8 @@ export default function SecurityTab({ allSetting, updateSetting, saveSetting }: 
                             )}
                           </span>
                           <span className="api-token-created">
-                            {t('pages.settings.security.lastSeen')}: {IntlUtil.formatDate(row.lastSeenAt * 1000)}
+                            {t('pages.settings.security.lastSeen')}:{' '}
+                            {IntlUtil.formatDate(row.lastSeenAt * 1000)}
                           </span>
                           <span className="api-token-created" title={row.userAgent}>
                             {row.userAgent || '-'}
