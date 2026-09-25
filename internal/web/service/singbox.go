@@ -43,6 +43,15 @@ func SetSingBoxDependencies(inbound *InboundService, settings *SettingService) {
 
 type SingBoxService struct{}
 
+func singBoxInboundRequiresUsers(protocol model.Protocol) bool {
+	switch protocol {
+	case model.VLESS, model.VMESS, model.Trojan, model.NaiveProxy, model.AnyTLS:
+		return true
+	default:
+		return false
+	}
+}
+
 func mustJSON(value map[string]any) []byte {
 	data, _ := json.Marshal(value)
 	return data
@@ -266,6 +275,11 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 			}
 			clients = append(clients, entry)
 		}
+			if singBoxInboundRequiresUsers(inbound.Protocol) && len(clients) == 0 {
+			logger.Warningf("Skipping sing-box inbound %q (%s): no active users", inbound.Tag, inbound.Protocol)
+			continue
+		}
+
 		settings, _ := raw["settings"].(map[string]any)
 		if settings == nil {
 			settings = map[string]any{}
