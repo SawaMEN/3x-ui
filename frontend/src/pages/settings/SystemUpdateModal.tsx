@@ -83,6 +83,17 @@ const normalizeVersion = (value: string) => value.trim().replace(/^v/i, '');
 const versionsDiffer = (installed: string, available: string) =>
   normalizeVersion(installed) !== normalizeVersion(available);
 
+const dependencyNeedsAction = (dependency: DependencyStatus) => {
+  if (!dependency.availableVersion) return false;
+  if (dependency.key === 'sudoku') {
+    return !dependency.installed || dependency.updateAvailable;
+  }
+  if (dependency.key === 'naiveproxy' && dependency.source === 'xray') {
+    return !dependency.installed || dependency.updateAvailable;
+  }
+  return dependency.installed && dependency.updateAvailable;
+};
+
 function waitForUpdateRecovery(delayMs: number): Promise<void> {
   return new Promise((resolve) => {
     window.setTimeout(resolve, delayMs);
@@ -184,22 +195,35 @@ export default function SystemUpdateModal({
       }
     };
 
-    const [settings, serverStatus, xrayVersions, singBoxStatus, singBoxVersions, sudokuStatus] =
-      await Promise.all([
-        safePost<{ coreType?: string }>('/panel/api/setting/all'),
-        safeGet<{ xray?: { version?: string } }>('/panel/api/server/status'),
-        safeGet<string[]>('/panel/api/server/getXrayVersion'),
-        safeGet<{ installed?: boolean; version?: string }>('/panel/api/setting/singbox/status'),
-        safeGet<Array<{ version?: string; prerelease?: boolean } | string>>(
-          '/panel/api/setting/singbox/versions',
-        ),
-        safeGet<{
-          installed?: boolean;
-          version?: string;
-          latestVersion?: string;
-          updateAvailable?: boolean;
-        }>('/panel/api/setting/sudoku/status'),
-      ]);
+    const [
+      settings,
+      serverStatus,
+      xrayVersions,
+      singBoxStatus,
+      singBoxVersions,
+      naiveProxyStatus,
+      sudokuStatus,
+    ] = await Promise.all([
+      safePost<{ coreType?: string }>('/panel/api/setting/all'),
+      safeGet<{ xray?: { version?: string } }>('/panel/api/server/status'),
+      safeGet<string[]>('/panel/api/server/getXrayVersion'),
+      safeGet<{ installed?: boolean; version?: string }>('/panel/api/setting/singbox/status'),
+      safeGet<Array<{ version?: string; prerelease?: boolean } | string>>(
+        '/panel/api/setting/singbox/versions',
+      ),
+      safeGet<{
+        installed?: boolean;
+        version?: string;
+        latestVersion?: string;
+        updateAvailable?: boolean;
+      }>('/panel/api/naiveproxy/status'),
+      safeGet<{
+        installed?: boolean;
+        version?: string;
+        latestVersion?: string;
+        updateAvailable?: boolean;
+      }>('/panel/api/setting/sudoku/status'),
+    ]);
 
     const coreType: CoreType | null =
       settings.success &&
@@ -231,22 +255,47 @@ export default function SystemUpdateModal({
       singBoxVersionList[0]?.version ||
       '';
 
+    const standaloneNaiveInstalled =
+      naiveProxyStatus.success === true && naiveProxyStatus.obj?.installed === true;
+    const standaloneNaiveCurrent = naiveProxyStatus.success
+      ? naiveProxyStatus.obj?.version || ''
+      : '';
+    const standaloneNaiveLatest = naiveProxyStatus.success
+      ? naiveProxyStatus.obj?.latestVersion || ''
+      : '';
+
     const sudokuCurrent = sudokuStatus.success ? sudokuStatus.obj?.version || '' : '';
     const sudokuLatest = sudokuStatus.success ? sudokuStatus.obj?.latestVersion || '' : '';
+
+    const naiveInstalled =
+      coreType === 'sing-box'
+        ? singBoxInstalled
+        : coreType === 'xray'
+          ? standaloneNaiveInstalled
+          : false;
+    const naiveCurrent =
+      coreType === 'sing-box'
+        ? singBoxCurrent
+        : coreType === 'xray'
+          ? standaloneNaiveCurrent
+          : '';
+    const naiveLatest =
+      coreType === 'sing-box'
+        ? stableSingBoxVersion
+        : coreType === 'xray'
+          ? standaloneNaiveLatest
+          : '';
 
     setDependencies([
       {
         key: 'naiveproxy',
         label: 'NaiveProxy',
-        installed: coreType === 'sing-box' && singBoxInstalled,
-        installedVersion: coreType === 'sing-box' ? singBoxCurrent : '',
-        availableVersion: coreType === 'sing-box' ? stableSingBoxVersion : '',
+        source: coreType || undefined,
+        installed: naiveInstalled,
+        installedVersion: naiveCurrent,
+        availableVersion: naiveLatest,
         updateAvailable: Boolean(
-          coreType === 'sing-box' &&
-          singBoxInstalled &&
-          singBoxCurrent &&
-          stableSingBoxVersion &&
-          versionsDiffer(singBoxCurrent, stableSingBoxVersion),
+          naiveInstalled && naiveCurrent && naiveLatest && versionsDiffer(naiveCurrent, naiveLatest),
         ),
       },
       {
@@ -299,17 +348,20 @@ export default function SystemUpdateModal({
   }, [loadDependencyUpdates, messageApi]);
 
   const updateDependency = async (dependency: DependencyStatus) => {
-    if (!dependency.availableVersion || (dependency.key !== 'sudoku' && !dependency.installed))
-      return;
+    if (!dependencyNeedsAction(dependency)) return;
 
     setDependencyBusy(dependency.key);
     try {
       let response: ApiMsg<unknown>;
       switch (dependency.key) {
         case 'naiveproxy':
-          response = (await HttpUtil.post(
-            `/panel/api/setting/singbox/install/${encodeURIComponent(dependency.availableVersion)}`,
-          )) as ApiMsg<unknown>;
+          if (dependency.source === 'xray') {
+            response = (await HttpUtil.post('/panel/api/naiveproxy/update')) as ApiMsg<unknown>;
+          } else {
+            response = (await HttpUtil.post(
+              `/panel/api/setting/singbox/install/${encodeURIComponent(dependency.availableVersion)}`,
+            )) as ApiMsg<unknown>;
+          }
           break;
         case 'hysteria2':
           if (dependency.source === 'sing-box') {
@@ -394,20 +446,16 @@ export default function SystemUpdateModal({
         setSystemUpdateResult(normalizeSystemUpdateResult(systemMsg.obj));
       }
 
-      const pending = dependencies.filter((dependency) => {
-        if (!dependency.availableVersion) return false;
-        if (dependency.key === 'sudoku') {
-          return !dependency.installed || dependency.updateAvailable;
-        }
-        return dependency.installed && dependency.updateAvailable;
-      });
+      const pending = dependencies.filter(dependencyNeedsAction);
 
       const failed: string[] = [];
       const updatedTargets = new Set<string>();
       for (const dependency of pending) {
         const target =
           dependency.key === 'naiveproxy'
-            ? 'sing-box'
+            ? dependency.source === 'xray'
+              ? 'naiveproxy'
+              : 'sing-box'
             : dependency.key === 'hysteria2'
               ? dependency.source || 'xray'
               : 'sudoku';
@@ -419,9 +467,13 @@ export default function SystemUpdateModal({
           setDependencyBusy(dependency.key);
           let response: ApiMsg<unknown>;
           if (dependency.key === 'naiveproxy') {
-            response = (await HttpUtil.post(
-              `/panel/api/setting/singbox/install/${encodeURIComponent(dependency.availableVersion)}`,
-            )) as ApiMsg<unknown>;
+            if (dependency.source === 'xray') {
+              response = (await HttpUtil.post('/panel/api/naiveproxy/update')) as ApiMsg<unknown>;
+            } else {
+              response = (await HttpUtil.post(
+                `/panel/api/setting/singbox/install/${encodeURIComponent(dependency.availableVersion)}`,
+              )) as ApiMsg<unknown>;
+            }
           } else if (dependency.key === 'hysteria2') {
             if (dependency.source === 'sing-box') {
               response = (await HttpUtil.post(
@@ -509,7 +561,7 @@ export default function SystemUpdateModal({
 
   const rebootRequired =
     Boolean(systemUpdate?.kernel.rebootRequired) || Boolean(systemUpdateResult?.rebootRequired);
-  const componentUpdatesAvailable = dependencies.some((dependency) => dependency.updateAvailable);
+  const componentUpdatesAvailable = dependencies.some(dependencyNeedsAction);
   const unstableComponentUpdateAvailable = dependencies.some(
     (dependency) => dependency.prerelease && dependency.updateAvailable,
   );
@@ -666,79 +718,81 @@ export default function SystemUpdateModal({
               className="system-update-section"
             >
               <div className="system-component-grid">
-                {dependencies.map((dependency) => (
-                  <Card
-                    key={dependency.key}
-                    size="small"
-                    className="system-component-card"
-                    title={dependency.label}
-                    extra={
-                      dependency.updateAvailable ? (
-                        <Tag color="warning">{t('pages.settings.swap.updatesAvailable')}</Tag>
-                      ) : dependency.installed ? (
-                        <Tag color="success">{t('pages.settings.swap.upToDate')}</Tag>
-                      ) : (
-                        <Tag>{t('pages.settings.swap.notInstalled')}</Tag>
-                      )
-                    }
-                  >
-                    {dependency.key === 'hysteria2' && (
-                      <Typography.Text
-                        type="secondary"
-                        style={{ display: 'block', marginBottom: 10 }}
-                      >
-                        {dependency.source === 'sing-box'
-                          ? 'Hysteria2 обновляется вместе с sing-box, поскольку используется реализация Hysteria2 из sing-box.'
-                          : 'Hysteria2 обновляется вместе с Xray-core, поскольку используется реализация Hysteria2 из Xray.'}
-                      </Typography.Text>
-                    )}
-                    {dependency.key === 'naiveproxy' && (
-                      <Typography.Text
-                        type="secondary"
-                        style={{ display: 'block', marginBottom: 10 }}
-                      >
-                        NaiveProxy обновляется вместе с sing-box, поскольку Naive является
-                        встроенным протоколом sing-box.
-                      </Typography.Text>
-                    )}
-                    <div className="system-component-meta">
-                      <div>
-                        <Typography.Text type="secondary">
-                          {t('pages.settings.swap.installedVersion')}
-                        </Typography.Text>
-                        <Typography.Text strong>
-                          {dependency.installed ? dependency.installedVersion || '—' : '—'}
-                        </Typography.Text>
-                      </div>
-                      <div>
-                        <Typography.Text type="secondary">
-                          {t('pages.settings.swap.availableVersion')}
-                        </Typography.Text>
-                        <Typography.Text strong>
-                          {dependency.availableVersion || '—'}
-                        </Typography.Text>
-                      </div>
-                    </div>
-                    <Button
+                {dependencies.map((dependency) => {
+                  const canInstallStandaloneNaive =
+                    dependency.key === 'naiveproxy' && dependency.source === 'xray';
+                  const installable = dependency.key === 'sudoku' || canInstallStandaloneNaive;
+                  const actionAvailable = dependencyNeedsAction(dependency);
+                  return (
+                    <Card
+                      key={dependency.key}
                       size="small"
-                      icon={<DownloadOutlined />}
-                      loading={dependencyBusy === dependency.key}
-                      disabled={
-                        (!dependency.updateAvailable &&
-                          !(dependency.key === 'sudoku' && !dependency.installed)) ||
-                        dependencyBusy !== null ||
-                        systemUpdateBusy
+                      className="system-component-card"
+                      title={dependency.label}
+                      extra={
+                        dependency.updateAvailable ? (
+                          <Tag color="warning">{t('pages.settings.swap.updatesAvailable')}</Tag>
+                        ) : dependency.installed ? (
+                          <Tag color="success">{t('pages.settings.swap.upToDate')}</Tag>
+                        ) : (
+                          <Tag>{t('pages.settings.swap.notInstalled')}</Tag>
+                        )
                       }
-                      onClick={() => void updateDependency(dependency)}
                     >
-                      {!dependency.installed && dependency.key === 'sudoku'
-                        ? 'Установить'
-                        : dependency.updateAvailable
-                          ? t('pages.settings.swap.updateComponent')
-                          : t('pages.settings.swap.upToDate')}
-                    </Button>
-                  </Card>
-                ))}
+                      {dependency.key === 'hysteria2' && (
+                        <Typography.Text
+                          type="secondary"
+                          style={{ display: 'block', marginBottom: 10 }}
+                        >
+                          {dependency.source === 'sing-box'
+                            ? 'Hysteria2 обновляется вместе с sing-box, поскольку используется реализация Hysteria2 из sing-box.'
+                            : 'Hysteria2 обновляется вместе с Xray-core, поскольку используется реализация Hysteria2 из Xray.'}
+                        </Typography.Text>
+                      )}
+                      {dependency.key === 'naiveproxy' && (
+                        <Typography.Text
+                          type="secondary"
+                          style={{ display: 'block', marginBottom: 10 }}
+                        >
+                          {dependency.source === 'xray'
+                            ? 'При Xray NaiveProxy используется как отдельный бинарник и обновляется напрямую из официальных релизов klzgrad/naiveproxy.'
+                            : 'При sing-box NaiveProxy используется из встроенной реализации sing-box и обновляется вместе с sing-box.'}
+                        </Typography.Text>
+                      )}
+                      <div className="system-component-meta">
+                        <div>
+                          <Typography.Text type="secondary">
+                            {t('pages.settings.swap.installedVersion')}
+                          </Typography.Text>
+                          <Typography.Text strong>
+                            {dependency.installed ? dependency.installedVersion || '—' : '—'}
+                          </Typography.Text>
+                        </div>
+                        <div>
+                          <Typography.Text type="secondary">
+                            {t('pages.settings.swap.availableVersion')}
+                          </Typography.Text>
+                          <Typography.Text strong>
+                            {dependency.availableVersion || '—'}
+                          </Typography.Text>
+                        </div>
+                      </div>
+                      <Button
+                        size="small"
+                        icon={<DownloadOutlined />}
+                        loading={dependencyBusy === dependency.key}
+                        disabled={!actionAvailable || dependencyBusy !== null || systemUpdateBusy}
+                        onClick={() => void updateDependency(dependency)}
+                      >
+                        {!dependency.installed && installable
+                          ? 'Установить'
+                          : dependency.updateAvailable
+                            ? t('pages.settings.swap.updateComponent')
+                            : t('pages.settings.swap.upToDate')}
+                      </Button>
+                    </Card>
+                  );
+                })}
               </div>
             </Card>
 
