@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Dropdown, Modal, Space, Table, Tabs, message } from 'antd';
+import { Button, Dropdown, Input, Modal, Select, Space, Table, Tabs, message } from 'antd';
 import {
   AimOutlined,
   ControlOutlined,
@@ -15,6 +15,7 @@ import { catTabLabel } from '@/pages/settings/catTabLabel';
 import PromptModal from '@/components/feedback/PromptModal';
 import TextModal from '@/components/feedback/TextModal';
 import { isBalancerLoopbackTag } from '../balancers/balancer-loopback';
+import { HttpUtil } from '@/utils';
 import RoutingBasic from './RoutingBasic';
 import RouteTester from './RouteTester';
 import RuleFormModal from './RuleFormModal';
@@ -51,6 +52,15 @@ export default function RoutingTab({
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
+
+  const [routingPresets, setRoutingPresets] = useState<
+    { id: number; name: string; description: string; ruleCount: number }[]
+  >([]);
+  const [presetId, setPresetId] = useState<number | null>(null);
+  const [presetSaveOpen, setPresetSaveOpen] = useState(false);
+  const [presetName, setPresetName] = useState('');
+  const [presetDescription, setPresetDescription] = useState('');
+  const [presetBusy, setPresetBusy] = useState(false);
   const dragRef = useRef<{
     from: number | null;
     to: number | null;
@@ -106,6 +116,20 @@ export default function RoutingTab({
     rowsRef.current = rows;
   });
 
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const msg = await HttpUtil.get<
+        { id: number; name: string; description: string; ruleCount: number }[]
+      >('/panel/api/xray/routingPresets/list', undefined, { silent: true });
+      if (!cancelled && msg?.success) setRoutingPresets(msg.obj || []);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const mutate = useCallback(
     (mutator: (next: XraySettingsValue) => void) => {
       setTemplateSettings((prev) => {
@@ -116,6 +140,89 @@ export default function RoutingTab({
       });
     },
     [setTemplateSettings],
+  );
+
+  const refreshRoutingPresets = useCallback(async () => {
+    const msg = await HttpUtil.get<
+      { id: number; name: string; description: string; ruleCount: number }[]
+    >('/panel/api/xray/routingPresets/list', undefined, { silent: true });
+    if (msg?.success) setRoutingPresets(msg.obj || []);
+  }, []);
+
+  const applyRoutingPreset = useCallback(
+    async (id: number) => {
+      setPresetBusy(true);
+      try {
+        const msg = await HttpUtil.get<{
+          id: number;
+          name: string;
+          description: string;
+          rules: RuleObject[];
+        }>('/panel/api/xray/routingPresets/get/' + id);
+        if (!msg?.success || !msg.obj) {
+          message.error(msg?.msg || t('pages.xray.routingPresetLoadFailed'));
+          return;
+        }
+        mutate((tt) => {
+          if (!tt.routing) tt.routing = { rules: [] };
+          tt.routing.rules = JSON.parse(JSON.stringify(msg.obj!.rules)) as RuleObject[];
+        });
+        setPresetId(id);
+        message.success(t('pages.xray.routingPresetApplied'));
+      } finally {
+        setPresetBusy(false);
+      }
+    },
+    [mutate, t],
+  );
+
+  const saveRoutingPreset = useCallback(async () => {
+    if (!presetName.trim()) {
+      message.warning(t('pages.xray.routingPresetNameRequired'));
+      return;
+    }
+    setPresetBusy(true);
+    try {
+      const msg = await HttpUtil.post<{ id: number }>(
+        '/panel/api/xray/routingPresets/save',
+        {
+          name: presetName.trim(),
+          description: presetDescription.trim(),
+          rules: JSON.parse(JSON.stringify(rules)),
+        },
+        { headers: { 'Content-Type': 'application/json' } },
+      );
+      if (!msg?.success) {
+        message.error(msg?.msg || t('pages.xray.routingPresetSaveFailed'));
+        return;
+      }
+      setPresetSaveOpen(false);
+      setPresetName('');
+      setPresetDescription('');
+      await refreshRoutingPresets();
+      message.success(t('pages.xray.routingPresetSaved'));
+    } finally {
+      setPresetBusy(false);
+    }
+  }, [presetDescription, presetName, refreshRoutingPresets, rules, t]);
+
+  const deleteRoutingPreset = useCallback(
+    async (id: number) => {
+      setPresetBusy(true);
+      try {
+        const msg = await HttpUtil.post('/panel/api/xray/routingPresets/del/' + id);
+        if (!msg?.success) {
+          message.error(msg?.msg || t('pages.xray.routingPresetDeleteFailed'));
+          return;
+        }
+        if (presetId === id) setPresetId(null);
+        await refreshRoutingPresets();
+        message.success(t('pages.xray.routingPresetDeleted'));
+      } finally {
+        setPresetBusy(false);
+      }
+    },
+    [presetId, refreshRoutingPresets, t],
   );
 
   const inboundTagOptions = useMemo(() => {
@@ -369,6 +476,38 @@ export default function RoutingTab({
                   <Button type="primary" icon={<PlusOutlined />} onClick={openAdd}>
                     {t('pages.xray.Routings')}
                   </Button>
+                  <Select
+                    allowClear
+                    value={presetId ?? undefined}
+                    placeholder={t('pages.xray.routingPreset')}
+                    loading={presetBusy}
+                    style={{ minWidth: isMobile ? 160 : 220 }}
+                    options={routingPresets.map((preset) => ({
+                      value: preset.id,
+                      label: `${preset.name} · ${preset.ruleCount}`,
+                    }))}
+                    onChange={(value) => {
+                      if (value != null) void applyRoutingPreset(Number(value));
+                    }}
+                    dropdownRender={(menu) => (
+                      <>
+                        {menu}
+                        <div style={{ padding: '8px 12px', borderTop: '1px solid var(--ant-color-border)' }}>
+                          <Button
+                            type="link"
+                            block
+                            onClick={() => {
+                              setPresetName('');
+                              setPresetDescription('');
+                              setPresetSaveOpen(true);
+                            }}
+                          >
+                            {t('pages.xray.saveRoutingPreset')}
+                          </Button>
+                        </div>
+                      </>
+                    )}
+                  />
                   <Dropdown
                     trigger={['click']}
                     menu={{
@@ -438,6 +577,27 @@ export default function RoutingTab({
           },
         ]}
       />
+
+      {presetId != null && routingPresets.some((p) => p.id === presetId) && (
+        <Space style={{ marginTop: 8 }} wrap>
+          <Button
+            danger
+            size="small"
+            loading={presetBusy}
+            onClick={() =>
+              modal.confirm({
+                title: t('pages.xray.deleteRoutingPreset'),
+                okText: t('delete'),
+                okType: 'danger',
+                cancelText: t('cancel'),
+                onOk: () => deleteRoutingPreset(presetId),
+              })
+            }
+          >
+            {t('delete')}
+          </Button>
+        </Space>
+      )}
       <RuleFormModal
         open={ruleModalOpen}
         rule={editingRule}
@@ -456,6 +616,29 @@ export default function RoutingTab({
         json
         onConfirm={importRules}
       />
+
+      <Modal
+        open={presetSaveOpen}
+        title={t('pages.xray.saveRoutingPreset')}
+        onCancel={() => setPresetSaveOpen(false)}
+        onOk={() => void saveRoutingPreset()}
+        confirmLoading={presetBusy}
+      >
+        <Space orientation="vertical" style={{ width: '100%' }}>
+          <Input
+            value={presetName}
+            onChange={(e) => setPresetName(e.target.value)}
+            placeholder={t('pages.xray.routingPresetName')}
+            autoFocus
+          />
+          <Input.TextArea
+            value={presetDescription}
+            onChange={(e) => setPresetDescription(e.target.value)}
+            placeholder={t('pages.xray.routingPresetDescription')}
+            autoSize={{ minRows: 3, maxRows: 6 }}
+          />
+        </Space>
+      </Modal>
       <TextModal
         open={exportOpen}
         onClose={() => setExportOpen(false)}

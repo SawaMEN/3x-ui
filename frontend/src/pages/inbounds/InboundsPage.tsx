@@ -598,6 +598,26 @@ export default function InboundsPage() {
     [modal, nodesList, refresh, t],
   );
 
+  const onReorder = useCallback(
+    async (ids: number[]) => {
+      try {
+        const msg = await HttpUtil.post(
+          '/panel/api/inbounds/reorder',
+          { ids },
+          { headers: { 'Content-Type': 'application/json' } },
+        );
+        if (!msg?.success) {
+          messageApi.error(msg?.msg || t('somethingWentWrong'));
+        }
+      } catch {
+        messageApi.error(t('somethingWentWrong'));
+      } finally {
+        await refresh();
+      }
+    },
+    [messageApi, refresh, t],
+  );
+
   const onGeneralAction = useCallback(
     (key: GeneralAction) => {
       switch (key) {
@@ -810,6 +830,7 @@ export default function InboundsPage() {
                         onRowAction({ key, dbInbound: dbInbound as unknown as DBInbound })
                       }
                       onBulkDelete={confirmBulkDelete}
+                      onReorder={onReorder}
                     />
                   </Col>
                 </Row>

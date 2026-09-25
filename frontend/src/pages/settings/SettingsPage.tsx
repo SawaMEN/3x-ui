@@ -80,8 +80,15 @@ function scrollTarget() {
 
 export default function SettingsPage() {
   const { t } = useTranslation();
-  const { isDark, isUltra, mode, setThemeMode, lowPower, toggleLowPower, antdThemeConfig } =
-    useTheme();
+  const {
+    isDark,
+    isUltra,
+    mode,
+    setThemeMode,
+    lowPower,
+    toggleLowPower,
+    antdThemeConfig,
+  } = useTheme();
   const { isMobile } = useMediaQuery();
   const [modal, modalContextHolder] = Modal.useModal();
   const [messageApi, messageContextHolder] = message.useMessage();

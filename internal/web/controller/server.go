@@ -116,6 +116,15 @@ func (a *ServerController) startTask() {
 		}
 	})
 
+	// Geodata releases are checked daily. UpdateGeofile stages and verifies each
+	// upstream atomically, and AutoUpdateGeofiles skips the job when Xray is
+	// intentionally stopped.
+	_, _ = c.AddFunc("@daily", func() {
+		if err := a.serverService.AutoUpdateGeofiles(); err != nil {
+			logger.Warning("automatic geodata update failed:", err)
+		}
+	})
+
 	// Keep the rolling dev updater independent from the shared cron scheduler.
 	// This guarantees that dev checks still run even if another cron task fails
 	// to register or the scheduler is not started yet.

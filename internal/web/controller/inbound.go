@@ -87,6 +87,7 @@ func (a *InboundController) initRouter(g *gin.RouterGroup) {
 	g.POST("/:id/delAllClients", a.delAllInboundClients)
 	g.POST("/resetAllTraffics", a.resetAllTraffics)
 	g.POST("/import", a.importInbound)
+	g.POST("/reorder", a.reorder)
 	g.POST("/:id/fallbacks", a.setFallbacks)
 	g.POST("/pushClientTraffics", a.pushClientTraffics)
 
@@ -507,4 +508,20 @@ func (a *InboundController) setFallbacks(c *gin.Context) {
 	}
 	a.xrayService.SetToNeedRestart()
 	jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.inboundUpdateSuccess"), nil)
+}
+
+func (a *InboundController) reorder(c *gin.Context) {
+	user := session.GetLoginUser(c)
+	var req struct {
+		Ids []int `json:"ids"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		jsonMsg(c, "invalid reorder payload", err)
+		return
+	}
+	if err := a.inboundService.Reorder(user.Id, req.Ids); err != nil {
+		jsonMsg(c, "failed to reorder inbounds", err)
+		return
+	}
+	jsonMsg(c, "inbounds reordered", nil)
 }

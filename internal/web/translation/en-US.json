@@ -125,7 +125,8 @@
     "unpinSidebar": "Unpin sidebar",
     "subFormats": "Sub Formats",
     "telemt": "Telemt",
-    "singBox": "sing-box Configs"
+    "singBox": "sing-box Configs",
+    "templates": "Templates"
   },
   "pages": {
     "login": {
@@ -754,7 +755,8 @@
         "peerNumber": "Peer {n}",
         "peerNumberConfig": "Peer {n} config"
       },
-      "sniffingDestOverride": "Destination override"
+      "sniffingDestOverride": "Destination override",
+      "dragToReorder": "Drag to reorder"
     },
     "clients": {
       "tabBasics": "Basics",
@@ -1261,7 +1263,8 @@
       "pinnedCertPlaceholder": "base64 or hex SHA-256",
       "fetchPin": "Fetch",
       "pinFetched": "Fetched the node's current certificate",
-      "pinFetchFailed": "Could not fetch the certificate"
+      "pinFetchFailed": "Could not fetch the certificate",
+      "dragToReorder": "Drag to reorder"
     },
     "settings": {
       "defaultTag": "Default",
@@ -1536,7 +1539,20 @@
         "apiTokenEmpty": "No tokens yet — create one to authenticate bots or remote panels.",
         "apiTokenDeleteWarning": "Any caller using this token will stop authenticating immediately.",
         "apiTokenCreatedTitle": "Token created",
-        "apiTokenCreatedNotice": "Copy this token now. For security it is not stored in readable form and will not be shown again."
+        "apiTokenCreatedNotice": "Copy this token now. For security it is not stored in readable form and will not be shown again.",
+        "sessions": "Active sessions",
+        "sessionsHint": "Review signed-in devices and revoke sessions you no longer trust.",
+        "sessionsEmpty": "No tracked sessions.",
+        "currentSession": "Current",
+        "revokedSession": "Revoked",
+        "lastSeen": "Last seen",
+        "unknownAddress": "Unknown address",
+        "revokeSession": "Revoke this session?",
+        "revokeOtherSessions": "Revoke other sessions",
+        "revokeOtherSessionsDesc": "All other sessions will be signed out. This device stays active.",
+        "otherSessionsRevoked": "Other sessions revoked.",
+        "sessionRevoked": "Session revoked.",
+        "sessionsUseLogout": "Use Logout to end the current session."
       },
       "toasts": {
         "modifySettings": "The parameters have been changed.",
@@ -2399,7 +2415,19 @@
         "poolSize": "Pool Size"
       },
       "defaultOutbound": "Default Outbound",
-      "defaultOutboundDesc": "Traffic that does not match any routing rule uses this outbound (Xray uses the first outbound in the list)."
+      "defaultOutboundDesc": "Traffic that does not match any routing rule uses this outbound (Xray uses the first outbound in the list).",
+      "routingPreset": "Routing preset",
+      "saveRoutingPreset": "Save routing preset",
+      "routingPresetName": "Preset name",
+      "routingPresetDescription": "Optional description",
+      "routingPresetNameRequired": "Preset name is required.",
+      "routingPresetApplied": "Routing preset applied to the current configuration.",
+      "routingPresetLoadFailed": "Failed to load routing preset.",
+      "routingPresetSaveFailed": "Failed to save routing preset.",
+      "routingPresetSaved": "Routing preset saved.",
+      "deleteRoutingPreset": "Delete this routing preset?",
+      "routingPresetDeleteFailed": "Failed to delete routing preset.",
+      "routingPresetDeleted": "Routing preset deleted."
     },
     "singBox": {
       "save": "Save",
@@ -2424,6 +2452,42 @@
       "sourceDisk": "Actual file",
       "sourceGenerated": "Generated",
       "actualTitle": "Actual sing-box configuration"
+    },
+    "templates": {
+      "title": "Template Library",
+      "subtitle": "Reusable Xray configurations with server-side secret sanitization.",
+      "add": "Add template",
+      "searchPlaceholder": "Search templates",
+      "allKinds": "All types",
+      "inbound": "Inbound",
+      "xrayConfig": "Xray config",
+      "empty": "No templates yet. Import a configuration to create your first sanitized template.",
+      "editorTitle": "Create template",
+      "kind": "Type",
+      "name": "Name",
+      "namePlaceholder": "VLESS Reality starter",
+      "descriptionPlaceholder": "What this template is for",
+      "tagsPlaceholder": "Tags separated by commas: vless, reality, xhttp",
+      "previewSanitize": "Preview sanitization",
+      "sanitizeResult": "Sanitized size: {{size}}",
+      "noWarnings": "No secrets or host-specific values were found.",
+      "invalidJson": "Configuration must be valid JSON.",
+      "sanitizeFailed": "Failed to sanitize template.",
+      "saveFailed": "Failed to save template.",
+      "saved": "Template saved.",
+      "savedWithWarnings": "Template saved after removing sensitive values.",
+      "titleRequired": "Template name is required.",
+      "loadFailed": "Failed to load templates.",
+      "deleteTitle": "Delete this template?",
+      "deleteFailed": "Failed to delete template.",
+      "deleted": "Template deleted.",
+      "copy": "Copy JSON",
+      "copied": "JSON copied.",
+      "export": "Export JSON",
+      "noDescription": "No description.",
+      "namePlaceholderShort": "Template name",
+      "applyInbound": "Create inbound",
+      "applied": "Inbound created from template. Review and regenerate sanitized secrets before enabling it."
     }
   },
   "tgbot": {

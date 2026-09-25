@@ -125,7 +125,8 @@
     "unpinSidebar": "Открепить боковую панель",
     "subFormats": "Форматы подписки",
     "telemt": "Telemt",
-    "singBox": "Настройки sing-box"
+    "singBox": "Настройки sing-box",
+    "templates": "Шаблоны"
   },
   "pages": {
     "login": {
@@ -754,7 +755,8 @@
         "peerNumber": "Peer {n}",
         "peerNumberConfig": "Конфиг Peer {n}"
       },
-      "sniffingDestOverride": "Переопределение назначения"
+      "sniffingDestOverride": "Переопределение назначения",
+      "dragToReorder": "Перетащите для изменения порядка"
     },
     "clients": {
       "tabBasics": "Основные",
@@ -1143,7 +1145,8 @@
       "pinnedCertPlaceholder": "SHA-256 в base64 или hex",
       "fetchPin": "Получить",
       "pinFetched": "Текущий сертификат узла получен",
-      "pinFetchFailed": "Не удалось получить сертификат"
+      "pinFetchFailed": "Не удалось получить сертификат",
+      "dragToReorder": "Перетащите для изменения порядка"
     },
     "settings": {
       "defaultTag": "По умолчанию",
@@ -1414,7 +1417,20 @@
         "apiTokenEmpty": "Токенов пока нет — создайте один для аутентификации ботов или удалённых панелей.",
         "apiTokenDeleteWarning": "Любой клиент, использующий этот токен, немедленно потеряет аутентификацию.",
         "apiTokenCreatedTitle": "Токен создан",
-        "apiTokenCreatedNotice": "Скопируйте этот токен сейчас. В целях безопасности он не хранится в читаемом виде и больше не будет показан."
+        "apiTokenCreatedNotice": "Скопируйте этот токен сейчас. В целях безопасности он не хранится в читаемом виде и больше не будет показан.",
+        "sessions": "Активные сессии",
+        "sessionsHint": "Проверьте активные устройства и отзовите сессии, которым больше не доверяете.",
+        "sessionsEmpty": "Отслеживаемых сессий пока нет.",
+        "currentSession": "Текущая",
+        "revokedSession": "Отозвана",
+        "lastSeen": "Последняя активность",
+        "unknownAddress": "Неизвестный адрес",
+        "revokeSession": "Отозвать эту сессию?",
+        "revokeOtherSessions": "Отозвать остальные",
+        "revokeOtherSessionsDesc": "Все остальные сессии будут завершены. Эта сессия останется активной.",
+        "otherSessionsRevoked": "Остальные сессии отозваны.",
+        "sessionRevoked": "Сессия отозвана.",
+        "sessionsUseLogout": "Для завершения текущей сессии используйте выход из панели."
       },
       "toasts": {
         "modifySettings": "Настройки изменены",
@@ -2281,7 +2297,19 @@
         "poolSize": "Размер пула"
       },
       "defaultOutbound": "Исходящий по умолчанию",
-      "defaultOutboundDesc": "Трафик без совпадения с правилами маршрутизации идёт через этот исходящий (первый в списке)."
+      "defaultOutboundDesc": "Трафик без совпадения с правилами маршрутизации идёт через этот исходящий (первый в списке).",
+      "routingPreset": "Пресет маршрутизации",
+      "saveRoutingPreset": "Сохранить пресет маршрутизации",
+      "routingPresetName": "Название пресета",
+      "routingPresetDescription": "Необязательное описание",
+      "routingPresetNameRequired": "Укажите название пресета.",
+      "routingPresetApplied": "Пресет применён к текущей конфигурации.",
+      "routingPresetLoadFailed": "Не удалось загрузить пресет маршрутизации.",
+      "routingPresetSaveFailed": "Не удалось сохранить пресет маршрутизации.",
+      "routingPresetSaved": "Пресет маршрутизации сохранён.",
+      "deleteRoutingPreset": "Удалить этот пресет маршрутизации?",
+      "routingPresetDeleteFailed": "Не удалось удалить пресет маршрутизации.",
+      "routingPresetDeleted": "Пресет маршрутизации удалён."
     },
     "hosts": {
       "addHost": "Добавить хост",
@@ -2424,6 +2452,42 @@
       "sourceDisk": "Фактический файл",
       "sourceGenerated": "Сгенерировано",
       "actualTitle": "Фактическая конфигурация sing-box"
+    },
+    "templates": {
+      "title": "Библиотека шаблонов",
+      "subtitle": "Переиспользуемые конфигурации Xray с серверной очисткой секретов.",
+      "add": "Добавить шаблон",
+      "searchPlaceholder": "Поиск шаблонов",
+      "allKinds": "Все типы",
+      "inbound": "Inbound",
+      "xrayConfig": "Конфигурация Xray",
+      "empty": "Шаблонов пока нет. Импортируйте конфигурацию, чтобы создать первый очищенный шаблон.",
+      "editorTitle": "Создание шаблона",
+      "kind": "Тип",
+      "name": "Название",
+      "namePlaceholder": "Стартовый VLESS Reality",
+      "descriptionPlaceholder": "Для чего нужен шаблон",
+      "tagsPlaceholder": "Теги через запятую: vless, reality, xhttp",
+      "previewSanitize": "Предпросмотр очистки",
+      "sanitizeResult": "Размер после очистки: {{size}}",
+      "noWarnings": "Секретов и привязанных к хосту значений не найдено.",
+      "invalidJson": "Конфигурация должна быть корректным JSON.",
+      "sanitizeFailed": "Не удалось очистить шаблон.",
+      "saveFailed": "Не удалось сохранить шаблон.",
+      "saved": "Шаблон сохранён.",
+      "savedWithWarnings": "Шаблон сохранён после удаления чувствительных данных.",
+      "titleRequired": "Укажите название шаблона.",
+      "loadFailed": "Не удалось загрузить шаблоны.",
+      "deleteTitle": "Удалить этот шаблон?",
+      "deleteFailed": "Не удалось удалить шаблон.",
+      "deleted": "Шаблон удалён.",
+      "copy": "Копировать JSON",
+      "copied": "JSON скопирован.",
+      "export": "Экспорт JSON",
+      "noDescription": "Без описания.",
+      "namePlaceholderShort": "Название шаблона",
+      "applyInbound": "Создать inbound",
+      "applied": "Inbound создан из шаблона. Перед включением проверьте конфигурацию и заново задайте очищенные секреты."
     }
   },
   "tgbot": {

@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Badge, Button, Card, Dropdown, Modal, Space, Switch, Table, Tag, Tooltip } from 'antd';
 import type { BadgeProps } from 'antd';
@@ -13,6 +13,7 @@ import {
   EyeInvisibleOutlined,
   EyeOutlined,
   InfoCircleOutlined,
+  HolderOutlined,
   MoreOutlined,
   PlusOutlined,
   RightOutlined,
@@ -25,6 +26,7 @@ import NodeHistoryPanel from './NodeHistoryPanel';
 import type { NodeRecord } from '@/api/queries/useNodesQuery';
 import { isPanelUpdateAvailable } from '@/lib/panel-version';
 import { activateOnKey } from '@/utils/a11y';
+import { SizeFormatter } from '@/utils';
 import './NodeList.css';
 
 interface NodeListProps {
@@ -42,6 +44,7 @@ interface NodeListProps {
   onToggleEnable: (node: NodeRecord, next: boolean) => void;
   onUpdateNode: (node: NodeRecord) => void;
   onUpdateSelected: () => void;
+  onReorder: (ids: number[]) => Promise<void>;
 }
 
 function isUpdateEligible(n: NodeRecord): boolean {
@@ -178,6 +181,7 @@ function NodeList({
   onToggleEnable,
   onUpdateNode,
   onUpdateSelected,
+  onReorder,
 }: NodeListProps) {
   const { t } = useTranslation();
   const relativeTime = useRelativeTime();
@@ -185,6 +189,7 @@ function NodeList({
   const [showAddress, setShowAddress] = useState(false);
   const [statsNode, setStatsNode] = useState<NodeRow | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
+  const [draggedNodeId, setDraggedNodeId] = useState<number | null>(null);
 
   // Map a node GUID to its display name so a transitive sub-node can show which
   // parent it is reached through (#4983).
@@ -238,6 +243,27 @@ function NodeList({
       return next;
     });
   }
+
+  const reorderNode = useCallback(
+    async (targetId: number) => {
+      if (draggedNodeId == null || draggedNodeId === targetId) {
+        setDraggedNodeId(null);
+        return;
+      }
+      const ids = dataSource.filter((row) => !row.transitive).map((row) => row.id);
+      const from = ids.indexOf(draggedNodeId);
+      const to = ids.indexOf(targetId);
+      if (from < 0 || to < 0) {
+        setDraggedNodeId(null);
+        return;
+      }
+      ids.splice(from, 1);
+      ids.splice(to, 0, draggedNodeId);
+      setDraggedNodeId(null);
+      await onReorder(ids);
+    },
+    [dataSource, draggedNodeId, onReorder],
+  );
 
   const columns = useMemo<ColumnsType<NodeRow>>(
     () => [
@@ -330,6 +356,13 @@ function NodeList({
             style={record.transitive ? { paddingInlineStart: 20 } : undefined}
           >
             <span className="name">
+              {!record.transitive && (
+                <HolderOutlined
+                  className="node-drag-handle"
+                  title={t('pages.nodes.dragToReorder')}
+                  aria-label={t('pages.nodes.dragToReorder')}
+                />
+              )}
               {record.transitive && (
                 <ApartmentOutlined style={{ marginInlineEnd: 6, opacity: 0.6 }} />
               )}
@@ -548,6 +581,27 @@ function NodeList({
         scroll={{ x: 'max-content', y: 600 }}
         size="middle"
         rowKey="key"
+        onRow={(record) =>
+          record.transitive
+            ? {}
+            : {
+                draggable: true,
+                className: draggedNodeId === record.id ? 'is-dragged' : undefined,
+                onDragStart: (event) => {
+                  setDraggedNodeId(record.id);
+                  event.dataTransfer.effectAllowed = 'move';
+                },
+                onDragOver: (event) => {
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = 'move';
+                },
+                onDrop: (event) => {
+                  event.preventDefault();
+                  void reorderNode(record.id);
+                },
+                onDragEnd: () => setDraggedNodeId(null),
+              }
+        }
         rowSelection={
           dataSource.length > 1
             ? {
@@ -574,7 +628,7 @@ function NodeList({
         }}
       />
     ),
-    [dataSource, columns, loading, selectedIds, onSelectionChange, t],
+    [dataSource, columns, loading, selectedIds, onSelectionChange, t, draggedNodeId, reorderNode],
   );
 
   return (
@@ -621,7 +675,24 @@ function NodeList({
                     </div>
                   </div>
                 ) : (
-                  <div key={record.id} className="node-card">
+                  <div
+                    key={record.id}
+                    className={`node-card${draggedNodeId === record.id ? ' is-dragged' : ''}`}
+                    draggable
+                    onDragStart={(event) => {
+                      setDraggedNodeId(record.id);
+                      event.dataTransfer.effectAllowed = 'move';
+                    }}
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = 'move';
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      void reorderNode(record.id);
+                    }}
+                    onDragEnd={() => setDraggedNodeId(null)}
+                  >
                     {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events -- mouse click-to-expand mirrors the keyboard-accessible chevron disclosure button */}
                     <div
                       className="card-head"
@@ -630,6 +701,11 @@ function NodeList({
                           toggleExpanded(record.id);
                       }}
                     >
+                      <HolderOutlined
+                        className="node-drag-handle"
+                        title={t('pages.nodes.dragToReorder')}
+                        aria-label={t('pages.nodes.dragToReorder')}
+                      />
                       <RightOutlined
                         className={`card-expand${expandedIds.has(record.id) ? ' is-expanded' : ''}`}
                         role="button"
@@ -716,6 +792,20 @@ function NodeList({
                       </div>
                     </div>
 
+                    <div className="node-load-grid">
+                      <span>
+                        CPU <b>{formatPct(record.cpuPct)}</b>
+                      </span>
+                      <span>
+                        RAM <b>{formatPct(record.memPct)}</b>
+                      </span>
+                      <span>
+                        NET ↑ <b>{SizeFormatter.speedFormat(record.netUp)}</b>
+                      </span>
+                      <span>
+                        NET ↓ <b>{SizeFormatter.speedFormat(record.netDown)}</b>
+                      </span>
+                    </div>
                     {expandedIds.has(record.id) && (
                       <div className="card-history">
                         <NodeHistoryPanel node={record} />

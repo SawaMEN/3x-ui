@@ -122,7 +122,7 @@ func decryptToken(n *model.Node) {
 func (s *NodeService) GetAll() ([]*model.Node, error) {
 	db := database.GetDB()
 	var nodes []*model.Node
-	err := db.Model(model.Node{}).Order("id asc").Find(&nodes).Error
+	err := db.Model(model.Node{}).Order("sort_order asc, id asc").Find(&nodes).Error
 	if err != nil || len(nodes) == 0 {
 		return nodes, err
 	}
