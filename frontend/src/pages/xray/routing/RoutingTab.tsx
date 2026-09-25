@@ -116,7 +116,6 @@ export default function RoutingTab({
     rowsRef.current = rows;
   });
 
-
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -492,7 +491,12 @@ export default function RoutingTab({
                     dropdownRender={(menu) => (
                       <>
                         {menu}
-                        <div style={{ padding: '8px 12px', borderTop: '1px solid var(--ant-color-border)' }}>
+                        <div
+                          style={{
+                            padding: '8px 12px',
+                            borderTop: '1px solid var(--ant-color-border)',
+                          }}
+                        >
                           <Button
                             type="link"
                             block

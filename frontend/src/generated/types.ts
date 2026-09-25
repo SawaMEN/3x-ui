@@ -637,6 +637,7 @@ export interface Inbound {
   shareAddr: string;
   shareAddrStrategy: string;
   sniffing: unknown;
+  sortOrder: number;
   streamSettings: unknown;
   subSortIndex: number;
   tag: string;
@@ -759,6 +760,7 @@ export interface Node {
   port: number;
   remark: string;
   scheme: string;
+  sortOrder: number;
   status: string;
   tlsVerifyMode: string;
   transitive?: boolean;

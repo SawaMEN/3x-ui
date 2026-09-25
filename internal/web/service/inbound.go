@@ -236,7 +236,7 @@ func (s *InboundService) annotateLocalOriginGuid(inbounds []*model.Inbound) {
 func (s *InboundService) GetInboundsSlim(userId int) ([]*model.Inbound, error) {
 	db := database.GetDB()
 	var inbounds []*model.Inbound
-	err := db.Model(model.Inbound{}).Preload("ClientStats").Where("user_id = ?", userId).Order("id ASC").Find(&inbounds).Error
+	err := db.Model(model.Inbound{}).Preload("ClientStats").Where("user_id = ?", userId).Order("sort_order ASC, id ASC").Find(&inbounds).Error
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}

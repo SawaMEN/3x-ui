@@ -16,6 +16,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawgnet"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/tail"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
@@ -275,7 +276,7 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 			}
 			clients = append(clients, entry)
 		}
-			if singBoxInboundRequiresUsers(inbound.Protocol) && len(clients) == 0 {
+		if singBoxInboundRequiresUsers(inbound.Protocol) && len(clients) == 0 {
 			logger.Warningf("Skipping sing-box inbound %q (%s): no active users", inbound.Tag, inbound.Protocol)
 			continue
 		}

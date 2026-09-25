@@ -2,9 +2,9 @@ package session
 
 import (
 	"net/http"
-	"strings"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
@@ -59,7 +59,6 @@ func TestSessionUserIDSupportsLegacyUserPayload(t *testing.T) {
 	}
 }
 
-
 func TestRevokedSessionIsNotAuthenticated(t *testing.T) {
 	setupSessionTestDB(t)
 	gin.SetMode(gin.TestMode)
@@ -91,7 +90,7 @@ func TestRevokedSessionIsNotAuthenticated(t *testing.T) {
 	if cookieHeader == "" {
 		t.Fatal("login response did not set a session cookie")
 	}
-	cookieHeader = strings.Split(cookieHeader, ";", 2)[0]
+	cookieHeader = strings.SplitN(cookieHeader, ";", 2)[0]
 
 	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
 	req.Header.Set("Cookie", cookieHeader)

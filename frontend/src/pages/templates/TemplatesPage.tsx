@@ -110,7 +110,6 @@ function formatDate(unix: number): string {
 
 export default function TemplatesPage() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const { antdThemeConfig, isDark, isUltra } = useTheme();
   const [messageApi, messageContextHolder] = message.useMessage();
   const [items, setItems] = useState<Template[]>([]);
@@ -167,11 +166,14 @@ export default function TemplatesPage() {
         { kind: draft.kind, content },
         { headers: { 'Content-Type': 'application/json' } },
       );
-      if (!msg?.success || !msg.obj) throw new Error(msg?.msg || t('pages.templates.sanitizeFailed'));
+      if (!msg?.success || !msg.obj)
+        throw new Error(msg?.msg || t('pages.templates.sanitizeFailed'));
       setPreview(msg.obj);
       return msg.obj;
     } catch (error) {
-      messageApi.error(error instanceof Error ? error.message : t('pages.templates.sanitizeFailed'));
+      messageApi.error(
+        error instanceof Error ? error.message : t('pages.templates.sanitizeFailed'),
+      );
       return null;
     } finally {
       setPreviewLoading(false);
@@ -285,8 +287,8 @@ export default function TemplatesPage() {
     if (!msg?.success) return;
     setDetailOpen(false);
     messageApi.success(t('pages.templates.applied'));
-    navigate('/inbounds');
-  }, [detail, messageApi, navigate, t]);
+    window.location.assign('/inbounds');
+  }, [detail, messageApi, t]);
 
   const copyDetail = useCallback(async () => {
     if (!detail) return;
@@ -385,7 +387,11 @@ export default function TemplatesPage() {
                               : t('pages.templates.xrayConfig')}
                           </span>
                         </div>
-                        <Typography.Title level={4} ellipsis={{ rows: 2 }} className="template-card-title">
+                        <Typography.Title
+                          level={4}
+                          ellipsis={{ rows: 2 }}
+                          className="template-card-title"
+                        >
                           {item.title}
                         </Typography.Title>
                         <Typography.Paragraph
@@ -492,7 +498,9 @@ export default function TemplatesPage() {
               type={preview.warnings?.length ? 'warning' : 'success'}
               showIcon
               icon={<SafetyCertificateOutlined />}
-              message={t('pages.templates.sanitizeResult', { size: formatBytes(preview.sizeBytes || 0) })}
+              message={t('pages.templates.sanitizeResult', {
+                size: formatBytes(preview.sizeBytes || 0),
+              })}
               description={
                 preview.warnings?.length ? (
                   <ul style={{ marginBottom: 0, paddingInlineStart: 18 }}>
