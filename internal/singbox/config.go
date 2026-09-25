@@ -969,7 +969,8 @@ func translateHysteriaStream(out map[string]any, protocol string, stream map[str
 	if idle := rawInt(settings, "udpIdleTimeout"); idle > 0 && protocol == "hysteria2" {
 		out["idle_timeout"] = fmt.Sprintf("%ds", idle)
 	}
-	if masquerade := rawObject(settings, "masquerade"); inbound && len(masquerade) > 0 && protocol == "hysteria2" {
+	users, _ := out["users"].([]map[string]any)
+	if masquerade := rawObject(settings, "masquerade"); inbound && len(users) == 0 && len(masquerade) > 0 && protocol == "hysteria2" {
 		m := map[string]any{}
 		switch rawString(masquerade, "type") {
 		case "proxy":

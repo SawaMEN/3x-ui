@@ -210,10 +210,10 @@ func resolveTelemtWebPublicAddr(domain string) (string, error) {
 	if err != nil { return "", fmt.Errorf("WEB Proxy domain %s cannot be resolved: %w", domain, err) }
 	isPublic := func(ip net.IP) bool { return ip != nil && ip.IsGlobalUnicast() && !ip.IsPrivate() && !ip.IsLoopback() && !ip.IsLinkLocalUnicast() && !ip.IsUnspecified() }
 	for _, ip := range ips {
-		if ip4 := ip.To4(); ip4 != nil && isPublic(ip4) { return net.JoinHostPort(ip4.String(), "443"), nil }
+		if ip4 := ip.To4(); ip4 != nil && isPublic(ip4) { return net.JoinHostPort(domain, "443"), nil }
 	}
 	for _, ip := range ips {
-		if ip.To4() == nil && isPublic(ip) { return net.JoinHostPort(ip.String(), "443"), nil }
+		if ip.To4() == nil && isPublic(ip) { return net.JoinHostPort(domain, "443"), nil }
 	}
 	return "", fmt.Errorf("WEB Proxy domain %s does not resolve to a public IP address", domain)
 }
