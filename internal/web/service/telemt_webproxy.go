@@ -252,6 +252,7 @@ func telemtWebNginxActive() bool {
 
 func telemtWebEnsureNginxRunning() error {
 	if err := exec.Command("nginx", "-t").Run(); err != nil { return errors.New("nginx configuration test failed") }
+	if telemtWebNginxActive() { return nil }
 	if systemctl("enable", "--now", "nginx") == nil { return nil }
 	if _, err := exec.LookPath("rc-service"); err == nil { if err := exec.CommandContext(context.Background(), "rc-service", "nginx", "restart").Run(); err != nil { return fmt.Errorf("failed to start nginx: %w", err) }; _, _ = exec.CommandContext(context.Background(), "rc-update", "add", "nginx", "default").Output(); return nil }
 	return errors.New("failed to start nginx")
@@ -300,6 +301,7 @@ func telemtWebEnsureCertificate(ctx context.Context, domain, panelCert, panelKey
 	if err := telemtWebWriteAcmeNginxConfig(domain); err != nil { return "", "", err }
 	defer removeTelemtWebAcmeConfig()
 	if err := telemtWebEnsureNginxRunning(); err != nil { return "", "", err }
+	if err := telemtWebReloadNginx(); err != nil { return "", "", err }
 	if !telemtWebCommandExists("certbot") { if err := telemtWebInstallCertbot(ctx, telemtWebPackageManager()); err != nil { return "", "", err } }
 	timeoutCtx, cancel := context.WithTimeout(ctx, 10*time.Minute); defer cancel()
 	cmd := exec.CommandContext(timeoutCtx, "certbot", "certonly", "--webroot", "-w", telemtWebDecoyDir, "--non-interactive", "--agree-tos", "--register-unsafely-without-email", "-d", domain, "--preferred-challenges", "http")
