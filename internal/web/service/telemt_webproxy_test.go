@@ -13,6 +13,7 @@ func TestAppendTelemtWebProxyConfig(t *testing.T) {
 		Secret:     "0123456789abcdef0123456789abcdef",
 		DecoyDir:   "/var/lib/x-ui/telemt-web",
 		ListenPort: 15080,
+		PublicAddr: "203.0.113.10:443",
 	}
 	got, err := appendTelemtWebProxyConfig(base, state)
 	if err != nil {
@@ -23,7 +24,7 @@ func TestAppendTelemtWebProxyConfig(t *testing.T) {
 		"transport = \"web\"",
 		"port = 15080",
 		"host = \"example.com\"",
-		"public_addr = \"example.com:443\"",
+		"public_addr = \"203.0.113.10:443\"",
 		"secret_mode = \"dd\"",
 	} {
 		if !containsTelemtWeb(got, want) {
@@ -73,7 +74,7 @@ func TestTelemtWebVersionAtLeast(t *testing.T) {
 	}
 	for _, tt := range tests {
 		if got := telemtWebVersionAtLeast(tt.current, tt.required); got != tt.want {
-			t.Fatalf("telemtWebVersionAtLeast(%q,%q) = %v, want %v", tt.current, tt.required, tt.want, got)
+			t.Fatalf("telemtWebVersionAtLeast(%q,%q) = %v, want %v", tt.current, tt.required, got, tt.want)
 		}
 	}
 }
