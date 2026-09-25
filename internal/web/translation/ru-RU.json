@@ -1782,16 +1782,6 @@
         "updateComponentFailed": "Не удалось обновить {component}.",
         "partialUpdate": "Системные пакеты обновлены, но не удалось обновить: {components}.",
         "rebootFailed": "Не удалось запустить перезагрузку сервера."
-      },
-      "menuStyle": {
-        "title": "Стиль меню",
-        "subtitle": "Выберите вид бокового меню.",
-        "pill": "Pill",
-        "pillDesc": "Округлённые капсулы",
-        "solid": "Solid",
-        "solidDesc": "Плотные элементы",
-        "minimal": "Minimal",
-        "minimalDesc": "Минимальное меню с маркером"
       }
     },
     "xray": {
