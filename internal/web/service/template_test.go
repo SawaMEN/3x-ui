@@ -25,7 +25,7 @@ func TestSanitizeTemplateContentRemovesSecretsAndClients(t *testing.T) {
 			t.Fatalf("sanitized template still contains %q: %s", secret, text)
 		}
 	}
-	if !strings.Contains(text, "\"clients\":[]} {
+	if !strings.Contains(text, "\"clients\":[]") {
 		t.Fatalf("clients collection should be preserved as an empty array: %s", text)
 	}
 	if len(warnings) < 4 {
