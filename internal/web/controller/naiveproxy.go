@@ -2,6 +2,7 @@ package controller
 
 import (
 	"fmt"
+	"runtime"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/naiveproxy"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
@@ -28,6 +29,9 @@ func (a *NaiveProxyController) standaloneAllowed() error {
 	}
 	if coreType != service.CoreTypeXray {
 		return fmt.Errorf("standalone NaiveProxy is available only when Xray is selected")
+	}
+	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
+		return fmt.Errorf("official Caddy-Naive server release supports linux/amd64 only; current platform is %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
 	return nil
 }
