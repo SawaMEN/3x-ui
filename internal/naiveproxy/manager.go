@@ -22,9 +22,7 @@ import (
 	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
-	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 )
 
 const (
@@ -33,10 +31,7 @@ const (
 	reconcileInterval = 3 * time.Second
 )
 
-var (
-	managerMu      sync.Mutex
-	reconcilerOnce sync.Once
-)
+var managerMu sync.Mutex
 
 type Status struct {
 	Installed       bool   `json:"installed"`
@@ -80,91 +75,6 @@ type inboundSettings struct {
 	} `json:"tls"`
 }
 
-// StartAutoReconciler keeps the standalone Naive server in sync with the DB.
-// It is intentionally idempotent and safe to call from controller setup.
-func StartAutoReconciler() {
-	reconcilerOnce.Do(func() {
-		go func() {
-			ticker := time.NewTicker(reconcileInterval)
-			defer ticker.Stop()
-			for {
-				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-				if err := Reconcile(ctx); err != nil && database.GetDB() != nil {
-					logger.Warning("NaiveProxy reconcile failed:", err)
-				}
-				cancel()
-				<-ticker.C
-			}
-		}()
-	})
-}
-
-// Reconcile makes Caddy-Naive match the currently selected core and local
-// enabled Naive inbounds. When sing-box is selected the sidecar is stopped,
-// leaving the native sing-box Naive listener as the sole owner of the port.
-func Reconcile(ctx context.Context) error {
-	db := database.GetDB()
-	if db == nil {
-		return nil
-	}
-
-	coreType := "xray"
-	var row struct{ Value string }
-	if err := db.Table("settings").Select("value").Where("key = ?", "coreType").Take(&row).Error; err == nil && strings.TrimSpace(row.Value) != "" {
-		coreType = strings.TrimSpace(row.Value)
-	}
-	if coreType != "xray" {
-		return Stop()
-	}
-
-	var rows []*model.Inbound
-	if err := db.Model(&model.Inbound{}).
-		Preload("ClientStats").
-		Where("protocol = ? AND enable = ? AND node_id IS NULL", model.NaiveProxy, true).
-		Order("id ASC").
-		Find(&rows).Error; err != nil {
-		return err
-	}
-
-	inbounds := make([]Inbound, 0, len(rows))
-	for _, row := range rows {
-		var settings inboundSettings
-		if err := json.Unmarshal([]byte(row.Settings), &settings); err != nil {
-			return fmt.Errorf("Naive inbound %q has invalid settings: %w", row.Tag, err)
-		}
-		enabledByEmail := make(map[string]bool, len(row.ClientStats))
-		for _, stat := range row.ClientStats {
-			enabledByEmail[strings.ToLower(strings.TrimSpace(stat.Email))] = stat.Enable
-		}
-		users := make([]User, 0, len(settings.Clients))
-		seen := make(map[string]struct{}, len(settings.Clients))
-		for _, client := range settings.Clients {
-			username := strings.TrimSpace(client.Email)
-			if username == "" || client.Password == "" || !client.Enable {
-				continue
-			}
-			if enabled, exists := enabledByEmail[strings.ToLower(username)]; exists && !enabled {
-				continue
-			}
-			key := strings.ToLower(username)
-			if _, exists := seen[key]; exists {
-				continue
-			}
-			seen[key] = struct{}{}
-			users = append(users, User{Username: username, Password: client.Password})
-		}
-		inbounds = append(inbounds, Inbound{
-			Tag:             row.Tag,
-			Listen:          row.Listen,
-			Port:            row.Port,
-			CertificatePath: strings.TrimSpace(settings.TLS.CertificatePath),
-			KeyPath:         strings.TrimSpace(settings.TLS.KeyPath),
-			Users:           users,
-		})
-	}
-	return Sync(ctx, inbounds)
-}
-
 func GetStatus(ctx context.Context) (Status, error) {
 	binary := BinaryPath()
 	_, statErr := os.Stat(binary)
@@ -188,13 +98,14 @@ func GetStatus(ctx context.Context) (Status, error) {
 }
 
 // Update installs the official Caddy build carrying klzgrad/forwardproxy@naive.
-// Reconcile is called afterwards so an active Xray setup resumes automatically.
+// The official upstream archive currently targets Linux amd64; other platforms
+// must use sing-box's native Naive implementation instead of this sidecar.
 func Update(ctx context.Context) (Status, error) {
 	managerMu.Lock()
 	defer managerMu.Unlock()
 
-	if runtime.GOOS != "linux" {
-		return Status{}, fmt.Errorf("standalone NaiveProxy server is supported on Linux only")
+	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
+		return Status{}, fmt.Errorf("standalone NaiveProxy server is supported on Linux amd64 only")
 	}
 	rel, err := fetchLatestRelease(ctx)
 	if err != nil {
@@ -244,9 +155,8 @@ func Update(ctx context.Context) (Status, error) {
 		return Status{}, err
 	}
 
-	// Do not recurse through the manager lock. The next reconciler tick will
-	// start the newly installed binary; update endpoint callers still receive
-	// the installed version immediately.
+	// Do not recurse through the manager lock. Ensure/reconciler starts the
+	// newly installed binary after Update returns.
 	status, err := statusWithoutRelease()
 	if err != nil {
 		return Status{}, err
@@ -475,12 +385,14 @@ func validateConfig(ctx context.Context, path string) error {
 	return nil
 }
 
-func BinaryPath() string       { return filepath.Join(config.GetBinFolderPath(), "caddy-naive") }
-func versionPath() string      { return filepath.Join(config.GetBinFolderPath(), "caddy-naive.version") }
-func configPath() string       { return filepath.Join(config.GetBinFolderPath(), "caddy-naive.Caddyfile") }
-func pidPath() string          { return filepath.Join(config.GetBinFolderPath(), "caddy-naive.pid") }
-func logPath() string          { return filepath.Join(config.GetBinFolderPath(), "caddy-naive.log") }
-func normalizeVersion(v string) string { return strings.TrimPrefix(strings.TrimSpace(v), "v") }
+func BinaryPath() string  { return filepath.Join(config.GetBinFolderPath(), "caddy-naive") }
+func versionPath() string { return filepath.Join(config.GetBinFolderPath(), "caddy-naive.version") }
+func configPath() string  { return filepath.Join(config.GetBinFolderPath(), "caddy-naive.Caddyfile") }
+func pidPath() string     { return filepath.Join(config.GetBinFolderPath(), "caddy-naive.pid") }
+func logPath() string     { return filepath.Join(config.GetBinFolderPath(), "caddy-naive.log") }
+func normalizeVersion(v string) string {
+	return strings.TrimPrefix(strings.TrimSpace(v), "v")
+}
 
 func statusWithoutRelease() (Status, error) {
 	binary := BinaryPath()
