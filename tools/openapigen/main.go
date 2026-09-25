@@ -108,7 +108,18 @@ func run(root, outDir string) error {
 				"AmneziaWGLogs",
 				"PeerActivity",
 				"HwidSlotStatus",
+				"TemplateInput",
+				"TemplateView",
+				"TemplateDetail",
+				"TemplateSanitizeResult",
+				"RoutingPresetInput",
+				"RoutingPresetView",
+				"RoutingPresetDetail",
 			),
+		},
+		{
+			Path:        resolveRel(root, "internal/web/session"),
+			StructAllow: setOf("SessionView"),
 		},
 		{
 			Path:        resolveRel(root, "internal/web/service/panel"),

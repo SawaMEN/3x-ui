@@ -901,6 +901,31 @@ export interface RealityScanResult {
   x25519: boolean;
 }
 
+export interface RoutingPresetDetail {
+  createdAt: number;
+  description: string;
+  id: number;
+  name: string;
+  ruleCount: number;
+  rules: unknown[];
+  updatedAt: number;
+}
+
+export interface RoutingPresetInput {
+  description: string;
+  name: string;
+  rules: unknown[];
+}
+
+export interface RoutingPresetView {
+  createdAt: number;
+  description: string;
+  id: number;
+  name: string;
+  ruleCount: number;
+  updatedAt: number;
+}
+
 export interface ServerSettings {
   contentPaddingAddition?: string;
   disableCookies: boolean;
@@ -941,6 +966,16 @@ export interface ServerSettings {
   subnetIp: string;
 }
 
+export interface SessionView {
+  createdAt: number;
+  id: number;
+  ipAddress: string;
+  isCurrent: boolean;
+  lastSeenAt: number;
+  revokedAt?: number;
+  userAgent: string;
+}
+
 export interface Setting {
   id: number;
   key: string;
@@ -956,6 +991,46 @@ export interface SubBalancer {
   remark: string;
   sortOrder: number;
   strategy: string;
+  updatedAt: number;
+}
+
+export interface TemplateDetail {
+  content: unknown;
+  createdAt: number;
+  description: string;
+  id: number;
+  kind: string;
+  sizeBytes: number;
+  summary?: Record<string, unknown>;
+  tags: string[];
+  title: string;
+  updatedAt: number;
+}
+
+export interface TemplateInput {
+  content: unknown;
+  description: string;
+  kind: string;
+  tags: string[];
+  title: string;
+}
+
+export interface TemplateSanitizeResult {
+  content: unknown;
+  kind: string;
+  sizeBytes: number;
+  warnings: string[];
+}
+
+export interface TemplateView {
+  createdAt: number;
+  description: string;
+  id: number;
+  kind: string;
+  sizeBytes: number;
+  summary?: Record<string, unknown>;
+  tags: string[];
+  title: string;
   updatedAt: number;
 }
 

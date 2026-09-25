@@ -1,0 +1,227 @@
+---
+title: Runtime services
+description: Administrative runtime endpoints for core status, version
+  information, and VK TURN proxy management.
+full: true
+_openapi:
+  preload:
+    - ./public/openapi.json
+  toc:
+    - depth: 2
+      title: Export all VK TURN proxy client links for an inbound.
+      url: '#export-all-vk-turn-proxy-client-links-for-an-inbound'
+    - depth: 2
+      title: Export one VK TURN proxy client link for an inbound.
+      url: '#export-one-vk-turn-proxy-client-link-for-an-inbound'
+    - depth: 2
+      title: List peer options used by VK TURN proxy clients.
+      url: '#list-peer-options-used-by-vk-turn-proxy-clients'
+    - depth: 2
+      title: Return the active core configuration as JSON.
+      url: '#return-the-active-core-configuration-as-json'
+    - depth: 2
+      title: Return VK TURN proxy runtime status.
+      url: '#return-vk-turn-proxy-runtime-status'
+    - depth: 2
+      title: Return available VK TURN proxy versions.
+      url: '#return-available-vk-turn-proxy-versions'
+    - depth: 2
+      title: Return sing-box installation and runtime status.
+      url: '#return-sing-box-installation-and-runtime-status'
+    - depth: 2
+      title: Return Sudoku installation status.
+      url: '#return-sudoku-installation-status'
+    - depth: 2
+      title: Return available sing-box versions.
+      url: '#return-available-sing-box-versions'
+    - depth: 2
+      title: Enable or disable a VK TURN proxy client for an inbound.
+      url: '#enable-or-disable-a-vk-turn-proxy-client-for-an-inbound'
+    - depth: 2
+      title: Restart the active core service.
+      url: '#restart-the-active-core-service'
+    - depth: 2
+      title: Stop the active core service.
+      url: '#stop-the-active-core-service'
+    - depth: 2
+      title: Install a VK TURN proxy version.
+      url: '#install-a-vk-turn-proxy-version'
+    - depth: 2
+      title: Return VK TURN proxy logs.
+      url: '#return-vk-turn-proxy-logs'
+    - depth: 2
+      title: Restart the VK TURN proxy service.
+      url: '#restart-the-vk-turn-proxy-service'
+    - depth: 2
+      title: Start the VK TURN proxy service.
+      url: '#start-the-vk-turn-proxy-service'
+    - depth: 2
+      title: Stop the VK TURN proxy service.
+      url: '#stop-the-vk-turn-proxy-service'
+    - depth: 2
+      title: Upload a VK TURN proxy package.
+      url: '#upload-a-vk-turn-proxy-package'
+    - depth: 2
+      title: Install sing-box using the configured channel.
+      url: '#install-sing-box-using-the-configured-channel'
+    - depth: 2
+      title: Install or update the managed Sudoku tunnel binary.
+      url: '#install-or-update-the-managed-sudoku-tunnel-binary'
+    - depth: 2
+      title: Install a specific sing-box version.
+      url: '#install-a-specific-sing-box-version'
+    - depth: 2
+      title: Uninstall sing-box.
+      url: '#uninstall-sing-box'
+    - depth: 2
+      title: Return the editable sing-box configuration.
+      url: '#return-the-editable-sing-box-configuration'
+    - depth: 2
+      title: Save the editable sing-box configuration.
+      url: '#save-the-editable-sing-box-configuration'
+    - depth: 2
+      title: Reset the editable sing-box configuration to generated defaults.
+      url: '#reset-the-editable-sing-box-configuration-to-generated-defaults'
+    - depth: 2
+      title: Return current swap and ZRAM status.
+      url: '#return-current-swap-and-zram-status'
+    - depth: 2
+      title: Create the managed swap file.
+      url: '#create-the-managed-swap-file'
+    - depth: 2
+      title: Delete the managed swap file.
+      url: '#delete-the-managed-swap-file'
+    - depth: 2
+      title: Set vm.swappiness.
+      url: '#set-vmswappiness'
+    - depth: 2
+      title: Create managed ZRAM swap.
+      url: '#create-managed-zram-swap'
+    - depth: 2
+      title: Delete managed ZRAM swap.
+      url: '#delete-managed-zram-swap'
+    - depth: 2
+      title: Install or enable the supported ZRAM integration.
+      url: '#install-or-enable-the-supported-zram-integration'
+    - depth: 2
+      title: Reinstall the supported ZRAM integration.
+      url: '#reinstall-the-supported-zram-integration'
+    - depth: 2
+      title: Return available system package and kernel updates.
+      url: '#return-available-system-package-and-kernel-updates'
+    - depth: 2
+      title: Refresh system package and kernel update information.
+      url: '#refresh-system-package-and-kernel-update-information'
+    - depth: 2
+      title: Apply the selected system package updates.
+      url: '#apply-the-selected-system-package-updates'
+    - depth: 2
+      title: Reboot the panel host after system updates.
+      url: '#reboot-the-panel-host-after-system-updates'
+    - depth: 2
+      title: Return the Telemt Web Proxy and external port 443 status.
+      url: '#return-the-telemt-web-proxy-and-external-port-443-status'
+    - depth: 2
+      title: Enable the Telemt Web Proxy.
+      url: '#enable-the-telemt-web-proxy'
+    - depth: 2
+      title: Disable the Telemt Web Proxy.
+      url: '#disable-the-telemt-web-proxy'
+  structuredData:
+    headings:
+      - content: Export all VK TURN proxy client links for an inbound.
+        id: export-all-vk-turn-proxy-client-links-for-an-inbound
+      - content: Export one VK TURN proxy client link for an inbound.
+        id: export-one-vk-turn-proxy-client-link-for-an-inbound
+      - content: List peer options used by VK TURN proxy clients.
+        id: list-peer-options-used-by-vk-turn-proxy-clients
+      - content: Return the active core configuration as JSON.
+        id: return-the-active-core-configuration-as-json
+      - content: Return VK TURN proxy runtime status.
+        id: return-vk-turn-proxy-runtime-status
+      - content: Return available VK TURN proxy versions.
+        id: return-available-vk-turn-proxy-versions
+      - content: Return sing-box installation and runtime status.
+        id: return-sing-box-installation-and-runtime-status
+      - content: Return Sudoku installation status.
+        id: return-sudoku-installation-status
+      - content: Return available sing-box versions.
+        id: return-available-sing-box-versions
+      - content: Enable or disable a VK TURN proxy client for an inbound.
+        id: enable-or-disable-a-vk-turn-proxy-client-for-an-inbound
+      - content: Restart the active core service.
+        id: restart-the-active-core-service
+      - content: Stop the active core service.
+        id: stop-the-active-core-service
+      - content: Install a VK TURN proxy version.
+        id: install-a-vk-turn-proxy-version
+      - content: Return VK TURN proxy logs.
+        id: return-vk-turn-proxy-logs
+      - content: Restart the VK TURN proxy service.
+        id: restart-the-vk-turn-proxy-service
+      - content: Start the VK TURN proxy service.
+        id: start-the-vk-turn-proxy-service
+      - content: Stop the VK TURN proxy service.
+        id: stop-the-vk-turn-proxy-service
+      - content: Upload a VK TURN proxy package.
+        id: upload-a-vk-turn-proxy-package
+      - content: Install sing-box using the configured channel.
+        id: install-sing-box-using-the-configured-channel
+      - content: Install or update the managed Sudoku tunnel binary.
+        id: install-or-update-the-managed-sudoku-tunnel-binary
+      - content: Install a specific sing-box version.
+        id: install-a-specific-sing-box-version
+      - content: Uninstall sing-box.
+        id: uninstall-sing-box
+      - content: Return the editable sing-box configuration.
+        id: return-the-editable-sing-box-configuration
+      - content: Save the editable sing-box configuration.
+        id: save-the-editable-sing-box-configuration
+      - content: Reset the editable sing-box configuration to generated defaults.
+        id: reset-the-editable-sing-box-configuration-to-generated-defaults
+      - content: Return current swap and ZRAM status.
+        id: return-current-swap-and-zram-status
+      - content: Create the managed swap file.
+        id: create-the-managed-swap-file
+      - content: Delete the managed swap file.
+        id: delete-the-managed-swap-file
+      - content: Set vm.swappiness.
+        id: set-vmswappiness
+      - content: Create managed ZRAM swap.
+        id: create-managed-zram-swap
+      - content: Delete managed ZRAM swap.
+        id: delete-managed-zram-swap
+      - content: Install or enable the supported ZRAM integration.
+        id: install-or-enable-the-supported-zram-integration
+      - content: Reinstall the supported ZRAM integration.
+        id: reinstall-the-supported-zram-integration
+      - content: Return available system package and kernel updates.
+        id: return-available-system-package-and-kernel-updates
+      - content: Refresh system package and kernel update information.
+        id: refresh-system-package-and-kernel-update-information
+      - content: Apply the selected system package updates.
+        id: apply-the-selected-system-package-updates
+      - content: Reboot the panel host after system updates.
+        id: reboot-the-panel-host-after-system-updates
+      - content: Return the Telemt Web Proxy and external port 443 status.
+        id: return-the-telemt-web-proxy-and-external-port-443-status
+      - content: Enable the Telemt Web Proxy.
+        id: enable-the-telemt-web-proxy
+      - content: Disable the Telemt Web Proxy.
+        id: disable-the-telemt-web-proxy
+    contents: []
+---
+
+{/* This file was generated by Fumadocs. Do not edit this file directly. Any changes should be made by running the generation command again. */}
+
+export default function Layout(props) {
+  const { APIPage, OpenAPIPage } = props.components ?? {};
+  // "APIPage" is the old name from v10, this allows both for backward compatibility
+  const Comp = OpenAPIPage ?? APIPage;
+  return (
+    <>
+      {props.children}
+      <Comp document="./public/openapi.json" webhooks={[]} operations={[{"path":"/panel/api/inbounds/{id}/vk-turn-proxy/export-all","method":"get"},{"path":"/panel/api/inbounds/{id}/vk-turn-proxy/export/{clientId}","method":"get"},{"path":"/panel/api/inbounds/{id}/vk-turn-proxy/peer-options","method":"get"},{"path":"/panel/api/server/coreConfigJson","method":"get"},{"path":"/panel/api/server/vk-turn-proxy/status","method":"get"},{"path":"/panel/api/server/vk-turn-proxy/versions","method":"get"},{"path":"/panel/api/setting/singbox/status","method":"get"},{"path":"/panel/api/setting/sudoku/status","method":"get"},{"path":"/panel/api/setting/singbox/versions","method":"get"},{"path":"/panel/api/inbounds/{id}/vk-turn-proxy/clients/{clientId}/enable","method":"post"},{"path":"/panel/api/server/restartCoreService","method":"post"},{"path":"/panel/api/server/stopCoreService","method":"post"},{"path":"/panel/api/server/vk-turn-proxy/install/{version}","method":"post"},{"path":"/panel/api/server/vk-turn-proxy/logs/{count}","method":"post"},{"path":"/panel/api/server/vk-turn-proxy/restart","method":"post"},{"path":"/panel/api/server/vk-turn-proxy/start","method":"post"},{"path":"/panel/api/server/vk-turn-proxy/stop","method":"post"},{"path":"/panel/api/server/vk-turn-proxy/upload","method":"post"},{"path":"/panel/api/setting/singbox/install","method":"post"},{"path":"/panel/api/setting/sudoku/update","method":"post"},{"path":"/panel/api/setting/singbox/install/{version}","method":"post"},{"path":"/panel/api/setting/singbox/uninstall","method":"post"},{"path":"/panel/api/setting/singbox/config","method":"get"},{"path":"/panel/api/setting/singbox/config","method":"post"},{"path":"/panel/api/setting/singbox/config/reset","method":"post"},{"path":"/panel/api/setting/swap/status","method":"get"},{"path":"/panel/api/setting/swap/create","method":"post"},{"path":"/panel/api/setting/swap/delete","method":"post"},{"path":"/panel/api/setting/swap/swappiness","method":"post"},{"path":"/panel/api/setting/swap/zram/create","method":"post"},{"path":"/panel/api/setting/swap/zram/delete","method":"post"},{"path":"/panel/api/setting/swap/zram/install","method":"post"},{"path":"/panel/api/setting/swap/zram/reinstall","method":"post"},{"path":"/panel/api/setting/system/update/status","method":"get"},{"path":"/panel/api/setting/system/update/check","method":"post"},{"path":"/panel/api/setting/system/update/apply","method":"post"},{"path":"/panel/api/setting/system/update/reboot","method":"post"},{"path":"/panel/api/telemt/webproxy/status","method":"get"},{"path":"/panel/api/telemt/webproxy/enable","method":"post"},{"path":"/panel/api/telemt/webproxy/disable","method":"post"}]} showTitle />
+    </>
+  );
+}

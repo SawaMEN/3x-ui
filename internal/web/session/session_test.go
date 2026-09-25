@@ -1,6 +1,7 @@
 package session
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 func setupSessionTestDB(t *testing.T) {
@@ -22,6 +24,51 @@ func setupSessionTestDB(t *testing.T) {
 		t.Fatalf("InitDB: %v", err)
 	}
 	t.Cleanup(func() { _ = database.CloseDB() })
+}
+
+func TestLegacySessionMigrationFailsClosed(t *testing.T) {
+	setupSessionTestDB(t)
+	user := &model.User{Username: "migration-test", Password: "hash"}
+	if err := database.GetDB().Create(user).Error; err != nil {
+		t.Fatal(err)
+	}
+	router := gin.New()
+	router.Use(sessions.Sessions(sessionCookieName, cookie.NewStore([]byte("01234567890123456789012345678901"))))
+	router.GET("/legacy", func(c *gin.Context) {
+		s := sessions.Default(c)
+		s.Set(loginUserKey, user.Id)
+		s.Set(loginEpochKey, user.LoginEpoch)
+		if err := s.Save(); err != nil {
+			t.Fatal(err)
+		}
+	})
+	router.GET("/protected", func(c *gin.Context) {
+		if GetLoginUser(c) != nil {
+			c.Status(http.StatusNoContent)
+			return
+		}
+		c.Status(http.StatusUnauthorized)
+	})
+	login := httptest.NewRecorder()
+	router.ServeHTTP(login, httptest.NewRequest(http.MethodGet, "/legacy", nil))
+	cb := database.GetDB().Callback().Create()
+	if err := cb.Before("gorm:create").Register("test:session-write-failure", func(tx *gorm.DB) {
+		if tx.Statement.Table == "user_sessions" {
+			tx.AddError(errors.New("session store unavailable"))
+		}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = cb.Remove("test:session-write-failure") })
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	for _, cookie := range login.Result().Cookies() {
+		req.AddCookie(cookie)
+	}
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, req)
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401 when session registration fails", response.Code)
+	}
 }
 
 func TestSetLoginUserStoresOnlyUserID(t *testing.T) {

@@ -8,7 +8,6 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"runtime"
 	"syscall"
 	"testing"
 	"time"
@@ -19,10 +18,6 @@ import (
 )
 
 func TestGetInstalledVersionReadsBinaryVersion(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("test helper uses a POSIX shell")
-	}
-
 	dir := t.TempDir()
 	binaryPath := filepath.Join(dir, GetBinaryName())
 	script := "#!/bin/sh\necho 'Xray 26.6.27 (Xray, Penetrates Everything.)'\n"

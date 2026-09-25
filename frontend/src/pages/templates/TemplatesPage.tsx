@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Alert,
@@ -123,27 +123,37 @@ export default function TemplatesPage() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
   const [detail, setDetail] = useState<TemplateDetail | null>(null);
+  const pendingLoad = useRef<AbortController | null>(null);
 
   const load = useCallback(async () => {
+    pendingLoad.current?.abort();
+    const controller = new AbortController();
+    pendingLoad.current = controller;
     setLoading(true);
     try {
       const msg = await HttpUtil.get<TemplateListResponse>(
         `/panel/api/templates/list?kind=${encodeURIComponent(kind)}&q=${encodeURIComponent(query)}&limit=50`,
         undefined,
-        { silent: true },
+        { silent: true, signal: controller.signal },
       );
+      if (controller.signal.aborted) return;
       if (!msg?.success) throw new Error(msg?.msg || t('pages.templates.loadFailed'));
       setItems(msg?.obj?.items || []);
     } catch (error) {
-      messageApi.error(error instanceof Error ? error.message : t('pages.templates.loadFailed'));
+      if (!controller.signal.aborted) {
+        messageApi.error(error instanceof Error ? error.message : t('pages.templates.loadFailed'));
+      }
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) setLoading(false);
     }
   }, [kind, messageApi, query, t]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 180);
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(timer);
+      pendingLoad.current?.abort();
+    };
   }, [load]);
 
   const openEditor = useCallback(() => {

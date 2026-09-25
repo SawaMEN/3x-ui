@@ -176,6 +176,11 @@ export default function SecurityTab({ allSetting, updateSetting, saveSetting }: 
     }
   }, []);
 
+  const loadSessions = useCallback(async () => {
+    setSessionsLoading(true);
+    await fetchSessions();
+  }, [fetchSessions]);
+
   useEffect(() => {
     void fetchSessions();
   }, [fetchSessions]);
@@ -404,10 +409,7 @@ export default function SecurityTab({ allSetting, updateSetting, saveSetting }: 
                     <Button
                       size="small"
                       icon={<ReloadOutlined />}
-                      onClick={() => {
-                        setSessionsLoading(true);
-                        void fetchSessions();
-                      }}
+                      onClick={() => void loadSessions()}
                     >
                       {t('refresh')}
                     </Button>

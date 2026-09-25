@@ -2485,7 +2485,6 @@
       "copied": "JSON скопирован.",
       "export": "Экспорт JSON",
       "noDescription": "Без описания.",
-      "namePlaceholderShort": "Название шаблона",
       "applyInbound": "Создать inbound",
       "applied": "Inbound создан из шаблона. Перед включением проверьте конфигурацию и заново задайте очищенные секреты."
     }

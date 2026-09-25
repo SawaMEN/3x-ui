@@ -982,6 +982,32 @@ export const EXAMPLES: Record<string, unknown> = {
     "tlsVersion": "1.3",
     "x25519": true
   },
+  "RoutingPresetDetail": {
+    "createdAt": 0,
+    "description": "",
+    "id": 0,
+    "name": "",
+    "ruleCount": 0,
+    "rules": [
+      null
+    ],
+    "updatedAt": 0
+  },
+  "RoutingPresetInput": {
+    "description": "",
+    "name": "",
+    "rules": [
+      null
+    ]
+  },
+  "RoutingPresetView": {
+    "createdAt": 0,
+    "description": "",
+    "id": 0,
+    "name": "",
+    "ruleCount": 0,
+    "updatedAt": 0
+  },
   "ServerSettings": {
     "contentPaddingAddition": "",
     "disableCookies": false,
@@ -1021,6 +1047,15 @@ export const EXAMPLES: Record<string, unknown> = {
     "subnetCidr": 0,
     "subnetIp": ""
   },
+  "SessionView": {
+    "createdAt": 0,
+    "id": 0,
+    "ipAddress": "",
+    "isCurrent": false,
+    "lastSeenAt": 0,
+    "revokedAt": 0,
+    "userAgent": ""
+  },
   "Setting": {
     "id": 0,
     "key": "",
@@ -1039,6 +1074,50 @@ export const EXAMPLES: Record<string, unknown> = {
     "sortOrder": 1,
     "strategy": "random",
     "updatedAt": 1710000000000
+  },
+  "TemplateDetail": {
+    "content": null,
+    "createdAt": 0,
+    "description": "",
+    "id": 0,
+    "kind": "",
+    "sizeBytes": 0,
+    "summary": {},
+    "tags": [
+      ""
+    ],
+    "title": "",
+    "updatedAt": 0
+  },
+  "TemplateInput": {
+    "content": null,
+    "description": "",
+    "kind": "",
+    "tags": [
+      ""
+    ],
+    "title": ""
+  },
+  "TemplateSanitizeResult": {
+    "content": null,
+    "kind": "",
+    "sizeBytes": 0,
+    "warnings": [
+      ""
+    ]
+  },
+  "TemplateView": {
+    "createdAt": 0,
+    "description": "",
+    "id": 0,
+    "kind": "",
+    "sizeBytes": 0,
+    "summary": {},
+    "tags": [
+      ""
+    ],
+    "title": "",
+    "updatedAt": 0
   },
   "Traffic": {
     "Down": 2097152,

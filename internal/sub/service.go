@@ -19,13 +19,13 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/goccy/go-json"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
-"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/sudoku"
-"github.com/SawaMEN/3x-ui/v3/internal/tuic"
+	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/random"
 	wgutil "github.com/SawaMEN/3x-ui/v3/internal/util/wireguard"
@@ -170,6 +170,7 @@ type SubService struct {
 	// fields (encryption, method, version, …) from it.
 	settingsByInbound       map[int]map[string]any
 	streamSettingsByInbound map[int]map[string]any
+	hostsByInbound          map[int][]*model.Host
 }
 
 // NewSubService creates a new subscription service with the given configuration.
@@ -206,6 +207,7 @@ func (s *SubService) PrepareForRequest(host string) {
 	s.fullyPrimedInbounds = map[int]bool{}
 	s.settingsByInbound = map[int]map[string]any{}
 	s.streamSettingsByInbound = map[int]map[string]any{}
+	s.hostsByInbound = nil
 	s.loadNodes()
 	s.loadRemarkSettings()
 	s.subCalendarExpireInclusive, _ = s.settingService.GetSubCalendarExpireInclusive()
@@ -789,6 +791,9 @@ func (s *SubService) getInboundsBySubId(subId string) ([]*model.Inbound, error) 
 		return nil, err
 	}
 	s.indexStatsBySubId(subId)
+	if err := s.primeHosts(inbounds); err != nil {
+		return nil, err
+	}
 	return inbounds, nil
 }
 
@@ -1141,6 +1146,7 @@ func (s *SubService) genShadowTlsLink(inbound *model.Inbound, email string) stri
 	}
 	return strings.Join(links, "\n")
 }
+
 // naiveShareEndpoints returns the concrete dial endpoints that belong to a Naive
 // link. Host rows are projected into StreamSettings["externalProxy"] by the
 // subscription callers, so keeping this helper on the serialized endpoint path

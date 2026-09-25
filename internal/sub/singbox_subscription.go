@@ -15,6 +15,36 @@ func buildSeparatedSingBoxSubscription(template map[string]any, proxies []map[st
 	if len(proxies) == 0 {
 		return "", nil
 	}
+	var translatedDNS, translatedRoute map[string]any
+	if template != nil {
+		if rawDNS, ok := template["dns"].(map[string]any); ok {
+			var err error
+			translatedDNS, err = singbox.TranslateXrayDNS(rawDNS)
+			if err != nil {
+				return "", fmt.Errorf("%w: translate DNS: %w", errSubscriptionFormatUnsupported, err)
+			}
+		}
+		if rawRouting, ok := template["routing"].(map[string]any); ok {
+			var err error
+			translatedRoute, err = singbox.TranslateXrayRouting(rawRouting)
+			if err != nil {
+				return "", fmt.Errorf("%w: translate routing: %w", errSubscriptionFormatUnsupported, err)
+			}
+		}
+	}
+	// A standalone profile must be able to resolve the proxy's server even
+	// when the panel has no custom DNS template. Keep the local resolver
+	// separate from the user's DNS rule and final server.
+	if translatedDNS == nil {
+		translatedDNS = map[string]any{}
+	}
+	servers, _ := translatedDNS["servers"].([]map[string]any)
+	servers = append(servers, map[string]any{"type": "local", "tag": "panel-local"})
+	translatedDNS["servers"] = servers
+	if translatedRoute == nil {
+		translatedRoute = map[string]any{}
+	}
+	translatedRoute["default_domain_resolver"] = "panel-local"
 
 	configs := make([]json.RawMessage, 0, len(proxies))
 	for _, proxy := range proxies {
@@ -31,26 +61,8 @@ func buildSeparatedSingBoxSubscription(template map[string]any, proxies []map[st
 			},
 		}
 
-		if template != nil {
-			if rawDNS, ok := template["dns"].(map[string]any); ok {
-				dns, err := singbox.TranslateXrayDNS(rawDNS)
-				if err != nil {
-					return "", fmt.Errorf("%w: translate DNS: %v", errSubscriptionFormatUnsupported, err)
-				}
-				if len(dns) > 0 {
-					cfg["dns"] = dns
-				}
-			}
-			if rawRouting, ok := template["routing"].(map[string]any); ok {
-				route, err := singbox.TranslateXrayRouting(rawRouting)
-				if err != nil {
-					return "", fmt.Errorf("%w: translate routing: %v", errSubscriptionFormatUnsupported, err)
-				}
-				if len(route) > 0 {
-					cfg["route"] = route
-				}
-			}
-		}
+		cfg["dns"] = translatedDNS
+		cfg["route"] = translatedRoute
 
 		encoded, err := json.MarshalIndent(cfg, "", "  ")
 		if err != nil {

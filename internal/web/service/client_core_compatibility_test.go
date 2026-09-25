@@ -105,6 +105,9 @@ func TestCoreCompatibilityManualClientEditClearsAutoDisableMarker(t *testing.T) 
 	if err := db.Create(record).Error; err != nil {
 		t.Fatal(err)
 	}
+	if err := db.Model(record).Update("enable", false).Error; err != nil {
+		t.Fatal(err)
+	}
 
 	if err := clearCoreAutoDisabledByEmail(record.Email); err != nil {
 		t.Fatal(err)

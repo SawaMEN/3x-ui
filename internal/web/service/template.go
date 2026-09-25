@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -57,8 +57,11 @@ type TemplateSanitizeResult struct {
 
 var templateSecretKeys = map[string]struct{}{
 	"password": {}, "secret": {}, "secretkey": {}, "privatekey": {}, "publickey": {}, "presharedkey": {},
-	"psk": {}, "token": {}, "apikey": {}, "api_key": {}, "authtoken": {}, "authorization": {},
+	"psk": {}, "token": {}, "apikey": {}, "authtoken": {}, "authorization": {},
+	"uuid": {}, "authstr": {}, "authstring": {}, "mldsa65seed": {}, "shortid": {},
 }
+
+var templateKeyNormalizer = strings.NewReplacer("_", "", "-", "")
 
 var templateHostKeys = map[string]struct{}{
 	"publichost": {}, "apilisten": {}, "serverhost": {}, "publicaddress": {}, "externalproxy": {},
@@ -116,9 +119,14 @@ func isMeaningfulTemplateValue(v any) bool {
 	}
 }
 
-func sanitizeTemplateValue(v any, path string, warnings *[]string) any {
+func sanitizeTemplateValue(v any, path, protocol string, warnings *[]string) any {
 	switch x := v.(type) {
 	case map[string]any:
+		if value, ok := x["protocol"].(string); ok {
+			protocol = strings.ToLower(value)
+		} else if value, ok := x["type"].(string); ok {
+			protocol = strings.ToLower(value)
+		}
 		out := make(map[string]any, len(x))
 		keys := make([]string, 0, len(x))
 		for k := range x {
@@ -132,7 +140,11 @@ func sanitizeTemplateValue(v any, path string, warnings *[]string) any {
 			if path != "" {
 				childPath = path + "." + k
 			}
-			if _, secret := templateSecretKeys[lk]; secret {
+			_, secret := templateSecretKeys[templateKeyNormalizer.Replace(lk)]
+			secret = secret || (lk == "id" && (protocol == "vless" || protocol == "vmess" || protocol == "tuic"))
+			secret = secret || (lk == "auth" && (protocol == "hysteria" || protocol == "hysteria2"))
+			secret = secret || (lk == "decryption" && protocol == "vless" && child != "none")
+			if secret {
 				if isMeaningfulTemplateValue(child) {
 					*warnings = append(*warnings, childPath+": secret removed")
 				}
@@ -172,13 +184,13 @@ func sanitizeTemplateValue(v any, path string, warnings *[]string) any {
 				out[k] = []any{}
 				continue
 			}
-			out[k] = sanitizeTemplateValue(child, childPath, warnings)
+			out[k] = sanitizeTemplateValue(child, childPath, protocol, warnings)
 		}
 		return out
 	case []any:
 		out := make([]any, len(x))
 		for i, child := range x {
-			out[i] = sanitizeTemplateValue(child, fmt.Sprintf("%s[%d]", path, i), warnings)
+			out[i] = sanitizeTemplateValue(child, fmt.Sprintf("%s[%d]", path, i), protocol, warnings)
 		}
 		return out
 	default:
@@ -201,7 +213,7 @@ func sanitizeTemplateContent(kind string, raw []byte) ([]byte, []string, error) 
 		return nil, nil, err
 	}
 	var warnings []string
-	clean := sanitizeTemplateValue(obj, "", &warnings)
+	clean := sanitizeTemplateValue(obj, "", "", &warnings)
 	encoded, err := json.MarshalIndent(clean, "", "  ")
 	if err != nil {
 		return nil, nil, fmt.Errorf("encode sanitized template: %w", err)

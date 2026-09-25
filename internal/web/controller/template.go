@@ -1,10 +1,10 @@
 package controller
 
 import (
+	"errors"
 	"strconv"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
-	"github.com/SawaMEN/3x-ui/v3/internal/web/session"
 	"github.com/gin-gonic/gin"
 )
 
@@ -23,7 +23,6 @@ func NewTemplateController(g *gin.RouterGroup) *TemplateController {
 }
 
 func (a *TemplateController) list(c *gin.Context) {
-	_ = session.GetLoginUser(c)
 	limit := 20
 	offset := 0
 	if v, err := strconv.Atoi(c.Query("limit")); err == nil && v > 0 {
@@ -43,7 +42,7 @@ func (a *TemplateController) list(c *gin.Context) {
 func (a *TemplateController) get(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil || id <= 0 {
-		jsonMsg(c, "invalid template id", err)
+		jsonMsg(c, "invalid template id", errors.New("id must be a positive integer"))
 		return
 	}
 	item, err := a.service.Get(id)
@@ -85,7 +84,7 @@ func (a *TemplateController) save(c *gin.Context) {
 func (a *TemplateController) del(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil || id <= 0 {
-		jsonMsg(c, "invalid template id", err)
+		jsonMsg(c, "invalid template id", errors.New("id must be a positive integer"))
 		return
 	}
 	if err := a.service.Delete(id); err != nil {
@@ -94,4 +93,3 @@ func (a *TemplateController) del(c *gin.Context) {
 	}
 	jsonMsg(c, "template deleted", nil)
 }
-

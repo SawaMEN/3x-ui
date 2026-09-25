@@ -34,14 +34,14 @@ const (
 	Hysteria    Protocol = "hysteria"
 	MTProto     Protocol = "mtproto"
 	AmneziaWG   Protocol = "amneziawg"
-	TUIC       Protocol = "tuic"
+	TUIC        Protocol = "tuic"
 	NaiveProxy  Protocol = "naive"
 	AnyTLS      Protocol = "anytls"
 	ShadowTLS   Protocol = "shadowtls"
 	Psiphon     Protocol = "psiphon"
 	Mieru       Protocol = "mieru"
 	VKTurnProxy Protocol = "vk-turn-proxy"
-	Sudoku       Protocol = "sudoku"
+	Sudoku      Protocol = "sudoku"
 )
 
 // User represents a user account in the 3x-ui panel.
@@ -61,7 +61,7 @@ type Inbound struct {
 	Total                int64                `json:"total" form:"total"`                                                                                                                                           // Total traffic limit in bytes
 	Remark               string               `json:"remark" form:"remark" example:"VLESS-443"`                                                                                                                     // Human-readable remark
 	SubSortIndex         int                  `json:"subSortIndex" form:"subSortIndex" gorm:"default:1" validate:"omitempty" example:"1"`                                                                           // Sort order of this inbound's links in subscription output only (lower first; negatives allowed; 0/omitted → 1; ties by id)
-	SortOrder            int                  `json:"sortOrder" form:"sortOrder" gorm:"column:sort_order;default:0;index"` // Manual panel ordering; ties fall back to id.
+	SortOrder            int                  `json:"sortOrder" form:"sortOrder" gorm:"column:sort_order;default:0;index"`                                                                                          // Manual panel ordering; ties fall back to id.
 	Enable               bool                 `json:"enable" form:"enable" gorm:"index:idx_enable_traffic_reset,priority:1" example:"true"`                                                                         // Whether the inbound is enabled
 	ExpiryTime           int64                `json:"expiryTime" form:"expiryTime"`                                                                                                                                 // Expiration timestamp
 	TrafficReset         string               `json:"trafficReset" form:"trafficReset" gorm:"default:never;index:idx_enable_traffic_reset,priority:2" validate:"omitempty,oneof=never hourly daily weekly monthly"` // Traffic reset schedule
@@ -926,41 +926,41 @@ type Client struct {
 }
 
 type ClientRecord struct {
-	Id              int    `json:"id" gorm:"primaryKey;autoIncrement"`
-	Email           string `json:"email" gorm:"uniqueIndex;not null"`
-	SubID           string `json:"subId" gorm:"index;column:sub_id"`
-	UUID            string `json:"uuid" gorm:"column:uuid"`
-	Password        string `json:"password"`
-	Auth            string `json:"auth"`
-	Flow            string `json:"flow"`
-	Security        string `json:"security"`
-	Reverse         string `json:"reverse" gorm:"column:reverse"`
-	PrivateKey      string `json:"privateKey" gorm:"column:wg_private_key"`
-	PublicKey       string `json:"publicKey" gorm:"column:wg_public_key"`
-	AllowedIPs      string `json:"allowedIPs" gorm:"column:wg_allowed_ips"`
-	PreSharedKey    string `json:"preSharedKey" gorm:"column:wg_pre_shared_key"`
-	KeepAlive       int    `json:"keepAlive" gorm:"column:wg_keep_alive;default:0"`
-	ForwardedPorts  string `json:"forwardedPorts" gorm:"column:wg_forwarded_ports"`
-	Secret          string `json:"secret" gorm:"column:secret"`
-	AdTag           string `json:"adTag" gorm:"column:ad_tag;default:''"`
-	LimitIP         int    `json:"limitIp" gorm:"column:limit_ip"`
-	LimitHwid       int    `json:"limitHwid" gorm:"column:limit_hwid;default:0"`
-	TotalGB         int64  `json:"totalGB" gorm:"column:total_gb"`
-	ExpiryTime      int64  `json:"expiryTime" gorm:"column:expiry_time"`
-	Enable          bool   `json:"enable" gorm:"default:true"`
+	Id             int    `json:"id" gorm:"primaryKey;autoIncrement"`
+	Email          string `json:"email" gorm:"uniqueIndex;not null"`
+	SubID          string `json:"subId" gorm:"index;column:sub_id"`
+	UUID           string `json:"uuid" gorm:"column:uuid"`
+	Password       string `json:"password"`
+	Auth           string `json:"auth"`
+	Flow           string `json:"flow"`
+	Security       string `json:"security"`
+	Reverse        string `json:"reverse" gorm:"column:reverse"`
+	PrivateKey     string `json:"privateKey" gorm:"column:wg_private_key"`
+	PublicKey      string `json:"publicKey" gorm:"column:wg_public_key"`
+	AllowedIPs     string `json:"allowedIPs" gorm:"column:wg_allowed_ips"`
+	PreSharedKey   string `json:"preSharedKey" gorm:"column:wg_pre_shared_key"`
+	KeepAlive      int    `json:"keepAlive" gorm:"column:wg_keep_alive;default:0"`
+	ForwardedPorts string `json:"forwardedPorts" gorm:"column:wg_forwarded_ports"`
+	Secret         string `json:"secret" gorm:"column:secret"`
+	AdTag          string `json:"adTag" gorm:"column:ad_tag;default:''"`
+	LimitIP        int    `json:"limitIp" gorm:"column:limit_ip"`
+	LimitHwid      int    `json:"limitHwid" gorm:"column:limit_hwid;default:0"`
+	TotalGB        int64  `json:"totalGB" gorm:"column:total_gb"`
+	ExpiryTime     int64  `json:"expiryTime" gorm:"column:expiry_time"`
+	Enable         bool   `json:"enable" gorm:"default:true"`
 	// Set automatically when a core switch disables this client because its protocol is unsupported.
 	// It is cleared by explicit user changes and when the client becomes compatible again.
 	AutoDisabledByCore string `json:"-" gorm:"column:auto_disabled_by_core;default:''"`
-	TgID            int64  `json:"tgId" gorm:"column:tg_id;index:idx_clients_tg_id"`
-	Group           string `json:"group" gorm:"column:group_name;default:'';index:idx_client_record_group"`
-	Comment         string `json:"comment"`
-	Reset           int    `json:"reset" gorm:"default:0"`
-	ResetDay        int    `json:"resetDay" gorm:"column:reset_day;default:0"`
-	ResetMax        int    `json:"resetMax" gorm:"column:reset_max;default:0"`
-	TrafficReset    string `json:"trafficReset" gorm:"column:traffic_reset;default:never;index:idx_clients_traffic_reset"`
-	TrafficResetDay int    `json:"trafficResetDay" gorm:"column:traffic_reset_day;default:1"`
-	CreatedAt       int64  `json:"createdAt" gorm:"autoCreateTime:milli"`
-	UpdatedAt       int64  `json:"updatedAt" gorm:"autoUpdateTime:milli"`
+	TgID               int64  `json:"tgId" gorm:"column:tg_id;index:idx_clients_tg_id"`
+	Group              string `json:"group" gorm:"column:group_name;default:'';index:idx_client_record_group"`
+	Comment            string `json:"comment"`
+	Reset              int    `json:"reset" gorm:"default:0"`
+	ResetDay           int    `json:"resetDay" gorm:"column:reset_day;default:0"`
+	ResetMax           int    `json:"resetMax" gorm:"column:reset_max;default:0"`
+	TrafficReset       string `json:"trafficReset" gorm:"column:traffic_reset;default:never;index:idx_clients_traffic_reset"`
+	TrafficResetDay    int    `json:"trafficResetDay" gorm:"column:traffic_reset_day;default:1"`
+	CreatedAt          int64  `json:"createdAt" gorm:"autoCreateTime:milli"`
+	UpdatedAt          int64  `json:"updatedAt" gorm:"autoUpdateTime:milli"`
 	// Owned solely by the node-snapshot sweep, which soft-orphans instead of
 	// deleting; orphans from any other cause stay at zero and are never reaped.
 	SyncOrphanedAt int64 `json:"-" gorm:"column:sync_orphaned_at;default:0"`

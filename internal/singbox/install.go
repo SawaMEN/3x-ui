@@ -112,7 +112,7 @@ func ListVersions(ctx context.Context) ([]ReleaseVersion, error) {
 		return versions, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("fetch sing-box releases: API: %w; Atom fallback: %v", err, feedErr)
+		return nil, fmt.Errorf("fetch sing-box releases: API: %w; Atom fallback: %w", err, feedErr)
 	}
 	return nil, fmt.Errorf("sing-box releases API returned %s; Atom fallback failed: %w", resp.Status, feedErr)
 }
@@ -159,7 +159,7 @@ func listVersionsFromAtom(ctx context.Context) ([]ReleaseVersion, error) {
 		}
 		if tag != "" {
 			releases = append(releases, releaseListInfo{
-				TagName: tag,
+				TagName:    tag,
 				Prerelease: isPreReleaseVersion(tag),
 			})
 		}

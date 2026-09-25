@@ -3980,6 +3980,97 @@ export const SCHEMAS: Record<string, unknown> = {
     ],
     "type": "object"
   },
+  "RoutingPresetDetail": {
+    "properties": {
+      "createdAt": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "description": {
+        "type": "string"
+      },
+      "id": {
+        "type": "integer"
+      },
+      "name": {
+        "type": "string"
+      },
+      "ruleCount": {
+        "type": "integer"
+      },
+      "rules": {
+        "items": {},
+        "type": "array"
+      },
+      "updatedAt": {
+        "format": "int64",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "createdAt",
+      "description",
+      "id",
+      "name",
+      "ruleCount",
+      "rules",
+      "updatedAt"
+    ],
+    "type": "object"
+  },
+  "RoutingPresetInput": {
+    "properties": {
+      "description": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "rules": {
+        "items": {},
+        "type": "array"
+      }
+    },
+    "required": [
+      "description",
+      "name",
+      "rules"
+    ],
+    "type": "object"
+  },
+  "RoutingPresetView": {
+    "properties": {
+      "createdAt": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "description": {
+        "type": "string"
+      },
+      "id": {
+        "type": "integer"
+      },
+      "name": {
+        "type": "string"
+      },
+      "ruleCount": {
+        "type": "integer"
+      },
+      "updatedAt": {
+        "format": "int64",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "createdAt",
+      "description",
+      "id",
+      "name",
+      "ruleCount",
+      "updatedAt"
+    ],
+    "type": "object"
+  },
   "ServerSettings": {
     "description": "ServerSettings is the \"server\" block of an AmneziaWG inbound's Settings\nJSON: the interface-level configuration shared by every client/peer. The\nlisten port is deliberately not duplicated here — it lives on the inbound\nrow itself (Inbound.Port), like every other protocol.",
     "properties": {
@@ -4124,6 +4215,43 @@ export const SCHEMAS: Record<string, unknown> = {
     ],
     "type": "object"
   },
+  "SessionView": {
+    "properties": {
+      "createdAt": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "id": {
+        "type": "integer"
+      },
+      "ipAddress": {
+        "type": "string"
+      },
+      "isCurrent": {
+        "type": "boolean"
+      },
+      "lastSeenAt": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "revokedAt": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "userAgent": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "createdAt",
+      "id",
+      "ipAddress",
+      "isCurrent",
+      "lastSeenAt",
+      "userAgent"
+    ],
+    "type": "object"
+  },
   "Setting": {
     "description": "Setting stores key-value configuration settings for the 3x-ui panel.",
     "properties": {
@@ -4212,6 +4340,156 @@ export const SCHEMAS: Record<string, unknown> = {
       "remark",
       "sortOrder",
       "strategy",
+      "updatedAt"
+    ],
+    "type": "object"
+  },
+  "TemplateDetail": {
+    "properties": {
+      "content": {},
+      "createdAt": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "description": {
+        "type": "string"
+      },
+      "id": {
+        "type": "integer"
+      },
+      "kind": {
+        "type": "string"
+      },
+      "sizeBytes": {
+        "type": "integer"
+      },
+      "summary": {
+        "additionalProperties": {},
+        "type": "object"
+      },
+      "tags": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "title": {
+        "type": "string"
+      },
+      "updatedAt": {
+        "format": "int64",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "content",
+      "createdAt",
+      "description",
+      "id",
+      "kind",
+      "sizeBytes",
+      "tags",
+      "title",
+      "updatedAt"
+    ],
+    "type": "object"
+  },
+  "TemplateInput": {
+    "properties": {
+      "content": {},
+      "description": {
+        "type": "string"
+      },
+      "kind": {
+        "type": "string"
+      },
+      "tags": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "title": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "content",
+      "description",
+      "kind",
+      "tags",
+      "title"
+    ],
+    "type": "object"
+  },
+  "TemplateSanitizeResult": {
+    "properties": {
+      "content": {},
+      "kind": {
+        "type": "string"
+      },
+      "sizeBytes": {
+        "type": "integer"
+      },
+      "warnings": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      }
+    },
+    "required": [
+      "content",
+      "kind",
+      "sizeBytes",
+      "warnings"
+    ],
+    "type": "object"
+  },
+  "TemplateView": {
+    "properties": {
+      "createdAt": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "description": {
+        "type": "string"
+      },
+      "id": {
+        "type": "integer"
+      },
+      "kind": {
+        "type": "string"
+      },
+      "sizeBytes": {
+        "type": "integer"
+      },
+      "summary": {
+        "additionalProperties": {},
+        "type": "object"
+      },
+      "tags": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "title": {
+        "type": "string"
+      },
+      "updatedAt": {
+        "format": "int64",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "createdAt",
+      "description",
+      "id",
+      "kind",
+      "sizeBytes",
+      "tags",
+      "title",
       "updatedAt"
     ],
     "type": "object"

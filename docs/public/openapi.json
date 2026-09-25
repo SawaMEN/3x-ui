@@ -28,6 +28,9 @@
     "schemas": {
       "AllSetting": {
         "properties": {
+          "coreType": {
+            "type": "string"
+          },
           "datepicker": {
             "type": "string"
           },
@@ -507,6 +510,7 @@
           }
         },
         "required": [
+          "coreType",
           "datepicker",
           "discordAdminIds",
           "discordBotBackup",
@@ -659,6 +663,9 @@
       },
       "AllSettingView": {
         "properties": {
+          "coreType": {
+            "type": "string"
+          },
           "datepicker": {
             "type": "string"
           },
@@ -1162,6 +1169,7 @@
           }
         },
         "required": [
+          "coreType",
           "datepicker",
           "discordAdminIds",
           "discordBotBackup",
@@ -1549,6 +1557,9 @@
           },
           "subId": {
             "description": "Subscription identifier",
+            "type": "string"
+          },
+          "sudokuPrivateKey": {
             "type": "string"
           },
           "tgId": {
@@ -2757,7 +2768,13 @@
               "tun",
               "mtproto",
               "amneziawg",
-              "tuic"
+              "tuic",
+              "naive",
+              "anytls",
+              "shadowtls",
+              "mieru",
+              "vk-turn-proxy",
+              "sudoku"
             ],
             "example": "vless",
             "type": "string"
@@ -2780,6 +2797,10 @@
             "type": "string"
           },
           "sniffing": {},
+          "sortOrder": {
+            "description": "Manual panel ordering; ties fall back to id.",
+            "type": "integer"
+          },
           "streamSettings": {},
           "subSortIndex": {
             "description": "Sort order of this inbound's links in subscription output only (lower first; negatives allowed; 0/omitted → 1; ties by id)",
@@ -2835,6 +2856,7 @@
           "shareAddr",
           "shareAddrStrategy",
           "sniffing",
+          "sortOrder",
           "streamSettings",
           "subSortIndex",
           "tag",
@@ -3287,6 +3309,10 @@
             "example": "https",
             "type": "string"
           },
+          "sortOrder": {
+            "description": "Manual panel ordering; ties fall back to id.",
+            "type": "integer"
+          },
           "status": {
             "description": "Heartbeat-updated fields. UpdatedAt advances on every probe even when\nthe row is otherwise unchanged so the UI's \"last seen\" tooltip is\ntruthful without us having to read LastHeartbeat separately.\nonline|offline|unknown",
             "example": "online",
@@ -3358,6 +3384,7 @@
           "port",
           "remark",
           "scheme",
+          "sortOrder",
           "status",
           "tlsVerifyMode",
           "updatedAt",
@@ -3709,7 +3736,7 @@
         "type": "object"
       },
       "PanelUpdateStatus": {
-        "description": "PanelUpdateStatus reports the outcome of the most recently launched panel\nself-update. RunID lets the caller confirm this status belongs to the\nupdate it started rather than a stale result left over from an earlier\nrun; State is one of \"pending\", \"success\", or \"failed\". RunID is a decimal\nstring, not a JSON number: it's a formatted UnixNano timestamp, and\nJavaScript's number type can't represent that precisely (it exceeds\nNumber.MAX_SAFE_INTEGER), which would let two different runs round to the\nsame value on the wire and defeat the whole point of this field.",
+        "description": "PanelUpdateStatus reports the outcome of the most recently launched panel\nself-update. RunID lets the caller confirm this status belongs to the\nupdate it started rather than a stale one.",
         "properties": {
           "exitCode": {
             "example": 0,
@@ -3719,6 +3746,14 @@
             "example": 1735689612,
             "format": "int64",
             "type": "integer"
+          },
+          "logFile": {
+            "example": "/var/log/x-ui/update.log",
+            "type": "string"
+          },
+          "message": {
+            "example": "failed to download x-ui release archive",
+            "type": "string"
           },
           "runId": {
             "example": "1735689600123456789",
@@ -3971,6 +4006,97 @@
         ],
         "type": "object"
       },
+      "RoutingPresetDetail": {
+        "properties": {
+          "createdAt": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "ruleCount": {
+            "type": "integer"
+          },
+          "rules": {
+            "items": {},
+            "type": "array"
+          },
+          "updatedAt": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "createdAt",
+          "description",
+          "id",
+          "name",
+          "ruleCount",
+          "rules",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "RoutingPresetInput": {
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "rules": {
+            "items": {},
+            "type": "array"
+          }
+        },
+        "required": [
+          "description",
+          "name",
+          "rules"
+        ],
+        "type": "object"
+      },
+      "RoutingPresetView": {
+        "properties": {
+          "createdAt": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "ruleCount": {
+            "type": "integer"
+          },
+          "updatedAt": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "createdAt",
+          "description",
+          "id",
+          "name",
+          "ruleCount",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
       "ServerSettings": {
         "description": "ServerSettings is the \"server\" block of an AmneziaWG inbound's Settings\nJSON: the interface-level configuration shared by every client/peer. The\nlisten port is deliberately not duplicated here — it lives on the inbound\nrow itself (Inbound.Port), like every other protocol.",
         "properties": {
@@ -4115,6 +4241,43 @@
         ],
         "type": "object"
       },
+      "SessionView": {
+        "properties": {
+          "createdAt": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "ipAddress": {
+            "type": "string"
+          },
+          "isCurrent": {
+            "type": "boolean"
+          },
+          "lastSeenAt": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "revokedAt": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "userAgent": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "createdAt",
+          "id",
+          "ipAddress",
+          "isCurrent",
+          "lastSeenAt",
+          "userAgent"
+        ],
+        "type": "object"
+      },
       "Setting": {
         "description": "Setting stores key-value configuration settings for the 3x-ui panel.",
         "properties": {
@@ -4203,6 +4366,156 @@
           "remark",
           "sortOrder",
           "strategy",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "TemplateDetail": {
+        "properties": {
+          "content": {},
+          "createdAt": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "integer"
+          },
+          "summary": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "content",
+          "createdAt",
+          "description",
+          "id",
+          "kind",
+          "sizeBytes",
+          "tags",
+          "title",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "TemplateInput": {
+        "properties": {
+          "content": {},
+          "description": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "content",
+          "description",
+          "kind",
+          "tags",
+          "title"
+        ],
+        "type": "object"
+      },
+      "TemplateSanitizeResult": {
+        "properties": {
+          "content": {},
+          "kind": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "integer"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "content",
+          "kind",
+          "sizeBytes",
+          "warnings"
+        ],
+        "type": "object"
+      },
+      "TemplateView": {
+        "properties": {
+          "createdAt": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "integer"
+          },
+          "summary": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "createdAt",
+          "description",
+          "id",
+          "kind",
+          "sizeBytes",
+          "tags",
+          "title",
           "updatedAt"
         ],
         "type": "object"
@@ -4378,6 +4691,18 @@
   ],
   "tags": [
     {
+      "name": "Templates",
+      "description": "Sanitized local configuration templates. All endpoints require panel authentication."
+    },
+    {
+      "name": "Routing Presets",
+      "description": "Reusable routing rules owned by the authenticated user."
+    },
+    {
+      "name": "Sessions",
+      "description": "Inspect and revoke the current user’s panel sessions."
+    },
+    {
       "name": "Authentication",
       "description": "Two authentication modes are supported. UI sessions use a cookie set by the login endpoint. Programmatic clients (bots, scripts, remote panels) authenticate with a Bearer token taken from Settings → Security → API Token. Both work for every endpoint under /panel/api/*."
     },
@@ -4426,11 +4751,679 @@
       "description": "A separate HTTP/HTTPS server that serves proxy subscription links (standard, JSON, and Clash) to clients. The server listens on its own port (default 2096) and is configured in Settings → Subscription. Fresh panels generate random path prefixes for each format; all paths remain configurable. Every subscription endpoint sets response headers for client apps to read traffic/expiry info."
     },
     {
+      "name": "Telemt",
+      "description": "Manage the Telemt service, proxies, configuration, and active client IPs."
+    },
+    {
       "name": "WebSocket",
       "description": "Real-time status updates via WebSocket. Connect once at <code>ws://<panel>/ws</code> to receive a stream of JSON messages without polling. Requires an authenticated session cookie (Bearer token auth is not supported). Each message has a <code>type</code> field that identifies the payload shape."
+    },
+    {
+      "name": "Runtime services",
+      "description": "Administrative runtime endpoints for core status, version information, and VK TURN proxy management."
     }
   ],
   "paths": {
+    "/panel/api/templates/list": {
+      "get": {
+        "tags": [
+          "Templates"
+        ],
+        "summary": "List templates as {items, total}, with optional kind, text search and pagination.",
+        "operationId": "get_panel_api_templates_list",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "description": "",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "inbound",
+                "xray_config"
+              ]
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "description": "",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/templates/get/{id}": {
+      "get": {
+        "tags": [
+          "Templates"
+        ],
+        "summary": "Read a template and its sanitized configuration.",
+        "operationId": "get_panel_api_templates_get_id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {
+                      "$ref": "#/components/schemas/TemplateDetail"
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": {
+                    "content": null,
+                    "createdAt": 0,
+                    "description": "",
+                    "id": 0,
+                    "kind": "",
+                    "sizeBytes": 0,
+                    "summary": {},
+                    "tags": [
+                      ""
+                    ],
+                    "title": "",
+                    "updatedAt": 0
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/templates/sanitize": {
+      "post": {
+        "tags": [
+          "Templates"
+        ],
+        "summary": "Preview sanitized inbound or Xray configuration and warnings without saving.",
+        "operationId": "post_panel_api_templates_sanitize",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "inbound",
+                      "xray_config"
+                    ],
+                    "description": ""
+                  },
+                  "content": {
+                    "type": "object",
+                    "description": ""
+                  }
+                },
+                "required": [
+                  "kind",
+                  "content"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {
+                      "$ref": "#/components/schemas/TemplateSanitizeResult"
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": {
+                    "content": null,
+                    "kind": "",
+                    "sizeBytes": 0,
+                    "warnings": [
+                      ""
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/templates/save": {
+      "post": {
+        "tags": [
+          "Templates"
+        ],
+        "summary": "Sanitize and save a template; returns {template, warnings}.",
+        "operationId": "post_panel_api_templates_save",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "inbound",
+                      "xray_config"
+                    ],
+                    "description": ""
+                  },
+                  "title": {
+                    "type": "string",
+                    "description": ""
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": ""
+                  },
+                  "tags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": ""
+                  },
+                  "content": {
+                    "type": "object",
+                    "description": ""
+                  }
+                },
+                "required": [
+                  "kind",
+                  "title",
+                  "content"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/templates/del/{id}": {
+      "post": {
+        "tags": [
+          "Templates"
+        ],
+        "summary": "Delete a saved template.",
+        "operationId": "post_panel_api_templates_del_id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/xray/routingPresets/list": {
+      "get": {
+        "tags": [
+          "Routing Presets"
+        ],
+        "summary": "List saved routing presets.",
+        "operationId": "get_panel_api_xray_routingPresets_list",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/RoutingPresetView"
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": [
+                    {
+                      "createdAt": 0,
+                      "description": "",
+                      "id": 0,
+                      "name": "",
+                      "ruleCount": 0,
+                      "updatedAt": 0
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/xray/routingPresets/get/{id}": {
+      "get": {
+        "tags": [
+          "Routing Presets"
+        ],
+        "summary": "Read a routing preset with its rules.",
+        "operationId": "get_panel_api_xray_routingPresets_get_id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {
+                      "$ref": "#/components/schemas/RoutingPresetDetail"
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": {
+                    "createdAt": 0,
+                    "description": "",
+                    "id": 0,
+                    "name": "",
+                    "ruleCount": 0,
+                    "rules": [
+                      null
+                    ],
+                    "updatedAt": 0
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/xray/routingPresets/save": {
+      "post": {
+        "tags": [
+          "Routing Presets"
+        ],
+        "summary": "Save a routing preset for the current user.",
+        "operationId": "post_panel_api_xray_routingPresets_save",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": ""
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": ""
+                  },
+                  "rules": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    },
+                    "description": ""
+                  }
+                },
+                "required": [
+                  "name",
+                  "rules"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {
+                      "$ref": "#/components/schemas/RoutingPresetView"
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": {
+                    "createdAt": 0,
+                    "description": "",
+                    "id": 0,
+                    "name": "",
+                    "ruleCount": 0,
+                    "updatedAt": 0
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/xray/routingPresets/del/{id}": {
+      "post": {
+        "tags": [
+          "Routing Presets"
+        ],
+        "summary": "Delete a routing preset owned by the current user.",
+        "operationId": "post_panel_api_xray_routingPresets_del_id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/setting/sessions": {
+      "get": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "List sessions and identify the current browser session.",
+        "operationId": "get_panel_api_setting_sessions",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SessionView"
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": [
+                    {
+                      "createdAt": 0,
+                      "id": 0,
+                      "ipAddress": "",
+                      "isCurrent": false,
+                      "lastSeenAt": 0,
+                      "revokedAt": 0,
+                      "userAgent": ""
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/setting/sessions/revoke/{id}": {
+      "post": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Revoke another session. Use logout for the current browser session.",
+        "operationId": "post_panel_api_setting_sessions_revoke_id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/setting/sessions/revokeOthers": {
+      "post": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Revoke all sessions except the current browser session. Bearer callers revoke all browser sessions.",
+        "operationId": "post_panel_api_setting_sessions_revokeOthers",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/login": {
       "post": {
         "tags": [
@@ -4691,6 +5684,7 @@
                       "shareAddr": "",
                       "shareAddrStrategy": "node",
                       "sniffing": null,
+                      "sortOrder": 0,
                       "streamSettings": null,
                       "subSortIndex": 1,
                       "tag": "in-443-tcp",
@@ -4700,6 +5694,58 @@
                       "up": 0
                     }
                   ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/inbounds/reorder": {
+      "post": {
+        "tags": [
+          "Inbounds"
+        ],
+        "summary": "Set the panel display order for the authenticated user’s inbounds.",
+        "operationId": "post_panel_api_inbounds_reorder",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    },
+                    "description": "Inbound IDs in display order."
+                  }
+                },
+                "required": [
+                  "ids"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
                 }
               }
             }
@@ -6159,6 +7205,8 @@
                   "obj": {
                     "exitCode": 0,
                     "finishedAt": 1735689612,
+                    "logFile": "/var/log/x-ui/update.log",
+                    "message": "failed to download x-ui release archive",
                     "runId": "1735689600123456789",
                     "state": "success"
                   }
@@ -10302,6 +11350,58 @@
                   "obj": [
                     "vless://uuid@host:443?...#user1"
                   ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/nodes/reorder": {
+      "post": {
+        "tags": [
+          "Nodes"
+        ],
+        "summary": "Set the panel display order for nodes.",
+        "operationId": "post_panel_api_nodes_reorder",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    },
+                    "description": "Node IDs in display order."
+                  }
+                },
+                "required": [
+                  "ids"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
                 }
               }
             }
@@ -15051,6 +16151,297 @@
         }
       }
     },
+    "/panel/api/telemt/status": {
+      "get": {
+        "tags": [
+          "Telemt"
+        ],
+        "summary": "Return Telemt installation, service, version, update, and MEKO status.",
+        "operationId": "get_panel_api_telemt_status",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/telemt/config": {
+      "get": {
+        "tags": [
+          "Telemt"
+        ],
+        "summary": "Return the current Telemt configuration.",
+        "operationId": "get_panel_api_telemt_config",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Telemt"
+        ],
+        "summary": "Save the Telemt configuration.",
+        "operationId": "post_panel_api_telemt_config",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "enabled": true,
+                "port": 8443,
+                "secret": "...",
+                "tls": true,
+                "sni": "example.com"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/telemt/proxy": {
+      "get": {
+        "tags": [
+          "Telemt"
+        ],
+        "summary": "List configured Telemt proxy users and generated client links.",
+        "operationId": "get_panel_api_telemt_proxy",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Telemt"
+        ],
+        "summary": "Create a Telemt proxy user.",
+        "operationId": "post_panel_api_telemt_proxy",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "name": "mobile",
+                "host": "example.com"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/telemt/proxy/{name}": {
+      "delete": {
+        "tags": [
+          "Telemt"
+        ],
+        "summary": "Delete a Telemt proxy user by username.",
+        "operationId": "delete_panel_api_telemt_proxy_name",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "description": "Telemt username.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/telemt/connections": {
+      "get": {
+        "tags": [
+          "Telemt"
+        ],
+        "summary": "Return active Telemt client IPs with cached geolocation and associated users.",
+        "operationId": "get_panel_api_telemt_connections",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/telemt/action": {
+      "post": {
+        "tags": [
+          "Telemt"
+        ],
+        "summary": "Perform a Telemt service action such as start, stop, restart, update, or MEKO toggle.",
+        "operationId": "post_panel_api_telemt_action",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "action": "restart"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/ws": {
       "get": {
         "tags": [
@@ -15677,6 +17068,7 @@
                   "shareAddr": "",
                   "shareAddrStrategy": "node",
                   "sniffing": null,
+                  "sortOrder": 0,
                   "streamSettings": null,
                   "subSortIndex": 1,
                   "tag": "in-443-tcp",
@@ -15875,6 +17267,1299 @@
             }
           }
         ]
+      }
+    },
+    "/panel/api/inbounds/{id}/vk-turn-proxy/export-all": {
+      "get": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Export all VK TURN proxy client links for an inbound.",
+        "operationId": "get_panel_api_inbounds_id_vk_turn_proxy_export_all",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/inbounds/{id}/vk-turn-proxy/export/{clientId}": {
+      "get": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Export one VK TURN proxy client link for an inbound.",
+        "operationId": "get_panel_api_inbounds_id_vk_turn_proxy_export_clientId",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "clientId",
+            "in": "path",
+            "required": true,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/inbounds/{id}/vk-turn-proxy/peer-options": {
+      "get": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "List peer options used by VK TURN proxy clients.",
+        "operationId": "get_panel_api_inbounds_id_vk_turn_proxy_peer_options",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/server/coreConfigJson": {
+      "get": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Return the active core configuration as JSON.",
+        "operationId": "get_panel_api_server_coreConfigJson",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/server/vk-turn-proxy/status": {
+      "get": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Return VK TURN proxy runtime status.",
+        "operationId": "get_panel_api_server_vk_turn_proxy_status",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/server/vk-turn-proxy/versions": {
+      "get": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Return available VK TURN proxy versions.",
+        "operationId": "get_panel_api_server_vk_turn_proxy_versions",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/setting/singbox/status": {
+      "get": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Return sing-box installation and runtime status.",
+        "operationId": "get_panel_api_setting_singbox_status",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/setting/sudoku/status": {
+      "get": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Return Sudoku installation status.",
+        "operationId": "get_panel_api_setting_sudoku_status",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/setting/singbox/versions": {
+      "get": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Return available sing-box versions.",
+        "operationId": "get_panel_api_setting_singbox_versions",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/inbounds/{id}/vk-turn-proxy/clients/{clientId}/enable": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Enable or disable a VK TURN proxy client for an inbound.",
+        "operationId": "post_panel_api_inbounds_id_vk_turn_proxy_clients_clientId_enable",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "clientId",
+            "in": "path",
+            "required": true,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/server/restartCoreService": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Restart the active core service.",
+        "operationId": "post_panel_api_server_restartCoreService",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/server/stopCoreService": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Stop the active core service.",
+        "operationId": "post_panel_api_server_stopCoreService",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/server/vk-turn-proxy/install/{version}": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Install a VK TURN proxy version.",
+        "operationId": "post_panel_api_server_vk_turn_proxy_install_version",
+        "parameters": [
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/server/vk-turn-proxy/logs/{count}": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Return VK TURN proxy logs.",
+        "operationId": "post_panel_api_server_vk_turn_proxy_logs_count",
+        "parameters": [
+          {
+            "name": "count",
+            "in": "path",
+            "required": true,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/server/vk-turn-proxy/restart": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Restart the VK TURN proxy service.",
+        "operationId": "post_panel_api_server_vk_turn_proxy_restart",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/server/vk-turn-proxy/start": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Start the VK TURN proxy service.",
+        "operationId": "post_panel_api_server_vk_turn_proxy_start",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/server/vk-turn-proxy/stop": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Stop the VK TURN proxy service.",
+        "operationId": "post_panel_api_server_vk_turn_proxy_stop",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/server/vk-turn-proxy/upload": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Upload a VK TURN proxy package.",
+        "operationId": "post_panel_api_server_vk_turn_proxy_upload",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/setting/singbox/install": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Install sing-box using the configured channel.",
+        "operationId": "post_panel_api_setting_singbox_install",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/setting/sudoku/update": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Install or update the managed Sudoku tunnel binary.",
+        "operationId": "post_panel_api_setting_sudoku_update",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/setting/singbox/install/{version}": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Install a specific sing-box version.",
+        "operationId": "post_panel_api_setting_singbox_install_version",
+        "parameters": [
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/setting/singbox/uninstall": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Uninstall sing-box.",
+        "operationId": "post_panel_api_setting_singbox_uninstall",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/setting/singbox/config": {
+      "get": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Return the editable sing-box configuration.",
+        "operationId": "get_panel_api_setting_singbox_config",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Save the editable sing-box configuration.",
+        "operationId": "post_panel_api_setting_singbox_config",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/setting/singbox/config/reset": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Reset the editable sing-box configuration to generated defaults.",
+        "operationId": "post_panel_api_setting_singbox_config_reset",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/setting/swap/status": {
+      "get": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Return current swap and ZRAM status.",
+        "operationId": "get_panel_api_setting_swap_status",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/setting/swap/create": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Create the managed swap file.",
+        "operationId": "post_panel_api_setting_swap_create",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/setting/swap/delete": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Delete the managed swap file.",
+        "operationId": "post_panel_api_setting_swap_delete",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/setting/swap/swappiness": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Set vm.swappiness.",
+        "operationId": "post_panel_api_setting_swap_swappiness",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/setting/swap/zram/create": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Create managed ZRAM swap.",
+        "operationId": "post_panel_api_setting_swap_zram_create",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/setting/swap/zram/delete": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Delete managed ZRAM swap.",
+        "operationId": "post_panel_api_setting_swap_zram_delete",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/setting/swap/zram/install": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Install or enable the supported ZRAM integration.",
+        "operationId": "post_panel_api_setting_swap_zram_install",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/setting/swap/zram/reinstall": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Reinstall the supported ZRAM integration.",
+        "operationId": "post_panel_api_setting_swap_zram_reinstall",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/setting/system/update/status": {
+      "get": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Return available system package and kernel updates.",
+        "operationId": "get_panel_api_setting_system_update_status",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/setting/system/update/check": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Refresh system package and kernel update information.",
+        "operationId": "post_panel_api_setting_system_update_check",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/setting/system/update/apply": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Apply the selected system package updates.",
+        "operationId": "post_panel_api_setting_system_update_apply",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/setting/system/update/reboot": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Reboot the panel host after system updates.",
+        "operationId": "post_panel_api_setting_system_update_reboot",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/telemt/webproxy/status": {
+      "get": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Return the Telemt Web Proxy and external port 443 status.",
+        "operationId": "get_panel_api_telemt_webproxy_status",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/telemt/webproxy/enable": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Enable the Telemt Web Proxy.",
+        "operationId": "post_panel_api_telemt_webproxy_enable",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/telemt/webproxy/disable": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Disable the Telemt Web Proxy.",
+        "operationId": "post_panel_api_telemt_webproxy_disable",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     }
   }

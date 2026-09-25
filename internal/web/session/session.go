@@ -196,10 +196,15 @@ func GetLoginUser(c *gin.Context) *model.User {
 	}
 	raw, _ := s.Get(loginSessionKey).(string)
 	if raw == "" {
-		if _, err := ensureSessionRecord(c, user, s); err == nil {
-			if saveErr := s.Save(); saveErr != nil {
-				logger.Warning("session: failed to persist migrated session:", saveErr)
-			}
+		if _, err := ensureSessionRecord(c, user, s); err != nil {
+			logger.Warning("session: failed to register migrated session:", err)
+			revokeAndClearSession(c, s, true)
+			return nil
+		}
+		if err := s.Save(); err != nil {
+			logger.Warning("session: failed to persist migrated session:", err)
+			revokeAndClearSession(c, s, false)
+			return nil
 		}
 		return user
 	}

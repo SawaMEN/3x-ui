@@ -1,6 +1,7 @@
 package singbox
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/url"
@@ -21,11 +22,30 @@ func TranslateXrayRouting(raw map[string]any) (map[string]any, error) {
 			continue
 		}
 		r := map[string]any{}
+		for _, key := range []string{"attrs", "vlessRoute", "localIP", "localPort", "process", "localOS", "webhook"} {
+			value := xr[key]
+			present := value != nil
+			switch v := value.(type) {
+			case string:
+				present = strings.TrimSpace(v) != ""
+			case []any:
+				present = len(v) > 0
+			case map[string]any:
+				present = len(v) > 0
+			}
+			if present {
+				return nil, fmt.Errorf("routing rule %d: unsupported matcher %s", i, key)
+			}
+		}
 		inboundTags := compatStringSlice(xr["inboundTag"])
 		if len(inboundTags) > 0 {
 			r["inbound"] = inboundTags
 		}
-		if domains := compatStringSlice(xr["domain"]); len(domains) > 0 {
+		domains := compatStringSlice(xr["domain"])
+		if xr["domain"] == nil {
+			domains = compatStringSlice(xr["domains"])
+		}
+		if len(domains) > 0 {
 			if err := translateCompatDomains(r, domains); err != nil {
 				return nil, fmt.Errorf("routing rule %d: %w", i, err)
 			}
@@ -50,11 +70,30 @@ func TranslateXrayRouting(raw map[string]any) (map[string]any, error) {
 				r["ip_cidr"] = cidrs
 			}
 		}
-		if port := compatString(xr["port"]); port != "" {
-			r["port"] = port
+		for _, field := range []struct{ xray, singbox string }{{"port", "port"}, {"sourcePort", "source_port"}} {
+			if err := translateCompatPorts(r, field.singbox, xr[field.xray]); err != nil {
+				return nil, fmt.Errorf("routing rule %d: %s: %w", i, field.xray, err)
+			}
 		}
-		if sourcePort := compatString(xr["sourcePort"]); sourcePort != "" {
-			r["source_port"] = sourcePort
+		sources := compatStringSlice(xr["sourceIP"])
+		if xr["sourceIP"] == nil {
+			sources = compatStringSlice(xr["source"])
+		}
+		var sourceCIDRs []string
+		for _, source := range sources {
+			if strings.EqualFold(source, "geoip:private") {
+				r["source_ip_is_private"] = true
+				continue
+			}
+			if net.ParseIP(source) == nil {
+				if _, _, err := net.ParseCIDR(source); err != nil {
+					return nil, fmt.Errorf("routing rule %d: unsupported sourceIP matcher %q", i, source)
+				}
+			}
+			sourceCIDRs = append(sourceCIDRs, source)
+		}
+		if len(sourceCIDRs) > 0 {
+			r["source_ip_cidr"] = sourceCIDRs
 		}
 		if network := compatString(xr["network"]); network != "" {
 			parts := strings.Split(network, ",")
@@ -79,10 +118,22 @@ func TranslateXrayRouting(raw map[string]any) (map[string]any, error) {
 			}
 		}
 		if users := compatStringSlice(xr["user"]); len(users) > 0 {
-			r["user"] = users
+			r["auth_user"] = users
 		}
 		if protocols := compatStringSlice(xr["protocol"]); len(protocols) > 0 {
 			r["protocol"] = protocols
+		}
+		// Xray combines domain and IP constraints with AND; sing-box groups
+		// destination matchers with OR unless they are separate logical rules.
+		if len(domains) > 0 && (r["ip_cidr"] != nil || r["ip_is_private"] != nil) {
+			ipRule := map[string]any{}
+			for _, key := range []string{"ip_cidr", "ip_is_private"} {
+				if value, ok := r[key]; ok {
+					ipRule[key] = value
+					delete(r, key)
+				}
+			}
+			r = map[string]any{"type": "logical", "mode": "and", "rules": []map[string]any{r, ipRule}}
 		}
 		if outbound := compatString(xr["outboundTag"]); outbound != "" {
 			// The stock Xray template contains an internal "api" inbound/rule used
@@ -108,6 +159,54 @@ func TranslateXrayRouting(raw map[string]any) (map[string]any, error) {
 		out["rules"] = rules
 	}
 	return out, nil
+}
+
+func translateCompatPorts(dst map[string]any, field string, value any) error {
+	if value == nil {
+		return nil
+	}
+	var text string
+	switch v := value.(type) {
+	case string:
+		text = v
+	case float64:
+		text = strconv.FormatFloat(v, 'f', -1, 64)
+	case int:
+		text = strconv.Itoa(v)
+	case json.Number:
+		text = v.String()
+	default:
+		return fmt.Errorf("invalid port value %v", value)
+	}
+	var ports []uint16
+	var ranges []string
+	for part := range strings.SplitSeq(text, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		lo, hi, isRange := strings.Cut(part, "-")
+		start, err := strconv.ParseUint(strings.TrimSpace(lo), 10, 16)
+		if err != nil {
+			return fmt.Errorf("invalid port %q", part)
+		}
+		if !isRange {
+			ports = append(ports, uint16(start))
+			continue
+		}
+		end, err := strconv.ParseUint(strings.TrimSpace(hi), 10, 16)
+		if err != nil || end < start {
+			return fmt.Errorf("invalid port range %q", part)
+		}
+		ranges = append(ranges, fmt.Sprintf("%d:%d", start, end))
+	}
+	if len(ports) > 0 {
+		dst[field] = ports
+	}
+	if len(ranges) > 0 {
+		dst[field+"_range"] = ranges
+	}
+	return nil
 }
 
 func TranslateXrayDomainStrategy(value string) string {
@@ -269,20 +368,53 @@ func translateCompatDomains(dst map[string]any, domains []string) error {
 // internal Go packages.
 func TranslateXrayDNS(raw map[string]any) (map[string]any, error) {
 	out := map[string]any{}
+	for _, field := range []string{"disableFallback", "disableFallbackIfMatch", "enableParallelQuery", "serveStale", "serveExpiredTTL"} {
+		if isMeaningfulCompatValue(raw[field]) {
+			return nil, fmt.Errorf("DNS %s cannot be translated to sing-box", field)
+		}
+	}
+	if isMeaningfulCompatValue(raw["useSystemHosts"]) {
+		return nil, fmt.Errorf("DNS useSystemHosts cannot be translated to sing-box")
+	}
+	if strategy := compatString(raw["queryStrategy"]); strategy != "" {
+		switch strings.ToLower(strategy) {
+		case "useip", "use_ip", "use-ip":
+		case "useip4", "useipv4", "use_ip4", "use_ipv4":
+			out["strategy"] = "ipv4_only"
+		case "useip6", "useipv6", "use_ip6", "use_ipv6":
+			out["strategy"] = "ipv6_only"
+		default:
+			return nil, fmt.Errorf("DNS queryStrategy %q cannot be translated to sing-box", strategy)
+		}
+	}
+	if disableCache, ok := raw["disableCache"].(bool); ok && disableCache {
+		out["disable_cache"] = true
+	}
 	serversRaw, _ := raw["servers"].([]any)
 	servers := make([]map[string]any, 0, len(serversRaw))
+	needsBootstrap := false
 	for i, item := range serversRaw {
 		var address string
+		var extra map[string]any
 		switch value := item.(type) {
 		case string:
 			address = strings.TrimSpace(value)
 		case map[string]any:
+			extra = value
 			address = strings.TrimSpace(compatString(value["address"]))
+			for _, field := range []string{"domains", "expectedIPs", "expectIPs", "unexpectedIPs", "clientIp", "skipFallback", "finalQuery", "serveStale", "serveExpiredTTL", "disableCache"} {
+				if isMeaningfulCompatValue(value[field]) {
+					return nil, fmt.Errorf("DNS server %d %s cannot be translated to sing-box", i, field)
+				}
+			}
+			if strategy := compatString(value["queryStrategy"]); strategy != "" && !strings.EqualFold(strategy, "UseIP") {
+				return nil, fmt.Errorf("DNS server %d queryStrategy cannot be translated to sing-box", i)
+			}
 		default:
-			continue
+			return nil, fmt.Errorf("DNS server %d has an invalid configuration", i)
 		}
 		if address == "" {
-			continue
+			return nil, fmt.Errorf("DNS server %d has an empty address", i)
 		}
 		server := map[string]any{"tag": fmt.Sprintf("dns-%d", i+1)}
 		if strings.EqualFold(address, "localhost") || strings.EqualFold(address, "local") {
@@ -290,13 +422,11 @@ func TranslateXrayDNS(raw map[string]any) (map[string]any, error) {
 		} else {
 			if strings.HasPrefix(address, "https://") || strings.HasPrefix(address, "h3://") {
 				server["type"] = "https"
-				defaultPort := 443
 				if strings.HasPrefix(address, "h3://") {
 					server["type"] = "h3"
 				}
 				if u, err := url.Parse(address); err == nil && u.Hostname() != "" {
 					server["server"] = u.Hostname()
-					server["server_port"] = parseCompatPort(u.Port(), defaultPort)
 					if u.EscapedPath() != "" {
 						server["path"] = u.EscapedPath()
 					}
@@ -307,7 +437,6 @@ func TranslateXrayDNS(raw map[string]any) (map[string]any, error) {
 				server["type"] = "tls"
 				if u, err := url.Parse(address); err == nil && u.Hostname() != "" {
 					server["server"] = u.Hostname()
-					server["server_port"] = parseCompatPort(u.Port(), 853)
 				} else {
 					return nil, fmt.Errorf("DNS server %d has invalid TLS address %q", i, address)
 				}
@@ -315,26 +444,110 @@ func TranslateXrayDNS(raw map[string]any) (map[string]any, error) {
 				server["type"] = "quic"
 				if u, err := url.Parse(address); err == nil && u.Hostname() != "" {
 					server["server"] = u.Hostname()
-					server["server_port"] = parseCompatPort(u.Port(), 853)
 				} else {
 					return nil, fmt.Errorf("DNS server %d has invalid QUIC address %q", i, address)
 				}
+			} else if strings.HasPrefix(address, "tcp://") {
+				server["type"] = "tcp"
+				u, err := url.Parse(address)
+				if err != nil || u.Hostname() == "" {
+					return nil, fmt.Errorf("DNS server %d has invalid TCP address %q", i, address)
+				}
+				server["server"] = u.Hostname()
+			} else if strings.HasPrefix(address, "udp://") {
+				server["type"] = "udp"
+				if u, err := url.Parse(address); err == nil && u.Hostname() != "" {
+					server["server"] = u.Hostname()
+				} else {
+					return nil, fmt.Errorf("DNS server %d has invalid UDP address %q", i, address)
+				}
+			} else if strings.Contains(address, "://") {
+				return nil, fmt.Errorf("DNS server %d uses unsupported address %q", i, address)
 			} else {
 				server["type"] = "udp"
-				clean := strings.TrimPrefix(address, "udp://")
-				if u, err := url.Parse("udp://" + clean); err == nil && u.Hostname() != "" {
+				if u, err := url.Parse("udp://" + address); err == nil && u.Hostname() != "" {
 					server["server"] = u.Hostname()
-					server["server_port"] = parseCompatPort(u.Port(), 53)
 				} else {
 					return nil, fmt.Errorf("DNS server %d has invalid UDP address %q", i, address)
 				}
 			}
 		}
+		if server["type"] != "local" {
+			u, err := url.Parse(address)
+			if err != nil || u.Scheme == "" {
+				u, err = url.Parse("udp://" + address)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("DNS server %d has invalid address %q: %w", i, address, err)
+			}
+			defaultPort := 53
+			switch server["type"] {
+			case "https", "h3":
+				defaultPort = 443
+			case "tls", "quic":
+				defaultPort = 853
+			}
+			port, err := compatDNSPort(u.Port(), defaultPort)
+			if err != nil {
+				return nil, fmt.Errorf("DNS server %d: %w", i, err)
+			}
+			if extra["port"] != nil {
+				explicit, err := compatDNSPort(fmt.Sprint(extra["port"]), port)
+				if err != nil {
+					return nil, fmt.Errorf("DNS server %d: %w", i, err)
+				}
+				if u.Port() != "" && explicit != port {
+					return nil, fmt.Errorf("DNS server %d has conflicting ports", i)
+				}
+				port = explicit
+			}
+			server["server_port"] = port
+			if net.ParseIP(compatString(server["server"])) == nil {
+				server["domain_resolver"] = "panel-bootstrap"
+				needsBootstrap = true
+			}
+		}
 		servers = append(servers, server)
+	}
+	if needsBootstrap {
+		servers = append(servers, map[string]any{"type": "local", "tag": "panel-bootstrap"})
+	}
+	if raw["hosts"] != nil {
+		if _, ok := raw["hosts"].(map[string]any); !ok {
+			return nil, fmt.Errorf("DNS hosts has invalid configuration")
+		}
+	}
+	if hosts, ok := raw["hosts"].(map[string]any); ok && len(hosts) > 0 {
+		predefined := make(map[string]any, len(hosts))
+		for domain, record := range hosts {
+			if strings.TrimSpace(domain) == "" || strings.ContainsAny(domain, ":/* ") {
+				return nil, fmt.Errorf("DNS host %q cannot be translated to sing-box", domain)
+			}
+			addresses := compatStringSlice(record)
+			if len(addresses) == 0 {
+				return nil, fmt.Errorf("DNS host %q has no IP addresses", domain)
+			}
+			for _, address := range addresses {
+				if net.ParseIP(address) == nil {
+					return nil, fmt.Errorf("DNS host %q has unsupported address %q", domain, address)
+				}
+			}
+			predefined[domain] = addresses
+		}
+		servers = append(servers, map[string]any{"type": "hosts", "tag": "panel-hosts", "predefined": predefined})
+		out["rules"] = []map[string]any{{"preferred_by": "panel-hosts", "action": "route", "server": "panel-hosts"}}
+	}
+	if len(servers) == 0 || len(servers) == 1 && servers[0]["type"] == "hosts" {
+		servers = append(servers, map[string]any{"type": "local", "tag": "panel-default"})
 	}
 	if len(servers) > 0 {
 		out["servers"] = servers
-		out["final"] = servers[0]["tag"]
+		for _, server := range servers {
+			if server["type"] != "hosts" {
+				out["final"] = server["tag"]
+				break
+			}
+		}
 	}
 	if clientIP := compatString(raw["clientIp"]); clientIP != "" {
 		if net.ParseIP(clientIP) == nil {
@@ -343,6 +556,25 @@ func TranslateXrayDNS(raw map[string]any) (map[string]any, error) {
 		out["client_subnet"] = clientIP
 	}
 	return out, nil
+}
+
+func isMeaningfulCompatValue(value any) bool {
+	switch v := value.(type) {
+	case nil:
+		return false
+	case bool:
+		return v
+	case float64:
+		return v != 0
+	case int:
+		return v != 0
+	case string:
+		return strings.TrimSpace(v) != ""
+	case []any:
+		return len(v) > 0
+	default:
+		return true
+	}
 }
 
 func compatString(v any) string {
@@ -370,13 +602,13 @@ func compatStringSlice(v any) []string {
 	return nil
 }
 
-func parseCompatPort(value string, fallback int) int {
+func compatDNSPort(value string, fallback int) (int, error) {
 	if value == "" {
-		return fallback
+		return fallback, nil
 	}
-	port, err := strconv.Atoi(value)
-	if err != nil || port < 1 || port > 65535 {
-		return fallback
+	port, err := strconv.ParseUint(value, 10, 16)
+	if err != nil || port == 0 {
+		return 0, fmt.Errorf("invalid DNS port %q", value)
 	}
-	return port
+	return int(port), nil
 }

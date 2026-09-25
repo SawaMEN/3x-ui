@@ -612,14 +612,12 @@ func TestSubJsonServiceWireguardNoKey(t *testing.T) {
 	}
 }
 
-
-
 func TestSubJsonServiceExternalProxyDoesNotMutateInbound(t *testing.T) {
 	inbound := &model.Inbound{
-		Listen:   "origin.example.com",
-		Port:     443,
-		Protocol: model.VLESS,
-		Settings: `{"encryption":"none"}`,
+		Listen:         "origin.example.com",
+		Port:           443,
+		Protocol:       model.VLESS,
+		Settings:       `{"encryption":"none"}`,
 		StreamSettings: `{"network":"tcp","security":"tls","tlsSettings":{"serverName":"origin.example.com"},"externalProxy":[{"dest":"edge-one.example.com","port":8443,"forceTls":"tls"},{"dest":"edge-two.example.com","port":9443,"forceTls":"tls"}]}`,
 	}
 	client := model.Client{ID: "11111111-2222-4333-8444-555555555555", Email: "user@example.com"}
@@ -652,10 +650,10 @@ func TestSubJsonServiceExternalProxyDoesNotMutateInbound(t *testing.T) {
 func TestSubJsonServiceHysteria2IsNotDropped(t *testing.T) {
 	svc := NewSubJsonService("", "", "", "", nil)
 	inbound := &model.Inbound{
-		Listen:   "hy.example.com",
-		Port:     443,
-		Protocol: model.Hysteria,
-		Settings: `{"version":2}`,
+		Listen:         "hy.example.com",
+		Port:           443,
+		Protocol:       model.Hysteria,
+		Settings:       `{"version":2}`,
 		StreamSettings: `{"network":"hysteria","security":"tls","tlsSettings":{"serverName":"hy.example.com"}}`,
 	}
 	client := model.Client{Email: "user@example.com", Auth: "hysteria-auth"}
@@ -753,8 +751,9 @@ func TestNativeRealityTLS(t *testing.T) {
 	if tls["enabled"] != true || tls["server_name"] != "www.example.com" {
 		t.Fatalf("unexpected TLS: %#v", got)
 	}
-	if _, exists := tls["utls"]; exists {
-		t.Fatalf("Reality TLS must not emit a separate uTLS block: %#v", tls)
+	utls, _ := tls["utls"].(map[string]any)
+	if utls["enabled"] != true || utls["fingerprint"] != "chrome" {
+		t.Fatalf("sing-box REALITY requires uTLS: %#v", tls)
 	}
 	reality, _ := tls["reality"].(map[string]any)
 	if reality["enabled"] != true || reality["public_key"] != "public-key" || reality["short_id"] != "0123456789abcdef" {
@@ -814,8 +813,8 @@ func TestNativeVLESSOutbound(t *testing.T) {
 	}
 	client := model.Client{ID: "11111111-1111-1111-1111-111111111111", Flow: "xtls-rprx-vision"}
 	stream := map[string]any{
-		"network":  "ws",
-		"security": "tls",
+		"network":     "ws",
+		"security":    "tls",
 		"tlsSettings": map[string]any{"serverName": "example.com"},
 		"wsSettings":  map[string]any{"path": "/ws", "headers": map[string]any{"Host": "example.com"}},
 	}
@@ -843,9 +842,9 @@ func TestNativeVMessOutbound(t *testing.T) {
 	inbound := &model.Inbound{Listen: "vmess.example.com", Port: 443, Protocol: model.VMESS}
 	client := model.Client{ID: "11111111-1111-1111-1111-111111111111", Security: "auto"}
 	stream := map[string]any{
-		"network":  "grpc",
-		"security": "tls",
-		"tlsSettings": map[string]any{"serverName": "vmess.example.com"},
+		"network":      "grpc",
+		"security":     "tls",
+		"tlsSettings":  map[string]any{"serverName": "vmess.example.com"},
 		"grpcSettings": map[string]any{"serviceName": "proxy"},
 	}
 	streamJSON, err := json.Marshal(stream)
@@ -885,8 +884,8 @@ func TestNativeTrojanOutbound(t *testing.T) {
 	inbound := &model.Inbound{Listen: "trojan.example.com", Port: 443, Protocol: model.Trojan}
 	client := model.Client{Password: "secret"}
 	stream := map[string]any{
-		"network":  "tcp",
-		"security": "tls",
+		"network":     "tcp",
+		"security":    "tls",
 		"tlsSettings": map[string]any{"serverName": "trojan.example.com"},
 	}
 	streamJSON, err := json.Marshal(stream)
@@ -914,12 +913,12 @@ func TestNativeHysteria2Outbound(t *testing.T) {
 	}
 	client := model.Client{Auth: "secret"}
 	stream := map[string]any{
-		"network":  "hysteria",
-		"security": "tls",
+		"network":     "hysteria",
+		"security":    "tls",
 		"tlsSettings": map[string]any{"serverName": "hy2.example.com"},
 		"hysteriaSettings": map[string]any{
-			"version": 2,
-			"up_mbps":  100,
+			"version":   2,
+			"up_mbps":   100,
 			"down_mbps": 50,
 			"obfs":      map[string]any{"type": "salamander", "password": "obfs"},
 		},
@@ -1008,14 +1007,13 @@ func TestGetSingBoxJsonEmitsNativeOutbound(t *testing.T) {
 	_ = svc
 }
 
-
 func TestGetConfigSkipsPlaintextHysteriaExternalProxy(t *testing.T) {
 	inbound := &model.Inbound{
 		Protocol: model.Hysteria, Listen: "203.0.113.1", Port: 443,
-		Settings: `{"version":2}`,
+		Settings:       `{"version":2}`,
 		StreamSettings: `{"network":"hysteria","security":"tls","hysteriaSettings":{"version":2},"externalProxy":[{"forceTls":"none","dest":"plain.example.com","port":80}]}`,
 	}
-	client := model.Client{Email:"user", Auth:"secret"}
+	client := model.Client{Email: "user", Auth: "secret"}
 	svc := NewSubJsonService("", "", "", "", nil)
 	subReq := NewSubService("").ForRequest("sub.example.com")
 	if raws := svc.getConfig(subReq, inbound, client, "sub.example.com"); len(raws) != 0 {

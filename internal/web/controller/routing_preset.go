@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"errors"
 	"strconv"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
@@ -37,7 +38,7 @@ func (a *RoutingPresetController) list(c *gin.Context) {
 func (a *RoutingPresetController) get(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil || id <= 0 {
-		jsonMsg(c, "invalid preset id", err)
+		jsonMsg(c, "invalid preset id", errors.New("id must be a positive integer"))
 		return
 	}
 	item, err := a.service.Get(a.userID(c), id)
@@ -57,7 +58,7 @@ func (a *RoutingPresetController) save(c *gin.Context) {
 func (a *RoutingPresetController) del(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil || id <= 0 {
-		jsonMsg(c, "invalid preset id", err)
+		jsonMsg(c, "invalid preset id", errors.New("id must be a positive integer"))
 		return
 	}
 	err = a.service.Delete(a.userID(c), id)

@@ -38,10 +38,13 @@ import (
 func migrationModels() []any {
 	return []any{
 		&model.User{},
+		&model.UserSession{},
 		&model.Setting{},
 		&model.HistoryOfSeeders{},
 		&model.Node{},
 		&model.ApiToken{},
+		&model.LocalTemplate{},
+		&model.RoutingPreset{},
 		&model.Inbound{},
 		&xray.ClientTraffic{},
 		&model.OutboundTraffics{},

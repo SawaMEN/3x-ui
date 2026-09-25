@@ -3,6 +3,7 @@ package singbox
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net"
 	"net/url"
 	"path/filepath"
@@ -724,13 +725,13 @@ func translateStream(out map[string]any, protocol string, stream map[string]any,
 				}
 				if path := rawString(cert, "certificateFile"); path != "" {
 					t["certificate_path"] = path
-				} else if value := rawString(cert, "certificate"); value != "" {
-					t["certificate"] = []string{value}
+				} else if value := compatStringSlice(cert["certificate"]); len(value) > 0 {
+					t["certificate"] = value
 				}
 				if path := rawString(cert, "keyFile"); path != "" {
 					t["key_path"] = path
-				} else if value := rawString(cert, "key"); value != "" {
-					t["key"] = []string{value}
+				} else if value := compatStringSlice(cert["key"]); len(value) > 0 {
+					t["key"] = value
 				}
 				break
 			}
@@ -753,12 +754,6 @@ func translateStream(out map[string]any, protocol string, stream map[string]any,
 		}
 		if serverName != "" {
 			t["server_name"] = serverName
-		}
-		if publicKey := rawString(reality, "publicKey"); publicKey != "" {
-			r["public_key"] = publicKey
-		}
-		if privateKey := rawString(reality, "privateKey"); privateKey != "" {
-			r["private_key"] = privateKey
 		}
 		if inbound {
 			dest := strings.TrimSpace(rawString(reality, "target"))
@@ -783,7 +778,7 @@ func translateStream(out map[string]any, protocol string, stream map[string]any,
 			if shortIDs, ok := reality["shortIds"].([]any); ok && len(shortIDs) > 0 {
 				ids := make([]string, 0, len(shortIDs))
 				for _, id := range shortIDs {
-					if value, ok := id.(string); ok && value != "" {
+					if value, ok := id.(string); ok {
 						ids = append(ids, value)
 					}
 				}
@@ -796,19 +791,31 @@ func translateStream(out map[string]any, protocol string, stream map[string]any,
 			if rawString(reality, "privateKey") == "" {
 				return fmt.Errorf("inbound %q has REALITY enabled but no private key", rawString(out, "tag"))
 			}
+			r["private_key"] = rawString(reality, "privateKey")
 		} else {
 			publicKey := rawString(reality, "publicKey")
+			if publicKey == "" {
+				publicKey = rawString(reality, "password")
+			}
 			if publicKey == "" {
 				return fmt.Errorf("outbound %q has REALITY enabled but no public key", rawString(out, "tag"))
 			}
 			r["public_key"] = publicKey
-			if shortID := rawString(reality, "shortId"); shortID != "" {
+			if shortID, exists := reality["shortId"].(string); exists {
 				r["short_id"] = shortID
-			} else if shortIDs := rawStrings(reality, "shortIds"); len(shortIDs) > 0 {
-				r["short_id"] = shortIDs[0]
+			} else if shortIDs, ok := reality["shortIds"].([]any); ok && len(shortIDs) > 0 {
+				r["short_id"], _ = shortIDs[0].(string)
 			} else {
-				return fmt.Errorf("outbound %q has REALITY enabled but no short id", rawString(out, "tag"))
+				r["short_id"] = ""
 			}
+			fingerprint := rawString(reality, "fingerprint")
+			if fingerprint == "" {
+				fingerprint = rawString(tlsSettings, "fingerprint")
+			}
+			if fingerprint == "" {
+				fingerprint = "chrome"
+			}
+			t["utls"] = map[string]any{"enabled": true, "fingerprint": fingerprint}
 		}
 		t["reality"] = r
 		out["tls"] = t
@@ -830,7 +837,20 @@ func translateStream(out map[string]any, protocol string, stream map[string]any,
 		if path := rawString(ws, "path"); path != "" {
 			transport["path"] = path
 		}
-		if headers, ok := ws["headers"].(map[string]any); ok && len(headers) > 0 {
+		headers, _ := ws["headers"].(map[string]any)
+		headers = maps.Clone(headers)
+		if host := rawString(ws, "host"); host != "" {
+			if headers == nil {
+				headers = map[string]any{}
+			}
+			for key := range headers {
+				if strings.EqualFold(key, "Host") {
+					delete(headers, key)
+				}
+			}
+			headers["Host"] = host
+		}
+		if len(headers) > 0 {
 			transport["headers"] = headers
 		}
 		if maxEarlyData := rawInt(ws, "maxEarlyData"); maxEarlyData > 0 {

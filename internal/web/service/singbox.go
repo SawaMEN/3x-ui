@@ -80,7 +80,11 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 		var xrayCfg map[string]any
 		if json.Unmarshal([]byte(template), &xrayCfg) == nil {
 			if rawDNS, ok := xrayCfg["dns"].(map[string]any); ok && len(rawDNS) > 0 {
-				if dns, err := singbox.TranslateXrayDNS(rawDNS); err == nil && len(dns) > 0 {
+				dns, err := singbox.TranslateXrayDNS(rawDNS)
+				if err != nil {
+					return nil, fmt.Errorf("sing-box DNS template: %w", err)
+				}
+				if len(dns) > 0 {
 					// sing-box 1.14 requires a resolver for domain-based outbound
 					// server addresses. Keep the system resolver available even when
 					// the Xray DNS template replaces the generated default.

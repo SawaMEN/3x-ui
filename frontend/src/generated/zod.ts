@@ -960,6 +960,34 @@ export const RealityScanResultSchema = z.object({
 });
 export type RealityScanResult = z.infer<typeof RealityScanResultSchema>;
 
+export const RoutingPresetDetailSchema = z.object({
+  createdAt: z.number().int(),
+  description: z.string(),
+  id: z.number().int(),
+  name: z.string(),
+  ruleCount: z.number().int(),
+  rules: z.array(z.unknown()),
+  updatedAt: z.number().int(),
+});
+export type RoutingPresetDetail = z.infer<typeof RoutingPresetDetailSchema>;
+
+export const RoutingPresetInputSchema = z.object({
+  description: z.string(),
+  name: z.string(),
+  rules: z.array(z.unknown()),
+});
+export type RoutingPresetInput = z.infer<typeof RoutingPresetInputSchema>;
+
+export const RoutingPresetViewSchema = z.object({
+  createdAt: z.number().int(),
+  description: z.string(),
+  id: z.number().int(),
+  name: z.string(),
+  ruleCount: z.number().int(),
+  updatedAt: z.number().int(),
+});
+export type RoutingPresetView = z.infer<typeof RoutingPresetViewSchema>;
+
 export const ServerSettingsSchema = z.object({
   contentPaddingAddition: z.string().optional(),
   disableCookies: z.boolean(),
@@ -1001,6 +1029,17 @@ export const ServerSettingsSchema = z.object({
 });
 export type ServerSettings = z.infer<typeof ServerSettingsSchema>;
 
+export const SessionViewSchema = z.object({
+  createdAt: z.number().int(),
+  id: z.number().int(),
+  ipAddress: z.string(),
+  isCurrent: z.boolean(),
+  lastSeenAt: z.number().int(),
+  revokedAt: z.number().int().optional(),
+  userAgent: z.string(),
+});
+export type SessionView = z.infer<typeof SessionViewSchema>;
+
 export const SettingSchema = z.object({
   id: z.number().int(),
   key: z.string(),
@@ -1020,6 +1059,50 @@ export const SubBalancerSchema = z.object({
   updatedAt: z.number().int(),
 });
 export type SubBalancer = z.infer<typeof SubBalancerSchema>;
+
+export const TemplateDetailSchema = z.object({
+  content: z.unknown(),
+  createdAt: z.number().int(),
+  description: z.string(),
+  id: z.number().int(),
+  kind: z.string(),
+  sizeBytes: z.number().int(),
+  summary: z.record(z.string(), z.unknown()).optional(),
+  tags: z.array(z.string()),
+  title: z.string(),
+  updatedAt: z.number().int(),
+});
+export type TemplateDetail = z.infer<typeof TemplateDetailSchema>;
+
+export const TemplateInputSchema = z.object({
+  content: z.unknown(),
+  description: z.string(),
+  kind: z.string(),
+  tags: z.array(z.string()),
+  title: z.string(),
+});
+export type TemplateInput = z.infer<typeof TemplateInputSchema>;
+
+export const TemplateSanitizeResultSchema = z.object({
+  content: z.unknown(),
+  kind: z.string(),
+  sizeBytes: z.number().int(),
+  warnings: z.array(z.string()),
+});
+export type TemplateSanitizeResult = z.infer<typeof TemplateSanitizeResultSchema>;
+
+export const TemplateViewSchema = z.object({
+  createdAt: z.number().int(),
+  description: z.string(),
+  id: z.number().int(),
+  kind: z.string(),
+  sizeBytes: z.number().int(),
+  summary: z.record(z.string(), z.unknown()).optional(),
+  tags: z.array(z.string()),
+  title: z.string(),
+  updatedAt: z.number().int(),
+});
+export type TemplateView = z.infer<typeof TemplateViewSchema>;
 
 export const TrafficSchema = z.object({
   Down: z.number().int(),

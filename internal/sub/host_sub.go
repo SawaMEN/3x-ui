@@ -17,13 +17,15 @@ import (
 // inbound/externalProxy path, preserving byte-identical output for zero-host
 // inbounds.
 func (s *SubService) hostEndpoints(inbound *model.Inbound, format string) []map[string]any {
-	var hosts []*model.Host
-	if err := database.GetDB().
-		Where("inbound_id = ? AND is_disabled = ?", inbound.Id, false).
-		Order("sort_order asc, id asc").
-		Find(&hosts).Error; err != nil {
-		logger.Warning("SubService - hostEndpoints:", err)
-		return nil
+	hosts, primed := s.hostsByInbound[inbound.Id]
+	if !primed {
+		if err := database.GetDB().
+			Where("inbound_id = ? AND is_disabled = ?", inbound.Id, false).
+			Order("sort_order asc, id asc").
+			Find(&hosts).Error; err != nil {
+			logger.Warning("SubService - hostEndpoints:", err)
+			return nil
+		}
 	}
 	if len(hosts) == 0 {
 		return nil
@@ -37,6 +39,27 @@ func (s *SubService) hostEndpoints(inbound *model.Inbound, format string) []map[
 		eps = append(eps, hostToExternalProxyMap(h, defaultDest, inbound.Port))
 	}
 	return eps
+}
+
+func (s *SubService) primeHosts(inbounds []*model.Inbound) error {
+	s.hostsByInbound = make(map[int][]*model.Host, len(inbounds))
+	ids := make([]int, 0, len(inbounds))
+	for _, inbound := range inbounds {
+		ids = append(ids, inbound.Id)
+		s.hostsByInbound[inbound.Id] = nil
+	}
+	for start := 0; start < len(ids); start += 400 {
+		var hosts []*model.Host
+		if err := database.GetDB().Where("inbound_id IN ? AND is_disabled = ?", ids[start:min(start+400, len(ids))], false).
+			Order("sort_order asc, id asc").Find(&hosts).Error; err != nil {
+			s.hostsByInbound = nil
+			return err
+		}
+		for _, host := range hosts {
+			s.hostsByInbound[host.InboundId] = append(s.hostsByInbound[host.InboundId], host)
+		}
+	}
+	return nil
 }
 
 // hostToExternalProxyMap projects a Host onto the externalProxy entry shape the

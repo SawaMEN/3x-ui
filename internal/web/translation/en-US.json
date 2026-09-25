@@ -2485,7 +2485,6 @@
       "copied": "JSON copied.",
       "export": "Export JSON",
       "noDescription": "No description.",
-      "namePlaceholderShort": "Template name",
       "applyInbound": "Create inbound",
       "applied": "Inbound created from template. Review and regenerate sanitized secrets before enabling it."
     }

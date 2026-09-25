@@ -177,13 +177,14 @@ func GetZramInstallInfo() (ZramInstallInfo, error) {
 	}
 
 	info.UsingGenerator = info.ActiveBackend == zramBackendGenerator
-	if info.Package == zramBackendTools {
+	switch info.Package {
+	case zramBackendTools:
 		info.ConfigPath = "/etc/default/zramswap"
-	} else if info.Package == zramBackendConfig {
+	case zramBackendConfig:
 		info.ConfigPath = ""
-	} else if info.Package == zramBackendInit {
+	case zramBackendInit:
 		info.ConfigPath = "/etc/conf.d/zram-init"
-	} else {
+	default:
 		info.ConfigPath = "/etc/systemd/zram-generator.conf.d/60-3x-ui.conf"
 	}
 
