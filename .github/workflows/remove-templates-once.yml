@@ -49,15 +49,6 @@ jobs:
             exit 1
           fi
 
-      - name: Validate
-        shell: bash
-        run: |
-          mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
-          go test -vet=off ./internal/web/controller ./internal/web/service ./internal/database
-          cd frontend
-          npm run typecheck
-          npm test
-
       - name: Commit removal
         shell: bash
         run: |
@@ -67,3 +58,12 @@ jobs:
           git diff --cached --quiet && { echo "No changes to commit" >&2; exit 1; }
           git commit -m "refactor: remove templates feature"
           git push origin HEAD:remove-templates-feature
+
+      - name: Validate
+        shell: bash
+        run: |
+          mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+          go test -vet=off ./internal/web/controller ./internal/web/service ./internal/database
+          cd frontend
+          npm run typecheck
+          npm test
