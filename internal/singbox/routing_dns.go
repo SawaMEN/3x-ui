@@ -14,12 +14,15 @@ import (
 // instead of being emitted as invalid sing-box fields.
 func TranslateXrayRouting(raw map[string]any) (map[string]any, error) {
 	out := map[string]any{}
-	rulesRaw, _ := raw["rules"].([]any)
+	rulesRaw, ok := raw["rules"].([]any)
+	if raw["rules"] != nil && !ok {
+		return nil, fmt.Errorf("routing rules has invalid configuration")
+	}
 	rules := make([]map[string]any, 0, len(rulesRaw))
 	for i, item := range rulesRaw {
 		xr, ok := item.(map[string]any)
 		if !ok {
-			continue
+			return nil, fmt.Errorf("routing rule %d has invalid configuration", i)
 		}
 		r := map[string]any{}
 		for _, key := range []string{"attrs", "vlessRoute", "localIP", "localPort", "process", "localOS", "webhook"} {
@@ -230,7 +233,10 @@ func TranslateXrayDomainStrategy(value string) string {
 // is used as the deterministic default unless Xray's fallbackTag is itself
 // one of the selected outbounds.
 func TranslateXrayBalancers(raw map[string]any) ([]map[string]any, error) {
-	items, _ := raw["balancers"].([]any)
+	items, ok := raw["balancers"].([]any)
+	if raw["balancers"] != nil && !ok {
+		return nil, fmt.Errorf("routing balancers has invalid configuration")
+	}
 	if len(items) == 0 {
 		return nil, nil
 	}
@@ -238,7 +244,7 @@ func TranslateXrayBalancers(raw map[string]any) ([]map[string]any, error) {
 	for i, item := range items {
 		balancer, ok := item.(map[string]any)
 		if !ok {
-			continue
+			return nil, fmt.Errorf("balancer %d has invalid configuration", i)
 		}
 		tag := compatString(balancer["tag"])
 		if tag == "" {
