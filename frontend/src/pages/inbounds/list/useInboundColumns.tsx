@@ -48,6 +48,7 @@ export function useInboundColumns({
   trafficDiff,
   onRowAction,
   onSwitchEnable,
+  reorderEnabled,
 }: UseInboundColumnsParams): TableColumnType<DBInboundRecord>[] {
   const { t } = useTranslation();
   const { datepicker } = useDatepicker();
@@ -456,5 +457,6 @@ export function useInboundColumns({
     datepicker,
     onRowAction,
     onSwitchEnable,
+    reorderEnabled,
   ]);
 }
