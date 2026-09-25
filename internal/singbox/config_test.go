@@ -400,7 +400,7 @@ func TestTranslateXrayVLESSOutboundMapsServer(t *testing.T) {
 	}
 }
 
-func TestTranslateXrayHysteria2InboundDropsMasqueradeWhenUsersExist(t *testing.T) {
+func TestTranslateXrayHysteria2InboundKeepsMasqueradeWithUsers(t *testing.T) {
 	raw := map[string]any{
 		"protocol": "hysteria",
 		"tag":      "hy2-in",
@@ -427,8 +427,9 @@ func TestTranslateXrayHysteria2InboundDropsMasqueradeWhenUsersExist(t *testing.T
 	if got["type"] != "hysteria2" {
 		t.Fatalf("unexpected Hysteria2 type: %#v", got["type"])
 	}
-	if _, ok := got["masquerade"]; ok {
-		t.Fatalf("masquerade must be omitted when users are configured: %#v", got["masquerade"])
+	masquerade, ok := got["masquerade"].(map[string]any)
+	if !ok || masquerade["type"] != "string" || masquerade["content"] != "hello" {
+		t.Fatalf("unexpected Hysteria2 masquerade: %#v", got["masquerade"])
 	}
 }
 
