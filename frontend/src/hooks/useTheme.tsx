@@ -7,10 +7,8 @@ const STORAGE_DARK = 'dark-mode';
 const STORAGE_ULTRA = 'isUltraDarkThemeEnabled';
 const STORAGE_THEME = 'xui-theme';
 const STORAGE_LOW_POWER = 'xui-low-power';
-const STORAGE_MENU_STYLE = 'xui-menu-style';
 
 export type ThemeMode = 'light' | 'dark' | 'ultra-dark' | 'colorful' | 'blue-gray' | 'cyberpunk';
-export type MenuStyle = 'pill' | 'solid' | 'minimal';
 
 function readBool(key: string, fallback: boolean): boolean {
   const raw = localStorage.getItem(key);
@@ -20,11 +18,6 @@ function readBool(key: string, fallback: boolean): boolean {
 
 function readLowPower(): boolean {
   return readBool(STORAGE_LOW_POWER, false);
-}
-
-function readMenuStyle(): MenuStyle {
-  const saved = localStorage.getItem(STORAGE_MENU_STYLE);
-  return saved === 'pill' || saved === 'solid' || saved === 'minimal' ? saved : 'pill';
 }
 
 function readThemeMode(): ThemeMode {
@@ -45,7 +38,7 @@ function readThemeMode(): ThemeMode {
   return 'cyberpunk';
 }
 
-function applyDom(mode: ThemeMode, lowPower: boolean, menuStyle: MenuStyle = readMenuStyle()) {
+function applyDom(mode: ThemeMode, lowPower: boolean) {
   const isDark =
     mode === 'dark' || mode === 'ultra-dark' || mode === 'blue-gray' || mode === 'cyberpunk';
   document.body.classList.remove(
@@ -61,7 +54,6 @@ function applyDom(mode: ThemeMode, lowPower: boolean, menuStyle: MenuStyle = rea
   document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
   document.documentElement.setAttribute('data-theme', mode);
   document.documentElement.setAttribute('data-low-power', String(lowPower));
-  document.documentElement.setAttribute('data-menu-style', menuStyle);
   const msg = document.getElementById('message');
   if (msg) {
     msg.classList.remove('dark', 'light');
@@ -71,8 +63,7 @@ function applyDom(mode: ThemeMode, lowPower: boolean, menuStyle: MenuStyle = rea
 
 const initialMode = readThemeMode();
 const initialLowPower = readLowPower();
-const initialMenuStyle = readMenuStyle();
-applyDom(initialLowPower ? 'dark' : initialMode, initialLowPower, initialMenuStyle);
+applyDom(initialLowPower ? 'dark' : initialMode, initialLowPower);
 
 const ULTRA_DARK_TOKENS = {
   colorBgBase: '#000000',
@@ -360,8 +351,6 @@ interface ThemeContextValue {
   antdThemeConfig: ThemeConfig;
   lowPower: boolean;
   toggleLowPower: () => void;
-  menuStyle: MenuStyle;
-  setMenuStyle: (style: MenuStyle) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -369,7 +358,6 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [mode, setMode] = useState<ThemeMode>(initialMode);
   const [lowPower, setLowPower] = useState<boolean>(() => readLowPower());
-  const [menuStyle, setMenuStyleState] = useState<MenuStyle>(() => readMenuStyle());
   const activeMode: ThemeMode = lowPower ? 'dark' : mode;
   const isDark =
     activeMode === 'dark' ||
@@ -379,13 +367,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const isUltra = activeMode === 'ultra-dark';
 
   useLayoutEffect(() => {
-    applyDom(activeMode, lowPower, menuStyle);
+    applyDom(activeMode, lowPower);
     localStorage.setItem(STORAGE_THEME, mode);
     localStorage.setItem(STORAGE_LOW_POWER, String(lowPower));
     localStorage.setItem(STORAGE_DARK, String(isDark));
     localStorage.setItem(STORAGE_ULTRA, String(isUltra));
-    localStorage.setItem(STORAGE_MENU_STYLE, menuStyle);
-  }, [activeMode, mode, isDark, isUltra, lowPower, menuStyle]);
+  }, [activeMode, mode, isDark, isUltra, lowPower]);
 
   const toggleTheme = useCallback(
     () =>
@@ -412,8 +399,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       antdThemeConfig,
       lowPower,
       toggleLowPower,
-      menuStyle,
-      setMenuStyle,
     }),
     [
       mode,
@@ -425,8 +410,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       antdThemeConfig,
       lowPower,
       toggleLowPower,
-      menuStyle,
-      setMenuStyle,
     ],
   );
 
