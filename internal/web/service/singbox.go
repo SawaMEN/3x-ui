@@ -45,7 +45,7 @@ type SingBoxService struct{}
 
 func singBoxInboundRequiresUsers(protocol model.Protocol) bool {
 	switch protocol {
-	case model.VLESS, model.VMESS, model.Trojan, model.NaiveProxy, model.AnyTLS:
+	case model.VLESS, model.VMESS, model.Trojan, model.NaiveProxy, model.Hysteria, model.ShadowTLS, model.AnyTLS:
 		return true
 	default:
 		return false
