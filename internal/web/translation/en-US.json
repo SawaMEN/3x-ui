@@ -125,8 +125,7 @@
     "unpinSidebar": "Unpin sidebar",
     "subFormats": "Sub Formats",
     "telemt": "Telemt",
-    "singBox": "sing-box Configs",
-    "templates": "Templates"
+    "singBox": "sing-box Configs"
   },
   "pages": {
     "login": {
@@ -2452,41 +2451,6 @@
       "sourceDisk": "Actual file",
       "sourceGenerated": "Generated",
       "actualTitle": "Actual sing-box configuration"
-    },
-    "templates": {
-      "title": "Template Library",
-      "subtitle": "Reusable Xray configurations with server-side secret sanitization.",
-      "add": "Add template",
-      "searchPlaceholder": "Search templates",
-      "allKinds": "All types",
-      "inbound": "Inbound",
-      "xrayConfig": "Xray config",
-      "empty": "No templates yet. Import a configuration to create your first sanitized template.",
-      "editorTitle": "Create template",
-      "kind": "Type",
-      "name": "Name",
-      "namePlaceholder": "VLESS Reality starter",
-      "descriptionPlaceholder": "What this template is for",
-      "tagsPlaceholder": "Tags separated by commas: vless, reality, xhttp",
-      "previewSanitize": "Preview sanitization",
-      "sanitizeResult": "Sanitized size: {{size}}",
-      "noWarnings": "No secrets or host-specific values were found.",
-      "invalidJson": "Configuration must be valid JSON.",
-      "sanitizeFailed": "Failed to sanitize template.",
-      "saveFailed": "Failed to save template.",
-      "saved": "Template saved.",
-      "savedWithWarnings": "Template saved after removing sensitive values.",
-      "titleRequired": "Template name is required.",
-      "loadFailed": "Failed to load templates.",
-      "deleteTitle": "Delete this template?",
-      "deleteFailed": "Failed to delete template.",
-      "deleted": "Template deleted.",
-      "copy": "Copy JSON",
-      "copied": "JSON copied.",
-      "export": "Export JSON",
-      "noDescription": "No description.",
-      "applyInbound": "Create inbound",
-      "applied": "Inbound created from template. Review and regenerate sanitized secrets before enabling it."
     }
   },
   "tgbot": {

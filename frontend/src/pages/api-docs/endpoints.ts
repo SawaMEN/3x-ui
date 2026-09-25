@@ -198,67 +198,6 @@ const hwidStatusErrorResponses = {
 
 export const sections: readonly Section[] = [
   {
-    id: 'templates',
-    title: 'Templates',
-    description:
-      'Sanitized local configuration templates. All endpoints require panel authentication.',
-    endpoints: [
-      {
-        method: 'GET',
-        path: '/panel/api/templates/list',
-        summary:
-          'List templates as {items, total}, with optional kind, text search and pagination.',
-        params: [
-          {
-            name: 'kind',
-            in: 'query',
-            type: 'string',
-            optional: true,
-            enum: ['inbound', 'xray_config'],
-          },
-          { name: 'q', in: 'query', type: 'string', optional: true },
-          { name: 'limit', in: 'query', type: 'integer', optional: true, defaultValue: 20 },
-          { name: 'offset', in: 'query', type: 'integer', optional: true, defaultValue: 0 },
-        ],
-      },
-      {
-        method: 'GET',
-        path: '/panel/api/templates/get/:id',
-        summary: 'Read a template and its sanitized configuration.',
-        params: [{ name: 'id', in: 'path', type: 'integer' }],
-        responseSchema: 'TemplateDetail',
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/templates/sanitize',
-        summary: 'Preview sanitized inbound or Xray configuration and warnings without saving.',
-        params: [
-          { name: 'kind', in: 'body', type: 'string', enum: ['inbound', 'xray_config'] },
-          { name: 'content', in: 'body', type: 'object' },
-        ],
-        responseSchema: 'TemplateSanitizeResult',
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/templates/save',
-        summary: 'Sanitize and save a template; returns {template, warnings}.',
-        params: [
-          { name: 'kind', in: 'body', type: 'string', enum: ['inbound', 'xray_config'] },
-          { name: 'title', in: 'body', type: 'string' },
-          { name: 'description', in: 'body', type: 'string', optional: true },
-          { name: 'tags', in: 'body', type: 'string[]', optional: true },
-          { name: 'content', in: 'body', type: 'object' },
-        ],
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/templates/del/:id',
-        summary: 'Delete a saved template.',
-        params: [{ name: 'id', in: 'path', type: 'integer' }],
-      },
-    ],
-  },
-  {
     id: 'routing-presets',
     title: 'Routing Presets',
     description: 'Reusable routing rules owned by the authenticated user.',

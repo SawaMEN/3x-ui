@@ -205,9 +205,6 @@ func (a *APIController) initRouter(g *gin.RouterGroup) {
 	telemt := api.Group("/telemt")
 	NewTelemtController(telemt, a.settingService)
 
-	templates := api.Group("/templates")
-	NewTemplateController(templates)
-
 	routingPresets := api.Group("/xray/routingPresets")
 	NewRoutingPresetController(routingPresets)
 
