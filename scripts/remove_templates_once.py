@@ -1,6 +1,5 @@
 from pathlib import Path
 import json
-import re
 
 
 def replace_exact(path: str, old: str, new: str = "") -> None:
@@ -10,54 +9,6 @@ def replace_exact(path: str, old: str, new: str = "") -> None:
     if count != 1:
         raise SystemExit(f"{path}: expected exactly one match, got {count}: {old!r}")
     p.write_text(text.replace(old, new, 1))
-
-
-def remove_json_object_property(path: str, key: str, indent: int = 4) -> None:
-    p = Path(path)
-    text = p.read_text()
-    marker = " " * indent + f'"{key}": {{'
-    start = text.find(marker)
-    if start < 0:
-        raise SystemExit(f"{path}: object property {key!r} not found")
-    brace = text.find("{", start)
-    depth = 0
-    in_string = False
-    escaped = False
-    end = None
-    for i in range(brace, len(text)):
-        ch = text[i]
-        if in_string:
-            if escaped:
-                escaped = False
-            elif ch == "\\":
-                escaped = True
-            elif ch == '"':
-                in_string = False
-            continue
-        if ch == '"':
-            in_string = True
-        elif ch == "{":
-            depth += 1
-        elif ch == "}":
-            depth -= 1
-            if depth == 0:
-                end = i + 1
-                break
-    if end is None:
-        raise SystemExit(f"{path}: unterminated object for {key!r}")
-    line_start = text.rfind("\n", 0, start) + 1
-    cursor = end
-    if cursor < len(text) and text[cursor] == ",":
-        cursor += 1
-    if cursor < len(text) and text[cursor] == "\n":
-        cursor += 1
-    else:
-        prev = text.rfind(",", 0, line_start)
-        if prev >= 0:
-            text = text[:prev] + text[prev + 1:]
-            line_start -= 1
-            cursor -= 1
-    p.write_text(text[:line_start] + text[cursor:])
 
 
 # Frontend navigation and route.
@@ -100,13 +51,13 @@ p.write_text(text[:begin] + text[end:])
 # Locale keys used only by the removed page/menu.
 for locale in ("internal/web/translation/en-US.json", "internal/web/translation/ru-RU.json"):
     p = Path(locale)
-    text = p.read_text()
-    text, n = re.subn(r',\n    "templates": "[^"]*"\n  },', '\n  },', text, count=1)
-    if n != 1:
-        raise SystemExit(f"{locale}: menu.templates not found")
-    p.write_text(text)
-    remove_json_object_property(locale, "templates", indent=4)
-    json.loads(Path(locale).read_text())
+    data = json.loads(p.read_text())
+    try:
+        del data["menu"]["templates"]
+        del data["pages"]["templates"]
+    except KeyError as exc:
+        raise SystemExit(f"{locale}: expected templates key missing: {exc}") from exc
+    p.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n")
 
 # Files dedicated to the feature.
 for filename in (
