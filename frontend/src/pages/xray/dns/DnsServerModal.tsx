@@ -85,9 +85,9 @@ function valuesFromServer(server: DnsServerValue | null): DnsServerForm {
     finalQuery: data?.finalQuery ?? server.finalQuery ?? false,
     tag: data?.tag ?? server.tag ?? '',
     clientIp:
-      data?.clientIp ??
-      server.clientIp ??
-      (typeof server.clientIP === 'string' ? server.clientIP : ''),
+      data?.clientIP ??
+      (typeof server.clientIP === 'string' ? server.clientIP : undefined) ??
+      (typeof server.clientIp === 'string' ? server.clientIp : ''),
     serveStale: data?.serveStale ?? server.serveStale ?? false,
     serveExpiredTTL: data?.serveExpiredTTL ?? server.serveExpiredTTL ?? 0,
     timeoutMs: data?.timeoutMs ?? server.timeoutMs ?? 4000,
@@ -126,7 +126,7 @@ function valuesToWire(values: DnsServerForm): DnsServerValue {
   };
   if (!isEncryptedDnsAddress(values.address)) out.port = values.port;
   if (values.tag) out.tag = values.tag;
-  if (values.clientIp) out.clientIp = values.clientIp;
+  if (values.clientIp) out.clientIP = values.clientIp;
   return out as DnsServerValue;
 }
 
