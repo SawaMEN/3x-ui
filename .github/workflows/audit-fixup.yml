@@ -25,25 +25,41 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          path = Path("internal/web/service/inbound.go")
+          path = Path("frontend/src/pages/inbounds/list/useInboundColumns.tsx")
           text = path.read_text()
-          old = 'Where("user_id = ?", userId).Order("id ASC").Find(&inbounds).Error'
-          new = 'Where("user_id = ?", userId).Order("sort_order ASC, id ASC").Find(&inbounds).Error'
-          count = text.count(old)
-          if count != 1:
-              raise SystemExit(f"{path}: expected one slim-order match, found {count}")
+          old = "  onRowAction,\n  onSwitchEnable,\n}: UseInboundColumnsParams)"
+          new = "  onRowAction,\n  onSwitchEnable,\n  reorderEnabled,\n}: UseInboundColumnsParams)"
+          if text.count(old) != 1:
+              raise SystemExit(f"{path}: unexpected parameter block")
+          text = text.replace(old, new, 1)
+          old = "    onRowAction,\n    onSwitchEnable,\n  ]);"
+          new = "    onRowAction,\n    onSwitchEnable,\n    reorderEnabled,\n  ]);"
+          if text.count(old) != 1:
+              raise SystemExit(f"{path}: unexpected dependency block")
+          path.write_text(text.replace(old, new, 1))
+
+          path = Path("frontend/src/pages/templates/TemplatesPage.tsx")
+          text = path.read_text()
+          old = "import { useTranslation } from 'react-i18next';\n"
+          new = old + "import { useNavigate } from 'react-router-dom';\n"
+          if text.count(old) != 1 or "useNavigate } from 'react-router-dom'" in text:
+              raise SystemExit(f"{path}: unexpected import block")
           path.write_text(text.replace(old, new, 1))
           PY
           cd frontend
           npm ci --no-audit --no-fund
           npx oxfmt --write \
-            src/pages/settings/SettingsPage.tsx \
+            src/pages/inbounds/list/useInboundColumns.tsx \
             src/pages/templates/TemplatesPage.tsx \
-            src/pages/xray/routing/RoutingTab.tsx
+            src/test/node-list-rerender.test.tsx \
+            src/test/node-list-rowkey.test.tsx
       - name: Commit fixups
         run: |
           git config user.name "3x-ui audit bot"
           git config user.email "actions@users.noreply.github.com"
           git add -A
+          if git diff --cached --quiet; then
+            exit 0
+          fi
           git commit -m "audit-fixup"
           git push origin HEAD:audit/full-project-hardening-20260925
