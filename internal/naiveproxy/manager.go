@@ -5,20 +5,38 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
+	"strconv"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 )
 
-const releasesAPI = "https://api.github.com/repos/klzgrad/naiveproxy/releases/latest"
+const (
+	releasesAPI       = "https://api.github.com/repos/klzgrad/forwardproxy/releases/latest"
+	releaseAssetName  = "caddy-forwardproxy-naive.tar.xz"
+	reconcileInterval = 3 * time.Second
+)
+
+var (
+	managerMu      sync.Mutex
+	reconcilerOnce sync.Once
+)
 
 type Status struct {
 	Installed       bool   `json:"installed"`
@@ -26,6 +44,21 @@ type Status struct {
 	LatestVersion   string `json:"latestVersion"`
 	UpdateAvailable bool   `json:"updateAvailable"`
 	Binary          string `json:"binary"`
+	Running         bool   `json:"running"`
+}
+
+type User struct {
+	Username string
+	Password string
+}
+
+type Inbound struct {
+	Tag             string
+	Listen          string
+	Port            int
+	CertificatePath string
+	KeyPath         string
+	Users           []User
 }
 
 type releaseAsset struct {
@@ -39,6 +72,99 @@ type release struct {
 	Assets  []releaseAsset `json:"assets"`
 }
 
+type inboundSettings struct {
+	Clients []model.Client `json:"clients"`
+	TLS     struct {
+		CertificatePath string `json:"certificatePath"`
+		KeyPath         string `json:"keyPath"`
+	} `json:"tls"`
+}
+
+// StartAutoReconciler keeps the standalone Naive server in sync with the DB.
+// It is intentionally idempotent and safe to call from controller setup.
+func StartAutoReconciler() {
+	reconcilerOnce.Do(func() {
+		go func() {
+			ticker := time.NewTicker(reconcileInterval)
+			defer ticker.Stop()
+			for {
+				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				if err := Reconcile(ctx); err != nil && database.GetDB() != nil {
+					logger.Warning("NaiveProxy reconcile failed:", err)
+				}
+				cancel()
+				<-ticker.C
+			}
+		}()
+	})
+}
+
+// Reconcile makes Caddy-Naive match the currently selected core and local
+// enabled Naive inbounds. When sing-box is selected the sidecar is stopped,
+// leaving the native sing-box Naive listener as the sole owner of the port.
+func Reconcile(ctx context.Context) error {
+	db := database.GetDB()
+	if db == nil {
+		return nil
+	}
+
+	coreType := "xray"
+	var row struct{ Value string }
+	if err := db.Table("settings").Select("value").Where("key = ?", "coreType").Take(&row).Error; err == nil && strings.TrimSpace(row.Value) != "" {
+		coreType = strings.TrimSpace(row.Value)
+	}
+	if coreType != "xray" {
+		return Stop()
+	}
+
+	var rows []*model.Inbound
+	if err := db.Model(&model.Inbound{}).
+		Preload("ClientStats").
+		Where("protocol = ? AND enable = ? AND node_id IS NULL", model.NaiveProxy, true).
+		Order("id ASC").
+		Find(&rows).Error; err != nil {
+		return err
+	}
+
+	inbounds := make([]Inbound, 0, len(rows))
+	for _, row := range rows {
+		var settings inboundSettings
+		if err := json.Unmarshal([]byte(row.Settings), &settings); err != nil {
+			return fmt.Errorf("Naive inbound %q has invalid settings: %w", row.Tag, err)
+		}
+		enabledByEmail := make(map[string]bool, len(row.ClientStats))
+		for _, stat := range row.ClientStats {
+			enabledByEmail[strings.ToLower(strings.TrimSpace(stat.Email))] = stat.Enable
+		}
+		users := make([]User, 0, len(settings.Clients))
+		seen := make(map[string]struct{}, len(settings.Clients))
+		for _, client := range settings.Clients {
+			username := strings.TrimSpace(client.Email)
+			if username == "" || client.Password == "" || !client.Enable {
+				continue
+			}
+			if enabled, exists := enabledByEmail[strings.ToLower(username)]; exists && !enabled {
+				continue
+			}
+			key := strings.ToLower(username)
+			if _, exists := seen[key]; exists {
+				continue
+			}
+			seen[key] = struct{}{}
+			users = append(users, User{Username: username, Password: client.Password})
+		}
+		inbounds = append(inbounds, Inbound{
+			Tag:             row.Tag,
+			Listen:          row.Listen,
+			Port:            row.Port,
+			CertificatePath: strings.TrimSpace(settings.TLS.CertificatePath),
+			KeyPath:         strings.TrimSpace(settings.TLS.KeyPath),
+			Users:           users,
+		})
+	}
+	return Sync(ctx, inbounds)
+}
+
 func GetStatus(ctx context.Context) (Status, error) {
 	binary := BinaryPath()
 	_, statErr := os.Stat(binary)
@@ -46,12 +172,12 @@ func GetStatus(ctx context.Context) (Status, error) {
 		Installed: statErr == nil,
 		Version:   installedVersion(binary),
 		Binary:    binary,
+		Running:   processRunning(),
 	}
 
 	rel, err := fetchLatestRelease(ctx)
 	if err != nil {
-		// A temporary GitHub/API failure must not make an already installed
-		// standalone NaiveProxy look absent to the panel.
+		// Network failure must not make an installed component look absent.
 		return status, nil
 	}
 	status.LatestVersion = strings.TrimSpace(rel.TagName)
@@ -61,7 +187,15 @@ func GetStatus(ctx context.Context) (Status, error) {
 	return status, nil
 }
 
+// Update installs the official Caddy build carrying klzgrad/forwardproxy@naive.
+// Reconcile is called afterwards so an active Xray setup resumes automatically.
 func Update(ctx context.Context) (Status, error) {
+	managerMu.Lock()
+	defer managerMu.Unlock()
+
+	if runtime.GOOS != "linux" {
+		return Status{}, fmt.Errorf("standalone NaiveProxy server is supported on Linux only")
+	}
 	rel, err := fetchLatestRelease(ctx)
 	if err != nil {
 		return Status{}, err
@@ -71,7 +205,7 @@ func Update(ctx context.Context) (Status, error) {
 		return Status{}, err
 	}
 
-	tmpDir, err := os.MkdirTemp("", "3x-ui-naiveproxy-*")
+	tmpDir, err := os.MkdirTemp("", "3x-ui-caddy-naive-*")
 	if err != nil {
 		return Status{}, err
 	}
@@ -89,11 +223,12 @@ func Update(ctx context.Context) (Status, error) {
 		return Status{}, err
 	}
 
+	_ = stopLocked()
 	binDir := config.GetBinFolderPath()
 	if err := os.MkdirAll(binDir, 0o755); err != nil {
 		return Status{}, err
 	}
-	staged := filepath.Join(binDir, ".naive.new")
+	staged := filepath.Join(binDir, ".caddy-naive.new")
 	if err := copyFile(extracted, staged); err != nil {
 		return Status{}, err
 	}
@@ -109,19 +244,248 @@ func Update(ctx context.Context) (Status, error) {
 		return Status{}, err
 	}
 
-	return GetStatus(ctx)
-}
-
-func BinaryPath() string {
-	name := "naive"
-	if runtime.GOOS == "windows" {
-		name += ".exe"
+	// Do not recurse through the manager lock. The next reconciler tick will
+	// start the newly installed binary; update endpoint callers still receive
+	// the installed version immediately.
+	status, err := statusWithoutRelease()
+	if err != nil {
+		return Status{}, err
 	}
-	return filepath.Join(config.GetBinFolderPath(), name)
+	status.LatestVersion = strings.TrimSpace(rel.TagName)
+	status.UpdateAvailable = false
+	return status, nil
 }
 
-func versionPath() string {
-	return filepath.Join(config.GetBinFolderPath(), "naiveproxy.version")
+// Sync writes and validates a complete Caddyfile, then atomically restarts the
+// sidecar only when its effective configuration changed.
+func Sync(ctx context.Context, inbounds []Inbound) error {
+	managerMu.Lock()
+	defer managerMu.Unlock()
+
+	if len(inbounds) == 0 {
+		return stopLocked()
+	}
+	if _, err := os.Stat(BinaryPath()); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("NaiveProxy server is not installed; install Caddy-Naive from System Updates")
+		}
+		return err
+	}
+
+	content, err := RenderConfig(inbounds)
+	if err != nil {
+		return err
+	}
+	old, _ := os.ReadFile(configPath())
+	if string(old) == content && processRunning() {
+		return nil
+	}
+
+	if err := os.MkdirAll(config.GetBinFolderPath(), 0o755); err != nil {
+		return err
+	}
+	staged := configPath() + ".new"
+	if err := os.WriteFile(staged, []byte(content), 0o600); err != nil {
+		return err
+	}
+	if err := validateConfig(ctx, staged); err != nil {
+		_ = os.Remove(staged)
+		return err
+	}
+	if err := os.Rename(staged, configPath()); err != nil {
+		_ = os.Remove(staged)
+		return err
+	}
+	if err := stopLocked(); err != nil {
+		return err
+	}
+	return startLocked()
+}
+
+func RenderConfig(inbounds []Inbound) (string, error) {
+	if len(inbounds) == 0 {
+		return "", nil
+	}
+	items := append([]Inbound(nil), inbounds...)
+	sort.SliceStable(items, func(i, j int) bool {
+		if items[i].Port == items[j].Port {
+			return items[i].Tag < items[j].Tag
+		}
+		return items[i].Port < items[j].Port
+	})
+	ports := make(map[int]string, len(items))
+	var b strings.Builder
+	b.WriteString("{\n\tadmin off\n\torder forward_proxy before file_server\n}\n\n")
+
+	for _, inbound := range items {
+		if inbound.Port < 1 || inbound.Port > 65535 {
+			return "", fmt.Errorf("Naive inbound %q has invalid port %d", inbound.Tag, inbound.Port)
+		}
+		if previous, exists := ports[inbound.Port]; exists {
+			return "", fmt.Errorf("Naive inbounds %q and %q use the same port %d", previous, inbound.Tag, inbound.Port)
+		}
+		ports[inbound.Port] = inbound.Tag
+		if inbound.CertificatePath == "" || inbound.KeyPath == "" {
+			return "", fmt.Errorf("Naive inbound %q requires certificatePath and keyPath", inbound.Tag)
+		}
+		if len(inbound.Users) == 0 {
+			return "", fmt.Errorf("Naive inbound %q has no enabled users", inbound.Tag)
+		}
+
+		fmt.Fprintf(&b, ":%d {\n", inbound.Port)
+		listen := strings.TrimSpace(inbound.Listen)
+		if listen != "" && listen != "0.0.0.0" && listen != "::" && listen != "[::]" {
+			if strings.HasPrefix(listen, "@") || strings.HasPrefix(listen, "/") {
+				return "", fmt.Errorf("Naive inbound %q cannot bind to a unix socket", inbound.Tag)
+			}
+			if host, _, err := net.SplitHostPort(listen); err == nil {
+				listen = host
+			}
+			listen = strings.Trim(listen, "[]")
+			fmt.Fprintf(&b, "\tbind %s\n", caddyQuote(listen))
+		}
+		fmt.Fprintf(&b, "\ttls %s %s\n", caddyQuote(inbound.CertificatePath), caddyQuote(inbound.KeyPath))
+		b.WriteString("\tforward_proxy {\n")
+		for _, user := range inbound.Users {
+			if strings.TrimSpace(user.Username) == "" || user.Password == "" {
+				continue
+			}
+			fmt.Fprintf(&b, "\t\tbasic_auth %s %s\n", caddyQuote(user.Username), caddyQuote(user.Password))
+		}
+		b.WriteString("\t\thide_ip\n\t\thide_via\n\t\tprobe_resistance\n\t}\n}\n\n")
+	}
+	return b.String(), nil
+}
+
+func caddyQuote(value string) string { return strconv.Quote(value) }
+
+func Stop() error {
+	managerMu.Lock()
+	defer managerMu.Unlock()
+	return stopLocked()
+}
+
+func startLocked() error {
+	if processRunning() {
+		return nil
+	}
+	logFile, err := os.OpenFile(logPath(), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	cmd := exec.Command(BinaryPath(), "run", "--config", configPath(), "--adapter", "caddyfile")
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+	if err := cmd.Start(); err != nil {
+		_ = logFile.Close()
+		return fmt.Errorf("start Caddy-Naive: %w", err)
+	}
+	_ = logFile.Close()
+	if err := os.WriteFile(pidPath(), []byte(strconv.Itoa(cmd.Process.Pid)+"\n"), 0o600); err != nil {
+		_ = cmd.Process.Kill()
+		return err
+	}
+	go func() {
+		_ = cmd.Wait()
+		if data, err := os.ReadFile(pidPath()); err == nil && strings.TrimSpace(string(data)) == strconv.Itoa(cmd.Process.Pid) {
+			_ = os.Remove(pidPath())
+		}
+	}()
+	time.Sleep(250 * time.Millisecond)
+	if !processRunning() {
+		return fmt.Errorf("Caddy-Naive exited immediately; see %s", logPath())
+	}
+	return nil
+}
+
+func stopLocked() error {
+	pid, ok := readPID()
+	if !ok {
+		_ = os.Remove(pidPath())
+		return nil
+	}
+	proc, err := os.FindProcess(pid)
+	if err != nil {
+		_ = os.Remove(pidPath())
+		return nil
+	}
+	if runtime.GOOS == "linux" && !pidBelongsToBinary(pid) {
+		_ = os.Remove(pidPath())
+		return nil
+	}
+	_ = proc.Signal(syscall.SIGTERM)
+	for i := 0; i < 20; i++ {
+		if !pidAlive(pid) {
+			_ = os.Remove(pidPath())
+			return nil
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	_ = proc.Kill()
+	_ = os.Remove(pidPath())
+	return nil
+}
+
+func processRunning() bool {
+	pid, ok := readPID()
+	if !ok || !pidAlive(pid) {
+		return false
+	}
+	return runtime.GOOS != "linux" || pidBelongsToBinary(pid)
+}
+
+func readPID() (int, bool) {
+	data, err := os.ReadFile(pidPath())
+	if err != nil {
+		return 0, false
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	return pid, err == nil && pid > 1
+}
+
+func pidAlive(pid int) bool {
+	proc, err := os.FindProcess(pid)
+	if err != nil {
+		return false
+	}
+	return proc.Signal(syscall.Signal(0)) == nil
+}
+
+func pidBelongsToBinary(pid int) bool {
+	exe, err := os.Readlink(fmt.Sprintf("/proc/%d/exe", pid))
+	if err != nil {
+		return false
+	}
+	want, err := filepath.EvalSymlinks(BinaryPath())
+	if err != nil {
+		want = BinaryPath()
+	}
+	got, err := filepath.EvalSymlinks(exe)
+	if err != nil {
+		got = exe
+	}
+	return got == want
+}
+
+func validateConfig(ctx context.Context, path string) error {
+	cmd := exec.CommandContext(ctx, BinaryPath(), "validate", "--config", path, "--adapter", "caddyfile")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("validate Caddy-Naive config: %w: %s", err, strings.TrimSpace(string(output)))
+	}
+	return nil
+}
+
+func BinaryPath() string       { return filepath.Join(config.GetBinFolderPath(), "caddy-naive") }
+func versionPath() string      { return filepath.Join(config.GetBinFolderPath(), "caddy-naive.version") }
+func configPath() string       { return filepath.Join(config.GetBinFolderPath(), "caddy-naive.Caddyfile") }
+func pidPath() string          { return filepath.Join(config.GetBinFolderPath(), "caddy-naive.pid") }
+func logPath() string          { return filepath.Join(config.GetBinFolderPath(), "caddy-naive.log") }
+func normalizeVersion(v string) string { return strings.TrimPrefix(strings.TrimSpace(v), "v") }
+
+func statusWithoutRelease() (Status, error) {
+	binary := BinaryPath()
+	_, err := os.Stat(binary)
+	return Status{Installed: err == nil, Version: installedVersion(binary), Binary: binary, Running: processRunning()}, nil
 }
 
 func installedVersion(binary string) string {
@@ -135,26 +499,11 @@ func installedVersion(binary string) string {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	output, err := exec.CommandContext(ctx, binary, "--version").CombinedOutput()
+	output, err := exec.CommandContext(ctx, binary, "version").CombinedOutput()
 	if err != nil && len(output) == 0 {
 		return ""
 	}
-	return parseVersionOutput(string(output))
-}
-
-func parseVersionOutput(output string) string {
-	for _, field := range strings.Fields(strings.TrimSpace(output)) {
-		candidate := strings.Trim(field, " ,;()[]")
-		plain := strings.TrimPrefix(candidate, "v")
-		if strings.Count(plain, ".") >= 2 && strings.ContainsAny(plain, "0123456789") {
-			return candidate
-		}
-	}
-	return strings.TrimSpace(output)
-}
-
-func normalizeVersion(value string) string {
-	return strings.TrimPrefix(strings.TrimSpace(value), "v")
+	return strings.TrimSpace(string(output))
 }
 
 func fetchLatestRelease(ctx context.Context) (release, error) {
@@ -166,54 +515,29 @@ func fetchLatestRelease(ctx context.Context) (release, error) {
 	req.Header.Set("User-Agent", "3x-ui")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return release{}, fmt.Errorf("fetch NaiveProxy release: %w", err)
+		return release{}, fmt.Errorf("fetch Caddy-Naive release: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return release{}, fmt.Errorf("NaiveProxy release API returned %s", resp.Status)
+		return release{}, fmt.Errorf("Caddy-Naive release API returned %s", resp.Status)
 	}
 	var rel release
 	if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil {
 		return release{}, err
 	}
 	if strings.TrimSpace(rel.TagName) == "" {
-		return release{}, fmt.Errorf("NaiveProxy release API returned an empty tag")
+		return release{}, fmt.Errorf("Caddy-Naive release API returned an empty tag")
 	}
 	return rel, nil
 }
 
 func pickAsset(assets []releaseAsset) (releaseAsset, error) {
-	if runtime.GOOS != "linux" {
-		return releaseAsset{}, fmt.Errorf("standalone NaiveProxy updater is supported on Linux only")
-	}
-	arch := ""
-	switch runtime.GOARCH {
-	case "amd64":
-		arch = "x64"
-	case "386":
-		arch = "x86"
-	case "arm64":
-		arch = "arm64"
-	case "arm":
-		arch = "arm"
-	case "loong64":
-		arch = "loong64"
-	case "mips64le":
-		arch = "mips64el"
-	case "mipsle":
-		arch = "mipsel"
-	case "riscv64":
-		arch = "riscv64"
-	default:
-		return releaseAsset{}, fmt.Errorf("NaiveProxy is not published for linux/%s", runtime.GOARCH)
-	}
-	needle := "-linux-" + arch + ".tar.xz"
 	for _, asset := range assets {
-		if strings.HasSuffix(asset.Name, needle) && asset.URL != "" {
+		if asset.Name == releaseAssetName && asset.URL != "" {
 			return asset, nil
 		}
 	}
-	return releaseAsset{}, fmt.Errorf("no NaiveProxy release asset for linux/%s", runtime.GOARCH)
+	return releaseAsset{}, fmt.Errorf("official release does not contain %s", releaseAssetName)
 }
 
 func downloadAndVerify(ctx context.Context, asset releaseAsset, dst string) error {
@@ -228,7 +552,7 @@ func downloadAndVerify(ctx context.Context, asset releaseAsset, dst string) erro
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("NaiveProxy download returned %s", resp.Status)
+		return fmt.Errorf("Caddy-Naive download returned %s", resp.Status)
 	}
 	out, err := os.Create(dst)
 	if err != nil {
@@ -243,12 +567,11 @@ func downloadAndVerify(ctx context.Context, asset releaseAsset, dst string) erro
 	if closeErr != nil {
 		return closeErr
 	}
-
 	if strings.HasPrefix(strings.ToLower(asset.Digest), "sha256:") {
 		expected := strings.TrimSpace(strings.TrimPrefix(strings.ToLower(asset.Digest), "sha256:"))
 		actual := hex.EncodeToString(hash.Sum(nil))
 		if expected != "" && actual != expected {
-			return fmt.Errorf("NaiveProxy archive checksum mismatch")
+			return fmt.Errorf("Caddy-Naive archive checksum mismatch")
 		}
 	}
 	return nil
@@ -256,11 +579,11 @@ func downloadAndVerify(ctx context.Context, asset releaseAsset, dst string) erro
 
 func extractTarXZ(ctx context.Context, archivePath, dst string) error {
 	if _, err := exec.LookPath("tar"); err != nil {
-		return fmt.Errorf("tar is required to install standalone NaiveProxy: %w", err)
+		return fmt.Errorf("tar with xz support is required to install Caddy-Naive: %w", err)
 	}
 	cmd := exec.CommandContext(ctx, "tar", "-xJf", archivePath, "-C", dst)
 	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("extract NaiveProxy: %w: %s", err, strings.TrimSpace(string(output)))
+		return fmt.Errorf("extract Caddy-Naive: %w: %s", err, strings.TrimSpace(string(output)))
 	}
 	return nil
 }
@@ -274,7 +597,8 @@ func findExtractedBinary(root string) (string, error) {
 		if info.IsDir() {
 			return nil
 		}
-		if filepath.Base(path) == "naive" {
+		name := strings.ToLower(filepath.Base(path))
+		if name == "caddy" || name == "caddy-forwardproxy-naive" {
 			found = path
 			return filepath.SkipAll
 		}
@@ -284,7 +608,7 @@ func findExtractedBinary(root string) (string, error) {
 		return "", err
 	}
 	if found == "" {
-		return "", fmt.Errorf("naive binary not found in NaiveProxy archive")
+		return "", fmt.Errorf("Caddy binary not found in %s", releaseAssetName)
 	}
 	return found, nil
 }
