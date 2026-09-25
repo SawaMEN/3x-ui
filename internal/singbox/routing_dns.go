@@ -390,9 +390,13 @@ func TranslateXrayDNS(raw map[string]any) (map[string]any, error) {
 	if disableCache, ok := raw["disableCache"].(bool); ok && disableCache {
 		out["disable_cache"] = true
 	}
-	serversRaw, _ := raw["servers"].([]any)
+	serversRaw, ok := raw["servers"].([]any)
+	if raw["servers"] != nil && !ok {
+		return nil, fmt.Errorf("DNS servers has invalid configuration")
+	}
 	servers := make([]map[string]any, 0, len(serversRaw))
 	needsBootstrap := false
+	timeoutMillis := uint64(4000)
 	for i, item := range serversRaw {
 		var address string
 		var extra map[string]any
@@ -413,6 +417,25 @@ func TranslateXrayDNS(raw map[string]any) (map[string]any, error) {
 		default:
 			return nil, fmt.Errorf("DNS server %d has an invalid configuration", i)
 		}
+		serverTimeout := uint64(4000)
+		if extra["timeoutMs"] != nil {
+			switch extra["timeoutMs"].(type) {
+			case float64, int, json.Number:
+			default:
+				return nil, fmt.Errorf("DNS server %d has invalid timeoutMs", i)
+			}
+			value, err := strconv.ParseUint(fmt.Sprint(extra["timeoutMs"]), 10, 64)
+			if err != nil || value > uint64((1<<63-1)/1000000) {
+				return nil, fmt.Errorf("DNS server %d has invalid timeoutMs", i)
+			}
+			if value != 0 {
+				serverTimeout = value
+			}
+		}
+		if i > 0 && serverTimeout != timeoutMillis {
+			return nil, fmt.Errorf("DNS servers have different timeouts")
+		}
+		timeoutMillis = serverTimeout
 		if address == "" {
 			return nil, fmt.Errorf("DNS server %d has an empty address", i)
 		}
@@ -542,6 +565,7 @@ func TranslateXrayDNS(raw map[string]any) (map[string]any, error) {
 	}
 	if len(servers) > 0 {
 		out["servers"] = servers
+		out["timeout"] = fmt.Sprintf("%dms", timeoutMillis)
 		for _, server := range servers {
 			if server["type"] != "hosts" {
 				out["final"] = server["tag"]
