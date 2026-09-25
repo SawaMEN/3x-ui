@@ -17,9 +17,6 @@ jobs:
         with:
           ref: audit/full-project-hardening-20260925
           fetch-depth: 0
-      - uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
       - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
@@ -28,39 +25,21 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          def replace_once(path: str, old: str, new: str) -> None:
-              p = Path(path)
-              text = p.read_text()
-              count = text.count(old)
-              if count != 1:
-                  raise SystemExit(f"{path}: expected one match, found {count}")
-              p.write_text(text.replace(old, new, 1))
-
-          replace_once(
-              "internal/web/service/singbox.go",
-              '"github.com/SawaMEN/3x-ui/v3/internal/database/model"\n\t"github.com/SawaMEN/3x-ui/v3/internal/singbox"',
-              '"github.com/SawaMEN/3x-ui/v3/internal/database/model"\n\t"github.com/SawaMEN/3x-ui/v3/internal/logger"\n\t"github.com/SawaMEN/3x-ui/v3/internal/singbox"',
-          )
-          replace_once(
-              "frontend/src/pages/settings/SecurityTab.tsx",
-              "  const fetchSessions = useCallback(async () => {\n    setSessionsLoading(true);\n    try {",
-              "  const fetchSessions = useCallback(async () => {\n    try {",
-          )
-          replace_once(
-              "frontend/src/pages/settings/SecurityTab.tsx",
-              "onClick={() => void fetchSessions()}",
-              "onClick={() => { setSessionsLoading(true); void fetchSessions(); }}",
-          )
-          replace_once(
-              "frontend/src/pages/inbounds/list/useInboundColumns.tsx",
-              "    onSwitchEnable,\n    reorderEnabled,\n  ]);",
-              "    onSwitchEnable,\n  ]);",
-          )
+          path = Path("internal/web/service/inbound.go")
+          text = path.read_text()
+          old = 'Where("user_id = ?", userId).Order("id ASC").Find(&inbounds).Error'
+          new = 'Where("user_id = ?", userId).Order("sort_order ASC, id ASC").Find(&inbounds).Error'
+          count = text.count(old)
+          if count != 1:
+              raise SystemExit(f"{path}: expected one slim-order match, found {count}")
+          path.write_text(text.replace(old, new, 1))
           PY
-          gofmt -w internal/web/service/singbox.go internal/web/session/session.go internal/web/session/current_session.go internal/web/service/template_test.go internal/web/session/session_test.go
           cd frontend
-          npm ci
-          npm run gen
+          npm ci --no-audit --no-fund
+          npx oxfmt --write \
+            src/pages/settings/SettingsPage.tsx \
+            src/pages/templates/TemplatesPage.tsx \
+            src/pages/xray/routing/RoutingTab.tsx
       - name: Commit fixups
         run: |
           git config user.name "3x-ui audit bot"
