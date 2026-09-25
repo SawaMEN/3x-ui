@@ -1075,50 +1075,6 @@ export const EXAMPLES: Record<string, unknown> = {
     "strategy": "random",
     "updatedAt": 1710000000000
   },
-  "TemplateDetail": {
-    "content": null,
-    "createdAt": 0,
-    "description": "",
-    "id": 0,
-    "kind": "",
-    "sizeBytes": 0,
-    "summary": {},
-    "tags": [
-      ""
-    ],
-    "title": "",
-    "updatedAt": 0
-  },
-  "TemplateInput": {
-    "content": null,
-    "description": "",
-    "kind": "",
-    "tags": [
-      ""
-    ],
-    "title": ""
-  },
-  "TemplateSanitizeResult": {
-    "content": null,
-    "kind": "",
-    "sizeBytes": 0,
-    "warnings": [
-      ""
-    ]
-  },
-  "TemplateView": {
-    "createdAt": 0,
-    "description": "",
-    "id": 0,
-    "kind": "",
-    "sizeBytes": 0,
-    "summary": {},
-    "tags": [
-      ""
-    ],
-    "title": "",
-    "updatedAt": 0
-  },
   "Traffic": {
     "Down": 2097152,
     "IsInbound": true,

@@ -125,8 +125,7 @@
     "unpinSidebar": "Открепить боковую панель",
     "subFormats": "Форматы подписки",
     "telemt": "Telemt",
-    "singBox": "Настройки sing-box",
-    "templates": "Шаблоны"
+    "singBox": "Настройки sing-box"
   },
   "pages": {
     "login": {
@@ -2452,41 +2451,6 @@
       "sourceDisk": "Фактический файл",
       "sourceGenerated": "Сгенерировано",
       "actualTitle": "Фактическая конфигурация sing-box"
-    },
-    "templates": {
-      "title": "Библиотека шаблонов",
-      "subtitle": "Переиспользуемые конфигурации Xray с серверной очисткой секретов.",
-      "add": "Добавить шаблон",
-      "searchPlaceholder": "Поиск шаблонов",
-      "allKinds": "Все типы",
-      "inbound": "Inbound",
-      "xrayConfig": "Конфигурация Xray",
-      "empty": "Шаблонов пока нет. Импортируйте конфигурацию, чтобы создать первый очищенный шаблон.",
-      "editorTitle": "Создание шаблона",
-      "kind": "Тип",
-      "name": "Название",
-      "namePlaceholder": "Стартовый VLESS Reality",
-      "descriptionPlaceholder": "Для чего нужен шаблон",
-      "tagsPlaceholder": "Теги через запятую: vless, reality, xhttp",
-      "previewSanitize": "Предпросмотр очистки",
-      "sanitizeResult": "Размер после очистки: {{size}}",
-      "noWarnings": "Секретов и привязанных к хосту значений не найдено.",
-      "invalidJson": "Конфигурация должна быть корректным JSON.",
-      "sanitizeFailed": "Не удалось очистить шаблон.",
-      "saveFailed": "Не удалось сохранить шаблон.",
-      "saved": "Шаблон сохранён.",
-      "savedWithWarnings": "Шаблон сохранён после удаления чувствительных данных.",
-      "titleRequired": "Укажите название шаблона.",
-      "loadFailed": "Не удалось загрузить шаблоны.",
-      "deleteTitle": "Удалить этот шаблон?",
-      "deleteFailed": "Не удалось удалить шаблон.",
-      "deleted": "Шаблон удалён.",
-      "copy": "Копировать JSON",
-      "copied": "JSON скопирован.",
-      "export": "Экспорт JSON",
-      "noDescription": "Без описания.",
-      "applyInbound": "Создать inbound",
-      "applied": "Inbound создан из шаблона. Перед включением проверьте конфигурацию и заново задайте очищенные секреты."
     }
   },
   "tgbot": {

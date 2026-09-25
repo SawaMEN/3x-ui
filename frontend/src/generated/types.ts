@@ -994,46 +994,6 @@ export interface SubBalancer {
   updatedAt: number;
 }
 
-export interface TemplateDetail {
-  content: unknown;
-  createdAt: number;
-  description: string;
-  id: number;
-  kind: string;
-  sizeBytes: number;
-  summary?: Record<string, unknown>;
-  tags: string[];
-  title: string;
-  updatedAt: number;
-}
-
-export interface TemplateInput {
-  content: unknown;
-  description: string;
-  kind: string;
-  tags: string[];
-  title: string;
-}
-
-export interface TemplateSanitizeResult {
-  content: unknown;
-  kind: string;
-  sizeBytes: number;
-  warnings: string[];
-}
-
-export interface TemplateView {
-  createdAt: number;
-  description: string;
-  id: number;
-  kind: string;
-  sizeBytes: number;
-  summary?: Record<string, unknown>;
-  tags: string[];
-  title: string;
-  updatedAt: number;
-}
-
 export interface Traffic {
   Down: number;
   IsInbound: boolean;

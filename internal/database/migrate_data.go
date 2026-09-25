@@ -43,7 +43,6 @@ func migrationModels() []any {
 		&model.HistoryOfSeeders{},
 		&model.Node{},
 		&model.ApiToken{},
-		&model.LocalTemplate{},
 		&model.RoutingPreset{},
 		&model.Inbound{},
 		&xray.ClientTraffic{},
@@ -64,7 +63,6 @@ func migrationModels() []any {
 		&model.TelemtIPGeo{},
 		&model.OutboundSubscription{},
 		&model.SubBalancer{},
-		&model.LocalTemplate{},
 		&model.RoutingPreset{},
 		&model.UserSession{},
 	}

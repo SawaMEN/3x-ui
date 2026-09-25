@@ -74,7 +74,6 @@ func allModels() []any {
 		&model.HistoryOfSeeders{},
 		&model.Node{},
 		&model.ApiToken{},
-		&model.LocalTemplate{},
 		&model.RoutingPreset{},
 		&model.UserSession{},
 		&model.ClientRecord{},
