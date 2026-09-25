@@ -3,7 +3,9 @@ package naiveproxy
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
+	"runtime"
 	"sync"
 	"time"
 
@@ -23,7 +25,7 @@ func StartAutomaticLifecycle() {
 			ticker := time.NewTicker(reconcileInterval)
 			defer ticker.Stop()
 			for {
-				ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 				if err := Ensure(ctx); err != nil && database.GetDB() != nil {
 					logger.Warning("NaiveProxy automatic lifecycle failed:", err)
 				}
@@ -43,6 +45,9 @@ func Ensure(ctx context.Context) error {
 	}
 	if !needed {
 		return Reconcile(ctx)
+	}
+	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
+		return fmt.Errorf("official Caddy-Naive server release supports linux/amd64 only; current platform is %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
 	if _, err := os.Stat(BinaryPath()); err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
