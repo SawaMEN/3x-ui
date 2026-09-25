@@ -25,31 +25,35 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          path = Path("frontend/src/pages/inbounds/list/useInboundColumns.tsx")
-          text = path.read_text()
-          old = "  onRowAction,\n  onSwitchEnable,\n}: UseInboundColumnsParams)"
-          new = "  onRowAction,\n  onSwitchEnable,\n  reorderEnabled,\n}: UseInboundColumnsParams)"
-          if text.count(old) != 1:
-              raise SystemExit(f"{path}: unexpected parameter block")
-          text = text.replace(old, new, 1)
-          old = "    onRowAction,\n    onSwitchEnable,\n  ]);"
-          new = "    onRowAction,\n    onSwitchEnable,\n    reorderEnabled,\n  ]);"
-          if text.count(old) != 1:
-              raise SystemExit(f"{path}: unexpected dependency block")
-          path.write_text(text.replace(old, new, 1))
-
           path = Path("frontend/src/pages/templates/TemplatesPage.tsx")
           text = path.read_text()
-          old = "import { useTranslation } from 'react-i18next';\n"
-          new = old + "import { useNavigate } from 'react-router-dom';\n"
-          if text.count(old) != 1 or "useNavigate } from 'react-router-dom'" in text:
-              raise SystemExit(f"{path}: unexpected import block")
+          text = text.replace("import { useNavigate } from 'react-router-dom';\n", "")
+          text = text.replace("  const navigate = useNavigate();\n", "")
+          old = "    navigate('/inbounds');\n  }, [detail, messageApi, navigate, t]);"
+          new = "    window.location.assign('/inbounds');\n  }, [detail, messageApi, t]);"
+          if text.count(old) != 1:
+              raise SystemExit(f"{path}: unexpected navigation block")
           path.write_text(text.replace(old, new, 1))
+
+          for name in [
+              "frontend/src/test/node-list-rerender.test.tsx",
+              "frontend/src/test/node-list-rowkey.test.tsx",
+          ]:
+              path = Path(name)
+              text = path.read_text()
+              if name.endswith("node-list-rerender.test.tsx"):
+                  old = "      onReorder: noop,"
+                  new = "      onReorder: async () => {},"
+              else:
+                  old = "        onReorder={noop}"
+                  new = "        onReorder={async () => {}}"
+              if text.count(old) != 1:
+                  raise SystemExit(f"{path}: unexpected reorder callback")
+              path.write_text(text.replace(old, new, 1))
           PY
           cd frontend
           npm ci --no-audit --no-fund
           npx oxfmt --write \
-            src/pages/inbounds/list/useInboundColumns.tsx \
             src/pages/templates/TemplatesPage.tsx \
             src/test/node-list-rerender.test.tsx \
             src/test/node-list-rowkey.test.tsx
