@@ -110,7 +110,7 @@ func GetStatus(ctx context.Context) (Status, error) {
 	status.CanUpdate = status.RunningAsRoot && (status.UpdatesAvailable || status.MissingPackages)
 
 	if info.manager == "pacman" {
-		status.Notes = append(status.Notes, "Arch Linux требует полного обновления системы через pacman -Syu; частичные обновления не поддерживаются.")
+		status.Notes = append(status.Notes, "Arch Linux обычно рекомендует полное pacman -Syu. Панель намеренно обновляет только зависимости 3x-ui и пакеты ядра; полное обновление системы при необходимости выполните вручную.")
 	}
 	status.Notes = append(status.Notes,
 		"Зависимости новых протоколов: WireGuard, AmneziaWG и VK-Turn используют iproute2/iproute и iptables для сетевого стека и маршрутизации; MTProto/Telemt, TUIC, Naive, Mieru и Psiphon используют curl, tar, ca-certificates, openssl и socat для загрузки/запуска и TLS/туннельного окружения.",
@@ -127,6 +127,7 @@ func GetStatus(ctx context.Context) (Status, error) {
 	}
 	return status, nil
 }
+
 func Refresh(ctx context.Context) (Status, error) {
 	info := detectDistribution()
 	if info.manager == "" {
@@ -178,15 +179,23 @@ func Apply(ctx context.Context) (UpdateResult, error) {
 	}
 
 	missing := make([]string, 0)
+	upgradable := make([]string, 0)
+	seenUpgrade := make(map[string]struct{})
 	for _, item := range status.Packages {
 		if item.Required && !item.Installed {
 			missing = append(missing, item.Name)
 		}
-	}
+		if item.UpdateAvailable && (item.Required || item.Kernel) {
+			if _, exists := seenUpgrade[item.Name]; !exists {
+				upgradable = append(upgradable, item.Name)
+				seenUpgrade[item.Name] = struct{}{}
+			}
+		}
 	sort.Strings(missing)
+	sort.Strings(upgradable)
 
 	outputs := make([]string, 0, 2)
-	if len(missing) > 0 && info.manager != "pacman" {
+	if len(missing) > 0 {
 		args, ok := packageInstallCommand(info.manager, missing)
 		if !ok {
 			return UpdateResult{}, fmt.Errorf("unsupported package install command for %s", info.manager)
@@ -204,20 +213,29 @@ func Apply(ctx context.Context) (UpdateResult, error) {
 		}
 	}
 
-	upgradeArgs := packageUpgradeCommand(info.manager)
-	output, upgradeErr := runCommand(updateCtx, upgradeArgs[0], upgradeArgs[1:]...)
-	outputs = append(outputs, output)
+	if len(upgradable) > 0 {
+		upgradeArgs := packageUpgradeCommand(info.manager, upgradable)
+		if len(upgradeArgs) == 0 {
+			return UpdateResult{}, fmt.Errorf("unsupported package upgrade command for %s", info.manager)
+		}
+		output, upgradeErr := runCommand(updateCtx, upgradeArgs[0], upgradeArgs[1:]...)
+		outputs = append(outputs, output)
+		if upgradeErr != nil {
+			result := UpdateResult{
+				Updated:        false,
+				Output:         truncateOutput(strings.Join(outputs, "\n"), 20000),
+				RebootRequired: status.Kernel.UpdateAvailable || status.Kernel.RebootRequired,
+				Error:          truncateOutput(upgradeErr.Error(), 4000),
+			}
+			return result, fmt.Errorf("system update failed: %s", result.Error)
+		}
+	}
 
 	result := UpdateResult{
-		Updated:        upgradeErr == nil,
+		Updated:        len(missing) > 0 || len(upgradable) > 0,
 		Output:         truncateOutput(strings.Join(outputs, "\n"), 20000),
 		RebootRequired: status.Kernel.UpdateAvailable || status.Kernel.RebootRequired,
 	}
-	if upgradeErr != nil {
-		result.Error = truncateOutput(upgradeErr.Error(), 4000)
-		return result, fmt.Errorf("system update failed: %s", result.Error)
-	}
-
 	result.RebootRequired = result.RebootRequired || rebootRequired(info.manager)
 	return result, nil
 }
@@ -237,6 +255,8 @@ func packageInstallCommand(manager string, names []string) ([]string, bool) {
 		return append([]string{"zypper", "--non-interactive", "install", "-y"}, names...), true
 	case "apk":
 		return append([]string{"apk", "add", "--no-cache"}, names...), true
+	case "pacman":
+		return append([]string{"pacman", "-S", "--noconfirm", "--needed"}, names...), true
 	default:
 		return nil, false
 	}
@@ -247,28 +267,27 @@ func packageUpgradeCommand(manager string, names ...[]string) []string {
 	if len(names) > 0 {
 		selected = names[0]
 	}
+	if len(selected) == 0 {
+		// Never fall back to a distribution-wide upgrade. This panel owns only
+		// the packages it explicitly depends on (plus detected kernel packages).
+		return nil
+	}
 
 	switch manager {
 	case "apt-get":
-		if len(selected) > 0 { return append([]string{"apt-get", "install", "-y", "--no-install-recommends"}, selected...) }
-		return []string{"apt-get", "upgrade", "-y", "--with-new-pkgs", "--no-install-recommends"}
+		return append([]string{"apt-get", "install", "-y", "--no-install-recommends"}, selected...)
 	case "dnf":
-		if len(selected) > 0 { return append([]string{"dnf", "upgrade", "-y"}, selected...) }
-		return []string{"dnf", "upgrade", "-y"}
+		return append([]string{"dnf", "upgrade", "-y"}, selected...)
 	case "yum":
-		if len(selected) > 0 { return append([]string{"yum", "update", "-y"}, selected...) }
-		return []string{"yum", "update", "-y"}
+		return append([]string{"yum", "update", "-y"}, selected...)
 	case "zypper":
-		if len(selected) > 0 { return append([]string{"zypper", "--non-interactive", "update", "-y"}, selected...) }
-		return []string{"zypper", "--non-interactive", "update", "-y"}
+		return append([]string{"zypper", "--non-interactive", "update", "-y"}, selected...)
 	case "apk":
-		if len(selected) > 0 { return append([]string{"apk", "upgrade", "--no-cache"}, selected...) }
-		return []string{"apk", "upgrade", "--no-cache"}
+		return append([]string{"apk", "upgrade", "--no-cache"}, selected...)
 	case "pacman":
-		if len(selected) > 0 { return append([]string{"pacman", "-Syu", "--noconfirm", "--needed"}, selected...) }
-		return []string{"pacman", "-Syu", "--noconfirm", "--needed"}
+		return append([]string{"pacman", "-S", "--noconfirm", "--needed"}, selected...)
 	default:
-		return []string{}
+		return nil
 	}
 }
 
@@ -376,6 +395,7 @@ func requiredPackages(distribution string) []string {
 
 	return packages
 }
+
 func collectPackageStatuses(
 	distribution string,
 	upgrades map[string]string,
