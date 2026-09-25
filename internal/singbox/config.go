@@ -640,10 +640,14 @@ func translateUsers(out map[string]any, protocol string, settings map[string]any
 			if password, ok := client["password"].(string); ok && password != "" {
 				user["password"] = password
 			}
-		case "naive", "anytls", "shadowtls":
+		case "naive":
 			if email := rawString(client, "email"); email != "" {
 				user["username"] = email
 			}
+			if password := rawString(client, "password"); password != "" {
+				user["password"] = password
+			}
+		case "anytls", "shadowtls":
 			if password := rawString(client, "password"); password != "" {
 				user["password"] = password
 			}
