@@ -22,7 +22,7 @@ export const DnsServerObjectInnerSchema = z.object({
   skipFallback: z.boolean().optional(),
   finalQuery: z.boolean().optional(),
   tag: z.string().optional(),
-  clientIp: z.string().optional(),
+  clientIP: z.string().optional(),
   queryStrategy: DnsQueryStrategySchema.optional(),
   disableCache: z.boolean().optional(),
   timeoutMs: z.number().int().min(0).default(4000),
