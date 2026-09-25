@@ -6,6 +6,7 @@ import '@/styles/utils.css';
 import '@/styles/page-shell.css';
 import '@/styles/page-cards.css';
 import '@/styles/material-ui.css';
+import '@/styles/sidebar-brand-alignment.css';
 
 import { setupHttp } from '@/api/http-init';
 import { readyI18n } from '@/i18n/react';
