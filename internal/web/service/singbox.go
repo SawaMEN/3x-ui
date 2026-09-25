@@ -268,7 +268,7 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 				if client.Password != "" {
 					entry["password"] = client.Password
 				}
-			case model.NaiveProxy, model.Mieru, model.AnyTLS, model.ShadowTLS:
+			case model.HTTP, model.Mixed, model.NaiveProxy, model.Mieru, model.AnyTLS, model.ShadowTLS:
 				if client.Password != "" {
 					entry["password"] = client.Password
 				}
