@@ -1376,6 +1376,14 @@ func (s *ClientService) SetClientEnableByEmail(inboundSvc *InboundService, clien
 	if err != nil {
 		return false, false, err
 	}
+	// An explicit user/API enable/disable action takes ownership away from the automatic
+	// core-switch state, even when it repeats the current boolean value.
+	if err := clearCoreAutoDisabledByEmail(clientEmail); err != nil {
+		return false, false, err
+	}
+	if current == enable {
+		return false, false, nil
+	}
 	if current == enable {
 		return false, false, nil
 	}

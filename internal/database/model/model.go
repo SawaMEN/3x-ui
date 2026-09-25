@@ -946,6 +946,9 @@ type ClientRecord struct {
 	TotalGB         int64  `json:"totalGB" gorm:"column:total_gb"`
 	ExpiryTime      int64  `json:"expiryTime" gorm:"column:expiry_time"`
 	Enable          bool   `json:"enable" gorm:"default:true"`
+	// Set automatically when a core switch disables this client because its protocol is unsupported.
+	// It is cleared by explicit user changes and when the client becomes compatible again.
+	AutoDisabledByCore string `json:"-" gorm:"column:auto_disabled_by_core;default:''"`
 	TgID            int64  `json:"tgId" gorm:"column:tg_id;index:idx_clients_tg_id"`
 	Group           string `json:"group" gorm:"column:group_name;default:'';index:idx_client_record_group"`
 	Comment         string `json:"comment"`

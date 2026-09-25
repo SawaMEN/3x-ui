@@ -211,34 +211,45 @@ func (a *SettingController) updateSetting(c *gin.Context) {
 		}
 	}
 	if err == nil && oldCoreType != allSetting.CoreType {
-		// Switching cores is a transaction: never let two engines own the same
-		// listener, and never leave the panel configured for a core that failed
-		// to start. UpdateAllSetting already persisted the requested value, so
-		// restore the old value if the new runtime cannot start.
-		ctx := c.Request.Context()
-		if oldCoreType == service.CoreTypeSingBox {
-			_ = a.singBoxService.Stop(ctx)
-		} else {
-			_ = a.xrayService.StopXray()
-		}
-		var restartErr error
-		if allSetting.CoreType == service.CoreTypeSingBox {
-			restartErr = a.singBoxService.Restart(ctx)
-		} else {
-			restartErr = a.xrayService.RestartXray(true)
-		}
-		if restartErr != nil {
-			err = restartErr
+		compatErr := service.SyncClientCoreCompatibility(oldCoreType, allSetting.CoreType)
+		if compatErr != nil {
+			err = compatErr
 			if rollbackErr := a.settingService.SetCoreType(oldCoreType); rollbackErr != nil {
 				logger.Error("core switch failed and rollback could not be persisted:", rollbackErr)
+			}
+		} else {
+			// Switching cores is a transaction: never let two engines own the same
+			// listener, and never leave the panel configured for a core that failed
+			// to start. UpdateAllSetting already persisted the requested value, so
+			// restore the old value if the new runtime cannot start.
+			ctx := c.Request.Context()
+			if oldCoreType == service.CoreTypeSingBox {
+				_ = a.singBoxService.Stop(ctx)
 			} else {
-				// Best effort: bring the previously working engine back.
-				if oldCoreType == service.CoreTypeSingBox {
-					if startErr := a.singBoxService.Restart(ctx); startErr != nil {
-						logger.Error("failed to restore sing-box after core switch failure:", startErr)
+				_ = a.xrayService.StopXray()
+			}
+			var restartErr error
+			if allSetting.CoreType == service.CoreTypeSingBox {
+				restartErr = a.singBoxService.Restart(ctx)
+			} else {
+				restartErr = a.xrayService.RestartXray(true)
+			}
+			if restartErr != nil {
+				err = restartErr
+				if rollbackErr := a.settingService.SetCoreType(oldCoreType); rollbackErr != nil {
+					logger.Error("core switch failed and rollback could not be persisted:", rollbackErr)
+				} else {
+					if compatErr := service.SyncClientCoreCompatibility(allSetting.CoreType, oldCoreType); compatErr != nil {
+						logger.Error("failed to restore client core compatibility after core switch failure:", compatErr)
 					}
-				} else if startErr := a.xrayService.RestartXray(true); startErr != nil {
-					logger.Error("failed to restore xray after core switch failure:", startErr)
+					// Best effort: bring the previously working engine back.
+					if oldCoreType == service.CoreTypeSingBox {
+						if startErr := a.singBoxService.Restart(ctx); startErr != nil {
+							logger.Error("failed to restore sing-box after core switch failure:", startErr)
+						}
+					} else if startErr := a.xrayService.RestartXray(true); startErr != nil {
+						logger.Error("failed to restore xray after core switch failure:", startErr)
+					}
 				}
 			}
 		}
