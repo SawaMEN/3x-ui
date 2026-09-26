@@ -1127,6 +1127,9 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 	if err := s.normalizeAmneziaWGSettings(inbound, ""); err != nil {
 		return inbound, false, err
 	}
+	if err := prepareExternalVPN(inbound, ""); err != nil {
+		return inbound, false, err
+	}
 	if inbound.NodeID != nil && !isNodeEligibleProtocol(inbound.Protocol) {
 		return inbound, false, common.NewErrorf("%s inbounds cannot be assigned to a node", inbound.Protocol)
 	}
@@ -1338,6 +1341,7 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 		if inbound.Enable && (isXrayManagedProtocol(inbound.Protocol) ||
 			inbound.Protocol == model.MTProto ||
 			inbound.Protocol == model.TUIC ||
+			inbound.Protocol == model.Pingtunnel || inbound.Protocol == model.TrustTunnel ||
 			inbound.Protocol == model.AmneziaWG ||
 			inbound.Protocol == model.NaiveProxy ||
 			inbound.Protocol == model.AnyTLS ||
@@ -1430,6 +1434,7 @@ func (s *InboundService) delInbound(id int) (bool, func(), error) {
 			(isXrayManagedProtocol(ib.Protocol) ||
 				ib.Protocol == model.MTProto ||
 				ib.Protocol == model.TUIC ||
+				ib.Protocol == model.Pingtunnel || ib.Protocol == model.TrustTunnel ||
 				ib.Protocol == model.AmneziaWG ||
 				naiveSingBox)
 		if shouldPushToRuntime {
@@ -1765,6 +1770,9 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 	if err := s.normalizeAmneziaWGSettings(inbound, oldInbound.Settings); err != nil {
 		return inbound, false, err
 	}
+	if err := prepareExternalVPN(inbound, oldInbound.Settings); err != nil {
+		return inbound, false, err
+	}
 	inbound.SubSortIndex = normalizeSubSortIndex(inbound.SubSortIndex)
 
 	clients, err := s.GetClients(inbound)
@@ -1976,7 +1984,7 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 		oldInbound.Tag = resolvedTag
 		inbound.Tag = oldInbound.Tag
 
-		localSidecarTransition := oldProtocol == model.MTProto || oldInbound.Protocol == model.MTProto || oldProtocol == model.TUIC || oldInbound.Protocol == model.TUIC
+		localSidecarTransition := oldProtocol == model.MTProto || oldInbound.Protocol == model.MTProto || oldProtocol == model.TUIC || oldInbound.Protocol == model.TUIC || oldProtocol == model.Pingtunnel || oldInbound.Protocol == model.Pingtunnel || oldProtocol == model.TrustTunnel || oldInbound.Protocol == model.TrustTunnel
 		naiveSingBoxRuntime := false
 		if oldProtocol == model.NaiveProxy || oldInbound.Protocol == model.NaiveProxy ||
 			oldProtocol == model.AnyTLS || oldInbound.Protocol == model.AnyTLS ||
@@ -2007,7 +2015,7 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 						logger.Debug("Updated Naive inbound applied on", rt.Name(), ":", oldInbound.Tag)
 					}
 				}
-			} else if oldProtocol == model.MTProto || oldInbound.Protocol == model.MTProto || oldProtocol == model.TUIC || oldInbound.Protocol == model.TUIC {
+			} else if oldProtocol == model.MTProto || oldInbound.Protocol == model.MTProto || oldProtocol == model.TUIC || oldInbound.Protocol == model.TUIC || oldProtocol == model.Pingtunnel || oldInbound.Protocol == model.Pingtunnel || oldProtocol == model.TrustTunnel || oldInbound.Protocol == model.TrustTunnel {
 				oldSnapshot := *oldInbound
 				oldSnapshot.Tag = tag
 				oldSnapshot.Protocol = oldProtocol
@@ -2021,7 +2029,7 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 						pushable = false
 					}
 				}
-				newProtocolIsSidecar := oldInbound.Protocol == model.MTProto || oldInbound.Protocol == model.TUIC
+				newProtocolIsSidecar := oldInbound.Protocol == model.MTProto || oldInbound.Protocol == model.TUIC || oldInbound.Protocol == model.Pingtunnel || oldInbound.Protocol == model.TrustTunnel
 				if pushable {
 					postCommitApply = func() {
 						if err2 := rt.UpdateInbound(context.Background(), &oldSnapshot, payload); err2 == nil {

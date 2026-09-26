@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { PingtunnelInboundSettingsSchema, TrustTunnelInboundSettingsSchema } from './external-vpn';
 import { AmneziawgInboundSettingsSchema } from './amneziawg';
 import { AnyTlsInboundSettingsSchema } from './anytls';
 import { ShadowTlsInboundSettingsSchema } from './shadowtls';
@@ -20,6 +21,7 @@ import { VmessInboundSettingsSchema } from './vmess';
 import { VkTurnProxyInboundSettingsSchema } from './vk-turn-proxy';
 import { WireguardInboundSettingsSchema } from './wireguard';
 
+export * from './external-vpn';
 export * from './amneziawg';
 export * from './anytls';
 export * from './shadowtls';
@@ -62,6 +64,8 @@ export const InboundSettingsSchema = z.discriminatedUnion('protocol', [
   z.object({ protocol: z.literal('anytls'), settings: AnyTlsInboundSettingsSchema }),
   z.object({ protocol: z.literal('shadowtls'), settings: ShadowTlsInboundSettingsSchema }),
   z.object({ protocol: z.literal('tuic'), settings: TuicInboundSettingsSchema }),
+  z.object({ protocol: z.literal('pingtunnel'), settings: PingtunnelInboundSettingsSchema }),
+  z.object({ protocol: z.literal('trusttunnel'), settings: TrustTunnelInboundSettingsSchema }),
   z.object({ protocol: z.literal('naive'), settings: NaiveInboundSettingsSchema }),
   z.object({ protocol: z.literal('mieru'), settings: MieruInboundSettingsSchema }),
   z.object({ protocol: z.literal('sudoku'), settings: SudokuInboundSettingsSchema }),

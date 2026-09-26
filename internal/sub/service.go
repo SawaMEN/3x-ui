@@ -23,6 +23,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/sudoku"
 	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
@@ -43,7 +44,7 @@ var errSubscriptionFormatUnsupported = errors.New("subscription format cannot re
 func containsUnsupportedJSONProtocol(inbounds []*model.Inbound) bool {
 	for _, inbound := range inbounds {
 		switch inbound.Protocol {
-		case model.NaiveProxy, model.AnyTLS, model.ShadowTLS, model.AmneziaWG, model.TUIC, model.MTProto, model.VKTurnProxy, model.Mieru:
+		case model.NaiveProxy, model.AnyTLS, model.ShadowTLS, model.AmneziaWG, model.TUIC, model.MTProto, model.VKTurnProxy, model.Mieru, model.TrustTunnel:
 			return true
 		}
 	}
@@ -53,7 +54,7 @@ func containsUnsupportedJSONProtocol(inbounds []*model.Inbound) bool {
 func containsUnsupportedSingBoxProtocol(inbounds []*model.Inbound) bool {
 	for _, inbound := range inbounds {
 		switch inbound.Protocol {
-		case model.AmneziaWG, model.MTProto, model.VKTurnProxy, model.Mieru:
+		case model.AmneziaWG, model.MTProto, model.VKTurnProxy, model.Mieru, model.TrustTunnel:
 			return true
 		}
 	}
@@ -63,7 +64,7 @@ func containsUnsupportedSingBoxProtocol(inbounds []*model.Inbound) bool {
 func containsUnsupportedClashProtocol(inbounds []*model.Inbound) bool {
 	for _, inbound := range inbounds {
 		switch inbound.Protocol {
-		case model.NaiveProxy, model.AnyTLS, model.ShadowTLS, model.MTProto, model.VKTurnProxy, model.Mieru:
+		case model.NaiveProxy, model.AnyTLS, model.ShadowTLS, model.MTProto, model.VKTurnProxy, model.Mieru, model.TrustTunnel:
 			return true
 		case model.Hysteria, model.WireGuard, model.TUIC, model.AmneziaWG:
 			// These protocols have dedicated Clash/Mihomo emitters.
@@ -284,7 +285,7 @@ func (s *SubService) clientForLink(inbound *model.Inbound, email string) (model.
 // synced last (see TunnelAllowedIPsByInbound / amneziaWGClientAddresses).
 func (s *SubService) clientsForLinkExport(inbound *model.Inbound) ([]model.Client, error) {
 	if inbound.Protocol == model.WireGuard || inbound.Protocol == model.AmneziaWG ||
-		inbound.Protocol == model.AnyTLS || inbound.Protocol == model.ShadowTLS {
+		inbound.Protocol == model.AnyTLS || inbound.Protocol == model.ShadowTLS || inbound.Protocol == model.TrustTunnel {
 		// These protocols keep the client password in the inbound settings JSON.
 		// Prefer that source so subscriptions also work for existing rows whose
 		// normalized clients record predates password persistence.
@@ -660,7 +661,7 @@ func (s *SubService) inboundLinks(inbound *model.Inbound) []string {
 		}
 		seen[key] = struct{}{}
 		var link string
-		if len(hostEps) > 0 {
+		if len(hostEps) > 0 && inbound.Protocol != model.TrustTunnel {
 			link = s.linkFromHosts(inbound, client, hostEps)
 		} else {
 			link = s.GetLink(inbound, client.Email)
@@ -769,7 +770,7 @@ func (s *SubService) getInboundsBySubId(subId string) ([]*model.Inbound, error) 
 	protocols := []string{
 		"vmess", "vless", "trojan", "shadowsocks", "hysteria",
 		"wireguard", "amneziawg", "mtproto", "tuic", "naive", "anytls", "shadowtls", "mieru",
-		"vk-turn-proxy",
+		"vk-turn-proxy", "trusttunnel",
 	}
 	if sudoku.IsInstalled(config.GetBinFolderPath()) {
 		protocols = append(protocols, string(model.Sudoku))
@@ -977,6 +978,19 @@ func (s *SubService) GetLink(inbound *model.Inbound, email string) string {
 		return s.genAmneziaWGLink(inbound, email)
 	case "tuic":
 		return s.genTuicLink(inbound, email)
+	case model.TrustTunnel:
+		if _, ok := s.clientForLink(inbound, email); !ok {
+			return ""
+		}
+		inst, err := externalvpn.FromInbound(inbound)
+		if err != nil {
+			return ""
+		}
+		link, err := externalvpn.ExportTrustTunnelLink(inst, email, s.resolveInboundAddress(inbound))
+		if err != nil {
+			return ""
+		}
+		return link
 	case model.NaiveProxy:
 		return s.genNaiveLink(inbound, email)
 	case model.AnyTLS:

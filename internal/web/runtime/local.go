@@ -11,6 +11,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawgnet"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
 	"github.com/SawaMEN/3x-ui/v3/internal/mtproto"
 	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
@@ -67,6 +68,13 @@ func (l *Local) withAPI(fn func(api *xray.XrayAPI) error) error {
 }
 
 func (l *Local) AddInbound(ctx context.Context, ib *model.Inbound) error {
+	if ib.Protocol == model.Pingtunnel || ib.Protocol == model.TrustTunnel {
+		inst, err := externalvpn.FromInbound(ib)
+		if err != nil {
+			return err
+		}
+		return externalvpn.GetManager().Ensure(inst)
+	}
 	if ib.Protocol == model.MTProto {
 		inst, ok := mtproto.InstanceFromInbound(ib)
 		if !ok {
@@ -103,6 +111,10 @@ func (l *Local) AddInbound(ctx context.Context, ib *model.Inbound) error {
 }
 
 func (l *Local) DelInbound(ctx context.Context, ib *model.Inbound) error {
+	if ib.Protocol == model.Pingtunnel || ib.Protocol == model.TrustTunnel {
+		externalvpn.GetManager().Remove(ib.Id)
+		return nil
+	}
 	if ib.Protocol == model.MTProto {
 		mtproto.GetManager().Remove(ib.Id)
 		return nil
@@ -125,6 +137,15 @@ func (l *Local) DelInbound(ctx context.Context, ib *model.Inbound) error {
 }
 
 func (l *Local) UpdateInbound(ctx context.Context, oldIb, newIb *model.Inbound) error {
+	if oldIb.Protocol == model.Pingtunnel || oldIb.Protocol == model.TrustTunnel || newIb.Protocol == model.Pingtunnel || newIb.Protocol == model.TrustTunnel {
+		if err := l.DelInbound(ctx, oldIb); err != nil {
+			return err
+		}
+		if newIb.Enable {
+			return l.AddInbound(ctx, newIb)
+		}
+		return nil
+	}
 	if l.isSingBox() && oldIb.Protocol != model.MTProto && oldIb.Protocol != model.AmneziaWG && oldIb.Protocol != model.TUIC && newIb.Protocol != model.MTProto && newIb.Protocol != model.AmneziaWG && newIb.Protocol != model.TUIC {
 		return l.applyCoreChange(ctx)
 	}
@@ -217,7 +238,7 @@ func (l *Local) updateTuicInbound(ctx context.Context, oldIb, newIb *model.Inbou
 }
 
 func (l *Local) AddUser(ctx context.Context, ib *model.Inbound, userMap map[string]any) error {
-	if ib.Protocol == model.MTProto || ib.Protocol == model.AmneziaWG || ib.Protocol == model.TUIC {
+	if ib.Protocol == model.MTProto || ib.Protocol == model.AmneziaWG || ib.Protocol == model.TUIC || ib.Protocol == model.Pingtunnel || ib.Protocol == model.TrustTunnel {
 		return nil
 	}
 	if l.isSingBox() {
@@ -227,7 +248,7 @@ func (l *Local) AddUser(ctx context.Context, ib *model.Inbound, userMap map[stri
 }
 
 func (l *Local) RemoveUser(ctx context.Context, ib *model.Inbound, email string) error {
-	if ib.Protocol == model.MTProto || ib.Protocol == model.AmneziaWG || ib.Protocol == model.TUIC {
+	if ib.Protocol == model.MTProto || ib.Protocol == model.AmneziaWG || ib.Protocol == model.TUIC || ib.Protocol == model.Pingtunnel || ib.Protocol == model.TrustTunnel {
 		return nil
 	}
 	if l.isSingBox() {

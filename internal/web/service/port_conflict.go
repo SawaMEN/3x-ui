@@ -2,6 +2,7 @@ package service
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -25,6 +26,8 @@ func inboundTransports(protocol model.Protocol, streamSettings, settings string)
 	// Native sidecars expose their transport choice in protocol settings rather
 	// than Xray streamSettings.
 	switch protocol {
+	case model.TrustTunnel:
+		return transportTCP | transportUDP
 	case model.Hysteria, model.WireGuard, model.AmneziaWG, model.TUIC:
 		return transportUDP
 	case model.MTProto:
@@ -209,6 +212,17 @@ func (s *InboundService) checkPortConflict(inbound *model.Inbound, ignoreId int)
 }
 
 func checkPortConflictTx(db *gorm.DB, inbound *model.Inbound, ignoreId int) (*portConflictDetail, error) {
+	if inbound.Protocol == model.Pingtunnel {
+		var other model.Inbound
+		err := db.Where("protocol = ? AND enable = ? AND id <> ? AND node_id IS NULL", model.Pingtunnel, true, ignoreId).First(&other).Error
+		if err == nil {
+			return &portConflictDetail{InboundID: other.Id, Tag: other.Tag, Listen: other.Listen, Port: 0}, nil
+		}
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, err
+		}
+		return nil, nil
+	}
 	newBits := inboundTransports(inbound.Protocol, inbound.StreamSettings, inbound.Settings)
 
 	// The panel itself owns its configured web port outside the inbounds table.

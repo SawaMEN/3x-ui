@@ -1149,6 +1149,8 @@ update_x-ui() {
     elif [[ -f bin/mtg-linux-$(arch) ]]; then
         chmod +x bin/mtg-linux-$(arch) > /dev/null 2>&1
     fi
+    [[ -f bin/pingtunnel ]] && chmod 0755 bin/pingtunnel
+    [[ -f bin/trusttunnel_endpoint ]] && chmod 0755 bin/trusttunnel_endpoint
     if [[ -f bin/tuic-server ]]; then
         chmod +x bin/tuic-server > /dev/null 2>&1
     fi

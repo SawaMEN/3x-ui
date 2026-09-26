@@ -28,6 +28,7 @@ const PROTOCOL_LABELS: Record<string, string> = {
   tg: 'MTProto',
   vpn: 'AmneziaWG',
   tuic: 'TUIC',
+  tt: 'TrustTunnel',
   naive: 'Naive',
   'naive+https': 'Naive',
   'naive+quic': 'Naive',
@@ -47,6 +48,7 @@ const PROTOCOL_COLORS: Record<string, string> = {
   MTProto: 'blue',
   AmneziaWG: 'yellow',
   TUIC: 'orange',
+  TrustTunnel: 'cyan',
   Naive: 'orange',
   Mieru: 'purple',
   Sudoku: 'gold',
@@ -181,6 +183,10 @@ export function parseLinkParts(link: string): LinkParts | null {
     if (scheme === 'tg') security = 'FakeTLS';
     if (scheme === 'tuic') {
       network = 'quic';
+      security = 'TLS';
+    }
+    if (scheme === 'tt') {
+      network = 'HTTPS';
       security = 'TLS';
     }
   }

@@ -735,7 +735,15 @@
         "shadowTlsWildcardSniOff": "Выключено",
         "shadowTlsWildcardSniAuthed": "Только авторизованные",
         "shadowTlsWildcardSniAll": "Все",
-        "shadowTlsHint": "ShadowTLS использует отдельный сервер рукопожатия. Для обычной конфигурации оставьте сервер cloudflare.com и порт 443."
+        "shadowTlsHint": "ShadowTLS использует отдельный сервер рукопожатия. Для обычной конфигурации оставьте сервер cloudflare.com и порт 443.",
+        "pingtunnelHint": "ICMP-служба. Панель создаёт ключ и секрет ChaCha20. На сервере может работать только один Pingtunnel; отдельные учётные записи и порт не используются.",
+        "pingtunnelKey": "Ключ Pingtunnel (0 — создать)",
+        "pingtunnelSecret": "Секрет шифрования (пусто — создать)",
+        "trusttunnelHint": "TCP и UDP используют указанный порт. Если пути к сертификату не заданы, создаётся самоподписанный TLS-сертификат. Добавьте пользователей в разделе «Клиенты».",
+        "trusttunnelHostname": "Имя хоста TLS",
+        "trusttunnelCert": "Путь к сертификату PEM (необязательно)",
+        "trusttunnelKey": "Путь к закрытому ключу PEM (необязательно)",
+        "pingtunnelClientConfig": "JSON клиента Pingtunnel (при необходимости замените адрес сервера)"
       },
       "info": {
         "mode": "Режим",
