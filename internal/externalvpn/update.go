@@ -28,8 +28,10 @@ import (
 const maxExternalVPNArchiveSize int64 = 256 << 20
 
 var (
-	externalVPNHTTPClient = &http.Client{Timeout: 30 * time.Second}
-	externalVersionPattern = regexp.MustCompile(`(?i)\bv?(\d+(?:\.\d+)+(?:[-+][0-9a-z.-]+)?)\b`)
+	externalVPNHTTPClient     = &http.Client{Timeout: 30 * time.Second}
+	externalVPNDownloadClient = &http.Client{Timeout: 10 * time.Minute}
+	externalVPNUpdateMu       sync.Mutex
+	externalVersionPattern    = regexp.MustCompile(`(?i)\bv?(\d+(?:\.\d+)+(?:[-+][0-9a-z.-]+)?)\b`)
 )
 
 type releaseAsset struct {
@@ -187,6 +189,13 @@ func Update(ctx context.Context, protocol model.Protocol) error {
 	if err != nil {
 		return err
 	}
+
+	// Updating replaces files shared by all inbounds of a protocol. Serialize
+	// installs so two clicks (or two browser sessions) cannot race on staging,
+	// process restarts, or the final binary replacement.
+	externalVPNUpdateMu.Lock()
+	defer externalVPNUpdateMu.Unlock()
+
 	release, err := fetchLatestRelease(ctx, spec)
 	if err != nil {
 		return err
@@ -232,6 +241,7 @@ func Update(ctx context.Context, protocol model.Protocol) error {
 	}
 	_, copyErr := io.Copy(staged, source)
 	closeSourceErr := source.Close()
+	syncErr := staged.Sync()
 	closeStagedErr := staged.Close()
 	if copyErr != nil {
 		return copyErr
@@ -239,11 +249,25 @@ func Update(ctx context.Context, protocol model.Protocol) error {
 	if closeSourceErr != nil {
 		return closeSourceErr
 	}
+	if syncErr != nil {
+		return syncErr
+	}
 	if closeStagedErr != nil {
 		return closeStagedErr
 	}
 	if err := os.Chmod(stagedPath, 0o755); err != nil {
 		return err
+	}
+
+	// Never replace a working binary with an archive member that cannot execute
+	// on this host or does not identify itself as the release we selected.
+	stagedVersion, err := binaryVersion(ctx, stagedPath, spec.versionArgs)
+	if err != nil {
+		return fmt.Errorf("validate %s binary: %w", protocol, err)
+	}
+	expectedVersion := normalizeReleaseVersion(release.TagName)
+	if expectedVersion != "" && normalizeReleaseVersion(stagedVersion) != expectedVersion {
+		return fmt.Errorf("validate %s binary: expected version %s, got %s", protocol, expectedVersion, stagedVersion)
 	}
 
 	target := filepath.Join(binDir, spec.binaryName)
@@ -296,13 +320,16 @@ func downloadReleaseAsset(ctx context.Context, url, dst string) error {
 		return err
 	}
 	req.Header.Set("User-Agent", "3x-ui")
-	resp, err := externalVPNHTTPClient.Do(req)
+	resp, err := externalVPNDownloadClient.Do(req)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("external VPN download returned %s", resp.Status)
+	}
+	if resp.ContentLength > maxExternalVPNArchiveSize {
+		return fmt.Errorf("external VPN release archive exceeds %d MiB", maxExternalVPNArchiveSize>>20)
 	}
 	out, err := os.Create(dst)
 	if err != nil {
