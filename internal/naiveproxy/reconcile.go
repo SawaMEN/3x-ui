@@ -56,6 +56,12 @@ func reconcileStandalone(ctx context.Context) error {
 		}
 
 		users := mergeNaiveUsers(records, settings.Clients, row.ClientStats)
+		// An enabled inbound with no usable credentials must not keep the
+		// previously rendered Caddy site alive. Treat it as inactive so Sync
+		// removes it, and stops the sidecar entirely when no active sites remain.
+		if len(users) == 0 {
+			continue
+		}
 		inbounds = append(inbounds, Inbound{
 			Tag:             row.Tag,
 			Listen:          row.Listen,
