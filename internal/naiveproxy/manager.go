@@ -238,7 +238,15 @@ func RenderConfig(inbounds []Inbound) (string, error) {
 		if inbound.CertificatePath == "" || inbound.KeyPath == "" {
 			return "", fmt.Errorf("Naive inbound %q requires certificatePath and keyPath", inbound.Tag)
 		}
-		if len(inbound.Users) == 0 {
+		users := make([]User, 0, len(inbound.Users))
+		for _, user := range inbound.Users {
+			username := strings.TrimSpace(user.Username)
+			if username == "" || user.Password == "" {
+				continue
+			}
+			users = append(users, User{Username: username, Password: user.Password})
+		}
+		if len(users) == 0 {
 			return "", fmt.Errorf("Naive inbound %q has no enabled users", inbound.Tag)
 		}
 
@@ -256,10 +264,7 @@ func RenderConfig(inbounds []Inbound) (string, error) {
 		}
 		fmt.Fprintf(&b, "\ttls %s %s\n", caddyQuote(inbound.CertificatePath), caddyQuote(inbound.KeyPath))
 		b.WriteString("\tforward_proxy {\n")
-		for _, user := range inbound.Users {
-			if strings.TrimSpace(user.Username) == "" || user.Password == "" {
-				continue
-			}
+		for _, user := range users {
 			fmt.Fprintf(&b, "\t\tbasic_auth %s %s\n", caddyQuote(user.Username), caddyQuote(user.Password))
 		}
 		b.WriteString("\t\thide_ip\n\t\thide_via\n\t\tprobe_resistance\n\t}\n}\n\n")
