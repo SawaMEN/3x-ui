@@ -60,8 +60,8 @@ func (inst Instance) Validate() error {
 		if s.Encrypt != "chacha20" && s.Encrypt != "aes256" && s.Encrypt != "aes128" {
 			return fmt.Errorf("Pingtunnel encryption must be chacha20, aes256 or aes128")
 		}
-		if len(s.EncryptKey) < 16 {
-			return fmt.Errorf("Pingtunnel encryption key must be at least 16 characters")
+		if s.EncryptKey == "" {
+			return fmt.Errorf("Pingtunnel encryption key is required")
 		}
 		if inst.Listen != "" && net.ParseIP(inst.Listen) == nil {
 			return fmt.Errorf("Pingtunnel listen must be an IP address")
