@@ -278,7 +278,7 @@ func RewriteDNSOutboundRoutes(route map[string]any, dnsTags map[string]struct{})
 			route["final"] = "direct"
 			rule := map[string]any{"action": "hijack-dns"}
 			rules, _ := route["rules"].([]map[string]any)
-			rules = append([]map[string]any{rule}, rules...)
+			rules = append(rules, rule)
 			route["rules"] = rules
 		}
 	}
@@ -324,7 +324,7 @@ func translateCompatDomains(dst map[string]any, domains []string) error {
 		case strings.HasPrefix(value, "full:"):
 			exact = append(exact, strings.TrimPrefix(value, "full:"))
 		default:
-			exact = append(exact, value)
+			keyword = append(keyword, value)
 		}
 	}
 	if len(exact) > 0 {

@@ -65,6 +65,9 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 	}
 
 	cfg := singbox.NewConfig()
+	// Generated outbounds come from the Xray template. Keep NewConfig's
+	// defaults only for its standalone editor fallback.
+	cfg.Outbounds = nil
 	if singBoxProcess.SupportsNativeAPI() {
 		cfg.Services = []map[string]any{{
 			"type":        "api",
@@ -187,6 +190,22 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 		cfg.Outbounds = append(cfg.Outbounds, map[string]any{"type": "block", "tag": "blocked"})
 	}
 
+	inboundIDs := make([]int, 0, len(inbounds))
+	for _, inbound := range inbounds {
+		if inbound == nil || !inbound.Enable || inbound.NodeID != nil {
+			continue
+		}
+		switch inbound.Protocol {
+		case model.MTProto, model.AmneziaWG, model.TUIC, model.Mieru:
+			continue
+		}
+		inboundIDs = append(inboundIDs, inbound.Id)
+	}
+	clientsByInbound, err := singBoxInboundService.clientService.ListForInbounds(nil, inboundIDs)
+	if err != nil {
+		return nil, err
+	}
+
 	var unsupported []string
 	for _, inbound := range inbounds {
 		if inbound == nil || !inbound.Enable || inbound.NodeID != nil {
@@ -212,10 +231,7 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 		if listen, ok := raw["listen"].(string); !ok || strings.TrimSpace(listen) == "" {
 			raw["listen"] = "0.0.0.0"
 		}
-		dbClients, listErr := singBoxInboundService.clientService.ListForInbound(nil, inbound.Id)
-		if listErr != nil {
-			return nil, listErr
-		}
+		dbClients := clientsByInbound[inbound.Id]
 
 		enableMap := make(map[string]bool, len(inbound.ClientStats))
 		for _, stat := range inbound.ClientStats {

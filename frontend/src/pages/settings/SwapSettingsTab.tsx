@@ -268,45 +268,56 @@ export default function SwapSettingsTab() {
   const [swappiness, setSwappiness] = useState(60);
   const [systemUpdateOpen, setSystemUpdateOpen] = useState(false);
 
-  const refresh = useCallback(async () => {
-    try {
-      setLoadError('');
-      const msg = (await HttpUtil.get('/panel/api/setting/swap/status')) as ApiMsg<unknown>;
-      if (!msg?.success) throw new Error(msg?.msg || 'Failed to load swap status');
-      const next = normalizeSwapStatus(msg.obj);
-      setStatus(next);
-      setSwappiness(next.swappiness);
-      if (next.zramConfig.sizeBytes) {
-        setZramSize(Math.round(next.zramConfig.sizeBytes / 1024 / 1024));
+  const refresh = useCallback(
+    async (quiet = false) => {
+      try {
+        setLoadError('');
+        const msg = (await HttpUtil.get('/panel/api/setting/swap/status', undefined, {
+          silent: true,
+        })) as ApiMsg<unknown>;
+        if (!msg?.success) throw new Error(msg?.msg || 'Failed to load swap status');
+        const next = normalizeSwapStatus(msg.obj);
+        setStatus(next);
+        setSwappiness(next.swappiness);
+        if (next.zramConfig.sizeBytes) {
+          setZramSize(Math.round(next.zramConfig.sizeBytes / 1024 / 1024));
+        }
+        if (next.zramConfig.priority >= 0) setZramPriority(next.zramConfig.priority);
+        if (next.zramConfig.streams > 0) setZramStreams(next.zramConfig.streams);
+        setZramLimit(Math.round(next.zramConfig.memoryLimitBytes / 1024 / 1024));
+        if (next.zramConfig.algorithm) setZramAlgorithm(next.zramConfig.algorithm);
+        if (next.swapFileConfig.sizeBytes) {
+          setSwapSize(Math.round(next.swapFileConfig.sizeBytes / 1024 / 1024));
+        }
+        if (next.swapFileConfig.priority >= 0) setSwapPriority(next.swapFileConfig.priority);
+        if (!next.zramConfig.algorithm && next.zram.length > 0 && next.zram[0].algorithm) {
+          setZramAlgorithm(next.zram[0].algorithm);
+        }
+        setLoading(false);
+      } catch (error) {
+        const text = error instanceof Error ? error.message : String(error);
+        setLoadError(text);
+        if (!quiet) messageApi.error(text);
+        setLoading(false);
       }
-      if (next.zramConfig.priority >= 0) setZramPriority(next.zramConfig.priority);
-      if (next.zramConfig.streams > 0) setZramStreams(next.zramConfig.streams);
-      setZramLimit(Math.round(next.zramConfig.memoryLimitBytes / 1024 / 1024));
-      if (next.zramConfig.algorithm) setZramAlgorithm(next.zramConfig.algorithm);
-      if (next.swapFileConfig.sizeBytes) {
-        setSwapSize(Math.round(next.swapFileConfig.sizeBytes / 1024 / 1024));
-      }
-      if (next.swapFileConfig.priority >= 0) setSwapPriority(next.swapFileConfig.priority);
-      if (!next.zramConfig.algorithm && next.zram.length > 0 && next.zram[0].algorithm) {
-        setZramAlgorithm(next.zram[0].algorithm);
-      }
-      setLoading(false);
-    } catch (error) {
-      const text = error instanceof Error ? error.message : String(error);
-      setLoadError(text);
-      messageApi.error(text);
-      setLoading(false);
-    }
-  }, [messageApi]);
+    },
+    [messageApi],
+  );
 
   useEffect(() => {
-    const initial = window.setTimeout(() => void refresh(), 0);
-    const timer = window.setInterval(() => void refresh(), 4000);
-    return () => {
-      window.clearTimeout(initial);
-      window.clearInterval(timer);
+    if (busy) return;
+    let cancelled = false;
+    let timer: number | undefined;
+    const poll = async () => {
+      if (!document.hidden) await refresh(true);
+      if (!cancelled) timer = window.setTimeout(poll, 4000);
     };
-  }, [refresh]);
+    void poll();
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [busy, refresh]);
 
   const action = async (fn: () => Promise<ApiMsg>) => {
     setBusy(true);

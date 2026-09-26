@@ -311,15 +311,51 @@ func (s *ClientService) DetachInbound(tx *gorm.DB, inboundId int) error {
 	return tx.Where("inbound_id = ?", inboundId).Delete(&model.ClientInbound{}).Error
 }
 
+type linkedClientRow struct {
+	model.ClientRecord
+	InboundId    int
+	FlowOverride string
+}
+
+// ListForInbounds loads linked clients in batches for config generation.
+func (s *ClientService) ListForInbounds(tx *gorm.DB, inboundIDs []int) (map[int][]model.Client, error) {
+	return s.listForInbounds(tx, inboundIDs, nil)
+}
+
+func (s *ClientService) listForInbounds(tx *gorm.DB, inboundIDs []int, subId *string) (map[int][]model.Client, error) {
+	if tx == nil {
+		tx = database.GetDB()
+	}
+	clients := make(map[int][]model.Client, len(inboundIDs))
+	for _, batch := range chunkInts(inboundIDs, sqlInChunk) {
+		var rows []linkedClientRow
+		query := tx.Table("clients").
+			Select("clients.*, client_inbounds.inbound_id AS inbound_id, client_inbounds.flow_override AS flow_override").
+			Joins("JOIN client_inbounds ON client_inbounds.client_id = clients.id").
+			Where("client_inbounds.inbound_id IN ?", batch)
+		if subId != nil {
+			query = query.Where("clients.sub_id = ?", *subId)
+		}
+		err := query.
+			Order("client_inbounds.inbound_id ASC, clients.id ASC").
+			Find(&rows).Error
+		if err != nil {
+			return nil, err
+		}
+		for i := range rows {
+			client := rows[i].ToClient()
+			client.Flow = rows[i].FlowOverride
+			clients[rows[i].InboundId] = append(clients[rows[i].InboundId], *client)
+		}
+	}
+	return clients, nil
+}
+
 func (s *ClientService) ListForInbound(tx *gorm.DB, inboundId int) ([]model.Client, error) {
 	if tx == nil {
 		tx = database.GetDB()
 	}
-	type joinedRow struct {
-		model.ClientRecord
-		FlowOverride string
-	}
-	var rows []joinedRow
+	var rows []linkedClientRow
 	err := tx.Table("clients").
 		Select("clients.*, client_inbounds.flow_override AS flow_override").
 		Joins("JOIN client_inbounds ON client_inbounds.client_id = clients.id").
@@ -346,11 +382,7 @@ func (s *ClientService) ListForInboundBySubId(tx *gorm.DB, inboundId int, subId 
 	if tx == nil {
 		tx = database.GetDB()
 	}
-	type joinedRow struct {
-		model.ClientRecord
-		FlowOverride string
-	}
-	var rows []joinedRow
+	var rows []linkedClientRow
 	err := tx.Table("clients").
 		Select("clients.*, client_inbounds.flow_override AS flow_override").
 		Joins("JOIN client_inbounds ON client_inbounds.client_id = clients.id").
@@ -368,4 +400,9 @@ func (s *ClientService) ListForInboundBySubId(tx *gorm.DB, inboundId int, subId 
 		out = append(out, *c)
 	}
 	return out, nil
+}
+
+// ListForInboundsBySubId loads only one subscriber's linked clients in batches.
+func (s *ClientService) ListForInboundsBySubId(tx *gorm.DB, inboundIDs []int, subId string) (map[int][]model.Client, error) {
+	return s.listForInbounds(tx, inboundIDs, &subId)
 }

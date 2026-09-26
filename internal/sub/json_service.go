@@ -278,7 +278,6 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 	}
 
 	type nativeOutbound struct {
-		tag string
 		out map[string]any
 	}
 	var proxies []nativeOutbound
@@ -361,13 +360,13 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 				}
 
 				cfg := map[string]any{
-					"$schema": "https://sing-box.sagernet.org/schema.json",
+					"$schema":   "https://sing-box.sagernet.org/schema.json",
 					"endpoints": []any{endpoint},
 					"inbounds": []any{map[string]any{
-						"type":       "tun",
-						"tag":        "tun-in",
-						"address":    addresses,
-						"auto_route": true,
+						"type":         "tun",
+						"tag":          "tun-in",
+						"address":      addresses,
+						"auto_route":   true,
 						"strict_route": true,
 					}},
 					"outbounds": []any{
@@ -375,8 +374,8 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 						map[string]any{"type": "block", "tag": "blocked"},
 					},
 					"route": map[string]any{
-						"rules": []any{map[string]any{"action": "route", "outbound": "wg-endpoint"}},
-						"final": "direct",
+						"rules":                 []any{map[string]any{"action": "route", "outbound": "wg-endpoint"}},
+						"final":                 "direct",
 						"auto_detect_interface": true,
 					},
 				}
@@ -493,7 +492,7 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 						tag = fmt.Sprintf("%s-%d", tag, len(proxies)+1)
 					}
 					native["tag"] = tag
-					proxies = append(proxies, nativeOutbound{tag: tag, out: native})
+					proxies = append(proxies, nativeOutbound{out: native})
 					generated++
 				}
 				if generated == 0 {
@@ -515,7 +514,7 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 					tag = fmt.Sprintf("%s-%d", tag, len(proxies)+1)
 				}
 				native["tag"] = tag
-				proxies = append(proxies, nativeOutbound{tag: tag, out: native})
+				proxies = append(proxies, nativeOutbound{out: native})
 				continue
 			}
 			if inbound.Protocol == model.NaiveProxy {
@@ -541,7 +540,7 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 						tag = fmt.Sprintf("%s-%d", tag, len(proxies)+1)
 					}
 					native["tag"] = tag
-					proxies = append(proxies, nativeOutbound{tag: tag, out: native})
+					proxies = append(proxies, nativeOutbound{out: native})
 					generated++
 				}
 				if generated == 0 {
@@ -586,7 +585,7 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 					tag = fmt.Sprintf("%s-%d", tag, len(proxies)+1)
 				}
 				native["tag"] = tag
-				proxies = append(proxies, nativeOutbound{tag: tag, out: native})
+				proxies = append(proxies, nativeOutbound{out: native})
 			}
 		}
 	}
@@ -623,7 +622,7 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 				tag = fmt.Sprintf("external-%d", len(proxies)+1)
 			}
 			native["tag"] = tag
-			proxies = append(proxies, nativeOutbound{tag: tag, out: native})
+			proxies = append(proxies, nativeOutbound{out: native})
 		}
 	}
 
@@ -647,13 +646,27 @@ func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnA
 	if mode, remark := subReq.resolveInfoNodeRemark(subId, emails, traffic, len(proxies) > 0); mode != infoNodeNone {
 		dummyConfig := s.genDummySocksConfig(remark)
 		var dummy map[string]any
-		if err := json.Unmarshal(dummyConfig, &dummy); err == nil {
-			if outbounds, ok := dummy["outbounds"].([]any); ok && len(outbounds) > 0 {
-				if proxy, ok := outbounds[0].(map[string]any); ok {
-					proxies = append([]nativeOutbound{{tag: "subscription-status", out: proxy}}, proxies...)
-				}
-			}
+		if err := json.Unmarshal(dummyConfig, &dummy); err != nil {
+			return "", header, err
 		}
+		outbounds, ok := dummy["outbounds"].([]any)
+		if !ok || len(outbounds) == 0 {
+			return "", header, errSubscriptionFormatUnsupported
+		}
+		proxy, ok := outbounds[0].(map[string]any)
+		if !ok {
+			return "", header, errSubscriptionFormatUnsupported
+		}
+		native, err := singbox.TranslateXrayOutbound(proxy)
+		if err != nil {
+			return "", header, fmt.Errorf("%w: subscription status: %v", errSubscriptionFormatUnsupported, err)
+		}
+		tag := strings.TrimSpace(remark)
+		if tag == "" {
+			tag = "subscription-status"
+		}
+		native["tag"] = tag
+		proxies = append([]nativeOutbound{{out: native}}, proxies...)
 		if mode == infoNodeExpired || mode == infoNodeDepleted {
 			proxies = proxies[:1]
 		}
@@ -1444,7 +1457,7 @@ func (s *SubJsonService) genNativeTLSLike(subReq *SubService, inbound *model.Inb
 		"version":     version,
 		"password":    client.Password,
 		"tls": map[string]any{
-			"enabled":    true,
+			"enabled":     true,
 			"server_name": handshakeServer,
 		},
 	}
@@ -1483,13 +1496,13 @@ func (s *SubJsonService) genNativeNaive(subReq *SubService, inbound *model.Inbou
 	}
 
 	out := map[string]any{
-		"type":          "naive",
-		"server":        server,
-		"server_port":   serverPort,
-		"username":      client.Email,
-		"password":      client.Password,
-		"udp_over_tcp":  true,
-		"quic":          strings.EqualFold(strings.TrimSpace(network), "udp"),
+		"type":         "naive",
+		"server":       server,
+		"server_port":  serverPort,
+		"username":     client.Email,
+		"password":     client.Password,
+		"udp_over_tcp": true,
+		"quic":         strings.EqualFold(strings.TrimSpace(network), "udp"),
 	}
 
 	if cc, ok := settings["quicCongestionControl"].(string); ok && strings.TrimSpace(cc) != "" {

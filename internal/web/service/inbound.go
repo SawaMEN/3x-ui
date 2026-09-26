@@ -581,6 +581,10 @@ func (s *InboundService) GetClientsBySubId(inboundId int, subId string) ([]model
 	return s.clientService.ListForInboundBySubId(nil, inboundId, subId)
 }
 
+func (s *InboundService) GetClientsForInboundsBySubId(inboundIDs []int, subId string) (map[int][]model.Client, error) {
+	return s.clientService.ListForInboundsBySubId(nil, inboundIDs, subId)
+}
+
 // ListClientsForInbound returns every client attached to the inbound from the
 // normalized clients tables — the same source the running Xray config uses —
 // instead of parsing the embedded settings JSON, which can hold a stale UUID

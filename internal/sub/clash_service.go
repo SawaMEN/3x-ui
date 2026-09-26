@@ -13,6 +13,7 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/sudoku"
 	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
 	wgutil "github.com/SawaMEN/3x-ui/v3/internal/util/wireguard"
 )
@@ -57,6 +58,9 @@ func (s *SubClashService) getClash(subId string, host string, legacy bool) (stri
 	if containsUnsupportedClashProtocol(inbounds) {
 		return "", "", errSubscriptionFormatUnsupported
 	}
+	if legacy && containsSubscriptionProtocol(inbounds, model.Sudoku) {
+		return "", "", errNoLegacyClashProxies
+	}
 
 	var proxies []map[string]any
 	var hasInactiveExternal bool
@@ -77,7 +81,11 @@ func (s *SubClashService) getClash(subId string, host string, legacy bool) (stri
 				hasEnabledClient = true
 			}
 			seenEmails[client.Email] = struct{}{}
-			proxies = append(proxies, s.getProxies(subReq, inbound, client, host)...)
+			generated := s.getProxies(subReq, inbound, client, host)
+			if inbound.Protocol == model.Sudoku && len(generated) == 0 {
+				return "", "", errSubscriptionFormatUnsupported
+			}
+			proxies = append(proxies, generated...)
 		}
 	}
 	for _, ext := range externalLinks {
@@ -430,6 +438,9 @@ func (s *SubClashService) buildProxy(subReq *SubService, inbound *model.Inbound,
 	if inbound.Protocol == model.AmneziaWG {
 		return s.buildAmneziaWGProxy(subReq, inbound, client, ep)
 	}
+	if inbound.Protocol == model.Sudoku {
+		return s.buildSudokuProxy(subReq, inbound, client, ep)
+	}
 
 	network, _ := stream["network"].(string)
 
@@ -489,6 +500,48 @@ func (s *SubClashService) buildProxy(subReq *SubService, inbound *model.Inbound,
 		return nil
 	}
 
+	return proxy
+}
+
+func (s *SubClashService) buildSudokuProxy(subReq *SubService, inbound *model.Inbound, client model.Client, ep map[string]any) map[string]any {
+	key := strings.TrimSpace(client.SudokuPrivateKey)
+	if !sudoku.ValidPrivateKey(key) {
+		return nil
+	}
+	settings := subReq.linkSettings(inbound)
+	proxy := map[string]any{
+		"name":   subReq.endpointRemark(inbound, client.Email, ep, "tcp"),
+		"type":   "sudoku",
+		"server": inbound.Listen,
+		"port":   inbound.Port,
+		"key":    key,
+	}
+	for source, target := range map[string]string{
+		"aead": "aead-method", "paddingMin": "padding-min", "paddingMax": "padding-max",
+		"ascii": "table-type", "customTable": "custom-table", "customTables": "custom-tables",
+		"multiplex": "multiplex", "enablePureDownlink": "enable-pure-downlink",
+	} {
+		if value, ok := settings[source]; ok {
+			proxy[target] = value
+		}
+	}
+	out := map[string]any{}
+	if mask, ok := settings["httpmask"].(map[string]any); ok {
+		for source, target := range map[string]string{
+			"disable": "disable", "mode": "mode", "tls": "tls", "host": "host",
+			"pathRoot": "path-root", "multiplex": "multiplex",
+		} {
+			if value, ok := mask[source]; ok {
+				out[target] = value
+			}
+		}
+	}
+	if forceTLS, _ := ep["forceTls"].(string); forceTLS == "tls" || forceTLS == "none" {
+		out["tls"] = forceTLS == "tls"
+	}
+	if len(out) > 0 {
+		proxy["httpmask"] = out
+	}
 	return proxy
 }
 

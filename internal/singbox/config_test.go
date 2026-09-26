@@ -53,6 +53,7 @@ func TestRewriteDNSOutboundRoutes(t *testing.T) {
 	route := map[string]any{
 		"final": "dns",
 		"rules": []map[string]any{
+			{"domain": []string{"example.com"}, "action": "route", "outbound": "direct"},
 			{"protocol": []string{"dns"}, "action": "route", "outbound": "dns"},
 		},
 	}
@@ -61,7 +62,7 @@ func TestRewriteDNSOutboundRoutes(t *testing.T) {
 		t.Fatalf("unexpected DNS final target: %#v", route["final"])
 	}
 	rules := route["rules"].([]map[string]any)
-	if rules[0]["action"] != "hijack-dns" || len(rules) < 2 {
+	if len(rules) != 3 || rules[0]["outbound"] != "direct" || rules[1]["action"] != "hijack-dns" || rules[2]["action"] != "hijack-dns" {
 		t.Fatalf("unexpected DNS route rules: %#v", rules)
 	}
 	if _, ok := rules[1]["outbound"]; ok {

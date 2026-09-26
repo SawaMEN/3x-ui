@@ -61,10 +61,19 @@ func (s *InboundService) enrichClientStats(db *gorm.DB, inbounds []*model.Inboun
 // (not the embedded settings JSON, which can lag the live UUID — #6436).
 func (s *InboundService) backfillClientStats(db *gorm.DB, inbounds []*model.Inbound) [][]model.Client {
 	clientsByInbound := make([][]model.Client, len(inbounds))
+	inboundIDs := make([]int, 0, len(inbounds))
+	for _, inbound := range inbounds {
+		inboundIDs = append(inboundIDs, inbound.Id)
+	}
+	linkedClients, err := s.clientService.ListForInbounds(db, inboundIDs)
+	if err != nil {
+		logger.Warning("backfillClientStats: unable to load linked clients:", err)
+		return clientsByInbound
+	}
 	seenByInbound := make([]map[string]struct{}, len(inbounds))
 	missing := make(map[string]struct{})
 	for i, inbound := range inbounds {
-		clients, _ := s.clientService.ListForInbound(db, inbound.Id)
+		clients := linkedClients[inbound.Id]
 		clientsByInbound[i] = clients
 		seen := make(map[string]struct{}, len(inbound.ClientStats))
 		for _, st := range inbound.ClientStats {

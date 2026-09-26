@@ -108,24 +108,27 @@ export default function IndexPage() {
     if (coreType !== 'sing-box') return;
 
     let cancelled = false;
+    let timer: number | undefined;
     const syncSingBoxStatus = async () => {
-      const msg = await HttpUtil.get<{
-        running?: boolean;
-        version?: string;
-        error?: string;
-      }>('/panel/api/setting/singbox/status');
-      if (cancelled) return;
-      setCoreRunning(!!msg?.success && !!msg.obj?.running);
-      setCoreVersion(msg?.success && msg.obj?.version ? msg.obj.version : '');
-      setCoreError(msg?.success && msg.obj?.error ? msg.obj.error : '');
-      setCoreColor(msg?.success && msg.obj?.running ? 'green' : 'red');
+      if (!document.hidden) {
+        const msg = await HttpUtil.get<{
+          running?: boolean;
+          version?: string;
+          error?: string;
+        }>('/panel/api/setting/singbox/status', undefined, { silent: true });
+        if (cancelled) return;
+        setCoreRunning(!!msg?.success && !!msg.obj?.running);
+        setCoreVersion(msg?.success && msg.obj?.version ? msg.obj.version : '');
+        setCoreError(msg?.success && msg.obj?.error ? msg.obj.error : '');
+        setCoreColor(msg?.success && msg.obj?.running ? 'green' : 'red');
+      }
+      if (!cancelled) timer = window.setTimeout(syncSingBoxStatus, 10000);
     };
 
     void syncSingBoxStatus();
-    const timer = window.setInterval(() => void syncSingBoxStatus(), 10000);
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
+      if (timer !== undefined) window.clearTimeout(timer);
     };
   }, [coreType]);
   useEffect(() => {

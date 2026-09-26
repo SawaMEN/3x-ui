@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { HttpUtil } from '@/utils';
 import { Sparkline } from '@/components/viz';
@@ -38,10 +38,10 @@ export default function NodeHistoryPanel({ node, bucket = 30 }: NodeHistoryPanel
   const [netDownPoints, setNetDownPoints] = useState<number[]>([]);
   const [netDownLabels, setNetDownLabels] = useState<string[]>([]);
 
-  const lastNodeId = useRef<number>(node.id);
-
   useEffect(() => {
     let cancelled = false;
+    let refreshing = false;
+    let timer: number | undefined;
 
     const bucketLabel = (unixSec: number) => {
       const d = new Date(unixSec * 1000);
@@ -75,30 +75,43 @@ export default function NodeHistoryPanel({ node, bucket = 30 }: NodeHistoryPanel
     };
 
     const refresh = async () => {
-      const [cpu, mem, netUp, netDown] = await Promise.all([
-        fetchSeries('cpu', 'pct'),
-        fetchSeries('mem', 'pct'),
-        fetchSeries('netUp', 'rate'),
-        fetchSeries('netDown', 'rate'),
-      ]);
-      if (cancelled) return;
-      setCpuPoints(cpu.vals);
-      setCpuLabels(cpu.labs);
-      setMemPoints(mem.vals);
-      setMemLabels(mem.labs);
-      setNetUpPoints(netUp.vals);
-      setNetUpLabels(netUp.labs);
-      setNetDownPoints(netDown.vals);
-      setNetDownLabels(netDown.labs);
+      if (cancelled || refreshing || document.hidden) return;
+      refreshing = true;
+      try {
+        const [cpu, mem, netUp, netDown] = await Promise.all([
+          fetchSeries('cpu', 'pct'),
+          fetchSeries('mem', 'pct'),
+          fetchSeries('netUp', 'rate'),
+          fetchSeries('netDown', 'rate'),
+        ]);
+        if (cancelled) return;
+        setCpuPoints(cpu.vals);
+        setCpuLabels(cpu.labs);
+        setMemPoints(mem.vals);
+        setMemLabels(mem.labs);
+        setNetUpPoints(netUp.vals);
+        setNetUpLabels(netUp.labs);
+        setNetDownPoints(netDown.vals);
+        setNetDownLabels(netDown.labs);
+      } finally {
+        refreshing = false;
+        if (!cancelled && !document.hidden) {
+          timer = window.setTimeout(refresh, REFRESH_MS);
+        }
+      }
     };
 
-    refresh();
-    const timer = window.setInterval(refresh, REFRESH_MS);
-    lastNodeId.current = node.id;
+    const onVisibilityChange = () => {
+      window.clearTimeout(timer);
+      if (!document.hidden) void refresh();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    void refresh();
 
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
+      window.clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
     };
   }, [node.id, bucket]);
 

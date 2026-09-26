@@ -40,12 +40,25 @@ func buildSeparatedSingBoxSubscription(template map[string]any, proxies []map[st
 		translatedDNS = map[string]any{}
 	}
 	servers, _ := translatedDNS["servers"].([]map[string]any)
-	servers = append(servers, map[string]any{"type": "local", "tag": "panel-local"})
+	resolverTag := "panel-local"
+	usedTags := make(map[string]struct{}, len(servers))
+	for _, server := range servers {
+		if tag, ok := server["tag"].(string); ok {
+			usedTags[tag] = struct{}{}
+		}
+	}
+	for suffix := 1; ; suffix++ {
+		if _, exists := usedTags[resolverTag]; !exists {
+			break
+		}
+		resolverTag = fmt.Sprintf("panel-local-%d", suffix)
+	}
+	servers = append(servers, map[string]any{"type": "local", "tag": resolverTag})
 	translatedDNS["servers"] = servers
 	if translatedRoute == nil {
 		translatedRoute = map[string]any{}
 	}
-	translatedRoute["default_domain_resolver"] = "panel-local"
+	translatedRoute["default_domain_resolver"] = resolverTag
 
 	configs := make([]json.RawMessage, 0, len(proxies))
 	for _, proxy := range proxies {

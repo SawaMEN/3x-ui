@@ -33,19 +33,16 @@ func NewConfig() *Config {
 }
 
 func (c *Config) Marshal() ([]byte, error) {
-	seen := make(map[string]bool, len(c.Outbounds))
-	outbounds := make([]map[string]any, 0, len(c.Outbounds))
+	seen := make(map[string]struct{}, len(c.Outbounds))
 	for _, outbound := range c.Outbounds {
 		tag := rawString(outbound, "tag")
-		if tag != "" && seen[tag] {
-			continue
-		}
 		if tag != "" {
-			seen[tag] = true
+			if _, exists := seen[tag]; exists {
+				return nil, fmt.Errorf("duplicate sing-box outbound tag %q", tag)
+			}
+			seen[tag] = struct{}{}
 		}
-		outbounds = append(outbounds, outbound)
 	}
-	c.Outbounds = outbounds
 	return json.MarshalIndent(c, "", "  ")
 }
 
@@ -70,6 +67,9 @@ func TranslateXrayOutbound(raw map[string]any) (map[string]any, error) {
 	}
 	settings := rawObject(raw, "settings")
 	streamSettings := rawObject(raw, "streamSettings")
+	if err := validateSingleOutboundTarget(settings, protocol, tag); err != nil {
+		return nil, err
+	}
 	switch protocol {
 	case "socks", "http":
 		server := firstObject(settings, "servers")
@@ -226,15 +226,14 @@ func TranslateXrayOutbound(raw map[string]any) (map[string]any, error) {
 			out["server_port"] = port
 		}
 		if protocol == "hysteria2" {
-			if password := rawString(server, "password"); password != "" {
-				out["password"] = password
-			} else if password := rawString(settings, "password"); password != "" {
-				out["password"] = password
+			password := rawString(settings, "password")
+			if password == "" {
+				password = rawString(server, "password")
 			}
-			if password := rawString(hySettings, "auth"); password != "" && out["password"] == nil {
-				out["password"] = password
+			if password == "" {
+				password = rawString(hySettings, "auth")
 			}
-			if password := rawString(settings, "password"); password != "" {
+			if password != "" {
 				out["password"] = password
 			}
 		}
@@ -283,6 +282,9 @@ func TranslateXrayOutbound(raw map[string]any) (map[string]any, error) {
 			if auth == "" {
 				auth = rawString(firstObject(settings, "servers"), "password")
 			}
+			if auth == "" {
+				auth = rawString(settings, "password")
+			}
 			if auth != "" {
 				out["password"] = auth
 			}
@@ -326,6 +328,32 @@ func TranslateXrayOutbound(raw map[string]any) (map[string]any, error) {
 		return nil, err
 	}
 	return out, nil
+}
+
+func validateSingleOutboundTarget(settings map[string]any, protocol, tag string) error {
+	key := "servers"
+	switch protocol {
+	case "vmess", "vless":
+		key = "vnext"
+	case "socks", "http", "shadowsocks", "trojan", "hysteria", "hysteria2", "tuic":
+	default:
+		return nil
+	}
+	targets, ok := settings[key].([]any)
+	if !ok || len(targets) == 0 {
+		return nil
+	}
+	if len(targets) != 1 {
+		return fmt.Errorf("outbound %q has %d %s targets; sing-box supports one per outbound", tag, len(targets), key)
+	}
+	if protocol == "socks" || protocol == "http" || protocol == "vmess" || protocol == "vless" {
+		server, _ := targets[0].(map[string]any)
+		users, _ := server["users"].([]any)
+		if len(users) > 1 {
+			return fmt.Errorf("outbound %q has %d users; sing-box supports one per outbound", tag, len(users))
+		}
+	}
+	return nil
 }
 
 // TranslateXrayWireGuardEndpoint converts the panel's Xray WireGuard
@@ -728,30 +756,31 @@ func translateUsers(out map[string]any, protocol string, settings map[string]any
 
 func translateStream(out map[string]any, protocol string, stream map[string]any, inbound bool) error {
 	security := strings.ToLower(strings.TrimSpace(rawString(stream, "security")))
-	if protocol == "hysteria2" {
+	if protocol == "hysteria" || protocol == "hysteria2" {
 		if inbound {
 			if security != "tls" {
-				return fmt.Errorf("inbound %q uses Hysteria2 without required TLS", rawString(out, "tag"))
+				return fmt.Errorf("inbound %q uses %s without required TLS", rawString(out, "tag"), protocol)
 			}
 		} else {
 			switch security {
 			case "":
-				// Hysteria2 always uses TLS. Legacy/flat panel outbounds may omit the
-				// stream security marker, so synthesize the minimal client TLS block.
+				// Legacy/flat panel outbounds may omit the security marker.
+				// Both Hysteria versions require a client TLS block.
 				out["tls"] = map[string]any{"enabled": true}
 			case "tls":
 			default:
-				return fmt.Errorf("outbound %q uses Hysteria2 with unsupported security %q", rawString(out, "tag"), security)
+				return fmt.Errorf("outbound %q uses %s with unsupported security %q", rawString(out, "tag"), protocol, security)
 			}
 		}
 	}
 	if len(stream) == 0 {
-		if protocol == "hysteria2" {
+		if protocol == "hysteria" || protocol == "hysteria2" {
 			return translateHysteriaStream(out, protocol, stream, inbound)
 		}
 		return nil
 	}
 	switch security {
+	case "", "none":
 	case "tls":
 		tls := rawObject(stream, "tlsSettings")
 		t := map[string]any{"enabled": true}
@@ -871,6 +900,12 @@ func translateStream(out map[string]any, protocol string, stream map[string]any,
 		}
 		t["reality"] = r
 		out["tls"] = t
+	default:
+		direction := "outbound"
+		if inbound {
+			direction = "inbound"
+		}
+		return fmt.Errorf("%s %q uses unsupported Xray stream security %q", direction, rawString(out, "tag"), security)
 	}
 	network := strings.ToLower(strings.TrimSpace(rawString(stream, "network")))
 	if protocol == "hysteria2" || protocol == "hysteria" {
@@ -1021,6 +1056,21 @@ func translateHysteriaStream(out map[string]any, protocol string, stream map[str
 	}
 	if protocol == "hysteria" && version != 1 {
 		return fmt.Errorf("%s %q has inconsistent Hysteria version %d", direction, rawString(out, "tag"), version)
+	}
+	if protocol == "hysteria" {
+		up := rawInt(settings, "up_mbps")
+		if up <= 0 {
+			up = rawInt(settings, "up")
+		}
+		down := rawInt(settings, "down_mbps")
+		if down <= 0 {
+			down = rawInt(settings, "down")
+		}
+		if up <= 0 || down <= 0 {
+			return fmt.Errorf("%s %q Hysteria v1 requires positive up_mbps and down_mbps", direction, rawString(out, "tag"))
+		}
+		out["up_mbps"] = up
+		out["down_mbps"] = down
 	}
 	if protocol == "hysteria2" {
 		up := rawInt(settings, "up_mbps")

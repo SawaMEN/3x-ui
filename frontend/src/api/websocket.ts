@@ -132,9 +132,13 @@ export class WebSocketClient {
   #onMessage(event: MessageEvent): void {
     const data = event.data;
     if (typeof data === 'string') {
-      const byteLen = new Blob([data]).size;
-      if (byteLen > WebSocketClient.#MAX_PAYLOAD_BYTES) {
-        console.error(`WebSocket: payload too large (${byteLen} bytes), closing`);
+      // UTF-8 uses at most three bytes per UTF-16 code unit. Most status
+      // messages fit below this bound and need no Blob allocation.
+      if (
+        data.length > WebSocketClient.#MAX_PAYLOAD_BYTES / 3 &&
+        new Blob([data]).size > WebSocketClient.#MAX_PAYLOAD_BYTES
+      ) {
+        console.error('WebSocket: payload too large, closing');
         try {
           this.ws?.close(1009, 'message too big');
         } catch {}

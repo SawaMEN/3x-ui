@@ -43,7 +43,7 @@ var errSubscriptionFormatUnsupported = errors.New("subscription format cannot re
 func containsUnsupportedJSONProtocol(inbounds []*model.Inbound) bool {
 	for _, inbound := range inbounds {
 		switch inbound.Protocol {
-		case model.NaiveProxy, model.AnyTLS, model.ShadowTLS, model.AmneziaWG, model.TUIC, model.MTProto, model.VKTurnProxy, model.Mieru:
+		case model.NaiveProxy, model.AnyTLS, model.ShadowTLS, model.AmneziaWG, model.TUIC, model.MTProto, model.VKTurnProxy, model.Mieru, model.Sudoku:
 			return true
 		}
 	}
@@ -53,7 +53,7 @@ func containsUnsupportedJSONProtocol(inbounds []*model.Inbound) bool {
 func containsUnsupportedSingBoxProtocol(inbounds []*model.Inbound) bool {
 	for _, inbound := range inbounds {
 		switch inbound.Protocol {
-		case model.AmneziaWG, model.MTProto, model.VKTurnProxy, model.Mieru:
+		case model.AmneziaWG, model.MTProto, model.VKTurnProxy, model.Mieru, model.Sudoku:
 			return true
 		}
 	}
@@ -65,7 +65,7 @@ func containsUnsupportedClashProtocol(inbounds []*model.Inbound) bool {
 		switch inbound.Protocol {
 		case model.NaiveProxy, model.AnyTLS, model.ShadowTLS, model.MTProto, model.VKTurnProxy, model.Mieru:
 			return true
-		case model.Hysteria, model.WireGuard, model.TUIC, model.AmneziaWG:
+		case model.Hysteria, model.WireGuard, model.TUIC, model.AmneziaWG, model.Sudoku:
 			// These protocols have dedicated Clash/Mihomo emitters.
 			continue
 		default:
@@ -158,13 +158,17 @@ type SubService struct {
 	// doesn't own its row (multi-inbound subscriptions). Filled in
 	// getInboundsBySubId; reset per request in PrepareForRequest.
 	statsByEmail map[string]xray.ClientTraffic
+	// statsIndexed indicates that the request loaded traffic for its
+	// subscription, so the userinfo aggregate can reuse the same rows.
+	statsIndexed bool
 	// clientsByInbound caches clients resolved for this request keyed by
 	// inbound id then email, so the per-protocol link generators look a client
 	// up without re-parsing the inbound's settings JSON per link.
 	// fullyPrimedInbounds marks inbounds whose complete client list is cached
 	// (a miss there is authoritative). Reset per request in PrepareForRequest.
-	clientsByInbound    map[int]map[string]model.Client
-	fullyPrimedInbounds map[int]bool
+	clientsByInbound             map[int]map[string]model.Client
+	fullyPrimedInbounds          map[int]bool
+	subscriptionClientsByInbound map[int][]model.Client
 	// settingsByInbound caches each inbound's settings decoded once per request
 	// with the clients array left out; generators read only inbound-level
 	// fields (encryption, method, version, …) from it.
@@ -203,8 +207,10 @@ func (s *SubService) PrepareForRequest(host string) {
 	s.address = host
 	s.usageShown = map[string]bool{}
 	s.statsByEmail = map[string]xray.ClientTraffic{}
+	s.statsIndexed = false
 	s.clientsByInbound = map[int]map[string]model.Client{}
 	s.fullyPrimedInbounds = map[int]bool{}
+	s.subscriptionClientsByInbound = nil
 	s.settingsByInbound = map[int]map[string]any{}
 	s.streamSettingsByInbound = map[int]map[string]any{}
 	s.hostsByInbound = nil
@@ -284,7 +290,7 @@ func (s *SubService) clientForLink(inbound *model.Inbound, email string) (model.
 // synced last (see TunnelAllowedIPsByInbound / amneziaWGClientAddresses).
 func (s *SubService) clientsForLinkExport(inbound *model.Inbound) ([]model.Client, error) {
 	if inbound.Protocol == model.WireGuard || inbound.Protocol == model.AmneziaWG ||
-		inbound.Protocol == model.AnyTLS || inbound.Protocol == model.ShadowTLS {
+		inbound.Protocol == model.AnyTLS || inbound.Protocol == model.ShadowTLS || inbound.Protocol == model.Sudoku {
 		// These protocols keep the client password in the inbound settings JSON.
 		// Prefer that source so subscriptions also work for existing rows whose
 		// normalized clients record predates password persistence.
@@ -417,23 +423,36 @@ func listenIsInternalOnly(listen string) bool {
 // are primed into the per-request cache so the link generators don't parse
 // settings either.
 func (s *SubService) matchingClients(inbound *model.Inbound, subId string) []model.Client {
-	clients, err := s.inboundService.GetClientsBySubId(inbound.Id, subId)
-	if err != nil {
-		logger.Error("SubService - GetClientsBySubId: Unable to get clients from inbound")
-		return nil
+	clients, loaded := s.subscriptionClientsByInbound[inbound.Id]
+	if !loaded {
+		var err error
+		clients, err = s.inboundService.GetClientsBySubId(inbound.Id, subId)
+		if err != nil {
+			logger.Error("SubService - GetClientsBySubId: Unable to get clients from inbound")
+			return nil
+		}
 	}
 
-	if inbound.Protocol == model.AnyTLS || inbound.Protocol == model.ShadowTLS {
+	if inbound.Protocol == model.AnyTLS || inbound.Protocol == model.ShadowTLS || inbound.Protocol == model.Sudoku {
 		if settingsClients, settingsErr := s.inboundService.GetClients(inbound); settingsErr == nil {
-			passwordByEmail := make(map[string]string, len(settingsClients))
+			settingsByEmail := make(map[string]model.Client, len(settingsClients))
 			for _, settingsClient := range settingsClients {
+				key := strings.ToLower(settingsClient.Email)
+				current := settingsByEmail[key]
 				if settingsClient.Password != "" {
-					passwordByEmail[strings.ToLower(settingsClient.Email)] = settingsClient.Password
+					current.Password = settingsClient.Password
 				}
+				if settingsClient.SudokuPrivateKey != "" {
+					current.SudokuPrivateKey = settingsClient.SudokuPrivateKey
+				}
+				settingsByEmail[key] = current
 			}
 			for i := range clients {
-				if clients[i].Password == "" {
-					clients[i].Password = passwordByEmail[strings.ToLower(clients[i].Email)]
+				settingsClient := settingsByEmail[strings.ToLower(clients[i].Email)]
+				if inbound.Protocol == model.Sudoku {
+					clients[i].SudokuPrivateKey = settingsClient.SudokuPrivateKey
+				} else if clients[i].Password == "" {
+					clients[i].Password = settingsClient.Password
 				}
 			}
 		}
@@ -670,8 +689,10 @@ func (s *SubService) inboundLinks(inbound *model.Inbound) []string {
 	return out
 }
 
-// AggregateTrafficByEmails resolves traffic for every email in one
-// query and folds the rows into a single ClientTraffic + lastOnline.
+// AggregateTrafficByEmails resolves traffic for every email and folds the
+// rows into a single ClientTraffic + lastOnline. Subscription requests reuse
+// the rows loaded for link remarks and query only emails missing from that
+// index; direct callers still load all rows in one query.
 // xray.ClientTraffic.Email is globally unique, so a multi-inbound
 // client's single row is attached to exactly one inbound — iterating
 // per-inbound ClientStats would miss it on the others. Used by GetSubs,
@@ -685,12 +706,26 @@ func (s *SubService) AggregateTrafficByEmails(emails []string) (xray.ClientTraff
 	}
 	db := database.GetDB()
 	var rows []xray.ClientTraffic
-	if err := db.
-		Model(&xray.ClientTraffic{}).
-		Where("email IN ?", emails).
-		Find(&rows).Error; err != nil {
-		logger.Warning("SubService - AggregateTrafficByEmails: load by email:", err)
-		return agg, 0
+	missing := emails
+	if s.statsIndexed {
+		missing = make([]string, 0)
+		for _, email := range emails {
+			if row, ok := s.statsByEmail[email]; ok {
+				rows = append(rows, row)
+			} else {
+				missing = append(missing, email)
+			}
+		}
+	}
+	if len(missing) > 0 {
+		var remaining []xray.ClientTraffic
+		if err := db.Model(&xray.ClientTraffic{}).
+			Where("email IN ?", missing).
+			Find(&remaining).Error; err != nil {
+			logger.Warning("SubService - AggregateTrafficByEmails: load by email:", err)
+			return agg, 0
+		}
+		rows = append(rows, remaining...)
 	}
 
 	// total/expiry are configured limits owned by the clients table, not the
@@ -790,6 +825,18 @@ func (s *SubService) getInboundsBySubId(subId string) ([]*model.Inbound, error) 
 	if err != nil {
 		return nil, err
 	}
+	inboundIDs := make([]int, 0, len(inbounds))
+	for _, inbound := range inbounds {
+		inboundIDs = append(inboundIDs, inbound.Id)
+	}
+	clientsByInbound, err := s.inboundService.GetClientsForInboundsBySubId(inboundIDs, subId)
+	if err != nil {
+		return nil, err
+	}
+	s.subscriptionClientsByInbound = make(map[int][]model.Client, len(inbounds))
+	for _, inbound := range inbounds {
+		s.subscriptionClientsByInbound[inbound.Id] = clientsByInbound[inbound.Id]
+	}
 	s.indexStatsBySubId(subId)
 	if err := s.primeHosts(inbounds); err != nil {
 		return nil, err
@@ -798,36 +845,24 @@ func (s *SubService) getInboundsBySubId(subId string) ([]*model.Inbound, error) 
 }
 
 // indexStatsBySubId preloads traffic only for clients belonging to this
-// subscription. This avoids re-querying client_traffics once per rendered
-// link when remark templates use traffic variables, while the existing
-// statsByEmailFromDB fallback still covers orphaned/missing rows.
+// subscription. The subquery keeps the lookup to one database round trip
+// regardless of subscriber size, while the existing statsByEmailFromDB
+// fallback still covers orphaned/missing rows.
 func (s *SubService) indexStatsBySubId(subId string) {
 	if s.statsByEmail == nil {
 		s.statsByEmail = map[string]xray.ClientTraffic{}
 	}
-	db := database.GetDB()
-	var emails []string
-	if err := db.Model(&model.ClientRecord{}).
-		Where("sub_id = ?", subId).
-		Pluck("email", &emails).Error; err != nil {
-		logger.Error("SubService - indexStatsBySubId: load emails:", err)
+	var rows []xray.ClientTraffic
+	if err := database.GetDB().Model(&xray.ClientTraffic{}).
+		Where("email IN (SELECT email FROM clients WHERE sub_id = ?)", subId).
+		Find(&rows).Error; err != nil {
+		logger.Error("SubService - indexStatsBySubId: load traffics:", err)
 		return
 	}
-	const chunk = 400
-	for lo := 0; lo < len(emails); lo += chunk {
-		hi := lo + chunk
-		if hi > len(emails) {
-			hi = len(emails)
-		}
-		var rows []xray.ClientTraffic
-		if err := db.Where("email IN ?", emails[lo:hi]).Find(&rows).Error; err != nil {
-			logger.Error("SubService - indexStatsBySubId: load traffics:", err)
-			return
-		}
-		for _, st := range rows {
-			s.statsByEmail[st.Email] = st
-		}
+	for _, st := range rows {
+		s.statsByEmail[st.Email] = st
 	}
+	s.statsIndexed = true
 }
 
 // projectThroughFallbackMaster mutates the inbound in place so its
@@ -985,6 +1020,8 @@ func (s *SubService) GetLink(inbound *model.Inbound, email string) string {
 		return s.genShadowTlsLink(inbound, email)
 	case model.Mieru:
 		return s.genMieruLink(inbound, email)
+	case model.Sudoku:
+		return s.genSudokuLink(inbound, email)
 	}
 	return ""
 }
