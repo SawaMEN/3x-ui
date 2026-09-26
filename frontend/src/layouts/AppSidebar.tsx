@@ -370,6 +370,7 @@ function AppSidebar() {
         <div className="sider-brand">
           <div
             className={`brand-block sider-brand-content ${railCollapsed ? 'brand-is-compact' : 'brand-is-expanded'}`}
+            style={{ height: 72 }}
           >
             <span className="brand-text" aria-label={railCollapsed ? '3X' : '3X-UI'}>
               <span className="brand-text-full">3X-UI</span>
