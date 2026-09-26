@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 )
 
@@ -197,7 +198,7 @@ func (TelemtService) EnsureWebProxyBackend() error {
 		return fmt.Errorf("telemt: failed to start WEB Proxy backend: %w", err)
 	}
 
-	addr := fmt.Sprintf("%s:%d", telemtWebListenIP, telemtWebListenPort)
+	addr := net.JoinHostPort(telemtWebListenIP, strconv.Itoa(telemtWebListenPort))
 	deadline := time.Now().Add(8 * time.Second)
 	var lastErr error
 	for {

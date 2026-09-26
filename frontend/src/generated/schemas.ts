@@ -2748,7 +2748,9 @@ export const SCHEMAS: Record<string, unknown> = {
           "shadowtls",
           "mieru",
           "vk-turn-proxy",
-          "sudoku"
+          "sudoku",
+          "pingtunnel",
+          "trusttunnel"
         ],
         "example": "vless",
         "type": "string"

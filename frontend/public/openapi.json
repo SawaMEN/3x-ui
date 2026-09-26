@@ -2774,7 +2774,9 @@
               "shadowtls",
               "mieru",
               "vk-turn-proxy",
-              "sudoku"
+              "sudoku",
+              "pingtunnel",
+              "trusttunnel"
             ],
             "example": "vless",
             "type": "string"
@@ -4541,6 +4543,14 @@
   ],
   "tags": [
     {
+      "name": "External VPN",
+      "description": "Inspect and update standalone external VPN components."
+    },
+    {
+      "name": "NaiveProxy",
+      "description": "Manage the standalone Caddy-Naive sidecar used when Xray is the selected core."
+    },
+    {
       "name": "Routing Presets",
       "description": "Reusable routing rules owned by the authenticated user."
     },
@@ -4610,6 +4620,137 @@
     }
   ],
   "paths": {
+    "/panel/api/server/externalvpn/status": {
+      "get": {
+        "tags": [
+          "External VPN"
+        ],
+        "summary": "Return external VPN component installation and update status.",
+        "operationId": "get_panel_api_server_externalvpn_status",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/server/externalvpn/update/{protocol}": {
+      "post": {
+        "tags": [
+          "External VPN"
+        ],
+        "summary": "Install or update an external VPN component.",
+        "operationId": "post_panel_api_server_externalvpn_update_protocol",
+        "parameters": [
+          {
+            "name": "protocol",
+            "in": "path",
+            "required": true,
+            "description": "External VPN protocol identifier.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/naiveproxy/status": {
+      "get": {
+        "tags": [
+          "NaiveProxy"
+        ],
+        "summary": "Return standalone NaiveProxy installation and runtime status.",
+        "operationId": "get_panel_api_naiveproxy_status",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/naiveproxy/update": {
+      "post": {
+        "tags": [
+          "NaiveProxy"
+        ],
+        "summary": "Install or update standalone NaiveProxy from the official release.",
+        "operationId": "post_panel_api_naiveproxy_update",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/panel/api/xray/routingPresets/list": {
       "get": {
         "tags": [
