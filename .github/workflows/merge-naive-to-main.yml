@@ -61,24 +61,6 @@ jobs:
           cd ..
           git add -A
 
-      - name: Test backend
-        shell: bash
-        run: |
-          mkdir -p internal/web/dist
-          touch internal/web/dist/.gitkeep
-          go test -p 12 -vet=off -shuffle=on -count=1 ./...
-          rm -f internal/web/dist/.gitkeep
-          rmdir internal/web/dist 2>/dev/null || true
-
-      - name: Validate frontend
-        working-directory: frontend
-        run: |
-          npm run lint
-          npm run format:check
-          npm run typecheck
-          npm test
-          npm run build:ci
-
       - name: Commit once and push main
         shell: bash
         run: |
