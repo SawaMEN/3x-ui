@@ -20,6 +20,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawgnet"
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/eventbus"
+	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/mieru"
 	"github.com/SawaMEN/3x-ui/v3/internal/mtproto"
@@ -376,6 +377,10 @@ func (s *Server) startTask(restartXray bool, loc *time.Location) {
 	_, _ = s.cron.AddJob(cadenceTuic, tuicJob)
 	go tuicJob.Run()
 
+	externalJob := job.NewExternalVPNJob()
+	_, _ = s.cron.AddJob("@every 10s", externalJob)
+	go externalJob.Run()
+
 	mieruJob := job.NewMieruJob()
 	_, _ = s.cron.AddJob(cadenceMieru, mieruJob)
 	go mieruJob.Run()
@@ -383,7 +388,6 @@ func (s *Server) startTask(restartXray bool, loc *time.Location) {
 	sudokuJob := job.NewSudokuJob(s.ctx)
 	_, _ = s.cron.AddJob(cadenceSudoku, sudokuJob)
 	go sudokuJob.Run()
-
 
 	// check client ips from log file every 10 sec
 	_, _ = s.cron.AddJob(cadenceClientIPScan, job.NewCheckClientIpJob())
@@ -871,6 +875,7 @@ func (s *Server) stop(stopXray bool, stopTgBot bool) error {
 		mtproto.GetManager().StopAll()
 		amneziawgnet.GetManager().StopAll()
 		tuic.GetManager().StopAll()
+		externalvpn.GetManager().StopAll()
 		mieru.GetManager().StopAll()
 		amneziawgnet.GetOutboundManager().StopAll()
 	}

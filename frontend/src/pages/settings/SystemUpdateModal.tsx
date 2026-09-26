@@ -34,7 +34,12 @@ type SystemUpdatePackage = {
   updateAvailable: boolean;
 };
 
-type DependencyKey = 'naiveproxy' | 'hysteria2' | 'sudoku';
+type DependencyKey =
+  | 'naiveproxy'
+  | 'hysteria2'
+  | 'sudoku'
+  | 'pingtunnel'
+  | 'trusttunnel';
 
 type DependencyStatus = {
   key: DependencyKey;
@@ -45,6 +50,19 @@ type DependencyStatus = {
   updateAvailable: boolean;
   prerelease?: boolean;
   source?: 'xray' | 'sing-box';
+};
+
+type ExternalVPNBinaryStatus = {
+  installed?: boolean;
+  version?: string;
+  latestVersion?: string;
+  updateAvailable?: boolean;
+  error?: string;
+};
+
+type ExternalVPNStatus = {
+  pingtunnel?: ExternalVPNBinaryStatus;
+  trusttunnel?: ExternalVPNBinaryStatus;
 };
 
 type CoreType = 'xray' | 'sing-box';
@@ -82,6 +100,9 @@ const normalizeVersion = (value: string) => value.trim().replace(/^v/i, '');
 
 const versionsDiffer = (installed: string, available: string) =>
   normalizeVersion(installed) !== normalizeVersion(available);
+
+const isInstallableDependency = (key: DependencyKey) =>
+  key === 'sudoku' || key === 'pingtunnel' || key === 'trusttunnel';
 
 function waitForUpdateRecovery(delayMs: number): Promise<void> {
   return new Promise((resolve) => {
@@ -184,22 +205,30 @@ export default function SystemUpdateModal({
       }
     };
 
-    const [settings, serverStatus, xrayVersions, singBoxStatus, singBoxVersions, sudokuStatus] =
-      await Promise.all([
-        safePost<{ coreType?: string }>('/panel/api/setting/all'),
-        safeGet<{ xray?: { version?: string } }>('/panel/api/server/status'),
-        safeGet<string[]>('/panel/api/server/getXrayVersion'),
-        safeGet<{ installed?: boolean; version?: string }>('/panel/api/setting/singbox/status'),
-        safeGet<Array<{ version?: string; prerelease?: boolean } | string>>(
-          '/panel/api/setting/singbox/versions',
-        ),
-        safeGet<{
-          installed?: boolean;
-          version?: string;
-          latestVersion?: string;
-          updateAvailable?: boolean;
-        }>('/panel/api/setting/sudoku/status'),
-      ]);
+    const [
+      settings,
+      serverStatus,
+      xrayVersions,
+      singBoxStatus,
+      singBoxVersions,
+      sudokuStatus,
+      externalVPNStatus,
+    ] = await Promise.all([
+      safePost<{ coreType?: string }>('/panel/api/setting/all'),
+      safeGet<{ xray?: { version?: string } }>('/panel/api/server/status'),
+      safeGet<string[]>('/panel/api/server/getXrayVersion'),
+      safeGet<{ installed?: boolean; version?: string }>('/panel/api/setting/singbox/status'),
+      safeGet<Array<{ version?: string; prerelease?: boolean } | string>>(
+        '/panel/api/setting/singbox/versions',
+      ),
+      safeGet<{
+        installed?: boolean;
+        version?: string;
+        latestVersion?: string;
+        updateAvailable?: boolean;
+      }>('/panel/api/setting/sudoku/status'),
+      safeGet<ExternalVPNStatus>('/panel/api/server/externalvpn/status'),
+    ]);
 
     const coreType: CoreType | null =
       settings.success &&
@@ -233,6 +262,8 @@ export default function SystemUpdateModal({
 
     const sudokuCurrent = sudokuStatus.success ? sudokuStatus.obj?.version || '' : '';
     const sudokuLatest = sudokuStatus.success ? sudokuStatus.obj?.latestVersion || '' : '';
+    const pingtunnel = externalVPNStatus.success ? externalVPNStatus.obj?.pingtunnel : undefined;
+    const trusttunnel = externalVPNStatus.success ? externalVPNStatus.obj?.trusttunnel : undefined;
 
     setDependencies([
       {
@@ -243,10 +274,10 @@ export default function SystemUpdateModal({
         availableVersion: coreType === 'sing-box' ? stableSingBoxVersion : '',
         updateAvailable: Boolean(
           coreType === 'sing-box' &&
-          singBoxInstalled &&
-          singBoxCurrent &&
-          stableSingBoxVersion &&
-          versionsDiffer(singBoxCurrent, stableSingBoxVersion),
+            singBoxInstalled &&
+            singBoxCurrent &&
+            stableSingBoxVersion &&
+            versionsDiffer(singBoxCurrent, stableSingBoxVersion),
         ),
       },
       {
@@ -260,11 +291,11 @@ export default function SystemUpdateModal({
           coreType === 'sing-box' ? stableSingBoxVersion : coreType === 'xray' ? xrayLatest : '',
         updateAvailable: Boolean(
           coreType &&
-          (coreType === 'sing-box'
-            ? singBoxCurrent &&
-              stableSingBoxVersion &&
-              versionsDiffer(singBoxCurrent, stableSingBoxVersion)
-            : xrayCurrent && xrayLatest && versionsDiffer(xrayCurrent, xrayLatest)),
+            (coreType === 'sing-box'
+              ? singBoxCurrent &&
+                stableSingBoxVersion &&
+                versionsDiffer(singBoxCurrent, stableSingBoxVersion)
+              : xrayCurrent && xrayLatest && versionsDiffer(xrayCurrent, xrayLatest)),
         ),
       },
       {
@@ -277,6 +308,36 @@ export default function SystemUpdateModal({
           sudokuStatus.success && sudokuStatus.obj
             ? sudokuStatus.obj.updateAvailable === true
             : Boolean(sudokuCurrent && sudokuLatest && versionsDiffer(sudokuCurrent, sudokuLatest)),
+      },
+      {
+        key: 'pingtunnel',
+        label: 'Pingtunnel',
+        installed: pingtunnel?.installed === true,
+        installedVersion: pingtunnel?.version || '',
+        availableVersion: pingtunnel?.latestVersion || '',
+        updateAvailable:
+          pingtunnel?.updateAvailable === true ||
+          Boolean(
+            pingtunnel?.installed &&
+              pingtunnel.version &&
+              pingtunnel.latestVersion &&
+              versionsDiffer(pingtunnel.version, pingtunnel.latestVersion),
+          ),
+      },
+      {
+        key: 'trusttunnel',
+        label: 'TrustTunnel',
+        installed: trusttunnel?.installed === true,
+        installedVersion: trusttunnel?.version || '',
+        availableVersion: trusttunnel?.latestVersion || '',
+        updateAvailable:
+          trusttunnel?.updateAvailable === true ||
+          Boolean(
+            trusttunnel?.installed &&
+              trusttunnel.version &&
+              trusttunnel.latestVersion &&
+              versionsDiffer(trusttunnel.version, trusttunnel.latestVersion),
+          ),
       },
     ]);
   }, []);
@@ -298,35 +359,41 @@ export default function SystemUpdateModal({
     }
   }, [loadDependencyUpdates, messageApi]);
 
+  const requestDependencyUpdate = useCallback(async (dependency: DependencyStatus) => {
+    switch (dependency.key) {
+      case 'naiveproxy':
+        return (await HttpUtil.post(
+          `/panel/api/setting/singbox/install/${encodeURIComponent(dependency.availableVersion)}`,
+        )) as ApiMsg<unknown>;
+      case 'hysteria2':
+        if (dependency.source === 'sing-box') {
+          return (await HttpUtil.post(
+            `/panel/api/setting/singbox/install/${encodeURIComponent(dependency.availableVersion)}`,
+          )) as ApiMsg<unknown>;
+        }
+        return (await HttpUtil.post(
+          `/panel/api/server/installXray/${encodeURIComponent(dependency.availableVersion)}`,
+        )) as ApiMsg<unknown>;
+      case 'sudoku':
+        return (await HttpUtil.post('/panel/api/setting/sudoku/update')) as ApiMsg<unknown>;
+      case 'pingtunnel':
+      case 'trusttunnel':
+        return (await HttpUtil.post(
+          `/panel/api/server/externalvpn/update/${dependency.key}`,
+        )) as ApiMsg<unknown>;
+    }
+  }, []);
+
   const updateDependency = async (dependency: DependencyStatus) => {
-    if (!dependency.availableVersion || (dependency.key !== 'sudoku' && !dependency.installed))
+    if (
+      !dependency.availableVersion ||
+      (!dependency.installed && !isInstallableDependency(dependency.key))
+    )
       return;
 
     setDependencyBusy(dependency.key);
     try {
-      let response: ApiMsg<unknown>;
-      switch (dependency.key) {
-        case 'naiveproxy':
-          response = (await HttpUtil.post(
-            `/panel/api/setting/singbox/install/${encodeURIComponent(dependency.availableVersion)}`,
-          )) as ApiMsg<unknown>;
-          break;
-        case 'hysteria2':
-          if (dependency.source === 'sing-box') {
-            response = (await HttpUtil.post(
-              `/panel/api/setting/singbox/install/${encodeURIComponent(dependency.availableVersion)}`,
-            )) as ApiMsg<unknown>;
-          } else {
-            response = (await HttpUtil.post(
-              `/panel/api/server/installXray/${encodeURIComponent(dependency.availableVersion)}`,
-            )) as ApiMsg<unknown>;
-          }
-          break;
-        case 'sudoku':
-          response = (await HttpUtil.post('/panel/api/setting/sudoku/update')) as ApiMsg<unknown>;
-          break;
-      }
-
+      const response = await requestDependencyUpdate(dependency);
       if (!response?.success) {
         throw new Error(response?.msg || `Не удалось обновить ${dependency.label}`);
       }
@@ -396,7 +463,7 @@ export default function SystemUpdateModal({
 
       const pending = dependencies.filter((dependency) => {
         if (!dependency.availableVersion) return false;
-        if (dependency.key === 'sudoku') {
+        if (isInstallableDependency(dependency.key)) {
           return !dependency.installed || dependency.updateAvailable;
         }
         return dependency.installed && dependency.updateAvailable;
@@ -410,31 +477,14 @@ export default function SystemUpdateModal({
             ? 'sing-box'
             : dependency.key === 'hysteria2'
               ? dependency.source || 'xray'
-              : 'sudoku';
+              : dependency.key;
         if (updatedTargets.has(target)) {
           continue;
         }
         try {
           updatedTargets.add(target);
           setDependencyBusy(dependency.key);
-          let response: ApiMsg<unknown>;
-          if (dependency.key === 'naiveproxy') {
-            response = (await HttpUtil.post(
-              `/panel/api/setting/singbox/install/${encodeURIComponent(dependency.availableVersion)}`,
-            )) as ApiMsg<unknown>;
-          } else if (dependency.key === 'hysteria2') {
-            if (dependency.source === 'sing-box') {
-              response = (await HttpUtil.post(
-                `/panel/api/setting/singbox/install/${encodeURIComponent(dependency.availableVersion)}`,
-              )) as ApiMsg<unknown>;
-            } else {
-              response = (await HttpUtil.post(
-                `/panel/api/server/installXray/${encodeURIComponent(dependency.availableVersion)}`,
-              )) as ApiMsg<unknown>;
-            }
-          } else {
-            response = (await HttpUtil.post('/panel/api/setting/sudoku/update')) as ApiMsg<unknown>;
-          }
+          const response = await requestDependencyUpdate(dependency);
           if (!response?.success) {
             failed.push(dependency.label);
           }
@@ -509,7 +559,13 @@ export default function SystemUpdateModal({
 
   const rebootRequired =
     Boolean(systemUpdate?.kernel.rebootRequired) || Boolean(systemUpdateResult?.rebootRequired);
-  const componentUpdatesAvailable = dependencies.some((dependency) => dependency.updateAvailable);
+  const componentUpdatesAvailable = dependencies.some(
+    (dependency) =>
+      dependency.updateAvailable ||
+      (isInstallableDependency(dependency.key) &&
+        !dependency.installed &&
+        Boolean(dependency.availableVersion)),
+  );
   const unstableComponentUpdateAvailable = dependencies.some(
     (dependency) => dependency.prerelease && dependency.updateAvailable,
   );
@@ -697,8 +753,23 @@ export default function SystemUpdateModal({
                         type="secondary"
                         style={{ display: 'block', marginBottom: 10 }}
                       >
-                        NaiveProxy обновляется вместе с sing-box, поскольку Naive является
-                        встроенным протоколом sing-box.
+                        NaiveProxy обновляется вместе с sing-box, поскольку Naive является встроенным протоколом sing-box.
+                      </Typography.Text>
+                    )}
+                    {dependency.key === 'pingtunnel' && (
+                      <Typography.Text
+                        type="secondary"
+                        style={{ display: 'block', marginBottom: 10 }}
+                      >
+                        Pingtunnel обновляется отдельным официальным Linux-бинарником из GitHub Releases.
+                      </Typography.Text>
+                    )}
+                    {dependency.key === 'trusttunnel' && (
+                      <Typography.Text
+                        type="secondary"
+                        style={{ display: 'block', marginBottom: 10 }}
+                      >
+                        TrustTunnel обновляется отдельным официальным endpoint-бинарником из GitHub Releases.
                       </Typography.Text>
                     )}
                     <div className="system-component-meta">
@@ -725,13 +796,14 @@ export default function SystemUpdateModal({
                       loading={dependencyBusy === dependency.key}
                       disabled={
                         (!dependency.updateAvailable &&
-                          !(dependency.key === 'sudoku' && !dependency.installed)) ||
+                          !(isInstallableDependency(dependency.key) && !dependency.installed)) ||
+                        !dependency.availableVersion ||
                         dependencyBusy !== null ||
                         systemUpdateBusy
                       }
                       onClick={() => void updateDependency(dependency)}
                     >
-                      {!dependency.installed && dependency.key === 'sudoku'
+                      {!dependency.installed && isInstallableDependency(dependency.key)
                         ? 'Установить'
                         : dependency.updateAvailable
                           ? t('pages.settings.swap.updateComponent')

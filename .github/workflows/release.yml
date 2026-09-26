@@ -213,6 +213,19 @@ jobs:
           curl -sfLRo tuic-server "${CURL_RETRY[@]}" "https://github.com/EAimTY/tuic/releases/download/tuic-server-1.0.0/tuic-server-1.0.0-${TUIC_ARCH}"
           chmod +x tuic-server
 
+          PINGTUNNEL_VERSION=2.10
+          curl -fL --show-error "${CURL_RETRY[@]}" -o pingtunnel.zip "https://github.com/esrrhs/pingtunnel/releases/download/${PINGTUNNEL_VERSION}/pingtunnel_linux_${{ matrix.platform }}.zip"
+          unzip -p pingtunnel.zip pingtunnel > pingtunnel
+          chmod 0755 pingtunnel
+          rm pingtunnel.zip
+
+          case "${{ matrix.platform }}" in amd64) TRUST_ARCH=x86_64 ;; arm64) TRUST_ARCH=aarch64 ;; esac
+          TRUST_VERSION=1.1.0
+          curl -fL --show-error "${CURL_RETRY[@]}" -o trusttunnel.tar.gz "https://github.com/TrustTunnel/TrustTunnel/releases/download/v${TRUST_VERSION}/trusttunnel-v${TRUST_VERSION}-linux-${TRUST_ARCH}.tar.gz"
+          tar -xOzf trusttunnel.tar.gz "trusttunnel-v${TRUST_VERSION}-linux-${TRUST_ARCH}/trusttunnel_endpoint" > trusttunnel_endpoint
+          chmod 0755 trusttunnel_endpoint
+          rm trusttunnel.tar.gz
+
           MIERU_VER=$(gh api repos/enfein/mieru/releases/latest --jq '.tag_name')
           test -n "$MIERU_VER"
           case "${{ matrix.platform }}" in amd64) MIERU_ARCH=linux_amd64 ;; arm64) MIERU_ARCH=linux_arm64 ;; esac

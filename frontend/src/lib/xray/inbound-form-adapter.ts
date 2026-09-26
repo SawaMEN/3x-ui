@@ -286,6 +286,7 @@ function clientSchemaForProtocol(protocol: string): z.ZodType | null {
     case 'tuic':
       return TuicClientSchema;
     case 'naive':
+    case 'trusttunnel':
       return NaiveClientSchema;
     case 'mieru':
       return MieruClientSchema;

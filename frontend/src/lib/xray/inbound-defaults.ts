@@ -16,6 +16,7 @@ import type {
   ShadowsocksInboundSettings,
 } from '@/schemas/protocols/inbound/shadowsocks';
 import type { TrojanClient, TrojanInboundSettings } from '@/schemas/protocols/inbound/trojan';
+import type { PingtunnelInboundSettings, TrustTunnelInboundSettings } from '@/schemas/protocols/inbound/external-vpn';
 import type { TuicClient, TuicInboundSettings } from '@/schemas/protocols/inbound/tuic';
 import type { TunInboundSettings } from '@/schemas/protocols/inbound/tun';
 import type { TunnelInboundSettings } from '@/schemas/protocols/inbound/tunnel';
@@ -485,6 +486,8 @@ export type AnyInboundSettings =
   | AnyTlsInboundSettings
   | ShadowTlsInboundSettings
   | TuicInboundSettings
+  | PingtunnelInboundSettings
+  | TrustTunnelInboundSettings
   | NaiveInboundSettings
   | MieruInboundSettings
   | SudokuInboundSettings;
@@ -523,6 +526,10 @@ export function createDefaultInboundSettings(protocol: string): AnyInboundSettin
       return createDefaultShadowTlsInboundSettings();
     case 'tuic':
       return createDefaultTuicInboundSettings();
+    case 'pingtunnel':
+      return { key: 0, encrypt: 'chacha20', encryptKey: '', clients: [] };
+    case 'trusttunnel':
+      return { hostname: 'trusttunnel.local', certificate: '', privateKey: '', clients: [] };
     case 'naive':
       return createDefaultNaiveInboundSettings();
     case 'mieru':

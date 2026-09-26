@@ -735,7 +735,15 @@
         "shadowTlsWildcardSniOff": "Disabled",
         "shadowTlsWildcardSniAuthed": "Authenticated only",
         "shadowTlsWildcardSniAll": "All",
-        "shadowTlsHint": "ShadowTLS uses a separate handshake server. For a typical configuration, keep cloudflare.com and port 443."
+        "shadowTlsHint": "ShadowTLS uses a separate handshake server. For a typical configuration, keep cloudflare.com and port 443.",
+        "pingtunnelHint": "ICMP listener. The panel generates the key and ChaCha20 secret. Only one Pingtunnel inbound can run on this server; it has no per-client accounts or port.",
+        "pingtunnelKey": "Pingtunnel key (0 = generate)",
+        "pingtunnelSecret": "Encryption secret (blank = generate)",
+        "trusttunnelHint": "TCP and UDP use the configured port. A self-signed TLS certificate is generated unless certificate paths are supplied. Add accounts in Clients.",
+        "trusttunnelHostname": "TLS hostname",
+        "trusttunnelCert": "Certificate PEM path (optional)",
+        "trusttunnelKey": "Private key PEM path (optional)",
+        "pingtunnelClientConfig": "Pingtunnel client JSON (replace server address if necessary)"
       },
       "info": {
         "mode": "Mode",

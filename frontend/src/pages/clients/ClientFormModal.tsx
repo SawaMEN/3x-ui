@@ -64,6 +64,7 @@ const MULTI_CLIENT_PROTOCOLS = new Set([
   'mtproto',
   'amneziawg',
   'tuic',
+  'trusttunnel',
   'naive',
   'mieru',
   'vk-turn-proxy',

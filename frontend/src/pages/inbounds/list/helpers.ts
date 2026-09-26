@@ -97,6 +97,10 @@ export function inboundNetworkLabels(record: {
     case 'wireguard':
     case 'amneziawg':
       return ['UDP'];
+    case 'pingtunnel':
+      return ['ICMP'];
+    case 'trusttunnel':
+      return ['TCP', 'UDP'];
     case 'anytls':
     case 'shadowtls':
     case 'mtproto':
@@ -154,6 +158,7 @@ export function isInboundMultiUser(record: { protocol: string; settings: unknown
     case 'wireguard':
     case 'amneziawg':
     case 'tuic':
+    case 'trusttunnel':
     case 'vk-turn-proxy':
       return true;
     case 'shadowsocks':

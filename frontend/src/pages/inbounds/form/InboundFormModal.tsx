@@ -54,6 +54,7 @@ import { DateTimePicker } from '@/components/form';
 import { FinalMaskField } from '@/lib/xray/forms/fields';
 import './InboundFormModal.css';
 
+import { PingtunnelFields, TrustTunnelFields } from './protocols/external-vpn';
 import { AdvancedAllEditor, AdvancedSliceEditor } from './advanced-editors';
 import { formatInboundIssue, formatInboundValidation } from './formatValidationError';
 import {
@@ -313,6 +314,7 @@ export default function InboundFormModal({
     protocol !== Protocols.WIREGUARD &&
     protocol !== Protocols.TUNNEL &&
     protocol !== Protocols.TUIC &&
+    protocol !== Protocols.PINGTUNNEL && protocol !== Protocols.TRUSTTUNNEL &&
     protocol !== Protocols.NAIVE &&
     protocol !== Protocols.MIERU &&
     protocol !== Protocols.SUDOKU &&
@@ -596,6 +598,7 @@ export default function InboundFormModal({
       if (next !== Protocols.VLESS) {
         setV('disableFlow', false);
       }
+      if (next === Protocols.PINGTUNNEL) setV('port', 0);
       if (next === Protocols.HYSTERIA) {
         setV('streamSettings', {
           network: 'hysteria',
@@ -793,7 +796,7 @@ export default function InboundFormModal({
         label={t('pages.inbounds.port')}
         rules={{ validate: rhfZodValidate(InboundFormBaseSchema.shape.port) }}
       >
-        <InputNumber min={isUdsListen ? 0 : 1} max={65535} />
+        <InputNumber disabled={protocol === Protocols.PINGTUNNEL} min={protocol === Protocols.PINGTUNNEL || isUdsListen ? 0 : 1} max={65535} />
       </FormField>
 
       <Form.Item
@@ -875,6 +878,8 @@ export default function InboundFormModal({
       )}
 
       {protocol === Protocols.TUIC && <TuicFields />}
+      {protocol === Protocols.PINGTUNNEL && <PingtunnelFields />}
+      {protocol === Protocols.TRUSTTUNNEL && <TrustTunnelFields />}
       {protocol === Protocols.NAIVE && <NaiveFields />}
       {protocol === Protocols.ANYTLS && <AnyTlsFields />}
       {protocol === Protocols.SHADOWTLS && <ShadowTlsFields />}
@@ -1224,6 +1229,8 @@ export default function InboundFormModal({
                     Protocols.ANYTLS,
                     Protocols.SHADOWTLS,
                     Protocols.TUIC,
+                    Protocols.PINGTUNNEL,
+                    Protocols.TRUSTTUNNEL,
                     Protocols.NAIVE,
                     Protocols.MIERU,
                     Protocols.SUDOKU,

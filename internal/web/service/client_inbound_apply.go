@@ -442,7 +442,7 @@ func (s *ClientService) AddInboundClient(inboundSvc *InboundService, data *model
 			return false, common.NewError("client email is required")
 		}
 		switch oldInbound.Protocol {
-		case "trojan":
+		case "trojan", "trusttunnel":
 			if client.Password == "" {
 				return false, common.NewError("empty client ID")
 			}
@@ -698,7 +698,7 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 
 	newClientId := ""
 	switch oldInbound.Protocol {
-	case "trojan":
+	case "trojan", "trusttunnel":
 		newClientId = clients[0].Password
 	case "shadowsocks":
 		newClientId = clients[0].Email
@@ -747,7 +747,7 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 	// WireGuard/AmneziaWG keys are never rotated by an edit: when the incoming
 	// payload omits them (a metadata-only change), carry the stored credentials
 	// forward so the settings JSON and the running peer keep the client's identity.
- 	if oldInbound.Protocol == model.Sudoku && clientIndex >= 0 && clientIndex < len(oldClients) && clients[0].SudokuPrivateKey == "" {
+	if oldInbound.Protocol == model.Sudoku && clientIndex >= 0 && clientIndex < len(oldClients) && clients[0].SudokuPrivateKey == "" {
 		clients[0].SudokuPrivateKey = oldClients[clientIndex].SudokuPrivateKey
 	}
 	if (oldInbound.Protocol == model.WireGuard || oldInbound.Protocol == model.AmneziaWG) && clientIndex >= 0 && clientIndex < len(oldClients) {

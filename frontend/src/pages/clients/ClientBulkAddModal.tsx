@@ -38,6 +38,7 @@ const MULTI_CLIENT_PROTOCOLS = new Set([
   'wireguard',
   'amneziawg',
   'tuic',
+  'trusttunnel',
   'vk-turn-proxy',
 ]);
 
