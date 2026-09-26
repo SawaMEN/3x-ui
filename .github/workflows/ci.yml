@@ -142,7 +142,7 @@ jobs:
       - name: Race detector
         run: |
           go list ./internal/... . > /tmp/race-packages.txt
-          mapfile -t packages < <(grep -v '^github.com/SawaMEN/3x-ui/v3/internal/web/service$' /tmp/race-packages.txt)
+          mapfile -t packages < <(grep -Ev '^github.com/SawaMEN/3x-ui/v3/internal/(web/service|sub)$' /tmp/race-packages.txt)
           go test -race -p 12 -short -vet=off -timeout 20m "${packages[@]}"
 
   race-service:
@@ -161,7 +161,25 @@ jobs:
       - name: Stub internal/web/dist for go:embed
         run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
       - name: Service race detector (shard ${{ matrix.shard }})
-        run: bash tools/ci/race-service-shard.sh ${{ matrix.shard }} 3
+        run: bash tools/ci/race-package-shard.sh ./internal/web/service ${{ matrix.shard }} 3
+
+  race-sub:
+    if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Stub internal/web/dist for go:embed
+        run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+      - name: Subscription race detector (shard ${{ matrix.shard }})
+        run: bash tools/ci/race-package-shard.sh ./internal/sub ${{ matrix.shard }} 2
 
   fuzz-smoke:
     if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
