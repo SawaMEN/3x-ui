@@ -205,6 +205,9 @@ func (a *APIController) initRouter(g *gin.RouterGroup) {
 	telemt := api.Group("/telemt")
 	NewTelemtController(telemt, a.settingService)
 
+	// Standalone NaiveProxy is used only when Xray is selected.
+	NewNaiveProxyController(api)
+
 	routingPresets := api.Group("/xray/routingPresets")
 	NewRoutingPresetController(routingPresets)
 

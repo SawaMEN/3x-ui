@@ -198,6 +198,48 @@ const hwidStatusErrorResponses = {
 
 export const sections: readonly Section[] = [
   {
+    id: 'externalvpn',
+    title: 'External VPN',
+    description: 'Inspect and update standalone external VPN components.',
+    endpoints: [
+      {
+        method: 'GET',
+        path: '/panel/api/server/externalvpn/status',
+        summary: 'Return external VPN component installation and update status.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/server/externalvpn/update/:protocol',
+        summary: 'Install or update an external VPN component.',
+        params: [
+          {
+            name: 'protocol',
+            in: 'path',
+            type: 'string',
+            desc: 'External VPN protocol identifier.',
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'naiveproxy',
+    title: 'NaiveProxy',
+    description: 'Manage the standalone Caddy-Naive sidecar used when Xray is the selected core.',
+    endpoints: [
+      {
+        method: 'GET',
+        path: '/panel/api/naiveproxy/status',
+        summary: 'Return standalone NaiveProxy installation and runtime status.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/naiveproxy/update',
+        summary: 'Install or update standalone NaiveProxy from the official release.',
+      },
+    ],
+  },
+  {
     id: 'routing-presets',
     title: 'Routing Presets',
     description: 'Reusable routing rules owned by the authenticated user.',

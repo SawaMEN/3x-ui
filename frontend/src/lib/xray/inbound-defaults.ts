@@ -16,7 +16,10 @@ import type {
   ShadowsocksInboundSettings,
 } from '@/schemas/protocols/inbound/shadowsocks';
 import type { TrojanClient, TrojanInboundSettings } from '@/schemas/protocols/inbound/trojan';
-import type { PingtunnelInboundSettings, TrustTunnelInboundSettings } from '@/schemas/protocols/inbound/external-vpn';
+import type {
+  PingtunnelInboundSettings,
+  TrustTunnelInboundSettings,
+} from '@/schemas/protocols/inbound/external-vpn';
 import type { TuicClient, TuicInboundSettings } from '@/schemas/protocols/inbound/tuic';
 import type { TunInboundSettings } from '@/schemas/protocols/inbound/tun';
 import type { TunnelInboundSettings } from '@/schemas/protocols/inbound/tunnel';

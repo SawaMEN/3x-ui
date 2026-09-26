@@ -113,7 +113,7 @@ func GetStatus(ctx context.Context) (Status, error) {
 		status.Notes = append(status.Notes, "Arch Linux требует полного обновления системы через pacman -Syu; частичные обновления не поддерживаются.")
 	}
 	status.Notes = append(status.Notes,
-		"Зависимости новых протоколов: WireGuard, AmneziaWG и VK-Turn используют iproute2/iproute и iptables для сетевого стека и маршрутизации; MTProto/Telemt, TUIC, Naive, Mieru и Psiphon используют curl, tar, ca-certificates, openssl и socat для загрузки/запуска и TLS/туннельного окружения.",
+		"Зависимости новых протоколов: WireGuard, AmneziaWG и VK-Turn используют iproute2/iproute и iptables для сетевого стека и маршрутизации; MTProto/Telemt, TUIC, Naive, Mieru и Psiphon используют curl, tar, xz, ca-certificates, openssl и socat для загрузки/запуска и TLS/туннельного окружения.",
 		"Для Hysteria/TUIC/Naive и TLS-протоколов требуются актуальные ca-certificates и openssl; для UDP-маршрутизации и порт-хоппинга используются iproute2/iproute и iptables. Отдельные wireguard-tools и kernel-модули WireGuard здесь не требуются: соответствующие протоколы обслуживаются самим Xray/sidecar.",
 	)
 	if kernel.UpdateAvailable {
@@ -205,6 +205,9 @@ func Apply(ctx context.Context) (UpdateResult, error) {
 	}
 
 	upgradeArgs := packageUpgradeCommand(info.manager)
+	if info.manager == "pacman" && len(missing) > 0 {
+		upgradeArgs = packageUpgradeCommand(info.manager, missing)
+	}
 	output, upgradeErr := runCommand(updateCtx, upgradeArgs[0], upgradeArgs[1:]...)
 	outputs = append(outputs, output)
 
@@ -250,22 +253,34 @@ func packageUpgradeCommand(manager string, names ...[]string) []string {
 
 	switch manager {
 	case "apt-get":
-		if len(selected) > 0 { return append([]string{"apt-get", "install", "-y", "--no-install-recommends"}, selected...) }
+		if len(selected) > 0 {
+			return append([]string{"apt-get", "install", "-y", "--no-install-recommends"}, selected...)
+		}
 		return []string{"apt-get", "upgrade", "-y", "--with-new-pkgs", "--no-install-recommends"}
 	case "dnf":
-		if len(selected) > 0 { return append([]string{"dnf", "upgrade", "-y"}, selected...) }
+		if len(selected) > 0 {
+			return append([]string{"dnf", "upgrade", "-y"}, selected...)
+		}
 		return []string{"dnf", "upgrade", "-y"}
 	case "yum":
-		if len(selected) > 0 { return append([]string{"yum", "update", "-y"}, selected...) }
+		if len(selected) > 0 {
+			return append([]string{"yum", "update", "-y"}, selected...)
+		}
 		return []string{"yum", "update", "-y"}
 	case "zypper":
-		if len(selected) > 0 { return append([]string{"zypper", "--non-interactive", "update", "-y"}, selected...) }
+		if len(selected) > 0 {
+			return append([]string{"zypper", "--non-interactive", "update", "-y"}, selected...)
+		}
 		return []string{"zypper", "--non-interactive", "update", "-y"}
 	case "apk":
-		if len(selected) > 0 { return append([]string{"apk", "upgrade", "--no-cache"}, selected...) }
+		if len(selected) > 0 {
+			return append([]string{"apk", "upgrade", "--no-cache"}, selected...)
+		}
 		return []string{"apk", "upgrade", "--no-cache"}
 	case "pacman":
-		if len(selected) > 0 { return append([]string{"pacman", "-Syu", "--noconfirm", "--needed"}, selected...) }
+		if len(selected) > 0 {
+			return append([]string{"pacman", "-Syu", "--noconfirm", "--needed"}, selected...)
+		}
 		return []string{"pacman", "-Syu", "--noconfirm", "--needed"}
 	default:
 		return []string{}
@@ -320,17 +335,17 @@ func requiredPackages(distribution string) []string {
 	var packages []string
 	switch distribution {
 	case "ubuntu", "debian", "armbian":
-		packages = []string{"cron", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl", "util-linux", "iproute2", "iptables"}
+		packages = []string{"cron", "curl", "tar", "xz-utils", "tzdata", "socat", "ca-certificates", "openssl", "util-linux", "iproute2", "iptables"}
 	case "fedora", "amzn", "rhel", "almalinux", "rocky", "ol", "centos":
-		packages = []string{"cronie", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl", "util-linux", "iproute", "iptables"}
+		packages = []string{"cronie", "curl", "tar", "xz", "tzdata", "socat", "ca-certificates", "openssl", "util-linux", "iproute", "iptables"}
 	case "arch", "manjaro", "parch":
-		packages = []string{"cronie", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl", "util-linux", "iproute2", "iptables"}
+		packages = []string{"cronie", "curl", "tar", "xz", "tzdata", "socat", "ca-certificates", "openssl", "util-linux", "iproute2", "iptables"}
 	case "opensuse-tumbleweed", "opensuse-leap":
-		packages = []string{"cron", "curl", "tar", "timezone", "socat", "ca-certificates", "openssl", "util-linux", "iproute2", "iptables"}
+		packages = []string{"cron", "curl", "tar", "xz", "timezone", "socat", "ca-certificates", "openssl", "util-linux", "iproute2", "iptables"}
 	case "alpine":
-		packages = []string{"dcron", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl", "util-linux", "iproute2", "iptables"}
+		packages = []string{"dcron", "curl", "tar", "xz", "tzdata", "socat", "ca-certificates", "openssl", "util-linux", "iproute2", "iptables"}
 	default:
-		packages = []string{"cron", "curl", "tar", "tzdata", "socat", "ca-certificates", "openssl", "util-linux", "iproute2", "iptables"}
+		packages = []string{"cron", "curl", "tar", "xz-utils", "tzdata", "socat", "ca-certificates", "openssl", "util-linux", "iproute2", "iptables"}
 	}
 
 	addPackage := func(name string) {

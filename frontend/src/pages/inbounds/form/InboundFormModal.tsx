@@ -314,7 +314,8 @@ export default function InboundFormModal({
     protocol !== Protocols.WIREGUARD &&
     protocol !== Protocols.TUNNEL &&
     protocol !== Protocols.TUIC &&
-    protocol !== Protocols.PINGTUNNEL && protocol !== Protocols.TRUSTTUNNEL &&
+    protocol !== Protocols.PINGTUNNEL &&
+    protocol !== Protocols.TRUSTTUNNEL &&
     protocol !== Protocols.NAIVE &&
     protocol !== Protocols.MIERU &&
     protocol !== Protocols.SUDOKU &&
@@ -796,7 +797,11 @@ export default function InboundFormModal({
         label={t('pages.inbounds.port')}
         rules={{ validate: rhfZodValidate(InboundFormBaseSchema.shape.port) }}
       >
-        <InputNumber disabled={protocol === Protocols.PINGTUNNEL} min={protocol === Protocols.PINGTUNNEL || isUdsListen ? 0 : 1} max={65535} />
+        <InputNumber
+          disabled={protocol === Protocols.PINGTUNNEL}
+          min={protocol === Protocols.PINGTUNNEL || isUdsListen ? 0 : 1}
+          max={65535}
+        />
       </FormField>
 
       <Form.Item
