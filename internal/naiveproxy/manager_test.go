@@ -75,3 +75,43 @@ func TestRenderConfigRequiresTLSAndUsers(t *testing.T) {
 		t.Fatal("expected missing users error")
 	}
 }
+
+func TestRenderConfigRejectsOnlyInvalidCredentials(t *testing.T) {
+	_, err := RenderConfig([]Inbound{{
+		Tag:             "invalid-users",
+		Port:            443,
+		CertificatePath: "/c",
+		KeyPath:         "/k",
+		Users: []User{
+			{Username: "", Password: "secret"},
+			{Username: "   ", Password: "secret"},
+			{Username: "alice@example.com", Password: ""},
+		},
+	}})
+	if err == nil || !strings.Contains(err.Error(), "no enabled users") {
+		t.Fatalf("expected invalid-credentials error, got %v", err)
+	}
+}
+
+func TestRenderConfigFiltersInvalidCredentials(t *testing.T) {
+	got, err := RenderConfig([]Inbound{{
+		Tag:             "mixed-users",
+		Port:            443,
+		CertificatePath: "/c",
+		KeyPath:         "/k",
+		Users: []User{
+			{Username: "   ", Password: "ignored"},
+			{Username: " alice@example.com ", Password: "secret"},
+			{Username: "bob@example.com", Password: ""},
+		},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, `basic_auth "alice@example.com" "secret"`) {
+		t.Fatalf("expected trimmed valid credentials:\n%s", got)
+	}
+	if strings.Contains(got, "bob@example.com") || strings.Contains(got, "ignored") {
+		t.Fatalf("invalid credentials must not be emitted:\n%s", got)
+	}
+}
