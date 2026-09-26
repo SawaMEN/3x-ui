@@ -54,7 +54,7 @@ func TestVerifyReleaseDigest(t *testing.T) {
 	if err := os.WriteFile(path, []byte("3x-ui"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	const digest = "sha256:2b0c55f17e5068254749395fc3a7890f77639259391039c81f216320bfaac24a"
+	const digest = "sha256:1343462835cbb1f7631c393c1090169aee14f90129e0922c7ec1d58fd40b0647"
 	if err := verifyReleaseDigest(path, digest); err != nil {
 		t.Fatal(err)
 	}
