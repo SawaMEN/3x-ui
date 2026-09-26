@@ -29,7 +29,11 @@
     "build:ci": "vite build"
   },
   "lint-staged": {
-    "src/**/*.{ts,tsx}": [
+    "src/*.{ts,tsx}": [
+      "oxfmt",
+      "oxlint --fix"
+    ],
+    "src/!(generated)/**/*.{ts,tsx}": [
       "oxfmt",
       "oxlint --fix"
     ]
