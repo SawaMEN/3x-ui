@@ -52,7 +52,12 @@ jobs:
           gofmt -w internal/naiveproxy/*.go internal/web/controller/api.go internal/web/controller/naiveproxy.go internal/util/systemupdate/manager_linux.go internal/sub/json_service_test.go internal/web/service/telemt_webproxy_test.go
           cd frontend
           npm ci --no-audit --no-fund
-          npx oxfmt --write src/pages/settings/SystemUpdateModal.tsx src/pages/api-docs/endpoints.ts
+          npx oxfmt --write \
+            src/pages/settings/SystemUpdateModal.tsx \
+            src/pages/api-docs/endpoints.ts \
+            src/lib/xray/inbound-defaults.ts \
+            src/pages/inbounds/form/InboundFormModal.tsx \
+            src/pages/inbounds/form/protocols/external-vpn.tsx
           cd ..
           git add -A
 
