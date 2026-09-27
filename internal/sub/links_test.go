@@ -33,7 +33,7 @@ func TestSplitLinkLines(t *testing.T) {
 	}
 }
 
-func TestNormalizeSubscriptionLines_DeduplicatesAcrossEntries(t *testing.T) {
+func TestNormalizeGeneratedLinks_DeduplicatesAcrossEntries(t *testing.T) {
 	entries := []string{
 		"vless://same\nmieru://QUJDRA==\nmierus://user:pass@example.com?port=443&protocol=TCP#Mieru",
 		"vless://same",
@@ -45,8 +45,8 @@ func TestNormalizeSubscriptionLines_DeduplicatesAcrossEntries(t *testing.T) {
 		"mierus://user:pass@example.com?port=443&protocol=TCP#Mieru",
 		"vmess://other",
 	}
-	if got := normalizeSubscriptionLines(entries); !reflect.DeepEqual(got, want) {
-		t.Fatalf("normalizeSubscriptionLines() = %#v, want %#v", got, want)
+	if got := normalizeGeneratedLinks(entries); !reflect.DeepEqual(got, want) {
+		t.Fatalf("normalizeGeneratedLinks() = %#v, want %#v", got, want)
 	}
 }
 
