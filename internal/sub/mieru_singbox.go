@@ -52,7 +52,7 @@ func nativeMieruOutbounds(subReq *SubService, inbound *model.Inbound, client mod
 		for _, entry := range publicEntries {
 			binding := map[string]any{"protocol": entry.protocol}
 			if strings.Contains(entry.port, "-") {
-				binding["port_range"] = entry.port
+				binding["portRange"] = entry.port
 			} else {
 				port, err := strconv.Atoi(entry.port)
 				if err != nil || port < 1025 || port > 65535 {
@@ -68,7 +68,7 @@ func nativeMieruOutbounds(subReq *SubService, inbound *model.Inbound, client mod
 		out = append(out, map[string]any{
 			"type":           "mieru",
 			"server":         endpoint.Address,
-			"port_bindings":  bindings,
+			"portBindings":   bindings,
 			"username":       client.Email,
 			"password":       client.Password,
 			"multiplexing":   multiplexing,
