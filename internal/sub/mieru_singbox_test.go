@@ -1,8 +1,9 @@
 package sub
 
 import (
-	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"testing"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
 
 func TestNativeMieruOutbounds(t *testing.T) {
