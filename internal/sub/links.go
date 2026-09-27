@@ -28,7 +28,7 @@ func (p *LinkProvider) SubLinksForSubId(host, subId string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return normalizeSubscriptionLines(links), nil
+	return normalizeGeneratedLinks(links), nil
 }
 
 func (p *LinkProvider) LinksForClient(host string, inbound *model.Inbound, email string) []string {
@@ -48,31 +48,30 @@ func (p *LinkProvider) LinksForClient(host string, inbound *model.Inbound, email
 
 func (p *LinkProvider) LinksForInbounds(host string, inbounds []*model.Inbound) []string {
 	svc := p.build(host)
-	var out []string
+	var raw []string
 	for _, inbound := range inbounds {
 		if !sudokuInboundUsable(inbound) {
 			continue
 		}
 		svc.refreshSudokuCredentials(inbound)
-		out = append(out, svc.inboundLinks(inbound)...)
+		raw = append(raw, svc.inboundLinks(inbound)...)
 	}
-	return normalizeSubscriptionLines(out)
+	return normalizeGeneratedLinks(raw)
 }
 
-// normalizeSubscriptionLines flattens generated multi-link entries and removes
-// byte-identical duplicates while preserving the first occurrence and the
-// configured subscription order. splitLinkLines also collapses the native
-// mieru:// + simple-sharing mierus:// pair for a single Mieru endpoint.
-func normalizeSubscriptionLines(entries []string) []string {
-	out := make([]string, 0, len(entries))
-	seen := make(map[string]struct{}, len(entries))
-	for _, entry := range entries {
-		for _, line := range splitLinkLines(entry) {
-			if _, duplicate := seen[line]; duplicate {
+// normalizeGeneratedLinks flattens multi-link entries and removes exact
+// duplicates while preserving their first-seen order. This is shared by the
+// raw subscription endpoint and link-export APIs so clients see the same set.
+func normalizeGeneratedLinks(raw []string) []string {
+	out := make([]string, 0, len(raw))
+	seen := make(map[string]struct{}, len(raw))
+	for _, entry := range raw {
+		for _, link := range splitLinkLines(entry) {
+			if _, duplicate := seen[link]; duplicate {
 				continue
 			}
-			seen[line] = struct{}{}
-			out = append(out, line)
+			seen[link] = struct{}{}
+			out = append(out, link)
 		}
 	}
 	return out
