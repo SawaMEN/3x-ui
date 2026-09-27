@@ -24,7 +24,13 @@ func (p *LinkProvider) build(host string) *SubService {
 
 func (p *LinkProvider) SubLinksForSubId(host, subId string) ([]string, error) {
 	svc := p.build(host)
-	links, _, _, _, err := svc.GetSubs(subId, host)
+	if _, err := svc.repairSubscriptionBindings(subId); err != nil {
+		return nil, err
+	}
+	if err := svc.primeMieruClientsFromSettings(subId); err != nil {
+		return nil, err
+	}
+	links, _, _, _, err := svc.getSubs(subId)
 	if err != nil {
 		return nil, err
 	}
@@ -48,6 +54,7 @@ func (p *LinkProvider) LinksForClient(host string, inbound *model.Inbound, email
 	}
 	svc := p.build(host)
 	svc.refreshSudokuCredentials(inbound)
+	svc.primeMieruInboundClients(inbound)
 	svc.projectThroughFallbackMaster(inbound)
 	if endpoints := svc.hostEndpoints(inbound, "raw"); len(endpoints) > 0 {
 		if client, ok := svc.clientForLink(inbound, email); ok {
@@ -65,6 +72,7 @@ func (p *LinkProvider) LinksForInbounds(host string, inbounds []*model.Inbound) 
 			continue
 		}
 		svc.refreshSudokuCredentials(inbound)
+		svc.primeMieruInboundClients(inbound)
 		out = append(out, svc.inboundLinks(inbound)...)
 	}
 	return out
@@ -75,20 +83,20 @@ func (p *LinkProvider) LinksForInbounds(host string, inbounds []*model.Inbound) 
 //
 // Mieru is a special case. The generator keeps both the native full-profile
 // mieru:// form and the interoperable simple-sharing mierus:// form internally.
-// They describe the same endpoint and must not become two visible nodes. Prefer
-// the native protobuf profile whenever it is present: unlike mierus:// it is a
-// complete Mieru configuration and can be imported on a brand-new device. Keep
-// a lone simple link as a compatibility fallback for callers that only provide
-// that representation.
+// They describe the same endpoint. Generic subscription parsers such as
+// Hiddify/ray2sing treat both schemes as simple URLs, so feeding the native
+// protobuf mieru:// value produces a second, invalid Mieru node. Prefer the
+// simple-sharing form whenever the pair is present; a lone native link is kept
+// so callers that explicitly provide only that form do not lose it.
 func splitLinkLines(raw string) []string {
 	if raw == "" {
 		return nil
 	}
 	parts := strings.Split(raw, "\n")
-	hasNativeMieru := false
+	hasSimpleMieru := false
 	for _, part := range parts {
-		if strings.HasPrefix(strings.TrimSpace(part), "mieru://") {
-			hasNativeMieru = true
+		if strings.HasPrefix(strings.TrimSpace(part), "mierus://") {
+			hasSimpleMieru = true
 			break
 		}
 	}
@@ -100,7 +108,7 @@ func splitLinkLines(raw string) []string {
 		if p == "" {
 			continue
 		}
-		if hasNativeMieru && strings.HasPrefix(p, "mierus://") {
+		if hasSimpleMieru && strings.HasPrefix(p, "mieru://") {
 			continue
 		}
 		if _, duplicate := seen[p]; duplicate {
