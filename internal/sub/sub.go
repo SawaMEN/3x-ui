@@ -239,7 +239,7 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	happCfg.SubInfoButtonText, _ = s.settingService.GetSubHappSubInfoButtonText()
 	happCfg.SubInfoButtonLink, _ = s.settingService.GetSubHappSubInfoButtonLink()
 	happCfg.SubExpire, _ = s.settingService.GetSubHappSubExpire()
-	happCfg.SubExpireButtonLink, _ = s.settingService.GetSubHappExpireButtonLink()
+	happCfg.SubExpireButtonLink, _ = s.settingService.GetSubHappSubExpireButtonLink()
 	happCfg.NotificationExpire, _ = s.settingService.GetSubHappNotificationExpire()
 	happCfg.NoLimit, _ = s.settingService.GetSubHappNoLimit()
 	happCfg.AlwaysHwid, _ = s.settingService.GetSubHappAlwaysHwid()
