@@ -20,8 +20,9 @@ func TestSplitLinkLines(t *testing.T) {
 		{"trims_each_line", "  vless://abc  \n\tvmess://xyz\t", []string{"vless://abc", "vmess://xyz"}},
 		{"skips_blank_lines", "vless://abc\n\n\nvmess://xyz\n", []string{"vless://abc", "vmess://xyz"}},
 		{"deduplicates_exact_lines", "vless://abc\nvless://abc\nvmess://xyz", []string{"vless://abc", "vmess://xyz"}},
-		{"prefers_simple_mieru_pair", "mieru://QUJDRA==\nmierus://user:pass@example.com?port=443&protocol=TCP#Mieru", []string{"mierus://user:pass@example.com?port=443&protocol=TCP#Mieru"}},
+		{"prefers_complete_mieru_pair", "mieru://QUJDRA==\nmierus://user:pass@example.com?port=443&protocol=TCP#Mieru", []string{"mieru://QUJDRA=="}},
 		{"keeps_native_mieru_when_alone", "mieru://QUJDRA==", []string{"mieru://QUJDRA=="}},
+		{"keeps_simple_mieru_when_alone", "mierus://user:pass@example.com?port=443&protocol=TCP#Mieru", []string{"mierus://user:pass@example.com?port=443&protocol=TCP#Mieru"}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

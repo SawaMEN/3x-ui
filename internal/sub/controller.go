@@ -456,8 +456,17 @@ func dedupeEmails(emails []string) []string {
 
 func buildRawSubscriptionBody(subs []string) string {
 	var result strings.Builder
+	seen := make(map[string]struct{}, len(subs))
 	for _, sub := range subs {
 		for _, link := range splitLinkLines(sub) {
+			link = strings.TrimSpace(link)
+			if link == "" {
+				continue
+			}
+			if _, duplicate := seen[link]; duplicate {
+				continue
+			}
+			seen[link] = struct{}{}
 			result.WriteString(link)
 			result.WriteString("\n")
 		}
@@ -732,6 +741,12 @@ func (a *SUBController) subPageContext(page PageData) map[string]any {
 }
 
 func (a *SUBController) enforceHwid(c *gin.Context) bool {
+	if repaired, err := a.subService.repairSubscriptionBindings(c.Param("subid")); err != nil {
+		logger.Warningf("sub: failed to repair legacy subscription bindings for %q: %v", c.Param("subid"), err)
+	} else if repaired > 0 {
+		logger.Infof("sub: repaired %d legacy subscription binding(s) for %q", repaired, c.Param("subid"))
+	}
+
 	result, err := a.clientService.EnforceHwidForSubID(c.Param("subid"), service.HwidRequest{
 		Hwid:        c.GetHeader("X-HWID"),
 		UserAgent:   c.GetHeader("User-Agent"),

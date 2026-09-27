@@ -29,8 +29,15 @@ func (p *LinkProvider) SubLinksForSubId(host, subId string) ([]string, error) {
 		return nil, err
 	}
 	out := make([]string, 0, len(links))
+	seen := make(map[string]struct{}, len(links))
 	for _, l := range links {
-		out = append(out, splitLinkLines(l)...)
+		for _, line := range splitLinkLines(l) {
+			if _, duplicate := seen[line]; duplicate {
+				continue
+			}
+			seen[line] = struct{}{}
+			out = append(out, line)
+		}
 	}
 	return out, nil
 }
@@ -68,20 +75,20 @@ func (p *LinkProvider) LinksForInbounds(host string, inbounds []*model.Inbound) 
 //
 // Mieru is a special case. The generator keeps both the native full-profile
 // mieru:// form and the interoperable simple-sharing mierus:// form internally.
-// They describe the same endpoint. Generic subscription parsers such as
-// Hiddify/ray2sing treat both schemes as simple URLs, so feeding the native
-// protobuf mieru:// value produces a second, invalid Mieru node. Prefer the
-// simple-sharing form whenever the pair is present; a lone native link is kept
-// so callers that explicitly provide only that form do not lose it.
+// They describe the same endpoint and must not become two visible nodes. Prefer
+// the native protobuf profile whenever it is present: unlike mierus:// it is a
+// complete Mieru configuration and can be imported on a brand-new device. Keep
+// a lone simple link as a compatibility fallback for callers that only provide
+// that representation.
 func splitLinkLines(raw string) []string {
 	if raw == "" {
 		return nil
 	}
 	parts := strings.Split(raw, "\n")
-	hasSimpleMieru := false
+	hasNativeMieru := false
 	for _, part := range parts {
-		if strings.HasPrefix(strings.TrimSpace(part), "mierus://") {
-			hasSimpleMieru = true
+		if strings.HasPrefix(strings.TrimSpace(part), "mieru://") {
+			hasNativeMieru = true
 			break
 		}
 	}
@@ -93,7 +100,7 @@ func splitLinkLines(raw string) []string {
 		if p == "" {
 			continue
 		}
-		if hasSimpleMieru && strings.HasPrefix(p, "mieru://") {
+		if hasNativeMieru && strings.HasPrefix(p, "mierus://") {
 			continue
 		}
 		if _, duplicate := seen[p]; duplicate {
