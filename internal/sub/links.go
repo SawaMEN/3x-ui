@@ -28,11 +28,7 @@ func (p *LinkProvider) SubLinksForSubId(host, subId string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := make([]string, 0, len(links))
-	for _, l := range links {
-		out = append(out, splitLinkLines(l)...)
-	}
-	return out, nil
+	return normalizeSubscriptionLines(links), nil
 }
 
 func (p *LinkProvider) LinksForClient(host string, inbound *model.Inbound, email string) []string {
@@ -59,6 +55,25 @@ func (p *LinkProvider) LinksForInbounds(host string, inbounds []*model.Inbound) 
 		}
 		svc.refreshSudokuCredentials(inbound)
 		out = append(out, svc.inboundLinks(inbound)...)
+	}
+	return normalizeSubscriptionLines(out)
+}
+
+// normalizeSubscriptionLines flattens generated multi-link entries and removes
+// byte-identical duplicates while preserving the first occurrence and the
+// configured subscription order. splitLinkLines also collapses the native
+// mieru:// + simple-sharing mierus:// pair for a single Mieru endpoint.
+func normalizeSubscriptionLines(entries []string) []string {
+	out := make([]string, 0, len(entries))
+	seen := make(map[string]struct{}, len(entries))
+	for _, entry := range entries {
+		for _, line := range splitLinkLines(entry) {
+			if _, duplicate := seen[line]; duplicate {
+				continue
+			}
+			seen[line] = struct{}{}
+			out = append(out, line)
+		}
 	}
 	return out
 }
