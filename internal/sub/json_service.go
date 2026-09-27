@@ -449,7 +449,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 		// inbound in this subscription is not representable as an outbound.
 		// Do not let that unrelated inbound remove ShadowTLS from the profile.
 		if shadowTLSForHiddify && (inbound.Protocol == model.WireGuard ||
-			singBoxUnsupportedProtocol(inbound.Protocol)) {
+			(singBoxUnsupportedProtocol(inbound.Protocol) && inbound.Protocol != model.Mieru)) {
 			continue
 		}
 		subReq.projectThroughFallbackMaster(inbound)
@@ -460,6 +460,24 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 			seenEmails[client.Email] = struct{}{}
 			if client.Enable {
 				hasEnabledClient = true
+			}
+			if shadowTLSForHiddify && inbound.Protocol == model.Mieru {
+				generated := 0
+				for _, native := range nativeMieruOutbounds(subReq, inbound, client) {
+					tag := client.Email
+					if tag == "" {
+						tag = fmt.Sprintf("mieru-%d", len(proxies)+1)
+					} else if len(proxies) > 0 {
+						tag = fmt.Sprintf("%s-%d", tag, len(proxies)+1)
+					}
+					native["tag"] = tag
+					proxies = append(proxies, nativeOutbound{out: native})
+					generated++
+				}
+				if generated == 0 {
+					formatUnsupported = true
+				}
+				continue
 			}
 			if model.ShadowTLSTransport(inbound.Settings) != nil {
 				generated := 0
@@ -1652,9 +1670,9 @@ func (s *SubJsonService) genNativeTLSLikeEndpoint(subReq *SubService, inbound *m
 	// carries the destination and encrypts the payload after the TLS handshake.
 	return map[string]any{
 		"type": "shadowsocks", "method": "2022-blake3-aes-128-gcm",
-		"password": masterKey + ":" + model.ShadowTLSClientKey(client.Email, client.Password),
-		"udp_over_tcp": map[string]any{"enabled": true, "version": 2},
-		"detour": transportTag,
+		"password":                   masterKey + ":" + model.ShadowTLSClientKey(client.Email, client.Password),
+		"udp_over_tcp":               map[string]any{"enabled": true, "version": 2},
+		"detour":                     transportTag,
 		"_panel_shadowtls_transport": transport,
 	}
 }
