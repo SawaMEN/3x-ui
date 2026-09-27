@@ -239,7 +239,7 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	happCfg.SubInfoButtonText, _ = s.settingService.GetSubHappSubInfoButtonText()
 	happCfg.SubInfoButtonLink, _ = s.settingService.GetSubHappSubInfoButtonLink()
 	happCfg.SubExpire, _ = s.settingService.GetSubHappSubExpire()
-	happCfg.SubExpireButtonLink, _ = s.settingService.GetSubHappSubExpireButtonLink()
+	happCfg.SubExpireButtonLink, _ = s.settingService.GetSubHappExpireButtonLink()
 	happCfg.NotificationExpire, _ = s.settingService.GetSubHappNotificationExpire()
 	happCfg.NoLimit, _ = s.settingService.GetSubHappNoLimit()
 	happCfg.AlwaysHwid, _ = s.settingService.GetSubHappAlwaysHwid()
@@ -360,15 +360,14 @@ func (s *Server) subscriptionDomainValidator(primary string) gin.HandlerFunc {
 			return
 		}
 
+		// Legacy Hiddify URLs are intentionally host-independent after migration.
+		// The secret path and the user's UUID remain mandatory, so this bypass does
+		// not open regular 3x-ui subscription routes on arbitrary Host headers.
 		aliases, err := s.settingService.GetHiddifyLegacySubscriptionAliases()
 		if err == nil {
-			for _, alias := range aliases {
-				for _, domain := range alias.Domains {
-					if host == normalizeRequestHost(domain) {
-						c.Next()
-						return
-					}
-				}
+			if _, ok := legacyHiddifySubID(c.Request.URL.Path, aliases); ok {
+				c.Next()
+				return
 			}
 		}
 
