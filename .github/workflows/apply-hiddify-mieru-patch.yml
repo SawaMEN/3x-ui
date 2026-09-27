@@ -2,78 +2,36 @@ name: Apply Hiddify Mieru patch
 
 on:
   push:
-    branches:
-      - fix/hiddify-mieru-json
+    branches: ["fix/hiddify-mieru-json"]
 
 permissions:
   contents: write
 
 jobs:
   patch:
-    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
           ref: fix/hiddify-mieru-json
           fetch-depth: 0
-
-      - name: Patch Hiddify Mieru JSON handling
-        shell: bash
+      - name: Patch source
         run: |
           python3 - <<'PY'
           from pathlib import Path
-
-          path = Path('internal/sub/json_service.go')
+          path = Path("internal/sub/json_service.go")
           text = path.read_text()
-
-          old = '''\t\tif shadowTLSForHiddify && (inbound.Protocol == model.WireGuard ||
-\t\t\tsingBoxUnsupportedProtocol(inbound.Protocol)) {
-\t\t\tcontinue
-\t\t}
-'''
-          new = '''\t\tif shadowTLSForHiddify && (inbound.Protocol == model.WireGuard ||
-\t\t\t(singBoxUnsupportedProtocol(inbound.Protocol) && inbound.Protocol != model.Mieru)) {
-\t\t\tcontinue
-\t\t}
-'''
+          old = "\t\tif shadowTLSForHiddify && (inbound.Protocol == model.WireGuard ||\n\t\t\tsingBoxUnsupportedProtocol(inbound.Protocol)) {\n\t\t\tcontinue\n\t\t}\n"
+          new = "\t\tif shadowTLSForHiddify && (inbound.Protocol == model.WireGuard ||\n\t\t\t(singBoxUnsupportedProtocol(inbound.Protocol) && inbound.Protocol != model.Mieru)) {\n\t\t\tcontinue\n\t\t}\n"
           if old not in text:
-              raise SystemExit('Mieru unsupported-protocol guard not found')
+              raise SystemExit("guard not found")
           text = text.replace(old, new, 1)
-
-          old = '''\t\t\tif client.Enable {
-\t\t\t\thasEnabledClient = true
-\t\t\t}
-\t\t\tif model.ShadowTLSTransport(inbound.Settings) != nil {
-'''
-          new = '''\t\t\tif client.Enable {
-\t\t\t\thasEnabledClient = true
-\t\t\t}
-\t\t\tif shadowTLSForHiddify && inbound.Protocol == model.Mieru {
-\t\t\t\tgenerated := 0
-\t\t\t\tfor _, native := range nativeMieruOutbounds(subReq, inbound, client) {
-\t\t\t\t\ttag := client.Email
-\t\t\t\t\tif tag == "" {
-\t\t\t\t\t\ttag = fmt.Sprintf("mieru-%d", len(proxies)+1)
-\t\t\t\t\t} else if len(proxies) > 0 {
-\t\t\t\t\t\ttag = fmt.Sprintf("%s-%d", tag, len(proxies)+1)
-\t\t\t\t\t}
-\t\t\t\t\tnative["tag"] = tag
-\t\t\t\t\tproxies = append(proxies, nativeOutbound{out: native})
-\t\t\t\t\tgenerated++
-\t\t\t\t}
-\t\t\t\tif generated == 0 {
-\t\t\t\t\tformatUnsupported = true
-\t\t\t\t}
-\t\t\t\tcontinue
-\t\t\t}
-\t\t\tif model.ShadowTLSTransport(inbound.Settings) != nil {
-'''
+          old = "\t\t\tif client.Enable {\n\t\t\t\thasEnabledClient = true\n\t\t\t}\n\t\t\tif model.ShadowTLSTransport(inbound.Settings) != nil {\n"
+          new = "\t\t\tif client.Enable {\n\t\t\t\thasEnabledClient = true\n\t\t\t}\n\t\t\tif shadowTLSForHiddify && inbound.Protocol == model.Mieru {\n\t\t\t\tgenerated := 0\n\t\t\t\tfor _, native := range nativeMieruOutbounds(subReq, inbound, client) {\n\t\t\t\t\ttag := client.Email\n\t\t\t\t\tif tag == \"\" {\n\t\t\t\t\t\ttag = fmt.Sprintf(\"mieru-%d\", len(proxies)+1)\n\t\t\t\t\t} else if len(proxies) > 0 {\n\t\t\t\t\t\ttag = fmt.Sprintf(\"%s-%d\", tag, len(proxies)+1)\n\t\t\t\t\t}\n\t\t\t\t\tnative[\"tag\"] = tag\n\t\t\t\t\tproxies = append(proxies, nativeOutbound{out: native})\n\t\t\t\t\tgenerated++\n\t\t\t\t}\n\t\t\t\tif generated == 0 {\n\t\t\t\t\tformatUnsupported = true\n\t\t\t\t}\n\t\t\t\tcontinue\n\t\t\t}\n\t\t\tif model.ShadowTLSTransport(inbound.Settings) != nil {\n"
           if old not in text:
-              raise SystemExit('Mieru insertion point not found')
+              raise SystemExit("insertion point not found")
           path.write_text(text.replace(old, new, 1))
           PY
-
           cat > internal/sub/mieru_singbox.go <<'EOF'
           package sub
 
@@ -91,13 +49,11 @@ jobs:
           	if subReq == nil || inbound == nil || inbound.Protocol != model.Mieru || client.Password == "" {
           		return nil
           	}
-
           	settings := subReq.linkSettings(inbound)
           	entries := mieruShareEntries(settings, inbound.Port)
           	if len(entries) == 0 {
           		return nil
           	}
-
           	multiplexing, _ := settings["multiplexing"].(string)
           	if strings.TrimSpace(multiplexing) == "" {
           		multiplexing = "MULTIPLEXING_LOW"
@@ -106,14 +62,13 @@ jobs:
           	if strings.TrimSpace(handshakeMode) == "" {
           		handshakeMode = "HANDSHAKE_STANDARD"
           	}
-
           	endpoints := subReq.shareEndpointsForInbound(inbound)
           	out := make([]map[string]any, 0, len(endpoints))
           	for _, endpoint := range endpoints {
           		publicEntries := entries
           		if endpoint.ep != nil {
           			publicEntries = make([]struct {
-          				port     string
+          				port string
           				protocol string
           			}, 0, len(entries))
           			seenProtocols := make(map[string]struct{})
@@ -123,12 +78,11 @@ jobs:
           				}
           				seenProtocols[entry.protocol] = struct{}{}
           				publicEntries = append(publicEntries, struct {
-          					port     string
+          					port string
           					protocol string
           				}{port: strconv.Itoa(endpoint.Port), protocol: entry.protocol})
           			}
           		}
-
           		bindings := make([]any, 0, len(publicEntries))
           		for _, entry := range publicEntries {
           			binding := map[string]any{"protocol": entry.protocol}
@@ -146,40 +100,32 @@ jobs:
           		if len(bindings) == 0 || strings.TrimSpace(endpoint.Address) == "" {
           			continue
           		}
-
           		out = append(out, map[string]any{
-          			"type":           "mieru",
-          			"server":         endpoint.Address,
-          			"port_bindings":  bindings,
-          			"username":       client.Email,
-          			"password":       client.Password,
-          			"multiplexing":   multiplexing,
+          			"type": "mieru",
+          			"server": endpoint.Address,
+          			"port_bindings": bindings,
+          			"username": client.Email,
+          			"password": client.Password,
+          			"multiplexing": multiplexing,
           			"handshake_mode": handshakeMode,
           		})
           	}
           	return out
           }
           EOF
-
           cat > internal/sub/mieru_singbox_test.go <<'EOF'
           package sub
 
           import (
           	"testing"
-
           	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
           )
 
           func TestNativeMieruOutbounds(t *testing.T) {
           	svc := NewSubService("")
           	svc.address = "mieru.example.com"
-          	inbound := &model.Inbound{
-          		Protocol: model.Mieru,
-          		Port:     20000,
-          		Settings: `{"tcpPorts":["20001","20002-20003"],"udpPorts":["21001"],"multiplexing":"MULTIPLEXING_HIGH","handshakeMode":"HANDSHAKE_NO_WAIT"}`,
-          	}
+          	inbound := &model.Inbound{Protocol: model.Mieru, Port: 20000, Settings: `{"tcpPorts":["20001","20002-20003"],"udpPorts":["21001"],"multiplexing":"MULTIPLEXING_HIGH","handshakeMode":"HANDSHAKE_NO_WAIT"}`}
           	client := model.Client{Email: "user@example.com", Password: "secret"}
-
           	outs := nativeMieruOutbounds(svc, inbound, client)
           	if len(outs) != 1 {
           		t.Fatalf("outbounds = %d, want 1: %#v", len(outs), outs)
@@ -200,14 +146,8 @@ jobs:
           func TestNativeMieruOutboundsExternalProxyUsesPublicPort(t *testing.T) {
           	svc := NewSubService("")
           	svc.address = "origin.example.com"
-          	inbound := &model.Inbound{
-          		Protocol:       model.Mieru,
-          		Port:           20000,
-          		Settings:       `{"tcpPorts":["20001","20002"],"udpPorts":["21001"]}`,
-          		StreamSettings: `{"externalProxy":[{"dest":"edge.example.com","port":443}]}`,
-          	}
+          	inbound := &model.Inbound{Protocol: model.Mieru, Port: 20000, Settings: `{"tcpPorts":["20001","20002"],"udpPorts":["21001"]}`, StreamSettings: `{"externalProxy":[{"dest":"edge.example.com","port":443}]}`}
           	client := model.Client{Email: "user", Password: "secret"}
-
           	outs := nativeMieruOutbounds(svc, inbound, client)
           	if len(outs) != 1 || outs[0]["server"] != "edge.example.com" {
           		t.Fatalf("unexpected external Mieru outbound: %#v", outs)
@@ -217,19 +157,15 @@ jobs:
           		t.Fatalf("public port_bindings = %#v, want TCP+UDP", outs[0]["port_bindings"])
           	}
           	for _, raw := range bindings {
-          		binding := raw.(map[string]any)
-          		if binding["port"] != 443 {
-          			t.Fatalf("binding leaked private port: %#v", binding)
+          		if raw.(map[string]any)["port"] != 443 {
+          			t.Fatalf("binding leaked private port: %#v", raw)
           		}
           	}
           }
           EOF
-
           gofmt -w internal/sub/json_service.go internal/sub/mieru_singbox.go internal/sub/mieru_singbox_test.go
           rm .github/workflows/apply-hiddify-mieru-patch.yml
-
       - name: Commit patch
-        shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
