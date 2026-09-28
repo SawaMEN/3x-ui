@@ -1,22 +1,30 @@
 package service
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/pelletier/go-toml/v2"
 )
 
 const telemtSubscriptionUserPrefix = "sub_"
 
-var telemtSubscriptionProfileMu sync.Mutex
+var (
+	telemtSubscriptionProfileMu         sync.Mutex
+	errTelemtSubscriptionAPIUnsupported = errors.New("telemt: user create API is unavailable")
+)
 
 // telemtSubscriptionUsername maps a subscription identifier to a stable Telemt
 // username without exposing the subscription token itself in telemt.toml.
@@ -79,7 +87,6 @@ func (TelemtService) EnsureSubscriptionProxy(subID, host string) (TelemtProxy, e
 
 	username := telemtSubscriptionUsername(subID)
 	secret := strings.TrimSpace(raw.Access.Users[username])
-	created := false
 	if secret == "" {
 		buf := make([]byte, 16)
 		if _, err := rand.Read(buf); err != nil {
@@ -87,53 +94,25 @@ func (TelemtService) EnsureSubscriptionProxy(subID, host string) (TelemtProxy, e
 		}
 		secret = hex.EncodeToString(buf)
 
-		text := string(original)
-		section := "[access.users]"
-		idx := strings.Index(text, section)
-		if idx < 0 {
-			return TelemtProxy{}, errors.New("telemt: access.users section is missing")
-		}
-		insertAt := len(text)
-		if next := strings.Index(text[idx+len(section):], "\n["); next >= 0 {
-			insertAt = idx + len(section) + next + 1
-		}
-		entry := fmt.Sprintf("%s = \"%s\"\n", username, secret)
-		text = text[:insertAt] + entry + text[insertAt:]
-		if err := os.WriteFile(telemtConfigPath, []byte(text), 0o600); err != nil {
-			return TelemtProxy{}, err
-		}
-		created = true
-	}
-
-	rollback := func() {
-		if created {
-			_ = os.WriteFile(telemtConfigPath, original, 0o600)
-			_ = systemctl("daemon-reload")
-		}
-	}
-
-	if created {
-		if err := systemctl("daemon-reload"); err != nil {
-			rollback()
-			return TelemtProxy{}, err
-		}
-		if err := systemctl("restart", telemtServiceName); err != nil {
-			rollback()
-			_ = systemctl("restart", telemtServiceName)
-			return TelemtProxy{}, fmt.Errorf("telemt: subscription profile was rejected: %w", err)
+		if err := createTelemtSubscriptionUser(username, secret); err != nil {
+			if !errors.Is(err, errTelemtSubscriptionAPIUnsupported) {
+				return TelemtProxy{}, err
+			}
+			if err := createTelemtSubscriptionUserLegacy(original, username, secret); err != nil {
+				return TelemtProxy{}, err
+			}
 		}
 	}
 
 	link, err := telemtGeneratedLink(username, raw.General.Modes.TLS)
 	if err != nil {
-		if created {
-			rollback()
-			_ = systemctl("restart", telemtServiceName)
-		}
 		return TelemtProxy{}, fmt.Errorf("telemt: failed to obtain subscription link: %w", err)
 	}
 	if parsed, err := url.Parse(link); err == nil {
 		query := parsed.Query()
+		if effectiveSecret := strings.TrimSpace(query.Get("secret")); effectiveSecret != "" {
+			secret = effectiveSecret
+		}
 		query.Set("server", host)
 		parsed.RawQuery = query.Encode()
 		link = parsed.String()
@@ -147,4 +126,81 @@ func (TelemtService) EnsureSubscriptionProxy(subID, host string) (TelemtProxy, e
 		TLS:    raw.General.Modes.TLS,
 		Link:   link,
 	}, nil
+}
+
+// createTelemtSubscriptionUser uses Telemt's users API when available. Modern
+// Telemt versions update access.users atomically and apply runtime admission
+// without restarting the whole proxy process.
+func createTelemtSubscriptionUser(username, secret string) error {
+	body, err := json.Marshal(map[string]string{
+		"username": username,
+		"secret":   secret,
+	})
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, "http://127.0.0.1:9091/v1/users", bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("telemt: create subscription user request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
+	if err != nil {
+		return fmt.Errorf("telemt: create subscription user: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return nil
+	}
+	if resp.StatusCode == http.StatusConflict {
+		// A concurrent request may have created the same deterministic user.
+		// The following GET resolves the effective secret/link from Telemt.
+		return nil
+	}
+	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusMethodNotAllowed {
+		return errTelemtSubscriptionAPIUnsupported
+	}
+	message, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<10))
+	if detail := strings.TrimSpace(string(message)); detail != "" {
+		return fmt.Errorf("telemt: create subscription user: HTTP %d: %s", resp.StatusCode, detail)
+	}
+	return fmt.Errorf("telemt: create subscription user: HTTP %d", resp.StatusCode)
+}
+
+// createTelemtSubscriptionUserLegacy keeps compatibility with Telemt builds
+// predating POST /v1/users. The service is already known to be active; this
+// fallback rewrites only access.users and restarts with rollback on failure.
+func createTelemtSubscriptionUserLegacy(original []byte, username, secret string) error {
+	text := string(original)
+	section := "[access.users]"
+	idx := strings.Index(text, section)
+	if idx < 0 {
+		return errors.New("telemt: access.users section is missing")
+	}
+	insertAt := len(text)
+	if next := strings.Index(text[idx+len(section):], "\n["); next >= 0 {
+		insertAt = idx + len(section) + next + 1
+	}
+	entry := fmt.Sprintf("%s = \"%s\"\n", username, secret)
+	text = text[:insertAt] + entry + text[insertAt:]
+	if err := os.WriteFile(telemtConfigPath, []byte(text), 0o600); err != nil {
+		return err
+	}
+
+	rollback := func() {
+		_ = os.WriteFile(telemtConfigPath, original, 0o600)
+		_ = systemctl("daemon-reload")
+	}
+	if err := systemctl("daemon-reload"); err != nil {
+		rollback()
+		return err
+	}
+	if err := systemctl("restart", telemtServiceName); err != nil {
+		rollback()
+		_ = systemctl("restart", telemtServiceName)
+		return fmt.Errorf("telemt: subscription profile was rejected: %w", err)
+	}
+	return nil
 }
