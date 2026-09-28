@@ -391,12 +391,12 @@ export default function SystemUpdateModal({
   const checkSystemUpdates = useCallback(async () => {
     setSystemUpdateBusy(true);
     try {
-      const [msg] = await Promise.all([
-        HttpUtil.post(
-          `/panel/api/setting/system/update/check?allPackages=${includeAllPackages}`,
-        ) as Promise<ApiMsg<unknown>>,
-        loadDependencyUpdates(),
-      ]);
+      void loadDependencyUpdates().catch(() => {
+        // A component version lookup must not block Linux package status.
+      });
+      const msg = (await HttpUtil.post(
+        `/panel/api/setting/system/update/check?allPackages=${includeAllPackages}`,
+      )) as ApiMsg<unknown>;
       if (!msg?.success) throw new Error(msg?.msg || 'Failed to check system updates');
       setSystemUpdate(normalizeSystemUpdate(msg.obj));
       setSystemUpdateResult(null);
@@ -493,7 +493,7 @@ export default function SystemUpdateModal({
         setSystemUpdateResult(result);
 
         const errorMessage =
-          systemMsg?.msg || result.error || t('pages.settings.swap.updateFailed');
+          result.error || systemMsg?.msg || t('pages.settings.swap.updateFailed');
         if (isTransientFetchFailure(errorMessage)) {
           const recoveredStatus = await recoverSystemUpdateStatus();
           systemUpdateRecovered = recoveredStatus !== null;
@@ -974,6 +974,9 @@ export default function SystemUpdateModal({
               <Alert key={note} type="info" showIcon title={note} />
             ))}
 
+            {systemUpdateResult?.error && (
+              <Alert type="error" showIcon message={systemUpdateResult.error} />
+            )}
             {systemUpdateResult?.output && (
               <Card size="small" title={t('pages.settings.swap.updateOutput')}>
                 <Typography.Text code>
