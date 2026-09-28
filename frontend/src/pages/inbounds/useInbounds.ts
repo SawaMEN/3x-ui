@@ -254,6 +254,40 @@ export function useInbounds() {
 
   const [lastOnlineMap, setLastOnlineMap] = useState<Record<string, number>>({});
 
+  // Xray's online-users API identifies a live user by email, but does not say
+  // which inbound accepted the connection. That ambiguity only matters when the
+  // same enabled email is attached to more than one inbound on the same node.
+  // Precompute that multiplicity once per inbound-list change: a unique email
+  // can trust the live connection signal even while its inbound is idle; a
+  // duplicate email still needs the active-inbound traffic gate below.
+  const emailInboundCountByGuid = useMemo(() => {
+    const result = new Map<string, Map<string, number>>();
+    for (const dbInbound of dbInbounds) {
+      if (!dbInbound.enable || !TRACKED_PROTOCOLS.includes(dbInbound.protocol)) continue;
+      const settings = coerceInboundJsonField(dbInbound.settings) as {
+        method?: string;
+        clients?: Array<{ email?: string; enable?: boolean }>;
+      };
+      if (
+        dbInbound.protocol === Protocols.SHADOWSOCKS &&
+        !isSSMultiUser({ protocol: dbInbound.protocol, settings })
+      ) {
+        continue;
+      }
+      const guid =
+        dbInbound.originNodeGuid || (dbInbound.nodeId != null ? `node:${dbInbound.nodeId}` : '');
+      const counts = result.get(guid) ?? new Map<string, number>();
+      const seenOnInbound = new Set<string>();
+      for (const client of settings.clients || []) {
+        if (!client.enable || !client.email || seenOnInbound.has(client.email)) continue;
+        seenOnInbound.add(client.email);
+        counts.set(client.email, (counts.get(client.email) ?? 0) + 1);
+      }
+      result.set(guid, counts);
+    }
+    return result;
+  }, [dbInbounds]);
+
   const rollupClients = useCallback(
     (
       dbInbound: DBInboundInstance,
@@ -289,12 +323,13 @@ export function useInbounds() {
         dbInbound.originNodeGuid || (dbInbound.nodeId != null ? `node:${dbInbound.nodeId}` : '');
       const nodeOnline = onlineByGuid.get(guid);
       // A node absent from the active map reports no per-inbound activity, so
-      // leave its inbounds ungated. When present, only mark a client online on
-      // this inbound if its tag actually carried traffic — that's what stops a
-      // multi-inbound client lighting up every inbound it's attached to.
+      // leave its inbounds ungated. When present, only mark an ambiguous client
+      // online on this inbound if its tag actually carried traffic — that's what
+      // stops a multi-inbound client lighting up every inbound it's attached to.
       const activeForNode = activeByGuid.get(guid);
       const inboundActive =
         activeForNode === undefined || !dbInbound.tag || activeForNode.has(dbInbound.tag);
+      const emailInboundCounts = emailInboundCountByGuid.get(guid);
 
       if (dbInbound.enable) {
         const statsByEmail = new Map<
@@ -320,7 +355,10 @@ export function useInbounds() {
             continue;
           }
           active.push(client.email);
-          if (inboundActive && nodeOnline?.has(client.email)) online.push(client.email);
+          const emailIsUnambiguous = (emailInboundCounts?.get(client.email) ?? 0) <= 1;
+          if ((emailIsUnambiguous || inboundActive) && nodeOnline?.has(client.email)) {
+            online.push(client.email);
+          }
           if (stats) {
             const expiringSoon =
               (stats.expiryTime > 0 && stats.expiryTime - now < expireDiff) ||
@@ -344,7 +382,7 @@ export function useInbounds() {
         comments,
       };
     },
-    [onlineByGuid, activeByGuid, expireDiff, trafficDiff],
+    [onlineByGuid, activeByGuid, emailInboundCountByGuid, expireDiff, trafficDiff],
   );
 
   // Every write to a DBInbound row also replaces the dbInbounds array, so this
