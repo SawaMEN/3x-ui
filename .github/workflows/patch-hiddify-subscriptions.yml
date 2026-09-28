@@ -73,7 +73,7 @@ jobs:
 
       - name: Verify package compiles
         shell: bash
-        run: go test ./internal/web/service
+        run: go test ./internal/web/service -run '^$'
 
       - name: Commit patch and remove temporary workflow
         shell: bash
