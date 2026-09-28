@@ -39,6 +39,10 @@ func (a *FirewallController) status(c *gin.Context) {
 }
 
 func (a *FirewallController) initializeControl(c *gin.Context) bool {
+	if err := a.firewallService.RememberSafetyPort(firewallSafetyPort(c)); err != nil {
+		jsonMsg(c, "failed to persist firewall safety port", err)
+		return false
+	}
 	if err := a.firewallService.MarkControlInitialized(); err != nil {
 		jsonMsg(c, "failed to initialize firewall management", err)
 		return false
