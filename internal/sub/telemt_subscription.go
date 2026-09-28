@@ -65,7 +65,7 @@ func serveTelemtSubscription(c *gin.Context) {
 		logger.Debug("sub: Telemt personal profile unavailable:", err)
 	}
 
-	settings = service.SettingService{}
+	settings := service.SettingService{}
 	defaultDomain, _ := settings.GetWebDomain()
 	if strings.TrimSpace(defaultDomain) == "" {
 		defaultDomain = host
