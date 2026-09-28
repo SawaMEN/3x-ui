@@ -218,9 +218,28 @@ func (s *FirewallService) status(ctx context.Context, safetyPort int) (FirewallS
 	for _, r := range managed {
 		owned[firewallRuleKey(r.Port, r.Protocol)] = r.Owned
 	}
+	seen := make(map[string]bool, len(desired))
 	for i := range desired {
 		key := firewallRuleKey(desired[i].Port, desired[i].Protocol)
+		seen[key] = true
 		desired[i].Exists, desired[i].Owned = existing[key], owned[key]
+	}
+	// When auto-sync is disabled, inbound rules are intentionally frozen rather
+	// than deleted. Keep showing those managed rules in the UI so the operator
+	// sees the actual firewall state instead of an incomplete desired-only view.
+	if !auto {
+		for _, r := range managed {
+			key := firewallRuleKey(r.Port, r.Protocol)
+			if r.Source != "inbound" || seen[key] {
+				continue
+			}
+			r.Exists = existing[key]
+			desired = append(desired, r)
+			seen[key] = true
+		}
+		sort.Slice(desired, func(i, j int) bool {
+			return desired[i].Port < desired[j].Port || (desired[i].Port == desired[j].Port && desired[i].Protocol < desired[j].Protocol)
+		})
 	}
 	st.Rules = desired
 	return st, nil
@@ -248,7 +267,7 @@ func (s *FirewallService) sync(ctx context.Context, b firewallBackend, safetyPor
 		old[firewallRuleKey(r.Port, r.Protocol)] = r
 	}
 	want := map[string]bool{}
-	next := make([]FirewallRule, 0, len(desired))
+	next := make([]FirewallRule, 0, len(desired)+len(managed))
 	for _, r := range desired {
 		key := firewallRuleKey(r.Port, r.Protocol)
 		want[key] = true
@@ -265,7 +284,18 @@ func (s *FirewallService) sync(ctx context.Context, b firewallBackend, safetyPor
 	}
 	for _, r := range managed {
 		key := firewallRuleKey(r.Port, r.Protocol)
-		if want[key] || !r.Owned || !existing[key] {
+		if want[key] {
+			continue
+		}
+		// Auto-sync off means freeze the last reconciled inbound rules. Manual
+		// rule changes, firewall enable/disable and Sync-now must not silently
+		// close working proxy ports merely because background automation is off.
+		if !auto && r.Source == "inbound" {
+			r.Exists = false
+			next = append(next, r)
+			continue
+		}
+		if !r.Owned || !existing[key] {
 			continue
 		}
 		if err := deleteFirewallRule(ctx, b, r); err != nil {
