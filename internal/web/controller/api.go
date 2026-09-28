@@ -178,6 +178,7 @@ func (a *APIController) initRouter(g *gin.RouterGroup) {
 	// advertise support, before CSRF/handlers read the body.
 	api.Use(middleware.ConfigEnvelopeMiddleware())
 	api.Use(middleware.CSRFMiddleware())
+	api.Use(firewallAutoSyncMiddleware())
 
 	api.GET("/openapi.json", ServeOpenAPISpec)
 
@@ -192,6 +193,10 @@ func (a *APIController) initRouter(g *gin.RouterGroup) {
 	// Server API
 	server := api.Group("/server")
 	a.serverController = NewServerController(server)
+
+	// Managed host firewall. Only session/admin-token callers can reach these
+	// routes because monitor and node-sync scopes use explicit allowlists.
+	NewFirewallController(api.Group("/firewall"))
 
 	// Nodes API — multi-panel management
 	nodes := api.Group("/nodes")
