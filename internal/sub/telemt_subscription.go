@@ -10,15 +10,22 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 )
 
+type telemtSubscriptionProfile struct {
+	Host string `json:"host"`
+	Port int    `json:"port"`
+	TLS  bool   `json:"tls"`
+	Link string `json:"link"`
+}
+
 type telemtSubscriptionPayload struct {
-	Personal *service.TelemtProxy `json:"personal,omitempty"`
-	WebProxy string               `json:"webProxy,omitempty"`
+	Personal *telemtSubscriptionProfile `json:"personal,omitempty"`
+	WebProxy string                      `json:"webProxy,omitempty"`
 }
 
 func registerTelemtSubscriptionRoute(g *gin.RouterGroup) {
 	// Keep the endpoint next to the configured browser subscription URL so it
 	// continues to work when /sub/ is customized or exposed through a reverse
-	// proxy that only forwards the subscription prefix.
+	// proxy that forwards the subscription prefix.
 	settings := service.SettingService{}
 	subPath, err := settings.GetSubPath()
 	if err != nil {
@@ -60,7 +67,12 @@ func serveTelemtSubscription(c *gin.Context) {
 	telemt := service.TelemtService{}
 	payload := telemtSubscriptionPayload{}
 	if personal, err := telemt.EnsureSubscriptionProxy(subID, host); err == nil {
-		payload.Personal = &personal
+		payload.Personal = &telemtSubscriptionProfile{
+			Host: personal.Host,
+			Port: personal.Port,
+			TLS:  personal.TLS,
+			Link: personal.Link,
+		}
 	} else {
 		logger.Debug("sub: Telemt personal profile unavailable:", err)
 	}
