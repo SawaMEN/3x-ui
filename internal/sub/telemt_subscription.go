@@ -15,10 +15,15 @@ type telemtSubscriptionPayload struct {
 	WebProxy string               `json:"webProxy,omitempty"`
 }
 
-func registerTelemtSubscriptionRoute(g *gin.RouterGroup, subPath string) {
+func registerTelemtSubscriptionRoute(g *gin.RouterGroup) {
 	// Keep the endpoint next to the configured browser subscription URL so it
 	// continues to work when /sub/ is customized or exposed through a reverse
 	// proxy that only forwards the subscription prefix.
+	settings := service.SettingService{}
+	subPath, err := settings.GetSubPath()
+	if err != nil {
+		subPath = "/sub/"
+	}
 	path := "/" + strings.Trim(subPath, "/") + "/telemt/:subid"
 	if strings.Trim(subPath, "/") == "" {
 		path = "/telemt/:subid"
@@ -60,7 +65,7 @@ func serveTelemtSubscription(c *gin.Context) {
 		logger.Debug("sub: Telemt personal profile unavailable:", err)
 	}
 
-	settings := service.SettingService{}
+	settings = service.SettingService{}
 	defaultDomain, _ := settings.GetWebDomain()
 	if strings.TrimSpace(defaultDomain) == "" {
 		defaultDomain = host
