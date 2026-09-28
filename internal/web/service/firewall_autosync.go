@@ -10,12 +10,38 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 )
 
-const firewallControlInitializedKey = "firewallControlInitialized"
+const (
+	firewallControlInitializedKey = "firewallControlInitialized"
+	firewallSafetyPortKey         = "firewallSafetyPort"
+)
 
 var firewallAutoSyncOnce sync.Once
 
 func (s *FirewallService) MarkControlInitialized() error {
 	return (&SettingService{}).setBool(firewallControlInitializedKey, true)
+}
+
+// RememberSafetyPort persists the externally visible panel port discovered on
+// an authenticated firewall-management request. Background reconciliation then
+// keeps that port open even after the request that originally exposed it has
+// finished, including across panel restarts.
+func (s *FirewallService) RememberSafetyPort(port int) error {
+	if port < 1 || port > 65535 {
+		return nil
+	}
+	return (&SettingService{}).setInt(firewallSafetyPortKey, port)
+}
+
+func rememberedFirewallSafetyPort() int {
+	raw, err := firewallSetting(firewallSafetyPortKey, "0")
+	if err != nil {
+		return 0
+	}
+	port, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || port < 1 || port > 65535 {
+		return 0
+	}
+	return port
 }
 
 func firewallControlInitialized() bool {
@@ -44,9 +70,21 @@ func (s *FirewallService) StartAutoSync() {
 				if !firewallControlInitialized() {
 					return
 				}
+				auto, err := firewallAutoSync()
+				if err != nil || !auto {
+					return
+				}
 				ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 				defer cancel()
-				if err := s.SyncIfEnabled(ctx); err != nil {
+				backend, err := detectFirewallBackend(ctx)
+				if err != nil {
+					return
+				}
+				on, err := backend.enabled(ctx)
+				if err != nil || !on {
+					return
+				}
+				if _, err := s.Sync(ctx, rememberedFirewallSafetyPort()); err != nil {
 					logger.Debug("firewall auto-sync failed:", err)
 				}
 			}
