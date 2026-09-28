@@ -835,7 +835,14 @@ func runCommand(ctx context.Context, command string, args ...string) (string, er
 	cmd := exec.CommandContext(ctx, command, args...)
 	cmd.Env = append(os.Environ(), "LC_ALL=C", "LANG=C", "LANGUAGE=C")
 	output, err := cmd.CombinedOutput()
-	return string(output), err
+	if err != nil {
+		detail := truncateOutput(string(output), 2000)
+		if detail != "" {
+			return string(output), fmt.Errorf("%s: %w: %s", command, err, detail)
+		}
+		return string(output), fmt.Errorf("%s: %w", command, err)
+	}
+	return string(output), nil
 }
 
 func truncateOutput(value string, max int) string {
