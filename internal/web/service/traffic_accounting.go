@@ -133,6 +133,7 @@ func (s *InboundService) addClientTrafficStrict(tx *gorm.DB, traffics []*xray.Cl
 	}
 
 	var err error
+	var convertedExpiryByEmail map[string]int64
 	dbClientTraffics, convertedExpiryByEmail, err = s.adjustTraffics(tx, dbClientTraffics)
 	if err != nil {
 		return err
