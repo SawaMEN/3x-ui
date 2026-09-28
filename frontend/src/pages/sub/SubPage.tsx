@@ -41,11 +41,8 @@ const usedByte =
 const expireMs = Number(subData.expire || 0) * 1000;
 const clientEmail = [...new Set(linkEmails.filter(Boolean))].join(', ');
 const loadedAt = Date.now();
-const rawBasePath = String(subData.basePath || '/');
-const basePath = rawBasePath === '/' ? '/' : `/${rawBasePath.replace(/^\/+|\/+$/g, '')}/`;
 
 type TelemtProxyProfile = {
-  name: string;
   host: string;
   port: number;
   tls: boolean;
@@ -56,6 +53,22 @@ type TelemtSubscriptionData = {
   personal?: TelemtProxyProfile;
   webProxy?: string;
 };
+
+function buildTelemtEndpoint(): string {
+  if (!sId) return '';
+  try {
+    const endpoint = new URL(subUrl || window.location.href, window.location.href);
+    endpoint.search = '';
+    endpoint.hash = '';
+    const segments = endpoint.pathname.split('/').filter(Boolean);
+    if (segments.length > 0) segments.pop();
+    segments.push('telemt', sId);
+    endpoint.pathname = `/${segments.map((part) => encodeURIComponent(decodeURIComponent(part))).join('/')}`;
+    return endpoint.toString();
+  } catch {
+    return '';
+  }
+}
 
 const heroData = {
   status: resolveSubStatus({ enabled: !!subData.enabled, usedByte, totalByte, expireMs }, loadedAt),
@@ -104,9 +117,9 @@ export default function SubPage() {
   const [telemtData, setTelemtData] = useState<TelemtSubscriptionData>({});
 
   useEffect(() => {
-    if (!sId) return;
+    const endpoint = buildTelemtEndpoint();
+    if (!endpoint) return;
     const controller = new AbortController();
-    const endpoint = `${basePath}telemt/${encodeURIComponent(sId)}`;
     void fetch(endpoint, {
       method: 'GET',
       cache: 'no-store',
