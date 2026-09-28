@@ -200,10 +200,12 @@ func (t *Tgbot) buildSubscriptionURLs(email string) (string, string, error) {
 
 	var subURL string
 	var subJsonURL string
+	hiddifyURIs, _ := t.settingService.GetHiddifySubscriptionURIs()
+	hiddifySubURI := hiddifyURIs[client.SubID]
 
 	// If pre-configured URIs are available, use them directly
-	if client.HiddifySubURI != "" {
-		subURL = strings.TrimSuffix(client.HiddifySubURI, "/") + "/" + client.SubID + "/"
+	if hiddifySubURI != "" {
+		subURL = strings.TrimSuffix(hiddifySubURI, "/") + "/" + client.SubID + "/"
 	} else if subURI != "" {
 		if !strings.HasSuffix(subURI, "/") {
 			subURI = subURI + "/"

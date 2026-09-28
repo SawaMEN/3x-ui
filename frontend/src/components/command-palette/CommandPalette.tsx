@@ -201,7 +201,7 @@ export default function CommandPalette() {
       const ok = await ClipboardManager.copyText(link);
       if (ok) message.success(t('copied'));
     },
-    [allSetting.subURI, t],
+    [allSetting, t],
   );
 
   const restartXray = useCallback(async () => {
@@ -637,7 +637,7 @@ export default function CommandPalette() {
     inbounds,
     isDark,
     isUltra,
-    allSetting.subURI,
+    allSetting,
     t,
     close,
     navigate,
