@@ -76,7 +76,7 @@ func (a *FirewallController) setAutoSync(c *gin.Context) {
 	if !a.initializeControl(c) {
 		return
 	}
-	status, err := a.firewallService.SetAutoSync(c.Request.Context(), req.Enabled, firewallSafetyPort(c))
+	status, err := a.firewallService.SetAutoSyncPreference(c.Request.Context(), req.Enabled, firewallSafetyPort(c))
 	jsonObj(c, status, err)
 }
 
