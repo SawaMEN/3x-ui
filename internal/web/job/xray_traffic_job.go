@@ -205,6 +205,7 @@ func (j *XrayTrafficJob) Run() {
 						activeEmails = append(activeEmails, email)
 					}
 				}
+			}
 		}
 	} else {
 		j.onlineAPIFailures.Store(0)
