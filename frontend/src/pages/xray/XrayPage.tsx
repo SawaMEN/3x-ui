@@ -36,6 +36,7 @@ import {
   detectBalancerCycles,
 } from './balancers/balancer-loopback';
 import { DnsTab } from './dns';
+import { FirewallButton } from './FirewallButton';
 import { WarpModal, NordModal, PiaModal } from './overrides';
 import './XrayPage.css';
 
@@ -343,10 +344,11 @@ export default function XrayPage() {
                     <Card hoverable>
                       <Row className="header-row">
                         <Col xs={24} sm={14} className="header-actions">
-                          <Space>
+                          <Space wrap>
                             <Button type="primary" disabled={saveDisabled} onClick={onSaveAll}>
                               {t('pages.xray.save')}
                             </Button>
+                            <FirewallButton compact={isMobile} />
                           </Space>
                         </Col>
                         <Col xs={24} sm={10} className="header-info">
