@@ -38,12 +38,23 @@ func (a *FirewallController) status(c *gin.Context) {
 	jsonObj(c, status, err)
 }
 
+func (a *FirewallController) initializeControl(c *gin.Context) bool {
+	if err := a.firewallService.MarkControlInitialized(); err != nil {
+		jsonMsg(c, "failed to initialize firewall management", err)
+		return false
+	}
+	return true
+}
+
 func (a *FirewallController) setEnabled(c *gin.Context) {
 	var req struct {
 		Enabled bool `json:"enabled" form:"enabled"`
 	}
 	if err := c.ShouldBind(&req); err != nil {
 		jsonMsg(c, "invalid firewall state", err)
+		return
+	}
+	if !a.initializeControl(c) {
 		return
 	}
 	status, err := a.firewallService.SetEnabled(c.Request.Context(), req.Enabled, firewallSafetyPort(c))
@@ -58,11 +69,17 @@ func (a *FirewallController) setAutoSync(c *gin.Context) {
 		jsonMsg(c, "invalid firewall auto-sync state", err)
 		return
 	}
+	if !a.initializeControl(c) {
+		return
+	}
 	status, err := a.firewallService.SetAutoSync(c.Request.Context(), req.Enabled, firewallSafetyPort(c))
 	jsonObj(c, status, err)
 }
 
 func (a *FirewallController) sync(c *gin.Context) {
+	if !a.initializeControl(c) {
+		return
+	}
 	status, err := a.firewallService.Sync(c.Request.Context(), firewallSafetyPort(c))
 	jsonObj(c, status, err)
 }
@@ -76,6 +93,9 @@ func (a *FirewallController) addRule(c *gin.Context) {
 		jsonMsg(c, "invalid firewall rule", err)
 		return
 	}
+	if !a.initializeControl(c) {
+		return
+	}
 	status, err := a.firewallService.AddManualRule(c.Request.Context(), req.Port, req.Protocol, firewallSafetyPort(c))
 	jsonObj(c, status, err)
 }
@@ -87,6 +107,9 @@ func (a *FirewallController) deleteRule(c *gin.Context) {
 	}
 	if err := c.ShouldBind(&req); err != nil {
 		jsonMsg(c, "invalid firewall rule", err)
+		return
+	}
+	if !a.initializeControl(c) {
 		return
 	}
 	status, err := a.firewallService.DeleteManualRule(c.Request.Context(), req.Port, req.Protocol, firewallSafetyPort(c))
