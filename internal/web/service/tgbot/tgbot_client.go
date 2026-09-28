@@ -202,7 +202,9 @@ func (t *Tgbot) buildSubscriptionURLs(email string) (string, string, error) {
 	var subJsonURL string
 
 	// If pre-configured URIs are available, use them directly
-	if subURI != "" {
+	if client.HiddifySubURI != "" {
+		subURL = strings.TrimSuffix(client.HiddifySubURI, "/") + "/" + client.SubID + "/"
+	} else if subURI != "" {
 		if !strings.HasSuffix(subURI, "/") {
 			subURI = subURI + "/"
 		}
