@@ -136,7 +136,11 @@ export default function GeneralTab({
       const result = await hiddifyRequest('preview', file);
       if (result.success && typeof result.obj?.users === 'number') {
         const userList = result.obj.userList ?? [];
-        setHiddifyPreview({ users: result.obj.users, userList, warnings: result.obj.warnings ?? [] });
+        setHiddifyPreview({
+          users: result.obj.users,
+          userList,
+          warnings: result.obj.warnings ?? [],
+        });
         setHiddifySelected(userList.map((user) => user.uuid));
       }
     } finally {
@@ -1043,7 +1047,10 @@ export default function GeneralTab({
         open={hiddifyOpen}
         title="Импорт пользователей Hiddify"
         okText="Импортировать пользователей"
-        okButtonProps={{ disabled: !hiddifyPreview || hiddifySelected.length === 0, loading: hiddifyBusy }}
+        okButtonProps={{
+          disabled: !hiddifyPreview || hiddifySelected.length === 0,
+          loading: hiddifyBusy,
+        }}
         onOk={() => void importHiddify()}
         onCancel={() => {
           setHiddifyOpen(false);
@@ -1085,9 +1092,14 @@ export default function GeneralTab({
             <div style={{ marginTop: 12 }}>
               <Checkbox
                 checked={hiddifySelected.length === hiddifyPreview.userList.length}
-                indeterminate={hiddifySelected.length > 0 && hiddifySelected.length < hiddifyPreview.userList.length}
+                indeterminate={
+                  hiddifySelected.length > 0 &&
+                  hiddifySelected.length < hiddifyPreview.userList.length
+                }
                 onChange={(event) =>
-                  setHiddifySelected(event.target.checked ? hiddifyPreview.userList.map((user) => user.uuid) : [])
+                  setHiddifySelected(
+                    event.target.checked ? hiddifyPreview.userList.map((user) => user.uuid) : [],
+                  )
                 }
               >
                 Выбрать всех пользователей
@@ -1106,7 +1118,10 @@ export default function GeneralTab({
                       }
                     >
                       {user.name || user.uuid} {user.comment ? `— ${user.comment}` : ''}
-                      <span style={{ color: 'var(--ant-color-text-secondary)' }}> ({user.uuid.slice(0, 8)})</span>
+                      <span style={{ color: 'var(--ant-color-text-secondary)' }}>
+                        {' '}
+                        ({user.uuid.slice(0, 8)})
+                      </span>
                     </Checkbox>
                   </div>
                 ))}
