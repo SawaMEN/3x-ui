@@ -1,5 +1,6 @@
 # Canonical task runner. Mirrors .github/workflows/ci.yml so `make verify`
 # reproduces the PR gate locally. Run `make help` for the list.
+# Temporary branch-only change used to trigger the existing Arch shell validation.
 
 SHELL := bash
 FRONTEND = frontend
