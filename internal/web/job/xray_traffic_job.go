@@ -84,8 +84,10 @@ func (j *XrayTrafficJob) Run() {
 	if err != nil {
 		return
 	}
+	// Rollback is idempotent with Commit. This also guarantees that a panic or
+	// future early-return cannot leave xrayTrafficMu locked indefinitely.
+	defer trafficRead.Rollback()
 	if err := j.inboundService.CommitXrayTraffic(traffics, clientTraffics); err != nil {
-		trafficRead.Rollback()
 		logger.Warning("commit xray traffic failed; delta will be retried:", err)
 		return
 	}
