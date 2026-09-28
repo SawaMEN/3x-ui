@@ -306,7 +306,7 @@ export function FirewallButton({ compact = false }: FirewallButtonProps) {
               </Button>
             </Space>
 
-            <Divider orientation="start">{text.automatic}</Divider>
+            <Divider>{text.automatic}</Divider>
             <Table<FirewallRule>
               size="small"
               rowKey={(rule) => `${rule.source}-${rule.port}-${rule.protocol}`}
@@ -317,7 +317,7 @@ export function FirewallButton({ compact = false }: FirewallButtonProps) {
               scroll={{ x: 520 }}
             />
 
-            <Divider orientation="start">{text.manual}</Divider>
+            <Divider>{text.manual}</Divider>
             <Space wrap>
               <InputNumber
                 min={1}
