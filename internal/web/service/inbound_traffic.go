@@ -193,6 +193,15 @@ func (s *InboundService) addClientTraffic(tx *gorm.DB, traffics []*xray.ClientTr
 		if !ok || (t.Up == 0 && t.Down == 0) {
 			continue
 		}
+		up, down := t.Up, t.Down
+		// Clamp against the stored row before SQL addition. Even a LEAST/MIN
+		// expression can overflow int64 while evaluating col + delta.
+		if remaining := max(int64(0), database.TrafficMax-ct.Up); up > remaining {
+			up = remaining
+		}
+		if remaining := max(int64(0), database.TrafficMax-ct.Down); down > remaining {
+			down = remaining
+		}
 		if err = tx.Exec(
 			fmt.Sprintf(
 				`UPDATE client_traffics SET up = %s, down = %s, last_online = %s WHERE email = ?`,
@@ -200,7 +209,7 @@ func (s *InboundService) addClientTraffic(tx *gorm.DB, traffics []*xray.ClientTr
 				database.ClampedAddExpr("down"),
 				database.GreatestExpr("last_online", "?"),
 			),
-			t.Up, t.Down, now, ct.Email,
+			up, down, now, ct.Email,
 		).Error; err != nil {
 			return fmt.Errorf("update client traffic %s: %w", ct.Email, err)
 		}
