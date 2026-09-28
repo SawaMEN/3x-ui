@@ -8,8 +8,8 @@ import { useInbounds } from '@/pages/inbounds/useInbounds';
 
 import { makeTestQueryClient } from './test-utils';
 
-function seedInbounds() {
-  const rows = [1, 2].map((id) => ({
+function seedInbounds(emails = ['c1@x', 'c2@x']) {
+  const rows = [1, 2].map((id, index) => ({
     id,
     protocol: 'vless',
     tag: `in-${id}`,
@@ -18,9 +18,9 @@ function seedInbounds() {
     down: 20,
     total: 0,
     expiryTime: 0,
-    settings: JSON.stringify({ clients: [{ email: `c${id}@x`, enable: true }] }),
+    settings: JSON.stringify({ clients: [{ email: emails[index], enable: true }] }),
     clientStats: [
-      { email: `c${id}@x`, up: 1, down: 2, total: 0, expiryTime: 0, enable: true, inboundId: id },
+      { email: emails[index], up: 1, down: 2, total: 0, expiryTime: 0, enable: true, inboundId: id },
     ],
   }));
   const queryClient = makeTestQueryClient();
@@ -36,8 +36,8 @@ function seedInbounds() {
   return { rows, wrapper };
 }
 
-async function renderInbounds() {
-  const { rows, wrapper } = seedInbounds();
+async function renderInbounds(emails?: string[]) {
+  const { rows, wrapper } = seedInbounds(emails);
   const hook = renderHook(() => useInbounds(), { wrapper });
   await waitFor(() => expect(hook.result.current.dbInbounds).toHaveLength(2));
   return { rows, result: hook.result };
@@ -103,5 +103,34 @@ describe('inbound websocket merges keep unchanged state', () => {
     act(push);
 
     expect(result.current.clientCount).toBe(rollup);
+  });
+});
+
+describe('inbound online attribution', () => {
+  it('keeps a uniquely-attached connected client online while its inbound is idle', async () => {
+    const { result } = await renderInbounds();
+
+    act(() =>
+      result.current.applyTrafficEvent({
+        onlineByGuid: { '': ['c1@x'] },
+        activeInbounds: { '': [] },
+      }),
+    );
+
+    expect(result.current.clientCount[1]?.online).toEqual(['c1@x']);
+  });
+
+  it('keeps the active-inbound gate when the same email exists on multiple inbounds', async () => {
+    const { result } = await renderInbounds(['shared@x', 'shared@x']);
+
+    act(() =>
+      result.current.applyTrafficEvent({
+        onlineByGuid: { '': ['shared@x'] },
+        activeInbounds: { '': ['in-1'] },
+      }),
+    );
+
+    expect(result.current.clientCount[1]?.online).toEqual(['shared@x']);
+    expect(result.current.clientCount[2]?.online).toEqual([]);
   });
 });
