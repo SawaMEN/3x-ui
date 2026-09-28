@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -355,5 +356,34 @@ func TestNormalizeHiddifyLegacySubscriptionAlias(t *testing.T) {
 	}
 	if len(alias.Domains) != 1 || alias.Domains[0] != "example.com" {
 		t.Fatalf("domains = %#v", alias.Domains)
+	}
+}
+
+func TestHiddifyTwentyUsersImportWithoutInbounds(t *testing.T) {
+	setupBulkDB(t)
+	var users strings.Builder
+	users.WriteString(`{"users":[{"uuid":"00000000-0000-4000-8000-000000000000","name":"default","enable":true,"is_active":true}`)
+	for i := 1; i <= 20; i++ {
+		users.WriteString(fmt.Sprintf(`,{"uuid":"00000000-0000-4000-8000-%012d","name":"User%d","enable":true,"is_active":true}`, i, i))
+	}
+	users.WriteString(`]}`)
+	backup, preview, err := ParseHiddifyBackup(strings.NewReader(users.String()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if preview.Users != 20 || len(preview.UserList) != 20 {
+		t.Fatalf("preview = %d users, %d choices; want 20", preview.Users, len(preview.UserList))
+	}
+	selected := make([]string, 0, len(preview.UserList))
+	for _, user := range preview.UserList {
+		selected = append(selected, user.UUID)
+	}
+	items, err := backup.HiddifyClientsSelected(selected)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, _, err := (&ClientService{}).ImportClients(nil, items)
+	if err != nil || result.Created != 20 || len(result.Skipped) != 0 {
+		t.Fatalf("import = %+v, %v; want 20 created", result, err)
 	}
 }
