@@ -63,6 +63,9 @@ func TestHiddifySubscriptionURLUsesBackupPathAndPublicDomain(t *testing.T) {
 	if got, err := s.HiddifySubscriptionURI(HiddifyLegacySubscriptionAlias{Path: "BackupPath123"}, "http://cdn.example.com:2096"); err != nil || got != "https://cdn.example.com/BackupPath123/" {
 		t.Fatalf("imported URL must use HTTPS on 443: %q, %v", got, err)
 	}
+	if got, err := s.HiddifySubscriptionURI(HiddifyLegacySubscriptionAlias{Path: "BackupPath123"}, "https://cdn.example.com:2096"); err != nil || got != "https://cdn.example.com/BackupPath123/" {
+		t.Fatalf("old HTTPS URL must drop the listener port: %q, %v", got, err)
+	}
 	for _, input := range []string{"https://cdn.example.com/wrong-path", "file://cdn.example.com", "https://user:pass@cdn.example.com"} {
 		if _, err := s.HiddifySubscriptionURI(HiddifyLegacySubscriptionAlias{Path: "SharedPath123"}, input); err == nil {
 			t.Fatalf("accepted invalid public origin %q", input)

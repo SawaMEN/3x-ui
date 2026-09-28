@@ -271,26 +271,6 @@ func (s *SettingService) HiddifySubscriptionURI(alias HiddifyLegacySubscriptionA
 			return "", fmt.Errorf("invalid subscription port")
 		}
 	}
-	// A public HTTPS URL cannot use the panel's plain HTTP subscription
-	// listener. This commonly happens when the old /subs/ URL is copied as
-	// the migration origin instead of the panel's HTTPS origin.
-	if parsed.Scheme == "https" && parsed.Port() != "" {
-		subPort, err := s.GetSubPort()
-		if err != nil {
-			return "", err
-		}
-		cert, err := s.GetSubCertFile()
-		if err != nil {
-			return "", err
-		}
-		key, err := s.GetSubKeyFile()
-		if err != nil {
-			return "", err
-		}
-		if parsed.Port() == strconv.Itoa(subPort) && (cert == "" || key == "") {
-			return "", fmt.Errorf("HTTPS on subscription port %d requires a subscription TLS certificate; use the public panel HTTPS domain without this port", subPort)
-		}
-	}
 	// Migrated links always use the HTTPS vhost on the standard port. The
 	// subscription listener's own port remains the default for other users.
 	host := parsed.Hostname()
