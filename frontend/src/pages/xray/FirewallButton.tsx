@@ -193,9 +193,7 @@ export function FirewallButton({ compact = false }: FirewallButtonProps) {
       title: text.source,
       dataIndex: 'source',
       width: 120,
-      render: (value: string) => (
-        <Typography.Text type="secondary">{value || '—'}</Typography.Text>
-      ),
+      render: (value: string) => <Typography.Text type="secondary">{value || '—'}</Typography.Text>,
     },
   ];
 
@@ -268,9 +266,7 @@ export function FirewallButton({ compact = false }: FirewallButtonProps) {
                 <Switch
                   checked={Boolean(status?.enabled)}
                   disabled={!status?.available || busy}
-                  onChange={(enabled) =>
-                    void mutate('/panel/api/firewall/enable', { enabled })
-                  }
+                  onChange={(enabled) => void mutate('/panel/api/firewall/enable', { enabled })}
                 />
                 <div>
                   <Typography.Text strong>{text.enabled}</Typography.Text>
@@ -285,9 +281,7 @@ export function FirewallButton({ compact = false }: FirewallButtonProps) {
                 <Switch
                   checked={status?.autoSync ?? true}
                   disabled={busy}
-                  onChange={(autoSync) =>
-                    void mutate('/panel/api/firewall/autoSync', { autoSync })
-                  }
+                  onChange={(autoSync) => void mutate('/panel/api/firewall/autoSync', { autoSync })}
                 />
                 <div>
                   <Typography.Text strong>{text.auto}</Typography.Text>
