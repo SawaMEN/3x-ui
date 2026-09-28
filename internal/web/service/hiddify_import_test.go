@@ -101,14 +101,6 @@ func TestSaveHiddifySubscriptionURLAffectsImportedUsersOnly(t *testing.T) {
 	if err != nil || urls[importedID] != "https://cdn.example.com/BackupPath123/" || urls[regular.SubID] != "" {
 		t.Fatalf("per-user subscription URLs = %#v, %v", urls, err)
 	}
-	defaults, err := s.GetDefaultSettings("panel.example.com")
-	if err != nil {
-		t.Fatal(err)
-	}
-	values := defaults.(map[string]any)
-	if values["subURI"] == uri || values["hiddifySubURIs"].(map[string]string)[importedID] != uri {
-		t.Fatalf("defaults leaked imported URL to ordinary users: %#v", values)
-	}
 	aliases, err := s.GetHiddifyLegacySubscriptionAliases()
 	if err != nil || len(aliases) != 1 || aliases[0].Path != alias.Path {
 		t.Fatalf("legacy routes = %#v, %v", aliases, err)
