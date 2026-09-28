@@ -166,7 +166,7 @@ func (a *ServerController) importHiddify(c *gin.Context) {
 			return
 		}
 	}
-	jsonObj(c, gin.H{"created": result.Created, "skipped": result.Skipped, "subscriptionURI": legacyURI}, nil)
+	jsonObj(c, gin.H{"selected": len(items), "created": result.Created, "skipped": result.Skipped, "subscriptionURI": legacyURI}, nil)
 }
 
 // startTask registers the @2s ticker that refreshes server status, samples
