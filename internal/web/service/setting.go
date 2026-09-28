@@ -1215,7 +1215,25 @@ func (s *SettingService) GetIpLimitEnable() (bool, error) {
 func (s *SettingService) GetAccessLogEnable() (bool, error) {
 	accessLogPath, err := xray.GetAccessLogPath()
 	if err != nil {
-		return false, err
+		if !os.IsNotExist(err) {
+			return false, err
+		}
+		// The generated Xray config does not exist until the core starts, and
+		// may never exist when the panel uses sing-box. The stored template is
+		// still available for reporting whether the log viewer is enabled.
+		template, templateErr := s.GetXrayConfigTemplate()
+		if templateErr != nil {
+			return false, templateErr
+		}
+		var cfg struct {
+			Log struct {
+				Access string `json:"access"`
+			} `json:"log"`
+		}
+		if parseErr := json.Unmarshal([]byte(template), &cfg); parseErr != nil {
+			return false, parseErr
+		}
+		accessLogPath = cfg.Log.Access
 	}
 	return (accessLogPath != "none" && accessLogPath != ""), nil
 }
