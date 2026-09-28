@@ -6,7 +6,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 )
@@ -16,28 +15,40 @@ type telemtSubscriptionPayload struct {
 	WebProxy string               `json:"webProxy,omitempty"`
 }
 
-func registerTelemtSubscriptionRoute(g *gin.RouterGroup) {
-	g.GET("/telemt/:subid", serveTelemtSubscription)
+func registerTelemtSubscriptionRoute(g *gin.RouterGroup, subPath string) {
+	// Keep the endpoint next to the configured browser subscription URL so it
+	// continues to work when /sub/ is customized or exposed through a reverse
+	// proxy that only forwards the subscription prefix.
+	path := "/" + strings.Trim(subPath, "/") + "/telemt/:subid"
+	if strings.Trim(subPath, "/") == "" {
+		path = "/telemt/:subid"
+	}
+	g.GET(path, serveTelemtSubscription)
 }
 
 func serveTelemtSubscription(c *gin.Context) {
 	subID := strings.TrimSpace(c.Param("subid"))
-	if subID == "" || database.GetDB() == nil {
+	if subID == "" {
 		c.Status(http.StatusNotFound)
 		return
 	}
 
-	var count int64
-	if err := database.GetDB().Table("clients").Where("sub_id = ?", subID).Count(&count).Error; err != nil || count == 0 {
-		c.Status(http.StatusNotFound)
-		return
-	}
-
-	resolver := NewSubService("").ForRequest("")
+	resolver := NewSubService("")
 	_, host, _, _ := resolver.ResolveRequest(c)
 	host = strings.Trim(strings.TrimSpace(host), "[]")
 	if host == "" {
 		c.Status(http.StatusServiceUnavailable)
+		return
+	}
+
+	// Validate the subscription through the same data path used by the normal
+	// raw/browser subscription instead of depending on a particular DB schema.
+	// This also rejects deleted or never-existing subIds consistently.
+	subReq := resolver.ForRequest(host)
+	subReq.subscriptionBody = false
+	subs, _, _, _, err := subReq.getSubs(subID)
+	if err != nil || subs == nil {
+		writeSubError(c, err)
 		return
 	}
 
