@@ -1,7 +1,9 @@
 package controller
 
 import (
+	"net"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
@@ -45,12 +47,42 @@ func (a *FirewallController) setEnabled(c *gin.Context) {
 		jsonMsg(c, "invalid firewall request", err)
 		return
 	}
+	if form.Enabled {
+		// Preserve the exact public port used for the current authenticated web
+		// session. This covers reverse proxies (443/80) and custom external ports
+		// in addition to the panel's own internal webPort, preventing lockout.
+		if port := currentPanelAccessPort(c); port > 0 {
+			_ = a.firewallService.AddManualRule(service.FirewallPortRule{
+				Port:     port,
+				Protocol: "tcp",
+				Label:    "Current panel access",
+			})
+		}
+	}
 	if err := a.firewallService.SetEnabled(form.Enabled); err != nil {
 		jsonMsg(c, "failed to change firewall state", err)
 		return
 	}
 	status, err := a.firewallService.Status()
 	jsonObj(c, status, err)
+}
+
+func currentPanelAccessPort(c *gin.Context) int {
+	if forwarded := strings.TrimSpace(strings.Split(c.GetHeader("X-Forwarded-Port"), ",")[0]); forwarded != "" {
+		if port, err := strconv.Atoi(forwarded); err == nil && port > 0 && port <= 65535 {
+			return port
+		}
+	}
+	if _, portText, err := net.SplitHostPort(c.Request.Host); err == nil {
+		if port, err := strconv.Atoi(portText); err == nil && port > 0 && port <= 65535 {
+			return port
+		}
+	}
+	proto := strings.ToLower(strings.TrimSpace(strings.Split(c.GetHeader("X-Forwarded-Proto"), ",")[0]))
+	if c.Request.TLS != nil || proto == "https" {
+		return 443
+	}
+	return 80
 }
 
 func (a *FirewallController) setAutoSync(c *gin.Context) {
