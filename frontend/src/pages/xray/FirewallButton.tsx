@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Alert,
@@ -48,9 +48,11 @@ const strings = {
     button: 'Файрволл',
     title: 'Управление файрволлом',
     enabled: 'Файрволл x-ui',
-    enabledDesc: 'Ограничивает входящие подключения и автоматически оставляет доступными только нужные панели порты.',
+    enabledDesc:
+      'Ограничивает входящие подключения и автоматически оставляет доступными только нужные панели порты.',
     auto: 'Автоматическая синхронизация',
-    autoDesc: 'При создании, изменении, включении или удалении подключения набор открытых портов обновляется автоматически.',
+    autoDesc:
+      'При создании, изменении, включении или удалении подключения набор открытых портов обновляется автоматически.',
     backend: 'Backend',
     active: 'Включён',
     inactive: 'Выключен',
@@ -65,9 +67,12 @@ const strings = {
     actions: 'Действия',
     remove: 'Удалить',
     confirmRemove: 'Удалить это правило?',
-    noBackend: 'Не найден поддерживаемый firewall backend. Установите nftables/iptables, UFW или firewalld.',
-    safety: 'Порт панели, порт подписок и SSH добавляются автоматически, чтобы включение файрволла не заблокировало доступ к серверу.',
-    external: 'Обнаружен системный firewall. x-ui управляет только своими правилами и не удаляет правила администратора.',
+    noBackend:
+      'Не найден поддерживаемый firewall backend. Установите nftables/iptables, UFW или firewalld.',
+    safety:
+      'Порт панели, порт подписок и SSH добавляются автоматически, чтобы включение файрволла не заблокировало доступ к серверу.',
+    external:
+      'Обнаружен системный firewall. x-ui управляет только своими правилами и не удаляет правила администратора.',
     loadError: 'Не удалось получить состояние файрволла',
     requestError: 'Операция с файрволлом не выполнена',
     invalidPort: 'Укажите порт от 1 до 65535.',
@@ -78,9 +83,11 @@ const strings = {
     button: 'Firewall',
     title: 'Firewall manager',
     enabled: 'x-ui firewall',
-    enabledDesc: 'Restricts inbound traffic while keeping the ports required by the panel reachable.',
+    enabledDesc:
+      'Restricts inbound traffic while keeping the ports required by the panel reachable.',
     auto: 'Automatic synchronization',
-    autoDesc: 'Creating, editing, enabling or deleting an inbound automatically updates the allowed ports.',
+    autoDesc:
+      'Creating, editing, enabling or deleting an inbound automatically updates the allowed ports.',
     backend: 'Backend',
     active: 'Enabled',
     inactive: 'Disabled',
@@ -95,9 +102,12 @@ const strings = {
     actions: 'Actions',
     remove: 'Delete',
     confirmRemove: 'Delete this rule?',
-    noBackend: 'No supported firewall backend was found. Install nftables/iptables, UFW or firewalld.',
-    safety: 'The panel, subscription and SSH ports are added automatically to avoid locking you out of the server.',
-    external: 'A system firewall is active. x-ui manages only its own rules and does not remove administrator rules.',
+    noBackend:
+      'No supported firewall backend was found. Install nftables/iptables, UFW or firewalld.',
+    safety:
+      'The panel, subscription and SSH ports are added automatically to avoid locking you out of the server.',
+    external:
+      'A system firewall is active. x-ui manages only its own rules and does not remove administrator rules.',
     loadError: 'Failed to load firewall state',
     requestError: 'Firewall operation failed',
     invalidPort: 'Enter a port between 1 and 65535.',
@@ -136,10 +146,6 @@ export function FirewallButton({ compact = false }: FirewallButtonProps) {
       setLoading(false);
     }
   }, [text.loadError]);
-
-  useEffect(() => {
-    if (open) void load();
-  }, [open, load]);
 
   const mutate = useCallback(
     async (url: string, data?: Record<string, unknown>) => {
@@ -187,7 +193,9 @@ export function FirewallButton({ compact = false }: FirewallButtonProps) {
       title: text.source,
       dataIndex: 'source',
       width: 120,
-      render: (value: string) => <Typography.Text type="secondary">{value || '—'}</Typography.Text>,
+      render: (value: string) => (
+        <Typography.Text type="secondary">{value || '—'}</Typography.Text>
+      ),
     },
   ];
 
@@ -228,25 +236,30 @@ export function FirewallButton({ compact = false }: FirewallButtonProps) {
     }
   }
 
+  function openManager() {
+    setOpen(true);
+    void load();
+  }
+
   return (
     <>
-      <Button onClick={() => setOpen(true)}>{compact ? text.button : text.button}</Button>
+      <Button block={compact} onClick={openManager}>
+        {text.button}
+      </Button>
       <Modal
         open={open}
         title={text.title}
         width={860}
         onCancel={() => setOpen(false)}
-        footer={
-          <Button onClick={() => setOpen(false)}>
-            {text.close}
-          </Button>
-        }
+        footer={<Button onClick={() => setOpen(false)}>{text.close}</Button>}
         destroyOnHidden
       >
         <Spin spinning={loading || busy}>
           <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
             {error ? <Alert type="error" showIcon message={error} /> : null}
-            {status && !status.available ? <Alert type="warning" showIcon message={text.noBackend} /> : null}
+            {status && !status.available ? (
+              <Alert type="warning" showIcon message={text.noBackend} />
+            ) : null}
             <Alert type="info" showIcon message={text.safety} />
             {status?.external ? <Alert type="warning" showIcon message={text.external} /> : null}
 
@@ -255,7 +268,9 @@ export function FirewallButton({ compact = false }: FirewallButtonProps) {
                 <Switch
                   checked={Boolean(status?.enabled)}
                   disabled={!status?.available || busy}
-                  onChange={(enabled) => void mutate('/panel/api/firewall/enable', { enabled })}
+                  onChange={(enabled) =>
+                    void mutate('/panel/api/firewall/enable', { enabled })
+                  }
                 />
                 <div>
                   <Typography.Text strong>{text.enabled}</Typography.Text>
@@ -270,7 +285,9 @@ export function FirewallButton({ compact = false }: FirewallButtonProps) {
                 <Switch
                   checked={status?.autoSync ?? true}
                   disabled={busy}
-                  onChange={(autoSync) => void mutate('/panel/api/firewall/autoSync', { autoSync })}
+                  onChange={(autoSync) =>
+                    void mutate('/panel/api/firewall/autoSync', { autoSync })
+                  }
                 />
                 <div>
                   <Typography.Text strong>{text.auto}</Typography.Text>
