@@ -1,0 +1,86 @@
+name: Apply Hiddify subscription routing patch
+
+on:
+  push:
+    branches:
+      - up
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: up
+          fetch-depth: 0
+
+      - name: Route legacy Hiddify aliases through the panel
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('internal/web/service/telemt_webproxy.go')
+          source = path.read_text()
+          start = source.index('// The Telemt WEB vhost normally sends every URL to its decoy backend.')
+          end = source.index('\nfunc renderTelemtWebSubscriptionLocations', start)
+          replacement = '''// The Telemt WEB vhost normally sends every URL to its decoy backend. Imported
+          // Hiddify subscription paths are resolved by the panel router's NoRoute handler,
+          // so proxy them to the panel instead of the subscription listener. This keeps
+          // exported Hiddify URLs independent of the configured subscription port.
+          func telemtWebSubscriptionLocations(s *SettingService) (string, error) {
+          \taliases, err := s.GetHiddifyLegacySubscriptionAliases()
+          \tif err != nil || len(aliases) == 0 {
+          \t\treturn "", err
+          \t}
+          \tport, err := s.GetPort()
+          \tif err != nil {
+          \t\treturn "", err
+          \t}
+          \tlisten, err := s.GetListen()
+          \tif err != nil {
+          \t\treturn "", err
+          \t}
+          \tif listen == "" || listen == "0.0.0.0" {
+          \t\tlisten = "127.0.0.1"
+          \t} else if listen == "::" {
+          \t\tlisten = "::1"
+          \t} else if net.ParseIP(listen) == nil {
+          \t\treturn "", fmt.Errorf("invalid panel listen address %q for Telemt WEB proxy", listen)
+          \t}
+          \tcert, err := s.GetCertFile()
+          \tif err != nil {
+          \t\treturn "", err
+          \t}
+          \tkey, err := s.GetKeyFile()
+          \tif err != nil {
+          \t\treturn "", err
+          \t}
+          \tscheme := "http"
+          \tif cert != "" && key != "" {
+          \t\tscheme = "https"
+          \t}
+          \treturn renderTelemtWebSubscriptionLocations(aliases, scheme+"://"+net.JoinHostPort(listen, fmt.Sprint(port))), nil
+          }
+          '''
+          path.write_text(source[:start] + replacement + source[end:])
+          PY
+          gofmt -w internal/web/service/telemt_webproxy.go
+
+      - name: Verify package compiles
+        shell: bash
+        run: go test ./internal/web/service
+
+      - name: Commit patch and remove temporary workflow
+        shell: bash
+        run: |
+          git rm .github/workflows/patch-hiddify-subscriptions.yml
+          git add internal/web/service/telemt_webproxy.go
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "fix: decouple Hiddify subscriptions from sub port"
+          git push origin HEAD:up
