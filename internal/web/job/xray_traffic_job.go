@@ -75,17 +75,27 @@ func (j *XrayTrafficJob) Run() {
 	if !j.xrayService.IsXrayRunning() {
 		return
 	}
-	traffics, clientTraffics, err := j.xrayService.GetXrayTraffic()
+
+	// Keep the Xray delta baseline unacknowledged until inbound, client and
+	// outbound counters are durably committed together. On a DB failure the
+	// baseline is restored, so the same bytes are included in the next poll
+	// instead of being lost permanently.
+	traffics, clientTraffics, trafficRead, err := j.xrayService.BeginXrayTrafficRead()
 	if err != nil {
 		return
 	}
-	needRestart0, clientsDisabled, err := j.inboundService.AddTraffic(traffics, clientTraffics)
-	if err != nil {
-		logger.Warning("add inbound traffic failed:", err)
+	if err := j.inboundService.CommitXrayTraffic(traffics, clientTraffics); err != nil {
+		trafficRead.Rollback()
+		logger.Warning("commit xray traffic failed; delta will be retried:", err)
+		return
 	}
-	err, needRestart1 := j.outboundService.AddTraffic(traffics, clientTraffics)
+	trafficRead.Commit()
+
+	// Traffic itself is already durable. Run quota/expiry lifecycle maintenance
+	// without writing the counters a second time.
+	needRestart0, clientsDisabled, err := j.inboundService.AddTraffic(nil, nil)
 	if err != nil {
-		logger.Warning("add outbound traffic failed:", err)
+		logger.Warning("traffic lifecycle maintenance failed:", err)
 	}
 	if clientsDisabled {
 		restartOnDisable, settingErr := j.settingService.GetRestartXrayOnClientDisable()
@@ -105,7 +115,7 @@ func (j *XrayTrafficJob) Run() {
 	} else if err != nil {
 		logger.Warning("get ExternalTrafficInformEnable failed:", err)
 	}
-	if needRestart0 || needRestart1 {
+	if needRestart0 {
 		j.xrayService.SetToNeedRestart()
 	}
 
