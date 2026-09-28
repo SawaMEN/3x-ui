@@ -14,17 +14,25 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
+const telemtSubscriptionUserPrefix = "sub_"
+
 var telemtSubscriptionProfileMu sync.Mutex
 
 // telemtSubscriptionUsername maps a subscription identifier to a stable Telemt
 // username without exposing the subscription token itself in telemt.toml.
 func telemtSubscriptionUsername(subID string) string {
 	sum := sha256.Sum256([]byte(strings.TrimSpace(subID)))
-	return "sub_" + hex.EncodeToString(sum[:12])
+	return telemtSubscriptionUserPrefix + hex.EncodeToString(sum[:12])
+}
+
+func isTelemtSubscriptionUsername(username string) bool {
+	return strings.HasPrefix(strings.TrimSpace(username), telemtSubscriptionUserPrefix)
 }
 
 // EnsureSubscriptionProxy returns the stable Telemt proxy assigned to subID,
 // creating it on first use. Repeated calls keep the same username and secret.
+// It never starts a stopped Telemt service: opening a public subscription page
+// must not override the administrator's explicit service state.
 func (TelemtService) EnsureSubscriptionProxy(subID, host string) (TelemtProxy, error) {
 	subID = strings.TrimSpace(subID)
 	host = strings.TrimSpace(host)
@@ -41,6 +49,9 @@ func (TelemtService) EnsureSubscriptionProxy(subID, host string) (TelemtProxy, e
 	telemtSubscriptionProfileMu.Lock()
 	defer telemtSubscriptionProfileMu.Unlock()
 
+	if systemctl("is-active", "--quiet", telemtServiceName) != nil {
+		return TelemtProxy{}, errors.New("telemt: service is not active")
+	}
 	if err := ensureTelemtConfig(); err != nil {
 		return TelemtProxy{}, err
 	}
@@ -106,19 +117,10 @@ func (TelemtService) EnsureSubscriptionProxy(subID, host string) (TelemtProxy, e
 			rollback()
 			return TelemtProxy{}, err
 		}
-		if systemctl("is-active", "--quiet", telemtServiceName) == nil {
-			if err := systemctl("restart", telemtServiceName); err != nil {
-				rollback()
-				_ = systemctl("restart", telemtServiceName)
-				return TelemtProxy{}, fmt.Errorf("telemt: subscription profile was rejected: %w", err)
-			}
-		} else if err := systemctl("start", telemtServiceName); err != nil {
+		if err := systemctl("restart", telemtServiceName); err != nil {
 			rollback()
-			return TelemtProxy{}, fmt.Errorf("telemt: failed to start service: %w", err)
-		}
-	} else if systemctl("is-active", "--quiet", telemtServiceName) != nil {
-		if err := systemctl("start", telemtServiceName); err != nil {
-			return TelemtProxy{}, fmt.Errorf("telemt: failed to start service: %w", err)
+			_ = systemctl("restart", telemtServiceName)
+			return TelemtProxy{}, fmt.Errorf("telemt: subscription profile was rejected: %w", err)
 		}
 	}
 
