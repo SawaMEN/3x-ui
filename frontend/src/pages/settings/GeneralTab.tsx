@@ -105,6 +105,7 @@ export default function GeneralTab({
   const [hiddifySelected, setHiddifySelected] = useState<string[]>([]);
   const [hiddifyResult, setHiddifyResult] = useState<{
     created: number;
+    selected: number;
     skipped: { email: string; reason: string }[];
   } | null>(null);
   const [hiddifyBusy, setHiddifyBusy] = useState(false);
@@ -122,6 +123,7 @@ export default function GeneralTab({
       warnings?: string[];
       created?: number;
       skipped?: unknown[];
+      selected?: number;
       subscriptionURI?: string;
     }>(`/panel/api/server/hiddify/${action}`, form, { silentSuccess: true });
   };
@@ -156,7 +158,11 @@ export default function GeneralTab({
       if (result.success) {
         const skipped = (result.obj?.skipped ?? []) as { email: string; reason: string }[];
         const created = result.obj?.created ?? 0;
-        setHiddifyResult({ created, skipped });
+        setHiddifyResult({
+          created,
+          selected: result.obj?.selected ?? hiddifySelected.length,
+          skipped,
+        });
         void queryClient.invalidateQueries({ queryKey: keys.settings.defaults() });
         void queryClient.invalidateQueries({ queryKey: keys.clients.root() });
         if (result.obj?.subscriptionURI) {
@@ -164,10 +170,6 @@ export default function GeneralTab({
         }
         if (skipped.length === 0) {
           message.success(`Импортировано пользователей: ${created}.`);
-          setHiddifyOpen(false);
-          setHiddifyFile(null);
-          setHiddifyPreview(null);
-          setHiddifySelected([]);
         }
       }
     } finally {
@@ -1129,12 +1131,12 @@ export default function GeneralTab({
             </div>
           </>
         )}
-        {hiddifyResult && hiddifyResult.skipped.length > 0 && (
+        {hiddifyResult && (
           <Alert
             style={{ marginTop: 12 }}
-            type="warning"
+            type={hiddifyResult.skipped.length ? 'warning' : 'success'}
             showIcon
-            message={`Добавлено: ${hiddifyResult.created}. Пропущено: ${hiddifyResult.skipped.length}.`}
+            message={`Выбрано: ${hiddifyResult.selected}. Добавлено: ${hiddifyResult.created}. Пропущено: ${hiddifyResult.skipped.length}.`}
             description={hiddifyResult.skipped.map((item) => (
               <div key={item.email}>
                 {item.email}: {item.reason}
