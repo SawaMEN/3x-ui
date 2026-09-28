@@ -1,0 +1,124 @@
+package controller
+
+import (
+	"net"
+	"strconv"
+	"strings"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
+
+	"github.com/gin-gonic/gin"
+)
+
+// FirewallController exposes host-firewall management next to the proxy-core
+// controls. It is mounted under /panel/api/server/firewall and therefore uses
+// the panel's normal session/API authentication and CSRF protection.
+type FirewallController struct {
+	firewallService service.FirewallService
+}
+
+func NewFirewallController(g *gin.RouterGroup) *FirewallController {
+	a := &FirewallController{}
+	a.initRouter(g.Group("/firewall"))
+	return a
+}
+
+func (a *FirewallController) initRouter(g *gin.RouterGroup) {
+	g.GET("/status", a.status)
+	g.POST("/enabled", a.setEnabled)
+	g.POST("/auto-sync", a.setAutoSync)
+	g.POST("/sync", a.sync)
+	g.POST("/rules/add", a.addRule)
+	g.POST("/rules/delete", a.deleteRule)
+}
+
+func (a *FirewallController) status(c *gin.Context) {
+	status, err := a.firewallService.GetStatus(c.Request.Context(), firewallSafetyPort(c))
+	jsonObj(c, status, err)
+}
+
+func (a *FirewallController) setEnabled(c *gin.Context) {
+	var req struct {
+		Enabled bool `json:"enabled" form:"enabled"`
+	}
+	if err := c.ShouldBind(&req); err != nil {
+		jsonMsg(c, "invalid firewall state", err)
+		return
+	}
+	status, err := a.firewallService.SetEnabled(c.Request.Context(), req.Enabled, firewallSafetyPort(c))
+	jsonObj(c, status, err)
+}
+
+func (a *FirewallController) setAutoSync(c *gin.Context) {
+	var req struct {
+		Enabled bool `json:"enabled" form:"enabled"`
+	}
+	if err := c.ShouldBind(&req); err != nil {
+		jsonMsg(c, "invalid firewall auto-sync state", err)
+		return
+	}
+	status, err := a.firewallService.SetAutoSync(c.Request.Context(), req.Enabled, firewallSafetyPort(c))
+	jsonObj(c, status, err)
+}
+
+func (a *FirewallController) sync(c *gin.Context) {
+	status, err := a.firewallService.Sync(c.Request.Context(), firewallSafetyPort(c))
+	jsonObj(c, status, err)
+}
+
+func (a *FirewallController) addRule(c *gin.Context) {
+	var req struct {
+		Port     int    `json:"port" form:"port"`
+		Protocol string `json:"protocol" form:"protocol"`
+	}
+	if err := c.ShouldBind(&req); err != nil {
+		jsonMsg(c, "invalid firewall rule", err)
+		return
+	}
+	status, err := a.firewallService.AddManualRule(c.Request.Context(), req.Port, req.Protocol, firewallSafetyPort(c))
+	jsonObj(c, status, err)
+}
+
+func (a *FirewallController) deleteRule(c *gin.Context) {
+	var req struct {
+		Port     int    `json:"port" form:"port"`
+		Protocol string `json:"protocol" form:"protocol"`
+	}
+	if err := c.ShouldBind(&req); err != nil {
+		jsonMsg(c, "invalid firewall rule", err)
+		return
+	}
+	status, err := a.firewallService.DeleteManualRule(c.Request.Context(), req.Port, req.Protocol, firewallSafetyPort(c))
+	jsonObj(c, status, err)
+}
+
+// firewallSafetyPort protects the very HTTP(S) port from which the operator is
+// enabling the firewall, including a trusted reverse proxy's external port.
+// This supplements the persisted panel/subscription/SSH ports collected by the
+// service and prevents the toggle itself from locking the current panel out.
+func firewallSafetyPort(c *gin.Context) int {
+	if isTrustedForwardedRequest(c) {
+		if raw := strings.TrimSpace(strings.Split(c.GetHeader("X-Forwarded-Port"), ",")[0]); raw != "" {
+			if port, err := strconv.Atoi(raw); err == nil && port >= 1 && port <= 65535 {
+				return port
+			}
+		}
+	}
+	if _, raw, err := net.SplitHostPort(c.Request.Host); err == nil {
+		if port, err := strconv.Atoi(raw); err == nil && port >= 1 && port <= 65535 {
+			return port
+		}
+	}
+	if isTrustedForwardedRequest(c) {
+		switch strings.ToLower(strings.TrimSpace(strings.Split(c.GetHeader("X-Forwarded-Proto"), ",")[0])) {
+		case "https":
+			return 443
+		case "http":
+			return 80
+		}
+	}
+	if c.Request.TLS != nil {
+		return 443
+	}
+	return 0
+}
