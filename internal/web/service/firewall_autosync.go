@@ -114,6 +114,10 @@ func (s *FirewallService) StartAutoSync() {
 				firewallMu.Lock()
 				defer firewallMu.Unlock()
 
+				if err := migrateManagedBackendIfNeededLocked(ctx); err != nil {
+					logger.Debug("firewall backend migration failed:", err)
+					return
+				}
 				backend, err := detectManagedFirewallBackend(ctx)
 				if err != nil {
 					return
