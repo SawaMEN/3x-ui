@@ -152,7 +152,11 @@ export function FirewallModal({ open, onClose }: Props) {
     setAction(key);
     try {
       const msg = await HttpUtil.post<FirewallStatus>(path, data, { silentSuccess: true });
-      if (msg.success && msg.obj) setStatus(msg.obj);
+      if (msg.success && msg.obj) {
+        setStatus(msg.obj);
+        return true;
+      }
+      return false;
     } finally {
       setAction('');
     }
@@ -341,7 +345,9 @@ export function FirewallModal({ open, onClose }: Props) {
               onClick={() => {
                 if (!port) return;
                 void post('/panel/api/server/firewall/rules/add', { port, protocol }, 'add').then(
-                  () => setPort(null),
+                  (success) => {
+                    if (success) setPort(null);
+                  },
                 );
               }}
             >
