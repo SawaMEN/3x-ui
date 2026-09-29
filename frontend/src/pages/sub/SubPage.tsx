@@ -19,7 +19,7 @@ import SubConfigsTab from './SubConfigsTab';
 import SubHeader from './SubHeader';
 import SubHero from './SubHero';
 import SubLinksTab from './SubLinksTab';
-import { buildSubApps, daysUntil, detectPlatform, resolveSubStatus } from './subPageModel';
+import { buildSubApps, buildTelemtEndpoint, daysUntil, detectPlatform, resolveSubStatus } from './subPageModel';
 import './SubPage.css';
 
 const subData = window.__SUB_PAGE_DATA__ || {};
@@ -53,24 +53,6 @@ type TelemtSubscriptionData = {
   personal?: TelemtProxyProfile;
   webProxy?: string;
 };
-
-function buildTelemtEndpoint(): string {
-  if (!sId) return '';
-  try {
-    // The page is already being served by the reachable subscription host.
-    // Its embedded public URL can still contain a previously configured port.
-    const endpoint = new URL(window.location.href);
-    endpoint.search = '';
-    endpoint.hash = '';
-    const segments = endpoint.pathname.split('/').filter(Boolean);
-    if (segments.length > 0) segments.pop();
-    segments.push('telemt', sId);
-    endpoint.pathname = `/${segments.map((part) => encodeURIComponent(decodeURIComponent(part))).join('/')}`;
-    return endpoint.toString();
-  } catch {
-    return '';
-  }
-}
 
 const heroData = {
   status: resolveSubStatus({ enabled: !!subData.enabled, usedByte, totalByte, expireMs }, loadedAt),
@@ -119,7 +101,7 @@ export default function SubPage() {
   const [telemtData, setTelemtData] = useState<TelemtSubscriptionData>({});
 
   useEffect(() => {
-    const endpoint = buildTelemtEndpoint();
+    const endpoint = buildTelemtEndpoint(window.location.href, sId);
     if (!endpoint) return;
     const controller = new AbortController();
     void fetch(endpoint, {
