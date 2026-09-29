@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"encoding/json"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -17,7 +18,7 @@ func TestRemoteRestartXrayUsesCoreAwareEndpoint(t *testing.T) {
 		gotMethod = r.Method
 		gotPath = r.URL.Path
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"success":true,"msg":"","obj":null}`))
+		_ = json.NewEncoder(w).Encode(map[string]any{"success": true, "msg": "", "obj": nil})
 	}))
 	defer server.Close()
 
