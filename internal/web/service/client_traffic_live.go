@@ -1,6 +1,7 @@
 package service
 
 import (
+	"math"
 	"sync"
 	"time"
 
@@ -58,8 +59,8 @@ func normalizeClientTrafficDelta(delta, elapsedMs int64) int64 {
 	// metric, while the durable counters remain exact int64 values in the DB.
 	// Clamp before conversion so a very short interval cannot overflow int64.
 	normalized := float64(delta) * float64(clientTrafficLiveSpeedWindowMillis) / float64(elapsedMs)
-	if normalized >= float64(database.TrafficMax) {
-		return database.TrafficMax
+	if normalized >= float64(math.MaxInt64) {
+		return math.MaxInt64
 	}
 	if normalized < 1 {
 		return 0
