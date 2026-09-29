@@ -282,7 +282,7 @@ func translateCompatPorts(dst map[string]any, field string, value any) error {
 		}
 		end, err := strconv.ParseUint(strings.TrimSpace(hi), 10, 16)
 		if err != nil || end < start {
-			return nil, fmt.Errorf("invalid port range %q", part)
+			return fmt.Errorf("invalid port range %q", part)
 		}
 		ranges = append(ranges, fmt.Sprintf("%d:%d", start, end))
 	}
