@@ -2,6 +2,7 @@ package controller
 
 import (
 	"net"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -34,7 +35,7 @@ func (a *FirewallController) initRouter(g *gin.RouterGroup) {
 }
 
 func (a *FirewallController) status(c *gin.Context) {
-	status, err := a.firewallService.GetStatus(c.Request.Context(), firewallSafetyPort(c))
+	status, err := a.firewallService.GetManagedStatus(c.Request.Context(), firewallSafetyPort(c))
 	jsonObj(c, status, err)
 }
 
@@ -61,7 +62,7 @@ func (a *FirewallController) setEnabled(c *gin.Context) {
 	if !a.initializeControl(c) {
 		return
 	}
-	status, err := a.firewallService.SetEnabled(c.Request.Context(), req.Enabled, firewallSafetyPort(c))
+	status, err := a.firewallService.SetManagedEnabled(c.Request.Context(), req.Enabled, firewallSafetyPort(c))
 	jsonObj(c, status, err)
 }
 
@@ -76,7 +77,7 @@ func (a *FirewallController) setAutoSync(c *gin.Context) {
 	if !a.initializeControl(c) {
 		return
 	}
-	status, err := a.firewallService.SetAutoSyncPreference(c.Request.Context(), req.Enabled, firewallSafetyPort(c))
+	status, err := a.firewallService.SetManagedAutoSyncPreference(c.Request.Context(), req.Enabled, firewallSafetyPort(c))
 	jsonObj(c, status, err)
 }
 
@@ -84,7 +85,7 @@ func (a *FirewallController) sync(c *gin.Context) {
 	if !a.initializeControl(c) {
 		return
 	}
-	status, err := a.firewallService.Sync(c.Request.Context(), firewallSafetyPort(c))
+	status, err := a.firewallService.SyncManaged(c.Request.Context(), firewallSafetyPort(c))
 	jsonObj(c, status, err)
 }
 
@@ -92,6 +93,7 @@ func (a *FirewallController) addRule(c *gin.Context) {
 	var req struct {
 		Port     int    `json:"port" form:"port"`
 		Protocol string `json:"protocol" form:"protocol"`
+		Label    string `json:"label" form:"label"`
 	}
 	if err := c.ShouldBind(&req); err != nil {
 		jsonMsg(c, "invalid firewall rule", err)
@@ -100,7 +102,7 @@ func (a *FirewallController) addRule(c *gin.Context) {
 	if !a.initializeControl(c) {
 		return
 	}
-	status, err := a.firewallService.AddManualRule(c.Request.Context(), req.Port, req.Protocol, firewallSafetyPort(c))
+	status, err := a.firewallService.AddManagedManualRule(c.Request.Context(), req.Port, req.Protocol, req.Label, firewallSafetyPort(c))
 	jsonObj(c, status, err)
 }
 
@@ -116,8 +118,24 @@ func (a *FirewallController) deleteRule(c *gin.Context) {
 	if !a.initializeControl(c) {
 		return
 	}
-	status, err := a.firewallService.DeleteManualRule(c.Request.Context(), req.Port, req.Protocol, firewallSafetyPort(c))
+	status, err := a.firewallService.DeleteManagedManualRule(c.Request.Context(), req.Port, req.Protocol, firewallSafetyPort(c))
 	jsonObj(c, status, err)
+}
+
+// firewallAutoSyncMiddleware coalesces successful inbound mutation requests
+// into an immediate firewall reconcile. The periodic worker remains a safety
+// net for imports and future mutation paths that bypass this API group.
+func firewallAutoSyncMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Next()
+		if c.Request.Method != http.MethodPost {
+			return
+		}
+		path := c.FullPath()
+		if strings.Contains(path, "/panel/api/inbounds/") {
+			service.TriggerFirewallSync()
+		}
+	}
 }
 
 // firewallSafetyPort protects the very HTTP(S) port from which the operator is
