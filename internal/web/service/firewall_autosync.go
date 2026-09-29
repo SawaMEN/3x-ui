@@ -109,8 +109,16 @@ func (s *FirewallService) StartAutoSync() {
 				if err != nil || !auto {
 					return
 				}
+
 				ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 				defer cancel()
+
+				// Serialize command execution with interactive firewall actions. The
+				// private sync path avoids the public Sync method's second backend
+				// detection and full status rebuild, which were wasted every 5 seconds.
+				firewallMu.Lock()
+				defer firewallMu.Unlock()
+
 				backend, err := detectFirewallBackend(ctx)
 				if err != nil {
 					return
@@ -119,7 +127,7 @@ func (s *FirewallService) StartAutoSync() {
 				if err != nil || !on {
 					return
 				}
-				if _, err := s.Sync(ctx, rememberedFirewallSafetyPort()); err != nil {
+				if err := s.sync(ctx, backend, rememberedFirewallSafetyPort()); err != nil {
 					logger.Debug("firewall auto-sync failed:", err)
 				}
 			}
