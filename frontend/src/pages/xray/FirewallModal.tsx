@@ -3,6 +3,7 @@ import {
   Alert,
   Button,
   Divider,
+  Input,
   InputNumber,
   Modal,
   Popconfirm,
@@ -30,6 +31,7 @@ type FirewallRule = {
 type FirewallManualRule = {
   port: number;
   protocol: 'tcp' | 'udp' | string;
+  label?: string;
 };
 
 type FirewallStatus = {
@@ -66,7 +68,8 @@ export function FirewallModal({ open, onClose }: Props) {
         ? {
             title: 'Управление файрволлом',
             loading: 'Получение состояния файрволла…',
-            unsupported: 'Поддерживаемый файрволл не найден. Установите UFW или firewalld.',
+            unsupported:
+              'Поддерживаемый файрволл не найден. Установите UFW, firewalld, nftables или iptables.',
             enabled: 'Файрволл включён',
             disabled: 'Файрволл выключен',
             auto: 'Автоматически открывать и закрывать порты подключений',
@@ -80,6 +83,8 @@ export function FirewallModal({ open, onClose }: Props) {
             add: 'Добавить',
             port: 'Порт',
             protocol: 'Протокол',
+            label: 'Описание',
+            labelPlaceholder: 'Например: DNS, мониторинг, игровой сервер',
             source: 'Назначение',
             state: 'Состояние',
             open: 'Открыт',
@@ -99,7 +104,8 @@ export function FirewallModal({ open, onClose }: Props) {
         : {
             title: 'Firewall management',
             loading: 'Loading firewall status…',
-            unsupported: 'No supported firewall found. Install UFW or firewalld.',
+            unsupported:
+              'No supported firewall found. Install UFW, firewalld, nftables, or iptables.',
             enabled: 'Firewall enabled',
             disabled: 'Firewall disabled',
             auto: 'Automatically open and close inbound ports',
@@ -113,6 +119,8 @@ export function FirewallModal({ open, onClose }: Props) {
             add: 'Add',
             port: 'Port',
             protocol: 'Protocol',
+            label: 'Description',
+            labelPlaceholder: 'For example: DNS, monitoring, game server',
             source: 'Purpose',
             state: 'State',
             open: 'Open',
@@ -137,6 +145,7 @@ export function FirewallModal({ open, onClose }: Props) {
   const [action, setAction] = useState('');
   const [port, setPort] = useState<number | null>(null);
   const [protocol, setProtocol] = useState('both');
+  const [label, setLabel] = useState('');
 
   async function refresh() {
     setLoading(true);
@@ -221,6 +230,12 @@ export function FirewallModal({ open, onClose }: Props) {
       render: (value: string) => <Tag>{value.toUpperCase()}</Tag>,
     },
     {
+      title: text.label,
+      dataIndex: 'label',
+      ellipsis: true,
+      render: (value?: string) => value || '—',
+    },
+    {
       title: '',
       key: 'delete',
       align: 'right' as const,
@@ -254,7 +269,7 @@ export function FirewallModal({ open, onClose }: Props) {
       }}
       footer={null}
       title={text.title}
-      width={860}
+      width={900}
     >
       {!status ? (
         <Typography.Text type="secondary">{text.loading}</Typography.Text>
@@ -338,17 +353,29 @@ export function FirewallModal({ open, onClose }: Props) {
                 { value: 'udp', label: 'UDP' },
               ]}
             />
+            <Input
+              value={label}
+              maxLength={120}
+              placeholder={text.labelPlaceholder}
+              onChange={(event) => setLabel(event.target.value)}
+              style={{ width: 290 }}
+            />
             <Button
               type="primary"
               disabled={!port}
               loading={action === 'add'}
               onClick={() => {
                 if (!port) return;
-                void post('/panel/api/server/firewall/rules/add', { port, protocol }, 'add').then(
-                  (success) => {
-                    if (success) setPort(null);
-                  },
-                );
+                void post(
+                  '/panel/api/server/firewall/rules/add',
+                  { port, protocol, label },
+                  'add',
+                ).then((success) => {
+                  if (success) {
+                    setPort(null);
+                    setLabel('');
+                  }
+                });
               }}
             >
               {text.add}
