@@ -23,7 +23,7 @@ const telemtSubscriptionUserPrefix = "sub_"
 
 var (
 	telemtSubscriptionProfileMu         sync.Mutex
-	errTelemtSubscriptionAPIUnsupported = errors.New("telemt: user create API is unavailable")
+	errTelemtSubscriptionAPIUnsupported = errors.New("telemt: users API is unavailable")
 )
 
 // telemtSubscriptionUsername maps a subscription identifier to a stable Telemt
@@ -34,7 +34,12 @@ func telemtSubscriptionUsername(subID string) string {
 }
 
 func isTelemtSubscriptionUsername(username string) bool {
-	return strings.HasPrefix(strings.TrimSpace(username), telemtSubscriptionUserPrefix)
+	username = strings.TrimSpace(username)
+	if !strings.HasPrefix(username, telemtSubscriptionUserPrefix) || len(username) != len(telemtSubscriptionUserPrefix)+24 {
+		return false
+	}
+	_, err := hex.DecodeString(username[len(telemtSubscriptionUserPrefix):])
+	return err == nil
 }
 
 // EnsureSubscriptionProxy returns the stable Telemt proxy assigned to subID,
@@ -128,6 +133,38 @@ func (TelemtService) EnsureSubscriptionProxy(subID, host string) (TelemtProxy, e
 	}, nil
 }
 
+// DeleteSubscriptionProxy revokes the deterministic Telemt user assigned to a
+// subscription. It never starts a stopped Telemt service. When the users API is
+// unavailable, it removes the account from telemt.toml directly and only
+// restarts Telemt when the service was already active.
+func (TelemtService) DeleteSubscriptionProxy(subID string) error {
+	subID = strings.TrimSpace(subID)
+	if subID == "" {
+		return nil
+	}
+
+	telemtSubscriptionProfileMu.Lock()
+	defer telemtSubscriptionProfileMu.Unlock()
+
+	username := telemtSubscriptionUsername(subID)
+	active := systemctl("is-active", "--quiet", telemtServiceName) == nil
+	var apiErr error
+	if active {
+		apiErr = deleteTelemtSubscriptionUser(username)
+		if apiErr == nil {
+			return nil
+		}
+	}
+
+	if err := deleteTelemtSubscriptionUserLegacy(username, active); err != nil {
+		if apiErr != nil {
+			return fmt.Errorf("telemt: revoke subscription user via API (%v) and config fallback: %w", apiErr, err)
+		}
+		return err
+	}
+	return nil
+}
+
 // createTelemtSubscriptionUser uses Telemt's users API when available. Modern
 // Telemt versions update access.users atomically and apply runtime admission
 // without restarting the whole proxy process.
@@ -169,6 +206,33 @@ func createTelemtSubscriptionUser(username, secret string) error {
 	return fmt.Errorf("telemt: create subscription user: HTTP %d", resp.StatusCode)
 }
 
+func deleteTelemtSubscriptionUser(username string) error {
+	req, err := http.NewRequest(http.MethodDelete, "http://127.0.0.1:9091/v1/users/"+url.PathEscape(username), nil)
+	if err != nil {
+		return fmt.Errorf("telemt: delete subscription user request: %w", err)
+	}
+	resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
+	if err != nil {
+		return fmt.Errorf("telemt: delete subscription user: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return nil
+	}
+	// A 404 can mean either that the user is already gone or that an older
+	// Telemt build does not expose the users endpoint. The config fallback is
+	// idempotent, so let the caller use it in both cases.
+	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusMethodNotAllowed {
+		return errTelemtSubscriptionAPIUnsupported
+	}
+	message, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<10))
+	if detail := strings.TrimSpace(string(message)); detail != "" {
+		return fmt.Errorf("telemt: delete subscription user: HTTP %d: %s", resp.StatusCode, detail)
+	}
+	return fmt.Errorf("telemt: delete subscription user: HTTP %d", resp.StatusCode)
+}
+
 // createTelemtSubscriptionUserLegacy keeps compatibility with Telemt builds
 // predating POST /v1/users. The service is already known to be active; this
 // fallback rewrites only access.users and restarts with rollback on failure.
@@ -201,6 +265,60 @@ func createTelemtSubscriptionUserLegacy(original []byte, username, secret string
 		rollback()
 		_ = systemctl("restart", telemtServiceName)
 		return fmt.Errorf("telemt: subscription profile was rejected: %w", err)
+	}
+	return nil
+}
+
+func deleteTelemtSubscriptionUserLegacy(username string, restart bool) error {
+	original, err := os.ReadFile(telemtConfigPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("telemt: read config while revoking subscription user: %w", err)
+	}
+
+	var raw struct {
+		Access struct {
+			Users map[string]string `toml:"users"`
+		} `toml:"access"`
+	}
+	if err := toml.Unmarshal(original, &raw); err != nil {
+		return fmt.Errorf("telemt: parse config while revoking subscription user: %w", err)
+	}
+	if _, exists := raw.Access.Users[username]; !exists {
+		return nil
+	}
+
+	lines := strings.SplitAfter(string(original), "\n")
+	inUsers := false
+	removed := false
+	out := make([]string, 0, len(lines))
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(strings.TrimSuffix(line, "\n"))
+		if strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]") {
+			inUsers = trimmed == "[access.users]"
+		}
+		if inUsers {
+			if eq := strings.Index(trimmed, "="); eq >= 0 && strings.TrimSpace(trimmed[:eq]) == username {
+				removed = true
+				continue
+			}
+		}
+		out = append(out, line)
+	}
+	if !removed {
+		return fmt.Errorf("telemt: subscription user %q exists in parsed config but its TOML entry was not found", username)
+	}
+
+	if err := os.WriteFile(telemtConfigPath, []byte(strings.Join(out, "")), 0o600); err != nil {
+		return fmt.Errorf("telemt: persist revoked subscription user: %w", err)
+	}
+	if !restart {
+		return nil
+	}
+	if err := systemctl("restart", telemtServiceName); err != nil {
+		return fmt.Errorf("telemt: restart after revoking subscription user: %w", err)
 	}
 	return nil
 }
