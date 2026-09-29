@@ -210,7 +210,7 @@ func TranslateXrayRoutingWithGeoData(raw map[string]any, store *geodata.Store) (
 	return out, nil
 }
 
-const maxRoutingGeoEntries = 100000
+const maxRoutingGeoEntries = 500000
 
 func isGeoToken(value, prefix string) bool {
 	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(value)), prefix)
@@ -282,7 +282,7 @@ func translateCompatPorts(dst map[string]any, field string, value any) error {
 		}
 		end, err := strconv.ParseUint(strings.TrimSpace(hi), 10, 16)
 		if err != nil || end < start {
-			return fmt.Errorf("invalid port range %q", part)
+			return nil, fmt.Errorf("invalid port range %q", part)
 		}
 		ranges = append(ranges, fmt.Sprintf("%d:%d", start, end))
 	}
