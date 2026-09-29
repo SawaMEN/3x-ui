@@ -16,7 +16,7 @@
     "lint:fix": "oxlint --fix src tools",
     "lint:deprecated": "oxlint --type-aware -A all -D typescript/no-deprecated src",
     "format": "oxfmt src tools",
-    "format:check": "oxfmt src tools && git diff --exit-code -- src tools",
+    "format:check": "oxfmt --check src tools",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
