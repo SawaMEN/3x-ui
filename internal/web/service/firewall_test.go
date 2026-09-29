@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/mieru"
 )
 
 func TestFirewallProtocolsForInbound(t *testing.T) {
@@ -19,6 +20,7 @@ func TestFirewallProtocolsForInbound(t *testing.T) {
 		{name: "vless kcp", protocol: model.VLESS, network: "kcp", want: []string{"udp"}},
 		{name: "mixed", protocol: model.Mixed, network: "tcp", want: []string{"tcp", "udp"}},
 		{name: "wireguard", protocol: model.WireGuard, network: "tcp", want: []string{"udp"}},
+		{name: "amneziawg", protocol: model.AmneziaWG, network: "tcp", want: []string{"udp"}},
 		{name: "hysteria", protocol: model.Hysteria, network: "", want: []string{"udp"}},
 		{name: "tuic", protocol: model.TUIC, network: "", want: []string{"udp"}},
 		{name: "combined", protocol: model.VLESS, network: "tcp,udp", want: []string{"tcp", "udp"}},
@@ -106,6 +108,26 @@ func TestFirewallRuleSpec(t *testing.T) {
 	}
 	if got := firewallRuleSpec(FirewallRule{PortRange: "10000-10100", Protocol: "UDP"}); got != "10000-10100/udp" {
 		t.Fatalf("range rule = %q, want 10000-10100/udp", got)
+	}
+}
+
+func TestMieruBindingsProduceCanonicalFirewallSpecs(t *testing.T) {
+	bindings := []mieru.PortBinding{
+		{Port: 4433, Protocol: "TCP"},
+		{PortRange: "20000-20100", Protocol: "UDP"},
+	}
+	want := []string{"4433/tcp", "20000-20100/udp"}
+	got := make([]string, 0, len(bindings))
+	for _, binding := range bindings {
+		got = append(got, firewallRuleSpec(FirewallRule{
+			Port:      binding.Port,
+			PortRange: binding.PortRange,
+			Protocol:  binding.Protocol,
+			Source:    "inbound",
+		}))
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Mieru firewall specs = %#v, want %#v", got, want)
 	}
 }
 
