@@ -18,7 +18,8 @@ import { useTranslation } from 'react-i18next';
 import { HttpUtil } from '@/utils';
 
 type FirewallRule = {
-  port: number;
+  port?: number;
+  portRange?: string;
   protocol: 'tcp' | 'udp' | string;
   source: string;
   label: string;
@@ -45,6 +46,16 @@ type Props = {
   open: boolean;
   onClose: () => void;
 };
+
+function rulePort(rule: FirewallRule) {
+  return rule.portRange || String(rule.port || '');
+}
+
+function rulePortStart(rule: FirewallRule) {
+  if (rule.port) return rule.port;
+  const value = Number.parseInt((rule.portRange || '').split(/[-:]/, 1)[0] || '', 10);
+  return Number.isFinite(value) ? value : 0;
+}
 
 export function FirewallModal({ open, onClose }: Props) {
   const { i18n } = useTranslation();
@@ -165,9 +176,10 @@ export function FirewallModal({ open, onClose }: Props) {
   const ruleColumns = [
     {
       title: text.port,
-      dataIndex: 'port',
-      width: 90,
-      sorter: (a: FirewallRule, b: FirewallRule) => a.port - b.port,
+      key: 'port',
+      width: 130,
+      sorter: (a: FirewallRule, b: FirewallRule) => rulePortStart(a) - rulePortStart(b),
+      render: (_: unknown, rule: FirewallRule) => rulePort(rule),
     },
     {
       title: text.protocol,
@@ -292,7 +304,7 @@ export function FirewallModal({ open, onClose }: Props) {
           <Divider orientation="left">{text.rules}</Divider>
           <Table<FirewallRule>
             size="small"
-            rowKey={(rule) => `${rule.port}-${rule.protocol}-${rule.source}`}
+            rowKey={(rule) => `${rulePort(rule)}-${rule.protocol}-${rule.source}`}
             columns={ruleColumns}
             dataSource={status.rules || []}
             pagination={false}
