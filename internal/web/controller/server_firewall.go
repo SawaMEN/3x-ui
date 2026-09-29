@@ -70,7 +70,7 @@ func (a *FirewallController) setEnabled(c *gin.Context) {
 	if !a.initializeControl(c) {
 		return
 	}
-	status, err := a.firewallService.SetManagedEnabled(c.Request.Context(), req.Enabled, firewallSafetyPort(c))
+	status, err := a.firewallService.SetManagedEnabledSafe(c.Request.Context(), req.Enabled, firewallSafetyPort(c))
 	jsonObj(c, status, err)
 }
 
@@ -85,7 +85,7 @@ func (a *FirewallController) setAutoSync(c *gin.Context) {
 	if !a.initializeControl(c) {
 		return
 	}
-	status, err := a.firewallService.SetManagedAutoSyncPreference(c.Request.Context(), req.Enabled, firewallSafetyPort(c))
+	status, err := a.firewallService.SetManagedAutoSyncPreferenceSafe(c.Request.Context(), req.Enabled, firewallSafetyPort(c))
 	jsonObj(c, status, err)
 }
 
