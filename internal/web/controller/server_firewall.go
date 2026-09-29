@@ -29,6 +29,7 @@ func (a *FirewallController) initRouter(g *gin.RouterGroup) {
 	g.GET("/status", a.status)
 	g.POST("/enabled", a.setEnabled)
 	g.POST("/auto-sync", a.setAutoSync)
+	g.POST("/ping", a.setPing)
 	g.POST("/sync", a.sync)
 	g.POST("/rules/add", a.addRule)
 	g.POST("/rules/delete", a.deleteRule)
@@ -71,6 +72,9 @@ func (a *FirewallController) setEnabled(c *gin.Context) {
 		return
 	}
 	status, err := a.firewallService.SetManagedEnabledSafe(c.Request.Context(), req.Enabled, firewallSafetyPort(c))
+	if err == nil {
+		status, err = a.firewallService.ReconcileManagedPingState(c.Request.Context(), firewallSafetyPort(c))
+	}
 	jsonObj(c, status, err)
 }
 
@@ -86,6 +90,21 @@ func (a *FirewallController) setAutoSync(c *gin.Context) {
 		return
 	}
 	status, err := a.firewallService.SetManagedAutoSyncPreferenceSafe(c.Request.Context(), req.Enabled, firewallSafetyPort(c))
+	jsonObj(c, status, err)
+}
+
+func (a *FirewallController) setPing(c *gin.Context) {
+	var req struct {
+		Enabled bool `json:"enabled" form:"enabled"`
+	}
+	if err := c.ShouldBind(&req); err != nil {
+		jsonMsg(c, "invalid firewall ping state", err)
+		return
+	}
+	if !a.initializeControl(c) {
+		return
+	}
+	status, err := a.firewallService.SetManagedPingEnabledSafe(c.Request.Context(), req.Enabled, firewallSafetyPort(c))
 	jsonObj(c, status, err)
 }
 
