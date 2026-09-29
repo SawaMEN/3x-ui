@@ -231,6 +231,8 @@ func (a *ServerController) status(c *gin.Context) {
 		jsonObj(c, status, nil)
 		return
 	}
+	statusSnapshot := *status
+	status = &statusSnapshot
 
 	coreType, err := a.settingService.GetCoreType()
 	if err != nil || coreType == "" {
