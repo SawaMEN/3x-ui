@@ -177,6 +177,7 @@ func (a *APIController) initRouter(g *gin.RouterGroup) {
 	// advertise support, before CSRF/handlers read the body.
 	api.Use(middleware.ConfigEnvelopeMiddleware())
 	api.Use(middleware.CSRFMiddleware())
+	api.Use(firewallAutoSyncMiddleware())
 
 	api.GET("/openapi.json", ServeOpenAPISpec)
 
