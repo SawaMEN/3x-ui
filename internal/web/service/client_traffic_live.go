@@ -8,6 +8,13 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
+// A traffic transaction can touch thousands of client rows. last_online is
+// stamped before that transaction commits, so keep more than one poll interval
+// of overlap to make a slow commit visible on the next sample. Re-reading rows
+// is cheap and safe because the in-memory baseline turns repeats into zero
+// deltas.
+const clientTrafficLiveScanOverlapMillis int64 = 15_000
+
 // clientTrafficLiveSampler derives one live delta stream from the durable
 // client_traffics table. Every collector (Xray, sing-box and sidecars) already
 // commits attributable client bytes there, so sampling the shared table avoids
@@ -46,6 +53,10 @@ func (s *InboundService) SampleClientTrafficDeltas() ([]*xray.ClientTraffic, []*
 	defer clientTrafficLiveSampler.Unlock()
 
 	if !clientTrafficLiveSampler.initialized {
+		// Capture the boundary before reading. A write committed while the full
+		// baseline is being loaded is then eligible for the first delta scan even
+		// if its row was read just before that commit became visible.
+		scanAt := time.Now().UnixMilli()
 		rows, err := s.GetAllClientTraffics()
 		if err != nil {
 			return nil, nil, err
@@ -58,15 +69,16 @@ func (s *InboundService) SampleClientTrafficDeltas() ([]*xray.ClientTraffic, []*
 			baseline[row.Email] = clientTrafficCounters{up: row.Up, down: row.Down}
 		}
 		clientTrafficLiveSampler.baseline = baseline
-		clientTrafficLiveSampler.lastScan = time.Now().UnixMilli()
+		clientTrafficLiveSampler.lastScan = scanAt
 		clientTrafficLiveSampler.initialized = true
 		return []*xray.ClientTraffic{}, []*xray.ClientTraffic{}, nil
 	}
 
-	// Keep a small overlap around the boundary. Rows seen twice are harmless:
-	// the baseline turns the second observation into a zero delta, while the
-	// overlap prevents a commit racing the scan from being missed.
-	cutoff := clientTrafficLiveSampler.lastScan - 1000
+	// Keep an overlap around the boundary. Rows seen repeatedly are harmless:
+	// the baseline turns later observations into zero deltas, while the overlap
+	// prevents a transaction that started before a scan but committed after it
+	// from being skipped.
+	cutoff := clientTrafficLiveSampler.lastScan - clientTrafficLiveScanOverlapMillis
 	if cutoff < 0 {
 		cutoff = 0
 	}
