@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Alert,
   Button,
@@ -136,10 +136,6 @@ export function FirewallModal({ open, onClose }: Props) {
     }
   }
 
-  useEffect(() => {
-    if (open) void refresh();
-  }, [open]);
-
   async function post(path: string, data?: Record<string, unknown>, key = path) {
     setAction(key);
     try {
@@ -233,7 +229,16 @@ export function FirewallModal({ open, onClose }: Props) {
   const supported = status?.supported ?? false;
 
   return (
-    <Modal open={open} onCancel={onClose} footer={null} title={text.title} width={860}>
+    <Modal
+      open={open}
+      onCancel={onClose}
+      afterOpenChange={(visible) => {
+        if (visible) void refresh();
+      }}
+      footer={null}
+      title={text.title}
+      width={860}
+    >
       {!status ? (
         <Typography.Text type="secondary">{text.loading}</Typography.Text>
       ) : !supported ? (
