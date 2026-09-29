@@ -138,20 +138,20 @@ describe('SubscriptionGeneralTab', () => {
     renderWithProviders(
       <MemoryRouter initialEntries={['/settings#subscription']}>
         <SubscriptionGeneralTab
-          allSetting={new AllSetting({
-            subPort: 8443,
-            subURI: 'https://sub.example.com:2096/sub/',
-            subJsonURI: 'https://sub.example.com:2096/json/',
-            subClashURI: 'https://proxy.example.com/clash/',
-          })}
+          allSetting={
+            new AllSetting({
+              subPort: 8443,
+              subURI: 'https://sub.example.com:2096/sub/',
+              subJsonURI: 'https://sub.example.com:2096/json/',
+              subClashURI: 'https://proxy.example.com/clash/',
+            })
+          }
           updateSetting={updateSetting}
         />
       </MemoryRouter>,
     );
 
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Replace 2096 with current port' }),
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Replace 2096 with current port' }));
     expect(updateSetting).toHaveBeenCalledWith({
       subURI: 'https://sub.example.com:8443/sub/',
       subJsonURI: 'https://sub.example.com:8443/json/',
@@ -164,12 +164,14 @@ describe('SubscriptionGeneralTab', () => {
     renderWithProviders(
       <MemoryRouter initialEntries={['/settings#subscription']}>
         <SubscriptionGeneralTab
-          allSetting={new AllSetting({
-            subPort: 2096,
-            subURI: 'https://sub.example.com:2096/sub/',
-            subJsonURI: 'https://sub.example.com:2096/json/',
-            subClashURI: 'https://proxy.example.com:443/clash/',
-          })}
+          allSetting={
+            new AllSetting({
+              subPort: 2096,
+              subURI: 'https://sub.example.com:2096/sub/',
+              subJsonURI: 'https://sub.example.com:2096/json/',
+              subClashURI: 'https://proxy.example.com:443/clash/',
+            })
+          }
           updateSetting={updateSetting}
         />
       </MemoryRouter>,
