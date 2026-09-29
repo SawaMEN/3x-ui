@@ -67,5 +67,6 @@ func TestNormalizeClientTrafficDelta(t *testing.T) {
 			if got := normalizeClientTrafficDelta(tt.delta, tt.elapsedMs); got != tt.want {
 				t.Fatalf("normalizeClientTrafficDelta(%d, %d) = %d, want %d", tt.delta, tt.elapsedMs, got, tt.want)
 			}
+		})
 	}
 }
