@@ -1,6 +1,9 @@
 package service
 
-import "testing"
+import (
+	"testing"
+	"unicode/utf8"
+)
 
 func TestAppendFrozenInboundRules(t *testing.T) {
 	desired := []FirewallRule{{Port: 443, Protocol: "tcp", Source: "panel"}}
@@ -32,9 +35,7 @@ func TestNormalizeFirewallLabelUnicode(t *testing.T) {
 	if len([]rune(got)) != 120 {
 		t.Fatalf("rune count = %d, want 120", len([]rune(got)))
 	}
-	if ![]rune(got)[119:120][0].IsLetter() {
-		// unreachable for valid rune truncation; retained as an explicit UTF-8
-		// integrity guard without relying on byte length.
-		t.Fatal("truncated label ended with invalid rune")
+	if !utf8.ValidString(got) {
+		t.Fatal("truncated label is not valid UTF-8")
 	}
 }
