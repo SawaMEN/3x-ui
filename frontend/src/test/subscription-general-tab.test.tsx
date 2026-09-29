@@ -149,7 +149,9 @@ describe('SubscriptionGeneralTab', () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Replace 2096 with current port' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Replace 2096 with current port' }),
+    );
     expect(updateSetting).toHaveBeenCalledWith({
       subURI: 'https://sub.example.com:8443/sub/',
       subJsonURI: 'https://sub.example.com:8443/json/',
