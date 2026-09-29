@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -19,64 +18,84 @@ var firewallPingSysctlPaths = []string{
 	"/proc/sys/net/ipv6/icmp/echo_ignore_all",
 }
 
-func readFirewallPingEnabled() (bool, error) {
-	found := false
+type firewallPingSysctlState struct {
+	path  string
+	value string
+}
+
+func readFirewallPingSysctls() ([]firewallPingSysctlState, error) {
+	states := make([]firewallPingSysctlState, 0, len(firewallPingSysctlPaths))
 	for _, path := range firewallPingSysctlPaths {
 		raw, err := os.ReadFile(path)
 		if errors.Is(err, os.ErrNotExist) {
 			continue
 		}
 		if err != nil {
-			return false, fmt.Errorf("read ping state %s: %w", path, err)
+			return nil, fmt.Errorf("read ping state %s: %w", path, err)
 		}
-		found = true
-		rawValue := strings.TrimSpace(string(raw))
-		if rawValue != "0" && rawValue != "1" {
-			return false, fmt.Errorf("invalid ping state in %s", path)
+		value := strings.TrimSpace(string(raw))
+		if value != "0" && value != "1" {
+			return nil, fmt.Errorf("invalid ping state in %s", path)
 		}
-		if rawValue == "1" {
+		states = append(states, firewallPingSysctlState{path: path, value: value})
+	}
+	return states, nil
+}
+
+func readFirewallPingEnabled() (bool, error) {
+	states, err := readFirewallPingSysctls()
+	if err != nil {
+		return false, err
+	}
+	for _, state := range states {
+		if state.value == "1" {
 			return false, nil
 		}
-	}
-	if !found {
-		return true, nil
 	}
 	return true, nil
 }
 
+func writeFirewallPingSysctl(path, value string) error {
+	file, err := os.OpenFile(path, os.O_WRONLY, 0)
+	if err != nil {
+		return err
+	}
+	_, writeErr := file.WriteString(value + "\n")
+	closeErr := file.Close()
+	if writeErr != nil {
+		return writeErr
+	}
+	return closeErr
+}
+
 func writeFirewallPingEnabled(enabled bool) error {
-	value := "1\n"
+	desired := "1"
 	if enabled {
-		value = "0\n"
+		desired = "0"
 	}
-	found := false
-	var errs []error
-	for _, path := range firewallPingSysctlPaths {
-		if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-			continue
-		} else if err != nil {
-			errs = append(errs, fmt.Errorf("inspect ping state %s: %w", path, err))
-			continue
-		}
-		found = true
-		file, err := os.OpenFile(path, os.O_WRONLY, 0)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("open ping state %s: %w", path, err))
-			continue
-		}
-		_, writeErr := file.WriteString(value)
-		closeErr := file.Close()
-		if writeErr != nil {
-			errs = append(errs, fmt.Errorf("write ping state %s: %w", path, writeErr))
-		} else if closeErr != nil {
-			errs = append(errs, fmt.Errorf("close ping state %s: %w", path, closeErr))
-		}
+	states, err := readFirewallPingSysctls()
+	if err != nil {
+		return err
 	}
-	if len(errs) > 0 {
-		return errors.Join(errs...)
-	}
-	if !found {
+	if len(states) == 0 {
 		return errors.New("ICMP echo sysctl is unavailable")
+	}
+
+	changed := make([]firewallPingSysctlState, 0, len(states))
+	for _, state := range states {
+		if state.value == desired {
+			continue
+		}
+		if err := writeFirewallPingSysctl(state.path, desired); err != nil {
+			var rollbackErrs []error
+			for i := len(changed) - 1; i >= 0; i-- {
+				if rollbackErr := writeFirewallPingSysctl(changed[i].path, changed[i].value); rollbackErr != nil {
+					rollbackErrs = append(rollbackErrs, fmt.Errorf("rollback %s: %w", changed[i].path, rollbackErr))
+				}
+			}
+			return errors.Join(append([]error{fmt.Errorf("write ping state %s: %w", state.path, err)}, rollbackErrs...)...)
+		}
+		changed = append(changed, state)
 	}
 	return nil
 }
@@ -96,6 +115,11 @@ func firewallPingPreference() (enabled, configured bool, err error) {
 	}
 	enabled, err = strconv.ParseBool(raw)
 	return enabled, true, err
+}
+
+func (s *FirewallService) ManagedPingEnabled() (bool, error) {
+	enabled, _, err := firewallPingPreference()
+	return enabled, err
 }
 
 func (s *FirewallService) reconcileManagedPingStateLocked(backendEnabled bool) error {
@@ -156,16 +180,4 @@ func (s *FirewallService) SetManagedPingEnabledSafe(ctx context.Context, enabled
 		return FirewallManagedStatus{}, err
 	}
 	return s.managedStatusSafeLocked(ctx, safetyPort)
-}
-
-func (status FirewallManagedStatus) MarshalJSON() ([]byte, error) {
-	type statusAlias FirewallManagedStatus
-	pingEnabled, _, err := firewallPingPreference()
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(struct {
-		statusAlias
-		PingEnabled bool `json:"pingEnabled"`
-	}{statusAlias: statusAlias(status), PingEnabled: pingEnabled})
 }
