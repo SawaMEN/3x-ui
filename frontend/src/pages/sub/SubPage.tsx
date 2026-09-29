@@ -188,14 +188,15 @@ export default function SubPage() {
       items.push({
         key: 'telemt',
         icon: <ApiOutlined />,
-        label: 'Telemt',
+        label: 'Telegram Proxy',
         children: (
           <Space direction="vertical" size="middle" style={{ width: '100%' }}>
             {telemtData.personal?.link && (
-              <Card size="small" title="Personal Telemt proxy">
+              <Card size="small" title="Personal Telegram Proxy">
                 <Space direction="vertical" size="small" style={{ width: '100%' }}>
                   <Typography.Text type="secondary">
-                    {telemtData.personal.host}:{telemtData.personal.port}
+                    Individual proxy profile for this subscription · {telemtData.personal.host}:
+                    {telemtData.personal.port}
                   </Typography.Text>
                   <Typography.Paragraph
                     copyable={{ text: telemtData.personal.link }}
@@ -210,15 +211,17 @@ export default function SubPage() {
                     icon={<ApiOutlined />}
                     onClick={() => open(telemtData.personal!.link)}
                   >
-                    Telegram
+                    Open in Telegram
                   </Button>
                 </Space>
               </Card>
             )}
             {telemtData.webProxy && (
-              <Card size="small" title="WEB Proxy (common)">
+              <Card size="small" title="Web Proxy">
                 <Space direction="vertical" size="small" style={{ width: '100%' }}>
-                  <Typography.Text type="secondary">Shared WEB Proxy</Typography.Text>
+                  <Typography.Text type="secondary">
+                    Shared Web Proxy for all subscription users
+                  </Typography.Text>
                   <Typography.Paragraph
                     copyable={{ text: telemtData.webProxy }}
                     style={{ marginBottom: 0 }}
@@ -232,7 +235,7 @@ export default function SubPage() {
                     icon={<ApiOutlined />}
                     onClick={() => open(telemtData.webProxy!)}
                   >
-                    Telegram
+                    Open in Telegram
                   </Button>
                 </Space>
               </Card>
