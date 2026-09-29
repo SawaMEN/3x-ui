@@ -103,7 +103,8 @@ export function FirewallModal({ open, onClose }: Props) {
             enabled: 'Firewall enabled',
             disabled: 'Firewall disabled',
             auto: 'Automatically open and close inbound ports',
-            autoHint: 'Rules are synchronized after inbound create, update, enable, disable, and delete.',
+            autoHint:
+              'Rules are synchronized after inbound create, update, enable, disable, and delete.',
             safety:
               'Panel, current external panel port, subscription port, and SSH are protected automatically to prevent lockout.',
             sync: 'Sync now',
@@ -271,7 +272,9 @@ export function FirewallModal({ open, onClose }: Props) {
                   void post('/panel/api/server/firewall/enabled', { enabled: checked }, 'enabled')
                 }
               />
-              <Typography.Text strong>{status.enabled ? text.enabled : text.disabled}</Typography.Text>
+              <Typography.Text strong>
+                {status.enabled ? text.enabled : text.disabled}
+              </Typography.Text>
             </Space>
             <Tag>{status.backend}</Tag>
             <Button
@@ -337,8 +340,8 @@ export function FirewallModal({ open, onClose }: Props) {
               loading={action === 'add'}
               onClick={() => {
                 if (!port) return;
-                void post('/panel/api/server/firewall/rules/add', { port, protocol }, 'add').then(() =>
-                  setPort(null),
+                void post('/panel/api/server/firewall/rules/add', { port, protocol }, 'add').then(
+                  () => setPort(null),
                 );
               }}
             >
@@ -355,7 +358,9 @@ export function FirewallModal({ open, onClose }: Props) {
           />
         </Space>
       )}
-      {loading && status ? <Typography.Text type="secondary"> {text.loading}</Typography.Text> : null}
+      {loading && status ? (
+        <Typography.Text type="secondary"> {text.loading}</Typography.Text>
+      ) : null}
     </Modal>
   );
 }
