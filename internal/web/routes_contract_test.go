@@ -121,6 +121,12 @@ func TestRouteRegistryContract(t *testing.T) {
 		var missing []string
 		for route := range registered {
 			fields := strings.Fields(route)
+			// Keep the internal-firewall guard at the call site too. A PR merge ref
+			// may combine this branch with a newer inContractScope helper from main;
+			// these UI-only endpoints must not become a public API by accident.
+			if len(fields) >= 2 && isInternalUIAPI(fields[1]) {
+				continue
+			}
 			if inContractScope(fields[0], fields[1]) && !documented[route] {
 				missing = append(missing, route)
 			}
