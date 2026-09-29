@@ -1,9 +1,8 @@
 package service
 
 import (
+	"math"
 	"testing"
-
-	"github.com/SawaMEN/3x-ui/v3/internal/database"
 )
 
 func TestNormalizeClientTrafficDelta(t *testing.T) {
@@ -57,9 +56,9 @@ func TestNormalizeClientTrafficDelta(t *testing.T) {
 		},
 		{
 			name:      "overflow is clamped",
-			delta:     database.TrafficMax,
+			delta:     math.MaxInt64,
 			elapsedMs: 1,
-			want:      database.TrafficMax,
+			want:      math.MaxInt64,
 		},
 	}
 
@@ -68,6 +67,5 @@ func TestNormalizeClientTrafficDelta(t *testing.T) {
 			if got := normalizeClientTrafficDelta(tt.delta, tt.elapsedMs); got != tt.want {
 				t.Fatalf("normalizeClientTrafficDelta(%d, %d) = %d, want %d", tt.delta, tt.elapsedMs, got, tt.want)
 			}
-		})
 	}
 }
