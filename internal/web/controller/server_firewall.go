@@ -35,11 +35,19 @@ func (a *FirewallController) initRouter(g *gin.RouterGroup) {
 }
 
 func (a *FirewallController) status(c *gin.Context) {
+	if err := a.firewallService.MigrateManagedBackendIfNeeded(c.Request.Context()); err != nil {
+		jsonMsg(c, "failed to reconcile firewall backend", err)
+		return
+	}
 	status, err := a.firewallService.GetManagedStatus(c.Request.Context(), firewallSafetyPort(c))
 	jsonObj(c, status, err)
 }
 
 func (a *FirewallController) initializeControl(c *gin.Context) bool {
+	if err := a.firewallService.MigrateManagedBackendIfNeeded(c.Request.Context()); err != nil {
+		jsonMsg(c, "failed to reconcile firewall backend", err)
+		return false
+	}
 	if err := a.firewallService.RememberSafetyPort(firewallSafetyPort(c)); err != nil {
 		jsonMsg(c, "failed to persist firewall safety port", err)
 		return false
