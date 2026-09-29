@@ -93,11 +93,9 @@ func (s *FirewallService) SetAutoSyncPreference(ctx context.Context, enabled boo
 }
 
 // StartAutoSync keeps firewall rules aligned with enabled local inbounds even
-// when changes arrive through imports, API calls, or node synchronization
-// rather than the browser that opened the firewall dialog. Existing system
-// firewall installations are not adopted automatically after an upgrade: the
-// background reconciler starts mutating rules only after the operator performs
-// a firewall action from the panel at least once.
+// when changes arrive through imports, API calls, or node synchronization.
+// Inbound API mutations trigger an immediate coalesced reconcile; a periodic
+// pass remains as drift repair for imports and future mutation paths.
 func (s *FirewallService) StartAutoSync() {
 	firewallAutoSyncOnce.Do(func() {
 		go func() {
@@ -113,13 +111,10 @@ func (s *FirewallService) StartAutoSync() {
 				ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 				defer cancel()
 
-				// Serialize command execution with interactive firewall actions. The
-				// private sync path avoids the public Sync method's second backend
-				// detection and full status rebuild, which were wasted every 5 seconds.
 				firewallMu.Lock()
 				defer firewallMu.Unlock()
 
-				backend, err := detectFirewallBackend(ctx)
+				backend, err := detectManagedFirewallBackend(ctx)
 				if err != nil {
 					return
 				}
@@ -127,15 +122,19 @@ func (s *FirewallService) StartAutoSync() {
 				if err != nil || !on {
 					return
 				}
-				if err := s.sync(ctx, backend, rememberedFirewallSafetyPort()); err != nil {
+				if err := s.syncManagedLocked(ctx, backend, rememberedFirewallSafetyPort()); err != nil {
 					logger.Debug("firewall auto-sync failed:", err)
 				}
 			}
 
 			syncNow()
-			ticker := time.NewTicker(5 * time.Second)
+			ticker := time.NewTicker(15 * time.Second)
 			defer ticker.Stop()
-			for range ticker.C {
+			for {
+				select {
+				case <-ticker.C:
+				case <-firewallSyncTrigger:
+				}
 				syncNow()
 			}
 		}()
