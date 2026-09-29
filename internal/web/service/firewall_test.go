@@ -59,15 +59,61 @@ func TestNormalizeFirewallProtocols(t *testing.T) {
 	}
 }
 
+func TestCanonicalFirewallSpec(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+		ok    bool
+	}{
+		{input: "22/tcp", want: "22/tcp", ok: true},
+		{input: "443/TCP", want: "443/tcp", ok: true},
+		{input: "10000-10100/udp", want: "10000-10100/udp", ok: true},
+		{input: "10000:10100/TCP", want: "10000-10100/tcp", ok: true},
+		{input: "1234-1234/tcp", want: "1234/tcp", ok: true},
+		{input: "0/tcp", ok: false},
+		{input: "65536/tcp", ok: false},
+		{input: "2000-1000/tcp", ok: false},
+		{input: "1-65536/udp", ok: false},
+		{input: "1-2-3/tcp", ok: false},
+		{input: "443/sctp", ok: false},
+		{input: "443", ok: false},
+		{input: "abc/tcp", ok: false},
+	}
+	for _, tt := range tests {
+		got, ok := canonicalFirewallSpec(tt.input)
+		if ok != tt.ok || got != tt.want {
+			t.Fatalf("canonicalFirewallSpec(%q) = %q, %v; want %q, %v", tt.input, got, ok, tt.want, tt.ok)
+		}
+	}
+}
+
 func TestValidFirewallSpec(t *testing.T) {
-	for _, spec := range []string{"22/tcp", "443/TCP", "65535/udp"} {
+	for _, spec := range []string{"22/tcp", "443/TCP", "65535/udp", "10000-10100/tcp", "10000:10100/udp"} {
 		if !validFirewallSpec(spec) {
 			t.Fatalf("expected %q to be valid", spec)
 		}
 	}
-	for _, spec := range []string{"0/tcp", "65536/tcp", "443/sctp", "443", "abc/tcp"} {
+	for _, spec := range []string{"0/tcp", "65536/tcp", "2000-1000/tcp", "443/sctp", "443", "abc/tcp"} {
 		if validFirewallSpec(spec) {
 			t.Fatalf("expected %q to be invalid", spec)
 		}
+	}
+}
+
+func TestFirewallRuleSpec(t *testing.T) {
+	if got := firewallRuleSpec(FirewallRule{Port: 443, Protocol: "TCP"}); got != "443/tcp" {
+		t.Fatalf("single-port rule = %q, want 443/tcp", got)
+	}
+	if got := firewallRuleSpec(FirewallRule{PortRange: "10000-10100", Protocol: "UDP"}); got != "10000-10100/udp" {
+		t.Fatalf("range rule = %q, want 10000-10100/udp", got)
+	}
+}
+
+func TestUFWFirewallSpec(t *testing.T) {
+	if got := ufwFirewallSpec("10000-10100/tcp"); got != "10000:10100/tcp" {
+		t.Fatalf("ufw range spec = %q, want 10000:10100/tcp", got)
+	}
+	if got := ufwFirewallSpec("443/tcp"); got != "443/tcp" {
+		t.Fatalf("ufw single-port spec = %q, want 443/tcp", got)
 	}
 }
