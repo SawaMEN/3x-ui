@@ -15,6 +15,7 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/mieru"
 )
 
 const (
@@ -26,12 +27,13 @@ const (
 var firewallMu sync.Mutex
 
 type FirewallRule struct {
-	Port     int    `json:"port"`
-	Protocol string `json:"protocol"`
-	Source   string `json:"source"`
-	Label    string `json:"label"`
-	Owned    bool   `json:"owned"`
-	Exists   bool   `json:"exists"`
+	Port      int    `json:"port,omitempty"`
+	PortRange string `json:"portRange,omitempty"`
+	Protocol  string `json:"protocol"`
+	Source    string `json:"source"`
+	Label     string `json:"label"`
+	Owned     bool   `json:"owned"`
+	Exists    bool   `json:"exists"`
 }
 
 type FirewallManualRule struct {
@@ -216,11 +218,13 @@ func (s *FirewallService) status(ctx context.Context, safetyPort int) (FirewallS
 	}
 	owned := map[string]bool{}
 	for _, r := range managed {
-		owned[firewallRuleKey(r.Port, r.Protocol)] = r.Owned
+		if key := firewallRuleSpec(r); key != "" {
+			owned[key] = r.Owned
+		}
 	}
 	seen := make(map[string]bool, len(desired))
 	for i := range desired {
-		key := firewallRuleKey(desired[i].Port, desired[i].Protocol)
+		key := firewallRuleSpec(desired[i])
 		seen[key] = true
 		desired[i].Exists, desired[i].Owned = existing[key], owned[key]
 	}
@@ -229,17 +233,15 @@ func (s *FirewallService) status(ctx context.Context, safetyPort int) (FirewallS
 	// sees the actual firewall state instead of an incomplete desired-only view.
 	if !auto {
 		for _, r := range managed {
-			key := firewallRuleKey(r.Port, r.Protocol)
-			if r.Source != "inbound" || seen[key] {
+			key := firewallRuleSpec(r)
+			if key == "" || r.Source != "inbound" || seen[key] {
 				continue
 			}
 			r.Exists = existing[key]
 			desired = append(desired, r)
 			seen[key] = true
 		}
-		sort.Slice(desired, func(i, j int) bool {
-			return desired[i].Port < desired[j].Port || (desired[i].Port == desired[j].Port && desired[i].Protocol < desired[j].Protocol)
-		})
+		sortFirewallRules(desired)
 	}
 	st.Rules = desired
 	return st, nil
@@ -264,12 +266,17 @@ func (s *FirewallService) sync(ctx context.Context, b firewallBackend, safetyPor
 	}
 	old := map[string]FirewallRule{}
 	for _, r := range managed {
-		old[firewallRuleKey(r.Port, r.Protocol)] = r
+		if key := firewallRuleSpec(r); key != "" {
+			old[key] = r
+		}
 	}
 	want := map[string]bool{}
 	next := make([]FirewallRule, 0, len(desired)+len(managed))
 	for _, r := range desired {
-		key := firewallRuleKey(r.Port, r.Protocol)
+		key := firewallRuleSpec(r)
+		if key == "" {
+			continue
+		}
 		want[key] = true
 		r.Owned = old[key].Owned
 		if !existing[key] {
@@ -283,8 +290,8 @@ func (s *FirewallService) sync(ctx context.Context, b firewallBackend, safetyPor
 		next = append(next, r)
 	}
 	for _, r := range managed {
-		key := firewallRuleKey(r.Port, r.Protocol)
-		if want[key] {
+		key := firewallRuleSpec(r)
+		if key == "" || want[key] {
 			continue
 		}
 		// Auto-sync off means freeze the last reconciled inbound rules. Manual
@@ -310,15 +317,18 @@ func (s *FirewallService) sync(ctx context.Context, b firewallBackend, safetyPor
 
 func (s *FirewallService) desiredRules(auto bool, safetyPort int) ([]FirewallRule, error) {
 	m := map[string]FirewallRule{}
+	addRule := func(r FirewallRule) {
+		key := firewallRuleSpec(r)
+		if key == "" {
+			return
+		}
+		if old, ok := m[key]; ok && firewallSourcePriority(r.Source) <= firewallSourcePriority(old.Source) {
+			return
+		}
+		m[key] = r
+	}
 	add := func(port int, proto, source, label string) {
-		if port < 1 || port > 65535 {
-			return
-		}
-		key := firewallRuleKey(port, proto)
-		if old, ok := m[key]; ok && firewallSourcePriority(source) <= firewallSourcePriority(old.Source) {
-			return
-		}
-		m[key] = FirewallRule{Port: port, Protocol: proto, Source: source, Label: label}
+		addRule(FirewallRule{Port: port, Protocol: proto, Source: source, Label: label})
 	}
 	settings := SettingService{}
 	if p, err := settings.GetPort(); err == nil {
@@ -346,17 +356,29 @@ func (s *FirewallService) desiredRules(auto bool, safetyPort int) ([]FirewallRul
 		var inbounds []model.Inbound
 		err := database.GetDB().Model(&model.Inbound{}).
 			Select("port", "protocol", "stream_settings", "settings", "remark", "enable", "node_id").
-			Where("enable = ? AND port > 0 AND node_id IS NULL", true).Find(&inbounds).Error
+			Where("enable = ? AND node_id IS NULL", true).Find(&inbounds).Error
 		if err != nil {
 			return nil, err
 		}
 		for _, ib := range inbounds {
+			label := strings.TrimSpace(ib.Remark)
+			if label == "" {
+				label = string(ib.Protocol)
+			}
+			if ib.Protocol == model.Mieru {
+				for _, binding := range mieru.PortBindingsFromInbound(&ib) {
+					addRule(FirewallRule{
+						Port:      binding.Port,
+						PortRange: binding.PortRange,
+						Protocol:  strings.ToLower(binding.Protocol),
+						Source:    "inbound",
+						Label:     label,
+					})
+				}
+				continue
+			}
 			network, _ := inboundStreamHints(string(ib.Protocol), ib.StreamSettings, ib.Settings)
 			for _, proto := range firewallProtocolsForInbound(ib.Protocol, network) {
-				label := strings.TrimSpace(ib.Remark)
-				if label == "" {
-					label = string(ib.Protocol)
-				}
 				add(ib.Port, proto, "inbound", label)
 			}
 		}
@@ -365,9 +387,7 @@ func (s *FirewallService) desiredRules(auto bool, safetyPort int) ([]FirewallRul
 	for _, r := range m {
 		out = append(out, r)
 	}
-	sort.Slice(out, func(i, j int) bool {
-		return out[i].Port < out[j].Port || (out[i].Port == out[j].Port && out[i].Protocol < out[j].Protocol)
-	})
+	sortFirewallRules(out)
 	return out, nil
 }
 
@@ -433,7 +453,88 @@ func normalizeFirewallProtocols(p string) ([]string, error) {
 }
 
 func firewallRuleKey(port int, proto string) string {
-	return strconv.Itoa(port) + "/" + strings.ToLower(proto)
+	spec, ok := canonicalFirewallSpec(strconv.Itoa(port) + "/" + proto)
+	if !ok {
+		return ""
+	}
+	return spec
+}
+
+func firewallRuleSpec(r FirewallRule) string {
+	if strings.TrimSpace(r.PortRange) != "" {
+		spec, ok := canonicalFirewallSpec(r.PortRange + "/" + r.Protocol)
+		if !ok {
+			return ""
+		}
+		return spec
+	}
+	return firewallRuleKey(r.Port, r.Protocol)
+}
+
+func firewallRuleStart(r FirewallRule) int {
+	if r.Port > 0 {
+		return r.Port
+	}
+	raw := strings.TrimSpace(r.PortRange)
+	if i := strings.IndexAny(raw, "-:"); i >= 0 {
+		raw = raw[:i]
+	}
+	n, _ := strconv.Atoi(strings.TrimSpace(raw))
+	return n
+}
+
+func sortFirewallRules(rules []FirewallRule) {
+	sort.Slice(rules, func(i, j int) bool {
+		pi, pj := firewallRuleStart(rules[i]), firewallRuleStart(rules[j])
+		if pi != pj {
+			return pi < pj
+		}
+		si, sj := firewallRuleSpec(rules[i]), firewallRuleSpec(rules[j])
+		if si != sj {
+			return si < sj
+		}
+		return rules[i].Source < rules[j].Source
+	})
+}
+
+func canonicalFirewallSpec(spec string) (string, bool) {
+	parts := strings.Split(strings.ToLower(strings.TrimSpace(spec)), "/")
+	if len(parts) != 2 || (parts[1] != "tcp" && parts[1] != "udp") {
+		return "", false
+	}
+	portSpec := strings.TrimSpace(parts[0])
+	if portSpec == "" {
+		return "", false
+	}
+	portSpec = strings.ReplaceAll(portSpec, ":", "-")
+	if strings.Contains(portSpec, "-") {
+		bounds := strings.Split(portSpec, "-")
+		if len(bounds) != 2 {
+			return "", false
+		}
+		start, err1 := strconv.Atoi(strings.TrimSpace(bounds[0]))
+		end, err2 := strconv.Atoi(strings.TrimSpace(bounds[1]))
+		if err1 != nil || err2 != nil || start < 1 || end > 65535 || end < start {
+			return "", false
+		}
+		if start == end {
+			return strconv.Itoa(start) + "/" + parts[1], true
+		}
+		return fmt.Sprintf("%d-%d/%s", start, end, parts[1]), true
+	}
+	port, err := strconv.Atoi(portSpec)
+	if err != nil || port < 1 || port > 65535 {
+		return "", false
+	}
+	return strconv.Itoa(port) + "/" + parts[1], true
+}
+
+func ufwFirewallSpec(spec string) string {
+	parts := strings.SplitN(spec, "/", 2)
+	if len(parts) != 2 {
+		return spec
+	}
+	return strings.ReplaceAll(parts[0], "-", ":") + "/" + parts[1]
 }
 
 func firewallSetting(key, fallback string) (string, error) {
@@ -550,8 +651,10 @@ func listFirewallRules(ctx context.Context, b firewallBackend) (map[string]bool,
 		}
 		for line := range strings.SplitSeq(text, "\n") {
 			f := strings.Fields(strings.TrimSpace(line))
-			if len(f) >= 3 && f[0] == "ufw" && f[1] == "allow" && validFirewallSpec(f[2]) {
-				out[strings.ToLower(f[2])] = true
+			if len(f) >= 3 && f[0] == "ufw" && f[1] == "allow" {
+				if spec, ok := canonicalFirewallSpec(f[2]); ok {
+					out[spec] = true
+				}
 			}
 		}
 		return out, nil
@@ -568,27 +671,26 @@ func listFirewallRules(ctx context.Context, b firewallBackend) (map[string]bool,
 	if err != nil {
 		return nil, err
 	}
-	for _, spec := range strings.Fields(text) {
-		if validFirewallSpec(spec) {
-			out[strings.ToLower(spec)] = true
+	for _, raw := range strings.Fields(text) {
+		if spec, ok := canonicalFirewallSpec(raw); ok {
+			out[spec] = true
 		}
 	}
 	return out, nil
 }
 
 func validFirewallSpec(spec string) bool {
-	p := strings.Split(strings.ToLower(spec), "/")
-	if len(p) != 2 || (p[1] != "tcp" && p[1] != "udp") {
-		return false
-	}
-	n, err := strconv.Atoi(p[0])
-	return err == nil && n > 0 && n <= 65535
+	_, ok := canonicalFirewallSpec(spec)
+	return ok
 }
 
 func addFirewallRule(ctx context.Context, b firewallBackend, r FirewallRule) error {
-	spec := firewallRuleKey(r.Port, r.Protocol)
+	spec := firewallRuleSpec(r)
+	if spec == "" {
+		return errors.New("invalid firewall rule")
+	}
 	if b.name == "ufw" {
-		_, err := runFirewallCommand(ctx, b.binary, "allow", spec, "comment", "3x-ui managed")
+		_, err := runFirewallCommand(ctx, b.binary, "allow", ufwFirewallSpec(spec), "comment", "3x-ui managed")
 		return err
 	}
 	on, _ := b.enabled(ctx)
@@ -607,9 +709,12 @@ func addFirewallRule(ctx context.Context, b firewallBackend, r FirewallRule) err
 }
 
 func deleteFirewallRule(ctx context.Context, b firewallBackend, r FirewallRule) error {
-	spec := firewallRuleKey(r.Port, r.Protocol)
+	spec := firewallRuleSpec(r)
+	if spec == "" {
+		return errors.New("invalid firewall rule")
+	}
 	if b.name == "ufw" {
-		_, err := runFirewallCommand(ctx, b.binary, "--force", "delete", "allow", spec)
+		_, err := runFirewallCommand(ctx, b.binary, "--force", "delete", "allow", ufwFirewallSpec(spec))
 		return err
 	}
 	on, _ := b.enabled(ctx)
