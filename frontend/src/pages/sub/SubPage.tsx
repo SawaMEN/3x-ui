@@ -19,7 +19,13 @@ import SubConfigsTab from './SubConfigsTab';
 import SubHeader from './SubHeader';
 import SubHero from './SubHero';
 import SubLinksTab from './SubLinksTab';
-import { buildSubApps, buildTelemtEndpoint, daysUntil, detectPlatform, resolveSubStatus } from './subPageModel';
+import {
+  buildSubApps,
+  buildTelemtEndpoint,
+  daysUntil,
+  detectPlatform,
+  resolveSubStatus,
+} from './subPageModel';
 import './SubPage.css';
 
 const subData = window.__SUB_PAGE_DATA__ || {};
@@ -181,10 +187,19 @@ export default function SubPage() {
                   <Typography.Text type="secondary">
                     {telemtData.personal.host}:{telemtData.personal.port}
                   </Typography.Text>
-                  <Typography.Paragraph copyable={{ text: telemtData.personal.link }} style={{ marginBottom: 0 }}>
-                    <Typography.Link href={telemtData.personal.link}>{telemtData.personal.link}</Typography.Link>
+                  <Typography.Paragraph
+                    copyable={{ text: telemtData.personal.link }}
+                    style={{ marginBottom: 0 }}
+                  >
+                    <Typography.Link href={telemtData.personal.link}>
+                      {telemtData.personal.link}
+                    </Typography.Link>
                   </Typography.Paragraph>
-                  <Button type="primary" icon={<ApiOutlined />} onClick={() => open(telemtData.personal!.link)}>
+                  <Button
+                    type="primary"
+                    icon={<ApiOutlined />}
+                    onClick={() => open(telemtData.personal!.link)}
+                  >
                     Telegram
                   </Button>
                 </Space>
@@ -194,10 +209,19 @@ export default function SubPage() {
               <Card size="small" title="WEB Proxy (common)">
                 <Space direction="vertical" size="small" style={{ width: '100%' }}>
                   <Typography.Text type="secondary">Shared WEB Proxy</Typography.Text>
-                  <Typography.Paragraph copyable={{ text: telemtData.webProxy }} style={{ marginBottom: 0 }}>
-                    <Typography.Link href={telemtData.webProxy}>{telemtData.webProxy}</Typography.Link>
+                  <Typography.Paragraph
+                    copyable={{ text: telemtData.webProxy }}
+                    style={{ marginBottom: 0 }}
+                  >
+                    <Typography.Link href={telemtData.webProxy}>
+                      {telemtData.webProxy}
+                    </Typography.Link>
                   </Typography.Paragraph>
-                  <Button type="primary" icon={<ApiOutlined />} onClick={() => open(telemtData.webProxy!)}>
+                  <Button
+                    type="primary"
+                    icon={<ApiOutlined />}
+                    onClick={() => open(telemtData.webProxy!)}
+                  >
                     Telegram
                   </Button>
                 </Space>
