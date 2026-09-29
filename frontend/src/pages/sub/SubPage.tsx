@@ -57,7 +57,9 @@ type TelemtSubscriptionData = {
 function buildTelemtEndpoint(): string {
   if (!sId) return '';
   try {
-    const endpoint = new URL(subUrl || window.location.href, window.location.href);
+    // The page is already being served by the reachable subscription host.
+    // Its embedded public URL can still contain a previously configured port.
+    const endpoint = new URL(window.location.href);
     endpoint.search = '';
     endpoint.hash = '';
     const segments = endpoint.pathname.split('/').filter(Boolean);
