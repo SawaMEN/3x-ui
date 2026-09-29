@@ -5,14 +5,24 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"unicode/utf8"
 )
 
 func normalizeFirewallLabelUnicode(label string) string {
-	runes := []rune(strings.TrimSpace(label))
-	if len(runes) > 120 {
-		runes = runes[:120]
+	label = strings.TrimSpace(label)
+	if len(label) <= 120 {
+		return label
 	}
-	return string(runes)
+	var out strings.Builder
+	out.Grow(120)
+	for _, r := range label {
+		width := utf8.RuneLen(r)
+		if width < 0 || out.Len()+width > 120 {
+			break
+		}
+		out.WriteRune(r)
+	}
+	return out.String()
 }
 
 func appendFrozenInboundRules(desired, managed []FirewallRule) []FirewallRule {
