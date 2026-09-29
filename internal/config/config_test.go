@@ -97,3 +97,40 @@ func TestGetBinFolderPath(t *testing.T) {
 		}
 	})
 }
+
+func TestCopyFile(t *testing.T) {
+	t.Run("copies and truncates destination", func(t *testing.T) {
+		dir := t.TempDir()
+		src := filepath.Join(dir, "src.db")
+		dst := filepath.Join(dir, "dst.db")
+		want := []byte("new\x00\x01")
+
+		if err := os.WriteFile(src, want, 0o600); err != nil {
+			t.Fatalf("write src: %v", err)
+		}
+		if err := os.WriteFile(dst, []byte("stale-and-longer"), 0o600); err != nil {
+			t.Fatalf("write dst: %v", err)
+		}
+		if err := copyFile(src, dst); err != nil {
+			t.Fatalf("copyFile: %v", err)
+		}
+		got, err := os.ReadFile(dst)
+		if err != nil {
+			t.Fatalf("read dst: %v", err)
+		}
+		if string(got) != string(want) {
+			t.Fatalf("dst contents = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("missing source", func(t *testing.T) {
+		dir := t.TempDir()
+		dst := filepath.Join(dir, "dst.db")
+		if err := copyFile(filepath.Join(dir, "missing.db"), dst); err == nil {
+			t.Fatal("copyFile with missing source returned nil error")
+		}
+		if _, err := os.Stat(dst); !os.IsNotExist(err) {
+			t.Fatalf("destination should not be created, stat err = %v", err)
+		}
+	})
+}

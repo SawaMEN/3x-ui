@@ -8,6 +8,22 @@ import (
 	"testing"
 )
 
+func assertSQLiteFilePermissions(t *testing.T, dbPath string) {
+	t.Helper()
+	for _, name := range []string{dbPath, dbPath + "-wal", dbPath + "-shm"} {
+		info, err := os.Stat(name)
+		if errors.Is(err, os.ErrNotExist) && name != dbPath {
+			continue
+		}
+		if err != nil {
+			t.Fatalf("stat %s: %v", name, err)
+		}
+		if perm := info.Mode().Perm(); perm != 0o600 {
+			t.Fatalf("%s perm = %o, want 600", filepath.Base(name), perm)
+		}
+	}
+}
+
 func TestInitDBRestrictsSQLiteFilePermissions(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("POSIX permission bits are not meaningful on Windows")
@@ -26,18 +42,7 @@ func TestInitDBRestrictsSQLiteFilePermissions(t *testing.T) {
 	} else if perm := info.Mode().Perm(); perm != 0o700 {
 		t.Fatalf("db dir perm = %o, want 700", perm)
 	}
-	for _, name := range []string{dbPath, dbPath + "-wal", dbPath + "-shm"} {
-		info, err := os.Stat(name)
-		if errors.Is(err, os.ErrNotExist) && name != dbPath {
-			continue
-		}
-		if err != nil {
-			t.Fatalf("stat %s: %v", name, err)
-		}
-		if perm := info.Mode().Perm(); perm != 0o600 {
-			t.Fatalf("%s perm = %o, want 600", filepath.Base(name), perm)
-		}
-	}
+	assertSQLiteFilePermissions(t, dbPath)
 }
 
 func TestInitDBTightensExistingSQLiteFilePermissions(t *testing.T) {
@@ -63,17 +68,5 @@ func TestInitDBTightensExistingSQLiteFilePermissions(t *testing.T) {
 		t.Fatalf("InitDB: %v", err)
 	}
 	t.Cleanup(func() { _ = CloseDB() })
-
-	for _, name := range []string{dbPath, dbPath + "-wal", dbPath + "-shm"} {
-		info, err := os.Stat(name)
-		if errors.Is(err, os.ErrNotExist) && name != dbPath {
-			continue
-		}
-		if err != nil {
-			t.Fatalf("stat %s: %v", name, err)
-		}
-		if perm := info.Mode().Perm(); perm != 0o600 {
-			t.Fatalf("%s perm = %o, want 600", filepath.Base(name), perm)
-		}
-	}
+	assertSQLiteFilePermissions(t, dbPath)
 }
