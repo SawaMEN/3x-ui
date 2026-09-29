@@ -95,7 +95,8 @@ func (s *FirewallService) SetAutoSyncPreference(ctx context.Context, enabled boo
 // StartAutoSync keeps firewall rules aligned with enabled local inbounds even
 // when changes arrive through imports, API calls, or node synchronization.
 // Inbound API mutations trigger an immediate coalesced reconcile; a periodic
-// pass remains as drift repair for imports and future mutation paths.
+// five-second pass remains as drift repair for imports and future mutation
+// paths and keeps the managed iptables jump behind newly added admin rules.
 func (s *FirewallService) StartAutoSync() {
 	firewallAutoSyncOnce.Do(func() {
 		go func() {
@@ -126,13 +127,13 @@ func (s *FirewallService) StartAutoSync() {
 				if err != nil || !on {
 					return
 				}
-				if err := s.syncManagedLocked(ctx, backend, rememberedFirewallSafetyPort()); err != nil {
+				if err := s.syncManagedSafeLocked(ctx, backend, rememberedFirewallSafetyPort()); err != nil {
 					logger.Debug("firewall auto-sync failed:", err)
 				}
 			}
 
 			syncNow()
-			ticker := time.NewTicker(15 * time.Second)
+			ticker := time.NewTicker(5 * time.Second)
 			defer ticker.Stop()
 			for {
 				select {
