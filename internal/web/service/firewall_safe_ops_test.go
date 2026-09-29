@@ -32,10 +32,13 @@ func TestNormalizeFirewallLabelUnicode(t *testing.T) {
 		long += "я"
 	}
 	got := normalizeFirewallLabelUnicode(long)
-	if len([]rune(got)) != 120 {
-		t.Fatalf("rune count = %d, want 120", len([]rune(got)))
+	if len(got) > 120 {
+		t.Fatalf("byte length = %d, want <= 120", len(got))
 	}
 	if !utf8.ValidString(got) {
 		t.Fatal("truncated label is not valid UTF-8")
+	}
+	if len([]rune(got)) != 60 {
+		t.Fatalf("rune count = %d, want 60 Cyrillic runes in 120 bytes", len([]rune(got)))
 	}
 }
