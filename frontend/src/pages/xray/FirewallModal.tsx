@@ -304,7 +304,7 @@ export function FirewallModal({ open, onClose }: Props) {
             </Space>
           </div>
 
-          <Divider orientation="left">{text.rules}</Divider>
+          <Divider orientation="start">{text.rules}</Divider>
           <Table<FirewallRule>
             size="small"
             rowKey={(rule) => `${rulePort(rule)}-${rule.protocol}-${rule.source}`}
@@ -314,7 +314,7 @@ export function FirewallModal({ open, onClose }: Props) {
             scroll={{ x: 620 }}
           />
 
-          <Divider orientation="left">{text.manual}</Divider>
+          <Divider orientation="start">{text.manual}</Divider>
           <Space wrap>
             <InputNumber
               min={1}
