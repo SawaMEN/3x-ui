@@ -37,8 +37,15 @@ var contractExtraRoutes = map[string]bool{
 	"GET /ws":                  true,
 }
 
+// Host-firewall mutation is intentionally an internal panel UI surface rather
+// than a supported public automation API. Keep it out of OpenAPI until a
+// stable permission model and compatibility contract are defined for it.
+func isInternalUIAPI(path string) bool {
+	return strings.HasPrefix(path, "/panel/api/server/firewall/")
+}
+
 func inContractScope(method, path string) bool {
-	return strings.HasPrefix(path, "/panel/api/") || contractExtraRoutes[method+" "+path]
+	return (strings.HasPrefix(path, "/panel/api/") && !isInternalUIAPI(path)) || contractExtraRoutes[method+" "+path]
 }
 
 func registeredContractRoutes(t *testing.T) map[string]bool {
