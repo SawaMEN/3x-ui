@@ -39,7 +39,7 @@ func (a *FirewallController) status(c *gin.Context) {
 		jsonMsg(c, "failed to reconcile firewall backend", err)
 		return
 	}
-	status, err := a.firewallService.GetManagedStatus(c.Request.Context(), firewallSafetyPort(c))
+	status, err := a.firewallService.GetManagedStatusSafe(c.Request.Context(), firewallSafetyPort(c))
 	jsonObj(c, status, err)
 }
 
@@ -93,7 +93,7 @@ func (a *FirewallController) sync(c *gin.Context) {
 	if !a.initializeControl(c) {
 		return
 	}
-	status, err := a.firewallService.SyncManaged(c.Request.Context(), firewallSafetyPort(c))
+	status, err := a.firewallService.SyncManagedSafe(c.Request.Context(), firewallSafetyPort(c))
 	jsonObj(c, status, err)
 }
 
@@ -110,7 +110,7 @@ func (a *FirewallController) addRule(c *gin.Context) {
 	if !a.initializeControl(c) {
 		return
 	}
-	status, err := a.firewallService.AddManagedManualRule(c.Request.Context(), req.Port, req.Protocol, req.Label, firewallSafetyPort(c))
+	status, err := a.firewallService.AddManagedManualRuleSafe(c.Request.Context(), req.Port, req.Protocol, req.Label, firewallSafetyPort(c))
 	jsonObj(c, status, err)
 }
 
@@ -126,7 +126,7 @@ func (a *FirewallController) deleteRule(c *gin.Context) {
 	if !a.initializeControl(c) {
 		return
 	}
-	status, err := a.firewallService.DeleteManagedManualRule(c.Request.Context(), req.Port, req.Protocol, firewallSafetyPort(c))
+	status, err := a.firewallService.DeleteManagedManualRuleSafe(c.Request.Context(), req.Port, req.Protocol, firewallSafetyPort(c))
 	jsonObj(c, status, err)
 }
 
