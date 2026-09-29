@@ -125,7 +125,37 @@ describe('SubscriptionGeneralTab', () => {
 
     fireEvent.change(screen.getByDisplayValue('2096'), { target: { value: '8443' } });
 
-    expect(updateSetting).toHaveBeenCalledWith({ subPort: 8443 });
+    expect(updateSetting).toHaveBeenCalledWith({
+      subPort: 8443,
+      subURI: '',
+      subJsonURI: '',
+      subClashURI: '',
+    });
+  });
+
+  it('moves subscription links with the listener while preserving reverse proxy ports', () => {
+    const updateSetting = vi.fn();
+    renderWithProviders(
+      <MemoryRouter initialEntries={['/settings#subscription']}>
+        <SubscriptionGeneralTab
+          allSetting={new AllSetting({
+            subPort: 2096,
+            subURI: 'https://sub.example.com:2096/sub/',
+            subJsonURI: 'https://sub.example.com:2096/json/',
+            subClashURI: 'https://proxy.example.com:443/clash/',
+          })}
+          updateSetting={updateSetting}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.change(screen.getByDisplayValue('2096'), { target: { value: '8443' } });
+    expect(updateSetting).toHaveBeenCalledWith({
+      subPort: 8443,
+      subURI: 'https://sub.example.com:8443/sub/',
+      subJsonURI: 'https://sub.example.com:8443/json/',
+      subClashURI: 'https://proxy.example.com:443/clash/',
+    });
   });
 
   it('uses router navigation to open subscription format settings', () => {

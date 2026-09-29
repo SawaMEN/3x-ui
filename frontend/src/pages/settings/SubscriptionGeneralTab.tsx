@@ -29,6 +29,22 @@ interface SubscriptionGeneralTabProps {
 const PANEL_SETTINGS_TAB = '1';
 const HAPP_SETTINGS_TAB = '5';
 
+function uriWithSubscriptionPort(uri: string, previousPort: number, nextPort: number): string {
+  if (!uri) return uri;
+  try {
+    const parsed = new URL(uri);
+    if (parsed.port !== String(previousPort)) return uri;
+    parsed.port =
+      (parsed.protocol === 'https:' && nextPort === 443) ||
+      (parsed.protocol === 'http:' && nextPort === 80)
+        ? ''
+        : String(nextPort);
+    return parsed.toString();
+  } catch {
+    return uri;
+  }
+}
+
 export default function SubscriptionGeneralTab({
   allSetting,
   updateSetting,
@@ -40,6 +56,15 @@ export default function SubscriptionGeneralTab({
   // Keep the URL semantic while mapping to the legacy numeric key used by these inner tabs.
   const initialTab =
     searchParams.get('subscriptionTab') === 'happ' ? HAPP_SETTINGS_TAB : PANEL_SETTINGS_TAB;
+
+  const changeSubscriptionPort = (nextPort: number) => {
+    updateSetting({
+      subPort: nextPort,
+      subURI: uriWithSubscriptionPort(allSetting.subURI, allSetting.subPort, nextPort),
+      subJsonURI: uriWithSubscriptionPort(allSetting.subJsonURI, allSetting.subPort, nextPort),
+      subClashURI: uriWithSubscriptionPort(allSetting.subClashURI, allSetting.subPort, nextPort),
+    });
+  };
 
   return (
     <Tabs
@@ -121,7 +146,7 @@ export default function SubscriptionGeneralTab({
                   min={1}
                   max={65535}
                   style={{ width: '100%' }}
-                  onChange={onNumber((v) => updateSetting({ subPort: v }))}
+                  onChange={onNumber(changeSubscriptionPort)}
                 />
               </SettingListItem>
               <SettingListItem
