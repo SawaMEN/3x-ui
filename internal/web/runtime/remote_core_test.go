@@ -12,12 +12,10 @@ import (
 )
 
 func TestRemoteRestartXrayUsesCoreAwareEndpoint(t *testing.T) {
-	var gotPath string
+	var gotMethod, gotPath string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
 		gotPath = r.URL.Path
-		if r.Method != http.MethodPost {
-			t.Fatalf("method = %s, want POST", r.Method)
-		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"success":true,"msg":"","obj":null}`))
 	}))
@@ -45,6 +43,9 @@ func TestRemoteRestartXrayUsesCoreAwareEndpoint(t *testing.T) {
 
 	if err := r.RestartXray(context.Background()); err != nil {
 		t.Fatalf("RestartXray() error = %v", err)
+	}
+	if gotMethod != http.MethodPost {
+		t.Fatalf("method = %q, want POST", gotMethod)
 	}
 	if gotPath != "/panel/api/server/restartCoreService" {
 		t.Fatalf("path = %q, want %q", gotPath, "/panel/api/server/restartCoreService")
