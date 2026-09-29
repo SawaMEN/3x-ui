@@ -118,6 +118,55 @@ func (s *FirewallService) GetManagedStatusSafe(ctx context.Context, safetyPort i
 	return s.managedStatusSafeLocked(ctx, safetyPort)
 }
 
+func (s *FirewallService) SetManagedEnabledSafe(ctx context.Context, enabled bool, safetyPort int) (FirewallManagedStatus, error) {
+	firewallMu.Lock()
+	defer firewallMu.Unlock()
+	backend, err := detectManagedFirewallBackend(ctx)
+	if err != nil {
+		return FirewallManagedStatus{}, err
+	}
+	if enabled {
+		if err := s.syncManagedSafeLocked(ctx, backend, safetyPort); err != nil {
+			return FirewallManagedStatus{}, err
+		}
+		if backend.name == "ufw" || backend.name == "firewalld" {
+			if err := setFirewallBackendEnabled(ctx, backend, true); err != nil {
+				return FirewallManagedStatus{}, err
+			}
+			if err := s.syncManagedSafeLocked(ctx, backend, safetyPort); err != nil {
+				return FirewallManagedStatus{}, err
+			}
+		}
+	} else if err := disableManagedBackend(ctx, backend); err != nil {
+		return FirewallManagedStatus{}, err
+	}
+	return s.managedStatusSafeLocked(ctx, safetyPort)
+}
+
+func (s *FirewallService) SetManagedAutoSyncPreferenceSafe(ctx context.Context, enabled bool, safetyPort int) (FirewallManagedStatus, error) {
+	firewallMu.Lock()
+	defer firewallMu.Unlock()
+	if err := (&SettingService{}).setBool(firewallAutoSyncKey, enabled); err != nil {
+		return FirewallManagedStatus{}, err
+	}
+	if enabled {
+		backend, err := detectManagedFirewallBackend(ctx)
+		if err != nil {
+			return FirewallManagedStatus{}, err
+		}
+		on, err := backend.enabled(ctx)
+		if err != nil {
+			return FirewallManagedStatus{}, err
+		}
+		if on {
+			if err := s.syncManagedSafeLocked(ctx, backend, safetyPort); err != nil {
+				return FirewallManagedStatus{}, err
+			}
+		}
+	}
+	return s.managedStatusSafeLocked(ctx, safetyPort)
+}
+
 func (s *FirewallService) SyncManagedSafe(ctx context.Context, safetyPort int) (FirewallManagedStatus, error) {
 	firewallMu.Lock()
 	defer firewallMu.Unlock()
