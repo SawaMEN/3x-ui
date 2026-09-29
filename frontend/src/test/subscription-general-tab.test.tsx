@@ -133,6 +133,30 @@ describe('SubscriptionGeneralTab', () => {
     });
   });
 
+  it('repairs saved 2096 URLs after the listener port was changed earlier', () => {
+    const updateSetting = vi.fn();
+    renderWithProviders(
+      <MemoryRouter initialEntries={['/settings#subscription']}>
+        <SubscriptionGeneralTab
+          allSetting={new AllSetting({
+            subPort: 8443,
+            subURI: 'https://sub.example.com:2096/sub/',
+            subJsonURI: 'https://sub.example.com:2096/json/',
+            subClashURI: 'https://proxy.example.com/clash/',
+          })}
+          updateSetting={updateSetting}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Replace 2096 with current port' }));
+    expect(updateSetting).toHaveBeenCalledWith({
+      subURI: 'https://sub.example.com:8443/sub/',
+      subJsonURI: 'https://sub.example.com:8443/json/',
+      subClashURI: 'https://proxy.example.com/clash/',
+    });
+  });
+
   it('moves subscription links with the listener while preserving reverse proxy ports', () => {
     const updateSetting = vi.fn();
     renderWithProviders(

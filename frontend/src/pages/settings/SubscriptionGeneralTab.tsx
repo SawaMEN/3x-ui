@@ -45,6 +45,14 @@ function uriWithSubscriptionPort(uri: string, previousPort: number, nextPort: nu
   }
 }
 
+function usesOldDefaultPort(uri: string): boolean {
+  try {
+    return new URL(uri).port === '2096';
+  } catch {
+    return false;
+  }
+}
+
 export default function SubscriptionGeneralTab({
   allSetting,
   updateSetting,
@@ -63,6 +71,17 @@ export default function SubscriptionGeneralTab({
       subURI: uriWithSubscriptionPort(allSetting.subURI, allSetting.subPort, nextPort),
       subJsonURI: uriWithSubscriptionPort(allSetting.subJsonURI, allSetting.subPort, nextPort),
       subClashURI: uriWithSubscriptionPort(allSetting.subClashURI, allSetting.subPort, nextPort),
+    });
+  };
+  const hasOldSubscriptionURL =
+    allSetting.subPort !== 2096 &&
+    [allSetting.subURI, allSetting.subJsonURI, allSetting.subClashURI].some(usesOldDefaultPort);
+
+  const repairOldSubscriptionURLs = () => {
+    updateSetting({
+      subURI: uriWithSubscriptionPort(allSetting.subURI, 2096, allSetting.subPort),
+      subJsonURI: uriWithSubscriptionPort(allSetting.subJsonURI, 2096, allSetting.subPort),
+      subClashURI: uriWithSubscriptionPort(allSetting.subClashURI, 2096, allSetting.subPort),
     });
   };
 
@@ -149,6 +168,19 @@ export default function SubscriptionGeneralTab({
                   onChange={onNumber(changeSubscriptionPort)}
                 />
               </SettingListItem>
+              {hasOldSubscriptionURL && (
+                <Alert
+                  type="warning"
+                  showIcon
+                  style={{ margin: '12px 20px' }}
+                  title={t('pages.settings.subOldPortWarning')}
+                  action={
+                    <Button size="small" onClick={repairOldSubscriptionURLs}>
+                      {t('pages.settings.subOldPortRepair')}
+                    </Button>
+                  }
+                />
+              )}
               <SettingListItem
                 paddings="small"
                 title={t('pages.settings.subPath')}
