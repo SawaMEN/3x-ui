@@ -53,9 +53,59 @@ jobs:
               body,
               count=1,
           )
+          body = body.replace(
+              "if marker not in s:\n    raise SystemExit('NodeList version column marker missing')\n",
+              "",
+          )
           Path('/tmp/apply-node-singbox.py').write_text(body)
           PY
           python3 /tmp/apply-node-singbox.py
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path('frontend/src/pages/nodes/NodeList.tsx')
+          s = p.read_text()
+          marker = (
+              "      {\n"
+              "        title: t('pages.nodes.xrayVersion'),\n"
+              "        dataIndex: 'xrayVersion',\n"
+              "        align: 'center',\n"
+              "        render: (_value, record) => record.xrayVersion || '-',\n"
+              "      },"
+          )
+          replacement = (
+              "      {\n"
+              "        title: 'Core',\n"
+              "        dataIndex: 'runningCore',\n"
+              "        align: 'center',\n"
+              "        render: (_value, record) => (\n"
+              "          <Tooltip title={`Configured: ${record.coreType || '-'}`}>\n"
+              "            <Tag color={record.runningCore ? 'green' : 'default'} style={{ margin: 0 }}>\n"
+              "              {record.runningCore || 'stopped'}\n"
+              "            </Tag>\n"
+              "          </Tooltip>\n"
+              "        ),\n"
+              "      },\n"
+              "      {\n"
+              "        title: t('pages.nodes.xrayVersion'),\n"
+              "        dataIndex: 'xrayVersion',\n"
+              "        align: 'center',\n"
+              "        render: (_value, record) => record.xrayVersion || '-',\n"
+              "      },\n"
+              "      {\n"
+              "        title: 'sing-box',\n"
+              "        dataIndex: 'singboxVersion',\n"
+              "        align: 'center',\n"
+              "        render: (_value, record) =>\n"
+              "          record.singboxInstalled === false ? 'not installed' : record.singboxVersion || '-',\n"
+              "      },"
+          )
+          if marker not in s:
+              raise SystemExit('current NodeList xray version column marker missing')
+          p.write_text(s.replace(marker, replacement, 1))
+          PY
+
           rm -f .github/workflows/temp-node-singbox-pr.yml
           gofmt -w internal/web/controller/server.go internal/web/service/node.go internal/database/model/model.go
 
