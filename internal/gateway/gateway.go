@@ -21,7 +21,7 @@ const (
 
 // State describes both the Xray template and the recovery marker. Enabled is
 // true when either Gateway-owned config is present or a backup from an older
-///interrupted operation still exists, so the UI always offers a safe disable
+// interrupted operation still exists, so the UI always offers a safe disable
 // path instead of allowing a second backup to overwrite recovery data.
 type State struct {
 	Enabled      bool
@@ -31,9 +31,15 @@ type State struct {
 
 var operationMu sync.Mutex
 
+// InboundPort returns the local port Linux TPROXY rules must redirect to.
+func InboundPort() int {
+	return inboundPort
+}
+
 func gatewayInbound() map[string]any {
 	return map[string]any{
-		"listen":   "127.0.0.1",
+		// Do not bind this TPROXY listener to 127.0.0.1. Redirected packets from
+		// LAN clients arrive through PREROUTING and must be accepted by Xray.
 		"port":     inboundPort,
 		"protocol": "dokodemo-door",
 		"settings": map[string]any{
@@ -74,8 +80,8 @@ func gatewayOutbound() map[string]any {
 
 func gatewayRoutingRule() map[string]any {
 	return map[string]any{
-		"type":       "field",
-		"inboundTag": []any{inboundTag},
+		"type":        "field",
+		"inboundTag":  []any{inboundTag},
 		"outboundTag": outboundTag,
 	}
 }
