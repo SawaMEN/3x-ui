@@ -1007,6 +1007,7 @@ func (s *NodeService) UpdateHeartbeat(id int, p HeartbeatPatch) error {
 		updates["xray_version"] = p.XrayVersion
 	}
 	if p.SingBoxKnown {
+		updates["singbox_known"] = true
 		updates["singbox_version"] = p.SingBoxVersion
 		updates["singbox_installed"] = p.SingBoxInstalled
 		updates["singbox_state"] = p.SingBoxState
@@ -1424,6 +1425,7 @@ type ProbeResultUI struct {
 	XrayVersion      string  `json:"xrayVersion" example:"25.10.31"`
 	SingBoxVersion   string  `json:"singboxVersion"`
 	SingBoxInstalled bool    `json:"singboxInstalled"`
+	SingBoxKnown     bool    `json:"singboxKnown"`
 	CoreType         string  `json:"coreType"`
 	RunningCore      string  `json:"runningCore"`
 	PanelVersion     string  `json:"panelVersion" example:"v3.x.x"`
@@ -1445,6 +1447,7 @@ func (p HeartbeatPatch) ToUI(ok bool) ProbeResultUI {
 		XrayVersion:      p.XrayVersion,
 		SingBoxVersion:   p.SingBoxVersion,
 		SingBoxInstalled: p.SingBoxInstalled,
+		SingBoxKnown:     p.SingBoxKnown,
 		CoreType:         p.CoreType,
 		RunningCore:      p.RunningCore,
 		PanelVersion:     p.PanelVersion,

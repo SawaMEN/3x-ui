@@ -464,8 +464,11 @@ function NodeList({
         title: 'sing-box',
         dataIndex: 'singboxVersion',
         align: 'center',
-        render: (_value, record) =>
-          record.singboxInstalled === false ? 'not installed' : record.singboxVersion || '-',
+        render: (_value, record) => {
+          if (record.singboxKnown !== true) return 'unknown';
+          if (!record.singboxInstalled) return 'not installed';
+          return record.singboxVersion || 'installed';
+        },
       },
       {
         title: t('pages.nodes.panelVersion') || 'Panel version',

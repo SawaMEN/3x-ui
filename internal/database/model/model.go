@@ -820,6 +820,7 @@ type Node struct {
 	XrayVersion      string  `json:"xrayVersion" example:"25.10.31"`
 	SingBoxVersion   string  `json:"singboxVersion" gorm:"column:singbox_version"`
 	SingBoxInstalled bool    `json:"singboxInstalled" gorm:"column:singbox_installed;default:false"`
+	SingBoxKnown     bool    `json:"singboxKnown" gorm:"column:singbox_known;default:false"`
 	CoreType         string  `json:"coreType" gorm:"column:core_type"`
 	RunningCore      string  `json:"runningCore" gorm:"column:running_core"`
 	PanelVersion     string  `json:"panelVersion" gorm:"column:panel_version" example:"v3.x.x"`
@@ -882,6 +883,7 @@ type NodeSummary struct {
 	XrayVersion      string `json:"xrayVersion"`
 	SingBoxVersion   string `json:"singboxVersion"`
 	SingBoxInstalled bool   `json:"singboxInstalled"`
+	SingBoxKnown     bool   `json:"singboxKnown"`
 	CoreType         string `json:"coreType"`
 	RunningCore      string `json:"runningCore"`
 	// Core states/errors are forwarded so masters can surface failures on transitive sub-nodes too.

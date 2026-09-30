@@ -642,7 +642,18 @@ func (r *Remote) RestartXray(ctx context.Context) error {
 	// restart whichever core the node has selected. Newer nodes expose the
 	// core-aware endpoint and route it to Xray or sing-box as appropriate.
 	_, err := r.do(ctx, http.MethodPost, "panel/api/server/restartCoreService", nil)
-	return err
+	if err == nil {
+		return nil
+	}
+	// Older nodes predate restartCoreService and only expose restartXrayService.
+	// Fall back only when the endpoint itself is missing; a real 5xx/core error
+	// from a new node must be surfaced rather than hidden by a second restart.
+	msg := err.Error()
+	if !strings.Contains(msg, "HTTP 404") && !strings.Contains(msg, "HTTP 405") {
+		return err
+	}
+	_, legacyErr := r.do(ctx, http.MethodPost, "panel/api/server/restartXrayService", nil)
+	return legacyErr
 }
 
 // UpdatePanel asks the node to run its own official self-updater (update.sh)
