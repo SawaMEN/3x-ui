@@ -31,10 +31,11 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
           import subprocess
 
           previous = subprocess.check_output(
-              ['git', 'show', 'HEAD^:.github/workflows/temp-node-singbox-apply.yml'],
+              ['git', 'show', 'c4489ac80bf466ff4186e126798ca16a75573c22:.github/workflows/temp-node-singbox-apply.yml'],
               text=True,
           )
           start_marker = "          python3 <<'PY'\n"
@@ -46,6 +47,12 @@ jobs:
               line[10:] if line.startswith('          ') else line
               for line in body.splitlines()
           ) + '\n'
+          body = re.sub(
+              r"\n    if s\.count\(old\) != 1:\n        raise SystemExit\(f'non-unique replacement marker in \{path\}: \{old\[:120\]!r\}'\)\n",
+              "\n",
+              body,
+              count=1,
+          )
           Path('/tmp/apply-node-singbox.py').write_text(body)
           PY
           python3 /tmp/apply-node-singbox.py
