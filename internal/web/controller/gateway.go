@@ -61,18 +61,21 @@ func (a *GatewayController) enable(c *gin.Context) {
 		return
 	}
 
+	changed := false
 	if !gateway.IsEnabled() {
 		if err := gateway.Enable(); err != nil {
 			payload, _ := a.statusPayload()
 			jsonObj(c, payload, err)
 			return
 		}
+		changed = true
 	}
 
 	// Keep the same semantics as the Xray settings editor: apply the changed
 	// template immediately only when Xray is already running. A manually stopped
-	// core must stay stopped.
-	if a.xrayService.IsXrayRunning() {
+	// core must stay stopped. Repeated enable requests are intentionally idempotent
+	// and do not restart an unchanged Xray process.
+	if changed && a.xrayService.IsXrayRunning() {
 		if err := a.xrayService.RestartXray(false); err != nil {
 			payload, _ := a.statusPayload()
 			jsonObj(c, payload, err)
@@ -92,18 +95,21 @@ func (a *GatewayController) disable(c *gin.Context) {
 		return
 	}
 
+	changed := false
 	if gateway.IsEnabled() {
 		if err := gateway.Disable(); err != nil {
 			payload, _ := a.statusPayload()
 			jsonObj(c, payload, err)
 			return
 		}
+		changed = true
 	}
 
 	// Disabling remains available even after the operator has switched to
 	// sing-box, so a stale Gateway backup can always be restored. Restart Xray
-	// only when it is the selected running core.
-	if coreType != service.CoreTypeSingBox && a.xrayService.IsXrayRunning() {
+	// only when it is the selected running core. Repeated disable requests do not
+	// restart an unchanged process.
+	if changed && coreType != service.CoreTypeSingBox && a.xrayService.IsXrayRunning() {
 		if err := a.xrayService.RestartXray(false); err != nil {
 			payload, _ := a.statusPayload()
 			jsonObj(c, payload, err)
