@@ -340,8 +340,13 @@ func (s *Server) startTask(restartXray bool, loc *time.Location) {
 			}
 		}
 	} else if restartXray {
-		if err := (&service.SingBoxService{}).Restart(s.ctx); err != nil {
-			logger.Warning("start sing-box failed:", err)
+		singBoxService := &service.SingBoxService{}
+		if singBoxService.Installed() {
+			if err := singBoxService.Restart(s.ctx); err != nil {
+				logger.Warning("start sing-box failed:", err)
+			}
+		} else {
+			logger.Warning("sing-box is selected but not installed; leaving core stopped")
 		}
 	}
 	// Keep the scheduler core-agnostic: the operator can switch engines
