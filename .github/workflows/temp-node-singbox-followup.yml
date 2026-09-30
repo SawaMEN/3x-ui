@@ -1,0 +1,413 @@
+name: temp-node-singbox-followup
+
+on:
+  push:
+    branches:
+      - temp/node-singbox-status
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: temp/node-singbox-status
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Apply compatibility fixes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              s = p.read_text()
+              if old not in s:
+                  raise SystemExit(f'missing marker in {path}: {old[:160]!r}')
+              p.write_text(s.replace(old, new, 1))
+
+          # Persist whether a node actually supports the new sing-box status contract.
+          replace_once(
+              'internal/database/model/model.go',
+              '\tSingBoxInstalled bool    `json:"singboxInstalled" gorm:"column:singbox_installed;default:false"`\n\tCoreType',
+              '\tSingBoxInstalled bool    `json:"singboxInstalled" gorm:"column:singbox_installed;default:false"`\n\tSingBoxKnown     bool    `json:"singboxKnown" gorm:"column:singbox_known;default:false"`\n\tCoreType',
+          )
+          replace_once(
+              'internal/database/model/model.go',
+              '\tSingBoxInstalled bool   `json:"singboxInstalled"`\n\tCoreType',
+              '\tSingBoxInstalled bool   `json:"singboxInstalled"`\n\tSingBoxKnown     bool   `json:"singboxKnown"`\n\tCoreType',
+          )
+
+          # Persist the known flag only when the remote node actually reports sing-box.
+          replace_once(
+              'internal/web/service/node.go',
+              '\tif p.SingBoxKnown {\n\t\tupdates["singbox_version"] = p.SingBoxVersion',
+              '\tif p.SingBoxKnown {\n\t\tupdates["singbox_known"] = true\n\t\tupdates["singbox_version"] = p.SingBoxVersion',
+          )
+          replace_once(
+              'internal/web/service/node.go',
+              '\tSingBoxInstalled bool    `json:"singboxInstalled"`\n\tCoreType',
+              '\tSingBoxInstalled bool    `json:"singboxInstalled"`\n\tSingBoxKnown     bool    `json:"singboxKnown"`\n\tCoreType',
+          )
+          replace_once(
+              'internal/web/service/node.go',
+              '\t\tSingBoxInstalled: p.SingBoxInstalled,\n\t\tCoreType:',
+              '\t\tSingBoxInstalled: p.SingBoxInstalled,\n\t\tSingBoxKnown:     p.SingBoxKnown,\n\t\tCoreType:',
+          )
+
+          # Browser/API node contract must not drop the fields stored by heartbeat.
+          replace_once(
+              'internal/web/service/node_contract.go',
+              '\tXrayVersion         string   `json:"xrayVersion" example:"25.10.31"`\n\tPanelVersion',
+              '\tXrayVersion         string   `json:"xrayVersion" example:"25.10.31"`\n\tSingBoxVersion      string   `json:"singboxVersion"`\n\tSingBoxInstalled    bool     `json:"singboxInstalled"`\n\tSingBoxKnown        bool     `json:"singboxKnown"`\n\tCoreType            string   `json:"coreType"`\n\tRunningCore         string   `json:"runningCore"`\n\tPanelVersion',
+          )
+          replace_once(
+              'internal/web/service/node_contract.go',
+              '\tXrayState           string   `json:"xrayState" example:"running"`\n\tXrayError           string   `json:"xrayError" example:""`',
+              '\tXrayState           string   `json:"xrayState" example:"running"`\n\tXrayError           string   `json:"xrayError" example:""`\n\tSingBoxState        string   `json:"singboxState" example:"running"`\n\tSingBoxError        string   `json:"singboxError" example:""`',
+          )
+          replace_once(
+              'internal/web/service/node_contract.go',
+              '\t\tXrayVersion:         n.XrayVersion,\n\t\tPanelVersion:',
+              '\t\tXrayVersion:         n.XrayVersion,\n\t\tSingBoxVersion:      n.SingBoxVersion,\n\t\tSingBoxInstalled:    n.SingBoxInstalled,\n\t\tSingBoxKnown:        n.SingBoxKnown,\n\t\tCoreType:            n.CoreType,\n\t\tRunningCore:         n.RunningCore,\n\t\tPanelVersion:',
+          )
+          replace_once(
+              'internal/web/service/node_contract.go',
+              '\t\tXrayState:           n.XrayState,\n\t\tXrayError:           n.XrayError,',
+              '\t\tXrayState:           n.XrayState,\n\t\tXrayError:           n.XrayError,\n\t\tSingBoxState:        n.SingBoxState,\n\t\tSingBoxError:        n.SingBoxError,',
+          )
+
+          # Preserve the known flag through chained/transitive nodes.
+          replace_once(
+              'internal/web/service/node_tree.go',
+              '\t\t\tSingBoxInstalled: n.SingBoxInstalled,\n\t\t\tCoreType:',
+              '\t\t\tSingBoxInstalled: n.SingBoxInstalled,\n\t\t\tSingBoxKnown: n.SingBoxKnown,\n\t\t\tCoreType:',
+          )
+          replace_once(
+              'internal/web/service/node_tree.go',
+              '\t\t\tSingBoxInstalled: sum.SingBoxInstalled,\n\t\t\tCoreType:',
+              '\t\t\tSingBoxInstalled: sum.SingBoxInstalled,\n\t\t\tSingBoxKnown: sum.SingBoxKnown,\n\t\t\tCoreType:',
+          )
+
+          # New panels use restartCoreService; old Xray-only nodes still need the legacy endpoint.
+          replace_once(
+              'internal/web/runtime/remote.go',
+              '''func (r *Remote) RestartXray(ctx context.Context) error {
+\t// Keep the legacy Runtime method name for mixed-version compatibility, but
+\t// restart whichever core the node has selected. Newer nodes expose the
+\t// core-aware endpoint and route it to Xray or sing-box as appropriate.
+\t_, err := r.do(ctx, http.MethodPost, "panel/api/server/restartCoreService", nil)
+\treturn err
+}''',
+              '''func (r *Remote) RestartXray(ctx context.Context) error {
+\t// Keep the legacy Runtime method name for mixed-version compatibility, but
+\t// restart whichever core the node has selected. Newer nodes expose the
+\t// core-aware endpoint and route it to Xray or sing-box as appropriate.
+\t_, err := r.do(ctx, http.MethodPost, "panel/api/server/restartCoreService", nil)
+\tif err == nil {
+\t\treturn nil
+\t}
+\t// Older nodes predate restartCoreService and only expose restartXrayService.
+\t// Fall back only when the endpoint itself is missing; a real 5xx/core error
+\t// from a new node must be surfaced rather than hidden by a second restart.
+\tmsg := err.Error()
+\tif !strings.Contains(msg, "HTTP 404") && !strings.Contains(msg, "HTTP 405") {
+\t\treturn err
+\t}
+\t_, legacyErr := r.do(ctx, http.MethodPost, "panel/api/server/restartXrayService", nil)
+\treturn legacyErr
+}''',
+          )
+
+          # Frontend knows the difference between unknown and explicitly absent sing-box.
+          p = Path('frontend/src/schemas/node.ts')
+          s = p.read_text()
+          needle = '    singboxInstalled: z.boolean().optional(),\n'
+          if s.count(needle) != 2:
+              raise SystemExit(f'expected 2 singboxInstalled schema markers, got {s.count(needle)}')
+          p.write_text(s.replace(needle, needle + '    singboxKnown: z.boolean().optional(),\n'))
+
+          replace_once(
+              'frontend/src/pages/nodes/NodeList.tsx',
+              '''        render: (_value, record) =>
+          record.singboxInstalled === false ? 'not installed' : record.singboxVersion || '-',
+      },''',
+              '''        render: (_value, record) => {
+          if (record.singboxKnown !== true) return 'unknown';
+          if (!record.singboxInstalled) return 'not installed';
+          return record.singboxVersion || 'installed';
+        },
+      },''',
+          )
+          PY
+
+          cat > internal/web/runtime/remote_core_test.go <<'EOF'
+          package runtime
+
+          import (
+              "context"
+              "encoding/json"
+              "net"
+              "net/http"
+              "net/http/httptest"
+              "strconv"
+              "strings"
+              "testing"
+
+              "github.com/SawaMEN/3x-ui/v3/internal/database/model"
+          )
+
+          func remoteForTestServer(t *testing.T, server *httptest.Server) *Remote {
+              t.Helper()
+              host, portText, err := net.SplitHostPort(server.Listener.Addr().String())
+              if err != nil {
+                  t.Fatal(err)
+              }
+              port, err := strconv.Atoi(portText)
+              if err != nil {
+                  t.Fatal(err)
+              }
+              return NewRemote(&model.Node{
+                  Id:                  1,
+                  Name:                "test-node",
+                  Address:             host,
+                  Port:                port,
+                  Scheme:              "http",
+                  BasePath:            "/",
+                  ApiToken:            "test-token",
+                  AllowPrivateAddress: true,
+              }, nil)
+          }
+
+          func writeOKEnvelope(w http.ResponseWriter) {
+              w.Header().Set("Content-Type", "application/json")
+              _ = json.NewEncoder(w).Encode(map[string]any{"success": true, "msg": "", "obj": nil})
+          }
+
+          func TestRemoteRestartXrayUsesCoreAwareEndpoint(t *testing.T) {
+              var gotMethod, gotPath string
+              server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+                  gotMethod = r.Method
+                  gotPath = r.URL.Path
+                  writeOKEnvelope(w)
+              }))
+              defer server.Close()
+
+              remote := remoteForTestServer(t, server)
+              if err := remote.RestartXray(context.Background()); err != nil {
+                  t.Fatalf("RestartXray() error = %v", err)
+              }
+              if gotMethod != http.MethodPost {
+                  t.Fatalf("method = %q, want POST", gotMethod)
+              }
+              if gotPath != "/panel/api/server/restartCoreService" {
+                  t.Fatalf("path = %q, want core-aware endpoint", gotPath)
+              }
+          }
+
+          func TestRemoteRestartXrayFallsBackForLegacyNode(t *testing.T) {
+              var paths []string
+              server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+                  paths = append(paths, r.URL.Path)
+                  switch r.URL.Path {
+                  case "/panel/api/server/restartCoreService":
+                      http.NotFound(w, r)
+                  case "/panel/api/server/restartXrayService":
+                      writeOKEnvelope(w)
+                  default:
+                      http.NotFound(w, r)
+                  }
+              }))
+              defer server.Close()
+
+              remote := remoteForTestServer(t, server)
+              if err := remote.RestartXray(context.Background()); err != nil {
+                  t.Fatalf("RestartXray() fallback error = %v", err)
+              }
+              want := []string{"/panel/api/server/restartCoreService", "/panel/api/server/restartXrayService"}
+              if len(paths) != len(want) || paths[0] != want[0] || paths[1] != want[1] {
+                  t.Fatalf("paths = %#v, want %#v", paths, want)
+              }
+          }
+
+          func TestRemoteRestartXrayDoesNotHideCoreFailure(t *testing.T) {
+              legacyCalled := false
+              server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+                  if r.URL.Path == "/panel/api/server/restartXrayService" {
+                      legacyCalled = true
+                  }
+                  http.Error(w, "core failed", http.StatusInternalServerError)
+              }))
+              defer server.Close()
+
+              remote := remoteForTestServer(t, server)
+              err := remote.RestartXray(context.Background())
+              if err == nil || !strings.Contains(err.Error(), "HTTP 500") {
+                  t.Fatalf("RestartXray() error = %v, want HTTP 500", err)
+              }
+              if legacyCalled {
+                  t.Fatal("legacy restart endpoint must not be called after a real core failure")
+              }
+          }
+          EOF
+
+          cat > internal/web/service/node_core_status_test.go <<'EOF'
+          package service
+
+          import (
+              "context"
+              "encoding/json"
+              "net"
+              "net/http"
+              "net/http/httptest"
+              "strconv"
+              "testing"
+
+              "github.com/SawaMEN/3x-ui/v3/internal/database/model"
+          )
+
+          func probeStatusObject(t *testing.T, obj map[string]any) HeartbeatPatch {
+              t.Helper()
+              server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+                  if r.URL.Path != "/panel/api/server/status" {
+                      http.NotFound(w, r)
+                      return
+                  }
+                  w.Header().Set("Content-Type", "application/json")
+                  _ = json.NewEncoder(w).Encode(map[string]any{"success": true, "msg": "", "obj": obj})
+              }))
+              defer server.Close()
+
+              host, portText, err := net.SplitHostPort(server.Listener.Addr().String())
+              if err != nil {
+                  t.Fatal(err)
+              }
+              port, err := strconv.Atoi(portText)
+              if err != nil {
+                  t.Fatal(err)
+              }
+              node := &model.Node{
+                  Address:             host,
+                  Port:                port,
+                  Scheme:              "http",
+                  BasePath:            "/",
+                  AllowPrivateAddress: true,
+              }
+              patch, err := (&NodeService{}).probe(context.Background(), node, "")
+              if err != nil {
+                  t.Fatalf("probe() error = %v", err)
+              }
+              return patch
+          }
+
+          func TestProbeKeepsXrayAndSingBoxIndependent(t *testing.T) {
+              patch := probeStatusObject(t, map[string]any{
+                  "xray": map[string]any{"version": "25.10.31", "state": "stop", "errorMsg": ""},
+                  "singbox": map[string]any{"installed": true, "version": "1.12.0", "state": "running", "errorMsg": ""},
+                  "core": map[string]any{"type": "sing-box", "running": "sing-box", "state": "running", "version": "1.12.0", "errorMsg": ""},
+              })
+              if patch.XrayVersion != "25.10.31" || patch.SingBoxVersion != "1.12.0" {
+                  t.Fatalf("versions = xray:%q sing-box:%q", patch.XrayVersion, patch.SingBoxVersion)
+              }
+              if !patch.SingBoxKnown || !patch.SingBoxInstalled {
+                  t.Fatalf("sing-box flags = known:%v installed:%v", patch.SingBoxKnown, patch.SingBoxInstalled)
+              }
+              if patch.CoreType != CoreTypeSingBox || patch.RunningCore != CoreTypeSingBox {
+                  t.Fatalf("core = configured:%q running:%q", patch.CoreType, patch.RunningCore)
+              }
+          }
+
+          func TestProbeReportsKnownMissingSingBox(t *testing.T) {
+              patch := probeStatusObject(t, map[string]any{
+                  "xray": map[string]any{"version": "25.10.31", "state": "running", "errorMsg": ""},
+                  "singbox": map[string]any{"installed": false, "version": "", "state": "stop", "errorMsg": ""},
+                  "core": map[string]any{"type": "xray", "running": "xray", "state": "running", "version": "25.10.31", "errorMsg": ""},
+              })
+              if !patch.SingBoxKnown || patch.SingBoxInstalled || patch.SingBoxVersion != "" {
+                  t.Fatalf("sing-box = known:%v installed:%v version:%q", patch.SingBoxKnown, patch.SingBoxInstalled, patch.SingBoxVersion)
+              }
+              if patch.RunningCore != CoreTypeXray {
+                  t.Fatalf("running core = %q, want xray", patch.RunningCore)
+              }
+          }
+
+          func TestProbeLegacyXrayNodeLeavesSingBoxUnknown(t *testing.T) {
+              patch := probeStatusObject(t, map[string]any{
+                  "xray": map[string]any{"version": "25.10.31", "state": "running", "errorMsg": ""},
+              })
+              if patch.SingBoxKnown {
+                  t.Fatal("legacy node must not be reported as known missing sing-box")
+              }
+              if patch.CoreType != CoreTypeXray || patch.RunningCore != CoreTypeXray {
+                  t.Fatalf("legacy core = configured:%q running:%q", patch.CoreType, patch.RunningCore)
+              }
+          }
+
+          func TestNodeViewExposesCoreStatus(t *testing.T) {
+              view := toNodeView(&model.Node{
+                  XrayVersion: "25.10.31", SingBoxVersion: "1.12.0",
+                  SingBoxInstalled: true, SingBoxKnown: true,
+                  CoreType: CoreTypeSingBox, RunningCore: CoreTypeSingBox,
+                  SingBoxState: "running", SingBoxError: "",
+              })
+              if view.SingBoxVersion != "1.12.0" || !view.SingBoxInstalled || !view.SingBoxKnown {
+                  t.Fatalf("node view lost sing-box status: %#v", view)
+              }
+              if view.CoreType != CoreTypeSingBox || view.RunningCore != CoreTypeSingBox {
+                  t.Fatalf("node view lost core status: %#v", view)
+              }
+          }
+          EOF
+
+          gofmt -w \
+            internal/database/model/model.go \
+            internal/web/service/node.go \
+            internal/web/service/node_contract.go \
+            internal/web/service/node_tree.go \
+            internal/web/service/node_core_status_test.go \
+            internal/web/runtime/remote.go \
+            internal/web/runtime/remote_core_test.go
+
+      - name: Backend tests
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            if GODEBUG=http2client=0 go test ./internal/web/service ./internal/web/runtime ./internal/database/model; then
+              exit 0
+            fi
+            echo "Backend test attempt ${attempt} failed; retrying"
+            sleep $((attempt * 5))
+          done
+          exit 1
+
+      - name: Frontend checks
+        working-directory: frontend
+        run: |
+          npm ci --ignore-scripts
+          npm run typecheck
+          npx oxlint src/pages/nodes/NodeList.tsx src/schemas/node.ts
+
+      - name: Commit compatibility fixes
+        shell: bash
+        run: |
+          rm -f .github/workflows/temp-node-singbox-followup.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git diff --cached --check
+          git commit -m "fix(nodes): complete sing-box status compatibility"
+          git push origin HEAD:temp/node-singbox-status
