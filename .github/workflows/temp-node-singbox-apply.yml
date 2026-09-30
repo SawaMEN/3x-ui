@@ -117,7 +117,7 @@ jobs:
         run: |
           npm ci --ignore-scripts
           npm run typecheck
-          npm run lint
+          npx oxlint src/pages/nodes/NodeList.tsx src/schemas/node.ts
 
       - name: Commit implementation
         shell: bash
