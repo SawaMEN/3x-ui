@@ -12,7 +12,8 @@ const jsonOptions = { headers: { 'Content-Type': 'application/json' } };
 
 export default function TelemtSubscriptionToggle() {
   const [portalTarget, setPortalTarget] = useState<Element | null>(null);
-  const [enabled, setEnabled] = useState(true);
+  const [enabled, setEnabled] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -37,9 +38,16 @@ export default function TelemtSubscriptionToggle() {
       const response = await HttpUtil.get<SubscriptionProxySetting>(
         '/panel/api/telemt/subscription-proxy',
       );
-      if (response?.success && response.obj) {
-        setEnabled(Boolean(response.obj.enabled));
+      if (!response?.success || !response.obj) {
+        setLoaded(false);
+        message.error(response?.msg || 'Не удалось получить настройку личных Telemt-прокси');
+        return;
       }
+      setEnabled(Boolean(response.obj.enabled));
+      setLoaded(true);
+    } catch {
+      setLoaded(false);
+      message.error('Не удалось получить настройку личных Telemt-прокси');
     } finally {
       setLoading(false);
     }
@@ -50,6 +58,8 @@ export default function TelemtSubscriptionToggle() {
   }, [loadSetting]);
 
   const updateSetting = async (checked: boolean) => {
+    if (!loaded || saving) return;
+
     const previous = enabled;
     setEnabled(checked);
     setSaving(true);
@@ -59,14 +69,14 @@ export default function TelemtSubscriptionToggle() {
         { enabled: checked },
         jsonOptions,
       );
-      if (!response?.success) {
+      if (!response?.success || !response.obj) {
         setEnabled(previous);
         message.error(response?.msg || 'Не удалось сохранить настройку личных Telemt-прокси');
         return;
       }
-      setEnabled(Boolean(response.obj?.enabled ?? checked));
+      setEnabled(Boolean(response.obj.enabled));
       message.success(
-        checked
+        response.obj.enabled
           ? 'Личные Telemt-прокси для подписок включены'
           : 'Личные Telemt-прокси для подписок выключены',
       );
@@ -83,17 +93,20 @@ export default function TelemtSubscriptionToggle() {
   return createPortal(
     <Tooltip
       title={
-        enabled
-          ? 'Для подписок создаются личные Telemt-прокси. Уже созданные прокси сохраняются.'
-          : 'Новые личные Telemt-прокси не создаются, вкладка Telemt в подписке скрыта. Существующие прокси не удаляются.'
+        !loaded
+          ? 'Состояние настройки не удалось получить. Обновите страницу и повторите попытку.'
+          : enabled
+            ? 'Для подписок создаются личные Telemt-прокси. Уже созданные прокси сохраняются.'
+            : 'Новые личные Telemt-прокси не создаются, вкладка Telemt в подписке скрыта. Существующие прокси не удаляются.'
       }
     >
       <Space size={8} wrap>
         <Typography.Text type="secondary">Личные прокси в подписках</Typography.Text>
         <Switch
+          aria-label="Личные Telemt-прокси в подписках"
           checked={enabled}
           loading={loading || saving}
-          disabled={loading || saving}
+          disabled={!loaded || loading || saving}
           onChange={(checked) => void updateSetting(checked)}
         />
       </Space>
