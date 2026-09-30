@@ -242,10 +242,11 @@ func (a *ServerController) status(c *gin.Context) {
 	singBoxState := service.Stop
 	singBoxError := ""
 	singBoxVersion := ""
-	singBoxInstalled := false
-	if version, versionErr := a.singBoxService.CachedVersion(c.Request.Context()); versionErr == nil && version != "" {
-		singBoxInstalled = true
-		singBoxVersion = version
+	singBoxInstalled := a.singBoxService.Installed()
+	if singBoxInstalled {
+		if version, versionErr := a.singBoxService.CachedVersion(c.Request.Context()); versionErr == nil && version != "" {
+			singBoxVersion = version
+		}
 	}
 	if a.singBoxService.IsRunning() {
 		singBoxState = service.Running
