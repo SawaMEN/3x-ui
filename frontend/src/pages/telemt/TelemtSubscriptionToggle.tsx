@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Space, Switch, Tooltip, Typography, message } from 'antd';
 import { createPortal } from 'react-dom';
 
@@ -17,29 +17,33 @@ export default function TelemtSubscriptionToggle() {
   const [saving, setSaving] = useState(false);
   const portalTarget = document.querySelector('.telemt-header');
 
-  const loadSetting = useCallback(async () => {
-    try {
-      const response = await HttpUtil.get<SubscriptionProxySetting>(
-        '/panel/api/telemt/subscription-proxy',
-      );
-      if (!response?.success || !response.obj) {
-        setLoaded(false);
-        message.error(response?.msg || 'Не удалось получить настройку личных Telemt-прокси');
-        return;
-      }
-      setEnabled(Boolean(response.obj.enabled));
-      setLoaded(true);
-    } catch {
-      setLoaded(false);
-      message.error('Не удалось получить настройку личных Telemt-прокси');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
-    void loadSetting();
-  }, [loadSetting]);
+    let active = true;
+
+    void HttpUtil.get<SubscriptionProxySetting>('/panel/api/telemt/subscription-proxy')
+      .then((response) => {
+        if (!active) return;
+        if (!response?.success || !response.obj) {
+          setLoaded(false);
+          message.error(response?.msg || 'Не удалось получить настройку личных Telemt-прокси');
+          return;
+        }
+        setEnabled(Boolean(response.obj.enabled));
+        setLoaded(true);
+      })
+      .catch(() => {
+        if (!active) return;
+        setLoaded(false);
+        message.error('Не удалось получить настройку личных Telemt-прокси');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const updateSetting = async (checked: boolean) => {
     if (!loaded || saving) return;
