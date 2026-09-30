@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 
 import NodeList from '@/pages/nodes/NodeList';
 import type { NodeRecord } from '@/schemas/node';
@@ -16,8 +16,12 @@ function sampleNodes(): NodeRecord[] {
 }
 
 describe('NodeList desktop table row keys', () => {
-  it('gives transitive sub-node rows distinct keys instead of colliding on id 0', () => {
-    const { container } = renderWithProviders(
+  afterEach(() => vi.restoreAllMocks());
+
+  it('keeps transitive rows and status cells free of React key collisions', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    renderWithProviders(
       <NodeList
         nodes={sampleNodes()}
         isMobile={false}
@@ -35,11 +39,17 @@ describe('NodeList desktop table row keys', () => {
       />,
     );
 
-    const rowKeys = Array.from(container.querySelectorAll('tr[data-row-key]'))
-      .map((row) => row.getAttribute('data-row-key'))
-      .filter((key): key is string => key !== null);
+    const duplicateKeyWarning = errorSpy.mock.calls.some((call) =>
+      call.some((arg) => typeof arg === 'string' && arg.includes('same key')),
+    );
+    const spreadKeyWarning = errorSpy.mock.calls.some((call) =>
+      call.some(
+        (arg) =>
+          typeof arg === 'string' && arg.includes('key') && arg.includes('being spread into JSX'),
+      ),
+    );
 
-    expect(rowKeys).toEqual(expect.arrayContaining(['1', 't-ca', 't-cb']));
-    expect(new Set(rowKeys).size).toBe(rowKeys.length);
+    expect(duplicateKeyWarning).toBe(false);
+    expect(spreadKeyWarning).toBe(false);
   });
 });

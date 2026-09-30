@@ -89,7 +89,6 @@ const heroData = {
 
 const apps = buildSubApps({ subUrl, sId, subTitle });
 const initialPlatform = detectPlatform(navigator.userAgent);
-const telemtEndpoint = buildTelemtEndpoint(window.location.href, sId);
 const RTL_LANGUAGES = new Set(['fa-IR', 'ar-EG']);
 
 // The sub page runs its own violet accent, so every antd control on it picks the
@@ -117,9 +116,10 @@ export default function SubPage() {
     setMessageInstance(messageApi);
   }, [messageApi]);
   const [lang, setLang] = useState<string>(() => LanguageManager.getLanguage('subscription'));
+  const telemtEndpoint = buildTelemtEndpoint(window.location.href, sId);
   const [telemtData, setTelemtData] = useState<TelemtSubscriptionData>({});
-  const [telemtLoading, setTelemtLoading] = useState(Boolean(telemtEndpoint));
-  const [telemtError, setTelemtError] = useState(!telemtEndpoint);
+  const [telemtLoading, setTelemtLoading] = useState(() => Boolean(telemtEndpoint));
+  const [telemtError, setTelemtError] = useState(() => !telemtEndpoint);
 
   useEffect(() => {
     if (!telemtEndpoint) return;
@@ -155,7 +155,7 @@ export default function SubPage() {
       });
 
     return () => controller.abort();
-  }, []);
+  }, [telemtEndpoint]);
 
   const onLangChange = useCallback((next: string) => {
     setLang(next);
