@@ -366,6 +366,7 @@ func (s *Server) startTask(restartXray bool, loc *time.Location) {
 	// is inert unless an Xray mutation has explicitly armed the flag.
 	_, _ = s.cron.AddFunc(cadenceXrayRestart, func() {
 		s.xrayService.ApplyPendingRestart()
+		(&service.SingBoxService{}).ApplyPendingRestart(s.ctx)
 	})
 
 	// Reconcile mtproto (mtg) sidecars and scrape their traffic
