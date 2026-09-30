@@ -71,66 +71,63 @@ interface HealthProps {
   status?: string;
   xrayState?: string;
   xrayError?: string;
+  singboxState?: string;
+  singboxError?: string;
+  coreType?: string;
+  runningCore?: string;
 }
 
-// Purple: the node's panel API is reachable (status=online) but its Xray core
-// has failed or been stopped. Distinct from a normal offline/unknown node.
-const XRAY_ERROR_COLOR = '#722ED1';
+const CORE_ERROR_COLOR = '#722ED1';
 
-// True when the panel is online but Xray itself reports error/stop.
-function hasXrayProblem(status?: string, xrayState?: string): boolean {
-  if (status !== 'online') return false;
-  const xs = (xrayState || '').toLowerCase().trim();
-  return xs === 'error' || xs === 'stop';
+function coreHealth(record: HealthProps) {
+  const configured = (record.coreType || 'xray').toLowerCase();
+  const state = configured === 'singbox' ? record.singboxState : record.xrayState;
+  const error = configured === 'singbox' ? record.singboxError : record.xrayError;
+  return { configured, state: (state || '').toLowerCase().trim(), error: error || '' };
 }
 
-// Tooltip text + icon color for the status cell. A real probe error (lastError)
-// is a warning and takes precedence; otherwise an Xray-core problem shows purple.
-function statusIssue(record: Pick<NodeRecord, 'status' | 'xrayState' | 'xrayError' | 'lastError'>) {
-  const tip =
-    record.lastError ||
-    (hasXrayProblem(record.status, record.xrayState) ? record.xrayError : '') ||
-    '';
+function hasCoreProblem(record: HealthProps): boolean {
+  if (record.status !== 'online') return false;
+  if (record.runningCore) return false;
+  const { state } = coreHealth(record);
+  return state === 'error' || state === 'stop';
+}
+
+function statusIssue(record: Pick<NodeRecord, 'status' | 'xrayState' | 'xrayError' | 'singboxState' | 'singboxError' | 'coreType' | 'runningCore' | 'lastError'>) {
+  const health = coreHealth(record);
+  const tip = record.lastError || (hasCoreProblem(record) ? health.error : '') || '';
   const iconColor =
-    !record.lastError && hasXrayProblem(record.status, record.xrayState)
-      ? XRAY_ERROR_COLOR
+    !record.lastError && hasCoreProblem(record)
+      ? CORE_ERROR_COLOR
       : 'var(--ant-color-warning)';
   return { tip, iconColor };
 }
 
-function StatusDot({ status, xrayState }: HealthProps) {
-  if (status === 'online') {
-    return hasXrayProblem(status, xrayState) ? (
-      <span className="xray-error-dot" />
-    ) : (
-      <span className="online-dot" />
-    );
+function StatusDot(props: HealthProps) {
+  if (props.status === 'online') {
+    return hasCoreProblem(props) ? <span className="xray-error-dot" /> : <span className="online-dot" />;
   }
-  return <Badge status={badgeStatus(status)} />;
+  return <Badge status={badgeStatus(props.status)} />;
 }
 
-function StatusLabel({ status, xrayState }: HealthProps) {
+function StatusLabel(props: HealthProps) {
   const { t } = useTranslation();
-  if (status === 'online') {
-    const xs = (xrayState || '').toLowerCase().trim();
-    if (xs === 'error' || xs === 'stop') {
-      const detail =
-        xs === 'error'
-          ? t('pages.nodes.statusValues.xrayError')
-          : t('pages.nodes.statusValues.xrayStopped');
+  if (props.status === 'online') {
+    const health = coreHealth(props);
+    if (hasCoreProblem(props)) {
       return (
-        <span style={{ color: XRAY_ERROR_COLOR }}>
-          {t('pages.nodes.statusValues.online')} ({detail})
+        <span style={{ color: CORE_ERROR_COLOR }}>
+          {t('pages.nodes.statusValues.online')} ({health.configured}: {health.state || 'stopped'})
         </span>
       );
     }
     return (
       <span style={{ color: 'var(--ant-color-success)' }}>
-        {t('pages.nodes.statusValues.online')}
+        {t('pages.nodes.statusValues.online')}{props.runningCore ? ` (${props.runningCore})` : ''}
       </span>
     );
   }
-  return <span>{t(`pages.nodes.statusValues.${status || 'unknown'}`)}</span>;
+  return <span>{t(`pages.nodes.statusValues.${props.status || 'unknown'}`)}</span>;
 }
 
 function formatPct(p?: number): string {
@@ -420,8 +417,8 @@ function NodeList({
           const { tip, iconColor } = statusIssue(record);
           return (
             <Space size={4}>
-              <StatusDot status={record.status} xrayState={record.xrayState} />
-              <StatusLabel status={record.status} xrayState={record.xrayState} />
+              <StatusDot {...record} />
+              <StatusLabel {...record} />
               {tip && (
                 <Tooltip title={tip}>
                   <ExclamationCircleOutlined style={{ color: iconColor }} />
@@ -446,10 +443,29 @@ function NodeList({
         render: (_value, record) => formatPct(record.memPct),
       },
       {
+        title: 'Core',
+        dataIndex: 'runningCore',
+        align: 'center',
+        render: (_value, record) => (
+          <Tooltip title={`Configured: ${record.coreType || '-'}`}>
+            <Tag color={record.runningCore ? 'green' : 'default'} style={{ margin: 0 }}>
+              {record.runningCore || 'stopped'}
+            </Tag>
+          </Tooltip>
+        ),
+      },
+      {
         title: t('pages.nodes.xrayVersion'),
         dataIndex: 'xrayVersion',
         align: 'center',
         render: (_value, record) => record.xrayVersion || '-',
+      },
+      {
+        title: 'sing-box',
+        dataIndex: 'singboxVersion',
+        align: 'center',
+        render: (_value, record) =>
+          record.singboxInstalled === false ? 'not installed' : record.singboxVersion || '-',
       },
       {
         title: t('pages.nodes.panelVersion') || 'Panel version',

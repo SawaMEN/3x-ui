@@ -238,18 +238,32 @@ func (a *ServerController) status(c *gin.Context) {
 	if err != nil || coreType == "" {
 		coreType = service.CoreTypeXray
 	}
-	if coreType == service.CoreTypeSingBox {
-		status.Xray.State = service.Stop
-		status.Xray.ErrorMsg = ""
-		if a.singBoxService.IsRunning() {
-			status.Xray.State = service.Running
-		} else if coreErr := a.singBoxService.LastError(); coreErr != nil {
-			status.Xray.State = service.Error
-			status.Xray.ErrorMsg = coreErr.Error()
-		}
-		if version, versionErr := a.singBoxService.CachedVersion(c.Request.Context()); versionErr == nil {
-			status.Xray.Version = version
-		}
+
+	singBoxState := service.Stop
+	singBoxError := ""
+	singBoxVersion := ""
+	singBoxInstalled := false
+	if version, versionErr := a.singBoxService.CachedVersion(c.Request.Context()); versionErr == nil && version != "" {
+		singBoxInstalled = true
+		singBoxVersion = version
+	}
+	if a.singBoxService.IsRunning() {
+		singBoxState = service.Running
+	} else if coreErr := a.singBoxService.LastError(); coreErr != nil {
+		singBoxState = service.Error
+		singBoxError = coreErr.Error()
+	}
+
+	runningCore := ""
+	switch {
+	case coreType == service.CoreTypeSingBox && a.singBoxService.IsRunning():
+		runningCore = service.CoreTypeSingBox
+	case coreType == service.CoreTypeXray && status.Xray.State == service.Running:
+		runningCore = service.CoreTypeXray
+	case a.singBoxService.IsRunning():
+		runningCore = service.CoreTypeSingBox
+	case status.Xray.State == service.Running:
+		runningCore = service.CoreTypeXray
 	}
 
 	raw, err := json.Marshal(status)
@@ -262,11 +276,28 @@ func (a *ServerController) status(c *gin.Context) {
 		jsonObj(c, status, nil)
 		return
 	}
+
+	obj["singbox"] = gin.H{
+		"installed": singBoxInstalled,
+		"state":     singBoxState,
+		"errorMsg":  singBoxError,
+		"version":   singBoxVersion,
+	}
+
+	selectedState := status.Xray.State
+	selectedError := status.Xray.ErrorMsg
+	selectedVersion := status.Xray.Version
+	if coreType == service.CoreTypeSingBox {
+		selectedState = singBoxState
+		selectedError = singBoxError
+		selectedVersion = singBoxVersion
+	}
 	obj["core"] = gin.H{
 		"type":     coreType,
-		"state":    status.Xray.State,
-		"errorMsg": status.Xray.ErrorMsg,
-		"version":  status.Xray.Version,
+		"running":  runningCore,
+		"state":    selectedState,
+		"errorMsg": selectedError,
+		"version":  selectedVersion,
 	}
 	jsonObj(c, obj, nil)
 }

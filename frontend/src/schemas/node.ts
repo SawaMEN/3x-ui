@@ -18,6 +18,10 @@ export const NodeRecordSchema = z
     cpuPct: z.number().optional(),
     memPct: z.number().optional(),
     xrayVersion: z.string().optional(),
+    singboxVersion: z.string().optional(),
+    singboxInstalled: z.boolean().optional(),
+    coreType: z.string().optional(),
+    runningCore: z.string().optional(),
     panelVersion: z.string().optional(),
     uptimeSecs: z.number().optional(),
     netUp: z.number().optional(),
@@ -35,6 +39,8 @@ export const NodeRecordSchema = z
     // (status=online) but the Xray core on that node has failed.
     xrayState: z.string().optional(),
     xrayError: z.string().optional(),
+    singboxState: z.string().optional(),
+    singboxError: z.string().optional(),
     allowPrivateAddress: z.boolean().optional(),
     tlsVerifyMode: z.enum(['verify', 'skip', 'pin', 'mtls']).optional(),
     pinnedCertSha256: z.string().optional(),
@@ -57,10 +63,16 @@ export const ProbeResultSchema = z
     status: z.string(),
     latencyMs: z.number().optional(),
     xrayVersion: z.string().optional(),
+    singboxVersion: z.string().optional(),
+    singboxInstalled: z.boolean().optional(),
+    coreType: z.string().optional(),
+    runningCore: z.string().optional(),
     error: z.string().optional(),
-    // Present on successful probe; used to surface "connected to panel, but xray failed on node".
+    // Present on successful probe; identifies the selected and actually running core.
     xrayState: z.string().optional(),
     xrayError: z.string().optional(),
+    singboxState: z.string().optional(),
+    singboxError: z.string().optional(),
   })
   .loose();
 
