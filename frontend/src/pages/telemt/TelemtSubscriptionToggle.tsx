@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Space, Switch, Tooltip, Typography, message } from 'antd';
 import { createPortal } from 'react-dom';
 
@@ -11,18 +11,13 @@ type SubscriptionProxySetting = {
 const jsonOptions = { headers: { 'Content-Type': 'application/json' } };
 
 export default function TelemtSubscriptionToggle() {
-  const [portalTarget, setPortalTarget] = useState<Element | null>(null);
   const [enabled, setEnabled] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-
-  useLayoutEffect(() => {
-    setPortalTarget(document.querySelector('.telemt-header'));
-  }, []);
+  const portalTarget = document.querySelector('.telemt-header');
 
   const loadSetting = useCallback(async () => {
-    setLoading(true);
     try {
       const response = await HttpUtil.get<SubscriptionProxySetting>(
         '/panel/api/telemt/subscription-proxy',
