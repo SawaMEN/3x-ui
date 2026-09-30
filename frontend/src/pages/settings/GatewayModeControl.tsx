@@ -24,35 +24,32 @@ type GatewayStatus = {
 const HEADER_TARGET = '.settings-page .header-actions';
 
 export default function GatewayModeControl() {
-  const [portalTarget, setPortalTarget] = useState<Element | null>(null);
+  const [portalTarget, setPortalTarget] = useState<Element | null>(() =>
+    document.querySelector(HEADER_TARGET),
+  );
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<GatewayStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [messageApi, contextHolder] = message.useMessage();
 
-  // SettingsPage renders its header only after settings are loaded. Observe DOM
-  // changes until the header appears instead of polling every animation frame.
+  // SettingsPage renders its header only after settings are loaded. If it did
+  // not exist during our first render, wait for the DOM insertion once.
   useEffect(() => {
-    const findTarget = () => document.querySelector(HEADER_TARGET);
-    const initialTarget = findTarget();
-    if (initialTarget) {
-      setPortalTarget(initialTarget);
-      return;
-    }
+    if (portalTarget) return;
 
     const observer = new MutationObserver(() => {
-      const target = findTarget();
+      const target = document.querySelector(HEADER_TARGET);
       if (!target) return;
       setPortalTarget(target);
       observer.disconnect();
     });
     observer.observe(document.body, { childList: true, subtree: true });
     return () => observer.disconnect();
-  }, []);
+  }, [portalTarget]);
 
-  const refresh = useCallback(
-    async (quiet = false) => {
+  const loadStatus = useCallback(
+    async (quiet = false): Promise<GatewayStatus | null> => {
       try {
         const response = (await HttpUtil.get('/panel/api/gateway/status', undefined, {
           silent: true,
@@ -61,35 +58,51 @@ export default function GatewayModeControl() {
           if (!quiet) {
             messageApi.error(response?.msg || 'Не удалось получить состояние Gateway Mode');
           }
-          return;
+          return null;
         }
-        setStatus(response.obj);
+        return response.obj;
       } catch (error) {
         if (!quiet) {
           messageApi.error(
             error instanceof Error ? error.message : 'Не удалось получить состояние Gateway Mode',
           );
         }
-      } finally {
-        setLoading(false);
+        return null;
       }
     },
     [messageApi],
   );
 
+  const refresh = useCallback(
+    async (quiet = false) => {
+      const nextStatus = await loadStatus(quiet);
+      if (nextStatus) setStatus(nextStatus);
+      setLoading(false);
+    },
+    [loadStatus],
+  );
+
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    let active = true;
+
+    void loadStatus()
+      .then((nextStatus) => {
+        if (active && nextStatus) setStatus(nextStatus);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [loadStatus]);
 
   useEffect(() => {
     const onSettingsSaved = () => void refresh(true);
     window.addEventListener('xui-core-settings-saved', onSettingsSaved);
     return () => window.removeEventListener('xui-core-settings-saved', onSettingsSaved);
   }, [refresh]);
-
-  useEffect(() => {
-    if (open) void refresh(true);
-  }, [open, refresh]);
 
   const runAction = async (action: 'enable' | 'disable') => {
     setBusy(true);
@@ -123,7 +136,14 @@ export default function GatewayModeControl() {
     ? createPortal(
         <span style={{ display: 'inline-flex', marginInlineStart: 8 }}>
           <Tooltip title="Управление прозрачным шлюзом Xray">
-            <Button icon={<ApartmentOutlined />} loading={loading} onClick={() => setOpen(true)}>
+            <Button
+              icon={<ApartmentOutlined />}
+              loading={loading}
+              onClick={() => {
+                setOpen(true);
+                void refresh(true);
+              }}
+            >
               Gateway: {recoveryOnly ? 'восстановление' : enabled ? 'вкл.' : 'выкл.'}
             </Button>
           </Tooltip>
