@@ -1,0 +1,153 @@
+name: temp-node-core-aware-inbounds
+
+on:
+  push:
+    branches:
+      - temp/node-singbox-status
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: temp/node-singbox-status
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Make inbound runtime selection node-core aware
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path('internal/web/service/inbound.go')
+          s = p.read_text()
+
+          marker = '''type InboundService struct {
+          \tclientService   ClientService
+          \tfallbackService FallbackService
+          \t// FromNodeSync marks a master push: the row was validated where the operator
+          \t// acted, and a node that refuses it only falls out of sync.
+          \tFromNodeSync bool
+          }
+          '''
+          helper = marker + '''
+          // coreTypeForInbound returns the core that owns an inbound at its execution
+          // site. Local inbounds use this panel's setting; node-hosted inbounds use
+          // the node's reported configured core. Nodes from older builds have no
+          // core_type yet, so preserve their historical Xray behavior.
+          func (s *InboundService) coreTypeForInbound(inbound *model.Inbound) (string, error) {
+          \tif inbound != nil && inbound.NodeID != nil {
+          \t\tvar node model.Node
+          \t\tif err := database.GetDB().Model(&model.Node{}).
+          \t\t\tSelect("core_type").Where("id = ?", *inbound.NodeID).First(&node).Error; err != nil {
+          \t\t\treturn "", err
+          \t\t}
+          \t\tcore := strings.ToLower(strings.TrimSpace(node.CoreType))
+          \t\tif core == "" {
+          \t\t\treturn CoreTypeXray, nil
+          \t\t}
+          \t\treturn core, nil
+          \t}
+          \tcore, err := (&SettingService{}).GetCoreType()
+          \tif err != nil {
+          \t\treturn "", err
+          \t}
+          \tcore = strings.ToLower(strings.TrimSpace(core))
+          \tif core == "" {
+          \t\tcore = CoreTypeXray
+          \t}
+          \treturn core, nil
+          }
+          '''
+          if marker not in s:
+              raise SystemExit('InboundService marker not found')
+          s = s.replace(marker, helper, 1)
+
+          old = '''\t\tif ib.Protocol == model.NaiveProxy || ib.Protocol == model.AnyTLS || ib.Protocol == model.ShadowTLS {
+          \t\t\tif core, coreErr := (&SettingService{}).GetCoreType(); coreErr == nil {
+          \t\t\t\tnaiveSingBox = core == CoreTypeSingBox
+          \t\t\t}
+          \t\t}'''
+          new = '''\t\tif ib.Protocol == model.NaiveProxy || ib.Protocol == model.AnyTLS || ib.Protocol == model.ShadowTLS {
+          \t\t\tif core, coreErr := s.coreTypeForInbound(&ib); coreErr == nil {
+          \t\t\t\tnaiveSingBox = core == CoreTypeSingBox
+          \t\t\t}
+          \t\t}'''
+          if old not in s:
+              raise SystemExit('delete core block not found')
+          s = s.replace(old, new, 1)
+
+          old = '''\tif inbound.Protocol == model.NaiveProxy || inbound.Protocol == model.AnyTLS || inbound.Protocol == model.ShadowTLS {
+          \t\tcore, coreErr := (&SettingService{}).GetCoreType()
+          \t\tif coreErr != nil {
+          \t\t\treturn false, coreErr
+          \t\t}
+          \t\tif core != CoreTypeSingBox {
+          \t\t\treturn false, nil
+          \t\t}
+          \t}'''
+          new = '''\tif inbound.Protocol == model.NaiveProxy || inbound.Protocol == model.AnyTLS || inbound.Protocol == model.ShadowTLS {
+          \t\tcore, coreErr := s.coreTypeForInbound(inbound)
+          \t\tif coreErr != nil {
+          \t\t\treturn false, coreErr
+          \t\t}
+          \t\tif core != CoreTypeSingBox {
+          \t\t\treturn false, nil
+          \t\t}
+          \t}'''
+          if old not in s:
+              raise SystemExit('enable core block not found')
+          s = s.replace(old, new, 1)
+
+          old = '''\t\tif oldProtocol == model.NaiveProxy || oldInbound.Protocol == model.NaiveProxy ||
+          \t\t\toldProtocol == model.AnyTLS || oldInbound.Protocol == model.AnyTLS ||
+          \t\t\toldProtocol == model.ShadowTLS || oldInbound.Protocol == model.ShadowTLS {
+          \t\t\tcore, coreErr := (&SettingService{}).GetCoreType()
+          \t\t\tif coreErr != nil {
+          \t\t\t\treturn coreErr
+          \t\t\t}
+          \t\t\tnaiveSingBoxRuntime = core == CoreTypeSingBox
+          \t\t}'''
+          new = '''\t\tif oldProtocol == model.NaiveProxy || oldInbound.Protocol == model.NaiveProxy ||
+          \t\t\toldProtocol == model.AnyTLS || oldInbound.Protocol == model.AnyTLS ||
+          \t\t\toldProtocol == model.ShadowTLS || oldInbound.Protocol == model.ShadowTLS {
+          \t\t\tcore, coreErr := s.coreTypeForInbound(oldInbound)
+          \t\t\tif coreErr != nil {
+          \t\t\t\treturn coreErr
+          \t\t\t}
+          \t\t\tnaiveSingBoxRuntime = core == CoreTypeSingBox
+          \t\t}'''
+          if old not in s:
+              raise SystemExit('update core block not found')
+          s = s.replace(old, new, 1)
+
+          p.write_text(s)
+          PY
+          gofmt -w internal/web/service/inbound.go
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add internal/web/service/inbound.go
+          git diff --cached --check
+          git commit -m "fix(nodes): select inbound runtime by node core"
+
+      - name: Backend tests
+        shell: bash
+        run: |
+          GODEBUG=http2client=0 go test ./internal/web/service ./internal/web/controller ./internal/web/job ./internal/web/runtime
+
+      - name: Remove temporary workflow and push
+        shell: bash
+        run: |
+          rm -f .github/workflows/temp-node-core-aware-inbounds.yml
+          git add -A
+          git commit -m "chore: remove temporary node core-aware workflow"
+          git push origin HEAD:temp/node-singbox-status
