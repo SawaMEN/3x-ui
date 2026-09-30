@@ -38,6 +38,7 @@ type ClientController struct {
 	clientService  service.ClientService
 	inboundService service.InboundService
 	xrayService    service.XrayService
+	singBoxService service.SingBoxService
 	settingService service.SettingService
 	happGenerator  service.HappLinkGenerator
 }
@@ -195,7 +196,7 @@ func (a *ClientController) create(c *gin.Context) {
 	// Flagged before the error check: a partly-applied create leaves clients
 	// committed on the inbounds that succeeded, and those still need the restart.
 	if needRestart {
-		a.xrayService.SetToNeedRestart()
+		markSelectedCoreNeedRestart(&a.settingService, &a.xrayService, &a.singBoxService)
 	}
 	// A partly-applied call committed real clients; a rejected one touched
 	// nothing, and broadcasting those would refetch every panel for nothing.
@@ -224,7 +225,7 @@ func (a *ClientController) update(c *gin.Context) {
 	// Flagged before the error check: a partly-applied edit leaves the change
 	// committed on the inbounds that succeeded, and those still need the restart.
 	if needRestart {
-		a.xrayService.SetToNeedRestart()
+		markSelectedCoreNeedRestart(&a.settingService, &a.xrayService, &a.singBoxService)
 	}
 	// A partly-applied call committed real changes; a rejected one touched
 	// nothing, and broadcasting those would refetch every panel for nothing.
@@ -245,7 +246,7 @@ func (a *ClientController) delete(c *gin.Context) {
 	// Flagged before the error check: a partly-applied delete already removed
 	// the client from the inbounds that succeeded, and those need the restart.
 	if needRestart {
-		a.xrayService.SetToNeedRestart()
+		markSelectedCoreNeedRestart(&a.settingService, &a.xrayService, &a.singBoxService)
 	}
 	// A partly-applied call committed real removals; a rejected one touched
 	// nothing, and broadcasting those would refetch every panel for nothing.
@@ -276,7 +277,7 @@ func (a *ClientController) attach(c *gin.Context) {
 	}
 	needRestart, err := a.clientService.AttachByEmail(&a.inboundService, email, body.InboundIds)
 	if needRestart {
-		a.xrayService.SetToNeedRestart()
+		markSelectedCoreNeedRestart(&a.settingService, &a.xrayService, &a.singBoxService)
 	}
 	// A partly-applied call committed real clients; a rejected one touched
 	// nothing, and broadcasting those would refetch every panel for nothing.
@@ -313,7 +314,7 @@ func (a *ClientController) resetAllTraffics(c *gin.Context) {
 	}
 	jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.resetAllClientTrafficSuccess"), nil)
 	if needRestart {
-		a.xrayService.SetToNeedRestart()
+		markSelectedCoreNeedRestart(&a.settingService, &a.xrayService, &a.singBoxService)
 	}
 	notifyClientsChanged()
 }
@@ -340,7 +341,7 @@ func (a *ClientController) bulkAdjust(c *gin.Context) {
 	}
 	jsonObj(c, result, nil)
 	if needRestart {
-		a.xrayService.SetToNeedRestart()
+		markSelectedCoreNeedRestart(&a.settingService, &a.xrayService, &a.singBoxService)
 	}
 	notifyClientsChanged()
 }
@@ -368,7 +369,7 @@ func (a *ClientController) bulkAttach(c *gin.Context) {
 	}
 	jsonObj(c, result, nil)
 	if needRestart {
-		a.xrayService.SetToNeedRestart()
+		markSelectedCoreNeedRestart(&a.settingService, &a.xrayService, &a.singBoxService)
 	}
 	notifyClientsChanged()
 }
@@ -391,7 +392,7 @@ func (a *ClientController) bulkDetach(c *gin.Context) {
 	}
 	jsonObj(c, result, nil)
 	if needRestart {
-		a.xrayService.SetToNeedRestart()
+		markSelectedCoreNeedRestart(&a.settingService, &a.xrayService, &a.singBoxService)
 	}
 	notifyClientsChanged()
 }
@@ -409,7 +410,7 @@ func (a *ClientController) bulkDelete(c *gin.Context) {
 	}
 	jsonObj(c, result, nil)
 	if needRestart {
-		a.xrayService.SetToNeedRestart()
+		markSelectedCoreNeedRestart(&a.settingService, &a.xrayService, &a.singBoxService)
 	}
 	notifyClientsChanged()
 }
@@ -439,7 +440,7 @@ func (a *ClientController) bulkSetEnable(c *gin.Context, enable bool) {
 	}
 	jsonObj(c, result, nil)
 	if needRestart {
-		a.xrayService.SetToNeedRestart()
+		markSelectedCoreNeedRestart(&a.settingService, &a.xrayService, &a.singBoxService)
 	}
 	notifyClientsChanged()
 }
@@ -457,7 +458,7 @@ func (a *ClientController) bulkCreate(c *gin.Context) {
 	}
 	jsonObj(c, result, nil)
 	if needRestart {
-		a.xrayService.SetToNeedRestart()
+		markSelectedCoreNeedRestart(&a.settingService, &a.xrayService, &a.singBoxService)
 	}
 	notifyClientsChanged()
 }
@@ -470,7 +471,7 @@ func (a *ClientController) delDepleted(c *gin.Context) {
 	}
 	jsonObj(c, gin.H{"deleted": deleted}, nil)
 	if needRestart {
-		a.xrayService.SetToNeedRestart()
+		markSelectedCoreNeedRestart(&a.settingService, &a.xrayService, &a.singBoxService)
 	}
 	notifyClientsChanged()
 }
@@ -512,7 +513,7 @@ func (a *ClientController) importClients(c *gin.Context) {
 	}
 	jsonObj(c, result, nil)
 	if needRestart {
-		a.xrayService.SetToNeedRestart()
+		markSelectedCoreNeedRestart(&a.settingService, &a.xrayService, &a.singBoxService)
 	}
 	notifyClientsChanged()
 }
@@ -536,7 +537,7 @@ func (a *ClientController) resetTrafficByEmail(c *gin.Context) {
 	}
 	jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.resetInboundClientTrafficSuccess"), nil)
 	if needRestart {
-		a.xrayService.SetToNeedRestart()
+		markSelectedCoreNeedRestart(&a.settingService, &a.xrayService, &a.singBoxService)
 	}
 	notifyClientsChanged()
 }
@@ -683,7 +684,7 @@ func (a *ClientController) detach(c *gin.Context) {
 	// Flagged before the error check: a partly-applied detach already removed
 	// the client from the inbounds that succeeded, and those need the restart.
 	if needRestart {
-		a.xrayService.SetToNeedRestart()
+		markSelectedCoreNeedRestart(&a.settingService, &a.xrayService, &a.singBoxService)
 	}
 	// A partly-applied call committed real removals; a rejected one touched
 	// nothing, and broadcasting those would refetch every panel for nothing.
@@ -713,6 +714,6 @@ func (a *ClientController) bulkResetTraffic(c *gin.Context) {
 		return
 	}
 	jsonObj(c, gin.H{"affected": affected}, nil)
-	a.xrayService.SetToNeedRestart()
+	markSelectedCoreNeedRestart(&a.settingService, &a.xrayService, &a.singBoxService)
 	notifyClientsChanged()
 }
