@@ -39,6 +39,34 @@ type InboundService struct {
 	FromNodeSync bool
 }
 
+// coreTypeForInbound returns the core that owns an inbound at its execution
+// site. Local inbounds use this panel's setting; node-hosted inbounds use
+// the node's reported configured core. Nodes from older builds have no
+// core_type yet, so preserve their historical Xray behavior.
+func (s *InboundService) coreTypeForInbound(inbound *model.Inbound) (string, error) {
+	if inbound != nil && inbound.NodeID != nil {
+		var node model.Node
+		if err := database.GetDB().Model(&model.Node{}).
+			Select("core_type").Where("id = ?", *inbound.NodeID).First(&node).Error; err != nil {
+			return "", err
+		}
+		core := strings.ToLower(strings.TrimSpace(node.CoreType))
+		if core == "" {
+			return CoreTypeXray, nil
+		}
+		return core, nil
+	}
+	core, err := (&SettingService{}).GetCoreType()
+	if err != nil {
+		return "", err
+	}
+	core = strings.ToLower(strings.TrimSpace(core))
+	if core == "" {
+		core = CoreTypeXray
+	}
+	return core, nil
+}
+
 func normalizeTrafficResetDay(day int) int {
 	if day < 1 {
 		return 1
@@ -1448,7 +1476,7 @@ func (s *InboundService) delInbound(id int) (bool, func(), error) {
 	if loadErr == nil {
 		naiveSingBox := false
 		if ib.Protocol == model.NaiveProxy || ib.Protocol == model.AnyTLS || ib.Protocol == model.ShadowTLS {
-			if core, coreErr := (&SettingService{}).GetCoreType(); coreErr == nil {
+			if core, coreErr := s.coreTypeForInbound(&ib); coreErr == nil {
 				naiveSingBox = core == CoreTypeSingBox
 			}
 		}
@@ -1710,7 +1738,7 @@ func (s *InboundService) SetInboundEnable(id int, enable bool) (bool, error) {
 	inbound.Enable = enable
 
 	if inbound.Protocol == model.NaiveProxy || inbound.Protocol == model.AnyTLS || inbound.Protocol == model.ShadowTLS {
-		core, coreErr := (&SettingService{}).GetCoreType()
+		core, coreErr := s.coreTypeForInbound(inbound)
 		if coreErr != nil {
 			return false, coreErr
 		}
@@ -2027,7 +2055,7 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 		if oldProtocol == model.NaiveProxy || oldInbound.Protocol == model.NaiveProxy ||
 			oldProtocol == model.AnyTLS || oldInbound.Protocol == model.AnyTLS ||
 			oldProtocol == model.ShadowTLS || oldInbound.Protocol == model.ShadowTLS {
-			core, coreErr := (&SettingService{}).GetCoreType()
+			core, coreErr := s.coreTypeForInbound(oldInbound)
 			if coreErr != nil {
 				return coreErr
 			}
