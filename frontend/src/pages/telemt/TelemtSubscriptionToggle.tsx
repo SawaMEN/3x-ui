@@ -1,0 +1,103 @@
+import { useCallback, useEffect, useState } from 'react';
+import { Space, Switch, Tooltip, Typography, message } from 'antd';
+import { createPortal } from 'react-dom';
+
+import { HttpUtil } from '@/utils';
+
+type SubscriptionProxySetting = {
+  enabled: boolean;
+};
+
+const jsonOptions = { headers: { 'Content-Type': 'application/json' } };
+
+export default function TelemtSubscriptionToggle() {
+  const [portalTarget, setPortalTarget] = useState<Element | null>(null);
+  const [enabled, setEnabled] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    const findTarget = () => {
+      const target = document.querySelector('.telemt-header');
+      if (target) setPortalTarget(target);
+      return Boolean(target);
+    };
+
+    if (findTarget()) return;
+    const observer = new MutationObserver(() => {
+      if (findTarget()) observer.disconnect();
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, []);
+
+  const loadSetting = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await HttpUtil.get<SubscriptionProxySetting>(
+        '/panel/api/telemt/subscription-proxy',
+      );
+      if (response?.success && response.obj) {
+        setEnabled(Boolean(response.obj.enabled));
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadSetting();
+  }, [loadSetting]);
+
+  const updateSetting = async (checked: boolean) => {
+    const previous = enabled;
+    setEnabled(checked);
+    setSaving(true);
+    try {
+      const response = await HttpUtil.post<SubscriptionProxySetting>(
+        '/panel/api/telemt/subscription-proxy',
+        { enabled: checked },
+        jsonOptions,
+      );
+      if (!response?.success) {
+        setEnabled(previous);
+        message.error(response?.msg || 'Не удалось сохранить настройку личных Telemt-прокси');
+        return;
+      }
+      setEnabled(Boolean(response.obj?.enabled ?? checked));
+      message.success(
+        checked
+          ? 'Личные Telemt-прокси для подписок включены'
+          : 'Личные Telemt-прокси для подписок выключены',
+      );
+    } catch {
+      setEnabled(previous);
+      message.error('Не удалось сохранить настройку личных Telemt-прокси');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!portalTarget) return null;
+
+  return createPortal(
+    <Tooltip
+      title={
+        enabled
+          ? 'Для подписок создаются личные Telemt-прокси. Уже созданные прокси сохраняются.'
+          : 'Новые личные Telemt-прокси не создаются, вкладка Telemt в подписке скрыта. Существующие прокси не удаляются.'
+      }
+    >
+      <Space size={8} wrap>
+        <Typography.Text type="secondary">Личные прокси в подписках</Typography.Text>
+        <Switch
+          checked={enabled}
+          loading={loading || saving}
+          disabled={loading || saving}
+          onChange={(checked) => void updateSetting(checked)}
+        />
+      </Space>
+    </Tooltip>,
+    portalTarget,
+  );
+}
