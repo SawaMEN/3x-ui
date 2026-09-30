@@ -2,6 +2,8 @@ package controller
 
 import (
 	"errors"
+	"fmt"
+	"sync"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/gateway"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
@@ -15,6 +17,7 @@ import (
 type GatewayController struct {
 	settingService service.SettingService
 	xrayService    service.XrayService
+	operationMu    sync.Mutex
 }
 
 func NewGatewayController(g *gin.RouterGroup) *GatewayController {
@@ -31,16 +34,22 @@ func (a *GatewayController) initRouter(g *gin.RouterGroup) {
 }
 
 func (a *GatewayController) statusPayload() (gin.H, error) {
-	coreType, err := a.settingService.GetCoreType()
-	if err != nil {
-		return gin.H{"enabled": gateway.IsEnabled()}, err
+	state, stateErr := gateway.GetState()
+	coreType, coreErr := a.settingService.GetCoreType()
+
+	payload := gin.H{
+		"enabled":      state.Enabled,
+		"canEnable":    !state.Enabled && coreType != service.CoreTypeSingBox,
+		"coreType":     coreType,
+		"xrayRunning":  a.xrayService.IsXrayRunning(),
 	}
-	return gin.H{
-		"enabled":     gateway.IsEnabled(),
-		"canEnable":   coreType != service.CoreTypeSingBox,
-		"coreType":    coreType,
-		"xrayRunning": a.xrayService.IsXrayRunning(),
-	}, nil
+	if stateErr != nil {
+		return payload, stateErr
+	}
+	if coreErr != nil {
+		return payload, coreErr
+	}
+	return payload, nil
 }
 
 func (a *GatewayController) status(c *gin.Context) {
@@ -49,6 +58,9 @@ func (a *GatewayController) status(c *gin.Context) {
 }
 
 func (a *GatewayController) enable(c *gin.Context) {
+	a.operationMu.Lock()
+	defer a.operationMu.Unlock()
+
 	coreType, err := a.settingService.GetCoreType()
 	if err != nil {
 		payload, _ := a.statusPayload()
@@ -61,8 +73,15 @@ func (a *GatewayController) enable(c *gin.Context) {
 		return
 	}
 
+	state, err := gateway.GetState()
+	if err != nil {
+		payload, _ := a.statusPayload()
+		jsonObj(c, payload, err)
+		return
+	}
+
 	changed := false
-	if !gateway.IsEnabled() {
+	if !state.Enabled {
 		if err := gateway.Enable(); err != nil {
 			payload, _ := a.statusPayload()
 			jsonObj(c, payload, err)
@@ -71,14 +90,12 @@ func (a *GatewayController) enable(c *gin.Context) {
 		changed = true
 	}
 
-	// Keep the same semantics as the Xray settings editor: apply the changed
-	// template immediately only when Xray is already running. A manually stopped
-	// core must stay stopped. Repeated enable requests are intentionally idempotent
-	// and do not restart an unchanged Xray process.
+	// A manually stopped core must stay stopped. Repeated enable requests are
+	// idempotent and do not restart an unchanged Xray process.
 	if changed && a.xrayService.IsXrayRunning() {
 		if err := a.xrayService.RestartXray(false); err != nil {
 			payload, _ := a.statusPayload()
-			jsonObj(c, payload, err)
+			jsonObj(c, payload, fmt.Errorf("Gateway Mode was enabled, but Xray restart failed: %w", err))
 			return
 		}
 	}
@@ -88,6 +105,9 @@ func (a *GatewayController) enable(c *gin.Context) {
 }
 
 func (a *GatewayController) disable(c *gin.Context) {
+	a.operationMu.Lock()
+	defer a.operationMu.Unlock()
+
 	coreType, coreErr := a.settingService.GetCoreType()
 	if coreErr != nil {
 		payload, _ := a.statusPayload()
@@ -95,8 +115,15 @@ func (a *GatewayController) disable(c *gin.Context) {
 		return
 	}
 
+	state, err := gateway.GetState()
+	if err != nil {
+		payload, _ := a.statusPayload()
+		jsonObj(c, payload, err)
+		return
+	}
+
 	changed := false
-	if gateway.IsEnabled() {
+	if state.Enabled {
 		if err := gateway.Disable(); err != nil {
 			payload, _ := a.statusPayload()
 			jsonObj(c, payload, err)
@@ -105,14 +132,13 @@ func (a *GatewayController) disable(c *gin.Context) {
 		changed = true
 	}
 
-	// Disabling remains available even after the operator has switched to
-	// sing-box, so a stale Gateway backup can always be restored. Restart Xray
-	// only when it is the selected running core. Repeated disable requests do not
-	// restart an unchanged process.
+	// Disabling remains available after switching to sing-box so stale Gateway
+	// config/backup state can always be cleaned up. Restart Xray only when it is
+	// the selected running core.
 	if changed && coreType != service.CoreTypeSingBox && a.xrayService.IsXrayRunning() {
 		if err := a.xrayService.RestartXray(false); err != nil {
 			payload, _ := a.statusPayload()
-			jsonObj(c, payload, err)
+			jsonObj(c, payload, fmt.Errorf("Gateway Mode was disabled, but Xray restart failed: %w", err))
 			return
 		}
 	}
