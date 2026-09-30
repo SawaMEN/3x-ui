@@ -1,0 +1,101 @@
+name: temp-node-singbox-scheduler
+
+on:
+  push:
+    branches:
+      - temp/node-singbox-status
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: temp/node-singbox-status
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Skip absent sing-box during panel startup
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('internal/web/web.go')
+          s = p.read_text()
+          old = '''\t} else if restartXray {
+          \t\tif err := (&service.SingBoxService{}).Restart(s.ctx); err != nil {
+          \t\t\tlogger.Warning("start sing-box failed:", err)
+          \t\t}
+          \t}'''
+          new = '''\t} else if restartXray {
+          \t\tsingBoxService := &service.SingBoxService{}
+          \t\tif singBoxService.Installed() {
+          \t\t\tif err := singBoxService.Restart(s.ctx); err != nil {
+          \t\t\t\tlogger.Warning("start sing-box failed:", err)
+          \t\t\t}
+          \t\t} else {
+          \t\t\tlogger.Warning("sing-box is selected but not installed; leaving core stopped")
+          \t\t}
+          \t}'''
+          if old not in s:
+              raise SystemExit('startup sing-box block not found')
+          p.write_text(s.replace(old, new, 1))
+          PY
+          gofmt -w internal/web/web.go
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add internal/web/web.go
+          git diff --cached --check
+          git commit -m "fix(singbox): skip startup when binary is absent"
+
+      - name: Remove duplicate sing-box traffic polling
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('internal/web/web.go')
+          s = p.read_text()
+          old = '''\t_, _ = s.cron.AddJob(cadenceXrayTraffic, job.NewXrayTrafficJob())
+          \t_, _ = s.cron.AddFunc(cadenceXrayTraffic, func() {
+          \t\tsingTraffic := &service.SingBoxService{}
+          \t\tctx, cancel := context.WithTimeout(s.ctx, 4*time.Second)
+          \t\tdefer cancel()
+          \t\tif core, err := s.settingService.GetCoreType(); err == nil && core == service.CoreTypeSingBox {
+          \t\t\tif err := singTraffic.PollTraffic(ctx); err != nil {
+          \t\t\t\tlogger.Debug("sing-box traffic poll failed:", err)
+          \t\t\t}
+          \t\t}
+          \t})'''
+          new = '''\t// XrayTrafficJob is core-aware: it polls Xray when Xray is selected and
+          \t// sing-box (including online presence) when sing-box is selected. Keep a
+          \t// single consumer of sing-box delta events so traffic cannot be split
+          \t// between two same-cadence cron callbacks.
+          \t_, _ = s.cron.AddJob(cadenceXrayTraffic, job.NewXrayTrafficJob())'''
+          if old not in s:
+              raise SystemExit('duplicate sing-box traffic block not found')
+          p.write_text(s.replace(old, new, 1))
+          PY
+          gofmt -w internal/web/web.go
+          git add internal/web/web.go
+          git diff --cached --check
+          git commit -m "fix(singbox): avoid duplicate traffic polling"
+
+      - name: Backend tests
+        shell: bash
+        run: |
+          GODEBUG=http2client=0 go test ./internal/web ./internal/web/job ./internal/web/service ./internal/web/controller ./internal/web/runtime
+
+      - name: Remove temporary workflow and push
+        shell: bash
+        run: |
+          rm -f .github/workflows/temp-node-singbox-scheduler.yml
+          git add -A
+          git commit -m "chore: remove temporary sing-box scheduler workflow"
+          git push origin HEAD:temp/node-singbox-status
