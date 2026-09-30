@@ -83,7 +83,7 @@ func (j *XrayTrafficJob) runNonXrayTraffic() {
 	if coreErr == nil && core == service.CoreTypeSingBox {
 		service.EnsureOnlinePresenceTracker()
 		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-		online, err := (&service.SingBoxService{}).OnlineClientIPs(ctx)
+		online, activeInbounds, err := (&service.SingBoxService{}).OnlinePresence(ctx)
 		cancel()
 		if err != nil {
 			logger.Debug("get online users from sing-box api failed:", err)
@@ -99,7 +99,7 @@ func (j *XrayTrafficJob) runNonXrayTraffic() {
 					logger.Warning("bump last online for sing-box clients failed:", err)
 				}
 			}
-			j.inboundService.RefreshLocalOnlineClients(emails, nil)
+			j.inboundService.RefreshLocalOnlineClients(emails, activeInbounds)
 		}
 	}
 
