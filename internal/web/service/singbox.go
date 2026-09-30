@@ -111,7 +111,7 @@ func singBoxTUICInbound(ib *model.Inbound, clients []any) (map[string]any, error
 	return map[string]any{
 		"type": "tuic", "tag": ib.Tag, "listen": listen, "listen_port": inst.Port,
 		"users": users, "congestion_control": inst.CongestionControl,
-		"auth_timeout": fmt.Sprintf("%ds", inst.AuthenticationTimeout),
+		"auth_timeout":       fmt.Sprintf("%ds", inst.AuthenticationTimeout),
 		"zero_rtt_handshake": inst.ZeroRTTHandshake,
 		"tls": map[string]any{"enabled": true, "certificate_path": inst.Certificate,
 			"key_path": inst.PrivateKey, "alpn": inst.ALPN},
@@ -664,6 +664,7 @@ func singBoxConfigDir() string {
 }
 
 func (s *SingBoxService) Restart(ctx context.Context) error {
+	markSingBoxStarted()
 	if _, err := singBoxProcess.Version(ctx); err != nil {
 		singBoxProcess.SetError(err)
 		return err
@@ -680,6 +681,7 @@ func (s *SingBoxService) Restart(ctx context.Context) error {
 }
 
 func (s *SingBoxService) Start(ctx context.Context) error {
+	markSingBoxStarted()
 	if _, err := singBoxProcess.Version(ctx); err != nil {
 		singBoxProcess.SetError(err)
 		return err
@@ -696,6 +698,7 @@ func (s *SingBoxService) Start(ctx context.Context) error {
 }
 
 func (s *SingBoxService) Stop(ctx context.Context) error {
+	markSingBoxStopped()
 	return singBoxProcess.Stop()
 }
 
