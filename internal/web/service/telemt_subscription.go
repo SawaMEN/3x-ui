@@ -112,7 +112,16 @@ func (TelemtService) EnsureSubscriptionProxy(subID, host string) (TelemtProxy, e
 	}
 
 	if !active {
-		return TelemtProxy{}, errors.New("telemt: service is not active; subscription user was saved for the next start")
+		// Persisting the account is the requested outcome during client creation.
+		// Return the prepared credentials as success without trying to start Telemt
+		// or manufacture a runtime-generated link that is unavailable while stopped.
+		return TelemtProxy{
+			Name:   username,
+			Secret: secret,
+			Host:   host,
+			Port:   raw.Server.Port,
+			TLS:    raw.General.Modes.TLS,
+		}, nil
 	}
 
 	link, err := telemtGeneratedLink(username, raw.General.Modes.TLS)
