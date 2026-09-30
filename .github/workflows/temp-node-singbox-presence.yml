@@ -1,0 +1,193 @@
+name: temp-node-singbox-presence
+
+on:
+  push:
+    branches:
+      - temp/node-singbox-status
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: temp/node-singbox-status
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Track sing-box active inbounds
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path('internal/web/service/singbox.go')
+          s = p.read_text()
+          old = '''func (s *SingBoxService) OnlineClientIPs(ctx context.Context) (map[string]map[string]struct{}, error) {
+          \tapi := singbox.NewConnectionAPIClient()
+          \tdefer api.Close()
+          \tconnections, err := api.Snapshot(ctx)
+          \tif err != nil {
+          \t\treturn nil, err
+          \t}
+          \tonline := make(map[string]map[string]struct{})
+          \tfor _, connection := range connections {
+          \t\tif connection == nil || connection.User == "" || connection.Source == "" {
+          \t\t\tcontinue
+          \t\t}
+          \t\tip := connection.Source
+          \t\tif host, _, splitErr := net.SplitHostPort(ip); splitErr == nil {
+          \t\t\tip = host
+          \t\t}
+          \t\tif ip == "" {
+          \t\t\tcontinue
+          \t\t}
+          \t\tif online[connection.User] == nil {
+          \t\t\tonline[connection.User] = make(map[string]struct{})
+          \t\t}
+          \t\tonline[connection.User][ip] = struct{}{}
+          \t}
+          \treturn online, nil
+          }'''
+          new = '''// OnlinePresence returns the current sing-box users/IPs and active inbound
+          // tags from one native API snapshot. Keeping them in the same snapshot makes
+          // the node's online user and inbound indicators describe the same instant.
+          func (s *SingBoxService) OnlinePresence(ctx context.Context) (map[string]map[string]struct{}, []string, error) {
+          \tapi := singbox.NewConnectionAPIClient()
+          \tdefer api.Close()
+          \tconnections, err := api.Snapshot(ctx)
+          \tif err != nil {
+          \t\treturn nil, nil, err
+          \t}
+          \tonline := make(map[string]map[string]struct{})
+          \tactiveSet := make(map[string]struct{})
+          \tfor _, connection := range connections {
+          \t\tif connection == nil {
+          \t\t\tcontinue
+          \t\t}
+          \t\tif connection.Inbound != "" {
+          \t\t\tactiveSet[connection.Inbound] = struct{}{}
+          \t\t}
+          \t\tif connection.User == "" || connection.Source == "" {
+          \t\t\tcontinue
+          \t\t}
+          \t\tip := connection.Source
+          \t\tif host, _, splitErr := net.SplitHostPort(ip); splitErr == nil {
+          \t\t\tip = host
+          \t\t}
+          \t\tif ip == "" {
+          \t\t\tcontinue
+          \t\t}
+          \t\tif online[connection.User] == nil {
+          \t\t\tonline[connection.User] = make(map[string]struct{})
+          \t\t}
+          \t\tonline[connection.User][ip] = struct{}{}
+          \t}
+          \tactive := make([]string, 0, len(activeSet))
+          \tfor tag := range activeSet {
+          \t\tactive = append(active, tag)
+          \t}
+          \tsort.Strings(active)
+          \treturn online, active, nil
+          }
+
+          func (s *SingBoxService) OnlineClientIPs(ctx context.Context) (map[string]map[string]struct{}, error) {
+          \tonline, _, err := s.OnlinePresence(ctx)
+          \treturn online, err
+          }'''
+          if old not in s:
+              raise SystemExit('OnlineClientIPs block not found')
+          p.write_text(s.replace(old, new))
+
+          p = Path('internal/web/job/xray_traffic_job.go')
+          s = p.read_text()
+          s = s.replace(
+          '''\t\tonline, err := (&service.SingBoxService{}).OnlineClientIPs(ctx)''',
+          '''\t\tonline, activeInbounds, err := (&service.SingBoxService{}).OnlinePresence(ctx)''')
+          s = s.replace(
+          '''\t\t\tj.inboundService.RefreshLocalOnlineClients(emails, nil)''',
+          '''\t\t\tj.inboundService.RefreshLocalOnlineClients(emails, activeInbounds)''')
+          p.write_text(s)
+          PY
+          gofmt -w internal/web/service/singbox.go internal/web/job/xray_traffic_job.go
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add internal/web/service/singbox.go internal/web/job/xray_traffic_job.go
+          git diff --cached --check
+          git commit -m "fix(singbox): report active inbounds from connection API"
+
+      - name: Make node depletion restart core-aware
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('internal/web/job/node_traffic_sync_job.go')
+          s = p.read_text()
+          s = s.replace(
+          '''\tsettingService service.SettingService
+          \txrayService    service.XrayService''',
+          '''\tsettingService service.SettingService
+          \txrayService    service.XrayService
+          \tsingBoxService service.SingBoxService''')
+          old = '''\tif clientsDisabled {
+          \t\tif restartOnDisable, settingErr := j.settingService.GetRestartXrayOnClientDisable(); settingErr == nil && restartOnDisable {
+          \t\t\tif err := j.xrayService.RestartXray(true); err != nil {
+          \t\t\t\tlogger.Warning("node traffic sync: restart xray after disabling clients failed:", err)
+          \t\t\t\tj.xrayService.SetToNeedRestart()
+          \t\t\t}
+          \t\t} else if settingErr != nil {
+          \t\t\tlogger.Warning("node traffic sync: get RestartXrayOnClientDisable failed:", settingErr)
+          \t\t}
+          \t\tj.structural.set()
+          \t}'''
+          new = '''\tif clientsDisabled {
+          \t\tif restartOnDisable, settingErr := j.settingService.GetRestartXrayOnClientDisable(); settingErr == nil && restartOnDisable {
+          \t\t\tcoreType, coreErr := j.settingService.GetCoreType()
+          \t\t\tif coreErr != nil {
+          \t\t\t\tlogger.Warning("node traffic sync: get selected core after disabling clients failed:", coreErr)
+          \t\t\t} else if coreType == service.CoreTypeSingBox {
+          \t\t\t\t// A stopped or absent sing-box has no live sessions to drop. The
+          \t\t\t\t// next explicit start writes the current client configuration.
+          \t\t\t\tif j.singBoxService.IsRunning() {
+          \t\t\t\t\tif err := j.singBoxService.Restart(context.Background()); err != nil {
+          \t\t\t\t\t\tlogger.Warning("node traffic sync: restart sing-box after disabling clients failed:", err)
+          \t\t\t\t\t\tj.singBoxService.SetToNeedRestart()
+          \t\t\t\t\t}
+          \t\t\t\t}
+          \t\t\t} else if err := j.xrayService.RestartXray(true); err != nil {
+          \t\t\t\tlogger.Warning("node traffic sync: restart xray after disabling clients failed:", err)
+          \t\t\t\tj.xrayService.SetToNeedRestart()
+          \t\t\t}
+          \t\t} else if settingErr != nil {
+          \t\t\tlogger.Warning("node traffic sync: get RestartXrayOnClientDisable failed:", settingErr)
+          \t\t}
+          \t\tj.structural.set()
+          \t}'''
+          if old not in s:
+              raise SystemExit('node depletion restart block not found')
+          p.write_text(s.replace(old, new))
+          PY
+          gofmt -w internal/web/job/node_traffic_sync_job.go
+          git add internal/web/job/node_traffic_sync_job.go
+          git diff --cached --check
+          git commit -m "fix(nodes): restart selected core after quota disable"
+
+      - name: Backend tests
+        shell: bash
+        run: |
+          GODEBUG=http2client=0 go test ./internal/web/job ./internal/web/service ./internal/web/controller ./internal/web/runtime
+
+      - name: Remove temporary workflow and push
+        shell: bash
+        run: |
+          rm -f .github/workflows/temp-node-singbox-presence.yml
+          git add -A
+          git commit -m "chore: remove temporary sing-box presence workflow"
+          git push origin HEAD:temp/node-singbox-status
