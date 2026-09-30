@@ -354,17 +354,11 @@ func (s *Server) startTask(restartXray bool, loc *time.Location) {
 	// every tick, while each traffic collector cheaply no-ops when unselected.
 	_, _ = s.cron.AddJob(cadenceXrayRunning, job.NewCheckXrayRunningJob())
 
+	// XrayTrafficJob is core-aware: it polls Xray when Xray is selected and
+	// sing-box (including online presence) when sing-box is selected. Keep a
+	// single consumer of sing-box delta events so traffic cannot be split
+	// between two same-cadence cron callbacks.
 	_, _ = s.cron.AddJob(cadenceXrayTraffic, job.NewXrayTrafficJob())
-	_, _ = s.cron.AddFunc(cadenceXrayTraffic, func() {
-		singTraffic := &service.SingBoxService{}
-		ctx, cancel := context.WithTimeout(s.ctx, 4*time.Second)
-		defer cancel()
-		if core, err := s.settingService.GetCoreType(); err == nil && core == service.CoreTypeSingBox {
-			if err := singTraffic.PollTraffic(ctx); err != nil {
-				logger.Debug("sing-box traffic poll failed:", err)
-			}
-		}
-	})
 
 	// Xray has a separate pending-restart flag used by hot-apply paths.
 	// This can remain scheduled even while sing-box is selected: ApplyPendingRestart
