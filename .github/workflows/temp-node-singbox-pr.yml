@@ -1,3 +1,4 @@
+# Temporary trigger marker; removed by the implementation workflow.
 name: temp-node-singbox-pr
 
 on:
