@@ -13,9 +13,12 @@ type ApiMsg<T = unknown> = {
 
 type GatewayStatus = {
   enabled: boolean;
+  configured: boolean;
+  recoveryBackup: boolean;
   canEnable: boolean;
   coreType: string;
   xrayRunning: boolean;
+  port: number;
 };
 
 const HEADER_TARGET = '.settings-page .header-actions';
@@ -111,6 +114,8 @@ export default function GatewayModeControl() {
   };
 
   const enabled = status?.enabled === true;
+  const configured = status?.configured === true;
+  const recoveryOnly = enabled && !configured && status?.recoveryBackup === true;
   const singBoxSelected = status?.coreType === 'sing-box';
   const canEnable = status?.canEnable === true;
 
@@ -119,7 +124,7 @@ export default function GatewayModeControl() {
         <span style={{ display: 'inline-flex', marginInlineStart: 8 }}>
           <Tooltip title="Управление прозрачным шлюзом Xray">
             <Button icon={<ApartmentOutlined />} loading={loading} onClick={() => setOpen(true)}>
-              Gateway: {enabled ? 'вкл.' : 'выкл.'}
+              Gateway: {recoveryOnly ? 'восстановление' : enabled ? 'вкл.' : 'выкл.'}
             </Button>
           </Tooltip>
         </span>,
@@ -140,13 +145,21 @@ export default function GatewayModeControl() {
       >
         <Space direction="vertical" size={14} style={{ width: '100%' }}>
           <Alert
-            type={enabled ? 'success' : 'info'}
+            type={recoveryOnly ? 'warning' : enabled ? 'success' : 'info'}
             showIcon
-            title={enabled ? 'Gateway Mode включён' : 'Gateway Mode выключен'}
+            title={
+              recoveryOnly
+                ? 'Требуется очистка состояния Gateway Mode'
+                : enabled
+                  ? 'Gateway Mode включён'
+                  : 'Gateway Mode выключен'
+            }
             description={
-              enabled
-                ? 'В шаблоне Xray активны отдельный TPROXY-вход и Gateway-outbound.'
-                : 'Gateway-объекты сейчас не активны в конфигурации Xray.'
+              recoveryOnly
+                ? 'Найдена резервная копия Gateway Mode, но его объекты отсутствуют в текущем Xray-конфиге. Нажмите «Выключить», чтобы безопасно удалить устаревший recovery-marker.'
+                : enabled
+                  ? 'В шаблоне Xray активны отдельный TPROXY-вход и Gateway-outbound.'
+                  : 'Gateway-объекты сейчас не активны в конфигурации Xray.'
             }
           />
 
@@ -158,6 +171,7 @@ export default function GatewayModeControl() {
             <Tag color={status?.xrayRunning ? 'success' : 'default'}>
               Xray {status?.xrayRunning ? 'работает' : 'остановлен'}
             </Tag>
+            <Tag>TPROXY: {status?.port ?? 52345}</Tag>
           </Space>
 
           {singBoxSelected && !enabled && (
@@ -169,7 +183,7 @@ export default function GatewayModeControl() {
             />
           )}
 
-          {singBoxSelected && enabled && (
+          {singBoxSelected && enabled && !recoveryOnly && (
             <Alert
               type="warning"
               showIcon
@@ -185,15 +199,20 @@ export default function GatewayModeControl() {
           </Typography.Paragraph>
 
           <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-            Для работы сервера как шлюза также должны быть настроены маршрутизация Linux/TPROXY, а
-            клиентские устройства должны отправлять трафик через этот сервер.
+            Linux должен перенаправлять TCP/UDP через TPROXY на порт {status?.port ?? 52345} и иметь
+            включённый IPv4 forwarding. Клиентские устройства должны использовать этот сервер как
+            шлюз.
           </Typography.Paragraph>
 
           <Space wrap>
             {enabled ? (
               <Popconfirm
                 title="Выключить Gateway Mode?"
-                description="Будут удалены только TPROXY-вход, Gateway-outbound и связанное правило маршрутизации. Остальные изменения Xray сохранятся."
+                description={
+                  recoveryOnly
+                    ? 'Будет удалён только устаревший recovery-marker. Текущий Xray-конфиг не будет откатан.'
+                    : 'Будут удалены только TPROXY-вход, Gateway-outbound и связанное правило маршрутизации. Остальные изменения Xray сохранятся.'
+                }
                 okText="Выключить"
                 cancelText="Отмена"
                 onConfirm={() => void runAction('disable')}
