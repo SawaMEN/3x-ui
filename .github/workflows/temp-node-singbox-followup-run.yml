@@ -50,6 +50,12 @@ jobs:
               return body, end
 
           py, _ = extract("          python3 - <<'PY'\n", "\n          PY")
+          # Those spaces belong to the TypeScript string literal, not to YAML/Python.
+          # Restore them after stripping the YAML run-block indentation above.
+          py = py.replace("\nrecord.singboxInstalled === false", "\n          record.singboxInstalled === false")
+          py = py.replace("\nif (record.singboxKnown !== true)", "\n          if (record.singboxKnown !== true)")
+          py = py.replace("\nif (!record.singboxInstalled)", "\n          if (!record.singboxInstalled)")
+          py = py.replace("\nreturn record.singboxVersion", "\n          return record.singboxVersion")
           Path('/tmp/apply-node-singbox-followup.py').write_text(py)
 
           remote_test, remote_end = extract(
