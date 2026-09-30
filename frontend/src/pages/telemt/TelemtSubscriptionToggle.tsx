@@ -18,11 +18,13 @@ export default function TelemtSubscriptionToggle() {
   const [saving, setSaving] = useState(false);
 
   useLayoutEffect(() => {
-    setPortalTarget(document.querySelector('.telemt-header'));
+    const frame = window.requestAnimationFrame(() => {
+      setPortalTarget(document.querySelector('.telemt-header'));
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, []);
 
   const loadSetting = useCallback(async () => {
-    setLoading(true);
     try {
       const response = await HttpUtil.get<SubscriptionProxySetting>(
         '/panel/api/telemt/subscription-proxy',
@@ -43,7 +45,8 @@ export default function TelemtSubscriptionToggle() {
   }, []);
 
   useEffect(() => {
-    void loadSetting();
+    const frame = window.requestAnimationFrame(() => void loadSetting());
+    return () => window.cancelAnimationFrame(frame);
   }, [loadSetting]);
 
   const updateSetting = async (checked: boolean) => {
