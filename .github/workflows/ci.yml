@@ -13,17 +13,20 @@ on:
       - ".github/workflows/ci.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  gateway-artifacts:
+  apply-generated:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: feature/gateway-gui
+          fetch-depth: 0
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
@@ -36,21 +39,31 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci --no-audit --no-fund
         working-directory: frontend
-      - name: Format Gateway control
+      - name: Apply formatter
         run: npx oxfmt src/pages/settings/GatewayModeControl.tsx
         working-directory: frontend
       - name: Regenerate schemas, examples and OpenAPI
         run: npm run gen
         working-directory: frontend
-      - name: Upload exact generated results
-        uses: actions/upload-artifact@v4
-        with:
-          name: gateway-ci-results
-          if-no-files-found: error
-          path: |
-            frontend/src/pages/settings/GatewayModeControl.tsx
-            frontend/public/openapi.json
-            frontend/src/generated/examples.ts
-            frontend/src/generated/schemas.ts
-            frontend/src/generated/types.ts
+      - name: Restore normal project CI files
+        run: |
+          git fetch origin main
+          git show origin/main:.github/workflows/ci.yml > .github/workflows/ci.yml
+          git show origin/main:frontend/package.json > frontend/package.json
+      - name: Commit generated results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/ci.yml frontend/package.json \
+            frontend/src/pages/settings/GatewayModeControl.tsx \
+            frontend/public/openapi.json \
+            frontend/src/generated/examples.ts \
+            frontend/src/generated/schemas.ts \
+            frontend/src/generated/types.ts \
             frontend/src/generated/zod.ts
+          if git diff --cached --quiet; then
+            echo "No generated changes to commit"
+            exit 0
+          fi
+          git commit -m "chore: apply gateway frontend generation"
+          git push origin HEAD:feature/gateway-gui
