@@ -38,10 +38,13 @@ func (a *GatewayController) statusPayload() (gin.H, error) {
 	coreType, coreErr := a.settingService.GetCoreType()
 
 	payload := gin.H{
-		"enabled":      state.Enabled,
-		"canEnable":    !state.Enabled && coreType != service.CoreTypeSingBox,
-		"coreType":     coreType,
-		"xrayRunning":  a.xrayService.IsXrayRunning(),
+		"enabled":        state.Enabled,
+		"configured":     state.Configured,
+		"recoveryBackup": state.BackupExists,
+		"canEnable":      !state.Enabled && coreType != service.CoreTypeSingBox,
+		"coreType":       coreType,
+		"xrayRunning":    a.xrayService.IsXrayRunning(),
+		"port":           gateway.InboundPort(),
 	}
 	if stateErr != nil {
 		return payload, stateErr
