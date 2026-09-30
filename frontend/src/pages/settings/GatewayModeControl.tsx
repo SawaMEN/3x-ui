@@ -100,11 +100,7 @@ export default function GatewayModeControl() {
     ? createPortal(
         <span style={{ display: 'inline-flex', marginInlineStart: 8 }}>
           <Tooltip title="Управление прозрачным шлюзом Xray">
-            <Button
-              icon={<ApartmentOutlined />}
-              loading={loading}
-              onClick={() => setOpen(true)}
-            >
+            <Button icon={<ApartmentOutlined />} loading={loading} onClick={() => setOpen(true)}>
               Gateway: {enabled ? 'вкл.' : 'выкл.'}
             </Button>
           </Tooltip>
@@ -171,8 +167,8 @@ export default function GatewayModeControl() {
           </Typography.Paragraph>
 
           <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-            Для работы сервера как шлюза также должны быть настроены маршрутизация Linux/TPROXY,
-            а клиентские устройства должны отправлять трафик через этот сервер.
+            Для работы сервера как шлюза также должны быть настроены маршрутизация Linux/TPROXY, а
+            клиентские устройства должны отправлять трафик через этот сервер.
           </Typography.Paragraph>
 
           <Space wrap>

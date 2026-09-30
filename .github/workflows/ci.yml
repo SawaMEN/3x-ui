@@ -11,22 +11,108 @@ on:
       - "Makefile"
       - "internal/config/version"
       - ".github/workflows/ci.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "**.go"
+      - "go.mod"
+      - "go.sum"
+      - "frontend/**"
+      - ".nvmrc"
+      - "Makefile"
+      - "internal/config/version"
+      - ".github/workflows/ci.yml"
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  apply-generated:
+  go-test:
+    if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
+    runs-on: ubuntu-latest
+    env:
+      GOPROXY: "https://proxy.golang.org|direct"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Stub internal/web/dist for go:embed
+        run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+      - name: Download Go dependencies
+        run: |
+          for attempt in 1 2 3; do
+            if go mod download; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "go mod download failed after ${attempt} attempts" >&2
+              exit 1
+            fi
+            sleep $((attempt * 5))
+          done
+      - name: Test
+        run: |
+          go test -p 12 -vet=off -shuffle=on -count=1 ./...
+
+  postgres-durable-first:
+    if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: xui_durable
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d xui_durable"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      XUI_DB_TYPE: postgres
+      XUI_DB_DSN: "host=127.0.0.1 port=5432 user=postgres password=postgres dbname=xui_durable sslmode=disable"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Stub internal/web/dist for go:embed
+        run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+      - name: PostgreSQL durable-first tests
+        run: |
+          set -o pipefail
+          go test -p 12 ./internal/web/service -run 'PostgresCommitFailure' -count=1 -v | tee /tmp/postgres-durable-first.log
+          passed=$(grep -c -- '--- PASS' /tmp/postgres-durable-first.log || true)
+          if [ "$passed" -lt 1 ]; then
+            echo "expected at least 1 passing durable-first test, got $passed" >&2
+            exit 1
+          fi
+      - name: PostgreSQL schema and migration tests
+        run: |
+          set -o pipefail
+          go test -p 12 ./internal/database -run '^(TestHostAutoMigrateCreatesColumns_Postgres|TestMigrate_Postgres)$' -count=1 -v | tee /tmp/postgres-schema.log
+          passed=$(grep -c -- '--- PASS' /tmp/postgres-schema.log || true)
+          if [ "$passed" -lt 2 ]; then
+            echo "expected 2 passing PostgreSQL schema tests, got $passed" >&2
+            exit 1
+          fi
+
+  codegen:
+    if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-        with:
-          ref: feature/gateway-gui
-          fetch-depth: 0
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
@@ -34,36 +120,186 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - name: Install frontend dependencies
-        run: npm ci --no-audit --no-fund
-        working-directory: frontend
-      - name: Apply formatter
-        run: npx oxfmt src/pages/settings/GatewayModeControl.tsx
-        working-directory: frontend
       - name: Regenerate schemas, examples and OpenAPI
         run: npm run gen
         working-directory: frontend
-      - name: Restore normal project CI files
+      - name: Fail if generated files are stale
+        run: git diff --exit-code -- frontend/src/generated frontend/public/openapi.json
+
+  govulncheck:
+    if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Stub internal/web/dist for go:embed
+        run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+      - name: Run govulncheck
+        run: govulncheck ./...
+
+  race:
+    if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Stub internal/web/dist for go:embed
+        run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+      - name: Race detector
         run: |
-          git fetch origin main
-          git show origin/main:.github/workflows/ci.yml > .github/workflows/ci.yml
-          git show origin/main:frontend/package.json > frontend/package.json
-      - name: Commit generated results
+          go list ./internal/... . > /tmp/race-packages.txt
+          mapfile -t packages < <(grep -Ev '^github.com/SawaMEN/3x-ui/v3/internal/(web/service|sub)$' /tmp/race-packages.txt)
+          go test -race -p 12 -short -vet=off -timeout 20m "${packages[@]}"
+
+  race-service:
+    if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Stub internal/web/dist for go:embed
+        run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+      - name: Service race detector (shard ${{ matrix.shard }})
+        run: bash tools/ci/race-package-shard.sh ./internal/web/service ${{ matrix.shard }} 3
+
+  race-sub:
+    if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Stub internal/web/dist for go:embed
+        run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+      - name: Subscription race detector (shard ${{ matrix.shard }})
+        run: bash tools/ci/race-package-shard.sh ./internal/sub ${{ matrix.shard }} 2
+
+  fuzz-smoke:
+    if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Stub internal/web/dist for go:embed
+        run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+      - name: Fuzz critical parsers (smoke)
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .github/workflows/ci.yml frontend/package.json \
-            frontend/src/pages/settings/GatewayModeControl.tsx \
-            frontend/public/openapi.json \
-            frontend/src/generated/examples.ts \
-            frontend/src/generated/schemas.ts \
-            frontend/src/generated/types.ts \
-            frontend/src/generated/zod.ts
-          if git diff --cached --quiet; then
-            echo "No generated changes to commit"
-            exit 0
+          go test -p 12 -run '^$' -fuzz 'FuzzParseLink$' -fuzztime=30s ./internal/util/link/
+          go test -p 12 -run '^$' -fuzz 'FuzzDecodeCertPin$' -fuzztime=30s ./internal/web/runtime/
+
+  golangci:
+    if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Stub internal/web/dist for go:embed
+        run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: latest
+          args: --fix --issues-exit-code=0
+
+  arch-linux:
+    if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Full Arch package upgrade
+        run: pacman -Syu --noconfirm
+      - name: Install Arch validation tools
+        run: pacman -S --noconfirm --needed bash shellcheck systemd
+      - name: Validate Arch installer scripts
+        run: |
+          bash -n install.sh
+          bash -n x-ui.sh
+          shellcheck --shell=bash --severity=error install.sh x-ui.sh
+      - name: Validate Arch systemd unit
+        run: |
+          cp x-ui.service.arch /tmp/x-ui.service
+          sed -i 's#^ExecStart=.*#ExecStart=/bin/true#' /tmp/x-ui.service
+          systemd-analyze verify /tmp/x-ui.service
+      - name: Guard against pacman partial upgrades
+        run: |
+          if grep -nE 'pacman[[:space:]]+-S(y|yy)([[:space:]]|$)' install.sh; then
+            echo "Unsupported pacman partial-upgrade command found in install.sh" >&2
+            exit 1
           fi
-          git commit -m "chore: apply gateway frontend generation"
-          git push origin HEAD:feature/gateway-gui
+
+  frontend:
+    if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Cache Playwright Chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
+      - name: Install
+        run: npm ci --no-audit --no-fund
+        working-directory: frontend
+      - name: Verify generated MSW worker is current
+        run: git diff --exit-code -- public/mockServiceWorker.js package-lock.json
+        working-directory: frontend
+      - name: Lint
+        run: npm run lint
+        working-directory: frontend
+      # Keep formatting as a hard gate; formatter-only commits are still validated on PRs.
+      - name: Format check
+        run: npm run format:check
+        working-directory: frontend
+      - name: Typecheck
+        run: npm run typecheck
+        working-directory: frontend
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium
+        working-directory: frontend
+      - name: Test
+        run: npm test
+        working-directory: frontend
+      - name: Build
+        if: github.event_name == 'pull_request'
+        run: npm run build:ci
+        working-directory: frontend
+      - name: Build Storybook
+        if: github.event_name == 'pull_request'
+        run: npm run build-storybook
+        working-directory: frontend
+      - name: Audit
+        run: npm audit --omit=dev --audit-level=high
+        working-directory: frontend

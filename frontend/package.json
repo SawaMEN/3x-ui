@@ -16,7 +16,7 @@
     "lint:fix": "oxlint --fix src tools",
     "lint:deprecated": "oxlint --type-aware -A all -D typescript/no-deprecated src",
     "format": "oxfmt src tools",
-    "format:check": "oxfmt src/pages/settings/GatewayModeControl.tsx && git diff -- src/pages/settings/GatewayModeControl.tsx && exit 1",
+    "format:check": "oxfmt --check src tools",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
