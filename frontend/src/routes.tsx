@@ -4,6 +4,7 @@ import { Spin } from 'antd';
 
 import PanelLayout from '@/layouts/PanelLayout';
 import { importWithChunkRecovery } from '@/lib/chunk-load-recovery';
+import GatewayModeControl from '@/pages/settings/GatewayModeControl';
 import TelemtSubscriptionToggle from '@/pages/telemt/TelemtSubscriptionToggle';
 
 const IndexPage = lazy(() => importWithChunkRecovery(() => import('@/pages/index/IndexPage')));
@@ -64,7 +65,15 @@ const routes: RouteObject[] = [
       { path: 'nodes', element: withSuspense(<NodesPage />) },
       { path: 'hosts', element: withSuspense(<HostsPage />) },
       { path: 'firewall', element: withSuspense(<FirewallPage />) },
-      { path: 'settings', element: withSuspense(<SettingsPage />) },
+      {
+        path: 'settings',
+        element: withSuspense(
+          <>
+            <SettingsPage />
+            <GatewayModeControl />
+          </>,
+        ),
+      },
       { path: 'xray', element: withSuspense(<XrayPage />) },
       { path: 'singbox', element: withSuspense(<SingBoxPage />) },
       { path: 'outbound', element: withSuspense(<XrayPage />) },
