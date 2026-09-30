@@ -43,7 +43,7 @@ export default function GatewayModeControl() {
       setPortalTarget(target);
       if (!target) frame = window.requestAnimationFrame(attach);
     };
-    attach();
+    frame = window.requestAnimationFrame(attach);
     return () => {
       if (frame) window.cancelAnimationFrame(frame);
     };
@@ -76,7 +76,8 @@ export default function GatewayModeControl() {
   );
 
   useEffect(() => {
-    void refresh();
+    const frame = window.requestAnimationFrame(() => void refresh());
+    return () => window.cancelAnimationFrame(frame);
   }, [refresh]);
 
   const runAction = async (action: 'enable' | 'disable') => {
