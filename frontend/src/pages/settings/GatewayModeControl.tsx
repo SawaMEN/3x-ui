@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Alert, Button, Modal, Popconfirm, Space, Tag, Tooltip, Typography, message } from 'antd';
+import {
+  Alert,
+  Button,
+  Modal,
+  Popconfirm,
+  Space,
+  Tag,
+  Tooltip,
+  Typography,
+  message,
+} from 'antd';
 import { ApartmentOutlined, ReloadOutlined } from '@ant-design/icons';
 
 import { HttpUtil } from '@/utils';
@@ -46,7 +56,9 @@ export default function GatewayModeControl() {
           silent: true,
         })) as ApiMsg<GatewayStatus>;
         if (!response?.success || !response.obj) {
-          if (!quiet) messageApi.error(response?.msg || 'Не удалось получить состояние Gateway Mode');
+          if (!quiet) {
+            messageApi.error(response?.msg || 'Не удалось получить состояние Gateway Mode');
+          }
           return;
         }
         setStatus(response.obj);
@@ -70,11 +82,9 @@ export default function GatewayModeControl() {
   const runAction = async (action: 'enable' | 'disable') => {
     setBusy(true);
     try {
-      const response = (await HttpUtil.post(
-        `/panel/api/gateway/${action}`,
-        undefined,
-        { silentSuccess: true },
-      )) as ApiMsg<GatewayStatus>;
+      const response = (await HttpUtil.post(`/panel/api/gateway/${action}`, undefined, {
+        silentSuccess: true,
+      })) as ApiMsg<GatewayStatus>;
 
       if (response?.obj) setStatus(response.obj);
       if (!response?.success) {
@@ -82,9 +92,7 @@ export default function GatewayModeControl() {
         return;
       }
 
-      messageApi.success(
-        action === 'enable' ? 'Gateway Mode включён' : 'Gateway Mode выключен',
-      );
+      messageApi.success(action === 'enable' ? 'Gateway Mode включён' : 'Gateway Mode выключен');
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : 'Не удалось изменить Gateway Mode');
     } finally {
@@ -203,11 +211,7 @@ export default function GatewayModeControl() {
                 </Button>
               </Popconfirm>
             )}
-            <Button
-              icon={<ReloadOutlined />}
-              disabled={busy}
-              onClick={() => void refresh()}
-            >
+            <Button icon={<ReloadOutlined />} disabled={busy} onClick={() => void refresh()}>
               Обновить
             </Button>
           </Space>
