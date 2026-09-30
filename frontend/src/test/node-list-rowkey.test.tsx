@@ -45,9 +45,7 @@ describe('NodeList desktop table row keys', () => {
     const spreadKeyWarning = errorSpy.mock.calls.some((call) =>
       call.some(
         (arg) =>
-          typeof arg === 'string' &&
-          arg.includes('key') &&
-          arg.includes('being spread into JSX'),
+          typeof arg === 'string' && arg.includes('key') && arg.includes('being spread into JSX'),
       ),
     );
 
