@@ -3,7 +3,7 @@ name: temp-node-singbox-pr
 on:
   pull_request:
     branches:
-      - main
+      - temp/node-singbox-trigger-base
     types: [opened, synchronize, reopened]
 
 permissions:
