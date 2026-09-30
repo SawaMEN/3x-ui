@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import { Space, Switch, Tooltip, Typography, message } from 'antd';
 import { createPortal } from 'react-dom';
 
@@ -17,19 +17,8 @@ export default function TelemtSubscriptionToggle() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    const findTarget = () => {
-      const target = document.querySelector('.telemt-header');
-      if (target) setPortalTarget(target);
-      return Boolean(target);
-    };
-
-    if (findTarget()) return;
-    const observer = new MutationObserver(() => {
-      if (findTarget()) observer.disconnect();
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
-    return () => observer.disconnect();
+  useLayoutEffect(() => {
+    setPortalTarget(document.querySelector('.telemt-header'));
   }, []);
 
   const loadSetting = useCallback(async () => {
