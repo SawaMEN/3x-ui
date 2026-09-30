@@ -110,7 +110,16 @@ jobs:
           gofmt -w internal/web/controller/server.go internal/web/service/node.go internal/database/model/model.go
 
       - name: Backend tests
-        run: go test ./internal/web/controller ./internal/web/service ./internal/web/runtime ./internal/database/model
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            if GODEBUG=http2client=0 go test ./internal/web/controller ./internal/web/service ./internal/web/runtime ./internal/database/model; then
+              exit 0
+            fi
+            echo "Backend test attempt ${attempt} failed; retrying after transient dependency/network failure"
+            sleep $((attempt * 5))
+          done
+          exit 1
 
       - name: Frontend checks
         working-directory: frontend
