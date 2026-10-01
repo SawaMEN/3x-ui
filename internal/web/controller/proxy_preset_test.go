@@ -22,9 +22,13 @@ func TestProxyPresetRoutesRegistered(t *testing.T) {
 		"POST /panel/api/hosts/presets/save",
 		"POST /panel/api/hosts/presets/update/:id",
 		"POST /panel/api/hosts/presets/del/:id",
+		"GET /panel/api/hosts/presets/assignments",
 		"GET /panel/api/hosts/presets/assignment/:groupId",
 		"POST /panel/api/hosts/presets/assign/:groupId",
+		"POST /panel/api/hosts/presets/assign/bulk",
 		"POST /panel/api/hosts/presets/unassign/:groupId",
+		"GET /panel/api/hosts/presets/bundle",
+		"POST /panel/api/hosts/presets/bundle/import",
 	} {
 		if !routes[want] {
 			t.Fatalf("missing route %q; routes=%v", want, engine.Routes())
