@@ -1,6 +1,12 @@
 package model
 
-import "time"
+import (
+	"encoding/json"
+	"sync"
+	"time"
+
+	"gorm.io/gorm"
+)
 
 // ProxyPreset stores reusable subscription-endpoint overrides. The JSON config
 // deliberately uses pointer fields: nil means "leave the Host value unchanged",
@@ -135,4 +141,100 @@ func ApplyProxyPresetConfig(h *Host, cfg ProxyPresetConfig) {
 	if cfg.ShuffleHost != nil {
 		h.ShuffleHost = *cfg.ShuffleHost
 	}
+}
+
+var hostProxyPresetCache struct {
+	sync.RWMutex
+	loaded  bool
+	byGroup map[string]ProxyPresetConfig
+}
+
+// InvalidateProxyPresetCache makes the next subscription endpoint rebuild the
+// complete preset binding map. Preset CRUD calls this after every mutation.
+func InvalidateProxyPresetCache() {
+	hostProxyPresetCache.Lock()
+	hostProxyPresetCache.loaded = false
+	hostProxyPresetCache.byGroup = nil
+	hostProxyPresetCache.Unlock()
+}
+
+func loadProxyPresetCache(tx *gorm.DB) error {
+	hostProxyPresetCache.RLock()
+	loaded := hostProxyPresetCache.loaded
+	hostProxyPresetCache.RUnlock()
+	if loaded {
+		return nil
+	}
+
+	hostProxyPresetCache.Lock()
+	defer hostProxyPresetCache.Unlock()
+	if hostProxyPresetCache.loaded {
+		return nil
+	}
+	byGroup := make(map[string]ProxyPresetConfig)
+	migrator := tx.Migrator()
+	if !migrator.HasTable(&HostProxyPreset{}) || !migrator.HasTable(&ProxyPreset{}) {
+		hostProxyPresetCache.byGroup = byGroup
+		hostProxyPresetCache.loaded = true
+		return nil
+	}
+
+	db := tx.Session(&gorm.Session{SkipHooks: true})
+	var bindings []HostProxyPreset
+	if err := db.Find(&bindings).Error; err != nil {
+		return err
+	}
+	if len(bindings) == 0 {
+		hostProxyPresetCache.byGroup = byGroup
+		hostProxyPresetCache.loaded = true
+		return nil
+	}
+	ids := make([]int, 0, len(bindings))
+	seen := make(map[int]struct{}, len(bindings))
+	for _, binding := range bindings {
+		if _, ok := seen[binding.PresetId]; ok {
+			continue
+		}
+		seen[binding.PresetId] = struct{}{}
+		ids = append(ids, binding.PresetId)
+	}
+	var presets []ProxyPreset
+	if err := db.Where("id IN ?", ids).Find(&presets).Error; err != nil {
+		return err
+	}
+	configs := make(map[int]ProxyPresetConfig, len(presets))
+	for _, preset := range presets {
+		var cfg ProxyPresetConfig
+		if err := json.Unmarshal([]byte(preset.Config), &cfg); err == nil {
+			configs[preset.Id] = cfg
+		}
+	}
+	for _, binding := range bindings {
+		if cfg, ok := configs[binding.PresetId]; ok {
+			byGroup[binding.GroupId] = cfg
+		}
+	}
+	hostProxyPresetCache.byGroup = byGroup
+	hostProxyPresetCache.loaded = true
+	return nil
+}
+
+// ApplyAssignedProxyPreset resolves a Host group's assigned preset and overlays
+// it on the supplied in-memory Host. It is intentionally explicit instead of a
+// GORM AfterFind hook so normal Host API reads never expose effective values as
+// editable base values. Subscription rendering is the sole caller.
+func ApplyAssignedProxyPreset(tx *gorm.DB, h *Host) error {
+	if h == nil || h.GroupId == "" {
+		return nil
+	}
+	if err := loadProxyPresetCache(tx); err != nil {
+		return err
+	}
+	hostProxyPresetCache.RLock()
+	cfg, ok := hostProxyPresetCache.byGroup[h.GroupId]
+	hostProxyPresetCache.RUnlock()
+	if ok {
+		ApplyProxyPresetConfig(h, cfg)
+	}
+	return nil
 }
