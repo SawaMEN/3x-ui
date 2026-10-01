@@ -30,8 +30,7 @@ func (s *OutboundService) AddTraffic(traffics []*xray.Traffic, clientTraffics []
 }
 
 // saturatingAdd caps counters at database.TrafficMax: unlike the SQL paths,
-// this read-modify-write add happens in Go, where an int64 overflow silently
-// wraps negative instead of erroring (#5762).
+// this read-modify-write add happens in Go, where an int64 overflow silently wraps negative instead of erroring (#5762).
 func saturatingAdd(a, b int64) int64 {
 	if b > database.TrafficMax-a {
 		return database.TrafficMax
@@ -107,10 +106,7 @@ func (s *OutboundService) ResetOutboundTraffic(tag string) error {
 }
 
 // TestOutboundResult represents the result of testing an outbound.
-// Delay is in milliseconds. Endpoints is only populated for TCP-mode
-// probes; HTTP mode reports the round-trip of a real HTTP request on an
-// established connection through the outbound (the cold first request
-// supplies the timing breakdown).
+// Delay is in milliseconds.
 type TestOutboundResult struct {
 	Tag     string `json:"tag,omitempty"`
 	Success bool   `json:"success"`
@@ -118,11 +114,6 @@ type TestOutboundResult struct {
 	Error   string `json:"error,omitempty"`
 	Mode    string `json:"mode,omitempty"`
 
-	// HTTP-mode extras. Any HTTP response counts as reachable; HTTPStatus
-	// records what the test URL answered. ConnectMs is the dial to the local
-	// test inbound; TLSMs covers outbound-chain establishment + target TLS
-	// (https URLs only, since xray ACKs the SOCKS CONNECT before dialing
-	// upstream); TTFBMs is request start → first response byte.
 	HTTPStatus int   `json:"httpStatus,omitempty"`
 	ConnectMs  int64 `json:"connectMs,omitempty"`
 	TLSMs      int64 `json:"tlsMs,omitempty"`
@@ -132,8 +123,7 @@ type TestOutboundResult struct {
 	Egress    *TestEgressResult    `json:"egress,omitempty"`
 }
 
-// TestEndpointResult is one entry in a TCP-mode probe — the per-endpoint
-// dial outcome for outbounds that expose multiple servers/peers.
+// TestEndpointResult is one entry in a TCP-mode probe.
 type TestEndpointResult struct {
 	Address string `json:"address"`
 	Success bool   `json:"success"`
@@ -141,8 +131,7 @@ type TestEndpointResult struct {
 	Error   string `json:"error,omitempty"`
 }
 
-// TestEgressResult is populated by HTTP-mode probes from Cloudflare's trace
-// endpoint. It reports what an external service sees after the outbound chain.
+// TestEgressResult reports what an external service sees after the outbound chain.
 type TestEgressResult struct {
 	IPv4    string `json:"ipv4,omitempty"`
 	IPv6    string `json:"ipv6,omitempty"`
@@ -156,9 +145,15 @@ func (s *OutboundService) testOutboundTCP(outboundJSON string) (*TestOutboundRes
 		return &TestOutboundResult{Mode: "tcp", Success: false, Error: fmt.Sprintf("Invalid outbound JSON: %v", err)}, nil
 	}
 	tag, _ := ob["tag"].(string)
-	protocol, _ := ob["protocol"].(string)
-	if equalsAnyFold(protocol, "blackhole", "freedom") || tag == "blocked" {
+	protocol := outboundType(ob)
+	if equalsAnyFold(protocol, "blackhole", "freedom", "block", "direct") || tag == "blocked" {
 		return &TestOutboundResult{Tag: tag, Mode: "tcp", Success: false, Error: "Outbound has no testable endpoint"}, nil
+	}
+	if equalsAnyFold(protocol, "selector", "urltest") {
+		return &TestOutboundResult{Tag: tag, Mode: "tcp", Success: false, Error: "Group outbound must be tested through the running core"}, nil
+	}
+	if nativeOutboundTransportIsUDP(ob) {
+		return &TestOutboundResult{Tag: tag, Mode: "tcp", Success: false, Error: "UDP-based outbound requires an active-core probe"}, nil
 	}
 
 	endpoints := extractOutboundEndpoints(ob)
@@ -216,17 +211,35 @@ func probeTCPEndpoint(endpoint string, timeout time.Duration) TestEndpointResult
 	return r
 }
 
-// outboundTransportIsUDP reports whether the outbound's proxy speaks UDP
-// (wireguard, hysteria, or a kcp/quic/hysteria stream transport). A bare
-// UDP dial can't probe these — they ignore unauthenticated packets, so a
-// dial neither proves reachability nor measures latency. Such outbounds
-// must go through the real xray handshake probe instead.
+func outboundType(ob map[string]any) string {
+	if protocol, _ := ob["protocol"].(string); strings.TrimSpace(protocol) != "" {
+		return strings.ToLower(strings.TrimSpace(protocol))
+	}
+	typeName, _ := ob["type"].(string)
+	return strings.ToLower(strings.TrimSpace(typeName))
+}
+
+func nativeOutboundTransportIsUDP(ob map[string]any) bool {
+	if _, hasProtocol := ob["protocol"]; hasProtocol {
+		return false
+	}
+	switch outboundType(ob) {
+	case "hysteria", "hysteria2", "tuic", "wireguard":
+		return true
+	default:
+		return false
+	}
+}
+
+// outboundTransportIsUDP reports whether the outbound's proxy speaks UDP.
 func outboundTransportIsUDP(ob map[string]any) bool {
+	if nativeOutboundTransportIsUDP(ob) {
+		return true
+	}
 	if protocol, _ := ob["protocol"].(string); equalsAnyFold(protocol, "hysteria", "wireguard", "amneziawg") {
 		return true
 	}
 	if stream, ok := ob["streamSettings"].(map[string]any); ok {
-		// The core resolves "kcp" and "mkcp" to the same mKCP transport.
 		if n, _ := stream["network"].(string); equalsAnyFold(n, "hysteria", "kcp", "mkcp", "quic") {
 			return true
 		}
@@ -234,8 +247,6 @@ func outboundTransportIsUDP(ob map[string]any) bool {
 	return false
 }
 
-// equalsAnyFold mirrors the core, which lowercases a protocol id and a
-// transport name before it resolves either of them.
 func equalsAnyFold(value string, want ...string) bool {
 	for _, w := range want {
 		if strings.EqualFold(value, w) {
@@ -246,8 +257,17 @@ func equalsAnyFold(value string, want ...string) bool {
 }
 
 func extractOutboundEndpoints(ob map[string]any) []string {
-	protocol, _ := ob["protocol"].(string)
-	protocol = strings.ToLower(protocol)
+	protocol := outboundType(ob)
+	if _, native := ob["type"]; native {
+		if server, _ := ob["server"].(string); strings.TrimSpace(server) != "" {
+			port := numAsInt(ob["server_port"])
+			if port > 0 {
+				return []string{net.JoinHostPort(server, strconv.Itoa(port))}
+			}
+		}
+		return nil
+	}
+
 	settings, _ := ob["settings"].(map[string]any)
 	if settings == nil {
 		return nil
@@ -258,7 +278,7 @@ func extractOutboundEndpoints(ob map[string]any) []string {
 		host, _ := addr.(string)
 		p := numAsInt(port)
 		if host != "" && p > 0 {
-			out = append(out, fmt.Sprintf("%s:%d", host, p))
+			out = append(out, net.JoinHostPort(host, strconv.Itoa(p)))
 		}
 	}
 	switch protocol {
@@ -299,7 +319,6 @@ func extractOutboundEndpoints(ob map[string]any) []string {
 						out = append(out, ep)
 					}
 				}
-			}
 		}
 	}
 	return out
