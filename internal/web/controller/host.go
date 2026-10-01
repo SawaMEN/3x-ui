@@ -17,6 +17,7 @@ type HostController struct {
 func NewHostController(g *gin.RouterGroup) *HostController {
 	a := &HostController{}
 	a.initRouter(g)
+	NewProxyPresetController(g.Group("/presets"))
 	return a
 }
 
