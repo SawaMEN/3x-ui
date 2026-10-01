@@ -8,11 +8,13 @@ import {
   ProxyPresetAssignmentsSchema,
   ProxyPresetInputSchema,
   ProxyPresetListSchema,
+  ProxyPresetPreviewSchema,
   ProxyPresetViewSchema,
   type ProxyBundle,
   type ProxyBundleImportResult,
   type ProxyPresetAssignment,
   type ProxyPresetInput,
+  type ProxyPresetPreviewItem,
   type ProxyPresetView,
 } from '@/schemas/api/proxyPreset';
 import { HttpUtil, type Msg } from '@/utils';
@@ -106,6 +108,24 @@ export function useProxyPresetMutations() {
     onSuccess: invalidate,
   });
 
+  const previewMutation = useMutation({
+    mutationFn: async ({
+      groupIds,
+      presetId,
+    }: {
+      groupIds: string[];
+      presetId: number;
+    }): Promise<ProxyPresetPreviewItem[]> => {
+      const msg = await HttpUtil.post(
+        '/panel/api/hosts/presets/preview',
+        { groupIds, presetId },
+        { ...JSON_HEADERS, silent: true },
+      );
+      if (!msg.success) throw new Error(msg.msg || 'Failed to preview proxy preset');
+      return requireParsedObj(msg, ProxyPresetPreviewSchema, 'hosts/presets/preview');
+    },
+  });
+
   const assignMutation = useMutation({
     mutationFn: async ({ groupId, presetId }: { groupId: string; presetId: number }) => {
       const msg = await HttpUtil.post(
@@ -177,6 +197,8 @@ export function useProxyPresetMutations() {
     save: (input: ProxyPresetInput) => saveMutation.mutateAsync(input),
     update: (id: number, input: ProxyPresetInput) => updateMutation.mutateAsync({ id, input }),
     remove: (id: number) => deleteMutation.mutateAsync(id),
+    preview: (groupIds: string[], presetId: number) =>
+      previewMutation.mutateAsync({ groupIds, presetId }),
     assign: (groupId: string, presetId: number) => assignMutation.mutateAsync({ groupId, presetId }),
     assignMany: (groupIds: string[], presetId: number | null) =>
       assignManyMutation.mutateAsync({ groupIds, presetId }),
@@ -185,6 +207,7 @@ export function useProxyPresetMutations() {
       importMutation.mutateAsync({ bundle, dryRun, allowMissingInbounds }),
     exportBundle,
     saving: saveMutation.isPending || updateMutation.isPending,
+    previewing: previewMutation.isPending,
     importing: importMutation.isPending,
     assigning: assignMutation.isPending || assignManyMutation.isPending || unassignMutation.isPending,
   };
