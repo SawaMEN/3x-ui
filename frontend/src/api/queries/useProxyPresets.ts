@@ -5,6 +5,7 @@ import {
   ProxyBundleImportResultSchema,
   ProxyBundleSchema,
   ProxyPresetAssignmentSchema,
+  ProxyPresetAssignmentsSchema,
   ProxyPresetInputSchema,
   ProxyPresetListSchema,
   ProxyPresetViewSchema,
@@ -14,22 +15,39 @@ import {
   type ProxyPresetInput,
   type ProxyPresetView,
 } from '@/schemas/api/proxyPreset';
-import { HttpUtil } from '@/utils';
+import { HttpUtil, type Msg } from '@/utils';
 import { parseMsg } from '@/utils/zodValidate';
+import type { z } from 'zod';
 
 const JSON_HEADERS = { headers: { 'Content-Type': 'application/json' } };
 
+function requireParsedObj<T extends z.ZodType>(msg: Msg<unknown>, schema: T, context: string): z.infer<T> {
+  const parsed = parseMsg(msg, schema, context, { strict: true }).obj;
+  if (parsed == null) throw new Error(`${context} returned no object`);
+  return parsed;
+}
+
 async function fetchPresets(): Promise<ProxyPresetView[]> {
   const msg = await HttpUtil.get('/panel/api/hosts/presets/list', undefined, { silent: true });
-  if (!msg?.success) throw new Error(msg?.msg || 'Failed to fetch proxy presets');
-  const validated = parseMsg(msg, ProxyPresetListSchema, 'hosts/presets/list', { strict: true });
-  return validated.obj ?? [];
+  if (!msg.success) throw new Error(msg.msg || 'Failed to fetch proxy presets');
+  return requireParsedObj(msg, ProxyPresetListSchema, 'hosts/presets/list');
 }
 
 export function useProxyPresetsQuery() {
   return useQuery({
     queryKey: keys.proxyPresets.list(),
     queryFn: fetchPresets,
+  });
+}
+
+export function useProxyPresetAssignmentsQuery() {
+  return useQuery({
+    queryKey: keys.proxyPresets.assignments(),
+    queryFn: async (): Promise<ProxyPresetAssignment[]> => {
+      const msg = await HttpUtil.get('/panel/api/hosts/presets/assignments', undefined, { silent: true });
+      if (!msg.success) throw new Error(msg.msg || 'Failed to fetch proxy preset assignments');
+      return requireParsedObj(msg, ProxyPresetAssignmentsSchema, 'hosts/presets/assignments');
+    },
   });
 }
 
@@ -43,11 +61,9 @@ export function useProxyPresetAssignment(groupId: string | null) {
         undefined,
         { silent: true },
       );
-      if (!msg?.success) throw new Error(msg?.msg || 'Failed to fetch proxy preset assignment');
+      if (!msg.success) throw new Error(msg.msg || 'Failed to fetch proxy preset assignment');
       if (msg.obj == null) return null;
-      return parseMsg(msg, ProxyPresetAssignmentSchema, 'hosts/presets/assignment', {
-        strict: true,
-      }).obj;
+      return requireParsedObj(msg, ProxyPresetAssignmentSchema, 'hosts/presets/assignment');
     },
   });
 }
@@ -65,8 +81,8 @@ export function useProxyPresetMutations() {
     mutationFn: async (input: ProxyPresetInput): Promise<ProxyPresetView> => {
       const payload = ProxyPresetInputSchema.parse(input);
       const msg = await HttpUtil.post('/panel/api/hosts/presets/save', payload, JSON_HEADERS);
-      if (!msg?.success) throw new Error(msg?.msg || 'Failed to save proxy preset');
-      return parseMsg(msg, ProxyPresetViewSchema, 'hosts/presets/save', { strict: true }).obj;
+      if (!msg.success) throw new Error(msg.msg || 'Failed to save proxy preset');
+      return requireParsedObj(msg, ProxyPresetViewSchema, 'hosts/presets/save');
     },
     onSuccess: invalidate,
   });
@@ -75,8 +91,8 @@ export function useProxyPresetMutations() {
     mutationFn: async ({ id, input }: { id: number; input: ProxyPresetInput }): Promise<ProxyPresetView> => {
       const payload = ProxyPresetInputSchema.parse(input);
       const msg = await HttpUtil.post(`/panel/api/hosts/presets/update/${id}`, payload, JSON_HEADERS);
-      if (!msg?.success) throw new Error(msg?.msg || 'Failed to update proxy preset');
-      return parseMsg(msg, ProxyPresetViewSchema, 'hosts/presets/update', { strict: true }).obj;
+      if (!msg.success) throw new Error(msg.msg || 'Failed to update proxy preset');
+      return requireParsedObj(msg, ProxyPresetViewSchema, 'hosts/presets/update');
     },
     onSuccess: invalidate,
   });
@@ -84,7 +100,7 @@ export function useProxyPresetMutations() {
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
       const msg = await HttpUtil.post(`/panel/api/hosts/presets/del/${id}`);
-      if (!msg?.success) throw new Error(msg?.msg || 'Failed to delete proxy preset');
+      if (!msg.success) throw new Error(msg.msg || 'Failed to delete proxy preset');
       return msg;
     },
     onSuccess: invalidate,
@@ -97,8 +113,8 @@ export function useProxyPresetMutations() {
         { presetId },
         JSON_HEADERS,
       );
-      if (!msg?.success) throw new Error(msg?.msg || 'Failed to assign proxy preset');
-      return parseMsg(msg, ProxyPresetAssignmentSchema, 'hosts/presets/assign', { strict: true }).obj;
+      if (!msg.success) throw new Error(msg.msg || 'Failed to assign proxy preset');
+      return requireParsedObj(msg, ProxyPresetAssignmentSchema, 'hosts/presets/assign');
     },
     onSuccess: invalidate,
   });
@@ -108,7 +124,7 @@ export function useProxyPresetMutations() {
       const msg = await HttpUtil.post(
         `/panel/api/hosts/presets/unassign/${encodeURIComponent(groupId)}`,
       );
-      if (!msg?.success) throw new Error(msg?.msg || 'Failed to unassign proxy preset');
+      if (!msg.success) throw new Error(msg.msg || 'Failed to unassign proxy preset');
       return msg;
     },
     onSuccess: invalidate,
@@ -130,10 +146,8 @@ export function useProxyPresetMutations() {
         { bundle: validatedBundle, dryRun, allowMissingInbounds },
         JSON_HEADERS,
       );
-      if (!msg?.success) throw new Error(msg?.msg || 'Failed to import proxy bundle');
-      return parseMsg(msg, ProxyBundleImportResultSchema, 'hosts/presets/bundle/import', {
-        strict: true,
-      }).obj;
+      if (!msg.success) throw new Error(msg.msg || 'Failed to import proxy bundle');
+      return requireParsedObj(msg, ProxyBundleImportResultSchema, 'hosts/presets/bundle/import');
     },
     onSuccess: async (_, variables) => {
       if (!variables.dryRun) await invalidate();
@@ -142,8 +156,8 @@ export function useProxyPresetMutations() {
 
   const exportBundle = async (): Promise<ProxyBundle> => {
     const msg = await HttpUtil.get('/panel/api/hosts/presets/bundle', undefined, { silent: true });
-    if (!msg?.success) throw new Error(msg?.msg || 'Failed to export proxy bundle');
-    return parseMsg(msg, ProxyBundleSchema, 'hosts/presets/bundle', { strict: true }).obj;
+    if (!msg.success) throw new Error(msg.msg || 'Failed to export proxy bundle');
+    return requireParsedObj(msg, ProxyBundleSchema, 'hosts/presets/bundle');
   };
 
   return {
