@@ -23,6 +23,8 @@ func NewProxyPresetController(g *gin.RouterGroup) *ProxyPresetController {
 	g.GET("/assignment/:groupId", a.assignment)
 	g.POST("/assign/:groupId", a.assign)
 	g.POST("/unassign/:groupId", a.unassign)
+	g.GET("/bundle", a.bundle)
+	g.POST("/bundle/import", a.importBundle)
 	return a
 }
 
@@ -114,4 +116,19 @@ func (a *ProxyPresetController) assign(c *gin.Context) {
 func (a *ProxyPresetController) unassign(c *gin.Context) {
 	err := a.service.Unassign(a.userID(c), c.Param("groupId"))
 	jsonMsg(c, "proxy preset unassigned", err)
+}
+
+func (a *ProxyPresetController) bundle(c *gin.Context) {
+	bundle, err := a.service.ExportBundle(a.userID(c))
+	jsonObj(c, bundle, err)
+}
+
+func (a *ProxyPresetController) importBundle(c *gin.Context) {
+	var req service.ProxyBundleImportRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		jsonMsg(c, "invalid proxy bundle payload", err)
+		return
+	}
+	result, err := a.service.ImportBundle(a.userID(c), req)
+	jsonObj(c, result, err)
 }
