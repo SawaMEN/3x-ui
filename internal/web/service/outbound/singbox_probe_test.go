@@ -25,12 +25,15 @@ func TestNativeSingBoxGroupHasNoDirectEndpoint(t *testing.T) {
 	}
 }
 
-func TestNativeSingBoxUDPOutboundUsesCoreProbe(t *testing.T) {
+func TestNativeSingBoxUDPOutboundStaysOutOfXrayProbeLane(t *testing.T) {
 	for _, typeName := range []string{"hysteria2", "tuic", "wireguard"} {
 		t.Run(typeName, func(t *testing.T) {
 			ob := map[string]any{"type": typeName, "tag": typeName}
-			if !outboundTransportIsUDP(ob) {
-				t.Fatalf("outbound %q was not classified as UDP based", typeName)
+			if !nativeOutboundTransportIsUDP(ob) {
+				t.Fatalf("outbound %q was not classified as native UDP based", typeName)
+			}
+			if outboundTransportIsUDP(ob) {
+				t.Fatalf("outbound %q entered the Xray HTTP probe lane", typeName)
 			}
 		})
 	}
