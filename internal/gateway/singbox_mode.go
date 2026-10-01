@@ -112,10 +112,13 @@ func getSingBoxStateUnlocked() (State, error) {
 	if err != nil {
 		return State{}, err
 	}
-	configured := hasSingBoxGatewayInbound(cfg)
+	inbound := hasSingBoxGatewayInbound(cfg)
+	sniff := hasSingBoxGatewaySniffRule(cfg)
 	return State{
-		Enabled:      configured || backup,
-		Configured:   configured,
+		// An inbound from an older Gateway revision is still considered enabled
+		// so the UI offers Disable and can cleanly migrate it on re-enable.
+		Enabled:      inbound || backup,
+		Configured:   inbound && sniff,
 		BackupExists: backup,
 	}, nil
 }
@@ -171,20 +174,21 @@ func DisableSingBox() error {
 	if err != nil {
 		return err
 	}
-	configured := hasSingBoxGatewayInbound(cfg)
-	if !configured && !backup {
+	inbound := hasSingBoxGatewayInbound(cfg)
+	if !inbound && !backup {
 		return fmt.Errorf("Gateway Mode is not enabled")
 	}
 
-	if configured {
-		changed, err := removeSingBoxGatewayConfig(cfg)
-		if err != nil {
+	// A recovery backup means Gateway owned this template even if the inbound
+	// was edited manually. Remove any remaining Gateway-owned route artifact as
+	// part of the same cleanup.
+	changed, err := removeSingBoxGatewayConfig(cfg)
+	if err != nil {
+		return err
+	}
+	if changed {
+		if err := saveSingBoxTemplate(cfg); err != nil {
 			return err
-		}
-		if changed {
-			if err := saveSingBoxTemplate(cfg); err != nil {
-				return err
-			}
 		}
 	}
 
