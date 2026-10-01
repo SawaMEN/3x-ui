@@ -22,6 +22,7 @@ func TestProxyPresetRoutesRegistered(t *testing.T) {
 		"POST /panel/api/hosts/presets/save",
 		"POST /panel/api/hosts/presets/update/:id",
 		"POST /panel/api/hosts/presets/del/:id",
+		"POST /panel/api/hosts/presets/preview",
 		"GET /panel/api/hosts/presets/assignments",
 		"GET /panel/api/hosts/presets/assignment/:groupId",
 		"POST /panel/api/hosts/presets/assign/:groupId",
