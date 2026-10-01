@@ -13,4 +13,4 @@ ExecReload=/usr/local/x-ui/telemt-meko-fix.sh apply
 ExecStop=/usr/local/x-ui/telemt-meko-fix.sh remove
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=x-ui.service
