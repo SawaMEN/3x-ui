@@ -25,6 +25,10 @@ type EditorForm = {
 
 const EMPTY_CONFIG = '{\n  "security": "tls"\n}';
 
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export default function ProxyPresetManagerModal({ open, presets, loading, onOpenChange }: Props) {
   const { t } = useTranslation();
   const [messageApi, contextHolder] = message.useMessage();
@@ -53,10 +57,16 @@ export default function ProxyPresetManagerModal({ open, presets, loading, onOpen
   };
 
   const submit = async () => {
-    const values = await form.validateFields();
+    const values = form.getFieldsValue();
+    form.setFields([
+      { name: 'name', errors: [] },
+      { name: 'description', errors: [] },
+      { name: 'configJson', errors: [] },
+    ]);
+
     let raw: unknown;
     try {
-      raw = JSON.parse(values.configJson);
+      raw = JSON.parse(values.configJson ?? '');
     } catch {
       form.setFields([{ name: 'configJson', errors: ['Invalid JSON'] }]);
       return;
@@ -71,15 +81,47 @@ export default function ProxyPresetManagerModal({ open, presets, loading, onOpen
       ]);
       return;
     }
-    const input = ProxyPresetInputSchema.parse({
+
+    const inputResult = ProxyPresetInputSchema.safeParse({
       name: values.name,
       description: values.description ?? '',
       config: configResult.data,
     });
-    if (editing) await update(editing.id, input);
-    else await save(input);
-    messageApi.success(t('save'));
-    setEditorOpen(false);
+    if (!inputResult.success) {
+      const fields = new Map<'name' | 'description', string[]>();
+      for (const issue of inputResult.error.issues) {
+        const field = issue.path[0];
+        if (field !== 'name' && field !== 'description') continue;
+        const messages = fields.get(field) ?? [];
+        messages.push(issue.message);
+        fields.set(field, messages);
+      }
+      form.setFields(
+        [...fields.entries()].map(([name, errors]) => ({
+          name,
+          errors,
+        })),
+      );
+      return;
+    }
+
+    try {
+      if (editing) await update(editing.id, inputResult.data);
+      else await save(inputResult.data);
+      messageApi.success(t('success'));
+      setEditorOpen(false);
+    } catch (error) {
+      messageApi.error(errorText(error));
+    }
+  };
+
+  const deletePreset = async (preset: ProxyPresetView) => {
+    try {
+      await remove(preset.id);
+      messageApi.success(t('success'));
+    } catch (error) {
+      messageApi.error(errorText(error));
+    }
   };
 
   return (
@@ -125,7 +167,7 @@ export default function ProxyPresetManagerModal({ open, presets, loading, onOpen
                       title={t('sure')}
                       okText={t('delete')}
                       okButtonProps={{ danger: true }}
-                      onConfirm={() => remove(preset.id)}
+                      onConfirm={() => deletePreset(preset)}
                     >
                       <Button
                         type="text"
@@ -154,12 +196,8 @@ export default function ProxyPresetManagerModal({ open, presets, loading, onOpen
         width={720}
       >
         <Form form={form} layout="vertical">
-          <Form.Item
-            name="name"
-            label="Name"
-            rules={[{ required: true, min: 1, max: 120 }]}
-          >
-            <Input autoComplete="off" />
+          <Form.Item name="name" label="Name">
+            <Input autoComplete="off" maxLength={120} />
           </Form.Item>
           <Form.Item name="description" label={t('comment')}>
             <Input maxLength={1000} />
@@ -167,7 +205,6 @@ export default function ProxyPresetManagerModal({ open, presets, loading, onOpen
           <Form.Item
             name="configJson"
             label={t('jsonEditor')}
-            rules={[{ required: true }]}
             extra="Examples: security, sni, hostHeader, path, alpn, fingerprint, allowInsecure, echConfigList, muxParams, sockoptParams, finalMask. Omit a field to inherit it from Host."
           >
             <Input.TextArea rows={16} spellCheck={false} style={{ fontFamily: 'monospace' }} />
