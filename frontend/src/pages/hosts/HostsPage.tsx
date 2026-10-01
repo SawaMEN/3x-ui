@@ -20,11 +20,18 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useHostsQuery, type HostRecord } from '@/api/queries/useHostsQuery';
 import { useHostMutations } from '@/api/queries/useHostMutations';
 import { useInboundOptions } from '@/api/queries/useInboundOptions';
+import {
+  useProxyPresetAssignmentsQuery,
+  useProxyPresetMutations,
+  useProxyPresetsQuery,
+} from '@/api/queries/useProxyPresets';
 import AppSidebar from '@/layouts/AppSidebar';
 import { setMessageInstance } from '@/utils/messageBus';
 import type { BulkAddHostValues } from '@/schemas/api/host';
 import HostList, { sortHosts } from './HostList';
 import HostFormModal from './HostFormModal';
+import ProxyBundleControls from './ProxyBundleControls';
+import ProxyPresetManagerModal from './ProxyPresetManagerModal';
 
 export default function HostsPage() {
   const { t } = useTranslation();
@@ -40,10 +47,14 @@ export default function HostsPage() {
   const { bulkCreate, update, remove, setEnable, reorder, bulkSetEnable, bulkDel } =
     useHostMutations();
   const { data: inboundOptions = [] } = useInboundOptions();
+  const { data: presets = [], isFetching: presetsLoading } = useProxyPresetsQuery();
+  const { data: assignments = [] } = useProxyPresetAssignmentsQuery();
+  const { assignMany } = useProxyPresetMutations();
 
   const [formOpen, setFormOpen] = useState(false);
   const [formMode, setFormMode] = useState<'add' | 'edit'>('add');
   const [formHost, setFormHost] = useState<HostRecord | null>(null);
+  const [presetsOpen, setPresetsOpen] = useState(false);
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
 
   const onAdd = useCallback(() => {
@@ -130,6 +141,16 @@ export default function HostsPage() {
     });
   }, [selectedGroupIds, modal, t, bulkDel, messageApi]);
 
+  const onAssignPreset = useCallback(
+    async (groupIds: string[], presetId: number | null) => {
+      if (groupIds.length === 0) return;
+      await assignMany(groupIds, presetId);
+      messageApi.success(t('success'));
+      setSelectedGroupIds([]);
+    },
+    [assignMany, messageApi, t],
+  );
+
   const summary = useMemo(() => {
     const total = hosts.length;
     const enabled = hosts.filter((h) => !h.isDisabled).length;
@@ -203,6 +224,8 @@ export default function HostsPage() {
                     <HostList
                       hosts={hosts}
                       inboundOptions={inboundOptions}
+                      presets={presets}
+                      assignments={assignments}
                       loading={loading}
                       isMobile={isMobile}
                       selectedGroupIds={selectedGroupIds}
@@ -214,6 +237,9 @@ export default function HostsPage() {
                       onMove={onMove}
                       onBulkEnable={onBulkEnable}
                       onBulkDelete={onBulkDelete}
+                      onAssignPreset={onAssignPreset}
+                      onManagePresets={() => setPresetsOpen(true)}
+                      bundleControls={<ProxyBundleControls />}
                     />
                   </Col>
                 </Row>
@@ -230,6 +256,12 @@ export default function HostsPage() {
           existingHosts={hosts}
           save={onSave}
           onOpenChange={setFormOpen}
+        />
+        <ProxyPresetManagerModal
+          open={presetsOpen}
+          presets={presets}
+          loading={presetsLoading}
+          onOpenChange={setPresetsOpen}
         />
       </Layout>
     </ConfigProvider>
