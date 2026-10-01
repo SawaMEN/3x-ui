@@ -36,6 +36,9 @@ func (s *SubService) hostEndpoints(inbound *model.Inbound, format string) []map[
 		if err := model.ApplyAssignedProxyPreset(database.GetDB(), h); err != nil {
 			logger.Warning("SubService - host proxy preset:", err)
 		}
+		if !s.hostAppliesToInbound(h, inbound) {
+			continue
+		}
 		if slices.Contains(h.ExcludeFromSubTypes, format) {
 			continue
 		}
@@ -186,7 +189,6 @@ func applyHostStreamOverrides(ep map[string]any, stream map[string]any) {
 			if len(merged) > 0 {
 				stream["finalmask"] = merged
 			}
-		}
 	}
 	// Reality SNI override (host only): JSON realityData reads serverNames and
 	// clash reads serverName, so set both forms.
