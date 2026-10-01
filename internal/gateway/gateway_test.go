@@ -108,6 +108,35 @@ func TestApplyGatewayConfigRejectsMalformedArrays(t *testing.T) {
 	}
 }
 
+func TestApplyGatewayConfigIsIdempotent(t *testing.T) {
+	cfg := map[string]any{
+		"inbounds": []any{
+			map[string]any{"tag": "existing-in", "protocol": "socks"},
+		},
+	}
+
+	if err := applyGatewayConfig(cfg); err != nil {
+		t.Fatalf("first applyGatewayConfig() error = %v", err)
+	}
+	if err := applyGatewayConfig(cfg); err != nil {
+		t.Fatalf("second applyGatewayConfig() error = %v", err)
+	}
+
+	inbounds, ok := cfg["inbounds"].([]any)
+	if !ok {
+		t.Fatalf("unexpected inbounds type: %T", cfg["inbounds"])
+	}
+	gatewayCount := 0
+	for _, inbound := range inbounds {
+		if itemTag(inbound) == inboundTag {
+			gatewayCount++
+		}
+	}
+	if gatewayCount != 1 {
+		t.Fatalf("gateway inbound count = %d, want 1", gatewayCount)
+	}
+}
+
 func TestLegacyGatewayRuleDetectionRequiresOwnedInboundAndOutbound(t *testing.T) {
 	if isLegacyGatewayRule(map[string]any{
 		"type":        "field",
