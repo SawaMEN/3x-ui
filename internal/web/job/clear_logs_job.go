@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
@@ -90,11 +91,25 @@ func (j *ClearLogsJob) Run() {
 	}
 
 	wipeXrayLogs()
+	checkpointSQLiteWAL()
 }
 
 func (j *PruneXrayLogsJob) Run() {
 	truncateXrayLog(xray.GetAccessLogPath, maxXrayLogBytes)
 	truncateXrayLog(xray.GetErrorLogPath, maxXrayLogBytes)
+}
+
+func checkpointSQLiteWAL() {
+	if database.IsPostgres() {
+		return
+	}
+	db := database.GetDB()
+	if db == nil {
+		return
+	}
+	if err := db.Exec("PRAGMA wal_checkpoint(TRUNCATE)").Error; err != nil {
+		logger.Warning("SQLite WAL checkpoint failed:", err)
+	}
 }
 
 func wipeXrayLogs() {
