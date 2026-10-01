@@ -11,11 +11,10 @@ import (
 	"syscall"
 )
 
-// killStrayMtgProcesses is kept under its historical name for compatibility
-// with the manager, but now reaps only Telemt processes owned by the MTProto
+// killStrayTelemtSidecars reaps only Telemt processes owned by the MTProto
 // sidecar manager. Matching the binary name alone is unsafe because the same
 // telemt binary can also be used by telemt.service / WEB Proxy.
-func killStrayMtgProcesses(binaryPath string) int {
+func killStrayTelemtSidecars(binaryPath string) int {
 	base := filepath.Base(binaryPath)
 	if base == "" || base == "." || base == string(filepath.Separator) {
 		return 0
@@ -43,6 +42,9 @@ func killStrayMtgProcesses(binaryPath string) int {
 	}
 	return killed
 }
+
+// Historical compatibility until every caller has moved to the Telemt name.
+func killStrayMtgProcesses(binaryPath string) int { return killStrayTelemtSidecars(binaryPath) }
 
 func isOwnedTelemtSidecar(pid int) bool {
 	args := cmdlineArgs(pid)
