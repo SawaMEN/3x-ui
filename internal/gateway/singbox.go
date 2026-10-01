@@ -14,6 +14,86 @@ func singBoxGatewayInbound() map[string]any {
 	}
 }
 
+// singBoxGatewaySniffRule mirrors Xray Gateway's route-only HTTP/TLS/QUIC
+// sniffing. TPROXY receives an IP destination, so sniffing must run before
+// domain routing rules in order for those rules to see SNI/Host names.
+func singBoxGatewaySniffRule() map[string]any {
+	return map[string]any{
+		"inbound": []any{inboundTag},
+		"action":  "sniff",
+		"sniffer": []any{"http", "tls", "quic"},
+	}
+}
+
+func singBoxGatewayStringSlice(value any) ([]string, bool) {
+	switch values := value.(type) {
+	case []string:
+		return values, true
+	case []any:
+		result := make([]string, 0, len(values))
+		for _, value := range values {
+			text, ok := value.(string)
+			if !ok {
+				return nil, false
+			}
+			result = append(result, text)
+		}
+		return result, true
+	default:
+		return nil, false
+	}
+}
+
+func isSingBoxGatewaySniffRule(item any) bool {
+	rule, ok := item.(map[string]any)
+	if !ok || len(rule) != 3 || rule["action"] != "sniff" {
+		return false
+	}
+	inbounds, ok := singBoxGatewayStringSlice(rule["inbound"])
+	if !ok || len(inbounds) != 1 || inbounds[0] != inboundTag {
+		return false
+	}
+	sniffers, ok := singBoxGatewayStringSlice(rule["sniffer"])
+	if !ok || len(sniffers) != 3 {
+		return false
+	}
+	return sniffers[0] == "http" && sniffers[1] == "tls" && sniffers[2] == "quic"
+}
+
+func singBoxGatewayRoute(cfg map[string]any, create bool) (map[string]any, error) {
+	value, exists := cfg["route"]
+	if !exists || value == nil {
+		if !create {
+			return nil, nil
+		}
+		route := map[string]any{}
+		cfg["route"] = route
+		return route, nil
+	}
+	route, ok := value.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("config route section must be an object")
+	}
+	return route, nil
+}
+
+func hasSingBoxGatewaySniffRule(cfg map[string]any) bool {
+	route, err := singBoxGatewayRoute(cfg, false)
+	if err != nil || route == nil {
+		return false
+	}
+	rules, err := arrayField(route, "rules")
+	if err != nil {
+		return false
+	}
+	for _, rule := range rules {
+		if isSingBoxGatewaySniffRule(rule) {
+			return true
+		}
+	}
+	return false
+}
+
 func singBoxPort(value any) (int, bool) {
 	switch port := value.(type) {
 	case int:
@@ -62,8 +142,10 @@ func validateSingBoxGatewayConflicts(cfg map[string]any) error {
 	if err != nil {
 		return err
 	}
+	gatewayInboundExists := false
 	for _, item := range inbounds {
 		if isSingBoxGatewayInbound(item) {
+			gatewayInboundExists = true
 			continue
 		}
 		if itemTag(item) == inboundTag {
@@ -84,6 +166,23 @@ func validateSingBoxGatewayConflicts(cfg map[string]any) error {
 		}
 		return fmt.Errorf("sing-box inbound %q already uses Gateway port %d", tag, inboundPort)
 	}
+
+	route, err := singBoxGatewayRoute(cfg, false)
+	if err != nil {
+		return err
+	}
+	if route == nil {
+		return nil
+	}
+	rules, err := arrayField(route, "rules")
+	if err != nil {
+		return err
+	}
+	for _, rule := range rules {
+		if isSingBoxGatewaySniffRule(rule) && !gatewayInboundExists {
+			return fmt.Errorf("sing-box Gateway sniff rule already exists without the Gateway inbound")
+		}
+	}
 	return nil
 }
 
@@ -92,24 +191,77 @@ func removeSingBoxGatewayConfig(cfg map[string]any) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	filtered := make([]any, 0, len(inbounds))
-	removed := false
+	route, err := singBoxGatewayRoute(cfg, false)
+	if err != nil {
+		return false, err
+	}
+	var rules []any
+	if route != nil {
+		rules, err = arrayField(route, "rules")
+		if err != nil {
+			return false, err
+		}
+	}
+
+	filteredInbounds := make([]any, 0, len(inbounds))
+	inboundRemoved := false
 	for _, item := range inbounds {
 		if isSingBoxGatewayInbound(item) {
-			removed = true
+			inboundRemoved = true
 			continue
 		}
-		filtered = append(filtered, item)
+		filteredInbounds = append(filteredInbounds, item)
 	}
-	if removed {
-		cfg["inbounds"] = filtered
+	if inboundRemoved {
+		cfg["inbounds"] = filteredInbounds
 	}
-	return removed, nil
+
+	ruleRemoved := false
+	if route != nil {
+		filteredRules := make([]any, 0, len(rules))
+		for _, rule := range rules {
+			if isSingBoxGatewaySniffRule(rule) {
+				ruleRemoved = true
+				continue
+			}
+			filteredRules = append(filteredRules, rule)
+		}
+		if ruleRemoved {
+			if len(filteredRules) == 0 {
+				delete(route, "rules")
+			} else {
+				route["rules"] = filteredRules
+			}
+		}
+	}
+	return inboundRemoved || ruleRemoved, nil
 }
 
 func applySingBoxGatewayConfig(cfg map[string]any) error {
 	if err := validateSingBoxGatewayConflicts(cfg); err != nil {
 		return err
 	}
-	return replaceTaggedItem(cfg, "inbounds", inboundTag, singBoxGatewayInbound())
+	if err := replaceTaggedItem(cfg, "inbounds", inboundTag, singBoxGatewayInbound()); err != nil {
+		return err
+	}
+
+	route, err := singBoxGatewayRoute(cfg, true)
+	if err != nil {
+		return err
+	}
+	rules, err := arrayField(route, "rules")
+	if err != nil {
+		return err
+	}
+	// Sniffing has to happen before domain/protocol routing. Replace any
+	// Gateway-owned copy and put exactly one rule at the front.
+	updated := make([]any, 0, len(rules)+1)
+	updated = append(updated, singBoxGatewaySniffRule())
+	for _, rule := range rules {
+		if !isSingBoxGatewaySniffRule(rule) {
+			updated = append(updated, rule)
+		}
+	}
+	route["rules"] = updated
+	return nil
 }
