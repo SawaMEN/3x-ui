@@ -119,6 +119,19 @@ export function useProxyPresetMutations() {
     onSuccess: invalidate,
   });
 
+  const assignManyMutation = useMutation({
+    mutationFn: async ({ groupIds, presetId }: { groupIds: string[]; presetId: number | null }) => {
+      const msg = await HttpUtil.post(
+        '/panel/api/hosts/presets/assign/bulk',
+        { groupIds, presetId },
+        JSON_HEADERS,
+      );
+      if (!msg.success) throw new Error(msg.msg || 'Failed to assign proxy presets');
+      return requireParsedObj(msg, ProxyPresetAssignmentsSchema, 'hosts/presets/assign/bulk');
+    },
+    onSuccess: invalidate,
+  });
+
   const unassignMutation = useMutation({
     mutationFn: async (groupId: string) => {
       const msg = await HttpUtil.post(
@@ -165,11 +178,14 @@ export function useProxyPresetMutations() {
     update: (id: number, input: ProxyPresetInput) => updateMutation.mutateAsync({ id, input }),
     remove: (id: number) => deleteMutation.mutateAsync(id),
     assign: (groupId: string, presetId: number) => assignMutation.mutateAsync({ groupId, presetId }),
+    assignMany: (groupIds: string[], presetId: number | null) =>
+      assignManyMutation.mutateAsync({ groupIds, presetId }),
     unassign: (groupId: string) => unassignMutation.mutateAsync(groupId),
     importBundle: (bundle: ProxyBundle, dryRun: boolean, allowMissingInbounds: boolean) =>
       importMutation.mutateAsync({ bundle, dryRun, allowMissingInbounds }),
     exportBundle,
     saving: saveMutation.isPending || updateMutation.isPending,
     importing: importMutation.isPending,
+    assigning: assignMutation.isPending || assignManyMutation.isPending || unassignMutation.isPending,
   };
 }
