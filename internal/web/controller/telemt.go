@@ -26,6 +26,8 @@ func NewTelemtController(g *gin.RouterGroup, settingService service.SettingServi
 	g.POST("/webproxy/disable", a.disableWebProxy)
 	g.GET("/config", a.config)
 	g.POST("/config", a.saveConfig)
+	g.GET("/meko/config", a.mekoConfig)
+	g.POST("/meko/config", a.saveMekoConfig)
 	g.GET("/subscription-proxy", a.subscriptionProxySetting)
 	g.POST("/subscription-proxy", a.saveSubscriptionProxySetting)
 	g.GET("/proxy", a.listProxy)
@@ -154,6 +156,23 @@ func (a *TelemtController) saveConfig(c *gin.Context) {
 		return
 	}
 	jsonObj(c, a.service.Status(), nil)
+}
+
+func (a *TelemtController) mekoConfig(c *gin.Context) {
+	jsonObj(c, a.service.GetMekoConfig(), nil)
+}
+
+func (a *TelemtController) saveMekoConfig(c *gin.Context) {
+	var cfg service.TelemtMekoConfig
+	if err := c.ShouldBindJSON(&cfg); err != nil {
+		jsonMsg(c, "invalid MEKO V3 configuration", err)
+		return
+	}
+	if err := a.service.SaveMekoConfig(cfg); err != nil {
+		jsonMsg(c, err.Error(), err)
+		return
+	}
+	jsonObj(c, a.service.GetMekoConfig(), nil)
 }
 
 func (a *TelemtController) subscriptionProxySetting(c *gin.Context) {

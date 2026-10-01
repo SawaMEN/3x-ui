@@ -44,7 +44,11 @@ collect_ports() {
             valid_port "$p" && found+=("$p")
         done
         shopt -u nullglob
-        if (( ${#found[@]} == 0 )) && [[ -r "$LEGACY_CONFIG" ]]; then
+
+        # The standalone Telemt page can still host WEB Proxy. Include its
+        # legacy port only while telemt.service is actually running.
+        if [[ -r "$LEGACY_CONFIG" ]] && command -v systemctl >/dev/null 2>&1 && \
+           systemctl is-active --quiet telemt.service 2>/dev/null; then
             p="$(read_port "$LEGACY_CONFIG" || true)"
             valid_port "$p" && found+=("$p")
         fi
@@ -92,12 +96,27 @@ ensure_chain() {
     iptables -t "$table" -F "$chain"
 }
 
+remove() {
+    command -v iptables >/dev/null 2>&1 || return 0
+    remove_jump_all filter INPUT "$FILTER_CHAIN"
+    remove_jump_all mangle PREROUTING "$MARK_CHAIN"
+    iptables -t filter -F "$FILTER_CHAIN" 2>/dev/null || true
+    iptables -t filter -X "$FILTER_CHAIN" 2>/dev/null || true
+    iptables -t mangle -F "$MARK_CHAIN" 2>/dev/null || true
+    iptables -t mangle -X "$MARK_CHAIN" 2>/dev/null || true
+    log "MEKO V3 rules removed"
+}
+
 apply() {
     command -v iptables >/dev/null 2>&1 || { log "iptables is required"; exit 1; }
     ensure_u32 || { log "xt_u32 is not available; MEKO V3 cannot be enabled"; exit 1; }
 
     mapfile -t ports < <(collect_ports)
-    (( ${#ports[@]} > 0 )) || { log "No active Telemt MTProto ports found"; exit 1; }
+    if (( ${#ports[@]} == 0 )); then
+        remove
+        log "No active Telemt MTProto ports found; rules left clean"
+        return 0
+    fi
 
     ensure_ssh_access
     ensure_chain filter "$FILTER_CHAIN"
@@ -134,26 +153,27 @@ apply() {
     log "MEKO V3 applied to Telemt MTProto ports: ${ports[*]} (rate=${RATE}, burst=${BURST})"
 }
 
-remove() {
-    command -v iptables >/dev/null 2>&1 || return 0
-    remove_jump_all filter INPUT "$FILTER_CHAIN"
-    remove_jump_all mangle PREROUTING "$MARK_CHAIN"
-    iptables -t filter -F "$FILTER_CHAIN" 2>/dev/null || true
-    iptables -t filter -X "$FILTER_CHAIN" 2>/dev/null || true
-    iptables -t mangle -F "$MARK_CHAIN" 2>/dev/null || true
-    iptables -t mangle -X "$MARK_CHAIN" 2>/dev/null || true
-    log "MEKO V3 rules removed"
-}
-
 status() {
     local installed=false
-    if iptables -t filter -C INPUT -j "$FILTER_CHAIN" 2>/dev/null && \
-       iptables -t mangle -C PREROUTING -j "$MARK_CHAIN" 2>/dev/null; then
-        installed=true
+    local -a applied_ports=()
+    if command -v iptables >/dev/null 2>&1; then
+        if iptables -t filter -C INPUT -j "$FILTER_CHAIN" 2>/dev/null && \
+           iptables -t mangle -C PREROUTING -j "$MARK_CHAIN" 2>/dev/null; then
+            installed=true
+        fi
+        if iptables -t filter -S "$FILTER_CHAIN" >/dev/null 2>&1; then
+            mapfile -t applied_ports < <(
+                iptables -t filter -S "$FILTER_CHAIN" 2>/dev/null \
+                    | awk '{ for (i=1; i<=NF; i++) if ($i=="--dport") print $(i+1) }' \
+                    | awk '/^[0-9]+$/ { seen[$1]=1 } END { for (p in seen) print p }' \
+                    | sort -n
+            )
+        fi
     fi
     mapfile -t ports < <(collect_ports)
     printf 'installed=%s\n' "$installed"
     printf 'ports=%s\n' "$(IFS=,; echo "${ports[*]:-}")"
+    printf 'applied_ports=%s\n' "$(IFS=,; echo "${applied_ports[*]:-}")"
     printf 'rate=%s\n' "$RATE"
     printf 'burst=%s\n' "$BURST"
 }
