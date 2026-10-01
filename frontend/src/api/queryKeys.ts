@@ -16,6 +16,7 @@ export const keys = {
   proxyPresets: {
     root: () => ['proxy-presets'] as const,
     list: () => ['proxy-presets', 'list'] as const,
+    assignments: () => ['proxy-presets', 'assignments'] as const,
     assignment: (groupId: string) => ['proxy-presets', 'assignment', groupId] as const,
   },
   subBalancers: {
