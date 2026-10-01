@@ -64,7 +64,7 @@ func TestApplyProxyPresetConfigCanExplicitlyClearValues(t *testing.T) {
 	}
 }
 
-func TestHostAfterFindAppliesAndUnassignRestoresPreset(t *testing.T) {
+func TestAssignedProxyPresetIsExplicitAndDoesNotChangeBaseReads(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatal(err)
@@ -91,23 +91,34 @@ func TestHostAfterFindAppliesAndUnassignRestoresPreset(t *testing.T) {
 	}
 	InvalidateProxyPresetCache()
 
-	var effective Host
-	if err := db.First(&effective, base.Id).Error; err != nil {
+	var stored Host
+	if err := db.First(&stored, base.Id).Error; err != nil {
+		t.Fatal(err)
+	}
+	if stored.Port != 443 || stored.Security != "same" || stored.Sni != "base.example.com" {
+		t.Fatalf("normal DB read was unexpectedly modified: %+v", stored)
+	}
+
+	effective := stored
+	if err := ApplyAssignedProxyPreset(db, &effective); err != nil {
 		t.Fatal(err)
 	}
 	if effective.Port != 8443 || effective.Security != "tls" || effective.Sni != "preset.example.com" {
 		t.Fatalf("effective host does not contain preset: %+v", effective)
+	}
+	if stored.Port != 443 || stored.Security != "same" || stored.Sni != "base.example.com" {
+		t.Fatalf("applying preset mutated source host: %+v", stored)
 	}
 
 	if err := db.Where("group_id = ?", "group-a").Delete(&HostProxyPreset{}).Error; err != nil {
 		t.Fatal(err)
 	}
 	InvalidateProxyPresetCache()
-	var restored Host
-	if err := db.First(&restored, base.Id).Error; err != nil {
+	restored := stored
+	if err := ApplyAssignedProxyPreset(db, &restored); err != nil {
 		t.Fatal(err)
 	}
 	if restored.Port != 443 || restored.Security != "same" || restored.Sni != "base.example.com" {
-		t.Fatalf("unassign did not restore stored host values: %+v", restored)
+		t.Fatalf("unassign did not preserve base host values: %+v", restored)
 	}
 }
