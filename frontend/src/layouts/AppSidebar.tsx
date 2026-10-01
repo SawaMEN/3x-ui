@@ -208,6 +208,11 @@ function AppSidebar() {
         label: t('pages.singBox.sections.network'),
       },
       {
+        key: '/singbox/runtime',
+        icon: <ThunderboltOutlinedFallback />,
+        label: 'Runtime',
+      },
+      {
         key: '/singbox#advanced',
         icon: <CodeOutlined />,
         label: t('pages.singBox.sections.advanced'),
@@ -305,13 +310,15 @@ function AppSidebar() {
 
   const settingsActive = pathname === '/settings';
   const xrayActive = pathname === '/xray';
-  const singBoxActive = pathname === '/singbox';
+  const singBoxActive = pathname === '/singbox' || pathname.startsWith('/singbox/');
   const selectedKey = settingsActive
     ? `/settings${hash || '#general'}`
     : xrayActive
       ? `/xray${hash || '#basic'}`
       : singBoxActive
-        ? `/singbox${hash || '#basic'}`
+        ? pathname === '/singbox'
+          ? `/singbox${hash || '#basic'}`
+          : pathname
         : pathname === ''
           ? '/'
           : pathname;
@@ -496,4 +503,9 @@ function AppSidebar() {
     </div>
   );
 }
+
+function ThunderboltOutlinedFallback() {
+  return <span aria-hidden="true">⚡</span>;
+}
+
 export default memo(AppSidebar);
