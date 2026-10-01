@@ -51,6 +51,7 @@ export const ProxyPresetAssignmentSchema = z.object({
   presetName: z.string(),
 });
 export type ProxyPresetAssignment = z.infer<typeof ProxyPresetAssignmentSchema>;
+export const ProxyPresetAssignmentsSchema = z.array(ProxyPresetAssignmentSchema);
 
 export const ProxyBundleHostSchema = z.object({
   groupId: z.string(),
