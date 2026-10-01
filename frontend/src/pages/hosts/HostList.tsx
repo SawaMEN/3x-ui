@@ -1,6 +1,6 @@
-import { memo, useMemo } from 'react';
+import { memo, useMemo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Card, Popover, Space, Switch, Table, Tag, Tooltip } from 'antd';
+import { Button, Card, Popover, Select, Space, Switch, Table, Tag, Tooltip } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
   ArrowDownOutlined,
@@ -9,15 +9,19 @@ import {
   EditOutlined,
   GlobalOutlined,
   PlusOutlined,
+  SettingOutlined,
 } from '@ant-design/icons';
 
 import type { HostRecord } from '@/api/queries/useHostsQuery';
 import type { InboundOption } from '@/schemas/client';
+import type { ProxyPresetAssignment, ProxyPresetView } from '@/schemas/api/proxyPreset';
 import './HostList.css';
 
 interface HostListProps {
   hosts: HostRecord[];
   inboundOptions: InboundOption[];
+  presets: ProxyPresetView[];
+  assignments: ProxyPresetAssignment[];
   loading?: boolean;
   isMobile?: boolean;
   selectedGroupIds: string[];
@@ -29,6 +33,9 @@ interface HostListProps {
   onMove: (host: HostRecord, dir: 'up' | 'down') => void;
   onBulkEnable: (enable: boolean) => void;
   onBulkDelete: () => void;
+  onAssignPreset: (groupIds: string[], presetId: number | null) => void;
+  onManagePresets: () => void;
+  bundleControls?: ReactNode;
 }
 
 const INBOUND_PROTOCOL_COLORS: Record<string, string> = {
@@ -60,6 +67,8 @@ function HostList(props: HostListProps) {
   const {
     hosts,
     inboundOptions,
+    presets,
+    assignments,
     loading,
     isMobile,
     selectedGroupIds,
@@ -71,6 +80,9 @@ function HostList(props: HostListProps) {
     onMove,
     onBulkEnable,
     onBulkDelete,
+    onAssignPreset,
+    onManagePresets,
+    bundleControls,
   } = props;
 
   const inboundsMap = useMemo(() => {
@@ -78,6 +90,12 @@ function HostList(props: HostListProps) {
     for (const ib of inboundOptions) map.set(ib.id, ib);
     return map;
   }, [inboundOptions]);
+
+  const assignmentMap = useMemo(() => {
+    const map = new Map<string, ProxyPresetAssignment>();
+    for (const assignment of assignments) map.set(assignment.groupId, assignment);
+    return map;
+  }, [assignments]);
 
   const sorted = useMemo(() => sortHosts(hosts), [hosts]);
 
@@ -255,6 +273,14 @@ function HostList(props: HostListProps) {
       render: (security: string) => <Tag>{security || 'same'}</Tag>,
     },
     {
+      title: 'Preset',
+      key: 'preset',
+      render: (_, h) => {
+        const assignment = assignmentMap.get(h.groupId);
+        return assignment ? <Tag color="purple">{assignment.presetName}</Tag> : <span className="host-muted">—</span>;
+      },
+    },
+    {
       title: t('pages.hosts.fields.tags'),
       key: 'tags',
       render: (_, h) =>
@@ -275,9 +301,15 @@ function HostList(props: HostListProps) {
   const toolbar = (
     <div className="card-toolbar">
       {selectedGroupIds.length === 0 ? (
-        <Button type="primary" icon={<PlusOutlined />} onClick={onAdd}>
-          {!isMobile && t('pages.hosts.addHost')}
-        </Button>
+        <>
+          <Button type="primary" icon={<PlusOutlined />} onClick={onAdd}>
+            {!isMobile && t('pages.hosts.addHost')}
+          </Button>
+          <Button icon={<SettingOutlined />} onClick={onManagePresets}>
+            {!isMobile && 'Presets'}
+          </Button>
+          {bundleControls}
+        </>
       ) : (
         <>
           <Tag
@@ -288,6 +320,13 @@ function HostList(props: HostListProps) {
           >
             {t('pages.hosts.selectedCount', { count: selectedGroupIds.length })}
           </Tag>
+          <Select<number>
+            allowClear
+            style={{ minWidth: 180 }}
+            placeholder="Preset"
+            options={presets.map((preset) => ({ label: preset.name, value: preset.id }))}
+            onChange={(presetId) => onAssignPreset(selectedGroupIds, presetId ?? null)}
+          />
           <Button onClick={() => onBulkEnable(true)}>{t('pages.hosts.bulkEnable')}</Button>
           <Button onClick={() => onBulkEnable(false)}>{t('pages.hosts.bulkDisable')}</Button>
           <Button danger icon={<DeleteOutlined />} onClick={onBulkDelete}>
