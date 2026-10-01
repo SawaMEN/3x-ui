@@ -13,6 +13,11 @@ export const keys = {
     byInbound: (inboundId: number) => ['hosts', 'byInbound', inboundId] as const,
     tags: () => ['hosts', 'tags'] as const,
   },
+  proxyPresets: {
+    root: () => ['proxy-presets'] as const,
+    list: () => ['proxy-presets', 'list'] as const,
+    assignment: (groupId: string) => ['proxy-presets', 'assignment', groupId] as const,
+  },
   subBalancers: {
     root: () => ['sub-balancers'] as const,
     list: () => ['sub-balancers', 'list'] as const,
