@@ -72,6 +72,9 @@ func TestApplySingBoxGatewayConfig(t *testing.T) {
 	if _, exists := inbound["network"]; exists {
 		t.Fatalf("gateway network = %#v, want omitted for TCP+UDP", inbound["network"])
 	}
+	if !hasSingBoxGatewaySniffRule(cfg) {
+		t.Fatal("Gateway sniff rule was not added")
+	}
 }
 
 func TestApplySingBoxGatewayConfigIsIdempotent(t *testing.T) {
@@ -100,6 +103,86 @@ func TestApplySingBoxGatewayConfigIsIdempotent(t *testing.T) {
 	}
 	if len(inbounds) != 2 {
 		t.Fatalf("inbound count = %d, want existing + gateway", len(inbounds))
+	}
+
+	route := cfg["route"].(map[string]any)
+	rules := route["rules"].([]any)
+	sniffCount := 0
+	for _, rule := range rules {
+		if isSingBoxGatewaySniffRule(rule) {
+			sniffCount++
+		}
+	}
+	if sniffCount != 1 {
+		t.Fatalf("Gateway sniff rule count = %d, want 1", sniffCount)
+	}
+}
+
+func TestApplySingBoxGatewayConfigPrependsSniffRuleAndPreservesRoute(t *testing.T) {
+	first := map[string]any{"domain_suffix": []any{"example.com"}, "action": "route", "outbound": "proxy"}
+	second := map[string]any{"ip_is_private": true, "action": "route", "outbound": "direct"}
+	cfg := map[string]any{
+		"inbounds": []any{},
+		"route": map[string]any{
+			"final": "proxy",
+			"rules": []any{first, second},
+		},
+	}
+
+	if err := applySingBoxGatewayConfig(cfg); err != nil {
+		t.Fatalf("applySingBoxGatewayConfig() error = %v", err)
+	}
+
+	route := cfg["route"].(map[string]any)
+	if route["final"] != "proxy" {
+		t.Fatalf("route final = %#v, want proxy", route["final"])
+	}
+	rules := route["rules"].([]any)
+	if len(rules) != 3 {
+		t.Fatalf("route rule count = %d, want 3", len(rules))
+	}
+	if !isSingBoxGatewaySniffRule(rules[0]) {
+		t.Fatalf("first route rule = %#v, want Gateway sniff", rules[0])
+	}
+	if rules[1] != first || rules[2] != second {
+		t.Fatalf("existing route rules were not preserved in order: %#v", rules)
+	}
+}
+
+func TestApplySingBoxGatewayConfigRejectsOrphanSniffRule(t *testing.T) {
+	cfg := map[string]any{
+		"inbounds": []any{map[string]any{"type": "mixed", "tag": "existing"}},
+		"route":    map[string]any{"rules": []any{singBoxGatewaySniffRule()}},
+	}
+
+	err := applySingBoxGatewayConfig(cfg)
+	if err == nil || !strings.Contains(err.Error(), "sniff rule") {
+		t.Fatalf("applySingBoxGatewayConfig() error = %v, want orphan sniff collision", err)
+	}
+	if len(cfg["inbounds"].([]any)) != 1 {
+		t.Fatalf("inbounds changed after rejected config: %#v", cfg["inbounds"])
+	}
+}
+
+func TestApplySingBoxGatewayConfigRejectsMalformedRouteWithoutMutation(t *testing.T) {
+	for name, route := range map[string]any{
+		"route object": "invalid",
+		"rules array":  map[string]any{"rules": "invalid"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := map[string]any{
+				"inbounds": []any{map[string]any{"type": "mixed", "tag": "existing"}},
+				"route":    route,
+			}
+			err := applySingBoxGatewayConfig(cfg)
+			if err == nil {
+				t.Fatal("applySingBoxGatewayConfig() accepted malformed route")
+			}
+			inbounds := cfg["inbounds"].([]any)
+			if len(inbounds) != 1 || itemTag(inbounds[0]) != "existing" {
+				t.Fatalf("inbounds mutated after route validation error: %#v", inbounds)
+			}
+		})
 	}
 }
 
@@ -186,6 +269,36 @@ func TestRemoveSingBoxGatewayConfigPreservesOtherInbounds(t *testing.T) {
 	inbounds := cfg["inbounds"].([]any)
 	if len(inbounds) != 1 || itemTag(inbounds[0]) != "existing" {
 		t.Fatalf("unrelated inbounds changed: %#v", inbounds)
+	}
+}
+
+func TestRemoveSingBoxGatewayConfigRemovesSniffAndPreservesUserRoute(t *testing.T) {
+	userRule := map[string]any{"domain_suffix": []any{"example.org"}, "action": "route", "outbound": "proxy"}
+	cfg := map[string]any{
+		"inbounds": []any{singBoxGatewayInbound()},
+		"route": map[string]any{
+			"final": "proxy",
+			"rules": []any{singBoxGatewaySniffRule(), userRule},
+		},
+	}
+
+	changed, err := removeSingBoxGatewayConfig(cfg)
+	if err != nil {
+		t.Fatalf("removeSingBoxGatewayConfig() error = %v", err)
+	}
+	if !changed {
+		t.Fatal("removeSingBoxGatewayConfig() changed = false, want true")
+	}
+	if len(cfg["inbounds"].([]any)) != 0 {
+		t.Fatalf("Gateway inbound was not removed: %#v", cfg["inbounds"])
+	}
+	route := cfg["route"].(map[string]any)
+	if route["final"] != "proxy" {
+		t.Fatalf("route final changed: %#v", route["final"])
+	}
+	rules := route["rules"].([]any)
+	if len(rules) != 1 || rules[0] != userRule {
+		t.Fatalf("user route rules changed: %#v", rules)
 	}
 }
 
