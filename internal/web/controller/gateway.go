@@ -2,6 +2,7 @@ package controller
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/gateway"
@@ -9,6 +10,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+const xrayGatewayCoreType = "xray"
 
 // GatewayController exposes the transparent gateway controls used by the panel
 // UI. The active core decides which config template receives the Gateway
@@ -53,22 +56,86 @@ func disableGatewayForCore(coreType string) error {
 	return gateway.Disable()
 }
 
+func otherGatewayCore(coreType string) string {
+	if coreType == service.CoreTypeSingBox {
+		return xrayGatewayCoreType
+	}
+	return service.CoreTypeSingBox
+}
+
+type gatewayStatus struct {
+	State     gateway.State
+	OwnerCore string
+	Conflict  bool
+}
+
+// gatewayStatusForCore treats Gateway Mode as one logical feature even though
+// Xray and sing-box keep independent recovery backups. This is important after
+// switching cores: stale Gateway state in the previously selected core must
+// remain visible and removable instead of looking disabled.
+func gatewayStatusForCore(coreType string) (gatewayStatus, error) {
+	activeState, err := gatewayStateForCore(coreType)
+	if err != nil {
+		return gatewayStatus{}, fmt.Errorf("get %s Gateway state: %w", coreType, err)
+	}
+
+	otherCore := otherGatewayCore(coreType)
+	otherState, otherErr := gatewayStateForCore(otherCore)
+	if otherErr != nil {
+		// An unused core may not have a usable template yet. Do not make Gateway
+		// status unavailable for the selected core solely because the inactive
+		// core cannot be inspected.
+		owner := ""
+		if activeState.Enabled {
+			owner = coreType
+		}
+		return gatewayStatus{State: activeState, OwnerCore: owner}, nil
+	}
+
+	if activeState.Enabled && otherState.Enabled {
+		activeState.Configured = activeState.Configured || otherState.Configured
+		activeState.BackupExists = activeState.BackupExists || otherState.BackupExists
+		return gatewayStatus{
+			State:     activeState,
+			OwnerCore: "multiple",
+			Conflict:  true,
+		}, nil
+	}
+	if activeState.Enabled {
+		return gatewayStatus{State: activeState, OwnerCore: coreType}, nil
+	}
+	if otherState.Enabled {
+		return gatewayStatus{State: otherState, OwnerCore: otherCore}, nil
+	}
+	return gatewayStatus{State: activeState}, nil
+}
+
 func (a *GatewayController) statusPayload() (gin.H, error) {
 	coreType, coreErr := a.settingService.GetCoreType()
-	state, stateErr := gatewayStateForCore(coreType)
-
 	payload := gin.H{
-		"enabled":        state.Enabled,
-		"configured":     state.Configured,
-		"recoveryBackup": state.BackupExists,
-		"canEnable":      !state.Enabled,
-		"coreType":       coreType,
-		"xrayRunning":    a.xrayService.IsXrayRunning(),
-		"port":           gateway.InboundPort(),
+		"enabled":         false,
+		"configured":      false,
+		"recoveryBackup":  false,
+		"canEnable":       false,
+		"coreType":        coreType,
+		"gatewayCoreType": "",
+		"coreMismatch":    false,
+		"conflict":        false,
+		"xrayRunning":     a.xrayService.IsXrayRunning(),
+		"port":            gateway.InboundPort(),
 	}
 	if coreErr != nil {
 		return payload, coreErr
 	}
+
+	status, stateErr := gatewayStatusForCore(coreType)
+	payload["enabled"] = status.State.Enabled
+	payload["configured"] = status.State.Configured
+	payload["recoveryBackup"] = status.State.BackupExists
+	payload["gatewayCoreType"] = status.OwnerCore
+	payload["conflict"] = status.Conflict
+	payload["coreMismatch"] = status.OwnerCore != "" && status.OwnerCore != "multiple" && status.OwnerCore != coreType
+	payload["canEnable"] = !status.Conflict && status.OwnerCore != coreType
 	if stateErr != nil {
 		return payload, stateErr
 	}
@@ -99,6 +166,16 @@ func (a *GatewayController) enable(c *gin.Context) {
 	}
 
 	changed := false
+	otherCore := otherGatewayCore(coreType)
+	if otherState, otherErr := gatewayStateForCore(otherCore); otherErr == nil && otherState.Enabled {
+		if err := disableGatewayForCore(otherCore); err != nil {
+			payload, _ := a.statusPayload()
+			jsonObj(c, payload, fmt.Errorf("disable stale %s Gateway Mode before switching to %s: %w", otherCore, coreType, err))
+			return
+		}
+		changed = true
+	}
+
 	if !state.Enabled {
 		if err := enableGatewayForCore(coreType); err != nil {
 			payload, _ := a.statusPayload()
@@ -133,29 +210,38 @@ func (a *GatewayController) disable(c *gin.Context) {
 		return
 	}
 
-	state, err := gatewayStateForCore(coreType)
-	if err != nil {
-		payload, _ := a.statusPayload()
-		jsonObj(c, payload, err)
-		return
-	}
-
 	changed := false
-	if state.Enabled {
-		if err := disableGatewayForCore(coreType); err != nil {
-			payload, _ := a.statusPayload()
-			jsonObj(c, payload, err)
-			return
+	failures := make([]string, 0, 2)
+	for _, candidate := range []string{coreType, otherGatewayCore(coreType)} {
+		state, stateErr := gatewayStateForCore(candidate)
+		if stateErr != nil {
+			// The inactive core may not have a template yet. The selected core is
+			// always expected to be inspectable; surface that failure immediately.
+			if candidate == coreType {
+				failures = append(failures, fmt.Sprintf("%s state: %v", candidate, stateErr))
+			}
+			continue
+		}
+		if !state.Enabled {
+			continue
+		}
+		if err := disableGatewayForCore(candidate); err != nil {
+			failures = append(failures, fmt.Sprintf("%s: %v", candidate, err))
+			continue
 		}
 		changed = true
 	}
 
 	if changed && a.xrayService.IsXrayRunning() {
 		if err := a.xrayService.RestartXray(false); err != nil {
-			payload, _ := a.statusPayload()
-			jsonObj(c, payload, fmt.Errorf("Gateway Mode was disabled, but %s restart failed: %w", coreType, err))
-			return
+			failures = append(failures, fmt.Sprintf("%s restart: %v", coreType, err))
 		}
+	}
+
+	if len(failures) > 0 {
+		payload, _ := a.statusPayload()
+		jsonObj(c, payload, fmt.Errorf("Gateway Mode disable incomplete: %s", strings.Join(failures, "; ")))
+		return
 	}
 
 	payload, err := a.statusPayload()
