@@ -363,6 +363,7 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 		WithSUBIncyEnableRouting(SubIncyEnableRouting),
 		WithSUBIncyRoutingRules(SubIncyRoutingRules),
 	)
+	registerAutoSubscriptionRoute(g, s.sub)
 	registerTelemtSubscriptionRoute(g)
 
 	// Keep the compatibility handler registered so the panel can dispatch an
