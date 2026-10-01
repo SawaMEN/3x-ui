@@ -5,6 +5,32 @@ import (
 	"testing"
 )
 
+func TestDecodeSingBoxTemplateRejectsNullRoot(t *testing.T) {
+	cfg, err := decodeSingBoxTemplate("null")
+	if err == nil {
+		t.Fatal("decodeSingBoxTemplate() accepted null top-level config")
+	}
+	if cfg != nil {
+		t.Fatalf("decodeSingBoxTemplate() cfg = %#v, want nil", cfg)
+	}
+	if !strings.Contains(err.Error(), "top-level JSON value must be an object") {
+		t.Fatalf("decodeSingBoxTemplate() error = %v, want object validation error", err)
+	}
+}
+
+func TestDecodeSingBoxTemplateAcceptsObject(t *testing.T) {
+	cfg, err := decodeSingBoxTemplate(`{"log":{"level":"info"},"inbounds":[]}`)
+	if err != nil {
+		t.Fatalf("decodeSingBoxTemplate() error = %v", err)
+	}
+	if cfg == nil {
+		t.Fatal("decodeSingBoxTemplate() returned nil config")
+	}
+	if _, ok := cfg["log"].(map[string]any); !ok {
+		t.Fatalf("decoded log section type = %T, want map[string]any", cfg["log"])
+	}
+}
+
 func TestApplySingBoxGatewayConfig(t *testing.T) {
 	cfg := map[string]any{
 		"inbounds": []any{

@@ -12,6 +12,17 @@ import (
 
 const singBoxBackupPath = "/etc/x-ui/gateway-singbox-backup.json"
 
+func decodeSingBoxTemplate(raw string) (map[string]any, error) {
+	var cfg map[string]any
+	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
+		return nil, fmt.Errorf("parse sing-box template: %w", err)
+	}
+	if cfg == nil {
+		return nil, fmt.Errorf("parse sing-box template: top-level JSON value must be an object")
+	}
+	return cfg, nil
+}
+
 func loadSingBoxTemplate() (map[string]any, string, error) {
 	if err := database.InitDB(config.GetDBPath()); err != nil {
 		return nil, "", fmt.Errorf("initialize database: %w", err)
@@ -26,9 +37,9 @@ func loadSingBoxTemplate() (map[string]any, string, error) {
 		return nil, "", fmt.Errorf("sing-box template is empty")
 	}
 
-	var cfg map[string]any
-	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
-		return nil, "", fmt.Errorf("parse sing-box template: %w", err)
+	cfg, err := decodeSingBoxTemplate(raw)
+	if err != nil {
+		return nil, "", err
 	}
 	return cfg, raw, nil
 }
