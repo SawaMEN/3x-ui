@@ -1,6 +1,9 @@
 package gateway
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestApplySingBoxGatewayConfig(t *testing.T) {
 	cfg := map[string]any{
@@ -62,7 +65,7 @@ func TestApplySingBoxGatewayConfigIsIdempotent(t *testing.T) {
 	inbounds := cfg["inbounds"].([]any)
 	gatewayCount := 0
 	for _, inbound := range inbounds {
-		if itemTag(inbound) == inboundTag {
+		if isSingBoxGatewayInbound(inbound) {
 			gatewayCount++
 		}
 	}
@@ -74,6 +77,70 @@ func TestApplySingBoxGatewayConfigIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestApplySingBoxGatewayConfigRejectsTagCollision(t *testing.T) {
+	conflicting := map[string]any{
+		"type":        "mixed",
+		"tag":         inboundTag,
+		"listen":      "127.0.0.1",
+		"listen_port": float64(1080),
+	}
+	cfg := map[string]any{"inbounds": []any{conflicting}}
+
+	err := applySingBoxGatewayConfig(cfg)
+	if err == nil || !strings.Contains(err.Error(), "tag") {
+		t.Fatalf("applySingBoxGatewayConfig() error = %v, want tag collision", err)
+	}
+
+	inbounds := cfg["inbounds"].([]any)
+	if len(inbounds) != 1 || itemTag(inbounds[0]) != inboundTag {
+		t.Fatalf("conflicting inbound was modified: %#v", inbounds)
+	}
+	inbound := inbounds[0].(map[string]any)
+	if inbound["type"] != "mixed" || inbound["listen_port"] != float64(1080) {
+		t.Fatalf("conflicting inbound contents changed: %#v", inbound)
+	}
+}
+
+func TestApplySingBoxGatewayConfigRejectsPortCollision(t *testing.T) {
+	conflicting := map[string]any{
+		"type":        "mixed",
+		"tag":         "existing",
+		"listen":      "127.0.0.1",
+		"listen_port": float64(inboundPort),
+	}
+	cfg := map[string]any{"inbounds": []any{conflicting}}
+
+	err := applySingBoxGatewayConfig(cfg)
+	if err == nil || !strings.Contains(err.Error(), "port") {
+		t.Fatalf("applySingBoxGatewayConfig() error = %v, want port collision", err)
+	}
+
+	inbounds := cfg["inbounds"].([]any)
+	if len(inbounds) != 1 || itemTag(inbounds[0]) != "existing" {
+		t.Fatalf("conflicting inbound was modified: %#v", inbounds)
+	}
+	inbound := inbounds[0].(map[string]any)
+	if inbound["type"] != "mixed" || inbound["listen_port"] != float64(inboundPort) {
+		t.Fatalf("conflicting inbound contents changed: %#v", inbound)
+	}
+}
+
+func TestSingBoxGatewayDetectionRequiresOwnedShape(t *testing.T) {
+	cfg := map[string]any{
+		"inbounds": []any{
+			map[string]any{
+				"type":        "mixed",
+				"tag":         inboundTag,
+				"listen":      "0.0.0.0",
+				"listen_port": float64(inboundPort),
+			},
+		},
+	}
+	if hasSingBoxGatewayInbound(cfg) {
+		t.Fatal("hasSingBoxGatewayInbound() = true for non-Gateway inbound")
+	}
+}
+
 func TestRemoveSingBoxGatewayConfigPreservesOtherInbounds(t *testing.T) {
 	cfg := map[string]any{
 		"inbounds": []any{
@@ -82,16 +149,42 @@ func TestRemoveSingBoxGatewayConfigPreservesOtherInbounds(t *testing.T) {
 		},
 	}
 
-	changed, err := removeTaggedItem(cfg, "inbounds", inboundTag)
+	changed, err := removeSingBoxGatewayConfig(cfg)
 	if err != nil {
-		t.Fatalf("removeTaggedItem() error = %v", err)
+		t.Fatalf("removeSingBoxGatewayConfig() error = %v", err)
 	}
 	if !changed {
-		t.Fatal("removeTaggedItem() changed = false, want true")
+		t.Fatal("removeSingBoxGatewayConfig() changed = false, want true")
 	}
 
 	inbounds := cfg["inbounds"].([]any)
 	if len(inbounds) != 1 || itemTag(inbounds[0]) != "existing" {
 		t.Fatalf("unrelated inbounds changed: %#v", inbounds)
+	}
+}
+
+func TestRemoveSingBoxGatewayConfigPreservesTagCollision(t *testing.T) {
+	conflicting := map[string]any{
+		"type":        "mixed",
+		"tag":         inboundTag,
+		"listen":      "0.0.0.0",
+		"listen_port": float64(1080),
+	}
+	cfg := map[string]any{"inbounds": []any{conflicting}}
+
+	changed, err := removeSingBoxGatewayConfig(cfg)
+	if err != nil {
+		t.Fatalf("removeSingBoxGatewayConfig() error = %v", err)
+	}
+	if changed {
+		t.Fatal("removeSingBoxGatewayConfig() changed = true for user-owned tag collision")
+	}
+	inbounds := cfg["inbounds"].([]any)
+	if len(inbounds) != 1 || itemTag(inbounds[0]) != inboundTag {
+		t.Fatalf("conflicting inbound was modified: %#v", inbounds)
+	}
+	inbound := inbounds[0].(map[string]any)
+	if inbound["type"] != "mixed" || inbound["listen_port"] != float64(1080) {
+		t.Fatalf("conflicting inbound contents changed: %#v", inbound)
 	}
 }

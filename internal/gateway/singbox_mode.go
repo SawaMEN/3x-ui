@@ -101,7 +101,7 @@ func getSingBoxStateUnlocked() (State, error) {
 	if err != nil {
 		return State{}, err
 	}
-	configured := hasGatewayInbound(cfg)
+	configured := hasSingBoxGatewayInbound(cfg)
 	return State{
 		Enabled:      configured || backup,
 		Configured:   configured,
@@ -127,7 +127,7 @@ func EnableSingBox() error {
 	if err != nil {
 		return err
 	}
-	if hasGatewayInbound(cfg) || backup {
+	if hasSingBoxGatewayInbound(cfg) || backup {
 		return fmt.Errorf("Gateway Mode is already enabled or requires cleanup")
 	}
 
@@ -160,13 +160,13 @@ func DisableSingBox() error {
 	if err != nil {
 		return err
 	}
-	configured := hasGatewayInbound(cfg)
+	configured := hasSingBoxGatewayInbound(cfg)
 	if !configured && !backup {
 		return fmt.Errorf("Gateway Mode is not enabled")
 	}
 
 	if configured {
-		changed, err := removeTaggedItem(cfg, "inbounds", inboundTag)
+		changed, err := removeSingBoxGatewayConfig(cfg)
 		if err != nil {
 			return err
 		}
