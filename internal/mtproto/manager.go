@@ -251,7 +251,7 @@ func (m *Manager) sweepOrphansLocked() {
 		return
 	}
 	m.swept = true
-	if n := killStrayMtgProcesses(GetBinaryPath()); n > 0 {
+	if n := killStrayTelemtSidecars(GetBinaryPath()); n > 0 {
 		logger.Warningf("mtproto: terminated %d orphaned Telemt process(es)", n)
 	}
 }
