@@ -109,42 +109,33 @@ func telemtSubscriptionUsernamesFromConfig() ([]string, error) {
 	if err := toml.Unmarshal(content, &raw); err != nil {
 		return nil, fmt.Errorf("telemt: parse config while listing subscription users: %w", err)
 	}
+	return telemtSubscriptionUsernames(raw.Access.Users), nil
+}
 
+func telemtSubscriptionUsernames(users map[string]string) []string {
 	usernames := make([]string, 0)
-	for username := range raw.Access.Users {
+	for username := range users {
 		if isTelemtSubscriptionUsername(username) {
 			usernames = append(usernames, username)
 		}
 	}
 	sort.Strings(usernames)
-	return usernames, nil
+	return usernames
 }
 
-func deleteAllTelemtSubscriptionUsersFromConfig(restart bool) error {
-	original, err := os.ReadFile(telemtConfigPath)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("telemt: read config while revoking subscription users: %w", err)
-	}
-
+func removeTelemtSubscriptionUsersFromTOML(original []byte) ([]byte, int, error) {
 	var raw struct {
 		Access struct {
 			Users map[string]string `toml:"users"`
 		} `toml:"access"`
 	}
 	if err := toml.Unmarshal(original, &raw); err != nil {
-		return fmt.Errorf("telemt: parse config while revoking subscription users: %w", err)
+		return nil, 0, fmt.Errorf("telemt: parse config while revoking subscription users: %w", err)
 	}
-	remaining := 0
-	for username := range raw.Access.Users {
-		if isTelemtSubscriptionUsername(username) {
-			remaining++
-		}
-	}
+
+	remaining := len(telemtSubscriptionUsernames(raw.Access.Users))
 	if remaining == 0 {
-		return nil
+		return original, 0, nil
 	}
 
 	lines := strings.SplitAfter(string(original), "\n")
@@ -168,10 +159,28 @@ func deleteAllTelemtSubscriptionUsersFromConfig(restart bool) error {
 		out = append(out, line)
 	}
 	if removed != remaining {
-		return fmt.Errorf("telemt: found %d subscription users in parsed config but removed %d TOML entries", remaining, removed)
+		return nil, removed, fmt.Errorf("telemt: found %d subscription users in parsed config but removed %d TOML entries", remaining, removed)
+	}
+	return []byte(strings.Join(out, "")), removed, nil
+}
+
+func deleteAllTelemtSubscriptionUsersFromConfig(restart bool) error {
+	original, err := os.ReadFile(telemtConfigPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("telemt: read config while revoking subscription users: %w", err)
 	}
 
-	if err := os.WriteFile(telemtConfigPath, []byte(strings.Join(out, "")), 0o600); err != nil {
+	updated, removed, err := removeTelemtSubscriptionUsersFromTOML(original)
+	if err != nil {
+		return err
+	}
+	if removed == 0 {
+		return nil
+	}
+	if err := os.WriteFile(telemtConfigPath, updated, 0o600); err != nil {
 		return fmt.Errorf("telemt: persist revoked subscription users: %w", err)
 	}
 	if !restart {
