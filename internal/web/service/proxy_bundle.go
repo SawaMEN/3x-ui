@@ -38,15 +38,15 @@ type ProxyBundleImportRequest struct {
 }
 
 type ProxyBundleImportResult struct {
-	DryRun               bool     `json:"dryRun"`
-	CreatedPresets       int      `json:"createdPresets"`
-	UpdatedPresets       int      `json:"updatedPresets"`
-	CreatedHosts         int      `json:"createdHosts"`
-	UpdatedHosts         int      `json:"updatedHosts"`
-	AssignedPresets      int      `json:"assignedPresets"`
-	SkippedHosts         []string `json:"skippedHosts"`
-	MissingInboundTags   []string `json:"missingInboundTags"`
-	MissingPresetNames   []string `json:"missingPresetNames"`
+	DryRun             bool     `json:"dryRun"`
+	CreatedPresets     int      `json:"createdPresets"`
+	UpdatedPresets     int      `json:"updatedPresets"`
+	CreatedHosts       int      `json:"createdHosts"`
+	UpdatedHosts       int      `json:"updatedHosts"`
+	AssignedPresets    int      `json:"assignedPresets"`
+	SkippedHosts       []string `json:"skippedHosts"`
+	MissingInboundTags []string `json:"missingInboundTags"`
+	MissingPresetNames []string `json:"missingPresetNames"`
 }
 
 func (s *ProxyPresetService) ExportBundle(userID int) (*ProxyBundle, error) {
@@ -149,19 +149,18 @@ func resolveBundleInboundIDs(inbounds map[string]int, tags []string) ([]int, []s
 }
 
 type preparedBundleHost struct {
-	item      ProxyBundleHost
-	group     entity.HostGroup
-	existing  bool
-	groupID   string
-	skip      bool
+	item     ProxyBundleHost
+	group    entity.HostGroup
+	existing bool
+	groupID  string
+	skip     bool
 }
 
 type preparedProxyBundle struct {
-	presets          []ProxyPresetInput
-	hosts            []preparedBundleHost
-	presetExists     map[string]bool
-	missingInbounds  []string
-	missingPresets   []string
+	presets         []ProxyPresetInput
+	hosts           []preparedBundleHost
+	missingInbounds []string
+	missingPresets  []string
 }
 
 func prepareProxyBundleImport(userID int, req ProxyBundleImportRequest) (*preparedProxyBundle, *ProxyBundleImportResult, error) {
@@ -189,7 +188,7 @@ func prepareProxyBundleImport(userID int, req ProxyBundleImportRequest) (*prepar
 		presetExists[preset.Name] = true
 	}
 	result := &ProxyBundleImportResult{DryRun: req.DryRun, SkippedHosts: []string{}, MissingInboundTags: []string{}, MissingPresetNames: []string{}}
-	prepared := &preparedProxyBundle{presetExists: presetExists}
+	prepared := &preparedProxyBundle{}
 	seenPresetNames := make(map[string]struct{}, len(req.Bundle.Presets))
 	for _, incoming := range req.Bundle.Presets {
 		candidate := incoming
@@ -208,21 +207,34 @@ func prepareProxyBundleImport(userID int, req ProxyBundleImportRequest) (*prepar
 		presetExists[candidate.Name] = true
 		prepared.presets = append(prepared.presets, candidate)
 	}
+	if len(existingPresets)+result.CreatedPresets > proxyPresetMaxCount {
+		return nil, nil, fmt.Errorf("proxy preset limit reached: maximum is %d", proxyPresetMaxCount)
+	}
 
 	validate := validator.New(validator.WithRequiredStructEnabled())
 	missingInboundSet := map[string]struct{}{}
 	missingPresetSet := map[string]struct{}{}
-	for _, item := range req.Bundle.Hosts {
+	skippedSet := map[string]struct{}{}
+	seenGroupIDs := map[string]struct{}{}
+	for _, incoming := range req.Bundle.Hosts {
+		item := incoming
+		item.PresetName = strings.TrimSpace(item.PresetName)
 		group := item.HostGroup
+		group.GroupId = strings.TrimSpace(group.GroupId)
+		if group.GroupId != "" {
+			if _, duplicate := seenGroupIDs[group.GroupId]; duplicate {
+				return nil, nil, fmt.Errorf("duplicate host groupId %q in bundle", group.GroupId)
+			}
+			seenGroupIDs[group.GroupId] = struct{}{}
+		}
 		ids, missing := resolveBundleInboundIDs(inboundByTag, item.InboundTags)
 		group.InboundIds = ids
 		for _, tag := range missing {
 			missingInboundSet[tag] = struct{}{}
 		}
-		entry := preparedBundleHost{item: item, group: group, groupID: strings.TrimSpace(group.GroupId)}
+		entry := preparedBundleHost{item: item, group: group, groupID: group.GroupId}
 		if len(missing) > 0 || len(ids) == 0 {
 			entry.skip = true
-			result.SkippedHosts = append(result.SkippedHosts, group.Remark)
 		}
 		if err := validate.Struct(group); err != nil && !entry.skip {
 			return nil, nil, fmt.Errorf("host group %q: %w", group.Remark, err)
@@ -230,7 +242,6 @@ func prepareProxyBundleImport(userID int, req ProxyBundleImportRequest) (*prepar
 		if item.PresetName != "" && !presetExists[item.PresetName] {
 			missingPresetSet[item.PresetName] = struct{}{}
 			entry.skip = true
-			result.SkippedHosts = append(result.SkippedHosts, group.Remark)
 		}
 		if entry.groupID != "" {
 			owned, err := hostGroupBelongsToUser(db, userID, entry.groupID)
@@ -239,13 +250,24 @@ func prepareProxyBundleImport(userID int, req ProxyBundleImportRequest) (*prepar
 			}
 			entry.existing = owned
 		}
-		if entry.existing {
-			result.UpdatedHosts++
+		if entry.skip {
+			label := strings.TrimSpace(group.Remark)
+			if label == "" {
+				label = entry.groupID
+			}
+			if _, seen := skippedSet[label]; !seen {
+				result.SkippedHosts = append(result.SkippedHosts, label)
+				skippedSet[label] = struct{}{}
+			}
 		} else {
-			result.CreatedHosts++
-		}
-		if item.PresetName != "" && !entry.skip {
-			result.AssignedPresets++
+			if entry.existing {
+				result.UpdatedHosts++
+			} else {
+				result.CreatedHosts++
+			}
+			if item.PresetName != "" {
+				result.AssignedPresets++
+			}
 		}
 		prepared.hosts = append(prepared.hosts, entry)
 	}
@@ -255,6 +277,7 @@ func prepareProxyBundleImport(userID int, req ProxyBundleImportRequest) (*prepar
 	for name := range missingPresetSet {
 		result.MissingPresetNames = append(result.MissingPresetNames, name)
 	}
+	sort.Strings(result.SkippedHosts)
 	sort.Strings(result.MissingInboundTags)
 	sort.Strings(result.MissingPresetNames)
 	prepared.missingInbounds = result.MissingInboundTags
@@ -299,7 +322,8 @@ func (s *ProxyPresetService) ImportBundle(userID int, req ProxyBundleImportReque
 					return err
 				}
 			case errors.Is(err, gorm.ErrRecordNotFound):
-				row = model.ProxyPreset{UserId: userID, Name: incoming.Name, Description: incoming.Description, Config: config, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+				now := time.Now()
+				row = model.ProxyPreset{UserId: userID, Name: incoming.Name, Description: incoming.Description, Config: config, CreatedAt: now, UpdatedAt: now}
 				if err := tx.Create(&row).Error; err != nil {
 					return err
 				}
@@ -341,7 +365,8 @@ func (s *ProxyPresetService) ImportBundle(userID int, req ProxyBundleImportReque
 				return err
 			}
 			if entry.existing {
-				if err := tx.Where("group_id = ?", groupID).Delete(&model.Host{}).Error; err != nil {
+				ownedInbounds := tx.Model(&model.Inbound{}).Select("id").Where("user_id = ?", userID)
+				if err := tx.Where("group_id = ? AND inbound_id IN (?)", groupID, ownedInbounds).Delete(&model.Host{}).Error; err != nil {
 					return err
 				}
 			}
@@ -356,10 +381,11 @@ func (s *ProxyPresetService) ImportBundle(userID int, req ProxyBundleImportReque
 			}
 			if entry.item.PresetName != "" {
 				presetID := presetIDs[entry.item.PresetName]
-				binding := model.HostProxyPreset{GroupId: groupID, UserId: userID, PresetId: presetID, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+				now := time.Now()
+				binding := model.HostProxyPreset{GroupId: groupID, UserId: userID, PresetId: presetID, CreatedAt: now, UpdatedAt: now}
 				if err := tx.Clauses(clause.OnConflict{
-					Columns: []clause.Column{{Name: "group_id"}},
-					DoUpdates: clause.Assignments(map[string]any{"user_id": userID, "preset_id": presetID, "updated_at": time.Now()}),
+					Columns:   []clause.Column{{Name: "group_id"}},
+					DoUpdates: clause.Assignments(map[string]any{"user_id": userID, "preset_id": presetID, "updated_at": now}),
 				}).Create(&binding).Error; err != nil {
 					return err
 				}
