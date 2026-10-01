@@ -152,7 +152,7 @@ func arrayField(cfg map[string]any, key string) ([]any, error) {
 	}
 	items, ok := value.([]any)
 	if !ok {
-		return nil, fmt.Errorf("Xray %s section must be an array", key)
+		return nil, fmt.Errorf("config %s section must be an array", key)
 	}
 	return items, nil
 }
@@ -254,7 +254,7 @@ func removeTaggedItem(cfg map[string]any, key, tag string) (bool, error) {
 	}
 	items, ok := value.([]any)
 	if !ok {
-		return false, fmt.Errorf("Xray %s section must be an array", key)
+		return false, fmt.Errorf("config %s section must be an array", key)
 	}
 	filtered := make([]any, 0, len(items))
 	removed := false
