@@ -26,6 +26,9 @@ const XrayPage = lazy(() => importWithChunkRecovery(() => import('@/pages/xray/X
 const SingBoxPage = lazy(() =>
   importWithChunkRecovery(() => import('@/pages/singbox/SingBoxPage')),
 );
+const LinkInspectorPage = lazy(() =>
+  importWithChunkRecovery(() => import('@/pages/tools/LinkInspectorPage')),
+);
 const ApiDocsPage = lazy(() =>
   importWithChunkRecovery(() => import('@/pages/api-docs/ApiDocsPage')),
 );
@@ -67,6 +70,7 @@ const routes: RouteObject[] = [
       { path: 'settings', element: withSuspense(<SettingsPage />) },
       { path: 'xray', element: withSuspense(<XrayPage />) },
       { path: 'singbox', element: withSuspense(<SingBoxPage />) },
+      { path: 'link-inspector', element: withSuspense(<LinkInspectorPage />) },
       { path: 'outbound', element: withSuspense(<XrayPage />) },
       { path: 'routing', element: withSuspense(<XrayPage />) },
       { path: 'api-docs', element: withSuspense(<ApiDocsPage />) },
