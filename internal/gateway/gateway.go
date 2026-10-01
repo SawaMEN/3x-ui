@@ -14,15 +14,14 @@ import (
 const (
 	backupPath = "/etc/x-ui/gateway-xray-backup.json"
 
-	inboundTag  = "in-tproxy"
-	outboundTag = "xui-gateway-direct"
-	inboundPort = 52345
+	inboundTag        = "in-tproxy"
+	legacyOutboundTag = "xui-gateway-direct"
+	inboundPort       = 52345
 )
 
-// State describes both the Xray template and the recovery marker. Enabled is
-// true when either Gateway-owned config is present or a backup from an older
-// interrupted operation still exists, so the UI always offers a safe disable
-// path instead of allowing a second backup to overwrite recovery data.
+// State describes both the active Gateway inbound and recovery/legacy markers.
+// Enabled remains true while any Gateway-owned artifact exists so the UI always
+// offers a cleanup path instead of allowing a second enable over stale state.
 type State struct {
 	Enabled      bool
 	Configured   bool
@@ -38,13 +37,14 @@ func InboundPort() int {
 
 func gatewayInbound() map[string]any {
 	return map[string]any{
-		// Do not bind this TPROXY listener to 127.0.0.1. Redirected packets from
-		// LAN clients arrive through PREROUTING and must be accepted by Xray.
+		// The default listen address is 0.0.0.0. A transparent gateway must not
+		// bind this listener to loopback because redirected LAN traffic arrives
+		// through PREROUTING.
 		"port":     inboundPort,
-		"protocol": "dokodemo-door",
+		"protocol": "tunnel",
 		"settings": map[string]any{
+			"allowedNetwork": "tcp,udp",
 			"followRedirect": true,
-			"network":        "tcp,udp",
 		},
 		"sniffing": map[string]any{
 			"destOverride": []any{
@@ -61,28 +61,6 @@ func gatewayInbound() map[string]any {
 			},
 		},
 		"tag": inboundTag,
-	}
-}
-
-func gatewayOutbound() map[string]any {
-	return map[string]any{
-		"protocol": "freedom",
-		"settings": map[string]any{
-			"finalRules": []any{
-				map[string]any{
-					"action": "allow",
-				},
-			},
-		},
-		"tag": outboundTag,
-	}
-}
-
-func gatewayRoutingRule() map[string]any {
-	return map[string]any{
-		"type":        "field",
-		"inboundTag":  []any{inboundTag},
-		"outboundTag": outboundTag,
 	}
 }
 
@@ -201,26 +179,32 @@ func hasInboundTag(rule map[string]any, tag string) bool {
 	return false
 }
 
-func isGatewayRule(item any) bool {
+func isLegacyGatewayRule(item any) bool {
 	rule, ok := item.(map[string]any)
 	if !ok {
 		return false
 	}
 	outbound, _ := rule["outboundTag"].(string)
-	return outbound == outboundTag && hasInboundTag(rule, inboundTag)
+	return outbound == legacyOutboundTag && hasInboundTag(rule, inboundTag)
 }
 
-func hasGatewayArtifacts(cfg map[string]any) bool {
-	if inbounds, ok := cfg["inbounds"].([]any); ok {
-		for _, item := range inbounds {
-			if itemTag(item) == inboundTag {
-				return true
-			}
+func hasGatewayInbound(cfg map[string]any) bool {
+	inbounds, ok := cfg["inbounds"].([]any)
+	if !ok {
+		return false
+	}
+	for _, item := range inbounds {
+		if itemTag(item) == inboundTag {
+			return true
 		}
 	}
+	return false
+}
+
+func hasLegacyGatewayArtifacts(cfg map[string]any) bool {
 	if outbounds, ok := cfg["outbounds"].([]any); ok {
 		for _, item := range outbounds {
-			if itemTag(item) == outboundTag {
+			if itemTag(item) == legacyOutboundTag {
 				return true
 			}
 		}
@@ -228,13 +212,17 @@ func hasGatewayArtifacts(cfg map[string]any) bool {
 	if routing, ok := cfg["routing"].(map[string]any); ok {
 		if rules, ok := routing["rules"].([]any); ok {
 			for _, item := range rules {
-				if isGatewayRule(item) {
+				if isLegacyGatewayRule(item) {
 					return true
 				}
 			}
 		}
 	}
 	return false
+}
+
+func hasGatewayArtifacts(cfg map[string]any) bool {
+	return hasGatewayInbound(cfg) || hasLegacyGatewayArtifacts(cfg)
 }
 
 func replaceTaggedItem(cfg map[string]any, key, tag string, replacement any) error {
@@ -252,46 +240,11 @@ func replaceTaggedItem(cfg map[string]any, key, tag string, replacement any) err
 	return nil
 }
 
-func addGatewayRoutingRule(cfg map[string]any) error {
-	var routing map[string]any
-	if value, exists := cfg["routing"]; exists && value != nil {
-		var ok bool
-		routing, ok = value.(map[string]any)
-		if !ok {
-			return fmt.Errorf("Xray routing section must be an object")
-		}
-	} else {
-		routing = map[string]any{}
-	}
-
-	var rules []any
-	if value, exists := routing["rules"]; exists && value != nil {
-		var ok bool
-		rules, ok = value.([]any)
-		if !ok {
-			return fmt.Errorf("Xray routing rules must be an array")
-		}
-	}
-
-	filtered := make([]any, 0, len(rules)+1)
-	for _, item := range rules {
-		if !isGatewayRule(item) {
-			filtered = append(filtered, item)
-		}
-	}
-	routing["rules"] = append([]any{gatewayRoutingRule()}, filtered...)
-	cfg["routing"] = routing
-	return nil
-}
-
 func applyGatewayConfig(cfg map[string]any) error {
-	if err := replaceTaggedItem(cfg, "inbounds", inboundTag, gatewayInbound()); err != nil {
-		return err
-	}
-	if err := replaceTaggedItem(cfg, "outbounds", outboundTag, gatewayOutbound()); err != nil {
-		return err
-	}
-	return addGatewayRoutingRule(cfg)
+	// Gateway Mode must not select an outbound for the operator. Transparent
+	// traffic enters the normal Xray dispatcher and therefore follows the same
+	// routing rules/default outbound as any other inbound.
+	return replaceTaggedItem(cfg, "inbounds", inboundTag, gatewayInbound())
 }
 
 func removeTaggedItem(cfg map[string]any, key, tag string) (bool, error) {
@@ -318,7 +271,7 @@ func removeTaggedItem(cfg map[string]any, key, tag string) (bool, error) {
 	return removed, nil
 }
 
-func removeGatewayRoutingRule(cfg map[string]any) (bool, error) {
+func removeLegacyGatewayRoutingRule(cfg map[string]any) (bool, error) {
 	value, exists := cfg["routing"]
 	if !exists || value == nil {
 		return false, nil
@@ -338,7 +291,7 @@ func removeGatewayRoutingRule(cfg map[string]any) (bool, error) {
 	filtered := make([]any, 0, len(rules))
 	removed := false
 	for _, item := range rules {
-		if isGatewayRule(item) {
+		if isLegacyGatewayRule(item) {
 			removed = true
 			continue
 		}
@@ -353,20 +306,23 @@ func removeGatewayRoutingRule(cfg map[string]any) (bool, error) {
 
 func removeGatewayConfig(cfg map[string]any) (bool, error) {
 	removed := false
-	for _, target := range []struct {
-		key string
-		tag string
-	}{
-		{key: "inbounds", tag: inboundTag},
-		{key: "outbounds", tag: outboundTag},
-	} {
-		changed, err := removeTaggedItem(cfg, target.key, target.tag)
-		if err != nil {
-			return false, err
-		}
-		removed = removed || changed
+
+	changed, err := removeTaggedItem(cfg, "inbounds", inboundTag)
+	if err != nil {
+		return false, err
 	}
-	changed, err := removeGatewayRoutingRule(cfg)
+	removed = removed || changed
+
+	// Clean up objects created by the first Gateway GUI implementation. They
+	// must never survive disable because its forced direct route bypassed the
+	// operator's normal Xray routing policy.
+	changed, err = removeTaggedItem(cfg, "outbounds", legacyOutboundTag)
+	if err != nil {
+		return false, err
+	}
+	removed = removed || changed
+
+	changed, err = removeLegacyGatewayRoutingRule(cfg)
 	if err != nil {
 		return false, err
 	}
@@ -382,9 +338,9 @@ func getStateUnlocked() (State, error) {
 	if err != nil {
 		return State{}, err
 	}
-	configured := hasGatewayArtifacts(cfg)
+	configured := hasGatewayInbound(cfg)
 	return State{
-		Enabled:      configured || backup,
+		Enabled:      hasGatewayArtifacts(cfg) || backup,
 		Configured:   configured,
 		BackupExists: backup,
 	}, nil
@@ -421,7 +377,7 @@ func Enable() error {
 		return err
 	}
 	if hasGatewayArtifacts(cfg) || backup {
-		return fmt.Errorf("Gateway Mode is already enabled")
+		return fmt.Errorf("Gateway Mode is already enabled or requires cleanup")
 	}
 
 	if err := applyGatewayConfig(cfg); err != nil {

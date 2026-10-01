@@ -29,6 +29,12 @@ func TestApplyAndRemoveGatewayConfigPreservesExistingConfig(t *testing.T) {
 	if !hasGatewayArtifacts(cfg) {
 		t.Fatal("Gateway artifacts were not detected after apply")
 	}
+	if !reflect.DeepEqual(cfg["outbounds"], original["outbounds"]) {
+		t.Fatal("Gateway apply changed existing outbounds")
+	}
+	if !reflect.DeepEqual(cfg["routing"], original["routing"]) {
+		t.Fatal("Gateway apply changed existing routing")
+	}
 
 	changed, err := removeGatewayConfig(cfg)
 	if err != nil {
@@ -42,6 +48,32 @@ func TestApplyAndRemoveGatewayConfigPreservesExistingConfig(t *testing.T) {
 	}
 	if !reflect.DeepEqual(cfg, original) {
 		t.Fatalf("unrelated config changed after enable/disable cycle\nwant: %#v\n got: %#v", original, cfg)
+	}
+}
+
+func TestApplyGatewayConfigUsesTunnelTPROXY(t *testing.T) {
+	cfg := map[string]any{}
+
+	if err := applyGatewayConfig(cfg); err != nil {
+		t.Fatalf("applyGatewayConfig() error = %v", err)
+	}
+	inbounds, ok := cfg["inbounds"].([]any)
+	if !ok || len(inbounds) != 1 {
+		t.Fatalf("unexpected inbounds after apply: %#v", cfg["inbounds"])
+	}
+	inbound, ok := inbounds[0].(map[string]any)
+	if !ok {
+		t.Fatalf("unexpected gateway inbound: %#v", inbounds[0])
+	}
+	if inbound["protocol"] != "tunnel" {
+		t.Fatalf("gateway protocol = %#v, want tunnel", inbound["protocol"])
+	}
+	settings, ok := inbound["settings"].(map[string]any)
+	if !ok {
+		t.Fatalf("unexpected gateway settings: %#v", inbound["settings"])
+	}
+	if settings["allowedNetwork"] != "tcp,udp" || settings["followRedirect"] != true {
+		t.Fatalf("unexpected gateway settings: %#v", settings)
 	}
 }
 
@@ -76,16 +108,51 @@ func TestApplyGatewayConfigRejectsMalformedArrays(t *testing.T) {
 	}
 }
 
-func TestGatewayRuleDetectionRequiresOwnedInboundAndOutbound(t *testing.T) {
-	if isGatewayRule(map[string]any{
-		"type":       "field",
-		"inboundTag": []any{inboundTag},
+func TestLegacyGatewayRuleDetectionRequiresOwnedInboundAndOutbound(t *testing.T) {
+	if isLegacyGatewayRule(map[string]any{
+		"type":        "field",
+		"inboundTag":  []any{inboundTag},
 		"outboundTag": "another-outbound",
 	}) {
 		t.Fatal("rule with another outbound was treated as Gateway-owned")
 	}
-	if !isGatewayRule(gatewayRoutingRule()) {
-		t.Fatal("Gateway routing rule was not detected")
+	if !isLegacyGatewayRule(map[string]any{
+		"type":        "field",
+		"inboundTag":  []any{inboundTag},
+		"outboundTag": legacyOutboundTag,
+	}) {
+		t.Fatal("legacy Gateway routing rule was not detected")
+	}
+}
+
+func TestRemoveGatewayConfigCleansLegacyArtifacts(t *testing.T) {
+	cfg := map[string]any{
+		"inbounds": []any{gatewayInbound()},
+		"outbounds": []any{
+			map[string]any{"tag": legacyOutboundTag, "protocol": "freedom"},
+			map[string]any{"tag": "keep", "protocol": "freedom"},
+		},
+		"routing": map[string]any{
+			"rules": []any{
+				map[string]any{
+					"type":        "field",
+					"inboundTag":  []any{inboundTag},
+					"outboundTag": legacyOutboundTag,
+				},
+				map[string]any{"type": "field", "outboundTag": "keep"},
+			},
+		},
+	}
+
+	changed, err := removeGatewayConfig(cfg)
+	if err != nil {
+		t.Fatalf("removeGatewayConfig() error = %v", err)
+	}
+	if !changed {
+		t.Fatal("removeGatewayConfig() reported no changes")
+	}
+	if hasGatewayArtifacts(cfg) {
+		t.Fatal("Gateway artifacts remain after legacy cleanup")
 	}
 }
 

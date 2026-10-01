@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { Alert, Button, Modal, Popconfirm, Space, Tag, Tooltip, Typography, message } from 'antd';
 import { ApartmentOutlined, ReloadOutlined } from '@ant-design/icons';
 
@@ -21,32 +20,12 @@ type GatewayStatus = {
   port: number;
 };
 
-const HEADER_TARGET = '.settings-page .header-actions';
-
 export default function GatewayModeControl() {
-  const [portalTarget, setPortalTarget] = useState<Element | null>(() =>
-    document.querySelector(HEADER_TARGET),
-  );
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<GatewayStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [messageApi, contextHolder] = message.useMessage();
-
-  // SettingsPage renders its header only after settings are loaded. If it did
-  // not exist during our first render, wait for the DOM insertion once.
-  useEffect(() => {
-    if (portalTarget) return;
-
-    const observer = new MutationObserver(() => {
-      const target = document.querySelector(HEADER_TARGET);
-      if (!target) return;
-      setPortalTarget(target);
-      observer.disconnect();
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
-    return () => observer.disconnect();
-  }, [portalTarget]);
 
   const loadStatus = useCallback(
     async (quiet = false): Promise<GatewayStatus | null> => {
@@ -132,30 +111,22 @@ export default function GatewayModeControl() {
   const singBoxSelected = status?.coreType === 'sing-box';
   const canEnable = status?.canEnable === true;
 
-  const trigger = portalTarget
-    ? createPortal(
-        <span style={{ display: 'inline-flex', marginInlineStart: 8 }}>
-          <Tooltip title="Управление прозрачным шлюзом Xray">
-            <Button
-              icon={<ApartmentOutlined />}
-              loading={loading}
-              onClick={() => {
-                setOpen(true);
-                void refresh(true);
-              }}
-            >
-              Gateway: {recoveryOnly ? 'восстановление' : enabled ? 'вкл.' : 'выкл.'}
-            </Button>
-          </Tooltip>
-        </span>,
-        portalTarget,
-      )
-    : null;
-
   return (
     <>
       {contextHolder}
-      {trigger}
+      <Tooltip title="Управление прозрачным шлюзом Xray">
+        <Button
+          icon={<ApartmentOutlined />}
+          loading={loading}
+          onClick={() => {
+            setOpen(true);
+            void refresh(true);
+          }}
+        >
+          Gateway: {recoveryOnly ? 'восстановление' : enabled ? 'вкл.' : 'выкл.'}
+        </Button>
+      </Tooltip>
+
       <Modal
         open={open}
         title="Gateway Mode"
@@ -178,8 +149,8 @@ export default function GatewayModeControl() {
               recoveryOnly
                 ? 'Найдена резервная копия Gateway Mode, но его объекты отсутствуют в текущем Xray-конфиге. Нажмите «Выключить», чтобы безопасно удалить устаревший recovery-marker.'
                 : enabled
-                  ? 'В шаблоне Xray активны отдельный TPROXY-вход и Gateway-outbound.'
-                  : 'Gateway-объекты сейчас не активны в конфигурации Xray.'
+                  ? 'В шаблоне Xray активен отдельный TPROXY-вход. Дальнейшая маршрутизация выполняется обычными правилами Xray.'
+                  : 'Gateway-вход сейчас не активен в конфигурации Xray.'
             }
           />
 
@@ -208,14 +179,14 @@ export default function GatewayModeControl() {
               type="warning"
               showIcon
               title="Gateway Mode активен в Xray"
-              description="Сейчас выбрано ядро sing-box. Gateway Mode можно безопасно выключить: будут удалены только его собственные элементы конфигурации."
+              description="Сейчас выбрано ядро sing-box. Gateway Mode можно безопасно выключить: будет удалён только его собственный TPROXY-вход и старые служебные артефакты Gateway Mode, если они остались от предыдущей реализации."
             />
           )}
 
           <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-            При включении панель сохраняет резервную копию текущего шаблона Xray и добавляет только
-            Gateway-объекты. При обычном выключении удаляются только эти объекты, поэтому изменения
-            Xray, сделанные после включения Gateway Mode, не откатываются.
+            При включении панель сохраняет резервную копию текущего шаблона Xray и добавляет отдельный
+            TPROXY-вход. Outbound и routing не подменяются: перехваченный трафик проходит через ваши
+            обычные правила маршрутизации Xray.
           </Typography.Paragraph>
 
           <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
@@ -231,7 +202,7 @@ export default function GatewayModeControl() {
                 description={
                   recoveryOnly
                     ? 'Будет удалён только устаревший recovery-marker. Текущий Xray-конфиг не будет откатан.'
-                    : 'Будут удалены только TPROXY-вход, Gateway-outbound и связанное правило маршрутизации. Остальные изменения Xray сохранятся.'
+                    : 'Будет удалён Gateway TPROXY-вход и совместимые служебные артефакты старой реализации. Остальные настройки Xray сохранятся.'
                 }
                 okText="Выключить"
                 cancelText="Отмена"
@@ -244,7 +215,7 @@ export default function GatewayModeControl() {
             ) : (
               <Popconfirm
                 title="Включить Gateway Mode?"
-                description="Панель сохранит резервную копию и добавит Gateway-объекты в текущий шаблон Xray."
+                description="Панель сохранит резервную копию и добавит TPROXY-вход в текущий шаблон Xray, не меняя ваши outbound и routing."
                 okText="Включить"
                 cancelText="Отмена"
                 onConfirm={() => void runAction('enable')}
