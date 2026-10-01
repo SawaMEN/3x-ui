@@ -20,6 +20,7 @@ func NewProxyPresetController(g *gin.RouterGroup) *ProxyPresetController {
 	g.POST("/save", a.save)
 	g.POST("/update/:id", a.update)
 	g.POST("/del/:id", a.del)
+	g.POST("/preview", a.preview)
 	g.GET("/assignments", a.assignments)
 	g.GET("/assignment/:groupId", a.assignment)
 	g.POST("/assign/:groupId", a.assign)
@@ -92,6 +93,16 @@ func (a *ProxyPresetController) del(c *gin.Context) {
 	}
 	err := a.service.Delete(a.userID(c), id)
 	jsonMsg(c, "proxy preset deleted", err)
+}
+
+func (a *ProxyPresetController) preview(c *gin.Context) {
+	var req service.ProxyPresetPreviewRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		jsonMsg(c, "invalid proxy preset preview payload", err)
+		return
+	}
+	items, err := a.service.Preview(a.userID(c), req)
+	jsonObj(c, items, err)
 }
 
 func (a *ProxyPresetController) assignments(c *gin.Context) {
