@@ -135,7 +135,7 @@ func GetManager() *Manager {
 	return manager
 }
 
-// decodeLegacySecret converts an mtg Telegram-link secret to Telemt's raw
+// decodeLegacySecret converts a Telegram-link MTProxy secret to Telemt's raw
 // 32-hex user secret and recovers the FakeTLS host embedded after an ee secret.
 func decodeLegacySecret(secret string) (raw, domain string) {
 	s := strings.TrimSpace(secret)
@@ -476,6 +476,44 @@ func FreeLocalPort() (int, error) {
 
 func tomlQuote(s string) string { return strconv.Quote(s) }
 
+func networkOptions(preferIP string) (ipv4, ipv6 bool, prefer int) {
+	ipv4, ipv6, prefer = true, true, 4
+	switch strings.ToLower(strings.TrimSpace(preferIP)) {
+	case "prefer-ipv6":
+		prefer = 6
+	case "only-ipv6":
+		ipv4, ipv6, prefer = false, true, 6
+	case "only-ipv4":
+		ipv4, ipv6, prefer = true, false, 4
+	}
+	return
+}
+
+func validAnnounceIP(value string, wantV6 bool) string {
+	value = strings.Trim(strings.TrimSpace(value), "[]")
+	ip := net.ParseIP(value)
+	if ip == nil {
+		return ""
+	}
+	if wantV6 {
+		if ip.To4() != nil {
+			return ""
+		}
+	} else if ip.To4() == nil {
+		return ""
+	}
+	return value
+}
+
+func (inst Instance) listenerAnnounceIP(listen string) string {
+	listen = strings.Trim(strings.TrimSpace(listen), "[]")
+	ip := net.ParseIP(listen)
+	if ip != nil && ip.To4() == nil {
+		return validAnnounceIP(inst.PublicIPv6, true)
+	}
+	return validAnnounceIP(inst.PublicIPv4, false)
+}
+
 func renderConfig(inst Instance, apiPort int, apiToken string) string {
 	var b strings.Builder
 	b.WriteString("[general]\nfast_mode = true\nuse_middle_proxy = false\n")
@@ -490,19 +528,17 @@ func renderConfig(inst Instance, apiPort int, apiToken string) string {
 	// ee (FakeTLS) Telegram links continue to work after migration from mtg.
 	b.WriteString("\n[general.modes]\nclassic = true\nsecure = true\ntls = true\n")
 	b.WriteString("\n[general.links]\nshow = \"*\"\n")
-	b.WriteString("\n[network]\nipv4 = true\nipv6 = true\n")
-	switch strings.ToLower(inst.PreferIP) {
-	case "only-ipv6", "prefer-ipv6":
-		b.WriteString("prefer = 6\n")
-	default:
-		b.WriteString("prefer = 4\n")
-	}
+	ipv4, ipv6, prefer := networkOptions(inst.PreferIP)
+	fmt.Fprintf(&b, "\n[network]\nipv4 = %t\nipv6 = %t\nprefer = %d\n", ipv4, ipv6, prefer)
 	fmt.Fprintf(&b, "\n[server]\nport = %d\n", inst.Port)
 	listen := strings.TrimSpace(inst.Listen)
 	if listen == "" {
 		listen = "0.0.0.0"
 	}
-	fmt.Fprintf(&b, "\n[[server.listeners]]\nip = %s\n", tomlQuote(listen))
+	fmt.Fprintf(&b, "\n[[server.listeners]]\nip = %s\nproxy_protocol = %t\n", tomlQuote(listen), inst.ProxyProtocolListener)
+	if announceIP := inst.listenerAnnounceIP(listen); announceIP != "" {
+		fmt.Fprintf(&b, "announce_ip = %s\n", tomlQuote(announceIP))
+	}
 	fmt.Fprintf(&b, "\n[server.api]\nenabled = true\nlisten = %s\nwhitelist = [\"127.0.0.0/8\"]\nauth_header = %s\nread_only = false\n", tomlQuote(fmt.Sprintf("127.0.0.1:%d", apiPort)), tomlQuote("Bearer "+apiToken))
 	if inst.FakeTLSDomain != "" {
 		fmt.Fprintf(&b, "\n[censorship]\ntls_domain = %s\nmask = true\ntls_emulation = true\n", tomlQuote(inst.FakeTLSDomain))
