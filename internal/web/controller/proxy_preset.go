@@ -23,6 +23,7 @@ func NewProxyPresetController(g *gin.RouterGroup) *ProxyPresetController {
 	g.GET("/assignments", a.assignments)
 	g.GET("/assignment/:groupId", a.assignment)
 	g.POST("/assign/:groupId", a.assign)
+	g.POST("/assign/bulk", a.assignBulk)
 	g.POST("/unassign/:groupId", a.unassign)
 	g.GET("/bundle", a.bundle)
 	g.POST("/bundle/import", a.importBundle)
@@ -117,6 +118,19 @@ func (a *ProxyPresetController) assign(c *gin.Context) {
 	}
 	item, err := a.service.Assign(a.userID(c), c.Param("groupId"), body.PresetId)
 	jsonObj(c, item, err)
+}
+
+func (a *ProxyPresetController) assignBulk(c *gin.Context) {
+	var body struct {
+		GroupIds []string `json:"groupIds"`
+		PresetId *int     `json:"presetId"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		jsonMsg(c, "invalid proxy preset bulk assignment", err)
+		return
+	}
+	items, err := a.service.AssignMany(a.userID(c), body.GroupIds, body.PresetId)
+	jsonObj(c, items, err)
 }
 
 func (a *ProxyPresetController) unassign(c *gin.Context) {
