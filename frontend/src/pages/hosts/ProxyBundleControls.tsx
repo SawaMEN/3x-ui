@@ -10,6 +10,10 @@ import {
   type ProxyBundleImportResult,
 } from '@/schemas/api/proxyPreset';
 
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export default function ProxyBundleControls() {
   const { t } = useTranslation();
   const [messageApi, contextHolder] = message.useMessage();
@@ -20,16 +24,20 @@ export default function ProxyBundleControls() {
   const { exportBundle, importBundle, importing } = useProxyPresetMutations();
 
   const onExport = async () => {
-    const data = await exportBundle();
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `3x-ui-proxy-bundle-${new Date().toISOString().slice(0, 10)}.json`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(url);
+    try {
+      const data = await exportBundle();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `3x-ui-proxy-bundle-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    } catch (error) {
+      messageApi.error(errorText(error));
+    }
   };
 
   const onFile = async (file: File) => {
@@ -45,21 +53,29 @@ export default function ProxyBundleControls() {
       messageApi.error(validated.error.issues.map((issue) => issue.message).join('; '));
       return;
     }
-    const nextBundle = validated.data;
-    const nextPreview = await importBundle(nextBundle, true, false);
-    setBundle(nextBundle);
-    setPreview(nextPreview);
-    setAllowMissing(false);
+    try {
+      const nextBundle = validated.data;
+      const nextPreview = await importBundle(nextBundle, true, false);
+      setBundle(nextBundle);
+      setPreview(nextPreview);
+      setAllowMissing(false);
+    } catch (error) {
+      messageApi.error(errorText(error));
+    }
   };
 
   const applyImport = async () => {
     if (!bundle) return;
-    const result = await importBundle(bundle, false, allowMissing);
-    setPreview(null);
-    setBundle(null);
-    messageApi.success(
-      `${t('success')}: ${result.createdHosts + result.updatedHosts} Hosts, ${result.createdPresets + result.updatedPresets} presets`,
-    );
+    try {
+      const result = await importBundle(bundle, false, allowMissing);
+      setPreview(null);
+      setBundle(null);
+      messageApi.success(
+        `${t('success')}: ${result.createdHosts + result.updatedHosts} Hosts, ${result.createdPresets + result.updatedPresets} presets`,
+      );
+    } catch (error) {
+      messageApi.error(errorText(error));
+    }
   };
 
   const hasMissing = Boolean(preview?.missingInboundTags.length || preview?.missingPresetNames.length);
@@ -93,7 +109,9 @@ export default function ProxyBundleControls() {
         okText={t('confirm')}
         cancelText={t('cancel')}
         confirmLoading={importing}
-        okButtonProps={{ disabled: blockedByPreset || (Boolean(preview?.missingInboundTags.length) && !allowMissing) }}
+        okButtonProps={{
+          disabled: blockedByPreset || (Boolean(preview?.missingInboundTags.length) && !allowMissing),
+        }}
         onOk={applyImport}
         onCancel={() => {
           setPreview(null);
