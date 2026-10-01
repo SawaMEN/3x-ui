@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -144,7 +145,7 @@ func TestApplySingBoxGatewayConfigPrependsSniffRuleAndPreservesRoute(t *testing.
 	if !isSingBoxGatewaySniffRule(rules[0]) {
 		t.Fatalf("first route rule = %#v, want Gateway sniff", rules[0])
 	}
-	if rules[1] != first || rules[2] != second {
+	if !reflect.DeepEqual(rules[1], first) || !reflect.DeepEqual(rules[2], second) {
 		t.Fatalf("existing route rules were not preserved in order: %#v", rules)
 	}
 }
@@ -297,7 +298,7 @@ func TestRemoveSingBoxGatewayConfigRemovesSniffAndPreservesUserRoute(t *testing.
 		t.Fatalf("route final changed: %#v", route["final"])
 	}
 	rules := route["rules"].([]any)
-	if len(rules) != 1 || rules[0] != userRule {
+	if len(rules) != 1 || !reflect.DeepEqual(rules[0], userRule) {
 		t.Fatalf("user route rules changed: %#v", rules)
 	}
 }
