@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -30,6 +32,20 @@ type TrafficHistoryPoint struct {
 	Up   int64 `json:"up"`
 	Down int64 `json:"down"`
 }
+
+type trafficHistoryCounter struct {
+	resource string
+	tag      string
+	up       int64
+	down     int64
+}
+
+var trafficHistorySnapshot = struct {
+	sync.Mutex
+	initialized bool
+	previous    map[string]trafficHistoryCounter
+	lastPrune   time.Time
+}{previous: make(map[string]trafficHistoryCounter)}
 
 func validTrafficHistoryResource(resource string) bool {
 	switch resource {
@@ -68,8 +84,111 @@ func RecordTrafficHistory(samples []TrafficHistorySample, now time.Time) error {
 	}
 	return database.GetDB().Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "resource"}, {Name: "tag"}, {Name: "date_time"}, {Name: "direction"}},
-		DoUpdates: clause.Assignments(map[string]any{"traffic": gorm.Expr("traffic_history.traffic + excluded.traffic")}),
+		DoUpdates: clause.Assignments(map[string]any{"traffic": gorm.Expr("traffic + excluded.traffic")}),
 	}).Create(&rows).Error
+}
+
+func historyCounterKey(resource, tag string) string {
+	return resource + "\x00" + tag
+}
+
+func counterDelta(current, previous int64) int64 {
+	if current <= 0 {
+		return 0
+	}
+	if current >= previous {
+		return current - previous
+	}
+	return current
+}
+
+func trafficHistoryDeltas(previous, current map[string]trafficHistoryCounter) []TrafficHistorySample {
+	result := make([]TrafficHistorySample, 0, len(current))
+	for key, now := range current {
+		before, ok := previous[key]
+		if !ok {
+			continue
+		}
+		up := counterDelta(now.up, before.up)
+		down := counterDelta(now.down, before.down)
+		if up == 0 && down == 0 {
+			continue
+		}
+		result = append(result, TrafficHistorySample{Resource: now.resource, Tag: now.tag, Up: up, Down: down})
+	}
+	return result
+}
+
+func loadTrafficHistoryCounters() (map[string]trafficHistoryCounter, error) {
+	db := database.GetDB()
+	current := make(map[string]trafficHistoryCounter)
+
+	var inbounds []model.Inbound
+	if err := db.Model(&model.Inbound{}).Select("tag", "up", "down").Find(&inbounds).Error; err != nil {
+		return nil, err
+	}
+	for _, inbound := range inbounds {
+		if inbound.Tag == "" {
+			continue
+		}
+		counter := trafficHistoryCounter{resource: "inbound", tag: inbound.Tag, up: inbound.Up, down: inbound.Down}
+		current[historyCounterKey(counter.resource, counter.tag)] = counter
+	}
+
+	var clients []xray.ClientTraffic
+	if err := db.Model(&xray.ClientTraffic{}).Select("email", "up", "down").Find(&clients).Error; err != nil {
+		return nil, err
+	}
+	for _, client := range clients {
+		if client.Email == "" {
+			continue
+		}
+		counter := trafficHistoryCounter{resource: "client", tag: client.Email, up: client.Up, down: client.Down}
+		current[historyCounterKey(counter.resource, counter.tag)] = counter
+	}
+
+	var outbounds []model.OutboundTraffics
+	if err := db.Model(&model.OutboundTraffics{}).Select("tag", "up", "down").Find(&outbounds).Error; err != nil {
+		return nil, err
+	}
+	for _, outbound := range outbounds {
+		if outbound.Tag == "" {
+			continue
+		}
+		counter := trafficHistoryCounter{resource: "outbound", tag: outbound.Tag, up: outbound.Up, down: outbound.Down}
+		current[historyCounterKey(counter.resource, counter.tag)] = counter
+	}
+	return current, nil
+}
+
+// SnapshotTrafficHistory stores deltas from durable counters and keeps the baseline in memory.
+func SnapshotTrafficHistory(now time.Time) error {
+	trafficHistorySnapshot.Lock()
+	defer trafficHistorySnapshot.Unlock()
+
+	current, err := loadTrafficHistoryCounters()
+	if err != nil {
+		return err
+	}
+	if !trafficHistorySnapshot.initialized {
+		trafficHistorySnapshot.previous = current
+		trafficHistorySnapshot.initialized = true
+		trafficHistorySnapshot.lastPrune = now
+		return nil
+	}
+
+	samples := trafficHistoryDeltas(trafficHistorySnapshot.previous, current)
+	if err := RecordTrafficHistory(samples, now); err != nil {
+		return err
+	}
+	trafficHistorySnapshot.previous = current
+	if now.Sub(trafficHistorySnapshot.lastPrune) >= 24*time.Hour {
+		if err := PruneTrafficHistory(); err != nil {
+			return err
+		}
+		trafficHistorySnapshot.lastPrune = now
+	}
+	return nil
 }
 
 // GetTrafficHistory returns summed buckets; bucketSeconds must align with storage buckets.
