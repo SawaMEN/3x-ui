@@ -1,6 +1,8 @@
 package job
 
 import (
+	"time"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/websocket"
@@ -25,6 +27,9 @@ func NewOutboundSubscriptionJob() *OutboundSubscriptionJob {
 
 // Run is invoked by the cron scheduler.
 func (j *OutboundSubscriptionJob) Run() {
+	if err := service.SnapshotTrafficHistory(time.Now()); err != nil {
+		logger.Warning("traffic history snapshot failed:", err)
+	}
 	if j.subService == nil {
 		j.subService = &service.OutboundSubscriptionService{}
 	}
