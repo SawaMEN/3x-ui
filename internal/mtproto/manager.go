@@ -27,6 +27,7 @@ type SecretEntry struct {
 	AdTag       string
 	QuotaBytes  int64
 	ExpiresUnix int64
+	LimitIP     int
 }
 
 type Instance struct {
@@ -79,7 +80,7 @@ func (inst Instance) structuralFingerprint() string {
 func (inst Instance) secretsFingerprint() string {
 	pairs := make([]string, 0, len(inst.Secrets))
 	for _, e := range inst.Secrets {
-		pairs = append(pairs, fmt.Sprintf("%s=%s;tag=%s;q=%d;exp=%d", e.Name, e.Secret, e.AdTag, e.QuotaBytes, e.ExpiresUnix))
+		pairs = append(pairs, fmt.Sprintf("%s=%s;tag=%s;q=%d;exp=%d;ip=%d", e.Name, e.Secret, e.AdTag, e.QuotaBytes, e.ExpiresUnix, e.LimitIP))
 	}
 	slices.Sort(pairs)
 	return strings.Join(pairs, "|")
@@ -180,6 +181,7 @@ func InstanceFromInbound(ib *model.Inbound) (Instance, bool) {
 			Enable     bool   `json:"enable"`
 			TotalGB    int64  `json:"totalGB"`
 			ExpiryTime int64  `json:"expiryTime"`
+			LimitIP    int    `json:"limitIp"`
 		} `json:"clients"`
 	}
 	if err := json.Unmarshal([]byte(ib.Settings), &parsed); err != nil {
@@ -198,7 +200,7 @@ func InstanceFromInbound(ib *model.Inbound) (Instance, bool) {
 		if domain == "" && embeddedDomain != "" {
 			domain = embeddedDomain
 		}
-		e := SecretEntry{Name: c.Email, Secret: raw, AdTag: usableAdTag(c.AdTag)}
+		e := SecretEntry{Name: c.Email, Secret: raw, AdTag: usableAdTag(c.AdTag), LimitIP: max(c.LimitIP, 0)}
 		if c.TotalGB > 0 {
 			e.QuotaBytes = c.TotalGB
 		}
@@ -579,6 +581,16 @@ func renderConfig(inst Instance, apiPort int, apiToken string) string {
 				exp = true
 			}
 			fmt.Fprintf(&b, "%s = %s\n", tomlQuote(e.Name), tomlQuote(expiresString(e.ExpiresUnix)))
+		}
+	}
+	ipLimits := false
+	for _, e := range inst.Secrets {
+		if e.LimitIP > 0 {
+			if !ipLimits {
+				b.WriteString("\n[access.user_max_unique_ips]\n")
+				ipLimits = true
+			}
+			fmt.Fprintf(&b, "%s = %d\n", tomlQuote(e.Name), e.LimitIP)
 		}
 	}
 	if inst.RouteThroughXray && inst.XrayRoutePort > 0 {
