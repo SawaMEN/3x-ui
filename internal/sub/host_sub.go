@@ -66,6 +66,9 @@ func (s *SubService) primeHosts(inbounds []*model.Inbound) error {
 // raw/json/clash renderers already consume. Address/port fall back to the
 // inbound's own when the host leaves them blank (override-only host).
 func hostToExternalProxyMap(h *model.Host, defaultDest string, defaultPort int) map[string]any {
+	if err := model.ApplyAssignedProxyPreset(database.GetDB(), h); err != nil {
+		logger.Warning("SubService - host proxy preset:", err)
+	}
 	dest := h.Address
 	if dest == "" {
 		dest = defaultDest
