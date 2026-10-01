@@ -1,7 +1,12 @@
 import { z } from 'zod';
 
 import { AlpnSchema } from '@/schemas/protocols/security/tls';
-import { HostSecuritySchema, MihomoIpVersionSchema, SubTypeSchema } from '@/schemas/api/host';
+import {
+  HostRecordSchema,
+  HostSecuritySchema,
+  MihomoIpVersionSchema,
+  SubTypeSchema,
+} from '@/schemas/api/host';
 
 export const ProxyPresetConfigSchema = z.object({
   port: z.number().int().min(0).max(65535).optional(),
@@ -52,6 +57,17 @@ export const ProxyPresetAssignmentSchema = z.object({
 });
 export type ProxyPresetAssignment = z.infer<typeof ProxyPresetAssignmentSchema>;
 export const ProxyPresetAssignmentsSchema = z.array(ProxyPresetAssignmentSchema);
+
+export const ProxyPresetPreviewItemSchema = z.object({
+  groupId: z.string(),
+  remark: z.string(),
+  base: HostRecordSchema,
+  effective: HostRecordSchema,
+  changedFields: z.array(z.string()),
+  warnings: z.array(z.string()),
+});
+export type ProxyPresetPreviewItem = z.infer<typeof ProxyPresetPreviewItemSchema>;
+export const ProxyPresetPreviewSchema = z.array(ProxyPresetPreviewItemSchema);
 
 export const ProxyBundleHostSchema = z.object({
   groupId: z.string().default(''),
