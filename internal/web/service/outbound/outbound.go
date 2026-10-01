@@ -231,11 +231,9 @@ func nativeOutboundTransportIsUDP(ob map[string]any) bool {
 	}
 }
 
-// outboundTransportIsUDP reports whether the outbound's proxy speaks UDP.
+// outboundTransportIsUDP is limited to Xray-shaped configs because the HTTP
+// probe lane builds a temporary Xray process and cannot consume native JSON.
 func outboundTransportIsUDP(ob map[string]any) bool {
-	if nativeOutboundTransportIsUDP(ob) {
-		return true
-	}
 	if protocol, _ := ob["protocol"].(string); equalsAnyFold(protocol, "hysteria", "wireguard", "amneziawg") {
 		return true
 	}
