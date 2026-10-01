@@ -63,6 +63,27 @@ func otherGatewayCore(coreType string) string {
 	return service.CoreTypeSingBox
 }
 
+// rollbackGatewayChange restores the two template states after a failed core
+// migration. It deliberately operates on config only; the caller decides
+// whether the running core also needs to be reconciled afterwards.
+func rollbackGatewayChange(currentCore, previousCore string, disableCurrent, restorePrevious bool) error {
+	failures := make([]string, 0, 2)
+	if disableCurrent {
+		if err := disableGatewayForCore(currentCore); err != nil {
+			failures = append(failures, fmt.Sprintf("disable %s: %v", currentCore, err))
+		}
+	}
+	if restorePrevious {
+		if err := enableGatewayForCore(previousCore); err != nil {
+			failures = append(failures, fmt.Sprintf("restore %s: %v", previousCore, err))
+		}
+	}
+	if len(failures) > 0 {
+		return fmt.Errorf("%s", strings.Join(failures, "; "))
+	}
+	return nil
+}
+
 type gatewayStatus struct {
 	State     gateway.State
 	OwnerCore string
@@ -165,7 +186,10 @@ func (a *GatewayController) enable(c *gin.Context) {
 		return
 	}
 
+	wasRunning := a.xrayService.IsXrayRunning()
 	changed := false
+	currentEnabledByRequest := false
+	previousCoreDisabled := false
 	otherCore := otherGatewayCore(coreType)
 	if otherState, otherErr := gatewayStateForCore(otherCore); otherErr == nil && otherState.Enabled {
 		if err := disableGatewayForCore(otherCore); err != nil {
@@ -173,24 +197,49 @@ func (a *GatewayController) enable(c *gin.Context) {
 			jsonObj(c, payload, fmt.Errorf("disable stale %s Gateway Mode before switching to %s: %w", otherCore, coreType, err))
 			return
 		}
+		previousCoreDisabled = true
 		changed = true
 	}
 
 	if !state.Enabled {
 		if err := enableGatewayForCore(coreType); err != nil {
+			if previousCoreDisabled {
+				if rollbackErr := rollbackGatewayChange(coreType, otherCore, false, true); rollbackErr != nil {
+					err = fmt.Errorf("enable %s Gateway Mode: %w; rollback failed: %v", coreType, err, rollbackErr)
+				} else {
+					err = fmt.Errorf("enable %s Gateway Mode: %w; previous %s Gateway Mode restored", coreType, err, otherCore)
+				}
+			}
 			payload, _ := a.statusPayload()
 			jsonObj(c, payload, err)
 			return
 		}
+		currentEnabledByRequest = true
 		changed = true
 	}
 
 	// A manually stopped core must stay stopped. Repeated enable requests are
 	// idempotent and do not restart an unchanged core process.
-	if changed && a.xrayService.IsXrayRunning() {
-		if err := a.xrayService.RestartXray(false); err != nil {
+	if changed && wasRunning {
+		if restartErr := a.xrayService.RestartXray(false); restartErr != nil {
+			rollbackErr := rollbackGatewayChange(coreType, otherCore, currentEnabledByRequest, previousCoreDisabled)
+			if rollbackErr != nil {
+				payload, _ := a.statusPayload()
+				jsonObj(c, payload, fmt.Errorf("apply %s Gateway Mode restart failed: %v; rollback failed: %w", coreType, restartErr, rollbackErr))
+				return
+			}
+
+			// The process was running before this request. Once the templates are
+			// restored, reconcile the runtime again so a failed/partial hot reload
+			// cannot leave it serving the attempted Gateway configuration.
+			if restoreErr := a.xrayService.RestartXray(false); restoreErr != nil {
+				payload, _ := a.statusPayload()
+				jsonObj(c, payload, fmt.Errorf("apply %s Gateway Mode restart failed: %v; config rollback succeeded but runtime restore failed: %w", coreType, restartErr, restoreErr))
+				return
+			}
+
 			payload, _ := a.statusPayload()
-			jsonObj(c, payload, fmt.Errorf("Gateway Mode was enabled, but %s restart failed: %w", coreType, err))
+			jsonObj(c, payload, fmt.Errorf("apply %s Gateway Mode restart failed and the Gateway configuration was rolled back: %w", coreType, restartErr))
 			return
 		}
 	}
