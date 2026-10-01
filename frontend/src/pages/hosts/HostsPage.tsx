@@ -28,10 +28,23 @@ import {
 import AppSidebar from '@/layouts/AppSidebar';
 import { setMessageInstance } from '@/utils/messageBus';
 import type { BulkAddHostValues } from '@/schemas/api/host';
+import type { ProxyPresetPreviewItem } from '@/schemas/api/proxyPreset';
 import HostList, { sortHosts } from './HostList';
 import HostFormModal from './HostFormModal';
 import ProxyBundleControls from './ProxyBundleControls';
 import ProxyPresetManagerModal from './ProxyPresetManagerModal';
+import ProxyPresetPreviewModal from './ProxyPresetPreviewModal';
+
+interface PendingPresetPreview {
+  groupIds: string[];
+  presetId: number;
+  presetName: string;
+  items: ProxyPresetPreviewItem[];
+}
+
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 export default function HostsPage() {
   const { t } = useTranslation();
@@ -49,13 +62,14 @@ export default function HostsPage() {
   const { data: inboundOptions = [] } = useInboundOptions();
   const { data: presets = [], isFetching: presetsLoading } = useProxyPresetsQuery();
   const { data: assignments = [] } = useProxyPresetAssignmentsQuery();
-  const { assignMany } = useProxyPresetMutations();
+  const { assignMany, preview, assigning } = useProxyPresetMutations();
 
   const [formOpen, setFormOpen] = useState(false);
   const [formMode, setFormMode] = useState<'add' | 'edit'>('add');
   const [formHost, setFormHost] = useState<HostRecord | null>(null);
   const [presetsOpen, setPresetsOpen] = useState(false);
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
+  const [presetPreview, setPresetPreview] = useState<PendingPresetPreview | null>(null);
 
   const onAdd = useCallback(() => {
     setFormMode('add');
@@ -144,12 +158,40 @@ export default function HostsPage() {
   const onAssignPreset = useCallback(
     async (groupIds: string[], presetId: number | null) => {
       if (groupIds.length === 0) return;
-      await assignMany(groupIds, presetId);
-      messageApi.success(t('success'));
-      setSelectedGroupIds([]);
+      try {
+        if (presetId == null) {
+          await assignMany(groupIds, null);
+          messageApi.success(t('success'));
+          setSelectedGroupIds([]);
+          return;
+        }
+        const preset = presets.find((item) => item.id === presetId);
+        if (!preset) throw new Error('Proxy preset not found');
+        const items = await preview(groupIds, presetId);
+        setPresetPreview({
+          groupIds: [...groupIds],
+          presetId,
+          presetName: preset.name,
+          items,
+        });
+      } catch (error) {
+        messageApi.error(errorText(error));
+      }
     },
-    [assignMany, messageApi, t],
+    [assignMany, messageApi, presets, preview, t],
   );
+
+  const applyPresetPreview = useCallback(async () => {
+    if (!presetPreview) return;
+    try {
+      await assignMany(presetPreview.groupIds, presetPreview.presetId);
+      messageApi.success(t('success'));
+      setPresetPreview(null);
+      setSelectedGroupIds([]);
+    } catch (error) {
+      messageApi.error(errorText(error));
+    }
+  }, [assignMany, messageApi, presetPreview, t]);
 
   const summary = useMemo(() => {
     const total = hosts.length;
@@ -262,6 +304,14 @@ export default function HostsPage() {
           presets={presets}
           loading={presetsLoading}
           onOpenChange={setPresetsOpen}
+        />
+        <ProxyPresetPreviewModal
+          open={presetPreview !== null}
+          presetName={presetPreview?.presetName ?? ''}
+          items={presetPreview?.items ?? []}
+          confirming={assigning}
+          onCancel={() => setPresetPreview(null)}
+          onApply={applyPresetPreview}
         />
       </Layout>
     </ConfigProvider>
