@@ -64,6 +64,17 @@ func gatewayInbound() map[string]any {
 	}
 }
 
+func decodeXrayTemplate(raw string) (map[string]any, error) {
+	var cfg map[string]any
+	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
+		return nil, fmt.Errorf("parse Xray template: %w", err)
+	}
+	if cfg == nil {
+		return nil, fmt.Errorf("parse Xray template: top-level JSON value must be an object")
+	}
+	return cfg, nil
+}
+
 func loadTemplate() (map[string]any, string, error) {
 	if err := database.InitDB(config.GetDBPath()); err != nil {
 		return nil, "", fmt.Errorf("initialize database: %w", err)
@@ -75,9 +86,9 @@ func loadTemplate() (map[string]any, string, error) {
 		return nil, "", fmt.Errorf("get Xray template: %w", err)
 	}
 
-	var cfg map[string]any
-	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
-		return nil, "", fmt.Errorf("parse Xray template: %w", err)
+	cfg, err := decodeXrayTemplate(raw)
+	if err != nil {
+		return nil, "", err
 	}
 
 	return cfg, raw, nil
@@ -329,7 +340,7 @@ func hasLegacyGatewayArtifacts(cfg map[string]any) bool {
 					return true
 				}
 			}
-	}
+		}
 	}
 	return false
 }
