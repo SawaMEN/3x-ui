@@ -107,6 +107,8 @@ func (a *SettingController) initRouter(g *gin.RouterGroup) {
 	g.GET("/singbox/config", a.singBoxConfig)
 	g.POST("/singbox/config", a.saveSingBoxConfig)
 	g.POST("/singbox/config/reset", a.resetSingBoxConfig)
+	g.GET("/singbox/connections", a.singBoxConnections)
+	g.POST("/singbox/connections/:id/close", a.closeSingBoxConnection)
 	g.GET("/swap/status", a.swapStatus)
 	g.POST("/swap/zram/install", a.installZram)
 	g.POST("/swap/zram/reinstall", a.reinstallZram)
