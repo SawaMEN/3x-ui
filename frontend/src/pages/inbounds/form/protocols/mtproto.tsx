@@ -22,26 +22,6 @@ export default function MtprotoFields() {
         <Input placeholder="www.cloudflare.com" />
       </FormField>
       <FormField
-        name={['settings', 'domainFronting', 'ip']}
-        label={t('pages.inbounds.form.mtgDomainFrontingIp')}
-        tooltip={t('pages.inbounds.form.mtgDomainFrontingHint')}
-      >
-        <Input placeholder="127.0.0.1" />
-      </FormField>
-      <FormField
-        name={['settings', 'domainFronting', 'port']}
-        label={t('pages.inbounds.form.mtgDomainFrontingPort')}
-      >
-        <InputNumber min={0} max={65535} placeholder="443" style={{ width: '100%' }} />
-      </FormField>
-      <FormField
-        name={['settings', 'domainFronting', 'proxyProtocol']}
-        label={t('pages.inbounds.form.mtgDomainFrontingProxyProtocol')}
-        valueProp="checked"
-      >
-        <Switch />
-      </FormField>
-      <FormField
         name={['settings', 'proxyProtocolListener']}
         label={t('pages.inbounds.form.mtgProxyProtocolListener')}
         valueProp="checked"
