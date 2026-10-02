@@ -282,6 +282,20 @@ func ensureActionFor(running bool, curStructFP, curSecretsFP, newStructFP, newSe
 	return ensureNoop
 }
 
+// stopManaged treats an already-exited process as stopped, but never lets the
+// manager forget a sidecar that Stop failed to terminate. Keeping the entry and
+// its config makes the next reconcile retry the stop instead of starting a
+// second Telemt process on the same listener.
+func stopManaged(cur *managed) error {
+	if cur == nil || cur.proc == nil || !cur.proc.IsRunning() {
+		return nil
+	}
+	if err := cur.proc.Stop(); err != nil && cur.proc.IsRunning() {
+		return err
+	}
+	return nil
+}
+
 func (m *Manager) ensureLocked(inst Instance) error {
 	structFP, secFP := inst.structuralFingerprint(), inst.secretsFingerprint()
 	if cur, ok := m.procs[inst.Id]; ok {
@@ -302,7 +316,9 @@ func (m *Manager) ensureLocked(inst Instance) error {
 			logger.Warningf("mtproto: Telemt reload failed for inbound %d, restarting", inst.Id)
 			fallthrough
 		case ensureRestart:
-			_ = cur.proc.Stop()
+			if err := stopManaged(cur); err != nil {
+				return fmt.Errorf("mtproto: stop Telemt for inbound %d before restart: %w", inst.Id, err)
+			}
 			delete(m.procs, inst.Id)
 		}
 	}
@@ -340,7 +356,10 @@ func (m *Manager) Remove(id int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if cur, ok := m.procs[id]; ok {
-		_ = cur.proc.Stop()
+		if err := stopManaged(cur); err != nil {
+			logger.Errorf("mtproto: failed to stop Telemt for inbound %d: %v", id, err)
+			return
+		}
 		delete(m.procs, id)
 		logger.Infof("mtproto: stopped Telemt for inbound %d", id)
 	}
@@ -390,7 +409,10 @@ func (m *Manager) Reconcile(desired []Instance) {
 	}
 	for id, cur := range m.procs {
 		if _, ok := want[id]; !ok {
-			_ = cur.proc.Stop()
+			if err := stopManaged(cur); err != nil {
+				logger.Warningf("mtproto: failed to stop removed inbound %d: %v", id, err)
+				continue
+			}
 			delete(m.procs, id)
 			_ = os.Remove(configPathForID(id))
 		}
@@ -410,7 +432,10 @@ func (m *Manager) StopAll() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for id, cur := range m.procs {
-		_ = cur.proc.Stop()
+		if err := stopManaged(cur); err != nil {
+			logger.Warningf("mtproto: failed to stop Telemt for inbound %d during shutdown: %v", id, err)
+			continue
+		}
 		_ = os.Remove(configPathForID(id))
 		delete(m.procs, id)
 	}
