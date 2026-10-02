@@ -137,7 +137,8 @@ func EnsureSudokuCredentials(inboundID int) error {
 	}
 
 	changed := false
-	if !sudoku.ValidPrivateKey(masterPrivate) {
+	masterRotated := !sudoku.ValidPrivateKey(masterPrivate) || !sudoku.ValidPrivateKey(settings.Key)
+	if masterRotated {
 		publicKey, privateKey, keyErr := sudoku.GenerateMasterKey(ctx, binary)
 		if keyErr != nil {
 			return keyErr
@@ -146,30 +147,12 @@ func EnsureSudokuCredentials(inboundID int) error {
 		masterPrivate = privateKey
 		if err := sudoku.WriteMasterKey(binDir, inboundID, masterPrivate); err != nil {
 			return err
-		}
-		changed = true
-	} else if strings.TrimSpace(settings.Key) == "" {
-		publicKey, privateKey, keyErr := sudoku.GenerateMasterKey(ctx, binary)
-		if keyErr != nil {
-			return keyErr
-		}
-		settings.Key = publicKey
-		masterPrivate = privateKey
-		if err := sudoku.WriteMasterKey(binDir, inboundID, masterPrivate); err != nil {
-			return err
-		}
-		for i := range settings.Clients {
-			splitKey, keyErr := sudoku.GenerateSplitKey(ctx, binary, masterPrivate)
-			if keyErr != nil {
-				return keyErr
-			}
-			settings.Clients[i].SudokuPrivateKey = splitKey
 		}
 		changed = true
 	}
 
 	for i := range settings.Clients {
-		if sudoku.ValidPrivateKey(settings.Clients[i].SudokuPrivateKey) {
+		if !masterRotated && sudoku.ValidPrivateKey(settings.Clients[i].SudokuPrivateKey) {
 			continue
 		}
 		splitKey, keyErr := sudoku.GenerateSplitKey(ctx, binary, masterPrivate)
