@@ -18,7 +18,7 @@ arch_name() {
 }
 
 get_latest_tag() {
-  curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -o /dev/null -w "%{redirect_url}" "https://github.com/${REPO}/releases/latest" | sed -n "s#.*/releases/tag/##p"
+  curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -o /dev/null -w "%{url_effective}" "https://github.com/${REPO}/releases/latest" | sed -n "s#.*/releases/tag/##p"
 }
 
 download_latest() {
@@ -75,7 +75,7 @@ main() {
   arch="$(arch_name)"
   [[ "$arch" != "unsupported" ]] || { echo "unsupported CPU architecture" >&2; exit 1; }
   tag="$(get_latest_tag)"
-  [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "invalid latest Telemt tag: $tag" >&2; exit 1; }
+  [[ "$tag" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "invalid latest Telemt tag: $tag" >&2; exit 1; }
   current="$(current_version || true)"
   if [[ "${1:-}" == "--check" ]]; then
     echo "current=${current:-unknown}"

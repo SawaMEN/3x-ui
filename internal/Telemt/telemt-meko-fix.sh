@@ -87,25 +87,6 @@ ensure_u32() {
     iptables -m u32 --help >/dev/null 2>&1
 }
 
-get_ssh_port() {
-    local p=""
-    if command -v sshd >/dev/null 2>&1; then
-        p="$(sshd -T 2>/dev/null | awk '$1=="port" {print $2; exit}' || true)"
-    fi
-    if ! valid_port "$p" && [[ -r /etc/ssh/sshd_config ]]; then
-        p="$(awk 'tolower($1)=="port" && $2 ~ /^[0-9]+$/ {print $2; exit}' /etc/ssh/sshd_config || true)"
-    fi
-    valid_port "$p" || p=22
-    printf '%s\n' "$p"
-}
-
-ensure_ssh_access() {
-    local ssh_port
-    ssh_port="$(get_ssh_port)"
-    iptables -C INPUT -p tcp --dport "$ssh_port" -j ACCEPT 2>/dev/null || \
-        iptables -I INPUT 1 -p tcp --dport "$ssh_port" -j ACCEPT
-}
-
 remove_jump_all() {
     local table="$1" parent="$2" child="$3"
     while iptables -t "$table" -C "$parent" -j "$child" 2>/dev/null; do
@@ -147,7 +128,6 @@ apply() {
         return 0
     fi
 
-    ensure_ssh_access
     ensure_chain filter "$FILTER_CHAIN"
     ensure_chain mangle "$MARK_CHAIN"
 
@@ -160,9 +140,10 @@ apply() {
     for port in "${ports[@]}"; do
         valid_port "$port" || continue
 
+        # Preserve every unrelated fwmark bit. MEKO owns only bit 0x400.
         iptables -t mangle -A "$MARK_CHAIN" -p tcp --dport "$port" -m u32 --u32 "$U32_FILTER" \
-            -j MARK --set-mark "$MARK"
-        iptables -t filter -A "$FILTER_CHAIN" -p tcp --dport "$port" --syn -m mark --mark "$MARK" -j ACCEPT
+            -j MARK --set-xmark "$MARK/$MARK"
+        iptables -t filter -A "$FILTER_CHAIN" -p tcp --dport "$port" --syn -m mark --mark "$MARK/$MARK" -j ACCEPT
 
         iptables -t filter -A "$FILTER_CHAIN" -p tcp --dport "$port" --syn \
             -m hashlimit --hashlimit-name "telemt_meko_${port}" --hashlimit-mode srcip \
