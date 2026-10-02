@@ -16,6 +16,7 @@ const mekoHelperPath = "/usr/local/x-ui/telemt-meko-fix.sh"
 var mekoSync struct {
 	sync.Mutex
 	timer *time.Timer
+	run   sync.Mutex
 }
 
 // scheduleMekoSync coalesces rapid MTProto lifecycle changes (for example an
@@ -38,6 +39,11 @@ func applyMekoRules() {
 	mekoSync.Lock()
 	mekoSync.timer = nil
 	mekoSync.Unlock()
+
+	// iptables updates are transactional only per command. Never let two
+	// sidecar lifecycle events rebuild the managed chains concurrently.
+	mekoSync.run.Lock()
+	defer mekoSync.run.Unlock()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
 	defer cancel()
