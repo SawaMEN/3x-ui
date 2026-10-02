@@ -63,7 +63,7 @@ func normalizeSudokuSettings(raw string) (sudokuStoredSettings, error) {
 		ASCII:              "prefer_entropy",
 		EnablePureDownlink: true,
 		Multiplex:          "off",
-		HTTPMask:           sudokuHTTPMaskSettings{Mode: "legacy"},
+		HTTPMask:           sudokuHTTPMaskSettings{Mode: "auto"},
 	}
 	if strings.TrimSpace(raw) != "" {
 		if err := json.Unmarshal([]byte(raw), &settings); err != nil {
@@ -99,7 +99,7 @@ func normalizeSudokuSettings(raw string) (sudokuStoredSettings, error) {
 	}
 	settings.HTTPMask.Multiplex = settings.Multiplex
 	if settings.HTTPMask.Mode == "" {
-		settings.HTTPMask.Mode = "legacy"
+		settings.HTTPMask.Mode = "auto"
 	}
 	return settings, nil
 }
