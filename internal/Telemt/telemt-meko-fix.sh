@@ -7,10 +7,18 @@ FILTER_CHAIN="TELEMT_MEKO"
 MARK_CHAIN="TELEMT_MEKO_MARK"
 MARK="0x400"
 U32_FILTER="32 & 0x000FFFFF = 0x0002FFFF && 40 & 0xFF000000 = 0x02000000 && 44 & 0xFFFF0000 = 0x01030000 && 48 & 0xFFFFFF00 = 0x01010800 && 60 & 0xFFFFFFFF = 0x04020000"
+ENABLED="${TELEMT_MEKO_ENABLED:-0}"
 RATE="${TELEMT_MEKO_RATE:-54/minute}"
 BURST="${TELEMT_MEKO_BURST:-1}"
 
 log() { printf '%s\n' "[telemt-meko-fix] $*"; }
+
+enabled() {
+    case "${ENABLED,,}" in
+        1|true|yes|on) return 0 ;;
+        *) return 1 ;;
+    esac
+}
 
 read_port() {
     local config="$1"
@@ -45,8 +53,6 @@ collect_ports() {
         done
         shopt -u nullglob
 
-        # The standalone Telemt page can still host WEB Proxy. Include its
-        # legacy port only while telemt.service is actually running.
         if [[ -r "$LEGACY_CONFIG" ]] && command -v systemctl >/dev/null 2>&1 && \
            systemctl is-active --quiet telemt.service 2>/dev/null; then
             p="$(read_port "$LEGACY_CONFIG" || true)"
@@ -108,6 +114,12 @@ remove() {
 }
 
 apply() {
+    if ! enabled; then
+        remove
+        log "MEKO V3 is disabled by panel settings"
+        return 0
+    fi
+
     command -v iptables >/dev/null 2>&1 || { log "iptables is required"; exit 1; }
     ensure_u32 || { log "xt_u32 is not available; MEKO V3 cannot be enabled"; exit 1; }
 
@@ -122,8 +134,6 @@ apply() {
     ensure_chain filter "$FILTER_CHAIN"
     ensure_chain mangle "$MARK_CHAIN"
 
-    # Own the jumps explicitly. Recreate them so stale/duplicate rules from an
-    # interrupted previous apply cannot change ordering or accumulate forever.
     remove_jump_all filter INPUT "$FILTER_CHAIN"
     remove_jump_all mangle PREROUTING "$MARK_CHAIN"
     iptables -t mangle -I PREROUTING 1 -j "$MARK_CHAIN"
@@ -133,15 +143,10 @@ apply() {
     for port in "${ports[@]}"; do
         valid_port "$port" || continue
 
-        # MEKO V3 fingerprint: mark the characteristic iOS SYN and allow it
-        # without the generic per-source SYN limiter.
         iptables -t mangle -A "$MARK_CHAIN" -p tcp --dport "$port" -m u32 --u32 "$U32_FILTER" \
             -j MARK --set-mark "$MARK"
         iptables -t filter -A "$FILTER_CHAIN" -p tcp --dport "$port" --syn -m mark --mark "$MARK" -j ACCEPT
 
-        # Original MEKO V3 policy for all other clients: 54 SYN/min/IP, burst 1,
-        # then an immediate TCP reset. Rate/burst can be overridden by the panel
-        # service environment without modifying the script.
         iptables -t filter -A "$FILTER_CHAIN" -p tcp --dport "$port" --syn \
             -m hashlimit --hashlimit-name "telemt_meko_${port}" --hashlimit-mode srcip \
             --hashlimit-upto "$RATE" --hashlimit-burst "$BURST" \
@@ -171,6 +176,7 @@ status() {
         fi
     fi
     mapfile -t ports < <(collect_ports)
+    printf 'enabled=%s\n' "$(enabled && echo true || echo false)"
     printf 'installed=%s\n' "$installed"
     printf 'ports=%s\n' "$(IFS=,; echo "${ports[*]:-}")"
     printf 'applied_ports=%s\n' "$(IFS=,; echo "${applied_ports[*]:-}")"
