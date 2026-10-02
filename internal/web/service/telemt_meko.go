@@ -257,16 +257,19 @@ func ensureTelemtMekoAssets() error {
 			return err
 		}
 	}
-	if _, err := os.Stat(telemtMekoUnitPath); errors.Is(err, os.ErrNotExist) {
-		data, readErr := os.ReadFile(telemtMekoBundledUnitPath)
-		if readErr != nil {
-			return fmt.Errorf("telemt meko: service unit is missing: %w", readErr)
+
+	bundled, err := os.ReadFile(telemtMekoBundledUnitPath)
+	if err != nil {
+		return fmt.Errorf("telemt meko: service unit is missing: %w", err)
+	}
+	installed, readErr := os.ReadFile(telemtMekoUnitPath)
+	if readErr != nil && !errors.Is(readErr, os.ErrNotExist) {
+		return fmt.Errorf("telemt meko: read installed service unit: %w", readErr)
+	}
+	if errors.Is(readErr, os.ErrNotExist) || string(installed) != string(bundled) {
+		if err := os.WriteFile(telemtMekoUnitPath, bundled, 0o644); err != nil {
+			return fmt.Errorf("telemt meko: install service unit: %w", err)
 		}
-		if writeErr := os.WriteFile(telemtMekoUnitPath, data, 0o644); writeErr != nil {
-			return fmt.Errorf("telemt meko: install service unit: %w", writeErr)
-		}
-	} else if err != nil {
-		return err
 	}
 	return systemctl("daemon-reload")
 }
@@ -291,11 +294,22 @@ func (TelemtService) SaveMekoConfig(cfg TelemtMekoConfig) error {
 		return nil
 	}
 
-	_ = systemctl("disable", "--now", telemtMekoServiceName)
-	if _, err := os.Stat(telemtMekoScriptPath); err == nil {
-		_, _ = runTelemtMekoScript("remove", cfg)
+	var errs []error
+	if _, err := os.Stat(telemtMekoUnitPath); err == nil {
+		if err := systemctl("disable", "--now", telemtMekoServiceName); err != nil {
+			errs = append(errs, fmt.Errorf("telemt meko: disable failed: %w", err))
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		errs = append(errs, fmt.Errorf("telemt meko: inspect service unit: %w", err))
 	}
-	return nil
+	if _, err := os.Stat(telemtMekoScriptPath); err == nil {
+		if _, err := runTelemtMekoScript("remove", cfg); err != nil {
+			errs = append(errs, err)
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		errs = append(errs, fmt.Errorf("telemt meko: inspect fix script: %w", err))
+	}
+	return errors.Join(errs...)
 }
 
 func sameMekoPorts(a, b []int) bool {
@@ -318,7 +332,8 @@ func (TelemtService) RefreshMekoFix() error {
 	cfg := TelemtService{}.GetMekoConfig()
 	if !cfg.Enabled {
 		if cfg.Applied {
-			_, _ = runTelemtMekoScript("remove", cfg)
+			_, err := runTelemtMekoScript("remove", cfg)
+			return err
 		}
 		return nil
 	}

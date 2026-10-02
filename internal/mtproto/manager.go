@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -65,9 +66,6 @@ func (inst Instance) structuralFingerprint() string {
 		strconv.FormatBool(inst.Debug),
 		strconv.FormatBool(inst.ProxyProtocolListener),
 		inst.PreferIP,
-		inst.FrontingIP,
-		strconv.Itoa(inst.FrontingPort),
-		strconv.FormatBool(inst.FrontingProxyProtocol),
 		strconv.Itoa(inst.ThrottleMaxConnections),
 		strconv.FormatBool(inst.RouteThroughXray),
 		strconv.Itoa(inst.XrayRoutePort),
@@ -155,6 +153,14 @@ func decodeLegacySecret(secret string) (raw, domain string) {
 	return s, ""
 }
 
+func validRawSecret(secret string) bool {
+	if len(secret) != 32 {
+		return false
+	}
+	_, err := hex.DecodeString(secret)
+	return err == nil
+}
+
 func InstanceFromInbound(ib *model.Inbound) (Instance, bool) {
 	if ib == nil || ib.Protocol != model.MTProto {
 		return Instance{}, false
@@ -194,7 +200,7 @@ func InstanceFromInbound(ib *model.Inbound) (Instance, bool) {
 			continue
 		}
 		raw, embeddedDomain := decodeLegacySecret(c.Secret)
-		if len(raw) != 32 {
+		if !validRawSecret(raw) {
 			continue
 		}
 		if domain == "" && embeddedDomain != "" {
@@ -336,9 +342,42 @@ func (m *Manager) Remove(id int) {
 	if cur, ok := m.procs[id]; ok {
 		_ = cur.proc.Stop()
 		delete(m.procs, id)
-		_ = os.Remove(configPathForID(id))
 		logger.Infof("mtproto: stopped Telemt for inbound %d", id)
 	}
+	if err := os.Remove(configPathForID(id)); err == nil {
+		scheduleMekoSync()
+	}
+}
+
+func configIDFromPath(path string) (int, bool) {
+	name := filepath.Base(path)
+	if !strings.HasPrefix(name, "telemt-") || !strings.HasSuffix(name, ".toml") {
+		return 0, false
+	}
+	rawID := strings.TrimSuffix(strings.TrimPrefix(name, "telemt-"), ".toml")
+	id, err := strconv.Atoi(rawID)
+	return id, err == nil && id > 0
+}
+
+func removeStaleConfigs(want map[int]struct{}) int {
+	files, err := filepath.Glob(filepath.Join(configDir(), "telemt-*.toml"))
+	if err != nil {
+		return 0
+	}
+	removed := 0
+	for _, path := range files {
+		id, ok := configIDFromPath(path)
+		if !ok {
+			continue
+		}
+		if _, keep := want[id]; keep {
+			continue
+		}
+		if err := os.Remove(path); err == nil {
+			removed++
+		}
+	}
+	return removed
 }
 
 func (m *Manager) Reconcile(desired []Instance) {
@@ -355,6 +394,10 @@ func (m *Manager) Reconcile(desired []Instance) {
 			delete(m.procs, id)
 			_ = os.Remove(configPathForID(id))
 		}
+	}
+	if n := removeStaleConfigs(want); n > 0 {
+		logger.Infof("mtproto: removed %d stale Telemt config(s)", n)
+		scheduleMekoSync()
 	}
 	for _, i := range desired {
 		if err := m.ensureLocked(i); err != nil {
@@ -625,18 +668,76 @@ func authorize(req *http.Request, token string) {
 	}
 }
 
+type telemtReloadEnvelope struct {
+	OK   bool `json:"ok"`
+	Data struct {
+		ReloadID uint64 `json:"reload_id"`
+		State    string `json:"state"`
+	} `json:"data"`
+}
+
 func reloadTelemt(port int, token string) bool {
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, fmt.Sprintf("http://127.0.0.1:%d/v1/system/reload", port), nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	client := &http.Client{Timeout: 4 * time.Second}
+	baseURL := fmt.Sprintf("http://127.0.0.1:%d", port)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/v1/system/reload", nil)
 	if err != nil {
 		return false
 	}
 	authorize(req, token)
-	resp, err := (&http.Client{Timeout: 4 * time.Second}).Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return false
 	}
-	defer resp.Body.Close()
-	return resp.StatusCode == http.StatusAccepted || resp.StatusCode == http.StatusOK
+	var accepted telemtReloadEnvelope
+	decodeErr := json.NewDecoder(resp.Body).Decode(&accepted)
+	_ = resp.Body.Close()
+	if resp.StatusCode == http.StatusOK && decodeErr != nil {
+		// Compatibility with old Telemt builds where reload was synchronous and
+		// returned an empty 200 response.
+		return true
+	}
+	if (resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusOK) || decodeErr != nil || !accepted.OK {
+		return false
+	}
+	if accepted.Data.ReloadID == 0 {
+		return resp.StatusCode == http.StatusOK
+	}
+
+	statusURL := fmt.Sprintf("%s/v1/system/reload/%d", baseURL, accepted.Data.ReloadID)
+	for {
+		statusReq, err := http.NewRequestWithContext(ctx, http.MethodGet, statusURL, nil)
+		if err != nil {
+			return false
+		}
+		authorize(statusReq, token)
+		statusResp, err := client.Do(statusReq)
+		if err != nil {
+			return false
+		}
+		var status telemtReloadEnvelope
+		decodeErr := json.NewDecoder(statusResp.Body).Decode(&status)
+		_ = statusResp.Body.Close()
+		if statusResp.StatusCode != http.StatusOK || decodeErr != nil || !status.OK {
+			return false
+		}
+		switch strings.ToLower(status.Data.State) {
+		case "succeeded":
+			return true
+		case "failed", "rolled_back":
+			return false
+		case "accepted", "preparing", "activating", "draining":
+		default:
+			return false
+		}
+		select {
+		case <-ctx.Done():
+			return false
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
 }
 
 type secretPutEntry struct {

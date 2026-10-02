@@ -37,6 +37,34 @@ enabled() {
     esac
 }
 
+normalize_rate() {
+    local value="$1" number
+    case "$value" in
+        */minute) number="${value%/minute}" ;;
+        */min) number="${value%/min}" ;;
+        *) number="$value" ;;
+    esac
+    [[ "$number" =~ ^[0-9]+$ ]] || return 1
+    (( 10#$number >= 1 && 10#$number <= 60000 )) || return 1
+    printf '%d/minute\n' "$((10#$number))"
+}
+
+normalize_burst() {
+    local value="$1"
+    [[ "$value" =~ ^[0-9]+$ ]] || return 1
+    (( 10#$value >= 1 && 10#$value <= 1000 )) || return 1
+    printf '%d\n' "$((10#$value))"
+}
+
+if ! RATE="$(normalize_rate "$RATE")"; then
+    log "Invalid TELEMT_MEKO_RATE: $RATE"
+    exit 2
+fi
+if ! BURST="$(normalize_burst "$BURST")"; then
+    log "Invalid TELEMT_MEKO_BURST: $BURST"
+    exit 2
+fi
+
 read_port() {
     local config="$1"
     awk '
@@ -165,8 +193,10 @@ apply() {
             -j MARK --set-xmark "$MARK/$MARK"
         iptables -t filter -A "$FILTER_CHAIN" -p tcp --dport "$port" --syn -m mark --mark "$MARK/$MARK" -j ACCEPT
 
+        # xt_hashlimit stores names in an IFNAMSIZ-sized field (15 visible
+        # characters on Linux). Keep the per-port name short even for 65535.
         iptables -t filter -A "$FILTER_CHAIN" -p tcp --dport "$port" --syn \
-            -m hashlimit --hashlimit-name "telemt_meko_${port}" --hashlimit-mode srcip \
+            -m hashlimit --hashlimit-name "tm_${port}" --hashlimit-mode srcip \
             --hashlimit-upto "$RATE" --hashlimit-burst "$BURST" \
             --hashlimit-htable-expire 60000 --hashlimit-htable-size 32768 -j ACCEPT
         iptables -t filter -A "$FILTER_CHAIN" -p tcp --dport "$port" --syn \

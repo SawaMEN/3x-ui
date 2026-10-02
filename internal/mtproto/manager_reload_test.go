@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -100,18 +101,53 @@ func TestEnsureActionFor(t *testing.T) {
 	}
 }
 
-func TestReloadTelemt(t *testing.T) {
-	var method, path, auth string
+func TestReloadTelemtWaitsForRuntimeActivation(t *testing.T) {
+	var polls atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		method, path, auth = r.Method, r.URL.Path, r.Header.Get("Authorization")
-		w.WriteHeader(http.StatusAccepted)
+		if got := r.Header.Get("Authorization"); got != "Bearer sesame" {
+			t.Errorf("bad auth header: %q", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/system/reload":
+			w.WriteHeader(http.StatusAccepted)
+			_, _ = fmt.Fprint(w, `{"ok":true,"data":{"reload_id":7,"state":"accepted"}}`)
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/system/reload/7":
+			state := "activating"
+			if polls.Add(1) >= 2 {
+				state = "succeeded"
+			}
+			_, _ = fmt.Fprintf(w, `{"ok":true,"data":{"reload_id":7,"state":%q}}`, state)
+		default:
+			http.NotFound(w, r)
+		}
 	}))
 	defer srv.Close()
 	if !reloadTelemt(serverPort(t, srv), "sesame") {
-		t.Fatal("reload should accept 202")
+		t.Fatal("reload should succeed only after terminal succeeded state")
 	}
-	if method != http.MethodPost || path != "/v1/system/reload" || auth != "Bearer sesame" {
-		t.Fatalf("bad reload request: %s %s %q", method, path, auth)
+	if polls.Load() < 2 {
+		t.Fatalf("expected reload status polling, polls=%d", polls.Load())
+	}
+}
+
+func TestReloadTelemtRejectsFailedActivation(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodPost && r.URL.Path == "/v1/system/reload" {
+			w.WriteHeader(http.StatusAccepted)
+			_, _ = fmt.Fprint(w, `{"ok":true,"data":{"reload_id":9,"state":"accepted"}}`)
+			return
+		}
+		if r.Method == http.MethodGet && r.URL.Path == "/v1/system/reload/9" {
+			_, _ = fmt.Fprint(w, `{"ok":true,"data":{"reload_id":9,"state":"failed"}}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+	if reloadTelemt(serverPort(t, srv), "sesame") {
+		t.Fatal("failed runtime activation must not be reported as successful reload")
 	}
 }
 
@@ -127,9 +163,15 @@ func TestEnsureHotReloadKeepsProcess(t *testing.T) {
 	token := mgr.procs[1].apiToken
 	reloaded := make(chan struct{}, 1)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
 		if r.Method == http.MethodPost && r.URL.Path == "/v1/system/reload" {
 			reloaded <- struct{}{}
 			w.WriteHeader(http.StatusAccepted)
+			_, _ = fmt.Fprint(w, `{"ok":true,"data":{"reload_id":11,"state":"accepted"}}`)
+			return
+		}
+		if r.Method == http.MethodGet && r.URL.Path == "/v1/system/reload/11" {
+			_, _ = fmt.Fprint(w, `{"ok":true,"data":{"reload_id":11,"state":"succeeded"}}`)
 			return
 		}
 		http.NotFound(w, r)
@@ -182,4 +224,32 @@ func TestEnsureReloadFallbackRestarts(t *testing.T) {
 	}
 	waitSpawnCount(t, pidFile, 2)
 	mgr.StopAll()
+}
+
+func TestRemoveStaleConfigs(t *testing.T) {
+	binDir := t.TempDir()
+	t.Setenv("XUI_BIN_FOLDER", binDir)
+	if err := os.MkdirAll(configDir(), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	stale := configPathForID(1)
+	keep := configPathForID(2)
+	foreign := filepath.Join(configDir(), "telemt-bad.toml")
+	for _, path := range []string{stale, keep, foreign} {
+		if err := os.WriteFile(path, []byte("test"), 0o640); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := removeStaleConfigs(map[int]struct{}{2: {}}); got != 1 {
+		t.Fatalf("removed=%d want=1", got)
+	}
+	if _, err := os.Stat(stale); !os.IsNotExist(err) {
+		t.Fatalf("stale config still exists: %v", err)
+	}
+	if _, err := os.Stat(keep); err != nil {
+		t.Fatalf("wanted config was removed: %v", err)
+	}
+	if _, err := os.Stat(foreign); err != nil {
+		t.Fatalf("unrecognized config must be left untouched: %v", err)
+	}
 }
