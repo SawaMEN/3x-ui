@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
@@ -311,18 +312,43 @@ func writeCandidateConfig(binDir string, id int, cfg Config) (string, error) {
 func promoteConfig(candidate, finalPath string) error {
 	if err := os.Rename(candidate, finalPath); err == nil {
 		return nil
-	} else {
-		// Windows cannot replace an existing destination with Rename. The normal
-		// Linux path above remains atomic; on Windows rollback will restore it if
-		// the second rename fails.
-		if removeErr := os.Remove(finalPath); removeErr != nil && !os.IsNotExist(removeErr) {
-			return err
-		}
-		if retryErr := os.Rename(candidate, finalPath); retryErr != nil {
-			return retryErr
-		}
-		return nil
+	} else if runtime.GOOS != "windows" {
+		return err
 	}
+
+	// Windows cannot atomically replace an existing destination with Rename.
+	// Move the previous config aside first so a failed promotion can restore it.
+	dir := filepath.Dir(finalPath)
+	backupFile, err := os.CreateTemp(dir, ".sudoku-config-backup-*")
+	if err != nil {
+		return err
+	}
+	backupPath := backupFile.Name()
+	if err := backupFile.Close(); err != nil {
+		_ = os.Remove(backupPath)
+		return err
+	}
+	if err := os.Remove(backupPath); err != nil {
+		return err
+	}
+	defer os.Remove(backupPath)
+
+	hadPrevious := false
+	if err := os.Rename(finalPath, backupPath); err == nil {
+		hadPrevious = true
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+
+	if err := os.Rename(candidate, finalPath); err != nil {
+		if hadPrevious {
+			if restoreErr := os.Rename(backupPath, finalPath); restoreErr != nil {
+				return fmt.Errorf("replace config: %w; restore previous config: %v", err, restoreErr)
+			}
+		}
+		return err
+	}
+	return nil
 }
 
 func restoreConfig(path string, data []byte) error {
