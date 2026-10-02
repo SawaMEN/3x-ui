@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -104,6 +105,38 @@ func normalizeSudokuSettings(raw string) (sudokuStoredSettings, error) {
 	return settings, nil
 }
 
+func activeSudokuClientRoster(clients []model.Client) []string {
+	seen := make(map[string]struct{}, len(clients))
+	roster := make([]string, 0, len(clients))
+	for _, client := range clients {
+		if !client.Enable {
+			continue
+		}
+		identity := strings.ToLower(strings.TrimSpace(client.Email))
+		if identity == "" {
+			continue
+		}
+		if _, ok := seen[identity]; ok {
+			continue
+		}
+		seen[identity] = struct{}{}
+		roster = append(roster, identity)
+	}
+	sort.Strings(roster)
+	return roster
+}
+
+func sudokuRosterSet(roster []string) map[string]struct{} {
+	set := make(map[string]struct{}, len(roster))
+	for _, item := range roster {
+		item = strings.ToLower(strings.TrimSpace(item))
+		if item != "" {
+			set[item] = struct{}{}
+		}
+	}
+	return set
+}
+
 func EnsureSudokuCredentials(inboundID int) error {
 	sudokuCredentialsMu.Lock()
 	defer sudokuCredentialsMu.Unlock()
@@ -136,8 +169,32 @@ func EnsureSudokuCredentials(inboundID int) error {
 		return readErr
 	}
 
+	currentRoster := activeSudokuClientRoster(settings.Clients)
+	previousRoster, rosterErr := sudoku.ReadClientRoster(binDir, inboundID)
+	rosterMissing := sudoku.ClientRosterMissing(rosterErr)
+	if rosterErr != nil && !rosterMissing {
+		return rosterErr
+	}
+	previousSet := sudokuRosterSet(previousRoster)
+	currentSet := sudokuRosterSet(currentRoster)
+
+	credentialsRevoked := false
+	if rosterMissing {
+		// Existing installations had no roster. Rotate once to establish a
+		// trustworthy revocation baseline and invalidate keys belonging to users
+		// that may have been removed before roster tracking existed.
+		credentialsRevoked = sudoku.ValidPrivateKey(masterPrivate) && sudoku.ValidPublicKey(settings.Key)
+	} else {
+		for identity := range previousSet {
+			if _, ok := currentSet[identity]; !ok {
+				credentialsRevoked = true
+				break
+			}
+		}
+	}
+
 	changed := false
-	masterRotated := !sudoku.ValidPrivateKey(masterPrivate) || !sudoku.ValidPrivateKey(settings.Key)
+	masterRotated := !sudoku.ValidPrivateKey(masterPrivate) || !sudoku.ValidPublicKey(settings.Key) || credentialsRevoked
 	if masterRotated {
 		publicKey, privateKey, keyErr := sudoku.GenerateMasterKey(ctx, binary)
 		if keyErr != nil {
@@ -152,14 +209,26 @@ func EnsureSudokuCredentials(inboundID int) error {
 	}
 
 	for i := range settings.Clients {
-		if !masterRotated && sudoku.ValidPrivateKey(settings.Clients[i].SudokuPrivateKey) {
+		client := &settings.Clients[i]
+		identity := strings.ToLower(strings.TrimSpace(client.Email))
+		if !client.Enable {
+			if client.SudokuPrivateKey != "" {
+				client.SudokuPrivateKey = ""
+				changed = true
+			}
+			continue
+		}
+
+		_, knownClient := previousSet[identity]
+		needsKey := masterRotated || rosterMissing || !knownClient || !sudoku.ValidPrivateKey(client.SudokuPrivateKey)
+		if !needsKey {
 			continue
 		}
 		splitKey, keyErr := sudoku.GenerateSplitKey(ctx, binary, masterPrivate)
 		if keyErr != nil {
 			return keyErr
 		}
-		settings.Clients[i].SudokuPrivateKey = splitKey
+		client.SudokuPrivateKey = splitKey
 		changed = true
 	}
 
@@ -173,6 +242,9 @@ func EnsureSudokuCredentials(inboundID int) error {
 			Update("settings", string(data)).Error; err != nil {
 			return err
 		}
+	}
+	if err := sudoku.WriteClientRoster(binDir, inboundID, currentRoster); err != nil {
+		return err
 	}
 	return nil
 }
