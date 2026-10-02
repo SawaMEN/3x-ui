@@ -134,7 +134,11 @@ apply() {
     remove_jump_all filter INPUT "$FILTER_CHAIN"
     remove_jump_all mangle PREROUTING "$MARK_CHAIN"
     iptables -t mangle -I PREROUTING 1 -j "$MARK_CHAIN"
-    iptables -t filter -I INPUT 2 -j "$FILTER_CHAIN"
+    # Upstream MEKO used INPUT position 2 only because it first inserted its
+    # own global SSH ACCEPT rule at position 1. 3x-ui intentionally does not
+    # mutate SSH policy, so the MEKO chain itself must run before any existing
+    # INPUT ACCEPT rule or Telemt SYN packets could bypass the fix entirely.
+    iptables -t filter -I INPUT 1 -j "$FILTER_CHAIN"
 
     local port
     for port in "${ports[@]}"; do
