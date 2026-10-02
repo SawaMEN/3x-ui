@@ -168,6 +168,10 @@ func EnsureSudokuCredentials(inboundID int) error {
 	if readErr != nil && !errors.Is(readErr, os.ErrNotExist) {
 		return readErr
 	}
+	rotationPending, err := sudoku.CredentialRotationPending(binDir, inboundID)
+	if err != nil {
+		return err
+	}
 
 	currentRoster := activeSudokuClientRoster(settings.Clients)
 	previousRoster, rosterErr := sudoku.ReadClientRoster(binDir, inboundID)
@@ -194,24 +198,27 @@ func EnsureSudokuCredentials(inboundID int) error {
 	}
 
 	changed := false
-	masterRotated := !sudoku.ValidPrivateKey(masterPrivate) || !sudoku.ValidPublicKey(settings.Key) || credentialsRevoked
+	masterRotated := rotationPending || !sudoku.ValidPrivateKey(masterPrivate) || !sudoku.ValidPublicKey(settings.Key) || credentialsRevoked
 	if masterRotated {
+		// Persist a recovery marker before changing either side of the
+		// public/private master-key pair. If any later step fails, the next
+		// reconcile will rotate again instead of trusting mismatched state.
+		if err := sudoku.BeginCredentialRotation(binDir, inboundID); err != nil {
+			return err
+		}
 		publicKey, privateKey, keyErr := sudoku.GenerateMasterKey(ctx, binary)
 		if keyErr != nil {
 			return keyErr
 		}
 		settings.Key = publicKey
 		masterPrivate = privateKey
-		if err := sudoku.WriteMasterKey(binDir, inboundID, masterPrivate); err != nil {
-			return err
-		}
 		changed = true
 	}
 
 	for i := range settings.Clients {
 		client := &settings.Clients[i]
 		identity := strings.ToLower(strings.TrimSpace(client.Email))
-		if !client.Enable {
+		if !client.Enable || identity == "" {
 			if client.SudokuPrivateKey != "" {
 				client.SudokuPrivateKey = ""
 				changed = true
@@ -243,8 +250,22 @@ func EnsureSudokuCredentials(inboundID int) error {
 			return err
 		}
 	}
+
+	// Commit the private half only after the database contains the matching
+	// public key and client split keys. The pending marker keeps failures here
+	// recoverable and causes DesiredSudokuInstances to fail closed meanwhile.
+	if masterRotated {
+		if err := sudoku.WriteMasterKey(binDir, inboundID, masterPrivate); err != nil {
+			return err
+		}
+	}
 	if err := sudoku.WriteClientRoster(binDir, inboundID, currentRoster); err != nil {
 		return err
+	}
+	if masterRotated {
+		if err := sudoku.CompleteCredentialRotation(binDir, inboundID); err != nil {
+			return err
+		}
 	}
 	return nil
 }
