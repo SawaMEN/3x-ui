@@ -56,14 +56,17 @@ normalize_burst() {
     printf '%d\n' "$((10#$value))"
 }
 
-if ! RATE="$(normalize_rate "$RATE")"; then
-    log "Invalid TELEMT_MEKO_RATE: $RATE"
-    exit 2
-fi
-if ! BURST="$(normalize_burst "$BURST")"; then
-    log "Invalid TELEMT_MEKO_BURST: $BURST"
-    exit 2
-fi
+normalize_limits() {
+    local raw_rate="$RATE" raw_burst="$BURST"
+    if ! RATE="$(normalize_rate "$raw_rate")"; then
+        log "Invalid TELEMT_MEKO_RATE: $raw_rate"
+        return 2
+    fi
+    if ! BURST="$(normalize_burst "$raw_burst")"; then
+        log "Invalid TELEMT_MEKO_BURST: $raw_burst"
+        return 2
+    fi
+}
 
 read_port() {
     local config="$1"
@@ -159,6 +162,10 @@ apply() {
         log "MEKO V3 is disabled by panel settings"
         return 0
     fi
+
+    # Rate/burst only matter while adding hashlimit rules. Keep cleanup usable
+    # even if the persisted state was edited or corrupted by hand.
+    normalize_limits
 
     command -v iptables >/dev/null 2>&1 || { log "iptables is required"; exit 1; }
     ensure_u32 || { log "xt_u32 is not available; MEKO V3 cannot be enabled"; exit 1; }
