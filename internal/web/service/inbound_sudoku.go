@@ -149,8 +149,6 @@ func EnsureSudokuCredentials(inboundID int) error {
 		}
 		changed = true
 	} else if strings.TrimSpace(settings.Key) == "" {
-		// The public part is intentionally rotated rather than re-implementing
-		// Sudoku's Edwards25519 key math inside the panel.
 		publicKey, privateKey, keyErr := sudoku.GenerateMasterKey(ctx, binary)
 		if keyErr != nil {
 			return keyErr
@@ -197,9 +195,6 @@ func EnsureSudokuCredentials(inboundID int) error {
 }
 
 func DesiredSudokuInstances() ([]sudoku.Instance, error) {
-	if err := DisableUnavailableSudokuInbounds(); err != nil {
-		return nil, err
-	}
 	if !sudoku.IsInstalled(config.GetBinFolderPath()) {
 		return []sudoku.Instance{}, nil
 	}
