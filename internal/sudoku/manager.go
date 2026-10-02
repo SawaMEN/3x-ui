@@ -52,8 +52,8 @@ func (m *Manager) Reconcile(ctx context.Context, desired []Instance) {
 	binDir := config.GetBinFolderPath()
 	if !IsInstalled(binDir) {
 		for id, cur := range m.procs {
-			if cur != nil && cur.proc != nil {
-				_ = cur.proc.Stop()
+			if !m.stopTracked(id, cur, "binary unavailable") {
+				continue
 			}
 			delete(m.procs, id)
 			delete(m.lastErr, id)
@@ -62,6 +62,7 @@ func (m *Manager) Reconcile(ctx context.Context, desired []Instance) {
 		return
 	}
 	binary := GetBinaryPath(binDir)
+	binaryFP := currentBinaryFingerprint(binary)
 
 	want := make(map[int]Instance, len(desired))
 	for _, inst := range desired {
@@ -72,7 +73,9 @@ func (m *Manager) Reconcile(ctx context.Context, desired []Instance) {
 		if _, ok := want[id]; ok {
 			continue
 		}
-		_ = cur.proc.Stop()
+		if !m.stopTracked(id, cur, "inbound removed or disabled") {
+			continue
+		}
 		delete(m.procs, id)
 		delete(m.lastErr, id)
 		_ = os.Remove(configPath(binDir, id))
@@ -81,41 +84,56 @@ func (m *Manager) Reconcile(ctx context.Context, desired []Instance) {
 	for _, inst := range desired {
 		fp := fingerprint(inst.Config)
 		cur := m.procs[inst.ID]
-		if cur != nil && cur.proc != nil && cur.proc.IsRunning() && cur.fingerprint == fp {
-			if currentBinaryFingerprint(binary) == cur.binaryFingerprint {
+		if cur != nil && cur.proc != nil && cur.proc.IsRunning() && cur.fingerprint == fp && cur.binaryFingerprint == binaryFP {
+			continue
+		}
+
+		if cur != nil {
+			if !m.stopTracked(inst.ID, cur, "restart") {
 				continue
 			}
-			_ = cur.proc.Stop()
 			delete(m.procs, inst.ID)
 		}
-		if cur != nil {
-			_ = cur.proc.Stop()
-			delete(m.procs, inst.ID)
-		}
+
 		if err := writeConfig(binDir, inst.ID, inst.Config); err != nil {
-			if m.lastErr[inst.ID] != err.Error() {
-				m.lastErr[inst.ID] = err.Error()
-				logger.Warningf("sudoku: failed to write config for inbound %d (%s): %v", inst.ID, inst.Tag, err)
-			}
+			m.recordError(inst.ID, fmt.Errorf("write config: %w", err), "sudoku: failed to write config for inbound %d (%s): %v", inst.ID, inst.Tag, err)
 			continue
 		}
 		proc := NewProcess(configPath(binDir, inst.ID), inst.Tag)
 		if err := proc.Start(binary); err != nil {
-			if m.lastErr[inst.ID] != err.Error() {
-				m.lastErr[inst.ID] = err.Error()
-				logger.Warningf("sudoku: failed to start inbound %d (%s): %v", inst.ID, inst.Tag, err)
-			}
+			m.recordError(inst.ID, err, "sudoku: failed to start inbound %d (%s): %v", inst.ID, inst.Tag, err)
 			continue
 		}
 		m.procs[inst.ID] = &managed{
 			proc:              proc,
 			fingerprint:       fp,
 			binary:            binary,
-			binaryFingerprint: currentBinaryFingerprint(binary),
+			binaryFingerprint: binaryFP,
 		}
 		delete(m.lastErr, inst.ID)
 		logger.Infof("sudoku: started inbound %d (%s)", inst.ID, inst.Tag)
 	}
+}
+
+func (m *Manager) stopTracked(id int, cur *managed, reason string) bool {
+	if cur == nil || cur.proc == nil {
+		return true
+	}
+	if err := cur.proc.Stop(); err != nil {
+		wrapped := fmt.Errorf("stop Sudoku process (%s): %w", reason, err)
+		m.recordError(id, wrapped, "sudoku: failed to stop inbound %d during %s: %v", id, reason, err)
+		return false
+	}
+	return true
+}
+
+func (m *Manager) recordError(id int, err error, format string, args ...any) {
+	message := err.Error()
+	if m.lastErr[id] == message {
+		return
+	}
+	m.lastErr[id] = message
+	logger.Warningf(format, args...)
 }
 
 func (m *Manager) StopAll() {
@@ -123,11 +141,13 @@ func (m *Manager) StopAll() {
 	defer m.mu.Unlock()
 	binDir := config.GetBinFolderPath()
 	for id, cur := range m.procs {
-		_ = cur.proc.Stop()
+		if !m.stopTracked(id, cur, "manager shutdown") {
+			continue
+		}
 		delete(m.procs, id)
+		delete(m.lastErr, id)
 		_ = os.Remove(configPath(binDir, id))
 	}
-	m.lastErr = make(map[int]string)
 }
 
 func (m *Manager) Remove(id int) {
@@ -135,7 +155,9 @@ func (m *Manager) Remove(id int) {
 	defer m.mu.Unlock()
 	binDir := config.GetBinFolderPath()
 	if cur := m.procs[id]; cur != nil {
-		_ = cur.proc.Stop()
+		if !m.stopTracked(id, cur, "inbound removal") {
+			return
+		}
 		delete(m.procs, id)
 	}
 	delete(m.lastErr, id)
