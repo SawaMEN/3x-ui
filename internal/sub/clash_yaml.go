@@ -74,20 +74,20 @@ func normalizeClashCompatibility(v any) any {
 	}
 }
 
-func normalizeSudokuMihomoProxy(proxy map[string]any) {
-	move := func(from, to string) {
-		value, ok := proxy[from]
-		if !ok {
-			return
-		}
-		if _, exists := proxy[to]; !exists {
-			proxy[to] = value
-		}
-		delete(proxy, from)
+func moveClashField(proxy map[string]any, from, to string) {
+	value, ok := proxy[from]
+	if !ok {
+		return
 	}
+	if _, exists := proxy[to]; !exists {
+		proxy[to] = value
+	}
+	delete(proxy, from)
+}
 
-	move("aead", "aead-method")
-	move("ascii", "table-type")
+func normalizeSudokuMihomoProxy(proxy map[string]any) {
+	moveClashField(proxy, "aead", "aead-method")
+	moveClashField(proxy, "ascii", "table-type")
 
 	if tableType, ok := proxy["table-type"].(string); ok {
 		switch strings.ToLower(strings.TrimSpace(tableType)) {
@@ -110,6 +110,7 @@ func normalizeSudokuMihomoProxy(proxy map[string]any) {
 				if _, exists := httpMask[key]; !exists {
 					httpMask[key] = value
 				}
+			}
 		}
 		delete(proxy, "http-mask")
 	}
@@ -165,7 +166,7 @@ func quoteAmbiguousYAMLScalars(v any) any {
 			return v
 		}
 		out := make([]any, rv.Len())
-		for i := range rv.Len() {
+		for i := 0; i < rv.Len(); i++ {
 			out[i] = quoteAmbiguousYAMLScalars(rv.Index(i).Interface())
 		}
 		return out
