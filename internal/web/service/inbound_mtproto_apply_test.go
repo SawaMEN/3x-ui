@@ -12,14 +12,14 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
 )
 
-func telemtConfigPath(t *testing.T, inboundId int) string {
+func mtprotoTelemtConfigPath(t *testing.T, inboundId int) string {
 	t.Helper()
 	return filepath.Join(os.Getenv("XUI_BIN_FOLDER"), "mtproto", fmt.Sprintf("telemt-%d.toml", inboundId))
 }
 
 func readTelemtConfig(t *testing.T, inboundId int) string {
 	t.Helper()
-	data, err := os.ReadFile(telemtConfigPath(t, inboundId))
+	data, err := os.ReadFile(mtprotoTelemtConfigPath(t, inboundId))
 	if err != nil {
 		t.Fatalf("read Telemt config: %v", err)
 	}
