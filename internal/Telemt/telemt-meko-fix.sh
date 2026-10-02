@@ -94,6 +94,20 @@ remove_jump_all() {
     done
 }
 
+# A firewall manager may insert rules ahead of MEKO after it was applied.
+# Merely checking that the jump exists is therefore insufficient: an earlier
+# ACCEPT can bypass the filter. Healthy means exactly one jump, at rule #1.
+jump_is_first_unique() {
+    local table="$1" parent="$2" child="$3"
+    iptables -t "$table" -L "$parent" --line-numbers -n 2>/dev/null | awk -v child="$child" '
+        $1 ~ /^[0-9]+$/ && $2 == child {
+            count++
+            if ($1 == 1) first = 1
+        }
+        END { exit !(count == 1 && first == 1) }
+    '
+}
+
 ensure_chain() {
     local table="$1" chain="$2"
     iptables -t "$table" -N "$chain" 2>/dev/null || true
@@ -131,6 +145,8 @@ apply() {
     ensure_chain filter "$FILTER_CHAIN"
     ensure_chain mangle "$MARK_CHAIN"
 
+    # Keep exactly one jump and make it the first rule. This is intentionally
+    # idempotent and also repairs ordering changed by ufw/firewalld/scripts.
     remove_jump_all filter INPUT "$FILTER_CHAIN"
     remove_jump_all mangle PREROUTING "$MARK_CHAIN"
     iptables -t mangle -I PREROUTING 1 -j "$MARK_CHAIN"
@@ -164,8 +180,8 @@ status() {
     local installed=false
     local -a applied_ports=()
     if command -v iptables >/dev/null 2>&1; then
-        if iptables -t filter -C INPUT -j "$FILTER_CHAIN" 2>/dev/null && \
-           iptables -t mangle -C PREROUTING -j "$MARK_CHAIN" 2>/dev/null; then
+        if jump_is_first_unique filter INPUT "$FILTER_CHAIN" && \
+           jump_is_first_unique mangle PREROUTING "$MARK_CHAIN"; then
             installed=true
         fi
         if iptables -t filter -S "$FILTER_CHAIN" >/dev/null 2>&1; then
