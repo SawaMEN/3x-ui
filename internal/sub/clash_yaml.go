@@ -41,6 +41,101 @@ func yamlScalarIsAmbiguous(s string) bool {
 	return yamlNonStringWords[s] || yamlNonStringNumber.MatchString(s)
 }
 
+// normalizeClashCompatibility rewrites legacy/internal proxy field names at
+// the serialization boundary. Keeping this here makes every Clash/Mihomo
+// subscription path consistent without changing the in-memory builders used
+// by other formats.
+func normalizeClashCompatibility(v any) any {
+	switch value := v.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(value))
+		for key, item := range value {
+			out[key] = normalizeClashCompatibility(item)
+		}
+		if proxyType, _ := out["type"].(string); strings.EqualFold(strings.TrimSpace(proxyType), "sudoku") {
+			normalizeSudokuMihomoProxy(out)
+		}
+		return out
+	case []any:
+		out := make([]any, len(value))
+		for i, item := range value {
+			out[i] = normalizeClashCompatibility(item)
+		}
+		return out
+	case []map[string]any:
+		out := make([]map[string]any, 0, len(value))
+		for _, item := range value {
+			normalized, _ := normalizeClashCompatibility(item).(map[string]any)
+			out = append(out, normalized)
+		}
+		return out
+	default:
+		return v
+	}
+}
+
+func normalizeSudokuMihomoProxy(proxy map[string]any) {
+	move := func(from, to string) {
+		value, ok := proxy[from]
+		if !ok {
+			return
+		}
+		if _, exists := proxy[to]; !exists {
+			proxy[to] = value
+		}
+		delete(proxy, from)
+	}
+
+	move("aead", "aead-method")
+	move("ascii", "table-type")
+
+	if tableType, ok := proxy["table-type"].(string); ok {
+		switch strings.ToLower(strings.TrimSpace(tableType)) {
+		case "ascii":
+			proxy["table-type"] = "prefer_ascii"
+		case "entropy":
+			proxy["table-type"] = "prefer_entropy"
+		}
+	}
+
+	var httpMask map[string]any
+	if current, ok := proxy["httpmask"].(map[string]any); ok {
+		httpMask = current
+	}
+	if legacy, ok := proxy["http-mask"].(map[string]any); ok {
+		if httpMask == nil {
+			httpMask = legacy
+		} else {
+			for key, value := range legacy {
+				if _, exists := httpMask[key]; !exists {
+					httpMask[key] = value
+				}
+		}
+		delete(proxy, "http-mask")
+	}
+	if httpMask != nil {
+		if pathRoot, ok := httpMask["pathRoot"]; ok {
+			if _, exists := httpMask["path-root"]; !exists {
+				httpMask["path-root"] = pathRoot
+			}
+			delete(httpMask, "pathRoot")
+		}
+		proxy["httpmask"] = httpMask
+	}
+
+	// Host endpoint forceTls is currently exposed by the Sudoku builder as a
+	// top-level `tls` field. Mihomo reads TLS only from the nested httpmask
+	// options, so move the override there instead of silently dropping it.
+	if tls, ok := proxy["tls"].(bool); ok {
+		if httpMask == nil {
+			httpMask = make(map[string]any)
+			proxy["httpmask"] = httpMask
+		}
+		httpMask["tls"] = tls
+		delete(proxy, "tls")
+	}
+}
+
 func quoteAmbiguousYAMLScalars(v any) any {
 	if v == nil {
 		return nil
@@ -85,5 +180,5 @@ func quoteAmbiguousYAMLScalars(v any) any {
 }
 
 func marshalClashYAML(config any) ([]byte, error) {
-	return yaml.Marshal(quoteAmbiguousYAMLScalars(config))
+	return yaml.Marshal(quoteAmbiguousYAMLScalars(normalizeClashCompatibility(config)))
 }
