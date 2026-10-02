@@ -3,13 +3,30 @@ set -euo pipefail
 
 CONFIG_GLOB="/usr/local/x-ui/bin/mtproto/telemt-*.toml"
 LEGACY_CONFIG="/etc/x-ui/telemt.toml"
+STATE_FILE="/etc/x-ui/telemt-meko-fix.env"
 FILTER_CHAIN="TELEMT_MEKO"
 MARK_CHAIN="TELEMT_MEKO_MARK"
 MARK="0x400"
 U32_FILTER="32 & 0x000FFFFF = 0x0002FFFF && 40 & 0xFF000000 = 0x02000000 && 44 & 0xFFFF0000 = 0x01030000 && 48 & 0xFFFFFF00 = 0x01010800 && 60 & 0xFFFFFFFF = 0x04020000"
-ENABLED="${TELEMT_MEKO_ENABLED:-0}"
-RATE="${TELEMT_MEKO_RATE:-54/minute}"
-BURST="${TELEMT_MEKO_BURST:-1}"
+
+# Load panel-managed settings for direct/manual invocations too. Explicit
+# environment values still win, which lets the backend preview/apply settings
+# atomically before the systemd unit is restarted.
+file_enabled=""
+file_rate=""
+file_burst=""
+if [[ -r "$STATE_FILE" ]]; then
+    while IFS='=' read -r key value; do
+        case "${key//[[:space:]]/}" in
+            TELEMT_MEKO_ENABLED) file_enabled="${value//[[:space:]]/}" ;;
+            TELEMT_MEKO_RATE) file_rate="${value//[[:space:]]/}" ;;
+            TELEMT_MEKO_BURST) file_burst="${value//[[:space:]]/}" ;;
+        esac
+    done < "$STATE_FILE"
+fi
+ENABLED="${TELEMT_MEKO_ENABLED:-${file_enabled:-0}}"
+RATE="${TELEMT_MEKO_RATE:-${file_rate:-54/minute}}"
+BURST="${TELEMT_MEKO_BURST:-${file_burst:-1}}"
 
 log() { printf '%s\n' "[telemt-meko-fix] $*"; }
 
