@@ -216,10 +216,7 @@ export default function TelemtPage() {
 
   useEffect(() => {
     const initialRefresh = window.setTimeout(() => void refreshAll(), 0);
-    const timer = window.setInterval(
-      () => void Promise.all([loadStatus(), loadMeko()]),
-      15000,
-    );
+    const timer = window.setInterval(() => void Promise.all([loadStatus(), loadMeko()]), 15000);
     return () => {
       window.clearTimeout(initialRefresh);
       window.clearInterval(timer);
@@ -921,9 +918,7 @@ export default function TelemtPage() {
                           <Descriptions.Item label="MARK">
                             {mekoConfig.mark || '0x400'}
                           </Descriptions.Item>
-                          <Descriptions.Item label="Найденные порты">
-                            {mekoPorts}
-                          </Descriptions.Item>
+                          <Descriptions.Item label="Найденные порты">{mekoPorts}</Descriptions.Item>
                           <Descriptions.Item label="Защищённые порты">
                             {mekoAppliedPorts}
                           </Descriptions.Item>
