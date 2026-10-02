@@ -21,12 +21,12 @@ const (
 )
 
 type TelemtMekoConfig struct {
-	Enabled       bool  `json:"enabled"`
-	Applied       bool  `json:"applied"`
-	RatePerMinute int   `json:"ratePerMinute"`
-	Burst         int   `json:"burst"`
-	Ports         []int `json:"ports"`
-	AppliedPorts  []int `json:"appliedPorts"`
+	Enabled       bool   `json:"enabled"`
+	Applied       bool   `json:"applied"`
+	RatePerMinute int    `json:"ratePerMinute"`
+	Burst         int    `json:"burst"`
+	Ports         []int  `json:"ports"`
+	AppliedPorts  []int  `json:"appliedPorts"`
 	Fingerprint   string `json:"fingerprint"`
 	Mark          string `json:"mark"`
 }
@@ -38,6 +38,11 @@ func defaultTelemtMekoConfig() TelemtMekoConfig {
 		Fingerprint:   "MEKO V3/u32",
 		Mark:          "0x400",
 	}
+}
+
+func parseMekoBool(value string) bool {
+	value = strings.ToLower(strings.TrimSpace(strings.Trim(value, "\"'")))
+	return value == "1" || value == "true" || value == "yes" || value == "on"
 }
 
 func parseMekoRate(value string) int {
@@ -85,6 +90,8 @@ func readTelemtMekoEnv(cfg *TelemtMekoConfig) {
 			continue
 		}
 		switch strings.TrimSpace(key) {
+		case "TELEMT_MEKO_ENABLED":
+			cfg.Enabled = parseMekoBool(value)
 		case "TELEMT_MEKO_RATE":
 			if n := parseMekoRate(value); n > 0 {
 				cfg.RatePerMinute = n
@@ -124,7 +131,6 @@ func discoverTelemtMekoPorts() []int {
 			if port := telemtPortFromConfig(path); port > 0 {
 				seen[port] = struct{}{}
 			}
-		}
 	}
 	// The standalone Telemt page can still run its own service for WEB Proxy.
 	// Cover that port as well, but only while the standalone service is active.
@@ -132,7 +138,6 @@ func discoverTelemtMekoPorts() []int {
 		if port := telemtPortFromConfig(telemtConfigPath); port > 0 {
 			seen[port] = struct{}{}
 		}
-	}
 	ports := make([]int, 0, len(seen))
 	for port := range seen {
 		ports = append(ports, port)
@@ -142,7 +147,12 @@ func discoverTelemtMekoPorts() []int {
 }
 
 func mekoEnv(cfg TelemtMekoConfig) []string {
+	enabled := "0"
+	if cfg.Enabled {
+		enabled = "1"
+	}
 	return []string{
+		"TELEMT_MEKO_ENABLED=" + enabled,
 		fmt.Sprintf("TELEMT_MEKO_RATE=%d/minute", cfg.RatePerMinute),
 		fmt.Sprintf("TELEMT_MEKO_BURST=%d", cfg.Burst),
 	}
@@ -185,7 +195,6 @@ func readTelemtMekoRuntime(cfg *TelemtMekoConfig) {
 func (TelemtService) GetMekoConfig() TelemtMekoConfig {
 	cfg := defaultTelemtMekoConfig()
 	readTelemtMekoEnv(&cfg)
-	cfg.Enabled = systemctl("is-enabled", "--quiet", telemtMekoServiceName) == nil
 	cfg.Ports = discoverTelemtMekoPorts()
 	readTelemtMekoRuntime(&cfg)
 	if cfg.Ports == nil {
@@ -211,7 +220,11 @@ func writeTelemtMekoEnv(cfg TelemtMekoConfig) error {
 	if err := os.MkdirAll(filepath.Dir(telemtMekoEnvPath), 0o700); err != nil {
 		return err
 	}
-	data := fmt.Sprintf("TELEMT_MEKO_RATE=%d/minute\nTELEMT_MEKO_BURST=%d\n", cfg.RatePerMinute, cfg.Burst)
+	enabled := 0
+	if cfg.Enabled {
+		enabled = 1
+	}
+	data := fmt.Sprintf("TELEMT_MEKO_ENABLED=%d\nTELEMT_MEKO_RATE=%d/minute\nTELEMT_MEKO_BURST=%d\n", enabled, cfg.RatePerMinute, cfg.Burst)
 	tmp, err := os.CreateTemp(filepath.Dir(telemtMekoEnvPath), ".telemt-meko-*.env")
 	if err != nil {
 		return err
@@ -302,6 +315,9 @@ func sameMekoPorts(a, b []int) bool {
 func (TelemtService) RefreshMekoFix() error {
 	cfg := TelemtService{}.GetMekoConfig()
 	if !cfg.Enabled {
+		if cfg.Applied {
+			_, _ = runTelemtMekoScript("remove", cfg)
+		}
 		return nil
 	}
 	if cfg.Applied && sameMekoPorts(cfg.Ports, cfg.AppliedPorts) {
