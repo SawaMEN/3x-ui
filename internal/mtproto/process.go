@@ -29,9 +29,9 @@ func GetBinaryName() string {
 	return name
 }
 
-func GetBinaryPath() string            { return config.GetBinFolderPath() + "/" + GetBinaryName() }
-func configDir() string                { return config.GetBinFolderPath() + "/mtproto" }
-func configPathForID(id int) string    { return fmt.Sprintf("%s/telemt-%d.toml", configDir(), id) }
+func GetBinaryPath() string         { return config.GetBinFolderPath() + "/" + GetBinaryName() }
+func configDir() string             { return config.GetBinFolderPath() + "/mtproto" }
+func configPathForID(id int) string { return fmt.Sprintf("%s/telemt-%d.toml", configDir(), id) }
 
 var (
 	gracefulStopTimeout = 5 * time.Second
@@ -39,9 +39,9 @@ var (
 )
 
 type procLogWriter struct {
-	mu              sync.Mutex
-	label, buf       string
-	lastLine         string
+	mu        sync.Mutex
+	label, buf string
+	lastLine  string
 }
 
 func (w *procLogWriter) Write(p []byte) (int, error) {
@@ -147,6 +147,11 @@ func (p *Process) Start() error {
 		p.mu.Lock()
 		p.cmd = nil
 		p.mu.Unlock()
+		// The config describes a port that is only valid while this Telemt
+		// sidecar is alive. Do not leave a dead generated config behind for
+		// the MEKO port discovery to treat as an active inbound.
+		_ = os.Remove(p.configPath)
+		scheduleMekoSync()
 		return err
 	}
 	attachChildLifetime(cmd)
@@ -164,6 +169,12 @@ func (p *Process) wait(cmd *exec.Cmd, done chan struct{}) {
 	}
 	logger.Errorf("mtproto: telemt process exited: %v", err)
 	p.setExitErr(err)
+	// A sidecar that dies unexpectedly no longer owns its configured port.
+	// Remove its generated config so MEKO cannot keep firewall rules for a
+	// listener that is no longer running. Reconcile will regenerate it before
+	// the next start attempt.
+	_ = os.Remove(p.configPath)
+	scheduleMekoSync()
 }
 
 func (p *Process) setExitErr(err error) {
