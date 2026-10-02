@@ -43,9 +43,6 @@ func killStrayTelemtSidecars(binaryPath string) int {
 	return killed
 }
 
-// Historical compatibility until every caller has moved to the Telemt name.
-func killStrayMtgProcesses(binaryPath string) int { return killStrayTelemtSidecars(binaryPath) }
-
 func isOwnedTelemtSidecar(pid int) bool {
 	args := cmdlineArgs(pid)
 	if len(args) < 3 || args[1] != "run" {
