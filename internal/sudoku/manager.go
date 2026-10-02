@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
@@ -19,6 +20,7 @@ type Instance struct {
 
 type managed struct {
 	proc              *Process
+	config            Config
 	fingerprint       string
 	binary            string
 	binaryFingerprint string
@@ -82,30 +84,113 @@ func (m *Manager) Reconcile(ctx context.Context, desired []Instance) {
 	}
 
 	for _, inst := range desired {
+		if ctx != nil {
+			select {
+			case <-ctx.Done():
+				m.recordError(inst.ID, ctx.Err(), "sudoku: reconcile cancelled before inbound %d (%s): %v", inst.ID, inst.Tag, ctx.Err())
+				return
+			default:
+			}
+		}
+
 		fp := fingerprint(inst.Config)
 		cur := m.procs[inst.ID]
 		if cur != nil && cur.proc != nil && cur.proc.IsRunning() && cur.fingerprint == fp && cur.binaryFingerprint == binaryFP {
 			continue
 		}
 
-		if cur != nil {
-			if !m.stopTracked(inst.ID, cur, "restart") {
-				continue
+		candidate, err := writeCandidateConfig(binDir, inst.ID, inst.Config)
+		if err != nil {
+			m.recordError(inst.ID, fmt.Errorf("write candidate config: %w", err), "sudoku: failed to prepare config for inbound %d (%s): %v", inst.ID, inst.Tag, err)
+			continue
+		}
+		candidatePresent := true
+		cleanupCandidate := func() {
+			if candidatePresent {
+				_ = os.Remove(candidate)
 			}
-			delete(m.procs, inst.ID)
 		}
 
-		if err := writeConfig(binDir, inst.ID, inst.Config); err != nil {
-			m.recordError(inst.ID, fmt.Errorf("write config: %w", err), "sudoku: failed to write config for inbound %d (%s): %v", inst.ID, inst.Tag, err)
+		// Validate the candidate before touching a healthy process. Start() validates
+		// again after promotion as defence in depth.
+		if err := validateConfig(binary, candidate); err != nil {
+			cleanupCandidate()
+			m.recordError(inst.ID, err, "sudoku: rejected config for inbound %d (%s): %v", inst.ID, inst.Tag, err)
 			continue
 		}
-		proc := NewProcess(configPath(binDir, inst.ID), inst.Tag)
+
+		finalPath := configPath(binDir, inst.ID)
+		var oldConfig []byte
+		if cur != nil {
+			oldConfig, err = os.ReadFile(finalPath)
+			if err != nil {
+				if !os.IsNotExist(err) {
+					cleanupCandidate()
+					m.recordError(inst.ID, fmt.Errorf("read current config: %w", err), "sudoku: cannot snapshot current config for inbound %d (%s): %v", inst.ID, inst.Tag, err)
+					continue
+				}
+				oldConfig, err = marshalConfig(cur.config)
+				if err != nil {
+					cleanupCandidate()
+					m.recordError(inst.ID, fmt.Errorf("render rollback config: %w", err), "sudoku: cannot prepare rollback config for inbound %d (%s): %v", inst.ID, inst.Tag, err)
+					continue
+				}
+			}
+		}
+
+		if cur != nil {
+			if !m.stopTracked(inst.ID, cur, "restart") {
+				cleanupCandidate()
+				continue
+			}
+		}
+
+		if err := promoteConfig(candidate, finalPath); err != nil {
+			cleanupCandidate()
+			promoteErr := fmt.Errorf("activate validated config: %w", err)
+			if cur != nil {
+				if restartErr := cur.proc.Start(binary); restartErr == nil {
+					cur.binary = binary
+					cur.binaryFingerprint = binaryFP
+					m.recordError(inst.ID, promoteErr, "sudoku: failed to activate new config for inbound %d (%s); previous process restored: %v", inst.ID, inst.Tag, err)
+					continue
+				} else {
+					promoteErr = fmt.Errorf("%w; restart previous process: %v", promoteErr, restartErr)
+				}
+			}
+			m.recordError(inst.ID, promoteErr, "sudoku: failed to activate config for inbound %d (%s): %v", inst.ID, inst.Tag, promoteErr)
+			continue
+		}
+		candidatePresent = false
+
+		proc := NewProcess(finalPath, inst.Tag)
 		if err := proc.Start(binary); err != nil {
-			m.recordError(inst.ID, err, "sudoku: failed to start inbound %d (%s): %v", inst.ID, inst.Tag, err)
+			startErr := err
+			if cur == nil {
+				_ = os.Remove(finalPath)
+				m.recordError(inst.ID, startErr, "sudoku: failed to start inbound %d (%s): %v", inst.ID, inst.Tag, startErr)
+				continue
+			}
+
+			if rollbackErr := restoreConfig(finalPath, oldConfig); rollbackErr != nil {
+				combined := fmt.Errorf("start new config: %v; restore previous config: %w", startErr, rollbackErr)
+				m.recordError(inst.ID, combined, "sudoku: failed to start inbound %d (%s) and rollback config: %v", inst.ID, inst.Tag, combined)
+				continue
+			}
+			if rollbackStartErr := cur.proc.Start(binary); rollbackStartErr != nil {
+				combined := fmt.Errorf("start new config: %v; restart previous config: %w", startErr, rollbackStartErr)
+				m.recordError(inst.ID, combined, "sudoku: failed to start inbound %d (%s) and restore previous process: %v", inst.ID, inst.Tag, combined)
+				continue
+			}
+			cur.binary = binary
+			cur.binaryFingerprint = binaryFP
+			m.recordError(inst.ID, startErr, "sudoku: failed to start new config for inbound %d (%s); previous config restored: %v", inst.ID, inst.Tag, startErr)
 			continue
 		}
+
 		m.procs[inst.ID] = &managed{
 			proc:              proc,
+			config:            inst.Config,
 			fingerprint:       fp,
 			binary:            binary,
 			binaryFingerprint: binaryFP,
@@ -178,17 +263,104 @@ func fingerprint(cfg Config) string {
 	return string(b)
 }
 
-func writeConfig(binDir string, id int, cfg Config) error {
+func marshalConfig(cfg Config) ([]byte, error) {
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	return append(data, '\n'), nil
+}
+
+func writeCandidateConfig(binDir string, id int, cfg Config) (string, error) {
 	dir := configDir(binDir)
 	if err := os.MkdirAll(dir, 0o750); err != nil {
-		return err
+		return "", err
 	}
-	path := configPath(binDir, id)
-	data, err := json.MarshalIndent(cfg, "", "  ")
+	data, err := marshalConfig(cfg)
+	if err != nil {
+		return "", err
+	}
+	file, err := os.CreateTemp(dir, fmt.Sprintf(".sudoku-%d-*.json", id))
+	if err != nil {
+		return "", err
+	}
+	path := file.Name()
+	ok := false
+	defer func() {
+		_ = file.Close()
+		if !ok {
+			_ = os.Remove(path)
+		}
+	}()
+	if err := file.Chmod(0o640); err != nil {
+		return "", err
+	}
+	if _, err := file.Write(data); err != nil {
+		return "", err
+	}
+	if err := file.Sync(); err != nil {
+		return "", err
+	}
+	if err := file.Close(); err != nil {
+		return "", err
+	}
+	ok = true
+	return path, nil
+}
+
+func promoteConfig(candidate, finalPath string) error {
+	if err := os.Rename(candidate, finalPath); err == nil {
+		return nil
+	} else {
+		// Windows cannot replace an existing destination with Rename. The normal
+		// Linux path above remains atomic; on Windows rollback will restore it if
+		// the second rename fails.
+		if removeErr := os.Remove(finalPath); removeErr != nil && !os.IsNotExist(removeErr) {
+			return err
+		}
+		if retryErr := os.Rename(candidate, finalPath); retryErr != nil {
+			return retryErr
+		}
+		return nil
+	}
+}
+
+func restoreConfig(path string, data []byte) error {
+	if len(data) == 0 {
+		return fmt.Errorf("previous config snapshot is empty")
+	}
+	dir := filepath.Dir(path)
+	file, err := os.CreateTemp(dir, ".sudoku-rollback-*.json")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, append(data, '\n'), 0o640)
+	tmp := file.Name()
+	defer os.Remove(tmp)
+	if err := file.Chmod(0o640); err != nil {
+		_ = file.Close()
+		return err
+	}
+	if _, err := file.Write(data); err != nil {
+		_ = file.Close()
+		return err
+	}
+	if err := file.Sync(); err != nil {
+		_ = file.Close()
+		return err
+	}
+	if err := file.Close(); err != nil {
+		return err
+	}
+	return promoteConfig(tmp, path)
+}
+
+func writeConfig(binDir string, id int, cfg Config) error {
+	candidate, err := writeCandidateConfig(binDir, id, cfg)
+	if err != nil {
+		return err
+	}
+	defer os.Remove(candidate)
+	return promoteConfig(candidate, configPath(binDir, id))
 }
 
 func WriteMasterKey(binDir string, id int, key string) error {
