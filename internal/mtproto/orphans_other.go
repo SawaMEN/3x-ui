@@ -7,6 +7,3 @@ package mtproto
 // attachChildLifetime), so sidecar orphans do not arise there; other platforms
 // are not supported deployment targets for managed MTProto Telemt sidecars.
 func killStrayTelemtSidecars(_ string) int { return 0 }
-
-// Historical compatibility until every caller has moved to the Telemt name.
-func killStrayMtgProcesses(binaryPath string) int { return killStrayTelemtSidecars(binaryPath) }
