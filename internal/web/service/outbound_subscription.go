@@ -313,6 +313,7 @@ func (s *OutboundSubscriptionService) RefreshAllEnabled() (int, error) {
 			} else {
 				refreshed++
 			}
+		}
 	}
 	return refreshed, nil
 }
@@ -432,6 +433,7 @@ func (s *OutboundSubscriptionService) fetchAndStore(sub *model.OutboundSubscript
 					if tag, _ := m["tag"].(string); tag != "" {
 						prevTagByIndex[i] = tag
 					}
+				}
 			}
 		}
 	}
