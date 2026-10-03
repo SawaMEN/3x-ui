@@ -30,17 +30,12 @@ type JsonObject = Record<string, unknown>;
 
 type Session = {
   id: string;
-  core?: string;
   inbound?: string;
-  inboundType?: string;
   user?: string;
   outbound?: string;
-  network?: string;
   source?: string;
   destination?: string;
   domain?: string;
-  rule?: string;
-  createdAt?: number;
   upload?: number;
   download?: number;
   chain?: string[];
@@ -96,23 +91,27 @@ export default function SingBoxRuntimePage() {
   const [probeResults, setProbeResults] = useState<Record<string, ProbeResult>>({});
 
   const loadConfig = useCallback(async () => {
-    const msg = (await HttpUtil.get('/panel/api/setting/singbox/config', undefined, {
+    const response = (await HttpUtil.get('/panel/api/setting/singbox/config', undefined, {
       silent: true,
     })) as ApiMsg<ConfigSnapshot>;
-    if (!msg.success || !msg.obj) return;
-    setRunning(!!msg.obj.running);
-    setVersion(msg.obj.version || '');
-    setOutbounds(Array.isArray(msg.obj.config?.outbounds) ? msg.obj.config!.outbounds! : []);
+    if (!response.success || !response.obj) return;
+    setRunning(!!response.obj.running);
+    setVersion(response.obj.version || '');
+    setOutbounds(
+      Array.isArray(response.obj.config?.outbounds) ? response.obj.config.outbounds : [],
+    );
   }, []);
 
   const loadSessions = useCallback(async () => {
     setLoadingSessions(true);
     try {
-      const msg = (await HttpUtil.get('/panel/api/server/singbox/sessions', undefined, {
+      const response = (await HttpUtil.get('/panel/api/server/singbox/sessions', undefined, {
         silent: true,
       })) as ApiMsg<Session[]>;
-      if (!msg.success) throw new Error(msg.msg || 'Failed to load sing-box sessions');
-      setSessions(Array.isArray(msg.obj) ? msg.obj : []);
+      if (!response.success) {
+        throw new Error(response.msg || 'Failed to load sing-box sessions');
+      }
+      setSessions(Array.isArray(response.obj) ? response.obj : []);
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : String(error));
     } finally {
@@ -125,33 +124,34 @@ export default function SingBoxRuntimePage() {
   }, [loadConfig, loadSessions]);
 
   useEffect(() => {
-    void refresh();
+    const timer = window.setTimeout(() => void refresh(), 0);
+    return () => window.clearTimeout(timer);
   }, [refresh]);
 
   useEffect(() => {
-    if (!autoRefresh) return;
+    if (!autoRefresh) return undefined;
     const timer = window.setInterval(() => void loadSessions(), 5000);
     return () => window.clearInterval(timer);
   }, [autoRefresh, loadSessions]);
 
   const disconnect = useCallback(
     async (session: Session) => {
-      let msg: ApiMsg;
+      let response: ApiMsg;
       if (session.user) {
-        msg = (await HttpUtil.post('/panel/api/server/singbox/sessions/disconnect-user', {
+        response = (await HttpUtil.post('/panel/api/server/singbox/sessions/disconnect-user', {
           user: session.user,
           inbound: session.inbound || '',
         })) as ApiMsg;
       } else if (session.inbound) {
-        msg = (await HttpUtil.post('/panel/api/server/singbox/sessions/disconnect-inbound', {
+        response = (await HttpUtil.post('/panel/api/server/singbox/sessions/disconnect-inbound', {
           inbound: session.inbound,
         })) as ApiMsg;
       } else {
         messageApi.warning('This session has no user or inbound identity to disconnect safely.');
         return;
       }
-      if (!msg.success) {
-        messageApi.error(msg.msg || 'Failed to disconnect session');
+      if (!response.success) {
+        messageApi.error(response.msg || 'Failed to disconnect session');
         return;
       }
       await loadSessions();
@@ -163,15 +163,15 @@ export default function SingBoxRuntimePage() {
     if (outbounds.length === 0) return;
     setTesting(true);
     try {
-      const msg = (await HttpUtil.post('/panel/api/xray/testOutbounds', {
+      const response = (await HttpUtil.post('/panel/api/xray/testOutbounds', {
         outbounds: JSON.stringify(outbounds),
         mode: 'tcp',
       })) as ApiMsg<ProbeResult[]>;
-      if (!msg.success || !Array.isArray(msg.obj)) {
-        throw new Error(msg.msg || 'Failed to test sing-box outbounds');
+      if (!response.success || !Array.isArray(response.obj)) {
+        throw new Error(response.msg || 'Failed to test sing-box outbounds');
       }
       const next: Record<string, ProbeResult> = {};
-      msg.obj.forEach((result, index) => {
+      response.obj.forEach((result, index) => {
         const name = result.tag || outboundTag(outbounds[index]) || `#${index + 1}`;
         next[name] = result;
       });
@@ -208,7 +208,14 @@ export default function SingBoxRuntimePage() {
           session.chain?.some((item) => item.toLowerCase() === wanted)
         );
       }
-      return [session.user, session.inbound, session.outbound, session.source, session.destination, session.domain]
+      return [
+        session.user,
+        session.inbound,
+        session.outbound,
+        session.source,
+        session.destination,
+        session.domain,
+      ]
         .filter(Boolean)
         .some((item) => String(item).toLowerCase().includes(wanted));
     });
@@ -240,7 +247,8 @@ export default function SingBoxRuntimePage() {
       title: 'Traffic',
       key: 'traffic',
       width: 170,
-      render: (_: unknown, row: Session) => `${formatBytes(row.upload)} ↑ / ${formatBytes(row.download)} ↓`,
+      render: (_: unknown, row: Session) =>
+        `${formatBytes(row.upload)} ↑ / ${formatBytes(row.download)} ↓`,
     },
     {
       title: '',
@@ -279,7 +287,9 @@ export default function SingBoxRuntimePage() {
                   </Col>
                   <Col>
                     <Space wrap>
-                      <Tag color={running ? 'success' : 'default'}>{running ? 'running' : 'stopped'}</Tag>
+                      <Tag color={running ? 'success' : 'default'}>
+                        {running ? 'running' : 'stopped'}
+                      </Tag>
                       {version && <Tag>{version}</Tag>}
                       <Button icon={<ReloadOutlined />} onClick={() => void refresh()}>
                         Refresh
@@ -290,7 +300,11 @@ export default function SingBoxRuntimePage() {
               </Card>
 
               {!running && (
-                <Alert type="warning" showIcon message="Sing-box is not running; live sessions are unavailable." />
+                <Alert
+                  type="warning"
+                  showIcon
+                  message="Sing-box is not running; live sessions are unavailable."
+                />
               )}
 
               <Tabs
@@ -305,7 +319,10 @@ export default function SingBoxRuntimePage() {
                             <Select
                               value={resource}
                               style={{ width: 150 }}
-                              options={['all', 'user', 'inbound', 'outbound'].map((value) => ({ value, label: value }))}
+                              options={['all', 'user', 'inbound', 'outbound'].map((value) => ({
+                                value,
+                                label: value,
+                              }))}
                               onChange={(value) => {
                                 setResource(value);
                                 setFilter('');
@@ -394,7 +411,11 @@ export default function SingBoxRuntimePage() {
                       </Card>
                     ),
                   },
-                  { key: 'history', label: 'Traffic history', children: <TrafficHistoryPanel /> },
+                  {
+                    key: 'history',
+                    label: 'Traffic history',
+                    children: <TrafficHistoryPanel />,
+                  },
                 ]}
               />
             </Space>
