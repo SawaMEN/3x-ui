@@ -7,6 +7,7 @@ import {
   Button,
   Card,
   ConfigProvider,
+  Collapse,
   Divider,
   FloatButton,
   Input,
@@ -40,6 +41,8 @@ import AppSidebar from '@/layouts/AppSidebar';
 import { HttpUtil } from '@/utils';
 import { useTheme } from '@/hooks/useTheme';
 import './SingBoxPage.css';
+import SimpleSettings from './SimpleSettings';
+import { outboundDefaults } from './simple-settings';
 
 type SectionKey =
   | 'schema'
@@ -363,7 +366,9 @@ function CommonListItem({
 function singBoxHealthIssues(config: ConfigMap) {
   const issues: string[] = [];
   const outbounds = asObjectArray(config.outbounds);
-  const tags = outbounds.map((item) => asString(item.tag)).filter(Boolean);
+  const tags = [...outbounds, ...asObjectArray(config.endpoints)]
+    .map((item) => asString(item.tag))
+    .filter(Boolean);
   const seen = new Set<string>();
 
   tags.forEach((tag) => {
@@ -554,24 +559,24 @@ function SingBoxOutboundEditor({
                         'tuic',
                         'selector',
                         'urltest',
-                        'tun',
-                        'redirect',
-                        'tproxy',
                         'shadowtls',
                         'ssh',
                       ].map((v) => ({ value: v, label: v }))}
                       onChange={(next) =>
-                        onChange({
-                          type: next,
-                          tag: asString(value.tag) || next,
-                          ...(next === 'selector' || next === 'urltest'
-                            ? { outbounds: asStringArray(value.outbounds) }
-                            : {}),
-                        })
+                        onChange(
+                          outboundDefaults(
+                            next,
+                            asString(value.tag) || next,
+                            asStringArray(value.outbounds),
+                          ),
+                        )
                       }
                     />
                   </Field>
-                  <Field label="Tag" hint="Уникальное имя для routing, selector и urltest.">
+                  <Field
+                    label="Название подключения"
+                    hint="Уникальное имя, по которому подключение выбирается в правилах."
+                  >
                     <TextField
                       value={asString(value.tag)}
                       onChange={(v) => patch('tag', v)}
@@ -650,7 +655,7 @@ function SingBoxOutboundEditor({
                           </Field>
                         </>
                       )}
-                      {['vless', 'vmess'].includes(type) && (
+                      {['vless', 'vmess', 'tuic'].includes(type) && (
                         <Field label="UUID">
                           <TextField
                             value={asString(value.uuid)}
@@ -717,7 +722,10 @@ function SingBoxOutboundEditor({
                           />
                         </Field>
                       )}
-                      <Field label="Detour" hint="Провести соединение через другой outbound.">
+                      <Field
+                        label="Подключиться через другой выход"
+                        hint="Оставьте пустым для обычного подключения."
+                      >
                         <TextField
                           value={asString(value.detour)}
                           onChange={(v) => patch('detour', v)}
@@ -946,7 +954,7 @@ function SingBoxOutboundModal({
       cancelText="Отмена"
       onCancel={onCancel}
       onOk={() => onSave(draft)}
-      destroyOnClose
+      destroyOnHidden
     >
       <SingBoxOutboundEditor value={draft} existingTags={existingTags} onChange={setDraft} />
     </Modal>
@@ -1194,6 +1202,7 @@ function SingBoxRouteRuleModal({
 export default function SingBoxPage() {
   const { t } = useTranslation();
   const [messageApi, contextHolder] = message.useMessage();
+  const [modalApi, modalContextHolder] = Modal.useModal();
   const { antdThemeConfig, isDark, isUltra } = useTheme();
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
@@ -1216,6 +1225,11 @@ export default function SingBoxPage() {
     [],
   );
   const activeSection = sectionKeys.has(sectionSlug) ? sectionSlug : 'basic';
+  const [advancedMode, setAdvancedMode] = useState(false);
+  const expertSection = ['advanced', 'endpoints', 'certificates', 'network'].includes(
+    activeSection,
+  );
+  const showAdvanced = advancedMode || expertSection;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [fetchError, setFetchError] = useState('');
@@ -1381,7 +1395,7 @@ export default function SingBoxPage() {
     };
 
     return (
-      <Space direction="vertical" size={12} style={{ width: '100%' }}>
+      <Space orientation="vertical" size={12} style={{ width: '100%' }}>
         <Card>
           <SectionHeader
             title="DNS"
@@ -1699,7 +1713,7 @@ export default function SingBoxPage() {
               ])
             }
           />
-          <Space direction="vertical" style={{ width: '100%' }} size={12}>
+          <Space orientation="vertical" style={{ width: '100%' }} size={12}>
             {items.map((item, index) => (
               <Card size="small" className="singbox-item-card" key={`cert-provider-${index}`}>
                 <div className="singbox-item-card-header">
@@ -1825,7 +1839,7 @@ export default function SingBoxPage() {
               ])
             }
           />
-          <Space direction="vertical" style={{ width: '100%' }} size={12}>
+          <Space orientation="vertical" style={{ width: '100%' }} size={12}>
             {items.map((item, index) => {
               const tls = asObject(item.tls);
               return (
@@ -1929,7 +1943,7 @@ export default function SingBoxPage() {
               ])
             }
           />
-          <Space direction="vertical" style={{ width: '100%' }} size={12}>
+          <Space orientation="vertical" style={{ width: '100%' }} size={12}>
             {items.map((item, index) => (
               <CommonListItem
                 key={`namespace-${index}`}
@@ -1994,7 +2008,7 @@ export default function SingBoxPage() {
               ])
             }
           />
-          <Space direction="vertical" style={{ width: '100%' }} size={12}>
+          <Space orientation="vertical" style={{ width: '100%' }} size={12}>
             {items.map((item, index) => {
               const nextItems = [...items];
               const patch = (value: JsonObject) => {
@@ -2253,47 +2267,49 @@ export default function SingBoxPage() {
               Добавить правило
             </Button>
           </div>
-          <Row gutter={[12, 16]}>
-            <Field label="Final outbound">
-              <Select
-                allowClear
-                value={asString(value.final) || undefined}
-                options={outTags.map((v) => ({ value: v, label: v }))}
-                style={{ width: '100%' }}
-                onChange={(v) => patchSection('route', { final: v })}
-              />
-            </Field>
-            <Field label="Default domain resolver">
-              <TextField
-                value={asString(value.default_domain_resolver)}
-                onChange={(v) => patchSection('route', { default_domain_resolver: v })}
-              />
-            </Field>
-            <Field label="Default HTTP client">
-              <TextField
-                value={asString(value.default_http_client)}
-                onChange={(v) => patchSection('route', { default_http_client: v })}
-              />
-            </Field>
-            <Field label="Auto detect interface">
-              <ToggleField
-                checked={asBoolean(value.auto_detect_interface)}
-                onChange={(v) => patchSection('route', { auto_detect_interface: v })}
-              />
-            </Field>
-            <Field label="Find process">
-              <ToggleField
-                checked={asBoolean(value.find_process)}
-                onChange={(v) => patchSection('route', { find_process: v })}
-              />
-            </Field>
-            <Field label="Find neighbor">
-              <ToggleField
-                checked={asBoolean(value.find_neighbor)}
-                onChange={(v) => patchSection('route', { find_neighbor: v })}
-              />
-            </Field>
-          </Row>
+          {showAdvanced && (
+            <Row gutter={[12, 16]}>
+              <Field label="Выход по умолчанию">
+                <Select
+                  allowClear
+                  value={asString(value.final) || undefined}
+                  options={outTags.map((v) => ({ value: v, label: v }))}
+                  style={{ width: '100%' }}
+                  onChange={(v) => patchSection('route', { final: v })}
+                />
+              </Field>
+              <Field label="DNS для адресов серверов">
+                <TextField
+                  value={asString(value.default_domain_resolver)}
+                  onChange={(v) => patchSection('route', { default_domain_resolver: v })}
+                />
+              </Field>
+              <Field label="Default HTTP client">
+                <TextField
+                  value={asString(value.default_http_client)}
+                  onChange={(v) => patchSection('route', { default_http_client: v })}
+                />
+              </Field>
+              <Field label="Auto detect interface">
+                <ToggleField
+                  checked={asBoolean(value.auto_detect_interface)}
+                  onChange={(v) => patchSection('route', { auto_detect_interface: v })}
+                />
+              </Field>
+              <Field label="Find process">
+                <ToggleField
+                  checked={asBoolean(value.find_process)}
+                  onChange={(v) => patchSection('route', { find_process: v })}
+                />
+              </Field>
+              <Field label="Find neighbor">
+                <ToggleField
+                  checked={asBoolean(value.find_neighbor)}
+                  onChange={(v) => patchSection('route', { find_neighbor: v })}
+                />
+              </Field>
+            </Row>
+          )}
 
           <Divider />
           <Table
@@ -2303,7 +2319,7 @@ export default function SingBoxPage() {
             dataSource={rules}
             locale={{
               emptyText: (
-                <Empty description="Правил нет. Весь трафик используется через Final outbound." />
+                <Empty description="Правил нет. Используется выбранный выход в интернет." />
               ),
             }}
             columns={[
@@ -2365,35 +2381,39 @@ export default function SingBoxPage() {
           />
         </Card>
 
-        <Card>
-          <div className="singbox-card-title">Rule-set и расширенные правила</div>
-          <div className="singbox-section-description">
-            Сложные наборы остаются редактируемыми вручную, но основная маршрутизация больше не
-            требует ручной сборки JSON.
-          </div>
-          <div className="singbox-inline-actions">
-            <JsonModal
-              title="Route rules"
-              value={rules}
-              onApply={(next) => patchSection('route', { rules: Array.isArray(next) ? next : [] })}
-              buttonText="Все rules"
-            />
-            <JsonModal
-              title="Rule-set"
-              value={Array.isArray(value.rule_set) ? value.rule_set : []}
-              onApply={(next) =>
-                patchSection('route', { rule_set: Array.isArray(next) ? next : [] })
-              }
-              buttonText="Rule-set"
-            />
-            <JsonModal
-              title="Route"
-              value={value}
-              onApply={(next) => updateSection('route', asObject(next))}
-              buttonText="Расширенный JSON"
-            />
-          </div>
-        </Card>
+        {showAdvanced && (
+          <Card>
+            <div className="singbox-card-title">Rule-set и расширенные правила</div>
+            <div className="singbox-section-description">
+              Сложные наборы остаются редактируемыми вручную, но основная маршрутизация больше не
+              требует ручной сборки JSON.
+            </div>
+            <div className="singbox-inline-actions">
+              <JsonModal
+                title="Route rules"
+                value={rules}
+                onApply={(next) =>
+                  patchSection('route', { rules: Array.isArray(next) ? next : [] })
+                }
+                buttonText="Все rules"
+              />
+              <JsonModal
+                title="Rule-set"
+                value={Array.isArray(value.rule_set) ? value.rule_set : []}
+                onApply={(next) =>
+                  patchSection('route', { rule_set: Array.isArray(next) ? next : [] })
+                }
+                buttonText="Rule-set"
+              />
+              <JsonModal
+                title="Route"
+                value={value}
+                onApply={(next) => updateSection('route', asObject(next))}
+                buttonText="Расширенный JSON"
+              />
+            </div>
+          </Card>
+        )}
       </>
     );
   };
@@ -2537,7 +2557,7 @@ export default function SingBoxPage() {
   );
 
   const renderBasic = () => (
-    <Space direction="vertical" size={12} style={{ width: '100%' }}>
+    <Space orientation="vertical" size={12} style={{ width: '100%' }}>
       {renderLog()}
       {renderNtp()}
       {renderSchema()}
@@ -2545,21 +2565,21 @@ export default function SingBoxPage() {
   );
 
   const renderCertificates = () => (
-    <Space direction="vertical" size={12} style={{ width: '100%' }}>
+    <Space orientation="vertical" size={12} style={{ width: '100%' }}>
       {renderCertificate()}
       {renderCertificateProviders()}
     </Space>
   );
 
   const renderNetwork = () => (
-    <Space direction="vertical" size={12} style={{ width: '100%' }}>
+    <Space orientation="vertical" size={12} style={{ width: '100%' }}>
       {renderHttpClients()}
       {renderNamespaces()}
     </Space>
   );
 
   const renderAdvanced = () => (
-    <Space direction="vertical" size={12} style={{ width: '100%' }}>
+    <Space orientation="vertical" size={12} style={{ width: '100%' }}>
       <Card>
         <SectionHeader
           title="Расширенная конфигурация"
@@ -2571,12 +2591,20 @@ export default function SingBoxPage() {
             value={config}
             onApply={(next) => setConfig(asObject(next))}
           />
-          <Button icon={<ReloadOutlined />} onClick={() => void refresh()} disabled={saving}>
+          <Button icon={<ReloadOutlined />} onClick={() => requestRefresh()} disabled={saving}>
             Обновить из файла
           </Button>
         </Space>
       </Card>
       {renderExperimental()}
+      <Collapse
+        items={[
+          { key: 'basic', label: 'Журнал, время и схема', children: renderBasic() },
+          { key: 'certificates', label: 'Сертификаты', children: renderCertificates() },
+          { key: 'network', label: 'Сеть и HTTP-клиенты', children: renderNetwork() },
+          { key: 'endpoints', label: 'Туннели (Endpoints)', children: renderEndpoints() },
+        ]}
+      />
     </Space>
   );
 
@@ -2586,7 +2614,16 @@ export default function SingBoxPage() {
   const sectionBody = (() => {
     switch (activeSection) {
       case 'dns':
-        return renderDns();
+        return showAdvanced ? (
+          renderDns()
+        ) : (
+          <SimpleSettings
+            config={config}
+            onChange={setConfig}
+            section="dns"
+            onNavigate={navigate}
+          />
+        );
       case 'routing':
         return (
           <Tabs
@@ -2600,7 +2637,31 @@ export default function SingBoxPage() {
               );
             }}
             items={[
-              { key: 'rules', label: 'Маршрутизация', children: renderRoute() },
+              {
+                key: 'rules',
+                label: 'Маршрутизация',
+                children: showAdvanced ? (
+                  renderRoute()
+                ) : (
+                  <Space orientation="vertical" size={12} style={{ width: '100%' }}>
+                    <SimpleSettings
+                      config={config}
+                      onChange={setConfig}
+                      section="routing"
+                      onNavigate={navigate}
+                    />
+                    <Collapse
+                      items={[
+                        {
+                          key: 'rules',
+                          label: 'Правила для отдельных сайтов и подключений',
+                          children: renderRoute(),
+                        },
+                      ]}
+                    />
+                  </Space>
+                ),
+              },
               { key: 'adblock', label: 'AdBlock', children: <AdBlockTab /> },
             ]}
           />
@@ -2616,15 +2677,46 @@ export default function SingBoxPage() {
       case 'advanced':
         return renderAdvanced();
       default:
-        return renderBasic();
+        return showAdvanced ? (
+          renderBasic()
+        ) : (
+          <SimpleSettings config={config} onChange={setConfig} onNavigate={navigate} />
+        );
     }
   })();
 
   const scrollTarget = () => document.getElementById('content-layout') || window;
+  const requestRefresh = () => {
+    if (!dirty) {
+      void refresh();
+      return;
+    }
+    modalApi.confirm({
+      title: 'Отменить несохранённые изменения?',
+      content: 'Будут загружены последние сохранённые настройки.',
+      okText: 'Отменить изменения',
+      cancelText: 'Продолжить настройку',
+      onOk: refresh,
+    });
+  };
+  const requestReset = () =>
+    modalApi.confirm({
+      title: 'Вернуть автоматические настройки sing-box?',
+      content:
+        'Ручные настройки DNS, исходящих подключений и маршрутизации будут сброшены. Входящие подключения и пользователи сохранятся.',
+      okText: 'Сбросить настройки',
+      cancelText: 'Отмена',
+      okButtonProps: { danger: true },
+      onOk: reset,
+    });
+  const visibleSections = showAdvanced
+    ? Array.from(sectionKeys)
+    : ['basic', 'dns', 'routing', 'outbound'];
 
   return (
     <ConfigProvider theme={antdThemeConfig}>
       {contextHolder}
+      {modalContextHolder}
       <Layout
         className={`singbox-page ${isDark ? 'is-dark ' : ''}${isUltra ? 'is-ultra' : ''}`.trim()}
       >
@@ -2632,7 +2724,7 @@ export default function SingBoxPage() {
         <Layout className="content-shell">
           <Layout.Content id="content-layout" className="content-area">
             <FloatButton.BackTop target={scrollTarget} visibilityHeight={200} />
-            <Spin spinning={loading} delay={150} description={t('loading')} size="large">
+            <Spin spinning={loading || saving} delay={150} description={t('loading')} size="large">
               {fetchError ? (
                 <Result
                   status="error"
@@ -2644,8 +2736,8 @@ export default function SingBoxPage() {
                     </Button>
                   }
                 />
-              ) : (
-                <Space direction="vertical" size={12} style={{ width: '100%' }}>
+              ) : snapshot ? (
+                <Space orientation="vertical" size={12} style={{ width: '100%' }}>
                   <Card hoverable>
                     <Row gutter={[12, 12]} align="middle">
                       <Col xs={24} md={14}>
@@ -2654,6 +2746,7 @@ export default function SingBoxPage() {
                             icon={<SaveOutlined />}
                             type="primary"
                             loading={saving}
+                            disabled={!dirty || loading}
                             onClick={save}
                           >
                             {t('pages.singBox.save')}
@@ -2661,13 +2754,27 @@ export default function SingBoxPage() {
                           <Button
                             icon={<ReloadOutlined />}
                             loading={saving}
-                            onClick={() => void refresh()}
+                            onClick={requestRefresh}
                           >
                             {t('pages.singBox.refresh')}
                           </Button>
-                          <Button danger loading={saving} onClick={() => void reset()}>
-                            {t('pages.singBox.reset')}
-                          </Button>
+                          <Space>
+                            <span>Расширенный режим</span>
+                            <Switch
+                              aria-label="Расширенный режим"
+                              checked={showAdvanced}
+                              disabled={saving}
+                              onChange={(checked) => {
+                                setAdvancedMode(checked);
+                                if (!checked && expertSection) navigate('/singbox#basic');
+                              }}
+                            />
+                          </Space>
+                          {showAdvanced && (
+                            <Button danger disabled={saving} onClick={requestReset}>
+                              {t('pages.singBox.reset')}
+                            </Button>
+                          )}
                         </Space>
                       </Col>
                       <Col xs={24} md={10}>
@@ -2707,24 +2814,28 @@ export default function SingBoxPage() {
                     />
                   )}
 
-                  <Alert
-                    type="info"
-                    showIcon
-                    title={t('pages.singBox.actualTitle')}
-                    description={
-                      <Space direction="vertical" size={0}>
-                        <span>{snapshot?.configPath}</span>
-                        {snapshot?.configModified && <span>{snapshot.configModified}</span>}
-                      </Space>
-                    }
-                  />
+                  {showAdvanced && (
+                    <Alert
+                      type="info"
+                      showIcon
+                      title={t('pages.singBox.actualTitle')}
+                      description={
+                        <Space orientation="vertical" size={0}>
+                          <span>{snapshot?.configPath}</span>
+                          {snapshot?.configModified && <span>{snapshot.configModified}</span>}
+                        </Space>
+                      }
+                    />
+                  )}
 
-                  <Alert
-                    type="info"
-                    showIcon
-                    title={t('pages.singBox.managedTitle')}
-                    description={t('pages.singBox.managedDesc')}
-                  />
+                  {showAdvanced && (
+                    <Alert
+                      type="info"
+                      showIcon
+                      title={t('pages.singBox.managedTitle')}
+                      description={t('pages.singBox.managedDesc')}
+                    />
+                  )}
 
                   <Tabs
                     activeKey={activeSection}
@@ -2732,13 +2843,15 @@ export default function SingBoxPage() {
                       if (sectionKeys.has(key)) navigate('/singbox#' + key);
                     }}
                     className="singbox-main-tabs"
-                    items={Array.from(sectionKeys).map((key) => ({
+                    items={visibleSections.map((key) => ({
                       key,
                       label: SECTION_LABELS[key],
                       children: key === activeSection ? sectionBody : null,
                     }))}
                   />
                 </Space>
+              ) : (
+                <div style={{ minHeight: 200 }} />
               )}
             </Spin>
           </Layout.Content>
