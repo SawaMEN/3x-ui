@@ -97,4 +97,47 @@ describe('simple sing-box page', () => {
     expect(HttpUtil.post).not.toHaveBeenCalled();
     fireEvent.click(screen.getByText('Отмена').closest('button')!);
   });
+  it('imports standard Trojan links with TLS enabled', async () => {
+    mount('/singbox#outbound');
+    fireEvent.click(await screen.findByText('Импорт ссылки'));
+    fireEvent.change(screen.getByPlaceholderText('vless://...'), {
+      target: { value: 'trojan://pass@proxy.test#Imported' },
+    });
+    fireEvent.click(screen.getByText('Добавить').closest('button')!);
+    await screen.findByText('Imported');
+    fireEvent.click(screen.getByText('Save').closest('button')!);
+    await waitFor(() =>
+      expect(HttpUtil.post).toHaveBeenCalledWith(
+        '/panel/api/setting/singbox/config',
+        expect.anything(),
+      ),
+    );
+    const call = vi
+      .mocked(HttpUtil.post)
+      .mock.calls.find(([path]) => path === '/panel/api/setting/singbox/config')!;
+    const sent = JSON.parse((call[1] as { config: string }).config);
+    expect(sent.outbounds).toContainEqual({
+      type: 'trojan',
+      tag: 'Imported',
+      server: 'proxy.test',
+      server_port: 443,
+      password: 'pass',
+      tls: { enabled: true, server_name: 'proxy.test' },
+    });
+  });
+
+  it('keeps unsupported links out of the configuration', async () => {
+    mount('/singbox#outbound');
+    fireEvent.click(await screen.findByText('Импорт ссылки'));
+    fireEvent.change(screen.getByPlaceholderText('vless://...'), {
+      target: {
+        value: 'vless://12345678-1234-1234-1234-123456789abc@proxy.test?type=xhttp#Unsupported',
+      },
+    });
+    fireEvent.click(screen.getByText('Добавить').closest('button')!);
+    await screen.findByText(/Транспорт xhttp не поддерживается/);
+    expect(screen.queryByText('Unsupported')).toBeNull();
+    expect(screen.getByText('Save').closest('button')!.hasAttribute('disabled')).toBe(true);
+    expect(HttpUtil.post).not.toHaveBeenCalled();
+  });
 });

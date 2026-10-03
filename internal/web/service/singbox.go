@@ -501,6 +501,7 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 }
 
 type SingBoxEditorSnapshot struct {
+	InboundTags     []string       `json:"inboundTags"`
 	Config          map[string]any `json:"config"`
 	Running         bool           `json:"running"`
 	Version         string         `json:"version"`
@@ -554,6 +555,12 @@ func (s *SingBoxService) GetEditorConfig(ctx context.Context) (*SingBoxEditorSna
 	if _, ok := raw["outbounds"]; ok {
 		raw["outbounds"] = editorConfig.Outbounds
 	}
+	inboundTags := make([]string, 0, len(editorConfig.Inbounds))
+	for _, inbound := range editorConfig.Inbounds {
+		if tag, ok := inbound["tag"].(string); ok && tag != "" {
+			inboundTags = append(inboundTags, tag)
+		}
+	}
 	delete(raw, "inbounds")
 	delete(raw, "services")
 	modified := ""
@@ -566,6 +573,7 @@ func (s *SingBoxService) GetEditorConfig(ctx context.Context) (*SingBoxEditorSna
 	}
 	return &SingBoxEditorSnapshot{
 		Config:          raw,
+		InboundTags:     inboundTags,
 		Running:         s.IsRunning(),
 		Version:         version,
 		ConfigPath:      path,
@@ -579,6 +587,9 @@ func normalizeSingBoxTemplate(raw string) (string, error) {
 	var obj map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(raw), &obj); err != nil {
 		return "", fmt.Errorf("invalid sing-box JSON: %w", err)
+	}
+	if obj == nil {
+		return "", fmt.Errorf("sing-box settings must be a JSON object")
 	}
 	allowed := map[string]struct{}{
 		"$schema": {}, "log": {}, "dns": {}, "ntp": {}, "certificate": {},

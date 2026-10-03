@@ -123,3 +123,57 @@ export function outboundDefaults(type: string, tag: string, group: string[] = []
     ...(['trojan', 'hysteria2', 'tuic'].includes(type) ? { tls: { enabled: true } } : {}),
   };
 }
+
+export function outboundErrors(value: ConfigObject, otherTags: string[]): string[] {
+  const errors: string[] = [];
+  const tag = typeof value.tag === 'string' ? value.tag.trim() : '';
+  const type = typeof value.type === 'string' ? value.type : '';
+  if (!tag) errors.push('Укажите название подключения.');
+  else if (otherTags.includes(tag))
+    errors.push('Это название уже используется другим подключением или туннелем.');
+  if (!type) errors.push('Выберите протокол.');
+  if (['dns', 'tun', 'redirect', 'tproxy', 'wireguard'].includes(type))
+    errors.push('Этот тип не поддерживается как исходящее подключение текущим sing-box.');
+  if (
+    [
+      'vless',
+      'vmess',
+      'trojan',
+      'shadowsocks',
+      'http',
+      'socks',
+      'hysteria2',
+      'tuic',
+      'shadowtls',
+      'ssh',
+    ].includes(type)
+  ) {
+    if (typeof value.server !== 'string' || !value.server.trim()) errors.push('Укажите сервер.');
+    if (
+      !Number.isInteger(value.server_port) ||
+      Number(value.server_port) < 1 ||
+      Number(value.server_port) > 65535
+    )
+      errors.push('Порт должен быть целым числом от 1 до 65535.');
+  }
+  if (
+    ['vless', 'vmess', 'tuic'].includes(type) &&
+    (typeof value.uuid !== 'string' ||
+      !/^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i.test(value.uuid))
+  )
+    errors.push('Укажите корректный UUID.');
+  if (['trojan', 'shadowsocks', 'hysteria2', 'tuic'].includes(type) && !value.password)
+    errors.push('Укажите пароль.');
+  if (type === 'shadowsocks' && !value.method) errors.push('Выберите метод шифрования.');
+  if (['hysteria2', 'tuic', 'shadowtls'].includes(type) && object(value.tls).enabled !== true)
+    errors.push('Для этого протокола требуется TLS.');
+  if (['selector', 'urltest'].includes(type)) {
+    const members = Array.isArray(value.outbounds) ? value.outbounds : [];
+    if (!members.length) errors.push('Выберите подключения для группы.');
+    if (members.some((member) => member === tag || !otherTags.includes(String(member))))
+      errors.push(
+        'Группа должна ссылаться на существующие подключения и не может ссылаться на себя.',
+      );
+  }
+  return errors;
+}

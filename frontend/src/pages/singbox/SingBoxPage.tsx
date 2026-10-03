@@ -42,7 +42,8 @@ import { HttpUtil } from '@/utils';
 import { useTheme } from '@/hooks/useTheme';
 import './SingBoxPage.css';
 import SimpleSettings from './SimpleSettings';
-import { outboundDefaults } from './simple-settings';
+import { outboundDefaults, outboundErrors } from './simple-settings';
+import { parseShareLink, uniqueTag } from './share-links';
 
 type SectionKey =
   | 'schema'
@@ -63,6 +64,7 @@ type ConfigMap = JsonObject;
 type ApiMsg<T = unknown> = { success?: boolean; msg?: string; obj?: T };
 
 type Snapshot = {
+  inboundTags?: string[];
   config: ConfigMap;
   running: boolean;
   version: string;
@@ -237,7 +239,13 @@ function JsonModal({
 
   const apply = () => {
     try {
-      const parsed = JSON.parse(text);
+      const parsed: unknown = JSON.parse(text);
+      if (
+        Array.isArray(value)
+          ? !Array.isArray(parsed)
+          : !parsed || typeof parsed !== 'object' || Array.isArray(parsed)
+      )
+        throw new Error(Array.isArray(value) ? 'Ожидается JSON-массив.' : 'Ожидается JSON-объект.');
       onApply(parsed);
       setOpen(false);
     } catch (err) {
@@ -421,73 +429,6 @@ function singBoxHealthIssues(config: ConfigMap) {
   return Array.from(new Set(issues));
 }
 
-function singBoxParseShareLink(raw: string): JsonObject | null {
-  try {
-    const url = new URL(raw.trim());
-    const params = url.searchParams;
-    const tag = decodeURIComponent(url.hash.replace(/^#/, '')) || url.hostname;
-    const common: JsonObject = { tag, server: url.hostname, server_port: Number(url.port || 443) };
-
-    if (url.protocol === 'vless:') {
-      const next: JsonObject = { ...common, type: 'vless', uuid: decodeURIComponent(url.username) };
-      if (params.get('flow')) next.flow = params.get('flow');
-      if (params.get('security') === 'tls' || params.get('sni') || params.get('pbk')) {
-        const tls: JsonObject = { enabled: true };
-        if (params.get('sni')) tls.server_name = params.get('sni');
-        if (params.get('alpn')) tls.alpn = params.get('alpn')!.split(',');
-        if (params.get('insecure') === '1') tls.insecure = true;
-        if (params.get('pbk') || params.get('sid')) {
-          tls.reality = {
-            enabled: true,
-            public_key: params.get('pbk') || '',
-            short_id: params.get('sid') || '',
-          };
-        }
-        next.tls = tls;
-      }
-      const network = params.get('type');
-      if (network === 'ws' || network === 'http' || network === 'grpc') {
-        const transport: JsonObject = { type: network };
-        if (params.get('path')) transport.path = params.get('path');
-        if (params.get('host')) transport.headers = { Host: params.get('host') };
-        if (params.get('serviceName')) transport.service_name = params.get('serviceName');
-        next.transport = transport;
-      }
-      return next;
-    }
-
-    if (url.protocol === 'trojan:') {
-      const next: JsonObject = {
-        ...common,
-        type: 'trojan',
-        password: decodeURIComponent(url.username || url.password),
-      };
-      if (params.get('sni') || params.get('security') === 'tls') {
-        next.tls = { enabled: true, server_name: params.get('sni') || url.hostname };
-      }
-      return next;
-    }
-
-    if (url.protocol === 'http:' || url.protocol === 'https:') {
-      const next: JsonObject = { ...common, type: 'http' };
-      if (url.username) next.username = decodeURIComponent(url.username);
-      if (url.password) next.password = decodeURIComponent(url.password);
-      if (url.protocol === 'https:') next.tls = { enabled: true, server_name: url.hostname };
-      return next;
-    }
-
-    if (url.protocol === 'socks5:' || url.protocol === 'socks:') {
-      const next: JsonObject = { ...common, type: 'socks' };
-      if (url.username) next.username = decodeURIComponent(url.username);
-      if (url.password) next.password = decodeURIComponent(url.password);
-      return next;
-    }
-  } catch {
-    return null;
-  }
-  return null;
-}
-
 function SingBoxOutboundEditor({
   value,
   existingTags,
@@ -548,7 +489,6 @@ function SingBoxOutboundEditor({
                       options={[
                         'direct',
                         'block',
-                        'dns',
                         'http',
                         'socks',
                         'shadowsocks',
@@ -898,20 +838,11 @@ function SingBoxOutboundEditor({
                   description="Любой параметр sing-box можно задать вручную, не теряя остальную форму."
                   style={{ marginBottom: 12 }}
                 />
-                <Input.TextArea
-                  autoSize={{ minRows: 16, maxRows: 30 }}
-                  spellCheck={false}
-                  value={prettyJson(value)}
-                  onChange={(e) => {
-                    try {
-                      const parsed = JSON.parse(e.target.value);
-                      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed))
-                        onChange(parsed);
-                    } catch {
-                      /* wait for valid json */
-                    }
-                  }}
-                  style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
+                <JsonModal
+                  title="Исходящее подключение — JSON"
+                  value={value}
+                  onApply={(next) => onChange(asObject(next))}
+                  buttonText="Редактировать JSON"
                 />
               </Card>
             ),
@@ -935,15 +866,20 @@ function SingBoxOutboundModal({
   onCancel: () => void;
   onSave: (value: JsonObject) => void;
 }) {
+  const existingTagsKey = JSON.stringify(existingTags);
+  const [error, setError] = useState('');
   const [draft, setDraft] = useState<JsonObject>({});
   useEffect(() => {
     if (!open) return;
     const nextDraft = value
       ? JSON.parse(JSON.stringify(value))
-      : { type: 'direct', tag: 'direct-' + (existingTags.length + 1) };
-    const timer = window.setTimeout(() => setDraft(nextDraft), 0);
+      : { type: 'direct', tag: uniqueTag('direct', JSON.parse(existingTagsKey) as string[]) };
+    const timer = window.setTimeout(() => {
+      setDraft(nextDraft);
+      setError('');
+    }, 0);
     return () => window.clearTimeout(timer);
-  }, [open, value, existingTags.length]);
+  }, [open, value, existingTagsKey]);
 
   return (
     <Modal
@@ -953,9 +889,22 @@ function SingBoxOutboundModal({
       okText="Сохранить"
       cancelText="Отмена"
       onCancel={onCancel}
-      onOk={() => onSave(draft)}
+      onOk={() => {
+        const errors = outboundErrors(
+          draft,
+          existingTags.filter(
+            (_tag, index) => index !== (value ? existingTags.indexOf(asString(value.tag)) : -1),
+          ),
+        );
+        if (errors.length) {
+          setError(errors.join(' '));
+          return;
+        }
+        onSave({ ...draft, tag: asString(draft.tag).trim() });
+      }}
       destroyOnHidden
     >
+      {error && <Alert type="error" showIcon title={error} style={{ marginBottom: 12 }} />}
       <SingBoxOutboundEditor value={draft} existingTags={existingTags} onChange={setDraft} />
     </Modal>
   );
@@ -1175,20 +1124,11 @@ function SingBoxRouteRuleModal({
             label: 'JSON',
             children: (
               <Card size="small">
-                <Input.TextArea
-                  autoSize={{ minRows: 16, maxRows: 28 }}
-                  spellCheck={false}
-                  value={prettyJson(draft)}
-                  onChange={(e) => {
-                    try {
-                      const parsed = JSON.parse(e.target.value);
-                      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed))
-                        setDraft(parsed);
-                    } catch {
-                      /* wait for valid json */
-                    }
-                  }}
-                  style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
+                <JsonModal
+                  title="Правило — JSON"
+                  value={draft}
+                  onApply={(next) => setDraft(asObject(next))}
+                  buttonText="Редактировать JSON"
                 />
               </Card>
             ),
@@ -2865,17 +2805,23 @@ export default function SingBoxPage() {
         cancelText="Отмена"
         onCancel={() => setShareLinkOpen(false)}
         onOk={() => {
-          const parsed = singBoxParseShareLink(shareLink);
-          if (!parsed) {
-            messageApi.error(
-              'Не удалось распознать ссылку. Поддерживаются VLESS, Trojan, HTTP и SOCKS5.',
-            );
+          let parsed: JsonObject;
+          try {
+            parsed = parseShareLink(shareLink);
+          } catch (error) {
+            messageApi.error(error instanceof Error ? error.message : String(error));
             return;
           }
           const current = asObjectArray(sectionValue('outbounds', config));
-          let tag = asString(parsed.tag) || 'outbound';
-          if (current.some((item) => asString(item.tag) === tag))
-            tag = tag + '-' + (current.length + 1);
+          const tag = uniqueTag(
+            asString(parsed.tag),
+            [...current, ...asObjectArray(config.endpoints)].map((item) => asString(item.tag)),
+          );
+          const errors = outboundErrors({ ...parsed, tag }, []);
+          if (errors.length) {
+            messageApi.error(errors[0]);
+            return;
+          }
           updateSection('outbounds', [...current, { ...parsed, tag }]);
           setShareLink('');
           setShareLinkOpen(false);
@@ -2904,7 +2850,10 @@ export default function SingBoxPage() {
             ? null
             : asObjectArray(sectionValue('outbounds', config))[editingOutbound]
         }
-        existingTags={asObjectArray(sectionValue('outbounds', config))
+        existingTags={[
+          ...asObjectArray(sectionValue('outbounds', config)),
+          ...asObjectArray(config.endpoints),
+        ]
           .map((item) => asString(item.tag))
           .filter(Boolean)}
         onCancel={() => setOutboundModalOpen(false)}
@@ -2924,9 +2873,12 @@ export default function SingBoxPage() {
             ? null
             : asObjectArray(asObject(sectionValue('route', config)).rules)[editingRouteRule]
         }
-        inboundTags={asObjectArray(config.inbounds)
-          .map((item) => asString(item.tag))
-          .filter(Boolean)}
+        inboundTags={
+          snapshot?.inboundTags ??
+          asObjectArray(config.inbounds)
+            .map((item) => asString(item.tag))
+            .filter(Boolean)
+        }
         outboundTags={asObjectArray(sectionValue('outbounds', config))
           .map((item) => asString(item.tag))
           .filter(Boolean)}
