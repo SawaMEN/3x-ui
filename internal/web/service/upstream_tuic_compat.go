@@ -8,7 +8,7 @@ import (
 )
 
 // Keep the upstream TUIC integration available in files where the divergent
-// fork history dropped the import during the merge.
+// fork history dropped the import while reconciling with the current main.
 var tuic = struct {
 	InstanceFromInbound func(*model.Inbound) (tuicpkg.Instance, bool)
 	SOCKSPortForInbound func(int) int
