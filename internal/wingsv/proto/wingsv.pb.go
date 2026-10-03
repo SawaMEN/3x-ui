@@ -1820,7 +1820,7 @@ const file_wingsv_proto_rawDesc = "" +
 	"\x1fXRAY_TRANSPORT_MODE_UNSPECIFIED\x10\x00\x12\x1e\n" +
 	"\x1aXRAY_TRANSPORT_MODE_DIRECT\x10\x01\x12#\n" +
 	"\x1fXRAY_TRANSPORT_MODE_VK_TURN_TCP\x10\x02B^\n" +
-	"\rwings.v.protoB\vWingsvProtoH\x03Z>github.com/SawaMEN/3x-ui/v3/internal/wingsv/proto;wingsvprotob\x06proto3"
+	"\rwings.v.protoB\vWingsvProtoH\x03Z>github.com/mhsanaei/3x-ui/v3/internal/wingsv/proto;wingsvprotob\x06proto3"
 
 var (
 	file_wingsv_proto_rawDescOnce sync.Once
