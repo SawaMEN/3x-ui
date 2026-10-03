@@ -7,7 +7,7 @@ on:
       - ".github/workflows/sync-reconcile-fix.yml"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   fix:
@@ -45,12 +45,10 @@ jobs:
                   raise SystemExit(f'{path}: insertion anchor not found: {needle!r}')
               write(path, text.replace(needle, needle + addition, 1))
 
-          # Remove the temporary package-name shim. Real imports are restored below.
           compat = root / 'internal/web/service/upstream_tuic_compat.go'
           if compat.exists():
               compat.unlink()
 
-          # TUIC references dropped their imports during conflict resolution.
           add_after(
               'internal/web/service/inbound_amneziawg.go',
               '\t"github.com/SawaMEN/3x-ui/v3/internal/logger"\n',
@@ -62,11 +60,11 @@ jobs:
               '\t"github.com/SawaMEN/3x-ui/v3/internal/tuic"\n',
           )
 
-          # Build the candidate-email list locally instead of using the temporary SQL expression shim.
           path = 'internal/web/service/inbound.go'
           text = read(path)
+          start = text.find('func (s *InboundService) buildInboundForLocalRuntime')
           marker = '\ttrafficIDs := make(map[string]int)\n\tif inbound.Protocol == model.TUIC {'
-          if marker in text and '\temails := make([]string, 0, len(clients))\n' not in text[text.find('func (s *InboundService) buildInboundForLocalRuntime'):]:
+          if start >= 0 and marker in text[start:] and '\temails := make([]string, 0, len(clients))\n' not in text[start:]:
               replacement = '''\temails := make([]string, 0, len(clients))
 \tfor _, client := range clients {
 \t\tif c, ok := client.(map[string]any); ok {
@@ -79,10 +77,9 @@ jobs:
 
 \ttrafficIDs := make(map[string]int)
 \tif inbound.Protocol == model.TUIC {'''
-              text = text.replace(marker, replacement, 1)
+              text = text[:start] + text[start:].replace(marker, replacement, 1)
               write(path, text)
 
-          # Imports lost while merging upstream changes into fork-specific files.
           add_after(
               'internal/web/service/server.go',
               '\t"github.com/SawaMEN/3x-ui/v3/internal/util/common"\n',
@@ -109,15 +106,12 @@ jobs:
               '\t"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"\n',
           )
 
-          # Shutdown merge retained users of err1/err2 but lost their declarations.
           path = 'internal/web/web.go'
           text = read(path)
           fn = 'func (s *Server) stop(stopXray bool, stopTgBot bool) error {\n'
           if fn in text and fn + '\tvar err1, err2 error\n' not in text:
-              text = text.replace(fn, fn + '\tvar err1, err2 error\n', 1)
-              write(path, text)
+              write(path, text.replace(fn, fn + '\tvar err1, err2 error\n', 1))
 
-          # Keep the fork's string listener helpers while upstream TUIC checks use them.
           helper = root / 'internal/web/service/sync_port_helpers.go'
           helper.write_text('''package service
 
@@ -134,8 +128,6 @@ func inboundBindAddr(ib *model.Inbound) string {
 ''')
           PY
 
-          # The old fork TUIC snapshot job and the new native-TUIC journal cannot coexist.
-          # Use the current upstream pair, adapted only for this fork's Go module path.
           for f in internal/web/job/tuic_job.go internal/web/job/tuic_journal.go internal/web/job/tuic_job_test.go internal/web/job/tuic_journal_test.go; do
             git show upstream/main:"$f" | sed 's#github.com/mhsanaei/3x-ui/v3#github.com/SawaMEN/3x-ui/v3#g' > "$f"
           done
@@ -155,11 +147,29 @@ func inboundBindAddr(ib *model.Inbound) string {
             internal/web/job/tuic_job_test.go \
             internal/web/job/tuic_journal_test.go
 
-          rm .github/workflows/sync-reconcile-fix.yml
-      - name: Commit reconciliation
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "fix(sync): reconcile upstream TUIC and lost imports"
-          git push origin HEAD:sync-upstream-2026-10-03
+          mkdir -p /tmp/reconciled
+          cp --parents \
+            internal/web/service/inbound.go \
+            internal/web/service/inbound_amneziawg.go \
+            internal/web/service/port_conflict.go \
+            internal/web/service/server.go \
+            internal/web/service/panel/panel.go \
+            internal/web/service/tgbot/tgbot.go \
+            internal/web/controller/server.go \
+            internal/web/web.go \
+            internal/web/service/sync_port_helpers.go \
+            internal/web/job/tuic_job.go \
+            internal/web/job/tuic_journal.go \
+            internal/web/job/tuic_job_test.go \
+            internal/web/job/tuic_journal_test.go \
+            /tmp/reconciled/
+          printf '%s\n' internal/web/service/upstream_tuic_compat.go > /tmp/reconciled/DELETE_FILES.txt
+      - name: Verify reconciled Go tree compiles
+        run: go test ./internal/web/service ./internal/web/job ./internal/web/controller ./internal/web -run '^$'
+      - name: Upload reconciled files
+        uses: actions/upload-artifact@v7
+        with:
+          name: upstream-reconciled-files
+          path: /tmp/reconciled
+          if-no-files-found: error
+          retention-days: 1
