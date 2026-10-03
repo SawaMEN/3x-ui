@@ -281,7 +281,7 @@ func (s *OutboundSubscriptionService) GetLastOutbounds(id int) ([]any, error) {
 }
 
 // Refresh fetches the subscription URL, parses the links, assigns stable tags,
-// persists the results, and returns the generated outbounds.
+// persists the results, and returns the runtime-compatible outbounds.
 func (s *OutboundSubscriptionService) Refresh(id int) ([]any, error) {
 	sub, err := s.Get(id)
 	if err != nil {
@@ -456,10 +456,11 @@ func (s *OutboundSubscriptionService) fetchAndStore(sub *model.OutboundSubscript
 	}
 
 	// Compatibility is a runtime property, not a storage filter. Validate all
-	// members against the selected core only to produce an explicit user-facing
-	// status; activeOutboundsSplit filters the same members when building the
-	// actual runtime config so an incompatible profile cannot stop the core.
-	_, compatibilityIssues, coreName := filterSubscriptionOutboundsWithIssues(
+	// members against the selected core to produce an explicit user-facing
+	// status. The same compatible slice is returned by Refresh for backwards
+	// compatibility; the full source set remains persisted for future core
+	// switches/upgrades.
+	runtimeCompatible, compatibilityIssues, coreName := filterSubscriptionOutboundsWithIssues(
 		fmt.Sprintf("outbound sub %d", sub.Id), stored,
 	)
 
@@ -497,7 +498,7 @@ func (s *OutboundSubscriptionService) fetchAndStore(sub *model.OutboundSubscript
 	if result.RowsAffected == 0 {
 		return nil, fmt.Errorf("subscription changed during refresh; retry")
 	}
-	return stored, nil
+	return runtimeCompatible, nil
 }
 
 func (s *OutboundSubscriptionService) recordError(sub *model.OutboundSubscription, err error) {
@@ -644,6 +645,7 @@ func (s *OutboundSubscriptionService) Move(id int, up bool) error {
 			if err := db.Model(sub).Update("priority", i).Error; err != nil {
 				return err
 			}
+		}
 	}
 	return nil
 }
