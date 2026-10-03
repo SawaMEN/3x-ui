@@ -879,6 +879,7 @@ func (s *Server) StopPanelOnly() error {
 }
 
 func (s *Server) stop(stopXray bool, stopTgBot bool) error {
+	var err1, err2 error
 	s.cancel()
 	if stopXray {
 		if coreType, _ := s.settingService.GetCoreType(); coreType == service.CoreTypeSingBox {

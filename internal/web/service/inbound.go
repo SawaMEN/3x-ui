@@ -2319,6 +2319,16 @@ func (s *InboundService) buildInboundForLocalRuntime(tx *gorm.DB, inbound *model
 		enableMap[clientTraffic.Email] = clientTraffic.Enable
 	}
 
+	emails := make([]string, 0, len(clients))
+	for _, client := range clients {
+		if c, ok := client.(map[string]any); ok {
+			email, _ := c["email"].(string)
+			if email != "" {
+				emails = append(emails, email)
+			}
+		}
+	}
+
 	trafficIDs := make(map[string]int)
 	if inbound.Protocol == model.TUIC {
 		var rows []xray.ClientTraffic
