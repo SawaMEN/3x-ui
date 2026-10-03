@@ -1,0 +1,83 @@
+name: Stage upstream sync
+
+on:
+  push:
+    branches:
+      - sync/upstream-2026-10-03
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream-2026-10-03
+  cancel-in-progress: false
+
+jobs:
+  merge:
+    if: ${{ !contains(github.event.head_commit.message, '[upstream-sync-done]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout staging branch
+        uses: actions/checkout@v4
+        with:
+          ref: sync/upstream-2026-10-03
+          fetch-depth: 0
+
+      - name: Build synthetic upstream history and merge
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          LOCAL_BASE=cb9fcf872dc58d7a6a17dc9663ec4506ffdf2063
+          UPSTREAM_BASE=95f19b192f477b59cc368dcb7751bcf2e0180e5b
+          TARGET_BRANCH=sync/upstream-2026-10-03
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git remote add upstream https://github.com/MHSanaei/3x-ui.git
+          git fetch --no-tags upstream main
+          UPSTREAM_HEAD="$(git rev-parse upstream/main)"
+
+          LOCAL_TREE="$(git rev-parse "${LOCAL_BASE}^{tree}")"
+          UPSTREAM_TREE="$(git rev-parse "${UPSTREAM_BASE}^{tree}")"
+          if [ "$LOCAL_TREE" != "$UPSTREAM_TREE" ]; then
+            echo "Logical base trees differ: $LOCAL_TREE != $UPSTREAM_TREE" >&2
+            exit 2
+          fi
+
+          git switch --detach "$LOCAL_BASE"
+          git diff --binary "$UPSTREAM_BASE" "$UPSTREAM_HEAD" | git apply --index --binary --whitespace=nowarn
+          git commit -m "chore: synthetic upstream snapshot ${UPSTREAM_HEAD}"
+          SYNTHETIC_HEAD="$(git rev-parse HEAD)"
+
+          git switch "$TARGET_BRANCH"
+
+          set +e
+          git merge --no-ff --no-commit "$SYNTHETIC_HEAD"
+          MERGE_RC=$?
+          set -e
+
+          if [ "$MERGE_RC" -ne 0 ]; then
+            git diff --name-only --diff-filter=U | sort -u > .upstream-sync-conflicts
+            echo "Conflicts detected:"
+            cat .upstream-sync-conflicts
+          else
+            : > .upstream-sync-conflicts
+          fi
+
+          {
+            echo "upstream_repo=MHSanaei/3x-ui"
+            echo "upstream_base=${UPSTREAM_BASE}"
+            echo "upstream_head=${UPSTREAM_HEAD}"
+            echo "local_base=${LOCAL_BASE}"
+            echo "synthetic_head=${SYNTHETIC_HEAD}"
+          } > .upstream-sync-meta
+
+          # Commit the merge result on the staging branch. Text conflicts keep
+          # their standard conflict markers for deliberate follow-up resolution;
+          # binary/delete conflicts keep the working-tree side selected by git.
+          rm -f .github/workflows/sync-upstream.yml
+          git add -A
+          git commit -m "chore: stage MHSanaei upstream sync [upstream-sync-done]"
+          git push origin HEAD:"$TARGET_BRANCH"
