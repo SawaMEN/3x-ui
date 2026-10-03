@@ -1,6 +1,8 @@
 package job
 
 import (
+	"time"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/websocket"
@@ -14,40 +16,22 @@ type OutboundSubscriptionJob struct {
 	xraySvc    *service.XrayService
 }
 
-// NewOutboundSubscriptionJob creates the job (zero-value services are populated
-// on first Run via method calls, same pattern as other jobs).
 func NewOutboundSubscriptionJob() *OutboundSubscriptionJob {
-	return &OutboundSubscriptionJob{
-		subService: &service.OutboundSubscriptionService{},
-		xraySvc:    &service.XrayService{},
-	}
+	return &OutboundSubscriptionJob{subService: &service.OutboundSubscriptionService{}, xraySvc: &service.XrayService{}}
 }
 
-// Run is invoked by the cron scheduler.
 func (j *OutboundSubscriptionJob) Run() {
-	if j.subService == nil {
-		j.subService = &service.OutboundSubscriptionService{}
+	if err := service.SnapshotTrafficHistory(time.Now()); err != nil {
+		logger.Warning("traffic history snapshot failed:", err)
 	}
-	if j.xraySvc == nil {
-		j.xraySvc = &service.XrayService{}
-	}
-
+	if j.subService == nil { j.subService = &service.OutboundSubscriptionService{} }
+	if j.xraySvc == nil { j.xraySvc = &service.XrayService{} }
 	count, err := j.subService.RefreshAllEnabled()
-	if err != nil {
-		logger.Warning("outbound subscription auto-update error:", err)
-		return
-	}
+	if err != nil { logger.Warning("outbound subscription auto-update error:", err); return }
 	if count > 0 {
 		logger.Infof("Refreshed %d outbound subscription(s)", count)
-		// Ask the xray manager to restart/reload on the next 30s check.
 		core, _ := (&service.SettingService{}).GetCoreType()
-		if core == service.CoreTypeSingBox {
-			(&service.SingBoxService{}).SetToNeedRestart()
-		} else {
-			j.xraySvc.SetToNeedRestart()
-		}
-		// Also broadcast an invalidate so the UI can refresh the xray setting
-		// view (new outbounds will be visible after the reload cycle).
+		if core == service.CoreTypeSingBox { (&service.SingBoxService{}).SetToNeedRestart() } else { j.xraySvc.SetToNeedRestart() }
 		websocket.BroadcastInvalidate(websocket.MessageTypeOutbounds)
 	}
 }
