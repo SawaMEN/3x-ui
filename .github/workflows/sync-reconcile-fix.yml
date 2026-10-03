@@ -6,6 +6,7 @@ on:
       - sync-upstream-2026-10-03
     paths:
       - .github/workflows/sync-reconcile-fix.yml
+      - tools/reconcile_upstream_sync.py
 
 permissions:
   contents: read
@@ -15,4 +16,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - run: echo reconcile-runner-ok
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Fetch upstream
+        run: |
+          git remote add upstream https://github.com/MHSanaei/3x-ui.git || true
+          git fetch --depth=1 upstream main
+      - name: Reconcile sources
+        run: python3 tools/reconcile_upstream_sync.py
+      - name: Verify Go packages compile
+        run: go test ./internal/web/service ./internal/web/job ./internal/web/controller ./internal/web -run '^$'
+      - name: Upload reconciled files
+        uses: actions/upload-artifact@v7
+        with:
+          name: upstream-reconciled-files
+          path: /tmp/reconciled
+          if-no-files-found: error
+          retention-days: 1
