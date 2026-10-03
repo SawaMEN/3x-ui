@@ -19,8 +19,8 @@ Xray JSON config from that state, supervises the Xray child process, and exposes
 WebSocket API. A React SPA (built by Vite, embedded into the Go binary) is the UI. A second,
 separate HTTP server serves **subscription links** to end users.
 
-The panel supervises **managed child processes**: Xray-core itself and — when MTProto or
-TUIC inbounds exist — dedicated child proxy binaries:
+The panel supervises **managed child processes**: Xray-core itself and — when MTProto
+inbounds exist — a dedicated child proxy binary:
 
 - **`telemt` for MTProto inbounds** (`telemt/telemt`; `internal/mtproto/`):
   One managed process per inbound uses native `[access.users]` secrets, per-user

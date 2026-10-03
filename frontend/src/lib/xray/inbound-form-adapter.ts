@@ -1,3 +1,4 @@
+import { resolveTuicServerSettings } from '@/lib/tuic';
 import type {
   InboundFormValues,
   ShareAddrStrategy,

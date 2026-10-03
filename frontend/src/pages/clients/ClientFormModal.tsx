@@ -892,11 +892,7 @@ export default function ClientFormModal({
                           <FormField
                             name="totalGB"
                             label={t('pages.clients.totalGB')}
-                            tooltip={
-                              hasTuic
-                                ? t('pages.clients.tuicTotalGBDesc')
-                                : t('pages.clients.totalGBDesc')
-                            }
+                            tooltip={t('pages.clients.totalGBDesc')}
                             transform={{ output: (v) => Number(v) || 0 }}
                           >
                             <InputNumber min={0} step={1} style={{ width: '100%' }} />

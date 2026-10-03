@@ -158,3 +158,45 @@ func (j *TuicJob) Run() {
 
 	j.inboundService.RefreshLocalOnlineClients(onlineEmails, activeTags)
 }
+
+// FlushStoppedTraffic persists counters drained when the TUIC manager stops its
+// listeners. Call it after scheduled jobs have stopped and before the traffic
+// writer shuts down.
+func (j *TuicJob) FlushStoppedTraffic() error {
+	return j.flushTuicJournal()
+}
+
+func aggregateTuicClientTraffic(clientDeltas []tuic.ClientTrafficDelta, onlineEmails []string) []*xray.ClientTraffic {
+	clientTrafficMap := make(map[string]*xray.ClientTraffic, len(clientDeltas)+len(onlineEmails))
+	for _, cd := range clientDeltas {
+		key := cd.Email
+		if cd.TrafficID > 0 {
+			key = fmt.Sprintf("traffic:%d", cd.TrafficID)
+		}
+		if cd.TrafficID == 0 && cd.InboundID > 0 && cd.UUID != "" {
+			key = fmt.Sprintf("tuic:%d:%s", cd.InboundID, cd.UUID)
+		}
+		traffic := clientTrafficMap[key]
+		if traffic == nil {
+			traffic = &xray.ClientTraffic{Email: cd.Email, TuicTrafficID: cd.TrafficID, TuicUUID: cd.UUID, TuicInboundId: cd.InboundID}
+			clientTrafficMap[key] = traffic
+		}
+		traffic.Up += cd.Up
+		traffic.Down += cd.Down
+	}
+	for _, email := range onlineEmails {
+		if _, exists := clientTrafficMap[email]; !exists {
+			clientTrafficMap[email] = &xray.ClientTraffic{
+				Email: email,
+				Up:    0,
+				Down:  0,
+			}
+		}
+	}
+
+	clientTraffics := make([]*xray.ClientTraffic, 0, len(clientTrafficMap))
+	for _, ct := range clientTrafficMap {
+		clientTraffics = append(clientTraffics, ct)
+	}
+	return clientTraffics
+}

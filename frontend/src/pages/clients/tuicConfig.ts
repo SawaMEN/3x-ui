@@ -1,5 +1,6 @@
 import { formatInboundLabel } from '@/lib/inbounds/label';
 import { preferPublicHost, resolveShareHost } from '@/lib/xray/inbound-link';
+import { normalizeTuicCongestionController } from '@/lib/tuic';
 import type { ClientRecord, InboundOption } from '@/hooks/useClients';
 
 export function isTuicClient(client: ClientRecord | null | undefined): boolean {
