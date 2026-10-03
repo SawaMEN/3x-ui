@@ -120,18 +120,18 @@ func TestNormalizeV2RayTransportForRuntimeRemovesOnlyKnownIncompatibleFields(t *
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			transport := map[string]any{
-				"type":                  tc.typeName,
-				"host":                  []any{"cdn.example.com"},
-				"path":                  "/edge",
-				"method":                "PUT",
-				"headers":               map[string]any{"X-Test": "1"},
-				"idle_timeout":          "30s",
-				"ping_timeout":          "10s",
-				"max_early_data":        float64(2048),
+				"type":                   tc.typeName,
+				"host":                   []any{"cdn.example.com"},
+				"path":                   "/edge",
+				"method":                 "PUT",
+				"headers":                map[string]any{"X-Test": "1"},
+				"idle_timeout":           "30s",
+				"ping_timeout":           "10s",
+				"max_early_data":         float64(2048),
 				"early_data_header_name": "Sec-WebSocket-Protocol",
-				"service_name":          "grpc-service",
-				"permit_without_stream": true,
-				"future_option":         "preserve-me",
+				"service_name":           "grpc-service",
+				"permit_without_stream":  true,
+				"future_option":          "preserve-me",
 			}
 			if err := normalizeV2RayTransportForRuntime(transport, tc.typeName); err != nil {
 				t.Fatal(err)
@@ -198,6 +198,7 @@ func TestConfigMarshalAppliesOutboundNormalization(t *testing.T) {
 		"tag":         "proxy",
 		"server":      "203.0.113.1",
 		"server_port": 443,
+		"uuid":        "11111111-2222-4333-8444-555555555555",
 		"transport": map[string]any{
 			"type":    "http",
 			"headers": map[string]any{"Host": "cdn.example.com"},

@@ -1213,8 +1213,10 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 	if err := prepareExternalVPN(inbound, ""); err != nil {
 		return inbound, false, err
 	}
-	if inbound.NodeID != nil && !isNodeEligibleProtocol(inbound.Protocol) {
-		return inbound, false, common.NewErrorf("%s inbounds cannot be assigned to a node", inbound.Protocol)
+	if inbound.NodeID != nil {
+		if err := checkNodeCanHostProtocol(database.GetDB(), *inbound.NodeID, inbound.Protocol); err != nil {
+			return inbound, false, err
+		}
 	}
 	inbound.SubSortIndex = normalizeSubSortIndex(inbound.SubSortIndex)
 	if err := normalizeInboundShareAddressStrict(inbound); err != nil {
@@ -1875,6 +1877,11 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 
 	oldInbound, err := s.GetInbound(inbound.Id)
 	if err != nil {
+		return inbound, false, err
+	}
+	// Keep node ownership authoritative before protocol validation and port allocation.
+	inbound.NodeID = oldInbound.NodeID
+	if err := normalizeTuicSettings(inbound); err != nil {
 		return inbound, false, err
 	}
 	if err := validateShadowTLSTransport(inbound); err != nil {

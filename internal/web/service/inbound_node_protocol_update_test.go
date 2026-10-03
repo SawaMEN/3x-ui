@@ -23,6 +23,7 @@ func TestUpdateInbound_NodeMtprotoShareAddrIsEditable(t *testing.T) {
 	}
 
 	update := existing
+	update.NodeID = nil // Edit payloads may omit the stored node assignment.
 	update.ShareAddrStrategy = "custom"
 	update.ShareAddr = "new-share.example.com"
 	updated, _, err := (&InboundService{}).UpdateInbound(&update)

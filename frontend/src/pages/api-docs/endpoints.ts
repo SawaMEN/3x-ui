@@ -662,6 +662,27 @@ export const sections: readonly Section[] = [
       },
       {
         method: 'GET',
+        path: '/panel/api/server/core/capabilities',
+        summary: 'Return the selected core and its supported panel capabilities.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/server/singbox/outbound/check',
+        summary: 'Measure the delay of a running sing-box outbound.',
+        params: [
+          { name: 'tag', in: 'body (form)', type: 'string', desc: 'Outbound tag.' },
+          { name: 'url', in: 'body (form)', type: 'string', optional: true },
+          {
+            name: 'timeout',
+            in: 'body (form)',
+            type: 'integer',
+            optional: true,
+            desc: 'Timeout in milliseconds, from 1 to 30000; defaults to 5000.',
+          },
+        ],
+      },
+      {
+        method: 'GET',
         path: '/panel/api/server/getPanelUpdateInfo',
         summary: 'Check whether a newer 3x-ui release is available on GitHub.',
       },

@@ -34,8 +34,8 @@ func canonicalizeClientTraffic(tx *gorm.DB, traffics []*xray.ClientTraffic) ([]*
 			byEmail[email] = &copy
 			continue
 		}
-		current.Up += traffic.Up
-		current.Down += traffic.Down
+		current.Up = sumTrafficDelta(current.Up, traffic.Up)
+		current.Down = sumTrafficDelta(current.Down, traffic.Down)
 		current.Enable = current.Enable || traffic.Enable
 	}
 	result := make([]*xray.ClientTraffic, 0, len(byEmail))
