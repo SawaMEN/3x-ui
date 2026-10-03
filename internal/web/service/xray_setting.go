@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"slices"
 	"strconv"
 	"strings"
@@ -32,6 +33,19 @@ func (s *XraySettingService) SaveXraySetting(newXraySettings string) error {
 	// back here. Strip it before validation/storage, otherwise we save
 	// garbage the next read can't recover from without this same call.
 	newXraySettings = UnwrapXrayTemplateConfig(newXraySettings)
+
+	// Bulk JSON import may contain official sing-box outbounds in native
+	// {"type":"...","tag":"...",...} form. The panel stores a shared
+	// Xray-shaped template, so normalize those objects server-side as well as in
+	// the single-outbound editor. This also covers direct API clients.
+	if coreType, _ := s.GetCoreType(); coreType == CoreTypeSingBox {
+		normalized, err := normalizeTemplateNativeSingBoxOutbounds(newXraySettings)
+		if err != nil {
+			return common.NewError("xray template config invalid:", err)
+		}
+		newXraySettings = normalized
+	}
+
 	if err := s.CheckXrayConfig(newXraySettings); err != nil {
 		return err
 	}
@@ -47,6 +61,51 @@ func (s *XraySettingService) SaveXraySetting(newXraySettings string) error {
 	return s.saveSetting("xrayTemplateConfig", newXraySettings)
 }
 
+func normalizeTemplateNativeSingBoxOutbounds(raw string) (string, error) {
+	var cfg map[string]any
+	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
+		return raw, err
+	}
+	items, exists := cfg["outbounds"]
+	if !exists || items == nil {
+		return raw, nil
+	}
+	outbounds, ok := items.([]any)
+	if !ok {
+		return raw, fmt.Errorf("outbounds is not an array")
+	}
+	changed := false
+	for i, item := range outbounds {
+		ob, ok := item.(map[string]any)
+		if !ok {
+			return raw, fmt.Errorf("outbound %d is not an object", i+1)
+		}
+		protocol, _ := ob["protocol"].(string)
+		if strings.TrimSpace(protocol) != "" {
+			continue
+		}
+		outboundType, _ := ob["type"].(string)
+		if strings.TrimSpace(outboundType) == "" {
+			continue
+		}
+		normalized, err := normalizeJSONOutbound(ob)
+		if err != nil {
+			return raw, fmt.Errorf("outbound %d: %w", i+1, err)
+		}
+		outbounds[i] = normalized
+		changed = true
+	}
+	if !changed {
+		return raw, nil
+	}
+	cfg["outbounds"] = outbounds
+	encoded, err := json.Marshal(cfg)
+	if err != nil {
+		return raw, err
+	}
+	return string(encoded), nil
+}
+
 func (s *XraySettingService) CheckXrayConfig(XrayTemplateConfig string) error {
 	xrayConfig := &xray.Config{}
 	err := json.Unmarshal([]byte(XrayTemplateConfig), xrayConfig)
@@ -58,6 +117,27 @@ func (s *XraySettingService) CheckXrayConfig(XrayTemplateConfig string) error {
 		if err := json.Unmarshal(xrayConfig.OutboundConfigs, &outbounds); err != nil {
 			return common.NewError("xray template config invalid: outbounds is not an array:", err)
 		}
+
+		// The template is shared by both cores. Validate each outbound against
+		// the selected core instead of always feeding sing-box-native/future JSON
+		// through Xray's loader. This keeps the JSON editor protocol-agnostic
+		// while still rejecting profiles the active core cannot represent.
+		coreType, _ := s.GetCoreType()
+		if coreType == CoreTypeSingBox {
+			for _, outbound := range outbounds {
+				var ob map[string]any
+				if err := json.Unmarshal(outbound, &ob); err != nil {
+					return common.NewError("outbound JSON invalid:", err)
+				}
+				_, rejected, _ := filterSubscriptionOutboundsDetailed("xray template", []any{ob})
+				if len(rejected) > 0 {
+					tag, _ := ob["tag"].(string)
+					return fmt.Errorf("sing-box does not support outbound %q: %s", tag, rejected[0])
+				}
+			}
+			return nil
+		}
+
 		coreVersion := "Unknown"
 		if process := currentXrayProcess(); process != nil {
 			coreVersion = process.GetXrayVersion()
@@ -373,7 +453,6 @@ func isApiRule(rule map[string]any) bool {
 			if s, ok := t.(string); ok && s == "api" {
 				return true
 			}
-		}
 	case []string:
 		if slices.Contains(tags, "api") {
 			return true
