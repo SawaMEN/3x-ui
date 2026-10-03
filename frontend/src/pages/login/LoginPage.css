@@ -442,6 +442,7 @@ body.theme-blue-gray .login-app {
   margin-bottom: 0;
 }
 
+<<<<<<< HEAD
 /* Cyberpunk identity: reuse the global theme while keeping the login card
    readable above animated cyan/magenta/gold ambience. */
 body.theme-cyberpunk .brand-name {
@@ -563,4 +564,8 @@ body.theme-cyberpunk .login-form .ant-form-item-label > label {
   body.theme-cyberpunk .login-wrapper::after {
     animation: none;
   }
+=======
+.login-sponsor {
+  margin-top: 20px;
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
 }

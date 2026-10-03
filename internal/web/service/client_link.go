@@ -1,10 +1,18 @@
 package service
 
 import (
+	"fmt"
 	"strings"
 
+<<<<<<< HEAD
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+=======
+	"github.com/google/uuid"
+
+	"github.com/mhsanaei/3x-ui/v3/internal/database"
+	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -65,6 +73,7 @@ func applyClientRecordMerge(row *model.ClientRecord, incoming *model.ClientRecor
 	row.Comment = incoming.Comment
 	row.Reset = incoming.Reset
 	row.ResetDay = incoming.ResetDay
+	row.ResetWeekday = incoming.ResetWeekday
 	row.ResetMax = incoming.ResetMax
 	// Guarded like Group and AdTag: a node snapshot rebuilt from settings that
 	// predate the cycle would otherwise silently erase it.
@@ -94,8 +103,15 @@ func (s *ClientService) ApplyInboundClientDelta(tx *gorm.DB, inboundId int, chan
 }
 
 func (s *ClientService) syncInboundClients(tx *gorm.DB, inboundId int, clients []model.Client, detachEmails []string, prune bool) error {
+	if err := validateClientsRenewal(clients); err != nil {
+		return err
+	}
 	if tx == nil {
 		tx = database.GetDB()
+	}
+
+	if err := s.validateTuicIdentities(tx, inboundId, clients, detachEmails, prune); err != nil {
+		return err
 	}
 
 	emails := make([]string, 0, len(clients))
@@ -211,7 +227,42 @@ func (s *ClientService) syncInboundClients(tx *gorm.DB, inboundId int, clients [
 		wantedIds = append(wantedIds, id)
 	}
 
-	return s.reconcileInboundLinks(tx, inboundId, wantedFlow, wantedIds, detachEmails, prune)
+	if err := s.reconcileInboundLinks(tx, inboundId, wantedFlow, wantedIds, detachEmails, prune); err != nil {
+		return err
+	}
+
+	affected := map[int]struct{}{inboundId: {}}
+	for _, ids := range chunkInts(wantedIds, sqlInChunk) {
+		var inboundIDs []int
+		if err := tx.Model(&model.ClientInbound{}).Distinct("inbound_id").Where("client_id IN ?", ids).Pluck("inbound_id", &inboundIDs).Error; err != nil {
+			return err
+		}
+		for _, id := range inboundIDs {
+			affected[id] = struct{}{}
+		}
+	}
+	affectedIDs := make([]int, 0, len(affected))
+	for id := range affected {
+		affectedIDs = append(affectedIDs, id)
+	}
+	for _, ids := range chunkInts(affectedIDs, sqlInChunk) {
+		var duplicates int64
+		err := tx.Raw(`SELECT COUNT(*) FROM (
+            SELECT ci.inbound_id, LOWER(c.uuid) FROM clients c
+            JOIN client_inbounds ci ON ci.client_id = c.id
+            JOIN inbounds i ON i.id = ci.inbound_id
+            WHERE i.protocol = ? AND c.uuid <> '' AND ci.inbound_id IN ?
+            GROUP BY ci.inbound_id, LOWER(c.uuid) HAVING COUNT(*) > 1
+        ) AS duplicate_uuids`, model.TUIC, ids).Scan(&duplicates).Error
+		if err != nil {
+			return err
+		}
+		if duplicates > 0 {
+			return fmt.Errorf("TUIC: duplicate client UUID within inbound")
+		}
+	}
+
+	return nil
 }
 
 // reconcileInboundLinks writes only the client_inbounds rows that differ. prune
@@ -402,7 +453,52 @@ func (s *ClientService) ListForInboundBySubId(tx *gorm.DB, inboundId int, subId 
 	return out, nil
 }
 
+<<<<<<< HEAD
 // ListForInboundsBySubId loads only one subscriber's linked clients in batches.
 func (s *ClientService) ListForInboundsBySubId(tx *gorm.DB, inboundIDs []int, subId string) (map[int][]model.Client, error) {
 	return s.listForInbounds(tx, inboundIDs, &subId)
+=======
+func (s *ClientService) validateTuicIdentities(tx *gorm.DB, inboundID int, changed []model.Client, detached []string, prune bool) error {
+	var inbound model.Inbound
+	if err := tx.Select("protocol").Where("id = ?", inboundID).Take(&inbound).Error; err != nil {
+		return err
+	}
+	if inbound.Protocol != model.TUIC {
+		return nil
+	}
+	candidates := append([]model.Client(nil), changed...)
+	if !prune {
+		current, err := s.ListForInbound(tx, inboundID)
+		if err != nil {
+			return err
+		}
+		excluded := make(map[string]bool)
+		for _, client := range changed {
+			excluded[client.Email] = true
+		}
+		for _, email := range detached {
+			excluded[email] = true
+		}
+		for _, client := range current {
+			if !excluded[client.Email] {
+				candidates = append(candidates, client)
+			}
+		}
+	}
+	seen := make(map[uuid.UUID]string)
+	for _, client := range candidates {
+		if client.ID == "" {
+			continue
+		}
+		id, err := uuid.Parse(client.ID)
+		if err != nil {
+			return fmt.Errorf("TUIC: invalid client UUID")
+		}
+		if email, exists := seen[id]; exists && email != client.Email {
+			return fmt.Errorf("TUIC: duplicate client UUID within inbound")
+		}
+		seen[id] = client.Email
+	}
+	return nil
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
 }

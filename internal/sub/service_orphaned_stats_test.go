@@ -4,9 +4,16 @@ import (
 	"path/filepath"
 	"testing"
 
+<<<<<<< HEAD
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
+=======
+	"github.com/mhsanaei/3x-ui/v3/internal/database"
+	"github.com/mhsanaei/3x-ui/v3/internal/database/dbtest"
+	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
+	"github.com/mhsanaei/3x-ui/v3/internal/xray"
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
 )
 
 // statsForClient recovers a client's usage by email when the client_traffics row
@@ -17,10 +24,7 @@ import (
 func TestStatsForClient_OrphanedInboundIdFallback(t *testing.T) {
 	dbDir := t.TempDir()
 	t.Setenv("XUI_DB_FOLDER", dbDir)
-	if err := database.InitDB(filepath.Join(dbDir, "x-ui.db")); err != nil {
-		t.Fatalf("InitDB: %v", err)
-	}
-	t.Cleanup(func() { _ = database.CloseDB() })
+	dbtest.InitDB(t, filepath.Join(dbDir, "x-ui.db"))
 
 	const email = "old-client@example.com"
 	const total = int64(100) * gb

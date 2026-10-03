@@ -8,8 +8,14 @@ import (
 	"testing"
 	"time"
 
+<<<<<<< HEAD
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+=======
+	"github.com/mhsanaei/3x-ui/v3/internal/database"
+	"github.com/mhsanaei/3x-ui/v3/internal/database/dbtest"
+	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
 )
 
 func TestMergeClientIps_EvictsStaleOldEntries(t *testing.T) {
@@ -197,10 +203,7 @@ func TestPartitionLiveIps_ConcurrentLiveIpsSortedAscending(t *testing.T) {
 func TestGetInboundByEmailFallbackIgnoresProtocolScalarFields(t *testing.T) {
 	dbDir := t.TempDir()
 	t.Setenv("XUI_DB_FOLDER", dbDir)
-	if err := database.InitDB(filepath.Join(dbDir, "x-ui.db")); err != nil {
-		t.Fatalf("InitDB: %v", err)
-	}
-	t.Cleanup(func() { _ = database.CloseDB() })
+	dbtest.InitDB(t, filepath.Join(dbDir, "x-ui.db"))
 
 	inbound := &model.Inbound{
 		UserId:   1,

@@ -8,8 +8,13 @@ import (
 	"sync"
 	"testing"
 
+<<<<<<< HEAD
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+=======
+	"github.com/mhsanaei/3x-ui/v3/internal/database/dbtest"
+	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
 
 	"github.com/mymmrac/telego"
 )
@@ -58,10 +63,7 @@ func swapTestBot(t *testing.T, url string) {
 
 func newStaleButtonTgbot(t *testing.T) *Tgbot {
 	t.Helper()
-	if err := database.InitDB(filepath.Join(t.TempDir(), "x-ui.db")); err != nil {
-		t.Fatalf("InitDB: %v", err)
-	}
-	t.Cleanup(func() { _ = database.CloseDB() })
+	dbtest.InitDB(t, filepath.Join(t.TempDir(), "x-ui.db"))
 	return &Tgbot{}
 }
 

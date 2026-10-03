@@ -19,6 +19,7 @@ import (
 type AmneziaWGJob struct {
 	inboundService service.InboundService
 	settingService service.SettingService
+<<<<<<< HEAD
 	runMu          sync.Mutex
 	mu             sync.Mutex
 	lastTraffic    map[amneziaWGTrafficKey]amneziaWGTrafficSample
@@ -33,6 +34,9 @@ type amneziaWGTrafficKey struct {
 type amneziaWGTrafficSample struct {
 	rx uint64
 	tx uint64
+=======
+	xrayService    service.XrayService
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
 }
 
 // NewAmneziaWGJob creates a new AmneziaWG reconcile job instance.
@@ -196,6 +200,10 @@ func (j *AmneziaWGJob) Run() {
 		return
 	}
 	amneziawgnet.GetOutboundManager().Reconcile(outboundDesired)
+	// Xray's bridges are generated apart from the listener; one that moved needs them regenerated.
+	if amneziawgnet.BridgesStale() {
+		j.xrayService.SetToNeedRestart()
+	}
 }
 
 // desiredOutboundInstances derives client instances per template "amneziawg" outbound.

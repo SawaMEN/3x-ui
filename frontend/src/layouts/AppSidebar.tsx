@@ -10,6 +10,7 @@ import {
   CloudServerOutlined,
   ClusterOutlined,
   CodeOutlined,
+  CrownOutlined,
   DashboardOutlined,
   DatabaseOutlined,
   DiscordOutlined,
@@ -32,6 +33,11 @@ import {
 import { HttpUtil } from '@/utils';
 import { useTheme } from '@/hooks/useTheme';
 import { useAllSettings } from '@/api/queries/useAllSettings';
+<<<<<<< HEAD
+=======
+import { useCommandPalette } from '@/components/command-palette/useCommandPalette';
+import SponsorSlot from '@/components/sponsor/SponsorSlot';
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
 import './AppSidebar.css';
 
 const LOGOUT_KEY = '__logout__';
@@ -72,6 +78,11 @@ type IconName =
   | 'hosts'
   | 'firewall'
   | 'logout'
+<<<<<<< HEAD
+=======
+  | 'sponsors'
+  | 'apidocs'
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
   | 'outbound'
   | 'routing'
   | 'telemt'
@@ -86,6 +97,11 @@ const iconByName: Record<IconName, ComponentType> = {
   hosts: GlobalOutlined,
   firewall: SafetyOutlined,
   logout: LogoutOutlined,
+<<<<<<< HEAD
+=======
+  sponsors: CrownOutlined,
+  apidocs: ApiOutlined,
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
   outbound: ExportOutlined,
   routing: SwapOutlined,
   telemt: MessageOutlined,
@@ -162,11 +178,27 @@ function AppSidebar() {
 
   const xrayChildren = useMemo<NonNullable<MenuProps['items']>>(
     () => [
+<<<<<<< HEAD
       { key: '/xray#basic', icon: <SettingOutlined />, label: t('pages.xray.basicTemplate') },
       { key: '/settings#gateway', icon: <ApartmentOutlined />, label: 'Режим шлюза' },
       { key: '/xray#balancer', icon: <ClusterOutlined />, label: t('pages.xray.Balancers') },
       { key: '/xray#dns', icon: <DatabaseOutlined />, label: 'DNS' },
       { key: '/xray#advanced', icon: <CodeOutlined />, label: t('pages.xray.advancedTemplate') },
+=======
+      { key: '/', icon: 'dashboard', title: t('menu.dashboard') },
+      { key: '/inbounds', icon: 'inbound', title: t('menu.inbounds') },
+      { key: '/clients', icon: 'team', title: t('menu.clients') },
+      { key: '/groups', icon: 'groups', title: t('menu.groups') },
+      { key: '/nodes', icon: 'cluster', title: t('menu.nodes') },
+      { key: '/hosts', icon: 'hosts', title: t('menu.hosts') },
+      { key: '/outbound', icon: 'outbound', title: t('menu.outbounds') },
+      { key: '/routing', icon: 'routing', title: t('menu.routing') },
+      { key: '/settings', icon: 'setting', title: t('menu.settings') },
+      { key: '/xray', icon: 'tool', title: t('menu.xray') },
+      { key: '/api-docs', icon: 'apidocs', title: t('menu.apiDocs') },
+      { key: '/sponsors', icon: 'sponsors', title: t('menu.sponsors') },
+      { key: LOGOUT_KEY, icon: 'logout', title: t('logout') },
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
     ],
     [t],
   );
@@ -428,6 +460,19 @@ function AppSidebar() {
           items={toMenuItems(utilItems)}
           onClick={onMenuClick}
         />
+<<<<<<< HEAD
+=======
+        <div className="sider-footer">
+          <SponsorSlot
+            slot="sidebar"
+            variant="compact"
+            iconOnly={railCollapsed}
+            rotate
+            className="sider-sponsor"
+          />
+          <VersionBadge version={panelVersion} collapsed={railCollapsed} />
+        </div>
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
       </Layout.Sider>
       {drawerMounted && (
         <Drawer
@@ -451,6 +496,7 @@ function AppSidebar() {
           }}
           onClose={closeDrawer}
         >
+<<<<<<< HEAD
           <div className="drawer-header">
             <div className="drawer-header-brand-mark">
               <BrandMark />
@@ -494,6 +540,48 @@ function AppSidebar() {
         </Drawer>
       )}
       {!drawerMounted && (
+=======
+          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <SearchOutlined className="sidebar-command-icon" />
+            <span>{t('commandPalette.search') || 'Search...'}</span>
+          </span>
+          <span className="sidebar-command-kbd">
+            <span className="kbd-cmd">{SHORTCUT_MODIFIER}</span>
+            <span className="kbd-key">K</span>
+          </span>
+        </button>
+        <Menu
+          theme={currentTheme}
+          mode="inline"
+          selectedKeys={[selectedKey]}
+          openKeys={openKeys}
+          onOpenChange={(keys) => setOpenKeys(keys as string[])}
+          className="drawer-menu drawer-nav"
+          items={toMenuItems(navItems)}
+          onClick={(info) => {
+            onMenuClick(info);
+            setDrawerOpen(false);
+          }}
+        />
+        <Menu
+          theme={currentTheme}
+          mode="inline"
+          selectedKeys={[selectedKey]}
+          className="drawer-menu drawer-utility"
+          items={toMenuItems(utilItems)}
+          onClick={(info) => {
+            onMenuClick(info);
+            setDrawerOpen(false);
+          }}
+        />
+        <div className="drawer-footer">
+          <SponsorSlot slot="sidebar" variant="compact" rotate className="sider-sponsor" />
+          <VersionBadge version={panelVersion} />
+        </div>
+      </Drawer>
+
+      {!drawerOpen && (
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
         <button
           className="drawer-handle"
           type="button"

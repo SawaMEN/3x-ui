@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -11,8 +12,14 @@ import (
 	"testing"
 	"time"
 
+<<<<<<< HEAD
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+=======
+	"github.com/mhsanaei/3x-ui/v3/internal/database"
+	"github.com/mhsanaei/3x-ui/v3/internal/database/dbtest"
+	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
 )
 
 func resetSubscriptionCache(t *testing.T) {
@@ -296,5 +303,53 @@ func TestExpandEntryCacheHitWritesNothing(t *testing.T) {
 	}
 	if after.LastFetchAt != 0 || after.LastFetchError != "" {
 		t.Fatalf("cache hit wrote fetch status: %#v", after)
+	}
+}
+
+func TestFetchUsesConfiguredExternalSubUserAgent(t *testing.T) {
+	resetSubscriptionCache(t)
+	dbtest.InitDB(t, filepath.Join(t.TempDir(), "ua.db"))
+
+	const customUA = "Happ/4.2.1"
+	if err := database.GetDB().Create(&model.Setting{
+		Key:   "externalSubUserAgent",
+		Value: customUA,
+	}).Error; err != nil {
+		t.Fatalf("save setting: %v", err)
+	}
+
+	var gotUA string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotUA = r.Header.Get("User-Agent")
+		_, _ = w.Write([]byte("vless://uuid@host:443?security=none#x"))
+	}))
+	defer srv.Close()
+
+	res := fetchSubscriptionLinks(srv.URL)
+	if res.err != nil {
+		t.Fatalf("fetch: %v", res.err)
+	}
+	if gotUA != customUA {
+		t.Fatalf("User-Agent = %q, want %q", gotUA, customUA)
+	}
+}
+
+func TestFetchFallsBackToDefaultExternalSubUserAgent(t *testing.T) {
+	resetSubscriptionCache(t)
+	dbtest.InitDB(t, filepath.Join(t.TempDir(), "ua-default.db"))
+
+	var gotUA string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotUA = r.Header.Get("User-Agent")
+		_, _ = w.Write([]byte("vless://uuid@host:443?security=none#x"))
+	}))
+	defer srv.Close()
+
+	res := fetchSubscriptionLinks(srv.URL)
+	if res.err != nil {
+		t.Fatalf("fetch: %v", res.err)
+	}
+	if gotUA != "v2rayNG/1.8.5" {
+		t.Fatalf("User-Agent = %q, want default v2rayNG/1.8.5", gotUA)
 	}
 }

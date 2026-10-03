@@ -94,12 +94,21 @@ question it already answers.
 - **Migrations.** Schema changes are GORM `AutoMigrate` PLUS hand-written
   migrations in `internal/database/db.go`. There are no migration files and no
   down-migrations, and everything has to work on SQLite AND PostgreSQL.
+<<<<<<< HEAD
 - **Tests.** Stdlib `testing` only (no testify), table-driven with `t.Run` subtests
   and `t.Helper()` on helpers. An assertion must pin the exact value, typed error
   or emitted string — `err != nil` and `len(x) > 0` are findings, not nits. Prefer
   real dependencies: a throwaway DB via
   `database.InitDB(filepath.Join(t.TempDir(), "x-ui.db"))` with `t.Cleanup`, and
   `httptest` for HTTP. `internal/sub`'s `initSubDB(t)` is the template.
+=======
+- **Tests.** Stdlib `testing` only (no testify), table-driven with `t.Run`
+  subtests and `t.Helper()` on helpers. An assertion must pin the exact value,
+  typed error or emitted string — `err != nil` and `len(x) > 0` are findings,
+  not nits. Prefer real dependencies: a throwaway DB via
+  `dbtest.InitDB(t, filepath.Join(t.TempDir(), "x-ui.db"))`
+  (`internal/database/dbtest`), and `httptest` for HTTP. `internal/sub`'s `initSubDB(t)` is the template.
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
   A test must FAIL without its fix; one that passes either way certifies
   nothing and then gets cited as proof the fix works.
 

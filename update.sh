@@ -1170,8 +1170,15 @@ update_x-ui() {
         echo -e "${green}Removing old xray version...${plain}"
         rm "${xui_folder}/bin/xray-linux-${machine_arch}" -f > /dev/null 2>&1
         echo -e "${green}Removing old README and LICENSE file...${plain}"
+<<<<<<< HEAD
         rm "${xui_folder}/bin/README.md" -f > /dev/null 2>&1
         rm "${xui_folder}/bin/LICENSE" -f > /dev/null 2>&1
+=======
+        rm ${xui_folder}/bin/README.md -f > /dev/null 2>&1
+        rm ${xui_folder}/bin/LICENSE -f > /dev/null 2>&1
+        rm ${xui_folder}/bin/tuic-server -f > /dev/null 2>&1
+        rm ${xui_folder}/bin/tuic -rf > /dev/null 2>&1
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
     else
         rm -f "${archive}"
         _fail "ERROR: x-ui not installed."
@@ -1206,11 +1213,14 @@ update_x-ui() {
     elif [[ -f "bin/mtg-linux-${machine_arch}" ]]; then
         chmod +x "bin/mtg-linux-${machine_arch}" > /dev/null 2>&1
     fi
+<<<<<<< HEAD
     [[ -f bin/pingtunnel ]] && chmod 0755 bin/pingtunnel
     [[ -f bin/trusttunnel_endpoint ]] && chmod 0755 bin/trusttunnel_endpoint
     if [[ -f bin/tuic-server ]]; then
         chmod +x bin/tuic-server > /dev/null 2>&1
     fi
+=======
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
 
     echo -e "${green}Downloading and installing x-ui.sh script...${plain}"
     local xui_script_temp="/usr/bin/x-ui-temp.$$"

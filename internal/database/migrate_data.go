@@ -58,6 +58,7 @@ func migrationModels() []any {
 		&model.NodeClientTraffic{},
 		&model.NodeClientIp{},
 		&model.ClientGlobalTraffic{},
+<<<<<<< HEAD
 		&model.TelemtIPHistory{},
 		&model.TelemtUserHistory{},
 		&model.TelemtIPGeo{},
@@ -65,6 +66,12 @@ func migrationModels() []any {
 		&model.SubBalancer{},
 		&model.RoutingPreset{},
 		&model.UserSession{},
+=======
+		&model.NodePendingReset{},
+		&model.OutboundSubscription{},
+		&model.SubBalancer{},
+		&model.TuicTrafficReceipt{},
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
 	}
 }
 

@@ -362,6 +362,7 @@ install_acme() {
     return 0
 }
 
+<<<<<<< HEAD
 install_tuic_server() {
     local target_arch=""
     case "$(arch)" in
@@ -383,6 +384,8 @@ install_tuic_server() {
     fi
 }
 
+=======
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
 setup_ssl_certificate() {
     local domain="$1"
     local server_ip="$2"
@@ -1701,6 +1704,7 @@ install_x-ui() {
     elif [[ -f bin/mtg-linux-$(arch) ]]; then
         chmod +x bin/mtg-linux-$(arch)
     fi
+<<<<<<< HEAD
     [[ -f bin/pingtunnel ]] && chmod 0755 bin/pingtunnel
     [[ -f bin/trusttunnel_endpoint ]] && chmod 0755 bin/trusttunnel_endpoint
     if [[ -f bin/tuic-server ]]; then
@@ -1709,6 +1713,8 @@ install_x-ui() {
         install_tuic_server
     fi
     [[ -f bin/mita ]] && chmod +x bin/mita
+=======
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
 
     # Restore anything from the old bin/ that the fresh release doesn't ship
     # (custom geoip/geosite files, or anything else an admin hand-placed
@@ -1727,7 +1733,11 @@ install_x-ui() {
         while IFS= read -r -d '' f; do
             local rel="${f#"${custom_bin_backup}"/}"
             case "${rel}" in
+<<<<<<< HEAD
                 config.json | mtproto | mtproto/* | tuic | tuic/* | mieru | mieru/*) continue ;;
+=======
+                config.json | mtproto | mtproto/* | tuic | tuic/* | tuic-server | tuic-server-*) continue ;;
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
             esac
             if [[ ! -e "bin/${rel}" ]]; then
                 mkdir -p "bin/$(dirname "${rel}")"
@@ -1742,6 +1752,9 @@ install_x-ui() {
         fi
     fi
     trap - EXIT INT TERM
+
+    rm -f bin/tuic-server bin/tuic-server-* > /dev/null 2>&1 || true
+    rm -rf bin/tuic > /dev/null 2>&1 || true
 
     # Update x-ui cli and se set permission
     mv -f "${xui_script_temp}" /usr/bin/x-ui

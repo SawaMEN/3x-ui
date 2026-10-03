@@ -6,6 +6,7 @@ import PanelLayout from '@/layouts/PanelLayout';
 import { importWithChunkRecovery } from '@/lib/chunk-load-recovery';
 import TelemtSubscriptionToggle from '@/pages/telemt/TelemtSubscriptionToggle';
 
+<<<<<<< HEAD
 const IndexPage = lazy(() => importWithChunkRecovery(() => import('@/pages/index/IndexPage')));
 const InboundsPage = lazy(() =>
   importWithChunkRecovery(() => import('@/pages/inbounds/InboundsPage')),
@@ -30,6 +31,18 @@ const ApiDocsPage = lazy(() =>
   importWithChunkRecovery(() => import('@/pages/api-docs/ApiDocsPage')),
 );
 const TelemtPage = lazy(() => importWithChunkRecovery(() => import('@/pages/telemt/TelemtPage')));
+=======
+const IndexPage = lazy(() => import('@/pages/index/IndexPage'));
+const InboundsPage = lazy(() => import('@/pages/inbounds/InboundsPage'));
+const ClientsPage = lazy(() => import('@/pages/clients/ClientsPage'));
+const GroupsPage = lazy(() => import('@/pages/groups/GroupsPage'));
+const NodesPage = lazy(() => import('@/pages/nodes/NodesPage'));
+const HostsPage = lazy(() => import('@/pages/hosts/HostsPage'));
+const SettingsPage = lazy(() => import('@/pages/settings/SettingsPage'));
+const XrayPage = lazy(() => import('@/pages/xray/XrayPage'));
+const ApiDocsPage = lazy(() => import('@/pages/api-docs/ApiDocsPage'));
+const SponsorsPage = lazy(() => import('@/pages/sponsors/SponsorsPage'));
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
 
 function withSuspense(node: React.ReactNode) {
   return (
@@ -70,6 +83,7 @@ const routes: RouteObject[] = [
       { path: 'outbound', element: withSuspense(<XrayPage />) },
       { path: 'routing', element: withSuspense(<XrayPage />) },
       { path: 'api-docs', element: withSuspense(<ApiDocsPage />) },
+<<<<<<< HEAD
       {
         path: 'telemt',
         element: withSuspense(
@@ -79,6 +93,9 @@ const routes: RouteObject[] = [
           </>,
         ),
       },
+=======
+      { path: 'sponsors', element: withSuspense(<SponsorsPage />) },
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
     ],
   },
 ];

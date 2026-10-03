@@ -49,6 +49,7 @@ import type {
   ExternalLinkInput,
 } from '@/hooks/useClients';
 import { useFail2banStatusQuery, getLimitIpNotice } from '@/api/queries/useFail2banStatusQuery';
+import ClientRenewalFields from './ClientRenewalFields';
 import { ClientFormSchema, ClientCreateFormSchema, type ClientFormValues } from '@/schemas/client';
 import './ClientFormModal.css';
 
@@ -144,6 +145,7 @@ const EMPTY: Values = {
   delayedDays: 0,
   reset: 0,
   resetDay: 0,
+  resetWeekday: 0,
   resetMax: 0,
   trafficReset: 'never' as const,
   trafficResetDay: 1,
@@ -248,6 +250,7 @@ export default function ClientFormModal({
   const methods = useForm<Values>({ defaultValues: EMPTY });
   const inboundIds = useWatch({ control: methods.control, name: 'inboundIds' });
   const delayedStart = useWatch({ control: methods.control, name: 'delayedStart' });
+  const delayedDays = useWatch({ control: methods.control, name: 'delayedDays' });
   const expiryDate = useWatch({ control: methods.control, name: 'expiryDate' });
   const enable = useWatch({ control: methods.control, name: 'enable' });
   const flow = useWatch({ control: methods.control, name: 'flow' });
@@ -355,6 +358,7 @@ export default function ClientFormModal({
         totalGB: bytesToGB(client.totalGB || 0),
         reset: Number(client.reset) || 0,
         resetDay: Number(client.resetDay) || 0,
+        resetWeekday: Number(client.resetWeekday) || 0,
         resetMax: Number(client.resetMax) || 0,
         trafficReset: (client.trafficReset as ClientFormValues['trafficReset']) || 'never',
         trafficResetDay: Number(client.trafficResetDay) || 1,
@@ -437,6 +441,7 @@ export default function ClientFormModal({
     return ids;
   }, [inbounds]);
 
+<<<<<<< HEAD
   const tuicIds = useMemo(() => {
     const ids = new Set<number>();
     for (const row of inbounds || []) {
@@ -476,6 +481,8 @@ export default function ClientFormModal({
     [inboundIds, hysteriaIds],
   );
 
+=======
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
   const mtprotoDomain = useMemo(() => {
     for (const id of inboundIds || []) {
       const ib = (inbounds || []).find((row) => row.id === id);
@@ -677,6 +684,7 @@ export default function ClientFormModal({
       delayedDays: values.delayedDays,
       reset: values.reset,
       resetDay: values.resetDay,
+      resetWeekday: values.resetWeekday,
       resetMax: values.resetMax,
       trafficReset: values.trafficReset,
       trafficResetDay: values.trafficResetDay,
@@ -710,6 +718,7 @@ export default function ClientFormModal({
       expiryTime,
       reset: Number(values.reset) || 0,
       resetDay: Number(values.resetDay) || 0,
+      resetWeekday: Number(values.resetWeekday) || 0,
       resetMax: Number(values.resetMax) || 0,
       trafficReset: values.trafficReset || 'never',
       trafficResetDay: Number(values.trafficResetDay) || 1,
@@ -892,11 +901,7 @@ export default function ClientFormModal({
                           <FormField
                             name="totalGB"
                             label={t('pages.clients.totalGB')}
-                            tooltip={
-                              hasTuic
-                                ? t('pages.clients.tuicTotalGBDesc')
-                                : t('pages.clients.totalGBDesc')
-                            }
+                            tooltip={t('pages.clients.totalGBDesc')}
                             transform={{ output: (v) => Number(v) || 0 }}
                           >
                             <InputNumber min={0} step={1} style={{ width: '100%' }} />
@@ -999,37 +1004,10 @@ export default function ClientFormModal({
                             />
                           </Form.Item>
                         </Col>
-                        <Col xs={12} md={6}>
-                          <FormField
-                            name="reset"
-                            label={t('pages.clients.renewDays')}
-                            tooltip={t('pages.clients.renewDesc')}
-                            transform={{ output: (v) => Number(v) || 0 }}
-                          >
-                            <InputNumber min={0} style={{ width: '100%' }} />
-                          </FormField>
-                        </Col>
-                        <Col xs={12} md={6}>
-                          <FormField
-                            name="resetDay"
-                            label={t('pages.clients.renewOnDay')}
-                            tooltip={t('pages.clients.renewOnDayDesc')}
-                            transform={{ output: (v) => Number(v) || 0 }}
-                          >
-                            <InputNumber min={0} max={31} style={{ width: '100%' }} />
-                          </FormField>
-                        </Col>
-                        <Col xs={12} md={6}>
-                          <FormField
-                            name="resetMax"
-                            label={t('pages.clients.renewMax')}
-                            tooltip={t('pages.clients.renewMaxDesc')}
-                            transform={{ output: (v) => Number(v) || 0 }}
-                          >
-                            <InputNumber min={0} style={{ width: '100%' }} />
-                          </FormField>
-                        </Col>
-                        <Col xs={12} md={6}>
+                      </Row>
+
+                      <Row gutter={16}>
+                        <Col xs={24} md={12}>
                           <FormField
                             name="trafficReset"
                             label={t('pages.inbounds.periodicTrafficResetTitle')}
@@ -1041,9 +1019,7 @@ export default function ClientFormModal({
                               }))}
                             />
                           </FormField>
-                        </Col>
-                        {trafficReset === 'monthly' && (
-                          <Col xs={12} md={6}>
+                          {trafficReset === 'monthly' && (
                             <FormField
                               name="trafficResetDay"
                               label={t('pages.inbounds.periodicTrafficResetDay')}
@@ -1051,8 +1027,19 @@ export default function ClientFormModal({
                             >
                               <InputNumber min={1} max={31} style={{ width: '100%' }} />
                             </FormField>
-                          </Col>
-                        )}
+                          )}
+                        </Col>
+                        <Col xs={24} md={12}>
+                          <ClientRenewalFields
+                            active={open}
+                            delayedStart={delayedStart}
+                            expiryTime={
+                              delayedStart ? -86400000 * (delayedDays || 0) : expiryDate || 0
+                            }
+                            resetCount={client?.traffic?.resetCount || 0}
+                            setExpiry={(expiry) => methods.setValue('expiryDate', expiry)}
+                          />
+                        </Col>
                       </Row>
 
                       <Row gutter={16}>
@@ -1180,7 +1167,10 @@ export default function ClientFormModal({
                         </Space.Compact>
                       </Form.Item>
 
-                      <Form.Item label={t('pages.clients.subId')}>
+                      <Form.Item
+                        label={t('pages.clients.subId')}
+                        tooltip={t('pages.clients.subIdDesc')}
+                      >
                         <Space.Compact style={{ display: 'flex' }}>
                           <Input
                             value={subId}

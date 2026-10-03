@@ -6,8 +6,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+<<<<<<< HEAD
 	"runtime"
 	"strings"
+=======
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
 	"sync"
 	"sync/atomic"
 	"time"
@@ -81,28 +84,9 @@ func InitLogger(level logging.Level) {
 	logger.Store(newLogger)
 }
 
-// initDefaultBackend creates the console/syslog logging backend.
-// Windows: Uses stderr directly (no syslog support)
-// Unix-like: Attempts syslog, falls back to stderr
+// initDefaultBackend creates the console logging backend: syslog where the platform has it, else stderr.
 func initDefaultBackend() logging.Backend {
-	var backend logging.Backend
-	includeTime := false
-
-	if runtime.GOOS == "windows" {
-		// Windows: Use stderr directly (no syslog support)
-		backend = logging.NewLogBackend(os.Stderr, "", 0)
-		includeTime = true
-	} else {
-		// Unix-like: Try syslog, fallback to stderr
-		if syslogBackend, err := logging.NewSyslogBackend(""); err != nil {
-			fmt.Fprintf(os.Stderr, "syslog backend disabled: %v\n", err)
-			backend = logging.NewLogBackend(os.Stderr, "", 0)
-			includeTime = os.Getppid() > 0
-		} else {
-			backend = syslogBackend
-		}
-	}
-
+	backend, includeTime := newConsoleBackend()
 	return logging.NewBackendFormatter(backend, newFormatter(includeTime))
 }
 
@@ -115,8 +99,22 @@ func initFileBackend() logging.Backend {
 		return nil
 	}
 
-	logPath := filepath.Join(logDir, logFileName)
-	rotate := &lumberjack.Logger{
+	backend := logging.NewLogBackend(fileRotateFor(filepath.Join(logDir, logFileName)), "", 0)
+	return logging.NewBackendFormatter(backend, newFormatter(true))
+}
+
+// fileRotateFor reuses the open rotator for logPath: a re-init that swapped in a
+// new one would leave the old one holding the file, and loggers still writing to it.
+func fileRotateFor(logPath string) *lumberjack.Logger {
+	fileRotateMu.Lock()
+	defer fileRotateMu.Unlock()
+	if fileRotate != nil && fileRotate.Filename == logPath {
+		return fileRotate
+	}
+	if fileRotate != nil {
+		_ = fileRotate.Close()
+	}
+	fileRotate = &lumberjack.Logger{
 		Filename:   logPath,
 		MaxSize:    maxLogFileMB,
 		MaxBackups: maxLogBackups,
@@ -124,12 +122,7 @@ func initFileBackend() logging.Backend {
 		LocalTime:  true,
 		Compress:   compressRotated,
 	}
-	fileRotateMu.Lock()
-	fileRotate = rotate
-	fileRotateMu.Unlock()
-
-	backend := logging.NewLogBackend(rotate, "", 0)
-	return logging.NewBackendFormatter(backend, newFormatter(true))
+	return fileRotate
 }
 
 // newFormatter creates a log formatter with optional timestamp.

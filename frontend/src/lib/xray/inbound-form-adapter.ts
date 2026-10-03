@@ -1,3 +1,4 @@
+import { resolveTuicServerSettings } from '@/lib/tuic';
 import type {
   InboundFormValues,
   ShareAddrStrategy,
@@ -23,7 +24,10 @@ import {
 import type { StreamSettings } from '@/schemas/api/inbound';
 import type { Sniffing } from '@/schemas/primitives';
 import type { z } from 'zod';
-import { normalizeStreamSettingsForWire } from '@/lib/xray/stream-wire-normalize';
+import {
+  dropEmptyFinalMask,
+  normalizeStreamSettingsForWire,
+} from '@/lib/xray/stream-wire-normalize';
 import { canEnableSniffing } from '@/lib/xray/protocol-capabilities';
 import { tlsCertUsesFiles } from '@/schemas/protocols/security/tls';
 import { SockoptStreamSettingsSchema } from '@/schemas/protocols/stream/sockopt';
@@ -60,6 +64,7 @@ export interface RawInboundRow {
   shareAddrStrategy?: string;
   shareAddr?: string;
   subSortIndex?: number;
+  excludeFromSub?: boolean;
   disableFlow?: boolean;
   clientStats?: unknown;
 }
@@ -89,6 +94,7 @@ export interface WireInboundPayload {
   shareAddrStrategy: ShareAddrStrategy;
   shareAddr: string;
   subSortIndex: number;
+  excludeFromSub: boolean;
   disableFlow: boolean;
 }
 
@@ -168,6 +174,7 @@ function stripTlsCertUseFile(stream: Record<string, unknown>): void {
 }
 
 export function rawInboundToFormValues(row: RawInboundRow): InboundFormValues {
+<<<<<<< HEAD
   const isShadowTls = row.protocol === 'shadowtls';
   const protocol = (
     isShadowTls ? 'shadowsocks' : row.protocol || 'vless'
@@ -195,6 +202,13 @@ export function rawInboundToFormValues(row: RawInboundRow): InboundFormValues {
             innerKey: rawSettings.innerKey,
           },
         }
+=======
+  const protocol = (row.protocol || 'vless') as InboundSettings['protocol'];
+  const rawSettings = coerceJsonObject(row.settings);
+  const settings = (
+    protocol === 'tuic'
+      ? { clients: rawSettings.clients, server: resolveTuicServerSettings(rawSettings) }
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
       : rawSettings
   ) as InboundSettings['settings'];
   const rawStream = coerceJsonObject(row.streamSettings);
@@ -255,6 +269,7 @@ export function rawInboundToFormValues(row: RawInboundRow): InboundFormValues {
     shareAddrStrategy: coerceShareAddrStrategy(row.shareAddrStrategy),
     shareAddr: row.shareAddr ?? '',
     subSortIndex: row.subSortIndex == null || row.subSortIndex === 0 ? 1 : row.subSortIndex,
+    excludeFromSub: row.excludeFromSub ?? false,
     disableFlow: row.disableFlow ?? false,
     protocol,
     settings,
@@ -366,25 +381,7 @@ export function dropLegacyOptionalEmpties(
   if (Array.isArray(fb) && fb.length === 0) delete settings.fallbacks;
 
   if (stream) {
-    // StreamSettings emits `finalmask` only when at least one transport
-    // mask exists (legacy `hasFinalMask`). Drop the whole block when all
-    // sub-fields are empty; otherwise drop only the empty sub-arrays so
-    // the wire payload doesn't carry a stray `"tcp": []` next to a
-    // populated UDP mask list (and vice versa).
-    const fm = stream.finalmask as
-      | { tcp?: unknown[]; udp?: unknown[]; quicParams?: unknown }
-      | undefined;
-    if (fm && typeof fm === 'object') {
-      const hasTcp = Array.isArray(fm.tcp) && fm.tcp.length > 0;
-      const hasUdp = Array.isArray(fm.udp) && fm.udp.length > 0;
-      const hasQuic = fm.quicParams != null;
-      if (!hasTcp && !hasUdp && !hasQuic) {
-        delete stream.finalmask;
-      } else {
-        if (!hasTcp) delete fm.tcp;
-        if (!hasUdp) delete fm.udp;
-      }
-    }
+    dropEmptyFinalMask(stream);
 
     // Hysteria's per-client auth lives in settings.clients[*].auth; the
     // streamSettings.hysteriaSettings.auth slot is a holdover from older
@@ -397,8 +394,20 @@ export function dropLegacyOptionalEmpties(
   }
 }
 
-export function formValuesToWirePayload(values: InboundFormValues): WireInboundPayload {
+// An existing inbound's clients change only through the client endpoints, so
+// the edit form neither loads them nor sends them back.
+export function withoutClients(values: InboundFormValues): InboundFormValues {
+  const settings = { ...(values.settings as Record<string, unknown> | undefined) };
+  delete settings.clients;
+  return { ...values, settings } as InboundFormValues;
+}
+
+export function formValuesToWirePayload(
+  values: InboundFormValues,
+  options: { omitClients?: boolean } = {},
+): WireInboundPayload {
   const settingsPruned = (pruneEmpty(values.settings ?? {}) ?? {}) as Record<string, unknown>;
+<<<<<<< HEAD
   const shadowTls = settingsPruned.shadowTls as Record<string, unknown> | undefined;
   const shadowTlsEnabled = shadowTls?.enabled === true;
   const legacyShadowsocksWrapper = shadowTlsEnabled && values.protocol === 'shadowsocks';
@@ -413,6 +422,12 @@ export function formValuesToWirePayload(values: InboundFormValues): WireInboundP
     delete settingsPruned.password;
     delete settingsPruned.network;
     delete settingsPruned.ivCheck;
+=======
+  if (options.omitClients) {
+    delete settingsPruned.clients;
+  } else if (Array.isArray(settingsPruned.clients)) {
+    settingsPruned.clients = normalizeClients(values.protocol, settingsPruned.clients);
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
   }
   if (values.protocol === 'shadowsocks' || !shadowTlsEnabled) delete settingsPruned.shadowTls;
   if (Array.isArray(settingsPruned.clients)) {
@@ -455,6 +470,7 @@ export function formValuesToWirePayload(values: InboundFormValues): WireInboundP
     shareAddrStrategy: values.shareAddrStrategy,
     shareAddr: values.shareAddr,
     subSortIndex: values.subSortIndex,
+    excludeFromSub: values.excludeFromSub,
     disableFlow: values.disableFlow,
   };
   if (values.nodeId != null) payload.nodeId = values.nodeId;

@@ -2,8 +2,17 @@ package service
 
 import (
 	"encoding/json"
+	"strings"
 
+<<<<<<< HEAD
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+=======
+	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
+	"github.com/mhsanaei/3x-ui/v3/internal/util/common"
+	"github.com/mhsanaei/3x-ui/v3/internal/util/version"
+
+	"gorm.io/gorm"
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
 )
 
 // inboundShadowsocksMethod extracts settings.method for Shadowsocks inbounds so
@@ -53,17 +62,23 @@ func inboundCanEnableTlsFlow(protocol, streamSettings, settings string) bool {
 	}
 }
 
+<<<<<<< HEAD
 // nodeEligibleProtocols mirrors the frontend's NODE_ELIGIBLE_PROTOCOLS. These
 // are the inbound protocols the panel can manage through the remote panel
 // runtime. Core-specific support is validated separately by
 // coreSupportsInboundProtocol, so sidecar protocols remain assignable to either
 // core while Xray/sing-box-only listeners are rejected for the wrong core.
+=======
+// nodeEligibleProtocols mirrors the frontend's NODE_ELIGIBLE_PROTOCOLS. A sidecar
+// protocol's row is local on the node it is pushed to, so that panel runs it.
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
 var nodeEligibleProtocols = map[model.Protocol]bool{
 	model.VLESS:       true,
 	model.VMESS:       true,
 	model.Trojan:      true,
 	model.Shadowsocks: true,
 	model.WireGuard:   true,
+<<<<<<< HEAD
 	model.Hysteria:    true,
 	model.HTTP:        true,
 	model.Mixed:       true,
@@ -80,11 +95,45 @@ var nodeEligibleProtocols = map[model.Protocol]bool{
 	model.Mieru:       true,
 	model.VKTurnProxy: true,
 	model.Sudoku:      true,
+=======
+	model.MTProto:     true,
+	model.AmneziaWG:   true,
+	model.TUIC:        true,
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
 }
 
-// isNodeEligibleProtocol reports whether protocol may be assigned to a node.
-func isNodeEligibleProtocol(protocol model.Protocol) bool {
-	return nodeEligibleProtocols[protocol]
+// nodeProtocolFirstRelease is the panel release that introduced each protocol
+// newer than node support itself; an older node would hand it to Xray as-is.
+var nodeProtocolFirstRelease = map[model.Protocol]string{
+	model.MTProto:   "v3.5.0",
+	model.AmneziaWG: "v3.7.0",
+	model.TUIC:      "v3.8.0",
+}
+
+// checkNodeCanHostProtocol refuses assigning protocol to nodeID unless the
+// protocol may live on a node and that node's panel is new enough to run it.
+func checkNodeCanHostProtocol(db *gorm.DB, nodeID int, protocol model.Protocol) error {
+	if !nodeEligibleProtocols[protocol] {
+		return common.NewErrorf("%s inbounds cannot be assigned to a node", protocol)
+	}
+	firstRelease, ok := nodeProtocolFirstRelease[protocol]
+	if !ok {
+		return nil
+	}
+	var node model.Node
+	if err := db.Select("id", "name", "panel_version").First(&node, nodeID).Error; err != nil {
+		return err
+	}
+	if strings.TrimSpace(node.PanelVersion) == "" {
+		return common.NewErrorf("node %q has not reported its panel version yet; %s inbounds need %s or newer",
+			node.Name, protocol, firstRelease)
+	}
+	// A dev build reports "dev+<sha>": it tracks main, which carries every protocol.
+	if cmp, ok := version.Compare(node.PanelVersion, firstRelease); ok && cmp < 0 {
+		return common.NewErrorf("node %q runs panel %s; %s inbounds need %s or newer",
+			node.Name, node.PanelVersion, protocol, firstRelease)
+	}
+	return nil
 }
 
 // vlessEncryptionEnabled reports whether a VLESS inbound has VLESS-level

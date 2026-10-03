@@ -40,13 +40,23 @@ func (g *resetGate) waitAll(t *testing.T, want int32) {
 	}
 }
 
+<<<<<<< HEAD
 // resetNode is a node whose every traffic reset hangs until the gate opens.
+=======
+// resetNode is a node hosting inboundTag whose every traffic reset hangs until the
+// gate opens; it lists the inbound so the master can resolve its node-side id.
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
 func resetNode(t *testing.T, gate *resetGate, name, inboundTag string) int {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = io.Copy(io.Discard, r.Body)
+<<<<<<< HEAD
 		w.Header().Set("Content-Type", "application/json")
 		if strings.Contains(r.URL.Path, "inbounds/list") {
+=======
+		if strings.HasSuffix(r.URL.Path, "/panel/api/inbounds/list") {
+			w.Header().Set("Content-Type", "application/json")
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
 			_, _ = fmt.Fprintf(w, `{"success":true,"obj":[{"id":1,"tag":%q}]}`, inboundTag)
 			return
 		}

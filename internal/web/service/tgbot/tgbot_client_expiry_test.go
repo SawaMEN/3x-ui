@@ -6,9 +6,15 @@ import (
 	"strings"
 	"testing"
 
+<<<<<<< HEAD
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/locale"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
+=======
+	"github.com/mhsanaei/3x-ui/v3/internal/database/dbtest"
+	"github.com/mhsanaei/3x-ui/v3/internal/web/locale"
+	"github.com/mhsanaei/3x-ui/v3/internal/xray"
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
 
 	"github.com/nicksnyder/go-i18n/v2/i18n"
 	"golang.org/x/text/language"
@@ -35,10 +41,7 @@ func clientInfoLocalizer(t *testing.T) {
 // Regression test: a start-after-first-use client is stored as a negative duration,
 // and a disabled one rendered it as a 1969 date.
 func TestClientInfoShowsStartAfterFirstUseWhenDisabled(t *testing.T) {
-	if err := database.InitDB(filepath.Join(t.TempDir(), "x-ui.db")); err != nil {
-		t.Fatalf("InitDB: %v", err)
-	}
-	t.Cleanup(func() { _ = database.CloseDB() })
+	dbtest.InitDB(t, filepath.Join(t.TempDir(), "x-ui.db"))
 	clientInfoLocalizer(t)
 
 	traffic := &xray.ClientTraffic{

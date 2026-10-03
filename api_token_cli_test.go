@@ -6,19 +6,24 @@ package main
 import (
 	"testing"
 
+<<<<<<< HEAD
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service/panel"
+=======
+	"github.com/mhsanaei/3x-ui/v3/internal/config"
+	"github.com/mhsanaei/3x-ui/v3/internal/database"
+	"github.com/mhsanaei/3x-ui/v3/internal/database/dbtest"
+	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
+	"github.com/mhsanaei/3x-ui/v3/internal/web/service/panel"
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
 )
 
 func newTokenCLIEnv(t *testing.T) {
 	t.Helper()
 	t.Setenv("XUI_DB_FOLDER", t.TempDir())
-	if err := database.InitDB(config.GetDBPath()); err != nil {
-		t.Fatalf("init db: %v", err)
-	}
-	t.Cleanup(func() { _ = database.CloseDB() })
+	dbtest.InitDB(t, config.GetDBPath())
 }
 
 func tokenNames(t *testing.T) []string {
@@ -58,12 +63,12 @@ func TestGetApiTokenRotatesOnlyTheNamedToken(t *testing.T) {
 	newTokenCLIEnv(t)
 
 	svc := panel.ApiTokenService{}
-	weekly, err := svc.RecreateByName("weekly-report")
+	weekly, err := svc.RecreateByName("weekly-report", "")
 	if err != nil {
 		t.Fatalf("seed weekly-report: %v", err)
 	}
 
-	GetApiToken(true, "ci-bot")
+	GetApiToken(true, "ci-bot", "")
 
 	names := tokenNames(t)
 	if !hasName(names, "ci-bot") {
@@ -79,7 +84,7 @@ func TestGetApiTokenRotatesOnlyTheNamedToken(t *testing.T) {
 func TestGetApiTokenUsesGivenNameOnEmptyDatabase(t *testing.T) {
 	newTokenCLIEnv(t)
 
-	GetApiToken(true, "ci-bot")
+	GetApiToken(true, "ci-bot", "")
 
 	names := tokenNames(t)
 	if !hasName(names, "ci-bot") {
@@ -90,15 +95,31 @@ func TestGetApiTokenUsesGivenNameOnEmptyDatabase(t *testing.T) {
 	}
 }
 
+// -tokenScope has to reach both branches, or a fresh panel would mint an admin
+// token for a caller that asked for monitor.
+func TestGetApiTokenAppliesGivenScope(t *testing.T) {
+	newTokenCLIEnv(t)
+
+	GetApiToken(true, "ci-bot", model.ApiScopeMonitor)
+	if got := tokenRow(t, "ci-bot").Scope; got != model.ApiScopeMonitor {
+		t.Fatalf("minted scope = %q, want %q", got, model.ApiScopeMonitor)
+	}
+
+	GetApiToken(true, "ci-bot", model.ApiScopeNodeSync)
+	if got := tokenRow(t, "ci-bot").Scope; got != model.ApiScopeNodeSync {
+		t.Fatalf("regenerated scope = %q, want %q", got, model.ApiScopeNodeSync)
+	}
+}
+
 // install.sh records the token it gets on a fresh panel. A later bare
 // -getApiToken must rotate the fallback slot and leave that record valid.
 func TestGetApiTokenPreservesInstallTokenWhenRotating(t *testing.T) {
 	newTokenCLIEnv(t)
 
-	GetApiToken(true, "")
+	GetApiToken(true, "", "")
 	installed := tokenRow(t, installTokenName)
 
-	GetApiToken(true, "")
+	GetApiToken(true, "", "")
 
 	names := tokenNames(t)
 	if !hasName(names, cliFallbackTokenName) {
@@ -115,10 +136,10 @@ func TestGetApiTokenPreservesInstallTokenWhenRotating(t *testing.T) {
 func TestGetApiTokenTrimsName(t *testing.T) {
 	newTokenCLIEnv(t)
 
-	if _, err := (&panel.ApiTokenService{}).RecreateByName("seed"); err != nil {
+	if _, err := (&panel.ApiTokenService{}).RecreateByName("seed", ""); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	GetApiToken(true, "   ")
+	GetApiToken(true, "   ", "")
 
 	names := tokenNames(t)
 	if !hasName(names, cliFallbackTokenName) {

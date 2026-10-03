@@ -14,8 +14,13 @@ import (
 	"sync"
 	"testing"
 
+<<<<<<< HEAD
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
+=======
+	"github.com/mhsanaei/3x-ui/v3/internal/database/dbtest"
+	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
 )
 
 func TestBuildMessageIsRFC5322(t *testing.T) {
@@ -132,10 +137,7 @@ func startFakeSMTPServer(t *testing.T) (string, func() []string) {
 }
 
 func TestSendUsesBareAddressFromNameAddrSmtpFrom(t *testing.T) {
-	if err := database.InitDB(filepath.Join(t.TempDir(), "x-ui.db")); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = database.CloseDB() })
+	dbtest.InitDB(t, filepath.Join(t.TempDir(), "x-ui.db"))
 
 	addr, recordedLines := startFakeSMTPServer(t)
 	host, portStr, err := net.SplitHostPort(addr)
@@ -182,10 +184,7 @@ func TestSendUsesBareAddressFromNameAddrSmtpFrom(t *testing.T) {
 }
 
 func TestConnectionReportsMissingFrom(t *testing.T) {
-	if err := database.InitDB(filepath.Join(t.TempDir(), "x-ui.db")); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = database.CloseDB() })
+	dbtest.InitDB(t, filepath.Join(t.TempDir(), "x-ui.db"))
 
 	settingService := service.SettingService{}
 	mustSet := func(name string, err error) {

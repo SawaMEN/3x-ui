@@ -1,4 +1,4 @@
-import { fireEvent, screen } from '@testing-library/react';
+import { act, fireEvent, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { afterEach, expect, test, vi } from 'vitest';
 
@@ -14,14 +14,18 @@ afterEach(() => {
   localStorage.clear();
 });
 
-function renderSidebar() {
-  return renderWithProviders(
+// rc-menu registers its items in a microtask after render; settle it inside act().
+async function renderSidebar() {
+  const view = renderWithProviders(
     <MemoryRouter>
       <AppSidebar />
     </MemoryRouter>,
   );
+  await act(async () => {});
+  return view;
 }
 
+<<<<<<< HEAD
 test('uses a single wordmark with full and compact labels', () => {
   const view = renderSidebar();
   const sidebarRoot = view.container.querySelector('.ant-sidebar');
@@ -41,6 +45,10 @@ test('uses a single wordmark with full and compact labels', () => {
 
 test('keeps the sidebar expanded after pinning it from the header and restores the choice', () => {
   const first = renderSidebar();
+=======
+test('keeps the sidebar expanded after pinning it from the header and restores the choice', async () => {
+  const first = await renderSidebar();
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
   const sidebar = first.container.querySelector('.ant-layout-sider');
   const sidebarRoot = first.container.querySelector('.ant-sidebar');
 
@@ -60,7 +68,7 @@ test('keeps the sidebar expanded after pinning it from the header and restores t
 
   first.unmount();
 
-  const second = renderSidebar();
+  const second = await renderSidebar();
   const restoredSidebar = second.container.querySelector('.ant-layout-sider');
   const restoredSidebarRoot = second.container.querySelector('.ant-sidebar');
 
@@ -69,8 +77,8 @@ test('keeps the sidebar expanded after pinning it from the header and restores t
   expect(screen.getByRole('button', { name: 'Pin sidebar' })).not.toBeNull();
 });
 
-test('returns to the compact rail after unpinning', () => {
-  const view = renderSidebar();
+test('returns to the compact rail after unpinning', async () => {
+  const view = await renderSidebar();
   const sidebar = view.container.querySelector('.ant-layout-sider');
   const sidebarRoot = view.container.querySelector('.ant-sidebar');
 
@@ -84,6 +92,7 @@ test('returns to the compact rail after unpinning', () => {
   expect(localStorage.getItem('sidebar-pinned')).toBe('false');
 });
 
+<<<<<<< HEAD
 test('keeps core and swap controls in general settings, not the sidebar submenu', () => {
   vi.mocked(useAllSettings).mockReturnValue({ allSetting: { coreType: 'xray' } } as never);
   const view = renderWithProviders(
@@ -133,4 +142,10 @@ test('shows only the active core configuration menu', () => {
   expect(screen.queryByText('Proxy Core')).toBeNull();
   expect(screen.queryByText('Swap / ZRAM')).toBeNull();
   expect(screen.queryByText('API Docs')).toBeNull();
+=======
+test('labels the palette shortcut with the modifier the platform actually uses', async () => {
+  const view = await renderSidebar();
+  const chip = view.container.querySelector('.sidebar-command-kbd');
+  expect(chip?.textContent).toBe('CtrlK');
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
 });

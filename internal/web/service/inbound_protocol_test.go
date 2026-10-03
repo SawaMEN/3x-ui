@@ -88,6 +88,7 @@ func TestInboundCanHostFallbacks_StaysTcpOnly(t *testing.T) {
 		t.Errorf("inboundCanHostFallbacks(nil) = true, want false")
 	}
 }
+<<<<<<< HEAD
 
 // Mirrors frontend/src/lib/xray/node-protocols.ts. Node eligibility means the
 // remote panel can own/manage the inbound; selected-core compatibility is a
@@ -131,3 +132,5 @@ func TestIsNodeEligibleProtocol(t *testing.T) {
 		}
 	}
 }
+=======
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10

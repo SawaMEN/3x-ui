@@ -17,10 +17,18 @@ import (
 	"syscall"
 	"time"
 
+<<<<<<< HEAD
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/global"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
+=======
+	"github.com/mhsanaei/3x-ui/v3/internal/config"
+	"github.com/mhsanaei/3x-ui/v3/internal/logger"
+	"github.com/mhsanaei/3x-ui/v3/internal/util/version"
+	"github.com/mhsanaei/3x-ui/v3/internal/web/global"
+	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
 )
 
 // PanelService provides business logic for panel management operations.
@@ -493,13 +501,14 @@ func resolveUpdateFolders() (string, string) {
 }
 
 func isNewerVersion(latest string, current string) bool {
-	cmp, ok := compareVersionStrings(latest, current)
+	cmp, ok := version.Compare(latest, current)
 	if !ok {
-		return normalizeVersionTag(latest) != normalizeVersionTag(current)
+		return version.Normalize(latest) != version.Normalize(current)
 	}
 	return cmp > 0
 }
 
+<<<<<<< HEAD
 func compareVersionStrings(a, b string) (int, bool) {
 	aParts, okA := parseVersionParts(a)
 	bParts, okB := parseVersionParts(b)
@@ -537,6 +546,8 @@ func normalizeVersionTag(version string) string {
 	return strings.TrimPrefix(strings.TrimSpace(version), "v")
 }
 
+=======
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
 func shellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
 }

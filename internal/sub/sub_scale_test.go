@@ -14,11 +14,20 @@ import (
 	"github.com/op/go-logging"
 	"gorm.io/gorm"
 
+<<<<<<< HEAD
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	xuilogger "github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
+=======
+	"github.com/mhsanaei/3x-ui/v3/internal/config"
+	"github.com/mhsanaei/3x-ui/v3/internal/database"
+	"github.com/mhsanaei/3x-ui/v3/internal/database/dbtest"
+	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
+	xuilogger "github.com/mhsanaei/3x-ui/v3/internal/logger"
+	"github.com/mhsanaei/3x-ui/v3/internal/xray"
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
 )
 
 const scaleTargetSubId = "scale-target-sub"
@@ -38,10 +47,7 @@ func setupScaleSubDB(t *testing.T) {
 	}
 	switch strings.ToLower(strings.TrimSpace(os.Getenv("XUI_SCALE_TEST"))) {
 	case "1", "true", "yes":
-		if err := database.InitDB(filepath.Join(t.TempDir(), "scale.db")); err != nil {
-			t.Fatalf("InitDB(sqlite): %v", err)
-		}
-		t.Cleanup(func() { _ = database.CloseDB() })
+		dbtest.InitDB(t, filepath.Join(t.TempDir(), "scale.db"))
 		return
 	}
 	t.Skip("set XUI_SCALE_TEST=1 (sqlite) or XUI_DB_TYPE=postgres + XUI_DB_DSN (postgres) to run the scale benchmark")

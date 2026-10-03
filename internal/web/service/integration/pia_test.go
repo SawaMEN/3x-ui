@@ -11,9 +11,15 @@ import (
 	"testing"
 	"time"
 
+<<<<<<< HEAD
 	"github.com/SawaMEN/3x-ui/v3/internal/crypto/nodetoken"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	piaprotocol "github.com/SawaMEN/3x-ui/v3/internal/pia"
+=======
+	"github.com/mhsanaei/3x-ui/v3/internal/crypto/nodetoken"
+	"github.com/mhsanaei/3x-ui/v3/internal/database/dbtest"
+	piaprotocol "github.com/mhsanaei/3x-ui/v3/internal/pia"
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
 )
 
 type fakePiaAuth struct{ token string }
@@ -48,10 +54,7 @@ func (f *fakePiaRegistrar) RegisterKey(_ context.Context, server piaprotocol.Wir
 
 func setupPiaService(t *testing.T) *PiaService {
 	t.Helper()
-	if err := database.InitDB(filepath.Join(t.TempDir(), "x-ui.db")); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = database.CloseDB() })
+	dbtest.InitDB(t, filepath.Join(t.TempDir(), "x-ui.db"))
 	payload := []byte(`{"version":6,"groups":{"wg":[{"name":"wireguard","ports":[1337]}]},"regions":[{"id":"us-east","name":"US East","country":"US","geo":false,"offline":false,"port_forward":true,"servers":{"wg":[{"ip":"198.51.100.10","cn":"useast1"},{"ip":"198.51.100.20","cn":"useast2"}]}},{"id":"de-berlin","name":"Berlin","country":"DE","geo":false,"offline":false,"port_forward":false,"servers":{"wg":[{"ip":"203.0.113.10","cn":"berlin1"}]}}]}`)
 	svc := NewPiaService()
 	svc.Auth = fakePiaAuth{token: "tokentokentokentoken12"}

@@ -1,0 +1,5 @@
+upstream_repo=MHSanaei/3x-ui
+upstream_base=95f19b192f477b59cc368dcb7751bcf2e0180e5b
+upstream_head=05eb06f333ab5a4705d14121c4fe61ff15bf6cc8
+local_base=cb9fcf872dc58d7a6a17dc9663ec4506ffdf2063
+synthetic_head=3985ba46a19406eec1a890e1842588d1956c5a10

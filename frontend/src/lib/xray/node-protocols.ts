@@ -2,10 +2,17 @@ import { Protocols } from '@/schemas/primitives';
 
 /*
  * Protocols whose inbounds can live on a sub-node (the "Deploy To" set).
+<<<<<<< HEAD
  * The remote panel can manage both core-native listeners and its local
  * sidecars, so eligibility is intentionally broader than either core's native
  * protocol list. Core-specific support is checked separately below and by the
  * backend.
+=======
+ * Everything else (http, mixed, tunnel, tun) is panel-local only. The sidecar
+ * protocols run on the node's own panel; the backend refuses a node too old.
+ * Shared by the inbound form's Deploy To selector and the clone dialog's
+ * target picker so the two surfaces can never drift apart.
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
  */
 export const NODE_ELIGIBLE_PROTOCOLS: Readonly<Record<string, true>> = {
   [Protocols.VLESS]: true,
@@ -13,6 +20,7 @@ export const NODE_ELIGIBLE_PROTOCOLS: Readonly<Record<string, true>> = {
   [Protocols.TROJAN]: true,
   [Protocols.SHADOWSOCKS]: true,
   [Protocols.WIREGUARD]: true,
+<<<<<<< HEAD
   [Protocols.HYSTERIA]: true,
   [Protocols.HTTP]: true,
   [Protocols.MIXED]: true,
@@ -29,6 +37,11 @@ export const NODE_ELIGIBLE_PROTOCOLS: Readonly<Record<string, true>> = {
   [Protocols.MIERU]: true,
   [Protocols.VK_TURN_PROXY]: true,
   [Protocols.SUDOKU]: true,
+=======
+  [Protocols.MTPROTO]: true,
+  [Protocols.AMNEZIAWG]: true,
+  [Protocols.TUIC]: true,
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
 };
 
 export interface NodeCoreInfo {

@@ -17,7 +17,12 @@ import (
 	"github.com/gin-gonic/gin"
 	yaml "github.com/goccy/go-yaml"
 
+<<<<<<< HEAD
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
+=======
+	"github.com/mhsanaei/3x-ui/v3/internal/database"
+	"github.com/mhsanaei/3x-ui/v3/internal/database/dbtest"
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
 )
 
 func mergeRemoteClashRulesYAML(base map[string]any, raw string) error {
@@ -608,10 +613,7 @@ func TestRemoteRoutingHTTPClientRejectsLoopback(t *testing.T) {
 
 func TestRemoteRoutingPersistedLoadRetriesAfterDatabaseBecomesReady(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "x-ui.db")
-	if err := database.InitDB(dbPath); err != nil {
-		t.Fatalf("init db: %v", err)
-	}
-	t.Cleanup(func() { _ = database.CloseDB() })
+	dbtest.InitDB(t, dbPath)
 
 	deeplink, err := normalizeHappRouting([]byte(`{"Name":"persisted-after-ready"}`))
 	if err != nil {

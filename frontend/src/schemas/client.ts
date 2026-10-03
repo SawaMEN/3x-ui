@@ -42,6 +42,7 @@ export const ClientRecordSchema = z
     enable: z.boolean().optional(),
     reset: z.number().optional(),
     resetDay: z.number().optional(),
+    resetWeekday: z.number().optional(),
     resetMax: z.number().optional(),
     trafficReset: z.string().optional(),
     trafficResetDay: z.number().optional(),
@@ -329,6 +330,7 @@ export const ClientFormSchema = z.object({
   delayedDays: z.number().int().min(0),
   reset: z.number().int().min(0),
   resetDay: z.number().int().min(0).max(31),
+  resetWeekday: z.number().int().min(0).max(7),
   resetMax: z.number().int().min(0),
   trafficReset: z.enum(['never', 'hourly', 'daily', 'weekly', 'monthly']),
   trafficResetDay: z.number().int().min(1).max(31),
@@ -361,7 +363,7 @@ export const ClientBulkAdjustFormSchema = z
       (v.limitHwid !== undefined && v.limitHwid !== null) ||
       (v.adTag !== undefined && v.adTag.trim() !== ''),
     {
-      message: 'pages.clients.bulkAdjustNothing',
+      error: 'pages.clients.bulkAdjustNothing',
     },
   )
   .refine(
@@ -371,7 +373,7 @@ export const ClientBulkAdjustFormSchema = z
       return /^[0-9a-fA-F]{32}$/.test(tag);
     },
     {
-      message: 'pages.inbounds.form.mtgAdTagInvalid',
+      error: 'pages.inbounds.form.mtgAdTagInvalid',
       path: ['adTag'],
     },
   );
@@ -393,6 +395,7 @@ export const ClientBulkAddFormSchema = z.object({
   expiryTime: z.number(),
   reset: z.number().int().min(0),
   resetDay: z.number().int().min(0).max(31),
+  resetWeekday: z.number().int().min(0).max(7),
   resetMax: z.number().int().min(0),
   trafficReset: z.enum(['never', 'hourly', 'daily', 'weekly', 'monthly']).optional(),
   trafficResetDay: z.number().int().min(1).max(31).optional(),

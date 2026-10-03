@@ -280,9 +280,31 @@ check_status() {
         return 1
     fi
     if [[ $release == "alpine" ]]; then
+<<<<<<< HEAD
         [[ -f /etc/init.d/x-ui ]] || return 2
         rc-service x-ui status >/dev/null 2>&1 && return 0
         return 1
+=======
+        if [[ ! -f /etc/init.d/x-ui ]]; then
+            return 2
+        fi
+        if [[ $(rc-service x-ui status | grep -F 'status: started' -c) == 1 ]]; then
+            return 0
+        else
+            return 1
+        fi
+    else
+        if [[ ! -f ${xui_service}/x-ui.service ]]; then
+            return 2
+        fi
+        temp=$(systemctl show --property=SubState x-ui)
+        temp=${temp#SubState=}
+        if [[ "${temp}" == "running" ]]; then
+            return 0
+        else
+            return 1
+        fi
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
     fi
     command -v systemctl >/dev/null 2>&1 || return 2
     systemctl cat x-ui >/dev/null 2>&1 || return 2
@@ -545,6 +567,53 @@ run_speedtest() {
     if ! command -v speedtest >/dev/null 2>&1 && ! command -v speedtest-cli >/dev/null 2>&1; then
         echo "Installing a Speedtest CLI..."
         case "${release}" in
+<<<<<<< HEAD
+=======
+            ubuntu)
+                apt-get update
+                if [[ "${os_version}" -ge 2400 ]]; then
+                    apt-get install python3-pip -y
+                    python3 -m pip install pyasynchat --break-system-packages
+                fi
+                apt-get install fail2ban nftables -y
+                ;;
+            debian)
+                apt-get update
+                if [ "$os_version" -ge 12 ]; then
+                    apt-get install -y python3-systemd
+                fi
+                apt-get install -y fail2ban nftables
+                ;;
+            armbian)
+                apt-get update && apt-get install fail2ban nftables -y
+                ;;
+            fedora | amzn | virtuozzo | rhel | almalinux | rocky | ol)
+                if [[ "${release}" != "fedora" ]] && ! dnf repolist enabled 2> /dev/null | grep -qiw epel; then
+                    dnf install -y epel-release \
+                        || dnf install -y "https://dl.fedoraproject.org/pub/epel/epel-release-latest-$(rpm -E %rhel).noarch.rpm" \
+                        || echo -e "${yellow}Could not enable the EPEL repository; fail2ban is only available from EPEL on this distro.${plain}"
+                fi
+                dnf makecache -y && dnf -y install fail2ban nftables
+                ;;
+            centos)
+                if [[ "${VERSION_ID}" =~ ^7 ]]; then
+                    yum makecache -y && yum install epel-release -y
+                    # On EL7 fail2ban pulls in firewalld, which is enabled on the
+                    # next boot and blocks every panel/inbound port. The IP Limit
+                    # jail uses raw iptables, so a firewalld that was not there
+                    # before is not needed: keep it from starting on reboot.
+                    rpm -q firewalld &> /dev/null && had_firewalld=1 || had_firewalld=0
+                    yum -y install fail2ban nftables
+                    if [[ "${had_firewalld}" == "0" ]] && rpm -q firewalld &> /dev/null; then
+                        systemctl disable firewalld 2> /dev/null
+                        echo -e "${yellow}firewalld was pulled in by fail2ban and has been disabled so it does not block your ports after a reboot.${plain}
+"
+                    fi
+                else
+                    dnf makecache -y && dnf -y install fail2ban nftables
+                fi
+                ;;
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
             arch | manjaro | parch)
                 pacman -S --noconfirm --needed speedtest-cli || return 1
                 ;;

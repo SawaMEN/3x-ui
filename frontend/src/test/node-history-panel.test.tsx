@@ -37,7 +37,13 @@ describe('NodeHistoryPanel', () => {
 
     render(<NodeHistoryPanel node={{ id: 7 }} />);
 
+<<<<<<< HEAD
     await waitFor(() => {
+=======
+    // Sparkline updates its chart refs in a passive effect after the DOM commits.
+    await waitFor(() => {
+      expect(screen.getAllByRole('img')).toHaveLength(4);
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
       expect(screen.getAllByRole('img').map((el) => el.getAttribute('aria-label'))).toEqual([
         '40%',
         '60%',

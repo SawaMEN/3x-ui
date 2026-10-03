@@ -62,7 +62,11 @@ type Inbound struct {
 	Total                int64                `json:"total" form:"total"`                                                                                                                                           // Total traffic limit in bytes
 	Remark               string               `json:"remark" form:"remark" example:"VLESS-443"`                                                                                                                     // Human-readable remark
 	SubSortIndex         int                  `json:"subSortIndex" form:"subSortIndex" gorm:"default:1" validate:"omitempty" example:"1"`                                                                           // Sort order of this inbound's links in subscription output only (lower first; negatives allowed; 0/omitted → 1; ties by id)
+<<<<<<< HEAD
 	SortOrder            int                  `json:"sortOrder" form:"sortOrder" gorm:"column:sort_order;default:0;index"`                                                                                          // Manual panel ordering; ties fall back to id.
+=======
+	ExcludeFromSub       bool                 `json:"excludeFromSub" form:"excludeFromSub" gorm:"column:exclude_from_sub;default:false" example:"false"`                                                            // Whether to omit this inbound from subscription output while keeping it operational
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
 	Enable               bool                 `json:"enable" form:"enable" gorm:"index:idx_enable_traffic_reset,priority:1" example:"true"`                                                                         // Whether the inbound is enabled
 	ExpiryTime           int64                `json:"expiryTime" form:"expiryTime"`                                                                                                                                 // Expiration timestamp
 	TrafficReset         string               `json:"trafficReset" form:"trafficReset" gorm:"default:never;index:idx_enable_traffic_reset,priority:2" validate:"omitempty,oneof=never hourly daily weekly monthly"` // Traffic reset schedule
@@ -920,6 +924,7 @@ type Client struct {
 	ForwardedPorts      string           `json:"forwardedPorts,omitempty"` // AmneziaWG per-client port-forwarding spec, e.g. "80,443,8000-8100"
 	Secret              string           `json:"secret,omitempty" example:"ee1234567890abcdef1234567890abcd7777772e636c6f7564666c6172652e636f6d"`
 	AdTag               string           `json:"adTag,omitempty" example:"0123456789abcdef0123456789abcdef"`
+<<<<<<< HEAD
 	SudokuPrivateKey    string           `json:"sudokuPrivateKey,omitempty" gorm:"-"`
 	Email               string           `json:"email"`                        // Client email identifier
 	LimitIP             int              `json:"limitIp"`                      // IP limit for this client
@@ -933,6 +938,21 @@ type Client struct {
 	Reset               int              `json:"reset" form:"reset"`           // Reset period in days
 	ResetDay            int              `json:"resetDay" form:"resetDay"`     // Calendar renewal day 1-31, 0 = interval mode
 	ResetMax            int              `json:"resetMax" form:"resetMax"`     // Max auto-renew count, 0 = unlimited
+=======
+	Email               string           `json:"email"`                            // Client email identifier
+	LimitIP             int              `json:"limitIp"`                          // IP limit for this client
+	TotalGB             int64            `json:"totalGB" form:"totalGB"`           // Total traffic limit in GB
+	ExpiryTime          int64            `json:"expiryTime" form:"expiryTime"`     // Expiration timestamp
+	Enable              bool             `json:"enable" form:"enable"`             // Whether the client is enabled
+	TgID                int64            `json:"tgId" form:"tgId"`                 // Telegram user ID for notifications
+	SubID               string           `json:"subId" form:"subId"`               // Subscription identifier
+	Group               string           `json:"group,omitempty" form:"group"`     // Logical grouping label
+	Comment             string           `json:"comment" form:"comment"`           // Client comment
+	Reset               int              `json:"reset" form:"reset"`               // Reset period in days
+	ResetDay            int              `json:"resetDay" form:"resetDay"`         // Calendar renewal day 1-31, 0 disables monthly renewal
+	ResetWeekday        int              `json:"resetWeekday" form:"resetWeekday"` // Calendar weekday 1-7 (Mon-Sun), 0 disables weekly renewal
+	ResetMax            int              `json:"resetMax" form:"resetMax"`         // Max auto-renew count, 0 = unlimited
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
 	// Per-client traffic reset cycle, independent of the inbound's own (#5497).
 	TrafficReset    string `json:"trafficReset,omitempty" form:"trafficReset" validate:"omitempty,oneof=never hourly daily weekly monthly"`
 	TrafficResetDay int    `json:"trafficResetDay,omitempty" form:"trafficResetDay" validate:"omitempty,gte=1,lte=31"`
@@ -941,6 +961,7 @@ type Client struct {
 }
 
 type ClientRecord struct {
+<<<<<<< HEAD
 	Id             int    `json:"id" gorm:"primaryKey;autoIncrement"`
 	Email          string `json:"email" gorm:"uniqueIndex;not null"`
 	SubID          string `json:"subId" gorm:"index;column:sub_id"`
@@ -977,6 +998,41 @@ type ClientRecord struct {
 	TrafficResetDay    int    `json:"trafficResetDay" gorm:"column:traffic_reset_day;default:1"`
 	CreatedAt          int64  `json:"createdAt" gorm:"autoCreateTime:milli"`
 	UpdatedAt          int64  `json:"updatedAt" gorm:"autoUpdateTime:milli"`
+=======
+	Id              int    `json:"id" gorm:"primaryKey;autoIncrement"`
+	Email           string `json:"email" gorm:"uniqueIndex;not null"`
+	SubID           string `json:"subId" gorm:"index;column:sub_id"`
+	UUID            string `json:"uuid" gorm:"column:uuid"`
+	Password        string `json:"password"`
+	Auth            string `json:"auth"`
+	Flow            string `json:"flow"`
+	Security        string `json:"security"`
+	Reverse         string `json:"reverse" gorm:"column:reverse"`
+	PrivateKey      string `json:"privateKey" gorm:"column:wg_private_key"`
+	PublicKey       string `json:"publicKey" gorm:"column:wg_public_key"`
+	AllowedIPs      string `json:"allowedIPs" gorm:"column:wg_allowed_ips"`
+	PreSharedKey    string `json:"preSharedKey" gorm:"column:wg_pre_shared_key"`
+	KeepAlive       int    `json:"keepAlive" gorm:"column:wg_keep_alive;default:0"`
+	ForwardedPorts  string `json:"forwardedPorts" gorm:"column:wg_forwarded_ports"`
+	Secret          string `json:"secret" gorm:"column:secret"`
+	AdTag           string `json:"adTag" gorm:"column:ad_tag;default:''"`
+	LimitIP         int    `json:"limitIp" gorm:"column:limit_ip"`
+	LimitHwid       int    `json:"limitHwid" gorm:"column:limit_hwid;default:0"`
+	TotalGB         int64  `json:"totalGB" gorm:"column:total_gb"`
+	ExpiryTime      int64  `json:"expiryTime" gorm:"column:expiry_time"`
+	Enable          bool   `json:"enable" gorm:"default:true"`
+	TgID            int64  `json:"tgId" gorm:"column:tg_id;index:idx_clients_tg_id"`
+	Group           string `json:"group" gorm:"column:group_name;default:'';index:idx_client_record_group"`
+	Comment         string `json:"comment"`
+	Reset           int    `json:"reset" gorm:"default:0"`
+	ResetDay        int    `json:"resetDay" gorm:"column:reset_day;default:0"`
+	ResetWeekday    int    `json:"resetWeekday" gorm:"column:reset_weekday;default:0"`
+	ResetMax        int    `json:"resetMax" gorm:"column:reset_max;default:0"`
+	TrafficReset    string `json:"trafficReset" gorm:"column:traffic_reset;default:never;index:idx_clients_traffic_reset"`
+	TrafficResetDay int    `json:"trafficResetDay" gorm:"column:traffic_reset_day;default:1"`
+	CreatedAt       int64  `json:"createdAt" gorm:"autoCreateTime:milli"`
+	UpdatedAt       int64  `json:"updatedAt" gorm:"autoUpdateTime:milli"`
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
 	// Owned solely by the node-snapshot sweep, which soft-orphans instead of
 	// deleting; orphans from any other cause stay at zero and are never reaped.
 	SyncOrphanedAt int64 `json:"-" gorm:"column:sync_orphaned_at;default:0"`
@@ -1184,6 +1240,7 @@ func (c *Client) ToRecord() *ClientRecord {
 		Comment:         c.Comment,
 		Reset:           c.Reset,
 		ResetDay:        c.ResetDay,
+		ResetWeekday:    c.ResetWeekday,
 		ResetMax:        c.ResetMax,
 		TrafficReset:    c.TrafficReset,
 		TrafficResetDay: c.TrafficResetDay,
@@ -1242,6 +1299,7 @@ func (r *ClientRecord) ToClient() *Client {
 		Comment:         r.Comment,
 		Reset:           r.Reset,
 		ResetDay:        r.ResetDay,
+		ResetWeekday:    r.ResetWeekday,
 		ResetMax:        r.ResetMax,
 		TrafficReset:    r.TrafficReset,
 		TrafficResetDay: r.TrafficResetDay,
@@ -1407,16 +1465,39 @@ func MergeClientRecord(existing *ClientRecord, incoming *ClientRecord) []ClientM
 			existing.TgID = incoming.TgID
 		}
 	}
-	if existing.Reset != incoming.Reset && incoming.Reset != 0 {
-		if incomingNewer || existing.Reset == 0 {
-			keep("reset", existing.Reset, incoming.Reset, incoming.Reset)
-			existing.Reset = incoming.Reset
+	if existing.ResetWeekday != 0 || incoming.ResetWeekday != 0 {
+		// A mode switch must carry its zeroes, not fill them from another mode.
+		// Empty snapshots still preserve the existing schedule during migration.
+		incomingSet := incoming.Reset != 0 || incoming.ResetDay != 0 || incoming.ResetWeekday != 0
+		existingSet := existing.Reset != 0 || existing.ResetDay != 0 || existing.ResetWeekday != 0
+		if incomingSet && (incomingNewer || !existingSet) {
+			for _, field := range []struct {
+				name    string
+				current *int
+				value   int
+			}{
+				{"reset", &existing.Reset, incoming.Reset},
+				{"resetDay", &existing.ResetDay, incoming.ResetDay},
+				{"resetWeekday", &existing.ResetWeekday, incoming.ResetWeekday},
+			} {
+				if *field.current != field.value {
+					keep(field.name, *field.current, field.value, field.value)
+					*field.current = field.value
+				}
+			}
 		}
-	}
-	if existing.ResetDay != incoming.ResetDay && incoming.ResetDay != 0 {
-		if incomingNewer || existing.ResetDay == 0 {
-			keep("resetDay", existing.ResetDay, incoming.ResetDay, incoming.ResetDay)
-			existing.ResetDay = incoming.ResetDay
+	} else {
+		if existing.Reset != incoming.Reset && incoming.Reset != 0 {
+			if incomingNewer || existing.Reset == 0 {
+				keep("reset", existing.Reset, incoming.Reset, incoming.Reset)
+				existing.Reset = incoming.Reset
+			}
+		}
+		if existing.ResetDay != incoming.ResetDay && incoming.ResetDay != 0 {
+			if incomingNewer || existing.ResetDay == 0 {
+				keep("resetDay", existing.ResetDay, incoming.ResetDay, incoming.ResetDay)
+				existing.ResetDay = incoming.ResetDay
+			}
 		}
 	}
 	if existing.ResetMax != incoming.ResetMax && incoming.ResetMax != 0 {

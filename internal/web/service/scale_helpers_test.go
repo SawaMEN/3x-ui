@@ -9,11 +9,20 @@ import (
 	"testing"
 	"time"
 
+<<<<<<< HEAD
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	xuilogger "github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
+=======
+	"github.com/mhsanaei/3x-ui/v3/internal/config"
+	"github.com/mhsanaei/3x-ui/v3/internal/database"
+	"github.com/mhsanaei/3x-ui/v3/internal/database/dbtest"
+	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
+	xuilogger "github.com/mhsanaei/3x-ui/v3/internal/logger"
+	"github.com/mhsanaei/3x-ui/v3/internal/xray"
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
 
 	"github.com/op/go-logging"
 	"gorm.io/gorm"
@@ -41,10 +50,7 @@ func setupScaleDB(t *testing.T) {
 		if dbPath == "" {
 			dbPath = filepath.Join(t.TempDir(), "scale.db")
 		}
-		if err := database.InitDB(dbPath); err != nil {
-			t.Fatalf("InitDB(sqlite): %v", err)
-		}
-		t.Cleanup(func() { _ = database.CloseDB() })
+		dbtest.InitDB(t, dbPath)
 		return
 	}
 

@@ -226,6 +226,7 @@ body.dark .ant-sidebar > .ant-layout-sider {
   margin-top: auto;
   border-top: 1px solid var(--ant-color-border-secondary);
 }
+<<<<<<< HEAD
 .drawer-handle {
   display: none;
   position: fixed;
@@ -239,6 +240,47 @@ body.dark .ant-sidebar > .ant-layout-sider {
   background: var(--xui-surface-container);
   color: var(--ant-color-text);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+=======
+
+.ant-sidebar > .ant-layout-sider .ant-layout-sider-children {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.sider-nav {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+}
+
+.sider-utility {
+  flex: 0 0 auto;
+  border-top: 1px solid var(--ant-color-border-secondary);
+}
+
+.sider-footer {
+  flex: 0 0 auto;
+  padding: 8px 8px 12px;
+}
+
+.sider-sponsor {
+  margin-bottom: 6px;
+}
+
+.sidebar-pin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ant-color-text-secondary);
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
   cursor: pointer;
 }
 @media (max-width: 768px) {

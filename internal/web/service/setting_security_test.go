@@ -8,8 +8,14 @@ import (
 
 	"github.com/xlzd/gotp"
 
+<<<<<<< HEAD
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+=======
+	"github.com/mhsanaei/3x-ui/v3/internal/database"
+	"github.com/mhsanaei/3x-ui/v3/internal/database/dbtest"
+	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
 )
 
 func TestResetSettingsRegeneratesSubscriptionPaths(t *testing.T) {
@@ -52,14 +58,7 @@ func TestResetSettingsRegeneratesSubscriptionPaths(t *testing.T) {
 
 func setupSettingTestDB(t *testing.T) {
 	t.Helper()
-	if err := database.InitDB(filepath.Join(t.TempDir(), "x-ui.db")); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := database.CloseDB(); err != nil {
-			t.Fatal(err)
-		}
-	})
+	dbtest.InitDB(t, filepath.Join(t.TempDir(), "x-ui.db"))
 }
 
 func TestGetAllSettingViewRedactsSecrets(t *testing.T) {

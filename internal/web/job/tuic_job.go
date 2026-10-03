@@ -1,7 +1,11 @@
 package job
 
 import (
+<<<<<<< HEAD
 	"sync"
+=======
+	"fmt"
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
 	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
@@ -20,6 +24,7 @@ func NewTuicJob() *TuicJob {
 	return new(TuicJob)
 }
 
+<<<<<<< HEAD
 func tuicTrafficBatch(snapshot tuic.TrafficSnapshot, onlineEmails []string) ([]*xray.Traffic, []*xray.ClientTraffic) {
 	inboundUp := make(map[string]int64)
 	inboundDown := make(map[string]int64)
@@ -143,6 +148,42 @@ func (j *TuicJob) Run() {
 			// TUIC traffic.
 			j.pending.remember(traffics, clientTraffics)
 			logger.Warning("tuic job: add traffic failed; batch queued for retry:", err)
+=======
+func (j *TuicJob) Run() {
+	tuicJournalMu.Lock()
+	journalErr := j.replayTuicJournal()
+	tuicJournalMu.Unlock()
+	if journalErr != nil {
+		logger.Warning("tuic job: recover traffic journal failed:", journalErr)
+	}
+
+	desired, err := j.inboundService.DesiredTuicInstances()
+	if err != nil {
+		logger.Warning("tuic job: get desired instances failed:", err)
+		return
+	}
+
+	activeTags := make([]string, 0, len(desired))
+	for _, inst := range desired {
+		activeTags = append(activeTags, inst.Tag)
+	}
+
+	mgr := tuic.GetManager()
+	mgr.Reconcile(desired)
+
+	_, clientDeltas := mgr.CollectAllTraffic()
+	onlineEmails, _ := mgr.GetActiveClients(30 * time.Second)
+
+	clientTraffics := aggregateTuicClientTraffic(clientDeltas, onlineEmails)
+
+	// Inbound total traffic is already metered through the loopback SOCKS relay
+	// by xray_traffic_job (matching mtproto); only per-client deltas are submitted here.
+	if len(clientTraffics) > 0 {
+		needRestart, _, err := j.inboundService.AddTraffic(nil, clientTraffics)
+		if err != nil {
+			logger.Warning("tuic job: add traffic failed:", err)
+			mgr.RequeueClientTraffic(clientDeltas)
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
 		} else if needRestart {
 			if desired, err := j.inboundService.DesiredTuicInstances(); err == nil {
 				mgr.Reconcile(desired)
@@ -157,4 +198,46 @@ func (j *TuicJob) Run() {
 	}
 
 	j.inboundService.RefreshLocalOnlineClients(onlineEmails, activeTags)
+}
+
+// FlushStoppedTraffic persists counters drained when the TUIC manager stops its
+// listeners. Call it after scheduled jobs have stopped and before the traffic
+// writer shuts down.
+func (j *TuicJob) FlushStoppedTraffic() error {
+	return j.flushTuicJournal()
+}
+
+func aggregateTuicClientTraffic(clientDeltas []tuic.ClientTrafficDelta, onlineEmails []string) []*xray.ClientTraffic {
+	clientTrafficMap := make(map[string]*xray.ClientTraffic, len(clientDeltas)+len(onlineEmails))
+	for _, cd := range clientDeltas {
+		key := cd.Email
+		if cd.TrafficID > 0 {
+			key = fmt.Sprintf("traffic:%d", cd.TrafficID)
+		}
+		if cd.TrafficID == 0 && cd.InboundID > 0 && cd.UUID != "" {
+			key = fmt.Sprintf("tuic:%d:%s", cd.InboundID, cd.UUID)
+		}
+		traffic := clientTrafficMap[key]
+		if traffic == nil {
+			traffic = &xray.ClientTraffic{Email: cd.Email, TuicTrafficID: cd.TrafficID, TuicUUID: cd.UUID, TuicInboundId: cd.InboundID}
+			clientTrafficMap[key] = traffic
+		}
+		traffic.Up += cd.Up
+		traffic.Down += cd.Down
+	}
+	for _, email := range onlineEmails {
+		if _, exists := clientTrafficMap[email]; !exists {
+			clientTrafficMap[email] = &xray.ClientTraffic{
+				Email: email,
+				Up:    0,
+				Down:  0,
+			}
+		}
+	}
+
+	clientTraffics := make([]*xray.ClientTraffic, 0, len(clientTrafficMap))
+	for _, ct := range clientTrafficMap {
+		clientTraffics = append(clientTraffics, ct)
+	}
+	return clientTraffics
 }

@@ -10,8 +10,14 @@ import (
 	"sync/atomic"
 	"testing"
 
+<<<<<<< HEAD
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+=======
+	"github.com/mhsanaei/3x-ui/v3/internal/database"
+	"github.com/mhsanaei/3x-ui/v3/internal/database/dbtest"
+	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
 )
 
 // seedWarp stores warp credentials (with a Warp Plus license key) in the DB.
@@ -69,10 +75,7 @@ func withWarpAPIBase(t *testing.T, base string) {
 }
 
 func TestChangeWarpIPPreservesLicenseKey(t *testing.T) {
-	if err := database.InitDB(filepath.Join(t.TempDir(), "x-ui.db")); err != nil {
-		t.Fatalf("InitDB: %v", err)
-	}
-	t.Cleanup(func() { _ = database.CloseDB() })
+	dbtest.InitDB(t, filepath.Join(t.TempDir(), "x-ui.db"))
 
 	const license = "WARPPLLUS-KEY-0123456789abcdefgh" // 32 chars, >= 26 gate
 	seedWarp(t, license)
@@ -124,10 +127,7 @@ func TestChangeWarpIPPreservesLicenseKey(t *testing.T) {
 }
 
 func TestChangeWarpIPKeepsLicenseWhenReapplyFails(t *testing.T) {
-	if err := database.InitDB(filepath.Join(t.TempDir(), "x-ui.db")); err != nil {
-		t.Fatalf("InitDB: %v", err)
-	}
-	t.Cleanup(func() { _ = database.CloseDB() })
+	dbtest.InitDB(t, filepath.Join(t.TempDir(), "x-ui.db"))
 
 	const license = "WARPPLLUS-KEY-0123456789abcdefgh"
 	seedWarp(t, license)

@@ -1,7 +1,11 @@
 package controller
 
 import (
+<<<<<<< HEAD
 	"encoding/json"
+=======
+	"errors"
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
 	"fmt"
 	"io"
 	"net/http"
@@ -10,6 +14,7 @@ import (
 	"strconv"
 	"time"
 
+<<<<<<< HEAD
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/entity"
@@ -17,6 +22,16 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service/panel"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/websocket"
+=======
+	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
+	"github.com/mhsanaei/3x-ui/v3/internal/logger"
+	"github.com/mhsanaei/3x-ui/v3/internal/util/netsafe"
+	"github.com/mhsanaei/3x-ui/v3/internal/web/entity"
+	"github.com/mhsanaei/3x-ui/v3/internal/web/global"
+	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
+	"github.com/mhsanaei/3x-ui/v3/internal/web/service/panel"
+	"github.com/mhsanaei/3x-ui/v3/internal/web/websocket"
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
 
 	"github.com/gin-gonic/gin"
 )
@@ -738,7 +753,12 @@ func (a *ServerController) getCertHash(c *gin.Context) {
 // getRemoteCertHash runs `xray tls ping` against the given server and returns
 // its live certificate SHA-256 hash(es) for pinning.
 func (a *ServerController) getRemoteCertHash(c *gin.Context) {
-	hashes, err := a.serverService.GetRemoteCertHash(c.PostForm("server"))
+	allowPrivate := c.PostForm("allowPrivate") == "true"
+	hashes, err := a.serverService.GetRemoteCertHash(c.PostForm("server"), allowPrivate)
+	if errors.Is(err, netsafe.ErrPrivateAddressBlocked) {
+		jsonMsgObj(c, "get remote cert hash", gin.H{"privateTarget": true}, err)
+		return
+	}
 	if err != nil {
 		jsonMsg(c, "get remote cert hash", err)
 		return

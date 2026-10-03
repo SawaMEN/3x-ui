@@ -61,6 +61,7 @@ func (a *ClientController) initRouter(g *gin.RouterGroup) {
 	g.POST("/happLink/:id", a.generateHappLink)
 
 	g.POST("/add", a.create)
+	g.POST("/renewalPreview", a.renewalPreview)
 	g.POST("/update/:email", a.update)
 	g.POST("/del/:email", a.delete)
 	g.POST("/:email/attach", a.attach)
@@ -100,6 +101,16 @@ func (a *ClientController) list(c *gin.Context) {
 		return
 	}
 	jsonObj(c, rows, nil)
+}
+
+func (a *ClientController) renewalPreview(c *gin.Context) {
+	var request service.ClientRenewalPreviewRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	preview, err := a.clientService.PreviewRenewal(request, &a.settingService)
+	jsonObj(c, preview, err)
 }
 
 func (a *ClientController) listPaged(c *gin.Context) {
@@ -535,16 +546,27 @@ func (a *ClientController) importClients(c *gin.Context) {
 		return
 	}
 	result, needRestart, err := a.clientService.ImportClients(&a.inboundService, items)
+	// Flagged before the error check: a failed traffic restore still leaves the
+	// clients created before it committed, and those need the restart and refresh.
+	if needRestart {
+		a.xrayService.SetToNeedRestart()
+	}
+	if needRestart || result.Created > 0 || err == nil {
+		notifyClientsChanged()
+	}
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
 	a.provisionTelemtSubscriptions(c, items)
 	jsonObj(c, result, nil)
+<<<<<<< HEAD
 	if needRestart {
 		markSelectedCoreNeedRestart(&a.settingService, &a.xrayService, &a.singBoxService)
 	}
 	notifyClientsChanged()
+=======
+>>>>>>> 3985ba46a19406eec1a890e1842588d1956c5a10
 }
 
 func (a *ClientController) delOrphans(c *gin.Context) {
