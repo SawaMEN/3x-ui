@@ -50,6 +50,7 @@ jobs:
           git diff --binary "$UPSTREAM_BASE" "$UPSTREAM_HEAD" | git apply --index --binary --whitespace=nowarn
           git commit -m "chore: synthetic upstream snapshot ${UPSTREAM_HEAD}"
           SYNTHETIC_HEAD="$(git rev-parse HEAD)"
+          git branch -f _sync_synthetic "$SYNTHETIC_HEAD"
 
           git switch "$TARGET_BRANCH"
 
@@ -74,10 +75,34 @@ jobs:
             echo "synthetic_head=${SYNTHETIC_HEAD}"
           } > .upstream-sync-meta
 
-          # Commit the merge result on the staging branch. Text conflicts keep
-          # their standard conflict markers for deliberate follow-up resolution;
-          # binary/delete conflicts keep the working-tree side selected by git.
-          rm -f .github/workflows/sync-upstream.yml
+          # The Actions token cannot push workflow-file changes. Preserve their
+          # complete upstream delta separately, then keep the branch's current
+          # workflow tree unchanged. These workflow updates are applied later
+          # with the repository connection after source conflicts are resolved.
+          git diff --binary HEAD "$SYNTHETIC_HEAD" -- .github/workflows > .upstream-sync-workflows.patch || true
+          git restore --source=HEAD --staged --worktree -- .github/workflows
+
+          # Commit the staged three-way result. Text conflicts deliberately keep
+          # standard conflict markers so they can be resolved with full context.
           git add -A
           git commit -m "chore: stage MHSanaei upstream sync [upstream-sync-done]"
-          git push origin HEAD:"$TARGET_BRANCH"
+
+          # Export a self-contained git bundle for offline conflict resolution.
+          git branch -f _sync_staged HEAD
+          git bundle create upstream-sync.bundle _sync_staged _sync_synthetic
+
+      - name: Upload merge workspace
+        uses: actions/upload-artifact@v4
+        with:
+          name: upstream-sync-workspace
+          path: |
+            upstream-sync.bundle
+            .upstream-sync-conflicts
+            .upstream-sync-meta
+            .upstream-sync-workflows.patch
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Push staged merge
+        shell: bash
+        run: git push origin HEAD:sync/upstream-2026-10-03
