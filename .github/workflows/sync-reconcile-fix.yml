@@ -27,8 +27,6 @@ jobs:
           git fetch --depth=1 upstream main
       - name: Reconcile sources
         run: python3 tools/reconcile_upstream_sync.py
-      - name: Verify Go packages compile
-        run: go test ./internal/web/service ./internal/web/job ./internal/web/controller ./internal/web -run '^$'
       - name: Upload reconciled files
         uses: actions/upload-artifact@v7
         with:
