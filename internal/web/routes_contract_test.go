@@ -38,9 +38,6 @@ var contractExtraRoutes = map[string]bool{
 	"GET /ws":                  true,
 }
 
-// Host-firewall mutation and panel-only feature toggles/actions are intentionally
-// internal UI surfaces rather than supported public automation APIs. Keep
-// them out of OpenAPI until they have a stable compatibility contract.
 func isInternalUIAPI(path string) bool {
 	return strings.HasPrefix(path, "/panel/api/server/firewall/") ||
 		strings.HasPrefix(path, "/panel/api/gateway/") ||
@@ -87,7 +84,7 @@ func registeredContractRoutes(t *testing.T) map[string]bool {
 func documentedContractRoutes(t *testing.T) map[string]bool {
 	t.Helper()
 	registryDir := filepath.Join("..", "..", "frontend", "src", "pages", "api-docs")
-	registryFiles := []string{"endpoints.ts", "singbox-sessions.ts"}
+	registryFiles := []string{"endpoints.ts", "singbox-sessions.ts", "runtime-endpoints.ts"}
 	var registry strings.Builder
 	for _, name := range registryFiles {
 		source, err := os.ReadFile(filepath.Join(registryDir, name))
@@ -134,9 +131,6 @@ func TestRouteRegistryContract(t *testing.T) {
 		var missing []string
 		for route := range registered {
 			fields := strings.Fields(route)
-			// Keep the internal-UI guard at the call site too. A PR merge ref may
-			// combine this branch with a newer inContractScope helper from main;
-			// this direct check does not depend on any helper surviving merge.
 			if len(fields) >= 2 && isInternalUIAPI(fields[1]) {
 				continue
 			}
