@@ -1,0 +1,47 @@
+name: Reconcile sync branch with latest main
+
+on:
+  push:
+    branches:
+      - sync-upstream-2026-10-03
+    paths:
+      - .github/workflows/rebase-sync-on-main.yml
+
+permissions:
+  contents: write
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout sync branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: sync-upstream-2026-10-03
+
+      - name: Merge latest main, preferring main on conflicts
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git merge --no-edit -X theirs origin/main
+          git rm .github/workflows/rebase-sync-on-main.yml
+          git commit -m "chore: finish main reconciliation"
+          git push origin HEAD:sync-upstream-2026-10-03
+
+      - name: Backend tests
+        continue-on-error: false
+        run: go test ./...
+
+      - name: Frontend checks
+        continue-on-error: false
+        run: |
+          cd frontend
+          corepack enable
+          npm ci
+          npm run typecheck
+          npm run build:ci
