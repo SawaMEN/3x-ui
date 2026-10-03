@@ -45,15 +45,25 @@ jobs:
               continue
             fi
 
-            echo "Cherry-pick stopped; resolving remaining unmerged paths in favor of the local branch"
-            while IFS= read -r path; do
+            echo "Cherry-pick stopped; resolving remaining unmerged paths"
+            mapfile -t conflicts < <(git diff --name-only --diff-filter=U)
+            for path in "${conflicts[@]}"; do
               [ -n "$path" ] || continue
-              if git checkout --ours -- "$path" 2>/dev/null; then
-                git add -- "$path"
-              else
-                git rm -f --ignore-unmatch -- "$path" || true
-              fi
-            done < <(git diff --name-only --diff-filter=U)
+              case "$path" in
+                internal/tuic/config.go|internal/tuic/config_test.go|internal/tuic/orphans_linux.go|internal/tuic/orphans_other.go|internal/tuic/process.go|internal/tuic/process_other.go|internal/tuic/process_windows.go|internal/tuic/relay.go|internal/tuic/relay_test.go)
+                  echo "Accept upstream TUIC replacement deletion: $path"
+                  git rm -f --ignore-unmatch -- "$path" || true
+                  ;;
+                *)
+                  echo "Preserve local side of conflict: $path"
+                  if git checkout --ours -- "$path" 2>/dev/null; then
+                    git add -- "$path"
+                  else
+                    git rm -f --ignore-unmatch -- "$path" || true
+                  fi
+                  ;;
+              esac
+            done
 
             if git diff --name-only --diff-filter=U | grep -q .; then
               echo "Unresolved conflicts remain:"
