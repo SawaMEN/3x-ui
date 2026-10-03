@@ -437,14 +437,6 @@ export default function ClientFormModal({
     return ids;
   }, [inbounds]);
 
-  const tuicIds = useMemo(() => {
-    const ids = new Set<number>();
-    for (const row of inbounds || []) {
-      if (row && row.protocol === 'tuic') ids.add(row.id);
-    }
-    return ids;
-  }, [inbounds]);
-
   const uuidCapableIds = useMemo(() => {
     const ids = new Set<number>();
     for (const row of inbounds || []) {
