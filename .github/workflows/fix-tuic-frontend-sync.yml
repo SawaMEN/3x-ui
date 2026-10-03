@@ -1,0 +1,81 @@
+name: Repair TUIC frontend sync
+
+on:
+  push:
+    branches:
+      - sync-upstream-2026-10-03
+    paths:
+      - .github/workflows/fix-tuic-frontend-sync.yml
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: sync-upstream-2026-10-03
+          fetch-depth: 0
+
+      - name: Repair TUIC frontend merge
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          curl -fsSL https://raw.githubusercontent.com/MHSanaei/3x-ui/main/frontend/src/pages/clients/tuicConfig.ts \
+            -o frontend/src/pages/clients/tuicConfig.ts
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path('frontend/src/lib/xray/inbound-form-adapter.ts')
+          s = p.read_text()
+          s = s.replace("import { resolveTuicServerSettings } from '@/lib/tuic';\n", '', 1)
+          p.write_text(s)
+
+          p = Path('frontend/src/pages/inbounds/form/protocols/tuic.tsx')
+          s = p.read_text()
+          old = '  const { control, setValue } = useFormContext();'
+          new = '  const { control, setValue, getValues } = useFormContext();'
+          if old not in s:
+              raise SystemExit('TUIC form destructuring pattern not found')
+          p.write_text(s.replace(old, new, 1))
+
+          p = Path('frontend/src/pages/clients/ClientFormModal.tsx')
+          s = p.read_text()
+          block = """  const hasTuic = useMemo(\n    () => (inboundIds || []).some((id) => tuicIds.has(id)),\n    [inboundIds, tuicIds],\n  );\n\n"""
+          if block not in s:
+              raise SystemExit('unused hasTuic block not found')
+          p.write_text(s.replace(block, '', 1))
+          PY
+
+          cd frontend
+          npx oxfmt --write src/pages/clients/tuicConfig.ts src/lib/xray/inbound-form-adapter.ts src/pages/inbounds/form/protocols/tuic.tsx src/pages/clients/ClientFormModal.tsx
+          cd ..
+
+          git add frontend/src/pages/clients/tuicConfig.ts \
+                  frontend/src/lib/xray/inbound-form-adapter.ts \
+                  frontend/src/pages/inbounds/form/protocols/tuic.tsx \
+                  frontend/src/pages/clients/ClientFormModal.tsx
+          git commit -m "fix(frontend): reconcile native TUIC client UI"
+          git rm .github/workflows/fix-tuic-frontend-sync.yml
+          git commit -m "chore: finish TUIC frontend repair"
+          git push origin HEAD:sync-upstream-2026-10-03
+
+      - name: Frontend validation
+        run: |
+          cd frontend
+          npm ci --no-audit --no-fund
+          npm run lint
+          npm run format:check
+          npm run typecheck
+          npm test -- --run
+          npm run build:ci
+
+      - name: Backend validation
+        run: go test ./...
