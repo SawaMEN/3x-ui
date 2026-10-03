@@ -5,6 +5,10 @@ import (
 	"strings"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/version"
+
+	"gorm.io/gorm"
 )
 
 // inboundShadowsocksMethod extracts settings.method for Shadowsocks inbounds so
@@ -81,6 +85,10 @@ var nodeEligibleProtocols = map[model.Protocol]bool{
 	model.Mieru:       true,
 	model.VKTurnProxy: true,
 	model.Sudoku:      true,
+}
+
+func isNodeEligibleProtocol(protocol model.Protocol) bool {
+	return nodeEligibleProtocols[protocol]
 }
 
 // nodeProtocolFirstRelease is the panel release that introduced each protocol
