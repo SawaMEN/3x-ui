@@ -92,10 +92,10 @@ func TestNormalizeOutboundsForRuntimeStripsStaleQuicOptions(t *testing.T) {
 
 func TestNormalizeV2RayTransportForRuntimeRemovesOnlyKnownIncompatibleFields(t *testing.T) {
 	tests := []struct {
-		name      string
-		typeName  string
-		wantKeys  []string
-		dropKeys  []string
+		name     string
+		typeName string
+		wantKeys []string
+		dropKeys []string
 	}{
 		{
 			name:     "websocket after grpc",
@@ -175,8 +175,8 @@ func TestNormalizeOutboundsForRuntimeKeepsWebSocketHostHeader(t *testing.T) {
 
 func TestNormalizeV2RayTransportForRuntimeLeavesUnknownTransportUntouched(t *testing.T) {
 	transport := map[string]any{
-		"type":         "future-transport",
-		"service_name": "keep",
+		"type":          "future-transport",
+		"service_name":  "keep",
 		"future_option": true,
 	}
 	before := map[string]any{}
@@ -194,8 +194,10 @@ func TestNormalizeV2RayTransportForRuntimeLeavesUnknownTransportUntouched(t *tes
 func TestConfigMarshalAppliesOutboundNormalization(t *testing.T) {
 	cfg := NewConfig()
 	cfg.Outbounds = []map[string]any{{
-		"type": "vless",
-		"tag":  "proxy",
+		"type":        "vless",
+		"tag":         "proxy",
+		"server":      "203.0.113.1",
+		"server_port": 443,
 		"transport": map[string]any{
 			"type":    "http",
 			"headers": map[string]any{"Host": "cdn.example.com"},
