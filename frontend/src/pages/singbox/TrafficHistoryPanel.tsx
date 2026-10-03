@@ -39,8 +39,7 @@ function TrafficChart({ points }: { points: TrafficPoint[] }) {
   const x = (index: number) =>
     padding +
     (points.length <= 1 ? 0 : (index * (width - padding * 2)) / (points.length - 1));
-  const y = (value: number) =>
-    height - padding - (value / maxValue) * (height - padding * 2);
+  const y = (value: number) => height - padding - (value / maxValue) * (height - padding * 2);
   const path = (key: 'up' | 'down') =>
     points
       .map((point, index) => `${index === 0 ? 'M' : 'L'} ${x(index)} ${y(point[key])}`)
