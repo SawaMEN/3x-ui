@@ -461,11 +461,6 @@ export default function ClientFormModal({
     return ids;
   }, [inbounds]);
 
-  const hasTuic = useMemo(
-    () => (inboundIds || []).some((id) => tuicIds.has(id)),
-    [inboundIds, tuicIds],
-  );
-
   const showUuid = useMemo(
     () => (inboundIds || []).some((id) => uuidCapableIds.has(id)),
     [inboundIds, uuidCapableIds],

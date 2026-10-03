@@ -21,7 +21,7 @@ import { HttpUtil } from '@/utils';
 
 export default function TuicFields() {
   const { t } = useTranslation();
-  const { control, setValue } = useFormContext();
+  const { control, setValue, getValues } = useFormContext();
   const [loadingPanelCert, setLoadingPanelCert] = useState(false);
 
   const sni = (useWatch({ control, name: 'settings.server.sni' }) ?? '') as string;
