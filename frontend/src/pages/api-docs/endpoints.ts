@@ -198,6 +198,99 @@ const hwidStatusErrorResponses = {
 
 export const sections: readonly Section[] = [
   {
+    id: 'adblock',
+    title: 'AdBlock',
+    description: 'Manage native domain filtering and the optional YouTube filter.',
+    endpoints: [
+      {
+        method: 'GET',
+        path: '/panel/api/adblock/status',
+        summary: 'Read filter settings, list statistics and runtime status.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/adblock/settings',
+        summary: 'Save filter settings and apply them to the selected core.',
+        description:
+          'Send the complete enabled, sources, customDomains and allowlist settings. Other fields are optional. Settings are rolled back if core application fails.',
+        params: [
+          { name: 'enabled', in: 'body (json)', type: 'boolean' },
+          { name: 'sources', in: 'body (json)', type: 'string' },
+          { name: 'customDomains', in: 'body (json)', type: 'string' },
+          { name: 'allowlist', in: 'body (json)', type: 'string' },
+          { name: 'autoUpdate', in: 'body (json)', type: 'boolean', optional: true },
+          { name: 'updateIntervalHours', in: 'body (json)', type: 'integer', optional: true },
+          { name: 'profile', in: 'body (json)', type: 'string', optional: true },
+          { name: 'youtubeMode', in: 'body (json)', type: 'string', optional: true },
+          { name: 'scope', in: 'body (json)', type: 'object', optional: true },
+          { name: 'policies', in: 'body (json)', type: 'object[]', optional: true },
+          { name: 'server', in: 'body (json)', type: 'object', optional: true },
+        ],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/adblock/update',
+        summary: 'Refresh filter lists and apply pending changes.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/adblock/apply',
+        summary: 'Reconcile and apply pending filtering changes.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/adblock/pause',
+        summary: 'Pause filtering for 5, 15 or 60 minutes; use 0 to resume.',
+        params: [{ name: 'minutes', in: 'body (json)', type: 'integer', enum: [0, 5, 15, 60] }],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/adblock/check',
+        summary: 'Check whether a domain matches filtering policies.',
+        params: [
+          { name: 'domain', in: 'body (json)', type: 'string' },
+          { name: 'inbound', in: 'body (json)', type: 'string', optional: true },
+          { name: 'client', in: 'body (json)', type: 'string', optional: true },
+        ],
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/adblock/youtube-extension',
+        summary: 'Download the YouTube browser companion ZIP archive.',
+        responses: {
+          '200': {
+            description: 'Browser companion archive.',
+            content: { 'application/zip': { schema: { type: 'string', format: 'binary' } } },
+          },
+        },
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/adblock/youtube-server-certificate',
+        summary: 'Download the public CA certificate for the YouTube HTTPS filter.',
+        responses: {
+          '200': {
+            description: 'Public CA certificate in PEM format.',
+            content: { 'application/x-pem-file': { schema: { type: 'string', format: 'binary' } } },
+          },
+        },
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/adblock/youtube-server-routing/:core',
+        summary: 'Download a routing preset for a standalone YouTube filter on port 18080.',
+        params: [{ name: 'core', in: 'path', type: 'string', enum: ['xray', 'singbox'] }],
+        responses: {
+          '200': {
+            description: 'Core routing preset.',
+            content: { 'application/json': { schema: { type: 'object' } } },
+          },
+          '400': { description: 'Unsupported core.' },
+        },
+      },
+    ],
+  },
+  {
     id: 'externalvpn',
     title: 'External VPN',
     description: 'Inspect and update standalone external VPN components.',

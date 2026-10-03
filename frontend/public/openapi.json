@@ -4631,6 +4631,10 @@
   ],
   "tags": [
     {
+      "name": "AdBlock",
+      "description": "Manage native domain filtering and the optional YouTube filter."
+    },
+    {
       "name": "External VPN",
       "description": "Inspect and update standalone external VPN components."
     },
@@ -4708,6 +4712,387 @@
     }
   ],
   "paths": {
+    "/panel/api/adblock/status": {
+      "get": {
+        "tags": [
+          "AdBlock"
+        ],
+        "summary": "Read filter settings, list statistics and runtime status.",
+        "operationId": "get_panel_api_adblock_status",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/adblock/settings": {
+      "post": {
+        "tags": [
+          "AdBlock"
+        ],
+        "summary": "Save filter settings and apply them to the selected core.",
+        "operationId": "post_panel_api_adblock_settings",
+        "description": "Send the complete enabled, sources, customDomains and allowlist settings. Other fields are optional. Settings are rolled back if core application fails.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean",
+                    "description": ""
+                  },
+                  "sources": {
+                    "type": "string",
+                    "description": ""
+                  },
+                  "customDomains": {
+                    "type": "string",
+                    "description": ""
+                  },
+                  "allowlist": {
+                    "type": "string",
+                    "description": ""
+                  },
+                  "autoUpdate": {
+                    "type": "boolean",
+                    "description": ""
+                  },
+                  "updateIntervalHours": {
+                    "type": "integer",
+                    "description": ""
+                  },
+                  "profile": {
+                    "type": "string",
+                    "description": ""
+                  },
+                  "youtubeMode": {
+                    "type": "string",
+                    "description": ""
+                  },
+                  "scope": {
+                    "type": "object",
+                    "description": ""
+                  },
+                  "policies": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    },
+                    "description": ""
+                  },
+                  "server": {
+                    "type": "object",
+                    "description": ""
+                  }
+                },
+                "required": [
+                  "enabled",
+                  "sources",
+                  "customDomains",
+                  "allowlist"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/adblock/update": {
+      "post": {
+        "tags": [
+          "AdBlock"
+        ],
+        "summary": "Refresh filter lists and apply pending changes.",
+        "operationId": "post_panel_api_adblock_update",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/adblock/apply": {
+      "post": {
+        "tags": [
+          "AdBlock"
+        ],
+        "summary": "Reconcile and apply pending filtering changes.",
+        "operationId": "post_panel_api_adblock_apply",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/adblock/pause": {
+      "post": {
+        "tags": [
+          "AdBlock"
+        ],
+        "summary": "Pause filtering for 5, 15 or 60 minutes; use 0 to resume.",
+        "operationId": "post_panel_api_adblock_pause",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "minutes": {
+                    "type": "integer",
+                    "enum": [
+                      0,
+                      5,
+                      15,
+                      60
+                    ],
+                    "description": ""
+                  }
+                },
+                "required": [
+                  "minutes"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/adblock/check": {
+      "post": {
+        "tags": [
+          "AdBlock"
+        ],
+        "summary": "Check whether a domain matches filtering policies.",
+        "operationId": "post_panel_api_adblock_check",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "domain": {
+                    "type": "string",
+                    "description": ""
+                  },
+                  "inbound": {
+                    "type": "string",
+                    "description": ""
+                  },
+                  "client": {
+                    "type": "string",
+                    "description": ""
+                  }
+                },
+                "required": [
+                  "domain"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/adblock/youtube-extension": {
+      "get": {
+        "tags": [
+          "AdBlock"
+        ],
+        "summary": "Download the YouTube browser companion ZIP archive.",
+        "operationId": "get_panel_api_adblock_youtube_extension",
+        "responses": {
+          "200": {
+            "description": "Browser companion archive.",
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/adblock/youtube-server-certificate": {
+      "get": {
+        "tags": [
+          "AdBlock"
+        ],
+        "summary": "Download the public CA certificate for the YouTube HTTPS filter.",
+        "operationId": "get_panel_api_adblock_youtube_server_certificate",
+        "responses": {
+          "200": {
+            "description": "Public CA certificate in PEM format.",
+            "content": {
+              "application/x-pem-file": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/adblock/youtube-server-routing/{core}": {
+      "get": {
+        "tags": [
+          "AdBlock"
+        ],
+        "summary": "Download a routing preset for a standalone YouTube filter on port 18080.",
+        "operationId": "get_panel_api_adblock_youtube_server_routing_core",
+        "parameters": [
+          {
+            "name": "core",
+            "in": "path",
+            "required": true,
+            "description": "",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "xray",
+                "singbox"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Core routing preset.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Unsupported core."
+          }
+        }
+      }
+    },
     "/panel/api/server/externalvpn/status": {
       "get": {
         "tags": [

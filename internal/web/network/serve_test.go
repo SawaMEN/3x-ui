@@ -29,7 +29,9 @@ func (a testAddr) String() string  { return string(a) }
 
 func TestServeHTTPLogsUnexpectedListenerFailure(t *testing.T) {
 	errInjected := errors.New("injected listener failure")
-	ServeHTTP(&http.Server{}, failingListener{err: errInjected}, "Test server")
+	if err := ServeHTTP(&http.Server{}, failingListener{err: errInjected}, "Test server"); !errors.Is(err, errInjected) {
+		t.Fatalf("listener failure was not returned: %v", err)
+	}
 
 	for _, line := range logger.GetLogs(100, "error") {
 		if strings.Contains(line, errInjected.Error()) {
@@ -41,7 +43,9 @@ func TestServeHTTPLogsUnexpectedListenerFailure(t *testing.T) {
 
 func TestServeHTTPSuppressesNormalServerClose(t *testing.T) {
 	const marker = "normal-close-must-stay-silent"
-	ServeHTTP(&http.Server{}, failingListener{err: http.ErrServerClosed}, marker)
+	if err := ServeHTTP(&http.Server{}, failingListener{err: http.ErrServerClosed}, marker); err != nil {
+		t.Fatalf("normal server close returned an error: %v", err)
+	}
 
 	for _, line := range logger.GetLogs(100, "error") {
 		if strings.Contains(line, marker) {

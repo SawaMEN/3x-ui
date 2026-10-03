@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/network"
 )
 
 type Proxy struct {
@@ -162,7 +163,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	listener := newSingleListener(secure)
 	server := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, inner *http.Request) { p.forward(w, inner, host) }), ReadHeaderTimeout: 15 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 5 * time.Minute, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 64 << 10}
 	defer server.Close()
-	_ = server.Serve(listener)
+	_ = network.ServeHTTP(server, listener, "YouTube CONNECT filter")
 }
 func removeHop(headers http.Header) {
 	for _, field := range strings.Split(headers.Get("Connection"), ",") {
@@ -291,7 +292,7 @@ func (l *singleListener) Accept() (net.Conn, error) {
 	}
 	l.mu.Unlock()
 	<-l.done
-	return nil, net.ErrClosed
+	return nil, http.ErrServerClosed
 }
 func (l *singleListener) Close() error   { l.once.Do(func() { close(l.done) }); return l.conn.Close() }
 func (l *singleListener) Addr() net.Addr { return l.conn.LocalAddr() }
@@ -328,11 +329,7 @@ func Run(ctx context.Context, listen, caDir string) error {
 		case <-done:
 		}
 	}()
-	err = server.Serve(listener)
-	if err == http.ErrServerClosed {
-		return nil
-	}
-	return err
+	return network.ServeHTTP(server, listener, "YouTube proxy")
 }
 
 func (p *Proxy) handler(caDir string) http.Handler {

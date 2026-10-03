@@ -9,9 +9,12 @@ import (
 )
 
 // ServeHTTP runs a panel HTTP server and records unexpected listener failures.
-// A normal Shutdown returns http.ErrServerClosed and is intentionally silent.
-func ServeHTTP(server *http.Server, listener net.Listener, name string) {
+// Unexpected failures are returned to the caller. A normal Shutdown is silent
+// and returns nil.
+func ServeHTTP(server *http.Server, listener net.Listener, name string) error {
 	if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		logger.Error(name, " stopped unexpectedly: ", err)
+		return err
 	}
+	return nil
 }
