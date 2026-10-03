@@ -738,7 +738,12 @@ func (a *ServerController) getCertHash(c *gin.Context) {
 // getRemoteCertHash runs `xray tls ping` against the given server and returns
 // its live certificate SHA-256 hash(es) for pinning.
 func (a *ServerController) getRemoteCertHash(c *gin.Context) {
-	hashes, err := a.serverService.GetRemoteCertHash(c.PostForm("server"))
+	allowPrivate := c.PostForm("allowPrivate") == "true"
+	hashes, err := a.serverService.GetRemoteCertHash(c.PostForm("server"), allowPrivate)
+	if errors.Is(err, netsafe.ErrPrivateAddressBlocked) {
+		jsonMsgObj(c, "get remote cert hash", gin.H{"privateTarget": true}, err)
+		return
+	}
 	if err != nil {
 		jsonMsg(c, "get remote cert hash", err)
 		return

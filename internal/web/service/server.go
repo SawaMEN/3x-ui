@@ -2792,7 +2792,8 @@ func walkCertFiles(node any, out []string) []string {
 // proxy). A native handshake replaces the old `xray tls ping` subprocess so the
 // real dial/handshake failure (connection refused, timeout, …) surfaces
 // verbatim. `server` may be host or host:port; the port defaults to 443.
-func (s *ServerService) GetRemoteCertHash(server string) ([]string, error) {
+// allowPrivate lifts the SSRF guard for this one probe (the panel's confirmed opt-in).
+func (s *ServerService) GetRemoteCertHash(server string, allowPrivate bool) ([]string, error) {
 	server = strings.TrimSpace(server)
 	if server == "" {
 		return nil, common.NewError("no server provided")
@@ -2803,10 +2804,11 @@ func (s *ServerService) GetRemoteCertHash(server string) ([]string, error) {
 		host, port = h, p
 	}
 
-	dialer := stdnet.Dialer{Timeout: 10 * time.Second}
-	tcpConn, err := dialer.Dial("tcp", stdnet.JoinHostPort(host, port))
+	ctx, cancel := context.WithTimeout(netsafe.ContextWithAllowPrivate(context.Background(), allowPrivate), 10*time.Second)
+	defer cancel()
+	tcpConn, err := netsafe.SSRFGuardedDialContext(ctx, "tcp", stdnet.JoinHostPort(host, port))
 	if err != nil {
-		return nil, common.NewErrorf("failed to dial %s: %s", stdnet.JoinHostPort(host, port), err)
+		return nil, fmt.Errorf("failed to dial %s: %w", stdnet.JoinHostPort(host, port), err)
 	}
 	defer tcpConn.Close()
 	_ = tcpConn.SetDeadline(time.Now().Add(15 * time.Second))
