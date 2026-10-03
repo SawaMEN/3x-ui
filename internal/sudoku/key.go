@@ -3,6 +3,7 @@ package sudoku
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -25,7 +26,9 @@ func ValidPrivateKey(key string) bool {
 func GenerateMasterKey(ctx context.Context, binary string) (publicKey, privateKey string, err error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, binary, "-keygen").CombinedOutput()
+	cmd := exec.CommandContext(ctx, binary, "-keygen")
+	cmd.Env = append(os.Environ(), "SUDOKU_LOG_LEVEL=info", "NO_COLOR=1")
+	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", "", fmt.Errorf("Sudoku keygen failed: %w: %s", err, strings.TrimSpace(string(out)))
 	}
@@ -40,7 +43,9 @@ func GenerateMasterKey(ctx context.Context, binary string) (publicKey, privateKe
 func GenerateSplitKey(ctx context.Context, binary, masterPrivate string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, binary, "-keygen", "-more", masterPrivate).CombinedOutput()
+	cmd := exec.CommandContext(ctx, binary, "-keygen", "-more", masterPrivate)
+	cmd.Env = append(os.Environ(), "SUDOKU_LOG_LEVEL=info", "NO_COLOR=1")
+	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("Sudoku split-key generation failed: %w: %s", err, strings.TrimSpace(string(out)))
 	}
@@ -54,8 +59,10 @@ func GenerateSplitKey(ctx context.Context, binary, masterPrivate string) (string
 func findLabeledValue(output, label string) string {
 	for _, line := range strings.Split(output, "\n") {
 		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, label) {
-			return strings.TrimSpace(strings.TrimPrefix(line, label))
+		// Upstream emits "HH:MM:SS info [CLI] <label> <key>". Older
+		// versions print the label directly without a logging prefix.
+		if index := strings.Index(line, label); index >= 0 {
+			return strings.TrimSpace(line[index+len(label):])
 		}
 	}
 	return ""

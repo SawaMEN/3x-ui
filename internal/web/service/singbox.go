@@ -113,8 +113,10 @@ func singBoxTUICInbound(ib *model.Inbound, clients []any) (map[string]any, error
 		"users": users, "congestion_control": inst.CongestionControl,
 		"auth_timeout":       fmt.Sprintf("%ds", inst.AuthenticationTimeout),
 		"zero_rtt_handshake": inst.ZeroRTTHandshake,
-		"tls": map[string]any{"enabled": true, "certificate_path": inst.Certificate,
-			"key_path": inst.PrivateKey, "alpn": inst.ALPN},
+		"tls": map[string]any{
+			"enabled": true, "certificate_path": inst.Certificate,
+			"key_path": inst.PrivateKey, "alpn": inst.ALPN,
+		},
 	}, nil
 }
 
@@ -274,6 +276,12 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 		var raw map[string]any
 		if err := json.Unmarshal(rawBytes, &raw); err != nil {
 			return nil, err
+		}
+		stream, _ := raw["streamSettings"].(map[string]any)
+		network, _ := stream["network"].(string)
+		if strings.EqualFold(strings.TrimSpace(network), "xhttp") {
+			logger.Warningf("Skipping sing-box inbound %q: XHTTP transport is only supported by Xray", inbound.Tag)
+			continue
 		}
 		// Xray treats an empty inbound listen address as all interfaces. The
 		// sing-box default is loopback, which makes a successfully started
@@ -956,7 +964,7 @@ func (s *SingBoxService) installVersion(ctx context.Context, installer func(cont
 	if err != nil {
 		if wasRunning {
 			if restartErr := s.Start(ctx); restartErr != nil {
-				return "", fmt.Errorf("install sing-box: %w; restore previous process failed: %v", err, restartErr)
+				return "", fmt.Errorf("install sing-box: %w; restore previous process failed: %w", err, restartErr)
 			}
 		}
 		return "", err
@@ -968,7 +976,7 @@ func (s *SingBoxService) installVersion(ctx context.Context, installer func(cont
 	if err != nil {
 		if wasRunning {
 			if restartErr := s.Start(ctx); restartErr != nil {
-				return "", fmt.Errorf("verify installed sing-box %q: %w; restart failed: %v", installed, err, restartErr)
+				return "", fmt.Errorf("verify installed sing-box %q: %w; restart failed: %w", installed, err, restartErr)
 			}
 		}
 		return "", fmt.Errorf("verify installed sing-box %q: %w", installed, err)

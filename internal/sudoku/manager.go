@@ -97,6 +97,7 @@ func (m *Manager) Reconcile(ctx context.Context, desired []Instance) {
 		fp := fingerprint(inst.Config)
 		cur := m.procs[inst.ID]
 		if cur != nil && cur.proc != nil && cur.proc.IsRunning() && cur.fingerprint == fp && cur.binaryFingerprint == binaryFP {
+			delete(m.lastErr, inst.ID)
 			continue
 		}
 
@@ -156,7 +157,7 @@ func (m *Manager) Reconcile(ctx context.Context, desired []Instance) {
 					m.recordError(inst.ID, promoteErr, "sudoku: failed to activate new config for inbound %d (%s); previous process restored: %v", inst.ID, inst.Tag, err)
 					continue
 				} else {
-					promoteErr = fmt.Errorf("%w; restart previous process: %v", promoteErr, restartErr)
+					promoteErr = fmt.Errorf("%w; restart previous process: %w", promoteErr, restartErr)
 				}
 			}
 			m.recordError(inst.ID, promoteErr, "sudoku: failed to activate config for inbound %d (%s): %v", inst.ID, inst.Tag, promoteErr)
@@ -174,12 +175,12 @@ func (m *Manager) Reconcile(ctx context.Context, desired []Instance) {
 			}
 
 			if rollbackErr := restoreConfig(finalPath, oldConfig); rollbackErr != nil {
-				combined := fmt.Errorf("start new config: %v; restore previous config: %w", startErr, rollbackErr)
+				combined := fmt.Errorf("start new config: %w; restore previous config: %w", startErr, rollbackErr)
 				m.recordError(inst.ID, combined, "sudoku: failed to start inbound %d (%s) and rollback config: %v", inst.ID, inst.Tag, combined)
 				continue
 			}
 			if rollbackStartErr := cur.proc.Start(binary); rollbackStartErr != nil {
-				combined := fmt.Errorf("start new config: %v; restart previous config: %w", startErr, rollbackStartErr)
+				combined := fmt.Errorf("start new config: %w; restart previous config: %w", startErr, rollbackStartErr)
 				m.recordError(inst.ID, combined, "sudoku: failed to start inbound %d (%s) and restore previous process: %v", inst.ID, inst.Tag, combined)
 				continue
 			}
@@ -249,6 +250,8 @@ func (m *Manager) Remove(id int) {
 	delete(m.lastErr, id)
 	_ = os.Remove(configPath(binDir, id))
 	_ = os.Remove(keyPath(binDir, id))
+	_ = os.Remove(clientRosterPath(binDir, id))
+	_ = RemoveCredentialRotationState(binDir, id)
 }
 
 func currentBinaryFingerprint(path string) string {
@@ -343,7 +346,7 @@ func promoteConfig(candidate, finalPath string) error {
 	if err := os.Rename(candidate, finalPath); err != nil {
 		if hadPrevious {
 			if restoreErr := os.Rename(backupPath, finalPath); restoreErr != nil {
-				return fmt.Errorf("replace config: %w; restore previous config: %v", err, restoreErr)
+				return fmt.Errorf("replace config: %w; restore previous config: %w", err, restoreErr)
 			}
 		}
 		return err
@@ -355,14 +358,23 @@ func restoreConfig(path string, data []byte) error {
 	if len(data) == 0 {
 		return fmt.Errorf("previous config snapshot is empty")
 	}
+	return writeAtomicFile(path, data, 0o640)
+}
+
+// Stage complete contents before replacing credential state. Truncating the
+// roster in place can lose the revocation baseline if a write is interrupted.
+func writeAtomicFile(path string, data []byte, mode os.FileMode) error {
 	dir := filepath.Dir(path)
-	file, err := os.CreateTemp(dir, ".sudoku-rollback-*.json")
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		return err
+	}
+	file, err := os.CreateTemp(dir, ".sudoku-state-*")
 	if err != nil {
 		return err
 	}
 	tmp := file.Name()
 	defer os.Remove(tmp)
-	if err := file.Chmod(0o640); err != nil {
+	if err := file.Chmod(mode); err != nil {
 		_ = file.Close()
 		return err
 	}
@@ -380,21 +392,8 @@ func restoreConfig(path string, data []byte) error {
 	return promoteConfig(tmp, path)
 }
 
-func writeConfig(binDir string, id int, cfg Config) error {
-	candidate, err := writeCandidateConfig(binDir, id, cfg)
-	if err != nil {
-		return err
-	}
-	defer os.Remove(candidate)
-	return promoteConfig(candidate, configPath(binDir, id))
-}
-
 func WriteMasterKey(binDir string, id int, key string) error {
-	dir := configDir(binDir)
-	if err := os.MkdirAll(dir, 0o750); err != nil {
-		return err
-	}
-	return os.WriteFile(keyPath(binDir, id), []byte(key+"\n"), 0o600)
+	return writeAtomicFile(keyPath(binDir, id), []byte(key+"\n"), 0o600)
 }
 
 func ReadMasterKey(binDir string, id int) (string, error) {

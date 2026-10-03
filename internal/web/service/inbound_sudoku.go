@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"sort"
 	"strings"
@@ -146,7 +147,7 @@ func EnsureSudokuCredentials(inboundID int) error {
 	if err := db.First(&inbound, inboundID).Error; err != nil {
 		return err
 	}
-	if inbound.Protocol != model.Sudoku {
+	if inbound.Protocol != model.Sudoku || inbound.NodeID != nil {
 		return nil
 	}
 
@@ -240,14 +241,18 @@ func EnsureSudokuCredentials(inboundID int) error {
 	}
 
 	if changed {
-		data, marshalErr := json.MarshalIndent(settings, "", "  ")
+		data, marshalErr := sudokuSettingsWithCredentials(inbound.Settings, settings)
 		if marshalErr != nil {
 			return marshalErr
 		}
-		if err := db.Model(&model.Inbound{}).
-			Where("id = ?", inboundID).
-			Update("settings", string(data)).Error; err != nil {
-			return err
+		result := db.Model(&model.Inbound{}).
+			Where("id = ? AND settings = ? AND protocol = ? AND node_id IS NULL", inboundID, inbound.Settings, model.Sudoku).
+			Update("settings", string(data))
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return fmt.Errorf("Sudoku inbound %d changed during credential generation; retry reconciliation", inboundID)
 		}
 	}
 
@@ -294,6 +299,9 @@ func DesiredSudokuInstances() ([]sudoku.Instance, error) {
 		if err := database.GetDB().First(&current, inbound.Id).Error; err != nil {
 			continue
 		}
+		if current.Protocol != model.Sudoku || !current.Enable || current.NodeID != nil {
+			continue
+		}
 		settings, err := normalizeSudokuSettings(current.Settings)
 		if err != nil {
 			logger.Warningf("sudoku: invalid settings for inbound %d: %v", current.Id, err)
@@ -330,6 +338,56 @@ func DesiredSudokuInstances() ([]sudoku.Instance, error) {
 		})
 	}
 	return desired, nil
+}
+
+// Credential maintenance owns only the master public key and client split
+// keys. Preserve other settings, including fields added by newer clients.
+func sudokuSettingsWithCredentials(raw string, settings sudokuStoredSettings) ([]byte, error) {
+	fields := make(map[string]json.RawMessage)
+	if strings.TrimSpace(raw) != "" {
+		if err := json.Unmarshal([]byte(raw), &fields); err != nil {
+			return nil, err
+		}
+	}
+	if fields == nil {
+		fields = make(map[string]json.RawMessage)
+	}
+	var clients []map[string]json.RawMessage
+	if value, ok := fields["clients"]; ok {
+		if err := json.Unmarshal(value, &clients); err != nil {
+			return nil, err
+		}
+	}
+	if len(clients) != len(settings.Clients) {
+		return nil, fmt.Errorf("Sudoku client list changed while rendering credentials")
+	}
+	for i, client := range settings.Clients {
+		if clients[i] == nil {
+			clients[i] = make(map[string]json.RawMessage)
+		}
+		if client.SudokuPrivateKey == "" {
+			delete(clients[i], "sudokuPrivateKey")
+		} else {
+			value, err := json.Marshal(client.SudokuPrivateKey)
+			if err != nil {
+				return nil, err
+			}
+			clients[i]["sudokuPrivateKey"] = value
+		}
+	}
+	key, err := json.Marshal(settings.Key)
+	if err != nil {
+		return nil, err
+	}
+	fields["key"] = key
+	if _, ok := fields["clients"]; ok || len(clients) > 0 {
+		value, err := json.Marshal(clients)
+		if err != nil {
+			return nil, err
+		}
+		fields["clients"] = value
+	}
+	return json.MarshalIndent(fields, "", "  ")
 }
 
 func RefreshSudokuCredentialsOnInbound(inbound *model.Inbound) error {

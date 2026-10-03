@@ -29,11 +29,7 @@ func CredentialRotationPending(binDir string, id int) (bool, error) {
 // or the private-key file is changed. If the process crashes or a later write
 // fails, the marker survives and the next reconcile safely rotates again.
 func BeginCredentialRotation(binDir string, id int) error {
-	dir := configDir(binDir)
-	if err := os.MkdirAll(dir, 0o750); err != nil {
-		return err
-	}
-	return os.WriteFile(credentialRotationPath(binDir, id), []byte("pending\n"), 0o600)
+	return writeAtomicFile(credentialRotationPath(binDir, id), []byte("pending\n"), 0o600)
 }
 
 func CompleteCredentialRotation(binDir string, id int) error {

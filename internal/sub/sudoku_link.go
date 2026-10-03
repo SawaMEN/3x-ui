@@ -103,9 +103,10 @@ func (s *SubService) genSudokuLink(inbound *model.Inbound, email string) string 
 			payload["hm"] = mode
 		}
 		tlsEnabled, _ := mask["tls"].(bool)
-		if endpoint.ForceTls == "tls" {
+		switch endpoint.ForceTls {
+		case "tls":
 			tlsEnabled = true
-		} else if endpoint.ForceTls == "none" {
+		case "none":
 			tlsEnabled = false
 		}
 		if tlsEnabled {

@@ -37,10 +37,6 @@ func ReadClientRoster(binDir string, id int) ([]string, error) {
 }
 
 func WriteClientRoster(binDir string, id int, roster []string) error {
-	dir := configDir(binDir)
-	if err := os.MkdirAll(dir, 0o750); err != nil {
-		return err
-	}
 	seen := make(map[string]struct{}, len(roster))
 	values := make([]string, 0, len(roster))
 	for _, item := range roster {
@@ -59,7 +55,7 @@ func WriteClientRoster(binDir string, id int, roster []string) error {
 	if body != "" {
 		body += "\n"
 	}
-	return os.WriteFile(clientRosterPath(binDir, id), []byte(body), 0o600)
+	return writeAtomicFile(clientRosterPath(binDir, id), []byte(body), 0o600)
 }
 
 func ClientRosterMissing(err error) bool {
