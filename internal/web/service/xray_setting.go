@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"slices"
 	"strconv"
 	"strings"
@@ -58,6 +59,27 @@ func (s *XraySettingService) CheckXrayConfig(XrayTemplateConfig string) error {
 		if err := json.Unmarshal(xrayConfig.OutboundConfigs, &outbounds); err != nil {
 			return common.NewError("xray template config invalid: outbounds is not an array:", err)
 		}
+
+		// The template is shared by both cores. Validate each outbound against
+		// the selected core instead of always feeding sing-box-native/future JSON
+		// through Xray's loader. This keeps the JSON editor protocol-agnostic
+		// while still rejecting profiles the active core cannot represent.
+		coreType, _ := s.GetCoreType()
+		if coreType == CoreTypeSingBox {
+			for _, outbound := range outbounds {
+				var ob map[string]any
+				if err := json.Unmarshal(outbound, &ob); err != nil {
+					return common.NewError("outbound JSON invalid:", err)
+				}
+				_, rejected, _ := filterSubscriptionOutboundsDetailed("xray template", []any{ob})
+				if len(rejected) > 0 {
+					tag, _ := ob["tag"].(string)
+					return fmt.Errorf("sing-box does not support outbound %q: %s", tag, rejected[0])
+				}
+			}
+			return nil
+		}
+
 		coreVersion := "Unknown"
 		if process := currentXrayProcess(); process != nil {
 			coreVersion = process.GetXrayVersion()
