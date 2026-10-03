@@ -50,8 +50,8 @@ jobs:
               [ -n "$path" ] || continue
               if git checkout --ours -- "$path" 2>/dev/null; then
                 git add -- "$path"
-              elif git rm -f --ignore-unmatch -- "$path"; then
-                :
+              else
+                git rm -f --ignore-unmatch -- "$path" || true
               fi
             done < <(git diff --name-only --diff-filter=U)
 
@@ -60,7 +60,13 @@ jobs:
               git status --short
               exit 1
             fi
-            GIT_EDITOR=true git cherry-pick --continue
+
+            if git diff --cached --quiet; then
+              echo "Conflict resolution kept the local state; skipping empty upstream commit"
+              git cherry-pick --skip
+            else
+              GIT_EDITOR=true git cherry-pick --continue
+            fi
           done
 
       - name: Record upstream source
