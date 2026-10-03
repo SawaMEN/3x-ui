@@ -1,0 +1,32 @@
+name: Export upstream history
+
+on:
+  push:
+    branches:
+      - sync/upstream-history-export
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout local history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fetch and bundle upstream
+        shell: bash
+        run: |
+          set -euo pipefail
+          git remote add upstream https://github.com/MHSanaei/3x-ui.git
+          git fetch --no-tags upstream main
+          git branch -f _upstream_history upstream/main
+          git bundle create upstream-history.bundle _upstream_history
+      - name: Upload upstream history
+        uses: actions/upload-artifact@v4
+        with:
+          name: upstream-history
+          path: upstream-history.bundle
+          retention-days: 1
