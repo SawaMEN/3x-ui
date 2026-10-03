@@ -281,7 +281,9 @@ func (s *OutboundSubscriptionService) GetLastOutbounds(id int) ([]any, error) {
 }
 
 // Refresh fetches the subscription URL, parses the links, assigns stable tags,
-// persists the results, and returns the generated outbounds.
+// persists the results, and returns the generated outbounds supported by the
+// currently selected core. Unsupported profiles stay persisted for a later core
+// switch and are reported through LastError.
 func (s *OutboundSubscriptionService) Refresh(id int) ([]any, error) {
 	sub, err := s.Get(id)
 	if err != nil {
@@ -311,7 +313,6 @@ func (s *OutboundSubscriptionService) RefreshAllEnabled() (int, error) {
 			} else {
 				refreshed++
 			}
-		}
 	}
 	return refreshed, nil
 }
@@ -407,20 +408,21 @@ func (s *OutboundSubscriptionService) fetchAndStore(sub *model.OutboundSubscript
 		return nil, err
 	}
 
-	parsed, identities, err := link.ParseSubscriptionBody(body)
+	parsed, identities, parseIssues, err := parseOutboundSubscriptionBody(body)
 	if err != nil {
 		s.recordError(sub, err)
 		return nil, err
 	}
 
-	// Load previous identities -> tags for stability
+	// Load previous identities -> tags for stability.
 	prev := map[string]string{}
 	if strings.TrimSpace(sub.LinkIdentities) != "" {
 		_ = json.Unmarshal([]byte(sub.LinkIdentities), &prev)
 	}
 
 	// Also load previous outbounds so we can reuse tags even for identities we
-	// temporarily lost (defensive).
+	// temporarily lost (defensive). LastFetchedOutbounds intentionally contains
+	// every parsed profile, including profiles incompatible with the active core.
 	prevTagByIndex := map[int]string{}
 	if strings.TrimSpace(sub.LastFetchedOutbounds) != "" {
 		var prevObs []any
@@ -430,45 +432,31 @@ func (s *OutboundSubscriptionService) fetchAndStore(sub *model.OutboundSubscript
 					if tag, _ := m["tag"].(string); tag != "" {
 						prevTagByIndex[i] = tag
 					}
-				}
 			}
 		}
 	}
 
-	// Drop core-rejected links before tagging: prevTagByIndex indexes the persisted
-	// (filtered) list, so positions must be counted in that same list.
-	var droppedByCore []string
-	keptLinks, keptIdentities := parsed[:0], identities[:0]
-	for i, ob := range parsed {
-		if _, dropped := filterOutboundsRejectedByCore(fmt.Sprintf("outbound sub %d", sub.Id), []any{map[string]any(ob)}); len(dropped) > 0 {
-			droppedByCore = append(droppedByCore, dropped...)
-			continue
-		}
-		keptLinks = append(keptLinks, ob)
-		keptIdentities = append(keptIdentities, identities[i])
-	}
+	// Assign tags before compatibility filtering. Unsupported profiles remain in
+	// storage with stable tags so switching Xray <-> sing-box can restore them.
+	assigned := assignStableTags(parsed, identities, prev, prevTagByIndex, sub.Id, sub.TagPrefix)
 
-	// Assign tags with stability (identity reuse, positional fallback, then a
-	// fresh allocation), keeping tags unique within this batch. Extracted into a
-	// pure function so it can be unit-tested without network/DB. Tags are written
-	// back into the parsed outbounds in place.
-	assigned := assignStableTags(keptLinks, keptIdentities, prev, prevTagByIndex, sub.Id, sub.TagPrefix)
-
-	// Persist identities for next time
 	newIdent := map[string]string{}
-	for i, id := range keptIdentities {
+	for i, id := range identities {
 		newIdent[id] = assigned[i]
 	}
 	identJSON, _ := json.Marshal(newIdent)
 
-	kept := make([]any, len(keptLinks))
-	for i := range keptLinks {
-		kept[i] = map[string]any(keptLinks[i])
+	all := make([]any, len(parsed))
+	for i := range parsed {
+		all[i] = map[string]any(parsed[i])
 	}
 
-	// Persist the outbounds (as compact JSON array)
-	obsJSON, _ := json.Marshal(kept)
+	// Validate only for the selected runtime core. This does not mutate `all`;
+	// the compatible subset is returned/injected while the complete source set
+	// is persisted for future core switches.
+	active, rejectedByCore, coreName := filterSubscriptionOutboundsDetailed(fmt.Sprintf("outbound sub %d", sub.Id), all)
 
+	obsJSON, _ := json.Marshal(all)
 	changed := sub.LastFetchedOutbounds != string(obsJSON)
 	if changed {
 		sub.LastProbe = 0
@@ -476,10 +464,15 @@ func (s *OutboundSubscriptionService) fetchAndStore(sub *model.OutboundSubscript
 	sub.LastFetchedOutbounds = string(obsJSON)
 	sub.LinkIdentities = string(identJSON)
 	sub.LastUpdated = time.Now().Unix()
-	sub.LastError = ""
-	if len(droppedByCore) > 0 {
-		sub.LastError = fmt.Sprintf("dropped %d outbound(s) the xray core rejects: %s", len(droppedByCore), droppedByCore[0])
+
+	problems := make([]string, 0, 2)
+	if len(parseIssues) > 0 {
+		problems = append(problems, fmt.Sprintf("unsupported %d subscription profile(s): %s", len(parseIssues), parseIssues[0]))
 	}
+	if len(rejectedByCore) > 0 {
+		problems = append(problems, fmt.Sprintf("unsupported %d outbound profile(s) for %s: %s", len(rejectedByCore), coreName, rejectedByCore[0]))
+	}
+	sub.LastError = strings.Join(problems, "; ")
 
 	updates := map[string]any{
 		"last_fetched_outbounds": sub.LastFetchedOutbounds, "link_identities": sub.LinkIdentities,
@@ -497,7 +490,7 @@ func (s *OutboundSubscriptionService) fetchAndStore(sub *model.OutboundSubscript
 	if result.RowsAffected == 0 {
 		return nil, fmt.Errorf("subscription changed during refresh; retry")
 	}
-	return kept, nil
+	return active, nil
 }
 
 func (s *OutboundSubscriptionService) recordError(sub *model.OutboundSubscription, err error) {
