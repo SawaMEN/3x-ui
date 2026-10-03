@@ -1,0 +1,58 @@
+name: Finalize TUIC frontend reconciliation
+
+on:
+  push:
+    branches:
+      - sync-upstream-2026-10-03
+    paths:
+      - .github/workflows/finalize-tuic-frontend.yml
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: sync-upstream-2026-10-03
+          fetch-depth: 0
+
+      - name: Remove stale TUIC selector block
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('frontend/src/pages/clients/ClientFormModal.tsx')
+          s = p.read_text()
+          block = """  const tuicIds = useMemo(() => {\n    const ids = new Set<number>();\n    for (const row of inbounds || []) {\n      if (row && row.protocol === 'tuic') ids.add(row.id);\n    }\n    return ids;\n  }, [inbounds]);\n\n"""
+          if block not in s:
+              raise SystemExit('tuicIds block not found')
+          p.write_text(s.replace(block, '', 1))
+          PY
+          cd frontend
+          npx oxfmt --write src/pages/clients/ClientFormModal.tsx src/lib/hosts/host-link.ts
+          cd ..
+          git add frontend/src/pages/clients/ClientFormModal.tsx frontend/src/lib/hosts/host-link.ts
+          git commit -m "fix(frontend): complete TUIC host integration" || true
+          git rm .github/workflows/finalize-tuic-frontend.yml
+          git commit -m "chore: remove TUIC reconciliation workflow"
+          git push origin HEAD:sync-upstream-2026-10-03
+
+      - name: Frontend validation
+        run: |
+          cd frontend
+          npm ci --no-audit --no-fund
+          npm run lint
+          npm run format:check
+          npm run typecheck
+          npm test -- --run
+          npm run build:ci
+
+      - name: Backend validation
+        run: go test ./...
