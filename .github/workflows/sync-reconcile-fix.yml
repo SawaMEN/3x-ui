@@ -6,10 +6,9 @@ on:
       - sync-upstream-2026-10-03
     paths:
       - .github/workflows/sync-reconcile-fix.yml
-      - tools/reconcile_upstream_sync.py
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   fix:
@@ -21,16 +20,16 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - name: Fetch upstream
+      - name: Reconcile and commit
         run: |
           git remote add upstream https://github.com/MHSanaei/3x-ui.git || true
           git fetch --depth=1 upstream main
-      - name: Reconcile sources
-        run: python3 tools/reconcile_upstream_sync.py
-      - name: Upload reconciled files
-        uses: actions/upload-artifact@v7
-        with:
-          name: upstream-reconciled-files
-          path: /tmp/reconciled
-          if-no-files-found: error
-          retention-days: 1
+          git fetch origin main
+          python3 tools/reconcile_upstream_sync.py
+          git show origin/main:.github/workflows/smoke.yml > .github/workflows/smoke.yml
+          rm -f .github/workflows/sync-reconcile-fix.yml tools/reconcile_upstream_sync.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix(sync): reconcile upstream TUIC and merge fallout"
+          git push origin HEAD:sync-upstream-2026-10-03
