@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
 )
 
 func TestBuildTargetClientFromSourceTuic(t *testing.T) {
