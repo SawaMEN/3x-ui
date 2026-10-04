@@ -530,6 +530,12 @@ export function parseVmessLink(link: string): Raw | null {
           headers: json.host ? { Host: (json.host as string).split(',').filter(Boolean) } : {},
         },
       };
+     } else if (network === 'kcp') {
+      const kcp = stream.kcpSettings as Raw;
+      const mtu = kcpParamInRange(String(json.mtu ?? ''), KCP_MIN_MTU, KCP_MAX_MTU);
+      const tti = kcpParamInRange(String(json.tti ?? ''), KCP_MIN_TTI, KCP_MAX_TTI);
+      if (mtu !== null) kcp.mtu = mtu;
+      if (tti !== null) kcp.tti = tti;
     } else if (network === 'ws') {
       (stream.wsSettings as Raw).host = json.host ?? '';
       (stream.wsSettings as Raw).path = json.path ?? '/';
@@ -544,9 +550,16 @@ export function parseVmessLink(link: string): Raw | null {
       const xhttp = stream.xhttpSettings as Raw;
       xhttp.host = json.host ?? '';
       xhttp.path = json.path ?? '/';
-      if (json.mode) xhttp.mode = json.mode;
+      if (json.mode || json.type) xhttp.mode = json.mode || json.type;
       applyXhttpStringFromJson(xhttp, json);
     }
+    const maskParams = new URLSearchParams();
+    if (typeof json.fm === 'string') maskParams.set('fm', json.fm);
+    if (network === 'kcp') {
+      maskParams.set('headerType', typeof json.type === 'string' ? json.type : '');
+      maskParams.set('seed', typeof json.seed === 'string' ? json.seed : '');
+    }
+    applyFinalMaskParam(stream, maskParams);
     if (security === 'tls') {
       const tls = stream.tlsSettings as Raw;
       tls.serverName = json.sni ?? '';
@@ -563,7 +576,7 @@ export function parseVmessLink(link: string): Raw | null {
     const alterId = Number(json.aid ?? 0);
     if (!validPort(port) || !Number.isInteger(alterId) || alterId < 0) return null;
     const rawScy = (json.scy as string) || 'auto';
-    const userSecurity = rawScy === 'none' || rawScy === 'zero' ? 'auto' : rawScy;
+    const userSecurity = rawScy;
     return {
       protocol: 'vmess',
       tag: typeof json.ps === 'string' ? json.ps : '',
@@ -709,7 +722,7 @@ export function parseShadowsocksLink(link: string): Raw | null {
     } catch {
       return null;
     }
-    const at = decoded.indexOf('@');
+    const at = decoded.lastIndexOf('@');
     if (at < 0) return null;
     userInfo = decoded.slice(0, at);
     const hostPort = decoded.slice(at + 1);
@@ -749,7 +762,7 @@ export function parseHysteria2Link(link: string): Raw | null {
   // newStreamSlice('hysteria') initializer fills in receive-window
   // defaults; we override the user-set fields here.
   const auth = decodeURIComponent(url.username) +
-    (url.password ? `:${decodeURIComponent(url.password)}` : '');
+    (hasPasswordDelimiter(link) ? `:${decodeURIComponent(url.password)}` : '');
   const address = serverHostname(url.hostname);
   const port = Number(url.port) || 443;
   const params = url.searchParams;
@@ -902,4 +915,9 @@ export function parseOutboundLink(link: string): Raw | null {
     parseHysteria2Link(trimmed) ??
     parseWireguardLink(trimmed)
   );
+}
+
+function hasPasswordDelimiter(link: string): boolean {
+  const authority = link.trim().split('://', 2)[1]?.split(/[/?#]/, 1)[0] ?? '';
+  return authority.slice(0, authority.lastIndexOf('@')).includes(':');
 }

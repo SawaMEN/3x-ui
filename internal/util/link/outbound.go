@@ -70,6 +70,9 @@ func ParseSubscriptionBody(body []byte) ([]Outbound, []string, error) {
 		outbounds = append(outbounds, res.Outbound)
 		identities = append(identities, identity)
 	}
+	if len(outbounds) == 0 {
+		return nil, nil, fmt.Errorf("subscription contains no supported valid links")
+	}
 	return outbounds, identities, nil
 }
 
@@ -171,6 +174,14 @@ func parseVmess(link string) (*ParseResult, error) {
 
 	// Map known fields (best effort, matching frontend parser coverage)
 	switch network {
+	case "kcp":
+		kcp := stream["kcpSettings"].(map[string]any)
+		if n, ok := kcpParamInRange(fmt.Sprint(j["mtu"]), kcpMinMTU, kcpMaxMTU); ok {
+			kcp["mtu"] = n
+		}
+		if n, ok := kcpParamInRange(fmt.Sprint(j["tti"]), kcpMinTTI, kcpMaxTTI); ok {
+			kcp["tti"] = n
+		}
 	case "ws":
 		host, _ := j["host"].(string)
 		setWS(stream, host, getString(j, "path", "/"))
@@ -187,11 +198,11 @@ func parseVmess(link string) (*ParseResult, error) {
 		xh := stream["xhttpSettings"].(map[string]any)
 		xh["host"] = getString(j, "host", "")
 		xh["path"] = getString(j, "path", "/")
-		if m := getString(j, "mode", ""); m != "" {
+		if m := firstNonEmpty(getString(j, "mode", ""), getString(j, "type", "")); m != "" {
 			xh["mode"] = m
 		}
 		// xhttp advanced keys are passed through if present in the json
-		for _, k := range []string{"xPaddingBytes", "scMaxEachPostBytes", "scMinPostsIntervalMs"} {
+		for _, k := range []string{"xPaddingBytes", "xPaddingKey", "xPaddingHeader", "xPaddingPlacement", "xPaddingMethod", "sessionIDPlacement", "sessionIDKey", "sessionIDTable", "sessionIDLength", "seqPlacement", "seqKey", "uplinkDataPlacement", "uplinkDataKey", "scMaxEachPostBytes", "scMinPostsIntervalMs", "scStreamUpServerSecs", "uplinkHTTPMethod", "scMaxBufferedPosts", "serverMaxHeaderBytes", "uplinkChunkSize", "xPaddingObfsMode", "noSSEHeader", "noGRPCHeader", "xmux", "downloadSettings", "headers"} {
 			if v, ok := j[k]; ok {
 				xh[k] = v
 			}
@@ -212,6 +223,15 @@ func parseVmess(link string) (*ParseResult, error) {
 		}
 	}
 
+	maskParams := url.Values{}
+	if fm := getString(j, "fm", ""); fm != "" {
+		maskParams.Set("fm", fm)
+	}
+	if network == "kcp" {
+		maskParams.Set("headerType", getString(j, "type", ""))
+		maskParams.Set("seed", getString(j, "seed", ""))
+	}
+	applyFinalMask(stream, maskParams)
 	if security == "tls" {
 		tls := stream["tlsSettings"].(map[string]any)
 		tls["serverName"] = getString(j, "sni", "")
@@ -231,9 +251,6 @@ func parseVmess(link string) (*ParseResult, error) {
 		return nil, fmt.Errorf("invalid vmess port or alterId")
 	}
 	scy := getString(j, "scy", "auto")
-	if scy == "none" || scy == "zero" {
-		scy = "auto"
-	}
 	ob := Outbound{
 		"protocol": "vmess",
 		"tag":      getString(j, "ps", ""),
@@ -412,7 +429,7 @@ func parseShadowsocks(link string) (*ParseResult, error) {
 		if err != nil {
 			return nil, err
 		}
-		at = strings.Index(dec, "@")
+		at = strings.LastIndex(dec, "@")
 		if at < 0 {
 			return nil, fmt.Errorf("bad legacy ss")
 		}
@@ -784,6 +801,14 @@ func applySecurity(stream map[string]any, p url.Values) {
 	switch sec {
 	case "tls":
 		tls := stream["tlsSettings"].(map[string]any)
+		for _, key := range []string{"allowInsecure", "insecure"} {
+			if values, exists := p[key]; exists && len(values) > 0 {
+				if value, err := strconv.ParseBool(values[0]); err == nil {
+					tls["allowInsecure"] = value
+					break
+				}
+			}
+		}
 		tls["serverName"] = p.Get("sni")
 		tls["fingerprint"] = p.Get("fp")
 		if alpn := p.Get("alpn"); alpn != "" {
