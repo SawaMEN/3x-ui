@@ -577,7 +577,9 @@ func (c *ConnectionAPIClient) SnapshotTrafficEvents(ctx context.Context) (connec
 	// the server builds this snapshot but before the next poll, CreatedAt remains
 	// on the correct side of the boundary and its initial bytes are counted once.
 	snapshotAt := time.Now().UnixMilli()
-	stream, err := c.conn.NewStream(ctx, &grpc.StreamDesc{ServerStreams: true}, "/daemon.StartedService/SubscribeConnections", grpc.ForceCodec(connectionAPIProtoCodec{trafficOnly: true}))
+	streamCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	stream, err := c.conn.NewStream(streamCtx, &grpc.StreamDesc{ServerStreams: true}, "/daemon.StartedService/SubscribeConnections", grpc.ForceCodec(connectionAPIProtoCodec{trafficOnly: true}))
 	if err != nil {
 		c.Close()
 		return connectionEvents{}, err
@@ -656,7 +658,9 @@ func (c *ConnectionAPIClient) SnapshotEvents(ctx context.Context) (connectionEve
 	if err := c.connFor(ctx); err != nil {
 		return connectionEvents{}, err
 	}
-	stream, err := c.conn.NewStream(ctx, &grpc.StreamDesc{ServerStreams: true}, "/daemon.StartedService/SubscribeConnections", grpc.ForceCodec(connectionAPIProtoCodec{}))
+	streamCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	stream, err := c.conn.NewStream(streamCtx, &grpc.StreamDesc{ServerStreams: true}, "/daemon.StartedService/SubscribeConnections", grpc.ForceCodec(connectionAPIProtoCodec{}))
 	if err != nil {
 		c.Close()
 		return connectionEvents{}, err

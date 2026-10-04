@@ -4,6 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"os"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/config"
+	"github.com/SawaMEN/3x-ui/v3/internal/xray/geodata"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 )
@@ -25,7 +29,14 @@ func buildSeparatedSingBoxSubscription(template map[string]any, proxies []map[st
 		}
 		if rawRouting, ok := template["routing"].(map[string]any); ok {
 			var err error
-			translatedRoute, err = singbox.TranslateXrayRouting(rawRouting)
+			dir := config.GetBinFolderPath()
+			for _, key := range []string{"XRAY_LOCATION_ASSET", "xray.location.asset"} {
+				if value := os.Getenv(key); value != "" {
+					dir = value
+					break
+				}
+			}
+			translatedRoute, err = singbox.TranslateXrayRoutingWithGeoData(rawRouting, geodata.NewStore(dir))
 			if err != nil {
 				return "", fmt.Errorf("%w: translate routing: %w", errSubscriptionFormatUnsupported, err)
 			}
@@ -133,12 +144,24 @@ func buildHiddifySingBoxSubscription(proxies []map[string]any) (string, error) {
 	if len(proxies) == 0 {
 		return "", nil
 	}
+	usedTags := make(map[string]bool, len(proxies)*2)
+	for _, proxy := range proxies {
+		tag, _ := proxy["tag"].(string)
+		if tag == "" || usedTags[tag] {
+			return "", fmt.Errorf("Hiddify subscription has an empty or duplicate proxy tag %q", tag)
+		}
+		usedTags[tag] = true
+	}
 	outbounds := make([]any, 0, len(proxies)*2)
 	for i, original := range proxies {
 		proxy := maps.Clone(original)
 		if transport, ok := proxy["_panel_shadowtls_transport"].(map[string]any); ok {
 			transport = maps.Clone(transport)
 			tag := fmt.Sprintf("§hide§ shadowtls-transport-%d", i+1)
+			for suffix := 1; usedTags[tag]; suffix++ {
+				tag = fmt.Sprintf("§hide§ shadowtls-transport-%d-%d", i+1, suffix)
+			}
+			usedTags[tag] = true
 			transport["tag"] = tag
 			proxy["detour"] = tag
 			delete(proxy, "_panel_shadowtls_transport")

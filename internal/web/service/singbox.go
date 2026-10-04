@@ -812,6 +812,10 @@ func singBoxConfigDir() string {
 func (s *SingBoxService) Restart(ctx context.Context) error {
 	singBoxApplyMu.Lock()
 	defer singBoxApplyMu.Unlock()
+	return s.restartLocked(ctx)
+}
+
+func (s *SingBoxService) restartLocked(ctx context.Context) error {
 	// Capture the old applied config before publishing a candidate.
 	_ = s.IsRunning()
 	if _, err := singBoxProcess.Version(ctx); err != nil {
@@ -838,6 +842,10 @@ func (s *SingBoxService) Restart(ctx context.Context) error {
 func (s *SingBoxService) Start(ctx context.Context) error {
 	singBoxApplyMu.Lock()
 	defer singBoxApplyMu.Unlock()
+	return s.startLocked(ctx)
+}
+
+func (s *SingBoxService) startLocked(ctx context.Context) error {
 	if s.IsRunning() {
 		return nil
 	}
@@ -865,6 +873,10 @@ func (s *SingBoxService) Start(ctx context.Context) error {
 func (s *SingBoxService) Stop(ctx context.Context) error {
 	singBoxApplyMu.Lock()
 	defer singBoxApplyMu.Unlock()
+	return s.stopLocked(ctx)
+}
+
+func (s *SingBoxService) stopLocked(ctx context.Context) error {
 	if err := singBoxProcess.Stop(); err != nil {
 		return err
 	}
@@ -1123,15 +1135,22 @@ func (s *SingBoxService) GetLogs(count string, filter string) []LogEntry {
 func (s *SingBoxService) installVersion(ctx context.Context, installer func(context.Context) (string, error)) (string, error) {
 	singBoxInstallMu.Lock()
 	defer singBoxInstallMu.Unlock()
+	singBoxApplyMu.Lock()
+	defer singBoxApplyMu.Unlock()
 
 	restore, cleanup, err := singbox.SnapshotInstallation()
 	if err != nil {
 		return "", fmt.Errorf("backup sing-box installation: %w", err)
 	}
-	defer cleanup()
+	keepBackup := false
+	defer func() {
+		if !keepBackup {
+			cleanup()
+		}
+	}()
 	wasRunning := s.IsRunning()
 	if wasRunning {
-		if err := s.Stop(ctx); err != nil {
+		if err := s.stopLocked(ctx); err != nil {
 			return "", fmt.Errorf("stop sing-box before update: %w", err)
 		}
 	}
@@ -1140,9 +1159,11 @@ func (s *SingBoxService) installVersion(ctx context.Context, installer func(cont
 		recoveryCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		if err := singBoxProcess.Stop(); err != nil {
+			keepBackup = true
 			return "", fmt.Errorf("%w; stop failed update: %w", cause, err)
 		}
 		if err := restore(); err != nil {
+			keepBackup = true
 			return "", fmt.Errorf("%w; restore previous installation: %w", cause, err)
 		}
 		if wasRunning {
@@ -1167,7 +1188,7 @@ func (s *SingBoxService) installVersion(ctx context.Context, installer func(cont
 		return rollback(fmt.Errorf("verify installed sing-box %q: %w", installed, err))
 	}
 	if wasRunning {
-		if err := s.Start(ctx); err != nil {
+		if err := s.startLocked(ctx); err != nil {
 			return rollback(fmt.Errorf("start updated sing-box %s: %w", currentVersion, err))
 		}
 	}

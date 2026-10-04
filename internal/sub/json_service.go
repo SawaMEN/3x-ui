@@ -524,7 +524,8 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 						}
 					}
 				} else {
-					for _, raw := range s.getConfig(subReq, inbound, client, host) {
+					var endpointCopies []map[string]any
+					for index, raw := range s.getConfig(subReq, inbound, client, host, &endpointCopies) {
 						var profile map[string]any
 						if json.Unmarshal(raw, &profile) != nil {
 							continue
@@ -541,7 +542,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 						// global FinalMask or TLS defaults in the JSON template.
 						xray["streamSettings"] = map[string]any{"network": "tcp", "security": "none"}
 						native, err := singbox.TranslateXrayOutbound(xray)
-						if err != nil || !s.wrapNativeShadowTLS(inbound, native, nil) {
+						if err != nil || !s.wrapNativeShadowTLS(inbound, native, endpointCopies[index]) {
 							continue
 						}
 						generated++
@@ -1168,7 +1169,7 @@ func (s *SubJsonService) buildBalancerConfig(balancer *model.SubBalancer, entrie
 	return config
 }
 
-func (s *SubJsonService) getConfig(subReq *SubService, inbound *model.Inbound, client model.Client, host string) []json_util.RawMessage {
+func (s *SubJsonService) getConfig(subReq *SubService, inbound *model.Inbound, client model.Client, host string, endpointCopies ...*[]map[string]any) []json_util.RawMessage {
 	var newJsonArray []json_util.RawMessage
 	stream := s.streamData(inbound.StreamSettings, subKey(client))
 
@@ -1302,6 +1303,9 @@ func (s *SubJsonService) getConfig(subReq *SubService, inbound *model.Inbound, c
 
 		newConfig, _ := json.MarshalIndent(newConfigJson, "", "  ")
 		newJsonArray = append(newJsonArray, newConfig)
+		if len(endpointCopies) > 0 && endpointCopies[0] != nil {
+			*endpointCopies[0] = append(*endpointCopies[0], maps.Clone(extPrxy))
+		}
 	}
 
 	return newJsonArray
@@ -1604,7 +1608,13 @@ func (s *SubJsonService) wrapNativeShadowTLS(inbound *model.Inbound, inner map[s
 		if override, ok := externalProxySNI(endpoint); ok && strings.TrimSpace(override) != "" {
 			wildcard, _ := transport["wildcardSni"].(string)
 			named, _ := transport["handshakeForServerName"].(map[string]any)
-			_, hasNamedSNI := named[strings.ToLower(strings.TrimSpace(override))]
+			hasNamedSNI := false
+			for name := range named {
+				if strings.EqualFold(strings.TrimSpace(name), strings.TrimSpace(override)) {
+					hasNamedSNI = true
+					break
+				}
+			}
 			if wildcard == "all" || wildcard == "authed" || net.ParseIP(sni) != nil || hasNamedSNI {
 				sni = strings.TrimSpace(override)
 			}

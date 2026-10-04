@@ -131,12 +131,6 @@ func (p *Process) clearExternalPID(pid int) {
 	p.mu.Unlock()
 }
 
-func (p *Process) clearErrorWhileRunning() {
-	p.mu.Lock()
-	p.exitErr = nil
-	p.mu.Unlock()
-}
-
 func (p *Process) GetErr() error {
 	p.mu.RLock()
 	defer p.mu.RUnlock()

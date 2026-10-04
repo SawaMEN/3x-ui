@@ -75,7 +75,10 @@ func SnapshotInstallation() (restore func() error, cleanup func(), err error) {
 			}
 			_ = os.Remove(name)
 		}
-		return errors.Join(failures...)
+		if err := errors.Join(failures...); err != nil {
+			return fmt.Errorf("restore failed; backup retained in %s: %w", backupDir, err)
+		}
+		return nil
 	}
 	return restore, cleanup, nil
 }
