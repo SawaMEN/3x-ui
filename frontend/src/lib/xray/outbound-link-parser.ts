@@ -480,6 +480,8 @@ function applySecurityParams(stream: Raw, params: URLSearchParams): void {
     const tls = stream.tlsSettings as Raw;
     tls.serverName = params.get('sni') ?? '';
     tls.fingerprint = params.get('fp') ?? '';
+    const insecure = firstParam(params, 'allowInsecure', 'insecure');
+    if (insecure !== null) tls.allowInsecure = ['1', 'true'].includes(insecure);
     const alpn = params.get('alpn');
     if (alpn) tls.alpn = alpn.split(',');
     tls.echConfigList = params.get('ech') ?? '';
@@ -552,7 +554,9 @@ export function parseVmessLink(link: string): Raw | null {
       if (typeof json.pcs === 'string') tls.pinnedPeerCertSha256 = json.pcs;
     }
 
-    const port = Number(json.port) || 443;
+    const port = json.port === undefined || json.port === '' ? 443 : Number(json.port);
+    const alterId = Number(json.aid ?? 0);
+    if (!validPort(port) || !Number.isInteger(alterId) || alterId < 0) return null;
     const rawScy = (json.scy as string) || 'auto';
     const userSecurity = rawScy === 'none' || rawScy === 'zero' ? 'auto' : rawScy;
     return {
@@ -563,7 +567,7 @@ export function parseVmessLink(link: string): Raw | null {
           {
             address: json.add ?? '',
             port,
-            users: [{ id: json.id ?? '', security: userSecurity }],
+            users: [{ id: json.id ?? '', security: userSecurity, alterId }],
           },
         ],
       },
@@ -574,10 +578,22 @@ export function parseVmessLink(link: string): Raw | null {
   }
 }
 
+function validPort(port: number): boolean {
+  return Number.isInteger(port) && port > 0 && port <= 65535;
+}
+
+function serverHostname(host: string): string {
+  return host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host;
+}
+
 function parseUrlLink(link: string, expectedProto: string): URL | null {
   try {
     const url = new URL(link);
     if (url.protocol.replace(/:$/, '') !== expectedProto) return null;
+    if (!url.hostname || (url.port && !validPort(Number(url.port)))) return null;
+    // WHATWG URL preserves escaped userinfo; validate before decoding once.
+    decodeURIComponent(url.username);
+    decodeURIComponent(url.password);
     return url;
   } catch {
     return null;
@@ -587,8 +603,8 @@ function parseUrlLink(link: string, expectedProto: string): URL | null {
 export function parseVlessLink(link: string): Raw | null {
   const url = parseUrlLink(link, 'vless');
   if (!url) return null;
-  const id = url.username;
-  const address = url.hostname;
+  const id = decodeURIComponent(url.username);
+  const address = serverHostname(url.hostname);
   const port = Number(url.port) || 443;
   const params = url.searchParams;
   const network = params.get('type') ?? 'tcp';
@@ -614,8 +630,8 @@ export function parseVlessLink(link: string): Raw | null {
 export function parseTrojanLink(link: string): Raw | null {
   const url = parseUrlLink(link, 'trojan');
   if (!url) return null;
-  const password = url.username;
-  const address = url.hostname;
+  const password = decodeURIComponent(url.username);
+  const address = serverHostname(url.hostname);
   const port = Number(url.port) || 443;
   const params = url.searchParams;
   const network = params.get('type') ?? 'tcp';
@@ -680,7 +696,7 @@ export function parseShadowsocksLink(link: string): Raw | null {
     const colon = hostPort.lastIndexOf(':');
     if (colon < 0) return null;
     host = hostPort.slice(0, colon);
-    port = Number(hostPort.slice(colon + 1)) || 443;
+    port = Number(hostPort.slice(colon + 1));
   } else {
     let decoded: string;
     try {
@@ -695,8 +711,10 @@ export function parseShadowsocksLink(link: string): Raw | null {
     const colon = hostPort.lastIndexOf(':');
     if (colon < 0) return null;
     host = hostPort.slice(0, colon);
-    port = Number(hostPort.slice(colon + 1)) || 443;
+    port = Number(hostPort.slice(colon + 1));
   }
+  host = serverHostname(host);
+  if (!host || !validPort(port)) return null;
   const sep = userInfo.indexOf(':');
   const method = sep < 0 ? '2022-blake3-aes-128-gcm' : userInfo.slice(0, sep);
   const password = sep < 0 ? userInfo : userInfo.slice(sep + 1);
@@ -725,8 +743,9 @@ export function parseHysteria2Link(link: string): Raw | null {
   // network branch is the dedicated 'hysteria' transport — the modal's
   // newStreamSlice('hysteria') initializer fills in receive-window
   // defaults; we override the user-set fields here.
-  const auth = url.username;
-  const address = url.hostname;
+  const auth = decodeURIComponent(url.username) +
+    (url.password ? `:${decodeURIComponent(url.password)}` : '');
+  const address = serverHostname(url.hostname);
   const port = Number(url.port) || 443;
   const params = url.searchParams;
   const alpn = params.get('alpn');
@@ -740,6 +759,7 @@ export function parseHysteria2Link(link: string): Raw | null {
     },
     tlsSettings: {
       serverName: params.get('sni') ?? '',
+      allowInsecure: ['1', 'true'].includes(params.get('insecure') ?? ''),
       alpn: alpn ? alpn.split(',') : ['h3'],
       fingerprint: params.get('fp') ?? '',
       echConfigList: params.get('ech') ?? '',
