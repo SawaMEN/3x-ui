@@ -454,12 +454,12 @@ func (c *Config) MarshalJSON() ([]byte, error) {
 	clone.Endpoints = make([]map[string]any, 0, len(c.Endpoints))
 	clone.Route = normalizedRoute
 	clone.Experimental = experimental
-	if hasDNSServerTag(c.DNS, "local") {
+	if final := rawString(c.DNS, "final"); final != "" && hasDNSServerTag(c.DNS, final) {
 		if clone.Route == nil {
 			clone.Route = map[string]any{}
 		}
 		if _, exists := clone.Route["default_domain_resolver"]; !exists {
-			clone.Route["default_domain_resolver"] = "local"
+			clone.Route["default_domain_resolver"] = final
 		}
 	}
 	seen := make(map[string]string, len(normalizedOutbounds)+len(c.Endpoints))

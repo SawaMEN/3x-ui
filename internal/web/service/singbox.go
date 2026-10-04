@@ -147,9 +147,16 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 
 	managedOutboundTags := map[string]bool{}
 	dnsOutboundTags := make(map[string]struct{})
-	if template, err := singBoxSettingService.GetXrayConfigTemplate(); err == nil {
+	template, templateErr := singBoxSettingService.GetXrayConfigTemplate()
+	if templateErr != nil {
+		return nil, templateErr
+	}
+	{
 		var xrayCfg map[string]any
-		if json.Unmarshal([]byte(template), &xrayCfg) == nil {
+		if err := json.Unmarshal([]byte(template), &xrayCfg); err != nil {
+			return nil, fmt.Errorf("parse Xray template: %w", err)
+		}
+		{
 			prepend, tail, err := (&OutboundSubscriptionService{}).activeOutboundsSplit()
 			if err != nil {
 				return nil, err
@@ -190,17 +197,23 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 			// sing-box 1.14 requires a resolver for domain-based outbound
 			// server addresses. Apply this after translated routing so the
 			// compatibility route cannot accidentally discard it.
-			cfg.Route["default_domain_resolver"] = "local"
+			cfg.Route["default_domain_resolver"] = cfg.DNS["final"]
 			if rawRouting, ok := xrayCfg["routing"].(map[string]any); ok {
 				if strategy := singbox.TranslateXrayDomainStrategy(fmt.Sprint(rawRouting["domainStrategy"])); strategy != "" {
 					cfg.Route["default_domain_resolver"] = map[string]any{
-						"server":   "local",
+						"server":   cfg.DNS["final"],
 						"strategy": strategy,
 					}
 				}
 			}
 			if rawBalancers, ok := xrayCfg["routing"].(map[string]any); ok {
-				balancers, err := singbox.TranslateXrayBalancers(rawBalancers)
+				var available []map[string]any
+				for _, value := range xrayCfg["outbounds"].([]any) {
+					if outbound, ok := value.(map[string]any); ok {
+						available = append(available, outbound)
+					}
+				}
+				balancers, err := singbox.TranslateXrayBalancers(rawBalancers, available...)
 				if err != nil {
 					return nil, err
 				}
@@ -209,7 +222,7 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 			if rawOutbounds, ok := xrayCfg["outbounds"].([]any); ok {
 				if len(rawOutbounds) > 0 {
 					if first, ok := rawOutbounds[0].(map[string]any); ok {
-						if tag, ok := first["tag"].(string); ok && strings.HasPrefix(tag, "sub-auto-") {
+						if tag, ok := first["tag"].(string); ok && tag != "" {
 							cfg.Route["final"] = tag
 						}
 					}
@@ -236,6 +249,12 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 						continue
 					}
 					if protocol, _ := ob["protocol"].(string); strings.EqualFold(strings.TrimSpace(protocol), "dns") {
+						settings, _ := ob["settings"].(map[string]any)
+						for _, key := range []string{"address", "port", "rewriteAddress", "rewritePort", "nonIPQuery"} {
+							if value, present := settings[key]; present && fmt.Sprint(value) != "" && fmt.Sprint(value) != "0" && fmt.Sprint(value) != "skip" {
+								return nil, fmt.Errorf("DNS outbound %v option %s cannot be preserved by hijack-dns", ob["tag"], key)
+							}
+						}
 						if tag, _ := ob["tag"].(string); strings.TrimSpace(tag) != "" {
 							dnsOutboundTags[tag] = struct{}{}
 						}

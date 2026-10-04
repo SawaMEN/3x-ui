@@ -587,7 +587,6 @@ func applyXrayWireGuardEndpointCompatibility(endpoint map[string]any, raw map[st
 	if err := translateOutboundSockopt(endpoint, rawObject(raw, "streamSettings"), tag); err != nil {
 		return err
 	}
-	ensureWireGuardEndpointDomainResolver(endpoint)
 	return nil
 }
 
@@ -683,7 +682,6 @@ func applyXrayOutboundCompatibility(out map[string]any, raw map[string]any, stre
 		}
 		out["detour"] = detour
 	}
-	ensureOutboundDomainResolver(out)
 	return nil
 }
 

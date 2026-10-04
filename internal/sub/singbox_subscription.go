@@ -56,7 +56,11 @@ func buildSeparatedSingBoxSubscription(template map[string]any, proxies []map[st
 	if translatedRoute == nil {
 		translatedRoute = map[string]any{}
 	}
-	translatedRoute["default_domain_resolver"] = resolverTag
+	defaultResolver, _ := translatedDNS["final"].(string)
+	if defaultResolver == "" {
+		defaultResolver = resolverTag
+	}
+	translatedRoute["default_domain_resolver"] = defaultResolver
 
 	configs := make([]json.RawMessage, 0, len(proxies))
 	for _, proxy := range proxies {
