@@ -253,7 +253,7 @@ func (c *ClashStatsClient) Connections(ctx context.Context) ([]ClashConnection, 
 	}
 	defer resp.Body.Close()
 
-	body := io.LimitReader(resp.Body, 1<<20)
+	body := io.LimitReader(resp.Body, 64<<20)
 	if resp.StatusCode != http.StatusOK {
 		var apiErr clashAPIError
 		_ = json.NewDecoder(body).Decode(&apiErr)

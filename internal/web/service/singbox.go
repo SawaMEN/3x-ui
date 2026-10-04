@@ -37,6 +37,8 @@ var (
 	singBoxPendingInbound []*xray.Traffic
 	singBoxPendingClients []*xray.ClientTraffic
 	singBoxInstallMu      sync.Mutex
+	singBoxApplyMu        sync.Mutex
+	singBoxTemplateMu     sync.Mutex
 )
 
 // SetSingBoxDependencies wires the panel services used by the sing-box
@@ -722,6 +724,8 @@ func (s *SingBoxService) applyNativeTemplate(cfg *singbox.Config) error {
 }
 
 func (s *SingBoxService) SaveTemplate(ctx context.Context, raw string) error {
+	singBoxTemplateMu.Lock()
+	defer singBoxTemplateMu.Unlock()
 	normalized, err := normalizeSingBoxTemplate(raw)
 	if err != nil {
 		return err
@@ -757,6 +761,8 @@ func (s *SingBoxService) SaveTemplate(ctx context.Context, raw string) error {
 }
 
 func (s *SingBoxService) ResetTemplate(ctx context.Context) error {
+	singBoxTemplateMu.Lock()
+	defer singBoxTemplateMu.Unlock()
 	old, err := singBoxSettingService.GetSingBoxConfigTemplate()
 	if err != nil {
 		return err
@@ -788,19 +794,9 @@ func (s *SingBoxService) ResetTemplate(ctx context.Context) error {
 }
 
 func (s *SingBoxService) WriteConfig() error {
-	cfg, err := s.GetConfig()
-	if err != nil {
-		return err
-	}
-	data, err := cfg.Marshal()
-	if err != nil {
-		return err
-	}
-	path := singbox.GetConfigPath()
-	if err := os.MkdirAll(singBoxConfigDir(), 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(path, data, 0o600)
+	singBoxApplyMu.Lock()
+	defer singBoxApplyMu.Unlock()
+	return s.writeConfigCandidate(context.Background())
 }
 
 func singBoxConfigDir() string {
@@ -814,12 +810,15 @@ func singBoxConfigDir() string {
 }
 
 func (s *SingBoxService) Restart(ctx context.Context) error {
-	markSingBoxStarted()
+	singBoxApplyMu.Lock()
+	defer singBoxApplyMu.Unlock()
+	// Capture the old applied config before publishing a candidate.
+	_ = s.IsRunning()
 	if _, err := singBoxProcess.Version(ctx); err != nil {
 		singBoxProcess.SetError(err)
 		return err
 	}
-	if err := s.WriteConfig(); err != nil {
+	if err := s.writeConfigCandidate(ctx); err != nil {
 		singBoxProcess.SetError(err)
 		return err
 	}
@@ -827,17 +826,22 @@ func (s *SingBoxService) Restart(ctx context.Context) error {
 	if err := singBoxProcess.Restart(ctx); err != nil {
 		return err
 	}
+	markSingBoxStarted()
 	commitManagedYouTube(CoreTypeSingBox)
 	return nil
 }
 
 func (s *SingBoxService) Start(ctx context.Context) error {
-	markSingBoxStarted()
+	singBoxApplyMu.Lock()
+	defer singBoxApplyMu.Unlock()
+	if s.IsRunning() {
+		return nil
+	}
 	if _, err := singBoxProcess.Version(ctx); err != nil {
 		singBoxProcess.SetError(err)
 		return err
 	}
-	if err := s.WriteConfig(); err != nil {
+	if err := s.writeConfigCandidate(ctx); err != nil {
 		singBoxProcess.SetError(err)
 		return err
 	}
@@ -845,13 +849,19 @@ func (s *SingBoxService) Start(ctx context.Context) error {
 	if err := singBoxProcess.Start(ctx); err != nil {
 		return err
 	}
+	markSingBoxStarted()
 	commitManagedYouTube(CoreTypeSingBox)
 	return nil
 }
 
 func (s *SingBoxService) Stop(ctx context.Context) error {
+	singBoxApplyMu.Lock()
+	defer singBoxApplyMu.Unlock()
+	if err := singBoxProcess.Stop(); err != nil {
+		return err
+	}
 	markSingBoxStopped()
-	return singBoxProcess.Stop()
+	return nil
 }
 
 func (s *SingBoxService) IsRunning() bool {
@@ -882,7 +892,13 @@ func (s *SingBoxService) ConnectionCount(ctx context.Context) (int, error) {
 	defer api.Close()
 	connections, err := api.Snapshot(ctx)
 	if err == nil {
-		return len(connections), nil
+		active := 0
+		for _, connection := range connections {
+			if connection != nil && connection.ClosedAt == 0 {
+				active++
+			}
+		}
+		return active, nil
 	}
 	clashConnections, err := singbox.NewClashStatsClient().Connections(ctx)
 	if err != nil {
@@ -904,7 +920,7 @@ func (s *SingBoxService) OnlinePresence(ctx context.Context) (map[string]map[str
 	online := make(map[string]map[string]struct{})
 	activeSet := make(map[string]struct{})
 	for _, connection := range connections {
-		if connection == nil {
+		if connection == nil || connection.ClosedAt > 0 {
 			continue
 		}
 		if connection.Inbound != "" {
@@ -954,8 +970,9 @@ func (s *SingBoxService) DisconnectClientIPs(ctx context.Context, email string, 
 			wanted[ip] = struct{}{}
 		}
 	}
+	var disconnectErrors []string
 	for _, connection := range connections {
-		if connection == nil || connection.User != email || connection.Source == "" {
+		if connection == nil || connection.ClosedAt > 0 || connection.User != email || connection.Source == "" {
 			continue
 		}
 		ip := connection.Source
@@ -966,8 +983,11 @@ func (s *SingBoxService) DisconnectClientIPs(ctx context.Context, email string, 
 			continue
 		}
 		if err := api.CloseConnection(ctx, connection.ID); err != nil {
-			return err
+			disconnectErrors = append(disconnectErrors, err.Error())
 		}
+	}
+	if len(disconnectErrors) > 0 {
+		return fmt.Errorf("disconnect sing-box sessions: %s", strings.Join(disconnectErrors, "; "))
 	}
 	return nil
 }

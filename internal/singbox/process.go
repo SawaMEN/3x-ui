@@ -73,6 +73,7 @@ type Process struct {
 	config      string
 	externalPID int
 	isolated    bool
+	appliedConfig []byte
 }
 
 func NewProcess(configPath string) *Process {
@@ -100,7 +101,6 @@ func (p *Process) IsRunning() bool {
 			running = true
 		}
 		if running {
-			p.clearErrorWhileRunning()
 			return true
 		}
 	}
@@ -108,8 +108,7 @@ func (p *Process) IsRunning() bool {
 		return false
 	}
 	if externalPID > 0 {
-		if processMatchesBinary(externalPID, GetBinaryPath()) {
-			p.clearErrorWhileRunning()
+		if processMatchesConfig(externalPID, GetBinaryPath(), p.config) {
 			return true
 		}
 		p.clearExternalPID(externalPID)
@@ -117,8 +116,8 @@ func (p *Process) IsRunning() bool {
 	if pid := p.managedPID(); pid > 0 {
 		p.mu.Lock()
 		p.externalPID = pid
-		p.exitErr = nil
 		p.mu.Unlock()
+		p.rememberAppliedConfig()
 		return true
 	}
 	return false
@@ -200,12 +199,12 @@ func (p *Process) GetUptime() uint64 {
 	if p.isolated {
 		return 0
 	}
-	if externalPID > 0 && !processMatchesBinary(externalPID, GetBinaryPath()) {
+	if externalPID > 0 && !processMatchesConfig(externalPID, GetBinaryPath(), p.config) {
 		p.clearExternalPID(externalPID)
 		externalPID = 0
 	}
 	if externalPID <= 0 {
-		externalPID = findRunningPID(GetBinaryPath())
+		externalPID = findRunningPID(GetBinaryPath(), p.config)
 		if externalPID > 0 {
 			p.mu.Lock()
 			p.externalPID = externalPID
@@ -309,6 +308,7 @@ func (p *Process) startLocked(ctx context.Context) error {
 		p.mu.Lock()
 		p.externalPID = pid
 		p.mu.Unlock()
+		p.rememberAppliedConfig()
 		return nil
 	}
 	if err := p.Validate(ctx); err != nil {
@@ -346,6 +346,22 @@ func (p *Process) startLocked(ctx context.Context) error {
 		close(done)
 		p.mu.Unlock()
 	}()
+	// Startup errors (including bind collisions) happen after cmd.Start. Do not
+	// report success while the child is still in that immediate failure window.
+	timer := time.NewTimer(500 * time.Millisecond)
+	defer timer.Stop()
+	select {
+	case <-done:
+		if err := p.GetErr(); err != nil {
+			return fmt.Errorf("sing-box exited during startup: %w", err)
+		}
+		return fmt.Errorf("sing-box exited during startup")
+	case <-ctx.Done():
+		_ = p.stopLocked()
+		return ctx.Err()
+	case <-timer.C:
+	}
+	p.rememberAppliedConfig()
 	return nil
 }
 
@@ -367,17 +383,17 @@ func (p *Process) stopLocked() error {
 	p.mu.RUnlock()
 	if cmd == nil || cmd.Process == nil {
 		binary := GetBinaryPath()
-		if externalPID > 0 && !processMatchesBinary(externalPID, binary) {
+		if externalPID > 0 && !processMatchesConfig(externalPID, binary, p.config) {
 			p.clearExternalPID(externalPID)
 			externalPID = 0
 		}
 		if externalPID <= 0 && !p.isolated {
-			externalPID = findRunningPID(binary)
+			externalPID = findRunningPID(binary, p.config)
 		}
 		if externalPID <= 0 {
 			return nil
 		}
-		if !processMatchesBinary(externalPID, binary) {
+		if !processMatchesConfig(externalPID, binary, p.config) {
 			p.clearExternalPID(externalPID)
 			return nil
 		}
@@ -389,7 +405,7 @@ func (p *Process) stopLocked() error {
 			// Never escalate a cached PID without verifying it still points at
 			// the configured sing-box binary. The PID may have been reused after
 			// the identity check above.
-			if !processMatchesBinary(externalPID, binary) {
+			if !processMatchesConfig(externalPID, binary, p.config) {
 				p.clearExternalPID(externalPID)
 				return nil
 			}
@@ -409,7 +425,7 @@ func (p *Process) stopLocked() error {
 		// Graceful shutdown timed out. Revalidate immediately before SIGKILL so
 		// a PID recycled during the wait cannot cause an unrelated process to be
 		// terminated.
-		if !processMatchesBinary(externalPID, binary) {
+		if !processMatchesConfig(externalPID, binary, p.config) {
 			p.clearExternalPID(externalPID)
 			p.setErr(nil)
 			return nil
@@ -428,16 +444,21 @@ func (p *Process) stopLocked() error {
 		return nil
 	}
 	if err := cmd.Process.Signal(os.Interrupt); err != nil && !errors.Is(err, os.ErrProcessDone) {
-		_ = cmd.Process.Kill()
+		if err := cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+			return fmt.Errorf("force stop sing-box: %w", err)
+		}
 	}
 	if done != nil {
 		select {
 		case <-done:
 		case <-time.After(defaultGracefulStopTimeout):
-			_ = cmd.Process.Kill()
+			if err := cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+				return fmt.Errorf("force stop sing-box: %w", err)
+			}
 			select {
 			case <-done:
 			case <-time.After(defaultForceStopTimeout):
+				return fmt.Errorf("sing-box did not exit after force stop")
 			}
 		}
 	}
@@ -461,13 +482,13 @@ func (p *Process) waitForExternalExit(pid int, timeout time.Duration) bool {
 	binary := GetBinaryPath()
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
-		if !processMatchesBinary(pid, binary) {
+		if !processMatchesConfig(pid, binary, p.config) {
 			p.clearExternalPID(pid)
 			return true
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	if !processMatchesBinary(pid, binary) {
+	if !processMatchesConfig(pid, binary, p.config) {
 		p.clearExternalPID(pid)
 		return true
 	}
@@ -522,7 +543,7 @@ func processMatchesBinary(pid int, binary string) bool {
 	return arg0 == binary
 }
 
-func findRunningPID(binary string) int {
+func findRunningPID(binary string, configs ...string) int {
 	if runtime.GOOS != "linux" {
 		return 0
 	}
@@ -539,6 +560,9 @@ func findRunningPID(binary string) int {
 			continue
 		}
 		if processMatchesBinary(pid, binary) {
+			if len(configs) > 0 && !processMatchesConfig(pid, binary, configs[0]) {
+				continue
+			}
 			return pid
 		}
 	}
@@ -576,5 +600,5 @@ func (p *Process) managedPID() int {
 	if p.isolated {
 		return 0
 	}
-	return findRunningPID(GetBinaryPath())
+	return findRunningPID(GetBinaryPath(), p.config)
 }
