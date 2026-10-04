@@ -540,8 +540,9 @@ func (c *ConnectionAPIClient) applyNaiveClashFallback(ctx context.Context, respo
 			down = 0
 		}
 		previous, exists := c.naiveFallbackSnapshots[id]
-		fallbackUp := snapshotTrafficDelta(up, previous.uplink, exists, false)
-		fallbackDown := snapshotTrafficDelta(down, previous.downlink, exists, false)
+		countInitial := c.naiveFallbackAt > 0 && event.Connection.CreatedAt >= c.naiveFallbackAt
+		fallbackUp := snapshotTrafficDelta(up, previous.uplink, exists, countInitial)
+		fallbackDown := snapshotTrafficDelta(down, previous.downlink, exists, countInitial)
 		if event.UplinkDelta == 0 {
 			event.UplinkDelta = fallbackUp
 		}
@@ -596,6 +597,9 @@ func (c *ConnectionAPIClient) SnapshotTrafficEvents(ctx context.Context) (connec
 	}
 	c.normalizeTrafficSnapshot(&response, snapshotAt)
 	c.applyNaiveClashFallback(ctx, &response)
+	c.trafficMu.Lock()
+	c.naiveFallbackAt = snapshotAt
+	c.trafficMu.Unlock()
 	return response, nil
 }
 
@@ -605,6 +609,7 @@ type ConnectionAPIClient struct {
 	trafficSnapshots       map[string]connectionTrafficSnapshot
 	naiveFallbackSnapshots map[string]connectionTrafficSnapshot
 	trafficSnapshotAt      int64
+	naiveFallbackAt        int64
 }
 
 func NewConnectionAPIClient() *ConnectionAPIClient { return &ConnectionAPIClient{} }
@@ -704,4 +709,15 @@ func (c *ConnectionAPIClient) Snapshot(ctx context.Context) ([]*singBoxConnectio
 		}
 	}
 	return connections, nil
+}
+
+// ResetTrafficBaseline distinguishes a newly started core from a panel that
+// reconnects to an existing core whose totals may already be in the database.
+func (c *ConnectionAPIClient) ResetTrafficBaseline(startedAt int64) {
+	c.trafficMu.Lock()
+	defer c.trafficMu.Unlock()
+	c.trafficSnapshots = nil
+	c.naiveFallbackSnapshots = nil
+	c.trafficSnapshotAt = startedAt
+	c.naiveFallbackAt = startedAt
 }

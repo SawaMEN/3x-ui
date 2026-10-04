@@ -826,6 +826,10 @@ func (s *SingBoxService) Restart(ctx context.Context) error {
 	if err := singBoxProcess.Restart(ctx); err != nil {
 		return err
 	}
+	singBoxTrafficMu.Lock()
+	singBoxTrafficAPI.Close()
+	singBoxTrafficAPI.ResetTrafficBaseline(singBoxProcess.GetStartTime().UnixMilli())
+	singBoxTrafficMu.Unlock()
 	markSingBoxStarted()
 	commitManagedYouTube(CoreTypeSingBox)
 	return nil
@@ -849,6 +853,10 @@ func (s *SingBoxService) Start(ctx context.Context) error {
 	if err := singBoxProcess.Start(ctx); err != nil {
 		return err
 	}
+	singBoxTrafficMu.Lock()
+	singBoxTrafficAPI.Close()
+	singBoxTrafficAPI.ResetTrafficBaseline(singBoxProcess.GetStartTime().UnixMilli())
+	singBoxTrafficMu.Unlock()
 	markSingBoxStarted()
 	commitManagedYouTube(CoreTypeSingBox)
 	return nil
@@ -1116,41 +1124,53 @@ func (s *SingBoxService) installVersion(ctx context.Context, installer func(cont
 	singBoxInstallMu.Lock()
 	defer singBoxInstallMu.Unlock()
 
+	restore, cleanup, err := singbox.SnapshotInstallation()
+	if err != nil {
+		return "", fmt.Errorf("backup sing-box installation: %w", err)
+	}
+	defer cleanup()
 	wasRunning := s.IsRunning()
 	if wasRunning {
 		if err := s.Stop(ctx); err != nil {
 			return "", fmt.Errorf("stop sing-box before update: %w", err)
 		}
 	}
-
+	rollback := func(cause error) (string, error) {
+		// The update request may have been cancelled; recovery must still work.
+		recoveryCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := singBoxProcess.Stop(); err != nil {
+			return "", fmt.Errorf("%w; stop failed update: %w", cause, err)
+		}
+		if err := restore(); err != nil {
+			return "", fmt.Errorf("%w; restore previous installation: %w", cause, err)
+		}
+		if wasRunning {
+			if _, err := singBoxProcess.Version(recoveryCtx); err != nil {
+				return "", fmt.Errorf("%w; read restored version: %w", cause, err)
+			}
+			// Run the restored applied config, not a freshly generated candidate.
+			if err := singBoxProcess.Start(recoveryCtx); err != nil {
+				return "", fmt.Errorf("%w; restart restored installation: %w", cause, err)
+			}
+			markSingBoxStarted()
+		}
+		singBoxProcess.SetError(cause)
+		return "", cause
+	}
 	installed, err := installer(ctx)
 	if err != nil {
-		if wasRunning {
-			if restartErr := s.Start(ctx); restartErr != nil {
-				return "", fmt.Errorf("install sing-box: %w; restore previous process failed: %w", err, restartErr)
-			}
-		}
-		return "", err
+		return rollback(fmt.Errorf("install sing-box: %w", err))
 	}
-
-	// Refresh the process-level version cache so the dashboard immediately
-	// reports the newly installed binary even when the core was not running.
 	currentVersion, err := s.Version(ctx)
 	if err != nil {
-		if wasRunning {
-			if restartErr := s.Start(ctx); restartErr != nil {
-				return "", fmt.Errorf("verify installed sing-box %q: %w; restart failed: %w", installed, err, restartErr)
-			}
-		}
-		return "", fmt.Errorf("verify installed sing-box %q: %w", installed, err)
+		return rollback(fmt.Errorf("verify installed sing-box %q: %w", installed, err))
 	}
-
 	if wasRunning {
 		if err := s.Start(ctx); err != nil {
-			return "", fmt.Errorf("start updated sing-box %s: %w", currentVersion, err)
+			return rollback(fmt.Errorf("start updated sing-box %s: %w", currentVersion, err))
 		}
 	}
-
 	return currentVersion, nil
 }
 
