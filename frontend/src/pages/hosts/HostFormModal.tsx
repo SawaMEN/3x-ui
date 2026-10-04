@@ -506,7 +506,12 @@ export default function HostFormModal({
                         )}
                       />
                     </FormField>
-                    <div role="note">{t('pages.hosts.hints.mihomoX25519')}</div>
+                    <Form.Item
+                      label={t('pages.hosts.fields.mihomoX25519')}
+                      extra={t('pages.hosts.hints.mihomoX25519')}
+                    >
+                      <Switch checked disabled />
+                    </Form.Item>
                     <FormField
                       name="shuffleHost"
                       label={t('pages.hosts.fields.shuffleHost')}

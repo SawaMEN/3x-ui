@@ -1,10 +1,13 @@
 package sub
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	wgutil "github.com/SawaMEN/3x-ui/v3/internal/util/wireguard"
 )
 
 func TestAuditHostStreamIsolation(t *testing.T) {
@@ -78,5 +81,52 @@ func TestAuditHostShuffleKeepsOtherGroupsAndCache(t *testing.T) {
 	}
 	if !changed {
 		t.Fatal("opted-in group never shuffled")
+	}
+}
+
+func TestAuditNativeExcludedProtocolDoesNotTriggerFallback(t *testing.T) {
+	seedSubDB(t)
+	ib := seedSubInbound(t, "audit-native", "excluded", 4443, 1, wsTLSStream)
+	serverKey, _, err := wgutil.GenerateWireguardKeypair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	clientKey, _, err := wgutil.GenerateWireguardKeypair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings := fmt.Sprintf(`{"secretKey":%q,"clients":[{"email":"excluded@e","subId":"audit-native","enable":true,"privateKey":%q,"allowedIPs":["10.0.0.2/32"]}]}`, serverKey, clientKey)
+	if err := database.GetDB().Model(ib).Updates(map[string]any{"protocol": model.WireGuard, "settings": settings}).Error; err != nil {
+		t.Fatal(err)
+	}
+	seedHost(t, &model.Host{InboundId: ib.Id, Address: "excluded.example", ExcludeFromSubTypes: []string{"json"}})
+	out, _, err := NewSubJsonService("", "", "", "", NewSubService("")).GetSingBoxJson("audit-native", "request.example", false)
+	if err != nil || out != "" {
+		t.Fatalf("excluded WireGuard must not cause fallback: %q, %v", out, err)
+	}
+}
+
+func TestAuditClashExcludedUnsupportedProtocol(t *testing.T) {
+	seedSubDB(t)
+	seedSubInbound(t, "audit-clash", "included", 4443, 1, wsTLSStream)
+	ib := seedSubInbound(t, "audit-clash", "excluded", 4444, 2, wsTLSStream)
+	if err := database.GetDB().Model(ib).Update("protocol", model.TrustTunnel).Error; err != nil {
+		t.Fatal(err)
+	}
+	seedHost(t, &model.Host{InboundId: ib.Id, Address: "excluded.example", ExcludeFromSubTypes: []string{"clash"}})
+	out, _, err := NewSubClashService(false, "", NewSubService("")).GetClash("audit-clash", "request.example")
+	if err != nil || !strings.Contains(out, "4443") || strings.Contains(out, "excluded.example") {
+		t.Fatalf("excluded unsupported inbound affected Clash: %s, %v", out, err)
+	}
+}
+
+func TestAuditNativeNaiveBlankSNI(t *testing.T) {
+	inbound := &model.Inbound{Listen: "origin.example", Port: 443, Protocol: model.NaiveProxy,
+		Settings: `{"network":"tcp","tls":{"serverName":"inherited.example"}}`}
+	out := NewSubJsonService("", "", "", "", nil).genNativeNaive(&SubService{address: "sub.example"}, inbound,
+		model.Client{Email: "client", Password: "secret"}, map[string]any{"dest": "edge.example", "keepSniBlank": true})
+	tls, _ := out["tls"].(map[string]any)
+	if _, exists := tls["server_name"]; exists {
+		t.Fatalf("blank SNI inherited a hostname: %#v", tls)
 	}
 }

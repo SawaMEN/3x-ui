@@ -14,9 +14,10 @@ import (
 // hostEndpoints loads an inbound's enabled hosts for the given subscription
 // format ("raw"|"json"|"clash") and returns them as externalProxy-shaped maps so
 // the existing per-format renderers can fan out one link/proxy per host. Returns
-// nil when the inbound has no applicable host — the caller then uses the legacy
+// nil when the inbound has no enabled hosts — the caller then uses the legacy
 // inbound/externalProxy path, preserving byte-identical output for zero-host
-// inbounds.
+// inbounds. A non-nil empty slice means every enabled host excludes this format;
+// the caller must omit this inbound rather than expose its default endpoint.
 func (s *SubService) hostEndpoints(inbound *model.Inbound, format string) []map[string]any {
 	hosts, primed := s.hostsByInbound[inbound.Id]
 	if !primed {
@@ -59,6 +60,21 @@ func shuffledHosts(hosts []*model.Host) []*model.Host {
 		}
 	}
 	return out
+}
+
+// Excluded hosts must also be left out of protocol-support preflight checks.
+// Otherwise an intentionally omitted protocol makes auto-detection fall back
+// to another format before the renderer gets a chance to apply the exclusion.
+func (s *SubService) partitionHostFormat(inbounds []*model.Inbound, format string) (included, excluded []*model.Inbound) {
+	for _, inbound := range inbounds {
+		endpoints := s.hostEndpoints(inbound, format)
+		if endpoints != nil && len(endpoints) == 0 {
+			excluded = append(excluded, inbound)
+		} else {
+			included = append(included, inbound)
+		}
+	}
+	return
 }
 
 func (s *SubService) primeHosts(inbounds []*model.Inbound) error {
