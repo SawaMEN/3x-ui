@@ -22,6 +22,10 @@ func buildSeparatedSingBoxSubscription(template map[string]any, proxies []map[st
 	if template != nil {
 		if rawDNS, ok := template["dns"].(map[string]any); ok {
 			var err error
+			rawRouting, _ := template["routing"].(map[string]any)
+			if err := singbox.ValidateXrayDNSRouting(rawDNS, rawRouting); err != nil {
+				return "", fmt.Errorf("%w: translate DNS routing: %w", errSubscriptionFormatUnsupported, err)
+			}
 			translatedDNS, err = singbox.TranslateXrayDNS(rawDNS)
 			if err != nil {
 				return "", fmt.Errorf("%w: translate DNS: %w", errSubscriptionFormatUnsupported, err)

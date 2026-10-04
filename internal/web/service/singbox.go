@@ -166,6 +166,10 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 			manual, _ := xrayCfg["outbounds"].([]any)
 			xrayCfg["outbounds"] = append(append(prepend, manual...), tail...)
 			if rawDNS, ok := xrayCfg["dns"].(map[string]any); ok && len(rawDNS) > 0 {
+				rawRouting, _ := xrayCfg["routing"].(map[string]any)
+				if err := singbox.ValidateXrayDNSRouting(rawDNS, rawRouting); err != nil {
+					return nil, fmt.Errorf("sing-box DNS routing: %w", err)
+				}
 				dns, err := singbox.TranslateXrayDNS(rawDNS)
 				if err != nil {
 					return nil, fmt.Errorf("sing-box DNS template: %w", err)

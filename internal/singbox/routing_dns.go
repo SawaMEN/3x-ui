@@ -484,7 +484,7 @@ func translateCompatDomains(dst map[string]any, domains []string) error {
 // internal Go packages.
 func TranslateXrayDNS(raw map[string]any) (map[string]any, error) {
 	out := map[string]any{}
-	for _, field := range []string{"tag", "disableFallback", "disableFallbackIfMatch", "enableParallelQuery", "serveStale", "serveExpiredTTL"} {
+	for _, field := range []string{"disableFallback", "disableFallbackIfMatch", "enableParallelQuery", "serveStale", "serveExpiredTTL"} {
 		if isMeaningfulCompatValue(raw[field]) {
 			return nil, fmt.Errorf("DNS %s cannot be translated to sing-box", field)
 		}
@@ -522,7 +522,7 @@ func TranslateXrayDNS(raw map[string]any) (map[string]any, error) {
 		case map[string]any:
 			extra = value
 			address = strings.TrimSpace(compatString(value["address"]))
-			for _, field := range []string{"tag", "domains", "expectedIPs", "expectIPs", "unexpectedIPs", "clientIp", "skipFallback", "finalQuery", "serveStale", "serveExpiredTTL", "disableCache"} {
+			for _, field := range []string{"domains", "expectedIPs", "expectIPs", "unexpectedIPs", "clientIp", "skipFallback", "finalQuery", "serveStale", "serveExpiredTTL", "disableCache"} {
 				if isMeaningfulCompatValue(value[field]) {
 					return nil, fmt.Errorf("DNS server %d %s cannot be translated to sing-box", i, field)
 				}
@@ -787,4 +787,31 @@ func compatDNSPort(value string, fallback int) (int, error) {
 		return 0, fmt.Errorf("invalid DNS port %q", value)
 	}
 	return int(port), nil
+}
+
+// ValidateXrayDNSRouting rejects virtual DNS inbound policies that sing-box's
+// DNS clients cannot reproduce. An unused DNS tag is harmless metadata.
+func ValidateXrayDNSRouting(dns, routing map[string]any) error {
+	tags := map[string]bool{}
+	if tag := rawString(dns, "tag"); tag != "" {
+		tags[tag] = true
+	}
+	servers, _ := dns["servers"].([]any)
+	for _, server := range servers {
+		if server, ok := server.(map[string]any); ok {
+			if tag := rawString(server, "tag"); tag != "" {
+				tags[tag] = true
+			}
+		}
+	}
+	rules, _ := routing["rules"].([]any)
+	for i, item := range rules {
+		rule, _ := item.(map[string]any)
+		for _, tag := range compatStringSlice(rule["inboundTag"]) {
+			if tags[tag] {
+				return fmt.Errorf("DNS virtual inbound tag %q used by routing rule %d cannot be translated to sing-box", tag, i+1)
+			}
+		}
+	}
+	return nil
 }

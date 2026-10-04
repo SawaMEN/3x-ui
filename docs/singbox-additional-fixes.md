@@ -66,7 +66,7 @@
 | 146 | Периодический refresh перезапускает ядро даже без изменений | Периодический refresh сообщает об изменении конфигурации только при изменении outbound snapshot. |
 | 147 | Adoption не распознаёт разрешённые global CLI flags перед run | Adoption распознаёт global flags до/после run; неоднозначные конфигурации отвергаются. |
 | 148 | Bare IPv6 DNS address разбирается как host:port | Bare IPv6 DNS адрес оборачивается в скобки до разбора URL/порта. |
-| 149 | Xray DNS tag игнорируется, политика egress меняется | Xray DNS virtual inbound tag явно отклоняется, поскольку его egress-политика не воспроизводится. |
+| 149 | Xray DNS tag игнорируется, политика egress меняется | Правила маршрутизации по Xray DNS virtual inbound tag явно отклоняются, поскольку их egress-политика не воспроизводится. Неиспользуемые теги допускаются. |
 | 150 | Общий TLS translator включает несовместимый uTLS для QUIC | TLS compatibility не включает TCP uTLS для QUIC; явно заданный native QUIC uTLS отвергается. |
 | 151 | Go импорт TLS ссылок не читает allowInsecure/insecure | Go TLS URL parser сохраняет allowInsecure/insecure, включая false. |
 
