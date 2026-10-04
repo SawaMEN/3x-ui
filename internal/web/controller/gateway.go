@@ -229,6 +229,12 @@ func (a *GatewayController) enable(c *gin.Context) {
 	}
 
 	wasRunning := a.xrayService.IsXrayRunning()
+	if !wasRunning {
+		payload, _ := a.statusPayload()
+		jsonObj(c, payload, fmt.Errorf("cannot enable Gateway Mode while %s is stopped; start the selected core first", coreType))
+		return
+	}
+
 	changed := false
 	currentEnabledByRequest := false
 	previousCoreDisabled := false
@@ -281,9 +287,7 @@ func (a *GatewayController) enable(c *gin.Context) {
 		return
 	}
 
-	// A manually stopped core must stay stopped. Repeated enable requests are
-	// idempotent and do not restart an unchanged core process.
-	if changed && wasRunning {
+	if changed {
 		if restartErr := a.xrayService.RestartXray(false); restartErr != nil {
 			rollbackErr := rollbackGatewayChange(coreType, otherCore, currentEnabledByRequest, previousCoreDisabled)
 			if rollbackErr != nil {
@@ -315,7 +319,7 @@ func (a *GatewayController) enable(c *gin.Context) {
 	if err := a.networkService.Enable(c.Request.Context(), networkConfig); err != nil {
 		if changed {
 			rollbackErr := rollbackGatewayChange(coreType, otherCore, currentEnabledByRequest, previousCoreDisabled)
-			if rollbackErr == nil && wasRunning {
+			if rollbackErr == nil {
 				rollbackErr = a.xrayService.RestartXray(false)
 			}
 			if rollbackErr != nil {
