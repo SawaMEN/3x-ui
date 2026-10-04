@@ -18,6 +18,7 @@ import (
 type GatewayController struct {
 	settingService service.SettingService
 	xrayService    service.XrayService
+	singBoxService service.SingBoxService
 	networkService service.GatewayNetworkService
 	operationMu    sync.Mutex
 }
@@ -73,6 +74,31 @@ func otherGatewayCore(coreType string) string {
 		return service.CoreTypeXray
 	}
 	return service.CoreTypeSingBox
+}
+
+func (a *GatewayController) coreRunning(coreType string) bool {
+	switch coreType {
+	case service.CoreTypeXray:
+		return a.xrayService.IsXrayRunning()
+	case service.CoreTypeSingBox:
+		return a.singBoxService.IsRunning()
+	default:
+		return false
+	}
+}
+
+func (a *GatewayController) restartCore(ctx context.Context, coreType string) error {
+	switch coreType {
+	case service.CoreTypeXray:
+		return a.xrayService.RestartXray(false)
+	case service.CoreTypeSingBox:
+		if !a.singBoxService.Installed() {
+			return fmt.Errorf("sing-box is selected but not installed")
+		}
+		return a.singBoxService.Restart(ctx)
+	default:
+		return fmt.Errorf("unsupported core type %q", coreType)
+	}
 }
 
 // rollbackGatewayChange restores the two template states after a failed core
@@ -161,6 +187,12 @@ func gatewayStatusForCore(coreType string) (gatewayStatus, error) {
 
 func (a *GatewayController) statusPayload() (gin.H, error) {
 	coreType, coreErr := a.settingService.GetCoreType()
+	xrayRunning := a.xrayService.IsXrayRunning()
+	singBoxRunning := a.singBoxService.IsRunning()
+	coreRunning := false
+	if coreErr == nil {
+		coreRunning = a.coreRunning(coreType)
+	}
 	payload := gin.H{
 		"enabled":         false,
 		"configured":      false,
@@ -170,7 +202,9 @@ func (a *GatewayController) statusPayload() (gin.H, error) {
 		"gatewayCoreType": "",
 		"coreMismatch":    false,
 		"conflict":        false,
-		"xrayRunning":     a.xrayService.IsXrayRunning(),
+		"coreRunning":     coreRunning,
+		"xrayRunning":     xrayRunning,
+		"singBoxRunning":  singBoxRunning,
 		"port":            gateway.InboundPort(),
 		"network":         a.networkService.Status(context.Background()),
 	}
@@ -228,7 +262,7 @@ func (a *GatewayController) enable(c *gin.Context) {
 		return
 	}
 
-	wasRunning := a.xrayService.IsXrayRunning()
+	wasRunning := a.coreRunning(coreType)
 	if !wasRunning {
 		payload, _ := a.statusPayload()
 		jsonObj(c, payload, fmt.Errorf("cannot enable Gateway Mode while %s is stopped; start the selected core first", coreType))
@@ -288,7 +322,7 @@ func (a *GatewayController) enable(c *gin.Context) {
 	}
 
 	if changed {
-		if restartErr := a.xrayService.RestartXray(false); restartErr != nil {
+		if restartErr := a.restartCore(c.Request.Context(), coreType); restartErr != nil {
 			rollbackErr := rollbackGatewayChange(coreType, otherCore, currentEnabledByRequest, previousCoreDisabled)
 			if rollbackErr != nil {
 				payload, _ := a.statusPayload()
@@ -297,9 +331,9 @@ func (a *GatewayController) enable(c *gin.Context) {
 			}
 
 			// The process was running before this request. Once the templates are
-			// restored, reconcile the runtime again so a failed/partial hot reload
-			// cannot leave it serving the attempted Gateway configuration.
-			if restoreErr := a.xrayService.RestartXray(false); restoreErr != nil {
+			// restored, reconcile the same selected runtime again so a failed or
+			// partial restart cannot leave it serving the attempted configuration.
+			if restoreErr := a.restartCore(c.Request.Context(), coreType); restoreErr != nil {
 				payload, _ := a.statusPayload()
 				jsonObj(c, payload, fmt.Errorf("apply %s Gateway Mode restart failed: %w; config rollback succeeded but runtime restore failed: %w", coreType, restartErr, restoreErr))
 				return
@@ -320,7 +354,7 @@ func (a *GatewayController) enable(c *gin.Context) {
 		if changed {
 			rollbackErr := rollbackGatewayChange(coreType, otherCore, currentEnabledByRequest, previousCoreDisabled)
 			if rollbackErr == nil {
-				rollbackErr = a.xrayService.RestartXray(false)
+				rollbackErr = a.restartCore(c.Request.Context(), coreType)
 			}
 			if rollbackErr != nil {
 				err = fmt.Errorf("configure Linux Gateway networking: %w; core rollback failed: %v", err, rollbackErr)
@@ -348,7 +382,7 @@ func (a *GatewayController) disable(c *gin.Context) {
 		return
 	}
 
-	wasRunning := a.xrayService.IsXrayRunning()
+	wasRunning := a.coreRunning(coreType)
 	disabledCores := make([]string, 0, 2)
 	for _, candidate := range []string{coreType, otherGatewayCore(coreType)} {
 		state, stateErr := gatewayStateForCore(candidate)
@@ -379,7 +413,7 @@ func (a *GatewayController) disable(c *gin.Context) {
 	}
 
 	if len(disabledCores) > 0 && wasRunning {
-		if restartErr := a.xrayService.RestartXray(false); restartErr != nil {
+		if restartErr := a.restartCore(c.Request.Context(), coreType); restartErr != nil {
 			rollbackErr := restoreGatewayCores(disabledCores)
 			if rollbackErr != nil {
 				payload, _ := a.statusPayload()
@@ -387,7 +421,7 @@ func (a *GatewayController) disable(c *gin.Context) {
 				return
 			}
 
-			if restoreErr := a.xrayService.RestartXray(false); restoreErr != nil {
+			if restoreErr := a.restartCore(c.Request.Context(), coreType); restoreErr != nil {
 				payload, _ := a.statusPayload()
 				jsonObj(c, payload, fmt.Errorf("disable Gateway Mode restart failed: %w; config rollback succeeded but runtime restore failed: %w", restartErr, restoreErr))
 				return
