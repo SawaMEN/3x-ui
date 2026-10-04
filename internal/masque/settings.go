@@ -49,8 +49,8 @@ func Parse(data string) (Settings, error) {
 	if s.Path == "" {
 		s.Path = DefaultPath
 	}
-	if !strings.HasPrefix(s.Path, "/") || strings.ContainsAny(s.Path, "\r\n?#") {
-		return s, fmt.Errorf("MASQUE path must be an absolute URI template path")
+	if err := ValidatePath(s.Path); err != nil {
+		return s, err
 	}
 	if len(s.Address) == 0 {
 		s.Address = []string{"172.31.255.1/24", "fd7a:115c:a1e0::1/64"}
@@ -79,8 +79,22 @@ func Parse(data string) (Settings, error) {
 		return s, fmt.Errorf("MASQUE MTU must be 1280..65535")
 	}
 	s.TLS.Enabled = true
-	if (strings.TrimSpace(s.TLS.CertificatePath) == "") != (strings.TrimSpace(s.TLS.KeyPath) == "") {
+	s.TLS.CertificatePath = strings.TrimSpace(s.TLS.CertificatePath)
+	s.TLS.KeyPath = strings.TrimSpace(s.TLS.KeyPath)
+	s.TLS.ServerName = strings.TrimSpace(s.TLS.ServerName)
+	if (s.TLS.CertificatePath == "") != (s.TLS.KeyPath == "") {
 		return s, fmt.Errorf("MASQUE requires both TLS certificate and key, or neither")
+	}
+	usernames := map[string]bool{}
+	for _, client := range s.Clients {
+		if err := ValidateUsername(client.Email); err != nil {
+			return s, err
+		}
+		key := strings.ToLower(client.Email)
+		if usernames[key] {
+			return s, fmt.Errorf("MASQUE clients need unique usernames")
+		}
+		usernames[key] = true
 	}
 	return s, nil
 }
@@ -99,13 +113,8 @@ func Prepare(ib *model.Inbound, previous string) error {
 	for _, c := range old.Clients {
 		passwords[c.Email] = c.Password
 	}
-	seen := map[string]bool{}
 	for i := range s.Clients {
 		c := &s.Clients[i]
-		if c.Email == "" || seen[c.Email] {
-			return fmt.Errorf("MASQUE clients need unique nonempty usernames")
-		}
-		seen[c.Email] = true
 		if c.Password == "" {
 			c.Password = passwords[c.Email]
 		}

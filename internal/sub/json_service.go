@@ -518,6 +518,12 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 			injectExternalProxy(inbound, hostEps)
 			delete(subReq.streamSettingsByInbound, inbound.Id)
 		}
+		var masqueSettings masque.Settings
+		var masqueSettingsErr error
+		if inbound.Protocol == model.MASQUE {
+			// Parse the listener once even when a subscription shares many users.
+			masqueSettings, masqueSettingsErr = masque.Parse(inbound.Settings)
+		}
 		for _, client := range clients {
 			seenEmails[client.Email] = struct{}{}
 			if client.Enable {
@@ -687,25 +693,17 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 				continue
 			}
 			if inbound.Protocol == model.MASQUE {
-				settings, err := masque.Parse(inbound.Settings)
-				if err != nil || client.Email == "" || client.Password == "" {
+				if masqueSettingsErr != nil || client.Email == "" || client.Password == "" {
 					formatUnsupported = true
 					continue
 				}
 				generated := 0
 				for _, endpoint := range subReq.shareEndpointsForInbound(inbound) {
-					if endpoint.ForceTls == "none" {
+					native := genNativeMASQUE(masqueSettings, client, endpoint)
+					if native == nil {
 						continue
 					}
-					serverName := settings.TLS.ServerName
-					if sni, ok := externalProxySNI(endpoint.ep); ok {
-						serverName = sni
-					}
-					if serverName == "" {
-						serverName = endpoint.Address
-					}
-					version := settings.Version[0]
-					native := map[string]any{"type": "masque-client", "tag": fmt.Sprintf("MASQUE · %s-%d", client.Email, len(proxies)+1), "server": endpoint.Address, "server_port": endpoint.Port, "username": client.Email, "password": client.Password, "path": settings.Path, "version": version, "mtu": settings.MTU, "system": false, "tls": map[string]any{"enabled": true, "server_name": serverName}}
+					native["tag"] = fmt.Sprintf("MASQUE · %s-%d", client.Email, len(proxies)+1)
 					proxies = append(proxies, nativeOutbound{out: native})
 					generated++
 				}
@@ -1677,6 +1675,35 @@ func (s *SubJsonService) wrapNativeShadowTLS(inbound *model.Inbound, inner map[s
 		"server_port": port, "version": 3, "password": password, "tls": tls,
 	}
 	return true
+}
+
+// genNativeMASQUE keeps the advertised client options consistent with the server
+// while honoring the same TLS host overrides as other native protocols.
+func genNativeMASQUE(settings masque.Settings, client model.Client, endpoint ShareEndpoint) map[string]any {
+	server := strings.TrimSpace(endpoint.Address)
+	if strings.EqualFold(strings.TrimSpace(endpoint.ForceTls), "none") || server == "" || endpoint.Port < 1 || endpoint.Port > 65535 || client.Password == "" || masque.ValidateUsername(client.Email) != nil {
+		return nil
+	}
+	serverName := settings.TLS.ServerName
+	if sni, overridden := externalProxySNI(endpoint.ep); overridden {
+		serverName = strings.TrimSpace(sni)
+	} else if serverName == "" {
+		serverName = server
+	}
+	// Selection order in a multiselect is not a transport preference. Prefer
+	// the highest enabled version and let sing-box fall back when necessary.
+	version := 0
+	for _, candidate := range settings.Version {
+		if candidate > version {
+			version = candidate
+		}
+	}
+	tls := map[string]any{"enabled": true}
+	if serverName != "" {
+		tls["server_name"] = serverName
+	}
+	applyNativeTLSHostOptions(tls, endpoint.ep)
+	return map[string]any{"type": "masque-client", "server": server, "server_port": endpoint.Port, "username": client.Email, "password": client.Password, "path": settings.Path, "version": version, "mtu": settings.MTU, "system": false, "tls": tls}
 }
 
 func (s *SubJsonService) genNativeTLSLikeEndpoint(subReq *SubService, inbound *model.Inbound, client model.Client, endpoint ShareEndpoint) map[string]any {

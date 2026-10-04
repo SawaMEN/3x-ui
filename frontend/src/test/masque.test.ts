@@ -22,3 +22,28 @@ describe('MASQUE inbound', () => {
     expect(canEnableSniffing({ protocol: 'masque' })).toBe(false);
   });
 });
+
+describe('MASQUE validation', () => {
+  it.each(['/tunnel{?target,ipproto}', '/tunnel?address={target}&protocol={ipproto}'])(
+    'accepts query template %s',
+    (path) => {
+      expect(MasqueInboundSettingsSchema.parse({ path }).path).toBe(path);
+    },
+  );
+  it.each(['/bad path', '/{target', '/{}', '/{unknown}', '/{+target}', '/%zz', '/tunnel#fragment'])(
+    'rejects invalid template %s',
+    (path) => {
+      expect(MasqueInboundSettingsSchema.safeParse({ path }).success).toBe(false);
+    },
+  );
+  it('rejects duplicate versions and invalid or duplicate usernames', () => {
+    expect(MasqueInboundSettingsSchema.safeParse({ version: [3, 3] }).success).toBe(false);
+    expect(
+      MasqueInboundSettingsSchema.safeParse({ clients: [{ email: 'alice:bob' }] }).success,
+    ).toBe(false);
+    expect(
+      MasqueInboundSettingsSchema.safeParse({ clients: [{ email: 'alice' }, { email: 'ALICE' }] })
+        .success,
+    ).toBe(false);
+  });
+});

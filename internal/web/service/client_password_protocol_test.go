@@ -1,6 +1,7 @@
 package service
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
@@ -53,5 +54,16 @@ func TestAttachPasswordProtocolWithoutUUID(t *testing.T) {
 	}
 	if emails := settingsClientEmails(t, target.Id); len(emails) != 1 || emails[0] != rec.Email {
 		t.Fatalf("ShadowTLS clients = %v", emails)
+	}
+}
+
+func TestMASQUEClientRejectsBasicSeparator(t *testing.T) {
+	setupBulkDB(t)
+	inbound := mkInbound(t, 34004, model.MASQUE, `{"clients":[]}`)
+	if _, err := (&ClientService{}).Create(&InboundService{}, &ClientCreatePayload{Client: model.Client{Email: "alice:bob", SubID: "masque-sub", Password: "secret", Enable: true}, InboundIds: []int{inbound.Id}}); err == nil || !strings.Contains(err.Error(), "HTTP Basic username") {
+		t.Fatalf("expected Basic Auth username rejection, got %v", err)
+	}
+	if emails := settingsClientEmails(t, inbound.Id); len(emails) != 0 {
+		t.Fatalf("failed creation changed inbound: %v", emails)
 	}
 }
