@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -86,7 +87,29 @@ func NewClashStatsClient() *ClashStatsClient {
 	}
 }
 
+var runtimeConfigReader struct {
+	sync.RWMutex
+	read func() []byte
+}
+
+// SetRuntimeConfigReader supplies the applied config of the panel-managed process.
+func SetRuntimeConfigReader(read func() []byte) {
+	runtimeConfigReader.Lock()
+	defer runtimeConfigReader.Unlock()
+	runtimeConfigReader.read = read
+}
+
 func clashAPIInfoFromConfig() (string, string, error) {
+	runtimeConfigReader.RLock()
+	read := runtimeConfigReader.read
+	runtimeConfigReader.RUnlock()
+	if read != nil {
+		data := read()
+		if len(data) == 0 {
+			return "", "", fmt.Errorf("sing-box has no applied runtime config")
+		}
+		return clashAPIInfo(data)
+	}
 	data, err := os.ReadFile(GetConfigPath())
 	if err != nil {
 		return "", "", fmt.Errorf("read sing-box config: %w", err)

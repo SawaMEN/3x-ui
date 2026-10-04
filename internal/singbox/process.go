@@ -1,8 +1,8 @@
 package singbox
 
 import (
-	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -239,7 +239,7 @@ func (p *Process) Validate(ctx context.Context) error {
 		return err
 	}
 	// Snell requires 1.14 in both directions. The binary check remains authoritative.
-	if data, err := os.ReadFile(cfg); err == nil && bytes.Contains(data, []byte(`"snell"`)) {
+	if data, err := os.ReadFile(cfg); err == nil && configUsesProtocol(data, "snell") {
 		if _, err := p.Version(ctx); err != nil {
 			return err
 		}
@@ -375,6 +375,13 @@ func (p *Process) stopLocked() error {
 	p.mu.RLock()
 	cmd, done, externalPID := p.cmd, p.done, p.externalPID
 	p.mu.RUnlock()
+	if done != nil {
+		select {
+		case <-done:
+			cmd = nil
+		default:
+		}
+	}
 	if cmd == nil || cmd.Process == nil {
 		binary := GetBinaryPath()
 		if externalPID > 0 && !processMatchesConfig(externalPID, binary, p.config) {
@@ -595,4 +602,29 @@ func (p *Process) managedPID() int {
 		return 0
 	}
 	return findRunningPID(GetBinaryPath(), p.config)
+}
+
+func configUsesProtocol(data []byte, protocol string) bool {
+	var cfg struct {
+		Inbounds []struct {
+			Type string `json:"type"`
+		} `json:"inbounds"`
+		Outbounds []struct {
+			Type string `json:"type"`
+		} `json:"outbounds"`
+	}
+	if json.Unmarshal(data, &cfg) != nil {
+		return false
+	}
+	for _, inbound := range cfg.Inbounds {
+		if inbound.Type == protocol {
+			return true
+		}
+	}
+	for _, outbound := range cfg.Outbounds {
+		if outbound.Type == protocol {
+			return true
+		}
+	}
+	return false
 }

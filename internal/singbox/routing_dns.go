@@ -484,7 +484,7 @@ func translateCompatDomains(dst map[string]any, domains []string) error {
 // internal Go packages.
 func TranslateXrayDNS(raw map[string]any) (map[string]any, error) {
 	out := map[string]any{}
-	for _, field := range []string{"disableFallback", "disableFallbackIfMatch", "enableParallelQuery", "serveStale", "serveExpiredTTL"} {
+	for _, field := range []string{"tag", "disableFallback", "disableFallbackIfMatch", "enableParallelQuery", "serveStale", "serveExpiredTTL"} {
 		if isMeaningfulCompatValue(raw[field]) {
 			return nil, fmt.Errorf("DNS %s cannot be translated to sing-box", field)
 		}
@@ -522,7 +522,7 @@ func TranslateXrayDNS(raw map[string]any) (map[string]any, error) {
 		case map[string]any:
 			extra = value
 			address = strings.TrimSpace(compatString(value["address"]))
-			for _, field := range []string{"domains", "expectedIPs", "expectIPs", "unexpectedIPs", "clientIp", "skipFallback", "finalQuery", "serveStale", "serveExpiredTTL", "disableCache"} {
+			for _, field := range []string{"tag", "domains", "expectedIPs", "expectIPs", "unexpectedIPs", "clientIp", "skipFallback", "finalQuery", "serveStale", "serveExpiredTTL", "disableCache"} {
 				if isMeaningfulCompatValue(value[field]) {
 					return nil, fmt.Errorf("DNS server %d %s cannot be translated to sing-box", i, field)
 				}
@@ -554,6 +554,9 @@ func TranslateXrayDNS(raw map[string]any) (map[string]any, error) {
 		timeoutMillis = serverTimeout
 		if address == "" {
 			return nil, fmt.Errorf("DNS server %d has an empty address", i)
+		}
+		if net.ParseIP(address) != nil && strings.Contains(address, ":") {
+			address = "[" + address + "]"
 		}
 		server := map[string]any{"tag": fmt.Sprintf("dns-%d", i+1)}
 		if strings.EqualFold(address, "localhost") || strings.EqualFold(address, "local") {
@@ -725,7 +728,26 @@ func isMeaningfulCompatValue(value any) bool {
 	case string:
 		return strings.TrimSpace(v) != ""
 	case []any:
-		return len(v) > 0
+		for _, item := range v {
+			if isMeaningfulCompatValue(item) {
+				return true
+			}
+		}
+		return false
+	case []string:
+		for _, item := range v {
+			if strings.TrimSpace(item) != "" {
+				return true
+			}
+		}
+		return false
+	case map[string]any:
+		for _, item := range v {
+			if isMeaningfulCompatValue(item) {
+				return true
+			}
+		}
+		return false
 	default:
 		return true
 	}

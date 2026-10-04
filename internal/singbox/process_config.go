@@ -17,29 +17,42 @@ func processMatchesConfig(pid int, binary, config string) bool {
 		return false
 	}
 	args := strings.Split(strings.TrimSuffix(string(command), "\x00"), "\x00")
-	if len(args) < 3 || args[1] != "run" {
+	if len(args) < 3 {
 		return false
 	}
 	var configured string
-	for i := 2; i < len(args); i++ {
+	run := false
+	for i := 1; i < len(args); i++ {
 		switch {
+		case args[i] == "run":
+			if run {
+				return false
+			}
+			run = true
 		case args[i] == "-c" || args[i] == "--config":
 			if i+1 >= len(args) || configured != "" {
 				return false
 			}
 			i++
 			configured = args[i]
-		case strings.HasPrefix(args[i], "--config="):
+		case strings.HasPrefix(args[i], "--config=") || strings.HasPrefix(args[i], "-c="):
 			if configured != "" {
 				return false
 			}
-			configured = strings.TrimPrefix(args[i], "--config=")
-		case strings.HasPrefix(args[i], "-c="):
-			if configured != "" {
+			configured = strings.SplitN(args[i], "=", 2)[1]
+		case args[i] == "-D" || args[i] == "--directory":
+			if i+1 >= len(args) {
 				return false
 			}
-			configured = strings.TrimPrefix(args[i], "-c=")
+			i++ // /proc/cwd already reflects Chdir.
+		case strings.HasPrefix(args[i], "--directory=") || strings.HasPrefix(args[i], "-D="):
+		case args[i] == "--disable-color" || strings.HasPrefix(args[i], "--disable-color="):
+		default:
+			return false // Includes config directories and ambiguous extra config inputs.
 		}
+	}
+	if !run {
+		return false
 	}
 	if configured == "" {
 		return false

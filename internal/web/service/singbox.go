@@ -552,6 +552,10 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 				unsupported = append(unsupported, fmt.Sprintf("%s: %v", inbound.Tag, err))
 				continue
 			}
+			// Route and account bytes under the panel identity, on the injected listener.
+			inner["tag"] = inbound.Tag
+			translated["tag"] = "__shadowtls_transport_" + inbound.Tag
+			translated["detour"] = inbound.Tag
 			cfg.Inbounds = append(cfg.Inbounds, inner)
 		}
 		cfg.Inbounds = append(cfg.Inbounds, translated)
@@ -728,7 +732,62 @@ func (s *SingBoxService) applyNativeTemplate(cfg *singbox.Config) error {
 	if err != nil {
 		return err
 	}
-	return json.Unmarshal(mergedData, cfg)
+	if err := json.Unmarshal(mergedData, cfg); err != nil {
+		return err
+	}
+	var referencesLocal func(any) bool
+	referencesLocal = func(value any) bool {
+		switch value := value.(type) {
+		case map[string]any:
+			for key, item := range value {
+				if key == "domain_resolver" || key == "default_domain_resolver" {
+					if name, ok := item.(string); ok && name == "local" {
+						return true
+					}
+					if resolver, ok := item.(map[string]any); ok && resolver["server"] == "local" {
+						return true
+					}
+					continue
+				}
+				if referencesLocal(item) {
+					return true
+				}
+			}
+		case []any:
+			for _, item := range value {
+				if referencesLocal(item) {
+					return true
+				}
+			}
+		case []map[string]any:
+			for _, item := range value {
+				if referencesLocal(item) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	if referencesLocal(cfg.Inbounds) || referencesLocal(cfg.Route) || referencesLocal(cfg.Outbounds) || referencesLocal(cfg.Endpoints) {
+		if cfg.DNS == nil {
+			cfg.DNS = map[string]any{}
+		}
+		data, _ := json.Marshal(cfg.DNS["servers"])
+		var servers []map[string]any
+		if err := json.Unmarshal(data, &servers); err != nil && string(data) != "null" {
+			return fmt.Errorf("invalid native DNS servers: %w", err)
+		}
+		hasLocal := false
+		for _, server := range servers {
+			if server["tag"] == "local" {
+				hasLocal = true
+			}
+		}
+		if !hasLocal {
+			cfg.DNS["servers"] = append(servers, map[string]any{"type": "local", "tag": "local"})
+		}
+	}
+	return nil
 }
 
 func (s *SingBoxService) SaveTemplate(ctx context.Context, raw string) error {
@@ -1032,7 +1091,7 @@ func (s *SingBoxService) PollTraffic(ctx context.Context) error {
 	singBoxTrafficMu.Lock()
 	defer singBoxTrafficMu.Unlock()
 	if len(singBoxPendingInbound) > 0 || len(singBoxPendingClients) > 0 {
-		if _, _, err := singBoxInboundService.AddTraffic(singBoxPendingInbound, singBoxPendingClients); err != nil {
+		if err := s.commitTraffic(singBoxPendingInbound, singBoxPendingClients); err != nil {
 			return err
 		}
 		singBoxPendingInbound = nil
@@ -1088,8 +1147,8 @@ func (s *SingBoxService) PollTraffic(ctx context.Context) error {
 	for _, traffic := range clientDeltas {
 		clientTraffic = append(clientTraffic, traffic)
 	}
-	if len(inboundTraffic) > 0 || len(clientTraffic) > 0 {
-		if _, _, err = singBoxInboundService.AddTraffic(inboundTraffic, clientTraffic); err != nil {
+	{
+		if err = s.commitTraffic(inboundTraffic, clientTraffic); err != nil {
 			singBoxPendingInbound = inboundTraffic
 			singBoxPendingClients = clientTraffic
 			return err
@@ -1231,3 +1290,13 @@ func (s *SingBoxService) BinaryPath() string {
 func (s *SingBoxService) ProcessConfigPath() string {
 	return singbox.GetConfigPath()
 }
+
+func (s *SingBoxService) commitTraffic(inbounds []*xray.Traffic, clients []*xray.ClientTraffic) error {
+	needRestart, disabled, err := singBoxInboundService.AddTraffic(inbounds, clients)
+	if needRestart || disabled {
+		s.SetToNeedRestart()
+	}
+	return err
+}
+
+func init() { singbox.SetRuntimeConfigReader(singBoxProcess.AppliedConfig) }

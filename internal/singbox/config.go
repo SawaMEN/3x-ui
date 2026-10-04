@@ -540,7 +540,32 @@ func normalizeWireGuardAddresses(values []string) ([]string, error) {
 }
 
 func normalizeWireGuardReserved(v any) ([]int, error) {
-	reserved := compatIntSlice(v)
+	if v == nil {
+		return nil, nil
+	}
+	var reserved []int
+	switch values := v.(type) {
+	case []int:
+		reserved = append([]int(nil), values...)
+	case []any:
+		for _, value := range values {
+			var n int
+			switch value := value.(type) {
+			case int:
+				n = value
+			case float64:
+				if value < 0 || value > 255 || value != float64(int(value)) {
+					return nil, fmt.Errorf("reserved must contain integer bytes")
+				}
+				n = int(value)
+			default:
+				return nil, fmt.Errorf("reserved must contain integer bytes")
+			}
+			reserved = append(reserved, n)
+		}
+	default:
+		return nil, fmt.Errorf("reserved must be an array of bytes")
+	}
 	if len(reserved) == 0 {
 		return nil, nil
 	}
@@ -782,24 +807,20 @@ func TranslateShadowTLSWrappedInbound(raw map[string]any) (map[string]any, map[s
 	}
 	settings := rawObject(raw, "settings")
 	transport := rawObject(settings, "shadowTls")
-	password := strings.TrimSpace(rawString(transport, "password"))
-	if password == "" {
+	password := rawString(transport, "password")
+	if strings.TrimSpace(password) == "" {
 		return nil, nil, fmt.Errorf("inbound %q has no ShadowTLS transport password", rawString(raw, "tag"))
 	}
-	inner, err := TranslateXrayInbound(raw)
+	innerRaw := raw
+	if protocol == model.Mixed {
+		innerRaw = maps.Clone(raw)
+		innerSettings := maps.Clone(settings)
+		delete(innerSettings, "udp") // The inner listener is injected by TCP ShadowTLS.
+		innerRaw["settings"] = innerSettings
+	}
+	inner, err := TranslateXrayInbound(innerRaw)
 	if err != nil {
 		return nil, nil, err
-	}
-	if protocol == model.HTTP || protocol == model.Mixed {
-		accounts, _ := settings["accounts"].([]any)
-		users := make([]map[string]any, 0, len(accounts))
-		for _, entry := range accounts {
-			account, _ := entry.(map[string]any)
-			if user, pass := rawString(account, "user"), rawString(account, "pass"); user != "" && pass != "" {
-				users = append(users, map[string]any{"username": user, "password": pass})
-			}
-		}
-		inner["users"] = users
 	}
 	delete(inner, "listen")
 	delete(inner, "listen_port")
@@ -888,7 +909,7 @@ func translateUsers(out map[string]any, protocol string, settings map[string]any
 				user["uuid"] = id
 			}
 			if protocol == "vmess" {
-				user["alter_id"] = rawInt(client, "alterId")
+				user["alterId"] = rawInt(client, "alterId")
 			}
 			if flow, ok := client["flow"].(string); ok && flow != "" && protocol == "vless" {
 				user["flow"] = flow
@@ -1399,6 +1420,11 @@ func translateHysteriaStream(out map[string]any, protocol string, stream map[str
 		}
 	}
 	if masquerade := rawObject(settings, "masquerade"); inbound && len(masquerade) > 0 && protocol == "hysteria2" {
+		for _, key := range []string{"insecure", "xForwarded", "x_forwarded"} {
+			if isMeaningfulCompatValue(masquerade[key]) {
+				return fmt.Errorf("inbound %q Hysteria2 masquerade %s cannot be represented by sing-box", rawString(out, "tag"), key)
+			}
+		}
 		m := map[string]any{}
 		switch strings.ToLower(strings.TrimSpace(rawString(masquerade, "type"))) {
 		case "proxy":

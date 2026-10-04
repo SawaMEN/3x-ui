@@ -253,6 +253,11 @@ func translateOutboundTLSCompatibility(out map[string]any, stream map[string]any
 	}
 
 	fingerprint := strings.ToLower(strings.TrimSpace(rawString(tlsIn, "fingerprint")))
+	// Xray TCP fingerprints do not apply to QUIC; uTLS cannot provide its TLS config.
+	quic := rawString(out, "type") == "hysteria2" || rawString(out, "type") == "tuic" || rawString(out, "type") == "hysteria"
+	if quic {
+		fingerprint = "unsafe"
+	}
 	switch fingerprint {
 	case "":
 		// Xray defaults to the Chrome fingerprint when no explicit value is set.

@@ -306,6 +306,11 @@ func validateSingBoxOutbound(outbound map[string]any) error {
 
 func stringSliceLength(value any) int {
 	switch values := value.(type) {
+	case string:
+		if strings.TrimSpace(values) != "" {
+			return 1
+		}
+		return 0
 	case []string:
 		return len(values)
 	case []any:

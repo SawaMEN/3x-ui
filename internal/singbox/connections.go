@@ -487,9 +487,9 @@ func (c *ConnectionAPIClient) normalizeTrafficSnapshot(response *connectionEvent
 // cumulative byte counters for the same connection IDs. We only use those
 // counters when the native Naive delta is zero, so normal native accounting is
 // never double-counted.
-func (c *ConnectionAPIClient) applyNaiveClashFallback(ctx context.Context, response *connectionEvents) {
+func (c *ConnectionAPIClient) applyNaiveClashFallback(ctx context.Context, response *connectionEvents) bool {
 	if response == nil || len(response.Events) == 0 {
-		return
+		return false
 	}
 	needFallback := false
 	for _, event := range response.Events {
@@ -499,12 +499,12 @@ func (c *ConnectionAPIClient) applyNaiveClashFallback(ctx context.Context, respo
 		}
 	}
 	if !needFallback {
-		return
+		return false
 	}
 
 	connections, err := NewClashStatsClient().Connections(ctx)
 	if err != nil {
-		return
+		return false
 	}
 	byID := make(map[string]ClashConnection, len(connections))
 	for _, connection := range connections {
@@ -562,6 +562,7 @@ func (c *ConnectionAPIClient) applyNaiveClashFallback(ctx context.Context, respo
 		snapshot.missingSnapshots++
 		c.naiveFallbackSnapshots[id] = snapshot
 	}
+	return true
 }
 
 // SnapshotTrafficEvents is a low-allocation variant used by the traffic poll.
@@ -598,10 +599,11 @@ func (c *ConnectionAPIClient) SnapshotTrafficEvents(ctx context.Context) (connec
 		return connectionEvents{}, err
 	}
 	c.normalizeTrafficSnapshot(&response, snapshotAt)
-	c.applyNaiveClashFallback(ctx, &response)
-	c.trafficMu.Lock()
-	c.naiveFallbackAt = snapshotAt
-	c.trafficMu.Unlock()
+	if c.applyNaiveClashFallback(ctx, &response) {
+		c.trafficMu.Lock()
+		c.naiveFallbackAt = snapshotAt
+		c.trafficMu.Unlock()
+	}
 	return response, nil
 }
 
@@ -629,7 +631,7 @@ func (c *ConnectionAPIClient) connFor(ctx context.Context) error {
 	dialCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 	//nolint:staticcheck // DialContext/WithBlock preserve bounded synchronous dial semantics.
-	conn, err := grpc.DialContext(dialCtx, singBoxAPIAddress, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+	conn, err := grpc.DialContext(dialCtx, singBoxAPIAddress, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock(), grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(64<<20)))
 	if err != nil {
 		return err
 	}
