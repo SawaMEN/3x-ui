@@ -861,7 +861,7 @@ func (s *SubService) getInboundsBySubId(subId string) ([]*model.Inbound, error) 
 	protocols := []string{
 		"vmess", "vless", "trojan", "shadowsocks", "hysteria",
 		"wireguard", "amneziawg", "mtproto", "tuic", "naive", "anytls", "shadowtls", "mieru",
-		"vk-turn-proxy", "trusttunnel", "sudoku", "snell", "fptn", "openflux",
+		"vk-turn-proxy", "trusttunnel", "sudoku", "snell", "masque", "fptn", "openflux",
 	}
 	err := db.Model(model.Inbound{}).
 		Where(`id in (

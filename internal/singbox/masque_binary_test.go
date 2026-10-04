@@ -22,27 +22,8 @@ func TestMASQUEBinaryConfig(t *testing.T) {
 	if binary == "" {
 		t.Skip("set SINGBOX_TEST_BINARY for native MASQUE config checks")
 	}
+	certPath, keyPath := masqueTestCertificate(t)
 	dir := t.TempDir()
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
-	cert := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "localhost"}, DNSNames: []string{"localhost"}, IPAddresses: []net.IP{net.ParseIP("127.0.0.1")}, NotBefore: time.Now().Add(-time.Minute), NotAfter: time.Now().Add(time.Hour), KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}}
-	der, err := x509.CreateCertificate(rand.Reader, cert, cert, &key.PublicKey, key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	certPath, keyPath := filepath.Join(dir, "cert.pem"), filepath.Join(dir, "key.pem")
-	keyDER, err := x509.MarshalPKCS8PrivateKey(key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(certPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(keyPath, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER}), 0600); err != nil {
-		t.Fatal(err)
-	}
 	for _, version := range []int{1, 2, 3} {
 		endpoint, err := TranslateMASQUEEndpoint(map[string]any{"protocol": "masque", "tag": "masque", "listen": "127.0.0.1", "port": 18443, "settings": map[string]any{"version": []int{version}, "tls": map[string]any{"certificatePath": certPath, "keyPath": keyPath}, "clients": []any{map[string]any{"email": "alice", "password": "secret", "enable": true}}}})
 		if err != nil {
@@ -68,4 +49,30 @@ func TestMASQUEBinaryConfig(t *testing.T) {
 			}
 		}
 	}
+}
+
+func masqueTestCertificate(t *testing.T) (string, string) {
+	t.Helper()
+	dir := t.TempDir()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cert := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "localhost"}, DNSNames: []string{"localhost"}, IPAddresses: []net.IP{net.ParseIP("127.0.0.1")}, NotBefore: time.Now().Add(-time.Minute), NotAfter: time.Now().Add(time.Hour), KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}}
+	der, err := x509.CreateCertificate(rand.Reader, cert, cert, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	certPath, keyPath := filepath.Join(dir, "cert.pem"), filepath.Join(dir, "key.pem")
+	keyDER, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(certPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(keyPath, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER}), 0600); err != nil {
+		t.Fatal(err)
+	}
+	return certPath, keyPath
 }

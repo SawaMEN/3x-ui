@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/masque"
 )
 
 func TestBuildSeparatedSingBoxSubscription_MultipleProxies(t *testing.T) {
@@ -353,5 +354,62 @@ func TestMASQUESubscriptionUsesEndpoints(t *testing.T) {
 		if !hiddify && cfg["route"].(map[string]any)["final"] != proxy["tag"] {
 			t.Fatal("route does not target endpoint")
 		}
+	}
+}
+
+func TestMASQUEEndpointHostOptions(t *testing.T) {
+	settings, err := masque.Parse(`{"version":[1,3,2],"path":"/tunnel{?target,ipproto}","tls":{"serverName":"origin.example"}}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := model.Client{Email: "alice", Password: "secret", Enable: true}
+	endpoint := ShareEndpoint{Address: " edge.example ", Port: 443, ep: map[string]any{"sni": "tls.example", "allowInsecure": true, "alpn": []any{"h3"}}}
+	proxy := genNativeMASQUE(settings, client, endpoint)
+	tls := proxy["tls"].(map[string]any)
+	if proxy["version"] != 3 || proxy["server"] != "edge.example" || proxy["path"] != settings.Path || tls["server_name"] != "tls.example" || tls["insecure"] != true || !reflect.DeepEqual(tls["alpn"], []any{"h3"}) {
+		t.Fatalf("lost host options: %#v", proxy)
+	}
+	endpoint.ep = map[string]any{"keepSniBlank": true}
+	proxy = genNativeMASQUE(settings, client, endpoint)
+	if _, ok := proxy["tls"].(map[string]any)["server_name"]; ok {
+		t.Fatal("explicit blank SNI overridden")
+	}
+	endpoint.ForceTls = " NONE "
+	if genNativeMASQUE(settings, client, endpoint) != nil {
+		t.Fatal("advertised plaintext MASQUE")
+	}
+	endpoint.ForceTls = "same"
+	endpoint.Port = 65536
+	if genNativeMASQUE(settings, client, endpoint) != nil {
+		t.Fatal("advertised invalid port")
+	}
+}
+
+func TestMASQUEEndpointBootstrapDNS(t *testing.T) {
+	proxy := map[string]any{"type": "masque-client", "tag": "proxy-user", "server": "vpn.example", "server_port": 443}
+	template := map[string]any{"dns": map[string]any{"servers": []any{map[string]any{"address": "https://1.1.1.1/dns-query", "tag": "remote"}}, "tag": "remote"}}
+	data, err := buildSeparatedSingBoxSubscription(template, []map[string]any{proxy}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cfg map[string]any
+	if err := json.Unmarshal([]byte(data), &cfg); err != nil {
+		t.Fatal(err)
+	}
+	endpoint := cfg["endpoints"].([]any)[0].(map[string]any)
+	resolver, _ := endpoint["domain_resolver"].(string)
+	if resolver == "" {
+		t.Fatal("no endpoint bootstrap DNS")
+	}
+	found := false
+	for _, raw := range cfg["dns"].(map[string]any)["servers"].([]any) {
+		server := raw.(map[string]any)
+		found = found || (server["tag"] == resolver && server["type"] == "local")
+	}
+	if !found {
+		t.Fatalf("resolver is not local: %s", data)
+	}
+	if _, mutated := proxy["domain_resolver"]; mutated {
+		t.Fatal("input proxy mutated")
 	}
 }

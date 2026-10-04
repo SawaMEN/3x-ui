@@ -121,6 +121,10 @@ func buildSeparatedSingBoxSubscription(template map[string]any, proxies []map[st
 		}
 
 		if proxy["type"] == "masque-client" {
+			// Endpoints connect during startup. Bootstrap their server using the
+			// local resolver, even when the profile's normal DNS uses the tunnel.
+			proxy = maps.Clone(proxy)
+			proxy["domain_resolver"] = resolverTag
 			cfg["endpoints"] = []any{proxy}
 			if final, _ := route["final"].(string); final == "" {
 				route["final"] = proxyTag

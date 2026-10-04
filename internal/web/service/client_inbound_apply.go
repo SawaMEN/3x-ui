@@ -11,6 +11,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/masque"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/random"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
@@ -449,6 +450,11 @@ func (s *ClientService) AddInboundClient(inboundSvc *InboundService, data *model
 		if strings.TrimSpace(client.Email) == "" {
 			return false, common.NewError("client email is required")
 		}
+		if oldInbound.Protocol == model.MASQUE {
+			if err := masque.ValidateUsername(client.Email); err != nil {
+				return false, err
+			}
+		}
 		switch oldInbound.Protocol {
 		case "trojan", "trusttunnel", "naive", "masque", "snell", "fptn", "openflux", "anytls", "shadowtls", "mieru":
 			if client.Password == "" {
@@ -747,6 +753,11 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 	}
 	if strings.TrimSpace(clients[0].Email) == "" {
 		return false, common.NewError("client email is required")
+	}
+	if oldInbound.Protocol == model.MASQUE {
+		if err := masque.ValidateUsername(clients[0].Email); err != nil {
+			return false, err
+		}
 	}
 	if oldInbound.Protocol == model.MTProto && clients[0].AdTag != "" && !model.ValidMtprotoAdTag(clients[0].AdTag) {
 		return false, common.NewError("mtproto client ad tag must be 32 hex characters")
