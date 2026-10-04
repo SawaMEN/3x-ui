@@ -124,7 +124,7 @@ func singBoxTUICInbound(ib *model.Inbound, clients []any) (map[string]any, error
 		"users": users, "congestion_control": inst.CongestionControl,
 		"auth_timeout":       fmt.Sprintf("%ds", inst.AuthenticationTimeout),
 		"zero_rtt_handshake": inst.ZeroRTTHandshake,
-		"tls": tls,
+		"tls":                tls,
 	}, nil
 }
 
@@ -443,7 +443,8 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 			}
 			clients = append(clients, entry)
 		}
-		if singBoxInboundRequiresUsers(inbound.Protocol) && len(clients) == 0 {
+		managedProxy := (inbound.Protocol == model.HTTP || inbound.Protocol == model.Mixed) && len(dbClients) > 0
+		if (singBoxInboundRequiresUsers(inbound.Protocol) || managedProxy) && len(clients) == 0 {
 			logger.Warningf("Skipping sing-box inbound %q (%s): no active users", inbound.Tag, inbound.Protocol)
 			continue
 		}
@@ -460,6 +461,10 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 		settings, _ := raw["settings"].(map[string]any)
 		if settings == nil {
 			settings = map[string]any{}
+		}
+		if managedProxy {
+			// A stale accounts copy must not re-enable disabled managed users.
+			delete(settings, "accounts")
 		}
 		settings["clients"] = clients
 		sniffRule, sniffErr := singbox.TranslateXraySniffingRule(raw)
@@ -563,6 +568,9 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 		}
 	}
 	if len(sniffRules) > 0 {
+		if cfg.Route == nil {
+			cfg.Route = map[string]any{}
+		}
 		cfg.Route["rules"] = append(sniffRules, singBoxRouteRules(cfg.Route)...)
 	}
 	ensureAutomaticClashAPI(cfg)

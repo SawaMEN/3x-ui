@@ -21,8 +21,8 @@ func SnapshotInstallation() (restore func() error, cleanup func(), err error) {
 	cleanup = func() { _ = os.RemoveAll(backupDir) }
 	type savedFile struct {
 		path, backup string
-		mode os.FileMode
-		exists bool
+		mode         os.FileMode
+		exists       bool
 	}
 	var saved []savedFile
 	paths := []string{GetBinaryPath(), filepath.Join(dir, "libcronet.so"), filepath.Join(dir, "libcronet.dll"), GetConfigPath()}

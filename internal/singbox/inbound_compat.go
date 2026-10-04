@@ -202,15 +202,23 @@ func TranslateXraySniffingRule(raw map[string]any) (map[string]any, error) {
 	return rule, nil
 }
 
-func rawAccounts(settings map[string]any) []any {
-	accounts, _ := settings["accounts"].([]any)
+func rawAccounts(settings map[string]any) ([]any, error) {
+	accounts, ok := settings["accounts"].([]any)
+	if settings["accounts"] != nil && !ok {
+		return nil, fmt.Errorf("proxy inbound accounts must be an array")
+	}
 	result := make([]any, 0, len(accounts))
 	for _, raw := range accounts {
 		account, ok := raw.(map[string]any)
 		if !ok {
-			continue
+			return nil, fmt.Errorf("proxy inbound has an invalid account")
 		}
-		result = append(result, map[string]any{"email": rawString(account, "user"), "password": rawString(account, "pass")})
+		user, userOK := account["user"].(string)
+		password, passwordOK := account["pass"].(string)
+		if !userOK || !passwordOK {
+			return nil, fmt.Errorf("proxy inbound account requires string user/pass credentials")
+		}
+		result = append(result, map[string]any{"email": user, "password": password})
 	}
-	return result
+	return result, nil
 }

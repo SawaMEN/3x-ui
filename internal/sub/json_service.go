@@ -330,6 +330,16 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 			hasEnabledClient = hasEnabledClient || client.Enable
 		}
 	}
+	// Disabled clients contribute metadata but must not make an unsupported
+	// protocol veto the formats available to the remaining active clients.
+	inbounds = slices.DeleteFunc(inbounds, func(inbound *model.Inbound) bool {
+		active := false
+		for _, client := range clientsFor(inbound) {
+			seenEmails[client.Email] = struct{}{}
+			active = active || client.Enable
+		}
+		return !active
+	})
 	if len(inbounds) == 0 && len(externalLinks) == 0 {
 		emails := make([]string, 0, len(seenEmails))
 		for email := range seenEmails {

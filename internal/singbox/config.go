@@ -864,9 +864,11 @@ func translateUsers(out map[string]any, protocol string, settings map[string]any
 	clients, _ := settings["clients"].([]any)
 	if protocol == "http" || protocol == "socks" || protocol == "mixed" {
 		// Xray proxy accounts and panel-managed clients use different names.
-		for _, account := range rawAccounts(settings) {
-			clients = append(clients, account)
+		accounts, err := rawAccounts(settings)
+		if err != nil {
+			return err
 		}
+		clients = append(clients, accounts...)
 	}
 	users := make([]map[string]any, 0, len(clients))
 	for _, item := range clients {

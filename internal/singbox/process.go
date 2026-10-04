@@ -63,16 +63,16 @@ func configExecutablePath() string {
 }
 
 type Process struct {
-	mu          sync.RWMutex
-	lifecycle   sync.Mutex
-	cmd         *exec.Cmd
-	done        chan struct{}
-	exitErr     error
-	version     string
-	startTime   time.Time
-	config      string
-	externalPID int
-	isolated    bool
+	mu            sync.RWMutex
+	lifecycle     sync.Mutex
+	cmd           *exec.Cmd
+	done          chan struct{}
+	exitErr       error
+	version       string
+	startTime     time.Time
+	config        string
+	externalPID   int
+	isolated      bool
 	appliedConfig []byte
 }
 
