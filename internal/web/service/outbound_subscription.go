@@ -230,8 +230,8 @@ func (s *OutboundSubscriptionService) Create(remark, rawURL, tagPrefix, userAgen
 		}
 	}
 	// New subscriptions go to the end of the priority order.
-	var count int64
-	if err := database.GetDB().Model(&model.OutboundSubscription{}).Count(&count).Error; err != nil {
+	var lastPriority int
+	if err := database.GetDB().Model(&model.OutboundSubscription{}).Select("COALESCE(MAX(priority), -1)").Scan(&lastPriority).Error; err != nil {
 		return nil, err
 	}
 	sub := &model.OutboundSubscription{
@@ -242,7 +242,7 @@ func (s *OutboundSubscriptionService) Create(remark, rawURL, tagPrefix, userAgen
 		AllowInsecure:  allowInsecure,
 		UserAgent:      strings.TrimSpace(userAgent),
 		Prepend:        prepend,
-		Priority:       int(count),
+		Priority:       lastPriority + 1,
 		TagPrefix:      prefix,
 		UpdateInterval: updateInterval,
 	}

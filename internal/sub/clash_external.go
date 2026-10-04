@@ -144,7 +144,36 @@ func clashHysteriaFromExternal(settings, stream map[string]any, name string) map
 				return nil
 			}
 			proxy["obfs"], proxy["obfs-password"] = "salamander", password
-		case "udphop": // The common helper also handles the older quicParams form.
+			if size, _ := settings["packetSize"].(string); size != "" {
+				if parseHysteriaPacketSize(size) == "" {
+					return nil
+				}
+				min, max := splitHysteriaPacketSize(size)
+				proxy["obfs"] = "gecko"
+				proxy["obfs-min-packet-size"], _ = strconv.Atoi(min)
+				proxy["obfs-max-packet-size"], _ = strconv.Atoi(max)
+			}
+		case "udphop":
+			if settings["mode"] != "intervalremote" {
+				return nil
+			}
+			if interval, _ := settings["interval"].(string); interval != "" {
+				parts := strings.Split(interval, "-")
+				if len(parts) > 2 {
+					return nil
+				}
+				min, err := strconv.Atoi(parts[0])
+				if err != nil || min <= 0 {
+					return nil
+				}
+				if len(parts) == 2 {
+					max, err := strconv.Atoi(parts[1])
+					if err != nil || max < min {
+						return nil
+					}
+				}
+				proxy["hop-interval"] = interval
+			}
 		default:
 			return nil
 		}
