@@ -152,7 +152,15 @@ func (s *SubJsonService) GetJson(subId string, host string, alwaysReturnArray bo
 			continue
 		}
 		subReq.projectThroughFallbackMaster(inbound)
-		if hostEps := subReq.hostEndpoints(inbound, "json"); len(hostEps) > 0 {
+		hostEps := subReq.hostEndpoints(inbound, "json")
+		if hostEps != nil && len(hostEps) == 0 {
+			for _, client := range clients {
+				seenEmails[client.Email] = struct{}{}
+				hasEnabledClient = hasEnabledClient || client.Enable
+			}
+			continue
+		}
+		if len(hostEps) > 0 {
 			injectExternalProxy(inbound, hostEps)
 			delete(subReq.streamSettingsByInbound, inbound.Id)
 		}
@@ -463,7 +471,15 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 			continue
 		}
 		subReq.projectThroughFallbackMaster(inbound)
-		if hostEps := subReq.hostEndpoints(inbound, "json"); len(hostEps) > 0 {
+		hostEps := subReq.hostEndpoints(inbound, "json")
+		if hostEps != nil && len(hostEps) == 0 {
+			for _, client := range clients {
+				seenEmails[client.Email] = struct{}{}
+				hasEnabledClient = hasEnabledClient || client.Enable
+			}
+			continue
+		}
+		if len(hostEps) > 0 {
 			injectExternalProxy(inbound, hostEps)
 		}
 		for _, client := range clients {

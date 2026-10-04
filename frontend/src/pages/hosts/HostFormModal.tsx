@@ -506,13 +506,7 @@ export default function HostFormModal({
                         )}
                       />
                     </FormField>
-                    <FormField
-                      name="mihomoX25519"
-                      label={t('pages.hosts.fields.mihomoX25519')}
-                      valueProp="checked"
-                    >
-                      <Switch />
-                    </FormField>
+                    <div role="note">{t('pages.hosts.hints.mihomoX25519')}</div>
                     <FormField
                       name="shuffleHost"
                       label={t('pages.hosts.fields.shuffleHost')}

@@ -8,6 +8,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/random"
 )
 
 // hostEndpoints loads an inbound's enabled hosts for the given subscription
@@ -32,13 +33,32 @@ func (s *SubService) hostEndpoints(inbound *model.Inbound, format string) []map[
 	}
 	defaultDest := s.resolveInboundAddress(inbound)
 	eps := make([]map[string]any, 0, len(hosts))
-	for _, h := range hosts {
+	for _, h := range shuffledHosts(hosts) {
 		if slices.Contains(h.ExcludeFromSubTypes, format) {
 			continue
 		}
 		eps = append(eps, hostToExternalProxyMap(h, defaultDest, inbound.Port))
 	}
 	return eps
+}
+
+// Shuffle only the opted-in group's positions, without mutating the request
+// cache or changing the order of unrelated groups.
+func shuffledHosts(hosts []*model.Host) []*model.Host {
+	out := slices.Clone(hosts)
+	positions := make(map[string][]int)
+	for i, h := range out {
+		if h.ShuffleHost {
+			positions[h.GroupId] = append(positions[h.GroupId], i)
+		}
+	}
+	for _, ids := range positions {
+		for i := len(ids) - 1; i > 0; i-- {
+			j := random.Num(i + 1)
+			out[ids[i]], out[ids[j]] = out[ids[j]], out[ids[i]]
+		}
+	}
+	return out
 }
 
 func (s *SubService) primeHosts(inbounds []*model.Inbound) error {
@@ -88,7 +108,9 @@ func hostToExternalProxyMap(h *model.Host, defaultDest string, defaultPort int) 
 	if h.OverrideSniFromAddress {
 		sni = dest
 	}
-	if !h.KeepSniBlank && sni != "" {
+	if h.KeepSniBlank {
+		ep["keepSniBlank"] = true
+	} else if sni != "" {
 		ep["sni"] = sni
 	}
 	if h.Fingerprint != "" {
