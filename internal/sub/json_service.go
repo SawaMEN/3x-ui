@@ -171,6 +171,9 @@ func (s *SubJsonService) GetJson(subId string, host string, alwaysReturnArray bo
 				hasEnabledClient = true
 			}
 			seenEmails[client.Email] = struct{}{}
+			if !client.Enable {
+				continue
+			}
 			configs := s.getConfig(subReq, inbound, client, host)
 			if len(configs) == 0 {
 				return "", "", errSubscriptionFormatUnsupported
@@ -518,6 +521,9 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 			seenEmails[client.Email] = struct{}{}
 			if client.Enable {
 				hasEnabledClient = true
+			}
+			if !client.Enable {
+				continue
 			}
 			if model.ShadowTLSTransport(inbound.Settings) != nil {
 				generated := 0
@@ -1440,7 +1446,9 @@ func (s *SubJsonService) realityData(rData map[string]any, clientKey string) map
 		rltyData["shortId"] = ""
 	}
 	serverNames, ok := rData["serverNames"].([]any)
-	if ok && len(serverNames) > 0 {
+	if name, _ := rltyClientSettings["serverName"].(string); name != "" {
+		rltyData["serverName"] = name
+	} else if ok && len(serverNames) > 0 {
 		rltyData["serverName"], _ = serverNames[random.Num(len(serverNames))].(string)
 	} else {
 		rltyData["serverName"] = ""
