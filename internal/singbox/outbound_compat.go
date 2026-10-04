@@ -52,10 +52,10 @@ func translateHTTPOutboundOptions(out map[string]any, settings map[string]any) {
 }
 
 func translateFlatProxyCredentials(out map[string]any, settings map[string]any) {
-	if username := compatStringOption(settings, "user", "username"); username != "" {
+	if username := credentialOption(settings, "user", "username"); username != "" {
 		out["username"] = username
 	}
-	if password := compatStringOption(settings, "pass", "password"); password != "" {
+	if password := credentialOption(settings, "pass", "password"); password != "" {
 		out["password"] = password
 	}
 }
@@ -381,7 +381,11 @@ func translateV2RayPacketEncoding(out map[string]any, settings map[string]any, p
 		return nil
 	case "none":
 		if !specialVisionUDP443 {
-			delete(out, "packet_encoding")
+			if protocol == "vless" {
+				out["packet_encoding"] = ""
+			} else {
+				delete(out, "packet_encoding")
+			}
 		}
 		return nil
 	case "xudp":
@@ -657,4 +661,13 @@ func applyXrayOutboundCompatibility(out map[string]any, raw map[string]any, stre
 	}
 	ensureOutboundDomainResolver(out)
 	return nil
+}
+
+func credentialOption(settings map[string]any, keys ...string) string {
+	for _, key := range keys {
+		if value, present := settings[key].(string); present {
+			return value
+		}
+	}
+	return ""
 }

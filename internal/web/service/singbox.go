@@ -15,6 +15,7 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawgnet"
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
@@ -53,7 +54,7 @@ type SingBoxService struct{}
 
 func singBoxInboundRequiresUsers(protocol model.Protocol) bool {
 	switch protocol {
-	case model.VLESS, model.VMESS, model.Trojan, model.Snell, model.NaiveProxy, model.Hysteria, model.ShadowTLS, model.AnyTLS, model.TUIC:
+	case model.VLESS, model.VMESS, model.Shadowsocks, model.Trojan, model.Snell, model.NaiveProxy, model.Hysteria, model.ShadowTLS, model.AnyTLS, model.TUIC:
 		return true
 	default:
 		return false
@@ -305,11 +306,16 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 	}
 
 	var unsupported []string
+	var sniffRules []any
 	for _, inbound := range inbounds {
 		if inbound == nil || !inbound.Enable || inbound.NodeID != nil || isLocalSidecarInbound(inbound.Protocol) {
 			continue
 		}
-		rawBytes, err := json.Marshal(inbound)
+		runtimeInbound, err := singBoxInboundService.buildInboundForNodePush(database.GetDB(), inbound)
+		if err != nil {
+			return nil, err
+		}
+		rawBytes, err := json.Marshal(runtimeInbound)
 		if err != nil {
 			return nil, err
 		}
@@ -320,7 +326,7 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 		stream, _ := raw["streamSettings"].(map[string]any)
 		network, _ := stream["network"].(string)
 		if strings.EqualFold(strings.TrimSpace(network), "xhttp") {
-			logger.Warningf("Skipping sing-box inbound %q: XHTTP transport is only supported by Xray", inbound.Tag)
+			unsupported = append(unsupported, fmt.Sprintf("%s: XHTTP transport is only supported by Xray", inbound.Tag))
 			continue
 		}
 		// Xray treats an empty inbound listen address as all interfaces. The
@@ -431,6 +437,14 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 			settings = map[string]any{}
 		}
 		settings["clients"] = clients
+		sniffRule, sniffErr := singbox.TranslateXraySniffingRule(raw)
+		if sniffErr != nil {
+			unsupported = append(unsupported, sniffErr.Error())
+			continue
+		}
+		if sniffRule != nil {
+			sniffRules = append(sniffRules, sniffRule)
+		}
 
 		// NaiveProxy is a native TLS protocol in sing-box. Keep the ordinary
 		// inbound form simple by reusing the panel's HTTPS certificate/key when
@@ -522,6 +536,9 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 		if err := injectSingBoxMtprotoEgress(cfg, inbound); err != nil {
 			return nil, err
 		}
+	}
+	if len(sniffRules) > 0 {
+		cfg.Route["rules"] = append(sniffRules, singBoxRouteRules(cfg.Route)...)
 	}
 	ensureAutomaticClashAPI(cfg)
 	applySingBoxInfrastructureEgress(cfg)

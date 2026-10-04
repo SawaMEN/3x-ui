@@ -588,7 +588,7 @@ func rawBool(m map[string]any, key string) bool {
 
 func TranslateXrayInbound(raw map[string]any) (map[string]any, error) {
 	protocol := strings.ToLower(strings.TrimSpace(rawString(raw, "protocol")))
-	if protocol == "tunnel" || protocol == "wireguard" || protocol == "mtproto" || protocol == "amneziawg" || protocol == "tuic" || protocol == "mieru" || protocol == "pingtunnel" || protocol == "trusttunnel" {
+	if protocol == "tun" || protocol == "tunnel" || protocol == "wireguard" || protocol == "mtproto" || protocol == "amneziawg" || protocol == "tuic" || protocol == "mieru" || protocol == "pingtunnel" || protocol == "trusttunnel" {
 		return nil, fmt.Errorf("sing-box does not support Xray inbound protocol %q", protocol)
 	}
 	out := map[string]any{"tag": rawString(raw, "tag")}
@@ -763,6 +763,9 @@ func TranslateXrayInbound(raw map[string]any) (map[string]any, error) {
 			return nil, err
 		}
 	}
+	if err := translateInboundCompatibility(out, raw); err != nil {
+		return nil, err
+	}
 	return out, nil
 }
 
@@ -859,6 +862,12 @@ func TranslateShadowTLSInnerInbound(raw map[string]any) (map[string]any, error) 
 
 func translateUsers(out map[string]any, protocol string, settings map[string]any) error {
 	clients, _ := settings["clients"].([]any)
+	if protocol == "http" || protocol == "socks" || protocol == "mixed" {
+		// Xray proxy accounts and panel-managed clients use different names.
+		for _, account := range rawAccounts(settings) {
+			clients = append(clients, account)
+		}
+	}
 	users := make([]map[string]any, 0, len(clients))
 	for _, item := range clients {
 		client, ok := item.(map[string]any)
@@ -875,6 +884,9 @@ func translateUsers(out map[string]any, protocol string, settings map[string]any
 		case "vless", "vmess":
 			if id, ok := client["id"].(string); ok && id != "" {
 				user["uuid"] = id
+			}
+			if protocol == "vmess" {
+				user["alter_id"] = rawInt(client, "alterId")
 			}
 			if flow, ok := client["flow"].(string); ok && flow != "" && protocol == "vless" {
 				user["flow"] = flow
@@ -1018,9 +1030,17 @@ func translateStream(out map[string]any, protocol string, stream map[string]any,
 				break
 			}
 		}
+		if inbound {
+			if err := translateInboundTLSCompatibility(t, tls, rawString(out, "tag")); err != nil {
+				return err
+			}
+		}
 		out["tls"] = t
 	case "reality":
 		reality := rawObject(stream, "realitySettings")
+		if err := rejectXrayFields(reality, fmt.Sprintf("%s %q REALITY", map[bool]string{true: "inbound", false: "outbound"}[inbound], rawString(out, "tag")), "minClientVer", "maxClientVer", "mldsa65Seed", "mldsa65Verify", "xver", "limitFallbackUpload", "limitFallbackDownload"); err != nil {
+			return err
+		}
 		tlsSettings := rawObject(stream, "tlsSettings")
 		t := map[string]any{"enabled": true}
 		r := map[string]any{"enabled": true}
@@ -1042,6 +1062,12 @@ func translateStream(out map[string]any, protocol string, stream map[string]any,
 			if dest == "" {
 				dest = strings.TrimSpace(rawString(reality, "dest"))
 			}
+			if dest == "" && rawInt(reality, "target") > 0 {
+				dest = net.JoinHostPort("127.0.0.1", strconv.Itoa(rawInt(reality, "target")))
+			}
+			if dest == "" && rawInt(reality, "dest") > 0 {
+				dest = net.JoinHostPort("127.0.0.1", strconv.Itoa(rawInt(reality, "dest")))
+			}
 			if dest == "" {
 				dest = serverName
 			}
@@ -1051,6 +1077,9 @@ func translateStream(out map[string]any, protocol string, stream map[string]any,
 			host, port, err := parseRealityDestination(dest)
 			if err != nil {
 				return fmt.Errorf("inbound %q has invalid REALITY destination %q: %w", rawString(out, "tag"), dest, err)
+			}
+			if difference := rawInt(reality, "maxTimeDiff"); difference > 0 {
+				r["max_time_difference"] = fmt.Sprintf("%dms", difference)
 			}
 			r["handshake"] = map[string]any{
 				"server":          host,
@@ -1097,6 +1126,9 @@ func translateStream(out map[string]any, protocol string, stream map[string]any,
 			if fingerprint == "" {
 				fingerprint = "chrome"
 			}
+			if fingerprint == "unsafe" {
+				return fmt.Errorf("outbound %q: REALITY requires a supported uTLS fingerprint", rawString(out, "tag"))
+			}
 			t["utls"] = map[string]any{"enabled": true, "fingerprint": fingerprint}
 		}
 		t["reality"] = r
@@ -1116,6 +1148,12 @@ func translateStream(out map[string]any, protocol string, stream map[string]any,
 	}
 	switch network {
 	case "", "tcp", "raw":
+		for _, key := range []string{"tcpSettings", "rawSettings"} {
+			header := rawObject(rawObject(stream, key), "header")
+			if kind := rawString(header, "type"); kind != "" && kind != "none" {
+				return fmt.Errorf("connection %q: TCP header %q is not wire-compatible with sing-box", rawString(out, "tag"), kind)
+			}
+		}
 		return nil
 	case "ws":
 		ws := rawObject(stream, "wsSettings")
