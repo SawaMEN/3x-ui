@@ -6,10 +6,11 @@ on:
       - fix/gateway-mode-hardening
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   format:
+    if: "!startsWith(github.event.head_commit.message, 'chore(gateway): apply oxfmt')"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -21,11 +22,14 @@ jobs:
       - name: Install
         working-directory: frontend
         run: npm ci --no-audit --no-fund
-      - name: Format Gateway control and print result
+      - name: Format Gateway control
         working-directory: frontend
+        run: npx oxfmt src/pages/settings/GatewayModeControl.tsx
+      - name: Commit formatted Gateway control
         run: |
-          npx oxfmt src/pages/settings/GatewayModeControl.tsx
-          echo '===GATEWAY_FORMATTED_BEGIN==='
-          base64 -w 0 src/pages/settings/GatewayModeControl.tsx
-          echo
-          echo '===GATEWAY_FORMATTED_END==='
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/src/pages/settings/GatewayModeControl.tsx
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "chore(gateway): apply oxfmt"
+          git push origin HEAD:fix/gateway-mode-hardening
