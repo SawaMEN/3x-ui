@@ -19,6 +19,8 @@ type GatewayNetworkConfig = {
 
 type GatewayNetworkStatus = {
   configured: boolean;
+  active: boolean;
+  persistent: boolean;
   config: GatewayNetworkConfig;
   forwarding: boolean;
   policyRoute: boolean;
@@ -150,20 +152,27 @@ export default function GatewayModeControl() {
   const coreMismatch = status?.coreMismatch === true;
   const conflict = status?.conflict === true;
   const recoveryOnly = enabled && !configured && !coreMismatch && status?.recoveryBackup === true;
+  const incompleteCore = enabled && !configured && !coreMismatch;
   const canEnable = status?.canEnable === true;
   const selectedCore = coreLabel(status?.coreType);
   const ownerCore = coreLabel(status?.gatewayCoreType);
   const networkConfigured = status?.network?.configured === true;
+  const networkActive = status?.network?.active === true;
+  const networkPersistent = status?.network?.persistent === true;
   const networkHealthy =
     networkConfigured &&
     status?.network?.forwarding === true &&
     status?.network?.policyRoute === true &&
-    status?.network?.nftables === true;
+    status?.network?.nftables === true &&
+    networkPersistent;
+  const staleNetworkOnly = !enabled && (networkConfigured || networkActive);
+  const orphanedNetwork = networkActive && !networkConfigured;
   const networkInputValid =
     networkConfig.lanInterface.trim() !== '' &&
     networkConfig.lanIP.trim() !== '' &&
     networkConfig.lanPrefix >= 1 &&
     networkConfig.lanPrefix <= 32;
+  const canConfigureNetwork = networkConfigured || networkInputValid;
 
   return (
     <>
@@ -182,44 +191,50 @@ export default function GatewayModeControl() {
           type={
             conflict
               ? 'error'
-              : enabled && !networkHealthy
+              : incompleteCore || staleNetworkOnly || coreMismatch || (enabled && !networkHealthy)
                 ? 'warning'
-                : recoveryOnly || coreMismatch
-                  ? 'warning'
-                  : enabled
-                    ? 'success'
-                    : 'info'
+                : enabled
+                  ? 'success'
+                  : 'info'
           }
           showIcon
           title={
             conflict
               ? 'Обнаружен конфликт режима шлюза'
-              : enabled && !networkConfigured
-                ? 'Inbound создан, Linux-маршрутизация не настроена'
-                : enabled && !networkHealthy
-                  ? 'Сетевая часть режима шлюза требует восстановления'
-                  : recoveryOnly
-                    ? 'Требуется очистка состояния режима шлюза'
-                    : coreMismatch
-                      ? `Режим шлюза активен на другом ядре: ${ownerCore}`
-                      : enabled
-                        ? 'Режим шлюза включён'
-                        : 'Режим шлюза выключен'
+              : incompleteCore
+                ? 'Неполное состояние Gateway в конфигурации ядра'
+                : staleNetworkOnly
+                  ? 'Linux-настройки Gateway остались без активного inbound'
+                  : coreMismatch
+                    ? `Режим шлюза активен на другом ядре: ${ownerCore}`
+                    : enabled && !networkConfigured
+                      ? 'Inbound создан, Linux-маршрутизация не настроена'
+                      : enabled && !networkHealthy
+                        ? 'Сетевая часть режима шлюза требует восстановления'
+                        : enabled
+                          ? 'Режим шлюза включён'
+                          : 'Режим шлюза выключен'
           }
           description={
             conflict
-              ? 'Служебная конфигурация режима шлюза обнаружена одновременно в Xray и sing-box. Выключение безопасно очистит собственные объекты режима шлюза в обоих ядрах.'
-              : enabled && !networkConfigured
-                ? 'Это неполное состояние старой веб-реализации. Укажите LAN-параметры ниже и нажмите «Настроить Linux»: панель добавит ip forwarding, policy routing и nftables без создания второго inbound.'
-                : enabled && !networkHealthy
-                  ? 'Сохранённая конфигурация найдена, но часть runtime-правил отсутствует. Нажмите «Восстановить сетевые правила».'
-                  : recoveryOnly
-                    ? 'Найдена резервная копия режима шлюза, но его служебная конфигурация отсутствует. Нажмите «Выключить», чтобы безопасно удалить устаревшее состояние восстановления.'
-                    : coreMismatch
-                      ? `Сейчас выбрано ядро ${selectedCore}. Режим шлюза можно перенести на него без ручной очистки предыдущего ядра.`
-                      : enabled
-                        ? `Режим шлюза настроен для ${ownerCore === 'не определено' ? selectedCore : ownerCore}. Linux TPROXY и policy routing управляются панелью.`
-                        : `Режим шлюза сейчас не активен. При включении он будет настроен для ${selectedCore} вместе с Linux-маршрутизацией.`
+              ? 'Служебная конфигурация режима шлюза обнаружена одновременно в Xray и sing-box. Сначала выключите режим шлюза, чтобы безопасно очистить конфликтующие объекты.'
+              : incompleteCore
+                ? recoveryOnly
+                  ? 'Найдена резервная копия Gateway, но полноценный inbound отсутствует. Linux TPROXY включать нельзя: сначала нажмите «Выключить режим шлюза», затем включите его заново.'
+                  : 'Найдена частичная конфигурация Gateway. Чтобы не перенаправлять трафик на неполный inbound, сначала очистите состояние кнопкой «Выключить режим шлюза», затем включите его заново.'
+                : staleNetworkOnly
+                  ? orphanedNetwork
+                    ? 'Найдены оставшиеся policy/nftables-объекты без корректного gateway.env. Их нужно очистить перед повторным включением.'
+                    : 'Сетевые правила Gateway сохранены, но Gateway inbound в ядре отсутствует. Можно восстановить режим или удалить оставшиеся Linux-настройки.'
+                  : coreMismatch
+                    ? `Сейчас выбрано ядро ${selectedCore}. Режим шлюза можно перенести на него; Linux-настройки будут проверены и восстановлены при необходимости.`
+                    : enabled && !networkConfigured
+                      ? 'Укажите LAN-параметры ниже и нажмите «Настроить Linux». Второй inbound создан не будет.'
+                      : enabled && !networkHealthy
+                        ? 'Сохранённая конфигурация найдена, но отсутствует часть runtime-правил или файлов автозапуска. Нажмите «Восстановить сетевые правила».'
+                        : enabled
+                          ? `Режим шлюза настроен для ${ownerCore === 'не определено' ? selectedCore : ownerCore}. Linux TPROXY и policy routing управляются панелью.`
+                          : `Режим шлюза сейчас не активен. При включении он будет настроен для ${selectedCore} вместе с Linux-маршрутизацией.`
           }
         />
 
@@ -230,8 +245,8 @@ export default function GatewayModeControl() {
             <Tag color={coreMismatch || conflict ? 'warning' : 'success'}>Шлюз: {ownerCore}</Tag>
           )}
           <Tag>TPROXY: {status?.port ?? 52345}</Tag>
-          <Tag color={networkHealthy ? 'success' : networkConfigured ? 'warning' : 'default'}>
-            Linux: {networkHealthy ? 'готов' : networkConfigured ? 'частично' : 'не настроен'}
+          <Tag color={networkHealthy ? 'success' : networkConfigured || networkActive ? 'warning' : 'default'}>
+            Linux: {networkHealthy ? 'готов' : networkConfigured || networkActive ? 'частично' : 'не настроен'}
           </Tag>
         </Space>
 
@@ -241,8 +256,8 @@ export default function GatewayModeControl() {
             <Typography.Text type="secondary">LAN-интерфейс</Typography.Text>
             <Input
               value={networkConfig.lanInterface}
-              placeholder="eth1"
-              disabled={networkConfigured || busy}
+              placeholder="eth1 / br-lan"
+              disabled={networkConfigured || orphanedNetwork || busy}
               onChange={(event) =>
                 setNetworkConfig((current) => ({ ...current, lanInterface: event.target.value }))
               }
@@ -254,7 +269,7 @@ export default function GatewayModeControl() {
             <Input
               value={networkConfig.lanIP}
               placeholder="192.168.1.1"
-              disabled={networkConfigured || busy}
+              disabled={networkConfigured || orphanedNetwork || busy}
               onChange={(event) =>
                 setNetworkConfig((current) => ({ ...current, lanIP: event.target.value }))
               }
@@ -267,7 +282,7 @@ export default function GatewayModeControl() {
               min={1}
               max={32}
               value={networkConfig.lanPrefix}
-              disabled={networkConfigured || busy}
+              disabled={networkConfigured || orphanedNetwork || busy}
               onChange={(value) =>
                 setNetworkConfig((current) => ({ ...current, lanPrefix: value ?? 24 }))
               }
@@ -279,7 +294,7 @@ export default function GatewayModeControl() {
             <Input
               value={networkConfig.wanInterface}
               placeholder="eth0"
-              disabled={networkConfigured || busy}
+              disabled={networkConfigured || orphanedNetwork || busy}
               onChange={(event) =>
                 setNetworkConfig((current) => ({ ...current, wanInterface: event.target.value }))
               }
@@ -289,57 +304,74 @@ export default function GatewayModeControl() {
         </Space>
 
         <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-          LAN IP и префикс определяют локальную подсеть, которая исключается из TPROXY. WAN-интерфейс
-          нужен только если этот сервер должен выполнять NAT/masquerade в интернет. Для изменения уже
-          сохранённых сетевых параметров сначала выключите режим шлюза.
+          LAN IP должен быть назначен выбранному LAN-интерфейсу. Перехват ограничивается именно этим
+          интерфейсом, поэтому bridge-интерфейсы вроде br-lan поддерживаются. WAN-интерфейс нужен
+          только если сервер должен выполнять NAT/masquerade в интернет.
         </Typography.Paragraph>
 
         <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-          При включении панель добавляет TPROXY-вход выбранному ядру, включает IPv4 forwarding,
-          создаёт policy rule/table 100 и nftables-таблицы. Состояние и правила сохраняются для
-          автоматического восстановления после перезагрузки.
+          Сейчас Gateway перехватывает IPv4 TCP/UDP. IPv6 намеренно не отправляется в TPROXY, пока для
+          него не настроены отдельные IPv6 policy routing и адреса: это исключает поломку IPv6 из-за
+          неполной конфигурации.
         </Typography.Paragraph>
 
         <Space wrap>
-          {enabled && !networkHealthy && (
+          {enabled && configured && !coreMismatch && !conflict && !networkHealthy && !orphanedNetwork && (
             <Button
               type="primary"
               loading={busy}
-              disabled={loading || (!networkConfigured && !networkInputValid)}
+              disabled={loading || !canConfigureNetwork}
               onClick={() => void runAction('enable')}
             >
               {networkConfigured ? 'Восстановить сетевые правила' : 'Настроить Linux'}
             </Button>
           )}
 
-          {coreMismatch && !conflict && canEnable && networkHealthy && (
+          {coreMismatch && !conflict && canEnable && !orphanedNetwork && (
             <Popconfirm
               title={`Перенести режим шлюза на ${selectedCore}?`}
-              description="Панель удалит собственную конфигурацию режима шлюза из предыдущего ядра и включит её для выбранного ядра. Сетевые правила сохранятся. При ошибке будет выполнен откат."
+              description="Панель удалит собственную конфигурацию режима шлюза из предыдущего ядра и включит её для выбранного ядра. Сетевые правила будут проверены и восстановлены."
               okText="Перенести"
               cancelText="Отмена"
               onConfirm={() => void runAction('enable')}
+              disabled={!canConfigureNetwork}
             >
-              <Button type="primary" loading={busy} disabled={loading}>
+              <Button type="primary" loading={busy} disabled={loading || !canConfigureNetwork}>
                 Перенести на {selectedCore}
               </Button>
             </Popconfirm>
           )}
 
-          {enabled ? (
+          {staleNetworkOnly && !orphanedNetwork && canEnable && (
             <Popconfirm
-              title="Выключить режим шлюза?"
+              title="Восстановить режим шлюза?"
+              description={`Gateway inbound будет заново создан для ${selectedCore} с сохранёнными Linux-настройками.`}
+              okText="Восстановить"
+              cancelText="Отмена"
+              onConfirm={() => void runAction('enable')}
+            >
+              <Button type="primary" loading={busy} disabled={loading}>
+                Восстановить Gateway
+              </Button>
+            </Popconfirm>
+          )}
+
+          {enabled || staleNetworkOnly ? (
+            <Popconfirm
+              title={staleNetworkOnly && !enabled ? 'Удалить оставшиеся Linux-настройки Gateway?' : 'Выключить режим шлюза?'}
               description={
-                recoveryOnly
-                  ? 'Будет удалено устаревшее состояние восстановления и Linux-правила Gateway.'
-                  : 'Будут удалены TPROXY-объекты, nftables и policy routing Gateway; исходное значение IPv4 forwarding будет восстановлено.'
+                staleNetworkOnly && !enabled
+                  ? 'Будут удалены nftables, policy routing, systemd restore-файлы и gateway.env.'
+                  : recoveryOnly
+                    ? 'Будет удалено устаревшее состояние восстановления и Linux-правила Gateway.'
+                    : 'Будут удалены TPROXY-объекты, nftables и policy routing Gateway; исходное значение IPv4 forwarding будет восстановлено.'
               }
               okText="Выключить"
               cancelText="Отмена"
               onConfirm={() => void runAction('disable')}
             >
               <Button danger loading={busy}>
-                Выключить режим шлюза
+                {staleNetworkOnly && !enabled ? 'Очистить Linux-настройки' : 'Выключить режим шлюза'}
               </Button>
             </Popconfirm>
           ) : (
