@@ -19,8 +19,9 @@ type GatewayController struct {
 	settingService service.SettingService
 	xrayService    service.XrayService
 	networkService service.GatewayNetworkService
-	operationMu    sync.Mutex
 }
+
+var gatewayOperationMu sync.Mutex
 
 func NewGatewayController(g *gin.RouterGroup) *GatewayController {
 	a := &GatewayController{}
@@ -179,7 +180,8 @@ func (a *GatewayController) statusPayload() (gin.H, error) {
 	}
 
 	status, stateErr := gatewayStatusForCore(coreType)
-	payload["enabled"] = status.State.Enabled
+	network := payload["network"].(service.GatewayNetworkStatus)
+	payload["enabled"] = status.State.Enabled || network.Configured
 	payload["configured"] = status.State.Configured
 	payload["recoveryBackup"] = status.State.BackupExists
 	payload["gatewayCoreType"] = status.OwnerCore
@@ -202,11 +204,11 @@ type gatewayEnableRequest struct {
 }
 
 func (a *GatewayController) enable(c *gin.Context) {
-	a.operationMu.Lock()
-	defer a.operationMu.Unlock()
+	gatewayOperationMu.Lock()
+	defer gatewayOperationMu.Unlock()
 
 	var req gatewayEnableRequest
-	if c.Request.ContentLength > 0 {
+	if c.Request.ContentLength != 0 {
 		if err := c.ShouldBindJSON(&req); err != nil {
 			payload, _ := a.statusPayload()
 			jsonObj(c, payload, fmt.Errorf("invalid Gateway network settings: %w", err))
@@ -229,6 +231,11 @@ func (a *GatewayController) enable(c *gin.Context) {
 	}
 
 	wasRunning := a.xrayService.IsXrayRunning()
+	if !wasRunning {
+		payload, _ := a.statusPayload()
+		jsonObj(c, payload, fmt.Errorf("start the selected core before enabling Gateway Mode"))
+		return
+	}
 	changed := false
 	currentEnabledByRequest := false
 	previousCoreDisabled := false
@@ -292,6 +299,11 @@ func (a *GatewayController) enable(c *gin.Context) {
 		networkConfig = networkStatus.Config
 	}
 	if err := a.networkService.Enable(c.Request.Context(), networkConfig); err != nil {
+		if !networkStatus.Configured && a.networkService.Status(c.Request.Context()).Configured {
+			payload, _ := a.statusPayload()
+			jsonObj(c, payload, fmt.Errorf("%w; partial network setup requires cleanup; Gateway listener retained", err))
+			return
+		}
 		if changed {
 			rollbackErr := rollbackGatewayChange(coreType, otherCore, currentEnabledByRequest, previousCoreDisabled)
 			if rollbackErr == nil && wasRunning {
@@ -313,8 +325,8 @@ func (a *GatewayController) enable(c *gin.Context) {
 }
 
 func (a *GatewayController) disable(c *gin.Context) {
-	a.operationMu.Lock()
-	defer a.operationMu.Unlock()
+	gatewayOperationMu.Lock()
+	defer gatewayOperationMu.Unlock()
 
 	coreType, err := a.settingService.GetCoreType()
 	if err != nil {
@@ -375,6 +387,13 @@ func (a *GatewayController) disable(c *gin.Context) {
 	}
 
 	if err := a.networkService.Disable(c.Request.Context()); err != nil {
+		rollbackErr := restoreGatewayCores(disabledCores)
+		if rollbackErr == nil && len(disabledCores) > 0 && wasRunning {
+			rollbackErr = a.xrayService.RestartXray(false)
+		}
+		if rollbackErr != nil {
+			err = fmt.Errorf("%w; core rollback failed: %w", err, rollbackErr)
+		}
 		payload, _ := a.statusPayload()
 		jsonObj(c, payload, fmt.Errorf("disable Linux Gateway networking: %w", err))
 		return

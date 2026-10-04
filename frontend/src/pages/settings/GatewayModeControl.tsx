@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Button, Input, InputNumber, Popconfirm, Space, Tag, Typography, message } from 'antd';
+import {
+  Alert,
+  Button,
+  Input,
+  InputNumber,
+  Popconfirm,
+  Space,
+  Tag,
+  Typography,
+  message,
+} from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 
 import { HttpUtil } from '@/utils';
@@ -21,6 +31,7 @@ type GatewayNetworkStatus = {
   configured: boolean;
   config: GatewayNetworkConfig;
   forwarding: boolean;
+  rpFilter?: boolean;
   policyRoute: boolean;
   nftables: boolean;
 };
@@ -157,6 +168,7 @@ export default function GatewayModeControl() {
   const networkHealthy =
     networkConfigured &&
     status?.network?.forwarding === true &&
+    status?.network?.rpFilter !== false &&
     status?.network?.policyRoute === true &&
     status?.network?.nftables === true;
   const networkInputValid =
@@ -289,9 +301,9 @@ export default function GatewayModeControl() {
         </Space>
 
         <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-          LAN IP и префикс определяют локальную подсеть, которая исключается из TPROXY. WAN-интерфейс
-          нужен только если этот сервер должен выполнять NAT/masquerade в интернет. Для изменения уже
-          сохранённых сетевых параметров сначала выключите режим шлюза.
+          LAN IP и префикс определяют локальную подсеть, которая исключается из TPROXY.
+          WAN-интерфейс нужен только если этот сервер должен выполнять NAT/masquerade в интернет.
+          Для изменения уже сохранённых сетевых параметров сначала выключите режим шлюза.
         </Typography.Paragraph>
 
         <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
@@ -351,7 +363,11 @@ export default function GatewayModeControl() {
               onConfirm={() => void runAction('enable')}
               disabled={!canEnable || loading || !networkInputValid}
             >
-              <Button type="primary" loading={busy} disabled={!canEnable || loading || !networkInputValid}>
+              <Button
+                type="primary"
+                loading={busy}
+                disabled={!canEnable || loading || !networkInputValid}
+              >
                 Включить режим шлюза
               </Button>
             </Popconfirm>
