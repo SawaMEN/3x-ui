@@ -1816,6 +1816,17 @@ func (s *SubJsonService) genNativeTUIC(inbound *model.Inbound, stream map[string
 		settings["congestion_control"] = inst.CongestionControl
 		settings["udp_relay_mode"] = inst.UDPRelayMode
 		settings["zero_rtt_handshake"] = inst.ZeroRTTHandshake
+		stream = maps.Clone(stream)
+		tls, _ := stream["tlsSettings"].(map[string]any)
+		tls = maps.Clone(tls)
+		if tls == nil {
+			tls = map[string]any{}
+		}
+		if len(inst.ALPN) > 0 {
+			tls["alpn"] = inst.ALPN
+		}
+		stream["tlsSettings"] = tls
+		stream["security"] = "tls"
 	}
 	raw := map[string]any{
 		"protocol":       "tuic",
@@ -1865,13 +1876,15 @@ func (s *SubJsonService) genHy(inbound *model.Inbound, newStream map[string]any,
 	}
 	for _, key := range []string{
 		"up_mbps", "down_mbps", "hop_interval", "hop_interval_max",
+		"upMbps", "downMbps", "up", "down", "hopInterval", "hopIntervalMax",
+		"bbrProfile", "disableChromeParrot", "ignoreClientBandwidth",
 		"bbr_profile", "disable_chrome_parrot", "ignore_client_bandwidth",
 	} {
 		if value, ok := hyStream[key]; ok {
 			outHyStream[key] = value
 		}
 	}
-	if obfs, ok := hyStream["obfs"].(map[string]any); ok && len(obfs) > 0 {
+	if obfs, ok := hyStream["obfs"]; ok {
 		outHyStream["obfs"] = obfs
 	}
 	newStream["hysteriaSettings"] = outHyStream

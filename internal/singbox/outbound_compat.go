@@ -485,6 +485,9 @@ func translateOutboundSockopt(out map[string]any, stream map[string]any, tag str
 	if len(sockopt) == 0 {
 		return nil
 	}
+	if err := rejectXrayFields(sockopt, fmt.Sprintf("outbound %q sockopt", tag), "customSockopt", "happyEyeballs", "tcpCongestion", "tcpcongestion", "tcpMaxSeg", "tcpUserTimeout", "tcpWindowClamp", "V6Only", "tproxy", "addressPortStrategy"); err != nil {
+		return err
+	}
 	if bindInterface := strings.TrimSpace(rawString(sockopt, "interface")); bindInterface != "" {
 		out["bind_interface"] = bindInterface
 	}
@@ -627,6 +630,17 @@ func applyXrayOutboundCompatibility(out map[string]any, raw map[string]any, stre
 		return err
 	}
 	switch protocol {
+	case "freedom":
+		if err := rejectXrayFields(settings, fmt.Sprintf("outbound %q freedom", tag), "redirect", "fragment", "noise", "noises", "finalRules", "proxyProtocol"); err != nil {
+			return err
+		}
+		resolver, err := xrayDomainResolver(rawString(settings, "domainStrategy"), tag)
+		if err != nil {
+			return err
+		}
+		if resolver != nil {
+			out["domain_resolver"] = resolver
+		}
 	case "socks":
 		translateFlatProxyCredentials(out, settings)
 	case "http":
@@ -658,6 +672,16 @@ func applyXrayOutboundCompatibility(out map[string]any, raw map[string]any, stre
 	}
 	if err := translateOutboundSockopt(out, stream, tag); err != nil {
 		return err
+	}
+	proxy := rawObject(raw, "proxySettings")
+	if detour := rawString(proxy, "tag"); detour != "" {
+		if xrayBool(proxy, "transportLayer") {
+			return fmt.Errorf("outbound %q: proxySettings.transportLayer cannot be represented", tag)
+		}
+		if current := rawString(out, "detour"); current != "" && current != detour {
+			return fmt.Errorf("outbound %q has conflicting proxySettings and dialerProxy", tag)
+		}
+		out["detour"] = detour
 	}
 	ensureOutboundDomainResolver(out)
 	return nil

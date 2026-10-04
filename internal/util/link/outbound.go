@@ -433,10 +433,12 @@ func parseShadowsocks(link string) (*ParseResult, error) {
 	if host == "" || port <= 0 || port > 65535 {
 		return nil, fmt.Errorf("invalid ss host or port")
 	}
-	identity := "ss:" + method + ":" + pass + "@" + net.JoinHostPort(host, strconv.Itoa(port)) + "?" + canonicalQuery(params)
 	// The panel and v2rayN express shadowsocks tcp/http obfuscation only as the
 	// SIP002 plugin, so it has to become the header it stands for.
-	applyObfsLocalPlugin(params, rawQuery)
+	if err := applyObfsLocalPlugin(params, rawQuery); err != nil {
+		return nil, err
+	}
+	identity := "ss:" + method + ":" + pass + "@" + net.JoinHostPort(host, strconv.Itoa(port)) + "?" + canonicalQuery(params)
 	network := params.Get("type")
 	if network == "" {
 		network = "tcp"
@@ -472,37 +474,46 @@ func splitMethodPass(userInfo string) (string, string) {
 
 // applyObfsLocalPlugin maps a SIP002 obfs-local=http plugin onto the tcp/http
 // response header it stands for; the other plugin values have no Xray header.
-func applyObfsLocalPlugin(p url.Values, rawQuery string) {
-	if p.Get("headerType") != "" || p.Get("type") == "http" {
-		return
-	}
+func applyObfsLocalPlugin(p url.Values, rawQuery string) error {
 	plugin := p.Get("plugin")
 	if plugin == "" {
 		plugin = rawQueryPlugin(rawQuery)
 	}
+	if plugin == "" {
+		return nil
+	}
 	parts := strings.Split(plugin, ";")
-	if len(parts) == 0 || parts[0] != "obfs-local" {
-		return
+	if parts[0] != "obfs-local" {
+		return fmt.Errorf("unsupported SIP002 plugin %q", parts[0])
 	}
 	obfs, host := "", ""
 	for _, part := range parts[1:] {
-		if k, v, ok := strings.Cut(part, "="); ok {
-			switch k {
-			case "obfs":
-				obfs = v
-			case "obfs-host":
-				host = v
-			}
+		key, value, ok := strings.Cut(part, "=")
+		if !ok {
+			return fmt.Errorf("invalid SIP002 plugin option")
+		}
+		switch key {
+		case "obfs":
+			obfs = value
+		case "obfs-host":
+			host = value
+		default:
+			return fmt.Errorf("unsupported SIP002 plugin option %q", key)
 		}
 	}
 	if obfs != "http" {
-		return
+		return fmt.Errorf("unsupported obfs-local mode %q", obfs)
 	}
+	if network := p.Get("type"); network != "" && network != "tcp" {
+		return fmt.Errorf("conflicting SIP002 plugin transport")
+	}
+	p.Set("plugin", plugin)
 	p.Set("type", "tcp")
 	p.Set("headerType", "http")
 	if host != "" {
 		p.Set("host", host)
 	}
+	return nil
 }
 
 // rawQueryPlugin reads the plugin parameter straight out of the query string for

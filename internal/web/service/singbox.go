@@ -110,15 +110,19 @@ func singBoxTUICInbound(ib *model.Inbound, clients []any) (map[string]any, error
 	if inst.Port < 1 || inst.Port > 65535 {
 		return nil, fmt.Errorf("TUIC inbound %q has an invalid port", ib.Tag)
 	}
+	tls := map[string]any{"enabled": true, "alpn": inst.ALPN}
+	if strings.Contains(inst.Certificate, "-----BEGIN CERTIFICATE-----") {
+		tls["certificate"] = strings.Split(inst.Certificate, "\n")
+		tls["key"] = strings.Split(inst.PrivateKey, "\n")
+	} else {
+		tls["certificate_path"], tls["key_path"] = inst.Certificate, inst.PrivateKey
+	}
 	return map[string]any{
 		"type": "tuic", "tag": ib.Tag, "listen": listen, "listen_port": inst.Port,
 		"users": users, "congestion_control": inst.CongestionControl,
 		"auth_timeout":       fmt.Sprintf("%ds", inst.AuthenticationTimeout),
 		"zero_rtt_handshake": inst.ZeroRTTHandshake,
-		"tls": map[string]any{
-			"enabled": true, "certificate_path": inst.Certificate,
-			"key_path": inst.PrivateKey, "alpn": inst.ALPN,
-		},
+		"tls": tls,
 	}, nil
 }
 

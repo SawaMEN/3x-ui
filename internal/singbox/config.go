@@ -988,7 +988,10 @@ func translateStream(out map[string]any, protocol string, stream map[string]any,
 	}
 	if len(stream) == 0 {
 		if protocol == "hysteria" || protocol == "hysteria2" {
-			return translateHysteriaStream(out, protocol, stream, inbound)
+			if err := translateHysteriaStream(out, protocol, stream, inbound); err != nil {
+				return err
+			}
+			return translateFinalMask(out, stream, protocol, inbound)
 		}
 		return nil
 	}
@@ -1143,8 +1146,14 @@ func translateStream(out map[string]any, protocol string, stream map[string]any,
 	network := strings.ToLower(strings.TrimSpace(rawString(stream, "network")))
 	if protocol == "hysteria2" || protocol == "hysteria" {
 		if network == "hysteria" || network == "" {
-			return translateHysteriaStream(out, protocol, stream, inbound)
+			if err := translateHysteriaStream(out, protocol, stream, inbound); err != nil {
+				return err
+			}
+			return translateFinalMask(out, stream, protocol, inbound)
 		}
+	}
+	if err := translateFinalMask(out, stream, protocol, inbound); err != nil {
+		return err
 	}
 	switch network {
 	case "", "tcp", "raw":
@@ -1299,11 +1308,11 @@ func translateHysteriaStream(out map[string]any, protocol string, stream map[str
 		return fmt.Errorf("%s %q has inconsistent Hysteria version %d", direction, rawString(out, "tag"), version)
 	}
 	if protocol == "hysteria" {
-		up := rawInt(settings, "up_mbps")
+		up := hysteriaBandwidth(settings, "up_mbps", "upMbps", "up")
 		if up <= 0 {
 			up = rawInt(settings, "up")
 		}
-		down := rawInt(settings, "down_mbps")
+		down := hysteriaBandwidth(settings, "down_mbps", "downMbps", "down")
 		if down <= 0 {
 			down = rawInt(settings, "down")
 		}
@@ -1312,16 +1321,19 @@ func translateHysteriaStream(out map[string]any, protocol string, stream map[str
 		}
 		out["up_mbps"] = up
 		out["down_mbps"] = down
+		if obfs := rawString(settings, "obfs"); obfs != "" {
+			out["obfs"] = obfs
+		}
 	}
 	if protocol == "hysteria2" {
-		up := rawInt(settings, "up_mbps")
+		up := hysteriaBandwidth(settings, "up_mbps", "upMbps", "up")
 		if up <= 0 {
 			up = rawInt(settings, "up")
 		}
 		if up > 0 {
 			out["up_mbps"] = up
 		}
-		down := rawInt(settings, "down_mbps")
+		down := hysteriaBandwidth(settings, "down_mbps", "downMbps", "down")
 		if down <= 0 {
 			down = rawInt(settings, "down")
 		}
@@ -1370,6 +1382,17 @@ func translateHysteriaStream(out map[string]any, protocol string, stream map[str
 			case "":
 			default:
 				return fmt.Errorf("%s %q has invalid Hysteria2 obfs type %q", direction, rawString(out, "tag"), kind)
+			}
+		}
+	}
+	if timeout := rawInt(settings, "udpIdleTimeout"); timeout > 0 {
+		if inbound {
+			out["udp_timeout"] = fmt.Sprintf("%ds", timeout)
+		} else {
+			// Hysteria outbound has no UDP association timeout field.
+			// The panel emits 60 as a default even when it was not user configured.
+			if timeout != 60 {
+				return fmt.Errorf("outbound %q: Hysteria udpIdleTimeout cannot be represented", rawString(out, "tag"))
 			}
 		}
 	}
@@ -1476,4 +1499,13 @@ func firstObject(m map[string]any, key string) map[string]any {
 	}
 	value, _ := values[0].(map[string]any)
 	return value
+}
+
+func hysteriaBandwidth(settings map[string]any, keys ...string) int {
+	for _, key := range keys {
+		if value := rawInt(settings, key); value > 0 {
+			return value
+		}
+	}
+	return 0
 }

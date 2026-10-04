@@ -456,23 +456,28 @@ function sanitizeFinalMaskQuicParams(parsed: Record<string, unknown>): void {
 
 // The panel exports tcp/http obfuscation as the SIP002 obfs-local plugin only,
 // so the header it stands for has to be rebuilt before the transport is applied.
-function applyObfsLocalPluginParams(params: URLSearchParams): void {
-  if (params.get('headerType') || params.get('type') === 'http') return;
-  const parts = (params.get('plugin') ?? '').split(';');
-  if (parts[0] !== 'obfs-local') return;
+// Never import an unknown SIP002 plugin as a plain Shadowsocks connection.
+function applyObfsLocalPluginParams(params: URLSearchParams): boolean {
+  const plugin = params.get('plugin');
+  if (!plugin) return true;
+  const parts = plugin.split(';');
+  if (parts[0] !== 'obfs-local') return false;
   let obfs = '';
   let host = '';
   for (const part of parts.slice(1)) {
     const eq = part.indexOf('=');
-    if (eq < 0) continue;
+    if (eq < 0) return false;
     const key = part.slice(0, eq);
     if (key === 'obfs') obfs = part.slice(eq + 1);
     else if (key === 'obfs-host') host = part.slice(eq + 1);
+    else return false;
   }
-  if (obfs !== 'http') return;
+  if (obfs !== 'http') return false;
+  if (params.get('type') && params.get('type') !== 'tcp') return false;
   params.set('type', 'tcp');
   params.set('headerType', 'http');
   if (host) params.set('host', host);
+  return true;
 }
 
 function applySecurityParams(stream: Raw, params: URLSearchParams): void {
@@ -719,7 +724,7 @@ export function parseShadowsocksLink(link: string): Raw | null {
   const method = sep < 0 ? '2022-blake3-aes-128-gcm' : userInfo.slice(0, sep);
   const password = sep < 0 ? userInfo : userInfo.slice(sep + 1);
   const params = new URLSearchParams(rawQuery);
-  applyObfsLocalPluginParams(params);
+  if (!applyObfsLocalPluginParams(params)) return null;
   const network = params.get('type') ?? 'tcp';
   const security = (params.get('security') ?? 'none') as string;
   const stream = buildStream(network, security);
