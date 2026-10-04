@@ -3,6 +3,7 @@ import { Alert, Button, Input, InputNumber, Popconfirm, Space, Tag, Typography, 
 import { ReloadOutlined } from '@ant-design/icons';
 
 import { HttpUtil } from '@/utils';
+import { onNumber } from '@/utils/onNumber';
 
 type ApiMsg<T = unknown> = {
   success?: boolean;
@@ -283,9 +284,9 @@ export default function GatewayModeControl() {
               max={32}
               value={networkConfig.lanPrefix}
               disabled={networkConfigured || orphanedNetwork || busy}
-              onChange={(value) =>
-                setNetworkConfig((current) => ({ ...current, lanPrefix: value ?? 24 }))
-              }
+              onChange={onNumber((value) =>
+                setNetworkConfig((current) => ({ ...current, lanPrefix: value })),
+              )}
               style={{ width: 90, display: 'block' }}
             />
           </div>
