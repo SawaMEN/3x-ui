@@ -3,6 +3,7 @@ package service
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -13,11 +14,11 @@ import (
 )
 
 const (
-	gatewayStatePath          = "/etc/x-ui/gateway.env"
-	gatewayNFTPath            = "/etc/x-ui/gateway.nft"
-	gatewayRoutingServicePath = "/etc/systemd/system/xui-gateway-routing.service"
+	gatewayStatePath           = "/etc/x-ui/gateway.env"
+	gatewayNFTPath             = "/etc/x-ui/gateway.nft"
+	gatewayRoutingServicePath  = "/etc/systemd/system/xui-gateway-routing.service"
 	gatewayFirewallServicePath = "/etc/systemd/system/xui-gateway-firewall.service"
-	gatewayRestoreScriptPath  = "/usr/local/sbin/xui-gateway-firewall-restore"
+	gatewayRestoreScriptPath   = "/usr/local/sbin/xui-gateway-firewall-restore"
 )
 
 type GatewayNetworkConfig struct {
@@ -28,11 +29,13 @@ type GatewayNetworkConfig struct {
 }
 
 type GatewayNetworkStatus struct {
-	Configured   bool                 `json:"configured"`
-	Config       GatewayNetworkConfig `json:"config"`
-	Forwarding   bool                 `json:"forwarding"`
-	PolicyRoute  bool                 `json:"policyRoute"`
-	NFTables     bool                 `json:"nftables"`
+	Configured  bool                 `json:"configured"`
+	Active      bool                 `json:"active"`
+	Persistent  bool                 `json:"persistent"`
+	Config      GatewayNetworkConfig `json:"config"`
+	Forwarding  bool                 `json:"forwarding"`
+	PolicyRoute bool                 `json:"policyRoute"`
+	NFTables    bool                 `json:"nftables"`
 }
 
 type GatewayNetworkService struct{}
@@ -44,21 +47,65 @@ type gatewayNetworkState struct {
 }
 
 func (s *GatewayNetworkService) Status(ctx context.Context) GatewayNetworkStatus {
-	state, err := loadGatewayNetworkState()
-	if err != nil {
-		return GatewayNetworkStatus{}
+	status := GatewayNetworkStatus{}
+
+	state, stateErr := loadGatewayNetworkState()
+	if stateErr == nil {
+		status.Configured = true
+		status.Config = state.Config
+	} else if _, err := os.Stat(gatewayStatePath); err == nil {
+		// Keep a corrupt/stale state visible so the UI can offer cleanup instead
+		// of silently pretending that Gateway networking is absent.
+		status.Active = true
 	}
-	status := GatewayNetworkStatus{Configured: true, Config: state.Config}
+
 	if out, err := runGatewayCommand(ctx, "sysctl", "-n", "net.ipv4.ip_forward"); err == nil {
 		status.Forwarding = strings.TrimSpace(out) == "1"
 	}
+
+	rulePresent := false
 	if out, err := runGatewayCommand(ctx, "ip", "rule", "show"); err == nil {
-		status.PolicyRoute = strings.Contains(out, "fwmark 0x40/0xc0 lookup 100") || strings.Contains(out, "fwmark 0x40/0xc0 table 100")
+		rulePresent = gatewayPolicyRulePresent(out)
 	}
+	routePresent := false
+	if out, err := runGatewayCommand(ctx, "ip", "route", "show", "table", "100"); err == nil {
+		routePresent = gatewayPolicyRoutePresent(out)
+	}
+	status.PolicyRoute = rulePresent && routePresent
+
+	mainNFT := false
 	if _, err := runGatewayCommand(ctx, "nft", "list", "table", "inet", "xui_gateway"); err == nil {
-		status.NFTables = true
+		mainNFT = true
 	}
+	natNFT := false
+	if _, err := runGatewayCommand(ctx, "nft", "list", "table", "ip", "xui_gateway_nat"); err == nil {
+		natNFT = true
+	}
+	status.NFTables = mainNFT && (!status.Configured || state.Config.WANInterface == "" || natNFT)
+	status.Active = status.Active || rulePresent || routePresent || mainNFT || natNFT
+
+	_, routingUnitErr := os.Stat(gatewayRoutingServicePath)
+	_, firewallUnitErr := os.Stat(gatewayFirewallServicePath)
+	_, restoreScriptErr := os.Stat(gatewayRestoreScriptPath)
+	_, nftFileErr := os.Stat(gatewayNFTPath)
+	status.Persistent = routingUnitErr == nil && firewallUnitErr == nil && restoreScriptErr == nil && nftFileErr == nil
+
 	return status
+}
+
+func gatewayPolicyRulePresent(out string) bool {
+	return strings.Contains(out, "fwmark 0x40/0xc0 lookup 100") ||
+		strings.Contains(out, "fwmark 0x40/0xc0 table 100")
+}
+
+func gatewayPolicyRoutePresent(out string) bool {
+	for _, line := range strings.Split(out, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) >= 4 && fields[0] == "local" && fields[1] == "default" && fields[2] == "dev" && fields[3] == "lo" {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *GatewayNetworkService) Enable(ctx context.Context, cfg GatewayNetworkConfig) error {
@@ -75,6 +122,11 @@ func (s *GatewayNetworkService) Enable(ctx context.Context, cfg GatewayNetworkCo
 		// forwarding value captured before Gateway Mode was first enabled.
 		return applyGatewayNetwork(ctx, normalized, lanNetwork, state.OldForwarding, false)
 	}
+	if _, statErr := os.Stat(gatewayStatePath); statErr == nil {
+		return fmt.Errorf("Gateway network state is invalid; disable Gateway Mode to clean it up before enabling again")
+	} else if !os.IsNotExist(statErr) {
+		return fmt.Errorf("check Gateway network state: %w", statErr)
+	}
 
 	oldForwarding, err := runGatewayCommand(ctx, "sysctl", "-n", "net.ipv4.ip_forward")
 	if err != nil {
@@ -89,26 +141,36 @@ func (s *GatewayNetworkService) Enable(ctx context.Context, cfg GatewayNetworkCo
 
 func (s *GatewayNetworkService) Disable(ctx context.Context) error {
 	state, stateErr := loadGatewayNetworkState()
+	statePresent := false
+	if _, err := os.Stat(gatewayStatePath); err == nil {
+		statePresent = true
+	}
 
-	_ = runGatewayCommandOnly(ctx, "systemctl", "disable", "--now", "xui-gateway-firewall.service")
-	_ = runGatewayCommandOnly(ctx, "systemctl", "disable", "--now", "xui-gateway-routing.service")
-	_ = os.Remove(gatewayFirewallServicePath)
-	_ = os.Remove(gatewayRoutingServicePath)
-	_ = os.Remove(gatewayRestoreScriptPath)
-	_ = os.Remove(gatewayNFTPath)
-	_ = runGatewayCommandOnly(ctx, "nft", "delete", "table", "inet", "xui_gateway")
-	_ = runGatewayCommandOnly(ctx, "nft", "delete", "table", "ip", "xui_gateway_nat")
-	_ = runGatewayCommandOnly(ctx, "ip", "rule", "del", "fwmark", "0x40/0xc0", "table", "100")
-	_ = runGatewayCommandOnly(ctx, "ip", "route", "del", "local", "default", "dev", "lo", "table", "100")
+	cleanupErr := cleanupGatewayNetworkRuntime(ctx)
+	persistenceErr := removeGatewayNetworkPersistence(ctx, false)
 
+	var forwardingErr error
 	if stateErr == nil && (state.OldForwarding == "0" || state.OldForwarding == "1") {
 		if _, err := runGatewayCommand(ctx, "sysctl", "-w", "net.ipv4.ip_forward="+state.OldForwarding); err != nil {
-			return fmt.Errorf("restore net.ipv4.ip_forward: %w", err)
+			forwardingErr = fmt.Errorf("restore net.ipv4.ip_forward: %w", err)
+		}
+	} else if statePresent && stateErr != nil {
+		forwardingErr = fmt.Errorf("read Gateway state for forwarding restore: %w", stateErr)
+	}
+
+	// If restoring the original forwarding value failed, preserve the state so
+	// the operator can retry. A corrupt state cannot be retried meaningfully and
+	// is removed after reporting the problem.
+	if forwardingErr == nil || stateErr != nil {
+		if err := os.Remove(gatewayStatePath); err != nil && !os.IsNotExist(err) {
+			persistenceErr = errors.Join(persistenceErr, fmt.Errorf("remove Gateway state: %w", err))
 		}
 	}
-	_ = os.Remove(gatewayStatePath)
-	_ = runGatewayCommandOnly(ctx, "systemctl", "daemon-reload")
-	return nil
+	if err := runGatewayCommandOnly(ctx, "systemctl", "daemon-reload"); err != nil {
+		persistenceErr = errors.Join(persistenceErr, fmt.Errorf("reload systemd: %w", err))
+	}
+
+	return errors.Join(cleanupErr, persistenceErr, forwardingErr)
 }
 
 func applyGatewayNetwork(ctx context.Context, cfg GatewayNetworkConfig, lanNetwork, oldForwarding string, persistState bool) (err error) {
@@ -118,23 +180,19 @@ func applyGatewayNetwork(ctx context.Context, cfg GatewayNetworkConfig, lanNetwo
 
 	rollback := true
 	defer func() {
-		if !rollback {
+		if !rollback || !persistState {
 			return
 		}
-		_ = runGatewayCommandOnly(context.Background(), "nft", "delete", "table", "inet", "xui_gateway")
-		_ = runGatewayCommandOnly(context.Background(), "nft", "delete", "table", "ip", "xui_gateway_nat")
-		_ = runGatewayCommandOnly(context.Background(), "ip", "rule", "del", "fwmark", "0x40/0xc0", "table", "100")
-		_ = runGatewayCommandOnly(context.Background(), "ip", "route", "del", "local", "default", "dev", "lo", "table", "100")
-		if persistState {
-			_, _ = runGatewayCommand(context.Background(), "sysctl", "-w", "net.ipv4.ip_forward="+oldForwarding)
-		}
+		_ = cleanupGatewayNetworkRuntime(context.Background())
+		_ = removeGatewayNetworkPersistence(context.Background(), true)
+		_, _ = runGatewayCommand(context.Background(), "sysctl", "-w", "net.ipv4.ip_forward="+oldForwarding)
 	}()
 
 	if _, err = runGatewayCommand(ctx, "sysctl", "-w", "net.ipv4.ip_forward=1"); err != nil {
 		return fmt.Errorf("enable IPv4 forwarding: %w", err)
 	}
 
-	_ = runGatewayCommandOnly(ctx, "ip", "rule", "del", "fwmark", "0x40/0xc0", "table", "100")
+	_ = deleteGatewayPolicyRule(ctx)
 	if _, err = runGatewayCommand(ctx, "ip", "rule", "add", "fwmark", "0x40/0xc0", "table", "100"); err != nil {
 		return fmt.Errorf("add Gateway policy rule: %w", err)
 	}
@@ -142,22 +200,22 @@ func applyGatewayNetwork(ctx context.Context, cfg GatewayNetworkConfig, lanNetwo
 		return fmt.Errorf("add Gateway policy route: %w", err)
 	}
 
-	_ = runGatewayCommandOnly(ctx, "nft", "delete", "table", "inet", "xui_gateway")
-	_ = runGatewayCommandOnly(ctx, "nft", "delete", "table", "ip", "xui_gateway_nat")
-	nftRules := gatewayNFTRules(lanNetwork, cfg.WANInterface)
+	_ = deleteGatewayNFTTable(ctx, "inet", "xui_gateway")
+	_ = deleteGatewayNFTTable(ctx, "ip", "xui_gateway_nat")
+	nftRules := gatewayNFTRules(cfg.LANInterface, lanNetwork, cfg.WANInterface)
 	if err = runGatewayCommandInput(ctx, nftRules, "nft", "-f", "-"); err != nil {
 		return fmt.Errorf("apply Gateway nftables rules: %w", err)
 	}
 	if err = os.WriteFile(gatewayNFTPath, []byte(nftRules), 0o600); err != nil {
 		return fmt.Errorf("save Gateway nftables rules: %w", err)
 	}
-	if err = installGatewayNetworkUnits(ctx); err != nil {
-		return err
-	}
 	if persistState {
 		if err = saveGatewayNetworkState(gatewayNetworkState{OldForwarding: oldForwarding, Config: cfg, LANNetwork: lanNetwork}); err != nil {
 			return err
 		}
+	}
+	if err = installGatewayNetworkUnits(ctx); err != nil {
+		return err
 	}
 	rollback = false
 	return nil
@@ -176,18 +234,33 @@ func normalizeGatewayNetworkConfig(cfg GatewayNetworkConfig) (GatewayNetworkConf
 	if cfg.LANInterface == "" {
 		return cfg, "", fmt.Errorf("LAN interface is required")
 	}
-	if _, err := net.InterfaceByName(cfg.LANInterface); err != nil {
+	if !safeGatewayInterfaceName(cfg.LANInterface) {
+		return cfg, "", fmt.Errorf("LAN interface %q contains unsupported characters", cfg.LANInterface)
+	}
+	lanInterface, err := net.InterfaceByName(cfg.LANInterface)
+	if err != nil {
 		return cfg, "", fmt.Errorf("LAN interface %q does not exist", cfg.LANInterface)
 	}
 	ip := net.ParseIP(cfg.LANIP)
 	if ip == nil || ip.To4() == nil {
 		return cfg, "", fmt.Errorf("LAN IP must be a valid IPv4 address")
 	}
+	ip = ip.To4()
+	assigned, err := gatewayInterfaceHasIPv4(lanInterface, ip)
+	if err != nil {
+		return cfg, "", fmt.Errorf("read addresses for LAN interface %q: %w", cfg.LANInterface, err)
+	}
+	if !assigned {
+		return cfg, "", fmt.Errorf("LAN IP %s is not assigned to interface %s", ip.String(), cfg.LANInterface)
+	}
 	_, network, err := net.ParseCIDR(fmt.Sprintf("%s/%d", ip.String(), cfg.LANPrefix))
 	if err != nil {
 		return cfg, "", fmt.Errorf("calculate LAN network: %w", err)
 	}
 	if cfg.WANInterface != "" {
+		if !safeGatewayInterfaceName(cfg.WANInterface) {
+			return cfg, "", fmt.Errorf("WAN interface %q contains unsupported characters", cfg.WANInterface)
+		}
 		if _, err := net.InterfaceByName(cfg.WANInterface); err != nil {
 			return cfg, "", fmt.Errorf("WAN interface %q does not exist", cfg.WANInterface)
 		}
@@ -197,6 +270,47 @@ func normalizeGatewayNetworkConfig(cfg GatewayNetworkConfig) (GatewayNetworkConf
 	}
 	cfg.LANIP = ip.String()
 	return cfg, network.String(), nil
+}
+
+func safeGatewayInterfaceName(name string) bool {
+	if name == "" || len(name) > 15 {
+		return false
+	}
+	for _, r := range name {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			continue
+		}
+		switch r {
+		case '_', '-', '.', ':':
+			continue
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func gatewayInterfaceHasIPv4(iface *net.Interface, target net.IP) (bool, error) {
+	addrs, err := iface.Addrs()
+	if err != nil {
+		return false, err
+	}
+	for _, addr := range addrs {
+		var address string
+		switch value := addr.(type) {
+		case *net.IPNet:
+			address = value.IP.String()
+		case *net.IPAddr:
+			address = value.IP.String()
+		default:
+			address = strings.SplitN(addr.String(), "/", 2)[0]
+		}
+		ip := net.ParseIP(address)
+		if ip != nil && ip.To4() != nil && ip.To4().Equal(target) {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func saveGatewayNetworkState(state gatewayNetworkState) error {
@@ -258,6 +372,7 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
+ExecStartPre=-/usr/sbin/ip rule del fwmark 0x40/0xc0 table 100
 ExecStart=/usr/sbin/ip rule add fwmark 0x40/0xc0 table 100
 ExecStart=/usr/sbin/ip route replace local default dev lo table 100
 ExecStop=-/usr/sbin/ip rule del fwmark 0x40/0xc0 table 100
@@ -279,8 +394,8 @@ RULES="/etc/x-ui/gateway.nft"
 `
 	firewallUnit := `[Unit]
 Description=3X-UI Gateway Mode Firewall Restore
-Wants=network-online.target
-After=network-online.target nftables.service
+Wants=network-online.target xui-gateway-routing.service
+After=network-online.target nftables.service xui-gateway-routing.service
 
 [Service]
 Type=oneshot
@@ -290,13 +405,13 @@ RemainAfterExit=yes
 [Install]
 WantedBy=multi-user.target
 `
-	if err := os.WriteFile(gatewayRoutingServicePath, []byte(routingUnit), 0o644); err != nil {
+	if err := atomicWriteGatewayFile(gatewayRoutingServicePath, []byte(routingUnit), 0o644); err != nil {
 		return fmt.Errorf("write Gateway routing service: %w", err)
 	}
-	if err := os.WriteFile(gatewayRestoreScriptPath, []byte(restoreScript), 0o700); err != nil {
+	if err := atomicWriteGatewayFile(gatewayRestoreScriptPath, []byte(restoreScript), 0o700); err != nil {
 		return fmt.Errorf("write Gateway restore script: %w", err)
 	}
-	if err := os.WriteFile(gatewayFirewallServicePath, []byte(firewallUnit), 0o644); err != nil {
+	if err := atomicWriteGatewayFile(gatewayFirewallServicePath, []byte(firewallUnit), 0o644); err != nil {
 		return fmt.Errorf("write Gateway firewall service: %w", err)
 	}
 	if _, err := runGatewayCommand(ctx, "systemctl", "daemon-reload"); err != nil {
@@ -308,7 +423,113 @@ WantedBy=multi-user.target
 	return nil
 }
 
-func gatewayNFTRules(lanNetwork, wanInterface string) string {
+func atomicWriteGatewayFile(path string, content []byte, mode os.FileMode) error {
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, content, mode); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmp, mode); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	return nil
+}
+
+func removeGatewayNetworkPersistence(ctx context.Context, removeState bool) error {
+	var errs []error
+	for _, unit := range []struct {
+		name string
+		path string
+	}{
+		{name: "xui-gateway-firewall.service", path: gatewayFirewallServicePath},
+		{name: "xui-gateway-routing.service", path: gatewayRoutingServicePath},
+	} {
+		if _, err := os.Stat(unit.path); err == nil {
+			if cmdErr := runGatewayCommandOnly(ctx, "systemctl", "disable", "--now", unit.name); cmdErr != nil {
+				errs = append(errs, fmt.Errorf("disable %s: %w", unit.name, cmdErr))
+			}
+		} else if !os.IsNotExist(err) {
+			errs = append(errs, fmt.Errorf("check %s: %w", unit.path, err))
+		}
+	}
+	for _, path := range []string{gatewayFirewallServicePath, gatewayRoutingServicePath, gatewayRestoreScriptPath, gatewayNFTPath} {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			errs = append(errs, fmt.Errorf("remove %s: %w", path, err))
+		}
+	}
+	if removeState {
+		if err := os.Remove(gatewayStatePath); err != nil && !os.IsNotExist(err) {
+			errs = append(errs, fmt.Errorf("remove %s: %w", gatewayStatePath, err))
+		}
+	}
+	if err := runGatewayCommandOnly(ctx, "systemctl", "daemon-reload"); err != nil {
+		errs = append(errs, fmt.Errorf("reload systemd: %w", err))
+	}
+	return errors.Join(errs...)
+}
+
+func cleanupGatewayNetworkRuntime(ctx context.Context) error {
+	var errs []error
+	if err := deleteGatewayNFTTable(ctx, "inet", "xui_gateway"); err != nil {
+		errs = append(errs, err)
+	}
+	if err := deleteGatewayNFTTable(ctx, "ip", "xui_gateway_nat"); err != nil {
+		errs = append(errs, err)
+	}
+	if err := deleteGatewayPolicyRule(ctx); err != nil {
+		errs = append(errs, err)
+	}
+	if out, err := runGatewayCommand(ctx, "ip", "route", "show", "table", "100"); err != nil {
+		errs = append(errs, fmt.Errorf("inspect Gateway policy route: %w", err))
+	} else if gatewayPolicyRoutePresent(out) {
+		if _, err := runGatewayCommand(ctx, "ip", "route", "del", "local", "default", "dev", "lo", "table", "100"); err != nil {
+			errs = append(errs, fmt.Errorf("delete Gateway policy route: %w", err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+func deleteGatewayPolicyRule(ctx context.Context) error {
+	out, err := runGatewayCommand(ctx, "ip", "rule", "show")
+	if err != nil {
+		return fmt.Errorf("inspect Gateway policy rule: %w", err)
+	}
+	for gatewayPolicyRulePresent(out) {
+		if _, err := runGatewayCommand(ctx, "ip", "rule", "del", "fwmark", "0x40/0xc0", "table", "100"); err != nil {
+			return fmt.Errorf("delete Gateway policy rule: %w", err)
+		}
+		out, err = runGatewayCommand(ctx, "ip", "rule", "show")
+		if err != nil {
+			return fmt.Errorf("recheck Gateway policy rule: %w", err)
+		}
+	}
+	return nil
+}
+
+func deleteGatewayNFTTable(ctx context.Context, family, name string) error {
+	_, err := runGatewayCommand(ctx, "nft", "list", "table", family, name)
+	if err != nil {
+		if gatewayNFTObjectMissing(err) {
+			return nil
+		}
+		return fmt.Errorf("inspect nftables table %s %s: %w", family, name, err)
+	}
+	if _, err := runGatewayCommand(ctx, "nft", "delete", "table", family, name); err != nil {
+		return fmt.Errorf("delete nftables table %s %s: %w", family, name, err)
+	}
+	return nil
+}
+
+func gatewayNFTObjectMissing(err error) bool {
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "no such file or directory") || strings.Contains(message, "does not exist")
+}
+
+func gatewayNFTRules(lanInterface, lanNetwork, wanInterface string) string {
 	nat := ""
 	if wanInterface != "" {
 		nat = fmt.Sprintf(`
@@ -329,55 +550,26 @@ table ip xui_gateway_nat {
         auto-merge
         elements = { 0.0.0.0/8, 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16, 172.16.0.0/12, 192.0.0.0/24, 192.0.2.0/24, 192.88.99.0/24, 192.168.0.0/16, 198.51.100.0/24, 203.0.113.0/24, 224.0.0.0/3 }
     }
-    set whitelist6 {
-        type ipv6_addr
-        flags interval
-        auto-merge
-        elements = { ::/127, fc00::/7, fe80::/10, ff00::/8 }
-    }
     set interface {
         type ipv4_addr
         flags interval
         auto-merge
         elements = { 127.0.0.0/8, %s }
     }
-    set interface6 {
-        type ipv6_addr
-        flags interval
-        auto-merge
-        elements = { ::1, fe80::/64 }
-    }
-    chain tp_out {
-        meta mark & 0x00000080 == 0x00000080 return
-        meta l4proto { tcp, udp } fib saddr type local fib daddr type != local jump tp_rule
-    }
     chain tp_pre {
-        iifname "lo" meta mark & 0x000000c0 != 0x00000040 return
         meta l4proto { tcp, udp } fib saddr type != local fib daddr type != local jump tp_rule
         meta l4proto { tcp, udp } meta mark & 0x000000c0 == 0x00000040 tproxy ip to 127.0.0.1:52345
-        meta l4proto { tcp, udp } meta mark & 0x000000c0 == 0x00000040 tproxy ip6 to [::1]:52345
-    }
-    chain output {
-        type route hook output priority mangle - 5;
-        policy accept;
     }
     chain prerouting {
         type filter hook prerouting priority mangle - 5;
         policy accept;
-        meta nfproto { ipv4, ipv6 } jump tp_pre
+        iifname "%s" meta nfproto ipv4 jump tp_pre
     }
     chain tp_rule {
         meta mark set ct mark
         meta mark & 0x000000c0 == 0x00000040 return
-        iifname "br-*" return
-        iifname "docker*" return
-        iifname "veth*" return
-        iifname "wg*" return
-        iifname "ppp*" return
         ip daddr @interface return
         ip daddr @whitelist return
-        ip6 daddr @whitelist6 return
-        ip6 daddr @interface6 return
         jump tp_mark
     }
     chain tp_mark {
@@ -385,7 +577,7 @@ table ip xui_gateway_nat {
         meta l4proto udp ct state new meta mark set meta mark | 0x00000040
         ct mark set meta mark
     }
-}%s`, lanNetwork, nat)
+}%s`, lanNetwork, lanInterface, nat)
 }
 
 func runGatewayCommand(ctx context.Context, name string, args ...string) (string, error) {
