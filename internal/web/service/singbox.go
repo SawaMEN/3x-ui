@@ -579,7 +579,13 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 	if len(unsupported) > 0 {
 		return nil, fmt.Errorf("sing-box cannot represent enabled inbounds: %s", strings.Join(unsupported, "; "))
 	}
-	if err := s.applyNativeTemplate(cfg); err != nil {
+	managedMASQUETags := make(map[string]bool)
+	for _, inbound := range inbounds {
+		if inbound != nil && inbound.Protocol == model.MASQUE && inbound.NodeID == nil {
+			managedMASQUETags[inbound.Tag] = true
+		}
+	}
+	if err := s.applyNativeTemplate(cfg, managedMASQUETags); err != nil {
 		return nil, err
 	}
 	for _, inbound := range inbounds {
@@ -739,7 +745,20 @@ func normalizeSingBoxTemplate(raw string) (string, error) {
 	return string(data), nil
 }
 
-func (s *SingBoxService) applyNativeTemplate(cfg *singbox.Config) error {
+// mergeManagedMASQUEEndpoints preserves manually configured endpoints while
+// panel-owned tags always use the current database state (including absence).
+func mergeManagedMASQUEEndpoints(template, generated []map[string]any, tags map[string]bool) []map[string]any {
+	endpoints := make([]map[string]any, 0)
+	for _, endpoint := range template {
+		tag, _ := endpoint["tag"].(string)
+		if !tags[tag] {
+			endpoints = append(endpoints, endpoint)
+		}
+	}
+	return append(endpoints, generated...)
+}
+
+func (s *SingBoxService) applyNativeTemplate(cfg *singbox.Config, managedMASQUETags map[string]bool) error {
 	rawTemplate, err := singBoxSettingService.GetSingBoxConfigTemplate()
 	if err != nil {
 		return err
@@ -781,21 +800,10 @@ func (s *SingBoxService) applyNativeTemplate(cfg *singbox.Config) error {
 	if err := json.Unmarshal(mergedData, cfg); err != nil {
 		return err
 	}
-	if len(managedMASQUE) > 0 {
-		tags := map[string]bool{}
-		for _, endpoint := range managedMASQUE {
-			tag, _ := endpoint["tag"].(string)
-			tags[tag] = true
-		}
-		endpoints := make([]map[string]any, 0, len(cfg.Endpoints)+len(managedMASQUE))
-		for _, endpoint := range cfg.Endpoints {
-			tag, _ := endpoint["tag"].(string)
-			if !tags[tag] {
-				endpoints = append(endpoints, endpoint)
-			}
-		}
-		cfg.Endpoints = append(endpoints, managedMASQUE...)
-	}
+	// Include disabled listeners and listeners without active users in the tag
+	// set, so an old template cannot restore their previous credentials.
+	cfg.Endpoints = mergeManagedMASQUEEndpoints(cfg.Endpoints, managedMASQUE, managedMASQUETags)
+
 	var referencesLocal func(any) bool
 	referencesLocal = func(value any) bool {
 		switch value := value.(type) {
