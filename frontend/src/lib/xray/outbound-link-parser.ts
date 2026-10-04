@@ -530,7 +530,7 @@ export function parseVmessLink(link: string): Raw | null {
           headers: json.host ? { Host: (json.host as string).split(',').filter(Boolean) } : {},
         },
       };
-     } else if (network === 'kcp') {
+    } else if (network === 'kcp') {
       const kcp = stream.kcpSettings as Raw;
       const mtu = kcpParamInRange(String(json.mtu ?? ''), KCP_MIN_MTU, KCP_MAX_MTU);
       const tti = kcpParamInRange(String(json.tti ?? ''), KCP_MIN_TTI, KCP_MAX_TTI);
@@ -777,7 +777,7 @@ export function parseHysteria2Link(link: string): Raw | null {
     },
     tlsSettings: {
       serverName: params.get('sni') ?? '',
-      allowInsecure: ['1', 'true'].includes(params.get('insecure') ?? ''),
+      allowInsecure: ['1', 'true'].includes(params.get('allowInsecure') ?? params.get('insecure') ?? ''),
       alpn: alpn ? alpn.split(',') : ['h3'],
       fingerprint: params.get('fp') ?? '',
       echConfigList: params.get('ech') ?? '',

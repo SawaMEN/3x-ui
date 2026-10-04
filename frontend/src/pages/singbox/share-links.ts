@@ -22,7 +22,10 @@ export function parseShareLink(raw: string): ConfigObject {
   for (const key of ['ech', 'pcs', 'pinSHA256', 'pqv', 'fm']) {
     if (params.get(key)) throw new Error(`Параметр ${key} не поддерживается этим импортом sing-box.`);
   }
-  if (params.get('vcn') && params.get('vcn') !== (params.get('sni') || url.hostname.replace(/^\[|\]$/g, '')))
+  if (
+    params.get('vcn') &&
+    params.get('vcn') !== (params.get('sni') || url.hostname.replace(/^\[|\]$/g, ''))
+  )
     throw new Error('Отдельное имя проверки сертификата не поддерживается этим импортом.');
   const server = url.hostname.replace(/^\[|\]$/g, '');
   if (!server) throw new Error('В ссылке не указан сервер.');
@@ -53,7 +56,8 @@ export function parseShareLink(raw: string): ConfigObject {
     if (protocol === 'https') {
       const tls: ConfigObject = { enabled: true, server_name: params.get('sni') || server };
       if (params.get('alpn')) tls.alpn = params.get('alpn')!.split(',').filter(Boolean);
-      if (['1', 'true'].includes(params.get('allowInsecure') || params.get('insecure') || '')) tls.insecure = true;
+      if (['1', 'true'].includes(params.get('allowInsecure') || params.get('insecure') || ''))
+        tls.insecure = true;
       next.tls = tls;
     }
     return next;
@@ -69,7 +73,9 @@ export function parseShareLink(raw: string): ConfigObject {
     if (params.get('flow')) next.flow = params.get('flow');
   } else {
     const authority = raw.trim().split('://', 2)[1]?.split(/[/?#]/, 1)[0] ?? '';
-    next.password = authority.slice(0, authority.lastIndexOf('@')).includes(':') ? `${username}:${password}` : username;
+    next.password = authority.slice(0, authority.lastIndexOf('@')).includes(':')
+      ? `${username}:${password}`
+      : username;
   }
   const security = params.get('security') || (protocol === 'trojan' ? 'tls' : 'none');
   if (!['none', 'tls', 'reality'].includes(security))
@@ -77,11 +83,12 @@ export function parseShareLink(raw: string): ConfigObject {
   if (security !== 'none') {
     const tls: ConfigObject = { enabled: true, server_name: params.get('sni') || server };
     if (params.get('alpn')) tls.alpn = params.get('alpn')!.split(',').filter(Boolean);
-    if (['1', 'true'].includes(params.get('insecure') || params.get('allowInsecure') || ''))
+    if (['1', 'true'].includes(params.get('allowInsecure') || params.get('insecure') || ''))
       tls.insecure = true;
     const fingerprint = params.get('fp') || (security === 'reality' ? 'chrome' : '');
     if (fingerprint && fingerprint !== 'unsafe') tls.utls = { enabled: true, fingerprint };
-    if (security === 'reality' && fingerprint === 'unsafe') throw new Error('Reality требует uTLS fingerprint.');
+    if (security === 'reality' && fingerprint === 'unsafe')
+      throw new Error('Reality требует uTLS fingerprint.');
     if (security === 'reality') {
       if (!params.get('pbk')) throw new Error('В ссылке Reality отсутствует публичный ключ.');
       tls.reality = {

@@ -577,7 +577,7 @@ func parseHysteria2(link string) (*ParseResult, error) {
 		},
 		"tlsSettings": map[string]any{
 			"serverName":           params.Get("sni"),
-			"allowInsecure":        params.Get("insecure") == "1" || params.Get("insecure") == "true",
+			"allowInsecure":        firstNonEmpty(params.Get("allowInsecure"), params.Get("insecure")) == "1" || firstNonEmpty(params.Get("allowInsecure"), params.Get("insecure")) == "true",
 			"alpn":                 splitCommaOrDefault(params.Get("alpn"), []string{"h3"}),
 			"fingerprint":          params.Get("fp"),
 			"echConfigList":        params.Get("ech"),

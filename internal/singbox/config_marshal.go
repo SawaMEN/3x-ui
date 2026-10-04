@@ -259,6 +259,11 @@ func validateSingBoxRequiredFields(outbound map[string]any, protocol, tag string
 func validateSingBoxOutbound(outbound map[string]any) error {
 	protocol := strings.ToLower(strings.TrimSpace(rawString(outbound, "type")))
 	tag := rawString(outbound, "tag")
+	if protocol == "hysteria" || protocol == "hysteria2" || protocol == "tuic" {
+		if utls := rawObject(rawObject(outbound, "tls"), "utls"); rawBool(utls, "enabled") {
+			return fmt.Errorf("sing-box QUIC outbound %q cannot use TCP uTLS", tag)
+		}
+	}
 	if err := validateSingBoxOutboundType(protocol, tag); err != nil {
 		return err
 	}
@@ -325,7 +330,10 @@ func validateWireGuardReserved(peer map[string]any, tag string, index int) error
 	if !exists {
 		return nil
 	}
-	reserved := compatIntSlice(value)
+	reserved, err := normalizeWireGuardReserved(value)
+	if err != nil {
+		return fmt.Errorf("sing-box WireGuard endpoint %q peer %d: %w", tag, index+1, err)
+	}
 	if len(reserved) != 3 {
 		return fmt.Errorf("sing-box WireGuard endpoint %q peer %d reserved must contain exactly 3 bytes", tag, index+1)
 	}
