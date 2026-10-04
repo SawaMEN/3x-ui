@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Button, Popconfirm, Space, Tag, Typography, message } from 'antd';
+import { Alert, Button, Input, InputNumber, Popconfirm, Space, Tag, Typography, message } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 
 import { HttpUtil } from '@/utils';
@@ -8,6 +8,21 @@ type ApiMsg<T = unknown> = {
   success?: boolean;
   msg?: string;
   obj?: T;
+};
+
+type GatewayNetworkConfig = {
+  lanInterface: string;
+  lanIP: string;
+  lanPrefix: number;
+  wanInterface?: string;
+};
+
+type GatewayNetworkStatus = {
+  configured: boolean;
+  config: GatewayNetworkConfig;
+  forwarding: boolean;
+  policyRoute: boolean;
+  nftables: boolean;
 };
 
 type GatewayStatus = {
@@ -20,6 +35,14 @@ type GatewayStatus = {
   coreMismatch?: boolean;
   conflict?: boolean;
   port: number;
+  network?: GatewayNetworkStatus;
+};
+
+const emptyNetworkConfig: GatewayNetworkConfig = {
+  lanInterface: '',
+  lanIP: '',
+  lanPrefix: 24,
+  wanInterface: '',
 };
 
 function coreLabel(core?: string) {
@@ -31,6 +54,7 @@ function coreLabel(core?: string) {
 
 export default function GatewayModeControl() {
   const [status, setStatus] = useState<GatewayStatus | null>(null);
+  const [networkConfig, setNetworkConfig] = useState<GatewayNetworkConfig>(emptyNetworkConfig);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [messageApi, contextHolder] = message.useMessage();
@@ -60,13 +84,20 @@ export default function GatewayModeControl() {
     [messageApi],
   );
 
+  const applyStatus = useCallback((nextStatus: GatewayStatus) => {
+    setStatus(nextStatus);
+    if (nextStatus.network?.configured && nextStatus.network.config) {
+      setNetworkConfig(nextStatus.network.config);
+    }
+  }, []);
+
   const refresh = useCallback(
     async (quiet = false) => {
       const nextStatus = await loadStatus(quiet);
-      if (nextStatus) setStatus(nextStatus);
+      if (nextStatus) applyStatus(nextStatus);
       setLoading(false);
     },
-    [loadStatus],
+    [applyStatus, loadStatus],
   );
 
   useEffect(() => {
@@ -74,7 +105,7 @@ export default function GatewayModeControl() {
 
     void loadStatus()
       .then((nextStatus) => {
-        if (active && nextStatus) setStatus(nextStatus);
+        if (active && nextStatus) applyStatus(nextStatus);
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -83,7 +114,7 @@ export default function GatewayModeControl() {
     return () => {
       active = false;
     };
-  }, [loadStatus]);
+  }, [applyStatus, loadStatus]);
 
   useEffect(() => {
     const onSettingsSaved = () => void refresh(true);
@@ -94,11 +125,12 @@ export default function GatewayModeControl() {
   const runAction = async (action: 'enable' | 'disable') => {
     setBusy(true);
     try {
-      const response = (await HttpUtil.post(`/panel/api/gateway/${action}`, undefined, {
+      const data = action === 'enable' ? { network: networkConfig } : undefined;
+      const response = (await HttpUtil.post(`/panel/api/gateway/${action}`, data, {
         silentSuccess: true,
       })) as ApiMsg<GatewayStatus>;
 
-      if (response?.obj) setStatus(response.obj);
+      if (response?.obj) applyStatus(response.obj);
       if (!response?.success) {
         messageApi.error(response?.msg || 'Не удалось изменить режим шлюза');
         return;
@@ -121,6 +153,17 @@ export default function GatewayModeControl() {
   const canEnable = status?.canEnable === true;
   const selectedCore = coreLabel(status?.coreType);
   const ownerCore = coreLabel(status?.gatewayCoreType);
+  const networkConfigured = status?.network?.configured === true;
+  const networkHealthy =
+    networkConfigured &&
+    status?.network?.forwarding === true &&
+    status?.network?.policyRoute === true &&
+    status?.network?.nftables === true;
+  const networkInputValid =
+    networkConfig.lanInterface.trim() !== '' &&
+    networkConfig.lanIP.trim() !== '' &&
+    networkConfig.lanPrefix >= 1 &&
+    networkConfig.lanPrefix <= 32;
 
   return (
     <>
@@ -139,34 +182,44 @@ export default function GatewayModeControl() {
           type={
             conflict
               ? 'error'
-              : recoveryOnly || coreMismatch
+              : enabled && !networkHealthy
                 ? 'warning'
-                : enabled
-                  ? 'success'
-                  : 'info'
+                : recoveryOnly || coreMismatch
+                  ? 'warning'
+                  : enabled
+                    ? 'success'
+                    : 'info'
           }
           showIcon
           title={
             conflict
               ? 'Обнаружен конфликт режима шлюза'
-              : recoveryOnly
-                ? 'Требуется очистка состояния режима шлюза'
-                : coreMismatch
-                  ? `Режим шлюза активен на другом ядре: ${ownerCore}`
-                  : enabled
-                    ? 'Режим шлюза включён'
-                    : 'Режим шлюза выключен'
+              : enabled && !networkConfigured
+                ? 'Inbound создан, Linux-маршрутизация не настроена'
+                : enabled && !networkHealthy
+                  ? 'Сетевая часть режима шлюза требует восстановления'
+                  : recoveryOnly
+                    ? 'Требуется очистка состояния режима шлюза'
+                    : coreMismatch
+                      ? `Режим шлюза активен на другом ядре: ${ownerCore}`
+                      : enabled
+                        ? 'Режим шлюза включён'
+                        : 'Режим шлюза выключен'
           }
           description={
             conflict
               ? 'Служебная конфигурация режима шлюза обнаружена одновременно в Xray и sing-box. Выключение безопасно очистит собственные объекты режима шлюза в обоих ядрах.'
-              : recoveryOnly
-                ? 'Найдена резервная копия режима шлюза, но его служебная конфигурация отсутствует. Нажмите «Выключить», чтобы безопасно удалить устаревшее состояние восстановления.'
-                : coreMismatch
-                  ? `Сейчас выбрано ядро ${selectedCore}. Режим шлюза можно перенести на него без ручной очистки предыдущего ядра.`
-                  : enabled
-                    ? `Режим шлюза настроен для ${ownerCore === 'не определено' ? selectedCore : ownerCore}. Дальнейшая маршрутизация выполняется обычными правилами ядра.`
-                    : `Режим шлюза сейчас не активен. При включении он будет настроен для ${selectedCore}.`
+              : enabled && !networkConfigured
+                ? 'Это неполное состояние старой веб-реализации. Укажите LAN-параметры ниже и нажмите «Настроить Linux»: панель добавит ip forwarding, policy routing и nftables без создания второго inbound.'
+                : enabled && !networkHealthy
+                  ? 'Сохранённая конфигурация найдена, но часть runtime-правил отсутствует. Нажмите «Восстановить сетевые правила».'
+                  : recoveryOnly
+                    ? 'Найдена резервная копия режима шлюза, но его служебная конфигурация отсутствует. Нажмите «Выключить», чтобы безопасно удалить устаревшее состояние восстановления.'
+                    : coreMismatch
+                      ? `Сейчас выбрано ядро ${selectedCore}. Режим шлюза можно перенести на него без ручной очистки предыдущего ядра.`
+                      : enabled
+                        ? `Режим шлюза настроен для ${ownerCore === 'не определено' ? selectedCore : ownerCore}. Linux TPROXY и policy routing управляются панелью.`
+                        : `Режим шлюза сейчас не активен. При включении он будет настроен для ${selectedCore} вместе с Linux-маршрутизацией.`
           }
         />
 
@@ -177,25 +230,92 @@ export default function GatewayModeControl() {
             <Tag color={coreMismatch || conflict ? 'warning' : 'success'}>Шлюз: {ownerCore}</Tag>
           )}
           <Tag>TPROXY: {status?.port ?? 52345}</Tag>
+          <Tag color={networkHealthy ? 'success' : networkConfigured ? 'warning' : 'default'}>
+            Linux: {networkHealthy ? 'готов' : networkConfigured ? 'частично' : 'не настроен'}
+          </Tag>
+        </Space>
+
+        <Typography.Text strong>Сеть Gateway</Typography.Text>
+        <Space wrap align="start">
+          <div>
+            <Typography.Text type="secondary">LAN-интерфейс</Typography.Text>
+            <Input
+              value={networkConfig.lanInterface}
+              placeholder="eth1"
+              disabled={networkConfigured || busy}
+              onChange={(event) =>
+                setNetworkConfig((current) => ({ ...current, lanInterface: event.target.value }))
+              }
+              style={{ width: 150, display: 'block' }}
+            />
+          </div>
+          <div>
+            <Typography.Text type="secondary">LAN IP сервера</Typography.Text>
+            <Input
+              value={networkConfig.lanIP}
+              placeholder="192.168.1.1"
+              disabled={networkConfigured || busy}
+              onChange={(event) =>
+                setNetworkConfig((current) => ({ ...current, lanIP: event.target.value }))
+              }
+              style={{ width: 170, display: 'block' }}
+            />
+          </div>
+          <div>
+            <Typography.Text type="secondary">Префикс</Typography.Text>
+            <InputNumber
+              min={1}
+              max={32}
+              value={networkConfig.lanPrefix}
+              disabled={networkConfigured || busy}
+              onChange={(value) =>
+                setNetworkConfig((current) => ({ ...current, lanPrefix: value ?? 24 }))
+              }
+              style={{ width: 90, display: 'block' }}
+            />
+          </div>
+          <div>
+            <Typography.Text type="secondary">WAN-интерфейс (необязательно)</Typography.Text>
+            <Input
+              value={networkConfig.wanInterface}
+              placeholder="eth0"
+              disabled={networkConfigured || busy}
+              onChange={(event) =>
+                setNetworkConfig((current) => ({ ...current, wanInterface: event.target.value }))
+              }
+              style={{ width: 190, display: 'block' }}
+            />
+          </div>
         </Space>
 
         <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-          При включении панель сохраняет резервную копию конфигурации выбранного ядра и добавляет
-          отдельный TPROXY-вход. Outbound и routing не подменяются: перехваченный трафик проходит
-          через ваши обычные правила маршрутизации Xray или sing-box.
+          LAN IP и префикс определяют локальную подсеть, которая исключается из TPROXY. WAN-интерфейс
+          нужен только если этот сервер должен выполнять NAT/masquerade в интернет. Для изменения уже
+          сохранённых сетевых параметров сначала выключите режим шлюза.
         </Typography.Paragraph>
 
         <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-          Linux должен перенаправлять TCP/UDP через TPROXY на порт {status?.port ?? 52345} и иметь
-          включённый IPv4 forwarding. Клиентские устройства должны использовать этот сервер как
-          шлюз.
+          При включении панель добавляет TPROXY-вход выбранному ядру, включает IPv4 forwarding,
+          создаёт policy rule/table 100 и nftables-таблицы. Состояние и правила сохраняются для
+          автоматического восстановления после перезагрузки.
         </Typography.Paragraph>
 
         <Space wrap>
-          {coreMismatch && !conflict && canEnable && (
+          {enabled && !networkHealthy && (
+            <Button
+              type="primary"
+              loading={busy}
+              disabled={loading || (!networkConfigured && !networkInputValid)}
+              onClick={() => void runAction('enable')}
+            >
+              {networkConfigured ? 'Восстановить сетевые правила' : 'Настроить Linux'}
+            </Button>
+          )}
+
+          {coreMismatch && !conflict && canEnable && networkHealthy && (
             <Popconfirm
               title={`Перенести режим шлюза на ${selectedCore}?`}
-              description="Панель удалит собственную конфигурацию режима шлюза из предыдущего ядра и включит её для выбранного ядра. При ошибке будет выполнен откат."
+              description="Панель удалит собственную конфигурацию режима шлюза из предыдущего ядра и включит её для выбранного ядра. Сетевые правила сохранятся. При ошибке будет выполнен откат."
               okText="Перенести"
               cancelText="Отмена"
               onConfirm={() => void runAction('enable')}
@@ -211,8 +331,8 @@ export default function GatewayModeControl() {
               title="Выключить режим шлюза?"
               description={
                 recoveryOnly
-                  ? 'Будет удалено только устаревшее состояние восстановления. Текущая конфигурация ядра не будет откатана.'
-                  : 'Будут удалены только собственные TPROXY-объекты режима шлюза. Остальные настройки Xray и sing-box сохранятся.'
+                  ? 'Будет удалено устаревшее состояние восстановления и Linux-правила Gateway.'
+                  : 'Будут удалены TPROXY-объекты, nftables и policy routing Gateway; исходное значение IPv4 forwarding будет восстановлено.'
               }
               okText="Выключить"
               cancelText="Отмена"
@@ -225,13 +345,13 @@ export default function GatewayModeControl() {
           ) : (
             <Popconfirm
               title="Включить режим шлюза?"
-              description={`Панель сохранит резервную копию и добавит TPROXY-вход для ${selectedCore}, не меняя ваши outbound и routing.`}
+              description={`Панель настроит TPROXY для ${selectedCore}, IPv4 forwarding, policy routing и nftables.`}
               okText="Включить"
               cancelText="Отмена"
               onConfirm={() => void runAction('enable')}
-              disabled={!canEnable || loading}
+              disabled={!canEnable || loading || !networkInputValid}
             >
-              <Button type="primary" loading={busy} disabled={!canEnable || loading}>
+              <Button type="primary" loading={busy} disabled={!canEnable || loading || !networkInputValid}>
                 Включить режим шлюза
               </Button>
             </Popconfirm>
