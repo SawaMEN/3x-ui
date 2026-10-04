@@ -56,7 +56,7 @@ type SingBoxService struct{}
 
 func singBoxInboundRequiresUsers(protocol model.Protocol) bool {
 	switch protocol {
-	case model.VLESS, model.VMESS, model.Shadowsocks, model.Trojan, model.Snell, model.NaiveProxy, model.Hysteria, model.ShadowTLS, model.AnyTLS, model.TUIC:
+	case model.VLESS, model.VMESS, model.Shadowsocks, model.Trojan, model.MASQUE, model.Snell, model.NaiveProxy, model.Hysteria, model.ShadowTLS, model.AnyTLS, model.TUIC:
 		return true
 	default:
 		return false
@@ -397,6 +397,9 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 				continue
 			}
 			entry := map[string]any{"email": client.Email}
+			if inbound.Protocol == model.MASQUE {
+				entry["enable"] = true
+			}
 			switch inbound.Protocol {
 			case model.VLESS:
 				if client.ID != "" {
@@ -440,7 +443,7 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 				if client.Password != "" {
 					entry["password"] = client.Password
 				}
-			case model.HTTP, model.Mixed, model.NaiveProxy, model.Mieru, model.AnyTLS, model.ShadowTLS:
+			case model.HTTP, model.Mixed, model.MASQUE, model.NaiveProxy, model.Mieru, model.AnyTLS, model.ShadowTLS:
 				if client.Password != "" {
 					entry["password"] = client.Password
 				}
@@ -483,7 +486,7 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 		// NaiveProxy is a native TLS protocol in sing-box. Keep the ordinary
 		// inbound form simple by reusing the panel's HTTPS certificate/key when
 		// the inbound does not explicitly provide its own pair.
-		if inbound.Protocol == model.NaiveProxy || inbound.Protocol == model.AnyTLS {
+		if inbound.Protocol == model.MASQUE || inbound.Protocol == model.NaiveProxy || inbound.Protocol == model.AnyTLS {
 			tls, _ := settings["tls"].(map[string]any)
 			if tls == nil {
 				tls = map[string]any{}
@@ -494,7 +497,7 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 			keyPath, _ := tls["keyPath"].(string)
 			keyPath = strings.TrimSpace(keyPath)
 			if (certPath == "") != (keyPath == "") {
-				protocolName := "NaiveProxy"
+				protocolName := string(inbound.Protocol)
 				if inbound.Protocol == model.AnyTLS {
 					protocolName = "AnyTLS"
 				}
@@ -523,7 +526,7 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 				}
 			}
 			if certPath == "" || keyPath == "" {
-				protocolName := "NaiveProxy"
+				protocolName := string(inbound.Protocol)
 				if inbound.Protocol == model.AnyTLS {
 					protocolName = "AnyTLS"
 				}
@@ -542,6 +545,15 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 				continue
 			}
 			cfg.Inbounds = append(cfg.Inbounds, inner, outer)
+			continue
+		}
+
+		if inbound.Protocol == model.MASQUE {
+			endpoint, err := singbox.TranslateMASQUEEndpoint(raw)
+			if err != nil {
+				return nil, err
+			}
+			cfg.Endpoints = append(cfg.Endpoints, endpoint)
 			continue
 		}
 
@@ -654,6 +666,28 @@ func (s *SingBoxService) GetEditorConfig(ctx context.Context) (*SingBoxEditorSna
 			inboundTags = append(inboundTags, tag)
 		}
 	}
+	managedRows, err := singBoxInboundService.GetAllInbounds()
+	if err != nil {
+		return nil, err
+	}
+	managedTags := map[string]bool{}
+	for _, row := range managedRows {
+		if row != nil && row.NodeID == nil && row.Protocol == model.MASQUE {
+			managedTags[row.Tag] = true
+		}
+	}
+	editableEndpoints := make([]map[string]any, 0, len(editorConfig.Endpoints))
+	for _, endpoint := range editorConfig.Endpoints {
+		tag, _ := endpoint["tag"].(string)
+		if managedTags[tag] {
+			inboundTags = append(inboundTags, tag)
+		} else {
+			editableEndpoints = append(editableEndpoints, endpoint)
+		}
+	}
+	if _, exists := raw["endpoints"]; exists {
+		raw["endpoints"] = editableEndpoints
+	}
 	delete(raw, "inbounds")
 	delete(raw, "services")
 	modified := ""
@@ -718,6 +752,14 @@ func (s *SingBoxService) applyNativeTemplate(cfg *singbox.Config) error {
 	if err := json.Unmarshal([]byte(rawTemplate), &patch); err != nil {
 		return fmt.Errorf("stored sing-box settings are invalid: %w", err)
 	}
+	// The native editor may replace endpoints, but panel-managed MASQUE
+	// listeners must continue to follow inbound/client state from the database.
+	managedMASQUE := make([]map[string]any, 0)
+	for _, endpoint := range cfg.Endpoints {
+		if endpoint["type"] == "masque-server" {
+			managedMASQUE = append(managedMASQUE, endpoint)
+		}
+	}
 	currentData, err := json.Marshal(cfg)
 	if err != nil {
 		return err
@@ -738,6 +780,21 @@ func (s *SingBoxService) applyNativeTemplate(cfg *singbox.Config) error {
 	}
 	if err := json.Unmarshal(mergedData, cfg); err != nil {
 		return err
+	}
+	if len(managedMASQUE) > 0 {
+		tags := map[string]bool{}
+		for _, endpoint := range managedMASQUE {
+			tag, _ := endpoint["tag"].(string)
+			tags[tag] = true
+		}
+		endpoints := make([]map[string]any, 0, len(cfg.Endpoints)+len(managedMASQUE))
+		for _, endpoint := range cfg.Endpoints {
+			tag, _ := endpoint["tag"].(string)
+			if !tags[tag] {
+				endpoints = append(endpoints, endpoint)
+			}
+		}
+		cfg.Endpoints = append(endpoints, managedMASQUE...)
 	}
 	var referencesLocal func(any) bool
 	referencesLocal = func(value any) bool {
