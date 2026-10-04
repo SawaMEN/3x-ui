@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Button, Input, InputNumber, Popconfirm, Space, Tag, Typography, message } from 'antd';
+import {
+  Alert,
+  Button,
+  Input,
+  InputNumber,
+  Popconfirm,
+  Space,
+  Tag,
+  Typography,
+  message,
+} from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 
 import { HttpUtil } from '@/utils';
@@ -246,8 +256,21 @@ export default function GatewayModeControl() {
             <Tag color={coreMismatch || conflict ? 'warning' : 'success'}>Шлюз: {ownerCore}</Tag>
           )}
           <Tag>TPROXY: {status?.port ?? 52345}</Tag>
-          <Tag color={networkHealthy ? 'success' : networkConfigured || networkActive ? 'warning' : 'default'}>
-            Linux: {networkHealthy ? 'готов' : networkConfigured || networkActive ? 'частично' : 'не настроен'}
+          <Tag
+            color={
+              networkHealthy
+                ? 'success'
+                : networkConfigured || networkActive
+                  ? 'warning'
+                  : 'default'
+            }
+          >
+            Linux:{' '}
+            {networkHealthy
+              ? 'готов'
+              : networkConfigured || networkActive
+                ? 'частично'
+                : 'не настроен'}
           </Tag>
         </Space>
 
@@ -311,22 +334,27 @@ export default function GatewayModeControl() {
         </Typography.Paragraph>
 
         <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-          Сейчас Gateway перехватывает IPv4 TCP/UDP. IPv6 намеренно не отправляется в TPROXY, пока для
-          него не настроены отдельные IPv6 policy routing и адреса: это исключает поломку IPv6 из-за
-          неполной конфигурации.
+          Сейчас Gateway перехватывает IPv4 TCP/UDP. IPv6 намеренно не отправляется в TPROXY, пока
+          для него не настроены отдельные IPv6 policy routing и адреса: это исключает поломку IPv6
+          из-за неполной конфигурации.
         </Typography.Paragraph>
 
         <Space wrap>
-          {enabled && configured && !coreMismatch && !conflict && !networkHealthy && !orphanedNetwork && (
-            <Button
-              type="primary"
-              loading={busy}
-              disabled={loading || !canConfigureNetwork}
-              onClick={() => void runAction('enable')}
-            >
-              {networkConfigured ? 'Восстановить сетевые правила' : 'Настроить Linux'}
-            </Button>
-          )}
+          {enabled &&
+            configured &&
+            !coreMismatch &&
+            !conflict &&
+            !networkHealthy &&
+            !orphanedNetwork && (
+              <Button
+                type="primary"
+                loading={busy}
+                disabled={loading || !canConfigureNetwork}
+                onClick={() => void runAction('enable')}
+              >
+                {networkConfigured ? 'Восстановить сетевые правила' : 'Настроить Linux'}
+              </Button>
+            )}
 
           {coreMismatch && !conflict && canEnable && !orphanedNetwork && (
             <Popconfirm
@@ -359,7 +387,11 @@ export default function GatewayModeControl() {
 
           {enabled || staleNetworkOnly ? (
             <Popconfirm
-              title={staleNetworkOnly && !enabled ? 'Удалить оставшиеся Linux-настройки Gateway?' : 'Выключить режим шлюза?'}
+              title={
+                staleNetworkOnly && !enabled
+                  ? 'Удалить оставшиеся Linux-настройки Gateway?'
+                  : 'Выключить режим шлюза?'
+              }
               description={
                 staleNetworkOnly && !enabled
                   ? 'Будут удалены nftables, policy routing, systemd restore-файлы и gateway.env.'
@@ -372,7 +404,9 @@ export default function GatewayModeControl() {
               onConfirm={() => void runAction('disable')}
             >
               <Button danger loading={busy}>
-                {staleNetworkOnly && !enabled ? 'Очистить Linux-настройки' : 'Выключить режим шлюза'}
+                {staleNetworkOnly && !enabled
+                  ? 'Очистить Linux-настройки'
+                  : 'Выключить режим шлюза'}
               </Button>
             </Popconfirm>
           ) : (
@@ -384,7 +418,11 @@ export default function GatewayModeControl() {
               onConfirm={() => void runAction('enable')}
               disabled={!canEnable || loading || !networkInputValid}
             >
-              <Button type="primary" loading={busy} disabled={!canEnable || loading || !networkInputValid}>
+              <Button
+                type="primary"
+                loading={busy}
+                disabled={!canEnable || loading || !networkInputValid}
+              >
                 Включить режим шлюза
               </Button>
             </Popconfirm>
