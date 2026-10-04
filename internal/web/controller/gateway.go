@@ -260,6 +260,27 @@ func (a *GatewayController) enable(c *gin.Context) {
 		changed = true
 	}
 
+	// Enabled may mean only a recovery marker or a partial sing-box config.
+	// Never activate Linux interception until the selected core has a complete
+	// Gateway inbound/configuration, otherwise packets are sent to a dead port.
+	finalCoreState, stateErr := gatewayStateForCore(coreType)
+	if stateErr != nil || !finalCoreState.Configured {
+		var stateProblem error
+		if stateErr != nil {
+			stateProblem = fmt.Errorf("verify %s Gateway configuration: %w", coreType, stateErr)
+		} else {
+			stateProblem = fmt.Errorf("%s Gateway configuration is incomplete; disable Gateway Mode to clean stale recovery state before enabling it again", coreType)
+		}
+		if changed {
+			if rollbackErr := rollbackGatewayChange(coreType, otherCore, currentEnabledByRequest, previousCoreDisabled); rollbackErr != nil {
+				stateProblem = fmt.Errorf("%w; rollback failed: %v", stateProblem, rollbackErr)
+			}
+		}
+		payload, _ := a.statusPayload()
+		jsonObj(c, payload, stateProblem)
+		return
+	}
+
 	// A manually stopped core must stay stopped. Repeated enable requests are
 	// idempotent and do not restart an unchanged core process.
 	if changed && wasRunning {
