@@ -275,6 +275,20 @@ func checkPortConflictTx(db *gorm.DB, inbound *model.Inbound, ignoreId int) (*po
 		}
 		return nil, nil
 	}
+	if inbound.NodeID == nil {
+		reserved, err := gatewayTemplatePresent(db)
+		if err != nil {
+			return nil, err
+		}
+		if reserved {
+			if inbound.Tag == "in-tproxy" {
+				return nil, fmt.Errorf("inbound tag in-tproxy is reserved by Gateway Mode")
+			}
+			if port, _ := spansOverlap(inboundListenerSpans(inbound), []listenerSpan{{52345, 52345, transportTCP | transportUDP}}); port > 0 {
+				return &portConflictDetail{Tag: "in-tproxy", Listen: "0.0.0.0", Port: port, Transports: transportTCP | transportUDP}, nil
+			}
+		}
+	}
 	newBits := inboundTransports(inbound.Protocol, inbound.StreamSettings, inbound.Settings)
 	newSpans := inboundListenerSpans(inbound)
 
@@ -767,4 +781,25 @@ func (s *InboundService) tagExists(tag string, ignoreId int) (bool, error) {
 		return false, err
 	}
 	return count > 0, nil
+}
+
+func gatewayTemplatePresent(db *gorm.DB) (bool, error) {
+	var rows []model.Setting
+	if err := db.Where("key IN ?", []string{"xrayTemplateConfig", "singBoxConfigTemplate"}).Find(&rows).Error; err != nil {
+		return false, err
+	}
+	for _, row := range rows {
+		var cfg struct {
+			Inbounds []map[string]any `json:"inbounds"`
+		}
+		if json.Unmarshal([]byte(row.Value), &cfg) != nil {
+			continue
+		}
+		for _, inbound := range cfg.Inbounds {
+			if inbound["tag"] == "in-tproxy" && (inbound["type"] == "tproxy" || inbound["protocol"] == "tunnel" || inbound["protocol"] == "dokodemo-door") {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
 }

@@ -687,33 +687,8 @@ func main() {
 	case "encrypt-tokens":
 		encryptNodeTokens()
 	case "gateway":
-		if len(os.Args) < 3 {
-			fmt.Println("usage: x-ui gateway <enable|disable|status>")
-			return
-		}
-
-		switch os.Args[2] {
-		case "enable":
-			if err := gateway.Enable(); err != nil {
-				fmt.Println("Gateway enable failed:", err)
-				os.Exit(1)
-			}
-
-		case "disable":
-			if err := gateway.Disable(); err != nil {
-				fmt.Println("Gateway disable failed:", err)
-				os.Exit(1)
-			}
-
-		case "status":
-			if gateway.IsEnabled() {
-				fmt.Println("Gateway Mode: enabled")
-			} else {
-				fmt.Println("Gateway Mode: disabled")
-			}
-
-		default:
-			fmt.Println("usage: x-ui gateway <enable|disable|status>")
+		if err := gateway.CLI(os.Args[2:]); err != nil {
+			log.Fatal(err)
 		}
 	case "migrate-db":
 		if err := migrateDbCmd.Parse(os.Args[2:]); err != nil {

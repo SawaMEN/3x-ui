@@ -5,10 +5,12 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/gateway"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/sudoku"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/crypto"
@@ -202,6 +204,14 @@ func (a *SettingController) updateSetting(c *gin.Context) {
 			}
 		}
 	}
+	if oldCoreType != allSetting.CoreType && runtime.GOOS == "linux" && os.Geteuid() == 0 {
+		release, lockErr := gateway.AcquireOperation(c.Request.Context())
+		if lockErr != nil {
+			jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), lockErr)
+			return
+		}
+		defer release()
+	}
 	err := a.settingService.UpdateAllSetting(allSetting, service.SecretClears{
 		TgBotToken:      form.ClearTgBotToken,
 		LdapPassword:    form.ClearLdapPassword,
@@ -214,48 +224,7 @@ func (a *SettingController) updateSetting(c *gin.Context) {
 		}
 	}
 	if err == nil && oldCoreType != allSetting.CoreType {
-		compatErr := service.SyncClientCoreCompatibility(oldCoreType, allSetting.CoreType)
-		if compatErr != nil {
-			err = compatErr
-			if rollbackErr := a.settingService.SetCoreType(oldCoreType); rollbackErr != nil {
-				logger.Error("core switch failed and rollback could not be persisted:", rollbackErr)
-			}
-		} else {
-			// Switching cores is a transaction: never let two engines own the same
-			// listener, and never leave the panel configured for a core that failed
-			// to start. UpdateAllSetting already persisted the requested value, so
-			// restore the old value if the new runtime cannot start.
-			ctx := c.Request.Context()
-			if oldCoreType == service.CoreTypeSingBox {
-				_ = a.singBoxService.Stop(ctx)
-			} else {
-				_ = a.xrayService.StopXray()
-			}
-			var restartErr error
-			if allSetting.CoreType == service.CoreTypeSingBox {
-				restartErr = a.singBoxService.Restart(ctx)
-			} else {
-				restartErr = a.xrayService.RestartXray(true)
-			}
-			if restartErr != nil {
-				err = restartErr
-				if rollbackErr := a.settingService.SetCoreType(oldCoreType); rollbackErr != nil {
-					logger.Error("core switch failed and rollback could not be persisted:", rollbackErr)
-				} else {
-					if compatErr := service.SyncClientCoreCompatibility(allSetting.CoreType, oldCoreType); compatErr != nil {
-						logger.Error("failed to restore client core compatibility after core switch failure:", compatErr)
-					}
-					// Best effort: bring the previously working engine back.
-					if oldCoreType == service.CoreTypeSingBox {
-						if startErr := a.singBoxService.Restart(ctx); startErr != nil {
-							logger.Error("failed to restore sing-box after core switch failure:", startErr)
-						}
-					} else if startErr := a.xrayService.RestartXray(true); startErr != nil {
-						logger.Error("failed to restore xray after core switch failure:", startErr)
-					}
-				}
-			}
-		}
+		err = a.switchCoreWithGateway(c.Request.Context(), oldCoreType, allSetting.CoreType)
 	}
 	if err == nil && form.PanelOutbound != oldPanelOutbound && allSetting.CoreType == service.CoreTypeXray {
 		// Panel egress is currently implemented by an Xray loopback bridge.

@@ -4,9 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/config"
-	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 )
 
@@ -24,7 +23,7 @@ func decodeSingBoxTemplate(raw string) (map[string]any, error) {
 }
 
 func loadSingBoxTemplateRaw() (string, error) {
-	if err := database.InitDB(config.GetDBPath()); err != nil {
+	if err := ensureDatabase(); err != nil {
 		return "", fmt.Errorf("initialize database: %w", err)
 	}
 
@@ -88,6 +87,9 @@ func readSingBoxBackup() (string, error) {
 }
 
 func createSingBoxBackup(raw string) error {
+	if err := os.MkdirAll(filepath.Dir(singBoxBackupPath), 0700); err != nil {
+		return err
+	}
 	file, err := os.OpenFile(singBoxBackupPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		if os.IsExist(err) {
@@ -181,6 +183,9 @@ func EnableSingBox() error {
 		return fmt.Errorf("Gateway Mode is already enabled or requires cleanup")
 	}
 
+	if err := validateManagedGatewayConflicts(); err != nil {
+		return err
+	}
 	if err := applySingBoxGatewayConfig(cfg); err != nil {
 		return err
 	}
@@ -215,24 +220,13 @@ func DisableSingBox() error {
 		return fmt.Errorf("Gateway Mode is not enabled")
 	}
 
+	backupWasEmpty := false
 	if backup {
 		backupRaw, err := readSingBoxBackup()
 		if err != nil {
 			return err
 		}
-		// Restore the exact original value when Gateway started from an empty
-		// template, or when the current config no longer contains Gateway-owned
-		// objects and the backup is the only recoverable state left.
-		if backupRaw == "" || !artifacts {
-			if err := saveSingBoxTemplateRaw(backupRaw); err != nil {
-				return err
-			}
-			if err := removeSingBoxBackup(); err != nil {
-				return err
-			}
-			fmt.Println("sing-box Gateway configuration disabled.")
-			return nil
-		}
+		backupWasEmpty = backupRaw == ""
 	}
 
 	if artifacts {
@@ -241,7 +235,11 @@ func DisableSingBox() error {
 			return err
 		}
 		if changed {
-			if err := saveSingBoxTemplate(cfg); err != nil {
+			if backupWasEmpty && isEmptySingBoxGatewayRemainder(cfg) {
+				if err := saveSingBoxTemplateRaw(""); err != nil {
+					return err
+				}
+			} else if err := saveSingBoxTemplate(cfg); err != nil {
 				return err
 			}
 		}
@@ -255,4 +253,25 @@ func DisableSingBox() error {
 
 	fmt.Println("sing-box Gateway configuration disabled.")
 	return nil
+}
+
+// Restore the original empty template only when no operator edits remain.
+func isEmptySingBoxGatewayRemainder(cfg map[string]any) bool {
+	for key, value := range cfg {
+		switch key {
+		case "inbounds":
+			items, ok := value.([]any)
+			if !ok || len(items) != 0 {
+				return false
+			}
+		case "route":
+			obj, ok := value.(map[string]any)
+			if !ok || len(obj) != 0 {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+	return true
 }

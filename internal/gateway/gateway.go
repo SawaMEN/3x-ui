@@ -4,10 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/config"
-	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 )
 
@@ -76,7 +77,7 @@ func decodeXrayTemplate(raw string) (map[string]any, error) {
 }
 
 func loadTemplate() (map[string]any, string, error) {
-	if err := database.InitDB(config.GetDBPath()); err != nil {
+	if err := ensureDatabase(); err != nil {
 		return nil, "", fmt.Errorf("initialize database: %w", err)
 	}
 
@@ -100,8 +101,8 @@ func saveTemplate(cfg map[string]any) error {
 		return fmt.Errorf("marshal Xray template: %w", err)
 	}
 
-	settings := &service.XraySettingService{}
-	if err := settings.SaveXraySetting(string(data)); err != nil {
+	settings := &service.SettingService{}
+	if err := settings.SetXrayConfigTemplate(string(data)); err != nil {
 		return fmt.Errorf("save Xray template: %w", err)
 	}
 	return nil
@@ -119,6 +120,9 @@ func backupExists() (bool, error) {
 }
 
 func createBackup(raw string) error {
+	if err := os.MkdirAll(filepath.Dir(backupPath), 0700); err != nil {
+		return err
+	}
 	file, err := os.OpenFile(backupPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		if os.IsExist(err) {
@@ -179,6 +183,9 @@ func itemTag(item any) string {
 
 func xrayPort(value any) (int, bool) {
 	switch port := value.(type) {
+	case string:
+		n, err := strconv.Atoi(strings.TrimSpace(port))
+		return n, err == nil
 	case int:
 		return port, true
 	case int32:
@@ -260,8 +267,7 @@ func validateXrayGatewayConflicts(cfg map[string]any) error {
 		if !ok {
 			continue
 		}
-		port, ok := xrayPort(inbound["port"])
-		if !ok || port != inboundPort {
+		if !xrayPortIncludes(inbound["port"], inboundPort) {
 			continue
 		}
 		tag := itemTag(item)
@@ -468,7 +474,7 @@ func getStateUnlocked() (State, error) {
 	if err != nil {
 		return State{}, err
 	}
-	configured := hasGatewayInbound(cfg)
+	configured := hasUsableXrayGatewayInbound(cfg)
 	return State{
 		Enabled:      hasGatewayArtifacts(cfg) || backup,
 		Configured:   configured,
@@ -510,6 +516,9 @@ func Enable() error {
 		return fmt.Errorf("Gateway Mode is already enabled or requires cleanup")
 	}
 
+	if err := validateManagedGatewayConflicts(); err != nil {
+		return err
+	}
 	if err := applyGatewayConfig(cfg); err != nil {
 		return err
 	}
@@ -567,4 +576,46 @@ func Disable() error {
 
 	fmt.Println("Xray Gateway configuration disabled.")
 	return nil
+}
+
+func xrayPortIncludes(value any, target int) bool {
+	if n, ok := xrayPort(value); ok {
+		return n == target
+	}
+	text, ok := value.(string)
+	if !ok {
+		return false
+	}
+	for _, part := range strings.Split(text, ",") {
+		bounds := strings.SplitN(strings.TrimSpace(part), "-", 2)
+		first, err := strconv.Atoi(strings.TrimSpace(bounds[0]))
+		if err != nil {
+			continue
+		}
+		if len(bounds) == 1 {
+			if first == target {
+				return true
+			}
+			continue
+		}
+		last, err := strconv.Atoi(strings.TrimSpace(bounds[1]))
+		if err == nil && first <= target && target <= last {
+			return true
+		}
+	}
+	return false
+}
+func hasUsableXrayGatewayInbound(cfg map[string]any) bool {
+	inbounds, _ := cfg["inbounds"].([]any)
+	for _, item := range inbounds {
+		if !isXrayGatewayInbound(item) {
+			continue
+		}
+		inbound := item.(map[string]any)
+		listen := inbound["listen"]
+		if listen == nil || listen == "" || listen == "0.0.0.0" {
+			return true
+		}
+	}
+	return false
 }

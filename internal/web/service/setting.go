@@ -506,6 +506,13 @@ func (s *SettingService) GetXrayConfigTemplate() (string, error) {
 	return s.getString("xrayTemplateConfig")
 }
 
+// SetXrayConfigTemplate stores an already validated template. Gateway changes
+// only its own objects; it must not validate an inactive Xray template using
+// the currently selected sing-box outbound schema.
+func (s *SettingService) SetXrayConfigTemplate(raw string) error {
+	return s.setString("xrayTemplateConfig", raw)
+}
+
 func (s *SettingService) GetXrayOutboundTestUrl() (string, error) {
 	return s.getString("xrayOutboundTestUrl")
 }

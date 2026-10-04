@@ -791,6 +791,12 @@ func (s *SingBoxService) applyNativeTemplate(cfg *singbox.Config, managedMASQUET
 		if key == "inbounds" || key == "services" {
 			continue
 		}
+		if key == "route" {
+			if route, ok := mergeGatewayOnlyRoute(merged[key], value); ok {
+				merged[key] = route
+				continue
+			}
+		}
 		merged[key] = value
 	}
 	mergedData, err := json.Marshal(merged)
@@ -798,6 +804,9 @@ func (s *SingBoxService) applyNativeTemplate(cfg *singbox.Config, managedMASQUET
 		return err
 	}
 	if err := json.Unmarshal(mergedData, cfg); err != nil {
+		return err
+	}
+	if err := mergeSingBoxGatewayInbound(cfg, patch["inbounds"]); err != nil {
 		return err
 	}
 	// Include disabled listeners and listeners without active users in the tag

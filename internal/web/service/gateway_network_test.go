@@ -66,3 +66,16 @@ func TestGatewayCommandHonorsCancellation(t *testing.T) {
 		t.Fatal("cancellation did not stop command promptly")
 	}
 }
+
+func TestGatewayRuleOwnershipRejectsSelectors(t *testing.T) {
+	for _, line := range []string{
+		"100: from all fwmark 0x40/0xc0 lookup 100 uidrange 1000-1000",
+		"100: not from all fwmark 0x40/0xc0 lookup 100",
+		"100: from 192.168.0.0/16 fwmark 0x40/0xc0 lookup 100",
+		"100: from all fwmark 0x40/0xc0 lookup 100 iif eth0",
+	} {
+		if gatewayPolicyRuleCount(line) != 0 || !gatewayForeignRule(line) {
+			t.Fatalf("foreign selector treated as Gateway-owned: %s", line)
+		}
+	}
+}
