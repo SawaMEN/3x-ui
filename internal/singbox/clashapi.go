@@ -158,6 +158,10 @@ func clashAPIInfo(data []byte) (string, string, error) {
 // when that address is assigned to this host, so a Clash secret can never be
 // sent to an arbitrary remote endpoint.
 func clashControllerURL(controller string) (string, error) {
+	return clashControllerURLWithLocalCheck(controller, isLocalIP)
+}
+
+func clashControllerURLWithLocalCheck(controller string, localCheck func(net.IP) (bool, error)) (string, error) {
 	controller = strings.TrimSpace(controller)
 	if controller == "" {
 		return "", fmt.Errorf("sing-box Clash API is disabled")
@@ -194,7 +198,7 @@ func clashControllerURL(controller string) (string, error) {
 		case ip.IsLoopback():
 			host = ip.String()
 		default:
-			local, err := isLocalIP(ip)
+			local, err := localCheck(ip)
 			if err != nil {
 				return "", fmt.Errorf("inspect local interfaces for Clash API controller: %w", err)
 			}
