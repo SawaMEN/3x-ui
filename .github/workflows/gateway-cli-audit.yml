@@ -1,4 +1,4 @@
-name: Gateway CLI audit
+name: Gateway CLI hardening patch
 
 on:
   push:
@@ -6,23 +6,553 @@ on:
       - fix/gateway-mode-hardening
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  audit:
+  patch:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: fix/gateway-mode-hardening
-      - name: Locate Gateway CLI code
+          fetch-depth: 0
+      - name: Apply CLI hardening
         shell: bash
         run: |
-          echo '=== gateway/tproxy references in x-ui-core.sh ==='
-          grep -nEi 'gateway|tproxy|fwmark|52345|table[[:space:]]+100|ip rule|nft' x-ui-core.sh || true
-          echo '=== core restart helpers in x-ui-core.sh ==='
-          grep -nE 'restart_xray|restart_sing|sing-box|singbox' x-ui-core.sh || true
-          echo '=== Go gateway CLI dispatch ==='
-          grep -RInE 'gateway\.(Enable|Disable|GetState)|Gateway Mode|case .*gateway|"gateway"' --include='*.go' . | head -n 200 || true
-          echo '=== shell syntax ==='
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_between(text: str, start: str, end: str, replacement: str) -> str:
+              a = text.find(start)
+              if a < 0:
+                  raise SystemExit(f'start marker not found: {start!r}')
+              b = text.find(end, a)
+              if b < 0:
+                  raise SystemExit(f'end marker not found: {end!r}')
+              return text[:a] + replacement.rstrip() + '\n\n' + text[b:]
+
+          # ---- Go CLI: select the active core and clean stale ownership on disable. ----
+          main = Path('main.go')
+          text = main.read_text()
+          helper_anchor = '// main is the entry point of the 3x-ui application.'
+          if 'func gatewayCLISelectedCore()' not in text:
+              helpers = r'''func gatewayCLISelectedCore() (string, error) {
+	if err := database.InitDB(config.GetDBPath()); err != nil {
+		return "", fmt.Errorf("initialize database: %w", err)
+	}
+	settings := &service.SettingService{}
+	return settings.GetCoreType()
+}
+
+func gatewayCLIStateForCore(coreType string) (gateway.State, error) {
+	switch coreType {
+	case service.CoreTypeXray:
+		return gateway.GetState()
+	case service.CoreTypeSingBox:
+		return gateway.GetSingBoxState()
+	default:
+		return gateway.State{}, fmt.Errorf("unsupported core type %q", coreType)
+	}
+}
+
+func gatewayCLIEnableForCore(coreType string) error {
+	switch coreType {
+	case service.CoreTypeXray:
+		return gateway.Enable()
+	case service.CoreTypeSingBox:
+		return gateway.EnableSingBox()
+	default:
+		return fmt.Errorf("unsupported core type %q", coreType)
+	}
+}
+
+func gatewayCLIDisableForCore(coreType string) error {
+	switch coreType {
+	case service.CoreTypeXray:
+		return gateway.Disable()
+	case service.CoreTypeSingBox:
+		return gateway.DisableSingBox()
+	default:
+		return fmt.Errorf("unsupported core type %q", coreType)
+	}
+}
+
+func gatewayCLIOtherCore(coreType string) string {
+	if coreType == service.CoreTypeSingBox {
+		return service.CoreTypeXray
+	}
+	return service.CoreTypeSingBox
+}
+
+func gatewayCLIEnableSelected(coreType string) error {
+	otherCore := gatewayCLIOtherCore(coreType)
+	if otherState, err := gatewayCLIStateForCore(otherCore); err == nil && otherState.Enabled {
+		return fmt.Errorf("Gateway Mode is already owned by %s; disable it before enabling %s", otherCore, coreType)
+	}
+	return gatewayCLIEnableForCore(coreType)
+}
+
+func gatewayCLIDisableAll(selectedCore string) error {
+	failures := make([]string, 0, 2)
+	for index, coreType := range []string{selectedCore, gatewayCLIOtherCore(selectedCore)} {
+		state, err := gatewayCLIStateForCore(coreType)
+		if err != nil {
+			// Match the web controller: the selected core must be inspectable,
+			// while an unused alternate core may not have a valid template yet.
+			if index == 0 {
+				return fmt.Errorf("inspect %s Gateway state: %w", coreType, err)
+			}
+			continue
+		}
+		if !state.Enabled {
+			continue
+		}
+		if err := gatewayCLIDisableForCore(coreType); err != nil {
+			failures = append(failures, fmt.Sprintf("disable %s: %v", coreType, err))
+		}
+	}
+	if len(failures) > 0 {
+		return fmt.Errorf("%s", strings.Join(failures, "; "))
+	}
+	return nil
+}
+
+func gatewayCLIPrintStatus(selectedCore string) error {
+	selectedState, err := gatewayCLIStateForCore(selectedCore)
+	if err != nil {
+		return fmt.Errorf("inspect %s Gateway state: %w", selectedCore, err)
+	}
+	otherCore := gatewayCLIOtherCore(selectedCore)
+	otherState, otherErr := gatewayCLIStateForCore(otherCore)
+
+	owner := "none"
+	enabled := selectedState.Enabled
+	if selectedState.Enabled {
+		owner = selectedCore
+	}
+	if otherErr == nil && otherState.Enabled {
+		enabled = true
+		if selectedState.Enabled {
+			owner = "multiple"
+		} else {
+			owner = otherCore
+		}
+	}
+
+	if enabled {
+		fmt.Println("Gateway Mode: enabled")
+	} else {
+		fmt.Println("Gateway Mode: disabled")
+	}
+	fmt.Println("Selected core:", selectedCore)
+	fmt.Println("Gateway owner:", owner)
+	return nil
+}
+
+'''
+              pos = text.find(helper_anchor)
+              if pos < 0:
+                  raise SystemExit('main helper anchor not found')
+              text = text[:pos] + helpers + text[pos:]
+
+          gateway_case = r'''case "gateway":
+		if len(os.Args) < 3 {
+			fmt.Println("usage: x-ui gateway <enable|disable|status>")
+			return
+		}
+
+		coreType, err := gatewayCLISelectedCore()
+		if err != nil {
+			fmt.Println("Gateway core detection failed:", err)
+			os.Exit(1)
+		}
+
+		switch os.Args[2] {
+		case "enable":
+			if err := gatewayCLIEnableSelected(coreType); err != nil {
+				fmt.Println("Gateway enable failed:", err)
+				os.Exit(1)
+			}
+
+		case "disable":
+			if err := gatewayCLIDisableAll(coreType); err != nil {
+				fmt.Println("Gateway disable failed:", err)
+				os.Exit(1)
+			}
+
+		case "status":
+			if err := gatewayCLIPrintStatus(coreType); err != nil {
+				fmt.Println("Gateway status failed:", err)
+				os.Exit(1)
+			}
+
+		default:
+			fmt.Println("usage: x-ui gateway <enable|disable|status>")
+		}
+'''
+          text = replace_between(text, '\tcase "gateway":', '\tcase "migrate-db":', '\t' + gateway_case)
+          main.write_text(text)
+
+          # ---- Shell menu/network layer: mirror the fail-safe web networking model. ----
+          shell = Path('x-ui-core.sh')
+          text = shell.read_text()
+
+          routing = r'''gateway_routing_enable() {
+    # Remove stale duplicates before systemd takes ownership of this rule/table.
+    while ip rule show 2>/dev/null | grep -Eq 'fwmark 0x40/0xc0.*(lookup|table) 100'; do
+        ip rule del fwmark 0x40/0xc0 table 100 2>/dev/null || break
+    done
+    ip route del local default dev lo table 100 2>/dev/null || true
+
+    cat > "${XUI_GATEWAY_ROUTING_SERVICE}" <<'EOF'
+[Unit]
+Description=3X-UI Gateway Mode Policy Routing
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/ip rule add fwmark 0x40/0xc0 table 100
+ExecStart=/usr/sbin/ip route replace local default dev lo table 100
+RemainAfterExit=yes
+ExecStop=-/usr/sbin/ip rule del fwmark 0x40/0xc0 table 100
+ExecStop=-/usr/sbin/ip route del local default dev lo table 100
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload && systemctl enable --now xui-gateway-routing.service
+}
+
+gateway_routing_disable() {
+    systemctl disable --now xui-gateway-routing.service 2>/dev/null || true
+    rm -f "${XUI_GATEWAY_ROUTING_SERVICE}"
+    systemctl daemon-reload 2>/dev/null || true
+
+    while ip rule show 2>/dev/null | grep -Eq 'fwmark 0x40/0xc0.*(lookup|table) 100'; do
+        ip rule del fwmark 0x40/0xc0 table 100 2>/dev/null || break
+    done
+    ip route del local default dev lo table 100 2>/dev/null || true
+}
+'''
+          text = replace_between(text, 'gateway_routing_enable() {', 'gateway_save_sysctl() {', routing)
+
+          nft = r'''gateway_nft_enable() {
+    local lan_if="$1"
+    local lan_network="$2"
+
+    nft delete table inet xui_gateway 2>/dev/null || true
+    nft delete table ip xui_gateway_nat 2>/dev/null || true
+
+    nft -f - <<EOF
+table inet xui_gateway {
+    set whitelist {
+        type ipv4_addr
+        flags interval
+        auto-merge
+        elements = {
+            0.0.0.0/8,
+            10.0.0.0/8,
+            100.64.0.0/10,
+            127.0.0.0/8,
+            169.254.0.0/16,
+            172.16.0.0/12,
+            192.0.0.0/24,
+            192.0.2.0/24,
+            192.88.99.0/24,
+            192.168.0.0/16,
+            198.51.100.0/24,
+            203.0.113.0/24,
+            224.0.0.0/3
+        }
+    }
+
+    set interface {
+        type ipv4_addr
+        flags interval
+        auto-merge
+        elements = {
+            127.0.0.0/8,
+            ${lan_network}
+        }
+    }
+
+    chain tp_pre {
+        meta l4proto { tcp, udp } fib saddr type != local fib daddr type != local jump tp_rule
+        meta l4proto { tcp, udp } meta mark & 0x000000c0 == 0x00000040 tproxy ip to 127.0.0.1:52345
+    }
+
+    chain prerouting {
+        type filter hook prerouting priority mangle - 5;
+        policy accept;
+        iifname "${lan_if}" meta nfproto ipv4 jump tp_pre
+    }
+
+    chain tp_rule {
+        meta mark set ct mark
+        meta mark & 0x000000c0 == 0x00000040 return
+        ip daddr @interface return
+        ip daddr @whitelist return
+        jump tp_mark
+    }
+
+    chain tp_mark {
+        tcp flags syn / fin,syn,rst,ack meta mark set meta mark | 0x00000040
+        meta l4proto udp ct state new meta mark set meta mark | 0x00000040
+        ct mark set meta mark
+    }
+}
+EOF
+}
+'''
+          text = replace_between(text, 'gateway_nft_enable() {', 'gateway_nat_enable() {', nft)
+
+          helpers_and_enable = r'''gateway_safe_interface_name() {
+    [[ "$1" =~ ^[A-Za-z0-9_.:-]{1,15}$ ]]
+}
+
+gateway_has_network_artifacts() {
+    [[ -e "${XUI_GATEWAY_STATE}" ]] ||
+        [[ -e "${XUI_GATEWAY_ROUTING_SERVICE}" ]] ||
+        [[ -e /etc/systemd/system/xui-gateway-firewall.service ]] ||
+        [[ -e /usr/local/sbin/xui-gateway-firewall-restore ]] ||
+        [[ -e /etc/x-ui/gateway.nft ]] ||
+        nft list table inet xui_gateway >/dev/null 2>&1 ||
+        nft list table ip xui_gateway_nat >/dev/null 2>&1 ||
+        ip rule show 2>/dev/null | grep -Eq 'fwmark 0x40/0xc0.*(lookup|table) 100' ||
+        ip route show table 100 2>/dev/null | grep -Eq '^local default dev lo( |$)'
+}
+
+gateway_cleanup_linux() {
+    gateway_firewall_disable
+    gateway_nft_disable
+    gateway_routing_disable
+    gateway_restore_sysctl
+    rm -f "${XUI_GATEWAY_STATE}"
+}
+
+gateway_enable() {
+    local lan_if
+    local lan_ip
+    local prefix
+    local lan_network
+    local has_wan
+    local wan_if
+
+    if gateway_has_network_artifacts; then
+        LOGE "Gateway Linux state already exists or requires cleanup. Disable Gateway Mode first."
+        return 1
+    fi
+
+    echo ""
+    echo "=== Gateway Mode ==="
+    echo ""
+
+    read -rp "LAN interface: " lan_if
+    if [[ -z "${lan_if}" ]] || ! gateway_safe_interface_name "${lan_if}" || ! ip link show "${lan_if}" >/dev/null 2>&1; then
+        LOGE "Invalid LAN interface."
+        return 1
+    fi
+
+    read -rp "LAN IP: " lan_ip
+    read -rp "Prefix [24]: " prefix
+    prefix="${prefix:-24}"
+    lan_network="$(gateway_get_network "${lan_ip}" "${prefix}" 2>/dev/null)"
+    if [[ -z "${lan_network}" ]]; then
+        LOGE "Invalid LAN IPv4 address or prefix."
+        return 1
+    fi
+    if ! ip -o -4 addr show dev "${lan_if}" 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | grep -Fxq "${lan_ip}"; then
+        LOGE "LAN IP ${lan_ip} is not assigned to ${lan_if}."
+        return 1
+    fi
+
+    read -rp "Does this host have a WAN interface? [y/N]: " has_wan
+    if [[ "${has_wan}" =~ ^[Yy]$ ]]; then
+        read -rp "WAN interface: " wan_if
+        if [[ -z "${wan_if}" ]] || ! gateway_safe_interface_name "${wan_if}" || ! ip link show "${wan_if}" >/dev/null 2>&1; then
+            LOGE "Invalid WAN interface."
+            return 1
+        fi
+        if [[ "${wan_if}" == "${lan_if}" ]]; then
+            LOGE "LAN and WAN interfaces must be different."
+            return 1
+        fi
+    else
+        wan_if=""
+    fi
+
+    echo ""
+    LOGI "LAN interface: ${lan_if}"
+    LOGI "LAN network:   ${lan_network}"
+    LOGI "WAN interface: ${wan_if:-none}"
+    echo ""
+
+    # Configure the selected core first. Linux interception is activated only
+    # after the panel has successfully restarted with the Gateway inbound.
+    if ! "${xui_folder}/x-ui" gateway enable; then
+        LOGE "Failed to configure Gateway Mode for the selected core."
+        return 1
+    fi
+
+    restart 0
+    if ! check_status >/dev/null 2>&1; then
+        LOGE "Panel failed to restart after Gateway core configuration; rolling back."
+        "${xui_folder}/x-ui" gateway disable >/dev/null 2>&1 || true
+        restart 0
+        return 1
+    fi
+
+    mkdir -p /etc/x-ui
+    if ! gateway_save_sysctl; then
+        LOGE "Failed to save the original IPv4 forwarding state."
+        "${xui_folder}/x-ui" gateway disable >/dev/null 2>&1 || true
+        restart 0
+        return 1
+    fi
+    cat >> "${XUI_GATEWAY_STATE}" <<EOF
+LAN_IF=${lan_if}
+LAN_IP=${lan_ip}
+LAN_PREFIX=${prefix}
+LAN_NETWORK=${lan_network}
+WAN_IF=${wan_if}
+EOF
+    chmod 600 "${XUI_GATEWAY_STATE}"
+
+    if ! sysctl -w net.ipv4.ip_forward=1; then
+        LOGE "Failed to enable IPv4 forwarding."
+        gateway_cleanup_linux
+        "${xui_folder}/x-ui" gateway disable >/dev/null 2>&1 || true
+        restart 0
+        return 1
+    fi
+    if ! gateway_routing_enable; then
+        LOGE "Failed to configure Gateway policy routing."
+        gateway_cleanup_linux
+        "${xui_folder}/x-ui" gateway disable >/dev/null 2>&1 || true
+        restart 0
+        return 1
+    fi
+    if ! gateway_nft_enable "${lan_if}" "${lan_network}"; then
+        LOGE "Failed to configure Gateway nftables rules."
+        gateway_cleanup_linux
+        "${xui_folder}/x-ui" gateway disable >/dev/null 2>&1 || true
+        restart 0
+        return 1
+    fi
+    if [[ -n "${wan_if}" ]] && ! gateway_nat_enable "${lan_network}" "${wan_if}"; then
+        LOGE "Failed to configure Gateway NAT."
+        gateway_cleanup_linux
+        "${xui_folder}/x-ui" gateway disable >/dev/null 2>&1 || true
+        restart 0
+        return 1
+    fi
+    if ! gateway_firewall_persist; then
+        LOGE "Failed to persist Gateway firewall configuration."
+        gateway_cleanup_linux
+        "${xui_folder}/x-ui" gateway disable >/dev/null 2>&1 || true
+        restart 0
+        return 1
+    fi
+
+    echo ""
+    LOGI "Gateway Mode enabled successfully."
+}
+'''
+          text = replace_between(text, 'gateway_enable() {', 'gateway_disable() {', helpers_and_enable)
+
+          disable = r'''gateway_disable() {
+    echo ""
+    echo "Disabling Gateway Mode..."
+    echo ""
+
+    # Fail safe: stop interception before removing the inbound from either core.
+    # Even if core cleanup later fails, LAN traffic is no longer blackholed.
+    gateway_cleanup_linux
+
+    if ! "${xui_folder}/x-ui" gateway disable; then
+        LOGE "Linux Gateway interception is disabled, but core configuration cleanup failed."
+        return 1
+    fi
+
+    restart 0
+    LOGI "Gateway Mode disabled successfully."
+}
+'''
+          text = replace_between(text, 'gateway_disable() {', 'gateway_status() {', disable)
+
+          status = r'''gateway_status() {
+    echo ""
+    echo "=== Gateway Mode ==="
+    echo ""
+
+    local has_state="false"
+    if [[ -f "${XUI_GATEWAY_STATE}" ]]; then
+        has_state="true"
+        # State is written by this script/the panel and contains only validated
+        # interface/IP values. It remains useful for human-readable status.
+        source "${XUI_GATEWAY_STATE}"
+        echo "Linux state:    configured"
+        echo "LAN interface:  ${LAN_IF:-unknown}"
+        echo "LAN IP:         ${LAN_IP:-unknown}/${LAN_PREFIX:-unknown}"
+        echo "LAN network:    ${LAN_NETWORK:-unknown}"
+        echo "WAN interface:  ${WAN_IF:-none}"
+    else
+        echo "Linux state:    not configured"
+    fi
+
+    echo "TPROXY port:    52345"
+    echo "Inbound tag:    in-tproxy"
+    echo "Routing mark:   0x40/0xc0"
+    echo "Routing table:  100"
+    echo "IP mode:        IPv4 TCP/UDP"
+    echo ""
+
+    echo "Core state:"
+    "${xui_folder}/x-ui" gateway status || true
+
+    echo ""
+    echo "Policy routing:"
+    ip rule show 2>/dev/null | grep -F "fwmark 0x40/0xc0" || echo "  NOT FOUND"
+
+    echo ""
+    echo "Routing table 100:"
+    ip route show table 100 2>/dev/null || true
+
+    echo ""
+    echo "nftables:"
+    nft list table inet xui_gateway 2>/dev/null || echo "  xui_gateway table not found"
+
+    if [[ "${has_state}" == "true" && -n "${WAN_IF:-}" ]] || nft list table ip xui_gateway_nat >/dev/null 2>&1; then
+        echo ""
+        echo "NAT:"
+        nft list table ip xui_gateway_nat 2>/dev/null || echo "  xui_gateway_nat table not found"
+    fi
+
+    if [[ "${has_state}" != "true" ]] && gateway_has_network_artifacts; then
+        echo ""
+        LOGE "Stale/partial Linux Gateway objects detected; run Disable Gateway Mode to clean them up."
+    fi
+}
+'''
+          text = replace_between(text, 'gateway_status() {', 'gateway_menu() {', status)
+          shell.write_text(text)
+          PY
+
+          gofmt -w main.go
           bash -n x-ui-core.sh
+          git diff --check
+          go test ./internal/gateway ./internal/web/controller ./internal/web/service
+      - name: Commit CLI hardening
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add main.go x-ui-core.sh
+          git commit -m "fix(gateway): align CLI with web fail-safe mode"
+          git push origin HEAD:fix/gateway-mode-hardening
