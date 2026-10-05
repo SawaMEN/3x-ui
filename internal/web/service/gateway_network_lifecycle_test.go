@@ -301,6 +301,79 @@ func TestGatewayRepairLateFailureSuspendsInterception(t *testing.T) {
 	}
 	assertGatewayHealthy(t, s)
 }
+func TestGatewayMissingRPFilterSnapshotFailsClosed(t *testing.T) {
+	s, h, cfg := newGatewayTestHost(t)
+	baseline := map[string]string{}
+	for key, value := range h.sys {
+		baseline[key] = value
+	}
+	if err := s.Enable(context.Background(), cfg); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := os.ReadFile(s.paths.rpFilter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(s.paths.rpFilter); err != nil {
+		t.Fatal(err)
+	}
+	if status := s.Status(context.Background()); status.Error == "" {
+		t.Fatal("missing recovery baseline was not reported")
+	}
+	if err := s.Enable(context.Background(), cfg); err == nil {
+		t.Fatal("repair recreated a missing recovery baseline from modified sysctls")
+	}
+	if h.firewall == "" {
+		t.Fatal("rejected repair unnecessarily removed the previously active firewall")
+	}
+	if err := s.Suspend(context.Background()); err == nil {
+		t.Fatal("suspend hid the missing recovery baseline")
+	}
+	if h.firewall != "" {
+		t.Fatal("baseline failure did not fail closed")
+	}
+	state, err := s.loadGatewayNetworkState()
+	if err != nil || state.DesiredActive {
+		t.Fatalf("unsafe suspended state: %+v %v", state, err)
+	}
+	if err := os.WriteFile(s.paths.rpFilter, snapshot, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Disable(context.Background()); err != nil {
+		t.Fatal("cleanup after restoring baseline:", err)
+	}
+	if !reflect.DeepEqual(h.sys, baseline) {
+		t.Fatalf("restored baseline differs: got=%v want=%v", h.sys, baseline)
+	}
+}
+
+func TestGatewayLegacySuspendCapturesBaselineAndDisablesOldBootUnits(t *testing.T) {
+	s, h, cfg := newGatewayTestHost(t)
+	legacy := fmt.Sprintf("IP_FORWARD_OLD=0\nLAN_IF=%s\nLAN_IP=%s\nLAN_PREFIX=%d\nLAN_NETWORK=192.168.50.0/24\nWAN_IF=\n", cfg.LANInterface, cfg.LANIP, cfg.LANPrefix)
+	if err := os.WriteFile(s.paths.state, []byte(legacy), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{s.paths.routingUnit, s.paths.firewallUnit} {
+		if err := os.WriteFile(path, []byte("legacy"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	h.enabled = true
+	h.firewall = gatewayNFTRules("192.168.50.0/24", "", cfg.LANInterface)
+	if err := s.Suspend(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if h.firewall != "" || h.enabled {
+		t.Fatalf("legacy suspension left runtime/boot interception active: %+v", h)
+	}
+	if _, err := os.Stat(s.paths.rpFilter); err != nil {
+		t.Fatal("legacy baseline was not captured:", err)
+	}
+	state, err := s.loadGatewayNetworkState()
+	if err != nil || state.Legacy || state.DesiredActive {
+		t.Fatalf("legacy state was not migrated safely: %+v %v", state, err)
+	}
+}
 func TestGatewayRejectsForeignNetworkOwnership(t *testing.T) {
 	for _, kind := range []string{"rule", "route", "firewall"} {
 		t.Run(kind, func(t *testing.T) {

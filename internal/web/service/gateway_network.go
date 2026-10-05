@@ -82,6 +82,9 @@ type gatewayNetworkState struct {
 	Config        GatewayNetworkConfig
 	LANNetwork    string
 	DesiredActive bool
+	// Legacy identifies the pre-unified gateway.env format, which did not
+	// manage rp_filter and did not have a NETWORK_ENABLED marker.
+	Legacy bool
 }
 
 func (s *GatewayNetworkService) Status(ctx context.Context) GatewayNetworkStatus {
@@ -95,6 +98,11 @@ func (s *GatewayNetworkService) Status(ctx context.Context) GatewayNetworkStatus
 		return GatewayNetworkStatus{}
 	}
 	status := GatewayNetworkStatus{Configured: true, Config: state.Config}
+	if !state.Legacy {
+		if snapshotErr := s.validateGatewayRPSnapshot(); snapshotErr != nil {
+			status.Error = fmt.Sprintf("Gateway rp_filter recovery snapshot: %v", snapshotErr)
+		}
+	}
 	status.RPFilter = true
 	for _, name := range []string{"all", state.Config.LANInterface} {
 		if value, err := s.command(ctx, "sysctl", "-n", "net/ipv4/conf/"+name+"/rp_filter"); err != nil || strings.TrimSpace(value) != "0" {
@@ -170,8 +178,16 @@ func (s *GatewayNetworkService) Enable(ctx context.Context, cfg GatewayNetworkCo
 		if state.Config != normalized {
 			return fmt.Errorf("Gateway network is already configured for %s (%s); disable it before changing network settings", state.Config.LANInterface, state.LANNetwork)
 		}
-		// Reconcile a partially lost runtime state without overwriting the
-		// forwarding value captured before Gateway Mode was first enabled.
+		// The unified implementation changes rp_filter and therefore requires
+		// its original-value snapshot for every repair. Recreating a missing
+		// snapshot from the already-modified live sysctls would destroy the
+		// baseline. Pre-unified state is the only safe exception: it never
+		// changed rp_filter, so the current values are still the baseline.
+		if !state.Legacy {
+			if snapshotErr := s.validateGatewayRPSnapshot(); snapshotErr != nil {
+				return fmt.Errorf("Gateway rp_filter recovery snapshot is unavailable; suspend Gateway and restore the snapshot before repair: %w", snapshotErr)
+			}
+		}
 		return s.applyGatewayNetwork(ctx, normalized, lanNetwork, state.OldForwarding, false)
 	} else if !os.IsNotExist(stateErr) {
 		return fmt.Errorf("read Gateway recovery state: %w", stateErr)
@@ -213,11 +229,43 @@ func (s *GatewayNetworkService) Suspend(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
+	var recoveryErr error
+	if state.Legacy {
+		// Older Gateway networking never changed rp_filter. Capture those live
+		// values before writing the new state marker so future cleanup has a
+		// trustworthy baseline.
+		if err := s.captureGatewayRPFilter(ctx, state.Config.LANInterface); err != nil {
+			recoveryErr = errors.Join(recoveryErr, fmt.Errorf("capture legacy Gateway rp_filter baseline: %w", err))
+		}
+	} else if err := s.validateGatewayRPSnapshot(); err != nil {
+		recoveryErr = errors.Join(recoveryErr, fmt.Errorf("Gateway rp_filter recovery snapshot is unavailable: %w", err))
+	}
+
 	state.DesiredActive = false
 	if err := s.saveGatewayNetworkState(state); err != nil {
-		return err
+		return errors.Join(recoveryErr, err)
 	}
-	return s.removeGatewayTables(ctx)
+
+	if state.Legacy {
+		// Pre-unified restore units do not understand NETWORK_ENABLED=0. Disable
+		// their boot links before returning, even if baseline capture failed.
+		for _, unit := range []struct {
+			path string
+			name string
+		}{{s.networkPaths().firewallUnit, "xui-gateway-firewall.service"}, {s.networkPaths().routingUnit, "xui-gateway-routing.service"}} {
+			if _, statErr := os.Stat(unit.path); statErr == nil {
+				if err := s.commandOnly(ctx, "systemctl", "disable", unit.name); err != nil {
+					recoveryErr = errors.Join(recoveryErr, fmt.Errorf("disable legacy %s: %w", unit.name, err))
+				}
+			}
+		}
+	}
+
+	if err := s.removeGatewayTables(ctx); err != nil {
+		return errors.Join(recoveryErr, err)
+	}
+	return recoveryErr
 }
 func (s *GatewayNetworkService) removeGatewayTables(ctx context.Context) error {
 	tables, err := s.command(ctx, "nft", "list", "tables")
@@ -490,6 +538,7 @@ func (s *GatewayNetworkService) loadGatewayNetworkState() (gatewayNetworkState, 
 		OldForwarding: values["IP_FORWARD_OLD"],
 		LANNetwork:    values["LAN_NETWORK"],
 		DesiredActive: values["NETWORK_ENABLED"] != "0",
+		Legacy:        values["NETWORK_ENABLED"] == "",
 		Config: GatewayNetworkConfig{
 			LANInterface: values["LAN_IF"],
 			LANIP:        values["LAN_IP"],
@@ -602,6 +651,15 @@ func runGatewayCommandInput(ctx context.Context, input, name string, args ...str
 var gatewayInterfaceName = regexp.MustCompile(`^[a-zA-Z0-9_.:-]+$`)
 var gatewayTableRule = regexp.MustCompile(`(?m)\b(?:lookup|table) 100(?:\s|$)`)
 var gatewayPolicyRule = regexp.MustCompile(`(?m)\bfwmark 0x40/0xc0 (?:lookup|table) 100(?:\s|$)`)
+
+func (s *GatewayNetworkService) validateGatewayRPSnapshot() error {
+	data, err := os.ReadFile(s.networkPaths().rpFilter)
+	if err != nil {
+		return err
+	}
+	_, err = parseGatewayRPSnapshot(string(data))
+	return err
+}
 
 func gatewayTableInUse(rules string) bool        { return gatewayTableRule.MatchString(rules) }
 func gatewayPolicyRulePresent(rules string) bool { return gatewayPolicyRule.MatchString(rules) }
