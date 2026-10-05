@@ -3708,20 +3708,24 @@ if [[ $# -gt 0 ]]; then
             check_install 0 || exit 1
 
             case "$2" in
-            enable)
-        "${xui_folder}/x-ui" gateway enable
+                enable)
+                    if [[ $# -gt 2 ]]; then
+                        "${xui_folder}/x-ui" gateway "${@:2}"
+                    else
+                        gateway_enable
+                    fi
+                    ;;
+                disable)
+                    "${xui_folder}/x-ui" gateway disable
+                    ;;
+                status)
+                    "${xui_folder}/x-ui" gateway status
+                    ;;
+                *)
+                    echo "Usage: x-ui gateway <enable|disable|status> [--lan-interface NAME --lan-ip IPv4 --lan-prefix PREFIX --wan-interface NAME]"
+                    ;;
+            esac
             ;;
-        disable)
-            "${xui_folder}/x-ui" gateway disable
-            ;;
-        status)
-            "${xui_folder}/x-ui" gateway status
-            ;;
-        *)
-            echo "Usage: x-ui gateway <enable|disable|status>"
-            ;;
-    esac
-    ;;
         *) show_usage ;;
     esac
 else

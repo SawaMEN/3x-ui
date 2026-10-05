@@ -67,6 +67,9 @@ func CLI(args []string) error {
 	if before.Error != "" {
 		return fmt.Errorf("Gateway recovery state: %s", before.Error)
 	}
+	if before.RecoveryRequired && action != "disable" {
+		return fmt.Errorf("Gateway network recovery is required; disable Gateway first to clean stale owned objects")
+	}
 	states := map[string]State{}
 	for _, name := range []string{service.CoreTypeXray, service.CoreTypeSingBox} {
 		state, stateErr := StateForCore(name)

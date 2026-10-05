@@ -34,16 +34,17 @@ type GatewayNetworkConfig struct {
 }
 
 type GatewayNetworkStatus struct {
-	ListenerReady bool                 `json:"listenerReady"`
-	Configured    bool                 `json:"configured"`
-	Config        GatewayNetworkConfig `json:"config"`
-	RPFilter      bool                 `json:"rpFilter"`
-	Forwarding    bool                 `json:"forwarding"`
-	PolicyRoute   bool                 `json:"policyRoute"`
-	NAT           bool                 `json:"nat"`
-	Persistent    bool                 `json:"persistent"`
-	Error         string               `json:"error,omitempty"`
-	NFTables      bool                 `json:"nftables"`
+	ListenerReady    bool                 `json:"listenerReady"`
+	Configured       bool                 `json:"configured"`
+	RecoveryRequired bool                 `json:"recoveryRequired"`
+	Config           GatewayNetworkConfig `json:"config"`
+	RPFilter         bool                 `json:"rpFilter"`
+	Forwarding       bool                 `json:"forwarding"`
+	PolicyRoute      bool                 `json:"policyRoute"`
+	NAT              bool                 `json:"nat"`
+	Persistent       bool                 `json:"persistent"`
+	Error            string               `json:"error,omitempty"`
+	NFTables         bool                 `json:"nftables"`
 }
 
 type GatewayNetworkService struct {
@@ -108,7 +109,7 @@ func (s *GatewayNetworkService) Status(ctx context.Context) GatewayNetworkStatus
 				return GatewayNetworkStatus{Error: fmt.Sprintf("inspect orphaned Gateway networking: %v", inspectErr)}
 			}
 			if orphaned {
-				return GatewayNetworkStatus{Configured: true, Error: "Gateway recovery state is missing while managed Linux networking remains; disable Gateway to clean the orphaned interception safely"}
+				return GatewayNetworkStatus{RecoveryRequired: true}
 			}
 		}
 		return GatewayNetworkStatus{}
@@ -247,8 +248,7 @@ func (s *GatewayNetworkService) Suspend(ctx context.Context) error {
 		if !orphaned {
 			return nil
 		}
-		cleanupErr := s.cleanupGatewayWithoutState(ctx, false)
-		return errors.Join(fmt.Errorf("Gateway recovery state is missing; managed interception was suspended but original sysctl baselines cannot be recovered from gateway.env"), cleanupErr)
+		return s.cleanupGatewayWithoutState(ctx, false)
 	}
 	if err != nil {
 		return err
@@ -400,8 +400,7 @@ func (s *GatewayNetworkService) Disable(ctx context.Context) error {
 		if !orphaned {
 			return nil
 		}
-		cleanupErr := s.cleanupGatewayWithoutState(ctx, true)
-		return errors.Join(fmt.Errorf("Gateway recovery state was missing; managed interception was removed, but the previous net.ipv4.ip_forward value cannot be recovered safely and was left unchanged"), cleanupErr)
+		return s.cleanupGatewayWithoutState(ctx, true)
 	}
 	if err != nil {
 		return fmt.Errorf("read Gateway recovery state: %w", err)

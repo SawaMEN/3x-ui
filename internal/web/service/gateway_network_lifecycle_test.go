@@ -360,11 +360,11 @@ func TestGatewayMissingStateIsVisibleAndFailsClosed(t *testing.T) {
 		t.Fatal(err)
 	}
 	status := s.Status(context.Background())
-	if !status.Configured || !strings.Contains(status.Error, "recovery state is missing") {
-		t.Fatalf("orphaned networking was hidden: %+v", status)
+	if status.Configured || !status.RecoveryRequired || status.Error != "" {
+		t.Fatalf("orphaned networking was hidden or misclassified: %+v", status)
 	}
-	if err := s.Suspend(context.Background()); err == nil || !strings.Contains(err.Error(), "recovery state is missing") {
-		t.Fatalf("missing-state suspension error=%v", err)
+	if err := s.Suspend(context.Background()); err != nil {
+		t.Fatalf("missing-state suspension failed: %v", err)
 	}
 	if h.firewall != "" || h.rules != 0 || h.route != "" || h.enabled {
 		t.Fatalf("missing-state suspend did not fail closed: %+v", h)
@@ -377,11 +377,11 @@ func TestGatewayMissingStateIsVisibleAndFailsClosed(t *testing.T) {
 	}
 	// The disabled unit files/snapshot are intentionally still enough for
 	// Status to advertise recovery until explicit cleanup is requested.
-	if status := s.Status(context.Background()); !status.Configured || status.Error == "" {
+	if status := s.Status(context.Background()); !status.RecoveryRequired || status.Error != "" {
 		t.Fatalf("suspended orphan disappeared from status: %+v", status)
 	}
-	if err := s.Disable(context.Background()); err == nil || !strings.Contains(err.Error(), "net.ipv4.ip_forward") {
-		t.Fatalf("missing-state disable error=%v", err)
+	if err := s.Disable(context.Background()); err != nil {
+		t.Fatalf("missing-state disable failed: %v", err)
 	}
 	for key, value := range baseline {
 		if strings.HasSuffix(key, "/rp_filter") && h.sys[key] != value {
@@ -391,7 +391,7 @@ func TestGatewayMissingStateIsVisibleAndFailsClosed(t *testing.T) {
 	if h.sys["net.ipv4.ip_forward"] != "1" {
 		t.Fatal("disable guessed an unrecoverable forwarding baseline")
 	}
-	if status := s.Status(context.Background()); status.Configured || status.Error != "" {
+	if status := s.Status(context.Background()); status.Configured || status.RecoveryRequired || status.Error != "" {
 		t.Fatalf("fully cleaned orphan still visible: %+v", status)
 	}
 }
@@ -401,11 +401,11 @@ func TestGatewayRuleOnlyOrphanIsDetectedAndRemoved(t *testing.T) {
 	h.rules = 1
 	h.route = "local default dev lo scope host\n"
 	status := s.Status(context.Background())
-	if !status.Configured || status.Error == "" {
-		t.Fatalf("rule-only orphan was hidden: %+v", status)
+	if status.Configured || !status.RecoveryRequired || status.Error != "" {
+		t.Fatalf("rule-only orphan was hidden or misclassified: %+v", status)
 	}
-	if err := s.Disable(context.Background()); err == nil {
-		t.Fatal("rule-only cleanup hid the missing recovery state")
+	if err := s.Disable(context.Background()); err != nil {
+		t.Fatalf("rule-only cleanup failed: %v", err)
 	}
 	if h.rules != 0 || h.route != "" {
 		t.Fatalf("owned policy residue survived cleanup: %+v", h)

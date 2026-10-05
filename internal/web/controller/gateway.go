@@ -181,13 +181,13 @@ func (a *GatewayController) statusPayload() (gin.H, error) {
 
 	status, stateErr := gatewayStatusForCore(coreType)
 	network := payload["network"].(service.GatewayNetworkStatus)
-	payload["enabled"] = status.State.Enabled || network.Configured
+	payload["enabled"] = status.State.Enabled || network.Configured || network.RecoveryRequired
 	payload["configured"] = status.State.Configured
 	payload["recoveryBackup"] = status.State.BackupExists
 	payload["gatewayCoreType"] = status.OwnerCore
 	payload["conflict"] = status.Conflict
 	payload["coreMismatch"] = status.OwnerCore != "" && status.OwnerCore != "multiple" && status.OwnerCore != coreType
-	payload["canEnable"] = !status.Conflict && (!status.State.Enabled || status.State.Configured) && a.gatewayCoreRunning(coreType)
+	payload["canEnable"] = !network.RecoveryRequired && !status.Conflict && (!status.State.Enabled || status.State.Configured) && a.gatewayCoreRunning(coreType)
 	if stateErr != nil {
 		return payload, stateErr
 	}
@@ -228,6 +228,11 @@ func (a *GatewayController) enable(c *gin.Context) {
 	}
 
 	networkStatus := a.networkService.Status(c.Request.Context())
+	if networkStatus.RecoveryRequired {
+		payload, _ := a.statusPayload()
+		jsonObj(c, payload, fmt.Errorf("Gateway network recovery is required; disable Gateway first to clean stale owned objects"))
+		return
+	}
 	networkConfig := req.Network
 	if networkStatus.Configured {
 		if networkStatus.Error != "" {

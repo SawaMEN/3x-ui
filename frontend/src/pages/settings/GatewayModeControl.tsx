@@ -30,6 +30,7 @@ type GatewayNetworkConfig = {
 
 type GatewayNetworkStatus = {
   configured: boolean;
+  recoveryRequired?: boolean;
   config: GatewayNetworkConfig;
   forwarding: boolean;
   nat?: boolean;
@@ -166,7 +167,8 @@ export default function GatewayModeControl() {
   const configured = status?.configured === true;
   const coreMismatch = status?.coreMismatch === true;
   const conflict = status?.conflict === true;
-  const recoveryOnly = enabled && !configured && !coreMismatch;
+  const networkRecovery = status?.network?.recoveryRequired === true;
+  const recoveryOnly = networkRecovery || (enabled && !configured && !coreMismatch);
   const canEnable = status?.canEnable === true;
   const selectedCore = coreLabel(status?.coreType);
   const ownerCore = coreLabel(status?.gatewayCoreType);
