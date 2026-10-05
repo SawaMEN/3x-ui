@@ -88,7 +88,14 @@ func (s *GatewayNetworkService) Status(ctx context.Context) GatewayNetworkStatus
 	_, firewallUnitErr := os.Stat(gatewayFirewallServicePath)
 	_, restoreScriptErr := os.Stat(gatewayRestoreScriptPath)
 	_, nftFileErr := os.Stat(gatewayNFTPath)
-	status.Persistent = routingUnitErr == nil && firewallUnitErr == nil && restoreScriptErr == nil && nftFileErr == nil
+	routingUnitPresent := routingUnitErr == nil
+	firewallUnitPresent := firewallUnitErr == nil
+	restoreScriptPresent := restoreScriptErr == nil
+	nftFilePresent := nftFileErr == nil
+	status.Persistent = routingUnitPresent && firewallUnitPresent && restoreScriptPresent && nftFilePresent
+	// A partially installed/removed persistence set is still owned Gateway
+	// state. Surface it as active so the UI offers cleanup instead of hiding it.
+	status.Active = status.Active || routingUnitPresent || firewallUnitPresent || restoreScriptPresent || nftFilePresent
 
 	return status
 }

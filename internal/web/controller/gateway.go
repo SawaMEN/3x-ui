@@ -382,6 +382,18 @@ func (a *GatewayController) disable(c *gin.Context) {
 		return
 	}
 
+	// Stop packet interception before removing or restarting the core inbound.
+	// If Linux cleanup fails, abort without touching the core so existing
+	// TPROXY rules can never be left pointing at a listener we just removed.
+	networkStatus := a.networkService.Status(c.Request.Context())
+	if networkStatus.Configured || networkStatus.Active || networkStatus.Persistent {
+		if err := a.networkService.Disable(c.Request.Context()); err != nil {
+			payload, _ := a.statusPayload()
+			jsonObj(c, payload, fmt.Errorf("disable Linux Gateway networking before core changes: %w", err))
+			return
+		}
+	}
+
 	wasRunning := a.coreRunning(coreType)
 	disabledCores := make([]string, 0, 2)
 	for _, candidate := range []string{coreType, otherGatewayCore(coreType)} {
@@ -431,12 +443,6 @@ func (a *GatewayController) disable(c *gin.Context) {
 			jsonObj(c, payload, fmt.Errorf("disable Gateway Mode restart failed and the Gateway configuration was rolled back: %w", restartErr))
 			return
 		}
-	}
-
-	if err := a.networkService.Disable(c.Request.Context()); err != nil {
-		payload, _ := a.statusPayload()
-		jsonObj(c, payload, fmt.Errorf("disable Linux Gateway networking: %w", err))
-		return
 	}
 
 	payload, err := a.statusPayload()
