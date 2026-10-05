@@ -277,6 +277,30 @@ func TestGatewayRepairFailureKeepsExistingFirewall(t *testing.T) {
 		t.Fatal("repair lost baseline")
 	}
 }
+func TestGatewayRepairLateFailureSuspendsInterception(t *testing.T) {
+	s, h, cfg := newGatewayTestHost(t)
+	if err := s.Enable(context.Background(), cfg); err != nil {
+		t.Fatal(err)
+	}
+	h.failures["systemctl enable"] = 1
+	if err := s.Enable(context.Background(), cfg); err == nil {
+		t.Fatal("late repair failure ignored")
+	}
+	state, err := s.loadGatewayNetworkState()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.DesiredActive {
+		t.Fatal("failed repair remained armed for boot restoration")
+	}
+	if h.firewall != "" {
+		t.Fatal("failed repair left TPROXY interception active")
+	}
+	if err := s.Enable(context.Background(), cfg); err != nil {
+		t.Fatal("repair retry failed:", err)
+	}
+	assertGatewayHealthy(t, s)
+}
 func TestGatewayRejectsForeignNetworkOwnership(t *testing.T) {
 	for _, kind := range []string{"rule", "route", "firewall"} {
 		t.Run(kind, func(t *testing.T) {

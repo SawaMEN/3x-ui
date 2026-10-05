@@ -329,13 +329,27 @@ func (s *GatewayNetworkService) applyGatewayNetwork(ctx context.Context, cfg Gat
 			return err
 		}
 	}
+	firewallApplied := false
 	defer func() {
-		if err != nil && persistState {
-			cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-			if cleanupErr := s.Disable(cleanupCtx); cleanupErr != nil {
-				err = errors.Join(err, fmt.Errorf("Gateway rollback failed: %w", cleanupErr))
-			}
+		if err == nil {
+			return
+		}
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		var cleanupErr error
+		switch {
+		case persistState:
+			cleanupErr = s.Disable(cleanupCtx)
+		case firewallApplied:
+			// A repair/resume already had durable recovery state. If it fails
+			// after replacing the live firewall, fail closed instead of leaving
+			// interception active while reporting an unsuccessful operation.
+			cleanupErr = s.Suspend(cleanupCtx)
+		default:
+			return
+		}
+		if cleanupErr != nil {
+			err = errors.Join(err, fmt.Errorf("Gateway rollback failed: %w", cleanupErr))
 		}
 	}()
 
@@ -391,6 +405,7 @@ func (s *GatewayNetworkService) applyGatewayNetwork(ctx context.Context, cfg Gat
 	if err = s.commandInput(ctx, batch, "nft", "-f", "-"); err != nil {
 		return fmt.Errorf("apply Gateway nftables rules: %w", err)
 	}
+	firewallApplied = true
 	if err = gatewayAtomicWrite(s.networkPaths().nft, []byte(nftRules), 0o600); err != nil {
 		return fmt.Errorf("save Gateway nftables rules: %w", err)
 	}

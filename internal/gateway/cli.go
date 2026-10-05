@@ -142,6 +142,14 @@ func CLI(args []string) error {
 			return err
 		}
 		changed = append(changed, core)
+		// A saved Linux Gateway may outlive an interrupted template change.
+		// Remove TPROXY before restarting the panel/core so LAN traffic is not
+		// redirected to port 52345 while the listener is temporarily absent.
+		if before.Configured {
+			if err := network.Suspend(ctx); err != nil {
+				return rollback(false, err)
+			}
+		}
 		if err := restartGatewayPanel(ctx); err != nil {
 			return rollback(false, err)
 		}
