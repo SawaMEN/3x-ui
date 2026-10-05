@@ -1,0 +1,62 @@
+name: Gateway fail-safe patch
+
+on:
+  push:
+    branches:
+      - fix/gateway-mode-hardening
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/gateway-mode-hardening
+          fetch-depth: 0
+      - name: Apply fail-safe Gateway fixes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          gateway = Path('internal/web/controller/gateway.go')
+          text = gateway.read_text()
+          old = '''\twasRunning := a.coreRunning(coreType)\n\tdisabledCores := make([]string, 0, 2)\n'''
+          new = '''\t// Stop packet interception before removing or restarting the core inbound.\n\t// If Linux cleanup fails, abort without touching the core so existing\n\t// TPROXY rules can never be left pointing at a listener we just removed.\n\tnetworkStatus := a.networkService.Status(c.Request.Context())\n\tif networkStatus.Configured || networkStatus.Active || networkStatus.Persistent {\n\t\tif err := a.networkService.Disable(c.Request.Context()); err != nil {\n\t\t\tpayload, _ := a.statusPayload()\n\t\t\tjsonObj(c, payload, fmt.Errorf("disable Linux Gateway networking before core changes: %w", err))\n\t\t\treturn\n\t\t}\n\t}\n\n\twasRunning := a.coreRunning(coreType)\n\tdisabledCores := make([]string, 0, 2)\n'''
+          if old not in text:
+              raise SystemExit('gateway disable insertion anchor not found')
+          text = text.replace(old, new, 1)
+
+          old = '''\n\tif err := a.networkService.Disable(c.Request.Context()); err != nil {\n\t\tpayload, _ := a.statusPayload()\n\t\tjsonObj(c, payload, fmt.Errorf("disable Linux Gateway networking: %w", err))\n\t\treturn\n\t}\n\n\tpayload, err := a.statusPayload()\n'''
+          new = '''\n\tpayload, err := a.statusPayload()\n'''
+          if old not in text:
+              raise SystemExit('gateway trailing network cleanup anchor not found')
+          text = text.replace(old, new, 1)
+          gateway.write_text(text)
+
+          network = Path('internal/web/service/gateway_network.go')
+          text = network.read_text()
+          old = '''\t_, routingUnitErr := os.Stat(gatewayRoutingServicePath)\n\t_, firewallUnitErr := os.Stat(gatewayFirewallServicePath)\n\t_, restoreScriptErr := os.Stat(gatewayRestoreScriptPath)\n\t_, nftFileErr := os.Stat(gatewayNFTPath)\n\tstatus.Persistent = routingUnitErr == nil && firewallUnitErr == nil && restoreScriptErr == nil && nftFileErr == nil\n\n\treturn status\n'''
+          new = '''\t_, routingUnitErr := os.Stat(gatewayRoutingServicePath)\n\t_, firewallUnitErr := os.Stat(gatewayFirewallServicePath)\n\t_, restoreScriptErr := os.Stat(gatewayRestoreScriptPath)\n\t_, nftFileErr := os.Stat(gatewayNFTPath)\n\troutingUnitPresent := routingUnitErr == nil\n\tfirewallUnitPresent := firewallUnitErr == nil\n\trestoreScriptPresent := restoreScriptErr == nil\n\tnftFilePresent := nftFileErr == nil\n\tstatus.Persistent = routingUnitPresent && firewallUnitPresent && restoreScriptPresent && nftFilePresent\n\t// A partially installed/removed persistence set is still owned Gateway\n\t// state. Surface it as active so the UI offers cleanup instead of hiding it.\n\tstatus.Active = status.Active || routingUnitPresent || firewallUnitPresent || restoreScriptPresent || nftFilePresent\n\n\treturn status\n'''
+          if old not in text:
+              raise SystemExit('gateway persistence status anchor not found')
+          text = text.replace(old, new, 1)
+          network.write_text(text)
+          PY
+          gofmt -w internal/web/controller/gateway.go internal/web/service/gateway_network.go
+          git diff --check
+      - name: Commit patch
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add internal/web/controller/gateway.go internal/web/service/gateway_network.go
+          git commit -m "fix(gateway): fail safe before core cleanup"
+          git push origin HEAD:fix/gateway-mode-hardening
