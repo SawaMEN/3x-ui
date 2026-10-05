@@ -20,5 +20,9 @@ jobs:
         run: |
           echo '=== gateway/tproxy references in x-ui-core.sh ==='
           grep -nEi 'gateway|tproxy|fwmark|52345|table[[:space:]]+100|ip rule|nft' x-ui-core.sh || true
+          echo '=== core restart helpers in x-ui-core.sh ==='
+          grep -nE 'restart_xray|restart_sing|sing-box|singbox' x-ui-core.sh || true
+          echo '=== Go gateway CLI dispatch ==='
+          grep -RInE 'gateway\.(Enable|Disable|GetState)|Gateway Mode|case .*gateway|"gateway"' --include='*.go' . | head -n 200 || true
           echo '=== shell syntax ==='
           bash -n x-ui-core.sh
