@@ -347,6 +347,71 @@ func TestGatewayMissingRPFilterSnapshotFailsClosed(t *testing.T) {
 	}
 }
 
+func TestGatewayMissingStateIsVisibleAndFailsClosed(t *testing.T) {
+	s, h, cfg := newGatewayTestHost(t)
+	baseline := map[string]string{}
+	for key, value := range h.sys {
+		baseline[key] = value
+	}
+	if err := s.Enable(context.Background(), cfg); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(s.paths.state); err != nil {
+		t.Fatal(err)
+	}
+	status := s.Status(context.Background())
+	if !status.Configured || !strings.Contains(status.Error, "recovery state is missing") {
+		t.Fatalf("orphaned networking was hidden: %+v", status)
+	}
+	if err := s.Suspend(context.Background()); err == nil || !strings.Contains(err.Error(), "recovery state is missing") {
+		t.Fatalf("missing-state suspension error=%v", err)
+	}
+	if h.firewall != "" || h.rules != 0 || h.route != "" || h.enabled {
+		t.Fatalf("missing-state suspend did not fail closed: %+v", h)
+	}
+	if h.sys["net.ipv4.ip_forward"] != "1" {
+		t.Fatal("missing-state cleanup guessed the original ip_forward value")
+	}
+	if _, err := os.Stat(s.paths.rpFilter); err != nil {
+		t.Fatal("suspend discarded the only remaining rp_filter recovery data:", err)
+	}
+	// The disabled unit files/snapshot are intentionally still enough for
+	// Status to advertise recovery until explicit cleanup is requested.
+	if status := s.Status(context.Background()); !status.Configured || status.Error == "" {
+		t.Fatalf("suspended orphan disappeared from status: %+v", status)
+	}
+	if err := s.Disable(context.Background()); err == nil || !strings.Contains(err.Error(), "net.ipv4.ip_forward") {
+		t.Fatalf("missing-state disable error=%v", err)
+	}
+	for key, value := range baseline {
+		if strings.HasSuffix(key, "/rp_filter") && h.sys[key] != value {
+			t.Fatalf("rp_filter baseline not restored for %s: got=%s want=%s", key, h.sys[key], value)
+		}
+	}
+	if h.sys["net.ipv4.ip_forward"] != "1" {
+		t.Fatal("disable guessed an unrecoverable forwarding baseline")
+	}
+	if status := s.Status(context.Background()); status.Configured || status.Error != "" {
+		t.Fatalf("fully cleaned orphan still visible: %+v", status)
+	}
+}
+
+func TestGatewayRuleOnlyOrphanIsDetectedAndRemoved(t *testing.T) {
+	s, h, _ := newGatewayTestHost(t)
+	h.rules = 1
+	h.route = "local default dev lo scope host\n"
+	status := s.Status(context.Background())
+	if !status.Configured || status.Error == "" {
+		t.Fatalf("rule-only orphan was hidden: %+v", status)
+	}
+	if err := s.Disable(context.Background()); err == nil {
+		t.Fatal("rule-only cleanup hid the missing recovery state")
+	}
+	if h.rules != 0 || h.route != "" {
+		t.Fatalf("owned policy residue survived cleanup: %+v", h)
+	}
+}
+
 func TestGatewayLegacySuspendCapturesBaselineAndDisablesOldBootUnits(t *testing.T) {
 	s, h, cfg := newGatewayTestHost(t)
 	legacy := fmt.Sprintf("IP_FORWARD_OLD=0\nLAN_IF=%s\nLAN_IP=%s\nLAN_PREFIX=%d\nLAN_NETWORK=192.168.50.0/24\nWAN_IF=\n", cfg.LANInterface, cfg.LANIP, cfg.LANPrefix)

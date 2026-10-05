@@ -95,6 +95,22 @@ func (s *GatewayNetworkService) Status(ctx context.Context) GatewayNetworkStatus
 		if _, statErr := os.Stat(s.networkPaths().state); statErr == nil {
 			return GatewayNetworkStatus{Configured: true, Error: err.Error()}
 		}
+		if !os.IsNotExist(err) {
+			return GatewayNetworkStatus{Error: err.Error()}
+		}
+		// A deleted gateway.env must not make an active, panel-owned TPROXY
+		// firewall look like a clean disabled Gateway. Surface the residue so
+		// callers can explicitly clean it instead of restarting a core behind
+		// an invisible interception rule.
+		if s.checkSupport() == nil {
+			orphaned, inspectErr := s.gatewayOrphaned(ctx)
+			if inspectErr != nil {
+				return GatewayNetworkStatus{Error: fmt.Sprintf("inspect orphaned Gateway networking: %v", inspectErr)}
+			}
+			if orphaned {
+				return GatewayNetworkStatus{Configured: true, Error: "Gateway recovery state is missing while managed Linux networking remains; disable Gateway to clean the orphaned interception safely"}
+			}
+		}
 		return GatewayNetworkStatus{}
 	}
 	status := GatewayNetworkStatus{Configured: true, Config: state.Config}
@@ -224,7 +240,15 @@ func (s *GatewayNetworkService) Enable(ctx context.Context, cfg GatewayNetworkCo
 func (s *GatewayNetworkService) Suspend(ctx context.Context) error {
 	state, err := s.loadGatewayNetworkState()
 	if os.IsNotExist(err) {
-		return nil
+		orphaned, inspectErr := s.gatewayOrphaned(ctx)
+		if inspectErr != nil {
+			return fmt.Errorf("inspect Gateway networking without recovery state: %w", inspectErr)
+		}
+		if !orphaned {
+			return nil
+		}
+		cleanupErr := s.cleanupGatewayWithoutState(ctx, false)
+		return errors.Join(fmt.Errorf("Gateway recovery state is missing; managed interception was suspended but original sysctl baselines cannot be recovered from gateway.env"), cleanupErr)
 	}
 	if err != nil {
 		return err
@@ -267,6 +291,89 @@ func (s *GatewayNetworkService) Suspend(ctx context.Context) error {
 	}
 	return recoveryErr
 }
+func (s *GatewayNetworkService) gatewayOrphaned(ctx context.Context) (bool, error) {
+	paths := s.networkPaths()
+	for _, path := range []string{paths.rpFilter, paths.nft, paths.routingUnit, paths.firewallUnit, paths.restoreScript} {
+		if _, err := os.Stat(path); err == nil {
+			return true, nil
+		} else if !os.IsNotExist(err) {
+			return false, err
+		}
+	}
+	tables, err := s.command(ctx, "nft", "list", "tables")
+	if err != nil {
+		return false, err
+	}
+	if gatewayTablePresent(tables, "inet", "xui_gateway") || gatewayTablePresent(tables, "ip", "xui_gateway_nat") {
+		return true, nil
+	}
+	rules, err := s.command(ctx, "ip", "-N", "-4", "rule", "show")
+	if err != nil {
+		return false, err
+	}
+	return len(gatewayOwnedRulePriorities(rules)) > 0, nil
+}
+
+// cleanupGatewayWithoutState removes only resources with an unambiguous 3x-ui
+// identity. It deliberately does not guess the previous ip_forward value.
+func (s *GatewayNetworkService) cleanupGatewayWithoutState(ctx context.Context, removeFiles bool) error {
+	paths := s.networkPaths()
+	var cleanupErr error
+	for _, unit := range []struct{ path, name string }{{paths.firewallUnit, "xui-gateway-firewall.service"}, {paths.routingUnit, "xui-gateway-routing.service"}} {
+		if _, err := os.Stat(unit.path); err == nil {
+			if err := s.commandOnly(ctx, "systemctl", "disable", "--now", unit.name); err != nil {
+				cleanupErr = errors.Join(cleanupErr, fmt.Errorf("disable orphaned %s: %w", unit.name, err))
+			}
+		} else if !os.IsNotExist(err) {
+			cleanupErr = errors.Join(cleanupErr, err)
+		}
+	}
+	if err := s.removeGatewayTables(ctx); err != nil {
+		cleanupErr = errors.Join(cleanupErr, fmt.Errorf("remove orphaned Gateway nftables: %w", err))
+	}
+	rules, err := s.command(ctx, "ip", "-N", "-4", "rule", "show")
+	if err != nil {
+		cleanupErr = errors.Join(cleanupErr, err)
+	} else {
+		for _, priority := range gatewayOwnedRulePriorities(rules) {
+			if err := s.commandOnly(ctx, "ip", "-4", "rule", "del", "priority", priority, "from", "all", "fwmark", "0x40/0xc0", "table", "100"); err != nil {
+				cleanupErr = errors.Join(cleanupErr, err)
+			}
+		}
+	}
+	routes, routeErr := s.command(ctx, "ip", "-4", "route", "show", "table", "100")
+	if routeErr != nil && !strings.Contains(routes, "FIB table does not exist") {
+		cleanupErr = errors.Join(cleanupErr, routeErr)
+	} else if gatewayHasOwnedRoute(routes) {
+		if err := s.commandOnly(ctx, "ip", "-4", "route", "del", "local", "default", "dev", "lo", "table", "100"); err != nil {
+			cleanupErr = errors.Join(cleanupErr, err)
+		}
+	}
+	if !removeFiles {
+		return cleanupErr
+	}
+	// rp_filter has its own self-describing snapshot and can therefore still
+	// be restored safely even when gateway.env (which held ip_forward) is lost.
+	if _, err := os.Stat(paths.rpFilter); err == nil {
+		if err := s.restoreGatewayRPFilter(ctx); err != nil {
+			cleanupErr = errors.Join(cleanupErr, fmt.Errorf("restore orphaned Gateway rp_filter snapshot: %w", err))
+		} else if err := os.Remove(paths.rpFilter); err != nil && !os.IsNotExist(err) {
+			cleanupErr = errors.Join(cleanupErr, err)
+		}
+	} else if !os.IsNotExist(err) {
+		cleanupErr = errors.Join(cleanupErr, err)
+	}
+	for _, path := range []string{paths.firewallUnit, paths.routingUnit, paths.restoreScript, paths.nft} {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			cleanupErr = errors.Join(cleanupErr, err)
+		}
+	}
+	if err := s.commandOnly(ctx, "systemctl", "daemon-reload"); err != nil {
+		cleanupErr = errors.Join(cleanupErr, err)
+	}
+	return cleanupErr
+}
+
 func (s *GatewayNetworkService) removeGatewayTables(ctx context.Context) error {
 	tables, err := s.command(ctx, "nft", "list", "tables")
 	if err != nil {
@@ -286,7 +393,15 @@ func (s *GatewayNetworkService) removeGatewayTables(ctx context.Context) error {
 func (s *GatewayNetworkService) Disable(ctx context.Context) error {
 	state, err := s.loadGatewayNetworkState()
 	if os.IsNotExist(err) {
-		return nil
+		orphaned, inspectErr := s.gatewayOrphaned(ctx)
+		if inspectErr != nil {
+			return fmt.Errorf("inspect Gateway networking without recovery state: %w", inspectErr)
+		}
+		if !orphaned {
+			return nil
+		}
+		cleanupErr := s.cleanupGatewayWithoutState(ctx, true)
+		return errors.Join(fmt.Errorf("Gateway recovery state was missing; managed interception was removed, but the previous net.ipv4.ip_forward value cannot be recovered safely and was left unchanged"), cleanupErr)
 	}
 	if err != nil {
 		return fmt.Errorf("read Gateway recovery state: %w", err)
