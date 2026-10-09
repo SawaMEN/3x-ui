@@ -2,6 +2,7 @@ package hiddify
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -132,5 +133,51 @@ func TestTranslateXHTTPDownload(t *testing.T) {
 	}
 	if download["mode"] != nil || download["uuid"] != nil {
 		t.Fatalf("invalid fields leaked into download schema: %#v", download)
+	}
+}
+
+func TestDownloadRejectsNestedSettingsIncludingExtra(t *testing.T) {
+	for _, extra := range []bool{false, true} {
+		t.Run(fmt.Sprintf("extra=%v", extra), func(t *testing.T) {
+			xhttp := map[string]any{"downloadSettings": map[string]any{
+				"address": "nested.example.com", "port": 443, "network": "xhttp",
+			}}
+			if extra {
+				xhttp = map[string]any{"extra": xhttp}
+			}
+			_, err := translateDownload(map[string]any{
+				"address": "down.example.com", "port": 443, "network": "xhttp", "xhttpSettings": xhttp,
+			}, "test")
+			if err == nil || !strings.Contains(err.Error(), "nested downloadSettings cannot be preserved") {
+				t.Fatalf("nested download must fail explicitly: %v", err)
+			}
+		})
+	}
+}
+
+func TestDownloadExtraReplacesInactiveRootSettings(t *testing.T) {
+	download, err := translateDownload(map[string]any{
+		"address": "down.example.com", "port": 443, "network": "xhttp",
+		"xhttpSettings": map[string]any{
+			"path": "/down", "downloadSettings": map[string]any{"unused": true},
+			"extra": map[string]any{"xPaddingBytes": "100-200"},
+		},
+	}, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if download["path"] != "/down" || download["x_padding_bytes"] != "100-200" || download["download"] != nil {
+		t.Fatalf("incorrect effective download settings: %#v", download)
+	}
+}
+
+func TestDownloadRejectsMalformedXHTTPOptions(t *testing.T) {
+	for _, xhttp := range []any{"invalid", map[string]any{"extra": "invalid"}} {
+		_, err := translateDownload(map[string]any{
+			"address": "down.example.com", "port": 443, "network": "xhttp", "xhttpSettings": xhttp,
+		}, "test")
+		if err == nil || !strings.Contains(err.Error(), "must be an object") {
+			t.Fatalf("malformed download options must fail explicitly: %v", err)
+		}
 	}
 }

@@ -26,7 +26,7 @@ var xmuxFields = map[string]string{
 	"hMaxReusableSecs": "h_max_reusable_secs", "hKeepAlivePeriod": "h_keep_alive_period",
 }
 
-func translateXHTTP(raw map[string]any, inbound bool, label string) (map[string]any, error) {
+func effectiveXHTTPOptions(raw map[string]any, label string) (map[string]any, error) {
 	options := maps.Clone(raw)
 	if extra, exists := options["extra"]; exists && extra != nil {
 		object, ok := extra.(map[string]any)
@@ -40,6 +40,14 @@ func translateXHTTP(raw map[string]any, inbound bool, label string) (map[string]
 				options[key] = value
 			}
 		}
+	}
+	return options, nil
+}
+
+func translateXHTTP(raw map[string]any, inbound bool, label string) (map[string]any, error) {
+	options, err := effectiveXHTTPOptions(raw, label)
+	if err != nil {
+		return nil, err
 	}
 	out := map[string]any{"type": "xhttp"}
 	for key, value := range options {
@@ -115,7 +123,15 @@ func translateDownload(raw map[string]any, label string) (map[string]any, error)
 	if raw["network"] != "xhttp" {
 		return nil, fmt.Errorf("%s: downloadSettings.network must be xhttp", label)
 	}
-	xhttp := object(raw, "xhttpSettings")
+	if value := raw["xhttpSettings"]; value != nil {
+		if _, ok := value.(map[string]any); !ok {
+			return nil, fmt.Errorf("%s: download xhttpSettings must be an object", label)
+		}
+	}
+	xhttp, err := effectiveXHTTPOptions(object(raw, "xhttpSettings"), label)
+	if err != nil {
+		return nil, err
+	}
 	if mode := xhttp["mode"]; meaningful(mode) && mode != "auto" {
 		return nil, fmt.Errorf("%s: explicit download XHTTP mode cannot be preserved", label)
 	}
