@@ -48,6 +48,10 @@ def audit(upstream):
     release = lock["verified_release"]
     require(bool(re.fullmatch(r"[0-9a-f]{64}", release["sha256"])), "Expected SHA-256")
     require(f"/download/{target['tag']}/{release['asset']}" in release["url"], "Release URL is not pinned")
+    build = lock["panel_build"]
+    require({"with_v2ray_api", "with_awg", "with_quic", "with_wireguard"}.issubset(build["tags"]), "Panel build lacks required capabilities")
+    require(build["toolchain"] == "go1.26.3", "Hiddify TLS dependencies require the pinned Go toolchain")
+    require((ROOT / build["check_command_overlay"]).is_file(), "Missing check command overlay")
     print(f"OK: {len(names)} protocol entries (including aliases), explicit decisions and release lock")
     if upstream is None:
         print("Upstream verification skipped; pass --upstream to verify source evidence")

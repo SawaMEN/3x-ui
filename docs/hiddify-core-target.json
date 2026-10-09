@@ -6,43 +6,44 @@
   "evidence_level": "source-audit-and-amd64-binary-probes-not-traffic-e2e",
   "target": {
     "repository": "https://github.com/hiddify/hiddify-core",
-    "tag": "v4.1.0",
-    "commit": "c9d6f0f00b2eda34e4fb71863e4e0a62b3e931a0",
+    "tag": "v5.0.0",
+    "commit": "7854a77ec228309e2194bdfbec1efb5b7190aa5b",
     "submodules": {
-      "hiddify-sing-box": "0a02b7729f6a211436bb8bdcd8696c283eb27767",
-      "ray2sing": "f58be84e30d946915a1de437fbcc3d3ffca18a23"
+      "hiddify-sing-box": "965805340f3f399a48626d3facc355a906c95ebd",
+      "ray2sing": "505d8c645f1dad54544abd024ffd8100a8d771e8"
     }
   },
   "verified_release": {
-    "asset": "hiddify-core-linux-amd64.tar.gz",
-    "url": "https://github.com/hiddify/hiddify-core/releases/download/v4.1.0/hiddify-core-linux-amd64.tar.gz",
-    "sha256": "79f55725b9c1c0b3cad46a45ededb3c5be83d7a6236cc1dfa9bd78fb3c687e6f",
-    "reported_sing_box_version": "1.13.1",
+    "asset": "hiddify-lib-linux-amd64.tar.gz",
+    "url": "https://github.com/hiddify/hiddify-core/releases/download/v5.0.0/hiddify-lib-linux-amd64.tar.gz",
+    "sha256": "bb3925263992b43227dc9f6602f18f5f827a73efecbdb601f58ae6596467da33",
+    "reported_sing_box_version": "1.13.0-rc.2",
     "build_tags": [
-      "with_v2ray_api",
       "with_gvisor",
       "with_quic",
-      "with_dhcp",
       "with_wireguard",
       "with_utls",
-      "with_acme",
       "with_clash_api",
-      "with_tailscale",
-      "with_ccm",
-      "with_ocm",
+      "with_grpc",
+      "with_awg",
       "tfogo_checklinkname0",
       "with_naive_outbound",
-      "with_purego"
-    ]
+      "with_conntrack",
+      "with_embedded_tor",
+      "with_openvpn",
+      "with_openconnect"
+    ],
+    "user_stats_api_available": false
   },
   "runtime_contract": {
     "raw_config_command": [
       "srun",
       "-c"
     ],
-    "validation_cli_available": false,
+    "validation_cli_available": true,
     "stats_grpc_method": "/experimental.v2rayapi.StatsService/QueryStats",
-    "activation_ready": false
+    "activation_ready": false,
+    "requires_panel_build": true
   },
   "protocols": [
     {
@@ -57,7 +58,7 @@
       "migration": "adapt",
       "target_type": "vless",
       "target_kind": "inbound",
-      "decision": "Base UUID/flow supported; encrypted VLESS and extended protection settings block parity."
+      "decision": "Map UUID/flow and decryption/encryption with internal/hiddify; ML-DSA and Vision seed still block parity."
     },
     {
       "panel_protocol": "trojan",
@@ -134,7 +135,7 @@
       "migration": "adapt",
       "target_type": "mieru",
       "target_kind": "inbound",
-      "decision": "Native server exists; panel library v3.38.0 versus target v3.27.0 needs parity checks."
+      "decision": "Native server exists; verify pinned v5 Mieru dependency and credential/portBindings/meters before replacing panel runtime."
     },
     {
       "panel_protocol": "wireguard",
@@ -148,7 +149,7 @@
       "migration": "external",
       "target_type": "awg",
       "target_kind": "endpoint",
-      "decision": "Release CLI lacks with_awg; retain embedded amneziawgnet/bridge until AWG 3.1 parity."
+      "decision": "Release library includes with_awg; native parameters exist but AWG 3.1 and peer metering require parity validation; retain embedded bridge meanwhile."
     },
     {
       "panel_protocol": "tun",
@@ -215,17 +216,17 @@
     },
     {
       "panel_protocol": "snell",
-      "migration": "blocked",
-      "target_type": null,
-      "target_kind": null,
-      "decision": "Native inbound/outbound absent; port server implementation and versions/userkey schema."
+      "migration": "adapt",
+      "target_type": "snell",
+      "target_kind": "inbound",
+      "decision": "Native inbound versions 5/6 and outbound 4/6 are registered; existing panel server mapping can be reused."
     },
     {
       "panel_protocol": "masque",
-      "migration": "blocked",
-      "target_type": null,
-      "target_kind": null,
-      "decision": "masque-server endpoint absent; port implementation/schema/user metering."
+      "migration": "adapt",
+      "target_type": "masque-server",
+      "target_kind": "endpoint",
+      "decision": "Native server/client endpoints exist; reuse panel endpoint mapping and verify routing/user metering."
     }
   ],
   "source_checks": [
@@ -260,6 +261,53 @@
     {
       "path": "hiddify-sing-box/protocol/mieru/inbound.go",
       "contains": "func RegisterInbound"
+    },
+    {
+      "path": "hiddify-sing-box/option/vless.go",
+      "contains": "Decryption string"
+    },
+    {
+      "path": "hiddify-sing-box/option/outbound.go",
+      "contains": "json:\"final_mask,omitempty\""
+    },
+    {
+      "path": "hiddify-sing-box/option/snell.go",
+      "contains": "enum:\"5,6\""
+    },
+    {
+      "path": "hiddify-sing-box/protocol/masque/endpoint.go",
+      "contains": "func RegisterEndpoint"
+    },
+    {
+      "path": "v2/hcore/hcore_service.proto",
+      "contains": "rpc HotReload"
+    },
+    {
+      "path": "hiddify-sing-box/option/v2ray_transport.go",
+      "contains": "json:\"x_padding_bytes\""
     }
-  ]
+  ],
+  "panel_build": {
+    "tags": [
+      "with_v2ray_api",
+      "with_gvisor",
+      "with_quic",
+      "with_wireguard",
+      "with_utls",
+      "with_clash_api",
+      "with_awg",
+      "with_naive_outbound",
+      "with_purego",
+      "tfogo_checklinkname0"
+    ],
+    "sing_box_version": "1.13.0-rc.2",
+    "check_command_overlay": "deploy/hiddify/cmd_xui_check.go.in",
+    "runtime_dependencies": [
+      "matching libcronet for Naive outbound"
+    ],
+    "activation_ready": false,
+    "toolchain": "go1.26.3",
+    "validation_cli_available": true,
+    "user_stats_api_available": true
+  }
 }
