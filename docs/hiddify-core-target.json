@@ -1,0 +1,265 @@
+{
+  "schema_version": 1,
+  "audit_date": "2026-10-09",
+  "panel_baseline": "cf730af652387a2e99fa1cda20674b038a6edfdf",
+  "stage": 1,
+  "evidence_level": "source-audit-and-amd64-binary-probes-not-traffic-e2e",
+  "target": {
+    "repository": "https://github.com/hiddify/hiddify-core",
+    "tag": "v4.1.0",
+    "commit": "c9d6f0f00b2eda34e4fb71863e4e0a62b3e931a0",
+    "submodules": {
+      "hiddify-sing-box": "0a02b7729f6a211436bb8bdcd8696c283eb27767",
+      "ray2sing": "f58be84e30d946915a1de437fbcc3d3ffca18a23"
+    }
+  },
+  "verified_release": {
+    "asset": "hiddify-core-linux-amd64.tar.gz",
+    "url": "https://github.com/hiddify/hiddify-core/releases/download/v4.1.0/hiddify-core-linux-amd64.tar.gz",
+    "sha256": "79f55725b9c1c0b3cad46a45ededb3c5be83d7a6236cc1dfa9bd78fb3c687e6f",
+    "reported_sing_box_version": "1.13.1",
+    "build_tags": [
+      "with_v2ray_api",
+      "with_gvisor",
+      "with_quic",
+      "with_dhcp",
+      "with_wireguard",
+      "with_utls",
+      "with_acme",
+      "with_clash_api",
+      "with_tailscale",
+      "with_ccm",
+      "with_ocm",
+      "tfogo_checklinkname0",
+      "with_naive_outbound",
+      "with_purego"
+    ]
+  },
+  "runtime_contract": {
+    "raw_config_command": [
+      "srun",
+      "-c"
+    ],
+    "validation_cli_available": false,
+    "stats_grpc_method": "/experimental.v2rayapi.StatsService/QueryStats",
+    "activation_ready": false
+  },
+  "protocols": [
+    {
+      "panel_protocol": "vmess",
+      "migration": "native",
+      "target_type": "vmess",
+      "target_kind": "inbound",
+      "decision": "Map UUID/users and transport; handshake legacy alterId and multi-user."
+    },
+    {
+      "panel_protocol": "vless",
+      "migration": "adapt",
+      "target_type": "vless",
+      "target_kind": "inbound",
+      "decision": "Base UUID/flow supported; encrypted VLESS and extended protection settings block parity."
+    },
+    {
+      "panel_protocol": "trojan",
+      "migration": "adapt",
+      "target_type": "trojan",
+      "target_kind": "inbound",
+      "decision": "Map users/TLS; fallback supports default/ALPN only."
+    },
+    {
+      "panel_protocol": "shadowsocks",
+      "migration": "adapt",
+      "target_type": "shadowsocks",
+      "target_kind": "inbound",
+      "decision": "Preserve cipher/master PSK/user PSK and metering."
+    },
+    {
+      "panel_protocol": "http",
+      "migration": "native",
+      "target_type": "http",
+      "target_kind": "inbound",
+      "decision": "Map accounts/TLS and preserve disabled users."
+    },
+    {
+      "panel_protocol": "mixed",
+      "migration": "adapt",
+      "target_type": "mixed",
+      "target_kind": "inbound",
+      "decision": "Independent SOCKS udp=false cannot be represented by current translator."
+    },
+    {
+      "panel_protocol": "hysteria",
+      "migration": "adapt",
+      "target_type": "hysteria",
+      "target_kind": "inbound",
+      "decision": "Select hysteria/hysteria2 from version, audit obfs/bandwidth options."
+    },
+    {
+      "panel_protocol": "hysteria2",
+      "migration": "adapt",
+      "target_type": "hysteria2",
+      "target_kind": "inbound",
+      "decision": "Compatibility alias; normalize to version 2."
+    },
+    {
+      "panel_protocol": "tuic",
+      "migration": "adapt",
+      "target_type": "tuic",
+      "target_kind": "inbound",
+      "decision": "Use native listener; avoid simultaneous sidecar binding and duplicate metering."
+    },
+    {
+      "panel_protocol": "naive",
+      "migration": "adapt",
+      "target_type": "naive",
+      "target_kind": "inbound",
+      "decision": "Map username/password/TLS and TCP/QUIC mode."
+    },
+    {
+      "panel_protocol": "anytls",
+      "migration": "native",
+      "target_type": "anytls",
+      "target_kind": "inbound",
+      "decision": "Map password/TLS/padding_scheme; verify user metering."
+    },
+    {
+      "panel_protocol": "shadowtls",
+      "migration": "adapt",
+      "target_type": "shadowtls",
+      "target_kind": "inbound",
+      "decision": "Preserve ShadowTLS + inner Shadowsocks detour and derived credentials."
+    },
+    {
+      "panel_protocol": "mieru",
+      "migration": "adapt",
+      "target_type": "mieru",
+      "target_kind": "inbound",
+      "decision": "Native server exists; panel library v3.38.0 versus target v3.27.0 needs parity checks."
+    },
+    {
+      "panel_protocol": "wireguard",
+      "migration": "adapt",
+      "target_type": "wireguard",
+      "target_kind": "endpoint",
+      "decision": "Map endpoint listen_port/peers/allowed_ips; implement peer metering."
+    },
+    {
+      "panel_protocol": "amneziawg",
+      "migration": "external",
+      "target_type": "awg",
+      "target_kind": "endpoint",
+      "decision": "Release CLI lacks with_awg; retain embedded amneziawgnet/bridge until AWG 3.1 parity."
+    },
+    {
+      "panel_protocol": "tun",
+      "migration": "adapt",
+      "target_type": "tun",
+      "target_kind": "inbound",
+      "decision": "Native interface exists; current Xray translator rejects it; retain OS gateway lifecycle."
+    },
+    {
+      "panel_protocol": "tunnel",
+      "migration": "blocked",
+      "target_type": null,
+      "target_kind": null,
+      "decision": "Xray forwarding is not hiddify tunnel_server/client; map to direct/redirect/tproxy with explicit semantics."
+    },
+    {
+      "panel_protocol": "mtproto",
+      "migration": "external",
+      "target_type": null,
+      "target_kind": null,
+      "decision": "Retain Telemt reload/quotas/subscriptions and move egress bridge."
+    },
+    {
+      "panel_protocol": "pingtunnel",
+      "migration": "external",
+      "target_type": null,
+      "target_kind": null,
+      "decision": "Retain externalvpn runtime and TCP/UDP bridge."
+    },
+    {
+      "panel_protocol": "trusttunnel",
+      "migration": "external",
+      "target_type": null,
+      "target_kind": null,
+      "decision": "Retain externalvpn runtime/auth/TLS and bridge."
+    },
+    {
+      "panel_protocol": "fptn",
+      "migration": "external",
+      "target_type": null,
+      "target_kind": null,
+      "decision": "Retain externalvpn token/MTU/SNI and bridge."
+    },
+    {
+      "panel_protocol": "openflux",
+      "migration": "external",
+      "target_type": null,
+      "target_kind": null,
+      "decision": "Retain externalvpn secret/context/transports and bridge."
+    },
+    {
+      "panel_protocol": "vk-turn-proxy",
+      "migration": "external",
+      "target_type": null,
+      "target_kind": null,
+      "decision": "Retain external runtime/WireGuard relay and metering."
+    },
+    {
+      "panel_protocol": "sudoku",
+      "migration": "external",
+      "target_type": null,
+      "target_kind": null,
+      "decision": "Retain Sudoku runtime/credentials and bridge metering."
+    },
+    {
+      "panel_protocol": "snell",
+      "migration": "blocked",
+      "target_type": null,
+      "target_kind": null,
+      "decision": "Native inbound/outbound absent; port server implementation and versions/userkey schema."
+    },
+    {
+      "panel_protocol": "masque",
+      "migration": "blocked",
+      "target_type": null,
+      "target_kind": null,
+      "decision": "masque-server endpoint absent; port implementation/schema/user metering."
+    }
+  ],
+  "source_checks": [
+    {
+      "path": "cmd/cmd_sing_run.go",
+      "contains": "Use:   \"srun\""
+    },
+    {
+      "path": "v2/hcore/buildconfighelper.go",
+      "contains": "if !in.EnableRawConfig"
+    },
+    {
+      "path": "hiddify-sing-box/transport/v2ray/transport.go",
+      "contains": "return xhttp.NewServer"
+    },
+    {
+      "path": "hiddify-sing-box/experimental/v2rayapi/stats_grpc.pb.go",
+      "contains": "/experimental.v2rayapi.StatsService/QueryStats"
+    },
+    {
+      "path": "hiddify-sing-box/include/v2rayapi.go",
+      "contains": "//go:build with_v2ray_api"
+    },
+    {
+      "path": "hiddify-sing-box/include/awg.go",
+      "contains": "//go:build with_awg"
+    },
+    {
+      "path": "hiddify-sing-box/protocol/hiddify/xray/outbound.go",
+      "contains": "Xray is not implemented yet"
+    },
+    {
+      "path": "hiddify-sing-box/protocol/mieru/inbound.go",
+      "contains": "func RegisterInbound"
+    }
+  ]
+}
