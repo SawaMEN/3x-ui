@@ -14,6 +14,8 @@ import (
 
 const v2rayStatsAddress = "127.0.0.1:10086"
 
+type V2RayStat = v2rayStat
+
 type v2rayStat struct {
 	Name  string
 	Value int64
@@ -292,4 +294,10 @@ func (c *V2RayStatsClient) QueryUser(ctx context.Context, email string, reset bo
 		}
 	}
 	return up, down, nil
+}
+
+func (c *V2RayStatsClient) Close() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.closeLocked()
 }

@@ -392,3 +392,23 @@ func (c *ClashStatsClient) OnlineIPSet(ctx context.Context) (map[string]map[stri
 	}
 	return byInbound, len(connections), nil
 }
+
+// CloseConnection closes one active connection through the Clash API.
+func (c *ClashStatsClient) CloseConnection(ctx context.Context, id string) error {
+	if strings.TrimSpace(id) == "" {
+		return fmt.Errorf("connection ID is required")
+	}
+	req, err := c.newRequest(ctx, http.MethodDelete, "/connections/"+url.PathEscape(id))
+	if err != nil {
+		return err
+	}
+	response, err := c.requestClient(2 * time.Second).Do(req)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusNoContent && response.StatusCode != http.StatusOK {
+		return fmt.Errorf("close connection: HTTP %d", response.StatusCode)
+	}
+	return nil
+}

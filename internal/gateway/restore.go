@@ -22,7 +22,7 @@ func RestoreForCore(core string) error {
 	case service.CoreTypeXray:
 		cfg, raw, err = loadTemplate()
 		exists, apply, create, save, remove = backupExists, applyGatewayConfig, createBackup, saveTemplate, removeBackup
-	case service.CoreTypeSingBox:
+	case service.CoreTypeSingBox, service.CoreTypeHiddify:
 		cfg, raw, err = loadSingBoxTemplate()
 		exists, apply, create, save, remove = singBoxBackupExists, applySingBoxGatewayConfig, createSingBoxBackup, saveSingBoxTemplate, removeSingBoxBackup
 	default:

@@ -113,7 +113,7 @@ function AppSidebar() {
   const showSubFormats = !!(allSetting.subJsonEnable || allSetting.subClashEnable);
   const showSubBalancers = !!allSetting.subJsonEnable;
   const isXray = allSetting.coreType === 'xray';
-  const isSingBox = allSetting.coreType === 'sing-box';
+  const isSingBox = allSetting.coreType !== 'xray';
   const firewallTitle = (i18n.resolvedLanguage || i18n.language || '')
     .toLowerCase()
     .startsWith('ru')

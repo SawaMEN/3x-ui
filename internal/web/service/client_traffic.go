@@ -150,8 +150,8 @@ func (s *ClientService) resetClientTrafficSet(inboundSvc *InboundService, select
 	}
 	if needRestart {
 		coreType, _ := (&SettingService{}).GetCoreType()
-		if coreType == CoreTypeSingBox {
-			(&SingBoxService{}).SetToNeedRestart()
+		if IsNativeCore(coreType) {
+			(SelectedNativeCore()).SetToNeedRestart()
 		} else {
 			(&XrayService{}).SetToNeedRestart()
 		}

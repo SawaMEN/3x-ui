@@ -39,7 +39,7 @@ func gatewayStateForCore(coreType string) (gateway.State, error) {
 	switch coreType {
 	case service.CoreTypeXray:
 		return gateway.GetState()
-	case service.CoreTypeSingBox:
+	case service.CoreTypeSingBox, service.CoreTypeHiddify:
 		return gateway.GetSingBoxState()
 	default:
 		return gateway.State{}, fmt.Errorf("unsupported core type %q", coreType)
@@ -50,7 +50,7 @@ func enableGatewayForCore(coreType string) error {
 	switch coreType {
 	case service.CoreTypeXray:
 		return gateway.Enable()
-	case service.CoreTypeSingBox:
+	case service.CoreTypeSingBox, service.CoreTypeHiddify:
 		return gateway.EnableSingBox()
 	default:
 		return fmt.Errorf("unsupported core type %q", coreType)
@@ -61,7 +61,7 @@ func disableGatewayForCore(coreType string) error {
 	switch coreType {
 	case service.CoreTypeXray:
 		return gateway.Disable()
-	case service.CoreTypeSingBox:
+	case service.CoreTypeSingBox, service.CoreTypeHiddify:
 		return gateway.DisableSingBox()
 	default:
 		return fmt.Errorf("unsupported core type %q", coreType)
@@ -69,7 +69,7 @@ func disableGatewayForCore(coreType string) error {
 }
 
 func otherGatewayCore(coreType string) string {
-	if coreType == service.CoreTypeSingBox {
+	if service.IsNativeCore(coreType) {
 		return service.CoreTypeXray
 	}
 	return service.CoreTypeSingBox
@@ -423,16 +423,16 @@ func (a *GatewayController) disable(c *gin.Context) {
 }
 
 func (a *GatewayController) gatewayCoreRunning(coreType string) bool {
-	if coreType == service.CoreTypeSingBox {
-		return a.singBoxService.IsRunning()
+	if service.IsNativeCore(coreType) {
+		return service.SelectedNativeCore().IsRunning()
 	}
 	return a.xrayService.IsXrayRunning()
 }
 func (a *GatewayController) restartGatewayCore(ctx context.Context, coreType string) error {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	if coreType == service.CoreTypeSingBox {
-		return a.singBoxService.Restart(ctx)
+	if service.IsNativeCore(coreType) {
+		return service.SelectedNativeCore().Restart(ctx)
 	}
 	return a.xrayService.RestartXray(false)
 }

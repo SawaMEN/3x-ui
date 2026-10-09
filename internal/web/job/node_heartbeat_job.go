@@ -118,7 +118,7 @@ func selectedNodeCoreHealth(patch service.HeartbeatPatch) (string, string) {
 		core = strings.ToLower(strings.TrimSpace(patch.RunningCore))
 	}
 	switch core {
-	case service.CoreTypeSingBox:
+	case service.CoreTypeSingBox, service.CoreTypeHiddify:
 		return patch.SingBoxState, patch.SingBoxError
 	case service.CoreTypeXray:
 		return patch.XrayState, patch.XrayError

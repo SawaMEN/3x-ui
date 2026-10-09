@@ -15,6 +15,9 @@ import (
 // validating them with Xray's loader while sing-box is selected rejects native
 // sing-box protocols and misses sing-box-specific translation errors.
 func validateSingBoxTemplateOutbound(raw json.RawMessage, managed map[string]any) error {
+	return validateNativeTemplateOutbound(raw, managed, CoreTypeSingBox)
+}
+func validateNativeTemplateOutbound(raw json.RawMessage, managed map[string]any, core string) error {
 	if externalvpn.IsAdditionalOutbound(managed) {
 		return externalvpn.ValidateAdditionalOutbound(managed)
 	}
@@ -39,7 +42,7 @@ func validateSingBoxTemplateOutbound(raw json.RawMessage, managed map[string]any
 		_, err := singbox.TranslateXrayWireGuardEndpoint(managed)
 		return err
 	default:
-		_, err := singbox.TranslateXrayOutbound(managed)
+		_, err := NativeCore(core).translateOutbound(managed)
 		return err
 	}
 }

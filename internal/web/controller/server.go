@@ -103,7 +103,7 @@ func (a *ServerController) readHiddify(c *gin.Context) (*service.HiddifyBackup, 
 	if err != nil {
 		return nil, empty, err
 	}
-	if core != service.CoreTypeSingBox {
+	if !service.IsNativeCore(core) {
 		return nil, empty, fmt.Errorf("select and save sing-box as the core first")
 	}
 	file, header, err := c.Request.FormFile("backup")
@@ -244,23 +244,23 @@ func (a *ServerController) status(c *gin.Context) {
 	singBoxState := service.Stop
 	singBoxError := ""
 	singBoxVersion := ""
-	singBoxInstalled := a.singBoxService.Installed()
+	singBoxInstalled := service.SelectedNativeCore().Installed()
 	if singBoxInstalled {
-		if version, versionErr := a.singBoxService.CachedVersion(c.Request.Context()); versionErr == nil && version != "" {
+		if version, versionErr := service.SelectedNativeCore().CachedVersion(c.Request.Context()); versionErr == nil && version != "" {
 			singBoxVersion = version
 		}
 	}
 	switch {
-	case a.singBoxService.IsRunning():
+	case service.SelectedNativeCore().IsRunning():
 		singBoxState = service.Running
-	case !singBoxInstalled && coreType == service.CoreTypeSingBox:
+	case !singBoxInstalled && service.IsNativeCore(coreType):
 		// The panel itself is healthy, but its configured runtime cannot start.
 		// Report this explicitly so an upstream master can distinguish a
 		// deliberately stopped core from a node missing the selected binary.
 		singBoxState = service.Error
-		singBoxError = "sing-box is selected but not installed"
+		singBoxError = coreType + " is selected but not installed"
 	case singBoxInstalled:
-		if coreErr := a.singBoxService.LastError(); coreErr != nil {
+		if coreErr := service.SelectedNativeCore().LastError(); coreErr != nil {
 			singBoxState = service.Error
 			singBoxError = coreErr.Error()
 		}
@@ -268,12 +268,12 @@ func (a *ServerController) status(c *gin.Context) {
 
 	runningCore := ""
 	switch {
-	case coreType == service.CoreTypeSingBox && a.singBoxService.IsRunning():
-		runningCore = service.CoreTypeSingBox
+	case service.IsNativeCore(coreType) && service.SelectedNativeCore().IsRunning():
+		runningCore = service.SelectedNativeCore().CoreType()
 	case coreType == service.CoreTypeXray && status.Xray.State == service.Running:
 		runningCore = service.CoreTypeXray
-	case a.singBoxService.IsRunning():
-		runningCore = service.CoreTypeSingBox
+	case service.SelectedNativeCore().IsRunning():
+		runningCore = service.SelectedNativeCore().CoreType()
 	case status.Xray.State == service.Running:
 		runningCore = service.CoreTypeXray
 	}
@@ -296,10 +296,13 @@ func (a *ServerController) status(c *gin.Context) {
 		"version":   singBoxVersion,
 	}
 
+	if coreType == service.CoreTypeHiddify {
+		obj["hiddify"] = obj["singbox"]
+	}
 	selectedState := status.Xray.State
 	selectedError := status.Xray.ErrorMsg
 	selectedVersion := status.Xray.Version
-	if coreType == service.CoreTypeSingBox {
+	if service.IsNativeCore(coreType) {
 		selectedState = singBoxState
 		selectedError = singBoxError
 		selectedVersion = singBoxVersion
@@ -478,8 +481,8 @@ func (a *ServerController) stopCoreService(c *gin.Context) {
 		jsonMsg(c, "", err)
 		return
 	}
-	if coreType == service.CoreTypeSingBox {
-		err = a.singBoxService.Stop(c.Request.Context())
+	if service.IsNativeCore(coreType) {
+		err = service.SelectedNativeCore().Stop(c.Request.Context())
 	} else {
 		err = a.serverService.StopXrayService()
 	}
@@ -492,12 +495,12 @@ func (a *ServerController) restartCoreService(c *gin.Context) {
 		jsonMsg(c, "", err)
 		return
 	}
-	if coreType == service.CoreTypeSingBox {
-		if !a.singBoxService.Installed() {
-			jsonMsg(c, "", fmt.Errorf("sing-box is selected but not installed"))
+	if service.IsNativeCore(coreType) {
+		if !service.SelectedNativeCore().Installed() {
+			jsonMsg(c, "", fmt.Errorf("%s is selected but not installed", coreType))
 			return
 		}
-		err = a.singBoxService.Restart(c.Request.Context())
+		err = service.SelectedNativeCore().Restart(c.Request.Context())
 	} else {
 		err = a.serverService.RestartXrayService()
 	}
@@ -510,8 +513,8 @@ func (a *ServerController) getCoreConfigJson(c *gin.Context) {
 		jsonMsg(c, "", err)
 		return
 	}
-	if coreType == service.CoreTypeSingBox {
-		cfg, cfgErr := a.singBoxService.GetConfig()
+	if service.IsNativeCore(coreType) {
+		cfg, cfgErr := service.SelectedNativeCore().GetConfig()
 		if cfgErr != nil {
 			jsonMsg(c, "", cfgErr)
 			return
@@ -576,8 +579,8 @@ func (a *ServerController) getLogs(c *gin.Context) {
 // getXrayLogs retrieves Xray logs with filtering options for direct, blocked, and proxy traffic.
 func (a *ServerController) getXrayLogs(c *gin.Context) {
 	coreType, err := a.settingService.GetCoreType()
-	if err == nil && coreType == service.CoreTypeSingBox {
-		logs := a.singBoxService.GetLogs(c.Param("count"), c.PostForm("filter"))
+	if err == nil && service.IsNativeCore(coreType) {
+		logs := service.SelectedNativeCore().GetLogs(c.Param("count"), c.PostForm("filter"))
 		jsonObj(c, logs, nil)
 		return
 	}

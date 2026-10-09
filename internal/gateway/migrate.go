@@ -11,7 +11,7 @@ func StateForCore(core string) (State, error) {
 	if core == service.CoreTypeXray {
 		return GetState()
 	}
-	if core == service.CoreTypeSingBox {
+	if service.IsNativeCore(core) {
 		return GetSingBoxState()
 	}
 	return State{}, fmt.Errorf("unsupported Gateway core %q", core)
@@ -20,7 +20,7 @@ func EnableForCore(core string) error {
 	if core == service.CoreTypeXray {
 		return Enable()
 	}
-	if core == service.CoreTypeSingBox {
+	if service.IsNativeCore(core) {
 		return EnableSingBox()
 	}
 	return fmt.Errorf("unsupported Gateway core %q", core)
@@ -29,7 +29,7 @@ func DisableForCore(core string) error {
 	if core == service.CoreTypeXray {
 		return Disable()
 	}
-	if core == service.CoreTypeSingBox {
+	if service.IsNativeCore(core) {
 		return DisableSingBox()
 	}
 	return fmt.Errorf("unsupported Gateway core %q", core)
@@ -38,6 +38,9 @@ func DisableForCore(core string) error {
 // Caller holds AcquireOperation and suspends interception while switching the
 // runtime. The returned rollback only touches Gateway-owned template objects.
 func MigrateCore(oldCore, newCore string) (func() error, error) {
+	if service.IsNativeCore(oldCore) && service.IsNativeCore(newCore) {
+		return func() error { return nil }, nil
+	}
 	return migrateCore(oldCore, newCore, StateForCore, EnableForCore, DisableForCore, RestoreForCore)
 }
 func migrateCore(oldCore, newCore string, state func(string) (State, error), enable, disable, restore func(string) error) (func() error, error) {

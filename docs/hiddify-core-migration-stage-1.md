@@ -189,8 +189,7 @@ Executable не зависит от hiddify-core.so. Libcronet для Naive outb
 
 `internal/hiddify` содержит target-specific переводчики inbound/outbound и MASQUE
 endpoint. Они переиспользуют общий mapping sing-box, но расширения Hiddify включаются
-только явно. Обновление persisted DB и runtime dispatch — следующий этап, adapter
-ещё не активирован в работающей панели.
+только явно. Runtime dispatch и генератор подключены на этапе 2; см. [интеграцию](hiddify-core-integration.md). Автоматическая миграция существующих установок пока не включена.
 
 Панельный native linux/amd64 executable собран на Go 1.26.3. Семь проверок настоящим
 check прошли: encrypted XHTTP inbound + user stats; Snell6; encrypted outbound +
@@ -211,7 +210,7 @@ HIDDIFY_CONFIG_CHECK_BINARY=/path/to/output/hiddify-core-linux-amd64 go test -v 
 Это не разрешение на переключение работающего сервера: stock v5 amd64 library не обеспечивает
 per-user stats API этой панели; полная совместимость требует integration gates.
 
-Следующий этап: реализовать `internal/hiddify` runtime и validation entrypoint
+Runtime и validation entrypoint реализованы на [этапе 2](hiddify-core-integration.md). План этого этапа: реализовать `internal/hiddify` runtime и validation entrypoint
 поверх pinned source, выделить config/stats interfaces из Xray, затем выполнять
 mapping и integration fixtures. Для текущего набора функций потребуется
 panel-specific hiddify-core build (check/stats), mapping и решения для оставшихся

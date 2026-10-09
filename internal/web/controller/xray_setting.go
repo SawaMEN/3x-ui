@@ -698,7 +698,7 @@ func parseOutboundBalanceOptions(c *gin.Context) (*service.BalanceOptions, error
 }
 func markOutboundCoreRestart() {
 	core, _ := (&service.SettingService{}).GetCoreType()
-	if core == service.CoreTypeSingBox {
+	if service.IsNativeCore(core) {
 		(&service.SingBoxService{}).SetToNeedRestart()
 	} else {
 		(&service.XrayService{}).SetToNeedRestart()

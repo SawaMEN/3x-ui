@@ -41,8 +41,8 @@ func (j *OutboundSubscriptionJob) Run() {
 		logger.Infof("Refreshed %d outbound subscription(s)", count)
 		// Ask the xray manager to restart/reload on the next 30s check.
 		core, _ := (&service.SettingService{}).GetCoreType()
-		if core == service.CoreTypeSingBox {
-			(&service.SingBoxService{}).SetToNeedRestart()
+		if service.IsNativeCore(core) {
+			(service.SelectedNativeCore()).SetToNeedRestart()
 		} else {
 			j.xraySvc.SetToNeedRestart()
 		}

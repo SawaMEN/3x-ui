@@ -178,10 +178,10 @@ func applySingBoxInfrastructureEgress(cfg *singbox.Config) {
 // config file the running managed sing-box process uses. Regenerating from DB
 // here could choose a different port while an older config is still running.
 func singBoxEgressProxyURL(tag string) string {
-	if !singBoxProcess.IsRunning() || strings.TrimSpace(tag) == "" {
+	if !SelectedNativeCore().process().IsRunning() || strings.TrimSpace(tag) == "" {
 		return ""
 	}
-	data := singBoxProcess.AppliedConfig()
+	data := SelectedNativeCore().process().AppliedConfig()
 	if len(data) == 0 {
 		return ""
 	}
@@ -230,13 +230,13 @@ func coreEgressProxyURL(settings *SettingService, tag string) string {
 	if err != nil {
 		coreType = CoreTypeXray
 	}
-	singBoxRunning := singBoxProcess.IsRunning()
+	singBoxRunning := SelectedNativeCore().process().IsRunning()
 	xrayRunning := false
 	if proc := XrayProcess(); proc != nil {
 		xrayRunning = proc.IsRunning()
 	}
 
-	if coreType == CoreTypeSingBox {
+	if IsNativeCore(coreType) {
 		if singBoxRunning {
 			return singBoxEgressProxyURL(tag)
 		}

@@ -483,7 +483,12 @@ func (c *Config) MarshalJSON() ([]byte, error) {
 
 	for _, source := range normalizedOutbounds {
 		outbound := maps.Clone(source)
-		if err := validateSingBoxOutbound(outbound); err != nil {
+		validation := outbound
+		if c.Hiddify && rawString(rawObject(outbound, "transport"), "type") == "xhttp" {
+			validation = maps.Clone(outbound)
+			validation["transport"] = map[string]any{"type": "http"}
+		}
+		if err := validateSingBoxOutbound(validation); err != nil {
 			return nil, err
 		}
 		tag := rawString(outbound, "tag")

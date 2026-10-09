@@ -697,9 +697,9 @@ func (s *ServerService) GetStatus(lastStatus *Status) *Status {
 	if err != nil {
 		coreType = CoreTypeXray
 	}
-	if coreType == CoreTypeSingBox {
-		if singBoxProcess.IsRunning() {
-			status.CoreUptime = singBoxProcess.GetUptime()
+	if IsNativeCore(coreType) {
+		if SelectedNativeCore().process().IsRunning() {
+			status.CoreUptime = SelectedNativeCore().process().GetUptime()
 		}
 	} else if process := currentXrayProcess(); process != nil && process.IsRunning() {
 		status.CoreUptime = process.GetUptime()

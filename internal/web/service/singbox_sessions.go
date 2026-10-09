@@ -14,7 +14,7 @@ var (
 )
 
 func (s *SingBoxService) ensureSessionAPI() error {
-	if !singBoxProcess.SupportsNativeAPI() {
+	if !s.process().SupportsNativeAPI() {
 		return errors.New("sing-box native connection API requires sing-box 1.14 or newer")
 	}
 	if !s.IsRunning() {
@@ -26,6 +26,9 @@ func (s *SingBoxService) ensureSessionAPI() error {
 // ActiveSessions returns the current sing-box connection snapshot without
 // sharing state with the traffic accounting poller.
 func (s *SingBoxService) ActiveSessions(ctx context.Context) ([]singbox.ActiveSession, error) {
+	if s.Hiddify {
+		return s.hiddifySessions(ctx)
+	}
 	if err := s.ensureSessionAPI(); err != nil {
 		return nil, err
 	}
@@ -56,6 +59,19 @@ func (s *SingBoxService) DisconnectUsersSessions(ctx context.Context, inbound st
 	if !hasUser {
 		return 0, errors.New("at least one user is required")
 	}
+	if s.Hiddify {
+		return s.disconnectHiddify(ctx, func(session singbox.ActiveSession) bool {
+			if inbound != "" && session.Inbound != inbound {
+				return false
+			}
+			for _, user := range users {
+				if user != "" && session.User == user {
+					return true
+				}
+			}
+			return false
+		})
+	}
 	if err := s.ensureSessionAPI(); err != nil {
 		return 0, err
 	}
@@ -69,6 +85,9 @@ func (s *SingBoxService) DisconnectUsersSessions(ctx context.Context, inbound st
 func (s *SingBoxService) DisconnectInboundSessions(ctx context.Context, inbound string) (int, error) {
 	if inbound == "" {
 		return 0, errors.New("inbound is required")
+	}
+	if s.Hiddify {
+		return s.disconnectHiddify(ctx, func(session singbox.ActiveSession) bool { return session.Inbound == inbound })
 	}
 	if err := s.ensureSessionAPI(); err != nil {
 		return 0, err

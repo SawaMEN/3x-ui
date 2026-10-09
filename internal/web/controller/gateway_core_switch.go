@@ -59,6 +59,12 @@ func (a *SettingController) switchCoreWithGateway(ctx context.Context, oldCore, 
 		rollbackTemplate = func() error { return nil }
 		return err
 	}
+	// Check the complete candidate before giving up the old listeners.
+	if service.IsNativeCore(newCore) {
+		if err = service.NativeCore(newCore).WriteConfig(); err != nil {
+			return err
+		}
+	}
 	// Mark before stopping: even a failed Stop can change the old runtime.
 	runtimeChanged = true
 	if err = a.stopGatewayCore(ctx, oldCore); err != nil {
@@ -73,14 +79,14 @@ func (a *SettingController) switchCoreWithGateway(ctx context.Context, oldCore, 
 	return err
 }
 func (a *SettingController) stopGatewayCore(ctx context.Context, core string) error {
-	if core == service.CoreTypeSingBox {
-		return a.singBoxService.Stop(ctx)
+	if service.IsNativeCore(core) {
+		return service.NativeCore(core).Stop(ctx)
 	}
 	return a.xrayService.StopXray()
 }
 func (a *SettingController) startGatewayCore(ctx context.Context, core string) error {
-	if core == service.CoreTypeSingBox {
-		return a.singBoxService.Restart(ctx)
+	if service.IsNativeCore(core) {
+		return service.NativeCore(core).Restart(ctx)
 	}
 	return a.xrayService.RestartXray(true)
 }

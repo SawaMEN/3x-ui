@@ -15,6 +15,7 @@ import (
 )
 
 type Config struct {
+	Hiddify              bool             `json:"-"`
 	Schema               string           `json:"$schema,omitempty"`
 	NTP                  map[string]any   `json:"ntp,omitempty"`
 	Certificate          map[string]any   `json:"certificate,omitempty"`

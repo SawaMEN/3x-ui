@@ -32,14 +32,14 @@ func (j *CheckXrayRunningJob) Run() {
 	if err != nil {
 		coreType = service.CoreTypeXray
 	}
-	if coreType == service.CoreTypeSingBox {
-		if !j.singBox.DidCrash() {
+	if service.IsNativeCore(coreType) {
+		if !service.SelectedNativeCore().DidCrash() {
 			j.checkTime = 0
 			return
 		}
 		j.checkTime++
 		if j.checkTime > 1 {
-			err := j.singBox.Restart(context.Background())
+			err := service.SelectedNativeCore().Restart(context.Background())
 			j.checkTime = 0
 			if err != nil {
 				logger.Error("Restart sing-box failed:", err)

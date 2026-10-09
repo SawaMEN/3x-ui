@@ -72,8 +72,8 @@ func (s *XraySettingService) CheckXrayConfig(XrayTemplateConfig string) error {
 			if err := json.Unmarshal(outbound, &managed); err != nil {
 				return err
 			}
-			if core == CoreTypeSingBox {
-				if err := validateSingBoxTemplateOutbound(outbound, managed); err != nil {
+			if IsNativeCore(core) {
+				if err := validateNativeTemplateOutbound(outbound, managed, core); err != nil {
 					return err
 				}
 				continue

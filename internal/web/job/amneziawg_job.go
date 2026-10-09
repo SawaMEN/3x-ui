@@ -82,7 +82,7 @@ func (j *AmneziaWGJob) collectTraffic(coreType string, desired []amneziawg.Insta
 		}
 	}
 
-	if coreType != service.CoreTypeSingBox || len(desired) == 0 {
+	if !service.IsNativeCore(coreType) || len(desired) == 0 {
 		return
 	}
 	now := time.Now()

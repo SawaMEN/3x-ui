@@ -308,7 +308,7 @@ export default function SettingsPage() {
       <Navigate
         replace
         to={
-          allSetting.coreType === 'sing-box'
+          allSetting.coreType !== 'xray'
             ? '/singbox?routingTab=adblock#routing'
             : '/routing?routingTab=adblock'
         }

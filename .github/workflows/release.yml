@@ -235,6 +235,12 @@ jobs:
 
           cd ../..
 
+      - name: Build pinned hiddify-core
+        env:
+          GOOS: linux
+          GOARCH: ${{ matrix.platform }}
+        run: bash tools/build-hiddify-core.sh "$PWD/x-ui/bin"
+
       - name: Package
         run: |
           tar -zcf x-ui-linux-${{ matrix.platform }}.tar.gz x-ui

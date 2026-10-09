@@ -283,7 +283,7 @@ func runHTTPProbeBatch(items []*httpBatchItem, allOutbounds []any, testURL strin
 
 func runHTTPProbeBatchForCore(items []*httpBatchItem, allOutbounds []any, testURL string, realDelay bool, coreType string) (retryPerItem bool, err error) {
 	coreName := "xray"
-	if coreType == "sing-box" {
+	if coreType == "sing-box" || coreType == "hiddify-core" {
 		coreName = "sing-box"
 	}
 	ports, release, err := reserveLoopbackPorts(len(items))
@@ -306,7 +306,7 @@ func runHTTPProbeBatchForCore(items []*httpBatchItem, allOutbounds []any, testUR
 	defer os.Remove(configPath)
 
 	var proc batchProcess
-	if coreType == "sing-box" {
+	if coreType == "sing-box" || coreType == "hiddify-core" {
 		singBoxConfig, err := buildSingBoxBatchTestConfig(cfg)
 		if err != nil {
 			return true, fmt.Errorf("Build sing-box test config: %w", err)

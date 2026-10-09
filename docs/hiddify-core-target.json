@@ -43,7 +43,9 @@
     "validation_cli_available": true,
     "stats_grpc_method": "/experimental.v2rayapi.StatsService/QueryStats",
     "activation_ready": false,
-    "requires_panel_build": true
+    "requires_panel_build": true,
+    "panel_runtime_integrated": true,
+    "automatic_migration_ready": false
   },
   "protocols": [
     {
@@ -298,7 +300,8 @@
       "with_awg",
       "with_naive_outbound",
       "with_purego",
-      "tfogo_checklinkname0"
+      "tfogo_checklinkname0",
+      "with_xui_panel"
     ],
     "sing_box_version": "1.13.0-rc.2",
     "check_command_overlay": "deploy/hiddify/cmd_xui_check.go.in",
@@ -308,6 +311,7 @@
     "activation_ready": false,
     "toolchain": "go1.26.3",
     "validation_cli_available": true,
-    "user_stats_api_available": true
+    "user_stats_api_available": true,
+    "clash_user_overlay": "deploy/hiddify/clash-user.patch"
   }
 }

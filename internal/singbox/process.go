@@ -62,7 +62,18 @@ func configExecutablePath() string {
 	return exe
 }
 
+type ProcessOptions struct {
+	Binary          string
+	RunCommand      string
+	VersionPrefix   string
+	RequiredVersion string
+	RequiredTags    []string
+	NativeAPI       bool
+	MASQUE          bool
+}
+
 type Process struct {
+	profile       *ProcessOptions
 	mu            sync.RWMutex
 	lifecycle     sync.Mutex
 	cmd           *exec.Cmd
@@ -74,6 +85,23 @@ type Process struct {
 	externalPID   int
 	isolated      bool
 	appliedConfig []byte
+}
+
+func NewProcessWithOptions(configPath string, options ProcessOptions, isolated bool) *Process {
+	return &Process{config: resolvePath(configPath), version: "Unknown", profile: &options, isolated: isolated}
+}
+
+func (p *Process) binaryPath() string {
+	if p.profile != nil {
+		return resolvePath(p.profile.Binary)
+	}
+	return GetBinaryPath()
+}
+func (p *Process) runCommand() string {
+	if p.profile != nil {
+		return p.profile.RunCommand
+	}
+	return "run"
 }
 
 func NewProcess(configPath string) *Process {
@@ -108,7 +136,7 @@ func (p *Process) IsRunning() bool {
 		return false
 	}
 	if externalPID > 0 {
-		if processMatchesConfig(externalPID, GetBinaryPath(), p.config) {
+		if processMatchesConfig(externalPID, p.binaryPath(), p.config) {
 			return true
 		}
 		p.clearExternalPID(externalPID)
@@ -147,10 +175,18 @@ func (p *Process) GetVersion() string {
 	return p.version
 }
 
-func (p *Process) SupportsNativeAPI() bool { return p.supportsMinor(14) }
+func (p *Process) SupportsNativeAPI() bool {
+	if p.profile != nil {
+		return p.profile.NativeAPI
+	}
+	return p.supportsMinor(14)
+}
 
 // MASQUE was introduced in 1.15.0-alpha.7, not the earlier 1.15 alphas.
 func (p *Process) SupportsMASQUE() bool {
+	if p.profile != nil {
+		return p.profile.MASQUE
+	}
 	if !p.supportsMinor(15) {
 		return false
 	}
@@ -211,12 +247,12 @@ func (p *Process) GetUptime() uint64 {
 	if p.isolated {
 		return 0
 	}
-	if externalPID > 0 && !processMatchesConfig(externalPID, GetBinaryPath(), p.config) {
+	if externalPID > 0 && !processMatchesConfig(externalPID, p.binaryPath(), p.config) {
 		p.clearExternalPID(externalPID)
 		externalPID = 0
 	}
 	if externalPID <= 0 {
-		externalPID = findRunningPID(GetBinaryPath(), p.config)
+		externalPID = findRunningPID(p.binaryPath(), p.config)
 		if externalPID > 0 {
 			p.mu.Lock()
 			p.externalPID = externalPID
@@ -244,7 +280,7 @@ func (p *Process) GetUptime() uint64 {
 func (p *Process) ConfigPath() string { return p.config }
 
 func (p *Process) Validate(ctx context.Context) error {
-	binary := resolvePath(GetBinaryPath())
+	binary := resolvePath(p.binaryPath())
 	cfg := resolvePath(p.config)
 	if _, err := os.Stat(binary); err != nil {
 		err = fmt.Errorf("sing-box binary is not installed: %w", err)
@@ -257,7 +293,7 @@ func (p *Process) Validate(ctx context.Context) error {
 		return err
 	}
 	// Snell requires 1.14 in both directions. The binary check remains authoritative.
-	if data, err := os.ReadFile(cfg); err == nil && configUsesProtocol(data, "snell") {
+	if data, err := os.ReadFile(cfg); err == nil && configUsesProtocol(data, "snell") && p.profile == nil {
 		if _, err := p.Version(ctx); err != nil {
 			return err
 		}
@@ -271,6 +307,11 @@ func (p *Process) Validate(ctx context.Context) error {
 		}
 		if !p.SupportsMASQUE() {
 			return fmt.Errorf("MASQUE requires sing-box 1.15.0-alpha.7 or newer; installed: %s", p.GetVersion())
+		}
+	}
+	if p.profile != nil {
+		if _, err := p.Version(ctx); err != nil {
+			return err
 		}
 	}
 	cmdCtx, cancel := context.WithTimeout(ctx, defaultCommandTimeout)
@@ -288,7 +329,7 @@ func (p *Process) Validate(ctx context.Context) error {
 }
 
 func (p *Process) Version(ctx context.Context) (string, error) {
-	binary := resolvePath(GetBinaryPath())
+	binary := resolvePath(p.binaryPath())
 	cmdCtx, cancel := context.WithTimeout(ctx, defaultCommandTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(cmdCtx, binary, "version")
@@ -300,6 +341,18 @@ func (p *Process) Version(ctx context.Context) (string, error) {
 	version := strings.TrimSpace(string(output))
 	if lines := strings.SplitN(version, "\n", 2); len(lines) > 0 {
 		version = strings.TrimSpace(strings.TrimPrefix(lines[0], "sing-box version"))
+	}
+	if p.profile != nil {
+		fields := strings.Fields(strings.TrimPrefix(strings.SplitN(string(output), "\n", 2)[0], p.profile.VersionPrefix))
+		if len(fields) == 0 || fields[0] != p.profile.RequiredVersion {
+			return "", fmt.Errorf("expected core %s, received %s", p.profile.RequiredVersion, strings.TrimSpace(string(output)))
+		}
+		version = fields[0]
+		for _, tag := range p.profile.RequiredTags {
+			if !strings.Contains(string(output), tag) {
+				return "", fmt.Errorf("core build lacks required tag %s", tag)
+			}
+		}
 	}
 	p.mu.Lock()
 	p.version = version
@@ -334,9 +387,9 @@ func (p *Process) startLocked(ctx context.Context) error {
 	if err := p.Validate(ctx); err != nil {
 		return err
 	}
-	binary, cfg := resolvePath(GetBinaryPath()), resolvePath(p.config)
+	binary, cfg := resolvePath(p.binaryPath()), resolvePath(p.config)
 	// The core must outlive the HTTP request that started it.
-	cmd := exec.CommandContext(context.Background(), binary, "run", "-c", cfg)
+	cmd := exec.CommandContext(context.Background(), binary, p.runCommand(), "-c", cfg)
 	cmd.Dir = filepath.Dir(binary)
 	output := &processOutput{}
 	cmd.Stdout = output
@@ -409,7 +462,7 @@ func (p *Process) stopLocked() error {
 		}
 	}
 	if cmd == nil || cmd.Process == nil {
-		binary := GetBinaryPath()
+		binary := p.binaryPath()
 		if externalPID > 0 && !processMatchesConfig(externalPID, binary, p.config) {
 			p.clearExternalPID(externalPID)
 			externalPID = 0
@@ -506,7 +559,7 @@ func (p *Process) Restart(ctx context.Context) error {
 }
 
 func (p *Process) waitForExternalExit(pid int, timeout time.Duration) bool {
-	binary := GetBinaryPath()
+	binary := p.binaryPath()
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		if !processMatchesConfig(pid, binary, p.config) {
@@ -627,7 +680,7 @@ func (p *Process) managedPID() int {
 	if p.isolated {
 		return 0
 	}
-	return findRunningPID(GetBinaryPath(), p.config)
+	return findRunningPID(p.binaryPath(), p.config)
 }
 
 func configUsesProtocol(data []byte, protocol string) bool {

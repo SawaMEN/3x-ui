@@ -34,7 +34,7 @@ func NewLocal(deps LocalDeps) *Local { return &Local{deps: deps} }
 func (l *Local) Name() string        { return "local" }
 
 func (l *Local) isSingBox() bool {
-	return l.deps.CoreType != nil && l.deps.CoreType() == "sing-box"
+	return l.deps.CoreType != nil && (l.deps.CoreType() == "sing-box" || l.deps.CoreType() == "hiddify-core")
 }
 
 func (l *Local) applyCoreChange(ctx context.Context) error {
@@ -318,7 +318,7 @@ func (l *Local) updateMieruInbound(ctx context.Context, oldIb, newIb *model.Inbo
 }
 
 func (l *Local) AddUser(ctx context.Context, ib *model.Inbound, userMap map[string]any) error {
-	if ib.Protocol == model.MTProto || ib.Protocol == model.AmneziaWG || ib.Protocol == model.TUIC || ib.Protocol == model.Mieru || externalvpn.IsManaged(ib.Protocol) || ib.Protocol == model.Sudoku {
+	if ib.Protocol == model.MTProto || ib.Protocol == model.AmneziaWG || (ib.Protocol == model.TUIC && !l.isSingBox()) || ib.Protocol == model.Mieru || externalvpn.IsManaged(ib.Protocol) || ib.Protocol == model.Sudoku {
 		return nil
 	}
 	if l.isSingBox() {
@@ -328,7 +328,7 @@ func (l *Local) AddUser(ctx context.Context, ib *model.Inbound, userMap map[stri
 }
 
 func (l *Local) RemoveUser(ctx context.Context, ib *model.Inbound, email string) error {
-	if ib.Protocol == model.MTProto || ib.Protocol == model.AmneziaWG || ib.Protocol == model.TUIC || ib.Protocol == model.Mieru || externalvpn.IsManaged(ib.Protocol) || ib.Protocol == model.Sudoku {
+	if ib.Protocol == model.MTProto || ib.Protocol == model.AmneziaWG || (ib.Protocol == model.TUIC && !l.isSingBox()) || ib.Protocol == model.Mieru || externalvpn.IsManaged(ib.Protocol) || ib.Protocol == model.Sudoku {
 		return nil
 	}
 	if l.isSingBox() {

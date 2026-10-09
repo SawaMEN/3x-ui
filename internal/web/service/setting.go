@@ -482,6 +482,7 @@ func (s *SettingService) SetWarpUpdateInterval(val int) error {
 const (
 	CoreTypeXray    = "xray"
 	CoreTypeSingBox = "sing-box"
+	CoreTypeHiddify = "hiddify-core"
 )
 
 func (s *SettingService) GetCoreType() (string, error) {
@@ -489,14 +490,14 @@ func (s *SettingService) GetCoreType() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if coreType != CoreTypeXray && coreType != CoreTypeSingBox {
+	if !isSupportedCoreType(coreType) {
 		return CoreTypeXray, nil
 	}
 	return coreType, nil
 }
 
 func (s *SettingService) SetCoreType(coreType string) error {
-	if coreType != CoreTypeXray && coreType != CoreTypeSingBox {
+	if !isSupportedCoreType(coreType) {
 		return common.NewError("core type is not supported:", coreType)
 	}
 	return s.setString("coreType", coreType)

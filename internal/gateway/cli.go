@@ -75,6 +75,7 @@ func CLI(args []string) error {
 		}
 		states[name] = state
 	}
+	states[service.CoreTypeHiddify] = states[service.CoreTypeSingBox]
 	changed := []string{}
 	rollback := func(disabling bool, original error) error {
 		recovery, done := context.WithTimeout(context.Background(), 45*time.Second)
@@ -128,7 +129,7 @@ func CLI(args []string) error {
 		return err
 	}
 	other := service.CoreTypeSingBox
-	if core == other {
+	if service.IsNativeCore(core) {
 		other = service.CoreTypeXray
 	}
 	if states[other].Enabled {

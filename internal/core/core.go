@@ -8,11 +8,12 @@ type Type string
 const (
 	Xray    Type = "xray"
 	SingBox Type = "sing-box"
+	Hiddify Type = "hiddify-core"
 )
 
 // Valid reports whether the core type is supported by this build.
 func (t Type) Valid() bool {
-	return t == Xray || t == SingBox
+	return t == Xray || t == SingBox || t == Hiddify
 }
 
 // Runtime is the common lifecycle contract for panel-managed proxy cores.

@@ -1,0 +1,5 @@
+diff --git a/hiddify-sing-box/experimental/clashapi/trafficontrol/tracker.go b/hiddify-sing-box/experimental/clashapi/trafficontrol/tracker.go
+--- a/hiddify-sing-box/experimental/clashapi/trafficontrol/tracker.go
++++ b/hiddify-sing-box/experimental/clashapi/trafficontrol/tracker.go
+@@ -85,0 +86 @@
++			"user":            t.Metadata.User,

@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-
-	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 )
 
 // Check a candidate before replacing the file used by the running core. A
@@ -20,7 +18,7 @@ func (s *SingBoxService) writeConfigCandidate(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	path := singbox.GetConfigPath()
+	path := s.ProcessConfigPath()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
@@ -40,7 +38,7 @@ func (s *SingBoxService) writeConfigCandidate(ctx context.Context) error {
 	if err := file.Close(); err != nil {
 		return err
 	}
-	if err := singbox.NewTestProcess(name).Validate(ctx); err != nil {
+	if err := s.candidate(name).Validate(ctx); err != nil {
 		return fmt.Errorf("validate candidate sing-box config: %w", err)
 	}
 	if err := os.Rename(name, path); err != nil {

@@ -2,7 +2,7 @@ import { ObjectUtil } from '@/utils';
 import type { SubProfileMode } from '@/schemas/setting';
 
 export class AllSetting {
-  coreType: 'xray' | 'sing-box' = 'xray';
+  coreType: 'xray' | 'sing-box' | 'hiddify-core' = 'xray';
   webListen = '';
   webDomain = '';
   webPort = 2053;

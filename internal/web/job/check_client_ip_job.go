@@ -64,7 +64,7 @@ func (j *CheckClientIpJob) Run() {
 	j.pruneBannedSeen(observed)
 
 	coreType, _ := (&service.SettingService{}).GetCoreType()
-	singBox := coreType == service.CoreTypeSingBox
+	singBox := service.IsNativeCore(coreType)
 	if !singBox && !isFail2BanEnabled() {
 		return
 	}
@@ -117,10 +117,10 @@ func (j *CheckClientIpJob) pruneBannedSeen(observed map[string]map[string]int64)
 // failure — and the caller skips the run (there is no access-log fallback).
 func (j *CheckClientIpJob) collectFromOnlineAPI() (map[string]map[string]int64, bool) {
 	coreType, _ := (&service.SettingService{}).GetCoreType()
-	if coreType == service.CoreTypeSingBox {
+	if service.IsNativeCore(coreType) {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
-		online, err := (&service.SingBoxService{}).OnlineClientIPs(ctx)
+		online, err := (service.SelectedNativeCore()).OnlineClientIPs(ctx)
 		if err != nil {
 			logger.Debug("[LimitIP] sing-box native connection API unavailable this run:", err)
 			return nil, false
@@ -653,10 +653,10 @@ func (j *CheckClientIpJob) filterAdvancedSinceLastBan(email string, banned []IPW
 // handshakes are refused; the fail2ban ban is what ends live traffic.
 func (j *CheckClientIpJob) disconnectClientTemporarily(inbound *model.Inbound, clientEmail string, clients []model.Client) {
 	coreType, _ := (&service.SettingService{}).GetCoreType()
-	if coreType == service.CoreTypeSingBox {
+	if service.IsNativeCore(coreType) {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
-		if err := (&service.SingBoxService{}).DisconnectClientIPs(ctx, clientEmail, j.disAllowedIps); err != nil {
+		if err := (service.SelectedNativeCore()).DisconnectClientIPs(ctx, clientEmail, j.disAllowedIps); err != nil {
 			logger.Warningf("[LIMIT_IP] Failed to disconnect sing-box client %s: %v", clientEmail, err)
 		}
 		return

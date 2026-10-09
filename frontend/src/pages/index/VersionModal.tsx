@@ -44,21 +44,25 @@ export default function VersionModal({ open, status, onClose, onBusy }: VersionM
   const [modal, modalContextHolder] = Modal.useModal();
   const [activeKey, setActiveKey] = useState<string | string[]>('1');
   const [versions, setVersions] = useState<ReleaseVersion[]>([]);
-  const [coreType, setCoreType] = useState<'xray' | 'sing-box'>('xray');
+  const [coreType, setCoreType] = useState<'xray' | 'sing-box' | 'hiddify-core'>('xray');
   const [showDevVersions, setShowDevVersions] = useState(false);
   const [singBoxVersion, setSingBoxVersion] = useState('');
   const [loading, setLoading] = useState(false);
 
   const fetchVersions = useCallback(async () => {
     try {
-      const settingsMsg = await HttpUtil.post<{ coreType?: 'xray' | 'sing-box' }>(
+      const settingsMsg = await HttpUtil.post<{ coreType?: 'xray' | 'sing-box' | 'hiddify-core' }>(
         '/panel/api/setting/all',
       );
       const selectedCore =
-        settingsMsg?.success && settingsMsg.obj?.coreType === 'sing-box' ? 'sing-box' : 'xray';
+        settingsMsg?.success && settingsMsg.obj?.coreType ? settingsMsg.obj.coreType : 'xray';
       setCoreType(selectedCore);
 
-      if (selectedCore === 'sing-box') {
+      if (selectedCore === 'hiddify-core') {
+        const msg = await HttpUtil.get<{ version?: string }>('/panel/api/setting/hiddify/status');
+        setSingBoxVersion(msg.obj?.version || '');
+        setVersions([]);
+      } else if (selectedCore === 'sing-box') {
         const [versionMsg, statusMsg] = await Promise.all([
           HttpUtil.get<Array<ReleaseVersion | string>>('/panel/api/setting/singbox/versions'),
           HttpUtil.get<{ version?: string }>('/panel/api/setting/singbox/status'),
@@ -105,6 +109,7 @@ export default function VersionModal({ open, status, onClose, onBusy }: VersionM
   }, [open, fetchVersions]);
 
   function switchCoreVersion(version: string) {
+    if (coreType === 'hiddify-core') return;
     const isSingBox = coreType === 'sing-box';
     modal.confirm({
       title: isSingBox ? 'Переключить версию sing-box?' : t('pages.index.xraySwitchVersionDialog'),
@@ -157,7 +162,7 @@ export default function VersionModal({ open, status, onClose, onBusy }: VersionM
 
   const activeKeyStr = Array.isArray(activeKey) ? activeKey[0] : activeKey;
   const currentVersion =
-    coreType === 'sing-box' ? singBoxVersion.replace(/^v/, '') : status?.xray?.version || '';
+    coreType !== 'xray' ? singBoxVersion.replace(/^v/, '') : status?.xray?.version || '';
   const visibleVersions = versions.filter(
     (item) =>
       showDevVersions || !item.prerelease || item.version.replace(/^v/, '') === currentVersion,
@@ -166,7 +171,13 @@ export default function VersionModal({ open, status, onClose, onBusy }: VersionM
   return (
     <Modal
       open={open}
-      title={coreType === 'sing-box' ? 'Обновления sing-box' : t('pages.index.xrayUpdates')}
+      title={
+        coreType === 'hiddify-core'
+          ? 'hiddify-core обновляется вместе с панелью'
+          : coreType === 'sing-box'
+            ? 'Обновления sing-box'
+            : t('pages.index.xrayUpdates')
+      }
       footer={null}
       onCancel={onClose}
     >
@@ -179,7 +190,7 @@ export default function VersionModal({ open, status, onClose, onBusy }: VersionM
           items={[
             {
               key: '1',
-              label: coreType === 'sing-box' ? 'sing-box' : 'Xray',
+              label: coreType === 'xray' ? 'Xray' : coreType,
               children: (
                 <>
                   <div className="version-filter">

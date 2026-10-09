@@ -66,6 +66,8 @@ func normalizeNodeCoreType(value string) string {
 	switch value {
 	case "xray":
 		return CoreTypeXray
+	case "hiddifycore":
+		return CoreTypeHiddify
 	case "singbox":
 		return CoreTypeSingBox
 	default:
@@ -1215,7 +1217,7 @@ func (s *NodeService) withOutboundBridge(nodeID int, outboundTag string, fn func
 	proc := XrayProcess()
 	if proc == nil || !proc.IsRunning() {
 		coreType, _ := (&SettingService{}).GetCoreType()
-		if coreType == CoreTypeSingBox {
+		if IsNativeCore(coreType) {
 			return common.NewError("cannot create a temporary node outbound bridge while sing-box is selected; save the node first so its persistent bridge can be generated")
 		}
 		return common.NewError("cannot create node outbound bridge because Xray is not running")
@@ -1439,7 +1441,7 @@ func (s *NodeService) probe(ctx context.Context, n *model.Node, proxyURL string)
 		patch.SingBoxState = o.SingBox.State
 		patch.SingBoxError = o.SingBox.ErrorMsg
 		patch.XrayVersion = o.Xray.Version
-	} else if patch.CoreType == CoreTypeSingBox {
+	} else if IsNativeCore(patch.CoreType) {
 		// Compatibility with the first node-singbox-status implementation:
 		// it mirrored the selected sing-box into the legacy xray object. Do not
 		// expose that mirrored object as a simultaneously running Xray core.
@@ -1454,7 +1456,7 @@ func (s *NodeService) probe(ctx context.Context, n *model.Node, proxyURL string)
 	} else {
 		patch.XrayVersion = o.Xray.Version
 	}
-	if o.SingBox != nil || patch.CoreType != CoreTypeSingBox {
+	if o.SingBox != nil || !IsNativeCore(patch.CoreType) {
 		patch.XrayState = o.Xray.State
 		patch.XrayError = o.Xray.ErrorMsg
 	}

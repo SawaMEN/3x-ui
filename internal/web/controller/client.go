@@ -218,7 +218,7 @@ func (a *ClientController) provisionTelemtSubscriptions(c *gin.Context, payloads
 // deferred core restart remains the fallback for unsupported/sticky sessions.
 func (a *ClientController) disconnectSingBoxUsersBestEffort(c *gin.Context, emails ...string) {
 	coreType, err := a.settingService.GetCoreType()
-	if err != nil || coreType != service.CoreTypeSingBox {
+	if err != nil || !service.IsNativeCore(coreType) {
 		return
 	}
 	for _, email := range emails {
@@ -226,7 +226,7 @@ func (a *ClientController) disconnectSingBoxUsersBestEffort(c *gin.Context, emai
 		if email == "" {
 			continue
 		}
-		_, _ = a.singBoxService.DisconnectUserSessions(c.Request.Context(), "", email)
+		_, _ = service.SelectedNativeCore().DisconnectUserSessions(c.Request.Context(), "", email)
 	}
 }
 

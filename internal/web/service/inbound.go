@@ -1532,7 +1532,7 @@ func (s *InboundService) delInbound(id int) (bool, func(), error) {
 		naiveSingBox := false
 		if ib.Protocol == model.MASQUE || ib.Protocol == model.NaiveProxy || ib.Protocol == model.AnyTLS || ib.Protocol == model.ShadowTLS {
 			if core, coreErr := s.coreTypeForInbound(&ib); coreErr == nil {
-				naiveSingBox = core == CoreTypeSingBox
+				naiveSingBox = IsNativeCore(core)
 			}
 		}
 		shouldPushToRuntime := (ib.NodeID != nil || ib.Enable) &&
@@ -1805,7 +1805,7 @@ func (s *InboundService) SetInboundEnable(id int, enable bool) (bool, error) {
 		if coreErr != nil {
 			return false, coreErr
 		}
-		if core != CoreTypeSingBox {
+		if !IsNativeCore(core) {
 			return false, nil
 		}
 	}
@@ -2126,7 +2126,7 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 			if coreErr != nil {
 				return coreErr
 			}
-			naiveSingBoxRuntime = core == CoreTypeSingBox
+			naiveSingBoxRuntime = IsNativeCore(core)
 		}
 		if oldInbound.NodeID == nil && (isXrayManagedProtocol(oldInbound.Protocol) || localSidecarTransition || naiveSingBoxRuntime) {
 			rt, push, _, perr := s.nodePushPlan(oldInbound)

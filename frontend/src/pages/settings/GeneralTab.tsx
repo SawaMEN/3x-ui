@@ -94,7 +94,9 @@ export default function GeneralTab({
   const [balancerTagList, setBalancerTagList] = useState<string[]>([]);
   const [singBoxInstalled, setSingBoxInstalled] = useState<boolean | null>(null);
   const [singBoxInstalling, setSingBoxInstalling] = useState(false);
-  const [runningCore, setRunningCore] = useState<'xray' | 'sing-box' | 'none'>('none');
+  const [runningCore, setRunningCore] = useState<'xray' | 'sing-box' | 'hiddify-core' | 'none'>(
+    'none',
+  );
   const [hiddifyOpen, setHiddifyOpen] = useState(false);
   const [hiddifyFile, setHiddifyFile] = useState<File | null>(null);
   const [hiddifyPreview, setHiddifyPreview] = useState<{
@@ -182,18 +184,25 @@ export default function GeneralTab({
     const refreshCoreStatus = async () => {
       try {
         const [singMsg, serverMsg] = await Promise.all([
-          HttpUtil.get('/panel/api/setting/singbox/status') as Promise<
-            ApiMsg<{ installed: boolean; running: boolean }>
-          >,
+          HttpUtil.get(
+            allSetting.coreType === 'hiddify-core'
+              ? '/panel/api/setting/hiddify/status'
+              : '/panel/api/setting/singbox/status',
+          ) as Promise<ApiMsg<{ installed: boolean; running: boolean }>>,
           HttpUtil.get('/panel/api/server/status') as Promise<
-            ApiMsg<{ xray?: { state?: string } }>
+            ApiMsg<{
+              xray?: { state?: string };
+              core?: { running?: 'xray' | 'sing-box' | 'hiddify-core' };
+            }>
           >,
         ]);
         if (cancelled) return false;
         setSingBoxInstalled(Boolean(singMsg?.success && singMsg.obj?.installed));
         const singRunning = Boolean(singMsg?.success && singMsg.obj?.running);
         const xrayRunning = Boolean(serverMsg?.success && serverMsg.obj?.xray?.state === 'running');
-        const actualCore = singRunning ? 'sing-box' : xrayRunning ? 'xray' : 'none';
+        const actualCore =
+          serverMsg.obj?.core?.running ||
+          (singRunning ? 'sing-box' : xrayRunning ? 'xray' : 'none');
         setRunningCore(actualCore);
         return actualCore === allSetting.coreType;
       } catch {
@@ -587,13 +596,18 @@ export default function GeneralTab({
                       <Radio.Group
                         value={allSetting.coreType || 'xray'}
                         onChange={(e) =>
-                          updateSetting({ coreType: e.target.value as 'xray' | 'sing-box' })
+                          updateSetting({
+                            coreType: e.target.value as 'xray' | 'sing-box' | 'hiddify-core',
+                          })
                         }
                         optionType="button"
                         buttonStyle="solid"
                         size="large"
                         style={{ display: 'flex', width: '100%' }}
                       >
+                        <Radio.Button value="hiddify-core" style={{ flex: 1, textAlign: 'center' }}>
+                          <strong>hiddify-core</strong>
+                        </Radio.Button>
                         <Radio.Button value="xray" style={{ flex: 1, textAlign: 'center' }}>
                           <strong>Xray</strong>
                         </Radio.Button>
@@ -615,7 +629,7 @@ export default function GeneralTab({
                       >
                         <div style={{ minWidth: 0 }}>
                           <div style={{ fontWeight: 600 }}>
-                            {allSetting.coreType === 'sing-box' ? 'sing-box' : 'Xray'}
+                            {allSetting.coreType === 'xray' ? 'Xray' : allSetting.coreType}
                           </div>
                           <div style={{ fontSize: 12, opacity: 0.65 }}>
                             {allSetting.coreType === 'sing-box'
@@ -627,11 +641,13 @@ export default function GeneralTab({
                           <div style={{ fontSize: 12, marginTop: 4 }}>
                             Работает сейчас:{' '}
                             <strong>
-                              {runningCore === 'sing-box'
-                                ? 'sing-box'
-                                : runningCore === 'xray'
-                                  ? 'Xray'
-                                  : 'нет'}
+                              {runningCore === 'hiddify-core'
+                                ? 'hiddify-core'
+                                : runningCore === 'sing-box'
+                                  ? 'sing-box'
+                                  : runningCore === 'xray'
+                                    ? 'Xray'
+                                    : 'нет'}
                             </strong>
                           </div>
                         </div>
@@ -642,6 +658,22 @@ export default function GeneralTab({
                         )}
                       </div>
 
+                      {allSetting.coreType === 'hiddify-core' && (
+                        <Alert
+                          type={singBoxInstalled ? 'success' : 'warning'}
+                          showIcon
+                          message={
+                            singBoxInstalled
+                              ? 'hiddify-core установлен'
+                              : 'hiddify-core отсутствует'
+                          }
+                          description={
+                            singBoxInstalled
+                              ? 'Ядро будет применено после сохранения настроек.'
+                              : 'Установите сборку панели с ядром hiddify-core v5.0.0.'
+                          }
+                        />
+                      )}
                       {allSetting.coreType === 'sing-box' && !singBoxInstalled && (
                         <Button
                           type="primary"

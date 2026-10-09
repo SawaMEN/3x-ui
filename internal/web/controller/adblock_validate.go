@@ -24,8 +24,8 @@ func (a *AdBlockController) validateServerCore(ctx context.Context) error {
 	var raw []byte
 	binary := xray.GetBinaryPath()
 	args := []string{"run", "-test", "-config"}
-	if core == service.CoreTypeSingBox {
-		cfg, err := a.singBoxService.GetConfig()
+	if service.IsNativeCore(core) {
+		cfg, err := service.SelectedNativeCore().GetConfig()
 		if err != nil {
 			return err
 		}

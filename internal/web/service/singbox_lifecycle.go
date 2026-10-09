@@ -3,8 +3,6 @@ package service
 import (
 	"os"
 	"sync/atomic"
-
-	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 )
 
 var isSingBoxManuallyStopped atomic.Bool
@@ -13,7 +11,7 @@ var isSingBoxManuallyStopped atomic.Bool
 // regular filesystem entry. It deliberately avoids executing the binary,
 // so status/watchdog checks stay cheap when sing-box is not installed.
 func (s *SingBoxService) Installed() bool {
-	info, err := os.Stat(singbox.GetBinaryPath())
+	info, err := os.Stat(s.BinaryPath())
 	return err == nil && !info.IsDir()
 }
 
@@ -21,7 +19,7 @@ func (s *SingBoxService) Installed() bool {
 // stopped states: the operator explicitly stopped sing-box, or sing-box
 // is not installed on this panel/node at all.
 func (s *SingBoxService) DidCrash() bool {
-	return s.Installed() && !s.IsRunning() && !isSingBoxManuallyStopped.Load()
+	return s.Installed() && !s.IsRunning() && !s.stoppedFlag().Load()
 }
 
 func markSingBoxStarted() {

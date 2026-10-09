@@ -13,12 +13,12 @@ var isNeedSingBoxRestart atomic.Bool
 // Inbound/client controllers use the same deferred-restart model as Xray
 // so a burst of node-sync mutations is collapsed into one core reload.
 func (s *SingBoxService) SetToNeedRestart() {
-	isNeedSingBoxRestart.Store(true)
+	s.restartFlag().Store(true)
 }
 
 // IsNeedRestartAndSetFalse consumes the pending sing-box restart flag.
 func (s *SingBoxService) IsNeedRestartAndSetFalse() bool {
-	return isNeedSingBoxRestart.CompareAndSwap(true, false)
+	return s.restartFlag().CompareAndSwap(true, false)
 }
 
 // ApplyPendingRestart reloads sing-box only while it is the selected,
@@ -34,7 +34,7 @@ func (s *SingBoxService) ApplyPendingRestart(ctx context.Context) {
 		s.SetToNeedRestart()
 		return
 	}
-	if coreType != CoreTypeSingBox || !s.IsRunning() {
+	if coreType != s.coreType() || !s.IsRunning() {
 		return
 	}
 	if err := s.Restart(ctx); err != nil {

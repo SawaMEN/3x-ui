@@ -129,7 +129,7 @@ func applyAutomaticXray(subs []*model.OutboundSubscription) (map[int]string, err
 	return applied, nil
 }
 func localAutomaticSelectorClient() (*singbox.SelectorClient, error) {
-	data := singBoxProcess.AppliedConfig()
+	data := SelectedNativeCore().process().AppliedConfig()
 	if len(data) == 0 {
 		return nil, fmt.Errorf("sing-box has no applied runtime config")
 	}
@@ -164,8 +164,8 @@ func (s *OutboundSubscriptionService) ApplyAutomaticSelections() (int, error) {
 	}
 	applied := map[int]string{}
 	failures := map[int]error{}
-	if core == CoreTypeSingBox {
-		if !(&SingBoxService{}).IsRunning() {
+	if IsNativeCore(core) {
+		if !(SelectedNativeCore()).IsRunning() {
 			err = fmt.Errorf("core is stopped; selection will apply on startup")
 		} else {
 			var client *singbox.SelectorClient

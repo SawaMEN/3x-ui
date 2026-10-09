@@ -31,13 +31,13 @@ func validateInboundRuntimeTarget(inbound *model.Inbound) error {
 	if inbound.Protocol != model.MASQUE && inbound.Protocol != model.Snell && inbound.Protocol != model.NaiveProxy && inbound.Protocol != model.AnyTLS && inbound.Protocol != model.ShadowTLS {
 		return nil
 	}
-	if core == CoreTypeSingBox {
+	if IsNativeCore(core) {
 		if inbound.Protocol == model.MASQUE {
-			if _, err := (&SingBoxService{}).CachedVersion(context.Background()); err != nil {
+			if _, err := NativeCore(core).CachedVersion(context.Background()); err != nil {
 				return common.NewErrorf("MASQUE requires an installed sing-box 1.15+: %v", err)
 			}
-			if !singBoxProcess.SupportsMASQUE() {
-				return common.NewErrorf("MASQUE requires sing-box 1.15.0-alpha.7 or newer; installed: %s", singBoxProcess.GetVersion())
+			if !NativeCore(core).process().SupportsMASQUE() {
+				return common.NewErrorf("MASQUE requires sing-box 1.15.0-alpha.7 or newer; installed: %s", NativeCore(core).process().GetVersion())
 			}
 		}
 		return nil
@@ -113,7 +113,7 @@ func validateShadowTLSTransport(inbound *model.Inbound) error {
 	if err != nil {
 		return err
 	}
-	if core != CoreTypeSingBox {
+	if !IsNativeCore(core) {
 		if target != nil && target.NodeID != nil {
 			return common.NewError("ShadowTLS transport requires sing-box on the selected node")
 		}

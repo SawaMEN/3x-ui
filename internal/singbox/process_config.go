@@ -24,7 +24,7 @@ func processMatchesConfig(pid int, binary, config string) bool {
 	run := false
 	for i := 1; i < len(args); i++ {
 		switch {
-		case args[i] == "run":
+		case args[i] == "run" || args[i] == "srun":
 			if run {
 				return false
 			}

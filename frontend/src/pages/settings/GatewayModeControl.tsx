@@ -63,6 +63,7 @@ const emptyNetworkConfig: GatewayNetworkConfig = {
 };
 
 function coreLabel(core?: string) {
+  if (core === 'hiddify-core') return 'hiddify-core';
   if (core === 'sing-box') return 'sing-box';
   if (core === 'xray') return 'Xray';
   if (core === 'multiple') return 'Xray + sing-box';

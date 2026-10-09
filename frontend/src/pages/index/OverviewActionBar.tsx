@@ -19,7 +19,7 @@ import type { Status } from '@/models/status';
 
 interface OverviewActionBarProps {
   status: Status;
-  coreType: 'xray' | 'sing-box';
+  coreType: 'xray' | 'sing-box' | 'hiddify-core';
   coreVersion: string;
   coreRunning: boolean;
   coreError: string;
@@ -86,17 +86,17 @@ export default function OverviewActionBar({
 }: OverviewActionBarProps) {
   const { t } = useTranslation();
   const effectiveState =
-    coreType === 'sing-box' ? (coreRunning ? 'running' : 'stop') : status.xray.state;
+    coreType !== 'xray' ? (coreRunning ? 'running' : 'stop') : status.xray.state;
   const stateText =
-    coreType === 'sing-box'
+    coreType !== 'xray'
       ? coreRunning
         ? 'Работает'
         : coreError
           ? 'Ошибка'
           : 'Остановлен'
       : t(XRAY_STATE_KEYS[status.xray.state] ?? 'pages.index.xrayStatusUnknown');
-  const coreName = coreType === 'sing-box' ? 'sing-box' : 'Xray';
-  const displayedVersion = coreType === 'sing-box' ? coreVersion : status.xray.version;
+  const coreName = coreType === 'xray' ? 'Xray' : coreType;
+  const displayedVersion = coreType !== 'xray' ? coreVersion : status.xray.version;
   const hasVersion = !!displayedVersion && displayedVersion !== 'Unknown';
   const size = isMobile ? ('small' as const) : ('middle' as const);
 
@@ -105,14 +105,14 @@ export default function OverviewActionBar({
       {
         key: 'restart',
         icon: <ReloadOutlined />,
-        text: coreType === 'sing-box' ? 'Перезапустить sing-box' : t('pages.index.restartXray'),
+        text: coreType !== 'xray' ? 'Перезапустить sing-box' : t('pages.index.restartXray'),
         onClick: onRestartXray,
         primary: true,
       },
       {
         key: 'stop',
         icon: <PoweroffOutlined />,
-        text: coreType === 'sing-box' ? 'Остановить sing-box' : t('pages.index.stopXray'),
+        text: coreType !== 'xray' ? 'Остановить sing-box' : t('pages.index.stopXray'),
         onClick: onStopXray,
       },
     ],
@@ -121,7 +121,7 @@ export default function OverviewActionBar({
         key: 'logs',
         icon: <BarsOutlined />,
         text: t('pages.index.logs'),
-        onClick: coreType === 'sing-box' ? onOpenXrayLogs : onOpenLogs,
+        onClick: coreType !== 'xray' ? onOpenXrayLogs : onOpenLogs,
       },
       ...(coreType === 'xray' && accessLogEnable
         ? [

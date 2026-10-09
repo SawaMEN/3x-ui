@@ -102,6 +102,7 @@ func (a *SettingController) initRouter(g *gin.RouterGroup) {
 	g.POST("/updateUser", a.updateUser)
 	g.POST("/restartPanel", a.restartPanel)
 	g.GET("/singbox/status", a.singBoxStatus)
+	g.GET("/hiddify/status", a.hiddifyStatus)
 	g.POST("/singbox/install", a.installSingBox)
 	g.GET("/singbox/versions", a.singBoxVersions)
 	g.POST("/singbox/install/:version", a.installSingBoxVersion)
@@ -641,7 +642,7 @@ func (a *SettingController) systemUpdateReboot(c *gin.Context) {
 }
 
 func (a *SettingController) singBoxConfig(c *gin.Context) {
-	snapshot, err := a.singBoxService.GetEditorConfig(c.Request.Context())
+	snapshot, err := service.SelectedNativeCore().GetEditorConfig(c.Request.Context())
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.getSettings"), err)
 		return
@@ -659,7 +660,7 @@ func (a *SettingController) saveSingBoxConfig(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), errors.New("sing-box config is empty"))
 		return
 	}
-	if err := a.singBoxService.SaveTemplate(c.Request.Context(), form.Config); err != nil {
+	if err := service.SelectedNativeCore().SaveTemplate(c.Request.Context(), form.Config); err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
 		return
 	}
@@ -667,15 +668,18 @@ func (a *SettingController) saveSingBoxConfig(c *gin.Context) {
 }
 
 func (a *SettingController) resetSingBoxConfig(c *gin.Context) {
-	if err := a.singBoxService.ResetTemplate(c.Request.Context()); err != nil {
+	if err := service.SelectedNativeCore().ResetTemplate(c.Request.Context()); err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
 		return
 	}
 	jsonObj(c, gin.H{"reset": true}, nil)
 }
 
-func (a *SettingController) singBoxStatus(c *gin.Context) {
-	svc := &a.singBoxService
+func (a *SettingController) hiddifyStatus(c *gin.Context) {
+	a.nativeStatus(c, service.NativeCore(service.CoreTypeHiddify))
+}
+func (a *SettingController) singBoxStatus(c *gin.Context) { a.nativeStatus(c, &a.singBoxService) }
+func (a *SettingController) nativeStatus(c *gin.Context, svc *service.SingBoxService) {
 	_, statErr := os.Stat(svc.BinaryPath())
 	running := svc.IsRunning()
 	connections := 0

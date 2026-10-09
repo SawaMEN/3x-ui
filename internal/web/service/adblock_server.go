@@ -79,7 +79,7 @@ func (s *SettingService) AdBlockServerOutboundOptions() ([]string, error) {
 		return nil, err
 	}
 	var raw string
-	if core == CoreTypeSingBox {
+	if IsNativeCore(core) {
 		raw, err = s.GetSingBoxConfigTemplate()
 	} else {
 		raw, err = s.GetXrayConfigTemplate()

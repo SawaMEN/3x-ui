@@ -80,8 +80,8 @@ func (j *XrayTrafficJob) runNonXrayTraffic() {
 	if coreErr != nil {
 		logger.Debug("get core type for traffic presence failed:", coreErr)
 	}
-	if coreErr == nil && core == service.CoreTypeSingBox {
-		singBoxService := &service.SingBoxService{}
+	if coreErr == nil && service.IsNativeCore(core) {
+		singBoxService := service.SelectedNativeCore()
 		if !singBoxService.IsRunning() {
 			// A selected but missing/stopped sing-box has no live connections.
 			// Clear the previous snapshot instead of polling an unavailable API
@@ -150,7 +150,7 @@ func (j *XrayTrafficJob) runNonXrayTraffic() {
 // fallback, scales to 10k–20k+ clients per inbound.
 func (j *XrayTrafficJob) Run() {
 	core, coreErr := j.settingService.GetCoreType()
-	if coreErr == nil && core == service.CoreTypeSingBox {
+	if coreErr == nil && service.IsNativeCore(core) {
 		j.runNonXrayTraffic()
 		return
 	}

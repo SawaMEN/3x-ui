@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -18,6 +17,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
+	"github.com/SawaMEN/3x-ui/v3/internal/hiddify"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
@@ -52,7 +52,7 @@ func SetSingBoxDependencies(inbound *InboundService, settings *SettingService) {
 	}
 }
 
-type SingBoxService struct{}
+type SingBoxService struct{ Hiddify bool }
 
 func singBoxInboundRequiresUsers(protocol model.Protocol) bool {
 	switch protocol {
@@ -138,7 +138,7 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 	// Generated outbounds come from the Xray template. Keep NewConfig's
 	// defaults only for its standalone editor fallback.
 	cfg.Outbounds = nil
-	if singBoxProcess.SupportsNativeAPI() {
+	if s.process().SupportsNativeAPI() {
 		cfg.Services = []map[string]any{{
 			"type":        "api",
 			"tag":         "panel-api",
@@ -292,7 +292,7 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 						}
 						ob = bridge
 					}
-					translated, err := singbox.TranslateXrayOutbound(ob)
+					translated, err := s.translateOutbound(ob)
 					if err != nil {
 						return nil, err
 					}
@@ -354,7 +354,7 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 		}
 		stream, _ := raw["streamSettings"].(map[string]any)
 		network, _ := stream["network"].(string)
-		if strings.EqualFold(strings.TrimSpace(network), "xhttp") {
+		if !s.Hiddify && strings.EqualFold(strings.TrimSpace(network), "xhttp") {
 			unsupported = append(unsupported, fmt.Sprintf("%s: XHTTP transport is only supported by Xray", inbound.Tag))
 			continue
 		}
@@ -557,7 +557,7 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 			continue
 		}
 
-		translated, err := singbox.TranslateXrayInbound(raw)
+		translated, err := s.translateInbound(raw)
 		if err != nil {
 			unsupported = append(unsupported, fmt.Sprintf("%s: %v", inbound.Tag, err))
 			continue
@@ -608,6 +608,13 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 		return nil, err
 	}
 	externalvpn.KeepOutbounds(managedOutboundTags)
+	if s.Hiddify {
+		configureHiddifyStats(cfg)
+		if cfg.Log == nil {
+			cfg.Log = map[string]any{"level": "info"}
+		}
+		cfg.Log["output"] = s.logPath()
+	}
 	return cfg, nil
 }
 
@@ -623,7 +630,7 @@ type SingBoxEditorSnapshot struct {
 }
 
 func (s *SingBoxService) GetEditorConfig(ctx context.Context) (*SingBoxEditorSnapshot, error) {
-	path := singbox.GetConfigPath()
+	path := s.ProcessConfigPath()
 	data, err := os.ReadFile(path)
 	source := "disk"
 	if os.IsNotExist(err) {
@@ -944,16 +951,6 @@ func (s *SingBoxService) WriteConfig() error {
 	return s.writeConfigCandidate(context.Background())
 }
 
-func singBoxConfigDir() string {
-	path := singbox.GetConfigPath()
-	for i := len(path) - 1; i >= 0; i-- {
-		if path[i] == '/' || path[i] == '\\' {
-			return path[:i]
-		}
-	}
-	return "."
-}
-
 func (s *SingBoxService) Restart(ctx context.Context) error {
 	singBoxApplyMu.Lock()
 	defer singBoxApplyMu.Unlock()
@@ -961,26 +958,32 @@ func (s *SingBoxService) Restart(ctx context.Context) error {
 }
 
 func (s *SingBoxService) restartLocked(ctx context.Context) error {
+	if s.Hiddify && s.IsRunning() {
+		if err := s.PollTraffic(ctx); err != nil {
+			return err
+		}
+		hiddifyStats.Close()
+	}
 	// Capture the old applied config before publishing a candidate.
 	_ = s.IsRunning()
-	if _, err := singBoxProcess.Version(ctx); err != nil {
-		singBoxProcess.SetError(err)
+	if _, err := s.process().Version(ctx); err != nil {
+		s.process().SetError(err)
 		return err
 	}
 	if err := s.writeConfigCandidate(ctx); err != nil {
-		singBoxProcess.SetError(err)
+		s.process().SetError(err)
 		return err
 	}
 	tuic.GetManager().StopAll()
-	if err := singBoxProcess.Restart(ctx); err != nil {
+	if err := s.process().Restart(ctx); err != nil {
 		return err
 	}
 	singBoxTrafficMu.Lock()
 	singBoxTrafficAPI.Close()
-	singBoxTrafficAPI.ResetTrafficBaseline(singBoxProcess.GetStartTime().UnixMilli())
+	singBoxTrafficAPI.ResetTrafficBaseline(s.process().GetStartTime().UnixMilli())
 	singBoxTrafficMu.Unlock()
-	markSingBoxStarted()
-	commitManagedYouTube(CoreTypeSingBox)
+	s.stoppedFlag().Store(false)
+	commitManagedYouTube(s.coreType())
 	return nil
 }
 
@@ -994,24 +997,24 @@ func (s *SingBoxService) startLocked(ctx context.Context) error {
 	if s.IsRunning() {
 		return nil
 	}
-	if _, err := singBoxProcess.Version(ctx); err != nil {
-		singBoxProcess.SetError(err)
+	if _, err := s.process().Version(ctx); err != nil {
+		s.process().SetError(err)
 		return err
 	}
 	if err := s.writeConfigCandidate(ctx); err != nil {
-		singBoxProcess.SetError(err)
+		s.process().SetError(err)
 		return err
 	}
 	tuic.GetManager().StopAll()
-	if err := singBoxProcess.Start(ctx); err != nil {
+	if err := s.process().Start(ctx); err != nil {
 		return err
 	}
 	singBoxTrafficMu.Lock()
 	singBoxTrafficAPI.Close()
-	singBoxTrafficAPI.ResetTrafficBaseline(singBoxProcess.GetStartTime().UnixMilli())
+	singBoxTrafficAPI.ResetTrafficBaseline(s.process().GetStartTime().UnixMilli())
 	singBoxTrafficMu.Unlock()
-	markSingBoxStarted()
-	commitManagedYouTube(CoreTypeSingBox)
+	s.stoppedFlag().Store(false)
+	commitManagedYouTube(s.coreType())
 	return nil
 }
 
@@ -1022,37 +1025,47 @@ func (s *SingBoxService) Stop(ctx context.Context) error {
 }
 
 func (s *SingBoxService) stopLocked(ctx context.Context) error {
-	if err := singBoxProcess.Stop(); err != nil {
+	if s.Hiddify && s.IsRunning() {
+		if err := s.PollTraffic(ctx); err != nil {
+			logger.Warning("flush hiddify traffic before stop:", err)
+		}
+		hiddifyStats.Close()
+	}
+	if err := s.process().Stop(); err != nil {
 		return err
 	}
-	markSingBoxStopped()
+	s.stoppedFlag().Store(true)
 	return nil
 }
 
 func (s *SingBoxService) IsRunning() bool {
-	return singBoxProcess.IsRunning()
+	return s.process().IsRunning()
 }
 
 func (s *SingBoxService) LastError() error {
-	return singBoxProcess.GetErr()
+	return s.process().GetErr()
 }
 
 func (s *SingBoxService) Version(ctx context.Context) (string, error) {
-	return singBoxProcess.Version(ctx)
+	return s.process().Version(ctx)
 }
 
 func (s *SingBoxService) CachedVersion(ctx context.Context) (string, error) {
-	if version := singBoxProcess.GetVersion(); version != "" && version != "Unknown" {
+	if version := s.process().GetVersion(); version != "" && version != "Unknown" {
 		return version, nil
 	}
-	return singBoxProcess.Version(ctx)
+	return s.process().Version(ctx)
 }
 
 func (s *SingBoxService) Validate(ctx context.Context) error {
-	return singBoxProcess.Validate(ctx)
+	return s.process().Validate(ctx)
 }
 
 func (s *SingBoxService) ConnectionCount(ctx context.Context) (int, error) {
+	if s.Hiddify {
+		sessions, err := s.hiddifySessions(ctx)
+		return len(sessions), err
+	}
 	api := singbox.NewConnectionAPIClient()
 	defer api.Close()
 	connections, err := api.Snapshot(ctx)
@@ -1076,6 +1089,9 @@ func (s *SingBoxService) ConnectionCount(ctx context.Context) (int, error) {
 // tags from one native API snapshot. Keeping them in the same snapshot makes
 // the node's online user and inbound indicators describe the same instant.
 func (s *SingBoxService) OnlinePresence(ctx context.Context) (map[string]map[string]struct{}, []string, error) {
+	if s.Hiddify {
+		return s.hiddifyPresence(ctx)
+	}
 	api := singbox.NewConnectionAPIClient()
 	defer api.Close()
 	connections, err := api.Snapshot(ctx)
@@ -1120,6 +1136,18 @@ func (s *SingBoxService) OnlineClientIPs(ctx context.Context) (map[string]map[st
 }
 
 func (s *SingBoxService) DisconnectClientIPs(ctx context.Context, email string, ips []string) error {
+	if s.Hiddify {
+		_, err := s.disconnectHiddify(ctx, func(session singbox.ActiveSession) bool {
+			host, _, _ := net.SplitHostPort(session.Source)
+			for _, ip := range ips {
+				if ip != "" && host == ip && session.User == email {
+					return true
+				}
+			}
+			return false
+		})
+		return err
+	}
 	if email == "" || len(ips) == 0 {
 		return nil
 	}
@@ -1163,6 +1191,9 @@ func accumulateSingBoxTraffic(up, down *int64, uplinkDelta, downlinkDelta int64)
 }
 
 func (s *SingBoxService) PollTraffic(ctx context.Context) error {
+	if s.Hiddify {
+		return s.pollHiddifyTraffic(ctx)
+	}
 	// The cron callback creates a lightweight SingBoxService value every 5s;
 	// keep the native API transport package-wide so traffic polling does not
 	// repeatedly allocate a gRPC ClientConn and its background transport state.
@@ -1252,7 +1283,7 @@ func (s *SingBoxService) GetLogs(count string, filter string) []LogEntry {
 	if err != nil || limit <= 0 {
 		limit = 100
 	}
-	lines, err := tail.ReadTailLines(filepath.Join(filepath.Dir(singbox.GetConfigPath()), "sing-box.log"), 0, tail.DefaultTailBytes)
+	lines, err := tail.ReadTailLines(s.logPath(), 0, tail.DefaultTailBytes)
 	if err != nil {
 		return []LogEntry{}
 	}
@@ -1303,7 +1334,7 @@ func (s *SingBoxService) installVersion(ctx context.Context, installer func(cont
 		// The update request may have been cancelled; recovery must still work.
 		recoveryCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		if err := singBoxProcess.Stop(); err != nil {
+		if err := s.process().Stop(); err != nil {
 			keepBackup = true
 			return "", fmt.Errorf("%w; stop failed update: %w", cause, err)
 		}
@@ -1312,16 +1343,16 @@ func (s *SingBoxService) installVersion(ctx context.Context, installer func(cont
 			return "", fmt.Errorf("%w; restore previous installation: %w", cause, err)
 		}
 		if wasRunning {
-			if _, err := singBoxProcess.Version(recoveryCtx); err != nil {
+			if _, err := s.process().Version(recoveryCtx); err != nil {
 				return "", fmt.Errorf("%w; read restored version: %w", cause, err)
 			}
 			// Run the restored applied config, not a freshly generated candidate.
-			if err := singBoxProcess.Start(recoveryCtx); err != nil {
+			if err := s.process().Start(recoveryCtx); err != nil {
 				return "", fmt.Errorf("%w; restart restored installation: %w", cause, err)
 			}
-			markSingBoxStarted()
+			s.stoppedFlag().Store(false)
 		}
-		singBoxProcess.SetError(cause)
+		s.process().SetError(cause)
 		return "", cause
 	}
 	installed, err := installer(ctx)
@@ -1341,6 +1372,9 @@ func (s *SingBoxService) installVersion(ctx context.Context, installer func(cont
 }
 
 func (s *SingBoxService) InstallLatest(ctx context.Context) (string, error) {
+	if s.Hiddify {
+		return "", fmt.Errorf("hiddify-core is updated with the pinned panel release")
+	}
 	return s.installVersion(ctx, singbox.InstallLatest)
 }
 
@@ -1349,12 +1383,18 @@ func (s *SingBoxService) ListVersions(ctx context.Context) ([]singbox.ReleaseVer
 }
 
 func (s *SingBoxService) InstallVersion(ctx context.Context, version string) (string, error) {
+	if s.Hiddify {
+		return "", fmt.Errorf("hiddify-core is updated with the pinned panel release")
+	}
 	return s.installVersion(ctx, func(ctx context.Context) (string, error) {
 		return singbox.InstallVersion(ctx, version)
 	})
 }
 
 func (s *SingBoxService) Uninstall(ctx context.Context) error {
+	if s.Hiddify {
+		return fmt.Errorf("hiddify-core belongs to the panel release")
+	}
 	if s.IsRunning() {
 		return fmt.Errorf("stop sing-box before uninstalling it")
 	}
@@ -1362,10 +1402,16 @@ func (s *SingBoxService) Uninstall(ctx context.Context) error {
 }
 
 func (s *SingBoxService) BinaryPath() string {
+	if s.Hiddify {
+		return hiddify.GetBinaryPath()
+	}
 	return singbox.GetBinaryPath()
 }
 
 func (s *SingBoxService) ProcessConfigPath() string {
+	if s.Hiddify {
+		return hiddify.GetConfigPath()
+	}
 	return singbox.GetConfigPath()
 }
 
@@ -1377,4 +1423,6 @@ func (s *SingBoxService) commitTraffic(inbounds []*xray.Traffic, clients []*xray
 	return err
 }
 
-func init() { singbox.SetRuntimeConfigReader(singBoxProcess.AppliedConfig) }
+func init() {
+	singbox.SetRuntimeConfigReader(func() []byte { return SelectedNativeCore().process().AppliedConfig() })
+}

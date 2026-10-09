@@ -27,6 +27,7 @@ git clone --depth=1 --branch "${target[1]}" -- "${target[0]}" "$task_source/core
 git -C "$task_source/core" config submodule.ray2sing.url https://github.com/hiddify/ray2sing.git
 git -C "$task_source/core" submodule update --init --recursive --depth=1
 python3 "$task_root/tools/audit-hiddify-migration.py" --upstream "$task_source/core"
+git -C "$task_source/core" apply --unidiff-zero "$task_root/deploy/hiddify/clash-user.patch"
 cp -- "$task_root/deploy/hiddify/cmd_xui_check.go.in" "$task_source/core/cmd/cmd_xui_check.go"
 
 task_goos=${GOOS:-$(go env GOOS)}

@@ -63,7 +63,7 @@ func logSubscriptionCompatibilitySummary(label, coreName string, issues []string
 // expected feature gaps between Xray and sing-box.
 func filterSubscriptionOutboundsWithIssues(label string, members []any) ([]any, []string, string) {
 	core, _ := (&SettingService{}).GetCoreType()
-	if core != CoreTypeSingBox {
+	if !IsNativeCore(core) {
 		kept, compatibilityIssues := filterOutboundsRejectedByCore(label, members)
 		logSubscriptionCompatibilitySummary(label, "xray", compatibilityIssues)
 		return kept, nil, "xray"
@@ -100,7 +100,7 @@ func filterSubscriptionOutboundsWithIssues(label string, members []any) ([]any, 
 		case "wireguard":
 			_, err = singbox.TranslateXrayWireGuardEndpoint(ob)
 		default:
-			_, err = singbox.TranslateXrayOutbound(ob)
+			_, err = NativeCore(core).translateOutbound(ob)
 		}
 		if err != nil {
 			compatibilityIssues = append(compatibilityIssues, fmt.Sprintf("%s: %v", tag, err))
@@ -108,8 +108,8 @@ func filterSubscriptionOutboundsWithIssues(label string, members []any) ([]any, 
 		}
 		kept = append(kept, raw)
 	}
-	logSubscriptionCompatibilitySummary(label, "sing-box", compatibilityIssues)
-	return kept, statusIssues, "sing-box"
+	logSubscriptionCompatibilitySummary(label, core, compatibilityIssues)
+	return kept, statusIssues, core
 }
 
 // Unsupported subscription members must not prevent the active core starting.

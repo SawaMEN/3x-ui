@@ -19,6 +19,9 @@ ARG TARGETARCH
 RUN apk --no-cache --update add \
   build-base \
   gcc \
+  git \
+  python3 \
+  bash \
   curl \
   unzip
 
@@ -29,6 +32,7 @@ ENV CGO_ENABLED=1
 ENV CGO_CFLAGS="-D_LARGEFILE64_SOURCE"
 RUN go build -ldflags "-w -s" -o build/x-ui main.go
 RUN ./DockerInit.sh "$TARGETARCH"
+RUN GOOS=linux GOARCH="$TARGETARCH" bash tools/build-hiddify-core.sh /app/build/bin
 
 # ========================================================
 # Stage: Final Image of 3x-ui

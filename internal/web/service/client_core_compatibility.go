@@ -167,7 +167,7 @@ func SyncClientCoreCompatibility(oldCore, newCore string) error {
 }
 
 func isSupportedCoreType(core string) bool {
-	return core == CoreTypeXray || core == CoreTypeSingBox
+	return core == CoreTypeXray || IsNativeCore(core)
 }
 
 func coreSupportsInboundProtocol(core string, protocol model.Protocol) bool {
@@ -179,7 +179,7 @@ func coreSupportsInboundProtocol(core string, protocol model.Protocol) bool {
 		default:
 			return true
 		}
-	case CoreTypeSingBox:
+	case CoreTypeSingBox, CoreTypeHiddify:
 		switch protocol {
 		case model.WireGuard, model.Tunnel:
 			return false

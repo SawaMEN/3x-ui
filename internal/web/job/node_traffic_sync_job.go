@@ -167,13 +167,13 @@ func (j *NodeTrafficSyncJob) Run() {
 			coreType, coreErr := j.settingService.GetCoreType()
 			if coreErr != nil {
 				logger.Warning("node traffic sync: get selected core after disabling clients failed:", coreErr)
-			} else if coreType == service.CoreTypeSingBox {
+			} else if service.IsNativeCore(coreType) {
 				// A stopped or absent sing-box has no live sessions to drop. The
 				// next explicit start writes the current client configuration.
-				if j.singBoxService.IsRunning() {
-					if err := j.singBoxService.Restart(context.Background()); err != nil {
+				if service.SelectedNativeCore().IsRunning() {
+					if err := service.SelectedNativeCore().Restart(context.Background()); err != nil {
 						logger.Warning("node traffic sync: restart sing-box after disabling clients failed:", err)
-						j.singBoxService.SetToNeedRestart()
+						service.SelectedNativeCore().SetToNeedRestart()
 					}
 				}
 			} else if err := j.xrayService.RestartXray(true); err != nil {
