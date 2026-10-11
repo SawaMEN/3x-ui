@@ -11,7 +11,7 @@ import (
 // core that this panel currently runs. This is especially important on a
 // node: master sync writes local inbounds/clients, so marking Xray while
 // the node actually runs sing-box leaves the live sing-box config stale.
-func markSelectedCoreNeedRestart(settings *service.SettingService, xrayService *service.XrayService, singBoxService *service.SingBoxService) {
+func markSelectedCoreNeedRestart(settings *service.SettingService, xrayService *service.CoreService, singBoxService *service.SingBoxService) {
 	coreType, err := settings.GetCoreType()
 	if err == nil && service.IsNativeCore(coreType) {
 		service.NativeCore(coreType).SetToNeedRestart()
@@ -24,7 +24,7 @@ func markSelectedCoreNeedRestart(settings *service.SettingService, xrayService *
 // a caller immediately depends on the new configuration. Node OutboundTag
 // changes need this stronger form: the following reachability probe must use
 // the newly created loopback egress bridge, not wait for the deferred cron.
-func restartSelectedCoreNow(ctx context.Context, settings *service.SettingService, xrayService *service.XrayService, singBoxService *service.SingBoxService) error {
+func restartSelectedCoreNow(ctx context.Context, settings *service.SettingService, xrayService *service.CoreService, singBoxService *service.SingBoxService) error {
 	coreType, err := settings.GetCoreType()
 	if err != nil {
 		return err

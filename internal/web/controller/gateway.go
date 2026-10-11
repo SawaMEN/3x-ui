@@ -17,7 +17,7 @@ import (
 // inbound, while the gateway package owns the core-specific config mutation.
 type GatewayController struct {
 	settingService service.SettingService
-	xrayService    service.XrayService
+	xrayService    service.CoreService
 	singBoxService service.SingBoxService
 	networkService service.GatewayNetworkService
 }
@@ -170,7 +170,7 @@ func (a *GatewayController) statusPayload() (gin.H, error) {
 		"gatewayCoreType": "",
 		"coreMismatch":    false,
 		"conflict":        false,
-		"xrayRunning":     a.xrayService.IsXrayRunning(),
+		"xrayRunning":     false,
 		"coreRunning":     a.gatewayCoreRunning(coreType),
 		"port":            gateway.InboundPort(),
 		"network":         a.networkService.Status(context.Background()),
@@ -426,7 +426,7 @@ func (a *GatewayController) gatewayCoreRunning(coreType string) bool {
 	if service.IsNativeCore(coreType) {
 		return service.NativeCore(coreType).IsRunning()
 	}
-	return a.xrayService.IsXrayRunning()
+	return a.xrayService.IsCoreRunning()
 }
 func (a *GatewayController) restartGatewayCore(ctx context.Context, coreType string) error {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)

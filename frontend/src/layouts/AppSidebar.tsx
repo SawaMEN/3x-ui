@@ -112,8 +112,6 @@ function AppSidebar() {
   const { allSetting } = useAllSettings();
   const showSubFormats = !!(allSetting.subJsonEnable || allSetting.subClashEnable);
   const showSubBalancers = !!allSetting.subJsonEnable;
-  const isXray = allSetting.coreType === 'xray';
-  const isSingBox = allSetting.coreType !== 'xray';
   const firewallTitle = (i18n.resolvedLanguage || i18n.language || '')
     .toLowerCase()
     .startsWith('ru')
@@ -159,17 +157,6 @@ function AppSidebar() {
     return () => window.clearTimeout(timer);
   }, [updateHovered]);
   const currentTheme: 'light' | 'dark' = mode === 'light' || mode === 'colorful' ? 'light' : 'dark';
-
-  const xrayChildren = useMemo<NonNullable<MenuProps['items']>>(
-    () => [
-      { key: '/xray#basic', icon: <SettingOutlined />, label: t('pages.xray.basicTemplate') },
-      { key: '/settings#gateway', icon: <ApartmentOutlined />, label: 'Режим шлюза' },
-      { key: '/xray#balancer', icon: <ClusterOutlined />, label: t('pages.xray.Balancers') },
-      { key: '/xray#dns', icon: <DatabaseOutlined />, label: 'DNS' },
-      { key: '/xray#advanced', icon: <CodeOutlined />, label: t('pages.xray.advancedTemplate') },
-    ],
-    [t],
-  );
 
   const singBoxChildren = useMemo<NonNullable<MenuProps['items']>>(
     () => [
@@ -271,30 +258,16 @@ function AppSidebar() {
       { key: '/routing', icon: 'routing' as IconName, title: t('menu.routing') },
       { key: '/telemt', icon: 'telemt' as IconName, title: t('menu.telemt') },
       { key: '/settings', icon: 'setting' as IconName, title: t('menu.settings') },
-      ...(isXray
-        ? [
-            {
-              key: '/xray',
-              icon: 'tool' as IconName,
-              title: t('menu.xray'),
-              children: xrayChildren,
-            },
-          ]
-        : []),
-      ...(isSingBox
-        ? [
-            {
-              key: '/singbox',
-              icon: 'tool' as IconName,
-              title: t('menu.singBox'),
-              children: singBoxChildren,
-            },
-          ]
-        : []),
+      {
+        key: '/singbox',
+        icon: 'tool' as IconName,
+        title: t('menu.singBox'),
+        children: singBoxChildren,
+      },
       { key: LOGOUT_KEY, icon: 'logout' as IconName, title: t('logout') },
     ];
     return base;
-  }, [t, firewallTitle, isXray, isSingBox, xrayChildren, singBoxChildren]);
+  }, [t, firewallTitle, singBoxChildren]);
 
   const navItems = useMemo(() => tabs.filter((tab) => tab.icon !== 'logout'), [tabs]);
   const utilItems = useMemo(() => tabs.filter((tab) => tab.icon === 'logout'), [tabs]);
@@ -306,19 +279,19 @@ function AppSidebar() {
   const selectedKey = settingsActive
     ? `/settings${hash || '#general'}`
     : xrayActive
-      ? `/xray${hash || '#basic'}`
+      ? `/singbox${hash || '#basic'}`
       : singBoxActive
         ? `/singbox${hash || '#basic'}`
         : pathname === ''
           ? '/'
           : pathname;
-  const gatewaySubmenu = isXray ? '/xray' : '/settings';
+  const gatewaySubmenu = '/settings';
   const openSubmenu = gatewayActive
     ? gatewaySubmenu
     : settingsActive
       ? '/settings'
       : xrayActive
-        ? '/xray'
+        ? '/singbox'
         : singBoxActive
           ? '/singbox'
           : null;

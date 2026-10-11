@@ -4,15 +4,12 @@ import (
 	_ "embed"
 	"encoding/base64"
 	"encoding/json"
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
+	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 	"slices"
 	"strconv"
 	"strings"
-
-	"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
-	"github.com/SawaMEN/3x-ui/v3/internal/database"
-	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
-	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // XraySettingService provides business logic for Xray configuration management.
@@ -59,59 +56,15 @@ func (s *XraySettingService) CheckXrayConfig(XrayTemplateConfig string) error {
 		if err := json.Unmarshal(xrayConfig.OutboundConfigs, &outbounds); err != nil {
 			return common.NewError("xray template config invalid: outbounds is not an array:", err)
 		}
-		coreVersion := "Unknown"
-		if process := currentXrayProcess(); process != nil {
-			coreVersion = process.GetXrayVersion()
-		}
-		core, err := s.GetCoreType()
-		if err != nil {
-			return err
-		}
 		for _, outbound := range outbounds {
 			var managed map[string]any
 			if err := json.Unmarshal(outbound, &managed); err != nil {
 				return err
 			}
-			if IsNativeCore(core) {
-				if err := validateNativeTemplateOutbound(outbound, managed, core); err != nil {
-					return err
-				}
-				continue
+			if err := validateNativeTemplateOutbound(outbound, managed, CoreTypeSingBox); err != nil {
+				return err
 			}
-			protocol, _ := managed["protocol"].(string)
-			if strings.EqualFold(protocol, "snell") || strings.EqualFold(protocol, "singbox:snell") {
-				return common.NewError("Snell outbounds require sing-box 1.14+")
-			}
-			if externalvpn.IsAdditionalOutbound(managed) {
-				if err := externalvpn.ValidateAdditionalOutbound(managed); err != nil {
-					return err
-				}
-				continue
-			}
-			// Panel pseudo-protocol: validated panel-side because the core's
-			// loader would reject it outright.
-			if amneziawg.IsAmneziaWGOutbound(outbound) {
-				var probe struct {
-					Tag string `json:"tag"`
-				}
-				if err := json.Unmarshal(outbound, &probe); err != nil {
-					return common.NewError("xray template config invalid: amneziawg outbound tag unreadable:", err)
-				}
-				if err := amneziawg.ValidateAmneziaWGOutbound(probe.Tag, outbound); err != nil {
-					return err
-				}
-				continue
-			}
-			if err := xray.ValidateOutboundConfig(outbound); err != nil {
-				if shouldSkipLegacyUnencryptedOutboundRejection(coreVersion, err) {
-					continue
-				}
-				tagged := struct {
-					Tag string `json:"tag"`
-				}{}
-				_ = json.Unmarshal(outbound, &tagged)
-				return common.NewError("xray core rejects outbound \""+tagged.Tag+"\":", err)
-			}
+
 		}
 	}
 	return nil

@@ -13,6 +13,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/hiddify"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
@@ -57,9 +58,9 @@ func TestNativeOutboundEndpointsAndTransport(t *testing.T) {
 // Optional integration check with the real installed release. All traffic
 // stays on loopback; no Internet proxy credentials are required.
 func TestSingBoxProbeWithRunningProductionProcess(t *testing.T) {
-	binary := os.Getenv("SINGBOX_TEST_BINARY")
+	binary := os.Getenv("HIDDIFY_RUNTIME_TEST_BINARY")
 	if binary == "" {
-		t.Skip("set SINGBOX_TEST_BINARY to run real sing-box integration")
+		t.Skip("set HIDDIFY_RUNTIME_TEST_BINARY to run real sing-box integration")
 	}
 	dir := t.TempDir()
 	t.Setenv("XUI_BIN_FOLDER", dir)
@@ -74,7 +75,7 @@ func TestSingBoxProbeWithRunningProductionProcess(t *testing.T) {
 	if err := os.WriteFile(productionConfig, []byte(`{"outbounds":[{"type":"direct","tag":"direct"}]}`), 0600); err != nil {
 		t.Fatal(err)
 	}
-	production := singbox.NewProcess(productionConfig)
+	production := hiddify.NewProcess(productionConfig, false)
 	if err := production.Start(context.Background()); err != nil {
 		t.Fatal(err)
 	}

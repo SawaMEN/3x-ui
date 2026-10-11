@@ -69,8 +69,8 @@ func TestHiddifyConfigFromDatabase(t *testing.T) {
 	if len(cfg.Services) != 0 {
 		t.Fatal("unsupported sing-box 1.14 API injected")
 	}
-	if _, err := (&SingBoxService{}).GetConfig(); err == nil {
-		t.Fatal("stock sing-box incorrectly accepted XHTTP")
+	if _, err := (&SingBoxService{}).GetConfig(); err != nil {
+		t.Fatalf("default service must use owner XHTTP: %v", err)
 	}
 	binary := os.Getenv("HIDDIFY_CONFIG_CHECK_BINARY")
 	if binary == "" {
@@ -90,15 +90,15 @@ func TestHiddifyConfigFromDatabase(t *testing.T) {
 	}
 }
 
-func TestHiddifyRestartFlagsAreIndependent(t *testing.T) {
+func TestOwnerAliasSharesRestartFlag(t *testing.T) {
 	h := NativeCore(CoreTypeHiddify)
 	legacy := &SingBoxService{}
 	h.restartFlag().Store(false)
 	legacy.restartFlag().Store(false)
 	t.Cleanup(func() { h.restartFlag().Store(false); legacy.restartFlag().Store(false) })
 	h.SetToNeedRestart()
-	if legacy.IsNeedRestartAndSetFalse() || !h.IsNeedRestartAndSetFalse() {
-		t.Fatal("restart flags leak between cores")
+	if !legacy.IsNeedRestartAndSetFalse() || h.IsNeedRestartAndSetFalse() {
+		t.Fatal("aliases must consume the same sole-runtime restart flag")
 	}
 	if normalizeNodeCoreType("hiddify-core") != CoreTypeHiddify {
 		t.Fatal("node heartbeat loses core identity")

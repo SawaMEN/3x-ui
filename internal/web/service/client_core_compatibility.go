@@ -25,7 +25,7 @@ func SyncClientCoreCompatibility(oldCore, newCore string) error {
 	if oldCore == newCore {
 		return nil
 	}
-	if !isSupportedCoreType(oldCore) || !isSupportedCoreType(newCore) {
+	if (oldCore != CoreTypeXray && !isSupportedCoreType(oldCore)) || !isSupportedCoreType(newCore) {
 		return nil
 	}
 
@@ -168,7 +168,7 @@ func SyncClientCoreCompatibility(oldCore, newCore string) error {
 }
 
 func isSupportedCoreType(core string) bool {
-	return core == CoreTypeXray || IsNativeCore(core)
+	return IsNativeCore(core)
 }
 
 // CoreSupportsInboundProtocol exposes the same policy to offline migration preflight.

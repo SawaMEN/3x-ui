@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
@@ -17,6 +18,7 @@ import (
 
 var hiddifyRuntime = hiddify.NewRuntime(hiddify.GetConfigPath(), false)
 var hiddifyProcess = hiddifyRuntime.Process
+var ownerTrafficMu sync.Mutex
 var hiddifyNeedRestart atomic.Bool
 var hiddifyManuallyStopped atomic.Bool
 var hiddifyStats = hiddify.NewStatsClient()
@@ -26,14 +28,13 @@ var hiddifyStats = hiddify.NewStatsClient()
 func InitializeNativeCoreRuntime() {
 	hiddifyRuntime = hiddify.NewRuntime(hiddify.GetConfigPath(), false)
 	hiddifyProcess = hiddifyRuntime.Process
-	singBoxProcess = singbox.NewProcess(singbox.GetConfigPath())
 }
 
 func IsNativeCore(core string) bool { return core == CoreTypeSingBox || core == legacyCoreTypeHiddify }
 func NativeCore(core string) *SingBoxService {
 	// Both names resolve to the owner’s modified sing-box. The old name is
 	// accepted only for compatibility with persisted settings and older nodes.
-	return &SingBoxService{Hiddify: IsNativeCore(core)}
+	return &SingBoxService{}
 }
 func SelectedNativeCore() *SingBoxService {
 	core, _ := (&SettingService{}).GetCoreType()
@@ -44,40 +45,34 @@ func (s *SingBoxService) coreType() string {
 	return CoreTypeSingBox
 }
 func (s *SingBoxService) process() *singbox.Process {
-	if s.Hiddify {
-		return hiddifyProcess
-	}
-	return singBoxProcess
+	return hiddifyProcess
 }
 func (s *SingBoxService) candidate(path string) *singbox.Process {
-	if s.Hiddify {
-		return hiddify.NewProcess(path, true)
-	}
-	return singbox.NewTestProcess(path)
+	return hiddify.NewProcess(path, true)
 }
 func (s *SingBoxService) translateInbound(raw map[string]any) (map[string]any, error) {
-	if s.Hiddify {
+	{
 		return hiddify.TranslateInbound(raw)
 	}
-	return singbox.TranslateXrayInbound(raw)
+
 }
 func (s *SingBoxService) translateOutbound(raw map[string]any) (map[string]any, error) {
-	if s.Hiddify {
+	{
 		return hiddify.TranslateOutbound(raw)
 	}
-	return singbox.TranslateXrayOutbound(raw)
+
 }
 func (s *SingBoxService) restartFlag() *atomic.Bool {
-	if s.Hiddify {
+	{
 		return &hiddifyNeedRestart
 	}
-	return &isNeedSingBoxRestart
+
 }
 func (s *SingBoxService) stoppedFlag() *atomic.Bool {
-	if s.Hiddify {
+	{
 		return &hiddifyManuallyStopped
 	}
-	return &isSingBoxManuallyStopped
+
 }
 func (s *SingBoxService) logPath() string {
 	return filepath.Join(filepath.Dir(s.ProcessConfigPath()), s.coreType()+".log")
@@ -85,8 +80,8 @@ func (s *SingBoxService) logPath() string {
 
 // Non-destructive snapshots can be retried after an RPC or database failure.
 func (s *SingBoxService) pollHiddifyTraffic(ctx context.Context) error {
-	singBoxTrafficMu.Lock()
-	defer singBoxTrafficMu.Unlock()
+	ownerTrafficMu.Lock()
+	defer ownerTrafficMu.Unlock()
 	epoch, err := s.process().RuntimeID()
 	if err != nil {
 		return err
@@ -193,20 +188,20 @@ func splitHiddifyStats(stats []singbox.V2RayStat) (inboundTraffic []*coremodel.T
 }
 
 func (s *SingBoxService) startProcess(ctx context.Context) error {
-	if s.Hiddify {
+	{
 		return hiddifyRuntime.Start(ctx)
 	}
-	return s.process().Start(ctx)
+
 }
 func (s *SingBoxService) restartProcess(ctx context.Context) error {
-	if s.Hiddify {
+	{
 		return hiddifyRuntime.Restart(ctx)
 	}
-	return s.process().Restart(ctx)
+
 }
 func (s *SingBoxService) stopProcess(ctx context.Context) error {
-	if s.Hiddify {
+	{
 		return hiddifyRuntime.Stop(ctx)
 	}
-	return s.process().Stop()
+
 }

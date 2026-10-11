@@ -19,7 +19,7 @@ import (
 type InboundController struct {
 	inboundService  service.InboundService
 	clientService   service.ClientService
-	xrayService     service.XrayService
+	xrayService     service.CoreService
 	singBoxService  service.SingBoxService
 	settingService  service.SettingService
 	fallbackService service.FallbackService

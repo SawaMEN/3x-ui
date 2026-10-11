@@ -253,6 +253,15 @@ func (r runner) run(ctx context.Context, o Options) (result error) {
 	if err != nil {
 		return err
 	}
+	// Before core selection existed, an absent value meant Xray. Preserve that
+	// source interpretation even though new panel settings default to sing-box.
+	var storedCount int64
+	if err := database.GetDB().Model(&model.Setting{}).Where("key = ?", "coreType").Count(&storedCount).Error; err != nil {
+		return err
+	}
+	if storedCount == 0 {
+		old = service.CoreTypeXray
+	}
 	var inbounds []model.Inbound
 	if err := database.GetDB().Where("enable = ? AND node_id IS NULL", true).Find(&inbounds).Error; err != nil {
 		return err

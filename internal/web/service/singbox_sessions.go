@@ -3,38 +3,17 @@ package service
 import (
 	"context"
 	"errors"
-	"sync"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 )
 
-var (
-	singBoxSessionAPI = singbox.NewConnectionAPIClient()
-	singBoxSessionMu  sync.Mutex
-)
-
-func (s *SingBoxService) ensureSessionAPI() error {
-	if !s.process().SupportsNativeAPI() {
-		return errors.New("sing-box native connection API requires sing-box 1.14 or newer")
-	}
-	if !s.IsRunning() {
-		return errors.New("sing-box is not running")
-	}
-	return nil
-}
-
 // ActiveSessions returns the current sing-box connection snapshot without
 // sharing state with the traffic accounting poller.
 func (s *SingBoxService) ActiveSessions(ctx context.Context) ([]singbox.ActiveSession, error) {
-	if s.Hiddify {
+	{
 		return s.hiddifySessions(ctx)
 	}
-	if err := s.ensureSessionAPI(); err != nil {
-		return nil, err
-	}
-	singBoxSessionMu.Lock()
-	defer singBoxSessionMu.Unlock()
-	return singBoxSessionAPI.ActiveSessions(ctx)
+
 }
 
 // DisconnectUserSessions closes every currently tracked connection belonging
@@ -59,7 +38,7 @@ func (s *SingBoxService) DisconnectUsersSessions(ctx context.Context, inbound st
 	if !hasUser {
 		return 0, errors.New("at least one user is required")
 	}
-	if s.Hiddify {
+	{
 		return s.disconnectHiddify(ctx, func(session singbox.ActiveSession) bool {
 			if inbound != "" && session.Inbound != inbound {
 				return false
@@ -72,12 +51,7 @@ func (s *SingBoxService) DisconnectUsersSessions(ctx context.Context, inbound st
 			return false
 		})
 	}
-	if err := s.ensureSessionAPI(); err != nil {
-		return 0, err
-	}
-	singBoxSessionMu.Lock()
-	defer singBoxSessionMu.Unlock()
-	return singBoxSessionAPI.DisconnectUsers(ctx, inbound, users)
+
 }
 
 // DisconnectInboundSessions closes every currently tracked connection for an
@@ -86,13 +60,8 @@ func (s *SingBoxService) DisconnectInboundSessions(ctx context.Context, inbound 
 	if inbound == "" {
 		return 0, errors.New("inbound is required")
 	}
-	if s.Hiddify {
+	{
 		return s.disconnectHiddify(ctx, func(session singbox.ActiveSession) bool { return session.Inbound == inbound })
 	}
-	if err := s.ensureSessionAPI(); err != nil {
-		return 0, err
-	}
-	singBoxSessionMu.Lock()
-	defer singBoxSessionMu.Unlock()
-	return singBoxSessionAPI.DisconnectInbound(ctx, inbound)
+
 }

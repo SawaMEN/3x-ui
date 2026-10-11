@@ -167,8 +167,8 @@ func TestHiddifyFullConfigNativeRoutingDNSAndXHTTPOutbound(t *testing.T) {
 	if !strings.Contains(string(data), `"type": "xhttp"`) || cfg.Route["final"] != "select" {
 		t.Fatal("native config sections lost")
 	}
-	if _, err := (&SingBoxService{}).GetConfig(); err == nil {
-		t.Fatal("legacy sing-box accepts native Hiddify extension")
+	if _, err := (&SingBoxService{}).GetConfig(); err != nil {
+		t.Fatalf("default service must use owner extensions: %v", err)
 	}
 }
 
@@ -251,7 +251,7 @@ func TestHiddifyGenerationUsesRequestedCoreForSubscriptions(t *testing.T) {
 			setupBulkDB(t)
 			// Preview Hiddify while Xray is still selected. The subscription must
 			// be filtered against the requested generator, not the running engine.
-			if err := singBoxSettingService.SetCoreType(CoreTypeXray); err != nil {
+			if err := database.GetDB().Model(&model.Setting{}).Where("key = ?", "coreType").Update("value", CoreTypeXray).Error; err != nil {
 				t.Fatal(err)
 			}
 			members := `[{"protocol":"vless","tag":"subscription-xhttp","settings":{"address":"example.com","port":443,"id":"11111111-1111-4111-8111-111111111111","encryption":"none"},"streamSettings":{"network":"xhttp","xhttpSettings":{"path":"/subscription","mode":"stream-up"}}}]`

@@ -247,7 +247,7 @@ type Tgbot struct {
 	clientService  service.ClientService
 	settingService service.SettingService
 	serverService  service.ServerService
-	xrayService    service.XrayService
+	xrayService    service.CoreService
 	lastStatus     *service.Status
 }
 

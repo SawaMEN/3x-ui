@@ -153,7 +153,7 @@ func (s *ClientService) resetClientTrafficSet(inboundSvc *InboundService, select
 		if IsNativeCore(coreType) {
 			(SelectedNativeCore()).SetToNeedRestart()
 		} else {
-			(&XrayService{}).SetToNeedRestart()
+			(&CoreService{}).SetToNeedRestart()
 		}
 	}
 	for _, email := range emails {

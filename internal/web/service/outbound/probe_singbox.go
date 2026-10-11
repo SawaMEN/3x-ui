@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/hiddify"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
@@ -88,7 +89,7 @@ var newSingBoxBatchProcess = func(cfg *singbox.Config, path string) batchProcess
 	if err == nil {
 		path = absolute
 	}
-	return &singBoxBatchProcess{process: singbox.NewTestProcess(path), config: cfg, path: path}
+	return &singBoxBatchProcess{process: hiddify.NewProcess(path, true), config: cfg, path: path}
 }
 
 func (p *singBoxBatchProcess) Start() error {

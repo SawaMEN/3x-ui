@@ -255,7 +255,7 @@ func (t *Tgbot) answerCommand(message *telego.Message, chatId int64, isAdmin boo
 		onlyMessage = true
 		if isAdmin {
 			if len(commandArgs) == 0 {
-				if t.xrayService.IsXrayRunning() {
+				if t.xrayService.IsCoreRunning() {
 					err := t.xrayService.RestartXray(true)
 					if err != nil {
 						msg += t.I18nBot("tgbot.commands.restartFailed", "Error=="+err.Error())

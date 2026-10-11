@@ -39,7 +39,7 @@ func disableClients(t *testing.T, emails ...string) {
 
 func emittedClients(t *testing.T, tag string) (any, bool) {
 	t.Helper()
-	svc := &XrayService{}
+	svc := &CoreService{}
 	cfg, err := svc.GetXrayConfig()
 	if err != nil {
 		t.Fatalf("GetXrayConfig: %v", err)
@@ -124,7 +124,7 @@ func TestGetXrayConfig_SkipsMieruInbound(t *testing.T) {
 		t.Fatalf("create mieru inbound: %v", err)
 	}
 
-	cfg, err := (&XrayService{}).GetXrayConfig()
+	cfg, err := (&CoreService{}).GetXrayConfig()
 	if err != nil {
 		t.Fatalf("GetXrayConfig: %v", err)
 	}

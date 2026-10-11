@@ -13,7 +13,6 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service/integration"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service/outbound"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 
 	"github.com/gin-gonic/gin"
 )
@@ -24,7 +23,7 @@ type XraySettingController struct {
 	SettingService              service.SettingService
 	InboundService              service.InboundService
 	OutboundService             outbound.OutboundService
-	XrayService                 service.XrayService
+	CoreService                 service.CoreService
 	WarpService                 integration.WarpService
 	NordService                 integration.NordService
 	PiaService                  integration.PiaService
@@ -54,9 +53,6 @@ func (a *XraySettingController) initRouter(g *gin.RouterGroup) {
 	g.POST("/resetOutboundsTraffic", a.resetOutboundsTraffic)
 	g.POST("/testOutbound", a.testOutbound)
 	g.POST("/testOutbounds", a.testOutbounds)
-	g.POST("/balancerStatus", a.balancerStatus)
-	g.POST("/balancerOverride", a.balancerOverride)
-	g.POST("/routeTest", a.routeTest)
 
 	g.GET("/geodata/files", a.geodataFiles)
 	g.GET("/geodata/categories", a.geodataCategories)
@@ -156,8 +152,8 @@ func (a *XraySettingController) updateSetting(c *gin.Context) {
 		return
 	}
 	// Only reconcile a running core; a manually stopped xray stays stopped.
-	if a.XrayService.IsXrayRunning() {
-		if err := a.XrayService.RestartXray(false); err != nil {
+	if a.CoreService.IsCoreRunning() {
+		if err := a.CoreService.RestartXray(false); err != nil {
 			jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
 			return
 		}
@@ -177,7 +173,7 @@ func (a *XraySettingController) getDefaultXrayConfig(c *gin.Context) {
 
 // getXrayResult retrieves the current Xray service result.
 func (a *XraySettingController) getXrayResult(c *gin.Context) {
-	jsonObj(c, a.XrayService.GetXrayResult(), nil)
+	jsonObj(c, a.CoreService.GetCoreResult(), nil)
 }
 
 // warp handles Warp-related operations based on the action parameter.
@@ -199,7 +195,7 @@ func (a *XraySettingController) warp(c *gin.Context) {
 	case "changeIp":
 		resp, err = a.WarpService.ChangeWarpIP()
 		if err == nil {
-			a.XrayService.SetToNeedRestart()
+			a.CoreService.SetToNeedRestart()
 			// Restart the auto-update clock so a scheduled rotation
 			// doesn't fire right after this manual one.
 			err = a.SettingService.SetWarpLastUpdate(time.Now().Unix())
@@ -375,77 +371,6 @@ func (a *XraySettingController) testOutbounds(c *gin.Context) {
 	}
 
 	jsonObj(c, results, nil)
-}
-
-// balancerStatus reports the live state (override + strategy picks) of the
-// balancer tags given as a comma-separated "tags" form field.
-func (a *XraySettingController) balancerStatus(c *gin.Context) {
-	raw := c.PostForm("tags")
-	var tags []string
-	for tag := range strings.SplitSeq(raw, ",") {
-		if tag = strings.TrimSpace(tag); tag != "" {
-			tags = append(tags, tag)
-		}
-	}
-	statuses, err := a.XrayService.GetBalancersStatus(tags)
-	if err != nil {
-		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
-		return
-	}
-	byTag := make(map[string]service.BalancerStatus, len(statuses))
-	for _, status := range statuses {
-		byTag[status.Tag] = status
-	}
-	jsonObj(c, byTag, nil)
-}
-
-// balancerOverride forces a balancer to a specific outbound tag; an empty
-// "target" clears the override.
-func (a *XraySettingController) balancerOverride(c *gin.Context) {
-	tag := c.PostForm("tag")
-	if tag == "" {
-		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), common.NewError("tag is required"))
-		return
-	}
-	target := c.PostForm("target")
-	if err := a.XrayService.OverrideBalancer(tag, target); err != nil {
-		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
-		return
-	}
-	jsonObj(c, "", nil)
-}
-
-// routeTest asks the running core which outbound it would route a synthetic
-// connection to.
-func (a *XraySettingController) routeTest(c *gin.Context) {
-	port := 0
-	if portStr := c.PostForm("port"); portStr != "" {
-		parsed, err := strconv.Atoi(portStr)
-		if err != nil || parsed < 0 || parsed > 65535 {
-			jsonMsg(c, I18nWeb(c, "somethingWentWrong"), common.NewError("invalid port"))
-			return
-		}
-		port = parsed
-	}
-	req := xray.RouteTestRequest{
-		InboundTag: c.PostForm("inboundTag"),
-		Domain:     c.PostForm("domain"),
-		IP:         c.PostForm("ip"),
-		Port:       port,
-		Network:    c.PostForm("network"),
-		Protocol:   c.PostForm("protocol"),
-		Email:      c.PostForm("email"),
-	}
-	if req.Domain == "" && req.IP == "" {
-		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), common.NewError("domain or ip is required"))
-		return
-	}
-	result, err := a.XrayService.TestRoute(req)
-	if err != nil {
-		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
-		return
-	}
-	jsonObj(c, result, nil)
 }
 
 // maxGeodataTokens bounds one validation request; a routing rule listing more
@@ -701,7 +626,7 @@ func markOutboundCoreRestart() {
 	if service.IsNativeCore(core) {
 		service.SelectedNativeCore().SetToNeedRestart()
 	} else {
-		(&service.XrayService{}).SetToNeedRestart()
+		(&service.CoreService{}).SetToNeedRestart()
 	}
 }
 func (a *XraySettingController) probeOutboundSub(c *gin.Context) {

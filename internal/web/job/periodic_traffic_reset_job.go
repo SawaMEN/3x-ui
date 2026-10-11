@@ -21,7 +21,7 @@ type Period string
 type PeriodicTrafficResetJob struct {
 	inboundService service.InboundService
 	clientService  service.ClientService
-	xrayService    service.XrayService
+	xrayService    service.CoreService
 	period         Period
 	location       *time.Location
 }

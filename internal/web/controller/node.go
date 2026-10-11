@@ -16,7 +16,7 @@ import (
 
 type NodeController struct {
 	nodeService    service.NodeService
-	xrayService    service.XrayService
+	xrayService    service.CoreService
 	settingService service.SettingService
 	singBoxService service.SingBoxService
 }

@@ -1378,7 +1378,7 @@ func (s *InboundService) setRemoteTrafficLocked(nodeID int, snap *runtime.Traffi
 		}
 	}
 
-	if process := currentXrayProcess(); process != nil {
+	if process := currentOnlinePresence(); process != nil {
 		tree := snap.OnlineTree
 		switch {
 		case len(tree) == 0 && len(snap.OnlineEmails) > 0:
@@ -1423,7 +1423,12 @@ func (s *InboundService) restartRemoteNodesOnDisable(nodeIDs []int) {
 	common.GoRecover("restart-nodes-on-client-disable", func() {
 		for _, nodeID := range nodeIDs {
 			nodeIDCopy := nodeID
-			rt, rtErr := runtime.GetManager().RuntimeFor(&nodeIDCopy)
+			manager := runtime.GetManager()
+			if manager == nil {
+				logger.Warning("disableInvalidClients: runtime manager is unavailable")
+				return
+			}
+			rt, rtErr := manager.RuntimeFor(&nodeIDCopy)
 			if rtErr != nil {
 				logger.Warning("disableInvalidClients: get runtime for node", nodeID, "failed:", rtErr)
 				continue
@@ -1437,7 +1442,7 @@ func (s *InboundService) restartRemoteNodesOnDisable(nodeIDs []int) {
 
 func (s *InboundService) GetOnlineClients() []string {
 	var emails []string
-	if process := currentXrayProcess(); process != nil {
+	if process := currentOnlinePresence(); process != nil {
 		emails = process.GetOnlineClients()
 	}
 	if onlineEmails, _, _, err := s.getVKTurnProxyHeartbeatPresence(time.Now()); err == nil && len(onlineEmails) > 0 {
@@ -1463,7 +1468,7 @@ func (s *InboundService) GetOnlineClients() []string {
 // node-id keying so a client three hops down is attributed to its real node,
 // not the intermediate one it was synced through.
 func (s *InboundService) GetOnlineClientsByGuid() map[string][]string {
-	process := currentXrayProcess()
+	process := currentOnlinePresence()
 	if process == nil {
 		return map[string][]string{}
 	}
@@ -1481,7 +1486,7 @@ func (s *InboundService) GetOnlineClientsByGuid() map[string][]string {
 // each inbound. A GUID missing from the map means "don't gate" for that node's
 // inbounds (old-build node or no active-inbound signal).
 func (s *InboundService) GetActiveInboundsByGuid() map[string][]string {
-	process := currentXrayProcess()
+	process := currentOnlinePresence()
 	if process == nil {
 		return map[string][]string{}
 	}
@@ -1499,13 +1504,13 @@ func (s *InboundService) GetActiveInboundsByGuid() map[string][]string {
 }
 
 func (s *InboundService) SetNodeOnlineTree(nodeID int, tree map[string][]string) {
-	if process := currentXrayProcess(); process != nil {
+	if process := currentOnlinePresence(); process != nil {
 		process.SetNodeOnlineTree(nodeID, tree)
 	}
 }
 
 func (s *InboundService) ClearNodeOnlineClients(nodeID int) {
-	if process := currentXrayProcess(); process != nil {
+	if process := currentOnlinePresence(); process != nil {
 		process.ClearNodeOnlineClients(nodeID)
 	}
 }
@@ -1513,7 +1518,7 @@ func (s *InboundService) ClearNodeOnlineClients(nodeID int) {
 // RetainSyncedNodeOnlineClients keeps online clients only for nodes the traffic
 // sync still fetches; a node missing from nodes was deleted.
 func (s *InboundService) RetainSyncedNodeOnlineClients(nodes []*model.Node) {
-	process := currentXrayProcess()
+	process := currentOnlinePresence()
 	if process == nil {
 		return
 	}
@@ -1667,7 +1672,7 @@ func (s *InboundService) GetClientsLastOnline() (map[string]int64, error) {
 // xray.Process for why the local sets are kept separate from the shared
 // last_online column.
 func (s *InboundService) RefreshLocalOnlineClients(activeEmails, activeInboundTags []string) {
-	if process := currentXrayProcess(); process != nil {
+	if process := currentOnlinePresence(); process != nil {
 		process.RefreshLocalOnline(activeEmails, activeInboundTags, time.Now().UnixMilli(), onlineGracePeriodMs)
 	}
 }

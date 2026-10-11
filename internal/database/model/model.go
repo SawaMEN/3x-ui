@@ -442,7 +442,7 @@ func StripVmessClientSecurity(settings string) (string, bool) {
 
 // WireguardPeerFromClient builds the xray wireguard inbound peer object for one
 // WireGuard client. It is the single definition of the peer shape, shared by the
-// full-config path (XrayService.GetXrayConfig) and the live AddInbound path
+// full-config path (CoreService.GetXrayConfig) and the live AddInbound path
 // (WireguardClientsToPeers), so both emit identical peers. The client's
 // privateKey is intentionally omitted — it is the client's secret, not part of
 // the server-side peer.
@@ -842,7 +842,7 @@ type Node struct {
 	// XrayState and XrayError are captured from the remote node's /panel/api/server/status
 	// during heartbeats. They let the central panel distinguish "panel API reachable"
 	// (status=online) from "Xray core itself has failed on the node" for monitoring.
-	XrayState    string `json:"xrayState" gorm:"column:xray_state"`
+	XrayState    string `json:"presenceRegistry" gorm:"column:xray_state"`
 	XrayError    string `json:"xrayError" gorm:"column:xray_error"`
 	SingBoxState string `json:"singboxState" gorm:"column:singbox_state"`
 	SingBoxError string `json:"singboxError" gorm:"column:singbox_error"`
@@ -899,7 +899,7 @@ type NodeSummary struct {
 	CoreType         string             `json:"coreType"`
 	RunningCore      string             `json:"runningCore"`
 	// Core states/errors are forwarded so masters can surface failures on transitive sub-nodes too.
-	XrayState    string `json:"xrayState"`
+	XrayState    string `json:"presenceRegistry"`
 	XrayError    string `json:"xrayError,omitempty"`
 	SingBoxState string `json:"singboxState"`
 	SingBoxError string `json:"singboxError,omitempty"`

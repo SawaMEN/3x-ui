@@ -6,13 +6,11 @@ import (
 	"errors"
 	"os"
 	"sync"
-	"sync/atomic"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 )
 
-var isNeedSingBoxRestart atomic.Bool
 var nativePendingApplyMu sync.Mutex
 
 // SetToNeedRestart marks the selected sing-box runtime config as stale.
@@ -75,7 +73,7 @@ func (s *SingBoxService) ApplyPendingRestart(ctx context.Context) {
 		s.SetToNeedRestart()
 		return
 	}
-	if s.Hiddify {
+	{
 		cfg, err := s.GetConfig()
 		if err != nil {
 			s.process().SetError(err)

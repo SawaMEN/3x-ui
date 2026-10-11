@@ -1185,8 +1185,6 @@ update_x-ui() {
         rm "${xui_folder}/x-ui.sh" -f > /dev/null 2>&1
         echo -e "${green}Removing old mtg version...${plain}"
         rm "${xui_folder}/bin/mtg-linux-${machine_arch}" -f > /dev/null 2>&1
-        echo -e "${green}Removing old xray version...${plain}"
-        rm "${xui_folder}/bin/xray-linux-${machine_arch}" -f > /dev/null 2>&1
         echo -e "${green}Removing old README and LICENSE file...${plain}"
         rm "${xui_folder}/bin/README.md" -f > /dev/null 2>&1
         rm "${xui_folder}/bin/LICENSE" -f > /dev/null 2>&1
@@ -1206,15 +1204,7 @@ update_x-ui() {
     fi
     chmod +x x-ui > /dev/null 2>&1
 
-    # Check the system's architecture and rename the file accordingly.
-    # The panel binary maps GOARCH=arm to "arm32" (internal/xray/process.go),
-    # so the Xray binary must be named xray-linux-arm32.
-    if [[ ${machine_arch} == "armv5" || ${machine_arch} == "armv6" || ${machine_arch} == "armv7" ]]; then
-        mv "bin/xray-linux-${machine_arch}" bin/xray-linux-arm32 > /dev/null 2>&1
-        chmod +x bin/xray-linux-arm32 > /dev/null 2>&1
-    fi
-
-    chmod +x x-ui "bin/xray-linux-${machine_arch}" > /dev/null 2>&1
+    chmod +x x-ui "bin/hiddify-core-linux-${machine_arch}" || _fail "Owner sing-box binary missing"
     [[ -f bin/telemt ]] && chmod 0755 bin/telemt
     [[ -f telemt-meko-fix.sh ]] && chmod 0755 telemt-meko-fix.sh
     [[ -f telemt-update.sh ]] && chmod 0755 telemt-update.sh

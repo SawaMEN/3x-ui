@@ -24,11 +24,8 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
-	"github.com/SawaMEN/3x-ui/v3/internal/util/json_util"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
-
 	"gorm.io/gorm"
 )
 
@@ -1230,97 +1227,7 @@ func (s *NodeService) withOutboundBridge(nodeID int, outboundTag string, fn func
 		}
 	}
 
-	proc := XrayProcess()
-	if proc == nil || !proc.IsRunning() {
-		coreType, _ := (&SettingService{}).GetCoreType()
-		if IsNativeCore(coreType) {
-			return common.NewError("cannot create a temporary node outbound bridge while sing-box is selected; save the node first so its persistent bridge can be generated")
-		}
-		return common.NewError("cannot create node outbound bridge because Xray is not running")
-	}
-	apiPort := proc.GetAPIPort()
-	if apiPort <= 0 {
-		return common.NewError("cannot create node outbound bridge because Xray API is unavailable")
-	}
-
-	listener, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
-	if err != nil {
-		return fmt.Errorf("allocate temporary node outbound bridge: %w", err)
-	}
-	port := listener.Addr().(*net.TCPAddr).Port
-	if err := listener.Close(); err != nil {
-		return fmt.Errorf("release temporary node outbound bridge port: %w", err)
-	}
-
-	tag := fmt.Sprintf("node-test-%d-%d", nodeID, time.Now().UnixNano())
-	proxyURL := fmt.Sprintf("socks5://127.0.0.1:%d", port)
-
-	inboundJSON, err := json.Marshal(xray.InboundConfig{
-		Listen:   json_util.RawMessage(`"127.0.0.1"`),
-		Port:     port,
-		Protocol: "socks",
-		Settings: json_util.RawMessage(`{"auth":"noauth","udp":false}`),
-		Tag:      tag,
-	})
-	if err != nil {
-		return fmt.Errorf("marshal temporary node outbound bridge: %w", err)
-	}
-
-	cfg := proc.GetConfig()
-	if cfg == nil {
-		return common.NewError("cannot create node outbound bridge because Xray config is unavailable")
-	}
-	routing := map[string]any{}
-	if len(cfg.RouterConfig) > 0 {
-		_ = json.Unmarshal(cfg.RouterConfig, &routing)
-	}
-	rules, _ := routing["rules"].([]any)
-	rule := map[string]any{
-		"type":       "field",
-		"inboundTag": []any{tag},
-	}
-	if routingTagIsBalancer(routing, outboundTag) {
-		rule["balancerTag"] = outboundTag
-	} else {
-		rule["outboundTag"] = outboundTag
-	}
-	routing["rules"] = append([]any{rule}, rules...)
-	routingJSON, err := json.Marshal(routing)
-	if err != nil {
-		return fmt.Errorf("marshal temporary node outbound routing: %w", err)
-	}
-	originalRoutingJSON := cfg.RouterConfig
-
-	api := xray.XrayAPI{}
-	if err := api.Init(apiPort); err != nil {
-		return fmt.Errorf("connect to Xray API for node outbound bridge: %w", err)
-	}
-	defer api.Close()
-
-	if err := api.AddInbound(inboundJSON); err != nil {
-		return fmt.Errorf("add temporary node outbound bridge: %w", err)
-	}
-	defer func() {
-		if err := api.DelInbound(tag); err != nil {
-			logger.Warning("remove temp node bridge inbound failed:", err)
-		}
-	}()
-
-	if err := api.ApplyRoutingConfig(routingJSON); err != nil {
-		return fmt.Errorf("apply temporary node outbound routing: %w", err)
-	}
-	defer func() {
-		restore := originalRoutingJSON
-		if len(restore) == 0 {
-			restore = []byte("{}")
-		}
-		if err := api.ApplyRoutingConfig(restore); err != nil {
-			logger.Warning("restore routing after node bridge failed:", err)
-		}
-	}()
-
-	fn(proxyURL)
-	return nil
+	return common.NewError("save the node before probing so its sing-box egress bridge can be generated")
 }
 
 // A status envelope holds a handful of scalars; the cap keeps a hostile or
@@ -1534,7 +1441,7 @@ type ProbeResultUI struct {
 	Error            string             `json:"error"`
 	// XrayState/XrayError are populated on successful probes even when the node's
 	// Xray core is not healthy. The UI uses them for a distinct "panel ok, xray failed" indicator.
-	XrayState    string `json:"xrayState"`
+	XrayState    string `json:"presenceRegistry"`
 	XrayError    string `json:"xrayError"`
 	SingBoxState string `json:"singboxState"`
 	SingBoxError string `json:"singboxError"`

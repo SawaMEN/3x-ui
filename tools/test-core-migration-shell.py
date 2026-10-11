@@ -42,6 +42,18 @@ class ReleaseMigrationTests(unittest.TestCase):
             (old / "bin").mkdir(parents=True)
             (old / "x-ui").write_text("old-panel")
             (old / "bin" / "custom-key").write_text("existing-private-key")
+            (old / "bin" / "xray-linux-amd64").write_text("legacy-xray")
+            (old / "bin" / "sing-box-linux-amd64").write_text("legacy-stock")
+            (old / "bin" / "xray-linux-amd64").chmod(0o700)
+            (old / "bin" / "sing-box-linux-amd64").chmod(0o700)
+            if mode.startswith("external_"):
+                external = base / "external-bin"
+                external.mkdir()
+                (external / "xray-linux-amd64").write_text("legacy-xray")
+                (external / "sing-box-linux-amd64").write_text("legacy-stock")
+                (external / "custom-key").write_text("external-key")
+                (external / "xray-linux-amd64").chmod(0o700)
+                (external / "sing-box-linux-amd64").chmod(0o700)
             database = base / "database"
             database.write_text("original-users-keys-traffic\n")
             unit = base / "unit"
@@ -59,6 +71,10 @@ set -eu
 xui_folder="$TEST_ROOT/x-ui"
 xui_service="$TEST_ROOT"
 release=debian
+if [[ "$CASE" == external_* ]]; then
+    export XUI_BIN_FOLDER="$TEST_ROOT/external-bin"
+    CASE="${CASE#external_}"
+fi
 arch() { printf amd64; }
 systemctl() {
     printf 'service:%s\n' "$*" >> "$TEST_LOG"
@@ -86,6 +102,15 @@ core_migration_begin
 rm -rf "$xui_folder"
 cp -a "$TEST_ROOT/bundle/x-ui" "$xui_folder"
 printf 'new-unit' > "$TEST_ROOT/unit"
+if [[ -n "${XUI_BIN_FOLDER:-}" && "$XUI_BIN_FOLDER" != "$xui_folder/bin" ]]; then
+    cp "$xui_folder/bin/hiddify-core-linux-amd64" "$XUI_BIN_FOLDER/"
+fi
+# Custom-file restoration can bring old engines back; commit must remove them.
+printf 'legacy-xray' > "$xui_folder/bin/xray-linux-amd64"
+printf 'legacy-stock' > "$xui_folder/bin/sing-box-linux-amd64"
+chmod 0700 "$xui_folder/bin/xray-linux-amd64" "$xui_folder/bin/sing-box-linux-amd64"
+printf 'custom-config' > "$xui_folder/bin/xray-config.json"
+printf 'custom-config' > "$xui_folder/bin/sing-box-config.json"
 if [[ "$CASE" == apply || "$CASE" == stopped_failure ]]; then export FAIL_APPLY=1; fi
 if core_migration_apply; then
     if [[ "$CASE" == verify || "$CASE" == stop_failure ]]; then export FAIL_VERIFY=1; fi
@@ -94,6 +119,20 @@ if core_migration_apply; then
         [[ "$(cat "$TEST_DB")" == new-core ]]
         [[ -f "$cm_backup/installation/bin/custom-key" ]]
         [[ -f "$cm_backup/data/database" ]]
+        [[ -f "$cm_backup/installation/bin/xray-linux-amd64" ]]
+        [[ -f "$cm_backup/installation/bin/sing-box-linux-amd64" ]]
+        [[ ! -e "$xui_folder/bin/xray-linux-amd64" ]]
+        [[ ! -e "$xui_folder/bin/sing-box-linux-amd64" ]]
+        [[ -f "$xui_folder/bin/hiddify-core-linux-amd64" ]]
+        [[ "$(cat "$xui_folder/bin/xray-config.json")" == custom-config ]]
+        [[ "$(cat "$xui_folder/bin/sing-box-config.json")" == custom-config ]]
+        if [[ -d "$cm_backup/managed-bin" ]]; then
+            [[ -f "$cm_backup/managed-bin/xray-linux-amd64" ]]
+            [[ -f "$cm_backup/managed-bin/sing-box-linux-amd64" ]]
+            [[ ! -e "$XUI_BIN_FOLDER/xray-linux-amd64" ]]
+            [[ ! -e "$XUI_BIN_FOLDER/sing-box-linux-amd64" ]]
+            [[ "$(cat "$XUI_BIN_FOLDER/custom-key")" == external-key ]]
+        fi
         core_migration_exit 0
         exit 0
     fi
@@ -113,6 +152,13 @@ core_migration_exit 2
 [[ "$(cat "$TEST_ROOT/unit")" == old-unit ]]
 [[ -d "$cm_backup/failed-installation" ]]
 [[ -f "$cm_backup/data/database" ]]
+[[ -f "$xui_folder/bin/xray-linux-amd64" ]]
+[[ -f "$xui_folder/bin/sing-box-linux-amd64" ]]
+if [[ -d "$cm_backup/managed-bin" ]]; then
+    [[ "$(cat "$XUI_BIN_FOLDER/xray-linux-amd64")" == legacy-xray ]]
+    [[ "$(cat "$XUI_BIN_FOLDER/sing-box-linux-amd64")" == legacy-stock ]]
+    [[ "$(cat "$XUI_BIN_FOLDER/custom-key")" == external-key ]]
+fi
 '''
             env = dict(os.environ, TEST_ROOT=raw, TEST_DB=str(database),
                        TEST_LOG=str(base / "commands"), HELPER=str(ROOT / "core-migration.sh"),
@@ -121,6 +167,7 @@ core_migration_exit 2
             result = subprocess.run(["bash", "-c", script], env=env, text=True, capture_output=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             commands = (base / "commands").read_text()
+            mode = mode.removeprefix("external_")
             if mode != "preflight":
                 self.assertIn("backup\n", commands)
                 if mode == "stop_failure":
@@ -133,6 +180,8 @@ core_migration_exit 2
                 if mode=="disabled": self.assertIn("service:disable x-ui", commands)
 
     def test_success_retains_recovery_snapshot(self): self.run_case("success")
+    def test_external_bin_cleanup_retains_snapshot(self): self.run_case("external_success")
+    def test_external_bin_rollback_restores_legacy_files(self): self.run_case("external_verify")
     def test_apply_failure_recovers_installation_and_data(self): self.run_case("apply")
     def test_daemon_core_failure_recovers_installation_and_data(self): self.run_case("verify")
     def test_preflight_failure_does_not_touch_installation(self): self.run_case("preflight")

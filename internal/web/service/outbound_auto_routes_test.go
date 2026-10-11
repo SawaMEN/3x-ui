@@ -30,9 +30,8 @@ func TestAutomaticRoutingSelectionOnlyChangesRules(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	diff, ok := xray.ComputeHotDiff(cfg, next)
-	if !ok || len(diff.RoutingConfig) == 0 || len(diff.AddedOutbounds) > 0 || len(diff.RemovedOutboundTags) > 0 || len(diff.AddedInbounds) > 0 {
-		t.Fatalf("selection was not routing-only: %+v", diff)
+	if string(cfg.OutboundConfigs) != string(next.OutboundConfigs) || string(cfg.RouterConfig) == string(next.RouterConfig) {
+		t.Fatal("selection must change only routing")
 	}
 	if string(cfg.RouterConfig) != original {
 		t.Fatal("running snapshot mutated before core acknowledgement")

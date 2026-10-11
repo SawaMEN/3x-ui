@@ -21,7 +21,7 @@ type LdapSyncJob struct {
 	settingService service.SettingService
 	inboundService service.InboundService
 	clientService  service.ClientService
-	xrayService    service.XrayService
+	xrayService    service.CoreService
 	lastFlagCount  atomic.Int64
 }
 

@@ -1,7 +1,6 @@
 package service
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -75,59 +74,7 @@ func updateAutomaticRouting(cfg *xray.Config, subs []*model.OutboundSubscription
 	next.RouterConfig = json_util.RawMessage(encoded)
 	return &next, nil
 }
-func applyAutomaticXray(subs []*model.OutboundSubscription) (map[int]string, error) {
-	lock.Lock()
-	defer lock.Unlock()
-	applied := map[int]string{}
-	process := currentXrayProcess()
-	if process == nil || !process.IsRunning() {
-		return applied, fmt.Errorf("core is stopped; selection will apply on startup")
-	}
-	current := process.GetConfig()
-	if current == nil {
-		return applied, fmt.Errorf("running core configuration unavailable")
-	}
-	next, err := updateAutomaticRouting(current, subs)
-	if err != nil {
-		return applied, err
-	}
-	if process.GetAPIPort() <= 0 {
-		return applied, fmt.Errorf("core API is disabled; enable RoutingService for automatic switching")
-	}
-	api := &xray.XrayAPI{}
-	if err := api.Init(process.GetAPIPort()); err != nil {
-		return applied, err
-	}
-	defer api.Close()
-	needsApply := !bytes.Equal(next.RouterConfig, current.RouterConfig)
-	for _, sub := range subs {
-		actual, err := api.TestRoute(xray.RouteTestRequest{InboundTag: autoInboundTag(sub.Id), IP: "1.1.1.1", Port: 443})
-		if err != nil {
-			return applied, fmt.Errorf("live route verification failed: %w", err)
-		}
-		if !actual.Matched || actual.OutboundTag != autoRouteTarget(sub) {
-			needsApply = true
-		}
-		applied[sub.Id] = actual.OutboundTag
-	}
-	if needsApply {
-		if err := api.ApplyRoutingConfig(next.RouterConfig); err != nil {
-			return applied, fmt.Errorf("live routing update failed: %w", err)
-		}
-		for _, sub := range subs {
-			actual, err := api.TestRoute(xray.RouteTestRequest{InboundTag: autoInboundTag(sub.Id), IP: "1.1.1.1", Port: 443})
-			if err != nil {
-				return applied, fmt.Errorf("live route verification failed: %w", err)
-			}
-			applied[sub.Id] = actual.OutboundTag
-			if !actual.Matched || actual.OutboundTag != autoRouteTarget(sub) {
-				return applied, fmt.Errorf("core did not confirm automatic route")
-			}
-		}
-		process.SetConfig(next)
-	}
-	return applied, nil
-}
+
 func localAutomaticSelectorClient() (*singbox.SelectorClient, error) {
 	data := SelectedNativeCore().process().AppliedConfig()
 	if len(data) == 0 {
@@ -180,7 +127,7 @@ func (s *OutboundSubscriptionService) ApplyAutomaticSelections() (int, error) {
 			}
 		}
 	} else {
-		applied, err = applyAutomaticXray(subs)
+		err = fmt.Errorf("legacy core state requires offline migration to sing-box")
 	}
 	changes := 0
 	for _, sub := range subs {

@@ -17,7 +17,7 @@ import (
 )
 
 // generateNativeConfig is the shared compatibility translator. Hiddify supplies
-// a database snapshot; legacy sing-box retains its existing service reads.
+// a database snapshot for the owner runtime.
 func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot) (*singbox.Config, error) {
 	var inbounds []*model.Inbound
 	var err error
@@ -31,18 +31,10 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot) (*
 	}
 
 	cfg := singbox.NewConfig()
-	cfg.Hiddify = s.Hiddify
+	cfg.Hiddify = true
 	// Generated outbounds come from the Xray template. Keep NewConfig's
 	// defaults only for its standalone editor fallback.
 	cfg.Outbounds = nil
-	if s.process().SupportsNativeAPI() {
-		cfg.Services = []map[string]any{{
-			"type":        "api",
-			"tag":         "panel-api",
-			"listen":      "127.0.0.1",
-			"listen_port": 10091,
-		}}
-	}
 
 	managedOutboundTags := map[string]bool{}
 	dnsOutboundTags := make(map[string]struct{})
@@ -64,7 +56,7 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot) (*
 		if xrayCfg == nil {
 			return nil, fmt.Errorf("panel template must be a JSON object")
 		}
-		if s.Hiddify {
+		{
 			if err := validatePanelConfigSections(xrayCfg); err != nil {
 				return nil, err
 			}
@@ -211,12 +203,11 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot) (*
 						managedOutboundTags[tag] = true
 						var bridge map[string]any
 						var err error
-						if s.Hiddify {
+						{
 							bridge, err = externalvpn.PlanOutbound(ob)
 							cfg.ManagedOutbounds = append(cfg.ManagedOutbounds, ob)
-						} else {
-							bridge, err = externalvpn.EnsureOutbound(ob)
 						}
+
 						if err != nil {
 							return nil, fmt.Errorf("outbound %q: %w", tag, err)
 						}
@@ -290,12 +281,7 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot) (*
 		if err := json.Unmarshal(rawBytes, &raw); err != nil {
 			return nil, err
 		}
-		stream, _ := raw["streamSettings"].(map[string]any)
-		network, _ := stream["network"].(string)
-		if !s.Hiddify && strings.EqualFold(strings.TrimSpace(network), "xhttp") {
-			unsupported = append(unsupported, fmt.Sprintf("%s: XHTTP transport is only supported by Xray", inbound.Tag))
-			continue
-		}
+
 		// Xray treats an empty inbound listen address as all interfaces. The
 		// sing-box default is loopback, which makes a successfully started
 		// inbound unreachable from the network. Preserve Xray semantics.
@@ -414,11 +400,10 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot) (*
 		settings["clients"] = clients
 		var sniffRule map[string]any
 		var sniffErr error
-		if s.Hiddify {
+		{
 			sniffRule, sniffErr = hiddify.TranslateSniffingRule(raw)
-		} else {
-			sniffRule, sniffErr = singbox.TranslateXraySniffingRule(raw)
 		}
+
 		if sniffErr != nil {
 			unsupported = append(unsupported, sniffErr.Error())
 			continue
@@ -538,7 +523,7 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot) (*
 	if nativeErr != nil {
 		return nil, nativeErr
 	}
-	if s.Hiddify {
+	{
 		if err := configureHiddifyTunRouting(cfg, inbounds); err != nil {
 			return nil, err
 		}
@@ -568,7 +553,7 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot) (*
 			return nil, err
 		}
 	}
-	if s.Hiddify {
+	{
 		if err := configureHiddifyGatewayDNS(cfg); err != nil {
 			return nil, err
 		}
@@ -583,9 +568,7 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot) (*
 		}
 		cfg.Log["output"] = s.logPath()
 	}
-	if !s.Hiddify {
-		externalvpn.KeepOutbounds(managedOutboundTags)
-	}
+
 	return cfg, nil
 }
 

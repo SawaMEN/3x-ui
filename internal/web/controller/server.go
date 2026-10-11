@@ -56,7 +56,6 @@ func (a *ServerController) initRouter(g *gin.RouterGroup) {
 	g.GET("/xrayMetricsHistory/:metric/:bucket", a.getXrayMetricsHistoryBucket)
 	g.GET("/xrayObservatory", a.getXrayObservatory)
 	g.GET("/xrayObservatoryHistory/:tag/:bucket", a.getXrayObservatoryHistoryBucket)
-	g.GET("/getXrayVersion", a.getXrayVersion)
 	g.GET("/getPanelUpdateInfo", a.getPanelUpdateInfo)
 	g.GET("/getUpdateStatus", a.getUpdateStatus)
 	g.GET("/getConfigJson", a.getConfigJson)
@@ -77,7 +76,6 @@ func (a *ServerController) initRouter(g *gin.RouterGroup) {
 	g.POST("/stopCoreService", a.stopCoreService)
 	g.POST("/restartCoreService", a.restartCoreService)
 	g.GET("/coreConfigJson", a.getCoreConfigJson)
-	g.POST("/installXray/:version", a.installXray)
 	g.POST("/updatePanel", a.updatePanel)
 	g.POST("/setUpdateChannel", a.setUpdateChannel)
 	g.POST("/updateGeofile", a.updateGeofile)
@@ -373,15 +371,6 @@ func (a *ServerController) getXrayObservatoryHistoryBucket(c *gin.Context) {
 	jsonObj(c, a.xrayMetricsService.AggregateObservatory(tag, bucket, 60), nil)
 }
 
-func (a *ServerController) getXrayVersion(c *gin.Context) {
-	versions, err := a.serverService.GetXrayVersionsCached()
-	if err != nil {
-		jsonMsg(c, I18nWeb(c, "getVersion"), err)
-		return
-	}
-	jsonObj(c, versions, nil)
-}
-
 // getPanelUpdateInfo retrieves the current and latest panel version.
 func (a *ServerController) getPanelUpdateInfo(c *gin.Context) {
 	info, err := a.panelService.GetUpdateInfo()
@@ -391,13 +380,6 @@ func (a *ServerController) getPanelUpdateInfo(c *gin.Context) {
 		return
 	}
 	jsonObj(c, info, nil)
-}
-
-// installXray installs or updates Xray to the specified version.
-func (a *ServerController) installXray(c *gin.Context) {
-	version := c.Param("version")
-	err := a.serverService.UpdateXray(version)
-	jsonMsg(c, I18nWeb(c, "pages.index.xraySwitchVersionPopover"), err)
 }
 
 // updatePanel starts a panel self-update. With no "dev" form value it follows

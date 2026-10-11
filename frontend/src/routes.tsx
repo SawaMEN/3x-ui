@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { createBrowserRouter, type RouteObject } from 'react-router';
+import { createBrowserRouter, Navigate, type RouteObject } from 'react-router';
 import { Spin } from 'antd';
 
 import PanelLayout from '@/layouts/PanelLayout';
@@ -23,7 +23,7 @@ const FirewallPage = lazy(() =>
 const SettingsPage = lazy(() =>
   importWithChunkRecovery(() => import('@/pages/settings/SettingsPage')),
 );
-const XrayPage = lazy(() => importWithChunkRecovery(() => import('@/pages/xray/XrayPage')));
+
 const SingBoxPage = lazy(() =>
   importWithChunkRecovery(() => import('@/pages/singbox/SingBoxRoutePage')),
 );
@@ -68,7 +68,7 @@ const routes: RouteObject[] = [
       { path: 'hosts', element: withSuspense(<HostsPage />) },
       { path: 'firewall', element: withSuspense(<FirewallPage />) },
       { path: 'settings', element: withSuspense(<SettingsPage />) },
-      { path: 'xray', element: withSuspense(<XrayPage />) },
+      { path: 'xray', element: <Navigate to="/singbox" replace /> },
       { path: 'singbox', element: withSuspense(<SingBoxPage />) },
       { path: 'outbound', element: withSuspense(<CoreConfigRoutePage />) },
       { path: 'routing', element: withSuspense(<CoreConfigRoutePage />) },

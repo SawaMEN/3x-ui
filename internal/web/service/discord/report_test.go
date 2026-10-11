@@ -57,8 +57,8 @@ func TestBuildReport_NoBackup(t *testing.T) {
 		TcpCount: 15,
 		UdpCount: 5,
 	}
-	mockStatus.Xray.State = service.Running
-	mockStatus.Xray.Version = "25.1.0"
+	mockStatus.SingBox.State = service.Running
+	mockStatus.SingBox.Version = "sawamen-b5749002266b-panel4"
 
 	mockServer := &mockServerProvider{
 		status: mockStatus,
@@ -105,7 +105,7 @@ func TestBuildReport_NoBackup(t *testing.T) {
 		if field.Name == "Uptime" && field.Value == "2d 0h" {
 			foundUptime = true
 		}
-		if field.Name == "Xray Core" && field.Value == "25.1.0 (running)" {
+		if field.Name == "sing-box" && field.Value == "sawamen-b5749002266b-panel4 (running)" {
 			foundXray = true
 		}
 	}
@@ -123,8 +123,8 @@ func TestBuildReport_WithBackup(t *testing.T) {
 	mockStatus := &service.Status{
 		Uptime: 3600,
 	}
-	mockStatus.Xray.State = service.Running
-	mockStatus.Xray.Version = "25.1.0"
+	mockStatus.SingBox.State = service.Running
+	mockStatus.SingBox.Version = "sawamen-b5749002266b-panel4"
 
 	mockServer := &mockServerProvider{
 		status:   mockStatus,
@@ -170,8 +170,8 @@ func TestSendReport_Integration(t *testing.T) {
 	mockStatus := &service.Status{
 		Uptime: 86400,
 	}
-	mockStatus.Xray.State = service.Running
-	mockStatus.Xray.Version = "25.1.0"
+	mockStatus.SingBox.State = service.Running
+	mockStatus.SingBox.Version = "sawamen-b5749002266b-panel4"
 
 	mockServer := &mockServerProvider{
 		status: mockStatus,

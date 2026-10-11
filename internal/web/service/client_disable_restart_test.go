@@ -62,3 +62,10 @@ func TestManualClientDisableHonoursRestartSetting(t *testing.T) {
 		})
 	}
 }
+
+func setRestartOnClientDisable(t *testing.T, enabled bool) {
+	t.Helper()
+	if err := (&SettingService{}).setBool("restartXrayOnClientDisable", enabled); err != nil {
+		t.Fatal(err)
+	}
+}

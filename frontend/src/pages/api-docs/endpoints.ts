@@ -687,12 +687,6 @@ export const sections: readonly Section[] = [
       },
       {
         method: 'GET',
-        path: '/panel/api/server/getXrayVersion',
-        summary: 'List Xray binary versions available for install on this host.',
-        response: '{\n  "success": true,\n  "obj": ["v25.10.31", "v25.9.15", "v25.8.1"]\n}',
-      },
-      {
-        method: 'GET',
         path: '/panel/api/server/core/capabilities',
         summary: 'Return the selected core and its supported panel capabilities.',
       },
@@ -804,20 +798,6 @@ export const sections: readonly Section[] = [
         summary:
           'Reload Xray with the current config. Typically required after structural inbound or routing changes.',
         errorResponse: '{\n  "success": false,\n  "msg": "Xray config is invalid: ..."\n}',
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/server/installXray/:version',
-        summary:
-          'Download and install the specified Xray version. Pass "latest" for the newest release.',
-        params: [
-          {
-            name: 'version',
-            in: 'path',
-            type: 'string',
-            desc: 'Xray tag (e.g. v25.10.31) or "latest".',
-          },
-        ],
       },
       {
         method: 'POST',
@@ -2476,99 +2456,6 @@ export const sections: readonly Section[] = [
         body: 'outbounds=[{"tag":"direct","protocol":"freedom","settings":{}}]&mode=http',
       },
       {
-        method: 'POST',
-        path: '/panel/api/xray/balancerStatus',
-        summary:
-          'Live state of routing balancers in the running core (RoutingService.GetBalancerInfo): current override and the targets the strategy prefers. Returns a map keyed by balancer tag.',
-        params: [
-          {
-            name: 'tags',
-            in: 'body (form)',
-            type: 'string',
-            desc: 'Comma-separated balancer tags to query (e.g. "b1,b2").',
-          },
-        ],
-        body: 'tags=b1,b2',
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/xray/balancerOverride',
-        summary:
-          'Force a balancer in the running core to always pick one outbound (RoutingService.OverrideBalancerTarget). Applied live without a restart; cleared automatically when Xray restarts.',
-        params: [
-          { name: 'tag', in: 'body (form)', type: 'string', desc: 'Balancer tag (required).' },
-          {
-            name: 'target',
-            in: 'body (form)',
-            type: 'string',
-            desc: 'Outbound tag to force. Empty clears the override and returns control to the strategy.',
-            optional: true,
-          },
-        ],
-        body: 'tag=b1&target=proxy',
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/xray/routeTest',
-        summary:
-          'Ask the running core which outbound its router would pick for a synthetic connection (RoutingService.TestRoute). No traffic is sent.',
-        bodyRequiredOneOf: ['domain', 'ip'],
-        params: [
-          {
-            name: 'domain',
-            in: 'body (form)',
-            type: 'string',
-            desc: 'Target domain. Either domain or ip is required.',
-            optional: true,
-            minLength: 1,
-          },
-          {
-            name: 'ip',
-            in: 'body (form)',
-            type: 'string',
-            desc: 'Target IP. Either domain or ip is required.',
-            optional: true,
-            minLength: 1,
-          },
-          {
-            name: 'port',
-            in: 'body (form)',
-            type: 'number',
-            desc: 'Target port (optional).',
-            optional: true,
-          },
-          {
-            name: 'network',
-            in: 'body (form)',
-            type: 'string',
-            desc: '"tcp" (default) or "udp".',
-            optional: true,
-          },
-          {
-            name: 'inboundTag',
-            in: 'body (form)',
-            type: 'string',
-            desc: 'Simulate arrival on this inbound (optional).',
-            optional: true,
-          },
-          {
-            name: 'protocol',
-            in: 'body (form)',
-            type: 'string',
-            desc: 'Sniffed protocol such as http, tls, bittorrent (optional).',
-            optional: true,
-          },
-          {
-            name: 'email',
-            in: 'body (form)',
-            type: 'string',
-            desc: 'User attribution for user-based rules (optional).',
-            optional: true,
-          },
-        ],
-        body: 'domain=example.com&port=443&network=tcp',
-      },
-      {
         method: 'GET',
         path: '/panel/api/xray/geodata/files',
         summary:
@@ -3058,11 +2945,6 @@ export const sections: readonly Section[] = [
         summary: 'Return Sudoku installation status.',
       },
       {
-        method: 'GET',
-        path: '/panel/api/setting/singbox/versions',
-        summary: 'Return available sing-box versions.',
-      },
-      {
         method: 'POST',
         path: '/panel/api/inbounds/:id/vk-turn-proxy/clients/:clientId/enable',
         summary: 'Enable or disable a VK TURN proxy client for an inbound.',
@@ -3109,23 +2991,8 @@ export const sections: readonly Section[] = [
       },
       {
         method: 'POST',
-        path: '/panel/api/setting/singbox/install',
-        summary: 'Install sing-box using the configured channel.',
-      },
-      {
-        method: 'POST',
         path: '/panel/api/setting/sudoku/update',
         summary: 'Install or update the managed Sudoku tunnel binary.',
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/setting/singbox/install/:version',
-        summary: 'Install a specific sing-box version.',
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/setting/singbox/uninstall',
-        summary: 'Uninstall sing-box.',
       },
       {
         method: 'GET',

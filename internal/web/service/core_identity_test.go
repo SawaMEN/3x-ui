@@ -1,7 +1,6 @@
 package service
 
 import (
-	"context"
 	"testing"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/core"
@@ -33,15 +32,16 @@ func TestOwnerSingBoxCanonicalIdentity(t *testing.T) {
 			t.Fatalf("persisted=%q err=%v", stored, err)
 		}
 		runtime := NativeCore(input)
-		if !runtime.Hiddify || runtime.process() != hiddifyProcess || runtime.BinaryPath() != hiddify.GetBinaryPath() || runtime.CoreType() != "sing-box" {
+		if runtime.process() != hiddifyProcess || runtime.BinaryPath() != hiddify.GetBinaryPath() || runtime.CoreType() != "sing-box" {
 			t.Fatalf("wrong adapter for %q", input)
 		}
-		if _, err := runtime.InstallLatest(context.Background()); err == nil {
-			t.Fatal("owner core can be replaced by upstream")
-		}
+
 		if !coreSupportsInboundProtocol(kind, model.Tun) {
 			t.Fatal("owner TUN extension lost")
 		}
+	}
+	if err := settings.SetCoreType(CoreTypeXray); err == nil {
+		t.Fatal("removed Xray engine remains selectable")
 	}
 	if hiddify.NewRuntime("", true).Type() != core.SingBox {
 		t.Fatal("runtime exposes wrong identity")

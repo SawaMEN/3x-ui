@@ -47,7 +47,7 @@ type NodeView struct {
 	NetUp               uint64             `json:"netUp" example:"2097152"`
 	NetDown             uint64             `json:"netDown" example:"1048576"`
 	LastError           string             `json:"lastError" example:""`
-	XrayState           string             `json:"xrayState" example:"running"`
+	XrayState           string             `json:"presenceRegistry" example:"running"`
 	XrayError           string             `json:"xrayError" example:""`
 	SingBoxState        string             `json:"singboxState" example:"running"`
 	SingBoxError        string             `json:"singboxError" example:""`

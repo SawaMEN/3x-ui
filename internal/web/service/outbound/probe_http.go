@@ -80,7 +80,11 @@ type batchProcess interface {
 }
 
 var newBatchProcess = func(cfg *xray.Config, configPath string) batchProcess {
-	return xray.NewTestProcess(cfg, configPath)
+	native, err := buildSingBoxBatchTestConfig(cfg)
+	if err != nil {
+		return &failedBatchProcess{err: err}
+	}
+	return newSingBoxBatchProcess(native, configPath)
 }
 
 var egressTraceProbe = probeEgressTrace
@@ -836,3 +840,10 @@ func createTestConfigPath() (string, error) {
 	}
 	return path, nil
 }
+
+type failedBatchProcess struct{ err error }
+
+func (p *failedBatchProcess) Start() error      { return p.err }
+func (p *failedBatchProcess) Stop() error       { return nil }
+func (p *failedBatchProcess) IsRunning() bool   { return false }
+func (p *failedBatchProcess) GetResult() string { return p.err.Error() }

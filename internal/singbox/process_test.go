@@ -71,7 +71,7 @@ func TestIsolatedProcessNeverAdoptsManagedProcess(t *testing.T) {
 	if err := os.WriteFile(binary, executable, 0700); err != nil {
 		t.Fatal(err)
 	}
-	production := exec.Command(binary, "run", "-c", filepath.Join(dir, "managed.json"))
+	production := exec.Command(binary, "srun", "-c", filepath.Join(dir, "managed.json"))
 	production.Env = append(os.Environ(), "XUI_SINGBOX_TEST_PROCESS=1")
 	if err := production.Start(); err != nil {
 		t.Fatal(err)
@@ -83,7 +83,7 @@ func TestIsolatedProcessNeverAdoptsManagedProcess(t *testing.T) {
 	if !NewProcess(filepath.Join(dir, "managed.json")).IsRunning() {
 		t.Fatal("managed process was not discovered")
 	}
-	if processMatchesConfig(production.Process.Pid, binary, filepath.Join(dir, "managed.json"), "srun") {
+	if processMatchesConfig(production.Process.Pid, binary, filepath.Join(dir, "managed.json"), "run") {
 		t.Fatal("Hiddify raw runtime would adopt a client-mode run process")
 	}
 	isolated := NewTestProcess(filepath.Join(dir, "test.json"))

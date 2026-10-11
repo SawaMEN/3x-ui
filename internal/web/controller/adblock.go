@@ -19,7 +19,7 @@ const maxAdBlockSettingsBody = 4 << 20
 
 type AdBlockController struct {
 	settingService service.SettingService
-	xrayService    service.XrayService
+	xrayService    service.CoreService
 	singBoxService service.SingBoxService
 	operationMu    sync.Mutex
 }

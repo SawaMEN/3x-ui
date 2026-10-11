@@ -501,7 +501,7 @@ func (t *Tgbot) clientInfoMsg(
 
 	status := t.I18nBot("tgbot.offline")
 	isOnline := false
-	if process := service.XrayProcess(); process != nil && process.IsRunning() {
+	if process := service.OnlinePresence(); process != nil {
 		if slices.Contains(process.GetOnlineClients(), traffic.Email) {
 			status = t.I18nBot("tgbot.online")
 			isOnline = true

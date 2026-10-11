@@ -116,12 +116,8 @@ func (s *InboundService) ReconcileVKTurnProxyClientPeers() error {
 			continue
 		}
 
-		// WireGuard peers are static in xray-core: a running inbound cannot accept a
-		// new peer over the gRPC API (AlterInbound re-adds the whole inbound and
-		// xray rejects it with "empty peers"), so a peer-set change only takes
-		// effect on a config reload. Flag a restart; the periodic restart job
-		// (~30s) reloads the regenerated config, which now carries the delta.
-		isNeedXrayRestart.Store(true)
+		// Persisted peer changes require regeneration of the owner configuration.
+		SelectedNativeCore().SetToNeedRestart()
 	}
 	return nil
 }

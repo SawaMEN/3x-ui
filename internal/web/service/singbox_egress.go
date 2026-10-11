@@ -203,54 +203,10 @@ func singBoxEgressProxyURL(tag string) string {
 	return ""
 }
 
-func xrayEgressProxyURL(tag string) string {
-	proc := XrayProcess()
-	if proc == nil || !proc.IsRunning() {
-		return ""
-	}
-	cfg := proc.GetConfig()
-	if cfg == nil {
-		return ""
-	}
-	for i := range cfg.InboundConfigs {
-		if cfg.InboundConfigs[i].Tag == tag {
-			return fmt.Sprintf("socks5://127.0.0.1:%d", cfg.InboundConfigs[i].Port)
-		}
-	}
-	return ""
-}
-
-// coreEgressProxyURL prefers the selected engine while it is running. The
-// other engine is used only when the selected one is stopped, so an accidentally
-// lingering process cannot override the operator's active core.
+// coreEgressProxyURL uses only the managed owner runtime.
 func coreEgressProxyURL(settings *SettingService, tag string) string {
-	if settings == nil {
+	if settings == nil || !SelectedNativeCore().IsRunning() {
 		return ""
 	}
-	coreType, err := settings.GetCoreType()
-	if err != nil {
-		coreType = CoreTypeXray
-	}
-	singBoxRunning := SelectedNativeCore().process().IsRunning()
-	xrayRunning := false
-	if proc := XrayProcess(); proc != nil {
-		xrayRunning = proc.IsRunning()
-	}
-
-	if IsNativeCore(coreType) {
-		if singBoxRunning {
-			return singBoxEgressProxyURL(tag)
-		}
-		if xrayRunning {
-			return xrayEgressProxyURL(tag)
-		}
-		return ""
-	}
-	if xrayRunning {
-		return xrayEgressProxyURL(tag)
-	}
-	if singBoxRunning {
-		return singBoxEgressProxyURL(tag)
-	}
-	return ""
+	return singBoxEgressProxyURL(tag)
 }

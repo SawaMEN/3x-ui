@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -26,14 +25,6 @@ import (
 var (
 	singBoxInboundService InboundService
 	singBoxSettingService SettingService
-	singBoxProcess        = singbox.NewProcess(singbox.GetConfigPath())
-	singBoxTrafficAPI     = singbox.NewConnectionAPIClient()
-	singBoxTrafficMu      sync.Mutex
-	// A snapshot consumes native API deltas. Keep an unsuccessful DB batch so
-	// the next poll can persist it before reading another snapshot.
-	singBoxPendingInbound []*coremodel.Traffic
-	singBoxPendingClients []*coremodel.ClientTraffic
-	singBoxInstallMu      sync.Mutex
 	singBoxApplyMu        sync.Mutex
 	singBoxTemplateMu     sync.Mutex
 )
@@ -50,7 +41,6 @@ func SetSingBoxDependencies(inbound *InboundService, settings *SettingService) {
 }
 
 type SingBoxService struct {
-	Hiddify bool
 	gateway *GatewayNetworkService
 }
 
@@ -130,10 +120,7 @@ func singBoxTUICInbound(ib *model.Inbound, clients []any) (map[string]any, error
 
 // GetConfig is the single generation entry point for previews, candidates and restarts.
 func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
-	if s.Hiddify {
-		return (&HiddifyConfigGenerator{}).Generate()
-	}
-	return s.generateNativeConfig(nil)
+	return (&HiddifyConfigGenerator{}).Generate()
 }
 
 type SingBoxEditorSnapshot struct {
@@ -508,7 +495,7 @@ func (s *SingBoxService) restartLocked(ctx context.Context) (result error) {
 	if !unchanged() {
 		return errNativeConfigBatchChanged
 	}
-	if s.Hiddify && wasRunning {
+	if wasRunning {
 		if err := s.PollTraffic(ctx); err != nil {
 			return err
 		}
@@ -523,7 +510,7 @@ func (s *SingBoxService) restartLocked(ctx context.Context) (result error) {
 	}
 	var finishSidecars func(bool) error
 	applied := false
-	if s.Hiddify {
+	{
 		finishSidecars, err = externalvpn.ApplyOutbounds(candidate.managedOutbounds)
 		if err != nil {
 			return err
@@ -542,13 +529,13 @@ func (s *SingBoxService) restartLocked(ctx context.Context) (result error) {
 		return err
 	}
 	defer func() { result = errors.Join(result, finishGateway()) }()
-	if s.Hiddify {
+	{
 		hiddifyStats.Close()
 	}
 
 	tuic.GetManager().StopAll()
 	if err := s.restartProcess(ctx); err != nil {
-		if s.Hiddify && wasRunning && len(previous) > 0 {
+		if wasRunning && len(previous) > 0 {
 			recoveryErr := writeNativeConfigBytes(s.ProcessConfigPath(), previous)
 			if recoveryErr == nil && !s.IsRunning() {
 				recoveryCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -562,10 +549,6 @@ func (s *SingBoxService) restartLocked(ctx context.Context) (result error) {
 		}
 		return err
 	}
-	singBoxTrafficMu.Lock()
-	singBoxTrafficAPI.Close()
-	singBoxTrafficAPI.ResetTrafficBaseline(s.process().GetStartTime().UnixMilli())
-	singBoxTrafficMu.Unlock()
 	s.stoppedFlag().Store(false)
 	commitManagedYouTube(s.coreType())
 	applied = true
@@ -606,7 +589,7 @@ func (s *SingBoxService) startLocked(ctx context.Context) (result error) {
 		return err
 	}
 	applied := false
-	if s.Hiddify {
+	{
 		finish, err := externalvpn.ApplyOutbounds(candidate.managedOutbounds)
 		if err != nil {
 			return err
@@ -631,10 +614,6 @@ func (s *SingBoxService) startLocked(ctx context.Context) (result error) {
 		return err
 	}
 
-	singBoxTrafficMu.Lock()
-	singBoxTrafficAPI.Close()
-	singBoxTrafficAPI.ResetTrafficBaseline(s.process().GetStartTime().UnixMilli())
-	singBoxTrafficMu.Unlock()
 	s.stoppedFlag().Store(false)
 	commitManagedYouTube(s.coreType())
 	applied = true
@@ -657,7 +636,7 @@ func (s *SingBoxService) stopLocked(ctx context.Context) (result error) {
 	}
 	defer func() { result = errors.Join(result, finish()) }()
 
-	if s.Hiddify && s.IsRunning() {
+	if s.IsRunning() {
 		if err := s.PollTraffic(ctx); err != nil {
 			logger.Warning("flush hiddify traffic before stop:", err)
 		}
@@ -694,72 +673,21 @@ func (s *SingBoxService) Validate(ctx context.Context) error {
 }
 
 func (s *SingBoxService) ConnectionCount(ctx context.Context) (int, error) {
-	if s.Hiddify {
+	{
 		sessions, err := s.hiddifySessions(ctx)
 		return len(sessions), err
 	}
-	api := singbox.NewConnectionAPIClient()
-	defer api.Close()
-	connections, err := api.Snapshot(ctx)
-	if err == nil {
-		active := 0
-		for _, connection := range connections {
-			if connection != nil && connection.ClosedAt == 0 {
-				active++
-			}
-		}
-		return active, nil
-	}
-	clashConnections, err := singbox.NewClashStatsClient().Connections(ctx)
-	if err != nil {
-		return 0, err
-	}
-	return len(clashConnections), nil
+
 }
 
 // OnlinePresence returns the current sing-box users/IPs and active inbound
 // tags from one native API snapshot. Keeping them in the same snapshot makes
 // the node's online user and inbound indicators describe the same instant.
 func (s *SingBoxService) OnlinePresence(ctx context.Context) (map[string]map[string]struct{}, []string, error) {
-	if s.Hiddify {
+	{
 		return s.hiddifyPresence(ctx)
 	}
-	api := singbox.NewConnectionAPIClient()
-	defer api.Close()
-	connections, err := api.Snapshot(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-	online := make(map[string]map[string]struct{})
-	activeSet := make(map[string]struct{})
-	for _, connection := range connections {
-		if connection == nil || connection.ClosedAt > 0 {
-			continue
-		}
-		if connection.Inbound != "" {
-			activeSet[connection.Inbound] = struct{}{}
-		}
-		if connection.User == "" || connection.Source == "" {
-			continue
-		}
-		ip := connection.Source
-		if host, _, splitErr := net.SplitHostPort(ip); splitErr == nil {
-			ip = host
-		}
-		if ip == "" {
-			continue
-		}
-		if online[connection.User] == nil {
-			online[connection.User] = make(map[string]struct{})
-		}
-		online[connection.User][ip] = struct{}{}
-	}
-	active := make([]string, 0, len(activeSet))
-	for tag := range activeSet {
-		active = append(active, tag)
-	}
-	sort.Strings(active)
-	return online, active, nil
+
 }
 
 func (s *SingBoxService) OnlineClientIPs(ctx context.Context) (map[string]map[string]struct{}, error) {
@@ -771,7 +699,7 @@ func (s *SingBoxService) DisconnectClientIPs(ctx context.Context, email string, 
 	if email == "" || len(ips) == 0 {
 		return nil
 	}
-	if s.Hiddify {
+	{
 		_, err := s.disconnectHiddify(ctx, func(session singbox.ActiveSession) bool {
 			host, _, _ := net.SplitHostPort(session.Source)
 			for _, ip := range ips {
@@ -783,38 +711,7 @@ func (s *SingBoxService) DisconnectClientIPs(ctx context.Context, email string, 
 		})
 		return err
 	}
-	api := singbox.NewConnectionAPIClient()
-	defer api.Close()
-	connections, err := api.Snapshot(ctx)
-	if err != nil {
-		return err
-	}
-	wanted := make(map[string]struct{}, len(ips))
-	for _, ip := range ips {
-		if ip != "" {
-			wanted[ip] = struct{}{}
-		}
-	}
-	var disconnectErrors []string
-	for _, connection := range connections {
-		if connection == nil || connection.ClosedAt > 0 || connection.User != email || connection.Source == "" {
-			continue
-		}
-		ip := connection.Source
-		if host, _, splitErr := net.SplitHostPort(ip); splitErr == nil {
-			ip = host
-		}
-		if _, ok := wanted[ip]; !ok {
-			continue
-		}
-		if err := api.CloseConnection(ctx, connection.ID); err != nil {
-			disconnectErrors = append(disconnectErrors, err.Error())
-		}
-	}
-	if len(disconnectErrors) > 0 {
-		return fmt.Errorf("disconnect sing-box sessions: %s", strings.Join(disconnectErrors, "; "))
-	}
-	return nil
+
 }
 
 func accumulateSingBoxTraffic(up, down *int64, uplinkDelta, downlinkDelta int64) {
@@ -823,88 +720,13 @@ func accumulateSingBoxTraffic(up, down *int64, uplinkDelta, downlinkDelta int64)
 }
 
 func (s *SingBoxService) PollTraffic(ctx context.Context) error {
-	if s.Hiddify {
+	{
 		return s.pollHiddifyTraffic(ctx)
 	}
 	// The cron callback creates a lightweight SingBoxService value every 5s;
 	// keep the native API transport package-wide so traffic polling does not
 	// repeatedly allocate a gRPC ClientConn and its background transport state.
-	singBoxTrafficMu.Lock()
-	defer singBoxTrafficMu.Unlock()
-	if len(singBoxPendingInbound) > 0 || len(singBoxPendingClients) > 0 {
-		if err := s.commitTraffic(singBoxPendingInbound, singBoxPendingClients); err != nil {
-			return err
-		}
-		singBoxPendingInbound = nil
-		singBoxPendingClients = nil
-	}
-	response, err := singBoxTrafficAPI.SnapshotTrafficEvents(ctx)
-	if err != nil {
-		return err
-	}
 
-	inboundDeltas := make(map[string]*coremodel.Traffic)
-	clientDeltas := make(map[string]*coremodel.ClientTraffic)
-	onlineEmails := make(map[string]struct{})
-
-	for _, event := range response.Events {
-		if event == nil || event.Connection == nil {
-			continue
-		}
-		connection := event.Connection
-		if event.Type != singbox.ConnectionEventClosed && connection.User != "" {
-			onlineEmails[connection.User] = struct{}{}
-		}
-
-		uplinkDelta := event.UplinkDelta
-		downlinkDelta := event.DownlinkDelta
-		if uplinkDelta == 0 && downlinkDelta == 0 {
-			continue
-		}
-
-		if connection.Inbound != "" {
-			traffic := inboundDeltas[connection.Inbound]
-			if traffic == nil {
-				traffic = &coremodel.Traffic{Tag: connection.Inbound, IsInbound: true}
-				inboundDeltas[connection.Inbound] = traffic
-			}
-			accumulateSingBoxTraffic(&traffic.Up, &traffic.Down, uplinkDelta, downlinkDelta)
-		}
-		if connection.User != "" {
-			traffic := clientDeltas[connection.User]
-			if traffic == nil {
-				traffic = &coremodel.ClientTraffic{Email: connection.User}
-				clientDeltas[connection.User] = traffic
-			}
-			accumulateSingBoxTraffic(&traffic.Up, &traffic.Down, uplinkDelta, downlinkDelta)
-		}
-	}
-
-	inboundTraffic := make([]*coremodel.Traffic, 0, len(inboundDeltas))
-	for _, traffic := range inboundDeltas {
-		inboundTraffic = append(inboundTraffic, traffic)
-	}
-	clientTraffic := make([]*coremodel.ClientTraffic, 0, len(clientDeltas))
-	for _, traffic := range clientDeltas {
-		clientTraffic = append(clientTraffic, traffic)
-	}
-	{
-		if err = s.commitTraffic(inboundTraffic, clientTraffic); err != nil {
-			singBoxPendingInbound = inboundTraffic
-			singBoxPendingClients = clientTraffic
-			return err
-		}
-	}
-
-	emails := make([]string, 0, len(onlineEmails))
-	for email := range onlineEmails {
-		emails = append(emails, email)
-	}
-	sort.Strings(emails)
-	if len(emails) > 0 {
-		return singBoxInboundService.BumpClientsLastOnline(emails)
-	}
-	return nil
 }
 
 // GetLogs returns sing-box process log lines in the same shape used by the
@@ -940,114 +762,12 @@ func (s *SingBoxService) GetLogs(count string, filter string) []LogEntry {
 	return entries
 }
 
-func (s *SingBoxService) installVersion(ctx context.Context, installer func(context.Context) (string, error)) (string, error) {
-	singBoxInstallMu.Lock()
-	defer singBoxInstallMu.Unlock()
-	singBoxApplyMu.Lock()
-	defer singBoxApplyMu.Unlock()
-
-	restore, cleanup, err := singbox.SnapshotInstallation()
-	if err != nil {
-		return "", fmt.Errorf("backup sing-box installation: %w", err)
-	}
-	keepBackup := false
-	defer func() {
-		if !keepBackup {
-			cleanup()
-		}
-	}()
-	wasRunning := s.IsRunning()
-	if wasRunning {
-		if err := s.stopLocked(ctx); err != nil {
-			return "", fmt.Errorf("stop sing-box before update: %w", err)
-		}
-	}
-	rollback := func(cause error) (string, error) {
-		// The update request may have been cancelled; recovery must still work.
-		recoveryCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		if err := s.stopProcess(ctx); err != nil {
-			keepBackup = true
-			return "", fmt.Errorf("%w; stop failed update: %w", cause, err)
-		}
-		if err := restore(); err != nil {
-			keepBackup = true
-			return "", fmt.Errorf("%w; restore previous installation: %w", cause, err)
-		}
-		if wasRunning {
-			if _, err := s.process().Version(recoveryCtx); err != nil {
-				return "", fmt.Errorf("%w; read restored version: %w", cause, err)
-			}
-			// Run the restored applied config, not a freshly generated candidate.
-			if err := s.process().Start(recoveryCtx); err != nil {
-				return "", fmt.Errorf("%w; restart restored installation: %w", cause, err)
-			}
-			s.stoppedFlag().Store(false)
-		}
-		s.process().SetError(cause)
-		return "", cause
-	}
-	installed, err := installer(ctx)
-	if err != nil {
-		return rollback(fmt.Errorf("install sing-box: %w", err))
-	}
-	currentVersion, err := s.Version(ctx)
-	if err != nil {
-		return rollback(fmt.Errorf("verify installed sing-box %q: %w", installed, err))
-	}
-	if wasRunning {
-		if err := s.startLocked(ctx); err != nil {
-			return rollback(fmt.Errorf("start updated sing-box %s: %w", currentVersion, err))
-		}
-	}
-	return currentVersion, nil
-}
-
-func (s *SingBoxService) InstallLatest(ctx context.Context) (string, error) {
-	if s.Hiddify {
-		return "", fmt.Errorf("The owner sing-box fork is updated with the pinned panel release")
-	}
-	return s.installVersion(ctx, singbox.InstallLatest)
-}
-
-func (s *SingBoxService) ListVersions(ctx context.Context) ([]singbox.ReleaseVersion, error) {
-	if s.Hiddify {
-		return nil, fmt.Errorf("The owner sing-box fork is updated with the pinned panel release")
-	}
-	return singbox.ListVersions(ctx)
-}
-
-func (s *SingBoxService) InstallVersion(ctx context.Context, version string) (string, error) {
-	if s.Hiddify {
-		return "", fmt.Errorf("The owner sing-box fork is updated with the pinned panel release")
-	}
-	return s.installVersion(ctx, func(ctx context.Context) (string, error) {
-		return singbox.InstallVersion(ctx, version)
-	})
-}
-
-func (s *SingBoxService) Uninstall(ctx context.Context) error {
-	if s.Hiddify {
-		return fmt.Errorf("The owner sing-box fork belongs to the panel release")
-	}
-	if s.IsRunning() {
-		return fmt.Errorf("stop sing-box before uninstalling it")
-	}
-	return singbox.Uninstall()
-}
-
 func (s *SingBoxService) BinaryPath() string {
-	if s.Hiddify {
-		return hiddify.GetBinaryPath()
-	}
-	return singbox.GetBinaryPath()
+	return hiddify.GetBinaryPath()
 }
 
 func (s *SingBoxService) ProcessConfigPath() string {
-	if s.Hiddify {
-		return hiddify.GetConfigPath()
-	}
-	return singbox.GetConfigPath()
+	return hiddify.GetConfigPath()
 }
 
 func (s *SingBoxService) commitTraffic(inbounds []*coremodel.Traffic, clients []*coremodel.ClientTraffic) error {

@@ -38,7 +38,7 @@ var (
 // panel restart: Stop killed the consumer goroutine but Once prevented Start
 // from spawning a new one, so every later submitTrafficWrite blocked forever
 // on <-req.done with no consumer (including the AddTraffic call inside
-// XrayService.GetXrayConfig that runs from startTask).
+// CoreService.GetXrayConfig that runs from startTask).
 func StartTrafficWriter() {
 	twMu.Lock()
 	defer twMu.Unlock()

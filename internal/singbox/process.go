@@ -24,13 +24,7 @@ const (
 	defaultCommandTimeout      = 10 * time.Second
 )
 
-func GetBinaryName() string {
-	arch := runtime.GOARCH
-	if arch == "arm" {
-		arch = "armv7"
-	}
-	return fmt.Sprintf("sing-box-%s-%s", runtime.GOOS, arch)
-}
+func GetBinaryName() string { return filepath.Base(config.OwnerCoreBinaryPath()) }
 
 func resolveManagedPath(path string) string {
 	if path == "" || filepath.IsAbs(path) {
@@ -45,7 +39,7 @@ func GetBinaryPath() string {
 }
 
 func GetConfigPath() string {
-	return resolveManagedPath(filepath.Join(config.GetBinFolderPath(), "sing-box.json"))
+	return resolveManagedPath(filepath.Join(config.GetBinFolderPath(), "hiddify-core.json"))
 }
 
 // resolvePath is kept as a small compatibility helper for callers that pass
@@ -110,16 +104,7 @@ func (p *Process) runCommand() string {
 	if p.profile != nil {
 		return p.profile.RunCommand
 	}
-	return "run"
-}
-
-func NewProcess(configPath string) *Process {
-	return &Process{config: resolvePath(configPath), version: "Unknown"}
-}
-
-// NewTestProcess never discovers or stops the managed production process.
-func NewTestProcess(configPath string) *Process {
-	return &Process{config: resolvePath(configPath), version: "Unknown", isolated: true}
+	return "srun"
 }
 
 func (p *Process) IsRunning() bool {

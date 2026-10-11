@@ -1,88 +1,16 @@
 package service
 
 import (
-	"errors"
 	"fmt"
 	"maps"
 	"slices"
-	"sync"
 	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/logger"
-
 	"gorm.io/gorm"
 )
-
-// XrayTrafficRead keeps the Xray absolute-counter baseline locked until the
-// matching database transaction is either committed or rolled back.
-type XrayTrafficRead struct {
-	service    *XrayService
-	checkpoint map[string]int64
-	once       sync.Once
-}
-
-func cloneTrafficBaseline(src map[string]int64) map[string]int64 {
-	dst := make(map[string]int64, len(src))
-	for key, value := range src {
-		dst[key] = value
-	}
-	return dst
-}
-
-// BeginXrayTrafficRead fetches one traffic delta while retaining the traffic
-// mutex. The caller must Commit after the database write succeeds or Rollback
-// after it fails, preventing a failed write from consuming the Xray delta.
-func (s *XrayService) BeginXrayTrafficRead() ([]*coremodel.Traffic, []*coremodel.ClientTraffic, *XrayTrafficRead, error) {
-	process := currentXrayProcess()
-	if process == nil || !process.IsRunning() {
-		err := errors.New("xray is not running")
-		logger.Debug("Attempted to fetch Xray traffic, but Xray is not running:", err)
-		return nil, nil, nil, err
-	}
-
-	s.xrayTrafficMu.Lock()
-	apiPort := process.GetAPIPort()
-	if err := s.xrayAPI.Init(apiPort); err != nil {
-		s.xrayTrafficMu.Unlock()
-		logger.Debug("Failed to initialize Xray API:", err)
-		return nil, nil, nil, err
-	}
-
-	checkpoint := cloneTrafficBaseline(s.xrayAPI.StatsLastValues)
-	traffics, clientTraffics, err := s.xrayAPI.GetTraffic()
-	if err != nil {
-		s.xrayTrafficMu.Unlock()
-		logger.Debug("Failed to fetch Xray traffic:", err)
-		return nil, nil, nil, err
-	}
-
-	return traffics, clientTraffics, &XrayTrafficRead{
-		service:    s,
-		checkpoint: checkpoint,
-	}, nil
-}
-
-func (r *XrayTrafficRead) Commit() {
-	if r == nil || r.service == nil {
-		return
-	}
-	r.once.Do(func() {
-		r.service.xrayTrafficMu.Unlock()
-	})
-}
-
-func (r *XrayTrafficRead) Rollback() {
-	if r == nil || r.service == nil {
-		return
-	}
-	r.once.Do(func() {
-		r.service.xrayAPI.StatsLastValues = cloneTrafficBaseline(r.checkpoint)
-		r.service.xrayTrafficMu.Unlock()
-	})
-}
 
 // CommitCoreTraffic persists inbound, client and outbound traffic in one DB
 // transaction. Counter acquisition and acknowledgement belong to the adapter.

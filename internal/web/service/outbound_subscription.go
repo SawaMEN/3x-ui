@@ -21,7 +21,6 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/link"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 	"gorm.io/gorm"
 )
 
@@ -32,10 +31,6 @@ import (
 // core predates that rejection, unencrypted outbounds are kept, mirroring
 // CheckXrayConfig's version gate.
 func filterOutboundsRejectedByCore(label string, outbounds []any) ([]any, []string) {
-	coreVersion := "Unknown"
-	if process := currentXrayProcess(); process != nil {
-		coreVersion = process.GetXrayVersion()
-	}
 	kept := make([]any, 0, len(outbounds))
 	var dropped []string
 	for _, ob := range outbounds {
@@ -49,7 +44,7 @@ func filterOutboundsRejectedByCore(label string, outbounds []any) ([]any, []stri
 		}
 		raw, err := json.Marshal(ob)
 		if err == nil {
-			if buildErr := xray.ValidateOutboundConfig(raw); buildErr != nil && !shouldSkipLegacyUnencryptedOutboundRejection(coreVersion, buildErr) {
+			if buildErr := validateNativeTemplateOutbound(raw, asNativeOutboundMap(ob), CoreTypeSingBox); buildErr != nil {
 				tag := ""
 				if m, ok := ob.(map[string]any); ok {
 					tag, _ = m["tag"].(string)
@@ -800,3 +795,5 @@ func (s *OutboundSubscriptionService) activeAutomaticSubscriptions() ([]*model.O
 	err := database.GetDB().Where("enabled = ? AND auto_balance = ?", true, true).Order("priority asc, id asc").Find(&subs).Error
 	return subs, err
 }
+
+func asNativeOutboundMap(raw any) map[string]any { object, _ := raw.(map[string]any); return object }

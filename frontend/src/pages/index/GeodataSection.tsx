@@ -164,7 +164,7 @@ export default function GeodataSection({ active, onBusy, onClose }: GeodataSecti
             outboundTestUrl: outboundTestUrlRef.current,
           });
           if (msg?.success) {
-            await HttpUtil.post('/panel/api/server/restartXrayService');
+            await HttpUtil.post('/panel/api/server/restartCoreService');
           }
         } finally {
           onBusy({ busy: false });

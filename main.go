@@ -123,6 +123,11 @@ func runWebServer() {
 	if err != nil {
 		log.Fatalf("Error initializing database: %v", err)
 	}
+	// Persist the sole core identity so fresh backups do not resemble databases
+	// from releases whose implicit default engine was Xray.
+	if err := (&service.SettingService{}).SetCoreType(service.CoreTypeSingBox); err != nil {
+		log.Fatalf("Error saving core identity: %v", err)
+	}
 	if count, err := (&service.SettingService{}).MigrateHiddifySubscriptionURLs(); err != nil {
 		logger.Warning("Could not migrate imported Hiddify subscription URLs: ", err)
 	} else if count > 0 {
@@ -169,7 +174,7 @@ func runWebServer() {
 		stopTunnelHealthMonitor = cancel
 
 		monitor, err := tunnelmonitor.New(monitorCfg, func(_ context.Context) error {
-			logger.Warning("Tunnel health monitor threshold reached, restarting xray-core")
+			logger.Warning("Tunnel health monitor threshold reached, restarting sing-box")
 			return server.RestartXray()
 		})
 		if err != nil {
@@ -214,10 +219,10 @@ func runWebServer() {
 			}
 			log.Println("Sub server restarted successfully.")
 		case sys.SIGUSR1:
-			logger.Info("Received USR1 signal, restarting xray-core...")
+			logger.Info("Received USR1 signal, restarting sing-box...")
 			err := server.RestartXray()
 			if err != nil {
-				logger.Error("Failed to restart xray-core:", err)
+				logger.Error("Failed to restart sing-box:", err)
 			}
 
 		default:

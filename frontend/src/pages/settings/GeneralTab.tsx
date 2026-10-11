@@ -9,7 +9,6 @@ import {
   Input,
   InputNumber,
   Modal,
-  Radio,
   Select,
   Space,
   Switch,
@@ -92,9 +91,7 @@ export default function GeneralTab({
   const [outboundTagList, setOutboundTagList] = useState<string[]>([]);
   const [balancerTagList, setBalancerTagList] = useState<string[]>([]);
   const [singBoxInstalled, setSingBoxInstalled] = useState<boolean | null>(null);
-  const [runningCore, setRunningCore] = useState<'xray' | 'sing-box' | 'none'>(
-    'none',
-  );
+  const [runningCore, setRunningCore] = useState<'sing-box' | 'none'>('none');
   const [hiddifyOpen, setHiddifyOpen] = useState(false);
   const [hiddifyFile, setHiddifyFile] = useState<File | null>(null);
   const [hiddifyPreview, setHiddifyPreview] = useState<{
@@ -192,20 +189,16 @@ export default function GeneralTab({
           >,
           HttpUtil.get('/panel/api/server/status') as Promise<
             ApiMsg<{
-              xray?: { state?: string };
-              core?: { running?: 'xray' | 'sing-box' };
+              core?: { running?: 'sing-box' };
             }>
           >,
         ]);
         if (cancelled) return false;
         setSingBoxInstalled(Boolean(singMsg?.success && singMsg.obj?.installed));
         const singRunning = Boolean(singMsg?.success && singMsg.obj?.running);
-        const xrayRunning = Boolean(serverMsg?.success && serverMsg.obj?.xray?.state === 'running');
-        const actualCore =
-          serverMsg.obj?.core?.running ||
-          (singRunning ? 'sing-box' : xrayRunning ? 'xray' : 'none');
+        const actualCore = serverMsg.obj?.core?.running || (singRunning ? 'sing-box' : 'none');
         setRunningCore(actualCore);
-        return actualCore === allSetting.coreType;
+        return actualCore === 'sing-box';
       } catch {
         if (!cancelled) setRunningCore('none');
         return false;
@@ -584,25 +577,8 @@ export default function GeneralTab({
                     }}
                   >
                     <Space direction="vertical" size={12} style={{ width: '100%' }}>
-                      <Radio.Group
-                        value={allSetting.coreType || 'xray'}
-                        onChange={(e) =>
-                          updateSetting({
-                            coreType: e.target.value as 'xray' | 'sing-box',
-                          })
-                        }
-                        optionType="button"
-                        buttonStyle="solid"
-                        size="large"
-                        style={{ display: 'flex', width: '100%' }}
-                      >
-                        <Radio.Button value="xray" style={{ flex: 1, textAlign: 'center' }}>
-                          <strong>Xray</strong>
-                        </Radio.Button>
-                        <Radio.Button value="sing-box" style={{ flex: 1, textAlign: 'center' }}>
-                          <strong>sing-box</strong>
-                        </Radio.Button>
-                      </Radio.Group>
+                      <Tag color="gold">sing-box · сборка владельца</Tag>
+                      <p>Ядро поставляется и обновляется вместе с панелью.</p>
 
                       <div
                         style={{
@@ -616,9 +592,7 @@ export default function GeneralTab({
                         }}
                       >
                         <div style={{ minWidth: 0 }}>
-                          <div style={{ fontWeight: 600 }}>
-                            {allSetting.coreType === 'xray' ? 'Xray' : allSetting.coreType}
-                          </div>
+                          <div style={{ fontWeight: 600 }}>sing-box</div>
                           <div style={{ fontSize: 12, opacity: 0.65 }}>
                             {allSetting.coreType === 'sing-box'
                               ? singBoxInstalled
@@ -628,13 +602,7 @@ export default function GeneralTab({
                           </div>
                           <div style={{ fontSize: 12, marginTop: 4 }}>
                             Работает сейчас:{' '}
-                            <strong>
-                              {runningCore === 'sing-box'
-                                ? 'sing-box'
-                                : runningCore === 'xray'
-                                  ? 'Xray'
-                                  : 'нет'}
-                            </strong>
+                            <strong>{runningCore === 'sing-box' ? 'sing-box' : 'нет'}</strong>
                           </div>
                         </div>
                         {allSetting.coreType === 'sing-box' && (

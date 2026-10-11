@@ -662,3 +662,36 @@ func TestMigrationRejectsStalePostgresBackupBeforeAnyWrites(t *testing.T) {
 		t.Fatal("stale PostgreSQL backup created pending transition")
 	}
 }
+
+func TestStartupRequiresOfflineMigrationForLegacySettings(t *testing.T) {
+	_, _, _ = fixture(t)
+	if err := CheckPanelStartup(); err == nil {
+		t.Fatal("legacy runtime was allowed to start")
+	}
+	for _, kind := range []string{"sing-box", "hiddify-core"} {
+		if err := database.GetDB().Model(&model.Setting{}).Where("key = ?", "coreType").Update("value", kind).Error; err != nil {
+			t.Fatal(err)
+		}
+		if err := CheckPanelStartup(); err != nil {
+			t.Fatalf("owner profile %s: %v", kind, err)
+		}
+	}
+	if err := database.GetDB().Where("key = ?", "coreType").Delete(&model.Setting{}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := CheckPanelStartup(); err == nil {
+		t.Fatal("old default engine with existing inbounds bypassed migration")
+	}
+}
+
+func TestFreshDatabaseCanStartOwnerCoreWithoutSelectionRow(t *testing.T) {
+	t.Setenv("XUI_DB_TYPE", "sqlite")
+	t.Setenv("XUI_DB_FOLDER", t.TempDir())
+	if err := database.InitDB(config.GetDBPath()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = database.CloseDB() })
+	if err := CheckPanelStartup(); err != nil {
+		t.Fatal(err)
+	}
+}

@@ -79,7 +79,7 @@ type SettingController struct {
 	userService     panel.UserService
 	panelService    panel.PanelService
 	apiTokenService panel.ApiTokenService
-	xrayService     service.XrayService
+	xrayService     service.CoreService
 	singBoxService  service.SingBoxService
 }
 
@@ -103,10 +103,6 @@ func (a *SettingController) initRouter(g *gin.RouterGroup) {
 	g.POST("/restartPanel", a.restartPanel)
 	g.GET("/singbox/status", a.singBoxStatus)
 	g.GET("/hiddify/status", a.hiddifyStatus)
-	g.POST("/singbox/install", a.installSingBox)
-	g.GET("/singbox/versions", a.singBoxVersions)
-	g.POST("/singbox/install/:version", a.installSingBoxVersion)
-	g.POST("/singbox/uninstall", a.uninstallSingBox)
 	g.GET("/singbox/config", a.singBoxConfig)
 	g.POST("/singbox/config", a.saveSingBoxConfig)
 	g.POST("/singbox/config/reset", a.resetSingBoxConfig)
@@ -714,51 +710,6 @@ func (a *SettingController) nativeStatus(c *gin.Context, svc *service.SingBoxSer
 		"connections": connections,
 		"error":       lastError,
 	}, nil)
-}
-
-func (a *SettingController) singBoxVersions(c *gin.Context) {
-	versions, err := service.NativeCore(service.CoreTypeSingBox).ListVersions(c.Request.Context())
-	if err != nil {
-		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.getSettings"), err)
-		return
-	}
-	jsonObj(c, versions, nil)
-}
-
-func (a *SettingController) installSingBoxVersion(c *gin.Context) {
-	version := strings.TrimSpace(c.Param("version"))
-	if version == "" {
-		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), errors.New("sing-box version is empty"))
-		return
-	}
-	installed, err := service.NativeCore(service.CoreTypeSingBox).InstallVersion(c.Request.Context(), version)
-	if err != nil {
-		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
-		return
-	}
-	jsonObj(c, gin.H{"version": installed}, nil)
-}
-
-func (a *SettingController) uninstallSingBox(c *gin.Context) {
-	if err := service.NativeCore(service.CoreTypeSingBox).Uninstall(c.Request.Context()); err != nil {
-		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
-		return
-	}
-	jsonObj(c, gin.H{"installed": false}, nil)
-}
-
-func (a *SettingController) installSingBox(c *gin.Context) {
-	// Installation is deliberately independent from configuration generation.
-	// A panel may contain Xray-only inbounds (for example a legacy or custom
-	// transport) that sing-box cannot represent yet; that must not make the
-	// binary installation itself fail. Configuration is generated and validated
-	// when the operator actually switches the running core.
-	version, err := service.NativeCore(service.CoreTypeSingBox).InstallLatest(c.Request.Context())
-	if err != nil {
-		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
-		return
-	}
-	jsonObj(c, gin.H{"version": version}, nil)
 }
 
 // importSingBoxLink only decodes a share URI; saving remains a separate action.

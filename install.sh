@@ -1709,7 +1709,7 @@ install_x-ui() {
     fi
 
     # Check the system's architecture and rename the file accordingly.
-    chmod +x x-ui bin/xray-linux-$(arch)
+    chmod +x x-ui "bin/hiddify-core-linux-$(arch)"
     [[ -f bin/pingtunnel ]] && chmod 0755 bin/pingtunnel
     [[ -f bin/trusttunnel_endpoint ]] && chmod 0755 bin/trusttunnel_endpoint
     if [[ -f bin/tuic-server ]]; then
@@ -1723,8 +1723,8 @@ install_x-ui() {
     # (custom geoip/geosite files, or anything else an admin hand-placed
     # there) -- never overwrites a same-named file the new release provides,
     # so bundled assets (geoip.dat, geoip_RU.dat, ...) still get the fresh
-    # per-release copy. Runs after the arch-rename above so xray-linux-arm32/
-    # telemt already exist under their final names there and aren't
+    # per-release copy. Owner core and telemt already exist under their final
+    # names and are not
     # mistaken for custom files needing a restore. Skips paths the panel
     # itself regenerates at runtime (config.json, mtproto/*.toml -- see
     # internal/xray/process.go, internal/mtproto/manager.go): those aren't

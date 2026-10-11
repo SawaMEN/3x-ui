@@ -113,13 +113,13 @@ func (t *Tgbot) prepareServerUsageInfo() string {
 		t.setCachedStatus(t.lastStatus)
 	}
 	var onlines []string
-	if process := service.XrayProcess(); process != nil {
+	if process := service.OnlinePresence(); process != nil {
 		onlines = process.GetOnlineClients()
 	}
 
 	info += t.I18nBot("tgbot.messages.hostname", "Hostname=="+hostname)
 	info += t.I18nBot("tgbot.messages.version", "Version=="+config.GetPanelVersion())
-	info += t.I18nBot("tgbot.messages.xrayVersion", "XrayVersion=="+fmt.Sprint(t.lastStatus.Xray.Version))
+	info += t.I18nBot("tgbot.messages.xrayVersion", "XrayVersion=="+fmt.Sprint(t.lastStatus.SingBox.Version))
 
 	// get ip address
 	netInterfaces, err := net.Interfaces()
@@ -155,7 +155,7 @@ func (t *Tgbot) prepareServerUsageInfo() string {
 	info += t.I18nBot("tgbot.messages.tcpCount", "Count=="+strconv.Itoa(t.lastStatus.TcpCount))
 	info += t.I18nBot("tgbot.messages.udpCount", "Count=="+strconv.Itoa(t.lastStatus.UdpCount))
 	info += t.I18nBot("tgbot.messages.traffic", "Total=="+common.FormatTraffic(int64(t.lastStatus.NetTraffic.Sent+t.lastStatus.NetTraffic.Recv)), "Upload=="+common.FormatTraffic(int64(t.lastStatus.NetTraffic.Sent)), "Download=="+common.FormatTraffic(int64(t.lastStatus.NetTraffic.Recv)))
-	info += t.I18nBot("tgbot.messages.xrayStatus", "State=="+fmt.Sprint(t.lastStatus.Xray.State))
+	info += t.I18nBot("tgbot.messages.xrayStatus", "State=="+fmt.Sprint(t.lastStatus.SingBox.State))
 
 	// Cache the complete server stats
 	t.setCachedServerStats(info)
@@ -371,8 +371,8 @@ func (t *Tgbot) notifyExhausted() {
 
 // onlineClients retrieves and sends information about online clients.
 func (t *Tgbot) onlineClients(chatId int64, messageID ...int) {
-	process := service.XrayProcess()
-	if process == nil || !process.IsRunning() {
+	process := service.OnlinePresence()
+	if process == nil {
 		return
 	}
 
@@ -441,7 +441,7 @@ func (t *Tgbot) sendBackupData(chatId int64, dbData []byte, dbFilename string) {
 	time.Sleep(500 * time.Millisecond)
 
 	// Send config.json backup
-	file, err := os.Open(xray.GetConfigPath())
+	file, err := os.Open(service.SelectedNativeCore().ProcessConfigPath())
 	if err == nil {
 		defer file.Close()
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

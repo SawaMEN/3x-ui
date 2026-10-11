@@ -54,7 +54,7 @@ const (
 
 var defaultValueMap = map[string]string{
 	"xrayTemplateConfig": xrayTemplateConfig,
-	"coreType":           "xray",
+	"coreType":           "sing-box",
 	"webListen":          "",
 	"webDomain":          "",
 	"webPort":            "2053",
@@ -494,8 +494,11 @@ func (s *SettingService) GetCoreType() (string, error) {
 		return "", err
 	}
 	coreType = canonicalCoreType(coreType)
+	if coreType == CoreTypeXray {
+		return coreType, nil
+	} // Read-only legacy value for offline migration.
 	if !isSupportedCoreType(coreType) {
-		return CoreTypeXray, nil
+		return CoreTypeSingBox, nil
 	}
 	return coreType, nil
 }

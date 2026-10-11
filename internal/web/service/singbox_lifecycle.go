@@ -3,10 +3,7 @@ package service
 import (
 	"context"
 	"os"
-	"sync/atomic"
 )
-
-var isSingBoxManuallyStopped atomic.Bool
 
 // Installed reports whether the configured sing-box binary exists as a
 // regular filesystem entry. It deliberately avoids executing the binary,
@@ -21,14 +18,6 @@ func (s *SingBoxService) Installed() bool {
 // is not installed on this panel/node at all.
 func (s *SingBoxService) DidCrash() bool {
 	return s.Installed() && !s.IsRunning() && !s.stoppedFlag().Load()
-}
-
-func markSingBoxStarted() {
-	isSingBoxManuallyStopped.Store(false)
-}
-
-func markSingBoxStopped() {
-	isSingBoxManuallyStopped.Store(true)
 }
 
 // RecoverIfCrashed rechecks selection and manual Stop under the lifecycle lock.

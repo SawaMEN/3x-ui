@@ -40,7 +40,7 @@ type NodeTrafficSyncJob struct {
 	nodeService    service.NodeService
 	inboundService service.InboundService
 	settingService service.SettingService
-	xrayService    service.XrayService
+	xrayService    service.CoreService
 	singBoxService service.SingBoxService
 	running        sync.Mutex
 	structural     atomicBool

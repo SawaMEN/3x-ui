@@ -407,7 +407,7 @@ func TestHiddifyWatchdogRespectsStoppedAndDeselectedCore(t *testing.T) {
 		t.Fatal("watchdog undid manual stop")
 	}
 	svc.stoppedFlag().Store(false) // A previously observed crash.
-	if err := singBoxSettingService.SetCoreType(CoreTypeXray); err != nil {
+	if err := database.GetDB().Model(&model.Setting{}).Where("key = ?", "coreType").Update("value", CoreTypeXray).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := svc.RecoverIfCrashed(context.Background()); err != nil {

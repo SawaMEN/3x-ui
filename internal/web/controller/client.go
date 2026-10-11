@@ -37,7 +37,7 @@ func parseInboundIdsQuery(raw string) []int {
 type ClientController struct {
 	clientService  service.ClientService
 	inboundService service.InboundService
-	xrayService    service.XrayService
+	xrayService    service.CoreService
 	singBoxService service.SingBoxService
 	settingService service.SettingService
 	happGenerator  service.HappLinkGenerator

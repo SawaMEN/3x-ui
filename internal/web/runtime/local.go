@@ -2,7 +2,6 @@ package runtime
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"strconv"
 	"strings"
@@ -15,7 +14,6 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/mieru"
 	"github.com/SawaMEN/3x-ui/v3/internal/mtproto"
 	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 type LocalDeps struct {
@@ -40,11 +38,7 @@ func NewLocal(deps LocalDeps) *Local { return &Local{deps: deps} }
 func (l *Local) Name() string        { return "local" }
 
 func (l *Local) isNative() bool {
-	if l.deps.CoreType == nil {
-		return false
-	}
-	core := l.deps.CoreType()
-	return core == "sing-box" || core == "hiddify-core"
+	return true
 }
 
 func (l *Local) applyCoreChange(ctx context.Context) error {
@@ -62,27 +56,6 @@ func (l *Local) applyCoreChange(ctx context.Context) error {
 		l.deps.SetNeedRestart()
 	}
 	return nil
-}
-
-func (l *Local) withAPI(fn func(api *xray.XrayAPI) error) error {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	if l.deps.APIPort == nil {
-		return errors.New("local xray API port is not configured")
-	}
-	port := l.deps.APIPort()
-	if port == 0 {
-		return nil
-	}
-	if port < 0 {
-		return errors.New("local xray is not running")
-	}
-	var api xray.XrayAPI
-	if err := api.Init(port); err != nil {
-		return err
-	}
-	defer api.Close()
-	return fn(&api)
 }
 
 func (l *Local) AddInbound(ctx context.Context, ib *model.Inbound) error {
@@ -139,11 +112,7 @@ func (l *Local) AddInbound(ctx context.Context, ib *model.Inbound) error {
 	if l.isNative() {
 		return l.applyCoreChange(ctx)
 	}
-	body, err := json.MarshalIndent(xray.InboundFromPanel(ib.GenInboundConfig()), "", "  ")
-	if err != nil {
-		return err
-	}
-	return l.withAPI(func(api *xray.XrayAPI) error { return api.AddInbound(body) })
+	return l.applyCoreChange(ctx)
 }
 
 func (l *Local) DelInbound(ctx context.Context, ib *model.Inbound) error {
@@ -181,7 +150,7 @@ func (l *Local) DelInbound(ctx context.Context, ib *model.Inbound) error {
 	if l.isNative() {
 		return l.applyCoreChange(ctx)
 	}
-	return l.withAPI(func(api *xray.XrayAPI) error { return api.DelInbound(ib.Tag) })
+	return l.applyCoreChange(ctx)
 }
 
 func (l *Local) UpdateInbound(ctx context.Context, oldIb, newIb *model.Inbound) (err error) {
@@ -341,23 +310,17 @@ func (l *Local) updateMieruInbound(ctx context.Context, oldIb, newIb *model.Inbo
 }
 
 func (l *Local) AddUser(ctx context.Context, ib *model.Inbound, userMap map[string]any) error {
-	if ib.Protocol == model.MTProto || ib.Protocol == model.AmneziaWG || (ib.Protocol == model.TUIC && !l.isNative()) || ib.Protocol == model.Mieru || externalvpn.IsManaged(ib.Protocol) || ib.Protocol == model.Sudoku {
+	if ib.Protocol == model.MTProto || ib.Protocol == model.AmneziaWG || ib.Protocol == model.Mieru || externalvpn.IsManaged(ib.Protocol) || ib.Protocol == model.Sudoku {
 		return nil
 	}
-	if l.isNative() {
-		return l.applyCoreChange(ctx)
-	}
-	return l.withAPI(func(api *xray.XrayAPI) error { return api.AddUser(string(ib.Protocol), ib.Tag, userMap) })
+	return l.applyCoreChange(ctx)
 }
 
 func (l *Local) RemoveUser(ctx context.Context, ib *model.Inbound, email string) error {
-	if ib.Protocol == model.MTProto || ib.Protocol == model.AmneziaWG || (ib.Protocol == model.TUIC && !l.isNative()) || ib.Protocol == model.Mieru || externalvpn.IsManaged(ib.Protocol) || ib.Protocol == model.Sudoku {
+	if ib.Protocol == model.MTProto || ib.Protocol == model.AmneziaWG || ib.Protocol == model.Mieru || externalvpn.IsManaged(ib.Protocol) || ib.Protocol == model.Sudoku {
 		return nil
 	}
-	if l.isNative() {
-		return l.applyCoreChange(ctx)
-	}
-	return l.withAPI(func(api *xray.XrayAPI) error { return api.RemoveUser(ib.Tag, email) })
+	return l.applyCoreChange(ctx)
 }
 
 func (l *Local) AddClient(ctx context.Context, ib *model.Inbound, client model.Client) error {

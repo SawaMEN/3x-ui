@@ -24,11 +24,16 @@ core_migration_begin() {
     [[ -n "${cm_stage:-}" && -d "$xui_folder" ]] || return 1
     export XUI_MAIN_FOLDER="$xui_folder"
     export XUI_BIN_FOLDER="${XUI_BIN_FOLDER:-$xui_folder/bin}"
+    [[ "$XUI_BIN_FOLDER" == /* ]] || export XUI_BIN_FOLDER="$xui_folder/$XUI_BIN_FOLDER"
     cm_stopped=1
     cm_backup=$(mktemp -d "${xui_folder%/*}/x-ui-upgrade.XXXXXX") || return 1
     chmod 0700 "$cm_backup" || return 1
     # Do not let two installers snapshot/remove the same stopped installation.
     cp -a "$xui_folder" "$cm_backup/installation" || return 1
+    # Preserve configured binaries outside the installation snapshot too.
+    if [[ "$XUI_BIN_FOLDER" != "$xui_folder/bin" || -L "$XUI_BIN_FOLDER" ]]; then
+        cp -aH "$XUI_BIN_FOLDER" "$cm_backup/managed-bin" || return 1
+    fi
     mkdir "$cm_backup/host-files" || return 1
     core_migration_host_paths
     local i
@@ -51,6 +56,14 @@ core_migration_commit() {
     if [[ "${cm_was_enabled:-0}" == 0 ]]; then
         if [[ "$release" == alpine ]]; then rc-update del x-ui || return 1; else systemctl disable x-ui || return 1; fi
     fi
+    # Legacy executables are removed only after the owner runtime is verified.
+    # The installation snapshot keeps them available for recovery.
+    local legacy root
+    for root in "$xui_folder/bin" "$XUI_BIN_FOLDER"; do
+        for legacy in "$root"/xray "$root"/xray-* "$root"/sing-box "$root"/sing-box-*; do
+            [[ ! -f "$legacy" || ! -x "$legacy" ]] || rm -f -- "$legacy" || return 1
+        done
+    done
     cm_active=0
     cm_stopped=0
     [[ -z "${cm_stage:-}" ]] || rm -rf -- "$cm_stage"
@@ -73,6 +86,10 @@ core_migration_exit() {
         # Do not lose the failed installation; it can be inspected separately.
         if [[ -d "$xui_folder" ]]; then mv "$xui_folder" "$cm_backup/failed-installation" || return 1; fi
         cp -a "$cm_backup/installation" "$xui_folder" || return 1
+        if [[ -d "$cm_backup/managed-bin" ]]; then
+            mkdir -p "$XUI_BIN_FOLDER" || return 1
+            cp -a "$cm_backup/managed-bin/." "$XUI_BIN_FOLDER/" || return 1
+        fi
         local i
         for i in "${!cm_host_paths[@]}"; do
             if [[ -e "$cm_backup/host-files/$i" ]]; then

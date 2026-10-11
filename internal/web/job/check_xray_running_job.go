@@ -15,7 +15,7 @@ var EventBus *eventbus.Bus
 
 // CheckXrayRunningJob monitors the selected proxy core and restarts it if it crashes.
 type CheckXrayRunningJob struct {
-	xrayService service.XrayService
+	xrayService service.CoreService
 	singBox     service.SingBoxService
 	setting     service.SettingService
 	checkTime   int
@@ -28,39 +28,20 @@ func NewCheckXrayRunningJob() *CheckXrayRunningJob {
 
 // Run checks the selected core and restarts it after it is down for 2 consecutive checks.
 func (j *CheckXrayRunningJob) Run() {
-	coreType, err := j.setting.GetCoreType()
-	if err != nil {
-		coreType = service.CoreTypeXray
+	native := service.NativeCore(service.CoreTypeSingBox)
+	if err := native.ReconcileGateway(context.Background()); err != nil {
+		logger.Warning("Gateway reconcile: ", err)
 	}
-	if service.IsNativeCore(coreType) {
-		native := service.NativeCore(coreType)
-		if err := native.ReconcileGateway(context.Background()); err != nil {
-			logger.Warning("Gateway reconcile: ", err)
-		}
-		if !native.DidCrash() {
-			j.checkTime = 0
-			return
-		}
-		j.checkTime++
-		if j.checkTime > 1 {
-			err := native.RecoverIfCrashed(context.Background())
-			j.checkTime = 0
-			if err != nil {
-				logger.Error("Restart ", coreType, " failed:", err)
-			}
-		}
-		return
-	}
-	if !j.xrayService.DidXrayCrash() {
+	if !native.DidCrash() {
 		j.checkTime = 0
 		return
 	}
 	j.checkTime++
 	if j.checkTime > 1 {
-		err := j.xrayService.RestartXray(false)
+		err := native.RecoverIfCrashed(context.Background())
 		j.checkTime = 0
 		if err != nil {
-			logger.Error("Restart xray failed:", err)
+			logger.Error("Restart sing-box failed: ", err)
 		}
 	}
 }
