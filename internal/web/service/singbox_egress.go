@@ -94,6 +94,7 @@ func injectSingBoxEgressBridge(cfg *singbox.Config, bridgeTag, outboundTag strin
 			usedPorts[port] = struct{}{}
 		}
 	}
+	usedPorts[10086] = struct{}{}
 	usedPorts[10090] = struct{}{}
 	usedPorts[10091] = struct{}{}
 	if clash, ok := cfg.Experimental["clash_api"].(map[string]any); ok {

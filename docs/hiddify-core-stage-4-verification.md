@@ -27,14 +27,20 @@ version/revision и настоящий `check -c`. Изменения источ
 
 Один read-only repeatable-read snapshot содержит inbound/statistics,
 канонических связанных пользователей, fallback, settings и активные
-outbound subscriptions. UI reader, который попутно синхронизирует строки
+outbound subscriptions и параметры egress узлов. UI reader, который попутно синхронизирует строки
 трафика VK TURN, больше не вызывается при генерации Hiddify.
-Существующие infrastructure/adblock/YouTube overlays применяются после
-основной генерации своими совместимыми builders.
+Infrastructure, AdBlock и YouTube overlays используют тот же снимок settings/узлов
+и один момент времени для проверки паузы. После снятия снимка они больше не
+читают БД. Совместимые builders выделены так, чтобы переиспользовать их без
+повторного чтения состояния.
 
 Пользователи берутся из `clients` + `client_inbounds`; отключённые пользователи,
 disabled quota rows, неактивные inbound и listener удалённого узла не
 восстанавливаются из старых `settings.clients` или native-template inbounds.
+Несуществующий target для egress панели/активного узла возвращает ошибку:
+неявный выход напрямую больше не заменяет настроенный маршрут. Порт API
+статистики 10086 зарезервирован при распределении egress listener ports.
+
 Сохраняются существующие Snell per-inbound keys, ShadowTLS inner credentials,
 TLS paths/PEM, TUIC credentials, MASQUE endpoints и Gateway listener.
 БД, ID, credentials, исходные подписки и счётчики генератор не переписывает.
@@ -51,7 +57,9 @@ XHTTP-outbound теперь проходит через Hiddify-aware wire valid
 
 `FinalizeServerConfig` проверяет нормализованный wire graph: дубли тегов,
 route/DNS final, resolver, outbound/group/default/detour, nested routing и
-DNS rule-set references, циклы групп/detour. Inbound detour проверяется
+DNS rule-set references, циклы outbound-групп/detour, inbound detour и DNS resolver/groups.
+DNS group/multi не может ссылаться на другую группу или FakeIP: это
+ограничение закреплённого форка проверяется до Start. Inbound detour проверяется
 в namespace listener, что сохраняет ShadowTLS; произвольные HTTP headers
 не интерпретируются как конфигурационные ссылки.
 
@@ -83,6 +91,10 @@ inbound/outbound/user names, включая native endpoint peers. Native servic
 | VLESS TCP, WS, HTTP, gRPC, HTTPUpgrade, XHTTP + TLS | PASS |
 | Native DNS, routing, selector, local source rule set и XHTTP outbound | PASS |
 | Legacy DNS/domain/private-IP routing | PASS |
+| Native DNS group (local + UDP, parallel) | PASS |
+| AdBlock base/policies и egress из захваченного снимка | PASS |
+| Managed YouTube с upstream из захваченного снимка | PASS |
+| Публикация валидного candidate и отказ TUIC constructor без замены файла | PASS |
 | XHTTP из outbound subscription при выбранном Xray, с automatic selector и без | PASS |
 
 Дополнительно проверены стабильность статистических наборов, отсутствие
@@ -97,10 +109,10 @@ Hysteria2 gecko и MASQUE также проходят с новой сборко
 bash tools/build-hiddify-core.sh /path/to/output
 HIDDIFY_CONFIG_CHECK_BINARY=/path/to/output/hiddify-core-linux-amd64 \
   go test ./internal/hiddify ./internal/web/service \
-  -run '^(TestHiddify(FullDatabaseProtocolConfigurations|DatabaseTransportConfigurations|FullConfigNativeRoutingDNSAndXHTTPOutbound|SnapshotCanonicalUsersAndNoDatabaseWrites|RejectsBrokenTemplateBeforeConfigPublication|GenerationUsesRequestedCoreForSubscriptions|LegacyDNSAndRoutingGenerateFullConfig|MalformedPanelTemplateFailsWithoutPanic)|TestServerConfig.*|TestSniffing.*|TestPinnedBinaryChecksGeneratedConfigurations)$'
+  -run '^(TestHiddify(FullDatabaseProtocolConfigurations|DatabaseTransportConfigurations|FullConfigNativeRoutingDNSAndXHTTPOutbound|SnapshotCanonicalUsersAndNoDatabaseWrites|RejectsBrokenTemplateBeforeConfigPublication|GenerationUsesRequestedCoreForSubscriptions|LegacyDNSAndRoutingGenerateFullConfig|MalformedPanelTemplateFailsWithoutPanic|AllOverlaysUseCapturedSnapshot|RejectsMissingInfrastructureTargets|DNSGroupFullConfig|YouTubeUsesCapturedSnapshot|RealCandidatePublication)|TestServerConfig.*|TestSniffing.*|TestPinnedBinaryChecksGeneratedConfigurations)$'
 go vet ./internal/hiddify ./internal/web/service
 go build .
-python3 tools/audit-hiddify-migration.py
+python3 tools/audit-hiddify-migration.py --fork /path/to/pinned/hiddify-core
 ```
 
 Локальный набор выше и сборка linux/amd64 — PASS. Race-проверки Hiddify,
@@ -111,6 +123,29 @@ runtime/jobs/web, sing-box/Hiddify и БД. Получение его оконч
 сервису публичного IP: это раскрывает сетевой адрес среды и не входит в локальную
 проверку генератора. Этот запрос не повторялся; вместо него выполнен отдельный
 локальный набор, указанный выше.
+
+
+## Доработка завершения этапа 4
+
+Тесты после снимка обновляют panelOutbound, узлы, AdBlock domains/policies/pause
+и managed YouTube settings, затем блокируют любые новые GORM Query. Генератор
+по-прежнему выдаёт конфиг из исходного снимка; он проверен настоящим core check.
+Проверены оба режима AdBlock — базовый и персональные политики. YouTube
+использует локальный managed proxy; запросы к внешнему видео-сервису не нужны.
+
+Отдельный тест настоящей публикации проверяет успешную atomic rename с правами
+0600, ошибку TUIC UUID в native constructor, побайтное сохранение предыдущего
+конфига и удаление временных candidate files. Это дополняет проверки template
+и graph: отказ самого ядра также не может опубликовать конфиг.
+
+Новый локальный прогон включает всю DB-матрицу, новые snapshot/publication тесты,
+reference guards, sniffing и binary checks, а также регрессии sing-box Gateway,
+MASQUE isolation, users/TUIC/MTProto и AdBlock. Используется `-race` и настоящая
+сборка panel4. Аудит проверяет HEAD/gitlinks/origins собственного checkout.
+Результат дополнительного прогона: PASS (`-race`: hiddify 1.803s, service
+55.483s). `go vet`, сборка панели linux/amd64, проверка build-script и аудит
+закреплённого собственного checkout — PASS.
+Внешний запрос определения IP из общего набора не запускался повторно.
 
 ## Границы результата
 

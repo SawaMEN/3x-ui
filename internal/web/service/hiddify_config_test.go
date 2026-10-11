@@ -3,13 +3,17 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"gorm.io/gorm"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/adblock/youtubeproxy"
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
@@ -305,5 +309,169 @@ func TestHiddifyMalformedPanelTemplateFailsWithoutPanic(t *testing.T) {
 				t.Fatal("malformed template silently discarded")
 			}
 		})
+	}
+}
+
+func TestHiddifyAllOverlaysUseCapturedSnapshot(t *testing.T) {
+	for _, policies := range []bool{false, true} {
+		t.Run(fmt.Sprint(policies), func(t *testing.T) {
+			setupBulkDB(t)
+			seedHiddifyConfigInbound(t, model.VLESS, `{"decryption":"none"}`, `{}`)
+			values := map[string]string{"panelOutbound": "direct", "adBlockEnable": "true", "adBlockDomains": "snapshot.example", "adBlockPausedUntil": time.Now().Add(-time.Minute).Format(time.RFC3339)}
+			if policies {
+				values["adBlockPolicies"] = `[{"id":"captured","name":"Captured","enabled":true,"profile":"light","scope":{"inboundMode":"all","clientMode":"all"}}]`
+				values["adBlockPolicyDomains"] = `{"captured":"policy.example"}`
+			}
+			if err := saveAdBlockValues(values); err != nil {
+				t.Fatal(err)
+			}
+			node := &model.Node{Name: "snapshot-node", Enable: true, OutboundTag: "direct"}
+			if err := database.GetDB().Create(node).Error; err != nil {
+				t.Fatal(err)
+			}
+			snapshot, err := loadNativeConfigSnapshot()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := saveAdBlockValues(map[string]string{"panelOutbound": "lost", "adBlockDomains": "changed.example", "adBlockPolicyDomains": "{}", "adBlockPausedUntil": time.Now().Add(time.Hour).Format(time.RFC3339)}); err != nil {
+				t.Fatal(err)
+			}
+			if err := database.GetDB().Model(node).Update("outbound_tag", "lost").Error; err != nil {
+				t.Fatal(err)
+			}
+			// Any extra DB read would mix the new panel settings into this generation.
+			db := database.GetDB()
+			callback := "hiddify-snapshot-no-more-reads"
+			if err := db.Callback().Query().Before("gorm:query").Register(callback, func(tx *gorm.DB) { tx.AddError(errors.New("unexpected read after snapshot")) }); err != nil {
+				t.Fatal(err)
+			}
+			defer db.Callback().Query().Remove(callback)
+			cfg, err := NativeCore(CoreTypeHiddify).generateNativeConfig(snapshot)
+			if err != nil {
+				t.Fatal(err)
+			}
+			data := string(checkGeneratedHiddifyConfig(t, cfg))
+			expected := "snapshot.example"
+			if policies {
+				expected = "policy.example"
+			}
+			for _, want := range []string{expected, PanelEgressInboundTag, NodeEgressInboundTag(node.Id)} {
+				if !strings.Contains(data, want) {
+					t.Fatalf("snapshot overlay missing %s", want)
+				}
+			}
+			if strings.Contains(data, "changed.example") || strings.Contains(data, `"lost"`) {
+				t.Fatal("generation mixed snapshots")
+			}
+		})
+	}
+}
+
+func TestHiddifyRejectsMissingInfrastructureTargets(t *testing.T) {
+	for _, panel := range []bool{true, false} {
+		t.Run(fmt.Sprint(panel), func(t *testing.T) {
+			setupBulkDB(t)
+			if panel {
+				if err := singBoxSettingService.SetPanelOutbound("lost"); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				if err := database.GetDB().Create(&model.Node{Name: "missing-target", Enable: true, OutboundTag: "lost"}).Error; err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := (&HiddifyConfigGenerator{}).Generate(); err == nil || !strings.Contains(err.Error(), "egress bridge") {
+				t.Fatalf("missing egress silently bypassed: %v", err)
+			}
+		})
+	}
+}
+
+func TestHiddifyDNSGroupFullConfig(t *testing.T) {
+	setupBulkDB(t)
+	if err := singBoxSettingService.SetSingBoxConfigTemplate(`{"dns":{"servers":[{"type":"local","tag":"local"},{"type":"udp","tag":"remote","server":"1.1.1.1"},{"type":"group","tag":"group","servers":["local","remote"],"mode":"parallel"}],"final":"group"}}`); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := (&HiddifyConfigGenerator{}).Generate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkGeneratedHiddifyConfig(t, cfg)
+}
+
+func TestHiddifyYouTubeUsesCapturedSnapshot(t *testing.T) {
+	setupBulkDB(t)
+	t.Setenv("XUI_DB_FOLDER", t.TempDir())
+	defer youtubeproxy.Commit(false)
+	settings := AdBlockServerSettings{Enabled: true, Outbound: "direct", Limits: youtubeproxy.DefaultOptions()}
+	raw, _ := json.Marshal(settings)
+	if err := saveAdBlockValues(map[string]string{"adBlockEnable": "true", "adBlockServer": string(raw)}); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := loadNativeConfigSnapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := saveAdBlockValues(map[string]string{"adBlockEnable": "false", "adBlockServer": `{"enabled":true,"outbound":"lost"}`}); err != nil {
+		t.Fatal(err)
+	}
+	db := database.GetDB()
+	callback := "hiddify-youtube-no-more-reads"
+	if err := db.Callback().Query().Before("gorm:query").Register(callback, func(tx *gorm.DB) { tx.AddError(errors.New("unexpected YouTube read after snapshot")) }); err != nil {
+		t.Fatal(err)
+	}
+	defer db.Callback().Query().Remove(callback)
+	cfg, err := NativeCore(CoreTypeHiddify).generateNativeConfig(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := string(checkGeneratedHiddifyConfig(t, cfg))
+	if !strings.Contains(data, youtubeEgressTag) || !strings.Contains(data, "youtube-server-filter") || strings.Contains(data, `"lost"`) {
+		t.Fatal("YouTube generation ignored captured settings")
+	}
+}
+
+func TestHiddifyRealCandidatePublication(t *testing.T) {
+	binary := os.Getenv("HIDDIFY_CONFIG_CHECK_BINARY")
+	if binary == "" {
+		t.Skip("set HIDDIFY_CONFIG_CHECK_BINARY to validate publication with the pinned core")
+	}
+	binary, err := filepath.Abs(binary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	setupBulkDB(t)
+	dir := t.TempDir()
+	t.Setenv("XUI_BIN_FOLDER", dir)
+	if err := os.Symlink(binary, hiddify.GetBinaryPath()); err != nil {
+		t.Fatal(err)
+	}
+	s := NativeCore(CoreTypeHiddify)
+	if err := s.WriteConfig(); err != nil {
+		t.Fatal(err)
+	}
+	old, err := os.ReadFile(s.ProcessConfigPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(s.ProcessConfigPath())
+	if err != nil || info.Mode().Perm() != 0600 {
+		t.Fatalf("config permissions: %v, %v", info, err)
+	}
+	// UUID validation is performed by the actual TUIC constructor, after the
+	// panel's schema and graph checks. Its failure must not publish the candidate.
+	if err := singBoxSettingService.SetSingBoxConfigTemplate(`{"outbounds":[{"type":"tuic","tag":"direct","server":"127.0.0.1","server_port":443,"uuid":"invalid-uuid","password":"test-password","tls":{"enabled":true}},{"type":"block","tag":"blocked"}]}`); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.WriteConfig(); err == nil || !strings.Contains(err.Error(), "validate candidate hiddify-core config") {
+		t.Fatalf("expected native constructor rejection, got %v", err)
+	}
+	current, err := os.ReadFile(s.ProcessConfigPath())
+	if err != nil || string(current) != string(old) {
+		t.Fatal("invalid candidate replaced running config")
+	}
+	candidates, err := filepath.Glob(filepath.Join(dir, ".hiddify-core-config-*.json"))
+	if err != nil || len(candidates) != 0 {
+		t.Fatalf("candidate files left after rejection: %v, %v", candidates, err)
 	}
 }

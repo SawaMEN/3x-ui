@@ -543,12 +543,18 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot) (*
 		cfg.Route["rules"] = append(sniffRules, singBoxRouteRules(cfg.Route)...)
 	}
 	ensureAutomaticClashAPI(cfg)
-	applySingBoxInfrastructureEgress(cfg)
-	if err := singBoxSettingService.applySingBoxAdBlock(cfg); err != nil {
-		return nil, err
-	}
-	if err := singBoxSettingService.applySingBoxYouTubeServer(cfg); err != nil {
-		return nil, err
+	if snapshot != nil {
+		if err := snapshot.applyOverlays(cfg); err != nil {
+			return nil, err
+		}
+	} else {
+		applySingBoxInfrastructureEgress(cfg)
+		if err := singBoxSettingService.applySingBoxAdBlock(cfg); err != nil {
+			return nil, err
+		}
+		if err := singBoxSettingService.applySingBoxYouTubeServer(cfg); err != nil {
+			return nil, err
+		}
 	}
 	if s.Hiddify {
 		if err := hiddify.FinalizeServerConfig(cfg); err != nil {

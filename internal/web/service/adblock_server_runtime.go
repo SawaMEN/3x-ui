@@ -26,15 +26,21 @@ func (s *SettingService) serverPlan() (AdBlockServerSettings, adBlockPlan, error
 	if err != nil {
 		return settings, plan, err
 	}
+	return settings, youtubeServerPlan(settings, plan), nil
+}
+func youtubeServerPlan(settings AdBlockServerSettings, plan adBlockPlan) adBlockPlan {
 	plan.Enabled = plan.Enabled && settings.Enabled
 	plan.Base = youtubeHosts
+	// Clone before replacing policy lists so the base blocking plan stays immutable.
+	plan.Domains = make(map[string][]string, len(plan.Policies))
 	for _, p := range plan.Policies {
 		if p.Enabled && p.Profile != "off" {
 			plan.Domains[p.ID] = youtubeHosts
 		}
 	}
-	return settings, plan, nil
+	return plan
 }
+
 func excludedInfrastructure(tag string) bool {
 	return tag == "api" || tag == PanelEgressInboundTag || tag == youtubeEgressTag || strings.HasPrefix(tag, "node-egress")
 }
@@ -161,11 +167,17 @@ func replaceDomainSet(rule map[string]any) {
 }
 func (s *SettingService) applySingBoxYouTubeServer(cfg *singbox.Config) error {
 	settings, plan, err := s.serverPlan()
-	if err != nil || !plan.Enabled {
+	if err != nil {
 		return err
 	}
+	return applySingBoxYouTubeServerPlan(cfg, settings, plan)
+}
+func applySingBoxYouTubeServerPlan(cfg *singbox.Config, settings AdBlockServerSettings, plan adBlockPlan) error {
+	if !plan.Enabled {
+		return nil
+	}
 	temp := singbox.NewConfig()
-	if err = applySingBoxPolicyPlan(temp, plan); err != nil {
+	if err := applySingBoxPolicyPlan(temp, plan); err != nil {
 		return err
 	}
 	generated, err := nativeRuleArray(temp.Route["rules"])

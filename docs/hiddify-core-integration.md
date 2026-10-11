@@ -16,11 +16,16 @@
 
 ## Генерация полного серверного конфига
 
-Этап 4 подключил `HiddifyConfigGenerator`: основной DB snapshot, общие native
-builders, Hiddify-aware template merge, граф ссылок DNS/routing/rule sets,
+Этап 4 подключил `HiddifyConfigGenerator`: единый DB snapshot для
+inbounds/users/settings/subscriptions и egress узлов, общие native builders, Hiddify-aware template merge, граф ссылок DNS/routing/rule sets,
 канонические пользователи и стабильные статистические наборы. Preview,
 candidate и restart используют один entrypoint. Полные DB-конфиги 14 вариантов
 протоколов и 6 транспортов проверены настоящим `check -c`.
+Infrastructure, AdBlock и managed YouTube используют тот же снимок без
+дополнительного чтения БД. Preflight проверяет циклы DNS/inbound/outbound
+и ограничения DNS-групп; отсутствующий egress target возвращает ошибку.
+Настоящее ядро проверено на успешной публикации и отказе candidate с
+сохранением старого файла.
 Подробности: [hiddify-core-stage-4-verification.md](hiddify-core-stage-4-verification.md).
 
 ## Runtime и управление процессом

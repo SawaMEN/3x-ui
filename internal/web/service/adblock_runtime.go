@@ -108,6 +108,10 @@ func (s *SettingService) applySingBoxAdBlock(cfg *singbox.Config) error {
 	if err != nil {
 		return err
 	}
+	return applySingBoxAdBlockDomains(cfg, domains, scope)
+}
+
+func applySingBoxAdBlockDomains(cfg *singbox.Config, domains []string, scope AdBlockScope) error {
 	if err := stripSingBoxAdBlock(cfg); err != nil {
 		return err
 	}

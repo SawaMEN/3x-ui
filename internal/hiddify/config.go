@@ -256,11 +256,58 @@ func ValidateConfigReferences(cfg map[string]any) error {
 			}
 		}
 	}
+	if err := validateDependencyCycles(outbounds, edges, "outbound"); err != nil {
+		return err
+	}
+	listenerEdges := map[string][]string{}
+	for _, item := range configObjects(cfg["inbounds"]) {
+		name, _ := item["tag"].(string)
+		listenerEdges[name] = configNames(item["detour"])
+	}
+	if err := validateDependencyCycles(listeners, listenerEdges, "inbound"); err != nil {
+		return err
+	}
+	dnsEdges := map[string][]string{}
+	for _, item := range configObjects(resolver["servers"]) {
+		name, _ := item["tag"].(string)
+		members := configNames(item["servers"])
+		if err := require(dns, item["servers"], name+".servers", "DNS server"); err != nil {
+			return err
+		}
+		dependency := item["domain_resolver"]
+		if object, ok := dependency.(map[string]any); ok {
+			dependency = object["server"]
+		}
+		dnsEdges[name] = append(members, configNames(dependency)...)
+	}
+	if err := validateDependencyCycles(dns, dnsEdges, "DNS server"); err != nil {
+		return err
+	}
+	dnsTypes := map[string]string{}
+	for _, item := range configObjects(resolver["servers"]) {
+		name, _ := item["tag"].(string)
+		dnsTypes[name], _ = item["type"].(string)
+	}
+	for _, name := range sortedNames(dns) {
+		if dnsTypes[name] != "group" && dnsTypes[name] != "multi" {
+			continue
+		}
+		for _, member := range dnsEdges[name] {
+			switch dnsTypes[member] {
+			case "group", "multi", "fakeip":
+				return fmt.Errorf("hiddify DNS group %q cannot contain %s server %q", name, dnsTypes[member], member)
+			}
+		}
+	}
+	return nil
+}
+
+func validateDependencyCycles(names map[string]bool, edges map[string][]string, kind string) error {
 	state := map[string]int{}
 	var visit func(string) error
 	visit = func(name string) error {
 		if state[name] == 1 {
-			return fmt.Errorf("hiddify outbound dependency cycle at %q", name)
+			return fmt.Errorf("hiddify %s dependency cycle at %q", kind, name)
 		}
 		if state[name] == 2 {
 			return nil
@@ -274,7 +321,7 @@ func ValidateConfigReferences(cfg map[string]any) error {
 		state[name] = 2
 		return nil
 	}
-	for _, name := range sortedNames(outbounds) {
+	for _, name := range sortedNames(names) {
 		if err := visit(name); err != nil {
 			return err
 		}

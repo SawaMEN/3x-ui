@@ -25,6 +25,12 @@ func TestServerConfigReferenceFailures(t *testing.T) {
 		{"inbound detour", `"inbounds":[{"type":"shadowtls","tag":"outer","detour":"lost"}]`, "missing inbound"},
 		{"duplicate listener", `"inbounds":[{"tag":"same"},{"tag":"same"}]`, "duplicate listener"},
 		{"duplicate resolver", `"dns":{"servers":[{"tag":"same"},{"tag":"same"}]}`, "duplicate DNS server"},
+		{"inbound detour cycle", `"inbounds":[{"tag":"a","detour":"b"},{"tag":"b","detour":"a"}]`, "inbound dependency cycle"},
+		{"DNS group member", `"dns":{"servers":[{"type":"group","tag":"group","servers":["lost"]}]}`, "group.servers"},
+		{"DNS group cycle", `"dns":{"servers":[{"type":"group","tag":"a","servers":["b"]},{"type":"group","tag":"b","servers":["a"]}]}`, "DNS server dependency cycle"},
+		{"DNS resolver cycle", `"dns":{"servers":[{"type":"https","tag":"a","server":"dns.example.com","domain_resolver":{"server":"b"}},{"type":"https","tag":"b","server":"dns2.example.com","domain_resolver":"a"}]}`, "DNS server dependency cycle"},
+		{"nested DNS group", `"dns":{"servers":[{"type":"local","tag":"local"},{"type":"group","tag":"a","servers":["local"]},{"type":"group","tag":"b","servers":["a"]}]}`, "cannot contain group"},
+		{"DNS group FakeIP", `"dns":{"servers":[{"type":"fakeip","tag":"fake"},{"type":"group","tag":"group","servers":["fake"]}]}`, "cannot contain fakeip"},
 		{"download detour", `"route":{"rule_set":[{"tag":"rules","download_detour":"lost"}]}`, "download_detour"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
