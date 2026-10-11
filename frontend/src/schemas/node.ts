@@ -1,5 +1,18 @@
 import { z } from 'zod';
 
+export const NodeCoreCapabilitiesSchema = z
+  .object({
+    ruleSets: z.boolean(),
+    outboundDelayProbe: z.boolean(),
+    connectionStats: z.boolean(),
+    hotInboundReload: z.boolean(),
+    clashApi: z.boolean(),
+    geoIp: z.boolean(),
+    geoSite: z.boolean(),
+    shadowTls: z.boolean(),
+  })
+  .loose();
+
 export const NodeRecordSchema = z
   .object({
     id: z.number(),
@@ -21,6 +34,10 @@ export const NodeRecordSchema = z
     singboxVersion: z.string().optional(),
     singboxInstalled: z.boolean().optional(),
     singboxKnown: z.boolean().optional(),
+    coreVersion: z.string().optional(),
+    coreState: z.string().optional(),
+    coreError: z.string().optional(),
+    coreCapabilities: NodeCoreCapabilitiesSchema.nullish(),
     coreType: z.string().optional(),
     runningCore: z.string().optional(),
     panelVersion: z.string().optional(),
@@ -67,6 +84,10 @@ export const ProbeResultSchema = z
     singboxVersion: z.string().optional(),
     singboxInstalled: z.boolean().optional(),
     singboxKnown: z.boolean().optional(),
+    coreVersion: z.string().optional(),
+    coreState: z.string().optional(),
+    coreError: z.string().optional(),
+    coreCapabilities: NodeCoreCapabilitiesSchema.nullish(),
     coreType: z.string().optional(),
     runningCore: z.string().optional(),
     error: z.string().optional(),

@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/core"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
@@ -241,39 +242,37 @@ func (a *ServerController) status(c *gin.Context) {
 		coreType = service.CoreTypeXray
 	}
 
-	singBoxState := service.Stop
-	singBoxError := ""
-	singBoxVersion := ""
-	singBoxInstalled := service.SelectedNativeCore().Installed()
-	if singBoxInstalled {
-		if version, versionErr := service.SelectedNativeCore().CachedVersion(c.Request.Context()); versionErr == nil && version != "" {
-			singBoxVersion = version
+	nativeStatus := func(kind string) gin.H {
+		runtime := service.NativeCore(kind)
+		installed := runtime.Installed()
+		state, message, version := service.Stop, "", ""
+		if installed {
+			version, _ = runtime.CachedVersion(c.Request.Context())
 		}
-	}
-	switch {
-	case service.SelectedNativeCore().IsRunning():
-		singBoxState = service.Running
-	case !singBoxInstalled && service.IsNativeCore(coreType):
-		// The panel itself is healthy, but its configured runtime cannot start.
-		// Report this explicitly so an upstream master can distinguish a
-		// deliberately stopped core from a node missing the selected binary.
-		singBoxState = service.Error
-		singBoxError = coreType + " is selected but not installed"
-	case singBoxInstalled:
-		if coreErr := service.SelectedNativeCore().LastError(); coreErr != nil {
-			singBoxState = service.Error
-			singBoxError = coreErr.Error()
+		switch {
+		case runtime.IsRunning():
+			state = service.Running
+		case !installed && coreType == kind:
+			state, message = service.Error, kind+" is selected but not installed"
+		case installed:
+			if err := runtime.LastError(); err != nil {
+				state, message = service.Error, err.Error()
+			}
 		}
+		return gin.H{"installed": installed, "state": state, "errorMsg": message, "version": version}
 	}
-
+	singBoxStatus := nativeStatus(service.CoreTypeSingBox)
+	hiddifyStatus := nativeStatus(service.CoreTypeHiddify)
 	runningCore := ""
 	switch {
-	case service.IsNativeCore(coreType) && service.SelectedNativeCore().IsRunning():
-		runningCore = service.SelectedNativeCore().CoreType()
+	case service.IsNativeCore(coreType) && service.NativeCore(coreType).IsRunning():
+		runningCore = coreType
 	case coreType == service.CoreTypeXray && status.Xray.State == service.Running:
 		runningCore = service.CoreTypeXray
-	case service.SelectedNativeCore().IsRunning():
-		runningCore = service.SelectedNativeCore().CoreType()
+	case service.NativeCore(service.CoreTypeHiddify).IsRunning():
+		runningCore = service.CoreTypeHiddify
+	case service.NativeCore(service.CoreTypeSingBox).IsRunning():
+		runningCore = service.CoreTypeSingBox
 	case status.Xray.State == service.Running:
 		runningCore = service.CoreTypeXray
 	}
@@ -289,30 +288,18 @@ func (a *ServerController) status(c *gin.Context) {
 		return
 	}
 
-	obj["singbox"] = gin.H{
-		"installed": singBoxInstalled,
-		"state":     singBoxState,
-		"errorMsg":  singBoxError,
-		"version":   singBoxVersion,
-	}
-
-	if coreType == service.CoreTypeHiddify {
-		obj["hiddify"] = obj["singbox"]
-	}
-	selectedState := status.Xray.State
-	selectedError := status.Xray.ErrorMsg
-	selectedVersion := status.Xray.Version
-	if service.IsNativeCore(coreType) {
-		selectedState = singBoxState
-		selectedError = singBoxError
-		selectedVersion = singBoxVersion
+	obj["singbox"] = singBoxStatus
+	obj["hiddify"] = hiddifyStatus
+	selected := gin.H{"state": status.Xray.State, "errorMsg": status.Xray.ErrorMsg, "version": status.Xray.Version}
+	if coreType == service.CoreTypeSingBox {
+		selected = singBoxStatus
+	} else if coreType == service.CoreTypeHiddify {
+		selected = hiddifyStatus
 	}
 	obj["core"] = gin.H{
-		"type":     coreType,
-		"running":  runningCore,
-		"state":    selectedState,
-		"errorMsg": selectedError,
-		"version":  selectedVersion,
+		"type": coreType, "running": runningCore,
+		"state": selected["state"], "errorMsg": selected["errorMsg"], "version": selected["version"],
+		"capabilities": core.Type(coreType).Capabilities(),
 	}
 	jsonObj(c, obj, nil)
 }

@@ -1,4 +1,4 @@
-# Интеграция hiddify-core: этапы 2–6
+# Интеграция hiddify-core: этапы 2–7
 
 Ветка `update`. Ядро собирается только из `SawaMEN/hiddify-core`:
 `b5749002266b9782803669138494ef6937eb4e95`, зависимый `SawaMEN/hiddify-sing-box`:
@@ -115,3 +115,14 @@ Gateway и sidecar bridges продолжают использовать име�
 [hiddify-core-stage-2-verification.md](hiddify-core-stage-2-verification.md).
 
 Повторная проверка и исправления этапов 1–5: [отчёт](hiddify-core-stages-1-5-review.md).
+
+
+## Этап 7: подписки и удалённые узлы
+
+Hiddify native JSON использует адаптер собственного ядра и сохраняет XHTTP.
+Версия, состояние и capabilities выбранного ядра передаются heartbeat и деревом
+узлов; Hiddify больше не записывается в статус sing-box. UUID, пароли, SubID,
+импортированные URL и прежние клиентские форматы сохраняются.
+
+Реализованные сценарии, проверки и открытая эксплуатационная приёмка:
+[отчёт этапа 7](hiddify-core-stage-7-verification.md).

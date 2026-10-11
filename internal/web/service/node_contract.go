@@ -3,6 +3,7 @@ package service
 import (
 	"strings"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/core"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 )
@@ -10,54 +11,58 @@ import (
 // NodeView is the browser/API read contract for nodes. Credentials are
 // write-only: responses expose only whether a node has a token configured.
 type NodeView struct {
-	Id                  int      `json:"id" example:"1"`
-	Name                string   `json:"name" example:"edge-1"`
-	Remark              string   `json:"remark" example:"Primary edge"`
-	Scheme              string   `json:"scheme" example:"https"`
-	Address             string   `json:"address" example:"node.example.com"`
-	Port                int      `json:"port" example:"2053"`
-	BasePath            string   `json:"basePath" example:"/"`
-	HasApiToken         bool     `json:"hasApiToken" example:"true"`
-	Enable              bool     `json:"enable" example:"true"`
-	AllowPrivateAddress bool     `json:"allowPrivateAddress" example:"false"`
-	TlsVerifyMode       string   `json:"tlsVerifyMode" example:"verify"`
-	PinnedCertSha256    string   `json:"pinnedCertSha256" example:""`
-	InboundSyncMode     string   `json:"inboundSyncMode" example:"all"`
-	InboundTags         []string `json:"inboundTags" example:"[\"in-443-tcp\"]"`
-	OutboundTag         string   `json:"outboundTag" example:"direct"`
-	Guid                string   `json:"guid" example:"node-guid"`
-	Status              string   `json:"status" example:"online"`
-	LastHeartbeat       int64    `json:"lastHeartbeat" example:"1700000000"`
-	LatencyMs           int      `json:"latencyMs" example:"42"`
-	XrayVersion         string   `json:"xrayVersion" example:"25.10.31"`
-	SingBoxVersion      string   `json:"singboxVersion"`
-	SingBoxInstalled    bool     `json:"singboxInstalled"`
-	SingBoxKnown        bool     `json:"singboxKnown"`
-	CoreType            string   `json:"coreType"`
-	RunningCore         string   `json:"runningCore"`
-	PanelVersion        string   `json:"panelVersion" example:"v3.x.x"`
-	CpuPct              float64  `json:"cpuPct" example:"12.5"`
-	MemPct              float64  `json:"memPct" example:"45.2"`
-	UptimeSecs          uint64   `json:"uptimeSecs" example:"86400"`
-	NetUp               uint64   `json:"netUp" example:"2097152"`
-	NetDown             uint64   `json:"netDown" example:"1048576"`
-	LastError           string   `json:"lastError" example:""`
-	XrayState           string   `json:"xrayState" example:"running"`
-	XrayError           string   `json:"xrayError" example:""`
-	SingBoxState        string   `json:"singboxState" example:"running"`
-	SingBoxError        string   `json:"singboxError" example:""`
-	ConfigDirty         bool     `json:"configDirty" example:"false"`
-	ConfigDirtyAt       int64    `json:"configDirtyAt" example:"0"`
-	InboundCount        int      `json:"inboundCount" example:"3"`
-	ClientCount         int      `json:"clientCount" example:"25"`
-	OnlineCount         int      `json:"onlineCount" example:"5"`
-	ActiveCount         int      `json:"activeCount" example:"20"`
-	DisabledCount       int      `json:"disabledCount" example:"2"`
-	DepletedCount       int      `json:"depletedCount" example:"1"`
-	ParentGuid          string   `json:"parentGuid,omitempty" example:""`
-	Transitive          bool     `json:"transitive,omitempty" example:"false"`
-	CreatedAt           int64    `json:"createdAt" example:"1700000000"`
-	UpdatedAt           int64    `json:"updatedAt" example:"1700003600"`
+	Id                  int                `json:"id" example:"1"`
+	Name                string             `json:"name" example:"edge-1"`
+	Remark              string             `json:"remark" example:"Primary edge"`
+	Scheme              string             `json:"scheme" example:"https"`
+	Address             string             `json:"address" example:"node.example.com"`
+	Port                int                `json:"port" example:"2053"`
+	BasePath            string             `json:"basePath" example:"/"`
+	HasApiToken         bool               `json:"hasApiToken" example:"true"`
+	Enable              bool               `json:"enable" example:"true"`
+	AllowPrivateAddress bool               `json:"allowPrivateAddress" example:"false"`
+	TlsVerifyMode       string             `json:"tlsVerifyMode" example:"verify"`
+	PinnedCertSha256    string             `json:"pinnedCertSha256" example:""`
+	InboundSyncMode     string             `json:"inboundSyncMode" example:"all"`
+	InboundTags         []string           `json:"inboundTags" example:"[\"in-443-tcp\"]"`
+	OutboundTag         string             `json:"outboundTag" example:"direct"`
+	Guid                string             `json:"guid" example:"node-guid"`
+	Status              string             `json:"status" example:"online"`
+	LastHeartbeat       int64              `json:"lastHeartbeat" example:"1700000000"`
+	LatencyMs           int                `json:"latencyMs" example:"42"`
+	XrayVersion         string             `json:"xrayVersion" example:"25.10.31"`
+	SingBoxVersion      string             `json:"singboxVersion"`
+	SingBoxInstalled    bool               `json:"singboxInstalled"`
+	SingBoxKnown        bool               `json:"singboxKnown"`
+	CoreVersion         string             `json:"coreVersion"`
+	CoreState           string             `json:"coreState"`
+	CoreError           string             `json:"coreError"`
+	CoreCapabilities    *core.Capabilities `json:"coreCapabilities"`
+	CoreType            string             `json:"coreType"`
+	RunningCore         string             `json:"runningCore"`
+	PanelVersion        string             `json:"panelVersion" example:"v3.x.x"`
+	CpuPct              float64            `json:"cpuPct" example:"12.5"`
+	MemPct              float64            `json:"memPct" example:"45.2"`
+	UptimeSecs          uint64             `json:"uptimeSecs" example:"86400"`
+	NetUp               uint64             `json:"netUp" example:"2097152"`
+	NetDown             uint64             `json:"netDown" example:"1048576"`
+	LastError           string             `json:"lastError" example:""`
+	XrayState           string             `json:"xrayState" example:"running"`
+	XrayError           string             `json:"xrayError" example:""`
+	SingBoxState        string             `json:"singboxState" example:"running"`
+	SingBoxError        string             `json:"singboxError" example:""`
+	ConfigDirty         bool               `json:"configDirty" example:"false"`
+	ConfigDirtyAt       int64              `json:"configDirtyAt" example:"0"`
+	InboundCount        int                `json:"inboundCount" example:"3"`
+	ClientCount         int                `json:"clientCount" example:"25"`
+	OnlineCount         int                `json:"onlineCount" example:"5"`
+	ActiveCount         int                `json:"activeCount" example:"20"`
+	DisabledCount       int                `json:"disabledCount" example:"2"`
+	DepletedCount       int                `json:"depletedCount" example:"1"`
+	ParentGuid          string             `json:"parentGuid,omitempty" example:""`
+	Transitive          bool               `json:"transitive,omitempty" example:"false"`
+	CreatedAt           int64              `json:"createdAt" example:"1700000000"`
+	UpdatedAt           int64              `json:"updatedAt" example:"1700003600"`
 }
 
 func toNodeView(n *model.Node) *NodeView {
@@ -88,31 +93,32 @@ func toNodeView(n *model.Node) *NodeView {
 		SingBoxVersion:      n.SingBoxVersion,
 		SingBoxInstalled:    n.SingBoxInstalled,
 		SingBoxKnown:        n.SingBoxKnown,
-		CoreType:            n.CoreType,
-		RunningCore:         n.RunningCore,
-		PanelVersion:        n.PanelVersion,
-		CpuPct:              n.CpuPct,
-		MemPct:              n.MemPct,
-		UptimeSecs:          n.UptimeSecs,
-		NetUp:               n.NetUp,
-		NetDown:             n.NetDown,
-		LastError:           n.LastError,
-		XrayState:           n.XrayState,
-		XrayError:           n.XrayError,
-		SingBoxState:        n.SingBoxState,
-		SingBoxError:        n.SingBoxError,
-		ConfigDirty:         n.ConfigDirty,
-		ConfigDirtyAt:       n.ConfigDirtyAt,
-		InboundCount:        n.InboundCount,
-		ClientCount:         n.ClientCount,
-		OnlineCount:         n.OnlineCount,
-		ActiveCount:         n.ActiveCount,
-		DisabledCount:       n.DisabledCount,
-		DepletedCount:       n.DepletedCount,
-		ParentGuid:          n.ParentGuid,
-		Transitive:          n.Transitive,
-		CreatedAt:           n.CreatedAt,
-		UpdatedAt:           n.UpdatedAt,
+		CoreVersion:         n.CoreVersion, CoreState: n.CoreState, CoreError: n.CoreError, CoreCapabilities: n.CoreCapabilities,
+		CoreType:      n.CoreType,
+		RunningCore:   n.RunningCore,
+		PanelVersion:  n.PanelVersion,
+		CpuPct:        n.CpuPct,
+		MemPct:        n.MemPct,
+		UptimeSecs:    n.UptimeSecs,
+		NetUp:         n.NetUp,
+		NetDown:       n.NetDown,
+		LastError:     n.LastError,
+		XrayState:     n.XrayState,
+		XrayError:     n.XrayError,
+		SingBoxState:  n.SingBoxState,
+		SingBoxError:  n.SingBoxError,
+		ConfigDirty:   n.ConfigDirty,
+		ConfigDirtyAt: n.ConfigDirtyAt,
+		InboundCount:  n.InboundCount,
+		ClientCount:   n.ClientCount,
+		OnlineCount:   n.OnlineCount,
+		ActiveCount:   n.ActiveCount,
+		DisabledCount: n.DisabledCount,
+		DepletedCount: n.DepletedCount,
+		ParentGuid:    n.ParentGuid,
+		Transitive:    n.Transitive,
+		CreatedAt:     n.CreatedAt,
+		UpdatedAt:     n.UpdatedAt,
 	}
 }
 

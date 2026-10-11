@@ -42,12 +42,13 @@ func (s *NodeService) LocalDescendants() ([]model.NodeSummary, error) {
 			SingBoxVersion:   n.SingBoxVersion,
 			SingBoxInstalled: n.SingBoxInstalled,
 			SingBoxKnown:     n.SingBoxKnown,
-			CoreType:         n.CoreType,
-			RunningCore:      n.RunningCore,
-			XrayState:        n.XrayState,
-			XrayError:        n.XrayError,
-			SingBoxState:     n.SingBoxState,
-			SingBoxError:     n.SingBoxError,
+			CoreVersion:      n.CoreVersion, CoreState: n.CoreState, CoreError: n.CoreError, CoreCapabilities: n.CoreCapabilities,
+			CoreType:     n.CoreType,
+			RunningCore:  n.RunningCore,
+			XrayState:    n.XrayState,
+			XrayError:    n.XrayError,
+			SingBoxState: n.SingBoxState,
+			SingBoxError: n.SingBoxError,
 		})
 	}
 	return out, nil
@@ -167,13 +168,14 @@ func (s *NodeService) GetNodeTree() ([]*model.Node, error) {
 			SingBoxVersion:   sum.SingBoxVersion,
 			SingBoxInstalled: sum.SingBoxInstalled,
 			SingBoxKnown:     sum.SingBoxKnown,
-			CoreType:         sum.CoreType,
-			RunningCore:      sum.RunningCore,
-			XrayState:        sum.XrayState,
-			XrayError:        sum.XrayError,
-			SingBoxState:     sum.SingBoxState,
-			SingBoxError:     sum.SingBoxError,
-			Transitive:       true,
+			CoreVersion:      sum.CoreVersion, CoreState: sum.CoreState, CoreError: sum.CoreError, CoreCapabilities: sum.CoreCapabilities,
+			CoreType:     sum.CoreType,
+			RunningCore:  sum.RunningCore,
+			XrayState:    sum.XrayState,
+			XrayError:    sum.XrayError,
+			SingBoxState: sum.SingBoxState,
+			SingBoxError: sum.SingBoxError,
+			Transitive:   true,
 		})
 	}
 	if len(transitive) == 0 {

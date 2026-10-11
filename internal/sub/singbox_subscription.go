@@ -161,17 +161,38 @@ func buildHiddifySingBoxSubscription(proxies []map[string]any) (string, error) {
 	if len(proxies) == 0 {
 		return "", nil
 	}
-	usedTags := make(map[string]bool, len(proxies)*2)
+	// Reserve existing labels before assigning suffixes: a duplicate "edge"
+	// must not steal a later explicit "edge-2" label. Work on copies so a
+	// refresh never changes the stored link or another client's format.
+	reserved := make(map[string]bool, len(proxies))
 	for _, proxy := range proxies {
 		tag, _ := proxy["tag"].(string)
-		if tag == "" || usedTags[tag] {
-			return "", fmt.Errorf("Hiddify subscription has an empty or duplicate proxy tag %q", tag)
+		if tag == "" {
+			return "", fmt.Errorf("Hiddify subscription has an empty proxy tag")
 		}
+		reserved[tag] = true
+	}
+	usedTags := make(map[string]bool, len(proxies)*2)
+	named := make([]map[string]any, 0, len(proxies))
+	for _, original := range proxies {
+		proxy := maps.Clone(original)
+		base := proxy["tag"].(string)
+		tag := base
+		if usedTags[tag] {
+			for suffix := 2; ; suffix++ {
+				tag = fmt.Sprintf("%s-%d", base, suffix)
+				if !usedTags[tag] && !reserved[tag] {
+					break
+				}
+			}
+		}
+		proxy["tag"] = tag
 		usedTags[tag] = true
+		named = append(named, proxy)
 	}
 	endpoints := make([]any, 0)
 	outbounds := make([]any, 0, len(proxies)*2)
-	for i, original := range proxies {
+	for i, original := range named {
 		proxy := maps.Clone(original)
 		if transport, ok := proxy["_panel_shadowtls_transport"].(map[string]any); ok {
 			transport = maps.Clone(transport)

@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/core"
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	webruntime "github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
 )
@@ -149,5 +151,67 @@ func TestProbeLegacyHyphenatedSingBoxCore(t *testing.T) {
 	}
 	if patch.XrayVersion != "" || patch.XrayState != "" || patch.XrayError != "" {
 		t.Fatalf("legacy mirrored sing-box leaked into Xray status: version=%q state=%q error=%q", patch.XrayVersion, patch.XrayState, patch.XrayError)
+	}
+}
+
+func TestHiddifyHeartbeatMetadata(t *testing.T) {
+	setupBulkDB(t)
+	caps := core.Hiddify.Capabilities()
+	patch := probeStatusObject(t, map[string]any{
+		"core":    map[string]any{"type": "hiddify-core", "running": "hiddify-core", "version": "sawamen-test", "state": "running", "capabilities": caps},
+		"xray":    map[string]any{"version": "25.1", "state": "stop"},
+		"singbox": map[string]any{"version": "1.12", "state": "stop", "installed": true},
+	})
+	if patch.CoreVersion != "sawamen-test" || patch.CoreCapabilities == nil || *patch.CoreCapabilities != caps || patch.SingBoxVersion != "1.12" {
+		t.Fatalf("metadata: %#v", patch)
+	}
+	n := &model.Node{Name: "hiddify", Guid: "stage7-node", Address: "node.example", Port: 443, Scheme: "https"}
+	db := database.GetDB()
+	if err := db.Create(n).Error; err != nil {
+		t.Fatal(err)
+	}
+	svc := &NodeService{}
+	if err := svc.UpdateHeartbeat(n.Id, patch); err != nil {
+		t.Fatal(err)
+	}
+	read := func() model.Node {
+		var got model.Node
+		if err := db.First(&got, n.Id).Error; err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	got := read()
+	view := toNodeView(&got)
+	descendants, err := svc.LocalDescendants()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.CoreCapabilities == nil || *got.CoreCapabilities != caps || view.CoreVersion != "sawamen-test" || view.CoreCapabilities == nil || len(descendants) != 1 || descendants[0].CoreCapabilities == nil || *descendants[0].CoreCapabilities != caps {
+		t.Fatalf("DB/view/tree lost metadata: %#v %#v %#v", got, view, descendants)
+	}
+	if err := svc.UpdateHeartbeat(n.Id, HeartbeatPatch{Status: "offline", CoreType: CoreTypeHiddify}); err != nil {
+		t.Fatal(err)
+	}
+	got = read()
+	if got.CoreVersion != "sawamen-test" || got.CoreCapabilities == nil {
+		t.Fatal("failed probe erased known metadata")
+	}
+	if err := svc.UpdateHeartbeat(n.Id, HeartbeatPatch{Status: "online", CoreInfoKnown: true, CoreType: CoreTypeXray, CoreVersion: "old-xray"}); err != nil {
+		t.Fatal(err)
+	}
+	got = read()
+	if got.CoreCapabilities != nil || got.CoreVersion != "old-xray" {
+		t.Fatal("legacy node inherited stale capabilities")
+	}
+}
+
+func TestHiddifyHeartbeatIgnoresLegacySingBoxAlias(t *testing.T) {
+	patch := probeStatusObject(t, map[string]any{
+		"core":    map[string]any{"type": "hiddify-core", "version": "sawamen-old", "state": "running"},
+		"singbox": map[string]any{"installed": true, "version": "sawamen-old", "state": "running"},
+	})
+	if patch.SingBoxKnown || patch.SingBoxVersion != "" || patch.CoreVersion != "sawamen-old" || patch.CoreCapabilities != nil || patch.RunningCore != CoreTypeHiddify {
+		t.Fatalf("legacy alias/capabilities: %#v", patch)
 	}
 }

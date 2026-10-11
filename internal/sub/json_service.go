@@ -15,6 +15,7 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	hiddifycore "github.com/SawaMEN/3x-ui/v3/internal/hiddify"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/masque"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
@@ -286,6 +287,10 @@ func (s *SubJsonService) GetHiddifySingBoxJson(subId string, host string) (strin
 }
 
 func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnArray, hiddify bool) (string, string, error) {
+	translateOutbound := singbox.TranslateXrayOutbound
+	if hiddify {
+		translateOutbound = hiddifycore.TranslateOutbound
+	}
 	// Native subscriptions intentionally do not call GetJson(). We still reuse
 	// the panel's mature per-client endpoint generation helpers internally, but
 	// collect and translate the model-backed entries before an Xray document is
@@ -564,7 +569,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 						// ShadowTLS replaces the outer Xray transport, including any
 						// global FinalMask or TLS defaults in the JSON template.
 						xray["streamSettings"] = map[string]any{"network": "tcp", "security": "none"}
-						native, err := singbox.TranslateXrayOutbound(xray)
+						native, err := translateOutbound(xray)
 						if err != nil || !s.wrapNativeShadowTLS(inbound, native, endpointCopies[index]) {
 							continue
 						}
@@ -765,7 +770,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 				if nativeType, ok := proxy["type"].(string); ok && nativeType != "" {
 					native = proxy
 				} else {
-					translated, err := singbox.TranslateXrayOutbound(proxy)
+					translated, err := translateOutbound(proxy)
 					if err != nil {
 						formatUnsupported = true
 						continue
@@ -806,7 +811,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 			if err := json.Unmarshal(outbound, &xrayOutbound); err != nil {
 				return "", "", err
 			}
-			native, err := singbox.TranslateXrayOutbound(xrayOutbound)
+			native, err := translateOutbound(xrayOutbound)
 			if err != nil {
 				if !shadowTLSForHiddify {
 					formatUnsupported = true
@@ -857,7 +862,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 		if !ok {
 			return "", header, errSubscriptionFormatUnsupported
 		}
-		native, err := singbox.TranslateXrayOutbound(proxy)
+		native, err := translateOutbound(proxy)
 		if err != nil {
 			return "", header, fmt.Errorf("%w: subscription status: %w", errSubscriptionFormatUnsupported, err)
 		}

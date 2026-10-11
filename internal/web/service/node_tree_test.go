@@ -3,6 +3,7 @@ package service
 import (
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/core"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
@@ -35,8 +36,10 @@ func TestGetNodeTree_SurfacesTransitiveNodeNestedUnderParent(t *testing.T) {
 	}
 
 	// The heartbeat learned that Node2 manages Node3.
+	caps := core.Hiddify.Capabilities()
 	nodeDescendantsMu.Lock()
 	nodeDescendantsCache[1] = []model.NodeSummary{{
+		CoreType: CoreTypeHiddify, CoreVersion: "sawamen-tree", CoreCapabilities: &caps, CoreState: "running",
 		Guid: "node3-guid", ParentGuid: "node2-guid", Name: "Node3", Address: "10.0.0.3", Status: "online",
 	}}
 	nodeDescendantsMu.Unlock()
@@ -69,6 +72,9 @@ func TestGetNodeTree_SurfacesTransitiveNodeNestedUnderParent(t *testing.T) {
 	}
 	if !node3.Transitive || node3.ParentGuid != "node2-guid" {
 		t.Errorf("Node3 should be transitive under node2-guid, got transitive=%v parent=%q", node3.Transitive, node3.ParentGuid)
+	}
+	if node3.CoreVersion != "sawamen-tree" || node3.CoreCapabilities == nil || *node3.CoreCapabilities != caps || node3.CoreState != "running" {
+		t.Fatalf("transitive node metadata lost: %#v", node3)
 	}
 	if node3.Id != 0 {
 		t.Errorf("transitive node must be a read-only projection (Id 0), got Id=%d", node3.Id)

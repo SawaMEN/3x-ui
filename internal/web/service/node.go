@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/core"
 	"github.com/SawaMEN/3x-ui/v3/internal/crypto/nodetoken"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
@@ -39,6 +40,12 @@ type HeartbeatPatch struct {
 	SingBoxVersion   string
 	SingBoxInstalled bool
 	SingBoxKnown     bool
+	// CoreInfoKnown distinguishes a valid legacy response from a failed probe.
+	CoreInfoKnown    bool
+	CoreVersion      string
+	CoreState        string
+	CoreError        string
+	CoreCapabilities *core.Capabilities
 	CoreType         string
 	RunningCore      string
 	PanelVersion     string
@@ -1017,6 +1024,15 @@ func (s *NodeService) UpdateHeartbeat(id int, p HeartbeatPatch) error {
 		"xray_state":     p.XrayState,
 		"xray_error":     p.XrayError,
 	}
+	if p.CoreInfoKnown {
+		updates["core_version"], updates["core_state"], updates["core_error"] = p.CoreVersion, p.CoreState, p.CoreError
+		if p.CoreCapabilities == nil {
+			updates["core_capabilities"] = nil
+		} else {
+			data, _ := json.Marshal(p.CoreCapabilities)
+			updates["core_capabilities"] = string(data)
+		}
+	}
 	// Older node builds overload xray with the selected core. Never erase a
 	// previously known Xray version when probing such a sing-box node.
 	if p.XrayVersion != "" {
@@ -1398,11 +1414,12 @@ func (s *NodeService) probe(ctx context.Context, n *model.Node, proxyURL string)
 				ErrorMsg  string `json:"errorMsg"`
 			} `json:"singbox"`
 			Core struct {
-				Type     string `json:"type"`
-				Running  string `json:"running"`
-				State    string `json:"state"`
-				Version  string `json:"version"`
-				ErrorMsg string `json:"errorMsg"`
+				Capabilities *core.Capabilities `json:"capabilities"`
+				Type         string             `json:"type"`
+				Running      string             `json:"running"`
+				State        string             `json:"state"`
+				Version      string             `json:"version"`
+				ErrorMsg     string             `json:"errorMsg"`
 			} `json:"core"`
 			PanelVersion string `json:"panelVersion"`
 			PanelGuid    string `json:"panelGuid"`
@@ -1432,16 +1449,21 @@ func (s *NodeService) probe(ctx context.Context, n *model.Node, proxyURL string)
 	if o.Mem.Total > 0 {
 		patch.MemPct = float64(o.Mem.Current) * 100.0 / float64(o.Mem.Total)
 	}
+	patch.CoreInfoKnown = true
+	patch.CoreVersion = o.Core.Version
+	patch.CoreState = o.Core.State
+	patch.CoreError = o.Core.ErrorMsg
+	patch.CoreCapabilities = o.Core.Capabilities
 	patch.CoreType = normalizeNodeCoreType(o.Core.Type)
 	patch.RunningCore = normalizeNodeCoreType(o.Core.Running)
-	if o.SingBox != nil {
+	if o.SingBox != nil && !(patch.CoreType == CoreTypeHiddify && o.SingBox.Version == o.Core.Version && o.Core.Version != "") {
 		patch.SingBoxKnown = true
 		patch.SingBoxInstalled = o.SingBox.Installed
 		patch.SingBoxVersion = o.SingBox.Version
 		patch.SingBoxState = o.SingBox.State
 		patch.SingBoxError = o.SingBox.ErrorMsg
 		patch.XrayVersion = o.Xray.Version
-	} else if IsNativeCore(patch.CoreType) {
+	} else if patch.CoreType == CoreTypeSingBox {
 		// Compatibility with the first node-singbox-status implementation:
 		// it mirrored the selected sing-box into the legacy xray object. Do not
 		// expose that mirrored object as a simultaneously running Xray core.
@@ -1467,6 +1489,23 @@ func (s *NodeService) probe(ctx context.Context, n *model.Node, proxyURL string)
 		patch.CoreType = CoreTypeXray
 		patch.RunningCore = CoreTypeXray
 	}
+	if patch.CoreType == CoreTypeXray {
+		if patch.CoreVersion == "" {
+			patch.CoreVersion = patch.XrayVersion
+		}
+		if patch.CoreState == "" {
+			patch.CoreState = patch.XrayState
+			patch.CoreError = patch.XrayError
+		}
+	} else if patch.CoreType == CoreTypeSingBox {
+		if patch.CoreVersion == "" {
+			patch.CoreVersion = patch.SingBoxVersion
+		}
+		if patch.CoreState == "" {
+			patch.CoreState = patch.SingBoxState
+			patch.CoreError = patch.SingBoxError
+		}
+	}
 	patch.PanelVersion = o.PanelVersion
 	patch.Guid = o.PanelGuid
 	patch.UptimeSecs = o.Uptime
@@ -1476,19 +1515,23 @@ func (s *NodeService) probe(ctx context.Context, n *model.Node, proxyURL string)
 }
 
 type ProbeResultUI struct {
-	Status           string  `json:"status" example:"online"`
-	LatencyMs        int     `json:"latencyMs" example:"42"`
-	XrayVersion      string  `json:"xrayVersion" example:"25.10.31"`
-	SingBoxVersion   string  `json:"singboxVersion"`
-	SingBoxInstalled bool    `json:"singboxInstalled"`
-	SingBoxKnown     bool    `json:"singboxKnown"`
-	CoreType         string  `json:"coreType"`
-	RunningCore      string  `json:"runningCore"`
-	PanelVersion     string  `json:"panelVersion" example:"v3.x.x"`
-	CpuPct           float64 `json:"cpuPct" example:"12.5"`
-	MemPct           float64 `json:"memPct" example:"45.2"`
-	UptimeSecs       uint64  `json:"uptimeSecs" example:"86400"`
-	Error            string  `json:"error"`
+	Status           string             `json:"status" example:"online"`
+	LatencyMs        int                `json:"latencyMs" example:"42"`
+	XrayVersion      string             `json:"xrayVersion" example:"25.10.31"`
+	SingBoxVersion   string             `json:"singboxVersion"`
+	SingBoxInstalled bool               `json:"singboxInstalled"`
+	SingBoxKnown     bool               `json:"singboxKnown"`
+	CoreVersion      string             `json:"coreVersion"`
+	CoreState        string             `json:"coreState"`
+	CoreError        string             `json:"coreError"`
+	CoreCapabilities *core.Capabilities `json:"coreCapabilities"`
+	CoreType         string             `json:"coreType"`
+	RunningCore      string             `json:"runningCore"`
+	PanelVersion     string             `json:"panelVersion" example:"v3.x.x"`
+	CpuPct           float64            `json:"cpuPct" example:"12.5"`
+	MemPct           float64            `json:"memPct" example:"45.2"`
+	UptimeSecs       uint64             `json:"uptimeSecs" example:"86400"`
+	Error            string             `json:"error"`
 	// XrayState/XrayError are populated on successful probes even when the node's
 	// Xray core is not healthy. The UI uses them for a distinct "panel ok, xray failed" indicator.
 	XrayState    string `json:"xrayState"`
@@ -1504,17 +1547,18 @@ func (p HeartbeatPatch) ToUI(ok bool) ProbeResultUI {
 		SingBoxVersion:   p.SingBoxVersion,
 		SingBoxInstalled: p.SingBoxInstalled,
 		SingBoxKnown:     p.SingBoxKnown,
-		CoreType:         p.CoreType,
-		RunningCore:      p.RunningCore,
-		PanelVersion:     p.PanelVersion,
-		CpuPct:           p.CpuPct,
-		MemPct:           p.MemPct,
-		UptimeSecs:       p.UptimeSecs,
-		Error:            FriendlyProbeError(p.LastError),
-		XrayState:        p.XrayState,
-		XrayError:        p.XrayError,
-		SingBoxState:     p.SingBoxState,
-		SingBoxError:     p.SingBoxError,
+		CoreVersion:      p.CoreVersion, CoreState: p.CoreState, CoreError: p.CoreError, CoreCapabilities: p.CoreCapabilities,
+		CoreType:     p.CoreType,
+		RunningCore:  p.RunningCore,
+		PanelVersion: p.PanelVersion,
+		CpuPct:       p.CpuPct,
+		MemPct:       p.MemPct,
+		UptimeSecs:   p.UptimeSecs,
+		Error:        FriendlyProbeError(p.LastError),
+		XrayState:    p.XrayState,
+		XrayError:    p.XrayError,
+		SingBoxState: p.SingBoxState,
+		SingBoxError: p.SingBoxError,
 	}
 	if ok {
 		r.Status = "online"
