@@ -15,6 +15,7 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
 	"github.com/SawaMEN/3x-ui/v3/internal/hiddify"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
@@ -479,24 +480,59 @@ func (s *SingBoxService) Restart(ctx context.Context) error {
 	return s.restartLocked(ctx)
 }
 
-func (s *SingBoxService) restartLocked(ctx context.Context) error {
-	if s.Hiddify && s.IsRunning() {
-		if err := s.PollTraffic(ctx); err != nil {
-			return err
-		}
-		hiddifyStats.Close()
+func (s *SingBoxService) restartLocked(ctx context.Context) (result error) {
+	unchanged, err := nativeConfigBatchGuard()
+	if err != nil {
+		return err
 	}
-	// Capture the old applied config before publishing a candidate.
 	wasRunning := s.IsRunning()
 	previous := s.process().AppliedConfig()
 	if _, err := s.process().Version(ctx); err != nil {
 		s.process().SetError(err)
 		return err
 	}
-	if err := s.writeConfigCandidate(ctx); err != nil {
+	candidate, err := s.prepareConfigCandidate(ctx)
+	if err != nil {
 		s.process().SetError(err)
 		return err
 	}
+	defer candidate.close()
+	if !unchanged() {
+		return errNativeConfigBatchChanged
+	}
+	if s.Hiddify && wasRunning {
+		if err := s.PollTraffic(ctx); err != nil {
+			return err
+		}
+	}
+	// Traffic enforcement can itself commit client changes. Regenerate on the
+	// next tick instead of starting a candidate with newly disabled identities.
+	if !unchanged() {
+		return errNativeConfigBatchChanged
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	var finishSidecars func(bool) error
+	applied := false
+	if s.Hiddify {
+		finishSidecars, err = externalvpn.ApplyOutbounds(candidate.managedOutbounds)
+		if err != nil {
+			return err
+		}
+		defer func() { result = errors.Join(result, finishSidecars(applied)) }()
+	}
+	if !unchanged() {
+		return errNativeConfigBatchChanged
+	}
+	if err := candidate.publish(ctx); err != nil {
+		s.process().SetError(err)
+		return err
+	}
+	if s.Hiddify {
+		hiddifyStats.Close()
+	}
+
 	tuic.GetManager().StopAll()
 	if err := s.restartProcess(ctx); err != nil {
 		if s.Hiddify && wasRunning && len(previous) > 0 {
@@ -519,6 +555,7 @@ func (s *SingBoxService) restartLocked(ctx context.Context) error {
 	singBoxTrafficMu.Unlock()
 	s.stoppedFlag().Store(false)
 	commitManagedYouTube(s.coreType())
+	applied = true
 	return nil
 }
 
@@ -528,7 +565,7 @@ func (s *SingBoxService) Start(ctx context.Context) error {
 	return s.startLocked(ctx)
 }
 
-func (s *SingBoxService) startLocked(ctx context.Context) error {
+func (s *SingBoxService) startLocked(ctx context.Context) (result error) {
 	if s.IsRunning() {
 		return nil
 	}
@@ -536,10 +573,38 @@ func (s *SingBoxService) startLocked(ctx context.Context) error {
 		s.process().SetError(err)
 		return err
 	}
-	if err := s.writeConfigCandidate(ctx); err != nil {
+	unchanged, err := nativeConfigBatchGuard()
+	if err != nil {
+		return err
+	}
+	candidate, err := s.prepareConfigCandidate(ctx)
+	if err != nil {
 		s.process().SetError(err)
 		return err
 	}
+	defer candidate.close()
+	if !unchanged() {
+		return errNativeConfigBatchChanged
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	applied := false
+	if s.Hiddify {
+		finish, err := externalvpn.ApplyOutbounds(candidate.managedOutbounds)
+		if err != nil {
+			return err
+		}
+		defer func() { result = errors.Join(result, finish(applied)) }()
+	}
+	if !unchanged() {
+		return errNativeConfigBatchChanged
+	}
+	if err := candidate.publish(ctx); err != nil {
+		s.process().SetError(err)
+		return err
+	}
+
 	tuic.GetManager().StopAll()
 	if err := s.startProcess(ctx); err != nil {
 		return err
@@ -550,6 +615,7 @@ func (s *SingBoxService) startLocked(ctx context.Context) error {
 	singBoxTrafficMu.Unlock()
 	s.stoppedFlag().Store(false)
 	commitManagedYouTube(s.coreType())
+	applied = true
 	return nil
 }
 

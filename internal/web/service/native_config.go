@@ -209,7 +209,14 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot) (*
 					if externalvpn.IsAdditionalOutbound(ob) {
 						tag, _ := ob["tag"].(string)
 						managedOutboundTags[tag] = true
-						bridge, err := externalvpn.EnsureOutbound(ob)
+						var bridge map[string]any
+						var err error
+						if s.Hiddify {
+							bridge, err = externalvpn.PlanOutbound(ob)
+							cfg.ManagedOutbounds = append(cfg.ManagedOutbounds, ob)
+						} else {
+							bridge, err = externalvpn.EnsureOutbound(ob)
+						}
 						if err != nil {
 							return nil, fmt.Errorf("outbound %q: %w", tag, err)
 						}
@@ -557,6 +564,9 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot) (*
 		}
 	}
 	if s.Hiddify {
+		if err := s.filterManagedOutboundPlans(cfg); err != nil {
+			return nil, err
+		}
 		if err := hiddify.FinalizeServerConfig(cfg); err != nil {
 			return nil, err
 		}
@@ -565,7 +575,9 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot) (*
 		}
 		cfg.Log["output"] = s.logPath()
 	}
-	externalvpn.KeepOutbounds(managedOutboundTags)
+	if !s.Hiddify {
+		externalvpn.KeepOutbounds(managedOutboundTags)
+	}
 	return cfg, nil
 }
 
@@ -589,5 +601,38 @@ func validatePanelConfigSections(template map[string]any) error {
 			}
 		}
 	}
+	return nil
+}
+
+// Native templates can replace generated outbounds. Start a planned sidecar
+// only if the final outbound still uses its loopback bridge credentials.
+func (s *SingBoxService) filterManagedOutboundPlans(cfg *singbox.Config) error {
+	retained := make([]map[string]any, 0, len(cfg.ManagedOutbounds))
+	for _, raw := range cfg.ManagedOutbounds {
+		bridge, err := externalvpn.PlanOutbound(raw)
+		if err != nil {
+			return err
+		}
+		expected, err := s.translateOutbound(bridge)
+		if err != nil {
+			return err
+		}
+		for _, actual := range cfg.Outbounds {
+			matches := true
+			for _, key := range []string{"tag", "type", "server", "server_port", "uuid", "username", "password"} {
+				wanted, _ := json.Marshal(expected[key])
+				got, _ := json.Marshal(actual[key])
+				if string(wanted) != string(got) {
+					matches = false
+					break
+				}
+			}
+			if matches {
+				retained = append(retained, raw)
+				break
+			}
+		}
+	}
+	cfg.ManagedOutbounds = retained
 	return nil
 }

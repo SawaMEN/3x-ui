@@ -110,3 +110,5 @@ Gateway и sidecar bridges продолжают использовать име�
 
 Проверки второго этапа и их фактические результаты записаны в
 [hiddify-core-stage-2-verification.md](hiddify-core-stage-2-verification.md).
+
+Повторная проверка и исправления этапов 1–5: [отчёт](hiddify-core-stages-1-5-review.md).

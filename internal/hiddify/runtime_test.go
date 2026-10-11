@@ -39,6 +39,11 @@ esac
 		t.Fatal("wrong core identity")
 	}
 	t.Cleanup(func() { _ = r.Stop(context.Background()) })
+	cancelled, cancelStart := context.WithCancel(context.Background())
+	cancelStart()
+	if err := contract.Start(cancelled); err != context.Canceled || contract.IsRunning() {
+		t.Fatalf("cancelled start launched child: %v", err)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	if err := contract.Start(ctx); err != nil {
 		cancel()

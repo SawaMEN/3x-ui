@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -47,6 +48,7 @@ type managedOutbound struct {
 
 var outboundMu sync.Mutex
 var outboundProcesses = map[string]*managedOutbound{}
+var outboundPlans = map[string]*managedOutbound{}
 
 func IsAdditionalOutbound(raw map[string]any) bool {
 	p, _ := raw["protocol"].(string)
@@ -95,6 +97,172 @@ func ValidateAdditionalOutbound(raw map[string]any) error {
 	return nil
 }
 
+// PlanOutbound allocates a stable bridge identity without starting/stopping a
+// child or rewriting its files. Preview and candidate checks use this path.
+func PlanOutbound(raw map[string]any) (map[string]any, error) {
+	if err := ValidateAdditionalOutbound(raw); err != nil {
+		return nil, err
+	}
+	tag, _ := raw["tag"].(string)
+	if strings.TrimSpace(tag) == "" {
+		return nil, fmt.Errorf("managed outbound requires tag")
+	}
+	outboundMu.Lock()
+	defer outboundMu.Unlock()
+	plan, err := planOutboundLocked(tag, raw)
+	if err != nil {
+		return nil, err
+	}
+	return outboundBridge(tag, plan), nil
+}
+
+func planOutboundLocked(tag string, raw map[string]any) (*managedOutbound, error) {
+	data, err := json.Marshal(raw)
+	if err != nil {
+		return nil, err
+	}
+	sum := sha256.Sum256(data)
+	fingerprint := hex.EncodeToString(sum[:])
+	if plan := outboundPlans[tag]; plan != nil && plan.fingerprint == fingerprint {
+		if active := outboundProcesses[tag]; active != nil {
+			plan.port, plan.password = active.port, active.password
+		}
+		return plan, nil
+	}
+	plan := &managedOutbound{fingerprint: fingerprint}
+	if err := json.Unmarshal(data, &plan.raw); err != nil {
+		return nil, err
+	}
+	old := outboundProcesses[tag]
+	if old == nil {
+		old = outboundPlans[tag]
+	}
+	if old != nil {
+		plan.port, plan.password = old.port, old.password
+	}
+	if plan.port == 0 {
+		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			return nil, err
+		}
+		plan.port = listener.Addr().(*net.TCPAddr).Port
+		_ = listener.Close()
+	}
+	if plan.password == "" {
+		plan.password = uuid.NewString()
+	}
+	outboundPlans[tag] = plan
+	return plan, nil
+}
+
+// OutboundsApplied includes the sidecar configuration behind stable bridge
+// addresses: identical native JSON does not imply identical VPN credentials.
+func OutboundsApplied(raws []map[string]any) bool {
+	outboundMu.Lock()
+	defer outboundMu.Unlock()
+	tags := map[string]bool{}
+	for _, raw := range raws {
+		tag, _ := raw["tag"].(string)
+		tags[tag] = true
+		data, err := json.Marshal(raw)
+		if err != nil {
+			return false
+		}
+		sum := sha256.Sum256(data)
+		proc := outboundProcesses[tag]
+		if proc == nil || proc.fingerprint != hex.EncodeToString(sum[:]) || proc.done == nil {
+			return false
+		}
+		select {
+		case <-proc.done:
+			return false
+		default:
+		}
+	}
+	for tag, proc := range outboundProcesses {
+		if !proc.probe && !tags[tag] {
+			return false
+		}
+	}
+	return true
+}
+
+// ApplyOutbounds stages desired sidecars only after the candidate has passed
+// validation. Finish(true) retires obsolete children; Finish(false) restores
+// replaced ones and removes newly started children. Callers serialize applies.
+func ApplyOutbounds(raws []map[string]any) (finish func(bool) error, err error) {
+	previous := map[string]*managedOutbound{}
+	tags := map[string]bool{}
+	outboundMu.Lock()
+	for _, raw := range raws {
+		tag, _ := raw["tag"].(string)
+		tags[tag] = true
+		previous[tag] = outboundProcesses[tag]
+	}
+	outboundMu.Unlock()
+	var once sync.Once
+	var finishErr error
+	finish = func(commit bool) error {
+		once.Do(func() {
+			if commit {
+				KeepOutbounds(tags)
+				return
+			}
+			for tag, old := range previous {
+				if old != nil {
+					_, restoreErr := EnsureOutbound(old.raw)
+					if restoreErr == nil {
+						outboundMu.Lock()
+						restored := outboundProcesses[tag]
+						outboundMu.Unlock()
+						if restored != old {
+							restoreErr = waitOutboundStartup(tag, restored)
+						}
+					}
+					finishErr = errors.Join(finishErr, restoreErr)
+				} else {
+					outboundMu.Lock()
+					if proc := outboundProcesses[tag]; proc != nil {
+						stopOutbound(proc)
+						delete(outboundProcesses, tag)
+					}
+					outboundMu.Unlock()
+				}
+			}
+		})
+		return finishErr
+	}
+	for _, raw := range raws {
+		if _, err := EnsureOutbound(raw); err != nil {
+			return nil, errors.Join(err, finish(false))
+		}
+		tag, _ := raw["tag"].(string)
+		outboundMu.Lock()
+		proc := outboundProcesses[tag]
+		outboundMu.Unlock()
+		if proc != previous[tag] {
+			if err := waitOutboundStartup(tag, proc); err != nil {
+				return nil, errors.Join(err, finish(false))
+			}
+		}
+	}
+	return finish, nil
+}
+
+func waitOutboundStartup(tag string, proc *managedOutbound) error {
+	if proc == nil || proc.done == nil {
+		return fmt.Errorf("managed outbound %q disappeared during apply", tag)
+	}
+	timer := time.NewTimer(500 * time.Millisecond)
+	defer timer.Stop()
+	select {
+	case <-proc.done:
+		return fmt.Errorf("managed outbound %q exited during startup: %s", tag, proc.cmd.ProcessState)
+	case <-timer.C:
+		return nil
+	}
+}
+
 func EnsureOutbound(raw map[string]any) (map[string]any, error) { return ensureOutbound(raw, false) }
 
 func ensureOutbound(raw map[string]any, probe bool) (map[string]any, error) {
@@ -124,6 +292,11 @@ func ensureOutbound(raw map[string]any, probe bool) (map[string]any, error) {
 		stopOutbound(old)
 	}
 	proc := &managedOutbound{fingerprint: fingerprint, probe: probe}
+	if !probe {
+		if plan := outboundPlans[tag]; plan != nil && plan.fingerprint == fingerprint {
+			proc.port, proc.password = plan.port, plan.password
+		}
+	}
 	if err := json.Unmarshal(data, &proc.raw); err != nil {
 		return nil, err
 	}
@@ -292,6 +465,11 @@ func stopOutbound(proc *managedOutbound) {
 func KeepOutbounds(tags map[string]bool) {
 	outboundMu.Lock()
 	defer outboundMu.Unlock()
+	for tag := range outboundPlans {
+		if !tags[tag] {
+			delete(outboundPlans, tag)
+		}
+	}
 	for tag, proc := range outboundProcesses {
 		if !tags[tag] && (!proc.probe || tags == nil) {
 			stopOutbound(proc)

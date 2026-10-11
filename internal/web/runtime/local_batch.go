@@ -21,6 +21,7 @@ func (l *Local) BeginConfigBatch() func() error {
 	}
 	l.batchMu.Lock()
 	l.batches++
+	l.batchVersion++
 	l.batchMu.Unlock()
 	var once sync.Once
 	var err error
@@ -28,6 +29,7 @@ func (l *Local) BeginConfigBatch() func() error {
 		once.Do(func() {
 			l.batchMu.Lock()
 			l.batches--
+			l.batchVersion++
 			apply := l.batches == 0 && l.batchDirty
 			if apply {
 				l.batchDirty = false
@@ -58,3 +60,10 @@ func (l *Local) requestNativeApply(ctx context.Context) error {
 }
 
 func (l *Local) UsesNativeConfig() bool { return l.isNative() }
+
+// ConfigBatchVersion changes even when a scope opens and closes during validation.
+func (l *Local) ConfigBatchVersion() uint64 {
+	l.batchMu.Lock()
+	defer l.batchMu.Unlock()
+	return l.batchVersion
+}

@@ -28,11 +28,12 @@ type LocalDeps struct {
 }
 
 type Local struct {
-	deps       LocalDeps
-	mu         sync.Mutex
-	batchMu    sync.Mutex
-	batches    int
-	batchDirty bool
+	deps         LocalDeps
+	mu           sync.Mutex
+	batchMu      sync.Mutex
+	batches      int
+	batchDirty   bool
+	batchVersion uint64
 }
 
 func NewLocal(deps LocalDeps) *Local { return &Local{deps: deps} }

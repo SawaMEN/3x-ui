@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"os"
 	"sync/atomic"
 )
@@ -28,4 +29,19 @@ func markSingBoxStarted() {
 
 func markSingBoxStopped() {
 	isSingBoxManuallyStopped.Store(true)
+}
+
+// RecoverIfCrashed rechecks selection and manual Stop under the lifecycle lock.
+// A watchdog observation is stale as soon as an operator changes either one.
+func (s *SingBoxService) RecoverIfCrashed(ctx context.Context) error {
+	singBoxApplyMu.Lock()
+	defer singBoxApplyMu.Unlock()
+	coreType, err := (&SettingService{}).GetCoreType()
+	if err != nil {
+		return err
+	}
+	if coreType != s.coreType() || !s.DidCrash() {
+		return nil
+	}
+	return s.restartLocked(ctx)
 }

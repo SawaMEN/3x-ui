@@ -395,6 +395,9 @@ func (p *Process) Start(ctx context.Context) error {
 }
 
 func (p *Process) startLocked(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	p.mu.RLock()
 	running, done := p.cmd != nil && p.cmd.Process != nil, p.done
 	p.mu.RUnlock()
@@ -422,6 +425,9 @@ func (p *Process) startLocked(ctx context.Context) error {
 		return err
 	}
 	binary, cfg := resolvePath(p.binaryPath()), resolvePath(p.config)
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	// The core must outlive the HTTP request that started it.
 	cmd := exec.CommandContext(context.Background(), binary, p.runCommand(), "-c", cfg)
 	cmd.Dir = filepath.Dir(binary)
@@ -467,6 +473,10 @@ func (p *Process) startLocked(ctx context.Context) error {
 		_ = p.stopLocked()
 		return ctx.Err()
 	case <-timer.C:
+	}
+	if err := ctx.Err(); err != nil {
+		_ = p.stopLocked()
+		return err
 	}
 	p.rememberAppliedConfig()
 	return nil
@@ -584,6 +594,9 @@ func (p *Process) Restart(ctx context.Context) error {
 	p.lifecycle.Lock()
 	defer p.lifecycle.Unlock()
 	if err := p.Validate(ctx); err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
 		return err
 	}
 	if err := p.stopLocked(); err != nil {

@@ -3,10 +3,12 @@ package service
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"sync"
 	"sync/atomic"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 )
 
@@ -61,7 +63,12 @@ func (s *SingBoxService) ApplyPendingRestart(ctx context.Context) {
 		s.SetToNeedRestart()
 		return
 	}
-	if !s.IsRunning() {
+	coreType, err = (&SettingService{}).GetCoreType()
+	if err != nil {
+		s.SetToNeedRestart()
+		return
+	}
+	if coreType != s.coreType() || !s.IsRunning() {
 		return
 	}
 	if batch := localConfigBatch(); batch != nil && batch.ConfigBatchActive() {
@@ -81,7 +88,7 @@ func (s *SingBoxService) ApplyPendingRestart(ctx context.Context) {
 			s.SetToNeedRestart()
 			return
 		}
-		if bytes.Equal(data, s.process().AppliedConfig()) {
+		if bytes.Equal(data, s.process().AppliedConfig()) && externalvpn.OutboundsApplied(cfg.ManagedOutbounds) {
 			// WriteConfig/editor may have published another candidate without applying
 			// it. Restore the actual applied bytes rather than treating disk as runtime.
 			if disk, err := os.ReadFile(s.ProcessConfigPath()); err != nil || !bytes.Equal(disk, data) {
@@ -96,7 +103,11 @@ func (s *SingBoxService) ApplyPendingRestart(ctx context.Context) {
 		}
 	}
 	if err := s.restartLocked(ctx); err != nil {
-		logger.Error("apply native core configuration failed:", err)
 		s.SetToNeedRestart()
+		if errors.Is(err, errNativeConfigBatchChanged) {
+			return
+		}
+		s.process().SetError(err)
+		logger.Error("apply native core configuration failed:", err)
 	}
 }

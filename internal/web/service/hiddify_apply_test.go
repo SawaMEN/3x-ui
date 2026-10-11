@@ -9,9 +9,11 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
 	"github.com/SawaMEN/3x-ui/v3/internal/hiddify"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 	webRuntime "github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
@@ -140,8 +142,13 @@ func stage5ProcessFixture(t *testing.T) (*SingBoxService, string, *atomic.Int32)
 	starts := filepath.Join(dir, "starts")
 	script := fmt.Sprintf(`#!/bin/sh
 case "$1" in
-version) printf 'hiddify-core version %s\nTags: with_xui_panel,with_v2ray_api,with_awg,with_quic,with_wireguard,with_clash_api,with_utls,with_masque\nRevision: %s\n' ;;
-check) test -f "$3" ;;
+version) printf 'hiddify-core version %s\nTags: with_xui_panel,with_v2ray_api,with_awg,with_quic,with_wireguard,with_clash_api,with_utls,with_masque,with_gvisor,with_naive_outbound,with_purego,tfogo_checklinkname0\nRevision: %s\n' ;;
+check) test -f "$3" || exit 2
+if grep -q stage-audit-reject "$3"; then echo 'candidate rejected' >&2; exit 3; fi
+if test -f "$(dirname "$0")/hold-check"; then
+ touch "$(dirname "$0")/checking"
+ while test -f "$(dirname "$0")/hold-check"; do sleep 0.02; done
+fi ;;
 srun) echo started >> %q; if grep -q stage5-fail "$3"; then exit 7; fi; exec sleep 60 ;;
 *) exit 9 ;;
 esac
@@ -299,5 +306,209 @@ func TestHiddifyInvalidDesiredConfigPreservesRunningProcess(t *testing.T) {
 	}
 	if data, _ := os.ReadFile(svc.ProcessConfigPath()); string(data) != string(previous) {
 		t.Fatal("invalid desired config was published")
+	}
+}
+
+func TestHiddifyBinaryRejectDoesNotConsumeStats(t *testing.T) {
+	svc, starts, polls := stage5ProcessFixture(t)
+	previous := svc.process().AppliedConfig()
+	ib := seedHiddifyConfigInbound(t, model.VLESS, `{"decryption":"none"}`, `{}`)
+	if err := database.GetDB().Model(ib).Update("tag", "stage-audit-reject").Error; err != nil {
+		t.Fatal(err)
+	}
+	svc.SetToNeedRestart()
+	svc.ApplyPendingRestart(context.Background())
+	if !svc.IsRunning() || !svc.restartFlag().Load() || stage5Starts(t, starts) != 1 || polls.Load() != 0 {
+		t.Fatal("binary rejection consumed stats or restarted core")
+	}
+	if data, _ := os.ReadFile(svc.ProcessConfigPath()); string(data) != string(previous) {
+		t.Fatal("rejected config published")
+	}
+	if err := svc.Restart(context.Background()); err == nil || polls.Load() != 0 {
+		t.Fatal("manual restart consumed stats before validation")
+	}
+}
+
+func TestHiddifyBatchChangesDuringCandidateValidation(t *testing.T) {
+	svc, starts, polls := stage5ProcessFixture(t)
+	previous := svc.process().AppliedConfig()
+	ib := seedHiddifyConfigInbound(t, model.VLESS, `{"decryption":"none"}`, `{}`)
+	dir := filepath.Dir(svc.BinaryPath())
+	hold, checking := filepath.Join(dir, "hold-check"), filepath.Join(dir, "checking")
+	if err := os.WriteFile(hold, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	svc.SetToNeedRestart()
+	go func() { defer close(done); svc.ApplyPendingRestart(context.Background()) }()
+	t.Cleanup(func() { _ = os.Remove(hold); <-done })
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if _, err := os.Stat(checking); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("candidate did not reach validation")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	// Finish before validation returns: Active alone cannot detect this edit.
+	finish := beginLocalConfigBatch()
+	if err := database.GetDB().Model(ib).Update("tag", "stage-audit-final").Error; err != nil {
+		finish()
+		t.Fatal(err)
+	}
+	svc.SetToNeedRestart()
+	finish()
+	if err := os.Remove(hold); err != nil {
+		t.Fatal(err)
+	}
+	<-done
+	if !svc.restartFlag().Load() || stage5Starts(t, starts) != 1 || polls.Load() != 0 {
+		t.Fatal("intermediate snapshot was applied")
+	}
+	if data, _ := os.ReadFile(svc.ProcessConfigPath()); string(data) != string(previous) {
+		t.Fatal("stale candidate published")
+	}
+	svc.ApplyPendingRestart(context.Background())
+	if svc.restartFlag().Load() || stage5Starts(t, starts) != 2 || !strings.Contains(string(svc.process().AppliedConfig()), "stage-audit-final") {
+		t.Fatal("final configuration did not converge")
+	}
+}
+
+func TestHiddifyCancelledPublicationPreservesFile(t *testing.T) {
+	svc, _, _ := stage5ProcessFixture(t)
+	previous := svc.process().AppliedConfig()
+	seedHiddifyConfigInbound(t, model.VLESS, `{"decryption":"none"}`, `{}`)
+	candidate, err := svc.prepareConfigCandidate(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer candidate.close()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := candidate.publish(ctx); err != context.Canceled {
+		t.Fatalf("publish: %v", err)
+	}
+	if data, _ := os.ReadFile(svc.ProcessConfigPath()); string(data) != string(previous) {
+		t.Fatal("cancelled candidate published")
+	}
+}
+
+func TestHiddifyWatchdogRespectsStoppedAndDeselectedCore(t *testing.T) {
+	svc, starts, _ := stage5ProcessFixture(t)
+	if err := svc.Stop(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.RecoverIfCrashed(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if svc.IsRunning() || stage5Starts(t, starts) != 1 {
+		t.Fatal("watchdog undid manual stop")
+	}
+	svc.stoppedFlag().Store(false) // A previously observed crash.
+	if err := singBoxSettingService.SetCoreType(CoreTypeXray); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.RecoverIfCrashed(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if svc.IsRunning() || stage5Starts(t, starts) != 1 {
+		t.Fatal("watchdog restarted deselected core")
+	}
+}
+
+func TestHiddifyPreviewDoesNotRequireExternalOutboundBinary(t *testing.T) {
+	setupBulkDB(t)
+	t.Setenv("XUI_BIN_FOLDER", t.TempDir())
+	raw := `{"outbounds":[{"tag":"direct","protocol":"freedom"},{"tag":"preview-openflux","protocol":"openflux","settings":{"secret":"` + strings.Repeat("a", 64) + `","context":"preview","transports":[{"type":"direct","dial":"example.com:443","priority":100}]}}]}`
+	if err := singBoxSettingService.SetXrayConfigTemplate(raw); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := NativeCore(CoreTypeHiddify).GetConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.ManagedOutbounds) != 1 {
+		t.Fatal("managed outbound plan was lost")
+	}
+	cfg2, err := NativeCore(CoreTypeHiddify).GetConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, _ := cfg.Marshal()
+	second, _ := cfg2.Marshal()
+	if string(first) != string(second) {
+		t.Fatal("preview changed bridge identity")
+	}
+	checkGeneratedHiddifyConfig(t, cfg)
+	if err := singBoxSettingService.SetSingBoxConfigTemplate(`{"outbounds":[{"type":"direct","tag":"direct"}]}`); err != nil {
+		t.Fatal(err)
+	}
+	overridden, err := NativeCore(CoreTypeHiddify).GetConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(overridden.ManagedOutbounds) != 0 {
+		t.Fatal("template removed bridge but kept a sidecar startup plan")
+	}
+
+}
+
+func TestHiddifyCoreFailureRollsBackExternalOutbound(t *testing.T) {
+	svc, starts, _ := stage5ProcessFixture(t)
+	dir := filepath.Dir(svc.BinaryPath())
+	if err := os.WriteFile(filepath.Join(dir, "openflux"), []byte("#!/bin/sh\nexec sleep 60\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { externalvpn.KeepOutbounds(nil) })
+	template := func(context string) string {
+		return `{"outbounds":[{"tag":"direct","protocol":"freedom"},{"tag":"audit-openflux","protocol":"openflux","settings":{"secret":"` + strings.Repeat("a", 64) + `","context":"` + context + `","transports":[{"type":"direct","dial":"example.com:443","priority":100}]}}]}`
+	}
+	if err := singBoxSettingService.SetXrayConfigTemplate(template("stable")); err != nil {
+		t.Fatal(err)
+	}
+	svc.SetToNeedRestart()
+	svc.ApplyPendingRestart(context.Background())
+	if svc.restartFlag().Load() || stage5Starts(t, starts) != 2 {
+		t.Fatal("valid sidecar configuration did not apply")
+	}
+	configs, err := filepath.Glob(filepath.Join(dir, "externalvpn", "outbound-*", "client.conf"))
+	if err != nil || len(configs) != 1 {
+		t.Fatalf("sidecar config: %v %v", configs, err)
+	}
+	// Only the sidecar options change; bridge/native JSON remains identical.
+	if err := singBoxSettingService.SetXrayConfigTemplate(template("changed")); err != nil {
+		t.Fatal(err)
+	}
+	unchanged := svc.process().AppliedConfig()
+	svc.SetToNeedRestart()
+	svc.ApplyPendingRestart(context.Background())
+	if svc.restartFlag().Load() || stage5Starts(t, starts) != 3 || string(unchanged) != string(svc.process().AppliedConfig()) {
+		t.Fatal("sidecar-only update did not apply through stable bridge")
+	}
+	stable := svc.process().AppliedConfig()
+	before, err := os.ReadFile(configs[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(before), "SessionContext = changed") {
+		t.Fatal("native JSON no-op suppressed changed sidecar settings")
+	}
+	ib := seedHiddifyConfigInbound(t, model.VLESS, `{"decryption":"none"}`, `{}`)
+	if err := database.GetDB().Model(ib).Update("tag", "stage5-fail").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := singBoxSettingService.SetXrayConfigTemplate(template("candidate")); err != nil {
+		t.Fatal(err)
+	}
+	svc.SetToNeedRestart()
+	svc.ApplyPendingRestart(context.Background())
+	after, err := os.ReadFile(configs[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !svc.IsRunning() || !svc.restartFlag().Load() || string(stable) != string(svc.process().AppliedConfig()) || string(before) != string(after) {
+		t.Fatal("failed core candidate displaced stable sidecar or configuration")
 	}
 }

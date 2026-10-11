@@ -15,6 +15,7 @@ import (
 )
 
 type Config struct {
+	ManagedOutbounds     []map[string]any `json:"-"`
 	Hiddify              bool             `json:"-"`
 	Schema               string           `json:"$schema,omitempty"`
 	NTP                  map[string]any   `json:"ntp,omitempty"`

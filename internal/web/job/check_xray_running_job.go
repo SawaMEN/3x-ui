@@ -33,13 +33,14 @@ func (j *CheckXrayRunningJob) Run() {
 		coreType = service.CoreTypeXray
 	}
 	if service.IsNativeCore(coreType) {
-		if !service.SelectedNativeCore().DidCrash() {
+		native := service.NativeCore(coreType)
+		if !native.DidCrash() {
 			j.checkTime = 0
 			return
 		}
 		j.checkTime++
 		if j.checkTime > 1 {
-			err := service.SelectedNativeCore().Restart(context.Background())
+			err := native.RecoverIfCrashed(context.Background())
 			j.checkTime = 0
 			if err != nil {
 				logger.Error("Restart ", coreType, " failed:", err)
