@@ -83,6 +83,9 @@ func TestIsolatedProcessNeverAdoptsManagedProcess(t *testing.T) {
 	if !NewProcess(filepath.Join(dir, "managed.json")).IsRunning() {
 		t.Fatal("managed process was not discovered")
 	}
+	if processMatchesConfig(production.Process.Pid, binary, filepath.Join(dir, "managed.json"), "srun") {
+		t.Fatal("Hiddify raw runtime would adopt a client-mode run process")
+	}
 	isolated := NewTestProcess(filepath.Join(dir, "test.json"))
 	if isolated.IsRunning() || isolated.GetUptime() != 0 {
 		t.Fatal("test process adopted production state")

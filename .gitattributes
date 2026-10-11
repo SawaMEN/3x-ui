@@ -4,3 +4,5 @@ frontend/public/openapi.json text eol=lf
 frontend/src/test/__snapshots__/** text eol=lf
 *.go text eol=lf
 deploy/**/*.yaml text eol=lf
+# Unified diff context has a leading space before Go's tab indentation.
+deploy/hiddify/*.patch whitespace=-space-before-tab

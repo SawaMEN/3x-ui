@@ -42,7 +42,7 @@ func (j *CheckXrayRunningJob) Run() {
 			err := service.SelectedNativeCore().Restart(context.Background())
 			j.checkTime = 0
 			if err != nil {
-				logger.Error("Restart sing-box failed:", err)
+				logger.Error("Restart ", coreType, " failed:", err)
 			}
 		}
 		return

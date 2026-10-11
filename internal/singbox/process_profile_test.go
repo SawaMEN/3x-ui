@@ -54,3 +54,25 @@ esac
 		t.Fatal("unpinned version accepted")
 	}
 }
+
+func TestProcessProfileRejectsMisleadingIdentity(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell fixture")
+	}
+	dir := t.TempDir()
+	binary := filepath.Join(dir, "core")
+	profile := ProcessOptions{Binary: binary, Name: "hiddify-core", VersionPrefix: "hiddify-core version ", RequiredVersion: "panel-test", RequiredRevision: "pinned", RequiredTags: []string{"with_v2ray_api"}}
+	for _, output := range []string{
+		"panel-test\nTags: with_v2ray_api\nRevision: pinned\n",
+		"hiddify-core version panel-test\nTags: without_with_v2ray_api\nRevision: pinned\n",
+		"hiddify-core version panel-test\nTags: with_v2ray_api\nRevision: other\n",
+	} {
+		script := "#!/bin/sh\ncat <<'VERSION'\n" + output + "VERSION\n"
+		if err := os.WriteFile(binary, []byte(script), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := NewProcessWithOptions("", profile, true).Version(context.Background()); err == nil {
+			t.Fatalf("misleading identity accepted: %q", output)
+		}
+	}
+}

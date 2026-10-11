@@ -975,7 +975,7 @@ func (s *SingBoxService) restartLocked(ctx context.Context) error {
 		return err
 	}
 	tuic.GetManager().StopAll()
-	if err := s.process().Restart(ctx); err != nil {
+	if err := s.restartProcess(ctx); err != nil {
 		return err
 	}
 	singBoxTrafficMu.Lock()
@@ -1006,7 +1006,7 @@ func (s *SingBoxService) startLocked(ctx context.Context) error {
 		return err
 	}
 	tuic.GetManager().StopAll()
-	if err := s.process().Start(ctx); err != nil {
+	if err := s.startProcess(ctx); err != nil {
 		return err
 	}
 	singBoxTrafficMu.Lock()
@@ -1031,7 +1031,7 @@ func (s *SingBoxService) stopLocked(ctx context.Context) error {
 		}
 		hiddifyStats.Close()
 	}
-	if err := s.process().Stop(); err != nil {
+	if err := s.stopProcess(ctx); err != nil {
 		return err
 	}
 	s.stoppedFlag().Store(true)
@@ -1334,7 +1334,7 @@ func (s *SingBoxService) installVersion(ctx context.Context, installer func(cont
 		// The update request may have been cancelled; recovery must still work.
 		recoveryCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		if err := s.process().Stop(); err != nil {
+		if err := s.stopProcess(ctx); err != nil {
 			keepBackup = true
 			return "", fmt.Errorf("%w; stop failed update: %w", cause, err)
 		}

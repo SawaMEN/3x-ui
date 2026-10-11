@@ -16,9 +16,10 @@
 
 Актуальная матрица всех 26 значений протокола (25 типов + alias hysteria2),
 решения и проверяемые anchors: [hiddify-core-fork-audit.json](hiddify-core-fork-audit.json).
-Старый build lock [hiddify-core-target.json](hiddify-core-target.json) сохраняет
-проверенную версию до валидации нового форка; сборщик теперь получает и её из
-репозиториев SawaMEN. Это не переход на новый commit и не автоматическая миграция.
+Исторический build lock сохранён в [hiddify-core-v5-baseline.json](hiddify-core-v5-baseline.json).
+На этапе 2 активный [hiddify-core-target.json](hiddify-core-target.json) переведён
+на закреплённый пользовательский форк; см. [интеграцию](hiddify-core-integration.md).
+Автоматическая миграция не включена.
 Старый checksum и результаты v5 не доказывают работу нового форка.
 
 ## Исправления и обязательные решения
@@ -89,7 +90,7 @@ Xray и sing-box, их установку, переключатель и зав�
 
 ## Зафиксированная версия и проверяемые источники
 
-Машинный lock: [hiddify-core-target.json](hiddify-core-target.json).
+Исторический машинный lock: [hiddify-core-v5-baseline.json](hiddify-core-v5-baseline.json).
 
 | Компонент | Зафиксированное значение |
 | --- | --- |

@@ -8,7 +8,11 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 )
 
-const TargetVersion = "v5.0.0"
+const (
+	TargetVersion    = "sawamen-b5749002266b"
+	TargetRevision   = "b5749002266b9782803669138494ef6937eb4e95"
+	StatsQueryMethod = "/v2ray.core.app.stats.command.StatsService/QueryStats"
+)
 
 // TranslateInbound preserves Hiddify extensions without changing the sing-box adapter.
 func TranslateInbound(raw map[string]any) (map[string]any, error) {

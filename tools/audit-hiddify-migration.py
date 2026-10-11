@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check the stage-1 inventory offline; optionally verify a pinned upstream checkout."""
+"""Check historical stage-1 inventory and the pinned owner stage-2 build contract."""
 
 import argparse
 import json
@@ -31,7 +31,7 @@ def audit_fork(fork):
     require(target["repository"] == "https://github.com/SawaMEN/hiddify-core", "Fork must be owner-managed")
     for revision in [lock["panel_baseline"], target["commit"], *target["submodules"].values()]:
         require(bool(re.fullmatch(r"[0-9a-f]{40}", revision)), "Expected pinned fork revision")
-    baseline = json.loads((ROOT / "docs/hiddify-core-target.json").read_text())
+    baseline = json.loads((ROOT / "docs/hiddify-core-v5-baseline.json").read_text())
     rows = lock["protocols"]
     names = [row["panel_protocol"] for row in rows]
     require(len(names) == len(set(names)), "Duplicate fork protocol")
@@ -63,7 +63,7 @@ def audit_fork(fork):
 
 
 def audit(upstream):
-    lock = json.loads((ROOT / "docs/hiddify-core-target.json").read_text())
+    lock = json.loads((ROOT / "docs/hiddify-core-v5-baseline.json").read_text())
     require(lock["schema_version"] == 1 and lock["stage"] == 1, "Unknown audit schema/stage")
     require(not lock["runtime_contract"]["activation_ready"], "Stage 1 cannot enable migration")
     protocols = []
@@ -95,7 +95,7 @@ def audit(upstream):
     require((ROOT / build["clash_user_overlay"]).is_file(), "Missing authenticated Clash user overlay")
     print(f"OK: {len(names)} protocol entries (including aliases), explicit decisions and release lock")
     if upstream is None:
-        print("Upstream verification skipped; pass --upstream to verify source evidence")
+        print("OK: historical v5 baseline retained separately from the active runtime lock")
         return
     upstream = upstream.resolve()
     require(git(upstream, "remote", "get-url", "origin").removesuffix(".git") == target["repository"], "Core checkout is not from the owner's repository")
@@ -114,13 +114,49 @@ def audit(upstream):
     print("This audit does not establish traffic, quota, gateway or platform compatibility")
 
 
+def audit_build(source):
+    lock = json.loads((ROOT / "docs/hiddify-core-target.json").read_text())
+    require(lock["schema_version"] == 2 and lock["stage"] == 2, "Unknown runtime lock schema/stage")
+    target, build = lock["target"], lock["panel_build"]
+    fork = json.loads((ROOT / "docs/hiddify-core-fork-audit.json").read_text())
+    require(target["repository"] == fork["target"]["repository"], "Runtime must use the audited owner repository")
+    require(target["commit"] == fork["target"]["commit"] and target["submodules"] == fork["target"]["submodules"], "Runtime revisions differ from fork audit")
+    require(not lock["runtime_contract"]["automatic_migration_ready"], "Stage 2 cannot enable automatic migration")
+    require(build["toolchain"] == "go" + fork["required_go_directive"], "Runtime toolchain differs from audited sources")
+    require({"with_xui_panel", "with_v2ray_api", "with_awg", "with_quic", "with_wireguard", "with_masque", "with_clash_api"}.issubset(build["tags"]), "Runtime build lacks required tags")
+    profile = (ROOT / "internal/hiddify/translate.go").read_text()
+    require(target["version"] in profile and target["commit"] in profile, "Runtime process identity differs from build lock")
+    require(lock["runtime_contract"]["stats_grpc_method"] == fork["stats_contract"]["method"], "Wrong runtime statistics method")
+    require(lock["runtime_contract"]["stats_grpc_method"] in profile, "Runtime statistics client differs from lock")
+    for key in ("check_command_overlay", "clash_user_overlay"):
+        require((ROOT / build[key]).is_file(), "Missing runtime overlay: " + key)
+    print("OK: stage-2 build/runtime identity, owner revisions, toolchain, tags and statistics profile")
+    if source is None:
+        return
+    source = source.resolve()
+    require(git(source, "remote", "get-url", "origin").removesuffix(".git") == target["repository"], "Wrong runtime source origin")
+    require(git(source, "rev-parse", "HEAD") == target["commit"], "Runtime source HEAD differs from lock")
+    require(not git(source, "status", "--porcelain", "--untracked-files=no"), "Runtime source has tracked changes")
+    for name, revision in target["submodules"].items():
+        require(git(source, "ls-tree", "HEAD", name).split()[2] == revision, "Runtime gitlink differs: " + name)
+        require(git(source / name, "rev-parse", "HEAD") == revision, "Runtime submodule unpinned: " + name)
+        require(git(source / name, "remote", "get-url", "origin").removesuffix(".git") == target["submodule_repositories"][name], "Wrong runtime submodule origin: " + name)
+        require(not git(source / name, "status", "--porcelain", "--untracked-files=no"), "Runtime submodule has changes: " + name)
+    for status in git(source, "submodule", "status", "--recursive").splitlines():
+        require(not status.startswith(("-", "+", "U")), "Uninitialized or modified nested runtime submodule")
+    for check in lock["source_checks"]:
+        require(check["contains"] in (source / check["path"]).read_text(), "Runtime source evidence changed: " + check["path"])
+    print("OK: runtime source/gitlinks/origins and source anchors before overlays")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--upstream", type=Path, help="hiddify-core checkout with initialized pinned submodules")
+    parser.add_argument("--upstream", type=Path, help="active stage-2 owner checkout with initialized pinned submodules")
     parser.add_argument("--fork", type=Path, help="current owner fork checkout with pinned submodules (source audit only)")
     args = parser.parse_args()
     try:
-        audit(args.upstream)
+        audit(None)
+        audit_build(args.upstream)
         audit_fork(args.fork)
     except (ValueError, KeyError, OSError, subprocess.CalledProcessError) as error:
         print(f"FAIL: {error}", file=sys.stderr)

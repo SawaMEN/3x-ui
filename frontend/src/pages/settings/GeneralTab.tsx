@@ -670,7 +670,7 @@ export default function GeneralTab({
                           description={
                             singBoxInstalled
                               ? 'Ядро будет применено после сохранения настроек.'
-                              : 'Установите сборку панели с ядром hiddify-core v5.0.0.'
+                              : 'Установите сборку панели с закреплённым ядром Hiddify Core.'
                           }
                         />
                       )}

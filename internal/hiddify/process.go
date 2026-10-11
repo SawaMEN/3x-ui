@@ -16,10 +16,14 @@ func GetBinaryPath() string {
 	return filepath.Join(filepath.Dir(singbox.GetBinaryPath()), name)
 }
 func GetConfigPath() string { return filepath.Join(filepath.Dir(GetBinaryPath()), "hiddify-core.json") }
+
+var requiredBuildTags = []string{"with_xui_panel", "with_v2ray_api", "with_awg", "with_quic", "with_wireguard", "with_clash_api", "with_utls", "with_masque"}
+
 func NewProcess(path string, isolated bool) *singbox.Process {
 	return singbox.NewProcessWithOptions(path, singbox.ProcessOptions{
 		Binary: GetBinaryPath(), RunCommand: "srun", VersionPrefix: "hiddify-core version ",
-		RequiredVersion: TargetVersion, RequiredTags: []string{"with_xui_panel", "with_v2ray_api", "with_awg", "with_quic", "with_wireguard"},
+		RequiredVersion: TargetVersion, RequiredTags: requiredBuildTags,
+		RequiredRevision: TargetRevision, Name: "hiddify-core",
 		MASQUE: true,
 	}, isolated)
 }

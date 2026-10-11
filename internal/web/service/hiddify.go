@@ -15,10 +15,11 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
-var hiddifyProcess = hiddify.NewProcess(hiddify.GetConfigPath(), false)
+var hiddifyRuntime = hiddify.NewRuntime(hiddify.GetConfigPath(), false)
+var hiddifyProcess = hiddifyRuntime.Process
 var hiddifyNeedRestart atomic.Bool
 var hiddifyManuallyStopped atomic.Bool
-var hiddifyStats singbox.V2RayStatsClient
+var hiddifyStats = hiddify.NewStatsClient()
 var hiddifyPendingInbounds []*xray.Traffic
 var hiddifyPendingClients []*xray.ClientTraffic
 
@@ -102,7 +103,7 @@ func (s *SingBoxService) pollHiddifyTraffic(ctx context.Context) error {
 
 func configureHiddifyStats(cfg *singbox.Config) {
 	cfg.Hiddify = true
-	cfg.Services = nil // v5 uses V2Ray stats and Clash, not sing-box 1.14 service.api.
+	cfg.Services = nil // This fork uses V2Ray stats and Clash rather than service.api.
 	users, tags := []string{}, []string{}
 	listeners := append(append([]map[string]any{}, cfg.Inbounds...), cfg.Endpoints...)
 	for _, inbound := range listeners {
@@ -246,4 +247,23 @@ func splitHiddifyStats(stats []singbox.V2RayStat) (inboundTraffic []*xray.Traffi
 	}
 
 	return
+}
+
+func (s *SingBoxService) startProcess(ctx context.Context) error {
+	if s.Hiddify {
+		return hiddifyRuntime.Start(ctx)
+	}
+	return s.process().Start(ctx)
+}
+func (s *SingBoxService) restartProcess(ctx context.Context) error {
+	if s.Hiddify {
+		return hiddifyRuntime.Restart(ctx)
+	}
+	return s.process().Restart(ctx)
+}
+func (s *SingBoxService) stopProcess(ctx context.Context) error {
+	if s.Hiddify {
+		return hiddifyRuntime.Stop(ctx)
+	}
+	return s.process().Stop()
 }

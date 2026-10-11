@@ -29,6 +29,10 @@ func TestCapabilitiesFor(t *testing.T) {
 				ShadowTLS:          true,
 			},
 		},
+		{name: "hiddify-core", core: Hiddify, want: Capabilities{
+			RuleSets: true, OutboundDelayProbe: true, ConnectionStats: true,
+			ClashAPI: true, ShadowTLS: true,
+		}},
 		{name: "unknown", core: Type("unknown"), want: Capabilities{}},
 	}
 
