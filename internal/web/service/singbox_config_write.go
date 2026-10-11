@@ -51,3 +51,33 @@ func (s *SingBoxService) writeConfigCandidate(ctx context.Context) error {
 	defer dir.Close()
 	return dir.Sync()
 }
+
+// Restore a trusted applied snapshot with the same atomic/durable publication
+// and permissions as a validated candidate. Callers must hold singBoxApplyMu.
+func writeNativeConfigBytes(path string, data []byte) error {
+	file, err := os.CreateTemp(filepath.Dir(path), ".native-config-restore-*.json")
+	if err != nil {
+		return err
+	}
+	name := file.Name()
+	defer os.Remove(name)
+	defer file.Close()
+	if _, err := file.Write(data); err != nil {
+		return err
+	}
+	if err := file.Sync(); err != nil {
+		return err
+	}
+	if err := file.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(name, path); err != nil {
+		return err
+	}
+	dir, err := os.Open(filepath.Dir(path))
+	if err != nil {
+		return err
+	}
+	defer dir.Close()
+	return dir.Sync()
+}

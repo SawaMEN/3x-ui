@@ -30,6 +30,7 @@ type BulkAttachResult struct {
 // all clients to a target in a single AddInboundClient call, and reports clients already
 // present on a target as skipped.
 func (s *ClientService) BulkAttach(inboundSvc *InboundService, emails []string, inboundIds []int) (*BulkAttachResult, bool, error) {
+	defer beginLocalConfigBatch()()
 	result := &BulkAttachResult{}
 	if len(emails) == 0 || len(inboundIds) == 0 {
 		return result, false, nil
@@ -176,6 +177,7 @@ type BulkDetachResult struct {
 // are reported under skipped. ClientRecord rows are kept even when they become orphaned
 // (matches single-client detach semantics); callers should use bulkDelete for full removal.
 func (s *ClientService) BulkDetach(inboundSvc *InboundService, emails []string, inboundIds []int) (*BulkDetachResult, bool, error) {
+	defer beginLocalConfigBatch()()
 	result := &BulkDetachResult{}
 	if len(emails) == 0 || len(inboundIds) == 0 {
 		return result, false, nil
@@ -333,6 +335,7 @@ var bulkFlowAllowed = map[string]struct{}{
 // settings JSON is parsed and written exactly once regardless of how
 // many target emails it contains.
 func (s *ClientService) BulkAdjust(inboundSvc *InboundService, emails []string, addDays int, addBytes int64, flow string, limitHwid *int, adTag string) (BulkAdjustResult, bool, error) {
+	defer beginLocalConfigBatch()()
 	result := BulkAdjustResult{}
 	if len(emails) == 0 {
 		return result, false, nil
@@ -886,6 +889,7 @@ type BulkDeleteReport struct {
 // IN-clause queries at the end. Errors on a particular email are recorded
 // in the Skipped list and processing continues for the rest.
 func (s *ClientService) BulkDelete(inboundSvc *InboundService, emails []string, keepTraffic bool) (BulkDeleteResult, bool, error) {
+	defer beginLocalConfigBatch()()
 	result := BulkDeleteResult{}
 
 	cleanEmails := trimmedUniqueEmails(emails)
@@ -1265,6 +1269,7 @@ type BulkCreateReport struct {
 }
 
 func (s *ClientService) BulkCreate(inboundSvc *InboundService, payloads []ClientCreatePayload) (BulkCreateResult, bool, error) {
+	defer beginLocalConfigBatch()()
 	result := BulkCreateResult{}
 	if len(payloads) == 0 {
 		return result, false, nil
@@ -1553,6 +1558,7 @@ type BulkSetEnableReport struct {
 }
 
 func (s *ClientService) BulkSetEnable(inboundSvc *InboundService, emails []string, enable bool) (BulkSetEnableResult, bool, error) {
+	defer beginLocalConfigBatch()()
 	result := BulkSetEnableResult{}
 
 	cleanEmails := trimmedUniqueEmails(emails)

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -486,7 +487,8 @@ func (s *SingBoxService) restartLocked(ctx context.Context) error {
 		hiddifyStats.Close()
 	}
 	// Capture the old applied config before publishing a candidate.
-	_ = s.IsRunning()
+	wasRunning := s.IsRunning()
+	previous := s.process().AppliedConfig()
 	if _, err := s.process().Version(ctx); err != nil {
 		s.process().SetError(err)
 		return err
@@ -497,6 +499,18 @@ func (s *SingBoxService) restartLocked(ctx context.Context) error {
 	}
 	tuic.GetManager().StopAll()
 	if err := s.restartProcess(ctx); err != nil {
+		if s.Hiddify && wasRunning && len(previous) > 0 {
+			recoveryErr := writeNativeConfigBytes(s.ProcessConfigPath(), previous)
+			if recoveryErr == nil && !s.IsRunning() {
+				recoveryCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				recoveryErr = s.startProcess(recoveryCtx)
+				cancel()
+			}
+			if recoveryErr != nil {
+				err = errors.Join(err, fmt.Errorf("restore previous hiddify configuration: %w", recoveryErr))
+			}
+			s.process().SetError(err)
+		}
 		return err
 	}
 	singBoxTrafficMu.Lock()

@@ -295,7 +295,7 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 }
 
 // Background-job cadences. Centralized here as the single tuning surface; the
-// values are unchanged from the historical hardcoded cron specs. Follow-up:
+// native config applies use a short cadence with a batch/overlap guard. Follow-up:
 // make these configurable via settings, add per-tick jitter to de-synchronize
 // fleet load, skip expensive jobs when no WebSocket clients are connected or
 // node/xray state is unchanged, and export per-job duration/skipped/error
@@ -303,6 +303,7 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 const (
 	cadenceXrayRunning   = "@every 3s"
 	cadenceXrayRestart   = "@every 30s"
+	cadenceNativeApply   = "@every 1s"
 	cadenceXrayTraffic   = "@every 5s"
 	cadenceMtproto       = "@every 10s"
 	cadenceAmneziaWG     = "@every 10s"
@@ -364,7 +365,11 @@ func (s *Server) startTask(restartXray bool, loc *time.Location) {
 	// is inert unless an Xray mutation has explicitly armed the flag.
 	_, _ = s.cron.AddFunc(cadenceXrayRestart, func() {
 		s.xrayService.ApplyPendingRestart()
-		(service.SelectedNativeCore()).ApplyPendingRestart(s.ctx)
+	})
+	// Native configuration changes converge promptly, without a restart per user.
+	// The apply guard suppresses overlapping ticks and active mutation batches.
+	_, _ = s.cron.AddFunc(cadenceNativeApply, func() {
+		service.SelectedNativeCore().ApplyPendingRestart(s.ctx)
 	})
 
 	// Reconcile mtproto (mtg) sidecars and scrape their traffic
@@ -633,7 +638,7 @@ func (s *Server) start(restartXray bool, startTgBot bool) (err error) {
 			}
 			return core
 		},
-		RestartCore: func(ctx context.Context) error {
+		RequestConfigApply: func(ctx context.Context) error {
 			core, err := s.settingService.GetCoreType()
 			if err != nil {
 				return err

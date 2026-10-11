@@ -19,30 +19,43 @@ import (
 )
 
 type LocalDeps struct {
-	APIPort        func() int
-	CoreType       func() string
-	RestartCore    func(context.Context) error
-	SetNeedRestart func()
+	APIPort  func() int
+	CoreType func() string
+	// RequestConfigApply queues one validated apply of committed DB state.
+	RequestConfigApply func(context.Context) error
+	RestartCore        func(context.Context) error // Compatibility for existing embedders.
+	SetNeedRestart     func()
 }
 
 type Local struct {
-	deps LocalDeps
-	mu   sync.Mutex
+	deps       LocalDeps
+	mu         sync.Mutex
+	batchMu    sync.Mutex
+	batches    int
+	batchDirty bool
 }
 
 func NewLocal(deps LocalDeps) *Local { return &Local{deps: deps} }
 func (l *Local) Name() string        { return "local" }
 
-func (l *Local) isSingBox() bool {
-	return l.deps.CoreType != nil && (l.deps.CoreType() == "sing-box" || l.deps.CoreType() == "hiddify-core")
+func (l *Local) isNative() bool {
+	if l.deps.CoreType == nil {
+		return false
+	}
+	core := l.deps.CoreType()
+	return core == "sing-box" || core == "hiddify-core"
 }
 
 func (l *Local) applyCoreChange(ctx context.Context) error {
-	if l.isSingBox() {
-		if l.deps.RestartCore == nil {
-			return errors.New("sing-box runtime restart is not configured")
+	if l.isNative() {
+		l.batchMu.Lock()
+		if l.batches > 0 {
+			l.batchDirty = true
+			l.batchMu.Unlock()
+			return nil
 		}
-		return l.deps.RestartCore(ctx)
+		l.batchMu.Unlock()
+		return l.requestNativeApply(ctx)
 	}
 	if l.deps.SetNeedRestart != nil {
 		l.deps.SetNeedRestart()
@@ -109,7 +122,7 @@ func (l *Local) AddInbound(ctx context.Context, ib *model.Inbound) error {
 		return err
 	}
 	if ib.Protocol == model.TUIC {
-		if l.isSingBox() {
+		if l.isNative() {
 			return l.applyCoreChange(ctx)
 		}
 		inst, ok := tuic.InstanceFromInbound(ib)
@@ -122,7 +135,7 @@ func (l *Local) AddInbound(ctx context.Context, ib *model.Inbound) error {
 		}
 		return err
 	}
-	if l.isSingBox() {
+	if l.isNative() {
 		return l.applyCoreChange(ctx)
 	}
 	body, err := json.MarshalIndent(xray.InboundFromPanel(ib.GenInboundConfig()), "", "  ")
@@ -159,18 +172,27 @@ func (l *Local) DelInbound(ctx context.Context, ib *model.Inbound) error {
 	}
 	if ib.Protocol == model.TUIC {
 		tuic.GetManager().Remove(ib.Id)
-		if l.isSingBox() {
+		if l.isNative() {
 			return l.applyCoreChange(ctx)
 		}
 		return nil
 	}
-	if l.isSingBox() {
+	if l.isNative() {
 		return l.applyCoreChange(ctx)
 	}
 	return l.withAPI(func(api *xray.XrayAPI) error { return api.DelInbound(ib.Tag) })
 }
 
-func (l *Local) UpdateInbound(ctx context.Context, oldIb, newIb *model.Inbound) error {
+func (l *Local) UpdateInbound(ctx context.Context, oldIb, newIb *model.Inbound) (err error) {
+	finish := l.BeginConfigBatch()
+	defer func() {
+		// Sidecar transitions can add/remove an egress bridge even when the new
+		// listener is disabled. The full native configuration must follow the DB.
+		if l.isNative() && oldIb.Protocol != newIb.Protocol {
+			err = errors.Join(err, l.applyCoreChange(ctx))
+		}
+		err = errors.Join(err, finish())
+	}()
 	if externalvpn.IsManaged(oldIb.Protocol) || externalvpn.IsManaged(newIb.Protocol) {
 		if err := l.DelInbound(ctx, oldIb); err != nil {
 			return err
@@ -180,7 +202,7 @@ func (l *Local) UpdateInbound(ctx context.Context, oldIb, newIb *model.Inbound) 
 		}
 		return nil
 	}
-	if l.isSingBox() && oldIb.Protocol != model.MTProto && oldIb.Protocol != model.AmneziaWG && oldIb.Protocol != model.Mieru && oldIb.Protocol != model.Sudoku && newIb.Protocol != model.MTProto && newIb.Protocol != model.AmneziaWG && newIb.Protocol != model.Mieru && newIb.Protocol != model.Sudoku {
+	if l.isNative() && oldIb.Protocol != model.MTProto && oldIb.Protocol != model.AmneziaWG && oldIb.Protocol != model.Mieru && oldIb.Protocol != model.Sudoku && newIb.Protocol != model.MTProto && newIb.Protocol != model.AmneziaWG && newIb.Protocol != model.Mieru && newIb.Protocol != model.Sudoku {
 		if oldIb.Protocol == model.TUIC {
 			tuic.GetManager().Remove(oldIb.Id)
 		}
@@ -318,20 +340,20 @@ func (l *Local) updateMieruInbound(ctx context.Context, oldIb, newIb *model.Inbo
 }
 
 func (l *Local) AddUser(ctx context.Context, ib *model.Inbound, userMap map[string]any) error {
-	if ib.Protocol == model.MTProto || ib.Protocol == model.AmneziaWG || (ib.Protocol == model.TUIC && !l.isSingBox()) || ib.Protocol == model.Mieru || externalvpn.IsManaged(ib.Protocol) || ib.Protocol == model.Sudoku {
+	if ib.Protocol == model.MTProto || ib.Protocol == model.AmneziaWG || (ib.Protocol == model.TUIC && !l.isNative()) || ib.Protocol == model.Mieru || externalvpn.IsManaged(ib.Protocol) || ib.Protocol == model.Sudoku {
 		return nil
 	}
-	if l.isSingBox() {
+	if l.isNative() {
 		return l.applyCoreChange(ctx)
 	}
 	return l.withAPI(func(api *xray.XrayAPI) error { return api.AddUser(string(ib.Protocol), ib.Tag, userMap) })
 }
 
 func (l *Local) RemoveUser(ctx context.Context, ib *model.Inbound, email string) error {
-	if ib.Protocol == model.MTProto || ib.Protocol == model.AmneziaWG || (ib.Protocol == model.TUIC && !l.isSingBox()) || ib.Protocol == model.Mieru || externalvpn.IsManaged(ib.Protocol) || ib.Protocol == model.Sudoku {
+	if ib.Protocol == model.MTProto || ib.Protocol == model.AmneziaWG || (ib.Protocol == model.TUIC && !l.isNative()) || ib.Protocol == model.Mieru || externalvpn.IsManaged(ib.Protocol) || ib.Protocol == model.Sudoku {
 		return nil
 	}
-	if l.isSingBox() {
+	if l.isNative() {
 		return l.applyCoreChange(ctx)
 	}
 	return l.withAPI(func(api *xray.XrayAPI) error { return api.RemoveUser(ib.Tag, email) })
@@ -361,7 +383,7 @@ func (l *Local) UpdateUser(ctx context.Context, ib *model.Inbound, oldEmail stri
 	if ib.Protocol == model.Mieru || ib.Protocol == model.Sudoku || externalvpn.IsManaged(ib.Protocol) {
 		return nil // Full state is reapplied by the protocol-specific reconciler.
 	}
-	if l.isSingBox() {
+	if l.isNative() {
 		// sing-box reads the client list from the database when regenerating
 		// its config. Avoid the remove+add double restart used by Xray's API.
 		return l.applyCoreChange(ctx)

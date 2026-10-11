@@ -329,6 +329,7 @@ func (s *ClientService) checkEmailsExistForClients(inboundSvc *InboundService, c
 }
 
 func (s *ClientService) AddInboundClient(inboundSvc *InboundService, data *model.Inbound) (bool, error) {
+	defer beginLocalConfigBatch()()
 	if oldInbound, err := inboundSvc.GetInbound(data.Id); err == nil && oldInbound.Protocol == model.VKTurnProxy {
 		return inboundSvc.AddVKTurnProxyClient(data)
 	}
@@ -602,6 +603,10 @@ func (s *ClientService) AddInboundClient(inboundSvc *InboundService, data *model
 	if oldInbound.NodeID == nil {
 		if !push {
 			needRestart = true
+		} else if rtUsesNativeConfig(rt) && !isLocalSidecarInbound(oldInbound.Protocol) {
+			if err := rt.UpdateInbound(context.Background(), oldInbound, oldInbound); err != nil {
+				needRestart = true
+			}
 		} else if oldInbound.Protocol == model.MTProto {
 			inboundSvc.applyLocalMtproto(oldInbound.Id)
 		} else if oldInbound.Protocol == model.AmneziaWG {
@@ -683,6 +688,7 @@ func (s *ClientService) AddInboundClient(inboundSvc *InboundService, data *model
 }
 
 func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *model.Inbound, oldEmail string) (bool, error) {
+	defer beginLocalConfigBatch()()
 	if oldInbound, err := inboundSvc.GetInbound(data.Id); err == nil && oldInbound.Protocol == model.VKTurnProxy {
 		if clientID, ok := inboundSvc.vkTurnProxyClientIDByEmail(data.Id, oldEmail); ok {
 			return inboundSvc.UpdateVKTurnProxyClient(data, clientID)
@@ -1064,6 +1070,10 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 		if oldInbound.NodeID == nil {
 			if !push {
 				needRestart = true
+			} else if rtUsesNativeConfig(rt) && !isLocalSidecarInbound(oldInbound.Protocol) {
+				if err := rt.UpdateInbound(context.Background(), oldInbound, oldInbound); err != nil {
+					needRestart = true
+				}
 			} else if oldInbound.Protocol == model.MTProto {
 				inboundSvc.applyLocalMtproto(oldInbound.Id)
 			} else if oldInbound.Protocol == model.AmneziaWG {
@@ -1140,6 +1150,7 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 }
 
 func (s *ClientService) DelInboundClientByEmail(inboundSvc *InboundService, inboundId int, email string, keepTraffic bool, fullDelete bool) (bool, error) {
+	defer beginLocalConfigBatch()()
 	defer lockInbound(inboundId).Unlock()
 
 	oldInbound, err := inboundSvc.GetInbound(inboundId)
@@ -1448,6 +1459,7 @@ func (s *ClientService) SetClientEnableByEmail(inboundSvc *InboundService, clien
 // SyncInbound over a stale sibling would revert the edit in the normalized
 // records (#5039).
 func (s *ClientService) applyClientFieldByEmail(inboundSvc *InboundService, clientEmail string, mutate func(c map[string]any)) (bool, error) {
+	defer beginLocalConfigBatch()()
 	inboundIds, err := s.GetInboundIdsForEmail(database.GetDB(), clientEmail)
 	if err != nil {
 		return false, err

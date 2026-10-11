@@ -1,4 +1,4 @@
-# Интеграция hiddify-core: этапы 2–4
+# Интеграция hiddify-core: этапы 2–5
 
 Ветка `update`. Ядро собирается только из `SawaMEN/hiddify-core`:
 `b5749002266b9782803669138494ef6937eb4e95`, зависимый `SawaMEN/hiddify-sing-box`:
@@ -27,6 +27,19 @@ Infrastructure, AdBlock и managed YouTube используют тот же сн
 Настоящее ядро проверено на успешной публикации и отказе candidate с
 сохранением старого файла.
 Подробности: [hiddify-core-stage-4-verification.md](hiddify-core-stage-4-verification.md).
+
+## Применение изменений панели
+
+Этап 5 добавил scopes для local native mutations и массовых клиентских
+операций. Последний scope запрашивает один apply зафиксированной БД; native
+update/enable/user changes используют полный конфиг. Фоновый apply проверяет
+очередь раз в секунду, ждёт завершения пачки, пропускает неизменившийся конфиг
+и сохраняет ручной Stop. Неудачный запуск восстанавливает предыдущий applied
+config и процесс; desired state остаётся для retry.
+
+Raw `srun` не предоставляет client RPC `/hcore.Core/HotReload`, поэтому
+применение использует контролируемый restart без объявления HotInboundReload.
+Проверки и границы: [hiddify-core-stage-5-verification.md](hiddify-core-stage-5-verification.md).
 
 ## Runtime и управление процессом
 

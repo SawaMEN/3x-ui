@@ -35,7 +35,7 @@ func (m *Manager) SessionRuntimeFor(nodeID *int) (SessionRuntime, error) {
 }
 
 func (l *Local) ActiveSessions(ctx context.Context) ([]singbox.ActiveSession, error) {
-	if !l.isSingBox() {
+	if !l.isNative() {
 		return nil, errors.New("active sessions are currently available only for sing-box")
 	}
 	client := singbox.NewConnectionAPIClient()
@@ -48,7 +48,7 @@ func (l *Local) DisconnectUserSessions(ctx context.Context, inbound, user string
 }
 
 func (l *Local) DisconnectUsersSessions(ctx context.Context, inbound string, users []string) (int, error) {
-	if !l.isSingBox() {
+	if !l.isNative() {
 		return 0, errors.New("session disconnect is currently available only for sing-box")
 	}
 	client := singbox.NewConnectionAPIClient()
@@ -57,7 +57,7 @@ func (l *Local) DisconnectUsersSessions(ctx context.Context, inbound string, use
 }
 
 func (l *Local) DisconnectInboundSessions(ctx context.Context, inbound string) (int, error) {
-	if !l.isSingBox() {
+	if !l.isNative() {
 		return 0, errors.New("session disconnect is currently available only for sing-box")
 	}
 	client := singbox.NewConnectionAPIClient()

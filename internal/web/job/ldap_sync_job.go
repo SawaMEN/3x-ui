@@ -151,6 +151,7 @@ func (j *LdapSyncJob) Run() {
 		}
 	}
 
+	defer service.BeginLocalConfigBatch()()
 	j.createClients(clientsToCreate, resolvedInboundIds, resolvedTags)
 
 	// --- Execute enable/disable batch ---

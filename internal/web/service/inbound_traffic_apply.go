@@ -141,6 +141,7 @@ func (s *InboundService) applyTrafficLocalPlan(plan *trafficLocalApplyPlan) (nee
 }
 
 func (s *InboundService) applyTrafficMutationBatch(b *trafficMutationBatch) bool {
+	defer beginLocalConfigBatch()()
 	if b == nil {
 		return false
 	}
