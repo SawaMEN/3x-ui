@@ -66,6 +66,12 @@ _write_update_status() {
 }
 _report_update_exit() {
     local code=$?
+    if declare -F core_migration_exit >/dev/null; then
+        if ! core_migration_exit "$code"; then
+            [[ "$code" -ne 0 ]] || code=1
+            xui_update_error="${xui_update_error:-upgrade rollback failed; inspect retained snapshot}"
+        fi
+    fi
     if [[ "${code}" -eq 0 ]]; then
         _write_update_status "success" "0" ""
     else
@@ -1127,11 +1133,22 @@ update_x-ui() {
         _fail "ERROR: Release archive does not contain x-ui/x-ui. The current installation was not changed."
     fi
 
+    local cm_helper
+    cm_helper=$(mktemp "${install_parent}/.core-migration.XXXXXX") || _fail "Cannot prepare migration helper"
+    if ! tar -xOf "${archive}" x-ui/core-migration.sh > "$cm_helper"; then
+        rm -f "$cm_helper"
+        _fail "Release is missing the installed-panel migration helper; current installation was not changed"
+    fi
+    source "$cm_helper"
+    rm -f "$cm_helper"
+    core_migration_prepare_archive "$archive" || _fail "Pinned owner core preflight failed; current installation was not changed"
+
     if [[ -e ${xui_folder}/ ]]; then
         echo -e "${green}Stopping x-ui...${plain}"
         if [[ $release == "alpine" ]]; then
             if [ -f "/etc/init.d/x-ui" ]; then
-                rc-service x-ui stop > /dev/null 2>&1
+                rc-service x-ui stop > /dev/null 2>&1 || _fail "Cannot stop x-ui for offline migration"
+                core_migration_begin || _fail "Cannot snapshot installation; no release files replaced"
                 rc-update del x-ui > /dev/null 2>&1
                 echo -e "${green}Removing old service unit version...${plain}"
                 rm -f /etc/init.d/x-ui > /dev/null 2>&1
@@ -1141,7 +1158,8 @@ update_x-ui() {
             fi
         else
             if [ -f "${xui_service}/x-ui.service" ]; then
-                systemctl stop x-ui > /dev/null 2>&1
+                systemctl stop x-ui > /dev/null 2>&1 || _fail "Cannot stop x-ui for offline migration"
+                core_migration_begin || _fail "Cannot snapshot installation; no release files replaced"
                 systemctl disable x-ui > /dev/null 2>&1
                 echo -e "${green}Removing old systemd unit version...${plain}"
                 rm "${xui_service}/x-ui.service" -f > /dev/null 2>&1
@@ -1243,6 +1261,8 @@ update_x-ui() {
         chmod 640 "${xui_folder}/bin/config.json" > /dev/null 2>&1
     fi
 
+    core_migration_apply || _fail "Owner sing-box migration failed; restoring previous installation"
+
     if [[ $release == "alpine" ]]; then
         echo -e "${green}Downloading and installing startup unit x-ui.rc...${plain}"
         xui_rc_temp="/etc/init.d/x-ui.tmp.$$"
@@ -1334,7 +1354,8 @@ update_x-ui() {
         fi
     fi
 
-    config_after_update
+    core_migration_commit || _fail "Updated panel did not start its owner sing-box; restoring snapshot"
+    if [[ -z "${cm_backup:-}" ]]; then config_after_update; fi
 
     # IP Limit relies on fail2ban; install + configure it now so the feature
     # works out of the box on update too (no-op when XUI_ENABLE_FAIL2BAN=false).

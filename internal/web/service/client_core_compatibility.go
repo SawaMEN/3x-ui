@@ -170,6 +170,11 @@ func isSupportedCoreType(core string) bool {
 	return core == CoreTypeXray || IsNativeCore(core)
 }
 
+// CoreSupportsInboundProtocol exposes the same policy to offline migration preflight.
+func CoreSupportsInboundProtocol(core string, protocol model.Protocol) bool {
+	return coreSupportsInboundProtocol(canonicalCoreType(core), protocol)
+}
+
 func coreSupportsInboundProtocol(core string, protocol model.Protocol) bool {
 	switch core {
 	case CoreTypeXray:

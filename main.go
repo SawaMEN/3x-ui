@@ -17,6 +17,7 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/adblock/youtubeproxy"
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
+	"github.com/SawaMEN/3x-ui/v3/internal/coremigration"
 	"github.com/SawaMEN/3x-ui/v3/internal/crypto/nodetoken"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/gateway"
@@ -74,6 +75,14 @@ func initNodeTokenCrypto() error {
 
 // runWebServer initializes and starts the web server for the 3x-ui panel.
 func runWebServer() {
+	release, err := coremigration.AcquirePanelLease()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer release()
+	if err := coremigration.CheckPanelStartup(); err != nil {
+		log.Fatal(err)
+	}
 	log.Printf("Starting %v %v", config.GetName(), config.GetPanelVersion())
 
 	switch config.GetLogLevel() {
@@ -110,7 +119,7 @@ func runWebServer() {
 		log.Fatalf("Error initializing node-token encryption: %v", err)
 	}
 
-	err := database.InitDB(config.GetDBPath())
+	err = database.InitDB(config.GetDBPath())
 	if err != nil {
 		log.Fatalf("Error initializing database: %v", err)
 	}
@@ -690,6 +699,10 @@ func main() {
 		if err := gateway.CLI(os.Args[2:]); err != nil {
 			log.Fatal(err)
 		}
+	case "core-migrate":
+		if err := coremigration.CLIWithInitializer(os.Args[2:], initNodeTokenCrypto); err != nil {
+			log.Fatal(err)
+		}
 	case "migrate-db":
 		if err := migrateDbCmd.Parse(os.Args[2:]); err != nil {
 			fmt.Println(err)
@@ -791,6 +804,7 @@ Commands:
     youtube-proxy  run the opt-in YouTube HTTPS server filter
     run            run web panel
     migrate        migrate from other/old x-ui
+    core-migrate   migrate an offline installation to the owner sing-box (--backup-dir)
     migrate-db     SQLite <-> .dump (--dump/--restore) or copy into PostgreSQL (--dsn)
     encrypt-tokens encrypt node bearer tokens with the configured active key
     setting        set settings
