@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"path/filepath"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/hiddify"
+	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 )
 
@@ -20,8 +20,6 @@ var hiddifyProcess = hiddifyRuntime.Process
 var hiddifyNeedRestart atomic.Bool
 var hiddifyManuallyStopped atomic.Bool
 var hiddifyStats = hiddify.NewStatsClient()
-var hiddifyPendingInbounds []*coremodel.Traffic
-var hiddifyPendingClients []*coremodel.ClientTraffic
 
 func IsNativeCore(core string) bool { return core == CoreTypeSingBox || core == CoreTypeHiddify }
 func NativeCore(core string) *SingBoxService {
@@ -78,47 +76,36 @@ func (s *SingBoxService) logPath() string {
 	return filepath.Join(filepath.Dir(s.ProcessConfigPath()), s.coreType()+".log")
 }
 
-// QueryStats resets one snapshot only after the previous DB batch was saved.
-// Retain a failed batch so a transient DB error cannot discard byte deltas.
+// Non-destructive snapshots can be retried after an RPC or database failure.
 func (s *SingBoxService) pollHiddifyTraffic(ctx context.Context) error {
 	singBoxTrafficMu.Lock()
 	defer singBoxTrafficMu.Unlock()
-	if len(hiddifyPendingInbounds) > 0 || len(hiddifyPendingClients) > 0 {
-		if err := s.commitTraffic(hiddifyPendingInbounds, hiddifyPendingClients); err != nil {
-			return err
-		}
-		hiddifyPendingInbounds, hiddifyPendingClients = nil, nil
+	epoch, err := s.process().RuntimeID()
+	if err != nil {
+		return err
 	}
-	stats, err := hiddifyStats.Query(ctx, nil, true)
+	stats, err := hiddifyStats.Query(ctx, nil, false)
 	if err != nil {
 		return fmt.Errorf("hiddify user statistics: %w", err)
 	}
-	hiddifyPendingInbounds, hiddifyPendingClients = splitHiddifyStats(stats)
-	if err := s.commitTraffic(hiddifyPendingInbounds, hiddifyPendingClients); err != nil {
+	after, err := s.process().RuntimeID()
+	if err != nil {
 		return err
 	}
-	hiddifyPendingInbounds, hiddifyPendingClients = nil, nil
+	if epoch != after {
+		return fmt.Errorf("hiddify core restarted during statistics query")
+	}
+	if err := s.commitHiddifySnapshot(epoch, stats); err != nil {
+		return err
+	}
+	if err := s.enforceHiddifySessions(ctx); err != nil {
+		logger.Warning("hiddify session revocation failed; retry after config apply:", err)
+	}
 	return nil
 }
 
 func (s *SingBoxService) hiddifySessions(ctx context.Context) ([]singbox.ActiveSession, error) {
-	connections, err := singbox.NewClashStatsClient().Connections(ctx)
-	if err != nil {
-		return nil, err
-	}
-	sessions := make([]singbox.ActiveSession, 0, len(connections))
-	for _, connection := range connections {
-		kind, inbound, _ := strings.Cut(connection.Metadata.Type, "/")
-		sessions = append(sessions, singbox.ActiveSession{
-			ID: connection.ID, Core: CoreTypeHiddify, Inbound: inbound, InboundType: kind,
-			User: connection.Metadata.User, Network: connection.Metadata.Network,
-			Source:      net.JoinHostPort(connection.Metadata.SourceIP, connection.Metadata.SourcePort),
-			Destination: net.JoinHostPort(connection.Metadata.DestinationIP, connection.Metadata.DestinationPort),
-			Domain:      connection.Metadata.Host, CreatedAt: connection.Start.UnixMilli(),
-			Upload: connection.Upload, Download: connection.Download, Chain: connection.Chains,
-		})
-	}
-	return sessions, nil
+	return hiddify.ActiveSessions(ctx)
 }
 func (s *SingBoxService) hiddifyPresence(ctx context.Context) (map[string]map[string]struct{}, []string, error) {
 	sessions, err := s.hiddifySessions(ctx)
@@ -151,52 +138,40 @@ func (s *SingBoxService) hiddifyPresence(ctx context.Context) (map[string]map[st
 	return online, active, nil
 }
 func (s *SingBoxService) disconnectHiddify(ctx context.Context, match func(singbox.ActiveSession) bool) (int, error) {
-	sessions, err := s.hiddifySessions(ctx)
-	if err != nil {
-		return 0, err
-	}
-	api := singbox.NewClashStatsClient()
-	count := 0
-	var failures []error
-	for _, session := range sessions {
-		if !match(session) {
-			continue
-		}
-		if err := api.CloseConnection(ctx, session.ID); err != nil {
-			failures = append(failures, err)
-		} else {
-			count++
-		}
-	}
-	return count, errors.Join(failures...)
+	return hiddify.DisconnectSessions(ctx, match)
 }
 
 func splitHiddifyStats(stats []singbox.V2RayStat) (inboundTraffic []*coremodel.Traffic, clientTraffic []*coremodel.ClientTraffic) {
 	inbounds := map[string]*coremodel.Traffic{}
 	clients := map[string]*coremodel.ClientTraffic{}
 	for _, stat := range stats {
-		parts := strings.Split(stat.Name, ">>>")
-		if len(parts) != 4 || parts[2] != "traffic" || (parts[3] != "uplink" && parts[3] != "downlink") || stat.Value <= 0 {
+		kind, rest, _ := strings.Cut(stat.Name, ">>>")
+		i := strings.LastIndex(rest, ">>>traffic>>>")
+		identity, direction, found := "", "", i > 0
+		if found {
+			identity, direction = rest[:i], rest[i+len(">>>traffic>>>"):]
+		}
+		if !found || identity == "" || (direction != "uplink" && direction != "downlink") || stat.Value <= 0 {
 			continue
 		}
-		switch parts[0] {
+		switch kind {
 		case "inbound":
-			if inbounds[parts[1]] == nil {
-				inbounds[parts[1]] = &coremodel.Traffic{Tag: parts[1], IsInbound: true}
+			if inbounds[identity] == nil {
+				inbounds[identity] = &coremodel.Traffic{Tag: identity, IsInbound: true}
 			}
-			if parts[3] == "uplink" {
-				inbounds[parts[1]].Up = stat.Value
+			if direction == "uplink" {
+				inbounds[identity].Up = stat.Value
 			} else {
-				inbounds[parts[1]].Down = stat.Value
+				inbounds[identity].Down = stat.Value
 			}
 		case "user":
-			if clients[parts[1]] == nil {
-				clients[parts[1]] = &coremodel.ClientTraffic{Email: parts[1]}
+			if clients[identity] == nil {
+				clients[identity] = &coremodel.ClientTraffic{Email: identity}
 			}
-			if parts[3] == "uplink" {
-				clients[parts[1]].Up = stat.Value
+			if direction == "uplink" {
+				clients[identity].Up = sumTrafficDelta(clients[identity].Up, stat.Value)
 			} else {
-				clients[parts[1]].Down = stat.Value
+				clients[identity].Down = sumTrafficDelta(clients[identity].Down, stat.Value)
 			}
 		}
 	}

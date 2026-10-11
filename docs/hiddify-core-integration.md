@@ -1,4 +1,4 @@
-# Интеграция hiddify-core: этапы 2–5
+# Интеграция hiddify-core: этапы 2–6
 
 Ветка `update`. Ядро собирается только из `SawaMEN/hiddify-core`:
 `b5749002266b9782803669138494ef6937eb4e95`, зависимый `SawaMEN/hiddify-sing-box`:
@@ -95,14 +95,17 @@ Release workflow и Docker используют тот же сборщик.
 со сбросом счётчиков мог бы потерять данные. Wire payload объявляется обычным
 protobuf (`proto`), чтобы стандартный gRPC-сервер принимал запрос.
 
-Пользовательские счётчики связываются с metadata.User и stats.users. Существующий
-сборщик трафика сохраняет неудачную DB batch для повтора; это ещё не доказательство
-crash-safe учёта при потерянном ответе QueryStats — полный этап 6 остаётся впереди.
-Clash используется для онлайн-пользователей, IP и отключения нужной сессии.
+Пользовательские счётчики связываются с metadata.User и stats.users. Этап 6
+использует `Reset=false`, durable контрольные точки и транзакционное начисление
+дельт. Перезапуск панели, повторный ответ и DB retry не повторяют начисление.
+Квоты, expiry/autorenew и session revocation используют зафиксированное состояние.
+Clash adapter общий для service и local runtime; online/IP отражают его снимок.
+Проверки и открытая приёмка сохранения последних байтов при остановке ядра:
+[hiddify-core-stage-6-verification.md](hiddify-core-stage-6-verification.md).
 
 ## Границы этапа
 
-Автоматическая миграция БД, смена ядра по умолчанию и удаление Xray/sing-box
+Автоматический перенос пользователей на новое ядро, смена ядра по умолчанию и удаление Xray/sing-box
 не включены: это последующие этапы. Config translation, nodes, subscriptions,
 Gateway и sidecar bridges продолжают использовать имеющиеся адаптеры панели.
 Ограничения ML-DSA/seed, mKCP, Xray session/fallback/sockopt/TLS, peer metering и

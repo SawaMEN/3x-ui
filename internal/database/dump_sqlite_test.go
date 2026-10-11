@@ -46,6 +46,11 @@ func TestCopyAllModelsIntoSQLite(t *testing.T) {
 		t.Fatalf("seed traffic: %v", err)
 	}
 
+	checkpoint := model.CoreTrafficCheckpoint{Name: "hiddify:user>>>a@b.c>>>traffic>>>uplink", Epoch: "core-1", Value: 10, TrafficID: 1}
+	if err := src.Create(&checkpoint).Error; err != nil {
+		t.Fatal(err)
+	}
+
 	dst, err := gorm.Open(sqlite.Open(dstPath), &gorm.Config{Logger: logger.Discard})
 	if err != nil {
 		t.Fatalf("open dst: %v", err)
@@ -70,6 +75,14 @@ func TestCopyAllModelsIntoSQLite(t *testing.T) {
 		if got != tc.want {
 			t.Errorf("%T: got %d rows, want %d", tc.model, got, tc.want)
 		}
+	}
+
+	var copied model.CoreTrafficCheckpoint
+	if err := dst.Where("name = ?", checkpoint.Name).First(&copied).Error; err != nil {
+		t.Fatal(err)
+	}
+	if copied != checkpoint {
+		t.Fatalf("counter baseline lost during copy: %+v", copied)
 	}
 
 	// Spot-check a copied value survived the round-trip.

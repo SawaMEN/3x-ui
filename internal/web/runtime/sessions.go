@@ -7,8 +7,16 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/hiddify"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 )
+
+func (l *Local) sessionCore() string {
+	if l.deps.CoreType == nil {
+		return ""
+	}
+	return l.deps.CoreType()
+}
 
 // SessionRuntime is an optional runtime capability. It is intentionally kept
 // out of Runtime so mixed-version nodes and existing runtime test doubles do
@@ -35,8 +43,12 @@ func (m *Manager) SessionRuntimeFor(nodeID *int) (SessionRuntime, error) {
 }
 
 func (l *Local) ActiveSessions(ctx context.Context) ([]singbox.ActiveSession, error) {
-	if !l.isNative() {
-		return nil, errors.New("active sessions are currently available only for sing-box")
+	core := l.sessionCore()
+	if core == "hiddify-core" {
+		return hiddify.ActiveSessions(ctx)
+	}
+	if core != "sing-box" {
+		return nil, errors.New("active sessions are currently available only for native cores")
 	}
 	client := singbox.NewConnectionAPIClient()
 	defer client.Close()
@@ -48,8 +60,12 @@ func (l *Local) DisconnectUserSessions(ctx context.Context, inbound, user string
 }
 
 func (l *Local) DisconnectUsersSessions(ctx context.Context, inbound string, users []string) (int, error) {
-	if !l.isNative() {
-		return 0, errors.New("session disconnect is currently available only for sing-box")
+	core := l.sessionCore()
+	if core == "hiddify-core" {
+		return hiddify.DisconnectUsers(ctx, inbound, users)
+	}
+	if core != "sing-box" {
+		return 0, errors.New("session disconnect is currently available only for native cores")
 	}
 	client := singbox.NewConnectionAPIClient()
 	defer client.Close()
@@ -57,8 +73,12 @@ func (l *Local) DisconnectUsersSessions(ctx context.Context, inbound string, use
 }
 
 func (l *Local) DisconnectInboundSessions(ctx context.Context, inbound string) (int, error) {
-	if !l.isNative() {
-		return 0, errors.New("session disconnect is currently available only for sing-box")
+	core := l.sessionCore()
+	if core == "hiddify-core" {
+		return hiddify.DisconnectInbound(ctx, inbound)
+	}
+	if core != "sing-box" {
+		return 0, errors.New("session disconnect is currently available only for native cores")
 	}
 	client := singbox.NewConnectionAPIClient()
 	defer client.Close()

@@ -99,6 +99,7 @@ func (j *XrayTrafficJob) runNonXrayTraffic() {
 			cancel()
 			if err != nil {
 				logger.Debug("get online users from sing-box api failed:", err)
+				j.inboundService.RefreshLocalOnlineClients(nil, nil)
 			} else {
 				emails := make([]string, 0, len(online))
 				for email := range online {

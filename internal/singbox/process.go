@@ -234,6 +234,49 @@ func (p *Process) GetStartTime() time.Time {
 	return p.startTime
 }
 
+// RuntimeID remains stable when the panel adopts an existing process, and
+// changes after a core restart (including PID reuse).
+func (p *Process) RuntimeID() (string, error) {
+	if !p.IsRunning() {
+		return "", fmt.Errorf("%s is not running", p.coreName())
+	}
+	p.mu.RLock()
+	pid := p.externalPID
+	started, isolated := p.startTime, p.isolated
+	owned := p.cmd != nil && p.cmd.Process != nil
+	if owned && p.done != nil {
+		select {
+		case <-p.done:
+			owned = false
+		default:
+		}
+	}
+	if owned {
+		pid = p.cmd.Process.Pid
+	} else {
+		started = time.Time{}
+	}
+	p.mu.RUnlock()
+	if pid <= 0 {
+		return "", fmt.Errorf("%s process identity unavailable", p.coreName())
+	}
+	if isolated && !started.IsZero() {
+		return fmt.Sprintf("isolated:%d:%d", pid, started.UnixNano()), nil
+	}
+	proc, err := gprocess.NewProcess(int32(pid))
+	if err != nil {
+		return "", err
+	}
+	created, err := proc.CreateTime()
+	if err != nil {
+		return "", err
+	}
+	if created <= 0 {
+		return "", fmt.Errorf("invalid process creation time")
+	}
+	return fmt.Sprintf("%d:%d", pid, created), nil
+}
+
 // GetUptime returns the uptime of the sing-box process in seconds.
 func (p *Process) GetUptime() uint64 {
 	p.mu.RLock()

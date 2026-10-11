@@ -58,6 +58,12 @@ func (s *InboundService) addTrafficLocked(inboundTraffics []*coremodel.Traffic, 
 		return false, false, nil, nil, err
 	}
 
+	return s.maintainTrafficLocked()
+}
+
+// Accounting is already durable; maintenance failures must never replay bytes.
+func (s *InboundService) maintainTrafficLocked() (bool, bool, []int, []trafficInboundUpdatePlan, error) {
+	db := database.GetDB()
 	var (
 		needRestart          bool
 		clientsDisabled      bool
@@ -102,7 +108,7 @@ func (s *InboundService) addTrafficLocked(inboundTraffics []*coremodel.Traffic, 
 		logger.Warning("traffic lifecycle maintenance failed after traffic commit:", err)
 		return false, false, nil, nil, nil
 	}
-	needRestart = needRestart || s.applyTrafficMutationBatch(batch)
+	needRestart = s.applyTrafficMutationBatch(batch) || needRestart
 	return needRestart, clientsDisabled, disabledNodeIDs, batch.remotePlans, nil
 }
 

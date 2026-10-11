@@ -737,20 +737,20 @@ func (s *SingBoxService) OnlineClientIPs(ctx context.Context) (map[string]map[st
 }
 
 func (s *SingBoxService) DisconnectClientIPs(ctx context.Context, email string, ips []string) error {
+	if email == "" || len(ips) == 0 {
+		return nil
+	}
 	if s.Hiddify {
 		_, err := s.disconnectHiddify(ctx, func(session singbox.ActiveSession) bool {
 			host, _, _ := net.SplitHostPort(session.Source)
 			for _, ip := range ips {
-				if ip != "" && host == ip && session.User == email {
+				if normalized := hiddify.NormalizeIP(ip); normalized != "" && host == normalized && session.User == email {
 					return true
 				}
 			}
 			return false
 		})
 		return err
-	}
-	if email == "" || len(ips) == 0 {
-		return nil
 	}
 	api := singbox.NewConnectionAPIClient()
 	defer api.Close()
