@@ -10,7 +10,7 @@
 
 Web Gateway выбирает Hiddify runtime по типу ядра, полученному для операции,
 без повторного чтения глобального выбора внутри проверки/restart. Status
-считает Hiddify владельцем native Gateway; HTTP контракт проверен на настоящей
+использует Sing-box для native Gateway; HTTP контракт проверен на настоящей
 БД и Gin-контроллере. Существующие web/CLI операции enable/disable и native
 TPROXY template сохранены.
 
@@ -93,7 +93,7 @@ FPTN outbound больше не требует отдельный sing-box вн�
 FPTN VLESS bridge остаётся на loopback хоста, внутри контейнера использует
 bind_interface=fptn0; его DNS использует тот же vpn-out detour. Исчезнувший
 FPTN tunnel не должен переключать bridge на обычный default интерфейс.
-Точная bridge JSON, используемая запуском, принята настоящим owner-core check.
+Точная bridge JSON, используемая запуском, принята настоящим modified-sing-box check.
 Настоящий Docker FPTN handshake в этом окружении не запускался.
 
 Выполнены полные пакеты externalvpn, TUIC, MTProto, AmneziaWG, Mieru, Sudoku,
@@ -103,7 +103,7 @@ FPTN tunnel не должен переключать bridge на обычный 
 
 ## Выполненные проверки
 
-- Owner core `check -c`: native TUN IPv4/IPv6/DNS, полный DB TUN config,
+- Modified Sing-box `check -c`: native TUN IPv4/IPv6/DNS, полный DB TUN config,
   TPROXY Gateway с DNS rule, FPTN bridge и существующие Hiddify config сценарии.
 - Lifecycle fixtures: снять interception до Stop, успешный restart, откат
   failed candidate с восстановлением сети, Stop/Start, потеря firewall,
@@ -116,7 +116,7 @@ FPTN tunnel не должен переключать bridge на обычный 
 - Frontend: 70 тестов в трёх затронутых наборах, typecheck, lint изменённых
   файлов и production build.
 - Go vet затронутых пакетов, сборка панели, git diff --check и source/build-lock
-  audit checkout владельца с --upstream.
+  audit checkout модифицированного Sing-box с --upstream.
 
 ## Открытая эксплуатационная приёмка
 

@@ -1582,8 +1582,8 @@ install_x-ui() {
         exit 1
     fi
 
-    # Existing installs use the same offline migration/rollback as the updater.
-    if [[ -e "$xui_folder/x-ui" ]]; then
+    # Preflight every release before extraction; existing installs also arm rollback.
+    if [[ -f "${xui_folder}-linux-$(arch).tar.gz" ]]; then
         local cm_archive="${xui_folder}-linux-$(arch).tar.gz" cm_helper
         cm_helper=$(mktemp "${xui_folder%/*}/.core-migration.XXXXXX") || exit 1
         tar -xOf "$cm_archive" x-ui/core-migration.sh > "$cm_helper" || { rm -f "$cm_helper"; exit 1; }
@@ -1723,7 +1723,7 @@ install_x-ui() {
     # (custom geoip/geosite files, or anything else an admin hand-placed
     # there) -- never overwrites a same-named file the new release provides,
     # so bundled assets (geoip.dat, geoip_RU.dat, ...) still get the fresh
-    # per-release copy. Owner core and telemt already exist under their final
+    # per-release copy. Modified Sing-box and telemt already exist under their final
     # names and are not
     # mistaken for custom files needing a restore. Skips paths the panel
     # itself regenerates at runtime (config.json, mtproto/*.toml -- see
@@ -1767,6 +1767,7 @@ install_x-ui() {
     if [[ "${cm_active:-0}" == 1 ]]; then
         core_migration_apply || exit 1
     else
+        core_migration_install_managed_bin || exit 1
         config_after_install
     fi
 

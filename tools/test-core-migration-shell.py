@@ -29,13 +29,13 @@ case "$mode" in
 check) [[ "${FAIL_PREFLIGHT:-0}" == 0 ]];;
 backup) mkdir "$dir"; cp "$TEST_DB" "$dir/database";;
 restore) cp "$dir/database" "$TEST_DB";;
-apply) printf 'new-core\n' > "$TEST_DB"; [[ "${FAIL_APPLY:-0}" == 0 ]];;
+apply) [[ -x "$XUI_BIN_FOLDER/hiddify-core-linux-amd64" ]]; printf 'new-core\n' > "$TEST_DB"; [[ "${FAIL_APPLY:-0}" == 0 ]];;
 verify) [[ "${FAIL_VERIFY:-0}" == 0 ]];;
 esac
 '''
 
 class ReleaseMigrationTests(unittest.TestCase):
-    def run_case(self, mode):
+    def run_case(self, mode, relative_link=False):
         with tempfile.TemporaryDirectory() as raw:
             base = Path(raw)
             old = base / "x-ui"
@@ -46,7 +46,7 @@ class ReleaseMigrationTests(unittest.TestCase):
             (old / "bin" / "sing-box-linux-amd64").write_text("legacy-stock")
             (old / "bin" / "xray-linux-amd64").chmod(0o700)
             (old / "bin" / "sing-box-linux-amd64").chmod(0o700)
-            if mode.startswith("external_"):
+            if mode.startswith(("external_", "symlink_")):
                 external = base / "external-bin"
                 external.mkdir()
                 (external / "xray-linux-amd64").write_text("legacy-xray")
@@ -54,6 +54,10 @@ class ReleaseMigrationTests(unittest.TestCase):
                 (external / "custom-key").write_text("external-key")
                 (external / "xray-linux-amd64").chmod(0o700)
                 (external / "sing-box-linux-amd64").chmod(0o700)
+            if mode.startswith("symlink_"):
+                import shutil
+                shutil.rmtree(old / "bin")
+                (old / "bin").symlink_to("../external-bin" if relative_link else external, target_is_directory=True)
             database = base / "database"
             database.write_text("original-users-keys-traffic\n")
             unit = base / "unit"
@@ -62,7 +66,8 @@ class ReleaseMigrationTests(unittest.TestCase):
             (bundle / "bin").mkdir(parents=True)
             (bundle / "x-ui").write_text(PANEL)
             (bundle / "x-ui").chmod(0o700)
-            (bundle / "bin" / "hiddify-core-linux-amd64").write_text("owner-core")
+            (bundle / "bin" / "hiddify-core-linux-amd64").write_text("modified-sing-box")
+            (bundle / "bin" / "hiddify-core-linux-amd64").chmod(0o700)
             archive = base / "release.tar.gz"
             with tarfile.open(archive, "w:gz") as target:
                 target.add(bundle, arcname="x-ui")
@@ -74,6 +79,10 @@ release=debian
 if [[ "$CASE" == external_* ]]; then
     export XUI_BIN_FOLDER="$TEST_ROOT/external-bin"
     CASE="${CASE#external_}"
+fi
+if [[ "$CASE" == symlink_* ]]; then
+    unset XUI_BIN_FOLDER
+    CASE="${CASE#symlink_}"
 fi
 arch() { printf amd64; }
 systemctl() {
@@ -102,9 +111,6 @@ core_migration_begin
 rm -rf "$xui_folder"
 cp -a "$TEST_ROOT/bundle/x-ui" "$xui_folder"
 printf 'new-unit' > "$TEST_ROOT/unit"
-if [[ -n "${XUI_BIN_FOLDER:-}" && "$XUI_BIN_FOLDER" != "$xui_folder/bin" ]]; then
-    cp "$xui_folder/bin/hiddify-core-linux-amd64" "$XUI_BIN_FOLDER/"
-fi
 # Custom-file restoration can bring old engines back; commit must remove them.
 printf 'legacy-xray' > "$xui_folder/bin/xray-linux-amd64"
 printf 'legacy-stock' > "$xui_folder/bin/sing-box-linux-amd64"
@@ -117,10 +123,10 @@ if core_migration_apply; then
     if core_migration_commit; then
         [[ "$CASE" == success || "$CASE" == disabled ]]
         [[ "$(cat "$TEST_DB")" == new-core ]]
-        [[ -f "$cm_backup/installation/bin/custom-key" ]]
+        [[ -f "$cm_backup/installation/bin/custom-key" || -f "$cm_backup/managed-bin/custom-key" ]]
         [[ -f "$cm_backup/data/database" ]]
-        [[ -f "$cm_backup/installation/bin/xray-linux-amd64" ]]
-        [[ -f "$cm_backup/installation/bin/sing-box-linux-amd64" ]]
+        [[ -f "$cm_backup/installation/bin/xray-linux-amd64" || -f "$cm_backup/managed-bin/xray-linux-amd64" ]]
+        [[ -f "$cm_backup/installation/bin/sing-box-linux-amd64" || -f "$cm_backup/managed-bin/sing-box-linux-amd64" ]]
         [[ ! -e "$xui_folder/bin/xray-linux-amd64" ]]
         [[ ! -e "$xui_folder/bin/sing-box-linux-amd64" ]]
         [[ -f "$xui_folder/bin/hiddify-core-linux-amd64" ]]
@@ -141,20 +147,21 @@ fi
 if [[ "$CASE" == stop_failure ]]; then
     if core_migration_exit 2; then exit 22; fi
     [[ "$(cat "$TEST_DB")" == new-core ]]
-    [[ -f "$cm_backup/installation/bin/custom-key" ]]
+    [[ -f "$cm_backup/installation/bin/custom-key" || -f "$cm_backup/managed-bin/custom-key" ]]
     [[ -d "$cm_stage" ]]
     exit 0
 fi
 core_migration_exit 2
 [[ "$(cat "$TEST_DB")" == original-users-keys-traffic ]]
 [[ "$(cat "$xui_folder/x-ui")" == old-panel ]]
-[[ "$(cat "$xui_folder/bin/custom-key")" == existing-private-key ]]
+[[ "$(cat "$xui_folder/bin/custom-key")" == existing-private-key || "$(cat "$xui_folder/bin/custom-key")" == external-key ]]
 [[ "$(cat "$TEST_ROOT/unit")" == old-unit ]]
 [[ -d "$cm_backup/failed-installation" ]]
 [[ -f "$cm_backup/data/database" ]]
 [[ -f "$xui_folder/bin/xray-linux-amd64" ]]
 [[ -f "$xui_folder/bin/sing-box-linux-amd64" ]]
 if [[ -d "$cm_backup/managed-bin" ]]; then
+    [[ ! -e "$XUI_BIN_FOLDER/hiddify-core-linux-amd64" ]]
     [[ "$(cat "$XUI_BIN_FOLDER/xray-linux-amd64")" == legacy-xray ]]
     [[ "$(cat "$XUI_BIN_FOLDER/sing-box-linux-amd64")" == legacy-stock ]]
     [[ "$(cat "$XUI_BIN_FOLDER/custom-key")" == external-key ]]
@@ -167,7 +174,7 @@ fi
             result = subprocess.run(["bash", "-c", script], env=env, text=True, capture_output=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             commands = (base / "commands").read_text()
-            mode = mode.removeprefix("external_")
+            mode = mode.removeprefix("external_").removeprefix("symlink_")
             if mode != "preflight":
                 self.assertIn("backup\n", commands)
                 if mode == "stop_failure":
@@ -179,6 +186,11 @@ fi
                     else: self.assertIn("service:start x-ui", commands)
                 if mode=="disabled": self.assertIn("service:disable x-ui", commands)
 
+    def test_relative_symlink_bin_success(self): self.run_case("symlink_success", relative_link=True)
+    def test_relative_symlink_bin_rollback(self): self.run_case("symlink_verify", relative_link=True)
+    def test_symlink_bin_success(self): self.run_case("symlink_success")
+    def test_symlink_bin_rollback(self): self.run_case("symlink_verify")
+
     def test_success_retains_recovery_snapshot(self): self.run_case("success")
     def test_external_bin_cleanup_retains_snapshot(self): self.run_case("external_success")
     def test_external_bin_rollback_restores_legacy_files(self): self.run_case("external_verify")
@@ -188,6 +200,34 @@ fi
     def test_disabled_autostart_survives_upgrade(self): self.run_case("disabled")
     def test_rollback_keeps_originally_stopped_panel_stopped(self): self.run_case("stopped_failure")
     def test_failed_service_stop_blocks_restore(self): self.run_case("stop_failure")
+    def test_fresh_external_and_relative_bin_receive_release(self):
+        for relative in (False, True):
+            with self.subTest(relative=relative), tempfile.TemporaryDirectory() as raw:
+                base = Path(raw)
+                stage = base / "stage" / "x-ui" / "bin"
+                stage.mkdir(parents=True)
+                (stage / "hiddify-core-linux-amd64").write_text("modified-sing-box")
+                (stage / "geoip.dat").write_text("release-geodata")
+                install = base / "x-ui"
+                install.mkdir()
+                dest = install / "custom-bin" if relative else base / "external-bin"
+                dest.mkdir()
+                (dest / "custom.dat").write_text("custom-database")
+                script = r'''set -eu
+source "$HELPER"
+arch() { printf amd64; }
+xui_folder="$TEST_ROOT/x-ui"
+cm_stage="$TEST_ROOT/stage"
+core_migration_install_managed_bin
+[[ -x "$XUI_BIN_FOLDER/hiddify-core-linux-amd64" ]]
+[[ "$(cat "$XUI_BIN_FOLDER/geoip.dat")" == release-geodata ]]
+[[ "$(cat "$XUI_BIN_FOLDER/custom.dat")" == custom-database ]]
+'''
+                env = dict(os.environ, HELPER=str(ROOT / "core-migration.sh"), TEST_ROOT=raw,
+                           XUI_BIN_FOLDER="custom-bin" if relative else str(dest))
+                result = subprocess.run(["bash", "-c", script], env=env, text=True, capture_output=True)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_both_installers_arm_rollback_before_replacement(self):
         for name in ("install.sh", "update.sh"):
             source = (ROOT / name).read_text()

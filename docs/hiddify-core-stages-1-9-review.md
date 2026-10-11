@@ -2,8 +2,8 @@
 
 Ветка: `update`. База проверки: `6b93a1e5ab705cb3fa8237ada8d983c3eabb4afd`.
 Ядро определяется как **sing-box** и берётся из закреплённого репозитория
-владельца `SawaMEN/hiddify-core`; старое имя `hiddify-core` — входной алиас.
-Исходники, overlays и build lock владельца сохранены. Этап 10 не выполнялся.
+модифицированной сборки; старое имя `hiddify-core` — входной алиас.
+Исходники, overlays и build lock сохранены. Этап 10 не выполнялся.
 
 ## Проверенные контракты
 
@@ -12,7 +12,7 @@
 | 1 | Инвентарь 26 протоколов/alias, owner origins, commits, submodules и build lock | Source audit прошёл |
 | 2 | Проверка version/tags/revision, candidate check, supervised start/stop, gRPC statistics contract | Go/regression/race; конфигурации принимает закреплённый binary |
 | 3 | Общие DTO, прежние таблицы/индексы/идентификаторы, миграции БД, отсутствие Xray в production deps слоя БД | Полные Go-тесты и go list -deps |
-| 4 | Полный конфиг из согласованного снимка БД, связанные пользователи, routing/DNS/TLS, native graph и overlays | Full database config checks настоящим owner binary |
+| 4 | Полный конфиг из согласованного снимка БД, связанные пользователи, routing/DNS/TLS, native graph и overlays | Full database config checks настоящим бинарника Sing-box |
 | 5 | Local/remote mutation paths, batch apply, restart/rollback, вручную остановленное ядро | Regression/race fixtures |
 | 6 | Долговечные checkpoint + traffic totals, повторы запросов, reset/restart, квоты, sessions/IP | Regression/race fixtures; граница последних неопросенных байтов сохраняется |
 | 7 | Подписки, HTTP node sync/status/capabilities, legacy compatibility и health UI | Backend-тесты и frontend unit/component tests |
@@ -44,7 +44,7 @@
    service environment. Writer использовал новый XUI_BIN_FOLDER, а runtime
    сохранял старый binary/config path. Main теперь пересоздаёт native adapters
    после загрузки окружения и до запуска service goroutines. Тест исполняет
-   fake owner binary только по окончательному пути.
+   fake бинарника Sing-box только по окончательному пути.
 6. **Зависшая PostgreSQL archive preflight.** Проверка `pg_restore --list`
    игнорировала deadline CLI. Теперь она использует его context; зависший
    subprocess завершается без попытки restore. SQL queries этих migration
@@ -63,7 +63,7 @@ Regression совместимости проверяет WireGuard, VLESS и Nai
 
 ## Выполненная проверка
 
-- Полный `go test ./... -count=1 -timeout=180s`, с настоящим owner binary для
+- Полный `go test ./... -count=1 -timeout=180s`, с настоящим бинарника Sing-box для
   opt-in `check -c`; после исправлений повторён.
 - Тематические `-race`: migration, Hiddify config/apply/traffic, native/Gateway,
   runtime, controller, process supervision и совместимость клиентов.

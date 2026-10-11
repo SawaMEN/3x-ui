@@ -577,7 +577,7 @@ export default function GeneralTab({
                     }}
                   >
                     <Space direction="vertical" size={12} style={{ width: '100%' }}>
-                      <Tag color="gold">sing-box · сборка владельца</Tag>
+                      <Tag color="gold">sing-box · модифицированная сборка</Tag>
                       <p>Ядро поставляется и обновляется вместе с панелью.</p>
 
                       <div
@@ -596,8 +596,8 @@ export default function GeneralTab({
                           <div style={{ fontSize: 12, opacity: 0.65 }}>
                             {allSetting.coreType === 'sing-box'
                               ? singBoxInstalled
-                                ? 'Собственная сборка sing-box'
-                                : 'Требуется сборка панели с ядром владельца'
+                                ? 'Модифицированный Sing-box'
+                                : 'Требуется сборка панели с модифицированным Sing-box'
                               : t('pages.settings.coreTypeDesc')}
                           </div>
                           <div style={{ fontSize: 12, marginTop: 4 }}>
@@ -622,7 +622,7 @@ export default function GeneralTab({
                           description={
                             singBoxInstalled
                               ? 'Ядро будет применено после сохранения настроек.'
-                              : 'Установите сборку панели с закреплённым sing-box из репозитория владельца.'
+                              : 'Установите сборку панели с модифицированным Sing-box.'
                           }
                         />
                       )}

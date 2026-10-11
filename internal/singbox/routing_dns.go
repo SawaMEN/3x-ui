@@ -67,7 +67,7 @@ func TranslateXrayRoutingWithGeoData(raw map[string]any, store *geodata.Store) (
 		if len(domains) > 0 {
 			var expanded []string
 			for _, domain := range domains {
-				if isGeoToken(domain, "geosite:") || isGeoToken(domain, "ext:") {
+				if isGeoToken(domain, "geosite:") || isGeoToken(domain, "ext:") || isGeoToken(domain, "ext-domain:") || isGeoToken(domain, "ext-site:") {
 					entries, err := routingGeoEntries(store, domain, geodata.KindSite)
 					if err != nil {
 						return nil, fmt.Errorf("routing rule %d: domain %q: %w", i, domain, err)
@@ -98,7 +98,7 @@ func TranslateXrayRoutingWithGeoData(raw map[string]any, store *geodata.Store) (
 		if ips := compatStringSlice(xr["ip"]); len(ips) > 0 {
 			cidrs := make([]string, 0, len(ips))
 			for _, ip := range ips {
-				if !strings.EqualFold(ip, "geoip:private") && (isGeoToken(ip, "geoip:") || isGeoToken(ip, "ext:")) {
+				if !strings.EqualFold(ip, "geoip:private") && (isGeoToken(ip, "geoip:") || isGeoToken(ip, "ext:") || isGeoToken(ip, "ext-ip:")) {
 					entries, err := routingGeoEntries(store, ip, geodata.KindIP)
 					if err != nil {
 						return nil, fmt.Errorf("routing rule %d: IP %q: %w", i, ip, err)
@@ -136,7 +136,7 @@ func TranslateXrayRoutingWithGeoData(raw map[string]any, store *geodata.Store) (
 		}
 		var sourceCIDRs []string
 		for _, source := range sources {
-			if !strings.EqualFold(source, "geoip:private") && (isGeoToken(source, "geoip:") || isGeoToken(source, "ext:")) {
+			if !strings.EqualFold(source, "geoip:private") && (isGeoToken(source, "geoip:") || isGeoToken(source, "ext:") || isGeoToken(source, "ext-ip:")) {
 				entries, err := routingGeoEntries(store, source, geodata.KindIP)
 				if err != nil {
 					return nil, fmt.Errorf("routing rule %d: sourceIP %q: %w", i, source, err)
@@ -249,18 +249,15 @@ func routingGeoEntries(store *geodata.Store, token string, kind geodata.GeoKind)
 		return nil, fmt.Errorf("geodata directory is unavailable")
 	}
 	token = strings.TrimSpace(token)
-	var file, category string
-	if isGeoToken(token, "ext:") {
-		file, category, _ = strings.Cut(token[4:], ":")
-	} else if kind == geodata.KindIP && isGeoToken(token, "geoip:") {
-		file, category = "geoip.dat", token[6:]
-	} else if kind == geodata.KindSite && isGeoToken(token, "geosite:") {
-		file, category = "geosite.dat", token[8:]
+	reference, err := geodata.ParseReference(token, kind)
+	if err != nil {
+		return nil, err
 	}
-	if file == "" || category == "" || strings.ContainsAny(category, "@!:") {
-		return nil, fmt.Errorf("unsupported geodata category")
+	if reference.File == "" || reference.Reverse {
+		return nil, fmt.Errorf("unsupported geodata category or inverse matcher")
 	}
-	entries, err := store.AllEntries(file, category, maxRoutingGeoEntries)
+	file := reference.File
+	entries, err := store.FilteredEntries(file, reference.Code, maxRoutingGeoEntries, reference.Attributes)
 	if err != nil {
 		return nil, err
 	}

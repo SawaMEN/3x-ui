@@ -1141,7 +1141,7 @@ update_x-ui() {
     fi
     source "$cm_helper"
     rm -f "$cm_helper"
-    core_migration_prepare_archive "$archive" || _fail "Pinned owner core preflight failed; current installation was not changed"
+    core_migration_prepare_archive "$archive" || _fail "Pinned modified Sing-box preflight failed; current installation was not changed"
 
     if [[ -e ${xui_folder}/ ]]; then
         echo -e "${green}Stopping x-ui...${plain}"
@@ -1204,7 +1204,7 @@ update_x-ui() {
     fi
     chmod +x x-ui > /dev/null 2>&1
 
-    chmod +x x-ui "bin/hiddify-core-linux-${machine_arch}" || _fail "Owner sing-box binary missing"
+    chmod +x x-ui "bin/hiddify-core-linux-${machine_arch}" || _fail "Modified Sing-box binary missing"
     [[ -f bin/telemt ]] && chmod 0755 bin/telemt
     [[ -f telemt-meko-fix.sh ]] && chmod 0755 telemt-meko-fix.sh
     [[ -f telemt-update.sh ]] && chmod 0755 telemt-update.sh
@@ -1251,7 +1251,7 @@ update_x-ui() {
         chmod 640 "${xui_folder}/bin/config.json" > /dev/null 2>&1
     fi
 
-    core_migration_apply || _fail "Owner sing-box migration failed; restoring previous installation"
+    core_migration_apply || _fail "Modified Sing-box migration failed; restoring previous installation"
 
     if [[ $release == "alpine" ]]; then
         echo -e "${green}Downloading and installing startup unit x-ui.rc...${plain}"
@@ -1344,7 +1344,7 @@ update_x-ui() {
         fi
     fi
 
-    core_migration_commit || _fail "Updated panel did not start its owner sing-box; restoring snapshot"
+    core_migration_commit || _fail "Updated panel did not start its modified Sing-box; restoring snapshot"
     if [[ -z "${cm_backup:-}" ]]; then config_after_update; fi
 
     # IP Limit relies on fail2ban; install + configure it now so the feature

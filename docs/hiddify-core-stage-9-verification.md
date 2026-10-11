@@ -1,6 +1,6 @@
 # Этап 9: миграция установленных панелей
 
-Ветка: `update`. Целевое ядро: модифицированный **sing-box** владельца,
+Ветка: `update`. Целевое ядро: модифицированный **Sing-box**,
 собранный из `SawaMEN/hiddify-core` по текущему
 [hiddify-core-target.json](hiddify-core-target.json).
 Старый тип `hiddify-core` остаётся входным алиасом; результат — `sing-box`.
@@ -41,7 +41,7 @@
 
 ## Ручное использование
 
-Для ручной миграции уже установлен новый panel binary с owner core. Каталог
+Для ручной миграции уже установлен новый panel binary с modified Sing-box. Каталог
 snapshot должен быть новым, постоянным и находиться вне заменяемой установки.
 При нестандартных путях передаются те же XUI_DB_FOLDER, XUI_DB_DSN,
 XUI_MAIN_FOLDER, XUI_BIN_FOLDER и параметры node-token keyring, что у сервиса.
@@ -84,7 +84,7 @@ Go-тесты покрывают успешный переход, идемпот
 копию, чужой pending snapshot, lease collision, interrupted journal, Gateway
 desired state и блокировку запуска панели. Отдельные тесты команд PostgreSQL
 проверяют restore flags и отсутствие credentials в arguments.
-Тест реального закреплённого owner binary выполняет check -c.
+Тест реального закреплённого бинарника Sing-box выполняет check -c.
 Пробный supervision проверен shell fixture с настоящим дочерним процессом.
 
 Семь shell-тестов проверяют успешное обновление, откат при ошибке apply и

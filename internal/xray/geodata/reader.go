@@ -52,7 +52,7 @@ type byteSpan struct {
 // scanEntries walks the database once and materialises only the requested page
 // of one category, so browsing a category with hundreds of thousands of rules
 // costs no more than browsing a small one.
-func scanEntriesFromSpans(dir, name string, spans []byteSpan, kind GeoKind, code, query string, offset, limit int) (GeoEntryPage, error) {
+func scanEntriesFromSpans(dir, name string, spans []byteSpan, kind GeoKind, code, query string, offset, limit int, attributes ...string) (GeoEntryPage, error) {
 	page := GeoEntryPage{Items: []GeoEntry{}}
 	matched := 0
 
@@ -82,7 +82,23 @@ func scanEntriesFromSpans(dir, name string, spans []byteSpan, kind GeoKind, code
 			var ok bool
 			var err error
 			if kind == KindSite {
-				raw, _, err = domainValue(payload, false)
+				var present []string
+				raw, present, err = domainValue(payload, len(attributes) > 0)
+				if err != nil {
+					return err
+				}
+				for _, attribute := range attributes {
+					found := false
+					for _, key := range present {
+						if key == attribute {
+							found = true
+							break
+						}
+					}
+					if !found {
+						return nil
+					}
+				}
 				if err != nil {
 					return err
 				}
@@ -150,6 +166,9 @@ func scanIndexFile(dir, name string, kind GeoKind) (*categoryScan, error) {
 	scan := &categoryScan{kind: kind, spans: make(map[string][]byteSpan)}
 	byCode := make(map[string]int)
 	err := eachListEntryFile(dir, name, func(entry []byte, span byteSpan) error {
+		if kind == KindIP && reverseGeoIP(entry) {
+			return fmt.Errorf("%w: inverse geoip databases require a native Sing-box invert rule", ErrUnrecognized)
+		}
 		count := 0
 		attributes := make(map[string]struct{})
 		code, err := walkEntry(entry, func(payload []byte) error {
@@ -524,4 +543,33 @@ func mergeAttributes(existing []string, attributes map[string]struct{}) []string
 	}
 	sort.Strings(out)
 	return out
+}
+
+// ReverseMatch changes the meaning of the entire CIDR list. Refuse it instead
+// of silently converting its complement into a positive match.
+func reverseGeoIP(record []byte) bool {
+	for len(record) > 0 {
+		number, typ, n := protowire.ConsumeTag(record)
+		if n < 0 {
+			return false
+		}
+		record = record[n:]
+		if number == 3 && typ == protowire.VarintType {
+			v, n := protowire.ConsumeVarint(record)
+			if n < 0 {
+				return false
+			}
+			if v != 0 {
+				return true
+			}
+			record = record[n:]
+			continue
+		}
+		n = protowire.ConsumeFieldValue(number, typ, record)
+		if n < 0 {
+			return false
+		}
+		record = record[n:]
+	}
+	return false
 }

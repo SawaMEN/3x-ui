@@ -1,17 +1,17 @@
 # Этап 10: единственное управляемое ядро
 
-Рабочая ветка: `update`. Ядро — модифицированный **sing-box** владельца из
-`SawaMEN/hiddify-core`, revision `b5749002266b9782803669138494ef6937eb4e95`,
-версия `sawamen-b5749002266b-panel4`. Его исходники остаются в репозитории
-владельца; панель проверяет закреплённую версию, revision и build tags.
+Рабочая ветка: `update`. Ядро — модифицированный **Sing-box**,
+revision `b5749002266b9782803669138494ef6937eb4e95`,
+версия `sawamen-b5749002266b-panel4`. Панель проверяет закреплённую версию,
+revision и build tags.
 
 ## Изменения
 
 - Удалены управляемый процесс Xray, его gRPC-клиент, hot-apply, счётчики
   старого API и standalone загрузчики Xray/stock sing-box.
 - Основной процесс, временные процессы проверки исходящих, генерация
-  конфигурации, сессии, watchdog и статистика используют owner-профиль.
-  Пустой `SingBoxService{}` также означает owner-сборку: отдельного флага
+  конфигурации, сессии, watchdog и статистика используют профиль модифицированного Sing-box.
+  Пустой `SingBoxService{}` также означает модифицированную сборку: отдельного флага
   выбора stock runtime больше нет.
 - Данные онлайн-клиентов и узлов вынесены в независимый `Presence`.
   Уведомления Telegram/Discord, история online и обновление геоданных
@@ -27,10 +27,10 @@
 - HY2 и Naive в окне обновлений отмечены как встроенные: они обновляются
   вместе с панелью. Mieru/mita, Telemt и другие sidecars сохраняются.
 - X25519 и ECH генерируются без Xray executable. VLESS encryption использует
-  CLI закреплённого owner core. Неподдерживаемые ML-DSA/ML-KEM Reality
+  CLI закреплённого modified Sing-box. Неподдерживаемые ML-DSA/ML-KEM Reality
   операции возвращают явную ошибку вместо обращения к удалённому ядру.
 - Release workflow и DockerInit не загружают Xray; installer/updater используют
-  `hiddify-core-linux-<arch>`. CLI проверяет процесс owner-сборки.
+  `hiddify-core-linux-<arch>`. CLI проверяет процесс модифицированной сборки.
 
 ## Совместимость и миграция
 
@@ -46,11 +46,11 @@ geodata и проверку legacy формата; он не запускает 
 inbounds/template, требует **offline core-migrate** до запуска панели.
 Миграция сохраняет прежнее значение неявного default как Xray, чтобы новый
 default панели не изменил интерпретацию исходной конфигурации.
-`hiddify-core` принимается как прежнее имя owner-профиля и сохраняется как
+`hiddify-core` принимается как прежнее имя профиля модифицированного Sing-box и сохраняется как
 `sing-box`; это не второй движок.
 
 В install/update порядок следующий: остановка, snapshot установки и БД,
-preflight/trial owner core, применение, запуск панели, `--verify-running`,
+preflight/trial modified Sing-box, применение, запуск панели, `--verify-running`,
 восстановление Gateway, удаление рабочих legacy executables. Удаляются только исполняемые файлы с
 именами `xray`, `xray-*`, `sing-box`, `sing-box-*` в управляемом bin каталоге.
 Неисполняемые конфигурации, геоданные и sidecars не затрагиваются. Snapshot сохраняется. Для нестандартного
@@ -63,7 +63,7 @@ legacy БД напрямую и не используйте прямой restore
 
 ## Контейнеры
 
-Новый образ собирает закреплённое ядро владельца; standalone Xray/stock
+Новый образ собирает закреплённое модифицированный Sing-box; standalone Xray/stock
 sing-box в него не добавляются. Для старого volume остановите старый контейнер,
 сохраните его image/tag и данные, выполните `core-migrate --backup-dir DIR`
 через `/app/x-ui` нового образа с теми же volumes, переменными XUI и сетевыми
@@ -75,10 +75,10 @@ Entrypoint не выполняет скрытую миграцию пользо�
 ## Проверка
 
 - `go test ./... -count=1 -timeout=180s` с `HIDDIFY_CONFIG_CHECK_BINARY` на
-  реальную закреплённую сборку владельца.
+  реальную закреплённую модифицированную сборку.
 - Проверки generated ECH, пар X25519, единственного default runtime,
   запрета standalone обновления и сохранения migration/default identity.
-- Race-проверки миграции, owner runtime, presence, native apply и сессий.
+- Race-проверки миграции, modified Sing-box runtime, presence, native apply и сессий.
 - `go vet ./...`, сборка панели; frontend typecheck, lint, build.
 - Frontend unit/components: **151 файл, 1544 теста passed, 1 skipped**.
 - Десять shell-сценариев `tools/test-core-migration-shell.py`: успешное

@@ -45,7 +45,7 @@ ARM64, musl и Docker runtime отдельно не проверены. Naive ou
 ## Повторяемые проверки
 
 ```bash
-python3 tools/audit-hiddify-migration.py --upstream /path/to/owner-core --fork /path/to/owner-core
+python3 tools/audit-hiddify-migration.py --upstream /path/to/modified-sing-box --fork /path/to/modified-sing-box
 bash -n tools/build-hiddify-core.sh
 bash tools/build-hiddify-core.sh /path/to/bin
 HIDDIFY_CONFIG_CHECK_BINARY=/path/to/bin/hiddify-core-linux-amd64 \

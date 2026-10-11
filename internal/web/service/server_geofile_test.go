@@ -13,6 +13,8 @@ import (
 	"testing"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
+	xraygeodata "github.com/xtls/xray-core/common/geodata"
+	"google.golang.org/protobuf/proto"
 )
 
 // Loyalsoldier and runetfreedom write "<hash>  geoip.dat"; chocolate4u writes
@@ -148,6 +150,8 @@ func geofileTestEnv(t *testing.T, entries map[string]geofileEntry) string {
 
 	binFolder := t.TempDir()
 	t.Setenv("XUI_BIN_FOLDER", binFolder)
+	t.Setenv("XRAY_LOCATION_ASSET", "")
+	t.Setenv("xray.location.asset", "")
 
 	originalAllowlist := geofileAllowlist
 	geofileAllowlist = entries
@@ -167,7 +171,7 @@ func restartStub(t *testing.T, called *bool) {
 }
 
 func TestUpdateGeofileInstallsVerifiedFile(t *testing.T) {
-	srv, _ := geofileServer(t, []fakeUpstream{{repo: "a", assets: map[string]string{"geoip.dat": "good geoip payload"}}})
+	srv, _ := geofileServer(t, []fakeUpstream{{repo: "a", assets: map[string]string{"geoip.dat": testGeoIP("good geoip payload")}}})
 	binFolder := geofileTestEnv(t, map[string]geofileEntry{
 		"geoip.dat": {srv.URL + "/a", "geoip.dat", "geoip.dat"},
 	})
@@ -183,8 +187,8 @@ func TestUpdateGeofileInstallsVerifiedFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read installed geofile: %v", err)
 	}
-	if string(got) != "good geoip payload" {
-		t.Fatalf("installed content = %q, want %q", got, "good geoip payload")
+	if string(got) != testGeoIP("good geoip payload") {
+		t.Fatalf("installed content = %q, want %q", got, testGeoIP("good geoip payload"))
 	}
 	if !restarted {
 		t.Fatal("a file was installed, so xray should have been restarted")
@@ -194,7 +198,7 @@ func TestUpdateGeofileInstallsVerifiedFile(t *testing.T) {
 func TestUpdateGeofileRejectsDigestMismatch(t *testing.T) {
 	srv, _ := geofileServer(t, []fakeUpstream{{
 		repo:    "a",
-		assets:  map[string]string{"geoip.dat": "good geoip payload"},
+		assets:  map[string]string{"geoip.dat": testGeoIP("good geoip payload")},
 		corrupt: map[string]bool{"geoip.dat": true},
 	}})
 	binFolder := geofileTestEnv(t, map[string]geofileEntry{
@@ -225,7 +229,7 @@ func TestUpdateGeofileRejectsDigestMismatch(t *testing.T) {
 func TestUpdateGeofileInstallsNeitherFileOfAFailedUpstream(t *testing.T) {
 	srv, hits := geofileServer(t, []fakeUpstream{{
 		repo:    "a",
-		assets:  map[string]string{"geoip.dat": "good geoip", "geosite.dat": "good geosite"},
+		assets:  map[string]string{"geoip.dat": testGeoIP("good geoip"), "geosite.dat": testGeoSite("good.example")},
 		corrupt: map[string]bool{"geosite.dat": true},
 	}})
 	binFolder := geofileTestEnv(t, map[string]geofileEntry{
@@ -256,10 +260,10 @@ func TestUpdateGeofileInstallsNeitherFileOfAFailedUpstream(t *testing.T) {
 // A broken upstream must not discard a healthy one's verified download.
 func TestUpdateGeofileKeepsGoodUpstreamWhenAnotherFails(t *testing.T) {
 	srv, _ := geofileServer(t, []fakeUpstream{
-		{repo: "aaa", assets: map[string]string{"geoip.dat": "healthy payload"}},
+		{repo: "aaa", assets: map[string]string{"geoip.dat": testGeoIP("healthy payload")}},
 		{
 			repo:    "zzz",
-			assets:  map[string]string{"geoip.dat": "broken payload"},
+			assets:  map[string]string{"geoip.dat": testGeoIP("broken payload")},
 			corrupt: map[string]bool{"geoip.dat": true},
 		},
 	})
@@ -283,8 +287,8 @@ func TestUpdateGeofileKeepsGoodUpstreamWhenAnotherFails(t *testing.T) {
 	if readErr != nil {
 		t.Fatalf("the healthy upstream's file must still be installed: %v", readErr)
 	}
-	if string(got) != "healthy payload" {
-		t.Fatalf("installed content = %q, want %q", got, "healthy payload")
+	if string(got) != testGeoIP("healthy payload") {
+		t.Fatalf("installed content = %q, want %q", got, testGeoIP("healthy payload"))
 	}
 	if _, statErr := os.Stat(filepath.Join(binFolder, "geoip_RU.dat")); !os.IsNotExist(statErr) {
 		t.Fatal("the failing upstream's file must not be installed")
@@ -297,9 +301,9 @@ func TestUpdateGeofileKeepsGoodUpstreamWhenAnotherFails(t *testing.T) {
 // The upstreams publish several times a day. Once `latest` is resolved, the
 // asset and its digest must both come from that release, not from a newer one.
 func TestUpdateGeofileSurvivesReleaseRotation(t *testing.T) {
-	const oldBody = "release one payload"
+	oldBody := testGeoIP("release one payload")
 	oldSum := sha256.Sum256([]byte(oldBody))
-	newSum := sha256.Sum256([]byte("release two payload"))
+	newSum := sha256.Sum256([]byte(testGeoIP("release two payload")))
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/a/releases/latest/download/geoip.dat", func(w http.ResponseWriter, r *http.Request) {
@@ -411,5 +415,106 @@ func TestStandardGeodataSources(t *testing.T) {
 		if got[i] != want[i] {
 			t.Errorf("source %d = %+v, want %+v", i, got[i], want[i])
 		}
+	}
+}
+
+func TestUpdateGeofileUsesConfiguredAssetDirectory(t *testing.T) {
+	srv, _ := geofileServer(t, []fakeUpstream{{repo: "a", assets: map[string]string{"geoip.dat": testGeoIP("verified payload")}}})
+	bin := geofileTestEnv(t, map[string]geofileEntry{"geoip.dat": {srv.URL + "/a", "geoip.dat", "geoip.dat"}})
+	assets := t.TempDir()
+	t.Setenv("XRAY_LOCATION_ASSET", assets)
+	var restarted bool
+	restartStub(t, &restarted)
+	if err := (&ServerService{}).UpdateGeofile("geoip.dat"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(assets, "geoip.dat")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(bin, "geoip.dat")); !os.IsNotExist(err) {
+		t.Fatalf("unexpected bin asset: %v", err)
+	}
+	if !restarted {
+		t.Fatal("native configuration must be regenerated")
+	}
+}
+
+func TestGeofileReleaseInstallationRollback(t *testing.T) {
+	dir := t.TempDir()
+	stage := t.TempDir()
+	var files []stagedGeofile
+	for _, name := range []string{"geoip.dat", "geosite.dat"} {
+		dest := filepath.Join(dir, name)
+		src := filepath.Join(stage, name)
+		if err := os.WriteFile(dest, []byte("old"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(src, []byte("new"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		files = append(files, stagedGeofile{destPath: dest, stagePath: src})
+	}
+	original := renameGeofile
+	t.Cleanup(func() { renameGeofile = original })
+	renameGeofile = func(src, dest string) error {
+		if strings.HasSuffix(dest, "geosite.dat") {
+			return fmt.Errorf("simulated disk failure")
+		}
+		return os.Rename(src, dest)
+	}
+	if err := installGeofileRelease(files); err == nil {
+		t.Fatal("expected install failure")
+	}
+	for _, f := range files {
+		b, err := os.ReadFile(f.destPath)
+		if err != nil || string(b) != "old" {
+			t.Fatalf("mixed release at %s: %q %v", f.destPath, b, err)
+		}
+	}
+}
+
+func testGeoIP(code string) string {
+	b, err := proto.Marshal(&xraygeodata.GeoIPList{Entry: []*xraygeodata.GeoIP{{Code: code, Cidr: []*xraygeodata.CIDR{{Ip: []byte{203, 0, 113, 0}, Prefix: 24}}}}})
+	if err != nil {
+		panic(err)
+	}
+	return string(b)
+}
+func testGeoSite(value string) string {
+	b, err := proto.Marshal(&xraygeodata.GeoSiteList{Entry: []*xraygeodata.GeoSite{{Code: "test", Domain: []*xraygeodata.Domain{{Type: xraygeodata.Domain_Domain, Value: value}}}}})
+	if err != nil {
+		panic(err)
+	}
+	return string(b)
+}
+func TestUpdateGeofileRejectsMalformedDatabaseWithValidChecksum(t *testing.T) {
+	srv, _ := geofileServer(t, []fakeUpstream{{repo: "a", assets: map[string]string{"geoip.dat": "not a protobuf database"}}})
+	dir := geofileTestEnv(t, map[string]geofileEntry{"geoip.dat": {srv.URL + "/a", "geoip.dat", "geoip.dat"}})
+	var restarted bool
+	restartStub(t, &restarted)
+	err := (&ServerService{}).UpdateGeofile("")
+	if err == nil || !strings.Contains(err.Error(), "invalid Geofile") {
+		t.Fatalf("expected format rejection: %v", err)
+	}
+	if restarted {
+		t.Fatal("malformed database restarted core")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "geoip.dat")); !os.IsNotExist(err) {
+		t.Fatal("invalid database installed")
+	}
+}
+
+func TestGeodataValidationMatchesNativeKindAndNegation(t *testing.T) {
+	dir := geofileTestEnv(t, nil)
+	if err := os.WriteFile(filepath.Join(dir, "geosite.dat"), []byte(testGeoSite("example.com")), 0600); err != nil {
+		t.Fatal(err)
+	}
+	svc := &GeodataService{}
+	issues := svc.Validate(true, []string{"ext:geosite.dat:test", "!geoip:test"})
+	if len(issues) != 2 || issues[0].Reason != geodataReasonWrongKind || issues[1].Reason != geodataReasonSyntax {
+		t.Fatalf("validator disagrees with native conversion: %+v", issues)
+	}
+	if issues := svc.Validate(true, []string{"geoip:private"}); len(issues) != 0 {
+		t.Fatalf("native private matcher needs no dat: %+v", issues)
 	}
 }

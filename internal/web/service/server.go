@@ -46,6 +46,7 @@ import (
 	systemswap "github.com/SawaMEN/3x-ui/v3/internal/util/swap"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/sys"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
+	"github.com/SawaMEN/3x-ui/v3/internal/xray/geodata"
 
 	"github.com/google/uuid"
 	utls "github.com/refraction-networking/utls"
@@ -1983,6 +1984,39 @@ type stagedGeofile struct {
 // restartXrayAfterGeofileUpdate is a seam: tests assert that an update which
 // installed nothing also restarted nothing.
 var restartXrayAfterGeofileUpdate = (*ServerService).RestartXrayService
+var geofileUpdateMu sync.Mutex
+var renameGeofile = os.Rename
+
+// installGeofileRelease rolls back a partially installed upstream pair.
+func installGeofileRelease(files []stagedGeofile) error {
+	backups := make(map[string]string)
+	for _, file := range files {
+		backup := file.stagePath + ".previous"
+		if err := os.Link(file.destPath, backup); err == nil {
+			backups[file.destPath] = backup
+		} else if !os.IsNotExist(err) {
+			return fmt.Errorf("backup Geofile %s: %w", file.destPath, err)
+		}
+	}
+	for i, file := range files {
+		if err := renameGeofile(file.stagePath, file.destPath); err != nil {
+			failures := []error{fmt.Errorf("install Geofile %s: %w", file.destPath, err)}
+			for _, previous := range files[:i] {
+				var restoreErr error
+				if backup, ok := backups[previous.destPath]; ok {
+					restoreErr = os.Rename(backup, previous.destPath)
+				} else {
+					restoreErr = os.Remove(previous.destPath)
+				}
+				if restoreErr != nil {
+					failures = append(failures, restoreErr)
+				}
+			}
+			return errors.Join(failures...)
+		}
+	}
+	return nil
+}
 
 // AutoUpdateGeofiles refreshes the standard geodata set only while Xray is
 // already running. The scheduled updater must never turn a deliberately stopped
@@ -1995,6 +2029,8 @@ func (s *ServerService) AutoUpdateGeofiles() error {
 }
 
 func (s *ServerService) UpdateGeofile(fileName string) error {
+	geofileUpdateMu.Lock()
+	defer geofileUpdateMu.Unlock()
 	// Strict allowlist check to avoid writing uncontrolled files
 	if fileName != "" {
 		if _, ok := geofileAllowlist[fileName]; !ok {
@@ -2015,14 +2051,14 @@ func (s *ServerService) UpdateGeofile(fileName string) error {
 	}
 	repos := slices.Sorted(maps.Keys(byRepo))
 
-	binFolder := config.GetBinFolderPath()
+	binFolder := assetDir()
 	stageDir, err := os.MkdirTemp(binFolder, "geofile-")
 	if err != nil {
 		return common.NewErrorf("Failed to create staging folder for Geofiles: %v", err)
 	}
 	defer os.RemoveAll(stageDir)
 
-	client := s.settingService.NewProxiedHTTPClient(0)
+	client := s.settingService.NewProxiedHTTPClient(5 * time.Minute)
 
 	var errorMessages []string
 	installed := 0
@@ -2035,20 +2071,18 @@ func (s *ServerService) UpdateGeofile(fileName string) error {
 			errorMessages = append(errorMessages, err.Error())
 			continue
 		}
-		for _, file := range staged {
-			if err := os.Rename(file.stagePath, file.destPath); err != nil {
-				errorMessages = append(errorMessages, fmt.Sprintf("Failed to install Geofile %s: %v", file.destPath, err))
-				continue
-			}
-			installed++
+		if err := installGeofileRelease(staged); err != nil {
+			errorMessages = append(errorMessages, err.Error())
+			continue
 		}
+		installed += len(staged)
 	}
 
 	// Nothing changed, so there is no reason to restart the core and drop every
 	// client connection.
 	if installed > 0 {
 		if err := restartXrayAfterGeofileUpdate(s); err != nil {
-			errorMessages = append(errorMessages, fmt.Sprintf("Updated Geofiles but Failed to start Xray: %v", err))
+			errorMessages = append(errorMessages, fmt.Sprintf("Updated Geofiles but failed to start Sing-box: %v", err))
 		}
 	}
 
@@ -2179,9 +2213,13 @@ func (s *ServerService) stageGeofile(client *http.Client, entry geofileEntry, ta
 		return false, common.NewErrorf("Failed to create Geofile %s: %v", stagePath, err)
 	}
 	hasher := sha256.New()
-	if _, err := io.Copy(io.MultiWriter(file, hasher), resp.Body); err != nil {
+	size, copyErr := io.Copy(io.MultiWriter(file, hasher), io.LimitReader(resp.Body, geodata.MaxFileSize+1))
+	if copyErr != nil || size > geodata.MaxFileSize {
 		file.Close()
-		return false, common.NewErrorf("Failed to save Geofile %s: %v", stagePath, err)
+		if copyErr == nil {
+			copyErr = geodata.ErrFileTooLarge
+		}
+		return false, common.NewErrorf("Failed to save Geofile %s: %v", stagePath, copyErr)
 	}
 	if err := file.Close(); err != nil {
 		return false, common.NewErrorf("Failed to save Geofile %s: %v", stagePath, err)
@@ -2195,6 +2233,17 @@ func (s *ServerService) stageGeofile(client *http.Client, entry geofileEntry, ta
 	}
 	if got := hex.EncodeToString(hasher.Sum(nil)); !strings.EqualFold(got, want) {
 		return false, common.NewErrorf("does not match the published SHA-256 checksum, so the download is corrupted or has been tampered with (expected %s, got %s)", want, got)
+	}
+	kind, err := geodata.NewStore(filepath.Dir(stagePath)).Kind(filepath.Base(stagePath))
+	if err != nil {
+		return false, fmt.Errorf("invalid Geofile %s: %w", entry.FileName, err)
+	}
+	expected := geodata.KindSite
+	if strings.HasPrefix(entry.Asset, "geoip") {
+		expected = geodata.KindIP
+	}
+	if kind != expected {
+		return false, fmt.Errorf("Geofile %s has wrong database type", entry.FileName)
 	}
 
 	setModTime(stagePath)
@@ -2473,7 +2522,7 @@ func (s *ServerService) GetNewVlessEnc() (any, error) {
 		return nil, err
 	}
 	if pair.Encryption == "" || pair.Decryption == "" {
-		return nil, fmt.Errorf("invalid owner VLESS key generator output")
+		return nil, fmt.Errorf("invalid Sing-box VLESS key generator output")
 	}
 	return map[string]any{"auths": []map[string]string{{"id": "x25519", "label": "X25519", "encryption": pair.Encryption, "decryption": pair.Decryption}}}, nil
 }

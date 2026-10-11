@@ -103,7 +103,7 @@ export default function VersionModal({ open, onClose, onBusy }: VersionModalProp
                   type="info"
                   showIcon
                   title={singBoxVersion || 'sing-box'}
-                  description="Ядро из репозитория владельца входит в выпуск панели. Для обновления используйте обновление панели."
+                  description="Модифицированный Sing-box входит в выпуск панели. Для обновления используйте обновление панели."
                 />
               ),
             },

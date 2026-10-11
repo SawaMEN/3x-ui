@@ -34,6 +34,9 @@ core_migration_begin() {
     if [[ "$XUI_BIN_FOLDER" != "$xui_folder/bin" || -L "$XUI_BIN_FOLDER" ]]; then
         cp -aH "$XUI_BIN_FOLDER" "$cm_backup/managed-bin" || return 1
     fi
+    if [[ -L "$xui_folder/bin" ]]; then
+        cm_original_bin_target=$(readlink -f "$xui_folder/bin") || return 1
+    fi
     mkdir "$cm_backup/host-files" || return 1
     core_migration_host_paths
     local i
@@ -48,7 +51,32 @@ core_migration_begin() {
 }
 core_migration_apply() {
     [[ "${cm_active:-0}" == 1 ]] || return 0
+    core_migration_install_managed_bin || return 1
     "$xui_folder/x-ui" core-migrate --backup-dir "$cm_backup/data"
+}
+core_migration_install_managed_bin() {
+    # Releases extract into installation/bin; a configured external directory
+    # must receive the same binaries and databases before the migration trial.
+    export XUI_MAIN_FOLDER="$xui_folder"
+    export XUI_BIN_FOLDER="${XUI_BIN_FOLDER:-$xui_folder/bin}"
+    [[ "$XUI_BIN_FOLDER" == /* ]] || export XUI_BIN_FOLDER="$xui_folder/$XUI_BIN_FOLDER"
+    if [[ -n "${cm_backup:-}" && -L "$cm_backup/installation/bin" && "$XUI_BIN_FOLDER" == "$xui_folder/bin" ]]; then
+        # The installer extracts a real bin directory. Restore the configured
+        # link before deploying the release into its original target.
+        if [[ ! -L "$xui_folder/bin" ]]; then
+            # Relative links in the snapshot resolve from a different parent.
+            # Copy to the original resolved target before restoring the link.
+            [[ -n "${cm_original_bin_target:-}" ]] || return 1
+            mkdir -p "$cm_original_bin_target" || return 1
+            cp -a "$xui_folder/bin/." "$cm_original_bin_target/" || return 1
+            rm -rf -- "$xui_folder/bin" || return 1
+            cp -a "$cm_backup/installation/bin" "$xui_folder/bin" || return 1
+        fi
+    fi
+    if [[ "$XUI_BIN_FOLDER" == "$xui_folder/bin" && ! -L "$XUI_BIN_FOLDER" ]]; then return 0; fi
+    mkdir -p "$XUI_BIN_FOLDER" || return 1
+    cp -a "$cm_stage/x-ui/bin/." "$XUI_BIN_FOLDER/" || return 1
+    chmod +x "$XUI_BIN_FOLDER/hiddify-core-linux-$(arch)" || return 1
 }
 core_migration_commit() {
     "$xui_folder/x-ui" core-migrate --verify-running || return 1
@@ -88,6 +116,15 @@ core_migration_exit() {
         cp -a "$cm_backup/installation" "$xui_folder" || return 1
         if [[ -d "$cm_backup/managed-bin" ]]; then
             mkdir -p "$XUI_BIN_FOLDER" || return 1
+            # Remove assets first introduced by this release as well as restore
+            # overwritten files. Keep unrelated custom files intact.
+            local asset rel
+            while IFS= read -r -d '' asset; do
+                rel="${asset#"$cm_stage/x-ui/bin/"}"
+                if [[ ! -e "$cm_backup/managed-bin/$rel" && ! -L "$cm_backup/managed-bin/$rel" ]]; then
+                    rm -f -- "$XUI_BIN_FOLDER/$rel" || return 1
+                fi
+            done < <(find "$cm_stage/x-ui/bin" \( -type f -o -type l \) -print0)
             cp -a "$cm_backup/managed-bin/." "$XUI_BIN_FOLDER/" || return 1
         fi
         local i

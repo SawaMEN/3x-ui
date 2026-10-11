@@ -9,7 +9,7 @@
 ## Источник и сохранение статистики
 
 Подтверждённый контракт — метод
-`/v2ray.core.app.stats.command.StatsService/QueryStats`. В исходниках владельца
+`/v2ray.core.app.stats.command.StatsService/QueryStats`. В исходниках модифицированного Sing-box
 `experimental/v2rayapi/stats.go` TCP, UDP и flow trackers начисляют байты по
 `metadata.Inbound` и `metadata.User`. Ответ содержит
 `inbound>>>tag>>>traffic>>>uplink/downlink` и
