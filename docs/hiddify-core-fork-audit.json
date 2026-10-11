@@ -1,0 +1,291 @@
+{
+  "schema_version": 1,
+  "audit_date": "2026-10-11",
+  "stage": 1,
+  "panel_baseline": "a62bed71bcf3162a9e77b4f035c42d8b86bdbef0",
+  "evidence_level": "source-only-no-build-no-binary-no-traffic-e2e",
+  "target": {
+    "repository": "https://github.com/SawaMEN/hiddify-core",
+    "commit": "b5749002266b9782803669138494ef6937eb4e95",
+    "submodules": {
+      "hiddify-sing-box": "8a82b70836022a1b56eca15df12f56f903cfb27d",
+      "ray2sing": "505d8c645f1dad54544abd024ffd8100a8d771e8"
+    },
+    "submodule_repositories": {
+      "hiddify-sing-box": "https://github.com/SawaMEN/hiddify-sing-box",
+      "ray2sing": "https://github.com/hiddify/ray2sing"
+    }
+  },
+  "activation_ready": false,
+  "automatic_migration_ready": false,
+  "required_go_directive": "1.26.8",
+  "toolchain_validated": false,
+  "previous_binary_baseline": "hiddify-core-target.json",
+  "stats_contract": {
+    "registered_service": "v2ray.core.app.stats.command.StatsService",
+    "method": "/v2ray.core.app.stats.command.StatsService/QueryStats",
+    "panel_method": "/experimental.v2rayapi.StatsService/QueryStats",
+    "compatible": false,
+    "query_fields": {
+      "pattern": 1,
+      "reset": 2,
+      "patterns": 3,
+      "regexp": 4
+    },
+    "metering_requires": "authenticated metadata.User and stats.users whitelist; endpoints need separate traffic checks"
+  },
+  "required_panel_changes": [
+    "gRPC service path selection pinned to runtime profile",
+    "Clash metadata.user overlay or native fork implementation",
+    "explicit check command registration",
+    "with_masque for MASQUE outbound (endpoints registered separately)",
+    "toolchain and dependency validation against go 1.26.8",
+    "new runtime version identity and pinned owner build; do not reuse v5 binary evidence"
+  ],
+  "protocols": [
+    {
+      "panel_protocol": "vmess",
+      "migration": "native",
+      "target_type": "vmess",
+      "target_kind": "inbound",
+      "decision": "Map UUID/users and transport; handshake legacy alterId and multi-user."
+    },
+    {
+      "panel_protocol": "vless",
+      "migration": "adapt",
+      "target_type": "vless",
+      "target_kind": "inbound",
+      "decision": "Map UUID/flow and decryption/encryption with internal/hiddify; ML-DSA and Vision seed still block parity."
+    },
+    {
+      "panel_protocol": "trojan",
+      "migration": "adapt",
+      "target_type": "trojan",
+      "target_kind": "inbound",
+      "decision": "Map users/TLS; fallback supports default/ALPN only."
+    },
+    {
+      "panel_protocol": "shadowsocks",
+      "migration": "adapt",
+      "target_type": "shadowsocks",
+      "target_kind": "inbound",
+      "decision": "Preserve cipher/master PSK/user PSK and metering."
+    },
+    {
+      "panel_protocol": "http",
+      "migration": "native",
+      "target_type": "http",
+      "target_kind": "inbound",
+      "decision": "Map accounts/TLS and preserve disabled users."
+    },
+    {
+      "panel_protocol": "mixed",
+      "migration": "adapt",
+      "target_type": "mixed",
+      "target_kind": "inbound",
+      "decision": "Independent SOCKS udp=false cannot be represented by current translator."
+    },
+    {
+      "panel_protocol": "hysteria",
+      "migration": "adapt",
+      "target_type": "hysteria",
+      "target_kind": "inbound",
+      "decision": "Select hysteria/hysteria2 from version, audit obfs/bandwidth options."
+    },
+    {
+      "panel_protocol": "hysteria2",
+      "migration": "adapt",
+      "target_type": "hysteria2",
+      "target_kind": "inbound",
+      "decision": "Compatibility alias; normalize to version 2."
+    },
+    {
+      "panel_protocol": "tuic",
+      "migration": "adapt",
+      "target_type": "tuic",
+      "target_kind": "inbound",
+      "decision": "Use native listener; avoid simultaneous sidecar binding and duplicate metering."
+    },
+    {
+      "panel_protocol": "naive",
+      "migration": "adapt",
+      "target_type": "naive",
+      "target_kind": "inbound",
+      "decision": "Map username/password/TLS and TCP/QUIC mode."
+    },
+    {
+      "panel_protocol": "anytls",
+      "migration": "native",
+      "target_type": "anytls",
+      "target_kind": "inbound",
+      "decision": "Map password/TLS/padding_scheme; verify user metering."
+    },
+    {
+      "panel_protocol": "shadowtls",
+      "migration": "adapt",
+      "target_type": "shadowtls",
+      "target_kind": "inbound",
+      "decision": "Preserve ShadowTLS + inner Shadowsocks detour and derived credentials."
+    },
+    {
+      "panel_protocol": "mieru",
+      "migration": "adapt",
+      "target_type": "mieru",
+      "target_kind": "inbound",
+      "decision": "Native server exists; verify pinned v5 Mieru dependency and credential/portBindings/meters before replacing panel runtime."
+    },
+    {
+      "panel_protocol": "wireguard",
+      "migration": "adapt",
+      "target_type": "wireguard",
+      "target_kind": "endpoint",
+      "decision": "Map endpoint listen_port/peers/allowed_ips; implement peer metering."
+    },
+    {
+      "panel_protocol": "amneziawg",
+      "migration": "adapt",
+      "target_type": "awg",
+      "target_kind": "endpoint",
+      "decision": "AWG endpoint exposes named peers and source-IP user mapping. Validate non-overlapping allowed_ips, AWG v3 parameter parity and peer TCP/UDP/flow accounting before replacing embedded runtime."
+    },
+    {
+      "panel_protocol": "tun",
+      "migration": "adapt",
+      "target_type": "tun",
+      "target_kind": "inbound",
+      "decision": "Native interface exists; current Xray translator rejects it; retain OS gateway lifecycle."
+    },
+    {
+      "panel_protocol": "tunnel",
+      "migration": "blocked",
+      "target_type": null,
+      "target_kind": null,
+      "decision": "Xray forwarding is not hiddify tunnel_server/client; map to direct/redirect/tproxy with explicit semantics."
+    },
+    {
+      "panel_protocol": "mtproto",
+      "migration": "external",
+      "target_type": null,
+      "target_kind": null,
+      "decision": "Retain Telemt reload/quotas/subscriptions and move egress bridge."
+    },
+    {
+      "panel_protocol": "pingtunnel",
+      "migration": "external",
+      "target_type": null,
+      "target_kind": null,
+      "decision": "Retain externalvpn runtime and TCP/UDP bridge. Outbound exists in the pinned fork; it does not implement the required server inbound."
+    },
+    {
+      "panel_protocol": "trusttunnel",
+      "migration": "adapt",
+      "target_type": "trusttunnel",
+      "target_kind": "inbound",
+      "decision": "Native inbound is registered and sets metadata.User from authenticated username. Map TLS/users/network; compare external runtime options before replacing it."
+    },
+    {
+      "panel_protocol": "fptn",
+      "migration": "external",
+      "target_type": null,
+      "target_kind": null,
+      "decision": "Retain externalvpn token/MTU/SNI and bridge. Outbound exists in the pinned fork; it does not implement the required server inbound."
+    },
+    {
+      "panel_protocol": "openflux",
+      "migration": "external",
+      "target_type": null,
+      "target_kind": null,
+      "decision": "Retain externalvpn secret/context/transports and bridge. Outbound exists in the pinned fork; it does not implement the required server inbound."
+    },
+    {
+      "panel_protocol": "vk-turn-proxy",
+      "migration": "external",
+      "target_type": null,
+      "target_kind": null,
+      "decision": "Retain external runtime/WireGuard relay and metering."
+    },
+    {
+      "panel_protocol": "sudoku",
+      "migration": "external",
+      "target_type": null,
+      "target_kind": null,
+      "decision": "Retain Sudoku runtime/credentials and bridge metering. Outbound exists in the pinned fork; it does not implement the required server inbound."
+    },
+    {
+      "panel_protocol": "snell",
+      "migration": "adapt",
+      "target_type": "snell",
+      "target_kind": "inbound",
+      "decision": "Native inbound versions 5/6 and outbound 4/6 are registered; existing panel server mapping can be reused."
+    },
+    {
+      "panel_protocol": "masque",
+      "migration": "adapt",
+      "target_type": "masque-server",
+      "target_kind": "endpoint",
+      "decision": "Native server/client endpoints exist; reuse panel endpoint mapping and verify routing/user metering."
+    }
+  ],
+  "source_checks": [
+    {
+      "path": "cmd/cmd_sing_run.go",
+      "contains": "Use:   \"srun\""
+    },
+    {
+      "path": "cmd/cmd_check.go",
+      "contains": "// var commandCheck = &cobra.Command{"
+    },
+    {
+      "path": "go.mod",
+      "contains": "go 1.26.8"
+    },
+    {
+      "path": ".gitmodules",
+      "contains": "https://github.com/SawaMEN/hiddify-sing-box"
+    },
+    {
+      "path": "hiddify-sing-box/include/registry.go",
+      "contains": "trusttunnel.RegistryInbound(registry)"
+    },
+    {
+      "path": "hiddify-sing-box/protocol/trusttunnel/inbound.go",
+      "contains": "User:              username"
+    },
+    {
+      "path": "hiddify-sing-box/option/awg.go",
+      "contains": "Username                    string"
+    },
+    {
+      "path": "hiddify-sing-box/protocol/awg/endpoint.go",
+      "contains": "metadata.User = e.peerUsers.Lookup(source.Addr)"
+    },
+    {
+      "path": "hiddify-sing-box/experimental/v2rayapi/stats.go",
+      "contains": "StatsService_ServiceDesc.ServiceName = \"v2ray.core.app.stats.command.StatsService\""
+    },
+    {
+      "path": "hiddify-sing-box/include/v2rayapi.go",
+      "contains": "//go:build with_v2ray_api"
+    },
+    {
+      "path": "hiddify-sing-box/include/masque.go",
+      "contains": "//go:build with_masque"
+    },
+    {
+      "path": "hiddify-sing-box/transport/v2ray/transport.go",
+      "contains": "return xhttp.NewServer"
+    },
+    {
+      "path": "hiddify-sing-box/option/vless.go",
+      "contains": "Decryption string"
+    },
+    {
+      "path": "hiddify-sing-box/protocol/mieru/inbound.go",
+      "contains": "metadata.User = userCtx.UserName()"
+    },
+    {
+      "path": "v2/hcore/hcore_service.proto",
+      "contains": "rpc HotReload"
+    }
+  ]
+}

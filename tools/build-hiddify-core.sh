@@ -24,6 +24,7 @@ if [[ ${#target[@]} != 6 ]]; then
   exit 1
 fi
 git clone --depth=1 --branch "${target[1]}" -- "${target[0]}" "$task_source/core"
+git -C "$task_source/core" config submodule.hiddify-sing-box.url https://github.com/SawaMEN/hiddify-sing-box.git
 git -C "$task_source/core" config submodule.ray2sing.url https://github.com/hiddify/ray2sing.git
 git -C "$task_source/core" submodule update --init --recursive --depth=1
 python3 "$task_root/tools/audit-hiddify-migration.py" --upstream "$task_source/core"

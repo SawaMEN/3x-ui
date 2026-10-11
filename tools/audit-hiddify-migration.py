@@ -23,6 +23,45 @@ def git(path, *args):
     ).strip()
 
 
+def audit_fork(fork):
+    lock = json.loads((ROOT / "docs/hiddify-core-fork-audit.json").read_text())
+    require(lock["schema_version"] == 1 and lock["stage"] == 1, "Unknown fork schema/stage")
+    require(not lock["activation_ready"] and not lock["automatic_migration_ready"], "Unverified fork cannot enable migration")
+    target = lock["target"]
+    require(target["repository"] == "https://github.com/SawaMEN/hiddify-core", "Fork must be owner-managed")
+    for revision in [lock["panel_baseline"], target["commit"], *target["submodules"].values()]:
+        require(bool(re.fullmatch(r"[0-9a-f]{40}", revision)), "Expected pinned fork revision")
+    baseline = json.loads((ROOT / "docs/hiddify-core-target.json").read_text())
+    rows = lock["protocols"]
+    names = [row["panel_protocol"] for row in rows]
+    require(len(names) == len(set(names)), "Duplicate fork protocol")
+    require(set(names) == {row["panel_protocol"] for row in baseline["protocols"]}, "Fork protocol inventory drift")
+    for row in rows:
+        require(row["migration"] in {"native", "adapt", "external", "blocked"}, "Unknown fork decision")
+        require(bool(row["decision"].strip()), "Missing fork decision")
+        require((row["target_kind"] is None) == (row["target_type"] is None), "Incomplete fork target identity")
+    stats = lock["stats_contract"]
+    client = (ROOT / "internal/singbox/v2rayapi.go").read_text()
+    require(stats["panel_method"] in client, "Panel statistics contract changed; re-audit fork compatibility")
+    require(stats["compatible"] == (stats["method"] == stats["panel_method"]), "Incorrect statistics compatibility")
+    print(f"OK: owner fork inventory ({len(names)} entries), pinned revisions, explicit API mismatch")
+    if fork is None:
+        print("Fork source verification skipped; pass --fork to check the pinned owner checkout")
+        return
+    fork = fork.resolve()
+    require(git(fork, "remote", "get-url", "origin").removesuffix(".git") == target["repository"], "Wrong fork origin")
+    require(git(fork, "rev-parse", "HEAD") == target["commit"], "Fork HEAD differs from audit")
+    require(not git(fork, "status", "--porcelain", "--untracked-files=no"), "Fork has tracked changes")
+    for name, revision in target["submodules"].items():
+        require(git(fork, "ls-tree", "HEAD", name).split()[2] == revision, f"Wrong fork gitlink: {name}")
+        require(git(fork / name, "rev-parse", "HEAD") == revision, f"Unpinned fork submodule: {name}")
+        require(git(fork / name, "remote", "get-url", "origin").removesuffix(".git") == target["submodule_repositories"][name], f"Wrong fork submodule origin: {name}")
+        require(not git(fork / name, "status", "--porcelain", "--untracked-files=no"), f"Modified fork submodule: {name}")
+    for check in lock["source_checks"]:
+        require(check["contains"] in (fork / check["path"]).read_text(), f"Fork source evidence changed: {check['path']}")
+    print("OK: owner fork HEAD/gitlinks/origins and source anchors; no runtime/traffic validation")
+
+
 def audit(upstream):
     lock = json.loads((ROOT / "docs/hiddify-core-target.json").read_text())
     require(lock["schema_version"] == 1 and lock["stage"] == 1, "Unknown audit schema/stage")
@@ -43,6 +82,7 @@ def audit(upstream):
         require(f"| `{row['panel_protocol']}` |" in report, f"No report row for {row['panel_protocol']}")
         require((row["target_kind"] is None) == (row["target_type"] is None), "Incomplete target identity")
     target = lock["target"]
+    require(target["repository"] == "https://github.com/SawaMEN/hiddify-core", "Core must come from the owner's repository")
     for rev in [target["commit"], *target["submodules"].values(), lock["panel_baseline"]]:
         require(bool(re.fullmatch(r"[0-9a-f]{40}", rev)), "Expected a full pinned commit")
     release = lock["verified_release"]
@@ -58,11 +98,15 @@ def audit(upstream):
         print("Upstream verification skipped; pass --upstream to verify source evidence")
         return
     upstream = upstream.resolve()
+    require(git(upstream, "remote", "get-url", "origin").removesuffix(".git") == target["repository"], "Core checkout is not from the owner's repository")
     require(git(upstream, "rev-parse", "HEAD") == target["commit"], "Upstream HEAD differs from lock")
     require(git(upstream, "rev-parse", f"{target['tag']}^{{commit}}") == target["commit"], "Upstream tag differs from lock")
     require(not git(upstream, "status", "--porcelain", "--untracked-files=no"), "Upstream has tracked modifications")
     for name, revision in target["submodules"].items():
+        require(git(upstream, "ls-tree", "HEAD", name).split()[2] == revision, f"Submodule tree differs from lock: {name}")
         require(git(upstream / name, "rev-parse", "HEAD") == revision, f"Uninitialized or unpinned submodule: {name}")
+        if name == "hiddify-sing-box":
+            require(git(upstream / name, "remote", "get-url", "origin").removesuffix(".git") == "https://github.com/SawaMEN/hiddify-sing-box", "Sing-box fork must come from the owner's repository")
         require(not git(upstream / name, "status", "--porcelain", "--untracked-files=no"), f"Modified submodule: {name}")
     for check in lock["source_checks"]:
         require(check["contains"] in (upstream / check["path"]).read_text(), f"Source evidence changed: {check['path']}")
@@ -73,9 +117,11 @@ def audit(upstream):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--upstream", type=Path, help="hiddify-core checkout with initialized pinned submodules")
+    parser.add_argument("--fork", type=Path, help="current owner fork checkout with pinned submodules (source audit only)")
     args = parser.parse_args()
     try:
         audit(args.upstream)
+        audit_fork(args.fork)
     except (ValueError, KeyError, OSError, subprocess.CalledProcessError) as error:
         print(f"FAIL: {error}", file=sys.stderr)
         return 1

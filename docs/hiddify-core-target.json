@@ -5,12 +5,17 @@
   "stage": 1,
   "evidence_level": "source-audit-and-amd64-binary-probes-not-traffic-e2e",
   "target": {
-    "repository": "https://github.com/hiddify/hiddify-core",
+    "repository": "https://github.com/SawaMEN/hiddify-core",
     "tag": "v5.0.0",
     "commit": "7854a77ec228309e2194bdfbec1efb5b7190aa5b",
     "submodules": {
       "hiddify-sing-box": "965805340f3f399a48626d3facc355a906c95ebd",
       "ray2sing": "505d8c645f1dad54544abd024ffd8100a8d771e8"
+    },
+    "source_policy": "owner-repositories-only; v5 is the previous binary-tested baseline, not the current fork audit",
+    "submodule_repositories": {
+      "hiddify-sing-box": "https://github.com/SawaMEN/hiddify-sing-box",
+      "ray2sing": "https://github.com/hiddify/ray2sing"
     }
   },
   "verified_release": {
@@ -313,5 +318,6 @@
     "validation_cli_available": true,
     "user_stats_api_available": true,
     "clash_user_overlay": "deploy/hiddify/clash-user.patch"
-  }
+  },
+  "current_fork_audit": "hiddify-core-fork-audit.json"
 }

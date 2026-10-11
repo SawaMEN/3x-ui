@@ -1,4 +1,82 @@
-# Миграция на hiddify-core: этап 1
+# Миграция на hiddify-core: проверка этапа 1
+
+Повторная проверка: 2026-10-11, только ветка `update`, панель `a62bed7`.
+Источник ядра — **SawaMEN/hiddify-core**, зависимого runtime —
+**SawaMEN/hiddify-sing-box**. Ограничения можно устранять в этих форках;
+они не являются основанием навсегда отказываться от функции панели.
+
+## Текущий форк и прежняя проверенная сборка
+
+| Назначение | Ревизия | Проверка |
+| --- | --- | --- |
+| Текущий hiddify-core | `b5749002266b9782803669138494ef6937eb4e95` | Исходники |
+| Его hiddify-sing-box submodule | `8a82b70836022a1b56eca15df12f56f903cfb27d` | Исходники именно gitlink, не последний main |
+| Его ray2sing submodule | `505d8c645f1dad54544abd024ffd8100a8d771e8` | Gitlink; пользователь не имеет отдельного форка этой зависимости |
+| Прежняя panel build | v5.0.0, `7854a77ec228309e2194bdfbec1efb5b7190aa5b` | Исторические бинарные проверки ниже |
+
+Актуальная матрица всех 26 значений протокола (25 типов + alias hysteria2),
+решения и проверяемые anchors: [hiddify-core-fork-audit.json](hiddify-core-fork-audit.json).
+Старый build lock [hiddify-core-target.json](hiddify-core-target.json) сохраняет
+проверенную версию до валидации нового форка; сборщик теперь получает и её из
+репозиториев SawaMEN. Это не переход на новый commit и не автоматическая миграция.
+Старый checksum и результаты v5 не доказывают работу нового форка.
+
+## Исправления и обязательные решения
+
+| Область | Результат на текущем зафиксированном форке | Решение |
+| --- | --- | --- |
+| TrustTunnel | Есть настоящий inbound в registry и protocol/trusttunnel/inbound.go; TCP/UDP получают имя аутентифицированного пользователя | Статус adapt вместо external-only. Написать mapping TLS/users/network и проверить паритет с внешним сервисом |
+| AWG | option/awg.go содержит peer name, endpoint связывает source IP с metadata.User | Статус adapt; проверить пересекающиеся allowed_ips, IPv4/IPv6, UDP/TCP/flow metering, параметры AWG v3. Наличие name ещё не доказывает полный учёт |
+| Статистика gRPC | stats.go переименовывает зарегистрированный ServiceName в v2ray.core.app.stats.command.StatsService | Текущий panel client использует experimental.v2rayapi и несовместим. Для нового runtime нужен новый путь либо alias в форке; схему полей 1/2/3/4 сохранить |
+| Имена пользователей | Mieru использует username; TrustTunnel использует username; AWG — peer name | Согласовать идентификатор с email/ID БД и stats.users, не считать наличие API доказательством работы quota |
+| Clash online/IP | tracker.go не сериализует metadata.User | Перенести overlay или добавить user в собственном форке. Проверить адрес и identity сессии перед disconnect |
+| Проверка config | cmd_check.go по-прежнему содержит закомментированную регистрацию команды check | Перенести overlay в новый build либо экспортировать check в своём ядре. box.New без Start не проверяет handshake |
+| MASQUE | Endpoints зарегистрированы отдельно; outbound требует with_masque | Новый panel build должен включать with_masque. Проверить TLS/HTTP3, user routing и счётчики |
+| Toolchain | core и submodule требуют Go 1.26.8; старый build закрепляет go1.26.3 | Новый commit нельзя просто подставить в старый build lock: заново проверить зависимости, Psiphon TLS и startup на новой версии Go |
+| FPTN/OpenFlux/PingTunnel/Sudoku | Есть outbounds; серверные inbounds в registry отсутствуют | Сохранить внешние серверы либо портировать серверные реализации в свой форк; outbound не заменяет сервер |
+| MTProto/VK TURN | Эквивалентного native inbound не найдено | Сохранить Telemt/relay и перенести bridge; удаление этих сервисов не входит в удаление Xray/sing-box |
+| XHTTP/VLESS | Server/client XHTTP и encryption/decryption есть | Проверить generated native JSON и handshake; REALITY ML-DSA/seed, mKCP и неподдерживаемые Xray options остаются preflight blockers |
+| DNS/routing/Gateway | Native генератор панели переиспользуется; OS lifecycle остаётся в internal/gateway | Проверить порядок правил, ext geodata → rule sets, DNS, nftables/policy routing, restart/rollback с TUN |
+| HotReload | RPC и исходники есть, панель использует restart | Restart допустим до доказанной горячей замены; batch operations применять один раз |
+
+## Где дорабатывать
+
+В `SawaMEN/hiddify-core`: CLI check, идентичность и рецепт server build,
+toolchain/startup. В `SawaMEN/hiddify-sing-box`: Clash user, alias статистического
+сервиса при необходимости, недостающие transport/TLS/server возможности и
+учёт endpoints. В `3x-ui`: mapping, runtime profile, миграционный preflight,
+DB traffic, subscriptions, nodes и gateway orchestration. Изменений в main
+этих репозиториев при этом аудите нет.
+
+## Статус завершения
+
+Инвентаризация и решения этапа 1 проверены по исходникам. **Переход текущего
+форка ещё не готов к активации**: несовместимость gRPC, новый toolchain и
+остальные пункты выше требуют реализации/проверки. В этой среде отсутствует Go;
+новый binary, VPN handshake, квоты, TUN/Gateway, ARM64 и musl не проверены.
+Release draft — изменяемый prerelease, его библиотечные архивы нельзя считать
+закреплённой panel build с нужными tags/overlays.
+
+Воспроизводимая проверка источников (чистый checkout core с submodules на gitlink):
+
+```bash
+python3 tools/audit-hiddify-migration.py --fork /path/to/SawaMEN-hiddify-core
+python3 tools/audit-hiddify-migration.py
+```
+
+Первичные источники:
+[core](https://github.com/SawaMEN/hiddify-core/tree/b5749002266b9782803669138494ef6937eb4e95),
+[registry](https://github.com/SawaMEN/hiddify-sing-box/blob/8a82b70836022a1b56eca15df12f56f903cfb27d/include/registry.go),
+[stats](https://github.com/SawaMEN/hiddify-sing-box/blob/8a82b70836022a1b56eca15df12f56f903cfb27d/experimental/v2rayapi/stats.go),
+[AWG](https://github.com/SawaMEN/hiddify-sing-box/blob/8a82b70836022a1b56eca15df12f56f903cfb27d/protocol/awg/endpoint.go),
+[TrustTunnel](https://github.com/SawaMEN/hiddify-sing-box/blob/8a82b70836022a1b56eca15df12f56f903cfb27d/protocol/trusttunnel/inbound.go).
+
+Ниже сохранён прежний аудит v5 как история проверки. Его утверждения о наличии
+протоколов/зависимостей не заменяют актуальную матрицу форка выше.
+
+---
+
+# Предыдущая проверка v5.0.0 (историческая база)
 
 Дата аудита: 2026-10-09. Ветка: `update`. Снимок панели:
 `cf730af652387a2e99fa1cda20674b038a6edfdf`.
