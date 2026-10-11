@@ -32,8 +32,11 @@ git -C "$task_source/core" config submodule.ray2sing.url https://github.com/hidd
 git -C "$task_source/core" submodule update --init --recursive --depth=1
 python3 "$task_root/tools/audit-hiddify-migration.py" --upstream "$task_source/core"
 git -C "$task_source/core" apply "$task_root/deploy/hiddify/clash-user.patch"
+git -C "$task_source/core" apply "$task_root/deploy/hiddify/sniff-override.patch"
 cp -- "$task_root/deploy/hiddify/cmd_xui_check.go.in" "$task_source/core/cmd/cmd_xui_check.go"
 cp -- "$task_root/deploy/hiddify/clash_user_test.go.in" "$task_source/core/hiddify-sing-box/experimental/clashapi/trafficontrol/xui_panel_test.go"
+
+cp -- "$task_root/deploy/hiddify/sniff_override_test.go.in" "$task_source/core/hiddify-sing-box/route/rule/xui_panel_sniff_test.go"
 
 task_goos=${GOOS:-$(go env GOOS)}
 task_goarch=${GOARCH:-$(go env GOARCH)}
@@ -45,6 +48,7 @@ if [[ "$task_goos" == "$(go env GOHOSTOS)" && "$task_goarch" == "$(go env GOHOST
   (
     cd -- "$task_source/core"
     CGO_ENABLED=0 GOTOOLCHAIN="${target[5]}" go test -tags "${target[3]}" github.com/sagernet/sing-box/experimental/clashapi/trafficontrol -run '^TestXUIPanelAuthenticatedUserIsConnectionMetadata$' -count=1
+    CGO_ENABLED=0 GOTOOLCHAIN="${target[5]}" go test -tags "${target[3]}" github.com/sagernet/sing-box/route/rule -run '^TestXUIPanelSniffOverrideAction$' -count=1
   )
 fi
 (

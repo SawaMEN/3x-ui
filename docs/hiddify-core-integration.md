@@ -1,4 +1,4 @@
-# Интеграция hiddify-core: этапы 2–3
+# Интеграция hiddify-core: этапы 2–4
 
 Ветка `update`. Ядро собирается только из `SawaMEN/hiddify-core`:
 `b5749002266b9782803669138494ef6937eb4e95`, зависимый `SawaMEN/hiddify-sing-box`:
@@ -14,6 +14,15 @@
 остаётся в адаптере; общие DTO не подменяют native-конфиг Hiddify.
 Проверки: [hiddify-core-stage-3-verification.md](hiddify-core-stage-3-verification.md).
 
+## Генерация полного серверного конфига
+
+Этап 4 подключил `HiddifyConfigGenerator`: основной DB snapshot, общие native
+builders, Hiddify-aware template merge, граф ссылок DNS/routing/rule sets,
+канонические пользователи и стабильные статистические наборы. Preview,
+candidate и restart используют один entrypoint. Полные DB-конфиги 14 вариантов
+протоколов и 6 транспортов проверены настоящим `check -c`.
+Подробности: [hiddify-core-stage-4-verification.md](hiddify-core-stage-4-verification.md).
+
 ## Runtime и управление процессом
 
 `internal/hiddify.Runtime` реализует `internal/core.Runtime` и используется
@@ -23,7 +32,7 @@ config и команде `srun`; клиентский `run` не принима�
 Stop выполняет ограниченное по времени завершение и при уже отменённом контексте
 панели. Watchdog восстанавливает процесс после сбоя; ручная остановка сохраняется.
 
-`version` обязан сообщить `sawamen-b5749002266b`, полный source revision и точные
+`version` обязан сообщить `sawamen-b5749002266b-panel4`, полный source revision и точные
 обязательные tags. Проверка больше не принимает совпадение tag по подстроке.
 Неподходящая сборка отклоняется с ошибкой hiddify-core. Выбор Hiddify возвращает
 capabilities интеграции, включая Clash, rulesets и статистику, без обещания HotReload.
@@ -52,6 +61,12 @@ metadata.user. Сборка на host architecture выполняет тест �
 hiddify-core.so. Для Naive outbound по-прежнему нужна соответствующая libcronet;
 эта зависимость не заменяется фиктивным успешным constructor check.
 Release workflow и Docker используют тот же сборщик.
+
+Сборка panel4 дополнительно применяет contextual sniff override patch к
+собственному форку: `override_destination` в modern action подключён к
+существующему механизму перезаписи адреса. Decode/native action тест запускается
+в сборщике. Поэтому сборка этапа 2 без этого mapping больше не принимается
+за текущий профиль.
 
 ## API статистики
 

@@ -22,7 +22,7 @@ func (s *SingBoxService) writeConfigCandidate(ctx context.Context) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	file, err := os.CreateTemp(filepath.Dir(path), ".sing-box-config-*.json")
+	file, err := os.CreateTemp(filepath.Dir(path), "."+s.coreType()+"-config-*.json")
 	if err != nil {
 		return err
 	}
@@ -39,7 +39,7 @@ func (s *SingBoxService) writeConfigCandidate(ctx context.Context) error {
 		return err
 	}
 	if err := s.candidate(name).Validate(ctx); err != nil {
-		return fmt.Errorf("validate candidate sing-box config: %w", err)
+		return fmt.Errorf("validate candidate %s config: %w", s.coreType(), err)
 	}
 	if err := os.Rename(name, path); err != nil {
 		return err

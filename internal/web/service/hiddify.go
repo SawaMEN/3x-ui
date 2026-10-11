@@ -101,45 +101,6 @@ func (s *SingBoxService) pollHiddifyTraffic(ctx context.Context) error {
 	return nil
 }
 
-func configureHiddifyStats(cfg *singbox.Config) {
-	cfg.Hiddify = true
-	cfg.Services = nil // This fork uses V2Ray stats and Clash rather than service.api.
-	users, tags := []string{}, []string{}
-	listeners := append(append([]map[string]any{}, cfg.Inbounds...), cfg.Endpoints...)
-	for _, inbound := range listeners {
-		if tag, ok := inbound["tag"].(string); ok {
-			tags = append(tags, tag)
-		}
-		data, _ := inbound["users"].([]map[string]any)
-		for _, user := range data {
-			name, _ := user["name"].(string)
-			if name == "" {
-				name, _ = user["username"].(string)
-			}
-			if name != "" {
-				users = append(users, name)
-			}
-		}
-		anyUsers, _ := inbound["users"].([]any)
-		for _, item := range anyUsers {
-			if user, ok := item.(map[string]any); ok {
-				name, _ := user["name"].(string)
-				if name == "" {
-					name, _ = user["username"].(string)
-				}
-				if name != "" {
-					users = append(users, name)
-				}
-			}
-		}
-	}
-
-	if cfg.Experimental == nil {
-		cfg.Experimental = map[string]any{}
-	}
-	cfg.Experimental["v2ray_api"] = map[string]any{"listen": "127.0.0.1:10086", "stats": map[string]any{"enabled": true, "inbounds": tags, "users": users}}
-}
-
 func (s *SingBoxService) hiddifySessions(ctx context.Context) ([]singbox.ActiveSession, error) {
 	connections, err := singbox.NewClashStatsClient().Connections(ctx)
 	if err != nil {

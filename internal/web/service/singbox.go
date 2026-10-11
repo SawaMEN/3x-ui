@@ -12,18 +12,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
-	"github.com/SawaMEN/3x-ui/v3/internal/amneziawgnet"
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
-	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
 	"github.com/SawaMEN/3x-ui/v3/internal/hiddify"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/tail"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray/geodata"
 )
 
 var (
@@ -128,494 +123,12 @@ func singBoxTUICInbound(ib *model.Inbound, clients []any) (map[string]any, error
 	}, nil
 }
 
+// GetConfig is the single generation entry point for previews, candidates and restarts.
 func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
-	inbounds, err := singBoxInboundService.GetAllInbounds()
-	if err != nil {
-		return nil, err
-	}
-
-	cfg := singbox.NewConfig()
-	// Generated outbounds come from the Xray template. Keep NewConfig's
-	// defaults only for its standalone editor fallback.
-	cfg.Outbounds = nil
-	if s.process().SupportsNativeAPI() {
-		cfg.Services = []map[string]any{{
-			"type":        "api",
-			"tag":         "panel-api",
-			"listen":      "127.0.0.1",
-			"listen_port": 10091,
-		}}
-	}
-
-	managedOutboundTags := map[string]bool{}
-	dnsOutboundTags := make(map[string]struct{})
-	template, templateErr := singBoxSettingService.GetXrayConfigTemplate()
-	if templateErr != nil {
-		return nil, templateErr
-	}
-	{
-		var xrayCfg map[string]any
-		if err := json.Unmarshal([]byte(template), &xrayCfg); err != nil {
-			return nil, fmt.Errorf("parse Xray template: %w", err)
-		}
-		{
-			prepend, tail, err := (&OutboundSubscriptionService{}).activeOutboundsSplit()
-			if err != nil {
-				return nil, err
-			}
-			manual, _ := xrayCfg["outbounds"].([]any)
-			xrayCfg["outbounds"] = append(append(prepend, manual...), tail...)
-			if rawDNS, ok := xrayCfg["dns"].(map[string]any); ok && len(rawDNS) > 0 {
-				rawRouting, _ := xrayCfg["routing"].(map[string]any)
-				if err := singbox.ValidateXrayDNSRouting(rawDNS, rawRouting); err != nil {
-					return nil, fmt.Errorf("sing-box DNS routing: %w", err)
-				}
-				dns, err := singbox.TranslateXrayDNS(rawDNS)
-				if err != nil {
-					return nil, fmt.Errorf("sing-box DNS template: %w", err)
-				}
-				if len(dns) > 0 {
-					// sing-box 1.14 requires a resolver for domain-based outbound
-					// server addresses. Keep the system resolver available even when
-					// the Xray DNS template replaces the generated default.
-					servers, _ := dns["servers"].([]map[string]any)
-					hasLocal := false
-					for _, server := range servers {
-						if tag, _ := server["tag"].(string); tag == "local" {
-							hasLocal = true
-							break
-						}
-					}
-					if !hasLocal {
-						servers = append(servers, map[string]any{"type": "local", "tag": "local"})
-						dns["servers"] = servers
-					}
-					cfg.DNS = dns
-				}
-			}
-			if rawRouting, ok := xrayCfg["routing"].(map[string]any); ok && len(rawRouting) > 0 {
-				if route, err := singbox.TranslateXrayRoutingWithGeoData(rawRouting, geodata.NewStore(assetDir())); err != nil {
-					return nil, err
-				} else if len(route) > 0 {
-					cfg.Route = route
-				}
-			}
-			// sing-box 1.14 requires a resolver for domain-based outbound
-			// server addresses. Apply this after translated routing so the
-			// compatibility route cannot accidentally discard it.
-			cfg.Route["default_domain_resolver"] = cfg.DNS["final"]
-			if rawRouting, ok := xrayCfg["routing"].(map[string]any); ok {
-				if strategy := singbox.TranslateXrayDomainStrategy(fmt.Sprint(rawRouting["domainStrategy"])); strategy != "" {
-					cfg.Route["default_domain_resolver"] = map[string]any{
-						"server":   cfg.DNS["final"],
-						"strategy": strategy,
-					}
-				}
-			}
-			if rawBalancers, ok := xrayCfg["routing"].(map[string]any); ok {
-				var available []map[string]any
-				for _, value := range xrayCfg["outbounds"].([]any) {
-					if outbound, ok := value.(map[string]any); ok {
-						available = append(available, outbound)
-					}
-				}
-				balancers, err := singbox.TranslateXrayBalancers(rawBalancers, available...)
-				if err != nil {
-					return nil, err
-				}
-				cfg.Outbounds = append(cfg.Outbounds, balancers...)
-			}
-			if rawOutbounds, ok := xrayCfg["outbounds"].([]any); ok {
-				if len(rawOutbounds) > 0 {
-					if first, ok := rawOutbounds[0].(map[string]any); ok {
-						if tag, ok := first["tag"].(string); ok && tag != "" {
-							cfg.Route["final"] = tag
-						}
-					}
-				}
-
-				for i, raw := range rawOutbounds {
-					ob, ok := raw.(map[string]any)
-					if !ok {
-						continue
-					}
-					if id, ok := automaticAliasID(ob); ok {
-						sub, err := (&OutboundSubscriptionService{}).Get(id)
-						if err != nil {
-							return nil, err
-						}
-						var members []any
-						if sub.LastFetchedOutbounds != "" {
-							if err := json.Unmarshal([]byte(sub.LastFetchedOutbounds), &members); err != nil {
-								return nil, err
-							}
-						}
-						members = filterSubscriptionOutbounds("sing-box automatic selector", members)
-						cfg.Outbounds = append(cfg.Outbounds, automaticSingBoxSelector(sub, members))
-						continue
-					}
-					if protocol, _ := ob["protocol"].(string); strings.EqualFold(strings.TrimSpace(protocol), "dns") {
-						settings, _ := ob["settings"].(map[string]any)
-						for _, key := range []string{"address", "port", "rewriteAddress", "rewritePort", "nonIPQuery"} {
-							if value, present := settings[key]; present && fmt.Sprint(value) != "" && fmt.Sprint(value) != "0" && fmt.Sprint(value) != "skip" {
-								return nil, fmt.Errorf("DNS outbound %v option %s cannot be preserved by hijack-dns", ob["tag"], key)
-							}
-						}
-						if tag, _ := ob["tag"].(string); strings.TrimSpace(tag) != "" {
-							dnsOutboundTags[tag] = struct{}{}
-						}
-						continue
-					}
-					if protocol, _ := ob["protocol"].(string); strings.EqualFold(strings.TrimSpace(protocol), "wireguard") {
-						endpoint, err := singbox.TranslateXrayWireGuardEndpoint(ob)
-						if err != nil {
-							return nil, err
-						}
-						cfg.Endpoints = append(cfg.Endpoints, endpoint)
-						continue
-					}
-					if amneziawg.IsAmneziaWGOutbound(mustJSON(ob)) {
-						bridged, bridgeOK := amneziawgnet.BuildSocksBridge(mustJSON(ob))
-						if !bridgeOK {
-							return nil, fmt.Errorf("amneziawg outbound %d: cannot create sing-box SOCKS bridge", i)
-						}
-						if err := json.Unmarshal(bridged, &ob); err != nil {
-							return nil, fmt.Errorf("amneziawg outbound %d: invalid bridge: %w", i, err)
-						}
-					}
-					if externalvpn.IsAdditionalOutbound(ob) {
-						tag, _ := ob["tag"].(string)
-						managedOutboundTags[tag] = true
-						bridge, err := externalvpn.EnsureOutbound(ob)
-						if err != nil {
-							return nil, fmt.Errorf("outbound %q: %w", tag, err)
-						}
-						ob = bridge
-					}
-					translated, err := s.translateOutbound(ob)
-					if err != nil {
-						return nil, err
-					}
-					cfg.Outbounds = append(cfg.Outbounds, translated)
-				}
-			}
-			if cfg.Route != nil {
-				singbox.RewriteDNSOutboundRoutes(cfg.Route, dnsOutboundTags)
-			}
-		}
-	}
-
-	hasDirect, hasBlocked := false, false
-	for _, outbound := range cfg.Outbounds {
-		tag, _ := outbound["tag"].(string)
-		switch tag {
-		case "direct":
-			hasDirect = true
-		case "blocked":
-			hasBlocked = true
-		}
-	}
-	if !hasDirect {
-		cfg.Outbounds = append(cfg.Outbounds, map[string]any{"type": "direct", "tag": "direct"})
-	}
-	if !hasBlocked {
-		cfg.Outbounds = append(cfg.Outbounds, map[string]any{"type": "block", "tag": "blocked"})
-	}
-
-	inboundIDs := make([]int, 0, len(inbounds))
-	for _, inbound := range inbounds {
-		if inbound == nil || !inbound.Enable || inbound.NodeID != nil || isLocalSidecarInbound(inbound.Protocol) {
-			continue
-		}
-		inboundIDs = append(inboundIDs, inbound.Id)
-	}
-	clientsByInbound, err := singBoxInboundService.clientService.ListForInbounds(nil, inboundIDs)
-	if err != nil {
-		return nil, err
-	}
-
-	var unsupported []string
-	var sniffRules []any
-	for _, inbound := range inbounds {
-		if inbound == nil || !inbound.Enable || inbound.NodeID != nil || isLocalSidecarInbound(inbound.Protocol) {
-			continue
-		}
-		runtimeInbound, err := singBoxInboundService.buildInboundForNodePush(database.GetDB(), inbound)
-		if err != nil {
-			return nil, err
-		}
-		rawBytes, err := json.Marshal(runtimeInbound)
-		if err != nil {
-			return nil, err
-		}
-		var raw map[string]any
-		if err := json.Unmarshal(rawBytes, &raw); err != nil {
-			return nil, err
-		}
-		stream, _ := raw["streamSettings"].(map[string]any)
-		network, _ := stream["network"].(string)
-		if !s.Hiddify && strings.EqualFold(strings.TrimSpace(network), "xhttp") {
-			unsupported = append(unsupported, fmt.Sprintf("%s: XHTTP transport is only supported by Xray", inbound.Tag))
-			continue
-		}
-		// Xray treats an empty inbound listen address as all interfaces. The
-		// sing-box default is loopback, which makes a successfully started
-		// inbound unreachable from the network. Preserve Xray semantics.
-		if listen, ok := raw["listen"].(string); !ok || strings.TrimSpace(listen) == "" {
-			raw["listen"] = "0.0.0.0"
-		}
-		dbClients := clientsByInbound[inbound.Id]
-		// Snell user keys belong to this inbound. Keep the runtime credentials
-		// identical to the native subscription even when the global client has
-		// a different password for another protocol.
-		snellKeys := map[string]string{}
-		if inbound.Protocol == model.Snell {
-			var local struct {
-				Clients []model.Client `json:"clients"`
-			}
-			if err := json.Unmarshal([]byte(inbound.Settings), &local); err != nil {
-				return nil, err
-			}
-			for _, client := range local.Clients {
-				if client.Enable {
-					snellKeys[client.Email] = client.Password
-				}
-			}
-		}
-
-		enableMap := make(map[string]bool, len(inbound.ClientStats))
-		for _, stat := range inbound.ClientStats {
-			enableMap[stat.Email] = stat.Enable
-		}
-
-		clients := make([]any, 0, len(dbClients))
-		for _, client := range dbClients {
-			if enabled, exists := enableMap[client.Email]; exists && !enabled {
-				continue
-			}
-			if !client.Enable {
-				continue
-			}
-			entry := map[string]any{"email": client.Email}
-			if inbound.Protocol == model.MASQUE {
-				entry["enable"] = true
-			}
-			switch inbound.Protocol {
-			case model.VLESS:
-				if client.ID != "" {
-					entry["id"] = client.ID
-				}
-				if client.Flow != "" && !inbound.DisableFlow {
-					entry["flow"] = client.Flow
-				}
-			case model.VMESS:
-				if client.ID != "" {
-					entry["id"] = client.ID
-				}
-				if client.Security != "" {
-					entry["security"] = client.Security
-				}
-			case model.Snell:
-				password, present := snellKeys[client.Email]
-				if !present {
-					continue
-				}
-				entry["password"] = password
-			case model.Trojan:
-				if client.Password != "" {
-					entry["password"] = client.Password
-				}
-				if client.Flow != "" && !inbound.DisableFlow {
-					entry["flow"] = client.Flow
-				}
-			case model.Shadowsocks:
-				if client.Password != "" {
-					entry["password"] = client.Password
-				}
-			case model.Hysteria:
-				if client.Auth != "" {
-					entry["auth"] = client.Auth
-				}
-			case model.TUIC:
-				if client.ID != "" {
-					entry["uuid"] = client.ID
-				}
-				if client.Password != "" {
-					entry["password"] = client.Password
-				}
-			case model.HTTP, model.Mixed, model.MASQUE, model.NaiveProxy, model.Mieru, model.AnyTLS, model.ShadowTLS:
-				if client.Password != "" {
-					entry["password"] = client.Password
-				}
-			}
-			clients = append(clients, entry)
-		}
-		managedProxy := (inbound.Protocol == model.HTTP || inbound.Protocol == model.Mixed) && len(dbClients) > 0
-		if (singBoxInboundRequiresUsers(inbound.Protocol) || managedProxy) && len(clients) == 0 {
-			logger.Warningf("Skipping sing-box inbound %q (%s): no active users", inbound.Tag, inbound.Protocol)
-			continue
-		}
-		if inbound.Protocol == model.TUIC {
-			translated, err := singBoxTUICInbound(inbound, clients)
-			if err != nil {
-				unsupported = append(unsupported, fmt.Sprintf("%s: %v", inbound.Tag, err))
-				continue
-			}
-			cfg.Inbounds = append(cfg.Inbounds, translated)
-			continue
-		}
-
-		settings, _ := raw["settings"].(map[string]any)
-		if settings == nil {
-			settings = map[string]any{}
-		}
-		if managedProxy {
-			// A stale accounts copy must not re-enable disabled managed users.
-			delete(settings, "accounts")
-		}
-		settings["clients"] = clients
-		sniffRule, sniffErr := singbox.TranslateXraySniffingRule(raw)
-		if sniffErr != nil {
-			unsupported = append(unsupported, sniffErr.Error())
-			continue
-		}
-		if sniffRule != nil {
-			sniffRules = append(sniffRules, sniffRule)
-		}
-
-		// NaiveProxy is a native TLS protocol in sing-box. Keep the ordinary
-		// inbound form simple by reusing the panel's HTTPS certificate/key when
-		// the inbound does not explicitly provide its own pair.
-		if inbound.Protocol == model.MASQUE || inbound.Protocol == model.NaiveProxy || inbound.Protocol == model.AnyTLS {
-			tls, _ := settings["tls"].(map[string]any)
-			if tls == nil {
-				tls = map[string]any{}
-			}
-			tls["enabled"] = true
-			certPath, _ := tls["certificatePath"].(string)
-			certPath = strings.TrimSpace(certPath)
-			keyPath, _ := tls["keyPath"].(string)
-			keyPath = strings.TrimSpace(keyPath)
-			if (certPath == "") != (keyPath == "") {
-				protocolName := string(inbound.Protocol)
-				if inbound.Protocol == model.AnyTLS {
-					protocolName = "AnyTLS"
-				}
-				return nil, fmt.Errorf("%s inbound %q must provide both TLS certificate and private key, or neither", protocolName, inbound.Tag)
-			}
-			if certPath == "" {
-				// Prefer the panel HTTPS certificate, then fall back to the
-				// dedicated subscription HTTPS certificate. Both are valid
-				// certificate sources for a native Naive TLS listener.
-				webCertPath, _ := singBoxSettingService.GetCertFile()
-				webKeyPath, _ := singBoxSettingService.GetKeyFile()
-				webCertPath = strings.TrimSpace(webCertPath)
-				webKeyPath = strings.TrimSpace(webKeyPath)
-				if webCertPath != "" && webKeyPath != "" {
-					certPath = webCertPath
-					keyPath = webKeyPath
-				} else {
-					subCertPath, _ := singBoxSettingService.GetSubCertFile()
-					subKeyPath, _ := singBoxSettingService.GetSubKeyFile()
-					subCertPath = strings.TrimSpace(subCertPath)
-					subKeyPath = strings.TrimSpace(subKeyPath)
-					if subCertPath != "" && subKeyPath != "" {
-						certPath = subCertPath
-						keyPath = subKeyPath
-					}
-				}
-			}
-			if certPath == "" || keyPath == "" {
-				protocolName := string(inbound.Protocol)
-				if inbound.Protocol == model.AnyTLS {
-					protocolName = "AnyTLS"
-				}
-				return nil, fmt.Errorf("%s inbound %q requires a complete TLS certificate/private-key pair (inbound, panel HTTPS, or subscription HTTPS)", protocolName, inbound.Tag)
-			}
-			tls["certificatePath"] = certPath
-			tls["keyPath"] = keyPath
-			settings["tls"] = tls
-		}
-
-		raw["settings"] = settings
-		if model.ShadowTLSTransport(inbound.Settings) != nil {
-			outer, inner, err := singbox.TranslateShadowTLSWrappedInbound(raw)
-			if err != nil {
-				unsupported = append(unsupported, fmt.Sprintf("%s: %v", inbound.Tag, err))
-				continue
-			}
-			cfg.Inbounds = append(cfg.Inbounds, inner, outer)
-			continue
-		}
-
-		if inbound.Protocol == model.MASQUE {
-			endpoint, err := singbox.TranslateMASQUEEndpoint(raw)
-			if err != nil {
-				return nil, err
-			}
-			cfg.Endpoints = append(cfg.Endpoints, endpoint)
-			continue
-		}
-
-		translated, err := s.translateInbound(raw)
-		if err != nil {
-			unsupported = append(unsupported, fmt.Sprintf("%s: %v", inbound.Tag, err))
-			continue
-		}
-		if inbound.Protocol == model.ShadowTLS {
-			inner, err := singbox.TranslateShadowTLSInnerInbound(raw)
-			if err != nil {
-				unsupported = append(unsupported, fmt.Sprintf("%s: %v", inbound.Tag, err))
-				continue
-			}
-			// Route and account bytes under the panel identity, on the injected listener.
-			inner["tag"] = inbound.Tag
-			translated["tag"] = "__shadowtls_transport_" + inbound.Tag
-			translated["detour"] = inbound.Tag
-			cfg.Inbounds = append(cfg.Inbounds, inner)
-		}
-		cfg.Inbounds = append(cfg.Inbounds, translated)
-	}
-	if len(unsupported) > 0 {
-		return nil, fmt.Errorf("sing-box cannot represent enabled inbounds: %s", strings.Join(unsupported, "; "))
-	}
-	managedMASQUETags := make(map[string]bool)
-	for _, inbound := range inbounds {
-		if inbound != nil && inbound.Protocol == model.MASQUE && inbound.NodeID == nil {
-			managedMASQUETags[inbound.Tag] = true
-		}
-	}
-	if err := s.applyNativeTemplate(cfg, managedMASQUETags); err != nil {
-		return nil, err
-	}
-	for _, inbound := range inbounds {
-		if err := injectSingBoxMtprotoEgress(cfg, inbound); err != nil {
-			return nil, err
-		}
-	}
-	if len(sniffRules) > 0 {
-		if cfg.Route == nil {
-			cfg.Route = map[string]any{}
-		}
-		cfg.Route["rules"] = append(sniffRules, singBoxRouteRules(cfg.Route)...)
-	}
-	ensureAutomaticClashAPI(cfg)
-	applySingBoxInfrastructureEgress(cfg)
-	if err := singBoxSettingService.applySingBoxAdBlock(cfg); err != nil {
-		return nil, err
-	}
-	if err := singBoxSettingService.applySingBoxYouTubeServer(cfg); err != nil {
-		return nil, err
-	}
-	externalvpn.KeepOutbounds(managedOutboundTags)
 	if s.Hiddify {
-		configureHiddifyStats(cfg)
-		if cfg.Log == nil {
-			cfg.Log = map[string]any{"level": "info"}
-		}
-		cfg.Log["output"] = s.logPath()
+		return (&HiddifyConfigGenerator{}).Generate()
 	}
-	return cfg, nil
+	return s.generateNativeConfig(nil)
 }
 
 type SingBoxEditorSnapshot struct {
@@ -731,17 +244,13 @@ func normalizeSingBoxTemplate(raw string) (string, error) {
 	if obj == nil {
 		return "", fmt.Errorf("sing-box settings must be a JSON object")
 	}
-	allowed := map[string]struct{}{
-		"$schema": {}, "log": {}, "dns": {}, "ntp": {}, "certificate": {},
-		"certificate_providers": {}, "http_clients": {}, "network_namespaces": {},
-		"outbounds": {}, "route": {}, "endpoints": {}, "experimental": {},
-	}
+
 	for key := range obj {
 		if key == "inbounds" || key == "services" {
 			delete(obj, key)
 			continue
 		}
-		if _, ok := allowed[key]; !ok {
+		if !nativeTemplateFields[key] {
 			return "", fmt.Errorf("unsupported sing-box top-level field %q; panel-managed inbounds/services are not editable here", key)
 		}
 	}
@@ -770,6 +279,10 @@ func (s *SingBoxService) applyNativeTemplate(cfg *singbox.Config, managedMASQUET
 	if err != nil {
 		return err
 	}
+	return s.applyNativeTemplateValue(cfg, managedMASQUETags, rawTemplate)
+}
+
+func (s *SingBoxService) applyNativeTemplateValue(cfg *singbox.Config, managedMASQUETags map[string]bool, rawTemplate string) error {
 	rawTemplate = strings.TrimSpace(rawTemplate)
 	if rawTemplate == "" {
 		return nil
@@ -777,6 +290,14 @@ func (s *SingBoxService) applyNativeTemplate(cfg *singbox.Config, managedMASQUET
 	var patch map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(rawTemplate), &patch); err != nil {
 		return fmt.Errorf("stored sing-box settings are invalid: %w", err)
+	}
+	if patch == nil {
+		return fmt.Errorf("stored %s settings must be an object", s.coreType())
+	}
+	for key := range patch {
+		if !nativeTemplateFields[key] {
+			return fmt.Errorf("unsupported %s top-level field %q", s.coreType(), key)
+		}
 	}
 	// The native editor may replace endpoints, but panel-managed MASQUE
 	// listeners must continue to follow inbound/client state from the database.
@@ -1425,4 +946,11 @@ func (s *SingBoxService) commitTraffic(inbounds []*coremodel.Traffic, clients []
 
 func init() {
 	singbox.SetRuntimeConfigReader(func() []byte { return SelectedNativeCore().process().AppliedConfig() })
+}
+
+var nativeTemplateFields = map[string]bool{
+	"$schema": true, "log": true, "dns": true, "ntp": true, "certificate": true,
+	"certificate_providers": true, "http_clients": true, "network_namespaces": true,
+	"outbounds": true, "route": true, "endpoints": true, "experimental": true,
+	"inbounds": true, "services": true,
 }

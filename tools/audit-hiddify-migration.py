@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check historical stage-1 inventory and the pinned owner stage-2 build contract."""
+"""Check historical stage-1 inventory and the active pinned owner build contract."""
 
 import argparse
 import json
@@ -116,21 +116,21 @@ def audit(upstream):
 
 def audit_build(source):
     lock = json.loads((ROOT / "docs/hiddify-core-target.json").read_text())
-    require(lock["schema_version"] == 2 and lock["stage"] == 2, "Unknown runtime lock schema/stage")
+    require(lock["schema_version"] == 2 and lock["stage"] in (2, 4), "Unknown runtime lock schema/stage")
     target, build = lock["target"], lock["panel_build"]
     fork = json.loads((ROOT / "docs/hiddify-core-fork-audit.json").read_text())
     require(target["repository"] == fork["target"]["repository"], "Runtime must use the audited owner repository")
     require(target["commit"] == fork["target"]["commit"] and target["submodules"] == fork["target"]["submodules"], "Runtime revisions differ from fork audit")
-    require(not lock["runtime_contract"]["automatic_migration_ready"], "Stage 2 cannot enable automatic migration")
+    require(not lock["runtime_contract"]["automatic_migration_ready"], "Runtime profile cannot enable automatic migration before integration gates")
     require(build["toolchain"] == "go" + fork["required_go_directive"], "Runtime toolchain differs from audited sources")
     require({"with_xui_panel", "with_v2ray_api", "with_awg", "with_quic", "with_wireguard", "with_masque", "with_clash_api"}.issubset(build["tags"]), "Runtime build lacks required tags")
     profile = (ROOT / "internal/hiddify/translate.go").read_text()
     require(target["version"] in profile and target["commit"] in profile, "Runtime process identity differs from build lock")
     require(lock["runtime_contract"]["stats_grpc_method"] == fork["stats_contract"]["method"], "Wrong runtime statistics method")
     require(lock["runtime_contract"]["stats_grpc_method"] in profile, "Runtime statistics client differs from lock")
-    for key in ("check_command_overlay", "clash_user_overlay"):
+    for key in ("check_command_overlay", "clash_user_overlay", "sniff_override_overlay", "sniff_override_test_overlay"):
         require((ROOT / build[key]).is_file(), "Missing runtime overlay: " + key)
-    print("OK: stage-2 build/runtime identity, owner revisions, toolchain, tags and statistics profile")
+    print(f"OK: stage-{lock['stage']} build/runtime identity, owner revisions, toolchain, tags and statistics profile")
     if source is None:
         return
     source = source.resolve()
@@ -151,7 +151,7 @@ def audit_build(source):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--upstream", type=Path, help="active stage-2 owner checkout with initialized pinned submodules")
+    parser.add_argument("--upstream", type=Path, help="active owner checkout with initialized pinned submodules")
     parser.add_argument("--fork", type=Path, help="current owner fork checkout with pinned submodules (source audit only)")
     args = parser.parse_args()
     try:

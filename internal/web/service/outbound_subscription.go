@@ -666,6 +666,15 @@ func (s *OutboundSubscriptionService) activeOutboundsSplit() (prepend []any, app
 	if err := db.Where("enabled = ?", true).Order("priority asc, id asc").Find(&subs).Error; err != nil {
 		return nil, nil, err
 	}
+	return splitActiveOutbounds(subs)
+}
+
+func splitActiveOutbounds(subs []*model.OutboundSubscription) (prepend []any, appendList []any, err error) {
+	core, _ := (&SettingService{}).GetCoreType()
+	return splitActiveOutboundsForCore(subs, core)
+}
+
+func splitActiveOutboundsForCore(subs []*model.OutboundSubscription, core string) (prepend []any, appendList []any, err error) {
 	for _, sub := range subs {
 		raw := sub.LastFetchedOutbounds
 		if strings.TrimSpace(raw) == "" {
@@ -679,7 +688,7 @@ func (s *OutboundSubscriptionService) activeOutboundsSplit() (prepend []any, app
 			logger.Warningf("outbound sub %d has corrupt LastFetchedOutbounds: %v", sub.Id, err)
 			continue
 		}
-		arr = filterSubscriptionOutbounds(fmt.Sprintf("outbound sub %d", sub.Id), arr)
+		arr, _, _ = filterSubscriptionOutboundsForCore(fmt.Sprintf("outbound sub %d", sub.Id), core, arr)
 		arr = subscriptionAutoOutbound(sub, arr)
 		if sub.Prepend {
 			prepend = append(prepend, arr...)

@@ -63,6 +63,10 @@ func logSubscriptionCompatibilitySummary(label, coreName string, issues []string
 // expected feature gaps between Xray and sing-box.
 func filterSubscriptionOutboundsWithIssues(label string, members []any) ([]any, []string, string) {
 	core, _ := (&SettingService{}).GetCoreType()
+	return filterSubscriptionOutboundsForCore(label, core, members)
+}
+
+func filterSubscriptionOutboundsForCore(label, core string, members []any) ([]any, []string, string) {
 	if !IsNativeCore(core) {
 		kept, compatibilityIssues := filterOutboundsRejectedByCore(label, members)
 		logSubscriptionCompatibilitySummary(label, "xray", compatibilityIssues)
