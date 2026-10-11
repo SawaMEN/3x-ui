@@ -18245,6 +18245,36 @@
         }
       }
     },
+    "/panel/api/setting/singbox/import-link": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Decode a Mieru share link into a native outbound without saving.",
+        "operationId": "post_panel_api_setting_singbox_import_link",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/panel/api/setting/singbox/config/reset": {
       "post": {
         "tags": [

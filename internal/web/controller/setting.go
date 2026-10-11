@@ -110,6 +110,7 @@ func (a *SettingController) initRouter(g *gin.RouterGroup) {
 	g.GET("/singbox/config", a.singBoxConfig)
 	g.POST("/singbox/config", a.saveSingBoxConfig)
 	g.POST("/singbox/config/reset", a.resetSingBoxConfig)
+	g.POST("/singbox/import-link", a.importSingBoxLink)
 	g.GET("/swap/status", a.swapStatus)
 	g.POST("/swap/zram/install", a.installZram)
 	g.POST("/swap/zram/reinstall", a.reinstallZram)
@@ -758,4 +759,17 @@ func (a *SettingController) installSingBox(c *gin.Context) {
 		return
 	}
 	jsonObj(c, gin.H{"version": version}, nil)
+}
+
+// importSingBoxLink only decodes a share URI; saving remains a separate action.
+func (a *SettingController) importSingBoxLink(c *gin.Context) {
+	var form struct {
+		Link string `json:"link" form:"link" binding:"required"`
+	}
+	if err := c.ShouldBind(&form); err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	outbound, err := service.ParseNativeMieruShareLink(form.Link)
+	jsonObj(c, outbound, err)
 }

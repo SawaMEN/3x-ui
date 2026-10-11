@@ -400,7 +400,11 @@ function singBoxHealthIssues(config: ConfigMap) {
       )
     ) {
       if (!asString(item.server)) issues.push(type + ' "' + name + '": не указан сервер');
-      if (!asNumber(item.server_port)) issues.push(type + ' "' + name + '": не указан порт');
+      if (
+        !asNumber(item.server_port) &&
+        !(type === 'hysteria2' && asStringArray(item.server_ports).length)
+      )
+        issues.push(type + ' "' + name + '": не указан порт');
     }
     if (['vless', 'vmess'].includes(type) && !asString(item.uuid)) {
       issues.push(type + ' "' + name + '": не указан UUID');
@@ -502,6 +506,7 @@ function SingBoxOutboundEditor({
                         'vless',
                         'trojan',
                         'hysteria2',
+                        'mieru',
                         'tuic',
                         'selector',
                         'urltest',
@@ -594,9 +599,81 @@ function SingBoxOutboundEditor({
                           <Field label="Порт">
                             <NumberField
                               value={asNumber(value.server_port)}
-                              onChange={(v) => patch('server_port', v)}
+                              onChange={(v) => {
+                                if (type === 'hysteria2') {
+                                  const next: JsonObject = { ...value, server_port: v };
+                                  delete next.server_ports;
+                                  onChange(next);
+                                } else patch('server_port', v);
+                              }}
                               min={1}
                               max={65535}
+                            />
+                          </Field>
+                        </>
+                      )}
+                      {type === 'hysteria2' && (
+                        <Field
+                          label="Диапазоны портов"
+                          hint="Например: 443:443,10000:10010. Заполнение включает смену порта."
+                        >
+                          <TextField
+                            value={asStringArray(value.server_ports).join(',')}
+                            onChange={(v) => {
+                              const next = { ...value };
+                              if (v.trim()) {
+                                next.server_ports = v.split(',').map((p) => p.trim());
+                                delete next.server_port;
+                              } else {
+                                delete next.server_ports;
+                                next.server_port = 443;
+                              }
+                              onChange(next);
+                            }}
+                          />
+                        </Field>
+                      )}
+                      {type === 'mieru' && (
+                        <>
+                          <Field label="Сервер">
+                            <TextField
+                              value={asString(value.server)}
+                              onChange={(v) => patch('server', v)}
+                            />
+                          </Field>
+                          <Field label="TCP/UDP порты">
+                            <JsonModal
+                              title="Mieru portBindings"
+                              value={value.portBindings || []}
+                              onApply={(next) => patch('portBindings', next)}
+                            />
+                          </Field>
+                          <Field label="MTU">
+                            <NumberField
+                              value={asNumber(value.mtu)}
+                              onChange={(v) => patch('mtu', v)}
+                              min={1280}
+                              max={1500}
+                            />
+                          </Field>
+                          <Field label="Multiplexing">
+                            <Select
+                              value={asString(value.multiplexing) || 'DEFAULT'}
+                              options={['DEFAULT', 'LOW', 'MIDDLE', 'HIGH'].map((v) => ({
+                                label: v,
+                                value: v,
+                              }))}
+                              onChange={(v) => patch('multiplexing', v)}
+                            />
+                          </Field>
+                          <Field label="Handshake">
+                            <Select
+                              value={asString(value.handshake_mode) || 'DEFAULT'}
+                              options={['DEFAULT', 'STANDARD', 'NO_WAIT'].map((v) => ({
+                                label: v,
+                                value: v,
+                              }))}
+                              onChange={(v) => patch('handshake_mode', v)}
                             />
                           </Field>
                         </>
@@ -626,7 +703,7 @@ function SingBoxOutboundEditor({
                           />
                         </Field>
                       )}
-                      {['http', 'socks'].includes(type) && (
+                      {['http', 'socks', 'mieru'].includes(type) && (
                         <>
                           <Field label="Логин">
                             <TextField
@@ -1155,7 +1232,12 @@ export default function SingBoxPage() {
   const navigate = useNavigate();
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [config, setConfig] = useState<ConfigMap>({});
-  const sectionSlug = location.hash.replace(/^#/, '');
+  const sectionSlug =
+    location.pathname === '/outbound'
+      ? 'outbound'
+      : location.pathname === '/routing'
+        ? 'routing'
+        : location.hash.replace(/^#/, '');
   const sectionKeys = useMemo(
     () =>
       new Set([
@@ -1195,6 +1277,7 @@ export default function SingBoxPage() {
   const [routeRuleModalOpen, setRouteRuleModalOpen] = useState(false);
   const [editingRouteRule, setEditingRouteRule] = useState<number | null>(null);
   const [shareLinkOpen, setShareLinkOpen] = useState(false);
+  const [importingLink, setImportingLink] = useState(false);
   const [shareLink, setShareLink] = useState('');
 
   const sectionValue = useCallback((key: SectionKey, source: ConfigMap) => {
@@ -2368,7 +2451,6 @@ export default function SingBoxPage() {
     const value = asObject(sectionValue('experimental', config));
     const cacheFile = asObject(value.cache_file);
     const clash = asObject(value.clash_api);
-    const v2ray = asObject(value.v2ray_api);
     const patchNested = (key: string, patch: JsonObject) =>
       patchSection('experimental', { [key]: { ...asObject(value[key]), ...patch } });
     return (
@@ -2465,21 +2547,10 @@ export default function SingBoxPage() {
             <Card title="V2Ray API">
               <Row gutter={[12, 12]}>
                 <Field label="Listen" span={24}>
-                  <TextField
-                    value={asString(v2ray.listen)}
-                    onChange={(next) => patchNested('v2ray_api', { listen: next })}
-                  />
+                  <Input value="127.0.0.1:10086" readOnly />
+                  <p>Панель управляет API статистики и списками пользователей автоматически.</p>
                 </Field>
               </Row>
-              <div className="singbox-item-actions">
-                <JsonModal
-                  title="V2Ray API — JSON"
-                  value={v2ray}
-                  onApply={(next) =>
-                    patchSection('experimental', { ...value, v2ray_api: asObject(next) })
-                  }
-                />
-              </div>
             </Card>
           </Col>
         </Row>
@@ -2820,13 +2891,27 @@ export default function SingBoxPage() {
         okText="Добавить"
         cancelText="Отмена"
         onCancel={() => setShareLinkOpen(false)}
-        onOk={() => {
+        confirmLoading={importingLink}
+        maskClosable={!importingLink}
+        cancelButtonProps={{ disabled: importingLink }}
+        onOk={async () => {
+          if (importingLink) return;
+          setImportingLink(true);
           let parsed: JsonObject;
           try {
-            parsed = parseShareLink(shareLink);
+            if (/^mierus?:\/\//.test(shareLink.trim())) {
+              const result = (await HttpUtil.post('/panel/api/setting/singbox/import-link', {
+                link: shareLink,
+              })) as ApiMsg;
+              if (!result?.success)
+                throw new Error(result?.msg || 'Не удалось импортировать Mieru');
+              parsed = asObject(result.obj);
+            } else parsed = parseShareLink(shareLink);
           } catch (error) {
             messageApi.error(error instanceof Error ? error.message : String(error));
             return;
+          } finally {
+            setImportingLink(false);
           }
           const current = asObjectArray(sectionValue('outbounds', config));
           const tag = uniqueTag(
@@ -2848,7 +2933,7 @@ export default function SingBoxPage() {
           type="info"
           showIcon
           message="Автоматический импорт"
-          description="TLS, Reality и базовый WebSocket/gRPC transport переносятся из VLESS/Trojan ссылок."
+          description="VLESS, Trojan, HTTP, SOCKS5, Hysteria2 (hy2) и Mieru (mieru/mierus). Ссылка создаёт исходящее подключение."
           style={{ marginBottom: 12 }}
         />
         <Input.TextArea

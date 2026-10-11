@@ -3,6 +3,7 @@ import { createBrowserRouter, type RouteObject } from 'react-router';
 import { Spin } from 'antd';
 
 import PanelLayout from '@/layouts/PanelLayout';
+import CoreConfigRoutePage from '@/pages/CoreConfigRoutePage';
 import { importWithChunkRecovery } from '@/lib/chunk-load-recovery';
 import TelemtSubscriptionToggle from '@/pages/telemt/TelemtSubscriptionToggle';
 
@@ -69,8 +70,8 @@ const routes: RouteObject[] = [
       { path: 'settings', element: withSuspense(<SettingsPage />) },
       { path: 'xray', element: withSuspense(<XrayPage />) },
       { path: 'singbox', element: withSuspense(<SingBoxPage />) },
-      { path: 'outbound', element: withSuspense(<XrayPage />) },
-      { path: 'routing', element: withSuspense(<XrayPage />) },
+      { path: 'outbound', element: withSuspense(<CoreConfigRoutePage />) },
+      { path: 'routing', element: withSuspense(<CoreConfigRoutePage />) },
       { path: 'api-docs', element: withSuspense(<ApiDocsPage />) },
       {
         path: 'telemt',

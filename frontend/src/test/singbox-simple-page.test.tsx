@@ -178,3 +178,50 @@ describe('simple sing-box page', () => {
     expect(HttpUtil.post).not.toHaveBeenCalled();
   });
 });
+
+it.each(['/outbound', '/routing'])('opens the matching native section for %s', async (path) => {
+  mount(path);
+  expect(
+    await screen.findByText(
+      path === '/outbound'
+        ? 'Настройки sing-box · Исходящие'
+        : 'Настройки sing-box · Маршрутизация',
+    ),
+  ).toBeTruthy();
+});
+
+it('decodes Mieru through the pure import API and saves native port bindings', async () => {
+  const outbound = {
+    type: 'mieru',
+    tag: 'Mieru imported',
+    server: 'proxy.test',
+    username: 'u',
+    password: 'p',
+    portBindings: [{ protocol: 'TCP', portRange: '2012-2022' }],
+    multiplexing: 'HIGH',
+    handshake_mode: 'NO_WAIT',
+  };
+  vi.mocked(HttpUtil.post).mockImplementation(async (path) =>
+    path === '/panel/api/setting/singbox/import-link'
+      ? { success: true, msg: '', obj: outbound }
+      : { success: true, msg: '', obj: null },
+  );
+  mount('/outbound');
+  fireEvent.click(await screen.findByText('Импорт ссылки'));
+  const link = 'mierus://u:p@proxy.test?profile=test&port=2012-2022&protocol=TCP';
+  fireEvent.change(screen.getByPlaceholderText('vless://...'), { target: { value: link } });
+  fireEvent.click(screen.getByText('Добавить').closest('button')!);
+  await screen.findByText('Mieru imported');
+  expect(HttpUtil.post).toHaveBeenCalledWith('/panel/api/setting/singbox/import-link', { link });
+  fireEvent.click(screen.getByText('Save').closest('button')!);
+  await waitFor(() =>
+    expect(HttpUtil.post).toHaveBeenCalledWith(
+      '/panel/api/setting/singbox/config',
+      expect.anything(),
+    ),
+  );
+  const call = vi
+    .mocked(HttpUtil.post)
+    .mock.calls.find(([path]) => path === '/panel/api/setting/singbox/config')!;
+  expect(JSON.parse((call[1] as { config: string }).config).outbounds).toContainEqual(outbound);
+});

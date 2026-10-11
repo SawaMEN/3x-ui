@@ -99,6 +99,7 @@ export function useAllSettings() {
     allSetting,
     updateSetting,
     fetched: query.data !== undefined,
+    fetchError: query.error?.message,
     spinning: extraSpinning || saveMut.isPending,
     setSpinning: setExtraSpinning,
     saveDisabled,
