@@ -1,4 +1,4 @@
-# Интеграция hiddify-core: этапы 2–7
+# Интеграция hiddify-core: этапы 2–8
 
 Ветка `update`. Ядро собирается только из `SawaMEN/hiddify-core`:
 `b5749002266b9782803669138494ef6937eb4e95`, зависимый `SawaMEN/hiddify-sing-box`:
@@ -126,3 +126,14 @@ Hiddify native JSON использует адаптер собственного
 
 Реализованные сценарии, проверки и открытая эксплуатационная приёмка:
 [отчёт этапа 7](hiddify-core-stage-7-verification.md).
+
+
+## Этап 8: Gateway и дополнительные сервисы
+
+Gateway interception следует native Start/Stop/restart и восстановлению процесса;
+boot restore использует общий runtime lease. Hiddify генерирует scoped Gateway
+DNS rule и переводит настройки TUN с защитой от маршрутизационных петель.
+FPTN bridge запускает закреплённый owner core вместо отдельного sing-box.
+
+Проверки, ограничения совместного TUN/TPROXY и открытая приёмка реального
+сетевого трафика: [отчёт этапа 8](hiddify-core-stage-8-verification.md).

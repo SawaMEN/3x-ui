@@ -28,6 +28,7 @@ func (s *GatewayNetworkService) gatewayNetworkUnits() (string, string, string, e
 	script := strings.NewReplacer(
 		"@STATE@", gatewayShellQuote(paths.state), "@RULES@", gatewayShellQuote(paths.nft),
 		"@RP@", gatewayShellQuote(paths.rpFilter), "@LOCK@", gatewayShellQuote(paths.state+".lock"),
+		"@RUNTIME_LOCK@", gatewayShellQuote(paths.state+".runtime.lock"),
 		"@IP@", commands["ip"], "@NFT@", commands["nft"], "@SYSCTL@", commands["sysctl"],
 		"@SS@", commands["ss"], "@FLOCK@", commands["flock"],
 	).Replace(gatewayRestoreScript)
@@ -50,6 +51,8 @@ RP=@RP@
 [[ -f "$STATE" ]] || exit 0
 exec 9>"$STATE.lock"
 @FLOCK@ -w 25 9
+exec 8>@RUNTIME_LOCK@
+@FLOCK@ -w 25 8
 [[ -f "$STATE" ]] || exit 0
 grep -qx 'NETWORK_ENABLED=0' "$STATE" && exit 0
 lan=$(sed -n 's/^LAN_IF=//p' "$STATE")

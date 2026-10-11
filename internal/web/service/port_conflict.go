@@ -26,6 +26,9 @@ type listenerSpan struct {
 }
 
 func inboundListenerSpans(ib *model.Inbound) []listenerSpan {
+	if ib.Protocol == model.Tun {
+		return nil
+	}
 	if ib.Protocol != model.Mieru {
 		return []listenerSpan{{ib.Port, ib.Port, inboundTransports(ib.Protocol, ib.StreamSettings, ib.Settings)}}
 	}
@@ -288,6 +291,9 @@ func checkPortConflictTx(db *gorm.DB, inbound *model.Inbound, ignoreId int) (*po
 				return &portConflictDetail{Tag: "in-tproxy", Listen: "0.0.0.0", Port: port, Transports: transportTCP | transportUDP}, nil
 			}
 		}
+	}
+	if inbound.Protocol == model.Tun {
+		return nil, nil
 	}
 	newBits := inboundTransports(inbound.Protocol, inbound.StreamSettings, inbound.Settings)
 	newSpans := inboundListenerSpans(inbound)

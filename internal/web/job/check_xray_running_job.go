@@ -34,6 +34,9 @@ func (j *CheckXrayRunningJob) Run() {
 	}
 	if service.IsNativeCore(coreType) {
 		native := service.NativeCore(coreType)
+		if err := native.ReconcileGateway(context.Background()); err != nil {
+			logger.Warning("Gateway reconcile: ", err)
+		}
 		if !native.DidCrash() {
 			j.checkTime = 0
 			return

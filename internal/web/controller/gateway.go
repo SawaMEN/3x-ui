@@ -424,7 +424,7 @@ func (a *GatewayController) disable(c *gin.Context) {
 
 func (a *GatewayController) gatewayCoreRunning(coreType string) bool {
 	if service.IsNativeCore(coreType) {
-		return service.SelectedNativeCore().IsRunning()
+		return service.NativeCore(coreType).IsRunning()
 	}
 	return a.xrayService.IsXrayRunning()
 }
@@ -432,7 +432,7 @@ func (a *GatewayController) restartGatewayCore(ctx context.Context, coreType str
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	if service.IsNativeCore(coreType) {
-		return service.SelectedNativeCore().Restart(ctx)
+		return service.NativeCore(coreType).Restart(ctx)
 	}
 	return a.xrayService.RestartXray(false)
 }

@@ -343,10 +343,10 @@ func (s *Server) startTask(restartXray bool, loc *time.Location) {
 		singBoxService := service.SelectedNativeCore()
 		if singBoxService.Installed() {
 			if err := singBoxService.Restart(s.ctx); err != nil {
-				logger.Warning("start sing-box failed:", err)
+				logger.Warning("start ", coreType, " failed:", err)
 			}
 		} else {
-			logger.Warning("sing-box is selected but not installed; leaving core stopped")
+			logger.Warning(coreType, " is selected but not installed; leaving core stopped")
 		}
 	}
 	// Keep the scheduler core-agnostic: the operator can switch engines

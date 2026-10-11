@@ -1,20 +1,13 @@
 package hiddify
 
 import (
-	"fmt"
 	"path/filepath"
-	"runtime"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 )
 
-func GetBinaryPath() string {
-	name := fmt.Sprintf("hiddify-core-%s-%s", runtime.GOOS, runtime.GOARCH)
-	if runtime.GOOS == "windows" {
-		name += ".exe"
-	}
-	return filepath.Join(filepath.Dir(singbox.GetBinaryPath()), name)
-}
+func GetBinaryPath() string { return config.OwnerCoreBinaryPath() }
 func GetConfigPath() string { return filepath.Join(filepath.Dir(GetBinaryPath()), "hiddify-core.json") }
 
 var requiredBuildTags = []string{"with_xui_panel", "with_v2ray_api", "with_awg", "with_quic", "with_wireguard", "with_clash_api", "with_utls", "with_masque", "with_gvisor", "with_naive_outbound", "with_purego", "tfogo_checklinkname0"}

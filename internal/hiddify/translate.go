@@ -40,6 +40,9 @@ func translate(raw map[string]any, inbound bool) (map[string]any, error) {
 	protocol, _ := copy["protocol"].(string)
 	protocol = strings.ToLower(strings.TrimSpace(protocol))
 	label := fmt.Sprintf("hiddify %s %q", direction(inbound), copy["tag"])
+	if inbound && protocol == "tun" {
+		return translateTun(copy)
+	}
 	if err := rejectProtectionLoss(settings, stream, label); err != nil {
 		return nil, err
 	}

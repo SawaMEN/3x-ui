@@ -25,7 +25,7 @@ func ensureDatabase() error {
 
 func validateManagedGatewayConflicts() error {
 	var count int64
-	if err := database.GetDB().Model(&model.Inbound{}).Where("enable = ? AND node_id IS NULL AND (port = ? OR tag = ?)", true, inboundPort, inboundTag).Count(&count).Error; err != nil {
+	if err := database.GetDB().Model(&model.Inbound{}).Where("enable = ? AND node_id IS NULL AND ((protocol <> ? AND port = ?) OR tag = ?)", true, model.Tun, inboundPort, inboundTag).Count(&count).Error; err != nil {
 		return err
 	}
 	if count != 0 {

@@ -45,3 +45,10 @@ describe('remote Hiddify health', () => {
     expect(nodeSupportsProtocol({ coreType: 'xray' }, Protocols.MASQUE)).toBe(false);
   });
 });
+
+describe('Hiddify TUN support', () => {
+  it('offers translated TUN on Hiddify and keeps stock sing-box strict', () => {
+    expect(nodeSupportsProtocol({ coreType: 'hiddify-core' }, Protocols.TUN)).toBe(true);
+    expect(nodeSupportsProtocol({ coreType: 'sing-box' }, Protocols.TUN)).toBe(false);
+  });
+});

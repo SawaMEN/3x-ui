@@ -538,6 +538,11 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot) (*
 	if nativeErr != nil {
 		return nil, nativeErr
 	}
+	if s.Hiddify {
+		if err := configureHiddifyTunRouting(cfg, inbounds); err != nil {
+			return nil, err
+		}
+	}
 	for _, inbound := range inbounds {
 		if err := injectSingBoxMtprotoEgress(cfg, inbound); err != nil {
 			return nil, err
@@ -564,6 +569,9 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot) (*
 		}
 	}
 	if s.Hiddify {
+		if err := configureHiddifyGatewayDNS(cfg); err != nil {
+			return nil, err
+		}
 		if err := s.filterManagedOutboundPlans(cfg); err != nil {
 			return nil, err
 		}

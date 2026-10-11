@@ -58,6 +58,8 @@ export function nodeCoreType(node: NodeCoreInfo): 'xray' | 'singbox' | 'hiddifyc
 export function nodeSupportsProtocol(node: NodeCoreInfo, protocol: string): boolean {
   if (!NODE_ELIGIBLE_PROTOCOLS[protocol]) return false;
 
+  if (nodeCoreType(node) === 'singbox' && protocol === Protocols.TUN) return false;
+
   if (nodeCoreType(node) !== 'xray') {
     // Keep this in sync with backend coreSupportsInboundProtocol(). WireGuard
     // and dokodemo/tunnel are Xray-native listeners; the other entries either

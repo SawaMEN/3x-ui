@@ -49,7 +49,10 @@ func SetSingBoxDependencies(inbound *InboundService, settings *SettingService) {
 	}
 }
 
-type SingBoxService struct{ Hiddify bool }
+type SingBoxService struct {
+	Hiddify bool
+	gateway *GatewayNetworkService
+}
 
 func singBoxInboundRequiresUsers(protocol model.Protocol) bool {
 	switch protocol {
@@ -486,6 +489,11 @@ func (s *SingBoxService) restartLocked(ctx context.Context) (result error) {
 		return err
 	}
 	wasRunning := s.IsRunning()
+	if !wasRunning {
+		if err := s.guardStoppedGateway(ctx); err != nil {
+			return err
+		}
+	}
 	previous := s.process().AppliedConfig()
 	if _, err := s.process().Version(ctx); err != nil {
 		s.process().SetError(err)
@@ -529,6 +537,11 @@ func (s *SingBoxService) restartLocked(ctx context.Context) (result error) {
 		s.process().SetError(err)
 		return err
 	}
+	finishGateway, err := s.pauseGateway(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { result = errors.Join(result, finishGateway()) }()
 	if s.Hiddify {
 		hiddifyStats.Close()
 	}
@@ -567,7 +580,10 @@ func (s *SingBoxService) Start(ctx context.Context) error {
 
 func (s *SingBoxService) startLocked(ctx context.Context) (result error) {
 	if s.IsRunning() {
-		return nil
+		return s.resumeGateway(ctx)
+	}
+	if err := s.guardStoppedGateway(ctx); err != nil {
+		return err
 	}
 	if _, err := s.process().Version(ctx); err != nil {
 		s.process().SetError(err)
@@ -606,9 +622,15 @@ func (s *SingBoxService) startLocked(ctx context.Context) (result error) {
 	}
 
 	tuic.GetManager().StopAll()
+	finishGateway, err := s.pauseGateway(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { result = errors.Join(result, finishGateway()) }()
 	if err := s.startProcess(ctx); err != nil {
 		return err
 	}
+
 	singBoxTrafficMu.Lock()
 	singBoxTrafficAPI.Close()
 	singBoxTrafficAPI.ResetTrafficBaseline(s.process().GetStartTime().UnixMilli())
@@ -625,7 +647,16 @@ func (s *SingBoxService) Stop(ctx context.Context) error {
 	return s.stopLocked(ctx)
 }
 
-func (s *SingBoxService) stopLocked(ctx context.Context) error {
+func (s *SingBoxService) stopLocked(ctx context.Context) (result error) {
+	// Shutdown callers may have already cancelled the panel context.
+	recovery, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	finish, err := s.pauseGateway(recovery)
+	if err != nil {
+		return err
+	}
+	defer func() { result = errors.Join(result, finish()) }()
+
 	if s.Hiddify && s.IsRunning() {
 		if err := s.PollTraffic(ctx); err != nil {
 			logger.Warning("flush hiddify traffic before stop:", err)

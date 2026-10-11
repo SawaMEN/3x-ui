@@ -394,47 +394,31 @@ func startOutbound(tag string, proc *managedOutbound) error {
 		}
 		// The VLESS bridge can dial only via fptn0; DNS takes the same outbound.
 		// A dead tunnel therefore fails closed instead of falling back to eth0.
-		socks := map[string]any{"log": map[string]any{"level": "warn"}, "inbounds": []any{map[string]any{"type": "vless", "tag": "panel-in", "listen": "0.0.0.0", "listen_port": 1080, "users": []any{map[string]any{"name": "panel", "uuid": proc.password}}}}, "outbounds": []any{map[string]any{"type": "direct", "tag": "vpn-out", "bind_interface": "fptn0"}}, "dns": map[string]any{"servers": []any{map[string]any{"type": "udp", "tag": "vpn-dns", "server": "1.1.1.1", "detour": "vpn-out"}}, "final": "vpn-dns", "strategy": "ipv4_only"}, "route": map[string]any{"final": "vpn-out", "default_domain_resolver": "vpn-dns"}}
+		socks := fptnBridgeConfig(proc.password)
 		cfg, _ := json.Marshal(socks)
 		if err := writePrivate(filepath.Join(folder, "socks.json"), cfg); err != nil {
 			cancel()
 			return err
 		}
-		script := `#!/bin/sh
-set -eu
-/usr/bin/fptn-client-cli --access-token "$(cat /run/panel/token)" --tun-interface-name fptn0 --mtu-size "$1" --sni "$2" --bypass-method "$3" --enable-ad-block false &
-client=$!
-trap 'kill "$client" 2>/dev/null || true' EXIT INT TERM
-n=0
-while ! ip link show fptn0 >/dev/null 2>&1; do
- kill -0 "$client" || exit 1
- n=$((n+1)); [ "$n" -le 60 ] || exit 1
- sleep 1
-done
-/usr/bin/panel-singbox run -c /run/panel/socks.json &
-socks=$!
-while kill -0 "$client" 2>/dev/null && kill -0 "$socks" 2>/dev/null; do sleep 1; done
-kill "$client" "$socks" 2>/dev/null || true
-exit 1
-`
-		if err := writePrivate(filepath.Join(folder, "run.sh"), []byte(script)); err != nil {
+
+		if err := writePrivate(filepath.Join(folder, "run.sh"), []byte(fptnOutboundScript)); err != nil {
 			cancel()
 			return err
 		}
-		sb, err := filepath.Abs(filepath.Join(config.GetBinFolderPath(), "sing-box"))
+		sb, err := filepath.Abs(config.OwnerCoreBinaryPath())
 		if err != nil {
 			cancel()
 			return err
 		}
 		if _, err := os.Stat(sb); err != nil {
 			cancel()
-			return fmt.Errorf("FPTN outbound requires installed sing-box: %w", err)
+			return fmt.Errorf("FPTN outbound requires installed owner hiddify-core: %w", err)
 		}
 		proc.container = containerName(0) + "-out-" + suffix
 		cleanupCtx, done := context.WithTimeout(context.Background(), 5*time.Second)
 		_ = exec.CommandContext(cleanupCtx, "docker", "rm", "-f", proc.container).Run()
 		done()
-		proc.cmd = exec.CommandContext(ctx, "docker", "run", "--rm", "--name", proc.container, "--cap-add", "NET_ADMIN", "--device", "/dev/net/tun:/dev/net/tun", "--publish", fmt.Sprintf("127.0.0.1:%d:1080/tcp", proc.port), "--mount", "type=bind,src="+folder+",dst=/run/panel,readonly", "--mount", "type=bind,src="+sb+",dst=/usr/bin/panel-singbox,readonly", "3x-ui-fptn-client:0.4.6", "/bin/sh", "/run/panel/run.sh", strconv.Itoa(s.MTU), s.SNI, s.Bypass)
+		proc.cmd = exec.CommandContext(ctx, "docker", "run", "--rm", "--name", proc.container, "--cap-add", "NET_ADMIN", "--device", "/dev/net/tun:/dev/net/tun", "--publish", fmt.Sprintf("127.0.0.1:%d:1080/tcp", proc.port), "--mount", "type=bind,src="+folder+",dst=/run/panel,readonly", "--mount", "type=bind,src="+sb+",dst=/usr/bin/panel-core,readonly", "3x-ui-fptn-client:0.4.6", "/bin/sh", "/run/panel/run.sh", strconv.Itoa(s.MTU), s.SNI, s.Bypass)
 	}
 	proc.cmd.Stdout, proc.cmd.Stderr = os.Stdout, os.Stderr
 	if err := proc.cmd.Start(); err != nil {
@@ -552,3 +536,25 @@ func EnsureProbeOutbound(raw map[string]any) (map[string]any, func(), error) {
 	}
 	return bridge, cleanup, nil
 }
+
+func fptnBridgeConfig(password string) map[string]any {
+	return map[string]any{"log": map[string]any{"level": "warn"}, "inbounds": []any{map[string]any{"type": "vless", "tag": "panel-in", "listen": "0.0.0.0", "listen_port": 1080, "users": []any{map[string]any{"name": "panel", "uuid": password}}}}, "outbounds": []any{map[string]any{"type": "direct", "tag": "vpn-out", "bind_interface": "fptn0"}}, "dns": map[string]any{"servers": []any{map[string]any{"type": "udp", "tag": "vpn-dns", "server": "1.1.1.1", "detour": "vpn-out"}}, "final": "vpn-dns", "strategy": "ipv4_only"}, "route": map[string]any{"final": "vpn-out", "default_domain_resolver": "vpn-dns"}}
+}
+
+const fptnOutboundScript = `#!/bin/sh
+set -eu
+/usr/bin/fptn-client-cli --access-token "$(cat /run/panel/token)" --tun-interface-name fptn0 --mtu-size "$1" --sni "$2" --bypass-method "$3" --enable-ad-block false &
+client=$!
+trap 'kill "$client" 2>/dev/null || true' EXIT INT TERM
+n=0
+while ! ip link show fptn0 >/dev/null 2>&1; do
+ kill -0 "$client" || exit 1
+ n=$((n+1)); [ "$n" -le 60 ] || exit 1
+ sleep 1
+done
+/usr/bin/panel-core srun -c /run/panel/socks.json &
+socks=$!
+while kill -0 "$client" 2>/dev/null && kill -0 "$socks" 2>/dev/null; do sleep 1; done
+kill "$client" "$socks" 2>/dev/null || true
+exit 1
+`

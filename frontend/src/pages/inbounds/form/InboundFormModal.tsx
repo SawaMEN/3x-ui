@@ -682,7 +682,7 @@ export default function InboundFormModal({
       if (next !== Protocols.VLESS) {
         setV('disableFlow', false);
       }
-      if (next === Protocols.PINGTUNNEL) setV('port', 0);
+      if (next === Protocols.PINGTUNNEL || next === Protocols.TUN) setV('port', 0);
       if (next === Protocols.HYSTERIA) {
         setV('streamSettings', {
           network: 'hysteria',
@@ -701,6 +701,7 @@ export default function InboundFormModal({
         });
       } else if (
         next === Protocols.WIREGUARD ||
+        next === Protocols.TUN ||
         next === Protocols.TUNNEL ||
         next === Protocols.MASQUE ||
         next === Protocols.SNELL ||
@@ -891,7 +892,9 @@ export default function InboundFormModal({
         }}
       >
         <InputNumber
-          disabled={protocol === Protocols.PINGTUNNEL || hasMieruPortBindings}
+          disabled={
+            protocol === Protocols.PINGTUNNEL || protocol === Protocols.TUN || hasMieruPortBindings
+          }
           min={
             protocol === Protocols.PINGTUNNEL || isUdsListen
               ? 0
