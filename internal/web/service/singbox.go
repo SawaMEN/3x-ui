@@ -1005,18 +1005,21 @@ func (s *SingBoxService) installVersion(ctx context.Context, installer func(cont
 
 func (s *SingBoxService) InstallLatest(ctx context.Context) (string, error) {
 	if s.Hiddify {
-		return "", fmt.Errorf("hiddify-core is updated with the pinned panel release")
+		return "", fmt.Errorf("The owner sing-box fork is updated with the pinned panel release")
 	}
 	return s.installVersion(ctx, singbox.InstallLatest)
 }
 
 func (s *SingBoxService) ListVersions(ctx context.Context) ([]singbox.ReleaseVersion, error) {
+	if s.Hiddify {
+		return nil, fmt.Errorf("The owner sing-box fork is updated with the pinned panel release")
+	}
 	return singbox.ListVersions(ctx)
 }
 
 func (s *SingBoxService) InstallVersion(ctx context.Context, version string) (string, error) {
 	if s.Hiddify {
-		return "", fmt.Errorf("hiddify-core is updated with the pinned panel release")
+		return "", fmt.Errorf("The owner sing-box fork is updated with the pinned panel release")
 	}
 	return s.installVersion(ctx, func(ctx context.Context) (string, error) {
 		return singbox.InstallVersion(ctx, version)
@@ -1025,7 +1028,7 @@ func (s *SingBoxService) InstallVersion(ctx context.Context, version string) (st
 
 func (s *SingBoxService) Uninstall(ctx context.Context) error {
 	if s.Hiddify {
-		return fmt.Errorf("hiddify-core belongs to the panel release")
+		return fmt.Errorf("The owner sing-box fork belongs to the panel release")
 	}
 	if s.IsRunning() {
 		return fmt.Errorf("stop sing-box before uninstalling it")

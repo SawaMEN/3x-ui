@@ -38,7 +38,7 @@ func ActiveSessions(ctx context.Context) ([]singbox.ActiveSession, error) {
 			created = connection.Start.UnixMilli()
 		}
 		sessions = append(sessions, singbox.ActiveSession{
-			ID: connection.ID, Core: "hiddify-core", Inbound: inbound, InboundType: kind,
+			ID: connection.ID, Core: "sing-box", Inbound: inbound, InboundType: kind,
 			User: connection.Metadata.User, Network: connection.Metadata.Network,
 			Source:      net.JoinHostPort(NormalizeIP(connection.Metadata.SourceIP), connection.Metadata.SourcePort),
 			Destination: net.JoinHostPort(connection.Metadata.DestinationIP, connection.Metadata.DestinationPort),

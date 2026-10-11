@@ -9,6 +9,7 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	webruntime "github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -103,7 +104,7 @@ func (a *ServerController) getSingBoxSessions(c *gin.Context) {
 		return
 	}
 	if nodeID == nil {
-		sessions, err := a.singBoxService.ActiveSessions(c.Request.Context())
+		sessions, err := service.SelectedNativeCore().ActiveSessions(c.Request.Context())
 		jsonObj(c, sessions, err)
 		return
 	}
@@ -155,7 +156,7 @@ func (a *ServerController) disconnectSingBoxUsersSessionsRequest(c *gin.Context,
 		return
 	}
 	if nodeID == nil {
-		closed, err := a.singBoxService.DisconnectUsersSessions(c.Request.Context(), request.Inbound, request.Users)
+		closed, err := service.SelectedNativeCore().DisconnectUsersSessions(c.Request.Context(), request.Inbound, request.Users)
 		jsonObj(c, gin.H{"closed": closed}, err)
 		return
 	}
@@ -186,7 +187,7 @@ func (a *ServerController) disconnectSingBoxInboundSessions(c *gin.Context) {
 		return
 	}
 	if nodeID == nil {
-		closed, err := a.singBoxService.DisconnectInboundSessions(c.Request.Context(), request.Inbound)
+		closed, err := service.SelectedNativeCore().DisconnectInboundSessions(c.Request.Context(), request.Inbound)
 		jsonObj(c, gin.H{"closed": closed}, err)
 		return
 	}

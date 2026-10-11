@@ -699,7 +699,7 @@ func parseOutboundBalanceOptions(c *gin.Context) (*service.BalanceOptions, error
 func markOutboundCoreRestart() {
 	core, _ := (&service.SettingService{}).GetCoreType()
 	if service.IsNativeCore(core) {
-		(&service.SingBoxService{}).SetToNeedRestart()
+		service.SelectedNativeCore().SetToNeedRestart()
 	} else {
 		(&service.XrayService{}).SetToNeedRestart()
 	}

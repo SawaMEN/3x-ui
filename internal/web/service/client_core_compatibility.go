@@ -179,10 +179,7 @@ func coreSupportsInboundProtocol(core string, protocol model.Protocol) bool {
 		default:
 			return true
 		}
-	case CoreTypeSingBox, CoreTypeHiddify:
-		if core == CoreTypeSingBox && protocol == model.Tun {
-			return false
-		}
+	case CoreTypeSingBox:
 		switch protocol {
 		case model.WireGuard, model.Tunnel:
 			return false

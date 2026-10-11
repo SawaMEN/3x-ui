@@ -75,7 +75,6 @@ func CLI(args []string) error {
 		}
 		states[name] = state
 	}
-	states[service.CoreTypeHiddify] = states[service.CoreTypeSingBox]
 	changed := []string{}
 	rollback := func(disabling bool, original error) error {
 		recovery, done := context.WithTimeout(context.Background(), 45*time.Second)

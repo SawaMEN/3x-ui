@@ -27,7 +27,7 @@ func CapabilitiesFor(t Type) Capabilities {
 			GeoIP:            true,
 			GeoSite:          true,
 		}
-	case SingBox, Hiddify:
+	case SingBox:
 		return Capabilities{
 			RuleSets:           true,
 			OutboundDelayProbe: true,

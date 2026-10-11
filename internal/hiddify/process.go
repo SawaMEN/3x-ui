@@ -16,7 +16,7 @@ func NewProcess(path string, isolated bool) *singbox.Process {
 	return singbox.NewProcessWithOptions(path, singbox.ProcessOptions{
 		Binary: GetBinaryPath(), RunCommand: "srun", VersionPrefix: "hiddify-core version ",
 		RequiredVersion: TargetVersion, RequiredTags: requiredBuildTags,
-		RequiredRevision: TargetRevision, Name: "hiddify-core",
+		RequiredRevision: TargetRevision, Name: "sing-box",
 		MASQUE: true,
 	}, isolated)
 }

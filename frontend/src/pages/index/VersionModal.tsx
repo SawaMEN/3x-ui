@@ -44,44 +44,24 @@ export default function VersionModal({ open, status, onClose, onBusy }: VersionM
   const [modal, modalContextHolder] = Modal.useModal();
   const [activeKey, setActiveKey] = useState<string | string[]>('1');
   const [versions, setVersions] = useState<ReleaseVersion[]>([]);
-  const [coreType, setCoreType] = useState<'xray' | 'sing-box' | 'hiddify-core'>('xray');
+  const [coreType, setCoreType] = useState<'xray' | 'sing-box'>('xray');
   const [showDevVersions, setShowDevVersions] = useState(false);
   const [singBoxVersion, setSingBoxVersion] = useState('');
   const [loading, setLoading] = useState(false);
 
   const fetchVersions = useCallback(async () => {
     try {
-      const settingsMsg = await HttpUtil.post<{ coreType?: 'xray' | 'sing-box' | 'hiddify-core' }>(
-        '/panel/api/setting/all',
-      );
+      const settingsMsg = await HttpUtil.post<{
+        coreType?: 'xray' | 'sing-box';
+      }>('/panel/api/setting/all');
       const selectedCore =
         settingsMsg?.success && settingsMsg.obj?.coreType ? settingsMsg.obj.coreType : 'xray';
       setCoreType(selectedCore);
 
-      if (selectedCore === 'hiddify-core') {
-        const msg = await HttpUtil.get<{ version?: string }>('/panel/api/setting/hiddify/status');
+      if (selectedCore !== 'xray') {
+        const msg = await HttpUtil.get<{ version?: string }>('/panel/api/setting/singbox/status');
         setSingBoxVersion(msg.obj?.version || '');
         setVersions([]);
-      } else if (selectedCore === 'sing-box') {
-        const [versionMsg, statusMsg] = await Promise.all([
-          HttpUtil.get<Array<ReleaseVersion | string>>('/panel/api/setting/singbox/versions'),
-          HttpUtil.get<{ version?: string }>('/panel/api/setting/singbox/status'),
-        ]);
-        if (versionMsg?.success) {
-          setVersions(
-            (versionMsg.obj || [])
-              .map((item) =>
-                typeof item === 'string'
-                  ? { version: item, prerelease: isDevVersion(item) }
-                  : {
-                      version: item?.version || '',
-                      prerelease: !!item?.prerelease,
-                    },
-              )
-              .filter((item) => !!item.version),
-          );
-        }
-        if (statusMsg?.success) setSingBoxVersion(statusMsg.obj?.version || '');
       } else {
         const msg = await HttpUtil.get<string[]>('/panel/api/server/getXrayVersion');
         if (msg?.success) {
@@ -109,26 +89,17 @@ export default function VersionModal({ open, status, onClose, onBusy }: VersionM
   }, [open, fetchVersions]);
 
   function switchCoreVersion(version: string) {
-    if (coreType === 'hiddify-core') return;
-    const isSingBox = coreType === 'sing-box';
+    if (coreType !== 'xray') return;
     modal.confirm({
-      title: isSingBox ? 'Переключить версию sing-box?' : t('pages.index.xraySwitchVersionDialog'),
-      content: isSingBox
-        ? `Установить sing-box ${version} и заменить текущую версию?`
-        : t('pages.index.xraySwitchVersionDialogDesc').replace('#version#', version),
+      title: t('pages.index.xraySwitchVersionDialog'),
+      content: t('pages.index.xraySwitchVersionDialogDesc').replace('#version#', version),
       okText: t('confirm'),
       cancelText: t('cancel'),
       onOk: async () => {
         onClose();
         onBusy({ busy: true, tip: t('pages.index.dontRefresh') });
         try {
-          if (isSingBox) {
-            await HttpUtil.post(
-              `/panel/api/setting/singbox/install/${encodeURIComponent(version)}`,
-            );
-          } else {
-            await HttpUtil.post(`/panel/api/server/installXray/${encodeURIComponent(version)}`);
-          }
+          await HttpUtil.post(`/panel/api/server/installXray/${encodeURIComponent(version)}`);
         } finally {
           onBusy({ busy: false });
         }
@@ -172,11 +143,9 @@ export default function VersionModal({ open, status, onClose, onBusy }: VersionM
     <Modal
       open={open}
       title={
-        coreType === 'hiddify-core'
-          ? 'hiddify-core обновляется вместе с панелью'
-          : coreType === 'sing-box'
-            ? 'Обновления sing-box'
-            : t('pages.index.xrayUpdates')
+        coreType !== 'xray'
+          ? 'sing-box из репозитория владельца обновляется вместе с панелью'
+          : t('pages.index.xrayUpdates')
       }
       footer={null}
       onCancel={onClose}

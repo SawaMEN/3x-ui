@@ -74,7 +74,7 @@ func normalizeNodeCoreType(value string) string {
 	case "xray":
 		return CoreTypeXray
 	case "hiddifycore":
-		return CoreTypeHiddify
+		return CoreTypeSingBox
 	case "singbox":
 		return CoreTypeSingBox
 	default:
@@ -1456,7 +1456,7 @@ func (s *NodeService) probe(ctx context.Context, n *model.Node, proxyURL string)
 	patch.CoreCapabilities = o.Core.Capabilities
 	patch.CoreType = normalizeNodeCoreType(o.Core.Type)
 	patch.RunningCore = normalizeNodeCoreType(o.Core.Running)
-	if o.SingBox != nil && !(patch.CoreType == CoreTypeHiddify && o.SingBox.Version == o.Core.Version && o.Core.Version != "") {
+	if o.SingBox != nil {
 		patch.SingBoxKnown = true
 		patch.SingBoxInstalled = o.SingBox.Installed
 		patch.SingBoxVersion = o.SingBox.Version

@@ -12,7 +12,8 @@ export interface HealthProps {
 
 export function normalizeCoreName(value?: string): string {
   const core = (value || '').toLowerCase().trim().replaceAll('-', '');
-  return core === 'xray' || core === 'singbox' || core === 'hiddifycore' ? core : '';
+  if (core === 'hiddifycore') return 'singbox';
+  return core === 'xray' || core === 'singbox' ? core : '';
 }
 
 export function coreHealth(record: HealthProps) {

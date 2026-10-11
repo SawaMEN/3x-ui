@@ -39,7 +39,7 @@ func gatewayStateForCore(coreType string) (gateway.State, error) {
 	switch coreType {
 	case service.CoreTypeXray:
 		return gateway.GetState()
-	case service.CoreTypeSingBox, service.CoreTypeHiddify:
+	case service.CoreTypeSingBox:
 		return gateway.GetSingBoxState()
 	default:
 		return gateway.State{}, fmt.Errorf("unsupported core type %q", coreType)
@@ -50,7 +50,7 @@ func enableGatewayForCore(coreType string) error {
 	switch coreType {
 	case service.CoreTypeXray:
 		return gateway.Enable()
-	case service.CoreTypeSingBox, service.CoreTypeHiddify:
+	case service.CoreTypeSingBox:
 		return gateway.EnableSingBox()
 	default:
 		return fmt.Errorf("unsupported core type %q", coreType)
@@ -61,7 +61,7 @@ func disableGatewayForCore(coreType string) error {
 	switch coreType {
 	case service.CoreTypeXray:
 		return gateway.Disable()
-	case service.CoreTypeSingBox, service.CoreTypeHiddify:
+	case service.CoreTypeSingBox:
 		return gateway.DisableSingBox()
 	default:
 		return fmt.Errorf("unsupported core type %q", coreType)

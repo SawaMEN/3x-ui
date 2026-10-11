@@ -21,9 +21,11 @@ var hiddifyNeedRestart atomic.Bool
 var hiddifyManuallyStopped atomic.Bool
 var hiddifyStats = hiddify.NewStatsClient()
 
-func IsNativeCore(core string) bool { return core == CoreTypeSingBox || core == CoreTypeHiddify }
+func IsNativeCore(core string) bool { return core == CoreTypeSingBox || core == legacyCoreTypeHiddify }
 func NativeCore(core string) *SingBoxService {
-	return &SingBoxService{Hiddify: core == CoreTypeHiddify}
+	// Both names resolve to the owner’s modified sing-box. The old name is
+	// accepted only for compatibility with persisted settings and older nodes.
+	return &SingBoxService{Hiddify: IsNativeCore(core)}
 }
 func SelectedNativeCore() *SingBoxService {
 	core, _ := (&SettingService{}).GetCoreType()
@@ -31,9 +33,6 @@ func SelectedNativeCore() *SingBoxService {
 }
 func (s *SingBoxService) CoreType() string { return s.coreType() }
 func (s *SingBoxService) coreType() string {
-	if s.Hiddify {
-		return CoreTypeHiddify
-	}
 	return CoreTypeSingBox
 }
 func (s *SingBoxService) process() *singbox.Process {

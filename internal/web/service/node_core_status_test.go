@@ -211,7 +211,7 @@ func TestHiddifyHeartbeatIgnoresLegacySingBoxAlias(t *testing.T) {
 		"core":    map[string]any{"type": "hiddify-core", "version": "sawamen-old", "state": "running"},
 		"singbox": map[string]any{"installed": true, "version": "sawamen-old", "state": "running"},
 	})
-	if patch.SingBoxKnown || patch.SingBoxVersion != "" || patch.CoreVersion != "sawamen-old" || patch.CoreCapabilities != nil || patch.RunningCore != CoreTypeHiddify {
+	if !patch.SingBoxKnown || patch.SingBoxVersion != "sawamen-old" || patch.CoreVersion != "sawamen-old" || patch.CoreCapabilities != nil || patch.RunningCore != CoreTypeHiddify {
 		t.Fatalf("legacy alias/capabilities: %#v", patch)
 	}
 }

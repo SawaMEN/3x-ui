@@ -2,7 +2,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 
 import { HttpUtil } from '@/utils';
 
-export type CoreType = 'xray' | 'sing-box' | 'hiddify-core';
+export type CoreType = 'xray' | 'sing-box';
 
 export interface CoreCapabilities {
   ruleSets: boolean;

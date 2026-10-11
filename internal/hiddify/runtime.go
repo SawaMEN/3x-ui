@@ -19,7 +19,7 @@ func NewRuntime(path string, isolated bool) *Runtime {
 	return &Runtime{Process: NewProcess(path, isolated)}
 }
 
-func (r *Runtime) Type() core.Type                             { return core.Hiddify }
+func (r *Runtime) Type() core.Type                             { return core.SingBox }
 func (r *Runtime) Version(ctx context.Context) (string, error) { return r.Process.Version(ctx) }
 func (r *Runtime) Start(ctx context.Context) error             { return r.Process.Start(ctx) }
 func (r *Runtime) Stop(_ context.Context) error {

@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
@@ -47,6 +48,25 @@ func TestHiddifyNodeSyncAndTrafficAPI(t *testing.T) {
 	NewInboundController(api.Group("/inbounds"))
 	NewClientController(api.Group("/clients"))
 	serverController := &ServerController{}
+	statusResponse := httptest.NewRecorder()
+	statusContext, _ := gin.CreateTestContext(statusResponse)
+	statusContext.Request = httptest.NewRequest("GET", "/panel/api/server/status", nil)
+	serverController.status(statusContext)
+	var statusEnvelope struct {
+		Obj map[string]json.RawMessage `json:"obj"`
+	}
+	if err := json.Unmarshal(statusResponse.Body.Bytes(), &statusEnvelope); err != nil {
+		t.Fatal(err)
+	}
+	var selected struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(statusEnvelope.Obj["core"], &selected); err != nil {
+		t.Fatal(err)
+	}
+	if selected.Type != "sing-box" || statusEnvelope.Obj["singbox"] == nil || statusEnvelope.Obj["hiddify"] != nil {
+		t.Fatalf("owner core must be exposed as sing-box: %s", statusResponse.Body.String())
+	}
 	api.GET("/server/status", serverController.status)
 	server := httptest.NewServer(engine)
 	defer server.Close()

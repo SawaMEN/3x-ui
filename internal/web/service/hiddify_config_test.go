@@ -167,7 +167,7 @@ func TestHiddifyFullConfigNativeRoutingDNSAndXHTTPOutbound(t *testing.T) {
 	if !strings.Contains(string(data), `"type": "xhttp"`) || cfg.Route["final"] != "select" {
 		t.Fatal("native config sections lost")
 	}
-	if _, err := NativeCore(CoreTypeSingBox).GetConfig(); err == nil {
+	if _, err := (&SingBoxService{}).GetConfig(); err == nil {
 		t.Fatal("legacy sing-box accepts native Hiddify extension")
 	}
 }
@@ -463,7 +463,7 @@ func TestHiddifyRealCandidatePublication(t *testing.T) {
 	if err := singBoxSettingService.SetSingBoxConfigTemplate(`{"outbounds":[{"type":"tuic","tag":"direct","server":"127.0.0.1","server_port":443,"uuid":"invalid-uuid","password":"test-password","tls":{"enabled":true}},{"type":"block","tag":"blocked"}]}`); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.WriteConfig(); err == nil || !strings.Contains(err.Error(), "validate candidate hiddify-core config") {
+	if err := s.WriteConfig(); err == nil || !strings.Contains(err.Error(), "validate candidate sing-box config") {
 		t.Fatalf("expected native constructor rejection, got %v", err)
 	}
 	current, err := os.ReadFile(s.ProcessConfigPath())

@@ -317,6 +317,7 @@ func (s *SettingService) GetAllSetting() (*entity.AllSetting, error) {
 		allSetting.SubProfileMode = ""
 	}
 	allSetting.SubProfileMode = effectiveSubProfileMode(allSetting.SubProfileMode, allSetting.SubProfileUrl)
+	allSetting.CoreType = canonicalCoreType(allSetting.CoreType)
 	return allSetting, nil
 }
 
@@ -482,7 +483,9 @@ func (s *SettingService) SetWarpUpdateInterval(val int) error {
 const (
 	CoreTypeXray    = "xray"
 	CoreTypeSingBox = "sing-box"
-	CoreTypeHiddify = "hiddify-core"
+	// Deprecated: the owner kernel identifies as sing-box.
+	CoreTypeHiddify       = CoreTypeSingBox
+	legacyCoreTypeHiddify = "hiddify-core"
 )
 
 func (s *SettingService) GetCoreType() (string, error) {
@@ -490,13 +493,22 @@ func (s *SettingService) GetCoreType() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	coreType = canonicalCoreType(coreType)
 	if !isSupportedCoreType(coreType) {
 		return CoreTypeXray, nil
 	}
 	return coreType, nil
 }
 
+func canonicalCoreType(value string) string {
+	if value == legacyCoreTypeHiddify {
+		return CoreTypeSingBox
+	}
+	return value
+}
+
 func (s *SettingService) SetCoreType(coreType string) error {
+	coreType = canonicalCoreType(coreType)
 	if !isSupportedCoreType(coreType) {
 		return common.NewError("core type is not supported:", coreType)
 	}
@@ -1504,6 +1516,7 @@ type SecretClears struct {
 }
 
 func (s *SettingService) UpdateAllSetting(allSetting *entity.AllSetting, clears SecretClears) error {
+	allSetting.CoreType = canonicalCoreType(allSetting.CoreType)
 	switch allSetting.SubProfileMode {
 	case "", SubProfileModeNone, SubProfileModeBuiltin, SubProfileModeCustom:
 		allSetting.SubProfileMode = effectiveSubProfileMode(allSetting.SubProfileMode, allSetting.SubProfileUrl)

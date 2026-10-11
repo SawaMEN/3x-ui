@@ -40,9 +40,9 @@ export interface NodeCoreInfo {
   runningCore?: string | null;
 }
 
-function normalizeCore(value?: string | null): 'xray' | 'singbox' | 'hiddifycore' | '' {
+function normalizeCore(value?: string | null): 'xray' | 'singbox' | '' {
   const normalized = (value ?? '').trim().toLowerCase().replaceAll('-', '');
-  if (normalized === 'hiddifycore') return 'hiddifycore';
+  if (normalized === 'hiddifycore') return 'singbox';
   if (normalized === 'singbox') return 'singbox';
   if (normalized === 'xray') return 'xray';
   return '';
@@ -51,14 +51,12 @@ function normalizeCore(value?: string | null): 'xray' | 'singbox' | 'hiddifycore
 // Old nodes do not report coreType. Match the backend's compatibility fallback:
 // a known configured core wins; otherwise a known running core is useful, and
 // a completely unknown node remains Xray-compatible for legacy behaviour.
-export function nodeCoreType(node: NodeCoreInfo): 'xray' | 'singbox' | 'hiddifycore' {
+export function nodeCoreType(node: NodeCoreInfo): 'xray' | 'singbox' {
   return normalizeCore(node.coreType) || normalizeCore(node.runningCore) || 'xray';
 }
 
 export function nodeSupportsProtocol(node: NodeCoreInfo, protocol: string): boolean {
   if (!NODE_ELIGIBLE_PROTOCOLS[protocol]) return false;
-
-  if (nodeCoreType(node) === 'singbox' && protocol === Protocols.TUN) return false;
 
   if (nodeCoreType(node) !== 'xray') {
     // Keep this in sync with backend coreSupportsInboundProtocol(). WireGuard

@@ -19,7 +19,7 @@ import type { Status } from '@/models/status';
 
 interface OverviewActionBarProps {
   status: Status;
-  coreType: 'xray' | 'sing-box' | 'hiddify-core';
+  coreType: 'xray' | 'sing-box';
   coreVersion: string;
   coreRunning: boolean;
   coreError: string;

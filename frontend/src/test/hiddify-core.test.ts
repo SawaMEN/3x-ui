@@ -6,9 +6,9 @@ import { NodeRecordSchema, ProbeResultSchema } from '@/schemas/node';
 import { Protocols } from '@/schemas/primitives';
 
 describe('hiddify core selection', () => {
-  it('retains hiddify identity reported by the node', () => {
-    expect(nodeCoreType({ coreType: 'hiddify-core', runningCore: 'xray' })).toBe('hiddifycore');
-    expect(nodeCoreType({ runningCore: 'hiddify-core' })).toBe('hiddifycore');
+  it('normalizes the legacy owner core name to sing-box', () => {
+    expect(nodeCoreType({ coreType: 'hiddify-core', runningCore: 'xray' })).toBe('singbox');
+    expect(nodeCoreType({ runningCore: 'hiddify-core' })).toBe('singbox');
   });
   it('uses native core protocol eligibility', () => {
     expect(nodeSupportsProtocol({ coreType: 'hiddify-core' }, Protocols.SNELL)).toBe(true);
@@ -25,12 +25,16 @@ describe('remote Hiddify health', () => {
       coreState: 'stop',
       xrayState: 'running',
     };
-    expect(coreHealth(node).configured).toBe('hiddifycore');
+    expect(coreHealth(node).configured).toBe('singbox');
     expect(hasCoreProblem(node)).toBe(true);
-    expect(hasCoreProblem({ ...node, coreState: 'running', runningCore: 'hiddify-core' })).toBe(
-      false,
-    );
-    expect(hasCoreProblem({ ...node, runningCore: 'sing-box' })).toBe(true);
+    expect(
+      hasCoreProblem({
+        ...node,
+        coreState: 'running',
+        runningCore: 'hiddify-core',
+      }),
+    ).toBe(false);
+    expect(hasCoreProblem({ ...node, runningCore: 'sing-box' })).toBe(false);
     expect(hasCoreProblem({ ...node, status: 'offline' })).toBe(false);
   });
   it('accepts legacy unknown capabilities without inventing them', () => {
@@ -47,8 +51,8 @@ describe('remote Hiddify health', () => {
 });
 
 describe('Hiddify TUN support', () => {
-  it('offers translated TUN on Hiddify and keeps stock sing-box strict', () => {
+  it('offers translated TUN under the canonical sing-box name', () => {
     expect(nodeSupportsProtocol({ coreType: 'hiddify-core' }, Protocols.TUN)).toBe(true);
-    expect(nodeSupportsProtocol({ coreType: 'sing-box' }, Protocols.TUN)).toBe(false);
+    expect(nodeSupportsProtocol({ coreType: 'sing-box' }, Protocols.TUN)).toBe(true);
   });
 });

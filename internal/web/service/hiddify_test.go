@@ -69,7 +69,7 @@ func TestHiddifyConfigFromDatabase(t *testing.T) {
 	if len(cfg.Services) != 0 {
 		t.Fatal("unsupported sing-box 1.14 API injected")
 	}
-	if _, err := NativeCore(CoreTypeSingBox).GetConfig(); err == nil {
+	if _, err := (&SingBoxService{}).GetConfig(); err == nil {
 		t.Fatal("stock sing-box incorrectly accepted XHTTP")
 	}
 	binary := os.Getenv("HIDDIFY_CONFIG_CHECK_BINARY")
@@ -92,7 +92,7 @@ func TestHiddifyConfigFromDatabase(t *testing.T) {
 
 func TestHiddifyRestartFlagsAreIndependent(t *testing.T) {
 	h := NativeCore(CoreTypeHiddify)
-	legacy := NativeCore(CoreTypeSingBox)
+	legacy := &SingBoxService{}
 	h.restartFlag().Store(false)
 	legacy.restartFlag().Store(false)
 	t.Cleanup(func() { h.restartFlag().Store(false); legacy.restartFlag().Store(false) })

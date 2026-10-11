@@ -38,12 +38,12 @@ func TestLocalHiddifySessionsUseClashAndPreserveIdentity(t *testing.T) {
 	cfg, _ := json.Marshal(map[string]any{"experimental": map[string]any{"clash_api": map[string]any{"external_controller": strings.TrimPrefix(server.URL, "http://"), "secret": "phase6"}}})
 	singbox.SetRuntimeConfigReader(func() []byte { return cfg })
 	t.Cleanup(func() { singbox.SetRuntimeConfigReader(nil) })
-	local := NewLocal(LocalDeps{CoreType: func() string { return "hiddify-core" }})
+	local := NewLocal(LocalDeps{CoreType: func() string { return "sing-box" }})
 	sessions, err := local.ActiveSessions(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(sessions) != 4 || sessions[0].Source != "192.0.2.1:12" || sessions[1].Source != "[2001:db8::1]:13" || sessions[0].CreatedAt != 0 || sessions[1].Network != "udp" {
+	if len(sessions) != 4 || sessions[0].Source != "192.0.2.1:12" || sessions[1].Source != "[2001:db8::1]:13" || sessions[0].Core != "sing-box" || sessions[0].CreatedAt != 0 || sessions[1].Network != "udp" {
 		t.Fatalf("session identity lost: %+v", sessions)
 	}
 	if n, err := local.DisconnectUsersSessions(context.Background(), "vpn", []string{"", "alice"}); n != 1 || err != nil {

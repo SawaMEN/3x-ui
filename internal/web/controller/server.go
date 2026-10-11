@@ -262,15 +262,13 @@ func (a *ServerController) status(c *gin.Context) {
 		return gin.H{"installed": installed, "state": state, "errorMsg": message, "version": version}
 	}
 	singBoxStatus := nativeStatus(service.CoreTypeSingBox)
-	hiddifyStatus := nativeStatus(service.CoreTypeHiddify)
+
 	runningCore := ""
 	switch {
 	case service.IsNativeCore(coreType) && service.NativeCore(coreType).IsRunning():
 		runningCore = coreType
 	case coreType == service.CoreTypeXray && status.Xray.State == service.Running:
 		runningCore = service.CoreTypeXray
-	case service.NativeCore(service.CoreTypeHiddify).IsRunning():
-		runningCore = service.CoreTypeHiddify
 	case service.NativeCore(service.CoreTypeSingBox).IsRunning():
 		runningCore = service.CoreTypeSingBox
 	case status.Xray.State == service.Running:
@@ -289,12 +287,9 @@ func (a *ServerController) status(c *gin.Context) {
 	}
 
 	obj["singbox"] = singBoxStatus
-	obj["hiddify"] = hiddifyStatus
 	selected := gin.H{"state": status.Xray.State, "errorMsg": status.Xray.ErrorMsg, "version": status.Xray.Version}
 	if coreType == service.CoreTypeSingBox {
 		selected = singBoxStatus
-	} else if coreType == service.CoreTypeHiddify {
-		selected = hiddifyStatus
 	}
 	obj["core"] = gin.H{
 		"type": coreType, "running": runningCore,

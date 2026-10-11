@@ -44,15 +44,10 @@ func (m *Manager) SessionRuntimeFor(nodeID *int) (SessionRuntime, error) {
 
 func (l *Local) ActiveSessions(ctx context.Context) ([]singbox.ActiveSession, error) {
 	core := l.sessionCore()
-	if core == "hiddify-core" {
+	if core == "hiddify-core" || core == "sing-box" {
 		return hiddify.ActiveSessions(ctx)
 	}
-	if core != "sing-box" {
-		return nil, errors.New("active sessions are currently available only for native cores")
-	}
-	client := singbox.NewConnectionAPIClient()
-	defer client.Close()
-	return client.ActiveSessions(ctx)
+	return nil, errors.New("active sessions are currently available only for native cores")
 }
 
 func (l *Local) DisconnectUserSessions(ctx context.Context, inbound, user string) (int, error) {
@@ -61,28 +56,18 @@ func (l *Local) DisconnectUserSessions(ctx context.Context, inbound, user string
 
 func (l *Local) DisconnectUsersSessions(ctx context.Context, inbound string, users []string) (int, error) {
 	core := l.sessionCore()
-	if core == "hiddify-core" {
+	if core == "hiddify-core" || core == "sing-box" {
 		return hiddify.DisconnectUsers(ctx, inbound, users)
 	}
-	if core != "sing-box" {
-		return 0, errors.New("session disconnect is currently available only for native cores")
-	}
-	client := singbox.NewConnectionAPIClient()
-	defer client.Close()
-	return client.DisconnectUsers(ctx, inbound, users)
+	return 0, errors.New("session disconnect is currently available only for native cores")
 }
 
 func (l *Local) DisconnectInboundSessions(ctx context.Context, inbound string) (int, error) {
 	core := l.sessionCore()
-	if core == "hiddify-core" {
+	if core == "hiddify-core" || core == "sing-box" {
 		return hiddify.DisconnectInbound(ctx, inbound)
 	}
-	if core != "sing-box" {
-		return 0, errors.New("session disconnect is currently available only for native cores")
-	}
-	client := singbox.NewConnectionAPIClient()
-	defer client.Close()
-	return client.DisconnectInbound(ctx, inbound)
+	return 0, errors.New("session disconnect is currently available only for native cores")
 }
 
 func (r *Remote) ActiveSessions(ctx context.Context) ([]singbox.ActiveSession, error) {

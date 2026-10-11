@@ -111,9 +111,7 @@ export default function IndexPage() {
       version?: string;
       error?: string;
     }>(
-      coreType === 'hiddify-core'
-        ? '/panel/api/setting/hiddify/status'
-        : '/panel/api/setting/singbox/status',
+      '/panel/api/setting/singbox/status',
       undefined,
       { silent: true },
     );
@@ -121,7 +119,7 @@ export default function IndexPage() {
     setCoreVersion(msg?.success && msg.obj?.version ? msg.obj.version : '');
     setCoreError(msg?.success && msg.obj?.error ? msg.obj.error : '');
     setCoreColor(msg?.success && msg.obj?.running ? 'green' : 'red');
-  }, [coreType]);
+  }, []);
 
   useEffect(() => {
     if (coreType === 'xray') return;

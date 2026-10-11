@@ -54,7 +54,6 @@ interface GeneralTabProps {
 export default function GeneralTab({
   allSetting,
   updateSetting,
-  saveSettings,
   onOpenSwap,
   onOpenSystemUpdate,
 }: GeneralTabProps) {
@@ -93,8 +92,7 @@ export default function GeneralTab({
   const [outboundTagList, setOutboundTagList] = useState<string[]>([]);
   const [balancerTagList, setBalancerTagList] = useState<string[]>([]);
   const [singBoxInstalled, setSingBoxInstalled] = useState<boolean | null>(null);
-  const [singBoxInstalling, setSingBoxInstalling] = useState(false);
-  const [runningCore, setRunningCore] = useState<'xray' | 'sing-box' | 'hiddify-core' | 'none'>(
+  const [runningCore, setRunningCore] = useState<'xray' | 'sing-box' | 'none'>(
     'none',
   );
   const [hiddifyOpen, setHiddifyOpen] = useState(false);
@@ -156,10 +154,15 @@ export default function GeneralTab({
     try {
       const result = await hiddifyRequest('import', hiddifyFile);
       if (result.success) {
-        const skipped = (result.obj?.skipped ?? []) as { email: string; reason: string }[];
+        const skipped = (result.obj?.skipped ?? []) as {
+          email: string;
+          reason: string;
+        }[];
         const created = result.obj?.created ?? 0;
         setHiddifyResult({ created, skipped });
-        void queryClient.invalidateQueries({ queryKey: keys.settings.defaults() });
+        void queryClient.invalidateQueries({
+          queryKey: keys.settings.defaults(),
+        });
         void queryClient.invalidateQueries({ queryKey: keys.clients.root() });
         if (result.obj?.subscriptionURI) {
           message.success(`URL для импортированных пользователей: ${result.obj.subscriptionURI}`);
@@ -184,15 +187,13 @@ export default function GeneralTab({
     const refreshCoreStatus = async () => {
       try {
         const [singMsg, serverMsg] = await Promise.all([
-          HttpUtil.get(
-            allSetting.coreType === 'hiddify-core'
-              ? '/panel/api/setting/hiddify/status'
-              : '/panel/api/setting/singbox/status',
-          ) as Promise<ApiMsg<{ installed: boolean; running: boolean }>>,
+          HttpUtil.get('/panel/api/setting/singbox/status') as Promise<
+            ApiMsg<{ installed: boolean; running: boolean }>
+          >,
           HttpUtil.get('/panel/api/server/status') as Promise<
             ApiMsg<{
               xray?: { state?: string };
-              core?: { running?: 'xray' | 'sing-box' | 'hiddify-core' };
+              core?: { running?: 'xray' | 'sing-box' };
             }>
           >,
         ]);
@@ -237,31 +238,6 @@ export default function GeneralTab({
       window.removeEventListener('xui-core-settings-saved', onCoreSettingsSaved);
     };
   }, [allSetting.coreType]);
-
-  const installSingBox = async () => {
-    setSingBoxInstalling(true);
-    try {
-      const msg = (await HttpUtil.post('/panel/api/setting/singbox/install')) as ApiMsg;
-      if (!msg?.success) return;
-      setSingBoxInstalled(true);
-
-      // The radio choice is kept as a draft until the normal settings save.
-      // Once the binary is installed, finish that pending core switch here so
-      // the selected engine becomes the actually running engine immediately.
-      if (allSetting.coreType === 'sing-box' && saveSettings) {
-        await saveSettings();
-      }
-    } finally {
-      setSingBoxInstalling(false);
-    }
-  };
-
-  const uninstallSingBox = async () => {
-    const msg = (await HttpUtil.post('/panel/api/setting/singbox/uninstall')) as ApiMsg;
-    if (!msg?.success) return;
-    setSingBoxInstalled(false);
-    setRunningCore('none');
-  };
 
   useEffect(() => {
     let cancelled = false;
@@ -373,7 +349,9 @@ export default function GeneralTab({
   }, [allSetting.ldapInboundTags]);
 
   function setLdapInboundTagList(list: string[]) {
-    updateSetting({ ldapInboundTags: Array.isArray(list) ? list.join(',') : '' });
+    updateSetting({
+      ldapInboundTags: Array.isArray(list) ? list.join(',') : '',
+    });
   }
 
   function onLangChange(value: string) {
@@ -454,7 +432,11 @@ export default function GeneralTab({
                 >
                   <Input
                     value={allSetting.webBasePath}
-                    onChange={(e) => updateSetting({ webBasePath: sanitizePath(e.target.value) })}
+                    onChange={(e) =>
+                      updateSetting({
+                        webBasePath: sanitizePath(e.target.value),
+                      })
+                    }
                   />
                 </SettingListItem>
 
@@ -535,7 +517,9 @@ export default function GeneralTab({
                       placeholder={t('pages.settings.panelOutboundPh')}
                       options={outboundOptions}
                       onChange={(v) =>
-                        updateSetting({ panelOutbound: (v as string | undefined) || '' })
+                        updateSetting({
+                          panelOutbound: (v as string | undefined) || '',
+                        })
                       }
                     />
                   </SettingListItem>
@@ -591,13 +575,20 @@ export default function GeneralTab({
                   title={t('pages.settings.coreType')}
                   description={t('pages.settings.coreTypeDesc')}
                 >
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 8,
+                      width: '100%',
+                    }}
+                  >
                     <Space direction="vertical" size={12} style={{ width: '100%' }}>
                       <Radio.Group
                         value={allSetting.coreType || 'xray'}
                         onChange={(e) =>
                           updateSetting({
-                            coreType: e.target.value as 'xray' | 'sing-box' | 'hiddify-core',
+                            coreType: e.target.value as 'xray' | 'sing-box',
                           })
                         }
                         optionType="button"
@@ -605,9 +596,6 @@ export default function GeneralTab({
                         size="large"
                         style={{ display: 'flex', width: '100%' }}
                       >
-                        <Radio.Button value="hiddify-core" style={{ flex: 1, textAlign: 'center' }}>
-                          <strong>hiddify-core</strong>
-                        </Radio.Button>
                         <Radio.Button value="xray" style={{ flex: 1, textAlign: 'center' }}>
                           <strong>Xray</strong>
                         </Radio.Button>
@@ -634,20 +622,18 @@ export default function GeneralTab({
                           <div style={{ fontSize: 12, opacity: 0.65 }}>
                             {allSetting.coreType === 'sing-box'
                               ? singBoxInstalled
-                                ? t('pages.settings.singBoxInstalled')
-                                : t('pages.settings.installSingBox')
+                                ? 'Собственная сборка sing-box'
+                                : 'Требуется сборка панели с ядром владельца'
                               : t('pages.settings.coreTypeDesc')}
                           </div>
                           <div style={{ fontSize: 12, marginTop: 4 }}>
                             Работает сейчас:{' '}
                             <strong>
-                              {runningCore === 'hiddify-core'
-                                ? 'hiddify-core'
-                                : runningCore === 'sing-box'
-                                  ? 'sing-box'
-                                  : runningCore === 'xray'
-                                    ? 'Xray'
-                                    : 'нет'}
+                              {runningCore === 'sing-box'
+                                ? 'sing-box'
+                                : runningCore === 'xray'
+                                  ? 'Xray'
+                                  : 'нет'}
                             </strong>
                           </div>
                         </div>
@@ -658,50 +644,21 @@ export default function GeneralTab({
                         )}
                       </div>
 
-                      {allSetting.coreType === 'hiddify-core' && (
+                      {allSetting.coreType === 'sing-box' && (
                         <Alert
                           type={singBoxInstalled ? 'success' : 'warning'}
                           showIcon
                           message={
-                            singBoxInstalled
-                              ? 'hiddify-core установлен'
-                              : 'hiddify-core отсутствует'
+                            singBoxInstalled ? 'sing-box установлен' : 'sing-box отсутствует'
                           }
                           description={
                             singBoxInstalled
                               ? 'Ядро будет применено после сохранения настроек.'
-                              : 'Установите сборку панели с закреплённым ядром Hiddify Core.'
+                              : 'Установите сборку панели с закреплённым sing-box из репозитория владельца.'
                           }
                         />
                       )}
-                      {allSetting.coreType === 'sing-box' && !singBoxInstalled && (
-                        <Button
-                          type="primary"
-                          block
-                          loading={singBoxInstalling}
-                          onClick={installSingBox}
-                        >
-                          {t('pages.settings.installSingBox')}
-                        </Button>
-                      )}
 
-                      {allSetting.coreType === 'sing-box' && singBoxInstalled && (
-                        <Button
-                          block
-                          danger
-                          onClick={uninstallSingBox}
-                          disabled={runningCore === 'sing-box'}
-                        >
-                          Удалить sing-box
-                        </Button>
-                      )}
-                      {allSetting.coreType === 'sing-box' &&
-                        singBoxInstalled &&
-                        runningCore === 'sing-box' && (
-                          <div style={{ fontSize: 12, opacity: 0.65 }}>
-                            Сначала переключите ядро на Xray и сохраните настройки.
-                          </div>
-                        )}
                       <Space wrap style={{ width: '100%' }}>
                         <Button icon={<SwapOutlined />} onClick={() => onOpenSwap?.()}>
                           {t('pages.settings.swap.openFromCore')}
@@ -806,7 +763,11 @@ export default function GeneralTab({
                   <Input
                     value={allSetting.externalTrafficInformURI}
                     placeholder="(http|https)://domain[:port]/path/"
-                    onChange={(e) => updateSetting({ externalTrafficInformURI: e.target.value })}
+                    onChange={(e) =>
+                      updateSetting({
+                        externalTrafficInformURI: e.target.value,
+                      })
+                    }
                   />
                 </SettingListItem>
               </>
@@ -834,11 +795,21 @@ export default function GeneralTab({
                 >
                   <Select
                     value={allSetting.datepicker || 'gregorian'}
-                    onChange={(v) => updateSetting({ datepicker: v as 'gregorian' | 'jalalian' })}
+                    onChange={(v) =>
+                      updateSetting({
+                        datepicker: v as 'gregorian' | 'jalalian',
+                      })
+                    }
                     style={{ width: '100%' }}
                     options={[
-                      { value: 'gregorian', label: t('pages.settings.calendarGregorian') },
-                      { value: 'jalalian', label: t('pages.settings.calendarJalalian') },
+                      {
+                        value: 'gregorian',
+                        label: t('pages.settings.calendarGregorian'),
+                      },
+                      {
+                        value: 'jalalian',
+                        label: t('pages.settings.calendarJalalian'),
+                      },
                     ]}
                   />
                 </SettingListItem>

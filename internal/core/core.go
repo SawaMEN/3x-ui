@@ -8,12 +8,13 @@ type Type string
 const (
 	Xray    Type = "xray"
 	SingBox Type = "sing-box"
-	Hiddify Type = "hiddify-core"
+	// Hiddify is a deprecated source-compatible alias for the owner sing-box fork.
+	Hiddify Type = SingBox
 )
 
 // Valid reports whether the core type is supported by this build.
 func (t Type) Valid() bool {
-	return t == Xray || t == SingBox || t == Hiddify
+	return t == Xray || t == SingBox
 }
 
 // Runtime is the common lifecycle contract for panel-managed proxy cores.
