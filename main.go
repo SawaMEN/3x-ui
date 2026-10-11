@@ -604,6 +604,7 @@ func loadServiceEnvFile() {
 // It parses command-line arguments to run the web server, migrate database, or update settings.
 func main() {
 	loadServiceEnvFile()
+	service.InitializeNativeCoreRuntime()
 
 	if len(os.Args) < 2 {
 		runWebServer()

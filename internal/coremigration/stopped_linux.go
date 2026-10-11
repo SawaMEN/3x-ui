@@ -51,19 +51,46 @@ func assertStopped() error {
 			continue
 		}
 		words := strings.Split(string(args), "\x00")
-		for i, word := range words {
-			if (word == "-c" || word == "-config" || word == "--config") && i+1 < len(words) {
-				candidate := words[i+1]
-				if !filepath.IsAbs(candidate) {
-					cwd, _ := os.Readlink(filepath.Join(proc, "cwd"))
-					candidate = filepath.Join(cwd, candidate)
-				}
-				if !configs[filepath.Clean(candidate)] {
-					continue
-				}
-				return fmt.Errorf("core PID %d still owns installation config; stop x-ui and its cores", pid)
-			}
+		cwd, _ := os.Readlink(filepath.Join(proc, "cwd"))
+		if referencesManagedConfig(words, cwd, configs) {
+			return fmt.Errorf("core PID %d still owns installation config; stop x-ui and its cores", pid)
 		}
 	}
 	return nil
+}
+
+func canonicalConfigPath(path string) string {
+	path = filepath.Clean(path)
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		return filepath.Clean(resolved)
+	}
+	return path
+}
+func referencesManagedConfig(words []string, cwd string, configs map[string]bool) bool {
+	for i, word := range words {
+		var candidate string
+		if (word == "-c" || word == "-config" || word == "--config") && i+1 < len(words) {
+			candidate = words[i+1]
+		} else {
+			for _, prefix := range []string{"-c=", "-config=", "--config="} {
+				if value, ok := strings.CutPrefix(word, prefix); ok {
+					candidate = value
+					break
+				}
+			}
+		}
+		if candidate == "" {
+			continue
+		}
+		if !filepath.IsAbs(candidate) {
+			candidate = filepath.Join(cwd, candidate)
+		}
+		candidate = canonicalConfigPath(candidate)
+		for path := range configs {
+			if candidate == canonicalConfigPath(path) {
+				return true
+			}
+		}
+	}
+	return false
 }

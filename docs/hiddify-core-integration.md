@@ -172,3 +172,9 @@ FPTN bridge запускает закреплённый owner core вместо 
 [отчёт этапа 9](hiddify-core-stage-9-verification.md).
 Полноценный privileged upgrade/traffic/reboot и live PostgreSQL restore
 требуют отдельной эксплуатационной приёмки.
+
+## Повторная проверка этапов 1–9
+
+[Общий отчёт](hiddify-core-stages-1-9-review.md) содержит проверенные контракты,
+исправления stale backups, legacy alias, runtime environment и rollback,
+результаты регрессий и оставшуюся эксплуатационную приёмку.

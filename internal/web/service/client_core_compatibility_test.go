@@ -66,7 +66,7 @@ func TestSyncClientCoreCompatibilitySwitchesAutomaticClientState(t *testing.T) {
 		}
 	}
 
-	if err := SyncClientCoreCompatibility(CoreTypeXray, CoreTypeSingBox); err != nil {
+	if err := SyncClientCoreCompatibility(CoreTypeXray, legacyCoreTypeHiddify); err != nil {
 		t.Fatal(err)
 	}
 
@@ -85,7 +85,7 @@ func TestSyncClientCoreCompatibilitySwitchesAutomaticClientState(t *testing.T) {
 	check("vless@example", true, "")
 	check("naive@example", true, "")
 
-	if err := SyncClientCoreCompatibility(CoreTypeSingBox, CoreTypeXray); err != nil {
+	if err := SyncClientCoreCompatibility(legacyCoreTypeHiddify, CoreTypeXray); err != nil {
 		t.Fatal(err)
 	}
 	check("wg@example", true, "")

@@ -61,7 +61,11 @@ core_migration_exit() {
     [[ "${cm_active:-0}" != 1 || "$code" != 0 ]] || incomplete=1
     if [[ "${cm_active:-0}" == 1 ]]; then
         echo "Upgrade failed; restoring offline snapshot: $cm_backup" >&2
-        if [[ "${release}" == alpine ]]; then rc-service x-ui stop; else systemctl stop x-ui; fi
+        if [[ "${release}" == alpine ]]; then
+            rc-service x-ui stop || return 1
+        else
+            systemctl stop x-ui || return 1
+        fi
         if ! "$cm_stage/x-ui/x-ui" core-migrate --restore --backup-dir "$cm_backup/data"; then
             echo "Automatic rollback failed. Keep x-ui stopped and recover from $cm_backup." >&2
             return 1

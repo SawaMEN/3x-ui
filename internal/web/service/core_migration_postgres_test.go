@@ -4,10 +4,12 @@ package service
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestCoreMigrationPostgresCommandsKeepCredentialsOutOfArguments(t *testing.T) {
@@ -65,5 +67,25 @@ func TestCoreMigrationPostgresSnapshotRequiresRestoreToolBeforeDump(t *testing.T
 	}
 	if _, err := os.Stat(dump); !os.IsNotExist(err) {
 		t.Fatal("non-restorable dump was created")
+	}
+}
+
+func TestCoreMigrationPostgresArchiveProbeHonorsCancellation(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XUI_DB_DSN", "postgres://panel:secret@localhost/panel")
+	script := "#!/bin/sh\nexec /bin/sleep 30\n"
+	if err := os.WriteFile(filepath.Join(dir, "pg_restore"), []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	started := time.Now()
+	err := CoreMigrationPostgresRestore(ctx, filepath.Join(dir, "database.dump"))
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal("archive probe ignored cancellation", err)
+	}
+	if time.Since(started) > time.Second {
+		t.Fatal("archive probe exceeded cancellation budget")
 	}
 }

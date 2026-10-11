@@ -215,3 +215,17 @@ func TestHiddifyHeartbeatIgnoresLegacySingBoxAlias(t *testing.T) {
 		t.Fatalf("legacy alias/capabilities: %#v", patch)
 	}
 }
+
+func TestNodeViewCanonicalizesOfflineLegacyOwnerCore(t *testing.T) {
+	node := &model.Node{CoreType: legacyCoreTypeHiddify, RunningCore: legacyCoreTypeHiddify, CoreVersion: "existing-owner", Status: "offline"}
+	view := toNodeView(node)
+	if view.CoreType != CoreTypeSingBox || view.RunningCore != CoreTypeSingBox {
+		t.Fatalf("legacy owner identity escaped read contract: %+v", view)
+	}
+	if node.CoreType != legacyCoreTypeHiddify || node.RunningCore != legacyCoreTypeHiddify {
+		t.Fatal("read contract mutated stored node")
+	}
+	if view.CoreVersion != "existing-owner" || view.Status != "offline" {
+		t.Fatal("canonicalization changed health/version")
+	}
+}

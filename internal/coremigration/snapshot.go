@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"io"
 	"os"
 	"path/filepath"
@@ -18,15 +19,16 @@ type savedFile struct {
 	Exists bool   `json:"exists"`
 }
 type manifest struct {
-	DatabaseID     string      `json:"databaseId"`
-	Schema         int         `json:"schema"`
-	Revision       string      `json:"revision"`
-	CoreType       string      `json:"coreType"`
-	DBKind         string      `json:"dbKind"`
-	Phase          string      `json:"phase"`
-	PostgresSHA256 string      `json:"postgresSha256,omitempty"`
-	PostgresTables []string    `json:"postgresTables,omitempty"`
-	Files          []savedFile `json:"files"`
+	DatabaseID          string      `json:"databaseId"`
+	Schema              int         `json:"schema"`
+	Revision            string      `json:"revision"`
+	CoreType            string      `json:"coreType"`
+	DBKind              string      `json:"dbKind"`
+	Phase               string      `json:"phase"`
+	PostgresSHA256      string      `json:"postgresSha256,omitempty"`
+	PostgresFingerprint string      `json:"postgresFingerprint,omitempty"`
+	PostgresTables      []string    `json:"postgresTables,omitempty"`
+	Files               []savedFile `json:"files"`
 }
 
 func atomicWrite(path string, data []byte, mode os.FileMode) error {
@@ -203,6 +205,41 @@ func verifyPostgres(dir string, m *manifest) error {
 	}
 	if hash != m.PostgresSHA256 || hash == "" {
 		return fmt.Errorf("PostgreSQL backup checksum mismatch")
+	}
+	return nil
+}
+
+// A prepared backup must still describe the stopped SQLite database. Otherwise
+// rollback would discard users/traffic written after --backup-only.
+func verifySQLiteSource(m *manifest) error {
+	if m.DBKind != "sqlite" {
+		return nil
+	}
+	db, err := filepath.Abs(config.GetDBPath())
+	if err != nil {
+		return err
+	}
+	for _, f := range m.Files {
+		if f.Path != db && f.Path != db+"-wal" && f.Path != db+"-shm" && f.Path != db+"-journal" {
+			continue
+		}
+		_, err := os.Lstat(f.Path)
+		if os.IsNotExist(err) && !f.Exists {
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("SQLite database changed since backup; use a new backup directory: %w", err)
+		}
+		if !f.Exists {
+			return fmt.Errorf("SQLite database changed since backup; use a new backup directory")
+		}
+		hash, err := hashFile(f.Path)
+		if err != nil {
+			return err
+		}
+		if hash != f.SHA256 {
+			return fmt.Errorf("SQLite database changed since backup; use a new backup directory")
+		}
 	}
 	return nil
 }

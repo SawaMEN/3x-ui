@@ -21,6 +21,7 @@ type coreCompatibilityInbound struct {
 // A client is incompatible when any local inbound it is attached to is unsupported
 // by the target core. AutoDisabledByCore distinguishes this from a manual disable.
 func SyncClientCoreCompatibility(oldCore, newCore string) error {
+	oldCore, newCore = canonicalCoreType(oldCore), canonicalCoreType(newCore)
 	if oldCore == newCore {
 		return nil
 	}

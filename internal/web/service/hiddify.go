@@ -21,6 +21,14 @@ var hiddifyNeedRestart atomic.Bool
 var hiddifyManuallyStopped atomic.Bool
 var hiddifyStats = hiddify.NewStatsClient()
 
+// InitializeNativeCoreRuntime resolves paths after the service environment has
+// been loaded. Call once at process startup, before any service goroutines.
+func InitializeNativeCoreRuntime() {
+	hiddifyRuntime = hiddify.NewRuntime(hiddify.GetConfigPath(), false)
+	hiddifyProcess = hiddifyRuntime.Process
+	singBoxProcess = singbox.NewProcess(singbox.GetConfigPath())
+}
+
 func IsNativeCore(core string) bool { return core == CoreTypeSingBox || core == legacyCoreTypeHiddify }
 func NativeCore(core string) *SingBoxService {
 	// Both names resolve to the owner’s modified sing-box. The old name is

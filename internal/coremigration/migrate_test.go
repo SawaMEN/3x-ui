@@ -559,3 +559,106 @@ func TestMigrationPendingJournalBlocksPanelStartup(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestMigrationRejectsStaleSQLiteBackupWithoutDiscardingNewData(t *testing.T) {
+	r, p, dir := fixture(t)
+	_ = database.CloseDB()
+	if err := r.run(context.Background(), Options{BackupDir: dir, BackupOnly: true}); err != nil {
+		t.Fatal(err)
+	}
+	reopen(t)
+	if err := database.GetDB().Create(&model.ClientRecord{Email: "new-after-backup", UUID: "22222222-2222-4222-8222-222222222222", Enable: true}).Error; err != nil {
+		t.Fatal(err)
+	}
+	before := preserved(t)
+	_ = database.CloseDB()
+	err := r.run(context.Background(), Options{BackupDir: dir})
+	if err == nil || !strings.Contains(err.Error(), "changed since backup") {
+		t.Fatal("stale rollback snapshot accepted", err)
+	}
+	if p.starts != 0 {
+		t.Fatal("stale snapshot started trial")
+	}
+	if _, err := os.Stat(pendingPath()); !os.IsNotExist(err) {
+		t.Fatal("stale preflight wrote pending journal")
+	}
+	reopen(t)
+	if preserved(t) != before {
+		t.Fatal("preflight discarded newly written data")
+	}
+}
+
+func TestMigrationRecognizesResidualCoreConfigArguments(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	if err := os.WriteFile(path, []byte("{}"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	alias := filepath.Join(dir, "alias.json")
+	if err := os.Symlink(path, alias); err != nil {
+		t.Fatal(err)
+	}
+	managed := map[string]bool{path: true}
+	for _, args := range [][]string{
+		{"core", "run", "-c", path},
+		{"core", "srun", "--config=" + path},
+		{"core", "run", "-config=" + path},
+		{"core", "srun", "-c=alias.json"},
+		{"core", "run", "--config", "config.json"},
+	} {
+		if !referencesManagedConfig(args, dir, managed) {
+			t.Fatalf("missed residual core %v", args)
+		}
+	}
+	if referencesManagedConfig([]string{"core", "srun", "--config=/unrelated/config.json"}, dir, managed) {
+		t.Fatal("unrelated runtime blocked migration")
+	}
+}
+
+func TestMigrationRejectsStalePostgresBackupBeforeAnyWrites(t *testing.T) {
+	r, p, dir := fixture(t)
+	_ = database.CloseDB()
+	original, err := os.ReadFile(config.GetDBPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("XUI_DB_TYPE", "postgres")
+	t.Setenv("XUI_DB_DSN", "postgres://panel:secret@localhost/panel")
+	if err := os.Mkdir(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	identity, err := databaseIdentity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, err := snapshotFiles(dir, r.files())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := atomicWrite(filepath.Join(dir, "database.dump"), []byte("fixture dump"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	digest, err := hashFile(filepath.Join(dir, "database.dump"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := &manifest{Schema: 1, DatabaseID: identity, Revision: hiddify.TargetRevision, CoreType: "sing-box", DBKind: "postgres", Phase: "backed-up", Files: files, PostgresSHA256: digest, PostgresFingerprint: "previous-data"}
+	if err := saveManifest(dir, m); err != nil {
+		t.Fatal(err)
+	}
+	r.postgresFingerprint = func(context.Context) (string, error) { return "new-users-or-traffic", nil }
+	err = r.run(context.Background(), Options{BackupDir: dir})
+	if err == nil || !strings.Contains(err.Error(), "changed since backup") {
+		t.Fatal("stale PostgreSQL backup accepted", err)
+	}
+	current, err := os.ReadFile(config.GetDBPath())
+	if err != nil || string(original) != string(current) {
+		t.Fatal("preflight wrote database")
+	}
+	if p.starts != 0 {
+		t.Fatal("stale PostgreSQL backup started runtime")
+	}
+	if _, err := os.Stat(pendingPath()); !os.IsNotExist(err) {
+		t.Fatal("stale PostgreSQL backup created pending transition")
+	}
+}

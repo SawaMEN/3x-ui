@@ -36,15 +36,16 @@ type runtime interface {
 	IsRunning() bool
 }
 type runner struct {
-	newRuntime func(string) runtime
-	stopped    func() error
-	files      func() []string
-	statePath  func() string
-	gateway    func(context.Context, string) (bool, func(), error)
+	postgresFingerprint func(context.Context) (string, error)
+	newRuntime          func(string) runtime
+	stopped             func() error
+	files               func() []string
+	statePath           func() string
+	gateway             func(context.Context, string) (bool, func(), error)
 }
 
 func defaults() runner {
-	return runner{newRuntime: func(path string) runtime { return hiddify.NewProcess(path, true) }, stopped: assertStopped, files: migrationFiles, statePath: service.GatewayMigrationStatePath, gateway: prepareGateway}
+	return runner{postgresFingerprint: service.CoreMigrationPostgresFingerprint, newRuntime: func(path string) runtime { return hiddify.NewProcess(path, true) }, stopped: assertStopped, files: migrationFiles, statePath: service.GatewayMigrationStatePath, gateway: prepareGateway}
 }
 func Run(ctx context.Context, opts Options) error {
 	release, err := AcquirePanelLease()
@@ -146,7 +147,7 @@ func (r runner) run(ctx context.Context, o Options) (result error) {
 		}
 		m = &manifest{DatabaseID: identity, Schema: 1, Revision: hiddify.TargetRevision, CoreType: "sing-box", DBKind: config.GetDBKind(), Phase: "backed-up"}
 		if m.DBKind == "postgres" {
-			if m.PostgresTables, err = service.CoreMigrationPostgresTables(); err != nil {
+			if m.PostgresTables, err = service.CoreMigrationPostgresTables(ctx); err != nil {
 				return err
 			}
 			tables := map[string]bool{}
@@ -155,6 +156,9 @@ func (r runner) run(ctx context.Context, o Options) (result error) {
 			}
 			if !tables["settings"] || !tables["users"] || !tables["inbounds"] {
 				return errors.New("PostgreSQL database does not contain an installed panel")
+			}
+			if m.PostgresFingerprint, err = r.postgresFingerprint(ctx); err != nil {
+				return err
 			}
 			if err := service.CoreMigrationPostgresSnapshot(ctx, filepath.Join(dir, "database.dump")); err != nil {
 				return err
@@ -192,6 +196,18 @@ func (r runner) run(ctx context.Context, o Options) (result error) {
 	}
 	if m.Phase != "backed-up" {
 		return fmt.Errorf("snapshot phase %s requires --restore or a new backup directory", m.Phase)
+	}
+	if m.DBKind == "postgres" {
+		current, err := r.postgresFingerprint(ctx)
+		if err != nil {
+			return err
+		}
+		if m.PostgresFingerprint == "" || current != m.PostgresFingerprint {
+			return errors.New("PostgreSQL database changed since backup; use a new backup directory")
+		}
+	}
+	if err := verifySQLiteSource(m); err != nil {
+		return err
 	}
 	if o.BackupOnly {
 		return nil
@@ -321,7 +337,7 @@ func restore(ctx context.Context, dir string, m *manifest) error {
 		return err
 	}
 	if m.DBKind == "postgres" {
-		if err := service.CoreMigrationPostgresRemoveAddedTables(m.PostgresTables); err != nil {
+		if err := service.CoreMigrationPostgresRemoveAddedTables(ctx, m.PostgresTables); err != nil {
 			return err
 		}
 		if err := service.CoreMigrationPostgresRestore(ctx, filepath.Join(dir, "database.dump")); err != nil {

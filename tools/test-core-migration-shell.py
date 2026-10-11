@@ -65,6 +65,7 @@ systemctl() {
     case "$1" in
         is-active) [[ "${SIM_RUNNING:-1}" == 1 ]];;
         is-enabled) [[ "${SIM_ENABLED:-1}" == 1 ]];;
+        stop) [[ "$CASE" != stop_failure ]];;
         *) return 0;;
     esac
 }
@@ -87,7 +88,7 @@ cp -a "$TEST_ROOT/bundle/x-ui" "$xui_folder"
 printf 'new-unit' > "$TEST_ROOT/unit"
 if [[ "$CASE" == apply || "$CASE" == stopped_failure ]]; then export FAIL_APPLY=1; fi
 if core_migration_apply; then
-    if [[ "$CASE" == verify ]]; then export FAIL_VERIFY=1; fi
+    if [[ "$CASE" == verify || "$CASE" == stop_failure ]]; then export FAIL_VERIFY=1; fi
     if core_migration_commit; then
         [[ "$CASE" == success || "$CASE" == disabled ]]
         [[ "$(cat "$TEST_DB")" == new-core ]]
@@ -98,6 +99,13 @@ if core_migration_apply; then
     fi
 fi
 [[ "$CASE" != success && "$CASE" != disabled ]]
+if [[ "$CASE" == stop_failure ]]; then
+    if core_migration_exit 2; then exit 22; fi
+    [[ "$(cat "$TEST_DB")" == new-core ]]
+    [[ -f "$cm_backup/installation/bin/custom-key" ]]
+    [[ -d "$cm_stage" ]]
+    exit 0
+fi
 core_migration_exit 2
 [[ "$(cat "$TEST_DB")" == original-users-keys-traffic ]]
 [[ "$(cat "$xui_folder/x-ui")" == old-panel ]]
@@ -115,7 +123,10 @@ core_migration_exit 2
             commands = (base / "commands").read_text()
             if mode != "preflight":
                 self.assertIn("backup\n", commands)
-                if mode not in ("success", "disabled"):
+                if mode == "stop_failure":
+                    self.assertNotIn("restore\n", commands)
+                    self.assertNotIn("service:start x-ui", commands)
+                elif mode not in ("success", "disabled"):
                     self.assertIn("restore\n", commands)
                     if mode=="stopped_failure": self.assertNotIn("service:start x-ui",commands)
                     else: self.assertIn("service:start x-ui", commands)
@@ -127,6 +138,7 @@ core_migration_exit 2
     def test_preflight_failure_does_not_touch_installation(self): self.run_case("preflight")
     def test_disabled_autostart_survives_upgrade(self): self.run_case("disabled")
     def test_rollback_keeps_originally_stopped_panel_stopped(self): self.run_case("stopped_failure")
+    def test_failed_service_stop_blocks_restore(self): self.run_case("stop_failure")
     def test_both_installers_arm_rollback_before_replacement(self):
         for name in ("install.sh", "update.sh"):
             source = (ROOT / name).read_text()

@@ -101,3 +101,12 @@ Linux host, фактическое обновление старой панел�
 Сохранены уже записанные счётчики, ограничение последних неопросенных байтов
 при аварии ядра из этапа 6 остаётся. Docker image rollback не автоматизирован
 этими host install/update scripts.
+
+## Исправления повторной проверки
+
+Применение prepared snapshot теперь проверяет свежесть БД; изменившиеся SQLite
+или PostgreSQL требуют нового backup directory. Проверка оставшихся процессов
+учитывает inline config flags и symlinks. Failed service stop прерывает rollback
+до изменений, archive preflight PostgreSQL соблюдает deadline.
+Runtime использует пути после загрузки EnvironmentFile.
+Подробности: [повторная проверка этапов 1–9](hiddify-core-stages-1-9-review.md).
