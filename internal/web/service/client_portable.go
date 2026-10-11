@@ -7,9 +7,9 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 
 	"gorm.io/gorm"
 )
@@ -243,7 +243,7 @@ func (s *ClientService) DeleteOrphans() (int, error) {
 		}
 		if len(emails) > 0 {
 			for _, batch := range chunkStrings(emails, sqlInChunk) {
-				if e := tx.Where("email IN ?", batch).Delete(&xray.ClientTraffic{}).Error; e != nil {
+				if e := tx.Where("email IN ?", batch).Delete(&coremodel.ClientTraffic{}).Error; e != nil {
 					return e
 				}
 				if e := tx.Where("client_email IN ?", batch).Delete(&model.InboundClientIps{}).Error; e != nil {

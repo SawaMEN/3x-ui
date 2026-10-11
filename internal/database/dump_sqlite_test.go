@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -42,7 +42,7 @@ func TestCopyAllModelsIntoSQLite(t *testing.T) {
 	if err := src.Create(&model.Inbound{UserId: 1, Remark: "in", Port: 443, Protocol: "vless", Tag: "inbound-443"}).Error; err != nil {
 		t.Fatalf("seed inbound: %v", err)
 	}
-	if err := src.Create(&xray.ClientTraffic{InboundId: 1, Email: "a@b.c", Enable: true, Up: 10, Down: 20}).Error; err != nil {
+	if err := src.Create(&coremodel.ClientTraffic{InboundId: 1, Email: "a@b.c", Enable: true, Up: 10, Down: 20}).Error; err != nil {
 		t.Fatalf("seed traffic: %v", err)
 	}
 
@@ -61,7 +61,7 @@ func TestCopyAllModelsIntoSQLite(t *testing.T) {
 	}{
 		{&model.User{}, 1},
 		{&model.Inbound{}, 1},
-		{&xray.ClientTraffic{}, 1},
+		{&coremodel.ClientTraffic{}, 1},
 	} {
 		var got int64
 		if err := dst.Model(tc.model).Count(&got).Error; err != nil {
@@ -73,7 +73,7 @@ func TestCopyAllModelsIntoSQLite(t *testing.T) {
 	}
 
 	// Spot-check a copied value survived the round-trip.
-	var ct xray.ClientTraffic
+	var ct coremodel.ClientTraffic
 	if err := dst.Where("email = ?", "a@b.c").First(&ct).Error; err != nil {
 		t.Fatalf("read back traffic: %v", err)
 	}

@@ -3,19 +3,19 @@ package service
 import (
 	"errors"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"gorm.io/gorm"
 )
 
-func canonicalizeClientTraffic(tx *gorm.DB, traffics []*xray.ClientTraffic) ([]*xray.ClientTraffic, error) {
-	byEmail := make(map[string]*xray.ClientTraffic, len(traffics))
+func canonicalizeClientTraffic(tx *gorm.DB, traffics []*coremodel.ClientTraffic) ([]*coremodel.ClientTraffic, error) {
+	byEmail := make(map[string]*coremodel.ClientTraffic, len(traffics))
 	for _, traffic := range traffics {
 		if traffic == nil {
 			continue
 		}
 		email := traffic.Email
 		if traffic.TuicTrafficID > 0 {
-			var owner xray.ClientTraffic
+			var owner coremodel.ClientTraffic
 			err := tx.Select("email").Where("id = ?", traffic.TuicTrafficID).Take(&owner).Error
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				continue
@@ -38,7 +38,7 @@ func canonicalizeClientTraffic(tx *gorm.DB, traffics []*xray.ClientTraffic) ([]*
 		current.Down = sumTrafficDelta(current.Down, traffic.Down)
 		current.Enable = current.Enable || traffic.Enable
 	}
-	result := make([]*xray.ClientTraffic, 0, len(byEmail))
+	result := make([]*coremodel.ClientTraffic, 0, len(byEmail))
 	for _, traffic := range byEmail {
 		result = append(result, traffic)
 	}

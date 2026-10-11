@@ -3,10 +3,10 @@ package service
 import (
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // The manual switch applies through the runtime, and the core's API removal
@@ -45,7 +45,7 @@ func TestManualClientDisableHonoursRestartSetting(t *testing.T) {
 			if err := clientSvc.SyncInbound(nil, inbound.Id, clients); err != nil {
 				t.Fatalf("SyncInbound: %v", err)
 			}
-			if err := database.GetDB().Create(&xray.ClientTraffic{InboundId: inbound.Id, Email: email, Enable: true}).Error; err != nil {
+			if err := database.GetDB().Create(&coremodel.ClientTraffic{InboundId: inbound.Id, Email: email, Enable: true}).Error; err != nil {
 				t.Fatalf("seed traffic: %v", err)
 			}
 

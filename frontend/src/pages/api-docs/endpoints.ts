@@ -3049,6 +3049,11 @@ export const sections: readonly Section[] = [
       },
       {
         method: 'GET',
+        path: '/panel/api/setting/hiddify/status',
+        summary: 'Return Hiddify Core installation and runtime status.',
+      },
+      {
+        method: 'GET',
         path: '/panel/api/setting/sudoku/status',
         summary: 'Return Sudoku installation status.',
       },

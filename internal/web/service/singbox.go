@@ -14,6 +14,7 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawgnet"
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
@@ -22,7 +23,6 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/tail"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray/geodata"
 )
 
@@ -34,8 +34,8 @@ var (
 	singBoxTrafficMu      sync.Mutex
 	// A snapshot consumes native API deltas. Keep an unsuccessful DB batch so
 	// the next poll can persist it before reading another snapshot.
-	singBoxPendingInbound []*xray.Traffic
-	singBoxPendingClients []*xray.ClientTraffic
+	singBoxPendingInbound []*coremodel.Traffic
+	singBoxPendingClients []*coremodel.ClientTraffic
 	singBoxInstallMu      sync.Mutex
 	singBoxApplyMu        sync.Mutex
 	singBoxTemplateMu     sync.Mutex
@@ -1211,8 +1211,8 @@ func (s *SingBoxService) PollTraffic(ctx context.Context) error {
 		return err
 	}
 
-	inboundDeltas := make(map[string]*xray.Traffic)
-	clientDeltas := make(map[string]*xray.ClientTraffic)
+	inboundDeltas := make(map[string]*coremodel.Traffic)
+	clientDeltas := make(map[string]*coremodel.ClientTraffic)
 	onlineEmails := make(map[string]struct{})
 
 	for _, event := range response.Events {
@@ -1233,7 +1233,7 @@ func (s *SingBoxService) PollTraffic(ctx context.Context) error {
 		if connection.Inbound != "" {
 			traffic := inboundDeltas[connection.Inbound]
 			if traffic == nil {
-				traffic = &xray.Traffic{Tag: connection.Inbound, IsInbound: true}
+				traffic = &coremodel.Traffic{Tag: connection.Inbound, IsInbound: true}
 				inboundDeltas[connection.Inbound] = traffic
 			}
 			accumulateSingBoxTraffic(&traffic.Up, &traffic.Down, uplinkDelta, downlinkDelta)
@@ -1241,18 +1241,18 @@ func (s *SingBoxService) PollTraffic(ctx context.Context) error {
 		if connection.User != "" {
 			traffic := clientDeltas[connection.User]
 			if traffic == nil {
-				traffic = &xray.ClientTraffic{Email: connection.User}
+				traffic = &coremodel.ClientTraffic{Email: connection.User}
 				clientDeltas[connection.User] = traffic
 			}
 			accumulateSingBoxTraffic(&traffic.Up, &traffic.Down, uplinkDelta, downlinkDelta)
 		}
 	}
 
-	inboundTraffic := make([]*xray.Traffic, 0, len(inboundDeltas))
+	inboundTraffic := make([]*coremodel.Traffic, 0, len(inboundDeltas))
 	for _, traffic := range inboundDeltas {
 		inboundTraffic = append(inboundTraffic, traffic)
 	}
-	clientTraffic := make([]*xray.ClientTraffic, 0, len(clientDeltas))
+	clientTraffic := make([]*coremodel.ClientTraffic, 0, len(clientDeltas))
 	for _, traffic := range clientDeltas {
 		clientTraffic = append(clientTraffic, traffic)
 	}
@@ -1415,7 +1415,7 @@ func (s *SingBoxService) ProcessConfigPath() string {
 	return singbox.GetConfigPath()
 }
 
-func (s *SingBoxService) commitTraffic(inbounds []*xray.Traffic, clients []*xray.ClientTraffic) error {
+func (s *SingBoxService) commitTraffic(inbounds []*coremodel.Traffic, clients []*coremodel.ClientTraffic) error {
 	needRestart, disabled, err := singBoxInboundService.AddTraffic(inbounds, clients)
 	if needRestart || disabled {
 		s.SetToNeedRestart()

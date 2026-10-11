@@ -6,14 +6,14 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // AddTuicTrafficBatch commits a journal batch and its receipt atomically. A
 // retained journal can therefore be replayed after an ambiguous commit result.
-func (s *InboundService) AddTuicTrafficBatch(id string, traffic []*xray.ClientTraffic) error {
+func (s *InboundService) AddTuicTrafficBatch(id string, traffic []*coremodel.ClientTraffic) error {
 	if id == "" {
 		return errors.New("TUIC traffic batch has no ID")
 	}

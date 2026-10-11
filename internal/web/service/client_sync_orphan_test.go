@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 
 	"gorm.io/gorm"
 )
@@ -43,7 +43,7 @@ func TestSyncOrphanSurvivesMergeUntilGraceElapses(t *testing.T) {
 	createNodeInboundWithClient(t, db, 1, "n1-in", 41001, email)
 	settings := fmt.Sprintf(`{"clients":[{"email":%q,"enable":true}]}`, email)
 	syncNodeWithSettings(t, svc, 1, "n1-in", settings,
-		xray.ClientTraffic{Email: email, Up: 5, Down: 5, Enable: true})
+		coremodel.ClientTraffic{Email: email, Up: 5, Down: 5, Enable: true})
 
 	if rec, traf := countClientRows(t, db, email); rec != 1 || traf != 1 {
 		t.Fatalf("setup: clients=%d client_traffics=%d, want 1/1", rec, traf)
@@ -97,7 +97,7 @@ func TestSyncOrphanMarkClearedOnReattach(t *testing.T) {
 	createNodeInboundWithClient(t, db, 1, "n1-in", 41001, email)
 	settings := fmt.Sprintf(`{"clients":[{"email":%q,"enable":true}]}`, email)
 	syncNodeWithSettings(t, svc, 1, "n1-in", settings,
-		xray.ClientTraffic{Email: email, Up: 5, Down: 5, Enable: true})
+		coremodel.ClientTraffic{Email: email, Up: 5, Down: 5, Enable: true})
 
 	if _, err := svc.setRemoteTrafficLocked(1, snapshotWithoutClients(t, "n1-in"), false, false); err != nil {
 		t.Fatalf("orphaning merge: %v", err)
@@ -107,7 +107,7 @@ func TestSyncOrphanMarkClearedOnReattach(t *testing.T) {
 	}
 
 	syncNodeWithSettings(t, svc, 1, "n1-in", settings,
-		xray.ClientTraffic{Email: email, Up: 6, Down: 6, Enable: true})
+		coremodel.ClientTraffic{Email: email, Up: 6, Down: 6, Enable: true})
 
 	if orphanedAt := readOrphanMark(t, db, email); orphanedAt != 0 {
 		t.Fatalf("re-attached client kept its orphan mark: sync_orphaned_at=%d", orphanedAt)

@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
@@ -45,7 +45,7 @@ func migrationModels() []any {
 		&model.ApiToken{},
 		&model.RoutingPreset{},
 		&model.Inbound{},
-		&xray.ClientTraffic{},
+		&coremodel.ClientTraffic{},
 		&model.OutboundTraffics{},
 		&model.InboundClientIps{},
 		&model.ClientRecord{},

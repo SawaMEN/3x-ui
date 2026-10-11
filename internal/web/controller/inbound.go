@@ -1,17 +1,17 @@
 package controller
 
 import (
+	"encoding/json"
 	"net"
 	"strconv"
 	"strings"
-	"encoding/json"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/middleware"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/session"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/websocket"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 	"github.com/gin-gonic/gin"
 )
 
@@ -392,8 +392,8 @@ func (a *InboundController) resetAllTraffics(c *gin.Context) {
 // (see InboundService.AcceptGlobalTraffic for the storage semantics).
 func (a *InboundController) pushClientTraffics(c *gin.Context) {
 	var req struct {
-		MasterGuid string                `json:"masterGuid"`
-		Traffics   []*xray.ClientTraffic `json:"traffics"`
+		MasterGuid string                     `json:"masterGuid"`
+		Traffics   []*coremodel.ClientTraffic `json:"traffics"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)

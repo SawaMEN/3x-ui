@@ -1,11 +1,11 @@
 package job
 
 import (
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
-type trafficCommitFunc func([]*xray.Traffic, []*xray.ClientTraffic) (bool, bool, error)
+type trafficCommitFunc func([]*coremodel.Traffic, []*coremodel.ClientTraffic) (bool, bool, error)
 
 // accumulateTrafficDelta merges runtime deltas without letting a counter reset
 // or int64 overflow erase traffic already observed in the same polling batch.
@@ -29,15 +29,15 @@ func accumulateTrafficDelta(current, delta int64) int64 {
 // such as Mieru, MTProto and TUIC advance their own cursors when sampled, so
 // dropping a failed AddTraffic call would permanently lose those bytes.
 type pendingTrafficBatch struct {
-	inbounds []*xray.Traffic
-	clients  []*xray.ClientTraffic
+	inbounds []*coremodel.Traffic
+	clients  []*coremodel.ClientTraffic
 }
 
 func (b *pendingTrafficBatch) hasData() bool {
 	return len(b.inbounds) > 0 || len(b.clients) > 0
 }
 
-func (b *pendingTrafficBatch) remember(inbounds []*xray.Traffic, clients []*xray.ClientTraffic) {
+func (b *pendingTrafficBatch) remember(inbounds []*coremodel.Traffic, clients []*coremodel.ClientTraffic) {
 	b.inbounds = inbounds
 	b.clients = clients
 }
@@ -46,7 +46,7 @@ func (b *pendingTrafficBatch) remember(inbounds []*xray.Traffic, clients []*xray
 // may itself still be waiting for persistence. This is used when a collector
 // must stop immediately (for example on a core switch) before a previous DB
 // retry has succeeded.
-func (b *pendingTrafficBatch) appendBatch(inbounds []*xray.Traffic, clients []*xray.ClientTraffic) {
+func (b *pendingTrafficBatch) appendBatch(inbounds []*coremodel.Traffic, clients []*coremodel.ClientTraffic) {
 	b.inbounds = append(b.inbounds, inbounds...)
 	b.clients = append(b.clients, clients...)
 }

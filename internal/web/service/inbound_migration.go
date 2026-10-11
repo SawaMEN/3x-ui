@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 
 	"gorm.io/gorm"
 )
@@ -57,8 +57,8 @@ func (s *InboundService) MigrationRequirements() (err error) {
 			return
 		}
 	}
-	if tx.Migrator().HasColumn(&xray.ClientTraffic{}, "all_time") {
-		if err = tx.Migrator().DropColumn(&xray.ClientTraffic{}, "all_time"); err != nil {
+	if tx.Migrator().HasColumn(&coremodel.ClientTraffic{}, "all_time") {
+		if err = tx.Migrator().DropColumn(&coremodel.ClientTraffic{}, "all_time"); err != nil {
 			return
 		}
 	}
@@ -179,7 +179,7 @@ func (s *InboundService) MigrationRequirements() (err error) {
 		for _, modelClient := range modelClients {
 			if len(modelClient.Email) > 0 {
 				var count int64
-				if err = tx.Model(xray.ClientTraffic{}).Where("email = ?", modelClient.Email).Count(&count).Error; err != nil {
+				if err = tx.Model(coremodel.ClientTraffic{}).Where("email = ?", modelClient.Email).Count(&count).Error; err != nil {
 					return
 				}
 				if count == 0 {
@@ -201,7 +201,7 @@ func (s *InboundService) MigrationRequirements() (err error) {
 	}
 
 	// Remove orphaned traffics
-	if err = tx.Where("inbound_id = 0").Delete(xray.ClientTraffic{}).Error; err != nil {
+	if err = tx.Where("inbound_id = 0").Delete(coremodel.ClientTraffic{}).Error; err != nil {
 		return
 	}
 

@@ -3,10 +3,10 @@ package service
 import (
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 func TestTrafficDisableImmediatelyUpdatesNodeRuntime(t *testing.T) {
@@ -14,7 +14,7 @@ func TestTrafficDisableImmediatelyUpdatesNodeRuntime(t *testing.T) {
 	nodeID, fake := setupNodeRuntime(t)
 	client := model.Client{Email: "spent-node", Enable: true}
 	ib := nodeInbound(t, nodeID, 46301, []model.Client{client})
-	if err := database.GetDB().Create(&xray.ClientTraffic{
+	if err := database.GetDB().Create(&coremodel.ClientTraffic{
 		InboundId: ib.Id, Email: client.Email, Enable: true, Up: 100, Total: 100,
 	}).Error; err != nil {
 		t.Fatalf("seed traffic: %v", err)
@@ -47,7 +47,7 @@ func TestTrafficDisableRefreshesLocalMTProtoSidecar(t *testing.T) {
 		t.Fatalf("SyncInbound: %v", err)
 	}
 	seedClientTraffic(t, ib.Id, "spent-mt", true)
-	if err := database.GetDB().Model(&xray.ClientTraffic{}).Where("email = ?", "spent-mt").
+	if err := database.GetDB().Model(&coremodel.ClientTraffic{}).Where("email = ?", "spent-mt").
 		Updates(map[string]any{"up": 100, "total": 100}).Error; err != nil {
 		t.Fatalf("deplete traffic: %v", err)
 	}
@@ -72,7 +72,7 @@ func TestDelDepletedClientsCleansRuntimeAfterCommit(t *testing.T) {
 		`{"clients":[{"email":"gone","enable":true}]}`)
 	ib := loadInboundByTag(t, "depleted-only")
 	seedClientTraffic(t, ib.Id, "gone", true)
-	if err := database.GetDB().Model(&xray.ClientTraffic{}).Where("email = ?", "gone").
+	if err := database.GetDB().Model(&coremodel.ClientTraffic{}).Where("email = ?", "gone").
 		Updates(map[string]any{"up": 100, "total": 100, "reset": 0}).Error; err != nil {
 		t.Fatalf("deplete traffic: %v", err)
 	}

@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 func TestSyncClientCoreCompatibilitySwitchesAutomaticClientState(t *testing.T) {
@@ -61,7 +61,7 @@ func TestSyncClientCoreCompatibilitySwitchesAutomaticClientState(t *testing.T) {
 		{vless, "vless@example"},
 		{naive, "naive@example"},
 	} {
-		if err := db.Create(&xray.ClientTraffic{InboundId: pair.ib.Id, Email: pair.e, Enable: true}).Error; err != nil {
+		if err := db.Create(&coremodel.ClientTraffic{InboundId: pair.ib.Id, Email: pair.e, Enable: true}).Error; err != nil {
 			t.Fatal(err)
 		}
 	}

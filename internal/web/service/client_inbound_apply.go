@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
@@ -15,7 +16,6 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/random"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 	"gorm.io/gorm"
 )
 
@@ -160,7 +160,7 @@ func (s *ClientService) delInboundClients(inboundSvc *InboundService, inboundId 
 		notDepleted := false
 		if len(email) > 0 {
 			var enables []bool
-			if err := db.Model(xray.ClientTraffic{}).Where("email = ?", email).Limit(1).Pluck("enable", &enables).Error; err != nil {
+			if err := db.Model(coremodel.ClientTraffic{}).Where("email = ?", email).Limit(1).Pluck("enable", &enables).Error; err != nil {
 				logger.Error("Get stats error")
 				return needRestart, err
 			}
@@ -979,7 +979,7 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 				emailUnchanged := strings.EqualFold(oldEmail, clients[0].Email)
 				targetExists := int64(0)
 				if !emailUnchanged {
-					if e := tx.Model(xray.ClientTraffic{}).Where("email = ?", clients[0].Email).Count(&targetExists).Error; e != nil {
+					if e := tx.Model(coremodel.ClientTraffic{}).Where("email = ?", clients[0].Email).Count(&targetExists).Error; e != nil {
 						return e
 					}
 				}

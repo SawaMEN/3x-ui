@@ -3,10 +3,10 @@ package job
 import (
 	"sync"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/mtproto"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // MtprotoJob reconciles the running Telemt sidecar processes against the enabled
@@ -68,11 +68,11 @@ func (j *MtprotoJob) Run() {
 	// A routed inbound's total is already metered through the Xray bridge by
 	// xray_traffic_job, so only non-routed inbounds are rolled up here; per-client
 	// deltas are always kept, since the bridge cannot tell MTProto users apart.
-	clientTraffics := make([]*xray.ClientTraffic, 0, len(deltas))
+	clientTraffics := make([]*coremodel.ClientTraffic, 0, len(deltas))
 	inboundUp := make(map[string]int64)
 	inboundDown := make(map[string]int64)
 	for _, d := range deltas {
-		clientTraffics = append(clientTraffics, &xray.ClientTraffic{
+		clientTraffics = append(clientTraffics, &coremodel.ClientTraffic{
 			Email: d.Email,
 			Up:    d.Up,
 			Down:  d.Down,
@@ -83,9 +83,9 @@ func (j *MtprotoJob) Run() {
 		}
 	}
 
-	traffics := make([]*xray.Traffic, 0, len(inboundUp))
+	traffics := make([]*coremodel.Traffic, 0, len(inboundUp))
 	for tag, up := range inboundUp {
-		traffics = append(traffics, &xray.Traffic{
+		traffics = append(traffics, &coremodel.Traffic{
 			IsInbound: true,
 			Tag:       tag,
 			Up:        up,

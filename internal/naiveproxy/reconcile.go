@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // reconcileStandalone builds the Xray-side Naive server from the normalized
@@ -74,7 +74,7 @@ func reconcileStandalone(ctx context.Context) error {
 	return Sync(ctx, inbounds)
 }
 
-func mergeNaiveUsers(records []model.ClientRecord, legacy []model.Client, stats []xray.ClientTraffic) []User {
+func mergeNaiveUsers(records []model.ClientRecord, legacy []model.Client, stats []coremodel.ClientTraffic) []User {
 	enabledByEmail := make(map[string]bool, len(stats))
 	for _, stat := range stats {
 		enabledByEmail[strings.ToLower(strings.TrimSpace(stat.Email))] = stat.Enable

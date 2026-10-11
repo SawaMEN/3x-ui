@@ -17654,6 +17654,36 @@
         }
       }
     },
+    "/panel/api/setting/hiddify/status": {
+      "get": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Return Hiddify Core installation and runtime status.",
+        "operationId": "get_panel_api_setting_hiddify_status",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/panel/api/setting/sudoku/status": {
       "get": {
         "tags": [

@@ -1,10 +1,18 @@
-# Интеграция hiddify-core: этап 2
+# Интеграция hiddify-core: этапы 2–3
 
 Ветка `update`. Ядро собирается только из `SawaMEN/hiddify-core`:
 `b5749002266b9782803669138494ef6937eb4e95`, зависимый `SawaMEN/hiddify-sing-box`:
 `8a82b70836022a1b56eca15df12f56f903cfb27d`.
 Точный build lock: [hiddify-core-target.json](hiddify-core-target.json).
 Предыдущий v5 lock сохранён отдельно в [hiddify-core-v5-baseline.json](hiddify-core-v5-baseline.json).
+
+## Общие модели панели
+
+Этап 3 вынес трафик и структуру inbound в `internal/coremodel`. БД,
+подписки, лимиты и синхронизация узлов используют общие модели напрямую.
+Таблицы, идентификаторы и контракты JSON сохранены. Xray wire-сериализация
+остаётся в адаптере; общие DTO не подменяют native-конфиг Hiddify.
+Проверки: [hiddify-core-stage-3-verification.md](hiddify-core-stage-3-verification.md).
 
 ## Runtime и управление процессом
 

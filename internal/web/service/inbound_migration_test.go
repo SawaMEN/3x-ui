@@ -8,9 +8,9 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // TestMigrationRequirements_BackfillsClientTrafficsWithMultiDomainInbound guards the
@@ -63,7 +63,7 @@ func TestMigrationRequirements_BackfillsClientTrafficsWithMultiDomainInbound(t *
 	}
 
 	var before int64
-	if err := db.Model(xray.ClientTraffic{}).Count(&before).Error; err != nil {
+	if err := db.Model(coremodel.ClientTraffic{}).Count(&before).Error; err != nil {
 		t.Fatalf("count client_traffics before: %v", err)
 	}
 	if before != 0 {
@@ -77,8 +77,8 @@ func TestMigrationRequirements_BackfillsClientTrafficsWithMultiDomainInbound(t *
 	// Before the fix this was rolled back whenever the externalProxy detection query
 	// errored (it does on Postgres via json_extract), so the MultiDomain inbound below
 	// is deliberately present to make that query return rows and run to completion.
-	var ct xray.ClientTraffic
-	if err := db.Model(xray.ClientTraffic{}).Where("email = ?", backfillEmail).First(&ct).Error; err != nil {
+	var ct coremodel.ClientTraffic
+	if err := db.Model(coremodel.ClientTraffic{}).Where("email = ?", backfillEmail).First(&ct).Error; err != nil {
 		t.Fatalf("client_traffics row not backfilled for %s: %v", backfillEmail, err)
 	}
 
@@ -120,7 +120,7 @@ func TestMigrationRequirementsReturnsAddClientStatFailure(t *testing.T) {
 		t.Fatalf("MigrationRequirements error = %v, want %q", err, injected)
 	}
 	var count int64
-	if err := db.Model(&xray.ClientTraffic{}).Where("email = ?", "first@example.test").Count(&count).Error; err != nil {
+	if err := db.Model(&coremodel.ClientTraffic{}).Where("email = ?", "first@example.test").Count(&count).Error; err != nil {
 		t.Fatalf("count rolled-back traffic: %v", err)
 	}
 	if count != 0 {
@@ -216,7 +216,7 @@ func TestMigrationRemoveOrphanedTraffics(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			var got int64
-			if err := db.Model(xray.ClientTraffic{}).Where("email = ?", c.email).Count(&got).Error; err != nil {
+			if err := db.Model(coremodel.ClientTraffic{}).Where("email = ?", c.email).Count(&got).Error; err != nil {
 				t.Fatalf("count client_traffics for %s: %v", c.email, err)
 			}
 			if got != c.want {

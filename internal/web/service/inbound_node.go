@@ -9,12 +9,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -269,7 +269,7 @@ func mergeActivationExpiry(existing, node int64) int64 {
 
 // masterLimitsAllowClient reports whether the master's own deadline and quota
 // (including this tick's deltas) still permit the client.
-func masterLimitsAllowClient(master *xray.ClientTraffic, now, deltaUp, deltaDown int64) bool {
+func masterLimitsAllowClient(master *coremodel.ClientTraffic, now, deltaUp, deltaDown int64) bool {
 	if master == nil {
 		return false
 	}
@@ -284,7 +284,7 @@ func masterLimitsAllowClient(master *xray.ClientTraffic, now, deltaUp, deltaDown
 
 // nodeDisableIsStale reports an enable=false the node decided against limits the
 // master has since changed, so it must not latch back (#6228 / #4917).
-func nodeDisableIsStale(master *xray.ClientTraffic, node xray.ClientTraffic, now, deltaUp, deltaDown int64) bool {
+func nodeDisableIsStale(master *coremodel.ClientTraffic, node coremodel.ClientTraffic, now, deltaUp, deltaDown int64) bool {
 	if master == nil {
 		return false
 	}
@@ -308,7 +308,7 @@ func clampTrafficCounter(v int64) int64 {
 
 // applyMasterClientLifecycle overlays the already-merged master row onto a
 // node-reported client for SyncInbound (#6228).
-func applyMasterClientLifecycle(c *model.Client, master *xray.ClientTraffic, cs *xray.ClientTraffic) {
+func applyMasterClientLifecycle(c *model.Client, master *coremodel.ClientTraffic, cs *coremodel.ClientTraffic) {
 	if master == nil {
 		// No central row to speak for the client: the node's own latch is all
 		// there is, and it may only disable.
@@ -323,7 +323,7 @@ func applyMasterClientLifecycle(c *model.Client, master *xray.ClientTraffic, cs 
 
 // nodeClientRenewed reports a node-side auto-renew: an absolute deadline moved
 // forward, evidenced by a renewal-count bump or a drop below the stored baseline.
-func nodeClientRenewed(existing *xray.ClientTraffic, cs xray.ClientTraffic, canon, base nodeTrafficCounter) bool {
+func nodeClientRenewed(existing *coremodel.ClientTraffic, cs coremodel.ClientTraffic, canon, base nodeTrafficCounter) bool {
 	if (cs.Reset <= 0 && cs.ResetDay <= 0) || cs.ExpiryTime <= 0 || existing.ExpiryTime <= 0 {
 		return false
 	}
@@ -556,13 +556,13 @@ func (s *InboundService) setRemoteTrafficLocked(nodeID int, snap *runtime.Traffi
 		}
 	}
 
-	var centralClientStats []xray.ClientTraffic
+	var centralClientStats []coremodel.ClientTraffic
 	if len(central) > 0 {
 		ids := make([]int, 0, len(central))
 		for i := range central {
 			ids = append(ids, central[i].Id)
 		}
-		if err := db.Model(xray.ClientTraffic{}).
+		if err := db.Model(coremodel.ClientTraffic{}).
 			Where("inbound_id IN ?", ids).
 			Find(&centralClientStats).Error; err != nil {
 			return false, err
@@ -572,8 +572,8 @@ func (s *InboundService) setRemoteTrafficLocked(nodeID int, snap *runtime.Traffi
 		inboundID int
 		email     string
 	}
-	centralCS := make(map[csKey]*xray.ClientTraffic, len(centralClientStats))
-	centralCSByEmail := make(map[string]*xray.ClientTraffic, len(centralClientStats))
+	centralCS := make(map[csKey]*coremodel.ClientTraffic, len(centralClientStats))
+	centralCSByEmail := make(map[string]*coremodel.ClientTraffic, len(centralClientStats))
 	for i := range centralClientStats {
 		centralCS[csKey{centralClientStats[i].InboundId, centralClientStats[i].Email}] = &centralClientStats[i]
 		centralCSByEmail[centralClientStats[i].Email] = &centralClientStats[i]
@@ -644,7 +644,7 @@ func (s *InboundService) setRemoteTrafficLocked(nodeID int, snap *runtime.Traffi
 		}
 		for _, batch := range chunkStrings(snapEmailList, sqliteMaxVars) {
 			var found []string
-			if err := db.Model(xray.ClientTraffic{}).Where("email IN ?", batch).Pluck("email", &found).Error; err != nil {
+			if err := db.Model(coremodel.ClientTraffic{}).Where("email IN ?", batch).Pluck("email", &found).Error; err != nil {
 				return false, err
 			}
 			for _, e := range found {
@@ -885,7 +885,7 @@ func (s *InboundService) setRemoteTrafficLocked(nodeID int, snap *runtime.Traffi
 		// so: silent removal is indistinguishable from an inbound never arriving.
 		logger.Warningf("setRemoteTraffic: node %d no longer reports inbound %q (id %d, port %d) — removing it centrally", nodeID, c.Tag, c.Id, c.Port)
 		var goneEmails []string
-		if err := tx.Model(xray.ClientTraffic{}).
+		if err := tx.Model(coremodel.ClientTraffic{}).
 			Where("inbound_id = ?", c.Id).
 			Pluck("email", &goneEmails).Error; err != nil {
 			return false, err
@@ -924,7 +924,7 @@ func (s *InboundService) setRemoteTrafficLocked(nodeID int, snap *runtime.Traffi
 			}
 			for _, batch := range chunkStrings(delEmails, sqliteMaxVars) {
 				if err := tx.Where("inbound_id = ? AND email IN ?", c.Id, batch).
-					Delete(&xray.ClientTraffic{}).Error; err != nil {
+					Delete(&coremodel.ClientTraffic{}).Error; err != nil {
 					return false, err
 				}
 			}
@@ -985,7 +985,7 @@ func (s *InboundService) setRemoteTrafficLocked(nodeID int, snap *runtime.Traffi
 				if isNewInbound && !isClientEmailTombstoned(cs.Email) {
 					seedUp, seedDown = canon.Up, canon.Down
 				}
-				row := &xray.ClientTraffic{
+				row := &coremodel.ClientTraffic{
 					InboundId:  c.Id,
 					Email:      cs.Email,
 					Enable:     cs.Enable,
@@ -1162,7 +1162,7 @@ func (s *InboundService) setRemoteTrafficLocked(nodeID int, snap *runtime.Traffi
 			// sweep will mark keeps it until the reaper confirms the removal.
 			if !stillUsed && !clientRecordExists(tx, existing.Email) {
 				if err := tx.Where("inbound_id = ? AND email = ?", c.Id, existing.Email).
-					Delete(&xray.ClientTraffic{}).Error; err != nil {
+					Delete(&coremodel.ClientTraffic{}).Error; err != nil {
 					return false, err
 				}
 			}
@@ -1227,7 +1227,7 @@ func (s *InboundService) setRemoteTrafficLocked(nodeID int, snap *runtime.Traffi
 			logger.Warningf("setRemoteTraffic: parse clients for tag %q failed: %v", snapIb.Tag, gcErr)
 			continue
 		}
-		csByEmail := make(map[string]xray.ClientTraffic, len(snapIb.ClientStats))
+		csByEmail := make(map[string]coremodel.ClientTraffic, len(snapIb.ClientStats))
 		for _, cs := range snapIb.ClientStats {
 			csByEmail[cs.Email] = cs
 		}
@@ -1237,7 +1237,7 @@ func (s *InboundService) setRemoteTrafficLocked(nodeID int, snap *runtime.Traffi
 				continue
 			}
 			existing := centralCSByEmail[clients[i].Email]
-			var csPtr *xray.ClientTraffic
+			var csPtr *coremodel.ClientTraffic
 			if cs, hit := csByEmail[clients[i].Email]; hit {
 				csCopy := cs
 				csPtr = &csCopy
@@ -1642,8 +1642,8 @@ func filterGuidTreeKeys(tree map[string][]string, allowed map[string]struct{}) m
 
 func (s *InboundService) GetClientsLastOnline() (map[string]int64, error) {
 	db := database.GetDB()
-	var rows []xray.ClientTraffic
-	err := db.Model(&xray.ClientTraffic{}).Select("email, last_online").Find(&rows).Error
+	var rows []coremodel.ClientTraffic
+	err := db.Model(&coremodel.ClientTraffic{}).Select("email, last_online").Find(&rows).Error
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}
@@ -1678,9 +1678,9 @@ func (s *InboundService) FilterAndSortClientEmails(emails []string) ([]string, [
 	// Step 1: Get ClientTraffic records for emails in the input list.
 	// Chunked to stay under SQLite's bind-variable limit on huge inputs.
 	uniqEmails := uniqueNonEmptyStrings(emails)
-	clients := make([]xray.ClientTraffic, 0, len(uniqEmails))
+	clients := make([]coremodel.ClientTraffic, 0, len(uniqEmails))
 	for _, batch := range chunkStrings(uniqEmails, sqliteMaxVars) {
-		var page []xray.ClientTraffic
+		var page []coremodel.ClientTraffic
 		if err := db.Where("email IN ?", batch).Find(&page).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil, err
 		}

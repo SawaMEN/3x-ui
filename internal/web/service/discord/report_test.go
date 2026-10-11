@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 type mockServerProvider struct {
@@ -72,7 +72,7 @@ func TestBuildReport_NoBackup(t *testing.T) {
 				Remark: "VLESS-TCP",
 				Enable: true,
 				Port:   443,
-				ClientStats: []xray.ClientTraffic{
+				ClientStats: []coremodel.ClientTraffic{
 					{Email: "user1@example.com", Enable: true, Up: 100, Down: 200},
 					{Email: "user2@example.com", Enable: false},
 				},

@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // TestAPIUserFromClientCarriesShadowsocksCipher pins what the renew path must
@@ -71,7 +71,7 @@ func TestAutoRenewShadowsocksKeepsSettingsClean(t *testing.T) {
 	if err := svc.clientService.SyncInbound(nil, ib.Id, clients); err != nil {
 		t.Fatalf("SyncInbound: %v", err)
 	}
-	if err := db.Create(&[]xray.ClientTraffic{
+	if err := db.Create(&[]coremodel.ClientTraffic{
 		{InboundId: ib.Id, Email: "ss@x", Enable: false, Up: 10, Down: 20, Reset: 30, ExpiryTime: past},
 	}).Error; err != nil {
 		t.Fatalf("seed client_traffics: %v", err)

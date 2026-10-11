@@ -9,11 +9,11 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/json_util"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
-// Protocol represents the protocol type for Xray inbounds.
+// Protocol represents the protocol type for panel inbounds.
 type Protocol string
 
 // Protocol constants for different Xray inbound protocols.
@@ -57,22 +57,22 @@ type User struct {
 	LoginEpoch int64  `json:"-" gorm:"default:0"`
 }
 
-// Inbound represents an Xray inbound configuration with traffic statistics and settings.
+// Inbound represents a panel inbound with traffic statistics and settings.
 type Inbound struct {
-	Id                   int                  `json:"id" form:"id" gorm:"primaryKey;autoIncrement" example:"1"`                                                                                                     // Unique identifier
-	UserId               int                  `json:"-"`                                                                                                                                                            // Associated user ID
-	Up                   int64                `json:"up" form:"up"`                                                                                                                                                 // Upload traffic in bytes
-	Down                 int64                `json:"down" form:"down"`                                                                                                                                             // Download traffic in bytes
-	Total                int64                `json:"total" form:"total"`                                                                                                                                           // Total traffic limit in bytes
-	Remark               string               `json:"remark" form:"remark" example:"VLESS-443"`                                                                                                                     // Human-readable remark
-	SubSortIndex         int                  `json:"subSortIndex" form:"subSortIndex" gorm:"default:1" validate:"omitempty" example:"1"`                                                                           // Sort order of this inbound's links in subscription output only (lower first; negatives allowed; 0/omitted → 1; ties by id)
-	SortOrder            int                  `json:"sortOrder" form:"sortOrder" gorm:"column:sort_order;default:0;index"`                                                                                          // Manual panel ordering; ties fall back to id.
-	Enable               bool                 `json:"enable" form:"enable" gorm:"index:idx_enable_traffic_reset,priority:1" example:"true"`                                                                         // Whether the inbound is enabled
-	ExpiryTime           int64                `json:"expiryTime" form:"expiryTime"`                                                                                                                                 // Expiration timestamp
-	TrafficReset         string               `json:"trafficReset" form:"trafficReset" gorm:"default:never;index:idx_enable_traffic_reset,priority:2" validate:"omitempty,oneof=never hourly daily weekly monthly"` // Traffic reset schedule
-	TrafficResetDay      int                  `json:"trafficResetDay" form:"trafficResetDay" gorm:"default:1" validate:"omitempty,gte=1,lte=31" example:"1"`                                                        // Day of month for monthly traffic resets
-	LastTrafficResetTime int64                `json:"lastTrafficResetTime" form:"lastTrafficResetTime" gorm:"default:0"`                                                                                            // Last traffic reset timestamp
-	ClientStats          []xray.ClientTraffic `gorm:"foreignKey:InboundId;references:Id" json:"clientStats" form:"clientStats"`                                                                                     // Client traffic statistics
+	Id                   int                       `json:"id" form:"id" gorm:"primaryKey;autoIncrement" example:"1"`                                                                                                     // Unique identifier
+	UserId               int                       `json:"-"`                                                                                                                                                            // Associated user ID
+	Up                   int64                     `json:"up" form:"up"`                                                                                                                                                 // Upload traffic in bytes
+	Down                 int64                     `json:"down" form:"down"`                                                                                                                                             // Download traffic in bytes
+	Total                int64                     `json:"total" form:"total"`                                                                                                                                           // Total traffic limit in bytes
+	Remark               string                    `json:"remark" form:"remark" example:"VLESS-443"`                                                                                                                     // Human-readable remark
+	SubSortIndex         int                       `json:"subSortIndex" form:"subSortIndex" gorm:"default:1" validate:"omitempty" example:"1"`                                                                           // Sort order of this inbound's links in subscription output only (lower first; negatives allowed; 0/omitted → 1; ties by id)
+	SortOrder            int                       `json:"sortOrder" form:"sortOrder" gorm:"column:sort_order;default:0;index"`                                                                                          // Manual panel ordering; ties fall back to id.
+	Enable               bool                      `json:"enable" form:"enable" gorm:"index:idx_enable_traffic_reset,priority:1" example:"true"`                                                                         // Whether the inbound is enabled
+	ExpiryTime           int64                     `json:"expiryTime" form:"expiryTime"`                                                                                                                                 // Expiration timestamp
+	TrafficReset         string                    `json:"trafficReset" form:"trafficReset" gorm:"default:never;index:idx_enable_traffic_reset,priority:2" validate:"omitempty,oneof=never hourly daily weekly monthly"` // Traffic reset schedule
+	TrafficResetDay      int                       `json:"trafficResetDay" form:"trafficResetDay" gorm:"default:1" validate:"omitempty,gte=1,lte=31" example:"1"`                                                        // Day of month for monthly traffic resets
+	LastTrafficResetTime int64                     `json:"lastTrafficResetTime" form:"lastTrafficResetTime" gorm:"default:0"`                                                                                            // Last traffic reset timestamp
+	ClientStats          []coremodel.ClientTraffic `gorm:"foreignKey:InboundId;references:Id" json:"clientStats" form:"clientStats"`                                                                                     // Client traffic statistics
 
 	// Xray configuration fields
 	Listen            string   `json:"listen" form:"listen"`
@@ -354,8 +354,8 @@ func StripInboundXhttpClientFields(streamSettings string) (string, bool) {
 	return string(out), true
 }
 
-// GenXrayInboundConfig generates an Xray inbound configuration from the Inbound model.
-func (i *Inbound) GenXrayInboundConfig() *xray.InboundConfig {
+// GenInboundConfig builds a normalized panel inbound from the stored row.
+func (i *Inbound) GenInboundConfig() *coremodel.InboundConfig {
 	listen := i.Listen
 	if listen == "" {
 		listen = "0.0.0.0"
@@ -394,7 +394,7 @@ func (i *Inbound) GenXrayInboundConfig() *xray.InboundConfig {
 			streamSettings = healed
 		}
 	}
-	return &xray.InboundConfig{
+	return &coremodel.InboundConfig{
 		Listen:         json_util.RawMessage(listen),
 		Port:           i.Port,
 		Protocol:       protocol,
@@ -468,7 +468,7 @@ func WireguardPeerFromClient(c Client) map[string]any {
 // every other protocol uses); xray is configured with "peers". GetXrayConfig
 // already does this conversion when it builds the full config, but the live
 // gRPC AddInbound paths (inbound create/edit and node reconcile) go through
-// GenXrayInboundConfig directly — without the conversion they re-add the
+// GenInboundConfig directly — without the conversion they re-add the
 // wireguard inbound with no peers, dropping every connected client until the
 // next full restart. Clients are the source of truth and are always rebuilt
 // into peers (matching GetXrayConfig), so the panel's empty "peers" placeholder
@@ -900,7 +900,7 @@ type ClientReverse struct {
 	Tag string `json:"tag"`
 }
 
-// Client represents a client configuration for Xray inbounds with traffic limits and settings.
+// Client represents a client configuration for panel inbounds with traffic limits and settings.
 type Client struct {
 	ID         string         `json:"id,omitempty"`       // Unique client identifier
 	Security   string         `json:"security"`           // Security method (e.g., "auto", "aes-128-gcm")
@@ -1533,3 +1533,7 @@ func MergeClientRecord(existing *ClientRecord, incoming *ClientRecord) []ClientM
 	}
 	return conflicts
 }
+
+// GenXrayInboundConfig retains the previous method name for callers.
+// Deprecated: use GenInboundConfig and adapt at the core boundary.
+func (i *Inbound) GenXrayInboundConfig() *coremodel.InboundConfig { return i.GenInboundConfig() }

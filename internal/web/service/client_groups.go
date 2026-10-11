@@ -11,7 +11,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -249,7 +249,7 @@ func (s *ClientService) AddToGroup(emails []string, group string) (int, error) {
 			var up, down int64
 			for _, batch := range chunkStrings(changed, sqlInChunk) {
 				var totals struct{ Up, Down int64 }
-				if err := tx.Model(&xray.ClientTraffic{}).
+				if err := tx.Model(&coremodel.ClientTraffic{}).
 					Select("COALESCE(SUM(up), 0) AS up, COALESCE(SUM(down), 0) AS down").
 					Where("email IN ?", batch).Scan(&totals).Error; err != nil {
 					return err

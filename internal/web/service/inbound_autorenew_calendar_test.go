@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // pinPanelZone fixes the panel time zone so the assertions below can talk about
@@ -41,7 +41,7 @@ func TestAutoRenewClients_CalendarModeLandsOnTheBillingDay(t *testing.T) {
 	if err := svc.clientService.SyncInbound(nil, ib.Id, clients); err != nil {
 		t.Fatalf("SyncInbound: %v", err)
 	}
-	if err := db.Create(&xray.ClientTraffic{
+	if err := db.Create(&coremodel.ClientTraffic{
 		InboundId: ib.Id, Email: "cal@x", Enable: false, Up: 5, Down: 6,
 		ResetDay: 15, ExpiryTime: past.UnixMilli(),
 	}).Error; err != nil {
@@ -54,7 +54,7 @@ func TestAutoRenewClients_CalendarModeLandsOnTheBillingDay(t *testing.T) {
 		t.Fatalf("renewed count = %d, want 1", count)
 	}
 
-	var row xray.ClientTraffic
+	var row coremodel.ClientTraffic
 	if err := db.Where("email = ?", "cal@x").First(&row).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestAutoRenewClients_CalendarModeClampsShortMonths(t *testing.T) {
 	if err := svc.clientService.SyncInbound(nil, ib.Id, clients); err != nil {
 		t.Fatalf("SyncInbound: %v", err)
 	}
-	if err := db.Create(&xray.ClientTraffic{
+	if err := db.Create(&coremodel.ClientTraffic{
 		InboundId: ib.Id, Email: "eom@x", Enable: false, ResetDay: 31, ExpiryTime: past.UnixMilli(),
 	}).Error; err != nil {
 		t.Fatalf("seed client_traffics: %v", err)
@@ -102,7 +102,7 @@ func TestAutoRenewClients_CalendarModeClampsShortMonths(t *testing.T) {
 		t.Fatalf("autoRenewClients: %v", err)
 	}
 
-	var row xray.ClientTraffic
+	var row coremodel.ClientTraffic
 	if err := db.Where("email = ?", "eom@x").First(&row).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +146,7 @@ func TestAutoRenewClients_IntervalModeUnchanged(t *testing.T) {
 	if err := svc.clientService.SyncInbound(nil, ib.Id, clients); err != nil {
 		t.Fatalf("SyncInbound: %v", err)
 	}
-	if err := db.Create(&xray.ClientTraffic{
+	if err := db.Create(&coremodel.ClientTraffic{
 		InboundId: ib.Id, Email: "days@x", Enable: false, Reset: 30, ExpiryTime: past,
 	}).Error; err != nil {
 		t.Fatalf("seed client_traffics: %v", err)
@@ -158,7 +158,7 @@ func TestAutoRenewClients_IntervalModeUnchanged(t *testing.T) {
 		t.Fatalf("renewed count = %d, want 1", count)
 	}
 
-	var row xray.ClientTraffic
+	var row coremodel.ClientTraffic
 	if err := db.Where("email = ?", "days@x").First(&row).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -187,7 +187,7 @@ func TestAutoRenewClients_RowWithNoModeIsNotSelected(t *testing.T) {
 	}
 	// Seeded straight into the table with both modes off, the shape the
 	// selection filter is supposed to exclude.
-	if err := db.Create(&xray.ClientTraffic{
+	if err := db.Create(&coremodel.ClientTraffic{
 		InboundId: ib.Id, Email: "none@x", Enable: false, Reset: 0, ResetDay: 0, ExpiryTime: past,
 	}).Error; err != nil {
 		t.Fatalf("seed client_traffics: %v", err)
@@ -196,7 +196,7 @@ func TestAutoRenewClients_RowWithNoModeIsNotSelected(t *testing.T) {
 	// Asserted against the query rather than by running the loop: the failure
 	// this guards is a hang, and a stuck goroutine outlives the test's DB.
 	var selected int64
-	if err := db.Model(&xray.ClientTraffic{}).
+	if err := db.Model(&coremodel.ClientTraffic{}).
 		Where("(reset > 0 or reset_day > 0) and expiry_time > 0 and expiry_time <= ?", time.Now().UnixMilli()).
 		Where("email = ?", "none@x").
 		Count(&selected).Error; err != nil {
@@ -212,7 +212,7 @@ func TestAutoRenewClients_RowWithNoModeIsNotSelected(t *testing.T) {
 		t.Fatalf("renewed count = %d, want 0", count)
 	}
 
-	var row xray.ClientTraffic
+	var row coremodel.ClientTraffic
 	if err := db.Where("email = ?", "none@x").First(&row).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -279,7 +279,7 @@ func TestClientEditKeepsTheBillingDay(t *testing.T) {
 		t.Fatalf("clients.reset_day = %d after an unrelated edit, want 20", rec.ResetDay)
 	}
 
-	var row xray.ClientTraffic
+	var row coremodel.ClientTraffic
 	if err := db.Where("email = ?", "keep@x").First(&row).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -360,7 +360,7 @@ func TestAutoRenewClients_CalendarModeSpendsOneAllowancePerMonth(t *testing.T) {
 	if err := svc.clientService.SyncInbound(nil, ib.Id, clients); err != nil {
 		t.Fatalf("SyncInbound: %v", err)
 	}
-	if err := db.Create(&xray.ClientTraffic{
+	if err := db.Create(&coremodel.ClientTraffic{
 		InboundId: ib.Id, Email: "calcap@x", Enable: false, ResetDay: 10, ResetMax: 3, ResetCount: 2,
 		Up: 111, Down: 222, ExpiryTime: past.UnixMilli(),
 	}).Error; err != nil {
@@ -371,7 +371,7 @@ func TestAutoRenewClients_CalendarModeSpendsOneAllowancePerMonth(t *testing.T) {
 		t.Fatalf("autoRenewClients: %v", err)
 	}
 
-	var row xray.ClientTraffic
+	var row coremodel.ClientTraffic
 	if err := db.Where("email = ?", "calcap@x").First(&row).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -411,7 +411,7 @@ func TestAutoRenewClients_CalendarModeEndOfMonthExpiryDoesNotConsumeAllowance(t 
 	if err := svc.clientService.SyncInbound(nil, ib.Id, clients); err != nil {
 		t.Fatalf("SyncInbound: %v", err)
 	}
-	if err := db.Create(&xray.ClientTraffic{
+	if err := db.Create(&coremodel.ClientTraffic{
 		InboundId: ib.Id, Email: "eomcap@x", Enable: false, ResetDay: 1, ResetMax: 1, ResetCount: 0,
 		Up: 7, Down: 8, ExpiryTime: past.UnixMilli(),
 	}).Error; err != nil {
@@ -424,7 +424,7 @@ func TestAutoRenewClients_CalendarModeEndOfMonthExpiryDoesNotConsumeAllowance(t 
 		t.Fatalf("renewed count = %d, want 1", count)
 	}
 
-	var row xray.ClientTraffic
+	var row coremodel.ClientTraffic
 	if err := db.Where("email = ?", "eomcap@x").First(&row).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -462,7 +462,7 @@ func TestAutoRenewClients_CalendarModeEndOfMonthUnlimitedChargesOnce(t *testing.
 	if err := svc.clientService.SyncInbound(nil, ib.Id, clients); err != nil {
 		t.Fatalf("SyncInbound: %v", err)
 	}
-	if err := db.Create(&xray.ClientTraffic{
+	if err := db.Create(&coremodel.ClientTraffic{
 		InboundId: ib.Id, Email: "eomunc@x", Enable: false, ResetDay: 1, ResetCount: 0,
 		ExpiryTime: past.UnixMilli(),
 	}).Error; err != nil {
@@ -473,7 +473,7 @@ func TestAutoRenewClients_CalendarModeEndOfMonthUnlimitedChargesOnce(t *testing.
 		t.Fatalf("autoRenewClients: %v", err)
 	}
 
-	var row xray.ClientTraffic
+	var row coremodel.ClientTraffic
 	if err := db.Where("email = ?", "eomunc@x").First(&row).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -505,7 +505,7 @@ func TestAutoRenewClients_CalendarModeMidDayBeforeBillingChargesAlignment(t *tes
 	if err := svc.clientService.SyncInbound(nil, ib.Id, clients); err != nil {
 		t.Fatalf("SyncInbound: %v", err)
 	}
-	if err := db.Create(&xray.ClientTraffic{
+	if err := db.Create(&coremodel.ClientTraffic{
 		InboundId: ib.Id, Email: "eommid@x", Enable: false, ResetDay: 1, ResetMax: 1, ResetCount: 0,
 		ExpiryTime: past.UnixMilli(),
 	}).Error; err != nil {
@@ -516,7 +516,7 @@ func TestAutoRenewClients_CalendarModeMidDayBeforeBillingChargesAlignment(t *tes
 		t.Fatalf("autoRenewClients: %v", err)
 	}
 
-	var row xray.ClientTraffic
+	var row coremodel.ClientTraffic
 	if err := db.Where("email = ?", "eommid@x").First(&row).Error; err != nil {
 		t.Fatal(err)
 	}

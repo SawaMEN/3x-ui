@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // remarkContext carries the per-client data a remark template can interpolate.
@@ -20,7 +20,7 @@ import (
 // name (use {{INBOUND}} and {{HOST}} side by side to show both).
 type remarkContext struct {
 	client     model.Client
-	stats      xray.ClientTraffic
+	stats      coremodel.ClientTraffic
 	inbound    *model.Inbound
 	hostRemark string
 	transport  string
@@ -290,7 +290,7 @@ func remarkVarValue(token string, ctx remarkContext) string {
 }
 
 // clientStatus collapses enable/expiry/quota into a single word.
-func clientStatus(st xray.ClientTraffic) string {
+func clientStatus(st coremodel.ClientTraffic) string {
 	if !st.Enable {
 		return "disabled"
 	}
@@ -340,7 +340,7 @@ func max64(a, b int64) int64 {
 }
 
 // statusEmoji maps clientStatus to a single emoji character.
-func statusEmoji(st xray.ClientTraffic) string {
+func statusEmoji(st coremodel.ClientTraffic) string {
 	switch clientStatus(st) {
 	case "active":
 		return "✅"
@@ -357,7 +357,7 @@ func statusEmoji(st xray.ClientTraffic) string {
 
 // usagePercentage computes the traffic usage as a percentage string (e.g. "52.3％").
 // Uses U+FF05: an ASCII percent encodes to %25, which Happ rejects, dropping the remark.
-func usagePercentage(st xray.ClientTraffic) string {
+func usagePercentage(st coremodel.ClientTraffic) string {
 	if st.Total <= 0 {
 		return ""
 	}
@@ -481,7 +481,7 @@ func isJalaliLeap(y int) bool {
 // statsForClient returns the client's live traffic record, or a minimal one
 // synthesized from the client (enable/expiry/total) when no live stats exist —
 // so expiry/total/status tokens still resolve on links that have no counters yet.
-func (s *SubService) statsForClient(inbound *model.Inbound, client model.Client) xray.ClientTraffic {
+func (s *SubService) statsForClient(inbound *model.Inbound, client model.Client) coremodel.ClientTraffic {
 	if stats, ok := s.findClientStats(inbound, client.Email); ok {
 		return stats
 	}
@@ -500,7 +500,7 @@ func (s *SubService) statsForClient(inbound *model.Inbound, client model.Client)
 	if stats, ok := s.statsByEmailFromDB(client.Email); ok {
 		return stats
 	}
-	return xray.ClientTraffic{
+	return coremodel.ClientTraffic{
 		Enable:     client.Enable,
 		ExpiryTime: client.ExpiryTime,
 		Total:      client.TotalGB,

@@ -10,9 +10,9 @@ import (
 	"strings"
 	"sync/atomic"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/hiddify"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 var hiddifyRuntime = hiddify.NewRuntime(hiddify.GetConfigPath(), false)
@@ -20,8 +20,8 @@ var hiddifyProcess = hiddifyRuntime.Process
 var hiddifyNeedRestart atomic.Bool
 var hiddifyManuallyStopped atomic.Bool
 var hiddifyStats = hiddify.NewStatsClient()
-var hiddifyPendingInbounds []*xray.Traffic
-var hiddifyPendingClients []*xray.ClientTraffic
+var hiddifyPendingInbounds []*coremodel.Traffic
+var hiddifyPendingClients []*coremodel.ClientTraffic
 
 func IsNativeCore(core string) bool { return core == CoreTypeSingBox || core == CoreTypeHiddify }
 func NativeCore(core string) *SingBoxService {
@@ -210,9 +210,9 @@ func (s *SingBoxService) disconnectHiddify(ctx context.Context, match func(singb
 	return count, errors.Join(failures...)
 }
 
-func splitHiddifyStats(stats []singbox.V2RayStat) (inboundTraffic []*xray.Traffic, clientTraffic []*xray.ClientTraffic) {
-	inbounds := map[string]*xray.Traffic{}
-	clients := map[string]*xray.ClientTraffic{}
+func splitHiddifyStats(stats []singbox.V2RayStat) (inboundTraffic []*coremodel.Traffic, clientTraffic []*coremodel.ClientTraffic) {
+	inbounds := map[string]*coremodel.Traffic{}
+	clients := map[string]*coremodel.ClientTraffic{}
 	for _, stat := range stats {
 		parts := strings.Split(stat.Name, ">>>")
 		if len(parts) != 4 || parts[2] != "traffic" || (parts[3] != "uplink" && parts[3] != "downlink") || stat.Value <= 0 {
@@ -221,7 +221,7 @@ func splitHiddifyStats(stats []singbox.V2RayStat) (inboundTraffic []*xray.Traffi
 		switch parts[0] {
 		case "inbound":
 			if inbounds[parts[1]] == nil {
-				inbounds[parts[1]] = &xray.Traffic{Tag: parts[1], IsInbound: true}
+				inbounds[parts[1]] = &coremodel.Traffic{Tag: parts[1], IsInbound: true}
 			}
 			if parts[3] == "uplink" {
 				inbounds[parts[1]].Up = stat.Value
@@ -230,7 +230,7 @@ func splitHiddifyStats(stats []singbox.V2RayStat) (inboundTraffic []*xray.Traffi
 			}
 		case "user":
 			if clients[parts[1]] == nil {
-				clients[parts[1]] = &xray.ClientTraffic{Email: parts[1]}
+				clients[parts[1]] = &coremodel.ClientTraffic{Email: parts[1]}
 			}
 			if parts[3] == "uplink" {
 				clients[parts[1]].Up = stat.Value

@@ -125,7 +125,7 @@ func (l *Local) AddInbound(ctx context.Context, ib *model.Inbound) error {
 	if l.isSingBox() {
 		return l.applyCoreChange(ctx)
 	}
-	body, err := json.MarshalIndent(ib.GenXrayInboundConfig(), "", "  ")
+	body, err := json.MarshalIndent(xray.InboundFromPanel(ib.GenInboundConfig()), "", "  ")
 	if err != nil {
 		return err
 	}

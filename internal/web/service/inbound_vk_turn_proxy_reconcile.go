@@ -3,10 +3,10 @@ package service
 import (
 	"strings"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // ReconcileVKTurnProxyClientPeers brings each managed client peer in the target
@@ -34,8 +34,8 @@ func (s *InboundService) ReconcileVKTurnProxyClientPeers() error {
 		wgInboundID := settings.Forward.WireGuardInboundID
 
 		trafficEnabled := map[string]bool{}
-		var rows []xray.ClientTraffic
-		if err := db.Model(&xray.ClientTraffic{}).Where("inbound_id = ?", inbound.Id).Find(&rows).Error; err == nil {
+		var rows []coremodel.ClientTraffic
+		if err := db.Model(&coremodel.ClientTraffic{}).Where("inbound_id = ?", inbound.Id).Find(&rows).Error; err == nil {
 			for _, row := range rows {
 				trafficEnabled[row.Email] = row.Enable
 			}

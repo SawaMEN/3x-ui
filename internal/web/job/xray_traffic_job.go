@@ -6,11 +6,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service/outbound"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/websocket"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 
 	"github.com/valyala/fasthttp"
 )
@@ -42,8 +42,8 @@ const clientStatsSnapshotMaxClients = 5000
 // row and a zero row render identically. Broadcasting just the movers keeps that
 // frame from growing with the client count — at 5k clients it was carrying about
 // a megabyte of zeros every five seconds.
-func splitMovedClientTraffics(clientTraffics []*xray.ClientTraffic) ([]*xray.ClientTraffic, []string, map[string]bool) {
-	moved := make([]*xray.ClientTraffic, 0, len(clientTraffics))
+func splitMovedClientTraffics(clientTraffics []*coremodel.ClientTraffic) ([]*coremodel.ClientTraffic, []string, map[string]bool) {
+	moved := make([]*coremodel.ClientTraffic, 0, len(clientTraffics))
 	emails := make([]string, 0, len(clientTraffics))
 	active := make(map[string]bool, len(clientTraffics))
 	for _, ct := range clientTraffics {
@@ -124,7 +124,7 @@ func (j *XrayTrafficJob) runNonXrayTraffic() {
 	liveTraffics, liveStats, err := j.inboundService.SampleClientTrafficDeltas()
 	if err != nil {
 		logger.Warning("sample unified client traffic failed:", err)
-		liveTraffics = []*xray.ClientTraffic{}
+		liveTraffics = []*coremodel.ClientTraffic{}
 		liveStats = nil
 	}
 	onlineClients := j.inboundService.GetOnlineClients()
@@ -173,7 +173,7 @@ func (j *XrayTrafficJob) Run() {
 	// Rollback is idempotent with Commit. This also guarantees that a panic or
 	// future early-return cannot leave xrayTrafficMu locked indefinitely.
 	defer trafficRead.Rollback()
-	if err := j.inboundService.CommitXrayTraffic(traffics, clientTraffics); err != nil {
+	if err := j.inboundService.CommitCoreTraffic(traffics, clientTraffics); err != nil {
 		logger.Warning("commit xray traffic failed; delta will be retried:", err)
 		return
 	}
@@ -269,7 +269,7 @@ func (j *XrayTrafficJob) Run() {
 	liveTraffics, liveStats, sampleErr := j.inboundService.SampleClientTrafficDeltas()
 	if sampleErr != nil {
 		logger.Warning("sample unified client traffic failed:", sampleErr)
-		liveTraffics = []*xray.ClientTraffic{}
+		liveTraffics = []*coremodel.ClientTraffic{}
 		liveStats = nil
 	}
 
@@ -285,7 +285,7 @@ func (j *XrayTrafficJob) Run() {
 		snapshot = false
 	}
 
-	var stats []*xray.ClientTraffic
+	var stats []*coremodel.ClientTraffic
 	var statsErr error
 	if snapshot {
 		stats, statsErr = j.inboundService.GetAllClientTraffics()
@@ -345,7 +345,7 @@ func (j *XrayTrafficJob) Run() {
 	}
 }
 
-func (j *XrayTrafficJob) informTrafficToExternalAPI(inboundTraffics []*xray.Traffic, clientTraffics []*xray.ClientTraffic) {
+func (j *XrayTrafficJob) informTrafficToExternalAPI(inboundTraffics []*coremodel.Traffic, clientTraffics []*coremodel.ClientTraffic) {
 	if len(inboundTraffics) == 0 && len(clientTraffics) == 0 {
 		return
 	}

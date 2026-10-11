@@ -7,8 +7,8 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // AutoMigrate must create the hot-path indexes used by client filters, traffic
@@ -22,7 +22,7 @@ func TestAutoMigrateCreatesHotPathIndexes(t *testing.T) {
 	}
 	if err := db.AutoMigrate(
 		&model.ClientRecord{},
-		&xray.ClientTraffic{},
+		&coremodel.ClientTraffic{},
 		&model.ClientGlobalTraffic{},
 		&model.Setting{},
 	); err != nil {
@@ -34,8 +34,8 @@ func TestAutoMigrateCreatesHotPathIndexes(t *testing.T) {
 		index string
 	}{
 		{&model.ClientRecord{}, "idx_client_record_group"},
-		{&xray.ClientTraffic{}, "idx_client_traffics_inbound"},
-		{&xray.ClientTraffic{}, "idx_client_traffics_renew"},
+		{&coremodel.ClientTraffic{}, "idx_client_traffics_inbound"},
+		{&coremodel.ClientTraffic{}, "idx_client_traffics_renew"},
 		{&model.ClientGlobalTraffic{}, "idx_client_global_email"},
 		{&model.Setting{}, "idx_settings_key"},
 	}

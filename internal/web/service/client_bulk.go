@@ -9,11 +9,11 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 
 	"gorm.io/gorm"
 )
@@ -517,7 +517,7 @@ func (s *ClientService) BulkAdjust(inboundSvc *InboundService, emails []string, 
 	wasDisabledDepleted := map[string]struct{}{}
 	for _, batch := range chunkStrings(candidateEmails, sqlInChunk) {
 		var rows []string
-		if err := db.Model(xray.ClientTraffic{}).
+		if err := db.Model(coremodel.ClientTraffic{}).
 			Where(cond+" AND enable = ? AND email IN ?", append(append([]any{}, condArgs...), false, batch)...).
 			Pluck("email", &rows).Error; err != nil {
 			return result, needRestart, err
@@ -545,7 +545,7 @@ func (s *ClientService) BulkAdjust(inboundSvc *InboundService, emails []string, 
 			updates["total"] = entry.newTotal
 		}
 		if len(updates) > 0 {
-			if err := db.Model(xray.ClientTraffic{}).Where("email = ?", email).Updates(updates).Error; err != nil {
+			if err := db.Model(coremodel.ClientTraffic{}).Where("email = ?", email).Updates(updates).Error; err != nil {
 				if _, already := skippedReasons[email]; !already {
 					skippedReasons[email] = err.Error()
 				}
@@ -608,7 +608,7 @@ func (s *ClientService) BulkAdjust(inboundSvc *InboundService, emails []string, 
 		}
 		for _, batch := range chunkStrings(wasList, sqlInChunk) {
 			var rows []string
-			if err := db.Model(xray.ClientTraffic{}).
+			if err := db.Model(coremodel.ClientTraffic{}).
 				Where(cond+" AND email IN ?", append(append([]any{}, condArgs...), batch)...).
 				Pluck("email", &rows).Error; err != nil {
 				return result, needRestart, err
@@ -1000,7 +1000,7 @@ func (s *ClientService) BulkDelete(inboundSvc *InboundService, emails []string, 
 			}
 			if !keepTraffic && len(successEmails) > 0 {
 				for _, batch := range chunkStrings(successEmails, sqlInChunk) {
-					if e := tx.Where("email IN ?", batch).Delete(&xray.ClientTraffic{}).Error; e != nil {
+					if e := tx.Where("email IN ?", batch).Delete(&coremodel.ClientTraffic{}).Error; e != nil {
 						return e
 					}
 					if e := tx.Where("client_email IN ?", batch).Delete(&model.InboundClientIps{}).Error; e != nil {
@@ -1127,7 +1127,7 @@ func (s *ClientService) bulkDelInboundClients(
 		}
 		for _, batch := range chunkStrings(foundList, sqlInChunk) {
 			var rows []trafficRow
-			if err := db.Model(xray.ClientTraffic{}).
+			if err := db.Model(coremodel.ClientTraffic{}).
 				Where("email IN ?", batch).
 				Select("email, enable").
 				Scan(&rows).Error; err == nil {
@@ -1511,7 +1511,7 @@ func (s *ClientService) DelDepleted(inboundSvc *InboundService) (int, bool, erro
 	now := time.Now().UnixMilli()
 	depletedClause := depletedClientsClause
 
-	var rows []xray.ClientTraffic
+	var rows []coremodel.ClientTraffic
 	if err := db.Where(depletedClause, now).Find(&rows).Error; err != nil {
 		return 0, false, err
 	}
@@ -1637,7 +1637,7 @@ func (s *ClientService) BulkSetEnable(inboundSvc *InboundService, emails []strin
 		now := time.Now().UnixMilli()
 		if err := runSerializedTx(func(tx *gorm.DB) error {
 			for _, batch := range chunkStrings(successEmails, sqlInChunk) {
-				if e := tx.Model(xray.ClientTraffic{}).Where("email IN ?", batch).Update("enable", enable).Error; e != nil {
+				if e := tx.Model(coremodel.ClientTraffic{}).Where("email IN ?", batch).Update("enable", enable).Error; e != nil {
 					return e
 				}
 				if e := tx.Model(&model.ClientRecord{}).Where("email IN ?", batch).

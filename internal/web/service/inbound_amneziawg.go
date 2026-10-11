@@ -10,12 +10,12 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawgnet"
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
 	wgutil "github.com/SawaMEN/3x-ui/v3/internal/util/wireguard"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // DesiredAmneziaWGInstances derives the AmneziaWG interfaces this panel
@@ -42,8 +42,8 @@ func (s *InboundService) DesiredAmneziaWGInstances() ([]amneziawg.Instance, erro
 	for _, ib := range inbounds {
 		ids = append(ids, ib.Id)
 	}
-	var disabledRows []xray.ClientTraffic
-	err = db.Model(xray.ClientTraffic{}).
+	var disabledRows []coremodel.ClientTraffic
+	err = db.Model(coremodel.ClientTraffic{}).
 		Where("inbound_id IN ? AND enable = ?", ids, false).
 		Select("inbound_id", "email").
 		Find(&disabledRows).Error

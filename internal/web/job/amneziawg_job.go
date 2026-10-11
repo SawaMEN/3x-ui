@@ -7,6 +7,7 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawgnet"
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
@@ -86,8 +87,8 @@ func (j *AmneziaWGJob) collectTraffic(coreType string, desired []amneziawg.Insta
 		return
 	}
 	now := time.Now()
-	var traffic []*xray.Traffic
-	var clientTraffic []*xray.ClientTraffic
+	var traffic []*coremodel.Traffic
+	var clientTraffic []*coremodel.ClientTraffic
 	activeEmails := make([]string, 0)
 	activeTags := make([]string, 0)
 	seenActiveTags := make(map[string]struct{})
@@ -120,13 +121,13 @@ func (j *AmneziaWGJob) collectTraffic(coreType string, desired []amneziawg.Insta
 			if deltaRx > 0 || deltaTx > 0 {
 				up := unsignedTrafficDelta(deltaRx)
 				down := unsignedTrafficDelta(deltaTx)
-				traffic = append(traffic, &xray.Traffic{
+				traffic = append(traffic, &coremodel.Traffic{
 					IsInbound: true,
 					Tag:       inst.Tag,
 					Up:        up,
 					Down:      down,
 				})
-				clientTraffic = append(clientTraffic, &xray.ClientTraffic{
+				clientTraffic = append(clientTraffic, &coremodel.ClientTraffic{
 					Email: client.Email,
 					Up:    up,
 					Down:  down,

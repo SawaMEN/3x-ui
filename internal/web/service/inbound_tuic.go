@@ -3,11 +3,11 @@ package service
 import (
 	"context"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 func (s *InboundService) DesiredTuicInstances() ([]tuic.Instance, error) {
@@ -27,8 +27,8 @@ func (s *InboundService) DesiredTuicInstances() ([]tuic.Instance, error) {
 	for _, ib := range inbounds {
 		ids = append(ids, ib.Id)
 	}
-	var disabledRows []xray.ClientTraffic
-	err = db.Model(xray.ClientTraffic{}).
+	var disabledRows []coremodel.ClientTraffic
+	err = db.Model(coremodel.ClientTraffic{}).
 		Where("inbound_id IN ? AND enable = ?", ids, false).
 		Select("inbound_id", "email").
 		Find(&disabledRows).Error

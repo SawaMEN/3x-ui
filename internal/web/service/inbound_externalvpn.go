@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
 	"github.com/SawaMEN/3x-ui/v3/internal/masque"
 	"github.com/SawaMEN/3x-ui/v3/internal/snell"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 func prepareExternalVPN(ib *model.Inbound, previous string) error {
@@ -103,7 +103,7 @@ func (s *InboundService) DesiredExternalVPNInstances() ([]externalvpn.Instance, 
 	}
 	disabled := map[int]map[string]bool{}
 	if len(ids) > 0 {
-		var stats []xray.ClientTraffic
+		var stats []coremodel.ClientTraffic
 		if err := database.GetDB().Where("inbound_id IN ? AND enable = ?", ids, false).Find(&stats).Error; err != nil {
 			return nil, err
 		}

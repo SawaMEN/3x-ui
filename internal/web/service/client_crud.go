@@ -14,13 +14,13 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/masque"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/random"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -902,7 +902,7 @@ func (s *ClientService) Delete(inboundSvc *InboundService, id int, keepTraffic b
 			return err
 		}
 		if !keepTraffic && existing.Email != "" {
-			if err := tx.Where("email = ?", existing.Email).Delete(&xray.ClientTraffic{}).Error; err != nil {
+			if err := tx.Where("email = ?", existing.Email).Delete(&coremodel.ClientTraffic{}).Error; err != nil {
 				return err
 			}
 			if err := clearGlobalTraffic(tx, existing.Email); err != nil {
@@ -1131,7 +1131,7 @@ func (s *ClientService) DeleteByEmail(inboundSvc *InboundService, email string, 
 	}
 	if !keepTraffic {
 		db := database.GetDB()
-		if err := db.Where("email = ?", email).Delete(&xray.ClientTraffic{}).Error; err != nil {
+		if err := db.Where("email = ?", email).Delete(&coremodel.ClientTraffic{}).Error; err != nil {
 			return needRestart, err
 		}
 		if err := clearGlobalTraffic(db, email); err != nil {

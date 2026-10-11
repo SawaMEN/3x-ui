@@ -10,9 +10,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 func seedInactiveExternalOnlySub(t *testing.T, subID, email string, enabled bool, expiry int64) {
@@ -27,7 +27,7 @@ func seedInactiveExternalOnlySub(t *testing.T, subID, email string, enabled bool
 			t.Fatalf("disable client: %v", err)
 		}
 	}
-	if err := db.Create(&xray.ClientTraffic{Email: email, Up: 11, Down: 22, Total: 1024, ExpiryTime: expiry}).Error; err != nil {
+	if err := db.Create(&coremodel.ClientTraffic{Email: email, Up: 11, Down: 22, Total: 1024, ExpiryTime: expiry}).Error; err != nil {
 		t.Fatalf("seed traffic: %v", err)
 	}
 	link := "vless://11111111-1111-1111-1111-111111111111@example.com:443?type=tcp&security=reality&pbk=abc&sid=12&fp=chrome#external"
@@ -69,7 +69,7 @@ func TestInactiveExternalOnlySubRemainsKnownWithoutExposingLinks(t *testing.T) {
 			wantHeader := fmt.Sprintf("upload=11; download=22; total=1024; expire=%d", state.expiry/1000)
 			for _, path := range []string{"/sub/" + subID, "/json/" + subID + "?view=raw", "/clash/" + subID + "?view=raw"} {
 				t.Run(path, func(t *testing.T) {
-					if err := database.GetDB().Model(&xray.ClientTraffic{}).Where("email = ?", email).Update("last_sub_fetch", 0).Error; err != nil {
+					if err := database.GetDB().Model(&coremodel.ClientTraffic{}).Where("email = ?", email).Update("last_sub_fetch", 0).Error; err != nil {
 						t.Fatalf("reset last_sub_fetch: %v", err)
 					}
 					req := httptest.NewRequest(http.MethodGet, path, nil)
@@ -86,7 +86,7 @@ func TestInactiveExternalOnlySubRemainsKnownWithoutExposingLinks(t *testing.T) {
 					if got := w.Header().Get("Subscription-Userinfo"); got != wantHeader {
 						t.Fatalf("Subscription-Userinfo = %q, want %q", got, wantHeader)
 					}
-					var traffic xray.ClientTraffic
+					var traffic coremodel.ClientTraffic
 					if err := database.GetDB().Where("email = ?", email).First(&traffic).Error; err != nil {
 						t.Fatalf("load traffic: %v", err)
 					}

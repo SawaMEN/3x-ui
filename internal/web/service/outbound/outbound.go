@@ -2,18 +2,18 @@ package outbound
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-	"encoding/json"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 	"gorm.io/gorm"
 )
 
@@ -24,7 +24,7 @@ type OutboundService struct {
 	CoreType string
 }
 
-func (s *OutboundService) AddTraffic(traffics []*xray.Traffic, clientTraffics []*xray.ClientTraffic) (error, bool) {
+func (s *OutboundService) AddTraffic(traffics []*coremodel.Traffic, clientTraffics []*coremodel.ClientTraffic) (error, bool) {
 	err := database.GetDB().Transaction(func(tx *gorm.DB) error {
 		return s.addOutboundTraffic(tx, traffics)
 	})
@@ -41,7 +41,7 @@ func saturatingAdd(a, b int64) int64 {
 	return a + b
 }
 
-func (s *OutboundService) addOutboundTraffic(tx *gorm.DB, traffics []*xray.Traffic) error {
+func (s *OutboundService) addOutboundTraffic(tx *gorm.DB, traffics []*coremodel.Traffic) error {
 	if len(traffics) == 0 {
 		return nil
 	}

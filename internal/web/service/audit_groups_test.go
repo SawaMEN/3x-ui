@@ -3,9 +3,9 @@ package service
 import (
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 func TestAuditGroupMovePreservesHistoryAndCountsNewUsage(t *testing.T) {
@@ -16,7 +16,7 @@ func TestAuditGroupMovePreservesHistoryAndCountsNewUsage(t *testing.T) {
 	if err := svc.ResetGroupTraffic("source"); err != nil {
 		t.Fatal(err)
 	}
-	if err := database.GetDB().Model(&xray.ClientTraffic{}).Where("email = ?", "new").Update("up", 35).Error; err != nil {
+	if err := database.GetDB().Model(&coremodel.ClientTraffic{}).Where("email = ?", "new").Update("up", 35).Error; err != nil {
 		t.Fatal(err)
 	}
 	if _, err := svc.AddToGroup([]string{"old"}, "destination"); err != nil {
@@ -28,7 +28,7 @@ func TestAuditGroupMovePreservesHistoryAndCountsNewUsage(t *testing.T) {
 	if g := groupByName(t, svc, "destination"); g.Up != 0 {
 		t.Fatalf("destination inherited old usage: %+v", g)
 	}
-	if err := database.GetDB().Model(&xray.ClientTraffic{}).Where("email = ?", "old").Update("up", 110).Error; err != nil {
+	if err := database.GetDB().Model(&coremodel.ClientTraffic{}).Where("email = ?", "old").Update("up", 110).Error; err != nil {
 		t.Fatal(err)
 	}
 	if g := groupByName(t, svc, "destination"); g.Up != 10 {

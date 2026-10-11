@@ -3,10 +3,10 @@ package service
 import (
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 func audit3CreateTuicClient(t *testing.T, svc *ClientService, inboundSvc *InboundService, ib *model.Inbound, email, id string) model.ClientRecord {
@@ -17,9 +17,9 @@ func audit3CreateTuicClient(t *testing.T, svc *ClientService, inboundSvc *Inboun
 	return lookupClientRecord(t, email)
 }
 
-func audit3Traffic(t *testing.T, email string) xray.ClientTraffic {
+func audit3Traffic(t *testing.T, email string) coremodel.ClientTraffic {
 	t.Helper()
-	var out xray.ClientTraffic
+	var out coremodel.ClientTraffic
 	if err := database.GetDB().Where("email = ?", email).First(&out).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +38,7 @@ func TestAudit3DeletedIdentityMustNotChargeDuplicateUUID(t *testing.T) {
 	if _, err := svc.Delete(inboundSvc, a.Id, true); err != nil {
 		t.Fatalf("public Delete keepTraffic: %v", err)
 	}
-	if _, _, err := inboundSvc.AddTraffic(nil, []*xray.ClientTraffic{{Email: "a@audit3", TuicTrafficID: trafficID, TuicUUID: id, TuicInboundId: ibA.Id, Up: 123, Down: 456}}); err != nil {
+	if _, _, err := inboundSvc.AddTraffic(nil, []*coremodel.ClientTraffic{{Email: "a@audit3", TuicTrafficID: trafficID, TuicUUID: id, TuicInboundId: ibA.Id, Up: 123, Down: 456}}); err != nil {
 		t.Fatal(err)
 	}
 	old, other := audit3Traffic(t, "a@audit3"), audit3Traffic(t, "b@audit3")
@@ -57,7 +57,7 @@ func TestAudit3RenameAndRotateCredentialsMustPreserveRetiredUsage(t *testing.T) 
 	if _, err := svc.Update(inboundSvc, a.Id, model.Client{Email: "new@audit3", ID: "a0000000-0000-0000-0000-000000000033", Password: "newpw", Enable: true}, 0); err != nil {
 		t.Fatalf("public rename + rotate: %v", err)
 	}
-	if _, _, err := inboundSvc.AddTraffic(nil, []*xray.ClientTraffic{{Email: "old@audit3", TuicTrafficID: trafficID, TuicUUID: oldID, TuicInboundId: ib.Id, Up: 123, Down: 456}}); err != nil {
+	if _, _, err := inboundSvc.AddTraffic(nil, []*coremodel.ClientTraffic{{Email: "old@audit3", TuicTrafficID: trafficID, TuicUUID: oldID, TuicInboundId: ib.Id, Up: 123, Down: 456}}); err != nil {
 		t.Fatal(err)
 	}
 	got := audit3Traffic(t, "new@audit3")
@@ -76,7 +76,7 @@ func TestAudit3PublicRenamePreservesRetiredUsage(t *testing.T) {
 	if _, err := svc.Update(inboundSvc, a.Id, model.Client{Email: "new@audit3", ID: id, Password: "pw", Enable: true}, 0); err != nil {
 		t.Fatalf("public rename: %v", err)
 	}
-	if _, _, err := inboundSvc.AddTraffic(nil, []*xray.ClientTraffic{{Email: "old@audit3", TuicTrafficID: trafficID, TuicUUID: id, TuicInboundId: ib.Id, Up: 123, Down: 456}}); err != nil {
+	if _, _, err := inboundSvc.AddTraffic(nil, []*coremodel.ClientTraffic{{Email: "old@audit3", TuicTrafficID: trafficID, TuicUUID: id, TuicInboundId: ib.Id, Up: 123, Down: 456}}); err != nil {
 		t.Fatal(err)
 	}
 	got := audit3Traffic(t, "new@audit3")
@@ -127,21 +127,21 @@ func audit3RuntimeTrafficID(t *testing.T, service *InboundService, inbound *mode
 func TestTuicDeletedTrafficRowCannotBillReusedEmail(t *testing.T) {
 	setupBulkDB(t)
 	db := database.GetDB()
-	old := xray.ClientTraffic{Email: "reused@audit3", Enable: true}
+	old := coremodel.ClientTraffic{Email: "reused@audit3", Enable: true}
 	if err := db.Create(&old).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Delete(&old).Error; err != nil {
 		t.Fatal(err)
 	}
-	replacement := xray.ClientTraffic{Email: old.Email, Enable: true}
+	replacement := coremodel.ClientTraffic{Email: old.Email, Enable: true}
 	if err := db.Create(&replacement).Error; err != nil {
 		t.Fatal(err)
 	}
 	if old.Id == replacement.Id {
 		t.Fatal("accounting primary key reused")
 	}
-	if _, _, err := (&InboundService{}).AddTraffic(nil, []*xray.ClientTraffic{{Email: old.Email, TuicTrafficID: old.Id, Up: 123, Down: 456}}); err != nil {
+	if _, _, err := (&InboundService{}).AddTraffic(nil, []*coremodel.ClientTraffic{{Email: old.Email, TuicTrafficID: old.Id, Up: 123, Down: 456}}); err != nil {
 		t.Fatal(err)
 	}
 	got := audit3Traffic(t, old.Email)

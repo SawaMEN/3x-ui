@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 )
 
 // TestRepairOverflowedTrafficCounters_HealsSQLiteRealPromotion reproduces
@@ -20,7 +20,7 @@ func TestRepairOverflowedTrafficCounters_HealsSQLiteRealPromotion(t *testing.T) 
 	}
 	t.Cleanup(func() { _ = CloseDB() })
 
-	rows := []xray.ClientTraffic{
+	rows := []coremodel.ClientTraffic{
 		{Email: "overflowed@x", Enable: true, Up: 5, Down: 6},
 		{Email: "negative@x", Enable: true, Up: 7, Down: 8},
 		{Email: "healthy@x", Enable: true, Up: 100, Down: 200},
@@ -38,7 +38,7 @@ func TestRepairOverflowedTrafficCounters_HealsSQLiteRealPromotion(t *testing.T) 
 		t.Fatalf("corrupt up: %v", err)
 	}
 
-	var broken []xray.ClientTraffic
+	var broken []coremodel.ClientTraffic
 	if err := db.Find(&broken).Error; err == nil {
 		t.Fatal("expected the REAL-promoted row to break scanning before the repair")
 	}
@@ -47,8 +47,8 @@ func TestRepairOverflowedTrafficCounters_HealsSQLiteRealPromotion(t *testing.T) 
 		t.Fatalf("repairOverflowedTrafficCounters: %v", err)
 	}
 
-	byEmail := map[string]xray.ClientTraffic{}
-	var repaired []xray.ClientTraffic
+	byEmail := map[string]coremodel.ClientTraffic{}
+	var repaired []coremodel.ClientTraffic
 	if err := db.Find(&repaired).Error; err != nil {
 		t.Fatalf("scan after repair: %v", err)
 	}
@@ -80,7 +80,7 @@ func TestClampedAddExpr_CapsAtTrafficMax(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = CloseDB() })
 
-	row := xray.ClientTraffic{Email: "near-cap@x", Enable: true, Up: TrafficMax - 10, Down: 1}
+	row := coremodel.ClientTraffic{Email: "near-cap@x", Enable: true, Up: TrafficMax - 10, Down: 1}
 	if err := db.Create(&row).Error; err != nil {
 		t.Fatalf("create traffic row: %v", err)
 	}
@@ -90,7 +90,7 @@ func TestClampedAddExpr_CapsAtTrafficMax(t *testing.T) {
 		t.Fatalf("clamped add: %v", err)
 	}
 
-	var got xray.ClientTraffic
+	var got coremodel.ClientTraffic
 	if err := db.Where("email = ?", "near-cap@x").First(&got).Error; err != nil {
 		t.Fatalf("scan after clamped add: %v", err)
 	}

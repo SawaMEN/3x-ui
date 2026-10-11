@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/mieru"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 func validateMieruInbound(inbound *model.Inbound, clients []model.Client) error {
@@ -49,8 +49,8 @@ func (s *InboundService) DesiredMieruInstances() ([]mieru.Instance, error) {
 	for _, ib := range inbounds {
 		ids = append(ids, ib.Id)
 	}
-	var disabledRows []xray.ClientTraffic
-	if err := db.Model(xray.ClientTraffic{}).
+	var disabledRows []coremodel.ClientTraffic
+	if err := db.Model(coremodel.ClientTraffic{}).
 		Where("inbound_id IN ? AND enable = ?", ids, false).
 		Select("inbound_id", "email").Find(&disabledRows).Error; err != nil {
 		return nil, err

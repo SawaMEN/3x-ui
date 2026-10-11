@@ -7,9 +7,9 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 	"github.com/mattn/go-sqlite3"
 )
 
@@ -27,7 +27,7 @@ func TestAuditResetAllReenablesEveryProjectionAndPreservesGroups(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertEnableEverywhere(t, svc, &InboundService{}, ib.Id, "spent@x", true)
-	if err := database.GetDB().Model(&xray.ClientTraffic{}).Where("email = ?", "spent@x").Update("up", 25).Error; err != nil {
+	if err := database.GetDB().Model(&coremodel.ClientTraffic{}).Where("email = ?", "spent@x").Update("up", 25).Error; err != nil {
 		t.Fatal(err)
 	}
 	if g := groupByName(t, svc, "paid"); g.Up != 25 {
@@ -121,11 +121,11 @@ func TestAuditScopedResetBatchesSQLAndLeavesOtherInbound(t *testing.T) {
 	ib := mkInbound(t, 55005, model.VLESS, `{"clients":[]}`)
 	other := mkInbound(t, 55006, model.VLESS, `{"clients":[]}`)
 	var records []model.ClientRecord
-	var traffic []xray.ClientTraffic
+	var traffic []coremodel.ClientTraffic
 	for i := range 801 {
 		email := fmt.Sprintf("batch-%d@x", i)
 		records = append(records, model.ClientRecord{Email: email, Enable: true})
-		traffic = append(traffic, xray.ClientTraffic{Email: email, Enable: true, Up: 100})
+		traffic = append(traffic, coremodel.ClientTraffic{Email: email, Enable: true, Up: 100})
 	}
 	if err := db.CreateInBatches(&records, 100).Error; err != nil {
 		t.Fatal(err)

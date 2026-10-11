@@ -4,15 +4,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 func seedClientRow(t *testing.T, email string, inboundId int, up, down, total int64) {
 	t.Helper()
 	db := database.GetDB()
-	if err := db.Create(&xray.ClientTraffic{InboundId: inboundId, Email: email, Enable: true, Up: up, Down: down, Total: total}).Error; err != nil {
+	if err := db.Create(&coremodel.ClientTraffic{InboundId: inboundId, Email: email, Enable: true, Up: up, Down: down, Total: total}).Error; err != nil {
 		t.Fatalf("seed client_traffics %q: %v", email, err)
 	}
 }
@@ -22,7 +22,7 @@ func TestAcceptGlobalTraffic_SideTableOnly(t *testing.T) {
 	svc := &InboundService{}
 	seedClientRow(t, "alice", 1, 100, 100, 0)
 
-	err := svc.AcceptGlobalTraffic("master-a", []*xray.ClientTraffic{
+	err := svc.AcceptGlobalTraffic("master-a", []*coremodel.ClientTraffic{
 		{Email: "alice", Up: 900, Down: 800},
 		{Email: "ghost", Up: 5, Down: 5}, // not hosted here — must be dropped
 	})
@@ -50,7 +50,7 @@ func TestAcceptGlobalTraffic_OverwriteAndMultiMaster(t *testing.T) {
 
 	must := func(guid string, up, down int64) {
 		t.Helper()
-		if err := svc.AcceptGlobalTraffic(guid, []*xray.ClientTraffic{{Email: "alice", Up: up, Down: down}}); err != nil {
+		if err := svc.AcceptGlobalTraffic(guid, []*coremodel.ClientTraffic{{Email: "alice", Up: up, Down: down}}); err != nil {
 			t.Fatalf("AcceptGlobalTraffic(%s): %v", guid, err)
 		}
 	}
@@ -58,7 +58,7 @@ func TestAcceptGlobalTraffic_OverwriteAndMultiMaster(t *testing.T) {
 	must("master-a", 50, 50) // a master-side reset propagates by overwrite
 	must("master-b", 500, 400)
 
-	rows := []*xray.ClientTraffic{{Email: "alice", Up: 10, Down: 10}}
+	rows := []*coremodel.ClientTraffic{{Email: "alice", Up: 10, Down: 10}}
 	overlayGlobalTraffic(db, rows)
 	if rows[0].Up != 500 || rows[0].Down != 400 {
 		t.Errorf("overlay should fold per-master max, got up=%d down=%d", rows[0].Up, rows[0].Down)
@@ -83,7 +83,7 @@ func TestDepletedCond_ProbeGuard(t *testing.T) {
 
 	// Once a master pushes a global row, the full predicate is used so combined
 	// quota is enforced.
-	if err := svc.AcceptGlobalTraffic("master-a", []*xray.ClientTraffic{{Email: "local-cap", Up: 1, Down: 1}}); err != nil {
+	if err := svc.AcceptGlobalTraffic("master-a", []*coremodel.ClientTraffic{{Email: "local-cap", Up: 1, Down: 1}}); err != nil {
 		t.Fatalf("AcceptGlobalTraffic: %v", err)
 	}
 	if got, _ := depletedCond(db); got != depletedClientsCond {
@@ -98,7 +98,7 @@ func TestStaleGlobalTraffic_Ignored(t *testing.T) {
 	staleAt := time.Now().Add(-globalTrafficFreshWindow - time.Hour).UnixMilli()
 	seedStaleGlobal := func(t *testing.T, guid, email string, up, down int64) {
 		t.Helper()
-		if err := svc.AcceptGlobalTraffic(guid, []*xray.ClientTraffic{{Email: email, Up: up, Down: down}}); err != nil {
+		if err := svc.AcceptGlobalTraffic(guid, []*coremodel.ClientTraffic{{Email: email, Up: up, Down: down}}); err != nil {
 			t.Fatalf("AcceptGlobalTraffic(%s): %v", guid, err)
 		}
 		if err := db.Model(&model.ClientGlobalTraffic{}).
@@ -126,7 +126,7 @@ func TestStaleGlobalTraffic_Ignored(t *testing.T) {
 	})
 
 	t.Run("stale row does not inflate the displayed total", func(t *testing.T) {
-		rows := []*xray.ClientTraffic{{Email: "cap", Up: 100, Down: 100}}
+		rows := []*coremodel.ClientTraffic{{Email: "cap", Up: 100, Down: 100}}
 		overlayGlobalTraffic(db, rows)
 		if rows[0].Up != 100 || rows[0].Down != 100 {
 			t.Errorf("stale global must not overlay display counters, got up=%d down=%d", rows[0].Up, rows[0].Down)
@@ -134,7 +134,7 @@ func TestStaleGlobalTraffic_Ignored(t *testing.T) {
 	})
 
 	t.Run("a live master still enforces alongside the stale row", func(t *testing.T) {
-		if err := svc.AcceptGlobalTraffic("live-master", []*xray.ClientTraffic{{Email: "cap", Up: 1, Down: 1}}); err != nil {
+		if err := svc.AcceptGlobalTraffic("live-master", []*coremodel.ClientTraffic{{Email: "cap", Up: 1, Down: 1}}); err != nil {
 			t.Fatalf("AcceptGlobalTraffic: %v", err)
 		}
 		if got, _ := depletedCond(db); got != depletedClientsCond {
@@ -146,7 +146,7 @@ func TestStaleGlobalTraffic_Ignored(t *testing.T) {
 			t.Fatalf("the live master reports usage well under quota, disabled %d", count)
 		}
 
-		if err := svc.AcceptGlobalTraffic("live-master", []*xray.ClientTraffic{{Email: "cap", Up: 600, Down: 500}}); err != nil {
+		if err := svc.AcceptGlobalTraffic("live-master", []*coremodel.ClientTraffic{{Email: "cap", Up: 600, Down: 500}}); err != nil {
 			t.Fatalf("AcceptGlobalTraffic: %v", err)
 		}
 		if _, count, _, err := svc.disableInvalidClients(db, newTrafficMutationBatch()); err != nil {
@@ -163,7 +163,7 @@ func TestGlobalUsage_DisablesClient(t *testing.T) {
 	// 200 of 1000 used locally — local check alone would never trip.
 	seedClientRow(t, "cap", 1, 100, 100, 1000)
 
-	if err := svc.AcceptGlobalTraffic("master-a", []*xray.ClientTraffic{{Email: "cap", Up: 800, Down: 700}}); err != nil {
+	if err := svc.AcceptGlobalTraffic("master-a", []*coremodel.ClientTraffic{{Email: "cap", Up: 800, Down: 700}}); err != nil {
 		t.Fatalf("AcceptGlobalTraffic: %v", err)
 	}
 
@@ -181,7 +181,7 @@ func TestGlobalRows_ClearedOnReset(t *testing.T) {
 	db := initTrafficTestDB(t)
 	svc := &InboundService{}
 	seedClientRow(t, "alice", 1, 50, 50, 1000)
-	if err := svc.AcceptGlobalTraffic("master-a", []*xray.ClientTraffic{{Email: "alice", Up: 999, Down: 999}}); err != nil {
+	if err := svc.AcceptGlobalTraffic("master-a", []*coremodel.ClientTraffic{{Email: "alice", Up: 999, Down: 999}}); err != nil {
 		t.Fatalf("AcceptGlobalTraffic: %v", err)
 	}
 	if err := svc.ResetClientTrafficByEmail("alice"); err != nil {
@@ -207,7 +207,7 @@ func TestSnapshotListNotOverlaid_SlimOverlaid(t *testing.T) {
 		t.Fatalf("create inbound: %v", err)
 	}
 	seedClientRow(t, "alice", ib.Id, 100, 100, 0)
-	if err := svc.AcceptGlobalTraffic("master-a", []*xray.ClientTraffic{{Email: "alice", Up: 900, Down: 900}}); err != nil {
+	if err := svc.AcceptGlobalTraffic("master-a", []*coremodel.ClientTraffic{{Email: "alice", Up: 900, Down: 900}}); err != nil {
 		t.Fatalf("AcceptGlobalTraffic: %v", err)
 	}
 

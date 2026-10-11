@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/eventbus"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
@@ -197,9 +198,9 @@ func (t *Tgbot) getExhausted(chatId int64) {
 	exDiff := int64(0)
 	now := time.Now().Unix() * 1000
 	var exhaustedInbounds []model.Inbound
-	var exhaustedClients []xray.ClientTraffic
+	var exhaustedClients []coremodel.ClientTraffic
 	var disabledInbounds []model.Inbound
-	var disabledClients []xray.ClientTraffic
+	var disabledClients []coremodel.ClientTraffic
 
 	TrafficThreshold, err := t.settingService.GetTrafficDiff()
 	if err == nil && TrafficThreshold > 0 {
@@ -322,8 +323,8 @@ func (t *Tgbot) notifyExhausted() {
 						if client.TgID != 0 {
 							chatID := client.TgID
 							if !int64Contains(chatIDsDone, chatID) && !checkAdmin(chatID) {
-								var disabledClients []xray.ClientTraffic
-								var exhaustedClients []xray.ClientTraffic
+								var disabledClients []coremodel.ClientTraffic
+								var exhaustedClients []coremodel.ClientTraffic
 								traffics, err := t.inboundService.GetClientTrafficTgBot(client.TgID)
 								if err == nil && len(traffics) > 0 {
 									var output strings.Builder

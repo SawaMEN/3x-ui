@@ -16,6 +16,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawgnet"
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
@@ -426,7 +427,7 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 			}
 		}
 
-		inboundConfig := inbound.GenXrayInboundConfig()
+		inboundConfig := xray.InboundFromPanel(inbound.GenInboundConfig())
 		xrayConfig.InboundConfigs = append(xrayConfig.InboundConfigs, *inboundConfig)
 	}
 
@@ -1275,7 +1276,7 @@ func stripDisabledRules(routerCfg json_util.RawMessage) json_util.RawMessage {
 }
 
 // GetXrayTraffic fetches the current traffic statistics from the running Xray process.
-func (s *XrayService) GetXrayTraffic() ([]*xray.Traffic, []*xray.ClientTraffic, error) {
+func (s *XrayService) GetXrayTraffic() ([]*coremodel.Traffic, []*coremodel.ClientTraffic, error) {
 	process := currentXrayProcess()
 	if process == nil || !process.IsRunning() {
 		err := errors.New("xray is not running")

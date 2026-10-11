@@ -15,9 +15,9 @@ import (
 
 	"github.com/gorilla/websocket"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 type mockXrayRestart struct {
@@ -202,7 +202,7 @@ func TestGatewayClient_EndToEndCommands(t *testing.T) {
 				Port:     8443,
 				Protocol: "vless",
 				Enable:   true,
-				ClientStats: []xray.ClientTraffic{
+				ClientStats: []coremodel.ClientTraffic{
 					{
 						Email:  "client@test.com",
 						Enable: true,

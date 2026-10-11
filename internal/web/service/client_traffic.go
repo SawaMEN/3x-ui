@@ -6,10 +6,10 @@ import (
 	"sort"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 
 	"gorm.io/gorm"
 )
@@ -42,7 +42,7 @@ func (s *ClientService) ResetAllClientTraffics(inboundSvc *InboundService, id in
 	_, _, err := s.resetClientTrafficSet(inboundSvc, func(tx *gorm.DB) ([]string, error) {
 		var emails []string
 		if id == -1 {
-			err := tx.Model(&xray.ClientTraffic{}).Pluck("email", &emails).Error
+			err := tx.Model(&coremodel.ClientTraffic{}).Pluck("email", &emails).Error
 			return emails, err
 		}
 		// A shared traffic row may retain a deleted inbound's ID. Membership
@@ -58,7 +58,7 @@ func (s *ClientService) ResetAllClientTraffics(inboundSvc *InboundService, id in
 func (s *ClientService) ResetAllTraffics() (bool, error) {
 	affected, needRestart, err := s.resetClientTrafficSet(&InboundService{}, func(tx *gorm.DB) ([]string, error) {
 		var emails []string
-		err := tx.Model(&xray.ClientTraffic{}).Pluck("email", &emails).Error
+		err := tx.Model(&coremodel.ClientTraffic{}).Pluck("email", &emails).Error
 		return emails, err
 	}, nil)
 	return affected > 0 || needRestart, err
@@ -103,11 +103,11 @@ func (s *ClientService) resetClientTrafficSet(inboundSvc *InboundService, select
 		}
 		for _, batch := range chunkStrings(emails, sqlInChunk) {
 			var disabled int64
-			if err := tx.Model(&xray.ClientTraffic{}).Where("email IN ? AND enable = ?", batch, false).Count(&disabled).Error; err != nil {
+			if err := tx.Model(&coremodel.ClientTraffic{}).Where("email IN ? AND enable = ?", batch, false).Count(&disabled).Error; err != nil {
 				return err
 			}
 			needRestart = needRestart || disabled > 0
-			res := tx.Model(&xray.ClientTraffic{}).Where("email IN ?", batch).
+			res := tx.Model(&coremodel.ClientTraffic{}).Where("email IN ?", batch).
 				Updates(map[string]any{"enable": true, "up": 0, "down": 0})
 			if res.Error != nil {
 				return res.Error

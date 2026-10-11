@@ -6,13 +6,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/websocket"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 const (
@@ -211,7 +211,7 @@ func (j *NodeTrafficSyncJob) Run() {
 		snapshot = false
 	}
 
-	var stats []*xray.ClientTraffic
+	var stats []*coremodel.ClientTraffic
 	var statsErr error
 	if snapshot {
 		stats, statsErr = j.inboundService.GetAllClientTraffics()
@@ -287,13 +287,13 @@ func (j *NodeTrafficSyncJob) Run() {
 // moves, so an idle stretch is averaged correctly when traffic resumes. A reset
 // rebaselines to the lower value; a first-seen tag yields no delta until the
 // next poll.
-func (j *NodeTrafficSyncJob) nodeInboundSpeed() []*xray.Traffic {
+func (j *NodeTrafficSyncJob) nodeInboundSpeed() []*coremodel.Traffic {
 	totals, err := j.inboundService.GetNodeInboundTrafficTotals()
 	if err != nil {
 		return nil
 	}
 	now := time.Now().UnixMilli()
-	deltas := make([]*xray.Traffic, 0, len(totals))
+	deltas := make([]*coremodel.Traffic, 0, len(totals))
 	next := make(map[string]inboundSample, len(totals))
 	for tag, cur := range totals {
 		prev, ok := j.prevInboundTotals[tag]
@@ -324,7 +324,7 @@ func (j *NodeTrafficSyncJob) nodeInboundSpeed() []*xray.Traffic {
 		up := dUp * nodeInboundSpeedWindowMs / elapsed
 		down := dDown * nodeInboundSpeedWindowMs / elapsed
 		if up > 0 || down > 0 {
-			deltas = append(deltas, &xray.Traffic{Tag: tag, IsInbound: true, Up: up, Down: down})
+			deltas = append(deltas, &coremodel.Traffic{Tag: tag, IsInbound: true, Up: up, Down: down})
 		}
 		next[tag] = inboundSample{up: cur[0], down: cur[1], at: now}
 	}

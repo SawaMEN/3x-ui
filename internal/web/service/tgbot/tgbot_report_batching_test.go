@@ -11,9 +11,9 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 
 	"github.com/mymmrac/telego"
 )
@@ -38,7 +38,7 @@ func seedReportClients(t *testing.T, remark string, emails []string) {
 		t.Fatalf("seed inbound: %v", err)
 	}
 	for _, email := range emails {
-		if err := database.GetDB().Create(&xray.ClientTraffic{
+		if err := database.GetDB().Create(&coremodel.ClientTraffic{
 			InboundId: inbound.Id,
 			Email:     email,
 			Enable:    true,

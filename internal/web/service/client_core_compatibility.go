@@ -5,9 +5,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 	"gorm.io/gorm"
 )
 
@@ -112,7 +112,7 @@ func SyncClientCoreCompatibility(oldCore, newCore string) error {
 				}).Error; err != nil {
 				return err
 			}
-			if err := tx.Model(&xray.ClientTraffic{}).
+			if err := tx.Model(&coremodel.ClientTraffic{}).
 				Where("email = ?", record.Email).
 				Update("enable", wantEnable).Error; err != nil {
 				return err

@@ -3,10 +3,10 @@ package job
 import (
 	"sync"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 type ExternalVPNJob struct {
@@ -49,8 +49,8 @@ func (j *ExternalVPNJob) Run() {
 	}
 
 	rows := mgr.CollectTraffic()
-	inbound := map[string]*xray.Traffic{}
-	clients := make([]*xray.ClientTraffic, 0, len(rows))
+	inbound := map[string]*coremodel.Traffic{}
+	clients := make([]*coremodel.ClientTraffic, 0, len(rows))
 	activeEmails := []string{}
 	activeTags := []string{}
 	for _, row := range rows {
@@ -59,13 +59,13 @@ func (j *ExternalVPNJob) Run() {
 			activeTags = append(activeTags, row.Tag)
 		}
 		if inbound[row.Tag] == nil {
-			inbound[row.Tag] = &xray.Traffic{Tag: row.Tag, IsInbound: true}
+			inbound[row.Tag] = &coremodel.Traffic{Tag: row.Tag, IsInbound: true}
 		}
 		inbound[row.Tag].Up = accumulateTrafficDelta(inbound[row.Tag].Up, row.Up)
 		inbound[row.Tag].Down = accumulateTrafficDelta(inbound[row.Tag].Down, row.Down)
-		clients = append(clients, &xray.ClientTraffic{Email: row.Email, Up: row.Up, Down: row.Down})
+		clients = append(clients, &coremodel.ClientTraffic{Email: row.Email, Up: row.Up, Down: row.Down})
 	}
-	totals := make([]*xray.Traffic, 0, len(inbound))
+	totals := make([]*coremodel.Traffic, 0, len(inbound))
 	for _, t := range inbound {
 		totals = append(totals, t)
 	}

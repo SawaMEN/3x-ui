@@ -6,9 +6,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 
 	"gorm.io/gorm"
 )
@@ -261,7 +261,7 @@ func stripTombstonedClients(settings string) (string, bool) {
 
 // liftClientLifecycleInSettings rewrites adopted settings from master traffic
 // so a lagging node blob cannot store pre-extension expiry/enable (#6228).
-func liftClientLifecycleInSettings(settings string, trafficByEmail map[string]*xray.ClientTraffic) (string, bool) {
+func liftClientLifecycleInSettings(settings string, trafficByEmail map[string]*coremodel.ClientTraffic) (string, bool) {
 	if settings == "" || len(trafficByEmail) == 0 {
 		return settings, false
 	}

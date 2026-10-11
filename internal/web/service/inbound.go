@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
@@ -23,7 +24,6 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
 	wgutil "github.com/SawaMEN/3x-ui/v3/internal/util/wireguard"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -2312,8 +2312,8 @@ func (s *InboundService) buildInboundForLocalRuntime(tx *gorm.DB, inbound *model
 		return built, nil
 	}
 
-	var clientStats []xray.ClientTraffic
-	if err := tx.Model(xray.ClientTraffic{}).
+	var clientStats []coremodel.ClientTraffic
+	if err := tx.Model(coremodel.ClientTraffic{}).
 		Where("inbound_id = ?", built.Id).
 		Select("email", "enable").
 		Find(&clientStats).Error; err != nil {
@@ -2336,7 +2336,7 @@ func (s *InboundService) buildInboundForLocalRuntime(tx *gorm.DB, inbound *model
 
 	trafficIDs := make(map[string]int)
 	if inbound.Protocol == model.TUIC {
-		var rows []xray.ClientTraffic
+		var rows []coremodel.ClientTraffic
 		if err := tx.Select("id", "email").Where("email IN ?", emails).Find(&rows).Error; err != nil {
 			return nil, err
 		}
