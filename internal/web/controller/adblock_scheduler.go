@@ -2,7 +2,6 @@ package controller
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
@@ -14,34 +13,35 @@ const (
 	adBlockSchedulerTimeout      = 5 * time.Minute
 )
 
-var adBlockSchedulerOnce sync.Once
-
-func startAdBlockScheduler(a *AdBlockController) {
-	if a == nil {
-		return
-	}
-	adBlockSchedulerOnce.Do(func() {
-		go a.runAdBlockScheduler()
-	})
-}
-
-func (a *AdBlockController) runAdBlockScheduler() {
+func (a *AdBlockController) runAdBlockScheduler(parent context.Context) {
 	initial := time.NewTimer(adBlockSchedulerInitialDelay)
 	defer initial.Stop()
 
-	<-initial.C
-	a.runScheduledAdBlockUpdate()
+	select {
+	case <-parent.Done():
+		return
+	case <-initial.C:
+	}
+	a.runScheduledAdBlockUpdate(parent)
 
 	ticker := time.NewTicker(adBlockSchedulerCheckEvery)
 	defer ticker.Stop()
-	for range ticker.C {
-		a.runScheduledAdBlockUpdate()
+	for {
+		select {
+		case <-parent.Done():
+			return
+		case <-ticker.C:
+			a.runScheduledAdBlockUpdate(parent)
+		}
 	}
 }
 
-func (a *AdBlockController) runScheduledAdBlockUpdate() {
+func (a *AdBlockController) runScheduledAdBlockUpdate(parent context.Context) {
 	a.operationMu.Lock()
 	defer a.operationMu.Unlock()
+	if parent.Err() != nil {
+		return
+	}
 
 	if err := a.settingService.ReconcileAdBlockApplication(); err != nil {
 		logger.Warningf("AdBlock reconcile failed: %v", err)
@@ -57,7 +57,7 @@ func (a *AdBlockController) runScheduledAdBlockUpdate() {
 		if retry.After(time.Now()) && retry.Before(time.Now().Add(10*time.Minute)) {
 			return
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), adBlockSchedulerTimeout)
+		ctx, cancel := context.WithTimeout(parent, adBlockSchedulerTimeout)
 		err := a.applyPending(ctx)
 		cancel()
 		if err != nil {
@@ -74,7 +74,7 @@ func (a *AdBlockController) runScheduledAdBlockUpdate() {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), adBlockSchedulerTimeout)
+	ctx, cancel := context.WithTimeout(parent, adBlockSchedulerTimeout)
 	defer cancel()
 
 	result, err := a.settingService.UpdateAdBlock(ctx)

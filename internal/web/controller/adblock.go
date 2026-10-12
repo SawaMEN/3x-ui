@@ -77,7 +77,6 @@ func NewAdBlockController(g *gin.RouterGroup) *AdBlockController {
 	group.GET("/youtube-extension", a.youtubeExtension)
 	group.GET("/youtube-server-certificate", a.youtubeServerCertificate)
 	group.GET("/youtube-server-routing/:core", a.youtubeServerRouting)
-	startAdBlockScheduler(a)
 	return a
 }
 

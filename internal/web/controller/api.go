@@ -1,8 +1,10 @@
 package controller
 
 import (
+	"context"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/middleware"
@@ -17,6 +19,10 @@ import (
 // APIController handles the main API routes for the 3x-ui panel, including inbounds and server management.
 type APIController struct {
 	BaseController
+	backgroundOnce        sync.Once
+	backgroundWG          sync.WaitGroup
+	firewallController    *FirewallController
+	adBlockController     *AdBlockController
 	inboundController     *InboundController
 	serverController      *ServerController
 	nodeController        *NodeController
@@ -196,7 +202,7 @@ func (a *APIController) initRouter(g *gin.RouterGroup) {
 	// Server API
 	server := api.Group("/server")
 	a.serverController = NewServerController(server)
-	NewFirewallController(server)
+	a.firewallController = NewFirewallController(server)
 
 	// Nodes API — multi-panel management
 	nodes := api.Group("/nodes")
@@ -222,7 +228,7 @@ func (a *APIController) initRouter(g *gin.RouterGroup) {
 	a.settingController = NewSettingController(api)
 	a.xraySettingController = NewXraySettingController(api)
 	NewGatewayController(api)
-	NewAdBlockController(api)
+	a.adBlockController = NewAdBlockController(api)
 
 	// Subscription balancers — client-side balancers for the JSON sub output
 	NewSubBalancerController(api)
@@ -235,3 +241,19 @@ func (a *APIController) initRouter(g *gin.RouterGroup) {
 func (a *APIController) BackuptoTgbot(c *gin.Context) {
 	a.Tgbot.SendBackupToAdmins()
 }
+
+// StartBackground starts workers only for an active panel, never route registration.
+func (a *APIController) StartBackground(ctx context.Context) {
+	a.backgroundOnce.Do(func() {
+		workers := []func(){func() { a.firewallController.firewallService.RunAutoSync(ctx) },
+			func() { a.adBlockController.runAdBlockScheduler(ctx) },
+			func() { service.RunTelemtConnectionMonitor(ctx) }}
+		for _, worker := range workers {
+			a.backgroundWG.Add(1)
+			go func() { defer a.backgroundWG.Done(); worker() }()
+		}
+	})
+}
+
+// WaitBackground joins every cancelled worker before the database can be closed.
+func (a *APIController) WaitBackground() { a.backgroundWG.Wait() }

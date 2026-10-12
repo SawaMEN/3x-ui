@@ -29,7 +29,6 @@ type firewallStatusResponse struct {
 func NewFirewallController(g *gin.RouterGroup) *FirewallController {
 	a := &FirewallController{}
 	a.initRouter(g.Group("/firewall"))
-	a.firewallService.StartAutoSync()
 	return a
 }
 

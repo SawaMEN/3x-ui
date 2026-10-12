@@ -858,6 +858,8 @@ func (s *Server) start(restartXray bool, startTgBot bool) (err error) {
 		_ = s.discordGateway.Start(s.ctx)
 	}
 
+	s.api.StartBackground(s.ctx)
+
 	return nil
 }
 
@@ -873,6 +875,9 @@ func (s *Server) StopPanelOnly() error {
 func (s *Server) stop(stopXray bool, stopTgBot bool) error {
 	var err1, err2 error
 	s.cancel()
+	if s.api != nil {
+		s.api.WaitBackground()
+	}
 	if stopXray {
 		if coreType, _ := s.settingService.GetCoreType(); service.IsNativeCore(coreType) {
 			_ = (service.SelectedNativeCore()).Stop(s.ctx)
