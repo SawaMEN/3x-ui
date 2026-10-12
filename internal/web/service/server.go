@@ -370,16 +370,14 @@ type MLKEM768Response struct {
 	Client string `json:"client" example:"mlkem768-client"`
 }
 
-func getPublicIP(url string) string {
-	client := &http.Client{
-		Timeout: 3 * time.Second,
-	}
+var publicIPHTTPClient = &http.Client{Timeout: 3 * time.Second}
 
+func getPublicIP(url string) string {
 	req, reqErr := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
 	if reqErr != nil {
 		return "N/A"
 	}
-	resp, err := client.Do(req)
+	resp, err := publicIPHTTPClient.Do(req)
 	if err != nil {
 		return "N/A"
 	}
@@ -393,17 +391,20 @@ func getPublicIP(url string) string {
 		return "N/A"
 	}
 
-	ip, err := io.ReadAll(resp.Body)
+	ip, err := io.ReadAll(io.LimitReader(resp.Body, 129))
 	if err != nil {
 		return "N/A"
 	}
 
-	ipString := strings.TrimSpace(string(ip))
-	if ipString == "" {
+	if len(ip) > 128 {
 		return "N/A"
 	}
-
-	return ipString
+	ipString := strings.TrimSpace(string(ip))
+	parsed := stdnet.ParseIP(ipString)
+	if parsed == nil || !parsed.IsGlobalUnicast() || parsed.IsPrivate() || parsed.IsLoopback() {
+		return "N/A"
+	}
+	return parsed.String()
 }
 
 var publicIPv4Services = []string{
@@ -436,10 +437,10 @@ func (s *ServerService) resolvePublicIPs() {
 
 	var ipv4, ipv6 string
 	if wantIPv4 {
-		ipv4 = firstPublicIP(publicIPv4Services)
+		ipv4 = firstPublicIP(publicIPv4Services, false)
 	}
 	if wantIPv6 {
-		ipv6 = firstPublicIP(publicIPv6Services)
+		ipv6 = firstPublicIP(publicIPv6Services, true)
 	}
 
 	s.mu.Lock()
@@ -457,15 +458,16 @@ func (s *ServerService) resolvePublicIPs() {
 
 // firstPublicIP returns the first service that answers, or "N/A" when every
 // one of them fails.
-func firstPublicIP(services []string) string {
+func firstPublicIP(services []string, ipv6 bool) string {
 	var ip string
 	for _, service := range services {
 		ip = getPublicIP(service)
-		if ip != "N/A" {
-			break
+		parsed := stdnet.ParseIP(ip)
+		if parsed != nil && (parsed.To4() == nil) == ipv6 {
+			return ip
 		}
 	}
-	return ip
+	return "N/A"
 }
 
 // resolvePublicIPsInBackground keeps a status sample off the lookup path: a box

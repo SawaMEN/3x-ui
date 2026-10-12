@@ -11,18 +11,14 @@ func TestCapabilitiesFor(t *testing.T) {
 		{
 			name: "xray",
 			core: Xray,
-			want: Capabilities{
-				ConnectionStats:  true,
-				HotInboundReload: true,
-				GeoIP:            true,
-				GeoSite:          true,
-			},
+			want: Capabilities{},
 		},
 		{
 			name: "sing-box",
 			core: SingBox,
 			want: Capabilities{
-				RuleSets:           true,
+				RuleSets: true,
+				GeoIP:    true, GeoSite: true,
 				OutboundDelayProbe: true,
 				ConnectionStats:    true,
 				ClashAPI:           true,
@@ -31,7 +27,7 @@ func TestCapabilitiesFor(t *testing.T) {
 		},
 		{name: "hiddify-core", core: Hiddify, want: Capabilities{
 			RuleSets: true, OutboundDelayProbe: true, ConnectionStats: true,
-			ClashAPI: true, ShadowTLS: true,
+			ClashAPI: true, ShadowTLS: true, GeoIP: true, GeoSite: true,
 		}},
 		{name: "unknown", core: Type("unknown"), want: Capabilities{}},
 	}

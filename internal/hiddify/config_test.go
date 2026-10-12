@@ -58,7 +58,7 @@ func TestServerConfigShadowTLSDetourAndStableStats(t *testing.T) {
 	if err := FinalizeServerConfig(cfg); err != nil {
 		t.Fatal(err)
 	}
-	if !cfg.Hiddify || len(cfg.Services) != 0 {
+	if len(cfg.Services) != 0 {
 		t.Fatal("wrong server profile")
 	}
 	stats := cfg.Experimental["v2ray_api"].(map[string]any)["stats"].(map[string]any)

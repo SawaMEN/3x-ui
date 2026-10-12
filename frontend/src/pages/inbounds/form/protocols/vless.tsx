@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Form, Input, InputNumber, Select, Space, Typography } from 'antd';
-import { Controller, useFormContext } from 'react-hook-form';
+import { Button, Form, Input, Select, Space, Typography } from 'antd';
 
 import { FormField } from '@/components/form/rhf';
 import { VLESS_AUTH_LABEL_KEYS, type VlessAuthKind } from '@/lib/xray/vless-encryption';
@@ -21,14 +20,11 @@ export default function VlessFields({
   saving,
   selectedVlessAuth,
   vlessAuthKind,
-  network,
-  security,
   shadowTlsEnabled = false,
   getNewVlessEnc,
   clearVlessEnc,
 }: VlessFieldsProps) {
   const { t } = useTranslation();
-  const { control } = useFormContext();
   const [authKind, setAuthKind] = useState<VlessAuthKind>(vlessAuthKind ?? 'x25519');
 
   const [syncedAuthKind, setSyncedAuthKind] = useState(vlessAuthKind);
@@ -72,33 +68,6 @@ export default function VlessFields({
           <Typography.Text type="secondary" className="vless-auth-state">
             {t('pages.inbounds.vlessAuthSelected', { auth: selectedVlessAuth })}
           </Typography.Text>
-        </Form.Item>
-      )}
-      {network === 'tcp' && (security === 'tls' || security === 'reality') && (
-        <Form.Item
-          label={t('pages.inbounds.form.visionTestseed')}
-          extra="Applies only to clients using the xtls-rprx-vision flow; ignored otherwise."
-        >
-          <Space.Compact block>
-            {[900, 500, 900, 256].map((def, i) => (
-              <Controller
-                key={i}
-                control={control}
-                name={`settings.testseed.${i}`}
-                defaultValue={def}
-                render={({ field }) => (
-                  <InputNumber
-                    min={1}
-                    style={{ width: '25%' }}
-                    value={field.value as number}
-                    onChange={field.onChange}
-                    onBlur={field.onBlur}
-                    ref={field.ref}
-                  />
-                )}
-              />
-            ))}
-          </Space.Compact>
         </Form.Item>
       )}
     </>

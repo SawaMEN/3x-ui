@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildNativeSingBoxOutbound,
   normalizeOutboundJsonForPanel,
+  normalizeOutboundJsonImport,
 } from '@/pages/xray/outbounds/singbox-native-outbound';
 import { SINGBOX_NATIVE_OUTBOUND_PROTOCOLS } from '@/pages/xray/outbounds/outbound-form-constants';
 import { isUdpOutbound } from '@/hooks/useXraySetting';
@@ -67,12 +68,17 @@ describe('native sing-box outbound templates', () => {
       settings: { protocol: 'udp', server: 'example.com' },
     });
   });
-  it.each(['singbox:hysteria', 'singbox:hysteria2', 'singbox:tuic', 'selector', 'singbox:urltest'])(
-    'uses a handshake probe for %s',
-    (protocol) => {
-      expect(isUdpOutbound({ protocol })).toBe(true);
-    },
-  );
+  it.each([
+    'singbox:hysteria',
+    'singbox:hysteria2',
+    'singbox:tuic',
+    'selector',
+    'singbox:urltest',
+    'mieru',
+    'singbox:mieru',
+  ])('uses a handshake probe for %s', (protocol) => {
+    expect(isUdpOutbound({ protocol })).toBe(true);
+  });
   it.each(['singbox:direct', 'singbox:block', 'singbox:dns'])(
     'disables testing for %s',
     (protocol) => {
@@ -99,5 +105,46 @@ describe('outbound chain probe mode', () => {
   });
   it('keeps unchained TCP proxies in TCP mode', () => {
     expect(isUdpOutbound({ protocol: 'singbox:ssh', settings: { detour: '' } })).toBe(false);
+  });
+});
+
+describe('atomic outbound JSON import', () => {
+  it('normalizes native single, array and full config imports', () => {
+    const native = { type: 'VLESS', server: '127.0.0.1', server_port: 443, uuid: 'id' };
+    for (const value of [native, [native], { outbounds: [native] }]) {
+      expect(normalizeOutboundJsonImport(value, ['vless-out'])).toEqual([
+        {
+          protocol: 'singbox:vless',
+          tag: 'vless-out-2',
+          settings: { server: '127.0.0.1', server_port: 443, uuid: 'id' },
+        },
+      ]);
+    }
+  });
+  it.each([
+    null,
+    7,
+    true,
+    'text',
+    [],
+    {},
+    [null],
+    [7],
+    [{ type: '' }],
+    [{ type: 7 }],
+    [{ protocol: 'http', tag: 7 }],
+    [{ protocol: 'http', tag: ' x ' }],
+    [{ protocol: 'http', tag: 'x', settings: [] }],
+    [
+      { protocol: 'http', tag: 'x' },
+      { protocol: 'socks', tag: 'x' },
+    ],
+  ])('rejects malformed imports: %j', (value) => {
+    expect(() => normalizeOutboundJsonImport(value)).toThrow();
+  });
+  it('rejects a collision with an existing tag', () => {
+    expect(() => normalizeOutboundJsonImport({ type: 'http', tag: 'x' }, ['x'])).toThrow(
+      'Duplicate',
+    );
   });
 });

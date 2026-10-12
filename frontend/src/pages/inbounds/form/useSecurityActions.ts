@@ -63,20 +63,6 @@ export function useSecurityActions({
     setValue('streamSettings.realitySettings.settings.publicKey', '');
   };
 
-  const genMldsa65 = async () => {
-    setSaving(true);
-    try {
-      const msg = await HttpUtil.get('/panel/api/server/getNewmldsa65');
-      if (msg?.success) {
-        const obj = msg.obj as { seed: string; verify: string };
-        setValue('streamSettings.realitySettings.mldsa65Seed', obj.seed);
-        setValue('streamSettings.realitySettings.settings.mldsa65Verify', obj.verify);
-      }
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const clearMldsa65 = () => {
     setValue('streamSettings.realitySettings.mldsa65Seed', '');
     setValue('streamSettings.realitySettings.settings.mldsa65Verify', '');
@@ -375,7 +361,6 @@ export function useSecurityActions({
   return {
     genRealityKeypair,
     clearRealityKeypair,
-    genMldsa65,
     clearMldsa65,
     scanRealityTarget,
     scanRealityCandidates,

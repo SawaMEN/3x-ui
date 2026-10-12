@@ -64,6 +64,7 @@ type ProcessOptions struct {
 	RequiredVersion  string
 	RequiredRevision string
 	RequiredTags     []string
+	RequiredAnyTags  []string
 	NativeAPI        bool
 	MASQUE           bool
 }
@@ -170,47 +171,11 @@ func (p *Process) GetVersion() string {
 }
 
 func (p *Process) SupportsNativeAPI() bool {
-	if p.profile != nil {
-		return p.profile.NativeAPI
-	}
-	return p.supportsMinor(14)
+	return p.profile != nil && p.profile.NativeAPI
 }
 
-// MASQUE was introduced in 1.15.0-alpha.7, not the earlier 1.15 alphas.
 func (p *Process) SupportsMASQUE() bool {
-	if p.profile != nil {
-		return p.profile.MASQUE
-	}
-	if !p.supportsMinor(15) {
-		return false
-	}
-	fields := strings.Fields(strings.TrimPrefix(strings.TrimSpace(p.GetVersion()), "v"))
-	if len(fields) == 0 {
-		return false
-	}
-	if alpha, ok := strings.CutPrefix(fields[0], "1.15.0-alpha."); ok {
-		number, err := strconv.Atoi(strings.Split(alpha, "+")[0])
-		return err == nil && number >= 7
-	}
-	return true
-}
-
-func (p *Process) supportsMinor(minimum int) bool {
-	version := strings.TrimSpace(strings.TrimPrefix(p.GetVersion(), "v"))
-	fields := strings.Fields(version)
-	if len(fields) == 0 {
-		return false
-	}
-	parts := strings.Split(fields[0], ".")
-	if len(parts) < 2 {
-		return false
-	}
-	major, err1 := strconv.Atoi(parts[0])
-	minor, err2 := strconv.Atoi(parts[1])
-	if err1 != nil || err2 != nil {
-		return false
-	}
-	return major > 1 || (major == 1 && minor >= minimum)
+	return p.profile != nil && p.profile.MASQUE
 }
 
 func (p *Process) GetStartTime() time.Time {
@@ -329,21 +294,12 @@ func (p *Process) Validate(ctx context.Context) error {
 		p.setErr(err)
 		return err
 	}
-	// Snell requires 1.14 in both directions. The binary check remains authoritative.
-	if data, err := os.ReadFile(cfg); err == nil && configUsesProtocol(data, "snell") && p.profile == nil {
-		if _, err := p.Version(ctx); err != nil {
-			return err
-		}
-		if !p.SupportsNativeAPI() {
-			return fmt.Errorf("Snell requires sing-box 1.14.0 or newer; installed: %s", p.GetVersion())
-		}
-	}
 	if data, err := os.ReadFile(cfg); err == nil && (configUsesProtocol(data, "masque-server") || configUsesProtocol(data, "masque-client")) {
 		if _, err := p.Version(ctx); err != nil {
 			return err
 		}
 		if !p.SupportsMASQUE() {
-			return fmt.Errorf("MASQUE requires sing-box 1.15.0-alpha.7 or newer; installed: %s", p.GetVersion())
+			return fmt.Errorf("MASQUE is unavailable in the configured Sing-box profile; installed: %s", p.GetVersion())
 		}
 	}
 	if p.profile != nil {
@@ -407,6 +363,15 @@ func (p *Process) Version(ctx context.Context) (string, error) {
 		for _, tag := range p.profile.RequiredTags {
 			if !buildTags[tag] {
 				return "", fmt.Errorf("core build lacks required tag %s", tag)
+			}
+		}
+		if len(p.profile.RequiredAnyTags) > 0 {
+			found := false
+			for _, tag := range p.profile.RequiredAnyTags {
+				found = found || buildTags[tag]
+			}
+			if !found {
+				return "", fmt.Errorf("core build lacks one of required tags %v", p.profile.RequiredAnyTags)
 			}
 		}
 	}

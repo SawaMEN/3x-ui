@@ -65,13 +65,12 @@ const (
 	egressTracePath = "/cdn-cgi/trace"
 )
 
-// httpTestSemaphore serialises HTTP-mode batches (each spawns a temp xray
+// httpTestSemaphore serialises HTTP-mode batches (each spawns a temporary Sing-box
 // instance, which is too expensive to run in parallel). TCP-mode probes are
 // dial-only and don't need the semaphore.
 var httpTestSemaphore sync.Mutex
 
-// batchProcess is the slice of xray.Process the batch engine needs; a seam
-// so unit tests can stub the process without an xray binary.
+// batchProcess is the lifecycle seam used by isolated probes and their tests.
 type batchProcess interface {
 	Start() error
 	Stop() error
@@ -286,10 +285,7 @@ func runHTTPProbeBatch(items []*httpBatchItem, allOutbounds []any, testURL strin
 }
 
 func runHTTPProbeBatchForCore(items []*httpBatchItem, allOutbounds []any, testURL string, realDelay bool, coreType string) (retryPerItem bool, err error) {
-	coreName := "xray"
-	if coreType == "sing-box" || coreType == "hiddify-core" {
-		coreName = "sing-box"
-	}
+	coreName := "sing-box"
 	ports, release, err := reserveLoopbackPorts(len(items))
 	if err != nil {
 		return false, fmt.Errorf("Failed to reserve test ports: %w", err)
@@ -325,8 +321,8 @@ func runHTTPProbeBatchForCore(items []*httpBatchItem, allOutbounds []any, testUR
 		}
 	}()
 
-	// Free the reserved ports just before xray binds them; the window is
-	// milliseconds, and a lost race makes xray exit fast, which surfaces
+	// Free the reserved ports just before Sing-box binds them; the window is
+	// milliseconds, and a lost race makes Sing-box exit fast, which surfaces
 	// below and triggers the per-item retry with fresh ports.
 	release()
 	if err := proc.Start(); err != nil {

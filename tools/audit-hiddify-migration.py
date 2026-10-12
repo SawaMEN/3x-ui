@@ -128,12 +128,12 @@ def audit_build(source):
     tag_block = re.search(r"var requiredBuildTags = \[\]string\{([^}]+)\}", process)
     require(tag_block is not None, "Runtime required build tags missing")
     runtime_tags = re.findall(r'"([^"\n]+)"', tag_block.group(1))
-    require(set(runtime_tags) == set(build["tags"]), "Runtime required tags differ from build lock")
+    require(set(runtime_tags) == set(build["tags"]) - {"with_purego"}, "Runtime required tags differ from build lock")
     profile = (ROOT / "internal/hiddify/translate.go").read_text()
     require(target["version"] in profile and target["commit"] in profile, "Runtime process identity differs from build lock")
     require(lock["runtime_contract"]["stats_grpc_method"] == fork["stats_contract"]["method"], "Wrong runtime statistics method")
     require(lock["runtime_contract"]["stats_grpc_method"] in profile, "Runtime statistics client differs from lock")
-    for key in ("check_command_overlay", "clash_user_overlay", "sniff_override_overlay", "sniff_override_test_overlay"):
+    for key in ("check_command_overlay", "clash_user_overlay", "sniff_override_overlay", "sniff_override_test_overlay", "http1_options_overlay", "http1_options_test_overlay"):
         require((ROOT / build[key]).is_file(), "Missing runtime overlay: " + key)
     print(f"OK: stage-{lock['stage']} build/runtime identity, owner revisions, toolchain, tags and statistics profile")
     if source is None:

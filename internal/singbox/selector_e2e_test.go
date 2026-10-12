@@ -43,7 +43,7 @@ func TestSelectorLiveSwitch_E2E(t *testing.T) {
 	if err := os.WriteFile(path, data, 0600); err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command(binary, "run", "-c", path)
+	cmd := exec.Command(binary, "srun", "-c", path)
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)

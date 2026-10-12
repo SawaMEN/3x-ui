@@ -31,7 +31,6 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot) (*
 	}
 
 	cfg := singbox.NewConfig()
-	cfg.Hiddify = true
 	// Generated outbounds come from the Xray template. Keep NewConfig's
 	// defaults only for its standalone editor fallback.
 	cfg.Outbounds = nil

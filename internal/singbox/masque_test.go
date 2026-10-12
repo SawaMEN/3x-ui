@@ -39,14 +39,7 @@ func TestMASQUEEndpoint(t *testing.T) {
 	}
 }
 
-func TestMASQUEVersionGate(t *testing.T) {
-	for version, expected := range map[string]bool{"1.14.1": false, "1.15.0-alpha.1": false, "1.15.0-alpha.6": false, "1.15.0-alpha.7": true, "1.15.0-alpha.10": true, "v1.15.0": true, "1.16.0": true, "2.0.0": true, "Unknown": false} {
-		p := NewProcess("unused")
-		p.version = version
-		if p.SupportsMASQUE() != expected {
-			t.Errorf("version %s", version)
-		}
-	}
+func TestMASQUEProtocolDetection(t *testing.T) {
 	data, _ := json.Marshal(map[string]any{"endpoints": []any{map[string]any{"type": "masque-client"}}})
 	if !configUsesProtocol(data, "masque-client") {
 		t.Fatal("client endpoint not detected")

@@ -1,3 +1,4 @@
+import { normalizeOutboundJsonImport } from './singbox-native-outbound';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -351,14 +352,14 @@ export default function OutboundsTab({
       messageApi.error(t('pages.xray.importInvalidJson'));
       return;
     }
-    const obj = parsed as { outbounds?: unknown };
-    const list = Array.isArray(parsed)
-      ? parsed
-      : Array.isArray(obj?.outbounds)
-        ? obj.outbounds
-        : null;
-    if (!list) {
-      messageApi.error(t('pages.xray.importInvalidJson'));
+    let list: Record<string, unknown>[];
+    try {
+      list = normalizeOutboundJsonImport(
+        parsed,
+        outbounds.map((outbound) => String(outbound.tag ?? '')),
+      );
+    } catch (error) {
+      messageApi.error(error instanceof Error ? error.message : t('pages.xray.importInvalidJson'));
       return;
     }
     mutate((tt) => {

@@ -1,7 +1,7 @@
 import AdditionalOutboundEditor from './AdditionalOutboundEditor';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Form, Input, InputNumber, Modal, Radio, Select, Space, Tabs, message } from 'antd';
+import { Form, Input, Modal, Radio, Select, Space, Tabs, message } from 'antd';
 import { Controller, FormProvider, useForm, useWatch } from 'react-hook-form';
 import { FinalMaskField, SniffingField } from '@/lib/xray/forms/fields';
 import { FormField, rhfZodValidate } from '@/components/form/rhf';
@@ -42,7 +42,6 @@ import {
   DnsFields,
   FreedomFields,
   HttpFields,
-  LoopbackFields,
   ServerTarget,
   ShadowsocksFields,
   SocksFields,
@@ -56,7 +55,6 @@ import {
   GrpcForm,
   HttpUpgradeForm,
   HysteriaForm,
-  KcpForm,
   MuxForm,
   RawForm,
   SockoptForm,
@@ -112,7 +110,6 @@ export default function OutboundFormModal({
     '') as string;
   const security = (useWatch({ control: methods.control, name: 'streamSettings.security' }) ??
     'none') as string;
-  const flow = (useWatch({ control: methods.control, name: 'settings.flow' }) ?? '') as string;
   const reverseTag = useWatch({ control: methods.control, name: 'settings.reverseTag' });
   const wgSecretKey = useWatch({ control: methods.control, name: 'settings.secretKey' }) as
     | string
@@ -518,7 +515,6 @@ export default function OutboundFormModal({
                       {protocol === 'http' && <HttpFields />}
                       {protocol === 'socks' && <SocksFields />}
 
-                      {protocol === 'loopback' && <LoopbackFields />}
                       {protocol === 'blackhole' && <BlackholeFields />}
                       {protocol === 'dns' && <DnsFields />}
 
@@ -557,8 +553,6 @@ export default function OutboundFormModal({
 
                           {network === 'tcp' && <RawForm />}
 
-                          {network === 'kcp' && <KcpForm />}
-
                           {network === 'ws' && <WsForm />}
 
                           {network === 'grpc' && <GrpcForm />}
@@ -579,28 +573,6 @@ export default function OutboundFormModal({
                             options={[{ value: '', label: t('none') }, ...FLOW_OPTIONS]}
                           />
                         </FormField>
-                      )}
-
-                      {/* Vision seed knobs only meaningful for the exact
-                          xtls-rprx-vision flow, on TCP+(tls|reality). */}
-                      {tlsFlowAllowed && flow === 'xtls-rprx-vision' && (
-                        <>
-                          <FormField
-                            label={t('pages.xray.outboundForm.visionTestpre')}
-                            name={['settings', 'testpre']}
-                          >
-                            <InputNumber min={0} style={{ width: '100%' }} />
-                          </FormField>
-                          <Form.Item label={t('pages.inbounds.form.visionTestseed')}>
-                            <Space.Compact block>
-                              {[0, 1, 2, 3].map((i) => (
-                                <FormField key={i} name={['settings', 'testseed', i]} noStyle>
-                                  <InputNumber min={1} style={{ width: '25%' }} />
-                                </FormField>
-                              ))}
-                            </Space.Compact>
-                          </Form.Item>
-                        </>
                       )}
 
                       {streamAllowed && network && (

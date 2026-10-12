@@ -54,12 +54,20 @@ export function isUdpOutbound(outbound: unknown): boolean {
     (typeof detour === 'string' && detour.trim() !== '') ||
     (typeof dialerProxy === 'string' && dialerProxy.trim() !== '') ||
     (typeof nativeTransport === 'string' && nativeTransport.toLowerCase() === 'quic') ||
-    ['wireguard', 'amneziawg', 'hysteria', 'hysteria2', 'tuic', 'selector', 'urltest'].includes(
-      protocol,
-    ) ||
+    [
+      'wireguard',
+      'amneziawg',
+      'hysteria',
+      'hysteria2',
+      'tuic',
+      'selector',
+      'urltest',
+      'mieru',
+    ].includes(protocol) ||
     network === 'hysteria' ||
     network === 'kcp' ||
-    // The core resolves "kcp" and "mkcp" to the same mKCP transport.
+    // Legacy UDP transports must reach core validation rather than report
+    // success from a bare TCP connection.
     network === 'mkcp' ||
     network === 'quic'
   );

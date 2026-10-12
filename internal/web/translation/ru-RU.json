@@ -552,7 +552,6 @@
         "naiveShareLinkFormatStandard": "Стандартный NaiveProxy",
         "naiveShareLinkFormatHiddify": "Hiddify",
         "naiveHint": "SNI можно не заполнять. В Hiddify-ссылке SNI автоматически берётся из домена ссылки; укажите его вручную только если сертификат использует другое имя.",
-        "visionTestseed": "Vision testseed",
         "version": "Версия",
         "udpIdleTimeout": "UDP idle timeout (с)",
         "masquerade": "Masquerade",
@@ -699,7 +698,6 @@
         "getNewCert": "Получить новый сертификат",
         "mldsa65Seed": "mldsa65 Seed",
         "mldsa65Verify": "mldsa65 Verify",
-        "getNewSeed": "Получить новый Seed",
         "listenHelp": "Можно также указать путь Unix-сокета (например, /run/xray/in.sock) или имя абстрактного сокета с префиксом @ (например, @xray/in.sock), чтобы слушать сокет вместо TCP-порта — в этом случае задайте порт 0.",
         "shareAddrStrategy": "Стратегия адреса для ссылок",
         "shareAddrStrategyHelp": "Определяет, какой адрес записывать в экспортируемые ссылки, QR-коды и выдачу подписки.",
@@ -856,7 +854,8 @@
         "fptnToken": "Токен FPTN",
         "fptnBypass": "Способ подключения",
         "openfluxSecret": "Секрет шифрования",
-        "openfluxOutboundHint": "Адреса каналов, приоритеты и контекст находятся в JSON ниже. Импорт openflux:// переносит их автоматически. Для одного серверного inbound используйте только одну активную клиентскую сессию."
+        "openfluxOutboundHint": "Адреса каналов, приоритеты и контекст находятся в JSON ниже. Импорт openflux:// переносит их автоматически. Для одного серверного inbound используйте только одну активную клиентскую сессию.",
+        "legacyRealityUnsupported": "Параметры ML-DSA для REALITY не поддерживаются этим Sing-box. Удалите их явно, чтобы сохранить конфигурацию."
       },
       "info": {
         "mode": "Режим",
@@ -1113,7 +1112,8 @@
       "renewOnDay": "Продлевать числа",
       "renewOnDayDesc": "Продлевать этого числа каждого месяца, в полночь по часовому поясу панели, вместо интервала в днях. Если в месяце такого числа нет, продление придётся на последний день. 0 — оставить режим интервала.",
       "renewsUsed": "Продлений израсходовано",
-      "bulkAdTagHint": "Введите 32-значный hex-тег для установки или 'none' для очистки спонсорского канала на MTProto."
+      "bulkAdTagHint": "Введите 32-значный hex-тег для установки или 'none' для очистки спонсорского канала на MTProto.",
+      "reverseUnsupported": "VLESS Reverse не поддерживается этим Sing-box. Удалите настройку явно, чтобы сохранить конфигурацию."
     },
     "groups": {
       "name": "Имя",
@@ -2074,8 +2074,6 @@
         "optional": "опционально",
         "udpOverTcp": "UDP over TCP",
         "uotVersion": "Версия UoT",
-        "inboundTag": "Тег входящего",
-        "inboundTagPlaceholder": "тег входящего в правилах маршрутизации",
         "responseType": "Тип ответа",
         "customResponseData": "Свой ответ (base64)",
         "rewriteNetwork": "Переписать сеть",
@@ -2102,7 +2100,6 @@
         "maxReusableSecs": "Макс. секунд повторного использования",
         "keepAlivePeriod": "Период keep alive",
         "authPassword": "Пароль авторизации",
-        "visionTestpre": "Vision testpre",
         "serverNamePlaceholder": "имя сервера",
         "verifyPeerName": "Проверять имя peer",
         "pinnedSha256": "Pinned SHA256",

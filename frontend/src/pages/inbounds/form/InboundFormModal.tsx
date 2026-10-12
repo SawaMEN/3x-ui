@@ -46,7 +46,6 @@ import { NODE_ELIGIBLE_PROTOCOLS, nodeSupportsProtocol } from '@/lib/xray/node-p
 import { VLESS_AUTH_LABEL_KEYS, vlessEncryptionAuthKind } from '@/lib/xray/vless-encryption';
 import { SniffingSchema } from '@/schemas/primitives/sniffing';
 import { TcpStreamSettingsSchema } from '@/schemas/protocols/stream/tcp';
-import { KcpStreamSettingsSchema } from '@/schemas/protocols/stream/kcp';
 import { WsStreamSettingsSchema } from '@/schemas/protocols/stream/ws';
 import { GrpcStreamSettingsSchema } from '@/schemas/protocols/stream/grpc';
 import { HttpUpgradeStreamSettingsSchema } from '@/schemas/protocols/stream/httpupgrade';
@@ -79,15 +78,7 @@ import {
   WireguardFields,
   VkTurnProxyFields,
 } from './protocols';
-import {
-  GrpcForm,
-  HttpUpgradeForm,
-  KcpForm,
-  RawForm,
-  SockoptForm,
-  WsForm,
-  XhttpForm,
-} from './transport';
+import { GrpcForm, HttpUpgradeForm, RawForm, SockoptForm, WsForm, XhttpForm } from './transport';
 import { RealityForm, TlsForm } from './security';
 import { useSecurityActions } from './useSecurityActions';
 import { useInboundFallbacks } from './useInboundFallbacks';
@@ -220,15 +211,13 @@ function buildAddModeValues(): InboundFormValues {
  * Switching `network` swaps which per-network key (tcpSettings, wsSettings,
  * grpcSettings, ...) appears on the wire. Seed each network's blob with its
  * Zod schema defaults so every field inside the network sub-form has a
- * defined starting value (KCP needs MTU=1350 etc., XHTTP needs the ""
+ * defined starting value (XHTTP needs the ""
  * sentinels so the "Default" option shows instead of blank).
  */
 function newStreamSlice(n: string): Record<string, unknown> {
   switch (n) {
     case 'tcp':
       return TcpStreamSettingsSchema.parse({ header: { type: 'none' } });
-    case 'kcp':
-      return KcpStreamSettingsSchema.parse({});
     case 'ws':
       return WsStreamSettingsSchema.parse({});
     case 'grpc':
@@ -367,7 +356,7 @@ export default function InboundFormModal({
    * Wireguard (always a UDP listener) and Tunnel (dokodemo-door) expose no
    * user-selectable transport — their stream tab is just sockopt, which is all
    * Tunnel's TProxy/redirect mode needs (sockopt.tproxy). Hysteria carries its
-   * own dedicated transport form. For all of these the RAW/mKCP/WS/... network
+   * own dedicated transport form. For all of these the RAW/WS/... network
    * picker and the per-network sub-forms are hidden.
    */
   const hasSelectableTransport =
@@ -457,7 +446,6 @@ export default function InboundFormModal({
   const {
     genRealityKeypair,
     clearRealityKeypair,
-    genMldsa65,
     clearMldsa65,
     scanRealityTarget,
     scanRealityCandidates,
@@ -1051,7 +1039,7 @@ export default function InboundFormModal({
   /*
    * Switching `network` swaps which per-network key appears on the wire. Clear
    * the old network's blob and seed the new one with schema defaults, plus the
-   * FinalMask mkcp-legacy UDP mask when moving to mKCP (removed otherwise).
+   * any obsolete mKCP mask when switching away from an imported legacy transport.
    */
   const onNetworkChange = (next: string) => {
     if (next === 'shadowtls') {
@@ -1100,27 +1088,12 @@ export default function InboundFormModal({
       if (k !== `${next}Settings`) delete cleaned[k];
     }
     cleaned[`${next}Settings`] = newStreamSlice(next);
-    if (next === 'kcp') {
-      const fm = (cleaned.finalmask as Record<string, unknown> | undefined) ?? {};
-      const udp = Array.isArray(fm.udp) ? (fm.udp as unknown[]) : [];
-      const hasMkcp = udp.some((m) => {
-        const entry = m as { type?: string };
-        return entry?.type === 'mkcp-legacy';
-      });
-      if (!hasMkcp) {
-        cleaned.finalmask = {
-          ...fm,
-          udp: [...udp, { type: 'mkcp-legacy', settings: { header: '', value: '' } }],
-        };
-      }
-    } else {
-      const fm = cleaned.finalmask as Record<string, unknown> | undefined;
-      if (fm && Array.isArray(fm.udp)) {
-        const udp = (fm.udp as unknown[]).filter(
-          (m) => (m as { type?: string })?.type !== 'mkcp-legacy',
-        );
-        cleaned.finalmask = { ...fm, udp };
-      }
+    const fm = cleaned.finalmask as Record<string, unknown> | undefined;
+    if (fm && Array.isArray(fm.udp)) {
+      cleaned.finalmask = {
+        ...fm,
+        udp: (fm.udp as unknown[]).filter((m) => (m as { type?: string })?.type !== 'mkcp-legacy'),
+      };
     }
     setV('streamSettings', cleaned);
   };
@@ -1147,7 +1120,6 @@ export default function InboundFormModal({
                 : []),
               ...(!SHADOWTLS_STREAMLESS_PROTOCOLS.has(protocol)
                 ? [
-                    { value: 'kcp', label: 'mKCP' },
                     { value: 'ws', label: 'WebSocket' },
                     { value: 'grpc', label: 'gRPC' },
                     { value: 'httpupgrade', label: 'HTTPUpgrade' },
@@ -1181,8 +1153,6 @@ export default function InboundFormModal({
             {network === 'xhttp' && <XhttpForm />}
 
             {network === 'httpupgrade' && <HttpUpgradeForm />}
-
-            {network === 'kcp' && <KcpForm />}
           </>
         )}
 
@@ -1260,7 +1230,6 @@ export default function InboundFormModal({
           randomizeSpiderX={randomizeSpiderX}
           genRealityKeypair={genRealityKeypair}
           clearRealityKeypair={clearRealityKeypair}
-          genMldsa65={genMldsa65}
           clearMldsa65={clearMldsa65}
         />
       )}

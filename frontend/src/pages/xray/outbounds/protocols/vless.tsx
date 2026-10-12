@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
-import { Input } from 'antd';
+import { Alert, Button, Input } from 'antd';
+import { useFormContext, useWatch } from 'react-hook-form';
 
 import { FormField, rhfZodValidate } from '@/components/form/rhf';
 import {
@@ -9,6 +10,8 @@ import {
 
 export default function VlessFields() {
   const { t } = useTranslation();
+  const { setValue } = useFormContext();
+  const reverseTag = useWatch({ name: 'settings.reverseTag' });
   return (
     <>
       <FormField
@@ -25,9 +28,17 @@ export default function VlessFields() {
       >
         <Input />
       </FormField>
-      <FormField label={t('pages.clients.reverseTag')} name={['settings', 'reverseTag']}>
-        <Input placeholder={t('pages.xray.outboundForm.optional')} />
-      </FormField>
+      {typeof reverseTag === 'string' && reverseTag.trim() && (
+        <>
+          <Alert type="warning" showIcon title={t('pages.clients.reverseUnsupported')} />
+          <FormField label={t('pages.clients.reverseTag')} name={['settings', 'reverseTag']}>
+            <Input readOnly placeholder={t('pages.xray.outboundForm.optional')} />
+          </FormField>{' '}
+          <Button danger onClick={() => setValue('settings.reverseTag', '', { shouldDirty: true })}>
+            {t('clear')}
+          </Button>
+        </>
+      )}
     </>
   );
 }

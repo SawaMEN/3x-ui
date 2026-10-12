@@ -114,7 +114,13 @@
     "user_stats_api_available": true,
     "clash_user_overlay": "deploy/hiddify/clash-user.patch",
     "sniff_override_overlay": "deploy/hiddify/sniff-override.patch",
-    "sniff_override_test_overlay": "deploy/hiddify/sniff_override_test.go.in"
+    "sniff_override_test_overlay": "deploy/hiddify/sniff_override_test.go.in",
+    "http1_options_overlay": "deploy/hiddify/http1-options.patch",
+    "http1_options_test_overlay": "deploy/hiddify/http1_options_test.go.in",
+    "cronet_linkage_profiles": {
+      "purego": "package pinned platform libcronet beside binary",
+      "musl": "with_musl, CGO_ENABLED=1, statically linked Cronet; release and Docker"
+    }
   },
   "verification": {
     "report": "hiddify-core-stage-4-verification.md",

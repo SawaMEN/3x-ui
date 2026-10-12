@@ -56,7 +56,7 @@ func buildSingBoxBatchTestConfig(source *xray.Config) (*singbox.Config, error) {
 			cfg.Endpoints = append(cfg.Endpoints, endpoint)
 			continue
 		}
-		translated, err := singbox.TranslateXrayOutbound(outbound)
+		translated, err := hiddify.TranslateOutbound(outbound)
 		if err != nil {
 			return nil, err
 		}
@@ -75,6 +75,7 @@ func buildSingBoxBatchTestConfig(source *xray.Config) (*singbox.Config, error) {
 	// Every test listener has an explicit rule, so no implicit "direct" tag
 	// is required (and may be owned by a user's proxy).
 	delete(cfg.Route, "final")
+	cfg.Route["default_domain_resolver"] = cfg.DNS["final"]
 	return cfg, nil
 }
 

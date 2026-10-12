@@ -16,7 +16,6 @@ import (
 
 type Config struct {
 	ManagedOutbounds     []map[string]any `json:"-"`
-	Hiddify              bool             `json:"-"`
 	Schema               string           `json:"$schema,omitempty"`
 	NTP                  map[string]any   `json:"ntp,omitempty"`
 	Certificate          map[string]any   `json:"certificate,omitempty"`
@@ -58,6 +57,16 @@ func (c *Config) Marshal() ([]byte, error) {
 }
 
 func TranslateXrayOutbound(raw map[string]any) (map[string]any, error) {
+	normalized, err := NormalizeOutboundInput(raw)
+	if err != nil {
+		return nil, err
+	}
+	raw = normalized
+	if !strings.HasPrefix(rawString(raw, "protocol"), "singbox:") {
+		if err := ValidatePanelIntegerOptions(raw); err != nil {
+			return nil, err
+		}
+	}
 	protocol := strings.ToLower(strings.TrimSpace(rawString(raw, "protocol")))
 	tag := rawString(raw, "tag")
 	if tag == "" {
@@ -614,6 +623,9 @@ func rawBool(m map[string]any, key string) bool {
 }
 
 func TranslateXrayInbound(raw map[string]any) (map[string]any, error) {
+	if err := ValidatePanelIntegerOptions(raw); err != nil {
+		return nil, err
+	}
 	protocol := strings.ToLower(strings.TrimSpace(rawString(raw, "protocol")))
 	if protocol == "masque" {
 		return nil, fmt.Errorf("MASQUE must be emitted as a masque-server endpoint")

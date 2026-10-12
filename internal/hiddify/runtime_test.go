@@ -25,7 +25,7 @@ check) if [ "$2" != '-c' ] || ! test -f "$3"; then exit 2; fi; if grep -q invali
 srun) exec sleep 60 ;;
 *) exit 4 ;;
 esac
-`, TargetVersion, strings.Join(requiredBuildTags, ","), TargetRevision)
+`, TargetVersion, strings.Join(append(append([]string{}, requiredBuildTags...), "with_purego"), ","), TargetRevision)
 	if err := os.WriteFile(GetBinaryPath(), []byte(script), 0700); err != nil {
 		t.Fatal(err)
 	}

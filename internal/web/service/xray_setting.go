@@ -1,15 +1,16 @@
 package service
 
 import (
+	"context"
 	_ "embed"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
+	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 	"slices"
-	"strconv"
-	"strings"
 )
 
 // XraySettingService provides business logic for Xray configuration management.
@@ -17,11 +18,6 @@ import (
 type XraySettingService struct {
 	SettingService
 }
-
-const (
-	unencryptedOutboundProhibitedError = "without TLS or other encryption is prohibited unless the server address is a private IP or domain"
-	unencryptedOutboundMinimumVersion  = "26.7.11"
-)
 
 func (s *XraySettingService) SaveXraySetting(newXraySettings string) error {
 	// The frontend round-trips the whole getXraySetting response back
@@ -45,6 +41,43 @@ func (s *XraySettingService) SaveXraySetting(newXraySettings string) error {
 	return s.saveSetting("xrayTemplateConfig", newXraySettings)
 }
 
+// SaveValidatedXraySetting checks a user-edited template against the generated
+// full native config before storing it. Internal routing synchronization uses
+// SaveXraySetting while its inbound transaction is still being committed.
+func (s *XraySettingService) SaveValidatedXraySetting(ctx context.Context, raw string) error {
+	raw = UnwrapXrayTemplateConfig(raw)
+	if err := s.CheckXrayConfig(raw); err != nil {
+		return err
+	}
+	if value, err := EnsureStatsRouting(raw); err == nil {
+		raw = value
+	}
+	if value, err := EnsureDnsServerRouting(raw); err == nil {
+		raw = value
+	}
+	if value, changed, err := database.RewriteDNSOutboundQTypeZero(raw); err == nil && changed {
+		raw = value
+	}
+	singBoxTemplateMu.Lock()
+	defer singBoxTemplateMu.Unlock()
+	snapshot, err := loadNativeConfigSnapshot()
+	if err != nil {
+		return err
+	}
+	snapshot.settings["xrayTemplateConfig"] = raw
+	native := NativeCore(CoreTypeSingBox)
+	cfg, err := native.generateNativeConfig(snapshot)
+	if err != nil {
+		return err
+	}
+	candidate, err := native.prepareGeneratedConfigCandidate(ctx, cfg)
+	if err != nil {
+		return err
+	}
+	defer candidate.close()
+	return s.saveSetting("xrayTemplateConfig", raw)
+}
+
 func (s *XraySettingService) CheckXrayConfig(XrayTemplateConfig string) error {
 	xrayConfig := &xray.Config{}
 	err := json.Unmarshal([]byte(XrayTemplateConfig), xrayConfig)
@@ -56,63 +89,28 @@ func (s *XraySettingService) CheckXrayConfig(XrayTemplateConfig string) error {
 		if err := json.Unmarshal(xrayConfig.OutboundConfigs, &outbounds); err != nil {
 			return common.NewError("xray template config invalid: outbounds is not an array:", err)
 		}
+		tags := map[string]bool{}
 		for _, outbound := range outbounds {
 			var managed map[string]any
 			if err := json.Unmarshal(outbound, &managed); err != nil {
 				return err
 			}
-			if err := validateNativeTemplateOutbound(outbound, managed, CoreTypeSingBox); err != nil {
+			normalized, err := singbox.NormalizeOutboundInput(managed)
+			if err != nil {
+				return err
+			}
+			tag := normalized["tag"].(string)
+			if tags[tag] {
+				return fmt.Errorf("duplicate outbound tag %q", tag)
+			}
+			tags[tag] = true
+			if err := validateNativeTemplateOutbound(outbound, normalized, CoreTypeSingBox); err != nil {
 				return err
 			}
 
 		}
 	}
 	return nil
-}
-
-// shouldSkipLegacyUnencryptedOutboundRejection lets an older running Xray
-// core accept an outbound that the newer embedded validator rejects solely
-// because it is unencrypted and targets a public address. Unknown or malformed
-// versions preserve the embedded validator's strict behavior.
-func shouldSkipLegacyUnencryptedOutboundRejection(coreVersion string, err error) bool {
-	if err == nil || !strings.Contains(err.Error(), unencryptedOutboundProhibitedError) {
-		return false
-	}
-	comparison, ok := compareXrayCoreVersions(coreVersion, unencryptedOutboundMinimumVersion)
-	return ok && comparison < 0
-}
-
-func compareXrayCoreVersions(a, b string) (int, bool) {
-	aParts, okA := parseXrayCoreVersionParts(a)
-	bParts, okB := parseXrayCoreVersionParts(b)
-	if !okA || !okB {
-		return 0, false
-	}
-	for i := range len(aParts) {
-		if aParts[i] > bParts[i] {
-			return 1, true
-		}
-		if aParts[i] < bParts[i] {
-			return -1, true
-		}
-	}
-	return 0, true
-}
-
-func parseXrayCoreVersionParts(version string) ([3]int, bool) {
-	var result [3]int
-	parts := strings.Split(strings.TrimPrefix(strings.TrimSpace(version), "v"), ".")
-	if len(parts) != len(result) {
-		return result, false
-	}
-	for i, part := range parts {
-		n, err := strconv.Atoi(part)
-		if err != nil {
-			return result, false
-		}
-		result[i] = n
-	}
-	return result, true
 }
 
 func (s *XraySettingService) UpdateWarpXraySetting(warpData map[string]string, warpConfig map[string]any) error {

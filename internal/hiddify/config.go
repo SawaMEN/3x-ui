@@ -15,7 +15,6 @@ func FinalizeServerConfig(cfg *singbox.Config) error {
 	if cfg == nil {
 		return fmt.Errorf("hiddify server configuration is nil")
 	}
-	cfg.Hiddify = true
 	cfg.Services = nil // The pinned profile exposes stats through V2Ray and Clash.
 	data, err := cfg.Marshal()
 	if err != nil {
@@ -161,7 +160,7 @@ func ValidateConfigReferences(cfg map[string]any) error {
 	require := func(set map[string]bool, value any, path, kind string) error {
 		for _, name := range configNames(value) {
 			if !set[name] {
-				return fmt.Errorf("hiddify %s references missing %s %q", path, kind, name)
+				return fmt.Errorf("sing-box %s references missing %s %q", path, kind, name)
 			}
 		}
 		return nil
@@ -307,7 +306,7 @@ func validateDependencyCycles(names map[string]bool, edges map[string][]string, 
 	var visit func(string) error
 	visit = func(name string) error {
 		if state[name] == 1 {
-			return fmt.Errorf("hiddify %s dependency cycle at %q", kind, name)
+			return fmt.Errorf("sing-box %s dependency cycle at %q", kind, name)
 		}
 		if state[name] == 2 {
 			return nil

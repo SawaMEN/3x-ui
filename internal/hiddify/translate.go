@@ -24,6 +24,13 @@ func TranslateOutbound(raw map[string]any) (map[string]any, error) {
 }
 
 func translate(raw map[string]any, inbound bool) (map[string]any, error) {
+	if !inbound {
+		normalized, err := singbox.NormalizeOutboundInput(raw)
+		if err != nil {
+			return nil, err
+		}
+		raw = normalized
+	}
 	copy, err := clone(raw)
 	if err != nil {
 		return nil, err
@@ -31,7 +38,7 @@ func translate(raw map[string]any, inbound bool) (map[string]any, error) {
 	for _, key := range []string{"settings", "streamSettings"} {
 		if value := copy[key]; value != nil {
 			if _, ok := value.(map[string]any); !ok {
-				return nil, fmt.Errorf("hiddify %q: %s must be an object", copy["tag"], key)
+				return nil, fmt.Errorf("sing-box %q: %s must be an object", copy["tag"], key)
 			}
 		}
 	}
@@ -39,15 +46,21 @@ func translate(raw map[string]any, inbound bool) (map[string]any, error) {
 	settings := object(copy, "settings")
 	protocol, _ := copy["protocol"].(string)
 	protocol = strings.ToLower(strings.TrimSpace(protocol))
-	label := fmt.Sprintf("hiddify %s %q", direction(inbound), copy["tag"])
+	label := fmt.Sprintf("sing-box %s %q", direction(inbound), copy["tag"])
 	if inbound && protocol == "tun" {
 		return translateTun(copy)
 	}
 	if err := rejectProtectionLoss(settings, stream, label); err != nil {
 		return nil, err
 	}
+	if !strings.HasPrefix(protocol, "singbox:") {
+		if err := singbox.ValidatePanelIntegerOptions(copy); err != nil {
+			return nil, err
+		}
+	}
 	var transport map[string]any
-	if stream["network"] == "xhttp" {
+	network, _ := stream["network"].(string)
+	if strings.EqualFold(strings.TrimSpace(network), "xhttp") {
 		if value := stream["xhttpSettings"]; value != nil {
 			if _, ok := value.(map[string]any); !ok {
 				return nil, fmt.Errorf("%s: xhttpSettings must be an object", label)

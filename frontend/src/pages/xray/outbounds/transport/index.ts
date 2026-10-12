@@ -1,5 +1,4 @@
 export { default as RawForm } from './raw';
-export { default as KcpForm } from './kcp';
 export { default as WsForm } from './ws';
 export { default as GrpcForm } from './grpc';
 export { default as HttpUpgradeForm } from './httpupgrade';

@@ -301,8 +301,8 @@ func validateSingBoxOutbound(outbound map[string]any) error {
 	if !singBoxOutboundSupportsV2RayTransport(protocol) {
 		return fmt.Errorf("sing-box outbound %q protocol %s does not support V2Ray transport", tag, protocol)
 	}
-	switch rawString(transport, "type") {
-	case "http", "ws", "quic", "grpc", "httpupgrade":
+	switch strings.ToLower(strings.TrimSpace(rawString(transport, "type"))) {
+	case "http", "ws", "quic", "grpc", "httpupgrade", "xhttp", "raw":
 		return nil
 	default:
 		return fmt.Errorf("sing-box outbound %q uses unsupported V2Ray transport %q", tag, rawString(transport, "type"))
@@ -483,12 +483,7 @@ func (c *Config) MarshalJSON() ([]byte, error) {
 
 	for _, source := range normalizedOutbounds {
 		outbound := maps.Clone(source)
-		validation := outbound
-		if c.Hiddify && rawString(rawObject(outbound, "transport"), "type") == "xhttp" {
-			validation = maps.Clone(outbound)
-			validation["transport"] = map[string]any{"type": "http"}
-		}
-		if err := validateSingBoxOutbound(validation); err != nil {
+		if err := validateSingBoxOutbound(outbound); err != nil {
 			return nil, err
 		}
 		tag := rawString(outbound, "tag")

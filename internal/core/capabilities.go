@@ -20,16 +20,11 @@ type Capabilities struct {
 // integration needed to use it.
 func CapabilitiesFor(t Type) Capabilities {
 	switch t {
-	case Xray:
-		return Capabilities{
-			ConnectionStats:  true,
-			HotInboundReload: true,
-			GeoIP:            true,
-			GeoSite:          true,
-		}
 	case SingBox:
 		return Capabilities{
 			RuleSets:           true,
+			GeoIP:              true,
+			GeoSite:            true,
 			OutboundDelayProbe: true,
 			ConnectionStats:    true,
 			ClashAPI:           true,

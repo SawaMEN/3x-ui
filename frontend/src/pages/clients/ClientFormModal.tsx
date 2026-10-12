@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  Alert,
   AutoComplete,
   Button,
   Col,
@@ -1078,11 +1079,27 @@ export default function ClientFormModal({
                               </FormField>
                             </Col>
                           )}
-                          {showReverseTag && (
+                          {showReverseTag && reverseTag && (
                             <Col xs={24} md={12}>
+                              <Alert
+                                type="warning"
+                                showIcon
+                                title={t('pages.clients.reverseUnsupported')}
+                              />
                               <FormField name="reverseTag" label={t('pages.clients.reverseTag')}>
-                                <Input placeholder={t('pages.clients.reverseTagPlaceholder')} />
+                                <Input
+                                  readOnly
+                                  placeholder={t('pages.clients.reverseTagPlaceholder')}
+                                />
                               </FormField>
+                              <Button
+                                danger
+                                onClick={() =>
+                                  methods.setValue('reverseTag', '', { shouldDirty: true })
+                                }
+                              >
+                                {t('clear')}
+                              </Button>
                             </Col>
                           )}
                         </Row>

@@ -33,6 +33,7 @@ func TestNativeOutboundBinaryMatrix(t *testing.T) {
 		"snell":       `{"server":"127.0.0.1","server_port":443,"version":4,"psk":"secret"}`,
 		"ssh":         `{"server":"127.0.0.1"}`,
 		"tor":         `{}`,
+		"mieru":       `{"server":"127.0.0.1","username":"alice","password":"secret","portBindings":[{"protocol":"TCP","port":2012}],"mtu":1400,"multiplexing":"MIDDLE","handshake_mode":"STANDARD"}`,
 		"naive":       `{"server":"127.0.0.1","server_port":443,"username":"proxy","password":"secret","tls":{"enabled":true}}`,
 		"selector":    `{"outbounds":["direct"],"default":"direct"}`,
 		"urltest":     `{"outbounds":["direct"],"interval":"3m"}`,

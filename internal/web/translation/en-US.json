@@ -531,7 +531,6 @@
         "naiveShareLinkFormatStandard": "Standard NaiveProxy",
         "naiveShareLinkFormatHiddify": "Hiddify",
         "naiveHint": "SNI can be left empty. In Hiddify links, SNI is automatically taken from the link domain; set it manually only when the certificate uses a different hostname.",
-        "visionTestseed": "Vision testseed",
         "version": "Version",
         "udpIdleTimeout": "UDP idle timeout (s)",
         "masquerade": "Masquerade",
@@ -690,7 +689,6 @@
         "getNewCert": "Get New Cert",
         "mldsa65Seed": "mldsa65 Seed",
         "mldsa65Verify": "mldsa65 Verify",
-        "getNewSeed": "Get New Seed",
         "limitFallback": "Limit Fallback",
         "limitFallbackUpload": "Limit Fallback Upload",
         "limitFallbackDownload": "Limit Fallback Download",
@@ -856,7 +854,8 @@
         "fptnToken": "FPTN token",
         "fptnBypass": "Connection method",
         "openfluxSecret": "Encryption secret",
-        "openfluxOutboundHint": "Channel URLs, priorities and key context are in the JSON below. Importing openflux:// fills them automatically. Use only one active client session per server inbound."
+        "openfluxOutboundHint": "Channel URLs, priorities and key context are in the JSON below. Importing openflux:// fills them automatically. Use only one active client session per server inbound.",
+        "legacyRealityUnsupported": "This Sing-box does not support ML-DSA REALITY options. Clear them explicitly before saving the configuration."
       },
       "info": {
         "mode": "Mode",
@@ -1113,7 +1112,8 @@
       "renewOnDay": "Renew on day",
       "renewOnDayDesc": "Renew on this day of every calendar month, at midnight in the panel's time zone, instead of every N days. A month too short for the chosen day renews on its last day. 0 keeps the day-interval mode.",
       "renewsUsed": "Renewals used",
-      "bulkAdTagHint": "Enter a 32-character hex tag to set, or 'none' to clear sponsor channel on MTProto inbounds."
+      "bulkAdTagHint": "Enter a 32-character hex tag to set, or 'none' to clear sponsor channel on MTProto inbounds.",
+      "reverseUnsupported": "This Sing-box does not support VLESS Reverse. Clear the option explicitly before saving the configuration."
     },
     "groups": {
       "name": "Name",
@@ -2193,8 +2193,6 @@
         "optional": "optional",
         "udpOverTcp": "UDP over TCP",
         "uotVersion": "UoT version",
-        "inboundTag": "Inbound tag",
-        "inboundTagPlaceholder": "inbound tag used in routing rules",
         "responseType": "Response type",
         "customResponseData": "Custom response (base64)",
         "rewriteNetwork": "Rewrite network",
@@ -2221,7 +2219,6 @@
         "maxReusableSecs": "Max reusable secs",
         "keepAlivePeriod": "Keep alive period",
         "authPassword": "Auth password",
-        "visionTestpre": "Vision testpre",
         "serverNamePlaceholder": "server name",
         "verifyPeerName": "Verify peer name",
         "pinnedSha256": "Pinned SHA256",

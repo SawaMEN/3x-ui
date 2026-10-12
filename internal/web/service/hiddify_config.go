@@ -20,7 +20,7 @@ type HiddifyConfigGenerator struct{}
 func (g *HiddifyConfigGenerator) Generate() (*singbox.Config, error) {
 	snapshot, err := loadNativeConfigSnapshot()
 	if err != nil {
-		return nil, fmt.Errorf("hiddify configuration snapshot: %w", err)
+		return nil, fmt.Errorf("sing-box configuration snapshot: %w", err)
 	}
 	return NativeCore(CoreTypeHiddify).generateNativeConfig(snapshot)
 }

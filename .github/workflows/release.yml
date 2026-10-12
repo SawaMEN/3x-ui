@@ -149,6 +149,7 @@ jobs:
           export PATH="$(realpath "$TOOLCHAIN_DIR")/bin:$PATH"
           export CC=$(realpath "$(find "$TOOLCHAIN_DIR/bin" -name '*-gcc.br_real' -type f -executable | head -n1)")
           test -n "$CC"
+          echo "CC=$CC" >> "$GITHUB_ENV"
           cd -
 
           LDFLAGS="-w -s -linkmode external -extldflags '-static'"
@@ -224,8 +225,12 @@ jobs:
 
           cd ../..
 
-      - name: Build pinned hiddify-core
+      - name: Install Cronet static linker
+        run: sudo apt-get update && sudo apt-get install -y lld
+
+      - name: Build pinned Sing-box
         env:
+          SINGBOX_CRONET_LINKAGE: musl
           GOOS: linux
           GOARCH: ${{ matrix.platform }}
         run: bash tools/build-hiddify-core.sh "$PWD/x-ui/bin"

@@ -8,6 +8,5 @@ export { default as SocksFields } from './socks';
 export { default as WireguardFields } from './wireguard';
 export { default as AmneziawgFields } from './amneziawg';
 export { default as FreedomFields } from './freedom';
-export { default as LoopbackFields } from './loopback';
 export { default as BlackholeFields } from './blackhole';
 export { default as DnsFields } from './dns';

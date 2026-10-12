@@ -139,7 +139,7 @@ func (a *XraySettingController) getXraySetting(c *gin.Context) {
 // outbounds or routing rules changed, with a process restart otherwise.
 func (a *XraySettingController) updateSetting(c *gin.Context) {
 	xraySetting := c.PostForm("xraySetting")
-	if err := a.XraySettingService.SaveXraySetting(xraySetting); err != nil {
+	if err := a.XraySettingService.SaveValidatedXraySetting(c.Request.Context(), xraySetting); err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
 		return
 	}

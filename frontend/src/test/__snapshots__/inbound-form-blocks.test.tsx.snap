@@ -14,8 +14,6 @@ exports[`inbound security forms > RealityForm field structure is stable 1`] = `
   "SpiderX",
   "Public Key",
   "Private Key",
-  "mldsa65 Seed",
-  "mldsa65 Verify",
   "Master Key Log",
 ]
 `;
@@ -55,17 +53,6 @@ exports[`inbound transport forms > HttpUpgradeForm field structure is stable 1`]
   "Host",
   "Path",
   "Headers",
-]
-`;
-
-exports[`inbound transport forms > KcpForm field structure is stable 1`] = `
-[
-  "MTU",
-  "TTI (ms)",
-  "Uplink (MB/s)",
-  "Downlink (MB/s)",
-  "CWND Multiplier",
-  "Max Sending Window",
 ]
 `;
 

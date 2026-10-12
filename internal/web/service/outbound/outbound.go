@@ -20,7 +20,7 @@ import (
 // OutboundService provides business logic for managing Xray outbound configurations.
 // It handles outbound traffic monitoring and statistics.
 type OutboundService struct {
-	// CoreType selects the core for isolated handshake probes. Empty means Xray.
+	// CoreType retains compatibility with stored callers; probes use Sing-box.
 	CoreType string
 }
 
@@ -236,11 +236,12 @@ func outboundTransportIsUDP(ob map[string]any) bool {
 	if kind, _ := transport["type"].(string); equalsAnyFold(kind, "quic") {
 		return true
 	}
-	if protocol, _ := ob["protocol"].(string); equalsAnyFold(normalizedProbeProtocol(protocol), "hysteria", "hysteria2", "tuic", "wireguard", "amneziawg", "fptn", "openflux", "selector", "urltest") {
+	if protocol, _ := ob["protocol"].(string); equalsAnyFold(normalizedProbeProtocol(protocol), "hysteria", "hysteria2", "tuic", "wireguard", "amneziawg", "fptn", "openflux", "selector", "urltest", "mieru") {
 		return true
 	}
 	if stream, ok := ob["streamSettings"].(map[string]any); ok {
-		// The core resolves "kcp" and "mkcp" to the same mKCP transport.
+		// Legacy UDP transports are sent through validation and must not get
+		// a misleading success from a bare TCP connection.
 		if n, _ := stream["network"].(string); equalsAnyFold(n, "hysteria", "kcp", "mkcp", "quic") {
 			return true
 		}

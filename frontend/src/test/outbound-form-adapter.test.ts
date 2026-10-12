@@ -849,3 +849,18 @@ describe('outbound-form-adapter: full optional-block round-trip', () => {
     expect(back.mux).toMatchObject({ enabled: true });
   });
 });
+
+it('does not invent a Vision testseed when converting native-compatible VLESS', () => {
+  const form = rawOutboundToFormValues({
+    protocol: 'vless',
+    tag: 'vision',
+    settings: {
+      address: 'proxy.test',
+      port: 443,
+      id: '2a547fe4-5b0f-4a84-845c-131464875bf8',
+      flow: 'xtls-rprx-vision',
+    },
+    streamSettings: { network: 'tcp', security: 'tls' },
+  });
+  expect(formValuesToWirePayload(form).settings).not.toHaveProperty('testseed');
+});

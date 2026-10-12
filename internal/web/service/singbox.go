@@ -402,25 +402,17 @@ func (s *SingBoxService) SaveTemplate(ctx context.Context, raw string) error {
 	if err := singBoxSettingService.SetSingBoxConfigTemplate(normalized); err != nil {
 		return err
 	}
-	rollback := func() {
-		_ = singBoxSettingService.SetSingBoxConfigTemplate(old)
-		_ = s.WriteConfig()
+	rollback := func() error {
+		return errors.Join(singBoxSettingService.SetSingBoxConfigTemplate(old), s.WriteConfig())
 	}
 	if err := s.WriteConfig(); err != nil {
-		rollback()
-		return err
+		return errors.Join(err, rollback())
 	}
 	if !s.IsRunning() {
 		return nil
 	}
-	if err := s.Validate(ctx); err != nil {
-		rollback()
-		return err
-	}
 	if err := s.Restart(ctx); err != nil {
-		rollback()
-		_ = s.Restart(ctx)
-		return err
+		return errors.Join(err, rollback(), s.Restart(ctx))
 	}
 	return nil
 }
@@ -435,25 +427,17 @@ func (s *SingBoxService) ResetTemplate(ctx context.Context) error {
 	if err := singBoxSettingService.SetSingBoxConfigTemplate(""); err != nil {
 		return err
 	}
-	rollback := func() {
-		_ = singBoxSettingService.SetSingBoxConfigTemplate(old)
-		_ = s.WriteConfig()
+	rollback := func() error {
+		return errors.Join(singBoxSettingService.SetSingBoxConfigTemplate(old), s.WriteConfig())
 	}
 	if err := s.WriteConfig(); err != nil {
-		rollback()
-		return err
+		return errors.Join(err, rollback())
 	}
 	if !s.IsRunning() {
 		return nil
 	}
-	if err := s.Validate(ctx); err != nil {
-		rollback()
-		return err
-	}
 	if err := s.Restart(ctx); err != nil {
-		rollback()
-		_ = s.Restart(ctx)
-		return err
+		return errors.Join(err, rollback(), s.Restart(ctx))
 	}
 	return nil
 }

@@ -269,8 +269,8 @@ it('browses databases without selection controls in read-only mode', async () =>
   );
   await screen.findByText('google');
   expect(screen.queryByRole('checkbox')).toBeNull();
-  expect(screen.queryByRole('button', { name: 'Apply', exact: true })).toBeNull();
-  await userEvent.setup().click(screen.getAllByRole('button', { name: 'Close', exact: true }).at(-1)!);
+  expect(screen.queryByRole('button', { name: 'Apply' })).toBeNull();
+  await userEvent.setup().click(screen.getAllByRole('button', { name: 'Close' }).at(-1)!);
   expect(onClose).toHaveBeenCalledOnce();
   expect(onApply).not.toHaveBeenCalled();
 });

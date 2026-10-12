@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 	"os"
 	"path/filepath"
 )
@@ -47,6 +48,10 @@ func (s *SingBoxService) prepareConfigCandidate(ctx context.Context) (_ *nativeC
 	if err != nil {
 		return nil, err
 	}
+	return s.prepareGeneratedConfigCandidate(ctx, cfg)
+}
+
+func (s *SingBoxService) prepareGeneratedConfigCandidate(ctx context.Context, cfg *singbox.Config) (_ *nativeConfigCandidate, err error) {
 	data, err := cfg.Marshal()
 	if err != nil {
 		return nil, err

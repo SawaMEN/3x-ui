@@ -40,7 +40,6 @@ interface RealityFormProps {
   randomizeSpiderX: () => void;
   genRealityKeypair: () => void;
   clearRealityKeypair: () => void;
-  genMldsa65: () => void;
   clearMldsa65: () => void;
 }
 
@@ -55,7 +54,6 @@ export default function RealityForm({
   randomizeSpiderX,
   genRealityKeypair,
   clearRealityKeypair,
-  genMldsa65,
   clearMldsa65,
 }: RealityFormProps) {
   const { t } = useTranslation();
@@ -284,28 +282,34 @@ export default function RealityForm({
           </Button>
         </Space>
       </Form.Item>
-      <FormField
-        name={['streamSettings', 'realitySettings', 'mldsa65Seed']}
-        label={t('pages.inbounds.form.mldsa65Seed')}
-      >
-        <Input.TextArea autoSize={{ minRows: 2, maxRows: 6 }} />
-      </FormField>
-      <FormField
-        name={['streamSettings', 'realitySettings', 'settings', 'mldsa65Verify']}
-        label={t('pages.inbounds.form.mldsa65Verify')}
-      >
-        <Input.TextArea autoSize={{ minRows: 2, maxRows: 6 }} />
-      </FormField>
-      <Form.Item label=" ">
-        <Space>
-          <Button type="primary" loading={saving} onClick={genMldsa65}>
-            {t('pages.inbounds.form.getNewSeed')}
-          </Button>
-          <Button danger onClick={clearMldsa65}>
-            {t('clear')}
-          </Button>
-        </Space>
-      </Form.Item>
+      {mldsa65Enabled && (
+        <>
+          <Alert
+            showIcon
+            type="warning"
+            title={t('pages.inbounds.form.legacyRealityUnsupported')}
+          />
+          <FormField
+            name={['streamSettings', 'realitySettings', 'mldsa65Seed']}
+            label={t('pages.inbounds.form.mldsa65Seed')}
+          >
+            <Input.TextArea readOnly autoSize={{ minRows: 2, maxRows: 6 }} />
+          </FormField>
+          <FormField
+            name={['streamSettings', 'realitySettings', 'settings', 'mldsa65Verify']}
+            label={t('pages.inbounds.form.mldsa65Verify')}
+          >
+            <Input.TextArea readOnly autoSize={{ minRows: 2, maxRows: 6 }} />
+          </FormField>
+          <Form.Item label=" ">
+            <Space>
+              <Button danger onClick={clearMldsa65}>
+                {t('clear')}
+              </Button>
+            </Space>
+          </Form.Item>
+        </>
+      )}
       <FormField
         name={['streamSettings', 'realitySettings', 'masterKeyLog']}
         label={t('pages.inbounds.form.masterKeyLog')}
