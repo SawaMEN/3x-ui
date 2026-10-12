@@ -174,6 +174,7 @@ describe('useAllSettings', () => {
     expect(result.current.allSetting.hasTgBotToken).toBe(true);
     expect(result.current.saveDisabled).toBe(true);
   });
+
   it('sends the complete settings when saving a partial security change', async () => {
     const post = vi.spyOn(HttpUtil, 'post').mockImplementation(async (url) => {
       if (url === '/panel/api/setting/all') {
@@ -207,5 +208,4 @@ describe('useAllSettings', () => {
       }),
     );
   });
-
 });
