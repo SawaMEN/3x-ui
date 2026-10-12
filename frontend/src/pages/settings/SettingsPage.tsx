@@ -163,7 +163,8 @@ export default function SettingsPage() {
     // webDomain is also enforced by the backend Host validator: continuing
     // to use the old hostname after changing it results in HTTP 403.
     const nextHost = webDomain?.trim() || entryHost;
-    const hostname = nextHost.includes(':') && !nextHost.startsWith('[') ? `[${nextHost}]` : nextHost;
+    const hostname =
+      nextHost.includes(':') && !nextHost.startsWith('[') ? `[${nextHost}]` : nextHost;
     url.hostname = hostname;
 
     // Preserve the public HTTPS origin when TLS is terminated by a reverse
