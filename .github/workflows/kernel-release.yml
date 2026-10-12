@@ -1,100 +1,15 @@
 name: Release modified Sing-box
-
 on:
-  workflow_dispatch:
   push:
     branches: [update]
-    paths:
-      - .github/workflows/kernel-release.yml
-      - docs/hiddify-core-target.json
-      - deploy/hiddify/**
-      - tools/build-hiddify-core.sh
-
+    paths: [.github/workflows/kernel-release.yml]
 permissions:
   contents: read
-
 concurrency:
   group: sing-box-release-${{ github.ref }}
-  cancel-in-progress: false
-
+  cancel-in-progress: true
 jobs:
-  build:
+  release-location:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [amd64, arm64]
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
-        with:
-          go-version: '1.26.8'
-      - name: Build pinned kernel and validate host configuration
-        env:
-          GOOS: linux
-          GOARCH: ${{ matrix.arch }}
-          SINGBOX_CRONET_LINKAGE: purego
-        run: bash tools/build-hiddify-core.sh "$PWD/kernel-output"
-      - name: Package kernel and matching runtime library
-        env:
-          KERNEL_ARCH: ${{ matrix.arch }}
-        run: |
-          set -euo pipefail
-          mkdir release-assets
-          tar -C kernel-output -czf "release-assets/sing-box-linux-${KERNEL_ARCH}.tar.gz" \
-            "hiddify-core-linux-${KERNEL_ARCH}" "hiddify-core-linux-${KERNEL_ARCH}.sha256" \
-            libcronet.so libcronet.so.sha256 target.json
-          (cd release-assets; sha256sum "sing-box-linux-${KERNEL_ARCH}.tar.gz" > "sing-box-linux-${KERNEL_ARCH}.tar.gz.sha256")
-      - uses: actions/upload-artifact@v7
-        with:
-          name: sing-box-linux-${{ matrix.arch }}
-          path: release-assets/*
-          if-no-files-found: error
-          compression-level: 0
-
-  publish:
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v7
-        with:
-          pattern: sing-box-linux-*
-          path: release-assets
-          merge-multiple: true
-      - name: Publish verified kernel release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          SOURCE_COMMIT: ${{ github.sha }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          version=$(python3 -c 'import json; print(json.load(open("docs/hiddify-core-target.json"))["target"]["version"])')
-          tag="sing-box-${version}"
-          cat > release-notes.md <<NOTES
-          Modified Sing-box ${version} for the 3x-ui update branch.
-
-          Includes Vision tuning, REALITY ML-DSA, VLESS Reverse, mKCP, XHTTP nested download overrides and dynamic balancers.
-
-          Linux x86_64: sing-box-linux-amd64.tar.gz
-          Linux ARM64: sing-box-linux-arm64.tar.gz
-
-          Extract the matching archive into the panel bin directory. Keep libcronet.so beside hiddify-core-linux-ARCH. The binary filename is retained for panel compatibility.
-          Requires the panel from update with the same pinned kernel version. Updating only the kernel on an older panel can fail its version check.
-
-          Each archive includes the kernel, matching Cronet library, SHA-256 checksums and source/build manifest. Verify the archive checksum before installation.
-          Source commit: ${SOURCE_COMMIT}
-          NOTES
-          if gh release view "$tag" --json isDraft,targetCommitish > existing-release.json 2>/dev/null; then
-            jq -e --arg source "$SOURCE_COMMIT" '.isDraft == true and .targetCommitish == $source' existing-release.json >/dev/null || {
-              echo "Release $tag already exists; refusing to replace published or unrelated assets" >&2
-              exit 1
-            }
-          else
-            gh release create "$tag" --target "$SOURCE_COMMIT" --draft --prerelease \
-              --title "Modified Sing-box ${version}" --notes-file release-notes.md
-          fi
-          gh release upload "$tag" release-assets/*.tar.gz release-assets/*.sha256 --clobber
-          gh release edit "$tag" --draft=false --prerelease --latest=false
+      - run: echo 'Kernel releases are published in SawaMEN/hiddify-core.'
