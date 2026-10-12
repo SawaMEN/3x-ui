@@ -57,7 +57,8 @@ base64url без padding. Seed должен отличаться от прива
 В panel5 оставались ограничения Reverse, mKCP, XHTTP и балансировщиков.
 В panel6 добавлены Reverse, mKCP, режим download и динамические стратегии;
 проверки и оставшиеся ограничения описаны в [отчёте](sing-box-transport-balancer-support.md).
-Вложенные XHTTP downloadSettings по-прежнему отклоняются.
+Вложенные XHTTP downloadSettings добавлены в panel7; семантика и ограничения
+описаны в отчёте.
 
 Для использования новых параметров требуется ядро **panel5**: старый бинарник
 panel4 не содержит этих изменений. Сборка: `tools/build-hiddify-core.sh`;

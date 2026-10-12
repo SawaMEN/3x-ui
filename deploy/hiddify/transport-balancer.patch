@@ -34,29 +34,60 @@
  			{Value: C.V2RayTransportTypeHTTP, StructType: reflect.TypeFor[V2RayHTTPOptions]()},
  			{Value: C.V2RayTransportTypeWebsocket, StructType: reflect.TypeFor[V2RayWebsocketOptions]()},
  			{Value: C.V2RayTransportTypeQUIC, StructType: reflect.TypeFor[V2RayQUICOptions]()},
-@@ -175,6 +181,7 @@
+@@ -175,6 +181,8 @@
  type V2RayXHTTPOptions _V2RayXHTTPOptions
  
  type V2RayXHTTPDownloadOptions struct {
-+	Mode string `json:"mode,omitempty"`
++	Download *V2RayXHTTPDownloadOptions `json:"download,omitempty"`
++	Mode     string                     `json:"mode,omitempty"`
  	V2RayXHTTPBaseOptions
  	ServerOptions
  	OutboundTLSOptionsContainer
-@@ -211,7 +218,12 @@
+@@ -210,13 +218,36 @@
+ 	if err != nil {
  		return err
  	}
- 	if c.Download != nil {
+-	if c.Download != nil {
 -		err = checkV2RayXHTTPBaseOptions(c.Mode, &c.Download.V2RayXHTTPBaseOptions)
-+		switch c.Download.Mode {
+-		if err != nil {
+-			return err
+-		}
+-	}
+-	return nil
++	_, err = c.ResolveDownload()
++	return err
++}
++
++// ResolveDownload validates every override; the deepest override selects the download endpoint.
++func (c *V2RayXHTTPOptions) ResolveDownload() (*V2RayXHTTPDownloadOptions, error) {
++	if c.Download != nil && c.Mode == "stream-one" {
++		return nil, E.New("stream-one cannot use a separate download")
++	}
++	var last *V2RayXHTTPDownloadOptions
++	seen := map[*V2RayXHTTPDownloadOptions]bool{}
++	for node, depth := c.Download, 1; node != nil; node, depth = node.Download, depth+1 {
++		if depth > 8 || seen[node] {
++			return nil, E.New("download nesting exceeds 8 or contains a cycle")
++		}
++		seen[node] = true
++		switch node.Mode {
 +		case "", "auto", "packet-up", "stream-up", "stream-one":
 +		default:
-+			return E.New("unsupported download mode: " + c.Download.Mode)
++			return nil, E.New("unsupported download mode: ", node.Mode)
 +		}
-+		err = checkV2RayXHTTPBaseOptions(c.Download.Mode, &c.Download.V2RayXHTTPBaseOptions)
- 		if err != nil {
- 			return err
- 		}
-@@ -502,3 +514,16 @@
++		if node.Server == "" || node.ServerPort == 0 {
++			return nil, E.New("download server and port required")
++		}
++		if err := checkV2RayXHTTPBaseOptions(node.Mode, &node.V2RayXHTTPBaseOptions); err != nil {
++			return nil, err
++		}
++		last = node
++	}
++	return last, nil
+ }
+ 
+ func checkV2RayXHTTPBaseOptions(mode string, options *V2RayXHTTPBaseOptions) error {
+@@ -502,3 +533,16 @@
  func (m *V2RayXHTTPXmuxOptions) GetNormalizedHMaxReusableSecs() Xbadoption.Range {
  	return m.HMaxReusableSecs
  }
@@ -954,6 +985,39 @@
 +	w.server.mu.Unlock()
 +	return nil
 +}
+--- a/transport/v2rayxhttp/client.go
++++ b/transport/v2rayxhttp/client.go
+@@ -47,6 +47,10 @@
+ 	if options.Mode == "" {
+ 		return nil, E.New("mode is not set")
+ 	}
++	download, err := options.ResolveDownload()
++	if err != nil {
++		return nil, err
++	}
+ 	dest := serverAddr
+ 	baseRequestURL, err := getBaseRequestURL(&options.V2RayXHTTPBaseOptions, dest, tlsConfig)
+ 	if err != nil {
+@@ -65,12 +69,16 @@
+ 	}
+ 	baseRequestURL2 := baseRequestURL
+ 	getHTTPClient2 := getHTTPClient
+-	if options.Download != nil {
+-		options2 := options.Download
++	if download != nil {
++		options2 := download
+ 		dialer2 := dialer
+ 		if options2.Detour != "" {
+ 			var ok bool
+-			dialer2, ok = service.FromContext[adapter.OutboundManager](ctx).Outbound(options2.Detour)
++			manager := service.FromContext[adapter.OutboundManager](ctx)
++			if manager == nil {
++				return nil, E.New("download detour requires outbound manager")
++			}
++			dialer2, ok = manager.Outbound(options2.Detour)
+ 			if !ok {
+ 				return nil, E.New("outbound detour not found: ", options2.Detour)
+ 			}
 --- a/transport/v2rayxhttp/server.go
 +++ b/transport/v2rayxhttp/server.go
 @@ -8,7 +8,6 @@

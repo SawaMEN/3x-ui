@@ -107,10 +107,20 @@ func translateXHTTP(raw map[string]any, inbound bool, label string) (map[string]
 	if mode := out["mode"]; mode != nil && mode != "" && mode != "auto" && mode != "packet-up" && mode != "stream-up" && mode != "stream-one" {
 		return nil, fmt.Errorf("%s: invalid XHTTP mode %v", label, mode)
 	}
+	if out["mode"] == "stream-one" && out["download"] != nil {
+		return nil, fmt.Errorf("%s: stream-one cannot use a separate download", label)
+	}
 	return out, nil
 }
 
 func translateDownload(raw map[string]any, label string) (map[string]any, error) {
+	return translateDownloadDepth(raw, label, 1)
+}
+
+func translateDownloadDepth(raw map[string]any, label string, depth int) (map[string]any, error) {
+	if depth > 8 {
+		return nil, fmt.Errorf("%s: downloadSettings depth exceeds 8", label)
+	}
 	for key, value := range raw {
 		switch key {
 		case "address", "port", "network", "security", "tlsSettings", "realitySettings", "xhttpSettings", "sockopt":
@@ -132,9 +142,10 @@ func translateDownload(raw map[string]any, label string) (map[string]any, error)
 	if err != nil {
 		return nil, err
 	}
-	if meaningful(xhttp["downloadSettings"]) {
-		return nil, fmt.Errorf("%s: nested downloadSettings cannot be preserved", label)
-	}
+	nested := xhttp["downloadSettings"]
+	delete(xhttp, "downloadSettings")
+	raw = maps.Clone(raw)
+	raw["xhttpSettings"] = xhttp
 	out, err := TranslateOutbound(map[string]any{
 		"protocol": "vless", "tag": label + " download",
 		"settings": map[string]any{
@@ -156,6 +167,17 @@ func translateDownload(raw map[string]any, label string) (map[string]any, error)
 		default:
 			return nil, fmt.Errorf("%s: downloadSettings cannot preserve %s", label, key)
 		}
+	}
+	if meaningful(nested) {
+		child, ok := nested.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("%s: nested downloadSettings must be an object", label)
+		}
+		translated, err := translateDownloadDepth(child, label+" download", depth+1)
+		if err != nil {
+			return nil, err
+		}
+		download["download"] = translated
 	}
 	return download, nil
 }

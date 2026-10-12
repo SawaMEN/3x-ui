@@ -136,7 +136,7 @@ func TestTranslateXHTTPDownload(t *testing.T) {
 	}
 }
 
-func TestDownloadRejectsNestedSettingsIncludingExtra(t *testing.T) {
+func TestDownloadPreservesNestedSettingsIncludingExtra(t *testing.T) {
 	for _, extra := range []bool{false, true} {
 		t.Run(fmt.Sprintf("extra=%v", extra), func(t *testing.T) {
 			xhttp := map[string]any{"downloadSettings": map[string]any{
@@ -145,11 +145,11 @@ func TestDownloadRejectsNestedSettingsIncludingExtra(t *testing.T) {
 			if extra {
 				xhttp = map[string]any{"extra": xhttp}
 			}
-			_, err := translateDownload(map[string]any{
+			out, err := translateDownload(map[string]any{
 				"address": "down.example.com", "port": 443, "network": "xhttp", "xhttpSettings": xhttp,
 			}, "test")
-			if err == nil || !strings.Contains(err.Error(), "nested downloadSettings cannot be preserved") {
-				t.Fatalf("nested download must fail explicitly: %v", err)
+			if err != nil || object(out, "download")["server"] != "nested.example.com" {
+				t.Fatalf("nested download lost: %v %v", out, err)
 			}
 		})
 	}

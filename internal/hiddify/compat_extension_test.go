@@ -63,3 +63,21 @@ func TestDownloadExplicitModesPreserved(t *testing.T) {
 		}
 	}
 }
+func TestNestedDownloadTranslation(t *testing.T) {
+	leaf := map[string]any{"address": "127.0.0.1", "port": 443, "network": "xhttp", "xhttpSettings": map[string]any{"path": "/leaf"}}
+	root := map[string]any{"address": "127.0.0.1", "port": 444, "network": "xhttp", "xhttpSettings": map[string]any{"downloadSettings": leaf}}
+	out, err := translateDownload(root, "nested")
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkProtectionConfig(t, "outbounds", map[string]any{"type": "vless", "tag": "nested-test", "server": "127.0.0.1", "server_port": 443, "uuid": "11111111-1111-4111-8111-111111111111", "transport": map[string]any{"type": "xhttp", "mode": "packet-up", "download": out}})
+	if object(out, "download")["path"] != "/leaf" {
+		t.Fatal(out)
+	}
+	for i := 0; i < 8; i++ {
+		root = map[string]any{"address": "127.0.0.1", "port": 444, "network": "xhttp", "xhttpSettings": map[string]any{"downloadSettings": root}}
+	}
+	if _, err := translateDownload(root, "deep"); err == nil {
+		t.Fatal("excessive depth accepted")
+	}
+}
