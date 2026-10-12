@@ -1,6 +1,6 @@
 #!/bin/bash
-# Sourced by both release installers. Keep one verified recovery snapshot;
-# failed and unmarked snapshots are retained for manual recovery.
+# Sourced by both release installers. Recovery snapshots are temporary on
+# successful upgrades; failed and unverified snapshots remain for recovery.
 # The caller owns its EXIT status/reporting trap and calls core_migration_exit.
 core_migration_check_space() {
     local archive="$1" parent="${xui_folder%/*}" expanded available required snapshot=0 size folder
@@ -35,8 +35,8 @@ core_migration_check_space() {
 core_migration_prune_snapshots() {
     local old marker=".x-ui-upgrade-verified"
     [[ -n "${cm_backup:-}" && -d "$cm_backup" ]] || return 0
-    # Only this helper's completed transactions are eligible. Never infer
-    # success from directory names: failed rollbacks contain recovery data too.
+    # The transaction is verified and rollback has been disarmed by the caller.
+    # Never remove an unmarked/failed upgrade: it may be the only recovery copy.
     printf 'x-ui verified upgrade v1\n' > "$cm_backup/$marker" || return 1
     for old in "${xui_folder%/*}"/x-ui-upgrade.*; do
         [[ "$old" != "$cm_backup" && -d "$old" && ! -L "$old" ]] || continue
@@ -44,7 +44,10 @@ core_migration_prune_snapshots() {
         [[ "$(cat "$old/$marker")" == 'x-ui verified upgrade v1' ]] || continue
         rm -rf -- "$old" || echo "Could not remove old verified snapshot: $old" >&2
     done
-    return 0
+    # Keeping a full copy of every successful installation nearly doubles
+    # the VPS disk usage. Once the new panel and core are confirmed running,
+    # discard this transaction's large offline snapshot as well.
+    rm -rf -- "$cm_backup"
 }
 
 core_migration_prepare_archive() {
@@ -132,7 +135,7 @@ core_migration_commit() {
         if [[ "$release" == alpine ]]; then rc-update del x-ui || return 1; else systemctl disable x-ui || return 1; fi
     fi
     # Legacy executables are removed only after the owner runtime is verified.
-    # The installation snapshot keeps them available for recovery.
+    # The installation snapshot keeps them available until verification.
     local legacy root
     for root in "$xui_folder/bin" "$XUI_BIN_FOLDER"; do
         for legacy in "$root"/xray "$root"/xray-* "$root"/sing-box "$root"/sing-box-*; do
@@ -144,8 +147,8 @@ core_migration_commit() {
     [[ -z "${cm_stage:-}" ]] || rm -rf -- "$cm_stage"
     # Cleanup is after verification and disarming rollback. A cleanup error
     # cannot turn a healthy release into an attempted rollback without staging.
-    core_migration_prune_snapshots || echo "Could not mark recovery snapshot for retention cleanup: $cm_backup" >&2
-    echo "Upgrade committed; recovery snapshot retained: ${cm_backup:-none}"
+    core_migration_prune_snapshots || echo "Could not remove verified recovery snapshot: $cm_backup" >&2
+    echo "Upgrade committed; successful transaction snapshot removed"
 }
 core_migration_exit() {
     local code="$1" incomplete=0
