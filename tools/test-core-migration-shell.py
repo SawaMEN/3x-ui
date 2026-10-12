@@ -123,20 +123,16 @@ if core_migration_apply; then
     if core_migration_commit; then
         [[ "$CASE" == success || "$CASE" == disabled ]]
         [[ "$(cat "$TEST_DB")" == new-core ]]
-        [[ -f "$cm_backup/installation/bin/custom-key" || -f "$cm_backup/managed-bin/custom-key" ]]
-        [[ -f "$cm_backup/data/database" ]]
-        [[ -f "$cm_backup/installation/bin/xray-linux-amd64" || -f "$cm_backup/managed-bin/xray-linux-amd64" ]]
-        [[ -f "$cm_backup/installation/bin/sing-box-linux-amd64" || -f "$cm_backup/managed-bin/sing-box-linux-amd64" ]]
+        [[ ! -e "$cm_backup" ]] # The verified offline snapshot must not fill the VPS.
+        [[ -f "$xui_folder/bin/custom-key" || -f "$XUI_BIN_FOLDER/custom-key" ]]
         [[ ! -e "$xui_folder/bin/xray-linux-amd64" ]]
         [[ ! -e "$xui_folder/bin/sing-box-linux-amd64" ]]
         [[ -f "$xui_folder/bin/hiddify-core-linux-amd64" ]]
         [[ "$(cat "$xui_folder/bin/xray-config.json")" == custom-config ]]
         [[ "$(cat "$xui_folder/bin/sing-box-config.json")" == custom-config ]]
-        if [[ -d "$cm_backup/managed-bin" ]]; then
-            [[ -f "$cm_backup/managed-bin/xray-linux-amd64" ]]
-            [[ -f "$cm_backup/managed-bin/sing-box-linux-amd64" ]]
-            [[ ! -e "$XUI_BIN_FOLDER/xray-linux-amd64" ]]
-            [[ ! -e "$XUI_BIN_FOLDER/sing-box-linux-amd64" ]]
+        [[ ! -e "$XUI_BIN_FOLDER/xray-linux-amd64" ]]
+        [[ ! -e "$XUI_BIN_FOLDER/sing-box-linux-amd64" ]]
+        if [[ "$XUI_BIN_FOLDER" != "$xui_folder/bin" || -L "$xui_folder/bin" ]]; then
             [[ "$(cat "$XUI_BIN_FOLDER/custom-key")" == external-key ]]
         fi
         core_migration_exit 0
@@ -191,8 +187,8 @@ fi
     def test_symlink_bin_success(self): self.run_case("symlink_success")
     def test_symlink_bin_rollback(self): self.run_case("symlink_verify")
 
-    def test_success_retains_recovery_snapshot(self): self.run_case("success")
-    def test_external_bin_cleanup_retains_snapshot(self): self.run_case("external_success")
+    def test_success_removes_verified_recovery_snapshot(self): self.run_case("success")
+    def test_external_bin_cleanup_removes_snapshot(self): self.run_case("external_success")
     def test_external_bin_rollback_restores_legacy_files(self): self.run_case("external_verify")
     def test_apply_failure_recovers_installation_and_data(self): self.run_case("apply")
     def test_daemon_core_failure_recovers_installation_and_data(self): self.run_case("verify")
@@ -281,7 +277,7 @@ class UpgradeStorageTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         return result
 
-    def test_verified_snapshots_are_bounded_and_failed_backups_survive(self):
+    def test_verified_snapshots_are_removed_and_failed_backups_survive(self):
         with tempfile.TemporaryDirectory() as raw:
             base = Path(raw)
             marker = ".x-ui-upgrade-verified"
@@ -298,16 +294,16 @@ cm_backup="$TEST_ROOT/x-ui-upgrade.current"
 core_migration_prune_snapshots
 [[ ! -e "$TEST_ROOT/x-ui-upgrade.old" ]]
 [[ -L "$TEST_ROOT/x-ui-upgrade.link" ]]
-[[ -f "$cm_backup/database" ]]
+[[ ! -e "$cm_backup" ]]
 for name in failed unmarked foreign; do
     [[ -f "$TEST_ROOT/x-ui-upgrade.$name/database" ]]
 done
-# A subsequent success removes the previous completed snapshot too.
+# A subsequent success also removes its own snapshot.
 mkdir "$TEST_ROOT/x-ui-upgrade.next"
 cm_backup="$TEST_ROOT/x-ui-upgrade.next"
 core_migration_prune_snapshots
 [[ ! -e "$TEST_ROOT/x-ui-upgrade.current" ]]
-[[ -f "$cm_backup/.x-ui-upgrade-verified" ]]
+[[ ! -e "$cm_backup" ]]
 ''')
 
     def test_low_space_rejects_release_before_staging_or_service_stop(self):
