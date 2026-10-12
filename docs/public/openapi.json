@@ -1439,8 +1439,48 @@
         ],
         "type": "object"
       },
+      "Capabilities": {
+        "description": "Capabilities describes optional behavior exposed by a proxy core. Keep this\nseparate from Runtime so adding a core-specific feature never expands the\nlifecycle contract or forces unrelated adapters to implement stub methods.",
+        "properties": {
+          "clashApi": {
+            "type": "boolean"
+          },
+          "connectionStats": {
+            "type": "boolean"
+          },
+          "geoIp": {
+            "type": "boolean"
+          },
+          "geoSite": {
+            "type": "boolean"
+          },
+          "hotInboundReload": {
+            "type": "boolean"
+          },
+          "outboundDelayProbe": {
+            "type": "boolean"
+          },
+          "ruleSets": {
+            "type": "boolean"
+          },
+          "shadowTls": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "clashApi",
+          "connectionStats",
+          "geoIp",
+          "geoSite",
+          "hotInboundReload",
+          "outboundDelayProbe",
+          "ruleSets",
+          "shadowTls"
+        ],
+        "type": "object"
+      },
       "Client": {
-        "description": "Client represents a client configuration for Xray inbounds with traffic limits and settings.",
+        "description": "Client represents a client configuration for panel inbounds with traffic limits and settings.",
         "properties": {
           "adTag": {
             "example": "0123456789abcdef0123456789abcdef",
@@ -2692,7 +2732,7 @@
         "type": "object"
       },
       "Inbound": {
-        "description": "Inbound represents an Xray inbound configuration with traffic statistics and settings.",
+        "description": "Inbound represents a panel inbound with traffic statistics and settings.",
         "properties": {
           "clientStats": {
             "description": "Client traffic statistics",
@@ -3206,7 +3246,24 @@
             "format": "int64",
             "type": "integer"
           },
+          "coreCapabilities": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Capabilities"
+              }
+            ],
+            "nullable": true
+          },
+          "coreError": {
+            "type": "string"
+          },
+          "coreState": {
+            "type": "string"
+          },
           "coreType": {
+            "type": "string"
+          },
+          "coreVersion": {
             "type": "string"
           },
           "cpuPct": {
@@ -3310,6 +3367,10 @@
             "minimum": 1,
             "type": "integer"
           },
+          "presenceRegistry": {
+            "description": "XrayState and XrayError are captured from the remote node's /panel/api/server/status\nduring heartbeats. They let the central panel distinguish \"panel API reachable\"\n(status=online) from \"Xray core itself has failed on the node\" for monitoring.",
+            "type": "string"
+          },
           "remark": {
             "type": "string"
           },
@@ -3373,10 +3434,6 @@
           "xrayError": {
             "type": "string"
           },
-          "xrayState": {
-            "description": "XrayState and XrayError are captured from the remote node's /panel/api/server/status\nduring heartbeats. They let the central panel distinguish \"panel API reachable\"\n(status=online) from \"Xray core itself has failed on the node\" for monitoring.",
-            "type": "string"
-          },
           "xrayVersion": {
             "example": "25.10.31",
             "type": "string"
@@ -3390,7 +3447,10 @@
           "clientCount",
           "configDirty",
           "configDirtyAt",
+          "coreError",
+          "coreState",
           "coreType",
+          "coreVersion",
           "cpuPct",
           "createdAt",
           "depletedCount",
@@ -3413,6 +3473,7 @@
           "panelVersion",
           "pinnedCertSha256",
           "port",
+          "presenceRegistry",
           "remark",
           "runningCore",
           "scheme",
@@ -3427,7 +3488,6 @@
           "updatedAt",
           "uptimeSecs",
           "xrayError",
-          "xrayState",
           "xrayVersion"
         ],
         "type": "object"
@@ -3554,7 +3614,24 @@
             "format": "int64",
             "type": "integer"
           },
+          "coreCapabilities": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Capabilities"
+              }
+            ],
+            "nullable": true
+          },
+          "coreError": {
+            "type": "string"
+          },
+          "coreState": {
+            "type": "string"
+          },
           "coreType": {
+            "type": "string"
+          },
+          "coreVersion": {
             "type": "string"
           },
           "cpuPct": {
@@ -3659,6 +3736,10 @@
             "example": 2053,
             "type": "integer"
           },
+          "presenceRegistry": {
+            "example": "running",
+            "type": "string"
+          },
           "remark": {
             "example": "Primary edge",
             "type": "string"
@@ -3711,10 +3792,6 @@
           "xrayError": {
             "type": "string"
           },
-          "xrayState": {
-            "example": "running",
-            "type": "string"
-          },
           "xrayVersion": {
             "example": "25.10.31",
             "type": "string"
@@ -3728,7 +3805,10 @@
           "clientCount",
           "configDirty",
           "configDirtyAt",
+          "coreError",
+          "coreState",
           "coreType",
+          "coreVersion",
           "cpuPct",
           "createdAt",
           "depletedCount",
@@ -3752,6 +3832,7 @@
           "panelVersion",
           "pinnedCertSha256",
           "port",
+          "presenceRegistry",
           "remark",
           "runningCore",
           "scheme",
@@ -3765,7 +3846,6 @@
           "updatedAt",
           "uptimeSecs",
           "xrayError",
-          "xrayState",
           "xrayVersion"
         ],
         "type": "object"
@@ -3902,7 +3982,24 @@
       },
       "ProbeResultUI": {
         "properties": {
+          "coreCapabilities": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Capabilities"
+              }
+            ],
+            "nullable": true
+          },
+          "coreError": {
+            "type": "string"
+          },
+          "coreState": {
+            "type": "string"
+          },
           "coreType": {
+            "type": "string"
+          },
+          "coreVersion": {
             "type": "string"
           },
           "cpuPct": {
@@ -3922,6 +4019,10 @@
           },
           "panelVersion": {
             "example": "v3.x.x",
+            "type": "string"
+          },
+          "presenceRegistry": {
+            "description": "XrayState/XrayError are populated on successful probes even when the node's\nXray core is not healthy. The UI uses them for a distinct \"panel ok, xray failed\" indicator.",
             "type": "string"
           },
           "runningCore": {
@@ -3954,22 +4055,22 @@
           "xrayError": {
             "type": "string"
           },
-          "xrayState": {
-            "description": "XrayState/XrayError are populated on successful probes even when the node's\nXray core is not healthy. The UI uses them for a distinct \"panel ok, xray failed\" indicator.",
-            "type": "string"
-          },
           "xrayVersion": {
             "example": "25.10.31",
             "type": "string"
           }
         },
         "required": [
+          "coreError",
+          "coreState",
           "coreType",
+          "coreVersion",
           "cpuPct",
           "error",
           "latencyMs",
           "memPct",
           "panelVersion",
+          "presenceRegistry",
           "runningCore",
           "singboxError",
           "singboxInstalled",
@@ -3979,7 +4080,6 @@
           "status",
           "uptimeSecs",
           "xrayError",
-          "xrayState",
           "xrayVersion"
         ],
         "type": "object"
@@ -4465,7 +4565,7 @@
         "type": "object"
       },
       "Traffic": {
-        "description": "Traffic represents network traffic statistics for Xray connections.\nIt tracks upload and download bytes for inbound or outbound traffic.",
+        "description": "Traffic represents network traffic statistics reported by a core.\nIt tracks upload and download bytes for inbound or outbound traffic.",
         "properties": {
           "Down": {
             "example": 2097152,
@@ -11468,7 +11568,11 @@
                       "clientCount": 25,
                       "configDirty": false,
                       "configDirtyAt": 0,
+                      "coreCapabilities": null,
+                      "coreError": "",
+                      "coreState": "",
                       "coreType": "",
+                      "coreVersion": "",
                       "cpuPct": 12.5,
                       "createdAt": 1700000000,
                       "depletedCount": 1,
@@ -11495,6 +11599,7 @@
                       "parentGuid": "",
                       "pinnedCertSha256": "",
                       "port": 2053,
+                      "presenceRegistry": "running",
                       "remark": "Primary edge",
                       "runningCore": "",
                       "scheme": "https",
@@ -11509,7 +11614,6 @@
                       "updatedAt": 1700003600,
                       "uptimeSecs": 86400,
                       "xrayError": "",
-                      "xrayState": "running",
                       "xrayVersion": "25.10.31"
                     }
                   ]
@@ -11676,7 +11780,11 @@
                     "clientCount": 25,
                     "configDirty": false,
                     "configDirtyAt": 0,
+                    "coreCapabilities": null,
+                    "coreError": "",
+                    "coreState": "",
                     "coreType": "",
+                    "coreVersion": "",
                     "cpuPct": 12.5,
                     "createdAt": 1700000000,
                     "depletedCount": 1,
@@ -11703,6 +11811,7 @@
                     "parentGuid": "",
                     "pinnedCertSha256": "",
                     "port": 2053,
+                    "presenceRegistry": "running",
                     "remark": "Primary edge",
                     "runningCore": "",
                     "scheme": "https",
@@ -11717,7 +11826,6 @@
                     "updatedAt": 1700003600,
                     "uptimeSecs": 86400,
                     "xrayError": "",
-                    "xrayState": "running",
                     "xrayVersion": "25.10.31"
                   }
                 }
@@ -11833,7 +11941,11 @@
                     "clientCount": 25,
                     "configDirty": false,
                     "configDirtyAt": 0,
+                    "coreCapabilities": null,
+                    "coreError": "",
+                    "coreState": "",
                     "coreType": "",
+                    "coreVersion": "",
                     "cpuPct": 12.5,
                     "createdAt": 1700000000,
                     "depletedCount": 1,
@@ -11860,6 +11972,7 @@
                     "parentGuid": "",
                     "pinnedCertSha256": "",
                     "port": 2053,
+                    "presenceRegistry": "running",
                     "remark": "Primary edge",
                     "runningCore": "",
                     "scheme": "https",
@@ -11874,7 +11987,6 @@
                     "updatedAt": 1700003600,
                     "uptimeSecs": 86400,
                     "xrayError": "",
-                    "xrayState": "running",
                     "xrayVersion": "25.10.31"
                   }
                 }
@@ -12088,12 +12200,17 @@
                 "example": {
                   "success": true,
                   "obj": {
+                    "coreCapabilities": null,
+                    "coreError": "",
+                    "coreState": "",
                     "coreType": "",
+                    "coreVersion": "",
                     "cpuPct": 12.5,
                     "error": "",
                     "latencyMs": 42,
                     "memPct": 45.2,
                     "panelVersion": "v3.x.x",
+                    "presenceRegistry": "",
                     "runningCore": "",
                     "singboxError": "",
                     "singboxInstalled": false,
@@ -12103,7 +12220,6 @@
                     "status": "online",
                     "uptimeSecs": 86400,
                     "xrayError": "",
-                    "xrayState": "",
                     "xrayVersion": "25.10.31"
                   }
                 }
@@ -16954,7 +17070,11 @@
                   "clientCount": 25,
                   "configDirty": false,
                   "configDirtyAt": 0,
+                  "coreCapabilities": null,
+                  "coreError": "",
+                  "coreState": "",
                   "coreType": "",
+                  "coreVersion": "",
                   "cpuPct": 12.5,
                   "createdAt": 1700000000,
                   "depletedCount": 1,
@@ -16981,6 +17101,7 @@
                   "parentGuid": "",
                   "pinnedCertSha256": "",
                   "port": 2053,
+                  "presenceRegistry": "running",
                   "remark": "Primary edge",
                   "runningCore": "",
                   "scheme": "https",
@@ -16995,7 +17116,6 @@
                   "updatedAt": 1700003600,
                   "uptimeSecs": 86400,
                   "xrayError": "",
-                  "xrayState": "running",
                   "xrayVersion": "25.10.31"
                 }
               ],

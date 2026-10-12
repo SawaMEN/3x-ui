@@ -104,7 +104,7 @@
     "check_command_overlay": "deploy/hiddify/cmd_xui_check.go.in",
     "runtime_dependencies": ["matching libcronet for Naive outbound"],
     "activation_ready": false,
-    "toolchain": "go1.27.2",
+    "toolchain": "go1.26.9",
     "validation_cli_available": true,
     "user_stats_api_available": true,
     "clash_user_overlay": "deploy/hiddify/clash-user.patch",
