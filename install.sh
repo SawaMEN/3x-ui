@@ -110,7 +110,13 @@ install_base() {
             fi
             ;;
         arch | manjaro | parch)
-            pacman -Syu --noconfirm --needed cronie curl tar tzdata socat ca-certificates openssl iproute2 iptables nftables util-linux
+            # A panel-only update must not trigger a full Arch OS upgrade when
+            # all required tools are installed. If any dependency is missing,
+            # install it with -Syu to avoid unsupported partial upgrades.
+            local arch_deps=(cronie curl tar tzdata socat ca-certificates openssl iproute2 iptables nftables util-linux)
+            if ! pacman -Q "${arch_deps[@]}" > /dev/null 2>&1; then
+                pacman -Syu --noconfirm --needed "${arch_deps[@]}"
+            fi
             ;;
         opensuse-tumbleweed | opensuse-leap)
             zypper refresh && zypper -q install -y cron curl tar timezone socat ca-certificates openssl iproute2 iptables nftables util-linux
