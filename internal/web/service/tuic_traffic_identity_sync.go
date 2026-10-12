@@ -3,8 +3,9 @@ package service
 import (
 	"errors"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"gorm.io/gorm"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 )
 
 func canonicalizeClientTraffic(tx *gorm.DB, traffics []*coremodel.ClientTraffic) ([]*coremodel.ClientTraffic, error) {

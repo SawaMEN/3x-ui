@@ -20,7 +20,7 @@ func TestHiddifyRuntimeUsesEnvironmentLoadedAfterPackageInitialization(t *testin
 	t.Setenv("XUI_BIN_FOLDER", t.TempDir())
 	binary := hiddify.GetBinaryPath()
 	script := fmt.Sprintf("#!/bin/sh\nprintf 'hiddify-core version %s\\nTags: with_xui_panel,with_v2ray_api,with_awg,with_quic,with_wireguard,with_clash_api,with_utls,with_masque,with_gvisor,with_naive_outbound,with_purego,tfogo_checklinkname0\\nRevision: %s\\n'\n", hiddify.TargetVersion, hiddify.TargetRevision)
-	if err := os.WriteFile(binary, []byte(script), 0700); err != nil {
+	if err := os.WriteFile(binary, []byte(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	InitializeNativeCoreRuntime()

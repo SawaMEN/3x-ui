@@ -19,6 +19,7 @@ func (s *GatewayNetworkService) pauseRuntime(ctx context.Context) error {
 	}
 	return s.removeGatewayTables(ctx)
 }
+
 func (s *GatewayNetworkService) resumeRuntime(ctx context.Context) error {
 	state, err := s.loadGatewayNetworkState()
 	if os.IsNotExist(err) {
@@ -37,6 +38,7 @@ func (s *GatewayNetworkService) resumeRuntime(ctx context.Context) error {
 	}
 	return nil
 }
+
 func (s *SingBoxService) gatewayNetwork() *GatewayNetworkService {
 	if s.gateway != nil {
 		return s.gateway
@@ -133,6 +135,7 @@ func (s *SingBoxService) resumeGatewayNetwork(ctx context.Context, network *Gate
 	}
 	return network.resumeRuntime(ctx)
 }
+
 func (s *SingBoxService) resumeGateway(ctx context.Context) error {
 	network := s.gatewayNetwork()
 	release, err := network.runtimeLease(ctx)

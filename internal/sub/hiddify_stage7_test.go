@@ -98,7 +98,7 @@ func TestHiddifySubscriptionXHTTPPreservesIdentity(t *testing.T) {
 	}
 	if binary := os.Getenv("HIDDIFY_TEST_BINARY"); binary != "" {
 		path := filepath.Join(t.TempDir(), "subscription.json")
-		if err := os.WriteFile(path, []byte(data), 0600); err != nil {
+		if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		cmd := exec.Command(binary, "check", "-c", path)

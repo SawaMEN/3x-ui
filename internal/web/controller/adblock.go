@@ -8,11 +8,12 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/adblock"
 	"github.com/SawaMEN/3x-ui/v3/internal/adblock/youtube"
 	"github.com/SawaMEN/3x-ui/v3/internal/adblock/youtubeproxy"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
-	"github.com/gin-gonic/gin"
 )
 
 const maxAdBlockSettingsBody = 4 << 20
@@ -163,7 +164,8 @@ func (a *AdBlockController) readStatus() (*adBlockStatus, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &adBlockStatus{ServerOutbounds: outboundOptions, Server: server, ServerRuntime: youtubeproxy.Status(), ServerCertificate: certificate,
+	return &adBlockStatus{
+		ServerOutbounds: outboundOptions, Server: server, ServerRuntime: youtubeproxy.Status(), ServerCertificate: certificate,
 		Policies: policies,
 		Enabled:  enabled,
 		Scope:    scope, ScopeOptions: options, Application: application, PausedUntil: pausedUntil, SourceStatuses: sourcesStatus,
@@ -223,7 +225,7 @@ func (a *AdBlockController) saveSettings(c *gin.Context) {
 			}
 		}
 		if rollbackErr != nil {
-			jsonMsg(c, "application and rollback failed", fmt.Errorf("apply: %v; rollback: %w", err, rollbackErr))
+			jsonMsg(c, "application and rollback failed", fmt.Errorf("apply: %w; rollback: %w", err, rollbackErr))
 			return
 		}
 		jsonMsg(c, "settings rolled back after core application failed", err)
@@ -289,6 +291,7 @@ func (a *AdBlockController) applyPending(ctx context.Context) error {
 	}
 	return err
 }
+
 func (a *AdBlockController) apply(c *gin.Context) {
 	a.operationMu.Lock()
 	defer a.operationMu.Unlock()
@@ -303,6 +306,7 @@ func (a *AdBlockController) apply(c *gin.Context) {
 	status, err := a.readStatus()
 	jsonObj(c, status, err)
 }
+
 func (a *AdBlockController) pause(c *gin.Context) {
 	a.operationMu.Lock()
 	defer a.operationMu.Unlock()
@@ -325,6 +329,7 @@ func (a *AdBlockController) pause(c *gin.Context) {
 	status, err := a.readStatus()
 	jsonObj(c, status, err)
 }
+
 func (a *AdBlockController) checkDomain(c *gin.Context) {
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 4096)
 	var form struct {

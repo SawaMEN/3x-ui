@@ -13,10 +13,6 @@ import (
 // process.go mutation audits (pure-logic, cross-platform)
 // ---------------------------------------------------------------------------
 
-type errProcessTest string
-
-func (e errProcessTest) Error() string { return string(e) }
-
 // TestRefreshLocalOnline_GraceBoundaryEmails pins the exact `<` boundary at
 // process.go:407: an email idle for EXACTLY graceMs must be aged out (the
 // window is half-open, age < grace). A mutated comparison (`<=`) would keep it.

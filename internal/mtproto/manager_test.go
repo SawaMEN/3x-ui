@@ -198,7 +198,6 @@ func TestFingerprintSplit(t *testing.T) {
 	if forward.secretsFingerprint() != reverse.secretsFingerprint() {
 		t.Fatal("client order must not alter fingerprint")
 	}
-
 }
 
 func TestMonotonicCounterDelta(t *testing.T) {

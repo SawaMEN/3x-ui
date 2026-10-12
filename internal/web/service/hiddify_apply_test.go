@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -11,14 +12,15 @@ import (
 	"testing"
 	"time"
 
+	stats "github.com/xtls/xray-core/app/stats/command"
+	"google.golang.org/grpc"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
 	"github.com/SawaMEN/3x-ui/v3/internal/hiddify"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 	webRuntime "github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
-	stats "github.com/xtls/xray-core/app/stats/command"
-	"google.golang.org/grpc"
 )
 
 func hiddifyApplyRecorder(t *testing.T) (*atomic.Int32, *[]string) {
@@ -153,7 +155,7 @@ srun) echo started >> %q; if grep -q stage5-fail "$3"; then exit 7; fi; exec sle
 *) exit 9 ;;
 esac
 `, hiddify.TargetVersion, hiddify.TargetRevision, starts)
-	if err := os.WriteFile(hiddify.GetBinaryPath(), []byte(script), 0700); err != nil {
+	if err := os.WriteFile(hiddify.GetBinaryPath(), []byte(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	oldRuntime, oldProcess, oldStats := hiddifyRuntime, hiddifyProcess, hiddifyStats
@@ -217,7 +219,7 @@ func TestHiddifyPendingApplyBatchNoopAndRollback(t *testing.T) {
 	if svc.restartFlag().Load() || stage5Starts(t, starts) != 1 || polls.Load() != 0 {
 		t.Fatal("unchanged config restarted or reset stats")
 	}
-	if err := os.WriteFile(svc.ProcessConfigPath(), []byte(`{"preview":"unapplied"}`), 0600); err != nil {
+	if err := os.WriteFile(svc.ProcessConfigPath(), []byte(`{"preview":"unapplied"}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	svc.SetToNeedRestart()
@@ -335,7 +337,7 @@ func TestHiddifyBatchChangesDuringCandidateValidation(t *testing.T) {
 	ib := seedHiddifyConfigInbound(t, model.VLESS, `{"decryption":"none"}`, `{}`)
 	dir := filepath.Dir(svc.BinaryPath())
 	hold, checking := filepath.Join(dir, "hold-check"), filepath.Join(dir, "checking")
-	if err := os.WriteFile(hold, nil, 0600); err != nil {
+	if err := os.WriteFile(hold, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	done := make(chan struct{})
@@ -387,7 +389,7 @@ func TestHiddifyCancelledPublicationPreservesFile(t *testing.T) {
 	defer candidate.close()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if err := candidate.publish(ctx); err != context.Canceled {
+	if err := candidate.publish(ctx); !errors.Is(err, context.Canceled) {
 		t.Fatalf("publish: %v", err)
 	}
 	if data, _ := os.ReadFile(svc.ProcessConfigPath()); string(data) != string(previous) {
@@ -452,13 +454,12 @@ func TestHiddifyPreviewDoesNotRequireExternalOutboundBinary(t *testing.T) {
 	if len(overridden.ManagedOutbounds) != 0 {
 		t.Fatal("template removed bridge but kept a sidecar startup plan")
 	}
-
 }
 
 func TestHiddifyCoreFailureRollsBackExternalOutbound(t *testing.T) {
 	svc, starts, _ := stage5ProcessFixture(t)
 	dir := filepath.Dir(svc.BinaryPath())
-	if err := os.WriteFile(filepath.Join(dir, "openflux"), []byte("#!/bin/sh\nexec sleep 60\n"), 0700); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "openflux"), []byte("#!/bin/sh\nexec sleep 60\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { externalvpn.KeepOutbounds(nil) })

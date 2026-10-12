@@ -141,6 +141,7 @@ func xrayAdBlockScopeRules(cfg *xray.Config, scope AdBlockScope) ([]map[string]a
 	}
 	return merged, nil
 }
+
 func applyXrayAdBlockScope(cfg *xray.Config, scope AdBlockScope) error {
 	scopeRules, err := xrayAdBlockScopeRules(cfg, scope)
 	if err != nil {
@@ -182,6 +183,7 @@ func applyXrayAdBlockScope(cfg *xray.Config, scope AdBlockScope) error {
 	cfg.RouterConfig = json_util.RawMessage(raw)
 	return err
 }
+
 func singBoxAdBlockScope(rule map[string]any, scope AdBlockScope) map[string]any {
 	conditions := []map[string]any{rule}
 	for _, entry := range []struct {

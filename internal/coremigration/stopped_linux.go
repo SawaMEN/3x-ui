@@ -66,6 +66,7 @@ func canonicalConfigPath(path string) string {
 	}
 	return path
 }
+
 func referencesManagedConfig(words []string, cwd string, configs map[string]bool) bool {
 	for i, word := range words {
 		var candidate string

@@ -27,7 +27,6 @@ type LocalDeps struct {
 
 type Local struct {
 	deps         LocalDeps
-	mu           sync.Mutex
 	batchMu      sync.Mutex
 	batches      int
 	batchDirty   bool

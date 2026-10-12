@@ -156,6 +156,7 @@ func CLI(args []string) error {
 	fmt.Println("Gateway Mode enabled (" + core + ")")
 	return nil
 }
+
 func restartGatewayPanel(ctx context.Context) error {
 	cmd := exec.CommandContext(ctx, "systemctl", "restart", "x-ui.service")
 	if output, err := cmd.CombinedOutput(); err != nil {

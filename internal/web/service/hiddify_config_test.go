@@ -5,13 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"gorm.io/gorm"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"gorm.io/gorm"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/adblock/youtubeproxy"
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
@@ -34,7 +35,7 @@ func checkGeneratedHiddifyConfig(t *testing.T, cfg *singbox.Config) []byte {
 		}
 		t.Setenv("XUI_BIN_FOLDER", filepath.Dir(binary))
 		path := filepath.Join(t.TempDir(), "hiddify-core.json")
-		if err := os.WriteFile(path, data, 0600); err != nil {
+		if err := os.WriteFile(path, data, 0o600); err != nil {
 			t.Fatal(err)
 		}
 		if err := hiddify.NewProcess(path, true).Validate(context.Background()); err != nil {
@@ -152,7 +153,7 @@ func TestHiddifyFullConfigNativeRoutingDNSAndXHTTPOutbound(t *testing.T) {
 	setupBulkDB(t)
 	seedHiddifyConfigInbound(t, model.VLESS, `{"decryption":"none"}`, `{"network":"tcp"}`)
 	path := filepath.Join(t.TempDir(), "domains.json")
-	if err := os.WriteFile(path, []byte(`{"version":3,"rules":[{"domain_suffix":["example.com"]}]}`), 0600); err != nil {
+	if err := os.WriteFile(path, []byte(`{"version":3,"rules":[{"domain_suffix":["example.com"]}]}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	patch := fmt.Sprintf(`{"dns":{"servers":[{"type":"udp","tag":"remote","server":"1.1.1.1"}],"final":"remote","rules":[{"domain_suffix":["example.net"],"server":"remote"}]},"outbounds":[{"type":"vless","tag":"proxy","server":"example.com","server_port":443,"uuid":"11111111-1111-4111-8111-111111111111","tls":{"enabled":true,"server_name":"example.com"},"transport":{"type":"xhttp","path":"/vpn","mode":"stream-up","headers":{"detour":"opaque-header-value"}}},{"type":"direct","tag":"direct"},{"type":"selector","tag":"select","outbounds":["proxy","direct"],"default":"proxy"}],"route":{"final":"select","default_domain_resolver":"remote","rule_set":[{"type":"local","tag":"domains","format":"source","path":%q}],"rules":[{"rule_set":["domains"],"outbound":"direct"}]}}`, path)
@@ -231,7 +232,7 @@ func TestHiddifyRejectsBrokenTemplateBeforeConfigPublication(t *testing.T) {
 			}
 			path := NativeCore(CoreTypeHiddify).ProcessConfigPath()
 			old := []byte(`{"previous":"valid-config"}`)
-			if err := os.WriteFile(path, old, 0600); err != nil {
+			if err := os.WriteFile(path, old, 0o600); err != nil {
 				t.Fatal(err)
 			}
 			if err := NativeCore(CoreTypeHiddify).WriteConfig(); err == nil {
@@ -455,7 +456,7 @@ func TestHiddifyRealCandidatePublication(t *testing.T) {
 		t.Fatal(err)
 	}
 	info, err := os.Stat(s.ProcessConfigPath())
-	if err != nil || info.Mode().Perm() != 0600 {
+	if err != nil || info.Mode().Perm() != 0o600 {
 		t.Fatalf("config permissions: %v, %v", info, err)
 	}
 	// UUID validation is performed by the actual TUIC constructor, after the

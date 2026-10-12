@@ -43,7 +43,7 @@ func TestNativeMieruShareLinks(t *testing.T) {
 	if binary := os.Getenv("HIDDIFY_CONFIG_CHECK_BINARY"); binary != "" {
 		data, _ := json.Marshal(map[string]any{"outbounds": []any{expected}})
 		file := filepath.Join(t.TempDir(), "config.json")
-		if err := os.WriteFile(file, data, 0600); err != nil {
+		if err := os.WriteFile(file, data, 0o600); err != nil {
 			t.Fatal(err)
 		}
 		if output, err := exec.Command(binary, "check", "-c", file).CombinedOutput(); err != nil {

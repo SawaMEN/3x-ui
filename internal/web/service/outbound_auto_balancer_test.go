@@ -2,10 +2,11 @@ package service
 
 import (
 	"encoding/json"
+	"testing"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service/outbound"
-	"testing"
 )
 
 func TestAutoBalancerSelection(t *testing.T) {
@@ -18,9 +19,12 @@ func TestAutoBalancerSelection(t *testing.T) {
 		name, current, mode, want string
 		tolerance                 int
 	}{
-		{"fastest", "", "latency", "b", 0}, {"retain within tolerance", "a", "latency", "a", 50},
-		{"switch beyond tolerance", "a", "latency", "b", 20}, {"speed hysteresis", "a", "speed", "a", 0},
-		{"speed initial", "", "speed", "b", 0}, {"dead current", "dead", "latency", "b", 50},
+		{"fastest", "", "latency", "b", 0},
+		{"retain within tolerance", "a", "latency", "a", 50},
+		{"switch beyond tolerance", "a", "latency", "b", 20},
+		{"speed hysteresis", "a", "speed", "a", 0},
+		{"speed initial", "", "speed", "b", 0},
+		{"dead current", "dead", "latency", "b", 50},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := chooseSubscriptionOutbound(results, tc.current, tc.mode, tc.tolerance); got != tc.want {
@@ -36,6 +40,7 @@ func TestAutoBalancerSelection(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
 func TestAutoBalancerAliasFailsClosed(t *testing.T) {
 	a := map[string]any{"tag": "a", "protocol": "socks"}
 	b := map[string]any{"tag": "b", "protocol": "socks"}
@@ -63,10 +68,17 @@ func TestAutoBalancerAliasFailsClosed(t *testing.T) {
 		t.Fatal("disabled alias")
 	}
 }
+
 func TestAutoBalanceValidation(t *testing.T) {
 	for _, o := range []BalanceOptions{
-		{SwitchInterval: 29}, {HealthInterval: 9}, {Enabled: true, Mode: "speed", Interval: 30, URL: "https://1.1.1.1/file"},
-		{Mode: "unknown"}, {Interval: 29}, {Tolerance: -1}, {URL: "file:///etc/passwd"}, {URL: "http://127.0.0.1/test"},
+		{SwitchInterval: 29},
+		{HealthInterval: 9},
+		{Enabled: true, Mode: "speed", Interval: 30, URL: "https://1.1.1.1/file"},
+		{Mode: "unknown"},
+		{Interval: 29},
+		{Tolerance: -1},
+		{URL: "file:///etc/passwd"},
+		{URL: "http://127.0.0.1/test"},
 	} {
 		if o.Validate(false) == nil {
 			t.Fatalf("accepted invalid options: %+v", o)
@@ -77,6 +89,7 @@ func TestAutoBalanceValidation(t *testing.T) {
 		t.Fatalf("%+v %v", o, err)
 	}
 }
+
 func TestAutoBalancerProbePersistenceAndStaleEdit(t *testing.T) {
 	setupSettingTestDB(t)
 	db := database.GetDB()

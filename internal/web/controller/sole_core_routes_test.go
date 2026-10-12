@@ -1,8 +1,10 @@
 package controller
 
 import (
-	"github.com/gin-gonic/gin"
+	"net/http"
 	"testing"
+
+	"github.com/gin-gonic/gin"
 )
 
 func TestStandaloneCoreManagementRoutesRemoved(t *testing.T) {
@@ -22,7 +24,7 @@ func TestStandaloneCoreManagementRoutesRemoved(t *testing.T) {
 		if removed[route.Path] {
 			t.Errorf("standalone management still registered: %s %s", route.Method, route.Path)
 		}
-		if route.Method == "POST" && route.Path == "/panel/api/server/restartCoreService" {
+		if route.Method == http.MethodPost && route.Path == "/panel/api/server/restartCoreService" {
 			nativeRestart = true
 		}
 	}

@@ -26,8 +26,10 @@ import (
 
 const DefaultFPTNImage = "fptnvpn/fptn-vpn-server:0.4.4"
 
-var imagePattern = regexp.MustCompile(`^fptnvpn/fptn-vpn-server:(?:[0-9]+\.[0-9]+\.[0-9]+)(?:[-a-zA-Z0-9.]+)?$`)
-var domainPattern = regexp.MustCompile(`^[a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?$`)
+var (
+	imagePattern  = regexp.MustCompile(`^fptnvpn/fptn-vpn-server:(?:[0-9]+\.[0-9]+\.[0-9]+)(?:[-a-zA-Z0-9.]+)?$`)
+	domainPattern = regexp.MustCompile(`^[a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?$`)
+)
 
 // A stable ASCII username avoids the upstream users.list whitespace restriction
 // without forcing panel users to rename their existing email identities.

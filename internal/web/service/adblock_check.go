@@ -6,8 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/adblock"
 	"golang.org/x/net/idna"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/adblock"
 )
 
 type AdBlockDomainCheck struct {
@@ -29,6 +30,7 @@ func domainMatch(rule, host string) bool {
 	}
 	return host == rule
 }
+
 func (s *SettingService) CheckAdBlockDomain(input, inbound, client string) (*AdBlockDomainCheck, error) {
 	host, err := idna.Lookup.ToASCII(strings.TrimSuffix(strings.TrimSpace(input), "."))
 	if err != nil {
@@ -191,6 +193,7 @@ func (s *SettingService) CheckAdBlockDomain(input, inbound, client string) (*AdB
 	}
 	return out, nil
 }
+
 func (s *SettingService) GetAdBlockSourceStatuses() ([]adblock.SourceStatus, error) {
 	raw, err := s.getString("adBlockSourceCache")
 	if err != nil {

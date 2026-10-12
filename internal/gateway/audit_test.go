@@ -32,6 +32,7 @@ func TestGatewayDatabasePoolAndInactiveXrayTemplate(t *testing.T) {
 		t.Fatal("saving inactive Xray template used sing-box validation:", err)
 	}
 }
+
 func TestGatewayMigrationAndRollback(t *testing.T) {
 	states := map[string]State{"old": {Enabled: true, Configured: true}, "new": {}}
 	state := func(core string) (State, error) { return states[core], nil }
@@ -68,6 +69,7 @@ func TestGatewayMigrationAndRollback(t *testing.T) {
 		t.Fatal("partial Gateway migrated")
 	}
 }
+
 func TestGatewayMigrationSkipsInactiveTargetInspection(t *testing.T) {
 	state := func(core string) (State, error) {
 		if core == "new" {
@@ -79,6 +81,7 @@ func TestGatewayMigrationSkipsInactiveTargetInspection(t *testing.T) {
 		t.Fatal("disabled Gateway prevented normal core switch:", err)
 	}
 }
+
 func TestGatewayPortRangesAndLegacyRecovery(t *testing.T) {
 	for _, port := range []any{52345, "52345", "52340-52350", "1080,52345", "443,52300-52400"} {
 		cfg := map[string]any{"inbounds": []any{map[string]any{"tag": "user", "port": port}}}
@@ -93,6 +96,7 @@ func TestGatewayPortRangesAndLegacyRecovery(t *testing.T) {
 		t.Fatal("loopback Gateway was presented as usable or lost cleanup ownership")
 	}
 }
+
 func TestSingBoxEmptyBackupDoesNotEraseOperatorChanges(t *testing.T) {
 	for _, cfg := range []map[string]any{{"outbounds": []any{map[string]any{"tag": "added", "type": "direct"}}}, {"route": map[string]any{"final": "added"}}, {"log": map[string]any{"level": "debug"}}} {
 		if isEmptySingBoxGatewayRemainder(cfg) {

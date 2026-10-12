@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"golang.org/x/net/proxy"
 	"io"
 	"net"
 	"os"
@@ -12,6 +11,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"golang.org/x/net/proxy"
 )
 
 func TestSelectorLiveSwitch_E2E(t *testing.T) {
@@ -33,14 +34,16 @@ func TestSelectorLiveSwitch_E2E(t *testing.T) {
 		"inbounds": []any{map[string]any{"type": "socks", "tag": "test-in", "listen": "127.0.0.1", "listen_port": socksPort}},
 		"outbounds": []any{
 			map[string]any{"type": "selector", "tag": "sub-auto-7", "outbounds": []string{"sub-auto-block-7", "a", "b"}, "default": "a", "interrupt_exist_connections": false},
-			map[string]any{"type": "direct", "tag": "a"}, map[string]any{"type": "direct", "tag": "b"}, map[string]any{"type": "block", "tag": "sub-auto-block-7"},
+			map[string]any{"type": "direct", "tag": "a"},
+			map[string]any{"type": "direct", "tag": "b"},
+			map[string]any{"type": "block", "tag": "sub-auto-block-7"},
 		},
 		"route":        map[string]any{"final": "sub-auto-7"},
 		"experimental": map[string]any{"clash_api": map[string]any{"external_controller": fmt.Sprintf("127.0.0.1:%d", apiPort), "secret": "test-secret"}},
 	}
 	data, _ := json.Marshal(cfg)
 	path := filepath.Join(t.TempDir(), "config.json")
-	if err := os.WriteFile(path, data, 0600); err != nil {
+	if err := os.WriteFile(path, data, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	cmd := exec.Command(binary, "srun", "-c", path)

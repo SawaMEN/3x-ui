@@ -5,9 +5,11 @@ import (
 	"crypto/ecdh"
 	"encoding/base64"
 	"encoding/json"
-	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"golang.org/x/crypto/cryptobyte"
 	"testing"
+
+	"golang.org/x/crypto/cryptobyte"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
 
 func TestCoreKeysDoNotRequireLegacyBinary(t *testing.T) {

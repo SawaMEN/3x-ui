@@ -69,6 +69,7 @@ func TestHiddifyGatewayRuntimeRestartStopAndRepair(t *testing.T) {
 		t.Fatal("watchdog undid explicit Gateway suspension")
 	}
 }
+
 func TestHiddifyGatewayFailedRestartRestoresNetwork(t *testing.T) {
 	svc, _ := stage8GatewayFixture(t)
 	network, host, cfg := newGatewayTestHost(t)
@@ -88,6 +89,7 @@ func TestHiddifyGatewayFailedRestartRestoresNetwork(t *testing.T) {
 	}
 	assertGatewayHealthy(t, network)
 }
+
 func TestHiddifyGatewayResumeFailureLeavesNoInterception(t *testing.T) {
 	network, host, cfg := newGatewayTestHost(t)
 	if err := network.Enable(context.Background(), cfg); err != nil {
@@ -109,6 +111,7 @@ func TestHiddifyGatewayResumeFailureLeavesNoInterception(t *testing.T) {
 	}
 	assertGatewayHealthy(t, network)
 }
+
 func TestHiddifyTunGeneratedConfigAndLoopPrevention(t *testing.T) {
 	setupBulkDB(t)
 	ib := &model.Inbound{Enable: true, Protocol: model.Tun, Tag: "stage8-tun", Settings: `{"name":"hiddify0","gateway":["172.19.0.1/30"],"mtu":1500,"dns":["1.1.1.1"],"autoSystemRoutingTable":["0.0.0.0/0"],"autoOutboundsInterface":"auto"}`, StreamSettings: `{}`}
@@ -161,6 +164,7 @@ func TestHiddifyGatewayDNSAndTunConflict(t *testing.T) {
 		t.Fatalf("conflicting policy routing accepted: %v", err)
 	}
 }
+
 func TestTunDoesNotReserveSocketPortButKeepsGatewayTag(t *testing.T) {
 	setupConflictDB(t)
 	if err := singBoxSettingService.SetSingBoxConfigTemplate(`{"inbounds":` + gatewayNativeInbound + `}`); err != nil {
@@ -187,6 +191,7 @@ func stage8GatewayFixture(t *testing.T) (*SingBoxService, string) {
 	}
 	return svc, starts
 }
+
 func TestHiddifyGatewayRejectsUnownedReadySockets(t *testing.T) {
 	svc, _, _ := stage5ProcessFixture(t)
 	network, host, cfg := newGatewayTestHost(t)

@@ -11,8 +11,9 @@ import (
 )
 
 func response(body, kind string) *http.Response {
-	return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": {kind}, "ETag": {"old"}}, Body: io.NopCloser(strings.NewReader(body)), ContentLength: int64(len(body))}
+	return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": {kind}, "ETag": {"old"}}, Body: io.NopCloser(strings.NewReader(body)), ContentLength: int64(len(body))}
 }
+
 func TestFilterPlayerPreservesMediaNumbersAndCaptions(t *testing.T) {
 	raw := `{"adPlacements":[1],"playerAds":[2],"adSlots":[3],"streamingData":{"url":"https://media.example/x","n":9007199254740993},"captions":{"tracks":[1]},"playabilityStatus":{"status":"OK"}}`
 	r := response(raw, "application/json")
@@ -31,6 +32,7 @@ func TestFilterPlayerPreservesMediaNumbersAndCaptions(t *testing.T) {
 		t.Fatal("invalid JSON")
 	}
 }
+
 func TestHTMLInitialPlayerAndEscapedStrings(t *testing.T) {
 	raw := `<html><body>ytInitialPlayerResponse = {"adSlots":[1]}<script nonce="x">var ytInitialPlayerResponse = {"adSlots":[1],"streamingData":{"url":"x}\\\"y"},"captions":{"tracks":[1]}}; var other=42;</script></body></html>`
 	out, ok := cleanHTML([]byte(raw))
@@ -44,6 +46,7 @@ func TestHTMLInitialPlayerAndEscapedStrings(t *testing.T) {
 		t.Fatalf("script ad data survived: %s", out)
 	}
 }
+
 func TestFilterFailOpenAndStreaming(t *testing.T) {
 	for _, tc := range []struct{ body, path, kind string }{{`broken {`, "/youtubei/v1/player", "application/json"}, {`{"adSlots":[1]}`, "/youtubei/v1/browse", "application/json"}, {`{"adSlots":[1]}`, "/videoplayback", "video/mp4"}, {`{"streamingData":{}}`, "/youtubei/v1/player", "application/json"}, {strings.Repeat("x", maxBody+1), "/youtubei/v1/player", "application/json"}} {
 		r := response(tc.body, tc.kind)
@@ -57,6 +60,7 @@ func TestFilterFailOpenAndStreaming(t *testing.T) {
 		}
 	}
 }
+
 func TestGzipAndNestedPlayer(t *testing.T) {
 	var buf bytes.Buffer
 	writer := gzip.NewWriter(&buf)

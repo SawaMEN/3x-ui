@@ -89,7 +89,6 @@ func (t telemtMonitorTransport) RoundTrip(request *http.Request) (*http.Response
 }
 
 func (TelemtService) ConnectedClients() ([]TelemtConnection, error) {
-
 	db := database.GetDB()
 	if db == nil {
 		return []TelemtConnection{}, nil

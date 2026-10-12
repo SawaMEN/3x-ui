@@ -54,7 +54,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends iptables iprout
 COPY client.deb /tmp/client.deb
 RUN dpkg-deb -x /tmp/client.deb / && rm /tmp/client.deb
 `
-	if err := os.WriteFile(filepath.Join(folder, "Dockerfile"), []byte(dockerfile), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(folder, "Dockerfile"), []byte(dockerfile), 0o600); err != nil {
 		return err
 	}
 	cmd := exec.CommandContext(ctx, "docker", "build", "--tag", "3x-ui-fptn-client:0.4.6", folder)

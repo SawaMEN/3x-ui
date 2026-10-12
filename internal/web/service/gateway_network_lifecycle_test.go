@@ -35,6 +35,7 @@ func newGatewayTestHost(t *testing.T) (*GatewayNetworkService, *gatewayTestHost,
 	s := &GatewayNetworkService{paths: paths, run: h.run, input: h.input, interfaces: func() ([]net.Interface, error) { return ifaces, nil }}
 	return s, h, GatewayNetworkConfig{LANInterface: "lo", LANIP: "192.168.50.1", LANPrefix: 24}
 }
+
 func (h *gatewayTestHost) fail(key string) error {
 	if h.failures[key] > 0 {
 		h.failures[key]--
@@ -42,6 +43,7 @@ func (h *gatewayTestHost) fail(key string) error {
 	}
 	return nil
 }
+
 func (h *gatewayTestHost) run(ctx context.Context, name string, args ...string) (string, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err
@@ -141,6 +143,7 @@ func (h *gatewayTestHost) run(ctx context.Context, name string, args ...string) 
 	}
 	return "", fmt.Errorf("unhandled command: %s %s", name, a)
 }
+
 func (h *gatewayTestHost) input(ctx context.Context, input, name string, args ...string) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -163,6 +166,7 @@ func (h *gatewayTestHost) input(ctx context.Context, input, name string, args ..
 	}
 	return nil
 }
+
 func assertGatewayHealthy(t *testing.T, s *GatewayNetworkService) {
 	t.Helper()
 	status := s.Status(context.Background())
@@ -170,6 +174,7 @@ func assertGatewayHealthy(t *testing.T, s *GatewayNetworkService) {
 		t.Fatalf("unhealthy: %+v", status)
 	}
 }
+
 func TestGatewayNetworkLifecyclePreservesBaseline(t *testing.T) {
 	s, h, cfg := newGatewayTestHost(t)
 	baseline := map[string]string{}
@@ -218,6 +223,7 @@ func TestGatewayNetworkLifecyclePreservesBaseline(t *testing.T) {
 		t.Fatal("repeated disable:", err)
 	}
 }
+
 func TestGatewayNetworkFailureRollback(t *testing.T) {
 	for _, stage := range []string{"nft check", "sysctl net.ipv4.ip_forward=1", "nft apply", "systemctl daemon-reload", "systemctl enable"} {
 		t.Run(stage, func(t *testing.T) {
@@ -239,6 +245,7 @@ func TestGatewayNetworkFailureRollback(t *testing.T) {
 		})
 	}
 }
+
 func TestGatewayFailedRollbackRetainsRecovery(t *testing.T) {
 	s, h, cfg := newGatewayTestHost(t)
 	h.failures["systemctl enable"] = 1
@@ -260,6 +267,7 @@ func TestGatewayFailedRollbackRetainsRecovery(t *testing.T) {
 		t.Fatal("retry cleanup:", err)
 	}
 }
+
 func TestGatewayRepairFailureKeepsExistingFirewall(t *testing.T) {
 	s, h, cfg := newGatewayTestHost(t)
 	if err := s.Enable(context.Background(), cfg); err != nil {
@@ -277,6 +285,7 @@ func TestGatewayRepairFailureKeepsExistingFirewall(t *testing.T) {
 		t.Fatal("repair lost baseline")
 	}
 }
+
 func TestGatewayRejectsForeignNetworkOwnership(t *testing.T) {
 	for _, kind := range []string{"rule", "route", "firewall"} {
 		t.Run(kind, func(t *testing.T) {
@@ -298,6 +307,7 @@ func TestGatewayRejectsForeignNetworkOwnership(t *testing.T) {
 		})
 	}
 }
+
 func TestGatewayListenerFailureHasNoSideEffects(t *testing.T) {
 	s, h, cfg := newGatewayTestHost(t)
 	h.listener = false
@@ -310,6 +320,7 @@ func TestGatewayListenerFailureHasNoSideEffects(t *testing.T) {
 		t.Fatal("kernel changed without listener")
 	}
 }
+
 func TestGatewayInvalidSnapshotsAndHealth(t *testing.T) {
 	for _, input := range []string{"", "net/ipv4/conf/all/rp_filter 3", "net/ipv4/conf/../../rp_filter 0", "net/ipv4/conf/all/rp_filter 1\nnet/ipv4/conf/all/rp_filter 0"} {
 		if _, err := parseGatewayRPSnapshot(input); err == nil {
@@ -326,7 +337,7 @@ func TestGatewayInvalidSnapshotsAndHealth(t *testing.T) {
 	if status.Persistent || status.ListenerReady {
 		t.Fatal("status masks missing persistence/listener")
 	}
-	if err := os.WriteFile(s.paths.state, []byte("IP_FORWARD_OLD=1\nLAN_IF=lo\nLAN_IF=evil\n"), 0600); err != nil {
+	if err := os.WriteFile(s.paths.state, []byte("IP_FORWARD_OLD=1\nLAN_IF=lo\nLAN_IF=evil\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	status = s.Status(context.Background())
@@ -334,6 +345,7 @@ func TestGatewayInvalidSnapshotsAndHealth(t *testing.T) {
 		t.Fatal("corrupt state invisible")
 	}
 }
+
 func TestGatewayRestoreScriptSyntaxAndOrdering(t *testing.T) {
 	s, _, _ := newGatewayTestHost(t)
 	routing, firewall, script, err := s.gatewayNetworkUnits()
@@ -372,7 +384,7 @@ case "$name $*" in
 esac
 `
 	for _, name := range []string{"ip", "nft", "ss", "sysctl"} {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(scriptTool), 0700); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(scriptTool), 0o700); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -384,19 +396,19 @@ esac
 		script = strings.ReplaceAll(script, gatewayShellQuote("/usr/bin/"+name), gatewayShellQuote(filepath.Join(dir, name)))
 	}
 	scriptPath := filepath.Join(dir, "restore")
-	if err := os.WriteFile(scriptPath, []byte(script), 0700); err != nil {
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.saveGatewayNetworkState(gatewayNetworkState{OldForwarding: "0", Config: cfg, LANNetwork: "192.168.50.0/24", DesiredActive: true}); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(s.paths.nft, []byte(gatewayNFTRules("192.168.50.0/24", "", "lo")), 0600); err != nil {
+	if err := os.WriteFile(s.paths.nft, []byte(gatewayNFTRules("192.168.50.0/24", "", "lo")), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(s.paths.rpFilter, []byte("net/ipv4/conf/all/rp_filter 2\nnet/ipv4/conf/lo/rp_filter 2\n"), 0600); err != nil {
+	if err := os.WriteFile(s.paths.rpFilter, []byte("net/ipv4/conf/all/rp_filter 2\nnet/ipv4/conf/lo/rp_filter 2\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(rulesPath, []byte("32764: from all fwmark 0x40/0xc0 lookup 100\n32765: from all fwmark 0x40/0xc0 lookup 100\n"), 0600); err != nil {
+	if err := os.WriteFile(rulesPath, []byte("32764: from all fwmark 0x40/0xc0 lookup 100\n32765: from all fwmark 0x40/0xc0 lookup 100\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	run := func(mode string) error {
@@ -427,7 +439,7 @@ esac
 	if check < 0 || apply <= check || !strings.Contains(log, "delete table inet xui_gateway") {
 		t.Fatalf("boot restore skipped atomic replacement validation: %s", log)
 	}
-	if err := os.WriteFile(rulesPath, []byte("100: from all fwmark 0x40/0xc0 lookup 100 uidrange 1000-1000\n"), 0600); err != nil {
+	if err := os.WriteFile(rulesPath, []byte("100: from all fwmark 0x40/0xc0 lookup 100 uidrange 1000-1000\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := run("routing"); err == nil {

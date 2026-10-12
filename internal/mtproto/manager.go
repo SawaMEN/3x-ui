@@ -602,6 +602,7 @@ func (inst Instance) listenerAnnounceIP(listen string) string {
 
 func (inst Instance) maskEnabled() bool      { return inst.TLSMask == nil || *inst.TLSMask }
 func (inst Instance) emulationEnabled() bool { return inst.TLSEmulation == nil || *inst.TLSEmulation }
+
 func (inst Instance) legacyModesEnabled() bool {
 	return inst.AllowLegacyModes == nil || *inst.AllowLegacyModes
 }

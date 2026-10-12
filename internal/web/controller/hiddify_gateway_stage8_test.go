@@ -7,9 +7,10 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
-	"github.com/gin-gonic/gin"
 )
 
 func TestHiddifyGatewayWebStatusUsesSelectedCore(t *testing.T) {
@@ -21,7 +22,7 @@ func TestHiddifyGatewayWebStatusUsesSelectedCore(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = database.CloseDB() })
 	settings := &service.SettingService{}
-	if err := settings.SetCoreType(service.CoreTypeHiddify); err != nil {
+	if err := settings.SetCoreType(service.CoreTypeSingBox); err != nil {
 		t.Fatal(err)
 	}
 	if err := settings.SetSingBoxConfigTemplate(`{"inbounds":[{"type":"tproxy","tag":"in-tproxy","listen":"0.0.0.0","listen_port":52345}],"route":{"rules":[{"inbound":["in-tproxy"],"action":"sniff","sniffer":["http","tls","quic"]}]}}`); err != nil {
@@ -43,7 +44,7 @@ func TestHiddifyGatewayWebStatusUsesSelectedCore(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &envelope); err != nil {
 		t.Fatal(err)
 	}
-	if !envelope.Success || envelope.Obj.CoreType != service.CoreTypeHiddify || envelope.Obj.Owner != service.CoreTypeHiddify || !envelope.Obj.Configured || envelope.Obj.Mismatch {
+	if !envelope.Success || envelope.Obj.CoreType != service.CoreTypeSingBox || envelope.Obj.Owner != service.CoreTypeSingBox || !envelope.Obj.Configured || envelope.Obj.Mismatch {
 		t.Fatalf("web Gateway misidentifies Hiddify: %s", response.Body.String())
 	}
 }

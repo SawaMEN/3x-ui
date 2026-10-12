@@ -1,9 +1,10 @@
 package service
 
 import (
+	"testing"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"testing"
 )
 
 func TestGatewayReservesPanelListenerAndTag(t *testing.T) {

@@ -1,6 +1,7 @@
 package youtubeproxy
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/pem"
@@ -44,7 +45,7 @@ func Prepare(dir string, options Options) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	listener, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		p.Close()
 		return 0, err
@@ -64,6 +65,7 @@ func Prepare(dir string, options Options) (int, error) {
 	}()
 	return instance.Port, nil
 }
+
 func Commit(enabled bool) {
 	managed.Lock()
 	defer managed.Unlock()
@@ -88,6 +90,7 @@ func Commit(enabled bool) {
 		}
 	}
 }
+
 func Abort() {
 	managed.Lock()
 	defer managed.Unlock()
@@ -97,6 +100,7 @@ func Abort() {
 		managed.candidate = nil
 	}
 }
+
 func Status() Counters {
 	managed.Lock()
 	defer managed.Unlock()

@@ -3,13 +3,11 @@ package job
 import (
 	"context"
 	"encoding/json"
-	"sync/atomic"
 	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
-	"github.com/SawaMEN/3x-ui/v3/internal/web/service/outbound"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/websocket"
 
 	"github.com/valyala/fasthttp"
@@ -17,11 +15,8 @@ import (
 
 // XrayTrafficJob collects and processes traffic statistics from Xray, updating the database and optionally informing external APIs.
 type XrayTrafficJob struct {
-	settingService    service.SettingService
-	xrayService       service.CoreService
-	inboundService    service.InboundService
-	outboundService   outbound.OutboundService
-	onlineAPIFailures atomic.Int32
+	settingService service.SettingService
+	inboundService service.InboundService
 }
 
 // clientStatsSnapshotMaxClients caps how many client_traffics rows the job

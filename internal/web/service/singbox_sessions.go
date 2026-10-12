@@ -13,7 +13,6 @@ func (s *SingBoxService) ActiveSessions(ctx context.Context) ([]singbox.ActiveSe
 	{
 		return s.hiddifySessions(ctx)
 	}
-
 }
 
 // DisconnectUserSessions closes every currently tracked connection belonging
@@ -51,7 +50,6 @@ func (s *SingBoxService) DisconnectUsersSessions(ctx context.Context, inbound st
 			return false
 		})
 	}
-
 }
 
 // DisconnectInboundSessions closes every currently tracked connection for an
@@ -63,5 +61,4 @@ func (s *SingBoxService) DisconnectInboundSessions(ctx context.Context, inbound 
 	{
 		return s.disconnectHiddify(ctx, func(session singbox.ActiveSession) bool { return session.Inbound == inbound })
 	}
-
 }

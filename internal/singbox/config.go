@@ -591,32 +591,6 @@ func normalizeWireGuardReserved(v any) ([]int, error) {
 	return reserved, nil
 }
 
-func compatIntSlice(v any) []int {
-	switch values := v.(type) {
-	case []any:
-		out := make([]int, 0, len(values))
-		for _, value := range values {
-			switch n := value.(type) {
-			case float64:
-				out = append(out, int(n))
-			case int:
-				out = append(out, n)
-			case string:
-				parsed, err := strconv.Atoi(strings.TrimSpace(n))
-				if err != nil {
-					return nil
-				}
-				out = append(out, parsed)
-			}
-		}
-		return out
-	case []int:
-		return append([]int(nil), values...)
-	default:
-		return nil
-	}
-}
-
 func rawBool(m map[string]any, key string) bool {
 	v, _ := m[key].(bool)
 	return v

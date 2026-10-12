@@ -65,6 +65,7 @@ func TestTrustedClientHTTPSFilteringEndToEnd(t *testing.T) {
 		t.Fatal("filtered response statistics missing")
 	}
 }
+
 func TestCAIsPrivateStableAndRestrictsHosts(t *testing.T) {
 	dir := t.TempDir()
 	first, err := loadAuthority(dir)
@@ -95,11 +96,12 @@ func TestCAIsPrivateStableAndRestrictsHosts(t *testing.T) {
 	if _, err = cert.Leaf.Verify(x509.VerifyOptions{Roots: pool, DNSName: "www.youtube.com"}); err != nil {
 		t.Fatal(err)
 	}
-	_ = os.Chmod(filepath.Join(dir, "ca-private.pem"), 0644)
+	_ = os.Chmod(filepath.Join(dir, "ca-private.pem"), 0o644)
 	if _, err = loadAuthority(dir); err == nil {
 		t.Fatal("world-readable CA accepted")
 	}
 }
+
 func TestProxyRejectsHostPivotAndPublicListener(t *testing.T) {
 	if err := Run(context.Background(), "0.0.0.0:18080", t.TempDir()); err == nil {
 		t.Fatal("public listener accepted")
@@ -110,11 +112,11 @@ func TestProxyRejectsHostPivotAndPublicListener(t *testing.T) {
 	}
 	defer p.Close()
 	recorder := httptest.NewRecorder()
-	p.forward(recorder, httptest.NewRequest("GET", "https://accounts.google.com/", nil), "www.youtube.com")
+	p.forward(recorder, httptest.NewRequest(http.MethodGet, "https://accounts.google.com/", nil), "www.youtube.com")
 	if recorder.Code != 421 {
 		t.Fatal("CONNECT host pivot accepted")
 	}
-	r := httptest.NewRequest("CONNECT", "http://127.0.0.1:22", nil)
+	r := httptest.NewRequest(http.MethodConnect, "http://127.0.0.1:22", nil)
 	r.Host = "127.0.0.1:22"
 	recorder = httptest.NewRecorder()
 	p.ServeHTTP(recorder, r)
@@ -122,6 +124,7 @@ func TestProxyRejectsHostPivotAndPublicListener(t *testing.T) {
 		t.Fatal("non-HTTPS target accepted")
 	}
 }
+
 func TestOtherHostsTunnelWithoutInterception(t *testing.T) {
 	p, err := New(t.TempDir())
 	if err != nil {
@@ -144,7 +147,7 @@ func TestOtherHostsTunnelWithoutInterception(t *testing.T) {
 	_, _ = fmt.Fprint(conn, "CONNECT googlevideo.com:443 HTTP/1.1\r\nHost: googlevideo.com:443\r\n\r\n")
 	reader := bufio.NewReader(conn)
 	r, err := http.ReadResponse(reader, nil)
-	if err != nil || r.StatusCode != 200 {
+	if err != nil || r.StatusCode != http.StatusOK {
 		t.Fatalf("CONNECT failed %v", err)
 	}
 	_, _ = fmt.Fprint(conn, "opaque TLS bytes")
@@ -181,7 +184,7 @@ func TestRunStopsAndExportsOnlyPublicCA(t *testing.T) {
 	}
 	body, _ := io.ReadAll(response.Body)
 	_ = response.Body.Close()
-	if response.StatusCode != 200 || strings.Contains(string(body), "PRIVATE KEY") {
+	if response.StatusCode != http.StatusOK || strings.Contains(string(body), "PRIVATE KEY") {
 		t.Fatal("bad public export")
 	}
 	response, err = client.Get("http://" + address + "/status")
@@ -189,7 +192,7 @@ func TestRunStopsAndExportsOnlyPublicCA(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = response.Body.Close()
-	if response.StatusCode != 200 {
+	if response.StatusCode != http.StatusOK {
 		t.Fatal("status unavailable")
 	}
 	cancel()

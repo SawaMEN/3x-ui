@@ -25,7 +25,7 @@ func TestFPTNBridgeUsesOwnerCoreAndVPNOnlyEgress(t *testing.T) {
 	if binary := os.Getenv("HIDDIFY_CONFIG_CHECK_BINARY"); binary != "" {
 		data, _ := json.Marshal(cfg)
 		path := filepath.Join(t.TempDir(), "fptn.json")
-		if err := os.WriteFile(path, data, 0600); err != nil {
+		if err := os.WriteFile(path, data, 0o600); err != nil {
 			t.Fatal(err)
 		}
 		cmd := exec.Command(binary, "check", "-c", path)

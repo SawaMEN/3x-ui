@@ -26,8 +26,10 @@ func TestHiddifyConfigFromDatabase(t *testing.T) {
 	if got, _ := singBoxSettingService.GetCoreType(); got != CoreTypeHiddify {
 		t.Fatalf("core normalized incorrectly: %s", got)
 	}
-	ib := &model.Inbound{Enable: true, Protocol: model.VLESS, Tag: "vless-xhttp", Port: 18443,
-		Settings: `{"decryption":"none"}`, StreamSettings: `{"network":"xhttp","xhttpSettings":{"path":"/vpn","mode":"stream-up"}}`}
+	ib := &model.Inbound{
+		Enable: true, Protocol: model.VLESS, Tag: "vless-xhttp", Port: 18443,
+		Settings: `{"decryption":"none"}`, StreamSettings: `{"network":"xhttp","xhttpSettings":{"path":"/vpn","mode":"stream-up"}}`,
+	}
 	db := database.GetDB()
 	if err := db.Create(ib).Error; err != nil {
 		t.Fatal(err)
@@ -48,7 +50,8 @@ func TestHiddifyConfigFromDatabase(t *testing.T) {
 	}
 	outbound, err := svc.translateOutbound(map[string]any{
 		"protocol": "vless", "tag": "hiddify-out", "settings": map[string]any{
-			"address": "example.com", "port": 443, "id": client.UUID, "encryption": "none"},
+			"address": "example.com", "port": 443, "id": client.UUID, "encryption": "none",
+		},
 		"streamSettings": map[string]any{"network": "xhttp", "xhttpSettings": map[string]any{"path": "/out", "mode": "stream-up", "xPaddingBytes": "100-200"}},
 	})
 	if err != nil {
@@ -82,7 +85,7 @@ func TestHiddifyConfigFromDatabase(t *testing.T) {
 	}
 	t.Setenv("XUI_BIN_FOLDER", filepath.Dir(binary))
 	file := filepath.Join(t.TempDir(), "candidate.json")
-	if err := os.WriteFile(file, data, 0600); err != nil {
+	if err := os.WriteFile(file, data, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := hiddify.NewProcess(file, true).Validate(context.Background()); err != nil {
@@ -126,7 +129,7 @@ func TestHiddifyClashPresenceAndDisconnect(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer test-secret" {
 			t.Error("Clash authentication missing")
-			w.WriteHeader(401)
+			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
 		if r.Method == http.MethodDelete {

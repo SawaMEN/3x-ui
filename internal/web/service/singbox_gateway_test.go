@@ -2,9 +2,10 @@ package service
 
 import (
 	"encoding/json"
-	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 	"reflect"
 	"testing"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 )
 
 const gatewayNativeInbound = `[{"type":"tproxy","tag":"in-tproxy","listen":"0.0.0.0","listen_port":52345}]`
@@ -31,6 +32,7 @@ func TestSingBoxGatewayReachesGeneratedConfig(t *testing.T) {
 		t.Fatal("Gateway sniff route missing")
 	}
 }
+
 func TestSingBoxGatewayTemplateInboundIsolation(t *testing.T) {
 	cfg := &singbox.Config{}
 	if err := mergeSingBoxGatewayInbound(cfg, json.RawMessage(`[{"type":"mixed","tag":"disabled-panel","listen_port":1080}]`)); err != nil {
@@ -49,6 +51,7 @@ func TestSingBoxGatewayTemplateInboundIsolation(t *testing.T) {
 		t.Fatal("managed port collision ignored")
 	}
 }
+
 func TestSingBoxGatewayRoutePreservesGeneratedRoutes(t *testing.T) {
 	base := json.RawMessage(`{"final":"proxy","auto_detect_interface":true,"rules":[{"domain_suffix":["example.com"],"outbound":"direct"}]}`)
 	patch := json.RawMessage(`{"rules":[{"inbound":["in-tproxy"],"action":"sniff","sniffer":["http","tls","quic"]}]}`)

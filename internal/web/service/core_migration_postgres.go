@@ -36,7 +36,7 @@ func CoreMigrationPostgresSnapshot(ctx context.Context, dst string) error {
 	if err != nil {
 		return err
 	}
-	file, err := os.OpenFile(dst, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	file, err := os.OpenFile(dst, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 	if err != nil {
 		return err
 	}
@@ -175,12 +175,14 @@ func CoreMigrationPostgresFingerprint(ctx context.Context) (string, error) {
 	}
 	return hex.EncodeToString(digest.Sum(nil)), nil
 }
+
 func hashMigrationValue(digest hash.Hash, value string) {
 	var size [8]byte
 	binary.BigEndian.PutUint64(size[:], uint64(len(value)))
 	digest.Write(size[:])
 	digest.Write([]byte(value))
 }
+
 func hashMigrationRows(digest hash.Hash, rows *sql.Rows) error {
 	defer rows.Close()
 	for rows.Next() {

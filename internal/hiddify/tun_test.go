@@ -26,7 +26,7 @@ func TestTunTranslationOwnerCore(t *testing.T) {
 		cfg := map[string]any{"inbounds": []any{got}, "outbounds": []any{map[string]any{"type": "direct", "tag": "direct"}}, "route": map[string]any{"auto_detect_interface": true, "final": "direct"}}
 		data, _ := json.Marshal(cfg)
 		path := filepath.Join(t.TempDir(), "tun.json")
-		if err := os.WriteFile(path, data, 0600); err != nil {
+		if err := os.WriteFile(path, data, 0o600); err != nil {
 			t.Fatal(err)
 		}
 		cmd := exec.Command(binary, "check", "-c", path)
@@ -36,6 +36,7 @@ func TestTunTranslationOwnerCore(t *testing.T) {
 		}
 	}
 }
+
 func TestTunRejectsUnmappedAndMalformedSettings(t *testing.T) {
 	for _, settings := range []map[string]any{
 		{"gateway": []any{"bad"}},

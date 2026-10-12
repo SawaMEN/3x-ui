@@ -39,7 +39,7 @@ func TestMASQUEBinaryConfig(t *testing.T) {
 				t.Fatal(err)
 			}
 			path := filepath.Join(dir, name+".json")
-			if err := os.WriteFile(path, data, 0600); err != nil {
+			if err := os.WriteFile(path, data, 0o600); err != nil {
 				t.Fatal(err)
 			}
 			cmd := exec.Command(binary, "check", "-c", path)
@@ -68,10 +68,10 @@ func masqueTestCertificate(t *testing.T) (string, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(certPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0600); err != nil {
+	if err := os.WriteFile(certPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(keyPath, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER}), 0600); err != nil {
+	if err := os.WriteFile(keyPath, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER}), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	return certPath, keyPath

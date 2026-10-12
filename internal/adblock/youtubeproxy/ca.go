@@ -32,7 +32,7 @@ var authorityLoadMu sync.Mutex
 func loadAuthority(dir string) (*authority, error) {
 	authorityLoadMu.Lock()
 	defer authorityLoadMu.Unlock()
-	if err := os.MkdirAll(dir, 0700); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
 	path := filepath.Join(dir, "ca-private.pem")
@@ -57,7 +57,7 @@ func loadAuthority(dir string) (*authority, error) {
 		}
 		data = append(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: private})...)
 		// O_EXCL prevents concurrent startup from replacing a CA trusted by clients.
-		file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+		file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 		if err != nil {
 			return nil, err
 		}
@@ -76,7 +76,7 @@ func loadAuthority(dir string) (*authority, error) {
 	if err != nil {
 		return nil, err
 	}
-	if info.Mode().Perm()&0077 != 0 {
+	if info.Mode().Perm()&0o077 != 0 {
 		return nil, fmt.Errorf("CA private file must have mode 0600: %s", path)
 	}
 	pair, err := tls.X509KeyPair(data, data)
@@ -95,12 +95,13 @@ func loadAuthority(dir string) (*authority, error) {
 	publicPath := filepath.Join(dir, "ca-cert.pem")
 	existing, _ := os.ReadFile(publicPath)
 	if !bytes.Equal(existing, public) {
-		if err = os.WriteFile(publicPath, public, 0644); err != nil {
+		if err = os.WriteFile(publicPath, public, 0o644); err != nil {
 			return nil, err
 		}
 	}
 	return &authority{cert: cert, key: key, leaves: map[string]*tls.Certificate{}}, nil
 }
+
 func (a *authority) leaf(host string) (*tls.Certificate, error) {
 	if !interceptedHost(host) {
 		return nil, fmt.Errorf("host not allowed for interception")

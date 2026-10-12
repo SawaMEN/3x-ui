@@ -7,10 +7,11 @@ import (
 	"strings"
 	"time"
 
+	"gorm.io/gorm"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
-	"gorm.io/gorm"
 )
 
 // HiddifyConfigGenerator builds the full server configuration used by previews,

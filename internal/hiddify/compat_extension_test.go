@@ -34,6 +34,7 @@ func TestKCPTranslationBothDirections(t *testing.T) {
 		}
 	}
 }
+
 func TestDynamicBalancerTranslation(t *testing.T) {
 	available := []map[string]any{{"protocol": "vless", "tag": "proxy-a"}, {"protocol": "vless", "tag": "proxy-b"}, {"protocol": "freedom", "tag": "backup"}}
 	config := map[string]any{"observatory": map[string]any{"subjectSelector": []any{"proxy-"}, "probeURL": "http://127.0.0.1/probe", "probeInterval": "10s", "enableConcurrency": true}}
@@ -52,6 +53,7 @@ func TestDynamicBalancerTranslation(t *testing.T) {
 		}
 	}
 }
+
 func TestDownloadExplicitModesPreserved(t *testing.T) {
 	for _, mode := range []string{"auto", "packet-up", "stream-up", "stream-one"} {
 		out, err := translateDownload(map[string]any{"address": "127.0.0.1", "port": 443, "network": "xhttp", "xhttpSettings": map[string]any{"path": "/down", "mode": mode}}, "download")
@@ -63,6 +65,7 @@ func TestDownloadExplicitModesPreserved(t *testing.T) {
 		}
 	}
 }
+
 func TestNestedDownloadTranslation(t *testing.T) {
 	leaf := map[string]any{"address": "127.0.0.1", "port": 443, "network": "xhttp", "xhttpSettings": map[string]any{"path": "/leaf"}}
 	root := map[string]any{"address": "127.0.0.1", "port": 444, "network": "xhttp", "xhttpSettings": map[string]any{"downloadSettings": leaf}}

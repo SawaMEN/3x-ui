@@ -16,6 +16,7 @@ func StateForCore(core string) (State, error) {
 	}
 	return State{}, fmt.Errorf("unsupported Gateway core %q", core)
 }
+
 func EnableForCore(core string) error {
 	if core == service.CoreTypeXray {
 		return Enable()
@@ -25,6 +26,7 @@ func EnableForCore(core string) error {
 	}
 	return fmt.Errorf("unsupported Gateway core %q", core)
 }
+
 func DisableForCore(core string) error {
 	if core == service.CoreTypeXray {
 		return Disable()
@@ -43,6 +45,7 @@ func MigrateCore(oldCore, newCore string) (func() error, error) {
 	}
 	return migrateCore(oldCore, newCore, StateForCore, EnableForCore, DisableForCore, RestoreForCore)
 }
+
 func migrateCore(oldCore, newCore string, state func(string) (State, error), enable, disable, restore func(string) error) (func() error, error) {
 	oldState, err := state(oldCore)
 	if err != nil {

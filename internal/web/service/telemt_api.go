@@ -10,8 +10,9 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/mtproto"
 	"github.com/pelletier/go-toml/v2"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/mtproto"
 )
 
 type telemtAPISettings struct {

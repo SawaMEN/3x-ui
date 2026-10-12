@@ -80,7 +80,6 @@ type SettingController struct {
 	panelService    panel.PanelService
 	apiTokenService panel.ApiTokenService
 	xrayService     service.CoreService
-	singBoxService  service.SingBoxService
 }
 
 // NewSettingController creates a new SettingController and initializes its routes.
@@ -673,11 +672,13 @@ func (a *SettingController) resetSingBoxConfig(c *gin.Context) {
 }
 
 func (a *SettingController) hiddifyStatus(c *gin.Context) {
-	a.nativeStatus(c, service.NativeCore(service.CoreTypeHiddify))
+	a.nativeStatus(c, service.NativeCore(service.CoreTypeSingBox))
 }
+
 func (a *SettingController) singBoxStatus(c *gin.Context) {
 	a.nativeStatus(c, service.NativeCore(service.CoreTypeSingBox))
 }
+
 func (a *SettingController) nativeStatus(c *gin.Context, svc *service.SingBoxService) {
 	_, statErr := os.Stat(svc.BinaryPath())
 	running := svc.IsRunning()

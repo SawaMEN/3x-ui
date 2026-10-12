@@ -3,6 +3,7 @@ package singbox
 import (
 	"encoding/json"
 	"fmt"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/masque"
 )
 

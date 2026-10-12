@@ -116,7 +116,7 @@ core_migration_install_managed_bin() {
             [[ -n "${cm_original_bin_target:-}" ]] || return 1
             mkdir -p "$cm_original_bin_target" || return 1
             cp -a "$xui_folder/bin/." "$cm_original_bin_target/" || return 1
-            rm -rf -- "$xui_folder/bin" || return 1
+            rm -rf -- "${xui_folder:?}/bin" || return 1
             cp -a "$cm_backup/installation/bin" "$xui_folder/bin" || return 1
         fi
     fi

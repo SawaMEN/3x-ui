@@ -621,6 +621,7 @@ func parseOutboundBalanceOptions(c *gin.Context) (*service.BalanceOptions, error
 	}
 	return o, nil
 }
+
 func markOutboundCoreRestart() {
 	core, _ := (&service.SettingService{}).GetCoreType()
 	if service.IsNativeCore(core) {
@@ -629,6 +630,7 @@ func markOutboundCoreRestart() {
 		(&service.CoreService{}).SetToNeedRestart()
 	}
 }
+
 func (a *XraySettingController) probeOutboundSub(c *gin.Context) {
 	id, err := parseIntSafe(c.Param("id"))
 	if err != nil || id <= 0 {

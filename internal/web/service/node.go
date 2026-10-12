@@ -18,6 +18,8 @@ import (
 	"sync"
 	"time"
 
+	"gorm.io/gorm"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/core"
 	"github.com/SawaMEN/3x-ui/v3/internal/crypto/nodetoken"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
@@ -26,7 +28,6 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
-	"gorm.io/gorm"
 )
 
 type HeartbeatPatch struct {
@@ -1396,7 +1397,8 @@ func (s *NodeService) probe(ctx context.Context, n *model.Node, proxyURL string)
 		patch.CoreType = CoreTypeXray
 		patch.RunningCore = CoreTypeXray
 	}
-	if patch.CoreType == CoreTypeXray {
+	switch patch.CoreType {
+	case CoreTypeXray:
 		if patch.CoreVersion == "" {
 			patch.CoreVersion = patch.XrayVersion
 		}
@@ -1404,7 +1406,7 @@ func (s *NodeService) probe(ctx context.Context, n *model.Node, proxyURL string)
 			patch.CoreState = patch.XrayState
 			patch.CoreError = patch.XrayError
 		}
-	} else if patch.CoreType == CoreTypeSingBox {
+	case CoreTypeSingBox:
 		if patch.CoreVersion == "" {
 			patch.CoreVersion = patch.SingBoxVersion
 		}

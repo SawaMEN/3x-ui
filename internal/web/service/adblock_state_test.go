@@ -56,6 +56,7 @@ func TestAdBlockApplicationOnlyChangesForEffectiveRules(t *testing.T) {
 		t.Fatal("restart lost apply failure")
 	}
 }
+
 func TestAdBlockPauseSurvivesRestartAndResumesWithoutAutoUpdate(t *testing.T) {
 	setupBulkDB(t)
 	s := &SettingService{}
@@ -96,6 +97,7 @@ func TestAdBlockPauseSurvivesRestartAndResumesWithoutAutoUpdate(t *testing.T) {
 		t.Fatal("invalid pause accepted")
 	}
 }
+
 func TestAdBlockDomainDiagnosisUsesEffectiveRulesAndScope(t *testing.T) {
 	setupBulkDB(t)
 	s := &SettingService{}

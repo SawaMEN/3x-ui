@@ -2,6 +2,7 @@ package hiddify
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -26,11 +27,11 @@ srun) exec sleep 60 ;;
 *) exit 4 ;;
 esac
 `, TargetVersion, strings.Join(append(append([]string{}, requiredBuildTags...), "with_purego"), ","), TargetRevision)
-	if err := os.WriteFile(GetBinaryPath(), []byte(script), 0700); err != nil {
+	if err := os.WriteFile(GetBinaryPath(), []byte(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	path := filepath.Join(dir, "candidate.json")
-	if err := os.WriteFile(path, []byte("{}"), 0600); err != nil {
+	if err := os.WriteFile(path, []byte("{}"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	r := NewRuntime(path, true)
@@ -41,7 +42,7 @@ esac
 	t.Cleanup(func() { _ = r.Stop(context.Background()) })
 	cancelled, cancelStart := context.WithCancel(context.Background())
 	cancelStart()
-	if err := contract.Start(cancelled); err != context.Canceled || contract.IsRunning() {
+	if err := contract.Start(cancelled); !errors.Is(err, context.Canceled) || contract.IsRunning() {
 		t.Fatalf("cancelled start launched child: %v", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -53,7 +54,7 @@ esac
 	if !contract.IsRunning() {
 		t.Fatal("core died with request context")
 	}
-	if err := os.WriteFile(path, []byte("invalid"), 0600); err != nil {
+	if err := os.WriteFile(path, []byte("invalid"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := contract.Restart(context.Background()); err == nil {
@@ -62,7 +63,7 @@ esac
 	if !contract.IsRunning() || string(r.Process.AppliedConfig()) != "{}" {
 		t.Fatal("invalid candidate displaced running core")
 	}
-	if err := os.WriteFile(path, []byte("{}"), 0600); err != nil {
+	if err := os.WriteFile(path, []byte("{}"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := contract.Restart(context.Background()); err != nil {

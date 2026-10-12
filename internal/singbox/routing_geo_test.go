@@ -70,7 +70,7 @@ func TestRoutingGeoAttributeFilters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "geosite.dat"), data, 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "geosite.dat"), data, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	for _, token := range []string{"geosite:test@ads@cn", "ext-domain:geosite.dat:test@ads@cn"} {
@@ -91,7 +91,7 @@ func TestGeoRoutingModifiedSingBoxCheck(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "geoip.dat"), data, 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "geoip.dat"), data, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	route, err := TranslateXrayRoutingWithGeoData(map[string]any{"rules": []any{map[string]any{"ip": []any{"geoip:test"}, "outboundTag": "direct"}}}, geodata.NewStore(dir))
@@ -103,7 +103,7 @@ func TestGeoRoutingModifiedSingBoxCheck(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := filepath.Join(dir, "config.json")
-	if err := os.WriteFile(path, raw, 0600); err != nil {
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if output, err := exec.Command(binary, "check", "-c", path).CombinedOutput(); err != nil {

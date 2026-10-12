@@ -274,16 +274,6 @@ func (s *OutboundService) testOutboundsParsed(items []map[string]any, testURL st
 	return results
 }
 
-// runHTTPProbeBatch makes one shared-process attempt for the given items,
-// writing per-request outcomes into the items' results. It returns a non-nil
-// error only when the process never became usable; retryPerItem reports
-// whether splitting the batch into per-item instances could help (true for
-// start failures / early exits that a poisoned config would explain, false
-// for environmental failures like a missing binary or no free ports).
-func runHTTPProbeBatch(items []*httpBatchItem, allOutbounds []any, testURL string, realDelay bool) (retryPerItem bool, err error) {
-	return runHTTPProbeBatchForCore(items, allOutbounds, testURL, realDelay, "xray")
-}
-
 func runHTTPProbeBatchForCore(items []*httpBatchItem, allOutbounds []any, testURL string, realDelay bool, coreType string) (retryPerItem bool, err error) {
 	coreName := "sing-box"
 	ports, release, err := reserveLoopbackPorts(len(items))

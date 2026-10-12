@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"gorm.io/gorm"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
@@ -16,7 +18,6 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/random"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
-	"gorm.io/gorm"
 )
 
 // droppedClientNeedsRestart is what restartXrayOnClientDisable asks for: the core
@@ -701,6 +702,9 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 	clients, err := inboundSvc.GetClients(data)
 	if err != nil {
 		return false, err
+	}
+	if len(clients) != 1 {
+		return false, common.NewError("client update requires exactly one client")
 	}
 
 	var settings map[string]any

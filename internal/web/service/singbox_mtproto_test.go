@@ -1,9 +1,10 @@
 package service
 
 import (
+	"testing"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
-	"testing"
 )
 
 func TestSingBoxMtprotoEgress(t *testing.T) {

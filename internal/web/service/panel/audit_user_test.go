@@ -5,11 +5,12 @@ import (
 	"path/filepath"
 	"testing"
 
+	"gorm.io/gorm"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/crypto"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
-	"gorm.io/gorm"
 )
 
 func TestAuditUserUpdateAnd2FAAreAtomic(t *testing.T) {

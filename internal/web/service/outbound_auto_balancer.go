@@ -71,6 +71,7 @@ func (o *BalanceOptions) Validate(allowPrivate bool) error {
 	}
 	return nil
 }
+
 func (o *BalanceOptions) apply(sub *model.OutboundSubscription) {
 	if sub.AutoBalance != o.Enabled || sub.BalanceMode != o.Mode || sub.ProbeURL != o.URL {
 		sub.SelectedTag = ""
@@ -84,6 +85,7 @@ func (o *BalanceOptions) apply(sub *model.OutboundSubscription) {
 	sub.LastHealth = 0
 	sub.LastProbe, sub.ProbeError, sub.ProbeResults = 0, "", ""
 }
+
 func subscriptionAutoOutbound(sub *model.OutboundSubscription, members []any) []any {
 	if !sub.AutoBalance {
 		return members
@@ -92,6 +94,7 @@ func subscriptionAutoOutbound(sub *model.OutboundSubscription, members []any) []
 	blocked := map[string]any{"tag": autoBlockedTag(sub.Id), "protocol": "blackhole", "settings": map[string]any{}}
 	return append([]any{alias, blocked}, members...)
 }
+
 func chooseSubscriptionOutbound(results []*outbound.TestOutboundResult, current, mode string, tolerance int) string {
 	var best, previous *outbound.TestOutboundResult
 	for _, r := range results {
@@ -122,11 +125,13 @@ func chooseSubscriptionOutbound(results []*outbound.TestOutboundResult, current,
 	return best.Tag
 }
 
-var autoBalanceMu sync.Mutex
-var automaticBalanceNow = time.Now
-var autoBalanceProbe = func(items, target, all, mode, core string) ([]*outbound.TestOutboundResult, error) {
-	return (&outbound.OutboundService{}).TestAutomaticOutbounds(items, target, all, mode, core)
-}
+var (
+	autoBalanceMu       sync.Mutex
+	automaticBalanceNow = time.Now
+	autoBalanceProbe    = func(items, target, all, mode, core string) ([]*outbound.TestOutboundResult, error) {
+		return (&outbound.OutboundService{}).TestAutomaticOutbounds(items, target, all, mode, core)
+	}
+)
 
 // runAutomaticProbe batches candidates and distinguishes an occupied probe
 // engine from failed nodes, so busy manual tests never cause a false failover.

@@ -4,6 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path"
+	"path/filepath"
+	"slices"
+	"strings"
+	"sync"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawgnet"
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
@@ -12,16 +18,9 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/json_util"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
-	"path"
-	"path/filepath"
-	"slices"
-	"strings"
-	"sync"
 )
 
-var (
-	presenceRegistry presenceState
-)
+var presenceRegistry presenceState
 
 type presenceState struct {
 	mu      sync.RWMutex

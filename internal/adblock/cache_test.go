@@ -72,8 +72,9 @@ func TestCachedSourcesRevalidateAndRefreshIndependently(t *testing.T) {
 		t.Fatal("304 accepted without cache")
 	}
 }
+
 func TestCachedSourcesMissingCacheAndCancellationAreAtomic(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { http.Error(w, "broken", 502) }))
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { http.Error(w, "broken", http.StatusBadGateway) }))
 	defer server.Close()
 	manager := Manager{Client: server.Client()}
 	if _, err := manager.FetchCached(context.Background(), []string{server.URL}, nil, false); err == nil {

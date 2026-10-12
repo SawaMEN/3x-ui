@@ -51,6 +51,7 @@ func TestAdBlockManagedServerScopeAndPause(t *testing.T) {
 		t.Fatal("proxy stayed running after route removal")
 	}
 }
+
 func TestAdBlockManagedServerRealCores(t *testing.T) {
 	for _, core := range []struct{ name, env string }{{"xray", "XUI_ADBLOCK_XRAY_BINARY"}, {"singbox", "XUI_ADBLOCK_SINGBOX_BINARY"}} {
 		t.Run(core.name, func(t *testing.T) {
@@ -87,7 +88,7 @@ func TestAdBlockManagedServerRealCores(t *testing.T) {
 				t.Skip("set " + core.env)
 			}
 			path := filepath.Join(t.TempDir(), "cfg.json")
-			if err := os.WriteFile(path, raw, 0600); err != nil {
+			if err := os.WriteFile(path, raw, 0o600); err != nil {
 				t.Fatal(err)
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)

@@ -48,7 +48,7 @@ func TestTranslateNativeSingBoxStableOutboundMatrix(t *testing.T) {
 			protocol: "urltest",
 			settings: map[string]any{
 				"outbounds": []any{"proxy-a", "proxy-b"},
-				"url": "https://www.gstatic.com/generate_204", "interval": "3m",
+				"url":       "https://www.gstatic.com/generate_204", "interval": "3m",
 			},
 		},
 		{

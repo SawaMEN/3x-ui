@@ -28,6 +28,7 @@ func init() {
 	defaultValueMap["adBlockPolicies"] = "[]"
 	defaultValueMap["adBlockPolicyDomains"] = "{}"
 }
+
 func (s *SettingService) GetAdBlockPolicies() ([]AdBlockPolicy, error) {
 	raw, err := s.getString("adBlockPolicies")
 	if err != nil {
@@ -37,6 +38,7 @@ func (s *SettingService) GetAdBlockPolicies() ([]AdBlockPolicy, error) {
 	err = json.Unmarshal([]byte(raw), &policies)
 	return policies, err
 }
+
 func validateAdBlockPolicies(policies []AdBlockPolicy) error {
 	if len(policies) > maxAdBlockPolicies {
 		return fmt.Errorf("maximum %d AdBlock policies", maxAdBlockPolicies)
@@ -62,6 +64,7 @@ func validateAdBlockPolicies(policies []AdBlockPolicy) error {
 	}
 	return nil
 }
+
 func adBlockPolicySources(policies []AdBlockPolicy) []string {
 	urls := []string{}
 	for _, p := range policies {
@@ -72,6 +75,7 @@ func adBlockPolicySources(policies []AdBlockPolicy) []string {
 	}
 	return urls
 }
+
 func newAdBlockManager() (adblock.Manager, func()) {
 	transport := &http.Transport{DialContext: netsafe.SSRFGuardedDialContext}
 	if base, ok := http.DefaultTransport.(*http.Transport); ok {
@@ -214,9 +218,11 @@ func (s *SettingService) buildAdBlockPolicyData(ctx context.Context, policies []
 	out, err := json.Marshal(data)
 	return string(out), err
 }
+
 func scopeMatches(scope AdBlockScope, inbound, client string) bool {
 	return scopeContains(scope.InboundMode, scope.Inbounds, inbound) && scopeContains(scope.ClientMode, scope.Clients, client)
 }
+
 func selectedAdBlockPolicy(policies []AdBlockPolicy, inbound, client string) *AdBlockPolicy {
 	for i := range policies {
 		if policies[i].Enabled && scopeMatches(policies[i].Scope, inbound, client) {

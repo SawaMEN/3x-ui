@@ -20,12 +20,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	utls "github.com/refraction-networking/utls"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
 
-var fptnMetricPattern = regexp.MustCompile(`^fptn_user_(incoming|outgoing)_traffic_bytes\{([^}]*)\}\s+([0-9.eE+\-]+)$`)
-var fptnLabelPattern = regexp.MustCompile(`(?:^|,)\s*(username|session_id)="([a-zA-Z0-9_-]+)"`)
+var (
+	fptnMetricPattern = regexp.MustCompile(`^fptn_user_(incoming|outgoing)_traffic_bytes\{([^}]*)\}\s+([0-9.eE+\-]+)$`)
+	fptnLabelPattern  = regexp.MustCompile(`(?:^|,)\s*(username|session_id)="([a-zA-Z0-9_-]+)"`)
+)
 
 type fptnTrafficSample struct {
 	email string
@@ -87,7 +90,8 @@ func collectFPTNTraffic(proc *running) (map[string]fptnTrafficSample, error) {
 	if !roots.AppendCertsFromPEM(data) {
 		return nil, fmt.Errorf("invalid FPTN CA")
 	}
-	tr := &http.Transport{Proxy: nil, DisableKeepAlives: true, ForceAttemptHTTP2: false,
+	tr := &http.Transport{
+		Proxy: nil, DisableKeepAlives: true, ForceAttemptHTTP2: false,
 		DialTLSContext: func(ctx context.Context, network, address string) (net.Conn, error) {
 			conn, err := (&net.Dialer{}).DialContext(ctx, network, address)
 			if err != nil {
@@ -128,7 +132,11 @@ func collectFPTNTraffic(proc *running) (map[string]fptnTrafficSample, error) {
 	}
 	defer tr.CloseIdleConnections()
 	client := &http.Client{Transport: tr, Timeout: 3 * time.Second}
-	response, err := client.Get("https://" + proc.metricsAddr + "/api/v1/metrics/" + inst.Settings.MetricsKey)
+	request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://"+proc.metricsAddr+"/api/v1/metrics/"+inst.Settings.MetricsKey, nil)
+	if err != nil {
+		return nil, err
+	}
+	response, err := client.Do(request)
 	if err != nil {
 		return nil, err
 	}
@@ -177,7 +185,7 @@ func collectFPTNTraffic(proc *running) (map[string]fptnTrafficSample, error) {
 
 func collectOpenFluxTraffic(proc *running) []TrafficDelta {
 	socket := filepath.Join(directory(), strconv.Itoa(proc.instance.ID), "ipc.sock")
-	conn, err := net.DialTimeout("unix", socket, time.Second)
+	conn, err := (&net.Dialer{Timeout: time.Second}).DialContext(context.Background(), "unix", socket)
 	if err != nil {
 		return nil
 	}

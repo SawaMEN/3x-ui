@@ -42,7 +42,7 @@ func (j *OutboundSubscriptionJob) Run() {
 		// Ask the xray manager to restart/reload on the next 30s check.
 		core, _ := (&service.SettingService{}).GetCoreType()
 		if service.IsNativeCore(core) {
-			(service.SelectedNativeCore()).SetToNeedRestart()
+			service.SelectedNativeCore().SetToNeedRestart()
 		} else {
 			j.xraySvc.SetToNeedRestart()
 		}

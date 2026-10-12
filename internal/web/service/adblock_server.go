@@ -21,7 +21,9 @@ func init() {
 	raw, _ := json.Marshal(AdBlockServerSettings{Limits: youtubeproxy.DefaultOptions()})
 	defaultValueMap["adBlockServer"] = string(raw)
 }
+
 func AdBlockServerCADir() string { return filepath.Join(config.GetDBFolderPath(), "youtube-filter") }
+
 func (s *SettingService) GetAdBlockServer() (AdBlockServerSettings, error) {
 	raw, err := s.getString("adBlockServer")
 	var settings AdBlockServerSettings
@@ -30,6 +32,7 @@ func (s *SettingService) GetAdBlockServer() (AdBlockServerSettings, error) {
 	}
 	return settings, err
 }
+
 func (settings *AdBlockServerSettings) validate() error {
 	settings.Outbound = strings.TrimSpace(settings.Outbound)
 	if len(settings.Outbound) > 128 || strings.ContainsAny(settings.Outbound, "\r\n\x00") || strings.HasPrefix(settings.Outbound, "youtube-") {
@@ -37,6 +40,7 @@ func (settings *AdBlockServerSettings) validate() error {
 	}
 	return settings.Limits.Validate()
 }
+
 func (s *SettingService) AdBlockServerEffective() (bool, error) {
 	server, err := s.GetAdBlockServer()
 	if err != nil {
@@ -49,6 +53,7 @@ func (s *SettingService) AdBlockServerEffective() (bool, error) {
 func (s *SettingService) AdBlockSnapshotForRollback() (map[string]string, error) {
 	return adBlockSnapshot()
 }
+
 func (s *SettingService) RestoreAdBlockSnapshot(values map[string]string) error {
 	adBlockUpdateMu.Lock()
 	defer adBlockUpdateMu.Unlock()

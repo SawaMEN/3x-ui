@@ -120,7 +120,7 @@ func backupExists() (bool, error) {
 }
 
 func createBackup(raw string) error {
-	if err := os.MkdirAll(filepath.Dir(backupPath), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(backupPath), 0o700); err != nil {
 		return err
 	}
 	file, err := os.OpenFile(backupPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
@@ -605,6 +605,7 @@ func xrayPortIncludes(value any, target int) bool {
 	}
 	return false
 }
+
 func hasUsableXrayGatewayInbound(cfg map[string]any) bool {
 	inbounds, _ := cfg["inbounds"].([]any)
 	for _, item := range inbounds {

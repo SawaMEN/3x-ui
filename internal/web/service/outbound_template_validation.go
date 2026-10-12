@@ -17,6 +17,7 @@ import (
 func validateSingBoxTemplateOutbound(raw json.RawMessage, managed map[string]any) error {
 	return validateNativeTemplateOutbound(raw, managed, CoreTypeSingBox)
 }
+
 func validateNativeTemplateOutbound(raw json.RawMessage, managed map[string]any, core string) error {
 	if externalvpn.IsAdditionalOutbound(managed) {
 		return externalvpn.ValidateAdditionalOutbound(managed)

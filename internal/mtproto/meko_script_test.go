@@ -97,7 +97,7 @@ func TestMekoNftBatchAndStatus(t *testing.T) {
 	script := strings.ReplaceAll(string(data), "/run/lock/x-ui-telemt-meko.lock", filepath.Join(dir, "lock"))
 	script = strings.ReplaceAll(script, "/etc/x-ui/telemt-meko-fix.env", filepath.Join(dir, "state.env"))
 	helper := filepath.Join(dir, "helper.sh")
-	if err := os.WriteFile(helper, []byte(script), 0700); err != nil {
+	if err := os.WriteFile(helper, []byte(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	mock := `#!/usr/bin/env bash
@@ -110,10 +110,10 @@ case "$*" in
  *) exit 1 ;;
 esac
 `
-	if err := os.WriteFile(filepath.Join(dir, "nft"), []byte(mock), 0700); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "nft"), []byte(mock), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "iptables"), []byte("#!/bin/sh\nexit 1\n"), 0700); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "iptables"), []byte("#!/bin/sh\nexit 1\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	run := func(action, enabled string) string {

@@ -60,16 +60,19 @@ func (s *GatewayNetworkService) networkPaths() gatewayNetworkPaths {
 	}
 	return gatewayNetworkPaths{gatewayStatePath, gatewayRPFilterPath, gatewayNFTPath, gatewayRoutingServicePath, gatewayFirewallServicePath, gatewayRestoreScriptPath}
 }
+
 func (s *GatewayNetworkService) command(ctx context.Context, name string, args ...string) (string, error) {
 	if s.run != nil {
 		return s.run(ctx, name, args...)
 	}
 	return runGatewayCommand(ctx, name, args...)
 }
+
 func (s *GatewayNetworkService) commandOnly(ctx context.Context, name string, args ...string) error {
 	_, err := s.command(ctx, name, args...)
 	return err
 }
+
 func (s *GatewayNetworkService) commandInput(ctx context.Context, input, name string, args ...string) error {
 	if s.input != nil {
 		return s.input(ctx, input, name, args...)
@@ -219,6 +222,7 @@ func (s *GatewayNetworkService) Suspend(ctx context.Context) error {
 	}
 	return s.removeGatewayTables(ctx)
 }
+
 func (s *GatewayNetworkService) removeGatewayTables(ctx context.Context) error {
 	tables, err := s.command(ctx, "nft", "list", "tables")
 	if err != nil {
@@ -235,6 +239,7 @@ func (s *GatewayNetworkService) removeGatewayTables(ctx context.Context) error {
 	}
 	return s.commandInput(ctx, batch.String(), "nft", "-f", "-")
 }
+
 func (s *GatewayNetworkService) Disable(ctx context.Context) error {
 	state, err := s.loadGatewayNetworkState()
 	if os.IsNotExist(err) {
@@ -438,7 +443,7 @@ func (s *GatewayNetworkService) saveGatewayNetworkState(state gatewayNetworkStat
 	content := fmt.Sprintf("NETWORK_ENABLED=%d\nIP_FORWARD_OLD=%s\nLAN_IF=%s\nLAN_IP=%s\nLAN_PREFIX=%d\nLAN_NETWORK=%s\nWAN_IF=%s\n",
 		active,
 		state.OldForwarding, state.Config.LANInterface, state.Config.LANIP, state.Config.LANPrefix, state.LANNetwork, state.Config.WANInterface)
-	return gatewayAtomicWrite(s.networkPaths().state, []byte(content), 0600)
+	return gatewayAtomicWrite(s.networkPaths().state, []byte(content), 0o600)
 }
 
 func (s *GatewayNetworkService) loadGatewayNetworkState() (gatewayNetworkState, error) {
@@ -503,7 +508,7 @@ func (s *GatewayNetworkService) installGatewayNetworkUnits(ctx context.Context) 
 		path, content string
 		mode          os.FileMode
 	}{
-		{s.networkPaths().routingUnit, routingUnit, 0644}, {s.networkPaths().firewallUnit, firewallUnit, 0644}, {s.networkPaths().restoreScript, script, 0700},
+		{s.networkPaths().routingUnit, routingUnit, 0o644}, {s.networkPaths().firewallUnit, firewallUnit, 0o644}, {s.networkPaths().restoreScript, script, 0o700},
 	} {
 		if err := gatewayAtomicWrite(file.path, []byte(file.content), file.mode); err != nil {
 			return err
@@ -566,11 +571,6 @@ func runGatewayCommand(ctx context.Context, name string, args ...string) (string
 	return string(out), nil
 }
 
-func runGatewayCommandOnly(ctx context.Context, name string, args ...string) error {
-	_, err := runGatewayCommand(ctx, name, args...)
-	return err
-}
-
 func runGatewayCommandInput(ctx context.Context, input, name string, args ...string) error {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -584,9 +584,11 @@ func runGatewayCommandInput(ctx context.Context, input, name string, args ...str
 	return nil
 }
 
-var gatewayInterfaceName = regexp.MustCompile(`^[a-zA-Z0-9_.:-]+$`)
-var gatewayTableRule = regexp.MustCompile(`(?m)\b(?:lookup|table) 100(?:\s|$)`)
-var gatewayPolicyRule = regexp.MustCompile(`(?m)\bfwmark 0x40/0xc0 (?:lookup|table) 100(?:\s|$)`)
+var (
+	gatewayInterfaceName = regexp.MustCompile(`^[a-zA-Z0-9_.:-]+$`)
+	gatewayTableRule     = regexp.MustCompile(`(?m)\b(?:lookup|table) 100(?:\s|$)`)
+	gatewayPolicyRule    = regexp.MustCompile(`(?m)\bfwmark 0x40/0xc0 (?:lookup|table) 100(?:\s|$)`)
+)
 
 func gatewayTableInUse(rules string) bool        { return gatewayTableRule.MatchString(rules) }
 func gatewayPolicyRulePresent(rules string) bool { return gatewayPolicyRule.MatchString(rules) }
@@ -629,17 +631,20 @@ func (s *GatewayNetworkService) captureGatewayRPFilter(ctx context.Context, ifac
 		}
 		fmt.Fprintf(&snapshot, "%s %s\n", key, value)
 	}
-	return gatewayAtomicWrite(s.networkPaths().rpFilter, []byte(snapshot.String()), 0600)
+	return gatewayAtomicWrite(s.networkPaths().rpFilter, []byte(snapshot.String()), 0o600)
 }
+
 func (s *GatewayNetworkService) configureGatewayRPFilter(ctx context.Context, iface string) error {
 	if err := s.captureGatewayRPFilter(ctx, iface); err != nil {
 		return err
 	}
 	return s.applyGatewayRPFilter(ctx, false, iface)
 }
+
 func (s *GatewayNetworkService) restoreGatewayRPFilter(ctx context.Context) error {
 	return s.applyGatewayRPFilter(ctx, true, "")
 }
+
 func parseGatewayRPSnapshot(data string) (map[string]string, error) {
 	values := map[string]string{}
 	for _, line := range strings.Split(data, "\n") {
@@ -660,6 +665,7 @@ func parseGatewayRPSnapshot(data string) (map[string]string, error) {
 	}
 	return values, nil
 }
+
 func (s *GatewayNetworkService) applyGatewayRPFilter(ctx context.Context, restore bool, iface string) error {
 	data, err := os.ReadFile(s.networkPaths().rpFilter)
 	if os.IsNotExist(err) {

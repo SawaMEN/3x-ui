@@ -17,7 +17,7 @@ func TestLocalHiddifySessionsUseClashAndPreserveIdentity(t *testing.T) {
 	closed := []string{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer phase6" {
-			w.WriteHeader(401)
+			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
 		if r.Method == http.MethodDelete {
@@ -25,9 +25,9 @@ func TestLocalHiddifySessionsUseClashAndPreserveIdentity(t *testing.T) {
 			closed = append(closed, r.URL.Path)
 			mu.Unlock()
 			if strings.HasSuffix(r.URL.Path, "fails") {
-				w.WriteHeader(500)
+				w.WriteHeader(http.StatusInternalServerError)
 			} else {
-				w.WriteHeader(204)
+				w.WriteHeader(http.StatusNoContent)
 			}
 			return
 		}

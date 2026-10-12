@@ -86,6 +86,7 @@ func init() {
 }
 
 func (s *SettingService) GetAdBlockProfile() (string, error) { return s.getString("adBlockProfile") }
+
 func (s *SettingService) GetAdBlockYoutubeMode() (string, error) {
 	return s.getString("adBlockYoutubeMode")
 }

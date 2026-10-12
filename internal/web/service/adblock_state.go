@@ -37,6 +37,7 @@ func init() {
 	defaultValueMap["adBlockApplyNextRetry"] = ""
 	defaultValueMap["adBlockSourceCache"] = "{}"
 }
+
 func adBlockSnapshot() (map[string]string, error) {
 	var rows []model.Setting
 	if err := database.GetDB().Where("key LIKE ? OR key = ?", "adBlock%", "coreType").Order("id DESC").Find(&rows).Error; err != nil {
@@ -53,6 +54,7 @@ func adBlockSnapshot() (map[string]string, error) {
 	}
 	return values, nil
 }
+
 func (s *SettingService) GetAdBlockScope() (AdBlockScope, error) {
 	raw, err := s.getString("adBlockScope")
 	if err != nil {
@@ -62,6 +64,7 @@ func (s *SettingService) GetAdBlockScope() (AdBlockScope, error) {
 	err = json.Unmarshal([]byte(raw), &scope)
 	return scope, err
 }
+
 func normalizeAdBlockScope(scope *AdBlockScope) error {
 	for _, mode := range []*string{&scope.InboundMode, &scope.ClientMode} {
 		if *mode == "" {
@@ -97,10 +100,12 @@ func normalizeAdBlockScope(scope *AdBlockScope) error {
 	}
 	return nil
 }
+
 func adBlockPaused(raw string, now time.Time) bool {
 	until, err := time.Parse(time.RFC3339, raw)
 	return err == nil && now.Before(until)
 }
+
 func adBlockFingerprint(values map[string]string, now time.Time) (string, error) {
 	plan, err := adBlockPlanAt(values, now)
 	if err != nil {
@@ -152,6 +157,7 @@ func saveAdBlockConfigValues(values map[string]string) error {
 	}
 	return saveAdBlockValues(values)
 }
+
 func (s *SettingService) GetAdBlockApplication() (*AdBlockApplication, error) {
 	pending, err := s.getBool("adBlockApplyPending")
 	if err != nil {
@@ -171,6 +177,7 @@ func (s *SettingService) GetAdBlockApplication() (*AdBlockApplication, error) {
 	}
 	return &AdBlockApplication{Pending: pending, LastError: message, AppliedAt: at, NextRetry: retry}, nil
 }
+
 func (s *SettingService) ReconcileAdBlockApplication() error {
 	if youtubeproxy.NeedsRecovery() {
 		if err := saveAdBlockValues(map[string]string{"adBlockApplyPending": "true"}); err != nil {
@@ -207,6 +214,7 @@ func (s *SettingService) ReconcileAdBlockApplication() error {
 	}
 	return nil
 }
+
 func (s *SettingService) MarkAdBlockApplied(applyErr error) error {
 	if applyErr != nil {
 		return saveAdBlockValues(map[string]string{"adBlockApplyPending": "true", "adBlockApplyError": applyErr.Error(), "adBlockApplyNextRetry": time.Now().UTC().Add(5 * time.Minute).Format(time.RFC3339)})
@@ -222,6 +230,7 @@ func (s *SettingService) MarkAdBlockApplied(applyErr error) error {
 	youtubeproxy.Commit(enabled)
 	return saveAdBlockValues(map[string]string{"adBlockApplyPending": "false", "adBlockApplyError": "", "adBlockAppliedAt": time.Now().UTC().Format(time.RFC3339), "adBlockAppliedCore": core, "adBlockApplyNextRetry": ""})
 }
+
 func (s *SettingService) SetAdBlockPause(minutes int) error {
 	if minutes != 0 && minutes != 5 && minutes != 15 && minutes != 60 {
 		return fmt.Errorf("pause must be 0, 5, 15 or 60 minutes")
@@ -237,6 +246,7 @@ func (s *SettingService) SetAdBlockPause(minutes int) error {
 	}
 	return saveAdBlockConfigValues(map[string]string{"adBlockPausedUntil": until})
 }
+
 func scopeContains(mode string, items []string, value string) bool {
 	found := false
 	for _, item := range items {

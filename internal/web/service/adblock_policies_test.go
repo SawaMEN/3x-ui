@@ -29,6 +29,7 @@ func policyFixture() adBlockPlan {
 		{ID: "light", Name: "Light", Enabled: true, Profile: "light", Scope: light},
 	}, Domains: map[string][]string{"light": {"light.example"}}}
 }
+
 func TestAdBlockPolicyFirstMatchAndMasterScope(t *testing.T) {
 	p := policyFixture()
 	for _, tc := range []struct {
@@ -51,6 +52,7 @@ func TestAdBlockPolicyFirstMatchAndMasterScope(t *testing.T) {
 		t.Fatal("disabled policy still takes precedence")
 	}
 }
+
 func TestAdBlockPolicyXrayDoesNotInheritOrCrossProduct(t *testing.T) {
 	p := policyFixture()
 	cfg := &xray.Config{RouterConfig: json_util.RawMessage(`{"rules":[{"type":"field","network":"tcp","outboundTag":"direct"}]}`), InboundConfigs: []xray.InboundConfig{
@@ -102,6 +104,7 @@ func TestAdBlockPolicyXrayDoesNotInheritOrCrossProduct(t *testing.T) {
 		t.Fatal("repeat application duplicated rules")
 	}
 }
+
 func TestAdBlockPolicySingBoxPriorityAndCleanup(t *testing.T) {
 	cfg := singbox.NewConfig()
 	cfg.Route["rules"] = []map[string]any{{"action": "route", "outbound": "direct"}}
@@ -130,6 +133,7 @@ func TestAdBlockPolicySingBoxPriorityAndCleanup(t *testing.T) {
 		t.Fatal("policy rules survived disable")
 	}
 }
+
 func TestAdBlockPolicyFingerprintAndValidation(t *testing.T) {
 	values := map[string]string{}
 	for k, v := range defaultValueMap {
@@ -202,7 +206,7 @@ func TestAdBlockPolicyRealCores(t *testing.T) {
 				t.Fatal(err)
 			}
 			path := filepath.Join(t.TempDir(), "config.json")
-			if err = os.WriteFile(path, raw, 0600); err != nil {
+			if err = os.WriteFile(path, raw, 0o600); err != nil {
 				t.Fatal(err)
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -213,6 +217,7 @@ func TestAdBlockPolicyRealCores(t *testing.T) {
 		})
 	}
 }
+
 func TestAdBlockPolicyCachedSaveAndDiagnostic(t *testing.T) {
 	setupBulkDB(t)
 	s := &SettingService{}

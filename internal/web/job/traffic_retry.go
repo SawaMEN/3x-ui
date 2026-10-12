@@ -42,15 +42,6 @@ func (b *pendingTrafficBatch) remember(inbounds []*coremodel.Traffic, clients []
 	b.clients = clients
 }
 
-// appendBatch adds another already-consumed runtime snapshot to a batch that
-// may itself still be waiting for persistence. This is used when a collector
-// must stop immediately (for example on a core switch) before a previous DB
-// retry has succeeded.
-func (b *pendingTrafficBatch) appendBatch(inbounds []*coremodel.Traffic, clients []*coremodel.ClientTraffic) {
-	b.inbounds = append(b.inbounds, inbounds...)
-	b.clients = append(b.clients, clients...)
-}
-
 // flush retries the exact batch before a collector is sampled again. On
 // success it clears the batch; on failure it leaves the slices intact so the
 // next poll can retry without double-consuming the runtime counters.

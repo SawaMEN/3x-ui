@@ -839,8 +839,6 @@ func (s *ServerService) sampleCPUUtilization() (float64, error) {
 }
 
 const (
-	maxXrayArchiveBytes = 200 << 20
-	maxXrayBinaryBytes  = 200 << 20
 	// maxXrayDigestBytes caps the .dgst checksum sidecar read; it is a few
 	// hundred bytes in practice.
 	maxXrayDigestBytes = 64 << 10
@@ -1985,9 +1983,11 @@ type stagedGeofile struct {
 
 // restartXrayAfterGeofileUpdate is a seam: tests assert that an update which
 // installed nothing also restarted nothing.
-var restartXrayAfterGeofileUpdate = (*ServerService).RestartXrayService
-var geofileUpdateMu sync.Mutex
-var renameGeofile = os.Rename
+var (
+	restartXrayAfterGeofileUpdate = (*ServerService).RestartXrayService
+	geofileUpdateMu               sync.Mutex
+	renameGeofile                 = os.Rename
+)
 
 // installGeofileRelease rolls back a partially installed upstream pair.
 func installGeofileRelease(files []stagedGeofile) error {

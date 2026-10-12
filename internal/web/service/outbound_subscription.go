@@ -14,6 +14,8 @@ import (
 	"sync"
 	"time"
 
+	"gorm.io/gorm"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
@@ -21,7 +23,6 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/link"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
-	"gorm.io/gorm"
 )
 
 // filterOutboundsRejectedByCore drops outbounds the vendored xray-core config
@@ -80,11 +81,13 @@ func readBoundedOutboundSubscriptionBody(r io.Reader) ([]byte, error) {
 }
 
 // OutboundSubscriptionService manages remote outbound subscriptions.
-var subscriptionOrderMu sync.Mutex
-var subscriptionLocks = struct {
-	sync.Mutex
-	entries map[int]*subscriptionLock
-}{entries: make(map[int]*subscriptionLock)}
+var (
+	subscriptionOrderMu sync.Mutex
+	subscriptionLocks   = struct {
+		sync.Mutex
+		entries map[int]*subscriptionLock
+	}{entries: make(map[int]*subscriptionLock)}
+)
 
 type subscriptionLock struct {
 	sync.Mutex
@@ -406,6 +409,7 @@ func (s *OutboundSubscriptionService) fetchAndStore(sub *model.OutboundSubscript
 	out, _, err := s.fetchAndStoreWithChange(sub)
 	return out, err
 }
+
 func (s *OutboundSubscriptionService) fetchAndStoreWithChange(sub *model.OutboundSubscription) ([]any, bool, error) {
 	unlock := lockSubscription(sub.Id)
 	defer unlock()
@@ -418,6 +422,7 @@ func (s *OutboundSubscriptionService) fetchAndStoreWithChange(sub *model.Outboun
 	out, err := s.fetchAndStoreLocked(sub)
 	return out, err == nil && previous != sub.LastFetchedOutbounds, err
 }
+
 func (s *OutboundSubscriptionService) fetchAndStoreLocked(sub *model.OutboundSubscription) ([]any, error) {
 	// Re-sanitize on every fetch (handles legacy rows + defense in depth against
 	// any direct DB tampering). Private targets are blocked unless this

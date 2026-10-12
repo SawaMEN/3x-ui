@@ -16,12 +16,14 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 )
 
-var hiddifyRuntime = hiddify.NewRuntime(hiddify.GetConfigPath(), false)
-var hiddifyProcess = hiddifyRuntime.Process
-var ownerTrafficMu sync.Mutex
-var hiddifyNeedRestart atomic.Bool
-var hiddifyManuallyStopped atomic.Bool
-var hiddifyStats = hiddify.NewStatsClient()
+var (
+	hiddifyRuntime         = hiddify.NewRuntime(hiddify.GetConfigPath(), false)
+	hiddifyProcess         = hiddifyRuntime.Process
+	ownerTrafficMu         sync.Mutex
+	hiddifyNeedRestart     atomic.Bool
+	hiddifyManuallyStopped atomic.Bool
+	hiddifyStats           = hiddify.NewStatsClient()
+)
 
 // InitializeNativeCoreRuntime resolves paths after the service environment has
 // been loaded. Call once at process startup, before any service goroutines.
@@ -31,11 +33,13 @@ func InitializeNativeCoreRuntime() {
 }
 
 func IsNativeCore(core string) bool { return core == CoreTypeSingBox || core == legacyCoreTypeHiddify }
+
 func NativeCore(core string) *SingBoxService {
 	// Both names resolve to the owner’s modified sing-box. The old name is
 	// accepted only for compatibility with persisted settings and older nodes.
 	return &SingBoxService{}
 }
+
 func SelectedNativeCore() *SingBoxService {
 	core, _ := (&SettingService{}).GetCoreType()
 	return NativeCore(core)
@@ -44,36 +48,39 @@ func (s *SingBoxService) CoreType() string { return s.coreType() }
 func (s *SingBoxService) coreType() string {
 	return CoreTypeSingBox
 }
+
 func (s *SingBoxService) process() *singbox.Process {
 	return hiddifyProcess
 }
+
 func (s *SingBoxService) candidate(path string) *singbox.Process {
 	return hiddify.NewProcess(path, true)
 }
+
 func (s *SingBoxService) translateInbound(raw map[string]any) (map[string]any, error) {
 	{
 		return hiddify.TranslateInbound(raw)
 	}
-
 }
+
 func (s *SingBoxService) translateOutbound(raw map[string]any) (map[string]any, error) {
 	{
 		return hiddify.TranslateOutbound(raw)
 	}
-
 }
+
 func (s *SingBoxService) restartFlag() *atomic.Bool {
 	{
 		return &hiddifyNeedRestart
 	}
-
 }
+
 func (s *SingBoxService) stoppedFlag() *atomic.Bool {
 	{
 		return &hiddifyManuallyStopped
 	}
-
 }
+
 func (s *SingBoxService) logPath() string {
 	return filepath.Join(filepath.Dir(s.ProcessConfigPath()), s.coreType()+".log")
 }
@@ -109,6 +116,7 @@ func (s *SingBoxService) pollHiddifyTraffic(ctx context.Context) error {
 func (s *SingBoxService) hiddifySessions(ctx context.Context) ([]singbox.ActiveSession, error) {
 	return hiddify.ActiveSessions(ctx)
 }
+
 func (s *SingBoxService) hiddifyPresence(ctx context.Context) (map[string]map[string]struct{}, []string, error) {
 	sessions, err := s.hiddifySessions(ctx)
 	if err != nil {
@@ -139,6 +147,7 @@ func (s *SingBoxService) hiddifyPresence(ctx context.Context) (map[string]map[st
 	sort.Strings(active)
 	return online, active, nil
 }
+
 func (s *SingBoxService) disconnectHiddify(ctx context.Context, match func(singbox.ActiveSession) bool) (int, error) {
 	return hiddify.DisconnectSessions(ctx, match)
 }
@@ -191,17 +200,16 @@ func (s *SingBoxService) startProcess(ctx context.Context) error {
 	{
 		return hiddifyRuntime.Start(ctx)
 	}
-
 }
+
 func (s *SingBoxService) restartProcess(ctx context.Context) error {
 	{
 		return hiddifyRuntime.Restart(ctx)
 	}
-
 }
+
 func (s *SingBoxService) stopProcess(ctx context.Context) error {
 	{
 		return hiddifyRuntime.Stop(ctx)
 	}
-
 }

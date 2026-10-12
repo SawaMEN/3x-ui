@@ -8,7 +8,6 @@ import (
 	"crypto/x509/pkix"
 	"encoding/json"
 	"encoding/pem"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 	"maps"
 	"math/big"
 	"os"
@@ -17,6 +16,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 

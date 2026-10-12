@@ -3,11 +3,12 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"testing"
+	"time"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service/outbound"
-	"testing"
-	"time"
 )
 
 func setupTimedBalancer(t *testing.T) (*model.OutboundSubscription, *int64) {
@@ -17,10 +18,12 @@ func setupTimedBalancer(t *testing.T) (*model.OutboundSubscription, *int64) {
 	oldClock, oldProbe := automaticBalanceNow, autoBalanceProbe
 	automaticBalanceNow = func() time.Time { return time.Unix(now, 0) }
 	t.Cleanup(func() { automaticBalanceNow = oldClock; autoBalanceProbe = oldProbe })
-	sub := &model.OutboundSubscription{Enabled: true, AutoBalance: true, BalanceMode: "speed", ProbeInterval: 3600, HealthInterval: 30, SwitchInterval: 900,
+	sub := &model.OutboundSubscription{
+		Enabled: true, AutoBalance: true, BalanceMode: "speed", ProbeInterval: 3600, HealthInterval: 30, SwitchInterval: 900,
 		SelectedTag: "a", LastProbe: now, LastHealth: now, LastSwitch: now,
 		ProbeResults:         `[{"tag":"a","success":true,"httpStatus":200,"downloadMbps":100},{"tag":"b","success":true,"httpStatus":200,"downloadMbps":20}]`,
-		LastFetchedOutbounds: `[{"tag":"a","protocol":"socks","settings":{"servers":[{"address":"1.1.1.1","port":1080}]}},{"tag":"b","protocol":"socks","settings":{"servers":[{"address":"1.0.0.1","port":1080}]}}]`}
+		LastFetchedOutbounds: `[{"tag":"a","protocol":"socks","settings":{"servers":[{"address":"1.1.1.1","port":1080}]}},{"tag":"b","protocol":"socks","settings":{"servers":[{"address":"1.0.0.1","port":1080}]}}]`,
+	}
 	if err := database.GetDB().Create(sub).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -321,6 +324,7 @@ func TestAutoBalancerBrokenSpeedServerKeepsHealthyRoute(t *testing.T) {
 		t.Fatal("broken endpoint retried without interval", err)
 	}
 }
+
 func TestAutoBalancerCachedSpeedWithoutCurrentMeasurementKeepsHealthySingleton(t *testing.T) {
 	results := []*outbound.TestOutboundResult{{Tag: "a", Success: true, HTTPStatus: 204, Delay: 10}}
 	if got := chooseRotatedOutbound(results, "a", "speed"); got != "a" {

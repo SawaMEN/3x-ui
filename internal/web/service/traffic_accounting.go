@@ -6,10 +6,11 @@ import (
 	"slices"
 	"time"
 
+	"gorm.io/gorm"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"gorm.io/gorm"
 )
 
 // CommitCoreTraffic persists inbound, client and outbound traffic in one DB

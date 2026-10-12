@@ -29,6 +29,7 @@ func NewSelectorClient(controller, secret string) (*SelectorClient, error) {
 	}
 	return &SelectorClient{address: address, secret: secret, client: &http.Client{Timeout: 3 * time.Second, Transport: &http.Transport{Proxy: nil}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}, nil
 }
+
 func (c *SelectorClient) request(ctx context.Context, method, tag string, body []byte) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, method, c.address+"/proxies/"+url.PathEscape(tag), bytes.NewReader(body))
 	if err != nil {
@@ -50,6 +51,7 @@ func (c *SelectorClient) request(ctx context.Context, method, tag string, body [
 	}
 	return io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 }
+
 func (c *SelectorClient) State(ctx context.Context, tag string) (*SelectorState, error) {
 	data, err := c.request(ctx, http.MethodGet, tag, nil)
 	if err != nil {
@@ -61,6 +63,7 @@ func (c *SelectorClient) State(ctx context.Context, tag string) (*SelectorState,
 	}
 	return &state, nil
 }
+
 func (c *SelectorClient) Select(ctx context.Context, tag, target string) (string, error) {
 	state, err := c.State(ctx, tag)
 	if err != nil {

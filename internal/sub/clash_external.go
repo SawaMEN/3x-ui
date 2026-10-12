@@ -2,6 +2,7 @@ package sub
 
 import (
 	"fmt"
+	"net"
 	"strconv"
 	"strings"
 )
@@ -283,11 +284,16 @@ func stripCIDR(addr string) string {
 
 func splitClashHostPort(endpoint string) (string, int) {
 	endpoint = strings.TrimSpace(endpoint)
-	i := strings.LastIndex(endpoint, ":")
-	if i < 0 {
+	if net.ParseIP(strings.Trim(endpoint, "[]")) != nil {
 		return endpoint, 0
 	}
-	host := strings.Trim(endpoint[:i], "[]")
-	port, _ := strconv.Atoi(endpoint[i+1:])
+	host, rawPort, err := net.SplitHostPort(endpoint)
+	if err != nil {
+		return endpoint, 0
+	}
+	port, err := strconv.Atoi(rawPort)
+	if err != nil || port < 1 || port > 65535 {
+		return host, 0
+	}
 	return host, port
 }

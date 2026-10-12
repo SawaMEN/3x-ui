@@ -16,6 +16,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gin-gonic/gin"
+	"github.com/goccy/go-json"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
@@ -29,8 +32,6 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/util/random"
 	wgutil "github.com/SawaMEN/3x-ui/v3/internal/util/wireguard"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
-	"github.com/gin-gonic/gin"
-	"github.com/goccy/go-json"
 )
 
 const salamanderWarningCacheSize = 2048

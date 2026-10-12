@@ -245,9 +245,11 @@ func (a *APIController) BackuptoTgbot(c *gin.Context) {
 // StartBackground starts workers only for an active panel, never route registration.
 func (a *APIController) StartBackground(ctx context.Context) {
 	a.backgroundOnce.Do(func() {
-		workers := []func(){func() { a.firewallController.firewallService.RunAutoSync(ctx) },
+		workers := []func(){
+			func() { a.firewallController.firewallService.RunAutoSync(ctx) },
 			func() { a.adBlockController.runAdBlockScheduler(ctx) },
-			func() { service.RunTelemtConnectionMonitor(ctx) }}
+			func() { service.RunTelemtConnectionMonitor(ctx) },
+		}
 		for _, worker := range workers {
 			a.backgroundWG.Add(1)
 			go func() { defer a.backgroundWG.Done(); worker() }()

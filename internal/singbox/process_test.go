@@ -48,7 +48,7 @@ func TestIsolatedProcessNeverAdoptsManagedProcess(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XUI_BIN_FOLDER", dir)
 	binary := filepath.Join(dir, GetBinaryName())
-	if err := os.WriteFile(binary, executable, 0700); err != nil {
+	if err := os.WriteFile(binary, executable, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	production := exec.Command(binary, "srun", "-c", filepath.Join(dir, "managed.json"))

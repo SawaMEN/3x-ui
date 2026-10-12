@@ -12,7 +12,7 @@ import (
 func nativeUsername(email string) string {
 	valid := email != "" && len(email) <= 64 && !strings.HasPrefix(email, "xui_")
 	for _, r := range email {
-		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '.' || r == '_' || r == '-') {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '.' && r != '_' && r != '-' {
 			valid = false
 		}
 	}

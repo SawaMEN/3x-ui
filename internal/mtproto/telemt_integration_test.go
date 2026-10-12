@@ -27,9 +27,11 @@ func TestOfficialTelemtConfigAndReload(t *testing.T) {
 		t.Fatal(err)
 	}
 	off := false
-	inst := Instance{Listen: "127.0.0.1", Port: port, FakeTLSDomain: "example.com",
+	inst := Instance{
+		Listen: "127.0.0.1", Port: port, FakeTLSDomain: "example.com",
 		FakeTLSDomains: []string{"example.org"}, TLSMask: &off, TLSEmulation: &off,
-		Secrets: []SecretEntry{{Name: "alice", Secret: "0123456789abcdef0123456789abcdef", LimitIP: 2, QuotaBytes: 1073741824, ExpiresUnix: 1893456000}}}
+		Secrets: []SecretEntry{{Name: "alice", Secret: "0123456789abcdef0123456789abcdef", LimitIP: 2, QuotaBytes: 1073741824, ExpiresUnix: 1893456000}},
+	}
 	path := filepath.Join(dir, "telemt.toml")
 	if err := writeConfig(path, inst, apiPort, "test-token"); err != nil {
 		t.Fatal(err)

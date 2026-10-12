@@ -1,8 +1,9 @@
 package hiddify
 
 import (
-	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 	"testing"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 )
 
 func TestReverseTranslationAndPortal(t *testing.T) {
@@ -29,6 +30,7 @@ func TestReverseTranslationAndPortal(t *testing.T) {
 		t.Fatal("source JSON mutated")
 	}
 }
+
 func TestReverseOutboundSniffing(t *testing.T) {
 	raw := map[string]any{"protocol": "vless", "tag": "reverse-bridge", "settings": map[string]any{"vnext": []any{map[string]any{"address": "127.0.0.1", "port": 443, "users": []any{map[string]any{"id": "11111111-1111-4111-8111-111111111111", "reverse": map[string]any{"tag": "bridge", "sniffing": map[string]any{"enabled": true, "routeOnly": true, "destOverride": []any{"http", "tls"}}}}}}}}}
 	out, err := TranslateOutbound(raw)
@@ -52,6 +54,7 @@ func TestReverseOutboundSniffing(t *testing.T) {
 		t.Fatal("reverse-only default route accepted")
 	}
 }
+
 func TestReverseRejectInvalidOptionsAndCollisions(t *testing.T) {
 	for _, reverse := range []any{"portal", map[string]any{"tag": ""}, map[string]any{"tag": " portal"}, map[string]any{"tag": "portal", "unknown": true}} {
 		raw := map[string]any{"protocol": "vless", "settings": map[string]any{"clients": []any{map[string]any{"id": "user", "reverse": reverse}}}}

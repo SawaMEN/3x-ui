@@ -43,7 +43,7 @@ func TestInboundTLSECHServerKeysTranslateToSingBoxPEM(t *testing.T) {
 func TestInboundTLSECHServerKeysRejectInvalidBase64(t *testing.T) {
 	out := map[string]any{"tag": "ech-in"}
 	err := translateStream(out, "vless", map[string]any{
-		"security": "tls",
+		"security":    "tls",
 		"tlsSettings": map[string]any{"echServerKeys": "not base64 !!!"},
 	}, true)
 	if err == nil || !strings.Contains(err.Error(), "echServerKeys") {
@@ -79,9 +79,9 @@ func TestOutboundRealityStillRejectsUnsupportedMLDSA(t *testing.T) {
 	err := translateStream(out, "vless", map[string]any{
 		"security": "reality",
 		"realitySettings": map[string]any{
-			"publicKey":    "public",
-			"serverName":   "example.com",
-			"fingerprint":  "chrome",
+			"publicKey":     "public",
+			"serverName":    "example.com",
+			"fingerprint":   "chrome",
 			"mldsa65Verify": "verify-key",
 		},
 	}, false)

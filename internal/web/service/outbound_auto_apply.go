@@ -112,7 +112,7 @@ func (s *OutboundSubscriptionService) ApplyAutomaticSelections() (int, error) {
 	applied := map[int]string{}
 	failures := map[int]error{}
 	if IsNativeCore(core) {
-		if !(SelectedNativeCore()).IsRunning() {
+		if !SelectedNativeCore().IsRunning() {
 			err = fmt.Errorf("core is stopped; selection will apply on startup")
 		} else {
 			var client *singbox.SelectorClient

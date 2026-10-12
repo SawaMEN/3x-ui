@@ -106,7 +106,11 @@ func (j *LdapSyncJob) Run() {
 	inboundMap := map[string]*model.Inbound{} // tag -> inbound
 	for _, ib := range inbounds {
 		inboundMap[ib.Tag] = ib
-		clients, _ := j.inboundService.GetClients(ib)
+		clients, err := j.inboundService.GetClients(ib)
+		if err != nil {
+			logger.Warningf("LDAP sync skipped: cannot read clients for inbound %s: %v", ib.Tag, err)
+			return
+		}
 		for i := range clients {
 			allClients[clients[i].Email] = &clients[i]
 		}
@@ -160,7 +164,8 @@ func (j *LdapSyncJob) Run() {
 
 	// --- Auto delete clients not in LDAP ---
 	autoDelete := mustGetBool(j.settingService.GetLdapAutoDelete)
-	if autoDelete && j.autoDeleteSafeForFetch(len(flags)) {
+	safeFetch := j.acceptFetchCount(len(flags))
+	if autoDelete && safeFetch {
 		ldapEmailSet := map[string]struct{}{}
 		for e := range flags {
 			ldapEmailSet[e] = struct{}{}
@@ -169,7 +174,16 @@ func (j *LdapSyncJob) Run() {
 			j.deleteClientsNotInLDAP(tag, ldapEmailSet)
 		}
 	}
-	j.lastFlagCount.Store(int64(len(flags)))
+}
+
+// Rejected partial results must not become the next comparison baseline:
+// otherwise the same broken directory response would pass on the next poll.
+func (j *LdapSyncJob) acceptFetchCount(fetched int) bool {
+	if !j.autoDeleteSafeForFetch(fetched) {
+		return false
+	}
+	j.lastFlagCount.Store(int64(fetched))
+	return true
 }
 
 // FetchVlessFlags returns (empty, nil) when the bind succeeds but the search

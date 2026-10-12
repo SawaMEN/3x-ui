@@ -16,10 +16,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
-	"github.com/google/uuid"
 )
 
 type OutboundSettings struct {
@@ -46,9 +47,11 @@ type managedOutbound struct {
 	failures    int
 }
 
-var outboundMu sync.Mutex
-var outboundProcesses = map[string]*managedOutbound{}
-var outboundPlans = map[string]*managedOutbound{}
+var (
+	outboundMu        sync.Mutex
+	outboundProcesses = map[string]*managedOutbound{}
+	outboundPlans     = map[string]*managedOutbound{}
+)
 
 func IsAdditionalOutbound(raw map[string]any) bool {
 	p, _ := raw["protocol"].(string)
@@ -141,7 +144,7 @@ func planOutboundLocked(tag string, raw map[string]any) (*managedOutbound, error
 		plan.port, plan.password = old.port, old.password
 	}
 	if plan.port == 0 {
-		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		listener, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
 		if err != nil {
 			return nil, err
 		}
@@ -304,7 +307,7 @@ func ensureOutbound(raw map[string]any, probe bool) (map[string]any, error) {
 		proc.port, proc.password = old.port, old.password
 	}
 	if proc.port == 0 {
-		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		listener, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
 		if err != nil {
 			return nil, err
 		}
@@ -340,7 +343,7 @@ func startOutbound(tag string, proc *managedOutbound) error {
 	sum := sha256.Sum256([]byte(tag))
 	suffix := hex.EncodeToString(sum[:8])
 	folder := filepath.Join(directory(), "outbound-"+suffix)
-	if err := os.MkdirAll(folder, 0700); err != nil {
+	if err := os.MkdirAll(folder, 0o700); err != nil {
 		return err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -446,6 +449,7 @@ func stopOutbound(proc *managedOutbound) {
 		}
 	}
 }
+
 func KeepOutbounds(tags map[string]bool) {
 	outboundMu.Lock()
 	defer outboundMu.Unlock()
@@ -461,6 +465,7 @@ func KeepOutbounds(tags map[string]bool) {
 		}
 	}
 }
+
 func RefreshOutbounds() {
 	outboundMu.Lock()
 	defer outboundMu.Unlock()

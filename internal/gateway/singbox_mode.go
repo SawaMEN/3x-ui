@@ -87,7 +87,7 @@ func readSingBoxBackup() (string, error) {
 }
 
 func createSingBoxBackup(raw string) error {
-	if err := os.MkdirAll(filepath.Dir(singBoxBackupPath), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(singBoxBackupPath), 0o700); err != nil {
 		return err
 	}
 	file, err := os.OpenFile(singBoxBackupPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)

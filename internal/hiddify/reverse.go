@@ -2,8 +2,9 @@ package hiddify
 
 import (
 	"fmt"
-	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 	"strings"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 )
 
 func takeReverseExtensions(settings map[string]any, protocol string, inbound bool) ([]map[string]any, error) {
@@ -49,6 +50,7 @@ func takeReverseExtensions(settings map[string]any, protocol string, inbound boo
 	}
 	return result, nil
 }
+
 func applyReverseExtensions(out map[string]any, reverse []map[string]any, inbound bool) error {
 	if len(reverse) == 0 {
 		return nil

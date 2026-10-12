@@ -12,6 +12,8 @@ on:
       - "internal/config/version"
       - ".github/workflows/ci.yml"
       - "tools/ci/**"
+      - "**.sh"
+      - "tools/test-*-shell.py"
   push:
     branches:
       - main
@@ -25,6 +27,8 @@ on:
       - "internal/config/version"
       - ".github/workflows/ci.yml"
       - "tools/ci/**"
+      - "**.sh"
+      - "tools/test-*-shell.py"
 
 permissions:
   contents: read
@@ -37,6 +41,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  shell-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate installer and management scripts
+        run: |
+          for script in install.sh update.sh x-ui.sh x-ui-core.sh core-migration.sh; do
+            bash -n "$script"
+          done
+          shellcheck --shell=bash --severity=error install.sh update.sh x-ui.sh x-ui-core.sh core-migration.sh
+          shellcheck --shell=bash --include=SC2086,SC2046,SC2115,SC2164 install.sh update.sh x-ui.sh x-ui-core.sh core-migration.sh
+      - name: Exercise release rollback and CLI failures
+        run: |
+          python3 tools/test-core-migration-shell.py
+          python3 tools/test-management-shell.py
+
   go-test:
     if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
     runs-on: ubuntu-latest

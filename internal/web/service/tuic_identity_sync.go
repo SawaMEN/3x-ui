@@ -3,9 +3,10 @@ package service
 import (
 	"fmt"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
 
 func (s *ClientService) validateTuicIdentities(tx *gorm.DB, inboundID int, changed []model.Client, detached []string, prune bool) error {

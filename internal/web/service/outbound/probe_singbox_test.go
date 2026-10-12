@@ -69,11 +69,11 @@ func TestSingBoxProbeWithRunningProductionProcess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, singbox.GetBinaryName()), data, 0700); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, singbox.GetBinaryName()), data, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	productionConfig := filepath.Join(dir, "production.json")
-	if err := os.WriteFile(productionConfig, []byte(`{"outbounds":[{"type":"direct","tag":"direct"}]}`), 0600); err != nil {
+	if err := os.WriteFile(productionConfig, []byte(`{"outbounds":[{"type":"direct","tag":"direct"}]}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	production := hiddify.NewProcess(productionConfig, false)
@@ -82,7 +82,7 @@ func TestSingBoxProbeWithRunningProductionProcess(t *testing.T) {
 	}
 	defer production.Stop()
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(204) }))
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
 	defer server.Close()
 	socks, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -120,7 +120,7 @@ func TestSingBoxBatchHTTPThroughNativeGroup(t *testing.T) {
 	original := newSingBoxBatchProcess
 	defer func() { newSingBoxBatchProcess = original }()
 	withEgressTraceProbe(t, func(_ *url.URL) *TestEgressResult { return nil })
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(204) }))
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
 	defer server.Close()
 	calls := 0
 	newSingBoxBatchProcess = func(cfg *singbox.Config, _path string) batchProcess {
@@ -164,7 +164,7 @@ func TestModifiedSingBoxProbePreservesXHTTPAndNativeResolver(t *testing.T) {
 	}
 	if binary := os.Getenv("SINGBOX_TEST_BINARY"); binary != "" {
 		file := filepath.Join(t.TempDir(), "probe.json")
-		if err := os.WriteFile(file, data, 0600); err != nil {
+		if err := os.WriteFile(file, data, 0o600); err != nil {
 			t.Fatal(err)
 		}
 		cmd := exec.Command(binary, "check", "-c", file)

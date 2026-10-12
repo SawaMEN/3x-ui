@@ -20,7 +20,7 @@ func TestPinnedProfileRequiresEveryBuildTag(t *testing.T) {
 				}
 			}
 			script := fmt.Sprintf("#!/bin/sh\nprintf 'hiddify-core version %s\\nTags: %s\\nRevision: %s\\n'\n", TargetVersion, strings.Join(tags, ","), TargetRevision)
-			if err := os.WriteFile(GetBinaryPath(), []byte(script), 0700); err != nil {
+			if err := os.WriteFile(GetBinaryPath(), []byte(script), 0o700); err != nil {
 				t.Fatal(err)
 			}
 			if _, err := NewProcess(GetConfigPath(), true).Version(context.Background()); err == nil || !strings.Contains(err.Error(), missing) {

@@ -12,9 +12,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	xraygeodata "github.com/xtls/xray-core/common/geodata"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
 )
 
 // Loyalsoldier and runetfreedom write "<hash>  geoip.dat"; chocolate4u writes
@@ -446,10 +447,10 @@ func TestGeofileReleaseInstallationRollback(t *testing.T) {
 	for _, name := range []string{"geoip.dat", "geosite.dat"} {
 		dest := filepath.Join(dir, name)
 		src := filepath.Join(stage, name)
-		if err := os.WriteFile(dest, []byte("old"), 0600); err != nil {
+		if err := os.WriteFile(dest, []byte("old"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(src, []byte("new"), 0600); err != nil {
+		if err := os.WriteFile(src, []byte("new"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		files = append(files, stagedGeofile{destPath: dest, stagePath: src})
@@ -480,6 +481,7 @@ func testGeoIP(code string) string {
 	}
 	return string(b)
 }
+
 func testGeoSite(value string) string {
 	b, err := proto.Marshal(&xraygeodata.GeoSiteList{Entry: []*xraygeodata.GeoSite{{Code: "test", Domain: []*xraygeodata.Domain{{Type: xraygeodata.Domain_Domain, Value: value}}}}})
 	if err != nil {
@@ -487,6 +489,7 @@ func testGeoSite(value string) string {
 	}
 	return string(b)
 }
+
 func TestUpdateGeofileRejectsMalformedDatabaseWithValidChecksum(t *testing.T) {
 	srv, _ := geofileServer(t, []fakeUpstream{{repo: "a", assets: map[string]string{"geoip.dat": "not a protobuf database"}}})
 	dir := geofileTestEnv(t, map[string]geofileEntry{"geoip.dat": {srv.URL + "/a", "geoip.dat", "geoip.dat"}})
@@ -506,7 +509,7 @@ func TestUpdateGeofileRejectsMalformedDatabaseWithValidChecksum(t *testing.T) {
 
 func TestGeodataValidationMatchesNativeKindAndNegation(t *testing.T) {
 	dir := geofileTestEnv(t, nil)
-	if err := os.WriteFile(filepath.Join(dir, "geosite.dat"), []byte(testGeoSite("example.com")), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "geosite.dat"), []byte(testGeoSite("example.com")), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	svc := &GeodataService{}

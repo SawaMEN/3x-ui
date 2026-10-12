@@ -87,9 +87,10 @@ install() {
         else
             start 0
         fi
-        return 0
+        return $?
+    else
+        local rc=$?
     fi
-    local rc=$?
     LOGE "Installation failed."
     [[ $# == 0 ]] && before_show_menu
     return "$rc"
@@ -108,8 +109,9 @@ update() {
             exec /usr/bin/x-ui
         fi
         return 0
+    else
+        local rc=$?
     fi
-    local rc=$?
     LOGE "Update failed. Review the errors above."
     [[ $# == 0 ]] && before_show_menu
     return "$rc"
@@ -128,8 +130,9 @@ update_dev() {
             exec /usr/bin/x-ui
         fi
         return 0
+    else
+        local rc=$?
     fi
-    local rc=$?
     LOGE "Dev update failed. Review the errors above."
     [[ $# == 0 ]] && before_show_menu
     return "$rc"
@@ -174,8 +177,9 @@ legacy_version() {
     if run_remote_script "https://raw.githubusercontent.com/SawaMEN/3x-ui/v${tag_version}/install.sh" "v${tag_version}"; then
         [[ $# == 0 ]] && exec /usr/bin/x-ui
         return 0
+    else
+        local rc=$?
     fi
-    local rc=$?
     LOGE "Failed to install panel version $tag_version."
     [[ $# == 0 ]] && before_show_menu
     return "$rc"
@@ -268,6 +272,111 @@ set_port() {
     echo -e "The port is set. Restart the panel and use ${green}${port}${plain} to access the web panel."
     confirm_restart
 }
+
+# Return service-command failures to scripts instead of letting a later log
+# message or menu condition replace the exit status with zero.
+xui_service_action() {
+    local action="$1"
+    if [[ $release == alpine ]]; then
+        rc-service x-ui "$action"
+    else
+        systemctl "$action" x-ui
+    fi
+}
+
+finish_service_action() {
+    local rc="$1" argc="$2"
+    [[ "$argc" != 0 ]] || before_show_menu
+    return "$rc"
+}
+
+start() {
+    local rc=0
+    if check_status; then
+        LOGI "Panel is already running."
+    elif [[ "$running_in_docker" == true ]]; then
+        LOGE "Panel is not running. Restart the container from the host."
+        rc=1
+    elif xui_service_action start; then
+        sleep 2
+        if check_status; then LOGI "Panel started."; else LOGE "Panel failed to start."; rc=1; fi
+    else
+        rc=$?
+        LOGE "Panel start failed."
+    fi
+    finish_service_action "$rc" "$#"
+}
+
+stop() {
+    local rc=0 state
+    check_status; state=$?
+    if [[ "$state" == 1 ]]; then
+        LOGI "Panel is already stopped."
+    elif [[ "$running_in_docker" == true ]]; then
+        LOGE "Stop the container from the host."
+        rc=1
+    elif xui_service_action stop; then
+        sleep 2
+        check_status; state=$?
+        if [[ "$state" == 1 ]]; then LOGI "Panel stopped."; else LOGE "Panel failed to stop."; rc=1; fi
+    else
+        rc=$?
+        LOGE "Panel stop failed."
+    fi
+    finish_service_action "$rc" "$#"
+}
+
+restart() {
+    local rc=0
+    if [[ "$running_in_docker" == true ]]; then
+        if signal_xui HUP && signal_xui USR1; then LOGI "Restart signals sent."; else rc=$?; LOGE "Could not signal panel."; fi
+    elif xui_service_action restart; then
+        sleep 2
+        if check_status; then LOGI "Panel restarted."; else LOGE "Panel failed to restart."; rc=1; fi
+    else
+        rc=$?
+        LOGE "Panel restart failed."
+    fi
+    finish_service_action "$rc" "$#"
+}
+
+restart_xray() {
+    local rc=0
+    if [[ "$running_in_docker" == true ]]; then
+        signal_xui USR1 || rc=$?
+    else
+        xui_service_action reload || rc=$?
+    fi
+    if [[ "$rc" == 0 ]]; then LOGI "Core reload requested."; else LOGE "Core reload failed."; fi
+    finish_service_action "$rc" "$#"
+}
+
+status() {
+    local rc=0
+    if [[ "$running_in_docker" == true ]]; then
+        show_status
+        check_status || rc=$?
+    else
+        xui_service_action status || rc=$?
+    fi
+    finish_service_action "$rc" "$#"
+}
+
+set_autostart() {
+    local action="$1" argc="$2" rc=0
+    if [[ "$running_in_docker" == true ]]; then
+        LOGI "Autostart is controlled by the Docker restart policy."
+    elif [[ $release == alpine ]]; then
+        if [[ "$action" == enable ]]; then rc-update add x-ui default || rc=$?; else rc-update del x-ui || rc=$?; fi
+    else
+        systemctl "$action" x-ui || rc=$?
+    fi
+    if [[ "$rc" == 0 ]]; then LOGI "Autostart setting applied."; else LOGE "Autostart setting failed."; fi
+    finish_service_action "$rc" "$argc"
+}
+
+enable() { set_autostart enable "$#"; }
+disable() { set_autostart disable "$#"; }
 
 xui_pid() {
     ps -ef 2>/dev/null | grep -F "${xui_folder}/x-ui" | grep -v grep | awk 'NR==1 {print $2}'

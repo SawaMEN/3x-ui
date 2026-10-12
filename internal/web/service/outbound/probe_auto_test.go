@@ -44,6 +44,7 @@ func TestAutomaticSpeedProbeThroughTunnel(t *testing.T) {
 		})
 	}
 }
+
 func TestAutomaticContextIncludesChainsExcludesUnrelated(t *testing.T) {
 	items := `[{"tag":"proxy","protocol":"socks","streamSettings":{"sockopt":{"dialerProxy":"chain"}}}]`
 	all := `[{"tag":"unrelated","protocol":"loopback"},{"tag":"chain","protocol":"socks","streamSettings":{"sockopt":{"dialerProxy":"proxy"}}},{"tag":"proxy","protocol":"blackhole"}]`
@@ -59,6 +60,7 @@ func TestAutomaticContextIncludesChainsExcludesUnrelated(t *testing.T) {
 		t.Fatal(result)
 	}
 }
+
 func TestSingBoxProbeConfiguration(t *testing.T) {
 	ob := map[string]any{"tag": "candidate", "protocol": "socks", "settings": map[string]any{"servers": []any{map[string]any{"address": "1.1.1.1", "port": 1080}}}}
 	items := []*httpBatchItem{{tag: "candidate", outbound: ob, result: &TestOutboundResult{}}}

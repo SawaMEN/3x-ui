@@ -692,7 +692,14 @@ export class Base64 {
     if (safe) {
       return Base64.encode(content).replace(/\+/g, '-').replace(/=/g, '').replace(/\//g, '_');
     }
-    return window.btoa(String.fromCharCode(...new TextEncoder().encode(content)));
+    const bytes = new TextEncoder().encode(content);
+    const chunks: string[] = [];
+    // Spreading the entire subscription/config exceeds the engine's argument
+    // limit for large inputs. Keep each call bounded without changing UTF-8.
+    for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+      chunks.push(String.fromCharCode(...bytes.subarray(offset, offset + 0x8000)));
+    }
+    return window.btoa(chunks.join(''));
   }
 
   static alternativeEncode(content: string): string {
@@ -752,8 +759,9 @@ export class TimeFormatter {
     if (second < 60) return second.toFixed(0) + 's';
     if (second < 3600) return (second / 60).toFixed(0) + 'm';
     if (second < 3600 * 24) return (second / 3600).toFixed(0) + 'h';
-    const day = Math.floor(second / 3600 / 24);
-    const remain = Number((second / 3600 - day * 24).toFixed(0));
+    const hours = Math.round(second / 3600);
+    const day = Math.floor(hours / 24);
+    const remain = hours % 24;
     return day + 'd' + (remain > 0 ? ' ' + remain + 'h' : '');
   }
 }

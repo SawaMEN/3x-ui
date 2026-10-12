@@ -98,7 +98,7 @@ func (p *singBoxBatchProcess) Start() error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(p.path, data, 0600); err != nil {
+	if err := os.WriteFile(p.path, data, 0o600); err != nil {
 		return fmt.Errorf("write sing-box test config: %w", err)
 	}
 	return p.process.Start(context.Background())

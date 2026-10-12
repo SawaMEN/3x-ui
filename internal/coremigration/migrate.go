@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"gorm.io/gorm"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
@@ -21,7 +23,6 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
-	"gorm.io/gorm"
 )
 
 type Options struct {
@@ -47,6 +48,7 @@ type runner struct {
 func defaults() runner {
 	return runner{postgresFingerprint: service.CoreMigrationPostgresFingerprint, newRuntime: func(path string) runtime { return hiddify.NewProcess(path, true) }, stopped: assertStopped, files: migrationFiles, statePath: service.GatewayMigrationStatePath, gateway: prepareGateway}
 }
+
 func Run(ctx context.Context, opts Options) error {
 	release, err := AcquirePanelLease()
 	if err != nil {
@@ -55,15 +57,18 @@ func Run(ctx context.Context, opts Options) error {
 	defer release()
 	return defaults().run(ctx, opts)
 }
+
 func migrationFiles() []string {
 	files := []string{config.GetDBPath(), config.GetDBPath() + "-wal", config.GetDBPath() + "-shm", config.GetDBPath() + "-journal", xray.GetConfigPath(), singbox.GetConfigPath(), hiddify.GetConfigPath()}
 	files = append(files, gateway.MigrationFiles()...)
 	files = append(files, service.GatewayMigrationFiles()...)
 	return files
 }
+
 func pendingPath() string {
 	return filepath.Join(config.GetDBFolderPath(), "core-migration-pending.json")
 }
+
 func (r runner) loadManifest(dir string) (*manifest, error) {
 	data, err := os.ReadFile(filepath.Join(dir, "manifest.json"))
 	if err != nil {
@@ -108,6 +113,7 @@ func (r runner) loadManifest(dir string) (*manifest, error) {
 	}
 	return &m, nil
 }
+
 func (r runner) run(ctx context.Context, o Options) (result error) {
 	if err := r.stopped(); err != nil {
 		return err
@@ -138,7 +144,7 @@ func (r runner) run(ctx context.Context, o Options) (result error) {
 				return fmt.Errorf("existing installation database is unavailable: %w", err)
 			}
 		}
-		if err := os.Mkdir(dir, 0700); err != nil {
+		if err := os.Mkdir(dir, 0o700); err != nil {
 			return fmt.Errorf("create private migration snapshot: %w", err)
 		}
 		identity, err := databaseIdentity()
@@ -212,7 +218,7 @@ func (r runner) run(ctx context.Context, o Options) (result error) {
 	if o.BackupOnly {
 		return nil
 	}
-	if err := atomicWrite(pendingPath(), []byte(dir), 0600); err != nil {
+	if err := atomicWrite(pendingPath(), []byte(dir), 0o600); err != nil {
 		return err
 	}
 	m.Phase = "applying"
@@ -335,6 +341,7 @@ func (r runner) run(ctx context.Context, o Options) (result error) {
 	}
 	return removePending(dir)
 }
+
 func restore(ctx context.Context, dir string, m *manifest) error {
 	if err := verifyPostgres(dir, m); err != nil {
 		return err
@@ -362,6 +369,7 @@ func restore(ctx context.Context, dir string, m *manifest) error {
 	}
 	return removePending(dir)
 }
+
 func removePending(dir string) error {
 	data, err := os.ReadFile(pendingPath())
 	if os.IsNotExist(err) {

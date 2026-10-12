@@ -78,12 +78,14 @@ func (a *SettingController) switchCoreWithGateway(ctx context.Context, oldCore, 
 	}
 	return err
 }
+
 func (a *SettingController) stopGatewayCore(ctx context.Context, core string) error {
 	if service.IsNativeCore(core) {
 		return service.NativeCore(core).Stop(ctx)
 	}
 	return a.xrayService.StopXray()
 }
+
 func (a *SettingController) startGatewayCore(ctx context.Context, core string) error {
 	if service.IsNativeCore(core) {
 		return service.NativeCore(core).Restart(ctx)

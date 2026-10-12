@@ -14,8 +14,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	gprocess "github.com/shirou/gopsutil/v4/process"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/config"
 )
 
 const (
@@ -101,6 +102,7 @@ func (p *Process) binaryPath() string {
 	}
 	return GetBinaryPath()
 }
+
 func (p *Process) runCommand() string {
 	if p.profile != nil {
 		return p.profile.RunCommand
@@ -613,20 +615,6 @@ func (p *Process) waitForExternalExit(pid int, timeout time.Duration) bool {
 		return true
 	}
 	return false
-}
-
-func processExists(pid int) bool {
-	if pid <= 0 {
-		return false
-	}
-	proc, err := os.FindProcess(pid)
-	if err != nil {
-		return false
-	}
-	if runtime.GOOS == "windows" {
-		return proc != nil
-	}
-	return proc.Signal(nil) == nil
 }
 
 func processMatchesBinary(pid int, binary string) bool {

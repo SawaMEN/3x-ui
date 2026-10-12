@@ -60,6 +60,7 @@ func New(caDir string) (*Proxy, error) {
 	transport.MaxIdleConnsPerHost = 16
 	return &Proxy{options: DefaultOptions(), ca: ca, transport: transport, dial: netsafe.SSRFGuardedDialContext, permits: make(chan struct{}, 128), filterSlots: make(chan struct{}, 2), connections: map[net.Conn]bool{}}, nil
 }
+
 func (p *Proxy) Close() {
 	p.mu.Lock()
 	p.closing = true
@@ -69,6 +70,7 @@ func (p *Proxy) Close() {
 	p.mu.Unlock()
 	p.transport.CloseIdleConnections()
 }
+
 func (p *Proxy) track(conn net.Conn) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -165,6 +167,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer server.Close()
 	_ = network.ServeHTTP(server, listener, "YouTube AdBlock filtered connection")
 }
+
 func removeHop(headers http.Header) {
 	for _, field := range strings.Split(headers.Get("Connection"), ",") {
 		headers.Del(strings.TrimSpace(field))
@@ -173,11 +176,12 @@ func removeHop(headers http.Header) {
 		headers.Del(field)
 	}
 }
+
 func (p *Proxy) forward(w http.ResponseWriter, r *http.Request, host string) {
 	requestHost := r.Host
 	if h, port, err := net.SplitHostPort(requestHost); err == nil {
 		if port != "443" {
-			http.Error(w, "invalid host port", 400)
+			http.Error(w, "invalid host port", http.StatusBadRequest)
 			return
 		}
 		requestHost = h
@@ -280,9 +284,11 @@ func (c *signalingConn) Close() error {
 	c.listener.once.Do(func() { close(c.listener.done) })
 	return err
 }
+
 func newSingleListener(c net.Conn) *singleListener {
 	return &singleListener{conn: c, done: make(chan struct{})}
 }
+
 func (l *singleListener) Accept() (net.Conn, error) {
 	l.mu.Lock()
 	if !l.used {
@@ -294,6 +300,7 @@ func (l *singleListener) Accept() (net.Conn, error) {
 	<-l.done
 	return nil, net.ErrClosed
 }
+
 func (l *singleListener) Close() error   { l.once.Do(func() { close(l.done) }); return l.conn.Close() }
 func (l *singleListener) Addr() net.Addr { return l.conn.LocalAddr() }
 
@@ -313,7 +320,7 @@ func Run(ctx context.Context, listen, caDir string) error {
 		return err
 	}
 	defer p.Close()
-	listener, err := net.Listen("tcp", listen)
+	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", listen)
 	if err != nil {
 		return err
 	}
@@ -339,14 +346,14 @@ func (p *Proxy) handler(caDir string) http.Handler {
 			return
 		}
 		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", 405)
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 		switch r.URL.Path {
 		case "/ca-cert.pem":
 			data, err := os.ReadFile(filepath.Join(caDir, "ca-cert.pem"))
 			if err != nil {
-				http.Error(w, "certificate unavailable", 500)
+				http.Error(w, "certificate unavailable", http.StatusInternalServerError)
 				return
 			}
 			w.Header().Set("Content-Type", "application/x-pem-file")

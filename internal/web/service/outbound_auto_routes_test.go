@@ -63,6 +63,7 @@ func TestAutomaticRoutingSelectionOnlyChangesRules(t *testing.T) {
 		t.Fatal("applied nonexistent handlers")
 	}
 }
+
 func TestAutomaticSelectorAndController(t *testing.T) {
 	sub := &model.OutboundSubscription{Id: 7, SelectedTag: "b", LastProbe: 1}
 	members := []any{map[string]any{"tag": "a"}, map[string]any{"tag": "b"}}
@@ -90,6 +91,7 @@ func TestAutomaticSelectorAndController(t *testing.T) {
 		t.Fatal("overwrote custom controller")
 	}
 }
+
 func TestAutomaticApplyStoppedCoreReportsPending(t *testing.T) {
 	sub, _ := setupTimedBalancer(t)
 	svc := &OutboundSubscriptionService{}

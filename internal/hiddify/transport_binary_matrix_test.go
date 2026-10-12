@@ -95,7 +95,7 @@ func TestPinnedProtocolTransportMatrix(t *testing.T) {
 						t.Fatal(err)
 					}
 					path := filepath.Join(t.TempDir(), "config.json")
-					if err := os.WriteFile(path, data, 0600); err != nil {
+					if err := os.WriteFile(path, data, 0o600); err != nil {
 						t.Fatal(err)
 					}
 					ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)

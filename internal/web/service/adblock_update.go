@@ -10,10 +10,11 @@ import (
 	"sync"
 	"time"
 
+	"gorm.io/gorm"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/adblock"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"gorm.io/gorm"
 )
 
 const DefaultAdBlockSources = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"

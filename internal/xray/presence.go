@@ -3,10 +3,11 @@ package xray
 import (
 	"encoding/json"
 	"errors"
-	"github.com/SawaMEN/3x-ui/v3/internal/config"
-	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"os"
 	"sync"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/config"
+	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 )
 
 // Presence tracks local and remote online identities; it cannot launch a core.
@@ -21,21 +22,27 @@ func NewPresence() *Presence { return &Presence{} }
 func GetConfigPath() string {
 	return config.GetBinFolderPath() + "/config.json"
 }
+
 func GetGeositePath() string {
 	return config.GetBinFolderPath() + "/geosite.dat"
 }
+
 func GetGeoipPath() string {
 	return config.GetBinFolderPath() + "/geoip.dat"
 }
+
 func GetIPLimitLogPath() string {
 	return config.GetLogFolder() + "/3xipl.log"
 }
+
 func GetIPLimitBannedLogPath() string {
 	return config.GetLogFolder() + "/3xipl-banned.log"
 }
+
 func GetIPLimitBannedPrevLogPath() string {
 	return config.GetLogFolder() + "/3xipl-banned.prev.log"
 }
+
 func getLogPath(key string) (string, error) {
 	config, err := os.ReadFile(GetConfigPath())
 	if err != nil {
@@ -62,12 +69,15 @@ func getLogPath(key string) (string, error) {
 	}
 	return "", nil
 }
+
 func GetAccessLogPath() (string, error) {
 	return getLogPath("access")
 }
+
 func GetErrorLogPath() (string, error) {
 	return getLogPath("error")
 }
+
 func (p *Presence) GetOnlineClients() []string {
 	p.onlineMu.RLock()
 	defer p.onlineMu.RUnlock()
@@ -97,6 +107,7 @@ func (p *Presence) GetOnlineClients() []string {
 	}
 	return out
 }
+
 func (p *Presence) GetLocalOnlineClients() []string {
 	p.onlineMu.RLock()
 	defer p.onlineMu.RUnlock()
@@ -107,6 +118,7 @@ func (p *Presence) GetLocalOnlineClients() []string {
 	copy(out, p.onlineClients)
 	return out
 }
+
 func (p *Presence) GetMergedNodeTrees() map[string][]string {
 	p.onlineMu.RLock()
 	defer p.onlineMu.RUnlock()
@@ -136,6 +148,7 @@ func (p *Presence) GetMergedNodeTrees() map[string][]string {
 	}
 	return out
 }
+
 func (p *Presence) GetLocalActiveInbounds() []string {
 	p.onlineMu.RLock()
 	defer p.onlineMu.RUnlock()
@@ -146,6 +159,7 @@ func (p *Presence) GetLocalActiveInbounds() []string {
 	copy(out, p.localActiveInbounds)
 	return out
 }
+
 func (p *Presence) GetMergedActiveInboundTrees() map[string][]string {
 	p.onlineMu.RLock()
 	defer p.onlineMu.RUnlock()
@@ -178,6 +192,7 @@ func (p *Presence) GetMergedActiveInboundTrees() map[string][]string {
 	}
 	return out
 }
+
 func (p *Presence) RefreshLocalOnline(activeEmails, activeInboundTags []string, now, graceMs int64) {
 	p.onlineMu.Lock()
 	defer p.onlineMu.Unlock()
@@ -213,6 +228,7 @@ func (p *Presence) RefreshLocalOnline(activeEmails, activeInboundTags []string, 
 	}
 	p.localActiveInbounds = activeInbounds
 }
+
 func (p *Presence) SetNodeOnlineTree(nodeID int, tree map[string][]string) {
 	p.onlineMu.Lock()
 	defer p.onlineMu.Unlock()
@@ -225,6 +241,7 @@ func (p *Presence) SetNodeOnlineTree(nodeID int, tree map[string][]string) {
 	}
 	p.nodeOnlineTrees[nodeID] = tree
 }
+
 func (p *Presence) SetNodeActiveInboundTree(nodeID int, tree map[string][]string) {
 	p.onlineMu.Lock()
 	defer p.onlineMu.Unlock()
@@ -237,12 +254,14 @@ func (p *Presence) SetNodeActiveInboundTree(nodeID int, tree map[string][]string
 	}
 	p.nodeActiveInboundTrees[nodeID] = tree
 }
+
 func (p *Presence) ClearNodeOnlineClients(nodeID int) {
 	p.onlineMu.Lock()
 	defer p.onlineMu.Unlock()
 	delete(p.nodeOnlineTrees, nodeID)
 	delete(p.nodeActiveInboundTrees, nodeID)
 }
+
 func (p *Presence) RetainNodeOnlineClients(keep func(nodeID int) bool) {
 	p.onlineMu.Lock()
 	defer p.onlineMu.Unlock()

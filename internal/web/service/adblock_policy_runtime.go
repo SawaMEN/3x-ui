@@ -27,6 +27,7 @@ type adBlockPlan struct {
 func adBlockPlanFromValues(v map[string]string) (adBlockPlan, error) {
 	return adBlockPlanAt(v, time.Now())
 }
+
 func adBlockPlanAt(v map[string]string, now time.Time) (adBlockPlan, error) {
 	plan := adBlockPlan{Domains: map[string][]string{}}
 	if err := json.Unmarshal([]byte(v["adBlockScope"]), &plan.Scope); err != nil {
@@ -62,6 +63,7 @@ func adBlockPlanAt(v map[string]string, now time.Time) (adBlockPlan, error) {
 	}
 	return plan, nil
 }
+
 func (s *SettingService) readAdBlockPlan() (adBlockPlan, error) {
 	keys := []string{"adBlockEnable", "adBlockScope", "adBlockDomains", "adBlockAllowlist", "adBlockYoutubeMode", "adBlockPausedUntil", "adBlockPolicies", "adBlockPolicyDomains"}
 	var rows []model.Setting
@@ -77,12 +79,14 @@ func (s *SettingService) readAdBlockPlan() (adBlockPlan, error) {
 	}
 	return adBlockPlanFromValues(v)
 }
+
 func planDomains(plan adBlockPlan, id string) []string {
 	if id == "" {
 		return plan.Base
 	}
 	return plan.Domains[id]
 }
+
 func planPolicyID(plan adBlockPlan, inbound, client string) (string, bool) {
 	if !plan.Enabled || !scopeMatches(plan.Scope, inbound, client) {
 		return "", false
@@ -92,6 +96,7 @@ func planPolicyID(plan adBlockPlan, inbound, client string) (string, bool) {
 	}
 	return "", true
 }
+
 func xrayInboundIdentities(in xray.InboundConfig) ([]string, error) {
 	var raw map[string]json.RawMessage
 	if len(in.Settings) > 0 {
@@ -121,6 +126,7 @@ func xrayInboundIdentities(in xray.InboundConfig) ([]string, error) {
 	}
 	return emails, nil
 }
+
 func applyXrayPolicyPlan(cfg *xray.Config, plan adBlockPlan) error {
 	router, outbounds, err := adblock.ApplyXrayRouting(cfg.RouterConfig, cfg.OutboundConfigs, nil)
 	if err != nil {
@@ -205,7 +211,7 @@ func applyXrayPolicyPlan(cfg *xray.Config, plan adBlockPlan) error {
 			xrayDomains = append(xrayDomains, domain)
 		}
 		rule := map[string]any{"type": "field", "domain": xrayDomains, "inboundTag": g.Inbounds, "outboundTag": adblock.OutboundTag}
-		if !(len(g.Users) == 1 && g.Users[0] == "") {
+		if len(g.Users) != 1 || g.Users[0] != "" {
 			users := make([]string, len(g.Users))
 			for i, email := range g.Users {
 				if strings.HasPrefix(email, "regexp:") {
@@ -244,6 +250,7 @@ func applyXrayPolicyPlan(cfg *xray.Config, plan adBlockPlan) error {
 	}
 	return nil
 }
+
 func scopePredicate(scope AdBlockScope) (map[string]any, bool) {
 	conditions := []map[string]any{}
 	for _, entry := range []struct {
@@ -273,6 +280,7 @@ func scopePredicate(scope AdBlockScope) (map[string]any, bool) {
 	}
 	return map[string]any{"type": "logical", "mode": "and", "rules": conditions}, false
 }
+
 func invertedPredicate(predicate map[string]any) map[string]any {
 	out := map[string]any{}
 	for key, value := range predicate {
@@ -282,6 +290,7 @@ func invertedPredicate(predicate map[string]any) map[string]any {
 	out["invert"] = !invert
 	return out
 }
+
 func domainSetMatch(domains []string) map[string]any {
 	exact, suffix := []string{}, []string{}
 	for _, domain := range domains {
@@ -300,6 +309,7 @@ func domainSetMatch(domains []string) map[string]any {
 	}
 	return match
 }
+
 func applySingBoxPolicyPlan(cfg *singbox.Config, plan adBlockPlan) error {
 	if err := stripSingBoxAdBlock(cfg); err != nil {
 		return err

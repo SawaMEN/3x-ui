@@ -14,8 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 	"golang.org/x/net/proxy"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 )
 
 // Entirely loopback: validates the real process/API contract without a public
@@ -49,8 +50,10 @@ func TestPinnedBinaryRawRuntimeAndStatistics(t *testing.T) {
 	logPath, configPath := filepath.Join(dir, "core.log"), filepath.Join(dir, "core.json")
 	cfg := map[string]any{
 		"log": map[string]any{"level": "info", "output": logPath},
-		"inbounds": []any{map[string]any{"type": "socks", "tag": "vpn", "listen": "127.0.0.1", "listen_port": port,
-			"users": []any{map[string]any{"username": "alice", "password": "secret"}}}},
+		"inbounds": []any{map[string]any{
+			"type": "socks", "tag": "vpn", "listen": "127.0.0.1", "listen_port": port,
+			"users": []any{map[string]any{"username": "alice", "password": "secret"}},
+		}},
 		"outbounds": []any{map[string]any{"type": "direct", "tag": "direct"}},
 		"experimental": map[string]any{
 			"v2ray_api": map[string]any{"listen": statsAddress, "stats": map[string]any{"enabled": true, "users": []string{"alice"}, "inbounds": []string{"vpn"}}},
@@ -58,7 +61,7 @@ func TestPinnedBinaryRawRuntimeAndStatistics(t *testing.T) {
 		},
 	}
 	data, _ := json.Marshal(cfg)
-	if err := os.WriteFile(configPath, data, 0600); err != nil {
+	if err := os.WriteFile(configPath, data, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	r := NewRuntime(configPath, true)

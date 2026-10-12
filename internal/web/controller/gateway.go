@@ -18,7 +18,6 @@ import (
 type GatewayController struct {
 	settingService service.SettingService
 	xrayService    service.CoreService
-	singBoxService service.SingBoxService
 	networkService service.GatewayNetworkService
 }
 
@@ -337,7 +336,7 @@ func (a *GatewayController) enable(c *gin.Context) {
 				rollbackErr = a.restartGatewayCore(context.Background(), coreType)
 			}
 			if rollbackErr != nil {
-				err = fmt.Errorf("configure Linux Gateway networking: %w; core rollback failed: %v", err, rollbackErr)
+				err = fmt.Errorf("configure Linux Gateway networking: %w; core rollback failed: %w", err, rollbackErr)
 			} else {
 				err = fmt.Errorf("configure Linux Gateway networking: %w; core changes rolled back", err)
 			}
@@ -428,6 +427,7 @@ func (a *GatewayController) gatewayCoreRunning(coreType string) bool {
 	}
 	return a.xrayService.IsCoreRunning()
 }
+
 func (a *GatewayController) restartGatewayCore(ctx context.Context, coreType string) error {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()

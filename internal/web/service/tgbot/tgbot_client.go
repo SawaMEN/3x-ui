@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
-	"io"
+	"net"
 	"net/http"
 	"slices"
 	"strconv"
@@ -177,11 +177,14 @@ func (t *Tgbot) buildSubscriptionURLs(email string) (string, string, error) {
 		}
 	}
 
-	host := subDomain
+	host := strings.Trim(subDomain, "[]")
+	if strings.Contains(host, ":") {
+		host = "[" + host + "]"
+	}
 	if (subPort == 443 && tls) || (subPort == 80 && !tls) {
 		// standard ports: no port in host
 	} else {
-		host = fmt.Sprintf("%s:%d", subDomain, subPort)
+		host = net.JoinHostPort(strings.Trim(subDomain, "[]"), strconv.Itoa(subPort))
 	}
 
 	// Ensure paths
@@ -237,9 +240,9 @@ func (t *Tgbot) sendClientSubLinks(chatId int64, email string) {
 		t.SendMsgToTgbot(chatId, t.I18nBot("tgbot.answers.errorOperation")+"\r\n"+err.Error())
 		return
 	}
-	msg := "Subscription URL:\r\n<code>" + subURL + "</code>"
+	msg := "Subscription URL:\r\n<code>" + html.EscapeString(subURL) + "</code>"
 	if subJsonURL != "" {
-		msg += "\r\n\r\nJSON URL:\r\n<code>" + subJsonURL + "</code>"
+		msg += "\r\n\r\nJSON URL:\r\n<code>" + html.EscapeString(subJsonURL) + "</code>"
 	}
 	inlineKeyboard := tu.InlineKeyboard(
 		tu.InlineKeyboardRow(
@@ -282,7 +285,7 @@ func (t *Tgbot) sendClientIndividualLinks(chatId int64, email string) {
 	}
 	defer resp.Body.Close()
 
-	bodyBytes, err := io.ReadAll(resp.Body)
+	bodyBytes, err := readClientSubscriptionResponse(resp)
 	if err != nil {
 		t.SendMsgToTgbot(chatId, t.I18nBot("tgbot.answers.errorOperation")+"\r\n"+err.Error())
 		return
@@ -328,7 +331,7 @@ func (t *Tgbot) sendClientIndividualLinks(chatId int64, email string) {
 		for _, link := range chunk {
 			// wrap each link in <code>
 			msg.WriteString("<code>")
-			msg.WriteString(link)
+			msg.WriteString(html.EscapeString(link))
 			msg.WriteString("</code>\r\n")
 		}
 		t.SendMsgToTgbot(chatId, msg.String())
@@ -387,8 +390,12 @@ func (t *Tgbot) sendClientQRLinks(chatId int64, email string) {
 		defer cancel()
 		req = req.WithContext(ctx)
 		if resp, err := optimizedHTTPClient.Do(req); err == nil {
-			body, _ := io.ReadAll(resp.Body)
+			body, readErr := readClientSubscriptionResponse(resp)
 			_ = resp.Body.Close()
+			if readErr != nil {
+				logger.Warning("fetch individual subscription QR links:", readErr)
+				return
+			}
 			encoded, _ := t.settingService.GetSubEncrypt()
 			var content string
 			if encoded {

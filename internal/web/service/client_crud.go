@@ -14,6 +14,9 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
@@ -21,8 +24,6 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/masque"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/random"
-	"github.com/google/uuid"
-	"gorm.io/gorm"
 )
 
 func hasForbiddenClientChar(s string) bool {

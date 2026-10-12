@@ -24,10 +24,10 @@ case "$1" in
  *) printf 'unexpected command: %s\n' "$1" >&2; exit 10 ;;
 esac
 `
-	if err := os.WriteFile(binary, []byte(script), 0700); err != nil {
+	if err := os.WriteFile(binary, []byte(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(cfg, []byte(`{"inbounds":[{"type":"snell"}],"endpoints":[{"type":"masque-server"}]}`), 0600); err != nil {
+	if err := os.WriteFile(cfg, []byte(`{"inbounds":[{"type":"snell"}],"endpoints":[{"type":"masque-server"}]}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	profile := ProcessOptions{Binary: binary, RunCommand: "srun", VersionPrefix: "hiddify-core version ", RequiredVersion: "v5.0.0", RequiredTags: []string{"with_xui_panel", "with_v2ray_api"}, MASQUE: true}
@@ -68,7 +68,7 @@ func TestProcessProfileRejectsMisleadingIdentity(t *testing.T) {
 		"hiddify-core version panel-test\nTags: with_v2ray_api\nRevision: other\n",
 	} {
 		script := "#!/bin/sh\ncat <<'VERSION'\n" + output + "VERSION\n"
-		if err := os.WriteFile(binary, []byte(script), 0700); err != nil {
+		if err := os.WriteFile(binary, []byte(script), 0o700); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := NewProcessWithOptions("", profile, true).Version(context.Background()); err == nil {

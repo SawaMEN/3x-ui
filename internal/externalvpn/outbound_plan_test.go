@@ -15,7 +15,7 @@ func openFluxPlan(tag, secret string) map[string]any {
 func TestOutboundPlanPreservesLiveChildAndRollbackRestoresState(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XUI_BIN_FOLDER", dir)
-	if err := os.WriteFile(filepath.Join(dir, "openflux"), []byte("#!/bin/sh\nif grep -q 'SessionContext = broken' \"$2\"; then exit 3; fi\nexec sleep 60\n"), 0700); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "openflux"), []byte("#!/bin/sh\nif grep -q 'SessionContext = broken' \"$2\"; then exit 3; fi\nexec sleep 60\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	oldPlans, oldProcesses := outboundPlans, outboundProcesses

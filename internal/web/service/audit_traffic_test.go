@@ -7,10 +7,11 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/mattn/go-sqlite3"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/mattn/go-sqlite3"
 )
 
 func TestAuditResetAllReenablesEveryProjectionAndPreservesGroups(t *testing.T) {

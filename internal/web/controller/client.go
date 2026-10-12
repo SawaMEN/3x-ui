@@ -275,8 +275,8 @@ func (a *ClientController) update(c *gin.Context) {
 	// A partly-applied call committed real changes; a rejected one touched
 	// nothing, and broadcasting those would refetch every panel for nothing.
 	if needRestart || err == nil {
-		newEmail := strings.TrimSpace(req.Client.Email)
-		if !req.Client.Enable || (newEmail != "" && newEmail != email) {
+		newEmail := strings.TrimSpace(req.Email)
+		if !req.Enable || (newEmail != "" && newEmail != email) {
 			a.disconnectSingBoxUsersBestEffort(c, email)
 		}
 		notifyClientsChanged()

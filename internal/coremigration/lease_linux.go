@@ -13,10 +13,10 @@ import (
 
 // AcquirePanelLease excludes migration from a running panel and other migrations.
 func AcquirePanelLease() (func(), error) {
-	if err := os.MkdirAll(config.GetDBFolderPath(), 0700); err != nil {
+	if err := os.MkdirAll(config.GetDBFolderPath(), 0o700); err != nil {
 		return nil, err
 	}
-	f, err := os.OpenFile(filepath.Join(config.GetDBFolderPath(), "core-migration.lock"), os.O_CREATE|os.O_RDWR, 0600)
+	f, err := os.OpenFile(filepath.Join(config.GetDBFolderPath(), "core-migration.lock"), os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return nil, err
 	}

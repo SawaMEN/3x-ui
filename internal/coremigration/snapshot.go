@@ -5,10 +5,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/config"
 )
 
 type savedFile struct {
@@ -32,7 +33,7 @@ type manifest struct {
 }
 
 func atomicWrite(path string, data []byte, mode os.FileMode) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
 	f, err := os.CreateTemp(filepath.Dir(path), ".core-migration-*")
@@ -66,13 +67,15 @@ func atomicWrite(path string, data []byte, mode os.FileMode) error {
 	defer d.Close()
 	return d.Sync()
 }
+
 func saveManifest(dir string, m *manifest) error {
 	data, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return err
 	}
-	return atomicWrite(filepath.Join(dir, "manifest.json"), data, 0600)
+	return atomicWrite(filepath.Join(dir, "manifest.json"), data, 0o600)
 }
+
 func snapshotFiles(dir string, paths []string) ([]savedFile, error) {
 	result := []savedFile{}
 	for i, path := range paths {
@@ -93,7 +96,7 @@ func snapshotFiles(dir string, paths []string) ([]savedFile, error) {
 			return nil, fmt.Errorf("migration snapshot requires a regular file: %s", absolute)
 		}
 		s.Exists, s.Mode, s.Backup = true, uint32(info.Mode().Perm()), fmt.Sprintf("files/%03d", i)
-		digest, err := atomicCopy(filepath.Join(dir, s.Backup), absolute, 0600)
+		digest, err := atomicCopy(filepath.Join(dir, s.Backup), absolute, 0o600)
 		if err != nil {
 			return nil, err
 		}
@@ -102,6 +105,7 @@ func snapshotFiles(dir string, paths []string) ([]savedFile, error) {
 	}
 	return result, nil
 }
+
 func verifyFiles(dir string, files []savedFile) error {
 	for _, f := range files {
 		if !f.Exists {
@@ -121,6 +125,7 @@ func verifyFiles(dir string, files []savedFile) error {
 	}
 	return nil
 }
+
 func restoreFiles(dir string, files []savedFile) error {
 	if err := verifyFiles(dir, files); err != nil {
 		return err
@@ -151,13 +156,14 @@ func hashFile(path string) (string, error) {
 	}
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }
+
 func atomicCopy(dst, src string, mode os.FileMode) (string, error) {
 	input, err := os.Open(src)
 	if err != nil {
 		return "", err
 	}
 	defer input.Close()
-	if err := os.MkdirAll(filepath.Dir(dst), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(dst), 0o700); err != nil {
 		return "", err
 	}
 	output, err := os.CreateTemp(filepath.Dir(dst), ".core-migration-*")
@@ -195,6 +201,7 @@ func atomicCopy(dst, src string, mode os.FileMode) (string, error) {
 	}
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }
+
 func verifyPostgres(dir string, m *manifest) error {
 	if m.DBKind != "postgres" {
 		return nil

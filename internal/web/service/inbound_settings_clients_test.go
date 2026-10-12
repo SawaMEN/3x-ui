@@ -8,6 +8,28 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
 
+func TestParseInboundSettingsClientsRejectsNullEntries(t *testing.T) {
+	for _, settings := range []string{`{"clients":[null]}`, `{"clients":[{"email":"alice"},null]}`} {
+		if _, err := ParseInboundSettingsClients(settings); err == nil {
+			t.Errorf("accepted null client: %s", settings)
+		}
+	}
+}
+
+func TestUpdateInboundClientRejectsWrongClientCount(t *testing.T) {
+	setupBulkDB(t)
+	inbound := &model.Inbound{UserId: 1, Port: 43800, Protocol: model.VLESS, Tag: "update-count", Settings: `{"clients":[]}`}
+	if err := database.GetDB().Create(inbound).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, settings := range []string{`{}`, `{"clients":null}`, `{"clients":[]}`, `{"clients":[{},{}]}`} {
+		request := &model.Inbound{Id: inbound.Id, Settings: settings}
+		if _, err := (&ClientService{}).UpdateInboundClient(&InboundService{}, request, "alice"); err == nil {
+			t.Errorf("accepted invalid update: %s", settings)
+		}
+	}
+}
+
 func TestParseInboundSettingsClientsIgnoresProtocolScalarFields(t *testing.T) {
 	tests := []struct {
 		name     string

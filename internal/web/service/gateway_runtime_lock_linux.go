@@ -4,10 +4,12 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"golang.org/x/sys/unix"
 	"os"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
 
 // Separate from the web/CLI operation lock, which callers may already hold.
@@ -15,7 +17,7 @@ import (
 func gatewayRuntimeLock(ctx context.Context, path string) (func(), error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0600)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return nil, err
 	}
@@ -28,7 +30,7 @@ func gatewayRuntimeLock(ctx context.Context, path string) (func(), error) {
 		if err == nil {
 			return func() { _ = unix.Flock(int(f.Fd()), unix.LOCK_UN); _ = f.Close() }, nil
 		}
-		if err != unix.EWOULDBLOCK && err != unix.EAGAIN {
+		if !errors.Is(err, unix.EWOULDBLOCK) && !errors.Is(err, unix.EAGAIN) {
 			_ = f.Close()
 			return nil, err
 		}

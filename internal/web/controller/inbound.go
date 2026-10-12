@@ -6,13 +6,14 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/middleware"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/session"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/websocket"
-	"github.com/gin-gonic/gin"
 )
 
 // InboundController handles HTTP requests related to Xray inbounds management.

@@ -5,20 +5,24 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
-	"golang.org/x/net/html"
+	"errors"
 	"io"
 	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	"golang.org/x/net/html"
 )
 
 const maxBody = 8 << 20
 
-var playerAPI = regexp.MustCompile(`^/youtubei/v[0-9]+/(player|next)$`)
-var initialPlayer = regexp.MustCompile(`(?:var\s+)?ytInitialPlayerResponse\s*=\s*`)
-var adKeys = []string{"adPlacements", "playerAds", "adSlots", "adBreakHeartbeatParams"}
+var (
+	playerAPI     = regexp.MustCompile(`^/youtubei/v[0-9]+/(player|next)$`)
+	initialPlayer = regexp.MustCompile(`(?:var\s+)?ytInitialPlayerResponse\s*=\s*`)
+	adKeys        = []string{"adPlacements", "playerAds", "adSlots", "adBreakHeartbeatParams"}
+)
 
 func interceptedHost(host string) bool {
 	switch strings.ToLower(host) {
@@ -27,6 +31,7 @@ func interceptedHost(host string) bool {
 	}
 	return false
 }
+
 func cleanPlayer(value any, depth int) bool {
 	if depth > 8 {
 		return false
@@ -47,6 +52,7 @@ func cleanPlayer(value any, depth int) bool {
 	}
 	return changed
 }
+
 func cleanJSON(raw []byte) ([]byte, bool) {
 	if !utf8.Valid(raw) {
 		return raw, false
@@ -105,6 +111,7 @@ func jsonEnd(raw []byte, start int) int {
 	}
 	return -1
 }
+
 func cleanScript(raw []byte) ([]byte, bool) {
 	// Only rewrite a syntactically valid initial player object. Unknown layouts,
 	// JSON errors and non-player content remain byte-for-byte unchanged.
@@ -148,10 +155,12 @@ type joinedBody struct {
 func filterResponse(response *http.Response, path string) bool {
 	return filterResponseLimit(response, path, maxBody)
 }
+
 func filterResponseLimit(response *http.Response, path string, limit int) bool {
 	changed, _ := filterResponseReason(response, path, limit)
 	return changed
 }
+
 func filterResponseReason(response *http.Response, path string, limit int) (bool, string) {
 	if response.StatusCode != http.StatusOK || response.Header.Get("Content-Range") != "" {
 		return false, "unchanged"
@@ -223,7 +232,7 @@ func cleanHTML(raw []byte) ([]byte, bool) {
 	for {
 		kind := tokenizer.Next()
 		if kind == html.ErrorToken {
-			if tokenizer.Err() != io.EOF {
+			if !errors.Is(tokenizer.Err(), io.EOF) {
 				return raw, false
 			}
 			break

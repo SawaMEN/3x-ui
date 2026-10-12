@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/link"
-	"github.com/gin-gonic/gin"
 )
 
 func (a *ServerController) initExternalVPNRouter(g *gin.RouterGroup) {

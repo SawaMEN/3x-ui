@@ -123,6 +123,7 @@ func (s *SettingService) recordAdBlockFailure(err error) error {
 	}
 	return saveAdBlockValues(values)
 }
+
 func (s *SettingService) adBlockUpdateValues(result *AdBlockUpdateResult, domains, sources string) (map[string]string, error) {
 	values := adBlockSuccessfulUpdateValues(result, domains, sources)
 	if len(result.Warnings) > 0 && !result.Cached {

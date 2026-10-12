@@ -31,22 +31,22 @@ func TestPruneCurrentCoreAndIPLogs(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XUI_BIN_FOLDER", dir)
 	t.Setenv("XUI_LOG_FOLDER", dir)
-	if err := os.MkdirAll(filepath.Dir(hiddify.GetConfigPath()), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(hiddify.GetConfigPath()), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	// No legacy config.json exists. A relative output uses the core working directory.
-	if err := os.WriteFile(hiddify.GetConfigPath(), []byte(`{"log":{"output":"custom.log"}}`), 0600); err != nil {
+	if err := os.WriteFile(hiddify.GetConfigPath(), []byte(`{"log":{"output":"custom.log"}}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	coreLog := filepath.Join(filepath.Dir(hiddify.GetBinaryPath()), "custom.log")
 	paths := []string{coreLog, filepath.Join(dir, "3xipl.log"), filepath.Join(dir, "3xipl-banned.log"), filepath.Join(dir, "3xipl-banned.prev.log")}
 	for _, path := range paths {
-		if err := os.WriteFile(path, []byte("oversized log line"), 0600); err != nil {
+		if err := os.WriteFile(path, []byte("oversized log line"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
 	// Truncation must preserve an open writer's inode.
-	writer, err := os.OpenFile(coreLog, os.O_APPEND|os.O_WRONLY, 0600)
+	writer, err := os.OpenFile(coreLog, os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,15 +71,15 @@ func TestCoreLogDisabledAndDailyCleanup(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XUI_BIN_FOLDER", dir)
 	path := filepath.Join(dir, "core.log")
-	if err := os.MkdirAll(filepath.Dir(hiddify.GetConfigPath()), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(hiddify.GetConfigPath()), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, []byte("keep"), 0600); err != nil {
+	if err := os.WriteFile(path, []byte("keep"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	for _, disabled := range []bool{true, false} {
 		cfg, _ := json.Marshal(map[string]any{"log": map[string]any{"disabled": disabled, "output": path}})
-		if err := os.WriteFile(hiddify.GetConfigPath(), cfg, 0600); err != nil {
+		if err := os.WriteFile(hiddify.GetConfigPath(), cfg, 0o600); err != nil {
 			t.Fatal(err)
 		}
 		wipeXrayLogs()
@@ -101,7 +101,7 @@ func TestDailyBanSnapshotBounds(t *testing.T) {
 	maxXrayLogBytes = 8
 	t.Cleanup(func() { maxXrayLogBytes = oldMax })
 	path := filepath.Join(dir, "3xipl-banned.log")
-	if err := os.WriteFile(path, []byte("old entries\nnew tail"), 0600); err != nil {
+	if err := os.WriteFile(path, []byte("old entries\nnew tail"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	NewClearLogsJob().Run()

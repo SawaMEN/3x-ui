@@ -14,10 +14,11 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/proxy"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/json_util"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
-	"golang.org/x/net/proxy"
 )
 
 // Opt-in checks exercise real core configuration loaders and IP-addressed HTTP
@@ -76,7 +77,7 @@ func TestAdBlockRealCores(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := os.WriteFile(configPath, config, 0600); err != nil {
+			if err := os.WriteFile(configPath, config, 0o600); err != nil {
 				t.Fatal(err)
 			}
 			validateArgs := []string{"check", "-c", configPath}
@@ -133,9 +134,16 @@ func TestAdBlockRealCores(t *testing.T) {
 				host    string
 				blocked bool
 			}{
-				{"ads.example", true}, {"sub.ads.example", false}, {"sub.tracker.example", true},
-				{"safe.broad.example", false}, {"exact.broad.example", true}, {"ordinary.example", false},
-				{"r1.googlevideo.com", false}, {"www.youtube.com", false}, {"youtubei.googleapis.com", false}, {"googleads.g.doubleclick.net", true},
+				{"ads.example", true},
+				{"sub.ads.example", false},
+				{"sub.tracker.example", true},
+				{"safe.broad.example", false},
+				{"exact.broad.example", true},
+				{"ordinary.example", false},
+				{"r1.googlevideo.com", false},
+				{"www.youtube.com", false},
+				{"youtubei.googleapis.com", false},
+				{"googleads.g.doubleclick.net", true},
 			} {
 				req, _ := http.NewRequest(http.MethodGet, origin.URL, nil)
 				req.Host = test.host

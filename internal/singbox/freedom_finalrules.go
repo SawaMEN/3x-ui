@@ -14,8 +14,8 @@ const xrayFreedomPrivateFinalRulesMarker = "_xui_xray_freedom_private_final_rule
 // translateXrayFreedomFinalRules recognizes the exact private-egress guard
 // installed by the panel migration:
 //
-//   block geoip:private
-//   allow everything else
+//	block geoip:private
+//	allow everything else
 //
 // sing-box direct outbounds do not have an outbound-level finalRules feature.
 // Mark the translated outbound so Config.MarshalJSON can preserve the guard in

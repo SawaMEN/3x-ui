@@ -47,6 +47,7 @@ func (p *Proxy) Stats() Counters {
 	message, _ := p.lastError.Load().(string)
 	return Counters{Malformed: p.malformed.Load(), Oversized: p.oversized.Load(), Unsupported: p.unsupported.Load(), Running: true, Requests: p.requests.Load(), Filtered: p.filtered.Load(), Busy: p.skippedBusy.Load(), TLSFailures: p.tlsFailures.Load(), UpstreamFailures: p.upstreamFailures.Load(), Unchanged: p.unchanged.Load(), LastError: message}
 }
+
 func NewWithOptions(dir string, options Options) (*Proxy, error) {
 	if err := options.Validate(); err != nil {
 		return nil, err

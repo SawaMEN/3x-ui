@@ -43,6 +43,7 @@ func TestManagedPrepareCommitAndAbort(t *testing.T) {
 		t.Fatal("stop retained proxy")
 	}
 }
+
 func TestManagedRecoveryAndResourceLimits(t *testing.T) {
 	Commit(false)
 	defer Commit(false)
@@ -75,6 +76,7 @@ func TestManagedRecoveryAndResourceLimits(t *testing.T) {
 		t.Fatal("memory budget accepted")
 	}
 }
+
 func TestFilterDiagnosticReasons(t *testing.T) {
 	for _, tc := range []struct {
 		body, encoding, reason string

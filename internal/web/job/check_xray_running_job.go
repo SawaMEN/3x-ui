@@ -15,10 +15,7 @@ var EventBus *eventbus.Bus
 
 // CheckXrayRunningJob monitors the selected proxy core and restarts it if it crashes.
 type CheckXrayRunningJob struct {
-	xrayService service.CoreService
-	singBox     service.SingBoxService
-	setting     service.SettingService
-	checkTime   int
+	checkTime int
 }
 
 // NewCheckXrayRunningJob creates the core health check job instance.

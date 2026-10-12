@@ -3,9 +3,10 @@ package service
 import (
 	"context"
 	"fmt"
-	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 	"os"
 	"path/filepath"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 )
 
 // Check a candidate before replacing the file used by the running core. A

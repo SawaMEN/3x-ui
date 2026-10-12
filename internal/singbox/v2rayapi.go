@@ -12,8 +12,10 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-const v2rayStatsAddress = "127.0.0.1:10086"
-const v2rayStatsMethod = "/experimental.v2rayapi.StatsService/QueryStats"
+const (
+	v2rayStatsAddress = "127.0.0.1:10086"
+	v2rayStatsMethod  = "/experimental.v2rayapi.StatsService/QueryStats"
+)
 
 type V2RayStat = v2rayStat
 
@@ -232,11 +234,11 @@ func (c *V2RayStatsClient) connFor(ctx context.Context) (*grpc.ClientConn, error
 	}
 	dialCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
-	//nolint:staticcheck // DialContext/WithBlock preserve bounded synchronous dial semantics here.
 	address := c.address
 	if address == "" {
 		address = v2rayStatsAddress
 	}
+	//nolint:staticcheck // DialContext preserves bounded synchronous dial semantics; NewClient is lazy.
 	conn, err := grpc.DialContext(
 		dialCtx,
 		address,

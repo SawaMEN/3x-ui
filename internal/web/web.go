@@ -17,6 +17,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gin-contrib/gzip"
+	"github.com/gin-contrib/sessions"
+	"github.com/gin-contrib/sessions/cookie"
+	"github.com/gin-gonic/gin"
+	"github.com/robfig/cron/v3"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawgnet"
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/eventbus"
@@ -41,11 +47,6 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service/panel"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service/tgbot"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/websocket"
-	"github.com/gin-contrib/gzip"
-	"github.com/gin-contrib/sessions"
-	"github.com/gin-contrib/sessions/cookie"
-	"github.com/gin-gonic/gin"
-	"github.com/robfig/cron/v3"
 )
 
 //go:embed translation/*
@@ -642,7 +643,7 @@ func (s *Server) start(restartXray bool, startTgBot bool) (err error) {
 				return err
 			}
 			if service.IsNativeCore(core) {
-				(service.SelectedNativeCore()).SetToNeedRestart()
+				service.SelectedNativeCore().SetToNeedRestart()
 				return nil
 			}
 			s.xrayService.SetToNeedRestart()
@@ -651,7 +652,7 @@ func (s *Server) start(restartXray bool, startTgBot bool) (err error) {
 		SetNeedRestart: func() {
 			core, err := s.settingService.GetCoreType()
 			if err == nil && service.IsNativeCore(core) {
-				(service.SelectedNativeCore()).SetToNeedRestart()
+				service.SelectedNativeCore().SetToNeedRestart()
 				return
 			}
 			s.xrayService.SetToNeedRestart()
@@ -742,7 +743,9 @@ func (s *Server) start(restartXray bool, startTgBot bool) (err error) {
 		IdleTimeout:       120 * time.Second,
 	}
 
-	go network.ServeHTTP(s.httpServer, listener, "Web server")
+	go func(server *http.Server) {
+		_ = network.ServeHTTP(server, listener, "Web server")
+	}(s.httpServer)
 
 	// Create event bus before startTask so jobs can use it
 	s.bus = eventbus.New(eventbus.DefaultBufferSize)
@@ -880,7 +883,7 @@ func (s *Server) stop(stopXray bool, stopTgBot bool) error {
 	}
 	if stopXray {
 		if coreType, _ := s.settingService.GetCoreType(); service.IsNativeCore(coreType) {
-			_ = (service.SelectedNativeCore()).Stop(s.ctx)
+			_ = service.SelectedNativeCore().Stop(s.ctx)
 		} else {
 			_ = s.xrayService.StopXray()
 		}

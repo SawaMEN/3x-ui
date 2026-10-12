@@ -100,6 +100,7 @@ func (m Manager) FetchCached(ctx context.Context, sources []string, previous map
 	sort.Strings(result.Domains)
 	return result, nil
 }
+
 func (m Manager) fetchCachedSource(ctx context.Context, url string, cached SourceCache) (SourceCache, int64, error) {
 	client := m.Client
 	if client == nil {
@@ -171,6 +172,7 @@ func (m Manager) fetchCachedSource(ctx context.Context, url string, cached Sourc
 	}
 	return SourceCache{Domains: domains, ETag: resp.Header.Get("ETag"), LastModified: resp.Header.Get("Last-Modified"), UpdatedAt: now, CheckedAt: now}, int64(len(body)), nil
 }
+
 func CacheStatuses(cache map[string]SourceCache) []SourceStatus {
 	result := make([]SourceStatus, 0, len(cache))
 	for url, entry := range cache {

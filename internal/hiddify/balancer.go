@@ -89,6 +89,7 @@ func TranslateBalancers(routing, config map[string]any, available ...map[string]
 	}
 	return result, nil
 }
+
 func balancerStrings(value any) ([]string, error) {
 	if values, ok := value.([]string); ok {
 		return values, nil
@@ -107,6 +108,7 @@ func balancerStrings(value any) ([]string, error) {
 	}
 	return out, nil
 }
+
 func addBalancerObservation(out, config map[string]any, targets []string, tag string) error {
 	obs := object(config, "observatory")
 	burst := false

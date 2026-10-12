@@ -34,7 +34,6 @@ type ServerController struct {
 	settingService     service.SettingService
 	panelService       panel.PanelService
 	xrayMetricsService service.XrayMetricsService
-	singBoxService     service.SingBoxService
 	clientService      service.ClientService
 }
 
@@ -675,12 +674,8 @@ func (a *ServerController) getNewX25519Cert(c *gin.Context) {
 
 // getNewmldsa65 generates a new ML-DSA-65 key.
 func (a *ServerController) getNewmldsa65(c *gin.Context) {
-	cert, err := a.serverService.GetNewmldsa65()
-	if err != nil {
-		jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.getNewmldsa65Error"), err)
-		return
-	}
-	jsonObj(c, cert, nil)
+	_, err := a.serverService.GetNewmldsa65()
+	jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.getNewmldsa65Error"), err)
 }
 
 // getNewEchCert generates a new ECH certificate for the given SNI.
@@ -766,12 +761,8 @@ func (a *ServerController) getNewUUID(c *gin.Context) {
 
 // getNewmlkem768 generates a new ML-KEM-768 key.
 func (a *ServerController) getNewmlkem768(c *gin.Context) {
-	out, err := a.serverService.GetNewmlkem768()
-	if err != nil {
-		jsonMsg(c, "Failed to generate mlkem768 keys", err)
-		return
-	}
-	jsonObj(c, out, nil)
+	_, err := a.serverService.GetNewmlkem768()
+	jsonMsg(c, "Failed to generate mlkem768 keys", err)
 }
 
 func (a *ServerController) getClientIps(c *gin.Context) {

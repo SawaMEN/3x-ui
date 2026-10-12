@@ -151,7 +151,7 @@ func (s *ClientService) resetClientTrafficSet(inboundSvc *InboundService, select
 	if needRestart {
 		coreType, _ := (&SettingService{}).GetCoreType()
 		if IsNativeCore(coreType) {
-			(SelectedNativeCore()).SetToNeedRestart()
+			SelectedNativeCore().SetToNeedRestart()
 		} else {
 			(&CoreService{}).SetToNeedRestart()
 		}

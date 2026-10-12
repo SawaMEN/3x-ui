@@ -14,8 +14,13 @@ func TestParseLinkPort(t *testing.T) {
 		def, want int
 		invalid   bool
 	}{
-		{"", 443, 443, false}, {"8080", 443, 8080, false}, {"65535", 443, 65535, false},
-		{"0", 443, 0, true}, {"-1", 443, 0, true}, {"abc", 443, 0, true}, {"65536", 443, 0, true},
+		{"", 443, 443, false},
+		{"8080", 443, 8080, false},
+		{"65535", 443, 65535, false},
+		{"0", 443, 0, true},
+		{"-1", 443, 0, true},
+		{"abc", 443, 0, true},
+		{"65536", 443, 0, true},
 	} {
 		t.Run(tc.in, func(t *testing.T) {
 			got, err := parseLinkPort(tc.in, tc.def)

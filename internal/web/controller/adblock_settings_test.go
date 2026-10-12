@@ -10,10 +10,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
-	"github.com/gin-gonic/gin"
 )
 
 func setupAdBlockControllerDB(t *testing.T) *AdBlockController {
@@ -26,6 +27,7 @@ func setupAdBlockControllerDB(t *testing.T) *AdBlockController {
 	t.Cleanup(func() { _ = database.CloseDB() })
 	return &AdBlockController{}
 }
+
 func TestAdBlockIntervalSaveDoesNotRestartCore(t *testing.T) {
 	a := setupAdBlockControllerDB(t)
 	if err := a.settingService.SaveAdBlockSettings(context.Background(), service.AdBlockSettings{Enabled: true, CustomDomains: "ads.example"}); err != nil {
@@ -57,6 +59,7 @@ func TestAdBlockIntervalSaveDoesNotRestartCore(t *testing.T) {
 		t.Fatal("interval save changed apply state")
 	}
 }
+
 func TestAdBlockPartialRefreshRetriesBeforeNormalInterval(t *testing.T) {
 	a := setupAdBlockControllerDB(t)
 	if err := a.settingService.SaveAdBlockSettings(context.Background(), service.AdBlockSettings{Enabled: true, CustomDomains: "ads.example"}); err != nil {

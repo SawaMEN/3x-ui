@@ -25,7 +25,7 @@ func containerName(id int) string {
 
 func (m *Manager) additionalCommand(inst Instance, metricsAddr string) (*exec.Cmd, context.CancelFunc, error) {
 	folder := filepath.Join(directory(), strconv.Itoa(inst.ID))
-	if err := os.MkdirAll(folder, 0700); err != nil {
+	if err := os.MkdirAll(folder, 0o700); err != nil {
 		return nil, nil, err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -157,7 +157,7 @@ func InstallOpenFlux(ctx context.Context) error {
 		return fmt.Errorf("OpenFlux release has no digest-verified %s asset", name)
 	}
 	dir := config.GetBinFolderPath()
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
 	f, err := os.CreateTemp(dir, ".openflux-*")
@@ -173,7 +173,7 @@ func InstallOpenFlux(ctx context.Context) error {
 	if err := verifyReleaseDigest(path, asset.Digest); err != nil {
 		return err
 	}
-	if err := os.Chmod(path, 0755); err != nil {
+	if err := os.Chmod(path, 0o755); err != nil {
 		return err
 	}
 	// Upstream has no version flag: validate its help output rather than invoking

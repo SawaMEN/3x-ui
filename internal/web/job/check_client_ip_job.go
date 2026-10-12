@@ -34,14 +34,11 @@ type IPWithTimestamp struct {
 type CheckClientIpJob struct {
 	disAllowedIps []string
 	bannedSeen    map[string]int64
-	xrayService   service.CoreService
 	allowlist     ipLimitAllowlist
 	lastIpPrune   int64
 }
 
 var job *CheckClientIpJob
-
-const defaultXrayAPIPort = 62789
 
 const ipStaleAfterSeconds = int64(30 * 60)
 
@@ -118,7 +115,7 @@ func (j *CheckClientIpJob) collectFromOnlineAPI() (map[string]map[string]int64, 
 	{
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
-		online, err := (service.SelectedNativeCore()).OnlineClientIPs(ctx)
+		online, err := service.SelectedNativeCore().OnlineClientIPs(ctx)
 		if err != nil {
 			logger.Debug("[LimitIP] sing-box native connection API unavailable this run:", err)
 			return nil, false
@@ -138,7 +135,6 @@ func (j *CheckClientIpJob) collectFromOnlineAPI() (map[string]map[string]int64, 
 		}
 		return observed, true
 	}
-
 }
 
 func (j *CheckClientIpJob) hasLimitIp() bool {

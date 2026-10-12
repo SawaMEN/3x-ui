@@ -26,7 +26,7 @@ pg_restore) exit 0 ;;
 esac
 `
 	for _, name := range []string{"pg_dump", "pg_restore"} {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(script), 0700); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(script), 0o700); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -36,7 +36,7 @@ esac
 		t.Fatal(err)
 	}
 	info, err := os.Stat(dump)
-	if err != nil || info.Mode().Perm() != 0600 {
+	if err != nil || info.Mode().Perm() != 0o600 {
 		t.Fatal("dump permissions are not private")
 	}
 	if err := CoreMigrationPostgresRestore(context.Background(), dump); err != nil {
@@ -74,7 +74,7 @@ func TestCoreMigrationPostgresArchiveProbeHonorsCancellation(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XUI_DB_DSN", "postgres://panel:secret@localhost/panel")
 	script := "#!/bin/sh\nexec /bin/sleep 30\n"
-	if err := os.WriteFile(filepath.Join(dir, "pg_restore"), []byte(script), 0700); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "pg_restore"), []byte(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", dir)

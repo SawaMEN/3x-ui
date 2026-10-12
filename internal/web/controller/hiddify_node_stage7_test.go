@@ -3,12 +3,15 @@ package controller
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/gin-gonic/gin"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/core"
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
@@ -17,7 +20,6 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/util/crypto"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
-	"github.com/gin-gonic/gin"
 )
 
 // Exercise the actual authenticated node API through the master's Remote
@@ -30,12 +32,12 @@ func TestHiddifyNodeSyncAndTrafficAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = database.CloseDB() })
-	if err := (&service.SettingService{}).SetCoreType(service.CoreTypeHiddify); err != nil {
+	if err := (&service.SettingService{}).SetCoreType(service.CoreTypeSingBox); err != nil {
 		t.Fatal(err)
 	}
 	prev := runtime.GetManager()
 	applies := 0
-	runtime.SetManager(runtime.NewManager(runtime.LocalDeps{CoreType: func() string { return service.CoreTypeHiddify }, RequestConfigApply: func(context.Context) error { applies++; return nil }}))
+	runtime.SetManager(runtime.NewManager(runtime.LocalDeps{CoreType: func() string { return service.CoreTypeSingBox }, RequestConfigApply: func(context.Context) error { applies++; return nil }}))
 	t.Cleanup(func() { runtime.SetManager(prev) })
 	token := &model.ApiToken{Name: "stage7-sync", Token: crypto.HashTokenSHA256("stage7-token"), Enabled: true, Scope: model.ApiScopeNodeSync}
 	if err := database.GetDB().Create(token).Error; err != nil {
@@ -50,7 +52,7 @@ func TestHiddifyNodeSyncAndTrafficAPI(t *testing.T) {
 	serverController := &ServerController{}
 	statusResponse := httptest.NewRecorder()
 	statusContext, _ := gin.CreateTestContext(statusResponse)
-	statusContext.Request = httptest.NewRequest("GET", "/panel/api/server/status", nil)
+	statusContext.Request = httptest.NewRequest(http.MethodGet, "/panel/api/server/status", nil)
 	serverController.status(statusContext)
 	var statusEnvelope struct {
 		Obj map[string]json.RawMessage `json:"obj"`
@@ -72,13 +74,13 @@ func TestHiddifyNodeSyncAndTrafficAPI(t *testing.T) {
 	defer server.Close()
 	u, _ := url.Parse(server.URL)
 	port, _ := strconv.Atoi(u.Port())
-	node := &model.Node{Name: "hiddify", Scheme: "http", Address: u.Hostname(), Port: port, BasePath: "/", ApiToken: "stage7-token", CoreType: service.CoreTypeHiddify, AllowPrivateAddress: true}
+	node := &model.Node{Name: "hiddify", Scheme: "http", Address: u.Hostname(), Port: port, BasePath: "/", ApiToken: "stage7-token", CoreType: service.CoreTypeSingBox, AllowPrivateAddress: true}
 	remote := runtime.NewRemote(node, nil)
 	patch, err := (&service.NodeService{}).Probe(context.Background(), node)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if patch.CoreType != service.CoreTypeHiddify || patch.CoreCapabilities == nil || *patch.CoreCapabilities != core.Hiddify.Capabilities() {
+	if patch.CoreType != service.CoreTypeSingBox || patch.CoreCapabilities == nil || *patch.CoreCapabilities != core.Hiddify.Capabilities() {
 		t.Fatalf("node status capabilities: %#v", patch)
 	}
 	const uuid = "11111111-1111-4111-8111-111111111111"

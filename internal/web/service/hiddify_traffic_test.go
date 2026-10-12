@@ -15,15 +15,16 @@ import (
 	"testing"
 	"time"
 
+	statsproto "github.com/xtls/xray-core/app/stats/command"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/hiddify"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
-	statsproto "github.com/xtls/xray-core/app/stats/command"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 func phase6TrafficRows(t *testing.T) {
@@ -35,9 +36,11 @@ func phase6TrafficRows(t *testing.T) {
 		}
 	}
 }
+
 func phase6Snapshot(value int64) []singbox.V2RayStat {
 	return []singbox.V2RayStat{{Name: "user>>>alice>>>traffic>>>uplink", Value: value}, {Name: "inbound>>>vpn>>>traffic>>>uplink", Value: value}}
 }
+
 func phase6AssertUsage(t *testing.T, user, inbound int64) {
 	t.Helper()
 	var client coremodel.ClientTraffic
@@ -177,7 +180,6 @@ func TestHiddifyPollDoesNotResetAfterLostReply(t *testing.T) {
 		t.Fatal(err)
 	}
 	phase6AssertUsage(t, 211, 207)
-
 }
 
 func TestHiddifyCheckpointQuotaDisablesCommittedUser(t *testing.T) {
@@ -320,11 +322,11 @@ func TestHiddifyDisabledSessionEnforcementRetries(t *testing.T) {
 			id := strings.TrimPrefix(r.URL.Path, "/connections/")
 			attempts[id]++
 			if id == "alice" && attempts[id] == 1 {
-				w.WriteHeader(500)
+				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 			removed[id] = true
-			w.WriteHeader(204)
+			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 		rows := []map[string]any{}

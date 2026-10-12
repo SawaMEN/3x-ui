@@ -2,6 +2,7 @@ package youtubeproxy
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -16,7 +17,7 @@ func CLI(args []string) error {
 	preset := flags.String("print-routing", "", "print routing fragment for xray or singbox, then exit")
 	caDir := flags.String("ca-dir", "/etc/x-ui/youtube-filter", "private CA directory (0600 key)")
 	if err := flags.Parse(args); err != nil {
-		if err == flag.ErrHelp {
+		if errors.Is(err, flag.ErrHelp) {
 			return nil
 		}
 		return err

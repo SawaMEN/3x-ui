@@ -25,7 +25,7 @@ func Archive() ([]byte, error) {
 			return nil, err
 		}
 		header := &zip.FileHeader{Name: "3x-ui-youtube/" + entry.Name(), Method: zip.Deflate}
-		header.SetModTime(time.Date(1980, 1, 1, 0, 0, 0, 0, time.UTC))
+		header.Modified = time.Date(1980, 1, 1, 0, 0, 0, 0, time.UTC)
 		file, err := writer.CreateHeader(header)
 		if err != nil {
 			return nil, err

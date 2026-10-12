@@ -26,6 +26,7 @@ func scopedXrayConfig() *xray.Config {
 		},
 	}
 }
+
 func TestAdBlockXrayScopePreservesOtherRouting(t *testing.T) {
 	setupBulkDB(t)
 	s := &SettingService{}
@@ -100,6 +101,7 @@ func TestAdBlockXrayScopePreservesOtherRouting(t *testing.T) {
 		t.Fatal("empty include scope blocked all traffic")
 	}
 }
+
 func TestAdBlockSingBoxLogicalScopeRoundTrip(t *testing.T) {
 	setupBulkDB(t)
 	s := &SettingService{}
@@ -136,6 +138,7 @@ func TestAdBlockSingBoxLogicalScopeRoundTrip(t *testing.T) {
 		t.Fatal("native editor retains managed logical scope")
 	}
 }
+
 func TestAdBlockScopedConfigsAcceptedByRealCores(t *testing.T) {
 	for _, core := range []struct{ Name, Env string }{{"xray", "XUI_ADBLOCK_XRAY_BINARY"}, {"singbox", "XUI_ADBLOCK_SINGBOX_BINARY"}} {
 		t.Run(core.Name, func(t *testing.T) {
@@ -170,7 +173,7 @@ func TestAdBlockScopedConfigsAcceptedByRealCores(t *testing.T) {
 				t.Fatal(err)
 			}
 			path := filepath.Join(t.TempDir(), "config.json")
-			if err := os.WriteFile(path, raw, 0600); err != nil {
+			if err := os.WriteFile(path, raw, 0o600); err != nil {
 				t.Fatal(err)
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)

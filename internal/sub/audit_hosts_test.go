@@ -121,8 +121,10 @@ func TestAuditClashExcludedUnsupportedProtocol(t *testing.T) {
 }
 
 func TestAuditNativeNaiveBlankSNI(t *testing.T) {
-	inbound := &model.Inbound{Listen: "origin.example", Port: 443, Protocol: model.NaiveProxy,
-		Settings: `{"network":"tcp","tls":{"serverName":"inherited.example"}}`}
+	inbound := &model.Inbound{
+		Listen: "origin.example", Port: 443, Protocol: model.NaiveProxy,
+		Settings: `{"network":"tcp","tls":{"serverName":"inherited.example"}}`,
+	}
 	out := NewSubJsonService("", "", "", "", nil).genNativeNaive(&SubService{address: "sub.example"}, inbound,
 		model.Client{Email: "client", Password: "secret"}, map[string]any{"dest": "edge.example", "keepSniBlank": true})
 	tls, _ := out["tls"].(map[string]any)

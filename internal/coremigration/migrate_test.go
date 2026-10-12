@@ -49,7 +49,7 @@ func fixture(t *testing.T) (runner, *trial, string) {
 	t.Setenv("XUI_DB_FOLDER", filepath.Join(dir, "db"))
 	t.Setenv("XUI_BIN_FOLDER", filepath.Join(dir, "bin"))
 	t.Setenv("XUI_DB_TYPE", "sqlite")
-	if err := os.MkdirAll(config.GetBinFolderPath(), 0700); err != nil {
+	if err := os.MkdirAll(config.GetBinFolderPath(), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	if err := database.InitDB(config.GetDBPath()); err != nil {
@@ -86,10 +86,10 @@ check) exit 0 ;;
 *) exit 1 ;;
 esac
 `, hiddify.TargetVersion, hiddify.TargetRevision)
-	if err := os.WriteFile(hiddify.GetBinaryPath(), []byte(script), 0700); err != nil {
+	if err := os.WriteFile(hiddify.GetBinaryPath(), []byte(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(hiddify.GetConfigPath(), []byte("previous-native-config"), 0600); err != nil {
+	if err := os.WriteFile(hiddify.GetConfigPath(), []byte("previous-native-config"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	p := &trial{}
@@ -103,6 +103,7 @@ esac
 	backup := filepath.Join(dir, "snapshot")
 	return r, p, backup
 }
+
 func preserved(t *testing.T) [32]byte {
 	t.Helper()
 	db := database.GetDB()
@@ -130,12 +131,14 @@ func preserved(t *testing.T) [32]byte {
 	}
 	return sha256.Sum256(data)
 }
+
 func reopen(t *testing.T) {
 	t.Helper()
 	if err := database.InitDB(config.GetDBPath()); err != nil {
 		t.Fatal(err)
 	}
 }
+
 func TestMigrationPreservesInstalledDataAndCommitsAfterTrial(t *testing.T) {
 	r, p, dir := fixture(t)
 	before := preserved(t)
@@ -185,6 +188,7 @@ func TestMigrationPreservesInstalledDataAndCommitsAfterTrial(t *testing.T) {
 		t.Fatal("native config not recovered")
 	}
 }
+
 func TestMigrationStartupFailureRestoresExactDatabaseAndConfig(t *testing.T) {
 	r, p, dir := fixture(t)
 	before := preserved(t)
@@ -215,6 +219,7 @@ func TestMigrationStartupFailureRestoresExactDatabaseAndConfig(t *testing.T) {
 		t.Fatal("successful rollback retained pending journal")
 	}
 }
+
 func TestMigrationRejectsUnsupportedActiveInboundWithoutDisablingUsers(t *testing.T) {
 	r, p, dir := fixture(t)
 	if err := database.GetDB().Model(&model.Inbound{}).Where("tag = ?", "migration-vless").Update("protocol", model.WireGuard).Error; err != nil {
@@ -234,6 +239,7 @@ func TestMigrationRejectsUnsupportedActiveInboundWithoutDisablingUsers(t *testin
 		t.Fatal("preflight disabled or changed clients")
 	}
 }
+
 func TestMigrationBackupOnlyInterruptedJournalAndCorruption(t *testing.T) {
 	r, p, dir := fixture(t)
 	_ = database.CloseDB()
@@ -251,7 +257,7 @@ func TestMigrationBackupOnlyInterruptedJournalAndCorruption(t *testing.T) {
 	if err := saveManifest(dir, m); err != nil {
 		t.Fatal(err)
 	}
-	if err := atomicWrite(pendingPath(), []byte(dir), 0600); err != nil {
+	if err := atomicWrite(pendingPath(), []byte(dir), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := r.run(context.Background(), Options{BackupDir: dir}); err == nil {
@@ -261,7 +267,7 @@ func TestMigrationBackupOnlyInterruptedJournalAndCorruption(t *testing.T) {
 		t.Fatal(err)
 	}
 	backup := filepath.Join(dir, m.Files[0].Backup)
-	if err := os.WriteFile(backup, []byte("corrupt"), 0600); err != nil {
+	if err := os.WriteFile(backup, []byte("corrupt"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	original, _ := os.ReadFile(config.GetDBPath())
@@ -273,6 +279,7 @@ func TestMigrationBackupOnlyInterruptedJournalAndCorruption(t *testing.T) {
 		t.Fatal("corrupt recovery changed live DB")
 	}
 }
+
 func TestMigrationPanelLeaseExcludesConcurrentOperation(t *testing.T) {
 	t.Setenv("XUI_DB_FOLDER", t.TempDir())
 	release, err := AcquirePanelLease()
@@ -300,7 +307,7 @@ func TestMigrationUsesSupervisedOwnerServerTrial(t *testing.T) {
 		t.Fatal(err)
 	}
 	script = []byte(strings.Replace(string(script), "check) exit 0 ;;", "check) exit 0 ;;\nsrun) trap 'exit 0' TERM INT; while :; do sleep 0.05; done ;;", 1))
-	if err := os.WriteFile(hiddify.GetBinaryPath(), script, 0700); err != nil {
+	if err := os.WriteFile(hiddify.GetBinaryPath(), script, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	r.newRuntime = func(path string) runtime { return hiddify.NewProcess(path, true) }
@@ -326,7 +333,7 @@ func TestMigrationNewKernelCheckFailurePreservesExistingConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	script = []byte(strings.Replace(string(script), "check) exit 0 ;;", "check) exit 7 ;;", 1))
-	if err := os.WriteFile(hiddify.GetBinaryPath(), script, 0700); err != nil {
+	if err := os.WriteFile(hiddify.GetBinaryPath(), script, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	if err := r.run(context.Background(), Options{BackupDir: dir}); err == nil {
@@ -356,7 +363,7 @@ func TestMigrationRunsPinnedBinaryConstructorWhenAvailable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(hiddify.GetBinaryPath(), data, 0700); err != nil {
+	if err := os.WriteFile(hiddify.GetBinaryPath(), data, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	// The actual check -c validates generated config; the fake trial leaves privileged
@@ -462,7 +469,7 @@ func TestMigrationRejectsRestoreFromAnotherPendingOperationBeforeWriting(t *test
 	}
 	before, _ := hashFile(config.GetDBPath())
 	other := filepath.Join(filepath.Dir(dir), "another-snapshot")
-	if err := atomicWrite(pendingPath(), []byte(other), 0600); err != nil {
+	if err := atomicWrite(pendingPath(), []byte(other), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := r.run(context.Background(), Options{BackupDir: dir, Restore: true}); err == nil {
@@ -473,6 +480,7 @@ func TestMigrationRejectsRestoreFromAnotherPendingOperationBeforeWriting(t *test
 		t.Fatal("foreign recovery changed database")
 	}
 }
+
 func TestMigrationRejectsMissingDatabaseInsteadOfCreatingAnEmptyPanel(t *testing.T) {
 	r, _, dir := fixture(t)
 	_ = database.CloseDB()
@@ -486,6 +494,7 @@ func TestMigrationRejectsMissingDatabaseInsteadOfCreatingAnEmptyPanel(t *testing
 		t.Fatal("missing database recreated")
 	}
 }
+
 func TestMigrationCLIRejectsConflictingModesBeforeInitialization(t *testing.T) {
 	called := false
 	for _, args := range [][]string{{"--check-binary", "--restore"}, {"--verify-running", "--backup-dir", "/unrelated"}, {"--backup-only", "--restore"}} {
@@ -504,14 +513,14 @@ func TestMigrationPreservesGatewayDesiredStateAcrossSuccessAndRollback(t *testin
 			r, p, dir := fixture(t)
 			state := filepath.Join(filepath.Dir(dir), "gateway.env")
 			original := "NETWORK_ENABLED=1\nLAN_IFACE=eth1\n"
-			if err := os.WriteFile(state, []byte(original), 0600); err != nil {
+			if err := os.WriteFile(state, []byte(original), 0o600); err != nil {
 				t.Fatal(err)
 			}
 			oldFiles := r.files
 			r.files = func() []string { return append(oldFiles(), state) }
 			r.statePath = func() string { return state }
 			r.gateway = func(context.Context, string) (bool, func(), error) {
-				if err := os.WriteFile(state, []byte("NETWORK_ENABLED=0\nLAN_IFACE=eth1\n"), 0600); err != nil {
+				if err := os.WriteFile(state, []byte("NETWORK_ENABLED=0\nLAN_IFACE=eth1\n"), 0o600); err != nil {
 					return false, nil, err
 				}
 				err := (&service.SettingService{}).SetSingBoxConfigTemplate(`{"inbounds":[{"type":"tproxy","tag":"in-tproxy","listen":"0.0.0.0","listen_port":52345}]}`)
@@ -546,7 +555,7 @@ func TestMigrationPendingJournalBlocksPanelStartup(t *testing.T) {
 	if err := CheckPanelStartup(); err != nil {
 		t.Fatal(err)
 	}
-	if err := atomicWrite(pendingPath(), []byte("/private/recovery"), 0600); err != nil {
+	if err := atomicWrite(pendingPath(), []byte("/private/recovery"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := CheckPanelStartup(); err == nil {
@@ -591,7 +600,7 @@ func TestMigrationRejectsStaleSQLiteBackupWithoutDiscardingNewData(t *testing.T)
 func TestMigrationRecognizesResidualCoreConfigArguments(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")
-	if err := os.WriteFile(path, []byte("{}"), 0600); err != nil {
+	if err := os.WriteFile(path, []byte("{}"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	alias := filepath.Join(dir, "alias.json")
@@ -624,7 +633,7 @@ func TestMigrationRejectsStalePostgresBackupBeforeAnyWrites(t *testing.T) {
 	}
 	t.Setenv("XUI_DB_TYPE", "postgres")
 	t.Setenv("XUI_DB_DSN", "postgres://panel:secret@localhost/panel")
-	if err := os.Mkdir(dir, 0700); err != nil {
+	if err := os.Mkdir(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	identity, err := databaseIdentity()
@@ -635,7 +644,7 @@ func TestMigrationRejectsStalePostgresBackupBeforeAnyWrites(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := atomicWrite(filepath.Join(dir, "database.dump"), []byte("fixture dump"), 0600); err != nil {
+	if err := atomicWrite(filepath.Join(dir, "database.dump"), []byte("fixture dump"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	digest, err := hashFile(filepath.Join(dir, "database.dump"))

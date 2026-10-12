@@ -12,8 +12,10 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
-const youtubeEgressTag = "youtube-filter-egress"
-const youtubeEgressPort = 18081
+const (
+	youtubeEgressTag  = "youtube-filter-egress"
+	youtubeEgressPort = 18081
+)
 
 var youtubeHosts = []string{"youtube.com", "www.youtube.com", "m.youtube.com"}
 
@@ -28,6 +30,7 @@ func (s *SettingService) serverPlan() (AdBlockServerSettings, adBlockPlan, error
 	}
 	return settings, youtubeServerPlan(settings, plan), nil
 }
+
 func youtubeServerPlan(settings AdBlockServerSettings, plan adBlockPlan) adBlockPlan {
 	plan.Enabled = plan.Enabled && settings.Enabled
 	plan.Base = youtubeHosts
@@ -44,6 +47,7 @@ func youtubeServerPlan(settings AdBlockServerSettings, plan adBlockPlan) adBlock
 func excludedInfrastructure(tag string) bool {
 	return tag == "api" || tag == PanelEgressInboundTag || tag == youtubeEgressTag || strings.HasPrefix(tag, "node-egress")
 }
+
 func (s *SettingService) applyXrayYouTubeServer(cfg *xray.Config) error {
 	settings, plan, err := s.serverPlan()
 	if err != nil || !plan.Enabled {
@@ -154,6 +158,7 @@ func (s *SettingService) applyXrayYouTubeServer(cfg *xray.Config) error {
 	}
 	return nil
 }
+
 func replaceDomainSet(rule map[string]any) {
 	if _, ok := rule["rule_set"]; ok {
 		delete(rule, "rule_set")
@@ -165,6 +170,7 @@ func replaceDomainSet(rule map[string]any) {
 		}
 	}
 }
+
 func (s *SettingService) applySingBoxYouTubeServer(cfg *singbox.Config) error {
 	settings, plan, err := s.serverPlan()
 	if err != nil {
@@ -172,6 +178,7 @@ func (s *SettingService) applySingBoxYouTubeServer(cfg *singbox.Config) error {
 	}
 	return applySingBoxYouTubeServerPlan(cfg, settings, plan)
 }
+
 func applySingBoxYouTubeServerPlan(cfg *singbox.Config, settings AdBlockServerSettings, plan adBlockPlan) error {
 	if !plan.Enabled {
 		return nil

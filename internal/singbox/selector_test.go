@@ -15,7 +15,7 @@ func TestSelectorSwitchAuthenticatesAndConfirms(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/proxies/sub-auto-7" || r.Header.Get("Authorization") != "Bearer test-secret" {
 			t.Errorf("invalid request %s", r.URL)
-			w.WriteHeader(403)
+			w.WriteHeader(http.StatusForbidden)
 			return
 		}
 		if r.Method == http.MethodPut {
@@ -27,7 +27,7 @@ func TestSelectorSwitchAuthenticatesAndConfirms(t *testing.T) {
 			}
 			current = payload.Name
 			puts++
-			w.WriteHeader(204)
+			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 		_ = json.NewEncoder(w).Encode(SelectorState{Now: current, All: []string{"a", "b", "block"}})
@@ -51,6 +51,7 @@ func TestSelectorSwitchAuthenticatesAndConfirms(t *testing.T) {
 		t.Fatal("selected missing member")
 	}
 }
+
 func TestSelectorRejectsRemoteAndUnconfirmedSwitch(t *testing.T) {
 	for _, address := range []string{"example.com:9090", "192.168.1.1:9090", "https://127.0.0.1:9090", "bad"} {
 		if _, err := NewSelectorClient(address, ""); err == nil {
@@ -59,7 +60,7 @@ func TestSelectorRejectsRemoteAndUnconfirmedSwitch(t *testing.T) {
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut {
-			w.WriteHeader(204)
+			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 		_ = json.NewEncoder(w).Encode(SelectorState{Now: "a", All: []string{"a", "b"}})

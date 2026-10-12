@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
 	"github.com/SawaMEN/3x-ui/v3/internal/hiddify"
@@ -661,7 +660,6 @@ func (s *SingBoxService) ConnectionCount(ctx context.Context) (int, error) {
 		sessions, err := s.hiddifySessions(ctx)
 		return len(sessions), err
 	}
-
 }
 
 // OnlinePresence returns the current sing-box users/IPs and active inbound
@@ -671,7 +669,6 @@ func (s *SingBoxService) OnlinePresence(ctx context.Context) (map[string]map[str
 	{
 		return s.hiddifyPresence(ctx)
 	}
-
 }
 
 func (s *SingBoxService) OnlineClientIPs(ctx context.Context) (map[string]map[string]struct{}, error) {
@@ -695,12 +692,6 @@ func (s *SingBoxService) DisconnectClientIPs(ctx context.Context, email string, 
 		})
 		return err
 	}
-
-}
-
-func accumulateSingBoxTraffic(up, down *int64, uplinkDelta, downlinkDelta int64) {
-	*up = sumTrafficDelta(*up, uplinkDelta)
-	*down = sumTrafficDelta(*down, downlinkDelta)
 }
 
 func (s *SingBoxService) PollTraffic(ctx context.Context) error {
@@ -710,7 +701,6 @@ func (s *SingBoxService) PollTraffic(ctx context.Context) error {
 	// The cron callback creates a lightweight SingBoxService value every 5s;
 	// keep the native API transport package-wide so traffic polling does not
 	// repeatedly allocate a gRPC ClientConn and its background transport state.
-
 }
 
 // GetLogs returns sing-box process log lines in the same shape used by the
@@ -752,14 +742,6 @@ func (s *SingBoxService) BinaryPath() string {
 
 func (s *SingBoxService) ProcessConfigPath() string {
 	return hiddify.GetConfigPath()
-}
-
-func (s *SingBoxService) commitTraffic(inbounds []*coremodel.Traffic, clients []*coremodel.ClientTraffic) error {
-	needRestart, disabled, err := singBoxInboundService.AddTraffic(inbounds, clients)
-	if needRestart || disabled {
-		s.SetToNeedRestart()
-	}
-	return err
 }
 
 func init() {

@@ -619,7 +619,9 @@ func (s *Server) Start() (err error) {
 	}
 	s.routerMu.Unlock()
 
-	go network.ServeHTTP(s.httpServer, listener, "Subscription server")
+	go func(server *http.Server) {
+		_ = network.ServeHTTP(server, listener, "Subscription server")
+	}(s.httpServer)
 
 	return nil
 }

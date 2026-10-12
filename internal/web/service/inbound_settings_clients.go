@@ -24,9 +24,16 @@ func ParseInboundSettingsClients(settings string) ([]model.Client, error) {
 		return nil, nil
 	}
 
-	var clients []model.Client
-	if err := json.Unmarshal(payload.Clients, &clients); err != nil {
+	var entries []*model.Client
+	if err := json.Unmarshal(payload.Clients, &entries); err != nil {
 		return nil, err
+	}
+	clients := make([]model.Client, 0, len(entries))
+	for _, entry := range entries {
+		if entry == nil {
+			return nil, common.NewError("inbound client entry must be an object")
+		}
+		clients = append(clients, *entry)
 	}
 	return clients, nil
 }
