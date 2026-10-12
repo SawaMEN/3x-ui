@@ -91,7 +91,12 @@ func (g *exampleGen) forType(t TypeRef, visited map[string]bool) any {
 			return nil
 		}
 		if alias, ok := g.aliasByName[t.Name]; ok {
-			return g.forType(alias.Underlying, visited)
+			if visited[t.Name] {
+				return nil
+			}
+			next := cloneVisited(visited)
+			next[t.Name] = true
+			return g.forType(alias.Underlying, next)
 		}
 		schema, ok := g.byName[t.Name]
 		if !ok || visited[t.Name] {

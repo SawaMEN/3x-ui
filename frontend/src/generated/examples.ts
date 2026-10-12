@@ -346,6 +346,16 @@ export const EXAMPLES: Record<string, unknown> = {
     "scope": "admin",
     "token": "new-token-string"
   },
+  "Capabilities": {
+    "clashApi": false,
+    "connectionStats": false,
+    "geoIp": false,
+    "geoSite": false,
+    "hotInboundReload": false,
+    "outboundDelayProbe": false,
+    "ruleSets": false,
+    "shadowTls": false
+  },
   "Client": {
     "adTag": "0123456789abcdef0123456789abcdef",
     "allowedIPs": [
@@ -817,7 +827,11 @@ export const EXAMPLES: Record<string, unknown> = {
     "clientCount": 27,
     "configDirty": false,
     "configDirtyAt": 0,
+    "coreCapabilities": null,
+    "coreError": "",
+    "coreState": "",
     "coreType": "",
+    "coreVersion": "",
     "cpuPct": 23.5,
     "createdAt": 1700000000,
     "depletedCount": 1,
@@ -843,6 +857,7 @@ export const EXAMPLES: Record<string, unknown> = {
     "parentGuid": "",
     "pinnedCertSha256": "",
     "port": 2053,
+    "presenceRegistry": "",
     "remark": "",
     "runningCore": "",
     "scheme": "https",
@@ -858,7 +873,6 @@ export const EXAMPLES: Record<string, unknown> = {
     "updatedAt": 1700000000,
     "uptimeSecs": 86400,
     "xrayError": "",
-    "xrayState": "",
     "xrayVersion": "25.10.31"
   },
   "NodeMutationRequest": {
@@ -889,7 +903,11 @@ export const EXAMPLES: Record<string, unknown> = {
     "clientCount": 25,
     "configDirty": false,
     "configDirtyAt": 0,
+    "coreCapabilities": null,
+    "coreError": "",
+    "coreState": "",
     "coreType": "",
+    "coreVersion": "",
     "cpuPct": 12.5,
     "createdAt": 1700000000,
     "depletedCount": 1,
@@ -916,6 +934,7 @@ export const EXAMPLES: Record<string, unknown> = {
     "parentGuid": "",
     "pinnedCertSha256": "",
     "port": 2053,
+    "presenceRegistry": "running",
     "remark": "Primary edge",
     "runningCore": "",
     "scheme": "https",
@@ -930,7 +949,6 @@ export const EXAMPLES: Record<string, unknown> = {
     "updatedAt": 1700003600,
     "uptimeSecs": 86400,
     "xrayError": "",
-    "xrayState": "running",
     "xrayVersion": "25.10.31"
   },
   "OutboundTraffics": {
@@ -961,12 +979,17 @@ export const EXAMPLES: Record<string, unknown> = {
     "up": 1048576
   },
   "ProbeResultUI": {
+    "coreCapabilities": null,
+    "coreError": "",
+    "coreState": "",
     "coreType": "",
+    "coreVersion": "",
     "cpuPct": 12.5,
     "error": "",
     "latencyMs": 42,
     "memPct": 45.2,
     "panelVersion": "v3.x.x",
+    "presenceRegistry": "",
     "runningCore": "",
     "singboxError": "",
     "singboxInstalled": false,
@@ -976,7 +999,6 @@ export const EXAMPLES: Record<string, unknown> = {
     "status": "online",
     "uptimeSecs": 86400,
     "xrayError": "",
-    "xrayState": "",
     "xrayVersion": "25.10.31"
   },
   "RealityScanResult": {

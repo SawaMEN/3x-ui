@@ -3,9 +3,6 @@ import { z } from 'zod';
 export const GeoKindSchema = z.string();
 export type GeoKind = z.infer<typeof GeoKindSchema>;
 
-export const OnlineAPISupportSchema = z.number().int();
-export type OnlineAPISupport = z.infer<typeof OnlineAPISupportSchema>;
-
 export const ProcessStateSchema = z.string();
 export type ProcessState = z.infer<typeof ProcessStateSchema>;
 
@@ -364,6 +361,18 @@ export const ApiTokenViewSchema = z.object({
   token: z.string().optional(),
 });
 export type ApiTokenView = z.infer<typeof ApiTokenViewSchema>;
+
+export const CapabilitiesSchema = z.object({
+  clashApi: z.boolean(),
+  connectionStats: z.boolean(),
+  geoIp: z.boolean(),
+  geoSite: z.boolean(),
+  hotInboundReload: z.boolean(),
+  outboundDelayProbe: z.boolean(),
+  ruleSets: z.boolean(),
+  shadowTls: z.boolean(),
+});
+export type Capabilities = z.infer<typeof CapabilitiesSchema>;
 
 export const ClientSchema = z.object({
   adTag: z.string().optional(),
@@ -787,7 +796,11 @@ export const NodeSchema = z.object({
   clientCount: z.number().int(),
   configDirty: z.boolean(),
   configDirtyAt: z.number().int(),
+  coreCapabilities: z.lazy(() => CapabilitiesSchema).nullable().optional(),
+  coreError: z.string(),
+  coreState: z.string(),
   coreType: z.string(),
+  coreVersion: z.string(),
   cpuPct: z.number(),
   createdAt: z.number().int(),
   depletedCount: z.number().int(),
@@ -811,6 +824,7 @@ export const NodeSchema = z.object({
   parentGuid: z.string().optional(),
   pinnedCertSha256: z.string(),
   port: z.number().int().min(1).max(65535),
+  presenceRegistry: z.string(),
   remark: z.string(),
   runningCore: z.string(),
   scheme: z.enum(['http', 'https']),
@@ -826,7 +840,6 @@ export const NodeSchema = z.object({
   updatedAt: z.number().int(),
   uptimeSecs: z.number().int(),
   xrayError: z.string(),
-  xrayState: z.string(),
   xrayVersion: z.string(),
 });
 export type Node = z.infer<typeof NodeSchema>;
@@ -859,7 +872,11 @@ export const NodeViewSchema = z.object({
   clientCount: z.number().int(),
   configDirty: z.boolean(),
   configDirtyAt: z.number().int(),
+  coreCapabilities: z.lazy(() => CapabilitiesSchema).nullable().optional(),
+  coreError: z.string(),
+  coreState: z.string(),
   coreType: z.string(),
+  coreVersion: z.string(),
   cpuPct: z.number(),
   createdAt: z.number().int(),
   depletedCount: z.number().int(),
@@ -884,6 +901,7 @@ export const NodeViewSchema = z.object({
   parentGuid: z.string().optional(),
   pinnedCertSha256: z.string(),
   port: z.number().int(),
+  presenceRegistry: z.string(),
   remark: z.string(),
   runningCore: z.string(),
   scheme: z.string(),
@@ -898,7 +916,6 @@ export const NodeViewSchema = z.object({
   updatedAt: z.number().int(),
   uptimeSecs: z.number().int(),
   xrayError: z.string(),
-  xrayState: z.string(),
   xrayVersion: z.string(),
 });
 export type NodeView = z.infer<typeof NodeViewSchema>;
@@ -937,12 +954,17 @@ export const PeerActivitySchema = z.object({
 export type PeerActivity = z.infer<typeof PeerActivitySchema>;
 
 export const ProbeResultUISchema = z.object({
+  coreCapabilities: z.lazy(() => CapabilitiesSchema).nullable().optional(),
+  coreError: z.string(),
+  coreState: z.string(),
   coreType: z.string(),
+  coreVersion: z.string(),
   cpuPct: z.number(),
   error: z.string(),
   latencyMs: z.number().int(),
   memPct: z.number(),
   panelVersion: z.string(),
+  presenceRegistry: z.string(),
   runningCore: z.string(),
   singboxError: z.string(),
   singboxInstalled: z.boolean(),
@@ -952,7 +974,6 @@ export const ProbeResultUISchema = z.object({
   status: z.string(),
   uptimeSecs: z.number().int(),
   xrayError: z.string(),
-  xrayState: z.string(),
   xrayVersion: z.string(),
 });
 export type ProbeResultUI = z.infer<typeof ProbeResultUISchema>;

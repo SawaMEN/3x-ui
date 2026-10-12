@@ -22,6 +22,11 @@ func main() {
 func run(root, outDir string) error {
 	requests := []packageRequest{
 		{
+			Path:        resolveRel(root, "internal/core"),
+			StructAllow: setOf("Capabilities"),
+			AliasAllow:  setOf(),
+		},
+		{
 			Path: resolveRel(root, "internal/database/model"),
 			StructAllow: setOf(
 				"User",
@@ -70,11 +75,12 @@ func run(root, outDir string) error {
 			),
 		},
 		{
-			Path: resolveRel(root, "internal/xray"),
+			Path: resolveRel(root, "internal/coremodel"),
 			StructAllow: setOf(
 				"ClientTraffic",
 				"Traffic",
 			),
+			AliasAllow: setOf(),
 		},
 		{
 			Path: resolveRel(root, "internal/xray/geodata"),

@@ -1503,6 +1503,32 @@ require_repo_files() {
     done
 }
 
+prepare_release_migration() {
+    local cm_archive="$1" cm_listing cm_helper cm_installed_bin="${XUI_BIN_FOLDER:-$xui_folder/bin}"
+    [[ "$cm_installed_bin" == /* ]] || cm_installed_bin="$xui_folder/$cm_installed_bin"
+    cm_listing=$(tar -tzf "$cm_archive") || return 1
+    if grep -Fxq 'x-ui/core-migration.sh' <<< "$cm_listing"; then
+        cm_helper=$(mktemp "${xui_folder%/*}/.core-migration.XXXXXX") || return 1
+        tar -xOf "$cm_archive" x-ui/core-migration.sh > "$cm_helper" || { rm -f "$cm_helper"; return 1; }
+        source "$cm_helper"
+        rm -f "$cm_helper"
+        trap 'code=$?; core_migration_exit "$code" || code=1; exit "$code"' EXIT
+        trap 'exit 143' TERM
+        trap 'exit 130' INT
+        core_migration_prepare_archive "$cm_archive" || return 1
+    else
+        if grep -Fxq "x-ui/bin/hiddify-core-linux-$(arch)" <<< "$cm_listing" ||
+            [[ -f "$cm_installed_bin/hiddify-core-linux-$(arch)" || -f "$xui_folder/bin/hiddify-core-linux-$(arch)" ]]; then
+            echo "Release is missing its migration helper or would downgrade a migrated panel; installation was not changed" >&2
+            return 1
+        fi
+        grep -Fxq 'x-ui/x-ui' <<< "$cm_listing" && grep -Fxq "x-ui/bin/xray-linux-$(arch)" <<< "$cm_listing" || {
+            echo "Release archive is missing required panel or kernel files" >&2
+            return 1
+        }
+    fi
+}
+
 install_x-ui() {
     cd ${xui_folder%/x-ui}/
 
@@ -1582,18 +1608,9 @@ install_x-ui() {
         exit 1
     fi
 
-    # Preflight every release before extraction; existing installs also arm rollback.
-    if [[ -f "${xui_folder}-linux-$(arch).tar.gz" ]]; then
-        local cm_archive="${xui_folder}-linux-$(arch).tar.gz" cm_helper
-        cm_helper=$(mktemp "${xui_folder%/*}/.core-migration.XXXXXX") || exit 1
-        tar -xOf "$cm_archive" x-ui/core-migration.sh > "$cm_helper" || { rm -f "$cm_helper"; exit 1; }
-        source "$cm_helper"
-        rm -f "$cm_helper"
-        trap 'code=$?; core_migration_exit "$code" || code=1; exit "$code"' EXIT
-        trap 'exit 143' TERM
-        trap 'exit 130' INT
-        core_migration_prepare_archive "$cm_archive" || exit 1
-    fi
+    # New kernel releases require their transaction helper. Older stable tags
+    # can still be installed before migration, but cannot downgrade a migrated panel.
+    prepare_release_migration "${xui_folder}-linux-$(arch).tar.gz" || exit 1
 
     # Stop x-ui service and remove old resources
     local custom_bin_backup=""
@@ -1709,7 +1726,12 @@ install_x-ui() {
     fi
 
     # Check the system's architecture and rename the file accordingly.
-    chmod +x x-ui "bin/hiddify-core-linux-$(arch)"
+    chmod +x x-ui || exit 1
+    if declare -F core_migration_prepare_archive >/dev/null; then
+        chmod +x "bin/hiddify-core-linux-$(arch)" || exit 1
+    else
+        chmod +x "bin/xray-linux-$(arch)" || exit 1
+    fi
     [[ -f bin/pingtunnel ]] && chmod 0755 bin/pingtunnel
     [[ -f bin/trusttunnel_endpoint ]] && chmod 0755 bin/trusttunnel_endpoint
     if [[ -f bin/tuic-server ]]; then
@@ -1767,7 +1789,9 @@ install_x-ui() {
     if [[ "${cm_active:-0}" == 1 ]]; then
         core_migration_apply || exit 1
     else
-        core_migration_install_managed_bin || exit 1
+        if declare -F core_migration_install_managed_bin >/dev/null; then
+            core_migration_install_managed_bin || exit 1
+        fi
         config_after_install
     fi
 

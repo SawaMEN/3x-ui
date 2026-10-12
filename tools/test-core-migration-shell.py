@@ -238,4 +238,39 @@ core_migration_install_managed_bin
             self.assertIn("core_migration_exit", source)
         self.assertNotIn("trap - EXIT INT TERM", (ROOT / "install.sh").read_text())
 
+class ReleaseCompatibilityTests(unittest.TestCase):
+    def test_release_selection_preserves_migration_guards(self):
+        source = (ROOT / "install.sh").read_text()
+        start = source.index("prepare_release_migration() {")
+        function = source[start:source.index("\n}\n", start) + 3]
+        for kind, installed, expected in (("legacy", False, 0), ("legacy", True, 1),
+                                          ("broken-new", False, 1), ("new", False, 0)):
+            with self.subTest(kind=kind, installed=installed), tempfile.TemporaryDirectory() as raw:
+                base = Path(raw)
+                bundle = base / "bundle" / "x-ui"
+                (bundle / "bin").mkdir(parents=True)
+                (bundle / "x-ui").write_text("panel")
+                binary = "xray-linux-amd64" if kind == "legacy" else "hiddify-core-linux-amd64"
+                (bundle / "bin" / binary).write_text("kernel")
+                if kind == "new":
+                    (bundle / "core-migration.sh").write_text(
+                        'core_migration_prepare_archive() { touch "$TEST_PREFLIGHT"; }\n'
+                        'core_migration_exit() { return 0; }\n')
+                folder = base / "installed"
+                (folder / "bin").mkdir(parents=True)
+                if installed:
+                    (folder / "bin" / "hiddify-core-linux-amd64").write_text("existing kernel")
+                archive = base / "release.tar.gz"
+                with tarfile.open(archive, "w:gz") as target:
+                    target.add(bundle, arcname="x-ui")
+                env = dict(os.environ, ARCHIVE=str(archive), xui_folder=str(folder),
+                           TEST_PREFLIGHT=str(base / "preflight"))
+                result = subprocess.run(["bash", "-c", function +
+                                         '\narch() { echo amd64; }\nprepare_release_migration "$ARCHIVE"'],
+                                        env=env, capture_output=True, text=True)
+                self.assertEqual(result.returncode, expected, result.stderr)
+                self.assertEqual((base / "preflight").exists(), kind == "new")
+                if installed:
+                    self.assertEqual((folder / "bin" / "hiddify-core-linux-amd64").read_text(), "existing kernel")
+
 if __name__ == "__main__": unittest.main()
