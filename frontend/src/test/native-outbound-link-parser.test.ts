@@ -63,7 +63,7 @@ describe('native outbound link import', () => {
     ).toMatchObject({
       password: 'secret',
       version: 3,
-      tls: { server_name: 'cover.example' },
+      tls: { enabled: true, server_name: 'cover.example' },
     });
     expect(
       parseNativeOutboundLink('mieru://alice:password@server.example:8080?transport=tcp')?.settings,
