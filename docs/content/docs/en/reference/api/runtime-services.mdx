@@ -32,9 +32,6 @@ _openapi:
       title: Return Sudoku installation status.
       url: '#return-sudoku-installation-status'
     - depth: 2
-      title: Return available sing-box versions.
-      url: '#return-available-sing-box-versions'
-    - depth: 2
       title: Enable or disable a VK TURN proxy client for an inbound.
       url: '#enable-or-disable-a-vk-turn-proxy-client-for-an-inbound'
     - depth: 2
@@ -62,17 +59,8 @@ _openapi:
       title: Upload a VK TURN proxy package.
       url: '#upload-a-vk-turn-proxy-package'
     - depth: 2
-      title: Install sing-box using the configured channel.
-      url: '#install-sing-box-using-the-configured-channel'
-    - depth: 2
       title: Install or update the managed Sudoku tunnel binary.
       url: '#install-or-update-the-managed-sudoku-tunnel-binary'
-    - depth: 2
-      title: Install a specific sing-box version.
-      url: '#install-a-specific-sing-box-version'
-    - depth: 2
-      title: Uninstall sing-box.
-      url: '#uninstall-sing-box'
     - depth: 2
       title: Return the editable sing-box configuration.
       url: '#return-the-editable-sing-box-configuration'
@@ -221,7 +209,7 @@ export default function Layout(props) {
   return (
     <>
       {props.children}
-      <Comp document="./public/openapi.json" webhooks={[]} operations={[{"path":"/panel/api/inbounds/{id}/vk-turn-proxy/export-all","method":"get"},{"path":"/panel/api/inbounds/{id}/vk-turn-proxy/export/{clientId}","method":"get"},{"path":"/panel/api/inbounds/{id}/vk-turn-proxy/peer-options","method":"get"},{"path":"/panel/api/server/coreConfigJson","method":"get"},{"path":"/panel/api/server/vk-turn-proxy/status","method":"get"},{"path":"/panel/api/server/vk-turn-proxy/versions","method":"get"},{"path":"/panel/api/setting/singbox/status","method":"get"},{"path":"/panel/api/setting/hiddify/status","method":"get"},{"path":"/panel/api/setting/sudoku/status","method":"get"},{"path":"/panel/api/setting/singbox/versions","method":"get"},{"path":"/panel/api/inbounds/{id}/vk-turn-proxy/clients/{clientId}/enable","method":"post"},{"path":"/panel/api/server/restartCoreService","method":"post"},{"path":"/panel/api/server/stopCoreService","method":"post"},{"path":"/panel/api/server/vk-turn-proxy/install/{version}","method":"post"},{"path":"/panel/api/server/vk-turn-proxy/logs/{count}","method":"post"},{"path":"/panel/api/server/vk-turn-proxy/restart","method":"post"},{"path":"/panel/api/server/vk-turn-proxy/start","method":"post"},{"path":"/panel/api/server/vk-turn-proxy/stop","method":"post"},{"path":"/panel/api/server/vk-turn-proxy/upload","method":"post"},{"path":"/panel/api/setting/singbox/install","method":"post"},{"path":"/panel/api/setting/sudoku/update","method":"post"},{"path":"/panel/api/setting/singbox/install/{version}","method":"post"},{"path":"/panel/api/setting/singbox/uninstall","method":"post"},{"path":"/panel/api/setting/singbox/config","method":"get"},{"path":"/panel/api/setting/singbox/config","method":"post"},{"path":"/panel/api/setting/singbox/config/reset","method":"post"},{"path":"/panel/api/setting/swap/status","method":"get"},{"path":"/panel/api/setting/swap/create","method":"post"},{"path":"/panel/api/setting/swap/delete","method":"post"},{"path":"/panel/api/setting/swap/swappiness","method":"post"},{"path":"/panel/api/setting/swap/zram/create","method":"post"},{"path":"/panel/api/setting/swap/zram/delete","method":"post"},{"path":"/panel/api/setting/swap/zram/install","method":"post"},{"path":"/panel/api/setting/swap/zram/reinstall","method":"post"},{"path":"/panel/api/setting/system/update/status","method":"get"},{"path":"/panel/api/setting/system/update/check","method":"post"},{"path":"/panel/api/setting/system/update/apply","method":"post"},{"path":"/panel/api/setting/system/update/reboot","method":"post"},{"path":"/panel/api/telemt/webproxy/status","method":"get"},{"path":"/panel/api/telemt/webproxy/enable","method":"post"},{"path":"/panel/api/telemt/webproxy/disable","method":"post"}]} showTitle />
+      <Comp document="./public/openapi.json" webhooks={[]} operations={[{"path":"/panel/api/inbounds/{id}/vk-turn-proxy/export-all","method":"get"},{"path":"/panel/api/inbounds/{id}/vk-turn-proxy/export/{clientId}","method":"get"},{"path":"/panel/api/inbounds/{id}/vk-turn-proxy/peer-options","method":"get"},{"path":"/panel/api/server/coreConfigJson","method":"get"},{"path":"/panel/api/server/vk-turn-proxy/status","method":"get"},{"path":"/panel/api/server/vk-turn-proxy/versions","method":"get"},{"path":"/panel/api/setting/singbox/status","method":"get"},{"path":"/panel/api/setting/hiddify/status","method":"get"},{"path":"/panel/api/setting/sudoku/status","method":"get"},{"path":"/panel/api/inbounds/{id}/vk-turn-proxy/clients/{clientId}/enable","method":"post"},{"path":"/panel/api/server/restartCoreService","method":"post"},{"path":"/panel/api/server/stopCoreService","method":"post"},{"path":"/panel/api/server/vk-turn-proxy/install/{version}","method":"post"},{"path":"/panel/api/server/vk-turn-proxy/logs/{count}","method":"post"},{"path":"/panel/api/server/vk-turn-proxy/restart","method":"post"},{"path":"/panel/api/server/vk-turn-proxy/start","method":"post"},{"path":"/panel/api/server/vk-turn-proxy/stop","method":"post"},{"path":"/panel/api/server/vk-turn-proxy/upload","method":"post"},{"path":"/panel/api/setting/sudoku/update","method":"post"},{"path":"/panel/api/setting/singbox/config","method":"get"},{"path":"/panel/api/setting/singbox/config","method":"post"},{"path":"/panel/api/setting/singbox/config/reset","method":"post"},{"path":"/panel/api/setting/swap/status","method":"get"},{"path":"/panel/api/setting/swap/create","method":"post"},{"path":"/panel/api/setting/swap/delete","method":"post"},{"path":"/panel/api/setting/swap/swappiness","method":"post"},{"path":"/panel/api/setting/swap/zram/create","method":"post"},{"path":"/panel/api/setting/swap/zram/delete","method":"post"},{"path":"/panel/api/setting/swap/zram/install","method":"post"},{"path":"/panel/api/setting/swap/zram/reinstall","method":"post"},{"path":"/panel/api/setting/system/update/status","method":"get"},{"path":"/panel/api/setting/system/update/check","method":"post"},{"path":"/panel/api/setting/system/update/apply","method":"post"},{"path":"/panel/api/setting/system/update/reboot","method":"post"},{"path":"/panel/api/telemt/webproxy/status","method":"get"},{"path":"/panel/api/telemt/webproxy/enable","method":"post"},{"path":"/panel/api/telemt/webproxy/disable","method":"post"}]} showTitle />
     </>
   );
 }

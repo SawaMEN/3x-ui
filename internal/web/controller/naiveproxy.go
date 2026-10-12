@@ -19,7 +19,6 @@ func NewNaiveProxyController(g *gin.RouterGroup) *NaiveProxyController {
 	group := g.Group("/naiveproxy")
 	group.GET("/status", a.status)
 	group.POST("/update", a.update)
-	naiveproxy.StartAutomaticLifecycle()
 	return a
 }
 
