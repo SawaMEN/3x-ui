@@ -498,10 +498,10 @@ func (a *SUBController) subs(c *gin.Context) {
 	if !a.enforceHwid(c) {
 		return
 	}
-	if strings.Contains(strings.ToLower(userAgent), "hiddify") && a.hasShadowTLSSubscription(c.Param("subid")) &&
+	if strings.Contains(strings.ToLower(userAgent), "hiddify") && a.hasNativeTLSSubscription(c.Param("subid")) &&
 		a.serveJsonBody(c, true, "application/json; charset=utf-8", false, true) {
 		a.recordSubscriptionFetch(c)
-		logSubscriptionRoute(userAgent, "hiddify-shadowtls-sing-box")
+		logSubscriptionRoute(userAgent, "hiddify-native-sing-box")
 		return
 	}
 	if shouldAutoServeClash(a.subClashAutoDetect, a.clashEnabled, false, userAgent, a.clashUserAgent) && a.serveClashBody(c, false, false) {
@@ -546,13 +546,13 @@ func (a *SUBController) subs(c *gin.Context) {
 	}
 }
 
-func (a *SUBController) hasShadowTLSSubscription(subID string) bool {
+func (a *SUBController) hasNativeTLSSubscription(subID string) bool {
 	inbounds, err := a.subService.getInboundsBySubId(subID)
 	if err != nil {
 		return false
 	}
 	for _, inbound := range inbounds {
-		if inbound.Protocol == "shadowtls" || model.ShadowTLSTransport(inbound.Settings) != nil {
+		if inbound.Protocol == model.AnyTLS || inbound.Protocol == model.ShadowTLS || model.ShadowTLSTransport(inbound.Settings) != nil {
 			return true
 		}
 	}
