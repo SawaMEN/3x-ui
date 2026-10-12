@@ -1,4 +1,4 @@
-import { Alert, Button, Card, Col, Row, Select, Space, Switch, Tag } from 'antd';
+import { Alert, Button, Card, Col, Row, Select, Space, Switch } from 'antd';
 import { DatabaseOutlined, ExportOutlined, SafetyOutlined, SwapOutlined } from '@ant-design/icons';
 import {
   applyDnsPreset,
@@ -52,8 +52,7 @@ export default function SimpleSettings({ config, onChange, section = 'basic', on
       {section === 'basic' && (
         <>
           <Card className="singbox-overview">
-            <Tag color="blue">sing-box</Tag>
-            <h1 className="singbox-overview-title">Быстрая настройка</h1>
+            <h2 className="singbox-overview-title">Быстрая настройка</h2>
             <p className="singbox-overview-description">
               DNS, выход в интернет и журнал — основные настройки сервера. Панель автоматически
               формирует входящие подключения, учёт трафика и служебные API.
