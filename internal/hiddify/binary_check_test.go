@@ -34,9 +34,11 @@ func TestPinnedBinaryChecksGeneratedConfigurations(t *testing.T) {
 		cmd.Dir = filepath.Dir(binary)
 		return cmd.CombinedOutput()
 	}
+	t.Setenv("XUI_BIN_FOLDER", filepath.Dir(binary))
+	identity, identityErr := NewProcess(GetConfigPath(), true).Version(context.Background())
 	version, err := run("version")
-	if err != nil || !strings.Contains(string(version), "hiddify-core version "+TargetVersion) || !strings.Contains(string(version), "with_v2ray_api") {
-		t.Fatalf("not the pinned panel build: %v: %s", err, version)
+	if err != nil || identityErr != nil || !strings.Contains(string(version), "hiddify-core version "+identity) || !strings.Contains(string(version), "with_v2ray_api") {
+		t.Fatalf("invalid downloaded panel core: execution=%v identity=%v output=%s", err, identityErr, version)
 	}
 	pairOutput, err := run("vlessenc", "--json")
 	if err != nil {

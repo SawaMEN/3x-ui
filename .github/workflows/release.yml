@@ -13,6 +13,7 @@ on:
       - "go.mod"
       - "go.sum"
       - "**.sh"
+      - "tools/fetch-latest-kernel.py"
       - "frontend/**"
       - "x-ui.service.debian"
       - "x-ui.service.arch"
@@ -31,6 +32,22 @@ on:
       - "docs/hiddify-core-target.json"
 
 jobs:
+  resolve-kernel:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Resolve latest published kernel release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag=$(python3 tools/fetch-latest-kernel.py --latest-tag)
+          echo "Kernel version: $tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
   frontend:
     name: Build frontend once
     runs-on: ubuntu-latest
@@ -73,7 +90,7 @@ jobs:
           compression-level: 0
 
   build:
-    needs: [frontend]
+    needs: [frontend, resolve-kernel]
     permissions:
       contents: write
     env:
@@ -233,15 +250,17 @@ jobs:
 
           cd ../..
 
-      - name: Install Cronet static linker
-        run: sudo apt-get update && sudo apt-get install -y lld
-
-      - name: Build pinned Sing-box
+      - name: Include verified latest Sing-box release
         env:
-          SINGBOX_CRONET_LINKAGE: musl
-          GOOS: linux
-          GOARCH: ${{ matrix.platform }}
-        run: bash tools/build-hiddify-core.sh "$PWD/x-ui/bin"
+          GH_TOKEN: ${{ github.token }}
+          KERNEL_TAG: ${{ needs.resolve-kernel.outputs.tag }}
+        run: |
+          python3 tools/fetch-latest-kernel.py --arch "${{ matrix.platform }}" --tag "$KERNEL_TAG" --output "$PWD/x-ui/bin"
+      - name: Check panel configuration with downloaded binary
+        if: matrix.platform == 'amd64'
+        env:
+          HIDDIFY_CONFIG_CHECK_BINARY: ${{ github.workspace }}/x-ui/bin/hiddify-core-linux-amd64
+        run: go test ./internal/hiddify -run '^TestPinnedBinaryChecksGeneratedConfigurations$' -count=1
 
       - name: Package
         run: |
