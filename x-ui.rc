@@ -52,7 +52,11 @@ setup_swap() {
 
 start_pre() {
     cd /usr/local/x-ui || return 1
-    setup_swap || true
+    # Avoid silently allocating disk or changing global swappiness.
+    # Administrators can opt in with /etc/x-ui/enable-managed-swap.
+    if [ -f /etc/x-ui/enable-managed-swap ]; then
+        setup_swap || true
+    fi
 }
 
 reload() {
