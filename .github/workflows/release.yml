@@ -38,6 +38,8 @@ jobs:
       tag: ${{ steps.release.outputs.tag }}
     steps:
       - uses: actions/checkout@v7
+      - name: Test stable-release selection
+        run: python3 -m unittest discover -s tools -p 'test_fetch_latest_kernel.py'
       - name: Resolve latest stable kernel release
         id: release
         env:
