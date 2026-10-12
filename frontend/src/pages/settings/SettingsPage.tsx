@@ -158,27 +158,52 @@ export default function SettingsPage() {
 
   function rebuildUrlAfterRestart(): string {
     const { webDomain, webPort, webBasePath, webCertFile, webKeyFile } = allSetting;
-    const newProtocol = webCertFile || webKeyFile ? 'https:' : 'http:';
+    const url = new URL(window.location.href);
 
-    let base = webBasePath ? webBasePath.replace(/^\//, '') : '';
-    if (base && !base.endsWith('/')) base += '/';
+    // webDomain is also enforced by the backend Host validator: continuing
+    // to use the old hostname after changing it results in HTTP 403.
+    const nextHost = webDomain?.trim() || entryHost;
+    url.hostname = nextHost.includes(':') ? `[${nextHost.replace(/^\\[|\\]$/g, '')}]` : nextHost;
 
-    if (!entryIsIP) {
-      const url = new URL(window.location.href);
-      url.pathname = `/${base}panel/settings`;
-      url.protocol = newProtocol;
-      return url.toString();
+    // Preserve the public HTTPS origin when TLS is terminated by a reverse
+    // proxy. A directly accessed panel should instead use its configured port.
+    if (webCertFile && webKeyFile) {
+      url.protocol = 'https:';
+    } else if (entryIsIP) {
+      url.protocol = 'http:';
+    }
+    if (entryIsIP || (entryPort && !['80', '443'].includes(entryPort))) {
+      if (webPort) url.port = String(webPort);
     }
 
-    let finalHost = entryHost;
-    let finalPort = entryPort || '';
-    if (webDomain && isIp(webDomain)) finalHost = webDomain;
-    if (webPort && Number(webPort) !== Number(entryPort)) finalPort = String(webPort);
-
-    const url = new URL(`${newProtocol}//${finalHost}`);
-    if (finalPort) url.port = finalPort;
+    let base = webBasePath ? webBasePath.replace(/^\\/+/, '') : '';
+    if (base && !base.endsWith('/')) base += '/';
     url.pathname = `/${base}panel/settings`;
+    url.search = '';
+    url.hash = '';
     return url.toString();
+  }
+
+  async function waitForRestartedPanel(target: string): Promise<boolean> {
+    // The backend schedules SIGHUP in 3 seconds. Do not mistake the old
+    // listener for the restarted one while it is still serving requests.
+    await PromiseUtil.sleep(3500);
+    for (let attempt = 0; attempt < 20; attempt++) {
+      try {
+        // A changed hostname/port may be cross-origin. no-cors permits a
+        // reachability probe without depending on panel CORS configuration.
+        const response = await fetch(target, {
+          mode: 'no-cors',
+          cache: 'no-store',
+          signal: AbortSignal.timeout(2000),
+        });
+        if (response.ok || response.type === 'opaque') return true;
+      } catch {
+        // The listener may still be restarting; retry within a fixed limit.
+      }
+      await PromiseUtil.sleep(1000);
+    }
+    return false;
   }
 
   async function onSave() {
@@ -208,8 +233,19 @@ export default function SettingsPage() {
         try {
           const msg = (await HttpUtil.post('/panel/api/setting/restartPanel')) as ApiMsg;
           if (!msg?.success) return;
-          await PromiseUtil.sleep(5000);
-          window.location.replace(rebuildUrlAfterRestart());
+          const target = rebuildUrlAfterRestart();
+          if (await waitForRestartedPanel(target)) {
+            window.location.replace(target);
+          } else {
+            modal.info({
+              title: t('pages.settings.restartPanel'),
+              content: (
+                <a href={target} rel="noreferrer">
+                  {target}
+                </a>
+              ),
+            });
+          }
         } finally {
           setSpinning(false);
         }
