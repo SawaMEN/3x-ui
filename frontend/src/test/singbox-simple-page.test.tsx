@@ -184,8 +184,8 @@ it.each(['/outbound', '/routing'])('opens the matching native section for %s', a
   expect(
     await screen.findByText(
       path === '/outbound'
-        ? 'Настройки sing-box · Исходящие'
-        : 'Настройки sing-box · Маршрутизация',
+        ? 'Standard core settings · Исходящие'
+        : 'Standard core settings · Маршрутизация',
     ),
   ).toBeTruthy();
 });

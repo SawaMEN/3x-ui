@@ -42,6 +42,7 @@ import { HttpUtil } from '@/utils';
 import { useTheme } from '@/hooks/useTheme';
 import './SingBoxPage.css';
 import SimpleSettings from './SimpleSettings';
+import CoreSelection from './CoreSelection';
 import {
   outboundDefaults,
   outboundErrors,
@@ -2745,6 +2746,7 @@ export default function SingBoxPage() {
         <Layout className="content-shell">
           <Layout.Content id="content-layout" className="content-area">
             <FloatButton.BackTop target={scrollTarget} visibilityHeight={200} />
+            {activeSection === 'basic' && <CoreSelection />}
             <Spin spinning={loading || saving} delay={150} description={t('loading')} size="large">
               {fetchError ? (
                 <Result
@@ -2761,7 +2763,9 @@ export default function SingBoxPage() {
                 <Space orientation="vertical" size={12} style={{ width: '100%' }}>
                   <Card className="singbox-toolbar">
                     <div className="singbox-toolbar-heading">
-                      <strong>Настройки sing-box · {SECTION_LABELS[activeSection]}</strong>
+                      <strong>
+                        {t('pages.coreSelection.settings')} · {SECTION_LABELS[activeSection]}
+                      </strong>
                       <span>Сохранение применит настройки и перезапустит работающее ядро.</span>
                     </div>
                     <Row gutter={[12, 12]} align="middle">
