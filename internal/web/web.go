@@ -315,7 +315,7 @@ const (
 	cadenceOutboundSub   = "@every 5m"
 	cadenceReapOrphans   = "@every 5m"
 	cadenceRemoteRouting = "@every 5m"
-	cadenceXrayLogPrune  = "@every 10m"
+	cadenceXrayLogPrune  = "@every 1m"
 	cadenceCheckHash     = "@every 2m"
 	// cpu.Percent samples over a full minute (blocking), so a finer cadence just
 	// stacks overlapping samplers; subscribers rate-limit alerts to 1/min anyway.

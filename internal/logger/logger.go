@@ -58,7 +58,7 @@ func init() {
 }
 
 // InitLogger initializes dual logging backends: console/syslog and file.
-// Console logging uses the specified level, file logging always uses DEBUG level.
+// Both backends use the configured level to avoid writing unwanted debug logs.
 func InitLogger(level logging.Level) {
 	newLogger := logging.MustGetLogger("x-ui")
 	backends := make([]logging.Backend, 0, 2)
@@ -69,10 +69,10 @@ func InitLogger(level logging.Level) {
 	leveledBackend.SetLevel(level, "x-ui")
 	backends = append(backends, leveledBackend)
 
-	// File backend with DEBUG level for comprehensive logging
+	// File backend follows the same level as the console.
 	if fileBackend := initFileBackend(); fileBackend != nil {
 		leveledBackend := logging.AddModuleLevel(fileBackend)
-		leveledBackend.SetLevel(logging.DEBUG, "x-ui")
+		leveledBackend.SetLevel(level, "x-ui")
 		backends = append(backends, leveledBackend)
 	}
 

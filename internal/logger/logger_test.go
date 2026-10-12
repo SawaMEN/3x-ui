@@ -2,11 +2,30 @@ package logger
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
 	golog "github.com/op/go-logging"
 )
+
+func TestFileLoggerRespectsConfiguredLevel(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XUI_LOG_FOLDER", dir)
+	InitLogger(golog.WARNING)
+	t.Cleanup(CloseLogger)
+	Debug("filtered-debug-marker")
+	Warning("retained-warning-marker")
+	data, err := os.ReadFile(filepath.Join(dir, logFileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "filtered-debug-marker") || !strings.Contains(string(data), "retained-warning-marker") {
+		t.Fatalf("configured file log level ignored: %s", data)
+	}
+}
 
 // TestGetLogs_ReturnsAtMostC guards the documented "up to c entries" contract.
 // The loop condition must cap output at c (ERROR entries are queried at "debug"
