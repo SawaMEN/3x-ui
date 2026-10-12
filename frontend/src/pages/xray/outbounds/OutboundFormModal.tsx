@@ -1,14 +1,15 @@
 import AdditionalOutboundEditor from './AdditionalOutboundEditor';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Form, Input, InputNumber, Modal, Radio, Select, Space, Tabs, message } from 'antd';
+import { Alert, Form, Input, InputNumber, Modal, Radio, Select, Space, Tabs, Typography, message } from 'antd';
 import { Controller, FormProvider, useForm, useWatch } from 'react-hook-form';
 import { FinalMaskField, SniffingField } from '@/lib/xray/forms/fields';
 import { FormField, rhfZodValidate } from '@/components/form/rhf';
 import { JsonEditor } from '@/components/form';
-import { HttpUtil, Wireguard } from '@/utils';
+import { Base64, HttpUtil, Wireguard } from '@/utils';
 import { formValuesToWirePayload, rawOutboundToFormValues } from '@/lib/xray/outbound-form-adapter';
 import { parseOutboundLink } from '@/lib/xray/outbound-link-parser';
+import { parseNativeOutboundLink } from '@/lib/xray/native-outbound-link-parser';
 import { XMUX_FRESH_DEFAULTS } from '@/schemas/protocols/stream/xhttp';
 import {
   OutboundFormBaseSchema,
@@ -40,6 +41,7 @@ import {
 import {
   buildNativeSingBoxOutbound,
   normalizeOutboundJsonForPanel,
+  normalizeOutboundJsonImport,
 } from './singbox-native-outbound';
 import {
   BlackholeFields,
@@ -104,9 +106,7 @@ export default function OutboundFormModal({
   const [linkInput, setLinkInput] = useState('');
 
   const isEdit = outboundProp != null;
-  const title = isEdit
-    ? `${t('edit')} ${t('pages.xray.Outbounds')}`
-    : `+ ${t('pages.xray.Outbounds')}`;
+  const title = isEdit ? 'Редактировать outbound' : 'Новый outbound';
   const okText = isEdit ? t('pages.clients.submitEdit') : t('create');
 
   const tag = (useWatch({ control: methods.control, name: 'tag' }) ?? '') as string;
@@ -136,52 +136,67 @@ export default function OutboundFormModal({
   const tlsFlowAllowed = canEnableTlsFlow({ protocol, streamSettings: { network, security } });
 
   /*
-   * Parse a share link (vmess:// / vless:// / trojan:// / ss:// /
-   * hysteria2:// / wireguard://) and replace form state with the result.
-   * The current tag is preserved when the parsed link doesn't carry one.
+   * Import a core-native URI, legacy URI, single JSON outbound or base64 JSON
+   * without forcing native settings through the typed Xray form.
+   * Multiple JSON outbounds belong in the subscription/outbound list importer.
    */
   async function importLink() {
     const link = linkInput.trim();
     if (!link) return;
     let parsed: Record<string, unknown> | null = null;
-    if (link.startsWith('fptn:') || link.startsWith('openflux://')) {
-      const result = await HttpUtil.post(
-        '/panel/api/server/externalvpn/parse-link',
-        { link },
-        { headers: { 'Content-Type': 'application/json' } },
-      );
-      if (!result?.success) {
-        messageApi.error(result?.msg || 'Wrong Link!');
-        return;
+    try {
+      const isJson = link.startsWith('{') || link.startsWith('[');
+      const decodeJson = (raw: string): Record<string, unknown> => {
+        const normalized = normalizeOutboundJsonImport(JSON.parse(raw) as unknown);
+        if (normalized.length !== 1) throw new Error('Вставьте один outbound. Для списка используйте импорт подписки.');
+        return normalized[0];
+      };
+      if (isJson) {
+        parsed = decodeJson(link);
+      } else if (link.startsWith('fptn:') || link.startsWith('openflux://')) {
+        const result = await HttpUtil.post(
+          '/panel/api/server/externalvpn/parse-link',
+          { link },
+          { headers: { 'Content-Type': 'application/json' } },
+        );
+        if (!result?.success) throw new Error(result?.msg || 'Не удалось разобрать ссылку');
+        parsed = result.obj as Record<string, unknown>;
+      } else {
+        parsed = parseOutboundLink(link) ?? parseNativeOutboundLink(link);
+        if (!parsed && !link.includes('://')) {
+          try { parsed = decodeJson(Base64.decode(link)); } catch { /* Not a JSON blob. */ }
+        }
       }
-      parsed = result.obj as Record<string, unknown>;
-    } else {
-      parsed = parseOutboundLink(link);
-    }
-    if (!parsed) {
-      messageApi.error('Wrong Link!');
+    } catch (error) {
+      messageApi.error((error as Error).message || 'Не удалось импортировать ссылку');
       return;
     }
-    if (!supportsBasicOutboundForm(parsed.protocol)) {
-      setJsonText(JSON.stringify(parsed, null, 2));
-      setJsonDirty(false);
-      setLinkInput('');
-      switchTab('2');
+    if (!parsed) {
+      messageApi.error('Неизвестный формат. Для протоколов без share URI используйте JSON ядра.');
       return;
     }
     const currentTag = methods.getValues('tag');
     if (!parsed.tag && currentTag) parsed.tag = currentTag;
+    if (!supportsBasicOutboundForm(parsed.protocol)) {
+      setJsonText(JSON.stringify(parsed, null, 2));
+      setJsonDirty(false);
+      setLinkInput('');
+      messageApi.success('Параметры загружены в JSON без потери дополнительных полей');
+      switchTab('2');
+      return;
+    }
     const next = rawOutboundToFormValues(parsed);
     methods.reset(next);
     setJsonText(JSON.stringify(formValuesToWirePayload(next), null, 2));
     setJsonDirty(false);
     setLinkInput('');
-    messageApi.success('Link imported successfully');
+    messageApi.success('Настройки соединения импортированы');
     switchTab('1');
   }
 
   useEffect(() => {
     if (!open) return;
+    setLinkInput('');
 
     // Native/future sing-box outbounds may not have a typed Basic form yet.
     // Preserve their JSON byte-for-byte semantically instead of passing them
@@ -297,6 +312,9 @@ export default function OutboundFormModal({
     }
     cleaned.security = next;
     methods.setValue('streamSettings', cleaned as StreamValue);
+    // Vision is valid only with supported TLS/Reality transport.
+    if (protocol === 'vless' && next === 'none' && flow === 'xtls-rprx-vision')
+      methods.setValue('settings.flow', '');
   }
 
   /*
@@ -306,7 +324,11 @@ export default function OutboundFormModal({
    */
   function onNetworkChange(next: string) {
     const stream = (methods.getValues('streamSettings') ?? {}) as Record<string, unknown>;
-    methods.setValue('streamSettings', applyNetworkChange(protocol, stream, next) as StreamValue);
+    const updated = applyNetworkChange(protocol, stream, next);
+    methods.setValue('streamSettings', updated as StreamValue);
+    if (protocol === 'vless' && flow === 'xtls-rprx-vision' &&
+      (next !== 'tcp' || updated.security === 'none'))
+      methods.setValue('settings.flow', '');
   }
 
   function onXmuxToggle(checked: boolean) {
@@ -441,11 +463,18 @@ export default function OutboundFormModal({
         okText={okText}
         cancelText={t('close')}
         mask={{ closable: false }}
-        width={780}
+        width={960}
+        className="outbound-form-modal"
         onOk={onOk}
         onCancel={onClose}
         destroyOnHidden
       >
+        <div className="outbound-form-heading">
+          <Typography.Text strong>Параметры исходящего подключения</Typography.Text>
+          <Typography.Text type="secondary">
+            Автоматическая синхронизация протокола, транспорта и защиты. JSON доступен для всех параметров ядра.
+          </Typography.Text>
+        </div>
         <FormProvider {...methods}>
           <Form
             colon={false}
@@ -454,12 +483,13 @@ export default function OutboundFormModal({
             labelWrap
           >
             <Tabs
+              className="outbound-form-tabs"
               activeKey={activeKey}
               onChange={onTabChange}
               items={[
                 {
                   key: '1',
-                  label: t('pages.xray.basicTemplate'),
+                  label: 'Визуальный редактор',
                   children: (
                     <>
                       <FormField
@@ -685,19 +715,32 @@ export default function OutboundFormModal({
                 },
                 {
                   key: '2',
-                  label: 'JSON',
+                  label: 'JSON и импорт',
                   children: (
                     <Space
                       orientation="vertical"
                       size={10}
                       style={{ width: '100%', marginTop: 10 }}
                     >
-                      <Input.Search
-                        value={linkInput}
-                        placeholder="vless:// snell:// fptn: openflux://"
-                        enterButton="Import"
-                        onChange={(e) => setLinkInput(e.target.value)}
-                        onSearch={importLink}
+                      <div className="outbound-form-import">
+                        <Typography.Text strong>Импорт конфигурации</Typography.Text>
+                        <Typography.Text type="secondary">
+                          Вставьте ссылку протокола, один JSON outbound или base64 JSON.
+                          Параметры native sing-box сохраняются в JSON без преобразования.
+                        </Typography.Text>
+                        <Input.Search
+                          value={linkInput}
+                          placeholder="vless://, anytls://, tuic://, hysteria://, JSON..."
+                          enterButton="Импортировать"
+                          onChange={(e) => setLinkInput(e.target.value)}
+                          onSearch={importLink}
+                        />
+                      </div>
+                      <Alert
+                        type="info"
+                        showIcon
+                        title="JSON является источником истины для расширенных протоколов"
+                        description="Если у протокола нет стандартной ссылки, вставьте его полный native JSON. Неизвестные ядру поля проверяются при сохранении сервером."
                       />
                       <AdditionalOutboundEditor
                         text={jsonText}
