@@ -1,3 +1,33 @@
+--- a/experimental/v2rayapi/server.go
++++ b/experimental/v2rayapi/server.go
+@@ -78,5 +78,8 @@
+ }
+ 
+ func (s *Server) StatsService() adapter.ConnectionTracker {
++	if s.statsService == nil {
++		return nil
++	}
+ 	return s.statsService
+ }
+--- a/experimental/v2rayapi/stats.go
++++ b/experimental/v2rayapi/stats.go
+@@ -278,3 +278,16 @@
+ 	s.counters[name] = counter
+ 	return counter
+ }
++
++// RoutedOutboundConnection counts physical outbound I/O with outbound directions.
++func (s *StatsService) RoutedOutboundConnection(ctx context.Context, conn net.Conn, outbound adapter.Outbound) net.Conn {
++	tag := outbound.Tag()
++	if tag == "" || !s.outbounds[tag] {
++		return conn
++	}
++	s.access.Lock()
++	up := s.loadOrCreateCounter("outbound>>>" + tag + ">>>traffic>>>uplink")
++	down := s.loadOrCreateCounter("outbound>>>" + tag + ">>>traffic>>>downlink")
++	s.access.Unlock()
++	return bufio.NewInt64CounterConn(conn, []*atomic.Int64{down}, []*atomic.Int64{up})
++}
 --- a/option/vless.go
 +++ b/option/vless.go
 @@ -10,15 +10,23 @@
@@ -174,7 +204,7 @@
  		h.logger.InfoContext(ctx, "outbound connection to ", destination)
 --- /dev/null
 +++ b/protocol/vless/xui_reverse.go
-@@ -0,0 +1,599 @@
+@@ -0,0 +1,606 @@
 +package vless
 +
 +import (
@@ -504,6 +534,13 @@
 +				err = context.DeadlineExceeded
 +			}
 +			if err == nil {
++				if api := service.FromContext[adapter.V2RayServer](ctx); api != nil {
++					if tracker, ok := api.StatsService().(interface {
++						RoutedOutboundConnection(context.Context, net.Conn, adapter.Outbound) net.Conn
++					}); ok {
++						c = tracker.RoutedOutboundConnection(ctx, c, (*Outbound)(b.dialer))
++					}
++				}
 +				d := &reverseDispatcher{bridge: b, ctx: ctx}
 +				w, e := XM.NewServerWorker(XS.ContextWithIsReverseMux(ctx, true), d, reverseLink(c))
 +				err = e
