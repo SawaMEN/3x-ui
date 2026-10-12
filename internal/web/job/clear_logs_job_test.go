@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/hiddify"
 )
 
 func writeLogConfig(t *testing.T, accessPath string, errorPath string) {
@@ -19,6 +21,97 @@ func writeLogConfig(t *testing.T, accessPath string, errorPath string) {
 	}
 	if err := os.WriteFile(filepath.Join(binDir, "config.json"), configData, 0o644); err != nil {
 		t.Fatalf("write xray config: %v", err)
+	}
+}
+
+func TestPruneCurrentCoreAndIPLogs(t *testing.T) {
+	oldMax := maxXrayLogBytes
+	maxXrayLogBytes = 8
+	t.Cleanup(func() { maxXrayLogBytes = oldMax })
+	dir := t.TempDir()
+	t.Setenv("XUI_BIN_FOLDER", dir)
+	t.Setenv("XUI_LOG_FOLDER", dir)
+	if err := os.MkdirAll(filepath.Dir(hiddify.GetConfigPath()), 0700); err != nil {
+		t.Fatal(err)
+	}
+	// No legacy config.json exists. A relative output uses the core working directory.
+	if err := os.WriteFile(hiddify.GetConfigPath(), []byte(`{"log":{"output":"custom.log"}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	coreLog := filepath.Join(filepath.Dir(hiddify.GetBinaryPath()), "custom.log")
+	paths := []string{coreLog, filepath.Join(dir, "3xipl.log"), filepath.Join(dir, "3xipl-banned.log"), filepath.Join(dir, "3xipl-banned.prev.log")}
+	for _, path := range paths {
+		if err := os.WriteFile(path, []byte("oversized log line"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Truncation must preserve an open writer's inode.
+	writer, err := os.OpenFile(coreLog, os.O_APPEND|os.O_WRONLY, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer writer.Close()
+	NewPruneXrayLogsJob().Run()
+	for _, path := range paths {
+		info, err := os.Stat(path)
+		if err != nil || info.Size() != 0 {
+			t.Fatalf("log not pruned: %s (%v)", path, err)
+		}
+	}
+	if _, err := writer.WriteString("new"); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(coreLog)
+	if err != nil || string(data) != "new" {
+		t.Fatalf("open writer lost after pruning: %q, %v", data, err)
+	}
+}
+
+func TestCoreLogDisabledAndDailyCleanup(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XUI_BIN_FOLDER", dir)
+	path := filepath.Join(dir, "core.log")
+	if err := os.MkdirAll(filepath.Dir(hiddify.GetConfigPath()), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("keep"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, disabled := range []bool{true, false} {
+		cfg, _ := json.Marshal(map[string]any{"log": map[string]any{"disabled": disabled, "output": path}})
+		if err := os.WriteFile(hiddify.GetConfigPath(), cfg, 0600); err != nil {
+			t.Fatal(err)
+		}
+		wipeXrayLogs()
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if disabled && string(data) != "keep" || !disabled && len(data) != 0 {
+			t.Fatalf("disabled=%v: unexpected log content %q", disabled, data)
+		}
+	}
+}
+
+func TestDailyBanSnapshotBounds(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XUI_LOG_FOLDER", dir)
+	t.Setenv("XUI_BIN_FOLDER", dir)
+	oldMax := maxXrayLogBytes
+	maxXrayLogBytes = 8
+	t.Cleanup(func() { maxXrayLogBytes = oldMax })
+	path := filepath.Join(dir, "3xipl-banned.log")
+	if err := os.WriteFile(path, []byte("old entries\nnew tail"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	NewClearLogsJob().Run()
+	data, err := os.ReadFile(filepath.Join(dir, "3xipl-banned.prev.log"))
+	if err != nil || string(data) != "new tail" {
+		t.Fatalf("snapshot exceeds bounded tail: %q, %v", data, err)
+	}
+	data, err = os.ReadFile(path)
+	if err != nil || len(data) != 0 {
+		t.Fatalf("source not cleared: %q, %v", data, err)
 	}
 }
 

@@ -1,10 +1,12 @@
 package job
 
 import (
+	"encoding/json"
 	"io"
 	"os"
 	"path/filepath"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/hiddify"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
@@ -16,8 +18,7 @@ var maxXrayLogBytes = defaultMaxXrayLogBytes
 // ClearLogsJob clears old log files to prevent disk space issues.
 type ClearLogsJob struct{}
 
-// PruneXrayLogsJob truncates oversized Xray access and error logs.
-// PruneXrayLogsJob truncates the Xray access and error logs once either exceeds maxXrayLogBytes.
+// PruneXrayLogsJob bounds both legacy and current core logs, and IP-limit logs.
 type PruneXrayLogsJob struct{}
 
 // NewClearLogsJob creates a new log cleanup job instance.
@@ -74,13 +75,25 @@ func (j *ClearLogsJob) Run() {
 				continue
 			}
 
-			_, err = io.Copy(logFilePrev, logFile)
+			// A pre-existing multi-GB log must not be duplicated at midnight.
+			// Keep only its bounded tail in the previous-day snapshot.
+			info, statErr := logFile.Stat()
+			if statErr == nil {
+				start := max(int64(0), info.Size()-maxXrayLogBytes)
+				_, err = io.Copy(logFilePrev, io.NewSectionReader(logFile, start, info.Size()-start))
+			} else {
+				err = statErr
+			}
 			if err != nil {
 				logger.Warning("Failed to copy log file:", logFiles[i], "to", logFilesPrev[i-1], "-", err)
 			}
 
 			logFile.Close()
-			logFilePrev.Close()
+			closeErr := logFilePrev.Close()
+			if err != nil || closeErr != nil {
+				// Preserve the source when the snapshot could not be written.
+				continue
+			}
 		}
 
 		err := os.Truncate(logFiles[i], 0)
@@ -95,11 +108,41 @@ func (j *ClearLogsJob) Run() {
 func (j *PruneXrayLogsJob) Run() {
 	truncateXrayLog(xray.GetAccessLogPath, maxXrayLogBytes)
 	truncateXrayLog(xray.GetErrorLogPath, maxXrayLogBytes)
+	truncateXrayLog(coreLogPath, maxXrayLogBytes)
+	for _, path := range []string{xray.GetIPLimitLogPath(), xray.GetIPLimitBannedLogPath(), xray.GetIPLimitBannedPrevLogPath()} {
+		truncateLogFile(path, maxXrayLogBytes)
+	}
 }
 
 func wipeXrayLogs() {
 	truncateXrayLog(xray.GetAccessLogPath, 0)
 	truncateXrayLog(xray.GetErrorLogPath, 0)
+	truncateXrayLog(coreLogPath, 0)
+}
+
+// Read the actual output setting: templates may change it or disable logging.
+// Relative outputs are resolved against the core's working directory.
+func coreLogPath() (string, error) {
+	data, err := os.ReadFile(hiddify.GetConfigPath())
+	if err != nil {
+		return "", err
+	}
+	var cfg struct {
+		Log struct {
+			Disabled bool   `json:"disabled"`
+			Output   string `json:"output"`
+		} `json:"log"`
+	}
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return "", err
+	}
+	if cfg.Log.Disabled || cfg.Log.Output == "" {
+		return "", nil
+	}
+	if filepath.IsAbs(cfg.Log.Output) {
+		return cfg.Log.Output, nil
+	}
+	return filepath.Join(filepath.Dir(hiddify.GetBinaryPath()), cfg.Log.Output), nil
 }
 
 func truncateXrayLog(pathFn func() (string, error), maxBytes int64) {
@@ -107,20 +150,23 @@ func truncateXrayLog(pathFn func() (string, error), maxBytes int64) {
 	if err != nil || disabledLogPath(logPath) {
 		return
 	}
-	if maxBytes > 0 {
-		info, err := os.Stat(logPath)
-		if err != nil {
-			if !os.IsNotExist(err) {
-				logger.Warning("Failed to stat Xray log:", logPath, "-", err)
-			}
-			return
+	truncateLogFile(logPath, maxBytes)
+}
+
+func truncateLogFile(logPath string, maxBytes int64) {
+	info, err := os.Stat(logPath)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			logger.Warning("Failed to stat core log:", logPath, "-", err)
 		}
-		if info.Size() <= maxBytes {
-			return
-		}
+		return
+	}
+	// Never truncate devices such as /dev/stdout, or pipes/directories.
+	if !info.Mode().IsRegular() || (maxBytes > 0 && info.Size() <= maxBytes) {
+		return
 	}
 	if err := os.Truncate(logPath, 0); err != nil && !os.IsNotExist(err) {
-		logger.Warning("Failed to truncate Xray log:", logPath, "-", err)
+		logger.Warning("Failed to truncate core log:", logPath, "-", err)
 	}
 }
 
