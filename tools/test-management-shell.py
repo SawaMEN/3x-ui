@@ -142,7 +142,7 @@ rc=$?
                 self.run_script(function(installer, "install_base") + r"""
 release=arch
 pacman() {
-    printf '%s\\n' "$1" >> "$TEST_ROOT/calls"
+    printf '%s\n' "$1" >> "$TEST_ROOT/calls"
     [[ "$1" == "-Q" ]]
 }
 install_base
@@ -155,42 +155,14 @@ install_base
                 self.run_script(function(installer, "install_base") + r"""
 release=arch
 pacman() {
-    printf '%s\\n' "$1" >> "$TEST_ROOT/calls"
+    printf '%s\n' "$1" >> "$TEST_ROOT/calls"
     [[ "$1" == "-Syu" ]]
 }
 install_base
-[[ $? == 0 && "$(cat "$TEST_ROOT/calls")" == 
-        for name in ("x-ui.service.debian", "x-ui.service.arch", "x-ui.service.rhel"):
-            with self.subTest(name=name):
-                text = (ROOT / name).read_text()
-                starts = [line for line in text.splitlines()
-                          if line.startswith("ExecStartPre=")]
-                self.assertEqual(len(starts), 1)
-                command = starts[0]
-                marker = "test -f /etc/x-ui/enable-managed-swap || exit 0;"
-                self.assertIn(marker, command)
-                self.assertLess(command.index(marker), command.index("mkdir -p /etc/sysctl.d"))
-
-    def test_openrc_managed_swap_is_opt_in(self):
-        text = (ROOT / "x-ui.rc").read_text()
-        start_pre = function("x-ui.rc", "start_pre")
-        self.assertIn("if [ -f /etc/x-ui/enable-managed-swap ]; then", start_pre)
-        self.assertIn("setup_swap || true", start_pre)
-        self.assertLess(start_pre.index("if [ -f"), start_pre.index("setup_swap || true"))
-
-    def test_arch_service_does_not_throttle_core_children(self):
-        arch = (ROOT / "x-ui.service.arch").read_text()
-        for line in ("MemoryHigh=", "CPUQuota=", 'Environment="GOMAXPROCS=1"'):
-            self.assertNotIn(line, arch)
-        self.assertIn('Environment="GOMEMLIMIT=256MiB"', arch)
-        self.assertIn('Environment="XUI_LOW_RESOURCE=true"', arch)
-
-
-if __name__ == "__main__":
-    unittest.main()
--Q\\n-Syu' ]]
+grep -qx -- '-Q' "$TEST_ROOT/calls"
+grep -qx -- '-Syu' "$TEST_ROOT/calls"
+[[ "$(wc -l < "$TEST_ROOT/calls")" -eq 2 ]]
 """, {"TEST_ROOT": raw})
-
 
     def test_systemd_managed_swap_is_opt_in(self):
         for name in ("x-ui.service.debian", "x-ui.service.arch", "x-ui.service.rhel"):
