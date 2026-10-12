@@ -174,4 +174,38 @@ describe('useAllSettings', () => {
     expect(result.current.allSetting.hasTgBotToken).toBe(true);
     expect(result.current.saveDisabled).toBe(true);
   });
+  it('sends the complete settings when saving a partial security change', async () => {
+    const post = vi.spyOn(HttpUtil, 'post').mockImplementation(async (url) => {
+      if (url === '/panel/api/setting/all') {
+        return new Msg(true, '', {
+          webPort: 2096,
+          webBasePath: '/custom-panel/',
+          webDomain: 'panel.example.com',
+        });
+      }
+      return new Msg(true, '');
+    });
+    const queryClient = makeTestQueryClient();
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useAllSettings(), { wrapper });
+
+    await waitFor(() => expect(result.current.fetched).toBe(true));
+    await act(async () => {
+      await result.current.savePayload({ twoFactorCode: '123456', twoFactorEnable: true });
+    });
+
+    expect(post).toHaveBeenCalledWith(
+      '/panel/api/setting/update',
+      expect.objectContaining({
+        webPort: 2096,
+        webBasePath: '/custom-panel/',
+        webDomain: 'panel.example.com',
+        twoFactorCode: '123456',
+        twoFactorEnable: true,
+      }),
+    );
+  });
+
 });
