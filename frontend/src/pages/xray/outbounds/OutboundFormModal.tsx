@@ -79,6 +79,7 @@ interface OutboundFormModalProps {
   existingTags: string[];
   dialerProxyTags?: string[];
   onClose: () => void;
+  onOpenSubscriptions?: () => void;
   onConfirm: (outbound: Record<string, unknown>) => void;
 }
 
@@ -95,6 +96,7 @@ export default function OutboundFormModal({
   existingTags,
   dialerProxyTags,
   onClose,
+  onOpenSubscriptions,
   onConfirm,
 }: OutboundFormModalProps) {
   const { t } = useTranslation();
@@ -735,6 +737,11 @@ export default function OutboundFormModal({
                           onChange={(e) => setLinkInput(e.target.value)}
                           onSearch={importLink}
                         />
+                        {onOpenSubscriptions && (
+                          <Typography.Link onClick={onOpenSubscriptions}>
+                            Управление подписками: добавить URL, обновить и настроить автообновление
+                          </Typography.Link>
+                        )}
                       </div>
                       <Alert
                         type="info"
