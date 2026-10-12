@@ -105,6 +105,23 @@ rc=$?
 [[ $rc == 1 && ! -e "$TEST_ROOT/download-started" ]]
 ''', {"TEST_ROOT": raw})
 
+    def test_installer_forwards_version_only_when_provided(self):
+        source = (ROOT / "install.sh").read_text()
+        marker = '\necho -e "${green}Running...${plain}"\n'
+        self.assertIn(marker, source)
+        dispatch = source.rsplit(marker, 1)[1]
+        for args, expected in (((), "0:"), (("v3.9.8",), "1:v3.9.8"),
+                               (("dev",), "1:dev")):
+            with self.subTest(args=args):
+                script = r'''
+install_base() { :; }
+install_x-ui() { printf '%s:%s' "$#" "${1:-}"; }
+''' + dispatch
+                result = subprocess.run(["bash", "-c", script, "install.sh", *args],
+                                        capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, expected)
+
     def test_uninstall_rejects_root_and_unrelated_directories(self):
         for path in ("/", "/usr", "relative/x-ui", "/app"):
             with self.subTest(path=path), tempfile.TemporaryDirectory() as raw:
