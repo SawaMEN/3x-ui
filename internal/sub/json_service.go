@@ -492,7 +492,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 	// WireGuard + proxy subscription cannot be represented by the current
 	// separated-profile builder without routing one profile through another,
 	// so reject it instead of falling back to the deprecated WireGuard outbound.
-	nativeTLSForHiddify := hiddify && (containsSubscriptionProtocol(inbounds, model.ShadowTLS) || containsShadowTLSTransport(inbounds))
+	nativeTLSForHiddify := hiddify && containsNativeTLSSubscription(inbounds)
 	if !nativeTLSForHiddify && (containsSubscriptionProtocol(inbounds, model.WireGuard) || containsUnsupportedSingBoxProtocol(inbounds)) {
 		return "", "", errSubscriptionFormatUnsupported
 	}
@@ -1627,6 +1627,22 @@ func (s *SubJsonService) genServer(subReq *SubService, inbound *model.Inbound, s
 
 func (s *SubJsonService) genNativeTLSLike(subReq *SubService, inbound *model.Inbound, client model.Client) map[string]any {
 	return s.genNativeTLSLikeEndpoint(subReq, inbound, client, subReq.inboundDefaultEndpoint(inbound))
+}
+
+// containsNativeTLSSubscription identifies protocols whose Hiddify import needs
+// native sing-box JSON; raw AnyTLS links and ShadowTLS detours cannot reliably
+// be imported as a plain URI subscription.
+func containsNativeTLSSubscription(inbounds []*model.Inbound) bool {
+	for _, inbound := range inbounds {
+		if inbound == nil {
+			continue
+		}
+		if inbound.Protocol == model.AnyTLS || inbound.Protocol == model.ShadowTLS ||
+			model.ShadowTLSTransport(inbound.Settings) != nil {
+			return true
+		}
+	}
+	return false
 }
 
 func containsShadowTLSTransport(inbounds []*model.Inbound) bool {
