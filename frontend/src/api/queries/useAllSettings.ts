@@ -89,7 +89,10 @@ export function useAllSettings() {
     async (payload: SettingSavePayload) => {
       const saved = new AllSetting(allSetting);
       Object.assign(saved, payload);
-      return (await saveMut.mutateAsync({ payload, saved })).msg;
+      // The backend's /setting/update endpoint replaces the complete settings
+    // document. Sending only a security-field patch silently resets every
+    // omitted field (including core type, listener and subscription URLs).
+    return (await saveMut.mutateAsync({ payload: { ...saved, ...payload }, saved })).msg;
     },
     [allSetting, saveMut],
   );
