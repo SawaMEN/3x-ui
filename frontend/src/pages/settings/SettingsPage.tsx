@@ -163,7 +163,8 @@ export default function SettingsPage() {
     // webDomain is also enforced by the backend Host validator: continuing
     // to use the old hostname after changing it results in HTTP 403.
     const nextHost = webDomain?.trim() || entryHost;
-    url.hostname = nextHost.includes(':') ? `[${nextHost.replace(/^\\[|\\]$/g, '')}]` : nextHost;
+    const hostname = nextHost.includes(':') && !nextHost.startsWith('[') ? `[${nextHost}]` : nextHost;
+    url.hostname = hostname;
 
     // Preserve the public HTTPS origin when TLS is terminated by a reverse
     // proxy. A directly accessed panel should instead use its configured port.
@@ -176,7 +177,8 @@ export default function SettingsPage() {
       if (webPort) url.port = String(webPort);
     }
 
-    let base = webBasePath ? webBasePath.replace(/^\\/+/, '') : '';
+    let base = webBasePath || '';
+    while (base.startsWith('/')) base = base.slice(1);
     if (base && !base.endsWith('/')) base += '/';
     url.pathname = `/${base}panel/settings`;
     url.search = '';
