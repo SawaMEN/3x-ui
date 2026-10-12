@@ -17,9 +17,10 @@ print(lock['target']['commit'])
 print(','.join(lock['panel_build']['tags']))
 print(lock['panel_build']['sing_box_version'])
 print(lock['panel_build']['toolchain'])
+print(lock['target']['submodules']['hiddify-sing-box'])
 PY
 )
-if [[ ${#target[@]} != 6 ]]; then
+if [[ ${#target[@]} != 7 ]]; then
   printf '%s\n' 'Failed to read pinned target manifest' >&2
   exit 1
 fi
@@ -30,6 +31,11 @@ git -C "$task_source/core" checkout -q --detach FETCH_HEAD
 git -C "$task_source/core" config submodule.hiddify-sing-box.url https://github.com/SawaMEN/hiddify-sing-box.git
 git -C "$task_source/core" config submodule.ray2sing.url https://github.com/hiddify/ray2sing.git
 git -C "$task_source/core" submodule update --init --recursive --depth=1
+# Track the independently maintained Sing-box fork even if the parent's
+# gitlink has not advanced. The lock retains the exact fetched revision.
+git -C "$task_source/core/hiddify-sing-box" fetch --depth=1 origin "${target[6]}"
+git -C "$task_source/core/hiddify-sing-box" checkout -q --detach FETCH_HEAD
+git -C "$task_source/core/hiddify-sing-box" submodule update --init --recursive --depth=1
 python3 "$task_root/tools/audit-hiddify-migration.py" --upstream "$task_source/core"
 git -C "$task_source/core" apply "$task_root/deploy/hiddify/runtime-dependencies.patch"
 (
