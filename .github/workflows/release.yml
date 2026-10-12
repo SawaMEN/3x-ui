@@ -38,7 +38,7 @@ jobs:
       tag: ${{ steps.release.outputs.tag }}
     steps:
       - uses: actions/checkout@v7
-      - name: Resolve latest published kernel release
+      - name: Resolve latest stable kernel release
         id: release
         env:
           GH_TOKEN: ${{ github.token }}

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Download the latest complete published SawaMEN/hiddify-core release.
+"""Download the latest stable SawaMEN/hiddify-core release.
 
-Includes prereleases (GitHub /releases/latest omits them). A shared tag
-is resolved once per panel workflow, so amd64 and arm64 use the same build.
+Only full GitHub releases are eligible (no drafts or prereleases).
+Resolve a single tag for the build matrix so amd64 and arm64 match.
 """
 import argparse
 import hashlib
@@ -57,7 +57,8 @@ def complete(release):
         f"sing-box-linux-{arch}.tar.gz{suffix}"
         for arch in ("amd64", "arm64") for suffix in ("", ".sha256")
     }
-    return (not release.get("draft") and bool(release.get("published_at"))
+    return (not release.get("draft") and not release.get("prerelease")
+            and bool(release.get("published_at"))
             and required <= {asset["name"] for asset in release.get("assets", [])})
 
 
@@ -66,13 +67,13 @@ def resolve(tag=None):
         if not re.fullmatch(r"[A-Za-z0-9._-]+", tag):
             raise ValueError("Invalid release tag")
         release = json_api("/releases/tags/" + quote(tag, safe=""))
-        if not complete(release):
-            raise ValueError("Release has no complete binaries and SHA-256 for both architectures")
-        return release
-    releases = [release for release in json_api("/releases?per_page=100") if complete(release)]
-    if not releases:
-        raise RuntimeError("No complete published Sing-box release")
-    return max(releases, key=lambda release: (release["published_at"], release["id"]))
+    else:
+        # GitHub's official latest endpoint ignores prereleases and drafts.
+        # Fail closed rather than silently downgrading to an incomplete build.
+        release = json_api("/releases/latest")
+    if not complete(release):
+        raise ValueError("Latest stable kernel release lacks AMD64/ARM64 binaries or SHA-256")
+    return release
 
 
 def checksum(file, checksum_file):
