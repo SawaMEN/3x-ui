@@ -1749,12 +1749,20 @@ func (s *SubJsonService) genNativeTLSLikeEndpoint(subReq *SubService, inbound *m
 				tls["server_name"] = strings.TrimSpace(serverName)
 			}
 		}
-		if endpoint.ep != nil {
-			if sni, ok := externalProxySNI(endpoint.ep); ok {
-				tls["server_name"] = sni
+		// A wrapped AnyTLS connection performs a second, independent TLS
+		// handshake *inside* the ShadowTLS detour. Host SNI, ALPN and
+		// allowInsecure overrides describe the outer ShadowTLS handshake,
+		// not the certificate presented by this inner AnyTLS listener.
+		// Applying them here makes an otherwise valid pair fail TLS
+		// verification (or ALPN negotiation) on the inner layer.
+		if model.ShadowTLSTransport(inbound.Settings) == nil {
+			if endpoint.ep != nil {
+				if sni, ok := externalProxySNI(endpoint.ep); ok {
+					tls["server_name"] = sni
+				}
 			}
+			applyNativeTLSHostOptions(tls, endpoint.ep)
 		}
-		applyNativeTLSHostOptions(tls, endpoint.ep)
 		out["tls"] = tls
 		return out
 	}
