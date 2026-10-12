@@ -123,7 +123,8 @@ def install(release, arch, destination):
             raise ValueError("Kernel version/source differs from release")
         if not TAGS.issubset(profile["tags"]) or not ({"with_purego", "with_musl"} & set(profile["tags"])):
             raise ValueError("Kernel build is missing mandatory panel features")
-        header = (temp / binary).read_bytes()[:20]
+        with open(temp / binary, "rb") as executable:
+            header = executable.read(20)
         if len(header) != 20 or header[:6] != b"\x7fELF\x02\x01" or struct.unpack_from("<H", header, 18)[0] != {"amd64": 62, "arm64": 183}[arch]:
             raise ValueError("Downloaded kernel is not a matching 64-bit ELF executable")
         (temp / binary).chmod(0o755)
