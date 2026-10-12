@@ -32,7 +32,7 @@ func validateSingBoxOutboundType(protocol, tag string) error {
 
 func isKnownSingBoxOutbound(protocol string) bool {
 	switch protocol {
-	case "direct", "bridge", "block", "socks", "http", "shadowsocks", "vmess", "trojan", "wireguard", "hysteria", "vless", "shadowtls", "tuic", "hysteria2", "anytls", "snell", "tailcat", "tor", "ssh", "dns", "selector", "urltest", "naive":
+	case "vless-reverse", "direct", "bridge", "block", "socks", "http", "shadowsocks", "vmess", "trojan", "wireguard", "hysteria", "vless", "shadowtls", "tuic", "hysteria2", "anytls", "snell", "tailcat", "tor", "ssh", "dns", "selector", "urltest", "naive":
 		return true
 	default:
 		return false
@@ -302,7 +302,7 @@ func validateSingBoxOutbound(outbound map[string]any) error {
 		return fmt.Errorf("sing-box outbound %q protocol %s does not support V2Ray transport", tag, protocol)
 	}
 	switch strings.ToLower(strings.TrimSpace(rawString(transport, "type"))) {
-	case "http", "ws", "quic", "grpc", "httpupgrade", "xhttp", "raw":
+	case "http", "ws", "quic", "grpc", "httpupgrade", "xhttp", "raw", "kcp":
 		return nil
 	default:
 		return fmt.Errorf("sing-box outbound %q uses unsupported V2Ray transport %q", tag, rawString(transport, "type"))

@@ -856,7 +856,11 @@
         "openfluxSecret": "Encryption secret",
         "openfluxOutboundHint": "Channel URLs, priorities and key context are in the JSON below. Importing openflux:// fills them automatically. Use only one active client session per server inbound.",
         "visionTestseed": "Vision testseed",
-        "getNewSeed": "Get New Seed"
+        "getNewSeed": "Get New Seed",
+        "mtu": "MTU",
+        "tti": "TTI (ms)",
+        "uplinkCapacity": "Uplink capacity (MB/s)",
+        "downlinkCapacity": "Downlink capacity (MB/s)"
       },
       "info": {
         "mode": "Mode",

@@ -475,3 +475,32 @@ func TestHiddifyRealCandidatePublication(t *testing.T) {
 		t.Fatalf("candidate files left after rejection: %v, %v", candidates, err)
 	}
 }
+
+func TestHiddifyDatabaseReversePortalConfiguration(t *testing.T) {
+	setupBulkDB(t)
+	ib := seedHiddifyConfigInbound(t, model.VLESS, `{"decryption":"none"}`, `{"network":"tcp"}`)
+	if err := database.GetDB().Model(&model.ClientRecord{}).Where("email = ?", "alice").Update("reverse", `{"tag":"reverse-portal"}`).Error; err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := (&HiddifyConfigGenerator{}).Generate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := checkGeneratedHiddifyConfig(t, cfg)
+	if !strings.Contains(string(data), `"vless-reverse"`) || !strings.Contains(string(data), `"reverse-portal"`) {
+		t.Fatal("stored reverse client lost its portal")
+	}
+	var found bool
+	for _, in := range cfg.Inbounds {
+		if in["tag"] == ib.Tag {
+			users := in["users"].([]map[string]any)
+			if len(users) != 1 || users[0]["reverse"].(map[string]any)["tag"] != "reverse-portal" {
+				t.Fatal(users)
+			}
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("reverse inbound missing")
+	}
+}

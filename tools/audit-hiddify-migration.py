@@ -133,8 +133,8 @@ def audit_build(source):
     require(target["version"] in profile and target["commit"] in profile, "Runtime process identity differs from build lock")
     require(lock["runtime_contract"]["stats_grpc_method"] == fork["stats_contract"]["method"], "Wrong runtime statistics method")
     require(lock["runtime_contract"]["stats_grpc_method"] in profile, "Runtime statistics client differs from lock")
-    require(build["protection_dependency_versions"] == {"github.com/metacubex/utls": "v1.8.8", "github.com/starifly/sing-vmess": "v0.2.7-mod.9"}, "Protection dependency versions differ from the audited build script")
-    for key in ("check_command_overlay", "clash_user_overlay", "sniff_override_overlay", "sniff_override_test_overlay", "http1_options_overlay", "http1_options_test_overlay", "protection_options_overlay", "utls_protection_overlay", "vision_protection_overlay", "reality_protection_test_overlay", "vision_preconnect_test_overlay", "vision_padding_test_overlay"):
+    require(build["protection_dependency_versions"] == {"github.com/metacubex/utls": "v1.8.8", "github.com/starifly/sing-vmess": "v0.2.7-mod.9", "github.com/xtls/xray-core": "v1.260327.1-0.20260728075948-5ca6f4b7d4dc"}, "Protection dependency versions differ from the audited build script")
+    for key in ("check_command_overlay", "clash_user_overlay", "sniff_override_overlay", "sniff_override_test_overlay", "http1_options_overlay", "http1_options_test_overlay", "protection_options_overlay", "utls_protection_overlay", "vision_protection_overlay", "reality_protection_test_overlay", "vision_preconnect_test_overlay", "vision_padding_test_overlay", "transport_balancer_overlay", "xray_runtime_compat_overlay", "kcp_transport_test_overlay", "xhttp_extension_test_overlay", "balancer_strategy_test_overlay", "reverse_overlay", "reverse_protocol_overlay", "reverse_runtime_test_overlay", "reverse_vision_test_overlay", "runtime_dependencies_overlay"):
         require((ROOT / build[key]).is_file(), "Missing runtime overlay: " + key)
     print(f"OK: stage-{lock['stage']} build/runtime identity, owner revisions, toolchain, tags and statistics profile")
     if source is None:

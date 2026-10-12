@@ -14,7 +14,7 @@
       "hiddify-sing-box": "https://github.com/SawaMEN/hiddify-sing-box",
       "ray2sing": "https://github.com/hiddify/ray2sing"
     },
-    "version": "sawamen-b5749002266b-panel5"
+    "version": "sawamen-b5749002266b-panel6"
   },
   "runtime_contract": {
     "raw_config_command": [
@@ -129,8 +129,19 @@
     "vision_padding_test_overlay": "deploy/hiddify/vision_padding_test.go.in",
     "protection_dependency_versions": {
       "github.com/metacubex/utls": "v1.8.8",
-      "github.com/starifly/sing-vmess": "v0.2.7-mod.9"
-    }
+      "github.com/starifly/sing-vmess": "v0.2.7-mod.9",
+      "github.com/xtls/xray-core": "v1.260327.1-0.20260728075948-5ca6f4b7d4dc"
+    },
+    "transport_balancer_overlay": "deploy/hiddify/transport-balancer.patch",
+    "xray_runtime_compat_overlay": "deploy/hiddify/xray-runtime-compat.patch",
+    "kcp_transport_test_overlay": "deploy/hiddify/kcp_transport_test.go.in",
+    "xhttp_extension_test_overlay": "deploy/hiddify/xhttp_extension_test.go.in",
+    "balancer_strategy_test_overlay": "deploy/hiddify/balancer_strategy_test.go.in",
+    "reverse_overlay": "deploy/hiddify/vless-reverse.patch",
+    "reverse_protocol_overlay": "deploy/hiddify/sing-vmess-reverse.patch",
+    "reverse_runtime_test_overlay": "deploy/hiddify/reverse_runtime_test.go.in",
+    "reverse_vision_test_overlay": "deploy/hiddify/reverse_vision_test.go.in",
+    "runtime_dependencies_overlay": "deploy/hiddify/runtime-dependencies.patch"
   },
   "verification": {
     "report": "hiddify-core-stage-4-verification.md",

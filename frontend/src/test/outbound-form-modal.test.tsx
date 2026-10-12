@@ -38,6 +38,18 @@ describe('OutboundFormModal', () => {
     expect(fieldLabels().length).toBeGreaterThan(0);
   });
 
+  it('allows creating a VLESS reverse bridge tag', () => {
+    renderModal({ protocol: 'vless', tag: 'remote', settings: {} });
+    const label = Array.from(document.querySelectorAll('.ant-form-item-label label')).find(
+      (l) => (l.textContent ?? '').trim() === 'Reverse tag',
+    );
+    const input = label?.closest('.ant-form-item')?.querySelector('input');
+    expect(input).toBeTruthy();
+    expect(input!.readOnly).toBe(false);
+    fireEvent.change(input!, { target: { value: 'bridge' } });
+    expect(input!.value).toBe('bridge');
+  });
+
   it('field structure differs per protocol (not a vacuous snapshot loop)', async () => {
     renderModal(null);
     const protocols = listSelectOptions('protocol');

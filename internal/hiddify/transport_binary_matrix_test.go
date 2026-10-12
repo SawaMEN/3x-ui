@@ -19,7 +19,7 @@ func TestPinnedProtocolTransportMatrix(t *testing.T) {
 	dir := t.TempDir()
 	cert, key := testCertificate(t, dir)
 	for _, protocol := range []string{"vless", "vmess", "trojan"} {
-		for _, network := range []string{"tcp", "ws", "grpc", "httpupgrade", "http", "xhttp", "raw", "quic"} {
+		for _, network := range []string{"tcp", "ws", "grpc", "httpupgrade", "http", "xhttp", "raw", "quic", "kcp"} {
 			for _, inbound := range []bool{false, true} {
 				direction := "outbound"
 				if inbound {

@@ -132,9 +132,6 @@ func translateDownload(raw map[string]any, label string) (map[string]any, error)
 	if err != nil {
 		return nil, err
 	}
-	if mode := xhttp["mode"]; meaningful(mode) && mode != "auto" {
-		return nil, fmt.Errorf("%s: explicit download XHTTP mode cannot be preserved", label)
-	}
 	if meaningful(xhttp["downloadSettings"]) {
 		return nil, fmt.Errorf("%s: nested downloadSettings cannot be preserved", label)
 	}
@@ -151,7 +148,6 @@ func translateDownload(raw map[string]any, label string) (map[string]any, error)
 	}
 	download := object(out, "transport")
 	delete(download, "type")
-	delete(download, "mode")
 	for key, value := range out {
 		switch key {
 		case "server", "server_port", "tls", "detour":

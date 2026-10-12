@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	TargetVersion    = "sawamen-b5749002266b-panel5"
+	TargetVersion    = "sawamen-b5749002266b-panel6"
 	TargetRevision   = "b5749002266b9782803669138494ef6937eb4e95"
 	StatsQueryMethod = "/v2ray.core.app.stats.command.StatsService/QueryStats"
 )
@@ -50,7 +50,11 @@ func translate(raw map[string]any, inbound bool) (map[string]any, error) {
 	if inbound && protocol == "tun" {
 		return translateTun(copy)
 	}
-	visionOptions, realityOptions, err := takeProtectionExtensions(settings, stream, protocol, inbound)
+	reverseOptions, err := takeReverseExtensions(settings, protocol, inbound)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", label, err)
+	}
+	visionOptions, realityOptions, err := takeProtectionExtensions(settings, stream, strings.TrimPrefix(protocol, "singbox:"), inbound)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", label, err)
 	}
@@ -64,6 +68,15 @@ func translate(raw map[string]any, inbound bool) (map[string]any, error) {
 	}
 	var transport map[string]any
 	network, _ := stream["network"].(string)
+	if strings.EqualFold(strings.TrimSpace(network), "kcp") {
+		if protocol != "vless" && protocol != "vmess" && protocol != "trojan" {
+			return nil, fmt.Errorf("%s: mKCP is unsupported for %s", label, protocol)
+		}
+		transport, err = translateKCP(stream)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", label, err)
+		}
+	}
 	if strings.EqualFold(strings.TrimSpace(network), "xhttp") {
 		if value := stream["xhttpSettings"]; value != nil {
 			if _, ok := value.(map[string]any); !ok {
@@ -132,6 +145,9 @@ func translate(raw map[string]any, inbound bool) (map[string]any, error) {
 	}
 	if mask != nil {
 		out["final_mask"] = mask
+	}
+	if err := applyReverseExtensions(out, reverseOptions, inbound); err != nil {
+		return nil, err
 	}
 	for key, value := range visionOptions {
 		out[key] = value

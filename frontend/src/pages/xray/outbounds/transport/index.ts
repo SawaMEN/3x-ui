@@ -6,3 +6,4 @@ export { default as XhttpForm } from './xhttp';
 export { default as HysteriaForm } from './hysteria';
 export { default as SockoptForm } from './sockopt';
 export { default as MuxForm } from './mux';
+export { default as KcpForm } from './kcp';

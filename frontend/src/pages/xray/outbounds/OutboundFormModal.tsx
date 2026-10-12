@@ -10,7 +10,11 @@ import { HttpUtil, Wireguard } from '@/utils';
 import { formValuesToWirePayload, rawOutboundToFormValues } from '@/lib/xray/outbound-form-adapter';
 import { parseOutboundLink } from '@/lib/xray/outbound-link-parser';
 import { XMUX_FRESH_DEFAULTS } from '@/schemas/protocols/stream/xhttp';
-import { OutboundFormBaseSchema, VlessOutboundFormSettingsSchema, type OutboundFormValues } from '@/schemas/forms/outbound-form';
+import {
+  OutboundFormBaseSchema,
+  VlessOutboundFormSettingsSchema,
+  type OutboundFormValues,
+} from '@/schemas/forms/outbound-form';
 import {
   canEnableReality,
   canEnableStream,
@@ -56,6 +60,7 @@ import {
   HttpUpgradeForm,
   HysteriaForm,
   MuxForm,
+  KcpForm,
   RawForm,
   SockoptForm,
   WsForm,
@@ -556,12 +561,17 @@ export default function OutboundFormModal({
                               options={
                                 protocol === 'hysteria'
                                   ? [HYSTERIA_NETWORK_OPTION]
-                                  : NETWORK_OPTIONS
+                                  : NETWORK_OPTIONS.filter(
+                                      (option) =>
+                                        option.value !== 'kcp' ||
+                                        ['vless', 'vmess', 'trojan'].includes(protocol),
+                                    )
                               }
                             />
                           </Form.Item>
 
                           {network === 'tcp' && <RawForm />}
+                          {network === 'kcp' && <KcpForm />}
 
                           {network === 'ws' && <WsForm />}
 
@@ -625,7 +635,6 @@ export default function OutboundFormModal({
                           </Form.Item>
                         </>
                       )}
-
 
                       {streamAllowed && network && (
                         <Form.Item label={t('security')}>

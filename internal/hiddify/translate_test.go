@@ -131,7 +131,7 @@ func TestTranslateXHTTPDownload(t *testing.T) {
 	if download["server"] != "down.example.com" || download["server_port"] != 8443 || download["path"] != "/down" || object(download, "tls")["server_name"] != "down.example.com" {
 		t.Fatalf("download transport lost: %#v", download)
 	}
-	if download["mode"] != nil || download["uuid"] != nil {
+	if download["mode"] != "auto" || download["uuid"] != nil {
 		t.Fatalf("invalid fields leaked into download schema: %#v", download)
 	}
 }

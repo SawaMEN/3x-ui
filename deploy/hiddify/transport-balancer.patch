@@ -1,0 +1,1384 @@
+--- a/option/v2ray_transport.go
++++ b/option/v2ray_transport.go
+@@ -24,6 +24,7 @@
+ 	HTTPUpgradeOptions V2RayHTTPUpgradeOptions `json:"-"`
+ 	XHTTPOptions       V2RayXHTTPOptions       `json:"-"` //H
+ 	DNSTTOptions       DnsttOptions            `json:"-"` //H
++	KCPOptions         V2RayKCPOptions         `json:"-"`
+ 	RawOptions         V2RayRawOptions         `json:"-"` //H
+ }
+ 
+@@ -44,6 +45,8 @@
+ 		v = o.HTTPUpgradeOptions
+ 	case C.V2RayTransportTypeXHTTP:
+ 		v = o.XHTTPOptions
++	case "kcp":
++		v = o.KCPOptions
+ 	case C.V2RayTransportTypeRaw: //H
+ 		v = o.RawOptions //H
+ 
+@@ -74,6 +77,8 @@
+ 		v = &o.HTTPUpgradeOptions
+ 	case C.V2RayTransportTypeXHTTP:
+ 		v = &o.XHTTPOptions
++	case "kcp":
++		v = &o.KCPOptions
+ 	case C.V2RayTransportTypeRaw:
+ 		v = &o.RawOptions
+ 	default:
+@@ -89,6 +94,7 @@
+ func (o V2RayTransportOptions) DescribeSchema(builder schema.Builder) (*schema.Node, error) {
+ 	return builder.Define("V2RayTransport", func() (*schema.Node, error) {
+ 		return schema.DiscriminatedUnion(builder, "type", true, []schema.UnionVariant{
++			{Value: "kcp", StructType: reflect.TypeFor[V2RayKCPOptions]()},
+ 			{Value: C.V2RayTransportTypeHTTP, StructType: reflect.TypeFor[V2RayHTTPOptions]()},
+ 			{Value: C.V2RayTransportTypeWebsocket, StructType: reflect.TypeFor[V2RayWebsocketOptions]()},
+ 			{Value: C.V2RayTransportTypeQUIC, StructType: reflect.TypeFor[V2RayQUICOptions]()},
+@@ -175,6 +181,7 @@
+ type V2RayXHTTPOptions _V2RayXHTTPOptions
+ 
+ type V2RayXHTTPDownloadOptions struct {
++	Mode string `json:"mode,omitempty"`
+ 	V2RayXHTTPBaseOptions
+ 	ServerOptions
+ 	OutboundTLSOptionsContainer
+@@ -211,7 +218,12 @@
+ 		return err
+ 	}
+ 	if c.Download != nil {
+-		err = checkV2RayXHTTPBaseOptions(c.Mode, &c.Download.V2RayXHTTPBaseOptions)
++		switch c.Download.Mode {
++		case "", "auto", "packet-up", "stream-up", "stream-one":
++		default:
++			return E.New("unsupported download mode: " + c.Download.Mode)
++		}
++		err = checkV2RayXHTTPBaseOptions(c.Download.Mode, &c.Download.V2RayXHTTPBaseOptions)
+ 		if err != nil {
+ 			return err
+ 		}
+@@ -502,3 +514,16 @@
+ func (m *V2RayXHTTPXmuxOptions) GetNormalizedHMaxReusableSecs() Xbadoption.Range {
+ 	return m.HMaxReusableSecs
+ }
++
++type V2RayKCPOptions struct {
++	MTU              *uint32           `json:"mtu,omitempty"`
++	TTI              *uint32           `json:"tti,omitempty"`
++	UplinkCapacity   *uint32           `json:"uplink_capacity,omitempty"`
++	DownlinkCapacity *uint32           `json:"downlink_capacity,omitempty"`
++	CwndMultiplier   *uint32           `json:"cwnd_multiplier,omitempty"`
++	MaxSendingWindow *uint32           `json:"max_sending_window,omitempty"`
++	Legacy           bool              `json:"legacy,omitempty"`
++	Seed             string            `json:"seed,omitempty"`
++	Header           string            `json:"header,omitempty"`
++	FinalMask        *FinalMaskOptions `json:"final_mask,omitempty"`
++}
+--- a/option/group.go
++++ b/option/group.go
+@@ -1,11 +1,15 @@
+ package option
+ 
+-import "github.com/sagernet/sing/common/json/badoption"
++import (
++	"github.com/sagernet/sing/common/json"
++	"github.com/sagernet/sing/common/json/badoption"
++)
+ 
+ type SelectorOutboundOptions struct {
+-	Outbounds                 []string `json:"outbounds" reference:"outbound"`
+-	Default                   string   `json:"default,omitempty" reference:"outbound"`
+-	InterruptExistConnections bool     `json:"interrupt_exist_connections,omitempty"`
++	Balancer                  *XrayBalancerOptions `json:"balancer,omitempty"`
++	Outbounds                 []string             `json:"outbounds" reference:"outbound"`
++	Default                   string               `json:"default,omitempty" reference:"outbound"`
++	InterruptExistConnections bool                 `json:"interrupt_exist_connections,omitempty"`
+ }
+ 
+ type URLTestOutboundOptions struct {
+@@ -17,3 +21,18 @@
+ 	IdleTimeout               badoption.Duration `json:"idle_timeout,omitempty"`
+ 	InterruptExistConnections bool               `json:"interrupt_exist_connections,omitempty"`
+ }
++
++type XrayBalancerOptions struct {
++	Burst        bool               `json:"burst,omitempty"`
++	Concurrent   bool               `json:"concurrent,omitempty"`
++	Connectivity string             `json:"connectivity,omitempty"`
++	Strategy     string             `json:"strategy"`
++	Fallback     string             `json:"fallback,omitempty" reference:"outbound"`
++	Settings     json.RawMessage    `json:"settings,omitempty"`
++	ProbeURL     string             `json:"probe_url,omitempty"`
++	ProbeTags    []string           `json:"probe_tags,omitempty"`
++	Interval     badoption.Duration `json:"interval,omitempty"`
++	Timeout      badoption.Duration `json:"timeout,omitempty"`
++	Sampling     uint16             `json:"sampling,omitempty"`
++	Method       string             `json:"method,omitempty"`
++}
+--- a/transport/v2ray/transport.go
++++ b/transport/v2ray/transport.go
+@@ -2,6 +2,7 @@
+ 
+ import (
+ 	"context"
++	"github.com/sagernet/sing-box/transport/v2raykcp"
+ 
+ 	"github.com/sagernet/sing-box/adapter"
+ 	"github.com/sagernet/sing-box/common/tls"
+@@ -43,6 +44,8 @@
+ 		return v2rayhttpupgrade.NewServer(ctx, logger, options.HTTPUpgradeOptions, tlsConfig, handler)
+ 	case C.V2RayTransportTypeXHTTP:
+ 		return xhttp.NewServer(ctx, logger, options.XHTTPOptions, tlsConfig, handler)
++	case "kcp":
++		return v2raykcp.NewServer(ctx, logger, options.KCPOptions, tlsConfig, handler)
+ 	case C.V2RayTransportTypeRaw:
+ 		return v2rayraw.NewServer(ctx, logger, options.RawOptions, tlsConfig, handler)
+ 	default:
+@@ -71,6 +74,8 @@
+ 		return v2rayhttpupgrade.NewClient(ctx, dialer, serverAddr, options.HTTPUpgradeOptions, tlsConfig)
+ 	case C.V2RayTransportTypeXHTTP:
+ 		return xhttp.NewClient(ctx, dialer, serverAddr, options.XHTTPOptions, tlsConfig)
++	case "kcp":
++		return v2raykcp.NewClient(ctx, dialer, serverAddr, options.KCPOptions, tlsConfig)
+ 	case C.V2RayTransportTypeRaw:
+ 		return v2rayraw.NewClient(ctx, dialer, serverAddr, options.RawOptions, tlsConfig)
+ 	default:
+--- a/protocol/group/selector.go
++++ b/protocol/group/selector.go
+@@ -31,6 +31,7 @@
+ )
+ 
+ type Selector struct {
++	balance *balanceState
+ 	outbound.Adapter
+ 	ctx                          context.Context
+ 	outbound                     adapter.OutboundManager
+@@ -46,7 +47,7 @@
+ 
+ func NewSelector(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.SelectorOutboundOptions) (adapter.Outbound, error) {
+ 	outbound := &Selector{
+-		Adapter:                      outbound.NewAdapter(C.TypeSelector, tag, nil, options.Outbounds),
++		Adapter:                      outbound.NewAdapter(C.TypeSelector, tag, nil, selectorDependencies(options)),
+ 		ctx:                          ctx,
+ 		outbound:                     service.FromContext[adapter.OutboundManager](ctx),
+ 		logger:                       logger,
+@@ -57,6 +58,14 @@
+ 		interruptGroup:               interrupt.NewGroup(),
+ 		interruptExternalConnections: options.InterruptExistConnections,
+ 	}
++	if options.Balancer != nil {
++		var err error
++		outbound.balance, err = newBalanceState(ctx, *options.Balancer)
++		if err != nil {
++			return nil, err
++		}
++
++	}
+ 	if len(outbound.tags) == 0 {
+ 		return nil, E.New("missing tags")
+ 	}
+@@ -64,6 +73,9 @@
+ }
+ 
+ func (s *Selector) Network() []string {
++	if s.balance != nil {
++		return []string{N.NetworkTCP, N.NetworkUDP}
++	}
+ 	selected := s.selected.Load()
+ 	if selected == nil {
+ 		return []string{N.NetworkTCP, N.NetworkUDP}
+@@ -72,6 +84,14 @@
+ }
+ 
+ func (s *Selector) Start() error {
++	if s.balance != nil && s.balance.config.Fallback != "" {
++		tag := s.balance.config.Fallback
++		detour, ok := s.outbound.Outbound(tag)
++		if !ok {
++			return E.New("balancer fallback not found: ", tag)
++		}
++		s.outbounds[tag] = detour
++	}
+ 	for i, tag := range s.tags {
+ 		detour, loaded := s.outbound.Outbound(tag)
+ 		if !loaded {
+@@ -111,15 +131,20 @@
+ 	return s.tags
+ }
+ 
+-func (s *Selector) Selected(network string) adapter.Outbound {
+-	return s.selected.Load()
+-}
++func (s *Selector) Selected(network string) adapter.Outbound { return s.selected.Load() }
+ 
+ func (s *Selector) AttachConnection(closer io.Closer) func() {
+ 	return s.interruptGroup.Add(closer, true)
+ }
+ 
+ func (s *Selector) References() []string {
++	if s.balance != nil {
++		refs := append([]string{}, s.tags...)
++		if s.balance.config.Fallback != "" {
++			refs = append(refs, s.balance.config.Fallback)
++		}
++		return refs
++	}
+ 	selected := s.selected.Load()
+ 	if selected == nil {
+ 		return s.tags[:1]
+@@ -128,6 +153,9 @@
+ }
+ 
+ func (s *Selector) SelectOutbound(tag string) bool {
++	if s.balance != nil {
++		return false
++	}
+ 	detour, loaded := s.outbounds[tag]
+ 	if !loaded {
+ 		return false
+@@ -158,7 +186,11 @@
+ }
+ 
+ func (s *Selector) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
+-	conn, err := s.selected.Load().DialContext(ctx, network, destination)
++	target, err := s.pickOutbound()
++	if err != nil {
++		return nil, err
++	}
++	conn, err := target.DialContext(ctx, network, destination)
+ 	if err != nil {
+ 		return nil, err
+ 	}
+@@ -166,7 +198,11 @@
+ }
+ 
+ func (s *Selector) ListenPacket(ctx context.Context, destination M.Socksaddr) (net.PacketConn, error) {
+-	conn, err := s.selected.Load().ListenPacket(ctx, destination)
++	target, err := s.pickOutbound()
++	if err != nil {
++		return nil, err
++	}
++	conn, err := target.ListenPacket(ctx, destination)
+ 	if err != nil {
+ 		return nil, err
+ 	}
+@@ -185,3 +221,43 @@
+ 		}
+ 	}
+ }
++
++func (s *Selector) pickOutbound() (adapter.Outbound, error) {
++	if s.balance == nil {
++		target := s.selected.Load()
++		if target == nil {
++			return nil, E.New("selector is not started")
++		}
++		return target, nil
++	}
++	tag, err := s.balance.pick(s.tags)
++	if err != nil {
++		return nil, err
++	}
++	target := s.outbounds[tag]
++	if target == nil {
++		return nil, E.New("balancer selected unknown outbound ", tag)
++	}
++	s.selected.Store(target)
++	return target, nil
++}
++func (s *Selector) PostStart() error {
++	if s.balance != nil {
++		s.balance.postStart(s.outbounds)
++	}
++	return nil
++}
++func (s *Selector) Close() error {
++	if s.balance != nil {
++		return s.balance.Close()
++	}
++	return nil
++}
++
++func selectorDependencies(o option.SelectorOutboundOptions) []string {
++	refs := append([]string{}, o.Outbounds...)
++	if o.Balancer != nil && o.Balancer.Fallback != "" && !common.Contains(refs, o.Balancer.Fallback) {
++		refs = append(refs, o.Balancer.Fallback)
++	}
++	return refs
++}
+--- /dev/null
++++ b/protocol/group/xui_balancer.go
+@@ -0,0 +1,292 @@
++package group
++
++import (
++	"context"
++	"encoding/json"
++	"fmt"
++	M "github.com/sagernet/sing/common/metadata"
++	"math"
++	"net"
++	"net/url"
++	"os"
++	"regexp"
++	"sort"
++	"strings"
++	"sync"
++	"time"
++
++	"github.com/sagernet/sing-box/adapter"
++	"github.com/sagernet/sing-box/common/urltest"
++	"github.com/sagernet/sing-box/option"
++	"github.com/sagernet/sing/common/json/badoption"
++	"github.com/sagernet/sing/service"
++	"github.com/xtls/xray-core/app/observatory"
++	XR "github.com/xtls/xray-core/app/router"
++	"github.com/xtls/xray-core/features/extension"
++	"google.golang.org/protobuf/proto"
++)
++
++type balanceState struct {
++	history         *urltest.HistoryStorage
++	started, closed bool
++	ctx             context.Context
++	cancel          context.CancelFunc
++	strategy        XR.BalancingStrategy
++	config          option.XrayBalancerOptions
++	mu              sync.RWMutex
++	reports         map[string]*observatory.OutboundStatus
++	samples         map[string][]probeSample
++	targets         map[string]adapter.Outbound
++	wg              sync.WaitGroup
++}
++type probeSample struct {
++	delay  time.Duration
++	failed bool
++}
++
++func newBalanceState(ctx context.Context, o option.XrayBalancerOptions) (*balanceState, error) {
++	o.Strategy = strings.ToLower(o.Strategy)
++	if o.Strategy == "" {
++		o.Strategy = "random"
++	}
++	if o.Interval <= 0 {
++		o.Interval = badoption.Duration(300 * time.Second)
++	}
++	if o.Timeout <= 0 {
++		o.Timeout = badoption.Duration(10 * time.Second)
++	}
++	if o.Sampling == 0 {
++		o.Sampling = 5
++	}
++	if o.Interval.Build() > time.Duration(math.MaxInt64)/time.Duration(o.Sampling)/2 || o.Sampling > 64 || o.Interval.Build() < time.Second || o.Timeout.Build() < time.Millisecond {
++		return nil, fmt.Errorf("invalid balancing probe limits")
++	}
++	for _, link := range []string{o.ProbeURL, o.Connectivity} {
++		if link != "" {
++			u, err := url.Parse(link)
++			if err != nil || u.Hostname() == "" || u.Scheme != "http" && u.Scheme != "https" {
++				return nil, fmt.Errorf("invalid balancing probe URL")
++			}
++		}
++	}
++	if (o.Strategy == "leastping" || o.Strategy == "leastload" || o.Fallback != "") && o.ProbeURL == "" {
++		return nil, fmt.Errorf("health balancing requires an explicit probe_url")
++	}
++	ctx, cancel := context.WithCancel(ctx)
++	state := &balanceState{history: service.PtrFromContext[urltest.HistoryStorage](ctx), ctx: ctx, cancel: cancel, config: o, reports: map[string]*observatory.OutboundStatus{}, samples: map[string][]probeSample{}}
++	switch o.Strategy {
++	case "random":
++		state.strategy = &XR.RandomStrategy{FallbackTag: o.Fallback}
++	case "roundrobin":
++		state.strategy = &XR.RoundRobinStrategy{FallbackTag: o.Fallback}
++	case "leastping":
++		state.strategy = &XR.LeastPingStrategy{}
++	case "leastload":
++		raw := json.RawMessage(o.Settings)
++		if len(raw) == 0 {
++			raw = []byte("{}")
++		}
++		settings, err := XR.ParseSingBoxLeastLoadSettings(raw)
++		if err != nil {
++			cancel()
++			return nil, err
++		}
++		for _, cost := range settings.Costs {
++			if cost == nil {
++				cancel()
++				return nil, fmt.Errorf("leastLoad costs must be objects")
++			}
++			if cost.Regexp {
++				if _, err := regexp.Compile(cost.Match); err != nil {
++					cancel()
++					return nil, err
++				}
++			}
++		}
++		state.strategy = XR.NewLeastLoadStrategy(settings)
++	default:
++		cancel()
++		return nil, fmt.Errorf("unknown balancing strategy %s", o.Strategy)
++	}
++	if err := XR.BindSingBoxObserver(state.strategy, ctx, state); err != nil {
++		cancel()
++		return nil, err
++	}
++	return state, nil
++}
++func (b *balanceState) Type() any    { return extension.ObservatoryType() }
++func (b *balanceState) Start() error { return nil }
++func (b *balanceState) Close() error {
++	b.mu.Lock()
++	b.closed = true
++	b.cancel()
++	b.mu.Unlock()
++	b.wg.Wait()
++	return nil
++}
++func (b *balanceState) GetObservation(context.Context) (proto.Message, error) {
++	b.mu.RLock()
++	defer b.mu.RUnlock()
++	report := &observatory.ObservationResult{}
++	for _, v := range b.reports {
++		copy := proto.Clone(v).(*observatory.OutboundStatus)
++		if b.config.Burst && time.Since(time.Unix(v.LastTryTime, 0)) > b.config.Interval.Build()*time.Duration(b.config.Sampling)*2 {
++			copy.Alive = false
++		}
++		report.Status = append(report.Status, copy)
++	}
++	sort.Slice(report.Status, func(i, j int) bool { return report.Status[i].OutboundTag < report.Status[j].OutboundTag })
++	return report, nil
++}
++func (b *balanceState) pick(tags []string) (string, error) {
++	tag := b.strategy.PickOutbound(tags)
++	if tag == "" {
++		tag = b.config.Fallback
++	}
++	if tag == "" {
++		return "", fmt.Errorf("balancer has no healthy outbound")
++	}
++	return tag, nil
++}
++func (b *balanceState) postStart(targets map[string]adapter.Outbound) {
++	b.mu.Lock()
++	if b.started || b.closed {
++		b.mu.Unlock()
++		return
++	}
++	b.started = true
++	b.targets = targets
++	if b.config.ProbeURL == "" {
++		b.mu.Unlock()
++		return
++	}
++	b.wg.Add(1)
++	b.mu.Unlock()
++	go func() {
++		defer b.wg.Done()
++		b.probe()
++		ticker := time.NewTicker(b.config.Interval.Build())
++		defer ticker.Stop()
++		for {
++			select {
++			case <-b.ctx.Done():
++				return
++			case <-ticker.C:
++				b.probe()
++			}
++		}
++	}()
++}
++func (b *balanceState) probe() {
++	limit := 1
++	if b.config.Concurrent {
++		limit = 4
++	}
++	semaphore := make(chan struct{}, limit)
++	var group sync.WaitGroup
++	for tag, detour := range b.targets {
++		if len(b.config.ProbeTags) > 0 {
++			found := false
++			for _, subject := range b.config.ProbeTags {
++				if subject == tag {
++					found = true
++					break
++				}
++			}
++			if !found {
++				continue
++			}
++		}
++		if tag == b.config.Fallback {
++			continue
++		}
++		select {
++		case semaphore <- struct{}{}:
++		case <-b.ctx.Done():
++			group.Wait()
++			return
++		}
++		group.Add(1)
++		go func(tag string, detour adapter.Outbound) {
++			defer group.Done()
++			defer func() { <-semaphore }()
++			ctx, cancel := context.WithTimeout(b.ctx, b.config.Timeout.Build())
++			delay, err := urltest.URLTestWithMethod(ctx, b.config.ProbeURL, b.config.Method, detour)
++			cancel()
++			if err != nil && b.config.Connectivity != "" {
++				ctx, cancel := context.WithTimeout(b.ctx, b.config.Timeout.Build())
++				_, connectErr := urltest.URLTestWithMethod(ctx, b.config.Connectivity, b.config.Method, directProbeDialer{})
++				cancel()
++				if connectErr != nil {
++					return
++				}
++			}
++			b.record(tag, time.Duration(delay)*time.Millisecond, err)
++		}(tag, detour)
++	}
++	group.Wait()
++}
++
++type directProbeDialer struct{}
++
++func (directProbeDialer) DialContext(ctx context.Context, network string, address M.Socksaddr) (net.Conn, error) {
++	var d net.Dialer
++	return d.DialContext(ctx, network, address.String())
++}
++func (directProbeDialer) ListenPacket(context.Context, M.Socksaddr) (net.PacketConn, error) {
++	return nil, os.ErrInvalid
++}
++
++func (b *balanceState) record(tag string, delay time.Duration, err error) {
++	b.mu.Lock()
++	samples := append(b.samples[tag], probeSample{delay: delay, failed: err != nil})
++	if len(samples) > int(b.config.Sampling) {
++		samples = samples[len(samples)-int(b.config.Sampling):]
++	}
++	b.samples[tag] = samples
++	health := &observatory.HealthPingMeasurementResult{All: int64(len(samples))}
++	var sum float64
++	var delays []float64
++	for _, s := range samples {
++		if s.failed {
++			health.Fail++
++			continue
++		}
++		sum += float64(s.delay)
++		delays = append(delays, float64(s.delay))
++	}
++	if len(delays) > 0 {
++		mean := sum / float64(len(delays))
++		health.Average = int64(mean)
++		var variance float64
++		for _, d := range delays {
++			variance += (d - mean) * (d - mean)
++		}
++		if len(delays) == 1 {
++			health.Deviation = int64(mean / 2)
++		} else {
++			health.Deviation = int64(math.Sqrt(variance / float64(len(delays)-1)))
++		}
++	}
++	report := &observatory.OutboundStatus{OutboundTag: tag, Alive: err == nil, Delay: delay.Milliseconds(), HealthPing: health, LastTryTime: time.Now().Unix()}
++	if err != nil {
++		report.LastErrorReason = err.Error()
++	} else {
++		report.LastSeenTime = time.Now().Unix()
++	}
++	if b.config.Burst {
++		report.Alive = health.All > health.Fail
++		report.Delay = health.Average / int64(time.Millisecond)
++	} else {
++		report.HealthPing = nil
++	}
++	b.reports[tag] = report
++	b.mu.Unlock()
++	if b.history != nil {
++		measured := uint16(min(max(report.Delay, 0), 65535))
++		if !report.Alive {
++			measured = 65535
++		}
++		b.history.StoreURLTestHistory(tag, &adapter.URLTestHistory{Time: time.Now(), Delay: measured})
++	}
++}
+--- a/common/urltest/urltest.go
++++ b/common/urltest/urltest.go
+@@ -72,11 +72,11 @@
+ 
+ func (s *HistoryStorage) StoreURLTestHistory(tag string, history *adapter.URLTestHistory) *adapter.URLTestHistory {
+ 	s.access.Lock()
+-	if old, ok := s.delayHistory[tag]; ok && history != nil {
+-		old.Delay = history.Delay
+-		old.Time = history.Time
++	if history != nil {
++		copy := *history
++		s.delayHistory[tag] = &copy
+ 	} else {
+-		s.delayHistory[tag] = history
++		s.delayHistory[tag] = nil
+ 	}
+ 	history = s.delayHistory[tag]
+ 	s.access.Unlock()
+@@ -130,7 +130,19 @@
+ 	return urlTest(ctx, link, detour)
+ }
+ 
+-func urlTest(ctx context.Context, link string, detour N.Dialer) (t uint16, err error) {
++func URLTestWithMethod(ctx context.Context, link, method string, detour N.Dialer) (uint16, error) {
++	if method == "" || method == http.MethodHead {
++		return URLTest(ctx, link, detour)
++	}
++	if detour == nil {
++		return 0, fmt.Errorf("urltest dialer is nil")
++	}
++	return urlTestWithMethod(ctx, link, method, detour)
++}
++func urlTest(ctx context.Context, link string, detour N.Dialer) (uint16, error) {
++	return urlTestWithMethod(ctx, link, http.MethodHead, detour)
++}
++func urlTestWithMethod(ctx context.Context, link, method string, detour N.Dialer) (t uint16, err error) {
+ 	if link == "" {
+ 		link = "https://www.gstatic.com/generate_204"
+ 	}
+@@ -158,12 +170,13 @@
+ 	if N.NeedHandshakeForWrite(instance) {
+ 		start = time.Now()
+ 	}
+-	req, err := http.NewRequest(http.MethodHead, link, nil)
++	req, err := http.NewRequestWithContext(ctx, method, link, nil)
+ 	if err != nil {
+ 		return
+ 	}
+ 	select {
+ 	case <-ctx.Done():
++		err = ctx.Err()
+ 		return
+ 	default:
+ 	}
+@@ -185,6 +198,7 @@
+ 	defer client.CloseIdleConnections()
+ 	select {
+ 	case <-ctx.Done():
++		err = ctx.Err()
+ 		return
+ 	default:
+ 	}
+--- /dev/null
++++ b/transport/v2raykcp/config.go
+@@ -0,0 +1,42 @@
++package v2raykcp
++
++import (
++	"encoding/json"
++	"fmt"
++	"github.com/sagernet/sing-box/hiddify/finalmask"
++	"github.com/sagernet/sing-box/option"
++	Xbuf "github.com/xtls/xray-core/common/buf"
++	"github.com/xtls/xray-core/transport/internet/kcp"
++)
++
++func buildOptions(o option.V2RayKCPOptions) (*kcp.Config, *finalmask.Masks, error) {
++	c := &kcp.Config{Mtu: 1350, Tti: 50, UplinkCapacity: 5, DownlinkCapacity: 20, CwndMultiplier: 1, MaxSendingWindow: 2 * 1024 * 1024}
++	for _, pair := range []struct {
++		value  *uint32
++		target *uint32
++	}{{o.MTU, &c.Mtu}, {o.TTI, &c.Tti}, {o.UplinkCapacity, &c.UplinkCapacity}, {o.DownlinkCapacity, &c.DownlinkCapacity}, {o.CwndMultiplier, &c.CwndMultiplier}, {o.MaxSendingWindow, &c.MaxSendingWindow}} {
++		if pair.value != nil {
++			*pair.target = *pair.value
++		}
++	}
++	if c.Mtu < 21 || c.Mtu > uint32(Xbuf.Size) || c.Tti < 10 || c.Tti > 1000 || c.CwndMultiplier < 1 || c.MaxSendingWindow < c.Mtu || c.UplinkCapacity > 4095 || c.DownlinkCapacity > 4095 {
++		return nil, nil, fmt.Errorf("invalid mKCP MTU, TTI, capacity or sending window")
++	}
++	masks := o.FinalMask
++	if o.Legacy || o.Seed != "" || o.Header != "" && o.Header != "none" {
++		if masks != nil && !masks.IsEmpty() {
++			return nil, nil, fmt.Errorf("mKCP legacy options and explicit masks are mutually exclusive")
++		}
++		seed, _ := json.Marshal(map[string]string{"value": o.Seed})
++		masks = &option.FinalMaskOptions{UDP: []option.FinalMaskItem{{Type: "mkcp-legacy", Settings: seed}}}
++		if o.Header != "" && o.Header != "none" {
++			header, _ := json.Marshal(map[string]string{"header": o.Header})
++			masks.UDP = append(masks.UDP, option.FinalMaskItem{Type: "mkcp-legacy", Settings: header})
++		}
++	}
++	if masks != nil && len(masks.TCP) > 0 {
++		return nil, nil, fmt.Errorf("mKCP accepts UDP masks only")
++	}
++	built, err := finalmask.Build(masks)
++	return c, built, err
++}
+--- /dev/null
++++ b/transport/v2raykcp/client.go
+@@ -0,0 +1,105 @@
++package v2raykcp
++
++import (
++	"context"
++	"crypto/rand"
++	"encoding/binary"
++	"github.com/sagernet/sing-box/common/tls"
++	"github.com/sagernet/sing-box/hiddify/finalmask"
++	"github.com/sagernet/sing-box/option"
++	M "github.com/sagernet/sing/common/metadata"
++	N "github.com/sagernet/sing/common/network"
++	"github.com/xtls/xray-core/transport/internet/kcp"
++	"io"
++	"net"
++	"sync"
++)
++
++type Client struct {
++	dialer   N.Dialer
++	address  M.Socksaddr
++	config   *kcp.Config
++	masks    *finalmask.Masks
++	tls      tls.Config
++	mu       sync.Mutex
++	closed   bool
++	sessions map[*kcp.Connection]struct{}
++}
++
++func NewClient(ctx context.Context, dialer N.Dialer, address M.Socksaddr, o option.V2RayKCPOptions, tlsConfig tls.Config) (*Client, error) {
++	config, masks, err := buildOptions(o)
++	if err != nil {
++		return nil, err
++	}
++	return &Client{dialer: dialer, address: address, config: config, masks: masks, tls: tlsConfig, sessions: make(map[*kcp.Connection]struct{})}, nil
++}
++func (c *Client) DialContext(ctx context.Context) (net.Conn, error) {
++	c.mu.Lock()
++	closed := c.closed
++	c.mu.Unlock()
++	if closed {
++		return nil, net.ErrClosed
++	}
++	raw, err := c.dialer.DialContext(ctx, N.NetworkUDP, c.address)
++	if err != nil {
++		return nil, err
++	}
++	if c.masks != nil {
++		raw, err = c.masks.WrapConn(raw, N.NetworkUDP, c.address)
++		if err != nil {
++			return nil, err
++		}
++	}
++	var conversation [2]byte
++	if _, err = io.ReadFull(rand.Reader, conversation[:]); err != nil {
++		raw.Close()
++		return nil, err
++	}
++	session := kcp.NewConnection(kcp.ConnMetadata{LocalAddr: raw.LocalAddr(), RemoteAddr: raw.RemoteAddr(), Conversation: binary.BigEndian.Uint16(conversation[:])}, raw, raw, c.config)
++	c.mu.Lock()
++	if c.closed {
++		c.mu.Unlock()
++		session.Terminate()
++		return nil, net.ErrClosed
++	}
++	c.sessions[session] = struct{}{}
++	c.mu.Unlock()
++	go func() {
++		defer func() { session.Terminate(); c.mu.Lock(); delete(c.sessions, session); c.mu.Unlock() }()
++		var reader kcp.KCPPacketReader
++		packet := make([]byte, 65536)
++		for {
++			n, err := raw.Read(packet)
++			if err != nil {
++				return
++			}
++			segments := reader.Read(packet[:n])
++			if len(segments) > 0 {
++				session.Input(segments)
++			}
++		}
++	}()
++	var conn net.Conn = session
++	if c.tls != nil {
++		conn, err = tls.ClientHandshake(ctx, session, c.tls)
++		if err != nil {
++			session.Terminate()
++			return nil, err
++		}
++	}
++	return conn, nil
++}
++
++func (c *Client) Close() error {
++	c.mu.Lock()
++	c.closed = true
++	list := make([]*kcp.Connection, 0, len(c.sessions))
++	for s := range c.sessions {
++		list = append(list, s)
++	}
++	c.mu.Unlock()
++	for _, s := range list {
++		s.Terminate()
++	}
++	return nil
++}
+--- /dev/null
++++ b/transport/v2raykcp/server.go
+@@ -0,0 +1,136 @@
++package v2raykcp
++
++import (
++	"context"
++	"github.com/sagernet/sing-box/adapter"
++	"github.com/sagernet/sing-box/common/tls"
++	"github.com/sagernet/sing-box/hiddify/finalmask"
++	"github.com/sagernet/sing-box/option"
++	"github.com/sagernet/sing/common/logger"
++	M "github.com/sagernet/sing/common/metadata"
++	N "github.com/sagernet/sing/common/network"
++	"github.com/xtls/xray-core/transport/internet/kcp"
++	"net"
++	"os"
++	"sync"
++)
++
++type sessionID struct {
++	address      string
++	conversation uint16
++}
++type Server struct {
++	ctx      context.Context
++	config   *kcp.Config
++	masks    *finalmask.Masks
++	tls      tls.ServerConfig
++	handler  adapter.V2RayServerTransportHandler
++	mu       sync.Mutex
++	closed   bool
++	packet   net.PacketConn
++	sessions map[sessionID]*kcp.Connection
++}
++
++func NewServer(ctx context.Context, logger logger.ContextLogger, o option.V2RayKCPOptions, tlsConfig tls.ServerConfig, handler adapter.V2RayServerTransportHandler) (*Server, error) {
++	config, masks, err := buildOptions(o)
++	if err != nil {
++		return nil, err
++	}
++	return &Server{ctx: ctx, config: config, masks: masks, tls: tlsConfig, handler: handler, sessions: make(map[sessionID]*kcp.Connection)}, nil
++}
++func (s *Server) Network() []string        { return []string{N.NetworkUDP} }
++func (s *Server) Serve(net.Listener) error { return os.ErrInvalid }
++func (s *Server) ServePacket(packet net.PacketConn) error {
++	var err error
++	if s.masks != nil && s.masks.UDP != nil {
++		raw := packet
++		packet, err = s.masks.UDP.WrapPacketConnServer(raw)
++		if err != nil {
++			raw.Close()
++			return err
++		}
++	}
++	s.mu.Lock()
++	if s.closed {
++		s.mu.Unlock()
++		packet.Close()
++		return net.ErrClosed
++	}
++	s.packet = packet
++	s.mu.Unlock()
++	var reader kcp.KCPPacketReader
++	data := make([]byte, 65536)
++	for {
++		n, addr, err := packet.ReadFrom(data)
++		if err != nil {
++			return err
++		}
++		segments := reader.Read(data[:n])
++		if len(segments) == 0 {
++			continue
++		}
++		id := sessionID{addr.String(), segments[0].Conversation()}
++		s.mu.Lock()
++		conn := s.sessions[id]
++		if conn == nil {
++			if s.closed {
++				s.mu.Unlock()
++				return net.ErrClosed
++			}
++			if segments[0].Command() == kcp.CommandTerminate || len(s.sessions) >= 4096 {
++				s.mu.Unlock()
++				continue
++			}
++			writer := &packetWriter{packet: packet, address: addr, server: s, id: id}
++			conn = kcp.NewConnection(kcp.ConnMetadata{LocalAddr: packet.LocalAddr(), RemoteAddr: addr, Conversation: id.conversation}, writer, writer, s.config)
++			s.sessions[id] = conn
++			go s.handle(conn, addr)
++		}
++		s.mu.Unlock()
++		conn.Input(segments)
++	}
++}
++func (s *Server) handle(session *kcp.Connection, addr net.Addr) {
++	var conn net.Conn = session
++	var err error
++	if s.tls != nil {
++		conn, err = tls.ServerHandshake(s.ctx, session, s.tls)
++		if err != nil {
++			session.Terminate()
++			return
++		}
++	}
++	s.handler.NewConnectionEx(s.ctx, conn, M.SocksaddrFromNet(addr), M.Socksaddr{}, nil)
++}
++func (s *Server) Close() error {
++	s.mu.Lock()
++	s.closed = true
++	packet := s.packet
++	list := make([]*kcp.Connection, 0, len(s.sessions))
++	for _, c := range s.sessions {
++		list = append(list, c)
++	}
++	s.mu.Unlock()
++	if packet != nil {
++		packet.Close()
++	}
++	for _, c := range list {
++		c.Terminate()
++	}
++	return nil
++}
++
++type packetWriter struct {
++	packet  net.PacketConn
++	address net.Addr
++	server  *Server
++	id      sessionID
++}
++
++func (w *packetWriter) Write(p []byte) (int, error) { return w.packet.WriteTo(p, w.address) }
++func (w *packetWriter) Close() error {
++	w.server.mu.Lock()
++	delete(w.server.sessions, w.id)
++	w.server.mu.Unlock()
++	return nil
++}
+--- a/transport/v2rayxhttp/server.go
++++ b/transport/v2rayxhttp/server.go
+@@ -8,7 +8,6 @@
+ 	"io"
+ 	"net"
+ 	"net/http"
+-	"net/url"
+ 	"os"
+ 	"strconv"
+ 	"strings"
+@@ -117,21 +116,13 @@
+ 	}
+ 	ApplyXPaddingToHeader(writer.Header(), config)
+ 	validRange := s.options.GetNormalizedXPaddingBytes()
+-	paddingLength := 0
+-	referrer := request.Header.Get("Referer")
+-	if referrer != "" {
+-		if referrerURL, err := url.Parse(referrer); err == nil {
+-			// Browser dialer cannot control the host part of referrer header, so only check the query
+-			paddingLength = len(referrerURL.Query().Get("x_padding"))
+-		}
+-	} else {
+-		paddingLength = len(request.URL.Query().Get("x_padding"))
+-	}
+-	if int32(paddingLength) < validRange.From || int32(paddingLength) > validRange.To {
+-		s.logger.ErrorContext(request.Context(), "invalid x_padding length:", int32(paddingLength))
++	padding, _ := ExtractXPaddingFromRequest(&s.options.V2RayXHTTPBaseOptions, request, s.options.XPaddingObfsMode)
++	if !IsPaddingValid(&s.options.V2RayXHTTPBaseOptions, padding, validRange.From, validRange.To, PaddingMethod(s.options.XPaddingMethod)) {
++		s.logger.ErrorContext(request.Context(), "invalid x_padding")
+ 		writer.WriteHeader(http.StatusBadRequest)
+ 		return
+ 	}
++
+ 	sessionId, seqStr := ExtractMetaFromRequest(s.options, request, s.path)
+ 	if sessionId == "" && s.options.Mode != "" && s.options.Mode != "auto" && s.options.Mode != "stream-one" && s.options.Mode != "stream-up" {
+ 		s.logger.ErrorContext(request.Context(), "stream-one mode is not allowed")
+--- a/transport/v2rayxhttp/xpadding.go
++++ b/transport/v2rayxhttp/xpadding.go
+@@ -39,11 +39,11 @@
+ }
+ 
+ func randStringFromCharset(n int, charset string) (string, bool) {
+-	if n <= 0 || len(charset) == 0 {
++	if n <= 0 || len(charset) == 0 || len(charset) > 256 {
+ 		return "", false
+ 	}
+ 	m := len(charset)
+-	limit := byte(256 - (256 % m))
++	limit := 256 - (256 % m)
+ 	result := make([]byte, n)
+ 	i := 0
+ 	buf := make([]byte, 256)
+@@ -52,7 +52,7 @@
+ 			return "", false
+ 		}
+ 		for _, rb := range buf {
+-			if rb >= limit {
++			if int(rb) >= limit {
+ 				continue
+ 			}
+ 			result[i] = charset[int(rb)%m]
+--- a/transport/v2rayxhttp/writer.go
++++ b/transport/v2rayxhttp/writer.go
+@@ -30,12 +30,14 @@
+ 	common.Must2(buffer.Write(b))
+ 
+ 	var writed int
+-	for _, buff := range buffer.MultiBuffer {
++	for i, buff := range buffer.MultiBuffer {
++		size := int(buff.Len())
+ 		err := w.WriteMultiBuffer(buf.MultiBuffer{buff})
+ 		if err != nil {
++			buf.ReleaseMulti(buffer.MultiBuffer[i+1:])
+ 			return writed, err
+ 		}
+-		writed += int(buff.Len())
++		writed += size
+ 	}
+ 	return writed, nil
+ }
+--- a/transport/v2rayxhttp/dialer.go
++++ b/transport/v2rayxhttp/dialer.go
+@@ -245,48 +245,51 @@
+ 	ctx  context.Context
+ 	Wait chan struct{}
+ 	io.ReadCloser
++	mutex    sync.Mutex
++	waitOnce sync.Once
++	closed   bool
+ }
+ 
+ func (w *WaitReadCloser) Set(rc io.ReadCloser) {
++	w.mutex.Lock()
++	if w.closed || w.ReadCloser != nil {
++		w.mutex.Unlock()
++		if rc != nil {
++			rc.Close()
++		}
++		return
++	}
+ 	w.ReadCloser = rc
+-	defer func() {
+-		if recover() != nil {
+-			rc.Close()
+-		}
+-	}()
+-	close(w.Wait)
+-}
+-
+-func (w *WaitReadCloser) Read(b []byte) (int, error) {
++	w.waitOnce.Do(func() { close(w.Wait) })
++	w.mutex.Unlock()
++}
++func (w *WaitReadCloser) Read(p []byte) (int, error) {
+ 	select {
+ 	case <-w.ctx.Done():
+ 		return 0, w.ctx.Err()
+-	default:
+-	}
+-
+-	if w.ReadCloser == nil {
+-		select {
+-		case <-w.ctx.Done():
+-			return 0, w.ctx.Err()
+-		case <-w.Wait:
+-		}
+-		if w.ReadCloser == nil {
+-			return 0, io.ErrClosedPipe
+-		}
+-	}
+-	return w.ReadCloser.Read(b)
+-}
+-
++	case <-w.Wait:
++	}
++	w.mutex.Lock()
++	reader, closed := w.ReadCloser, w.closed
++	w.mutex.Unlock()
++	if closed || reader == nil {
++		return 0, io.ErrClosedPipe
++	}
++	return reader.Read(p)
++}
+ func (w *WaitReadCloser) Close() error {
+-	if w.ReadCloser != nil {
+-		return w.ReadCloser.Close()
+-	}
+-	defer func() {
+-		if recover() != nil && w.ReadCloser != nil {
+-			w.ReadCloser.Close()
+-		}
+-	}()
+-	close(w.Wait)
++	w.mutex.Lock()
++	if w.closed {
++		w.mutex.Unlock()
++		return nil
++	}
++	w.closed = true
++	reader := w.ReadCloser
++	w.waitOnce.Do(func() { close(w.Wait) })
++	w.mutex.Unlock()
++	if reader != nil {
++		return reader.Close()
++	}
+ 	return nil
+ }
+ 
+--- a/transport/v2rayxhttp/upload_queue.go
++++ b/transport/v2rayxhttp/upload_queue.go
+@@ -1,15 +1,10 @@
+ package xhttp
+-
+-// upload_queue is a specialized priorityqueue + channel to reorder generic
+-// packets by a sequence number
+ 
+ import (
+ 	"container/heap"
++	E "github.com/sagernet/sing/common/exceptions"
+ 	"io"
+-	"runtime"
+ 	"sync"
+-
+-	E "github.com/sagernet/sing/common/exceptions"
+ )
+ 
+ type Packet struct {
+@@ -17,122 +12,160 @@
+ 	Payload []byte
+ 	Seq     uint64
+ }
+-
+ type uploadQueue struct {
+ 	reader          io.ReadCloser
+ 	nomore          bool
+ 	pushedPackets   chan Packet
+ 	writeCloseMutex sync.Mutex
++	readMutex       sync.Mutex
+ 	heap            uploadHeap
+ 	nextSeq         uint64
+ 	closed          bool
+ 	maxPackets      int
++	done            chan struct{}
++	space           chan struct{}
+ }
+ 
+ func NewUploadQueue(maxPackets int) *uploadQueue {
+-	return &uploadQueue{
+-		pushedPackets: make(chan Packet, maxPackets),
+-		heap:          uploadHeap{},
+-		nextSeq:       0,
+-		closed:        false,
+-		maxPackets:    maxPackets,
++	if maxPackets < 1 {
++		maxPackets = 1
++	}
++	return &uploadQueue{pushedPackets: make(chan Packet, maxPackets), maxPackets: maxPackets, done: make(chan struct{}), space: make(chan struct{}, 1)}
++}
++func (h *uploadQueue) Push(p Packet) error {
++	for {
++		h.writeCloseMutex.Lock()
++		if h.closed {
++			h.writeCloseMutex.Unlock()
++			return E.New("packet queue closed")
++		}
++		if h.nomore {
++			h.writeCloseMutex.Unlock()
++			return E.New("h.reader already exists")
++		}
++		select {
++		case h.pushedPackets <- p:
++			if p.Reader != nil {
++				h.nomore = true
++			}
++			h.writeCloseMutex.Unlock()
++			return nil
++		default:
++			h.writeCloseMutex.Unlock()
++		}
++		select {
++		case <-h.done:
++			return E.New("packet queue closed")
++		case <-h.space:
++		}
+ 	}
+ }
+-
+-func (h *uploadQueue) Push(p Packet) error {
+-	h.writeCloseMutex.Lock()
+-	defer h.writeCloseMutex.Unlock()
+-	if h.closed {
+-		return E.New("packet queue closed")
+-	}
+-	if h.nomore {
+-		return E.New("h.reader already exists")
+-	}
+-	if p.Reader != nil {
+-		h.nomore = true
+-	}
+-	h.pushedPackets <- p
+-	return nil
+-}
+-
+ func (h *uploadQueue) Close() error {
+ 	h.writeCloseMutex.Lock()
+-	defer h.writeCloseMutex.Unlock()
+-	if !h.closed {
+-		h.closed = true
+-		runtime.Gosched() // hope Read() gets the packet
+-	f:
+-		for {
+-			select {
+-			case p := <-h.pushedPackets:
+-				if p.Reader != nil {
+-					h.reader = p.Reader
+-				}
+-			default:
+-				break f
++	if h.closed {
++		h.writeCloseMutex.Unlock()
++		return nil
++	}
++	h.closed = true
++	close(h.done)
++	reader := h.reader
++	var pending []io.ReadCloser
++	for {
++		select {
++		case p := <-h.pushedPackets:
++			if p.Reader != nil {
++				pending = append(pending, p.Reader)
+ 			}
++		default:
++			h.writeCloseMutex.Unlock()
++			if reader != nil {
++				reader.Close()
++			}
++			for _, r := range pending {
++				r.Close()
++			}
++			return nil
+ 		}
+-		close(h.pushedPackets)
+ 	}
+-	if h.reader != nil {
+-		return h.reader.Close()
++}
++func (h *uploadQueue) receive() (Packet, bool) {
++	select {
++	case <-h.done:
++		return Packet{}, false
++	case p := <-h.pushedPackets:
++		select {
++		case h.space <- struct{}{}:
++		default:
++		}
++		return p, true
+ 	}
+-	return nil
+ }
+-
+ func (h *uploadQueue) Read(b []byte) (int, error) {
+-	if h.reader != nil {
+-		return h.reader.Read(b)
++	if len(b) == 0 {
++		return 0, nil
+ 	}
+-	if h.closed {
+-		return 0, io.EOF
+-	}
+-	if len(h.heap) == 0 {
+-		packet, more := <-h.pushedPackets
+-		if !more {
++	h.readMutex.Lock()
++	defer h.readMutex.Unlock()
++	for {
++		h.writeCloseMutex.Lock()
++		closed, reader := h.closed, h.reader
++		h.writeCloseMutex.Unlock()
++		if closed {
+ 			return 0, io.EOF
+ 		}
+-		if packet.Reader != nil {
+-			h.reader = packet.Reader
+-			return h.reader.Read(b)
++		if reader != nil {
++			return reader.Read(b)
+ 		}
+-		heap.Push(&h.heap, packet)
+-	}
+-	for len(h.heap) > 0 {
++		if len(h.heap) == 0 {
++			p, ok := h.receive()
++			if !ok {
++				return 0, io.EOF
++			}
++			if p.Reader != nil {
++				h.writeCloseMutex.Lock()
++				if h.closed {
++					h.writeCloseMutex.Unlock()
++					p.Reader.Close()
++					return 0, io.EOF
++				}
++				h.reader = p.Reader
++				h.writeCloseMutex.Unlock()
++				return p.Reader.Read(b)
++			}
++			heap.Push(&h.heap, p)
++		}
+ 		packet := heap.Pop(&h.heap).(Packet)
+-		n := 0
+-
+-		if packet.Seq == h.nextSeq {
+-			copy(b, packet.Payload)
+-			n = min(len(b), len(packet.Payload))
+-
+-			if n < len(packet.Payload) {
+-				// partial read
+-				packet.Payload = packet.Payload[n:]
+-				heap.Push(&h.heap, packet)
+-			} else {
+-				h.nextSeq = packet.Seq + 1
+-			}
+-
+-			return n, nil
++		if packet.Seq < h.nextSeq {
++			continue
+ 		}
+-		// misordered packet
+ 		if packet.Seq > h.nextSeq {
++			heap.Push(&h.heap, packet)
+ 			if len(h.heap) > h.maxPackets {
+-				// the "reassembly buffer" is too large, and we want to
+-				// constrain memory usage somehow. let's tear down the
+-				// connection, and hope the application retries.
+ 				return 0, E.New("packet queue is too large")
+ 			}
+-			heap.Push(&h.heap, packet)
+-			packet2, more := <-h.pushedPackets
+-			if !more {
++			p, ok := h.receive()
++			if !ok {
+ 				return 0, io.EOF
+ 			}
+-			heap.Push(&h.heap, packet2)
++			if p.Reader != nil {
++				p.Reader.Close()
++				return 0, E.New("cannot mix stream and packet upload")
++			}
++			heap.Push(&h.heap, p)
++			continue
+ 		}
++		n := copy(b, packet.Payload)
++		if n < len(packet.Payload) {
++			packet.Payload = packet.Payload[n:]
++			heap.Push(&h.heap, packet)
++		} else {
++			h.nextSeq++
++		}
++		if n == 0 {
++			continue
++		}
++		return n, nil
+ 	}
+-	return 0, nil
+ }
+ 
+ // heap code directly taken from https://pkg.go.dev/container/heap

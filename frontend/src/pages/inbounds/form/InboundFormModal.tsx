@@ -78,7 +78,15 @@ import {
   WireguardFields,
   VkTurnProxyFields,
 } from './protocols';
-import { GrpcForm, HttpUpgradeForm, RawForm, SockoptForm, WsForm, XhttpForm } from './transport';
+import {
+  GrpcForm,
+  HttpUpgradeForm,
+  KcpForm,
+  RawForm,
+  SockoptForm,
+  WsForm,
+  XhttpForm,
+} from './transport';
 import { RealityForm, TlsForm } from './security';
 import { useSecurityActions } from './useSecurityActions';
 import { useInboundFallbacks } from './useInboundFallbacks';
@@ -1090,7 +1098,7 @@ export default function InboundFormModal({
     }
     cleaned[`${next}Settings`] = newStreamSlice(next);
     const fm = cleaned.finalmask as Record<string, unknown> | undefined;
-    if (fm && Array.isArray(fm.udp)) {
+    if (next !== 'kcp' && fm && Array.isArray(fm.udp)) {
       cleaned.finalmask = {
         ...fm,
         udp: (fm.udp as unknown[]).filter((m) => (m as { type?: string })?.type !== 'mkcp-legacy'),
@@ -1116,6 +1124,9 @@ export default function InboundFormModal({
             disabled={mode === 'edit' && dbInbound?.protocol === Protocols.SHADOWTLS}
             options={[
               { value: 'tcp', label: 'RAW' },
+              ...(['vless', 'vmess', 'trojan'].includes(protocol)
+                ? [{ value: 'kcp', label: 'mKCP' }]
+                : []),
               ...(SHADOWTLS_TCP_PROTOCOLS.has(protocol)
                 ? [{ value: 'shadowtls', label: 'ShadowTLS' }]
                 : []),
@@ -1146,6 +1157,7 @@ export default function InboundFormModal({
         !SHADOWTLS_STREAMLESS_PROTOCOLS.has(protocol) && (
           <>
             {network === 'tcp' && <RawForm />}
+            {network === 'kcp' && <KcpForm />}
 
             {network === 'ws' && <WsForm />}
 

@@ -76,6 +76,7 @@ export const MUX_PROTOCOLS = new Set<string>(['vmess', 'vless', 'trojan', 'shado
 
 export const NETWORK_OPTIONS: { value: string; label: string }[] = [
   { value: 'tcp', label: 'RAW' },
+  { value: 'kcp', label: 'mKCP' },
   { value: 'ws', label: 'WebSocket' },
   { value: 'grpc', label: 'gRPC' },
   { value: 'httpupgrade', label: 'HTTPUpgrade' },

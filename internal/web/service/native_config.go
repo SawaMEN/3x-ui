@@ -127,7 +127,7 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot) (*
 						available = append(available, outbound)
 					}
 				}
-				balancers, err := singbox.TranslateXrayBalancers(rawBalancers, available...)
+				balancers, err := hiddify.TranslateBalancers(rawBalancers, xrayCfg, available...)
 				if err != nil {
 					return nil, err
 				}
@@ -325,6 +325,9 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot) (*
 			}
 			switch inbound.Protocol {
 			case model.VLESS:
+				if client.Reverse != nil {
+					entry["reverse"] = map[string]any{"tag": client.Reverse.Tag}
+				}
 				if client.ID != "" {
 					entry["id"] = client.ID
 				}
@@ -531,6 +534,9 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot) (*
 		if err := injectSingBoxMtprotoEgress(cfg, inbound); err != nil {
 			return nil, err
 		}
+	}
+	if err := hiddify.AddReversePortals(cfg); err != nil {
+		return nil, err
 	}
 	if len(sniffRules) > 0 {
 		if cfg.Route == nil {
