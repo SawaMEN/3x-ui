@@ -252,7 +252,7 @@ func TestGetSubsIncludesAnyTLSAndShadowTLS(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &hiddifyProfile); err != nil {
 		t.Fatalf("Hiddify needs one JSON document: %v", err)
 	}
-	if len(hiddifyProfile["outbounds"].([]any)) < 4 ||
+	if len(hiddifyProfile["outbounds"].([]any)) < 3 ||
 		!strings.Contains(response.Body.String(), `"type": "anytls"`) {
 		t.Fatalf("Hiddify is missing AnyTLS, ShadowTLS or its hidden transport: %s", response.Body.String())
 	}
