@@ -1,23 +1,26 @@
 {
   "schema_version": 2,
   "stage": 4,
-  "audit_date": "2026-10-11",
+  "audit_date": "2026-10-12",
   "previous_baseline": "hiddify-core-v5-baseline.json",
   "target": {
     "repository": "https://github.com/SawaMEN/hiddify-core",
-    "commit": "b5749002266b9782803669138494ef6937eb4e95",
+    "commit": "0b366d6879192a33a77053fad52571223ff367b0",
     "submodules": {
-      "hiddify-sing-box": "8a82b70836022a1b56eca15df12f56f903cfb27d",
+      "hiddify-sing-box": "3827d3a871dd3bcc7e8265538df7ceb157dd0066",
       "ray2sing": "505d8c645f1dad54544abd024ffd8100a8d771e8"
     },
     "submodule_repositories": {
       "hiddify-sing-box": "https://github.com/SawaMEN/hiddify-sing-box",
       "ray2sing": "https://github.com/hiddify/ray2sing"
     },
-    "version": "sawamen-b5749002266b-panel8"
+    "version": "sawamen-0b366d687919-3827d3a871dd-panel8"
   },
   "runtime_contract": {
-    "raw_config_command": ["srun", "-c"],
+    "raw_config_command": [
+      "srun",
+      "-c"
+    ],
     "validation_cli_available": true,
     "stats_grpc_method": "/v2ray.core.app.stats.command.StatsService/QueryStats",
     "panel_runtime_integrated": true,
@@ -100,9 +103,11 @@
       "with_xui_panel",
       "with_masque"
     ],
-    "sing_box_version": "sawamen-8a82b7083602",
+    "sing_box_version": "sawamen-3827d3a871dd",
     "check_command_overlay": "deploy/hiddify/cmd_xui_check.go.in",
-    "runtime_dependencies": ["matching libcronet for Naive outbound"],
+    "runtime_dependencies": [
+      "matching libcronet for Naive outbound"
+    ],
     "activation_ready": false,
     "toolchain": "go1.26.9",
     "validation_cli_available": true,
