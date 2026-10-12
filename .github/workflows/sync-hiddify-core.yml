@@ -2,6 +2,12 @@ name: Synchronize latest Sing-box kernel
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/sync-hiddify-core.yml'
+      - 'tools/sync-hiddify-latest.py'
+      - 'tools/build-hiddify-core.sh'
   schedule:
     - cron: "17 */6 * * *"
 
