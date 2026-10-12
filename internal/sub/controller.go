@@ -485,7 +485,7 @@ func (a *SUBController) subs(c *gin.Context) {
 		if !a.enforceHwid(c) {
 			return
 		}
-		if !a.serveJsonBody(c, a.jsonAlwaysArray, "application/json; charset=utf-8", false, true) {
+		if !a.serveJsonBody(c, a.jsonAlwaysArray, "application/json; charset=utf-8", strings.EqualFold(c.Query("view"), "raw"), true) {
 			writeSubError(c, nil)
 		}
 		a.recordSubscriptionFetch(c)
