@@ -41,22 +41,22 @@
 ручной браузерный прогон каждого действия и не доказательство корректности
 каждой функции при всех возможных входных данных.
 
-| Пункт | Что проверено | Граница проверки |
-|---|---|---|
-| Главная | route, статус ядра, canonical identity, статистика и websocket/backend tests | без работающего production-ядра |
-| Входящие | формы/схемы, CRUD, клиенты, TLS, transport, порты и конфликты, генерация конфигурации | без передачи трафика по каждому протоколу |
-| Клиенты | CRUD/attach, enable, квоты/traffic, ссылки, QR, настройки отдельных связей | внешние приложения клиентов не запускались |
-| Группы | API/controller/service tests и связи пользователей/inbound | без ручного полного UI сценария |
-| Узлы | identity/status, credentials, sync, remote config, frontend row/history tests | без соединения с удалённым узлом |
-| Hosts | schema, адреса/порты, ссылки и subscription fan-out | без проверки внешних DNS/CDN |
-| Firewall | правила/владение, Mieru TCP/UDP bindings, конфликт портов | реальные правила хоста не изменялись |
-| Исходящие | выбранное ядро, импорт/редактирование/сохранение, validation, группы и ссылки на теги | latency/handshake удалённых серверов не измерялись |
-| Маршрутизация | выбранное ядро, reference cleanup, final/group/detour dependencies, DNS/native overlays | без реальной маршрутизации трафика |
-| Telemt | route, общий backend/test suite и настройки sidecar | внешний telemt runtime не запускался |
-| Настройки | general/security, Telegram/email/Discord, subscription formats/balancers, settings draft/save tests | сообщения во внешние сервисы не отправлялись |
-| Ядро: Основное/DNS/Маршрутизация/Исходящие/Расширенные | чтение/сохранение native template, managed sections, validation-before-publication, API статистики, editor tests | не все возможные expert JSON комбинации |
-| Ядро: Adblock/Gateway | отдельные routes, controls, profiles/overlays, network lifecycle/rollback tests | без реального nft/TUN/reboot сценария |
-| Выход | существующий route/action, auth/session/backend tests | без отдельного ручного браузерного сценария |
+| Пункт                                                  | Что проверено                                                                                                    | Граница проверки                                   |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| Главная                                                | route, статус ядра, canonical identity, статистика и websocket/backend tests                                     | без работающего production-ядра                    |
+| Входящие                                               | формы/схемы, CRUD, клиенты, TLS, transport, порты и конфликты, генерация конфигурации                            | без передачи трафика по каждому протоколу          |
+| Клиенты                                                | CRUD/attach, enable, квоты/traffic, ссылки, QR, настройки отдельных связей                                       | внешние приложения клиентов не запускались         |
+| Группы                                                 | API/controller/service tests и связи пользователей/inbound                                                       | без ручного полного UI сценария                    |
+| Узлы                                                   | identity/status, credentials, sync, remote config, frontend row/history tests                                    | без соединения с удалённым узлом                   |
+| Hosts                                                  | schema, адреса/порты, ссылки и subscription fan-out                                                              | без проверки внешних DNS/CDN                       |
+| Firewall                                               | правила/владение, Mieru TCP/UDP bindings, конфликт портов                                                        | реальные правила хоста не изменялись               |
+| Исходящие                                              | выбранное ядро, импорт/редактирование/сохранение, validation, группы и ссылки на теги                            | latency/handshake удалённых серверов не измерялись |
+| Маршрутизация                                          | выбранное ядро, reference cleanup, final/group/detour dependencies, DNS/native overlays                          | без реальной маршрутизации трафика                 |
+| Telemt                                                 | route, общий backend/test suite и настройки sidecar                                                              | внешний telemt runtime не запускался               |
+| Настройки                                              | general/security, Telegram/email/Discord, subscription formats/balancers, settings draft/save tests              | сообщения во внешние сервисы не отправлялись       |
+| Ядро: Основное/DNS/Маршрутизация/Исходящие/Расширенные | чтение/сохранение native template, managed sections, validation-before-publication, API статистики, editor tests | не все возможные expert JSON комбинации            |
+| Ядро: Adblock/Gateway                                  | отдельные routes, controls, profiles/overlays, network lifecycle/rollback tests                                  | без реального nft/TUN/reboot сценария              |
+| Выход                                                  | существующий route/action, auth/session/backend tests                                                            | без отдельного ручного браузерного сценария        |
 
 API contract test сопоставляет реальный Gin router с документированными
 публичными операциями; внутренние UI-only операции исключаются по правилам
@@ -64,14 +64,14 @@ API contract test сопоставляет реальный Gin router с док
 
 ## Входящие протоколы: что подтверждено
 
-| Группа | Подтверждение |
-|---|---|
-| VLESS, VMess, Trojan, Shadowsocks2022, HTTP, Mixed | полный конфиг из БД и `check -c` закреплённого ядра |
-| Hysteria1/Hysteria2, TUIC, Naive, AnyTLS, ShadowTLS, Snell6, MASQUE | полный конфиг из БД и `check -c` закреплённого ядра; отдельные regression tests |
-| TCP, WS, HTTP, gRPC, HTTPUpgrade, XHTTP | конфиг из БД и проверки адаптера/бинарника |
-| TUN/WireGuard/tunnel | адаптеры, validation, existing Go/frontend suites; запуск интерфейсов требует проверки на хосте |
-| Mieru | отдельный runtime `mita`; settings/credentials/render, port conflicts/firewall и export tests; native outbound import проверен реальным sing-box |
-| MTProto, AmneziaWG, Pingtunnel, TrustTunnel, FPTN, OpenFlux, Sudoku, VK TURN proxy | отдельные локальные runtime; existing unit/service tests; бинарники и интерфейсы должны быть доступны на хосте |
+| Группа                                                                             | Подтверждение                                                                                                                                    |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| VLESS, VMess, Trojan, Shadowsocks2022, HTTP, Mixed                                 | полный конфиг из БД и `check -c` закреплённого ядра                                                                                              |
+| Hysteria1/Hysteria2, TUIC, Naive, AnyTLS, ShadowTLS, Snell6, MASQUE                | полный конфиг из БД и `check -c` закреплённого ядра; отдельные regression tests                                                                  |
+| TCP, WS, HTTP, gRPC, HTTPUpgrade, XHTTP                                            | конфиг из БД и проверки адаптера/бинарника                                                                                                       |
+| TUN/WireGuard/tunnel                                                               | адаптеры, validation, existing Go/frontend suites; запуск интерфейсов требует проверки на хосте                                                  |
+| Mieru                                                                              | отдельный runtime `mita`; settings/credentials/render, port conflicts/firewall и export tests; native outbound import проверен реальным sing-box |
+| MTProto, AmneziaWG, Pingtunnel, TrustTunnel, FPTN, OpenFlux, Sudoku, VK TURN proxy | отдельные локальные runtime; existing unit/service tests; бинарники и интерфейсы должны быть доступны на хосте                                   |
 
 HY2 inbound требует правильного TLS сертификата/ключа и открытого UDP порта;
 auth и obfs должны совпадать с клиентом. Mieru inbound не попадает в native

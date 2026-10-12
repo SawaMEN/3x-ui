@@ -41,10 +41,7 @@
     "user_stats_api_available": false
   },
   "runtime_contract": {
-    "raw_config_command": [
-      "srun",
-      "-c"
-    ],
+    "raw_config_command": ["srun", "-c"],
     "validation_cli_available": true,
     "stats_grpc_method": "/experimental.v2rayapi.StatsService/QueryStats",
     "activation_ready": false,
@@ -310,9 +307,7 @@
     ],
     "sing_box_version": "1.13.0-rc.2",
     "check_command_overlay": "deploy/hiddify/cmd_xui_check.go.in",
-    "runtime_dependencies": [
-      "matching libcronet for Naive outbound"
-    ],
+    "runtime_dependencies": ["matching libcronet for Naive outbound"],
     "activation_ready": false,
     "toolchain": "go1.26.3",
     "validation_cli_available": true,

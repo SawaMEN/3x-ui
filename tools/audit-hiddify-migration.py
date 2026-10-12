@@ -79,7 +79,7 @@ def audit(upstream):
     for row in rows:
         require(row["migration"] in {"native", "adapt", "external", "blocked"}, "Unknown migration status")
         require(bool(row["decision"].strip()), f"No migration decision for {row['panel_protocol']}")
-        require(f"| `{row['panel_protocol']}` |" in report, f"No report row for {row['panel_protocol']}")
+        require(re.search(r"\|\s*`" + re.escape(row["panel_protocol"]) + r"`\s*\|", report) is not None, f"No report row for {row['panel_protocol']}")
         require((row["target_kind"] is None) == (row["target_type"] is None), "Incomplete target identity")
     target = lock["target"]
     require(target["repository"] == "https://github.com/SawaMEN/hiddify-core", "Core must come from the owner's repository")
@@ -122,7 +122,9 @@ def audit_build(source):
     require(target["repository"] == fork["target"]["repository"], "Runtime must use the audited owner repository")
     require(target["commit"] == fork["target"]["commit"] and target["submodules"] == fork["target"]["submodules"], "Runtime revisions differ from fork audit")
     require(not lock["runtime_contract"]["automatic_migration_ready"], "Runtime profile cannot enable automatic migration before integration gates")
-    require(build["toolchain"] == "go" + fork["required_go_directive"], "Runtime toolchain differs from audited sources")
+    require(build["toolchain"] == "go1.27.2", "Runtime must use the pinned security-patched toolchain")
+    require(tuple(map(int, build["toolchain"].removeprefix("go").split("."))) >= tuple(map(int, fork["required_go_directive"].split("."))), "Runtime toolchain is older than the audited source requirement")
+    require(build["security_dependencies"] == {"golang.org/x/net": "v0.60.0"}, "Runtime security dependency lock differs from the build script")
     require({"with_xui_panel", "with_v2ray_api", "with_awg", "with_quic", "with_wireguard", "with_masque", "with_clash_api"}.issubset(build["tags"]), "Runtime build lacks required tags")
     process = (ROOT / "internal/hiddify/process.go").read_text()
     tag_block = re.search(r"var requiredBuildTags = \[\]string\{([^}]+)\}", process)

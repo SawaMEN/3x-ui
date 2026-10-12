@@ -1,23 +1,23 @@
-# Reverse, транспорты и балансировщики: panel7
+# Reverse, транспорты и балансировщики: panel8
 
 Изменения доступны в ветке `update`; требуется сборка
-`sawamen-b5749002266b-panel7`. Патчи применяются к закреплённым исходникам Sing-box
+`sawamen-b5749002266b-panel8`. Патчи применяются к закреплённым исходникам Sing-box
 и его зависимостей. Отдельный процесс Xray не запускается.
 
-| Возможность | Результат |
-| --- | --- |
-| VLESS Reverse | Авторизованный command 4, обратный mux, маршрутизация TCP/UDP, переподключение и учёт трафика |
-| mKCP | Транспорт подключён к VLESS, VMess и Trojan для inbound/outbound и native JSON |
-| mKCP + TLS | Реальная передача данных через TLS поверх mKCP проверена |
-| Legacy seed/header | Используются оригинальные механизмы mKCP Xray: seed, SRTP, uTP, WeChat, DTLS, WireGuard и отсутствие маски заголовка |
-| mKCP параметры | MTU, TTI, uplink/downlink capacity, cwndMultiplier, maxSendingWindow передаются в транспорт |
-| XHTTP download mode | Импортируется и проверяется отдельно; download передаётся как stream-down, как в Xray |
-| XHTTP padding | Исправлена проверка собственных ключей и размещения padding в header/cookie/query/queryInHeader, включая tokenish |
-| Random / roundRobin | Динамический выбор при каждом соединении, а не один постоянный узел |
-| LeastPing / leastLoad | Применяются алгоритмы закреплённой версии Xray к результатам проверок через исходящие Sing-box |
-| Fallback | Выбирается при отсутствии пригодных кандидатов; может находиться вне основного списка |
-| Observatory | subjectSelector, probeURL, probeInterval и enableConcurrency связаны с проверками ядра |
-| Burst observatory | sampling, timeout, HTTP HEAD/GET, статистика RTT, failure rate и connectivity используются при проверках |
+| Возможность           | Результат                                                                                                            |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| VLESS Reverse         | Авторизованный command 4, обратный mux, маршрутизация TCP/UDP, переподключение и учёт трафика                        |
+| mKCP                  | Транспорт подключён к VLESS, VMess и Trojan для inbound/outbound и native JSON                                       |
+| mKCP + TLS            | Реальная передача данных через TLS поверх mKCP проверена                                                             |
+| Legacy seed/header    | Используются оригинальные механизмы mKCP Xray: seed, SRTP, uTP, WeChat, DTLS, WireGuard и отсутствие маски заголовка |
+| mKCP параметры        | MTU, TTI, uplink/downlink capacity, cwndMultiplier, maxSendingWindow передаются в транспорт                          |
+| XHTTP download mode   | Импортируется и проверяется отдельно; download передаётся как stream-down, как в Xray                                |
+| XHTTP padding         | Исправлена проверка собственных ключей и размещения padding в header/cookie/query/queryInHeader, включая tokenish    |
+| Random / roundRobin   | Динамический выбор при каждом соединении, а не один постоянный узел                                                  |
+| LeastPing / leastLoad | Применяются алгоритмы закреплённой версии Xray к результатам проверок через исходящие Sing-box                       |
+| Fallback              | Выбирается при отсутствии пригодных кандидатов; может находиться вне основного списка                                |
+| Observatory           | subjectSelector, probeURL, probeInterval и enableConcurrency связаны с проверками ядра                               |
+| Burst observatory     | sampling, timeout, HTTP HEAD/GET, статистика RTT, failure rate и connectivity используются при проверках             |
 
 Reverse возвращён в формы клиентов и исходящих VLESS. На принимающей стороне
 `clients[].reverse.tag` создаёт исходящий `vless-reverse` с этим тегом; на стороне
@@ -91,3 +91,5 @@ Connectivity проверяет прямое подключение после �
 Reverse через остальные транспорты отдельно не проверялись. Системные интерфейсы
 и полный запуск маршрутизатора остаются ограничены разрешениями netlink текущего
 окружения. Поддержка в этом отчёте не означает проверку на внешних VPS.
+
+В panel8 сборка переведена на Go 1.27.2 и golang.org/x/net v0.60.0 с исправлениями HTTP/2, TLS и стандартной библиотеки. Протокольные настройки panel7 сохранены.

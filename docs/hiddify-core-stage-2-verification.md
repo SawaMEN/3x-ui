@@ -5,20 +5,20 @@ SawaMEN/hiddify-sing-box `8a82b70836022a1b56eca15df12f56f903cfb27d`.
 
 ## Подтверждённые результаты
 
-| Проверка | Результат |
-| --- | --- |
-| Аудит owner origin, commits, gitlinks, nested submodules, source anchors | Успешно |
-| Сборка настоящего executable linux/amd64 | Успешно, Go 1.26.8, CGO disabled |
-| CLI version/revision/tags | Успешно; version sawamen-b5749002266b и полный source revision |
-| CLI check со статистикой; отказ без config | Успешно |
-| Overlay Clash metadata.user | Тест непосредственно в пакете ядра прошёл; поле находится внутри metadata |
-| Generated configs настоящим check | Encrypted VLESS/XHTTP, Snell6, FinalMask, MASQUE+TLS, XHTTP download+TLS, Hysteria2 gecko+TLS приняты |
-| Lifecycle adapter | Start/restart/stop, жизнь после отмены запроса и остановка с отменённым контекстом; неверный кандидат оставляет текущий процесс/config |
-| Проверка идентичности | Неверный prefix/revision и tag-подстрока отклоняются; режим run не принимается как srun |
-| gRPC wire | Обе закреплённые схемы имени сервиса проверены на обычном protobuf gRPC-сервере; response bytes и reset flag сохранены |
-| Config из БД панели | Настоящий бинарник принимает конфиг с клиентом, XHTTP и Gateway; прочие TestHiddify проходят |
-| Race tests | internal/core, internal/hiddify, internal/singbox и целевые lifecycle/config tests internal/web/service прошли |
-| Go vet и сборка панели | Успешно |
+| Проверка                                                                 | Результат                                                                                                                              |
+| ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Аудит owner origin, commits, gitlinks, nested submodules, source anchors | Успешно                                                                                                                                |
+| Сборка настоящего executable linux/amd64                                 | Успешно, Go 1.26.8, CGO disabled                                                                                                       |
+| CLI version/revision/tags                                                | Успешно; version sawamen-b5749002266b и полный source revision                                                                         |
+| CLI check со статистикой; отказ без config                               | Успешно                                                                                                                                |
+| Overlay Clash metadata.user                                              | Тест непосредственно в пакете ядра прошёл; поле находится внутри metadata                                                              |
+| Generated configs настоящим check                                        | Encrypted VLESS/XHTTP, Snell6, FinalMask, MASQUE+TLS, XHTTP download+TLS, Hysteria2 gecko+TLS приняты                                  |
+| Lifecycle adapter                                                        | Start/restart/stop, жизнь после отмены запроса и остановка с отменённым контекстом; неверный кандидат оставляет текущий процесс/config |
+| Проверка идентичности                                                    | Неверный prefix/revision и tag-подстрока отклоняются; режим run не принимается как srun                                                |
+| gRPC wire                                                                | Обе закреплённые схемы имени сервиса проверены на обычном protobuf gRPC-сервере; response bytes и reset flag сохранены                 |
+| Config из БД панели                                                      | Настоящий бинарник принимает конфиг с клиентом, XHTTP и Gateway; прочие TestHiddify проходят                                           |
+| Race tests                                                               | internal/core, internal/hiddify, internal/singbox и целевые lifecycle/config tests internal/web/service прошли                         |
+| Go vet и сборка панели                                                   | Успешно                                                                                                                                |
 
 ## Ограничение реального запуска
 

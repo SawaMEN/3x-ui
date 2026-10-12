@@ -14,13 +14,10 @@
       "hiddify-sing-box": "https://github.com/SawaMEN/hiddify-sing-box",
       "ray2sing": "https://github.com/hiddify/ray2sing"
     },
-    "version": "sawamen-b5749002266b-panel7"
+    "version": "sawamen-b5749002266b-panel8"
   },
   "runtime_contract": {
-    "raw_config_command": [
-      "srun",
-      "-c"
-    ],
+    "raw_config_command": ["srun", "-c"],
     "validation_cli_available": true,
     "stats_grpc_method": "/v2ray.core.app.stats.command.StatsService/QueryStats",
     "panel_runtime_integrated": true,
@@ -105,11 +102,9 @@
     ],
     "sing_box_version": "sawamen-8a82b7083602",
     "check_command_overlay": "deploy/hiddify/cmd_xui_check.go.in",
-    "runtime_dependencies": [
-      "matching libcronet for Naive outbound"
-    ],
+    "runtime_dependencies": ["matching libcronet for Naive outbound"],
     "activation_ready": false,
-    "toolchain": "go1.26.8",
+    "toolchain": "go1.27.2",
     "validation_cli_available": true,
     "user_stats_api_available": true,
     "clash_user_overlay": "deploy/hiddify/clash-user.patch",
@@ -141,7 +136,10 @@
     "reverse_protocol_overlay": "deploy/hiddify/sing-vmess-reverse.patch",
     "reverse_runtime_test_overlay": "deploy/hiddify/reverse_runtime_test.go.in",
     "reverse_vision_test_overlay": "deploy/hiddify/reverse_vision_test.go.in",
-    "runtime_dependencies_overlay": "deploy/hiddify/runtime-dependencies.patch"
+    "runtime_dependencies_overlay": "deploy/hiddify/runtime-dependencies.patch",
+    "security_dependencies": {
+      "golang.org/x/net": "v0.60.0"
+    }
   },
   "verification": {
     "report": "hiddify-core-stage-4-verification.md",

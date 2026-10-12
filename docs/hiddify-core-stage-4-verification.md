@@ -77,25 +77,25 @@ inbound/outbound/user names, включая native endpoint peers. Native servic
 Каждый пример ниже начинается с БД и канонического клиента, проходит общий
 генератор и `hiddify-core check -c`. Это decode/constructor checks без Start.
 
-| Конфигурация | Результат |
-| --- | --- |
-| VLESS, VMess, Trojan | PASS |
-| Shadowsocks 2022 с server/client keys | PASS |
-| HTTP и Mixed с authentication | PASS |
-| Hysteria 1 и Hysteria 2 с TLS | PASS |
-| TUIC с TLS и linked UUID/password | PASS |
-| Naive и AnyTLS с сертификатом панели | PASS |
-| ShadowTLS 3 + внутренний Shadowsocks | PASS |
-| Snell 6 с per-inbound userkey | PASS |
-| MASQUE server endpoint с TLS | PASS |
-| VLESS TCP, WS, HTTP, gRPC, HTTPUpgrade, XHTTP + TLS | PASS |
-| Native DNS, routing, selector, local source rule set и XHTTP outbound | PASS |
-| Legacy DNS/domain/private-IP routing | PASS |
-| Native DNS group (local + UDP, parallel) | PASS |
-| AdBlock base/policies и egress из захваченного снимка | PASS |
-| Managed YouTube с upstream из захваченного снимка | PASS |
-| Публикация валидного candidate и отказ TUIC constructor без замены файла | PASS |
-| XHTTP из outbound subscription при выбранном Xray, с automatic selector и без | PASS |
+| Конфигурация                                                                  | Результат |
+| ----------------------------------------------------------------------------- | --------- |
+| VLESS, VMess, Trojan                                                          | PASS      |
+| Shadowsocks 2022 с server/client keys                                         | PASS      |
+| HTTP и Mixed с authentication                                                 | PASS      |
+| Hysteria 1 и Hysteria 2 с TLS                                                 | PASS      |
+| TUIC с TLS и linked UUID/password                                             | PASS      |
+| Naive и AnyTLS с сертификатом панели                                          | PASS      |
+| ShadowTLS 3 + внутренний Shadowsocks                                          | PASS      |
+| Snell 6 с per-inbound userkey                                                 | PASS      |
+| MASQUE server endpoint с TLS                                                  | PASS      |
+| VLESS TCP, WS, HTTP, gRPC, HTTPUpgrade, XHTTP + TLS                           | PASS      |
+| Native DNS, routing, selector, local source rule set и XHTTP outbound         | PASS      |
+| Legacy DNS/domain/private-IP routing                                          | PASS      |
+| Native DNS group (local + UDP, parallel)                                      | PASS      |
+| AdBlock base/policies и egress из захваченного снимка                         | PASS      |
+| Managed YouTube с upstream из захваченного снимка                             | PASS      |
+| Публикация валидного candidate и отказ TUIC constructor без замены файла      | PASS      |
+| XHTTP из outbound subscription при выбранном Xray, с automatic selector и без | PASS      |
 
 Дополнительно проверены стабильность статистических наборов, отсутствие
 перезаписи БД, защита от stale credentials, сохранение старого файла при
@@ -123,7 +123,6 @@ runtime/jobs/web, sing-box/Hiddify и БД. Получение его оконч
 сервису публичного IP: это раскрывает сетевой адрес среды и не входит в локальную
 проверку генератора. Этот запрос не повторялся; вместо него выполнен отдельный
 локальный набор, указанный выше.
-
 
 ## Доработка завершения этапа 4
 

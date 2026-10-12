@@ -69,19 +69,19 @@ restart. Это предусмотренный планом fallback для не
 
 ## Проверки
 
-| Проверка | Результат |
-| --- | --- |
-| 100 параллельных local user mutations и вложенные scopes | Один apply, ноль Xray API обращений |
-| Пустой scope, повторное закрытие, ошибка enqueue | Без лишнего apply; ошибка сохранена |
-| Disabled переход MTProto → VLESS | Один запрос native apply |
-| DB inbound create/update/disable/enable/delete | Зафиксированное состояние, один apply на изменение |
-| 30 клиентов × 2 inbound: bulk create/disable/enable/delete | Один итоговый конфиг на каждую пачку |
-| Bulk attach/detach и Snell delete | Один apply; удалённая identity/listener не возвращается |
-| Pending apply во время batch | Flag сохранён, процесс не перезапущен |
-| Неизменившийся конфиг и unapplied preview | Без restart/reset; восстановлены applied bytes |
-| Ошибка preflight | Старый процесс/файл сохранены, retry поставлен |
-| Сбой запуска candidate и исправление DB | Recovery старого процесса/конфига, успешный последующий retry |
-| Ручная остановка | Pending apply не запускает core |
+| Проверка                                                   | Результат                                                     |
+| ---------------------------------------------------------- | ------------------------------------------------------------- |
+| 100 параллельных local user mutations и вложенные scopes   | Один apply, ноль Xray API обращений                           |
+| Пустой scope, повторное закрытие, ошибка enqueue           | Без лишнего apply; ошибка сохранена                           |
+| Disabled переход MTProto → VLESS                           | Один запрос native apply                                      |
+| DB inbound create/update/disable/enable/delete             | Зафиксированное состояние, один apply на изменение            |
+| 30 клиентов × 2 inbound: bulk create/disable/enable/delete | Один итоговый конфиг на каждую пачку                          |
+| Bulk attach/detach и Snell delete                          | Один apply; удалённая identity/listener не возвращается       |
+| Pending apply во время batch                               | Flag сохранён, процесс не перезапущен                         |
+| Неизменившийся конфиг и unapplied preview                  | Без restart/reset; восстановлены applied bytes                |
+| Ошибка preflight                                           | Старый процесс/файл сохранены, retry поставлен                |
+| Сбой запуска candidate и исправление DB                    | Recovery старого процесса/конфига, успешный последующий retry |
+| Ручная остановка                                           | Pending apply не запускает core                               |
 
 DB lifecycle/bulk примеры выше проходят полный генератор и настоящий
 `hiddify-core check -c`. Startup failure и количество запусков проверяются

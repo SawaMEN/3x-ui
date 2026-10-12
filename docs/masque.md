@@ -55,5 +55,6 @@ An outgoing MASQUE connection can also be configured as a `masque-client` in
 It must not be placed in the Xray outbound editor or native `outbounds` array.
 
 References:
+
 - https://sing-box.sagernet.org/configuration/endpoint/masque-server/
 - https://sing-box.sagernet.org/configuration/endpoint/masque-client/

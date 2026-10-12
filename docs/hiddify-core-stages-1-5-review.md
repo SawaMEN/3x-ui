@@ -43,13 +43,13 @@
 
 ## Проверенные области
 
-| Этап | Область повторной проверки |
-| --- | --- |
-| 1 | Инвентаризация 26 значений протокола, owner origins, HEAD/gitlinks, source anchors, build lock |
-| 2 | Pinned binary identity/tags, raw `srun`, CLI candidate checks, protobuf stats namespace, отмена запуска и watchdog |
-| 3 | Core-neutral DTO, сохранение JSON/DB-контрактов, полные model tests и сборка потребителей |
-| 4 | DB snapshot, canonical users, templates/overlays, DNS/routing preflight, protocol/transport matrix и настоящий `check -c` |
-| 5 | CRUD/bulk, parallel/nested batches, no-op, изменения во время validation, rollback core/sidecars, manual Stop |
+| Этап | Область повторной проверки                                                                                                |
+| ---- | ------------------------------------------------------------------------------------------------------------------------- |
+| 1    | Инвентаризация 26 значений протокола, owner origins, HEAD/gitlinks, source anchors, build lock                            |
+| 2    | Pinned binary identity/tags, raw `srun`, CLI candidate checks, protobuf stats namespace, отмена запуска и watchdog        |
+| 3    | Core-neutral DTO, сохранение JSON/DB-контрактов, полные model tests и сборка потребителей                                 |
+| 4    | DB snapshot, canonical users, templates/overlays, DNS/routing preflight, protocol/transport matrix и настоящий `check -c` |
+| 5    | CRUD/bulk, parallel/nested batches, no-op, изменения во время validation, rollback core/sidecars, manual Stop             |
 
 Regression-проверки используют настоящий pinned binary для проверки JSON.
 Lifecycle и управляемые сбои воспроизводятся локальными process fixtures;

@@ -55,15 +55,15 @@ TPROXY не объявлен поддерживаемым; nft rules его не
 
 Новый адаптер Hiddify переводит существующие настройки TUN панели:
 
-| Панель | Собственное ядро |
-| --- | --- |
-| name | interface_name |
-| gateway (CIDR) | address |
-| mtu | mtu |
-| dns (IP) | dns_address, dns_mode=native |
-| autoSystemRoutingTable | route_address; auto_route при непустом списке |
-| autoOutboundsInterface=auto | route.auto_detect_interface |
-| явный autoOutboundsInterface | route.default_interface |
+| Панель                       | Собственное ядро                              |
+| ---------------------------- | --------------------------------------------- |
+| name                         | interface_name                                |
+| gateway (CIDR)               | address                                       |
+| mtu                          | mtu                                           |
+| dns (IP)                     | dns_address, dns_mode=native                  |
+| autoSystemRoutingTable       | route_address; auto_route при непустом списке |
+| autoOutboundsInterface=auto  | route.auto_detect_interface                   |
+| явный autoOutboundsInterface | route.default_interface                       |
 
 Используется native system stack. Адреса IPv4/IPv6, целочисленный MTU и имена
 интерфейсов проверяются до публикации. TUN требует хотя бы один interface CIDR.

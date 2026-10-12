@@ -7,17 +7,17 @@
 
 ## Проверенные контракты
 
-| Этап | Что перепроверено | Результат |
-| --- | --- | --- |
-| 1 | Инвентарь 26 протоколов/alias, owner origins, commits, submodules и build lock | Source audit прошёл |
-| 2 | Проверка version/tags/revision, candidate check, supervised start/stop, gRPC statistics contract | Go/regression/race; конфигурации принимает закреплённый binary |
-| 3 | Общие DTO, прежние таблицы/индексы/идентификаторы, миграции БД, отсутствие Xray в production deps слоя БД | Полные Go-тесты и go list -deps |
-| 4 | Полный конфиг из согласованного снимка БД, связанные пользователи, routing/DNS/TLS, native graph и overlays | Full database config checks настоящим бинарника Sing-box |
-| 5 | Local/remote mutation paths, batch apply, restart/rollback, вручную остановленное ядро | Regression/race fixtures |
-| 6 | Долговечные checkpoint + traffic totals, повторы запросов, reset/restart, квоты, sessions/IP | Regression/race fixtures; граница последних неопросенных байтов сохраняется |
-| 7 | Подписки, HTTP node sync/status/capabilities, legacy compatibility и health UI | Backend-тесты и frontend unit/component tests |
-| 8 | Native Gateway/TUN config, listener ownership, pause/resume, firewall rollback и repair | Constructor checks + lifecycle/network fixtures |
-| 9 | Backup до InitDB, защита от concurrent panel, trial start до coreType commit, откат файлов/БД/units, interrupted recovery | Offline/installer fixtures; дополнительные исправления ниже |
+| Этап | Что перепроверено                                                                                                         | Результат                                                                   |
+| ---- | ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| 1    | Инвентарь 26 протоколов/alias, owner origins, commits, submodules и build lock                                            | Source audit прошёл                                                         |
+| 2    | Проверка version/tags/revision, candidate check, supervised start/stop, gRPC statistics contract                          | Go/regression/race; конфигурации принимает закреплённый binary              |
+| 3    | Общие DTO, прежние таблицы/индексы/идентификаторы, миграции БД, отсутствие Xray в production deps слоя БД                 | Полные Go-тесты и go list -deps                                             |
+| 4    | Полный конфиг из согласованного снимка БД, связанные пользователи, routing/DNS/TLS, native graph и overlays               | Full database config checks настоящим бинарника Sing-box                    |
+| 5    | Local/remote mutation paths, batch apply, restart/rollback, вручную остановленное ядро                                    | Regression/race fixtures                                                    |
+| 6    | Долговечные checkpoint + traffic totals, повторы запросов, reset/restart, квоты, sessions/IP                              | Regression/race fixtures; граница последних неопросенных байтов сохраняется |
+| 7    | Подписки, HTTP node sync/status/capabilities, legacy compatibility и health UI                                            | Backend-тесты и frontend unit/component tests                               |
+| 8    | Native Gateway/TUN config, listener ownership, pause/resume, firewall rollback и repair                                   | Constructor checks + lifecycle/network fixtures                             |
+| 9    | Backup до InitDB, защита от concurrent panel, trial start до coreType commit, откат файлов/БД/units, interrupted recovery | Offline/installer fixtures; дополнительные исправления ниже                 |
 
 ## Исправленные недоработки
 

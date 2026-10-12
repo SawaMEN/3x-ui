@@ -32,6 +32,11 @@ git -C "$task_source/core" config submodule.ray2sing.url https://github.com/hidd
 git -C "$task_source/core" submodule update --init --recursive --depth=1
 python3 "$task_root/tools/audit-hiddify-migration.py" --upstream "$task_source/core"
 git -C "$task_source/core" apply "$task_root/deploy/hiddify/runtime-dependencies.patch"
+(
+  cd -- "$task_source/core"
+  GOTOOLCHAIN="${target[5]}" go mod edit -go="${target[5]#go}" -require=golang.org/x/net@v0.60.0
+  GOTOOLCHAIN="${target[5]}" go mod download golang.org/x/net@v0.60.0
+)
 git -C "$task_source/core" apply "$task_root/deploy/hiddify/clash-user.patch"
 git -C "$task_source/core" apply "$task_root/deploy/hiddify/sniff-override.patch"
 git -C "$task_source/core/hiddify-sing-box" apply "$task_root/deploy/hiddify/http1-options.patch"

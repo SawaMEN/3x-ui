@@ -6,17 +6,17 @@
 Исходные ревизии ядра сохранены; изменения применяются воспроизводимыми
 патчами из `deploy/hiddify` при сборке. Общий кеш Go-модулей не изменяется.
 
-| Параметр панели | Реализация |
-| --- | --- |
-| VLESS inbound `testseed` | Настройки padding серверного Vision writer |
-| VLESS outbound `testseed` | Настройки padding клиентского Vision writer |
-| VLESS outbound `testpre` | Пул предварительных транспортных/TLS-соединений до отправки VLESS-запроса |
-| REALITY `mldsa65Seed` | Дополнительная подпись ML-DSA-65 сертификата, привязанная к ClientHello и ServerHello |
-| REALITY `mldsa65Verify` | Проверка этой подписи; неверный ключ и отсутствие подписи отклоняются |
-| REALITY `minClientVer`, `maxClientVer` | Проверка версии в REALITY ClientHello |
-| REALITY `serverNames` | Все разрешённые SNI, без усечения списка до первого имени |
-| REALITY `xver` | PROXY protocol 0/1/2 к handshake target |
-| REALITY `limitFallbackUpload`, `limitFallbackDownload` | Настоящие лимиты fallback в TLS-библиотеке |
+| Параметр панели                                        | Реализация                                                                            |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| VLESS inbound `testseed`                               | Настройки padding серверного Vision writer                                            |
+| VLESS outbound `testseed`                              | Настройки padding клиентского Vision writer                                           |
+| VLESS outbound `testpre`                               | Пул предварительных транспортных/TLS-соединений до отправки VLESS-запроса             |
+| REALITY `mldsa65Seed`                                  | Дополнительная подпись ML-DSA-65 сертификата, привязанная к ClientHello и ServerHello |
+| REALITY `mldsa65Verify`                                | Проверка этой подписи; неверный ключ и отсутствие подписи отклоняются                 |
+| REALITY `minClientVer`, `maxClientVer`                 | Проверка версии в REALITY ClientHello                                                 |
+| REALITY `serverNames`                                  | Все разрешённые SNI, без усечения списка до первого имени                             |
+| REALITY `xver`                                         | PROXY protocol 0/1/2 к handshake target                                               |
+| REALITY `limitFallbackUpload`, `limitFallbackDownload` | Настоящие лимиты fallback в TLS-библиотеке                                            |
 
 `testseed` содержит четыре целых числа. Проверка исключает отрицательный padding,
 нулевые диапазоны генератора и переполнение 16-битных длин кадра. При отсутствии
