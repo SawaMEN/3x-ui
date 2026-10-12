@@ -91,7 +91,7 @@ export function parseNativeOutboundLink(link: string): Raw | null {
   const settings: Raw = { server: url.hostname.replace(/^\[|\]$/g, ''), server_port: port };
   const security = first(p, 'security');
   const secureScheme = ['https', 'naive+https', 'mierus'].includes(scheme);
-  const nativeTls = ['anytls', 'tuic', 'hysteria', 'naive'].includes(protocol);
+  const nativeTls = ['anytls', 'tuic', 'hysteria', 'naive', 'shadowtls'].includes(protocol);
   const enabled =
     security === 'tls' ||
     security === 'reality' ||
