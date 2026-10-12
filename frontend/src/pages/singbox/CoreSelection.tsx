@@ -18,7 +18,7 @@ export default function CoreSelection() {
         <div>
           <span className="core-selection-eyebrow">3x-ui</span>
           <h1 id="core-selection-title">{t('pages.coreSelection.title')}</h1>
-          <p>{t('pages.coreSelection.description')}</p>
+          <p>{t('pages.coreSelection.subtitle')}</p>
         </div>
         <Tag icon={<ClockCircleOutlined />}>{t('pages.coreSelection.soon')}</Tag>
       </header>

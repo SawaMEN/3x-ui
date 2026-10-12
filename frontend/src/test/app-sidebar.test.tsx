@@ -98,7 +98,7 @@ test('keeps core and swap controls in general settings, not the sidebar submenu'
   expect(screen.queryByText('Proxy Core')).toBeNull();
   expect(screen.queryByText('Swap / ZRAM')).toBeNull();
   expect(screen.queryByText('API Docs')).toBeNull();
-  expect(screen.getByText('sing-box Configs')).toBeTruthy();
+  expect(screen.getByText('Core settings')).toBeTruthy();
 });
 
 test('shows only the active core configuration menu', () => {
@@ -111,7 +111,7 @@ test('shows only the active core configuration menu', () => {
 
   const xrayRoot = xrayView.container.querySelector('.ant-sidebar');
   fireEvent.mouseEnter(xrayRoot!);
-  expect(screen.getByText('sing-box Configs')).toBeTruthy();
+  expect(screen.getByText('Core settings')).toBeTruthy();
   expect(screen.getAllByText('General').length).toBeGreaterThan(0);
   expect(screen.queryByText('Xray Configs')).toBeNull();
   expect(screen.queryByText('Proxy Core')).toBeNull();
@@ -128,7 +128,7 @@ test('shows only the active core configuration menu', () => {
 
   const singBoxRoot = singBoxView.container.querySelector('.ant-sidebar');
   fireEvent.mouseEnter(singBoxRoot!);
-  expect(screen.getByText('sing-box Configs')).toBeTruthy();
+  expect(screen.getByText('Core settings')).toBeTruthy();
   expect(screen.queryByText('Xray Configs')).toBeNull();
   expect(screen.queryByText('Proxy Core')).toBeNull();
   expect(screen.queryByText('Swap / ZRAM')).toBeNull();

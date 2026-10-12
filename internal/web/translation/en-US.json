@@ -130,7 +130,7 @@
   "pages": {
     "coreSelection": {
       "title": "Core settings",
-      "description": "Use the standard core or install a separate core to suit your needs.",
+      "subtitle": "Use the standard core or install a separate core to suit your needs.",
       "soon": "Coming soon",
       "defaultBadge": "Default",
       "defaultTitle": "Standard core",
