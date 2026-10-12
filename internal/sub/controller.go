@@ -21,7 +21,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 )
@@ -477,31 +476,32 @@ func (a *SUBController) subs(c *gin.Context) {
 		logSubscriptionRoute(userAgent, "info")
 		return
 	}
-	if a.maybeServeSubPage(c) {
-		logSubscriptionRoute(userAgent, "html")
-		return
-	}
-	// An explicit format selector on the main subscription URL must be honored
-	// before user-agent auto-detection. sing-box imports a remote profile and
-	// therefore needs the native JSON document instead of the raw link list.
-	if strings.EqualFold(c.Query("format"), "sing-box") {
+	// Explicit native formats must take precedence over both HTML Accept
+	// headers and app-specific User-Agent guessing. This also makes the links
+	// on the subscription page directly inspectable in a browser.
+	format := strings.ToLower(c.Query("format"))
+	if format == "sing-box" || format == "hiddify" {
 		if !a.enforceHwid(c) {
 			return
 		}
-		if !a.serveJsonBody(c, a.jsonAlwaysArray, "application/json; charset=utf-8", false, true) {
+		if !a.serveJsonBody(c, a.jsonAlwaysArray, "application/json; charset=utf-8", strings.EqualFold(c.Query("view"), "raw"), true) {
 			writeSubError(c, nil)
 		}
 		a.recordSubscriptionFetch(c)
-		logSubscriptionRoute(userAgent, "sing-box-json")
+		logSubscriptionRoute(userAgent, format+"-json")
+		return
+	}
+	if a.maybeServeSubPage(c) {
+		logSubscriptionRoute(userAgent, "html")
 		return
 	}
 	if !a.enforceHwid(c) {
 		return
 	}
-	if strings.Contains(strings.ToLower(userAgent), "hiddify") && a.hasShadowTLSSubscription(c.Param("subid")) &&
+	if strings.Contains(strings.ToLower(userAgent), "hiddify") && a.hasNativeTLSSubscription(c.Param("subid")) &&
 		a.serveJsonBody(c, true, "application/json; charset=utf-8", false, true) {
 		a.recordSubscriptionFetch(c)
-		logSubscriptionRoute(userAgent, "hiddify-shadowtls-sing-box")
+		logSubscriptionRoute(userAgent, "hiddify-native-sing-box")
 		return
 	}
 	if shouldAutoServeClash(a.subClashAutoDetect, a.clashEnabled, false, userAgent, a.clashUserAgent) && a.serveClashBody(c, false, false) {
@@ -546,17 +546,15 @@ func (a *SUBController) subs(c *gin.Context) {
 	}
 }
 
-func (a *SUBController) hasShadowTLSSubscription(subID string) bool {
-	inbounds, err := a.subService.getInboundsBySubId(subID)
+func (a *SUBController) hasNativeTLSSubscription(subID string) bool {
+	// getInboundsBySubId populates per-request client and host caches. Never
+	// mutate the shared controller service during concurrent subscription
+	// fetches: that can intermittently mix users or hide the native protocol.
+	inbounds, err := a.subService.ForRequest("").getInboundsBySubId(subID)
 	if err != nil {
 		return false
 	}
-	for _, inbound := range inbounds {
-		if inbound.Protocol == "shadowtls" || model.ShadowTLSTransport(inbound.Settings) != nil {
-			return true
-		}
-	}
-	return false
+	return containsNativeTLSSubscription(inbounds)
 }
 
 func (a *SUBController) recordSubscriptionFetch(c *gin.Context) {
@@ -876,12 +874,16 @@ func (a *SUBController) serveJsonBody(c *gin.Context, alwaysReturnArray bool, co
 	scheme, host, hostWithPort, _ := a.subService.ResolveRequest(c)
 	var jsonSub, header string
 	var err error
-	if forceSingBox || strings.EqualFold(c.Query("format"), "sing-box") {
-		if strings.Contains(strings.ToLower(c.Request.UserAgent()), "hiddify") {
-			jsonSub, header, err = a.subJsonService.GetHiddifySingBoxJson(subId, host)
-		} else {
-			jsonSub, header, err = a.subJsonService.GetSingBoxJson(subId, host, alwaysReturnArray)
-		}
+	format := strings.ToLower(c.Query("format"))
+	isHiddify := strings.Contains(strings.ToLower(c.Request.UserAgent()), "hiddify")
+	// Hiddify needs native sing-box JSON for AnyTLS and ShadowTLS even if the
+	// user imported the panel's /json/ subscription path. Plain Xray JSON
+	// cannot encode either protocol. An explicit format also works when the
+	// importing app does not identify itself in User-Agent.
+	if format == "hiddify" || (isHiddify && (forceSingBox || format == "sing-box" || a.hasNativeTLSSubscription(subId))) {
+		jsonSub, header, err = a.subJsonService.GetHiddifySingBoxJson(subId, host)
+	} else if forceSingBox || format == "sing-box" {
+		jsonSub, header, err = a.subJsonService.GetSingBoxJson(subId, host, alwaysReturnArray)
 	} else {
 		jsonSub, header, err = a.subJsonService.GetJson(subId, host, alwaysReturnArray)
 	}

@@ -224,8 +224,8 @@ func TestGetSubsIncludesAnyTLSAndShadowTLS(t *testing.T) {
 		t.Fatalf("sing-box subscription is missing ShadowTLS default handshake: %v\n%s", err, jsonSub)
 	}
 	controller := &SUBController{subService: NewSubService("")}
-	if !controller.hasShadowTLSSubscription(subID) {
-		t.Fatal("ShadowTLS inbound missing from subscription")
+	if !controller.hasNativeTLSSubscription(subID) {
+		t.Fatal("AnyTLS/ShadowTLS inbound missing from native subscription detection")
 	}
 	// An unrelated protocol without a sing-box outbound must not force the
 	// Hiddify subscription back to raw links and hide ShadowTLS.
@@ -252,9 +252,43 @@ func TestGetSubsIncludesAnyTLSAndShadowTLS(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &hiddifyProfile); err != nil {
 		t.Fatalf("Hiddify needs one JSON document: %v", err)
 	}
-	if len(hiddifyProfile["outbounds"].([]any)) < 3 {
-		t.Fatalf("Hiddify is missing its visible proxy or transport: %s", response.Body.String())
+	if len(hiddifyProfile["outbounds"].([]any)) < 3 ||
+		!strings.Contains(response.Body.String(), `"type": "anytls"`) {
+		t.Fatalf("Hiddify is missing AnyTLS, ShadowTLS or its hidden transport: %s", response.Body.String())
 	}
+
+	// Reproduce an AnyTLS-only subscriber with a concurrently attached MTProto
+	// inbound that cannot be exported to sing-box. Hiddify must not fall back
+	// to raw anytls:// links, which some Hiddify versions do not import.
+	if err := db.Model(shadowtls).Update("enable", false).Error; err != nil {
+		t.Fatal(err)
+	}
+	checkAnyTLS := func(path, agent, accept string) {
+		t.Helper()
+		request := httptest.NewRequest(http.MethodGet, path, nil)
+		request.Header.Set("User-Agent", agent)
+		if accept != "" {
+			request.Header.Set("Accept", accept)
+		}
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+		if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"type": "anytls"`) {
+			t.Fatalf("%s must return native AnyTLS JSON: HTTP %d: %s", path, response.Code, response.Body.String())
+		}
+		if strings.Contains(response.Body.String(), "anytls://") {
+			t.Fatalf("%s unexpectedly returned an AnyTLS share URI: %s", path, response.Body.String())
+		}
+	}
+	checkAnyTLS("/sub/"+subID, "HiddifyNext/4.0", "")
+	checkAnyTLS("/json/"+subID, "HiddifyNext/4.0", "")
+	// The explicit Hiddify format must work even without an identifying UA,
+	// including when a browser advertises an HTML response.
+	checkAnyTLS("/sub/"+subID+"?format=hiddify", "Mozilla/5.0", "text/html")
+
+	if err := db.Model(unsupported).Update("enable", false).Error; err != nil {
+		t.Fatal(err)
+	}
+	checkAnyTLS("/sub/"+subID+"?format=sing-box", "Mozilla/5.0", "text/html")
 }
 
 func TestGetSubsSkipsEmptyRenderedLinksButKeepsTraffic(t *testing.T) {

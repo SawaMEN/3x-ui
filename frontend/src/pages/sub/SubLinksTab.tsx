@@ -12,6 +12,8 @@ interface SubLinksTabProps {
 }
 
 const appendRawView = (url: string) => `${url}${url.includes('?') ? '&' : '?'}view=raw`;
+const appendNativeFormat = (url: string, format: string) =>
+  url ? `${url}${url.includes('?') ? '&' : '?'}format=${format}` : '';
 
 export default function SubLinksTab({ subUrl, subJsonUrl, subClashUrl, onCopy }: SubLinksTabProps) {
   const { t } = useTranslation();
@@ -26,6 +28,20 @@ export default function SubLinksTab({ subUrl, subJsonUrl, subClashUrl, onCopy }:
       downloadable: true,
     },
     { kind: 'CLASH', color: 'gold', url: subClashUrl, title: 'Clash / Mihomo', downloadable: true },
+    {
+      kind: 'SING-BOX',
+      color: 'cyan',
+      url: appendNativeFormat(subUrl, 'sing-box'),
+      title: 'Sing-box JSON (AnyTLS / ShadowTLS)',
+      downloadable: true,
+    },
+    {
+      kind: 'HIDDIFY',
+      color: 'blue',
+      url: appendNativeFormat(subUrl, 'hiddify'),
+      title: 'Hiddify JSON (AnyTLS / ShadowTLS)',
+      downloadable: true,
+    },
   ].filter((row) => row.url);
 
   return (

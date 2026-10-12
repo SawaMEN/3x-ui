@@ -413,3 +413,209 @@ func TestMASQUEEndpointBootstrapDNS(t *testing.T) {
 		t.Fatal("input proxy mutated")
 	}
 }
+
+func TestAnyTLSShadowTLSKeepsIndependentTLSSettings(t *testing.T) {
+	svc := &SubJsonService{}
+	inbound := &model.Inbound{
+		Protocol: model.AnyTLS,
+		Listen:   "edge.example.com",
+		Port:     443,
+		Settings: `{"tls":{"serverName":"vpn.example.com"},"shadowTls":{"enabled":true,"password":"outer-secret","wildcardSni":"all","handshake":{"server":"cover.example.com","serverPort":443}}}`,
+	}
+	endpoint := ShareEndpoint{
+		Address: "edge.example.com",
+		Port:    443,
+		ep: map[string]any{
+			"sni":           "front.example.com",
+			"alpn":          []any{"h2"},
+			"allowInsecure": true,
+		},
+	}
+	inner := svc.genNativeTLSLikeEndpoint(&SubService{}, inbound, model.Client{Email: "alice", Password: "inner-secret"}, endpoint)
+	if inner == nil {
+		t.Fatal("missing AnyTLS outbound")
+	}
+	tls, ok := inner["tls"].(map[string]any)
+	if !ok || tls["server_name"] != "vpn.example.com" {
+		t.Fatalf("inner AnyTLS must verify its own certificate, got TLS: %#v", inner["tls"])
+	}
+	if _, ok := tls["alpn"]; ok {
+		t.Fatalf("outer ALPN leaked into inner AnyTLS: %#v", tls)
+	}
+	if _, ok := tls["insecure"]; ok {
+		t.Fatalf("outer insecure override leaked into inner AnyTLS: %#v", tls)
+	}
+	if !svc.wrapNativeShadowTLS(inbound, inner, endpoint.ep) {
+		t.Fatal("failed to attach ShadowTLS transport")
+	}
+	transport, ok := inner["_panel_shadowtls_transport"].(map[string]any)
+	if !ok || inner["detour"] != transport["tag"] {
+		t.Fatalf("broken AnyTLS to ShadowTLS detour: %#v", inner)
+	}
+	outerTLS, ok := transport["tls"].(map[string]any)
+	if !ok || outerTLS["server_name"] != "front.example.com" || outerTLS["insecure"] != true || !reflect.DeepEqual(outerTLS["alpn"], []any{"h2"}) {
+		t.Fatalf("outer ShadowTLS options lost: %#v", transport["tls"])
+	}
+
+	inner["tag"] = "alice"
+	for _, hiddify := range []bool{false, true} {
+		var (
+			serialized string
+			err        error
+		)
+		if hiddify {
+			serialized, err = buildHiddifySingBoxSubscription([]map[string]any{inner})
+		} else {
+			serialized, err = buildSeparatedSingBoxSubscription(nil, []map[string]any{inner}, false)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		var profile struct {
+			Outbounds []map[string]any `json:"outbounds"`
+		}
+		if err := json.Unmarshal([]byte(serialized), &profile); err != nil {
+			t.Fatal(err)
+		}
+		var actualInner, actualOuter map[string]any
+		for _, outbound := range profile.Outbounds {
+			switch outbound["type"] {
+			case "anytls":
+				actualInner = outbound
+			case "shadowtls":
+				actualOuter = outbound
+			}
+		}
+		if actualInner == nil || actualOuter == nil || actualInner["detour"] != actualOuter["tag"] {
+			t.Fatalf("broken exported AnyTLS+ShadowTLS chain: %s", serialized)
+		}
+		if actualInner["tls"].(map[string]any)["server_name"] != "vpn.example.com" ||
+			actualOuter["tls"].(map[string]any)["server_name"] != "front.example.com" {
+			t.Fatalf("TLS server names were mixed in exported profile: %s", serialized)
+		}
+	}
+}
+
+func TestUnwrappedAnyTLSKeepsHostTLSOverrides(t *testing.T) {
+	svc := &SubJsonService{}
+	inbound := &model.Inbound{
+		Protocol: model.AnyTLS,
+		Listen:   "edge.example.com",
+		Port:     443,
+		Settings: `{"tls":{"serverName":"vpn.example.com"}}`,
+	}
+	endpoint := ShareEndpoint{Address: "edge.example.com", Port: 443, ep: map[string]any{
+		"sni": "front.example.com", "allowInsecure": true,
+	}}
+	out := svc.genNativeTLSLikeEndpoint(&SubService{}, inbound, model.Client{Password: "secret"}, endpoint)
+	if out == nil {
+		t.Fatal("missing AnyTLS outbound")
+	}
+	tls := out["tls"].(map[string]any)
+	if tls["server_name"] != "front.example.com" || tls["insecure"] != true {
+		t.Fatalf("unwrapped AnyTLS host overrides changed: %#v", tls)
+	}
+}
+
+func TestContainsNativeTLSSubscription(t *testing.T) {
+	tests := []struct {
+		name     string
+		inbounds []*model.Inbound
+		want     bool
+	}{
+		{name: "no inbounds"},
+		{name: "nil inbound", inbounds: []*model.Inbound{nil}},
+		{name: "ordinary VLESS", inbounds: []*model.Inbound{{Protocol: model.VLESS}}},
+		{name: "plain AnyTLS", inbounds: []*model.Inbound{{Protocol: model.AnyTLS}}, want: true},
+		{name: "standalone ShadowTLS", inbounds: []*model.Inbound{{Protocol: model.ShadowTLS}}, want: true},
+		{
+			name: "AnyTLS wrapped in ShadowTLS",
+			inbounds: []*model.Inbound{{
+				Protocol: model.AnyTLS,
+				Settings: `{"shadowTls":{"enabled":true,"password":"outer"}}`,
+			}},
+			want: true,
+		},
+		{
+			name: "other protocol wrapped in ShadowTLS",
+			inbounds: []*model.Inbound{{
+				Protocol: model.Shadowsocks,
+				Settings: `{"shadowTls":{"enabled":true,"password":"outer"}}`,
+			}},
+			want: true,
+		},
+		{
+			name: "disabled ShadowTLS wrapper",
+			inbounds: []*model.Inbound{{
+				Protocol: model.VLESS,
+				Settings: `{"shadowTls":{"enabled":false}}`,
+			}},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := containsNativeTLSSubscription(tc.inbounds); got != tc.want {
+				t.Fatalf("containsNativeTLSSubscription(%#v) = %t, want %t", tc.inbounds, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestHiddifySubscriptionIncludesVisibleAnyTLSAndShadowTLS(t *testing.T) {
+	outbounds := []map[string]any{
+		{
+			"type": "anytls", "tag": "AnyTLS · alice", "server": "vpn.example.com",
+			"server_port": 443, "password": "anytls-password",
+			"tls": map[string]any{"enabled": true, "server_name": "vpn.example.com"},
+		},
+		{
+			"type": "anytls", "tag": "AnyTLS + ShadowTLS · alice",
+			"password": "inner-password", "detour": "§hide§ shadowtls-transport",
+			"tls": map[string]any{"enabled": true, "server_name": "vpn.example.com"},
+			"_panel_shadowtls_transport": map[string]any{
+				"type": "shadowtls", "tag": "§hide§ shadowtls-transport",
+				"server": "edge.example.com", "server_port": 443,
+				"version": 3, "password": "outer-password",
+				"tls": map[string]any{"enabled": true, "server_name": "cover.example.com"},
+			},
+		},
+	}
+	result, err := buildHiddifySingBoxSubscription(outbounds)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var profile struct {
+		Outbounds []map[string]any `json:"outbounds"`
+	}
+	if err := json.Unmarshal([]byte(result), &profile); err != nil {
+		t.Fatal(err)
+	}
+	var standAlone, wrapped, transport map[string]any
+	for _, outbound := range profile.Outbounds {
+		switch outbound["tag"] {
+		case "AnyTLS · alice":
+			standAlone = outbound
+		case "AnyTLS + ShadowTLS · alice":
+			wrapped = outbound
+		default:
+			if outbound["type"] == "shadowtls" {
+				transport = outbound
+			}
+		}
+	}
+	if standAlone == nil || wrapped == nil || transport == nil ||
+		wrapped["detour"] != transport["tag"] {
+		t.Fatalf("missing or disconnected AnyTLS/ShadowTLS nodes: %s", result)
+	}
+	for _, proxy := range []map[string]any{standAlone, wrapped} {
+		if proxy["type"] != "anytls" || proxy["tls"].(map[string]any)["server_name"] != "vpn.example.com" {
+			t.Fatalf("invalid AnyTLS inner TLS: %#v", proxy)
+		}
+		if _, leaked := proxy["_panel_shadowtls_transport"]; leaked {
+			t.Fatalf("panel metadata leaked into subscription: %#v", proxy)
+		}
+	}
+	if transport["tls"].(map[string]any)["server_name"] != "cover.example.com" {
+		t.Fatalf("wrong ShadowTLS outer TLS: %#v", transport)
+	}
+}
