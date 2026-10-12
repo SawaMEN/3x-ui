@@ -2,11 +2,21 @@
 type Raw = Record<string, unknown>;
 
 const SCHEMES: Record<string, string> = {
-  anytls: 'anytls', tuic: 'tuic', hysteria: 'hysteria', hy: 'hysteria',
-  shadowtls: 'shadowtls', mieru: 'mieru', mierus: 'mieru',
-  naive: 'naive', 'naive+https': 'naive', ssh: 'ssh',
-  socks: 'socks', socks5: 'socks', socks5h: 'socks',
-  http: 'http', https: 'http',
+  anytls: 'anytls',
+  tuic: 'tuic',
+  hysteria: 'hysteria',
+  hy: 'hysteria',
+  shadowtls: 'shadowtls',
+  mieru: 'mieru',
+  mierus: 'mieru',
+  naive: 'naive',
+  'naive+https': 'naive',
+  ssh: 'ssh',
+  socks: 'socks',
+  socks5: 'socks',
+  socks5h: 'socks',
+  http: 'http',
+  https: 'http',
 };
 const first = (p: URLSearchParams, ...keys: string[]) =>
   keys.map((k) => p.get(k)).find((v) => v !== null && v !== '') ?? undefined;
@@ -30,15 +40,15 @@ function tlsOptions(p: URLSearchParams, enabled: boolean): Raw | undefined {
   const fp = first(p, 'fp', 'fingerprint');
   const alpn = first(p, 'alpn');
   const ech = first(p, 'ech');
-  if (!enabled && !key && !sni && insecure === undefined && !fp && !alpn && !ech)
-    return undefined;
+  if (!enabled && !key && !sni && insecure === undefined && !fp && !alpn && !ech) return undefined;
   const tls: Raw = { enabled: enabled || !!key };
   if (sni) tls.server_name = sni;
   if (insecure !== undefined) tls.insecure = insecure;
   if (alpn) tls.alpn = alpn.split(',').filter(Boolean);
   if (fp) tls.utls = { enabled: true, fingerprint: fp };
   if (ech) tls.ech = { enabled: true, config: [ech] };
-  if (key) tls.reality = { enabled: true, public_key: key, short_id: first(p, 'sid', 'short_id') ?? '' };
+  if (key)
+    tls.reality = { enabled: true, public_key: key, short_id: first(p, 'sid', 'short_id') ?? '' };
   return tls;
 }
 function extraOptions(p: URLSearchParams): Raw | null {
@@ -46,18 +56,25 @@ function extraOptions(p: URLSearchParams): Raw | null {
   if (!extra) return {};
   try {
     const obj: unknown = JSON.parse(extra);
-    return obj && typeof obj === 'object' && !Array.isArray(obj) ? obj as Raw : null;
-  } catch { return null; }
+    return obj && typeof obj === 'object' && !Array.isArray(obj) ? (obj as Raw) : null;
+  } catch {
+    return null;
+  }
 }
 export function parseNativeOutboundLink(link: string): Raw | null {
   let url: URL;
-  try { url = new URL(link.trim()); } catch { return null; }
+  try {
+    url = new URL(link.trim());
+  } catch {
+    return null;
+  }
   const scheme = url.protocol.slice(0, -1).toLowerCase();
   const protocol = SCHEMES[scheme];
   if (!protocol || !url.hostname) return null;
   // Remote HTTPS subscription URLs are not HTTP proxy share links.
   if (['http', 'https'].includes(scheme) && url.pathname !== '/') return null;
-  const defaultPort = scheme === 'ssh' ? 22 : protocol === 'socks' ? 1080 : scheme === 'http' ? 8080 : 443;
+  const defaultPort =
+    scheme === 'ssh' ? 22 : protocol === 'socks' ? 1080 : scheme === 'http' ? 8080 : 443;
   const port = Number(url.port || defaultPort);
   if (!Number.isInteger(port) || port < 1 || port > 65535) return null;
   let username: string, password: string, remark: string;
@@ -65,7 +82,9 @@ export function parseNativeOutboundLink(link: string): Raw | null {
     username = decodeURIComponent(url.username);
     password = decodeURIComponent(url.password);
     remark = decodeURIComponent(url.hash.slice(1));
-  } catch { return null; }
+  } catch {
+    return null;
+  }
   const p = url.searchParams;
   const extra = extraOptions(p);
   if (extra === null) return null;
@@ -73,7 +92,11 @@ export function parseNativeOutboundLink(link: string): Raw | null {
   const security = first(p, 'security');
   const secureScheme = ['https', 'naive+https', 'mierus'].includes(scheme);
   const nativeTls = ['anytls', 'tuic', 'hysteria', 'naive'].includes(protocol);
-  const enabled = security === 'tls' || security === 'reality' || secureScheme || (security !== 'none' && nativeTls);
+  const enabled =
+    security === 'tls' ||
+    security === 'reality' ||
+    secureScheme ||
+    (security !== 'none' && nativeTls);
   const tls = tlsOptions(p, enabled);
   if (tls && protocol !== 'ssh' && protocol !== 'mieru') settings.tls = tls;
   switch (protocol) {
@@ -111,7 +134,9 @@ export function parseNativeOutboundLink(link: string): Raw | null {
       delete settings.server_port;
       settings.username = username;
       settings.password = password;
-      settings.portBindings = [{ protocol: (first(p, 'protocol', 'transport') ?? 'TCP').toUpperCase(), port }];
+      settings.portBindings = [
+        { protocol: (first(p, 'protocol', 'transport') ?? 'TCP').toUpperCase(), port },
+      ];
       if (first(p, 'multiplexing')) settings.multiplexing = first(p, 'multiplexing');
       if (first(p, 'handshake_mode')) settings.handshake_mode = first(p, 'handshake_mode');
       break;

@@ -17,7 +17,6 @@
   margin-inline-start: 0;
 }
 
-
 /* Outbound editor — responsive, theme-neutral layout with a focused import area. */
 .outbound-form-modal .ant-modal-body {
   max-height: min(78vh, 820px);
@@ -32,9 +31,9 @@
   gap: 4px;
   padding: 14px 18px;
   margin-bottom: 14px;
-  border: 1px solid var(--ant-color-border-secondary, rgba(125, 125, 125, .2));
+  border: 1px solid var(--ant-color-border-secondary, rgba(125, 125, 125, 0.2));
   border-radius: 12px;
-  background: var(--ant-color-fill-quaternary, rgba(125, 125, 125, .045));
+  background: var(--ant-color-fill-quaternary, rgba(125, 125, 125, 0.045));
 }
 
 .outbound-form-heading .ant-typography {
@@ -64,8 +63,8 @@
   width: 100%;
   padding: 16px;
   border-radius: 12px;
-  border: 1px solid var(--ant-color-border-secondary, rgba(125, 125, 125, .2));
-  background: var(--ant-color-fill-quaternary, rgba(125, 125, 125, .045));
+  border: 1px solid var(--ant-color-border-secondary, rgba(125, 125, 125, 0.2));
+  background: var(--ant-color-fill-quaternary, rgba(125, 125, 125, 0.045));
 }
 
 .outbound-form-import .ant-typography {

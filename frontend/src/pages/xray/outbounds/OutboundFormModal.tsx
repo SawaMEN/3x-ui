@@ -1,7 +1,19 @@
 import AdditionalOutboundEditor from './AdditionalOutboundEditor';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Alert, Form, Input, InputNumber, Modal, Radio, Select, Space, Tabs, Typography, message } from 'antd';
+import {
+  Alert,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Radio,
+  Select,
+  Space,
+  Tabs,
+  Typography,
+  message,
+} from 'antd';
 import { Controller, FormProvider, useForm, useWatch } from 'react-hook-form';
 import { FinalMaskField, SniffingField } from '@/lib/xray/forms/fields';
 import { FormField, rhfZodValidate } from '@/components/form/rhf';
@@ -150,7 +162,8 @@ export default function OutboundFormModal({
       const isJson = link.startsWith('{') || link.startsWith('[');
       const decodeJson = (raw: string): Record<string, unknown> => {
         const normalized = normalizeOutboundJsonImport(JSON.parse(raw) as unknown);
-        if (normalized.length !== 1) throw new Error('Вставьте один outbound. Для списка используйте импорт подписки.');
+        if (normalized.length !== 1)
+          throw new Error('Вставьте один outbound. Для списка используйте импорт подписки.');
         return normalized[0];
       };
       if (isJson) {
@@ -166,7 +179,11 @@ export default function OutboundFormModal({
       } else {
         parsed = parseOutboundLink(link) ?? parseNativeOutboundLink(link);
         if (!parsed && !link.includes('://')) {
-          try { parsed = decodeJson(Base64.decode(link)); } catch { /* Not a JSON blob. */ }
+          try {
+            parsed = decodeJson(Base64.decode(link));
+          } catch {
+            /* Not a JSON blob. */
+          }
         }
       }
     } catch (error) {
@@ -328,8 +345,11 @@ export default function OutboundFormModal({
     const stream = (methods.getValues('streamSettings') ?? {}) as Record<string, unknown>;
     const updated = applyNetworkChange(protocol, stream, next);
     methods.setValue('streamSettings', updated as StreamValue);
-    if (protocol === 'vless' && flow === 'xtls-rprx-vision' &&
-      (next !== 'tcp' || updated.security === 'none'))
+    if (
+      protocol === 'vless' &&
+      flow === 'xtls-rprx-vision' &&
+      (next !== 'tcp' || updated.security === 'none')
+    )
       methods.setValue('settings.flow', '');
   }
 
@@ -474,7 +494,8 @@ export default function OutboundFormModal({
         <div className="outbound-form-heading">
           <Typography.Text strong>Параметры исходящего подключения</Typography.Text>
           <Typography.Text type="secondary">
-            Автоматическая синхронизация протокола, транспорта и защиты. JSON доступен для всех параметров ядра.
+            Автоматическая синхронизация протокола, транспорта и защиты. JSON доступен для всех
+            параметров ядра.
           </Typography.Text>
         </div>
         <FormProvider {...methods}>
@@ -727,8 +748,8 @@ export default function OutboundFormModal({
                       <div className="outbound-form-import">
                         <Typography.Text strong>Импорт конфигурации</Typography.Text>
                         <Typography.Text type="secondary">
-                          Вставьте ссылку протокола, один JSON outbound или base64 JSON.
-                          Параметры native sing-box сохраняются в JSON без преобразования.
+                          Вставьте ссылку протокола, один JSON outbound или base64 JSON. Параметры
+                          native sing-box сохраняются в JSON без преобразования.
                         </Typography.Text>
                         <Input.Search
                           value={linkInput}
