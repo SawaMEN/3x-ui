@@ -41,21 +41,6 @@ function tlsOptions(p: URLSearchParams, enabled: boolean): Raw | undefined {
   if (key) tls.reality = { enabled: true, public_key: key, short_id: first(p, 'sid', 'short_id') ?? '' };
   return tls;
 }
-function transportOptions(p: URLSearchParams): Raw | undefined {
-  const type = first(p, 'type', 'transport');
-  if (!type || type === 'tcp' || type === 'raw') return undefined;
-  if (!['ws', 'http', 'grpc', 'httpupgrade', 'quic'].includes(type)) return undefined;
-  const t: Raw = { type };
-  if (type === 'grpc') {
-    t.service_name = first(p, 'serviceName', 'service_name', 'path') ?? '';
-  } else if (type !== 'quic') {
-    const path = first(p, 'path');
-    const host = first(p, 'host');
-    if (path) t.path = path;
-    if (host) t.headers = { Host: host };
-  }
-  return t;
-}
 function extraOptions(p: URLSearchParams): Raw | null {
   const extra = first(p, 'extra');
   if (!extra) return {};
@@ -70,6 +55,8 @@ export function parseNativeOutboundLink(link: string): Raw | null {
   const scheme = url.protocol.slice(0, -1).toLowerCase();
   const protocol = SCHEMES[scheme];
   if (!protocol || !url.hostname) return null;
+  // Remote HTTPS subscription URLs are not HTTP proxy share links.
+  if (['http', 'https'].includes(scheme) && url.pathname !== '/') return null;
   const defaultPort = scheme === 'ssh' ? 22 : protocol === 'socks' ? 1080 : scheme === 'http' ? 8080 : 443;
   const port = Number(url.port || defaultPort);
   if (!Number.isInteger(port) || port < 1 || port > 65535) return null;
@@ -140,9 +127,6 @@ export function parseNativeOutboundLink(link: string): Raw | null {
       if (password) settings.password = password;
       break;
   }
-  const transport = transportOptions(p);
-  if (transport && ['anytls', 'naive', 'http', 'socks', 'shadowtls', 'tuic', 'hysteria'].includes(protocol))
-    settings.transport = transport;
   return {
     protocol: 'singbox:' + protocol,
     tag: remark || protocol + '-out',
