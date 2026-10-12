@@ -102,7 +102,28 @@ core_migration_begin() {
 core_migration_apply() {
     [[ "${cm_active:-0}" == 1 ]] || return 0
     core_migration_install_managed_bin || return 1
+    core_migration_restore_custom_bin_files || return 1
     "$xui_folder/x-ui" core-migrate --backup-dir "$cm_backup/data"
+}
+
+core_migration_restore_custom_bin_files() {
+    local source="$cm_backup/installation/bin" asset rel
+    # For an external bin/ symlink, the original target is already preserved
+    # and handled by core_migration_install_managed_bin.
+    [[ -d "$source" && ! -L "$source" ]] || return 0
+    while IFS= read -r -d '' asset; do
+        rel="${asset#"$source"/}"
+        case "$rel" in
+            config.json | mtg-linux-* | mtproto | mtproto/* | tuic | tuic/* | mieru | mieru/* | \
+            xray | xray-linux-* | sing-box | sing-box-* | hiddify-core-linux-* | \
+            telemt | telemt-* | README.md | LICENSE) continue ;;
+        esac
+        # The release's updated binaries and geodata win. Restore only
+        # user-provided extras, e.g. custom geoip/geosite files and keys.
+        [[ -e "$xui_folder/bin/$rel" || -L "$xui_folder/bin/$rel" ]] && continue
+        mkdir -p "$xui_folder/bin/$(dirname "$rel")" || return 1
+        cp -a -- "$asset" "$xui_folder/bin/$rel" || return 1
+    done < <(find "$source" \( -type f -o -type l \) -print0)
 }
 core_migration_install_managed_bin() {
     # Releases extract into installation/bin; a configured external directory
