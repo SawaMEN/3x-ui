@@ -477,14 +477,11 @@ func (a *SUBController) subs(c *gin.Context) {
 		logSubscriptionRoute(userAgent, "info")
 		return
 	}
-	if a.maybeServeSubPage(c) {
-		logSubscriptionRoute(userAgent, "html")
-		return
-	}
-	// An explicit format selector on the main subscription URL must be honored
-	// before user-agent auto-detection. sing-box imports a remote profile and
-	// therefore needs the native JSON document instead of the raw link list.
-	if strings.EqualFold(c.Query("format"), "sing-box") {
+	// Explicit native formats must take precedence over both HTML Accept
+	// headers and app-specific User-Agent guessing. This also makes the links
+	// on the subscription page directly inspectable in a browser.
+	format := strings.ToLower(c.Query("format"))
+	if format == "sing-box" || format == "hiddify" {
 		if !a.enforceHwid(c) {
 			return
 		}
@@ -492,7 +489,11 @@ func (a *SUBController) subs(c *gin.Context) {
 			writeSubError(c, nil)
 		}
 		a.recordSubscriptionFetch(c)
-		logSubscriptionRoute(userAgent, "sing-box-json")
+		logSubscriptionRoute(userAgent, format+"-json")
+		return
+	}
+	if a.maybeServeSubPage(c) {
+		logSubscriptionRoute(userAgent, "html")
 		return
 	}
 	if !a.enforceHwid(c) {
@@ -551,12 +552,7 @@ func (a *SUBController) hasNativeTLSSubscription(subID string) bool {
 	if err != nil {
 		return false
 	}
-	for _, inbound := range inbounds {
-		if inbound.Protocol == model.AnyTLS || inbound.Protocol == model.ShadowTLS || model.ShadowTLSTransport(inbound.Settings) != nil {
-			return true
-		}
-	}
-	return false
+	return containsNativeTLSSubscription(inbounds)
 }
 
 func (a *SUBController) recordSubscriptionFetch(c *gin.Context) {
@@ -876,7 +872,9 @@ func (a *SUBController) serveJsonBody(c *gin.Context, alwaysReturnArray bool, co
 	scheme, host, hostWithPort, _ := a.subService.ResolveRequest(c)
 	var jsonSub, header string
 	var err error
-	if forceSingBox || strings.EqualFold(c.Query("format"), "sing-box") {
+	if strings.EqualFold(c.Query("format"), "hiddify") {
+		jsonSub, header, err = a.subJsonService.GetHiddifySingBoxJson(subId, host)
+	} else if forceSingBox || strings.EqualFold(c.Query("format"), "sing-box") {
 		if strings.Contains(strings.ToLower(c.Request.UserAgent()), "hiddify") {
 			jsonSub, header, err = a.subJsonService.GetHiddifySingBoxJson(subId, host)
 		} else {
