@@ -98,13 +98,12 @@ export default function IndexPage() {
 
   const history = useOverviewHistory(status, fetched && !fetchError, lowPower);
 
-  const coreType = allSetting.coreType === 'sing-box' ? 'sing-box' : 'xray';
-  const displayCoreRunning =
-    coreType === 'sing-box' ? coreRunning : status.xray.state === 'running';
-  const displayCoreVersion = coreType === 'sing-box' ? coreVersion : status.xray.version;
-  const displayCoreError = coreType === 'sing-box' ? coreError : status.xray.errorMsg || '';
+  const coreType = 'sing-box' as const;
+  const displayCoreRunning = coreRunning;
+  const displayCoreVersion = coreVersion;
+  const displayCoreError = coreError;
   const portBindError = corePortBindError(displayCoreError);
-  const displayCoreColor = coreType === 'sing-box' ? coreColor : status.xray.color;
+  const displayCoreColor = coreColor;
 
   const refreshSingBoxStatus = useCallback(async () => {
     const msg = await HttpUtil.get<{
@@ -119,8 +118,6 @@ export default function IndexPage() {
   }, []);
 
   useEffect(() => {
-    if (coreType !== 'sing-box') return;
-
     let cancelled = false;
     let timer: number | undefined;
     const syncSingBoxStatus = async () => {
@@ -135,7 +132,7 @@ export default function IndexPage() {
       cancelled = true;
       if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, [coreType, refreshSingBoxStatus]);
+  }, [refreshSingBoxStatus]);
   useEffect(() => {
     HttpUtil.post<{ accessLogEnable?: boolean; devChannelEnable?: boolean }>(
       '/panel/api/setting/defaultSettings',
@@ -163,14 +160,14 @@ export default function IndexPage() {
   const stopXray = useCallback(async () => {
     await HttpUtil.post('/panel/api/server/stopCoreService');
     await refresh();
-    if (coreType === 'sing-box') await refreshSingBoxStatus();
-  }, [coreType, refresh, refreshSingBoxStatus]);
+    await refreshSingBoxStatus();
+  }, [refresh, refreshSingBoxStatus]);
 
   const restartXray = useCallback(async () => {
     await HttpUtil.post('/panel/api/server/restartCoreService');
     await refresh();
-    if (coreType === 'sing-box') await refreshSingBoxStatus();
-  }, [coreType, refresh, refreshSingBoxStatus]);
+    await refreshSingBoxStatus();
+  }, [refresh, refreshSingBoxStatus]);
 
   async function handleChannelChange(dev: boolean) {
     const res = await HttpUtil.post('/panel/api/server/setUpdateChannel', { dev });

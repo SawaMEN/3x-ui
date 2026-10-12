@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 type TuicJob struct {
@@ -75,8 +75,8 @@ func (j *TuicJob) FlushStoppedTraffic() error {
 	return j.flushTuicJournal()
 }
 
-func aggregateTuicClientTraffic(clientDeltas []tuic.ClientTrafficDelta, onlineEmails []string) []*xray.ClientTraffic {
-	clientTrafficMap := make(map[string]*xray.ClientTraffic, len(clientDeltas)+len(onlineEmails))
+func aggregateTuicClientTraffic(clientDeltas []tuic.ClientTrafficDelta, onlineEmails []string) []*coremodel.ClientTraffic {
+	clientTrafficMap := make(map[string]*coremodel.ClientTraffic, len(clientDeltas)+len(onlineEmails))
 	for _, cd := range clientDeltas {
 		key := cd.Email
 		if cd.TrafficID > 0 {
@@ -87,7 +87,7 @@ func aggregateTuicClientTraffic(clientDeltas []tuic.ClientTrafficDelta, onlineEm
 		}
 		traffic := clientTrafficMap[key]
 		if traffic == nil {
-			traffic = &xray.ClientTraffic{Email: cd.Email, TuicTrafficID: cd.TrafficID, TuicUUID: cd.UUID, TuicInboundId: cd.InboundID}
+			traffic = &coremodel.ClientTraffic{Email: cd.Email, TuicTrafficID: cd.TrafficID, TuicUUID: cd.UUID, TuicInboundId: cd.InboundID}
 			clientTrafficMap[key] = traffic
 		}
 		traffic.Up += cd.Up
@@ -95,7 +95,7 @@ func aggregateTuicClientTraffic(clientDeltas []tuic.ClientTrafficDelta, onlineEm
 	}
 	for _, email := range onlineEmails {
 		if _, exists := clientTrafficMap[email]; !exists {
-			clientTrafficMap[email] = &xray.ClientTraffic{
+			clientTrafficMap[email] = &coremodel.ClientTraffic{
 				Email: email,
 				Up:    0,
 				Down:  0,
@@ -103,7 +103,7 @@ func aggregateTuicClientTraffic(clientDeltas []tuic.ClientTrafficDelta, onlineEm
 		}
 	}
 
-	clientTraffics := make([]*xray.ClientTraffic, 0, len(clientTrafficMap))
+	clientTraffics := make([]*coremodel.ClientTraffic, 0, len(clientTrafficMap))
 	for _, ct := range clientTrafficMap {
 		clientTraffics = append(clientTraffics, ct)
 	}

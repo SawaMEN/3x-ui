@@ -1413,8 +1413,48 @@ export const SCHEMAS: Record<string, unknown> = {
     ],
     "type": "object"
   },
+  "Capabilities": {
+    "description": "Capabilities describes optional behavior exposed by a proxy core. Keep this\nseparate from Runtime so adding a core-specific feature never expands the\nlifecycle contract or forces unrelated adapters to implement stub methods.",
+    "properties": {
+      "clashApi": {
+        "type": "boolean"
+      },
+      "connectionStats": {
+        "type": "boolean"
+      },
+      "geoIp": {
+        "type": "boolean"
+      },
+      "geoSite": {
+        "type": "boolean"
+      },
+      "hotInboundReload": {
+        "type": "boolean"
+      },
+      "outboundDelayProbe": {
+        "type": "boolean"
+      },
+      "ruleSets": {
+        "type": "boolean"
+      },
+      "shadowTls": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "clashApi",
+      "connectionStats",
+      "geoIp",
+      "geoSite",
+      "hotInboundReload",
+      "outboundDelayProbe",
+      "ruleSets",
+      "shadowTls"
+    ],
+    "type": "object"
+  },
   "Client": {
-    "description": "Client represents a client configuration for Xray inbounds with traffic limits and settings.",
+    "description": "Client represents a client configuration for panel inbounds with traffic limits and settings.",
     "properties": {
       "adTag": {
         "example": "0123456789abcdef0123456789abcdef",
@@ -2666,7 +2706,7 @@ export const SCHEMAS: Record<string, unknown> = {
     "type": "object"
   },
   "Inbound": {
-    "description": "Inbound represents an Xray inbound configuration with traffic statistics and settings.",
+    "description": "Inbound represents a panel inbound with traffic statistics and settings.",
     "properties": {
       "clientStats": {
         "description": "Client traffic statistics",
@@ -3180,7 +3220,24 @@ export const SCHEMAS: Record<string, unknown> = {
         "format": "int64",
         "type": "integer"
       },
+      "coreCapabilities": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Capabilities"
+          }
+        ],
+        "nullable": true
+      },
+      "coreError": {
+        "type": "string"
+      },
+      "coreState": {
+        "type": "string"
+      },
       "coreType": {
+        "type": "string"
+      },
+      "coreVersion": {
         "type": "string"
       },
       "cpuPct": {
@@ -3284,6 +3341,10 @@ export const SCHEMAS: Record<string, unknown> = {
         "minimum": 1,
         "type": "integer"
       },
+      "presenceRegistry": {
+        "description": "XrayState and XrayError are captured from the remote node's /panel/api/server/status\nduring heartbeats. They let the central panel distinguish \"panel API reachable\"\n(status=online) from \"Xray core itself has failed on the node\" for monitoring.",
+        "type": "string"
+      },
       "remark": {
         "type": "string"
       },
@@ -3347,10 +3408,6 @@ export const SCHEMAS: Record<string, unknown> = {
       "xrayError": {
         "type": "string"
       },
-      "xrayState": {
-        "description": "XrayState and XrayError are captured from the remote node's /panel/api/server/status\nduring heartbeats. They let the central panel distinguish \"panel API reachable\"\n(status=online) from \"Xray core itself has failed on the node\" for monitoring.",
-        "type": "string"
-      },
       "xrayVersion": {
         "example": "25.10.31",
         "type": "string"
@@ -3364,7 +3421,10 @@ export const SCHEMAS: Record<string, unknown> = {
       "clientCount",
       "configDirty",
       "configDirtyAt",
+      "coreError",
+      "coreState",
       "coreType",
+      "coreVersion",
       "cpuPct",
       "createdAt",
       "depletedCount",
@@ -3387,6 +3447,7 @@ export const SCHEMAS: Record<string, unknown> = {
       "panelVersion",
       "pinnedCertSha256",
       "port",
+      "presenceRegistry",
       "remark",
       "runningCore",
       "scheme",
@@ -3401,7 +3462,6 @@ export const SCHEMAS: Record<string, unknown> = {
       "updatedAt",
       "uptimeSecs",
       "xrayError",
-      "xrayState",
       "xrayVersion"
     ],
     "type": "object"
@@ -3528,7 +3588,24 @@ export const SCHEMAS: Record<string, unknown> = {
         "format": "int64",
         "type": "integer"
       },
+      "coreCapabilities": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Capabilities"
+          }
+        ],
+        "nullable": true
+      },
+      "coreError": {
+        "type": "string"
+      },
+      "coreState": {
+        "type": "string"
+      },
       "coreType": {
+        "type": "string"
+      },
+      "coreVersion": {
         "type": "string"
       },
       "cpuPct": {
@@ -3633,6 +3710,10 @@ export const SCHEMAS: Record<string, unknown> = {
         "example": 2053,
         "type": "integer"
       },
+      "presenceRegistry": {
+        "example": "running",
+        "type": "string"
+      },
       "remark": {
         "example": "Primary edge",
         "type": "string"
@@ -3685,10 +3766,6 @@ export const SCHEMAS: Record<string, unknown> = {
       "xrayError": {
         "type": "string"
       },
-      "xrayState": {
-        "example": "running",
-        "type": "string"
-      },
       "xrayVersion": {
         "example": "25.10.31",
         "type": "string"
@@ -3702,7 +3779,10 @@ export const SCHEMAS: Record<string, unknown> = {
       "clientCount",
       "configDirty",
       "configDirtyAt",
+      "coreError",
+      "coreState",
       "coreType",
+      "coreVersion",
       "cpuPct",
       "createdAt",
       "depletedCount",
@@ -3726,6 +3806,7 @@ export const SCHEMAS: Record<string, unknown> = {
       "panelVersion",
       "pinnedCertSha256",
       "port",
+      "presenceRegistry",
       "remark",
       "runningCore",
       "scheme",
@@ -3739,7 +3820,6 @@ export const SCHEMAS: Record<string, unknown> = {
       "updatedAt",
       "uptimeSecs",
       "xrayError",
-      "xrayState",
       "xrayVersion"
     ],
     "type": "object"
@@ -3876,7 +3956,24 @@ export const SCHEMAS: Record<string, unknown> = {
   },
   "ProbeResultUI": {
     "properties": {
+      "coreCapabilities": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Capabilities"
+          }
+        ],
+        "nullable": true
+      },
+      "coreError": {
+        "type": "string"
+      },
+      "coreState": {
+        "type": "string"
+      },
       "coreType": {
+        "type": "string"
+      },
+      "coreVersion": {
         "type": "string"
       },
       "cpuPct": {
@@ -3896,6 +3993,10 @@ export const SCHEMAS: Record<string, unknown> = {
       },
       "panelVersion": {
         "example": "v3.x.x",
+        "type": "string"
+      },
+      "presenceRegistry": {
+        "description": "XrayState/XrayError are populated on successful probes even when the node's\nXray core is not healthy. The UI uses them for a distinct \"panel ok, xray failed\" indicator.",
         "type": "string"
       },
       "runningCore": {
@@ -3928,22 +4029,22 @@ export const SCHEMAS: Record<string, unknown> = {
       "xrayError": {
         "type": "string"
       },
-      "xrayState": {
-        "description": "XrayState/XrayError are populated on successful probes even when the node's\nXray core is not healthy. The UI uses them for a distinct \"panel ok, xray failed\" indicator.",
-        "type": "string"
-      },
       "xrayVersion": {
         "example": "25.10.31",
         "type": "string"
       }
     },
     "required": [
+      "coreError",
+      "coreState",
       "coreType",
+      "coreVersion",
       "cpuPct",
       "error",
       "latencyMs",
       "memPct",
       "panelVersion",
+      "presenceRegistry",
       "runningCore",
       "singboxError",
       "singboxInstalled",
@@ -3953,7 +4054,6 @@ export const SCHEMAS: Record<string, unknown> = {
       "status",
       "uptimeSecs",
       "xrayError",
-      "xrayState",
       "xrayVersion"
     ],
     "type": "object"
@@ -4439,7 +4539,7 @@ export const SCHEMAS: Record<string, unknown> = {
     "type": "object"
   },
   "Traffic": {
-    "description": "Traffic represents network traffic statistics for Xray connections.\nIt tracks upload and download bytes for inbound or outbound traffic.",
+    "description": "Traffic represents network traffic statistics reported by a core.\nIt tracks upload and download bytes for inbound or outbound traffic.",
     "properties": {
       "Down": {
         "example": 2097152,

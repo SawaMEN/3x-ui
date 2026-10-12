@@ -47,6 +47,7 @@ func TestOutboundTransportIsUDPMatchesTheCore(t *testing.T) {
 		ob   map[string]any
 		want bool
 	}{
+		{"native Mieru", map[string]any{"protocol": "singbox:mieru"}, true},
 		{"canonical wireguard", map[string]any{"protocol": "wireguard"}, true},
 		{"capitalised wireguard", map[string]any{"protocol": "WireGuard"}, true},
 		{"upper hysteria", map[string]any{"protocol": "HYSTERIA"}, true},

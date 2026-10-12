@@ -1,22 +1,22 @@
 package xray
 
 import (
-	"bytes"
 	"encoding/json"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/json_util"
 )
 
-// InboundConfig represents an Xray inbound configuration.
-// It defines how Xray accepts incoming connections including protocol, port, and settings.
-type InboundConfig struct {
-	Listen         json_util.RawMessage `json:"listen"` // listen cannot be an empty string
-	Port           int                  `json:"port"`
-	Protocol       string               `json:"protocol"`
-	Settings       json_util.RawMessage `json:"settings"`
-	StreamSettings json_util.RawMessage `json:"streamSettings,omitempty"`
-	Tag            string               `json:"tag"`
-	Sniffing       json_util.RawMessage `json:"sniffing,omitempty"`
+// InboundConfig is the legacy Xray wire representation of the panel inbound.
+type InboundConfig coremodel.InboundConfig
+
+// InboundFromPanel adapts a panel inbound to the Xray wire representation.
+func InboundFromPanel(inbound *coremodel.InboundConfig) *InboundConfig {
+	if inbound == nil {
+		return nil
+	}
+	wire := InboundConfig(*inbound)
+	return &wire
 }
 
 // MarshalJSON strips panel-only VLESS fields from the wire config sent to
@@ -73,28 +73,7 @@ func sanitizeVlessInboundSettings(settings json_util.RawMessage) json_util.RawMe
 	return json_util.RawMessage(out)
 }
 
-// Equals compares two InboundConfig instances for deep equality.
+// Equals compares the panel fields without changing Xray wire serialization.
 func (c *InboundConfig) Equals(other *InboundConfig) bool {
-	if !bytes.Equal(c.Listen, other.Listen) {
-		return false
-	}
-	if c.Port != other.Port {
-		return false
-	}
-	if c.Protocol != other.Protocol {
-		return false
-	}
-	if !bytes.Equal(c.Settings, other.Settings) {
-		return false
-	}
-	if !bytes.Equal(c.StreamSettings, other.StreamSettings) {
-		return false
-	}
-	if c.Tag != other.Tag {
-		return false
-	}
-	if !bytes.Equal(c.Sniffing, other.Sniffing) {
-		return false
-	}
-	return true
+	return (*coremodel.InboundConfig)(c).Equals((*coremodel.InboundConfig)(other))
 }

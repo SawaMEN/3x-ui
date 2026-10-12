@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/core"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
@@ -55,7 +56,6 @@ func (a *ServerController) initRouter(g *gin.RouterGroup) {
 	g.GET("/xrayMetricsHistory/:metric/:bucket", a.getXrayMetricsHistoryBucket)
 	g.GET("/xrayObservatory", a.getXrayObservatory)
 	g.GET("/xrayObservatoryHistory/:tag/:bucket", a.getXrayObservatoryHistoryBucket)
-	g.GET("/getXrayVersion", a.getXrayVersion)
 	g.GET("/getPanelUpdateInfo", a.getPanelUpdateInfo)
 	g.GET("/getUpdateStatus", a.getUpdateStatus)
 	g.GET("/getConfigJson", a.getConfigJson)
@@ -76,7 +76,6 @@ func (a *ServerController) initRouter(g *gin.RouterGroup) {
 	g.POST("/stopCoreService", a.stopCoreService)
 	g.POST("/restartCoreService", a.restartCoreService)
 	g.GET("/coreConfigJson", a.getCoreConfigJson)
-	g.POST("/installXray/:version", a.installXray)
 	g.POST("/updatePanel", a.updatePanel)
 	g.POST("/setUpdateChannel", a.setUpdateChannel)
 	g.POST("/updateGeofile", a.updateGeofile)
@@ -103,7 +102,7 @@ func (a *ServerController) readHiddify(c *gin.Context) (*service.HiddifyBackup, 
 	if err != nil {
 		return nil, empty, err
 	}
-	if core != service.CoreTypeSingBox {
+	if !service.IsNativeCore(core) {
 		return nil, empty, fmt.Errorf("select and save sing-box as the core first")
 	}
 	file, header, err := c.Request.FormFile("backup")
@@ -241,38 +240,34 @@ func (a *ServerController) status(c *gin.Context) {
 		coreType = service.CoreTypeXray
 	}
 
-	singBoxState := service.Stop
-	singBoxError := ""
-	singBoxVersion := ""
-	singBoxInstalled := a.singBoxService.Installed()
-	if singBoxInstalled {
-		if version, versionErr := a.singBoxService.CachedVersion(c.Request.Context()); versionErr == nil && version != "" {
-			singBoxVersion = version
+	nativeStatus := func(kind string) gin.H {
+		runtime := service.NativeCore(kind)
+		installed := runtime.Installed()
+		state, message, version := service.Stop, "", ""
+		if installed {
+			version, _ = runtime.CachedVersion(c.Request.Context())
 		}
-	}
-	switch {
-	case a.singBoxService.IsRunning():
-		singBoxState = service.Running
-	case !singBoxInstalled && coreType == service.CoreTypeSingBox:
-		// The panel itself is healthy, but its configured runtime cannot start.
-		// Report this explicitly so an upstream master can distinguish a
-		// deliberately stopped core from a node missing the selected binary.
-		singBoxState = service.Error
-		singBoxError = "sing-box is selected but not installed"
-	case singBoxInstalled:
-		if coreErr := a.singBoxService.LastError(); coreErr != nil {
-			singBoxState = service.Error
-			singBoxError = coreErr.Error()
+		switch {
+		case runtime.IsRunning():
+			state = service.Running
+		case !installed && coreType == kind:
+			state, message = service.Error, kind+" is selected but not installed"
+		case installed:
+			if err := runtime.LastError(); err != nil {
+				state, message = service.Error, err.Error()
+			}
 		}
+		return gin.H{"installed": installed, "state": state, "errorMsg": message, "version": version}
 	}
+	singBoxStatus := nativeStatus(service.CoreTypeSingBox)
 
 	runningCore := ""
 	switch {
-	case coreType == service.CoreTypeSingBox && a.singBoxService.IsRunning():
-		runningCore = service.CoreTypeSingBox
+	case service.IsNativeCore(coreType) && service.NativeCore(coreType).IsRunning():
+		runningCore = coreType
 	case coreType == service.CoreTypeXray && status.Xray.State == service.Running:
 		runningCore = service.CoreTypeXray
-	case a.singBoxService.IsRunning():
+	case service.NativeCore(service.CoreTypeSingBox).IsRunning():
 		runningCore = service.CoreTypeSingBox
 	case status.Xray.State == service.Running:
 		runningCore = service.CoreTypeXray
@@ -289,27 +284,15 @@ func (a *ServerController) status(c *gin.Context) {
 		return
 	}
 
-	obj["singbox"] = gin.H{
-		"installed": singBoxInstalled,
-		"state":     singBoxState,
-		"errorMsg":  singBoxError,
-		"version":   singBoxVersion,
-	}
-
-	selectedState := status.Xray.State
-	selectedError := status.Xray.ErrorMsg
-	selectedVersion := status.Xray.Version
+	obj["singbox"] = singBoxStatus
+	selected := gin.H{"state": status.Xray.State, "errorMsg": status.Xray.ErrorMsg, "version": status.Xray.Version}
 	if coreType == service.CoreTypeSingBox {
-		selectedState = singBoxState
-		selectedError = singBoxError
-		selectedVersion = singBoxVersion
+		selected = singBoxStatus
 	}
 	obj["core"] = gin.H{
-		"type":     coreType,
-		"running":  runningCore,
-		"state":    selectedState,
-		"errorMsg": selectedError,
-		"version":  selectedVersion,
+		"type": coreType, "running": runningCore,
+		"state": selected["state"], "errorMsg": selected["errorMsg"], "version": selected["version"],
+		"capabilities": core.Type(coreType).Capabilities(),
 	}
 	jsonObj(c, obj, nil)
 }
@@ -388,15 +371,6 @@ func (a *ServerController) getXrayObservatoryHistoryBucket(c *gin.Context) {
 	jsonObj(c, a.xrayMetricsService.AggregateObservatory(tag, bucket, 60), nil)
 }
 
-func (a *ServerController) getXrayVersion(c *gin.Context) {
-	versions, err := a.serverService.GetXrayVersionsCached()
-	if err != nil {
-		jsonMsg(c, I18nWeb(c, "getVersion"), err)
-		return
-	}
-	jsonObj(c, versions, nil)
-}
-
 // getPanelUpdateInfo retrieves the current and latest panel version.
 func (a *ServerController) getPanelUpdateInfo(c *gin.Context) {
 	info, err := a.panelService.GetUpdateInfo()
@@ -406,13 +380,6 @@ func (a *ServerController) getPanelUpdateInfo(c *gin.Context) {
 		return
 	}
 	jsonObj(c, info, nil)
-}
-
-// installXray installs or updates Xray to the specified version.
-func (a *ServerController) installXray(c *gin.Context) {
-	version := c.Param("version")
-	err := a.serverService.UpdateXray(version)
-	jsonMsg(c, I18nWeb(c, "pages.index.xraySwitchVersionPopover"), err)
 }
 
 // updatePanel starts a panel self-update. With no "dev" form value it follows
@@ -478,8 +445,8 @@ func (a *ServerController) stopCoreService(c *gin.Context) {
 		jsonMsg(c, "", err)
 		return
 	}
-	if coreType == service.CoreTypeSingBox {
-		err = a.singBoxService.Stop(c.Request.Context())
+	if service.IsNativeCore(coreType) {
+		err = service.SelectedNativeCore().Stop(c.Request.Context())
 	} else {
 		err = a.serverService.StopXrayService()
 	}
@@ -492,12 +459,12 @@ func (a *ServerController) restartCoreService(c *gin.Context) {
 		jsonMsg(c, "", err)
 		return
 	}
-	if coreType == service.CoreTypeSingBox {
-		if !a.singBoxService.Installed() {
-			jsonMsg(c, "", fmt.Errorf("sing-box is selected but not installed"))
+	if service.IsNativeCore(coreType) {
+		if !service.SelectedNativeCore().Installed() {
+			jsonMsg(c, "", fmt.Errorf("%s is selected but not installed", coreType))
 			return
 		}
-		err = a.singBoxService.Restart(c.Request.Context())
+		err = service.SelectedNativeCore().Restart(c.Request.Context())
 	} else {
 		err = a.serverService.RestartXrayService()
 	}
@@ -510,8 +477,8 @@ func (a *ServerController) getCoreConfigJson(c *gin.Context) {
 		jsonMsg(c, "", err)
 		return
 	}
-	if coreType == service.CoreTypeSingBox {
-		cfg, cfgErr := a.singBoxService.GetConfig()
+	if service.IsNativeCore(coreType) {
+		cfg, cfgErr := service.SelectedNativeCore().GetConfig()
 		if cfgErr != nil {
 			jsonMsg(c, "", cfgErr)
 			return
@@ -576,8 +543,8 @@ func (a *ServerController) getLogs(c *gin.Context) {
 // getXrayLogs retrieves Xray logs with filtering options for direct, blocked, and proxy traffic.
 func (a *ServerController) getXrayLogs(c *gin.Context) {
 	coreType, err := a.settingService.GetCoreType()
-	if err == nil && coreType == service.CoreTypeSingBox {
-		logs := a.singBoxService.GetLogs(c.Param("count"), c.PostForm("filter"))
+	if err == nil && service.IsNativeCore(coreType) {
+		logs := service.SelectedNativeCore().GetLogs(c.Param("count"), c.PostForm("filter"))
 		jsonObj(c, logs, nil)
 		return
 	}

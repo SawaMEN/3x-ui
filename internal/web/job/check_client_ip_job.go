@@ -34,7 +34,7 @@ type IPWithTimestamp struct {
 type CheckClientIpJob struct {
 	disAllowedIps []string
 	bannedSeen    map[string]int64
-	xrayService   service.XrayService
+	xrayService   service.CoreService
 	allowlist     ipLimitAllowlist
 	lastIpPrune   int64
 }
@@ -63,8 +63,7 @@ func (j *CheckClientIpJob) Run() {
 	}
 	j.pruneBannedSeen(observed)
 
-	coreType, _ := (&service.SettingService{}).GetCoreType()
-	singBox := coreType == service.CoreTypeSingBox
+	singBox := true
 	if !singBox && !isFail2BanEnabled() {
 		return
 	}
@@ -116,11 +115,10 @@ func (j *CheckClientIpJob) pruneBannedSeen(observed map[string]map[string]int64)
 // API is unavailable — xray not running, an older core, or a transient gRPC
 // failure — and the caller skips the run (there is no access-log fallback).
 func (j *CheckClientIpJob) collectFromOnlineAPI() (map[string]map[string]int64, bool) {
-	coreType, _ := (&service.SettingService{}).GetCoreType()
-	if coreType == service.CoreTypeSingBox {
+	{
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
-		online, err := (&service.SingBoxService{}).OnlineClientIPs(ctx)
+		online, err := (service.SelectedNativeCore()).OnlineClientIPs(ctx)
 		if err != nil {
 			logger.Debug("[LimitIP] sing-box native connection API unavailable this run:", err)
 			return nil, false
@@ -141,31 +139,6 @@ func (j *CheckClientIpJob) collectFromOnlineAPI() (map[string]map[string]int64, 
 		return observed, true
 	}
 
-	onlineUsers, ok, err := j.xrayService.GetOnlineUsers()
-	if err != nil {
-		logger.Debug("[LimitIP] Xray online-stats API unavailable this run:", err)
-		return nil, false
-	}
-	if !ok {
-		return nil, false
-	}
-	now := time.Now().Unix()
-	observed := make(map[string]map[string]int64, len(onlineUsers))
-	for _, user := range onlineUsers {
-		for _, entry := range user.IPs {
-			ts := entry.LastSeen
-			if ts <= 0 {
-				ts = now
-			}
-			if _, exists := observed[user.Email]; !exists {
-				observed[user.Email] = make(map[string]int64)
-			}
-			if existing, seen := observed[user.Email][entry.IP]; !seen || ts > existing {
-				observed[user.Email][entry.IP] = ts
-			}
-		}
-	}
-	return observed, true
 }
 
 func (j *CheckClientIpJob) hasLimitIp() bool {
@@ -649,151 +622,13 @@ func (j *CheckClientIpJob) filterAdvancedSinceLastBan(email string, banned []IPW
 	return actionable
 }
 
-// disconnectClientTemporarily drops a client's credential for a moment, so new
-// handshakes are refused; the fail2ban ban is what ends live traffic.
+// disconnectClientTemporarily closes disallowed native sessions without changing credentials.
 func (j *CheckClientIpJob) disconnectClientTemporarily(inbound *model.Inbound, clientEmail string, clients []model.Client) {
-	coreType, _ := (&service.SettingService{}).GetCoreType()
-	if coreType == service.CoreTypeSingBox {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		if err := (&service.SingBoxService{}).DisconnectClientIPs(ctx, clientEmail, j.disAllowedIps); err != nil {
-			logger.Warningf("[LIMIT_IP] Failed to disconnect sing-box client %s: %v", clientEmail, err)
-		}
-		return
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := service.SelectedNativeCore().DisconnectClientIPs(ctx, clientEmail, j.disAllowedIps); err != nil {
+		logger.Warningf("[LIMIT_IP] Failed to disconnect sing-box client %s: %v", clientEmail, err)
 	}
-
-	var xrayAPI xray.XrayAPI
-	apiPort := j.resolveXrayAPIPort()
-
-	err := xrayAPI.Init(apiPort)
-	if err != nil {
-		logger.Warningf("[LIMIT_IP] Failed to init Xray API for disconnection: %v", err)
-		return
-	}
-	defer xrayAPI.Close()
-
-	// Find the client config
-	var clientConfig map[string]any
-	var reverseClient bool
-	for _, client := range clients {
-		if client.Email == clientEmail {
-			// Convert client to map for API
-			clientBytes, _ := json.Marshal(client)
-			_ = json.Unmarshal(clientBytes, &clientConfig)
-			reverseClient = client.Reverse != nil
-			break
-		}
-	}
-
-	if clientConfig == nil {
-		return
-	}
-
-	// Protocols XrayAPI can remove and re-add from a marshaled model.Client.
-	// wireguard stays out: keepAlive marshals as a number, AddUser wants a string.
-	protocol := string(inbound.Protocol)
-	switch protocol {
-	case "vmess", "vless", "trojan", "shadowsocks", "hysteria":
-		// supported protocols, continue
-	default:
-		logger.Warningf("[LIMIT_IP] Temporary disconnect is not supported for protocol %s on inbound %s", protocol, inbound.Tag)
-		return
-	}
-
-	// RemoveUser drops a reverse client's outbound handler and the re-add below
-	// cannot restore it, so its tunnel would stay down until Xray restarts.
-	if reverseClient {
-		logger.Warningf("[LIMIT_IP] Not disconnecting %s: its reverse proxy config does not survive a temporary removal", clientEmail)
-		return
-	}
-
-	// For Shadowsocks, ensure the required "cipher" field is present by
-	// reading it from the inbound settings (e.g., settings["method"]).
-	if string(inbound.Protocol) == "shadowsocks" {
-		var inboundSettings map[string]any
-		if err := json.Unmarshal([]byte(inbound.Settings), &inboundSettings); err != nil {
-			logger.Warningf("[LIMIT_IP] Failed to parse inbound settings for shadowsocks cipher: %v", err)
-		} else {
-			if method, ok := inboundSettings["method"].(string); ok && method != "" {
-				clientConfig["cipher"] = method
-			}
-		}
-	}
-
-	// The core's RemoveUser clears its validator: a session already up keeps
-	// running, except a reverse vless client, which is skipped above.
-	err = xrayAPI.RemoveUser(inbound.Tag, clientEmail)
-	if err != nil {
-		logger.Warningf("[LIMIT_IP] Failed to remove user %s: %v", clientEmail, err)
-		return
-	}
-
-	// Nothing is pending here: AlterInbound applies the removal inline, so this
-	// only widens the window in which new handshakes fail.
-	time.Sleep(100 * time.Millisecond)
-
-	// Re-add user to allow new connections
-	err = xrayAPI.AddUser(protocol, inbound.Tag, clientConfig)
-	if err != nil {
-		logger.Warningf("[LIMIT_IP] Failed to re-add user %s: %v", clientEmail, err)
-	}
-}
-
-// resolveXrayAPIPort returns the API inbound port from running config, then template config, then default.
-func (j *CheckClientIpJob) resolveXrayAPIPort() int {
-	var configErr error
-	var templateErr error
-
-	if port, err := getAPIPortFromConfigPath(xray.GetConfigPath()); err == nil {
-		return port
-	} else {
-		configErr = err
-	}
-
-	db := database.GetDB()
-	var template model.Setting
-	if err := db.Where("key = ?", "xrayTemplateConfig").First(&template).Error; err == nil {
-		if port, parseErr := getAPIPortFromConfigData([]byte(template.Value)); parseErr == nil {
-			return port
-		} else {
-			templateErr = parseErr
-		}
-	} else {
-		templateErr = err
-	}
-
-	logger.Warningf(
-		"[LIMIT_IP] Could not determine Xray API port from config or template; falling back to default port %d (config error: %v, template error: %v)",
-		defaultXrayAPIPort,
-		configErr,
-		templateErr,
-	)
-
-	return defaultXrayAPIPort
-}
-
-func getAPIPortFromConfigPath(configPath string) (int, error) {
-	configData, err := os.ReadFile(configPath)
-	if err != nil {
-		return 0, err
-	}
-
-	return getAPIPortFromConfigData(configData)
-}
-
-func getAPIPortFromConfigData(configData []byte) (int, error) {
-	xrayConfig := &xray.Config{}
-	if err := json.Unmarshal(configData, xrayConfig); err != nil {
-		return 0, err
-	}
-
-	for _, inboundConfig := range xrayConfig.InboundConfigs {
-		if inboundConfig.Tag == "api" && inboundConfig.Port > 0 {
-			return inboundConfig.Port, nil
-		}
-	}
-
-	return 0, errors.New("api inbound port not found")
 }
 
 // getInboundByEmail resolves the inbound that owns a client email. It prefers

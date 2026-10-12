@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
@@ -23,7 +24,6 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
 	wgutil "github.com/SawaMEN/3x-ui/v3/internal/util/wireguard"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -1160,6 +1160,7 @@ func (s *InboundService) normalizeMtprotoXrayPort(inbound *model.Inbound, oldSet
 // then saves the inbound to the database and optionally adds it to the running Xray instance.
 // Returns the created inbound, whether Xray needs restart, and any error.
 func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, bool, error) {
+	defer beginLocalConfigBatch()()
 	inbound.Id = 0
 	if err := normalizeTuicSettings(inbound); err != nil {
 		return inbound, false, err
@@ -1512,6 +1513,7 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 }
 
 func (s *InboundService) DelInbound(id int) (bool, error) {
+	defer beginLocalConfigBatch()()
 	needRestart, nodePush, err := s.delInbound(id)
 	if nodePush != nil {
 		nodePush()
@@ -1530,9 +1532,9 @@ func (s *InboundService) delInbound(id int) (bool, func(), error) {
 	loadErr := db.Model(model.Inbound{}).Where("id = ?", id).First(&ib).Error
 	if loadErr == nil {
 		naiveSingBox := false
-		if ib.Protocol == model.MASQUE || ib.Protocol == model.NaiveProxy || ib.Protocol == model.AnyTLS || ib.Protocol == model.ShadowTLS {
+		if ib.Protocol == model.MASQUE || ib.Protocol == model.Snell || ib.Protocol == model.NaiveProxy || ib.Protocol == model.AnyTLS || ib.Protocol == model.ShadowTLS {
 			if core, coreErr := s.coreTypeForInbound(&ib); coreErr == nil {
-				naiveSingBox = core == CoreTypeSingBox
+				naiveSingBox = IsNativeCore(core)
 			}
 		}
 		shouldPushToRuntime := (ib.NodeID != nil || ib.Enable) &&
@@ -1660,6 +1662,7 @@ type BulkDelInboundReport struct {
 // the rest; the aggregated needRestart is returned so the caller restarts
 // xray at most once.
 func (s *InboundService) DelInbounds(ids []int) (BulkDelInboundResult, bool, error) {
+	defer beginLocalConfigBatch()()
 	result := BulkDelInboundResult{}
 	needRestart := false
 	var pushIDs []int
@@ -1758,6 +1761,7 @@ func (s *InboundService) SetInboundSubSortIndex(id int, index int) error {
 }
 
 func (s *InboundService) SetInboundEnable(id int, enable bool) (bool, error) {
+	defer beginLocalConfigBatch()()
 	inbound, err := s.GetInbound(id)
 	if err != nil {
 		return false, err
@@ -1805,7 +1809,7 @@ func (s *InboundService) SetInboundEnable(id int, enable bool) (bool, error) {
 		if coreErr != nil {
 			return false, coreErr
 		}
-		if core != CoreTypeSingBox {
+		if !IsNativeCore(core) {
 			return false, nil
 		}
 	}
@@ -1838,6 +1842,12 @@ func (s *InboundService) SetInboundEnable(id int, enable bool) (bool, error) {
 		return true, nil
 	}
 
+	if rtUsesNativeConfig(rt) && !isLocalSidecarInbound(inbound.Protocol) {
+		if err := rt.UpdateInbound(context.Background(), inbound, inbound); err != nil {
+			return true, nil
+		}
+		return needRestart, nil
+	}
 	if err := rt.DelInbound(context.Background(), inbound); err != nil &&
 		!strings.Contains(err.Error(), "not found") {
 		logger.Debug("SetInboundEnable: DelInbound on", rt.Name(), "failed:", err)
@@ -1860,6 +1870,7 @@ func (s *InboundService) SetInboundEnable(id int, enable bool) (bool, error) {
 }
 
 func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, bool, error) {
+	defer beginLocalConfigBatch()()
 	legacyShareAddr := legacyMtprotoShareAddr(inbound)
 	inbound.TrafficResetDay = normalizeTrafficResetDay(inbound.TrafficResetDay)
 	// Normalize streamSettings based on protocol
@@ -2126,7 +2137,7 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 			if coreErr != nil {
 				return coreErr
 			}
-			naiveSingBoxRuntime = core == CoreTypeSingBox
+			naiveSingBoxRuntime = IsNativeCore(core)
 		}
 		if oldInbound.NodeID == nil && (isXrayManagedProtocol(oldInbound.Protocol) || localSidecarTransition || naiveSingBoxRuntime) {
 			rt, push, _, perr := s.nodePushPlan(oldInbound)
@@ -2135,17 +2146,17 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 			}
 			if !push {
 				needRestart = true
-			} else if naiveSingBoxRuntime {
+			} else if naiveSingBoxRuntime || (rtUsesNativeConfig(rt) && !isLocalSidecarInbound(oldProtocol) && !isLocalSidecarInbound(oldInbound.Protocol)) {
 				oldSnapshot := *oldInbound
 				oldSnapshot.Tag = tag
 				oldSnapshot.Protocol = oldProtocol
 				payload := oldInbound
 				postCommitApply = func() {
 					if err2 := rt.UpdateInbound(context.Background(), &oldSnapshot, payload); err2 != nil {
-						logger.Debug("Unable to update Naive inbound on", rt.Name(), ":", err2)
+						logger.Debug("Unable to update native inbound on", rt.Name(), ":", err2)
 						needRestart = true
 					} else {
-						logger.Debug("Updated Naive inbound applied on", rt.Name(), ":", oldInbound.Tag)
+						logger.Debug("Updated native inbound applied on", rt.Name(), ":", oldInbound.Tag)
 					}
 				}
 			} else if localSidecarTransition {
@@ -2312,8 +2323,8 @@ func (s *InboundService) buildInboundForLocalRuntime(tx *gorm.DB, inbound *model
 		return built, nil
 	}
 
-	var clientStats []xray.ClientTraffic
-	if err := tx.Model(xray.ClientTraffic{}).
+	var clientStats []coremodel.ClientTraffic
+	if err := tx.Model(coremodel.ClientTraffic{}).
 		Where("inbound_id = ?", built.Id).
 		Select("email", "enable").
 		Find(&clientStats).Error; err != nil {
@@ -2336,7 +2347,7 @@ func (s *InboundService) buildInboundForLocalRuntime(tx *gorm.DB, inbound *model
 
 	trafficIDs := make(map[string]int)
 	if inbound.Protocol == model.TUIC {
-		var rows []xray.ClientTraffic
+		var rows []coremodel.ClientTraffic
 		if err := tx.Select("id", "email").Where("email IN ?", emails).Find(&rows).Error; err != nil {
 			return nil, err
 		}

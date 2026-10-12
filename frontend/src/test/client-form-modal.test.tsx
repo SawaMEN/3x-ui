@@ -77,6 +77,26 @@ describe('ClientFormModal credential tooltips', () => {
     });
   });
 
+  it('allows a VLESS client to create a reverse portal tag', async () => {
+    renderModal({
+      inbounds: [{ id: 1, protocol: 'vless', enable: true }],
+      mode: 'edit',
+      client: { email: 'reverse-client', enable: true },
+      attachedIds: [1],
+    });
+    const input = await waitFor(() => {
+      const label = Array.from(document.querySelectorAll('.ant-form-item-label label')).find(
+        (l) => (l.textContent ?? '').trim() === 'Reverse tag',
+      );
+      const found = label?.closest('.ant-form-item')?.querySelector('input');
+      if (!found) throw new Error('Reverse tag field missing');
+      return found;
+    });
+    expect(input.readOnly).toBe(false);
+    fireEvent.change(input, { target: { value: 'portal' } });
+    expect(input.value).toBe('portal');
+  });
+
   it('explains which protocols consume the Password field', async () => {
     renderModal();
     openCredentialsTab();

@@ -5,10 +5,10 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/dbtest"
 	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 func TestTuicShutdownJournalSurvivesDatabaseFailureAndReplaysOnce(t *testing.T) {
@@ -16,7 +16,7 @@ func TestTuicShutdownJournalSurvivesDatabaseFailureAndReplaysOnce(t *testing.T) 
 	t.Setenv("XUI_DB_FOLDER", dir)
 	dbtest.InitDB(t, filepath.Join(dir, "x-ui.db"))
 	db := database.GetDB()
-	row := xray.ClientTraffic{Email: "journal@x", Enable: true}
+	row := coremodel.ClientTraffic{Email: "journal@x", Enable: true}
 	if err := db.Create(&row).Error; err != nil {
 		t.Fatal(err)
 	}

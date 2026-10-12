@@ -8,6 +8,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/json"
 	"encoding/pem"
+	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 	"maps"
 	"math/big"
 	"os"
@@ -233,7 +234,7 @@ func TestGoldenInboundFullFixturesBuildInXray(t *testing.T) {
 				StreamSettings: section("streamSettings"),
 				Sniffing:       section("sniffing"),
 			}
-			raw, err := json.Marshal(ib.GenXrayInboundConfig())
+			raw, err := json.Marshal(xray.InboundFromPanel(ib.GenInboundConfig()))
 			if err != nil {
 				t.Fatalf("marshal generated inbound: %v", err)
 			}

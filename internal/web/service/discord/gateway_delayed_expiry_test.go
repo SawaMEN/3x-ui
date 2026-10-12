@@ -8,9 +8,9 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // expiryField is the position of the expiry field in the usage embed.
@@ -83,7 +83,7 @@ func TestUsageExpiryForDelayedStart(t *testing.T) {
 			Port:        443,
 			Protocol:    "vless",
 			Enable:      true,
-			ClientStats: []xray.ClientTraffic{{Email: email, Enable: true, ExpiryTime: -2592000000}},
+			ClientStats: []coremodel.ClientTraffic{{Email: email, Enable: true, ExpiryTime: -2592000000}},
 		}}
 
 		got := usageExpiryValue(t, runUsageCommand(t, settingService, inbounds, email))
@@ -100,7 +100,7 @@ func TestUsageExpiryForDelayedStart(t *testing.T) {
 			Port:        8443,
 			Protocol:    "vless",
 			Enable:      true,
-			ClientStats: []xray.ClientTraffic{{Email: email, Enable: true, ExpiryTime: deadline}},
+			ClientStats: []coremodel.ClientTraffic{{Email: email, Enable: true, ExpiryTime: deadline}},
 		}}
 
 		got := usageExpiryValue(t, runUsageCommand(t, settingService, inbounds, email))

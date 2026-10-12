@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // TestMergeActivationExpiry covers the pure reconciliation rule in isolation.
@@ -47,59 +47,59 @@ func TestNodeDisableIsStale(t *testing.T) {
 	const quota = int64(100)
 	cases := []struct {
 		name      string
-		master    *xray.ClientTraffic
-		node      xray.ClientTraffic
+		master    *coremodel.ClientTraffic
+		node      coremodel.ClientTraffic
 		deltaUp   int64
 		deltaDown int64
 		wantStale bool
 	}{
-		{name: "nil master", node: xray.ClientTraffic{ExpiryTime: earlyAbs}},
+		{name: "nil master", node: coremodel.ClientTraffic{ExpiryTime: earlyAbs}},
 		{
 			name:      "matching limits are a genuine verdict",
-			master:    &xray.ClientTraffic{ExpiryTime: lateAbs, Total: quota},
-			node:      xray.ClientTraffic{ExpiryTime: lateAbs, Total: quota},
+			master:    &coremodel.ClientTraffic{ExpiryTime: lateAbs, Total: quota},
+			node:      coremodel.ClientTraffic{ExpiryTime: lateAbs, Total: quota},
 			wantStale: false,
 		},
 		{
 			name:      "node still holds the pre-extension deadline",
-			master:    &xray.ClientTraffic{ExpiryTime: lateAbs},
-			node:      xray.ClientTraffic{ExpiryTime: earlyAbs},
+			master:    &coremodel.ClientTraffic{ExpiryTime: lateAbs},
+			node:      coremodel.ClientTraffic{ExpiryTime: earlyAbs},
 			wantStale: true,
 		},
 		{
 			name:      "node still holds the pre-top-up quota",
-			master:    &xray.ClientTraffic{ExpiryTime: lateAbs, Total: 2 * quota, Up: 60, Down: 50},
-			node:      xray.ClientTraffic{ExpiryTime: lateAbs, Total: quota},
+			master:    &coremodel.ClientTraffic{ExpiryTime: lateAbs, Total: 2 * quota, Up: 60, Down: 50},
+			node:      coremodel.ClientTraffic{ExpiryTime: lateAbs, Total: quota},
 			wantStale: true,
 		},
 		{
 			name:   "master itself expired",
-			master: &xray.ClientTraffic{ExpiryTime: earlyAbs},
-			node:   xray.ClientTraffic{ExpiryTime: earlyAbs - 1000},
+			master: &coremodel.ClientTraffic{ExpiryTime: earlyAbs},
+			node:   coremodel.ClientTraffic{ExpiryTime: earlyAbs - 1000},
 		},
 		{
 			name:   "master itself over quota",
-			master: &xray.ClientTraffic{ExpiryTime: lateAbs, Total: quota, Up: 60, Down: 50},
-			node:   xray.ClientTraffic{ExpiryTime: earlyAbs, Total: quota},
+			master: &coremodel.ClientTraffic{ExpiryTime: lateAbs, Total: quota, Up: 60, Down: 50},
+			node:   coremodel.ClientTraffic{ExpiryTime: earlyAbs, Total: quota},
 		},
 		{
 			name:      "this tick's deltas cross the master quota",
-			master:    &xray.ClientTraffic{ExpiryTime: lateAbs, Total: quota, Up: 40, Down: 50},
-			node:      xray.ClientTraffic{ExpiryTime: earlyAbs, Total: quota},
+			master:    &coremodel.ClientTraffic{ExpiryTime: lateAbs, Total: quota, Up: 40, Down: 50},
+			node:      coremodel.ClientTraffic{ExpiryTime: earlyAbs, Total: quota},
 			deltaUp:   10,
 			deltaDown: 10,
 		},
 		{
 			// Same row without the deltas: the crossing above is the deltas' doing.
 			name:      "under the master quota before this tick's deltas",
-			master:    &xray.ClientTraffic{ExpiryTime: lateAbs, Total: quota, Up: 40, Down: 50},
-			node:      xray.ClientTraffic{ExpiryTime: earlyAbs, Total: quota},
+			master:    &coremodel.ClientTraffic{ExpiryTime: lateAbs, Total: quota, Up: 40, Down: 50},
+			node:      coremodel.ClientTraffic{ExpiryTime: earlyAbs, Total: quota},
 			wantStale: true,
 		},
 		{
 			name:      "un-activated node duration against an absolute master",
-			master:    &xray.ClientTraffic{ExpiryTime: lateAbs},
-			node:      xray.ClientTraffic{ExpiryTime: -2592000000},
+			master:    &coremodel.ClientTraffic{ExpiryTime: lateAbs},
+			node:      coremodel.ClientTraffic{ExpiryTime: -2592000000},
 			wantStale: true,
 		},
 	}
@@ -128,28 +128,28 @@ func TestNodeFirstConnectExpiry_NotClobbered(t *testing.T) {
 	const duration = int64(-2592000000) // 30 days, not yet started
 
 	// Both nodes start out reporting the un-activated negative duration.
-	syncNode(t, svc, 1, "n1-in", xray.ClientTraffic{Email: email, Up: 0, Down: 0, ExpiryTime: duration, Enable: true})
-	syncNode(t, svc, 2, "n2-in", xray.ClientTraffic{Email: email, Up: 0, Down: 0, ExpiryTime: duration, Enable: true})
+	syncNode(t, svc, 1, "n1-in", coremodel.ClientTraffic{Email: email, Up: 0, Down: 0, ExpiryTime: duration, Enable: true})
+	syncNode(t, svc, 2, "n2-in", coremodel.ClientTraffic{Email: email, Up: 0, Down: 0, ExpiryTime: duration, Enable: true})
 	if got := readTraffic(t, db, email).ExpiryTime; got != duration {
 		t.Fatalf("before any connection: expiry = %d, want %d", got, duration)
 	}
 
 	// Client connects on node 1: it activates an absolute deadline.
 	const activated = int64(1893456000000) // some absolute ms timestamp
-	syncNode(t, svc, 1, "n1-in", xray.ClientTraffic{Email: email, Up: 100, Down: 100, ExpiryTime: activated, Enable: true})
+	syncNode(t, svc, 1, "n1-in", coremodel.ClientTraffic{Email: email, Up: 100, Down: 100, ExpiryTime: activated, Enable: true})
 	if got := readTraffic(t, db, email).ExpiryTime; got != activated {
 		t.Fatalf("after node 1 activation: expiry = %d, want %d", got, activated)
 	}
 
 	// Node 2 (no connection there) keeps reporting the negative duration. This
 	// must NOT reset the activated deadline.
-	syncNode(t, svc, 2, "n2-in", xray.ClientTraffic{Email: email, Up: 0, Down: 0, ExpiryTime: duration, Enable: true})
+	syncNode(t, svc, 2, "n2-in", coremodel.ClientTraffic{Email: email, Up: 0, Down: 0, ExpiryTime: duration, Enable: true})
 	if got := readTraffic(t, db, email).ExpiryTime; got != activated {
 		t.Fatalf("node 2 clobbered the activated deadline: expiry = %d, want %d", got, activated)
 	}
 
 	// Subsequent node 1 syncs keep the same absolute deadline.
-	syncNode(t, svc, 1, "n1-in", xray.ClientTraffic{Email: email, Up: 200, Down: 200, ExpiryTime: activated, Enable: true})
+	syncNode(t, svc, 1, "n1-in", coremodel.ClientTraffic{Email: email, Up: 200, Down: 200, ExpiryTime: activated, Enable: true})
 	if got := readTraffic(t, db, email).ExpiryTime; got != activated {
 		t.Fatalf("after further node 1 sync: expiry = %d, want %d", got, activated)
 	}
@@ -174,19 +174,19 @@ func TestNodeFirstConnectExpiry_NotClobbered_WithSettings(t *testing.T) {
 	actSettings := `{"clients":[{"email":"delayed","enable":true,"expiryTime":1893456000000}]}`
 
 	// Both nodes start un-activated.
-	syncNodeWithSettings(t, svc, 1, "n1-in", negSettings, xray.ClientTraffic{Email: email, ExpiryTime: duration, Enable: true})
-	syncNodeWithSettings(t, svc, 2, "n2-in", negSettings, xray.ClientTraffic{Email: email, ExpiryTime: duration, Enable: true})
+	syncNodeWithSettings(t, svc, 1, "n1-in", negSettings, coremodel.ClientTraffic{Email: email, ExpiryTime: duration, Enable: true})
+	syncNodeWithSettings(t, svc, 2, "n2-in", negSettings, coremodel.ClientTraffic{Email: email, ExpiryTime: duration, Enable: true})
 
 	// Node 1 activates (both its ClientStats and its settings now carry the
 	// absolute deadline, like a real node after adjustTraffics).
-	syncNodeWithSettings(t, svc, 1, "n1-in", actSettings, xray.ClientTraffic{Email: email, Up: 100, Down: 100, ExpiryTime: activated, Enable: true})
+	syncNodeWithSettings(t, svc, 1, "n1-in", actSettings, coremodel.ClientTraffic{Email: email, Up: 100, Down: 100, ExpiryTime: activated, Enable: true})
 	if got := readTraffic(t, db, email).ExpiryTime; got != activated {
 		t.Fatalf("after node 1 activation: expiry = %d, want %d", got, activated)
 	}
 
 	// Node 2 still reports the negative duration in BOTH ClientStats and
 	// settings. Neither the merge nor SyncInbound may reset the deadline.
-	syncNodeWithSettings(t, svc, 2, "n2-in", negSettings, xray.ClientTraffic{Email: email, ExpiryTime: duration, Enable: true})
+	syncNodeWithSettings(t, svc, 2, "n2-in", negSettings, coremodel.ClientTraffic{Email: email, ExpiryTime: duration, Enable: true})
 	if got := readTraffic(t, db, email).ExpiryTime; got != activated {
 		t.Fatalf("node 2 settings-sync clobbered the deadline: expiry = %d, want %d", got, activated)
 	}
@@ -203,17 +203,17 @@ func TestNodeRenewExtendsExpiry(t *testing.T) {
 	const first = int64(1893456000000)
 	const renewed = first + int64(2592000000) // +30 days after auto-renew
 
-	syncNode(t, svc, 1, "n1-in", xray.ClientTraffic{
+	syncNode(t, svc, 1, "n1-in", coremodel.ClientTraffic{
 		Email: email, Up: 0, Down: 0, ExpiryTime: first, Reset: 30, Enable: true,
 	})
-	syncNode(t, svc, 1, "n1-in", xray.ClientTraffic{
+	syncNode(t, svc, 1, "n1-in", coremodel.ClientTraffic{
 		Email: email, Up: 100, Down: 100, ExpiryTime: first, Reset: 30, Enable: true,
 	})
 	if got := readTraffic(t, db, email).ExpiryTime; got != first {
 		t.Fatalf("after activation: expiry = %d, want %d", got, first)
 	}
 
-	syncNode(t, svc, 1, "n1-in", xray.ClientTraffic{
+	syncNode(t, svc, 1, "n1-in", coremodel.ClientTraffic{
 		Email: email, Up: 5, Down: 5, ExpiryTime: renewed, Reset: 30, Enable: true,
 	})
 	if got := readTraffic(t, db, email).ExpiryTime; got != renewed {
@@ -234,13 +234,13 @@ func TestNodeRenew_WithMatchingSettings(t *testing.T) {
 	renewSettings := fmt.Sprintf(
 		`{"clients":[{"email":%q,"enable":true,"expiryTime":%d}]}`, email, renewSecondExpiry)
 
-	syncNodeWithSettings(t, svc, 1, "n1-in", firstSettings, xray.ClientTraffic{
+	syncNodeWithSettings(t, svc, 1, "n1-in", firstSettings, coremodel.ClientTraffic{
 		Email: email, Up: 0, Down: 0, ExpiryTime: renewFirstExpiry, Reset: renewPeriodDays, Enable: true,
 	})
-	syncNodeWithSettings(t, svc, 1, "n1-in", firstSettings, xray.ClientTraffic{
+	syncNodeWithSettings(t, svc, 1, "n1-in", firstSettings, coremodel.ClientTraffic{
 		Email: email, Up: 100, Down: 100, ExpiryTime: renewFirstExpiry, Reset: renewPeriodDays, Enable: true,
 	})
-	syncNodeWithSettings(t, svc, 1, "n1-in", renewSettings, xray.ClientTraffic{
+	syncNodeWithSettings(t, svc, 1, "n1-in", renewSettings, coremodel.ClientTraffic{
 		Email: email, Up: 5, Down: 5, ExpiryTime: renewSecondExpiry, Reset: renewPeriodDays, Enable: true,
 	})
 	if got := readTraffic(t, db, email).ExpiryTime; got != renewSecondExpiry {
@@ -262,13 +262,13 @@ func TestNodeStaleExpiryAfterExtend_NotClobbered(t *testing.T) {
 		`{"clients":[{"email":%q,"enable":false,"expiryTime":%d}]}`, email, expired)
 
 	syncNodeWithSettings(t, svc, 1, "n1-in", staleSettings,
-		xray.ClientTraffic{Email: email, ExpiryTime: expired, Enable: false})
+		coremodel.ClientTraffic{Email: email, ExpiryTime: expired, Enable: false})
 	if got := readTraffic(t, db, email); got.ExpiryTime != expired || got.Enable {
 		t.Fatalf("after expiry: expiry=%d enable=%v, want expiry=%d enable=false",
 			got.ExpiryTime, got.Enable, expired)
 	}
 
-	if err := db.Model(xray.ClientTraffic{}).Where("email = ?", email).
+	if err := db.Model(coremodel.ClientTraffic{}).Where("email = ?", email).
 		Updates(map[string]any{"expiry_time": extended, "enable": true}).Error; err != nil {
 		t.Fatalf("master extend traffic: %v", err)
 	}
@@ -278,7 +278,7 @@ func TestNodeStaleExpiryAfterExtend_NotClobbered(t *testing.T) {
 	}
 
 	syncNodeWithSettings(t, svc, 1, "n1-in", staleSettings,
-		xray.ClientTraffic{Email: email, ExpiryTime: expired, Enable: false})
+		coremodel.ClientTraffic{Email: email, ExpiryTime: expired, Enable: false})
 
 	got := readTraffic(t, db, email)
 	if got.ExpiryTime != extended {
@@ -342,8 +342,8 @@ func TestNodeStaleLift_MarksNodeDirty(t *testing.T) {
 		`{"clients":[{"email":%q,"enable":false,"expiryTime":%d}]}`, email, expired)
 
 	syncNodeWithSettings(t, svc, node.Id, "n1-in", staleSettings,
-		xray.ClientTraffic{Email: email, ExpiryTime: expired, Enable: false})
-	if err := db.Model(xray.ClientTraffic{}).Where("email = ?", email).
+		coremodel.ClientTraffic{Email: email, ExpiryTime: expired, Enable: false})
+	if err := db.Model(coremodel.ClientTraffic{}).Where("email = ?", email).
 		Updates(map[string]any{"expiry_time": extended, "enable": true}).Error; err != nil {
 		t.Fatalf("master extend: %v", err)
 	}
@@ -353,7 +353,7 @@ func TestNodeStaleLift_MarksNodeDirty(t *testing.T) {
 	}
 
 	syncNodeWithSettings(t, svc, node.Id, "n1-in", staleSettings,
-		xray.ClientTraffic{Email: email, ExpiryTime: expired, Enable: false})
+		coremodel.ClientTraffic{Email: email, ExpiryTime: expired, Enable: false})
 
 	var n model.Node
 	if err := db.Select("config_dirty").Where("id = ?", node.Id).First(&n).Error; err != nil {
@@ -399,10 +399,10 @@ func TestNodeQuotaDisable_SameExpiryStillLatches(t *testing.T) {
 	const email = "quota"
 	const expiry = int64(1893456000000)
 
-	syncNode(t, svc, 1, "n1-in", xray.ClientTraffic{
+	syncNode(t, svc, 1, "n1-in", coremodel.ClientTraffic{
 		Email: email, Up: 10, Down: 10, Total: 100, ExpiryTime: expiry, Enable: true,
 	})
-	syncNode(t, svc, 1, "n1-in", xray.ClientTraffic{
+	syncNode(t, svc, 1, "n1-in", coremodel.ClientTraffic{
 		Email: email, Up: 60, Down: 50, Total: 100, ExpiryTime: expiry, Enable: false,
 	})
 	if got := readTraffic(t, db, email); got.Enable {
@@ -420,17 +420,17 @@ func TestNodeQuotaDisable_OlderExpiryStillLatchesWhenOverQuota(t *testing.T) {
 	const email = "quota-lag"
 	early, late := earlyAbs, lateAbs
 
-	syncNode(t, svc, 1, "n1-in", xray.ClientTraffic{
+	syncNode(t, svc, 1, "n1-in", coremodel.ClientTraffic{
 		Email: email, Up: 10, Down: 10, Total: 100, ExpiryTime: late, Enable: true,
 	})
-	if err := db.Model(xray.ClientTraffic{}).Where("email = ?", email).
+	if err := db.Model(coremodel.ClientTraffic{}).Where("email = ?", email).
 		Updates(map[string]any{
 			"expiry_time": late, "enable": true, "up": int64(60), "down": int64(50), "total": int64(100),
 		}).Error; err != nil {
 		t.Fatalf("seed over-quota master: %v", err)
 	}
 
-	syncNode(t, svc, 1, "n1-in", xray.ClientTraffic{
+	syncNode(t, svc, 1, "n1-in", coremodel.ClientTraffic{
 		Email: email, Up: 60, Down: 50, Total: 100, ExpiryTime: early, Enable: false,
 	})
 	if got := readTraffic(t, db, email); got.Enable {
@@ -454,8 +454,8 @@ func TestNodeMasterShorten_NotClobberedWhileDirty(t *testing.T) {
 		`{"clients":[{"email":%q,"enable":true,"expiryTime":%d}]}`, email, longExp)
 
 	syncNodeWithSettings(t, svc, 1, "n1-in", longSettings,
-		xray.ClientTraffic{Email: email, ExpiryTime: longExp, Enable: true})
-	if err := db.Model(xray.ClientTraffic{}).Where("email = ?", email).
+		coremodel.ClientTraffic{Email: email, ExpiryTime: longExp, Enable: true})
+	if err := db.Model(coremodel.ClientTraffic{}).Where("email = ?", email).
 		Updates(map[string]any{"expiry_time": shortExp, "enable": true}).Error; err != nil {
 		t.Fatalf("master shorten: %v", err)
 	}
@@ -467,11 +467,11 @@ func TestNodeMasterShorten_NotClobberedWhileDirty(t *testing.T) {
 	snap := &runtime.TrafficSnapshot{
 		Inbounds: []*model.Inbound{{
 			Tag: "n1-in", Settings: longSettings,
-			ClientStats: []xray.ClientTraffic{{Email: email, ExpiryTime: longExp, Enable: true, Up: 5, Down: 5}},
+			ClientStats: []coremodel.ClientTraffic{{Email: email, ExpiryTime: longExp, Enable: true, Up: 5, Down: 5}},
 		}},
 	}
 	before := readTraffic(t, db, email)
-	if err := db.Model(xray.ClientTraffic{}).Where("email = ?", email).
+	if err := db.Model(coremodel.ClientTraffic{}).Where("email = ?", email).
 		Update("total", int64(999)).Error; err != nil {
 		t.Fatalf("master total: %v", err)
 	}
@@ -506,8 +506,8 @@ func TestNodeMasterShorten_LaggingClientStatsIgnored(t *testing.T) {
 		`{"clients":[{"email":%q,"enable":true,"expiryTime":%d}]}`, email, shortExp)
 
 	syncNodeWithSettings(t, svc, 1, "n1-in", longSettings,
-		xray.ClientTraffic{Email: email, ExpiryTime: longExp, Enable: true})
-	if err := db.Model(xray.ClientTraffic{}).Where("email = ?", email).
+		coremodel.ClientTraffic{Email: email, ExpiryTime: longExp, Enable: true})
+	if err := db.Model(coremodel.ClientTraffic{}).Where("email = ?", email).
 		Updates(map[string]any{"expiry_time": shortExp, "enable": true}).Error; err != nil {
 		t.Fatalf("master shorten: %v", err)
 	}
@@ -515,7 +515,7 @@ func TestNodeMasterShorten_LaggingClientStatsIgnored(t *testing.T) {
 	snap := &runtime.TrafficSnapshot{
 		Inbounds: []*model.Inbound{{
 			Tag: "n1-in", Settings: shortSettings,
-			ClientStats: []xray.ClientTraffic{{Email: email, ExpiryTime: longExp, Enable: true}},
+			ClientStats: []coremodel.ClientTraffic{{Email: email, ExpiryTime: longExp, Enable: true}},
 		}},
 	}
 	if _, err := svc.setRemoteTrafficLocked(1, snap, false, false); err != nil {
@@ -540,17 +540,17 @@ func TestNodeMasterShorten_CleanSiblingCannotRaise(t *testing.T) {
 		`{"clients":[{"email":%q,"enable":true,"expiryTime":%d}]}`, email, longExp)
 
 	syncNodeWithSettings(t, svc, 1, "n1-in", longSettings,
-		xray.ClientTraffic{Email: email, ExpiryTime: longExp, Enable: true})
+		coremodel.ClientTraffic{Email: email, ExpiryTime: longExp, Enable: true})
 	syncNodeWithSettings(t, svc, 2, "n2-in", longSettings,
-		xray.ClientTraffic{Email: email, ExpiryTime: longExp, Enable: true})
-	if err := db.Model(xray.ClientTraffic{}).Where("email = ?", email).
+		coremodel.ClientTraffic{Email: email, ExpiryTime: longExp, Enable: true})
+	if err := db.Model(coremodel.ClientTraffic{}).Where("email = ?", email).
 		Updates(map[string]any{"expiry_time": shortExp, "enable": true}).Error; err != nil {
 		t.Fatalf("master shorten: %v", err)
 	}
 
 	// Sibling 2 is clean and still reports the old longer deadline.
 	syncNodeWithSettings(t, svc, 2, "n2-in", longSettings,
-		xray.ClientTraffic{Email: email, ExpiryTime: longExp, Enable: true})
+		coremodel.ClientTraffic{Email: email, ExpiryTime: longExp, Enable: true})
 	if got := readTraffic(t, db, email); got.ExpiryTime != shortExp {
 		t.Fatalf("clean sibling raised shortened expiry: got %d want %d", got.ExpiryTime, shortExp)
 	}
@@ -568,19 +568,19 @@ func TestNodeMasterShorten_LaggingStatsNotTreatedAsRenew(t *testing.T) {
 	shortSettings := fmt.Sprintf(
 		`{"clients":[{"email":%q,"enable":true,"expiryTime":%d}]}`, email, shortExp)
 
-	syncNode(t, svc, 1, "n1-in", xray.ClientTraffic{
+	syncNode(t, svc, 1, "n1-in", coremodel.ClientTraffic{
 		Email: email, Up: 0, Down: 0, ExpiryTime: longExp, Reset: 30, Enable: true,
 	})
-	syncNode(t, svc, 1, "n1-in", xray.ClientTraffic{
+	syncNode(t, svc, 1, "n1-in", coremodel.ClientTraffic{
 		Email: email, Up: 100, Down: 100, ExpiryTime: longExp, Reset: 30, Enable: true,
 	})
-	if err := db.Model(xray.ClientTraffic{}).Where("email = ?", email).
+	if err := db.Model(coremodel.ClientTraffic{}).Where("email = ?", email).
 		Updates(map[string]any{"expiry_time": shortExp, "enable": true}).Error; err != nil {
 		t.Fatalf("master shorten: %v", err)
 	}
 
 	syncNodeWithSettings(t, svc, 1, "n1-in", shortSettings,
-		xray.ClientTraffic{Email: email, Up: 5, Down: 5, ExpiryTime: longExp, Reset: 30, Enable: true})
+		coremodel.ClientTraffic{Email: email, Up: 5, Down: 5, ExpiryTime: longExp, Reset: 30, Enable: true})
 	if got := readTraffic(t, db, email); got.ExpiryTime != shortExp {
 		t.Fatalf("lagging stats treated as renew: got %d want %d", got.ExpiryTime, shortExp)
 	}
@@ -598,8 +598,8 @@ func TestNodeStaleExpiryAfterExtend_WhileDirty(t *testing.T) {
 		`{"clients":[{"email":%q,"enable":false,"expiryTime":%d}]}`, email, expired)
 
 	syncNodeWithSettings(t, svc, 1, "n1-in", staleSettings,
-		xray.ClientTraffic{Email: email, ExpiryTime: expired, Enable: false})
-	if err := db.Model(xray.ClientTraffic{}).Where("email = ?", email).
+		coremodel.ClientTraffic{Email: email, ExpiryTime: expired, Enable: false})
+	if err := db.Model(coremodel.ClientTraffic{}).Where("email = ?", email).
 		Updates(map[string]any{"expiry_time": extended, "enable": true}).Error; err != nil {
 		t.Fatalf("master extend: %v", err)
 	}
@@ -611,7 +611,7 @@ func TestNodeStaleExpiryAfterExtend_WhileDirty(t *testing.T) {
 	snap := &runtime.TrafficSnapshot{
 		Inbounds: []*model.Inbound{{
 			Tag: "n1-in", Settings: staleSettings,
-			ClientStats: []xray.ClientTraffic{{Email: email, ExpiryTime: expired, Enable: false}},
+			ClientStats: []coremodel.ClientTraffic{{Email: email, ExpiryTime: expired, Enable: false}},
 		}},
 	}
 	if _, err := svc.setRemoteTrafficLocked(1, snap, true, false); err != nil {
@@ -631,10 +631,10 @@ func TestNodeRenewal_SkippedWhileDirty(t *testing.T) {
 	svc := &InboundService{}
 
 	const email = "renew-dirty"
-	syncNode(t, svc, 1, "n1-in", xray.ClientTraffic{
+	syncNode(t, svc, 1, "n1-in", coremodel.ClientTraffic{
 		Email: email, Up: 100, Down: 100, ExpiryTime: earlyAbs, Enable: true, Reset: 30,
 	})
-	if err := db.Model(xray.ClientTraffic{}).Where("email = ?", email).
+	if err := db.Model(coremodel.ClientTraffic{}).Where("email = ?", email).
 		Updates(map[string]any{"expiry_time": earlyAbs, "enable": true, "up": int64(100), "down": int64(100)}).Error; err != nil {
 		t.Fatalf("seed master: %v", err)
 	}
@@ -646,7 +646,7 @@ func TestNodeRenewal_SkippedWhileDirty(t *testing.T) {
 	snap := &runtime.TrafficSnapshot{
 		Inbounds: []*model.Inbound{{
 			Tag: "n1-in",
-			ClientStats: []xray.ClientTraffic{{
+			ClientStats: []coremodel.ClientTraffic{{
 				Email: email, Up: 10, Down: 10, ExpiryTime: lateAbs, Enable: true, Reset: 30,
 			}},
 		}},
@@ -688,8 +688,8 @@ func TestNodeExtend_FreshSettingsLaggingDisable(t *testing.T) {
 		`{"clients":[{"email":%q,"enable":true,"expiryTime":%d}]}`, email, extended)
 
 	syncNodeWithSettings(t, svc, 1, "n1-in", staleSettings,
-		xray.ClientTraffic{Email: email, ExpiryTime: expired, Enable: false})
-	if err := db.Model(xray.ClientTraffic{}).Where("email = ?", email).
+		coremodel.ClientTraffic{Email: email, ExpiryTime: expired, Enable: false})
+	if err := db.Model(coremodel.ClientTraffic{}).Where("email = ?", email).
 		Updates(map[string]any{"expiry_time": extended, "enable": true}).Error; err != nil {
 		t.Fatalf("master extend: %v", err)
 	}
@@ -697,7 +697,7 @@ func TestNodeExtend_FreshSettingsLaggingDisable(t *testing.T) {
 	snap := &runtime.TrafficSnapshot{
 		Inbounds: []*model.Inbound{{
 			Tag: "n1-in", Settings: freshSettings,
-			ClientStats: []xray.ClientTraffic{{Email: email, ExpiryTime: expired, Enable: false}},
+			ClientStats: []coremodel.ClientTraffic{{Email: email, ExpiryTime: expired, Enable: false}},
 		}},
 	}
 	if _, err := svc.setRemoteTrafficLocked(1, snap, false, false); err != nil {
@@ -725,10 +725,10 @@ func TestNodeRenew_ZeroTrafficUsesResetCount(t *testing.T) {
 	renewSettings := fmt.Sprintf(
 		`{"clients":[{"email":%q,"enable":true,"expiryTime":%d}]}`, email, lateAbs)
 
-	syncNodeWithSettings(t, svc, 1, "n1-in", firstSettings, xray.ClientTraffic{
+	syncNodeWithSettings(t, svc, 1, "n1-in", firstSettings, coremodel.ClientTraffic{
 		Email: email, ExpiryTime: earlyAbs, Reset: 30, Enable: true,
 	})
-	syncNodeWithSettings(t, svc, 1, "n1-in", renewSettings, xray.ClientTraffic{
+	syncNodeWithSettings(t, svc, 1, "n1-in", renewSettings, coremodel.ClientTraffic{
 		Email: email, ExpiryTime: lateAbs, Reset: 30, ResetCount: 1, Enable: true,
 	})
 
@@ -749,17 +749,17 @@ func TestNodeQuotaTopUp_LaggingDisableIgnored(t *testing.T) {
 	svc := &InboundService{}
 
 	const email = "topped-up"
-	syncNode(t, svc, 1, "n1-in", xray.ClientTraffic{
+	syncNode(t, svc, 1, "n1-in", coremodel.ClientTraffic{
 		Email: email, Up: 10, Down: 10, Total: 100, ExpiryTime: lateAbs, Enable: true,
 	})
-	if err := db.Model(xray.ClientTraffic{}).Where("email = ?", email).
+	if err := db.Model(coremodel.ClientTraffic{}).Where("email = ?", email).
 		Updates(map[string]any{
 			"total": int64(500), "enable": true, "up": int64(60), "down": int64(50),
 		}).Error; err != nil {
 		t.Fatalf("master top-up: %v", err)
 	}
 
-	syncNode(t, svc, 1, "n1-in", xray.ClientTraffic{
+	syncNode(t, svc, 1, "n1-in", coremodel.ClientTraffic{
 		Email: email, Up: 60, Down: 50, Total: 100, ExpiryTime: lateAbs, Enable: false,
 	})
 	if got := readTraffic(t, db, email); !got.Enable {
@@ -779,14 +779,14 @@ func TestNodeStaleEnable_LiftedOffInSettings(t *testing.T) {
 		`{"clients":[{"email":%q,"enable":true,"expiryTime":%d}]}`, email, lateAbs)
 
 	syncNodeWithSettings(t, svc, 1, "n1-in", liveSettings,
-		xray.ClientTraffic{Email: email, ExpiryTime: lateAbs, Enable: true})
-	if err := db.Model(xray.ClientTraffic{}).Where("email = ?", email).
+		coremodel.ClientTraffic{Email: email, ExpiryTime: lateAbs, Enable: true})
+	if err := db.Model(coremodel.ClientTraffic{}).Where("email = ?", email).
 		Update("enable", false).Error; err != nil {
 		t.Fatalf("master disable: %v", err)
 	}
 
 	syncNodeWithSettings(t, svc, 1, "n1-in", liveSettings,
-		xray.ClientTraffic{Email: email, ExpiryTime: lateAbs, Enable: true})
+		coremodel.ClientTraffic{Email: email, ExpiryTime: lateAbs, Enable: true})
 
 	var ib model.Inbound
 	if err := db.Where("tag = ?", "n1-in").First(&ib).Error; err != nil {
@@ -822,10 +822,10 @@ func TestNodeJustPushed_FreezesLifecycleOnly(t *testing.T) {
 	const fresh = "fresh"
 	extended := lateAbs + 86400000
 
-	syncNode(t, svc, 1, "n1-in", xray.ClientTraffic{
+	syncNode(t, svc, 1, "n1-in", coremodel.ClientTraffic{
 		Email: kept, Up: 10, Down: 10, Total: 100, ExpiryTime: lateAbs, Enable: true,
 	})
-	if err := db.Model(xray.ClientTraffic{}).Where("email = ?", kept).
+	if err := db.Model(coremodel.ClientTraffic{}).Where("email = ?", kept).
 		Updates(map[string]any{"expiry_time": extended, "total": int64(500)}).Error; err != nil {
 		t.Fatalf("master edit: %v", err)
 	}
@@ -833,7 +833,7 @@ func TestNodeJustPushed_FreezesLifecycleOnly(t *testing.T) {
 	snap := &runtime.TrafficSnapshot{
 		Inbounds: []*model.Inbound{{
 			Tag: "n1-in",
-			ClientStats: []xray.ClientTraffic{
+			ClientStats: []coremodel.ClientTraffic{
 				{Email: kept, Up: 20, Down: 20, Total: 100, ExpiryTime: lateAbs, Enable: false},
 				{Email: fresh, Up: 5, Down: 5, ExpiryTime: lateAbs, Enable: true},
 			},
@@ -927,19 +927,19 @@ func TestClientTrafficMergeSQLMatchesHelpers(t *testing.T) {
 	for i, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			rowEmail := fmt.Sprintf("%s-%d", email, i)
-			if err := db.Create(&xray.ClientTraffic{
+			if err := db.Create(&coremodel.ClientTraffic{
 				InboundId: 1, Email: rowEmail, Enable: c.masterEnable,
 				ExpiryTime: c.masterExpiry, Up: c.masterUp, Down: c.masterDown, Total: c.tot,
 			}).Error; err != nil {
 				t.Fatalf("seed: %v", err)
 			}
-			master := &xray.ClientTraffic{
+			master := &coremodel.ClientTraffic{
 				ExpiryTime: c.masterExpiry, Enable: c.masterEnable,
 				Up: c.masterUp, Down: c.masterDown, Total: c.tot,
 			}
 			wantExpiry := mergeActivationExpiry(c.masterExpiry, c.nodeExpiry)
 			wantEnable := c.masterEnable
-			node := xray.ClientTraffic{ExpiryTime: c.nodeExpiry, Total: c.nodeTotal}
+			node := coremodel.ClientTraffic{ExpiryTime: c.nodeExpiry, Total: c.nodeTotal}
 			if !c.nodeEnable && !nodeDisableIsStale(master, node, now, c.deltaUp, c.deltaDown) {
 				wantEnable = false
 			}
@@ -1002,12 +1002,12 @@ func TestNodeActivationLiftsClientRecordExpiry(t *testing.T) {
 		return rec.ExpiryTime
 	}
 
-	syncNodeWithSettings(t, svc, 1, "n1-in", negSettings, xray.ClientTraffic{Email: email, ExpiryTime: duration, Enable: true})
+	syncNodeWithSettings(t, svc, 1, "n1-in", negSettings, coremodel.ClientTraffic{Email: email, ExpiryTime: duration, Enable: true})
 	if got := readRecordExpiry(); got != duration {
 		t.Fatalf("before activation: record expiry = %d, want %d", got, duration)
 	}
 
-	syncNodeWithSettings(t, svc, 1, "n1-in", negSettings, xray.ClientTraffic{Email: email, Up: 100, Down: 100, ExpiryTime: activated, Enable: true})
+	syncNodeWithSettings(t, svc, 1, "n1-in", negSettings, coremodel.ClientTraffic{Email: email, Up: 100, Down: 100, ExpiryTime: activated, Enable: true})
 	if got := readTraffic(t, db, email).ExpiryTime; got != activated {
 		t.Fatalf("client_traffics not activated: expiry = %d, want %d", got, activated)
 	}

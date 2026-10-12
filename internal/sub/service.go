@@ -18,6 +18,7 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
@@ -28,7 +29,6 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/util/random"
 	wgutil "github.com/SawaMEN/3x-ui/v3/internal/util/wireguard"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 	"github.com/gin-gonic/gin"
 	"github.com/goccy/go-json"
 )
@@ -164,7 +164,7 @@ type SubService struct {
 	// lets statsForClient resolve usage for a client even on an inbound that
 	// doesn't own its row (multi-inbound subscriptions). Filled in
 	// getInboundsBySubId; reset per request in PrepareForRequest.
-	statsByEmail map[string]xray.ClientTraffic
+	statsByEmail map[string]coremodel.ClientTraffic
 	// statsIndexed indicates that the request loaded traffic for its
 	// subscription, so the userinfo aggregate can reuse the same rows.
 	statsIndexed bool
@@ -213,7 +213,7 @@ func (s *SubService) PrepareForRequest(host string) {
 	}
 	s.address = host
 	s.usageShown = map[string]bool{}
-	s.statsByEmail = map[string]xray.ClientTraffic{}
+	s.statsByEmail = map[string]coremodel.ClientTraffic{}
 	s.statsIndexed = false
 	s.clientsByInbound = map[int]map[string]model.Client{}
 	s.fullyPrimedInbounds = map[int]bool{}
@@ -483,13 +483,13 @@ func (s *SubService) RecordSubscriptionFetch(subId string) error {
 	if strings.TrimSpace(subId) == "" {
 		return nil
 	}
-	return database.GetDB().Model(&xray.ClientTraffic{}).
+	return database.GetDB().Model(&coremodel.ClientTraffic{}).
 		Where("email IN (SELECT email FROM clients WHERE sub_id = ?)", subId).
 		Update("last_sub_fetch", time.Now().UnixMilli()).Error
 }
 
 // GetSubs retrieves subscription links for a given subscription ID and host.
-func (s *SubService) GetSubs(subId string, host string) ([]string, []string, int64, xray.ClientTraffic, error) {
+func (s *SubService) GetSubs(subId string, host string) ([]string, []string, int64, coremodel.ClientTraffic, error) {
 	return s.ForRequest(host).getSubs(subId)
 }
 
@@ -502,7 +502,7 @@ const (
 	infoNodeDepleted
 )
 
-func (s *SubService) resolveInfoNodeRemark(subId string, uniqueEmails []string, traffic xray.ClientTraffic, hasEntries bool) (infoNodeMode, string) {
+func (s *SubService) resolveInfoNodeRemark(subId string, uniqueEmails []string, traffic coremodel.ClientTraffic, hasEntries bool) (infoNodeMode, string) {
 	if !s.subInfoNodeEnable || !s.subscriptionBody {
 		return infoNodeNone, ""
 	}
@@ -557,10 +557,10 @@ func (s *SubService) resolveInfoNodeRemark(subId string, uniqueEmails []string, 
 	return infoNodeNone, ""
 }
 
-func (s *SubService) getSubs(subId string) ([]string, []string, int64, xray.ClientTraffic, error) {
+func (s *SubService) getSubs(subId string) ([]string, []string, int64, coremodel.ClientTraffic, error) {
 	var result []string
 	var emails []string
-	var traffic xray.ClientTraffic
+	var traffic coremodel.ClientTraffic
 	var hasEnabledClient bool
 	inbounds, err := s.getInboundsBySubId(subId)
 	if err != nil {
@@ -750,19 +750,19 @@ func (s *SubService) inboundLinks(inbound *model.Inbound) []string {
 // rows into a single ClientTraffic + lastOnline. Subscription requests reuse
 // the rows loaded for link remarks and query only emails missing from that
 // index; direct callers still load all rows in one query.
-// xray.ClientTraffic.Email is globally unique, so a multi-inbound
+// coremodel.ClientTraffic.Email is globally unique, so a multi-inbound
 // client's single row is attached to exactly one inbound — iterating
 // per-inbound ClientStats would miss it on the others. Used by GetSubs,
 // SubClashService.GetClash, and SubJsonService.GetJson to keep the
 // sub-info header consistent across all three formats.
-func (s *SubService) AggregateTrafficByEmails(emails []string) (xray.ClientTraffic, int64) {
-	var agg xray.ClientTraffic
+func (s *SubService) AggregateTrafficByEmails(emails []string) (coremodel.ClientTraffic, int64) {
+	var agg coremodel.ClientTraffic
 	var lastOnline int64
 	if len(emails) == 0 {
 		return agg, 0
 	}
 	db := database.GetDB()
-	var rows []xray.ClientTraffic
+	var rows []coremodel.ClientTraffic
 	missing := emails
 	if s.statsIndexed {
 		missing = make([]string, 0)
@@ -775,8 +775,8 @@ func (s *SubService) AggregateTrafficByEmails(emails []string) (xray.ClientTraff
 		}
 	}
 	if len(missing) > 0 {
-		var remaining []xray.ClientTraffic
-		if err := db.Model(&xray.ClientTraffic{}).
+		var remaining []coremodel.ClientTraffic
+		if err := db.Model(&coremodel.ClientTraffic{}).
 			Where("email IN ?", missing).
 			Find(&remaining).Error; err != nil {
 			logger.Warning("SubService - AggregateTrafficByEmails: load by email:", err)
@@ -910,10 +910,10 @@ func (s *SubService) getInboundsBySubId(subId string) ([]*model.Inbound, error) 
 // fallback still covers orphaned/missing rows.
 func (s *SubService) indexStatsBySubId(subId string) {
 	if s.statsByEmail == nil {
-		s.statsByEmail = map[string]xray.ClientTraffic{}
+		s.statsByEmail = map[string]coremodel.ClientTraffic{}
 	}
-	var rows []xray.ClientTraffic
-	if err := database.GetDB().Model(&xray.ClientTraffic{}).
+	var rows []coremodel.ClientTraffic
+	if err := database.GetDB().Model(&coremodel.ClientTraffic{}).
 		Where("email IN (SELECT email FROM clients WHERE sub_id = ?)", subId).
 		Find(&rows).Error; err != nil {
 		logger.Error("SubService - indexStatsBySubId: load traffics:", err)
@@ -3229,13 +3229,13 @@ func fallbackRemark(parts ...string) string {
 }
 
 // findClientStats returns the inbound's traffic record for email, if present.
-func (s *SubService) findClientStats(inbound *model.Inbound, email string) (xray.ClientTraffic, bool) {
+func (s *SubService) findClientStats(inbound *model.Inbound, email string) (coremodel.ClientTraffic, bool) {
 	for _, clientStat := range inbound.ClientStats {
 		if clientStat.Email == email {
 			return clientStat, true
 		}
 	}
-	return xray.ClientTraffic{}, false
+	return coremodel.ClientTraffic{}, false
 }
 
 // statsByEmailFromDB resolves a client's traffic row straight from the DB by its
@@ -3248,17 +3248,17 @@ func (s *SubService) findClientStats(inbound *model.Inbound, email string) (xray
 // leaving {{TRAFFIC_USED}} stuck at 0 for pre-existing clients even though their
 // usage is intact (#5567). Matching by email recovers it, the same way the
 // sub-info header's AggregateTrafficByEmails already does.
-func (s *SubService) statsByEmailFromDB(email string) (xray.ClientTraffic, bool) {
+func (s *SubService) statsByEmailFromDB(email string) (coremodel.ClientTraffic, bool) {
 	db := database.GetDB()
 	if db == nil {
-		return xray.ClientTraffic{}, false
+		return coremodel.ClientTraffic{}, false
 	}
-	var row xray.ClientTraffic
-	if err := db.Model(&xray.ClientTraffic{}).Where("email = ?", email).First(&row).Error; err != nil {
-		return xray.ClientTraffic{}, false
+	var row coremodel.ClientTraffic
+	if err := db.Model(&coremodel.ClientTraffic{}).Where("email = ?", email).First(&row).Error; err != nil {
+		return coremodel.ClientTraffic{}, false
 	}
 	if s.statsByEmail == nil {
-		s.statsByEmail = map[string]xray.ClientTraffic{}
+		s.statsByEmail = map[string]coremodel.ClientTraffic{}
 	}
 	s.statsByEmail[email] = row
 	return row, true
@@ -3944,7 +3944,7 @@ func (s *SubService) joinPathWithID(basePath, subId string) string {
 
 // BuildPageData parses header and prepares the template view model.
 // BuildPageData constructs page data for rendering the subscription information page.
-func (s *SubService) BuildPageData(subId string, hostHeader string, traffic xray.ClientTraffic, lastOnline int64, subs []string, emails []string, subURL, subJsonURL, subClashURL string, basePath string, subTitle string, subSupportUrl string) PageData {
+func (s *SubService) BuildPageData(subId string, hostHeader string, traffic coremodel.ClientTraffic, lastOnline int64, subs []string, emails []string, subURL, subJsonURL, subClashURL string, basePath string, subTitle string, subSupportUrl string) PageData {
 	download := common.FormatTraffic(traffic.Down)
 	upload := common.FormatTraffic(traffic.Up)
 	total := "∞"

@@ -206,7 +206,7 @@ export default function CommandPalette() {
 
   const restartXray = useCallback(async () => {
     close();
-    const msg = await HttpUtil.post('/panel/api/server/restartXrayService', undefined, {
+    const msg = await HttpUtil.post('/panel/api/server/restartCoreService', undefined, {
       silentSuccess: true,
     });
     if (msg?.success) {

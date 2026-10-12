@@ -49,7 +49,7 @@ func (s *DiscordService) BuildReport(ctx context.Context, server ServerProvider,
 	}
 
 	var onlines []string
-	if process := service.XrayProcess(); process != nil && process.IsRunning() {
+	if process := service.OnlinePresence(); process != nil {
 		onlines = process.GetOnlineClients()
 	}
 
@@ -127,7 +127,7 @@ func (s *DiscordService) BuildReport(ctx context.Context, server ServerProvider,
 	fields := []EmbedField{
 		{Name: tr("host"), Value: hostname, Inline: true},
 		{Name: tr("discord.fields.panelVersion"), Value: config.GetPanelVersion(), Inline: true},
-		{Name: tr("discord.fields.xrayCore"), Value: fmt.Sprintf("%s (%s)", status.Xray.Version, status.Xray.State), Inline: true},
+		{Name: tr("discord.fields.xrayCore"), Value: fmt.Sprintf("%s (%s)", status.SingBox.Version, status.SingBox.State), Inline: true},
 		{Name: tr("pages.index.uptime"), Value: uptimeStr, Inline: true},
 		{Name: tr("discord.fields.systemLoad"), Value: loadStr, Inline: true},
 		{Name: tr("pages.index.memory"), Value: ramStr, Inline: true},

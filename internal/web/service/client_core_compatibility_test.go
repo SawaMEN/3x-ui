@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 func TestSyncClientCoreCompatibilitySwitchesAutomaticClientState(t *testing.T) {
@@ -61,12 +61,12 @@ func TestSyncClientCoreCompatibilitySwitchesAutomaticClientState(t *testing.T) {
 		{vless, "vless@example"},
 		{naive, "naive@example"},
 	} {
-		if err := db.Create(&xray.ClientTraffic{InboundId: pair.ib.Id, Email: pair.e, Enable: true}).Error; err != nil {
+		if err := db.Create(&coremodel.ClientTraffic{InboundId: pair.ib.Id, Email: pair.e, Enable: true}).Error; err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	if err := SyncClientCoreCompatibility(CoreTypeXray, CoreTypeSingBox); err != nil {
+	if err := SyncClientCoreCompatibility(CoreTypeXray, legacyCoreTypeHiddify); err != nil {
 		t.Fatal(err)
 	}
 
@@ -85,11 +85,11 @@ func TestSyncClientCoreCompatibilitySwitchesAutomaticClientState(t *testing.T) {
 	check("vless@example", true, "")
 	check("naive@example", true, "")
 
-	if err := SyncClientCoreCompatibility(CoreTypeSingBox, CoreTypeXray); err != nil {
+	if err := SyncClientCoreCompatibility(legacyCoreTypeHiddify, CoreTypeXray); err != nil {
 		t.Fatal(err)
 	}
-	check("wg@example", true, "")
-	check("naive@example", false, CoreTypeXray)
+	check("wg@example", false, CoreTypeSingBox)
+	check("naive@example", true, "")
 }
 
 func TestCoreCompatibilityManualClientEditClearsAutoDisableMarker(t *testing.T) {

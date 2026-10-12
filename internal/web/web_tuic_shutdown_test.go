@@ -15,12 +15,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/dbtest"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/job"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 func TestGracefulShutdownPersistsFinalTuicTraffic(t *testing.T) {
@@ -62,7 +62,7 @@ func TestGracefulShutdownPersistsFinalTuicTraffic(t *testing.T) {
 	if err := database.GetDB().Create(inbound).Error; err != nil {
 		t.Fatalf("create TUIC inbound: %v", err)
 	}
-	if err := database.GetDB().Create(&xray.ClientTraffic{InboundId: inboundID, Email: email, Enable: true}).Error; err != nil {
+	if err := database.GetDB().Create(&coremodel.ClientTraffic{InboundId: inboundID, Email: email, Enable: true}).Error; err != nil {
 		t.Fatalf("create client traffic: %v", err)
 	}
 
@@ -79,7 +79,7 @@ func TestGracefulShutdownPersistsFinalTuicTraffic(t *testing.T) {
 		t.Fatalf("graceful server shutdown: %v", err)
 	}
 
-	var got xray.ClientTraffic
+	var got coremodel.ClientTraffic
 	if err := database.GetDB().Where("email = ?", email).First(&got).Error; err != nil {
 		t.Fatalf("load persisted client traffic: %v", err)
 	}

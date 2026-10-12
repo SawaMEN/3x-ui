@@ -26,6 +26,7 @@ export const NODE_ELIGIBLE_PROTOCOLS: Readonly<Record<string, true>> = {
   [Protocols.FPTN]: true,
   [Protocols.OPENFLUX]: true,
   [Protocols.NAIVE]: true,
+  [Protocols.MASQUE]: true,
   [Protocols.SNELL]: true,
   [Protocols.ANYTLS]: true,
   [Protocols.SHADOWTLS]: true,
@@ -41,6 +42,7 @@ export interface NodeCoreInfo {
 
 function normalizeCore(value?: string | null): 'xray' | 'singbox' | '' {
   const normalized = (value ?? '').trim().toLowerCase().replaceAll('-', '');
+  if (normalized === 'hiddifycore') return 'singbox';
   if (normalized === 'singbox') return 'singbox';
   if (normalized === 'xray') return 'xray';
   return '';
@@ -56,7 +58,7 @@ export function nodeCoreType(node: NodeCoreInfo): 'xray' | 'singbox' {
 export function nodeSupportsProtocol(node: NodeCoreInfo, protocol: string): boolean {
   if (!NODE_ELIGIBLE_PROTOCOLS[protocol]) return false;
 
-  if (nodeCoreType(node) === 'singbox') {
+  if (nodeCoreType(node) !== 'xray') {
     // Keep this in sync with backend coreSupportsInboundProtocol(). WireGuard
     // and dokodemo/tunnel are Xray-native listeners; the other entries either
     // run natively in sing-box or through panel-managed sidecars.
@@ -68,6 +70,7 @@ export function nodeSupportsProtocol(node: NodeCoreInfo, protocol: string): bool
   // remain valid on an Xray node because the node panel owns their processes.
   return (
     protocol !== Protocols.NAIVE &&
+    protocol !== Protocols.MASQUE &&
     protocol !== Protocols.SNELL &&
     protocol !== Protocols.ANYTLS &&
     protocol !== Protocols.SHADOWTLS

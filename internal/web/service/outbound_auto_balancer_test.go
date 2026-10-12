@@ -89,7 +89,7 @@ func TestAutoBalancerProbePersistenceAndStaleEdit(t *testing.T) {
 	calls := 0
 	autoBalanceProbe = func(items, target, all, mode, core string) ([]*outbound.TestOutboundResult, error) {
 		calls++
-		if mode != "real" || core != "xray" {
+		if mode != "real" || core != "sing-box" {
 			t.Fatalf("%s %s", mode, core)
 		}
 		return []*outbound.TestOutboundResult{{Tag: "a", Success: true, HTTPStatus: 204, Delay: 25}}, nil

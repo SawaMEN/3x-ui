@@ -17,6 +17,7 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/adblock/youtubeproxy"
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
+	"github.com/SawaMEN/3x-ui/v3/internal/coremigration"
 	"github.com/SawaMEN/3x-ui/v3/internal/crypto/nodetoken"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/gateway"
@@ -74,6 +75,14 @@ func initNodeTokenCrypto() error {
 
 // runWebServer initializes and starts the web server for the 3x-ui panel.
 func runWebServer() {
+	release, err := coremigration.AcquirePanelLease()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer release()
+	if err := coremigration.CheckPanelStartup(); err != nil {
+		log.Fatal(err)
+	}
 	log.Printf("Starting %v %v", config.GetName(), config.GetPanelVersion())
 
 	switch config.GetLogLevel() {
@@ -110,9 +119,14 @@ func runWebServer() {
 		log.Fatalf("Error initializing node-token encryption: %v", err)
 	}
 
-	err := database.InitDB(config.GetDBPath())
+	err = database.InitDB(config.GetDBPath())
 	if err != nil {
 		log.Fatalf("Error initializing database: %v", err)
+	}
+	// Persist the sole core identity so fresh backups do not resemble databases
+	// from releases whose implicit default engine was Xray.
+	if err := (&service.SettingService{}).SetCoreType(service.CoreTypeSingBox); err != nil {
+		log.Fatalf("Error saving core identity: %v", err)
 	}
 	if count, err := (&service.SettingService{}).MigrateHiddifySubscriptionURLs(); err != nil {
 		logger.Warning("Could not migrate imported Hiddify subscription URLs: ", err)
@@ -160,7 +174,7 @@ func runWebServer() {
 		stopTunnelHealthMonitor = cancel
 
 		monitor, err := tunnelmonitor.New(monitorCfg, func(_ context.Context) error {
-			logger.Warning("Tunnel health monitor threshold reached, restarting xray-core")
+			logger.Warning("Tunnel health monitor threshold reached, restarting sing-box")
 			return server.RestartXray()
 		})
 		if err != nil {
@@ -205,10 +219,10 @@ func runWebServer() {
 			}
 			log.Println("Sub server restarted successfully.")
 		case sys.SIGUSR1:
-			logger.Info("Received USR1 signal, restarting xray-core...")
+			logger.Info("Received USR1 signal, restarting sing-box...")
 			err := server.RestartXray()
 			if err != nil {
-				logger.Error("Failed to restart xray-core:", err)
+				logger.Error("Failed to restart sing-box:", err)
 			}
 
 		default:
@@ -595,6 +609,7 @@ func loadServiceEnvFile() {
 // It parses command-line arguments to run the web server, migrate database, or update settings.
 func main() {
 	loadServiceEnvFile()
+	service.InitializeNativeCoreRuntime()
 
 	if len(os.Args) < 2 {
 		runWebServer()
@@ -688,6 +703,10 @@ func main() {
 		encryptNodeTokens()
 	case "gateway":
 		if err := gateway.CLI(os.Args[2:]); err != nil {
+			log.Fatal(err)
+		}
+	case "core-migrate":
+		if err := coremigration.CLIWithInitializer(os.Args[2:], initNodeTokenCrypto); err != nil {
 			log.Fatal(err)
 		}
 	case "migrate-db":
@@ -791,6 +810,7 @@ Commands:
     youtube-proxy  run the opt-in YouTube HTTPS server filter
     run            run web panel
     migrate        migrate from other/old x-ui
+    core-migrate   migrate an offline installation to the owner sing-box (--backup-dir)
     migrate-db     SQLite <-> .dump (--dump/--restore) or copy into PostgreSQL (--dsn)
     encrypt-tokens encrypt node bearer tokens with the configured active key
     setting        set settings

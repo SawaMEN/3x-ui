@@ -4,18 +4,18 @@ package web
 
 import (
 	"context"
+	"crypto/tls"
 	"embed"
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
 	"time"
-	"crypto/tls"
-	"io/fs"
-	"net/http"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawgnet"
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
@@ -41,7 +41,6 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service/panel"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service/tgbot"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/websocket"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
@@ -124,7 +123,7 @@ type Server struct {
 	api   *controller.APIController
 	ws    *controller.WebSocketController
 
-	xrayService    service.XrayService
+	xrayService    service.CoreService
 	settingService service.SettingService
 	tgbotService   tgbot.Tgbot
 	discordService *discord.DiscordService
@@ -295,7 +294,7 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 }
 
 // Background-job cadences. Centralized here as the single tuning surface; the
-// values are unchanged from the historical hardcoded cron specs. Follow-up:
+// native config applies use a short cadence with a batch/overlap guard. Follow-up:
 // make these configurable via settings, add per-tick jitter to de-synchronize
 // fleet load, skip expensive jobs when no WebSocket clients are connected or
 // node/xray state is unchanged, and export per-job duration/skipped/error
@@ -303,6 +302,7 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 const (
 	cadenceXrayRunning   = "@every 3s"
 	cadenceXrayRestart   = "@every 30s"
+	cadenceNativeApply   = "@every 1s"
 	cadenceXrayTraffic   = "@every 5s"
 	cadenceMtproto       = "@every 10s"
 	cadenceAmneziaWG     = "@every 10s"
@@ -331,7 +331,7 @@ func (s *Server) startTask(restartXray bool, loc *time.Location) {
 		logger.Warning("get selected core failed, falling back to Xray:", coreErr)
 		coreType = service.CoreTypeXray
 	}
-	useXray := coreType != service.CoreTypeSingBox
+	useXray := !service.IsNativeCore(coreType)
 	if useXray {
 		if restartXray {
 			if err := s.xrayService.RestartXray(true); err != nil {
@@ -339,13 +339,13 @@ func (s *Server) startTask(restartXray bool, loc *time.Location) {
 			}
 		}
 	} else if restartXray {
-		singBoxService := &service.SingBoxService{}
+		singBoxService := service.SelectedNativeCore()
 		if singBoxService.Installed() {
 			if err := singBoxService.Restart(s.ctx); err != nil {
-				logger.Warning("start sing-box failed:", err)
+				logger.Warning("start ", coreType, " failed:", err)
 			}
 		} else {
-			logger.Warning("sing-box is selected but not installed; leaving core stopped")
+			logger.Warning(coreType, " is selected but not installed; leaving core stopped")
 		}
 	}
 	// Keep the scheduler core-agnostic: the operator can switch engines
@@ -364,7 +364,11 @@ func (s *Server) startTask(restartXray bool, loc *time.Location) {
 	// is inert unless an Xray mutation has explicitly armed the flag.
 	_, _ = s.cron.AddFunc(cadenceXrayRestart, func() {
 		s.xrayService.ApplyPendingRestart()
-		(&service.SingBoxService{}).ApplyPendingRestart(s.ctx)
+	})
+	// Native configuration changes converge promptly, without a restart per user.
+	// The apply guard suppresses overlapping ticks and active mutation batches.
+	_, _ = s.cron.AddFunc(cadenceNativeApply, func() {
+		service.SelectedNativeCore().ApplyPendingRestart(s.ctx)
 	})
 
 	// Reconcile mtproto (mtg) sidecars and scrape their traffic
@@ -622,10 +626,9 @@ func (s *Server) start(restartXray bool, startTgBot bool) (err error) {
 
 	// Wire the inbound-runtime manager once so InboundService can route
 	// add/update/delete to either the local xray or a remote node panel.
-	// The closures bridge into XrayService (which owns the running xray
+	// The closures bridge into CoreService (which owns the running xray
 	// process state) without forcing the runtime package to import service.
 	runtime.SetManager(runtime.NewManager(runtime.LocalDeps{
-		APIPort: func() int { return s.xrayService.GetXrayAPIPort() },
 		CoreType: func() string {
 			core, err := s.settingService.GetCoreType()
 			if err != nil {
@@ -633,13 +636,13 @@ func (s *Server) start(restartXray bool, startTgBot bool) (err error) {
 			}
 			return core
 		},
-		RestartCore: func(ctx context.Context) error {
+		RequestConfigApply: func(ctx context.Context) error {
 			core, err := s.settingService.GetCoreType()
 			if err != nil {
 				return err
 			}
-			if core == service.CoreTypeSingBox {
-				(&service.SingBoxService{}).SetToNeedRestart()
+			if service.IsNativeCore(core) {
+				(service.SelectedNativeCore()).SetToNeedRestart()
 				return nil
 			}
 			s.xrayService.SetToNeedRestart()
@@ -647,8 +650,8 @@ func (s *Server) start(restartXray bool, startTgBot bool) (err error) {
 		},
 		SetNeedRestart: func() {
 			core, err := s.settingService.GetCoreType()
-			if err == nil && core == service.CoreTypeSingBox {
-				(&service.SingBoxService{}).SetToNeedRestart()
+			if err == nil && service.IsNativeCore(core) {
+				(service.SelectedNativeCore()).SetToNeedRestart()
 				return
 			}
 			s.xrayService.SetToNeedRestart()
@@ -746,16 +749,6 @@ func (s *Server) start(restartXray bool, startTgBot bool) (err error) {
 	service.SetEventBus(s.bus)
 	job.EventBus = s.bus
 	tgbot.EventBus = s.bus
-
-	// Wire xray crash callback BEFORE startTask so it's ready
-	xray.OnCrash = func(err error) {
-		if s.bus != nil {
-			s.bus.Publish(eventbus.Event{
-				Type: eventbus.EventXrayCrash,
-				Data: err.Error(),
-			})
-		}
-	}
 
 	// Register email subscriber (always — it checks smtpEnable at runtime)
 	emailService := email.NewEmailService(s.settingService)
@@ -865,6 +858,8 @@ func (s *Server) start(restartXray bool, startTgBot bool) (err error) {
 		_ = s.discordGateway.Start(s.ctx)
 	}
 
+	s.api.StartBackground(s.ctx)
+
 	return nil
 }
 
@@ -880,9 +875,12 @@ func (s *Server) StopPanelOnly() error {
 func (s *Server) stop(stopXray bool, stopTgBot bool) error {
 	var err1, err2 error
 	s.cancel()
+	if s.api != nil {
+		s.api.WaitBackground()
+	}
 	if stopXray {
-		if coreType, _ := s.settingService.GetCoreType(); coreType == service.CoreTypeSingBox {
-			_ = (&service.SingBoxService{}).Stop(s.ctx)
+		if coreType, _ := s.settingService.GetCoreType(); service.IsNativeCore(coreType) {
+			_ = (service.SelectedNativeCore()).Stop(s.ctx)
 		} else {
 			_ = s.xrayService.StopXray()
 		}

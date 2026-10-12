@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -94,11 +94,11 @@ func (s *InboundService) backfillClientStats(db *gorm.DB, inbounds []*model.Inbo
 		for e := range missing {
 			emails = append(emails, e)
 		}
-		var extra []xray.ClientTraffic
+		var extra []coremodel.ClientTraffic
 		var loadErr error
 		for _, batch := range chunkStrings(emails, sqlInChunk) {
-			var page []xray.ClientTraffic
-			if err := db.Model(xray.ClientTraffic{}).Where("email IN ?", batch).Find(&page).Error; err != nil {
+			var page []coremodel.ClientTraffic
+			if err := db.Model(coremodel.ClientTraffic{}).Where("email IN ?", batch).Find(&page).Error; err != nil {
 				loadErr = err
 				break
 			}
@@ -107,7 +107,7 @@ func (s *InboundService) backfillClientStats(db *gorm.DB, inbounds []*model.Inbo
 		if loadErr != nil {
 			logger.Warning("backfillClientStats:", loadErr)
 		} else {
-			byEmail := make(map[string]xray.ClientTraffic, len(extra))
+			byEmail := make(map[string]coremodel.ClientTraffic, len(extra))
 			for _, st := range extra {
 				byEmail[strings.ToLower(st.Email)] = st
 			}
@@ -376,10 +376,10 @@ func (s *InboundService) CopyInboundClients(targetInboundID int, sourceInboundID
 	return result, needRestart, nil
 }
 
-func (s *InboundService) GetClientInboundByTrafficID(trafficId int) (traffic *xray.ClientTraffic, inbound *model.Inbound, err error) {
+func (s *InboundService) GetClientInboundByTrafficID(trafficId int) (traffic *coremodel.ClientTraffic, inbound *model.Inbound, err error) {
 	db := database.GetDB()
-	var traffics []*xray.ClientTraffic
-	err = db.Model(xray.ClientTraffic{}).Where("id = ?", trafficId).Find(&traffics).Error
+	var traffics []*coremodel.ClientTraffic
+	err = db.Model(coremodel.ClientTraffic{}).Where("id = ?", trafficId).Find(&traffics).Error
 	if err != nil {
 		logger.Warningf("Error retrieving ClientTraffic with trafficId %d: %v", trafficId, err)
 		return nil, nil, err
@@ -404,10 +404,10 @@ func (s *InboundService) GetClientInboundByTrafficID(trafficId int) (traffic *xr
 	return traffic, inbound, err
 }
 
-func (s *InboundService) GetClientInboundByEmail(email string) (traffic *xray.ClientTraffic, inbound *model.Inbound, err error) {
+func (s *InboundService) GetClientInboundByEmail(email string) (traffic *coremodel.ClientTraffic, inbound *model.Inbound, err error) {
 	db := database.GetDB()
-	var traffics []*xray.ClientTraffic
-	err = db.Model(xray.ClientTraffic{}).Where("email = ?", email).Find(&traffics).Error
+	var traffics []*coremodel.ClientTraffic
+	err = db.Model(coremodel.ClientTraffic{}).Where("email = ?", email).Find(&traffics).Error
 	if err != nil {
 		logger.Warningf("Error retrieving ClientTraffic with email %s: %v", email, err)
 		return nil, nil, err
@@ -464,7 +464,7 @@ func (s *InboundService) inboundHasClientEmail(inbound *model.Inbound, email str
 	return false
 }
 
-func (s *InboundService) GetClientByEmail(clientEmail string) (*xray.ClientTraffic, *model.Client, error) {
+func (s *InboundService) GetClientByEmail(clientEmail string) (*coremodel.ClientTraffic, *model.Client, error) {
 	traffic, inbound, err := s.GetClientInboundByEmail(clientEmail)
 	if err != nil {
 		return nil, nil, err

@@ -24,8 +24,8 @@ func TestNodeTrafficSyncDropsOnlineClientsOfUnsyncedNodes(t *testing.T) {
 	t.Cleanup(func() { _ = database.CloseDB() })
 	runtime.SetManager(runtime.NewManager(runtime.LocalDeps{APIPort: func() int { return 0 }, SetNeedRestart: func() {}}))
 	t.Cleanup(func() { runtime.SetManager(nil) })
-	process := xray.NewTestProcess(nil, "")
-	t.Cleanup(service.SetXrayProcessForTest(process))
+	process := xray.NewPresence()
+	t.Cleanup(service.SetOnlinePresenceForTest(process))
 
 	disabled := &model.Node{Name: "disabled", Address: "127.0.0.1", Port: 1, ApiToken: "tok", Enable: true, Status: "online"}
 	if err := database.GetDB().Create(disabled).Error; err != nil {

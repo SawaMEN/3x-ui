@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // Delete tombstones up front and keeps the record when an inbound fails. A
@@ -57,7 +57,7 @@ func TestRecreatedClientSurvivesNodeMerge(t *testing.T) {
 	seedNodeRow(t, db, &model.Node{Id: 1, Name: "n1", Address: "127.0.0.1", Port: 2096, ApiToken: "tok", Enable: true})
 	createNodeInboundWithClient(t, db, 1, "n1-in", 41501, email)
 	nodeSettings := fmt.Sprintf(`{"clients": [{"email": %q, "enable": true}]}`, email)
-	syncNodeWithSettings(t, inboundSvc, 1, "n1-in", nodeSettings, xray.ClientTraffic{Email: email, Enable: true})
+	syncNodeWithSettings(t, inboundSvc, 1, "n1-in", nodeSettings, coremodel.ClientTraffic{Email: email, Enable: true})
 
 	var ib model.Inbound
 	if err := db.Where("tag = ?", "n1-in").First(&ib).Error; err != nil {
@@ -87,7 +87,7 @@ func TestRecreatedClientSurvivesNodeMerge(t *testing.T) {
 	}
 	snap := &runtime.TrafficSnapshot{Inbounds: []*model.Inbound{{
 		Tag: "n1-in", Protocol: model.VLESS, Settings: nodeSettings,
-		ClientStats: []xray.ClientTraffic{{Email: email, Enable: true}},
+		ClientStats: []coremodel.ClientTraffic{{Email: email, Enable: true}},
 	}}}
 	if _, err := inboundSvc.setRemoteTrafficLocked(1, snap, false, false); err != nil {
 		t.Fatalf("node merge: %v", err)

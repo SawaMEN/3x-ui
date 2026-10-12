@@ -5,9 +5,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 	"gorm.io/gorm"
 )
 
@@ -21,10 +21,11 @@ type coreCompatibilityInbound struct {
 // A client is incompatible when any local inbound it is attached to is unsupported
 // by the target core. AutoDisabledByCore distinguishes this from a manual disable.
 func SyncClientCoreCompatibility(oldCore, newCore string) error {
+	oldCore, newCore = canonicalCoreType(oldCore), canonicalCoreType(newCore)
 	if oldCore == newCore {
 		return nil
 	}
-	if !isSupportedCoreType(oldCore) || !isSupportedCoreType(newCore) {
+	if (oldCore != CoreTypeXray && !isSupportedCoreType(oldCore)) || !isSupportedCoreType(newCore) {
 		return nil
 	}
 
@@ -112,7 +113,7 @@ func SyncClientCoreCompatibility(oldCore, newCore string) error {
 				}).Error; err != nil {
 				return err
 			}
-			if err := tx.Model(&xray.ClientTraffic{}).
+			if err := tx.Model(&coremodel.ClientTraffic{}).
 				Where("email = ?", record.Email).
 				Update("enable", wantEnable).Error; err != nil {
 				return err
@@ -167,7 +168,12 @@ func SyncClientCoreCompatibility(oldCore, newCore string) error {
 }
 
 func isSupportedCoreType(core string) bool {
-	return core == CoreTypeXray || core == CoreTypeSingBox
+	return IsNativeCore(core)
+}
+
+// CoreSupportsInboundProtocol exposes the same policy to offline migration preflight.
+func CoreSupportsInboundProtocol(core string, protocol model.Protocol) bool {
+	return coreSupportsInboundProtocol(canonicalCoreType(core), protocol)
 }
 
 func coreSupportsInboundProtocol(core string, protocol model.Protocol) bool {

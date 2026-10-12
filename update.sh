@@ -66,6 +66,12 @@ _write_update_status() {
 }
 _report_update_exit() {
     local code=$?
+    if declare -F core_migration_exit >/dev/null; then
+        if ! core_migration_exit "$code"; then
+            [[ "$code" -ne 0 ]] || code=1
+            xui_update_error="${xui_update_error:-upgrade rollback failed; inspect retained snapshot}"
+        fi
+    fi
     if [[ "${code}" -eq 0 ]]; then
         _write_update_status "success" "0" ""
     else
@@ -198,7 +204,7 @@ install_base() {
             fi
             ;;
         arch | manjaro | parch)
-            pacman -Sy --noconfirm cronie curl tar tzdata socat ca-certificates openssl iproute2 iptables nftables util-linux > /dev/null 2>&1
+            pacman -Syu --noconfirm --needed cronie curl tar tzdata socat ca-certificates openssl iproute2 iptables nftables util-linux > /dev/null 2>&1
             ;;
         opensuse-tumbleweed | opensuse-leap)
             zypper refresh > /dev/null 2>&1 && zypper -q install -y cron curl tar timezone socat ca-certificates openssl iproute2 iptables nftables util-linux > /dev/null 2>&1
@@ -1127,11 +1133,22 @@ update_x-ui() {
         _fail "ERROR: Release archive does not contain x-ui/x-ui. The current installation was not changed."
     fi
 
+    local cm_helper
+    cm_helper=$(mktemp "${install_parent}/.core-migration.XXXXXX") || _fail "Cannot prepare migration helper"
+    if ! tar -xOf "${archive}" x-ui/core-migration.sh > "$cm_helper"; then
+        rm -f "$cm_helper"
+        _fail "Release is missing the installed-panel migration helper; current installation was not changed"
+    fi
+    source "$cm_helper"
+    rm -f "$cm_helper"
+    core_migration_prepare_archive "$archive" || _fail "Pinned modified Sing-box preflight failed; current installation was not changed"
+
     if [[ -e ${xui_folder}/ ]]; then
         echo -e "${green}Stopping x-ui...${plain}"
         if [[ $release == "alpine" ]]; then
             if [ -f "/etc/init.d/x-ui" ]; then
-                rc-service x-ui stop > /dev/null 2>&1
+                rc-service x-ui stop > /dev/null 2>&1 || _fail "Cannot stop x-ui for offline migration"
+                core_migration_begin || _fail "Cannot snapshot installation; no release files replaced"
                 rc-update del x-ui > /dev/null 2>&1
                 echo -e "${green}Removing old service unit version...${plain}"
                 rm -f /etc/init.d/x-ui > /dev/null 2>&1
@@ -1141,7 +1158,8 @@ update_x-ui() {
             fi
         else
             if [ -f "${xui_service}/x-ui.service" ]; then
-                systemctl stop x-ui > /dev/null 2>&1
+                systemctl stop x-ui > /dev/null 2>&1 || _fail "Cannot stop x-ui for offline migration"
+                core_migration_begin || _fail "Cannot snapshot installation; no release files replaced"
                 systemctl disable x-ui > /dev/null 2>&1
                 echo -e "${green}Removing old systemd unit version...${plain}"
                 rm "${xui_service}/x-ui.service" -f > /dev/null 2>&1
@@ -1167,8 +1185,6 @@ update_x-ui() {
         rm "${xui_folder}/x-ui.sh" -f > /dev/null 2>&1
         echo -e "${green}Removing old mtg version...${plain}"
         rm "${xui_folder}/bin/mtg-linux-${machine_arch}" -f > /dev/null 2>&1
-        echo -e "${green}Removing old xray version...${plain}"
-        rm "${xui_folder}/bin/xray-linux-${machine_arch}" -f > /dev/null 2>&1
         echo -e "${green}Removing old README and LICENSE file...${plain}"
         rm "${xui_folder}/bin/README.md" -f > /dev/null 2>&1
         rm "${xui_folder}/bin/LICENSE" -f > /dev/null 2>&1
@@ -1188,15 +1204,7 @@ update_x-ui() {
     fi
     chmod +x x-ui > /dev/null 2>&1
 
-    # Check the system's architecture and rename the file accordingly.
-    # The panel binary maps GOARCH=arm to "arm32" (internal/xray/process.go),
-    # so the Xray binary must be named xray-linux-arm32.
-    if [[ ${machine_arch} == "armv5" || ${machine_arch} == "armv6" || ${machine_arch} == "armv7" ]]; then
-        mv "bin/xray-linux-${machine_arch}" bin/xray-linux-arm32 > /dev/null 2>&1
-        chmod +x bin/xray-linux-arm32 > /dev/null 2>&1
-    fi
-
-    chmod +x x-ui "bin/xray-linux-${machine_arch}" > /dev/null 2>&1
+    chmod +x x-ui "bin/hiddify-core-linux-${machine_arch}" || _fail "Modified Sing-box binary missing"
     [[ -f bin/telemt ]] && chmod 0755 bin/telemt
     [[ -f telemt-meko-fix.sh ]] && chmod 0755 telemt-meko-fix.sh
     [[ -f telemt-update.sh ]] && chmod 0755 telemt-update.sh
@@ -1242,6 +1250,8 @@ update_x-ui() {
         echo -e "${green}Changing on config file permissions...${plain}"
         chmod 640 "${xui_folder}/bin/config.json" > /dev/null 2>&1
     fi
+
+    core_migration_apply || _fail "Modified Sing-box migration failed; restoring previous installation"
 
     if [[ $release == "alpine" ]]; then
         echo -e "${green}Downloading and installing startup unit x-ui.rc...${plain}"
@@ -1334,7 +1344,8 @@ update_x-ui() {
         fi
     fi
 
-    config_after_update
+    core_migration_commit || _fail "Updated panel did not start its modified Sing-box; restoring snapshot"
+    if [[ -z "${cm_backup:-}" ]]; then config_after_update; fi
 
     # IP Limit relies on fail2ban; install + configure it now so the feature
     # works out of the box on update too (no-op when XUI_ENABLE_FAIL2BAN=false).

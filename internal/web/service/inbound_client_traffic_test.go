@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // TestAddClientTraffic_MatchesByEmail covers two scenarios that share one fix:
@@ -46,17 +46,17 @@ func TestAddClientTraffic_MatchesByEmail(t *testing.T) {
 		t.Fatalf("create node inbound: %v", err)
 	}
 
-	if err := db.Create(&xray.ClientTraffic{InboundId: 9999, Email: staleEmail, Enable: true}).Error; err != nil {
+	if err := db.Create(&coremodel.ClientTraffic{InboundId: 9999, Email: staleEmail, Enable: true}).Error; err != nil {
 		t.Fatalf("create stale client_traffics: %v", err)
 	}
 	// Attached to both inbounds, but the node inbound won the OnConflict so the
 	// shared row is owned by the node inbound id.
-	if err := db.Create(&xray.ClientTraffic{InboundId: nodeInbound.Id, Email: dualEmail, Enable: true}).Error; err != nil {
+	if err := db.Create(&coremodel.ClientTraffic{InboundId: nodeInbound.Id, Email: dualEmail, Enable: true}).Error; err != nil {
 		t.Fatalf("create dual client_traffics: %v", err)
 	}
 
 	svc := InboundService{}
-	err := svc.addClientTraffic(db, []*xray.ClientTraffic{
+	err := svc.addClientTraffic(db, []*coremodel.ClientTraffic{
 		{Email: staleEmail, Up: 10, Down: 20},
 		{Email: dualEmail, Up: 30, Down: 40},
 	})
@@ -64,8 +64,8 @@ func TestAddClientTraffic_MatchesByEmail(t *testing.T) {
 		t.Fatalf("addClientTraffic: %v", err)
 	}
 
-	var stale xray.ClientTraffic
-	if err := db.Model(xray.ClientTraffic{}).Where("email = ?", staleEmail).First(&stale).Error; err != nil {
+	var stale coremodel.ClientTraffic
+	if err := db.Model(coremodel.ClientTraffic{}).Where("email = ?", staleEmail).First(&stale).Error; err != nil {
 		t.Fatalf("reload stale row: %v", err)
 	}
 	if stale.Up != 10 || stale.Down != 20 {
@@ -75,8 +75,8 @@ func TestAddClientTraffic_MatchesByEmail(t *testing.T) {
 		t.Errorf("stale-pointer row LastOnline not set")
 	}
 
-	var dual xray.ClientTraffic
-	if err := db.Model(xray.ClientTraffic{}).Where("email = ?", dualEmail).First(&dual).Error; err != nil {
+	var dual coremodel.ClientTraffic
+	if err := db.Model(coremodel.ClientTraffic{}).Where("email = ?", dualEmail).First(&dual).Error; err != nil {
 		t.Fatalf("reload dual row: %v", err)
 	}
 	if dual.Up != 30 || dual.Down != 40 {
@@ -125,17 +125,17 @@ func TestAdjustTraffics_DelayedStartConvertsDespiteStaleInboundId(t *testing.T) 
 
 	// The email-keyed traffic row survives an inbound delete+recreate pointing at a
 	// dead inbound id; client_inbounds still links the client to the live inbound.
-	if err := db.Create(&xray.ClientTraffic{InboundId: 9999, Email: email, Enable: true, ExpiryTime: -sevenDays}).Error; err != nil {
+	if err := db.Create(&coremodel.ClientTraffic{InboundId: 9999, Email: email, Enable: true, ExpiryTime: -sevenDays}).Error; err != nil {
 		t.Fatalf("create stale traffic row: %v", err)
 	}
 
 	before := time.Now().UnixMilli()
-	if err := svc.addClientTraffic(db, []*xray.ClientTraffic{{Email: email, Up: 100, Down: 200}}); err != nil {
+	if err := svc.addClientTraffic(db, []*coremodel.ClientTraffic{{Email: email, Up: 100, Down: 200}}); err != nil {
 		t.Fatalf("addClientTraffic: %v", err)
 	}
 
-	var row xray.ClientTraffic
-	if err := db.Model(xray.ClientTraffic{}).Where("email = ?", email).First(&row).Error; err != nil {
+	var row coremodel.ClientTraffic
+	if err := db.Model(coremodel.ClientTraffic{}).Where("email = ?", email).First(&row).Error; err != nil {
 		t.Fatalf("reload traffic row: %v", err)
 	}
 	if row.ExpiryTime <= 0 {
@@ -196,15 +196,15 @@ func TestAddClientTraffic_ExpiryWriteOnlyForConvertedClients(t *testing.T) {
 	if err := svc.clientService.SyncInbound(db, inbound.Id, clients); err != nil {
 		t.Fatalf("SyncInbound: %v", err)
 	}
-	if err := db.Create(&xray.ClientTraffic{InboundId: inbound.Id, Email: delayedEmail, Enable: true, ExpiryTime: -sevenDays}).Error; err != nil {
+	if err := db.Create(&coremodel.ClientTraffic{InboundId: inbound.Id, Email: delayedEmail, Enable: true, ExpiryTime: -sevenDays}).Error; err != nil {
 		t.Fatalf("create delayed traffic row: %v", err)
 	}
-	if err := db.Create(&xray.ClientTraffic{InboundId: inbound.Id, Email: normalEmail, Enable: true, ExpiryTime: normalExpiry}).Error; err != nil {
+	if err := db.Create(&coremodel.ClientTraffic{InboundId: inbound.Id, Email: normalEmail, Enable: true, ExpiryTime: normalExpiry}).Error; err != nil {
 		t.Fatalf("create normal traffic row: %v", err)
 	}
 
 	before := time.Now().UnixMilli()
-	err := svc.addClientTraffic(db, []*xray.ClientTraffic{
+	err := svc.addClientTraffic(db, []*coremodel.ClientTraffic{
 		{Email: delayedEmail, Up: 10, Down: 20},
 		{Email: normalEmail, Up: 30, Down: 40},
 	})
@@ -212,16 +212,16 @@ func TestAddClientTraffic_ExpiryWriteOnlyForConvertedClients(t *testing.T) {
 		t.Fatalf("addClientTraffic: %v", err)
 	}
 
-	var delayed xray.ClientTraffic
-	if err := db.Model(xray.ClientTraffic{}).Where("email = ?", delayedEmail).First(&delayed).Error; err != nil {
+	var delayed coremodel.ClientTraffic
+	if err := db.Model(coremodel.ClientTraffic{}).Where("email = ?", delayedEmail).First(&delayed).Error; err != nil {
 		t.Fatalf("reload delayed row: %v", err)
 	}
 	if delayed.ExpiryTime < before+sevenDays-5000 || delayed.ExpiryTime > before+sevenDays+5000 {
 		t.Errorf("delayed expiry = %d, want ~now+7d (%d)", delayed.ExpiryTime, before+sevenDays)
 	}
 
-	var normal xray.ClientTraffic
-	if err := db.Model(xray.ClientTraffic{}).Where("email = ?", normalEmail).First(&normal).Error; err != nil {
+	var normal coremodel.ClientTraffic
+	if err := db.Model(coremodel.ClientTraffic{}).Where("email = ?", normalEmail).First(&normal).Error; err != nil {
 		t.Fatalf("reload normal row: %v", err)
 	}
 	if normal.ExpiryTime != normalExpiry {
@@ -236,16 +236,16 @@ func TestAddClientTrafficSumsMultipleSourcesForOneUser(t *testing.T) {
 	setupSettingTestDB(t)
 	db := database.GetDB()
 	const email = "shared-user"
-	if err := db.Create(&xray.ClientTraffic{Email: email, Enable: true}).Error; err != nil {
+	if err := db.Create(&coremodel.ClientTraffic{Email: email, Enable: true}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := (&InboundService{}).addClientTraffic(db, []*xray.ClientTraffic{
+	if err := (&InboundService{}).addClientTraffic(db, []*coremodel.ClientTraffic{
 		{Email: email, Up: 10, Down: 20},
 		{Email: email, Up: 30, Down: 40},
 	}); err != nil {
 		t.Fatal(err)
 	}
-	var got xray.ClientTraffic
+	var got coremodel.ClientTraffic
 	if err := db.Where("email = ?", email).First(&got).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -258,16 +258,16 @@ func TestAddClientTrafficMultipleSourcesSaturateWithoutSQLOverflow(t *testing.T)
 	setupSettingTestDB(t)
 	db := database.GetDB()
 	const email = "near-limit"
-	if err := db.Create(&xray.ClientTraffic{Email: email, Enable: true, Up: database.TrafficMax - 3}).Error; err != nil {
+	if err := db.Create(&coremodel.ClientTraffic{Email: email, Enable: true, Up: database.TrafficMax - 3}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := (&InboundService{}).addClientTraffic(db, []*xray.ClientTraffic{
+	if err := (&InboundService{}).addClientTraffic(db, []*coremodel.ClientTraffic{
 		{Email: email, Up: database.TrafficMax - 1},
 		{Email: email, Up: database.TrafficMax - 1},
 	}); err != nil {
 		t.Fatal(err)
 	}
-	var got xray.ClientTraffic
+	var got coremodel.ClientTraffic
 	if err := db.Where("email = ?", email).First(&got).Error; err != nil {
 		t.Fatal(err)
 	}

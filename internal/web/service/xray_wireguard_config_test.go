@@ -15,7 +15,7 @@ func wgTestSecretKey() string {
 
 func wgInboundEmittedSettings(t *testing.T, tag string) map[string]any {
 	t.Helper()
-	svc := &XrayService{}
+	svc := &CoreService{}
 	cfg, err := svc.GetXrayConfig()
 	if err != nil {
 		t.Fatalf("GetXrayConfig: %v", err)

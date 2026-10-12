@@ -10,7 +10,11 @@ import { HttpUtil, Wireguard } from '@/utils';
 import { formValuesToWirePayload, rawOutboundToFormValues } from '@/lib/xray/outbound-form-adapter';
 import { parseOutboundLink } from '@/lib/xray/outbound-link-parser';
 import { XMUX_FRESH_DEFAULTS } from '@/schemas/protocols/stream/xhttp';
-import { OutboundFormBaseSchema, type OutboundFormValues } from '@/schemas/forms/outbound-form';
+import {
+  OutboundFormBaseSchema,
+  VlessOutboundFormSettingsSchema,
+  type OutboundFormValues,
+} from '@/schemas/forms/outbound-form';
 import {
   canEnableReality,
   canEnableStream,
@@ -42,7 +46,6 @@ import {
   DnsFields,
   FreedomFields,
   HttpFields,
-  LoopbackFields,
   ServerTarget,
   ShadowsocksFields,
   SocksFields,
@@ -56,8 +59,8 @@ import {
   GrpcForm,
   HttpUpgradeForm,
   HysteriaForm,
-  KcpForm,
   MuxForm,
+  KcpForm,
   RawForm,
   SockoptForm,
   WsForm,
@@ -112,7 +115,6 @@ export default function OutboundFormModal({
     '') as string;
   const security = (useWatch({ control: methods.control, name: 'streamSettings.security' }) ??
     'none') as string;
-  const flow = (useWatch({ control: methods.control, name: 'settings.flow' }) ?? '') as string;
   const reverseTag = useWatch({ control: methods.control, name: 'settings.reverseTag' });
   const wgSecretKey = useWatch({ control: methods.control, name: 'settings.secretKey' }) as
     | string
@@ -121,6 +123,16 @@ export default function OutboundFormModal({
   const streamAllowed = canEnableStream({ protocol });
   const tlsAllowed = canEnableTls({ protocol, streamSettings: { network, security } });
   const realityAllowed = canEnableReality({ protocol, streamSettings: { network, security } });
+  const flow = useWatch({ control: methods.control, name: 'settings.flow' });
+  useEffect(() => {
+    if (protocol === 'vless' && flow === 'xtls-rprx-vision') {
+      const seed = methods.getValues('settings.testseed');
+      if (!seed?.length || seed.every((value) => value == null)) {
+        methods.setValue('settings.testseed', [900, 500, 900, 256]);
+      }
+    }
+  }, [flow, protocol, methods]);
+
   const tlsFlowAllowed = canEnableTlsFlow({ protocol, streamSettings: { network, security } });
 
   /*
@@ -518,7 +530,6 @@ export default function OutboundFormModal({
                       {protocol === 'http' && <HttpFields />}
                       {protocol === 'socks' && <SocksFields />}
 
-                      {protocol === 'loopback' && <LoopbackFields />}
                       {protocol === 'blackhole' && <BlackholeFields />}
                       {protocol === 'dns' && <DnsFields />}
 
@@ -550,13 +561,16 @@ export default function OutboundFormModal({
                               options={
                                 protocol === 'hysteria'
                                   ? [HYSTERIA_NETWORK_OPTION]
-                                  : NETWORK_OPTIONS
+                                  : NETWORK_OPTIONS.filter(
+                                      (option) =>
+                                        option.value !== 'kcp' ||
+                                        ['vless', 'vmess', 'trojan'].includes(protocol),
+                                    )
                               }
                             />
                           </Form.Item>
 
                           {network === 'tcp' && <RawForm />}
-
                           {network === 'kcp' && <KcpForm />}
 
                           {network === 'ws' && <WsForm />}
@@ -580,22 +594,41 @@ export default function OutboundFormModal({
                           />
                         </FormField>
                       )}
-
-                      {/* Vision seed knobs only meaningful for the exact
-                          xtls-rprx-vision flow, on TCP+(tls|reality). */}
                       {tlsFlowAllowed && flow === 'xtls-rprx-vision' && (
                         <>
                           <FormField
                             label={t('pages.xray.outboundForm.visionTestpre')}
                             name={['settings', 'testpre']}
+                            rules={{
+                              validate: rhfZodValidate(
+                                VlessOutboundFormSettingsSchema.shape.testpre,
+                              ),
+                            }}
                           >
-                            <InputNumber min={0} style={{ width: '100%' }} />
+                            <InputNumber min={0} max={64} style={{ width: '100%' }} />
                           </FormField>
                           <Form.Item label={t('pages.inbounds.form.visionTestseed')}>
                             <Space.Compact block>
                               {[0, 1, 2, 3].map((i) => (
-                                <FormField key={i} name={['settings', 'testseed', i]} noStyle>
-                                  <InputNumber min={1} style={{ width: '25%' }} />
+                                <FormField
+                                  key={i}
+                                  name={['settings', 'testseed', i]}
+                                  noStyle
+                                  rules={{
+                                    validate: (_value, values) => {
+                                      const result =
+                                        VlessOutboundFormSettingsSchema.shape.testseed.safeParse(
+                                          values.settings.testseed,
+                                        );
+                                      return result.success || result.error.issues[0].message;
+                                    },
+                                  }}
+                                >
+                                  <InputNumber
+                                    min={i === 2 ? 0 : 1}
+                                    max={65536}
+                                    style={{ width: '25%' }}
+                                  />
                                 </FormField>
                               ))}
                             </Space.Compact>

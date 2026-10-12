@@ -14,13 +14,13 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/masque"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/random"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -123,6 +123,7 @@ func (s *ClientService) GetClientsByTrafficReset(period string) ([]ClientResetCy
 // Create applies the client to every requested inbound: one failing inbound no
 // longer aborts the others, so the error can name several and needRestart holds.
 func (s *ClientService) Create(inboundSvc *InboundService, payload *ClientCreatePayload) (bool, error) {
+	defer beginLocalConfigBatch()()
 	if payload == nil {
 		return false, common.NewError("empty payload")
 	}
@@ -568,6 +569,7 @@ func applyShadowsocksClientMethod(clients []any, settings map[string]any) {
 }
 
 func (s *ClientService) Update(inboundSvc *InboundService, id int, updated model.Client, limitHwid int, inboundFilter ...int) (bool, error) {
+	defer beginLocalConfigBatch()()
 	existing, err := s.GetByID(id)
 	if err != nil {
 		return false, err
@@ -833,6 +835,7 @@ func (s *ClientService) Update(inboundSvc *InboundService, id int, updated model
 }
 
 func (s *ClientService) Delete(inboundSvc *InboundService, id int, keepTraffic bool) (bool, error) {
+	defer beginLocalConfigBatch()()
 	existing, err := s.GetByID(id)
 	if err != nil {
 		return false, err
@@ -902,7 +905,7 @@ func (s *ClientService) Delete(inboundSvc *InboundService, id int, keepTraffic b
 			return err
 		}
 		if !keepTraffic && existing.Email != "" {
-			if err := tx.Where("email = ?", existing.Email).Delete(&xray.ClientTraffic{}).Error; err != nil {
+			if err := tx.Where("email = ?", existing.Email).Delete(&coremodel.ClientTraffic{}).Error; err != nil {
 				return err
 			}
 			if err := clearGlobalTraffic(tx, existing.Email); err != nil {
@@ -999,6 +1002,7 @@ func addressesFitAmneziaWGInbound(addrs []string, ib *model.Inbound) bool {
 // Attach applies the client to every requested inbound: one failing inbound no
 // longer aborts the others, so the error can name several and needRestart holds.
 func (s *ClientService) Attach(inboundSvc *InboundService, id int, inboundIds []int) (bool, error) {
+	defer beginLocalConfigBatch()()
 	existing, err := s.GetByID(id)
 	if err != nil {
 		return false, err
@@ -1087,6 +1091,7 @@ func (s *ClientService) AttachByEmail(inboundSvc *InboundService, email string, 
 }
 
 func (s *ClientService) DetachByEmailMany(inboundSvc *InboundService, email string, inboundIds []int) (bool, error) {
+	defer beginLocalConfigBatch()()
 	if email == "" {
 		return false, common.NewError("client email is required")
 	}
@@ -1131,7 +1136,7 @@ func (s *ClientService) DeleteByEmail(inboundSvc *InboundService, email string, 
 	}
 	if !keepTraffic {
 		db := database.GetDB()
-		if err := db.Where("email = ?", email).Delete(&xray.ClientTraffic{}).Error; err != nil {
+		if err := db.Where("email = ?", email).Delete(&coremodel.ClientTraffic{}).Error; err != nil {
 			return needRestart, err
 		}
 		if err := clearGlobalTraffic(db, email); err != nil {
@@ -1159,6 +1164,7 @@ func (s *ClientService) UpdateByEmail(inboundSvc *InboundService, email string, 
 }
 
 func (s *ClientService) Detach(inboundSvc *InboundService, id int, inboundIds []int) (bool, error) {
+	defer beginLocalConfigBatch()()
 	existing, err := s.GetByID(id)
 	if err != nil {
 		return false, err

@@ -11,7 +11,7 @@ import (
 // should be reloaded so the new outbounds take effect.
 type OutboundSubscriptionJob struct {
 	subService *service.OutboundSubscriptionService
-	xraySvc    *service.XrayService
+	xraySvc    *service.CoreService
 }
 
 // NewOutboundSubscriptionJob creates the job (zero-value services are populated
@@ -19,7 +19,7 @@ type OutboundSubscriptionJob struct {
 func NewOutboundSubscriptionJob() *OutboundSubscriptionJob {
 	return &OutboundSubscriptionJob{
 		subService: &service.OutboundSubscriptionService{},
-		xraySvc:    &service.XrayService{},
+		xraySvc:    &service.CoreService{},
 	}
 }
 
@@ -29,7 +29,7 @@ func (j *OutboundSubscriptionJob) Run() {
 		j.subService = &service.OutboundSubscriptionService{}
 	}
 	if j.xraySvc == nil {
-		j.xraySvc = &service.XrayService{}
+		j.xraySvc = &service.CoreService{}
 	}
 
 	count, err := j.subService.RefreshAllEnabled()
@@ -41,8 +41,8 @@ func (j *OutboundSubscriptionJob) Run() {
 		logger.Infof("Refreshed %d outbound subscription(s)", count)
 		// Ask the xray manager to restart/reload on the next 30s check.
 		core, _ := (&service.SettingService{}).GetCoreType()
-		if core == service.CoreTypeSingBox {
-			(&service.SingBoxService{}).SetToNeedRestart()
+		if service.IsNativeCore(core) {
+			(service.SelectedNativeCore()).SetToNeedRestart()
 		} else {
 			j.xraySvc.SetToNeedRestart()
 		}

@@ -54,7 +54,7 @@ const (
 
 var defaultValueMap = map[string]string{
 	"xrayTemplateConfig": xrayTemplateConfig,
-	"coreType":           "xray",
+	"coreType":           "sing-box",
 	"webListen":          "",
 	"webDomain":          "",
 	"webPort":            "2053",
@@ -317,6 +317,7 @@ func (s *SettingService) GetAllSetting() (*entity.AllSetting, error) {
 		allSetting.SubProfileMode = ""
 	}
 	allSetting.SubProfileMode = effectiveSubProfileMode(allSetting.SubProfileMode, allSetting.SubProfileUrl)
+	allSetting.CoreType = canonicalCoreType(allSetting.CoreType)
 	return allSetting, nil
 }
 
@@ -482,6 +483,9 @@ func (s *SettingService) SetWarpUpdateInterval(val int) error {
 const (
 	CoreTypeXray    = "xray"
 	CoreTypeSingBox = "sing-box"
+	// Deprecated: the owner kernel identifies as sing-box.
+	CoreTypeHiddify       = CoreTypeSingBox
+	legacyCoreTypeHiddify = "hiddify-core"
 )
 
 func (s *SettingService) GetCoreType() (string, error) {
@@ -489,14 +493,26 @@ func (s *SettingService) GetCoreType() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if coreType != CoreTypeXray && coreType != CoreTypeSingBox {
-		return CoreTypeXray, nil
+	coreType = canonicalCoreType(coreType)
+	if coreType == CoreTypeXray {
+		return coreType, nil
+	} // Read-only legacy value for offline migration.
+	if !isSupportedCoreType(coreType) {
+		return CoreTypeSingBox, nil
 	}
 	return coreType, nil
 }
 
+func canonicalCoreType(value string) string {
+	if value == legacyCoreTypeHiddify {
+		return CoreTypeSingBox
+	}
+	return value
+}
+
 func (s *SettingService) SetCoreType(coreType string) error {
-	if coreType != CoreTypeXray && coreType != CoreTypeSingBox {
+	coreType = canonicalCoreType(coreType)
+	if !isSupportedCoreType(coreType) {
 		return common.NewError("core type is not supported:", coreType)
 	}
 	return s.setString("coreType", coreType)
@@ -1503,6 +1519,7 @@ type SecretClears struct {
 }
 
 func (s *SettingService) UpdateAllSetting(allSetting *entity.AllSetting, clears SecretClears) error {
+	allSetting.CoreType = canonicalCoreType(allSetting.CoreType)
 	switch allSetting.SubProfileMode {
 	case "", SubProfileModeNone, SubProfileModeBuiltin, SubProfileModeCustom:
 		allSetting.SubProfileMode = effectiveSubProfileMode(allSetting.SubProfileMode, allSetting.SubProfileUrl)

@@ -1439,8 +1439,48 @@
         ],
         "type": "object"
       },
+      "Capabilities": {
+        "description": "Capabilities describes optional behavior exposed by a proxy core. Keep this\nseparate from Runtime so adding a core-specific feature never expands the\nlifecycle contract or forces unrelated adapters to implement stub methods.",
+        "properties": {
+          "clashApi": {
+            "type": "boolean"
+          },
+          "connectionStats": {
+            "type": "boolean"
+          },
+          "geoIp": {
+            "type": "boolean"
+          },
+          "geoSite": {
+            "type": "boolean"
+          },
+          "hotInboundReload": {
+            "type": "boolean"
+          },
+          "outboundDelayProbe": {
+            "type": "boolean"
+          },
+          "ruleSets": {
+            "type": "boolean"
+          },
+          "shadowTls": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "clashApi",
+          "connectionStats",
+          "geoIp",
+          "geoSite",
+          "hotInboundReload",
+          "outboundDelayProbe",
+          "ruleSets",
+          "shadowTls"
+        ],
+        "type": "object"
+      },
       "Client": {
-        "description": "Client represents a client configuration for Xray inbounds with traffic limits and settings.",
+        "description": "Client represents a client configuration for panel inbounds with traffic limits and settings.",
         "properties": {
           "adTag": {
             "example": "0123456789abcdef0123456789abcdef",
@@ -2692,7 +2732,7 @@
         "type": "object"
       },
       "Inbound": {
-        "description": "Inbound represents an Xray inbound configuration with traffic statistics and settings.",
+        "description": "Inbound represents a panel inbound with traffic statistics and settings.",
         "properties": {
           "clientStats": {
             "description": "Client traffic statistics",
@@ -3206,7 +3246,24 @@
             "format": "int64",
             "type": "integer"
           },
+          "coreCapabilities": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Capabilities"
+              }
+            ],
+            "nullable": true
+          },
+          "coreError": {
+            "type": "string"
+          },
+          "coreState": {
+            "type": "string"
+          },
           "coreType": {
+            "type": "string"
+          },
+          "coreVersion": {
             "type": "string"
           },
           "cpuPct": {
@@ -3310,6 +3367,10 @@
             "minimum": 1,
             "type": "integer"
           },
+          "presenceRegistry": {
+            "description": "XrayState and XrayError are captured from the remote node's /panel/api/server/status\nduring heartbeats. They let the central panel distinguish \"panel API reachable\"\n(status=online) from \"Xray core itself has failed on the node\" for monitoring.",
+            "type": "string"
+          },
           "remark": {
             "type": "string"
           },
@@ -3373,10 +3434,6 @@
           "xrayError": {
             "type": "string"
           },
-          "xrayState": {
-            "description": "XrayState and XrayError are captured from the remote node's /panel/api/server/status\nduring heartbeats. They let the central panel distinguish \"panel API reachable\"\n(status=online) from \"Xray core itself has failed on the node\" for monitoring.",
-            "type": "string"
-          },
           "xrayVersion": {
             "example": "25.10.31",
             "type": "string"
@@ -3390,7 +3447,10 @@
           "clientCount",
           "configDirty",
           "configDirtyAt",
+          "coreError",
+          "coreState",
           "coreType",
+          "coreVersion",
           "cpuPct",
           "createdAt",
           "depletedCount",
@@ -3413,6 +3473,7 @@
           "panelVersion",
           "pinnedCertSha256",
           "port",
+          "presenceRegistry",
           "remark",
           "runningCore",
           "scheme",
@@ -3427,7 +3488,6 @@
           "updatedAt",
           "uptimeSecs",
           "xrayError",
-          "xrayState",
           "xrayVersion"
         ],
         "type": "object"
@@ -3554,7 +3614,24 @@
             "format": "int64",
             "type": "integer"
           },
+          "coreCapabilities": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Capabilities"
+              }
+            ],
+            "nullable": true
+          },
+          "coreError": {
+            "type": "string"
+          },
+          "coreState": {
+            "type": "string"
+          },
           "coreType": {
+            "type": "string"
+          },
+          "coreVersion": {
             "type": "string"
           },
           "cpuPct": {
@@ -3659,6 +3736,10 @@
             "example": 2053,
             "type": "integer"
           },
+          "presenceRegistry": {
+            "example": "running",
+            "type": "string"
+          },
           "remark": {
             "example": "Primary edge",
             "type": "string"
@@ -3711,10 +3792,6 @@
           "xrayError": {
             "type": "string"
           },
-          "xrayState": {
-            "example": "running",
-            "type": "string"
-          },
           "xrayVersion": {
             "example": "25.10.31",
             "type": "string"
@@ -3728,7 +3805,10 @@
           "clientCount",
           "configDirty",
           "configDirtyAt",
+          "coreError",
+          "coreState",
           "coreType",
+          "coreVersion",
           "cpuPct",
           "createdAt",
           "depletedCount",
@@ -3752,6 +3832,7 @@
           "panelVersion",
           "pinnedCertSha256",
           "port",
+          "presenceRegistry",
           "remark",
           "runningCore",
           "scheme",
@@ -3765,7 +3846,6 @@
           "updatedAt",
           "uptimeSecs",
           "xrayError",
-          "xrayState",
           "xrayVersion"
         ],
         "type": "object"
@@ -3902,7 +3982,24 @@
       },
       "ProbeResultUI": {
         "properties": {
+          "coreCapabilities": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Capabilities"
+              }
+            ],
+            "nullable": true
+          },
+          "coreError": {
+            "type": "string"
+          },
+          "coreState": {
+            "type": "string"
+          },
           "coreType": {
+            "type": "string"
+          },
+          "coreVersion": {
             "type": "string"
           },
           "cpuPct": {
@@ -3922,6 +4019,10 @@
           },
           "panelVersion": {
             "example": "v3.x.x",
+            "type": "string"
+          },
+          "presenceRegistry": {
+            "description": "XrayState/XrayError are populated on successful probes even when the node's\nXray core is not healthy. The UI uses them for a distinct \"panel ok, xray failed\" indicator.",
             "type": "string"
           },
           "runningCore": {
@@ -3954,22 +4055,22 @@
           "xrayError": {
             "type": "string"
           },
-          "xrayState": {
-            "description": "XrayState/XrayError are populated on successful probes even when the node's\nXray core is not healthy. The UI uses them for a distinct \"panel ok, xray failed\" indicator.",
-            "type": "string"
-          },
           "xrayVersion": {
             "example": "25.10.31",
             "type": "string"
           }
         },
         "required": [
+          "coreError",
+          "coreState",
           "coreType",
+          "coreVersion",
           "cpuPct",
           "error",
           "latencyMs",
           "memPct",
           "panelVersion",
+          "presenceRegistry",
           "runningCore",
           "singboxError",
           "singboxInstalled",
@@ -3979,7 +4080,6 @@
           "status",
           "uptimeSecs",
           "xrayError",
-          "xrayState",
           "xrayVersion"
         ],
         "type": "object"
@@ -4465,7 +4565,7 @@
         "type": "object"
       },
       "Traffic": {
-        "description": "Traffic represents network traffic statistics for Xray connections.\nIt tracks upload and download bytes for inbound or outbound traffic.",
+        "description": "Traffic represents network traffic statistics reported by a core.\nIt tracks upload and download bytes for inbound or outbound traffic.",
         "properties": {
           "Down": {
             "example": 2097152,
@@ -6980,44 +7080,6 @@
         }
       }
     },
-    "/panel/api/server/getXrayVersion": {
-      "get": {
-        "tags": [
-          "Server"
-        ],
-        "summary": "List Xray binary versions available for install on this host.",
-        "operationId": "get_panel_api_server_getXrayVersion",
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "msg": {
-                      "type": "string"
-                    },
-                    "obj": {}
-                  }
-                },
-                "example": {
-                  "success": true,
-                  "obj": [
-                    "v25.10.31",
-                    "v25.9.15",
-                    "v25.8.1"
-                  ]
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/panel/api/server/core/capabilities": {
       "get": {
         "tags": [
@@ -7640,47 +7702,6 @@
                 "example": {
                   "success": false,
                   "msg": "Xray config is invalid: ..."
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/panel/api/server/installXray/{version}": {
-      "post": {
-        "tags": [
-          "Server"
-        ],
-        "summary": "Download and install the specified Xray version. Pass \"latest\" for the newest release.",
-        "operationId": "post_panel_api_server_installXray_version",
-        "parameters": [
-          {
-            "name": "version",
-            "in": "path",
-            "required": true,
-            "description": "Xray tag (e.g. v25.10.31) or \"latest\".",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "msg": {
-                      "type": "string"
-                    },
-                    "obj": {}
-                  }
                 }
               }
             }
@@ -11547,7 +11568,11 @@
                       "clientCount": 25,
                       "configDirty": false,
                       "configDirtyAt": 0,
+                      "coreCapabilities": null,
+                      "coreError": "",
+                      "coreState": "",
                       "coreType": "",
+                      "coreVersion": "",
                       "cpuPct": 12.5,
                       "createdAt": 1700000000,
                       "depletedCount": 1,
@@ -11574,6 +11599,7 @@
                       "parentGuid": "",
                       "pinnedCertSha256": "",
                       "port": 2053,
+                      "presenceRegistry": "running",
                       "remark": "Primary edge",
                       "runningCore": "",
                       "scheme": "https",
@@ -11588,7 +11614,6 @@
                       "updatedAt": 1700003600,
                       "uptimeSecs": 86400,
                       "xrayError": "",
-                      "xrayState": "running",
                       "xrayVersion": "25.10.31"
                     }
                   ]
@@ -11755,7 +11780,11 @@
                     "clientCount": 25,
                     "configDirty": false,
                     "configDirtyAt": 0,
+                    "coreCapabilities": null,
+                    "coreError": "",
+                    "coreState": "",
                     "coreType": "",
+                    "coreVersion": "",
                     "cpuPct": 12.5,
                     "createdAt": 1700000000,
                     "depletedCount": 1,
@@ -11782,6 +11811,7 @@
                     "parentGuid": "",
                     "pinnedCertSha256": "",
                     "port": 2053,
+                    "presenceRegistry": "running",
                     "remark": "Primary edge",
                     "runningCore": "",
                     "scheme": "https",
@@ -11796,7 +11826,6 @@
                     "updatedAt": 1700003600,
                     "uptimeSecs": 86400,
                     "xrayError": "",
-                    "xrayState": "running",
                     "xrayVersion": "25.10.31"
                   }
                 }
@@ -11912,7 +11941,11 @@
                     "clientCount": 25,
                     "configDirty": false,
                     "configDirtyAt": 0,
+                    "coreCapabilities": null,
+                    "coreError": "",
+                    "coreState": "",
                     "coreType": "",
+                    "coreVersion": "",
                     "cpuPct": 12.5,
                     "createdAt": 1700000000,
                     "depletedCount": 1,
@@ -11939,6 +11972,7 @@
                     "parentGuid": "",
                     "pinnedCertSha256": "",
                     "port": 2053,
+                    "presenceRegistry": "running",
                     "remark": "Primary edge",
                     "runningCore": "",
                     "scheme": "https",
@@ -11953,7 +11987,6 @@
                     "updatedAt": 1700003600,
                     "uptimeSecs": 86400,
                     "xrayError": "",
-                    "xrayState": "running",
                     "xrayVersion": "25.10.31"
                   }
                 }
@@ -12167,12 +12200,17 @@
                 "example": {
                   "success": true,
                   "obj": {
+                    "coreCapabilities": null,
+                    "coreError": "",
+                    "coreState": "",
                     "coreType": "",
+                    "coreVersion": "",
                     "cpuPct": 12.5,
                     "error": "",
                     "latencyMs": 42,
                     "memPct": 45.2,
                     "panelVersion": "v3.x.x",
+                    "presenceRegistry": "",
                     "runningCore": "",
                     "singboxError": "",
                     "singboxInstalled": false,
@@ -12182,7 +12220,6 @@
                     "status": "online",
                     "uptimeSecs": 86400,
                     "xrayError": "",
-                    "xrayState": "",
                     "xrayVersion": "25.10.31"
                   }
                 }
@@ -14627,223 +14664,6 @@
         }
       }
     },
-    "/panel/api/xray/balancerStatus": {
-      "post": {
-        "tags": [
-          "Xray Settings"
-        ],
-        "summary": "Live state of routing balancers in the running core (RoutingService.GetBalancerInfo): current override and the targets the strategy prefers. Returns a map keyed by balancer tag.",
-        "operationId": "post_panel_api_xray_balancerStatus",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/x-www-form-urlencoded": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "tags": {
-                    "type": "string",
-                    "description": "Comma-separated balancer tags to query (e.g. \"b1,b2\")."
-                  }
-                },
-                "required": [
-                  "tags"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "msg": {
-                      "type": "string"
-                    },
-                    "obj": {}
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/panel/api/xray/balancerOverride": {
-      "post": {
-        "tags": [
-          "Xray Settings"
-        ],
-        "summary": "Force a balancer in the running core to always pick one outbound (RoutingService.OverrideBalancerTarget). Applied live without a restart; cleared automatically when Xray restarts.",
-        "operationId": "post_panel_api_xray_balancerOverride",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/x-www-form-urlencoded": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "tag": {
-                    "type": "string",
-                    "description": "Balancer tag (required)."
-                  },
-                  "target": {
-                    "type": "string",
-                    "description": "Outbound tag to force. Empty clears the override and returns control to the strategy."
-                  }
-                },
-                "required": [
-                  "tag"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "msg": {
-                      "type": "string"
-                    },
-                    "obj": {}
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/panel/api/xray/routeTest": {
-      "post": {
-        "tags": [
-          "Xray Settings"
-        ],
-        "summary": "Ask the running core which outbound its router would pick for a synthetic connection (RoutingService.TestRoute). No traffic is sent.",
-        "operationId": "post_panel_api_xray_routeTest",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/x-www-form-urlencoded": {
-              "schema": {
-                "anyOf": [
-                  {
-                    "type": "object",
-                    "properties": {
-                      "domain": {
-                        "type": "string",
-                        "minLength": 1,
-                        "description": "Target domain. Either domain or ip is required."
-                      },
-                      "ip": {
-                        "type": "string",
-                        "description": "Target IP. Either domain or ip is required."
-                      },
-                      "port": {
-                        "type": "integer",
-                        "description": "Target port (optional)."
-                      },
-                      "network": {
-                        "type": "string",
-                        "description": "\"tcp\" (default) or \"udp\"."
-                      },
-                      "inboundTag": {
-                        "type": "string",
-                        "description": "Simulate arrival on this inbound (optional)."
-                      },
-                      "protocol": {
-                        "type": "string",
-                        "description": "Sniffed protocol such as http, tls, bittorrent (optional)."
-                      },
-                      "email": {
-                        "type": "string",
-                        "description": "User attribution for user-based rules (optional)."
-                      }
-                    },
-                    "required": [
-                      "domain"
-                    ]
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "domain": {
-                        "type": "string",
-                        "description": "Target domain. Either domain or ip is required."
-                      },
-                      "ip": {
-                        "type": "string",
-                        "minLength": 1,
-                        "description": "Target IP. Either domain or ip is required."
-                      },
-                      "port": {
-                        "type": "integer",
-                        "description": "Target port (optional)."
-                      },
-                      "network": {
-                        "type": "string",
-                        "description": "\"tcp\" (default) or \"udp\"."
-                      },
-                      "inboundTag": {
-                        "type": "string",
-                        "description": "Simulate arrival on this inbound (optional)."
-                      },
-                      "protocol": {
-                        "type": "string",
-                        "description": "Sniffed protocol such as http, tls, bittorrent (optional)."
-                      },
-                      "email": {
-                        "type": "string",
-                        "description": "User attribution for user-based rules (optional)."
-                      }
-                    },
-                    "required": [
-                      "ip"
-                    ]
-                  }
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "msg": {
-                      "type": "string"
-                    },
-                    "obj": {}
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/panel/api/xray/geodata/files": {
       "get": {
         "tags": [
@@ -17250,7 +17070,11 @@
                   "clientCount": 25,
                   "configDirty": false,
                   "configDirtyAt": 0,
+                  "coreCapabilities": null,
+                  "coreError": "",
+                  "coreState": "",
                   "coreType": "",
+                  "coreVersion": "",
                   "cpuPct": 12.5,
                   "createdAt": 1700000000,
                   "depletedCount": 1,
@@ -17277,6 +17101,7 @@
                   "parentGuid": "",
                   "pinnedCertSha256": "",
                   "port": 2053,
+                  "presenceRegistry": "running",
                   "remark": "Primary edge",
                   "runningCore": "",
                   "scheme": "https",
@@ -17291,7 +17116,6 @@
                   "updatedAt": 1700003600,
                   "uptimeSecs": 86400,
                   "xrayError": "",
-                  "xrayState": "running",
                   "xrayVersion": "25.10.31"
                 }
               ],
@@ -17654,13 +17478,13 @@
         }
       }
     },
-    "/panel/api/setting/sudoku/status": {
+    "/panel/api/setting/hiddify/status": {
       "get": {
         "tags": [
           "Runtime services"
         ],
-        "summary": "Return Sudoku installation status.",
-        "operationId": "get_panel_api_setting_sudoku_status",
+        "summary": "Return Hiddify Core installation and runtime status.",
+        "operationId": "get_panel_api_setting_hiddify_status",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -17684,13 +17508,13 @@
         }
       }
     },
-    "/panel/api/setting/singbox/versions": {
+    "/panel/api/setting/sudoku/status": {
       "get": {
         "tags": [
           "Runtime services"
         ],
-        "summary": "Return available sing-box versions.",
-        "operationId": "get_panel_api_setting_singbox_versions",
+        "summary": "Return Sudoku installation status.",
+        "operationId": "get_panel_api_setting_sudoku_status",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -18026,36 +17850,6 @@
         }
       }
     },
-    "/panel/api/setting/singbox/install": {
-      "post": {
-        "tags": [
-          "Runtime services"
-        ],
-        "summary": "Install sing-box using the configured channel.",
-        "operationId": "post_panel_api_setting_singbox_install",
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "msg": {
-                      "type": "string"
-                    },
-                    "obj": {}
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/panel/api/setting/sudoku/update": {
       "post": {
         "tags": [
@@ -18063,77 +17857,6 @@
         ],
         "summary": "Install or update the managed Sudoku tunnel binary.",
         "operationId": "post_panel_api_setting_sudoku_update",
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "msg": {
-                      "type": "string"
-                    },
-                    "obj": {}
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/panel/api/setting/singbox/install/{version}": {
-      "post": {
-        "tags": [
-          "Runtime services"
-        ],
-        "summary": "Install a specific sing-box version.",
-        "operationId": "post_panel_api_setting_singbox_install_version",
-        "parameters": [
-          {
-            "name": "version",
-            "in": "path",
-            "required": true,
-            "description": "",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "msg": {
-                      "type": "string"
-                    },
-                    "obj": {}
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/panel/api/setting/singbox/uninstall": {
-      "post": {
-        "tags": [
-          "Runtime services"
-        ],
-        "summary": "Uninstall sing-box.",
-        "operationId": "post_panel_api_setting_singbox_uninstall",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -18192,6 +17915,36 @@
         ],
         "summary": "Save the editable sing-box configuration.",
         "operationId": "post_panel_api_setting_singbox_config",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/setting/singbox/import-link": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Decode a Mieru share link into a native outbound without saving.",
+        "operationId": "post_panel_api_setting_singbox_import_link",
         "responses": {
           "200": {
             "description": "Successful response",

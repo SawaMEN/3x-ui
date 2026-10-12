@@ -3,10 +3,10 @@ package service
 import (
 	"strings"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // ReconcileVKTurnProxyClientPeers brings each managed client peer in the target
@@ -34,8 +34,8 @@ func (s *InboundService) ReconcileVKTurnProxyClientPeers() error {
 		wgInboundID := settings.Forward.WireGuardInboundID
 
 		trafficEnabled := map[string]bool{}
-		var rows []xray.ClientTraffic
-		if err := db.Model(&xray.ClientTraffic{}).Where("inbound_id = ?", inbound.Id).Find(&rows).Error; err == nil {
+		var rows []coremodel.ClientTraffic
+		if err := db.Model(&coremodel.ClientTraffic{}).Where("inbound_id = ?", inbound.Id).Find(&rows).Error; err == nil {
 			for _, row := range rows {
 				trafficEnabled[row.Email] = row.Enable
 			}
@@ -116,12 +116,8 @@ func (s *InboundService) ReconcileVKTurnProxyClientPeers() error {
 			continue
 		}
 
-		// WireGuard peers are static in xray-core: a running inbound cannot accept a
-		// new peer over the gRPC API (AlterInbound re-adds the whole inbound and
-		// xray rejects it with "empty peers"), so a peer-set change only takes
-		// effect on a config reload. Flag a restart; the periodic restart job
-		// (~30s) reloads the regenerated config, which now carries the delta.
-		isNeedXrayRestart.Store(true)
+		// Persisted peer changes require regeneration of the owner configuration.
+		SelectedNativeCore().SetToNeedRestart()
 	}
 	return nil
 }

@@ -39,7 +39,7 @@ func TestSingBoxConfigDoesNotRestoreDisabledMASQUE(t *testing.T) {
 	if err := database.GetDB().Create(inbound).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := singBoxSettingService.SetSingBoxConfigTemplate(`{"endpoints":[{"type":"masque-server","tag":"disabled-masque","users":[{"username":"alice","password":"stale"}]},{"type":"wireguard","tag":"manual"}]}`); err != nil {
+	if err := singBoxSettingService.SetSingBoxConfigTemplate(`{"endpoints":[{"type":"masque-server","tag":"disabled-masque","users":[{"username":"alice","password":"stale"}]},{"type":"wireguard","tag":"manual","address":["10.123.0.1/24"],"private_key":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=","peers":[{"public_key":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=","allowed_ips":["10.123.0.2/32"]}]}]}`); err != nil {
 		t.Fatal(err)
 	}
 	cfg, err := (&SingBoxService{}).GetConfig()

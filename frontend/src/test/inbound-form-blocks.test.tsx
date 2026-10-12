@@ -6,7 +6,6 @@ import { FormProvider, useForm } from 'react-hook-form';
 import {
   GrpcForm,
   HttpUpgradeForm,
-  KcpForm,
   RawForm,
   SockoptForm,
   WsForm,
@@ -50,11 +49,6 @@ describe('inbound transport forms', () => {
 
   it('GrpcForm field structure is stable', () => {
     renderInForm(<GrpcForm />);
-    expect(fieldLabels()).toMatchSnapshot();
-  });
-
-  it('KcpForm field structure is stable', () => {
-    renderInForm(<KcpForm />);
     expect(fieldLabels()).toMatchSnapshot();
   });
 

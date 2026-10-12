@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // PostgreSQL before 16 rejects a FROM subquery without an alias, so the TUIC
@@ -20,7 +20,7 @@ func TestSyncInboundClientsOnPostgres(t *testing.T) {
 	}
 	email := fmt.Sprintf("pg-sync-%d@x", suffix)
 	t.Cleanup(func() {
-		_ = db.Where("email = ?", email).Delete(&xray.ClientTraffic{}).Error
+		_ = db.Where("email = ?", email).Delete(&coremodel.ClientTraffic{}).Error
 		_ = db.Where("email = ?", email).Delete(&model.ClientRecord{}).Error
 		_ = db.Delete(&model.Inbound{}, inbound.Id).Error
 	})

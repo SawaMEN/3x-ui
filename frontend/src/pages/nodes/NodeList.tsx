@@ -1,3 +1,4 @@
+import { coreHealth, hasCoreProblem, type HealthProps } from '@/lib/node-health';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Badge, Button, Card, Dropdown, Modal, Space, Switch, Table, Tag, Tooltip } from 'antd';
@@ -67,44 +68,7 @@ function badgeStatus(status?: string): BadgeProps['status'] {
   }
 }
 
-interface HealthProps {
-  status?: string;
-  xrayState?: string;
-  xrayError?: string;
-  singboxState?: string;
-  singboxError?: string;
-  coreType?: string;
-  runningCore?: string;
-}
-
 const CORE_ERROR_COLOR = '#722ED1';
-
-function normalizeCoreName(value?: string): string {
-  const core = (value || '').toLowerCase().trim().replaceAll('-', '');
-  return core === 'xray' || core === 'singbox' ? core : '';
-}
-
-function coreHealth(record: HealthProps) {
-  const running = normalizeCoreName(record.runningCore);
-  // Old node builds may know only the running core. Prefer an explicit
-  // configured core when present, then fall back to the observed runtime.
-  const configured = normalizeCoreName(record.coreType) || running || 'xray';
-  const state = configured === 'singbox' ? record.singboxState : record.xrayState;
-  const error = configured === 'singbox' ? record.singboxError : record.xrayError;
-  return {
-    configured,
-    running,
-    state: (state || '').toLowerCase().trim(),
-    error: error || '',
-  };
-}
-
-function hasCoreProblem(record: HealthProps): boolean {
-  if (record.status !== 'online') return false;
-  const { configured, running, state } = coreHealth(record);
-  if (running) return running !== configured;
-  return state === 'error' || state === 'stop';
-}
 
 function statusIssue(
   record: Pick<
@@ -116,6 +80,8 @@ function statusIssue(
     | 'singboxError'
     | 'coreType'
     | 'runningCore'
+    | 'coreState'
+    | 'coreError'
     | 'lastError'
   >,
 ) {
@@ -499,6 +465,12 @@ function NodeList({
         dataIndex: 'xrayVersion',
         align: 'center',
         render: (_value, record) => record.xrayVersion || '-',
+      },
+      {
+        title: 'Core version',
+        dataIndex: 'coreVersion',
+        width: 160,
+        render: (version: string | undefined) => version || '—',
       },
       {
         title: 'sing-box',

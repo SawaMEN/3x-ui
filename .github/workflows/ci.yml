@@ -124,7 +124,7 @@ jobs:
         run: npm run gen
         working-directory: frontend
       - name: Fail if generated files are stale
-        run: git diff --exit-code -- frontend/src/generated frontend/public/openapi.json
+        run: git diff --exit-code -- frontend/src/generated frontend/public/openapi.json docs/public/openapi.json
 
   govulncheck:
     if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')

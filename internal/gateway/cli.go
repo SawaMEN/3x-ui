@@ -128,7 +128,7 @@ func CLI(args []string) error {
 		return err
 	}
 	other := service.CoreTypeSingBox
-	if core == other {
+	if service.IsNativeCore(core) {
 		other = service.CoreTypeXray
 	}
 	if states[other].Enabled {

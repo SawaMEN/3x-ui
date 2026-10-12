@@ -6,7 +6,7 @@
 // fixture without the caller projecting a whole object.
 
 const TLS_ELIGIBLE_PROTOCOLS = ['vmess', 'vless', 'trojan', 'shadowsocks'];
-const TLS_NETWORKS = ['tcp', 'ws', 'http', 'grpc', 'httpupgrade', 'xhttp'];
+const TLS_NETWORKS = ['tcp', 'kcp', 'ws', 'http', 'grpc', 'httpupgrade', 'xhttp'];
 const REALITY_ELIGIBLE_PROTOCOLS = ['vless', 'trojan'];
 const REALITY_NETWORKS = ['tcp', 'http', 'grpc', 'xhttp'];
 const STREAM_PROTOCOLS = [
@@ -38,6 +38,11 @@ export interface CapabilityShadowsocksSlice extends CapabilityProtocolSlice {
 
 export function canEnableTls(values: CapabilityProtocolSlice): boolean {
   if (values.protocol === 'hysteria') return true;
+  if (
+    values.streamSettings?.network === 'kcp' &&
+    !['vmess', 'vless', 'trojan'].includes(values.protocol)
+  )
+    return false;
   if (!TLS_ELIGIBLE_PROTOCOLS.includes(values.protocol)) return false;
   return TLS_NETWORKS.includes(values.streamSettings?.network ?? '');
 }

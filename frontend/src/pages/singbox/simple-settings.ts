@@ -153,7 +153,9 @@ export function outboundDefaults(type: string, tag: string, group: string[] = []
   if (['direct', 'block', 'dns'].includes(type)) return base;
   return {
     ...base,
-    server_port: type === 'ssh' ? 22 : type === 'socks' ? 1080 : 443,
+    ...(type === 'mieru'
+      ? { portBindings: [{ protocol: 'TCP', port: 443 }] }
+      : { server_port: type === 'ssh' ? 22 : type === 'socks' ? 1080 : 443 }),
     ...(type === 'vmess' ? { security: 'auto' } : {}),
     ...(type === 'shadowsocks' ? { method: 'aes-128-gcm' } : {}),
     ...(['trojan', 'hysteria2', 'tuic'].includes(type) ? { tls: { enabled: true } } : {}),
@@ -186,9 +188,22 @@ export function outboundErrors(value: ConfigObject, otherTags: string[]): string
   ) {
     if (typeof value.server !== 'string' || !value.server.trim()) errors.push('Укажите сервер.');
     if (
-      !Number.isInteger(value.server_port) ||
-      Number(value.server_port) < 1 ||
-      Number(value.server_port) > 65535
+      !(
+        type === 'hysteria2' &&
+        Array.isArray(value.server_ports) &&
+        value.server_ports.length > 0 &&
+        value.server_ports.every(
+          (port) =>
+            /^\d+(?::\d+)?$/.test(String(port)) &&
+            String(port)
+              .split(':')
+              .every((n) => Number(n) >= 1 && Number(n) <= 65535) &&
+            Number(String(port).split(':')[0]) <= Number(String(port).split(':').at(-1)),
+        )
+      ) &&
+      (!Number.isInteger(value.server_port) ||
+        Number(value.server_port) < 1 ||
+        Number(value.server_port) > 65535)
     )
       errors.push('Порт должен быть целым числом от 1 до 65535.');
   }
@@ -198,6 +213,63 @@ export function outboundErrors(value: ConfigObject, otherTags: string[]): string
       !/^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i.test(value.uuid))
   )
     errors.push('Укажите корректный UUID.');
+  if (type === 'mieru') {
+    if (typeof value.server !== 'string' || !value.server.trim()) errors.push('Укажите сервер.');
+    if (
+      typeof value.username !== 'string' ||
+      typeof value.password !== 'string' ||
+      !value.username ||
+      !value.password ||
+      new TextEncoder().encode(value.username).length > 64 ||
+      new TextEncoder().encode(value.password).length > 64
+    )
+      errors.push('Mieru требует логин и пароль длиной 1–64 байта.');
+    if (
+      value.mtu &&
+      (!Number.isInteger(value.mtu) || Number(value.mtu) < 1280 || Number(value.mtu) > 1500)
+    )
+      errors.push('MTU Mieru должен быть от 1280 до 1500.');
+    if (
+      value.multiplexing &&
+      !['DEFAULT', 'LOW', 'MIDDLE', 'HIGH'].includes(String(value.multiplexing))
+    )
+      errors.push('Неподдерживаемый режим multiplexing Mieru.');
+    if (
+      value.handshake_mode &&
+      !['DEFAULT', 'STANDARD', 'NO_WAIT'].includes(String(value.handshake_mode))
+    )
+      errors.push('Неподдерживаемый handshake Mieru.');
+    const bindings = Array.isArray(value.portBindings) ? value.portBindings : [];
+    if (
+      !bindings.length ||
+      bindings.some((item) => {
+        const binding = object(item);
+        if (!['TCP', 'UDP'].includes(String(binding.protocol).toUpperCase())) return true;
+        if (binding.portRange) {
+          const range = String(binding.portRange);
+          const [first, last] = range.split('-').map(Number);
+          return (
+            Boolean(binding.port) ||
+            !/^\d+-\d+$/.test(range) ||
+            first < 1 ||
+            last > 65535 ||
+            first > last
+          );
+        }
+        return (
+          !Number.isInteger(binding.port) ||
+          Number(binding.port) < 1 ||
+          Number(binding.port) > 65535
+        );
+      })
+    )
+      errors.push('Укажите корректные TCP/UDP порты Mieru.');
+    if (
+      value.server_port &&
+      (bindings.length !== 1 || object(bindings[0]).port !== value.server_port)
+    )
+      errors.push('server_port не соответствует portBindings Mieru.');
+  }
   if (['trojan', 'shadowsocks', 'hysteria2'].includes(type) && !value.password)
     errors.push('Укажите пароль.');
   if (type === 'shadowsocks' && !value.method) errors.push('Выберите метод шифрования.');

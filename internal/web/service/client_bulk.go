@@ -9,11 +9,11 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 
 	"gorm.io/gorm"
 )
@@ -30,6 +30,7 @@ type BulkAttachResult struct {
 // all clients to a target in a single AddInboundClient call, and reports clients already
 // present on a target as skipped.
 func (s *ClientService) BulkAttach(inboundSvc *InboundService, emails []string, inboundIds []int) (*BulkAttachResult, bool, error) {
+	defer beginLocalConfigBatch()()
 	result := &BulkAttachResult{}
 	if len(emails) == 0 || len(inboundIds) == 0 {
 		return result, false, nil
@@ -176,6 +177,7 @@ type BulkDetachResult struct {
 // are reported under skipped. ClientRecord rows are kept even when they become orphaned
 // (matches single-client detach semantics); callers should use bulkDelete for full removal.
 func (s *ClientService) BulkDetach(inboundSvc *InboundService, emails []string, inboundIds []int) (*BulkDetachResult, bool, error) {
+	defer beginLocalConfigBatch()()
 	result := &BulkDetachResult{}
 	if len(emails) == 0 || len(inboundIds) == 0 {
 		return result, false, nil
@@ -333,6 +335,7 @@ var bulkFlowAllowed = map[string]struct{}{
 // settings JSON is parsed and written exactly once regardless of how
 // many target emails it contains.
 func (s *ClientService) BulkAdjust(inboundSvc *InboundService, emails []string, addDays int, addBytes int64, flow string, limitHwid *int, adTag string) (BulkAdjustResult, bool, error) {
+	defer beginLocalConfigBatch()()
 	result := BulkAdjustResult{}
 	if len(emails) == 0 {
 		return result, false, nil
@@ -517,7 +520,7 @@ func (s *ClientService) BulkAdjust(inboundSvc *InboundService, emails []string, 
 	wasDisabledDepleted := map[string]struct{}{}
 	for _, batch := range chunkStrings(candidateEmails, sqlInChunk) {
 		var rows []string
-		if err := db.Model(xray.ClientTraffic{}).
+		if err := db.Model(coremodel.ClientTraffic{}).
 			Where(cond+" AND enable = ? AND email IN ?", append(append([]any{}, condArgs...), false, batch)...).
 			Pluck("email", &rows).Error; err != nil {
 			return result, needRestart, err
@@ -545,7 +548,7 @@ func (s *ClientService) BulkAdjust(inboundSvc *InboundService, emails []string, 
 			updates["total"] = entry.newTotal
 		}
 		if len(updates) > 0 {
-			if err := db.Model(xray.ClientTraffic{}).Where("email = ?", email).Updates(updates).Error; err != nil {
+			if err := db.Model(coremodel.ClientTraffic{}).Where("email = ?", email).Updates(updates).Error; err != nil {
 				if _, already := skippedReasons[email]; !already {
 					skippedReasons[email] = err.Error()
 				}
@@ -608,7 +611,7 @@ func (s *ClientService) BulkAdjust(inboundSvc *InboundService, emails []string, 
 		}
 		for _, batch := range chunkStrings(wasList, sqlInChunk) {
 			var rows []string
-			if err := db.Model(xray.ClientTraffic{}).
+			if err := db.Model(coremodel.ClientTraffic{}).
 				Where(cond+" AND email IN ?", append(append([]any{}, condArgs...), batch)...).
 				Pluck("email", &rows).Error; err != nil {
 				return result, needRestart, err
@@ -886,6 +889,7 @@ type BulkDeleteReport struct {
 // IN-clause queries at the end. Errors on a particular email are recorded
 // in the Skipped list and processing continues for the rest.
 func (s *ClientService) BulkDelete(inboundSvc *InboundService, emails []string, keepTraffic bool) (BulkDeleteResult, bool, error) {
+	defer beginLocalConfigBatch()()
 	result := BulkDeleteResult{}
 
 	cleanEmails := trimmedUniqueEmails(emails)
@@ -1000,7 +1004,7 @@ func (s *ClientService) BulkDelete(inboundSvc *InboundService, emails []string, 
 			}
 			if !keepTraffic && len(successEmails) > 0 {
 				for _, batch := range chunkStrings(successEmails, sqlInChunk) {
-					if e := tx.Where("email IN ?", batch).Delete(&xray.ClientTraffic{}).Error; e != nil {
+					if e := tx.Where("email IN ?", batch).Delete(&coremodel.ClientTraffic{}).Error; e != nil {
 						return e
 					}
 					if e := tx.Where("client_email IN ?", batch).Delete(&model.InboundClientIps{}).Error; e != nil {
@@ -1127,7 +1131,7 @@ func (s *ClientService) bulkDelInboundClients(
 		}
 		for _, batch := range chunkStrings(foundList, sqlInChunk) {
 			var rows []trafficRow
-			if err := db.Model(xray.ClientTraffic{}).
+			if err := db.Model(coremodel.ClientTraffic{}).
 				Where("email IN ?", batch).
 				Select("email, enable").
 				Scan(&rows).Error; err == nil {
@@ -1265,6 +1269,7 @@ type BulkCreateReport struct {
 }
 
 func (s *ClientService) BulkCreate(inboundSvc *InboundService, payloads []ClientCreatePayload) (BulkCreateResult, bool, error) {
+	defer beginLocalConfigBatch()()
 	result := BulkCreateResult{}
 	if len(payloads) == 0 {
 		return result, false, nil
@@ -1511,7 +1516,7 @@ func (s *ClientService) DelDepleted(inboundSvc *InboundService) (int, bool, erro
 	now := time.Now().UnixMilli()
 	depletedClause := depletedClientsClause
 
-	var rows []xray.ClientTraffic
+	var rows []coremodel.ClientTraffic
 	if err := db.Where(depletedClause, now).Find(&rows).Error; err != nil {
 		return 0, false, err
 	}
@@ -1553,6 +1558,7 @@ type BulkSetEnableReport struct {
 }
 
 func (s *ClientService) BulkSetEnable(inboundSvc *InboundService, emails []string, enable bool) (BulkSetEnableResult, bool, error) {
+	defer beginLocalConfigBatch()()
 	result := BulkSetEnableResult{}
 
 	cleanEmails := trimmedUniqueEmails(emails)
@@ -1637,7 +1643,7 @@ func (s *ClientService) BulkSetEnable(inboundSvc *InboundService, emails []strin
 		now := time.Now().UnixMilli()
 		if err := runSerializedTx(func(tx *gorm.DB) error {
 			for _, batch := range chunkStrings(successEmails, sqlInChunk) {
-				if e := tx.Model(xray.ClientTraffic{}).Where("email IN ?", batch).Update("enable", enable).Error; e != nil {
+				if e := tx.Model(coremodel.ClientTraffic{}).Where("email IN ?", batch).Update("enable", enable).Error; e != nil {
 					return e
 				}
 				if e := tx.Model(&model.ClientRecord{}).Where("email IN ?", batch).

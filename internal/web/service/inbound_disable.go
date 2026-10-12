@@ -5,8 +5,8 @@ import (
 	"slices"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 
 	"gorm.io/gorm"
 )
@@ -81,8 +81,8 @@ func (s *InboundService) disableInvalidClients(tx *gorm.DB, mutationBatch *traff
 	now := time.Now().UnixMilli()
 	cond, condArgs := depletedCond(tx)
 
-	var depletedRows []xray.ClientTraffic
-	err := tx.Model(xray.ClientTraffic{}).
+	var depletedRows []coremodel.ClientTraffic
+	err := tx.Model(coremodel.ClientTraffic{}).
 		Where(cond+" AND enable = ?", append(condArgs, true)...).
 		Find(&depletedRows).Error
 	if err != nil {
@@ -160,7 +160,7 @@ func (s *InboundService) disableInvalidClients(tx *gorm.DB, mutationBatch *traff
 	slices.Sort(ids)
 	var count int64
 	for _, batch := range chunkInts(ids, sqlInChunk) {
-		result := tx.Model(xray.ClientTraffic{}).
+		result := tx.Model(coremodel.ClientTraffic{}).
 			Where("id IN ? AND enable = ?", batch, true).
 			Update("enable", false)
 		if result.Error != nil {

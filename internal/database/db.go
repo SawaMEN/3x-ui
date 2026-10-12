@@ -21,11 +21,11 @@ import (
 	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/crypto"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/random"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/sys"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 
 	"github.com/mattn/go-sqlite3"
 	"gorm.io/driver/postgres"
@@ -70,7 +70,7 @@ func allModels() []any {
 		&model.OutboundTraffics{},
 		&model.Setting{},
 		&model.InboundClientIps{},
-		&xray.ClientTraffic{},
+		&coremodel.ClientTraffic{},
 		&model.HistoryOfSeeders{},
 		&model.Node{},
 		&model.ApiToken{},
@@ -92,15 +92,16 @@ func allModels() []any {
 		&model.OutboundSubscription{},
 		&model.SubBalancer{},
 		&model.TuicTrafficReceipt{},
+		&model.CoreTrafficCheckpoint{},
 	}
 }
 
 func migrateClientTrafficLastSubFetchColumn() error {
 	migrator := db.Migrator()
-	if !migrator.HasTable(&xray.ClientTraffic{}) || migrator.HasColumn(&xray.ClientTraffic{}, "last_sub_fetch") {
+	if !migrator.HasTable(&coremodel.ClientTraffic{}) || migrator.HasColumn(&coremodel.ClientTraffic{}, "last_sub_fetch") {
 		return nil
 	}
-	return migrator.AddColumn(&xray.ClientTraffic{}, "LastSubFetch")
+	return migrator.AddColumn(&coremodel.ClientTraffic{}, "LastSubFetch")
 }
 
 func migrateOutboundSubscriptionUserAgentColumn() error {

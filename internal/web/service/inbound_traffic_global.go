@@ -4,10 +4,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -21,13 +21,13 @@ import (
 //
 // Rows are overwritten, not max-merged: a reset on the master propagates here
 // on its next push. Emails this panel doesn't host are dropped.
-func (s *InboundService) AcceptGlobalTraffic(masterGuid string, traffics []*xray.ClientTraffic) error {
+func (s *InboundService) AcceptGlobalTraffic(masterGuid string, traffics []*coremodel.ClientTraffic) error {
 	masterGuid = strings.TrimSpace(masterGuid)
 	if masterGuid == "" {
 		return nil
 	}
 	emails := make([]string, 0, len(traffics))
-	byEmail := make(map[string]*xray.ClientTraffic, len(traffics))
+	byEmail := make(map[string]*coremodel.ClientTraffic, len(traffics))
 	for _, t := range traffics {
 		if t == nil || t.Email == "" {
 			continue
@@ -46,7 +46,7 @@ func (s *InboundService) AcceptGlobalTraffic(masterGuid string, traffics []*xray
 		known := make([]string, 0, len(emails))
 		for _, batch := range chunkStrings(emails, sqlInChunk) {
 			var page []string
-			if err := db.Model(xray.ClientTraffic{}).
+			if err := db.Model(coremodel.ClientTraffic{}).
 				Where("email IN ?", batch).
 				Pluck("email", &page).Error; err != nil {
 				return err
@@ -105,7 +105,7 @@ func chunkGlobalRows(rows []model.ClientGlobalTraffic, size int) [][]model.Clien
 // are untouched. Rows older than globalTrafficFreshWindow are ignored: they
 // come from a master that stopped pushing, and folding their frozen counters
 // in would keep showing usage the client no longer has (#6113).
-func overlayGlobalTraffic(db *gorm.DB, rows []*xray.ClientTraffic) {
+func overlayGlobalTraffic(db *gorm.DB, rows []*coremodel.ClientTraffic) {
 	if len(rows) == 0 {
 		return
 	}
@@ -119,7 +119,7 @@ func overlayGlobalTraffic(db *gorm.DB, rows []*xray.ClientTraffic) {
 	}
 
 	emails := make([]string, 0, len(rows))
-	byEmail := make(map[string][]*xray.ClientTraffic, len(rows))
+	byEmail := make(map[string][]*coremodel.ClientTraffic, len(rows))
 	for _, r := range rows {
 		if r == nil || r.Email == "" {
 			continue
@@ -150,11 +150,11 @@ func overlayGlobalTraffic(db *gorm.DB, rows []*xray.ClientTraffic) {
 }
 
 // overlayGlobalTrafficValues is overlayGlobalTraffic for value slices.
-func overlayGlobalTrafficValues(db *gorm.DB, rows []xray.ClientTraffic) {
+func overlayGlobalTrafficValues(db *gorm.DB, rows []coremodel.ClientTraffic) {
 	if len(rows) == 0 {
 		return
 	}
-	ptrs := make([]*xray.ClientTraffic, 0, len(rows))
+	ptrs := make([]*coremodel.ClientTraffic, 0, len(rows))
 	for i := range rows {
 		ptrs = append(ptrs, &rows[i])
 	}
@@ -166,7 +166,7 @@ func overlayGlobalTrafficValues(db *gorm.DB, rows []xray.ClientTraffic) {
 // the payload for Remote.PushGlobalClientTraffics. The rows carry the global
 // overlay so a mid-chain panel forwards the widest view it has seen, not just
 // its own aggregate.
-func (s *InboundService) GetNodeClientTraffics(nodeID int) ([]*xray.ClientTraffic, error) {
+func (s *InboundService) GetNodeClientTraffics(nodeID int) ([]*coremodel.ClientTraffic, error) {
 	db := database.GetDB()
 	emails, err := nodeHostedEmails(db, nodeID)
 	if err != nil {
@@ -175,10 +175,10 @@ func (s *InboundService) GetNodeClientTraffics(nodeID int) ([]*xray.ClientTraffi
 	if len(emails) == 0 {
 		return nil, nil
 	}
-	out := make([]*xray.ClientTraffic, 0, len(emails))
+	out := make([]*coremodel.ClientTraffic, 0, len(emails))
 	for _, batch := range chunkStrings(emails, sqlInChunk) {
-		var page []*xray.ClientTraffic
-		if err := db.Model(xray.ClientTraffic{}).Where("email IN ?", batch).Find(&page).Error; err != nil {
+		var page []*coremodel.ClientTraffic
+		if err := db.Model(coremodel.ClientTraffic{}).Where("email IN ?", batch).Find(&page).Error; err != nil {
 			return nil, err
 		}
 		out = append(out, page...)
@@ -193,7 +193,7 @@ func (s *InboundService) GetNodeClientTraffics(nodeID int) ([]*xray.ClientTraffi
 // snapshot masters poll: overlaying that would leak pushed globals back into
 // the masters' delta accounting.
 func (s *InboundService) overlayInboundsClientStats(db *gorm.DB, inbounds []*model.Inbound) {
-	rows := make([]*xray.ClientTraffic, 0)
+	rows := make([]*coremodel.ClientTraffic, 0)
 	for _, ib := range inbounds {
 		for j := range ib.ClientStats {
 			rows = append(rows, &ib.ClientStats[j])

@@ -11,16 +11,16 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
-func useOnlineTestProcess(t *testing.T) *xray.Process {
+func useOnlineTestProcess(t *testing.T) *xray.Presence {
 	t.Helper()
-	previousProcess, previousResult := xrayState.snapshot()
-	process := xray.NewTestProcess(nil, "")
-	xrayState.replace(process)
+	previousProcess, previousResult := presenceRegistry.snapshot()
+	process := xray.NewPresence()
+	presenceRegistry.replace(process)
 	t.Cleanup(func() {
-		xrayState.mu.Lock()
-		xrayState.process = previousProcess
-		xrayState.result = previousResult
-		xrayState.mu.Unlock()
+		presenceRegistry.mu.Lock()
+		presenceRegistry.process = previousProcess
+		presenceRegistry.result = previousResult
+		presenceRegistry.mu.Unlock()
 	})
 	return process
 }

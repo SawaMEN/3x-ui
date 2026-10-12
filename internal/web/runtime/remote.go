@@ -17,13 +17,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/crypto/nodetoken"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/wirecodec"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/entity"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 const remoteHTTPTimeout = 10 * time.Second
@@ -832,7 +832,7 @@ func (r *Remote) FetchTrafficSnapshot(ctx context.Context) (*TrafficSnapshot, er
 // pushing master. Display/enforcement input on the node only — the node never
 // folds these into the counters it reports back, so this panel's (and any
 // other master's) delta accounting over the node snapshot stays intact.
-func (r *Remote) PushGlobalClientTraffics(ctx context.Context, masterGuid string, traffics []*xray.ClientTraffic) error {
+func (r *Remote) PushGlobalClientTraffics(ctx context.Context, masterGuid string, traffics []*coremodel.ClientTraffic) error {
 	payload := map[string]any{
 		"masterGuid": masterGuid,
 		"traffics":   traffics,

@@ -17,7 +17,7 @@ import (
 // inbound, while the gateway package owns the core-specific config mutation.
 type GatewayController struct {
 	settingService service.SettingService
-	xrayService    service.XrayService
+	xrayService    service.CoreService
 	singBoxService service.SingBoxService
 	networkService service.GatewayNetworkService
 }
@@ -69,7 +69,7 @@ func disableGatewayForCore(coreType string) error {
 }
 
 func otherGatewayCore(coreType string) string {
-	if coreType == service.CoreTypeSingBox {
+	if service.IsNativeCore(coreType) {
 		return service.CoreTypeXray
 	}
 	return service.CoreTypeSingBox
@@ -170,7 +170,7 @@ func (a *GatewayController) statusPayload() (gin.H, error) {
 		"gatewayCoreType": "",
 		"coreMismatch":    false,
 		"conflict":        false,
-		"xrayRunning":     a.xrayService.IsXrayRunning(),
+		"xrayRunning":     false,
 		"coreRunning":     a.gatewayCoreRunning(coreType),
 		"port":            gateway.InboundPort(),
 		"network":         a.networkService.Status(context.Background()),
@@ -423,16 +423,16 @@ func (a *GatewayController) disable(c *gin.Context) {
 }
 
 func (a *GatewayController) gatewayCoreRunning(coreType string) bool {
-	if coreType == service.CoreTypeSingBox {
-		return a.singBoxService.IsRunning()
+	if service.IsNativeCore(coreType) {
+		return service.NativeCore(coreType).IsRunning()
 	}
-	return a.xrayService.IsXrayRunning()
+	return a.xrayService.IsCoreRunning()
 }
 func (a *GatewayController) restartGatewayCore(ctx context.Context, coreType string) error {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	if coreType == service.CoreTypeSingBox {
-		return a.singBoxService.Restart(ctx)
+	if service.IsNativeCore(coreType) {
+		return service.NativeCore(coreType).Restart(ctx)
 	}
 	return a.xrayService.RestartXray(false)
 }

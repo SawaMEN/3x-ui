@@ -8,6 +8,7 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/core"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -53,8 +54,8 @@ func (a *ServerController) checkSingBoxOutbound(c *gin.Context) {
 		jsonObj(c, nil, fmt.Errorf("selected core %q does not support outbound delay probes", coreType))
 		return
 	}
-	if !a.singBoxService.IsRunning() {
-		jsonObj(c, nil, fmt.Errorf("sing-box is not running"))
+	if !service.NativeCore(string(coreType)).IsRunning() {
+		jsonObj(c, nil, fmt.Errorf("%s is not running", coreType))
 		return
 	}
 

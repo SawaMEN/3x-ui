@@ -2,7 +2,6 @@ package controller
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -11,40 +10,21 @@ import (
 	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
-	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
+	"github.com/SawaMEN/3x-ui/v3/internal/hiddify"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 func (a *AdBlockController) validateServerCore(ctx context.Context) error {
-	core, err := a.settingService.GetCoreType()
+	cfg, err := service.SelectedNativeCore().GetConfig()
 	if err != nil {
 		return err
 	}
-	var raw []byte
-	binary := xray.GetBinaryPath()
-	args := []string{"run", "-test", "-config"}
-	if core == service.CoreTypeSingBox {
-		cfg, err := a.singBoxService.GetConfig()
-		if err != nil {
-			return err
-		}
-		raw, err = cfg.Marshal()
-		if err != nil {
-			return err
-		}
-		binary = singbox.GetBinaryPath()
-		args = []string{"check", "-c"}
-	} else {
-		cfg, err := a.xrayService.GetXrayConfig()
-		if err != nil {
-			return err
-		}
-		raw, err = json.Marshal(cfg)
-		if err != nil {
-			return err
-		}
+	raw, err := cfg.Marshal()
+	if err != nil {
+		return err
 	}
+	binary := hiddify.GetBinaryPath()
+	args := []string{"check", "-c"}
 	file, err := os.CreateTemp("", "x-ui-adblock-check-*.json")
 	if err != nil {
 		return err

@@ -19,7 +19,7 @@ const maxAdBlockSettingsBody = 4 << 20
 
 type AdBlockController struct {
 	settingService service.SettingService
-	xrayService    service.XrayService
+	xrayService    service.CoreService
 	singBoxService service.SingBoxService
 	operationMu    sync.Mutex
 }
@@ -77,7 +77,6 @@ func NewAdBlockController(g *gin.RouterGroup) *AdBlockController {
 	group.GET("/youtube-extension", a.youtubeExtension)
 	group.GET("/youtube-server-certificate", a.youtubeServerCertificate)
 	group.GET("/youtube-server-routing/:core", a.youtubeServerRouting)
-	startAdBlockScheduler(a)
 	return a
 }
 

@@ -11,9 +11,9 @@ import (
 	"testing"
 	"unicode/utf16"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // Discord's published caps, pinned here and not read from the package so the
@@ -41,7 +41,7 @@ func inboundFixtures(count int) []*model.Inbound {
 			Port:     10000 + i,
 			Protocol: "vless",
 			Enable:   i%2 == 0,
-			ClientStats: []xray.ClientTraffic{
+			ClientStats: []coremodel.ClientTraffic{
 				{Email: fmt.Sprintf("client-%d@test", i), Enable: true},
 			},
 		})

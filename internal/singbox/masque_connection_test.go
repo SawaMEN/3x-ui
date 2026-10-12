@@ -145,7 +145,7 @@ func startMASQUETestProcess(t *testing.T, binary, name string, cfg map[string]an
 	if err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command(binary, "run", "-c", path)
+	cmd := exec.Command(binary, "srun", "-c", path)
 	cmd.Dir = filepath.Dir(binary)
 	cmd.Stdout, cmd.Stderr = logFile, logFile
 	if err := cmd.Start(); err != nil {

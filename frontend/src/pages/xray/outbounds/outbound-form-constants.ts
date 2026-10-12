@@ -10,7 +10,7 @@ import {
 import { OutboundDomainStrategySchema } from '@/schemas/protocols/outbound';
 import { SSMethodSchema } from '@/schemas/protocols/shared/shadowsocks';
 
-// Native sing-box protocols supported by the stable 1.14.x line that don't
+// Native protocols supported by the pinned modified Sing-box that don't
 // have a typed Xray-compatible form. The singbox: prefix is a panel-only
 // escape hatch for names that also have a legacy compatibility translator;
 // it is stripped before the final sing-box config is emitted.
@@ -37,6 +37,7 @@ export const SINGBOX_NATIVE_OUTBOUND_PROTOCOLS = [
   'selector',
   'urltest',
   'naive',
+  'mieru',
 ] as const;
 
 export const SINGBOX_NATIVE_OUTBOUND_PROTOCOL_SET = new Set<string>(
@@ -44,7 +45,9 @@ export const SINGBOX_NATIVE_OUTBOUND_PROTOCOL_SET = new Set<string>(
 );
 
 export const PROTOCOL_OPTIONS = [
-  ...Object.values(Protocols).map((p) => ({ value: p, label: p })),
+  ...Object.values(Protocols)
+    .filter((p) => p !== 'loopback')
+    .map((p) => ({ value: p, label: p })),
   ...SINGBOX_NATIVE_OUTBOUND_PROTOCOLS.map((p) => ({
     value: p,
     label: ['fptn', 'openflux'].includes(p)
@@ -69,14 +72,7 @@ export const TARGET_STRATEGY_OPTIONS = OutboundDomainStrategySchema.options.map(
 
 // canEnableMux mirrors the adapter's helper but lives here so the modal
 // can show/hide the Mux section without going through the adapter.
-export const MUX_PROTOCOLS = new Set<string>([
-  'vmess',
-  'vless',
-  'trojan',
-  'shadowsocks',
-  'http',
-  'socks',
-]);
+export const MUX_PROTOCOLS = new Set<string>(['vmess', 'vless', 'trojan', 'shadowsocks']);
 
 export const NETWORK_OPTIONS: { value: string; label: string }[] = [
   { value: 'tcp', label: 'RAW' },

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Alert, Button, Collapse, Modal, Radio, Spin, Switch, Tag, Tooltip } from 'antd';
+import { Alert, Button, Collapse, Modal, Spin, Tag, Tooltip } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 
 import { HttpUtil } from '@/utils';
@@ -30,65 +30,17 @@ const GEOFILES = [
   'geoip_RU.dat',
 ];
 
-type ReleaseVersion = {
-  version: string;
-  prerelease: boolean;
-};
-
-function isDevVersion(version: string): boolean {
-  return /^v?\d+\.\d+\.\d+-/.test(version);
-}
-
-export default function VersionModal({ open, status, onClose, onBusy }: VersionModalProps) {
+export default function VersionModal({ open, onClose, onBusy }: VersionModalProps) {
   const { t } = useTranslation();
   const [modal, modalContextHolder] = Modal.useModal();
   const [activeKey, setActiveKey] = useState<string | string[]>('1');
-  const [versions, setVersions] = useState<ReleaseVersion[]>([]);
-  const [coreType, setCoreType] = useState<'xray' | 'sing-box'>('xray');
-  const [showDevVersions, setShowDevVersions] = useState(false);
   const [singBoxVersion, setSingBoxVersion] = useState('');
   const [loading, setLoading] = useState(false);
 
   const fetchVersions = useCallback(async () => {
     try {
-      const settingsMsg = await HttpUtil.post<{ coreType?: 'xray' | 'sing-box' }>(
-        '/panel/api/setting/all',
-      );
-      const selectedCore =
-        settingsMsg?.success && settingsMsg.obj?.coreType === 'sing-box' ? 'sing-box' : 'xray';
-      setCoreType(selectedCore);
-
-      if (selectedCore === 'sing-box') {
-        const [versionMsg, statusMsg] = await Promise.all([
-          HttpUtil.get<Array<ReleaseVersion | string>>('/panel/api/setting/singbox/versions'),
-          HttpUtil.get<{ version?: string }>('/panel/api/setting/singbox/status'),
-        ]);
-        if (versionMsg?.success) {
-          setVersions(
-            (versionMsg.obj || [])
-              .map((item) =>
-                typeof item === 'string'
-                  ? { version: item, prerelease: isDevVersion(item) }
-                  : {
-                      version: item?.version || '',
-                      prerelease: !!item?.prerelease,
-                    },
-              )
-              .filter((item) => !!item.version),
-          );
-        }
-        if (statusMsg?.success) setSingBoxVersion(statusMsg.obj?.version || '');
-      } else {
-        const msg = await HttpUtil.get<string[]>('/panel/api/server/getXrayVersion');
-        if (msg?.success) {
-          setVersions(
-            (msg.obj || []).map((version) => ({
-              version,
-              prerelease: isDevVersion(version),
-            })),
-          );
-        }
-      }
+      const msg = await HttpUtil.get<{ version?: string }>('/panel/api/setting/singbox/status');
+      setSingBoxVersion(msg.obj?.version || '');
     } finally {
       setLoading(false);
     }
@@ -103,33 +55,6 @@ export default function VersionModal({ open, status, onClose, onBusy }: VersionM
   useEffect(() => {
     if (open) void fetchVersions();
   }, [open, fetchVersions]);
-
-  function switchCoreVersion(version: string) {
-    const isSingBox = coreType === 'sing-box';
-    modal.confirm({
-      title: isSingBox ? 'Переключить версию sing-box?' : t('pages.index.xraySwitchVersionDialog'),
-      content: isSingBox
-        ? `Установить sing-box ${version} и заменить текущую версию?`
-        : t('pages.index.xraySwitchVersionDialogDesc').replace('#version#', version),
-      okText: t('confirm'),
-      cancelText: t('cancel'),
-      onOk: async () => {
-        onClose();
-        onBusy({ busy: true, tip: t('pages.index.dontRefresh') });
-        try {
-          if (isSingBox) {
-            await HttpUtil.post(
-              `/panel/api/setting/singbox/install/${encodeURIComponent(version)}`,
-            );
-          } else {
-            await HttpUtil.post(`/panel/api/server/installXray/${encodeURIComponent(version)}`);
-          }
-        } finally {
-          onBusy({ busy: false });
-        }
-      },
-    });
-  }
 
   function updateGeofile(fileName: string) {
     const isSingle = !!fileName;
@@ -156,17 +81,10 @@ export default function VersionModal({ open, status, onClose, onBusy }: VersionM
   }
 
   const activeKeyStr = Array.isArray(activeKey) ? activeKey[0] : activeKey;
-  const currentVersion =
-    coreType === 'sing-box' ? singBoxVersion.replace(/^v/, '') : status?.xray?.version || '';
-  const visibleVersions = versions.filter(
-    (item) =>
-      showDevVersions || !item.prerelease || item.version.replace(/^v/, '') === currentVersion,
-  );
-
   return (
     <Modal
       open={open}
-      title={coreType === 'sing-box' ? 'Обновления sing-box' : t('pages.index.xrayUpdates')}
+      title="sing-box обновляется вместе с панелью"
       footer={null}
       onCancel={onClose}
     >
@@ -179,39 +97,14 @@ export default function VersionModal({ open, status, onClose, onBusy }: VersionM
           items={[
             {
               key: '1',
-              label: coreType === 'sing-box' ? 'sing-box' : 'Xray',
+              label: 'sing-box',
               children: (
-                <>
-                  <div className="version-filter">
-                    <span>Показывать dev версии</span>
-                    <Switch checked={showDevVersions} onChange={setShowDevVersions} size="small" />
-                  </div>
-                  <Alert
-                    type="warning"
-                    className="mb-12"
-                    title={
-                      coreType === 'sing-box'
-                        ? 'Выберите версию sing-box'
-                        : t('pages.index.xraySwitchClickDesk')
-                    }
-                    showIcon
-                  />
-                  <div className="version-list">
-                    {visibleVersions.map((item, index) => (
-                      <div key={item.version} className="version-list-item">
-                        <Tag color={index % 2 === 0 ? 'purple' : 'green'}>{item.version}</Tag>
-                        <Radio
-                          checked={
-                            coreType === 'sing-box'
-                              ? singBoxVersion.includes(item.version.replace(/^v/, ''))
-                              : item.version === `v${status?.xray?.version}`
-                          }
-                          onClick={() => switchCoreVersion(item.version)}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </>
+                <Alert
+                  type="info"
+                  showIcon
+                  title={singBoxVersion || 'sing-box'}
+                  description="Модифицированный Sing-box входит в выпуск панели. Для обновления используйте обновление панели."
+                />
               ),
             },
             {

@@ -10,9 +10,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // base64("aes-256-gcm:clientpw"), the SIP002 userinfo both spellings share. The
@@ -51,14 +51,14 @@ func seedClashQuotaSub(t *testing.T, subID string, expiry int64) {
 	t.Helper()
 	db := database.GetDB()
 	seedSubInbound(t, subID, "A", 10001, 1, wsTLSStream)
-	if err := db.Create(&xray.ClientTraffic{Email: "A@e", Up: 11, Down: 22, Total: 1024, ExpiryTime: expiry}).Error; err != nil {
+	if err := db.Create(&coremodel.ClientTraffic{Email: "A@e", Up: 11, Down: 22, Total: 1024, ExpiryTime: expiry}).Error; err != nil {
 		t.Fatalf("seed A traffic: %v", err)
 	}
 	rec := &model.ClientRecord{Email: "B@e", SubID: subID, UUID: "22222222-2222-4222-8222-222222222222", Enable: true, ExpiryTime: expiry}
 	if err := db.Create(rec).Error; err != nil {
 		t.Fatalf("seed B client: %v", err)
 	}
-	if err := db.Create(&xray.ClientTraffic{Email: "B@e", Up: 100, Down: 200, Total: 2048, ExpiryTime: expiry}).Error; err != nil {
+	if err := db.Create(&coremodel.ClientTraffic{Email: "B@e", Up: 100, Down: 200, Total: 2048, ExpiryTime: expiry}).Error; err != nil {
 		t.Fatalf("seed B traffic: %v", err)
 	}
 	if err := db.Create(&model.ClientExternalLink{ClientId: rec.Id, Kind: model.ExternalLinkKindLink, Value: clashDroppedExternalLink, SortIndex: 1}).Error; err != nil {

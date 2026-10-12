@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 )
 
-func (s *SubService) subscriptionUserinfo(traffic xray.ClientTraffic) string {
+func (s *SubService) subscriptionUserinfo(traffic coremodel.ClientTraffic) string {
 	expire := traffic.ExpiryTime / 1000
 	if s.subCalendarExpireInclusive && traffic.ResetDay == 1 && traffic.ExpiryTime > 0 && s.calendarExpireLocation != nil {
 		at := time.UnixMilli(traffic.ExpiryTime).In(s.calendarExpireLocation)

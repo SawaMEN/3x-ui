@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-func processMatchesConfig(pid int, binary, config string) bool {
+func processMatchesConfig(pid int, binary, config string, commands ...string) bool {
 	if !processMatchesBinary(pid, binary) {
 		return false
 	}
@@ -24,7 +24,10 @@ func processMatchesConfig(pid int, binary, config string) bool {
 	run := false
 	for i := 1; i < len(args); i++ {
 		switch {
-		case args[i] == "run":
+		case args[i] == "run" || args[i] == "srun":
+			if len(commands) > 0 && args[i] != commands[0] {
+				return false
+			}
 			if run {
 				return false
 			}

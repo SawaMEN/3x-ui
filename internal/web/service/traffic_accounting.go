@@ -1,92 +1,20 @@
 package service
 
 import (
-	"errors"
 	"fmt"
 	"maps"
 	"slices"
-	"sync"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/logger"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
-
 	"gorm.io/gorm"
 )
 
-// XrayTrafficRead keeps the Xray absolute-counter baseline locked until the
-// matching database transaction is either committed or rolled back.
-type XrayTrafficRead struct {
-	service    *XrayService
-	checkpoint map[string]int64
-	once       sync.Once
-}
-
-func cloneTrafficBaseline(src map[string]int64) map[string]int64 {
-	dst := make(map[string]int64, len(src))
-	for key, value := range src {
-		dst[key] = value
-	}
-	return dst
-}
-
-// BeginXrayTrafficRead fetches one traffic delta while retaining the traffic
-// mutex. The caller must Commit after the database write succeeds or Rollback
-// after it fails, preventing a failed write from consuming the Xray delta.
-func (s *XrayService) BeginXrayTrafficRead() ([]*xray.Traffic, []*xray.ClientTraffic, *XrayTrafficRead, error) {
-	process := currentXrayProcess()
-	if process == nil || !process.IsRunning() {
-		err := errors.New("xray is not running")
-		logger.Debug("Attempted to fetch Xray traffic, but Xray is not running:", err)
-		return nil, nil, nil, err
-	}
-
-	s.xrayTrafficMu.Lock()
-	apiPort := process.GetAPIPort()
-	if err := s.xrayAPI.Init(apiPort); err != nil {
-		s.xrayTrafficMu.Unlock()
-		logger.Debug("Failed to initialize Xray API:", err)
-		return nil, nil, nil, err
-	}
-
-	checkpoint := cloneTrafficBaseline(s.xrayAPI.StatsLastValues)
-	traffics, clientTraffics, err := s.xrayAPI.GetTraffic()
-	if err != nil {
-		s.xrayTrafficMu.Unlock()
-		logger.Debug("Failed to fetch Xray traffic:", err)
-		return nil, nil, nil, err
-	}
-
-	return traffics, clientTraffics, &XrayTrafficRead{
-		service:    s,
-		checkpoint: checkpoint,
-	}, nil
-}
-
-func (r *XrayTrafficRead) Commit() {
-	if r == nil || r.service == nil {
-		return
-	}
-	r.once.Do(func() {
-		r.service.xrayTrafficMu.Unlock()
-	})
-}
-
-func (r *XrayTrafficRead) Rollback() {
-	if r == nil || r.service == nil {
-		return
-	}
-	r.once.Do(func() {
-		r.service.xrayAPI.StatsLastValues = cloneTrafficBaseline(r.checkpoint)
-		r.service.xrayTrafficMu.Unlock()
-	})
-}
-
-// CommitXrayTraffic persists inbound, client and outbound traffic in one DB
-// transaction, giving one durable acknowledgement point for the Xray delta.
-func (s *InboundService) CommitXrayTraffic(inboundTraffics []*xray.Traffic, clientTraffics []*xray.ClientTraffic) error {
+// CommitCoreTraffic persists inbound, client and outbound traffic in one DB
+// transaction. Counter acquisition and acknowledgement belong to the adapter.
+func (s *InboundService) CommitCoreTraffic(inboundTraffics []*coremodel.Traffic, clientTraffics []*coremodel.ClientTraffic) error {
 	return submitTrafficWrite(func() error {
 		return database.GetDB().Transaction(func(tx *gorm.DB) error {
 			if err := s.addInboundTraffic(tx, inboundTraffics); err != nil {
@@ -103,10 +31,16 @@ func (s *InboundService) CommitXrayTraffic(inboundTraffics []*xray.Traffic, clie
 	})
 }
 
+// CommitXrayTraffic retains the legacy method name.
+// Deprecated: use CommitCoreTraffic for shared traffic persistence.
+func (s *InboundService) CommitXrayTraffic(inboundTraffics []*coremodel.Traffic, clientTraffics []*coremodel.ClientTraffic) error {
+	return s.CommitCoreTraffic(inboundTraffics, clientTraffics)
+}
+
 // addClientTrafficStrict mirrors the accounting path but never swallows an
 // UPDATE error. Otherwise a failed client update looks like a successful
 // transaction to the Xray delta reader and those bytes are lost.
-func (s *InboundService) addClientTrafficStrict(tx *gorm.DB, traffics []*xray.ClientTraffic) error {
+func (s *InboundService) addClientTrafficStrict(tx *gorm.DB, traffics []*coremodel.ClientTraffic) error {
 	if len(traffics) == 0 {
 		return nil
 	}
@@ -122,8 +56,8 @@ func (s *InboundService) addClientTrafficStrict(tx *gorm.DB, traffics []*xray.Cl
 		return nil
 	}
 
-	dbClientTraffics := make([]*xray.ClientTraffic, 0, len(emails))
-	if err := tx.Model(xray.ClientTraffic{}).
+	dbClientTraffics := make([]*coremodel.ClientTraffic, 0, len(emails))
+	if err := tx.Model(coremodel.ClientTraffic{}).
 		Where("email IN (?)", emails).
 		Find(&dbClientTraffics).Error; err != nil {
 		return err
@@ -139,7 +73,7 @@ func (s *InboundService) addClientTrafficStrict(tx *gorm.DB, traffics []*xray.Cl
 		return err
 	}
 
-	trafficByEmail := make(map[string]*xray.ClientTraffic, len(traffics))
+	trafficByEmail := make(map[string]*coremodel.ClientTraffic, len(traffics))
 	for _, traffic := range traffics {
 		if traffic == nil || traffic.Email == "" {
 			continue
@@ -225,7 +159,7 @@ func clampTrafficDeltaToStored(stored, delta int64) int64 {
 	return delta
 }
 
-func addOutboundTrafficStrict(tx *gorm.DB, traffics []*xray.Traffic) error {
+func addOutboundTrafficStrict(tx *gorm.DB, traffics []*coremodel.Traffic) error {
 	for _, traffic := range traffics {
 		if traffic == nil || !traffic.IsOutbound || traffic.Tag == "" {
 			continue

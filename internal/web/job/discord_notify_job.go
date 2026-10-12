@@ -11,7 +11,7 @@ import (
 
 // DiscordNotifyJob sends periodic status reports and database backups via Discord bot.
 type DiscordNotifyJob struct {
-	xrayService    service.XrayService
+	xrayService    service.CoreService
 	serverService  service.ServerService
 	inboundService service.InboundService
 	settingService service.SettingService
@@ -34,7 +34,7 @@ func (j *DiscordNotifyJob) Run() {
 	if err != nil || !enabled {
 		return
 	}
-	if !j.xrayService.IsXrayRunning() {
+	if !j.xrayService.IsCoreRunning() {
 		return
 	}
 

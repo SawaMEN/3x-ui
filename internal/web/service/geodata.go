@@ -104,6 +104,13 @@ func (s *GeodataService) Validate(isIP bool, tokens []string) []GeodataTokenIssu
 			issues = append(issues, GeodataTokenIssue{Token: token, Reason: reason})
 			continue
 		}
+		if reference.Reverse {
+			issues = append(issues, GeodataTokenIssue{Token: token, Reason: geodataReasonSyntax, File: reference.File, Code: reference.Code})
+			continue
+		}
+		if isIP && strings.EqualFold(token, "geoip:private") {
+			continue
+		}
 		if reference.File == "" {
 			continue
 		}
@@ -115,6 +122,11 @@ func (s *GeodataService) Validate(isIP bool, tokens []string) []GeodataTokenIssu
 				File:   reference.File,
 				Code:   reference.Code,
 			})
+			continue
+		}
+		actualKind, err := assetStore().Kind(reference.File)
+		if err != nil || actualKind != kind {
+			issues = append(issues, GeodataTokenIssue{Token: token, Reason: geodataReasonWrongKind, File: reference.File, Code: reference.Code})
 			continue
 		}
 		if missing := unknownAttributes(category, reference.Attributes); missing != "" {
@@ -132,8 +144,7 @@ func (s *GeodataService) Validate(isIP bool, tokens []string) []GeodataTokenIssu
 // unknownAttributes returns the first attribute the category does not carry.
 // The core accepts such a token, but no domain can satisfy the filter, so the
 // rule silently matches nothing — worth reporting even though Xray will start.
-// A leading "!" is accepted either way: some databases ship the negated key
-// verbatim, and the panel must not guess which convention a database follows.
+// Attribute names, including a literal leading "!", are matched exactly.
 func unknownAttributes(category geodata.GeoCategory, wanted []string) string {
 	if len(wanted) == 0 {
 		return ""
@@ -141,13 +152,9 @@ func unknownAttributes(category geodata.GeoCategory, wanted []string) string {
 	present := make(map[string]struct{}, len(category.Attributes))
 	for _, attribute := range category.Attributes {
 		present[attribute] = struct{}{}
-		present[strings.TrimPrefix(attribute, "!")] = struct{}{}
 	}
 	for _, attribute := range wanted {
 		if _, ok := present[attribute]; ok {
-			continue
-		}
-		if _, ok := present[strings.TrimPrefix(attribute, "!")]; ok {
 			continue
 		}
 		return attribute

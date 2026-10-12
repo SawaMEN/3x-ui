@@ -303,10 +303,10 @@ check_enabled() {
 
 check_xray_status() {
     if command -v pgrep >/dev/null 2>&1; then
-        pgrep -f "${xui_folder}/bin/xray-linux" >/dev/null 2>&1
+        pgrep -f "${xui_folder}/bin/hiddify-core-linux" >/dev/null 2>&1
         return $?
     fi
-    ps -ef 2>/dev/null | grep -F "${xui_folder}/bin/xray-linux" | grep -v grep >/dev/null 2>&1
+    ps -ef 2>/dev/null | grep -F "${xui_folder}/bin/hiddify-core-linux" | grep -v grep >/dev/null 2>&1
 }
 
 show_status() {

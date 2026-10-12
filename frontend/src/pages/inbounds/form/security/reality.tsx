@@ -61,7 +61,9 @@ export default function RealityForm({
   const { t } = useTranslation();
   const { getFieldState, trigger } = useFormContext();
   const [scannerOpen, setScannerOpen] = useState(false);
-  const mldsa65Seed = useWatch({ name: 'streamSettings.realitySettings.mldsa65Seed' });
+  const mldsa65Seed = useWatch({
+    name: 'streamSettings.realitySettings.mldsa65Seed',
+  });
   const mldsa65Verify = useWatch({
     name: 'streamSettings.realitySettings.settings.mldsa65Verify',
   });
@@ -110,7 +112,12 @@ export default function RealityForm({
         name={['streamSettings', 'realitySettings', 'settings', 'fingerprint']}
         label="uTLS"
       >
-        <Select options={Object.values(UTLS_FINGERPRINT).map((fp) => ({ value: fp, label: fp }))} />
+        <Select
+          options={Object.values(UTLS_FINGERPRINT).map((fp) => ({
+            value: fp,
+            label: fp,
+          }))}
+        />
       </FormField>
       <Form.Item
         label={t('pages.inbounds.form.target')}

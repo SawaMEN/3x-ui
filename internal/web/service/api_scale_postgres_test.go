@@ -5,17 +5,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 func seedClientTraffics(t *testing.T, inboundId int, clients []model.Client) {
 	t.Helper()
 	db := database.GetDB()
-	rows := make([]xray.ClientTraffic, len(clients))
+	rows := make([]coremodel.ClientTraffic, len(clients))
 	for i := range clients {
-		rows[i] = xray.ClientTraffic{
+		rows[i] = coremodel.ClientTraffic{
 			InboundId:  inboundId,
 			Email:      clients[i].Email,
 			Enable:     true,
@@ -121,7 +121,7 @@ func TestAllAPIsPostgresScale(t *testing.T) {
 
 			depEmails := emails[:1000]
 			for _, batch := range chunkStrings(depEmails, sqlInChunk) {
-				if err := db.Model(xray.ClientTraffic{}).Where("email IN ?", batch).Update("down", int64(200)<<30).Error; err != nil {
+				if err := db.Model(coremodel.ClientTraffic{}).Where("email IN ?", batch).Update("down", int64(200)<<30).Error; err != nil {
 					t.Fatalf("mark depleted: %v", err)
 				}
 			}

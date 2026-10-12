@@ -58,17 +58,6 @@ exports[`inbound transport forms > HttpUpgradeForm field structure is stable 1`]
 ]
 `;
 
-exports[`inbound transport forms > KcpForm field structure is stable 1`] = `
-[
-  "MTU",
-  "TTI (ms)",
-  "Uplink (MB/s)",
-  "Downlink (MB/s)",
-  "CWND Multiplier",
-  "Max Sending Window",
-]
-`;
-
 exports[`inbound transport forms > RawForm field structure is stable 1`] = `
 [
   "Proxy Protocol",

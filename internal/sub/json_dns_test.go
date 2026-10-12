@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 const dnsTestStream = `{"network":"tcp","security":"tls","tlsSettings":{"serverName":"base.sni"}}`
@@ -243,7 +243,7 @@ func TestSubJsonDns_AppliesToInfoNodeDocument(t *testing.T) {
 	if err := db.Create(&model.ClientInbound{InboundId: 1, ClientId: 1}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Create(&xray.ClientTraffic{InboundId: 1, Email: "user1@test.com", Up: 1073741824, Down: 1073741824, Total: 10737418240, Enable: true}).Error; err != nil {
+	if err := db.Create(&coremodel.ClientTraffic{InboundId: 1, Email: "user1@test.com", Up: 1073741824, Down: 1073741824, Total: 10737418240, Enable: true}).Error; err != nil {
 		t.Fatal(err)
 	}
 

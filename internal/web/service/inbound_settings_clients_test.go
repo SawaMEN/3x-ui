@@ -3,9 +3,9 @@ package service
 import (
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 func TestParseInboundSettingsClientsIgnoresProtocolScalarFields(t *testing.T) {
@@ -110,7 +110,7 @@ func TestSearchClientTrafficIgnoresProtocolScalarFields(t *testing.T) {
 	if err := db.Create(&model.ClientRecord{Email: client.Email, Enable: true, SubID: client.SubID}).Error; err != nil {
 		t.Fatalf("create client record: %v", err)
 	}
-	if err := db.Create(&xray.ClientTraffic{InboundId: inbound.Id, Email: client.Email, Enable: true}).Error; err != nil {
+	if err := db.Create(&coremodel.ClientTraffic{InboundId: inbound.Id, Email: client.Email, Enable: true}).Error; err != nil {
 		t.Fatalf("create client traffic: %v", err)
 	}
 

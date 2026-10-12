@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
@@ -160,7 +161,7 @@ func TestDesiredTuicInstances(t *testing.T) {
 	}
 
 	// Add client traffic entry disabling disabled@test.com
-	ct := &xray.ClientTraffic{
+	ct := &coremodel.ClientTraffic{
 		InboundId: 30,
 		Email:     "disabled@test.com",
 		Enable:    false,

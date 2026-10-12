@@ -154,10 +154,7 @@ function vlessFromWire(raw: Raw): VlessOutboundFormSettings {
   const reverseTag = asString(reverse.tag);
   const reverseSniffing = reverseTag ? sniffingFromWire(reverse.sniffing) : SNIFFING_DEFAULT;
   const savedSeed = asArray(raw.testseed);
-  const testseed =
-    savedSeed.length === 4 && savedSeed.every((n) => Number.isInteger(n) && (n as number) > 0)
-      ? (savedSeed as number[])
-      : [900, 500, 900, 256];
+  const testseed = savedSeed as number[];
   return {
     address,
     port,
@@ -665,7 +662,7 @@ function vlessToWire(s: VlessOutboundFormSettings) {
   }
   if (s.flow === 'xtls-rprx-vision') {
     if (s.testpre > 0) result.testpre = s.testpre;
-    if (s.testseed.length === 4 && s.testseed.every((v) => Number.isInteger(v) && v > 0)) {
+    if (s.testseed.length > 0) {
       result.testseed = s.testseed;
     }
   }

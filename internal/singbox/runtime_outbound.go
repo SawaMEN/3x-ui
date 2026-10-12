@@ -39,6 +39,7 @@ func normalizeOutboundsForRuntime(outbounds []map[string]any) ([]map[string]any,
 
 	for index, outbound := range normalized {
 		outboundType := strings.ToLower(strings.TrimSpace(rawString(outbound, "type")))
+		outbound["type"] = outboundType
 		switch outboundType {
 		case "tun", "redirect", "tproxy":
 			return nil, fmt.Errorf("outbounds[%d].type %q is an inbound type and cannot be used as a sing-box outbound", index, outboundType)
@@ -52,6 +53,7 @@ func normalizeOutboundsForRuntime(outbounds []map[string]any) ([]map[string]any,
 			continue
 		}
 		transportType := strings.ToLower(strings.TrimSpace(rawString(transport, "type")))
+		transport["type"] = transportType
 		if err := normalizeV2RayTransportForRuntime(transport, transportType); err != nil {
 			return nil, fmt.Errorf("outbounds[%d].transport: %w", index, err)
 		}

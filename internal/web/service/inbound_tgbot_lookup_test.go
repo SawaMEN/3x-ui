@@ -4,9 +4,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // TestGetClientTrafficTgBot_SettingsSerializationStyles guards against the
@@ -39,7 +39,7 @@ func TestGetClientTrafficTgBot_SettingsSerializationStyles(t *testing.T) {
 		if err := db.Create(inbound).Error; err != nil {
 			t.Fatalf("create %s inbound: %v", c.name, err)
 		}
-		if err := db.Create(&xray.ClientTraffic{InboundId: inbound.Id, Email: c.email, Enable: true, Up: 10, Down: 20}).Error; err != nil {
+		if err := db.Create(&coremodel.ClientTraffic{InboundId: inbound.Id, Email: c.email, Enable: true, Up: 10, Down: 20}).Error; err != nil {
 			t.Fatalf("create %s client_traffics: %v", c.name, err)
 		}
 	}

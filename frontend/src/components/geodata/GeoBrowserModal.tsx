@@ -32,6 +32,7 @@ export interface GeoBrowserModalProps {
   kind: GeoKind;
   value: string;
   onApply: (value: string) => void;
+  readOnly?: boolean;
   onClose: () => void;
 }
 
@@ -59,6 +60,7 @@ export default function GeoBrowserModal({
   value,
   onApply,
   onClose,
+  readOnly = false,
 }: GeoBrowserModalProps) {
   const { t } = useTranslation();
   const [file, setFile] = useState<string | undefined>(undefined);
@@ -277,6 +279,7 @@ export default function GeoBrowserModal({
       open={open}
       title={t('pages.xray.geoBrowser.title')}
       width={880}
+      footer={readOnly ? <Button onClick={onClose}>{t('close')}</Button> : undefined}
       onCancel={onClose}
       onOk={() => onApply(mergeSelection(value, selected, known))}
       okText={t('pages.xray.geoBrowser.apply')}
@@ -353,12 +356,16 @@ export default function GeoBrowserModal({
                 pagination={false}
                 scroll={{ y: CATEGORY_SCROLL_HEIGHT }}
                 locale={{ emptyText: t('pages.xray.geoBrowser.noMatches') }}
-                rowSelection={{
-                  columnWidth: 42,
-                  preserveSelectedRowKeys: true,
-                  selectedRowKeys: selectedCodes,
-                  onChange: (keys) => toggle(keys as string[]),
-                }}
+                rowSelection={
+                  readOnly
+                    ? undefined
+                    : {
+                        columnWidth: 42,
+                        preserveSelectedRowKeys: true,
+                        selectedRowKeys: selectedCodes,
+                        onChange: (keys) => toggle(keys as string[]),
+                      }
+                }
                 onRow={(category) => ({
                   onClick: (event) => {
                     if ((event.target as HTMLElement).closest('.ant-table-selection-column'))
@@ -431,36 +438,38 @@ export default function GeoBrowserModal({
             </div>
           </div>
 
-          <div className="geo-footer">
-            {selected.length === 0 ? (
-              <Typography.Text type="secondary">
-                {t('pages.xray.geoBrowser.emptySelection')}
-              </Typography.Text>
-            ) : (
-              <>
-                <Space size={4} wrap className="geo-chips">
-                  {selected.map((token) => (
-                    <Tag
-                      key={token}
-                      closable
-                      color="processing"
-                      onClose={() =>
-                        setSelected((previous) => previous.filter((item) => item !== token))
-                      }
-                    >
-                      {token}
-                    </Tag>
-                  ))}
-                </Space>
-                <span className="geo-selected-count">
-                  {t('pages.xray.geoBrowser.selected', { count: selected.length })}
-                </span>
-                <Button type="link" size="small" onClick={() => setSelected([])}>
-                  {t('pages.xray.geoBrowser.clearAll')}
-                </Button>
-              </>
-            )}
-          </div>
+          {!readOnly && (
+            <div className="geo-footer">
+              {selected.length === 0 ? (
+                <Typography.Text type="secondary">
+                  {t('pages.xray.geoBrowser.emptySelection')}
+                </Typography.Text>
+              ) : (
+                <>
+                  <Space size={4} wrap className="geo-chips">
+                    {selected.map((token) => (
+                      <Tag
+                        key={token}
+                        closable
+                        color="processing"
+                        onClose={() =>
+                          setSelected((previous) => previous.filter((item) => item !== token))
+                        }
+                      >
+                        {token}
+                      </Tag>
+                    ))}
+                  </Space>
+                  <span className="geo-selected-count">
+                    {t('pages.xray.geoBrowser.selected', { count: selected.length })}
+                  </span>
+                  <Button type="link" size="small" onClick={() => setSelected([])}>
+                    {t('pages.xray.geoBrowser.clearAll')}
+                  </Button>
+                </>
+              )}
+            </div>
+          )}
         </>
       )}
     </Modal>

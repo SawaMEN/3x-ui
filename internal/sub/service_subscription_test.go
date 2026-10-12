@@ -12,10 +12,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	wgutil "github.com/SawaMEN/3x-ui/v3/internal/util/wireguard"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // Subscription traffic is indexed once per subscriber so traffic-aware
@@ -48,7 +48,7 @@ func TestGetInboundsBySubIdIndexesTrafficByEmail(t *testing.T) {
 	if err := db.Create(&model.ClientInbound{ClientId: client.Id, InboundId: inbound.Id}).Error; err != nil {
 		t.Fatalf("attach client: %v", err)
 	}
-	if err := db.Create(&xray.ClientTraffic{
+	if err := db.Create(&coremodel.ClientTraffic{
 		InboundId: inbound.Id, Email: client.Email, Up: 1234, Down: 5678, Enable: true,
 	}).Error; err != nil {
 		t.Fatalf("seed traffic: %v", err)
@@ -285,7 +285,7 @@ func TestGetSubsSkipsEmptyRenderedLinksButKeepsTraffic(t *testing.T) {
 	if err := db.Create(&model.ClientInbound{ClientId: client.Id, InboundId: inbound.Id}).Error; err != nil {
 		t.Fatalf("attach client: %v", err)
 	}
-	if err := db.Create(&xray.ClientTraffic{Email: client.Email, Up: 10, Down: 20, Enable: true}).Error; err != nil {
+	if err := db.Create(&coremodel.ClientTraffic{Email: client.Email, Up: 10, Down: 20, Enable: true}).Error; err != nil {
 		t.Fatalf("seed traffic: %v", err)
 	}
 

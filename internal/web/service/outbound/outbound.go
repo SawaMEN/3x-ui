@@ -2,29 +2,29 @@ package outbound
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-	"encoding/json"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 	"gorm.io/gorm"
 )
 
 // OutboundService provides business logic for managing Xray outbound configurations.
 // It handles outbound traffic monitoring and statistics.
 type OutboundService struct {
-	// CoreType selects the core for isolated handshake probes. Empty means Xray.
+	// CoreType retains compatibility with stored callers; probes use Sing-box.
 	CoreType string
 }
 
-func (s *OutboundService) AddTraffic(traffics []*xray.Traffic, clientTraffics []*xray.ClientTraffic) (error, bool) {
+func (s *OutboundService) AddTraffic(traffics []*coremodel.Traffic, clientTraffics []*coremodel.ClientTraffic) (error, bool) {
 	err := database.GetDB().Transaction(func(tx *gorm.DB) error {
 		return s.addOutboundTraffic(tx, traffics)
 	})
@@ -41,7 +41,7 @@ func saturatingAdd(a, b int64) int64 {
 	return a + b
 }
 
-func (s *OutboundService) addOutboundTraffic(tx *gorm.DB, traffics []*xray.Traffic) error {
+func (s *OutboundService) addOutboundTraffic(tx *gorm.DB, traffics []*coremodel.Traffic) error {
 	if len(traffics) == 0 {
 		return nil
 	}
@@ -236,11 +236,12 @@ func outboundTransportIsUDP(ob map[string]any) bool {
 	if kind, _ := transport["type"].(string); equalsAnyFold(kind, "quic") {
 		return true
 	}
-	if protocol, _ := ob["protocol"].(string); equalsAnyFold(normalizedProbeProtocol(protocol), "hysteria", "hysteria2", "tuic", "wireguard", "amneziawg", "fptn", "openflux", "selector", "urltest") {
+	if protocol, _ := ob["protocol"].(string); equalsAnyFold(normalizedProbeProtocol(protocol), "hysteria", "hysteria2", "tuic", "wireguard", "amneziawg", "fptn", "openflux", "selector", "urltest", "mieru") {
 		return true
 	}
 	if stream, ok := ob["streamSettings"].(map[string]any); ok {
-		// The core resolves "kcp" and "mkcp" to the same mKCP transport.
+		// Legacy UDP transports are sent through validation and must not get
+		// a misleading success from a bare TCP connection.
 		if n, _ := stream["network"].(string); equalsAnyFold(n, "hysteria", "kcp", "mkcp", "quic") {
 			return true
 		}

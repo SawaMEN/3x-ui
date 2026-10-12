@@ -18,7 +18,6 @@ type TelemtController struct {
 }
 
 func NewTelemtController(g *gin.RouterGroup, settingService service.SettingService) *TelemtController {
-	service.StartTelemtConnectionMonitor()
 	a := &TelemtController{settingService: settingService}
 	g.GET("/status", a.status)
 	g.GET("/webproxy/status", a.webProxyStatus)

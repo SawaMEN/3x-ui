@@ -22,7 +22,7 @@ interface SystemStripProps {
 
 function SystemStrip({ status, coreType, showIp, onToggleIp }: SystemStripProps) {
   const { t } = useTranslation();
-  const activeCore = coreType === 'sing-box' ? 'sing-box' : 'Xray';
+  const activeCore = coreType === 'xray' ? 'Xray' : coreType;
 
   return (
     <Card hoverable styles={{ body: { padding: 0 } }}>

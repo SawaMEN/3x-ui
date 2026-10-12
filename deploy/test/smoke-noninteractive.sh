@@ -29,6 +29,7 @@ echo "== non-interactive install smoke test (image: $IMAGE, version: ${XUI_SMOKE
 
 docker run --rm \
     -v "${REPO_ROOT}/install.sh:/root/install.sh:ro" \
+    -v "${REPO_ROOT}/deploy/test/systemctl-smoke.sh:/usr/local/bin/systemctl:ro" \
     -e XUI_NONINTERACTIVE=1 \
     -e XUI_SSL_MODE=none \
     -e XUI_SMOKE_VERSION="$XUI_SMOKE_VERSION" \
@@ -71,16 +72,13 @@ docker run --rm \
             || { echo "FAIL: hasDefaultCredential is not false"; exit 1; }
 
         echo "--- verifying the panel serves HTTP ---"
-        cd /usr/local/x-ui
-        ./x-ui > /tmp/xui.log 2>&1 &
-        xpid=$!
+        systemctl is-active --quiet x-ui
         for _ in $(seq 1 15); do
             code=$(curl -s -o /dev/null -w "%{http_code}" \
                 "http://127.0.0.1:${XUI_PANEL_PORT}/${XUI_WEB_BASE_PATH}/" 2>/dev/null || true)
             case "$code" in 200|301|302|307|308) break ;; esac
             sleep 1
         done
-        kill "$xpid" 2>/dev/null || true
         echo "panel HTTP status: ${code:-none}"
         case "${code:-}" in
             200|301|302|307|308) : ;;

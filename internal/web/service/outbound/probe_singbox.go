@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/hiddify"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
@@ -55,7 +56,7 @@ func buildSingBoxBatchTestConfig(source *xray.Config) (*singbox.Config, error) {
 			cfg.Endpoints = append(cfg.Endpoints, endpoint)
 			continue
 		}
-		translated, err := singbox.TranslateXrayOutbound(outbound)
+		translated, err := hiddify.TranslateOutbound(outbound)
 		if err != nil {
 			return nil, err
 		}
@@ -74,6 +75,7 @@ func buildSingBoxBatchTestConfig(source *xray.Config) (*singbox.Config, error) {
 	// Every test listener has an explicit rule, so no implicit "direct" tag
 	// is required (and may be owned by a user's proxy).
 	delete(cfg.Route, "final")
+	cfg.Route["default_domain_resolver"] = cfg.DNS["final"]
 	return cfg, nil
 }
 
@@ -88,7 +90,7 @@ var newSingBoxBatchProcess = func(cfg *singbox.Config, path string) batchProcess
 	if err == nil {
 		path = absolute
 	}
-	return &singBoxBatchProcess{process: singbox.NewTestProcess(path), config: cfg, path: path}
+	return &singBoxBatchProcess{process: hiddify.NewProcess(path, true), config: cfg, path: path}
 }
 
 func (p *singBoxBatchProcess) Start() error {

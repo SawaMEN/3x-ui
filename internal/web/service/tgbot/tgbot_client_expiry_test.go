@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/locale"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 
 	"github.com/nicksnyder/go-i18n/v2/i18n"
 	"golang.org/x/text/language"
@@ -41,7 +41,7 @@ func TestClientInfoShowsStartAfterFirstUseWhenDisabled(t *testing.T) {
 	t.Cleanup(func() { _ = database.CloseDB() })
 	clientInfoLocalizer(t)
 
-	traffic := &xray.ClientTraffic{
+	traffic := &coremodel.ClientTraffic{
 		Email:      "trial@example.com",
 		Enable:     false,
 		ExpiryTime: -30 * 24 * 60 * 60000,

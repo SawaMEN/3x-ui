@@ -48,6 +48,11 @@ func ParseReference(token string, kind GeoKind) (Reference, error) {
 		return Reference{}, ErrInvalidToken
 	}
 
+	// Fold only the prefix. External filenames remain case-sensitive.
+	if prefix, rest, found := strings.Cut(token, ":"); found {
+		token = strings.ToLower(prefix) + ":" + rest
+	}
+
 	var reference Reference
 	if kind == KindIP {
 		// The core strips one "!" before the prefix and another before the code,

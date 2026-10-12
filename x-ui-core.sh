@@ -576,7 +576,7 @@ restart() {
         if signal_xui HUP; then
             sleep 1
             signal_xui USR1
-            LOGI "Restart signal sent to the panel and xray-core."
+            LOGI "Restart signal sent to the panel and sing-box."
         else
             LOGE "Could not find the running panel process to signal."
         fi
@@ -612,7 +612,7 @@ restart() {
 restart_xray() {
     if [[ "${running_in_docker}" == "true" ]]; then
         if signal_xui USR1; then
-            LOGI "xray-core Restart signal sent successfully, Please check the log information to confirm whether xray restarted successfully"
+            LOGI "sing-box Restart signal sent successfully, Please check the log information to confirm whether xray restarted successfully"
         else
             LOGE "Could not find the running panel process to signal."
         fi
@@ -628,7 +628,7 @@ restart_xray() {
     else
         systemctl reload x-ui
     fi
-    LOGI "xray-core Restart signal sent successfully, Please check the log information to confirm whether xray restarted successfully"
+    LOGI "sing-box Restart signal sent successfully, Please check the log information to confirm whether xray restarted successfully"
     sleep 2
     show_xray_status
     if [[ $# == 0 ]]; then
@@ -984,7 +984,7 @@ show_enable_status() {
 }
 
 check_xray_status() {
-    count=$(ps -ef | grep "xray-linux" | grep -v "grep" | wc -l)
+    count=$(ps -ef | grep "hiddify-core-linux" | grep -v "grep" | wc -l)
     if [[ count -ne 0 ]]; then
         return 0
     else

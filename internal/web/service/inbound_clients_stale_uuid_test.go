@@ -3,9 +3,9 @@ package service
 import (
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // GetInbounds must enrich ClientStats.UUID from the clients table, not the
@@ -32,7 +32,7 @@ func TestEnrichClientStats_UsesClientsTableUUIDWhenSettingsStale(t *testing.T) {
 	if err := db.Create(&model.ClientInbound{ClientId: rec.Id, InboundId: ib.Id}).Error; err != nil {
 		t.Fatalf("create client_inbound: %v", err)
 	}
-	if err := db.Create(&xray.ClientTraffic{InboundId: ib.Id, Email: "stale@e", Enable: true}).Error; err != nil {
+	if err := db.Create(&coremodel.ClientTraffic{InboundId: ib.Id, Email: "stale@e", Enable: true}).Error; err != nil {
 		t.Fatalf("create client_traffics: %v", err)
 	}
 

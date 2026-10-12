@@ -9,6 +9,7 @@ export function uniqueTag(preferred: string, tags: string[]): string {
 }
 
 export function parseShareLink(raw: string): ConfigObject {
+  if (/^(hy2|hysteria2):\/\//i.test(raw.trim())) return parseHysteria2(raw.trim());
   let url: URL;
   try {
     url = new URL(raw.trim());
@@ -68,7 +69,7 @@ export function parseShareLink(raw: string): ConfigObject {
   if (protocol === 'vless') {
     if (params.get('encryption') && params.get('encryption') !== 'none')
       throw new Error(
-        'Это шифрование VLESS не поддерживается текущим sing-box. Используйте Xray или другую ссылку.',
+        'Это шифрование VLESS не поддерживается этим импортом. Настройте его в JSON редакторе.',
       );
     next.uuid = username;
     if (params.get('flow')) next.flow = params.get('flow');
@@ -105,7 +106,7 @@ export function parseShareLink(raw: string): ConfigObject {
   const network = params.get('type') || 'tcp';
   if (!['tcp', 'ws', 'http', 'grpc', 'httpupgrade'].includes(network))
     throw new Error(
-      `Транспорт ${network} не поддерживается этим импортом sing-box. Используйте совместимую ссылку или Xray.`,
+      `Транспорт ${network} не поддерживается этим импортом sing-box. Настройте транспорт в JSON редакторе.`,
     );
   if (network === 'tcp' && params.get('headerType') && params.get('headerType') !== 'none')
     throw new Error('TCP-маскировка не поддерживается этим импортом. Настройте транспорт вручную.');
@@ -122,6 +123,134 @@ export function parseShareLink(raw: string): ConfigObject {
     if (network === 'grpc' && params.get('serviceName'))
       transport.service_name = params.get('serviceName');
     next.transport = transport;
+  }
+  return next;
+}
+
+function parseHysteria2(raw: string): ConfigObject {
+  const match = raw.match(/^(?:hy2|hysteria2):\/\/([^/?#]*)(.*)$/i)!;
+  const authority = match[1];
+  const at = authority.lastIndexOf('@');
+  const auth = at < 0 ? '' : authority.slice(0, at);
+  const hostPort = authority.slice(at + 1);
+  const parts = hostPort.match(/^(\[[^\]]+\]|[^:]+)(?::(.+))?$/);
+  if (!parts) throw new Error('Некорректный сервер Hysteria2.');
+  const url = new URL(`https://${parts[1]}${match[2]}`);
+  const params = url.searchParams;
+  const allowed = new Set([
+    'mport',
+    'sni',
+    'insecure',
+    'allowInsecure',
+    'alpn',
+    'pinSHA256',
+    'ech',
+    'obfs',
+    'obfs-password',
+    'obfs-min-packet-size',
+    'obfs-max-packet-size',
+    'hop-interval',
+    'security',
+    'fp',
+    'vcn',
+    'minPacketSize',
+    'maxPacketSize',
+  ]);
+  for (const key of params.keys())
+    if (!allowed.has(key))
+      throw new Error(`Параметр ${key} не поддерживается этим импортом Hysteria2.`);
+  if (
+    (params.has('obfs-password') ||
+      params.has('obfs-min-packet-size') ||
+      params.has('obfs-max-packet-size') ||
+      params.has('minPacketSize') ||
+      params.has('maxPacketSize')) &&
+    !params.get('obfs')
+  )
+    throw new Error('Параметры маскировки требуют obfs.');
+  if (params.get('security') && params.get('security') !== 'tls')
+    throw new Error('Hysteria2 требует TLS.');
+  if (
+    params.get('vcn') &&
+    params.get('vcn') !== (params.get('sni') || url.hostname.replace(/^\[|\]$/g, ''))
+  )
+    throw new Error('Отдельное имя проверки сертификата не поддерживается этим импортом.');
+  // fp is a client compatibility hint: QUIC does not use the TCP uTLS fingerprint.
+  const ports = (params.get('mport') || parts[2] || '443').split(',').map((part) => {
+    if (!/^\d+(?:-\d+)?$/.test(part)) throw new Error('Некорректные порты Hysteria2.');
+    const [first, last = first] = part.split('-').map(Number);
+    if (first < 1 || last > 65535 || first > last) throw new Error('Некорректные порты Hysteria2.');
+    return first === last ? String(first) : `${first}:${last}`;
+  });
+  const password = decodeURIComponent(auth);
+  if (!password) throw new Error('Не указан пароль Hysteria2.');
+  const tls: ConfigObject = {
+    enabled: true,
+    server_name: params.get('sni') || url.hostname.replace(/^\[|\]$/g, ''),
+  };
+  if (['1', 'true'].includes(params.get('insecure') || params.get('allowInsecure') || ''))
+    tls.insecure = true;
+  if (params.get('alpn')) tls.alpn = params.get('alpn')!.split(',').filter(Boolean);
+  if (params.get('pinSHA256')) {
+    tls.certificate_sha256 = params
+      .get('pinSHA256')!
+      .split(',')
+      .map((pin) => {
+        const hash = pin.replace(/:/g, '');
+        if (!/^[a-f\d]{64}$/i.test(hash)) throw new Error('Некорректный pinSHA256.');
+        return btoa(String.fromCharCode(...hash.match(/../g)!.map((byte) => parseInt(byte, 16))));
+      });
+  }
+  if (params.get('ech')) {
+    const ech = params.get('ech')!;
+    try {
+      atob(ech);
+    } catch {
+      throw new Error('Некорректный ECH config.');
+    }
+    tls.ech = {
+      enabled: true,
+      config: [`-----BEGIN ECH CONFIGS-----\n${ech}\n-----END ECH CONFIGS-----`],
+    };
+  }
+  const next: ConfigObject = {
+    type: 'hysteria2',
+    tag: decodeURIComponent(url.hash.slice(1)) || tls.server_name,
+    server: url.hostname.replace(/^\[|\]$/g, ''),
+    password,
+    tls,
+  };
+  if (ports.length === 1 && !ports[0].includes(':')) next.server_port = Number(ports[0]);
+  else next.server_ports = ports.map((port) => (port.includes(':') ? port : `${port}:${port}`));
+  if (params.has('hop-interval')) {
+    const interval = params.get('hop-interval')!;
+    if (!/^\d+(?:\.\d+)?(?:ms|s|m|h)$/.test(interval) || parseFloat(interval) <= 0)
+      throw new Error('Некорректный интервал смены порта.');
+    next.hop_interval = interval;
+  }
+  if (params.get('obfs')) {
+    const type = params.get('obfs');
+    if (!['salamander', 'gecko'].includes(type!))
+      throw new Error('Неподдерживаемая маскировка Hysteria2.');
+    const obfs: ConfigObject = { type, password: params.get('obfs-password') };
+    if (!obfs.password) throw new Error('Не указан пароль маскировки.');
+    for (const [key, field] of [
+      ['obfs-min-packet-size', 'min_packet_size'],
+      ['obfs-max-packet-size', 'max_packet_size'],
+      ['minPacketSize', 'min_packet_size'],
+      ['maxPacketSize', 'max_packet_size'],
+    ]) {
+      if (!params.has(key)) continue;
+      const size = Number(params.get(key));
+      if (type !== 'gecko' || !Number.isInteger(size) || size < 1 || size > 2048)
+        throw new Error('Некорректный размер пакета Gecko.');
+      if (obfs[field] !== undefined && obfs[field] !== size)
+        throw new Error('Противоречивые параметры Gecko.');
+      obfs[field] = size;
+    }
+    if (Number(obfs.min_packet_size || 1) > Number(obfs.max_packet_size || 2048))
+      throw new Error('Некорректный диапазон пакетов Gecko.');
+    next.obfs = obfs;
   }
   return next;
 }

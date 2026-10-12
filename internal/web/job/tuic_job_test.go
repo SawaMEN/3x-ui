@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 func generateTestCertForJob(t *testing.T) (certPEM, keyPEM []byte) {
@@ -87,7 +87,7 @@ func TestTuicJob_TrafficAccounting(t *testing.T) {
 		t.Fatalf("create inbound failed: %v", err)
 	}
 
-	clientTraffic := &xray.ClientTraffic{
+	clientTraffic := &coremodel.ClientTraffic{
 		InboundId: inbound.Id,
 		Email:     email,
 		Up:        0,
@@ -117,7 +117,7 @@ func TestTuicJob_TrafficAccounting(t *testing.T) {
 	job.Run()
 
 	// Verify client traffic in database
-	var dbClient xray.ClientTraffic
+	var dbClient coremodel.ClientTraffic
 	if err := database.GetDB().Where("inbound_id = ? AND email = ?", inbound.Id, email).First(&dbClient).Error; err != nil {
 		t.Fatalf("find client traffic in DB failed: %v", err)
 	}

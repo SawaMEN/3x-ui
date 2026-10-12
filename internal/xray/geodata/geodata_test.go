@@ -576,3 +576,37 @@ func TestSymlinkOutOfTheAssetFolderIsRefused(t *testing.T) {
 		}
 	}
 }
+
+func TestIndexCacheAtomicReplacementWithSameMetadata(t *testing.T) {
+	dir := t.TempDir()
+	path := writeSiteDB(t, dir, "geosite.dat", site("aa", domain(xraygeodata.Domain_Domain, "old.example")))
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := NewStore(dir)
+	if _, err := store.Lookup("geosite.dat", "aa"); err != nil {
+		t.Fatal(err)
+	}
+	replacement := writeSiteDB(t, dir, "next.dat", site("bb", domain(xraygeodata.Domain_Domain, "new.example")))
+	if err := os.Chtimes(replacement, info.ModTime(), info.ModTime()); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(replacement, path); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Lookup("geosite.dat", "bb"); err != nil {
+		t.Fatalf("stale index after replacement: %v", err)
+	}
+	if _, err := store.Lookup("geosite.dat", "aa"); !errors.Is(err, ErrUnknownCategory) {
+		t.Fatalf("old category survived: %v", err)
+	}
+}
+
+func TestInverseGeoIPDatabaseFailsClosed(t *testing.T) {
+	dir := t.TempDir()
+	writeIPDB(t, dir, "geoip.dat", &xraygeodata.GeoIP{Code: "inverse", ReverseMatch: true, Cidr: []*xraygeodata.CIDR{{Ip: []byte{10, 0, 0, 0}, Prefix: 8}}})
+	if _, err := NewStore(dir).AllEntries("geoip.dat", "inverse", 100); err == nil {
+		t.Fatal("inverse category silently became a positive CIDR list")
+	}
+}

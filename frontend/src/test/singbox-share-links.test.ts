@@ -1,3 +1,7 @@
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parseShareLink, uniqueTag } from '@/pages/singbox/share-links';
 import { outboundErrors } from '@/pages/singbox/simple-settings';
@@ -108,4 +112,105 @@ describe('outbound validation', () => {
       outboundErrors({ type: 'selector', tag: 'group', outbounds: ['group'] }, ['proxy']),
     ).toHaveLength(1);
   });
+});
+
+it('imports HY2 auth, IPv6, hopping and Gecko without a conflicting server_port', () => {
+  const outbound = parseShareLink(
+    'hy2://user:p%40ss@[2001:db8::1]:443,10000-10010?obfs=gecko&obfs-password=secret&obfs-min-packet-size=20&obfs-max-packet-size=100&sni=tls.test#HY2',
+  );
+  expect(outbound).toMatchObject({
+    type: 'hysteria2',
+    tag: 'HY2',
+    server: '2001:db8::1',
+    password: 'user:p@ss',
+    server_ports: ['443:443', '10000:10010'],
+    obfs: { type: 'gecko', password: 'secret', min_packet_size: 20, max_packet_size: 100 },
+    tls: { enabled: true, server_name: 'tls.test' },
+  });
+  expect(outbound.server_port).toBeUndefined();
+  expect(outboundErrors(outbound, [])).toEqual([]);
+});
+it('imports default HY2 port and certificate pin', () => {
+  const outbound = parseShareLink(`hysteria2://pass@proxy.test?pinSHA256=${'00'.repeat(32)}`);
+  expect(outbound.server_port).toBe(443);
+  expect(outbound.tls).toMatchObject({ certificate_sha256: [btoa('\0'.repeat(32))] });
+});
+it.each([
+  'hy2://@host',
+  'hy2://p@host:90000',
+  'hy2://p@host:9000-8000',
+  'hy2://p@host?obfs=unknown',
+  'hy2://p@host?obfs=gecko',
+  'hy2://p@host?pinSHA256=bad',
+  'hy2://p@host?obfs=gecko&obfs-password=x&obfs-min-packet-size=3000',
+])('rejects invalid HY2 options: %s', (link) => {
+  expect(() => parseShareLink(link)).toThrow();
+});
+it('validates Mieru bindings without requiring server_port', () => {
+  expect(
+    outboundErrors(
+      {
+        type: 'mieru',
+        tag: 'm',
+        server: 'host',
+        username: 'u',
+        password: 'p',
+        portBindings: [{ protocol: 'TCP', portRange: '2012-2022' }],
+      },
+      [],
+    ),
+  ).toEqual([]);
+  expect(
+    outboundErrors(
+      {
+        type: 'mieru',
+        tag: 'm',
+        server: 'host',
+        username: 'u',
+        password: 'p',
+        server_port: 443,
+        portBindings: [{ protocol: 'TCP', portRange: '2012-2022' }],
+      },
+      [],
+    ).length,
+  ).toBeGreaterThan(0);
+});
+
+it.skipIf(!process.env.HIDDIFY_CONFIG_CHECK_BINARY)(
+  'checks actual imported HY2 JSON with the pinned owner core',
+  () => {
+    const dir = mkdtempSync(join(tmpdir(), 'hy2-import-'));
+    try {
+      for (const link of [
+        'hy2://pass@proxy.test',
+        'hy2://pass@proxy.test:443,10000-10010?obfs=gecko&obfs-password=x&obfs-min-packet-size=20&obfs-max-packet-size=100',
+        `hy2://pass@proxy.test?pinSHA256=${'00'.repeat(32)}`,
+      ]) {
+        const file = join(dir, 'config.json');
+        writeFileSync(file, JSON.stringify({ outbounds: [parseShareLink(link)] }));
+        expect(() =>
+          execFileSync(process.env.HIDDIFY_CONFIG_CHECK_BINARY!, ['check', '-c', file], {
+            timeout: 15000,
+          }),
+        ).not.toThrow();
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  },
+);
+
+it('accepts panel-exported HY2 security/fingerprint hints and Gecko aliases', () => {
+  expect(
+    parseShareLink(
+      'hysteria2://p@host:443?security=tls&fp=chrome&obfs=gecko&obfs-password=x&minPacketSize=100&maxPacketSize=200',
+    ),
+  ).toMatchObject({ obfs: { type: 'gecko', min_packet_size: 100, max_packet_size: 200 } });
+  expect(() => parseShareLink('hy2://p@host?security=none')).toThrow();
+  expect(() => parseShareLink('hy2://p@host?vcn=different')).toThrow();
+  expect(() =>
+    parseShareLink(
+      'hy2://p@host?obfs=gecko&obfs-password=x&minPacketSize=100&obfs-min-packet-size=101',
+    ),
+  ).toThrow();
 });

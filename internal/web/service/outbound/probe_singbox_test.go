@@ -8,11 +8,13 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/hiddify"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
@@ -57,9 +59,9 @@ func TestNativeOutboundEndpointsAndTransport(t *testing.T) {
 // Optional integration check with the real installed release. All traffic
 // stays on loopback; no Internet proxy credentials are required.
 func TestSingBoxProbeWithRunningProductionProcess(t *testing.T) {
-	binary := os.Getenv("SINGBOX_TEST_BINARY")
+	binary := os.Getenv("HIDDIFY_RUNTIME_TEST_BINARY")
 	if binary == "" {
-		t.Skip("set SINGBOX_TEST_BINARY to run real sing-box integration")
+		t.Skip("set HIDDIFY_RUNTIME_TEST_BINARY to run real sing-box integration")
 	}
 	dir := t.TempDir()
 	t.Setenv("XUI_BIN_FOLDER", dir)
@@ -74,7 +76,7 @@ func TestSingBoxProbeWithRunningProductionProcess(t *testing.T) {
 	if err := os.WriteFile(productionConfig, []byte(`{"outbounds":[{"type":"direct","tag":"direct"}]}`), 0600); err != nil {
 		t.Fatal(err)
 	}
-	production := singbox.NewProcess(productionConfig)
+	production := hiddify.NewProcess(productionConfig, false)
 	if err := production.Start(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -139,5 +141,36 @@ func TestSingBoxBatchHTTPThroughNativeGroup(t *testing.T) {
 	result, err := (&OutboundService{CoreType: "sing-box"}).TestOutbound(`{"protocol":"selector","tag":"best","settings":{"outbounds":["hop"],"default":"hop"}}`, server.URL, all, "tcp")
 	if err != nil || !result.Success || result.HTTPStatus != 204 || result.Mode != "http" || calls != 1 {
 		t.Fatalf("calls=%d result=%+v err=%v", calls, result, err)
+	}
+}
+
+func TestModifiedSingBoxProbePreservesXHTTPAndNativeResolver(t *testing.T) {
+	source := &xray.Config{}
+	source.OutboundConfigs = []byte(`[{"tag":"proxy","protocol":"vless","settings":{"address":"example.com","port":443,"id":"2a547fe4-5b0f-4a84-845c-131464875bf8","encryption":"none"},"streamSettings":{"network":"xhttp","xhttpSettings":{"path":"/relay","mode":"auto"}}}]`)
+	source.RouterConfig = []byte(`{"rules":[{"type":"field","outboundTag":"proxy","network":"tcp,udp"}]}`)
+	cfg, err := buildSingBoxBatchTestConfig(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Outbounds[0]["transport"].(map[string]any)["type"] != "xhttp" {
+		t.Fatal("modified transport lost")
+	}
+	if cfg.Route["default_domain_resolver"] != cfg.DNS["final"] {
+		t.Fatal("domain resolver lost")
+	}
+	data, err := cfg.Marshal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if binary := os.Getenv("SINGBOX_TEST_BINARY"); binary != "" {
+		file := filepath.Join(t.TempDir(), "probe.json")
+		if err := os.WriteFile(file, data, 0600); err != nil {
+			t.Fatal(err)
+		}
+		cmd := exec.Command(binary, "check", "-c", file)
+		cmd.Dir = filepath.Dir(binary)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("native probe: %v: %s", err, output)
+		}
 	}
 }

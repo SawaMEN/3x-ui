@@ -204,7 +204,7 @@ func TestTranslateXrayOutboundNativeRejectsInvalidSettings(t *testing.T) {
 		"tag":      "broken",
 		"settings": []any{"not", "an", "object"},
 	})
-	if err == nil || !strings.Contains(err.Error(), "invalid settings") {
+	if err == nil || !strings.Contains(err.Error(), "settings must be an object") {
 		t.Fatalf("expected invalid settings error, got %v", err)
 	}
 }

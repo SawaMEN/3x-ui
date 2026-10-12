@@ -14,11 +14,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 
 	"github.com/mymmrac/telego"
 	tu "github.com/mymmrac/telego/telegoutil"
@@ -432,7 +432,7 @@ func (t *Tgbot) sendClientQRLinks(chatId int64, email string) {
 
 // clientInfoMsg formats client information message based on traffic and flags.
 func (t *Tgbot) clientInfoMsg(
-	traffic *xray.ClientTraffic,
+	traffic *coremodel.ClientTraffic,
 	printEnabled bool,
 	printOnline bool,
 	printActive bool,
@@ -501,7 +501,7 @@ func (t *Tgbot) clientInfoMsg(
 
 	status := t.I18nBot("tgbot.offline")
 	isOnline := false
-	if process := service.XrayProcess(); process != nil && process.IsRunning() {
+	if process := service.OnlinePresence(); process != nil {
 		if slices.Contains(process.GetOnlineClients(), traffic.Email) {
 			status = t.I18nBot("tgbot.online")
 			isOnline = true

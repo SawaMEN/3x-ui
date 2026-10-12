@@ -3,10 +3,10 @@ package job
 import (
 	"sync"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/mieru"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 type MieruJob struct {
@@ -58,12 +58,12 @@ func (j *MieruJob) Run() {
 
 	deltas, onlineEmails := mgr.CollectTraffic(desired)
 	if len(deltas) > 0 || len(onlineEmails) > 0 {
-		inboundByTag := make(map[string]*xray.Traffic)
-		clientTraffic := make([]*xray.ClientTraffic, 0, len(deltas)+len(onlineEmails))
+		inboundByTag := make(map[string]*coremodel.Traffic)
+		clientTraffic := make([]*coremodel.ClientTraffic, 0, len(deltas)+len(onlineEmails))
 		seenClients := make(map[string]struct{}, len(deltas)+len(onlineEmails))
 
 		for _, delta := range deltas {
-			clientTraffic = append(clientTraffic, &xray.ClientTraffic{
+			clientTraffic = append(clientTraffic, &coremodel.ClientTraffic{
 				Email: delta.Email,
 				Up:    delta.Up,
 				Down:  delta.Down,
@@ -72,7 +72,7 @@ func (j *MieruJob) Run() {
 
 			traffic := inboundByTag[delta.Tag]
 			if traffic == nil {
-				traffic = &xray.Traffic{
+				traffic = &coremodel.Traffic{
 					IsInbound: true,
 					Tag:       delta.Tag,
 				}
@@ -89,14 +89,14 @@ func (j *MieruJob) Run() {
 			if _, exists := seenClients[email]; exists {
 				continue
 			}
-			clientTraffic = append(clientTraffic, &xray.ClientTraffic{
+			clientTraffic = append(clientTraffic, &coremodel.ClientTraffic{
 				Email: email,
 				Up:    0,
 				Down:  0,
 			})
 		}
 
-		traffics := make([]*xray.Traffic, 0, len(inboundByTag))
+		traffics := make([]*coremodel.Traffic, 0, len(inboundByTag))
 		for _, traffic := range inboundByTag {
 			traffics = append(traffics, traffic)
 		}

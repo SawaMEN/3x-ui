@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 const (
@@ -95,7 +95,7 @@ func seedPagingClients(t *testing.T) (int64, []pagingSeed) {
 				t.Fatalf("disable %s: %v", s.email, err)
 			}
 		}
-		traffic := xray.ClientTraffic{
+		traffic := coremodel.ClientTraffic{
 			Email:      s.email,
 			Enable:     s.enable,
 			Up:         s.used / 2,
@@ -534,7 +534,7 @@ func TestListPagedGlobalTrafficOverlay(t *testing.T) {
 
 	// bravo has used 1GB of its 10GB locally; a master reporting 10GB of
 	// cross-panel usage has to move it into the depleted bucket.
-	if err := inboundSvc.AcceptGlobalTraffic("master-guid", []*xray.ClientTraffic{
+	if err := inboundSvc.AcceptGlobalTraffic("master-guid", []*coremodel.ClientTraffic{
 		{Email: "bravo@x", Up: 4 * pagingGB, Down: 6 * pagingGB},
 	}); err != nil {
 		t.Fatalf("AcceptGlobalTraffic: %v", err)

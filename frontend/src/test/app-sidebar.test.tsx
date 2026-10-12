@@ -98,22 +98,22 @@ test('keeps core and swap controls in general settings, not the sidebar submenu'
   expect(screen.queryByText('Proxy Core')).toBeNull();
   expect(screen.queryByText('Swap / ZRAM')).toBeNull();
   expect(screen.queryByText('API Docs')).toBeNull();
-  expect(screen.getByText('Xray Configs')).toBeTruthy();
+  expect(screen.getByText('sing-box Configs')).toBeTruthy();
 });
 
 test('shows only the active core configuration menu', () => {
   vi.mocked(useAllSettings).mockReturnValue({ allSetting: { coreType: 'xray' } } as never);
   const xrayView = renderWithProviders(
-    <MemoryRouter initialEntries={['/xray#basic']}>
+    <MemoryRouter initialEntries={['/singbox#basic']}>
       <AppSidebar />
     </MemoryRouter>,
   );
 
   const xrayRoot = xrayView.container.querySelector('.ant-sidebar');
   fireEvent.mouseEnter(xrayRoot!);
-  expect(screen.getByText('Xray Configs')).toBeTruthy();
-  expect(screen.getByText('Basics')).toBeTruthy();
-  expect(screen.queryByText('sing-box Configs')).toBeNull();
+  expect(screen.getByText('sing-box Configs')).toBeTruthy();
+  expect(screen.getAllByText('General').length).toBeGreaterThan(0);
+  expect(screen.queryByText('Xray Configs')).toBeNull();
   expect(screen.queryByText('Proxy Core')).toBeNull();
   expect(screen.queryByText('Swap / ZRAM')).toBeNull();
   expect(screen.queryByText('API Docs')).toBeNull();

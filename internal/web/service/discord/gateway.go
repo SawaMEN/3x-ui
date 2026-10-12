@@ -506,7 +506,7 @@ func (g *GatewayClient) sendStatus(ctx context.Context) {
 	hours := (status.Uptime % 86400) / 3600
 
 	var onlines []string
-	if process := service.XrayProcess(); process != nil && process.IsRunning() {
+	if process := service.OnlinePresence(); process != nil {
 		onlines = process.GetOnlineClients()
 	}
 

@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 func initResetJobDB(t *testing.T) {
@@ -68,7 +68,7 @@ func seedClientOnCycle(t *testing.T, port int, c seededClient) {
 	if err := db.Create(&model.ClientInbound{ClientId: rec.Id, InboundId: ib.Id}).Error; err != nil {
 		t.Fatalf("link client to inbound: %v", err)
 	}
-	if err := db.Create(&xray.ClientTraffic{
+	if err := db.Create(&coremodel.ClientTraffic{
 		InboundId: ib.Id, Email: c.email, Enable: c.quotaEnable, Up: 500, Down: 700, Total: c.total,
 	}).Error; err != nil {
 		t.Fatalf("create traffic: %v", err)
@@ -81,9 +81,9 @@ func uuidFor(port int) string {
 		string(rune('0'+port/10%10)) + string(rune('0'+port%10))
 }
 
-func trafficFor(t *testing.T, email string) xray.ClientTraffic {
+func trafficFor(t *testing.T, email string) coremodel.ClientTraffic {
 	t.Helper()
-	var row xray.ClientTraffic
+	var row coremodel.ClientTraffic
 	if err := database.GetDB().Where("email = ?", email).First(&row).Error; err != nil {
 		t.Fatalf("read traffic for %s: %v", email, err)
 	}

@@ -10,10 +10,10 @@ import (
 	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	xuilogger "github.com/SawaMEN/3x-ui/v3/internal/logger"
-	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 
 	"github.com/op/go-logging"
 	"gorm.io/gorm"
@@ -148,9 +148,9 @@ func seedScaleDataset(t *testing.T, n, numInbounds int) scaleDataset {
 			t.Fatalf("seed client_inbounds %d: %v", i, err)
 		}
 
-		traffics := make([]xray.ClientTraffic, len(chunk))
+		traffics := make([]coremodel.ClientTraffic, len(chunk))
 		for j := range chunk {
-			traffics[j] = xray.ClientTraffic{
+			traffics[j] = coremodel.ClientTraffic{
 				InboundId:  ib.Id,
 				Email:      chunk[j].Email,
 				Enable:     true,
