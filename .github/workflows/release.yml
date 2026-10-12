@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - update
     tags:
       - "v*.*.*"
     paths:
@@ -26,6 +27,8 @@ on:
       - ".github/workflows/release.yml"
       - ".github/workflows/build.yml"
       - "internal/config/version"
+      - "deploy/hiddify/**"
+      - "docs/hiddify-core-target.json"
 
 jobs:
   frontend:
@@ -46,6 +49,11 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
           cache-dependency-path: frontend/package-lock.json
+
+      - name: Download Go dependencies
+        env:
+          GOPROXY: "https://proxy.golang.org|direct"
+        run: bash tools/ci/download-go-modules.sh
 
       - name: Run Go tests
         run: make test-go

@@ -87,7 +87,8 @@ if [[ ${SINGBOX_CRONET_LINKAGE:-purego} == musl ]]; then
   [[ "$task_goos" == linux ]] || { printf '%s\n' 'musl linkage requires Linux' >&2; exit 1; }
   task_cgo=1
   command -v ld.lld >/dev/null || { printf '%s\n' 'musl Cronet linkage requires LLVM LLD' >&2; exit 1; }
-  task_link_flags+=' -extldflags "-fuse-ld=lld -Wl,--no-dynamic-linker"'
+  command -v readelf >/dev/null || { printf '%s\n' 'musl linkage verification requires readelf' >&2; exit 1; }
+  task_link_flags+=' -linkmode external -extldflags "-static -fuse-ld=lld"'
   target[3]=${target[3]/with_purego/with_musl}
 elif [[ ${SINGBOX_CRONET_LINKAGE:-purego} != purego ]]; then
   printf '%s\n' 'Unknown Cronet linkage profile' >&2; exit 1
@@ -111,6 +112,14 @@ fi
     -ldflags "$task_link_flags" \
     -o "$task_output/$task_binary" ./cmd/main
 )
+if [[ ${SINGBOX_CRONET_LINKAGE:-purego} == musl ]]; then
+  task_elf_programs=$(readelf -l "$task_output/$task_binary")
+  task_elf_dynamic=$(readelf -d "$task_output/$task_binary")
+  if grep -q INTERP <<< "$task_elf_programs" || grep -q NEEDED <<< "$task_elf_dynamic"; then
+    printf '%s\n' 'musl kernel must have no ELF interpreter or shared-library dependencies' >&2
+    exit 1
+  fi
+fi
 if [[ "$task_goos" == "$(go env GOHOSTOS)" && "$task_goarch" == "$(go env GOHOSTARCH)" ]]; then
   task_version=$("$task_output/$task_binary" version)
   printf '%s\n' "$task_version"

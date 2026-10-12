@@ -11,6 +11,7 @@ on:
       - "Makefile"
       - "internal/config/version"
       - ".github/workflows/ci.yml"
+      - "tools/ci/**"
   push:
     branches:
       - main
@@ -23,9 +24,13 @@ on:
       - "Makefile"
       - "internal/config/version"
       - ".github/workflows/ci.yml"
+      - "tools/ci/**"
 
 permissions:
   contents: read
+
+env:
+  GOPROXY: "https://proxy.golang.org|direct"
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -46,17 +51,7 @@ jobs:
       - name: Stub internal/web/dist for go:embed
         run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
       - name: Download Go dependencies
-        run: |
-          for attempt in 1 2 3; do
-            if go mod download; then
-              exit 0
-            fi
-            if [ "$attempt" -eq 3 ]; then
-              echo "go mod download failed after ${attempt} attempts" >&2
-              exit 1
-            fi
-            sleep $((attempt * 5))
-          done
+        run: bash tools/ci/download-go-modules.sh
       - name: Test
         run: |
           go test -p 12 -vet=off -shuffle=on -count=1 ./...
@@ -153,6 +148,8 @@ jobs:
           cache: true
       - name: Stub internal/web/dist for go:embed
         run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+      - name: Download Go dependencies
+        run: bash tools/ci/download-go-modules.sh
       - name: Race detector
         run: |
           go list ./internal/... . > /tmp/race-packages.txt
@@ -174,6 +171,8 @@ jobs:
           cache: true
       - name: Stub internal/web/dist for go:embed
         run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+      - name: Download Go dependencies
+        run: bash tools/ci/download-go-modules.sh
       - name: Service race detector (shard ${{ matrix.shard }})
         run: bash tools/ci/race-package-shard.sh ./internal/web/service ${{ matrix.shard }} 3
 
@@ -192,6 +191,8 @@ jobs:
           cache: true
       - name: Stub internal/web/dist for go:embed
         run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+      - name: Download Go dependencies
+        run: bash tools/ci/download-go-modules.sh
       - name: Subscription race detector (shard ${{ matrix.shard }})
         run: bash tools/ci/race-package-shard.sh ./internal/sub ${{ matrix.shard }} 2
 
@@ -206,6 +207,8 @@ jobs:
           cache: true
       - name: Stub internal/web/dist for go:embed
         run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
+      - name: Download Go dependencies
+        run: bash tools/ci/download-go-modules.sh
       - name: Fuzz critical parsers (smoke)
         run: |
           go test -p 12 -run '^$' -fuzz 'FuzzParseLink$' -fuzztime=30s ./internal/util/link/
