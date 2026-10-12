@@ -548,7 +548,10 @@ func (a *SUBController) subs(c *gin.Context) {
 }
 
 func (a *SUBController) hasNativeTLSSubscription(subID string) bool {
-	inbounds, err := a.subService.getInboundsBySubId(subID)
+	// getInboundsBySubId populates per-request client and host caches. Never
+	// mutate the shared controller service during concurrent subscription
+	// fetches: that can intermittently mix users or hide the native protocol.
+	inbounds, err := a.subService.ForRequest("").getInboundsBySubId(subID)
 	if err != nil {
 		return false
 	}
@@ -872,14 +875,16 @@ func (a *SUBController) serveJsonBody(c *gin.Context, alwaysReturnArray bool, co
 	scheme, host, hostWithPort, _ := a.subService.ResolveRequest(c)
 	var jsonSub, header string
 	var err error
-	if strings.EqualFold(c.Query("format"), "hiddify") {
+	format := strings.ToLower(c.Query("format"))
+	isHiddify := strings.Contains(strings.ToLower(c.Request.UserAgent()), "hiddify")
+	// Hiddify needs native sing-box JSON for AnyTLS and ShadowTLS even if the
+	// user imported the panel's /json/ subscription path. Plain Xray JSON
+	// cannot encode either protocol. An explicit format also works when the
+	// importing app does not identify itself in User-Agent.
+	if format == "hiddify" || (isHiddify && (forceSingBox || format == "sing-box" || a.hasNativeTLSSubscription(subId))) {
 		jsonSub, header, err = a.subJsonService.GetHiddifySingBoxJson(subId, host)
-	} else if forceSingBox || strings.EqualFold(c.Query("format"), "sing-box") {
-		if strings.Contains(strings.ToLower(c.Request.UserAgent()), "hiddify") {
-			jsonSub, header, err = a.subJsonService.GetHiddifySingBoxJson(subId, host)
-		} else {
-			jsonSub, header, err = a.subJsonService.GetSingBoxJson(subId, host, alwaysReturnArray)
-		}
+	} else if forceSingBox || format == "sing-box" {
+		jsonSub, header, err = a.subJsonService.GetSingBoxJson(subId, host, alwaysReturnArray)
 	} else {
 		jsonSub, header, err = a.subJsonService.GetJson(subId, host, alwaysReturnArray)
 	}
