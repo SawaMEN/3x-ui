@@ -1512,7 +1512,8 @@ prepare_release_migration() {
         tar -xOf "$cm_archive" x-ui/core-migration.sh > "$cm_helper" || { rm -f "$cm_helper"; return 1; }
         source "$cm_helper"
         rm -f "$cm_helper"
-        trap 'code=$?; core_migration_exit "$code" || code=1; exit "$code"' EXIT
+        xui_download_archive="$cm_archive"
+        trap 'code=$?; core_migration_exit "$code" || code=1; rm -f -- "$xui_download_archive" "${xui_download_archive}.sha256"; exit "$code"' EXIT
         trap 'exit 143' TERM
         trap 'exit 130' INT
         core_migration_prepare_archive "$cm_archive" || return 1
@@ -1938,3 +1939,4 @@ install_x-ui() {
 echo -e "${green}Running...${plain}"
 install_base
 install_x-ui $1
+

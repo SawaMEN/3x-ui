@@ -72,6 +72,11 @@ _report_update_exit() {
             xui_update_error="${xui_update_error:-upgrade rollback failed; inspect retained snapshot}"
         fi
     fi
+    # The archive is outside the staging directory; preflight/rollback errors
+    # used to leave this large download behind even after staging was cleaned.
+    if [[ -n "${xui_download_archive:-}" ]]; then
+        rm -f -- "$xui_download_archive" "${xui_download_archive}.sha256"
+    fi
     if [[ "${code}" -eq 0 ]]; then
         _write_update_status "success" "0" ""
     else
@@ -1084,6 +1089,7 @@ update_x-ui() {
     local machine_arch
     machine_arch="$(arch)"
     local archive="${install_parent}/x-ui-linux-${machine_arch}.tar.gz"
+    xui_download_archive="$archive"
     local asset_url="https://github.com/SawaMEN/3x-ui/releases/download/${tag_version}/x-ui-linux-${machine_arch}.tar.gz"
 
     if ! download_release_asset "${asset_url}" "${archive}"; then
@@ -1141,7 +1147,7 @@ update_x-ui() {
     fi
     source "$cm_helper"
     rm -f "$cm_helper"
-    core_migration_prepare_archive "$archive" || _fail "Pinned modified Sing-box preflight failed; current installation was not changed"
+    core_migration_prepare_archive "$archive" || _fail "Release preflight failed (see error above); current installation was not changed"
 
     if [[ -e ${xui_folder}/ ]]; then
         echo -e "${green}Stopping x-ui...${plain}"
@@ -1378,3 +1384,4 @@ update_x-ui() {
 echo -e "${green}Running...${plain}"
 install_base
 update_x-ui $1
+

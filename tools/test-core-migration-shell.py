@@ -273,4 +273,72 @@ class ReleaseCompatibilityTests(unittest.TestCase):
                 if installed:
                     self.assertEqual((folder / "bin" / "hiddify-core-linux-amd64").read_text(), "existing kernel")
 
+class UpgradeStorageTests(unittest.TestCase):
+    def run_script(self, base, script):
+        env = dict(os.environ, HELPER=str(ROOT / "core-migration.sh"), TEST_ROOT=str(base))
+        result = subprocess.run(["bash", "-c", 'set -eu\nsource "$HELPER"\n' + script],
+                                env=env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        return result
+
+    def test_verified_snapshots_are_bounded_and_failed_backups_survive(self):
+        with tempfile.TemporaryDirectory() as raw:
+            base = Path(raw)
+            marker = ".x-ui-upgrade-verified"
+            for name in ("old", "current", "failed", "unmarked", "foreign"):
+                folder = base / ("x-ui-upgrade." + name)
+                folder.mkdir()
+                (folder / "database").write_text("recovery-data")
+            (base / "x-ui-upgrade.old" / marker).write_text("x-ui verified upgrade v1\n")
+            (base / "x-ui-upgrade.foreign" / marker).write_text("unrecognized marker\n")
+            (base / "x-ui-upgrade.link").symlink_to(base / "x-ui-upgrade.old", target_is_directory=True)
+            self.run_script(base, r'''
+xui_folder="$TEST_ROOT/x-ui"
+cm_backup="$TEST_ROOT/x-ui-upgrade.current"
+core_migration_prune_snapshots
+[[ ! -e "$TEST_ROOT/x-ui-upgrade.old" ]]
+[[ -L "$TEST_ROOT/x-ui-upgrade.link" ]]
+[[ -f "$cm_backup/database" ]]
+for name in failed unmarked foreign; do
+    [[ -f "$TEST_ROOT/x-ui-upgrade.$name/database" ]]
+done
+# A subsequent success removes the previous completed snapshot too.
+mkdir "$TEST_ROOT/x-ui-upgrade.next"
+cm_backup="$TEST_ROOT/x-ui-upgrade.next"
+core_migration_prune_snapshots
+[[ ! -e "$TEST_ROOT/x-ui-upgrade.current" ]]
+[[ -f "$cm_backup/.x-ui-upgrade-verified" ]]
+''')
+
+    def test_low_space_rejects_release_before_staging_or_service_stop(self):
+        with tempfile.TemporaryDirectory() as raw:
+            base = Path(raw)
+            install = base / "x-ui"
+            install.mkdir()
+            (install / "x-ui").write_text("old-panel")
+            with tarfile.open(base / "release.tar.gz", "w:gz") as target:
+                target.add(install, arcname="x-ui")
+            result = self.run_script(base, r'''
+xui_folder="$TEST_ROOT/x-ui"
+XUI_DB_FOLDER="$TEST_ROOT/database"
+df() { printf 'Filesystem 1024-blocks Used Available Capacity Mounted\nmock 100000 99999 1 99%% /\n'; }
+systemctl() { touch "$TEST_ROOT/service-touched"; return 0; }
+if core_migration_prepare_archive "$TEST_ROOT/release.tar.gz"; then exit 21; fi
+[[ "$(cat "$xui_folder/x-ui")" == old-panel ]]
+[[ ! -e "$TEST_ROOT/service-touched" ]]
+[[ -z "${cm_stage:-}" ]]
+core_migration_exit 1
+''')
+            self.assertIn("Insufficient disk space", result.stderr)
+
+    def test_corrupt_archive_rejected_by_space_check(self):
+        with tempfile.TemporaryDirectory() as raw:
+            base = Path(raw)
+            (base / "release.tar.gz").write_bytes(b"invalid-gzip")
+            self.run_script(base, r'''
+xui_folder="$TEST_ROOT/x-ui"
+if core_migration_check_space "$TEST_ROOT/release.tar.gz"; then exit 21; fi
+''')
+
 if __name__ == "__main__": unittest.main()
+
