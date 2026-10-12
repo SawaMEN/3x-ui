@@ -855,7 +855,8 @@
         "fptnBypass": "Connection method",
         "openfluxSecret": "Encryption secret",
         "openfluxOutboundHint": "Channel URLs, priorities and key context are in the JSON below. Importing openflux:// fills them automatically. Use only one active client session per server inbound.",
-        "legacyRealityUnsupported": "This Sing-box does not support ML-DSA REALITY options. Clear them explicitly before saving the configuration."
+        "visionTestseed": "Vision testseed",
+        "getNewSeed": "Get New Seed"
       },
       "info": {
         "mode": "Mode",
@@ -2229,7 +2230,8 @@
         "interface": "Interface",
         "proxyProtocol": "Proxy protocol",
         "tcpUserTimeoutMs": "TCP user timeout (ms)",
-        "tcpKeepAliveIdleS": "TCP keep-alive idle (s)"
+        "tcpKeepAliveIdleS": "TCP keep-alive idle (s)",
+        "visionTestpre": "Vision testpre"
       },
       "outbound": {
         "tag": "Tag",

@@ -40,6 +40,27 @@ cp -- "$task_root/deploy/hiddify/clash_user_test.go.in" "$task_source/core/hiddi
 
 cp -- "$task_root/deploy/hiddify/sniff_override_test.go.in" "$task_source/core/hiddify-sing-box/route/rule/xui_panel_sniff_test.go"
 
+# Modify verified dependency copies, never the shared Go module cache.
+task_module_cache=$(go env GOMODCACHE)
+(
+  cd -- "$task_source/core"
+  GOTOOLCHAIN="${target[5]}" go mod download github.com/metacubex/utls@v1.8.8 github.com/starifly/sing-vmess@v0.2.7-mod.9
+)
+mkdir -p "$task_source/core/xui-dependencies"
+cp -a "$task_module_cache/github.com/metacubex/utls@v1.8.8" "$task_source/core/xui-dependencies/utls"
+cp -a "$task_module_cache/github.com/starifly/sing-vmess@v0.2.7-mod.9" "$task_source/core/xui-dependencies/sing-vmess"
+chmod -R u+w "$task_source/core/xui-dependencies"
+git -C "$task_source/core" apply --directory=xui-dependencies/utls "$task_root/deploy/hiddify/utls-protection.patch"
+git -C "$task_source/core" apply --directory=xui-dependencies/sing-vmess "$task_root/deploy/hiddify/sing-vmess-protection.patch"
+git -C "$task_source/core/hiddify-sing-box" apply "$task_root/deploy/hiddify/protection-options.patch"
+cp "$task_root/deploy/hiddify/reality_protection_test.go.in" "$task_source/core/hiddify-sing-box/common/tls/xui_panel_reality_test.go"
+cp "$task_root/deploy/hiddify/vision_preconnect_test.go.in" "$task_source/core/hiddify-sing-box/protocol/vless/xui_preconnect_test.go"
+cp "$task_root/deploy/hiddify/vision_padding_test.go.in" "$task_source/core/xui-dependencies/sing-vmess/vless/xui_vision_options_test.go"
+(
+  cd -- "$task_source/core"
+  GOTOOLCHAIN="${target[5]}" go mod edit -replace github.com/metacubex/utls=./xui-dependencies/utls -replace github.com/sagernet/sing-vmess=./xui-dependencies/sing-vmess
+)
+
 task_goos=${GOOS:-$(go env GOOS)}
 task_goarch=${GOARCH:-$(go env GOARCH)}
 task_binary="hiddify-core-$task_goos-$task_goarch"
@@ -63,6 +84,7 @@ if [[ "$task_goos" == "$(go env GOHOSTOS)" && "$task_goarch" == "$(go env GOHOST
     CGO_ENABLED="$task_cgo" GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_link_flags" -tags "${target[3]}" github.com/sagernet/sing-box/experimental/clashapi/trafficontrol -run '^TestXUIPanelAuthenticatedUserIsConnectionMetadata$' -count=1
     CGO_ENABLED="$task_cgo" GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_link_flags" -tags "${target[3]}" github.com/sagernet/sing-box/option -run '^TestXUIPanelHTTP1RoundTrip$' -count=1
     CGO_ENABLED="$task_cgo" GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_link_flags" -tags "${target[3]}" github.com/sagernet/sing-box/route/rule -run '^TestXUIPanelSniffOverrideAction$' -count=1
+    CGO_ENABLED="$task_cgo" GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_link_flags" -tags "${target[3]}" github.com/sagernet/sing-box/common/tls github.com/sagernet/sing-box/protocol/vless github.com/sagernet/sing-vmess/vless -run '^TestXUIPanel(Reality|Preconnect|Vision)' -count=1 -timeout=60s
   )
 fi
 (

@@ -855,7 +855,8 @@
         "fptnBypass": "Способ подключения",
         "openfluxSecret": "Секрет шифрования",
         "openfluxOutboundHint": "Адреса каналов, приоритеты и контекст находятся в JSON ниже. Импорт openflux:// переносит их автоматически. Для одного серверного inbound используйте только одну активную клиентскую сессию.",
-        "legacyRealityUnsupported": "Параметры ML-DSA для REALITY не поддерживаются этим Sing-box. Удалите их явно, чтобы сохранить конфигурацию."
+        "visionTestseed": "Vision testseed",
+        "getNewSeed": "Получить новый Seed"
       },
       "info": {
         "mode": "Режим",
@@ -2110,7 +2111,8 @@
         "interface": "Интерфейс",
         "proxyProtocol": "Proxy protocol",
         "tcpUserTimeoutMs": "TCP user timeout (мс)",
-        "tcpKeepAliveIdleS": "TCP keep-alive idle (с)"
+        "tcpKeepAliveIdleS": "TCP keep-alive idle (с)",
+        "visionTestpre": "Vision testpre"
       },
       "outbound": {
         "tag": "Тег",

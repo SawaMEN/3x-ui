@@ -1,3 +1,4 @@
+import { VisionTestseedSchema } from '@/schemas/protocols/vision';
 import { z } from 'zod';
 
 import { PortSchema, SniffingSchema, type Sniffing } from '@/schemas/primitives';
@@ -44,8 +45,8 @@ export const VlessOutboundFormSettingsSchema = z.object({
   encryption: z.string().min(1).default('none'),
   reverseTag: z.string().default(''),
   reverseSniffing: SniffingSchema.default(DEFAULT_SNIFFING),
-  testpre: z.number().int().min(0).default(0),
-  testseed: z.array(z.number().int().positive()).default([]),
+  testpre: z.number().int().min(0).max(64).default(0),
+  testseed: VisionTestseedSchema.default([]),
 });
 export type VlessOutboundFormSettings = z.infer<typeof VlessOutboundFormSettingsSchema>;
 

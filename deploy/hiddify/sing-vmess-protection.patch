@@ -1,0 +1,234 @@
+--- a/vless/vision.go
++++ b/vless/vision.go
+@@ -19,15 +19,15 @@
+ 	N "github.com/sagernet/sing/common/network"
+ )
+ 
+-var tlsRegistry []func(conn net.Conn) (loaded bool, netConn net.Conn, reflectType reflect.Type, reflectPointer uintptr)
++var tlsRegistry []func(conn net.Conn) (loaded bool, netConn net.Conn, reflectType reflect.Type, reflectPointer unsafe.Pointer)
+ 
+ func init() {
+-	tlsRegistry = append(tlsRegistry, func(conn net.Conn) (loaded bool, netConn net.Conn, reflectType reflect.Type, reflectPointer uintptr) {
++	tlsRegistry = append(tlsRegistry, func(conn net.Conn) (loaded bool, netConn net.Conn, reflectType reflect.Type, reflectPointer unsafe.Pointer) {
+ 		tlsConn, loaded := N.CastReader[*tls.Conn](conn)
+ 		if !loaded {
+ 			return
+ 		}
+-		return true, tlsConn.NetConn(), reflect.TypeOf(tlsConn).Elem(), uintptr(unsafe.Pointer(tlsConn))
++		return true, tlsConn.NetConn(), reflect.TypeOf(tlsConn).Elem(), unsafe.Pointer(tlsConn)
+ 	})
+ }
+ 
+@@ -45,6 +45,7 @@
+ 	directConn  net.Conn
+ 	logger      logger.Logger
+ 
++	testseed               [4]uint32
+ 	userUUID               [16]byte
+ 	isTLS                  bool
+ 	numberOfPacketToFilter int
+@@ -98,6 +99,7 @@
+ 		directConn: info.rawConn,
+ 		logger:     logger,
+ 
++		testseed:               [4]uint32{900, 500, 900, 256},
+ 		userUUID:               userUUID,
+ 		numberOfPacketToFilter: 8,
+ 		remainingServerHello:   -1,
+@@ -182,10 +184,13 @@
+ 			info.netConn = netConn
+ 			info.rawConn = netConn
+ 
+-			inputField, _ := reflectType.FieldByName("input")
+-			rawInputField, _ := reflectType.FieldByName("rawInput")
+-			info.input = (*bytes.Reader)(unsafe.Pointer(reflectPointer + inputField.Offset))
+-			info.rawInput = (*bytes.Buffer)(unsafe.Pointer(reflectPointer + rawInputField.Offset))
++			inputField, inputOK := reflectType.FieldByName("input")
++			rawInputField, rawInputOK := reflectType.FieldByName("rawInput")
++			if !inputOK || !rawInputOK {
++				return nil, E.New("vision: TLS layer missing input/rawInput fields")
++			}
++			info.input = (*bytes.Reader)(unsafe.Add(reflectPointer, inputField.Offset))
++			info.rawInput = (*bytes.Buffer)(unsafe.Add(reflectPointer, rawInputField.Offset))
+ 			return info, nil
+ 		}
+ 	}
+@@ -195,7 +200,7 @@
+ 
+ func extractInputFields(encConn net.Conn, info *visionConnInfo) error {
+ 	reflectType := reflect.TypeOf(encConn).Elem()
+-	reflectPointer := uintptr(unsafe.Pointer(reflect.ValueOf(encConn).Pointer()))
++	reflectPointer := reflect.ValueOf(encConn).UnsafePointer()
+ 
+ 	inputField, inputOk := reflectType.FieldByName("input")
+ 	rawInputField, rawInputOk := reflectType.FieldByName("rawInput")
+@@ -204,8 +209,8 @@
+ 		return E.New("vision: encryption layer missing input/rawInput fields")
+ 	}
+ 
+-	info.input = (*bytes.Reader)(unsafe.Pointer(reflectPointer + inputField.Offset))
+-	info.rawInput = (*bytes.Buffer)(unsafe.Pointer(reflectPointer + rawInputField.Offset))
++	info.input = (*bytes.Reader)(unsafe.Add(reflectPointer, inputField.Offset))
++	info.rawInput = (*bytes.Buffer)(unsafe.Add(reflectPointer, rawInputField.Offset))
+ 	return nil
+ }
+ 
+@@ -213,10 +218,13 @@
+ 	for _, tlsCreator := range tlsRegistry {
+ 		loaded, _, reflectType, reflectPointer := tlsCreator(tlsConn)
+ 		if loaded {
+-			inputField, _ := reflectType.FieldByName("input")
+-			rawInputField, _ := reflectType.FieldByName("rawInput")
+-			info.input = (*bytes.Reader)(unsafe.Pointer(reflectPointer + inputField.Offset))
+-			info.rawInput = (*bytes.Buffer)(unsafe.Pointer(reflectPointer + rawInputField.Offset))
++			inputField, inputOK := reflectType.FieldByName("input")
++			rawInputField, rawInputOK := reflectType.FieldByName("rawInput")
++			if !inputOK || !rawInputOK {
++				return E.New("vision: TLS layer missing input/rawInput fields")
++			}
++			info.input = (*bytes.Reader)(unsafe.Add(reflectPointer, inputField.Offset))
++			info.rawInput = (*bytes.Buffer)(unsafe.Add(reflectPointer, rawInputField.Offset))
+ 			return nil
+ 		}
+ 	}
+@@ -597,11 +605,11 @@
+ 	if buffer != nil {
+ 		contentLen = buffer.Len()
+ 	}
+-	if contentLen < 900 && c.isTLS {
+-		l, _ := rand.Int(rand.Reader, big.NewInt(500))
+-		paddingLen = int(l.Int64()) + 900 - contentLen
++	if contentLen < int(c.testseed[0]) && c.isTLS {
++		l, _ := rand.Int(rand.Reader, big.NewInt(int64(c.testseed[1])))
++		paddingLen = int(l.Int64()) + int(c.testseed[2]) - contentLen
+ 	} else {
+-		l, _ := rand.Int(rand.Reader, big.NewInt(256))
++		l, _ := rand.Int(rand.Reader, big.NewInt(int64(c.testseed[3])))
+ 		paddingLen = int(l.Int64())
+ 	}
+ 	var bufferLen int
+--- a/vless/vision_utls.go
++++ b/vless/vision_utls.go
+@@ -13,14 +13,14 @@
+ )
+ 
+ func init() {
+-	tlsRegistry = append(tlsRegistry, func(conn net.Conn) (loaded bool, netConn net.Conn, reflectType reflect.Type, reflectPointer uintptr) {
++	tlsRegistry = append(tlsRegistry, func(conn net.Conn) (loaded bool, netConn net.Conn, reflectType reflect.Type, reflectPointer unsafe.Pointer) {
+ 		uConn, loaded := N.CastReader[*utls.UConn](conn)
+ 		if loaded {
+-			return true, uConn.NetConn(), reflect.TypeOf(uConn.Conn).Elem(), uintptr(unsafe.Pointer(uConn.Conn))
++			return true, uConn.NetConn(), reflect.TypeOf(uConn.Conn).Elem(), unsafe.Pointer(uConn.Conn)
+ 		}
+ 		tlsConn, loaded := N.CastReader[*utls.Conn](conn)
+ 		if loaded {
+-			return true, tlsConn.NetConn(), reflect.TypeOf(tlsConn).Elem(), uintptr(unsafe.Pointer(tlsConn))
++			return true, tlsConn.NetConn(), reflect.TypeOf(tlsConn).Elem(), unsafe.Pointer(tlsConn)
+ 		}
+ 		return
+ 	})
+--- a/vless/client.go
++++ b/vless/client.go
+@@ -19,9 +19,10 @@
+ )
+ 
+ type Client struct {
+-	key    [16]byte
+-	flow   string
+-	logger logger.Logger
++	key      [16]byte
++	flow     string
++	logger   logger.Logger
++	testseed [4]uint32
+ }
+ 
+ func NewClient(userId string, flow string, logger logger.Logger) (*Client, error) {
+@@ -34,7 +35,7 @@
+ 	default:
+ 		return nil, E.New("unsupported flow: " + flow)
+ 	}
+-	return &Client{user, flow, logger}, nil
++	return &Client{key: user, flow: flow, logger: logger, testseed: [4]uint32{900, 500, 900, 256}}, nil
+ }
+ 
+ func (c *Client) prepareConn(conn net.Conn, tlsConn net.Conn) (net.Conn, error) {
+@@ -49,6 +50,7 @@
+ 		if err != nil {
+ 			return nil, E.Cause(err, "initialize vision")
+ 		}
++		protocolConn.testseed = c.testseed
+ 		conn = protocolConn
+ 	}
+ 	return conn, nil
+--- a/vless/service.go
++++ b/vless/service.go
+@@ -21,6 +21,7 @@
+ type Service[T comparable] struct {
+ 	userMap  map[[16]byte]T
+ 	userFlow map[T]string
++	testseed [4]uint32
+ 	logger   logger.Logger
+ 	handler  Handler
+ }
+@@ -32,8 +33,9 @@
+ 
+ func NewService[T comparable](logger logger.Logger, handler Handler) *Service[T] {
+ 	return &Service[T]{
+-		logger:  logger,
+-		handler: handler,
++		testseed: [4]uint32{900, 500, 900, 256},
++		logger:   logger,
++		handler:  handler,
+ 	}
+ }
+ 
+@@ -80,7 +82,12 @@
+ 	responseConn := &serverConn{ExtendedConn: bufio.NewExtendedConn(conn)}
+ 	switch userFlow {
+ 	case FlowVision:
+-		conn, err = NewVisionConn(responseConn, conn, request.UUID, s.logger, canSplice)
++		var visionConn *VisionConn
++		visionConn, err = NewVisionConn(responseConn, conn, request.UUID, s.logger, canSplice)
++		if err == nil {
++			visionConn.testseed = s.testseed
++			conn = visionConn
++		}
+ 		if err != nil {
+ 			return E.Cause(err, "initialize vision")
+ 		}
+--- /dev/null
++++ b/vless/xui_vision_options.go
+@@ -0,0 +1,33 @@
++package vless
++
++import "fmt"
++
++// ValidateVisionTestseed bounds padding to the uint16 Vision wire format.
++func ValidateVisionTestseed(values []uint32) ([4]uint32, error) {
++	seed := [4]uint32{900, 500, 900, 256}
++	if len(values) == 0 {
++		return seed, nil
++	}
++	if len(values) != 4 {
++		return seed, fmt.Errorf("testseed must contain exactly four integers")
++	}
++	copy(seed[:], values)
++	if seed[0] == 0 || seed[1] == 0 || seed[3] == 0 || seed[2] < seed[0]-1 || uint64(seed[1])+uint64(seed[2])-1 > 65535 || seed[3] > 65536 {
++		return seed, fmt.Errorf("testseed produces invalid Vision padding")
++	}
++	return seed, nil
++}
++func (c *Client) SetVisionTestseed(values []uint32) error {
++	seed, err := ValidateVisionTestseed(values)
++	if err == nil {
++		c.testseed = seed
++	}
++	return err
++}
++func (s *Service[T]) SetVisionTestseed(values []uint32) error {
++	seed, err := ValidateVisionTestseed(values)
++	if err == nil {
++		s.testseed = seed
++	}
++	return err
++}

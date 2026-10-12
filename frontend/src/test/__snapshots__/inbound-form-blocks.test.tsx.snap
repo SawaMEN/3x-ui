@@ -14,6 +14,8 @@ exports[`inbound security forms > RealityForm field structure is stable 1`] = `
   "SpiderX",
   "Public Key",
   "Private Key",
+  "mldsa65 Seed",
+  "mldsa65 Verify",
   "Master Key Log",
 ]
 `;

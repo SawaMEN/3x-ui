@@ -102,6 +102,7 @@ describe('inbound security forms', () => {
         randomizeSpiderX={noop}
         genRealityKeypair={noop}
         clearRealityKeypair={noop}
+        genMldsa65={noop}
         clearMldsa65={noop}
       />,
     );

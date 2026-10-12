@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	TargetVersion    = "sawamen-b5749002266b-panel4"
+	TargetVersion    = "sawamen-b5749002266b-panel5"
 	TargetRevision   = "b5749002266b9782803669138494ef6937eb4e95"
 	StatsQueryMethod = "/v2ray.core.app.stats.command.StatsService/QueryStats"
 )
@@ -49,6 +49,10 @@ func translate(raw map[string]any, inbound bool) (map[string]any, error) {
 	label := fmt.Sprintf("sing-box %s %q", direction(inbound), copy["tag"])
 	if inbound && protocol == "tun" {
 		return translateTun(copy)
+	}
+	visionOptions, realityOptions, err := takeProtectionExtensions(settings, stream, protocol, inbound)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", label, err)
 	}
 	if err := rejectProtectionLoss(settings, stream, label); err != nil {
 		return nil, err
@@ -128,6 +132,16 @@ func translate(raw map[string]any, inbound bool) (map[string]any, error) {
 	}
 	if mask != nil {
 		out["final_mask"] = mask
+	}
+	for key, value := range visionOptions {
+		out[key] = value
+	}
+	if len(realityOptions) > 0 {
+		tls := object(out, "tls")
+		reality := object(tls, "reality")
+		for key, value := range realityOptions {
+			reality[key] = value
+		}
 	}
 	return out, nil
 }

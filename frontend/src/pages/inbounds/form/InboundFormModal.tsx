@@ -446,6 +446,7 @@ export default function InboundFormModal({
   const {
     genRealityKeypair,
     clearRealityKeypair,
+    genMldsa65,
     clearMldsa65,
     scanRealityTarget,
     scanRealityCandidates,
@@ -1230,6 +1231,7 @@ export default function InboundFormModal({
           randomizeSpiderX={randomizeSpiderX}
           genRealityKeypair={genRealityKeypair}
           clearRealityKeypair={clearRealityKeypair}
+          genMldsa65={genMldsa65}
           clearMldsa65={clearMldsa65}
         />
       )}

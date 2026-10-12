@@ -14,7 +14,7 @@
       "hiddify-sing-box": "https://github.com/SawaMEN/hiddify-sing-box",
       "ray2sing": "https://github.com/hiddify/ray2sing"
     },
-    "version": "sawamen-b5749002266b-panel4"
+    "version": "sawamen-b5749002266b-panel5"
   },
   "runtime_contract": {
     "raw_config_command": [
@@ -120,6 +120,16 @@
     "cronet_linkage_profiles": {
       "purego": "package pinned platform libcronet beside binary",
       "musl": "with_musl, CGO_ENABLED=1, statically linked Cronet; release and Docker"
+    },
+    "protection_options_overlay": "deploy/hiddify/protection-options.patch",
+    "utls_protection_overlay": "deploy/hiddify/utls-protection.patch",
+    "vision_protection_overlay": "deploy/hiddify/sing-vmess-protection.patch",
+    "reality_protection_test_overlay": "deploy/hiddify/reality_protection_test.go.in",
+    "vision_preconnect_test_overlay": "deploy/hiddify/vision_preconnect_test.go.in",
+    "vision_padding_test_overlay": "deploy/hiddify/vision_padding_test.go.in",
+    "protection_dependency_versions": {
+      "github.com/metacubex/utls": "v1.8.8",
+      "github.com/starifly/sing-vmess": "v0.2.7-mod.9"
     }
   },
   "verification": {

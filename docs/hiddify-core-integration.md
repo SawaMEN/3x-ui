@@ -70,7 +70,7 @@ config и команде `srun`; клиентский `run` не принима�
 Stop выполняет ограниченное по времени завершение и при уже отменённом контексте
 панели. Watchdog восстанавливает процесс после сбоя; ручная остановка сохраняется.
 
-`version` обязан сообщить `sawamen-b5749002266b-panel4`, полный source revision и точные
+`version` обязан сообщить `sawamen-b5749002266b-panel5`, полный source revision и точные
 обязательные tags. Проверка больше не принимает совпадение tag по подстроке.
 Неподходящая сборка отклоняется с ошибкой hiddify-core. Выбор sing-box возвращает
 capabilities интеграции, включая Clash, rulesets и статистику, без обещания HotReload.
@@ -186,3 +186,6 @@ runtime страницы. Клиентские форматы подписок �
 installation/database snapshot остаётся для восстановления.
 
 [Изменения, миграция контейнеров и границы проверки](hiddify-core-stage-10-verification.md).
+
+Новые параметры Vision и REALITY в сборке panel5 описаны в
+[sing-box-protection-support.md](sing-box-protection-support.md).

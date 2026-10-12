@@ -87,7 +87,7 @@ func TestTranslateRejectsProtectionLossAndUnknownXHTTP(t *testing.T) {
 		{"ML-DSA", func(r map[string]any) {
 			object(r, "streamSettings")["realitySettings"] = map[string]any{"mldsa65Seed": "secret"}
 		}, "mldsa65Seed cannot be preserved"},
-		{"Vision seed", func(r map[string]any) { object(r, "settings")["testseed"] = []any{1, 2, 3, 4} }, "testseed cannot be preserved"},
+		{"Vision seed", func(r map[string]any) { object(r, "settings")["testseed"] = []any{1, 0, 3, 4} }, "invalid Vision testseed"},
 		{"new session table", func(r map[string]any) {
 			object(object(r, "streamSettings"), "xhttpSettings")["sessionIDTable"] = "BASE36"
 		}, "unsupported xhttpSettings.sessionIDTable"},
