@@ -2550,6 +2550,7 @@ func applyShareNetworkParams(stream map[string]any, streamNetwork string, params
 // VMess base64 JSON link object. VMess supports arbitrary keys, so we
 // flatten the SplitHTTPConfig "extra" fields directly onto obj.
 func applyXhttpExtraObj(xhttp map[string]any, obj map[string]any) {
+	xhttp = effectiveXhttpOptions(xhttp)
 	if xpb, ok := xhttp["xPaddingBytes"].(string); ok && len(xpb) > 0 {
 		obj["x_padding_bytes"] = xpb
 	}
@@ -2599,6 +2600,7 @@ func applyVmessNetworkParams(stream map[string]any, network string, obj map[stri
 		applyPathAndHostObj(httpupgrade, obj)
 	case "xhttp":
 		xhttp, _ := stream["xhttpSettings"].(map[string]any)
+		xhttp = effectiveXhttpOptions(xhttp)
 		applyPathAndHostObj(xhttp, obj)
 		if mode, ok := xhttp["mode"].(string); ok {
 			obj["mode"] = mode
@@ -3302,6 +3304,7 @@ func searchKey(data any, key string) (any, bool) {
 // Truthy-only guards keep default inbounds emitting the same compact URL
 // they did before this helper grew.
 func buildXhttpExtra(xhttp map[string]any) map[string]any {
+	xhttp = effectiveXhttpOptions(xhttp)
 	if xhttp == nil {
 		return nil
 	}
@@ -3341,6 +3344,16 @@ func buildXhttpExtra(xhttp map[string]any) map[string]any {
 	for _, field := range stringFields {
 		if v, ok := xhttp[field].(string); ok && len(v) > 0 && v != coreDefaults[field] {
 			extra[field] = v
+		}
+	}
+
+	// Xray range fields also accept JSON numbers. API-imported inbounds
+	// must preserve these values just like forms using string ranges.
+	for _, field := range []string{"xPaddingBytes", "scMaxEachPostBytes", "scMinPostsIntervalMs", "sessionIDLength"} {
+		if value, ok := nonZeroShareValue(xhttp[field]); ok {
+			if _, isString := value.(string); !isString {
+				extra[field] = value
+			}
 		}
 	}
 
@@ -3459,6 +3472,7 @@ func nonEmptyShareObject(v any) (any, bool) {
 //     xray-core clients (v2rayNG, Happ, Furious, Exclave, …) pick up the
 //     bidirectional fields beyond path/host/mode.
 func applyXhttpExtraParams(xhttp map[string]any, params map[string]string) {
+	xhttp = effectiveXhttpOptions(xhttp)
 	if xhttp == nil {
 		return
 	}

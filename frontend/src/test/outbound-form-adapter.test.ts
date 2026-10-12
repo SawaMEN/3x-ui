@@ -864,3 +864,49 @@ it('does not invent a Vision testseed when converting native-compatible VLESS', 
   });
   expect(formValuesToWirePayload(form).settings).not.toHaveProperty('testseed');
 });
+
+describe('XHTTP outbound extra precedence', () => {
+  it('hydrates XMUX inside extra and removes the stale extra wrapper on save', () => {
+    const raw = {
+      protocol: 'vless',
+      tag: 'audit',
+      settings: { address: 'edge.example', port: 443, id: '11111111-1111-4111-8111-111111111111' },
+      streamSettings: {
+        network: 'xhttp',
+        security: 'none',
+        xhttpSettings: {
+          path: '/audit',
+          mode: 'packet-up',
+          scMinPostsIntervalMs: '999',
+          extra: {
+            path: '/ignored',
+            scMinPostsIntervalMs: '40-80',
+            xmux: { maxConcurrency: '4-8' },
+            downloadSettings: {
+              address: 'download.example',
+              port: 443,
+              network: 'xhttp',
+              xhttpSettings: { path: '/audit' },
+            },
+          },
+        },
+      },
+    };
+    const form = rawOutboundToFormValues(raw);
+    const wire = formValuesToWirePayload(form);
+    const xhttp = (wire.streamSettings as Record<string, unknown>).xhttpSettings as Record<
+      string,
+      unknown
+    >;
+    expect(xhttp).not.toHaveProperty('extra');
+    expect(xhttp).not.toHaveProperty('enableXmux');
+    expect(xhttp).toMatchObject({
+      path: '/audit',
+      mode: 'packet-up',
+      scMinPostsIntervalMs: '40-80',
+      xmux: { maxConcurrency: '4-8' },
+      downloadSettings: { address: 'download.example' },
+    });
+    expect(raw.streamSettings.xhttpSettings.extra.path).toBe('/ignored');
+  });
+});

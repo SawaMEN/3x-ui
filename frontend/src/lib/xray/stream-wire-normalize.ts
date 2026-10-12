@@ -1,3 +1,5 @@
+import { migrateLegacyXhttp } from '@/schemas/protocols/stream/xhttp';
+
 // Shapes the streamSettings subtree that 3x-ui persists to match what
 // xray-core actually consumes. The panel's Zod defaults mirror the full
 // SplitHTTPConfig / SockoptObject schema, but many fields are mode-specific
@@ -222,7 +224,7 @@ export function normalizeXhttpForWire(
   raw: Record<string, unknown>,
   side: StreamWireSide,
 ): Record<string, unknown> {
-  const out: Record<string, unknown> = { ...raw };
+  const out = migrateLegacyXhttp(raw) as Record<string, unknown>;
   liftLegacyXhttpSessionKeys(out);
   const mode = typeof out.mode === 'string' && out.mode !== '' ? out.mode : 'auto';
   const enableXmux = out.enableXmux === true;
@@ -236,7 +238,7 @@ export function normalizeXhttpForWire(
     if (out.scMinPostsIntervalMs === '' || out.scMinPostsIntervalMs === '30') {
       delete out.scMinPostsIntervalMs;
     }
-    delete out.uplinkChunkSize;
+    // Client tuning is persisted on inbounds for subscription propagation.
   }
 
   if (isRecord(out.xmux)) {

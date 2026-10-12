@@ -83,12 +83,14 @@ function buildXhttpExtra(xhttp: XHttpStreamSettings | undefined): Record<string,
     'uplinkDataPlacement',
     'uplinkDataKey',
     'scMaxEachPostBytes',
+    'scMinPostsIntervalMs',
   ] as const;
   // Values matching xray-core's own defaults stay off the wire — old panels
   // seeded them into every config and the literal values are a DPI
   // fingerprint (#5141). Mirrors the sub service's filter.
   const coreDefaults: Partial<Record<(typeof stringFields)[number], string>> = {
     scMaxEachPostBytes: '1000000',
+    scMinPostsIntervalMs: '30',
   };
   for (const k of stringFields) {
     const v = xhttp[k];
@@ -103,6 +105,11 @@ function buildXhttpExtra(xhttp: XHttpStreamSettings | undefined): Record<string,
   if (typeof extra.sessionIDKey === 'string') {
     extra.sessionKey = extra.sessionIDKey;
   }
+
+  if (xhttp.noGRPCHeader === true) extra.noGRPCHeader = true;
+  if (xhttp.uplinkChunkSize > 0) extra.uplinkChunkSize = xhttp.uplinkChunkSize;
+  if (xhttp.xmux) extra.xmux = xhttp.xmux;
+  if (xhttp.downloadSettings) extra.downloadSettings = xhttp.downloadSettings;
 
   // Headers on the wire are a record; emit them as a map upstream's
   // SplitHTTPConfig.headers expects, dropping Host (already on the URL).

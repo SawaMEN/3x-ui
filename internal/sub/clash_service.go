@@ -966,6 +966,7 @@ func (s *SubClashService) buildAmneziaWGProxy(subReq *SubService, inbound *model
 //
 // Returns nil if no non-trivial fields are present.
 func buildXhttpClashOpts(xhttp map[string]any) map[string]any {
+	xhttp = effectiveXhttpOptions(xhttp)
 	if xhttp == nil {
 		return nil
 	}
@@ -1010,6 +1011,14 @@ func buildXhttpClashOpts(xhttp map[string]any) map[string]any {
 	for _, f := range stringFields {
 		if v, ok := xhttp[f.src].(string); ok && v != "" && (f.skipValue == "" || v != f.skipValue) {
 			opts[f.dst] = v
+		}
+	}
+
+	for src, dst := range map[string]string{"xPaddingBytes": "x-padding-bytes", "scMaxEachPostBytes": "sc-max-each-post-bytes", "scMinPostsIntervalMs": "sc-min-posts-interval-ms", "sessionIDLength": "session-id-length"} {
+		if value, ok := nonZeroShareValue(xhttp[src]); ok {
+			if _, isString := value.(string); !isString {
+				opts[dst] = fmt.Sprint(value)
+			}
 		}
 	}
 

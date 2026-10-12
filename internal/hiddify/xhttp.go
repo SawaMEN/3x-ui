@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"maps"
 	"reflect"
+	"strings"
 )
 
 var xhttpFields = map[string]string{
@@ -41,6 +42,18 @@ func effectiveXHTTPOptions(raw map[string]any, label string) (map[string]any, er
 			}
 		}
 	}
+	if headers, ok := options["headers"].(map[string]any); ok {
+		copy := maps.Clone(headers)
+		for name, value := range copy {
+			if strings.EqualFold(name, "host") {
+				if host, _ := options["host"].(string); host == "" {
+					options["host"] = value
+				}
+				delete(copy, name)
+			}
+		}
+		options["headers"] = copy
+	}
 	return options, nil
 }
 
@@ -72,7 +85,8 @@ func translateXHTTP(raw map[string]any, inbound bool, label string) (map[string]
 		case "downloadSettings":
 			if meaningful(value) {
 				if inbound {
-					return nil, fmt.Errorf("%s: downloadSettings is outbound-only", label)
+					// Kept on the panel inbound for subscriptions, not the listener.
+					continue
 				}
 				download, ok := value.(map[string]any)
 				if !ok {

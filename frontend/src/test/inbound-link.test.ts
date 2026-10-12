@@ -1274,3 +1274,49 @@ describe('genTuicLink', () => {
     expect(link).not.toContain('#TUIC-Node-US-US');
   });
 });
+
+describe('XHTTP client tuning in panel links', () => {
+  it('keeps download settings, XMUX and packet-up tuning through a VLESS link', () => {
+    const inbound = InboundSchema.parse({
+      protocol: 'vless',
+      port: 443,
+      settings: { decryption: 'none', clients: [] },
+      streamSettings: {
+        network: 'xhttp',
+        security: 'none',
+        xhttpSettings: {
+          path: '/audit',
+          mode: 'packet-up',
+          scMinPostsIntervalMs: '40-80',
+          uplinkChunkSize: 4096,
+          noGRPCHeader: true,
+          xmux: { maxConcurrency: '8-16' },
+          downloadSettings: {
+            address: 'download.example',
+            port: 443,
+            network: 'xhttp',
+            xhttpSettings: { path: '/audit' },
+          },
+        },
+      },
+    });
+    const link = genVlessLink({
+      inbound,
+      address: 'example.test',
+      port: 443,
+      forceTls: 'same',
+      remark: 'audit',
+      clientId: '11111111-1111-4111-8111-111111111111',
+      flow: '',
+      externalProxy: null,
+    });
+    const extra = JSON.parse(new URL(link).searchParams.get('extra')!);
+    expect(extra).toMatchObject({
+      scMinPostsIntervalMs: '40-80',
+      uplinkChunkSize: 4096,
+      noGRPCHeader: true,
+      xmux: { maxConcurrency: '8-16' },
+      downloadSettings: { address: 'download.example' },
+    });
+  });
+});

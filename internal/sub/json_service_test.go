@@ -343,12 +343,12 @@ func TestSubJsonServiceXmuxSuppressesGlobalMux(t *testing.T) {
 	}
 }
 
-func TestSubJsonServiceGlobalMuxWhenNoXmux(t *testing.T) {
+func TestSubJsonServiceGlobalMuxForTCP(t *testing.T) {
 	globalMux := `{"enabled":true,"concurrency":8}`
 	svc := NewSubJsonService(globalMux, "", "", "", nil)
 
-	// When no xmux is present, the global subJsonMux should be used.
-	stream := `{"network":"xhttp","security":"tls","tlsSettings":{"serverName":"example.com"},"xhttpSettings":{"path":"/api","mode":"packet-up"}}`
+	// TCP transports can use global Mux; XHTTP is covered separately.
+	stream := `{"network":"tcp","security":"tls","tlsSettings":{"serverName":"example.com"},"tcpSettings":{"header":{"type":"none"}}}`
 	parsed := svc.streamData(stream, "")
 
 	mux := globalMux

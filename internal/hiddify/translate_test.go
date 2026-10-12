@@ -181,3 +181,48 @@ func TestDownloadRejectsMalformedXHTTPOptions(t *testing.T) {
 		}
 	}
 }
+
+func TestInboundXHTTPDownloadMetadataIsSubscriptionOnly(t *testing.T) {
+	raw := vlessInbound()
+	extra := object(object(object(raw, "streamSettings"), "xhttpSettings"), "extra")
+	extra["downloadSettings"] = map[string]any{"address": "download.example", "port": 443, "network": "xhttp", "xhttpSettings": map[string]any{"path": "/audit"}}
+	before, _ := json.Marshal(raw)
+	out, err := TranslateInbound(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := object(out, "transport")["download"]; exists {
+		t.Fatal("client download configured on listener")
+	}
+	checkProtectionConfig(t, "inbounds", out)
+	after, _ := json.Marshal(raw)
+	if string(before) != string(after) {
+		t.Fatal("subscription metadata was mutated")
+	}
+}
+
+func TestXHTTPHostHeaderMigratesWithoutMutatingSource(t *testing.T) {
+	for _, host := range []string{"", "explicit.example"} {
+		raw := vlessInbound()
+		xhttp := object(object(raw, "streamSettings"), "xhttpSettings")
+		xhttp["host"] = host
+		extra := object(xhttp, "extra")
+		extra["headers"] = map[string]any{"hOsT": "legacy.example", "X-Audit": "preserved"}
+		out, err := TranslateInbound(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		expected := host
+		if expected == "" {
+			expected = "legacy.example"
+		}
+		transport := object(out, "transport")
+		if transport["host"] != expected || len(object(transport, "headers")) != 1 {
+			t.Fatal(transport)
+		}
+		if object(extra, "headers")["hOsT"] != "legacy.example" {
+			t.Fatal("mutated source")
+		}
+		checkProtectionConfig(t, "inbounds", out)
+	}
+}

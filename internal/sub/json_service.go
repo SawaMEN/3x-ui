@@ -1231,14 +1231,11 @@ func (s *SubJsonService) getConfig(subReq *SubService, inbound *model.Inbound, c
 		defaultDest = host
 	}
 
-	// Per-inbound xmux takes precedence over the global subJsonMux.
-	// When xmux is present inside xhttpSettings, XHTTP multiplexing
-	// is handled by xmux — don't also set the legacy outbound.Mux.
+	// XHTTP always multiplexes its own HTTP connections, including when
+	// xmux is omitted and the core applies defaults. Never stack legacy Mux.
 	mux := s.mux
-	if xhttp, ok := stream["xhttpSettings"].(map[string]any); ok {
-		if _, hasXmux := xhttp["xmux"]; hasXmux {
-			mux = ""
-		}
+	if stream["network"] == "xhttp" {
+		mux = ""
 	}
 
 	externalProxies, ok := stream["externalProxy"].([]any)
@@ -1397,6 +1394,8 @@ func (s *SubJsonService) streamData(stream string, clientKey string) map[string]
 	case "xhttp":
 		streamSettings["xhttpSettings"] = s.removeAcceptProxy(streamSettings["xhttpSettings"])
 		if xhttp, ok := streamSettings["xhttpSettings"].(map[string]any); ok {
+			xhttp = effectiveXhttpOptions(xhttp)
+			streamSettings["xhttpSettings"] = xhttp
 			delete(xhttp, "noSSEHeader")
 			delete(xhttp, "scMaxBufferedPosts")
 			delete(xhttp, "scStreamUpServerSecs")
@@ -1404,10 +1403,10 @@ func (s *SubJsonService) streamData(stream string, clientKey string) map[string]
 			// Values matching xray-core's own defaults stay off the wire:
 			// old panels seeded them into every stored config and the
 			// literal scMinPostsIntervalMs=30 is a DPI fingerprint (#5141).
-			if v, _ := xhttp["scMaxEachPostBytes"].(string); v == "" || v == "1000000" {
+			if v := xhttp["scMaxEachPostBytes"]; v == nil || v == "" || v == "1000000" {
 				delete(xhttp, "scMaxEachPostBytes")
 			}
-			if v, _ := xhttp["scMinPostsIntervalMs"].(string); v == "" || v == "30" {
+			if v := xhttp["scMinPostsIntervalMs"]; v == nil || v == "" || v == "30" {
 				delete(xhttp, "scMinPostsIntervalMs")
 			}
 		}

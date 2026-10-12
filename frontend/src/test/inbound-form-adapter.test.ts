@@ -443,3 +443,42 @@ describe('xhttp xmux maxConcurrency survives a load/re-save round-trip', () => {
     expect(xmux.maxConcurrency).toBe('1-2');
   });
 });
+
+describe('imported XHTTP extra', () => {
+  it('honors core precedence and keeps client download settings on save', () => {
+    const form = rawInboundToFormValues({
+      ...vlessRow,
+      streamSettings: {
+        network: 'xhttp',
+        security: 'none',
+        xhttpSettings: {
+          host: 'edge.example',
+          path: '/audit',
+          mode: 'packet-up',
+          scMaxEachPostBytes: '999999',
+          extra: {
+            path: '/ignored',
+            scMaxEachPostBytes: 65536,
+            scMinPostsIntervalMs: 60,
+            uplinkChunkSize: 4096,
+            xmux: { maxConcurrency: '4-8' },
+            downloadSettings: { address: 'download.example', port: 443, network: 'xhttp' },
+          },
+        },
+      },
+    });
+    const wire = formValuesToWirePayload(form);
+    const xhttp = JSON.parse(wire.streamSettings!).xhttpSettings;
+    expect(xhttp).not.toHaveProperty('extra');
+    expect(xhttp).toMatchObject({
+      host: 'edge.example',
+      path: '/audit',
+      mode: 'packet-up',
+      scMaxEachPostBytes: '65536',
+      scMinPostsIntervalMs: '60',
+      uplinkChunkSize: 4096,
+      xmux: { maxConcurrency: '4-8' },
+      downloadSettings: { address: 'download.example' },
+    });
+  });
+});

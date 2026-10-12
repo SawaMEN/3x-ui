@@ -1,4 +1,4 @@
-import { XHttpXmuxSchema } from '@/schemas/protocols/stream/xhttp';
+import { migrateLegacyXhttp, XHttpXmuxSchema } from '@/schemas/protocols/stream/xhttp';
 import { OutboundDomainStrategySchema } from '@/schemas/protocols/outbound';
 import { AmneziaWGOutboundSettingsSchema } from '@/schemas/protocols/outbound';
 import { normalizeStreamSettingsForWire } from '@/lib/xray/stream-wire-normalize';
@@ -527,7 +527,7 @@ function hydrateStreamForm(stream: Raw): OutboundStreamFormValues {
   delete next.method;
   const xh = next.xhttpSettings;
   if (xh && typeof xh === 'object' && !Array.isArray(xh)) {
-    const xhttp = { ...(xh as Raw) };
+    const xhttp = migrateLegacyXhttp(xh) as Raw;
     const xmux = xhttp.xmux;
     if (xmux && typeof xmux === 'object' && !Array.isArray(xmux)) {
       xhttp.enableXmux = true;
