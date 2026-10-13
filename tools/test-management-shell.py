@@ -105,6 +105,54 @@ rc=$?
 [[ $rc == 1 && ! -e "$TEST_ROOT/download-started" ]]
 ''', {"TEST_ROOT": raw})
 
+    def test_installer_repairs_leftover_folder_without_systemd_unit(self):
+        # A failed first install may leave /usr/local/x-ui but no x-ui.service.
+        # Reinstall must skip the nonexistent service instead of failing on stop.
+        cases = (
+            # unit_file, loaded, active, stop_success, binary_running, rc, stops
+            (False, False, False, True, False, 0, 0),
+            (True, False, False, True, False, 0, 0),
+            (True, True, False, True, False, 0, 0),
+            (True, True, True, True, False, 0, 1),
+            (True, True, True, False, False, 1, 1),
+            (False, False, False, True, True, 1, 0),
+        )
+        for unit_file, loaded, active, stop_success, running, expected_rc, expected_stop in cases:
+            with self.subTest(unit_file=unit_file, loaded=loaded, active=active,
+                              stop_success=stop_success, running=running):
+                with tempfile.TemporaryDirectory() as raw:
+                    base = Path(raw)
+                    if unit_file:
+                        (base / "x-ui.service").write_text("[Service]\\n")
+                    log_path = base / "systemctl.log"
+                    self.run_script(function("install.sh", "_stop_existing_xui_for_install") + r'''
+release=arch
+xui_service="$TEST_ROOT"
+systemctl() {
+    printf '%s\\n' "$*" >> "$TEST_LOG"
+    case "$1" in
+        cat) [[ "$MOCK_LOADED" == 1 ]];;
+        is-active) [[ "$MOCK_ACTIVE" == 1 ]];;
+        stop) [[ "$MOCK_STOP_SUCCESS" == 1 ]];;
+        *) return 0;;
+    esac
+}
+_xui_binary_running() { [[ "$MOCK_BINARY_RUNNING" == 1 ]]; }
+_stop_existing_xui_for_install
+rc=$?
+stops=$(grep -c '^stop ' "$TEST_LOG" || true)
+[[ "$rc" == "$EXPECTED_RC" && "$stops" == "$EXPECTED_STOPS" ]]
+''', {
+                        "TEST_ROOT": raw,
+                        "TEST_LOG": str(log_path),
+                        "MOCK_LOADED": str(int(loaded)),
+                        "MOCK_ACTIVE": str(int(active)),
+                        "MOCK_STOP_SUCCESS": str(int(stop_success)),
+                        "MOCK_BINARY_RUNNING": str(int(running)),
+                        "EXPECTED_RC": str(expected_rc),
+                        "EXPECTED_STOPS": str(expected_stop),
+                    })
+
     def test_installer_forwards_version_only_when_provided(self):
         source = (ROOT / "install.sh").read_text()
         marker = '\necho -e "${green}Running...${plain}"\n'
