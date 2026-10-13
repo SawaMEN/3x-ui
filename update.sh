@@ -192,37 +192,6 @@ load_xui_env() {
     fi
 }
 
-install_base() {
-    echo -e "${green}Updating and install dependency packages...${plain}"
-    case "${release}" in
-        ubuntu | debian | armbian)
-            apt-get update > /dev/null 2>&1 && apt-get install -y -q cron curl tar tzdata socat ca-certificates openssl iproute2 iptables nftables util-linux > /dev/null 2>&1
-            ;;
-        fedora | amzn | virtuozzo | rhel | almalinux | rocky | ol)
-            dnf makecache -y > /dev/null 2>&1 && dnf install -y -q cronie curl tar tzdata socat ca-certificates openssl iproute iptables nftables util-linux > /dev/null 2>&1
-            ;;
-        centos)
-            if [[ "${VERSION_ID}" =~ ^7 ]]; then
-                yum makecache -y > /dev/null 2>&1 && yum install -y -q cronie curl tar tzdata socat ca-certificates openssl iproute iptables nftables util-linux > /dev/null 2>&1
-            else
-                dnf makecache -y > /dev/null 2>&1 && dnf install -y -q cronie curl tar tzdata socat ca-certificates openssl iproute iptables nftables util-linux > /dev/null 2>&1
-            fi
-            ;;
-        arch | manjaro | parch)
-            pacman -Syu --noconfirm --needed cronie curl tar tzdata socat ca-certificates openssl iproute2 iptables nftables util-linux > /dev/null 2>&1
-            ;;
-        opensuse-tumbleweed | opensuse-leap)
-            zypper refresh > /dev/null 2>&1 && zypper -q install -y cron curl tar timezone socat ca-certificates openssl iproute2 iptables nftables util-linux > /dev/null 2>&1
-            ;;
-        alpine)
-            apk update > /dev/null 2>&1 && apk add dcron curl tar tzdata socat ca-certificates openssl iproute2 iptables nftables util-linux > /dev/null 2>&1
-            ;;
-        *)
-            apt-get update > /dev/null 2>&1 && apt install -y -q cron curl tar tzdata socat ca-certificates openssl iproute2 iptables nftables util-linux > /dev/null 2>&1
-            ;;
-    esac
-}
-
 install_acme() {
     echo -e "${green}Installing acme.sh for SSL certificate management...${plain}"
     cd ~ || return 1
@@ -1092,7 +1061,9 @@ update_x-ui() {
 
     local machine_arch
     machine_arch="$(arch)"
-    local archive="${install_parent}/x-ui-linux-${machine_arch}.tar.gz"
+    # A second web/console updater must not overwrite or remove this download.
+    local archive
+    archive=$(mktemp "${install_parent}/.x-ui-download.XXXXXX.tar.gz") || _fail "Cannot create release download"
     xui_download_archive="$archive"
     local asset_url="https://github.com/SawaMEN/3x-ui/releases/download/${tag_version}/x-ui-linux-${machine_arch}.tar.gz"
 
@@ -1147,7 +1118,7 @@ update_x-ui() {
     cm_helper=$(mktemp "${install_parent}/.core-migration.XXXXXX") || _fail "Cannot prepare migration helper"
     if ! tar -xOf "${archive}" x-ui/core-migration.sh > "$cm_helper"; then
         rm -f "$cm_helper"
-        _fail "Release is missing the installed-panel migration helper; current installation was not changed"
+        _fail "Release ${tag_version} predates the new core migration and cannot be installed by this updater. Use x-ui update-dev (or the web DEV channel), or a newer stable release. Current installation was not changed"
     fi
     source "$cm_helper"
     rm -f "$cm_helper"
@@ -1391,6 +1362,11 @@ update_x-ui() {
 }
 
 echo -e "${green}Running...${plain}"
-install_base
+# Updating the panel must not upgrade the entire OS (notably pacman -Syu).
+# Installed panels already have these dependencies; fail before any replacement
+# if the host has since lost one of the required commands.
+for required_command in curl tar gzip sha256sum flock; do
+    _command_exists "$required_command" || _fail "Required command '$required_command' is missing; install it and retry the update"
+done
 update_x-ui "$1"
 

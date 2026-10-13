@@ -90,7 +90,8 @@ systemctl() {
     case "$1" in
         is-active) [[ "${SIM_RUNNING:-1}" == 1 ]];;
         is-enabled) [[ "${SIM_ENABLED:-1}" == 1 ]];;
-        stop) [[ "$CASE" != stop_failure ]];;
+        show) [[ "$CASE" != missing_unit_failure ]] || printf "not-found\n";;
+        stop) [[ "$CASE" != stop_failure && "$CASE" != missing_unit_failure ]];;
         *) return 0;;
     esac
 }
@@ -117,7 +118,7 @@ printf 'legacy-stock' > "$xui_folder/bin/sing-box-linux-amd64"
 chmod 0700 "$xui_folder/bin/xray-linux-amd64" "$xui_folder/bin/sing-box-linux-amd64"
 printf 'custom-config' > "$xui_folder/bin/xray-config.json"
 printf 'custom-config' > "$xui_folder/bin/sing-box-config.json"
-if [[ "$CASE" == apply || "$CASE" == stopped_failure ]]; then export FAIL_APPLY=1; fi
+if [[ "$CASE" == apply || "$CASE" == stopped_failure || "$CASE" == missing_unit_failure ]]; then export FAIL_APPLY=1; fi
 if core_migration_apply; then
     if [[ "$CASE" == verify || "$CASE" == stop_failure ]]; then export FAIL_VERIFY=1; fi
     if core_migration_commit; then
@@ -165,8 +166,8 @@ fi
 '''
             env = dict(os.environ, TEST_ROOT=raw, TEST_DB=str(database),
                        TEST_LOG=str(base / "commands"), HELPER=str(ROOT / "core-migration.sh"),
-                       ARCHIVE=str(archive), CASE=mode, SIM_ENABLED="0" if mode=="disabled" else "1",
-                       SIM_RUNNING="0" if mode=="stopped_failure" else "1")
+                       ARCHIVE=str(archive), CASE=mode, SIM_ENABLED="0" if mode in ("disabled", "missing_unit_failure") else "1",
+                       SIM_RUNNING="0" if mode in ("stopped_failure", "missing_unit_failure") else "1")
             result = subprocess.run(["bash", "-c", script], env=env, text=True, capture_output=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             commands = (base / "commands").read_text()
@@ -178,7 +179,7 @@ fi
                     self.assertNotIn("service:start x-ui", commands)
                 elif mode not in ("success", "disabled"):
                     self.assertIn("restore\n", commands)
-                    if mode=="stopped_failure": self.assertNotIn("service:start x-ui",commands)
+                    if mode in ("stopped_failure", "missing_unit_failure"): self.assertNotIn("service:start x-ui",commands)
                     else: self.assertIn("service:start x-ui", commands)
                 if mode=="disabled": self.assertIn("service:disable x-ui", commands)
 
@@ -195,6 +196,7 @@ fi
     def test_preflight_failure_does_not_touch_installation(self): self.run_case("preflight")
     def test_disabled_autostart_survives_upgrade(self): self.run_case("disabled")
     def test_rollback_keeps_originally_stopped_panel_stopped(self): self.run_case("stopped_failure")
+    def test_repair_rollback_without_registered_unit(self): self.run_case("missing_unit_failure")
     def test_failed_service_stop_blocks_restore(self): self.run_case("stop_failure")
     def test_fresh_external_and_relative_bin_receive_release(self):
         for relative in (False, True):

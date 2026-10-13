@@ -241,9 +241,14 @@ func (s *PanelService) startUpdate(useDev bool) (int64, error) {
 	runIDEnv := "XUI_UPDATE_RUN_ID=" + strconv.FormatInt(runID, 10)
 	statusFileEnv := "XUI_UPDATE_STATUS_FILE=" + statusFile
 	proxyEnv := updateProxyEnvVars()
+	for _, key := range []string{"XUI_BIN_FOLDER", "XUI_DB_FOLDER", "XUI_ENABLE_FAIL2BAN"} {
+		if value, ok := os.LookupEnv(key); ok {
+			proxyEnv = append(proxyEnv, key+"="+value)
+		}
+	}
 
 	if systemdRun, err := exec.LookPath("systemd-run"); err == nil {
-		unitName := fmt.Sprintf("x-ui-web-update-%d", time.Now().Unix())
+		unitName := fmt.Sprintf("x-ui-web-update-%d", runID)
 		args := []string{
 			"--unit", unitName,
 			"--setenv", "XUI_MAIN_FOLDER=" + mainFolder,
