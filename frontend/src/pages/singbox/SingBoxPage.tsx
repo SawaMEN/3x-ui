@@ -42,7 +42,6 @@ import { HttpUtil } from '@/utils';
 import { useTheme } from '@/hooks/useTheme';
 import './SingBoxPage.css';
 import SimpleSettings from './SimpleSettings';
-import CoreSelection from './CoreSelection';
 import { optimisticCacheEnabled, setDnsCache, setOptimisticCache } from './simple-settings';
 import {
   importNativeConnections,
@@ -2197,7 +2196,6 @@ export default function SingBoxPage() {
         <Layout className="content-shell">
           <Layout.Content id="content-layout" className="content-area">
             <FloatButton.BackTop target={scrollTarget} visibilityHeight={200} />
-            {activeSection === 'basic' && <CoreSelection />}
             <Spin spinning={loading || saving} delay={150} description={t('loading')} size="large">
               {fetchError ? (
                 <Result

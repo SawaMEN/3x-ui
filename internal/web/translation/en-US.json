@@ -129,14 +129,10 @@
   },
   "pages": {
     "coreSelection": {
-      "title": "Core settings",
-      "subtitle": "Use the standard core or install a separate core to suit your needs.",
-      "soon": "Coming soon",
       "defaultBadge": "Default",
+      "missing": "Not installed",
       "defaultTitle": "Standard core",
       "defaultDescription": "Included with the panel. Updated automatically when you update 3x-ui.",
-      "bundled": "Updates with the panel",
-      "externalDescription": "Download and install {name}, then activate it in the panel.",
       "separate": "Separate installation and updates",
       "installSoon": "Install and activate · Coming soon",
       "note": "Core installation and switching will be available in a future update.",
