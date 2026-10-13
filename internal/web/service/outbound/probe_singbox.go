@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/hiddify"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
@@ -46,13 +45,14 @@ func buildSingBoxBatchTestConfig(source *xray.Config) (*singbox.Config, error) {
 		if normalizedProbeProtocol(protocol) == "dns" {
 			continue
 		}
-		if strings.EqualFold(strings.TrimSpace(protocol), "wireguard") {
-			endpoint, err := singbox.TranslateXrayWireGuardEndpoint(outbound)
+		if endpoint, handled, err := singbox.TranslatePanelEndpoint(outbound); handled {
 			if err != nil {
 				return nil, err
 			}
 			// Probes must not create kernel interfaces or alter the host's routing.
-			endpoint["system"] = false
+			if endpoint["type"] == "wireguard" || endpoint["type"] == "awg" {
+				endpoint["system"] = false
+			}
 			cfg.Endpoints = append(cfg.Endpoints, endpoint)
 			continue
 		}

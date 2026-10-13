@@ -88,12 +88,14 @@ export default function SingBoxOutboundModal({
   value,
   existingTags,
   onCancel,
+  onSubscriptionURL,
   onSave,
 }: {
   open: boolean;
   value: ConfigObject | null;
   existingTags: string[];
   onCancel: () => void;
+  onSubscriptionURL?: (url: string) => void;
   onSave: (value: ConfigObject, additional?: ConfigObject[]) => void;
 }) {
   const [draft, setDraft] = useState<ConfigObject>({});
@@ -187,6 +189,17 @@ export default function SingBoxOutboundModal({
   const security = tls.enabled ? (reality.enabled ? 'reality' : 'tls') : 'none',
     network = text(transport.type) || 'tcp';
   async function importLink() {
+    if (/^https?:\/\//i.test(link.trim()) && onSubscriptionURL) {
+      try {
+        const url = new URL(link.trim());
+        if (!url.username && !url.password) {
+          onSubscriptionURL(url.href);
+          return;
+        }
+      } catch {
+        /* The normal importer reports malformed URLs. */
+      }
+    }
     const current = session.current;
     setImporting(true);
     setError('');
@@ -416,7 +429,7 @@ export default function SingBoxOutboundModal({
             )}
           </>
         )}
-        {remote && (
+        {!group && !['block', 'bridge'].includes(type) && (
           <Field
             label="Подключиться через"
             wide
@@ -427,7 +440,15 @@ export default function SingBoxOutboundModal({
               showSearch
               placeholder="Напрямую"
               value={text(draft.detour) || undefined}
-              options={options(existingTags.filter((t) => t !== draft.tag))}
+              options={options(
+                [
+                  ...new Set([
+                    ...existingTags,
+                    ...additional.map((item) => text(item.tag)),
+                    text(draft.detour),
+                  ]),
+                ].filter((t) => t && t !== draft.tag),
+              )}
               onChange={(v) => patch('detour', v)}
             />
           </Field>

@@ -49,6 +49,7 @@ import {
   renameImportedConnections,
 } from './native-import';
 import SingBoxOutboundModal from './SingBoxOutboundModal';
+import OutboundSubscriptions from './OutboundSubscriptions';
 
 type SectionKey =
   | 'schema'
@@ -70,6 +71,7 @@ type ApiMsg<T = unknown> = { success?: boolean; msg?: string; obj?: T };
 
 type Snapshot = {
   inboundTags?: string[];
+  subscriptionTags?: string[];
   config: ConfigMap;
   running: boolean;
   version: string;
@@ -717,6 +719,8 @@ export default function SingBoxPage() {
     advanced: t('pages.singBox.sections.advanced'),
   };
 
+  const [subscriptionsOpen, setSubscriptionsOpen] = useState(false);
+  const [subscriptionURL, setSubscriptionURL] = useState('');
   const [outboundModalOpen, setOutboundModalOpen] = useState(false);
   const [editingOutbound, setEditingOutbound] = useState<number | null>(null);
   const [routeRuleModalOpen, setRouteRuleModalOpen] = useState(false);
@@ -745,7 +749,7 @@ export default function SingBoxPage() {
     } finally {
       setLoading(false);
     }
-  }, [setConfig]);
+  }, [setConfig, setSnapshot]);
 
   useEffect(() => {
     const initial = window.setTimeout(() => void refresh(), 0);
@@ -1588,6 +1592,14 @@ export default function SingBoxPage() {
             </div>
           </div>
           <Space wrap>
+            <Button
+              onClick={() => {
+                setSubscriptionURL('');
+                setSubscriptionsOpen(true);
+              }}
+            >
+              Подписки
+            </Button>
             <Button onClick={() => setShareLinkOpen(true)}>Импорт ссылки</Button>
             <Button
               icon={<PlusOutlined />}
@@ -1721,9 +1733,10 @@ export default function SingBoxPage() {
   const renderRoute = () => {
     const value = asObject(sectionValue('route', config));
     const rules = Array.isArray(value.rules) ? value.rules.map(asObject) : [];
-    const outTags = asObjectArray(config.outbounds)
+    const outTags = [...asObjectArray(config.outbounds), ...asObjectArray(config.endpoints)]
       .map((item) => asString(item.tag))
-      .filter(Boolean);
+      .filter(Boolean)
+      .concat(snapshot?.subscriptionTags || []);
 
     return (
       <>
@@ -2349,13 +2362,25 @@ export default function SingBoxPage() {
         cancelButtonProps={{ disabled: importingLink }}
         onOk={async () => {
           if (importingLink) return;
+          if (/^https?:\/\//i.test(shareLink.trim())) {
+            try {
+              const url = new URL(shareLink.trim());
+              if (!url.username && !url.password) {
+                setSubscriptionURL(url.href);
+                setSubscriptionsOpen(true);
+                setShareLinkOpen(false);
+                return;
+              }
+            } catch {
+              /* The normal importer reports malformed URLs. */
+            }
+          }
           setImportingLink(true);
           try {
             const items = await importNativeConnections(shareLink);
-            const tags = [
-              ...asObjectArray(config.outbounds),
-              ...asObjectArray(config.endpoints),
-            ].map((item) => asString(item.tag));
+            const tags = [...asObjectArray(config.outbounds), ...asObjectArray(config.endpoints)]
+              .map((item) => asString(item.tag))
+              .concat(snapshot?.subscriptionTags || []);
             const imported = renameImportedConnections(items, tags);
             setConfig((current) => ({
               ...current,
@@ -2394,6 +2419,14 @@ export default function SingBoxPage() {
         />
       </Modal>
 
+      <OutboundSubscriptions
+        open={subscriptionsOpen}
+        initialURL={subscriptionURL}
+        onClose={() => setSubscriptionsOpen(false)}
+        onTagsChanged={(tags) =>
+          setSnapshot((current) => (current ? { ...current, subscriptionTags: tags } : current))
+        }
+      />
       <SingBoxOutboundModal
         open={outboundModalOpen}
         value={
@@ -2406,7 +2439,12 @@ export default function SingBoxPage() {
           ...asObjectArray(config.endpoints),
         ]
           .map((item) => asString(item.tag))
-          .filter(Boolean)}
+          .filter(Boolean)
+          .concat(snapshot?.subscriptionTags || [])}
+        onSubscriptionURL={(url) => {
+          setSubscriptionURL(url);
+          setSubscriptionsOpen(true);
+        }}
         onCancel={() => setOutboundModalOpen(false)}
         onSave={(next, additional = []) => {
           setConfig((current) => {
@@ -2447,7 +2485,8 @@ export default function SingBoxPage() {
         }
         outboundTags={asObjectArray(sectionValue('outbounds', config))
           .map((item) => asString(item.tag))
-          .filter(Boolean)}
+          .filter(Boolean)
+          .concat(snapshot?.subscriptionTags || [])}
         ruleSetTags={(() => {
           const ruleSet = asObject(sectionValue('route', config)).rule_set;
           return Array.isArray(ruleSet)

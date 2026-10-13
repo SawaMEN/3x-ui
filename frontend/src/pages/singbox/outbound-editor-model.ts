@@ -67,6 +67,8 @@ export function changeProtocol(value: ConfigObject, type: string): ConfigObject 
     text(value.tag) === value.type ? type : text(value.tag),
     strings(value.outbounds),
   );
+  if (!['bridge', 'block', 'selector', 'urltest', 'balancer'].includes(type) && value.detour)
+    next.detour = value.detour;
   if (nativeServerTypes.includes(type)) {
     for (const key of ['server', 'detour']) if (value[key] !== undefined) next[key] = value[key];
     if (

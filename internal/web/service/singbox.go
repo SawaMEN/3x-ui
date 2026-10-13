@@ -123,14 +123,15 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 }
 
 type SingBoxEditorSnapshot struct {
-	InboundTags     []string       `json:"inboundTags"`
-	Config          map[string]any `json:"config"`
-	Running         bool           `json:"running"`
-	Version         string         `json:"version"`
-	ConfigPath      string         `json:"configPath"`
-	ConfigSource    string         `json:"configSource"`
-	ConfigModified  string         `json:"configModified"`
-	ManagedSections []string       `json:"managedSections"`
+	SubscriptionTags []string       `json:"subscriptionTags"`
+	InboundTags      []string       `json:"inboundTags"`
+	Config           map[string]any `json:"config"`
+	Running          bool           `json:"running"`
+	Version          string         `json:"version"`
+	ConfigPath       string         `json:"configPath"`
+	ConfigSource     string         `json:"configSource"`
+	ConfigModified   string         `json:"configModified"`
+	ManagedSections  []string       `json:"managedSections"`
 }
 
 func (s *SingBoxService) GetEditorConfig(ctx context.Context) (*SingBoxEditorSnapshot, error) {
@@ -205,6 +206,27 @@ func (s *SingBoxService) GetEditorConfig(ctx context.Context) (*SingBoxEditorSna
 	if _, exists := raw["endpoints"]; exists {
 		raw["endpoints"] = editableEndpoints
 	}
+	active, err := (&OutboundSubscriptionService{}).AllActiveOutbounds()
+	if err != nil {
+		return nil, err
+	}
+	subscriptionTags := map[string]bool{}
+	var subscriptionTagList []string
+	for _, item := range active {
+		if row, ok := item.(map[string]any); ok {
+			if tag, _ := row["tag"].(string); tag != "" && !subscriptionTags[tag] {
+				subscriptionTags[tag] = true
+				subscriptionTagList = append(subscriptionTagList, tag)
+			}
+		}
+	}
+	// Never save managed subscription nodes as stale manual copies.
+	if _, ok := raw["outbounds"]; ok {
+		raw["outbounds"] = mergeSubscriptionConnections(editorConfig.Outbounds, nil, subscriptionTags)
+	}
+	if _, ok := raw["endpoints"]; ok {
+		raw["endpoints"] = mergeSubscriptionConnections(editableEndpoints, nil, subscriptionTags)
+	}
 	delete(raw, "inbounds")
 	delete(raw, "services")
 	modified := ""
@@ -216,14 +238,15 @@ func (s *SingBoxService) GetEditorConfig(ctx context.Context) (*SingBoxEditorSna
 		version = v
 	}
 	return &SingBoxEditorSnapshot{
-		Config:          raw,
-		InboundTags:     inboundTags,
-		Running:         s.IsRunning(),
-		Version:         version,
-		ConfigPath:      path,
-		ConfigSource:    source,
-		ConfigModified:  modified,
-		ManagedSections: []string{"inbounds", "services"},
+		Config:           raw,
+		SubscriptionTags: subscriptionTagList,
+		InboundTags:      inboundTags,
+		Running:          s.IsRunning(),
+		Version:          version,
+		ConfigPath:       path,
+		ConfigSource:     source,
+		ConfigModified:   modified,
+		ManagedSections:  []string{"inbounds", "services"},
 	}, nil
 }
 
@@ -294,7 +317,7 @@ func (s *SingBoxService) applyNativeTemplateValue(cfg *singbox.Config, managedMA
 	// listeners must continue to follow inbound/client state from the database.
 	managedMASQUE := make([]map[string]any, 0)
 	for _, endpoint := range cfg.Endpoints {
-		if endpoint["type"] == "masque-server" {
+		if tag, _ := endpoint["tag"].(string); managedMASQUETags[tag] {
 			managedMASQUE = append(managedMASQUE, endpoint)
 		}
 	}

@@ -13,7 +13,7 @@ import (
 
 func TestAutomaticRoutingSelectionOnlyChangesRules(t *testing.T) {
 	setupSettingTestDB(t)
-	sub := &model.OutboundSubscription{Enabled: true, AutoBalance: true, SelectedTag: "a", LastProbe: 1, LastFetchedOutbounds: `[{"tag":"a","protocol":"freedom","settings":{}},{"tag":"b","protocol":"freedom","settings":{}}]`}
+	sub := &model.OutboundSubscription{Enabled: true, AutoBalance: true, SelectedTag: "a", LastProbe: 1, LastFetchedOutbounds: `[{"tag":"a","protocol":"singbox:socks","settings":{"server":"127.0.0.1","server_port":1080}},{"tag":"b","protocol":"singbox:socks","settings":{"server":"127.0.0.1","server_port":1081}}]`}
 	if err := database.GetDB().Create(sub).Error; err != nil {
 		t.Fatal(err)
 	}

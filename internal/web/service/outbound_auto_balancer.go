@@ -10,6 +10,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service/outbound"
 )
 
@@ -262,6 +263,29 @@ func (s *OutboundSubscriptionService) ProbeAutomaticSubscriptions(forceID int) (
 		return 0, err
 	}
 	all, _ := config["outbounds"].([]any)
+	// Include native manual hops in isolated health checks.
+	nativeTemplate, err := settings.GetSingBoxConfigTemplate()
+	if err != nil {
+		return 0, err
+	}
+	if strings.TrimSpace(nativeTemplate) != "" {
+		var native map[string]any
+		if err := json.Unmarshal([]byte(nativeTemplate), &native); err != nil {
+			return 0, err
+		}
+		for _, section := range []string{"outbounds", "endpoints"} {
+			items, _ := native[section].([]any)
+			for _, raw := range items {
+				if row, ok := raw.(map[string]any); ok {
+					normalized, err := singbox.NormalizeOutboundInput(row)
+					if err != nil {
+						return 0, err
+					}
+					all = append(all, normalized)
+				}
+			}
+		}
+	}
 	active, err := s.AllActiveOutbounds()
 	if err != nil {
 		return 0, err
@@ -300,7 +324,7 @@ func (s *OutboundSubscriptionService) ProbeAutomaticSubscriptions(forceID int) (
 				continue
 			}
 		}
-		members = filterSubscriptionOutbounds("auto balancer", members)
+		members = subscriptionCascadeCandidates(filterSubscriptionOutbounds("auto balancer", members))
 		var current []any
 		for _, raw := range members {
 			if ob, ok := raw.(map[string]any); ok && ob["tag"] == sub.SelectedTag {

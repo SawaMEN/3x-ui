@@ -30,6 +30,7 @@ func automaticAliasID(ob map[string]any) (int, bool) {
 }
 
 func effectiveAutoTarget(sub *model.OutboundSubscription, members []any) string {
+	members = subscriptionCascadeCandidates(members)
 	selected := sub.SelectedTag
 	if selected == "" && sub.LastProbe == 0 && sub.LastHealth == 0 && len(members) > 0 {
 		if first, ok := members[0].(map[string]any); ok {
@@ -85,6 +86,7 @@ func injectAutomaticOutboundRoutes(cfg *xray.Config) error {
 }
 
 func automaticSingBoxSelector(sub *model.OutboundSubscription, members []any) map[string]any {
+	members = subscriptionCascadeCandidates(members)
 	tags := []string{autoBlockedTag(sub.Id)}
 	for _, raw := range members {
 		if ob, ok := raw.(map[string]any); ok {

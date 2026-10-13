@@ -86,7 +86,7 @@ func probeOutboundDependencies(outbound map[string]any) []string {
 	if proxySettings, ok := outbound["proxySettings"].(map[string]any); ok {
 		add(proxySettings["tag"])
 	}
-	if normalizedProbeProtocol(protocol) == "selector" || normalizedProbeProtocol(protocol) == "urltest" {
+	if kind := normalizedProbeProtocol(protocol); kind == "selector" || kind == "urltest" || kind == "balancer" {
 		switch members := settings["outbounds"].(type) {
 		case []any:
 			for _, member := range members {
@@ -99,4 +99,9 @@ func probeOutboundDependencies(outbound map[string]any) []string {
 		}
 	}
 	return dependencies
+}
+
+// OutboundDependencies exposes the same cascade graph used by isolated probes.
+func OutboundDependencies(outbound map[string]any) []string {
+	return probeOutboundDependencies(outbound)
 }

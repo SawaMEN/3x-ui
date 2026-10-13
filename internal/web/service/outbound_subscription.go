@@ -483,7 +483,7 @@ func (s *OutboundSubscriptionService) fetchAndStoreLocked(sub *model.OutboundSub
 		return nil, err
 	}
 
-	parsed, identities, err := link.ParseSubscriptionBody(body)
+	parsed, identities, err := parseOutboundSubscription(body)
 	if err != nil {
 		s.recordError(sub, err)
 		return nil, err
@@ -591,6 +591,10 @@ func (s *OutboundSubscriptionService) recordError(sub *model.OutboundSubscriptio
 // written back into parsed[i]["tag"]. The returned slice holds the assigned tags
 // in order. When tagPrefix is empty a "sub<subID>-" prefix is used for fresh tags.
 func assignStableTags(parsed []link.Outbound, identities []string, prev map[string]string, prevTagByIndex map[int]string, subID int, tagPrefix string) []string {
+	originalTags := make([]string, len(parsed))
+	for i, row := range parsed {
+		originalTags[i], _ = row["tag"].(string)
+	}
 	reservedStableTags := map[string]bool{}
 	for i := range parsed {
 		if i < len(identities) && prev[identities[i]] != "" {
@@ -639,6 +643,15 @@ func assignStableTags(parsed []link.Outbound, identities []string, prev map[stri
 
 		// write back the tag into the outbound
 		parsed[i]["tag"] = final
+	}
+	names := map[string]string{}
+	for i, old := range originalTags {
+		if old != "" {
+			names[old] = assigned[i]
+		}
+	}
+	for _, row := range parsed {
+		retagNativeShareReferences(map[string]any(row), names)
 	}
 	return assigned
 }

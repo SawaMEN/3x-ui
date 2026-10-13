@@ -36,6 +36,7 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot) (*
 	cfg.Outbounds = nil
 
 	managedOutboundTags := map[string]bool{}
+	subscriptionTags := map[string]bool{}
 	dnsOutboundTags := make(map[string]struct{})
 	var template string
 	var templateErr error
@@ -70,6 +71,15 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot) (*
 			}
 			if err != nil {
 				return nil, err
+			}
+			for _, list := range [][]any{prepend, tail} {
+				for _, item := range list {
+					if row, ok := item.(map[string]any); ok {
+						if tag, _ := row["tag"].(string); tag != "" {
+							subscriptionTags[tag] = true
+						}
+					}
+				}
 			}
 			manual, _ := xrayCfg["outbounds"].([]any)
 			xrayCfg["outbounds"] = append(append(prepend, manual...), tail...)
@@ -180,8 +190,7 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot) (*
 						}
 						continue
 					}
-					if protocol, _ := ob["protocol"].(string); strings.EqualFold(strings.TrimSpace(protocol), "wireguard") {
-						endpoint, err := singbox.TranslateXrayWireGuardEndpoint(ob)
+					if endpoint, handled, err := singbox.TranslatePanelEndpoint(ob); handled {
 						if err != nil {
 							return nil, err
 						}
@@ -516,6 +525,13 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot) (*
 			managedMASQUETags[inbound.Tag] = true
 		}
 	}
+	protectedOutbounds := selectSubscriptionConnections(cfg.Outbounds, subscriptionTags)
+	protectedEndpoints := selectSubscriptionConnections(cfg.Endpoints, subscriptionTags)
+	for _, endpoint := range cfg.Endpoints {
+		if tag, _ := endpoint["tag"].(string); tag != "" {
+			managedMASQUETags[tag] = true
+		}
+	}
 	var nativeErr error
 	if snapshot != nil {
 		nativeErr = s.applyNativeTemplateValue(cfg, managedMASQUETags, snapshot.setting("singBoxConfigTemplate"))
@@ -525,6 +541,8 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot) (*
 	if nativeErr != nil {
 		return nil, nativeErr
 	}
+	cfg.Outbounds = mergeSubscriptionConnections(cfg.Outbounds, protectedOutbounds, subscriptionTags)
+	cfg.Endpoints = mergeSubscriptionConnections(cfg.Endpoints, protectedEndpoints, subscriptionTags)
 	{
 		if err := configureHiddifyTunRouting(cfg, inbounds); err != nil {
 			return nil, err

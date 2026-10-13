@@ -12,6 +12,27 @@ vi.mock('@/pages/singbox/native-import', async (importOriginal) => ({
   importNativeConnections: vi.fn(),
 }));
 describe('native outbound modal', () => {
+  it('opens the subscription form for a pasted URL without sending it to the URI decoder', () => {
+    const onSubscriptionURL = vi.fn();
+    vi.mocked(importNativeConnections).mockClear();
+    render(
+      <SingBoxOutboundModal
+        open
+        value={null}
+        existingTags={[]}
+        onCancel={() => {}}
+        onSave={() => {}}
+        onSubscriptionURL={onSubscriptionURL}
+      />,
+    );
+    fireEvent.click(screen.getByRole('tab', { name: /JSON/ }));
+    fireEvent.change(screen.getByLabelText('Ссылка подключения'), {
+      target: { value: 'https://provider.test/sub/token' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Импортировать/ }));
+    expect(onSubscriptionURL).toHaveBeenCalledWith('https://provider.test/sub/token');
+    expect(importNativeConnections).not.toHaveBeenCalled();
+  });
   it('imports a link inside JSON and saves the same native data with a unique tag', async () => {
     const onSave = vi.fn();
     vi.mocked(importNativeConnections).mockResolvedValue([

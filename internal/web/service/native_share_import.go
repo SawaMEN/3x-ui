@@ -42,6 +42,9 @@ func ParseNativeOutboundImportContext(ctx context.Context, raw string) (*NativeS
 		return decodeSSHShare(raw)
 	}
 	binary := singbox.GetBinaryPath()
+	if strings.ContainsAny(raw, "\r\n") || strings.Contains(raw, " -> ") {
+		return parseNativeShareBatch(ctx, raw, binary)
+	}
 	if info, err := os.Stat(binary); err == nil && !info.IsDir() {
 		return parseShareWithKernel(ctx, raw, binary)
 	}
@@ -285,7 +288,7 @@ func parseNativeShareBatch(ctx context.Context, raw, binary string) (*NativeShar
 			link := strings.TrimSpace(chain[i])
 			parsed, handled, err := decodeNativeShare(link)
 			if !handled {
-				parsed, err = parseShareWithKernel(ctx, link, binary)
+				parsed, err = ParseNativeOutboundImportContext(ctx, link)
 			}
 			if err != nil {
 				return nil, err
@@ -334,7 +337,7 @@ func retagNativeShareReferences(value any, names map[string]string) {
 	case map[string]any:
 		for key, item := range v {
 			switch key {
-			case "detour", "default", "outbound", "final", "portal_tag", "bridge_tag":
+			case "detour", "default", "outbound", "final", "portal_tag", "bridge_tag", "dialerProxy":
 				if old, ok := item.(string); ok && names[old] != "" {
 					v[key] = names[old]
 				}
@@ -346,6 +349,12 @@ func retagNativeShareReferences(value any, names map[string]string) {
 						} else {
 							retagNativeShareReferences(member, names)
 						}
+					}
+				}
+			case "proxySettings":
+				if proxy, ok := item.(map[string]any); ok {
+					if old, ok := proxy["tag"].(string); ok && names[old] != "" {
+						proxy["tag"] = names[old]
 					}
 				}
 			case "headers":

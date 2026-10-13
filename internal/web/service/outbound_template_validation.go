@@ -32,6 +32,10 @@ func validateNativeTemplateOutbound(raw json.RawMessage, managed map[string]any,
 		return amneziawg.ValidateAmneziaWGOutbound(probe.Tag, raw)
 	}
 
+	if _, handled, err := singbox.TranslatePanelEndpoint(managed); handled {
+		return err
+	}
+
 	protocol, _ := managed["protocol"].(string)
 	protocol = strings.ToLower(strings.TrimSpace(protocol))
 	switch protocol {
@@ -39,9 +43,6 @@ func validateNativeTemplateOutbound(raw json.RawMessage, managed map[string]any,
 		// The sing-box generator translates Xray DNS routing references and does
 		// not emit the legacy Xray DNS outbound itself.
 		return nil
-	case "wireguard":
-		_, err := singbox.TranslateXrayWireGuardEndpoint(managed)
-		return err
 	default:
 		_, err := NativeCore(core).translateOutbound(managed)
 		return err

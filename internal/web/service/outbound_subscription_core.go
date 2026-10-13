@@ -8,6 +8,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service/outbound"
 )
 
 func subscriptionCompatibilityCategory(issue string) string {
@@ -96,15 +97,17 @@ func filterSubscriptionOutboundsForCore(label, core string, members []any) ([]an
 			}
 			continue
 		}
-		switch strings.ToLower(strings.TrimSpace(protocol)) {
-		case "loopback":
-			err = fmt.Errorf("Xray loopback members cannot be translated to sing-box")
-		case "amneziawg":
-			// The runtime and probe builders supply a SOCKS bridge.
-		case "wireguard":
-			_, err = singbox.TranslateXrayWireGuardEndpoint(ob)
-		default:
-			_, err = NativeCore(core).translateOutbound(ob)
+		if _, handled, endpointErr := singbox.TranslatePanelEndpoint(ob); handled {
+			err = endpointErr
+		} else {
+			switch strings.ToLower(strings.TrimSpace(protocol)) {
+			case "loopback":
+				err = fmt.Errorf("Xray loopback members cannot be translated to sing-box")
+			case "amneziawg":
+				// The runtime and probe builders supply a SOCKS bridge.
+			default:
+				_, err = NativeCore(core).translateOutbound(ob)
+			}
 		}
 		if err != nil {
 			compatibilityIssues = append(compatibilityIssues, fmt.Sprintf("%s: %v", tag, err))
@@ -112,6 +115,8 @@ func filterSubscriptionOutboundsForCore(label, core string, members []any) ([]an
 		}
 		kept = append(kept, raw)
 	}
+	kept, dependencyIssues := pruneSubscriptionDependencies(members, kept)
+	compatibilityIssues = append(compatibilityIssues, dependencyIssues...)
 	logSubscriptionCompatibilitySummary(label, core, compatibilityIssues)
 	return kept, statusIssues, core
 }
@@ -121,4 +126,82 @@ func filterSubscriptionOutboundsForCore(label, core string, members []any) ([]an
 func filterSubscriptionOutbounds(label string, members []any) []any {
 	kept, _, _ := filterSubscriptionOutboundsWithIssues(label, members)
 	return kept
+}
+
+// Keep references to manual template tags, but drop chains whose imported hop
+// was rejected by the active core. Repeat to remove transitive dependents.
+func pruneSubscriptionDependencies(source, kept []any) ([]any, []string) {
+	original, available := map[string]bool{}, map[string]bool{}
+	for _, raw := range source {
+		if row, ok := raw.(map[string]any); ok {
+			if tag, _ := row["tag"].(string); tag != "" {
+				original[tag] = true
+			}
+		}
+	}
+	for _, raw := range kept {
+		if row, ok := raw.(map[string]any); ok {
+			if tag, _ := row["tag"].(string); tag != "" {
+				available[tag] = true
+			}
+		}
+	}
+	var issues []string
+	for {
+		changed := false
+		remaining := make([]any, 0, len(kept))
+		for _, raw := range kept {
+			row, _ := raw.(map[string]any)
+			missing := ""
+			for _, dependency := range outbound.OutboundDependencies(row) {
+				if original[dependency] && !available[dependency] {
+					missing = dependency
+					break
+				}
+			}
+			if missing != "" {
+				tag, _ := row["tag"].(string)
+				delete(available, tag)
+				issues = append(issues, fmt.Sprintf("%s: incompatible cascade dependency %q", tag, missing))
+				changed = true
+			} else {
+				remaining = append(remaining, raw)
+			}
+		}
+		kept = remaining
+		if !changed {
+			return kept, issues
+		}
+	}
+}
+
+// A chain is a single candidate. Never select its intermediate transport or a
+// direct/block utility profile instead of the full proxy connection.
+func subscriptionCascadeCandidates(members []any) []any {
+	dependencies := map[string]bool{}
+	for _, raw := range members {
+		if row, ok := raw.(map[string]any); ok {
+			for _, tag := range outbound.OutboundDependencies(row) {
+				dependencies[tag] = true
+			}
+		}
+	}
+	var roots []any
+	for _, raw := range members {
+		row, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		tag, _ := row["tag"].(string)
+		protocol, _ := row["protocol"].(string)
+		kind := strings.TrimPrefix(strings.ToLower(strings.TrimSpace(protocol)), "singbox:")
+		switch kind {
+		case "shadowtls", "block", "blackhole", "direct", "freedom", "dns", "loopback", "bridge":
+			continue
+		}
+		if tag != "" && !dependencies[tag] {
+			roots = append(roots, raw)
+		}
+	}
+	return roots
 }

@@ -237,7 +237,7 @@ func outboundTransportIsUDP(ob map[string]any) bool {
 	if kind, _ := transport["type"].(string); equalsAnyFold(kind, "quic") {
 		return true
 	}
-	if protocol, _ := ob["protocol"].(string); equalsAnyFold(normalizedProbeProtocol(protocol), "hysteria", "hysteria2", "tuic", "wireguard", "amneziawg", "fptn", "openflux", "selector", "urltest", "mieru") {
+	if protocol, _ := ob["protocol"].(string); equalsAnyFold(normalizedProbeProtocol(protocol), "hysteria", "hysteria2", "tuic", "wireguard", "amneziawg", "fptn", "openflux", "selector", "urltest", "balancer", "mieru", "masque", "masque-client", "awg", "warp", "tailscale", "openconnect", "openvpn-client", "tunnel_client") {
 		return true
 	}
 	if stream, ok := ob["streamSettings"].(map[string]any); ok {
