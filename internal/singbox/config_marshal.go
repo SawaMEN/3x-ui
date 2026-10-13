@@ -347,7 +347,7 @@ func validateWireGuardReserved(peer map[string]any, tag string, index int) error
 
 func isKnownSingBoxEndpoint(protocol string) bool {
 	switch protocol {
-	case "wireguard", "tailscale", "openconnect", "openvpn-client", "openvpn-server", "masque-client", "masque-server":
+	case "wireguard", "awg", "warp", "tunnel_client", "tunnel_server", "tailscale", "openconnect", "openvpn-client", "openvpn-server", "masque-client", "masque-server":
 		return true
 	default:
 		return false

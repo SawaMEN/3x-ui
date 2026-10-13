@@ -716,12 +716,18 @@ func (a *SettingController) nativeStatus(c *gin.Context, svc *service.SingBoxSer
 // importSingBoxLink only decodes a share URI; saving remains a separate action.
 func (a *SettingController) importSingBoxLink(c *gin.Context) {
 	var form struct {
-		Link string `json:"link" form:"link" binding:"required"`
+		Link  string `json:"link" form:"link" binding:"required"`
+		Batch bool   `json:"batch" form:"batch"`
 	}
 	if err := c.ShouldBind(&form); err != nil {
 		jsonObj(c, nil, err)
 		return
 	}
-	outbound, err := service.ParseNativeMieruShareLink(form.Link)
+	if form.Batch {
+		result, err := service.ParseNativeOutboundImportContext(c.Request.Context(), form.Link)
+		jsonObj(c, result, err)
+		return
+	}
+	outbound, err := service.ParseNativeOutboundShareLink(form.Link)
 	jsonObj(c, outbound, err)
 }

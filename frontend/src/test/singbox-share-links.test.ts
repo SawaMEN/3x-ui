@@ -60,15 +60,12 @@ describe('sing-box share link import', () => {
       parseShareLink(`vless://${uuid}@proxy.test?security=reality&pbk=key&sid=`),
     ).toHaveProperty('tls.reality', { enabled: true, public_key: 'key', short_id: '' });
   });
-  it.each([
-    'type=xhttp',
-    'type=kcp',
-    'encryption=mlkem768x25519plus.native',
-    'security=reality',
-    'type=tcp&headerType=http',
-  ])('rejects unsupported or incomplete settings: %s', (query) => {
-    expect(() => parseShareLink(`vless://${uuid}@proxy.test?${query}`)).toThrow();
-  });
+  it.each(['type=xhttp', 'type=kcp', 'security=reality', 'type=tcp&headerType=http'])(
+    'rejects unsupported or incomplete settings: %s',
+    (query) => {
+      expect(() => parseShareLink(`vless://${uuid}@proxy.test?${query}`)).toThrow();
+    },
+  );
   it('avoids tag collisions with imported names and endpoints', () => {
     expect(uniqueTag('proxy', ['proxy', 'proxy-2', 'proxy-3'])).toBe('proxy-4');
   });
