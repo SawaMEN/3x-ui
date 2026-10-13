@@ -1168,7 +1168,12 @@ update_x-ui() {
             fi
         else
             if [ -f "${xui_service}/x-ui.service" ]; then
-                systemctl stop x-ui > /dev/null 2>&1 || _fail "Cannot stop x-ui for offline migration"
+                # A stale unit file may exist without having been loaded by
+                # systemd. Reload it, then stop only an actually running panel.
+                systemctl daemon-reload > /dev/null 2>&1 || _fail "Cannot reload x-ui systemd unit"
+                if systemctl is-active --quiet x-ui.service; then
+                    systemctl stop x-ui.service > /dev/null 2>&1 || _fail "Cannot stop x-ui for offline migration"
+                fi
                 core_migration_begin || _fail "Cannot snapshot installation; no release files replaced"
                 systemctl disable x-ui > /dev/null 2>&1
                 echo -e "${green}Removing old systemd unit version...${plain}"
