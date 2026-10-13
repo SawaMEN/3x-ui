@@ -738,6 +738,10 @@ export default function OutboundsTab({
           existingTags={existingTags}
           dialerProxyTags={dialerProxyTags}
           onClose={() => setModalOpen(false)}
+          onOpenSubscriptions={() => {
+            setModalOpen(false);
+            openSubManager();
+          }}
           onConfirm={onConfirm}
         />
         <PromptModal
