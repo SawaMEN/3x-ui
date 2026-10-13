@@ -103,6 +103,20 @@ describe('InboundFormModal', () => {
     expect(fieldLabels().length).toBeGreaterThan(0);
   });
 
+  it('keeps MASQUE selectable when dependency status is unavailable', async () => {
+    vi.mocked(HttpUtil.get).mockResolvedValueOnce({ success: false, msg: '', obj: null });
+    renderModal();
+    await act(async () => {});
+    listSelectOptions('protocol');
+    fireEvent.change(document.querySelector('#protocol')!, { target: { value: 'masque' } });
+    expect(listSelectOptions('protocol')).toContain('masque');
+    chooseSelectOption('protocol', 'masque');
+    await act(async () => {});
+    expect(document.querySelector('#protocol')?.closest('.ant-select')?.textContent).toContain(
+      'masque',
+    );
+  });
+
   it('field structure differs per protocol (not a vacuous snapshot loop)', async () => {
     renderModal();
     const protocols = listSelectOptions('protocol');
