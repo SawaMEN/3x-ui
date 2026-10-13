@@ -8,16 +8,17 @@
 .core-selection {
   color: var(--ant-color-text);
 }
-.core-selection-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
-  gap: 12px;
-}
-.core-selection-card {
+.core-selection-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 16px;
+  gap: 10px;
+}
+.core-selection-card {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
   border: 1px solid var(--ant-color-border-secondary);
   border-radius: 12px;
   background: var(--ant-color-bg-container);
@@ -28,19 +29,25 @@
   border-color: var(--ant-color-primary-border);
   background: var(--ant-color-primary-bg);
 }
-.core-selection-card-top,
+.core-selection-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--ant-color-fill-secondary);
+  color: var(--ant-color-primary);
+  font-size: 18px;
+}
 .core-selection-name {
   display: flex;
   align-items: center;
-  gap: 8px;
-}
-.core-selection-card-top {
-  justify-content: space-between;
   flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 4px;
 }
-.core-selection-name .anticon {
-  color: var(--ant-color-primary);
-  font-size: 18px;
+.core-selection-content {
+  min-width: 0;
 }
 .core-selection p {
   margin: 0;
@@ -48,9 +55,10 @@
   color: var(--ant-color-text-secondary);
   line-height: 1.5;
 }
-.core-selection-card > .ant-btn,
-.core-selection-status {
-  margin-top: auto;
+.core-selection-action {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
 }
 .core-selection .ant-tag {
   margin-inline-end: 0;
@@ -65,12 +73,29 @@
 .core-settings-tools {
   margin-top: 16px;
 }
-@media (max-width: 800px) {
-  .core-selection-grid {
-    grid-template-columns: 1fr;
+@media (max-width: 600px) {
+  .core-settings-panel {
+    padding: 8px 0;
   }
   .core-selection-card {
+    grid-template-columns: 32px minmax(0, 1fr);
     padding: 12px;
-    gap: 8px;
+    gap: 8px 10px;
+  }
+  .core-selection-icon {
+    width: 32px;
+    height: 32px;
+    align-self: start;
+  }
+  .core-selection-action {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+  .core-selection-action .ant-btn {
+    max-width: 100%;
+    height: auto;
+    min-height: 24px;
+    white-space: normal;
+    text-align: start;
   }
 }
