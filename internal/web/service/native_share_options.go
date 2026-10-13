@@ -13,6 +13,7 @@ import (
 
 //go:embed native_import_options.json
 var nativeImportOptionData []byte
+
 var nativeImportOptionTypes = func() map[string]map[string]string {
 	var catalog map[string]map[string]string
 	if err := json.Unmarshal(nativeImportOptionData, &catalog); err != nil {
@@ -95,7 +96,6 @@ func applyNativeShareOptions(out map[string]any, query url.Values) error {
 		}
 		value := values[len(values)-1]
 		if path == "packet_encoding" && value == "none" {
-			value = ""
 			out["packet_encoding"] = ""
 			continue
 		}

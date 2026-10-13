@@ -32,6 +32,7 @@ export default function HappSettingsContent({
   defaultActiveTab = 'routing',
 }: HappSettingsContentProps) {
   const { t } = useTranslation();
+  const [messageApi, messageContextHolder] = message.useMessage();
   const [selectedPreset, setSelectedPreset] = useState<string>('iran-bypass');
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -46,7 +47,7 @@ export default function HappSettingsContent({
     const payload = buildHappPresetDeeplink(selectedPreset);
     if (payload) {
       updateSetting({ subRoutingRules: payload });
-      message.success(t('pages.settings.subHappPresetApplied'));
+      messageApi.success(t('pages.settings.subHappPresetApplied'));
     }
   };
 
@@ -66,11 +67,12 @@ export default function HappSettingsContent({
     const deeplink = 'happ://routing/onadd/' + toBase64Utf8(JSON.stringify(profile));
     updateSetting({ subRoutingRules: deeplink });
     setIsModalOpen(false);
-    message.success(t('pages.settings.subHappDeeplinkGenerated'));
+    messageApi.success(t('pages.settings.subHappDeeplinkGenerated'));
   };
 
   return (
     <>
+      {messageContextHolder}
       <SettingListItem
         paddings="small"
         title={t('pages.settings.subHappAutoDetect')}

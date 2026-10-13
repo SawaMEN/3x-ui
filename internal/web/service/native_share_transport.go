@@ -79,6 +79,7 @@ func prepareNativeShareTransport(raw string) (string, map[string]any, error) {
 	u.RawQuery = q.Encode()
 	return u.String(), transport, nil
 }
+
 func nativeKCPOptions(q url.Values) (map[string]any, error) {
 	out := map[string]any{"type": "kcp", "legacy": true}
 	if seed := q.Get("seed"); seed != "" {

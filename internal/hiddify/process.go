@@ -29,7 +29,7 @@ func packagedCoreIdentity() (string, string) {
 	var manifest struct {
 		Target struct {
 			Version string `json:"version"`
-			Commit string `json:"commit"`
+			Commit  string `json:"commit"`
 		} `json:"target"`
 	}
 	if json.Unmarshal(data, &manifest) != nil ||
@@ -45,7 +45,7 @@ func NewProcess(path string, isolated bool) *singbox.Process {
 	return singbox.NewProcessWithOptions(path, singbox.ProcessOptions{
 		Binary: GetBinaryPath(), RunCommand: "srun", VersionPrefix: "hiddify-core version ",
 		RequiredVersion: version, RequiredTags: requiredBuildTags,
-		RequiredAnyTags: []string{"with_purego", "with_musl"},
+		RequiredAnyTags:  []string{"with_purego", "with_musl"},
 		RequiredRevision: revision, Name: "sing-box",
 		MASQUE: true,
 	}, isolated)

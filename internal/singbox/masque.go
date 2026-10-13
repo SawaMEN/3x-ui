@@ -46,6 +46,9 @@ func TranslateMASQUEEndpoint(raw map[string]any) (map[string]any, error) {
 		tls["server_name"] = s.TLS.ServerName
 	}
 	out := map[string]any{"type": "masque-server", "tag": rawString(raw, "tag"), "listen": listen, "listen_port": port, "version": s.Version, "path": s.Path, "address": s.Address, "mtu": s.MTU, "system": false, "users": users, "tls": tls}
+	for key, value := range s.Advanced {
+		out[key] = value
+	}
 	if len(s.AdvertiseRoutes) > 0 {
 		out["advertise_routes"] = s.AdvertiseRoutes
 	}

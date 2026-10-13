@@ -13,6 +13,7 @@ export const tlsProtocols = [
   'shadowtls',
   'naive',
   'trusttunnel',
+  'masque-client',
 ];
 export const realityProtocols = ['http', 'vmess', 'vless', 'trojan', 'anytls'];
 export const requiredTlsProtocols = [
@@ -22,6 +23,7 @@ export const requiredTlsProtocols = [
   'anytls',
   'shadowtls',
   'naive',
+  'masque-client',
 ];
 export const transportProtocols = ['vless', 'vmess', 'trojan'];
 export const object = (v: unknown): ConfigObject =>

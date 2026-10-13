@@ -1,3 +1,4 @@
+import { masqueClientDefaults } from './masque-settings';
 import { isNativeEndpoint, nativeServerTypes } from './native-import';
 export type ConfigObject = Record<string, unknown>;
 
@@ -142,6 +143,9 @@ export function setDefaultOutbound(config: ConfigObject, tag: string): ConfigObj
 
 export function outboundDefaults(type: string, tag: string, group: string[] = []): ConfigObject {
   const base = { type, tag };
+  if (type === 'masque-client') return masqueClientDefaults(tag);
+  if (type === 'masque')
+    return { ...base, use_http2: false, use_ipv6: false, profile: { recreate: false } };
   if (type === 'selector') return { ...base, outbounds: group };
   if (type === 'balancer') return { ...base, outbounds: group, strategy: 'round-robin' };
   if (type === 'urltest')
@@ -179,6 +183,25 @@ export function outboundErrors(value: ConfigObject, otherTags: string[]): string
   else if (otherTags.includes(tag))
     errors.push('Это название уже используется другим подключением или туннелем.');
   if (!type) errors.push('Выберите протокол.');
+  if (type === 'masque-client') {
+    if (typeof value.server !== 'string' || !value.server.trim())
+      errors.push('Укажите MASQUE-сервер.');
+    if (
+      !Number.isInteger(value.server_port) ||
+      Number(value.server_port) < 1 ||
+      Number(value.server_port) > 65535
+    )
+      errors.push('Порт MASQUE должен быть от 1 до 65535.');
+    if (![0, 1, 2, 3].includes(Number(value.version || 0))) errors.push('Выберите версию HTTP.');
+    if (object(value.tls).enabled !== true) errors.push('MASQUE требует TLS.');
+    if (String(value.username || '').includes(':'))
+      errors.push('Имя пользователя MASQUE не может содержать двоеточие.');
+    if (
+      value.mtu &&
+      (!Number.isInteger(value.mtu) || Number(value.mtu) < 1280 || Number(value.mtu) > 65535)
+    )
+      errors.push('MTU MASQUE должен быть от 1280 до 65535.');
+  }
   if (isNativeEndpoint(value)) return errors;
   if (['dns', 'tun', 'redirect', 'tproxy'].includes(type))
     errors.push('Этот тип не поддерживается как исходящее подключение текущим sing-box.');

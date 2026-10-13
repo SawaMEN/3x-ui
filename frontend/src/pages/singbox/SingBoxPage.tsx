@@ -1,3 +1,5 @@
+import MasqueConnectionFields from './MasqueConnectionFields';
+import { addWarpMasque } from './masque-settings';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router';
@@ -42,7 +44,12 @@ import { HttpUtil } from '@/utils';
 import { useTheme } from '@/hooks/useTheme';
 import './SingBoxPage.css';
 import SimpleSettings from './SimpleSettings';
-import { optimisticCacheEnabled, setDnsCache, setOptimisticCache } from './simple-settings';
+import {
+  outboundDefaults,
+  optimisticCacheEnabled,
+  setDnsCache,
+  setOptimisticCache,
+} from './simple-settings';
 import {
   importNativeConnections,
   isNativeEndpoint,
@@ -778,6 +785,17 @@ export default function SingBoxPage() {
   const save = async () => {
     try {
       const next: ConfigMap = { ...config };
+      if (asObjectArray(next.outbounds).some((item) => item.type === 'masque')) {
+        const experimental = asObject(next.experimental);
+        next.experimental = {
+          ...experimental,
+          cache_file: {
+            ...asObject(experimental.cache_file),
+            enabled: true,
+            store_masque_config: true,
+          },
+        };
+      }
       delete next.inbounds;
       delete next.services;
 
@@ -1476,7 +1494,7 @@ export default function SingBoxPage() {
       <>
         <SectionHeader
           title="Endpoints"
-          description="WireGuard, Tailscale, OpenConnect и OpenVPN endpoints."
+          description="MASQUE, WireGuard, Tailscale, OpenConnect и OpenVPN endpoints."
         />
         <Card className="singbox-list-card">
           <ListToolbar
@@ -1518,12 +1536,16 @@ export default function SingBoxPage() {
                         value={asString(item.type) || 'wireguard'}
                         options={[
                           'wireguard',
+                          'masque-client',
                           'tailscale',
                           'openconnect',
                           'openvpn-client',
                           'openvpn-server',
                         ].map((v) => ({ label: v, value: v }))}
-                        onChange={(next) => patch({ type: next })}
+                        onChange={(next) => {
+                          nextItems[index] = outboundDefaults(next, asString(item.tag));
+                          updateSection('endpoints', nextItems);
+                        }}
                       />
                     </Field>
                     <Field label="Tag">
@@ -1558,6 +1580,9 @@ export default function SingBoxPage() {
                       />
                     </Field>
                   </Row>
+                  {item.type === 'masque-client' && (
+                    <MasqueConnectionFields value={item} onChange={patch} />
+                  )}
                   <div className="singbox-item-actions">
                     <JsonModal
                       title={`${asString(item.tag) || 'Endpoint'} — JSON`}
@@ -1589,6 +1614,9 @@ export default function SingBoxPage() {
           </div>
           <Space wrap>
             <Button onClick={() => setShareLinkOpen(true)}>Импорт ссылки</Button>
+            <Button onClick={() => setConfig((current) => addWarpMasque(current))}>
+              Добавить WARP через MASQUE
+            </Button>
             <Button
               icon={<PlusOutlined />}
               type="primary"

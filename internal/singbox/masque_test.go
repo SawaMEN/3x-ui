@@ -45,3 +45,16 @@ func TestMASQUEProtocolDetection(t *testing.T) {
 		t.Fatal("client endpoint not detected")
 	}
 }
+
+func TestMASQUEEndpointKeepsAdvancedOptions(t *testing.T) {
+	endpoint, err := TranslateMASQUEEndpoint(map[string]any{"protocol": "masque", "tag": "masque", "port": 443, "settings": map[string]any{"tls": map[string]any{"certificatePath": "cert.pem", "keyPath": "key.pem"}, "clients": []any{map[string]any{"email": "alice", "password": "secret", "enable": true}}, "advanced": map[string]any{"udp_timeout": "5m", "initial_packet_size": float64(1200), "disable_path_mtu_discovery": true}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if endpoint["udp_timeout"] != "5m" || endpoint["initial_packet_size"] != float64(1200) || endpoint["disable_path_mtu_discovery"] != true {
+		t.Fatalf("lost advanced options: %#v", endpoint)
+	}
+	if endpoint["system"] != false {
+		t.Fatal("advanced options changed network stack")
+	}
+}

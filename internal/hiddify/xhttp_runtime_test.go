@@ -85,7 +85,7 @@ func TestXHTTPRuntimeTransfer(t *testing.T) {
 						stream["tlsSettings"] = map[string]any{"serverName": "localhost", "pinnedPeerCertSha256": hex.EncodeToString(hash[:]), "alpn": []any{"h2"}}
 					}
 					if security == "reality" {
-						target := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) }))
+						target := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))
 						target.EnableHTTP2 = true
 						target.Config.ErrorLog = log.New(io.Discard, "", 0)
 						target.StartTLS()
@@ -127,7 +127,7 @@ func TestXHTTPRuntimeTransfer(t *testing.T) {
 							t.Fatal(err)
 						}
 						file := filepath.Join(dir, name+".json")
-						if err := os.WriteFile(file, data, 0600); err != nil {
+						if err := os.WriteFile(file, data, 0o600); err != nil {
 							t.Fatal(err)
 						}
 						log, err := os.Create(filepath.Join(dir, name+".log"))
@@ -187,7 +187,7 @@ func TestXHTTPRuntimeTransfer(t *testing.T) {
 					payload := bytes.Repeat([]byte("xhttp-transfer-"), 32768)
 					for i := 0; i < 3; i++ {
 						ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-						req, _ := http.NewRequestWithContext(ctx, "POST", upstream.URL, bytes.NewReader(payload))
+						req, _ := http.NewRequestWithContext(ctx, http.MethodPost, upstream.URL, bytes.NewReader(payload))
 						res, err := client.Do(req)
 						if err != nil {
 							cancel()

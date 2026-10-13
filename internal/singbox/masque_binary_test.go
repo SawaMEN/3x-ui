@@ -76,3 +76,25 @@ func masqueTestCertificate(t *testing.T) (string, string) {
 	}
 	return certPath, keyPath
 }
+
+func TestWARPMASQUEBinaryConfig(t *testing.T) {
+	binary := os.Getenv("SINGBOX_TEST_BINARY")
+	if binary == "" {
+		t.Skip("set SINGBOX_TEST_BINARY for WARP MASQUE config checks")
+	}
+	for _, http2 := range []bool{false, true} {
+		data, err := json.Marshal(map[string]any{"outbounds": []any{map[string]any{"type": "masque", "tag": "warp-masque", "use_http2": http2, "use_ipv6": false, "profile": map[string]any{"recreate": false}}}, "experimental": map[string]any{"cache_file": map[string]any{"enabled": true, "store_masque_config": true}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		path := filepath.Join(t.TempDir(), "warp.json")
+		if err := os.WriteFile(path, data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		cmd := exec.Command(binary, "check", "-c", path)
+		cmd.Dir = filepath.Dir(binary)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("WARP HTTP/2=%v check: %v: %s", http2, err, output)
+		}
+	}
+}

@@ -64,6 +64,7 @@ interface PaletteItem {
 
 export default function CommandPalette() {
   const { t } = useTranslation();
+  const [messageApi, messageContextHolder] = message.useMessage();
   const navigate = useNavigate();
   const { isDark, isUltra, toggleTheme, toggleUltra, antdThemeConfig } = useTheme();
   const { isOpen, close } = useCommandPalette();
@@ -195,13 +196,13 @@ export default function CommandPalette() {
     async (client: ClientRecord) => {
       const link = clientSubscriptionLink(allSetting, client.subId, client.hiddifySubURI);
       if (!link) {
-        message.warning(t('pages.clients.noSubId'));
+        messageApi.warning(t('pages.clients.noSubId'));
         return;
       }
       const ok = await ClipboardManager.copyText(link);
-      if (ok) message.success(t('copied'));
+      if (ok) messageApi.success(t('copied'));
     },
-    [allSetting, t],
+    [allSetting, messageApi, t],
   );
 
   const restartXray = useCallback(async () => {
@@ -210,9 +211,9 @@ export default function CommandPalette() {
       silentSuccess: true,
     });
     if (msg?.success) {
-      message.success(t('commandPalette.restartXraySuccess'));
+      messageApi.success(t('commandPalette.restartXraySuccess'));
     }
-  }, [close, t]);
+  }, [close, messageApi, t]);
 
   const cycleTheme = useCallback(() => {
     if (!isDark) {
@@ -679,6 +680,7 @@ export default function CommandPalette() {
 
   return (
     <ConfigProvider theme={antdThemeConfig}>
+      {messageContextHolder}
       <div
         className={`command-palette-backdrop ${themeModeClass}`}
         role="presentation"

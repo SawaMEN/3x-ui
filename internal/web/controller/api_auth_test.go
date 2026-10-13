@@ -162,6 +162,7 @@ func TestNodeSyncScopeAllowlistMatchesRemoteInventory(t *testing.T) {
 		"/server/singbox/sessions/disconnect-users":   {http.MethodPost: {}},
 		"/server/singbox/sessions/disconnect-inbound": {http.MethodPost: {}},
 		"/clients/resetTraffic/:email":                {http.MethodPost: {}},
+		"/clients/bulkResetTraffic":                   {http.MethodPost: {}},
 		"/inbounds/resetAllTraffics":                  {http.MethodPost: {}},
 		"/inbounds/:id/resetTraffic":                  {http.MethodPost: {}},
 		"/clients/onlinesByGuid":                      {http.MethodPost: {}},
