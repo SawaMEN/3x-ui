@@ -22,6 +22,7 @@ import { Base64, HttpUtil, Wireguard } from '@/utils';
 import { formValuesToWirePayload, rawOutboundToFormValues } from '@/lib/xray/outbound-form-adapter';
 import { parseOutboundLink } from '@/lib/xray/outbound-link-parser';
 import { parseNativeOutboundLink } from '@/lib/xray/native-outbound-link-parser';
+import { outboundBasicConversionLoss } from '@/lib/xray/outbound-loss-check';
 import { XMUX_FRESH_DEFAULTS } from '@/schemas/protocols/stream/xhttp';
 import {
   OutboundFormBaseSchema,
@@ -196,7 +197,13 @@ export default function OutboundFormModal({
     }
     const currentTag = methods.getValues('tag');
     if (!parsed.tag && currentTag) parsed.tag = currentTag;
-    if (!supportsBasicOutboundForm(parsed.protocol)) {
+    const lostOnBasic = supportsBasicOutboundForm(parsed.protocol)
+      ? outboundBasicConversionLoss(parsed)
+      : null;
+    if (!supportsBasicOutboundForm(parsed.protocol) || lostOnBasic) {
+      if (lostOnBasic) {
+        messageApi.warning(`Параметр ${lostOnBasic} сохранён в JSON без преобразования.`);
+      }
       setJsonText(JSON.stringify(parsed, null, 2));
       setJsonDirty(false);
       setLinkInput('');
@@ -221,7 +228,11 @@ export default function OutboundFormModal({
     // Preserve their JSON byte-for-byte semantically instead of passing them
     // through rawOutboundToFormValues(), whose typed adapter intentionally
     // understands only the Xray-compatible form protocols.
-    if (outboundProp && !supportsBasicOutboundForm(outboundProp.protocol)) {
+    if (
+      outboundProp &&
+      (!supportsBasicOutboundForm(outboundProp.protocol) ||
+        outboundBasicConversionLoss(outboundProp))
+    ) {
       methods.reset(buildAddModeValues());
       setActiveKey('2');
       setJsonText(JSON.stringify(outboundProp, null, 2));
@@ -390,6 +401,11 @@ export default function OutboundFormModal({
     }
     if (!supportsBasicOutboundForm(parsed.protocol)) {
       messageApi.info('Native sing-box outbounds are edited in JSON mode');
+      return false;
+    }
+    const lostOnBasic = outboundBasicConversionLoss(parsed);
+    if (lostOnBasic) {
+      messageApi.warning(`Параметр ${lostOnBasic} недоступен в визуальной форме. JSON сохранён.`);
       return false;
     }
     if (!jsonDirty) return true;
