@@ -1539,6 +1539,45 @@ prepare_release_migration() {
     fi
 }
 
+# A leftover /usr/local/x-ui directory does not imply that systemd knows
+# x-ui.service (e.g. a failed first install or interrupted repair on Arch).
+# Only stop a loaded, active unit, and never overwrite a still-running binary.
+_xui_binary_running() {
+    local proc exe
+    for proc in /proc/[0-9]*/exe; do
+        exe=$(readlink "$proc" 2> /dev/null) || continue
+        if [[ "$exe" == "${xui_folder}/x-ui" || "$exe" == "${xui_folder}/x-ui (deleted)" ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+_stop_existing_xui_for_install() {
+    if [[ $release == "alpine" ]]; then
+        if [[ -f /etc/init.d/x-ui ]] && rc-service x-ui status > /dev/null 2>&1; then
+            rc-service x-ui stop || return 1
+        fi
+    else
+        # An existing unit file may not have been reloaded after a partial install.
+        if [[ -f "${xui_service}/x-ui.service" ]]; then
+            systemctl daemon-reload > /dev/null 2>&1 || return 1
+        fi
+        if systemctl cat x-ui.service > /dev/null 2>&1; then
+            if systemctl is-active --quiet x-ui.service; then
+                systemctl stop x-ui.service || return 1
+            fi
+        else
+            echo -e "${yellow}x-ui.service is not loaded; skipping service stop during installation/repair.${plain}"
+        fi
+    fi
+    if _xui_binary_running; then
+        echo -e "${red}x-ui is still running outside the managed service; stop it before replacing the installation.${plain}" >&2
+        return 1
+    fi
+    return 0
+}
+
 install_x-ui() {
     cd "${xui_folder%/x-ui}"/ || { echo "Cannot enter installation directory" >&2; return 1; }
 
@@ -1622,14 +1661,11 @@ install_x-ui() {
     # can still be installed before migration, but cannot downgrade a migrated panel.
     prepare_release_migration "${xui_folder}-linux-$(arch).tar.gz" || exit 1
 
-    # Stop x-ui service and remove old resources
+    # Stop the existing service only if installed and running. The directory
+    # may survive an interrupted first install without any systemd unit.
     local custom_bin_backup=""
     if [[ -e ${xui_folder}/ ]]; then
-        if [[ $release == "alpine" ]]; then
-            rc-service x-ui stop || exit 1
-        else
-            systemctl stop x-ui || exit 1
-        fi
+        _stop_existing_xui_for_install || exit 1
         if [[ -n "${cm_stage:-}" ]]; then core_migration_begin || exit 1; fi
         # Kill any leftover mtg (MTProto) sidecars. x-ui runs them outside its own
         # lifecycle, so on Linux a stale one can survive the stop and keep holding
