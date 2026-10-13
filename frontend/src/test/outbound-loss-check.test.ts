@@ -24,11 +24,13 @@ describe('lossless outbound editing gate', () => {
         protocol: 'vless',
         tag: 'legacy',
         settings: {
-          vnext: [{
-            address: 'edge.example',
-            port: 443,
-            users: [{ id: '11111111-2222-4333-8444-555555555555', encryption: 'none' }],
-          }],
+          vnext: [
+            {
+              address: 'edge.example',
+              port: 443,
+              users: [{ id: '11111111-2222-4333-8444-555555555555', encryption: 'none' }],
+            },
+          ],
         },
         streamSettings: { network: 'tcp', security: 'none' },
       }),
@@ -36,44 +38,51 @@ describe('lossless outbound editing gate', () => {
   });
 
   it('rejects hidden protocol settings before the basic editor can drop them', () => {
-    expect(outboundBasicConversionLoss({
-      protocol: 'vless',
-      tag: 'advanced',
-      settings: {
-        address: 'edge.example',
-        port: 443,
-        id: '11111111-2222-4333-8444-555555555555',
-        packetEncoding: 'xudp',
-      },
-    })).toBe('settings.packetEncoding');
+    expect(
+      outboundBasicConversionLoss({
+        protocol: 'vless',
+        tag: 'advanced',
+        settings: {
+          address: 'edge.example',
+          port: 443,
+          id: '11111111-2222-4333-8444-555555555555',
+          packetEncoding: 'xudp',
+        },
+      }),
+    ).toBe('settings.packetEncoding');
   });
 
   it('keeps multiple legacy VLESS destinations in JSON', () => {
     const node = {
-      address: 'edge.example', port: 443,
+      address: 'edge.example',
+      port: 443,
       users: [{ id: '11111111-2222-4333-8444-555555555555' }],
     };
-    expect(outboundBasicConversionLoss({
-      protocol: 'vless',
-      tag: 'multi',
-      settings: { vnext: [node, { ...node, address: 'other.example' }] },
-    })).toBe('settings.vnext');
+    expect(
+      outboundBasicConversionLoss({
+        protocol: 'vless',
+        tag: 'multi',
+        settings: { vnext: [node, { ...node, address: 'other.example' }] },
+      }),
+    ).toBe('settings.vnext');
   });
 
   it('detects unknown TLS extensions instead of silently deleting them', () => {
-    expect(outboundBasicConversionLoss({
-      protocol: 'vless',
-      tag: 'tls',
-      settings: {
-        address: 'edge.example',
-        port: 443,
-        id: '11111111-2222-4333-8444-555555555555',
-      },
-      streamSettings: {
-        network: 'tcp',
-        security: 'tls',
-        tlsSettings: { serverName: 'example.com', experimentalCoreOption: 'retain' },
-      },
-    })).toBe('streamSettings.tlsSettings.experimentalCoreOption');
+    expect(
+      outboundBasicConversionLoss({
+        protocol: 'vless',
+        tag: 'tls',
+        settings: {
+          address: 'edge.example',
+          port: 443,
+          id: '11111111-2222-4333-8444-555555555555',
+        },
+        streamSettings: {
+          network: 'tcp',
+          security: 'tls',
+          tlsSettings: { serverName: 'example.com', experimentalCoreOption: 'retain' },
+        },
+      }),
+    ).toBe('streamSettings.tlsSettings.experimentalCoreOption');
   });
 });

@@ -41,8 +41,7 @@ function normalizedVlessSource(raw: Raw): Raw | string {
   if (String(raw.protocol).toLowerCase() !== 'vless' || !isRecord(raw.settings)) return raw;
   const settings = raw.settings;
   if (!Array.isArray(settings.vnext)) return raw;
-  if (settings.vnext.length !== 1 || !isRecord(settings.vnext[0]))
-    return 'settings.vnext';
+  if (settings.vnext.length !== 1 || !isRecord(settings.vnext[0])) return 'settings.vnext';
   const server = settings.vnext[0];
   const users = server.users;
   if (!Array.isArray(users) || users.length !== 1 || !isRecord(users[0]))

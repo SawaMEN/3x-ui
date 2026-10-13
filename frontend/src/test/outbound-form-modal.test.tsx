@@ -265,7 +265,9 @@ describe('outbound import preserves advanced options', () => {
     );
     expect(document.querySelector('.ant-tabs-tab-active')?.textContent).toMatch(/JSON/);
     await act(async () => {
-      fireEvent.click(view.getAllByRole('tab').find((tab) => /Визуальный/.test(tab.textContent ?? ''))!);
+      fireEvent.click(
+        view.getAllByRole('tab').find((tab) => /Визуальный/.test(tab.textContent ?? ''))!,
+      );
     });
     expect(document.querySelector('.ant-tabs-tab-active')?.textContent).toMatch(/JSON/);
     await act(async () => {
