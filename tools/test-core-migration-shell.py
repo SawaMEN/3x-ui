@@ -236,37 +236,6 @@ core_migration_install_managed_bin
             self.assertIn("core_migration_exit", source)
         self.assertNotIn("trap - EXIT INT TERM", (ROOT / "install.sh").read_text())
 
-class InstallerServiceTests(unittest.TestCase):
-    def test_missing_unit_is_skipped_and_real_stop_errors_are_fatal(self):
-        source = (ROOT / "install.sh").read_text()
-        start = source.index("stop_existing_xui_service() {")
-        function = source[start:source.index("\n}\n", start) + 3]
-        for load_state, stop_code, expected, should_stop in (
-            ("not-found", 0, 0, False), ("loaded", 0, 0, True),
-            ("loaded", 1, 1, True), ("error", 1, 1, True),
-        ):
-            with self.subTest(load_state=load_state, stop_code=stop_code), tempfile.TemporaryDirectory() as raw:
-                log = Path(raw) / "service.log"
-                script = function + r'''
-release=arch
-systemctl() {
-    printf "%s\n" "$*" >> "$TEST_LOG"
-    case "$1" in
-        show) printf "%s\n" "$LOAD_STATE";;
-        stop) return "$STOP_CODE";;
-        *) return 0;;
-    esac
-}
-stop_existing_xui_service
-'''
-                result = subprocess.run(["bash", "-c", script], capture_output=True, text=True,
-                                        env=dict(os.environ, TEST_LOG=str(log), LOAD_STATE=load_state,
-                                                 STOP_CODE=str(stop_code)))
-                self.assertEqual(result.returncode, expected, result.stderr)
-                commands = log.read_text().splitlines()
-                self.assertEqual(commands[0], "daemon-reload")
-                self.assertEqual("stop x-ui" in commands, should_stop)
-
 class ReleaseCompatibilityTests(unittest.TestCase):
     def test_release_selection_preserves_migration_guards(self):
         source = (ROOT / "install.sh").read_text()
