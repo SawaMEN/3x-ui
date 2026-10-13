@@ -135,6 +135,23 @@ describe('simple sing-box page', () => {
     fireEvent.click(screen.getByText('Отмена').closest('button')!);
   });
   it('imports standard Trojan links with TLS enabled', async () => {
+    vi.mocked(HttpUtil.post).mockResolvedValue({
+      success: true,
+      msg: '',
+      obj: {
+        outbounds: [
+          {
+            type: 'trojan',
+            tag: 'Imported',
+            server: 'proxy.test',
+            server_port: 443,
+            password: 'pass',
+            tls: { enabled: true, server_name: 'proxy.test' },
+          },
+        ],
+        endpoints: [],
+      },
+    });
     mount('/singbox#outbound');
     fireEvent.click(await screen.findByText('Импорт ссылки'));
     fireEvent.change(screen.getByPlaceholderText('vless://...'), {
@@ -163,7 +180,12 @@ describe('simple sing-box page', () => {
     });
   });
 
-  it('keeps unsupported links out of the configuration', async () => {
+  it('keeps links rejected by the kernel out of the configuration', async () => {
+    vi.mocked(HttpUtil.post).mockResolvedValue({
+      success: false,
+      msg: 'Ядро не приняло ссылку',
+      obj: null,
+    });
     mount('/singbox#outbound');
     fireEvent.click(await screen.findByText('Импорт ссылки'));
     fireEvent.change(screen.getByPlaceholderText('vless://...'), {
@@ -172,10 +194,18 @@ describe('simple sing-box page', () => {
       },
     });
     fireEvent.click(screen.getByText('Добавить').closest('button')!);
-    await screen.findByText(/Транспорт xhttp не поддерживается/);
+    await screen.findByText('Ядро не приняло ссылку');
     expect(screen.queryByText('Unsupported')).toBeNull();
     expect(screen.getByText('Save').closest('button')!.hasAttribute('disabled')).toBe(true);
-    expect(HttpUtil.post).not.toHaveBeenCalled();
+    expect(HttpUtil.post).toHaveBeenCalledWith(
+      '/panel/api/setting/singbox/import-link',
+      expect.objectContaining({ batch: true }),
+    );
+    expect(
+      vi
+        .mocked(HttpUtil.post)
+        .mock.calls.some(([path]) => path === '/panel/api/setting/singbox/config'),
+    ).toBe(false);
   });
 });
 
@@ -203,7 +233,7 @@ it('decodes Mieru through the pure import API and saves native port bindings', a
   };
   vi.mocked(HttpUtil.post).mockImplementation(async (path) =>
     path === '/panel/api/setting/singbox/import-link'
-      ? { success: true, msg: '', obj: outbound }
+      ? { success: true, msg: '', obj: { outbounds: [outbound], endpoints: [] } }
       : { success: true, msg: '', obj: null },
   );
   mount('/outbound');
@@ -212,7 +242,10 @@ it('decodes Mieru through the pure import API and saves native port bindings', a
   fireEvent.change(screen.getByPlaceholderText('vless://...'), { target: { value: link } });
   fireEvent.click(screen.getByText('Добавить').closest('button')!);
   await screen.findByText('Mieru imported');
-  expect(HttpUtil.post).toHaveBeenCalledWith('/panel/api/setting/singbox/import-link', { link });
+  expect(HttpUtil.post).toHaveBeenCalledWith('/panel/api/setting/singbox/import-link', {
+    link,
+    batch: true,
+  });
   fireEvent.click(screen.getByText('Save').closest('button')!);
   await waitFor(() =>
     expect(HttpUtil.post).toHaveBeenCalledWith(

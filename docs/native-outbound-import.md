@@ -40,14 +40,14 @@ Stable release `sawamen-22fb84fdd93a-3827d3a871dd-panel8`; owner Sing-box revisi
 TLS and balancer overlays. The Linux AMD64 binary was downloaded with SHA-256
 verification together with its matching Cronet dependency.
 
-| Category | Native types |
-| --- | --- |
-| Proxy protocols | socks, http, shadowsocks, snell, vmess, trojan, naive, ssh, shadowtls, vless, anytls, mieru, sudoku, openflux, fptn, pingtunnel, trusttunnel, hysteria, hysteria2, tuic |
-| Other outbounds | direct, bridge, block, selector, urltest, balancer, tor, psiphon, xray, dnstt, gooserelay, masque, tailcat, vless-reverse, wireguard_legacy |
-| Endpoints | wireguard, awg, warp, tailscale, openconnect, openvpn-client, openvpn-server, masque-client, masque-server, tunnel_client, tunnel_server |
-| Transports | TCP, raw, HTTP, WebSocket, gRPC, HTTPUpgrade, XHTTP, QUIC, mKCP |
-| VLESS encryption | none; mlkem768x25519plus with native/xorpub/random, 0rtt/1rtt, padding and server keys |
-| Final masks | TCP: header-custom, fragment, sudoku, xmc. UDP: header-custom, mkcp-legacy, noise, salamander/Gecko, sudoku, xdns, xicmp, realm. Mask settings/chains are retained in final_mask. |
+| Category         | Native types                                                                                                                                                                      |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Proxy protocols  | socks, http, shadowsocks, snell, vmess, trojan, naive, ssh, shadowtls, vless, anytls, mieru, sudoku, openflux, fptn, pingtunnel, trusttunnel, hysteria, hysteria2, tuic           |
+| Other outbounds  | direct, bridge, block, selector, urltest, balancer, tor, psiphon, xray, dnstt, gooserelay, masque, tailcat, vless-reverse, wireguard_legacy                                       |
+| Endpoints        | wireguard, awg, warp, tailscale, openconnect, openvpn-client, openvpn-server, masque-client, masque-server, tunnel_client, tunnel_server                                          |
+| Transports       | TCP, raw, HTTP, WebSocket, gRPC, HTTPUpgrade, XHTTP, QUIC, mKCP                                                                                                                   |
+| VLESS encryption | none; mlkem768x25519plus with native/xorpub/random, 0rtt/1rtt, padding and server keys                                                                                            |
+| Final masks      | TCP: header-custom, fragment, sudoku, xmc. UDP: header-custom, mkcp-legacy, noise, salamander/Gecko, sudoku, xdns, xicmp, realm. Mask settings/chains are retained in final_mask. |
 
 The retired `shadowsocksr`, DNS outbound and removed `wireguard` outbound stubs
 are not advertised as working proxy types. WireGuard uses the endpoint section;
