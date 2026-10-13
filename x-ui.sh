@@ -312,6 +312,9 @@ stop() {
     check_status; state=$?
     if [[ "$state" == 1 ]]; then
         LOGI "Panel is already stopped."
+    elif [[ "$state" == 2 && "$running_in_docker" != true ]]; then
+        LOGE "x-ui.service is not installed or not loaded. Check systemctl status x-ui; repair with the installer."
+        rc=1
     elif [[ "$running_in_docker" == true ]]; then
         LOGE "Stop the container from the host."
         rc=1
