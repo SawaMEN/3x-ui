@@ -123,13 +123,13 @@ rc=$?
                 with tempfile.TemporaryDirectory() as raw:
                     base = Path(raw)
                     if unit_file:
-                        (base / "x-ui.service").write_text("[Service]\\n")
+                        (base / "x-ui.service").write_text("[Service]\n")
                     log_path = base / "systemctl.log"
                     self.run_script(function("install.sh", "_stop_existing_xui_for_install") + r'''
 release=arch
 xui_service="$TEST_ROOT"
 systemctl() {
-    printf '%s\\n' "$*" >> "$TEST_LOG"
+    printf '%s\n' "$*" >> "$TEST_LOG"
     case "$1" in
         cat) [[ "$MOCK_LOADED" == 1 ]];;
         is-active) [[ "$MOCK_ACTIVE" == 1 ]];;
