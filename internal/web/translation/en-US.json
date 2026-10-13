@@ -133,6 +133,7 @@
       "subtitle": "Use the standard core or install a separate core to suit your needs.",
       "soon": "Coming soon",
       "defaultBadge": "Default",
+      "missing": "Not installed",
       "defaultTitle": "Standard core",
       "defaultDescription": "Included with the panel. Updated automatically when you update 3x-ui.",
       "bundled": "Updates with the panel",

@@ -1,0 +1,76 @@
+.core-settings-panel {
+  padding: 10px 20px;
+}
+.core-settings-panel > h3 {
+  margin: 0 0 16px;
+  font-size: 16px;
+}
+.core-selection {
+  color: var(--ant-color-text);
+}
+.core-selection-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+  gap: 12px;
+}
+.core-selection-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 12px;
+  background: var(--ant-color-bg-container);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.core-selection-card-default {
+  border-color: var(--ant-color-primary-border);
+  background: var(--ant-color-primary-bg);
+}
+.core-selection-card-top,
+.core-selection-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.core-selection-card-top {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.core-selection-name .anticon {
+  color: var(--ant-color-primary);
+  font-size: 18px;
+}
+.core-selection p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ant-color-text-secondary);
+  line-height: 1.5;
+}
+.core-selection-card > .ant-btn,
+.core-selection-status {
+  margin-top: auto;
+}
+.core-selection .ant-tag {
+  margin-inline-end: 0;
+}
+.core-selection .core-selection-note {
+  margin-top: 12px;
+  font-size: 12px;
+}
+.core-selection-note .anticon {
+  margin-inline-end: 6px;
+}
+.core-settings-tools {
+  margin-top: 16px;
+}
+@media (max-width: 800px) {
+  .core-selection-grid {
+    grid-template-columns: 1fr;
+  }
+  .core-selection-card {
+    padding: 12px;
+    gap: 8px;
+  }
+}

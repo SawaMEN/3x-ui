@@ -13,7 +13,6 @@ import {
   Space,
   Switch,
   Tabs,
-  Tag,
   message,
 } from 'antd';
 import {
@@ -36,6 +35,7 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { catTabLabel } from './catTabLabel';
 import { sanitizePath } from './uriPath';
 import SecretInput from './SecretInput';
+import CoreSelection from './CoreSelection';
 
 interface ApiMsg<T = unknown> {
   success?: boolean;
@@ -562,82 +562,17 @@ export default function GeneralTab({
             key: 'core',
             label: catTabLabel(<SettingOutlined />, t('pages.settings.coreType'), isMobile),
             children: (
-              <div>
-                <SettingListItem
-                  paddings="small"
-                  title={t('pages.settings.coreType')}
-                  description={t('pages.settings.coreTypeDesc')}
-                >
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 8,
-                      width: '100%',
-                    }}
-                  >
-                    <Space direction="vertical" size={12} style={{ width: '100%' }}>
-                      <Tag color="gold">sing-box · модифицированная сборка</Tag>
-                      <p>Ядро поставляется и обновляется вместе с панелью.</p>
-
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: 12,
-                          padding: '10px 12px',
-                          borderRadius: 10,
-                          background: 'var(--ant-color-fill-quaternary)',
-                        }}
-                      >
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontWeight: 600 }}>sing-box</div>
-                          <div style={{ fontSize: 12, opacity: 0.65 }}>
-                            {allSetting.coreType === 'sing-box'
-                              ? singBoxInstalled
-                                ? 'Модифицированный Sing-box'
-                                : 'Требуется сборка панели с модифицированным Sing-box'
-                              : t('pages.settings.coreTypeDesc')}
-                          </div>
-                          <div style={{ fontSize: 12, marginTop: 4 }}>
-                            Работает сейчас:{' '}
-                            <strong>{runningCore === 'sing-box' ? 'sing-box' : 'нет'}</strong>
-                          </div>
-                        </div>
-                        {allSetting.coreType === 'sing-box' && (
-                          <Tag color={singBoxInstalled ? 'success' : 'warning'}>
-                            {singBoxInstalled ? 'Installed' : 'Not installed'}
-                          </Tag>
-                        )}
-                      </div>
-
-                      {allSetting.coreType === 'sing-box' && (
-                        <Alert
-                          type={singBoxInstalled ? 'success' : 'warning'}
-                          showIcon
-                          message={
-                            singBoxInstalled ? 'sing-box установлен' : 'sing-box отсутствует'
-                          }
-                          description={
-                            singBoxInstalled
-                              ? 'Ядро будет применено после сохранения настроек.'
-                              : 'Установите сборку панели с модифицированным Sing-box.'
-                          }
-                        />
-                      )}
-
-                      <Space wrap style={{ width: '100%' }}>
-                        <Button icon={<SwapOutlined />} onClick={() => onOpenSwap?.()}>
-                          {t('pages.settings.swap.openFromCore')}
-                        </Button>
-                        <Button icon={<ReloadOutlined />} onClick={() => onOpenSystemUpdate?.()}>
-                          {t('pages.settings.swap.systemUpdates')}
-                        </Button>
-                      </Space>
-                    </Space>
-                  </div>
-                </SettingListItem>
+              <div className="core-settings-panel">
+                <h3>{t('pages.settings.coreType')}</h3>
+                <CoreSelection installed={singBoxInstalled} running={runningCore === 'sing-box'} />
+                <Space wrap className="core-settings-tools">
+                  <Button icon={<SwapOutlined />} onClick={() => onOpenSwap?.()}>
+                    {t('pages.settings.swap.openFromCore')}
+                  </Button>
+                  <Button icon={<ReloadOutlined />} onClick={() => onOpenSystemUpdate?.()}>
+                    {t('pages.settings.swap.systemUpdates')}
+                  </Button>
+                </Space>
               </div>
             ),
           },
