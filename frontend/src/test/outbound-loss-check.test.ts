@@ -67,7 +67,7 @@ describe('lossless outbound editing gate', () => {
     ).toBe('settings.vnext');
   });
 
-  it('detects unknown TLS extensions instead of silently deleting them', () => {
+  it('permits advanced TLS extensions when the adapter retains them', () => {
     expect(
       outboundBasicConversionLoss({
         protocol: 'vless',
@@ -83,6 +83,6 @@ describe('lossless outbound editing gate', () => {
           tlsSettings: { serverName: 'example.com', experimentalCoreOption: 'retain' },
         },
       }),
-    ).toBe('streamSettings.tlsSettings.experimentalCoreOption');
+    ).toBeNull();
   });
 });
