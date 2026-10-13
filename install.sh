@@ -1539,8 +1539,27 @@ prepare_release_migration() {
     fi
 }
 
+# Install/repair also works when files exist but the service was never registered.
+# Real service-stop failures remain fatal before any files are replaced.
+stop_existing_xui_service() {
+    if [[ "$release" == "alpine" ]]; then
+        [[ ! -f /etc/init.d/x-ui ]] || rc-service x-ui stop
+    else
+        systemctl daemon-reload || return 1
+        local load_state
+        load_state=$(systemctl show x-ui.service -p LoadState --value) || return 1
+        [[ "$load_state" == "not-found" ]] || systemctl stop x-ui
+    fi
+}
+
 install_x-ui() {
     cd "${xui_folder%/x-ui}"/ || { echo "Cannot enter installation directory" >&2; return 1; }
+
+    # Separate downloads from concurrent install/update attempts.
+    local archive
+    archive=$(mktemp "${xui_folder%/*}/.x-ui-download.XXXXXX.tar.gz") || return 1
+    xui_download_archive="$archive"
+    trap 'code=$?; rm -f -- "$xui_download_archive" "$xui_download_archive.sha256"; exit "$code"' EXIT
 
     # Download resources
     if [ $# == 0 ]; then
@@ -1550,17 +1569,17 @@ install_x-ui() {
             exit 1
         fi
         echo -e "Got x-ui latest version: ${tag_version}, beginning the installation..."
-        curl -fLR --retry 5 --retry-delay 3 --connect-timeout 15 --speed-limit 1 --speed-time 300 -o "${xui_folder}-linux-$(arch).tar.gz" "https://github.com/SawaMEN/3x-ui/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz"
+        curl -fLR --retry 5 --retry-delay 3 --connect-timeout 15 --speed-limit 1 --speed-time 300 -o "${archive}" "https://github.com/SawaMEN/3x-ui/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz"
         if [[ $? -ne 0 ]]; then
             echo -e "${red}Downloading x-ui failed, please be sure that your server can access GitHub ${plain}"
             exit 1
         fi
-        if [[ ! -s ${xui_folder}-linux-$(arch).tar.gz ]]; then
-            rm "${xui_folder}-linux-$(arch).tar.gz" -f
+        if [[ ! -s ${archive} ]]; then
+            rm "${archive}" -f
             echo -e "${red}Downloaded x-ui release archive is empty${plain}"
             exit 1
         fi
-        verify_release_checksum "https://github.com/SawaMEN/3x-ui/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz" "${xui_folder}-linux-$(arch).tar.gz"
+        verify_release_checksum "https://github.com/SawaMEN/3x-ui/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz" "${archive}"
     else
         tag_version=$1
         # The rolling dev channel ships under a fixed, non-semver tag that is
@@ -1581,24 +1600,21 @@ install_x-ui() {
 
         url="https://github.com/SawaMEN/3x-ui/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz"
         echo -e "Beginning to install x-ui ${tag_version}"
-        curl -fLR --retry 5 --retry-delay 3 --connect-timeout 15 --speed-limit 1 --speed-time 300 -o "${xui_folder}-linux-$(arch).tar.gz" "${url}"
+        curl -fLR --retry 5 --retry-delay 3 --connect-timeout 15 --speed-limit 1 --speed-time 300 -o "${archive}" "${url}"
         if [[ $? -ne 0 ]]; then
             echo -e "${red}Download x-ui ${tag_version} failed, please check if the version exists ${plain}"
             exit 1
         fi
-        if [[ ! -s ${xui_folder}-linux-$(arch).tar.gz ]]; then
-            rm "${xui_folder}-linux-$(arch).tar.gz" -f
+        if [[ ! -s ${archive} ]]; then
+            rm "${archive}" -f
             echo -e "${red}Downloaded x-ui release archive is empty${plain}"
             exit 1
         fi
-        verify_release_checksum "${url}" "${xui_folder}-linux-$(arch).tar.gz"
+        verify_release_checksum "${url}" "${archive}"
     fi
-    # x-ui.sh, x-ui.rc and the unit files must come from the same release as
-    # the binary; only the rolling dev build tracks main.
+    # Pin helpers to the release tag, including the rolling dev build.
+    # main can advance while the corresponding release is still building.
     local script_ref="${tag_version}"
-    if [[ "${tag_version}" == "dev-latest" ]]; then
-        script_ref="main"
-    fi
     # The unit files are only fetched when the release tarball lacks them, so
     # they are checked at that point instead of here.
     local required_files=("x-ui.sh")
@@ -1620,16 +1636,12 @@ install_x-ui() {
 
     # New kernel releases require their transaction helper. Older stable tags
     # can still be installed before migration, but cannot downgrade a migrated panel.
-    prepare_release_migration "${xui_folder}-linux-$(arch).tar.gz" || exit 1
+    prepare_release_migration "${archive}" || exit 1
 
     # Stop x-ui service and remove old resources
     local custom_bin_backup=""
     if [[ -e ${xui_folder}/ ]]; then
-        if [[ $release == "alpine" ]]; then
-            rc-service x-ui stop || exit 1
-        else
-            systemctl stop x-ui || exit 1
-        fi
+        stop_existing_xui_service || exit 1
         if [[ -n "${cm_stage:-}" ]]; then core_migration_begin || exit 1; fi
         # Kill any leftover mtg (MTProto) sidecars. x-ui runs them outside its own
         # lifecycle, so on Linux a stale one can survive the stop and keep holding
@@ -1666,14 +1678,14 @@ install_x-ui() {
     fi
 
     # Extract resources and set permissions
-    tar zxvf "x-ui-linux-$(arch).tar.gz"
+    tar zxvf "${archive}"
     if [[ $? -ne 0 ]]; then
-        rm -f -- "x-ui-linux-$(arch).tar.gz"
+        rm -f -- "${archive}"
         rm -f "${xui_script_temp}"
         echo -e "${red}Failed to extract the x-ui release archive -- the previous installation has already been removed, so the panel will not start until this is fixed; try running the installer again${plain}"
         exit 1
     fi
-    rm -f -- "x-ui-linux-$(arch).tar.gz"
+    rm -f -- "${archive}"
 
     if ! cd "$xui_folder" || [[ ! -s x-ui ]]; then
         rm -f "${xui_script_temp}"
@@ -1945,6 +1957,6 @@ install_x-ui() {
 }
 
 echo -e "${green}Running...${plain}"
-install_base
+install_base || { echo "Failed to install required dependency packages" >&2; exit 1; }
 install_x-ui "$@"
 

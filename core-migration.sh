@@ -179,7 +179,12 @@ core_migration_exit() {
         if [[ "${release}" == alpine ]]; then
             rc-service x-ui stop || return 1
         else
-            systemctl stop x-ui || return 1
+            # Repair can begin with files present and no registered service.
+            # A missing unit is already stopped; other stop failures are fatal.
+            local load_state
+            systemctl daemon-reload || return 1
+            load_state=$(systemctl show x-ui.service -p LoadState --value) || return 1
+            [[ "$load_state" == "not-found" ]] || systemctl stop x-ui || return 1
         fi
         if ! "$cm_stage/x-ui/x-ui" core-migrate --restore --backup-dir "$cm_backup/data"; then
             echo "Automatic rollback failed. Keep x-ui stopped and recover from $cm_backup." >&2
@@ -214,7 +219,10 @@ core_migration_exit() {
             [[ "${cm_was_running:-0}" == 0 ]] || rc-service x-ui start || return 1
         else
             systemctl daemon-reload || return 1
-            if [[ "${cm_was_enabled:-0}" == 1 ]]; then systemctl enable x-ui || return 1; else systemctl disable x-ui || return 1; fi
+            load_state=$(systemctl show x-ui.service -p LoadState --value) || return 1
+            if [[ "$load_state" != "not-found" ]]; then
+                if [[ "${cm_was_enabled:-0}" == 1 ]]; then systemctl enable x-ui || return 1; else systemctl disable x-ui || return 1; fi
+            fi
             [[ "${cm_was_running:-0}" == 0 ]] || systemctl start x-ui || return 1
         fi
         if [[ "${cm_was_running:-0}" == 1 ]]; then core_migration_resume_gateway || return 1; fi
