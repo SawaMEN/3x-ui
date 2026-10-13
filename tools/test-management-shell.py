@@ -60,6 +60,18 @@ running_in_docker=false
 ''' + f"\nrelease={release}\ncheck_status() {{ return {state}; }}\n{name} 0\nrc=$?\n[[ $rc == 37 ]]\n"
                     self.run_script(script)
 
+    def test_stop_missing_service_does_not_invoke_systemctl_stop(self):
+        with tempfile.TemporaryDirectory() as raw:
+            self.run_script(self.service_functions() + r'''
+LOGE() { :; }; LOGI() { :; }; before_show_menu() { :; }
+running_in_docker=false; release=arch
+check_status() { return 2; }
+systemctl() { echo "$*" >> "$TEST_LOG"; return 37; }
+stop 0
+rc=$?
+[[ "$rc" == 1 && ! -e "$TEST_LOG" ]]
+''', {"TEST_LOG": str(Path(raw) / "calls.log")})
+
     def test_service_success_is_not_reported_as_failure(self):
         for name in ("start", "stop", "restart", "restart_xray", "status", "enable", "disable"):
             with self.subTest(command=name):
