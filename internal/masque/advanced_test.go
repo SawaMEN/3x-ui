@@ -25,3 +25,16 @@ func TestAdvancedOptionsCannotOverrideManagedFields(t *testing.T) {
 		t.Fatal(settings.Advanced)
 	}
 }
+
+func TestMemoryWindowsMatchKernelFormat(t *testing.T) {
+	for _, value := range []any{"64 MB", "32kb", "1024 B", float64(1048576), float64(0)} {
+		if !validMemorySize(value) {
+			t.Errorf("rejected supported window %#v", value)
+		}
+	}
+	for _, value := range []any{"1.5 MB", "64 MiB", "64", "18446744073709551616 B", "16 EB", float64(-1), float64(1.5)} {
+		if validMemorySize(value) {
+			t.Errorf("accepted invalid window %#v", value)
+		}
+	}
+}

@@ -881,7 +881,13 @@
         "masqueCustomCertificate": "Custom TLS certificate",
         "masqueAdvanced": "Advanced tunnel settings",
         "masqueRoutesHint": "An empty list allows all destinations. Set prefixes only to restrict networks available to clients.",
-        "masqueMTUDiscovery": "Disable path MTU discovery (QUIC)"
+        "masqueMTUDiscovery": "Disable path MTU discovery (QUIC)",
+        "masqueIdleTimeout": "Idle connection timeout",
+        "masqueKeepAlive": "Keepalive interval",
+        "masqueStreamWindow": "Stream receive window",
+        "masqueConnectionWindow": "Connection receive window",
+        "masqueInterface": "Network interface",
+        "masqueWindowHint": "An integer with a size unit, for example 64 MB or 512 KB."
       },
       "info": {
         "mode": "Mode",

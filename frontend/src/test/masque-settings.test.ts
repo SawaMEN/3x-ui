@@ -43,3 +43,16 @@ describe('MASQUE native configuration', () => {
     ).toContain('MASQUE требует TLS.');
   });
 });
+
+it.each([
+  { username: 'alice\nproxy' },
+  { username: 123 },
+  { version: '3' },
+  { version: true },
+  { path: '/{unknown}' },
+  { path: '/bad path' },
+])('rejects a MASQUE client the core cannot use: %j', (patch) => {
+  expect(
+    outboundErrors({ ...masqueClientDefaults('proxy'), server: 'vpn.example.com', ...patch }, []),
+  ).not.toEqual([]);
+});

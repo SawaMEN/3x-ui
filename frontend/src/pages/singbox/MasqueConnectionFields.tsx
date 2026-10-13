@@ -100,6 +100,7 @@ export default function MasqueConnectionFields({
             <Col xs={24} sm={12}>
               <Form.Item label="Автоматический переход на HTTP/2">
                 <Switch
+                  disabled={(Number(value.version) || 3) === 1}
                   checked={!value.disable_version_fallback}
                   onChange={(next) => patch('disable_version_fallback', !next)}
                 />

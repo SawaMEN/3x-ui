@@ -11,6 +11,15 @@ export default function MasqueFields() {
   const certificate = useWatch({ control, name: 'settings.tls.certificatePath' });
   const key = useWatch({ control, name: 'settings.tls.keyPath' });
   const automatic = !certificate && !key;
+  const hasHTTP2Options = versions.includes(2) || versions.includes(3);
+  const advancedLabels: Record<string, string> = {
+    udp_timeout: 'UDP timeout',
+    idle_timeout: t('pages.inbounds.form.masqueIdleTimeout'),
+    keep_alive_period: t('pages.inbounds.form.masqueKeepAlive'),
+    stream_receive_window: t('pages.inbounds.form.masqueStreamWindow'),
+    connection_receive_window: t('pages.inbounds.form.masqueConnectionWindow'),
+    bind_interface: t('pages.inbounds.form.masqueInterface'),
+  };
   const set = (name: string, value: unknown) =>
     setValue(name, value, { shouldDirty: true, shouldValidate: true });
   return (
@@ -139,17 +148,41 @@ export default function MasqueFields() {
                   'connection_receive_window',
                   'bind_interface',
                 ].map((name) => (
-                  <FormField key={name} name={['settings', 'advanced', name]} label={name}>
+                  <FormField
+                    key={name}
+                    name={['settings', 'advanced', name]}
+                    label={advancedLabels[name] || name}
+                    tooltip={
+                      name.includes('receive_window')
+                        ? t('pages.inbounds.form.masqueWindowHint')
+                        : undefined
+                    }
+                  >
                     <Input
+                      disabled={
+                        name !== 'udp_timeout' && name !== 'bind_interface' && !hasHTTP2Options
+                      }
                       placeholder={
-                        name.includes('timeout') || name.includes('period') ? '30s' : undefined
+                        name.includes('receive_window')
+                          ? '64 MB'
+                          : name.includes('timeout') || name.includes('period')
+                            ? '30s'
+                            : undefined
                       }
                     />
                   </FormField>
                 ))}
                 {['max_concurrent_streams', 'initial_packet_size', 'udp_nat_max'].map((name) => (
                   <FormField key={name} name={['settings', 'advanced', name]} label={name}>
-                    <InputNumber min={0} style={{ width: '100%' }} />
+                    <InputNumber
+                      min={name === 'initial_packet_size' ? 1200 : 0}
+                      disabled={
+                        name === 'initial_packet_size'
+                          ? !versions.includes(3)
+                          : name === 'max_concurrent_streams' && !hasHTTP2Options
+                      }
+                      style={{ width: '100%' }}
+                    />
                   </FormField>
                 ))}
                 <FormField
@@ -158,6 +191,7 @@ export default function MasqueFields() {
                 >
                   <Select
                     allowClear
+                    disabled={!versions.includes(3)}
                     options={[
                       { value: true, label: t('yes') },
                       { value: false, label: t('no') },

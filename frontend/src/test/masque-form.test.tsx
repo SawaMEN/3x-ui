@@ -10,6 +10,7 @@ function Form() {
     defaultValues: {
       settings: MasqueInboundSettingsSchema.parse({
         clients: [{ email: 'alice', password: 'secret' }],
+        advanced: { initial_packet_size: 1200, stream_receive_window: '64 MB' },
         tls: { certificatePath: '/cert.pem', keyPath: '/key.pem', serverName: 'vpn.example.com' },
       }),
     },
@@ -43,5 +44,19 @@ describe('MASQUE automatic settings', () => {
     expect(settings.tls.certificatePath).toBe('');
     expect(settings.tls.keyPath).toBe('');
     expect(settings.clients[0].password).toBe('secret');
+  });
+  it('keeps QUIC options while disabling their fields in TCP mode', () => {
+    renderWithProviders(<Form />);
+    fireEvent.click(screen.getByRole('button', { name: 'TCP / HTTP/2 compatibility' }));
+    fireEvent.click(screen.getByText('Advanced tunnel settings'));
+    const packetSize = screen.getByRole('spinbutton', { name: 'initial_packet_size' });
+    expect((packetSize as HTMLInputElement).disabled).toBe(true);
+    const settings = JSON.parse(screen.getByTestId('settings').textContent || '{}');
+    expect(settings.advanced.initial_packet_size).toBe(1200);
+    fireEvent.click(screen.getByRole('button', { name: 'QUIC / HTTP/3 only' }));
+    expect((packetSize as HTMLInputElement).disabled).toBe(false);
+    expect(
+      JSON.parse(screen.getByTestId('settings').textContent || '{}').advanced.initial_packet_size,
+    ).toBe(1200);
   });
 });

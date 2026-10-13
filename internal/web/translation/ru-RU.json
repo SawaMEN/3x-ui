@@ -881,7 +881,13 @@
         "masqueCustomCertificate": "Собственный TLS-сертификат",
         "masqueAdvanced": "Расширенные параметры туннеля",
         "masqueRoutesHint": "Пустой список разрешает все назначения. Заполняйте только для ограничения доступных клиентам сетей.",
-        "masqueMTUDiscovery": "Отключить определение MTU пути (QUIC)"
+        "masqueMTUDiscovery": "Отключить определение MTU пути (QUIC)",
+        "masqueIdleTimeout": "Таймаут простоя соединения",
+        "masqueKeepAlive": "Интервал keepalive",
+        "masqueStreamWindow": "Окно приёма потока",
+        "masqueConnectionWindow": "Окно приёма соединения",
+        "masqueInterface": "Сетевой интерфейс",
+        "masqueWindowHint": "Целое число с единицей размера, например 64 MB или 512 KB."
       },
       "info": {
         "mode": "Режим",

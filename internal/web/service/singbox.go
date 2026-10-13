@@ -245,6 +245,27 @@ func normalizeSingBoxTemplate(raw string) (string, error) {
 			return "", fmt.Errorf("unsupported sing-box top-level field %q; panel-managed inbounds/services are not editable here", key)
 		}
 	}
+	var cfg singbox.Config
+	if data, ok := obj["outbounds"]; ok {
+		if err := json.Unmarshal(data, &cfg.Outbounds); err != nil {
+			return "", fmt.Errorf("invalid native outbounds: %w", err)
+		}
+	}
+	if data, ok := obj["experimental"]; ok {
+		if err := json.Unmarshal(data, &cfg.Experimental); err != nil {
+			return "", fmt.Errorf("invalid native experimental settings: %w", err)
+		}
+	}
+	if err := ensureWARPMASQUECache(&cfg); err != nil {
+		return "", err
+	}
+	if cfg.Experimental != nil {
+		data, err := json.Marshal(cfg.Experimental)
+		if err != nil {
+			return "", err
+		}
+		obj["experimental"] = data
+	}
 	data, err := json.MarshalIndent(obj, "", "  ")
 	if err != nil {
 		return "", err
@@ -276,7 +297,7 @@ func (s *SingBoxService) applyNativeTemplate(cfg *singbox.Config, managedMASQUET
 func (s *SingBoxService) applyNativeTemplateValue(cfg *singbox.Config, managedMASQUETags map[string]bool, rawTemplate string) error {
 	rawTemplate = strings.TrimSpace(rawTemplate)
 	if rawTemplate == "" {
-		return nil
+		return ensureWARPMASQUECache(cfg)
 	}
 	var patch map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(rawTemplate), &patch); err != nil {
@@ -331,6 +352,9 @@ func (s *SingBoxService) applyNativeTemplateValue(cfg *singbox.Config, managedMA
 	// Include disabled listeners and listeners without active users in the tag
 	// set, so an old template cannot restore their previous credentials.
 	cfg.Endpoints = mergeManagedMASQUEEndpoints(cfg.Endpoints, managedMASQUE, managedMASQUETags)
+	if err := ensureWARPMASQUECache(cfg); err != nil {
+		return err
+	}
 
 	var referencesLocal func(any) bool
 	referencesLocal = func(value any) bool {

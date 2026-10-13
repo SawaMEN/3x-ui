@@ -1,3 +1,4 @@
+import { MasqueInboundSettingsSchema } from '@/schemas/protocols/inbound/masque';
 import { masqueClientDefaults } from './masque-settings';
 import { isNativeEndpoint, nativeServerTypes } from './native-import';
 export type ConfigObject = Record<string, unknown>;
@@ -192,9 +193,26 @@ export function outboundErrors(value: ConfigObject, otherTags: string[]): string
       Number(value.server_port) > 65535
     )
       errors.push('Порт MASQUE должен быть от 1 до 65535.');
-    if (![0, 1, 2, 3].includes(Number(value.version || 0))) errors.push('Выберите версию HTTP.');
+    if (
+      value.version !== undefined &&
+      (typeof value.version !== 'number' || ![0, 1, 2, 3].includes(value.version))
+    )
+      errors.push('Выберите версию HTTP.');
+    if (
+      value.path !== undefined &&
+      !MasqueInboundSettingsSchema.shape.path.safeParse(value.path || undefined).success
+    )
+      errors.push('Укажите корректный URI-шаблон MASQUE.');
     if (object(value.tls).enabled !== true) errors.push('MASQUE требует TLS.');
-    if (String(value.username || '').includes(':'))
+    if (
+      value.username !== undefined &&
+      (typeof value.username !== 'string' ||
+        Array.from(value.username).some(
+          (character) => character.charCodeAt(0) < 0x20 || character.charCodeAt(0) === 0x7f,
+        ))
+    )
+      errors.push('Имя пользователя MASQUE должно быть текстом без управляющих символов.');
+    if (typeof value.username === 'string' && value.username.includes(':'))
       errors.push('Имя пользователя MASQUE не может содержать двоеточие.');
     if (
       value.mtu &&

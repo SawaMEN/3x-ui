@@ -25,7 +25,7 @@ func TestMASQUEBinaryConfig(t *testing.T) {
 	certPath, keyPath := masqueTestCertificate(t)
 	dir := t.TempDir()
 	for _, version := range []int{1, 2, 3} {
-		endpoint, err := TranslateMASQUEEndpoint(map[string]any{"protocol": "masque", "tag": "masque", "listen": "127.0.0.1", "port": 18443, "settings": map[string]any{"version": []int{version}, "tls": map[string]any{"certificatePath": certPath, "keyPath": keyPath}, "clients": []any{map[string]any{"email": "alice", "password": "secret", "enable": true}}}})
+		endpoint, err := TranslateMASQUEEndpoint(map[string]any{"protocol": "masque", "tag": "masque", "listen": "127.0.0.1", "port": 18443, "settings": map[string]any{"version": []int{version}, "advanced": map[string]any{"udp_timeout": "5m", "initial_packet_size": 1200, "disable_path_mtu_discovery": true, "stream_receive_window": 1048576, "connection_receive_window": "64 MB", "keep_alive_period": "30s"}, "tls": map[string]any{"certificatePath": certPath, "keyPath": keyPath}, "clients": []any{map[string]any{"email": "alice", "password": "secret", "enable": true}}}})
 		if err != nil {
 			t.Fatal(err)
 		}
