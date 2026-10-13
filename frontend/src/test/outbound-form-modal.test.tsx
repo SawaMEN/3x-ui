@@ -201,3 +201,76 @@ describe('native sing-box JSON editing', () => {
     expect(onConfirm).toHaveBeenCalledWith(native);
   });
 });
+
+describe('outbound import preserves advanced options', () => {
+  it('imports AnyTLS URI in native JSON without changing credentials', async () => {
+    const onConfirm = vi.fn();
+    const view = renderWithProviders(
+      <OutboundFormModal
+        open
+        outbound={null}
+        existingTags={[]}
+        onClose={() => {}}
+        onConfirm={onConfirm}
+      />,
+    );
+    const jsonTab = view.getAllByRole('tab').find((tab) => /JSON/.test(tab.textContent ?? ''));
+    expect(jsonTab).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(jsonTab!);
+    });
+    const input = view.getByPlaceholderText(/anytls:\/\//) as HTMLInputElement;
+    fireEvent.change(input, {
+      target: { value: 'anytls://secret@edge.example:443?sni=cover.example#native-node' },
+    });
+    await act(async () => {
+      fireEvent.click(view.getByText('Импортировать'));
+    });
+    await act(async () => {
+      fireEvent.click(document.querySelector('.ant-modal-footer .ant-btn-primary')!);
+    });
+    expect(onConfirm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        protocol: 'singbox:anytls',
+        tag: 'native-node',
+        settings: expect.objectContaining({
+          server: 'edge.example',
+          password: 'secret',
+          tls: expect.objectContaining({ server_name: 'cover.example' }),
+        }),
+      }),
+    );
+  });
+
+  it('keeps a VLESS outbound with unrepresented options in JSON mode', async () => {
+    const original = {
+      protocol: 'vless',
+      tag: 'keep-extra',
+      settings: {
+        address: 'edge.example',
+        port: 443,
+        id: '11111111-2222-4333-8444-555555555555',
+        packetEncoding: 'xudp',
+      },
+    };
+    const onConfirm = vi.fn();
+    const view = renderWithProviders(
+      <OutboundFormModal
+        open
+        outbound={original}
+        existingTags={[]}
+        onClose={() => {}}
+        onConfirm={onConfirm}
+      />,
+    );
+    expect(document.querySelector('.ant-tabs-tab-active')?.textContent).toMatch(/JSON/);
+    await act(async () => {
+      fireEvent.click(view.getAllByRole('tab').find((tab) => /Визуальный/.test(tab.textContent ?? ''))!);
+    });
+    expect(document.querySelector('.ant-tabs-tab-active')?.textContent).toMatch(/JSON/);
+    await act(async () => {
+      fireEvent.click(document.querySelector('.ant-modal-footer .ant-btn-primary')!);
+    });
+    expect(onConfirm).toHaveBeenCalledWith(original);
+  });
+});
