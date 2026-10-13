@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/enfein/mieru/v3/pkg/appctl"
@@ -69,5 +70,47 @@ func TestNativeMieruShareLinks(t *testing.T) {
 		if _, err := ParseNativeMieruShareLink(link); err == nil {
 			t.Fatalf("accepted %q", link)
 		}
+	}
+}
+
+func TestParseNativeOutboundShareLink(t *testing.T) {
+	for _, tc := range []struct{ link, kind, field, value string }{
+		{"vless://12345678-1234-1234-1234-123456789abc@proxy.test:443?security=reality&pbk=public&sid=ab&fp=chrome#Proxy", "vless", "uuid", "12345678-1234-1234-1234-123456789abc"},
+		{"trojan://p%40ss@proxy.test:443?type=ws&path=%2Fws#Proxy", "trojan", "password", "p@ss"},
+		{"ss://YWVzLTEyOC1nY206cGFzcw@proxy.test:443#Proxy", "shadowsocks", "password", "pass"},
+		{"anytls://p%40ss@proxy.test:443?sni=cdn.test&idle_session_timeout=30s&fp=chrome", "anytls", "password", "p@ss"},
+		{"tuic://12345678-1234-1234-1234-123456789abc:pass@proxy.test:443", "tuic", "password", "pass"},
+		{"ssh://root:pass@proxy.test:22", "ssh", "user", "root"},
+		{"naive+https://user:pass@proxy.test:443", "naive", "username", "user"},
+		{"snell://secret@proxy.test:443?version=4", "snell", "psk", "secret"},
+	} {
+		t.Run(tc.kind, func(t *testing.T) {
+			out, err := ParseNativeOutboundShareLink(tc.link)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if out["type"] != tc.kind || out[tc.field] != tc.value || out["server"] != "proxy.test" {
+				t.Fatalf("unexpected decoded outbound: %#v", out)
+			}
+			if _, ok := out["protocol"]; ok {
+				t.Fatal("legacy wrapper leaked into native JSON")
+			}
+		})
+	}
+	if _, err := ParseNativeOutboundShareLink(strings.Repeat("a", 65537)); err == nil {
+		t.Fatal("oversized link accepted")
+	}
+}
+
+func TestNativeShareLinkRejectsLossyOptions(t *testing.T) {
+	if _, err := ParseNativeOutboundShareLink("anytls://pass@proxy.test?unknown=lost"); err == nil {
+		t.Fatal("unknown option silently lost")
+	}
+	out, err := ParseNativeOutboundShareLink("tuic://12345678-1234-1234-1234-123456789abc:pass@proxy.test?congestion-control=bbr&udp-relay-mode=quic")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out["congestion_control"] != "bbr" || out["udp_relay_mode"] != "quic" {
+		t.Fatal("TUIC options lost")
 	}
 }

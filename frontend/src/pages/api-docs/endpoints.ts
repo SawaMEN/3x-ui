@@ -3007,7 +3007,7 @@ export const sections: readonly Section[] = [
       {
         method: 'POST',
         path: '/panel/api/setting/singbox/import-link',
-        summary: 'Decode a Mieru share link into a native outbound without saving.',
+        summary: 'Decode a supported connection share link into a native outbound without saving.',
       },
       {
         method: 'POST',

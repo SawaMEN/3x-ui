@@ -2,8 +2,12 @@ package service
 
 import (
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
+	sharelink "github.com/SawaMEN/3x-ui/v3/internal/util/link"
 
 	"github.com/enfein/mieru/v3/pkg/appctl"
 )
@@ -86,4 +90,161 @@ func ParseNativeMieruShareLink(link string) (map[string]any, error) {
 		tag = host
 	}
 	return map[string]any{"type": "mieru", "tag": tag, "server": host, "username": user.GetName(), "password": user.GetPassword(), "portBindings": bindings, "mtu": mtu, "multiplexing": mux, "handshake_mode": strings.TrimPrefix(handshake, "HANDSHAKE_")}, nil
+}
+
+// ParseNativeOutboundShareLink reuses the subscription parser and the runtime
+// translator so transport/security options have the same meaning in both UIs.
+func parseLegacyNativeOutboundShareLink(raw string) (map[string]any, error) {
+	raw = strings.TrimSpace(raw)
+	if len(raw) > 64<<10 {
+		return nil, fmt.Errorf("connection link too large")
+	}
+	if strings.HasPrefix(raw, "mieru://") || strings.HasPrefix(raw, "mierus://") {
+		return ParseNativeMieruShareLink(raw)
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return nil, fmt.Errorf("invalid connection link: %w", err)
+	}
+	switch u.Scheme {
+	case "anytls", "tuic", "hysteria", "shadowtls", "ssh", "naive+https":
+		if u.Hostname() == "" || u.User == nil {
+			return nil, fmt.Errorf("server and credentials are required")
+		}
+		port := 443
+		if u.Scheme == "ssh" {
+			port = 22
+		}
+		if u.Port() != "" {
+			port, err = strconv.Atoi(u.Port())
+			if err != nil || port < 1 || port > 65535 {
+				return nil, fmt.Errorf("invalid server port")
+			}
+		}
+		kind := u.Scheme
+		if kind == "naive+https" {
+			kind = "naive"
+		}
+		tag := u.Fragment
+		if tag == "" {
+			tag = u.Hostname()
+		}
+		out := map[string]any{"type": kind, "tag": tag, "server": u.Hostname(), "server_port": port}
+		q := u.Query()
+		allowed := map[string]bool{"sni": true, "alpn": true, "insecure": true, "allowInsecure": true, "security": true}
+		switch kind {
+		case "tuic":
+			for _, key := range []string{"congestion_control", "congestion-control", "udp_relay_mode", "udp-relay-mode"} {
+				allowed[key] = true
+			}
+		case "anytls":
+			for _, key := range []string{"fp", "idle_session_timeout", "idle_session_check_interval"} {
+				allowed[key] = true
+			}
+		case "shadowtls":
+			allowed["version"] = true
+			allowed["fp"] = true
+		case "hysteria":
+			for _, key := range []string{"auth", "up_mbps", "down_mbps", "upmbps", "downmbps", "peer"} {
+				allowed[key] = true
+			}
+		}
+		for key := range q {
+			if !allowed[key] {
+				return nil, fmt.Errorf("unsupported %s link option %q; configure it in JSON", kind, key)
+			}
+		}
+		if q.Get("security") != "" && q.Get("security") != "tls" {
+			return nil, fmt.Errorf("%s link requires TLS", kind)
+		}
+		password, _ := u.User.Password()
+		switch kind {
+		case "tuic":
+			out["uuid"] = u.User.Username()
+			out["password"] = password
+			for _, key := range []string{"congestion_control", "udp_relay_mode"} {
+				if q.Get(key) != "" {
+					out[key] = q.Get(key)
+				} else if q.Get(strings.ReplaceAll(key, "_", "-")) != "" {
+					out[key] = q.Get(strings.ReplaceAll(key, "_", "-"))
+				}
+			}
+		case "ssh":
+			out["user"] = u.User.Username()
+			out["password"] = password
+		case "naive":
+			out["username"] = u.User.Username()
+			out["password"] = password
+		case "hysteria":
+			out["auth_str"] = u.User.Username()
+			if q.Get("auth") != "" {
+				out["auth_str"] = q.Get("auth")
+			}
+			for _, key := range []string{"up_mbps", "down_mbps"} {
+				speed := q.Get(key)
+				if speed == "" {
+					speed = q.Get(strings.ReplaceAll(key, "_", ""))
+				}
+				n, e := strconv.Atoi(speed)
+				if e != nil || n <= 0 {
+					return nil, fmt.Errorf("Hysteria requires positive %s", key)
+				}
+				out[key] = n
+			}
+		default:
+			out["password"] = u.User.Username()
+			if password != "" {
+				out["password"] = u.User.Username() + ":" + password
+			}
+			if kind == "shadowtls" {
+				out["version"] = 3
+				if q.Get("version") != "" {
+					n, e := strconv.Atoi(q.Get("version"))
+					if e != nil {
+						return nil, fmt.Errorf("invalid ShadowTLS version")
+					}
+					out["version"] = n
+				}
+			}
+		}
+		if kind != "ssh" {
+			sni := q.Get("sni")
+			if sni == "" {
+				sni = q.Get("peer")
+				if sni == "" {
+					sni = u.Hostname()
+				}
+			}
+			tls := map[string]any{"enabled": true, "server_name": sni}
+			if q.Get("alpn") != "" {
+				tls["alpn"] = strings.Split(q.Get("alpn"), ",")
+			}
+			if q.Get("insecure") == "1" || q.Get("insecure") == "true" || q.Get("allowInsecure") == "1" || q.Get("allowInsecure") == "true" {
+				tls["insecure"] = true
+			}
+			if q.Get("fp") != "" {
+				tls["utls"] = map[string]any{"enabled": true, "fingerprint": q.Get("fp")}
+			}
+			out["tls"] = tls
+		}
+		if kind == "anytls" {
+			for _, key := range []string{"idle_session_timeout", "idle_session_check_interval"} {
+				if q.Get(key) != "" {
+					out[key] = q.Get(key)
+				}
+			}
+		}
+		return singbox.TranslateXrayOutbound(map[string]any{"protocol": "singbox:" + kind, "tag": tag, "settings": out})
+	}
+	parsed, err := sharelink.ParseLink(raw)
+	if err != nil {
+		return nil, err
+	}
+	if parsed.Outbound["protocol"] == "wireguard" || parsed.Outbound["protocol"] == "amneziawg" {
+		return nil, fmt.Errorf("WireGuard and AmneziaWG must be imported as endpoints, not outbounds")
+	}
+	if tag, _ := parsed.Outbound["tag"].(string); strings.TrimSpace(tag) == "" {
+		parsed.Outbound["tag"] = fmt.Sprint(parsed.Outbound["protocol"]) + "-proxy"
+	}
+	return singbox.TranslateXrayOutbound(map[string]any(parsed.Outbound))
 }

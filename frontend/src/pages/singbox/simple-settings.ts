@@ -1,3 +1,4 @@
+import { isNativeEndpoint, nativeServerTypes } from './native-import';
 export type ConfigObject = Record<string, unknown>;
 
 export function object(value: unknown): ConfigObject {
@@ -142,6 +143,7 @@ export function setDefaultOutbound(config: ConfigObject, tag: string): ConfigObj
 export function outboundDefaults(type: string, tag: string, group: string[] = []): ConfigObject {
   const base = { type, tag };
   if (type === 'selector') return { ...base, outbounds: group };
+  if (type === 'balancer') return { ...base, outbounds: group, strategy: 'round-robin' };
   if (type === 'urltest')
     return {
       ...base,
@@ -150,15 +152,22 @@ export function outboundDefaults(type: string, tag: string, group: string[] = []
       interval: '3m',
       tolerance: 50,
     };
-  if (['direct', 'block', 'dns'].includes(type)) return base;
+  if (!nativeServerTypes.includes(type)) return base;
   return {
     ...base,
     ...(type === 'mieru'
       ? { portBindings: [{ protocol: 'TCP', port: 443 }] }
-      : { server_port: type === 'ssh' ? 22 : type === 'socks' ? 1080 : 443 }),
+      : {
+          server_port: type === 'ssh' ? 22 : type === 'socks' ? 1080 : type === 'http' ? 80 : 443,
+        }),
     ...(type === 'vmess' ? { security: 'auto' } : {}),
     ...(type === 'shadowsocks' ? { method: 'aes-128-gcm' } : {}),
-    ...(['trojan', 'hysteria2', 'tuic'].includes(type) ? { tls: { enabled: true } } : {}),
+    ...(type === 'shadowtls' ? { version: 3 } : {}),
+    ...(type === 'snell' ? { version: 4 } : {}),
+    ...(type === 'hysteria' ? { up_mbps: 100, down_mbps: 100 } : {}),
+    ...(['trojan', 'hysteria', 'hysteria2', 'tuic', 'anytls', 'shadowtls', 'naive'].includes(type)
+      ? { tls: { enabled: true } }
+      : {}),
   };
 }
 
@@ -170,7 +179,8 @@ export function outboundErrors(value: ConfigObject, otherTags: string[]): string
   else if (otherTags.includes(tag))
     errors.push('Это название уже используется другим подключением или туннелем.');
   if (!type) errors.push('Выберите протокол.');
-  if (['dns', 'tun', 'redirect', 'tproxy', 'wireguard'].includes(type))
+  if (isNativeEndpoint(value)) return errors;
+  if (['dns', 'tun', 'redirect', 'tproxy'].includes(type))
     errors.push('Этот тип не поддерживается как исходящее подключение текущим sing-box.');
   if (
     [
@@ -184,15 +194,20 @@ export function outboundErrors(value: ConfigObject, otherTags: string[]): string
       'tuic',
       'shadowtls',
       'ssh',
+      'anytls',
+      'naive',
+      'snell',
+      'hysteria',
     ].includes(type)
   ) {
     if (typeof value.server !== 'string' || !value.server.trim()) errors.push('Укажите сервер.');
     if (
       !(
         type === 'hysteria2' &&
-        Array.isArray(value.server_ports) &&
-        value.server_ports.length > 0 &&
-        value.server_ports.every(
+        (Array.isArray(value.server_ports) || typeof value.server_ports === 'string') &&
+        (typeof value.server_ports === 'string' ? [value.server_ports] : value.server_ports)
+          .length > 0 &&
+        (typeof value.server_ports === 'string' ? [value.server_ports] : value.server_ports).every(
           (port) =>
             /^\d+(?::\d+)?$/.test(String(port)) &&
             String(port)
@@ -231,12 +246,16 @@ export function outboundErrors(value: ConfigObject, otherTags: string[]): string
       errors.push('MTU Mieru должен быть от 1280 до 1500.');
     if (
       value.multiplexing &&
-      !['DEFAULT', 'LOW', 'MIDDLE', 'HIGH'].includes(String(value.multiplexing))
+      !['DEFAULT', 'OFF', 'LOW', 'MIDDLE', 'HIGH'].includes(
+        String(value.multiplexing).replace(/^MULTIPLEXING_/, ''),
+      )
     )
       errors.push('Неподдерживаемый режим multiplexing Mieru.');
     if (
       value.handshake_mode &&
-      !['DEFAULT', 'STANDARD', 'NO_WAIT'].includes(String(value.handshake_mode))
+      !['DEFAULT', 'STANDARD', 'NO_WAIT'].includes(
+        String(value.handshake_mode).replace(/^HANDSHAKE_/, ''),
+      )
     )
       errors.push('Неподдерживаемый handshake Mieru.');
     const bindings = Array.isArray(value.portBindings) ? value.portBindings : [];
@@ -270,12 +289,35 @@ export function outboundErrors(value: ConfigObject, otherTags: string[]): string
     )
       errors.push('server_port не соответствует portBindings Mieru.');
   }
-  if (['trojan', 'shadowsocks', 'hysteria2'].includes(type) && !value.password)
+  if (['trojan', 'shadowsocks', 'hysteria2', 'anytls'].includes(type) && !value.password)
     errors.push('Укажите пароль.');
   if (type === 'shadowsocks' && !value.method) errors.push('Выберите метод шифрования.');
-  if (['hysteria2', 'tuic', 'shadowtls'].includes(type) && object(value.tls).enabled !== true)
+  if (
+    ['hysteria', 'hysteria2', 'tuic', 'shadowtls', 'anytls', 'naive'].includes(type) &&
+    object(value.tls).enabled !== true
+  )
     errors.push('Для этого протокола требуется TLS.');
-  if (['selector', 'urltest'].includes(type)) {
+  const tls = object(value.tls);
+  if (['hysteria', 'hysteria2', 'tuic', 'naive'].includes(type) && object(tls.utls).enabled)
+    errors.push('Этот протокол не поддерживает uTLS.');
+  if (object(tls.reality).enabled && (tls.enabled !== true || !object(tls.reality).public_key))
+    errors.push('Reality требует TLS и публичный ключ.');
+  if (
+    type === 'vless' &&
+    value.flow &&
+    tls.enabled !== true &&
+    (!value.encryption || value.encryption === 'none')
+  )
+    errors.push('Vision требует TLS, Reality или шифрование VLESS.');
+  if (type === 'snell' && (!value.psk || ![4, 6].includes(Number(value.version))))
+    errors.push('Snell требует PSK и версию 4 или 6.');
+  if (
+    type === 'hysteria' &&
+    ((!value.up && Number(value.up_mbps || 0) <= 0) ||
+      (!value.down && Number(value.down_mbps || 0) <= 0))
+  )
+    errors.push('Укажите скорость отправки и загрузки Hysteria.');
+  if (['selector', 'urltest', 'balancer'].includes(type)) {
     const members = Array.isArray(value.outbounds) ? value.outbounds : [];
     if (!members.length) errors.push('Выберите подключения для группы.');
     if (members.some((member) => member === tag || !otherTags.includes(String(member))))

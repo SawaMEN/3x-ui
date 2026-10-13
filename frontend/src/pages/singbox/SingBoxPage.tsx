@@ -43,14 +43,13 @@ import { useTheme } from '@/hooks/useTheme';
 import './SingBoxPage.css';
 import SimpleSettings from './SimpleSettings';
 import CoreSelection from './CoreSelection';
+import { optimisticCacheEnabled, setDnsCache, setOptimisticCache } from './simple-settings';
 import {
-  outboundDefaults,
-  outboundErrors,
-  optimisticCacheEnabled,
-  setDnsCache,
-  setOptimisticCache,
-} from './simple-settings';
-import { parseShareLink, uniqueTag } from './share-links';
+  importNativeConnections,
+  isNativeEndpoint,
+  renameImportedConnections,
+} from './native-import';
+import SingBoxOutboundModal from './SingBoxOutboundModal';
 
 type SectionKey =
   | 'schema'
@@ -440,560 +439,6 @@ function singBoxHealthIssues(config: ConfigMap) {
   return Array.from(new Set(issues));
 }
 
-function SingBoxOutboundEditor({
-  value,
-  existingTags,
-  onChange,
-}: {
-  value: JsonObject;
-  existingTags: string[];
-  onChange: (value: JsonObject) => void;
-}) {
-  const type = asString(value.type) || 'direct';
-  const tls = asObject(value.tls);
-  const transport = asObject(value.transport);
-  const reality = asObject(tls.reality);
-
-  const patch = (key: string, nextValue: unknown) => {
-    const next = { ...value };
-    if (nextValue === '' || nextValue === undefined || nextValue === null) delete next[key];
-    else next[key] = nextValue;
-    onChange(next);
-  };
-
-  const nested = (section: string, key: string, nextValue: unknown) => {
-    const current = asObject(value[section]);
-    const nextChild = { ...current };
-    if (nextValue === '' || nextValue === undefined || nextValue === null) delete nextChild[key];
-    else nextChild[key] = nextValue;
-    const next = { ...value };
-    if (Object.keys(nextChild).length) next[section] = nextChild;
-    else delete next[section];
-    onChange(next);
-  };
-
-  const tag = asString(value.tag);
-  const duplicated = !!tag && existingTags.filter((item) => item === tag).length > (value ? 1 : 0);
-
-  return (
-    <>
-      {duplicated && (
-        <Alert
-          type="warning"
-          showIcon
-          message="Tag уже используется. Укажите уникальное имя."
-          style={{ marginBottom: 12 }}
-        />
-      )}
-      <Tabs
-        items={[
-          {
-            key: 'basic',
-            label: 'Основное',
-            children: (
-              <Card size="small">
-                <Row gutter={[12, 14]}>
-                  <Field label="Протокол">
-                    <Select
-                      value={type}
-                      style={{ width: '100%' }}
-                      options={[
-                        'direct',
-                        'block',
-                        'http',
-                        'socks',
-                        'shadowsocks',
-                        'vmess',
-                        'vless',
-                        'trojan',
-                        'hysteria2',
-                        'mieru',
-                        'tuic',
-                        'selector',
-                        'urltest',
-                        'shadowtls',
-                        'ssh',
-                      ].map((v) => ({ value: v, label: v }))}
-                      onChange={(next) =>
-                        onChange(
-                          outboundDefaults(
-                            next,
-                            asString(value.tag) || next,
-                            asStringArray(value.outbounds),
-                          ),
-                        )
-                      }
-                    />
-                  </Field>
-                  <Field
-                    label="Название подключения"
-                    hint="Уникальное имя, по которому подключение выбирается в правилах."
-                  >
-                    <TextField
-                      value={asString(value.tag)}
-                      onChange={(v) => patch('tag', v)}
-                      placeholder="proxy-1"
-                    />
-                  </Field>
-
-                  {['selector', 'urltest'].includes(type) ? (
-                    <>
-                      <Field label="Outbounds группы" span={24}>
-                        <Select
-                          mode="multiple"
-                          style={{ width: '100%' }}
-                          value={asStringArray(value.outbounds)}
-                          options={existingTags
-                            .filter((tag) => tag !== asString(value.tag))
-                            .map((tag) => ({ value: tag, label: tag }))}
-                          onChange={(v) => patch('outbounds', v)}
-                          placeholder="Выберите исходящие"
-                        />
-                      </Field>
-                      {type === 'urltest' && (
-                        <>
-                          <Field label="URL проверки">
-                            <TextField
-                              value={asString(value.url)}
-                              onChange={(v) => patch('url', v)}
-                              placeholder="https://www.gstatic.com/generate_204"
-                            />
-                          </Field>
-                          <Field label="Интервал">
-                            <TextField
-                              value={asString(value.interval)}
-                              onChange={(v) => patch('interval', v)}
-                              placeholder="3m"
-                            />
-                          </Field>
-                          <Field label="Допуск">
-                            <NumberField
-                              value={asNumber(value.tolerance)}
-                              onChange={(v) => patch('tolerance', v)}
-                            />
-                          </Field>
-                        </>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      {[
-                        'http',
-                        'socks',
-                        'shadowsocks',
-                        'vmess',
-                        'vless',
-                        'trojan',
-                        'hysteria2',
-                        'tuic',
-                        'shadowtls',
-                        'ssh',
-                      ].includes(type) && (
-                        <>
-                          <Field label="Сервер">
-                            <TextField
-                              value={asString(value.server)}
-                              onChange={(v) => patch('server', v)}
-                              placeholder="example.com"
-                            />
-                          </Field>
-                          <Field label="Порт">
-                            <NumberField
-                              value={asNumber(value.server_port)}
-                              onChange={(v) => {
-                                if (type === 'hysteria2') {
-                                  const next: JsonObject = { ...value, server_port: v };
-                                  delete next.server_ports;
-                                  onChange(next);
-                                } else patch('server_port', v);
-                              }}
-                              min={1}
-                              max={65535}
-                            />
-                          </Field>
-                        </>
-                      )}
-                      {type === 'hysteria2' && (
-                        <Field
-                          label="Диапазоны портов"
-                          hint="Например: 443:443,10000:10010. Заполнение включает смену порта."
-                        >
-                          <TextField
-                            value={asStringArray(value.server_ports).join(',')}
-                            onChange={(v) => {
-                              const next = { ...value };
-                              if (v.trim()) {
-                                next.server_ports = v.split(',').map((p) => p.trim());
-                                delete next.server_port;
-                              } else {
-                                delete next.server_ports;
-                                next.server_port = 443;
-                              }
-                              onChange(next);
-                            }}
-                          />
-                        </Field>
-                      )}
-                      {type === 'mieru' && (
-                        <>
-                          <Field label="Сервер">
-                            <TextField
-                              value={asString(value.server)}
-                              onChange={(v) => patch('server', v)}
-                            />
-                          </Field>
-                          <Field label="TCP/UDP порты">
-                            <JsonModal
-                              title="Mieru portBindings"
-                              value={value.portBindings || []}
-                              onApply={(next) => patch('portBindings', next)}
-                            />
-                          </Field>
-                          <Field label="MTU">
-                            <NumberField
-                              value={asNumber(value.mtu)}
-                              onChange={(v) => patch('mtu', v)}
-                              min={1280}
-                              max={1500}
-                            />
-                          </Field>
-                          <Field label="Multiplexing">
-                            <Select
-                              value={asString(value.multiplexing) || 'DEFAULT'}
-                              options={['DEFAULT', 'LOW', 'MIDDLE', 'HIGH'].map((v) => ({
-                                label: v,
-                                value: v,
-                              }))}
-                              onChange={(v) => patch('multiplexing', v)}
-                            />
-                          </Field>
-                          <Field label="Handshake">
-                            <Select
-                              value={asString(value.handshake_mode) || 'DEFAULT'}
-                              options={['DEFAULT', 'STANDARD', 'NO_WAIT'].map((v) => ({
-                                label: v,
-                                value: v,
-                              }))}
-                              onChange={(v) => patch('handshake_mode', v)}
-                            />
-                          </Field>
-                        </>
-                      )}
-                      {['vless', 'vmess', 'tuic'].includes(type) && (
-                        <Field label="UUID">
-                          <TextField
-                            value={asString(value.uuid)}
-                            onChange={(v) => patch('uuid', v)}
-                          />
-                        </Field>
-                      )}
-                      {type === 'vless' && (
-                        <Field label="Flow">
-                          <TextField
-                            value={asString(value.flow)}
-                            onChange={(v) => patch('flow', v)}
-                            placeholder="xtls-rprx-vision"
-                          />
-                        </Field>
-                      )}
-                      {['trojan', 'hysteria2', 'tuic'].includes(type) && (
-                        <Field label="Пароль">
-                          <Input.Password
-                            value={asString(value.password)}
-                            onChange={(e) => patch('password', e.target.value)}
-                          />
-                        </Field>
-                      )}
-                      {['http', 'socks', 'mieru'].includes(type) && (
-                        <>
-                          <Field label="Логин">
-                            <TextField
-                              value={asString(value.username)}
-                              onChange={(v) => patch('username', v)}
-                            />
-                          </Field>
-                          <Field label="Пароль">
-                            <Input.Password
-                              value={asString(value.password)}
-                              onChange={(e) => patch('password', e.target.value)}
-                            />
-                          </Field>
-                        </>
-                      )}
-                      {type === 'shadowsocks' && (
-                        <>
-                          <Field label="Метод">
-                            <TextField
-                              value={asString(value.method)}
-                              onChange={(v) => patch('method', v)}
-                              placeholder="2022-blake3-aes-128-gcm"
-                            />
-                          </Field>
-                          <Field label="Пароль">
-                            <Input.Password
-                              value={asString(value.password)}
-                              onChange={(e) => patch('password', e.target.value)}
-                            />
-                          </Field>
-                        </>
-                      )}
-                      {type === 'ssh' && (
-                        <Field label="Пользователь">
-                          <TextField
-                            value={asString(value.user)}
-                            onChange={(v) => patch('user', v)}
-                            placeholder="root"
-                          />
-                        </Field>
-                      )}
-                      <Field
-                        label="Подключиться через другой выход"
-                        hint="Оставьте пустым для обычного подключения."
-                      >
-                        <TextField
-                          value={asString(value.detour)}
-                          onChange={(v) => patch('detour', v)}
-                        />
-                      </Field>
-                    </>
-                  )}
-                </Row>
-              </Card>
-            ),
-          },
-          {
-            key: 'tls',
-            label: 'TLS / Reality',
-            children: (
-              <Card size="small">
-                <Row gutter={[12, 14]}>
-                  <Field label="TLS">
-                    <Switch
-                      checked={!!value.tls}
-                      onChange={(checked) => {
-                        if (checked) onChange({ ...value, tls: { enabled: true } });
-                        else
-                          onChange(
-                            (() => {
-                              const next = { ...value };
-                              delete next.tls;
-                              return next;
-                            })(),
-                          );
-                      }}
-                    />
-                  </Field>
-                  <Field label="SNI">
-                    <TextField
-                      value={asString(tls.server_name)}
-                      onChange={(v) => nested('tls', 'server_name', v)}
-                      placeholder="example.com"
-                    />
-                  </Field>
-                  <Field label="Insecure">
-                    <Switch
-                      checked={!!tls.insecure}
-                      disabled={!value.tls}
-                      onChange={(v) => nested('tls', 'insecure', v)}
-                    />
-                  </Field>
-                  <Field label="ALPN">
-                    <Select
-                      mode="tags"
-                      style={{ width: '100%' }}
-                      disabled={!value.tls}
-                      value={asStringArray(tls.alpn)}
-                      onChange={(v) => nested('tls', 'alpn', v)}
-                    />
-                  </Field>
-                  <Field label="Reality">
-                    <Switch
-                      checked={!!reality.enabled}
-                      disabled={!value.tls}
-                      onChange={(v) => nested('tls', 'reality', { ...reality, enabled: v })}
-                    />
-                  </Field>
-                  <Field label="Public key">
-                    <TextField
-                      value={asString(reality.public_key)}
-                      onChange={(v) => nested('tls', 'reality', { ...reality, public_key: v })}
-                    />
-                  </Field>
-                  <Field label="Short ID">
-                    <TextField
-                      value={asString(reality.short_id)}
-                      onChange={(v) => nested('tls', 'reality', { ...reality, short_id: v })}
-                    />
-                  </Field>
-                  <Field label="Certificate path">
-                    <TextField
-                      value={asString(tls.certificate_path)}
-                      onChange={(v) => nested('tls', 'certificate_path', v)}
-                    />
-                  </Field>
-                </Row>
-              </Card>
-            ),
-          },
-          {
-            key: 'transport',
-            label: 'Транспорт',
-            children: (
-              <Card size="small">
-                <Row gutter={[12, 14]}>
-                  <Field label="Transport">
-                    <Select
-                      allowClear
-                      style={{ width: '100%' }}
-                      value={asString(transport.type) || undefined}
-                      options={['http', 'ws', 'grpc', 'httpupgrade', 'quic'].map((v) => ({
-                        value: v,
-                        label: v,
-                      }))}
-                      onChange={(v) => {
-                        if (!v)
-                          onChange(
-                            (() => {
-                              const next = { ...value };
-                              delete next.transport;
-                              return next;
-                            })(),
-                          );
-                        else onChange({ ...value, transport: { ...transport, type: v } });
-                      }}
-                    />
-                  </Field>
-                  {['http', 'ws', 'httpupgrade'].includes(asString(transport.type)) && (
-                    <Field label="Path">
-                      <TextField
-                        value={asString(transport.path)}
-                        onChange={(v) => nested('transport', 'path', v)}
-                        placeholder="/"
-                      />
-                    </Field>
-                  )}
-                  {['http', 'ws'].includes(asString(transport.type)) && (
-                    <Field label="Host">
-                      <TextField
-                        value={asString(asObject(transport.headers).Host)}
-                        onChange={(v) =>
-                          nested('transport', 'headers', {
-                            ...asObject(transport.headers),
-                            Host: v,
-                          })
-                        }
-                      />
-                    </Field>
-                  )}
-                  {['grpc', 'quic'].includes(asString(transport.type)) && (
-                    <Field label="Service name">
-                      <TextField
-                        value={asString(transport.service_name)}
-                        onChange={(v) => nested('transport', 'service_name', v)}
-                      />
-                    </Field>
-                  )}
-                  <Field label="Headers JSON" span={24}>
-                    <Input.TextArea
-                      autoSize={{ minRows: 3, maxRows: 8 }}
-                      value={JSON.stringify(asObject(transport.headers), null, 2)}
-                      onChange={(e) => {
-                        try {
-                          nested('transport', 'headers', JSON.parse(e.target.value || '{}'));
-                        } catch {
-                          /* wait for valid json */
-                        }
-                      }}
-                    />
-                  </Field>
-                </Row>
-              </Card>
-            ),
-          },
-          {
-            key: 'advanced',
-            label: 'JSON',
-            children: (
-              <Card size="small">
-                <Alert
-                  type="info"
-                  showIcon
-                  message="Расширенный режим"
-                  description="Любой параметр sing-box можно задать вручную, не теряя остальную форму."
-                  style={{ marginBottom: 12 }}
-                />
-                <JsonModal
-                  title="Исходящее подключение — JSON"
-                  value={value}
-                  onApply={(next) => onChange(asObject(next))}
-                  buttonText="Редактировать JSON"
-                />
-              </Card>
-            ),
-          },
-        ]}
-      />
-    </>
-  );
-}
-
-function SingBoxOutboundModal({
-  open,
-  value,
-  existingTags,
-  onCancel,
-  onSave,
-}: {
-  open: boolean;
-  value: JsonObject | null;
-  existingTags: string[];
-  onCancel: () => void;
-  onSave: (value: JsonObject) => void;
-}) {
-  const existingTagsKey = JSON.stringify(existingTags);
-  const [error, setError] = useState('');
-  const [draft, setDraft] = useState<JsonObject>({});
-  useEffect(() => {
-    if (!open) return;
-    const nextDraft = value
-      ? JSON.parse(JSON.stringify(value))
-      : { type: 'direct', tag: uniqueTag('direct', JSON.parse(existingTagsKey) as string[]) };
-    const timer = window.setTimeout(() => {
-      setDraft(nextDraft);
-      setError('');
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [open, value, existingTagsKey]);
-
-  return (
-    <Modal
-      open={open}
-      width={980}
-      title={value ? 'Изменение outbound' : 'Новый outbound'}
-      okText="Сохранить"
-      cancelText="Отмена"
-      onCancel={onCancel}
-      onOk={() => {
-        const errors = outboundErrors(
-          draft,
-          existingTags.filter(
-            (_tag, index) => index !== (value ? existingTags.indexOf(asString(value.tag)) : -1),
-          ),
-        );
-        if (errors.length) {
-          setError(errors.join(' '));
-          return;
-        }
-        onSave({ ...draft, tag: asString(draft.tag).trim() });
-      }}
-      destroyOnHidden
-    >
-      {error && <Alert type="error" showIcon title={error} style={{ marginBottom: 12 }} />}
-      <SingBoxOutboundEditor value={draft} existingTags={existingTags} onChange={setDraft} />
-    </Modal>
-  );
-}
-
 function SingBoxRouteRuleModal({
   open,
   value,
@@ -1301,29 +746,35 @@ export default function SingBoxPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setConfig]);
 
   useEffect(() => {
     const initial = window.setTimeout(() => void refresh(), 0);
     return () => window.clearTimeout(initial);
   }, [refresh]);
 
-  const updateSection = useCallback((key: SectionKey, value: unknown) => {
-    setConfig((current) => ({
-      ...current,
-      [key === 'schema' ? '$schema' : key]: value,
-    }));
-  }, []);
-
-  const patchSection = useCallback((key: SectionKey, patch: JsonObject) => {
-    setConfig((current) => {
-      const currentValue = asObject(current[key]);
-      return {
+  const updateSection = useCallback(
+    (key: SectionKey, value: unknown) => {
+      setConfig((current) => ({
         ...current,
-        [key]: { ...currentValue, ...patch },
-      };
-    });
-  }, []);
+        [key === 'schema' ? '$schema' : key]: value,
+      }));
+    },
+    [setConfig],
+  );
+
+  const patchSection = useCallback(
+    (key: SectionKey, patch: JsonObject) => {
+      setConfig((current) => {
+        const currentValue = asObject(current[key]);
+        return {
+          ...current,
+          [key]: { ...currentValue, ...patch },
+        };
+      });
+    },
+    [setConfig],
+  );
 
   const save = async () => {
     try {
@@ -2901,33 +2352,30 @@ export default function SingBoxPage() {
         onOk={async () => {
           if (importingLink) return;
           setImportingLink(true);
-          let parsed: JsonObject;
           try {
-            if (/^mierus?:\/\//.test(shareLink.trim())) {
-              const result = (await HttpUtil.post('/panel/api/setting/singbox/import-link', {
-                link: shareLink,
-              })) as ApiMsg;
-              if (!result?.success)
-                throw new Error(result?.msg || 'Не удалось импортировать Mieru');
-              parsed = asObject(result.obj);
-            } else parsed = parseShareLink(shareLink);
+            const items = await importNativeConnections(shareLink);
+            const tags = [
+              ...asObjectArray(config.outbounds),
+              ...asObjectArray(config.endpoints),
+            ].map((item) => asString(item.tag));
+            const imported = renameImportedConnections(items, tags);
+            setConfig((current) => ({
+              ...current,
+              outbounds: [
+                ...asObjectArray(current.outbounds),
+                ...imported.filter((item) => !isNativeEndpoint(item)),
+              ],
+              endpoints: [
+                ...asObjectArray(current.endpoints),
+                ...imported.filter(isNativeEndpoint),
+              ],
+            }));
           } catch (error) {
             messageApi.error(error instanceof Error ? error.message : String(error));
             return;
           } finally {
             setImportingLink(false);
           }
-          const current = asObjectArray(sectionValue('outbounds', config));
-          const tag = uniqueTag(
-            asString(parsed.tag),
-            [...current, ...asObjectArray(config.endpoints)].map((item) => asString(item.tag)),
-          );
-          const errors = outboundErrors({ ...parsed, tag }, []);
-          if (errors.length) {
-            messageApi.error(errors[0]);
-            return;
-          }
-          updateSection('outbounds', [...current, { ...parsed, tag }]);
           setShareLink('');
           setShareLinkOpen(false);
           messageApi.success('Outbound создан автоматически.');
@@ -2937,7 +2385,7 @@ export default function SingBoxPage() {
           type="info"
           showIcon
           message="Автоматический импорт"
-          description="VLESS, Trojan, HTTP, SOCKS5, Hysteria2 (hy2) и Mieru (mieru/mierus). Ссылка создаёт исходящее подключение."
+          description="Ссылки поддерживаемых протоколов распознаются автоматически. Параметры подключения, безопасности и транспорта сохраняются."
           style={{ marginBottom: 12 }}
         />
         <Input.TextArea
@@ -2962,11 +2410,26 @@ export default function SingBoxPage() {
           .map((item) => asString(item.tag))
           .filter(Boolean)}
         onCancel={() => setOutboundModalOpen(false)}
-        onSave={(next) => {
-          const current = asObjectArray(sectionValue('outbounds', config));
-          if (editingOutbound == null) current.push(next);
-          else current[editingOutbound] = next;
-          updateSection('outbounds', current);
+        onSave={(next, additional = []) => {
+          setConfig((current) => {
+            const outbounds = asObjectArray(current.outbounds),
+              endpoints = asObjectArray(current.endpoints);
+            if (editingOutbound != null && !isNativeEndpoint(next)) {
+              outbounds[editingOutbound] = next;
+              return {
+                ...current,
+                outbounds: [...outbounds, ...additional.filter((item) => !isNativeEndpoint(item))],
+                endpoints: [...endpoints, ...additional.filter(isNativeEndpoint)],
+              };
+            }
+            if (editingOutbound != null) outbounds.splice(editingOutbound, 1);
+            const items = [next, ...additional];
+            return {
+              ...current,
+              outbounds: [...outbounds, ...items.filter((item) => !isNativeEndpoint(item))],
+              endpoints: [...endpoints, ...items.filter(isNativeEndpoint)],
+            };
+          });
           setOutboundModalOpen(false);
         }}
       />

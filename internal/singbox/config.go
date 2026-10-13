@@ -181,7 +181,7 @@ func TranslateXrayOutbound(raw map[string]any) (map[string]any, error) {
 			out["security"] = security
 			out["alter_id"] = rawInt(user, "alterId")
 		} else if encryption := rawString(user, "encryption"); encryption != "" && encryption != "none" {
-			return nil, fmt.Errorf("outbound %q uses unsupported VLESS encryption %q", tag, encryption)
+			out["encryption"] = encryption
 		}
 		if protocol == "vless" {
 			if flow := rawString(user, "flow"); flow != "" {

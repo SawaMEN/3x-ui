@@ -1,3 +1,4 @@
+import { HttpUtil } from '@/utils';
 import type { ConfigObject } from './simple-settings';
 
 export function uniqueTag(preferred: string, tags: string[]): string {
@@ -67,10 +68,7 @@ export function parseShareLink(raw: string): ConfigObject {
   if (!username)
     throw new Error(protocol === 'vless' ? 'Не указан UUID.' : 'Не указан пароль Trojan.');
   if (protocol === 'vless') {
-    if (params.get('encryption') && params.get('encryption') !== 'none')
-      throw new Error(
-        'Это шифрование VLESS не поддерживается этим импортом. Настройте его в JSON редакторе.',
-      );
+    if (params.get('encryption')) next.encryption = params.get('encryption');
     next.uuid = username;
     if (params.get('flow')) next.flow = params.get('flow');
   } else {
@@ -253,4 +251,15 @@ function parseHysteria2(raw: string): ConfigObject {
     next.obfs = obfs;
   }
   return next;
+}
+
+// Use the same server-side decoder as subscriptions for all other protocols.
+export async function importOutboundLink(raw: string): Promise<ConfigObject> {
+  const link = raw.trim();
+  const result = await HttpUtil.post<ConfigObject>('/panel/api/setting/singbox/import-link', {
+    link,
+  });
+  if (!result?.success || !result.obj || typeof result.obj.type !== 'string')
+    throw new Error(result?.msg || 'Не удалось распознать ссылку подключения.');
+  return result.obj;
 }

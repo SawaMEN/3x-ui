@@ -17943,7 +17943,7 @@
         "tags": [
           "Runtime services"
         ],
-        "summary": "Decode a Mieru share link into a native outbound without saving.",
+        "summary": "Decode a supported connection share link into a native outbound without saving.",
         "operationId": "post_panel_api_setting_singbox_import_link",
         "responses": {
           "200": {

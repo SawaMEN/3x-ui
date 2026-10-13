@@ -73,8 +73,13 @@ func TestTranslateVlessOutboundEncryptionAndFinalMask(t *testing.T) {
 	if got["encryption"] != "mlkem768x25519plus.native.0rtt.test-key" || got["final_mask"] == nil {
 		t.Fatalf("outbound extensions lost: %#v", got)
 	}
-	if _, err := singbox.TranslateXrayOutbound(raw); err == nil || !strings.Contains(err.Error(), "encryption") {
-		t.Fatalf("stock sing-box incorrectly accepts encrypted VLESS: %v", err)
+	if _, err := singbox.TranslateXrayOutbound(raw); err == nil || !strings.Contains(err.Error(), "finalmask") {
+		t.Fatalf("legacy translator must reject a mask it cannot preserve: %v", err)
+	}
+	delete(object(raw, "streamSettings"), "finalmask")
+	translated, err := singbox.TranslateXrayOutbound(raw)
+	if err != nil || translated["encryption"] != got["encryption"] {
+		t.Fatalf("native VLESS encryption lost: %#v, %v", translated, err)
 	}
 }
 
