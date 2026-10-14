@@ -15,12 +15,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
-	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
-	"github.com/SawaMEN/3x-ui/v3/internal/util/wireguard"
 	"github.com/amnezia-vpn/amneziawg-go/v3/conn"
 	"github.com/amnezia-vpn/amneziawg-go/v3/device"
 	"github.com/amnezia-vpn/amneziawg-go/v3/tun/netstack"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
+	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/wireguard"
 )
 
 // Native outbound -> real release core -> AWG v3 server -> TCP/UDP echo.

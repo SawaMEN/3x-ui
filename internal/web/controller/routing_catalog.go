@@ -5,8 +5,9 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 	"github.com/gin-gonic/gin"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 )
 
 type RoutingCatalogController struct{ service service.RoutingCatalogService }

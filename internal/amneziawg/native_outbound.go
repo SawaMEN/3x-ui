@@ -47,8 +47,10 @@ func NativeOutbound(raw []byte) (map[string]any, error) {
 			return nil, err
 		}
 		n, _ := strconv.Atoi(port)
-		peers = append(peers, map[string]any{"address": host, "port": n, "public_key": p.PublicKey,
-			"preshared_key": p.PresharedKey, "allowed_ips": p.AllowedIPs, "persistent_keepalive_interval": p.KeepAlive})
+		peers = append(peers, map[string]any{
+			"address": host, "port": n, "public_key": p.PublicKey,
+			"preshared_key": p.PresharedKey, "allowed_ips": p.AllowedIPs, "persistent_keepalive_interval": p.KeepAlive,
+		})
 	}
 	options := map[string]any{
 		"jc": s.Jc, "jmin": s.Jmin, "jmax": s.Jmax, "s1": s.S1, "s2": s.S2, "s3": s.S3, "s4": s.S4,
@@ -59,7 +61,9 @@ func NativeOutbound(raw []byte) (map[string]any, error) {
 		"random_trailers": s.RandomTrailers, "disable_cookies": s.DisableCookies,
 	}
 	wrapper["protocol"] = "singbox:awg"
-	wrapper["settings"] = map[string]any{"private_key": s.SecretKey, "address": s.Address,
-		"mtu": EffectiveMTU(s.MTU, s.S4), "listen_port": s.ListenPort, "awg": options, "peers": peers}
+	wrapper["settings"] = map[string]any{
+		"private_key": s.SecretKey, "address": s.Address,
+		"mtu": EffectiveMTU(s.MTU, s.S4), "listen_port": s.ListenPort, "awg": options, "peers": peers,
+	}
 	return wrapper, nil
 }

@@ -41,7 +41,7 @@ func TestRoutingCatalogBuiltinUsesInstalledGeoSite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "geosite.dat"), data, 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "geosite.dat"), data, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	var youtube, discord *RoutingCatalogCategory
@@ -139,10 +139,10 @@ func TestRoutingCatalogNativeSnapshotRuntimeAndEditorRoundTrip(t *testing.T) {
 	// The editor reads the expanded runtime file but must return source
 	// references, not freeze a list when unrelated settings are saved.
 	native := NativeCore(CoreTypeHiddify)
-	if err := os.MkdirAll(filepath.Dir(native.ProcessConfigPath()), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(native.ProcessConfigPath()), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(native.ProcessConfigPath(), raw, 0600); err != nil {
+	if err := os.WriteFile(native.ProcessConfigPath(), raw, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	editor, err := native.GetEditorConfig(context.Background())
