@@ -201,10 +201,16 @@ func parseVmess(link string) (*ParseResult, error) {
 		if m := firstNonEmpty(getString(j, "mode", ""), getString(j, "type", "")); m != "" {
 			xh["mode"] = m
 		}
-		// xhttp advanced keys are passed through if present in the json
-		for _, k := range []string{"xPaddingBytes", "xPaddingKey", "xPaddingHeader", "xPaddingPlacement", "xPaddingMethod", "sessionIDPlacement", "sessionIDKey", "sessionIDTable", "sessionIDLength", "seqPlacement", "seqKey", "uplinkDataPlacement", "uplinkDataKey", "scMaxEachPostBytes", "scMinPostsIntervalMs", "scStreamUpServerSecs", "uplinkHTTPMethod", "scMaxBufferedPosts", "serverMaxHeaderBytes", "uplinkChunkSize", "xPaddingObfsMode", "noSSEHeader", "noGRPCHeader", "xmux", "downloadSettings", "headers"} {
+		for _, k := range vmessXhttpKeys {
 			if v, ok := j[k]; ok {
 				xh[k] = v
+			}
+		}
+		for legacy, renamed := range xhttpLegacyAliases {
+			if _, ok := xh[renamed]; !ok {
+				if v, ok := j[legacy].(string); ok && v != "" {
+					xh[renamed] = v
+				}
 			}
 		}
 	case "tcp":
@@ -229,7 +235,7 @@ func parseVmess(link string) (*ParseResult, error) {
 	}
 	if network == "kcp" {
 		maskParams.Set("headerType", getString(j, "type", ""))
-		maskParams.Set("seed", getString(j, "seed", ""))
+		maskParams.Set("seed", getString(j, "seed", getString(j, "path", "")))
 	}
 	applyFinalMask(stream, maskParams)
 	if security == "tls" {
@@ -272,6 +278,21 @@ func parseVmess(link string) (*ParseResult, error) {
 		"streamSettings": stream,
 	}
 	return &ParseResult{Outbound: ob, Identity: identity}, nil
+}
+
+// vmessXhttpKeys are the XHTTP fields a vmess link carries inline, where vless/trojan put them in extra.
+var vmessXhttpKeys = []string{
+	"xPaddingBytes", "xPaddingObfsMode", "xPaddingKey", "xPaddingHeader", "xPaddingPlacement", "xPaddingMethod",
+	"sessionIDPlacement", "sessionIDKey", "sessionIDTable", "sessionIDLength",
+	"seqPlacement", "seqKey", "uplinkDataPlacement", "uplinkDataKey", "uplinkHTTPMethod", "uplinkChunkSize",
+	"scMaxEachPostBytes", "scMinPostsIntervalMs", "scMaxBufferedPosts", "scStreamUpServerSecs",
+	"serverMaxHeaderBytes", "noSSEHeader", "noGRPCHeader", "xmux", "downloadSettings", "headers",
+}
+
+// xhttpLegacyAliases maps the pre-rename session keys older links carry onto the current ones.
+var xhttpLegacyAliases = map[string]string{
+	"sessionPlacement": "sessionIDPlacement",
+	"sessionKey":       "sessionIDKey",
 }
 
 func vmessIdentity(j map[string]any) string {
