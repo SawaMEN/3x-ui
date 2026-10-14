@@ -102,7 +102,8 @@ func downloadRoutingList(ctx context.Context, rawURL string) (routingcatalog.Ent
 	// Administrators intentionally choose source hosts. The guarded dialer
 	// resolves, validates and dials the same public IP on every connection;
 	// redirects remain HTTPS and the transport has no proxy bypass.
-	// codeql[go/ssrf]
+	// codeql[go/request-forgery]
+
 	resp, err := client.Do(req)
 	if err != nil {
 		// The URL can contain a private subscription token. Never persist it
