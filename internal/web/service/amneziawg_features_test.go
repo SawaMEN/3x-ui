@@ -19,8 +19,10 @@ func TestNativeAWGOutboundGeneratedConfig(t *testing.T) {
 	}
 	for _, native := range []bool{false, true} {
 		t.Run(map[bool]string{false: "bridge", true: "native"}[native], func(t *testing.T) {
-			settings := map[string]any{"native": native, "secretKey": priv, "address": []string{"10.8.1.2/32"}, "jc": 4, "jmin": 10, "jmax": 20, "s4": 12,
-				"peers": []any{map[string]any{"publicKey": pub, "endpoint": "127.0.0.1:51820", "allowedIPs": []string{"0.0.0.0/0"}, "keepAlive": 25}}}
+			settings := map[string]any{
+				"native": native, "secretKey": priv, "address": []string{"10.8.1.2/32"}, "jc": 4, "jmin": 10, "jmax": 20, "s4": 12,
+				"peers": []any{map[string]any{"publicKey": pub, "endpoint": "127.0.0.1:51820", "allowedIPs": []string{"0.0.0.0/0"}, "keepAlive": 25}},
+			}
 			template, _ := json.Marshal(map[string]any{"outbounds": []any{map[string]any{"protocol": "amneziawg", "tag": "awg-egress", "settings": settings}, map[string]any{"protocol": "freedom", "tag": "direct"}}, "routing": map[string]any{"rules": []any{map[string]any{"type": "field", "domain": []string{"example.test"}, "outboundTag": "awg-egress"}}}})
 			snapshot := &nativeConfigSnapshot{capturedAt: time.Now(), settings: map[string]string{"xrayTemplateConfig": string(template), "singBoxConfigTemplate": "{}"}}
 			cfg, err := NativeCore(CoreTypeHiddify).generateNativeConfig(snapshot)

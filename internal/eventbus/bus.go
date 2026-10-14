@@ -95,6 +95,11 @@ func (b *Bus) Unsubscribe(id string) {
 // Publish sends an event to all subscribers. Non-blocking — if the buffer is
 // full the event is dropped and a warning is logged.
 func (b *Bus) Publish(e Event) {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	if b.stopped {
+		return
+	}
 	if e.Timestamp.IsZero() {
 		e.Timestamp = time.Now()
 	}
@@ -161,15 +166,14 @@ func safeCall(fn func(Event), e Event) {
 	fn(e)
 }
 
-// Stop shuts down the bus: the dispatch loop and every subscriber worker exit
-// after finishing any handler already in progress, and any events still buffered
-// or queued may be dropped. Safe to call once. After Stop returns, Subscribe is
-// a no-op — this also keeps Subscribe's wg.Add from ever racing with Wait below,
-// since both are serialized through mu.
+// Stop waits for active handlers and drops pending events. Safe to call concurrently.
+// Marking stopped under mu prevents Subscribe's wg.Add from racing with Wait.
 func (b *Bus) Stop() {
 	b.mu.Lock()
-	b.stopped = true
+	if !b.stopped {
+		b.stopped = true
+		close(b.done)
+	}
 	b.mu.Unlock()
-	close(b.done)
 	b.wg.Wait()
 }

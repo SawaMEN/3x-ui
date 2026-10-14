@@ -7,30 +7,32 @@ import { isRecentLocalInvalidate } from '@/api/invalidationTracker';
 
 type Handler = (payload: unknown) => void;
 
-let invalidateTimer: number | null = null;
-const pendingInvalidations = new Set<'inbounds' | 'clients'>();
-
 export function useWebSocketBridge() {
   const queryClient = useQueryClient();
 
   useEffect(() => {
     const client = getSharedWebSocketClient();
+    const invalidationKeys = new Map<string, readonly string[]>([
+      ['inbounds', keys.inbounds.root()],
+      ['clients', keys.clients.root()],
+      ['nodes', keys.nodes.list()],
+      ['outbounds', keys.xray.outboundsTraffic()],
+    ]);
+    let invalidateTimer: number | null = null;
+    const pendingInvalidations = new Set<string>();
 
     const onInvalidate: Handler = (payload) => {
       const p = payload as { type?: string } | undefined;
-      if (!p || (p.type !== 'inbounds' && p.type !== 'clients')) return;
+      if (!p?.type || !invalidationKeys.has(p.type)) return;
       pendingInvalidations.add(p.type);
-      if (invalidateTimer != null) clearTimeout(invalidateTimer);
+      if (invalidateTimer != null) return;
       invalidateTimer = window.setTimeout(() => {
         invalidateTimer = null;
-        if (isRecentLocalInvalidate()) {
-          pendingInvalidations.clear();
-          return;
-        }
         const pending = new Set(pendingInvalidations);
         pendingInvalidations.clear();
         for (const type of pending) {
-          void queryClient.invalidateQueries({ queryKey: [type] });
+          if ((type === 'inbounds' || type === 'clients') && isRecentLocalInvalidate()) continue;
+          void queryClient.invalidateQueries({ queryKey: invalidationKeys.get(type) });
         }
       }, 200);
     };

@@ -1,11 +1,38 @@
 package service
 
 import (
+	"encoding/gob"
 	"fmt"
+	"os"
 	"runtime"
+	"sync"
 	"testing"
 	"time"
 )
+
+func TestPersistSystemMetricsConcurrent(t *testing.T) {
+	t.Setenv("XUI_DB_FOLDER", t.TempDir())
+	var wg sync.WaitGroup
+	for range 16 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := PersistSystemMetrics(); err != nil {
+				t.Errorf("concurrent persistence failed: %v", err)
+			}
+		}()
+	}
+	wg.Wait()
+	f, err := os.Open(systemMetricsStorePath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	var data map[string]persistedSeries
+	if err := gob.NewDecoder(f).Decode(&data); err != nil {
+		t.Fatalf("persisted snapshot is unreadable: %v", err)
+	}
+}
 
 func TestMetricMemoryFootprint(t *testing.T) {
 	const metrics = 16
@@ -89,8 +116,93 @@ func TestTierBufRespectsCapacity(t *testing.T) {
 	if len(tb.samples) != 5 {
 		t.Fatalf("expected closed buckets capped at 5, got %d", len(tb.samples))
 	}
-	if last := tb.samples[len(tb.samples)-1]; last.T != 18 {
+	closed := tb.readSamples()
+	if last := closed[len(closed)-2]; last.T != 18 {
 		t.Fatalf("expected last closed bucket T=18 (19 still open), got %d", last.T)
+	}
+}
+
+func TestTierBufWrappedHistoryAndSnapshot(t *testing.T) {
+	tb := &tierBuf{resolution: 1, capacity: 5}
+	for i := range int64(23) {
+		tb.add(i, float64(i))
+	}
+	got := tb.readSamples()
+	for i, p := range got {
+		want := int64(17 + i)
+		if p.T != want || p.V != float64(want) {
+			t.Fatalf("sample %d = %+v, want {%d,%d}", i, p, want, want)
+		}
+	}
+	h := newMetricHistory()
+	h.series["cpu"] = &series{tiers: []*tierBuf{tb}}
+	closed := h.snapshot()["cpu"].Tiers[0].Samples
+	for i, p := range closed {
+		if p != got[i] {
+			t.Fatalf("persisted sample %d = %+v, want %+v", i, p, got[i])
+		}
+	}
+}
+
+func TestTierBufFullWritesDoNotAllocate(t *testing.T) {
+	tb := &tierBuf{resolution: 1, capacity: 5}
+	var timestamp int64
+	for range 10 {
+		tb.add(timestamp, 1)
+		timestamp++
+	}
+	allocs := testing.AllocsPerRun(1000, func() {
+		for range 100 {
+			tb.add(timestamp, 1)
+			timestamp++
+		}
+	})
+	if allocs != 0 {
+		t.Fatalf("full ring writes allocated %g times", allocs)
+	}
+}
+
+func TestTierBufIgnoresBackwardClockJump(t *testing.T) {
+	tb := &tierBuf{resolution: 10, capacity: 5}
+	tb.add(20, 2)
+	tb.add(10, 100)
+	tb.add(21, 4)
+	tb.add(30, 8)
+	got := tb.readSamples()
+	if len(got) != 2 || got[0] != (MetricSample{T: 20, V: 3}) || got[1] != (MetricSample{T: 30, V: 8}) {
+		t.Fatalf("backward clock jump corrupted buckets: %+v", got)
+	}
+}
+
+func TestMetricRestoreOwnsBoundedSampleStorage(t *testing.T) {
+	input := make([]MetricSample, 10000)
+	for i := range input {
+		input[i] = MetricSample{T: int64(i), V: float64(i)}
+	}
+	h := newMetricHistory()
+	h.restore(map[string]persistedSeries{"cpu": {Tiers: []persistedTier{{Resolution: 2, Samples: input}}}})
+	input[len(input)-1].V = -1
+	tb := h.series["cpu"].tiers[0]
+	if cap(tb.samples) != tb.capacity || len(tb.samples) != tb.capacity {
+		t.Fatalf("restored tier retains oversized storage: len=%d cap=%d", len(tb.samples), cap(tb.samples))
+	}
+	if got := tb.readSamples(); got[len(got)-1].V != 9999 {
+		t.Fatalf("restore aliases persisted samples: %+v", got[len(got)-1])
+	}
+}
+
+func BenchmarkTierBufFullWrites(b *testing.B) {
+	tb := &tierBuf{resolution: 1, capacity: 1800}
+	var timestamp int64
+	for range 2000 {
+		tb.add(timestamp, 1)
+		timestamp++
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		tb.add(timestamp, 1)
+		timestamp++
 	}
 }
 

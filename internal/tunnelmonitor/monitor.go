@@ -169,8 +169,14 @@ func (m *Monitor) Step(ctx context.Context) (bool, error) {
 	if m == nil {
 		return false, errors.New("nil monitor")
 	}
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
 
 	if err := m.probe(ctx); err != nil {
+		if ctx.Err() != nil {
+			return false, ctx.Err()
+		}
 		m.failures++
 
 		if m.failures < m.cfg.FailureThreshold {
@@ -216,10 +222,11 @@ func (m *Monitor) probe(ctx context.Context) error {
 	}
 	defer resp.Body.Close()
 
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
-
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusBadRequest {
 		return fmt.Errorf("unexpected HTTP status %d", resp.StatusCode)
+	}
+	if _, err := io.Copy(io.Discard, io.LimitReader(resp.Body, 4096)); err != nil {
+		return fmt.Errorf("read probe response: %w", err)
 	}
 
 	return nil

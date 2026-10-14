@@ -21,6 +21,7 @@ import (
 
 const (
 	subscriptionCacheTTL      = 5 * time.Minute
+	subscriptionRetryDelay    = 30 * time.Second
 	subscriptionMaxBytes      = 2 << 20 // 2 MiB
 	subscriptionCacheCapacity = 256
 )
@@ -28,8 +29,9 @@ const (
 var subscriptionHTTPClient = &http.Client{Timeout: 6 * time.Second}
 
 type subscriptionCacheEntry struct {
-	links     []string
-	fetchedAt time.Time
+	links      []string
+	fetchedAt  time.Time
+	retryAfter time.Time
 }
 
 type subscriptionFetch struct {
@@ -66,7 +68,7 @@ func fetchSubscriptionLinks(rawURL string) subscriptionFetchResult {
 
 	subscriptionCache.Lock()
 	cached, ok := subscriptionCache.m[rawURL]
-	if ok && time.Since(cached.fetchedAt) < subscriptionCacheTTL {
+	if ok && (time.Since(cached.fetchedAt) < subscriptionCacheTTL || time.Now().Before(cached.retryAfter)) {
 		subscriptionCache.Unlock()
 		return subscriptionFetchResult{links: cached.links}
 	}
@@ -86,19 +88,18 @@ func fetchSubscriptionLinks(rawURL string) subscriptionFetchResult {
 	}()
 
 	links, err := doFetchSubscriptionLinks(rawURL)
+	entry := subscriptionCacheEntry{links: links, fetchedAt: time.Now()}
 	if err != nil {
-		if ok {
-			fetch.links = cached.links
-		}
-		return subscriptionFetchResult{links: fetch.links, fetched: true, err: err}
+		entry = cached
+		entry.retryAfter = time.Now().Add(subscriptionRetryDelay)
 	}
 
 	subscriptionCache.Lock()
-	subscriptionCache.m[rawURL] = subscriptionCacheEntry{links: links, fetchedAt: time.Now()}
+	subscriptionCache.m[rawURL] = entry
 	trimSubscriptionCacheLocked(rawURL)
 	subscriptionCache.Unlock()
-	fetch.links = links
-	return subscriptionFetchResult{links: links, fetched: true}
+	fetch.links = entry.links
+	return subscriptionFetchResult{links: fetch.links, fetched: true, err: err}
 }
 
 func trimSubscriptionCacheLocked(keep string) {

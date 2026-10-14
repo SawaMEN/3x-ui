@@ -3,7 +3,9 @@ package tunnelmonitor
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -13,6 +15,51 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 )
+
+func TestMonitorCancelledProbeDoesNotRecover(t *testing.T) {
+	for _, cancelDuringProbe := range []bool{false, true} {
+		t.Run(strconv.FormatBool(cancelDuringProbe), func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			cfg := DefaultConfig()
+			cfg.FailureThreshold = 1
+			client := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				cancel()
+				return nil, req.Context().Err()
+			})}
+			restarts := 0
+			monitor := newWithClient(cfg, client, func(context.Context) error {
+				restarts++
+				return nil
+			})
+			if !cancelDuringProbe {
+				cancel()
+			}
+			recovered, err := monitor.Step(ctx)
+			if recovered || !errors.Is(err, context.Canceled) || restarts != 0 || monitor.failures != 0 {
+				t.Fatalf("cancelled probe changed health: recovered=%v err=%v restarts=%d failures=%d", recovered, err, restarts, monitor.failures)
+			}
+		})
+	}
+}
+
+type failedProbeBody struct{}
+
+func (failedProbeBody) Read([]byte) (int, error) { return 0, io.ErrUnexpectedEOF }
+func (failedProbeBody) Close() error             { return nil }
+
+func TestMonitorRejectsBrokenProbeBody(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.FailureThreshold = 2
+	client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusOK, Body: failedProbeBody{}}, nil
+	})}
+	monitor := newWithClient(cfg, client, nil)
+	recovered, err := monitor.Step(context.Background())
+	if recovered || !errors.Is(err, io.ErrUnexpectedEOF) || monitor.failures != 1 {
+		t.Fatalf("broken probe body treated as healthy: recovered=%v err=%v failures=%d", recovered, err, monitor.failures)
+	}
+}
 
 func TestMain(m *testing.M) {
 	logger.InitLogger(logging.ERROR)
