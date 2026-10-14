@@ -557,7 +557,10 @@ export function parseVmessLink(link: string): Raw | null {
     if (typeof json.fm === 'string') maskParams.set('fm', json.fm);
     if (network === 'kcp') {
       maskParams.set('headerType', typeof json.type === 'string' ? json.type : '');
-      maskParams.set('seed', typeof json.seed === 'string' ? json.seed : '');
+      maskParams.set(
+        'seed',
+        typeof json.seed === 'string' ? json.seed : typeof json.path === 'string' ? json.path : '',
+      );
     }
     applyFinalMaskParam(stream, maskParams);
     if (security === 'tls') {
