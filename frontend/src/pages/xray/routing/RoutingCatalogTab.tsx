@@ -67,6 +67,7 @@ export default function RoutingCatalogTab({
   onAssign,
 }: Props) {
   const { t } = useTranslation();
+  const [messageApi, messageContextHolder] = message.useMessage();
   const tr = useCallback(
     (key: string, options?: Record<string, unknown>) =>
       t(`pages.xray.routingCatalog.${key}`, options),
@@ -84,10 +85,10 @@ export default function RoutingCatalogTab({
   const { data, error, isFetching, refetch } = useQuery({
     queryKey: ['routing-catalog'],
     refetchInterval: 60000,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const [builtins, custom] = await Promise.all([
-        HttpUtil.get<Category[]>(`${API}/categories`, undefined, { silent: true }),
-        HttpUtil.get<RoutingList[]>(`${API}/list`, undefined, { silent: true }),
+        HttpUtil.get<Category[]>(`${API}/categories`, undefined, { silent: true, signal }),
+        HttpUtil.get<RoutingList[]>(`${API}/list`, undefined, { silent: true, signal }),
       ]);
       if (!builtins?.success || !custom?.success) {
         throw new Error(builtins?.msg || custom?.msg || tr('loadFailed'));
@@ -129,7 +130,7 @@ export default function RoutingCatalogTab({
       );
     }
     setSelected(null);
-    message.success(tr('added'));
+    messageApi.success(tr('added'));
   }
 
   async function saveSource() {
@@ -141,12 +142,12 @@ export default function RoutingCatalogTab({
         silent: true,
       });
       if (!result?.success) {
-        message.error(result?.msg || tr('saveFailed'));
+        messageApi.error(result?.msg || tr('saveFailed'));
         return;
       }
       setSource(null);
       await load();
-      message.success(tr('sourceSaved'));
+      messageApi.success(tr('sourceSaved'));
     } finally {
       setBusy(false);
     }
@@ -156,8 +157,8 @@ export default function RoutingCatalogTab({
     setBusy(true);
     try {
       const result = await HttpUtil.post(`${API}/${row.id}/refresh`, undefined, { silent: true });
-      if (!result?.success) message.error(result?.msg || tr('refreshFailed'));
-      else message.success(tr('refreshed'));
+      if (!result?.success) messageApi.error(result?.msg || tr('refreshFailed'));
+      else messageApi.success(tr('refreshed'));
       await load();
     } finally {
       setBusy(false);
@@ -167,13 +168,13 @@ export default function RoutingCatalogTab({
   async function remove(row: RoutingList) {
     const staged = currentRules.some((rule) => rule.routingListId === row.id);
     if (staged) {
-      message.warning(tr('removeRulesFirst'));
+      messageApi.warning(tr('removeRulesFirst'));
       return;
     }
     setBusy(true);
     try {
       const result = await HttpUtil.post(`${API}/${row.id}/delete`, undefined, { silent: true });
-      if (!result?.success) message.error(result?.msg || tr('deleteFailed'));
+      if (!result?.success) messageApi.error(result?.msg || tr('deleteFailed'));
       await load();
     } finally {
       setBusy(false);
@@ -187,7 +188,7 @@ export default function RoutingCatalogTab({
         silent: true,
       });
       if (!result?.success || !result.obj) {
-        message.error(result?.msg || tr('loadFailed'));
+        messageApi.error(result?.msg || tr('loadFailed'));
         return;
       }
       setPreviewFilter('');
@@ -244,6 +245,7 @@ export default function RoutingCatalogTab({
         </Button>
       </Space>
       <Card title={tr('builtins')} size="small">
+        {messageContextHolder}
         <Typography.Paragraph type="secondary">{tr('geodataHelp')}</Typography.Paragraph>
         <Table<Category>
           rowKey="id"

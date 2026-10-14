@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { expect, it, vi } from 'vitest';
 import RoutingCatalogTab from '@/pages/xray/routing/RoutingCatalogTab';
@@ -13,7 +13,7 @@ function mount(setTemplateSettings: SetTemplate) {
     routing: { rules: [{ type: 'field', outboundTag: 'direct' }] },
   } as XraySettingsValue;
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(
+  const view = render(
     <QueryClientProvider client={queryClient}>
       <RoutingCatalogTab
         templateSettings={template}
@@ -22,7 +22,7 @@ function mount(setTemplateSettings: SetTemplate) {
       />
     </QueryClientProvider>,
   );
-  return template;
+  return { template, ...view };
 }
 
 it('stages a catalog route without publishing or overwriting existing rules', async () => {
@@ -38,7 +38,7 @@ it('stages a catalog route without publishing or overwriting existing rules', as
   }));
   vi.mocked(HttpUtil.post).mockClear();
   const setTemplate = vi.fn<SetTemplate>();
-  const template = mount(setTemplate);
+  const { template } = mount(setTemplate);
   const youtubeRow = (await screen.findByText('geosite:youtube')).closest('tr')!;
   fireEvent.click(within(youtubeRow).getByRole('button', { name: 'Assign route' }));
   await screen.findByRole('dialog');
@@ -77,7 +77,7 @@ it('shows cached source failure and adds its stable list reference', async () =>
         ],
   }));
   const setTemplate = vi.fn<SetTemplate>();
-  const template = mount(setTemplate);
+  const { template } = mount(setTemplate);
   await screen.findByText('Last working list retained: HTTP 503');
   const row = screen.getByText('My source').closest('tr')!;
   fireEvent.click(within(row).getByRole('button', { name: 'Assign route' }));
@@ -91,3 +91,35 @@ it('shows cached source failure and adds its stable list reference', async () =>
   });
   expect(screen.getByText('Every 24 hours')).toBeTruthy();
 }, 15000);
+
+it('removes catalog notifications when the tab unmounts', async () => {
+  vi.mocked(HttpUtil.get).mockImplementation(async (url) => ({
+    success: true,
+    msg: '',
+    obj: url.endsWith('/categories')
+      ? [{ id: 'youtube', token: 'geosite:youtube', available: true }]
+      : [],
+  }));
+  const { unmount } = mount(vi.fn<SetTemplate>());
+  const row = (await screen.findByText('geosite:youtube')).closest('tr')!;
+  fireEvent.click(within(row).getByRole('button', { name: 'Assign route' }));
+  const apply = await screen.findByRole('button', { name: 'Add routing rule' });
+  await act(async () => fireEvent.click(apply));
+  const notice = 'Rule added. Save the configuration to apply it.';
+  await screen.findByText(notice);
+  unmount();
+  expect(screen.queryByText(notice)).toBeNull();
+}, 15000);
+
+it('cancels catalog reads when leaving the tab', async () => {
+  const signals: AbortSignal[] = [];
+  vi.mocked(HttpUtil.get).mockImplementation((_url, _params, options) => {
+    if (options?.signal) signals.push(options.signal);
+    return new Promise<never>(() => {});
+  });
+  const { unmount } = mount(vi.fn<SetTemplate>());
+  await waitFor(() => expect(signals).toHaveLength(2));
+  expect(signals.every((signal) => !signal.aborted)).toBe(true);
+  unmount();
+  expect(signals.every((signal) => signal.aborted)).toBe(true);
+});
