@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/amneziawgnet"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
 	"github.com/SawaMEN/3x-ui/v3/internal/hiddify"
@@ -555,6 +556,7 @@ func (s *SingBoxService) restartLocked(ctx context.Context) (result error) {
 		}
 		return err
 	}
+	amneziawgnet.GetOutboundManager().SetNativeTags(candidate.nativeAWGTags)
 	s.stoppedFlag().Store(false)
 	commitManagedYouTube(s.coreType())
 	applied = true
@@ -620,6 +622,7 @@ func (s *SingBoxService) startLocked(ctx context.Context) (result error) {
 		return err
 	}
 
+	amneziawgnet.GetOutboundManager().SetNativeTags(candidate.nativeAWGTags)
 	s.stoppedFlag().Store(false)
 	commitManagedYouTube(s.coreType())
 	applied = true

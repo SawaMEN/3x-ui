@@ -927,25 +927,26 @@ type Client struct {
 	// being broadcast to every attached tunnel inbound. Absent/unset for a
 	// given inbound id falls back to the shared AllowedIPs exactly as
 	// before -- fully backward compatible for callers that never set this.
-	AllowedIPsByInbound map[int][]string `json:"allowedIPsByInbound,omitempty"`
-	PreSharedKey        string           `json:"preSharedKey,omitempty"`
-	KeepAlive           *int             `json:"keepAlive,omitempty"`      // Seconds between PersistentKeepalive packets; 0 sends none, omit to keep the stored value
-	ForwardedPorts      string           `json:"forwardedPorts,omitempty"` // AmneziaWG per-client port-forwarding spec, e.g. "80,443,8000-8100"
-	Secret              string           `json:"secret,omitempty" example:"ee1234567890abcdef1234567890abcd7777772e636c6f7564666c6172652e636f6d"`
-	AdTag               string           `json:"adTag,omitempty" example:"0123456789abcdef0123456789abcdef"`
-	SudokuPrivateKey    string           `json:"sudokuPrivateKey,omitempty" gorm:"-"`
-	Email               string           `json:"email"`                        // Client email identifier
-	LimitIP             int              `json:"limitIp"`                      // IP limit for this client
-	TotalGB             int64            `json:"totalGB" form:"totalGB"`       // Total traffic limit in GB
-	ExpiryTime          int64            `json:"expiryTime" form:"expiryTime"` // Expiration timestamp
-	Enable              bool             `json:"enable" form:"enable"`         // Whether the client is enabled
-	TgID                int64            `json:"tgId" form:"tgId"`             // Telegram user ID for notifications
-	SubID               string           `json:"subId" form:"subId"`           // Subscription identifier
-	Group               string           `json:"group,omitempty" form:"group"` // Logical grouping label
-	Comment             string           `json:"comment" form:"comment"`       // Client comment
-	Reset               int              `json:"reset" form:"reset"`           // Reset period in days
-	ResetDay            int              `json:"resetDay" form:"resetDay"`     // Calendar renewal day 1-31, 0 = interval mode
-	ResetMax            int              `json:"resetMax" form:"resetMax"`     // Max auto-renew count, 0 = unlimited
+	AllowedIPsByInbound map[int][]string  `json:"allowedIPsByInbound,omitempty"`
+	PreSharedKey        string            `json:"preSharedKey,omitempty"`
+	KeepAlive           *int              `json:"keepAlive,omitempty"` // Seconds between PersistentKeepalive packets; 0 sends none, omit to keep the stored value
+	AWGClientOptions    *AWGClientOptions `json:"awgClientOptions,omitempty"`
+	ForwardedPorts      string            `json:"forwardedPorts,omitempty"` // AmneziaWG per-client port-forwarding spec, e.g. "80,443,8000-8100"
+	Secret              string            `json:"secret,omitempty" example:"ee1234567890abcdef1234567890abcd7777772e636c6f7564666c6172652e636f6d"`
+	AdTag               string            `json:"adTag,omitempty" example:"0123456789abcdef0123456789abcdef"`
+	SudokuPrivateKey    string            `json:"sudokuPrivateKey,omitempty" gorm:"-"`
+	Email               string            `json:"email"`                        // Client email identifier
+	LimitIP             int               `json:"limitIp"`                      // IP limit for this client
+	TotalGB             int64             `json:"totalGB" form:"totalGB"`       // Total traffic limit in GB
+	ExpiryTime          int64             `json:"expiryTime" form:"expiryTime"` // Expiration timestamp
+	Enable              bool              `json:"enable" form:"enable"`         // Whether the client is enabled
+	TgID                int64             `json:"tgId" form:"tgId"`             // Telegram user ID for notifications
+	SubID               string            `json:"subId" form:"subId"`           // Subscription identifier
+	Group               string            `json:"group,omitempty" form:"group"` // Logical grouping label
+	Comment             string            `json:"comment" form:"comment"`       // Client comment
+	Reset               int               `json:"reset" form:"reset"`           // Reset period in days
+	ResetDay            int               `json:"resetDay" form:"resetDay"`     // Calendar renewal day 1-31, 0 = interval mode
+	ResetMax            int               `json:"resetMax" form:"resetMax"`     // Max auto-renew count, 0 = unlimited
 	// Per-client traffic reset cycle, independent of the inbound's own (#5497).
 	TrafficReset    string `json:"trafficReset,omitempty" form:"trafficReset" validate:"omitempty,oneof=never hourly daily weekly monthly"`
 	TrafficResetDay int    `json:"trafficResetDay,omitempty" form:"trafficResetDay" validate:"omitempty,gte=1,lte=31"`
@@ -954,29 +955,30 @@ type Client struct {
 }
 
 type ClientRecord struct {
-	Id             int    `json:"id" gorm:"primaryKey;autoIncrement"`
-	Email          string `json:"email" gorm:"uniqueIndex;not null"`
-	SubID          string `json:"subId" gorm:"index;column:sub_id"`
-	HiddifySubURI  string `json:"hiddifySubURI,omitempty" gorm:"column:hiddify_sub_uri;default:''"`
-	UUID           string `json:"uuid" gorm:"column:uuid"`
-	Password       string `json:"password"`
-	Auth           string `json:"auth"`
-	Flow           string `json:"flow"`
-	Security       string `json:"security"`
-	Reverse        string `json:"reverse" gorm:"column:reverse"`
-	PrivateKey     string `json:"privateKey" gorm:"column:wg_private_key"`
-	PublicKey      string `json:"publicKey" gorm:"column:wg_public_key"`
-	AllowedIPs     string `json:"allowedIPs" gorm:"column:wg_allowed_ips"`
-	PreSharedKey   string `json:"preSharedKey" gorm:"column:wg_pre_shared_key"`
-	KeepAlive      int    `json:"keepAlive" gorm:"column:wg_keep_alive;default:0"`
-	ForwardedPorts string `json:"forwardedPorts" gorm:"column:wg_forwarded_ports"`
-	Secret         string `json:"secret" gorm:"column:secret"`
-	AdTag          string `json:"adTag" gorm:"column:ad_tag;default:''"`
-	LimitIP        int    `json:"limitIp" gorm:"column:limit_ip"`
-	LimitHwid      int    `json:"limitHwid" gorm:"column:limit_hwid;default:0"`
-	TotalGB        int64  `json:"totalGB" gorm:"column:total_gb"`
-	ExpiryTime     int64  `json:"expiryTime" gorm:"column:expiry_time"`
-	Enable         bool   `json:"enable" gorm:"default:true"`
+	Id               int               `json:"id" gorm:"primaryKey;autoIncrement"`
+	Email            string            `json:"email" gorm:"uniqueIndex;not null"`
+	SubID            string            `json:"subId" gorm:"index;column:sub_id"`
+	HiddifySubURI    string            `json:"hiddifySubURI,omitempty" gorm:"column:hiddify_sub_uri;default:''"`
+	UUID             string            `json:"uuid" gorm:"column:uuid"`
+	Password         string            `json:"password"`
+	Auth             string            `json:"auth"`
+	Flow             string            `json:"flow"`
+	Security         string            `json:"security"`
+	Reverse          string            `json:"reverse" gorm:"column:reverse"`
+	PrivateKey       string            `json:"privateKey" gorm:"column:wg_private_key"`
+	PublicKey        string            `json:"publicKey" gorm:"column:wg_public_key"`
+	AllowedIPs       string            `json:"allowedIPs" gorm:"column:wg_allowed_ips"`
+	PreSharedKey     string            `json:"preSharedKey" gorm:"column:wg_pre_shared_key"`
+	KeepAlive        int               `json:"keepAlive" gorm:"column:wg_keep_alive;default:0"`
+	ForwardedPorts   string            `json:"forwardedPorts" gorm:"column:wg_forwarded_ports"`
+	AWGClientOptions *AWGClientOptions `json:"awgClientOptions,omitempty" gorm:"serializer:json;column:awg_client_options"`
+	Secret           string            `json:"secret" gorm:"column:secret"`
+	AdTag            string            `json:"adTag" gorm:"column:ad_tag;default:''"`
+	LimitIP          int               `json:"limitIp" gorm:"column:limit_ip"`
+	LimitHwid        int               `json:"limitHwid" gorm:"column:limit_hwid;default:0"`
+	TotalGB          int64             `json:"totalGB" gorm:"column:total_gb"`
+	ExpiryTime       int64             `json:"expiryTime" gorm:"column:expiry_time"`
+	Enable           bool              `json:"enable" gorm:"default:true"`
 	// Set automatically when a core switch disables this client because its protocol is unsupported.
 	// It is cleared by explicit user changes and when the client becomes compatible again.
 	AutoDisabledByCore string `json:"-" gorm:"column:auto_disabled_by_core;default:''"`
@@ -1203,14 +1205,15 @@ func (c *Client) ToRecord() *ClientRecord {
 		CreatedAt:       c.CreatedAt,
 		UpdatedAt:       c.UpdatedAt,
 
-		PrivateKey:     c.PrivateKey,
-		PublicKey:      c.PublicKey,
-		AllowedIPs:     strings.Join(c.AllowedIPs, ","),
-		PreSharedKey:   c.PreSharedKey,
-		KeepAlive:      c.KeepAliveSeconds(),
-		ForwardedPorts: c.ForwardedPorts,
-		Secret:         c.Secret,
-		AdTag:          c.AdTag,
+		PrivateKey:       c.PrivateKey,
+		PublicKey:        c.PublicKey,
+		AllowedIPs:       strings.Join(c.AllowedIPs, ","),
+		PreSharedKey:     c.PreSharedKey,
+		KeepAlive:        c.KeepAliveSeconds(),
+		ForwardedPorts:   c.ForwardedPorts,
+		AWGClientOptions: c.AWGClientOptions,
+		Secret:           c.Secret,
+		AdTag:            c.AdTag,
 	}
 	if c.Reverse != nil {
 		if b, err := json.Marshal(c.Reverse); err == nil {
@@ -1261,14 +1264,15 @@ func (r *ClientRecord) ToClient() *Client {
 		CreatedAt:       r.CreatedAt,
 		UpdatedAt:       r.UpdatedAt,
 
-		PrivateKey:     r.PrivateKey,
-		PublicKey:      r.PublicKey,
-		AllowedIPs:     splitWireguardAllowedIPs(r.AllowedIPs),
-		PreSharedKey:   r.PreSharedKey,
-		KeepAlive:      nonZeroKeepAlive(r.KeepAlive),
-		ForwardedPorts: r.ForwardedPorts,
-		Secret:         r.Secret,
-		AdTag:          r.AdTag,
+		PrivateKey:       r.PrivateKey,
+		PublicKey:        r.PublicKey,
+		AllowedIPs:       splitWireguardAllowedIPs(r.AllowedIPs),
+		PreSharedKey:     r.PreSharedKey,
+		KeepAlive:        nonZeroKeepAlive(r.KeepAlive),
+		ForwardedPorts:   r.ForwardedPorts,
+		AWGClientOptions: r.AWGClientOptions,
+		Secret:           r.Secret,
+		AdTag:            r.AdTag,
 	}
 	if r.Reverse != "" {
 		var rev ClientReverse
@@ -1506,6 +1510,14 @@ func MergeClientRecord(existing *ClientRecord, incoming *ClientRecord) []ClientM
 		if incomingNewer || existing.KeepAlive == 0 {
 			keep("keepAlive", existing.KeepAlive, incoming.KeepAlive, incoming.KeepAlive)
 			existing.KeepAlive = incoming.KeepAlive
+		}
+	}
+	if incoming.AWGClientOptions != nil {
+		oldOptions, _ := json.Marshal(existing.AWGClientOptions)
+		newOptions, _ := json.Marshal(incoming.AWGClientOptions)
+		if !bytes.Equal(oldOptions, newOptions) && (incomingNewer || existing.AWGClientOptions == nil) {
+			existing.AWGClientOptions = incoming.AWGClientOptions
+			keep("awgClientOptions", string(oldOptions), string(newOptions), string(newOptions))
 		}
 	}
 	if existing.ForwardedPorts != incoming.ForwardedPorts && incoming.ForwardedPorts != "" {

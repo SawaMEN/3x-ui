@@ -53,6 +53,29 @@ func newTestOutboundDesired(t *testing.T, tag string) OutboundDesired {
 	}
 }
 
+func TestNativeOwnershipRetiresBridgeAndRejectsStaleReconcile(t *testing.T) {
+	m := &OutboundManager{iface: map[string]*managedOutbound{}}
+	defer m.Reconcile(nil)
+	d := newTestOutboundDesired(t, "ownership-test")
+	m.Reconcile([]OutboundDesired{d})
+	if len(m.iface) != 1 || m.HasNativeTag(d.Instance.Tag) {
+		t.Fatal("pending native configuration took bridge ownership")
+	}
+	m.SetNativeTags([]string{d.Instance.Tag})
+	if len(m.iface) != 0 || !m.HasNativeTag(d.Instance.Tag) {
+		t.Fatal("successful activation did not retire bridge")
+	}
+	m.Reconcile([]OutboundDesired{d})
+	if len(m.iface) != 0 {
+		t.Fatal("stale reconcile created a second device")
+	}
+	m.SetNativeTags(nil)
+	m.Reconcile([]OutboundDesired{d})
+	if len(m.iface) != 1 {
+		t.Fatal("switching back did not restore bridge")
+	}
+}
+
 // TestOutboundManagerReconcileEmptyDesiredClosesEgress verifies that an empty
 // desired set tears down interfaces and releases 127.0.0.1:64900.
 func TestOutboundManagerReconcileEmptyDesiredClosesEgress(t *testing.T) {

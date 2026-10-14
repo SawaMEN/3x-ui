@@ -230,6 +230,9 @@ func (j *AmneziaWGJob) desiredOutboundInstances() ([]amneziawgnet.OutboundDesire
 		if err := json.Unmarshal(raw, &probe); err != nil || probe.Tag == "" {
 			continue
 		}
+		if amneziawgnet.GetOutboundManager().HasNativeTag(probe.Tag) {
+			continue
+		}
 		inst, ok := amneziawg.InstanceFromOutbound(probe.Tag, raw)
 		if !ok {
 			continue

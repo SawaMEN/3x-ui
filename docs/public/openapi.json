@@ -26,6 +26,48 @@
       }
     },
     "schemas": {
+      "AWGClientOptions": {
+        "description": "AWGClientOptions only overrides client-side packet generation and local MTU.\nNil fields inherit the inbound defaults; an empty object clears overrides.\nShared header/padding/key parameters deliberately cannot be changed here.",
+        "properties": {
+          "i1": {
+            "nullable": true,
+            "type": "string"
+          },
+          "i2": {
+            "nullable": true,
+            "type": "string"
+          },
+          "i3": {
+            "nullable": true,
+            "type": "string"
+          },
+          "i4": {
+            "nullable": true,
+            "type": "string"
+          },
+          "i5": {
+            "nullable": true,
+            "type": "string"
+          },
+          "jc": {
+            "nullable": true,
+            "type": "integer"
+          },
+          "jmax": {
+            "nullable": true,
+            "type": "integer"
+          },
+          "jmin": {
+            "nullable": true,
+            "type": "integer"
+          },
+          "mtu": {
+            "nullable": true,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
       "AllSetting": {
         "properties": {
           "coreType": {
@@ -1506,6 +1548,14 @@
             "description": "Auth password (Hysteria)",
             "type": "string"
           },
+          "awgClientOptions": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AWGClientOptions"
+              }
+            ],
+            "nullable": true
+          },
           "comment": {
             "description": "Client comment",
             "type": "string"
@@ -1734,6 +1784,14 @@
           },
           "auth": {
             "type": "string"
+          },
+          "awgClientOptions": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AWGClientOptions"
+              }
+            ],
+            "nullable": true
           },
           "comment": {
             "type": "string"
@@ -8122,6 +8180,32 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/panel/api/server/amneziawgMetrics": {
+      "get": {
+        "tags": [
+          "Server"
+        ],
+        "summary": "Prometheus metrics for local AmneziaWG inbounds. Accessible with monitor or admin tokens and panel sessions.",
+        "operationId": "get_panel_api_server_amneziawgMetrics",
+        "description": "Aggregate metrics without client emails, IP addresses or keys. RX/TX are gauges since device start. Online means a handshake in the last 180 seconds. Rolling 24h/30d activity uses shared lastOnline of users attached to AWG and may include their other protocols.",
+        "responses": {
+          "200": {
+            "description": "Prometheus exposition format",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "awg_inbounds_configured 1\nawg_current_online 0\n"
+              }
+            }
+          },
+          "503": {
+            "description": "Metrics could not be collected"
           }
         }
       }

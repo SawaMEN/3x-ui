@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { AwgClientOptionsSchema } from './awg-client-options';
 
 const nullableStringArray = z
   .array(z.string())
@@ -54,6 +55,7 @@ export const ClientRecordSchema = z
     preSharedKey: z.string().optional(),
     keepAlive: z.number().optional(),
     forwardedPorts: z.string().optional(),
+    awgClientOptions: AwgClientOptionsSchema.nullable().optional(),
     secret: z.string().optional(),
     adTag: z.string().optional(),
     createdAt: z.number().optional(),

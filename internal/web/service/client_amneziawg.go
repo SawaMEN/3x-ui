@@ -39,6 +39,9 @@ func defaultAmneziaWGSubnetBases(settingsJSON string) (v4Base, v6Base string, er
 // edit never rotates keys. Mirrors defaultWireguardClients; crossInboundUsed
 // (see otherTunnelAllowedIPs) narrows which addresses are still free.
 func defaultAmneziaWGClients(settingsJSON string, existing, clients []model.Client, interfaceClients []any, crossInboundUsed map[string]string) error {
+	if err := validateAWGClientOptions(settingsJSON, clients); err != nil {
+		return err
+	}
 	v4Base, v6Base, err := defaultAmneziaWGSubnetBases(settingsJSON)
 	if err != nil {
 		return err
@@ -113,6 +116,33 @@ func defaultAmneziaWGClients(settingsJSON string, existing, clients []model.Clie
 				}
 				interfaceClients[i] = m
 			}
+		}
+	}
+	return nil
+}
+
+func validateAWGClientOptions(settings string, clients []model.Client) error {
+	hasOverrides := false
+	for _, client := range clients {
+		o := client.AWGClientOptions
+		if o != nil && (o.Jc != nil || o.Jmin != nil || o.Jmax != nil || o.I1 != nil || o.I2 != nil || o.I3 != nil || o.I4 != nil || o.I5 != nil || o.MTU != nil) {
+			hasOverrides = true
+			break
+		}
+	}
+	if !hasOverrides {
+		return nil
+	} // Keep legacy AWG rows editable without a server block.
+	var parsed amneziawg.InboundSettings
+	if err := json.Unmarshal([]byte(settings), &parsed); err != nil {
+		return err
+	}
+	if parsed.Server == nil {
+		return fmt.Errorf("AWG server settings are missing")
+	}
+	for _, client := range clients {
+		if _, err := amneziawg.ClientServerSettings(*parsed.Server, client.AWGClientOptions); err != nil {
+			return err
 		}
 	}
 	return nil

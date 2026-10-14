@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { AwgClientOptionsSchema } from '../../awg-client-options';
 
 // AntD InputNumber emits null (not undefined) when the user clears it, and
 // the form store hands that null straight to safeParse on submit — a bare
@@ -25,6 +26,7 @@ export const AmneziawgClientSchema = z.object({
   allowedIPs: z.array(z.string()).default([]),
   keepAlive: optionalClearedInt(z.number().int().min(0)),
   forwardedPorts: z.string().default(''),
+  awgClientOptions: AwgClientOptionsSchema.nullable().optional(),
   email: z.string().min(1),
   limitIp: z.number().int().min(0).default(0),
   totalGB: z.number().int().min(0).default(0),

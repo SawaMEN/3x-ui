@@ -14,6 +14,7 @@ import (
 type nativeConfigCandidate struct {
 	path, target     string
 	managedOutbounds []map[string]any
+	nativeAWGTags    []string
 }
 
 func (c *nativeConfigCandidate) close() { _ = os.Remove(c.path) }
@@ -84,7 +85,15 @@ func (s *SingBoxService) prepareGeneratedConfigCandidate(ctx context.Context, cf
 	if err := s.candidate(name).Validate(ctx); err != nil {
 		return nil, fmt.Errorf("validate candidate %s config: %w", s.coreType(), err)
 	}
-	return &nativeConfigCandidate{path: name, target: path, managedOutbounds: cfg.ManagedOutbounds}, nil
+	var nativeAWGTags []string
+	for _, endpoint := range cfg.Endpoints {
+		if endpoint["type"] == "awg" {
+			if tag, ok := endpoint["tag"].(string); ok {
+				nativeAWGTags = append(nativeAWGTags, tag)
+			}
+		}
+	}
+	return &nativeConfigCandidate{path: name, target: path, managedOutbounds: cfg.ManagedOutbounds, nativeAWGTags: nativeAWGTags}, nil
 }
 
 // Restore a trusted applied snapshot with the same atomic/durable publication

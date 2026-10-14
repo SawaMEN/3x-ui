@@ -33,7 +33,7 @@ const SHARE_HOSTNAME_RE =
 // Format a host for interpolation into a URL authority. IPv6 literals are
 // wrapped in square brackets per RFC 3986; IPv4 and hostnames are left as-is.
 // Any brackets already present are first stripped so the helper is idempotent.
-function formatUrlHost(address: string): string {
+export function formatUrlHost(address: string): string {
   const bare = address.replace(/^\[|\]$/g, '');
   return bare.includes(':') ? `[${bare}]` : bare;
 }
@@ -1055,7 +1055,7 @@ export function genAmneziaWGConfig(input: GenAmneziaWGLinkInput): string {
   const { settings, address, port, remark = '', peerIndex } = input;
   const client = settings.clients[peerIndex];
   if (!client) return '';
-  const server = settings.server;
+  const server = { ...settings.server, ...(client.awgClientOptions ?? {}) };
 
   // These land unescaped in the .conf; a newline would inject a config line
   // (e.g. a rogue PostUp) — same guard as the panel's other two emitters.
@@ -1064,6 +1064,10 @@ export function genAmneziaWGConfig(input: GenAmneziaWGLinkInput): string {
     server.primaryDns ?? '',
     server.secondaryDns ?? '',
     remark,
+    address,
+    client.preSharedKey ?? '',
+    ...(client.allowedIPs ?? []),
+    ...Object.values(server).filter((v): v is string => typeof v === 'string'),
   ]) {
     if (/[\r\n]/.test(v)) return '';
   }
@@ -1114,7 +1118,7 @@ export function genAmneziaWGConfig(input: GenAmneziaWGLinkInput): string {
     txt += `PresharedKey = ${client.preSharedKey}\n`;
   }
   txt += `AllowedIPs = 0.0.0.0/0, ::/0\n`;
-  txt += `Endpoint = ${address}:${port}`;
+  txt += `Endpoint = ${formatUrlHost(address)}:${port}`;
   if (typeof client.keepAlive === 'number' && client.keepAlive > 0) {
     txt += `\nPersistentKeepalive = ${client.keepAlive}`;
   }

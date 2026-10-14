@@ -50,6 +50,7 @@ import type {
 } from '@/hooks/useClients';
 import { useFail2banStatusQuery, getLimitIpNotice } from '@/api/queries/useFail2banStatusQuery';
 import { ClientFormSchema, ClientCreateFormSchema, type ClientFormValues } from '@/schemas/client';
+import type { AwgClientOptions } from '@/schemas/awg-client-options';
 import './ClientFormModal.css';
 
 const FLOW_OPTIONS = Object.values(TLS_FLOW_CONTROL);
@@ -124,6 +125,7 @@ type Values = ClientFormValues & {
   wgAllowedIPs: string;
   awgAllowedIPs: string;
   awgForwardedPorts: string;
+  awgClientOptions: AwgClientOptions;
   wgKeepAlive: number;
   secret: string;
   adTag: string;
@@ -161,6 +163,7 @@ const EMPTY: Values = {
   wgAllowedIPs: '',
   awgAllowedIPs: '',
   awgForwardedPorts: '',
+  awgClientOptions: {},
   wgKeepAlive: 25,
   secret: '',
   adTag: '',
@@ -372,6 +375,7 @@ export default function ClientFormModal({
         wgAllowedIPs: wgTunnelIPs ?? client.allowedIPs ?? '',
         awgAllowedIPs: awgTunnelIPs ?? client.allowedIPs ?? '',
         awgForwardedPorts: client.forwardedPorts || '',
+        awgClientOptions: client.awgClientOptions ?? {},
         wgKeepAlive: client.keepAlive ?? 0,
         secret: client.secret || '',
         adTag: client.adTag || '',
@@ -747,6 +751,7 @@ export default function ClientFormModal({
       // has no host-level iptables layer to hang per-client DNAT off of.
       if (showAmneziawg) {
         clientPayload.forwardedPorts = values.awgForwardedPorts.trim();
+        clientPayload.awgClientOptions = values.awgClientOptions;
       }
     }
 
@@ -1318,6 +1323,40 @@ export default function ClientFormModal({
                           >
                             <InputNumber min={0} max={65535} style={{ width: '100%' }} />
                           </FormField>
+                          {showAmneziawg && (
+                            <>
+                              <Typography.Paragraph type="secondary">
+                                {t('pages.clients.awgClientOptionsHint')}
+                              </Typography.Paragraph>
+                              {(['jc', 'jmin', 'jmax', 'mtu'] as const).map((key) => (
+                                <FormField
+                                  key={key}
+                                  name={['awgClientOptions', key]}
+                                  label={key === 'mtu' ? 'MTU' : key}
+                                  transform={{ output: (v) => (v == null ? undefined : Number(v)) }}
+                                >
+                                  <InputNumber
+                                    min={key === 'mtu' ? 1280 : 0}
+                                    max={key === 'mtu' ? 1500 : 4294967295}
+                                    placeholder={t('pages.clients.awgInherit')}
+                                    style={{ width: '100%' }}
+                                  />
+                                </FormField>
+                              ))}
+                              {(['i1', 'i2', 'i3', 'i4', 'i5'] as const).map((key) => (
+                                <FormField
+                                  key={key}
+                                  name={['awgClientOptions', key]}
+                                  label={key.toUpperCase()}
+                                >
+                                  <Input placeholder={t('pages.clients.awgInherit')} />
+                                </FormField>
+                              ))}
+                              <Button onClick={() => methods.setValue('awgClientOptions', {})}>
+                                {t('pages.clients.awgResetOverrides')}
+                              </Button>
+                            </>
+                          )}
                           {showAmneziawg && (
                             <FormField
                               name="awgForwardedPorts"
