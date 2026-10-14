@@ -28,6 +28,7 @@ export const MasqueInboundSettingsSchema = z.object({
   advertiseRoutes: z.array(z.string()).default([]),
   mtu: z.number().int().min(1280).max(65535).default(1280),
   tls: NaiveTlsSchema.default({ enabled: true, serverName: '', certificatePath: '', keyPath: '' }),
+  advanced: z.record(z.string(), z.unknown()).default({}),
   clients: z
     .array(
       NaiveClientSchema.extend({

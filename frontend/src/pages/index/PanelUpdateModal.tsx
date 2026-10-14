@@ -151,7 +151,9 @@ export default function PanelUpdateModal({
       ),
       okText: t('confirm'),
       cancelText: t('cancel'),
-      onOk: runUpdate,
+      onOk: () => {
+        void runUpdate();
+      },
     });
   }
 

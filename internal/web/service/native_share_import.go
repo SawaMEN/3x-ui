@@ -179,7 +179,7 @@ func parseShareWithKernel(parent context.Context, raw, binary string) (*NativeSh
 	if err != nil {
 		return nil, err
 	}
-	if err = os.WriteFile(input, []byte(kernelInput), 0600); err != nil {
+	if err = os.WriteFile(input, []byte(kernelInput), 0o600); err != nil {
 		return nil, err
 	}
 	if strings.HasPrefix(raw, "ssh://") && !strings.ContainsAny(raw, "\r\n") && !strings.Contains(raw, " -> ") {

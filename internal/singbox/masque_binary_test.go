@@ -25,7 +25,7 @@ func TestMASQUEBinaryConfig(t *testing.T) {
 	certPath, keyPath := masqueTestCertificate(t)
 	dir := t.TempDir()
 	for _, version := range []int{1, 2, 3} {
-		endpoint, err := TranslateMASQUEEndpoint(map[string]any{"protocol": "masque", "tag": "masque", "listen": "127.0.0.1", "port": 18443, "settings": map[string]any{"version": []int{version}, "tls": map[string]any{"certificatePath": certPath, "keyPath": keyPath}, "clients": []any{map[string]any{"email": "alice", "password": "secret", "enable": true}}}})
+		endpoint, err := TranslateMASQUEEndpoint(map[string]any{"protocol": "masque", "tag": "masque", "listen": "127.0.0.1", "port": 18443, "settings": map[string]any{"version": []int{version}, "advanced": map[string]any{"udp_timeout": "5m", "initial_packet_size": 1200, "disable_path_mtu_discovery": true, "stream_receive_window": 1048576, "connection_receive_window": "64 MB", "keep_alive_period": "30s"}, "tls": map[string]any{"certificatePath": certPath, "keyPath": keyPath}, "clients": []any{map[string]any{"email": "alice", "password": "secret", "enable": true}}}})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -75,4 +75,26 @@ func masqueTestCertificate(t *testing.T) (string, string) {
 		t.Fatal(err)
 	}
 	return certPath, keyPath
+}
+
+func TestWARPMASQUEBinaryConfig(t *testing.T) {
+	binary := os.Getenv("SINGBOX_TEST_BINARY")
+	if binary == "" {
+		t.Skip("set SINGBOX_TEST_BINARY for WARP MASQUE config checks")
+	}
+	for _, http2 := range []bool{false, true} {
+		data, err := json.Marshal(map[string]any{"outbounds": []any{map[string]any{"type": "masque", "tag": "warp-masque", "use_http2": http2, "use_ipv6": false, "profile": map[string]any{"recreate": false}}}, "experimental": map[string]any{"cache_file": map[string]any{"enabled": true, "store_masque_config": true}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		path := filepath.Join(t.TempDir(), "warp.json")
+		if err := os.WriteFile(path, data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		cmd := exec.Command(binary, "check", "-c", path)
+		cmd.Dir = filepath.Dir(binary)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("WARP HTTP/2=%v check: %v: %s", http2, err, output)
+		}
+	}
 }

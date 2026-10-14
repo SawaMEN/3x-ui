@@ -116,7 +116,7 @@ func TestNativeImportKernelMatrix(t *testing.T) {
 			}
 			encoded, _ := json.Marshal(got)
 			path := filepath.Join(t.TempDir(), "import.json")
-			if err := os.WriteFile(path, encoded, 0600); err != nil {
+			if err := os.WriteFile(path, encoded, 0o600); err != nil {
 				t.Fatal(err)
 			}
 			if output, err := exec.Command(binary, "check", "-c", path).CombinedOutput(); err != nil {

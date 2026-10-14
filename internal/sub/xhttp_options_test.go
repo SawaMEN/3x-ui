@@ -2,8 +2,9 @@ package sub
 
 import (
 	"encoding/json"
-	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"testing"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
 
 func TestXhttpExtraPrecedenceAcrossSubscriptions(t *testing.T) {

@@ -59,6 +59,7 @@ import {
   tlsProtocols,
   transportProtocols,
 } from './outbound-editor-model';
+import MasqueConnectionFields from './MasqueConnectionFields';
 import './SingBoxOutboundModal.css';
 function Field({
   label,
@@ -476,6 +477,11 @@ export default function SingBoxOutboundModal({
               />
             </Field>
           </>
+        )}
+        {['masque', 'masque-client'].includes(type) && (
+          <Col span={24}>
+            <MasqueConnectionFields value={draft} onChange={update} />
+          </Col>
         )}
         {type === 'anytls' && (
           <>

@@ -21,6 +21,7 @@ import { HttpUtil } from '@/utils';
 
 export default function TuicFields() {
   const { t } = useTranslation();
+  const [messageApi, messageContextHolder] = message.useMessage();
   const { control, setValue, getValues } = useFormContext();
   const [loadingPanelCert, setLoadingPanelCert] = useState(false);
 
@@ -59,7 +60,7 @@ export default function TuicFields() {
     // replaced manually before saving.
     const cleanSni = (sni || window.location.hostname || '').trim();
     if (!cleanSni) {
-      message.warning(t('pages.xray.tuic.sniRequired'));
+      messageApi.warning(t('pages.xray.tuic.sniRequired'));
       return;
     }
 
@@ -74,7 +75,7 @@ export default function TuicFields() {
     updateServerValue('max_idle_time', 15);
     updateServerValue('authentication_timeout', 3);
     updateServerValue('max_udp_relay_packet_size', 1500);
-    message.success(t('pages.inbounds.setSuccess'));
+    messageApi.success(t('pages.inbounds.setSuccess'));
   };
 
   const setCertFromPanel = async () => {
@@ -85,12 +86,12 @@ export default function TuicFields() {
           ? await HttpUtil.get(`/panel/api/nodes/webCert/${nodeId}`, undefined, { silent: true })
           : await HttpUtil.post('/panel/api/setting/all', undefined, { silent: true });
       if (!msg?.success) {
-        message.warning(msg?.msg || t('pages.inbounds.setDefaultCertEmpty'));
+        messageApi.warning(msg?.msg || t('pages.inbounds.setDefaultCertEmpty'));
         return;
       }
       const obj = msg.obj as { webCertFile?: string; webKeyFile?: string };
       if (!obj?.webCertFile && !obj?.webKeyFile) {
-        message.warning(t('pages.inbounds.setDefaultCertEmpty'));
+        messageApi.warning(t('pages.inbounds.setDefaultCertEmpty'));
         return;
       }
       if (obj.webCertFile) {
@@ -99,9 +100,9 @@ export default function TuicFields() {
       if (obj.webKeyFile) {
         updateServerValue('private_key', obj.webKeyFile);
       }
-      message.success(t('pages.inbounds.setSuccess'));
+      messageApi.success(t('pages.inbounds.setSuccess'));
     } catch {
-      message.error(t('somethingWentWrong'));
+      messageApi.error(t('somethingWentWrong'));
     } finally {
       setLoadingPanelCert(false);
     }
@@ -179,6 +180,7 @@ export default function TuicFields() {
 
   return (
     <>
+      {messageContextHolder}
       <Form.Item label={t('pages.inbounds.publicKey')}>
         <AutoComplete
           value={certificate}

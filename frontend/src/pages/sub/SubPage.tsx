@@ -91,23 +91,6 @@ const apps = buildSubApps({ subUrl, sId, subTitle });
 const initialPlatform = detectPlatform(navigator.userAgent);
 const RTL_LANGUAGES = new Set(['fa-IR', 'ar-EG']);
 
-// The sub page runs its own violet accent, so every antd control on it picks the
-// hue up instead of the panel blue useTheme pins. Mirrored in SubPage.css.
-const ACCENT = {
-  light: {
-    primary: '#7c3aed',
-    hover: '#8b5cf6',
-    active: '#6d28d9',
-    rail: 'rgba(124, 58, 237, 0.16)',
-  },
-  dark: {
-    primary: '#a78bfa',
-    hover: '#c4b5fd',
-    active: '#8b5cf6',
-    rail: 'rgba(167, 139, 250, 0.18)',
-  },
-};
-
 export default function SubPage() {
   const { t } = useTranslation();
   const { isDark, isUltra, antdThemeConfig } = useTheme();
@@ -309,33 +292,19 @@ export default function SubPage() {
     .filter(Boolean)
     .join(' ');
 
-  const themeConfig = useMemo(() => {
-    const accent = isDark ? ACCENT.dark : ACCENT.light;
-    const primary = {
-      colorPrimary: accent.primary,
-      colorPrimaryHover: accent.hover,
-      colorPrimaryActive: accent.active,
-    };
-    return {
-      ...antdThemeConfig,
-      token: {
-        ...antdThemeConfig.token,
-        ...primary,
-        colorLink: accent.primary,
-        colorInfo: accent.primary,
-      },
-      components: {
-        ...antdThemeConfig.components,
-        Button: { ...antdThemeConfig.components?.Button, ...primary },
-        Progress: { ...antdThemeConfig.components?.Progress, remainingColor: accent.rail },
-      },
-    };
-  }, [antdThemeConfig, isDark]);
+  const themeConfig = antdThemeConfig;
+  const subscriptionStyle = {
+    '--sub-accent': antdThemeConfig.token?.colorPrimary,
+    '--sub-grad-from': antdThemeConfig.token?.colorPrimary,
+    '--sub-ink-from': antdThemeConfig.token?.colorPrimary,
+    '--bg-page': antdThemeConfig.token?.colorBgLayout,
+    '--sub-card-bg': antdThemeConfig.token?.colorBgContainer,
+  } as React.CSSProperties;
 
   return (
     <ConfigProvider theme={themeConfig} direction={direction}>
       {messageContextHolder}
-      <Layout className={pageClass} dir={direction}>
+      <Layout className={pageClass} dir={direction} style={subscriptionStyle}>
         <div className="sub-aurora" aria-hidden="true">
           <span className="sub-aurora-grid" />
         </div>

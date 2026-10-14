@@ -34,8 +34,14 @@ MemorySwapMax=infinity
 LimitNOFILE=1048576
 TasksMax=infinity
 OOMScoreAdjust=-100
-UMask=0027
+UMask=0077
 PrivateTmp=true
+ProtectHostname=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectKernelLogs=true
+LockPersonality=true
+RestrictRealtime=true
 
 [Install]
 WantedBy=multi-user.target

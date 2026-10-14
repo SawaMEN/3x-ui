@@ -3,6 +3,7 @@ package singbox
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/masque"
 )
@@ -46,6 +47,19 @@ func TranslateMASQUEEndpoint(raw map[string]any) (map[string]any, error) {
 		tls["server_name"] = s.TLS.ServerName
 	}
 	out := map[string]any{"type": "masque-server", "tag": rawString(raw, "tag"), "listen": listen, "listen_port": port, "version": s.Version, "path": s.Path, "address": s.Address, "mtu": s.MTU, "system": false, "users": users, "tls": tls}
+	for key, value := range s.Advanced {
+		switch key {
+		case "initial_packet_size", "disable_path_mtu_discovery":
+			if !slices.Contains(s.Version, 3) {
+				continue
+			}
+		case "idle_timeout", "keep_alive_period", "stream_receive_window", "connection_receive_window", "max_concurrent_streams":
+			if !slices.Contains(s.Version, 2) && !slices.Contains(s.Version, 3) {
+				continue
+			}
+		}
+		out[key] = value
+	}
 	if len(s.AdvertiseRoutes) > 0 {
 		out["advertise_routes"] = s.AdvertiseRoutes
 	}

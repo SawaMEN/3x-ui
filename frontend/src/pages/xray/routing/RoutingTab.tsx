@@ -50,6 +50,7 @@ export default function RoutingTab({
   isMobile,
 }: RoutingTabProps) {
   const { t } = useTranslation();
+  const [messageApi, messageContextHolder] = message.useMessage();
   const location = useLocation();
   const navigate = useNavigate();
   const searchParams = new URLSearchParams(location.search);
@@ -173,7 +174,7 @@ export default function RoutingTab({
           rules: RuleObject[];
         }>('/panel/api/xray/routingPresets/get/' + id);
         if (!msg?.success || !msg.obj) {
-          message.error(msg?.msg || t('pages.xray.routingPresetLoadFailed'));
+          messageApi.error(msg?.msg || t('pages.xray.routingPresetLoadFailed'));
           return;
         }
         mutate((tt) => {
@@ -181,17 +182,17 @@ export default function RoutingTab({
           tt.routing.rules = JSON.parse(JSON.stringify(msg.obj!.rules)) as RuleObject[];
         });
         setPresetId(id);
-        message.success(t('pages.xray.routingPresetApplied'));
+        messageApi.success(t('pages.xray.routingPresetApplied'));
       } finally {
         setPresetBusy(false);
       }
     },
-    [mutate, t],
+    [messageApi, mutate, t],
   );
 
   const saveRoutingPreset = useCallback(async () => {
     if (!presetName.trim()) {
-      message.warning(t('pages.xray.routingPresetNameRequired'));
+      messageApi.warning(t('pages.xray.routingPresetNameRequired'));
       return;
     }
     setPresetBusy(true);
@@ -206,18 +207,18 @@ export default function RoutingTab({
         { headers: { 'Content-Type': 'application/json' } },
       );
       if (!msg?.success) {
-        message.error(msg?.msg || t('pages.xray.routingPresetSaveFailed'));
+        messageApi.error(msg?.msg || t('pages.xray.routingPresetSaveFailed'));
         return;
       }
       setPresetSaveOpen(false);
       setPresetName('');
       setPresetDescription('');
       await refreshRoutingPresets();
-      message.success(t('pages.xray.routingPresetSaved'));
+      messageApi.success(t('pages.xray.routingPresetSaved'));
     } finally {
       setPresetBusy(false);
     }
-  }, [presetDescription, presetName, refreshRoutingPresets, rules, t]);
+  }, [messageApi, presetDescription, presetName, refreshRoutingPresets, rules, t]);
 
   const deleteRoutingPreset = useCallback(
     async (id: number) => {
@@ -225,17 +226,17 @@ export default function RoutingTab({
       try {
         const msg = await HttpUtil.post('/panel/api/xray/routingPresets/del/' + id);
         if (!msg?.success) {
-          message.error(msg?.msg || t('pages.xray.routingPresetDeleteFailed'));
+          messageApi.error(msg?.msg || t('pages.xray.routingPresetDeleteFailed'));
           return;
         }
         if (presetId === id) setPresetId(null);
         await refreshRoutingPresets();
-        message.success(t('pages.xray.routingPresetDeleted'));
+        messageApi.success(t('pages.xray.routingPresetDeleted'));
       } finally {
         setPresetBusy(false);
       }
     },
-    [presetId, refreshRoutingPresets, t],
+    [messageApi, presetId, refreshRoutingPresets, t],
   );
 
   const inboundTagOptions = useMemo(() => {
@@ -299,7 +300,7 @@ export default function RoutingTab({
     try {
       parsed = JSON.parse(value);
     } catch {
-      message.error(t('pages.xray.importInvalidJson'));
+      messageApi.error(t('pages.xray.importInvalidJson'));
       return;
     }
     const obj = parsed as { rules?: unknown; routing?: { rules?: unknown } };
@@ -311,7 +312,7 @@ export default function RoutingTab({
           ? obj.routing!.rules
           : null;
     if (!list) {
-      message.error(t('pages.xray.importInvalidJson'));
+      messageApi.error(t('pages.xray.importInvalidJson'));
       return;
     }
     mutate((tt) => {
@@ -466,6 +467,7 @@ export default function RoutingTab({
 
   return (
     <>
+      {messageContextHolder}
       {modalContextHolder}
       <Tabs
         activeKey={activeTab}

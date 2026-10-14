@@ -27,6 +27,7 @@ type Settings struct {
 	MTU             int            `json:"mtu"`
 	TLS             TLS            `json:"tls"`
 	Clients         []model.Client `json:"clients"`
+	Advanced        map[string]any `json:"advanced,omitempty"`
 }
 
 func Parse(data string) (Settings, error) {
@@ -77,6 +78,9 @@ func Parse(data string) (Settings, error) {
 	}
 	if s.MTU < 1280 || s.MTU > 65535 {
 		return s, fmt.Errorf("MASQUE MTU must be 1280..65535")
+	}
+	if err := validateAdvanced(s.Advanced); err != nil {
+		return s, err
 	}
 	s.TLS.Enabled = true
 	s.TLS.CertificatePath = strings.TrimSpace(s.TLS.CertificatePath)

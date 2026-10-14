@@ -813,8 +813,8 @@ func TestTranslateAnyTLSWrappedByShadowTLSKeepsTwoTLSLayers(t *testing.T) {
 			"clients": []any{map[string]any{"email": "alice", "password": "inner-password"}},
 			"shadowTls": map[string]any{
 				"enabled": true, "password": "outer-password",
-				"handshake":  map[string]any{"server": "cover.example.com", "serverPort": 443},
-				"strictMode": true,
+				"handshake":   map[string]any{"server": "cover.example.com", "serverPort": 443},
+				"strictMode":  true,
 				"wildcardSni": "off",
 			},
 		},
