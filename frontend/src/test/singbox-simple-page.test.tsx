@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router';
 import SingBoxPage from '@/pages/singbox/SingBoxPage';
 import { HttpUtil } from '@/utils';
@@ -47,6 +48,56 @@ function mount(path = '/singbox') {
 }
 
 describe('simple sing-box page', () => {
+  it('exposes the catalog in current core settings and saves a managed native rule', async () => {
+    vi.mocked(HttpUtil.get).mockImplementation(async (url) => ({
+      success: true,
+      msg: '',
+      obj: url.endsWith('/routingCatalog/categories')
+        ? [{ id: 'youtube', token: 'geosite:youtube', available: true }]
+        : url.endsWith('/routingCatalog/list')
+          ? []
+          : {
+              config: structuredClone(config),
+              running: false,
+              version: '1.14.0',
+              managedSections: ['inbounds'],
+            },
+    }));
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/singbox#routing']}>
+          <SingBoxPage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    const catalogTab = await screen.findByText('List catalog');
+    fireEvent.click(catalogTab);
+    const row = (await screen.findByText('geosite:youtube', {}, { timeout: 5000 })).closest('tr')!;
+    fireEvent.click(within(row).getByText('Assign route').closest('button')!);
+    fireEvent.click((await screen.findByText('Add routing rule')).closest('button')!);
+    fireEvent.click(screen.getByText('Save').closest('button')!);
+    await waitFor(() =>
+      expect(HttpUtil.post).toHaveBeenCalledWith(
+        '/panel/api/setting/singbox/config',
+        expect.anything(),
+      ),
+    );
+    const call = vi
+      .mocked(HttpUtil.post)
+      .mock.calls.find(([path]) => path === '/panel/api/setting/singbox/config')!;
+    const sent = JSON.parse(String((call[1] as { config: string }).config));
+    expect(sent.route.rules).toEqual([
+      config.route.rules[0],
+      expect.objectContaining({
+        routingListCategory: 'youtube',
+        action: 'route',
+        outbound: 'direct',
+      }),
+    ]);
+    expect(sent.inbounds).toBeUndefined();
+    expect(sent.services).toBeUndefined();
+  });
   it('starts with simple controls and only exposes expert sections after switching', async () => {
     mount();
     await screen.findByText('Быстрая настройка');

@@ -61,7 +61,7 @@ func (s *XraySettingService) SaveValidatedXraySetting(ctx context.Context, raw s
 	}
 	singBoxTemplateMu.Lock()
 	defer singBoxTemplateMu.Unlock()
-	snapshot, err := loadNativeConfigSnapshot()
+	snapshot, err := loadNativeConfigSnapshotForTemplate(&raw)
 	if err != nil {
 		return err
 	}

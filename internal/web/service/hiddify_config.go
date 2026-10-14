@@ -31,6 +31,7 @@ type nativeConfigSnapshot struct {
 	clients       map[int][]model.Client
 	settings      map[string]string
 	subscriptions []*model.OutboundSubscription
+	routingLists  []model.RoutingList
 	nodes         []*model.Node
 	capturedAt    time.Time
 }
@@ -61,6 +62,10 @@ func nativeConfigSetting(snapshot *nativeConfigSnapshot, key string, fallback fu
 // Read inbounds, quota state, canonical linked users, fallbacks and templates
 // together. Do not invoke UI readers which reconcile traffic rows as a side effect.
 func loadNativeConfigSnapshot() (*nativeConfigSnapshot, error) {
+	return loadNativeConfigSnapshotForTemplate(nil)
+}
+
+func loadNativeConfigSnapshotForTemplate(template *string) (*nativeConfigSnapshot, error) {
 	snapshot := &nativeConfigSnapshot{settings: map[string]string{}, capturedAt: time.Now()}
 	err := database.GetDB().Transaction(func(tx *gorm.DB) error {
 		if err := tx.Preload("ClientStats").Order("id ASC").Find(&snapshot.inbounds).Error; err != nil {
@@ -89,6 +94,23 @@ func loadNativeConfigSnapshot() (*nativeConfigSnapshot, error) {
 		}
 		for _, setting := range settings {
 			snapshot.settings[setting.Key] = setting.Value
+		}
+		if template != nil {
+			snapshot.settings["xrayTemplateConfig"] = *template
+		}
+		listIDs, err := routingListIDs(snapshot.setting("xrayTemplateConfig"))
+		if err != nil {
+			return err
+		}
+		nativeListIDs, err := routingListIDs(snapshot.setting("singBoxConfigTemplate"))
+		if err != nil {
+			return err
+		}
+		listIDs = append(listIDs, nativeListIDs...)
+		if len(listIDs) > 0 {
+			if err := tx.Where("id IN ?", listIDs).Find(&snapshot.routingLists).Error; err != nil {
+				return err
+			}
 		}
 		if err := tx.Select("id", "enable", "outbound_tag").Order("sort_order ASC, id ASC").Find(&snapshot.nodes).Error; err != nil {
 			return err

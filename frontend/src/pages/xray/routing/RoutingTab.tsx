@@ -20,6 +20,7 @@ import { isBalancerLoopbackTag } from '../balancers/balancer-loopback';
 import { HttpUtil } from '@/utils';
 import AdBlockTab from '@/pages/adblock/AdBlockTab';
 import RoutingBasic from './RoutingBasic';
+import RoutingCatalogTab from './RoutingCatalogTab';
 import RouteTester from './RouteTester';
 import RuleFormModal from './RuleFormModal';
 import type { RoutingRule } from './RuleFormModal';
@@ -53,7 +54,7 @@ export default function RoutingTab({
   const navigate = useNavigate();
   const searchParams = new URLSearchParams(location.search);
   const requestedTab = searchParams.get('routingTab');
-  const activeTab = ['basic', 'rules', 'tester', 'adblock'].includes(requestedTab || '')
+  const activeTab = ['basic', 'rules', 'catalog', 'tester', 'adblock'].includes(requestedTab || '')
     ? requestedTab!
     : 'basic';
   const [modal, modalContextHolder] = Modal.useModal();
@@ -96,7 +97,10 @@ export default function RoutingTab({
         .map((rule, idx) => {
           const r: RuleRow = { key: idx };
           r.enabled = rule.enabled !== false;
-          r.domain = arrJoin(rule.domain);
+          r.domain =
+            typeof rule.routingListId === 'number'
+              ? t('pages.xray.routingCatalog.listReference', { id: rule.routingListId })
+              : arrJoin(rule.domain);
           r.ip = arrJoin(rule.ip);
           r.port = rule.port;
           r.sourcePort = rule.sourcePort;
@@ -118,7 +122,7 @@ export default function RoutingTab({
           const inboundTags = (rules[r.key]?.inboundTag || []) as string[];
           return !inboundTags.some(isBalancerLoopbackTag);
         }),
-    [rules],
+    [rules, t],
   );
 
   useEffect(() => {
@@ -590,6 +594,21 @@ export default function RoutingTab({
                   />
                 )}
               </Space>
+            ),
+          },
+          {
+            key: 'catalog',
+            label: catTabLabel(
+              <UnorderedListOutlined />,
+              t('pages.xray.routingCatalog.title'),
+              isMobile,
+            ),
+            children: (
+              <RoutingCatalogTab
+                templateSettings={templateSettings}
+                setTemplateSettings={setTemplateSettings}
+                outboundTags={outboundTagOptions}
+              />
             ),
           },
           {

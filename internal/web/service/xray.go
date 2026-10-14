@@ -99,6 +99,14 @@ func (s *CoreService) GetXrayConfig() (*xray.Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	routingLists, err := loadRoutingLists(templateConfig)
+	if err != nil {
+		return nil, err
+	}
+	templateConfig, err = materializeRoutingLists(templateConfig, routingLists)
+	if err != nil {
+		return nil, err
+	}
 
 	xrayConfig := &xray.Config{}
 	err = json.Unmarshal([]byte(templateConfig), xrayConfig)

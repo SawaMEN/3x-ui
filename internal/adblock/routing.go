@@ -74,7 +74,7 @@ func decodeArray(data []byte) ([]json.RawMessage, error) {
 }
 
 func updateOutbounds(outbounds []json.RawMessage, enabled bool) ([]json.RawMessage, error) {
-	result := make([]json.RawMessage, 0, len(outbounds)+1)
+	result := make([]json.RawMessage, 0, len(outbounds))
 	found := false
 	hasUserOutbound := false
 	for _, raw := range outbounds {
@@ -121,7 +121,7 @@ func updateRules(router map[string]json.RawMessage, domains []string) error {
 		}
 	}
 
-	filtered := make([]json.RawMessage, 0, len(rules)+1)
+	filtered := make([]json.RawMessage, 0, len(rules))
 	for _, raw := range rules {
 		var meta struct {
 			OutboundTag string `json:"outboundTag"`

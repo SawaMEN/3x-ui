@@ -50,6 +50,8 @@ import {
 } from './native-import';
 import SingBoxOutboundModal from './SingBoxOutboundModal';
 import OutboundSubscriptions from './OutboundSubscriptions';
+import RoutingCatalogTab from '@/pages/xray/routing/RoutingCatalogTab';
+import { catalogAssignedRules, nativeCatalogRule, putNativeCatalogRule } from './catalog-rules';
 
 type SectionKey =
   | 'schema'
@@ -458,6 +460,8 @@ function SingBoxRouteRuleModal({
   onSave: (value: JsonObject) => void;
 }) {
   const [draft, setDraft] = useState<JsonObject>({});
+  const catalogManaged =
+    typeof draft.routingListId === 'number' || typeof draft.routingListCategory === 'string';
   useEffect(() => {
     if (!open) return;
     const nextDraft = value ? JSON.parse(JSON.stringify(value)) : {};
@@ -496,6 +500,15 @@ function SingBoxRouteRuleModal({
         description="Правила редактируются так же, как в Xray: условия собираются полями, JSON оставлен для редких параметров."
         style={{ marginBottom: 12 }}
       />
+      {catalogManaged && (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          title="Домены и IP управляются каталогом списков"
+          description="Содержимое списка изменяется во вкладке «Каталог списков». Назначение и другие условия можно изменить здесь."
+        />
+      )}
       <Tabs
         items={[
           {
@@ -507,6 +520,7 @@ function SingBoxRouteRuleModal({
                   <Field label="Домены">
                     <Select
                       mode="tags"
+                      disabled={catalogManaged}
                       style={{ width: '100%' }}
                       value={asStringArray(draft.domain)}
                       onChange={(v) => patch('domain', v)}
@@ -516,6 +530,7 @@ function SingBoxRouteRuleModal({
                   <Field label="Domain suffix">
                     <Select
                       mode="tags"
+                      disabled={catalogManaged}
                       style={{ width: '100%' }}
                       value={asStringArray(draft.domain_suffix)}
                       onChange={(v) => patch('domain_suffix', v)}
@@ -524,6 +539,7 @@ function SingBoxRouteRuleModal({
                   <Field label="Domain keyword">
                     <Select
                       mode="tags"
+                      disabled={catalogManaged}
                       style={{ width: '100%' }}
                       value={asStringArray(draft.domain_keyword)}
                       onChange={(v) => patch('domain_keyword', v)}
@@ -532,6 +548,7 @@ function SingBoxRouteRuleModal({
                   <Field label="IP / CIDR">
                     <Select
                       mode="tags"
+                      disabled={catalogManaged}
                       style={{ width: '100%' }}
                       value={asStringArray(draft.ip_cidr)}
                       onChange={(v) => patch('ip_cidr', v)}
@@ -1825,6 +1842,12 @@ export default function SingBoxPage() {
                 title: 'Условия',
                 render: (_: unknown, row: JsonObject) => {
                   const pieces = [
+                    typeof row.routingListId === 'number'
+                      ? t('pages.xray.routingCatalog.listReference', { id: row.routingListId })
+                      : '',
+                    typeof row.routingListCategory === 'string'
+                      ? `geosite:${row.routingListCategory}`
+                      : '',
                     asStringArray(row.domain).join(', '),
                     asStringArray(row.domain_suffix).join(', '),
                     asStringArray(row.ip_cidr).join(', '),
@@ -2112,7 +2135,11 @@ export default function SingBoxPage() {
       case 'routing':
         return (
           <Tabs
-            activeKey={searchParams.get('routingTab') === 'adblock' ? 'adblock' : 'rules'}
+            activeKey={
+              ['adblock', 'catalog'].includes(searchParams.get('routingTab') || '')
+                ? searchParams.get('routingTab')!
+                : 'rules'
+            }
             onChange={(key) => {
               const next = new URLSearchParams(location.search);
               next.set('routingTab', key);
@@ -2145,6 +2172,40 @@ export default function SingBoxPage() {
                       ]}
                     />
                   </Space>
+                ),
+              },
+              {
+                key: 'catalog',
+                label: t('pages.xray.routingCatalog.title'),
+                children: (
+                  <RoutingCatalogTab
+                    outboundTags={Array.from(
+                      new Set(
+                        [...asObjectArray(config.outbounds), ...asObjectArray(config.endpoints)]
+                          .map((o) => asString(o.tag))
+                          .filter(Boolean)
+                          .concat(snapshot?.subscriptionTags || []),
+                      ),
+                    )}
+                    assignedRules={catalogAssignedRules(
+                      asObjectArray(asObject(config.route).rules),
+                    )}
+                    onAssign={(selection, outbound) =>
+                      setConfig((current) => {
+                        const route = asObject(current.route);
+                        return {
+                          ...current,
+                          route: {
+                            ...route,
+                            rules: putNativeCatalogRule(
+                              asObjectArray(route.rules),
+                              nativeCatalogRule(selection, outbound),
+                            ),
+                          },
+                        };
+                      })
+                    }
+                  />
                 ),
               },
               { key: 'adblock', label: 'AdBlock', children: <AdBlockTab /> },

@@ -72,7 +72,7 @@ func injectAutomaticOutboundRoutes(cfg *xray.Config) error {
 		routing = map[string]any{}
 	}
 	rules, _ := routing["rules"].([]any)
-	injected := make([]any, 0, len(subs)+len(rules))
+	injected := make([]any, 0, len(subs))
 	for _, sub := range subs {
 		injected = append(injected, map[string]any{"type": "field", "inboundTag": []string{autoInboundTag(sub.Id)}, "outboundTag": autoRouteTarget(sub)})
 	}

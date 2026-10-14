@@ -418,6 +418,7 @@ func (s *Server) startTask(restartXray bool, loc *time.Location) {
 
 	// Outbound subscription auto-refresh (respects per-sub updateInterval)
 	_, _ = s.cron.AddJob(cadenceOutboundSub, job.NewOutboundSubscriptionJob())
+	_, _ = s.cron.AddJob("@every 1m", job.NewRoutingCatalogJob())
 	_, _ = s.cron.AddJob("@every 10s", job.NewOutboundAutoBalancerJob())
 
 	_, _ = s.cron.AddJob(cadenceReapOrphans, job.NewReapSyncOrphansJob())
