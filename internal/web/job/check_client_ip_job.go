@@ -9,7 +9,6 @@ import (
 	"os/exec"
 	"runtime"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
@@ -33,7 +32,7 @@ type IPWithTimestamp struct {
 // existing online-stats API.
 type CheckClientIpJob struct {
 	disAllowedIps []string
-	bannedSeen    map[string]int64
+	bannedSeen    map[string]map[string]int64
 	allowlist     ipLimitAllowlist
 	lastIpPrune   int64
 }
@@ -95,14 +94,9 @@ func (j *CheckClientIpJob) pruneBannedSeen(observed map[string]map[string]int64)
 	if len(j.bannedSeen) == 0 {
 		return
 	}
-	for key := range j.bannedSeen {
-		email, _, ok := strings.Cut(key, "|")
-		if !ok {
-			delete(j.bannedSeen, key)
-			continue
-		}
+	for email := range j.bannedSeen {
 		if _, live := observed[email]; !live {
-			delete(j.bannedSeen, key)
+			delete(j.bannedSeen, email)
 		}
 	}
 }
@@ -140,7 +134,7 @@ func (j *CheckClientIpJob) collectFromOnlineAPI() (map[string]map[string]int64, 
 func (j *CheckClientIpJob) hasLimitIp() bool {
 	db := database.GetDB()
 	var probe int64
-	err := db.Model(&model.ClientRecord{}).Where("limit_ip > 0").Limit(1).Count(&probe).Error
+	err := db.Model(&model.ClientRecord{}).Select("1").Where("limit_ip > 0").Limit(1).Scan(&probe).Error
 	return err == nil && probe > 0
 }
 
@@ -593,26 +587,31 @@ func (j *CheckClientIpJob) updateInboundClientIps(tx *gorm.DB, inboundClientIps 
 // the previous ban: the core refreshes lastSeen solely on a new dispatch, so a
 // frozen value is a dead connection it hasn't reaped yet, not a reconnect.
 func (j *CheckClientIpJob) filterAdvancedSinceLastBan(email string, banned []IPWithTimestamp) []IPWithTimestamp {
+	if len(banned) == 0 {
+		delete(j.bannedSeen, email)
+		return nil
+	}
 	if j.bannedSeen == nil {
-		j.bannedSeen = make(map[string]int64)
+		j.bannedSeen = make(map[string]map[string]int64)
+	}
+	seen := j.bannedSeen[email]
+	if seen == nil {
+		seen = make(map[string]int64, len(banned))
+		j.bannedSeen[email] = seen
 	}
 	current := make(map[string]struct{}, len(banned))
-	actionable := make([]IPWithTimestamp, 0, len(banned))
+	var actionable []IPWithTimestamp
 	for _, ipTime := range banned {
-		key := email + "|" + ipTime.IP
-		current[key] = struct{}{}
-		if last, ok := j.bannedSeen[key]; ok && ipTime.Timestamp <= last {
+		current[ipTime.IP] = struct{}{}
+		if last, ok := seen[ipTime.IP]; ok && ipTime.Timestamp <= last {
 			continue
 		}
-		j.bannedSeen[key] = ipTime.Timestamp
+		seen[ipTime.IP] = ipTime.Timestamp
 		actionable = append(actionable, ipTime)
 	}
-	prefix := email + "|"
-	for key := range j.bannedSeen {
-		if strings.HasPrefix(key, prefix) {
-			if _, still := current[key]; !still {
-				delete(j.bannedSeen, key)
-			}
+	for ip := range seen {
+		if _, still := current[ip]; !still {
+			delete(seen, ip)
 		}
 	}
 	return actionable
