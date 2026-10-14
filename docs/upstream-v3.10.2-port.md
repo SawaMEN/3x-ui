@@ -35,3 +35,11 @@ Upstream: `608ef4e4`. База форка: `21bfb5c9` (адаптация v3.10.
 - Тест количества записей узлов для VLESS с/без flow, WireGuard+VLESS и двух туннелей.
 - Сохранение flow после последней отвязки; локальные peer-параметры разных туннелей.
 - Проверки типов frontend, lint и production build.
+
+- `go test -p 4 ./...`, `go build ./...`, `go vet` изменённых backend-пакетов: успешно.
+- Race-регрессии node merge и flow: успешно.
+- Frontend unit/component: 167 файлов, 1702 теста успешно, 1 пропущен.
+- 67 тестов импортера VMess/VLESS/Trojan/WireGuard входят в общий прогон.
+- Локальный frontend использовал временный конфиг без Storybook и shim для
+  недоступного в sandbox networkInterfaces; временные файлы не входят в PR.
+- PostgreSQL и браузерный Storybook проверяются GitHub CI, локально не запускались.
