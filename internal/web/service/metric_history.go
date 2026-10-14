@@ -43,6 +43,7 @@ type tierBuf struct {
 	resolution int
 	capacity   int
 	samples    []MetricSample
+	next       int
 	open       bool
 	openStart  int64
 	openSum    float64
@@ -52,6 +53,9 @@ type tierBuf struct {
 func (tb *tierBuf) add(unixSec int64, v float64) {
 	res := int64(tb.resolution)
 	b := (unixSec / res) * res
+	if tb.open && b < tb.openStart {
+		return
+	}
 	if tb.open && b != tb.openStart {
 		tb.flush()
 	}
@@ -66,9 +70,15 @@ func (tb *tierBuf) flush() {
 		tb.open = false
 		return
 	}
-	tb.samples = append(tb.samples, MetricSample{T: tb.openStart, V: tb.openSum / float64(tb.openCount)})
-	if len(tb.samples) > tb.capacity {
-		tb.samples = tb.samples[len(tb.samples)-tb.capacity:]
+	p := MetricSample{T: tb.openStart, V: tb.openSum / float64(tb.openCount)}
+	if len(tb.samples) < tb.capacity {
+		if tb.samples == nil {
+			tb.samples = make([]MetricSample, 0, tb.capacity)
+		}
+		tb.samples = append(tb.samples, p)
+	} else {
+		tb.samples[tb.next] = p
+		tb.next = (tb.next + 1) % tb.capacity
 	}
 	tb.open = false
 	tb.openStart = 0
@@ -80,11 +90,16 @@ func (tb *tierBuf) flush() {
 // the most recent point is visible before its bucket boundary closes.
 func (tb *tierBuf) readSamples() []MetricSample {
 	out := make([]MetricSample, len(tb.samples), len(tb.samples)+1)
-	copy(out, tb.samples)
+	tb.copyClosedSamples(out)
 	if tb.openCount > 0 {
 		out = append(out, MetricSample{T: tb.openStart, V: tb.openSum / float64(tb.openCount)})
 	}
 	return out
+}
+
+func (tb *tierBuf) copyClosedSamples(out []MetricSample) {
+	n := copy(out, tb.samples[tb.next:])
+	copy(out[n:], tb.samples[:tb.next])
 }
 
 // series is the rollup ladder for one metric: a sample is fed to every tier.
@@ -185,17 +200,15 @@ func (h *metricHistory) aggregate(metric string, bucketSeconds int, maxPoints in
 	bSize := int64(bucketSeconds)
 	curBucket := (tmp[0].T / bSize) * bSize
 	var out []map[string]any
-	var acc []float64
+	var sum float64
+	var count int
 	flush := func(ts int64) {
-		if len(acc) == 0 {
+		if count == 0 {
 			return
 		}
-		sum := 0.0
-		for _, v := range acc {
-			sum += v
-		}
-		out = append(out, map[string]any{"t": ts, "v": sum / float64(len(acc))})
-		acc = acc[:0]
+		out = append(out, map[string]any{"t": ts, "v": sum / float64(count)})
+		sum = 0
+		count = 0
 	}
 	for _, p := range tmp {
 		b := (p.T / bSize) * bSize
@@ -203,7 +216,8 @@ func (h *metricHistory) aggregate(metric string, bucketSeconds int, maxPoints in
 			flush(curBucket)
 			curBucket = b
 		}
-		acc = append(acc, p.V)
+		sum += p.V
+		count++
 	}
 	flush(curBucket)
 	if len(out) > maxPoints {
@@ -237,7 +251,7 @@ func (h *metricHistory) snapshot() map[string]persistedSeries {
 		ps := persistedSeries{Tiers: make([]persistedTier, len(s.tiers))}
 		for i, tb := range s.tiers {
 			cp := make([]MetricSample, len(tb.samples))
-			copy(cp, tb.samples)
+			tb.copyClosedSamples(cp)
 			ps.Tiers[i] = persistedTier{Resolution: tb.resolution, Samples: cp}
 		}
 		out[k] = ps
@@ -262,7 +276,8 @@ func (h *metricHistory) restore(data map[string]persistedSeries) {
 				if len(samples) > tb.capacity {
 					samples = samples[len(samples)-tb.capacity:]
 				}
-				tb.samples = samples
+				tb.samples = make([]MetricSample, len(samples), tb.capacity)
+				copy(tb.samples, samples)
 				break
 			}
 		}
@@ -305,6 +320,8 @@ func systemMetricsStorePath() string {
 // rename so a crash mid-write can't corrupt the previous snapshot. Called on a
 // timer and at shutdown.
 func PersistSystemMetrics() error {
+	systemMetricsPersistMu.Lock()
+	defer systemMetricsPersistMu.Unlock()
 	path := systemMetricsStorePath()
 	tmp := path + ".tmp"
 	f, err := os.Create(tmp)
@@ -322,6 +339,8 @@ func PersistSystemMetrics() error {
 	}
 	return os.Rename(tmp, path)
 }
+
+var systemMetricsPersistMu sync.Mutex
 
 // RestoreSystemMetrics loads a previously persisted host time-series on startup.
 // A missing file is not an error (first boot). A pre-tier flat snapshot is
