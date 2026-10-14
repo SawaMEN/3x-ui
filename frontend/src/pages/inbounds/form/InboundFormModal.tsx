@@ -22,7 +22,6 @@ import { HttpUtil, NumberFormatter, RandomUtil, SizeFormatter, Wireguard } from 
 import type { RealityScanResult } from '@/generated/types';
 import { rawInboundToFormValues, formValuesToWirePayload } from '@/lib/xray/inbound-form-adapter';
 import { createDefaultInboundSettings } from '@/lib/xray/inbound-defaults';
-import { generateAwgObfuscation } from '@/lib/xray/amneziawg-obfuscation';
 import { composeInboundTag, isAutoInboundTag, type InboundTagInput } from '@/lib/xray/inbound-tag';
 import {
   canEnableReality,
@@ -486,15 +485,6 @@ export default function InboundFormModal({
     setV('settings.server.publicKey', kp.publicKey);
   };
 
-  // Randomizes the AmneziaWG 3.1 obfuscation set client-side; the shared
-  // generator mirrors the Go backend's amneziawg.GenerateObfuscation31.
-  const regenInboundAwgObfuscation = () => {
-    const obf = generateAwgObfuscation();
-    for (const [field, value] of Object.entries(obf)) {
-      setV(`settings.server.${field}`, value);
-    }
-  };
-
   const matchesVlessAuth = (
     block: { id?: string; label?: string } | undefined | null,
     authId: string,
@@ -951,11 +941,7 @@ export default function InboundFormModal({
       )}
 
       {protocol === Protocols.AMNEZIAWG && (
-        <AmneziawgFields
-          awgPubKey={awgPubKey}
-          regenInboundAwg={regenInboundAwg}
-          regenInboundAwgObfuscation={regenInboundAwgObfuscation}
-        />
+        <AmneziawgFields awgPubKey={awgPubKey} regenInboundAwg={regenInboundAwg} />
       )}
 
       {protocol === Protocols.TUIC && <TuicFields />}

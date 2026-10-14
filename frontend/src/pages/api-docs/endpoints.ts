@@ -938,6 +938,26 @@ export const sections: readonly Section[] = [
         responseSchema: 'AmneziaWGLogs',
       },
       {
+        method: 'GET',
+        path: '/panel/api/server/amneziawgMetrics',
+        summary:
+          'Prometheus metrics for local AmneziaWG inbounds. Accessible with monitor or admin tokens and panel sessions.',
+        description:
+          'Aggregate metrics without client emails, IP addresses or keys. RX/TX are gauges since device start. Online means a handshake in the last 180 seconds. Rolling 24h/30d activity uses shared lastOnline of users attached to AWG and may include their other protocols.',
+        responses: {
+          '200': {
+            description: 'Prometheus exposition format',
+            content: {
+              'text/plain': {
+                schema: { type: 'string' },
+                example: 'awg_inbounds_configured 1\nawg_current_online 0\n',
+              },
+            },
+          },
+          '503': { description: 'Metrics could not be collected' },
+        },
+      },
+      {
         method: 'POST',
         path: '/panel/api/server/importDB',
         summary:

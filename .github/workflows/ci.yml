@@ -76,6 +76,15 @@ jobs:
         run: |
           go test -p 12 -vet=off -shuffle=on -count=1 ./...
 
+      - name: Fetch verified release core for AWG integration
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/fetch-latest-kernel.py --arch amd64 --output "$RUNNER_TEMP/awg-core"
+      - name: Verify native AWG configuration and TCP/UDP tunnel
+        env:
+          HIDDIFY_CONFIG_CHECK_BINARY: ${{ runner.temp }}/awg-core/hiddify-core-linux-amd64
+        run: go test ./internal/web/service -run '^TestNativeAWG' -count=1
+
   postgres-durable-first:
     if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
     runs-on: ubuntu-latest

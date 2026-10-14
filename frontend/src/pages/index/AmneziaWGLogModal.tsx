@@ -147,6 +147,15 @@ export default function AmneziaWGLogModal({ open, onClose }: AmneziaWGLogModalPr
             {t('pages.index.autoUpdate')}
           </Checkbox>
         </Form.Item>
+        <Form.Item>
+          <Button
+            href={`${(window.X_UI_BASE_PATH || '/').replace(/\/$/, '')}/panel/api/server/amneziawgMetrics`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Prometheus
+          </Button>
+        </Form.Item>
         <Form.Item className="download-item">
           <Button
             type="primary"

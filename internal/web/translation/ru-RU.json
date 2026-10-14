@@ -1127,7 +1127,17 @@
       "renewOnDay": "Продлевать числа",
       "renewOnDayDesc": "Продлевать этого числа каждого месяца, в полночь по часовому поясу панели, вместо интервала в днях. Если в месяце такого числа нет, продление придётся на последний день. 0 — оставить режим интервала.",
       "renewsUsed": "Продлений израсходовано",
-      "bulkAdTagHint": "Введите 32-значный hex-тег для установки или 'none' для очистки спонсорского канала на MTProto."
+      "bulkAdTagHint": "Введите 32-значный hex-тег для установки или 'none' для очистки спонсорского канала на MTProto.",
+      "awgRequiredVersion": "Профиль требует AWG {version} или новее",
+      "amneziaExportError": "Не удалось подготовить профиль Amnezia",
+      "openAmnezia": "Открыть в Amnezia VPN",
+      "amneziaScanChunks": "Отсканируйте все части в Amnezia: {current} из {total}",
+      "amneziaPreviousQr": "Предыдущий QR",
+      "amneziaNextQr": "Следующий QR",
+      "awgClientOptionsHint": "Клиентские параметры AWG. Пустые числовые поля наследуют настройки inbound. Эти изменения влияют на новые экспорты и подписки; серверные ключи и заголовки сохраняются.",
+      "awgInherit": "Из настроек inbound",
+      "awgResetOverrides": "Сбросить клиентские параметры",
+      "amneziaMtuImportHint": "Amnezia VPN 5.0.3.0 при импорте JSON-профиля устанавливает свой MTU: 1280 на мобильных платформах, 1376 на desktop. Чтобы сохранить заданный MTU, импортируйте .conf."
     },
     "groups": {
       "name": "Имя",
@@ -2354,7 +2364,15 @@
         "disableCookiesHint": "Не отправлять cookie reply — убирает сигнатуру для DPI, но ослабляет защиту от флуда.",
         "listenPort": "Listen Port (optional)",
         "listenPortHint": "Fixed local UDP source port. Leave 0 to pick one automatically.",
-        "outboundObfuscationHint": "Must exactly match the server side parameters."
+        "outboundObfuscationHint": "Must exactly match the server side parameters.",
+        "changePresetTitle": "Изменить параметры AWG?",
+        "changePresetWarning": "Все клиенты этого inbound должны получить обновлённые профили. Старые профили могут перестать подключаться.",
+        "compatibility": "Совместимость: AWG {version}",
+        "compatibilityHint": "Поколение определяется по используемым параметрам. При смене набора обновите профили всех клиентов.",
+        "preset": "Совместимость профиля",
+        "advancedSettings": "Расширенные параметры обфускации",
+        "nativeRuntime": "AWG непосредственно в ядре",
+        "nativeRuntimeHint": "Использовать AWG endpoint hiddify-core вместо отдельного SOCKS-моста. DNS задаётся в настройках ядра; поле DNS ниже должно быть пустым. Существующие профили по умолчанию используют мост. Укажите Listen Port = 0 для автоматического выбора порта."
       },
       "tuic": {
         "congestionControl": "Контроль перегрузок",

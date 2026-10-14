@@ -21,6 +21,14 @@ export default function AmneziawgFields() {
 
   return (
     <>
+      <FormField
+        name={['settings', 'native']}
+        label={t('pages.xray.amneziawg.nativeRuntime')}
+        extra={t('pages.xray.amneziawg.nativeRuntimeHint')}
+        valueProp="checked"
+      >
+        <Switch />
+      </FormField>
       <FormField label={t('pages.xray.amneziawg.mtu')} name={['settings', 'mtu']}>
         <InputNumber min={0} style={{ width: '100%' }} />
       </FormField>

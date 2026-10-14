@@ -499,6 +499,9 @@ func (s *ClientService) AddInboundClient(inboundSvc *InboundService, data *model
 			}
 		}
 		if oldInbound.Protocol == model.AmneziaWG {
+			if err := validateAWGClientOptions(oldInbound.Settings, []model.Client{client}); err != nil {
+				return false, err
+			}
 			if hit := inboundSvc.checkForwardedPortsConflict(portCtx, client.ForwardedPorts); hit != "" {
 				return false, common.NewError("amneziawg: forwardedPorts collides with", hit)
 			}
@@ -826,6 +829,9 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 		if clients[0].KeepAlive == nil {
 			clients[0].KeepAlive = old.KeepAlive
 		}
+		if clients[0].AWGClientOptions == nil {
+			clients[0].AWGClientOptions = old.AWGClientOptions
+		}
 		// ForwardedPorts is AmneziaWG-only (WireGuard's own inbound never
 		// reads it), same carry-forward reasoning as the fields above: a
 		// partial edit (e.g. a Telegram-bot enable/expiry toggle, or an API
@@ -836,6 +842,9 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 		}
 	}
 	if oldInbound.Protocol == model.AmneziaWG {
+		if err := validateAWGClientOptions(oldInbound.Settings, clients); err != nil {
+			return false, err
+		}
 		portCtx, err := inboundSvc.loadPortConflictContext(database.GetDB(), oldInbound.NodeID)
 		if err != nil {
 			return false, err
@@ -887,6 +896,9 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 				newMap["privateKey"] = clients[0].PrivateKey
 				newMap["publicKey"] = clients[0].PublicKey
 				newMap["allowedIPs"] = clients[0].AllowedIPs
+				if clients[0].AWGClientOptions != nil {
+					newMap["awgClientOptions"] = clients[0].AWGClientOptions
+				}
 				if clients[0].PreSharedKey != "" {
 					newMap["preSharedKey"] = clients[0].PreSharedKey
 				}

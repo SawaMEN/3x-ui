@@ -198,6 +198,18 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot) (*
 						continue
 					}
 					if amneziawg.IsAmneziaWGOutbound(mustJSON(ob)) {
+						if amneziawg.UsesNativeOutbound(mustJSON(ob)) {
+							native, err := amneziawg.NativeOutbound(mustJSON(ob))
+							if err != nil {
+								return nil, err
+							}
+							endpoint, _, err := singbox.TranslatePanelEndpoint(native)
+							if err != nil {
+								return nil, err
+							}
+							cfg.Endpoints = append(cfg.Endpoints, endpoint)
+							continue
+						}
 						bridged, bridgeOK := amneziawgnet.BuildSocksBridge(mustJSON(ob))
 						if !bridgeOK {
 							return nil, fmt.Errorf("amneziawg outbound %d: cannot create sing-box SOCKS bridge", i)

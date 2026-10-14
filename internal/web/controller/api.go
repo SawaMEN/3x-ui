@@ -86,6 +86,7 @@ func (a *APIController) checkAPIAuth(c *gin.Context) {
 // monitorScopeAllow exposes only status/metrics routes without sensitive data.
 // Keys are route patterns relative to /panel/api.
 var monitorScopeAllow = map[string]struct{}{
+	"/server/amneziawgMetrics":                    {},
 	"/server/status":                              {},
 	"/server/cpuHistory/:bucket":                  {},
 	"/server/history/:metric/:bucket":             {},

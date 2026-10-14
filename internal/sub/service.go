@@ -1702,6 +1702,11 @@ func amneziaWGHeaderOrDefault(value, fallback string) string {
 // frontend's genAmneziaWGConfig produces (same field order, same optional-field
 // conditionals) -- this is the payload wrapped into vpn:// links below.
 func amneziaWGConfigText(server *amneziawg.ServerSettings, client *model.Client, host string, port int, remark string) string {
+	adjusted, err := amneziawg.ClientServerSettings(*server, client.AWGClientOptions)
+	if err != nil {
+		return ""
+	}
+	server = &adjusted
 	// These land unescaped in [Interface]; a newline here would inject a
 	// config line (e.g. a rogue PostUp) into the subscriber's .conf.
 	for _, v := range []string{client.PrivateKey, server.PrimaryDNS, server.SecondaryDNS, remark} {

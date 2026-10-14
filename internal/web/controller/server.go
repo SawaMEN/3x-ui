@@ -82,6 +82,7 @@ func (a *ServerController) initRouter(g *gin.RouterGroup) {
 	g.POST("/logs/:count", a.getLogs)
 	g.POST("/xraylogs/:count", a.getXrayLogs)
 	g.POST("/amneziawglogs/:count", a.getAmneziaWGLogs)
+	g.GET("/amneziawgMetrics", a.getAmneziaWGMetrics)
 	g.POST("/importDB", a.importDB)
 	g.POST("/hiddify/preview", a.previewHiddify)
 	g.POST("/hiddify/import", a.importHiddify)
@@ -778,4 +779,14 @@ func (a *ServerController) setClientIps(c *gin.Context) {
 	}
 	err := (&service.InboundService{}).MergeInboundClientIps(ips)
 	jsonMsg(c, "Client IPs merged", err)
+}
+
+func (a *ServerController) getAmneziaWGMetrics(c *gin.Context) {
+	metrics, err := a.serverService.AmneziaWGMetrics()
+	if err != nil {
+		c.AbortWithStatus(http.StatusServiceUnavailable)
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	c.Data(http.StatusOK, "text/plain; version=0.0.4; charset=utf-8", []byte(metrics))
 }

@@ -1,5 +1,5 @@
 import { formatInboundLabel } from '@/lib/inbounds/label';
-import { preferPublicHost, resolveShareHost } from '@/lib/xray/inbound-link';
+import { formatUrlHost, preferPublicHost, resolveShareHost } from '@/lib/xray/inbound-link';
 import { effectiveMtu } from '@/lib/xray/amneziawg-obfuscation';
 import type { ClientRecord, InboundOption } from '@/hooks/useClients';
 
@@ -45,21 +45,28 @@ export function buildAmneziaWGClientConfig(
   publicHost = '',
   addressOverride = '',
 ): string {
-  const server = inbound?.awgServer;
+  const server = { ...inbound?.awgServer, ...(client.awgClientOptions ?? {}) };
   const endpointHost = resolveShareHost(
     inbound ?? {},
     inbound?.nodeAddress ?? '',
     preferPublicHost(host, publicHost),
   );
   const address = addressOverride || client.allowedIPs || '10.8.1.2/32';
-  const endpoint = `${endpointHost}:${inbound?.port || ''}`;
+  const endpoint = `${formatUrlHost(endpointHost)}:${inbound?.port || ''}`;
   const inboundName = inbound ? formatInboundLabel(inbound.tag, inbound.remark) : '';
   const remark = [inboundName, client.email, client.comment].filter(Boolean).join(' - ');
 
   // These land unescaped in [Interface]; a newline here would inject a
   // config line (e.g. a rogue PostUp) into the downloaded .conf.
   const privateKey = client.privateKey || client.password || '';
-  for (const v of [privateKey, server?.primaryDns ?? '', server?.secondaryDns ?? '', remark]) {
+  for (const v of [
+    privateKey,
+    remark,
+    address,
+    endpointHost,
+    client.preSharedKey ?? '',
+    ...Object.values(server).filter((v): v is string => typeof v === 'string'),
+  ]) {
     if (/[\r\n]/.test(v)) return '';
   }
 

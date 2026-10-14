@@ -21,6 +21,19 @@ export type trafficLocalApplyAction = z.infer<typeof trafficLocalApplyActionSche
 export const transportBitsSchema = z.number().int();
 export type transportBits = z.infer<typeof transportBitsSchema>;
 
+export const AWGClientOptionsSchema = z.object({
+  i1: z.string().nullable().optional(),
+  i2: z.string().nullable().optional(),
+  i3: z.string().nullable().optional(),
+  i4: z.string().nullable().optional(),
+  i5: z.string().nullable().optional(),
+  jc: z.number().int().nullable().optional(),
+  jmax: z.number().int().nullable().optional(),
+  jmin: z.number().int().nullable().optional(),
+  mtu: z.number().int().nullable().optional(),
+});
+export type AWGClientOptions = z.infer<typeof AWGClientOptionsSchema>;
+
 export const AllSettingSchema = z.object({
   coreType: z.string(),
   datepicker: z.string(),
@@ -379,6 +392,7 @@ export const ClientSchema = z.object({
   allowedIPs: z.array(z.string()).optional(),
   allowedIPsByInbound: z.record(z.number().int(), z.array(z.string())).optional(),
   auth: z.string().optional(),
+  awgClientOptions: z.lazy(() => AWGClientOptionsSchema).nullable().optional(),
   comment: z.string(),
   created_at: z.number().int().optional(),
   email: z.string(),
@@ -433,6 +447,7 @@ export const ClientRecordSchema = z.object({
   adTag: z.string(),
   allowedIPs: z.string(),
   auth: z.string(),
+  awgClientOptions: z.lazy(() => AWGClientOptionsSchema).nullable().optional(),
   comment: z.string(),
   createdAt: z.number().int(),
   email: z.string(),

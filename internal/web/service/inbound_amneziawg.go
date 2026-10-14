@@ -273,12 +273,27 @@ func (s *InboundService) normalizeAmneziaWGSettings(inbound *model.Inbound, oldS
 		}
 	}
 
+	var previous amneziawg.InboundSettings
+	if json.Unmarshal([]byte(oldSettings), &previous) == nil {
+		oldOptions := make(map[string]*model.AWGClientOptions, len(previous.Clients))
+		for _, client := range previous.Clients {
+			oldOptions[client.Email] = client.AWGClientOptions
+		}
+		for i := range parsed.Clients {
+			if parsed.Clients[i].AWGClientOptions == nil {
+				parsed.Clients[i].AWGClientOptions = oldOptions[parsed.Clients[i].Email]
+			}
+		}
+	}
 	portCtx, err := s.loadPortConflictContext(database.GetDB(), inbound.NodeID)
 	if err != nil {
 		return err
 	}
 	for i := range parsed.Clients {
 		c := &parsed.Clients[i]
+		if _, err := amneziawg.ClientServerSettings(*parsed.Server, c.AWGClientOptions); err != nil {
+			return err
+		}
 		if err := s.amneziaWGForwardedPortsConflict(portCtx, c); err != nil {
 			return err
 		}

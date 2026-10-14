@@ -7,6 +7,18 @@ export type staticEgressResolver = string;
 export type trafficLocalApplyAction = number;
 export type transportBits = number;
 
+export interface AWGClientOptions {
+  i1?: string | null;
+  i2?: string | null;
+  i3?: string | null;
+  i4?: string | null;
+  i5?: string | null;
+  jc?: number | null;
+  jmax?: number | null;
+  jmin?: number | null;
+  mtu?: number | null;
+}
+
 export interface AllSetting {
   coreType: string;
   datepicker: string;
@@ -359,6 +371,7 @@ export interface Client {
   allowedIPs?: string[];
   allowedIPsByInbound?: Record<number, string[]>;
   auth?: string;
+  awgClientOptions?: AWGClientOptions | null;
   comment: string;
   created_at?: number;
   email: string;
@@ -410,6 +423,7 @@ export interface ClientRecord {
   adTag: string;
   allowedIPs: string;
   auth: string;
+  awgClientOptions?: AWGClientOptions | null;
   comment: string;
   createdAt: number;
   email: string;
