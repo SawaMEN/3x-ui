@@ -221,6 +221,7 @@ func (a *APIController) initRouter(g *gin.RouterGroup) {
 
 	routingPresets := api.Group("/xray/routingPresets")
 	NewRoutingPresetController(routingPresets)
+	NewRoutingCatalogController(api.Group("/xray/routingCatalog"))
 
 	// Settings + core config management live under the API surface too, so the
 	// same authenticated panel session drives them. Gateway routes are kept as

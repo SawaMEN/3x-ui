@@ -75,6 +75,7 @@ func allModels() []any {
 		&model.Node{},
 		&model.ApiToken{},
 		&model.RoutingPreset{},
+		&model.RoutingList{},
 		&model.UserSession{},
 		&model.ClientRecord{},
 		&model.ClientInbound{},

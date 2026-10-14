@@ -48,6 +48,19 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot) (*
 	if templateErr != nil {
 		return nil, templateErr
 	}
+	var routingLists []model.RoutingList
+	if snapshot != nil {
+		routingLists = snapshot.routingLists
+	} else {
+		routingLists, err = loadRoutingLists(template)
+		if err != nil {
+			return nil, err
+		}
+	}
+	template, err = materializeRoutingLists(template, routingLists)
+	if err != nil {
+		return nil, err
+	}
 	{
 		var xrayCfg map[string]any
 		if err := json.Unmarshal([]byte(template), &xrayCfg); err != nil {
@@ -534,7 +547,7 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot) (*
 	}
 	var nativeErr error
 	if snapshot != nil {
-		nativeErr = s.applyNativeTemplateValue(cfg, managedMASQUETags, snapshot.setting("singBoxConfigTemplate"))
+		nativeErr = s.applyNativeTemplateValue(cfg, managedMASQUETags, snapshot.setting("singBoxConfigTemplate"), snapshot.routingLists)
 	} else {
 		nativeErr = s.applyNativeTemplate(cfg, managedMASQUETags)
 	}

@@ -7,7 +7,7 @@ import (
 
 var routingMatcherKeys = []string{
 	"domain", "domains", "ip", "port", "sourcePort", "localPort", "network",
-	"source", "sourceIP", "localIP", "user", "vlessRoute", "protocol", "attrs", "process",
+	"source", "sourceIP", "localIP", "user", "vlessRoute", "protocol", "attrs", "process", "routingListId",
 }
 
 func readInboundTags(raw any) []string {

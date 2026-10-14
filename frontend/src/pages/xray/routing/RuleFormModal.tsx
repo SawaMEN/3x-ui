@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Form, Input, Modal, Select, Space, Switch, Tooltip } from 'antd';
+import { Alert, Button, Form, Input, Modal, Select, Space, Switch, Tooltip } from 'antd';
 import { PlusOutlined, MinusOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import { FormProvider, useForm, useWatch } from 'react-hook-form';
 import { InputAddon } from '@/components/ui';
@@ -184,6 +184,14 @@ export default function RuleFormModal({
       onCancel={onClose}
     >
       <FormProvider {...methods}>
+        {typeof rule?.routingListId === 'number' && (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+            title={t('pages.xray.routingCatalog.managedRule', { id: rule.routingListId })}
+          />
+        )}
         <Form colon={false} labelCol={{ md: { span: 8 } }} wrapperCol={{ md: { span: 14 } }}>
           <FormField name="enabled" label={t('enable')} valueProp="checked">
             <Switch disabled={isApiRule(rule ?? {})} />
@@ -282,27 +290,31 @@ export default function RuleFormModal({
             ))}
           </Form.Item>
 
-          <FormField
-            name="ip"
-            label={
-              <Tooltip title={t('pages.xray.rules.useComma')}>
-                IP <QuestionCircleOutlined aria-hidden="true" />
-              </Tooltip>
-            }
-          >
-            <GeoTokenInput kind="ip" placeholder="0.0.0.0/8, fc00::/7, geoip:ir" />
-          </FormField>
+          {typeof rule?.routingListId !== 'number' && (
+            <>
+              <FormField
+                name="ip"
+                label={
+                  <Tooltip title={t('pages.xray.rules.useComma')}>
+                    IP <QuestionCircleOutlined aria-hidden="true" />
+                  </Tooltip>
+                }
+              >
+                <GeoTokenInput kind="ip" placeholder="0.0.0.0/8, fc00::/7, geoip:ir" />
+              </FormField>
 
-          <FormField
-            name="domain"
-            label={
-              <Tooltip title={t('pages.xray.rules.useComma')}>
-                {t('domainName')} <QuestionCircleOutlined aria-hidden="true" />
-              </Tooltip>
-            }
-          >
-            <GeoTokenInput kind="domain" placeholder="google.com, geosite:cn" />
-          </FormField>
+              <FormField
+                name="domain"
+                label={
+                  <Tooltip title={t('pages.xray.rules.useComma')}>
+                    {t('domainName')} <QuestionCircleOutlined aria-hidden="true" />
+                  </Tooltip>
+                }
+              >
+                <GeoTokenInput kind="domain" placeholder="google.com, geosite:cn" />
+              </FormField>
+            </>
+          )}
 
           <FormField
             name="user"

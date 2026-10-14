@@ -160,14 +160,30 @@ func (s *SingBoxService) GetEditorConfig(ctx context.Context) (*SingBoxEditorSna
 	if err != nil {
 		return nil, err
 	}
+	// Runtime policies contain expanded lists. Keep source references in the
+	// editable route so saving unrelated settings does not freeze those lists.
+	nativeTemplate, templateErr := singBoxSettingService.GetSingBoxConfigTemplate()
+	if templateErr != nil {
+		return nil, templateErr
+	}
 	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, err
+	}
+	if nativeCatalogHasReferences(nativeTemplate) {
+		var original map[string]any
+		if err := json.Unmarshal([]byte(nativeTemplate), &original); err != nil {
+			return nil, err
+		}
+		raw["route"] = original["route"]
 	}
 	// Remove the named panel-managed filter from an editor round trip.
 	var editorConfig singbox.Config
 	if err := json.Unmarshal(data, &editorConfig); err != nil {
 		return nil, err
+	}
+	if nativeCatalogHasReferences(nativeTemplate) {
+		editorConfig.Route, _ = raw["route"].(map[string]any)
 	}
 	if err := stripSingBoxAdBlock(&editorConfig); err != nil {
 		return nil, err
@@ -296,10 +312,24 @@ func (s *SingBoxService) applyNativeTemplate(cfg *singbox.Config, managedMASQUET
 	return s.applyNativeTemplateValue(cfg, managedMASQUETags, rawTemplate)
 }
 
-func (s *SingBoxService) applyNativeTemplateValue(cfg *singbox.Config, managedMASQUETags map[string]bool, rawTemplate string) error {
+func (s *SingBoxService) applyNativeTemplateValue(cfg *singbox.Config, managedMASQUETags map[string]bool, rawTemplate string, capturedLists ...[]model.RoutingList) error {
 	rawTemplate = strings.TrimSpace(rawTemplate)
 	if rawTemplate == "" {
 		return nil
+	}
+	var sources []model.RoutingList
+	var err error
+	if len(capturedLists) > 0 {
+		sources = capturedLists[0]
+	} else {
+		sources, err = loadRoutingLists(rawTemplate)
+		if err != nil {
+			return err
+		}
+	}
+	rawTemplate, err = materializeNativeRoutingLists(rawTemplate, sources)
+	if err != nil {
+		return err
 	}
 	var patch map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(rawTemplate), &patch); err != nil {

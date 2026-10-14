@@ -293,6 +293,73 @@ export const sections: readonly Section[] = [
     ],
   },
   {
+    id: 'routing-catalog',
+    title: 'Routing List Catalog',
+    description:
+      'Installed GeoSite categories and cached custom HTTPS domain/IP lists for server routing.',
+    endpoints: [
+      {
+        method: 'GET',
+        path: '/panel/api/xray/routingCatalog/categories',
+        summary: 'List built-in category tokens and their availability in installed GeoSite.',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/xray/routingCatalog/list',
+        summary:
+          'List custom sources with entry counts, update interval, last successful update and error.',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/xray/routingCatalog/:id/entries',
+        summary: 'Return cached domains and IP/CIDR entries without downloading the source.',
+        params: [{ name: 'id', in: 'path', type: 'integer' }],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/xray/routingCatalog/save',
+        summary:
+          'Download, validate and save a custom source. Invalid downloads leave the existing source unchanged.',
+        params: [
+          {
+            name: 'id',
+            in: 'body (json)',
+            type: 'integer',
+            optional: true,
+            desc: '0 or omitted creates a source; a positive ID edits it.',
+          },
+          { name: 'name', in: 'body (json)', type: 'string' },
+          {
+            name: 'url',
+            in: 'body (json)',
+            type: 'string',
+            desc: 'HTTPS TXT/hosts domain/IP list; private destinations are blocked.',
+          },
+          {
+            name: 'updateInterval',
+            in: 'body (json)',
+            type: 'integer',
+            desc: 'Seconds: 0 for manual updates, otherwise 3600–604800.',
+          },
+        ],
+        body: '{\n  "name": "My domains",\n  "url": "https://example.com/domains.txt",\n  "updateInterval": 86400\n}',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/xray/routingCatalog/:id/refresh',
+        summary:
+          'Refresh a source, retaining the last valid cache on failure. Returns whether its contents changed.',
+        params: [{ name: 'id', in: 'path', type: 'integer' }],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/xray/routingCatalog/:id/delete',
+        summary: 'Delete a source only after its rules are removed from the saved configuration.',
+        params: [{ name: 'id', in: 'path', type: 'integer' }],
+      },
+    ],
+  },
+  {
     id: 'sessions',
     title: 'Sessions',
     description: 'Inspect and revoke the current user’s panel sessions.',

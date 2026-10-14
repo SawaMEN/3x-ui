@@ -44,6 +44,7 @@ func migrationModels() []any {
 		&model.Node{},
 		&model.ApiToken{},
 		&model.RoutingPreset{},
+		&model.RoutingList{},
 		&model.Inbound{},
 		&coremodel.ClientTraffic{},
 		&model.OutboundTraffics{},

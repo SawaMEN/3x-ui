@@ -4747,6 +4747,10 @@
       "description": "Reusable routing rules owned by the authenticated user."
     },
     {
+      "name": "Routing List Catalog",
+      "description": "Installed GeoSite categories and cached custom HTTPS domain/IP lists for server routing."
+    },
+    {
       "name": "Sessions",
       "description": "Inspect and revoke the current user’s panel sessions."
     },
@@ -5188,6 +5192,257 @@
         ],
         "summary": "Delete a routing preset owned by the current user.",
         "operationId": "post_panel_api_xray_routingPresets_del_id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/xray/routingCatalog/categories": {
+      "get": {
+        "tags": [
+          "Routing List Catalog"
+        ],
+        "summary": "List built-in category tokens and their availability in installed GeoSite.",
+        "operationId": "get_panel_api_xray_routingCatalog_categories",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/xray/routingCatalog/list": {
+      "get": {
+        "tags": [
+          "Routing List Catalog"
+        ],
+        "summary": "List custom sources with entry counts, update interval, last successful update and error.",
+        "operationId": "get_panel_api_xray_routingCatalog_list",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/xray/routingCatalog/{id}/entries": {
+      "get": {
+        "tags": [
+          "Routing List Catalog"
+        ],
+        "summary": "Return cached domains and IP/CIDR entries without downloading the source.",
+        "operationId": "get_panel_api_xray_routingCatalog_id_entries",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/xray/routingCatalog/save": {
+      "post": {
+        "tags": [
+          "Routing List Catalog"
+        ],
+        "summary": "Download, validate and save a custom source. Invalid downloads leave the existing source unchanged.",
+        "operationId": "post_panel_api_xray_routingCatalog_save",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "integer",
+                    "description": "0 or omitted creates a source; a positive ID edits it."
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": ""
+                  },
+                  "url": {
+                    "type": "string",
+                    "description": "HTTPS TXT/hosts domain/IP list; private destinations are blocked."
+                  },
+                  "updateInterval": {
+                    "type": "integer",
+                    "description": "Seconds: 0 for manual updates, otherwise 3600–604800."
+                  }
+                },
+                "required": [
+                  "name",
+                  "url",
+                  "updateInterval"
+                ]
+              },
+              "example": {
+                "name": "My domains",
+                "url": "https://example.com/domains.txt",
+                "updateInterval": 86400
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/xray/routingCatalog/{id}/refresh": {
+      "post": {
+        "tags": [
+          "Routing List Catalog"
+        ],
+        "summary": "Refresh a source, retaining the last valid cache on failure. Returns whether its contents changed.",
+        "operationId": "post_panel_api_xray_routingCatalog_id_refresh",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/xray/routingCatalog/{id}/delete": {
+      "post": {
+        "tags": [
+          "Routing List Catalog"
+        ],
+        "summary": "Delete a source only after its rules are removed from the saved configuration.",
+        "operationId": "post_panel_api_xray_routingCatalog_id_delete",
         "parameters": [
           {
             "name": "id",
