@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,7 +15,21 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
 )
+
+func TestRoutingCatalogDownloadCannotInheritPrivateNetworkOptIn(t *testing.T) {
+	ctx := netsafe.ContextWithAllowPrivate(context.Background(), true)
+	for _, source := range []string{"https://127.0.0.1/list?token=secret", "https://[::1]/list"} {
+		_, err := downloadRoutingList(ctx, source)
+		if !errors.Is(err, netsafe.ErrPrivateAddressBlocked) {
+			t.Fatalf("private source not blocked: %v", err)
+		}
+		if strings.Contains(err.Error(), "token=secret") {
+			t.Fatal("source token leaked into error")
+		}
+	}
+}
 
 func TestRoutingCatalogBuiltinUsesInstalledGeoSite(t *testing.T) {
 	dir := t.TempDir()

@@ -59,14 +59,14 @@ server routing; it does not install client-side rules on phones or routers.
 
 All endpoints use the existing authenticated panel API:
 
-| Method | Path under `/panel/api/xray/routingCatalog` | Behavior |
-| --- | --- | --- |
-| GET | `/categories` | Built-in IDs/tokens and installed availability |
-| GET | `/list` | Custom sources, counts, interval, timestamp and error |
-| GET | `/:id/entries` | Cached domain and IP entries |
-| POST | `/save` | JSON `{id, name, url, updateInterval}`; 0/new ID creates |
-| POST | `/:id/refresh` | Validate and refresh; result indicates content change |
-| POST | `/:id/delete` | Delete an unreferenced source |
+| Method | Path under `/panel/api/xray/routingCatalog` | Behavior                                                 |
+| ------ | ------------------------------------------- | -------------------------------------------------------- |
+| GET    | `/categories`                               | Built-in IDs/tokens and installed availability           |
+| GET    | `/list`                                     | Custom sources, counts, interval, timestamp and error    |
+| GET    | `/:id/entries`                              | Cached domain and IP entries                             |
+| POST   | `/save`                                     | JSON `{id, name, url, updateInterval}`; 0/new ID creates |
+| POST   | `/:id/refresh`                              | Validate and refresh; result indicates content change    |
+| POST   | `/:id/delete`                               | Delete an unreferenced source                            |
 
 `updateInterval` is in seconds (0 or 3600–604800). `/save` has a 16 KiB request
 limit. The API uses the standard `{success, msg, obj}` response envelope.

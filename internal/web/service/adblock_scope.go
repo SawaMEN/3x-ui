@@ -165,7 +165,7 @@ func applyXrayAdBlockScope(cfg *xray.Config, scope AdBlockScope) error {
 			continue
 		}
 		for _, match := range scopeRules {
-			scoped := make(map[string]any, len(rule)+len(match))
+			scoped := make(map[string]any, len(rule))
 			for k, v := range rule {
 				scoped[k] = v
 			}

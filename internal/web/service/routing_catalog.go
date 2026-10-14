@@ -84,6 +84,8 @@ func downloadRoutingList(ctx context.Context, rawURL string) (routingcatalog.Ent
 	}
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
+	// Catalog sources never inherit another operation's private-network opt-in.
+	ctx = netsafe.ContextWithAllowPrivate(ctx, false)
 	transport := &http.Transport{DialContext: netsafe.SSRFGuardedDialContext, TLSHandshakeTimeout: 5 * time.Second, ResponseHeaderTimeout: 10 * time.Second}
 	defer transport.CloseIdleConnections()
 	client := &http.Client{Transport: transport, Timeout: 15 * time.Second, CheckRedirect: func(req *http.Request, via []*http.Request) error {
@@ -97,6 +99,10 @@ func downloadRoutingList(ctx context.Context, rawURL string) (routingcatalog.Ent
 		return routingcatalog.Entries{}, err
 	}
 	req.Header.Set("User-Agent", "3x-ui-routing-catalog/1.0")
+	// Administrators intentionally choose source hosts. The guarded dialer
+	// resolves, validates and dials the same public IP on every connection;
+	// redirects remain HTTPS and the transport has no proxy bypass.
+	// codeql[go/ssrf]
 	resp, err := client.Do(req)
 	if err != nil {
 		// The URL can contain a private subscription token. Never persist it
