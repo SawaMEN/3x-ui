@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -13,7 +14,51 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const defaultOutboundProbeURL = "https://www.gstatic.com/generate_204"
+const (
+	defaultOutboundProbeURL = "https://www.gstatic.com/generate_204"
+	warpOutboundProbeURL    = "https://www.cloudflare.com/cdn-cgi/trace"
+)
+
+// An outbound URL probe is an HTTPS transaction, not an ICMP ping. For WARP
+// MASQUE, two different hosts prevent an isolated destination failure from
+// being presented as an unavailable tunnel. User-specified URLs aren't retried.
+type outboundDelayProbe interface {
+	ProxyDelay(context.Context, string, string, time.Duration) (*singbox.ClashProxyDelay, error)
+}
+
+func measureOutboundDelay(ctx context.Context, probe outboundDelayProbe, tag, testURL string, timeout time.Duration, warp, customURL bool) (*singbox.ClashProxyDelay, string, error) {
+	urls := []string{testURL}
+	if warp && !customURL {
+		urls = []string{warpOutboundProbeURL, testURL}
+	}
+	perAttempt := timeout / time.Duration(len(urls))
+	if perAttempt < time.Millisecond {
+		perAttempt = time.Millisecond
+	}
+	failures := make([]string, 0, len(urls))
+	for _, target := range urls {
+		result, err := probe.ProxyDelay(ctx, tag, target, perAttempt)
+		if err == nil && result != nil && result.Delay > 0 {
+			return result, target, nil
+		}
+		if err == nil {
+			err = fmt.Errorf("ядро не вернуло положительную задержку")
+		}
+		if len(urls) == 1 {
+			return nil, "", err
+		}
+		failures = append(failures, fmt.Sprintf("%s: %v", target, err))
+		if ctx.Err() != nil {
+			break
+		}
+	}
+	return nil, "", fmt.Errorf(
+		"WARP через MASQUE %q: HTTPS-проверка не прошла (%s). "+
+			"Проверьте журнал sing-box на ошибки регистрации Cloudflare и доступность Cloudflare API; "+
+			"если выбран HTTP/3 (QUIC/UDP), попробуйте HTTP/2 (TCP)",
+		tag, strings.Join(failures, "; "),
+	)
+}
 
 func (a *ServerController) initOutboundProbeRouter(g *gin.RouterGroup) {
 	g.GET("/core/capabilities", a.getCoreCapabilities)
@@ -65,12 +110,17 @@ func (a *ServerController) checkSingBoxOutbound(c *gin.Context) {
 		return
 	}
 
-	testURL := strings.TrimSpace(c.PostForm("url"))
+	rawURL := strings.TrimSpace(c.PostForm("url"))
+	testURL := rawURL
 	if testURL == "" {
 		testURL = defaultOutboundProbeURL
 	}
+	warp := singbox.AppliedOutboundType(tag) == "masque"
 
 	timeout := 5 * time.Second
+	if warp && rawURL == "" {
+		timeout = 10 * time.Second
+	}
 	if raw := strings.TrimSpace(c.PostForm("timeout")); raw != "" {
 		milliseconds, err := strconv.Atoi(raw)
 		if err != nil || milliseconds < 1 || milliseconds > 30000 {
@@ -80,14 +130,17 @@ func (a *ServerController) checkSingBoxOutbound(c *gin.Context) {
 		timeout = time.Duration(milliseconds) * time.Millisecond
 	}
 
-	result, err := singbox.NewClashStatsClient().ProxyDelay(c.Request.Context(), tag, testURL, timeout)
+	result, measuredURL, err := measureOutboundDelay(
+		c.Request.Context(), singbox.NewClashStatsClient(), tag, testURL,
+		timeout, warp, rawURL != "",
+	)
 	if err != nil {
 		jsonObj(c, nil, err)
 		return
 	}
 	jsonObj(c, gin.H{
 		"tag":     tag,
-		"url":     testURL,
+		"url":     measuredURL,
 		"delay":   result.Delay,
 		"delay2":  result.Delay2,
 		"timeout": timeout.Milliseconds(),
