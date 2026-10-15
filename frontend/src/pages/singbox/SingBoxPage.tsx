@@ -1739,12 +1739,17 @@ export default function SingBoxPage() {
               },
             },
             {
-              title: 'TLS',
-              width: 70,
+              title: 'Защита',
+              width: 100,
               align: 'center',
               render: (_: unknown, row: JsonObject) =>
                 row.type === 'masque' ? (
-                  <Tag color="green">{row.use_http2 ? 'H2' : 'H3'}</Tag>
+                  <Tag
+                    color="green"
+                    title={row.use_http2 ? 'MASQUE поверх HTTP/2 и TLS' : 'MASQUE поверх HTTP/3 и QUIC/TLS'}
+                  >
+                    {row.use_http2 ? 'H2/TLS' : 'H3/TLS'}
+                  </Tag>
                 ) : row.tls ? (
                   <Tag color="green">TLS</Tag>
                 ) : (
