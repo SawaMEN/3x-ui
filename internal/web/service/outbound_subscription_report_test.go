@@ -177,3 +177,30 @@ func TestSubscriptionKernelValidationRedactsAuthenticationFields(t *testing.T) {
 		})
 	}
 }
+
+func TestSubscriptionKernelValidationUsesDiagnosticSeverity(t *testing.T) {
+	for _, test := range []struct {
+		name, output string
+		wantError    bool
+	}{
+		{"warning", "WARN[0000] unsupported legacy option ignored", false},
+		{"name", "INFO[0000] outbound/error-proxy: configuration accepted", false},
+		{"plain-error", "ERROR invalid profile", true},
+		{"timed-error", "ERROR[0000] invalid profile", true},
+		{"colored-error", "\x1b[31mERROR\x1b[0m[0000] invalid profile", true},
+		{"fatal", "FATAL[0000] invalid profile", true},
+		{"warning-before-error", "WARN[0000] legacy option ignored\nERROR[0000] invalid profile", true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			writeSubscriptionCheckBinary(t, "printf '%s\\n' '"+test.output+"'\nexit 0\n")
+			row := map[string]any{"protocol": "singbox:socks", "tag": "proxy", "settings": map[string]any{"server": "example.com", "server_port": 1080}}
+			err := validateSubscriptionNativeMember(row, CoreTypeHiddify)
+			if (err != nil) != test.wantError {
+				t.Fatalf("diagnostic %q: err=%v; wantError=%v", test.output, err, test.wantError)
+			}
+			if test.wantError && !strings.Contains(err.Error(), "invalid profile") {
+				t.Fatalf("actual error omitted from diagnostic: %v", err)
+			}
+		})
+	}
+}

@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -19,6 +20,8 @@ type subscriptionCheckResult struct {
 	message string
 	expires time.Time
 }
+
+var subscriptionCheckErrorLog = regexp.MustCompile(`(?im)^[\t ]*(?:\x1b\[[0-9;]*m)*(?:error|fatal|panic)(?:\x1b\[[0-9;]*m)*(?:[\t :\[]|$)`)
 
 var subscriptionCheckCache = struct {
 	sync.Mutex
@@ -103,9 +106,11 @@ func validateSubscriptionNativeMember(row map[string]any, core string) error {
 	message := ""
 	// Hiddify may represent an invalid profile as a blocked placeholder and
 	// still exit successfully. Error-level diagnostics are also a rejection.
-	diagnostics := strings.ToLower(string(output))
-	invalidPlaceholder := strings.Contains(diagnostics, "error") || strings.Contains(diagnostics, "unknown outbound") || strings.Contains(diagnostics, "unknown field") || strings.Contains(diagnostics, "unsupported")
-	if checkErr != nil || invalidPlaceholder {
+	errorLog := subscriptionCheckErrorLog.FindIndex(output)
+	if checkErr != nil || errorLog != nil {
+		if errorLog != nil {
+			output = output[errorLog[0]:]
+		}
 		detail := strings.TrimSpace(string(output))
 		// Kernel diagnostics must never expose imported authentication material.
 		var redact func(any)
