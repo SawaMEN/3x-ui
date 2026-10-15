@@ -132,10 +132,13 @@ core_migration_prepare_archive() {
     tar -xzf "$archive" -C "$cm_stage" || return 1
     cm_was_running=0
     cm_was_enabled=0
+    cm_had_service=0
     if [[ "$release" == alpine ]]; then
+        rc-service --exists x-ui >/dev/null 2>&1 && cm_had_service=1
         rc-service x-ui status >/dev/null 2>&1 && cm_was_running=1
-        rc-update show default 2>/dev/null | grep -q 'x-ui' && cm_was_enabled=1
+        rc-update show default 2>/dev/null | grep -Eq '^[[:space:]]*x-ui[[:space:]]*\|' && cm_was_enabled=1
     else
+        systemctl cat x-ui.service >/dev/null 2>&1 && cm_had_service=1
         systemctl is-active --quiet x-ui && cm_was_running=1
         systemctl is-enabled --quiet x-ui && cm_was_enabled=1
     fi
@@ -241,7 +244,7 @@ core_migration_install_managed_bin() {
 core_migration_commit() {
     "$xui_folder/x-ui" core-migrate --verify-running || return 1
     core_migration_resume_gateway || return 1
-    if [[ "${cm_was_enabled:-0}" == 0 ]]; then
+    if [[ "${cm_had_service:-1}" == 1 && "${cm_was_enabled:-0}" == 0 ]]; then
         if [[ "$release" == alpine ]]; then rc-update del x-ui || return 1; else systemctl disable x-ui || return 1; fi
     fi
     # Legacy executables are removed only after the owner runtime is verified.

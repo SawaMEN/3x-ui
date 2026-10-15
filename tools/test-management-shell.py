@@ -227,8 +227,27 @@ exit {initial}
             result = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
             self.assertEqual(result.returncode, expected, result.stderr)
 
+    def test_console_menu_and_usage_have_aligned_borders(self):
+        for name in ("show_menu", "show_usage"):
+            with self.subTest(command=name):
+                script = function("x-ui.sh", "print_console_box") + function("x-ui.sh", name)
+                script += "\nshow_status() { :; }\n" + name + " </dev/null\n"
+                result = subprocess.run(["bash", "-c", script], text=True, capture_output=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                lines = [line for line in result.stdout.splitlines() if line.startswith(("┌", "│", "├", "└"))]
+                self.assertGreater(len(lines), 20)
+                self.assertEqual(len({len(line) for line in lines}), 1, "\n".join(lines))
+
+    def test_openrc_autostart_matches_exact_service(self):
+        for service, expected in (("x-ui", 0), ("other-x-ui", 1), ("x-ui-test", 1)):
+            with self.subTest(service=service):
+                script = function("x-ui.sh", "check_enabled") + "\n"
+                script += f"running_in_docker=false; release=alpine\nrc-update() {{ printf '{service} | default\\n'; }}\ncheck_enabled\n"
+                result = subprocess.run(["bash", "-c", script], text=True, capture_output=True)
+                self.assertEqual(result.returncode, expected, result.stderr)
+
     def test_main_menu_returns_on_eof_and_nested_navigation(self):
-        script = function("x-ui.sh", "show_menu") + r'''
+        script = function("x-ui.sh", "print_console_box") + function("x-ui.sh", "show_menu") + r'''
 show_status() { :; }
 show_menu </dev/null >/dev/null || exit 1
 _xui_menu_active=1

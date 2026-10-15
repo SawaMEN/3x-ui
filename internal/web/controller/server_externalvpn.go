@@ -19,6 +19,8 @@ func (a *ServerController) initExternalVPNRouter(g *gin.RouterGroup) {
 
 func parseExternalVPNProtocol(value string) (model.Protocol, error) {
 	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "hysteria2":
+		return model.Hysteria, nil
 	case string(model.Pingtunnel):
 		return model.Pingtunnel, nil
 	case string(model.FPTN):

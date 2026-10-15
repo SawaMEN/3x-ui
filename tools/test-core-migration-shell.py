@@ -90,6 +90,7 @@ systemctl() {
     case "$1" in
         is-active) [[ "${SIM_RUNNING:-1}" == 1 ]];;
         is-enabled) [[ "${SIM_ENABLED:-1}" == 1 ]];;
+        cat) [[ "$CASE" != missing_service ]];;
         show) [[ "$CASE" != missing_unit_failure ]] || printf "not-found\n";;
         stop) [[ "$CASE" != stop_failure && "$CASE" != missing_unit_failure ]];;
         *) return 0;;
@@ -137,7 +138,7 @@ if [[ "$CASE" == apply || "$CASE" == stopped_failure || "$CASE" == missing_unit_
 if core_migration_apply; then
     if [[ "$CASE" == verify || "$CASE" == stop_failure ]]; then export FAIL_VERIFY=1; fi
     if core_migration_commit; then
-        [[ "$CASE" == success || "$CASE" == disabled ]]
+        [[ "$CASE" == success || "$CASE" == disabled || "$CASE" == missing_service ]]
         [[ "$(cat "$TEST_DB")" == new-core ]]
         [[ ! -e "$cm_backup" ]] # The verified offline snapshot must not fill the VPS.
         [[ -f "$xui_folder/bin/custom-key" || -f "$XUI_BIN_FOLDER/custom-key" ]]
@@ -181,8 +182,8 @@ fi
 '''
             env = dict(os.environ, TEST_ROOT=raw, TEST_DB=str(database), TEST_RELEASE="alpine" if alpine else "debian",
                        TEST_LOG=str(base / "commands"), HELPER=str(ROOT / "core-migration.sh"),
-                       ARCHIVE=str(archive), CASE=mode, SIM_ENABLED="0" if mode in ("disabled", "missing_unit_failure") else "1",
-                       SIM_RUNNING="0" if mode in ("stopped_failure", "missing_unit_failure") else "1")
+                       ARCHIVE=str(archive), CASE=mode, SIM_ENABLED="0" if mode in ("disabled", "missing_unit_failure", "missing_service") else "1",
+                       SIM_RUNNING="0" if mode in ("stopped_failure", "missing_unit_failure", "missing_service") else "1")
             result = subprocess.run(["bash", "-c", script], env=env, text=True, capture_output=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             commands = (base / "commands").read_text()
@@ -192,10 +193,11 @@ fi
                 if mode == "stop_failure":
                     self.assertNotIn("restore\n", commands)
                     self.assertNotIn("service:start x-ui", commands)
-                elif mode not in ("success", "disabled"):
+                elif mode not in ("success", "disabled", "missing_service"):
                     self.assertIn("restore\n", commands)
                     if mode in ("stopped_failure", "missing_unit_failure"): self.assertNotIn("service:start x-ui",commands)
                     else: self.assertIn("service:start x-ui", commands)
+                if mode=="missing_service": self.assertNotIn("service:disable x-ui", commands)
                 if mode=="disabled": self.assertIn("service:disable x-ui", commands)
 
     def test_alpine_rollback_after_new_service_crashes(self):
@@ -212,6 +214,7 @@ fi
     def test_apply_failure_recovers_installation_and_data(self): self.run_case("apply")
     def test_daemon_core_failure_recovers_installation_and_data(self): self.run_case("verify")
     def test_preflight_failure_does_not_touch_installation(self): self.run_case("preflight")
+    def test_repaired_missing_service_keeps_installer_autostart(self): self.run_case("missing_service")
     def test_disabled_autostart_survives_upgrade(self): self.run_case("disabled")
     def test_rollback_keeps_originally_stopped_panel_stopped(self): self.run_case("stopped_failure")
     def test_repair_rollback_without_registered_unit(self): self.run_case("missing_unit_failure")

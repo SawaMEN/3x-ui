@@ -9,6 +9,7 @@ import {
   Pagination,
   Popconfirm,
   Space,
+  Select,
   Switch,
   Table,
   Tag,
@@ -46,7 +47,8 @@ type DependencyStatus = {
   availableVersion: string;
   updateAvailable: boolean;
   prerelease?: boolean;
-  source?: 'sing-box';
+  source?: 'sing-box' | 'standalone';
+  error?: string;
 };
 
 type ExternalVPNBinaryStatus = {
@@ -58,6 +60,7 @@ type ExternalVPNBinaryStatus = {
 };
 
 type ExternalVPNStatus = {
+  hysteria2?: ExternalVPNBinaryStatus;
   pingtunnel?: ExternalVPNBinaryStatus;
   trusttunnel?: ExternalVPNBinaryStatus;
 };
@@ -93,6 +96,7 @@ type SystemUpdateResult = {
 type ApiMsg<T = unknown> = { success?: boolean; msg?: string; obj?: T };
 
 const isDependencyInstallable = (dependency: DependencyStatus) =>
+  dependency.source === 'standalone' ||
   dependency.key === 'sudoku' ||
   dependency.key === 'pingtunnel' ||
   dependency.key === 'trusttunnel';
@@ -190,16 +194,39 @@ export default function SystemUpdateModal({
   const [systemUpdateResult, setSystemUpdateResult] = useState<SystemUpdateResult | null>(null);
   const [includeAllPackages, setIncludeAllPackages] = useState(false);
   const [packagePage, setPackagePage] = useState(1);
-  const [dependencies, setDependencies] = useState<DependencyStatus[]>([]);
+  const [bundledDependencies, setBundledDependencies] = useState<DependencyStatus[]>([]);
+  const [standaloneDependencies, setStandaloneDependencies] = useState<DependencyStatus[]>([]);
+  const [componentSource, setComponentSource] = useState<Record<string, 'sing-box' | 'standalone'>>(
+    {},
+  );
+  const dependencies = useMemo(
+    () =>
+      bundledDependencies.map((dependency) =>
+        componentSource[dependency.key] === 'standalone'
+          ? standaloneDependencies.find((row) => row.key === dependency.key) || dependency
+          : dependency,
+      ),
+    [bundledDependencies, standaloneDependencies, componentSource],
+  );
+  const updatableDependencies = useMemo(
+    () => [
+      ...bundledDependencies.filter((row) => row.source !== 'sing-box'),
+      ...standaloneDependencies,
+    ],
+    [bundledDependencies, standaloneDependencies],
+  );
   const [dependencyBusy, setDependencyBusy] = useState<DependencyKey | null>(null);
 
   const loadDependencyUpdates = useCallback(async () => {
-    const [core, sudoku, external] = await Promise.all([
+    const [core, sudoku, external, naive] = await Promise.all([
       HttpUtil.get('/panel/api/setting/singbox/status') as Promise<
         ApiMsg<{ installed?: boolean; version?: string }>
       >,
       HttpUtil.get('/panel/api/setting/sudoku/status') as Promise<ApiMsg<ExternalVPNBinaryStatus>>,
       HttpUtil.get('/panel/api/server/externalvpn/status') as Promise<ApiMsg<ExternalVPNStatus>>,
+      HttpUtil.get('/panel/api/naiveproxy/status', undefined, { silent: true }) as Promise<
+        ApiMsg<ExternalVPNBinaryStatus>
+      >,
     ]);
     const bundled = ['naiveproxy', 'hysteria2'].map((key) => ({
       key: key as DependencyKey,
@@ -227,9 +254,34 @@ export default function SystemUpdateModal({
         installedVersion: data?.version || '',
         availableVersion: data?.latestVersion || '',
         updateAvailable: data?.updateAvailable === true,
+        error:
+          data?.error ||
+          (key === 'sudoku'
+            ? !sudoku.success
+              ? sudoku.msg
+              : undefined
+            : !external.success
+              ? external.msg
+              : undefined),
       });
     }
-    setDependencies(rows);
+    setBundledDependencies(rows);
+    setStandaloneDependencies(
+      (['naiveproxy', 'hysteria2'] as const).map((key) => {
+        const response = key === 'naiveproxy' ? naive : external;
+        const data = key === 'naiveproxy' ? naive.obj : external.obj?.hysteria2;
+        return {
+          key,
+          label: key === 'naiveproxy' ? 'NaiveProxy' : 'Hysteria2',
+          source: 'standalone',
+          installed: data?.installed === true,
+          installedVersion: data?.version || '',
+          availableVersion: data?.latestVersion || '',
+          updateAvailable: data?.updateAvailable === true,
+          error: data?.error || (response.success ? undefined : response.msg),
+        };
+      }),
+    );
   }, []);
 
   const checkSystemUpdates = useCallback(async () => {
@@ -254,8 +306,13 @@ export default function SystemUpdateModal({
   const requestDependencyUpdate = useCallback(async (dependency: DependencyStatus) => {
     switch (dependency.key) {
       case 'naiveproxy':
+        if (dependency.source !== 'standalone') throw new Error('Выберите отдельную установку.');
+        return (await HttpUtil.post('/panel/api/naiveproxy/update')) as ApiMsg<unknown>;
       case 'hysteria2':
-        throw new Error('Обновите панель: эти протоколы входят в закреплённый sing-box.');
+        if (dependency.source !== 'standalone') throw new Error('Выберите отдельную установку.');
+        return (await HttpUtil.post(
+          '/panel/api/server/externalvpn/update/hysteria2',
+        )) as ApiMsg<unknown>;
       case 'sudoku':
         return (await HttpUtil.post('/panel/api/setting/sudoku/update')) as ApiMsg<unknown>;
       case 'pingtunnel':
@@ -343,7 +400,9 @@ export default function SystemUpdateModal({
         setSystemUpdateResult(normalizeSystemUpdateResult(systemMsg.obj));
       }
 
-      const pending = dependencies.filter(dependencyNeedsAction);
+      const pending = updatableDependencies.filter(
+        (dependency) => dependency.installed && dependencyNeedsAction(dependency),
+      );
 
       const failed: string[] = [];
       const updatedTargets = new Set<string>();
@@ -432,7 +491,9 @@ export default function SystemUpdateModal({
     Boolean(systemUpdate?.kernel.rebootRequired) || Boolean(systemUpdateResult?.rebootRequired);
   const allPackagesMode = systemUpdate?.allPackages ?? includeAllPackages;
   const isArch = systemUpdate?.packageManager === 'pacman';
-  const componentUpdatesAvailable = dependencies.some(dependencyNeedsAction);
+  const componentUpdatesAvailable = updatableDependencies.some(
+    (dependency) => dependency.installed && dependencyNeedsAction(dependency),
+  );
   const unstableComponentUpdateAvailable = dependencies.some(
     (dependency) => dependency.prerelease && dependency.updateAvailable,
   );
@@ -614,6 +675,10 @@ export default function SystemUpdateModal({
               title={t('pages.settings.swap.componentUpdatesTitle')}
               className="system-update-section"
             >
+              <Typography.Paragraph type="secondary">
+                Дополнительные компоненты устанавливаются по кнопке «Установить». Общее обновление
+                обновляет только уже установленные компоненты.
+              </Typography.Paragraph>
               <div className="system-component-grid">
                 {dependencies.map((dependency) => (
                   <Card
@@ -631,21 +696,43 @@ export default function SystemUpdateModal({
                       )
                     }
                   >
-                    {dependency.key === 'hysteria2' && (
-                      <Typography.Text
-                        type="secondary"
-                        style={{ display: 'block', marginBottom: 10 }}
-                      >
-                        Hysteria2 входит в сборку sing-box и обновляется вместе с панелью.
-                      </Typography.Text>
+                    {(dependency.key === 'naiveproxy' || dependency.key === 'hysteria2') && (
+                      <>
+                        <Select
+                          aria-label={`${dependency.label}: вариант компонента`}
+                          value={componentSource[dependency.key] || 'sing-box'}
+                          style={{ width: '100%', marginBottom: 10 }}
+                          disabled={dependencyBusy !== null || systemUpdateBusy}
+                          options={[
+                            { value: 'sing-box', label: 'Встроен в sing-box' },
+                            { value: 'standalone', label: 'Отдельная установка бинарника' },
+                          ]}
+                          onChange={(source) =>
+                            setComponentSource((current) => ({
+                              ...current,
+                              [dependency.key]: source,
+                            }))
+                          }
+                        />
+                        <Typography.Text
+                          type="secondary"
+                          style={{ display: 'block', marginBottom: 10 }}
+                        >
+                          {dependency.source === 'sing-box'
+                            ? 'Используется в подключениях панели. Обновляется вместе с sing-box.'
+                            : dependency.key === 'naiveproxy'
+                              ? 'Caddy-Naive для Linux/amd64. Установка для самостоятельной настройки; подключения панели продолжают использовать sing-box.'
+                              : 'Официальный Hysteria 2 для самостоятельной настройки. Подключения панели продолжают использовать sing-box.'}
+                        </Typography.Text>
+                      </>
                     )}
-                    {dependency.key === 'naiveproxy' && (
-                      <Typography.Text
-                        type="secondary"
-                        style={{ display: 'block', marginBottom: 10 }}
-                      >
-                        NaiveProxy входит в сборку sing-box и обновляется вместе с панелью.
-                      </Typography.Text>
+                    {dependency.error && (
+                      <Alert
+                        type="warning"
+                        showIcon
+                        title={dependency.error}
+                        style={{ marginBottom: 10 }}
+                      />
                     )}
                     {dependency.key === 'pingtunnel' && (
                       <Typography.Text
@@ -696,11 +783,13 @@ export default function SystemUpdateModal({
                       }
                       onClick={() => void updateDependency(dependency)}
                     >
-                      {!dependency.installed && isDependencyInstallable(dependency)
-                        ? 'Установить'
-                        : dependency.updateAvailable
-                          ? t('pages.settings.swap.updateComponent')
-                          : t('pages.settings.swap.upToDate')}
+                      {dependency.source === 'sing-box'
+                        ? 'Встроен в sing-box'
+                        : !dependency.installed && isDependencyInstallable(dependency)
+                          ? 'Установить'
+                          : dependency.updateAvailable
+                            ? t('pages.settings.swap.updateComponent')
+                            : t('pages.settings.swap.upToDate')}
                     </Button>
                   </Card>
                 ))}

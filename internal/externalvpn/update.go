@@ -61,12 +61,20 @@ type BinaryStatus struct {
 }
 
 type UpdateStatus struct {
+	Hysteria2   BinaryStatus `json:"hysteria2"`
 	Pingtunnel  BinaryStatus `json:"pingtunnel"`
 	TrustTunnel BinaryStatus `json:"trusttunnel"`
 }
 
 func releaseSpecFor(protocol model.Protocol) (releaseSpec, error) {
 	switch protocol {
+	case model.Hysteria:
+		return releaseSpec{
+			protocol:    protocol,
+			api:         "https://api.github.com/repos/HyNetworks/hysteria/releases/latest",
+			binaryName:  "hysteria",
+			versionArgs: []string{"version"},
+		}, nil
 	case model.Pingtunnel:
 		return releaseSpec{
 			protocol:    protocol,
@@ -89,7 +97,7 @@ func releaseSpecFor(protocol model.Protocol) (releaseSpec, error) {
 func GetUpdateStatus(ctx context.Context) UpdateStatus {
 	var status UpdateStatus
 	var wg sync.WaitGroup
-	wg.Add(2)
+	wg.Add(3)
 	go func() {
 		defer wg.Done()
 		status.Pingtunnel = binaryStatus(ctx, model.Pingtunnel)
@@ -97,6 +105,10 @@ func GetUpdateStatus(ctx context.Context) UpdateStatus {
 	go func() {
 		defer wg.Done()
 		status.TrustTunnel = binaryStatus(ctx, model.TrustTunnel)
+	}()
+	go func() {
+		defer wg.Done()
+		status.Hysteria2 = binaryStatus(ctx, model.Hysteria)
 	}()
 	wg.Wait()
 	return status
@@ -151,6 +163,7 @@ func parseExternalVersion(value string) string {
 
 func normalizeReleaseVersion(value string) string {
 	value = strings.TrimSpace(value)
+	value = strings.TrimPrefix(value, "app/")
 	value = strings.TrimPrefix(value, "v")
 	value = strings.TrimPrefix(value, "V")
 	return value
@@ -224,9 +237,12 @@ func Update(ctx context.Context, protocol model.Protocol) error {
 	if err := verifyReleaseDigest(archivePath, asset.Digest); err != nil {
 		return err
 	}
-	extracted, err := extractReleaseBinary(archivePath, tmpDir, spec.binaryName)
-	if err != nil {
-		return err
+	extracted := archivePath
+	if protocol != model.Hysteria {
+		extracted, err = extractReleaseBinary(archivePath, tmpDir, spec.binaryName)
+		if err != nil {
+			return err
+		}
 	}
 
 	binDir := config.GetBinFolderPath()
@@ -280,10 +296,11 @@ func Update(ctx context.Context, protocol model.Protocol) error {
 	if err := os.Rename(stagedPath, target); err != nil {
 		return fmt.Errorf("install %s: %w", protocol, err)
 	}
-	// Linux keeps a running executable mapped after an atomic rename. Stop only
-	// after the new binary is in place; the normal reconciliation job will then
-	// restart enabled inbounds with the newly installed executable.
-	GetManager().StopProtocol(protocol)
+	// Restart managed sidecars only after replacing their executable.
+	// Standalone Hysteria does not affect native sing-box connections.
+	if protocol != model.Hysteria {
+		GetManager().StopProtocol(protocol)
+	}
 	return nil
 }
 
@@ -291,6 +308,13 @@ func pickReleaseAsset(spec releaseSpec, release githubRelease, goarch string) (r
 	var expected string
 	version := normalizeReleaseVersion(release.TagName)
 	switch spec.protocol {
+	case model.Hysteria:
+		switch goarch {
+		case "amd64", "arm64":
+			expected = "hysteria-linux-" + goarch
+		default:
+			return releaseAsset{}, fmt.Errorf("Hysteria2 is not published for linux/%s", goarch)
+		}
 	case model.Pingtunnel:
 		switch goarch {
 		case "amd64", "arm64":

@@ -1,8 +1,17 @@
 package externalvpn
 
 import (
+	"context"
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
@@ -61,4 +70,57 @@ func TestVerifyReleaseDigest(t *testing.T) {
 	if err := verifyReleaseDigest(path, "sha256:0000000000000000000000000000000000000000000000000000000000000000"); err == nil {
 		t.Fatal("digest mismatch was accepted")
 	}
+}
+
+func TestInstallStandaloneHysteriaFromOfficialAsset(t *testing.T) {
+	if runtime.GOOS != "linux" || (runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64") {
+		t.Skip("standalone Linux installer")
+	}
+	dir := t.TempDir()
+	t.Setenv("XUI_BIN_FOLDER", dir)
+	const executable = "#!/bin/sh\nprintf 'Version: v2.13.0\\n'\n"
+	digest := sha256.Sum256([]byte(executable))
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/binary" {
+			_, _ = io.WriteString(w, executable)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(githubRelease{
+			TagName: "app/v2.13.0",
+			Assets: []releaseAsset{{
+				Name:   "hysteria-linux-" + runtime.GOARCH,
+				URL:    "https://example.invalid/binary",
+				Digest: fmt.Sprintf("sha256:%x", digest),
+			}},
+		})
+	}))
+	defer server.Close()
+	originalAPI, originalDownload := externalVPNHTTPClient, externalVPNDownloadClient
+	client := &http.Client{Transport: hysteriaTestTransport{target: server.URL}}
+	externalVPNHTTPClient, externalVPNDownloadClient = client, client
+	t.Cleanup(func() { externalVPNHTTPClient, externalVPNDownloadClient = originalAPI, originalDownload })
+
+	if err := Update(context.Background(), model.Hysteria); err != nil {
+		t.Fatal(err)
+	}
+	installed, err := os.ReadFile(filepath.Join(dir, "hysteria"))
+	if err != nil || string(installed) != executable {
+		t.Fatalf("installed binary = %q, error = %v", installed, err)
+	}
+	status := binaryStatus(context.Background(), model.Hysteria)
+	if !status.Installed || status.Version != "2.13.0" || status.LatestVersion != "2.13.0" || status.UpdateAvailable || status.Error != "" {
+		t.Fatalf("status after install: %+v", status)
+	}
+}
+
+type hysteriaTestTransport struct{ target string }
+
+func (transport hysteriaTestTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	forward := request.Clone(request.Context())
+	target, err := url.Parse(transport.target)
+	if err != nil {
+		return nil, err
+	}
+	forward.URL.Scheme, forward.URL.Host = target.Scheme, target.Host
+	return http.DefaultTransport.RoundTrip(forward)
 }

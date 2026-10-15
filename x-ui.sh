@@ -421,7 +421,7 @@ check_enabled() {
         return 1
     fi
     if [[ $release == "alpine" ]]; then
-        rc-update show 2>/dev/null | grep -F 'x-ui' | grep -q default
+        rc-update show default 2>/dev/null | grep -Eq '^[[:space:]]*x-ui[[:space:]]*\|'
         return $?
     fi
     systemctl is-enabled --quiet x-ui 2>/dev/null
@@ -765,31 +765,48 @@ gateway_menu() {
     esac
 }
 
+print_console_box() {
+    local row width=48 border
+    for row in "$@"; do
+        (( ${#row} <= width )) || width=${#row}
+    done
+    printf -v border '%*s' "$((width + 2))" ''
+    border=${border// /─}
+    printf '┌%s┐\n' "$border"
+    for row in "$@"; do
+        if [[ "$row" == -- ]]; then
+            printf '├%s┤\n' "$border"
+        else
+            printf '│ %-*s │\n' "$width" "$row"
+        fi
+    done
+    printf '└%s┘\n' "$border"
+}
+
 show_usage() {
-    echo -e "┌────────────────────────────────────────────────────────────────┐
-│  ${blue}x-ui control menu usages (subcommands):${plain}                       │
-│                                                                │
-│  ${blue}x-ui${plain}                       - Admin Management Script          │
-│  ${blue}x-ui start${plain}                 - Start                            │
-│  ${blue}x-ui stop${plain}                  - Stop                             │
-│  ${blue}x-ui restart${plain}               - Restart                          │
-│  ${blue}x-ui restart-core${plain}          - Restart Sing-box                 │
-│  ${blue}x-ui status${plain}                - Current Status                   │
-│  ${blue}x-ui settings${plain}              - Current Settings                 │
-│  ${blue}x-ui enable${plain}                - Enable Autostart on OS Startup   │
-│  ${blue}x-ui disable${plain}               - Disable Autostart on OS Startup  │
-│  ${blue}x-ui log${plain}                   - Check logs                       │
-│  ${blue}x-ui banlog${plain}                - Check Fail2ban ban logs          │
-│  ${blue}x-ui update${plain}                - Update                           │
-│  ${blue}x-ui update-dev${plain}            - Update to Dev channel (latest)   │
-│  ${blue}x-ui update-menu${plain}           - Update management menu           │
-│  ${blue}x-ui update-all-geofiles${plain}   - Update all geo files             │
-│  ${blue}x-ui migrateDB [file]${plain}      - Convert .db <-> .dump (SQLite)   │
-│  ${blue}x-ui pgclient [ver]${plain}        - Upgrade pg_dump/pg_restore tools │
-│  ${blue}x-ui legacy${plain}                - Legacy version                   │
-│  ${blue}x-ui install${plain}               - Install                          │
-│  ${blue}x-ui uninstall${plain}             - Uninstall                        │
-└────────────────────────────────────────────────────────────────┘"
+    print_console_box \
+        "x-ui control menu usages (subcommands):" \
+        "" \
+        "x-ui                       - Admin Management Script" \
+        "x-ui start                 - Start" \
+        "x-ui stop                  - Stop" \
+        "x-ui restart               - Restart" \
+        "x-ui restart-core          - Restart Sing-box" \
+        "x-ui status                - Current Status" \
+        "x-ui settings              - Current Settings" \
+        "x-ui enable                - Enable Autostart on OS Startup" \
+        "x-ui disable               - Disable Autostart on OS Startup" \
+        "x-ui log                   - Check logs" \
+        "x-ui banlog                - Check Fail2ban ban logs" \
+        "x-ui update                - Update" \
+        "x-ui update-dev            - Update to Dev channel (latest)" \
+        "x-ui update-menu           - Update management menu" \
+        "x-ui update-all-geofiles   - Update all geo files" \
+        "x-ui migrateDB [file]      - Convert .db <-> .dump (SQLite)" \
+        "x-ui pgclient [ver]        - Upgrade pg_dump/pg_restore tools" \
+        "x-ui legacy                - Legacy version" \
+        "x-ui install               - Install" \
+        "x-ui uninstall             - Uninstall"
 }
 
 before_show_menu() {
@@ -800,47 +817,44 @@ show_menu() {
     [[ "${_xui_menu_active:-0}" == 0 ]] || return 0
     local _xui_menu_active=1
     while true; do
-        echo -e "
-╔────────────────────────────────────────────────╗
-│  ${green}3X-UI Panel Management Script${plain}                │
-│  ${green}0.${plain} Exit Script                               │
-│────────────────────────────────────────────────│
-│  ${green}1.${plain} Install                                   │
-│  ${green}2.${plain} Update                                    │
-│  ${green}3.${plain} Update to DEV (published build)     │
-│  ${green}4.${plain} Restore Installed Menu                   │
-│  ${green}5.${plain} Legacy Version                            │
-│  ${green}6.${plain} Uninstall                                 │
-│────────────────────────────────────────────────│
-│  ${green}7.${plain} Reset Username & Password                 │
-│  ${green}8.${plain} Reset Web Base Path                       │
-│  ${green}9.${plain} Reset Settings                            │
-│  ${green}10.${plain} Change Port                              │
-│  ${green}11.${plain} View Current Settings                    │
-│────────────────────────────────────────────────│
-│  ${green}12.${plain} Start                                    │
-│  ${green}13.${plain} Stop                                     │
-│  ${green}14.${plain} Restart                                  │
-│  ${green}15.${plain} Restart Sing-box                             │
-│  ${green}16.${plain} Check Status                             │
-│  ${green}17.${plain} Logs Management                          │
-│────────────────────────────────────────────────│
-│  ${green}18.${plain} Enable Autostart                         │
-│  ${green}19.${plain} Disable Autostart                        │
-│────────────────────────────────────────────────│
-│  ${green}20.${plain} SSL Certificate Management               │
-│  ${green}21.${plain} Cloudflare SSL Certificate               │
-│  ${green}22.${plain} IP Limit Management                      │
-│  ${green}23.${plain} Firewall Management                      │
-│  ${green}24.${plain} SSH Port Forwarding Management           │
-│  ${green}25.${plain} PostgreSQL Management                    │
-│────────────────────────────────────────────────│
-│  ${green}26.${plain} Enable BBR                               │
-│  ${green}27.${plain} Update Geo Files                         │
-│  ${green}28.${plain} Speedtest                                │
-│  ${green}29.${plain} Gateway Mode                               │
-╚────────────────────────────────────────────────╝
-"
+        print_console_box \
+            "3X-UI Panel Management Script" \
+            "0. Exit Script" \
+            "--" \
+            "1. Install" \
+            "2. Update" \
+            "3. Update to DEV (published build)" \
+            "4. Restore Installed Menu" \
+            "5. Legacy Version" \
+            "6. Uninstall" \
+            "--" \
+            "7. Reset Username & Password" \
+            "8. Reset Web Base Path" \
+            "9. Reset Settings" \
+            "10. Change Port" \
+            "11. View Current Settings" \
+            "--" \
+            "12. Start" \
+            "13. Stop" \
+            "14. Restart" \
+            "15. Restart Sing-box" \
+            "16. Check Status" \
+            "17. Logs Management" \
+            "--" \
+            "18. Enable Autostart" \
+            "19. Disable Autostart" \
+            "--" \
+            "20. SSL Certificate Management" \
+            "21. Cloudflare SSL Certificate" \
+            "22. IP Limit Management" \
+            "23. Firewall Management" \
+            "24. SSH Port Forwarding Management" \
+            "25. PostgreSQL Management" \
+            "--" \
+            "26. Enable BBR" \
+            "27. Update Geo Files" \
+            "28. Speedtest" \
+            "29. Gateway Mode"
         show_status
         echo
         read -rp "Please enter your selection [0-29]: " num || return 0

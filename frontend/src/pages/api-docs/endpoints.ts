@@ -231,7 +231,7 @@ export const sections: readonly Section[] = [
             name: 'protocol',
             in: 'path',
             type: 'string',
-            desc: 'External VPN protocol identifier.',
+            desc: 'Component identifier: pingtunnel, trusttunnel, hysteria2, openflux or fptn.',
           },
         ],
       },
@@ -240,7 +240,8 @@ export const sections: readonly Section[] = [
   {
     id: 'naiveproxy',
     title: 'NaiveProxy',
-    description: 'Manage the standalone Caddy-Naive sidecar used when Xray is the selected core.',
+    description:
+      'Install the optional Caddy-Naive binary for independent configuration on Linux/amd64. Panel connections continue to use sing-box.',
     endpoints: [
       {
         method: 'GET',

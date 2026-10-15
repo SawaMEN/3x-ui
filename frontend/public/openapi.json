@@ -4798,7 +4798,7 @@
     },
     {
       "name": "NaiveProxy",
-      "description": "Manage the standalone Caddy-Naive sidecar used when Xray is the selected core."
+      "description": "Install the optional Caddy-Naive binary for independent configuration on Linux/amd64. Panel connections continue to use sing-box."
     },
     {
       "name": "Routing Presets",
@@ -4975,7 +4975,7 @@
             "name": "protocol",
             "in": "path",
             "required": true,
-            "description": "External VPN protocol identifier.",
+            "description": "Component identifier: pingtunnel, trusttunnel, hysteria2, openflux or fptn.",
             "schema": {
               "type": "string"
             }
