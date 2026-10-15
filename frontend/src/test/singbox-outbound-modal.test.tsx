@@ -42,6 +42,28 @@ describe('native outbound modal', () => {
       [],
     );
   });
+  it('keeps the original tag and cached WARP options when editing', () => {
+    const onSave = vi.fn();
+    const warp = {
+      type: 'masque',
+      tag: 'my-warp',
+      use_http2: true,
+      use_ipv6: false,
+      profile: { recreate: false, detour: 'registration-proxy' },
+      reconnect_delay: '5s',
+    };
+    render(
+      <SingBoxOutboundModal
+        open
+        value={warp}
+        existingTags={['my-warp', 'registration-proxy']}
+        onCancel={() => {}}
+        onSave={onSave}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить изменения' }));
+    expect(onSave).toHaveBeenCalledWith(warp, []);
+  });
   it('opens the subscription form for a pasted URL without sending it to the URI decoder', () => {
     const onSubscriptionURL = vi.fn();
     vi.mocked(importNativeConnections).mockClear();
