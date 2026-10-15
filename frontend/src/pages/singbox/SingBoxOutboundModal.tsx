@@ -50,6 +50,7 @@ import {
   changeTransport,
   object,
   outboundProtocols,
+  outboundProtocolLabel,
   parseOutboundJson,
   requiredTlsProtocols,
   realityProtocols,
@@ -122,12 +123,14 @@ export default function SingBoxOutboundModal({
     tagsRef.current = existingTags;
   }, [existingTags]);
   const savedProtocols = useRef<Record<string, ConfigObject>>({});
+  const autoTagRef = useRef('');
   useEffect(() => {
     session.current++;
     if (!open) return;
     const initial = value
       ? structuredClone(value)
       : outboundDefaults('vless', uniqueTag('proxy', tagsRef.current));
+    autoTagRef.current = value ? '' : text(initial.tag);
     setDraft(initial);
     setJson(JSON.stringify(initial, null, 2));
     setTab('connection');
@@ -156,12 +159,14 @@ export default function SingBoxOutboundModal({
     setError('');
   };
   const patch = (key: string, v: unknown) => {
-    if (key === 'tag' && typeof v === 'string')
+    if (key === 'tag' && typeof v === 'string') {
+      autoTagRef.current = '';
       setAdditional((items) =>
         items.map(
           (item) => rewriteNativeReferences(item, new Map([[text(draft.tag), v]])) as ConfigObject,
         ),
       );
+    }
     const schema =
       (nativeFields.protocols as unknown as Record<string, OptionSchema>)[text(draft.type)] || {};
     const next = patchOption(draft, key, v, schema);
@@ -219,6 +224,7 @@ export default function SingBoxOutboundModal({
       const items = await importNativeConnections(link);
       if (current !== session.current) return;
       const renamed = renameImportedConnections(items, availableTags);
+      autoTagRef.current = '';
       update(renamed[0]);
       setInvalidOptions([]);
       setOptionsRevision((revision) => revision + 1);
@@ -239,24 +245,31 @@ export default function SingBoxOutboundModal({
         type="info"
         showIcon
         style={{ marginBottom: 16 }}
-        title="Автоматическая настройка подключения"
-        description="Импортируйте ссылку — адрес, ключи и настройки заполнятся сами. Необязательные параметры выбирает ядро. Недостающие учётные данные создаются автоматически; существующие сохраняются. Новые данные нужно указать и на удалённом сервере."
+        title={type === 'masque' ? 'Cloudflare WARP через MASQUE' : 'Автоматическая настройка подключения'}
+        description={
+          type === 'masque'
+            ? 'Устройство WARP регистрируется ядром sing-box при первом запуске. Выберите HTTP/3 или HTTP/2, сохраните подключение и примените настройки ядра. Кэш регистрации включается автоматически — свой MASQUE-сервер и отдельные ключи не нужны.'
+            : 'Импортируйте ссылку — адрес, ключи и настройки заполнятся сами. Необязательные параметры выбирает ядро. Недостающие учётные данные создаются автоматически; существующие сохраняются. Новые данные нужно указать и на удалённом сервере.'
+        }
         action={
-          <Button
-            disabled={!!jsonError || invalidOptions.length > 0}
-            onClick={() =>
-              update(
-                autoConfigureOutbound({
-                  ...draft,
-                  tag: text(draft.tag) || uniqueTag(type, availableTags),
-                }),
-              )
-            }
-          >
-            Настроить автоматически
-          </Button>
+          type === 'masque' ? undefined : (
+            <Button
+              disabled={!!jsonError || invalidOptions.length > 0}
+              onClick={() =>
+                update(
+                  autoConfigureOutbound({
+                    ...draft,
+                    tag: text(draft.tag) || uniqueTag(type, availableTags),
+                  }),
+                )
+              }
+            >
+              Настроить автоматически
+            </Button>
+          )
         }
       />
+      {type !== 'masque' && (
       <Space wrap style={{ marginBottom: 16 }}>
         <Button
           disabled={!!jsonError || invalidOptions.length > 0}
@@ -298,6 +311,7 @@ export default function SingBoxOutboundModal({
           Показать данные для сервера
         </Button>
       </Space>
+      )}
       <Space.Compact style={{ width: '100%', marginBottom: 16 }}>
         <Input
           aria-label="Ссылка для автоматической настройки"
@@ -318,12 +332,23 @@ export default function SingBoxOutboundModal({
             showSearch
             optionFilterProp="label"
             value={type || undefined}
-            options={options([...outboundProtocols, ...nativeEndpointTypes])}
+            options={[...outboundProtocols, ...nativeEndpointTypes].map((protocol) => ({
+              value: protocol,
+              label: outboundProtocolLabel(protocol),
+            }))}
             onChange={(next) => {
               setInvalidOptions([]);
               savedProtocols.current[type] = structuredClone(draft);
               const saved = savedProtocols.current[next];
-              update(saved ? { ...saved, tag: draft.tag } : changeProtocol(draft, next));
+              const changed = saved ? { ...saved, tag: draft.tag } : changeProtocol(draft, next);
+              // Only rename the pristine generated tag of a NEW connection.
+              // Editing and manually named/imported profiles keep their names.
+              if (!value && autoTagRef.current && text(draft.tag) === autoTagRef.current) {
+                const nextTag = uniqueTag(next === 'masque' ? 'warp-masque' : 'proxy', availableTags);
+                changed.tag = nextTag;
+                autoTagRef.current = nextTag;
+              }
+              update(changed);
             }}
           />
         </Field>
@@ -877,6 +902,7 @@ export default function SingBoxOutboundModal({
           setJson(raw);
           try {
             setDraft(parseOutboundJson(raw));
+            autoTagRef.current = '';
             setOptionsRevision((revision) => revision + 1);
             setInvalidOptions([]);
             setJsonError('');
@@ -991,10 +1017,12 @@ export default function SingBoxOutboundModal({
     >
       <div className="outbound-summary">
         <Space wrap>
-          <Tag color="blue">{type || 'Протокол'}</Tag>
+          <Tag color="blue">{type ? outboundProtocolLabel(type) : 'Протокол'}</Tag>
           <span>
             {text(draft.server) ||
-              (group ? 'Группа подключений' : remote ? 'Укажите сервер' : 'Локальное подключение')}
+              (type === 'masque'
+                ? 'Cloudflare WARP · регистрация в sing-box'
+                : group ? 'Группа подключений' : remote ? 'Укажите сервер' : 'Локальное подключение')}
             {draft.server && draft.server_port ? `:${draft.server_port}` : ''}
           </span>
         </Space>
