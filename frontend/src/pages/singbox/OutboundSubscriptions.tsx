@@ -126,7 +126,14 @@ export default function OutboundSubscriptions({
     await refresh(result.obj.id);
   }
   return (
-    <Drawer open={open} onClose={onClose} title="Подписки для каскада" size={760} zIndex={1100}>
+    <Drawer
+      destroyOnHidden
+      open={open}
+      onClose={onClose}
+      title="Подписки для каскада"
+      size={760}
+      zIndex={1100}
+    >
       <Space orientation="vertical" size={16} style={{ width: '100%' }}>
         <Alert
           type="info"

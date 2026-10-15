@@ -25,6 +25,7 @@ import {
   Switch,
   Table,
   Tabs,
+  Radio,
   Tag,
   Empty,
   message,
@@ -42,11 +43,14 @@ import {
 } from '@ant-design/icons';
 
 import AdBlockTab from '@/pages/adblock/AdBlockTab';
+import { SettingListItem } from '@/components/ui';
 import AppSidebar from '@/layouts/AppSidebar';
 import { HttpUtil } from '@/utils';
 import { useTheme } from '@/hooks/useTheme';
 import './SingBoxPage.css';
 import SimpleSettings from './SimpleSettings';
+import NativeRoutingBasic from './NativeRoutingBasic';
+import { basicRuleTitle } from './native-routing-basic';
 import NativeDnsServers from './NativeDnsServers';
 import NativeDnsRules from './NativeDnsRules';
 import { putConnection, removeConnection } from './config-references';
@@ -56,11 +60,7 @@ import {
   setOptimisticCache,
   setDefaultDomainResolver,
 } from './simple-settings';
-import {
-  importNativeConnections,
-  isNativeEndpoint,
-  renameImportedConnections,
-} from './native-import';
+import { isNativeEndpoint } from './native-import';
 import SingBoxOutboundModal from './SingBoxOutboundModal';
 import OutboundSubscriptions from './OutboundSubscriptions';
 import RoutingCatalogTab from '@/pages/xray/routing/RoutingCatalogTab';
@@ -566,9 +566,14 @@ function SingBoxRouteRuleModal({
               allowClear
               style={{ width: '100%' }}
               value={asString(draft.action) || 'route'}
-              options={['route', 'sniff', 'resolve', 'hijack-dns', 'reject', 'route-options'].map(
-                (v) => ({ value: v, label: v }),
-              )}
+              options={[
+                { value: 'route', label: 'Через подключение' },
+                { value: 'reject', label: 'Блокировать' },
+                ...['sniff', 'resolve', 'hijack-dns', 'route-options'].map((value) => ({
+                  value,
+                  label: value,
+                })),
+              ]}
               onChange={(v) =>
                 setDraft((current) => {
                   const next: JsonObject = { ...current, action: v || 'route' };
@@ -580,7 +585,8 @@ function SingBoxRouteRuleModal({
           </Field>
           <Field label="Комментарий" span={24}>
             <Input
-              value={asString(draft.comment)}
+              value={basicRuleTitle(asString(draft.comment))}
+              disabled={asString(draft.comment).startsWith('panel-basic:')}
               onChange={(e) => patch('comment', e.target.value)}
               placeholder="Telegram через proxy"
             />
@@ -766,6 +772,7 @@ export default function SingBoxPage() {
         'dns',
         'routing',
         'outbound',
+        'balancer',
         'endpoints',
         'certificates',
         'network',
@@ -774,11 +781,10 @@ export default function SingBoxPage() {
     [],
   );
   const activeSection = sectionKeys.has(sectionSlug) ? sectionSlug : 'basic';
-  const [advancedMode, setAdvancedMode] = useState(false);
   const expertSection = ['advanced', 'endpoints', 'certificates', 'network'].includes(
     activeSection,
   );
-  const showAdvanced = advancedMode || expertSection;
+  const showAdvanced = expertSection;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [fetchError, setFetchError] = useState('');
@@ -787,6 +793,7 @@ export default function SingBoxPage() {
     dns: 'DNS',
     routing: 'Маршрутизация',
     outbound: 'Исходящие',
+    balancer: 'Балансировщики',
     endpoints: 'Endpoints',
     certificates: 'Сертификаты',
     network: 'Сеть',
@@ -797,11 +804,9 @@ export default function SingBoxPage() {
   const [subscriptionURL, setSubscriptionURL] = useState('');
   const [outboundModalOpen, setOutboundModalOpen] = useState(false);
   const [editingOutbound, setEditingOutbound] = useState<number | null>(null);
+  const [newOutboundType, setNewOutboundType] = useState('vless');
   const [routeRuleModalOpen, setRouteRuleModalOpen] = useState(false);
   const [editingRouteRule, setEditingRouteRule] = useState<number | null>(null);
-  const [shareLinkOpen, setShareLinkOpen] = useState(false);
-  const [importingLink, setImportingLink] = useState(false);
-  const [shareLink, setShareLink] = useState('');
   const [routeSearch, setRouteSearch] = useState('');
   const [outboundSearch, setOutboundSearch] = useState('');
 
@@ -904,54 +909,51 @@ export default function SingBoxPage() {
   const renderLog = () => {
     const value = asObject(sectionValue('log', config));
     return (
-      <>
-        <SectionHeader
-          title="Логирование"
-          description="Основные параметры журналирования sing-box."
-          onReset={() => updateSection('log', sectionFallbacks.log)}
-        />
-        <Card>
-          <Row gutter={[12, 16]}>
-            <Field label="Логирование отключено">
-              <ToggleField
-                checked={asBoolean(value.disabled)}
-                onChange={(next) => patchSection('log', { disabled: next })}
-              />
-            </Field>
-            <Field label="Уровень">
-              <Select
-                style={{ width: '100%' }}
-                value={asString(value.level) || 'info'}
-                options={['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'panic'].map((v) => ({
-                  label: v,
-                  value: v,
-                }))}
-                onChange={(next) => patchSection('log', { level: next })}
-              />
-            </Field>
-            <Field label="Файл вывода" span={24}>
-              <TextField
-                value={asString(value.output)}
-                placeholder="box.log"
-                onChange={(next) => patchSection('log', { output: next })}
-              />
-            </Field>
-            <Field label="Добавлять timestamp">
-              <ToggleField
-                checked={asBoolean(value.timestamp)}
-                onChange={(next) => patchSection('log', { timestamp: next })}
-              />
-            </Field>
-          </Row>
-        </Card>
-        <div className="singbox-json-action">
+      <Card title="Логирование">
+        <SettingListItem title="Вести журнал">
+          <Switch
+            checked={!asBoolean(value.disabled)}
+            onChange={(enabled) => patchSection('log', { disabled: !enabled })}
+          />
+        </SettingListItem>
+        <SettingListItem
+          title="Уровень журнала"
+          description="Отладку включайте на время поиска ошибки."
+        >
+          <Select
+            aria-label="Подробность журнала"
+            style={{ width: '100%' }}
+            value={asString(value.level) || 'info'}
+            options={['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'panic'].map((level) => ({
+              label: level,
+              value: level,
+            }))}
+            onChange={(level) => patchSection('log', { level })}
+          />
+        </SettingListItem>
+        <SettingListItem
+          title="Файл журнала"
+          description="Оставьте пустым для вывода в системный журнал."
+        >
+          <TextField
+            value={asString(value.output)}
+            onChange={(output) => patchSection('log', { output })}
+          />
+        </SettingListItem>
+        <SettingListItem title="Добавлять время к записям">
+          <Switch
+            checked={asBoolean(value.timestamp)}
+            onChange={(timestamp) => patchSection('log', { timestamp })}
+          />
+        </SettingListItem>
+        {showAdvanced && (
           <JsonModal
             title="Лог — расширенный JSON"
             value={value}
             onApply={(next) => updateSection('log', asObject(next))}
           />
-        </div>
-      </>
+        )}
+      </Card>
     );
   };
 
@@ -1563,7 +1565,7 @@ export default function SingBoxPage() {
 
   const renderEndpoints = () => renderOutbounds(true);
 
-  const renderOutbounds = (onlyEndpoints = false) => {
+  const renderOutbounds = (onlyEndpoints = false, onlyGroups = false) => {
     const items = [
       ...asObjectArray(sectionValue('outbounds', config)),
       ...asObjectArray(config.endpoints),
@@ -1573,6 +1575,8 @@ export default function SingBoxPage() {
       .filter(
         (item) =>
           (!onlyEndpoints || isNativeEndpoint(item)) &&
+          (onlyEndpoints ||
+            ['selector', 'urltest', 'balancer'].includes(asString(item.type)) === onlyGroups) &&
           [item.tag, item.type, item.server]
             .join(' ')
             .toLowerCase()
@@ -1583,10 +1587,13 @@ export default function SingBoxPage() {
       <Card>
         <div className="singbox-section-header">
           <div>
-            <div className="singbox-section-title">Исходящие</div>
+            <div className="singbox-section-title">
+              {onlyGroups ? 'Балансировщики' : 'Исходящие подключения'}
+            </div>
             <div className="singbox-section-description">
-              Серверы, группы и туннели в одном списке. Изменение названия автоматически обновляет
-              ссылки в правилах маршрутизации и DNS.
+              {onlyGroups
+                ? 'Группы выбора и проверки подключений.'
+                : 'Серверы и туннели. Группы находятся в разделе «Балансировщики».'}
             </div>
           </div>
           <Space wrap>
@@ -1598,16 +1605,17 @@ export default function SingBoxPage() {
             >
               Подписки
             </Button>
-            <Button onClick={() => setShareLinkOpen(true)}>Импорт ссылки</Button>
             <Button
               icon={<PlusOutlined />}
               type="primary"
+              aria-label={onlyGroups ? 'Добавить балансировщик' : 'Добавить outbound'}
               onClick={() => {
                 setEditingOutbound(null);
+                setNewOutboundType(onlyGroups ? 'selector' : 'vless');
                 setOutboundModalOpen(true);
               }}
             >
-              Добавить outbound
+              {onlyGroups ? 'Добавить балансировщик' : 'Добавить outbound'}
             </Button>
           </Space>
         </div>
@@ -1929,7 +1937,7 @@ export default function SingBoxPage() {
                 },
               },
               {
-                title: 'Outbound',
+                title: 'Назначение',
                 width: 160,
                 render: (_: unknown, row: JsonObject) =>
                   asString(row.outbound) ? (
@@ -1940,7 +1948,8 @@ export default function SingBoxPage() {
               },
               {
                 title: 'Комментарий',
-                render: (_: unknown, row: JsonObject) => asString(row.comment) || '—',
+                render: (_: unknown, row: JsonObject) =>
+                  basicRuleTitle(asString(row.comment)) || '—',
               },
               {
                 title: '',
@@ -1952,6 +1961,16 @@ export default function SingBoxPage() {
                       <Button
                         size="small"
                         onClick={() => {
+                          if (asString(rules[index].comment).startsWith('panel-basic:')) {
+                            const next = new URLSearchParams(location.search);
+                            next.set('routingTab', 'basic');
+                            navigate({
+                              pathname: location.pathname,
+                              search: next.toString(),
+                              hash: location.hash,
+                            });
+                            return;
+                          }
                           setEditingRouteRule(index);
                           setRouteRuleModalOpen(true);
                         }}
@@ -1988,7 +2007,15 @@ export default function SingBoxPage() {
                           patchSection('route', {
                             rules: [
                               ...rules.slice(0, index + 1),
-                              structuredClone(rules[index]),
+                              {
+                                ...structuredClone(rules[index]),
+                                ...(asString(rules[index].comment).startsWith('panel-basic:')
+                                  ? {
+                                      comment:
+                                        'Копия: ' + basicRuleTitle(asString(rules[index].comment)),
+                                    }
+                                  : {}),
+                              },
                               ...rules.slice(index + 1),
                             ],
                           })
@@ -2216,6 +2243,7 @@ export default function SingBoxPage() {
       <Collapse
         items={[
           { key: 'basic', label: 'Журнал, время и схема', children: renderBasic() },
+          { key: 'dns', label: 'Дополнительные параметры DNS', children: renderDns() },
           {
             key: 'experimental',
             label: 'Кэш-файл и служебные API',
@@ -2237,19 +2265,12 @@ export default function SingBoxPage() {
       case 'dns':
         return (
           <Tabs
-            defaultActiveKey="basic"
+            defaultActiveKey="servers"
             items={[
               {
                 key: 'basic',
                 label: 'Основные',
-                children: (
-                  <SimpleSettings
-                    config={config}
-                    onChange={setConfig}
-                    section="dns"
-                    onNavigate={navigate}
-                  />
-                ),
+                children: <SimpleSettings config={config} onChange={setConfig} />,
               },
               {
                 key: 'servers',
@@ -2267,7 +2288,6 @@ export default function SingBoxPage() {
                 label: 'Правила DNS',
                 children: <NativeDnsRules config={config} onChange={setConfig} />,
               },
-              { key: 'advanced', label: 'Дополнительно', children: renderDns() },
             ]}
           />
         );
@@ -2292,11 +2312,10 @@ export default function SingBoxPage() {
                 key: 'basic',
                 label: 'Основные',
                 children: (
-                  <SimpleSettings
+                  <NativeRoutingBasic
                     config={config}
                     onChange={setConfig}
-                    section="routing"
-                    onNavigate={navigate}
+                    subscriptionTags={snapshot?.subscriptionTags || []}
                   />
                 ),
               },
@@ -2345,6 +2364,8 @@ export default function SingBoxPage() {
         );
       case 'outbound':
         return renderOutbounds();
+      case 'balancer':
+        return renderOutbounds(false, true);
       case 'endpoints':
         return renderEndpoints();
       case 'certificates':
@@ -2354,16 +2375,7 @@ export default function SingBoxPage() {
       case 'advanced':
         return renderAdvanced();
       default:
-        return (
-          <Space orientation="vertical" size={16} style={{ width: '100%' }}>
-            <SimpleSettings config={config} onChange={setConfig} onNavigate={navigate} />
-            <Collapse
-              items={[
-                { key: 'log', label: 'Параметры журнала и времени', children: renderBasic() },
-              ]}
-            />
-          </Space>
-        );
+        return renderLog();
     }
   })();
 
@@ -2391,9 +2403,7 @@ export default function SingBoxPage() {
       okButtonProps: { danger: true },
       onOk: reset,
     });
-  const visibleSections = showAdvanced
-    ? Array.from(sectionKeys)
-    : ['basic', 'dns', 'routing', 'outbound'];
+  const visibleSections = ['basic', 'routing', 'outbound', 'balancer', 'dns', 'advanced'];
 
   return (
     <ConfigProvider theme={antdThemeConfig}>
@@ -2446,18 +2456,6 @@ export default function SingBoxPage() {
                           >
                             {t('pages.singBox.refresh')}
                           </Button>
-                          <Space>
-                            <span>Расширенный режим</span>
-                            <Switch
-                              aria-label="Расширенный режим"
-                              checked={showAdvanced}
-                              disabled={saving}
-                              onChange={(checked) => {
-                                setAdvancedMode(checked);
-                                if (!checked && expertSection) navigate('/singbox#basic');
-                              }}
-                            />
-                          </Space>
                           {showAdvanced && (
                             <Button danger disabled={saving} onClick={requestReset}>
                               {t('pages.singBox.reset')}
@@ -2527,18 +2525,19 @@ export default function SingBoxPage() {
                     />
                   )}
 
-                  <Tabs
-                    activeKey={activeSection}
-                    onChange={(key) => {
-                      if (sectionKeys.has(key)) navigate('/singbox#' + key);
-                    }}
-                    className="singbox-main-tabs"
-                    items={visibleSections.map((key) => ({
-                      key,
-                      label: SECTION_LABELS[key],
-                      children: key === activeSection ? sectionBody : null,
-                    }))}
-                  />
+                  <Card className="singbox-section-navigation">
+                    <Radio.Group
+                      value={expertSection ? 'advanced' : activeSection}
+                      buttonStyle="solid"
+                      onChange={(event) => navigate('/singbox#' + event.target.value)}
+                      options={visibleSections.map((key) => ({
+                        value: key,
+                        label: SECTION_LABELS[key],
+                      }))}
+                      optionType="button"
+                    />
+                  </Card>
+                  <Card className="singbox-settings-body">{sectionBody}</Card>
                 </Space>
               ) : (
                 <div style={{ minHeight: 200 }} />
@@ -2548,85 +2547,20 @@ export default function SingBoxPage() {
         </Layout>
       </Layout>
 
-      <Modal
-        open={shareLinkOpen}
-        title="Импорт outbound по ссылке"
-        okText="Добавить"
-        cancelText="Отмена"
-        onCancel={() => setShareLinkOpen(false)}
-        confirmLoading={importingLink}
-        mask={{ closable: !importingLink }}
-        cancelButtonProps={{ disabled: importingLink }}
-        onOk={async () => {
-          if (importingLink) return;
-          if (/^https?:\/\//i.test(shareLink.trim())) {
-            try {
-              const url = new URL(shareLink.trim());
-              if (!url.username && !url.password) {
-                setSubscriptionURL(url.href);
-                setSubscriptionsOpen(true);
-                setShareLinkOpen(false);
-                return;
-              }
-            } catch {
-              /* The normal importer reports malformed URLs. */
-            }
+      {subscriptionsOpen && (
+        <OutboundSubscriptions
+          open
+          initialURL={subscriptionURL}
+          onClose={() => setSubscriptionsOpen(false)}
+          onTagsChanged={(tags) =>
+            setSnapshot((current) => (current ? { ...current, subscriptionTags: tags } : current))
           }
-          setImportingLink(true);
-          try {
-            const items = await importNativeConnections(shareLink);
-            const tags = [...asObjectArray(config.outbounds), ...asObjectArray(config.endpoints)]
-              .map((item) => asString(item.tag))
-              .concat(snapshot?.subscriptionTags || []);
-            const imported = renameImportedConnections(items, tags);
-            setConfig((current) => ({
-              ...current,
-              outbounds: [
-                ...asObjectArray(current.outbounds),
-                ...imported.filter((item) => !isNativeEndpoint(item)),
-              ],
-              endpoints: [
-                ...asObjectArray(current.endpoints),
-                ...imported.filter(isNativeEndpoint),
-              ],
-            }));
-          } catch (error) {
-            messageApi.error(error instanceof Error ? error.message : String(error));
-            return;
-          } finally {
-            setImportingLink(false);
-          }
-          setShareLink('');
-          setShareLinkOpen(false);
-          messageApi.success('Outbound создан автоматически.');
-        }}
-      >
-        <Alert
-          type="info"
-          showIcon
-          message="Автоматический импорт"
-          description="Ссылки поддерживаемых протоколов распознаются автоматически. Параметры подключения, безопасности и транспорта сохраняются."
-          style={{ marginBottom: 12 }}
         />
-        <Input.TextArea
-          value={shareLink}
-          onChange={(e) => setShareLink(e.target.value)}
-          autoSize={{ minRows: 5, maxRows: 10 }}
-          placeholder="vless://..."
-        />
-      </Modal>
-
-      <OutboundSubscriptions
-        open={subscriptionsOpen}
-        initialURL={subscriptionURL}
-        onClose={() => setSubscriptionsOpen(false)}
-        onTagsChanged={(tags) =>
-          setSnapshot((current) => (current ? { ...current, subscriptionTags: tags } : current))
-        }
-      />
+      )}
       {outboundModalOpen && (
         <SingBoxOutboundModal
           open
+          initialType={newOutboundType}
           value={
             editingOutbound == null
               ? null
@@ -2643,6 +2577,7 @@ export default function SingBoxPage() {
             .filter(Boolean)
             .concat(snapshot?.subscriptionTags || [])}
           onSubscriptionURL={(url) => {
+            setOutboundModalOpen(false);
             setSubscriptionURL(url);
             setSubscriptionsOpen(true);
           }}

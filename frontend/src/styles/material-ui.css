@@ -640,9 +640,7 @@ body.dark .ant-card:hover {
 .ant-dropdown,
 .ant-select-dropdown,
 .ant-picker-dropdown,
-.ant-popover,
-.ant-modal-wrap,
-.ant-drawer {
+.ant-popover {
   backdrop-filter: blur(14px);
 }
 

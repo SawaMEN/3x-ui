@@ -186,62 +186,6 @@
   font-size: 13px;
   line-height: 1.6;
 }
-.singbox-page .singbox-overview {
-  background: linear-gradient(
-    135deg,
-    var(--ant-color-primary-bg),
-    var(--ant-color-bg-container) 70%
-  );
-}
-.singbox-page .singbox-overview-title {
-  margin: 12px 0 8px;
-  font-size: clamp(22px, 3vw, 30px);
-  letter-spacing: -0.5px;
-  line-height: 1.2;
-}
-.singbox-page .singbox-overview-description {
-  color: var(--ant-color-text-secondary);
-  max-width: 760px;
-  line-height: 1.6;
-  margin-bottom: 24px;
-}
-.singbox-page .singbox-summary {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  text-align: start;
-  width: 100%;
-  height: 100%;
-  padding: 20px;
-  border: 1px solid var(--ant-color-border-secondary);
-  border-radius: 12px;
-  background: var(--ant-color-bg-container);
-  color: var(--ant-color-text);
-  font: inherit;
-  cursor: pointer;
-  transition:
-    border-color 150ms,
-    box-shadow 150ms;
-}
-.singbox-page .singbox-summary:hover,
-.singbox-page .singbox-summary:focus-visible {
-  border-color: var(--ant-color-primary);
-  box-shadow: 0 0 0 2px var(--ant-color-primary-bg);
-}
-.singbox-page .singbox-summary-label,
-.singbox-page .singbox-summary-detail {
-  color: var(--ant-color-text-secondary);
-  font-size: 13px;
-}
-.singbox-page .singbox-summary-value {
-  font-size: 20px;
-  overflow-wrap: anywhere;
-}
-.singbox-page .singbox-summary-action {
-  margin-top: auto;
-  color: var(--ant-color-primary);
-  font-size: 13px;
-}
 .singbox-page label.singbox-field-label {
   display: block;
 }
@@ -254,4 +198,20 @@
 }
 .singbox-page .singbox-switch-setting p {
   margin: 4px 0 0;
+}
+
+.singbox-section-navigation .ant-radio-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.singbox-section-navigation .ant-radio-button-wrapper {
+  border-radius: 6px;
+  border-inline-start-width: 1px;
+}
+.singbox-section-navigation .ant-radio-button-wrapper::before {
+  display: none;
+}
+.singbox-settings-body .setting-list-item + .setting-list-item {
+  border-top: 1px solid var(--ant-color-border-secondary);
 }

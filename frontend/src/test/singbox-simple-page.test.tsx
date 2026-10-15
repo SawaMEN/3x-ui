@@ -5,6 +5,9 @@ import { MemoryRouter } from 'react-router';
 import SingBoxPage from '@/pages/singbox/SingBoxPage';
 import { HttpUtil } from '@/utils';
 
+// Import and subscription handoffs render several dialogs on shared CI CPUs.
+vi.setConfig({ testTimeout: 15000 });
+
 vi.mock('@/layouts/AppSidebar', () => ({ default: () => null }));
 vi.mock('@/pages/adblock/AdBlockTab', () => ({ default: () => null }));
 vi.mock('@/hooks/useTheme', () => ({
@@ -38,6 +41,11 @@ beforeEach(() => {
   });
   vi.mocked(HttpUtil.post).mockClear();
 });
+
+async function openImporter() {
+  fireEvent.click(await screen.findByRole('button', { name: 'Добавить outbound' }));
+  fireEvent.click(await screen.findByRole('tab', { name: /JSON/ }));
+}
 
 function mount(path = '/singbox') {
   render(
@@ -212,24 +220,27 @@ describe('simple sing-box page', () => {
     expect(sent.outbounds).toEqual(config.outbounds);
   });
 
-  it('starts with simple controls and only exposes expert sections after switching', async () => {
+  it('uses the original Xray section order without a second advanced mode', async () => {
     mount();
-    await screen.findByText('Быстрая настройка');
-    expect(screen.queryByText('Endpoints')).toBeNull();
-    expect(screen.queryByText('V2Ray API')).toBeNull();
+    await screen.findByText('Логирование');
+    expect(screen.getAllByRole('radio').map((item) => item.closest('label')?.textContent)).toEqual([
+      'Основные',
+      'Маршрутизация',
+      'Исходящие',
+      'Балансировщики',
+      'DNS',
+      'Advanced',
+    ]);
+    expect(screen.queryByText('Быстрая настройка')).toBeNull();
+    expect(screen.queryByLabelText('Расширенный режим')).toBeNull();
     expect(screen.getByText('Save').closest('button')!.hasAttribute('disabled')).toBe(true);
-    fireEvent.click(screen.getByLabelText('Расширенный режим'));
-    expect(await screen.findByText('Endpoints')).toBeTruthy();
   });
 
-  it('shows current settings and opens DNS from the overview', async () => {
+  it('opens DNS servers directly from the main navigation', async () => {
     mount();
-    await screen.findByText('Быстрая настройка');
-    expect(screen.getByText('Системный DNS')).toBeTruthy();
-    expect(screen.getByText('Журнал событий')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Настроить: DNS' }));
-    await screen.findByText('Определение адресов сайтов (DNS)');
-    expect(screen.getByLabelText('Выбор IP-адреса')).toBeTruthy();
+    await screen.findByText('Логирование');
+    fireEvent.click(screen.getByRole('radio', { name: 'DNS' }));
+    expect(await screen.findByRole('button', { name: 'Добавить DNS' })).toBeTruthy();
     expect(HttpUtil.post).not.toHaveBeenCalled();
   });
 
@@ -243,6 +254,7 @@ describe('simple sing-box page', () => {
 
   it('saves simple edits with custom rules intact and omits panel-managed sections', async () => {
     mount('/singbox#dns');
+    fireEvent.click(await screen.findByRole('tab', { name: 'Основные' }));
     fireEvent.click(await screen.findByLabelText('Кэш DNS'));
     fireEvent.click(screen.getByText('Save').closest('button')!);
     await waitFor(() =>
@@ -264,14 +276,14 @@ describe('simple sing-box page', () => {
     mount();
     const select = await screen.findByLabelText('Подробность журнала');
     fireEvent.mouseDown(select.closest('.ant-select')!.querySelector('.ant-select-content')!);
-    fireEvent.click(await screen.findByText('Предупреждения и ошибки — меньше записей'));
+    fireEvent.click(await screen.findAllByText('warn').then((items) => items[items.length - 1]));
     fireEvent.click(screen.getByText('Save').closest('button')!);
     await waitFor(() => expect(HttpUtil.post).toHaveBeenCalled());
     const call = vi
       .mocked(HttpUtil.post)
       .mock.calls.find(([path]) => path === '/panel/api/setting/singbox/config')!;
     const sent = JSON.parse((call[1] as { config: string }).config);
-    expect(sent.log).toEqual({ ...config.log, level: 'warn', disabled: false });
+    expect(sent.log).toEqual({ ...config.log, level: 'warn' });
     expect(sent.dns).toEqual(config.dns);
     expect(sent.route).toEqual(config.route);
     expect(sent.inbounds).toBeUndefined();
@@ -280,6 +292,7 @@ describe('simple sing-box page', () => {
 
   it('asks before discarding unsaved edits', async () => {
     mount('/singbox#dns');
+    fireEvent.click(await screen.findByRole('tab', { name: 'Основные' }));
     await screen.findByText('Определение адресов сайтов (DNS)');
     fireEvent.click(screen.getByLabelText('Кэш DNS'));
     const loads = vi.mocked(HttpUtil.get).mock.calls.length;
@@ -291,9 +304,8 @@ describe('simple sing-box page', () => {
   });
 
   it('asks before resetting automatic settings', async () => {
-    mount();
-    await screen.findByText('Быстрая настройка');
-    fireEvent.click(screen.getByLabelText('Расширенный режим'));
+    mount('/singbox#advanced');
+    await screen.findByText('Расширенная конфигурация');
     fireEvent.click(screen.getByText('Reset to generated settings').closest('button')!);
     await screen.findAllByText('Вернуть автоматические настройки sing-box?');
     expect(HttpUtil.post).not.toHaveBeenCalled();
@@ -318,11 +330,15 @@ describe('simple sing-box page', () => {
       },
     });
     mount('/singbox#outbound');
-    fireEvent.click(await screen.findByText('Импорт ссылки'));
-    fireEvent.change(screen.getByPlaceholderText('vless://...'), {
+    await openImporter();
+    fireEvent.change(screen.getByLabelText('Ссылка подключения'), {
       target: { value: 'trojan://pass@proxy.test#Imported' },
     });
-    fireEvent.click(screen.getByText('Добавить').closest('button')!);
+    fireEvent.click(screen.getByRole('button', { name: /Импортировать/ }));
+    await screen.findByDisplayValue('Imported');
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: 'Добавить подключение' }),
+    );
     await screen.findByText('Imported');
     fireEvent.click(screen.getByText('Save').closest('button')!);
     await waitFor(() =>
@@ -352,13 +368,13 @@ describe('simple sing-box page', () => {
       obj: null,
     });
     mount('/singbox#outbound');
-    fireEvent.click(await screen.findByText('Импорт ссылки'));
-    fireEvent.change(screen.getByPlaceholderText('vless://...'), {
+    await openImporter();
+    fireEvent.change(screen.getByLabelText('Ссылка подключения'), {
       target: {
         value: 'vless://12345678-1234-1234-1234-123456789abc@proxy.test?type=xhttp#Unsupported',
       },
     });
-    fireEvent.click(screen.getByText('Добавить').closest('button')!);
+    fireEvent.click(screen.getByRole('button', { name: /Импортировать/ }));
     await screen.findByText('Ядро не приняло ссылку');
     expect(screen.queryByText('Unsupported')).toBeNull();
     expect(screen.getByText('Save').closest('button')!.hasAttribute('disabled')).toBe(true);
@@ -402,10 +418,14 @@ it('decodes Mieru through the pure import API and saves native port bindings', a
       : { success: true, msg: '', obj: null },
   );
   mount('/outbound');
-  fireEvent.click(await screen.findByText('Импорт ссылки'));
+  await openImporter();
   const link = 'mierus://u:p@proxy.test?profile=test&port=2012-2022&protocol=TCP';
-  fireEvent.change(screen.getByPlaceholderText('vless://...'), { target: { value: link } });
-  fireEvent.click(screen.getByText('Добавить').closest('button')!);
+  fireEvent.change(screen.getByLabelText('Ссылка подключения'), { target: { value: link } });
+  fireEvent.click(screen.getByRole('button', { name: /Импортировать/ }));
+  await screen.findByDisplayValue('Mieru imported');
+  fireEvent.click(
+    within(screen.getByRole('dialog')).getByRole('button', { name: 'Добавить подключение' }),
+  );
   await screen.findByText('Mieru imported');
   expect(HttpUtil.post).toHaveBeenCalledWith('/panel/api/setting/singbox/import-link', {
     link,
@@ -422,4 +442,38 @@ it('decodes Mieru through the pure import API and saves native port bindings', a
     .mocked(HttpUtil.post)
     .mock.calls.find(([path]) => path === '/panel/api/setting/singbox/config')!;
   expect(JSON.parse((call[1] as { config: string }).config).outbounds).toContainEqual(outbound);
+});
+
+it('has one importer and removes both modal and mask after opening a subscription from it', async () => {
+  vi.mocked(HttpUtil.get).mockImplementation(async (url) => ({
+    success: true,
+    msg: '',
+    obj: String(url).endsWith('/outbound-subs')
+      ? []
+      : {
+          config: structuredClone(config),
+          running: true,
+          version: '1.14.0',
+          managedSections: ['inbounds'],
+        },
+  }));
+  mount('/outbound');
+  await screen.findByRole('button', { name: 'Добавить outbound' });
+  expect(screen.queryByText('Импорт ссылки')).toBeNull();
+  await openImporter();
+  fireEvent.change(screen.getByLabelText('Ссылка подключения'), {
+    target: { value: 'https://provider.test/sub' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: /Импортировать/ }));
+  const drawer = await screen.findByRole('dialog');
+  await within(drawer).findByDisplayValue('https://provider.test/sub');
+  expect(screen.getAllByRole('dialog')).toHaveLength(1);
+  expect(screen.queryByRole('button', { name: 'Добавить подключение' })).toBeNull();
+  fireEvent.click(within(drawer).getByRole('button', { name: 'Close' }));
+  await waitFor(() => expect(document.querySelector('.ant-drawer')).toBeNull());
+  expect(screen.queryByRole('dialog')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Подписки' }));
+  const reopened = await screen.findByRole('dialog');
+  fireEvent.click(within(reopened).getByRole('button', { name: 'Close' }));
+  await waitFor(() => expect(document.querySelector('.ant-drawer-mask')).toBeNull());
 });

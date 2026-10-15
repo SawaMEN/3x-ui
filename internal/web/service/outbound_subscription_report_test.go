@@ -204,3 +204,47 @@ func TestSubscriptionKernelValidationUsesDiagnosticSeverity(t *testing.T) {
 		})
 	}
 }
+
+func TestSubscriptionKernelAssignsTagBeforeValidation(t *testing.T) {
+	folder := t.TempDir()
+	t.Setenv("XUI_BIN_FOLDER", folder)
+	if err := os.WriteFile(singbox.GetBinaryPath(), []byte(`#!/bin/sh
+[ "$1" != "check" ] || exit 0
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = "--output" ]; then output="$2"; shift 2; else shift; fi
+done
+printf '%s' '{"outbounds":[{"type":"socks","tag":" § 0","server":"proxy.test","server_port":1080}]}' > "$output"
+`), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	rows, _, _, err := parseOutboundSubscriptionReport([]byte("socks5://proxy.test:1080"), true)
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("unnamed kernel connection rejected: rows=%v err=%v", rows, err)
+	}
+	if tag, _ := rows[0]["tag"].(string); strings.TrimSpace(tag) == "" || tag != strings.TrimSpace(tag) {
+		t.Fatalf("invalid generated tag: %q", tag)
+	}
+	setupSettingTestDB(t)
+	id := serveOutboundSubscription(t, "", func(int) string { return "socks5://proxy.test:1080" })
+	first, _ := refreshOutboundTags(t, id)
+	second, _ := refreshOutboundTags(t, id)
+	if len(first) != 1 || len(second) != 1 || first[0] != second[0] {
+		t.Fatalf("subscription refresh changed tags: first=%v second=%v", first, second)
+	}
+}
+
+func TestSubscriptionTrimsProviderNamesAndPreservesReferences(t *testing.T) {
+	t.Setenv("XUI_BIN_FOLDER", t.TempDir())
+	body := `{"outbounds":[{"type":"socks","tag":" proxy ","server":"proxy.test","server_port":1080},{"type":"selector","tag":" group ","outbounds":[" proxy "],"default":" proxy "},{"type":"socks","tag":"  ","server":"other.test","server_port":1080}]}`
+	rows, _, _, err := parseOutboundSubscriptionReport([]byte(body), true)
+	if err != nil || len(rows) != 3 {
+		t.Fatalf("provider names rejected: rows=%v err=%v", rows, err)
+	}
+	if rows[0]["tag"] != "proxy" || rows[1]["tag"] != "group" {
+		t.Fatalf("tags not trimmed: %v", rows)
+	}
+	settings := rows[1]["settings"].(map[string]any)
+	if settings["default"] != "proxy" || settings["outbounds"].([]any)[0] != "proxy" {
+		t.Fatalf("group references were not renamed: %v", settings)
+	}
+}

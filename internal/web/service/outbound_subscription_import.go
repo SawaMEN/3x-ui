@@ -110,7 +110,15 @@ func parseOutboundSubscriptionEntries(body []byte, tolerant bool, warnings *[]st
 				}
 			}
 		}
-		names := map[string]bool{}
+		objects := make([]map[string]any, 0, len(rows))
+		for _, value := range rows {
+			if row, ok := value.(map[string]any); ok {
+				objects = append(objects, row)
+			}
+		}
+		if err := normalizeSubscriptionTags(objects); err != nil {
+			return nil, nil, err
+		}
 		for i, value := range rows {
 			row, ok := value.(map[string]any)
 			if !ok {
@@ -119,15 +127,6 @@ func parseOutboundSubscriptionEntries(body []byte, tolerant bool, warnings *[]st
 					continue
 				}
 				return nil, nil, fmt.Errorf("subscription connection %d must be an object", i+1)
-			}
-			if tag, _ := row["tag"].(string); tag == "" {
-				row["tag"] = fmt.Sprintf("profile-%d", i+1)
-			}
-			if tag, _ := row["tag"].(string); strings.TrimSpace(tag) != "" && tag == strings.TrimSpace(tag) {
-				if names[tag] {
-					return nil, nil, fmt.Errorf("duplicate subscription connection tag %q", tag)
-				}
-				names[tag] = true
 			}
 			normalized, err := singbox.NormalizeOutboundInput(row)
 			if err != nil {
@@ -179,6 +178,9 @@ func parseOutboundSubscriptionEntries(body []byte, tolerant bool, warnings *[]st
 				return nil, nil, fmt.Errorf("subscription line %d: unsupported or invalid connection", lineIndex+1)
 			}
 			rows := append(bundle.Outbounds, bundle.Endpoints...)
+			if err := normalizeSubscriptionTags(rows); err != nil {
+				return nil, nil, err
+			}
 			// Namespace independent bundles before merging their detour graphs.
 			names := map[string]string{}
 			for i, row := range rows {
@@ -216,4 +218,36 @@ func parseOutboundSubscriptionEntries(body []byte, tolerant bool, warnings *[]st
 		return nil, nil, fmt.Errorf("subscription contains no supported valid connections")
 	}
 	return out, identities, nil
+}
+
+// Provider labels are optional, unlike tags in an editable panel config.
+func normalizeSubscriptionTags(rows []map[string]any) error {
+	names := map[string]string{}
+	used := map[string]bool{}
+	for _, row := range rows {
+		original, _ := row["tag"].(string)
+		tag := strings.TrimSpace(original)
+		if tag == "" {
+			continue
+		}
+		if used[tag] {
+			return fmt.Errorf("duplicate subscription connection tag %q", tag)
+		}
+		used[tag] = true
+		names[original] = tag
+	}
+	for i, row := range rows {
+		original, _ := row["tag"].(string)
+		tag := strings.TrimSpace(original)
+		if tag == "" {
+			tag = fmt.Sprintf("profile-%d", i+1)
+			for used[tag] {
+				tag += "-node"
+			}
+			used[tag] = true
+		}
+		retagNativeShareReferences(row, names)
+		row["tag"] = tag
+	}
+	return nil
 }

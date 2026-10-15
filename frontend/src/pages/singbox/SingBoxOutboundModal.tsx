@@ -96,9 +96,11 @@ export default function SingBoxOutboundModal({
   existingTags,
   onCancel,
   onSubscriptionURL,
+  initialType = 'vless',
   onSave,
 }: {
   open: boolean;
+  initialType?: string;
   value: ConfigObject | null;
   existingTags: string[];
   onCancel: () => void;
@@ -129,7 +131,10 @@ export default function SingBoxOutboundModal({
     if (!open) return;
     const initial = value
       ? structuredClone(value)
-      : outboundDefaults('vless', uniqueTag('proxy', tagsRef.current));
+      : outboundDefaults(
+          initialType,
+          uniqueTag(initialType === 'selector' ? 'group' : 'proxy', tagsRef.current),
+        );
     autoTagRef.current = value ? '' : text(initial.tag);
     setDraft(initial);
     setJson(JSON.stringify(initial, null, 2));
@@ -144,7 +149,7 @@ export default function SingBoxOutboundModal({
     setInvalidOptions([]);
     setOptionsRevision((revision) => revision + 1);
     savedProtocols.current = {};
-  }, [open, value]);
+  }, [open, value, initialType]);
   const type = text(draft.type),
     tls = object(draft.tls),
     reality = object(tls.reality),
