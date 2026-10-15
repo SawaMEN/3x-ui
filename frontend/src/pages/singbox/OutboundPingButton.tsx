@@ -10,7 +10,9 @@ export default function OutboundPingButton({
   disabled?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<{ delay?: number; error?: string; url?: string } | null>(null);
+  const [result, setResult] = useState<{ delay?: number; error?: string; url?: string } | null>(
+    null,
+  );
   async function measure() {
     setBusy(true);
     setResult(null);
@@ -58,7 +60,12 @@ export default function OutboundPingButton({
       {result?.error && (
         <Typography.Text
           type="warning"
-          style={{ display: 'inline-block', maxWidth: 440, overflowWrap: 'anywhere', whiteSpace: 'normal' }}
+          style={{
+            display: 'inline-block',
+            maxWidth: 440,
+            overflowWrap: 'anywhere',
+            whiteSpace: 'normal',
+          }}
         >
           {result.error}
         </Typography.Text>
