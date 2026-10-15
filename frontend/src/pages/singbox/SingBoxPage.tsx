@@ -63,6 +63,7 @@ import SingBoxOutboundModal from './SingBoxOutboundModal';
 import OutboundSubscriptions from './OutboundSubscriptions';
 import RoutingCatalogTab from '@/pages/xray/routing/RoutingCatalogTab';
 import { catalogAssignedRules, nativeCatalogRule, putNativeCatalogRule } from './catalog-rules';
+import { outboundProtocolLabel } from './outbound-editor-model';
 
 type SectionKey =
   | 'schema'
@@ -1721,8 +1722,9 @@ export default function SingBoxPage() {
             },
             {
               title: 'Протокол',
-              width: 130,
-              render: (_: unknown, row: JsonObject) => asString(row.type) || '—',
+              width: 190,
+              render: (_: unknown, row: JsonObject) =>
+                asString(row.type) ? outboundProtocolLabel(asString(row.type)) : '—',
             },
             {
               title: 'Endpoint',
@@ -1730,6 +1732,7 @@ export default function SingBoxPage() {
                 const type = asString(row.type);
                 if (['selector', 'urltest', 'balancer'].includes(type))
                   return asStringArray(row.outbounds).length + ' outbound в группе';
+                if (type === 'masque') return 'Cloudflare WARP';
                 if (row.server)
                   return asString(row.server) + (row.server_port ? ':' + row.server_port : '');
                 return 'Локальный';
@@ -1740,7 +1743,9 @@ export default function SingBoxPage() {
               width: 70,
               align: 'center',
               render: (_: unknown, row: JsonObject) =>
-                row.tls ? <Tag color="green">TLS</Tag> : '—',
+                row.type === 'masque'
+                  ? <Tag color="green">{row.use_http2 ? 'H2' : 'H3'}</Tag>
+                  : row.tls ? <Tag color="green">TLS</Tag> : '—',
             },
             {
               title: 'Проверка',
