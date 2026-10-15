@@ -1,6 +1,14 @@
 import { nativeOutboundTypes, nativeServerTypes } from './native-import';
 import { outboundDefaults, type ConfigObject } from './simple-settings';
 export const outboundProtocols = nativeOutboundTypes;
+
+// The native core's "masque" outbound is Cloudflare WARP. The separate
+// "masque-client" CONNECT-IP endpoint connects to a user-operated server.
+export function outboundProtocolLabel(protocol: string): string {
+  if (protocol === 'masque') return 'Cloudflare WARP (MASQUE)';
+  if (protocol === 'masque-client') return 'MASQUE Client (CONNECT-IP)';
+  return protocol;
+}
 export const tlsProtocols = [
   'vless',
   'vmess',
