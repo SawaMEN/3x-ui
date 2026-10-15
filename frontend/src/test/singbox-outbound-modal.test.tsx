@@ -12,6 +12,37 @@ vi.mock('@/pages/singbox/native-import', async (importOriginal) => ({
   importNativeConnections: vi.fn(),
 }));
 describe('native outbound modal', () => {
+  it('creates Cloudflare WARP through the protocol picker with a unique tag', async () => {
+    const onSave = vi.fn();
+    render(
+      <SingBoxOutboundModal
+        open
+        value={null}
+        existingTags={['proxy', 'warp-masque']}
+        onCancel={() => {}}
+        onSave={onSave}
+      />,
+    );
+    const protocolInput = screen.getByLabelText('Протокол');
+    const picker =
+      protocolInput.closest('.ant-select')?.querySelector('.ant-select-selector') ??
+      protocolInput;
+    fireEvent.mouseDown(picker);
+    fireEvent.click(await screen.findByText('Cloudflare WARP (MASQUE)'));
+    expect(screen.getByText('Cloudflare WARP через MASQUE')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Создать недостающие учётные данные' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Добавить подключение' }));
+    expect(onSave).toHaveBeenCalledWith(
+      {
+        type: 'masque',
+        tag: 'warp-masque-2',
+        use_http2: false,
+        use_ipv6: false,
+        profile: { recreate: false },
+      },
+      [],
+    );
+  });
   it('opens the subscription form for a pasted URL without sending it to the URI decoder', () => {
     const onSubscriptionURL = vi.fn();
     vi.mocked(importNativeConnections).mockClear();
