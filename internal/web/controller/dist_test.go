@@ -2,6 +2,13 @@ package controller
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing/fstest"
+
+	"github.com/gin-contrib/sessions"
+	"github.com/gin-contrib/sessions/cookie"
+	"github.com/gin-gonic/gin"
 	"strings"
 	"testing"
 )
@@ -69,5 +76,28 @@ func TestPWAHeadInjectionUsesRuntimeBasePath(t *testing.T) {
 func TestPWAHeadInjectionSkipsSubscriptionPage(t *testing.T) {
 	if got := pwaHeadInjection("/panel-secret/", "subpage.html"); got != nil {
 		t.Fatalf("subpage injection = %q, want nil", got)
+	}
+}
+
+func TestDistPageExposesListenerAddress(t *testing.T) {
+	previous := distFS
+	distFS = fstest.MapFS{"dist/login.html": &fstest.MapFile{Data: []byte("<html><head></head></html>")}}
+	t.Cleanup(func() { distFS = previous })
+	engine := gin.New()
+	engine.Use(sessions.Sessions("test", cookie.NewStore([]byte("test-secret"))))
+	engine.GET("/", func(c *gin.Context) {
+		c.Set("panel_port", 2053)
+		c.Set("panel_tls", false)
+		serveDistPage(c, "login.html")
+	})
+	recorder := httptest.NewRecorder()
+	engine.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d", recorder.Code)
+	}
+	for _, tag := range []string{`name="panel-port" content="2053"`, `name="panel-tls" content="false"`} {
+		if !strings.Contains(recorder.Body.String(), tag) {
+			t.Fatalf("listener metadata missing: %s", tag)
+		}
 	}
 }

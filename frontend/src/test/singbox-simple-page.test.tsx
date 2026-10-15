@@ -98,6 +98,43 @@ describe('simple sing-box page', () => {
     expect(sent.inbounds).toBeUndefined();
     expect(sent.services).toBeUndefined();
   });
+  it('reorders and duplicates routing rules and persists their priority', async () => {
+    const first = { action: 'reject', domain: ['ads.test'] };
+    const second = { action: 'route', port_range: ['1000:2000'], outbound: 'direct' };
+    vi.mocked(HttpUtil.get).mockResolvedValue({
+      success: true,
+      msg: '',
+      obj: {
+        config: { ...structuredClone(config), route: { final: 'direct', rules: [first, second] } },
+        running: true,
+        version: '1.14.0',
+        managedSections: ['inbounds'],
+      },
+    });
+    mount('/routing');
+    const moveUp = await screen.findAllByTitle('Выше');
+    fireEvent.click(moveUp[1]);
+    const rows = screen.getAllByRole('row');
+    expect(rows[1].textContent).toContain('1000:2000');
+    expect(rows[2].textContent).toContain('ads.test');
+    fireEvent.click(screen.getAllByTitle('Дублировать')[0]);
+    fireEvent.click(screen.getByText('Save').closest('button')!);
+    await waitFor(() =>
+      expect(HttpUtil.post).toHaveBeenCalledWith(
+        '/panel/api/setting/singbox/config',
+        expect.anything(),
+      ),
+    );
+    const call = vi
+      .mocked(HttpUtil.post)
+      .mock.calls.find(([path]) => path === '/panel/api/setting/singbox/config')!;
+    expect(JSON.parse((call[1] as { config: string }).config).route.rules).toEqual([
+      second,
+      second,
+      first,
+    ]);
+  });
+
   it('starts with simple controls and only exposes expert sections after switching', async () => {
     mount();
     await screen.findByText('Быстрая настройка');

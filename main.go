@@ -147,7 +147,7 @@ func runWebServer() {
 	global.SetSubServer(subServer)
 	err = subServer.Start()
 	if err != nil {
-		log.Fatalf("Error starting sub server: %v", err)
+		logger.Errorf("Subscription server unavailable; panel remains running: %v", err)
 	}
 	if err := service.RefreshTelemtWebSubscriptionRoutes(); err != nil {
 		logger.Warning("Could not update Telemt WEB subscription routes: ", err)
@@ -212,12 +212,14 @@ func runWebServer() {
 			global.SetSubServer(subServer)
 			err = subServer.Start()
 			if err != nil {
-				log.Fatalf("Error restarting sub server: %v", err)
+				logger.Errorf("Subscription server unavailable after restart; panel remains running: %v", err)
 			}
 			if err := service.RefreshTelemtWebSubscriptionRoutes(); err != nil {
 				logger.Warning("Could not update Telemt WEB subscription routes after restart: ", err)
 			}
-			log.Println("Sub server restarted successfully.")
+			if err == nil {
+				log.Println("Sub server restarted successfully.")
+			}
 		case sys.SIGUSR1:
 			logger.Info("Received USR1 signal, restarting sing-box...")
 			err := server.RestartXray()

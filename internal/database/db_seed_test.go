@@ -214,7 +214,7 @@ func TestNormalizeSettingPaths_RepairsLegacyValues(t *testing.T) {
 		{Key: "subJsonPath", Value: "YIrCXJOOOL"},
 		{Key: "subPath", Value: "/sub"},
 		{Key: "subClashPath", Value: "clash/"},
-		{Key: "webBasePath", Value: "/panel/"},
+		{Key: "webBasePath", Value: "/:panel*?#%\\/"},
 	}
 	if err := db.Where("key IN ?", []string{"subPath", "subJsonPath", "subClashPath"}).Delete(&model.Setting{}).Error; err != nil {
 		t.Fatalf("clear generated subscription paths: %v", err)

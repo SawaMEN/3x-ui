@@ -18,6 +18,7 @@ func TestPathHasForbiddenChar(t *testing.T) {
 	}
 
 	invalid := []string{
+		"/:param/", "/catch*all/", "/secret?query/", "/secret#fragment/", "/encoded%2F/",
 		"/sub path/",
 		"/back\\slash/",
 		"/tab\there/",

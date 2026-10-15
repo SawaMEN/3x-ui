@@ -173,6 +173,13 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 
 	engine := gin.Default()
 	directHTTPS := s.isDirectHTTPSConfigured()
+	panelPort, err := s.settingService.GetPort()
+	if err != nil {
+		return nil, err
+	}
+	if port, configured, err := config.GetPortOverride(); configured && err == nil {
+		panelPort = port
+	}
 	sendHSTS := directHTTPS && !config.IsSkipHSTS()
 	engine.Use(middleware.SecurityHeadersMiddleware(sendHSTS))
 
@@ -221,6 +228,8 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	engine.Use(sessions.Sessions("3x-ui", store))
 	engine.Use(func(c *gin.Context) {
 		c.Set("base_path", basePath)
+		c.Set("panel_port", panelPort)
+		c.Set("panel_tls", directHTTPS)
 	})
 	engine.Use(func(c *gin.Context) {
 		uri := c.Request.RequestURI
@@ -478,7 +487,7 @@ func (s *Server) startTask(restartXray bool, loc *time.Location) {
 	// CPU monitor publishes cpu.high events; register it whenever any notifier
 	// (Telegram or Email) wants them, independent of the Telegram bot being on.
 	if s.cpuAlarmWanted() {
-		_, _ = s.cron.AddJob(cadenceCPUAlarm, job.NewCheckCpuJob())
+		_, _ = s.cron.AddJob(cadenceCPUAlarm, job.NewCheckCpuJobWithContext(s.ctx))
 	}
 	// Memory monitor publishes memory.high events; register it whenever any notifier wants them.
 	if s.memoryAlarmWanted() {

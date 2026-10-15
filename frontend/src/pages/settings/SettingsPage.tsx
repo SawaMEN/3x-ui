@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Navigate, useLocation } from 'react-router';
 import {
@@ -32,6 +32,7 @@ import { useAllSettings } from '@/api/queries/useAllSettings';
 import { AllSettingSchema } from '@/schemas/setting';
 import AppSidebar from '@/layouts/AppSidebar';
 import GeneralTab from './GeneralTab';
+import { panelUrlAfterRestart } from './panel-url';
 import SecurityTab from './SecurityTab';
 import TelegramTab from './TelegramTab';
 import EmailTab from './EmailTab';
@@ -61,22 +62,6 @@ const tabSlugs = [
   'gateway',
 ];
 
-function isIp(h: string): boolean {
-  if (typeof h !== 'string') return false;
-  const v4 = h.split('.');
-  if (v4.length === 4 && v4.every((p) => /^\d{1,3}$/.test(p) && Number(p) <= 255)) return true;
-  if (!h.includes(':') || h.includes(':::')) return false;
-  const parts = h.split('::');
-  if (parts.length > 2) return false;
-  const split = (s: string) => (s ? s.split(':').filter(Boolean) : []);
-  const head = split(parts[0]);
-  const tail = split(parts[1]);
-  const valid = (seg: string) => /^[0-9a-fA-F]{1,4}$/.test(seg);
-  if (![...head, ...tail].every(valid)) return false;
-  const groups = head.length + tail.length;
-  return parts.length === 2 ? groups < 8 : groups === 8;
-}
-
 function scrollTarget() {
   return document.getElementById('content-layout') as HTMLElement;
 }
@@ -104,9 +89,24 @@ export default function SettingsPage() {
     savePayload,
   } = useAllSettings();
 
-  const [entryHost] = useState(() => window.location.hostname);
-  const [entryPort] = useState(() => window.location.port);
-  const [entryIsIP] = useState(() => isIp(window.location.hostname));
+  const initialAddress = useRef<Parameters<typeof panelUrlAfterRestart>[1] | null>(null);
+  useEffect(() => {
+    if (!fetched || initialAddress.current) return;
+    const port = Number(
+      document.querySelector<HTMLMetaElement>('meta[name="panel-port"]')?.content,
+    );
+    const tls = document.querySelector<HTMLMetaElement>('meta[name="panel-tls"]')?.content;
+    initialAddress.current = {
+      ...allSetting,
+      ...(port > 0 ? { webPort: port } : {}),
+      ...(tls != null
+        ? {
+            webCertFile: tls === 'true' ? 'configured' : '',
+            webKeyFile: tls === 'true' ? 'configured' : '',
+          }
+        : {}),
+    };
+  }, [fetched, allSetting]);
 
   const [alertVisible, setAlertVisible] = useState(true);
   const [swapOpen, setSwapOpen] = useState(false);
@@ -156,51 +156,19 @@ export default function SettingsPage() {
     },
   ];
 
-  function rebuildUrlAfterRestart(): string {
-    const { webDomain, webPort, webBasePath, webCertFile, webKeyFile } = allSetting;
-    const url = new URL(window.location.href);
-
-    // webDomain is also enforced by the backend Host validator: continuing
-    // to use the old hostname after changing it results in HTTP 403.
-    const nextHost = webDomain?.trim() || entryHost;
-    const hostname =
-      nextHost.includes(':') && !nextHost.startsWith('[') ? `[${nextHost}]` : nextHost;
-    url.hostname = hostname;
-
-    // Preserve the public HTTPS origin when TLS is terminated by a reverse
-    // proxy. A directly accessed panel should instead use its configured port.
-    if (webCertFile && webKeyFile) {
-      url.protocol = 'https:';
-    } else if (entryIsIP) {
-      url.protocol = 'http:';
-    }
-    if (entryIsIP || (entryPort && !['80', '443'].includes(entryPort))) {
-      if (webPort) url.port = String(webPort);
-    }
-
-    let base = webBasePath || '';
-    while (base.startsWith('/')) base = base.slice(1);
-    if (base && !base.endsWith('/')) base += '/';
-    url.pathname = `/${base}panel/settings`;
-    url.search = '';
-    url.hash = '';
-    return url.toString();
-  }
-
   async function waitForRestartedPanel(target: string): Promise<boolean> {
     // The backend schedules SIGHUP in 3 seconds. Do not mistake the old
     // listener for the restarted one while it is still serving requests.
     await PromiseUtil.sleep(3500);
+    // Cross-origin probes may be blocked by mixed-content rules or CSP.
+    if (new URL(target).origin !== window.location.origin) return true;
     for (let attempt = 0; attempt < 20; attempt++) {
       try {
-        // A changed hostname/port may be cross-origin. no-cors permits a
-        // reachability probe without depending on panel CORS configuration.
         const response = await fetch(target, {
-          mode: 'no-cors',
           cache: 'no-store',
           signal: AbortSignal.timeout(2000),
         });
-        if (response.ok || response.type === 'opaque') return true;
+        if (response.ok) return true;
       } catch {
         // The listener may still be restarting; retry within a fixed limit.
       }
@@ -221,6 +189,7 @@ export default function SettingsPage() {
     const saveResult = await saveAll();
     if (saveResult?.success) {
       window.dispatchEvent(new Event('xui-core-settings-saved'));
+      return true;
     }
   }
 
@@ -234,9 +203,14 @@ export default function SettingsPage() {
       onOk: async () => {
         setSpinning(true);
         try {
+          if (!saveDisabled && !(await onSave())) return;
+          const target = panelUrlAfterRestart(
+            window.location.href,
+            initialAddress.current ?? allSetting,
+            allSetting,
+          );
           const msg = (await HttpUtil.post('/panel/api/setting/restartPanel')) as ApiMsg;
           if (!msg?.success) return;
-          const target = rebuildUrlAfterRestart();
           if (await waitForRestartedPanel(target)) {
             window.location.replace(target);
           } else {

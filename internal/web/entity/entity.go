@@ -196,7 +196,7 @@ type AllSettingView struct {
 
 func pathHasForbiddenChar(s string) bool {
 	for _, r := range s {
-		if r == '\\' || r == ' ' || r < 0x20 || r == 0x7f {
+		if strings.ContainsRune(`\ :*?#%`, r) || r < 0x20 || r == 0x7f {
 			return true
 		}
 	}

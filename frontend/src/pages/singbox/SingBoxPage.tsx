@@ -1,4 +1,5 @@
 import OutboundPingButton from './OutboundPingButton';
+import { prepareRouteRule, routePorts, routeRuleSummary } from './route-rule';
 import MasqueConnectionFields from './MasqueConnectionFields';
 import { addWarpMasque } from './masque-settings';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -31,6 +32,9 @@ import {
   message,
 } from 'antd';
 import {
+  ArrowUpOutlined,
+  ArrowDownOutlined,
+  CopyOutlined,
   CodeOutlined,
   DeleteOutlined,
   ExportOutlined,
@@ -468,12 +472,30 @@ function SingBoxRouteRuleModal({
   onSave: (value: JsonObject) => void;
 }) {
   const [draft, setDraft] = useState<JsonObject>({});
+  const [error, setError] = useState('');
   const catalogManaged =
     typeof draft.routingListId === 'number' || typeof draft.routingListCategory === 'string';
   useEffect(() => {
     if (!open) return;
     const nextDraft = value ? JSON.parse(JSON.stringify(value)) : {};
-    const timer = window.setTimeout(() => setDraft(nextDraft), 0);
+    for (const key of [
+      'domain',
+      'domain_suffix',
+      'domain_keyword',
+      'domain_regex',
+      'ip_cidr',
+      'source_ip_cidr',
+      'protocol',
+      'network',
+      'inbound',
+      'rule_set',
+    ]) {
+      if (typeof nextDraft[key] === 'string') nextDraft[key] = [nextDraft[key]];
+    }
+    const timer = window.setTimeout(() => {
+      setDraft(nextDraft);
+      setError('');
+    }, 0);
     return () => window.clearTimeout(timer);
   }, [open, value]);
 
@@ -499,7 +521,13 @@ function SingBoxRouteRuleModal({
       okText="Сохранить"
       cancelText="Отмена"
       onCancel={onCancel}
-      onOk={() => onSave(draft)}
+      onOk={() => {
+        try {
+          onSave(prepareRouteRule(draft));
+        } catch (error) {
+          setError(error instanceof Error ? error.message : String(error));
+        }
+      }}
     >
       <Alert
         type="info"
@@ -508,6 +536,7 @@ function SingBoxRouteRuleModal({
         description="Правила редактируются так же, как в Xray: условия собираются полями, JSON оставлен для редких параметров."
         style={{ marginBottom: 12 }}
       />
+      {error && <Alert type="error" showIcon title={error} style={{ marginBottom: 12 }} />}
       {catalogManaged && (
         <Alert
           type="info"
@@ -517,6 +546,44 @@ function SingBoxRouteRuleModal({
           description="Содержимое списка изменяется во вкладке «Каталог списков». Назначение и другие условия можно изменить здесь."
         />
       )}
+      <Card size="small">
+        <Row gutter={[12, 14]}>
+          <Field label="Исходящее подключение">
+            <Select
+              allowClear
+              style={{ width: '100%' }}
+              disabled={!!draft.action && draft.action !== 'route'}
+              value={asString(draft.outbound) || undefined}
+              options={outboundTags.map((v) => ({ value: v, label: v }))}
+              onChange={(v) => patch('outbound', v)}
+            />
+          </Field>
+          <Field label="Действие">
+            <Select
+              allowClear
+              style={{ width: '100%' }}
+              value={asString(draft.action) || 'route'}
+              options={['route', 'sniff', 'resolve', 'hijack-dns', 'reject', 'route-options'].map(
+                (v) => ({ value: v, label: v }),
+              )}
+              onChange={(v) =>
+                setDraft((current) => {
+                  const next: JsonObject = { ...current, action: v || 'route' };
+                  if (next.action !== 'route') delete next.outbound;
+                  return next;
+                })
+              }
+            />
+          </Field>
+          <Field label="Комментарий" span={24}>
+            <Input
+              value={asString(draft.comment)}
+              onChange={(e) => patch('comment', e.target.value)}
+              placeholder="Telegram через proxy"
+            />
+          </Field>
+        </Row>
+      </Card>
       <Tabs
         items={[
           {
@@ -525,9 +592,10 @@ function SingBoxRouteRuleModal({
             children: (
               <Card size="small">
                 <Row gutter={[12, 14]}>
-                  <Field label="Домены">
+                  <Field label="Точные домены">
                     <Select
                       mode="tags"
+                      tokenSeparators={[',', '\n']}
                       disabled={catalogManaged}
                       style={{ width: '100%' }}
                       value={asStringArray(draft.domain)}
@@ -535,61 +603,81 @@ function SingBoxRouteRuleModal({
                       placeholder="example.com"
                     />
                   </Field>
-                  <Field label="Domain suffix">
+                  <Field label="Домены и поддомены">
                     <Select
                       mode="tags"
+                      tokenSeparators={[',', '\n']}
                       disabled={catalogManaged}
                       style={{ width: '100%' }}
                       value={asStringArray(draft.domain_suffix)}
                       onChange={(v) => patch('domain_suffix', v)}
                     />
                   </Field>
-                  <Field label="Domain keyword">
+                  <Field label="Ключевые слова доменов">
                     <Select
                       mode="tags"
+                      tokenSeparators={[',', '\n']}
                       disabled={catalogManaged}
                       style={{ width: '100%' }}
                       value={asStringArray(draft.domain_keyword)}
                       onChange={(v) => patch('domain_keyword', v)}
                     />
                   </Field>
+                  <Field label="Регулярные выражения доменов">
+                    <Select
+                      mode="tags"
+                      tokenSeparators={[',', '\n']}
+                      disabled={catalogManaged}
+                      style={{ width: '100%' }}
+                      value={asStringArray(draft.domain_regex)}
+                      onChange={(v) => patch('domain_regex', v)}
+                    />
+                  </Field>
                   <Field label="IP / CIDR">
                     <Select
                       mode="tags"
+                      tokenSeparators={[',', '\n']}
                       disabled={catalogManaged}
                       style={{ width: '100%' }}
                       value={asStringArray(draft.ip_cidr)}
                       onChange={(v) => patch('ip_cidr', v)}
                     />
                   </Field>
-                  <Field label="Source IP / CIDR">
+                  <Field label="IP источника / CIDR">
                     <Select
                       mode="tags"
+                      tokenSeparators={[',', '\n']}
                       style={{ width: '100%' }}
                       value={asStringArray(draft.source_ip_cidr)}
                       onChange={(v) => patch('source_ip_cidr', v)}
                     />
                   </Field>
-                  <Field label="Ports">
+                  <Field label="Порты назначения">
                     <Input
-                      value={
-                        Array.isArray(draft.port) ? draft.port.join(', ') : asString(draft.port)
+                      value={routePorts(draft)}
+                      onChange={(e) =>
+                        setDraft((current) => {
+                          const next: JsonObject = { ...current, port: e.target.value };
+                          delete next.port_range;
+                          return next;
+                        })
                       }
-                      onChange={(e) => patch('port', e.target.value)}
                       placeholder="80, 443, 1000:2000"
                     />
                   </Field>
-                  <Field label="Source ports">
+                  <Field label="Порты источника">
                     <Input
-                      value={
-                        Array.isArray(draft.source_port)
-                          ? draft.source_port.join(', ')
-                          : asString(draft.source_port)
+                      value={routePorts(draft, true)}
+                      onChange={(e) =>
+                        setDraft((current) => {
+                          const next: JsonObject = { ...current, source_port: e.target.value };
+                          delete next.source_port_range;
+                          return next;
+                        })
                       }
-                      onChange={(e) => patch('source_port', e.target.value)}
                     />
                   </Field>
-                  <Field label="Protocol">
+                  <Field label="Протокол">
                     <Select
                       mode="multiple"
                       style={{ width: '100%' }}
@@ -601,7 +689,7 @@ function SingBoxRouteRuleModal({
                       onChange={(v) => patch('protocol', v)}
                     />
                   </Field>
-                  <Field label="Network">
+                  <Field label="Сеть">
                     <Select
                       mode="multiple"
                       style={{ width: '100%' }}
@@ -610,7 +698,7 @@ function SingBoxRouteRuleModal({
                       onChange={(v) => patch('network', v)}
                     />
                   </Field>
-                  <Field label="Inbound">
+                  <Field label="Входящие подключения">
                     <Select
                       mode="multiple"
                       style={{ width: '100%' }}
@@ -619,55 +707,13 @@ function SingBoxRouteRuleModal({
                       onChange={(v) => patch('inbound', v)}
                     />
                   </Field>
-                  <Field label="Rule-set">
+                  <Field label="Наборы правил">
                     <Select
                       mode="multiple"
                       style={{ width: '100%' }}
                       value={asStringArray(draft.rule_set)}
                       options={ruleSetTags.map((v) => ({ value: v, label: v }))}
                       onChange={(v) => patch('rule_set', v)}
-                    />
-                  </Field>
-                </Row>
-              </Card>
-            ),
-          },
-          {
-            key: 'target',
-            label: 'Назначение',
-            children: (
-              <Card size="small">
-                <Row gutter={[12, 14]}>
-                  <Field label="Outbound">
-                    <Select
-                      allowClear
-                      style={{ width: '100%' }}
-                      value={asString(draft.outbound) || undefined}
-                      options={outboundTags.map((v) => ({ value: v, label: v }))}
-                      onChange={(v) => patch('outbound', v)}
-                    />
-                  </Field>
-                  <Field label="Action">
-                    <Select
-                      allowClear
-                      style={{ width: '100%' }}
-                      value={asString(draft.action) || undefined}
-                      options={[
-                        'route',
-                        'sniff',
-                        'resolve',
-                        'hijack-dns',
-                        'reject',
-                        'selector',
-                      ].map((v) => ({ value: v, label: v }))}
-                      onChange={(v) => patch('action', v)}
-                    />
-                  </Field>
-                  <Field label="Комментарий" span={24}>
-                    <Input
-                      value={asString(draft.comment)}
-                      onChange={(e) => patch('comment', e.target.value)}
-                      placeholder="Telegram через proxy"
                     />
                   </Field>
                 </Row>
@@ -1804,8 +1850,8 @@ export default function SingBoxPage() {
             <div>
               <div className="singbox-section-title">Маршрутизация</div>
               <div className="singbox-section-description">
-                Фильтр → назначение. Домены, IP, порты, protocol/network и inbound собираются
-                формой, без запоминания JSON-ключей.
+                Правила проверяются сверху вниз. Первое совпавшее правило определяет назначение;
+                если совпадений нет, используется выход по умолчанию.
               </div>
             </div>
             <Button
@@ -1890,12 +1936,7 @@ export default function SingBoxPage() {
                     typeof row.routingListCategory === 'string'
                       ? `geosite:${row.routingListCategory}`
                       : '',
-                    asStringArray(row.domain).join(', '),
-                    asStringArray(row.domain_suffix).join(', '),
-                    asStringArray(row.ip_cidr).join(', '),
-                    asStringArray(row.protocol).join(', '),
-                    asStringArray(row.network).join(', '),
-                    asStringArray(row.inbound).join(', '),
+                    routeRuleSummary(row),
                   ].filter(Boolean);
                   return pieces.length ? pieces.join(' · ') : 'Любой трафик';
                 },
@@ -1904,7 +1945,11 @@ export default function SingBoxPage() {
                 title: 'Outbound',
                 width: 160,
                 render: (_: unknown, row: JsonObject) =>
-                  asString(row.outbound) ? <Tag color="blue">{asString(row.outbound)}</Tag> : '—',
+                  asString(row.outbound) ? (
+                    <Tag color="blue">{asString(row.outbound)}</Tag>
+                  ) : (
+                    <Tag>{asString(row.action) || 'route'}</Tag>
+                  ),
               },
               {
                 title: 'Комментарий',
@@ -1912,7 +1957,7 @@ export default function SingBoxPage() {
               },
               {
                 title: '',
-                width: 150,
+                width: 250,
                 render: (_: unknown, _row: JsonObject, index: number) => (
                   <Space>
                     <Button
@@ -1924,6 +1969,42 @@ export default function SingBoxPage() {
                     >
                       Изменить
                     </Button>
+                    <Button
+                      size="small"
+                      title="Выше"
+                      icon={<ArrowUpOutlined />}
+                      disabled={index === 0}
+                      onClick={() => {
+                        const next = [...rules];
+                        [next[index - 1], next[index]] = [next[index], next[index - 1]];
+                        patchSection('route', { rules: next });
+                      }}
+                    />
+                    <Button
+                      size="small"
+                      title="Ниже"
+                      icon={<ArrowDownOutlined />}
+                      disabled={index === rules.length - 1}
+                      onClick={() => {
+                        const next = [...rules];
+                        [next[index], next[index + 1]] = [next[index + 1], next[index]];
+                        patchSection('route', { rules: next });
+                      }}
+                    />
+                    <Button
+                      size="small"
+                      title="Дублировать"
+                      icon={<CopyOutlined />}
+                      onClick={() =>
+                        patchSection('route', {
+                          rules: [
+                            ...rules.slice(0, index + 1),
+                            structuredClone(rules[index]),
+                            ...rules.slice(index + 1),
+                          ],
+                        })
+                      }
+                    />
                     <Button
                       size="small"
                       danger
@@ -2205,6 +2286,7 @@ export default function SingBoxPage() {
                       onNavigate={navigate}
                     />
                     <Collapse
+                      defaultActiveKey={['rules']}
                       items={[
                         {
                           key: 'rules',
@@ -2586,7 +2668,10 @@ export default function SingBoxPage() {
             .map((item) => asString(item.tag))
             .filter(Boolean)
         }
-        outboundTags={asObjectArray(sectionValue('outbounds', config))
+        outboundTags={[
+          ...asObjectArray(sectionValue('outbounds', config)),
+          ...asObjectArray(config.endpoints),
+        ]
           .map((item) => asString(item.tag))
           .filter(Boolean)
           .concat(snapshot?.subscriptionTags || [])}
