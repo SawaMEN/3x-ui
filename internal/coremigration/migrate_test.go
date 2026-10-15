@@ -704,3 +704,98 @@ func TestFreshDatabaseCanStartOwnerCoreWithoutSelectionRow(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestSnapshotUsesProductionPathsOnce(t *testing.T) {
+	r, _, dir := fixture(t)
+	r.files = migrationFiles
+	_ = database.CloseDB()
+	if err := r.run(context.Background(), Options{BackupDir: dir, BackupOnly: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.loadManifest(dir); err != nil {
+		t.Fatalf("production snapshot cannot be reopened: %v", err)
+	}
+}
+
+func TestRestoreLegacySnapshotWithDuplicateCoreConfig(t *testing.T) {
+	for _, corrupt := range []bool{false, true} {
+		t.Run(fmt.Sprintf("corrupt=%t", corrupt), func(t *testing.T) {
+			r, _, dir := fixture(t)
+			_ = database.CloseDB()
+			if err := r.run(context.Background(), Options{BackupDir: dir, BackupOnly: true}); err != nil {
+				t.Fatal(err)
+			}
+			m, err := r.loadManifest(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			duplicate := m.Files[len(m.Files)-1]
+			duplicate.Backup = "files/legacy-duplicate"
+			if _, err := atomicCopy(filepath.Join(dir, duplicate.Backup), hiddify.GetConfigPath(), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			m.Files = append(m.Files, duplicate)
+			if err := saveManifest(dir, m); err != nil {
+				t.Fatal(err)
+			}
+			if corrupt {
+				if err := os.WriteFile(filepath.Join(dir, duplicate.Backup), []byte("damaged"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.WriteFile(hiddify.GetConfigPath(), []byte("replacement"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			err = r.run(context.Background(), Options{BackupDir: dir, Restore: true})
+			if corrupt {
+				if err == nil || !strings.Contains(err.Error(), "checksum mismatch") {
+					t.Fatalf("corrupt duplicate accepted or misdiagnosed: %v", err)
+				}
+			} else if err != nil {
+				t.Fatalf("legacy recovery failed: %v", err)
+			}
+			data, err := os.ReadFile(hiddify.GetConfigPath())
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := "previous-native-config"
+			if corrupt {
+				want = "replacement"
+			}
+			if string(data) != want {
+				t.Fatalf("config after recovery = %q, want %q", data, want)
+			}
+		})
+	}
+}
+
+func TestSnapshotRejectsMissingAndConflictingEntries(t *testing.T) {
+	for _, missing := range []bool{false, true} {
+		t.Run(fmt.Sprintf("missing=%t", missing), func(t *testing.T) {
+			r, _, dir := fixture(t)
+			_ = database.CloseDB()
+			if err := r.run(context.Background(), Options{BackupDir: dir, BackupOnly: true}); err != nil {
+				t.Fatal(err)
+			}
+			m, err := r.loadManifest(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := "incomplete migration snapshot"
+			if missing {
+				m.Files = m.Files[1:]
+			} else {
+				duplicate := m.Files[len(m.Files)-1]
+				duplicate.Mode = 0o777
+				m.Files = append(m.Files, duplicate)
+				want = "conflicting duplicate snapshot path"
+			}
+			if err := saveManifest(dir, m); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := r.loadManifest(dir); err == nil || !strings.Contains(err.Error(), want) {
+				t.Fatalf("invalid snapshot error = %v, want %q", err, want)
+			}
+		})
+	}
+}

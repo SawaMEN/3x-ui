@@ -1963,7 +1963,8 @@ install_x-ui() {
         # Install the official Telemt updater. It verifies the upstream SHA256
         # checksum before replacing the binary and preserves the running service.
         if [[ -f telemt-update.sh && -f telemt-update.service && -f telemt-update.timer ]]; then
-            install -m 0755 -o root -g root telemt-update.sh "${xui_folder}/telemt-update.sh"
+            chown root:root "${xui_folder}/telemt-update.sh"
+            chmod 0755 "${xui_folder}/telemt-update.sh"
             install -m 0644 -o root -g root telemt-update.service "${xui_service}/telemt-update.service"
             install -m 0644 -o root -g root telemt-update.timer "${xui_service}/telemt-update.timer"
             systemctl daemon-reload 2> /dev/null || true
@@ -1974,7 +1975,8 @@ install_x-ui() {
         # The panel initializes its state and starts it when ports appear.
         # nftables is preferred; IPv4 iptables remains a fallback.
         if [[ -f telemt-meko-fix.sh && -f telemt-meko-fix.service ]]; then
-            install -m 0755 -o root -g root telemt-meko-fix.sh "${xui_folder}/telemt-meko-fix.sh"
+            chown root:root "${xui_folder}/telemt-meko-fix.sh"
+            chmod 0755 "${xui_folder}/telemt-meko-fix.sh"
             install -m 0644 -o root -g root telemt-meko-fix.service "${xui_service}/telemt-meko-fix.service"
             systemctl daemon-reload 2> /dev/null || true
             systemctl enable telemt-meko-fix.service 2> /dev/null || true

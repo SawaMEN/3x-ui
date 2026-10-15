@@ -78,11 +78,16 @@ func saveManifest(dir string, m *manifest) error {
 
 func snapshotFiles(dir string, paths []string) ([]savedFile, error) {
 	result := []savedFile{}
+	seen := map[string]bool{}
 	for i, path := range paths {
 		absolute, err := filepath.Abs(path)
 		if err != nil {
 			return nil, err
 		}
+		if seen[absolute] {
+			continue
+		}
+		seen[absolute] = true
 		s := savedFile{Path: absolute}
 		info, err := os.Lstat(absolute)
 		if os.IsNotExist(err) {

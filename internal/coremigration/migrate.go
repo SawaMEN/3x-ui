@@ -95,15 +95,20 @@ func (r runner) loadManifest(dir string) (*manifest, error) {
 			return nil, fmt.Errorf("snapshot path is outside this installation: %s", f.Path)
 		}
 	}
-	if len(m.Files) != len(allowed) {
-		return nil, fmt.Errorf("incomplete migration snapshot")
-	}
-	seen := map[string]bool{}
+	unique := make([]savedFile, 0, len(m.Files))
+	seen := map[string]savedFile{}
 	for _, f := range m.Files {
-		if seen[f.Path] {
-			return nil, fmt.Errorf("duplicate snapshot path")
+		if previous, exists := seen[f.Path]; exists {
+			if previous.Exists != f.Exists || previous.SHA256 != f.SHA256 || previous.Mode != f.Mode {
+				return nil, fmt.Errorf("conflicting duplicate snapshot path: %s", f.Path)
+			}
+			continue
 		}
-		seen[f.Path] = true
+		seen[f.Path] = f
+		unique = append(unique, f)
+	}
+	if len(unique) != len(allowed) {
+		return nil, fmt.Errorf("incomplete migration snapshot")
 	}
 	if err := verifyPostgres(dir, &m); err != nil {
 		return nil, err
@@ -111,6 +116,9 @@ func (r runner) loadManifest(dir string) (*manifest, error) {
 	if err := verifyFiles(dir, m.Files); err != nil {
 		return nil, err
 	}
+	// Legacy snapshots listed the shared sing-box/hiddify config twice.
+	// Verify every copy above before restoring each destination just once.
+	m.Files = unique
 	return &m, nil
 }
 
@@ -180,6 +188,9 @@ func (r runner) run(ctx context.Context, o Options) (result error) {
 		}
 		if err := saveManifest(dir, m); err != nil {
 			return err
+		}
+		if m, err = r.loadManifest(dir); err != nil {
+			return fmt.Errorf("verify created migration snapshot: %w", err)
 		}
 	} else if err != nil {
 		return err
