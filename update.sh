@@ -82,6 +82,7 @@ _report_update_exit() {
     else
         _write_update_status "failed" "${code}" "${xui_update_error:-update script exited with code ${code}}"
     fi
+    exit "$code"
 }
 trap _report_update_exit EXIT
 trap 'exit 143' TERM
@@ -112,10 +113,11 @@ arch() {
     case "$(uname -m)" in
         x86_64 | x64 | amd64) echo 'amd64' ;;
         armv8* | arm64 | aarch64) echo 'arm64' ;;
-        *) echo -e "${red}Unsupported CPU architecture!${plain}" && rm -f "${cur_dir}/${script_name}" > /dev/null 2>&1 && exit 2 ;;
+        *) echo "Unsupported CPU architecture: $(uname -m)" >&2; return 1 ;;
     esac
 }
-echo "Arch: $(arch)"
+machine_arch=$(arch) || exit 1
+echo "Arch: ${machine_arch}"
 
 # Simple helpers
 is_ipv4() {
@@ -978,20 +980,72 @@ _install_xui_service_unit() {
 # Older tags predate some of these files (x-ui.rc arrived in v2.8.4). Serving
 # main's copy against an old binary is the mismatch this pinning exists to
 # prevent, so probe before the old install is removed and refuse the tag.
-require_repo_files() {
-    local ref="$1" name status
-    shift
-    [[ "${ref}" == "main" ]] && return 0
-    for name in "$@"; do
-        status=$(${curl_bin} -sIL --retry 3 --connect-timeout 15 -o /dev/null -w '%{http_code}' "https://raw.githubusercontent.com/SawaMEN/3x-ui/${ref}/${name}")
-        if [[ "${status}" == "000" ]]; then
-            status=$(${curl_bin} -4 -sIL --retry 3 --connect-timeout 15 -o /dev/null -w '%{http_code}' "https://raw.githubusercontent.com/SawaMEN/3x-ui/${ref}/${name}")
-        fi
-        if [[ "${status}" != "200" ]]; then
-            _fail "ERROR: ${name} is not available for ${ref} (HTTP ${status}). Update to a release that ships it, or to 'dev-latest'. The current installation is untouched."
-        fi
-    done
+# Retry a failed transport over IPv4 without mixing partial stdout with the retry.
+release_curl() {
+    local output
+    if output=$("${curl_bin:-curl}" "$@"); then
+        printf '%s' "$output"
+        return 0
+    fi
+    "${curl_bin:-curl}" -4 "$@"
 }
+
+resolve_latest_tag() {
+    local url tag page
+
+    # Prefer GitHub's public /releases/latest redirect. This does not require
+    # the REST API and therefore avoids the unauthenticated API rate limit.
+    url=$(release_curl -sSLI -o /dev/null -w '%{url_effective}'         --retry 5 --retry-delay 3 --connect-timeout 15 --max-time 60         "https://github.com/SawaMEN/3x-ui/releases/latest" 2>/dev/null)
+    tag=${url##*/tag/}
+    if [[ "$tag" != "$url" && -n "$tag" && "$tag" != "latest" ]]; then
+        printf '%s\n' "$tag"
+        return 0
+    fi
+
+    # Some proxies/CDNs do not expose the final URL for HEAD requests.
+    # Fall back to the public release HTML page, still without using the API.
+    page=$(release_curl -fsSL         --retry 5 --retry-delay 3 --connect-timeout 15 --max-time 60         "https://github.com/SawaMEN/3x-ui/releases/latest" 2>/dev/null) || return 1
+    tag=$(printf '%s' "$page"         | grep -oE '/SawaMEN/3x-ui/releases/tag/[^"?#]+'         | head -n 1         | sed 's#.*/tag/##')
+    [[ -n "$tag" ]] || return 1
+    printf '%s\n' "$tag"
+}
+
+# The fork's old stable tags predate the core migration. Default commands
+# select a compatible build; explicitly requested versions are never substituted.
+select_release_tag() {
+    local requested="${1:-}" status metadata commit immutable
+    if [[ -z "$requested" ]]; then
+        requested=$(resolve_latest_tag) || return 1
+        status=$(release_curl -sL --retry 2 --connect-timeout 15 --max-time 60 -o /dev/null -w '%{http_code}' \
+            "https://raw.githubusercontent.com/SawaMEN/3x-ui/${requested}/core-migration.sh")
+        case "$status" in
+            200) ;;
+            404)
+                echo "Latest stable ${requested} predates the current core; selecting the project's dev build (dev-latest)." >&2
+                requested=dev-latest ;;
+            *) echo "Cannot check compatibility of ${requested} (HTTP ${status}); installation unchanged." >&2; return 1 ;;
+        esac
+    fi
+    [[ "$requested" != dev ]] || requested=dev-latest
+    if [[ "$requested" == dev-latest ]]; then
+        metadata=$(release_curl -fsSL --retry 2 --connect-timeout 15 --max-time 60 \
+            "https://api.github.com/repos/SawaMEN/3x-ui/releases/tags/dev-latest") || metadata=""
+        commit=$(printf '%s' "$metadata" | sed -nE 's/.*commit=([0-9a-f]{40}).*/\1/p' | head -n1)
+        if [[ "$commit" =~ ^[0-9a-f]{40}$ ]]; then
+            immutable="dev-${commit}"
+            status=$(release_curl -sIL --retry 2 --connect-timeout 15 --max-time 60 -o /dev/null -w '%{http_code}' \
+                "https://github.com/SawaMEN/3x-ui/releases/download/${immutable}/x-ui-linux-$(arch).tar.gz")
+            if [[ "$status" == 200 ]]; then
+                requested="$immutable"
+            elif [[ "$status" != 404 ]]; then
+                echo "Cannot resolve immutable dev release (HTTP ${status}); installation unchanged." >&2
+                return 1
+            fi
+        fi
+    fi
+    printf '%s\n' "$requested"
+}
+
 
 # Downloads a release asset with bounded retries. Some hosts have broken or
 # partially configured IPv6 routes; in that case curl may fail before it ever
@@ -1002,13 +1056,13 @@ download_release_asset() {
     local dest="$2"
 
     rm -f "$dest"
-    if ${curl_bin} -fL --retry 3 --retry-delay 2 --connect-timeout 20 --max-time 900 -o "$dest" "$url"; then
+    if download_http_status=$("${curl_bin:-curl}" -fL --retry 3 --retry-delay 2 --connect-timeout 20 --max-time 900 -w '%{http_code}' -o "$dest" "$url"); then
         return 0
     fi
 
     echo -e "${yellow}Initial download failed; retrying GitHub over IPv4...${plain}"
     rm -f "$dest"
-    ${curl_bin} -4 -fL --retry 3 --retry-delay 2 --connect-timeout 20 --max-time 900 -o "$dest" "$url"
+    download_http_status=$("${curl_bin:-curl}" -4 -fL --retry 3 --retry-delay 2 --connect-timeout 20 --max-time 900 -w '%{http_code}' -o "$dest" "$url")
 }
 
 update_x-ui() {
@@ -1033,19 +1087,7 @@ update_x-ui() {
 
     # XUI_UPDATE_TAG lets the panel target a specific release tag (e.g. the
     # rolling dev-latest pre-release). Empty keeps the default latest-stable flow.
-    if [[ -n "${XUI_UPDATE_TAG}" ]]; then
-        tag_version="${XUI_UPDATE_TAG}"
-        echo -e "${green}Using update tag: ${tag_version}${plain}"
-    else
-        release_json=$(${curl_bin} -fsSL --retry 3 --retry-delay 2 --connect-timeout 15 "https://api.github.com/repos/SawaMEN/3x-ui/releases/latest" 2> /dev/null)
-        if [[ $? -ne 0 || -z "${release_json}" ]]; then
-            release_json=$(${curl_bin} -4 -fsSL --retry 3 --retry-delay 2 --connect-timeout 15 "https://api.github.com/repos/SawaMEN/3x-ui/releases/latest" 2> /dev/null)
-        fi
-        tag_version=$(printf '%s' "${release_json}" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-        if [[ ! -n "$tag_version" ]]; then
-            _fail "ERROR: Failed to fetch x-ui version, it may be due to GitHub API restrictions, please try it later"
-        fi
-    fi
+    tag_version=$(select_release_tag "${XUI_UPDATE_TAG:-}") || _fail "ERROR: Cannot select a compatible panel release. Current installation was not changed."
     echo -e "Got x-ui latest version: ${tag_version}, beginning the installation..."
 
     # Keep scripts and service files pinned to exactly the same Git ref as the
@@ -1055,9 +1097,7 @@ update_x-ui() {
 
     # The unit files are only fetched when the release tarball lacks them, so
     # they are checked at that point instead of here.
-    local required_files=("x-ui.sh")
-    [[ $release == "alpine" ]] && required_files+=("x-ui.rc")
-    require_repo_files "${script_ref}" "${required_files[@]}"
+
 
     local machine_arch
     machine_arch="$(arch)"
@@ -1069,7 +1109,10 @@ update_x-ui() {
 
     if ! download_release_asset "${asset_url}" "${archive}"; then
         rm -f "${archive}"
-        _fail "ERROR: Failed to download x-ui release ${tag_version}. Check the curl error above and verify that the server can access GitHub."
+        if [[ "${download_http_status:-}" == 404 ]]; then
+            _fail "ERROR: Release ${tag_version} has no x-ui-linux-${machine_arch}.tar.gz asset (HTTP 404). The build may still be publishing or this architecture is unsupported. Current installation was not changed."
+        fi
+        _fail "ERROR: Failed to download x-ui release ${tag_version} (HTTP ${download_http_status:-unknown}). See curl output above for the network/TLS error. Current installation was not changed."
     fi
     if [[ ! -s "${archive}" ]]; then
         rm -f "${archive}"
@@ -1094,7 +1137,7 @@ update_x-ui() {
             _fail "ERROR: Checksum mismatch for $(basename "${archive}"): expected ${expected_sha256:-<none>}, got ${actual_sha256}"
         fi
         echo -e "${green}Checksum verified: ${actual_sha256}${plain}"
-    elif [[ "${sidecar_code}" == "404" ]]; then
+    elif [[ "${sidecar_code}" == "404" && "${tag_version}" != dev-* ]]; then
         rm -f "${archive}.sha256"
         echo -e "${yellow}No checksum published for this release, skipping verification${plain}"
     else
@@ -1214,9 +1257,11 @@ update_x-ui() {
     echo -e "${green}Downloading and installing x-ui.sh script...${plain}"
     local xui_script_temp="/usr/bin/x-ui-temp.$$"
     rm -f "${xui_script_temp}"
-    if ! download_release_asset "https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/x-ui.sh" "${xui_script_temp}"; then
+    if [[ -s "${cm_stage}/x-ui/x-ui.sh" ]]; then
+        cp "${cm_stage}/x-ui/x-ui.sh" "${xui_script_temp}" || _fail "ERROR: Cannot stage the release management script"
+    elif ! download_release_asset "https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/x-ui.sh" "${xui_script_temp}"; then
         rm -f "${xui_script_temp}"
-        _fail "ERROR: Failed to download x-ui.sh script, please be sure that your server can access GitHub"
+        _fail "ERROR: Failed to download x-ui.sh script; the previous installation will be restored"
     fi
     if [[ ! -s "${xui_script_temp}" ]]; then
         rm -f "${xui_script_temp}"

@@ -161,31 +161,26 @@ func (s *SingBoxService) GetEditorConfig(ctx context.Context) (*SingBoxEditorSna
 	if err != nil {
 		return nil, err
 	}
-	// Runtime policies contain expanded lists. Keep source references in the
-	// editable route so saving unrelated settings does not freeze those lists.
-	nativeTemplate, templateErr := singBoxSettingService.GetSingBoxConfigTemplate()
-	if templateErr != nil {
-		return nil, templateErr
-	}
 	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, err
 	}
-	if nativeCatalogHasReferences(nativeTemplate) {
-		var original map[string]any
-		if err := json.Unmarshal([]byte(nativeTemplate), &original); err != nil {
-			return nil, err
-		}
-		raw["route"] = original["route"]
+	// Disk contains runtime-only sniffing, bridges and overlays. Reading it
+	// back as a template makes these rules multiply on each save/restart.
+	snapshot, err := loadNativeConfigSnapshot()
+	if err != nil {
+		return nil, err
 	}
-	// Remove the named panel-managed filter from an editor round trip.
+	editable, err := s.generateNativeConfig(snapshot, true)
+	if err != nil {
+		return nil, err
+	}
+	raw["route"] = editable.Route
 	var editorConfig singbox.Config
 	if err := json.Unmarshal(data, &editorConfig); err != nil {
 		return nil, err
 	}
-	if nativeCatalogHasReferences(nativeTemplate) {
-		editorConfig.Route, _ = raw["route"].(map[string]any)
-	}
+	editorConfig.Route = editable.Route
 	if err := stripSingBoxAdBlock(&editorConfig); err != nil {
 		return nil, err
 	}

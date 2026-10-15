@@ -118,7 +118,7 @@ update() {
 }
 
 update_dev() {
-    confirm "This will update x-ui to the latest DEV commit (the rolling 'dev-latest' build, not a stable release). Your data is preserved. Continue?" "y"
+    confirm "This will update x-ui to the latest published DEV build (the rolling 'dev-latest' build, not a stable release). Your data is preserved. Continue?" "y"
     if [[ $? != 0 ]]; then
         LOGE "Cancelled"
         [[ $# == 0 ]] && before_show_menu
@@ -138,15 +138,29 @@ update_dev() {
     return "$rc"
 }
 
+restore_packaged_menu() {
+    local source="${xui_folder}/x-ui.sh" temp_file
+    [[ -s "$source" ]] && bash -n "$source" || return 1
+    if grep -q 'x-ui-core.sh' "$source"; then
+        [[ -s "${xui_folder}/x-ui-core.sh" ]] && bash -n "${xui_folder}/x-ui-core.sh" || return 1
+    fi
+    temp_file=$(mktemp /usr/bin/x-ui-menu.XXXXXX) || return 1
+    if cp "$source" "$temp_file" && chmod 0755 "$temp_file" && mv -f "$temp_file" /usr/bin/x-ui; then
+        return 0
+    fi
+    rm -f "$temp_file"
+    return 1
+}
+
 update_menu() {
     echo -e "${yellow}Updating Menu${plain}"
-    confirm "This function will update the menu for the installed panel version." "y"
+    confirm "Restore the management menu shipped with the installed panel version?" "y"
     if [[ $? != 0 ]]; then
         LOGE "Cancelled"
         [[ $# == 0 ]] && before_show_menu
         return 0
     fi
-    if replace_xui_script "$(installed_script_url)" "false"; then
+    if restore_packaged_menu; then
         LOGI "Menu updated successfully."
         if [[ $# == 0 ]]; then
             exec /usr/bin/x-ui
@@ -414,11 +428,16 @@ check_enabled() {
 }
 
 check_xray_status() {
-    if command -v pgrep >/dev/null 2>&1; then
-        pgrep -f "${xui_folder}/bin/hiddify-core-linux" >/dev/null 2>&1
-        return $?
-    fi
-    ps -ef 2>/dev/null | grep -F "${xui_folder}/bin/hiddify-core-linux" | grep -v grep >/dev/null 2>&1
+    local bin_folder="${XUI_BIN_FOLDER:-${xui_folder}/bin}" proc exe
+    [[ "$bin_folder" == /* ]] || bin_folder="${xui_folder}/${bin_folder}"
+    bin_folder=$(readlink -f "$bin_folder" 2>/dev/null) || return 1
+    for proc in /proc/[0-9]*/exe; do
+        exe=$(readlink "$proc" 2>/dev/null) || continue
+        case "$exe" in
+            "$bin_folder"/hiddify-core-linux-*|"$bin_folder"/sing-box-linux-*) return 0 ;;
+        esac
+    done
+    return 1
 }
 
 show_status() {
@@ -456,7 +475,8 @@ show_log() {
     fi
 
     echo -e "${green}\t1.${plain} Debug Log"
-    echo -e "${green}\t2.${plain} Clear x-ui journal logs"
+    echo -e "${green}\t2.${plain} Recent panel errors"
+    echo -e "${green}\t3.${plain} Panel update log"
     echo -e "${green}\t0.${plain} Back to Main Menu"
     read -rp "Choose an option: " choice
     case "$choice" in
@@ -465,9 +485,14 @@ show_log() {
             journalctl -u x-ui -e --no-pager -f -p debug
             ;;
         2)
-            journalctl --rotate
-            journalctl --vacuum-time=1s
-            LOGI "Journal logs cleared."
+            journalctl -u x-ui -n 100 --no-pager -p err
+            ;;
+        3)
+            if [[ -r /var/log/x-ui/update.log ]]; then
+                tail -n 100 /var/log/x-ui/update.log
+            else
+                LOGW "No panel update log exists yet."
+            fi
             ;;
         *)
             LOGE "Invalid option."
@@ -748,7 +773,7 @@ show_usage() {
 │  ${blue}x-ui start${plain}                 - Start                            │
 │  ${blue}x-ui stop${plain}                  - Stop                             │
 │  ${blue}x-ui restart${plain}               - Restart                          │
-│  ${blue}x-ui restart-xray${plain}          - Restart Xray                     │
+│  ${blue}x-ui restart-core${plain}          - Restart Sing-box                 │
 │  ${blue}x-ui status${plain}                - Current Status                   │
 │  ${blue}x-ui settings${plain}              - Current Settings                 │
 │  ${blue}x-ui enable${plain}                - Enable Autostart on OS Startup   │
@@ -767,7 +792,13 @@ show_usage() {
 └────────────────────────────────────────────────────────────────┘"
 }
 
+before_show_menu() {
+    read -rp "Press enter to return to the main menu: " _ || true
+}
+
 show_menu() {
+    [[ "${_xui_menu_active:-0}" == 0 ]] || return 0
+    local _xui_menu_active=1
     while true; do
         echo -e "
 ╔────────────────────────────────────────────────╗
@@ -776,8 +807,8 @@ show_menu() {
 │────────────────────────────────────────────────│
 │  ${green}1.${plain} Install                                   │
 │  ${green}2.${plain} Update                                    │
-│  ${green}3.${plain} Update to Dev Channel (latest commit)     │
-│  ${green}4.${plain} Update Menu                               │
+│  ${green}3.${plain} Update to DEV (published build)     │
+│  ${green}4.${plain} Restore Installed Menu                   │
 │  ${green}5.${plain} Legacy Version                            │
 │  ${green}6.${plain} Uninstall                                 │
 │────────────────────────────────────────────────│
@@ -790,7 +821,7 @@ show_menu() {
 │  ${green}12.${plain} Start                                    │
 │  ${green}13.${plain} Stop                                     │
 │  ${green}14.${plain} Restart                                  │
-│  ${green}15.${plain} Restart Xray                             │
+│  ${green}15.${plain} Restart Sing-box                             │
 │  ${green}16.${plain} Check Status                             │
 │  ${green}17.${plain} Logs Management                          │
 │────────────────────────────────────────────────│
@@ -812,7 +843,7 @@ show_menu() {
 "
         show_status
         echo
-        read -rp "Please enter your selection [0-29]: " num
+        read -rp "Please enter your selection [0-29]: " num || return 0
         case "${num}" in
             0) exit 0 ;;
             1) check_uninstall && install ;;
@@ -854,7 +885,7 @@ if [[ $# -gt 0 ]]; then
         start) check_install 0 && start 0 ;;
         stop) check_install 0 && stop 0 ;;
         restart) check_install 0 && restart 0 ;;
-        restart-xray) check_install 0 && restart_xray 0 ;;
+        restart-core|restart-xray) check_install 0 && restart_xray 0 ;;
         status) check_install 0 && status 0 ;;
         settings) check_install 0 && check_config 0 ;;
         enable) check_install 0 && enable 0 ;;
@@ -880,7 +911,8 @@ if [[ $# -gt 0 ]]; then
             check_install 0 || exit 1
             "${xui_folder}/x-ui" gateway "${@:2}"
             ;;
-        *) show_usage ;;
+        help|--help|-h) show_usage ;;
+        *) show_usage; exit 1 ;;
     esac
 else
     show_menu

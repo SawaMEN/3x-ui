@@ -18,7 +18,7 @@ import (
 
 // generateNativeConfig is the shared compatibility translator. Hiddify supplies
 // a database snapshot for the owner runtime.
-func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot) (*singbox.Config, error) {
+func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot, editorOnly ...bool) (*singbox.Config, error) {
 	var inbounds []*model.Inbound
 	var err error
 	if snapshot != nil {
@@ -566,6 +566,24 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot) (*
 	if nativeErr != nil {
 		return nil, nativeErr
 	}
+	if len(editorOnly) > 0 && editorOnly[0] {
+		// The editor owns source policies, never the runtime's injected rules.
+		// Keep catalog references instead of freezing their expanded contents.
+		var source map[string]any
+		if snapshot != nil && strings.TrimSpace(snapshot.setting("singBoxConfigTemplate")) != "" {
+			if err := json.Unmarshal([]byte(snapshot.setting("singBoxConfigTemplate")), &source); err != nil {
+				return nil, err
+			}
+			if route, ok := source["route"].(map[string]any); ok {
+				rawRoute, _ := json.Marshal(route)
+				if _, gatewayOnly := mergeGatewayOnlyRoute(nil, rawRoute); !gatewayOnly {
+					cfg.Route = route
+				}
+			}
+		}
+		removeGeneratedSniffRules(cfg, sniffRules)
+		return cfg, nil
+	}
 	cfg.Outbounds = mergeSubscriptionConnections(cfg.Outbounds, protectedOutbounds, subscriptionTags)
 	cfg.Endpoints = mergeSubscriptionConnections(cfg.Endpoints, protectedEndpoints, subscriptionTags)
 	{
@@ -585,6 +603,7 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot) (*
 		if cfg.Route == nil {
 			cfg.Route = map[string]any{}
 		}
+		removeGeneratedSniffRules(cfg, sniffRules)
 		cfg.Route["rules"] = append(sniffRules, singBoxRouteRules(cfg.Route)...)
 	}
 	ensureAutomaticClashAPI(cfg)

@@ -46,4 +46,17 @@ describe('native route rule editor', () => {
     expect(summary).toMatch(/^НЕ/);
     expect(routeRuleSummary({ network: 'udp' })).toContain('udp');
   });
+  it('does not label catalog, process or numeric conditions as all traffic', () => {
+    for (const rule of [
+      { routingListId: 5 },
+      { routingListCategory: 'ru' },
+      { ip_version: 6 },
+      { auth_user: ['alice'] },
+      { process_name: ['browser'] },
+      { network_is_expensive: true },
+      { interface_address: { eth0: ['192.0.2.1'] } },
+    ])
+      expect(routeRuleSummary(rule)).not.toContain('Любой трафик');
+    expect(routeRuleSummary({ outbound: 'direct' })).toBe('Любой трафик');
+  });
 });

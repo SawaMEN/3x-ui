@@ -1925,16 +1925,7 @@ export default function SingBoxPage() {
               {
                 title: 'Условия',
                 render: (_: unknown, row: JsonObject) => {
-                  const pieces = [
-                    typeof row.routingListId === 'number'
-                      ? t('pages.xray.routingCatalog.listReference', { id: row.routingListId })
-                      : '',
-                    typeof row.routingListCategory === 'string'
-                      ? `geosite:${row.routingListCategory}`
-                      : '',
-                    routeRuleSummary(row),
-                  ].filter(Boolean);
-                  return pieces.length ? pieces.join(' · ') : 'Любой трафик';
+                  return routeRuleSummary(row);
                 },
               },
               {
