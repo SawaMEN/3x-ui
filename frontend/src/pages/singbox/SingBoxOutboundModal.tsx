@@ -1040,8 +1040,14 @@ export default function SingBoxOutboundModal({
         <Space>
           <span>
             {type === 'masque'
-              ? draft.use_http2 ? 'HTTP/2 · TCP/TLS' : 'HTTP/3 · QUIC/TLS'
-              : security === 'reality' ? 'Reality' : security === 'tls' ? 'TLS' : 'Без TLS'}
+              ? draft.use_http2
+                ? 'HTTP/2 · TCP/TLS'
+                : 'HTTP/3 · QUIC/TLS'
+              : security === 'reality'
+                ? 'Reality'
+                : security === 'tls'
+                  ? 'TLS'
+                  : 'Без TLS'}
           </span>
           {transportProtocols.includes(type) && <Tag>{network.toUpperCase()}</Tag>}
           {['hysteria', 'hysteria2', 'tuic'].includes(type) && <Tag>QUIC</Tag>}
