@@ -24,7 +24,7 @@ import {
   ThunderboltOutlined,
 } from '@ant-design/icons';
 
-import { HttpUtil, PromiseUtil } from '@/utils';
+import { HttpUtil } from '@/utils';
 import { setMessageInstance } from '@/utils/messageBus';
 import { useTheme } from '@/hooks/useTheme';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -32,7 +32,7 @@ import { useAllSettings } from '@/api/queries/useAllSettings';
 import { AllSettingSchema } from '@/schemas/setting';
 import AppSidebar from '@/layouts/AppSidebar';
 import GeneralTab from './GeneralTab';
-import { panelUrlAfterRestart } from './panel-url';
+import { panelUrlAfterRestart, waitForPanelRestart } from './panel-url';
 import SecurityTab from './SecurityTab';
 import TelegramTab from './TelegramTab';
 import EmailTab from './EmailTab';
@@ -156,27 +156,6 @@ export default function SettingsPage() {
     },
   ];
 
-  async function waitForRestartedPanel(target: string): Promise<boolean> {
-    // The backend schedules SIGHUP in 3 seconds. Do not mistake the old
-    // listener for the restarted one while it is still serving requests.
-    await PromiseUtil.sleep(3500);
-    // Cross-origin probes may be blocked by mixed-content rules or CSP.
-    if (new URL(target).origin !== window.location.origin) return true;
-    for (let attempt = 0; attempt < 20; attempt++) {
-      try {
-        const response = await fetch(target, {
-          cache: 'no-store',
-          signal: AbortSignal.timeout(2000),
-        });
-        if (response.ok) return true;
-      } catch {
-        // The listener may still be restarting; retry within a fixed limit.
-      }
-      await PromiseUtil.sleep(1000);
-    }
-    return false;
-  }
-
   async function onSave() {
     const result = AllSettingSchema.safeParse(allSetting);
     if (!result.success) {
@@ -208,10 +187,24 @@ export default function SettingsPage() {
             window.location.href,
             initialAddress.current ?? allSetting,
             allSetting,
+            Number(
+              document.querySelector<HTMLMetaElement>('meta[name="panel-port-override"]')?.content,
+            ) || 0,
           );
+          let instance =
+            document.querySelector<HTMLMetaElement>('meta[name="panel-instance"]')?.content || '';
+          try {
+            const response = await fetch(window.location.href, {
+              cache: 'no-store',
+              signal: AbortSignal.timeout(2000),
+            });
+            instance = response.headers.get('X-Panel-Instance') || instance;
+          } catch {
+            /* The restart API still reports a failed connection. */
+          }
           const msg = (await HttpUtil.post('/panel/api/setting/restartPanel')) as ApiMsg;
           if (!msg?.success) return;
-          if (await waitForRestartedPanel(target)) {
+          if (await waitForPanelRestart(target, window.location.href, instance)) {
             window.location.replace(target);
           } else {
             modal.info({

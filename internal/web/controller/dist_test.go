@@ -4,13 +4,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"testing"
 	"testing/fstest"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
-	"strings"
-	"testing"
 )
 
 func TestWithServerBasePath(t *testing.T) {
@@ -88,6 +88,8 @@ func TestDistPageExposesListenerAddress(t *testing.T) {
 	engine.GET("/", func(c *gin.Context) {
 		c.Set("panel_port", 2053)
 		c.Set("panel_tls", false)
+		c.Set("panel_port_override", 8443)
+		c.Set("panel_instance", "new-listener")
 		serveDistPage(c, "login.html")
 	})
 	recorder := httptest.NewRecorder()
@@ -95,7 +97,7 @@ func TestDistPageExposesListenerAddress(t *testing.T) {
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d", recorder.Code)
 	}
-	for _, tag := range []string{`name="panel-port" content="2053"`, `name="panel-tls" content="false"`} {
+	for _, tag := range []string{`name="panel-port" content="2053"`, `name="panel-tls" content="false"`, `name="panel-port-override" content="8443"`, `name="panel-instance" content="new-listener"`} {
 		if !strings.Contains(recorder.Body.String(), tag) {
 			t.Fatalf("listener metadata missing: %s", tag)
 		}

@@ -6,6 +6,7 @@ import {
   object,
   records,
   setDefaultOutbound,
+  setDefaultDomainResolver,
   setDnsCache,
   setLogLevel,
 } from './simple-settings';
@@ -250,6 +251,31 @@ export default function SimpleSettings({ config, onChange, section = 'basic', on
             ]}
             onChange={(tag) => onChange(setDefaultOutbound(config, tag))}
           />
+
+          <div style={{ marginTop: 16 }}>
+            <label className="singbox-field-label" htmlFor="singbox-domain-resolver">
+              DNS для адресов серверов
+            </label>
+            <Select
+              id="singbox-domain-resolver"
+              allowClear
+              style={{ width: '100%' }}
+              value={
+                typeof route.default_domain_resolver === 'string'
+                  ? route.default_domain_resolver
+                  : String(object(route.default_domain_resolver).server || '') || undefined
+              }
+              options={records(dns.servers).map((item) => ({
+                value: String(item.tag),
+                label: String(item.tag),
+              }))}
+              onChange={(tag) => onChange(setDefaultDomainResolver(config, tag || ''))}
+            />
+            <p className="singbox-description">
+              DNS, который определяет IP-адреса исходящих серверов. Дополнительные параметры
+              выбранного резолвера сохраняются.
+            </p>
+          </div>
           {!outbounds.length && (
             <Alert
               style={{ marginTop: 16 }}

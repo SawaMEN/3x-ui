@@ -31,13 +31,20 @@ func isLegacySubscriptionRequest(r *http.Request) bool {
 // with HTTP 403 Forbidden status. Confirmed legacy Hiddify subscription URLs are
 // allowed so migrated :443 links keep working when the subscription port changes.
 func DomainValidatorMiddleware(domain string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		host := c.Request.Host
-		if colonIndex := strings.LastIndex(host, ":"); colonIndex != -1 {
-			host, _, _ = net.SplitHostPort(c.Request.Host)
+	normalize := func(host string) string {
+		if name, _, err := net.SplitHostPort(host); err == nil {
+			host = name
 		}
-
-		if host != domain {
+		host = strings.TrimSuffix(strings.ToLower(strings.Trim(host, "[]")), ".")
+		if ip := net.ParseIP(host); ip != nil {
+			return ip.String()
+		}
+		return host
+	}
+	expected := normalize(domain)
+	return func(c *gin.Context) {
+		host := normalize(c.Request.Host)
+		if host != expected {
 			if isLegacySubscriptionRequest(c.Request) {
 				c.Next()
 				return

@@ -150,3 +150,25 @@ func TestConfigMarshalNormalizesPanelRouteMetadata(t *testing.T) {
 		t.Fatalf("stored editor port changed: %v", got)
 	}
 }
+
+func TestDisabledPanelRulesNeverReachRuntime(t *testing.T) {
+	route := map[string]any{"rules": []any{
+		map[string]any{"enabled": false, "action": "selector", "outbound": "missing"},
+		map[string]any{"enabled": true, "action": "reject", "domain": []string{"ads.test"}},
+		map[string]any{"type": "logical", "mode": "and", "action": "reject", "rules": []any{map[string]any{"enabled": false, "domain": []string{"disabled.test"}}}},
+	}}
+	got, err := normalizeRouteForRuntime(route)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rules := got["rules"].([]any)
+	if len(rules) != 1 {
+		t.Fatalf("runtime rules: %#v", rules)
+	}
+	if _, ok := rules[0].(map[string]any)["enabled"]; ok {
+		t.Fatal("panel enabled metadata leaked")
+	}
+	if len(route["rules"].([]any)) != 3 {
+		t.Fatal("stored rules changed")
+	}
+}

@@ -11,6 +11,8 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/cronspec"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/uripath"
 )
 
 type Msg struct {
@@ -194,15 +196,6 @@ type AllSettingView struct {
 	HasDiscordBotToken bool `json:"hasDiscordBotToken"`
 }
 
-func pathHasForbiddenChar(s string) bool {
-	for _, r := range s {
-		if strings.ContainsRune(`\ :*?#%`, r) || r < 0x20 || r == 0x7f {
-			return true
-		}
-	}
-	return false
-}
-
 // CheckNetipAddrOrPrefixList mirrors parseIpLimitAllowlist exactly: net and netip
 // disagree (net accepts "/024", netip does not), so save and scan must share rules.
 func CheckNetipAddrOrPrefixList(list, message string) error {
@@ -244,6 +237,17 @@ func (s *AllSetting) CheckValid() error {
 		return common.NewError("core type is not supported:", s.CoreType)
 	}
 
+	for _, domain := range []*string{&s.WebDomain, &s.SubDomain} {
+		if strings.TrimSpace(*domain) == "" {
+			*domain = ""
+			continue
+		}
+		normalized, err := netsafe.NormalizeHost(strings.TrimSuffix(strings.TrimSpace(*domain), "."))
+		if err != nil {
+			return common.NewError("Domain must contain only a hostname or IP address, without scheme, port or path: ", err)
+		}
+		*domain = strings.ToLower(normalized)
+	}
 	if s.WebListen != "" {
 		ip := net.ParseIP(s.WebListen)
 		if ip == nil {
@@ -286,43 +290,18 @@ func (s *AllSetting) CheckValid() error {
 
 	for _, p := range []struct {
 		name  string
-		value string
+		value *string
 	}{
-		{"web base path", s.WebBasePath},
-		{"subscription path", s.SubPath},
-		{"subscription JSON path", s.SubJsonPath},
-		{"subscription Clash path", s.SubClashPath},
+		{"web base path", &s.WebBasePath},
+		{"subscription path", &s.SubPath},
+		{"subscription JSON path", &s.SubJsonPath},
+		{"subscription Clash path", &s.SubClashPath},
 	} {
-		if pathHasForbiddenChar(p.value) {
-			return common.NewError("URI path contains an invalid character:", p.name)
+		normalized, err := uripath.Normalize(*p.value)
+		if err != nil {
+			return common.NewError(p.name, ": ", err)
 		}
-	}
-
-	if !strings.HasPrefix(s.WebBasePath, "/") {
-		s.WebBasePath = "/" + s.WebBasePath
-	}
-	if !strings.HasSuffix(s.WebBasePath, "/") {
-		s.WebBasePath += "/"
-	}
-	if !strings.HasPrefix(s.SubPath, "/") {
-		s.SubPath = "/" + s.SubPath
-	}
-	if !strings.HasSuffix(s.SubPath, "/") {
-		s.SubPath += "/"
-	}
-
-	if !strings.HasPrefix(s.SubJsonPath, "/") {
-		s.SubJsonPath = "/" + s.SubJsonPath
-	}
-	if !strings.HasSuffix(s.SubJsonPath, "/") {
-		s.SubJsonPath += "/"
-	}
-
-	if !strings.HasPrefix(s.SubClashPath, "/") {
-		s.SubClashPath = "/" + s.SubClashPath
-	}
-	if !strings.HasSuffix(s.SubClashPath, "/") {
-		s.SubClashPath += "/"
+		*p.value = normalized
 	}
 
 	for _, sched := range []struct{ name, spec string }{

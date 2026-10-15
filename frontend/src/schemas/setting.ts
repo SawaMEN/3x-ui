@@ -2,7 +2,13 @@ import { z } from 'zod';
 
 const port = z.number().int().min(1).max(65535);
 const nonNegativeInt = z.number().int().min(0);
-const absolutePath = z.string().regex(/^\//, 'pages.settings.validation.pathLeadingSlash');
+const absolutePath = z
+  .string()
+  .regex(/^\//, 'pages.settings.validation.pathLeadingSlash')
+  .refine(
+    (value) => !value.split('/').some((part) => part === '.' || part === '..'),
+    'URI path cannot contain . or .. segments',
+  );
 
 export const SubProfileModeSchema = z.enum(['none', 'builtin', 'custom']);
 export type SubProfileMode = z.infer<typeof SubProfileModeSchema>;

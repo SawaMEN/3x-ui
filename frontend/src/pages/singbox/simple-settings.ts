@@ -384,3 +384,12 @@ export function outboundErrors(value: ConfigObject, otherTags: string[]): string
   }
   return errors;
 }
+
+export function setDefaultDomainResolver(config: ConfigObject, tag: string): ConfigObject {
+  const route = { ...object(config.route) };
+  const current = object(route.default_domain_resolver);
+  if (!tag) delete route.default_domain_resolver;
+  else
+    route.default_domain_resolver = Object.keys(current).length ? { ...current, server: tag } : tag;
+  return { ...config, route };
+}

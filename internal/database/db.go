@@ -2095,14 +2095,25 @@ func normalizeSettingPaths() error {
 	}
 	for _, row := range rows {
 		fixed := strings.Map(func(r rune) rune {
-			if strings.ContainsRune(`\ :*?#%`, r) || r < 0x20 || r == 0x7f {
+			if strings.ContainsRune(`\ :*?#%;`, r) || r < 0x20 || r == 0x7f {
 				return -1
 			}
 			return r
 		}, row.Value)
+		parts := strings.Split(fixed, "/")
+		clean := make([]string, 0, len(parts))
+		for _, part := range parts {
+			if part != "" && part != "." && part != ".." {
+				clean = append(clean, part)
+			}
+		}
+		fixed = "/" + strings.Join(clean, "/")
+		if len(clean) > 0 {
+			fixed += "/"
+		}
 		if fixed != row.Value {
-			log.Printf("Repaired invalid URI path setting %s", row.Key)
-			if strings.Trim(fixed, "/") == "" {
+			log.Printf("Normalized URI path setting %s", row.Key)
+			if strings.Trim(fixed, "/") == "" && strings.Trim(row.Value, "/") != "" {
 				fixed = "/" + random.Seq(16) + "/"
 			}
 		}

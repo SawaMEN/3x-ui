@@ -27,6 +27,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/util/random"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/reflect_util"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/totp"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/uripath"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/entity"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray/dnsconf"
@@ -811,13 +812,11 @@ func (s *SettingService) GetPanelGuid() (string, error) {
 }
 
 func (s *SettingService) SetBasePath(basePath string) error {
-	if !strings.HasPrefix(basePath, "/") {
-		basePath = "/" + basePath
+	normalized, err := uripath.Normalize(basePath)
+	if err != nil {
+		return err
 	}
-	if !strings.HasSuffix(basePath, "/") {
-		basePath += "/"
-	}
-	return s.setString("webBasePath", basePath)
+	return s.setString("webBasePath", normalized)
 }
 
 func (s *SettingService) GetBasePath() (string, error) {

@@ -1,6 +1,5 @@
 import OutboundPingButton from './OutboundPingButton';
 import { prepareRouteRule, routePorts, routeRuleSummary } from './route-rule';
-import MasqueConnectionFields from './MasqueConnectionFields';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router';
@@ -48,11 +47,14 @@ import { HttpUtil } from '@/utils';
 import { useTheme } from '@/hooks/useTheme';
 import './SingBoxPage.css';
 import SimpleSettings from './SimpleSettings';
+import NativeDnsServers from './NativeDnsServers';
+import NativeDnsRules from './NativeDnsRules';
+import { putConnection, removeConnection } from './config-references';
 import {
-  outboundDefaults,
   optimisticCacheEnabled,
   setDnsCache,
   setOptimisticCache,
+  setDefaultDomainResolver,
 } from './simple-settings';
 import {
   importNativeConnections,
@@ -392,7 +394,7 @@ function CommonListItem({
   );
 }
 
-function singBoxHealthIssues(config: ConfigMap) {
+function singBoxHealthIssues(config: ConfigMap, subscriptionTags: string[] = []) {
   const issues: string[] = [];
   const outbounds = asObjectArray(config.outbounds);
   const tags = [...outbounds, ...asObjectArray(config.endpoints)]
@@ -405,7 +407,7 @@ function singBoxHealthIssues(config: ConfigMap) {
     seen.add(tag);
   });
 
-  const tagSet = new Set(tags);
+  const tagSet = new Set([...tags, ...subscriptionTags]);
   outbounds.forEach((item) => {
     const type = asString(item.type);
     const name = asString(item.tag) || 'без tag';
@@ -440,6 +442,7 @@ function singBoxHealthIssues(config: ConfigMap) {
   const rules = Array.isArray(route.rules) ? route.rules : [];
   rules.forEach((raw, index) => {
     const rule = asObject(raw);
+    if (rule.enabled === false) return;
     if (asString(rule.outbound) && !tagSet.has(asString(rule.outbound))) {
       issues.push(
         'Route rule #' +
@@ -799,6 +802,8 @@ export default function SingBoxPage() {
   const [shareLinkOpen, setShareLinkOpen] = useState(false);
   const [importingLink, setImportingLink] = useState(false);
   const [shareLink, setShareLink] = useState('');
+  const [routeSearch, setRouteSearch] = useState('');
+  const [outboundSearch, setOutboundSearch] = useState('');
 
   const sectionValue = useCallback((key: SectionKey, source: ConfigMap) => {
     const sourceKey = key === 'schema' ? '$schema' : key;
@@ -1556,119 +1561,23 @@ export default function SingBoxPage() {
     );
   };
 
-  const renderEndpoints = () => {
-    const items = asObjectArray(sectionValue('endpoints', config));
-    return (
-      <>
-        <SectionHeader
-          title="Endpoints"
-          description="MASQUE, WireGuard, Tailscale, OpenConnect и OpenVPN endpoints."
-        />
-        <Card className="singbox-list-card">
-          <ListToolbar
-            label="Endpoints"
-            onAdd={() =>
-              updateSection('endpoints', [
-                ...items,
-                { type: 'wireguard', tag: `endpoint-${items.length + 1}` },
-              ])
-            }
-          />
-          <Space orientation="vertical" style={{ width: '100%' }} size={12}>
-            {items.map((item, index) => {
-              const nextItems = [...items];
-              const patch = (value: JsonObject) => {
-                nextItems[index] = { ...nextItems[index], ...value };
-                updateSection('endpoints', nextItems);
-              };
-              return (
-                <Card size="small" className="singbox-item-card" key={`endpoint-${index}`}>
-                  <div className="singbox-item-card-header">
-                    <strong>{asString(item.tag) || `Endpoint #${index + 1}`}</strong>
-                    <Button
-                      danger
-                      type="text"
-                      icon={<DeleteOutlined />}
-                      onClick={() =>
-                        updateSection(
-                          'endpoints',
-                          items.filter((_, i) => i !== index),
-                        )
-                      }
-                    />
-                  </div>
-                  <Row gutter={[12, 12]}>
-                    <Field label="Тип">
-                      <Select
-                        style={{ width: '100%' }}
-                        value={asString(item.type) || 'wireguard'}
-                        options={[
-                          'wireguard',
-                          'masque-client',
-                          'tailscale',
-                          'openconnect',
-                          'openvpn-client',
-                          'openvpn-server',
-                        ].map((v) => ({ label: v, value: v }))}
-                        onChange={(next) => {
-                          nextItems[index] = outboundDefaults(next, asString(item.tag));
-                          updateSection('endpoints', nextItems);
-                        }}
-                      />
-                    </Field>
-                    <Field label="Tag">
-                      <TextField
-                        value={asString(item.tag)}
-                        onChange={(next) => patch({ tag: next })}
-                      />
-                    </Field>
-                    <Field label="Server">
-                      <TextField
-                        value={asString(item.server)}
-                        onChange={(next) => patch({ server: next })}
-                      />
-                    </Field>
-                    <Field label="Port">
-                      <NumberField
-                        value={asNumber(item.server_port)}
-                        max={65535}
-                        onChange={(next) => patch({ server_port: next })}
-                      />
-                    </Field>
-                    <Field label="Domain resolver">
-                      <TextField
-                        value={asString(item.domain_resolver)}
-                        onChange={(next) => patch({ domain_resolver: next })}
-                      />
-                    </Field>
-                    <Field label="Detour">
-                      <TextField
-                        value={asString(item.detour)}
-                        onChange={(next) => patch({ detour: next })}
-                      />
-                    </Field>
-                  </Row>
-                  {item.type === 'masque-client' && (
-                    <MasqueConnectionFields value={item} onChange={patch} />
-                  )}
-                  <div className="singbox-item-actions">
-                    <JsonModal
-                      title={`${asString(item.tag) || 'Endpoint'} — JSON`}
-                      value={item}
-                      onApply={(next) => patch(asObject(next))}
-                    />
-                  </div>
-                </Card>
-              );
-            })}
-          </Space>
-        </Card>
-      </>
-    );
-  };
+  const renderEndpoints = () => renderOutbounds(true);
 
-  const renderOutbounds = () => {
-    const items = asObjectArray(sectionValue('outbounds', config));
+  const renderOutbounds = (onlyEndpoints = false) => {
+    const items = [
+      ...asObjectArray(sectionValue('outbounds', config)),
+      ...asObjectArray(config.endpoints),
+    ];
+    const visible = items
+      .map((item, index): JsonObject => ({ ...item, __index: index }))
+      .filter(
+        (item) =>
+          (!onlyEndpoints || isNativeEndpoint(item)) &&
+          [item.tag, item.type, item.server]
+            .join(' ')
+            .toLowerCase()
+            .includes(outboundSearch.toLowerCase()),
+      );
 
     return (
       <Card>
@@ -1676,8 +1585,8 @@ export default function SingBoxPage() {
           <div>
             <div className="singbox-section-title">Исходящие</div>
             <div className="singbox-section-description">
-              Теперь это список как в Xray: отдельный мастер для протокола, серверных параметров,
-              TLS/Reality и транспорта.
+              Серверы, группы и туннели в одном списке. Изменение названия автоматически обновляет
+              ссылки в правилах маршрутизации и DNS.
             </div>
           </div>
           <Space wrap>
@@ -1702,11 +1611,20 @@ export default function SingBoxPage() {
             </Button>
           </Space>
         </div>
+        <Input.Search
+          placeholder="Поиск по названию, протоколу или серверу"
+          aria-label="Поиск исходящих подключений"
+          value={outboundSearch}
+          onChange={(event) => setOutboundSearch(event.target.value)}
+          allowClear
+          style={{ maxWidth: 460, marginBottom: 16 }}
+        />
         <Table
           size="small"
-          pagination={false}
-          rowKey={(_, index) => String(index)}
-          dataSource={items}
+          pagination={visible.length > 25 ? { pageSize: 25, showSizeChanger: false } : false}
+          scroll={{ x: 850 }}
+          rowKey={(row) => `${row.tag}:${row.__index}`}
+          dataSource={visible}
           locale={{
             emptyText: (
               <Empty description="Нет исходящих. Начните с direct, VLESS, VMess или Trojan." />
@@ -1754,7 +1672,7 @@ export default function SingBoxPage() {
                   >
                     {row.use_http2 ? 'H2/TLS' : 'H3/TLS'}
                   </Tag>
-                ) : row.tls ? (
+                ) : asBoolean(asObject(row.tls).enabled) ? (
                   <Tag color="green">TLS</Tag>
                 ) : (
                   '—'
@@ -1765,8 +1683,8 @@ export default function SingBoxPage() {
               width: 100,
               render: (_: unknown, row: JsonObject) => {
                 const name = asString(row.tag);
-                const broken = singBoxHealthIssues(config).some((issue) =>
-                  issue.includes('"' + name + '"'),
+                const broken = singBoxHealthIssues(config, snapshot?.subscriptionTags || []).some(
+                  (issue) => issue.includes('"' + name + '"'),
                 );
                 return (
                   <Space orientation="vertical">
@@ -1787,39 +1705,52 @@ export default function SingBoxPage() {
             {
               title: '',
               width: 180,
-              render: (_: unknown, _row: JsonObject, index: number) => (
-                <Space>
-                  <Button
-                    size="small"
-                    onClick={() => {
-                      setEditingOutbound(index);
-                      setOutboundModalOpen(true);
-                    }}
-                  >
-                    Изменить
-                  </Button>
-                  <JsonModal
-                    title={(asString(items[index].tag) || 'Outbound') + ' — JSON'}
-                    value={items[index]}
-                    onApply={(next) => {
-                      const copy = [...items];
-                      copy[index] = asObject(next);
-                      updateSection('outbounds', copy);
-                    }}
-                  />
-                  <Button
-                    size="small"
-                    danger
-                    icon={<DeleteOutlined />}
-                    onClick={() =>
-                      updateSection(
-                        'outbounds',
-                        items.filter((_, i) => i !== index),
-                      )
-                    }
-                  />
-                </Space>
-              ),
+              render: (_: unknown, row: JsonObject) => {
+                const index = asNumber(row.__index);
+                return (
+                  <Space>
+                    <Button
+                      size="small"
+                      onClick={() => {
+                        setEditingOutbound(index);
+                        setOutboundModalOpen(true);
+                      }}
+                    >
+                      Изменить
+                    </Button>
+                    <JsonModal
+                      title={(asString(items[index].tag) || 'Outbound') + ' — JSON'}
+                      value={items[index]}
+                      onApply={(next) => {
+                        try {
+                          setConfig(putConnection(config, index, asObject(next)));
+                        } catch (error) {
+                          messageApi.error(error instanceof Error ? error.message : String(error));
+                        }
+                      }}
+                    />
+                    <Button
+                      size="small"
+                      danger
+                      icon={<DeleteOutlined />}
+                      onClick={() => {
+                        try {
+                          const next = removeConnection(config, index);
+                          modalApi.confirm({
+                            title: `Удалить подключение ${items[index].tag}?`,
+                            okText: 'Удалить',
+                            cancelText: 'Отмена',
+                            okButtonProps: { danger: true },
+                            onOk: () => setConfig(next),
+                          });
+                        } catch (error) {
+                          messageApi.error(error instanceof Error ? error.message : String(error));
+                        }
+                      }}
+                    />
+                  </Space>
+                );
+              },
             },
           ]}
         />
@@ -1841,7 +1772,14 @@ export default function SingBoxPage() {
           <JsonModal
             title="Все outbounds"
             value={items}
-            onApply={(next) => updateSection('outbounds', Array.isArray(next) ? next : [])}
+            onApply={(next) => {
+              const items = asObjectArray(next);
+              setConfig((current) => ({
+                ...current,
+                outbounds: items.filter((item) => !isNativeEndpoint(item)),
+                endpoints: items.filter(isNativeEndpoint),
+              }));
+            }}
             buttonText="Массовый JSON"
           />
         </div>{' '}
@@ -1891,9 +1829,19 @@ export default function SingBoxPage() {
                 />
               </Field>
               <Field label="DNS для адресов серверов">
-                <TextField
-                  value={asString(value.default_domain_resolver)}
-                  onChange={(v) => patchSection('route', { default_domain_resolver: v })}
+                <Select
+                  allowClear
+                  style={{ width: '100%' }}
+                  value={
+                    asString(value.default_domain_resolver) ||
+                    asString(asObject(value.default_domain_resolver).server) ||
+                    undefined
+                  }
+                  options={asObjectArray(asObject(config.dns).servers).map((server) => ({
+                    value: asString(server.tag),
+                    label: asString(server.tag),
+                  }))}
+                  onChange={(v) => setConfig(setDefaultDomainResolver(config, v || ''))}
                 />
               </Field>
               <Field label="Default HTTP client">
@@ -1924,11 +1872,27 @@ export default function SingBoxPage() {
           )}
 
           <Divider />
+          <Input.Search
+            placeholder="Поиск по условиям, назначению или комментарию"
+            aria-label="Поиск правил маршрутизации"
+            value={routeSearch}
+            onChange={(event) => setRouteSearch(event.target.value)}
+            allowClear
+            style={{ maxWidth: 460, marginBottom: 16 }}
+          />
           <Table
             size="small"
             pagination={false}
-            rowKey={(_, index) => String(index)}
-            dataSource={rules}
+            scroll={{ x: 950 }}
+            rowKey={(row) => String(row.__index)}
+            dataSource={rules
+              .map((rule, index): JsonObject => ({ ...rule, __index: index }))
+              .filter((rule) =>
+                [routeRuleSummary(rule), rule.outbound, rule.action, rule.comment]
+                  .join(' ')
+                  .toLowerCase()
+                  .includes(routeSearch.toLowerCase()),
+              )}
             locale={{
               emptyText: (
                 <Empty description="Правил нет. Используется выбранный выход в интернет." />
@@ -1938,7 +1902,25 @@ export default function SingBoxPage() {
               {
                 title: '#',
                 width: 50,
-                render: (_: unknown, _row: JsonObject, index: number) => index + 1,
+                render: (_: unknown, row: JsonObject) => asNumber(row.__index) + 1,
+              },
+              {
+                title: 'Включено',
+                width: 90,
+                render: (_: unknown, row: JsonObject) => (
+                  <Switch
+                    size="small"
+                    checked={row.enabled !== false}
+                    aria-label={`Правило ${asNumber(row.__index) + 1}`}
+                    onChange={(enabled) =>
+                      patchSection('route', {
+                        rules: rules.map((rule, index) =>
+                          index === asNumber(row.__index) ? { ...rule, enabled } : rule,
+                        ),
+                      })
+                    }
+                  />
+                ),
               },
               {
                 title: 'Условия',
@@ -1972,63 +1954,66 @@ export default function SingBoxPage() {
               {
                 title: '',
                 width: 250,
-                render: (_: unknown, _row: JsonObject, index: number) => (
-                  <Space>
-                    <Button
-                      size="small"
-                      onClick={() => {
-                        setEditingRouteRule(index);
-                        setRouteRuleModalOpen(true);
-                      }}
-                    >
-                      Изменить
-                    </Button>
-                    <Button
-                      size="small"
-                      title="Выше"
-                      icon={<ArrowUpOutlined />}
-                      disabled={index === 0}
-                      onClick={() => {
-                        const next = [...rules];
-                        [next[index - 1], next[index]] = [next[index], next[index - 1]];
-                        patchSection('route', { rules: next });
-                      }}
-                    />
-                    <Button
-                      size="small"
-                      title="Ниже"
-                      icon={<ArrowDownOutlined />}
-                      disabled={index === rules.length - 1}
-                      onClick={() => {
-                        const next = [...rules];
-                        [next[index], next[index + 1]] = [next[index + 1], next[index]];
-                        patchSection('route', { rules: next });
-                      }}
-                    />
-                    <Button
-                      size="small"
-                      title="Дублировать"
-                      icon={<CopyOutlined />}
-                      onClick={() =>
-                        patchSection('route', {
-                          rules: [
-                            ...rules.slice(0, index + 1),
-                            structuredClone(rules[index]),
-                            ...rules.slice(index + 1),
-                          ],
-                        })
-                      }
-                    />
-                    <Button
-                      size="small"
-                      danger
-                      icon={<DeleteOutlined />}
-                      onClick={() =>
-                        patchSection('route', { rules: rules.filter((_, i) => i !== index) })
-                      }
-                    />
-                  </Space>
-                ),
+                render: (_: unknown, row: JsonObject) => {
+                  const index = asNumber(row.__index);
+                  return (
+                    <Space>
+                      <Button
+                        size="small"
+                        onClick={() => {
+                          setEditingRouteRule(index);
+                          setRouteRuleModalOpen(true);
+                        }}
+                      >
+                        Изменить
+                      </Button>
+                      <Button
+                        size="small"
+                        title="Выше"
+                        icon={<ArrowUpOutlined />}
+                        disabled={index === 0}
+                        onClick={() => {
+                          const next = [...rules];
+                          [next[index - 1], next[index]] = [next[index], next[index - 1]];
+                          patchSection('route', { rules: next });
+                        }}
+                      />
+                      <Button
+                        size="small"
+                        title="Ниже"
+                        icon={<ArrowDownOutlined />}
+                        disabled={index === rules.length - 1}
+                        onClick={() => {
+                          const next = [...rules];
+                          [next[index], next[index + 1]] = [next[index + 1], next[index]];
+                          patchSection('route', { rules: next });
+                        }}
+                      />
+                      <Button
+                        size="small"
+                        title="Дублировать"
+                        icon={<CopyOutlined />}
+                        onClick={() =>
+                          patchSection('route', {
+                            rules: [
+                              ...rules.slice(0, index + 1),
+                              structuredClone(rules[index]),
+                              ...rules.slice(index + 1),
+                            ],
+                          })
+                        }
+                      />
+                      <Button
+                        size="small"
+                        danger
+                        icon={<DeleteOutlined />}
+                        onClick={() =>
+                          patchSection('route', { rules: rules.filter((_, i) => i !== index) })
+                        }
+                      />
+                    </Space>
+                  );
+                },
               },
             ]}
           />
@@ -2253,27 +2238,53 @@ export default function SingBoxPage() {
     </Space>
   );
 
-  const healthIssues = singBoxHealthIssues(config);
+  const healthIssues = singBoxHealthIssues(config, snapshot?.subscriptionTags || []);
   const dirty = !!snapshot && JSON.stringify(snapshot.config) !== JSON.stringify(config);
 
   const sectionBody = (() => {
     switch (activeSection) {
       case 'dns':
-        return showAdvanced ? (
-          renderDns()
-        ) : (
-          <SimpleSettings
-            config={config}
-            onChange={setConfig}
-            section="dns"
-            onNavigate={navigate}
+        return (
+          <Tabs
+            defaultActiveKey="basic"
+            items={[
+              {
+                key: 'basic',
+                label: 'Основные',
+                children: (
+                  <SimpleSettings
+                    config={config}
+                    onChange={setConfig}
+                    section="dns"
+                    onNavigate={navigate}
+                  />
+                ),
+              },
+              {
+                key: 'servers',
+                label: 'DNS-серверы',
+                children: (
+                  <NativeDnsServers
+                    config={config}
+                    onChange={setConfig}
+                    subscriptionTags={snapshot?.subscriptionTags}
+                  />
+                ),
+              },
+              {
+                key: 'rules',
+                label: 'Правила DNS',
+                children: <NativeDnsRules config={config} onChange={setConfig} />,
+              },
+              { key: 'advanced', label: 'Дополнительно', children: renderDns() },
+            ]}
           />
         );
       case 'routing':
         return (
           <Tabs
             activeKey={
-              ['adblock', 'catalog'].includes(searchParams.get('routingTab') || '')
+              ['basic', 'adblock', 'catalog'].includes(searchParams.get('routingTab') || '')
                 ? searchParams.get('routingTab')!
                 : 'rules'
             }
@@ -2287,30 +2298,21 @@ export default function SingBoxPage() {
             }}
             items={[
               {
-                key: 'rules',
-                label: 'Маршрутизация',
-                children: showAdvanced ? (
-                  renderRoute()
-                ) : (
-                  <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-                    <SimpleSettings
-                      config={config}
-                      onChange={setConfig}
-                      section="routing"
-                      onNavigate={navigate}
-                    />
-                    <Collapse
-                      defaultActiveKey={['rules']}
-                      items={[
-                        {
-                          key: 'rules',
-                          label: 'Правила для отдельных сайтов и подключений',
-                          children: renderRoute(),
-                        },
-                      ]}
-                    />
-                  </Space>
+                key: 'basic',
+                label: 'Основные',
+                children: (
+                  <SimpleSettings
+                    config={config}
+                    onChange={setConfig}
+                    section="routing"
+                    onNavigate={navigate}
+                  />
                 ),
+              },
+              {
+                key: 'rules',
+                label: 'Правила',
+                children: renderRoute(),
               },
               {
                 key: 'catalog',
@@ -2361,10 +2363,15 @@ export default function SingBoxPage() {
       case 'advanced':
         return renderAdvanced();
       default:
-        return showAdvanced ? (
-          renderBasic()
-        ) : (
-          <SimpleSettings config={config} onChange={setConfig} onNavigate={navigate} />
+        return (
+          <Space orientation="vertical" size={16} style={{ width: '100%' }}>
+            <SimpleSettings config={config} onChange={setConfig} onNavigate={navigate} />
+            <Collapse
+              items={[
+                { key: 'log', label: 'Параметры журнала и времени', children: renderBasic() },
+              ]}
+            />
+          </Space>
         );
     }
   })();
@@ -2557,7 +2564,7 @@ export default function SingBoxPage() {
         cancelText="Отмена"
         onCancel={() => setShareLinkOpen(false)}
         confirmLoading={importingLink}
-        maskClosable={!importingLink}
+        mask={{ closable: !importingLink }}
         cancelButtonProps={{ disabled: importingLink }}
         onOk={async () => {
           if (importingLink) return;
@@ -2626,48 +2633,39 @@ export default function SingBoxPage() {
           setSnapshot((current) => (current ? { ...current, subscriptionTags: tags } : current))
         }
       />
-      <SingBoxOutboundModal
-        open={outboundModalOpen}
-        value={
-          editingOutbound == null
-            ? null
-            : asObjectArray(sectionValue('outbounds', config))[editingOutbound]
-        }
-        existingTags={[
-          ...asObjectArray(sectionValue('outbounds', config)),
-          ...asObjectArray(config.endpoints),
-        ]
-          .map((item) => asString(item.tag))
-          .filter(Boolean)
-          .concat(snapshot?.subscriptionTags || [])}
-        onSubscriptionURL={(url) => {
-          setSubscriptionURL(url);
-          setSubscriptionsOpen(true);
-        }}
-        onCancel={() => setOutboundModalOpen(false)}
-        onSave={(next, additional = []) => {
-          setConfig((current) => {
-            const outbounds = asObjectArray(current.outbounds),
-              endpoints = asObjectArray(current.endpoints);
-            if (editingOutbound != null && !isNativeEndpoint(next)) {
-              outbounds[editingOutbound] = next;
-              return {
-                ...current,
-                outbounds: [...outbounds, ...additional.filter((item) => !isNativeEndpoint(item))],
-                endpoints: [...endpoints, ...additional.filter(isNativeEndpoint)],
-              };
+      {outboundModalOpen && (
+        <SingBoxOutboundModal
+          open
+          value={
+            editingOutbound == null
+              ? null
+              : [
+                  ...asObjectArray(sectionValue('outbounds', config)),
+                  ...asObjectArray(config.endpoints),
+                ][editingOutbound]
+          }
+          existingTags={[
+            ...asObjectArray(sectionValue('outbounds', config)),
+            ...asObjectArray(config.endpoints),
+          ]
+            .map((item) => asString(item.tag))
+            .filter(Boolean)
+            .concat(snapshot?.subscriptionTags || [])}
+          onSubscriptionURL={(url) => {
+            setSubscriptionURL(url);
+            setSubscriptionsOpen(true);
+          }}
+          onCancel={() => setOutboundModalOpen(false)}
+          onSave={(next, additional = []) => {
+            try {
+              setConfig(putConnection(config, editingOutbound, next, additional));
+              setOutboundModalOpen(false);
+            } catch (error) {
+              messageApi.error(error instanceof Error ? error.message : String(error));
             }
-            if (editingOutbound != null) outbounds.splice(editingOutbound, 1);
-            const items = [next, ...additional];
-            return {
-              ...current,
-              outbounds: [...outbounds, ...items.filter((item) => !isNativeEndpoint(item))],
-              endpoints: [...endpoints, ...items.filter(isNativeEndpoint)],
-            };
-          });
-          setOutboundModalOpen(false);
-        }}
-      />
+          }}
+        />
+      )}
 
       <SingBoxRouteRuleModal
         open={routeRuleModalOpen}

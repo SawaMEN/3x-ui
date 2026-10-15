@@ -41,11 +41,16 @@ func normalizeRuntimeRuleList(value any, path string) ([]any, error) {
 		return nil, fmt.Errorf("%s must be an array", path)
 	}
 
+	out := make([]any, 0, len(rules))
 	for index, rawRule := range rules {
 		rule, ok := rawRule.(map[string]any)
 		if !ok {
 			return nil, fmt.Errorf("%s[%d] must be an object", path, index)
 		}
+		if rule["enabled"] == false {
+			continue
+		}
+		delete(rule, "enabled")
 		rulePath := fmt.Sprintf("%s[%d]", path, index)
 
 		// comment is panel-only metadata. sing-box uses strict JSON decoding and
@@ -73,10 +78,14 @@ func normalizeRuntimeRuleList(value any, path string) ([]any, error) {
 			if err != nil {
 				return nil, err
 			}
+			if len(normalizedNested) == 0 {
+				continue
+			}
 			rule["rules"] = normalizedNested
 		}
+		out = append(out, rule)
 	}
-	return rules, nil
+	return out, nil
 }
 
 func normalizeRuntimePortField(rule map[string]any, field, rangeField, path string) error {

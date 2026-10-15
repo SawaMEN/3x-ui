@@ -41,3 +41,15 @@ describe('panel address after restart', () => {
     ).toBe('http://panel.example/secret/panel/settings');
   });
 });
+
+it('keeps an environment-overridden port and normalizes repeated slashes', () => {
+  const listener = { ...initial, webPort: 8443 };
+  expect(
+    panelUrlAfterRestart(
+      'http://panel.test:8443/panel/settings',
+      listener,
+      { ...listener, webPort: 9090, webBasePath: '//secret///child//' },
+      8443,
+    ),
+  ).toBe('http://panel.test:8443/secret/child/panel/settings');
+});

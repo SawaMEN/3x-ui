@@ -190,13 +190,13 @@ func runWebServer() {
 		case syscall.SIGHUP:
 			logger.Info("Received SIGHUP signal. Restarting servers...")
 
-			err := server.StopPanelOnly()
-			if err != nil {
-				logger.Debug("Error stopping web server:", err)
-			}
-			err = subServer.Stop()
+			err := subServer.Stop()
 			if err != nil {
 				logger.Debug("Error stopping sub server:", err)
+			}
+			err = server.StopPanelOnly()
+			if err != nil {
+				logger.Debug("Error stopping web server:", err)
 			}
 
 			server = web.NewServer()

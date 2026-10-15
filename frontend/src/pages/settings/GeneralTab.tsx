@@ -33,7 +33,7 @@ import { onNumber } from '@/utils/onNumber';
 import { DefaultSettingTag, SettingListItem } from '@/components/ui';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { catTabLabel } from './catTabLabel';
-import { sanitizePath } from './uriPath';
+import { sanitizePath, normalizePath } from './uriPath';
 import SecretInput from './SecretInput';
 import CoreSelection from './CoreSelection';
 
@@ -58,6 +58,9 @@ export default function GeneralTab({
 }: GeneralTabProps) {
   const { t } = useTranslation();
   const { isMobile } = useMediaQuery();
+  const portOverride =
+    Number(document.querySelector<HTMLMetaElement>('meta[name="panel-port-override"]')?.content) ||
+    0;
   const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -410,12 +413,20 @@ export default function GeneralTab({
                   description={t('pages.settings.panelPortDesc')}
                 >
                   <InputNumber
-                    value={allSetting.webPort}
+                    value={portOverride || allSetting.webPort}
+                    disabled={portOverride > 0}
                     min={1}
                     max={65535}
                     style={{ width: '100%' }}
                     onChange={onNumber((v) => updateSetting({ webPort: v }))}
                   />
+                  {portOverride > 0 && (
+                    <Alert
+                      type="info"
+                      showIcon
+                      title={`Порт ${portOverride} задан переменной XUI_PORT в настройках службы.`}
+                    />
+                  )}
                 </SettingListItem>
 
                 <SettingListItem
@@ -425,6 +436,9 @@ export default function GeneralTab({
                 >
                   <Input
                     value={allSetting.webBasePath}
+                    onBlur={() =>
+                      updateSetting({ webBasePath: normalizePath(allSetting.webBasePath) })
+                    }
                     onChange={(e) =>
                       updateSetting({
                         webBasePath: sanitizePath(e.target.value),

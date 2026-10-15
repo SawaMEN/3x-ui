@@ -5,6 +5,7 @@ import {
   DNS_PRESETS,
   outboundDefaults,
   setDefaultOutbound,
+  setDefaultDomainResolver,
   setDnsCache,
   setOptimisticCache,
   setLogLevel,
@@ -174,4 +175,21 @@ describe('dependent sing-box settings', () => {
       log: { ...config.log, level: 'warn', disabled: false },
     });
   });
+});
+
+it('updates a bootstrap resolver without losing its strategy or custom options', () => {
+  const config = {
+    route: {
+      default_domain_resolver: { server: 'old', strategy: 'ipv4_only', disable_cache: true },
+      rules: [{ action: 'reject' }],
+    },
+  };
+  expect(setDefaultDomainResolver(config, 'new')).toEqual({
+    route: {
+      ...config.route,
+      default_domain_resolver: { server: 'new', strategy: 'ipv4_only', disable_cache: true },
+    },
+  });
+  expect(setDefaultDomainResolver(config, '').route).toEqual({ rules: [{ action: 'reject' }] });
+  expect(config.route.default_domain_resolver.server).toBe('old');
 });

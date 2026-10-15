@@ -135,6 +135,83 @@ describe('simple sing-box page', () => {
     ]);
   });
 
+  it('searches and disables the original routing rule without changing a different row', async () => {
+    const first = { action: 'reject', domain: ['ads.test'] };
+    const second = { action: 'route', port: [443], outbound: 'direct' };
+    vi.mocked(HttpUtil.get).mockResolvedValue({
+      success: true,
+      msg: '',
+      obj: {
+        config: { ...structuredClone(config), route: { final: 'direct', rules: [first, second] } },
+        running: true,
+        version: '1.14.0',
+        managedSections: ['inbounds'],
+      },
+    });
+    mount('/routing');
+    const search = await screen.findByLabelText('Поиск правил маршрутизации');
+    fireEvent.change(search, { target: { value: '443' } });
+    fireEvent.click(screen.getByRole('switch', { name: 'Правило 2' }));
+    fireEvent.click(screen.getByText('Save').closest('button')!);
+    await waitFor(() => expect(HttpUtil.post).toHaveBeenCalled());
+    const call = vi
+      .mocked(HttpUtil.post)
+      .mock.calls.find(([path]) => path === '/panel/api/setting/singbox/config')!;
+    expect(JSON.parse((call[1] as { config: string }).config).route.rules).toEqual([
+      first,
+      { ...second, enabled: false },
+    ]);
+  });
+
+  it('edits a tunnel from the same searchable outbound list and keeps route references', async () => {
+    const endpoint = {
+      type: 'masque-client',
+      tag: 'tunnel',
+      server: 'vpn.test',
+      server_port: 443,
+      version: 3,
+      path: '/.well-known/masque/ip/{target}/{ipproto}/',
+      mtu: 1280,
+      system: false,
+      tls: { enabled: true },
+    };
+    vi.mocked(HttpUtil.get).mockResolvedValue({
+      success: true,
+      msg: '',
+      obj: {
+        config: {
+          ...structuredClone(config),
+          endpoints: [endpoint],
+          route: { final: 'tunnel', rules: [] },
+        },
+        running: true,
+        version: '1.14.0',
+        managedSections: ['inbounds'],
+      },
+    });
+    mount('/outbound');
+    fireEvent.change(await screen.findByLabelText('Поиск исходящих подключений'), {
+      target: { value: 'tunnel' },
+    });
+    const row = screen.getByText('tunnel').closest('tr')!;
+    fireEvent.click(within(row).getByRole('button', { name: 'Изменить' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(await within(dialog).findByLabelText('Название подключения'), {
+      target: { value: 'renamed-tunnel' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Сохранить изменения' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull(), { timeout: 5000 });
+    fireEvent.click(screen.getByText('Save').closest('button')!);
+    await waitFor(() => expect(HttpUtil.post).toHaveBeenCalled());
+    const call = vi
+      .mocked(HttpUtil.post)
+      .mock.calls.find(([path]) => path === '/panel/api/setting/singbox/config')!;
+    const sent = JSON.parse((call[1] as { config: string }).config);
+    expect(sent.endpoints).toMatchObject([{ tag: 'renamed-tunnel', type: 'masque-client' }]);
+    expect(sent.route.final).toBe('renamed-tunnel');
+    expect(sent.outbounds).toEqual(config.outbounds);
+  });
+
   it('starts with simple controls and only exposes expert sections after switching', async () => {
     mount();
     await screen.findByText('Быстрая настройка');

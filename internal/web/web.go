@@ -35,6 +35,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/util/cronspec"
 	systemswap "github.com/SawaMEN/3x-ui/v3/internal/util/swap"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/sys"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/uripath"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/controller"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/global"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/job"
@@ -177,9 +178,17 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	if err != nil {
 		return nil, err
 	}
+	panelPortOverride := 0
 	if port, configured, err := config.GetPortOverride(); configured && err == nil {
 		panelPort = port
+		panelPortOverride = port
 	}
+	panelInstance := strconv.FormatInt(time.Now().UnixNano(), 10)
+	engine.Use(func(c *gin.Context) {
+		c.Header("X-Panel-Instance", panelInstance)
+		c.Set("panel_instance", panelInstance)
+		c.Set("panel_port_override", panelPortOverride)
+	})
 	sendHSTS := directHTTPS && !config.IsSkipHSTS()
 	engine.Use(middleware.SecurityHeadersMiddleware(sendHSTS))
 
@@ -216,7 +225,7 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	store := cookie.NewStore(secret)
 	// Configure default session cookie options, including expiration (MaxAge)
 	sessionOptions := sessions.Options{
-		Path:     basePath,
+		Path:     uripath.CookiePath(basePath),
 		HttpOnly: true,
 		Secure:   directHTTPS,
 		SameSite: http.SameSiteLaxMode,
