@@ -170,7 +170,16 @@ export function outboundDefaults(type: string, tag: string, group: string[] = []
     ...(type === 'shadowtls' ? { version: 3 } : {}),
     ...(type === 'snell' ? { version: 4 } : {}),
     ...(type === 'hysteria' ? { up_mbps: 100, down_mbps: 100 } : {}),
-    ...(['trojan', 'hysteria', 'hysteria2', 'tuic', 'anytls', 'shadowtls', 'naive'].includes(type)
+    ...([
+      'trojan',
+      'hysteria',
+      'hysteria2',
+      'tuic',
+      'anytls',
+      'shadowtls',
+      'naive',
+      'trusttunnel',
+    ].includes(type)
       ? { tls: { enabled: true } }
       : {}),
   };
@@ -287,15 +296,19 @@ export function outboundErrors(value: ConfigObject, otherTags: string[]): string
       errors.push('MTU Mieru должен быть от 1280 до 1500.');
     if (
       value.multiplexing &&
-      !['DEFAULT', 'OFF', 'LOW', 'MIDDLE', 'HIGH'].includes(
-        String(value.multiplexing).replace(/^MULTIPLEXING_/, ''),
+      !['DEFAULT', 'LOW', 'MEDIUM', 'MIDDLE', 'HIGH'].includes(
+        String(value.multiplexing)
+          .toUpperCase()
+          .replace(/^MULTIPLEXING_/, ''),
       )
     )
       errors.push('Неподдерживаемый режим multiplexing Mieru.');
     if (
       value.handshake_mode &&
-      !['DEFAULT', 'STANDARD', 'NO_WAIT'].includes(
-        String(value.handshake_mode).replace(/^HANDSHAKE_/, ''),
+      !['DEFAULT', 'STANDARD', 'NO_WAIT', 'NOWAIT'].includes(
+        String(value.handshake_mode)
+          .toUpperCase()
+          .replace(/^HANDSHAKE_/, ''),
       )
     )
       errors.push('Неподдерживаемый handshake Mieru.');
@@ -334,10 +347,14 @@ export function outboundErrors(value: ConfigObject, otherTags: string[]): string
     errors.push('Укажите пароль.');
   if (type === 'shadowsocks' && !value.method) errors.push('Выберите метод шифрования.');
   if (
-    ['hysteria', 'hysteria2', 'tuic', 'shadowtls', 'anytls', 'naive'].includes(type) &&
+    ['hysteria', 'hysteria2', 'tuic', 'shadowtls', 'anytls', 'naive', 'trusttunnel'].includes(
+      type,
+    ) &&
     object(value.tls).enabled !== true
   )
     errors.push('Для этого протокола требуется TLS.');
+  if (type === 'trusttunnel' && (!value.username || !value.password))
+    errors.push('TrustTunnel требует логин и пароль.');
   const tls = object(value.tls);
   if (['hysteria', 'hysteria2', 'tuic', 'naive'].includes(type) && object(tls.utls).enabled)
     errors.push('Этот протокол не поддерживает uTLS.');

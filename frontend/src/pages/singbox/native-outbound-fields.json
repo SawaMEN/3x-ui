@@ -1,1515 +1,6824 @@
 {
-  "anytls": {
-    "bind_address_no_port": "boolean",
-    "bind_interface": "string",
-    "client_metadata": "string",
-    "connect_timeout": "string",
-    "detour": "string",
-    "disable_tcp_keep_alive": "boolean",
-    "domain_resolver": "object",
-    "domain_strategy": "string",
-    "fallback_delay": "string",
-    "fallback_network_type": "array",
-    "final_mask": "object",
-    "idle_session_check_interval": "string",
-    "idle_session_timeout": "string",
-    "inet4_bind_address": "string",
-    "inet6_bind_address": "string",
-    "min_idle_session": "number",
-    "netns": "string",
-    "network_strategy": "string",
-    "network_type": "array",
-    "password": "string",
-    "protect_path": "string",
-    "reuse_addr": "boolean",
-    "routing_mark": "number",
-    "server": "string",
-    "server_port": "number",
-    "tcp_fast_open": "boolean",
-    "tcp_keep_alive": "string",
-    "tcp_keep_alive_interval": "string",
-    "tcp_multi_path": "boolean",
-    "tls": "object",
-    "udp_fragment": "boolean"
+  "definitions": {
+    "ACMEExternalAccountOptions": {
+      "key_id": {
+        "kind": "string"
+      },
+      "mac_key": {
+        "kind": "string"
+      }
+    },
+    "AwgOptions": {
+      "content_padding_addition": {
+        "kind": "string"
+      },
+      "disable_cookies": {
+        "kind": "boolean"
+      },
+      "h1": {
+        "kind": "string"
+      },
+      "h2": {
+        "kind": "string"
+      },
+      "h3": {
+        "kind": "string"
+      },
+      "h4": {
+        "kind": "string"
+      },
+      "header_protection_key": {
+        "kind": "string"
+      },
+      "i1": {
+        "kind": "string"
+      },
+      "i2": {
+        "kind": "string"
+      },
+      "i3": {
+        "kind": "string"
+      },
+      "i4": {
+        "kind": "string"
+      },
+      "i5": {
+        "kind": "string"
+      },
+      "jc": {
+        "integer": true,
+        "kind": "number"
+      },
+      "jmax": {
+        "integer": true,
+        "kind": "number"
+      },
+      "jmin": {
+        "integer": true,
+        "kind": "number"
+      },
+      "keepalive_timeout": {
+        "kind": "string"
+      },
+      "max_handshake_attempts": {
+        "kind": "string"
+      },
+      "random_trailers": {
+        "kind": "boolean"
+      },
+      "reject_after_time": {
+        "kind": "string"
+      },
+      "rekey_after_time": {
+        "kind": "string"
+      },
+      "rekey_timeout": {
+        "kind": "string"
+      },
+      "s1": {
+        "integer": true,
+        "kind": "number"
+      },
+      "s2": {
+        "integer": true,
+        "kind": "number"
+      },
+      "s3": {
+        "integer": true,
+        "kind": "number"
+      },
+      "s4": {
+        "integer": true,
+        "kind": "number"
+      }
+    },
+    "AwgPeerOptions": {
+      "address": {
+        "kind": "string"
+      },
+      "allowed_ips": {
+        "kind": "strings"
+      },
+      "name": {
+        "kind": "string"
+      },
+      "persistent_keepalive_interval": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0
+      },
+      "port": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0
+      },
+      "preshared_key": {
+        "kind": "string"
+      },
+      "public_key": {
+        "kind": "string"
+      }
+    },
+    "BrutalOptions": {
+      "down_mbps": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      },
+      "enabled": {
+        "kind": "boolean"
+      },
+      "up_mbps": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      }
+    },
+    "CertificateProviderOptions": {},
+    "CloudflareProfile": {
+      "auth_token": {
+        "kind": "string"
+      },
+      "detour": {
+        "kind": "string"
+      },
+      "id": {
+        "kind": "string"
+      },
+      "private_key": {
+        "kind": "string"
+      },
+      "recreate": {
+        "kind": "boolean"
+      }
+    },
+    "FinalMaskItem": {
+      "settings": {
+        "kind": "json"
+      },
+      "type": {
+        "kind": "string",
+        "required": true
+      }
+    },
+    "FinalMaskOptions": {
+      "quicParams": {
+        "kind": "json"
+      },
+      "tcp": {
+        "item": {
+          "kind": "object",
+          "ref": "FinalMaskItem"
+        },
+        "kind": "array"
+      },
+      "udp": {
+        "item": {
+          "kind": "object",
+          "ref": "FinalMaskItem"
+        },
+        "kind": "array"
+      }
+    },
+    "Hysteria2Realm": {
+      "http_client": {
+        "kind": "json"
+      },
+      "ip_version": {
+        "enum": [
+          0,
+          4,
+          6
+        ],
+        "integer": true,
+        "kind": "number"
+      },
+      "port_mapping": {
+        "kind": "object",
+        "ref": "Hysteria2RealmPortMapping"
+      },
+      "realm_id": {
+        "kind": "string",
+        "required": true
+      },
+      "server_url": {
+        "kind": "string",
+        "required": true
+      },
+      "stun_servers": {
+        "kind": "strings",
+        "required": true
+      },
+      "token": {
+        "kind": "string"
+      }
+    },
+    "Hysteria2RealmPortMapping": {
+      "enabled": {
+        "kind": "boolean"
+      },
+      "lifetime": {
+        "kind": "string"
+      },
+      "timeout": {
+        "kind": "string"
+      }
+    },
+    "InboundACMEOptions": {
+      "alternative_http_port": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0
+      },
+      "alternative_tls_port": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0
+      },
+      "data_directory": {
+        "kind": "string"
+      },
+      "default_server_name": {
+        "kind": "string"
+      },
+      "disable_http_challenge": {
+        "kind": "boolean"
+      },
+      "disable_tls_alpn_challenge": {
+        "kind": "boolean"
+      },
+      "dns01_challenge": {
+        "kind": "object",
+        "ref": "_ACMEDNS01ChallengeOptions"
+      },
+      "domain": {
+        "kind": "strings"
+      },
+      "email": {
+        "kind": "string"
+      },
+      "external_account": {
+        "kind": "object",
+        "ref": "ACMEExternalAccountOptions"
+      },
+      "profile": {
+        "kind": "string"
+      },
+      "provider": {
+        "kind": "string"
+      }
+    },
+    "InboundECHOptions": {
+      "dynamic_record_sizing_disabled": {
+        "kind": "boolean"
+      },
+      "enabled": {
+        "kind": "boolean"
+      },
+      "key": {
+        "kind": "strings"
+      },
+      "key_path": {
+        "kind": "string"
+      },
+      "pq_signature_schemes_enabled": {
+        "kind": "boolean"
+      }
+    },
+    "InboundRealityHandshakeOptions": {
+      "bind_address_no_port": {
+        "kind": "boolean"
+      },
+      "bind_interface": {
+        "kind": "string"
+      },
+      "connect_timeout": {
+        "kind": "string"
+      },
+      "detour": {
+        "kind": "string"
+      },
+      "disable_tcp_keep_alive": {
+        "kind": "boolean"
+      },
+      "domain_resolver": {
+        "kind": "object",
+        "ref": "_DomainResolveOptions",
+        "string": true
+      },
+      "domain_strategy": {
+        "kind": "string"
+      },
+      "fallback_delay": {
+        "kind": "string"
+      },
+      "fallback_network_type": {
+        "kind": "strings"
+      },
+      "final_mask": {
+        "kind": "object",
+        "ref": "FinalMaskOptions"
+      },
+      "inet4_bind_address": {
+        "kind": "string"
+      },
+      "inet6_bind_address": {
+        "kind": "string"
+      },
+      "netns": {
+        "kind": "string"
+      },
+      "network_strategy": {
+        "kind": "string"
+      },
+      "network_type": {
+        "kind": "strings"
+      },
+      "protect_path": {
+        "kind": "string"
+      },
+      "reuse_addr": {
+        "kind": "boolean"
+      },
+      "routing_mark": {
+        "kind": "number"
+      },
+      "server": {
+        "kind": "string",
+        "required": true
+      },
+      "server_port": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0,
+        "required": true
+      },
+      "tcp_fast_open": {
+        "kind": "boolean"
+      },
+      "tcp_keep_alive": {
+        "kind": "string"
+      },
+      "tcp_keep_alive_interval": {
+        "kind": "string"
+      },
+      "tcp_multi_path": {
+        "kind": "boolean"
+      },
+      "udp_fragment": {
+        "kind": "boolean"
+      }
+    },
+    "InboundRealityOptions": {
+      "enabled": {
+        "kind": "boolean"
+      },
+      "handshake": {
+        "kind": "object",
+        "ref": "InboundRealityHandshakeOptions"
+      },
+      "max_time_difference": {
+        "kind": "string"
+      },
+      "private_key": {
+        "kind": "string"
+      },
+      "short_id": {
+        "kind": "strings"
+      }
+    },
+    "InboundTLSOptions": {
+      "acme": {
+        "kind": "object",
+        "ref": "InboundACMEOptions"
+      },
+      "alpn": {
+        "kind": "strings"
+      },
+      "certificate": {
+        "kind": "strings"
+      },
+      "certificate_path": {
+        "kind": "string"
+      },
+      "certificate_provider": {
+        "kind": "object",
+        "ref": "CertificateProviderOptions"
+      },
+      "cipher_suites": {
+        "kind": "strings"
+      },
+      "client_authentication": {
+        "kind": "json"
+      },
+      "client_certificate": {
+        "kind": "strings"
+      },
+      "client_certificate_path": {
+        "kind": "strings"
+      },
+      "client_certificate_public_key_sha256": {
+        "item": {
+          "item": {
+            "kind": "json"
+          },
+          "kind": "array"
+        },
+        "kind": "array"
+      },
+      "client_certificate_sha256": {
+        "item": {
+          "item": {
+            "kind": "json"
+          },
+          "kind": "array"
+        },
+        "kind": "array"
+      },
+      "curve_preferences": {
+        "item": {
+          "kind": "json"
+        },
+        "kind": "array"
+      },
+      "ech": {
+        "kind": "object",
+        "ref": "InboundECHOptions"
+      },
+      "enabled": {
+        "kind": "boolean"
+      },
+      "handshake_timeout": {
+        "kind": "string"
+      },
+      "insecure": {
+        "kind": "boolean"
+      },
+      "kernel_rx": {
+        "kind": "boolean"
+      },
+      "kernel_tx": {
+        "kind": "boolean"
+      },
+      "key": {
+        "kind": "strings"
+      },
+      "key_path": {
+        "kind": "string"
+      },
+      "max_version": {
+        "enum": [
+          "1.0",
+          "1.1",
+          "1.2",
+          "1.3"
+        ],
+        "kind": "string"
+      },
+      "min_version": {
+        "enum": [
+          "1.0",
+          "1.1",
+          "1.2",
+          "1.3"
+        ],
+        "kind": "string"
+      },
+      "reality": {
+        "kind": "object",
+        "ref": "InboundRealityOptions"
+      },
+      "server_name": {
+        "kind": "string"
+      }
+    },
+    "LegacyWireGuardPeer": {
+      "allowed_ips": {
+        "kind": "strings"
+      },
+      "pre_shared_key": {
+        "kind": "string"
+      },
+      "public_key": {
+        "kind": "string"
+      },
+      "reserved": {
+        "item": {
+          "integer": true,
+          "kind": "number",
+          "max": 255,
+          "min": 0
+        },
+        "kind": "array"
+      },
+      "server": {
+        "kind": "string",
+        "required": true
+      },
+      "server_port": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0,
+        "required": true
+      }
+    },
+    "MASQUEOutboundTLSOptions": {
+      "cipher_suites": {
+        "kind": "strings"
+      },
+      "curve_preferences": {
+        "item": {
+          "kind": "json"
+        },
+        "kind": "array"
+      },
+      "fragment": {
+        "kind": "boolean"
+      },
+      "fragment_fallback_delay": {
+        "kind": "string"
+      },
+      "insecure": {
+        "kind": "boolean"
+      },
+      "kernel_rx": {
+        "kind": "boolean"
+      },
+      "kernel_tx": {
+        "kind": "boolean"
+      },
+      "record_fragment": {
+        "kind": "boolean"
+      }
+    },
+    "MieruPortBinding": {
+      "port": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0
+      },
+      "portRange": {
+        "kind": "string"
+      },
+      "protocol": {
+        "enum": [
+          "TCP",
+          "UDP"
+        ],
+        "kind": "string"
+      }
+    },
+    "OpenConnectCSDOptions": {
+      "wrapper_path": {
+        "kind": "string"
+      }
+    },
+    "OpenConnectFormEntryOptions": {
+      "form_id": {
+        "kind": "string"
+      },
+      "name": {
+        "kind": "string"
+      },
+      "promote": {
+        "kind": "boolean"
+      },
+      "submission_key": {
+        "kind": "string"
+      },
+      "value": {
+        "kind": "string"
+      }
+    },
+    "OpenConnectFortinetHostCheckOptions": {
+      "check_virtual_desktop": {
+        "kind": "string"
+      },
+      "hostcheck": {
+        "kind": "string"
+      }
+    },
+    "OpenConnectHIPOptions": {
+      "wrapper_path": {
+        "kind": "string"
+      }
+    },
+    "OpenConnectMobileOptions": {
+      "device_type": {
+        "kind": "string",
+        "required": true
+      },
+      "device_unique_id": {
+        "kind": "string",
+        "required": true
+      },
+      "platform_version": {
+        "kind": "string",
+        "required": true
+      }
+    },
+    "OpenConnectTLSOptions": {
+      "certificate_authority": {
+        "kind": "strings"
+      },
+      "certificate_authority_path": {
+        "kind": "string"
+      },
+      "client_certificate": {
+        "kind": "strings"
+      },
+      "client_certificate_path": {
+        "kind": "string"
+      },
+      "client_key": {
+        "kind": "strings"
+      },
+      "client_key_password": {
+        "kind": "string"
+      },
+      "client_key_path": {
+        "kind": "string"
+      },
+      "insecure": {
+        "kind": "boolean"
+      },
+      "mca_certificate": {
+        "kind": "strings"
+      },
+      "mca_certificate_path": {
+        "kind": "string"
+      },
+      "mca_key": {
+        "kind": "strings"
+      },
+      "mca_key_password": {
+        "kind": "string"
+      },
+      "mca_key_path": {
+        "kind": "string"
+      },
+      "peer_fingerprint": {
+        "kind": "strings"
+      },
+      "server_name": {
+        "kind": "string"
+      },
+      "system_trust_disabled": {
+        "kind": "boolean"
+      }
+    },
+    "OpenConnectTNCCCertificateOptions": {
+      "certificate": {
+        "kind": "strings"
+      },
+      "certificate_path": {
+        "kind": "string"
+      }
+    },
+    "OpenConnectTNCCOptions": {
+      "certificates": {
+        "item": {
+          "kind": "object",
+          "ref": "OpenConnectTNCCCertificateOptions"
+        },
+        "kind": "array"
+      },
+      "device_id": {
+        "kind": "string"
+      },
+      "machine_identification_enabled": {
+        "kind": "boolean"
+      },
+      "user_agent": {
+        "kind": "string"
+      },
+      "wrapper_path": {
+        "kind": "string"
+      }
+    },
+    "OpenConnectTokenOptions": {
+      "counter": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      },
+      "device_id": {
+        "kind": "string"
+      },
+      "mode": {
+        "enum": [
+          "totp",
+          "hotp",
+          "stoken",
+          "oidc"
+        ],
+        "kind": "string"
+      },
+      "password": {
+        "kind": "string"
+      },
+      "pin": {
+        "kind": "string"
+      },
+      "secret": {
+        "kind": "string"
+      },
+      "secret_path": {
+        "kind": "string"
+      }
+    },
+    "OpenFluxTransportOptions": {
+      "dial": {
+        "kind": "string"
+      },
+      "priority": {
+        "integer": true,
+        "kind": "number"
+      },
+      "type": {
+        "enum": [
+          "direct",
+          "yandex",
+          "vyandex",
+          "boards",
+          "mailru"
+        ],
+        "kind": "string",
+        "required": true
+      },
+      "url": {
+        "kind": "string"
+      }
+    },
+    "OpenVPNControlWrapOptions": {
+      "direction": {
+        "enum": [
+          "server",
+          "client"
+        ],
+        "kind": "string"
+      },
+      "key": {
+        "kind": "strings"
+      },
+      "key_path": {
+        "kind": "string"
+      },
+      "type": {
+        "enum": [
+          "tls_auth",
+          "tls_crypt",
+          "tls_crypt_v2"
+        ],
+        "kind": "string"
+      }
+    },
+    "OpenVPNInboundControlWrapOptions": {
+      "direction": {
+        "enum": [
+          "server",
+          "client"
+        ],
+        "kind": "string"
+      },
+      "force_cookie": {
+        "kind": "boolean"
+      },
+      "key": {
+        "kind": "strings"
+      },
+      "key_path": {
+        "kind": "string"
+      },
+      "type": {
+        "enum": [
+          "tls_auth",
+          "tls_crypt",
+          "tls_crypt_v2"
+        ],
+        "kind": "string"
+      }
+    },
+    "OpenVPNInboundTLSOptions": {
+      "certificate": {
+        "kind": "strings"
+      },
+      "certificate_path": {
+        "kind": "string"
+      },
+      "certificate_profile": {
+        "enum": [
+          "legacy",
+          "preferred",
+          "insecure",
+          "suiteb"
+        ],
+        "kind": "string"
+      },
+      "cipher": {
+        "kind": "string"
+      },
+      "client_certificate": {
+        "kind": "strings"
+      },
+      "client_certificate_path": {
+        "kind": "string"
+      },
+      "client_name": {
+        "kind": "string"
+      },
+      "client_name_type": {
+        "enum": [
+          "subject",
+          "name",
+          "name-prefix"
+        ],
+        "kind": "string"
+      },
+      "control_wrap": {
+        "kind": "object",
+        "ref": "OpenVPNInboundControlWrapOptions"
+      },
+      "crl_path": {
+        "kind": "string"
+      },
+      "groups": {
+        "kind": "string"
+      },
+      "key": {
+        "kind": "strings"
+      },
+      "key_path": {
+        "kind": "string"
+      },
+      "ns_certificate_type": {
+        "enum": [
+          "server",
+          "client"
+        ],
+        "kind": "string"
+      },
+      "peer_fingerprint": {
+        "kind": "strings"
+      },
+      "remote_certificate_eku": {
+        "kind": "string"
+      },
+      "remote_certificate_ku": {
+        "kind": "strings"
+      },
+      "remote_certificate_tls": {
+        "enum": [
+          "server",
+          "client",
+          "none"
+        ],
+        "kind": "string"
+      },
+      "verify_client_certificate": {
+        "enum": [
+          "require",
+          "optional",
+          "none"
+        ],
+        "kind": "string"
+      },
+      "version_max": {
+        "enum": [
+          "1.0",
+          "1.1",
+          "1.2",
+          "1.3"
+        ],
+        "kind": "string"
+      },
+      "version_min": {
+        "enum": [
+          "1.0",
+          "1.1",
+          "1.2",
+          "1.3"
+        ],
+        "kind": "string"
+      }
+    },
+    "OpenVPNOutboundTLSOptions": {
+      "certificate": {
+        "kind": "strings"
+      },
+      "certificate_path": {
+        "kind": "string"
+      },
+      "certificate_profile": {
+        "enum": [
+          "legacy",
+          "preferred",
+          "insecure",
+          "suiteb"
+        ],
+        "kind": "string"
+      },
+      "cipher": {
+        "kind": "string"
+      },
+      "client_certificate": {
+        "kind": "strings"
+      },
+      "client_certificate_path": {
+        "kind": "string"
+      },
+      "client_key": {
+        "kind": "strings"
+      },
+      "client_key_path": {
+        "kind": "string"
+      },
+      "control_wrap": {
+        "kind": "object",
+        "ref": "OpenVPNControlWrapOptions"
+      },
+      "crl_path": {
+        "kind": "string"
+      },
+      "groups": {
+        "kind": "string"
+      },
+      "ns_certificate_type": {
+        "enum": [
+          "server",
+          "client"
+        ],
+        "kind": "string"
+      },
+      "peer_fingerprint": {
+        "kind": "strings"
+      },
+      "remote_certificate_eku": {
+        "kind": "string"
+      },
+      "remote_certificate_ku": {
+        "kind": "strings"
+      },
+      "remote_certificate_tls": {
+        "enum": [
+          "server",
+          "client",
+          "none"
+        ],
+        "kind": "string"
+      },
+      "server_name": {
+        "kind": "string"
+      },
+      "server_name_type": {
+        "enum": [
+          "subject",
+          "name",
+          "name-prefix"
+        ],
+        "kind": "string"
+      },
+      "version_max": {
+        "enum": [
+          "1.0",
+          "1.1",
+          "1.2",
+          "1.3"
+        ],
+        "kind": "string"
+      },
+      "version_min": {
+        "enum": [
+          "1.0",
+          "1.1",
+          "1.2",
+          "1.3"
+        ],
+        "kind": "string"
+      }
+    },
+    "OpenVPNPullFilterOptions": {
+      "action": {
+        "enum": [
+          "accept",
+          "ignore",
+          "reject"
+        ],
+        "kind": "string",
+        "required": true
+      },
+      "text": {
+        "kind": "string",
+        "required": true
+      }
+    },
+    "OpenVPNPushDNSServerOptions": {
+      "addresses": {
+        "kind": "strings",
+        "required": true
+      },
+      "dnssec": {
+        "enum": [
+          "yes",
+          "optional",
+          "no"
+        ],
+        "kind": "string"
+      },
+      "priority": {
+        "integer": true,
+        "kind": "number",
+        "required": true
+      },
+      "resolve_domains": {
+        "kind": "strings"
+      },
+      "sni": {
+        "kind": "string"
+      },
+      "transport": {
+        "enum": [
+          "plain",
+          "dot",
+          "doh"
+        ],
+        "kind": "string"
+      }
+    },
+    "OpenVPNPushOptions": {
+      "block_outside_dns": {
+        "kind": "boolean"
+      },
+      "dhcp_options": {
+        "kind": "strings"
+      },
+      "dns": {
+        "kind": "strings"
+      },
+      "dns_servers": {
+        "item": {
+          "kind": "object",
+          "ref": "OpenVPNPushDNSServerOptions"
+        },
+        "kind": "array"
+      },
+      "ping_interval": {
+        "kind": "string"
+      },
+      "ping_restart": {
+        "kind": "string"
+      },
+      "redirect_gateway": {
+        "kind": "boolean"
+      },
+      "redirect_gateway_flags": {
+        "kind": "strings"
+      },
+      "routes": {
+        "kind": "strings"
+      },
+      "search_domains": {
+        "kind": "strings"
+      }
+    },
+    "OpenVPNRemoteOptions": {
+      "network": {
+        "enum": [
+          "udp",
+          "udp4",
+          "udp6",
+          "tcp",
+          "tcp4",
+          "tcp6"
+        ],
+        "kind": "string"
+      },
+      "server": {
+        "kind": "string",
+        "required": true
+      },
+      "server_port": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0,
+        "required": true
+      }
+    },
+    "OutboundECHOptions": {
+      "config": {
+        "kind": "strings"
+      },
+      "config_path": {
+        "kind": "string"
+      },
+      "dynamic_record_sizing_disabled": {
+        "kind": "boolean"
+      },
+      "enabled": {
+        "kind": "boolean"
+      },
+      "pq_signature_schemes_enabled": {
+        "kind": "boolean"
+      },
+      "query_server_name": {
+        "kind": "string"
+      }
+    },
+    "OutboundMultiplexOptions": {
+      "brutal": {
+        "kind": "object",
+        "ref": "BrutalOptions"
+      },
+      "enabled": {
+        "kind": "boolean"
+      },
+      "max_connections": {
+        "integer": true,
+        "kind": "number"
+      },
+      "max_streams": {
+        "integer": true,
+        "kind": "number"
+      },
+      "min_streams": {
+        "integer": true,
+        "kind": "number"
+      },
+      "padding": {
+        "kind": "boolean"
+      },
+      "protocol": {
+        "enum": [
+          "h2mux",
+          "smux",
+          "yamux"
+        ],
+        "kind": "string"
+      }
+    },
+    "OutboundRealityOptions": {
+      "enabled": {
+        "kind": "boolean"
+      },
+      "public_key": {
+        "kind": "string"
+      },
+      "short_id": {
+        "kind": "string"
+      }
+    },
+    "OutboundTLSOptions": {
+      "alpn": {
+        "kind": "strings"
+      },
+      "certificate": {
+        "kind": "strings"
+      },
+      "certificate_path": {
+        "kind": "string"
+      },
+      "certificate_public_key_sha256": {
+        "item": {
+          "item": {
+            "kind": "json"
+          },
+          "kind": "array"
+        },
+        "kind": "array"
+      },
+      "certificate_sha256": {
+        "item": {
+          "item": {
+            "kind": "json"
+          },
+          "kind": "array"
+        },
+        "kind": "array"
+      },
+      "cipher_suites": {
+        "kind": "strings"
+      },
+      "client_certificate": {
+        "kind": "strings"
+      },
+      "client_certificate_path": {
+        "kind": "string"
+      },
+      "client_key": {
+        "kind": "strings"
+      },
+      "client_key_path": {
+        "kind": "string"
+      },
+      "curve_preferences": {
+        "item": {
+          "kind": "json"
+        },
+        "kind": "array"
+      },
+      "disable_sni": {
+        "kind": "boolean"
+      },
+      "ech": {
+        "kind": "object",
+        "ref": "OutboundECHOptions"
+      },
+      "enabled": {
+        "kind": "boolean"
+      },
+      "engine": {
+        "enum": [
+          "go",
+          "apple",
+          "windows"
+        ],
+        "kind": "string"
+      },
+      "fragment": {
+        "kind": "boolean"
+      },
+      "fragment_fallback_delay": {
+        "kind": "string"
+      },
+      "handshake_timeout": {
+        "kind": "string"
+      },
+      "insecure": {
+        "kind": "boolean"
+      },
+      "kernel_rx": {
+        "kind": "boolean"
+      },
+      "kernel_tx": {
+        "kind": "boolean"
+      },
+      "max_version": {
+        "enum": [
+          "1.0",
+          "1.1",
+          "1.2",
+          "1.3"
+        ],
+        "kind": "string"
+      },
+      "min_version": {
+        "enum": [
+          "1.0",
+          "1.1",
+          "1.2",
+          "1.3"
+        ],
+        "kind": "string"
+      },
+      "reality": {
+        "kind": "object",
+        "ref": "OutboundRealityOptions"
+      },
+      "record_fragment": {
+        "kind": "boolean"
+      },
+      "server_name": {
+        "kind": "string"
+      },
+      "spoof": {
+        "kind": "string"
+      },
+      "spoof_method": {
+        "enum": [
+          "wrong-sequence",
+          "wrong-checksum",
+          "wrong-ack",
+          "wrong-md5",
+          "wrong-timestamp"
+        ],
+        "kind": "string"
+      },
+      "tls_tricks": {
+        "kind": "object",
+        "ref": "TLSTricksOptions"
+      },
+      "utls": {
+        "kind": "object",
+        "ref": "OutboundUTLSOptions"
+      }
+    },
+    "OutboundUTLSOptions": {
+      "enabled": {
+        "kind": "boolean"
+      },
+      "fingerprint": {
+        "enum": [
+          "chrome_psk",
+          "chrome_psk_shuffle",
+          "chrome_padding_psk_shuffle",
+          "chrome_pq",
+          "chrome_pq_psk",
+          "chrome",
+          "firefox",
+          "edge",
+          "safari",
+          "360",
+          "qq",
+          "ios",
+          "android",
+          "random",
+          "randomized",
+          "unsafe"
+        ],
+        "kind": "string"
+      }
+    },
+    "SudokuHTTPMaskOptions": {
+      "disable": {
+        "kind": "boolean"
+      },
+      "host": {
+        "kind": "string"
+      },
+      "mode": {
+        "kind": "string"
+      },
+      "multiplex": {
+        "kind": "string"
+      },
+      "path_root": {
+        "kind": "string"
+      },
+      "tls": {
+        "kind": "boolean"
+      }
+    },
+    "TLSTricksOptions": {
+      "mixedcase_sni": {
+        "kind": "boolean"
+      },
+      "padding_mode": {
+        "kind": "string"
+      },
+      "padding_size": {
+        "kind": "string"
+      },
+      "padding_sni": {
+        "kind": "string"
+      }
+    },
+    "TunnelUser": {
+      "key": {
+        "kind": "string",
+        "required": true
+      },
+      "uuid": {
+        "kind": "string",
+        "required": true
+      }
+    },
+    "WARPConfig_Interface": {
+      "addresses": {
+        "kind": "object",
+        "ref": "WARPConfig_Interface_Addresses",
+        "required": true
+      }
+    },
+    "WARPConfig_Interface_Addresses": {
+      "v4": {
+        "kind": "string",
+        "required": true
+      },
+      "v6": {
+        "kind": "string",
+        "required": true
+      }
+    },
+    "WARPConfig_Peers": {
+      "endpoint": {
+        "kind": "object",
+        "ref": "WARPConfig_Peers_Endpoint",
+        "required": true
+      },
+      "public_key": {
+        "kind": "string",
+        "required": true
+      }
+    },
+    "WARPConfig_Peers_Endpoint": {
+      "host": {
+        "kind": "string",
+        "required": true
+      },
+      "ports": {
+        "item": {
+          "integer": true,
+          "kind": "number"
+        },
+        "kind": "array",
+        "required": true
+      },
+      "v4": {
+        "kind": "string",
+        "required": true
+      },
+      "v6": {
+        "kind": "string",
+        "required": true
+      }
+    },
+    "WARPProfile": {
+      "auth_token": {
+        "kind": "string"
+      },
+      "detour": {
+        "kind": "string"
+      },
+      "id": {
+        "kind": "string"
+      },
+      "license": {
+        "kind": "string"
+      },
+      "private_key": {
+        "kind": "string"
+      },
+      "recreate": {
+        "kind": "boolean"
+      }
+    },
+    "WireGuardPeer": {
+      "address": {
+        "kind": "string"
+      },
+      "allowed_ips": {
+        "kind": "strings"
+      },
+      "name": {
+        "kind": "string"
+      },
+      "persistent_keepalive_interval": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0
+      },
+      "port": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0
+      },
+      "pre_shared_key": {
+        "kind": "string"
+      },
+      "public_key": {
+        "kind": "string"
+      },
+      "reserved": {
+        "item": {
+          "integer": true,
+          "kind": "number",
+          "max": 255,
+          "min": 0
+        },
+        "kind": "array"
+      }
+    },
+    "_ACMEDNS01ChallengeOptions": {
+      "provider": {
+        "enum": [
+          "alidns",
+          "cloudflare",
+          "acmedns"
+        ],
+        "kind": "string"
+      }
+    },
+    "_DomainResolveOptions": {
+      "client_subnet": {
+        "kind": "string"
+      },
+      "disable_cache": {
+        "kind": "boolean"
+      },
+      "disable_optimistic_cache": {
+        "kind": "boolean"
+      },
+      "rewrite_ttl": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      },
+      "server": {
+        "kind": "string",
+        "required": true
+      },
+      "strategy": {
+        "kind": "string"
+      },
+      "timeout": {
+        "kind": "string"
+      }
+    },
+    "_Hysteria2Obfs": {
+      "max_packet_size": {
+        "integer": true,
+        "kind": "number",
+        "when": {
+          "type": [
+            "gecko"
+          ]
+        }
+      },
+      "min_packet_size": {
+        "integer": true,
+        "kind": "number",
+        "when": {
+          "type": [
+            "gecko"
+          ]
+        }
+      },
+      "password": {
+        "kind": "string"
+      },
+      "type": {
+        "enum": [
+          "salamander",
+          "gecko"
+        ],
+        "kind": "string"
+      }
+    },
+    "_Inbound": {
+      "tag": {
+        "kind": "string"
+      },
+      "type": {
+        "kind": "string",
+        "required": true
+      }
+    },
+    "_Outbound": {
+      "tag": {
+        "kind": "string"
+      },
+      "type": {
+        "kind": "string",
+        "required": true
+      }
+    },
+    "_TailcatDERPServer": {
+      "cert_name": {
+        "kind": "string"
+      },
+      "derp_port": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0
+      },
+      "host": {
+        "kind": "string",
+        "required": true
+      },
+      "ipv4": {
+        "kind": "string"
+      },
+      "ipv6": {
+        "kind": "string"
+      },
+      "stun_port": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0
+      }
+    },
+    "_TailscaleSSHServerOptions": {
+      "disable_forwarding": {
+        "kind": "boolean"
+      },
+      "disable_pty": {
+        "kind": "boolean"
+      },
+      "disable_sftp": {
+        "kind": "boolean"
+      },
+      "enabled": {
+        "kind": "boolean"
+      }
+    },
+    "_UDPOverTCPOptions": {
+      "enabled": {
+        "kind": "boolean"
+      },
+      "version": {
+        "enum": [
+          1,
+          2
+        ],
+        "integer": true,
+        "kind": "number",
+        "max": 255,
+        "min": 0
+      }
+    },
+    "_V2RayTransportOptions": {
+      "type": {
+        "enum": [
+          "http",
+          "ws",
+          "quic",
+          "grpc",
+          "httpupgrade"
+        ],
+        "kind": "string",
+        "required": true
+      }
+    }
   },
-  "awg": {
-    "address": "array",
-    "awg": "object",
-    "bind_address_no_port": "boolean",
-    "bind_interface": "string",
-    "connect_timeout": "string",
-    "detour": "string",
-    "disable_tcp_keep_alive": "boolean",
-    "domain_resolver": "object",
-    "domain_strategy": "string",
-    "fallback_delay": "string",
-    "fallback_network_type": "array",
-    "final_mask": "object",
-    "inet4_bind_address": "string",
-    "inet6_bind_address": "string",
-    "listen_port": "number",
-    "mtu": "number",
-    "netns": "string",
-    "network_strategy": "string",
-    "network_type": "array",
-    "peers": "array",
-    "private_key": "string",
-    "protect_path": "string",
-    "reuse_addr": "boolean",
-    "routing_mark": "number",
-    "tcp_fast_open": "boolean",
-    "tcp_keep_alive": "string",
-    "tcp_keep_alive_interval": "string",
-    "tcp_multi_path": "boolean",
-    "udp_fragment": "boolean",
-    "useIntegratedTun": "boolean"
-  },
-  "balancer": {
-    "delay_acceptable_ratio": "number",
-    "interrupt_exist_connections": "boolean",
-    "max_retry": "number",
-    "outbounds": "strings",
-    "strategy": "string",
-    "tolerance": "number",
-    "ttl": "string"
-  },
-  "block": {},
-  "bridge": {
-    "bridge_name": "string",
-    "interface": "string",
-    "iproute2_rule_index": "number",
-    "iproute2_table_index": "number"
-  },
-  "direct": {
-    "bind_address_no_port": "boolean",
-    "bind_interface": "string",
-    "connect_timeout": "string",
-    "detour": "string",
-    "disable_tcp_keep_alive": "boolean",
-    "domain_resolver": "object",
-    "domain_strategy": "string",
-    "fallback_delay": "string",
-    "fallback_network_type": "array",
-    "final_mask": "object",
-    "inet4_bind_address": "string",
-    "inet6_bind_address": "string",
-    "netns": "string",
-    "network_strategy": "string",
-    "network_type": "array",
-    "override_address": "string",
-    "override_port": "number",
-    "protect_path": "string",
-    "proxy_protocol": "number",
-    "reuse_addr": "boolean",
-    "routing_mark": "number",
-    "tcp_fast_open": "boolean",
-    "tcp_keep_alive": "string",
-    "tcp_keep_alive_interval": "string",
-    "tcp_multi_path": "boolean",
-    "udp_fragment": "boolean"
-  },
-  "dnstt": {
-    "bind_address_no_port": "boolean",
-    "bind_interface": "string",
-    "clientid-size": "number",
-    "connect_timeout": "string",
-    "detour": "string",
-    "disable_tcp_keep_alive": "boolean",
-    "dnstt-compat": "boolean",
-    "domain": "string",
-    "domain_resolver": "object",
-    "domain_strategy": "string",
-    "fallback_delay": "string",
-    "fallback_network_type": "array",
-    "final_mask": "object",
-    "handshake-timeout": "string",
-    "idle-timeout": "string",
-    "inet4_bind_address": "string",
-    "inet6_bind_address": "string",
-    "keepalive": "string",
-    "max-num-labels": "number",
-    "max-qname-len": "number",
-    "max-streams": "number",
-    "mtu": "number",
-    "netns": "string",
-    "network_strategy": "string",
-    "network_type": "array",
-    "open-stream-timeout": "string",
-    "pretest-domain": "string",
-    "pretest-record-type": "string",
-    "protect_path": "string",
-    "pubkey": "string",
-    "reconnect-max": "string",
-    "reconnect-min": "string",
-    "record-type": "string",
-    "resolvers": "strings",
-    "reuse_addr": "boolean",
-    "routing_mark": "number",
-    "rps": "number",
-    "session-check-interval": "string",
-    "single-resolver": "boolean",
-    "smart_pool": "boolean",
-    "tcp_fast_open": "boolean",
-    "tcp_keep_alive": "string",
-    "tcp_keep_alive_interval": "string",
-    "tcp_multi_path": "boolean",
-    "tunnel-per-resolver": "number",
-    "udp-accept-errors": "boolean",
-    "udp-shared-socket": "boolean",
-    "udp-timeout": "string",
-    "udp-workers": "number",
-    "udp_fragment": "boolean",
-    "utls": "string"
-  },
-  "fptn": {
-    "bind_address_no_port": "boolean",
-    "bind_interface": "string",
-    "bypass": "string",
-    "connect_timeout": "string",
-    "detour": "string",
-    "disable_tcp_keep_alive": "boolean",
-    "domain_resolver": "object",
-    "domain_strategy": "string",
-    "fallback_delay": "string",
-    "fallback_network_type": "array",
-    "final_mask": "object",
-    "inet4_bind_address": "string",
-    "inet6_bind_address": "string",
-    "md5_fingerprint": "string",
-    "mtu": "number",
-    "netns": "string",
-    "network_strategy": "string",
-    "network_type": "array",
-    "password": "string",
-    "protect_path": "string",
-    "reuse_addr": "boolean",
-    "routing_mark": "number",
-    "server": "string",
-    "server_port": "number",
-    "sni": "string",
-    "tcp_fast_open": "boolean",
-    "tcp_keep_alive": "string",
-    "tcp_keep_alive_interval": "string",
-    "tcp_multi_path": "boolean",
-    "udp_fragment": "boolean",
-    "username": "string"
-  },
-  "gooserelay": {
-    "bind_address_no_port": "boolean",
-    "bind_interface": "string",
-    "connect_timeout": "string",
-    "debug_timing": "boolean",
-    "detour": "string",
-    "disable_tcp_keep_alive": "boolean",
-    "domain_resolver": "object",
-    "domain_strategy": "string",
-    "fallback_delay": "string",
-    "fallback_network_type": "array",
-    "final_mask": "object",
-    "google_host": "string",
-    "handshake_timeout": "string",
-    "inet4_bind_address": "string",
-    "inet6_bind_address": "string",
-    "netns": "string",
-    "network_strategy": "string",
-    "network_type": "array",
-    "protect_path": "string",
-    "reuse_addr": "boolean",
-    "routing_mark": "number",
-    "script_keys": "strings",
-    "sni": "strings",
-    "tcp_fast_open": "boolean",
-    "tcp_keep_alive": "string",
-    "tcp_keep_alive_interval": "string",
-    "tcp_multi_path": "boolean",
-    "tunnel_key": "string",
-    "udp_fragment": "boolean",
-    "udp_over_tcp": "object"
-  },
-  "http": {
-    "bind_address_no_port": "boolean",
-    "bind_interface": "string",
-    "connect_timeout": "string",
-    "detour": "string",
-    "disable_tcp_keep_alive": "boolean",
-    "disable_version_fallback": "boolean",
-    "domain_resolver": "object",
-    "domain_strategy": "string",
-    "fallback_delay": "string",
-    "fallback_network_type": "array",
-    "final_mask": "object",
-    "headers": "object",
-    "inet4_bind_address": "string",
-    "inet6_bind_address": "string",
-    "netns": "string",
-    "network_strategy": "string",
-    "network_type": "array",
-    "password": "string",
-    "path": "string",
-    "protect_path": "string",
-    "reuse_addr": "boolean",
-    "routing_mark": "number",
-    "server": "string",
-    "server_port": "number",
-    "tcp_fast_open": "boolean",
-    "tcp_keep_alive": "string",
-    "tcp_keep_alive_interval": "string",
-    "tcp_multi_path": "boolean",
-    "tls": "object",
-    "udp_fragment": "boolean",
-    "username": "string",
-    "version": "number"
-  },
-  "hysteria": {
-    "auth": "array",
-    "auth_str": "string",
-    "bind_address_no_port": "boolean",
-    "bind_interface": "string",
-    "connect_timeout": "string",
-    "connection_receive_window": "string",
-    "detour": "string",
-    "disable_mtu_discovery": "boolean",
-    "disable_path_mtu_discovery": "boolean",
-    "disable_tcp_keep_alive": "boolean",
-    "domain_resolver": "object",
-    "domain_strategy": "string",
-    "down": "json",
-    "down_mbps": "number",
-    "fallback_delay": "string",
-    "fallback_network_type": "array",
-    "final_mask": "object",
-    "hop_interval": "string",
-    "idle_timeout": "string",
-    "inet4_bind_address": "string",
-    "inet6_bind_address": "string",
-    "initial_packet_size": "number",
-    "keep_alive_period": "string",
-    "max_concurrent_streams": "number",
-    "netns": "string",
-    "network": "array",
-    "network_strategy": "string",
-    "network_type": "array",
-    "obfs": "string",
-    "protect_path": "string",
-    "recv_window": "number",
-    "recv_window_conn": "number",
-    "reuse_addr": "boolean",
-    "routing_mark": "number",
-    "server": "string",
-    "server_port": "number",
-    "server_ports": "strings",
-    "stream_receive_window": "string",
-    "tcp_fast_open": "boolean",
-    "tcp_keep_alive": "string",
-    "tcp_keep_alive_interval": "string",
-    "tcp_multi_path": "boolean",
-    "tls": "object",
-    "udp_fragment": "boolean",
-    "up": "json",
-    "up_mbps": "number"
-  },
-  "hysteria2": {
-    "bbr_profile": "string",
-    "bind_address_no_port": "boolean",
-    "bind_interface": "string",
-    "brutal_debug": "boolean",
-    "connect_timeout": "string",
-    "connection_receive_window": "string",
-    "detour": "string",
-    "disable_chrome_parrot": "boolean",
-    "disable_path_mtu_discovery": "boolean",
-    "disable_tcp_keep_alive": "boolean",
-    "domain_resolver": "object",
-    "domain_strategy": "string",
-    "down_mbps": "number",
-    "fallback_delay": "string",
-    "fallback_network_type": "array",
-    "final_mask": "object",
-    "hop_interval": "string",
-    "hop_interval_max": "string",
-    "idle_timeout": "string",
-    "inet4_bind_address": "string",
-    "inet6_bind_address": "string",
-    "initial_packet_size": "number",
-    "keep_alive_period": "string",
-    "max_concurrent_streams": "number",
-    "netns": "string",
-    "network": "array",
-    "network_strategy": "string",
-    "network_type": "array",
-    "obfs": "object",
-    "password": "string",
-    "protect_path": "string",
-    "realm": "object",
-    "reuse_addr": "boolean",
-    "routing_mark": "number",
-    "server": "string",
-    "server_port": "number",
-    "server_ports": "strings",
-    "stream_receive_window": "string",
-    "tcp_fast_open": "boolean",
-    "tcp_keep_alive": "string",
-    "tcp_keep_alive_interval": "string",
-    "tcp_multi_path": "boolean",
-    "tls": "object",
-    "udp_fragment": "boolean",
-    "up_mbps": "number"
-  },
-  "masque": {
-    "bind_address_no_port": "boolean",
-    "bind_interface": "string",
-    "connect_timeout": "string",
-    "detour": "string",
-    "disable_tcp_keep_alive": "boolean",
-    "domain_resolver": "object",
-    "domain_strategy": "string",
-    "fallback_delay": "string",
-    "fallback_network_type": "array",
-    "final_mask": "object",
-    "inet4_bind_address": "string",
-    "inet6_bind_address": "string",
-    "netns": "string",
-    "network_strategy": "string",
-    "network_type": "array",
-    "profile": "object",
-    "protect_path": "string",
-    "reconnect_delay": "string",
-    "reuse_addr": "boolean",
-    "routing_mark": "number",
-    "tcp_fast_open": "boolean",
-    "tcp_keep_alive": "string",
-    "tcp_keep_alive_interval": "string",
-    "tcp_multi_path": "boolean",
-    "tls": "object",
-    "udp_fragment": "boolean",
-    "udp_initial_packet_size": "number",
-    "udp_keepalive_period": "string",
-    "udp_timeout": "string",
-    "use_http2": "boolean",
-    "use_ipv6": "boolean"
-  },
-  "masque-client": {
-    "advertise_routes": "array",
-    "bind_address_no_port": "boolean",
-    "bind_interface": "string",
-    "connect_timeout": "string",
-    "detour": "string",
-    "disable_tcp_keep_alive": "boolean",
-    "disable_version_fallback": "boolean",
-    "domain_resolver": "object",
-    "domain_strategy": "string",
-    "fallback_delay": "string",
-    "fallback_network_type": "array",
-    "final_mask": "object",
-    "headers": "object",
-    "inet4_bind_address": "string",
-    "inet6_bind_address": "string",
-    "mtu": "number",
-    "name": "string",
-    "netns": "string",
-    "network_strategy": "string",
-    "network_type": "array",
-    "on_demand": "boolean",
-    "password": "string",
-    "path": "string",
-    "protect_path": "string",
-    "reuse_addr": "boolean",
-    "routing_mark": "number",
-    "server": "string",
-    "server_port": "number",
-    "system": "boolean",
-    "tcp_fast_open": "boolean",
-    "tcp_keep_alive": "string",
-    "tcp_keep_alive_interval": "string",
-    "tcp_multi_path": "boolean",
-    "tls": "object",
-    "udp_filtering": "json",
-    "udp_fragment": "boolean",
-    "udp_mapping": "json",
-    "udp_nat_max": "number",
-    "udp_timeout": "string",
-    "username": "string",
-    "version": "number"
-  },
-  "masque-server": {
-    "address": "array",
-    "advertise_routes": "array",
-    "bind_interface": "string",
-    "detour": "string",
-    "disable_tcp_keep_alive": "boolean",
-    "listen": "string",
-    "listen_port": "number",
-    "mtu": "number",
-    "name": "string",
-    "netns": "string",
-    "path": "string",
-    "proxy_protocol": "boolean",
-    "proxy_protocol_accept_no_header": "boolean",
-    "reuse_addr": "boolean",
-    "routing_mark": "number",
-    "system": "boolean",
-    "tcp_fast_open": "boolean",
-    "tcp_keep_alive": "string",
-    "tcp_keep_alive_interval": "string",
-    "tcp_multi_path": "boolean",
-    "tls": "object",
-    "udp_filtering": "json",
-    "udp_fragment": "boolean",
-    "udp_mapping": "json",
-    "udp_nat_max": "number",
-    "udp_timeout": "json",
-    "users": "array",
-    "version": "array"
-  },
-  "mieru": {
-    "bind_address_no_port": "boolean",
-    "bind_interface": "string",
-    "connect_timeout": "string",
-    "detour": "string",
-    "disable_tcp_keep_alive": "boolean",
-    "domain_resolver": "object",
-    "domain_strategy": "string",
-    "fallback_delay": "string",
-    "fallback_network_type": "array",
-    "final_mask": "object",
-    "handshake_mode": "string",
-    "inet4_bind_address": "string",
-    "inet6_bind_address": "string",
-    "mtu": "number",
-    "multiplexing": "string",
-    "netns": "string",
-    "network": "array",
-    "network_strategy": "string",
-    "network_type": "array",
-    "password": "string",
-    "portBindings": "array",
-    "protect_path": "string",
-    "reuse_addr": "boolean",
-    "routing_mark": "number",
-    "server": "string",
-    "server_port": "number",
-    "tcp_fast_open": "boolean",
-    "tcp_keep_alive": "string",
-    "tcp_keep_alive_interval": "string",
-    "tcp_multi_path": "boolean",
-    "udp_fragment": "boolean",
-    "username": "string"
-  },
-  "naive": {
-    "bind_address_no_port": "boolean",
-    "bind_interface": "string",
-    "connect_timeout": "string",
-    "detour": "string",
-    "disable_tcp_keep_alive": "boolean",
-    "domain_resolver": "object",
-    "domain_strategy": "string",
-    "extra_headers": "object",
-    "fallback_delay": "string",
-    "fallback_network_type": "array",
-    "final_mask": "object",
-    "inet4_bind_address": "string",
-    "inet6_bind_address": "string",
-    "insecure_concurrency": "number",
-    "netns": "string",
-    "network_strategy": "string",
-    "network_type": "array",
-    "password": "string",
-    "protect_path": "string",
-    "quic": "boolean",
-    "quic_congestion_control": "string",
-    "quic_session_receive_window": "string",
-    "reuse_addr": "boolean",
-    "routing_mark": "number",
-    "server": "string",
-    "server_port": "number",
-    "stream_receive_window": "string",
-    "tcp_fast_open": "boolean",
-    "tcp_keep_alive": "string",
-    "tcp_keep_alive_interval": "string",
-    "tcp_multi_path": "boolean",
-    "tls": "object",
-    "udp_fragment": "boolean",
-    "udp_over_tcp": "object",
-    "username": "string"
-  },
-  "openconnect": {
-    "allow_insecure_crypto": "boolean",
-    "auth_group": "string",
-    "base_mtu": "number",
-    "bind_address_no_port": "boolean",
-    "bind_interface": "string",
-    "compression_disabled": "boolean",
-    "compression_mode": "string",
-    "connect_timeout": "string",
-    "cookie": "string",
-    "csd": "object",
-    "detour": "string",
-    "disable_tcp_keep_alive": "boolean",
-    "domain_resolver": "object",
-    "domain_strategy": "string",
-    "dpd_interval": "string",
-    "dtls_local_port": "number",
-    "external_auth_disabled": "boolean",
-    "fallback_delay": "string",
-    "fallback_network_type": "array",
-    "final_mask": "object",
-    "flavor": "string",
-    "form_entries": "array",
-    "fortinet_host_check": "object",
-    "hip": "object",
-    "http_keepalive_disabled": "boolean",
-    "inet4_bind_address": "string",
-    "inet6_bind_address": "string",
-    "ipv6_disabled": "boolean",
-    "local_hostname": "string",
-    "mobile": "object",
-    "mtu": "number",
-    "name": "string",
-    "netns": "string",
-    "network_strategy": "string",
-    "network_type": "array",
-    "no_udp": "boolean",
-    "on_demand": "boolean",
-    "password": "string",
-    "password_authentication_disabled": "boolean",
-    "pfs": "boolean",
-    "protect_path": "string",
-    "queue_length": "number",
-    "reconnect_timeout": "string",
-    "reported_os": "string",
-    "reuse_addr": "boolean",
-    "routing_mark": "number",
-    "server": "string",
-    "system": "boolean",
-    "tcp_fast_open": "boolean",
-    "tcp_keep_alive": "string",
-    "tcp_keep_alive_enabled": "boolean",
-    "tcp_keep_alive_interval": "string",
-    "tcp_multi_path": "boolean",
-    "tls": "object",
-    "tncc": "object",
-    "token": "object",
-    "trojan_interval": "string",
-    "udp_filtering": "json",
-    "udp_fragment": "boolean",
-    "udp_mapping": "json",
-    "udp_nat_max": "number",
-    "udp_timeout": "string",
-    "user_agent": "string",
-    "username": "string",
-    "version": "string",
-    "xml_post_disabled": "boolean"
-  },
-  "openflux": {
-    "bind_address_no_port": "boolean",
-    "bind_interface": "string",
-    "codec": "string",
-    "connect_timeout": "string",
-    "context": "string",
-    "detour": "string",
-    "disable_tcp_keep_alive": "boolean",
-    "domain_resolver": "object",
-    "domain_strategy": "string",
-    "fallback_delay": "string",
-    "fallback_network_type": "array",
-    "final_mask": "object",
-    "inet4_bind_address": "string",
-    "inet6_bind_address": "string",
-    "negotiate": "boolean",
-    "netns": "string",
-    "network_strategy": "string",
-    "network_type": "array",
-    "protect_path": "string",
-    "reuse_addr": "boolean",
-    "routing_mark": "number",
-    "secret": "string",
-    "tcp_fast_open": "boolean",
-    "tcp_keep_alive": "string",
-    "tcp_keep_alive_interval": "string",
-    "tcp_multi_path": "boolean",
-    "transports": "array",
-    "udp_fragment": "boolean"
-  },
-  "openvpn-client": {
-    "address": "array",
-    "allow_compression": "string",
-    "auth": "string",
-    "auth_retry": "string",
-    "bind_address_no_port": "boolean",
-    "bind_interface": "string",
-    "block_ipv6": "boolean",
-    "cipher": "string",
-    "compression": "string",
-    "compression_lzo": "string",
-    "connect_timeout": "string",
-    "data_ciphers": "strings",
-    "data_ciphers_fallback": "string",
-    "detour": "string",
-    "disable_tcp_keep_alive": "boolean",
-    "domain_resolver": "object",
-    "domain_strategy": "string",
-    "explicit_exit_notify": "number",
-    "fallback_delay": "string",
-    "fallback_network_type": "array",
-    "final_mask": "object",
-    "fragment": "number",
-    "handshake_window": "string",
-    "inet4_bind_address": "string",
-    "inet6_bind_address": "string",
-    "key_direction": "string",
-    "mode": "string",
-    "mss_fix": "number",
-    "mss_fix_disabled": "boolean",
-    "mss_fix_mode": "string",
-    "mtu": "number",
-    "name": "string",
-    "netns": "string",
-    "network": "string",
-    "network_strategy": "string",
-    "network_type": "array",
-    "on_demand": "boolean",
-    "password": "string",
-    "peer_address": "string",
-    "peer_address_ipv6": "string",
-    "ping_interval": "string",
-    "ping_restart": "string",
-    "ping_restart_disabled": "boolean",
-    "protect_path": "string",
-    "pull_filters": "array",
-    "redirect_gateway": "boolean",
-    "redirect_gateway_flags": "strings",
-    "redirect_private": "boolean",
-    "remote_random": "boolean",
-    "renegotiate_bytes": "number",
-    "renegotiate_disabled": "boolean",
-    "renegotiate_interval": "string",
-    "renegotiate_packets": "number",
-    "replay_window": "number",
-    "replay_window_time": "string",
-    "reuse_addr": "boolean",
-    "route_gateway": "string",
-    "route_metric": "number",
-    "route_no_pull": "boolean",
-    "routes": "array",
-    "routing_mark": "number",
-    "server": "string",
-    "server_port": "number",
-    "servers": "array",
-    "static_challenge": "string",
-    "static_challenge_echo": "boolean",
-    "static_key": "strings",
-    "static_key_path": "string",
-    "system": "boolean",
-    "tcp_fast_open": "boolean",
-    "tcp_keep_alive": "string",
-    "tcp_keep_alive_interval": "string",
-    "tcp_multi_path": "boolean",
-    "tls": "object",
-    "tls_timeout": "string",
-    "topology": "string",
-    "udp_filtering": "json",
-    "udp_fragment": "boolean",
-    "udp_mapping": "json",
-    "udp_nat_max": "number",
-    "udp_timeout": "json",
-    "username": "string"
-  },
-  "openvpn-server": {
-    "address": "array",
-    "auth": "string",
-    "bind_interface": "string",
-    "cipher": "string",
-    "data_ciphers": "strings",
-    "data_ciphers_fallback": "string",
-    "detour": "string",
-    "disable_tcp_keep_alive": "boolean",
-    "duplicate_cn": "boolean",
-    "handshake_window": "string",
-    "key_direction": "string",
-    "listen": "string",
-    "listen_port": "number",
-    "max_clients": "number",
-    "mode": "string",
-    "mss_fix": "number",
-    "mss_fix_disabled": "boolean",
-    "mss_fix_mode": "string",
-    "mtu": "number",
-    "name": "string",
-    "netns": "string",
-    "network": "string",
-    "peer_address": "string",
-    "peer_address_ipv6": "string",
-    "ping_interval": "string",
-    "ping_restart": "string",
-    "proxy_protocol": "boolean",
-    "proxy_protocol_accept_no_header": "boolean",
-    "push": "object",
-    "remote": "string",
-    "remote_port": "number",
-    "renegotiate_bytes": "number",
-    "renegotiate_disabled": "boolean",
-    "renegotiate_interval": "string",
-    "renegotiate_packets": "number",
-    "replay_window": "number",
-    "replay_window_time": "string",
-    "reuse_addr": "boolean",
-    "routing_mark": "number",
-    "static_key": "strings",
-    "static_key_path": "string",
-    "system": "boolean",
-    "tcp_fast_open": "boolean",
-    "tcp_keep_alive": "string",
-    "tcp_keep_alive_interval": "string",
-    "tcp_multi_path": "boolean",
-    "tls": "object",
-    "topology": "string",
-    "udp_filtering": "json",
-    "udp_fragment": "boolean",
-    "udp_mapping": "json",
-    "udp_nat_max": "number",
-    "udp_timeout": "json",
-    "users": "array"
-  },
-  "pingtunnel": {
-    "bind_address_no_port": "boolean",
-    "bind_interface": "string",
-    "connect_timeout": "string",
-    "detour": "string",
-    "disable_tcp_keep_alive": "boolean",
-    "domain_resolver": "object",
-    "domain_strategy": "string",
-    "encryption": "string",
-    "encryption_key": "string",
-    "fallback_delay": "string",
-    "fallback_network_type": "array",
-    "final_mask": "object",
-    "inet4_bind_address": "string",
-    "inet6_bind_address": "string",
-    "key": "number",
-    "netns": "string",
-    "network_strategy": "string",
-    "network_type": "array",
-    "protect_path": "string",
-    "reuse_addr": "boolean",
-    "routing_mark": "number",
-    "server": "string",
-    "tcp_fast_open": "boolean",
-    "tcp_keep_alive": "string",
-    "tcp_keep_alive_interval": "string",
-    "tcp_multi_path": "boolean",
-    "udp_fragment": "boolean"
-  },
-  "psiphon": {
-    "allow_default_dns_resolver_with_bind_to_device": "boolean",
-    "bind_address_no_port": "boolean",
-    "bind_interface": "string",
-    "client_platform": "string",
-    "client_version": "string",
-    "conduit_pairing_id": "string",
-    "config": "string",
-    "connect_timeout": "string",
-    "data_directory": "string",
-    "detour": "string",
-    "disable_tcp_keep_alive": "boolean",
-    "domain_resolver": "object",
-    "domain_strategy": "string",
-    "egress_region": "string",
-    "establish_tunnel_timeout": "string",
-    "fallback_delay": "string",
-    "fallback_network_type": "array",
-    "final_mask": "object",
-    "inet4_bind_address": "string",
-    "inet6_bind_address": "string",
-    "netns": "string",
-    "network": "array",
-    "network_id": "string",
-    "network_strategy": "string",
-    "network_type": "array",
-    "propagation_channel_id": "string",
-    "protect_path": "string",
-    "remote_server_list_download_filename": "string",
-    "remote_server_list_signature_public_key": "string",
-    "remote_server_list_url": "string",
-    "reuse_addr": "boolean",
-    "routing_mark": "number",
-    "sponsor_id": "string",
-    "tcp_fast_open": "boolean",
-    "tcp_keep_alive": "string",
-    "tcp_keep_alive_interval": "string",
-    "tcp_multi_path": "boolean",
-    "udp_fragment": "boolean",
-    "upstream_proxy_url": "string"
-  },
-  "selector": {
-    "default": "string",
-    "interrupt_exist_connections": "boolean",
-    "outbounds": "strings"
-  },
-  "shadowsocks": {
-    "bind_address_no_port": "boolean",
-    "bind_interface": "string",
-    "connect_timeout": "string",
-    "detour": "string",
-    "disable_tcp_keep_alive": "boolean",
-    "domain_resolver": "object",
-    "domain_strategy": "string",
-    "fallback_delay": "string",
-    "fallback_network_type": "array",
-    "final_mask": "object",
-    "inet4_bind_address": "string",
-    "inet6_bind_address": "string",
-    "method": "string",
-    "multiplex": "object",
-    "netns": "string",
-    "network": "array",
-    "network_strategy": "string",
-    "network_type": "array",
-    "password": "string",
-    "plugin": "string",
-    "plugin_opts": "string",
-    "protect_path": "string",
-    "reuse_addr": "boolean",
-    "routing_mark": "number",
-    "server": "string",
-    "server_port": "number",
-    "tcp_fast_open": "boolean",
-    "tcp_keep_alive": "string",
-    "tcp_keep_alive_interval": "string",
-    "tcp_multi_path": "boolean",
-    "udp_fragment": "boolean",
-    "udp_over_tcp": "object"
-  },
-  "shadowtls": {
-    "bind_address_no_port": "boolean",
-    "bind_interface": "string",
-    "connect_timeout": "string",
-    "detour": "string",
-    "disable_tcp_keep_alive": "boolean",
-    "domain_resolver": "object",
-    "domain_strategy": "string",
-    "fallback_delay": "string",
-    "fallback_network_type": "array",
-    "final_mask": "object",
-    "inet4_bind_address": "string",
-    "inet6_bind_address": "string",
-    "netns": "string",
-    "network_strategy": "string",
-    "network_type": "array",
-    "password": "string",
-    "protect_path": "string",
-    "reuse_addr": "boolean",
-    "routing_mark": "number",
-    "server": "string",
-    "server_port": "number",
-    "tcp_fast_open": "boolean",
-    "tcp_keep_alive": "string",
-    "tcp_keep_alive_interval": "string",
-    "tcp_multi_path": "boolean",
-    "tls": "object",
-    "udp_fragment": "boolean",
-    "version": "number"
-  },
-  "snell": {
-    "bind_address_no_port": "boolean",
-    "bind_interface": "string",
-    "connect_timeout": "string",
-    "detour": "string",
-    "disable_tcp_keep_alive": "boolean",
-    "domain_resolver": "object",
-    "domain_strategy": "string",
-    "fallback_delay": "string",
-    "fallback_network_type": "array",
-    "final_mask": "object",
-    "inet4_bind_address": "string",
-    "inet6_bind_address": "string",
-    "netns": "string",
-    "network": "array",
-    "network_strategy": "string",
-    "network_type": "array",
-    "protect_path": "string",
-    "psk": "string",
-    "reuse": "boolean",
-    "reuse_addr": "boolean",
-    "routing_mark": "number",
-    "server": "string",
-    "server_port": "number",
-    "tcp_fast_open": "boolean",
-    "tcp_keep_alive": "string",
-    "tcp_keep_alive_interval": "string",
-    "tcp_multi_path": "boolean",
-    "udp_fragment": "boolean",
-    "userkey": "string",
-    "version": "number"
-  },
-  "socks": {
-    "bind_address_no_port": "boolean",
-    "bind_interface": "string",
-    "connect_timeout": "string",
-    "detour": "string",
-    "disable_tcp_keep_alive": "boolean",
-    "domain_resolver": "object",
-    "domain_strategy": "string",
-    "fallback_delay": "string",
-    "fallback_network_type": "array",
-    "final_mask": "object",
-    "inet4_bind_address": "string",
-    "inet6_bind_address": "string",
-    "netns": "string",
-    "network": "array",
-    "network_strategy": "string",
-    "network_type": "array",
-    "password": "string",
-    "protect_path": "string",
-    "reuse_addr": "boolean",
-    "routing_mark": "number",
-    "server": "string",
-    "server_port": "number",
-    "tcp_fast_open": "boolean",
-    "tcp_keep_alive": "string",
-    "tcp_keep_alive_interval": "string",
-    "tcp_multi_path": "boolean",
-    "udp_fragment": "boolean",
-    "udp_over_tcp": "object",
-    "username": "string",
-    "version": "string"
-  },
-  "ssh": {
-    "bind_address_no_port": "boolean",
-    "bind_interface": "string",
-    "cipher": "strings",
-    "client_version": "string",
-    "connect_timeout": "string",
-    "detour": "string",
-    "disable_tcp_keep_alive": "boolean",
-    "domain_resolver": "object",
-    "domain_strategy": "string",
-    "fallback_delay": "string",
-    "fallback_network_type": "array",
-    "final_mask": "object",
-    "host_key": "strings",
-    "host_key_algorithms": "strings",
-    "inet4_bind_address": "string",
-    "inet6_bind_address": "string",
-    "kex_algorithm": "strings",
-    "mac": "strings",
-    "netns": "string",
-    "network": "array",
-    "network_strategy": "string",
-    "network_type": "array",
-    "password": "string",
-    "private_key": "strings",
-    "private_key_passphrase": "string",
-    "private_key_path": "string",
-    "protect_path": "string",
-    "reuse_addr": "boolean",
-    "routing_mark": "number",
-    "server": "string",
-    "server_port": "number",
-    "tcp_fast_open": "boolean",
-    "tcp_keep_alive": "string",
-    "tcp_keep_alive_interval": "string",
-    "tcp_multi_path": "boolean",
-    "udp_fragment": "boolean",
-    "udp_over_tcp": "object",
-    "user": "string"
-  },
-  "sudoku": {
-    "aead": "string",
-    "ascii": "string",
-    "bind_address_no_port": "boolean",
-    "bind_interface": "string",
-    "connect_timeout": "string",
-    "custom_tables": "strings",
-    "detour": "string",
-    "disable_tcp_keep_alive": "boolean",
-    "domain_resolver": "object",
-    "domain_strategy": "string",
-    "enable_pure_downlink": "boolean",
-    "fallback_delay": "string",
-    "fallback_network_type": "array",
-    "final_mask": "object",
-    "httpmask": "object",
-    "inet4_bind_address": "string",
-    "inet6_bind_address": "string",
-    "key": "string",
-    "netns": "string",
-    "network_strategy": "string",
-    "network_type": "array",
-    "padding_max": "number",
-    "padding_min": "number",
-    "protect_path": "string",
-    "reuse_addr": "boolean",
-    "routing_mark": "number",
-    "server": "string",
-    "server_port": "number",
-    "tcp_fast_open": "boolean",
-    "tcp_keep_alive": "string",
-    "tcp_keep_alive_interval": "string",
-    "tcp_multi_path": "boolean",
-    "udp_fragment": "boolean"
-  },
-  "tailcat": {
-    "bind_address_no_port": "boolean",
-    "bind_interface": "string",
-    "connect_timeout": "string",
-    "derp_map_url": "string",
-    "derp_region": "number",
-    "derp_servers": "array",
-    "detour": "string",
-    "disable_tcp_keep_alive": "boolean",
-    "domain_resolver": "object",
-    "domain_strategy": "string",
-    "fallback_delay": "string",
-    "fallback_network_type": "array",
-    "final_mask": "object",
-    "http_client": "json",
-    "inet4_bind_address": "string",
-    "inet6_bind_address": "string",
-    "netns": "string",
-    "network_strategy": "string",
-    "network_type": "array",
-    "pre_shared_key": "string",
-    "private_key": "string",
-    "protect_path": "string",
-    "reuse_addr": "boolean",
-    "routing_mark": "number",
-    "server_disco_key": "string",
-    "server_public_key": "string",
-    "tcp_fast_open": "boolean",
-    "tcp_keep_alive": "string",
-    "tcp_keep_alive_interval": "string",
-    "tcp_multi_path": "boolean",
-    "udp_fragment": "boolean"
-  },
-  "tailscale": {
-    "accept_routes": "boolean",
-    "advertise_exit_node": "boolean",
-    "advertise_routes": "array",
-    "advertise_tags": "strings",
-    "auth_key": "string",
-    "bind_address_no_port": "boolean",
-    "bind_interface": "string",
-    "connect_timeout": "string",
-    "control_url": "string",
-    "detour": "string",
-    "disable_tcp_keep_alive": "boolean",
-    "domain_resolver": "object",
-    "domain_strategy": "string",
-    "ephemeral": "boolean",
-    "exit_node": "string",
-    "exit_node_allow_lan_access": "boolean",
-    "fallback_delay": "string",
-    "fallback_network_type": "array",
-    "final_mask": "object",
-    "hostname": "string",
-    "inet4_bind_address": "string",
-    "inet6_bind_address": "string",
-    "listen_port": "number",
-    "netns": "string",
-    "network_strategy": "string",
-    "network_type": "array",
-    "on_demand": "boolean",
-    "protect_path": "string",
-    "relay_server_port": "number",
-    "relay_server_static_endpoints": "array",
-    "reuse_addr": "boolean",
-    "routing_mark": "number",
-    "ssh_server": "object",
-    "state_directory": "string",
-    "system_interface": "boolean",
-    "system_interface_mtu": "number",
-    "system_interface_name": "string",
-    "taildrop_directory": "string",
-    "tcp_fast_open": "boolean",
-    "tcp_keep_alive": "string",
-    "tcp_keep_alive_interval": "string",
-    "tcp_multi_path": "boolean",
-    "udp_fragment": "boolean",
-    "udp_timeout": "json"
-  },
-  "tor": {
-    "bind_address_no_port": "boolean",
-    "bind_interface": "string",
-    "connect_timeout": "string",
-    "data_directory": "string",
-    "detour": "string",
-    "disable_tcp_keep_alive": "boolean",
-    "domain_resolver": "object",
-    "domain_strategy": "string",
-    "executable_path": "string",
-    "extra_args": "strings",
-    "fallback_delay": "string",
-    "fallback_network_type": "array",
-    "final_mask": "object",
-    "inet4_bind_address": "string",
-    "inet6_bind_address": "string",
-    "netns": "string",
-    "network_strategy": "string",
-    "network_type": "array",
-    "protect_path": "string",
-    "reuse_addr": "boolean",
-    "routing_mark": "number",
-    "tcp_fast_open": "boolean",
-    "tcp_keep_alive": "string",
-    "tcp_keep_alive_interval": "string",
-    "tcp_multi_path": "boolean",
-    "torrc": "object",
-    "udp_fragment": "boolean"
-  },
-  "trojan": {
-    "bind_address_no_port": "boolean",
-    "bind_interface": "string",
-    "connect_timeout": "string",
-    "detour": "string",
-    "disable_tcp_keep_alive": "boolean",
-    "domain_resolver": "object",
-    "domain_strategy": "string",
-    "fallback_delay": "string",
-    "fallback_network_type": "array",
-    "final_mask": "object",
-    "inet4_bind_address": "string",
-    "inet6_bind_address": "string",
-    "multiplex": "object",
-    "netns": "string",
-    "network": "array",
-    "network_strategy": "string",
-    "network_type": "array",
-    "password": "string",
-    "protect_path": "string",
-    "reuse_addr": "boolean",
-    "routing_mark": "number",
-    "server": "string",
-    "server_port": "number",
-    "tcp_fast_open": "boolean",
-    "tcp_keep_alive": "string",
-    "tcp_keep_alive_interval": "string",
-    "tcp_multi_path": "boolean",
-    "tls": "object",
-    "transport": "object",
-    "udp_fragment": "boolean"
-  },
-  "trusttunnel": {
-    "bind_address_no_port": "boolean",
-    "bind_interface": "string",
-    "connect_timeout": "string",
-    "detour": "string",
-    "disable_tcp_keep_alive": "boolean",
-    "domain_resolver": "object",
-    "domain_strategy": "string",
-    "fallback_delay": "string",
-    "fallback_network_type": "array",
-    "final_mask": "object",
-    "health_check": "boolean",
-    "inet4_bind_address": "string",
-    "inet6_bind_address": "string",
-    "netns": "string",
-    "network_strategy": "string",
-    "network_type": "array",
-    "password": "string",
-    "protect_path": "string",
-    "quic": "boolean",
-    "quic_congestion_control": "string",
-    "reuse_addr": "boolean",
-    "routing_mark": "number",
-    "server": "string",
-    "server_port": "number",
-    "tcp_fast_open": "boolean",
-    "tcp_keep_alive": "string",
-    "tcp_keep_alive_interval": "string",
-    "tcp_multi_path": "boolean",
-    "tls": "object",
-    "udp_fragment": "boolean",
-    "username": "string"
-  },
-  "tuic": {
-    "bind_address_no_port": "boolean",
-    "bind_interface": "string",
-    "congestion_control": "string",
-    "connect_timeout": "string",
-    "connection_receive_window": "string",
-    "detour": "string",
-    "disable_path_mtu_discovery": "boolean",
-    "disable_tcp_keep_alive": "boolean",
-    "domain_resolver": "object",
-    "domain_strategy": "string",
-    "fallback_delay": "string",
-    "fallback_network_type": "array",
-    "final_mask": "object",
-    "heartbeat": "string",
-    "idle_timeout": "string",
-    "inet4_bind_address": "string",
-    "inet6_bind_address": "string",
-    "initial_packet_size": "number",
-    "keep_alive_period": "string",
-    "max_concurrent_streams": "number",
-    "netns": "string",
-    "network": "array",
-    "network_strategy": "string",
-    "network_type": "array",
-    "password": "string",
-    "protect_path": "string",
-    "reuse_addr": "boolean",
-    "routing_mark": "number",
-    "server": "string",
-    "server_port": "number",
-    "stream_receive_window": "string",
-    "tcp_fast_open": "boolean",
-    "tcp_keep_alive": "string",
-    "tcp_keep_alive_interval": "string",
-    "tcp_multi_path": "boolean",
-    "tls": "object",
-    "udp_fragment": "boolean",
-    "udp_over_stream": "boolean",
-    "udp_relay_mode": "string",
-    "uuid": "string",
-    "zero_rtt_handshake": "boolean"
-  },
-  "tunnel_client": {
-    "key": "string",
-    "outbound": "object",
-    "uuid": "string"
-  },
-  "tunnel_server": {
-    "connect_timeout": "string",
-    "inbound": "object",
-    "users": "array",
-    "uuid": "string"
-  },
-  "urltest": {
-    "idle_timeout": "string",
-    "interrupt_exist_connections": "boolean",
-    "interval": "string",
-    "outbounds": "strings",
-    "tolerance": "number",
-    "url": "string",
-    "urls": "strings"
-  },
-  "vless": {
-    "bind_address_no_port": "boolean",
-    "bind_interface": "string",
-    "connect_timeout": "string",
-    "detour": "string",
-    "disable_tcp_keep_alive": "boolean",
-    "domain_resolver": "object",
-    "domain_strategy": "string",
-    "encryption": "string",
-    "fallback_delay": "string",
-    "fallback_network_type": "array",
-    "final_mask": "object",
-    "flow": "string",
-    "inet4_bind_address": "string",
-    "inet6_bind_address": "string",
-    "multiplex": "object",
-    "netns": "string",
-    "network": "array",
-    "network_strategy": "string",
-    "network_type": "array",
-    "packet_encoding": "string",
-    "protect_path": "string",
-    "reuse_addr": "boolean",
-    "routing_mark": "number",
-    "server": "string",
-    "server_port": "number",
-    "tcp_fast_open": "boolean",
-    "tcp_keep_alive": "string",
-    "tcp_keep_alive_interval": "string",
-    "tcp_multi_path": "boolean",
-    "tls": "object",
-    "transport": "object",
-    "udp_fragment": "boolean",
-    "uuid": "string"
-  },
-  "vless-reverse": {
-    "flow": "string",
-    "name": "string",
-    "reverse": "object",
-    "testpre": "number",
-    "testseed": "array",
-    "uuid": "string"
-  },
-  "vmess": {
-    "alter_id": "number",
-    "authenticated_length": "boolean",
-    "bind_address_no_port": "boolean",
-    "bind_interface": "string",
-    "connect_timeout": "string",
-    "detour": "string",
-    "disable_tcp_keep_alive": "boolean",
-    "domain_resolver": "object",
-    "domain_strategy": "string",
-    "fallback_delay": "string",
-    "fallback_network_type": "array",
-    "final_mask": "object",
-    "global_padding": "boolean",
-    "inet4_bind_address": "string",
-    "inet6_bind_address": "string",
-    "multiplex": "object",
-    "netns": "string",
-    "network": "array",
-    "network_strategy": "string",
-    "network_type": "array",
-    "packet_encoding": "string",
-    "protect_path": "string",
-    "reuse_addr": "boolean",
-    "routing_mark": "number",
-    "security": "string",
-    "server": "string",
-    "server_port": "number",
-    "tcp_fast_open": "boolean",
-    "tcp_keep_alive": "string",
-    "tcp_keep_alive_interval": "string",
-    "tcp_multi_path": "boolean",
-    "tls": "object",
-    "transport": "object",
-    "udp_fragment": "boolean",
-    "uuid": "string"
-  },
-  "warp": {
-    "awg": "object",
-    "bind_address_no_port": "boolean",
-    "bind_interface": "string",
-    "connect_timeout": "string",
-    "detour": "string",
-    "disable_tcp_keep_alive": "boolean",
-    "domain_resolver": "object",
-    "domain_strategy": "string",
-    "fallback_delay": "string",
-    "fallback_network_type": "array",
-    "final_mask": "object",
-    "inet4_bind_address": "string",
-    "inet6_bind_address": "string",
-    "listen_port": "number",
-    "mtu": "number",
-    "name": "string",
-    "netns": "string",
-    "network_strategy": "string",
-    "network_type": "array",
-    "noise": "json",
-    "profile": "object",
-    "protect_path": "string",
-    "reuse_addr": "boolean",
-    "routing_mark": "number",
-    "server": "string",
-    "server_port": "number",
-    "system": "boolean",
-    "tcp_fast_open": "boolean",
-    "tcp_keep_alive": "string",
-    "tcp_keep_alive_interval": "string",
-    "tcp_multi_path": "boolean",
-    "udp_fragment": "boolean",
-    "udp_timeout": "string",
-    "unique_identifier": "string",
-    "workers": "number"
-  },
-  "wireguard": {
-    "address": "array",
-    "awg": "object",
-    "bind_address_no_port": "boolean",
-    "bind_interface": "string",
-    "connect_timeout": "string",
-    "detour": "string",
-    "disable_tcp_keep_alive": "boolean",
-    "domain_resolver": "object",
-    "domain_strategy": "string",
-    "fallback_delay": "string",
-    "fallback_network_type": "array",
-    "final_mask": "object",
-    "inet4_bind_address": "string",
-    "inet6_bind_address": "string",
-    "listen_port": "number",
-    "mtu": "number",
-    "name": "string",
-    "netns": "string",
-    "network_strategy": "string",
-    "network_type": "array",
-    "noise": "json",
-    "on_demand": "boolean",
-    "peers": "array",
-    "private_key": "string",
-    "protect_path": "string",
-    "reuse_addr": "boolean",
-    "routing_mark": "number",
-    "system": "boolean",
-    "tcp_fast_open": "boolean",
-    "tcp_keep_alive": "string",
-    "tcp_keep_alive_interval": "string",
-    "tcp_multi_path": "boolean",
-    "udp_filtering": "json",
-    "udp_fragment": "boolean",
-    "udp_mapping": "json",
-    "udp_nat_max": "number",
-    "udp_timeout": "string",
-    "workers": "number"
-  },
-  "wireguard_legacy": {
-    "bind_address_no_port": "boolean",
-    "bind_interface": "string",
-    "connect_timeout": "string",
-    "detour": "string",
-    "disable_tcp_keep_alive": "boolean",
-    "domain_resolver": "object",
-    "domain_strategy": "string",
-    "fallback_delay": "string",
-    "fallback_network_type": "array",
-    "final_mask": "object",
-    "gso": "boolean",
-    "inet4_bind_address": "string",
-    "inet6_bind_address": "string",
-    "interface_name": "string",
-    "local_address": "array",
-    "mtu": "number",
-    "netns": "string",
-    "network": "array",
-    "network_strategy": "string",
-    "network_type": "array",
-    "peer_public_key": "string",
-    "peers": "array",
-    "pre_shared_key": "string",
-    "private_key": "string",
-    "protect_path": "string",
-    "reserved": "array",
-    "reuse_addr": "boolean",
-    "routing_mark": "number",
-    "server": "string",
-    "server_port": "number",
-    "system_interface": "boolean",
-    "tcp_fast_open": "boolean",
-    "tcp_keep_alive": "string",
-    "tcp_keep_alive_interval": "string",
-    "tcp_multi_path": "boolean",
-    "udp_fragment": "boolean",
-    "workers": "number"
-  },
-  "xray": {
-    "bind_address_no_port": "boolean",
-    "bind_interface": "string",
-    "connect_timeout": "string",
-    "detour": "string",
-    "disable_tcp_keep_alive": "boolean",
-    "domain_resolver": "object",
-    "domain_strategy": "string",
-    "fallback_delay": "string",
-    "fallback_network_type": "array",
-    "final_mask": "object",
-    "inet4_bind_address": "string",
-    "inet6_bind_address": "string",
-    "netns": "string",
-    "network": "array",
-    "network_strategy": "string",
-    "network_type": "array",
-    "protect_path": "string",
-    "reuse_addr": "boolean",
-    "routing_mark": "number",
-    "tcp_fast_open": "boolean",
-    "tcp_keep_alive": "string",
-    "tcp_keep_alive_interval": "string",
-    "tcp_multi_path": "boolean",
-    "udp_fragment": "boolean",
-    "udp_over_tcp": "object",
-    "xconfig": "object",
-    "xdebug": "boolean",
-    "xray_fragment": "json",
-    "xray_loglevel": "string",
-    "xray_outbound_raw": "object"
+  "dialerFields": [
+    "detour",
+    "final_mask",
+    "bind_interface",
+    "inet4_bind_address",
+    "inet6_bind_address",
+    "bind_address_no_port",
+    "protect_path",
+    "routing_mark",
+    "reuse_addr",
+    "netns",
+    "connect_timeout",
+    "tcp_fast_open",
+    "tcp_multi_path",
+    "disable_tcp_keep_alive",
+    "tcp_keep_alive",
+    "tcp_keep_alive_interval",
+    "udp_fragment",
+    "domain_resolver",
+    "network_strategy",
+    "network_type",
+    "fallback_network_type",
+    "fallback_delay",
+    "domain_strategy"
+  ],
+  "protocols": {
+    "anytls": {
+      "bind_address_no_port": {
+        "kind": "boolean"
+      },
+      "bind_interface": {
+        "kind": "string"
+      },
+      "client_metadata": {
+        "kind": "string"
+      },
+      "connect_timeout": {
+        "kind": "string"
+      },
+      "detour": {
+        "kind": "string"
+      },
+      "disable_tcp_keep_alive": {
+        "kind": "boolean"
+      },
+      "domain_resolver": {
+        "kind": "object",
+        "ref": "_DomainResolveOptions",
+        "string": true
+      },
+      "domain_strategy": {
+        "kind": "string"
+      },
+      "fallback_delay": {
+        "kind": "string"
+      },
+      "fallback_network_type": {
+        "kind": "strings"
+      },
+      "final_mask": {
+        "kind": "object",
+        "ref": "FinalMaskOptions"
+      },
+      "idle_session_check_interval": {
+        "kind": "string"
+      },
+      "idle_session_timeout": {
+        "kind": "string"
+      },
+      "inet4_bind_address": {
+        "kind": "string"
+      },
+      "inet6_bind_address": {
+        "kind": "string"
+      },
+      "min_idle_session": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      },
+      "netns": {
+        "kind": "string"
+      },
+      "network_strategy": {
+        "kind": "string"
+      },
+      "network_type": {
+        "kind": "strings"
+      },
+      "password": {
+        "kind": "string"
+      },
+      "protect_path": {
+        "kind": "string"
+      },
+      "reuse_addr": {
+        "kind": "boolean"
+      },
+      "routing_mark": {
+        "kind": "number"
+      },
+      "server": {
+        "kind": "string",
+        "required": true
+      },
+      "server_port": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0,
+        "required": true
+      },
+      "tcp_fast_open": {
+        "kind": "boolean"
+      },
+      "tcp_keep_alive": {
+        "kind": "string"
+      },
+      "tcp_keep_alive_interval": {
+        "kind": "string"
+      },
+      "tcp_multi_path": {
+        "kind": "boolean"
+      },
+      "tls": {
+        "kind": "object",
+        "ref": "OutboundTLSOptions"
+      },
+      "udp_fragment": {
+        "kind": "boolean"
+      }
+    },
+    "awg": {
+      "address": {
+        "kind": "strings",
+        "required": true
+      },
+      "awg": {
+        "kind": "object",
+        "ref": "AwgOptions"
+      },
+      "bind_address_no_port": {
+        "kind": "boolean"
+      },
+      "bind_interface": {
+        "kind": "string"
+      },
+      "connect_timeout": {
+        "kind": "string"
+      },
+      "detour": {
+        "kind": "string"
+      },
+      "disable_tcp_keep_alive": {
+        "kind": "boolean"
+      },
+      "domain_resolver": {
+        "kind": "object",
+        "ref": "_DomainResolveOptions",
+        "string": true
+      },
+      "domain_strategy": {
+        "kind": "string"
+      },
+      "fallback_delay": {
+        "kind": "string"
+      },
+      "fallback_network_type": {
+        "kind": "strings"
+      },
+      "final_mask": {
+        "kind": "object",
+        "ref": "FinalMaskOptions"
+      },
+      "inet4_bind_address": {
+        "kind": "string"
+      },
+      "inet6_bind_address": {
+        "kind": "string"
+      },
+      "listen_port": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0
+      },
+      "mtu": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      },
+      "netns": {
+        "kind": "string"
+      },
+      "network_strategy": {
+        "kind": "string"
+      },
+      "network_type": {
+        "kind": "strings"
+      },
+      "peers": {
+        "item": {
+          "kind": "object",
+          "ref": "AwgPeerOptions"
+        },
+        "kind": "array"
+      },
+      "private_key": {
+        "kind": "string",
+        "required": true
+      },
+      "protect_path": {
+        "kind": "string"
+      },
+      "reuse_addr": {
+        "kind": "boolean"
+      },
+      "routing_mark": {
+        "kind": "number"
+      },
+      "tcp_fast_open": {
+        "kind": "boolean"
+      },
+      "tcp_keep_alive": {
+        "kind": "string"
+      },
+      "tcp_keep_alive_interval": {
+        "kind": "string"
+      },
+      "tcp_multi_path": {
+        "kind": "boolean"
+      },
+      "udp_fragment": {
+        "kind": "boolean"
+      },
+      "useIntegratedTun": {
+        "kind": "boolean",
+        "required": true
+      }
+    },
+    "balancer": {
+      "delay_acceptable_ratio": {
+        "integer": false,
+        "kind": "number"
+      },
+      "interrupt_exist_connections": {
+        "kind": "boolean"
+      },
+      "max_retry": {
+        "integer": true,
+        "kind": "number"
+      },
+      "outbounds": {
+        "kind": "strings",
+        "required": true
+      },
+      "strategy": {
+        "enum": [
+          "round-robin",
+          "consistent-hashing",
+          "sticky-sessions",
+          "lowest-delay"
+        ],
+        "kind": "string"
+      },
+      "tolerance": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0
+      },
+      "ttl": {
+        "kind": "string"
+      }
+    },
+    "block": {},
+    "bridge": {
+      "bridge_name": {
+        "kind": "string"
+      },
+      "interface": {
+        "kind": "string"
+      },
+      "iproute2_rule_index": {
+        "integer": true,
+        "kind": "number"
+      },
+      "iproute2_table_index": {
+        "integer": true,
+        "kind": "number"
+      }
+    },
+    "direct": {
+      "bind_address_no_port": {
+        "kind": "boolean"
+      },
+      "bind_interface": {
+        "kind": "string"
+      },
+      "connect_timeout": {
+        "kind": "string"
+      },
+      "detour": {
+        "kind": "string"
+      },
+      "disable_tcp_keep_alive": {
+        "kind": "boolean"
+      },
+      "domain_resolver": {
+        "kind": "object",
+        "ref": "_DomainResolveOptions",
+        "string": true
+      },
+      "domain_strategy": {
+        "kind": "string"
+      },
+      "fallback_delay": {
+        "kind": "string"
+      },
+      "fallback_network_type": {
+        "kind": "strings"
+      },
+      "final_mask": {
+        "kind": "object",
+        "ref": "FinalMaskOptions"
+      },
+      "inet4_bind_address": {
+        "kind": "string"
+      },
+      "inet6_bind_address": {
+        "kind": "string"
+      },
+      "netns": {
+        "kind": "string"
+      },
+      "network_strategy": {
+        "kind": "string"
+      },
+      "network_type": {
+        "kind": "strings"
+      },
+      "override_address": {
+        "kind": "string"
+      },
+      "override_port": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0
+      },
+      "protect_path": {
+        "kind": "string"
+      },
+      "proxy_protocol": {
+        "integer": true,
+        "kind": "number",
+        "max": 255,
+        "min": 0
+      },
+      "reuse_addr": {
+        "kind": "boolean"
+      },
+      "routing_mark": {
+        "kind": "number"
+      },
+      "tcp_fast_open": {
+        "kind": "boolean"
+      },
+      "tcp_keep_alive": {
+        "kind": "string"
+      },
+      "tcp_keep_alive_interval": {
+        "kind": "string"
+      },
+      "tcp_multi_path": {
+        "kind": "boolean"
+      },
+      "udp_fragment": {
+        "kind": "boolean"
+      }
+    },
+    "dnstt": {
+      "bind_address_no_port": {
+        "kind": "boolean"
+      },
+      "bind_interface": {
+        "kind": "string"
+      },
+      "clientid-size": {
+        "integer": true,
+        "kind": "number"
+      },
+      "connect_timeout": {
+        "kind": "string"
+      },
+      "detour": {
+        "kind": "string"
+      },
+      "disable_tcp_keep_alive": {
+        "kind": "boolean"
+      },
+      "dnstt-compat": {
+        "kind": "boolean"
+      },
+      "domain": {
+        "kind": "string"
+      },
+      "domain_resolver": {
+        "kind": "object",
+        "ref": "_DomainResolveOptions",
+        "string": true
+      },
+      "domain_strategy": {
+        "kind": "string"
+      },
+      "fallback_delay": {
+        "kind": "string"
+      },
+      "fallback_network_type": {
+        "kind": "strings"
+      },
+      "final_mask": {
+        "kind": "object",
+        "ref": "FinalMaskOptions"
+      },
+      "handshake-timeout": {
+        "kind": "string"
+      },
+      "idle-timeout": {
+        "kind": "string"
+      },
+      "inet4_bind_address": {
+        "kind": "string"
+      },
+      "inet6_bind_address": {
+        "kind": "string"
+      },
+      "keepalive": {
+        "kind": "string"
+      },
+      "max-num-labels": {
+        "integer": true,
+        "kind": "number"
+      },
+      "max-qname-len": {
+        "integer": true,
+        "kind": "number"
+      },
+      "max-streams": {
+        "integer": true,
+        "kind": "number"
+      },
+      "mtu": {
+        "integer": true,
+        "kind": "number"
+      },
+      "netns": {
+        "kind": "string"
+      },
+      "network_strategy": {
+        "kind": "string"
+      },
+      "network_type": {
+        "kind": "strings"
+      },
+      "open-stream-timeout": {
+        "kind": "string"
+      },
+      "pretest-domain": {
+        "kind": "string"
+      },
+      "pretest-record-type": {
+        "kind": "string"
+      },
+      "protect_path": {
+        "kind": "string"
+      },
+      "pubkey": {
+        "kind": "string"
+      },
+      "reconnect-max": {
+        "kind": "string"
+      },
+      "reconnect-min": {
+        "kind": "string"
+      },
+      "record-type": {
+        "kind": "string"
+      },
+      "resolvers": {
+        "kind": "strings"
+      },
+      "reuse_addr": {
+        "kind": "boolean"
+      },
+      "routing_mark": {
+        "kind": "number"
+      },
+      "rps": {
+        "integer": false,
+        "kind": "number"
+      },
+      "session-check-interval": {
+        "kind": "string"
+      },
+      "single-resolver": {
+        "kind": "boolean"
+      },
+      "smart_pool": {
+        "kind": "boolean"
+      },
+      "tcp_fast_open": {
+        "kind": "boolean"
+      },
+      "tcp_keep_alive": {
+        "kind": "string"
+      },
+      "tcp_keep_alive_interval": {
+        "kind": "string"
+      },
+      "tcp_multi_path": {
+        "kind": "boolean"
+      },
+      "udp-accept-errors": {
+        "kind": "boolean"
+      },
+      "udp-shared-socket": {
+        "kind": "boolean"
+      },
+      "udp-timeout": {
+        "kind": "string"
+      },
+      "udp-workers": {
+        "integer": true,
+        "kind": "number"
+      },
+      "udp_fragment": {
+        "kind": "boolean"
+      },
+      "utls": {
+        "kind": "string"
+      }
+    },
+    "fptn": {
+      "bind_address_no_port": {
+        "kind": "boolean"
+      },
+      "bind_interface": {
+        "kind": "string"
+      },
+      "bypass": {
+        "kind": "string"
+      },
+      "connect_timeout": {
+        "kind": "string"
+      },
+      "detour": {
+        "kind": "string"
+      },
+      "disable_tcp_keep_alive": {
+        "kind": "boolean"
+      },
+      "domain_resolver": {
+        "kind": "object",
+        "ref": "_DomainResolveOptions",
+        "string": true
+      },
+      "domain_strategy": {
+        "kind": "string"
+      },
+      "fallback_delay": {
+        "kind": "string"
+      },
+      "fallback_network_type": {
+        "kind": "strings"
+      },
+      "final_mask": {
+        "kind": "object",
+        "ref": "FinalMaskOptions"
+      },
+      "inet4_bind_address": {
+        "kind": "string"
+      },
+      "inet6_bind_address": {
+        "kind": "string"
+      },
+      "md5_fingerprint": {
+        "kind": "string",
+        "required": true
+      },
+      "mtu": {
+        "integer": true,
+        "kind": "number"
+      },
+      "netns": {
+        "kind": "string"
+      },
+      "network_strategy": {
+        "kind": "string"
+      },
+      "network_type": {
+        "kind": "strings"
+      },
+      "password": {
+        "kind": "string",
+        "required": true
+      },
+      "protect_path": {
+        "kind": "string"
+      },
+      "reuse_addr": {
+        "kind": "boolean"
+      },
+      "routing_mark": {
+        "kind": "number"
+      },
+      "server": {
+        "kind": "string",
+        "required": true
+      },
+      "server_port": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0,
+        "required": true
+      },
+      "sni": {
+        "kind": "string"
+      },
+      "tcp_fast_open": {
+        "kind": "boolean"
+      },
+      "tcp_keep_alive": {
+        "kind": "string"
+      },
+      "tcp_keep_alive_interval": {
+        "kind": "string"
+      },
+      "tcp_multi_path": {
+        "kind": "boolean"
+      },
+      "udp_fragment": {
+        "kind": "boolean"
+      },
+      "username": {
+        "kind": "string",
+        "required": true
+      }
+    },
+    "gooserelay": {
+      "bind_address_no_port": {
+        "kind": "boolean"
+      },
+      "bind_interface": {
+        "kind": "string"
+      },
+      "connect_timeout": {
+        "kind": "string"
+      },
+      "debug_timing": {
+        "kind": "boolean"
+      },
+      "detour": {
+        "kind": "string"
+      },
+      "disable_tcp_keep_alive": {
+        "kind": "boolean"
+      },
+      "domain_resolver": {
+        "kind": "object",
+        "ref": "_DomainResolveOptions",
+        "string": true
+      },
+      "domain_strategy": {
+        "kind": "string"
+      },
+      "fallback_delay": {
+        "kind": "string"
+      },
+      "fallback_network_type": {
+        "kind": "strings"
+      },
+      "final_mask": {
+        "kind": "object",
+        "ref": "FinalMaskOptions"
+      },
+      "google_host": {
+        "kind": "string"
+      },
+      "handshake_timeout": {
+        "kind": "string"
+      },
+      "inet4_bind_address": {
+        "kind": "string"
+      },
+      "inet6_bind_address": {
+        "kind": "string"
+      },
+      "netns": {
+        "kind": "string"
+      },
+      "network_strategy": {
+        "kind": "string"
+      },
+      "network_type": {
+        "kind": "strings"
+      },
+      "protect_path": {
+        "kind": "string"
+      },
+      "reuse_addr": {
+        "kind": "boolean"
+      },
+      "routing_mark": {
+        "kind": "number"
+      },
+      "script_keys": {
+        "kind": "strings"
+      },
+      "sni": {
+        "kind": "strings"
+      },
+      "tcp_fast_open": {
+        "kind": "boolean"
+      },
+      "tcp_keep_alive": {
+        "kind": "string"
+      },
+      "tcp_keep_alive_interval": {
+        "kind": "string"
+      },
+      "tcp_multi_path": {
+        "kind": "boolean"
+      },
+      "tunnel_key": {
+        "kind": "string"
+      },
+      "udp_fragment": {
+        "kind": "boolean"
+      },
+      "udp_over_tcp": {
+        "boolean": true,
+        "kind": "object",
+        "ref": "_UDPOverTCPOptions"
+      }
+    },
+    "http": {
+      "bind_address_no_port": {
+        "kind": "boolean"
+      },
+      "bind_interface": {
+        "kind": "string"
+      },
+      "connect_timeout": {
+        "kind": "string"
+      },
+      "connection_receive_window": {
+        "kind": "string",
+        "when": {
+          "version": [
+            0,
+            2,
+            3
+          ]
+        }
+      },
+      "detour": {
+        "kind": "string"
+      },
+      "disable_path_mtu_discovery": {
+        "kind": "boolean",
+        "when": {
+          "version": [
+            3
+          ]
+        }
+      },
+      "disable_tcp_keep_alive": {
+        "kind": "boolean"
+      },
+      "disable_version_fallback": {
+        "kind": "boolean"
+      },
+      "domain_resolver": {
+        "kind": "object",
+        "ref": "_DomainResolveOptions",
+        "string": true
+      },
+      "domain_strategy": {
+        "kind": "string"
+      },
+      "fallback_delay": {
+        "kind": "string"
+      },
+      "fallback_network_type": {
+        "kind": "strings"
+      },
+      "final_mask": {
+        "kind": "object",
+        "ref": "FinalMaskOptions"
+      },
+      "headers": {
+        "kind": "headers"
+      },
+      "idle_timeout": {
+        "kind": "string",
+        "when": {
+          "version": [
+            0,
+            2,
+            3
+          ]
+        }
+      },
+      "inet4_bind_address": {
+        "kind": "string"
+      },
+      "inet6_bind_address": {
+        "kind": "string"
+      },
+      "initial_packet_size": {
+        "integer": true,
+        "kind": "number",
+        "when": {
+          "version": [
+            3
+          ]
+        }
+      },
+      "keep_alive_period": {
+        "kind": "string",
+        "when": {
+          "version": [
+            0,
+            2,
+            3
+          ]
+        }
+      },
+      "max_concurrent_streams": {
+        "integer": true,
+        "kind": "number",
+        "min": 0,
+        "when": {
+          "version": [
+            0,
+            2,
+            3
+          ]
+        }
+      },
+      "netns": {
+        "kind": "string"
+      },
+      "network_strategy": {
+        "kind": "string"
+      },
+      "network_type": {
+        "kind": "strings"
+      },
+      "password": {
+        "kind": "string"
+      },
+      "path": {
+        "kind": "string"
+      },
+      "protect_path": {
+        "kind": "string"
+      },
+      "reuse_addr": {
+        "kind": "boolean"
+      },
+      "routing_mark": {
+        "kind": "number"
+      },
+      "server": {
+        "kind": "string",
+        "required": true
+      },
+      "server_port": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0,
+        "required": true
+      },
+      "stream_receive_window": {
+        "kind": "string",
+        "when": {
+          "version": [
+            0,
+            2,
+            3
+          ]
+        }
+      },
+      "tcp_fast_open": {
+        "kind": "boolean"
+      },
+      "tcp_keep_alive": {
+        "kind": "string"
+      },
+      "tcp_keep_alive_interval": {
+        "kind": "string"
+      },
+      "tcp_multi_path": {
+        "kind": "boolean"
+      },
+      "tls": {
+        "kind": "object",
+        "ref": "OutboundTLSOptions"
+      },
+      "udp_fragment": {
+        "kind": "boolean"
+      },
+      "username": {
+        "kind": "string"
+      },
+      "version": {
+        "enum": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "integer": true,
+        "kind": "number"
+      }
+    },
+    "hysteria": {
+      "auth": {
+        "item": {
+          "kind": "json"
+        },
+        "kind": "array"
+      },
+      "auth_str": {
+        "kind": "string"
+      },
+      "bind_address_no_port": {
+        "kind": "boolean"
+      },
+      "bind_interface": {
+        "kind": "string"
+      },
+      "connect_timeout": {
+        "kind": "string"
+      },
+      "connection_receive_window": {
+        "kind": "string"
+      },
+      "detour": {
+        "kind": "string"
+      },
+      "disable_mtu_discovery": {
+        "kind": "boolean"
+      },
+      "disable_path_mtu_discovery": {
+        "kind": "boolean"
+      },
+      "disable_tcp_keep_alive": {
+        "kind": "boolean"
+      },
+      "domain_resolver": {
+        "kind": "object",
+        "ref": "_DomainResolveOptions",
+        "string": true
+      },
+      "domain_strategy": {
+        "kind": "string"
+      },
+      "down": {
+        "kind": "json"
+      },
+      "down_mbps": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      },
+      "fallback_delay": {
+        "kind": "string"
+      },
+      "fallback_network_type": {
+        "kind": "strings"
+      },
+      "final_mask": {
+        "kind": "object",
+        "ref": "FinalMaskOptions"
+      },
+      "hop_interval": {
+        "kind": "string"
+      },
+      "idle_timeout": {
+        "kind": "string"
+      },
+      "inet4_bind_address": {
+        "kind": "string"
+      },
+      "inet6_bind_address": {
+        "kind": "string"
+      },
+      "initial_packet_size": {
+        "integer": true,
+        "kind": "number"
+      },
+      "keep_alive_period": {
+        "kind": "string"
+      },
+      "max_concurrent_streams": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      },
+      "netns": {
+        "kind": "string"
+      },
+      "network": {
+        "kind": "network"
+      },
+      "network_strategy": {
+        "kind": "string"
+      },
+      "network_type": {
+        "kind": "strings"
+      },
+      "obfs": {
+        "kind": "string"
+      },
+      "protect_path": {
+        "kind": "string"
+      },
+      "recv_window": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      },
+      "recv_window_conn": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      },
+      "reuse_addr": {
+        "kind": "boolean"
+      },
+      "routing_mark": {
+        "kind": "number"
+      },
+      "server": {
+        "kind": "string",
+        "required": true
+      },
+      "server_port": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0,
+        "required": true
+      },
+      "server_ports": {
+        "kind": "strings"
+      },
+      "stream_receive_window": {
+        "kind": "string"
+      },
+      "tcp_fast_open": {
+        "kind": "boolean"
+      },
+      "tcp_keep_alive": {
+        "kind": "string"
+      },
+      "tcp_keep_alive_interval": {
+        "kind": "string"
+      },
+      "tcp_multi_path": {
+        "kind": "boolean"
+      },
+      "tls": {
+        "kind": "object",
+        "ref": "OutboundTLSOptions"
+      },
+      "udp_fragment": {
+        "kind": "boolean"
+      },
+      "up": {
+        "kind": "json"
+      },
+      "up_mbps": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      }
+    },
+    "hysteria2": {
+      "bbr_profile": {
+        "enum": [
+          "standard",
+          "conservative",
+          "aggressive"
+        ],
+        "kind": "string"
+      },
+      "bind_address_no_port": {
+        "kind": "boolean"
+      },
+      "bind_interface": {
+        "kind": "string"
+      },
+      "brutal_debug": {
+        "kind": "boolean"
+      },
+      "connect_timeout": {
+        "kind": "string"
+      },
+      "connection_receive_window": {
+        "kind": "string"
+      },
+      "detour": {
+        "kind": "string"
+      },
+      "disable_chrome_parrot": {
+        "kind": "boolean"
+      },
+      "disable_path_mtu_discovery": {
+        "kind": "boolean"
+      },
+      "disable_tcp_keep_alive": {
+        "kind": "boolean"
+      },
+      "domain_resolver": {
+        "kind": "object",
+        "ref": "_DomainResolveOptions",
+        "string": true
+      },
+      "domain_strategy": {
+        "kind": "string"
+      },
+      "down_mbps": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      },
+      "fallback_delay": {
+        "kind": "string"
+      },
+      "fallback_network_type": {
+        "kind": "strings"
+      },
+      "final_mask": {
+        "kind": "object",
+        "ref": "FinalMaskOptions"
+      },
+      "hop_interval": {
+        "kind": "string"
+      },
+      "hop_interval_max": {
+        "kind": "string"
+      },
+      "idle_timeout": {
+        "kind": "string"
+      },
+      "inet4_bind_address": {
+        "kind": "string"
+      },
+      "inet6_bind_address": {
+        "kind": "string"
+      },
+      "initial_packet_size": {
+        "integer": true,
+        "kind": "number"
+      },
+      "keep_alive_period": {
+        "kind": "string"
+      },
+      "max_concurrent_streams": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      },
+      "netns": {
+        "kind": "string"
+      },
+      "network": {
+        "kind": "network"
+      },
+      "network_strategy": {
+        "kind": "string"
+      },
+      "network_type": {
+        "kind": "strings"
+      },
+      "obfs": {
+        "kind": "object",
+        "ref": "_Hysteria2Obfs"
+      },
+      "password": {
+        "kind": "string"
+      },
+      "protect_path": {
+        "kind": "string"
+      },
+      "realm": {
+        "kind": "object",
+        "ref": "Hysteria2Realm"
+      },
+      "reuse_addr": {
+        "kind": "boolean"
+      },
+      "routing_mark": {
+        "kind": "number"
+      },
+      "server": {
+        "kind": "string",
+        "required": true
+      },
+      "server_port": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0,
+        "required": true
+      },
+      "server_ports": {
+        "kind": "strings"
+      },
+      "stream_receive_window": {
+        "kind": "string"
+      },
+      "tcp_fast_open": {
+        "kind": "boolean"
+      },
+      "tcp_keep_alive": {
+        "kind": "string"
+      },
+      "tcp_keep_alive_interval": {
+        "kind": "string"
+      },
+      "tcp_multi_path": {
+        "kind": "boolean"
+      },
+      "tls": {
+        "kind": "object",
+        "ref": "OutboundTLSOptions"
+      },
+      "udp_fragment": {
+        "kind": "boolean"
+      },
+      "up_mbps": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      }
+    },
+    "masque": {
+      "bind_address_no_port": {
+        "kind": "boolean"
+      },
+      "bind_interface": {
+        "kind": "string"
+      },
+      "connect_timeout": {
+        "kind": "string"
+      },
+      "detour": {
+        "kind": "string"
+      },
+      "disable_tcp_keep_alive": {
+        "kind": "boolean"
+      },
+      "domain_resolver": {
+        "kind": "object",
+        "ref": "_DomainResolveOptions",
+        "string": true
+      },
+      "domain_strategy": {
+        "kind": "string"
+      },
+      "fallback_delay": {
+        "kind": "string"
+      },
+      "fallback_network_type": {
+        "kind": "strings"
+      },
+      "final_mask": {
+        "kind": "object",
+        "ref": "FinalMaskOptions"
+      },
+      "inet4_bind_address": {
+        "kind": "string"
+      },
+      "inet6_bind_address": {
+        "kind": "string"
+      },
+      "netns": {
+        "kind": "string"
+      },
+      "network_strategy": {
+        "kind": "string"
+      },
+      "network_type": {
+        "kind": "strings"
+      },
+      "profile": {
+        "kind": "object",
+        "ref": "CloudflareProfile"
+      },
+      "protect_path": {
+        "kind": "string"
+      },
+      "reconnect_delay": {
+        "kind": "string"
+      },
+      "reuse_addr": {
+        "kind": "boolean"
+      },
+      "routing_mark": {
+        "kind": "number"
+      },
+      "tcp_fast_open": {
+        "kind": "boolean"
+      },
+      "tcp_keep_alive": {
+        "kind": "string"
+      },
+      "tcp_keep_alive_interval": {
+        "kind": "string"
+      },
+      "tcp_multi_path": {
+        "kind": "boolean"
+      },
+      "tls": {
+        "kind": "object",
+        "ref": "MASQUEOutboundTLSOptions"
+      },
+      "udp_fragment": {
+        "kind": "boolean"
+      },
+      "udp_initial_packet_size": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0
+      },
+      "udp_keepalive_period": {
+        "kind": "string"
+      },
+      "udp_timeout": {
+        "kind": "string"
+      },
+      "use_http2": {
+        "kind": "boolean"
+      },
+      "use_ipv6": {
+        "kind": "boolean"
+      }
+    },
+    "masque-client": {
+      "advertise_routes": {
+        "kind": "strings"
+      },
+      "bind_address_no_port": {
+        "kind": "boolean"
+      },
+      "bind_interface": {
+        "kind": "string"
+      },
+      "connect_timeout": {
+        "kind": "string"
+      },
+      "detour": {
+        "kind": "string"
+      },
+      "disable_tcp_keep_alive": {
+        "kind": "boolean"
+      },
+      "disable_version_fallback": {
+        "kind": "boolean"
+      },
+      "domain_resolver": {
+        "kind": "object",
+        "ref": "_DomainResolveOptions",
+        "string": true
+      },
+      "domain_strategy": {
+        "kind": "string"
+      },
+      "fallback_delay": {
+        "kind": "string"
+      },
+      "fallback_network_type": {
+        "kind": "strings"
+      },
+      "final_mask": {
+        "kind": "object",
+        "ref": "FinalMaskOptions"
+      },
+      "headers": {
+        "kind": "headers"
+      },
+      "inet4_bind_address": {
+        "kind": "string"
+      },
+      "inet6_bind_address": {
+        "kind": "string"
+      },
+      "mtu": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      },
+      "name": {
+        "kind": "string"
+      },
+      "netns": {
+        "kind": "string"
+      },
+      "network_strategy": {
+        "kind": "string"
+      },
+      "network_type": {
+        "kind": "strings"
+      },
+      "on_demand": {
+        "kind": "boolean"
+      },
+      "password": {
+        "kind": "string"
+      },
+      "path": {
+        "kind": "string"
+      },
+      "protect_path": {
+        "kind": "string"
+      },
+      "reuse_addr": {
+        "kind": "boolean"
+      },
+      "routing_mark": {
+        "kind": "number"
+      },
+      "server": {
+        "kind": "string",
+        "required": true
+      },
+      "server_port": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0,
+        "required": true
+      },
+      "system": {
+        "kind": "boolean"
+      },
+      "tcp_fast_open": {
+        "kind": "boolean"
+      },
+      "tcp_keep_alive": {
+        "kind": "string"
+      },
+      "tcp_keep_alive_interval": {
+        "kind": "string"
+      },
+      "tcp_multi_path": {
+        "kind": "boolean"
+      },
+      "tls": {
+        "kind": "object",
+        "ref": "OutboundTLSOptions"
+      },
+      "udp_filtering": {
+        "kind": "string"
+      },
+      "udp_fragment": {
+        "kind": "boolean"
+      },
+      "udp_mapping": {
+        "kind": "string"
+      },
+      "udp_nat_max": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      },
+      "udp_timeout": {
+        "kind": "string"
+      },
+      "username": {
+        "kind": "string"
+      },
+      "version": {
+        "enum": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "integer": true,
+        "kind": "number"
+      }
+    },
+    "masque-server": {
+      "address": {
+        "kind": "strings",
+        "required": true
+      },
+      "advertise_routes": {
+        "kind": "strings"
+      },
+      "bind_interface": {
+        "kind": "string"
+      },
+      "detour": {
+        "kind": "string"
+      },
+      "disable_tcp_keep_alive": {
+        "kind": "boolean"
+      },
+      "listen": {
+        "kind": "string"
+      },
+      "listen_port": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0
+      },
+      "mtu": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      },
+      "name": {
+        "kind": "string"
+      },
+      "netns": {
+        "kind": "string"
+      },
+      "path": {
+        "kind": "string"
+      },
+      "proxy_protocol": {
+        "kind": "boolean"
+      },
+      "proxy_protocol_accept_no_header": {
+        "kind": "boolean"
+      },
+      "reuse_addr": {
+        "kind": "boolean"
+      },
+      "routing_mark": {
+        "kind": "number"
+      },
+      "system": {
+        "kind": "boolean"
+      },
+      "tcp_fast_open": {
+        "kind": "boolean"
+      },
+      "tcp_keep_alive": {
+        "kind": "string"
+      },
+      "tcp_keep_alive_interval": {
+        "kind": "string"
+      },
+      "tcp_multi_path": {
+        "kind": "boolean"
+      },
+      "tls": {
+        "kind": "object",
+        "ref": "InboundTLSOptions"
+      },
+      "udp_filtering": {
+        "kind": "string"
+      },
+      "udp_fragment": {
+        "kind": "boolean"
+      },
+      "udp_mapping": {
+        "kind": "string"
+      },
+      "udp_nat_max": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      },
+      "udp_timeout": {
+        "kind": "json"
+      },
+      "users": {
+        "item": {
+          "kind": "json"
+        },
+        "kind": "array"
+      },
+      "version": {
+        "enum": [
+          "1",
+          "2",
+          "3"
+        ],
+        "item": {
+          "integer": true,
+          "kind": "number"
+        },
+        "kind": "array"
+      }
+    },
+    "mieru": {
+      "bind_address_no_port": {
+        "kind": "boolean"
+      },
+      "bind_interface": {
+        "kind": "string"
+      },
+      "connect_timeout": {
+        "kind": "string"
+      },
+      "detour": {
+        "kind": "string"
+      },
+      "disable_tcp_keep_alive": {
+        "kind": "boolean"
+      },
+      "domain_resolver": {
+        "kind": "object",
+        "ref": "_DomainResolveOptions",
+        "string": true
+      },
+      "domain_strategy": {
+        "kind": "string"
+      },
+      "fallback_delay": {
+        "kind": "string"
+      },
+      "fallback_network_type": {
+        "kind": "strings"
+      },
+      "final_mask": {
+        "kind": "object",
+        "ref": "FinalMaskOptions"
+      },
+      "handshake_mode": {
+        "enum": [
+          "HANDSHAKE_DEFAULT",
+          "HANDSHAKE_STANDARD",
+          "HANDSHAKE_NO_WAIT"
+        ],
+        "kind": "string"
+      },
+      "inet4_bind_address": {
+        "kind": "string"
+      },
+      "inet6_bind_address": {
+        "kind": "string"
+      },
+      "mtu": {
+        "integer": true,
+        "kind": "number"
+      },
+      "multiplexing": {
+        "enum": [
+          "MULTIPLEXING_DEFAULT",
+          "MULTIPLEXING_LOW",
+          "MULTIPLEXING_MIDDLE",
+          "MULTIPLEXING_HIGH"
+        ],
+        "kind": "string"
+      },
+      "netns": {
+        "kind": "string"
+      },
+      "network": {
+        "kind": "network"
+      },
+      "network_strategy": {
+        "kind": "string"
+      },
+      "network_type": {
+        "kind": "strings"
+      },
+      "password": {
+        "kind": "string"
+      },
+      "portBindings": {
+        "item": {
+          "kind": "object",
+          "ref": "MieruPortBinding"
+        },
+        "kind": "array"
+      },
+      "protect_path": {
+        "kind": "string"
+      },
+      "reuse_addr": {
+        "kind": "boolean"
+      },
+      "routing_mark": {
+        "kind": "number"
+      },
+      "server": {
+        "kind": "string",
+        "required": true
+      },
+      "server_port": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0,
+        "required": true
+      },
+      "tcp_fast_open": {
+        "kind": "boolean"
+      },
+      "tcp_keep_alive": {
+        "kind": "string"
+      },
+      "tcp_keep_alive_interval": {
+        "kind": "string"
+      },
+      "tcp_multi_path": {
+        "kind": "boolean"
+      },
+      "udp_fragment": {
+        "kind": "boolean"
+      },
+      "username": {
+        "kind": "string"
+      }
+    },
+    "naive": {
+      "bind_address_no_port": {
+        "kind": "boolean"
+      },
+      "bind_interface": {
+        "kind": "string"
+      },
+      "connect_timeout": {
+        "kind": "string"
+      },
+      "detour": {
+        "kind": "string"
+      },
+      "disable_tcp_keep_alive": {
+        "kind": "boolean"
+      },
+      "domain_resolver": {
+        "kind": "object",
+        "ref": "_DomainResolveOptions",
+        "string": true
+      },
+      "domain_strategy": {
+        "kind": "string"
+      },
+      "extra_headers": {
+        "kind": "headers"
+      },
+      "fallback_delay": {
+        "kind": "string"
+      },
+      "fallback_network_type": {
+        "kind": "strings"
+      },
+      "final_mask": {
+        "kind": "object",
+        "ref": "FinalMaskOptions"
+      },
+      "inet4_bind_address": {
+        "kind": "string"
+      },
+      "inet6_bind_address": {
+        "kind": "string"
+      },
+      "insecure_concurrency": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      },
+      "netns": {
+        "kind": "string"
+      },
+      "network_strategy": {
+        "kind": "string"
+      },
+      "network_type": {
+        "kind": "strings"
+      },
+      "password": {
+        "kind": "string"
+      },
+      "protect_path": {
+        "kind": "string"
+      },
+      "quic": {
+        "kind": "boolean"
+      },
+      "quic_congestion_control": {
+        "enum": [
+          "bbr",
+          "bbr2",
+          "cubic",
+          "reno"
+        ],
+        "kind": "string"
+      },
+      "quic_session_receive_window": {
+        "kind": "string"
+      },
+      "reuse_addr": {
+        "kind": "boolean"
+      },
+      "routing_mark": {
+        "kind": "number"
+      },
+      "server": {
+        "kind": "string",
+        "required": true
+      },
+      "server_port": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0,
+        "required": true
+      },
+      "stream_receive_window": {
+        "kind": "string"
+      },
+      "tcp_fast_open": {
+        "kind": "boolean"
+      },
+      "tcp_keep_alive": {
+        "kind": "string"
+      },
+      "tcp_keep_alive_interval": {
+        "kind": "string"
+      },
+      "tcp_multi_path": {
+        "kind": "boolean"
+      },
+      "tls": {
+        "kind": "object",
+        "ref": "OutboundTLSOptions"
+      },
+      "udp_fragment": {
+        "kind": "boolean"
+      },
+      "udp_over_tcp": {
+        "boolean": true,
+        "kind": "object",
+        "ref": "_UDPOverTCPOptions"
+      },
+      "username": {
+        "kind": "string"
+      }
+    },
+    "openconnect": {
+      "allow_insecure_crypto": {
+        "kind": "boolean"
+      },
+      "auth_group": {
+        "kind": "string"
+      },
+      "base_mtu": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      },
+      "bind_address_no_port": {
+        "kind": "boolean"
+      },
+      "bind_interface": {
+        "kind": "string"
+      },
+      "compression_disabled": {
+        "kind": "boolean"
+      },
+      "compression_mode": {
+        "enum": [
+          "stateless",
+          "all"
+        ],
+        "kind": "string"
+      },
+      "connect_timeout": {
+        "kind": "string"
+      },
+      "cookie": {
+        "kind": "string"
+      },
+      "csd": {
+        "kind": "object",
+        "ref": "OpenConnectCSDOptions"
+      },
+      "detour": {
+        "kind": "string"
+      },
+      "disable_tcp_keep_alive": {
+        "kind": "boolean"
+      },
+      "domain_resolver": {
+        "kind": "object",
+        "ref": "_DomainResolveOptions",
+        "string": true
+      },
+      "domain_strategy": {
+        "kind": "string"
+      },
+      "dpd_interval": {
+        "kind": "string"
+      },
+      "dtls_local_port": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0
+      },
+      "external_auth_disabled": {
+        "kind": "boolean"
+      },
+      "fallback_delay": {
+        "kind": "string"
+      },
+      "fallback_network_type": {
+        "kind": "strings"
+      },
+      "final_mask": {
+        "kind": "object",
+        "ref": "FinalMaskOptions"
+      },
+      "flavor": {
+        "enum": [
+          "anyconnect",
+          "gp",
+          "fortinet",
+          "f5",
+          "pulse",
+          "nc"
+        ],
+        "kind": "string"
+      },
+      "form_entries": {
+        "item": {
+          "kind": "object",
+          "ref": "OpenConnectFormEntryOptions"
+        },
+        "kind": "array"
+      },
+      "fortinet_host_check": {
+        "kind": "object",
+        "ref": "OpenConnectFortinetHostCheckOptions"
+      },
+      "hip": {
+        "kind": "object",
+        "ref": "OpenConnectHIPOptions"
+      },
+      "http_keepalive_disabled": {
+        "kind": "boolean"
+      },
+      "inet4_bind_address": {
+        "kind": "string"
+      },
+      "inet6_bind_address": {
+        "kind": "string"
+      },
+      "ipv6_disabled": {
+        "kind": "boolean"
+      },
+      "local_hostname": {
+        "kind": "string"
+      },
+      "mobile": {
+        "kind": "object",
+        "ref": "OpenConnectMobileOptions"
+      },
+      "mtu": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      },
+      "name": {
+        "kind": "string"
+      },
+      "netns": {
+        "kind": "string"
+      },
+      "network_strategy": {
+        "kind": "string"
+      },
+      "network_type": {
+        "kind": "strings"
+      },
+      "no_udp": {
+        "kind": "boolean"
+      },
+      "on_demand": {
+        "kind": "boolean"
+      },
+      "password": {
+        "kind": "string"
+      },
+      "password_authentication_disabled": {
+        "kind": "boolean"
+      },
+      "pfs": {
+        "kind": "boolean"
+      },
+      "protect_path": {
+        "kind": "string"
+      },
+      "queue_length": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      },
+      "reconnect_timeout": {
+        "kind": "string"
+      },
+      "reported_os": {
+        "kind": "string"
+      },
+      "reuse_addr": {
+        "kind": "boolean"
+      },
+      "routing_mark": {
+        "kind": "number"
+      },
+      "server": {
+        "kind": "string",
+        "required": true
+      },
+      "system": {
+        "kind": "boolean"
+      },
+      "tcp_fast_open": {
+        "kind": "boolean"
+      },
+      "tcp_keep_alive": {
+        "kind": "string"
+      },
+      "tcp_keep_alive_enabled": {
+        "kind": "boolean"
+      },
+      "tcp_keep_alive_interval": {
+        "kind": "string"
+      },
+      "tcp_multi_path": {
+        "kind": "boolean"
+      },
+      "tls": {
+        "kind": "object",
+        "ref": "OpenConnectTLSOptions"
+      },
+      "tncc": {
+        "kind": "object",
+        "ref": "OpenConnectTNCCOptions"
+      },
+      "token": {
+        "kind": "object",
+        "ref": "OpenConnectTokenOptions"
+      },
+      "trojan_interval": {
+        "kind": "string"
+      },
+      "udp_filtering": {
+        "kind": "string"
+      },
+      "udp_fragment": {
+        "kind": "boolean"
+      },
+      "udp_mapping": {
+        "kind": "string"
+      },
+      "udp_nat_max": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      },
+      "udp_timeout": {
+        "kind": "string"
+      },
+      "user_agent": {
+        "kind": "string"
+      },
+      "username": {
+        "kind": "string"
+      },
+      "version": {
+        "kind": "string"
+      },
+      "xml_post_disabled": {
+        "kind": "boolean"
+      }
+    },
+    "openflux": {
+      "bind_address_no_port": {
+        "kind": "boolean"
+      },
+      "bind_interface": {
+        "kind": "string"
+      },
+      "codec": {
+        "enum": [
+          "batched"
+        ],
+        "kind": "string"
+      },
+      "connect_timeout": {
+        "kind": "string"
+      },
+      "context": {
+        "kind": "string"
+      },
+      "detour": {
+        "kind": "string"
+      },
+      "disable_tcp_keep_alive": {
+        "kind": "boolean"
+      },
+      "domain_resolver": {
+        "kind": "object",
+        "ref": "_DomainResolveOptions",
+        "string": true
+      },
+      "domain_strategy": {
+        "kind": "string"
+      },
+      "fallback_delay": {
+        "kind": "string"
+      },
+      "fallback_network_type": {
+        "kind": "strings"
+      },
+      "final_mask": {
+        "kind": "object",
+        "ref": "FinalMaskOptions"
+      },
+      "inet4_bind_address": {
+        "kind": "string"
+      },
+      "inet6_bind_address": {
+        "kind": "string"
+      },
+      "negotiate": {
+        "kind": "boolean"
+      },
+      "netns": {
+        "kind": "string"
+      },
+      "network_strategy": {
+        "kind": "string"
+      },
+      "network_type": {
+        "kind": "strings"
+      },
+      "protect_path": {
+        "kind": "string"
+      },
+      "reuse_addr": {
+        "kind": "boolean"
+      },
+      "routing_mark": {
+        "kind": "number"
+      },
+      "secret": {
+        "kind": "string",
+        "required": true
+      },
+      "tcp_fast_open": {
+        "kind": "boolean"
+      },
+      "tcp_keep_alive": {
+        "kind": "string"
+      },
+      "tcp_keep_alive_interval": {
+        "kind": "string"
+      },
+      "tcp_multi_path": {
+        "kind": "boolean"
+      },
+      "transports": {
+        "item": {
+          "kind": "object",
+          "ref": "OpenFluxTransportOptions"
+        },
+        "kind": "array",
+        "required": true
+      },
+      "udp_fragment": {
+        "kind": "boolean"
+      }
+    },
+    "openvpn-client": {
+      "address": {
+        "kind": "strings"
+      },
+      "allow_compression": {
+        "enum": [
+          "no",
+          "asym",
+          "yes"
+        ],
+        "kind": "string"
+      },
+      "auth": {
+        "kind": "string"
+      },
+      "auth_retry": {
+        "enum": [
+          "none",
+          "nointeract",
+          "interact"
+        ],
+        "kind": "string"
+      },
+      "bind_address_no_port": {
+        "kind": "boolean"
+      },
+      "bind_interface": {
+        "kind": "string"
+      },
+      "block_ipv6": {
+        "kind": "boolean"
+      },
+      "cipher": {
+        "kind": "string"
+      },
+      "compression": {
+        "enum": [
+          "none",
+          "no",
+          "lz4",
+          "lz4-v2",
+          "stub",
+          "stub-v2",
+          "disabled",
+          "off"
+        ],
+        "kind": "string"
+      },
+      "compression_lzo": {
+        "enum": [
+          "none",
+          "no",
+          "yes",
+          "adaptive",
+          "asym",
+          "disabled",
+          "off"
+        ],
+        "kind": "string"
+      },
+      "connect_timeout": {
+        "kind": "string"
+      },
+      "data_ciphers": {
+        "kind": "strings"
+      },
+      "data_ciphers_fallback": {
+        "kind": "string"
+      },
+      "detour": {
+        "kind": "string"
+      },
+      "disable_tcp_keep_alive": {
+        "kind": "boolean"
+      },
+      "domain_resolver": {
+        "kind": "object",
+        "ref": "_DomainResolveOptions",
+        "string": true
+      },
+      "domain_strategy": {
+        "kind": "string"
+      },
+      "explicit_exit_notify": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      },
+      "fallback_delay": {
+        "kind": "string"
+      },
+      "fallback_network_type": {
+        "kind": "strings"
+      },
+      "final_mask": {
+        "kind": "object",
+        "ref": "FinalMaskOptions"
+      },
+      "fragment": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      },
+      "handshake_window": {
+        "kind": "string"
+      },
+      "inet4_bind_address": {
+        "kind": "string"
+      },
+      "inet6_bind_address": {
+        "kind": "string"
+      },
+      "key_direction": {
+        "enum": [
+          "server",
+          "client"
+        ],
+        "kind": "string"
+      },
+      "mode": {
+        "enum": [
+          "tls",
+          "static_key"
+        ],
+        "kind": "string"
+      },
+      "mss_fix": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      },
+      "mss_fix_disabled": {
+        "kind": "boolean"
+      },
+      "mss_fix_mode": {
+        "enum": [
+          "mtu",
+          "fixed"
+        ],
+        "kind": "string"
+      },
+      "mtu": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      },
+      "name": {
+        "kind": "string"
+      },
+      "netns": {
+        "kind": "string"
+      },
+      "network": {
+        "enum": [
+          "udp",
+          "udp4",
+          "udp6",
+          "tcp",
+          "tcp4",
+          "tcp6"
+        ],
+        "kind": "string"
+      },
+      "network_strategy": {
+        "kind": "string"
+      },
+      "network_type": {
+        "kind": "strings"
+      },
+      "on_demand": {
+        "kind": "boolean"
+      },
+      "password": {
+        "kind": "string"
+      },
+      "peer_address": {
+        "kind": "string"
+      },
+      "peer_address_ipv6": {
+        "kind": "string"
+      },
+      "ping_interval": {
+        "kind": "string"
+      },
+      "ping_restart": {
+        "kind": "string"
+      },
+      "ping_restart_disabled": {
+        "kind": "boolean"
+      },
+      "protect_path": {
+        "kind": "string"
+      },
+      "pull_filters": {
+        "item": {
+          "kind": "object",
+          "ref": "OpenVPNPullFilterOptions"
+        },
+        "kind": "array"
+      },
+      "redirect_gateway": {
+        "kind": "boolean"
+      },
+      "redirect_gateway_flags": {
+        "kind": "strings"
+      },
+      "redirect_private": {
+        "kind": "boolean"
+      },
+      "remote_random": {
+        "kind": "boolean"
+      },
+      "renegotiate_bytes": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      },
+      "renegotiate_disabled": {
+        "kind": "boolean"
+      },
+      "renegotiate_interval": {
+        "kind": "string"
+      },
+      "renegotiate_packets": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      },
+      "replay_window": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      },
+      "replay_window_time": {
+        "kind": "string"
+      },
+      "reuse_addr": {
+        "kind": "boolean"
+      },
+      "route_gateway": {
+        "kind": "string"
+      },
+      "route_metric": {
+        "integer": true,
+        "kind": "number"
+      },
+      "route_no_pull": {
+        "kind": "boolean"
+      },
+      "routes": {
+        "kind": "strings"
+      },
+      "routing_mark": {
+        "kind": "number"
+      },
+      "server": {
+        "kind": "string",
+        "required": true
+      },
+      "server_port": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0,
+        "required": true
+      },
+      "servers": {
+        "item": {
+          "kind": "object",
+          "ref": "OpenVPNRemoteOptions"
+        },
+        "kind": "array"
+      },
+      "static_challenge": {
+        "kind": "string"
+      },
+      "static_challenge_echo": {
+        "kind": "boolean"
+      },
+      "static_key": {
+        "kind": "strings"
+      },
+      "static_key_path": {
+        "kind": "string"
+      },
+      "system": {
+        "kind": "boolean"
+      },
+      "tcp_fast_open": {
+        "kind": "boolean"
+      },
+      "tcp_keep_alive": {
+        "kind": "string"
+      },
+      "tcp_keep_alive_interval": {
+        "kind": "string"
+      },
+      "tcp_multi_path": {
+        "kind": "boolean"
+      },
+      "tls": {
+        "kind": "object",
+        "ref": "OpenVPNOutboundTLSOptions"
+      },
+      "tls_timeout": {
+        "kind": "string"
+      },
+      "topology": {
+        "enum": [
+          "net30",
+          "p2p",
+          "subnet"
+        ],
+        "kind": "string"
+      },
+      "udp_filtering": {
+        "kind": "string"
+      },
+      "udp_fragment": {
+        "kind": "boolean"
+      },
+      "udp_mapping": {
+        "kind": "string"
+      },
+      "udp_nat_max": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      },
+      "udp_timeout": {
+        "kind": "json"
+      },
+      "username": {
+        "kind": "string"
+      }
+    },
+    "openvpn-server": {
+      "address": {
+        "kind": "strings",
+        "required": true
+      },
+      "auth": {
+        "kind": "string"
+      },
+      "bind_interface": {
+        "kind": "string"
+      },
+      "cipher": {
+        "kind": "string"
+      },
+      "data_ciphers": {
+        "kind": "strings"
+      },
+      "data_ciphers_fallback": {
+        "kind": "string"
+      },
+      "detour": {
+        "kind": "string"
+      },
+      "disable_tcp_keep_alive": {
+        "kind": "boolean"
+      },
+      "duplicate_cn": {
+        "kind": "boolean"
+      },
+      "handshake_window": {
+        "kind": "string"
+      },
+      "key_direction": {
+        "enum": [
+          "server",
+          "client"
+        ],
+        "kind": "string"
+      },
+      "listen": {
+        "kind": "string"
+      },
+      "listen_port": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0
+      },
+      "max_clients": {
+        "integer": true,
+        "kind": "number"
+      },
+      "mode": {
+        "enum": [
+          "tls",
+          "static_key"
+        ],
+        "kind": "string"
+      },
+      "mss_fix": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      },
+      "mss_fix_disabled": {
+        "kind": "boolean"
+      },
+      "mss_fix_mode": {
+        "enum": [
+          "mtu",
+          "fixed"
+        ],
+        "kind": "string"
+      },
+      "mtu": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      },
+      "name": {
+        "kind": "string"
+      },
+      "netns": {
+        "kind": "string"
+      },
+      "network": {
+        "enum": [
+          "tcp",
+          "udp"
+        ],
+        "kind": "string"
+      },
+      "peer_address": {
+        "kind": "string"
+      },
+      "peer_address_ipv6": {
+        "kind": "string"
+      },
+      "ping_interval": {
+        "kind": "string"
+      },
+      "ping_restart": {
+        "kind": "string"
+      },
+      "proxy_protocol": {
+        "kind": "boolean"
+      },
+      "proxy_protocol_accept_no_header": {
+        "kind": "boolean"
+      },
+      "push": {
+        "kind": "object",
+        "ref": "OpenVPNPushOptions"
+      },
+      "remote": {
+        "kind": "string"
+      },
+      "remote_port": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0
+      },
+      "renegotiate_bytes": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      },
+      "renegotiate_disabled": {
+        "kind": "boolean"
+      },
+      "renegotiate_interval": {
+        "kind": "string"
+      },
+      "renegotiate_packets": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      },
+      "replay_window": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      },
+      "replay_window_time": {
+        "kind": "string"
+      },
+      "reuse_addr": {
+        "kind": "boolean"
+      },
+      "routing_mark": {
+        "kind": "number"
+      },
+      "static_key": {
+        "kind": "strings"
+      },
+      "static_key_path": {
+        "kind": "string"
+      },
+      "system": {
+        "kind": "boolean"
+      },
+      "tcp_fast_open": {
+        "kind": "boolean"
+      },
+      "tcp_keep_alive": {
+        "kind": "string"
+      },
+      "tcp_keep_alive_interval": {
+        "kind": "string"
+      },
+      "tcp_multi_path": {
+        "kind": "boolean"
+      },
+      "tls": {
+        "kind": "object",
+        "ref": "OpenVPNInboundTLSOptions"
+      },
+      "topology": {
+        "enum": [
+          "net30",
+          "p2p",
+          "subnet"
+        ],
+        "kind": "string"
+      },
+      "udp_filtering": {
+        "kind": "string"
+      },
+      "udp_fragment": {
+        "kind": "boolean"
+      },
+      "udp_mapping": {
+        "kind": "string"
+      },
+      "udp_nat_max": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      },
+      "udp_timeout": {
+        "kind": "json"
+      },
+      "users": {
+        "item": {
+          "kind": "json"
+        },
+        "kind": "array"
+      }
+    },
+    "pingtunnel": {
+      "bind_address_no_port": {
+        "kind": "boolean"
+      },
+      "bind_interface": {
+        "kind": "string"
+      },
+      "connect_timeout": {
+        "kind": "string"
+      },
+      "detour": {
+        "kind": "string"
+      },
+      "disable_tcp_keep_alive": {
+        "kind": "boolean"
+      },
+      "domain_resolver": {
+        "kind": "object",
+        "ref": "_DomainResolveOptions",
+        "string": true
+      },
+      "domain_strategy": {
+        "kind": "string"
+      },
+      "encryption": {
+        "kind": "string"
+      },
+      "encryption_key": {
+        "kind": "string"
+      },
+      "fallback_delay": {
+        "kind": "string"
+      },
+      "fallback_network_type": {
+        "kind": "strings"
+      },
+      "final_mask": {
+        "kind": "object",
+        "ref": "FinalMaskOptions"
+      },
+      "inet4_bind_address": {
+        "kind": "string"
+      },
+      "inet6_bind_address": {
+        "kind": "string"
+      },
+      "key": {
+        "integer": true,
+        "kind": "number"
+      },
+      "netns": {
+        "kind": "string"
+      },
+      "network_strategy": {
+        "kind": "string"
+      },
+      "network_type": {
+        "kind": "strings"
+      },
+      "protect_path": {
+        "kind": "string"
+      },
+      "reuse_addr": {
+        "kind": "boolean"
+      },
+      "routing_mark": {
+        "kind": "number"
+      },
+      "server": {
+        "kind": "string",
+        "required": true
+      },
+      "tcp_fast_open": {
+        "kind": "boolean"
+      },
+      "tcp_keep_alive": {
+        "kind": "string"
+      },
+      "tcp_keep_alive_interval": {
+        "kind": "string"
+      },
+      "tcp_multi_path": {
+        "kind": "boolean"
+      },
+      "udp_fragment": {
+        "kind": "boolean"
+      }
+    },
+    "psiphon": {
+      "allow_default_dns_resolver_with_bind_to_device": {
+        "kind": "boolean"
+      },
+      "bind_address_no_port": {
+        "kind": "boolean"
+      },
+      "bind_interface": {
+        "kind": "string"
+      },
+      "client_platform": {
+        "kind": "string"
+      },
+      "client_version": {
+        "kind": "string"
+      },
+      "conduit_pairing_id": {
+        "kind": "string"
+      },
+      "config": {
+        "kind": "string"
+      },
+      "connect_timeout": {
+        "kind": "string"
+      },
+      "data_directory": {
+        "kind": "string"
+      },
+      "detour": {
+        "kind": "string"
+      },
+      "disable_tcp_keep_alive": {
+        "kind": "boolean"
+      },
+      "domain_resolver": {
+        "kind": "object",
+        "ref": "_DomainResolveOptions",
+        "string": true
+      },
+      "domain_strategy": {
+        "kind": "string"
+      },
+      "egress_region": {
+        "kind": "string"
+      },
+      "establish_tunnel_timeout": {
+        "kind": "string"
+      },
+      "fallback_delay": {
+        "kind": "string"
+      },
+      "fallback_network_type": {
+        "kind": "strings"
+      },
+      "final_mask": {
+        "kind": "object",
+        "ref": "FinalMaskOptions"
+      },
+      "inet4_bind_address": {
+        "kind": "string"
+      },
+      "inet6_bind_address": {
+        "kind": "string"
+      },
+      "netns": {
+        "kind": "string"
+      },
+      "network": {
+        "kind": "network"
+      },
+      "network_id": {
+        "kind": "string"
+      },
+      "network_strategy": {
+        "kind": "string"
+      },
+      "network_type": {
+        "kind": "strings"
+      },
+      "propagation_channel_id": {
+        "kind": "string"
+      },
+      "protect_path": {
+        "kind": "string"
+      },
+      "remote_server_list_download_filename": {
+        "kind": "string"
+      },
+      "remote_server_list_signature_public_key": {
+        "kind": "string"
+      },
+      "remote_server_list_url": {
+        "kind": "string"
+      },
+      "reuse_addr": {
+        "kind": "boolean"
+      },
+      "routing_mark": {
+        "kind": "number"
+      },
+      "sponsor_id": {
+        "kind": "string"
+      },
+      "tcp_fast_open": {
+        "kind": "boolean"
+      },
+      "tcp_keep_alive": {
+        "kind": "string"
+      },
+      "tcp_keep_alive_interval": {
+        "kind": "string"
+      },
+      "tcp_multi_path": {
+        "kind": "boolean"
+      },
+      "udp_fragment": {
+        "kind": "boolean"
+      },
+      "upstream_proxy_url": {
+        "kind": "string"
+      }
+    },
+    "selector": {
+      "default": {
+        "kind": "string"
+      },
+      "interrupt_exist_connections": {
+        "kind": "boolean"
+      },
+      "outbounds": {
+        "kind": "strings",
+        "required": true
+      }
+    },
+    "shadowsocks": {
+      "bind_address_no_port": {
+        "kind": "boolean"
+      },
+      "bind_interface": {
+        "kind": "string"
+      },
+      "connect_timeout": {
+        "kind": "string"
+      },
+      "detour": {
+        "kind": "string"
+      },
+      "disable_tcp_keep_alive": {
+        "kind": "boolean"
+      },
+      "domain_resolver": {
+        "kind": "object",
+        "ref": "_DomainResolveOptions",
+        "string": true
+      },
+      "domain_strategy": {
+        "kind": "string"
+      },
+      "fallback_delay": {
+        "kind": "string"
+      },
+      "fallback_network_type": {
+        "kind": "strings"
+      },
+      "final_mask": {
+        "kind": "object",
+        "ref": "FinalMaskOptions"
+      },
+      "inet4_bind_address": {
+        "kind": "string"
+      },
+      "inet6_bind_address": {
+        "kind": "string"
+      },
+      "method": {
+        "enum": [
+          "none",
+          "aes-128-gcm",
+          "aes-192-gcm",
+          "aes-256-gcm",
+          "chacha20-ietf-poly1305",
+          "xchacha20-ietf-poly1305",
+          "2022-blake3-aes-128-gcm",
+          "2022-blake3-aes-256-gcm",
+          "2022-blake3-chacha20-poly1305",
+          "aes-128-ctr",
+          "aes-192-ctr",
+          "aes-256-ctr",
+          "aes-128-cfb",
+          "aes-192-cfb",
+          "aes-256-cfb",
+          "rc4-md5",
+          "chacha20-ietf",
+          "xchacha20"
+        ],
+        "kind": "string",
+        "required": true
+      },
+      "multiplex": {
+        "kind": "object",
+        "ref": "OutboundMultiplexOptions"
+      },
+      "netns": {
+        "kind": "string"
+      },
+      "network": {
+        "kind": "network"
+      },
+      "network_strategy": {
+        "kind": "string"
+      },
+      "network_type": {
+        "kind": "strings"
+      },
+      "password": {
+        "kind": "string",
+        "required": true
+      },
+      "plugin": {
+        "kind": "string"
+      },
+      "plugin_opts": {
+        "kind": "string"
+      },
+      "protect_path": {
+        "kind": "string"
+      },
+      "reuse_addr": {
+        "kind": "boolean"
+      },
+      "routing_mark": {
+        "kind": "number"
+      },
+      "server": {
+        "kind": "string",
+        "required": true
+      },
+      "server_port": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0,
+        "required": true
+      },
+      "tcp_fast_open": {
+        "kind": "boolean"
+      },
+      "tcp_keep_alive": {
+        "kind": "string"
+      },
+      "tcp_keep_alive_interval": {
+        "kind": "string"
+      },
+      "tcp_multi_path": {
+        "kind": "boolean"
+      },
+      "udp_fragment": {
+        "kind": "boolean"
+      },
+      "udp_over_tcp": {
+        "boolean": true,
+        "kind": "object",
+        "ref": "_UDPOverTCPOptions"
+      }
+    },
+    "shadowtls": {
+      "bind_address_no_port": {
+        "kind": "boolean"
+      },
+      "bind_interface": {
+        "kind": "string"
+      },
+      "connect_timeout": {
+        "kind": "string"
+      },
+      "detour": {
+        "kind": "string"
+      },
+      "disable_tcp_keep_alive": {
+        "kind": "boolean"
+      },
+      "domain_resolver": {
+        "kind": "object",
+        "ref": "_DomainResolveOptions",
+        "string": true
+      },
+      "domain_strategy": {
+        "kind": "string"
+      },
+      "fallback_delay": {
+        "kind": "string"
+      },
+      "fallback_network_type": {
+        "kind": "strings"
+      },
+      "final_mask": {
+        "kind": "object",
+        "ref": "FinalMaskOptions"
+      },
+      "inet4_bind_address": {
+        "kind": "string"
+      },
+      "inet6_bind_address": {
+        "kind": "string"
+      },
+      "netns": {
+        "kind": "string"
+      },
+      "network_strategy": {
+        "kind": "string"
+      },
+      "network_type": {
+        "kind": "strings"
+      },
+      "password": {
+        "kind": "string"
+      },
+      "protect_path": {
+        "kind": "string"
+      },
+      "reuse_addr": {
+        "kind": "boolean"
+      },
+      "routing_mark": {
+        "kind": "number"
+      },
+      "server": {
+        "kind": "string",
+        "required": true
+      },
+      "server_port": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0,
+        "required": true
+      },
+      "tcp_fast_open": {
+        "kind": "boolean"
+      },
+      "tcp_keep_alive": {
+        "kind": "string"
+      },
+      "tcp_keep_alive_interval": {
+        "kind": "string"
+      },
+      "tcp_multi_path": {
+        "kind": "boolean"
+      },
+      "tls": {
+        "kind": "object",
+        "ref": "OutboundTLSOptions"
+      },
+      "udp_fragment": {
+        "kind": "boolean"
+      },
+      "version": {
+        "enum": [
+          1,
+          2,
+          3
+        ],
+        "integer": true,
+        "kind": "number"
+      }
+    },
+    "snell": {
+      "bind_address_no_port": {
+        "kind": "boolean"
+      },
+      "bind_interface": {
+        "kind": "string"
+      },
+      "connect_timeout": {
+        "kind": "string"
+      },
+      "detour": {
+        "kind": "string"
+      },
+      "disable_tcp_keep_alive": {
+        "kind": "boolean"
+      },
+      "domain_resolver": {
+        "kind": "object",
+        "ref": "_DomainResolveOptions",
+        "string": true
+      },
+      "domain_strategy": {
+        "kind": "string"
+      },
+      "fallback_delay": {
+        "kind": "string"
+      },
+      "fallback_network_type": {
+        "kind": "strings"
+      },
+      "final_mask": {
+        "kind": "object",
+        "ref": "FinalMaskOptions"
+      },
+      "inet4_bind_address": {
+        "kind": "string"
+      },
+      "inet6_bind_address": {
+        "kind": "string"
+      },
+      "mode": {
+        "enum": [
+          "default",
+          "unshaped",
+          "unsafe-raw"
+        ],
+        "kind": "string",
+        "when": {
+          "version": [
+            6
+          ]
+        }
+      },
+      "netns": {
+        "kind": "string"
+      },
+      "network": {
+        "kind": "network"
+      },
+      "network_strategy": {
+        "kind": "string"
+      },
+      "network_type": {
+        "kind": "strings"
+      },
+      "obfs_host": {
+        "kind": "string",
+        "when": {
+          "version": [
+            4
+          ]
+        }
+      },
+      "obfs_mode": {
+        "enum": [
+          "none",
+          "http",
+          "tls"
+        ],
+        "kind": "string",
+        "when": {
+          "version": [
+            4
+          ]
+        }
+      },
+      "protect_path": {
+        "kind": "string"
+      },
+      "psk": {
+        "kind": "string",
+        "required": true
+      },
+      "reuse": {
+        "kind": "boolean"
+      },
+      "reuse_addr": {
+        "kind": "boolean"
+      },
+      "routing_mark": {
+        "kind": "number"
+      },
+      "server": {
+        "kind": "string",
+        "required": true
+      },
+      "server_port": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0,
+        "required": true
+      },
+      "tcp_fast_open": {
+        "kind": "boolean"
+      },
+      "tcp_keep_alive": {
+        "kind": "string"
+      },
+      "tcp_keep_alive_interval": {
+        "kind": "string"
+      },
+      "tcp_multi_path": {
+        "kind": "boolean"
+      },
+      "udp_fragment": {
+        "kind": "boolean"
+      },
+      "userkey": {
+        "kind": "string"
+      },
+      "version": {
+        "enum": [
+          4,
+          6
+        ],
+        "integer": true,
+        "kind": "number",
+        "required": true
+      }
+    },
+    "socks": {
+      "bind_address_no_port": {
+        "kind": "boolean"
+      },
+      "bind_interface": {
+        "kind": "string"
+      },
+      "connect_timeout": {
+        "kind": "string"
+      },
+      "detour": {
+        "kind": "string"
+      },
+      "disable_tcp_keep_alive": {
+        "kind": "boolean"
+      },
+      "domain_resolver": {
+        "kind": "object",
+        "ref": "_DomainResolveOptions",
+        "string": true
+      },
+      "domain_strategy": {
+        "kind": "string"
+      },
+      "fallback_delay": {
+        "kind": "string"
+      },
+      "fallback_network_type": {
+        "kind": "strings"
+      },
+      "final_mask": {
+        "kind": "object",
+        "ref": "FinalMaskOptions"
+      },
+      "inet4_bind_address": {
+        "kind": "string"
+      },
+      "inet6_bind_address": {
+        "kind": "string"
+      },
+      "netns": {
+        "kind": "string"
+      },
+      "network": {
+        "kind": "network"
+      },
+      "network_strategy": {
+        "kind": "string"
+      },
+      "network_type": {
+        "kind": "strings"
+      },
+      "password": {
+        "kind": "string"
+      },
+      "protect_path": {
+        "kind": "string"
+      },
+      "reuse_addr": {
+        "kind": "boolean"
+      },
+      "routing_mark": {
+        "kind": "number"
+      },
+      "server": {
+        "kind": "string",
+        "required": true
+      },
+      "server_port": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0,
+        "required": true
+      },
+      "tcp_fast_open": {
+        "kind": "boolean"
+      },
+      "tcp_keep_alive": {
+        "kind": "string"
+      },
+      "tcp_keep_alive_interval": {
+        "kind": "string"
+      },
+      "tcp_multi_path": {
+        "kind": "boolean"
+      },
+      "udp_fragment": {
+        "kind": "boolean"
+      },
+      "udp_over_tcp": {
+        "boolean": true,
+        "kind": "object",
+        "ref": "_UDPOverTCPOptions"
+      },
+      "username": {
+        "kind": "string"
+      },
+      "version": {
+        "enum": [
+          "4",
+          "4a",
+          "5"
+        ],
+        "kind": "string"
+      }
+    },
+    "ssh": {
+      "bind_address_no_port": {
+        "kind": "boolean"
+      },
+      "bind_interface": {
+        "kind": "string"
+      },
+      "cipher": {
+        "kind": "strings"
+      },
+      "client_version": {
+        "kind": "string"
+      },
+      "connect_timeout": {
+        "kind": "string"
+      },
+      "detour": {
+        "kind": "string"
+      },
+      "disable_tcp_keep_alive": {
+        "kind": "boolean"
+      },
+      "domain_resolver": {
+        "kind": "object",
+        "ref": "_DomainResolveOptions",
+        "string": true
+      },
+      "domain_strategy": {
+        "kind": "string"
+      },
+      "fallback_delay": {
+        "kind": "string"
+      },
+      "fallback_network_type": {
+        "kind": "strings"
+      },
+      "final_mask": {
+        "kind": "object",
+        "ref": "FinalMaskOptions"
+      },
+      "host_key": {
+        "kind": "strings"
+      },
+      "host_key_algorithms": {
+        "kind": "strings"
+      },
+      "inet4_bind_address": {
+        "kind": "string"
+      },
+      "inet6_bind_address": {
+        "kind": "string"
+      },
+      "kex_algorithm": {
+        "kind": "strings"
+      },
+      "mac": {
+        "kind": "strings"
+      },
+      "netns": {
+        "kind": "string"
+      },
+      "network": {
+        "kind": "network"
+      },
+      "network_strategy": {
+        "kind": "string"
+      },
+      "network_type": {
+        "kind": "strings"
+      },
+      "password": {
+        "kind": "string"
+      },
+      "private_key": {
+        "kind": "strings"
+      },
+      "private_key_passphrase": {
+        "kind": "string"
+      },
+      "private_key_path": {
+        "kind": "string"
+      },
+      "protect_path": {
+        "kind": "string"
+      },
+      "reuse_addr": {
+        "kind": "boolean"
+      },
+      "routing_mark": {
+        "kind": "number"
+      },
+      "server": {
+        "kind": "string",
+        "required": true
+      },
+      "server_port": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0,
+        "required": true
+      },
+      "tcp_fast_open": {
+        "kind": "boolean"
+      },
+      "tcp_keep_alive": {
+        "kind": "string"
+      },
+      "tcp_keep_alive_interval": {
+        "kind": "string"
+      },
+      "tcp_multi_path": {
+        "kind": "boolean"
+      },
+      "udp_fragment": {
+        "kind": "boolean"
+      },
+      "udp_over_tcp": {
+        "boolean": true,
+        "kind": "object",
+        "ref": "_UDPOverTCPOptions"
+      },
+      "user": {
+        "kind": "string"
+      }
+    },
+    "sudoku": {
+      "aead": {
+        "kind": "string"
+      },
+      "ascii": {
+        "kind": "string"
+      },
+      "bind_address_no_port": {
+        "kind": "boolean"
+      },
+      "bind_interface": {
+        "kind": "string"
+      },
+      "connect_timeout": {
+        "kind": "string"
+      },
+      "custom_tables": {
+        "kind": "strings"
+      },
+      "detour": {
+        "kind": "string"
+      },
+      "disable_tcp_keep_alive": {
+        "kind": "boolean"
+      },
+      "domain_resolver": {
+        "kind": "object",
+        "ref": "_DomainResolveOptions",
+        "string": true
+      },
+      "domain_strategy": {
+        "kind": "string"
+      },
+      "enable_pure_downlink": {
+        "kind": "boolean"
+      },
+      "fallback_delay": {
+        "kind": "string"
+      },
+      "fallback_network_type": {
+        "kind": "strings"
+      },
+      "final_mask": {
+        "kind": "object",
+        "ref": "FinalMaskOptions"
+      },
+      "httpmask": {
+        "kind": "object",
+        "ref": "SudokuHTTPMaskOptions"
+      },
+      "inet4_bind_address": {
+        "kind": "string"
+      },
+      "inet6_bind_address": {
+        "kind": "string"
+      },
+      "key": {
+        "kind": "string",
+        "required": true
+      },
+      "netns": {
+        "kind": "string"
+      },
+      "network_strategy": {
+        "kind": "string"
+      },
+      "network_type": {
+        "kind": "strings"
+      },
+      "padding_max": {
+        "integer": true,
+        "kind": "number"
+      },
+      "padding_min": {
+        "integer": true,
+        "kind": "number"
+      },
+      "protect_path": {
+        "kind": "string"
+      },
+      "reuse_addr": {
+        "kind": "boolean"
+      },
+      "routing_mark": {
+        "kind": "number"
+      },
+      "server": {
+        "kind": "string",
+        "required": true
+      },
+      "server_port": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0,
+        "required": true
+      },
+      "tcp_fast_open": {
+        "kind": "boolean"
+      },
+      "tcp_keep_alive": {
+        "kind": "string"
+      },
+      "tcp_keep_alive_interval": {
+        "kind": "string"
+      },
+      "tcp_multi_path": {
+        "kind": "boolean"
+      },
+      "udp_fragment": {
+        "kind": "boolean"
+      }
+    },
+    "tailcat": {
+      "bind_address_no_port": {
+        "kind": "boolean"
+      },
+      "bind_interface": {
+        "kind": "string"
+      },
+      "connect_timeout": {
+        "kind": "string"
+      },
+      "derp_map_url": {
+        "kind": "string"
+      },
+      "derp_region": {
+        "integer": true,
+        "kind": "number"
+      },
+      "derp_servers": {
+        "item": {
+          "kind": "object",
+          "ref": "_TailcatDERPServer"
+        },
+        "kind": "array"
+      },
+      "detour": {
+        "kind": "string"
+      },
+      "disable_tcp_keep_alive": {
+        "kind": "boolean"
+      },
+      "domain_resolver": {
+        "kind": "object",
+        "ref": "_DomainResolveOptions",
+        "string": true
+      },
+      "domain_strategy": {
+        "kind": "string"
+      },
+      "fallback_delay": {
+        "kind": "string"
+      },
+      "fallback_network_type": {
+        "kind": "strings"
+      },
+      "final_mask": {
+        "kind": "object",
+        "ref": "FinalMaskOptions"
+      },
+      "http_client": {
+        "kind": "json"
+      },
+      "inet4_bind_address": {
+        "kind": "string"
+      },
+      "inet6_bind_address": {
+        "kind": "string"
+      },
+      "netns": {
+        "kind": "string"
+      },
+      "network_strategy": {
+        "kind": "string"
+      },
+      "network_type": {
+        "kind": "strings"
+      },
+      "pre_shared_key": {
+        "kind": "string"
+      },
+      "private_key": {
+        "kind": "string"
+      },
+      "protect_path": {
+        "kind": "string"
+      },
+      "reuse_addr": {
+        "kind": "boolean"
+      },
+      "routing_mark": {
+        "kind": "number"
+      },
+      "server_disco_key": {
+        "kind": "string",
+        "required": true
+      },
+      "server_public_key": {
+        "kind": "string",
+        "required": true
+      },
+      "tcp_fast_open": {
+        "kind": "boolean"
+      },
+      "tcp_keep_alive": {
+        "kind": "string"
+      },
+      "tcp_keep_alive_interval": {
+        "kind": "string"
+      },
+      "tcp_multi_path": {
+        "kind": "boolean"
+      },
+      "udp_fragment": {
+        "kind": "boolean"
+      }
+    },
+    "tailscale": {
+      "accept_routes": {
+        "kind": "boolean"
+      },
+      "advertise_exit_node": {
+        "kind": "boolean"
+      },
+      "advertise_routes": {
+        "kind": "strings"
+      },
+      "advertise_tags": {
+        "kind": "strings"
+      },
+      "auth_key": {
+        "kind": "string"
+      },
+      "bind_address_no_port": {
+        "kind": "boolean"
+      },
+      "bind_interface": {
+        "kind": "string"
+      },
+      "connect_timeout": {
+        "kind": "string"
+      },
+      "control_url": {
+        "kind": "string"
+      },
+      "detour": {
+        "kind": "string"
+      },
+      "disable_tcp_keep_alive": {
+        "kind": "boolean"
+      },
+      "domain_resolver": {
+        "kind": "object",
+        "ref": "_DomainResolveOptions",
+        "string": true
+      },
+      "domain_strategy": {
+        "kind": "string"
+      },
+      "ephemeral": {
+        "kind": "boolean"
+      },
+      "exit_node": {
+        "kind": "string"
+      },
+      "exit_node_allow_lan_access": {
+        "kind": "boolean"
+      },
+      "fallback_delay": {
+        "kind": "string"
+      },
+      "fallback_network_type": {
+        "kind": "strings"
+      },
+      "final_mask": {
+        "kind": "object",
+        "ref": "FinalMaskOptions"
+      },
+      "hostname": {
+        "kind": "string"
+      },
+      "inet4_bind_address": {
+        "kind": "string"
+      },
+      "inet6_bind_address": {
+        "kind": "string"
+      },
+      "listen_port": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0
+      },
+      "netns": {
+        "kind": "string"
+      },
+      "network_strategy": {
+        "kind": "string"
+      },
+      "network_type": {
+        "kind": "strings"
+      },
+      "on_demand": {
+        "kind": "boolean"
+      },
+      "protect_path": {
+        "kind": "string"
+      },
+      "relay_server_port": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0
+      },
+      "relay_server_static_endpoints": {
+        "kind": "strings"
+      },
+      "reuse_addr": {
+        "kind": "boolean"
+      },
+      "routing_mark": {
+        "kind": "number"
+      },
+      "ssh_server": {
+        "kind": "object",
+        "ref": "_TailscaleSSHServerOptions"
+      },
+      "state_directory": {
+        "kind": "string"
+      },
+      "system_interface": {
+        "kind": "boolean"
+      },
+      "system_interface_mtu": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      },
+      "system_interface_name": {
+        "kind": "string"
+      },
+      "taildrop_directory": {
+        "kind": "string"
+      },
+      "tcp_fast_open": {
+        "kind": "boolean"
+      },
+      "tcp_keep_alive": {
+        "kind": "string"
+      },
+      "tcp_keep_alive_interval": {
+        "kind": "string"
+      },
+      "tcp_multi_path": {
+        "kind": "boolean"
+      },
+      "udp_fragment": {
+        "kind": "boolean"
+      },
+      "udp_timeout": {
+        "kind": "json"
+      }
+    },
+    "tor": {
+      "bind_address_no_port": {
+        "kind": "boolean"
+      },
+      "bind_interface": {
+        "kind": "string"
+      },
+      "connect_timeout": {
+        "kind": "string"
+      },
+      "data_directory": {
+        "kind": "string"
+      },
+      "detour": {
+        "kind": "string"
+      },
+      "disable_tcp_keep_alive": {
+        "kind": "boolean"
+      },
+      "domain_resolver": {
+        "kind": "object",
+        "ref": "_DomainResolveOptions",
+        "string": true
+      },
+      "domain_strategy": {
+        "kind": "string"
+      },
+      "executable_path": {
+        "kind": "string"
+      },
+      "extra_args": {
+        "kind": "strings"
+      },
+      "fallback_delay": {
+        "kind": "string"
+      },
+      "fallback_network_type": {
+        "kind": "strings"
+      },
+      "final_mask": {
+        "kind": "object",
+        "ref": "FinalMaskOptions"
+      },
+      "inet4_bind_address": {
+        "kind": "string"
+      },
+      "inet6_bind_address": {
+        "kind": "string"
+      },
+      "netns": {
+        "kind": "string"
+      },
+      "network_strategy": {
+        "kind": "string"
+      },
+      "network_type": {
+        "kind": "strings"
+      },
+      "protect_path": {
+        "kind": "string"
+      },
+      "reuse_addr": {
+        "kind": "boolean"
+      },
+      "routing_mark": {
+        "kind": "number"
+      },
+      "tcp_fast_open": {
+        "kind": "boolean"
+      },
+      "tcp_keep_alive": {
+        "kind": "string"
+      },
+      "tcp_keep_alive_interval": {
+        "kind": "string"
+      },
+      "tcp_multi_path": {
+        "kind": "boolean"
+      },
+      "torrc": {
+        "kind": "json"
+      },
+      "udp_fragment": {
+        "kind": "boolean"
+      }
+    },
+    "trojan": {
+      "bind_address_no_port": {
+        "kind": "boolean"
+      },
+      "bind_interface": {
+        "kind": "string"
+      },
+      "connect_timeout": {
+        "kind": "string"
+      },
+      "detour": {
+        "kind": "string"
+      },
+      "disable_tcp_keep_alive": {
+        "kind": "boolean"
+      },
+      "domain_resolver": {
+        "kind": "object",
+        "ref": "_DomainResolveOptions",
+        "string": true
+      },
+      "domain_strategy": {
+        "kind": "string"
+      },
+      "fallback_delay": {
+        "kind": "string"
+      },
+      "fallback_network_type": {
+        "kind": "strings"
+      },
+      "final_mask": {
+        "kind": "object",
+        "ref": "FinalMaskOptions"
+      },
+      "inet4_bind_address": {
+        "kind": "string"
+      },
+      "inet6_bind_address": {
+        "kind": "string"
+      },
+      "multiplex": {
+        "kind": "object",
+        "ref": "OutboundMultiplexOptions"
+      },
+      "netns": {
+        "kind": "string"
+      },
+      "network": {
+        "kind": "network"
+      },
+      "network_strategy": {
+        "kind": "string"
+      },
+      "network_type": {
+        "kind": "strings"
+      },
+      "password": {
+        "kind": "string",
+        "required": true
+      },
+      "protect_path": {
+        "kind": "string"
+      },
+      "reuse_addr": {
+        "kind": "boolean"
+      },
+      "routing_mark": {
+        "kind": "number"
+      },
+      "server": {
+        "kind": "string",
+        "required": true
+      },
+      "server_port": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0,
+        "required": true
+      },
+      "tcp_fast_open": {
+        "kind": "boolean"
+      },
+      "tcp_keep_alive": {
+        "kind": "string"
+      },
+      "tcp_keep_alive_interval": {
+        "kind": "string"
+      },
+      "tcp_multi_path": {
+        "kind": "boolean"
+      },
+      "tls": {
+        "kind": "object",
+        "ref": "OutboundTLSOptions"
+      },
+      "transport": {
+        "kind": "object",
+        "ref": "_V2RayTransportOptions"
+      },
+      "udp_fragment": {
+        "kind": "boolean"
+      }
+    },
+    "trusttunnel": {
+      "bind_address_no_port": {
+        "kind": "boolean"
+      },
+      "bind_interface": {
+        "kind": "string"
+      },
+      "connect_timeout": {
+        "kind": "string"
+      },
+      "detour": {
+        "kind": "string"
+      },
+      "disable_tcp_keep_alive": {
+        "kind": "boolean"
+      },
+      "domain_resolver": {
+        "kind": "object",
+        "ref": "_DomainResolveOptions",
+        "string": true
+      },
+      "domain_strategy": {
+        "kind": "string"
+      },
+      "fallback_delay": {
+        "kind": "string"
+      },
+      "fallback_network_type": {
+        "kind": "strings"
+      },
+      "final_mask": {
+        "kind": "object",
+        "ref": "FinalMaskOptions"
+      },
+      "health_check": {
+        "kind": "boolean"
+      },
+      "inet4_bind_address": {
+        "kind": "string"
+      },
+      "inet6_bind_address": {
+        "kind": "string"
+      },
+      "netns": {
+        "kind": "string"
+      },
+      "network_strategy": {
+        "kind": "string"
+      },
+      "network_type": {
+        "kind": "strings"
+      },
+      "password": {
+        "kind": "string"
+      },
+      "protect_path": {
+        "kind": "string"
+      },
+      "quic": {
+        "kind": "boolean"
+      },
+      "quic_congestion_control": {
+        "kind": "string"
+      },
+      "reuse_addr": {
+        "kind": "boolean"
+      },
+      "routing_mark": {
+        "kind": "number"
+      },
+      "server": {
+        "kind": "string",
+        "required": true
+      },
+      "server_port": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0,
+        "required": true
+      },
+      "tcp_fast_open": {
+        "kind": "boolean"
+      },
+      "tcp_keep_alive": {
+        "kind": "string"
+      },
+      "tcp_keep_alive_interval": {
+        "kind": "string"
+      },
+      "tcp_multi_path": {
+        "kind": "boolean"
+      },
+      "tls": {
+        "kind": "object",
+        "ref": "OutboundTLSOptions"
+      },
+      "udp_fragment": {
+        "kind": "boolean"
+      },
+      "username": {
+        "kind": "string"
+      }
+    },
+    "tuic": {
+      "bind_address_no_port": {
+        "kind": "boolean"
+      },
+      "bind_interface": {
+        "kind": "string"
+      },
+      "congestion_control": {
+        "enum": [
+          "cubic",
+          "new_reno",
+          "bbr"
+        ],
+        "kind": "string"
+      },
+      "connect_timeout": {
+        "kind": "string"
+      },
+      "connection_receive_window": {
+        "kind": "string"
+      },
+      "detour": {
+        "kind": "string"
+      },
+      "disable_path_mtu_discovery": {
+        "kind": "boolean"
+      },
+      "disable_tcp_keep_alive": {
+        "kind": "boolean"
+      },
+      "domain_resolver": {
+        "kind": "object",
+        "ref": "_DomainResolveOptions",
+        "string": true
+      },
+      "domain_strategy": {
+        "kind": "string"
+      },
+      "fallback_delay": {
+        "kind": "string"
+      },
+      "fallback_network_type": {
+        "kind": "strings"
+      },
+      "final_mask": {
+        "kind": "object",
+        "ref": "FinalMaskOptions"
+      },
+      "heartbeat": {
+        "kind": "string"
+      },
+      "idle_timeout": {
+        "kind": "string"
+      },
+      "inet4_bind_address": {
+        "kind": "string"
+      },
+      "inet6_bind_address": {
+        "kind": "string"
+      },
+      "initial_packet_size": {
+        "integer": true,
+        "kind": "number"
+      },
+      "keep_alive_period": {
+        "kind": "string"
+      },
+      "max_concurrent_streams": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      },
+      "netns": {
+        "kind": "string"
+      },
+      "network": {
+        "kind": "network"
+      },
+      "network_strategy": {
+        "kind": "string"
+      },
+      "network_type": {
+        "kind": "strings"
+      },
+      "password": {
+        "kind": "string"
+      },
+      "protect_path": {
+        "kind": "string"
+      },
+      "reuse_addr": {
+        "kind": "boolean"
+      },
+      "routing_mark": {
+        "kind": "number"
+      },
+      "server": {
+        "kind": "string",
+        "required": true
+      },
+      "server_port": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0,
+        "required": true
+      },
+      "stream_receive_window": {
+        "kind": "string"
+      },
+      "tcp_fast_open": {
+        "kind": "boolean"
+      },
+      "tcp_keep_alive": {
+        "kind": "string"
+      },
+      "tcp_keep_alive_interval": {
+        "kind": "string"
+      },
+      "tcp_multi_path": {
+        "kind": "boolean"
+      },
+      "tls": {
+        "kind": "object",
+        "ref": "OutboundTLSOptions"
+      },
+      "udp_fragment": {
+        "kind": "boolean"
+      },
+      "udp_over_stream": {
+        "kind": "boolean"
+      },
+      "udp_relay_mode": {
+        "enum": [
+          "native",
+          "quic"
+        ],
+        "kind": "string"
+      },
+      "uuid": {
+        "kind": "string"
+      },
+      "zero_rtt_handshake": {
+        "kind": "boolean"
+      }
+    },
+    "tunnel_client": {
+      "key": {
+        "kind": "string",
+        "required": true
+      },
+      "outbound": {
+        "kind": "json",
+        "required": true
+      },
+      "uuid": {
+        "kind": "string",
+        "required": true
+      }
+    },
+    "tunnel_server": {
+      "connect_timeout": {
+        "kind": "string"
+      },
+      "inbound": {
+        "kind": "json",
+        "required": true
+      },
+      "users": {
+        "item": {
+          "kind": "object",
+          "ref": "TunnelUser"
+        },
+        "kind": "array",
+        "required": true
+      },
+      "uuid": {
+        "kind": "string",
+        "required": true
+      }
+    },
+    "urltest": {
+      "idle_timeout": {
+        "kind": "string"
+      },
+      "interrupt_exist_connections": {
+        "kind": "boolean"
+      },
+      "interval": {
+        "kind": "string"
+      },
+      "outbounds": {
+        "kind": "strings",
+        "required": true
+      },
+      "tolerance": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0
+      },
+      "url": {
+        "kind": "string"
+      },
+      "urls": {
+        "kind": "strings"
+      }
+    },
+    "vless": {
+      "bind_address_no_port": {
+        "kind": "boolean"
+      },
+      "bind_interface": {
+        "kind": "string"
+      },
+      "connect_timeout": {
+        "kind": "string"
+      },
+      "detour": {
+        "kind": "string"
+      },
+      "disable_tcp_keep_alive": {
+        "kind": "boolean"
+      },
+      "domain_resolver": {
+        "kind": "object",
+        "ref": "_DomainResolveOptions",
+        "string": true
+      },
+      "domain_strategy": {
+        "kind": "string"
+      },
+      "encryption": {
+        "kind": "string"
+      },
+      "fallback_delay": {
+        "kind": "string"
+      },
+      "fallback_network_type": {
+        "kind": "strings"
+      },
+      "final_mask": {
+        "kind": "object",
+        "ref": "FinalMaskOptions"
+      },
+      "flow": {
+        "kind": "string"
+      },
+      "inet4_bind_address": {
+        "kind": "string"
+      },
+      "inet6_bind_address": {
+        "kind": "string"
+      },
+      "multiplex": {
+        "kind": "object",
+        "ref": "OutboundMultiplexOptions"
+      },
+      "netns": {
+        "kind": "string"
+      },
+      "network": {
+        "kind": "network"
+      },
+      "network_strategy": {
+        "kind": "string"
+      },
+      "network_type": {
+        "kind": "strings"
+      },
+      "packet_encoding": {
+        "kind": "string"
+      },
+      "protect_path": {
+        "kind": "string"
+      },
+      "reuse_addr": {
+        "kind": "boolean"
+      },
+      "routing_mark": {
+        "kind": "number"
+      },
+      "server": {
+        "kind": "string",
+        "required": true
+      },
+      "server_port": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0,
+        "required": true
+      },
+      "tcp_fast_open": {
+        "kind": "boolean"
+      },
+      "tcp_keep_alive": {
+        "kind": "string"
+      },
+      "tcp_keep_alive_interval": {
+        "kind": "string"
+      },
+      "tcp_multi_path": {
+        "kind": "boolean"
+      },
+      "tls": {
+        "kind": "object",
+        "ref": "OutboundTLSOptions"
+      },
+      "transport": {
+        "kind": "object",
+        "ref": "_V2RayTransportOptions"
+      },
+      "udp_fragment": {
+        "kind": "boolean"
+      },
+      "uuid": {
+        "kind": "string",
+        "required": true
+      }
+    },
+    "vless-reverse": {},
+    "vmess": {
+      "alter_id": {
+        "integer": true,
+        "kind": "number"
+      },
+      "authenticated_length": {
+        "kind": "boolean"
+      },
+      "bind_address_no_port": {
+        "kind": "boolean"
+      },
+      "bind_interface": {
+        "kind": "string"
+      },
+      "connect_timeout": {
+        "kind": "string"
+      },
+      "detour": {
+        "kind": "string"
+      },
+      "disable_tcp_keep_alive": {
+        "kind": "boolean"
+      },
+      "domain_resolver": {
+        "kind": "object",
+        "ref": "_DomainResolveOptions",
+        "string": true
+      },
+      "domain_strategy": {
+        "kind": "string"
+      },
+      "fallback_delay": {
+        "kind": "string"
+      },
+      "fallback_network_type": {
+        "kind": "strings"
+      },
+      "final_mask": {
+        "kind": "object",
+        "ref": "FinalMaskOptions"
+      },
+      "global_padding": {
+        "kind": "boolean"
+      },
+      "inet4_bind_address": {
+        "kind": "string"
+      },
+      "inet6_bind_address": {
+        "kind": "string"
+      },
+      "multiplex": {
+        "kind": "object",
+        "ref": "OutboundMultiplexOptions"
+      },
+      "netns": {
+        "kind": "string"
+      },
+      "network": {
+        "kind": "network"
+      },
+      "network_strategy": {
+        "kind": "string"
+      },
+      "network_type": {
+        "kind": "strings"
+      },
+      "packet_encoding": {
+        "enum": [
+          "packetaddr",
+          "xudp"
+        ],
+        "kind": "string"
+      },
+      "protect_path": {
+        "kind": "string"
+      },
+      "reuse_addr": {
+        "kind": "boolean"
+      },
+      "routing_mark": {
+        "kind": "number"
+      },
+      "security": {
+        "enum": [
+          "auto",
+          "none",
+          "zero",
+          "aes-128-cfb",
+          "aes-128-gcm",
+          "chacha20-poly1305"
+        ],
+        "kind": "string",
+        "required": true
+      },
+      "server": {
+        "kind": "string",
+        "required": true
+      },
+      "server_port": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0,
+        "required": true
+      },
+      "tcp_fast_open": {
+        "kind": "boolean"
+      },
+      "tcp_keep_alive": {
+        "kind": "string"
+      },
+      "tcp_keep_alive_interval": {
+        "kind": "string"
+      },
+      "tcp_multi_path": {
+        "kind": "boolean"
+      },
+      "tls": {
+        "kind": "object",
+        "ref": "OutboundTLSOptions"
+      },
+      "transport": {
+        "kind": "object",
+        "ref": "_V2RayTransportOptions"
+      },
+      "udp_fragment": {
+        "kind": "boolean"
+      },
+      "uuid": {
+        "kind": "string",
+        "required": true
+      }
+    },
+    "warp": {
+      "awg": {
+        "kind": "object",
+        "ref": "AwgOptions"
+      },
+      "bind_address_no_port": {
+        "kind": "boolean"
+      },
+      "bind_interface": {
+        "kind": "string"
+      },
+      "connect_timeout": {
+        "kind": "string"
+      },
+      "detour": {
+        "kind": "string"
+      },
+      "disable_tcp_keep_alive": {
+        "kind": "boolean"
+      },
+      "domain_resolver": {
+        "kind": "object",
+        "ref": "_DomainResolveOptions",
+        "string": true
+      },
+      "domain_strategy": {
+        "kind": "string"
+      },
+      "fallback_delay": {
+        "kind": "string"
+      },
+      "fallback_network_type": {
+        "kind": "strings"
+      },
+      "final_mask": {
+        "kind": "object",
+        "ref": "FinalMaskOptions"
+      },
+      "inet4_bind_address": {
+        "kind": "string"
+      },
+      "inet6_bind_address": {
+        "kind": "string"
+      },
+      "interface": {
+        "kind": "object",
+        "ref": "WARPConfig_Interface",
+        "required": true
+      },
+      "listen_port": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0
+      },
+      "mtu": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      },
+      "name": {
+        "kind": "string"
+      },
+      "netns": {
+        "kind": "string"
+      },
+      "network_strategy": {
+        "kind": "string"
+      },
+      "network_type": {
+        "kind": "strings"
+      },
+      "noise": {
+        "kind": "json"
+      },
+      "peers": {
+        "item": {
+          "kind": "object",
+          "ref": "WARPConfig_Peers"
+        },
+        "kind": "array",
+        "required": true
+      },
+      "private_key": {
+        "kind": "string",
+        "required": true
+      },
+      "profile": {
+        "kind": "object",
+        "ref": "WARPProfile"
+      },
+      "protect_path": {
+        "kind": "string"
+      },
+      "reuse_addr": {
+        "kind": "boolean"
+      },
+      "routing_mark": {
+        "kind": "number"
+      },
+      "server": {
+        "kind": "string",
+        "required": true
+      },
+      "server_port": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0,
+        "required": true
+      },
+      "system": {
+        "kind": "boolean"
+      },
+      "tcp_fast_open": {
+        "kind": "boolean"
+      },
+      "tcp_keep_alive": {
+        "kind": "string"
+      },
+      "tcp_keep_alive_interval": {
+        "kind": "string"
+      },
+      "tcp_multi_path": {
+        "kind": "boolean"
+      },
+      "udp_fragment": {
+        "kind": "boolean"
+      },
+      "udp_timeout": {
+        "kind": "string"
+      },
+      "unique_identifier": {
+        "kind": "string"
+      },
+      "workers": {
+        "integer": true,
+        "kind": "number"
+      }
+    },
+    "wireguard": {
+      "address": {
+        "kind": "strings",
+        "required": true
+      },
+      "awg": {
+        "kind": "object",
+        "ref": "AwgOptions"
+      },
+      "bind_address_no_port": {
+        "kind": "boolean"
+      },
+      "bind_interface": {
+        "kind": "string"
+      },
+      "connect_timeout": {
+        "kind": "string"
+      },
+      "detour": {
+        "kind": "string"
+      },
+      "disable_tcp_keep_alive": {
+        "kind": "boolean"
+      },
+      "domain_resolver": {
+        "kind": "object",
+        "ref": "_DomainResolveOptions",
+        "string": true
+      },
+      "domain_strategy": {
+        "kind": "string"
+      },
+      "fallback_delay": {
+        "kind": "string"
+      },
+      "fallback_network_type": {
+        "kind": "strings"
+      },
+      "final_mask": {
+        "kind": "object",
+        "ref": "FinalMaskOptions"
+      },
+      "inet4_bind_address": {
+        "kind": "string"
+      },
+      "inet6_bind_address": {
+        "kind": "string"
+      },
+      "listen_port": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0
+      },
+      "mtu": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      },
+      "name": {
+        "kind": "string"
+      },
+      "netns": {
+        "kind": "string"
+      },
+      "network_strategy": {
+        "kind": "string"
+      },
+      "network_type": {
+        "kind": "strings"
+      },
+      "noise": {
+        "kind": "json"
+      },
+      "on_demand": {
+        "kind": "boolean"
+      },
+      "peers": {
+        "item": {
+          "kind": "object",
+          "ref": "WireGuardPeer"
+        },
+        "kind": "array"
+      },
+      "private_key": {
+        "kind": "string",
+        "required": true
+      },
+      "protect_path": {
+        "kind": "string"
+      },
+      "reuse_addr": {
+        "kind": "boolean"
+      },
+      "routing_mark": {
+        "kind": "number"
+      },
+      "system": {
+        "kind": "boolean"
+      },
+      "tcp_fast_open": {
+        "kind": "boolean"
+      },
+      "tcp_keep_alive": {
+        "kind": "string"
+      },
+      "tcp_keep_alive_interval": {
+        "kind": "string"
+      },
+      "tcp_multi_path": {
+        "kind": "boolean"
+      },
+      "udp_filtering": {
+        "kind": "string"
+      },
+      "udp_fragment": {
+        "kind": "boolean"
+      },
+      "udp_mapping": {
+        "kind": "string"
+      },
+      "udp_nat_max": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      },
+      "udp_timeout": {
+        "kind": "string"
+      },
+      "workers": {
+        "integer": true,
+        "kind": "number"
+      }
+    },
+    "wireguard_legacy": {
+      "bind_address_no_port": {
+        "kind": "boolean"
+      },
+      "bind_interface": {
+        "kind": "string"
+      },
+      "connect_timeout": {
+        "kind": "string"
+      },
+      "detour": {
+        "kind": "string"
+      },
+      "disable_tcp_keep_alive": {
+        "kind": "boolean"
+      },
+      "domain_resolver": {
+        "kind": "object",
+        "ref": "_DomainResolveOptions",
+        "string": true
+      },
+      "domain_strategy": {
+        "kind": "string"
+      },
+      "fallback_delay": {
+        "kind": "string"
+      },
+      "fallback_network_type": {
+        "kind": "strings"
+      },
+      "final_mask": {
+        "kind": "object",
+        "ref": "FinalMaskOptions"
+      },
+      "gso": {
+        "kind": "boolean"
+      },
+      "inet4_bind_address": {
+        "kind": "string"
+      },
+      "inet6_bind_address": {
+        "kind": "string"
+      },
+      "interface_name": {
+        "kind": "string"
+      },
+      "local_address": {
+        "kind": "strings",
+        "required": true
+      },
+      "mtu": {
+        "integer": true,
+        "kind": "number",
+        "min": 0
+      },
+      "netns": {
+        "kind": "string"
+      },
+      "network": {
+        "kind": "network"
+      },
+      "network_strategy": {
+        "kind": "string"
+      },
+      "network_type": {
+        "kind": "strings"
+      },
+      "peer_public_key": {
+        "kind": "string",
+        "required": true
+      },
+      "peers": {
+        "item": {
+          "kind": "object",
+          "ref": "LegacyWireGuardPeer"
+        },
+        "kind": "array"
+      },
+      "pre_shared_key": {
+        "kind": "string"
+      },
+      "private_key": {
+        "kind": "string",
+        "required": true
+      },
+      "protect_path": {
+        "kind": "string"
+      },
+      "reserved": {
+        "item": {
+          "integer": true,
+          "kind": "number",
+          "max": 255,
+          "min": 0
+        },
+        "kind": "array"
+      },
+      "reuse_addr": {
+        "kind": "boolean"
+      },
+      "routing_mark": {
+        "kind": "number"
+      },
+      "server": {
+        "kind": "string",
+        "required": true
+      },
+      "server_port": {
+        "integer": true,
+        "kind": "number",
+        "max": 65535,
+        "min": 0,
+        "required": true
+      },
+      "system_interface": {
+        "kind": "boolean"
+      },
+      "tcp_fast_open": {
+        "kind": "boolean"
+      },
+      "tcp_keep_alive": {
+        "kind": "string"
+      },
+      "tcp_keep_alive_interval": {
+        "kind": "string"
+      },
+      "tcp_multi_path": {
+        "kind": "boolean"
+      },
+      "udp_fragment": {
+        "kind": "boolean"
+      },
+      "workers": {
+        "integer": true,
+        "kind": "number"
+      }
+    },
+    "xray": {
+      "bind_address_no_port": {
+        "kind": "boolean"
+      },
+      "bind_interface": {
+        "kind": "string"
+      },
+      "connect_timeout": {
+        "kind": "string"
+      },
+      "detour": {
+        "kind": "string"
+      },
+      "disable_tcp_keep_alive": {
+        "kind": "boolean"
+      },
+      "domain_resolver": {
+        "kind": "object",
+        "ref": "_DomainResolveOptions",
+        "string": true
+      },
+      "domain_strategy": {
+        "kind": "string"
+      },
+      "fallback_delay": {
+        "kind": "string"
+      },
+      "fallback_network_type": {
+        "kind": "strings"
+      },
+      "final_mask": {
+        "kind": "object",
+        "ref": "FinalMaskOptions"
+      },
+      "inet4_bind_address": {
+        "kind": "string"
+      },
+      "inet6_bind_address": {
+        "kind": "string"
+      },
+      "netns": {
+        "kind": "string"
+      },
+      "network": {
+        "kind": "network"
+      },
+      "network_strategy": {
+        "kind": "string"
+      },
+      "network_type": {
+        "kind": "strings"
+      },
+      "protect_path": {
+        "kind": "string"
+      },
+      "reuse_addr": {
+        "kind": "boolean"
+      },
+      "routing_mark": {
+        "kind": "number"
+      },
+      "tcp_fast_open": {
+        "kind": "boolean"
+      },
+      "tcp_keep_alive": {
+        "kind": "string"
+      },
+      "tcp_keep_alive_interval": {
+        "kind": "string"
+      },
+      "tcp_multi_path": {
+        "kind": "boolean"
+      },
+      "udp_fragment": {
+        "kind": "boolean"
+      },
+      "udp_over_tcp": {
+        "boolean": true,
+        "kind": "object",
+        "ref": "_UDPOverTCPOptions"
+      },
+      "xconfig": {
+        "kind": "json"
+      },
+      "xdebug": {
+        "kind": "boolean"
+      }
+    }
   }
 }
