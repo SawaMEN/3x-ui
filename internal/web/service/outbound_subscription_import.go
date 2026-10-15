@@ -123,6 +123,12 @@ func parseOutboundSubscriptionEntries(body []byte, tolerant bool, warnings *[]st
 			if tag, _ := row["tag"].(string); tag == "" {
 				row["tag"] = fmt.Sprintf("profile-%d", i+1)
 			}
+			if tag, _ := row["tag"].(string); strings.TrimSpace(tag) != "" && tag == strings.TrimSpace(tag) {
+				if names[tag] {
+					return nil, nil, fmt.Errorf("duplicate subscription connection tag %q", tag)
+				}
+				names[tag] = true
+			}
 			normalized, err := singbox.NormalizeOutboundInput(row)
 			if err != nil {
 				if tolerant {
@@ -136,11 +142,6 @@ func parseOutboundSubscriptionEntries(body []byte, tolerant bool, warnings *[]st
 				}
 				return nil, nil, err
 			}
-			tag := normalized["tag"].(string)
-			if names[tag] {
-				return nil, nil, fmt.Errorf("duplicate subscription connection tag %q", tag)
-			}
-			names[tag] = true
 			if err := add(normalized, ""); err != nil {
 				return nil, nil, err
 			}

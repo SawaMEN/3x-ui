@@ -52,7 +52,7 @@ func writeSubscriptionCheckBinary(t *testing.T, script string) {
 	t.Helper()
 	dir := t.TempDir()
 	t.Setenv("XUI_BIN_FOLDER", dir)
-	if err := os.WriteFile(filepath.Join(dir, singbox.GetBinaryName()), []byte("#!/bin/sh\n"+script), 0700); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, singbox.GetBinaryName()), []byte("#!/bin/sh\n"+script), 0o700); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -140,5 +140,40 @@ func TestSubscriptionInstalledKernelPreservesURIOptionsAndSkipsUnknownType(t *te
 	kept, issues, _ := filterSubscriptionOutboundsForCore("installed kernel", CoreTypeHiddify, source)
 	if len(kept) != 1 || len(issues) != 1 {
 		t.Fatalf("kept=%v issues=%v", kept, issues)
+	}
+}
+
+func TestSubscriptionReportRejectsDuplicateTagsIncludingMalformedProfiles(t *testing.T) {
+	for _, body := range []string{
+		`[{"tag":"same","type":42},{"tag":"same","type":"socks","server":"example.com"}]`,
+		`[{"tag":"same","type":"socks","server":"example.com"},{"tag":"same","type":42}]`,
+		`[{"tag":"same","type":42},{"tag":"same","type":false}]`,
+	} {
+		_, _, _, err := parseOutboundSubscriptionReport([]byte(body), true)
+		if err == nil || !strings.Contains(err.Error(), "duplicate subscription connection tag") {
+			t.Fatalf("ambiguous subscription accepted: %s; err=%v", body, err)
+		}
+	}
+}
+
+func TestSubscriptionKernelValidationRedactsAuthenticationFields(t *testing.T) {
+	for _, test := range []struct{ field, secret string }{
+		{"uuid", "private-credential-value"},
+		{"auth", "private-credential-value"},
+		{"auth_str", "private-credential-value"},
+		{"password", "private-credential-value"},
+		{"psk", "private-credential-value"},
+		{"private_key", "private-credential-value"},
+		{"password", "abc"},
+	} {
+		t.Run(test.field+"/"+test.secret, func(t *testing.T) {
+			field, secret := test.field, test.secret
+			writeSubscriptionCheckBinary(t, "echo 'ERROR invalid credential: "+secret+"' >&2\nexit 1\n")
+			row := map[string]any{"protocol": "singbox:future-protocol", "tag": "proxy", "settings": map[string]any{field: secret}}
+			err := validateSubscriptionNativeMember(row, CoreTypeHiddify)
+			if err == nil || strings.Contains(err.Error(), secret) {
+				t.Fatalf("credential exposed in diagnostic: %v", err)
+			}
+		})
 	}
 }

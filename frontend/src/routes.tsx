@@ -3,7 +3,6 @@ import { createBrowserRouter, Navigate, type RouteObject } from 'react-router';
 import { Spin } from 'antd';
 
 import PanelLayout from '@/layouts/PanelLayout';
-import CoreConfigRoutePage from '@/pages/CoreConfigRoutePage';
 import { importWithChunkRecovery } from '@/lib/chunk-load-recovery';
 import TelemtSubscriptionToggle from '@/pages/telemt/TelemtSubscriptionToggle';
 
@@ -26,6 +25,9 @@ const SettingsPage = lazy(() =>
 
 const SingBoxPage = lazy(() =>
   importWithChunkRecovery(() => import('@/pages/singbox/SingBoxRoutePage')),
+);
+const CoreConfigRoutePage = lazy(() =>
+  importWithChunkRecovery(() => import('@/pages/CoreConfigRoutePage')),
 );
 const ApiDocsPage = lazy(() =>
   importWithChunkRecovery(() => import('@/pages/api-docs/ApiDocsPage')),
