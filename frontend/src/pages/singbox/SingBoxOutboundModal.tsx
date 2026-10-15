@@ -245,7 +245,11 @@ export default function SingBoxOutboundModal({
         type="info"
         showIcon
         style={{ marginBottom: 16 }}
-        title={type === 'masque' ? 'Cloudflare WARP через MASQUE' : 'Автоматическая настройка подключения'}
+        title={
+          type === 'masque'
+            ? 'Cloudflare WARP через MASQUE'
+            : 'Автоматическая настройка подключения'
+        }
         description={
           type === 'masque'
             ? 'Устройство WARP регистрируется ядром sing-box при первом запуске. Выберите HTTP/3 или HTTP/2, сохраните подключение и примените настройки ядра. Кэш регистрации включается автоматически — свой MASQUE-сервер и отдельные ключи не нужны.'
@@ -270,47 +274,47 @@ export default function SingBoxOutboundModal({
         }
       />
       {type !== 'masque' && (
-      <Space wrap style={{ marginBottom: 16 }}>
-        <Button
-          disabled={!!jsonError || invalidOptions.length > 0}
-          onClick={() => update(generateOutboundCredentials(draft, true))}
-        >
-          Создать недостающие учётные данные
-        </Button>
-        <Button
-          onClick={() =>
-            Modal.info({
-              title: 'Учётные данные подключения',
-              width: 650,
-              content: (
-                <Space orientation="vertical" style={{ width: '100%' }}>
-                  <p>
-                    Новые логины, пароли и общие ключи должны совпадать на клиенте и сервере.
-                    Публичный ключ WireGuard/AWG добавьте на сервер как ключ клиента.
-                  </p>
-                  <Input.TextArea
-                    aria-label="Учётные данные подключения"
-                    readOnly
-                    autoSize={{ minRows: 6, maxRows: 18 }}
-                    value={JSON.stringify(outboundCredentialSummary(draft), null, 2)}
-                  />
-                  <Button
-                    onClick={() =>
-                      void ClipboardManager.copyText(
-                        JSON.stringify(outboundCredentialSummary(draft), null, 2),
-                      )
-                    }
-                  >
-                    Скопировать данные
-                  </Button>
-                </Space>
-              ),
-            })
-          }
-        >
-          Показать данные для сервера
-        </Button>
-      </Space>
+        <Space wrap style={{ marginBottom: 16 }}>
+          <Button
+            disabled={!!jsonError || invalidOptions.length > 0}
+            onClick={() => update(generateOutboundCredentials(draft, true))}
+          >
+            Создать недостающие учётные данные
+          </Button>
+          <Button
+            onClick={() =>
+              Modal.info({
+                title: 'Учётные данные подключения',
+                width: 650,
+                content: (
+                  <Space orientation="vertical" style={{ width: '100%' }}>
+                    <p>
+                      Новые логины, пароли и общие ключи должны совпадать на клиенте и сервере.
+                      Публичный ключ WireGuard/AWG добавьте на сервер как ключ клиента.
+                    </p>
+                    <Input.TextArea
+                      aria-label="Учётные данные подключения"
+                      readOnly
+                      autoSize={{ minRows: 6, maxRows: 18 }}
+                      value={JSON.stringify(outboundCredentialSummary(draft), null, 2)}
+                    />
+                    <Button
+                      onClick={() =>
+                        void ClipboardManager.copyText(
+                          JSON.stringify(outboundCredentialSummary(draft), null, 2),
+                        )
+                      }
+                    >
+                      Скопировать данные
+                    </Button>
+                  </Space>
+                ),
+              })
+            }
+          >
+            Показать данные для сервера
+          </Button>
+        </Space>
       )}
       <Space.Compact style={{ width: '100%', marginBottom: 16 }}>
         <Input
@@ -344,7 +348,10 @@ export default function SingBoxOutboundModal({
               // Only rename the pristine generated tag of a NEW connection.
               // Editing and manually named/imported profiles keep their names.
               if (!value && autoTagRef.current && text(draft.tag) === autoTagRef.current) {
-                const nextTag = uniqueTag(next === 'masque' ? 'warp-masque' : 'proxy', availableTags);
+                const nextTag = uniqueTag(
+                  next === 'masque' ? 'warp-masque' : 'proxy',
+                  availableTags,
+                );
                 changed.tag = nextTag;
                 autoTagRef.current = nextTag;
               }
@@ -1022,7 +1029,11 @@ export default function SingBoxOutboundModal({
             {text(draft.server) ||
               (type === 'masque'
                 ? 'Cloudflare WARP · регистрация в sing-box'
-                : group ? 'Группа подключений' : remote ? 'Укажите сервер' : 'Локальное подключение')}
+                : group
+                  ? 'Группа подключений'
+                  : remote
+                    ? 'Укажите сервер'
+                    : 'Локальное подключение')}
             {draft.server && draft.server_port ? `:${draft.server_port}` : ''}
           </span>
         </Space>
