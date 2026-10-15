@@ -1,5 +1,5 @@
 import { MasqueInboundSettingsSchema } from '@/schemas/protocols/inbound/masque';
-import { masqueClientDefaults } from './masque-settings';
+import { masqueClientDefaults, warpMasqueDefaults } from './masque-settings';
 import { isNativeEndpoint, nativeServerTypes } from './native-import';
 export type ConfigObject = Record<string, unknown>;
 
@@ -145,8 +145,7 @@ export function setDefaultOutbound(config: ConfigObject, tag: string): ConfigObj
 export function outboundDefaults(type: string, tag: string, group: string[] = []): ConfigObject {
   const base = { type, tag };
   if (type === 'masque-client') return masqueClientDefaults(tag);
-  if (type === 'masque')
-    return { ...base, use_http2: false, use_ipv6: false, profile: { recreate: false } };
+  if (type === 'masque') return warpMasqueDefaults(tag);
   if (type === 'selector') return { ...base, outbounds: group };
   if (type === 'balancer') return { ...base, outbounds: group, strategy: 'round-robin' };
   if (type === 'urltest')
