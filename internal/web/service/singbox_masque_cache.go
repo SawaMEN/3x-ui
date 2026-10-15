@@ -3,6 +3,8 @@ package service
 import (
 	"fmt"
 	"maps"
+	"path/filepath"
+	"strings"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 )
@@ -36,6 +38,14 @@ func ensureWARPMASQUECache(cfg *singbox.Config) error {
 		cache = map[string]any{}
 	}
 	cache["enabled"], cache["store_masque_config"] = true, true
+	// The core's default cache.db path depends on its working directory.
+	// Persist WARP device registration beside the managed core configuration
+	// without overriding a user-provided path.
+	if path, ok := cache["path"]; !ok {
+		cache["path"] = filepath.Join(filepath.Dir(singbox.GetConfigPath()), "warp-masque-cache.db")
+	} else if value, ok := path.(string); ok && strings.TrimSpace(value) == "" {
+		cache["path"] = filepath.Join(filepath.Dir(singbox.GetConfigPath()), "warp-masque-cache.db")
+	}
 	experimental["cache_file"] = cache
 	cfg.Experimental = experimental
 	return nil
