@@ -187,11 +187,7 @@
         "kind": "json"
       },
       "ip_version": {
-        "enum": [
-          0,
-          4,
-          6
-        ],
+        "enum": [0, 4, 6],
         "integer": true,
         "kind": "number"
       },
@@ -472,21 +468,11 @@
         "kind": "string"
       },
       "max_version": {
-        "enum": [
-          "1.0",
-          "1.1",
-          "1.2",
-          "1.3"
-        ],
+        "enum": ["1.0", "1.1", "1.2", "1.3"],
         "kind": "string"
       },
       "min_version": {
-        "enum": [
-          "1.0",
-          "1.1",
-          "1.2",
-          "1.3"
-        ],
+        "enum": ["1.0", "1.1", "1.2", "1.3"],
         "kind": "string"
       },
       "reality": {
@@ -568,10 +554,7 @@
         "kind": "string"
       },
       "protocol": {
-        "enum": [
-          "TCP",
-          "UDP"
-        ],
+        "enum": ["TCP", "UDP"],
         "kind": "string"
       }
     },
@@ -713,12 +696,7 @@
         "kind": "string"
       },
       "mode": {
-        "enum": [
-          "totp",
-          "hotp",
-          "stoken",
-          "oidc"
-        ],
+        "enum": ["totp", "hotp", "stoken", "oidc"],
         "kind": "string"
       },
       "password": {
@@ -743,13 +721,7 @@
         "kind": "number"
       },
       "type": {
-        "enum": [
-          "direct",
-          "yandex",
-          "vyandex",
-          "boards",
-          "mailru"
-        ],
+        "enum": ["direct", "yandex", "vyandex", "boards", "mailru"],
         "kind": "string",
         "required": true
       },
@@ -759,10 +731,7 @@
     },
     "OpenVPNControlWrapOptions": {
       "direction": {
-        "enum": [
-          "server",
-          "client"
-        ],
+        "enum": ["server", "client"],
         "kind": "string"
       },
       "key": {
@@ -772,20 +741,13 @@
         "kind": "string"
       },
       "type": {
-        "enum": [
-          "tls_auth",
-          "tls_crypt",
-          "tls_crypt_v2"
-        ],
+        "enum": ["tls_auth", "tls_crypt", "tls_crypt_v2"],
         "kind": "string"
       }
     },
     "OpenVPNInboundControlWrapOptions": {
       "direction": {
-        "enum": [
-          "server",
-          "client"
-        ],
+        "enum": ["server", "client"],
         "kind": "string"
       },
       "force_cookie": {
@@ -798,11 +760,7 @@
         "kind": "string"
       },
       "type": {
-        "enum": [
-          "tls_auth",
-          "tls_crypt",
-          "tls_crypt_v2"
-        ],
+        "enum": ["tls_auth", "tls_crypt", "tls_crypt_v2"],
         "kind": "string"
       }
     },
@@ -814,12 +772,7 @@
         "kind": "string"
       },
       "certificate_profile": {
-        "enum": [
-          "legacy",
-          "preferred",
-          "insecure",
-          "suiteb"
-        ],
+        "enum": ["legacy", "preferred", "insecure", "suiteb"],
         "kind": "string"
       },
       "cipher": {
@@ -835,11 +788,7 @@
         "kind": "string"
       },
       "client_name_type": {
-        "enum": [
-          "subject",
-          "name",
-          "name-prefix"
-        ],
+        "enum": ["subject", "name", "name-prefix"],
         "kind": "string"
       },
       "control_wrap": {
@@ -859,10 +808,7 @@
         "kind": "string"
       },
       "ns_certificate_type": {
-        "enum": [
-          "server",
-          "client"
-        ],
+        "enum": ["server", "client"],
         "kind": "string"
       },
       "peer_fingerprint": {
@@ -875,37 +821,19 @@
         "kind": "strings"
       },
       "remote_certificate_tls": {
-        "enum": [
-          "server",
-          "client",
-          "none"
-        ],
+        "enum": ["server", "client", "none"],
         "kind": "string"
       },
       "verify_client_certificate": {
-        "enum": [
-          "require",
-          "optional",
-          "none"
-        ],
+        "enum": ["require", "optional", "none"],
         "kind": "string"
       },
       "version_max": {
-        "enum": [
-          "1.0",
-          "1.1",
-          "1.2",
-          "1.3"
-        ],
+        "enum": ["1.0", "1.1", "1.2", "1.3"],
         "kind": "string"
       },
       "version_min": {
-        "enum": [
-          "1.0",
-          "1.1",
-          "1.2",
-          "1.3"
-        ],
+        "enum": ["1.0", "1.1", "1.2", "1.3"],
         "kind": "string"
       }
     },
@@ -917,12 +845,7 @@
         "kind": "string"
       },
       "certificate_profile": {
-        "enum": [
-          "legacy",
-          "preferred",
-          "insecure",
-          "suiteb"
-        ],
+        "enum": ["legacy", "preferred", "insecure", "suiteb"],
         "kind": "string"
       },
       "cipher": {
@@ -951,10 +874,7 @@
         "kind": "string"
       },
       "ns_certificate_type": {
-        "enum": [
-          "server",
-          "client"
-        ],
+        "enum": ["server", "client"],
         "kind": "string"
       },
       "peer_fingerprint": {
@@ -967,50 +887,28 @@
         "kind": "strings"
       },
       "remote_certificate_tls": {
-        "enum": [
-          "server",
-          "client",
-          "none"
-        ],
+        "enum": ["server", "client", "none"],
         "kind": "string"
       },
       "server_name": {
         "kind": "string"
       },
       "server_name_type": {
-        "enum": [
-          "subject",
-          "name",
-          "name-prefix"
-        ],
+        "enum": ["subject", "name", "name-prefix"],
         "kind": "string"
       },
       "version_max": {
-        "enum": [
-          "1.0",
-          "1.1",
-          "1.2",
-          "1.3"
-        ],
+        "enum": ["1.0", "1.1", "1.2", "1.3"],
         "kind": "string"
       },
       "version_min": {
-        "enum": [
-          "1.0",
-          "1.1",
-          "1.2",
-          "1.3"
-        ],
+        "enum": ["1.0", "1.1", "1.2", "1.3"],
         "kind": "string"
       }
     },
     "OpenVPNPullFilterOptions": {
       "action": {
-        "enum": [
-          "accept",
-          "ignore",
-          "reject"
-        ],
+        "enum": ["accept", "ignore", "reject"],
         "kind": "string",
         "required": true
       },
@@ -1025,11 +923,7 @@
         "required": true
       },
       "dnssec": {
-        "enum": [
-          "yes",
-          "optional",
-          "no"
-        ],
+        "enum": ["yes", "optional", "no"],
         "kind": "string"
       },
       "priority": {
@@ -1044,11 +938,7 @@
         "kind": "string"
       },
       "transport": {
-        "enum": [
-          "plain",
-          "dot",
-          "doh"
-        ],
+        "enum": ["plain", "dot", "doh"],
         "kind": "string"
       }
     },
@@ -1090,14 +980,7 @@
     },
     "OpenVPNRemoteOptions": {
       "network": {
-        "enum": [
-          "udp",
-          "udp4",
-          "udp6",
-          "tcp",
-          "tcp4",
-          "tcp6"
-        ],
+        "enum": ["udp", "udp4", "udp6", "tcp", "tcp4", "tcp6"],
         "kind": "string"
       },
       "server": {
@@ -1156,11 +1039,7 @@
         "kind": "boolean"
       },
       "protocol": {
-        "enum": [
-          "h2mux",
-          "smux",
-          "yamux"
-        ],
+        "enum": ["h2mux", "smux", "yamux"],
         "kind": "string"
       }
     },
@@ -1235,11 +1114,7 @@
         "kind": "boolean"
       },
       "engine": {
-        "enum": [
-          "go",
-          "apple",
-          "windows"
-        ],
+        "enum": ["go", "apple", "windows"],
         "kind": "string"
       },
       "fragment": {
@@ -1261,21 +1136,11 @@
         "kind": "boolean"
       },
       "max_version": {
-        "enum": [
-          "1.0",
-          "1.1",
-          "1.2",
-          "1.3"
-        ],
+        "enum": ["1.0", "1.1", "1.2", "1.3"],
         "kind": "string"
       },
       "min_version": {
-        "enum": [
-          "1.0",
-          "1.1",
-          "1.2",
-          "1.3"
-        ],
+        "enum": ["1.0", "1.1", "1.2", "1.3"],
         "kind": "string"
       },
       "reality": {
@@ -1292,13 +1157,7 @@
         "kind": "string"
       },
       "spoof_method": {
-        "enum": [
-          "wrong-sequence",
-          "wrong-checksum",
-          "wrong-ack",
-          "wrong-md5",
-          "wrong-timestamp"
-        ],
+        "enum": ["wrong-sequence", "wrong-checksum", "wrong-ack", "wrong-md5", "wrong-timestamp"],
         "kind": "string"
       },
       "tls_tricks": {
@@ -1490,11 +1349,7 @@
     },
     "_ACMEDNS01ChallengeOptions": {
       "provider": {
-        "enum": [
-          "alidns",
-          "cloudflare",
-          "acmedns"
-        ],
+        "enum": ["alidns", "cloudflare", "acmedns"],
         "kind": "string"
       }
     },
@@ -1529,28 +1384,21 @@
         "integer": true,
         "kind": "number",
         "when": {
-          "type": [
-            "gecko"
-          ]
+          "type": ["gecko"]
         }
       },
       "min_packet_size": {
         "integer": true,
         "kind": "number",
         "when": {
-          "type": [
-            "gecko"
-          ]
+          "type": ["gecko"]
         }
       },
       "password": {
         "kind": "string"
       },
       "type": {
-        "enum": [
-          "salamander",
-          "gecko"
-        ],
+        "enum": ["salamander", "gecko"],
         "kind": "string"
       }
     },
@@ -1618,10 +1466,7 @@
         "kind": "boolean"
       },
       "version": {
-        "enum": [
-          1,
-          2
-        ],
+        "enum": [1, 2],
         "integer": true,
         "kind": "number",
         "max": 255,
@@ -1630,13 +1475,7 @@
     },
     "_V2RayTransportOptions": {
       "type": {
-        "enum": [
-          "http",
-          "ws",
-          "quic",
-          "grpc",
-          "httpupgrade"
-        ],
+        "enum": ["http", "ws", "quic", "grpc", "httpupgrade"],
         "kind": "string",
         "required": true
       }
@@ -1899,12 +1738,7 @@
         "required": true
       },
       "strategy": {
-        "enum": [
-          "round-robin",
-          "consistent-hashing",
-          "sticky-sessions",
-          "lowest-delay"
-        ],
+        "enum": ["round-robin", "consistent-hashing", "sticky-sessions", "lowest-delay"],
         "kind": "string"
       },
       "tolerance": {
@@ -2402,11 +2236,7 @@
       "connection_receive_window": {
         "kind": "string",
         "when": {
-          "version": [
-            0,
-            2,
-            3
-          ]
+          "version": [0, 2, 3]
         }
       },
       "detour": {
@@ -2415,9 +2245,7 @@
       "disable_path_mtu_discovery": {
         "kind": "boolean",
         "when": {
-          "version": [
-            3
-          ]
+          "version": [3]
         }
       },
       "disable_tcp_keep_alive": {
@@ -2450,11 +2278,7 @@
       "idle_timeout": {
         "kind": "string",
         "when": {
-          "version": [
-            0,
-            2,
-            3
-          ]
+          "version": [0, 2, 3]
         }
       },
       "inet4_bind_address": {
@@ -2467,19 +2291,13 @@
         "integer": true,
         "kind": "number",
         "when": {
-          "version": [
-            3
-          ]
+          "version": [3]
         }
       },
       "keep_alive_period": {
         "kind": "string",
         "when": {
-          "version": [
-            0,
-            2,
-            3
-          ]
+          "version": [0, 2, 3]
         }
       },
       "max_concurrent_streams": {
@@ -2487,11 +2305,7 @@
         "kind": "number",
         "min": 0,
         "when": {
-          "version": [
-            0,
-            2,
-            3
-          ]
+          "version": [0, 2, 3]
         }
       },
       "netns": {
@@ -2532,11 +2346,7 @@
       "stream_receive_window": {
         "kind": "string",
         "when": {
-          "version": [
-            0,
-            2,
-            3
-          ]
+          "version": [0, 2, 3]
         }
       },
       "tcp_fast_open": {
@@ -2562,12 +2372,7 @@
         "kind": "string"
       },
       "version": {
-        "enum": [
-          0,
-          1,
-          2,
-          3
-        ],
+        "enum": [0, 1, 2, 3],
         "integer": true,
         "kind": "number"
       }
@@ -2737,11 +2542,7 @@
     },
     "hysteria2": {
       "bbr_profile": {
-        "enum": [
-          "standard",
-          "conservative",
-          "aggressive"
-        ],
+        "enum": ["standard", "conservative", "aggressive"],
         "kind": "string"
       },
       "bind_address_no_port": {
@@ -3133,12 +2934,7 @@
         "kind": "string"
       },
       "version": {
-        "enum": [
-          0,
-          1,
-          2,
-          3
-        ],
+        "enum": [0, 1, 2, 3],
         "integer": true,
         "kind": "number"
       }
@@ -3238,11 +3034,7 @@
         "kind": "array"
       },
       "version": {
-        "enum": [
-          "1",
-          "2",
-          "3"
-        ],
+        "enum": ["1", "2", "3"],
         "item": {
           "integer": true,
           "kind": "number"
@@ -3285,11 +3077,7 @@
         "ref": "FinalMaskOptions"
       },
       "handshake_mode": {
-        "enum": [
-          "HANDSHAKE_DEFAULT",
-          "HANDSHAKE_STANDARD",
-          "HANDSHAKE_NO_WAIT"
-        ],
+        "enum": ["HANDSHAKE_DEFAULT", "HANDSHAKE_STANDARD", "HANDSHAKE_NO_WAIT"],
         "kind": "string"
       },
       "inet4_bind_address": {
@@ -3439,12 +3227,7 @@
         "kind": "boolean"
       },
       "quic_congestion_control": {
-        "enum": [
-          "bbr",
-          "bbr2",
-          "cubic",
-          "reno"
-        ],
+        "enum": ["bbr", "bbr2", "cubic", "reno"],
         "kind": "string"
       },
       "quic_session_receive_window": {
@@ -3520,10 +3303,7 @@
         "kind": "boolean"
       },
       "compression_mode": {
-        "enum": [
-          "stateless",
-          "all"
-        ],
+        "enum": ["stateless", "all"],
         "kind": "string"
       },
       "connect_timeout": {
@@ -3573,14 +3353,7 @@
         "ref": "FinalMaskOptions"
       },
       "flavor": {
-        "enum": [
-          "anyconnect",
-          "gp",
-          "fortinet",
-          "f5",
-          "pulse",
-          "nc"
-        ],
+        "enum": ["anyconnect", "gp", "fortinet", "f5", "pulse", "nc"],
         "kind": "string"
       },
       "form_entries": {
@@ -3744,9 +3517,7 @@
         "kind": "string"
       },
       "codec": {
-        "enum": [
-          "batched"
-        ],
+        "enum": ["batched"],
         "kind": "string"
       },
       "connect_timeout": {
@@ -3839,22 +3610,14 @@
         "kind": "strings"
       },
       "allow_compression": {
-        "enum": [
-          "no",
-          "asym",
-          "yes"
-        ],
+        "enum": ["no", "asym", "yes"],
         "kind": "string"
       },
       "auth": {
         "kind": "string"
       },
       "auth_retry": {
-        "enum": [
-          "none",
-          "nointeract",
-          "interact"
-        ],
+        "enum": ["none", "nointeract", "interact"],
         "kind": "string"
       },
       "bind_address_no_port": {
@@ -3870,28 +3633,11 @@
         "kind": "string"
       },
       "compression": {
-        "enum": [
-          "none",
-          "no",
-          "lz4",
-          "lz4-v2",
-          "stub",
-          "stub-v2",
-          "disabled",
-          "off"
-        ],
+        "enum": ["none", "no", "lz4", "lz4-v2", "stub", "stub-v2", "disabled", "off"],
         "kind": "string"
       },
       "compression_lzo": {
-        "enum": [
-          "none",
-          "no",
-          "yes",
-          "adaptive",
-          "asym",
-          "disabled",
-          "off"
-        ],
+        "enum": ["none", "no", "yes", "adaptive", "asym", "disabled", "off"],
         "kind": "string"
       },
       "connect_timeout": {
@@ -3947,17 +3693,11 @@
         "kind": "string"
       },
       "key_direction": {
-        "enum": [
-          "server",
-          "client"
-        ],
+        "enum": ["server", "client"],
         "kind": "string"
       },
       "mode": {
-        "enum": [
-          "tls",
-          "static_key"
-        ],
+        "enum": ["tls", "static_key"],
         "kind": "string"
       },
       "mss_fix": {
@@ -3969,10 +3709,7 @@
         "kind": "boolean"
       },
       "mss_fix_mode": {
-        "enum": [
-          "mtu",
-          "fixed"
-        ],
+        "enum": ["mtu", "fixed"],
         "kind": "string"
       },
       "mtu": {
@@ -3987,14 +3724,7 @@
         "kind": "string"
       },
       "network": {
-        "enum": [
-          "udp",
-          "udp4",
-          "udp6",
-          "tcp",
-          "tcp4",
-          "tcp6"
-        ],
+        "enum": ["udp", "udp4", "udp6", "tcp", "tcp4", "tcp6"],
         "kind": "string"
       },
       "network_strategy": {
@@ -4142,11 +3872,7 @@
         "kind": "string"
       },
       "topology": {
-        "enum": [
-          "net30",
-          "p2p",
-          "subnet"
-        ],
+        "enum": ["net30", "p2p", "subnet"],
         "kind": "string"
       },
       "udp_filtering": {
@@ -4203,10 +3929,7 @@
         "kind": "string"
       },
       "key_direction": {
-        "enum": [
-          "server",
-          "client"
-        ],
+        "enum": ["server", "client"],
         "kind": "string"
       },
       "listen": {
@@ -4223,10 +3946,7 @@
         "kind": "number"
       },
       "mode": {
-        "enum": [
-          "tls",
-          "static_key"
-        ],
+        "enum": ["tls", "static_key"],
         "kind": "string"
       },
       "mss_fix": {
@@ -4238,10 +3958,7 @@
         "kind": "boolean"
       },
       "mss_fix_mode": {
-        "enum": [
-          "mtu",
-          "fixed"
-        ],
+        "enum": ["mtu", "fixed"],
         "kind": "string"
       },
       "mtu": {
@@ -4256,10 +3973,7 @@
         "kind": "string"
       },
       "network": {
-        "enum": [
-          "tcp",
-          "udp"
-        ],
+        "enum": ["tcp", "udp"],
         "kind": "string"
       },
       "peer_address": {
@@ -4349,11 +4063,7 @@
         "ref": "OpenVPNInboundTLSOptions"
       },
       "topology": {
-        "enum": [
-          "net30",
-          "p2p",
-          "subnet"
-        ],
+        "enum": ["net30", "p2p", "subnet"],
         "kind": "string"
       },
       "udp_filtering": {
@@ -4825,11 +4535,7 @@
         "kind": "boolean"
       },
       "version": {
-        "enum": [
-          1,
-          2,
-          3
-        ],
+        "enum": [1, 2, 3],
         "integer": true,
         "kind": "number"
       }
@@ -4875,16 +4581,10 @@
         "kind": "string"
       },
       "mode": {
-        "enum": [
-          "default",
-          "unshaped",
-          "unsafe-raw"
-        ],
+        "enum": ["default", "unshaped", "unsafe-raw"],
         "kind": "string",
         "when": {
-          "version": [
-            6
-          ]
+          "version": [6]
         }
       },
       "netns": {
@@ -4902,22 +4602,14 @@
       "obfs_host": {
         "kind": "string",
         "when": {
-          "version": [
-            4
-          ]
+          "version": [4]
         }
       },
       "obfs_mode": {
-        "enum": [
-          "none",
-          "http",
-          "tls"
-        ],
+        "enum": ["none", "http", "tls"],
         "kind": "string",
         "when": {
-          "version": [
-            4
-          ]
+          "version": [4]
         }
       },
       "protect_path": {
@@ -4966,10 +4658,7 @@
         "kind": "string"
       },
       "version": {
-        "enum": [
-          4,
-          6
-        ],
+        "enum": [4, 6],
         "integer": true,
         "kind": "number",
         "required": true
@@ -5074,11 +4763,7 @@
         "kind": "string"
       },
       "version": {
-        "enum": [
-          "4",
-          "4a",
-          "5"
-        ],
+        "enum": ["4", "4a", "5"],
         "kind": "string"
       }
     },
@@ -5874,11 +5559,7 @@
         "kind": "string"
       },
       "congestion_control": {
-        "enum": [
-          "cubic",
-          "new_reno",
-          "bbr"
-        ],
+        "enum": ["cubic", "new_reno", "bbr"],
         "kind": "string"
       },
       "connect_timeout": {
@@ -5999,10 +5680,7 @@
         "kind": "boolean"
       },
       "udp_relay_mode": {
-        "enum": [
-          "native",
-          "quic"
-        ],
+        "enum": ["native", "quic"],
         "kind": "string"
       },
       "uuid": {
@@ -6255,10 +5933,7 @@
         "kind": "strings"
       },
       "packet_encoding": {
-        "enum": [
-          "packetaddr",
-          "xudp"
-        ],
+        "enum": ["packetaddr", "xudp"],
         "kind": "string"
       },
       "protect_path": {
@@ -6271,14 +5946,7 @@
         "kind": "number"
       },
       "security": {
-        "enum": [
-          "auto",
-          "none",
-          "zero",
-          "aes-128-cfb",
-          "aes-128-gcm",
-          "chacha20-poly1305"
-        ],
+        "enum": ["auto", "none", "zero", "aes-128-cfb", "aes-128-gcm", "chacha20-poly1305"],
         "kind": "string",
         "required": true
       },
