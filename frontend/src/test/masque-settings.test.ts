@@ -1,34 +1,25 @@
 import { describe, expect, it } from 'vitest';
-import { addWarpMasque, masqueClientDefaults } from '@/pages/singbox/masque-settings';
+import { masqueClientDefaults, warpMasqueDefaults } from '@/pages/singbox/masque-settings';
+import { outboundProtocolLabel } from '@/pages/singbox/outbound-editor-model';
 import { outboundDefaults, outboundErrors } from '@/pages/singbox/simple-settings';
 
 describe('MASQUE native configuration', () => {
-  it('registers WARP separately and keeps existing cache and connections', () => {
-    const config = {
-      outbounds: [{ type: 'wireguard', tag: 'warp' }],
-      endpoints: [{ type: 'masque-client', tag: 'warp-masque' }],
-      experimental: { cache_file: { path: '/data/cache.db', store_fakeip: true } },
-    };
-    const next = addWarpMasque(config);
-    expect(next.outbounds).toEqual([
-      { type: 'wireguard', tag: 'warp' },
-      {
-        type: 'masque',
-        tag: 'warp-masque-2',
-        use_http2: false,
-        use_ipv6: false,
-        profile: { recreate: false },
-      },
-    ]);
-    expect(next.experimental).toEqual({
-      cache_file: {
-        path: '/data/cache.db',
-        store_fakeip: true,
-        enabled: true,
-        store_masque_config: true,
-      },
+  it('creates Cloudflare WARP with native MASQUE defaults in the protocol editor', () => {
+    const warp = warpMasqueDefaults('warp-masque');
+    expect(warp).toEqual({
+      type: 'masque',
+      tag: 'warp-masque',
+      use_http2: false,
+      use_ipv6: false,
+      profile: { recreate: false },
     });
-    expect(config.outbounds).toHaveLength(1);
+    expect(outboundDefaults('masque', 'warp-masque')).toEqual(warp);
+    expect(outboundErrors(warp, [])).toEqual([]);
+    expect(outboundErrors(warp, ['warp-masque'])).toContain(
+      'Это название уже используется другим подключением или туннелем.',
+    );
+    expect(outboundProtocolLabel('masque')).toBe('Cloudflare WARP (MASQUE)');
+    expect(outboundProtocolLabel('masque-client')).toBe('MASQUE Client (CONNECT-IP)');
   });
   it('prevents saving an incomplete CONNECT-IP client', () => {
     const value = masqueClientDefaults('proxy');
