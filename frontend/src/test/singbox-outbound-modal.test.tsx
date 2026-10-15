@@ -27,6 +27,7 @@ describe('native outbound modal', () => {
     const picker =
       protocolInput.closest('.ant-select')?.querySelector('.ant-select-selector') ?? protocolInput;
     fireEvent.mouseDown(picker);
+    fireEvent.change(protocolInput, { target: { value: 'WARP' } });
     fireEvent.click(await screen.findByText('Cloudflare WARP (MASQUE)'));
     expect(screen.getByText('Cloudflare WARP через MASQUE')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Создать недостающие учётные данные' })).toBeNull();
