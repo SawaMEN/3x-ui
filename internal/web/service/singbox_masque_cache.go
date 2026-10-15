@@ -38,13 +38,13 @@ func ensureWARPMASQUECache(cfg *singbox.Config) error {
 		cache = map[string]any{}
 	}
 	cache["enabled"], cache["store_masque_config"] = true, true
-	// The core's default cache.db path depends on its working directory.
+	// The core runs in its binary directory; sing-box defaults to cache.db there.
 	// Persist WARP device registration beside the managed core configuration
 	// without overriding a user-provided path.
 	if path, ok := cache["path"]; !ok {
-		cache["path"] = filepath.Join(filepath.Dir(singbox.GetConfigPath()), "warp-masque-cache.db")
+		cache["path"] = filepath.Join(filepath.Dir(singbox.GetConfigPath()), "cache.db")
 	} else if value, ok := path.(string); ok && strings.TrimSpace(value) == "" {
-		cache["path"] = filepath.Join(filepath.Dir(singbox.GetConfigPath()), "warp-masque-cache.db")
+		cache["path"] = filepath.Join(filepath.Dir(singbox.GetConfigPath()), "cache.db")
 	}
 	experimental["cache_file"] = cache
 	cfg.Experimental = experimental
