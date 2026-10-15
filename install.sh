@@ -2061,7 +2061,7 @@ install_x-ui() {
         if declare -F core_migration_install_managed_bin >/dev/null; then
             core_migration_install_managed_bin || exit 1
         fi
-        config_after_install
+        config_after_install || { echo "Database migration failed; installation did not complete." >&2; exit 1; }
     fi
 
     # Etckeeper compatibility

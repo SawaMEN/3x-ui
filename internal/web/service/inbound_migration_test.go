@@ -345,3 +345,43 @@ func TestMigrationRequirementsWithoutMultiDomainInbounds(t *testing.T) {
 		})
 	}
 }
+
+func TestMigrateDBRejectsMalformedLegacyClientsWithoutWrites(t *testing.T) {
+	for _, clients := range []string{`[null]`, `[7]`, `["broken"]`} {
+		t.Run(clients, func(t *testing.T) {
+			dir := t.TempDir()
+			t.Setenv("XUI_DB_FOLDER", dir)
+			if err := database.InitDB(filepath.Join(dir, "x-ui.db")); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = database.CloseDB() })
+			db := database.GetDB()
+			inbound := model.Inbound{
+				UserId: 1, Tag: "invalid", Port: 30003,
+				Protocol: model.VLESS, Settings: `{"clients":` + clients + `}`, StreamSettings: `{}`,
+			}
+			if err := db.Create(&inbound).Error; err != nil {
+				t.Fatal(err)
+			}
+			orphan := coremodel.ClientTraffic{InboundId: 0, Email: "retained-until-migration-succeeds"}
+			if err := db.Create(&orphan).Error; err != nil {
+				t.Fatal(err)
+			}
+			err := (&InboundService{}).MigrateDB()
+			want := fmt.Sprintf("inbound %d client 1 must be an object", inbound.Id)
+			if err == nil || !strings.Contains(err.Error(), want) {
+				t.Fatalf("migration error = %v, want %q", err, want)
+			}
+			var got model.Inbound
+			if err := db.First(&got, inbound.Id).Error; err != nil {
+				t.Fatal(err)
+			}
+			if got.Settings != inbound.Settings {
+				t.Fatalf("failed migration changed client data: %s", got.Settings)
+			}
+			if err := db.First(&coremodel.ClientTraffic{}, orphan.Id).Error; err != nil {
+				t.Fatalf("cleanup ran after failed migration: %v", err)
+			}
+		})
+	}
+}

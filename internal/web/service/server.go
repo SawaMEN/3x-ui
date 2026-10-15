@@ -1565,7 +1565,9 @@ func (s *ServerService) ImportDB(file multipart.File, keepHostSettings bool) err
 
 	restoreHostBoundSettings(keptSettings)
 
-	s.inboundService.MigrateDB()
+	if err := s.inboundService.MigrateDB(); err != nil {
+		return common.NewErrorf("Database migration failed after import: %v", err)
+	}
 
 	xrayStopped = false
 	if err = s.RestartXrayService(); err != nil {
@@ -1799,7 +1801,9 @@ func (s *ServerService) restorePostgresDump(file multipart.File, keepHostSetting
 	}
 	restoreHostBoundSettings(keptSettings)
 
-	s.inboundService.MigrateDB()
+	if err := s.inboundService.MigrateDB(); err != nil {
+		return common.NewErrorf("Database migration failed after import: %v", err)
+	}
 
 	if runErr != nil {
 		return common.NewErrorf("pg_restore failed (database left unchanged): %v: %s", runErr, strings.TrimSpace(stderr.String()))
@@ -1862,7 +1866,9 @@ func (s *ServerService) migrateSQLiteIntoPostgres(file multipart.File, isSQLDump
 	if errInit := database.InitDB(config.GetDBPath()); errInit != nil {
 		return common.NewErrorf("Restore finished but reopening the database failed: %v", errInit)
 	}
-	s.inboundService.MigrateDB()
+	if err := s.inboundService.MigrateDB(); err != nil {
+		return common.NewErrorf("Database migration failed after import: %v", err)
+	}
 
 	if migrateErr != nil {
 		return common.NewErrorf("Importing the SQLite data into PostgreSQL failed: %v; the import runs in a single transaction, so the database was left unchanged", migrateErr)

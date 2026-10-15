@@ -824,7 +824,7 @@ config_after_update() {
 
     echo -e "${yellow}x-ui settings:${plain}"
     "${xui_folder}"/x-ui setting -show true
-    "${xui_folder}"/x-ui migrate
+    "${xui_folder}"/x-ui migrate || return 1
 
     # Properly detect empty cert by checking if cert: line exists and has content after it
     local existing_cert=$("${xui_folder}"/x-ui setting -getCert true 2> /dev/null | grep 'cert:' | awk -F': ' '{print $2}' | tr -d '[:space:]')
@@ -1407,7 +1407,7 @@ update_x-ui() {
     fi
 
     core_migration_commit || _fail "Updated panel did not start its modified Sing-box; restoring snapshot"
-    if [[ -z "${cm_backup:-}" ]]; then config_after_update; fi
+    if [[ -z "${cm_backup:-}" ]]; then config_after_update || _fail "Database migration failed; update did not complete"; fi
 
     # IP Limit relies on fail2ban; install + configure it now so the feature
     # works out of the box on update too (no-op when XUI_ENABLE_FAIL2BAN=false).

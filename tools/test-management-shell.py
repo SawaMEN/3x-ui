@@ -32,6 +32,43 @@ class ManagementTests(unittest.TestCase):
                                 text=True, env=dict(os.environ, **(env or {})))
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_install_smoke_verifies_stable_version_and_dev_commit(self):
+        source = (ROOT / "deploy/test/smoke-noninteractive.sh").read_text()
+        start = source.index('        if [ -n "${XUI_SMOKE_VERSION:-}" ]; then\n            installed=')
+        end = source.index("\n\n        RESULT=", start)
+        check = source[start:end].replace("/usr/local/x-ui/x-ui", '"$TEST_PANEL"')
+        commit = "0123456789abcdef0123456789abcdef01234567"
+        for tag, installed, expected in (("v3.9.8", "3.9.8", 0),
+                                         ("v3.9.8", "3.9.7", 1),
+                                         ("dev-" + commit, "dev+01234567", 0),
+                                         ("dev-" + commit, "dev+ffffffff", 1)):
+            with self.subTest(tag=tag, installed=installed), tempfile.TemporaryDirectory() as raw:
+                panel = Path(raw) / "panel"
+                panel.write_text("#!/bin/bash\nprintf '%s\\n' \"$TEST_INSTALLED\"\n")
+                panel.chmod(0o700)
+                result = subprocess.run(["bash", "-c", check], capture_output=True, text=True,
+                                        env=dict(os.environ, XUI_SMOKE_VERSION=tag,
+                                                 TEST_INSTALLED=installed, TEST_PANEL=str(panel)))
+                self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
+
+    def test_post_update_stops_after_failed_database_migration(self):
+        with tempfile.TemporaryDirectory() as raw:
+            base = Path(raw)
+            panel = base / "x-ui"
+            panel.write_text('''#!/bin/bash
+printf '%s\n' "$*" >> "$TEST_ROOT/calls"
+[[ "$1" != migrate ]] || exit 23
+printf 'port: 2053\nwebBasePath: /unchanged-path/\ncert: /cert/panel.pem\n'
+''')
+            panel.chmod(0o700)
+            self.run_script(function("update.sh", "config_after_update") + r'''
+xui_folder="$TEST_ROOT"
+curl() { printf '127.0.0.1\n200\n'; }
+config_after_update >/dev/null
+[[ $? == 1 ]] || exit 1
+[[ "$(wc -l < "$TEST_ROOT/calls")" == 2 ]]
+''', {"TEST_ROOT": raw})
+
     def test_remote_script_failure_is_returned_by_all_update_commands(self):
         for name in ("install", "update", "update_dev", "legacy_version"):
             with self.subTest(command=name):

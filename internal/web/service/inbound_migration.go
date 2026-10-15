@@ -36,6 +36,9 @@ func (s *InboundService) MigrationRemoveOrphanedTraffics() {
 func (s *InboundService) MigrationRequirements() (err error) {
 	db := database.GetDB()
 	tx := db.Begin()
+	if tx.Error != nil {
+		return tx.Error
+	}
 	defer func() {
 		if err == nil {
 			if commitErr := tx.Commit().Error; commitErr != nil {
@@ -117,7 +120,10 @@ func (s *InboundService) MigrationRequirements() (err error) {
 			newClients := make([]any, 0, len(clients))
 			hasVisionFlow := false
 			for client_index := range clients {
-				c := clients[client_index].(map[string]any)
+				c, valid := clients[client_index].(map[string]any)
+				if !valid {
+					return fmt.Errorf("inbound %d client %d must be an object", inbounds[inbound_index].Id, client_index+1)
+				}
 
 				// Add email='' if it is not exists
 				if _, ok := c["email"]; !ok {
@@ -278,12 +284,13 @@ func (s *InboundService) MigrationRequirements() (err error) {
 	return err
 }
 
-func (s *InboundService) MigrateDB() {
+func (s *InboundService) MigrateDB() error {
 	if err := s.MigrationRequirements(); err != nil {
-		logger.Errorf("MigrationRequirements failed: %v", err)
+		return fmt.Errorf("migration requirements failed: %w", err)
 	}
 	s.MigrationRemoveOrphanedTraffics()
 	s.MigrationRestoreVisionFlow()
+	return nil
 }
 
 // MigrationRestoreVisionFlow repairs VLESS inbounds whose clients lost their

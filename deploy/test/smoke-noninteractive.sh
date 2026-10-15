@@ -49,8 +49,12 @@ docker run --rm \
         echo "--- assertions ---"
         if [ -n "${XUI_SMOKE_VERSION:-}" ]; then
             installed=$(/usr/local/x-ui/x-ui -v)
-            [ "$installed" = "${XUI_SMOKE_VERSION#v}" ] \
-                || { echo "FAIL: installed version $installed, want ${XUI_SMOKE_VERSION#v}"; exit 1; }
+            expected="${XUI_SMOKE_VERSION#v}"
+            if [[ "$XUI_SMOKE_VERSION" =~ ^dev-([0-9a-f]{40})$ ]]; then
+                expected="dev+${BASH_REMATCH[1]:0:8}"
+            fi
+            [ "$installed" = "$expected" ] \
+                || { echo "FAIL: installed version $installed, want $expected"; exit 1; }
         fi
 
         RESULT=/etc/x-ui/install-result.env
