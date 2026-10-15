@@ -1746,7 +1746,11 @@ export default function SingBoxPage() {
                 row.type === 'masque' ? (
                   <Tag
                     color="green"
-                    title={row.use_http2 ? 'MASQUE поверх HTTP/2 и TLS' : 'MASQUE поверх HTTP/3 и QUIC/TLS'}
+                    title={
+                      row.use_http2
+                        ? 'MASQUE поверх HTTP/2 и TLS'
+                        : 'MASQUE поверх HTTP/3 и QUIC/TLS'
+                    }
                   >
                     {row.use_http2 ? 'H2/TLS' : 'H3/TLS'}
                   </Tag>
