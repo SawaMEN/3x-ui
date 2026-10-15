@@ -35,7 +35,7 @@ esac
 '''
 
 class ReleaseMigrationTests(unittest.TestCase):
-    def run_case(self, mode, relative_link=False):
+    def run_case(self, mode, relative_link=False, alpine=False):
         with tempfile.TemporaryDirectory() as raw:
             base = Path(raw)
             old = base / "x-ui"
@@ -75,7 +75,7 @@ class ReleaseMigrationTests(unittest.TestCase):
 set -eu
 xui_folder="$TEST_ROOT/x-ui"
 xui_service="$TEST_ROOT"
-release=debian
+release="${TEST_RELEASE:-debian}"
 if [[ "$CASE" == external_* ]]; then
     export XUI_BIN_FOLDER="$TEST_ROOT/external-bin"
     CASE="${CASE#external_}"
@@ -95,6 +95,20 @@ systemctl() {
         *) return 0;;
     esac
 }
+rc-service() {
+    printf 'service:%s %s\n' "$2" "$1" >> "$TEST_LOG"
+    case "$2" in
+        status) [[ ! -e "$TEST_ROOT/replaced" && "${SIM_RUNNING:-1}" == 1 ]];;
+        stop) [[ ! -e "$TEST_ROOT/replaced" ]];;
+        *) return 0;;
+    esac
+}
+rc-update() {
+    case "$1" in
+        show) printf 'x-ui | default\n';;
+        *) printf 'autostart:%s\n' "$*" >> "$TEST_LOG";;
+    esac
+}
 source "$HELPER"
 core_migration_host_paths() { cm_host_paths=("$TEST_ROOT/unit"); }
 core_migration_resume_gateway() { printf "resume-gateway\n" >> "$TEST_LOG"; }
@@ -111,6 +125,7 @@ core_migration_begin
 # Simulate the release replacement and host-unit installation.
 rm -rf "$xui_folder"
 cp -a "$TEST_ROOT/bundle/x-ui" "$xui_folder"
+touch "$TEST_ROOT/replaced"
 printf 'new-unit' > "$TEST_ROOT/unit"
 # Custom-file restoration can bring old engines back; commit must remove them.
 printf 'legacy-xray' > "$xui_folder/bin/xray-linux-amd64"
@@ -164,7 +179,7 @@ if [[ -d "$cm_backup/managed-bin" ]]; then
     [[ "$(cat "$XUI_BIN_FOLDER/custom-key")" == external-key ]]
 fi
 '''
-            env = dict(os.environ, TEST_ROOT=raw, TEST_DB=str(database),
+            env = dict(os.environ, TEST_ROOT=raw, TEST_DB=str(database), TEST_RELEASE="alpine" if alpine else "debian",
                        TEST_LOG=str(base / "commands"), HELPER=str(ROOT / "core-migration.sh"),
                        ARCHIVE=str(archive), CASE=mode, SIM_ENABLED="0" if mode in ("disabled", "missing_unit_failure") else "1",
                        SIM_RUNNING="0" if mode in ("stopped_failure", "missing_unit_failure") else "1")
@@ -182,6 +197,9 @@ fi
                     if mode in ("stopped_failure", "missing_unit_failure"): self.assertNotIn("service:start x-ui",commands)
                     else: self.assertIn("service:start x-ui", commands)
                 if mode=="disabled": self.assertIn("service:disable x-ui", commands)
+
+    def test_alpine_rollback_after_new_service_crashes(self):
+        self.run_case("verify", alpine=True)
 
     def test_relative_symlink_bin_success(self): self.run_case("symlink_success", relative_link=True)
     def test_relative_symlink_bin_rollback(self): self.run_case("symlink_verify", relative_link=True)
@@ -358,6 +376,42 @@ core_migration_exit ''' + str(code) + "\n")
             self.run_script(base, r'''
 xui_folder="$TEST_ROOT/x-ui"
 if core_migration_check_space "$TEST_ROOT/release.tar.gz"; then exit 21; fi
+''')
+
+class UpgradeInterruptionTests(unittest.TestCase):
+    run_script = UpgradeStorageTests.run_script
+
+    def test_interruption_after_stop_before_snapshot_restarts_original_panel(self):
+        for release in ("debian", "alpine"):
+            with self.subTest(release=release), tempfile.TemporaryDirectory() as raw:
+                base = Path(raw)
+                (base / "stage").mkdir()
+                self.run_script(base, r'''
+xui_folder="$TEST_ROOT/x-ui"
+cm_stage="$TEST_ROOT/stage"
+cm_was_running=1
+cm_stopped=1
+systemctl() { printf '%s\n' "$*" >> "$TEST_ROOT/calls"; }
+rc-service() { printf '%s %s\n' "$2" "$1" >> "$TEST_ROOT/calls"; }
+''' + f"release={release}\n" + r'''
+core_migration_exit 143
+grep -q '^start x-ui$' "$TEST_ROOT/calls"
+[[ ! -e "$cm_stage" ]]
+''')
+
+    def test_relative_paths_are_stable_across_download_and_install_directories(self):
+        with tempfile.TemporaryDirectory() as raw:
+            self.run_script(Path(raw), r'''
+xui_folder="$TEST_ROOT/x-ui"
+XUI_BIN_FOLDER=custom-bin
+XUI_DB_FOLDER=database
+core_migration_normalize_paths
+[[ "$XUI_BIN_FOLDER" == "$xui_folder/custom-bin" ]]
+[[ "$XUI_DB_FOLDER" == "$xui_folder/database" ]]
+[[ "$XUI_MAIN_FOLDER" == "$xui_folder" ]]
+cd /tmp
+core_migration_normalize_paths
+[[ "$XUI_DB_FOLDER" == "$xui_folder/database" ]]
 ''')
 
 class CoreVersionSelectionTests(unittest.TestCase):

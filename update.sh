@@ -149,11 +149,11 @@ acme_listen_flag() {
 is_port_in_use() {
     local port="$1"
     if command -v ss > /dev/null 2>&1; then
-        ss -ltn 2> /dev/null | awk -v p=":${port}$" '$4 ~ p {exit 0} END {exit 1}'
+        ss -ltn 2> /dev/null | awk -v p=":${port}$" '$4 ~ p {found=1; exit} END {exit !found}'
         return
     fi
     if command -v netstat > /dev/null 2>&1; then
-        netstat -lnt 2> /dev/null | awk -v p=":${port} " '$4 ~ p {exit 0} END {exit 1}'
+        netstat -lnt 2> /dev/null | awk -v p=":${port}$" '$4 ~ p {found=1; exit} END {exit !found}'
         return
     fi
     if command -v lsof > /dev/null 2>&1; then
@@ -184,14 +184,28 @@ xui_env_file_path() {
 }
 
 load_xui_env() {
-    local env_file
+    local env_file key had_allexport=0 env_status=0
+    local -a saved_keys=() saved_values=()
+    # Match the panel CLI: values explicitly supplied by the caller win over
+    # the service EnvironmentFile (including web update channel and paths).
+    while IFS= read -r key; do
+        [[ "$key" == XUI_* ]] || continue
+        saved_keys+=("$key")
+        saved_values+=("${!key}")
+    done < <(compgen -e)
+    [[ "$-" != *a* ]] || had_allexport=1
     env_file="$(xui_env_file_path)"
     if [[ -r "$env_file" ]]; then
         set -a
         # shellcheck disable=SC1090
-        source "$env_file"
-        set +a
+        source "$env_file" || env_status=$?
+        [[ "$had_allexport" == 1 ]] || set +a
     fi
+    local i
+    for i in "${!saved_keys[@]}"; do
+        export "${saved_keys[$i]}=${saved_values[$i]}"
+    done
+    return "$env_status"
 }
 
 install_acme() {
@@ -1046,6 +1060,65 @@ select_release_tag() {
     printf '%s\n' "$requested"
 }
 
+rewrite_release_service_paths() {
+    local file="$1" kind="$2" line temp escaped exec_path working_path
+    [[ "$xui_folder" != /usr/local/x-ui ]] || return 0
+    escaped="${xui_folder//\\/\\\\}"
+    escaped="${escaped//\"/\\\"}"
+    if [[ "$kind" == systemd ]]; then
+        escaped="${escaped//%/%%}"
+        working_path="${xui_folder//%/%%}"
+        exec_path="${escaped//\$/\$\$}"
+    else
+        escaped="${escaped//\$/\\\$}"
+        escaped="${escaped//\`/\\\`}"
+    fi
+    temp=$(mktemp "${file}.paths.XXXXXX") || return 1
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        case "$kind:$line" in
+            systemd:WorkingDirectory=*) printf 'WorkingDirectory=%s/\n' "$working_path" ;;
+            systemd:ExecStart=*) printf 'ExecStart=/usr/bin/env -- "%s/x-ui"\n' "$exec_path" ;;
+            openrc:command=*) printf 'command="%s/x-ui"\n' "$escaped" ;;
+            'openrc:    cd /usr/local/x-ui || return 1') printf '    cd "%s" || return 1\n' "$escaped" ;;
+            *) printf '%s\n' "$line" ;;
+        esac
+    done < "$file" > "$temp" || { rm -f "$temp"; return 1; }
+    mv -f "$temp" "$file"
+}
+
+prepare_release_host_files() {
+    local ref="$1" file unit
+    for file in x-ui.sh x-ui-core.sh; do
+        [[ -s "$cm_stage/x-ui/$file" ]] && bash -n "$cm_stage/x-ui/$file" || {
+            echo "Release management script is missing or invalid: $file. Installation unchanged." >&2
+            return 1
+        }
+    done
+    if [[ "$release" == alpine ]]; then
+        file="$cm_stage/x-ui/x-ui.rc"
+        if [[ ! -s "$file" ]]; then
+            download_release_asset "https://raw.githubusercontent.com/SawaMEN/3x-ui/$ref/x-ui.rc" "$file" || return 1
+        fi
+        [[ -s "$file" ]] && sh -n "$file" || return 1
+        rewrite_release_service_paths "$file" openrc || return 1
+        return 0
+    fi
+    case "$release" in
+        ubuntu|debian|armbian) unit=x-ui.service.debian ;;
+        arch|manjaro|parch) unit=x-ui.service.arch ;;
+        *) unit=x-ui.service.rhel ;;
+    esac
+    if [[ -s "$cm_stage/x-ui/x-ui.service" ]]; then unit=x-ui.service; fi
+    cm_service_unit="$cm_stage/x-ui/$unit"
+    if [[ ! -s "$cm_service_unit" ]]; then
+        download_release_asset "https://raw.githubusercontent.com/SawaMEN/3x-ui/$ref/$unit" "$cm_service_unit" || return 1
+    fi
+    [[ -s "$cm_service_unit" ]] && grep -q '^\[Service\]$' "$cm_service_unit" && grep -q '^ExecStart=' "$cm_service_unit" && grep -q '^WorkingDirectory=' "$cm_service_unit" || {
+        echo "Release systemd unit is missing or invalid; installation unchanged." >&2
+        return 1
+    }
+    rewrite_release_service_paths "$cm_service_unit" systemd
+}
 
 # Downloads a release asset with bounded retries. Some hosts have broken or
 # partially configured IPv6 routes; in that case curl may fail before it ever
@@ -1066,6 +1139,13 @@ download_release_asset() {
 }
 
 update_x-ui() {
+    load_xui_env || _fail "Cannot load x-ui service environment; current installation was not changed"
+    xui_folder="${XUI_MAIN_FOLDER:-/usr/local/x-ui}"
+    xui_service="${XUI_SERVICE:-/etc/systemd/system}"
+    if [[ -z "${XUI_UPDATE_STATUS_FILE:-}" ]]; then
+        xui_update_status_file="${XUI_DB_FOLDER:-/etc/x-ui}/update-status.json"
+        [[ "$xui_update_status_file" == /* ]] || xui_update_status_file="$xui_folder/$xui_update_status_file"
+    fi
     local install_parent="${xui_folder%/x-ui}"
     if [[ "$xui_folder" != /*/x-ui || "${install_parent}" == "${xui_folder}" || -z "${install_parent}" ]]; then
         _fail "ERROR: XUI_MAIN_FOLDER must end with /x-ui (current: ${xui_folder})."
@@ -1073,8 +1153,6 @@ update_x-ui() {
     if ! cd "${install_parent}"; then
         _fail "ERROR: Cannot enter x-ui installation parent directory: ${install_parent}"
     fi
-
-    load_xui_env
 
     if [ -f "${xui_folder}/x-ui" ]; then
         current_xui_version=$("${xui_folder}"/x-ui -v)
@@ -1166,8 +1244,12 @@ update_x-ui() {
     source "$cm_helper"
     rm -f "$cm_helper"
     core_migration_prepare_archive "$archive" || _fail "Release preflight failed (see error above); current installation was not changed"
+    prepare_release_host_files "${script_ref}" || _fail "Release service/menu preflight failed; current installation was not changed"
 
     if [[ -e ${xui_folder}/ ]]; then
+        # Arm recovery before stopping: a signal between stop and snapshot
+        # must still restart the untouched original installation.
+        cm_stopped=1
         echo -e "${green}Stopping x-ui...${plain}"
         if [[ $release == "alpine" ]]; then
             if [ -f "/etc/init.d/x-ui" ]; then
@@ -1225,11 +1307,11 @@ update_x-ui() {
     echo -e "${green}Installing new x-ui version...${plain}"
     if ! tar xzf "${archive}" "${cm_core_tar_args[@]}" -C "${install_parent}" > /dev/null 2>&1; then
         rm -f "${archive}"
-        _fail "ERROR: Failed to extract the x-ui release archive -- the previous installation has already been removed, so the panel will not start until this is fixed; try running the update again"
+        _fail "ERROR: Failed to extract the x-ui release archive -- restoring the previous installation from its snapshot"
     fi
     rm -f "${archive}"
     if ! cd "${xui_folder}" || [[ ! -s "${xui_folder}/x-ui" ]]; then
-        _fail "ERROR: Extracted x-ui archive is missing the x-ui binary -- the previous installation has already been removed, so the panel will not start until this is fixed; try running the update again"
+        _fail "ERROR: Extracted x-ui archive is missing the x-ui binary -- restoring the previous installation from its snapshot"
     fi
     if declare -F core_migration_restore_selected_core >/dev/null; then
         core_migration_restore_selected_core || _fail "Failed to retain installed core"
@@ -1288,16 +1370,16 @@ update_x-ui() {
     core_migration_apply || _fail "Modified Sing-box migration failed; restoring previous installation"
 
     if [[ $release == "alpine" ]]; then
-        echo -e "${green}Downloading and installing startup unit x-ui.rc...${plain}"
+        echo -e "${green}Installing staged startup unit x-ui.rc...${plain}"
         xui_rc_temp="/etc/init.d/x-ui.tmp.$$"
         rm -f "${xui_rc_temp}"
-        if ! download_release_asset "https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/x-ui.rc" "${xui_rc_temp}"; then
+        if ! cp "${cm_stage}/x-ui/x-ui.rc" "${xui_rc_temp}"; then
             rm -f "${xui_rc_temp}"
-            _fail "ERROR: Failed to download startup unit x-ui.rc, please be sure that your server can access GitHub"
+            _fail "ERROR: Cannot install staged OpenRC startup script; restoring previous installation"
         fi
         if [[ ! -s "${xui_rc_temp}" ]]; then
             rm -f "${xui_rc_temp}"
-            _fail "ERROR: Downloaded startup unit x-ui.rc is empty, please be sure that your server can access GitHub"
+            _fail "ERROR: Staged OpenRC startup script is empty; restoring previous installation"
         fi
         mv -f "${xui_rc_temp}" /etc/init.d/x-ui
         if [[ $? -ne 0 ]]; then
@@ -1307,64 +1389,10 @@ update_x-ui() {
         chmod +x /etc/init.d/x-ui > /dev/null 2>&1
         chown root:root /etc/init.d/x-ui > /dev/null 2>&1
         rc-update add x-ui > /dev/null 2>&1
-        rc-service x-ui start > /dev/null 2>&1
+        rc-service x-ui start > /dev/null 2>&1 || _fail "ERROR: Failed to start x-ui after update (OpenRC)"
     else
-        if [ -f "x-ui.service" ]; then
-            echo -e "${green}Installing systemd unit...${plain}"
-            if ! _install_xui_service_unit "x-ui.service" "false"; then
-                echo -e "${red}Failed to copy x-ui.service${plain}"
-                exit 1
-            fi
-        else
-            service_installed=false
-            case "${release}" in
-                ubuntu | debian | armbian)
-                    if [ -f "x-ui.service.debian" ]; then
-                        echo -e "${green}Installing debian-like systemd unit...${plain}"
-                        if _install_xui_service_unit "x-ui.service.debian" "false"; then
-                            service_installed=true
-                        fi
-                    fi
-                    ;;
-                arch | manjaro | parch)
-                    if [ -f "x-ui.service.arch" ]; then
-                        echo -e "${green}Installing arch-like systemd unit...${plain}"
-                        if _install_xui_service_unit "x-ui.service.arch" "false"; then
-                            service_installed=true
-                        fi
-                    fi
-                    ;;
-                *)
-                    if [ -f "x-ui.service.rhel" ]; then
-                        echo -e "${green}Installing rhel-like systemd unit...${plain}"
-                        if _install_xui_service_unit "x-ui.service.rhel" "false"; then
-                            service_installed=true
-                        fi
-                    fi
-                    ;;
-            esac
-
-            # If service file not found in tar.gz, download from GitHub
-            if [ "$service_installed" = false ]; then
-                echo -e "${yellow}Service files not found in tar.gz, downloading from GitHub...${plain}"
-                case "${release}" in
-                    ubuntu | debian | armbian)
-                        service_unit_url="https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/x-ui.service.debian"
-                        ;;
-                    arch | manjaro | parch)
-                        service_unit_url="https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/x-ui.service.arch"
-                        ;;
-                    *)
-                        service_unit_url="https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/x-ui.service.rhel"
-                        ;;
-                esac
-
-                if ! _install_xui_service_unit "$service_unit_url" "true"; then
-                    echo -e "${red}Failed to install x-ui.service from GitHub (${script_ref}) -- the release tarball did not ship one either${plain}"
-                    exit 1
-                fi
-            fi
-        fi
+        echo -e "${green}Installing staged systemd unit...${plain}"
+        _install_xui_service_unit "$cm_service_unit" false || _fail "Cannot install staged systemd unit"
         chown root:root "${xui_service}/x-ui.service" > /dev/null 2>&1
         chmod 644 "${xui_service}/x-ui.service" > /dev/null 2>&1
         systemctl daemon-reload > /dev/null 2>&1

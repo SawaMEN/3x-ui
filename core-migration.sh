@@ -105,8 +105,19 @@ core_migration_restore_selected_core() {
     done
 }
 
+core_migration_normalize_paths() {
+    export XUI_MAIN_FOLDER="$xui_folder"
+    export XUI_BIN_FOLDER="${XUI_BIN_FOLDER:-$xui_folder/bin}"
+    export XUI_DB_FOLDER="${XUI_DB_FOLDER:-/etc/x-ui}"
+    # The service runs from XUI_MAIN_FOLDER, but the downloader runs from its
+    # parent. Resolve relative paths once, before preflight/snapshot commands.
+    [[ "$XUI_BIN_FOLDER" == /* ]] || export XUI_BIN_FOLDER="$xui_folder/$XUI_BIN_FOLDER"
+    [[ "$XUI_DB_FOLDER" == /* ]] || export XUI_DB_FOLDER="$xui_folder/$XUI_DB_FOLDER"
+}
+
 core_migration_prepare_archive() {
     local archive="$1"
+    core_migration_normalize_paths
     cm_core_tar_args=()
     exec {cm_lock}>"${xui_folder%/*}/.x-ui-upgrade.lock" || return 1
     if ! flock -n "$cm_lock"; then
@@ -268,7 +279,11 @@ core_migration_finish() {
     if [[ "${cm_active:-0}" == 1 ]]; then
         echo "Upgrade failed; restoring offline snapshot: $cm_backup" >&2
         if [[ "${release}" == alpine ]]; then
-            rc-service x-ui stop || return 1
+            # OpenRC returns failure when stopping an already crashed/stopped
+            # service. That is exactly when rollback is needed most.
+            if rc-service x-ui status >/dev/null 2>&1; then
+                rc-service x-ui stop || return 1
+            fi
         else
             # Repair can begin with files present and no registered service.
             # A missing unit is already stopped; other stop failures are fatal.
