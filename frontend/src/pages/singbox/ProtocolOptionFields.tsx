@@ -197,7 +197,8 @@ export function dedicatedFields(type: string): Set<string> {
   if (type === 'selector') add('default');
   if (type === 'urltest') add('url', 'interval', 'tolerance');
   if (['masque', 'masque-client'].includes(type))
-    add('version', 'path', 'username', 'password', 'mtu', 'use_http2', 'use_ipv6');
+    add('version', 'path', 'username', 'password', 'mtu', 'use_http2', 'use_ipv6', 'udp_timeout');
+  if (type === 'masque') add('udp_keepalive_period', 'reconnect_delay');
   return result;
 }
 
