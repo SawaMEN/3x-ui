@@ -1180,13 +1180,16 @@ update_x-ui() {
     fi
 
     echo -e "${green}Installing new x-ui version...${plain}"
-    if ! tar xzf "${archive}" -C "${install_parent}" > /dev/null 2>&1; then
+    if ! tar xzf "${archive}" "${cm_core_tar_args[@]}" -C "${install_parent}" > /dev/null 2>&1; then
         rm -f "${archive}"
         _fail "ERROR: Failed to extract the x-ui release archive -- the previous installation has already been removed, so the panel will not start until this is fixed; try running the update again"
     fi
     rm -f "${archive}"
     if ! cd "${xui_folder}" || [[ ! -s "${xui_folder}/x-ui" ]]; then
         _fail "ERROR: Extracted x-ui archive is missing the x-ui binary -- the previous installation has already been removed, so the panel will not start until this is fixed; try running the update again"
+    fi
+    if declare -F core_migration_restore_selected_core >/dev/null; then
+        core_migration_restore_selected_core || _fail "Failed to retain installed core"
     fi
     chmod +x x-ui > /dev/null 2>&1
 

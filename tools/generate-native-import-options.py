@@ -11,7 +11,7 @@ from pathlib import Path
 root = Path(sys.argv[1])
 structs, aliases = {}, {}
 def collect(source):
-    for name, body in re.findall(r'type (\w+) struct\s*\{(.*?)\n\}', source, re.S):
+    for name, body in re.findall(r'type (\w+) struct\s*\{(?:[^\n]*\n)(.*?)\n\}', source, re.S):
         fields = []
         for line in body.splitlines():
             match = re.match(r'\s*\w+\s+(.+?)\s+`json:"([^",]+)', line)
@@ -98,3 +98,24 @@ for kind, name in {'http':'V2RayHTTPOptions','ws':'V2RayWebsocketOptions','grpc'
 path=Path(__file__).resolve().parent.parent/'internal/web/service/native_import_options.json'
 path.write_text(json.dumps(output,ensure_ascii=False,sort_keys=True,indent=2)+'\n')
 print(f'Generated native URI options for {len(registrations)} types and transport variants')
+
+# Top-level fields drive the native outbound editor. Nested structures retain
+# their JSON types and can be edited independently without replacing the draft.
+ui = {}
+for kind, name in sorted(registrations.items()):
+    if kind not in output:
+        continue
+    ui[kind] = {key: value for key, value in fields(name).items() if '.' not in key}
+    def ui_types(name):
+        result = {}
+        for key, go_type in structs.get(resolve(name), []):
+            if not key:
+                result.update(ui_types(go_type))
+            elif go_type.lstrip('*') in ['byteformats.MemoryBytes', 'badoption.HTTPHeader', 'FwMark']:
+                result[key] = {'byteformats.MemoryBytes': 'string', 'badoption.HTTPHeader': 'object', 'FwMark': 'number'}[go_type.lstrip('*')]
+            elif go_type in ['[]string', 'badoption.Listable[string]']:
+                result[key] = 'strings'
+        return result
+    ui[kind].update(ui_types(name))
+ui_path = Path(__file__).resolve().parent.parent / 'frontend/src/pages/singbox/native-outbound-fields.json'
+ui_path.write_text(json.dumps(ui, ensure_ascii=False, sort_keys=True, indent=2) + '\n')

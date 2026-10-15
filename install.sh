@@ -1765,7 +1765,7 @@ install_x-ui() {
     fi
 
     # Extract resources and set permissions
-    tar zxvf "${archive}"
+    tar zxvf "${archive}" "${cm_core_tar_args[@]}"
     if [[ $? -ne 0 ]]; then
         rm -f -- "${archive}"
         rm -f "${xui_script_temp}"
@@ -1778,6 +1778,9 @@ install_x-ui() {
         rm -f "${xui_script_temp}"
         echo -e "${red}Extracted x-ui archive is missing the x-ui binary -- the previous installation has already been removed, so the panel will not start until this is fixed; try running the installer again${plain}"
         exit 1
+    fi
+    if declare -F core_migration_restore_selected_core >/dev/null; then
+        core_migration_restore_selected_core || exit 1
     fi
     chmod +x x-ui
     chmod +x x-ui.sh

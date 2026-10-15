@@ -59,6 +59,8 @@ import {
   tlsProtocols,
   transportProtocols,
 } from './outbound-editor-model';
+import ProtocolOptionFields from './ProtocolOptionFields';
+import nativeFields from './native-outbound-fields.json';
 import MasqueConnectionFields from './MasqueConnectionFields';
 import './SingBoxOutboundModal.css';
 function Field({
@@ -105,6 +107,7 @@ export default function SingBoxOutboundModal({
   const [tab, setTab] = useState('connection'),
     [json, setJson] = useState(''),
     [jsonError, setJsonError] = useState('');
+  const [invalidOptions, setInvalidOptions] = useState<string[]>([]);
   const [error, setError] = useState(''),
     [link, setLink] = useState('');
   const [importing, setImporting] = useState(false),
@@ -131,6 +134,7 @@ export default function SingBoxOutboundModal({
     setImporting(false);
     setAdditional([]);
     setExportedLink('');
+    setInvalidOptions([]);
     savedProtocols.current = {};
   }, [open, value]);
   const type = text(draft.type),
@@ -183,10 +187,12 @@ export default function SingBoxOutboundModal({
       style={{ width: '100%' }}
       value={typeof draft[key] === 'number' ? (draft[key] as number) : undefined}
       min={min}
+      precision={0}
       max={max}
       onChange={(v) => patch(key, v)}
     />
   );
+  const protocolFields = (nativeFields as Record<string, Record<string, string>>)[type] || {};
   const security = tls.enabled ? (reality.enabled ? 'reality' : 'tls') : 'none',
     network = text(transport.type) || 'tcp';
   async function importLink() {
@@ -230,6 +236,7 @@ export default function SingBoxOutboundModal({
             value={type || undefined}
             options={options([...outboundProtocols, ...nativeEndpointTypes])}
             onChange={(next) => {
+              setInvalidOptions([]);
               savedProtocols.current[type] = structuredClone(draft);
               const saved = savedProtocols.current[next];
               update(saved ? { ...saved, tag: draft.tag } : changeProtocol(draft, next));
@@ -275,6 +282,14 @@ export default function SingBoxOutboundModal({
             )}
             {['http', 'socks', 'mieru', 'naive'].includes(type) && (
               <Field label="Логин">{input('username')}</Field>
+            )}
+            {type === 'naive' && (
+              <Field
+                label="Одновременные соединения"
+                hint="Пусто или 0 — выбор ядра. Увеличение может ослабить маскировку Naive."
+              >
+                {number('insecure_concurrency', 0)}
+              </Field>
             )}
             {type === 'ssh' && (
               <Field label="Пользователь SSH">{input('user', false, 'root')}</Field>
@@ -546,14 +561,28 @@ export default function SingBoxOutboundModal({
             </Field>
           </>
         )}
-        <Field label="Тайм-аут подключения">{input('connect_timeout', false, '10s')}</Field>
-        <Field label="TCP Fast Open">
-          <Switch
-            checked={!!draft.tcp_fast_open}
-            disabled={type === 'anytls'}
-            onChange={(v) => patch('tcp_fast_open', v)}
-          />
-        </Field>
+        <ProtocolOptionFields
+          key={type}
+          value={draft}
+          onChange={patch}
+          onValidity={(key, valid) =>
+            setInvalidOptions((current) =>
+              valid ? current.filter((item) => item !== key) : [...new Set([...current, key])],
+            )
+          }
+        />
+        {'connect_timeout' in protocolFields && (
+          <Field label="Тайм-аут подключения">{input('connect_timeout', false, '10s')}</Field>
+        )}
+        {'tcp_fast_open' in protocolFields && (
+          <Field label="TCP Fast Open">
+            <Switch
+              checked={!!draft.tcp_fast_open}
+              disabled={type === 'anytls'}
+              onChange={(v) => patch('tcp_fast_open', v)}
+            />
+          </Field>
+        )}
       </Row>
     </Form>
   );
@@ -865,6 +894,7 @@ export default function SingBoxOutboundModal({
           setJson(raw);
           try {
             setDraft(parseOutboundJson(raw));
+            setInvalidOptions([]);
             setJsonError('');
             setError('');
           } catch (e) {
@@ -948,11 +978,11 @@ export default function SingBoxOutboundModal({
       }}
       mask={{ closable: !importing }}
       cancelButtonProps={{ disabled: importing }}
-      okButtonProps={{ disabled: importing || !!jsonError }}
+      okButtonProps={{ disabled: importing || !!jsonError || invalidOptions.length > 0 }}
       okText={value ? 'Сохранить изменения' : 'Добавить подключение'}
       cancelText="Отмена"
       onOk={() => {
-        if (jsonError || importing) return;
+        if (invalidOptions.length > 0 || jsonError || importing) return;
         const batchTags = additional.map((item) => text(item.tag));
         const errors = outboundErrors(draft, [...availableTags, ...batchTags]);
         for (const item of additional)
@@ -994,7 +1024,7 @@ export default function SingBoxOutboundModal({
       <Tabs
         activeKey={tabs.some((t) => t.key === tab) ? tab : 'connection'}
         onChange={(next) => {
-          if (!jsonError && !importing) setTab(next);
+          if (!jsonError && !importing && invalidOptions.length === 0) setTab(next);
         }}
         items={tabs}
       />
@@ -1003,10 +1033,10 @@ export default function SingBoxOutboundModal({
           type="info"
           showIcon
           title="Туннель будет сохранён в Endpoints"
-          description="Все параметры туннеля доступны в JSON. Он будет доступен как исходящее подключение в маршрутах."
+          description="Параметры туннеля доступны в дополнительных настройках и JSON. Он будет доступен как исходящее подключение в маршрутах."
         />
       )}
-      {remote && tab === 'connection' && (
+      {tab === 'connection' && (
         <Collapse
           ghost
           size="small"
