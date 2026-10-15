@@ -56,12 +56,9 @@ func logSubscriptionCompatibilitySummary(label, coreName string, issues []string
 	)
 }
 
-// filterSubscriptionOutboundsWithIssues validates subscription members against
-// the active core. Runtime-only core incompatibilities are logged and filtered
-// without being returned as subscription refresh errors: fetching/parsing the
-// subscription still succeeded and all source profiles remain stored. The
-// returned issues are reserved for malformed/invalid source entries rather than
-// expected feature gaps between Xray and sing-box.
+// filterSubscriptionOutboundsWithIssues returns every incompatibility so the
+// subscription UI can explain excluded profiles without failing the refresh.
+// Original source profiles remain stored for future kernel upgrades.
 func filterSubscriptionOutboundsWithIssues(label string, members []any) ([]any, []string, string) {
 	core, _ := (&SettingService{}).GetCoreType()
 	return filterSubscriptionOutboundsForCore(label, core, members)
@@ -71,7 +68,7 @@ func filterSubscriptionOutboundsForCore(label, core string, members []any) ([]an
 	if !IsNativeCore(core) {
 		kept, compatibilityIssues := filterOutboundsRejectedByCore(label, members)
 		logSubscriptionCompatibilitySummary(label, "xray", compatibilityIssues)
-		return kept, nil, "xray"
+		return kept, compatibilityIssues, "xray"
 	}
 
 	kept := make([]any, 0, len(members))
@@ -89,6 +86,12 @@ func filterSubscriptionOutboundsForCore(label, core string, members []any) ([]an
 		}
 		protocol, _ := ob["protocol"].(string)
 		var err error
+		kind := strings.TrimPrefix(strings.ToLower(strings.TrimSpace(protocol)), "singbox:")
+		switch kind {
+		case "masque-server", "openvpn-server", "tunnel_server", "hinvalid":
+			compatibilityIssues = append(compatibilityIssues, fmt.Sprintf("%s: %s не поддерживается как исходящий клиент", tag, kind))
+			continue
+		}
 		if externalvpn.IsAdditionalOutbound(ob) {
 			if err := externalvpn.ValidateAdditionalOutbound(ob); err != nil {
 				statusIssues = append(statusIssues, fmt.Sprintf("%s: %v", tag, err))
@@ -113,12 +116,18 @@ func filterSubscriptionOutboundsForCore(label, core string, members []any) ([]an
 			compatibilityIssues = append(compatibilityIssues, fmt.Sprintf("%s: %v", tag, err))
 			continue
 		}
+		if kind != "amneziawg" {
+			if err := validateSubscriptionNativeMember(ob, core); err != nil {
+				compatibilityIssues = append(compatibilityIssues, fmt.Sprintf("%s: %v", tag, err))
+				continue
+			}
+		}
 		kept = append(kept, raw)
 	}
 	kept, dependencyIssues := pruneSubscriptionDependencies(members, kept)
 	compatibilityIssues = append(compatibilityIssues, dependencyIssues...)
 	logSubscriptionCompatibilitySummary(label, core, compatibilityIssues)
-	return kept, statusIssues, core
+	return kept, append(statusIssues, compatibilityIssues...), core
 }
 
 // Unsupported subscription members must not prevent the active core starting.
@@ -146,7 +155,59 @@ func pruneSubscriptionDependencies(source, kept []any) ([]any, []string) {
 			}
 		}
 	}
+	// A cycle can look locally valid when each member is checked in isolation.
+	// Reject the cycle and let the ordinary pass prune all dependent chains.
+	graph := map[string][]string{}
+	for _, raw := range kept {
+		if row, ok := raw.(map[string]any); ok {
+			tag, _ := row["tag"].(string)
+			graph[tag] = outbound.OutboundDependencies(row)
+		}
+	}
+	state, cyclic := map[string]int{}, map[string]bool{}
+	var stack []string
+	var visit func(string)
+	visit = func(tag string) {
+		if state[tag] == 2 {
+			return
+		}
+		if state[tag] == 1 {
+			for i, node := range stack {
+				if node == tag {
+					for _, member := range stack[i:] {
+						cyclic[member] = true
+					}
+					break
+				}
+			}
+			return
+		}
+		state[tag] = 1
+		stack = append(stack, tag)
+		for _, dependency := range graph[tag] {
+			if _, known := graph[dependency]; known {
+				visit(dependency)
+			}
+		}
+		stack = stack[:len(stack)-1]
+		state[tag] = 2
+	}
+	for tag := range graph {
+		visit(tag)
+	}
 	var issues []string
+	remaining := make([]any, 0, len(kept))
+	for _, raw := range kept {
+		row, _ := raw.(map[string]any)
+		tag, _ := row["tag"].(string)
+		if cyclic[tag] {
+			delete(available, tag)
+			issues = append(issues, fmt.Sprintf("%s: циклическая цепочка подключений, пропущена", tag))
+		} else {
+			remaining = append(remaining, raw)
+		}
+	}
+	kept = remaining
 	for {
 		changed := false
 		remaining := make([]any, 0, len(kept))

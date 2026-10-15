@@ -1,3 +1,4 @@
+import OutboundPingButton from './OutboundPingButton';
 import MasqueConnectionFields from './MasqueConnectionFields';
 import { addWarpMasque } from './masque-settings';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -419,7 +420,7 @@ function singBoxHealthIssues(config: ConfigMap) {
     if (['vless', 'vmess'].includes(type) && !asString(item.uuid)) {
       issues.push(type + ' "' + name + '": не указан UUID');
     }
-    if (['selector', 'urltest'].includes(type)) {
+    if (['selector', 'urltest', 'balancer'].includes(type)) {
       asStringArray(item.outbounds).forEach((target) => {
         if (!tagSet.has(target))
           issues.push(type + ' "' + name + '": отсутствует outbound "' + target + '"');
@@ -1685,7 +1686,7 @@ export default function SingBoxPage() {
               title: 'Endpoint',
               render: (_: unknown, row: JsonObject) => {
                 const type = asString(row.type);
-                if (['selector', 'urltest'].includes(type))
+                if (['selector', 'urltest', 'balancer'].includes(type))
                   return asStringArray(row.outbounds).length + ' outbound в группе';
                 if (row.server)
                   return asString(row.server) + (row.server_port ? ':' + row.server_port : '');
@@ -1707,7 +1708,20 @@ export default function SingBoxPage() {
                 const broken = singBoxHealthIssues(config).some((issue) =>
                   issue.includes('"' + name + '"'),
                 );
-                return broken ? <Tag color="error">Проверить</Tag> : <Tag color="success">ОК</Tag>;
+                return (
+                  <Space orientation="vertical">
+                    {broken ? <Tag color="error">Проверить</Tag> : <Tag color="success">ОК</Tag>}
+                    <OutboundPingButton
+                      key={name}
+                      tag={name}
+                      disabled={
+                        dirty ||
+                        broken ||
+                        ['direct', 'block', 'bridge'].includes(asString(row.type))
+                      }
+                    />
+                  </Space>
+                );
               },
             },
             {

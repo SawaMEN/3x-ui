@@ -83,3 +83,45 @@ it('keeps a saved subscription visible for retry when the first download fails',
       .mock.calls.filter(([path]) => path === '/panel/api/xray/outbound-subs'),
   ).toHaveLength(1);
 });
+
+it('shows compatibility warnings and can rank and ping the applied automatic route', async () => {
+  vi.mocked(HttpUtil.get).mockResolvedValue({
+    success: true,
+    msg: '',
+    obj: [
+      {
+        id: 7,
+        remark: 'Mixed',
+        url: 'https://provider.test/sub',
+        enabled: true,
+        autoBalance: true,
+        outboundCount: 3,
+        supportedCount: 2,
+        lastWarning: 'Один протокол не поддерживается',
+        selectedTag: 'best',
+        appliedTag: 'best',
+      },
+    ],
+  });
+  vi.mocked(HttpUtil.post).mockClear();
+  vi.mocked(HttpUtil.post).mockImplementation(async (path) => ({
+    success: true,
+    msg: '',
+    obj: String(path).endsWith('/check')
+      ? { delay: 42 }
+      : path === '/panel/api/xray/'
+        ? { subscriptionOutboundTags: ['sub-auto-7'] }
+        : {},
+  }));
+  render(<OutboundSubscriptions open initialURL="" onClose={() => {}} onTagsChanged={() => {}} />);
+  expect(await screen.findByText('Один протокол не поддерживается')).toBeTruthy();
+  expect(screen.getByText('Применимо: 2 из 3')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Пинг' }));
+  expect(await screen.findByText('42 мс')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Проверить и выбрать лучший' }));
+  await waitFor(() =>
+    expect(HttpUtil.post).toHaveBeenCalledWith('/panel/api/xray/outbound-subs/7/probe', undefined, {
+      silent: true,
+    }),
+  );
+});
