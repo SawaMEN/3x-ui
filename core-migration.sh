@@ -50,8 +50,64 @@ core_migration_prune_snapshots() {
     rm -rf -- "$cm_backup"
 }
 
+# Compare executable identities, rather than panel versions or file timestamps.
+# Failure to inspect either binary falls back to the normal validated upgrade.
+core_migration_core_version() {
+    local binary="$1" output
+    [[ -x "$binary" ]] && command -v timeout >/dev/null 2>&1 || return 1
+    output=$(cd "$(dirname "$binary")" && timeout 15 "./$(basename "$binary")" version 2>/dev/null) || return 1
+    [[ "$output" == 'hiddify-core version '* ]] || return 1
+    printf '%s\n' "$output" | awk 'NR == 1 && $3 != "" {print $3}'
+}
+
+core_migration_select_core() {
+    local current="${XUI_BIN_FOLDER:-$xui_folder/bin}" incoming="$cm_stage/x-ui/bin"
+    local binary="hiddify-core-linux-$(arch)" installed_version release_version asset
+    cm_core_tar_args=()
+    cm_reuse_core=0
+    [[ "$current" == /* ]] || current="$xui_folder/$current"
+    installed_version=$(core_migration_core_version "$current/$binary") || return 0
+    release_version=$(core_migration_core_version "$incoming/$binary") || return 0
+    [[ -n "$installed_version" && "$installed_version" == "$release_version" ]] || return 0
+    # Cronet belongs to the executable. Never mix an existing core with a new
+    # library or preserve a core whose required library is missing.
+    [[ ! -f "$incoming/libcronet.so" || -s "$current/libcronet.so" ]] || return 0
+    # The same version must still satisfy this panel's runtime contract.
+    # If not, use the already validated bundled build instead of blocking an update.
+    if ! XUI_BIN_FOLDER="$current" "$cm_stage/x-ui/x-ui" core-migrate --check-binary; then
+        echo "Installed core does not satisfy the new panel; using bundled core"
+        return 0
+    fi
+    for asset in "$binary" "$binary.sha256" libcronet.so libcronet.so.sha256 target.json; do
+        if [[ -f "$current/$asset" ]]; then
+            cp -p -- "$current/$asset" "$incoming/$asset" || return 1
+        else
+            rm -f -- "$incoming/$asset" || return 1
+        fi
+        cm_core_tar_args+=("--exclude=x-ui/bin/$asset")
+    done
+    cm_reuse_core=1
+    echo "Core $installed_version is already installed; keeping existing core and Naive library"
+}
+
+core_migration_restore_selected_core() {
+    [[ "${cm_reuse_core:-0}" == 1 ]] || return 0
+    local asset binary="hiddify-core-linux-$(arch)"
+    mkdir -p "$xui_folder/bin" || return 1
+    for asset in "$binary" "$binary.sha256" libcronet.so libcronet.so.sha256 target.json; do
+        if [[ -f "$cm_stage/x-ui/bin/$asset" ]]; then
+            if ! cmp -s -- "$cm_stage/x-ui/bin/$asset" "$xui_folder/bin/$asset"; then
+                cp -p -- "$cm_stage/x-ui/bin/$asset" "$xui_folder/bin/$asset" || return 1
+            fi
+        else
+            rm -f -- "$xui_folder/bin/$asset" || return 1
+        fi
+    done
+}
+
 core_migration_prepare_archive() {
     local archive="$1"
+    cm_core_tar_args=()
     exec {cm_lock}>"${xui_folder%/*}/.x-ui-upgrade.lock" || return 1
     flock -n "$cm_lock" || return 1
     core_migration_check_space "$archive" || return 1
@@ -69,6 +125,7 @@ core_migration_prepare_archive() {
     fi
     [[ -x "$cm_stage/x-ui/x-ui" && -s "$cm_stage/x-ui/bin/hiddify-core-linux-$(arch)" ]] || return 1
     XUI_BIN_FOLDER="$cm_stage/x-ui/bin" "$cm_stage/x-ui/x-ui" core-migrate --check-binary || return 1
+    core_migration_select_core
 }
 core_migration_begin() {
     [[ -n "${cm_stage:-}" && -d "$xui_folder" ]] || return 1
@@ -125,6 +182,22 @@ core_migration_restore_custom_bin_files() {
         cp -a -- "$asset" "$xui_folder/bin/$rel" || return 1
     done < <(find "$source" \( -type f -o -type l \) -print0)
 }
+# Keep an identical selected executable/library in place in external bin dirs.
+core_migration_copy_managed_assets() {
+    local source="$1" destination="$2" asset name
+    for asset in "$source"/* "$source"/.[!.]* "$source"/..?*; do
+        [[ -e "$asset" || -L "$asset" ]] || continue
+        name="${asset##*/}"
+        if [[ "${cm_reuse_core:-0}" == 1 ]]; then
+            case "$name" in
+                hiddify-core-linux-* | libcronet.so | libcronet.so.sha256 | target.json)
+                    cmp -s -- "$asset" "$destination/$name" && continue ;;
+            esac
+        fi
+        cp -a -- "$asset" "$destination/" || return 1
+    done
+}
+
 core_migration_install_managed_bin() {
     # Releases extract into installation/bin; a configured external directory
     # must receive the same binaries and databases before the migration trial.
@@ -139,14 +212,14 @@ core_migration_install_managed_bin() {
             # Copy to the original resolved target before restoring the link.
             [[ -n "${cm_original_bin_target:-}" ]] || return 1
             mkdir -p "$cm_original_bin_target" || return 1
-            cp -a "$xui_folder/bin/." "$cm_original_bin_target/" || return 1
+            core_migration_copy_managed_assets "$xui_folder/bin" "$cm_original_bin_target" || return 1
             rm -rf -- "${xui_folder:?}/bin" || return 1
             cp -a "$cm_backup/installation/bin" "$xui_folder/bin" || return 1
         fi
     fi
     if [[ "$XUI_BIN_FOLDER" == "$xui_folder/bin" && ! -L "$XUI_BIN_FOLDER" ]]; then return 0; fi
     mkdir -p "$XUI_BIN_FOLDER" || return 1
-    cp -a "$cm_stage/x-ui/bin/." "$XUI_BIN_FOLDER/" || return 1
+    core_migration_copy_managed_assets "$cm_stage/x-ui/bin" "$XUI_BIN_FOLDER" || return 1
     chmod +x "$XUI_BIN_FOLDER/hiddify-core-linux-$(arch)" || return 1
 }
 core_migration_commit() {

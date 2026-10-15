@@ -1,3 +1,4 @@
+import OutboundPingButton from '@/pages/singbox/OutboundPingButton';
 import { normalizeOutboundJsonImport } from './singbox-native-outbound';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -88,6 +89,8 @@ interface OutboundSub {
   updateInterval?: number;
   lastUpdated?: number;
   lastError?: string;
+  lastWarning?: string;
+  supportedCount?: number;
   outboundCount?: number;
   selectedTag?: string;
   appliedTag?: string;
@@ -1138,7 +1141,15 @@ export default function OutboundsTab({
                             >
                               {t('pages.xray.outboundSub.probeNow')}
                             </Button>
+                            <OutboundPingButton
+                              key={`${r.id}-${r.appliedTag || ''}`}
+                              tag={`sub-auto-${r.id}`}
+                              disabled={busyId === r.id || !r.enabled || !r.appliedTag}
+                            />
                           </div>
+                        )}
+                        {r.lastWarning && (
+                          <div style={{ color: '#b57900', fontSize: 12 }}>{r.lastWarning}</div>
                         )}
                         {r.tagPrefix && (
                           <div style={{ fontSize: 11, color: '#888' }}>{r.tagPrefix}</div>
@@ -1151,16 +1162,23 @@ export default function OutboundsTab({
                     dataIndex: 'outboundCount',
                     key: 'outboundCount',
                     align: 'center',
-                    render: (v) => v ?? 0,
+                    render: (v, row: OutboundSub) =>
+                      row.supportedCount === undefined ? (
+                        (v ?? 0)
+                      ) : (
+                        <Tooltip title="Совместимые подключения / всего в подписке">
+                          {row.supportedCount} / {v ?? 0}
+                        </Tooltip>
+                      ),
                   },
                   {
                     title: t('status'),
                     key: 'status',
                     align: 'center',
                     render: (_: unknown, r: OutboundSub) =>
-                      r.lastError ? (
-                        <Tooltip title={r.lastError}>
-                          <WarningOutlined style={{ color: '#e04141' }} />
+                      r.lastError || r.lastWarning ? (
+                        <Tooltip title={r.lastError || r.lastWarning}>
+                          <WarningOutlined style={{ color: r.lastError ? '#e04141' : '#b57900' }} />
                         </Tooltip>
                       ) : (
                         <Tooltip title={t('pages.xray.outboundSub.statusOk')}>

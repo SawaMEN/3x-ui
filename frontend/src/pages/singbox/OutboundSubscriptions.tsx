@@ -12,6 +12,7 @@ import {
   Table,
   Typography,
 } from 'antd';
+import OutboundPingButton from './OutboundPingButton';
 import { HttpUtil } from '@/utils';
 
 type Subscription = {
@@ -22,6 +23,12 @@ type Subscription = {
   autoBalance: boolean;
   outboundCount: number;
   lastError?: string;
+  lastWarning?: string;
+  supportedCount?: number;
+  selectedTag?: string;
+  appliedTag?: string;
+  applyError?: string;
+  probeResults?: string;
   probeError?: string;
 };
 
@@ -125,7 +132,7 @@ export default function OutboundSubscriptions({
           type="info"
           showIcon
           title="Добавьте подписку и выберите её в поле «Подключиться через»"
-          description="Тег sub-auto-ID автоматически выбирает рабочий узел. Список подключений обновляется по расписанию; также можно выбрать отдельный узел подписки. UDP-цепочка требует поддержки UDP у промежуточного узла."
+          description="Тег sub-auto-ID автоматически выбирает лучшее доступное подключение и сохраняет его, пока оно работает. Кнопка «Пинг» измеряет задержку через применённый балансировщик. Список подключений обновляется по расписанию; также можно выбрать отдельный узел подписки. UDP-цепочка требует поддержки UDP у промежуточного узла."
         />
         {error && <Alert type="error" showIcon title={error} />}
         <Form layout="vertical">
@@ -177,6 +184,21 @@ export default function OutboundSubscriptions({
                   <Typography.Text type="secondary">
                     {row.outboundCount} подключений{row.enabled ? '' : ' · отключена'}
                   </Typography.Text>
+                  {row.supportedCount !== undefined && (
+                    <Typography.Text type="secondary">
+                      Применимо: {row.supportedCount} из {row.outboundCount}
+                    </Typography.Text>
+                  )}
+                  {row.selectedTag && <Typography.Text>Выбран: {row.selectedTag}</Typography.Text>}
+                  {row.appliedTag && (
+                    <Typography.Text type="secondary">Применён: {row.appliedTag}</Typography.Text>
+                  )}
+                  {row.lastWarning && (
+                    <Typography.Text type="warning">{row.lastWarning}</Typography.Text>
+                  )}
+                  {row.applyError && (
+                    <Typography.Text type="warning">Не применено: {row.applyError}</Typography.Text>
+                  )}
                   {(row.lastError || row.probeError) && (
                     <Typography.Text type="danger">
                       {row.lastError || row.probeError}
@@ -192,6 +214,33 @@ export default function OutboundSubscriptions({
                   <Button disabled={busy} onClick={() => void run(() => refresh(row.id))}>
                     Обновить
                   </Button>
+                  <Button
+                    disabled={busy || !row.enabled || !row.autoBalance || !row.outboundCount}
+                    onClick={() =>
+                      void run(async () => {
+                        const reply = await HttpUtil.post(
+                          `/panel/api/xray/outbound-subs/${row.id}/probe`,
+                          undefined,
+                          { silent: true },
+                        );
+                        if (!reply.success)
+                          throw new Error(reply.msg || 'Не удалось проверить подключения подписки');
+                      })
+                    }
+                  >
+                    Проверить и выбрать лучший
+                  </Button>
+                  <OutboundPingButton
+                    key={`${row.id}-${row.appliedTag || ''}`}
+                    tag={`sub-auto-${row.id}`}
+                    disabled={
+                      busy ||
+                      !row.enabled ||
+                      !row.autoBalance ||
+                      !row.outboundCount ||
+                      !row.appliedTag
+                    }
+                  />
                   <Popconfirm
                     title="Удалить подписку? Ссылки на её теги в каскаде нужно заменить."
                     onConfirm={() =>

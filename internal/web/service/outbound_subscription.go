@@ -133,6 +133,11 @@ func (s *OutboundSubscriptionService) List() ([]*model.OutboundSubscription, err
 	}
 	for _, sub := range subs {
 		sub.OutboundCount = countOutbounds(sub.LastFetchedOutbounds)
+		var stored []any
+		if json.Unmarshal([]byte(sub.LastFetchedOutbounds), &stored) == nil {
+			compatible, _, _ := filterSubscriptionOutboundsWithIssues("subscription status", stored)
+			sub.SupportedCount = len(compatible)
+		}
 		// Don't ship the heavy raw blobs to the list view.
 		sub.LastFetchedOutbounds = ""
 		sub.LinkIdentities = ""
@@ -483,7 +488,21 @@ func (s *OutboundSubscriptionService) fetchAndStoreLocked(sub *model.OutboundSub
 		return nil, err
 	}
 
-	parsed, identities, err := parseOutboundSubscription(body)
+	parsed, identities, parseWarnings, err := parseOutboundSubscriptionReport(body, true)
+	if errors.Is(err, errNoSupportedSubscriptionConnections) {
+		warning := err.Error() + ". Предыдущие настройки подписки сохранены."
+		result := database.GetDB().Model(&model.OutboundSubscription{}).Where("id = ? AND url = ? AND tag_prefix = ? AND last_fetched_outbounds = ?", sub.Id, sub.Url, sub.TagPrefix, sub.LastFetchedOutbounds).Updates(map[string]any{"last_error": "", "last_warning": warning, "last_updated": time.Now().Unix()})
+		if result.Error != nil {
+			return nil, result.Error
+		}
+		if result.RowsAffected == 0 {
+			return nil, fmt.Errorf("subscription changed during refresh; retry")
+		}
+		var previous []any
+		_ = json.Unmarshal([]byte(sub.LastFetchedOutbounds), &previous)
+		compatible, _, _ := filterSubscriptionOutboundsWithIssues("previous subscription", previous)
+		return compatible, nil
+	}
 	if err != nil {
 		s.recordError(sub, err)
 		return nil, err
@@ -540,6 +559,26 @@ func (s *OutboundSubscriptionService) fetchAndStoreLocked(sub *model.OutboundSub
 		fmt.Sprintf("outbound sub %d", sub.Id), stored,
 	)
 
+	// An unusable provider update must not replace a previously working
+	// subscription and disconnect the running automatic route.
+	if len(runtimeCompatible) == 0 && sub.LastFetchedOutbounds != "" {
+		var previous []any
+		if json.Unmarshal([]byte(sub.LastFetchedOutbounds), &previous) == nil {
+			compatible, _, _ := filterSubscriptionOutboundsWithIssues("previous subscription", previous)
+			if len(compatible) > 0 {
+				warning := "В новом ответе нет совместимых подключений. Предыдущие рабочие подключения сохранены. " + strings.Join(append(parseWarnings, compatibilityIssues...), "; ")
+				result := database.GetDB().Model(&model.OutboundSubscription{}).Where("id = ? AND url = ? AND tag_prefix = ? AND last_fetched_outbounds = ?", sub.Id, sub.Url, sub.TagPrefix, sub.LastFetchedOutbounds).Updates(map[string]any{"last_error": "", "last_warning": warning, "last_updated": time.Now().Unix()})
+				if result.Error != nil {
+					return nil, result.Error
+				}
+				if result.RowsAffected == 0 {
+					return nil, fmt.Errorf("subscription changed during refresh; retry")
+				}
+				return compatible, nil
+			}
+		}
+	}
+
 	// Persist the complete outbound set (as compact JSON array).
 	obsJSON, _ := json.Marshal(stored)
 
@@ -551,16 +590,17 @@ func (s *OutboundSubscriptionService) fetchAndStoreLocked(sub *model.OutboundSub
 	sub.LinkIdentities = string(identJSON)
 	sub.LastUpdated = time.Now().Unix()
 	sub.LastError = ""
+	sub.LastWarning = strings.Join(parseWarnings, "; ")
 	if len(compatibilityIssues) > 0 {
-		sub.LastError = fmt.Sprintf(
-			"%d outbound(s) unsupported by current %s core; kept in subscription but excluded from runtime: %s",
+		sub.LastWarning = strings.TrimSpace(sub.LastWarning + " " + fmt.Sprintf(
+			"%d подключений не поддерживаются текущим ядром %s; сохранены в подписке, но не применены: %s",
 			len(compatibilityIssues), coreName, strings.Join(compatibilityIssues, "; "),
-		)
+		))
 	}
 
 	updates := map[string]any{
 		"last_fetched_outbounds": sub.LastFetchedOutbounds, "link_identities": sub.LinkIdentities,
-		"last_updated": sub.LastUpdated, "last_error": sub.LastError,
+		"last_updated": sub.LastUpdated, "last_error": sub.LastError, "last_warning": sub.LastWarning,
 	}
 	if changed {
 		updates["last_probe"] = 0
@@ -579,7 +619,7 @@ func (s *OutboundSubscriptionService) fetchAndStoreLocked(sub *model.OutboundSub
 
 func (s *OutboundSubscriptionService) recordError(sub *model.OutboundSubscription, err error) {
 	sub.LastError = err.Error()
-	_ = database.GetDB().Model(sub).Update("last_error", sub.LastError).Error
+	_ = database.GetDB().Model(&model.OutboundSubscription{}).Where("id = ? AND url = ? AND tag_prefix = ?", sub.Id, sub.Url, sub.TagPrefix).Update("last_error", sub.LastError).Error
 }
 
 // assignStableTags assigns a tag to each parsed outbound, preferring stability:

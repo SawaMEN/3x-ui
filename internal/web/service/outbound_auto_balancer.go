@@ -102,6 +102,9 @@ func chooseSubscriptionOutbound(results []*outbound.TestOutboundResult, current,
 		if r == nil || !r.Success || r.HTTPStatus < 200 || r.HTTPStatus >= 300 {
 			continue
 		}
+		if mode != "speed" && r.Delay < 0 {
+			continue
+		}
 		if mode == "speed" && r.DownloadMbps <= 0 {
 			continue
 		}
@@ -423,8 +426,12 @@ func (s *OutboundSubscriptionService) ProbeAutomaticSubscriptions(forceID int) (
 					}
 				}
 			}
-			chosen = chooseSubscriptionOutbound(results, sub.SelectedTag, selectionMode, sub.Tolerance)
-			if rotationDue || unavailable {
+			rankingCurrent := sub.SelectedTag
+			if forceID > 0 {
+				rankingCurrent = ""
+			} // Explicit checks choose the measured best without hysteresis.
+			chosen = chooseSubscriptionOutbound(results, rankingCurrent, selectionMode, sub.Tolerance)
+			if unavailable {
 				chosen = chooseRotatedOutbound(results, sub.SelectedTag, selectionMode)
 			}
 			encoded, _ := json.Marshal(results)

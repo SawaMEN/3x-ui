@@ -338,5 +338,61 @@ xui_folder="$TEST_ROOT/x-ui"
 if core_migration_check_space "$TEST_ROOT/release.tar.gz"; then exit 21; fi
 ''')
 
+class CoreVersionSelectionTests(unittest.TestCase):
+    run_script = UpgradeStorageTests.run_script
+    def test_core_selection_and_installation(self):
+        for location in ['internal', 'external', 'symlink']:
+            for state in ['same', 'different', 'broken', 'missing-library', 'incompatible']:
+                with self.subTest(location=location, state=state), tempfile.TemporaryDirectory() as raw:
+                    base = Path(raw)
+                    old = base / 'x-ui' / 'bin'
+                    incoming = base / 'stage' / 'x-ui' / 'bin'
+                    old.mkdir(parents=True)
+                    incoming.mkdir(parents=True)
+                    if location != 'internal':
+                        old.rmdir()
+                        old = base / 'external-bin'
+                        old.mkdir()
+                        if location == 'symlink':
+                            (base / 'x-ui' / 'bin').symlink_to('../external-bin')
+                    binary = 'hiddify-core-linux-amd64'
+                    for folder, version, marker in [(old, 'v1', 'old'), (incoming, 'v2' if state == 'different' else 'v1', 'new')]:
+                        code = '#!/bin/bash\n'
+                        code += 'exit 1\n' if state == 'broken' and folder == old else f'echo "hiddify-core version {version} (linux)"\n# {marker}\n'
+                        (folder / binary).write_text(code)
+                        (folder / binary).chmod(0o755)
+                        (folder / 'target.json').write_text(marker + '-manifest')
+                        if not (state == 'missing-library' and folder == old):
+                            (folder / 'libcronet.so').write_text(marker + '-library')
+                    panel = incoming.parent / 'x-ui'
+                    panel.write_text('#!/bin/bash\n' + ('[[ "$XUI_BIN_FOLDER" == */stage/x-ui/bin ]]\n' if state == 'incompatible' else 'exit 0\n'))
+                    panel.chmod(0o755)
+                    self.run_script(base, r'''
+xui_folder="$TEST_ROOT/x-ui"
+cm_stage="$TEST_ROOT/stage"
+arch() { printf amd64; }
+if [[ -d "$TEST_ROOT/external-bin" && ! -L "$xui_folder/bin" ]]; then
+    XUI_BIN_FOLDER="$TEST_ROOT/external-bin"
+fi
+core_migration_select_core
+if [[ "$(cat "$cm_stage/x-ui/bin/target.json")" == old-manifest ]]; then
+    [[ "$cm_reuse_core" == 1 ]]
+    [[ ${#cm_core_tar_args[@]} == 5 ]]
+    # Simulate removal of the installation during install.sh.
+    if [[ ! -L "$xui_folder/bin" && ! -d "$TEST_ROOT/external-bin" ]]; then
+        rm -rf "$xui_folder/bin"
+    fi
+    core_migration_restore_selected_core
+    core_migration_install_managed_bin
+    [[ "$(cat "$XUI_BIN_FOLDER/libcronet.so")" == old-library ]]
+    [[ "$(cat "$XUI_BIN_FOLDER/target.json")" == old-manifest ]]
+    grep -q '# old' "$XUI_BIN_FOLDER/hiddify-core-linux-amd64"
+else
+    [[ "$cm_reuse_core" == 0 ]]
+    [[ ${#cm_core_tar_args[@]} == 0 ]]
+    [[ "$(cat "$cm_stage/x-ui/bin/target.json")" == new-manifest ]]
+fi
+''')
+
 if __name__ == "__main__": unittest.main()
 

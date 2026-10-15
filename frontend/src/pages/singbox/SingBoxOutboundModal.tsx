@@ -13,7 +13,6 @@ import {
   Button,
   Card,
   Col,
-  Collapse,
   Form,
   Input,
   InputNumber,
@@ -59,6 +58,12 @@ import {
   tlsProtocols,
   transportProtocols,
 } from './outbound-editor-model';
+import { generateOutboundCredentials, outboundCredentialSummary } from './outbound-credentials';
+import { ClipboardManager } from '@/utils';
+import { autoConfigureOutbound } from './outbound-automation';
+import ProtocolOptionFields from './ProtocolOptionFields';
+import nativeFields from './native-outbound-fields.json';
+import { patchOption, type OptionSchema } from './protocol-option-model';
 import MasqueConnectionFields from './MasqueConnectionFields';
 import './SingBoxOutboundModal.css';
 function Field({
@@ -99,12 +104,14 @@ export default function SingBoxOutboundModal({
   onSubscriptionURL?: (url: string) => void;
   onSave: (value: ConfigObject, additional?: ConfigObject[]) => void;
 }) {
+  const [optionsRevision, setOptionsRevision] = useState(0);
   const [draft, setDraft] = useState<ConfigObject>({});
   const [additional, setAdditional] = useState<ConfigObject[]>([]);
   const [exportedLink, setExportedLink] = useState('');
   const [tab, setTab] = useState('connection'),
     [json, setJson] = useState(''),
     [jsonError, setJsonError] = useState('');
+  const [invalidOptions, setInvalidOptions] = useState<string[]>([]);
   const [error, setError] = useState(''),
     [link, setLink] = useState('');
   const [importing, setImporting] = useState(false),
@@ -131,6 +138,8 @@ export default function SingBoxOutboundModal({
     setImporting(false);
     setAdditional([]);
     setExportedLink('');
+    setInvalidOptions([]);
+    setOptionsRevision((revision) => revision + 1);
     savedProtocols.current = {};
   }, [open, value]);
   const type = text(draft.type),
@@ -153,9 +162,10 @@ export default function SingBoxOutboundModal({
           (item) => rewriteNativeReferences(item, new Map([[text(draft.tag), v]])) as ConfigObject,
         ),
       );
-    const next = { ...draft };
-    if (v === '' || v === undefined || v === null) delete next[key];
-    else next[key] = v;
+    const schema =
+      (nativeFields.protocols as unknown as Record<string, OptionSchema>)[text(draft.type)] || {};
+    const next = patchOption(draft, key, v, schema);
+    if (draft.type === 'mieru' && key === 'portBindings') delete next.server_port;
     update(next);
   };
   const nested = (key: string, field: string, v: unknown) => {
@@ -183,6 +193,7 @@ export default function SingBoxOutboundModal({
       style={{ width: '100%' }}
       value={typeof draft[key] === 'number' ? (draft[key] as number) : undefined}
       min={min}
+      precision={0}
       max={max}
       onChange={(v) => patch(key, v)}
     />
@@ -209,6 +220,8 @@ export default function SingBoxOutboundModal({
       if (current !== session.current) return;
       const renamed = renameImportedConnections(items, availableTags);
       update(renamed[0]);
+      setInvalidOptions([]);
+      setOptionsRevision((revision) => revision + 1);
       setAdditional(renamed.slice(1));
       setExportedLink('');
       savedProtocols.current = {};
@@ -222,6 +235,83 @@ export default function SingBoxOutboundModal({
   }
   const connection = (
     <Form layout="vertical">
+      <Alert
+        type="info"
+        showIcon
+        style={{ marginBottom: 16 }}
+        title="Автоматическая настройка подключения"
+        description="Импортируйте ссылку — адрес, ключи и настройки заполнятся сами. Необязательные параметры выбирает ядро. Недостающие учётные данные создаются автоматически; существующие сохраняются. Новые данные нужно указать и на удалённом сервере."
+        action={
+          <Button
+            disabled={!!jsonError || invalidOptions.length > 0}
+            onClick={() =>
+              update(
+                autoConfigureOutbound({
+                  ...draft,
+                  tag: text(draft.tag) || uniqueTag(type, availableTags),
+                }),
+              )
+            }
+          >
+            Настроить автоматически
+          </Button>
+        }
+      />
+      <Space wrap style={{ marginBottom: 16 }}>
+        <Button
+          disabled={!!jsonError || invalidOptions.length > 0}
+          onClick={() => update(generateOutboundCredentials(draft, true))}
+        >
+          Создать недостающие учётные данные
+        </Button>
+        <Button
+          onClick={() =>
+            Modal.info({
+              title: 'Учётные данные подключения',
+              width: 650,
+              content: (
+                <Space orientation="vertical" style={{ width: '100%' }}>
+                  <p>
+                    Новые логины, пароли и общие ключи должны совпадать на клиенте и сервере.
+                    Публичный ключ WireGuard/AWG добавьте на сервер как ключ клиента.
+                  </p>
+                  <Input.TextArea
+                    aria-label="Учётные данные подключения"
+                    readOnly
+                    autoSize={{ minRows: 6, maxRows: 18 }}
+                    value={JSON.stringify(outboundCredentialSummary(draft), null, 2)}
+                  />
+                  <Button
+                    onClick={() =>
+                      void ClipboardManager.copyText(
+                        JSON.stringify(outboundCredentialSummary(draft), null, 2),
+                      )
+                    }
+                  >
+                    Скопировать данные
+                  </Button>
+                </Space>
+              ),
+            })
+          }
+        >
+          Показать данные для сервера
+        </Button>
+      </Space>
+      <Space.Compact style={{ width: '100%', marginBottom: 16 }}>
+        <Input
+          aria-label="Ссылка для автоматической настройки"
+          placeholder="Вставьте ссылку подключения или подписки"
+          value={link}
+          onChange={(e) => setLink(e.target.value)}
+          onPressEnter={() => {
+            if (link.trim() && !importing) void importLink();
+          }}
+        />
+        <Button loading={importing} disabled={!link.trim()} onClick={importLink}>
+          Заполнить из ссылки
+        </Button>
+      </Space.Compact>
       <Row gutter={24}>
         <Field label="Протокол">
           <Select
@@ -230,6 +320,7 @@ export default function SingBoxOutboundModal({
             value={type || undefined}
             options={options([...outboundProtocols, ...nativeEndpointTypes])}
             onChange={(next) => {
+              setInvalidOptions([]);
               savedProtocols.current[type] = structuredClone(draft);
               const saved = savedProtocols.current[next];
               update(saved ? { ...saved, tag: draft.tag } : changeProtocol(draft, next));
@@ -276,6 +367,14 @@ export default function SingBoxOutboundModal({
             {['http', 'socks', 'mieru', 'naive'].includes(type) && (
               <Field label="Логин">{input('username')}</Field>
             )}
+            {type === 'naive' && (
+              <Field
+                label="Одновременные соединения"
+                hint="Пусто или 0 — выбор ядра. Увеличение может ослабить маскировку Naive."
+              >
+                {number('insecure_concurrency', 0)}
+              </Field>
+            )}
             {type === 'ssh' && (
               <Field label="Пользователь SSH">{input('user', false, 'root')}</Field>
             )}
@@ -302,7 +401,14 @@ export default function SingBoxOutboundModal({
             {type === 'snell' && (
               <>
                 <Field label="PSK">{input('psk', true)}</Field>
-                <Field label="Версия">{number('version', 4, 6)}</Field>
+                <Field label="Версия">
+                  <Select
+                    aria-label="Версия Snell"
+                    value={draft.version || 4}
+                    options={[4, 6].map((v) => ({ value: v, label: String(v) }))}
+                    onChange={(v) => patch('version', v)}
+                  />
+                </Field>
               </>
             )}
             {type === 'shadowtls' && (
@@ -386,15 +492,6 @@ export default function SingBoxOutboundModal({
                 />
               </Field>
             )}
-            {type === 'mieru' && (
-              <Field
-                label="Порты Mieru"
-                wide
-                hint="TCP/UDP и диапазоны портов редактируются во вкладке JSON."
-              >
-                <Input readOnly value={JSON.stringify(draft.portBindings || [])} />
-              </Field>
-            )}
           </>
         )}
         {group && (
@@ -454,106 +551,21 @@ export default function SingBoxOutboundModal({
             />
           </Field>
         )}
-      </Row>
-    </Form>
-  );
-  const protocolSettings = (
-    <Form layout="vertical">
-      <Row gutter={24}>
-        {type === 'tuic' && (
-          <>
-            <Field label="Контроль перегрузки">
-              <Select
-                value={text(draft.congestion_control) || 'cubic'}
-                options={options(['cubic', 'new_reno', 'bbr'])}
-                onChange={(v) => patch('congestion_control', v)}
-              />
-            </Field>
-            <Field label="Передача UDP">
-              <Select
-                value={text(draft.udp_relay_mode) || 'native'}
-                options={options(['native', 'quic'])}
-                onChange={(v) => patch('udp_relay_mode', v)}
-              />
-            </Field>
-          </>
-        )}
         {['masque', 'masque-client'].includes(type) && (
           <Col span={24}>
             <MasqueConnectionFields value={draft} onChange={update} />
           </Col>
         )}
-        {type === 'anytls' && (
-          <>
-            <Field label="Тайм-аут сессии">{input('idle_session_timeout', false, '30s')}</Field>
-            <Field label="Проверка неактивных сессий">
-              {input('idle_session_check_interval', false, '30s')}
-            </Field>
-          </>
-        )}
-        {type === 'hysteria2' && (
-          <>
-            <Field label="Маскировка">
-              <Select
-                allowClear
-                value={text(object(draft.obfs).type) || undefined}
-                options={options(['salamander', 'gecko'])}
-                onChange={(v) => {
-                  if (v) nested('obfs', 'type', v);
-                  else patch('obfs', undefined);
-                }}
-              />
-            </Field>
-            {draft.obfs && (
-              <Field label="Пароль маскировки">
-                <Input.Password
-                  value={text(object(draft.obfs).password)}
-                  onChange={(e) => nested('obfs', 'password', e.target.value)}
-                />
-              </Field>
-            )}
-            <Field label="Интервал смены портов">{input('hop_interval', false, '30s')}</Field>
-          </>
-        )}
-        {type === 'mieru' && (
-          <>
-            <Field label="MTU">{number('mtu', 1280, 1500)}</Field>
-            <Field label="Мультиплексирование">
-              <Select
-                value={text(draft.multiplexing).replace(/^MULTIPLEXING_/, '') || 'DEFAULT'}
-                options={options(['DEFAULT', 'OFF', 'LOW', 'MIDDLE', 'HIGH'])}
-                onChange={(v) => patch('multiplexing', 'MULTIPLEXING_' + v)}
-              />
-            </Field>
-            <Field label="Рукопожатие">
-              <Select
-                value={text(draft.handshake_mode).replace(/^HANDSHAKE_/, '') || 'DEFAULT'}
-                options={options(['DEFAULT', 'STANDARD', 'NO_WAIT'])}
-                onChange={(v) => patch('handshake_mode', 'HANDSHAKE_' + v)}
-              />
-            </Field>
-          </>
-        )}
-        {type === 'snell' && (
-          <>
-            <Field label="User key">{input('userkey', true)}</Field>
-            <Field label="Режим">
-              <Select
-                value={text(draft.mode) || 'default'}
-                options={options(['default', 'unshaped'])}
-                onChange={(v) => patch('mode', v)}
-              />
-            </Field>
-          </>
-        )}
-        <Field label="Тайм-аут подключения">{input('connect_timeout', false, '10s')}</Field>
-        <Field label="TCP Fast Open">
-          <Switch
-            checked={!!draft.tcp_fast_open}
-            disabled={type === 'anytls'}
-            onChange={(v) => patch('tcp_fast_open', v)}
-          />
-        </Field>
+        <ProtocolOptionFields
+          key={`${type}-${optionsRevision}`}
+          value={draft}
+          onChange={patch}
+          onValidity={(key, valid) =>
+            setInvalidOptions((current) =>
+              valid ? current.filter((item) => item !== key) : [...new Set([...current, key])],
+            )
+          }
+        />
       </Row>
     </Form>
   );
@@ -865,6 +877,8 @@ export default function SingBoxOutboundModal({
           setJson(raw);
           try {
             setDraft(parseOutboundJson(raw));
+            setOptionsRevision((revision) => revision + 1);
+            setInvalidOptions([]);
             setJsonError('');
             setError('');
           } catch (e) {
@@ -948,11 +962,11 @@ export default function SingBoxOutboundModal({
       }}
       mask={{ closable: !importing }}
       cancelButtonProps={{ disabled: importing }}
-      okButtonProps={{ disabled: importing || !!jsonError }}
+      okButtonProps={{ disabled: importing || !!jsonError || invalidOptions.length > 0 }}
       okText={value ? 'Сохранить изменения' : 'Добавить подключение'}
       cancelText="Отмена"
       onOk={() => {
-        if (jsonError || importing) return;
+        if (invalidOptions.length > 0 || jsonError || importing) return;
         const batchTags = additional.map((item) => text(item.tag));
         const errors = outboundErrors(draft, [...availableTags, ...batchTags]);
         for (const item of additional)
@@ -994,7 +1008,7 @@ export default function SingBoxOutboundModal({
       <Tabs
         activeKey={tabs.some((t) => t.key === tab) ? tab : 'connection'}
         onChange={(next) => {
-          if (!jsonError && !importing) setTab(next);
+          if (!jsonError && !importing && invalidOptions.length === 0) setTab(next);
         }}
         items={tabs}
       />
@@ -1003,20 +1017,7 @@ export default function SingBoxOutboundModal({
           type="info"
           showIcon
           title="Туннель будет сохранён в Endpoints"
-          description="Все параметры туннеля доступны в JSON. Он будет доступен как исходящее подключение в маршрутах."
-        />
-      )}
-      {remote && tab === 'connection' && (
-        <Collapse
-          ghost
-          size="small"
-          items={[
-            {
-              key: 'extra',
-              label: 'Дополнительные параметры',
-              children: protocolSettings,
-            },
-          ]}
+          description="Параметры туннеля доступны в дополнительных настройках и JSON. Он будет доступен как исходящее подключение в маршрутах."
         />
       )}
     </Modal>

@@ -30,7 +30,7 @@ func setupTimedBalancer(t *testing.T) (*model.OutboundSubscription, *int64) {
 	return sub, &now
 }
 
-func TestAutoBalancerSwitchesOnTimerEvenWhenCurrentIsFastest(t *testing.T) {
+func TestAutoBalancerTimerKeepsCurrentWhenItIsFastest(t *testing.T) {
 	sub, now := setupTimedBalancer(t)
 	calls := 0
 	autoBalanceProbe = func(items, target, all, mode, core string) ([]*outbound.TestOutboundResult, error) {
@@ -56,11 +56,11 @@ func TestAutoBalancerSwitchesOnTimerEvenWhenCurrentIsFastest(t *testing.T) {
 		t.Fatal(saved.SelectedTag)
 	}
 	*now++
-	if n, err := (&OutboundSubscriptionService{}).ProbeAutomaticSubscriptions(0); err != nil || n != 1 {
-		t.Fatalf("timer did not switch %d %v", n, err)
+	if n, err := (&OutboundSubscriptionService{}).ProbeAutomaticSubscriptions(0); err != nil || n != 0 {
+		t.Fatalf("timer replaced the best connection %d %v", n, err)
 	}
 	saved, _ = (&OutboundSubscriptionService{}).Get(sub.Id)
-	if saved.SelectedTag != "b" || saved.SwitchReason != "scheduled" || saved.LastSwitch != *now {
+	if saved.SelectedTag != "a" || saved.LastSwitch != *now {
 		t.Fatalf("%+v", saved)
 	}
 	before := calls
@@ -218,7 +218,7 @@ func TestAutoBalancerScheduledSpeedUsesCachedRanking(t *testing.T) {
 	}
 	members = append(members, map[string]any{"tag": "c", "protocol": "socks", "settings": map[string]any{"servers": []any{map[string]any{"address": "1.1.1.1", "port": 1080}}}})
 	encoded, _ := json.Marshal(members)
-	if err := database.GetDB().Model(sub).Updates(map[string]any{"last_fetched_outbounds": string(encoded), "probe_results": `[{"tag":"a","success":true,"downloadMbps":100},{"tag":"b","success":true,"downloadMbps":10},{"tag":"c","success":true,"downloadMbps":40}]`}).Error; err != nil {
+	if err := database.GetDB().Model(sub).Updates(map[string]any{"last_fetched_outbounds": string(encoded), "probe_results": `[{"tag":"a","success":true,"downloadMbps":15},{"tag":"b","success":true,"downloadMbps":10},{"tag":"c","success":true,"downloadMbps":40}]`}).Error; err != nil {
 		t.Fatal(err)
 	}
 	autoBalanceProbe = func(items, target, all, mode, core string) ([]*outbound.TestOutboundResult, error) {
@@ -329,5 +329,22 @@ func TestAutoBalancerCachedSpeedWithoutCurrentMeasurementKeepsHealthySingleton(t
 	results := []*outbound.TestOutboundResult{{Tag: "a", Success: true, HTTPStatus: 204, Delay: 10}}
 	if got := chooseRotatedOutbound(results, "a", "speed"); got != "a" {
 		t.Fatal(got)
+	}
+}
+
+func TestManualBalancerCheckSelectsMeasuredBestWithinTolerance(t *testing.T) {
+	sub, _ := setupTimedBalancer(t)
+	if err := database.GetDB().Model(sub).Updates(map[string]any{"balance_mode": "latency", "tolerance": 50}).Error; err != nil {
+		t.Fatal(err)
+	}
+	autoBalanceProbe = func(items, target, all, mode, core string) ([]*outbound.TestOutboundResult, error) {
+		return []*outbound.TestOutboundResult{{Tag: "a", Success: true, HTTPStatus: 204, Delay: 100}, {Tag: "b", Success: true, HTTPStatus: 204, Delay: 99}}, nil
+	}
+	if _, err := (&OutboundSubscriptionService{}).ProbeAutomaticSubscriptions(sub.Id); err != nil {
+		t.Fatal(err)
+	}
+	saved, err := (&OutboundSubscriptionService{}).Get(sub.Id)
+	if err != nil || saved.SelectedTag != "b" {
+		t.Fatal(saved, err)
 	}
 }

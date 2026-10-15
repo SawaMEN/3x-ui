@@ -1304,6 +1304,8 @@ type OutboundSubscription struct {
 	Prepend              bool   `json:"prepend" form:"prepend" gorm:"default:false"`             // place this subscription's outbounds before the manual template outbounds
 	LastUpdated          int64  `json:"lastUpdated" form:"lastUpdated"`
 	LastError            string `json:"lastError" form:"lastError"`
+	LastWarning          string `json:"lastWarning" gorm:"type:text"`
+	SupportedCount       int    `json:"supportedCount" gorm:"-"`
 	LastFetchedOutbounds string `json:"lastFetchedOutbounds" form:"lastFetchedOutbounds" gorm:"type:text"`
 	LinkIdentities       string `json:"-" gorm:"type:text;column:link_identities"`
 	CreatedAt            int64  `json:"createdAt" gorm:"autoCreateTime:milli"`
