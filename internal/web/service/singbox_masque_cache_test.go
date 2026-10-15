@@ -102,7 +102,7 @@ func TestWARPMASQUEUsesStableCachePathWhenUnspecified(t *testing.T) {
 	if err := ensureWARPMASQUECache(cfg); err != nil {
 		t.Fatal(err)
 	}
-	if cache["path"] != want {
+	if nextCache := cfg.Experimental["cache_file"].(map[string]any); nextCache["path"] != want {
 		t.Fatal("cache path changed on repeated apply")
 	}
 }
