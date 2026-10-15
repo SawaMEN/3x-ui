@@ -46,7 +46,7 @@ func TestWARPProbeFallsBackToIndependentHTTPSHost(t *testing.T) {
 
 func TestWARPProbeReportsBothFailures(t *testing.T) {
 	probe := &outboundDelayStub{failures: map[string]error{
-		warpOutboundProbeURL: errors.New("warp handshake failed"),
+		warpOutboundProbeURL:    errors.New("warp handshake failed"),
 		defaultOutboundProbeURL: errors.New("no egress"),
 	}}
 	_, _, err := measureOutboundDelay(
