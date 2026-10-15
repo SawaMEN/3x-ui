@@ -272,3 +272,23 @@ func TestClashControllerLocalCheck(t *testing.T) {
 		t.Fatalf("inspection error not propagated: %q %v", got, err)
 	}
 }
+
+func TestAppliedOutboundTypeUsesRunningConfig(t *testing.T) {
+	SetRuntimeConfigReader(func() []byte {
+		return []byte(`{"outbounds":[{"tag":"warp-masque","type":"masque"},{"tag":"direct","type":"direct"}]}`)
+	})
+	t.Cleanup(func() { SetRuntimeConfigReader(nil) })
+	if got := AppliedOutboundType("warp-masque"); got != "masque" {
+		t.Fatalf("WARP outbound type = %q", got)
+	}
+	if got := AppliedOutboundType("direct"); got != "direct" {
+		t.Fatalf("direct outbound type = %q", got)
+	}
+	if got := AppliedOutboundType("not-applied"); got != "" {
+		t.Fatalf("unsaved outbound must not be used: %q", got)
+	}
+	SetRuntimeConfigReader(func() []byte { return []byte("{") })
+	if got := AppliedOutboundType("warp-masque"); got != "" {
+		t.Fatalf("invalid runtime config must not be used: %q", got)
+	}
+}
