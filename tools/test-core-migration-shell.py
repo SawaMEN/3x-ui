@@ -329,6 +329,28 @@ core_migration_exit 1
 ''')
             self.assertIn("Insufficient disk space", result.stderr)
 
+    def test_exit_releases_lock_inherited_by_started_panel(self):
+        import signal
+        for code in (0, 1):
+            with self.subTest(exit_code=code), tempfile.TemporaryDirectory() as raw:
+                base = Path(raw)
+                try:
+                    self.run_script(base, r'''
+exec {cm_lock}>"$TEST_ROOT/upgrade.lock"
+flock -n "$cm_lock"
+sleep 60 </dev/null >/dev/null 2>&1 &
+echo "$!" > "$TEST_ROOT/child.pid"
+core_migration_exit ''' + str(code) + "\n")
+                    result = subprocess.run(["flock", "-n", str(base / "upgrade.lock"), "true"])
+                    self.assertEqual(result.returncode, 0, "started panel retained the upgrade lock")
+                finally:
+                    pid = base / "child.pid"
+                    if pid.exists():
+                        try:
+                            os.kill(int(pid.read_text()), signal.SIGTERM)
+                        except ProcessLookupError:
+                            pass
+
     def test_corrupt_archive_rejected_by_space_check(self):
         with tempfile.TemporaryDirectory() as raw:
             base = Path(raw)

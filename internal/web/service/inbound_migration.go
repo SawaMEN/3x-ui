@@ -196,8 +196,10 @@ func (s *InboundService) MigrationRequirements() (err error) {
 			return
 		}
 	}
-	if err = tx.Save(inbounds).Error; err != nil {
-		return
+	if len(inbounds) > 0 {
+		if err = tx.Save(inbounds).Error; err != nil {
+			return
+		}
 	}
 
 	// Remove orphaned traffics
@@ -224,7 +226,7 @@ func (s *InboundService) MigrationRequirements() (err error) {
 	  AND NULLIF(stream_settings, '')::jsonb #> '{tlsSettings,settings,domains}' IS NOT NULL`
 	}
 	err = tx.Raw(externalProxyQuery).Scan(&externalProxy).Error
-	if err != nil || len(externalProxy) == 0 {
+	if err != nil {
 		return
 	}
 

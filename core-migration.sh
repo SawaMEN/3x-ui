@@ -109,7 +109,12 @@ core_migration_prepare_archive() {
     local archive="$1"
     cm_core_tar_args=()
     exec {cm_lock}>"${xui_folder%/*}/.x-ui-upgrade.lock" || return 1
-    flock -n "$cm_lock" || return 1
+    if ! flock -n "$cm_lock"; then
+        echo "Another installation or update holds the x-ui upgrade lock; retry after it finishes." >&2
+        exec {cm_lock}>&-
+        unset cm_lock
+        return 1
+    fi
     core_migration_check_space "$archive" || return 1
     cm_stage=$(mktemp -d "${xui_folder%/*}/.x-ui-release.XXXXXX") || return 1
     chmod 0700 "$cm_stage" || return 1
@@ -245,6 +250,19 @@ core_migration_commit() {
     echo "Upgrade committed; successful transaction snapshot removed"
 }
 core_migration_exit() {
+    local status=0
+    core_migration_finish "$1" || status=$?
+    # A supervised panel can inherit this descriptor. Unlock explicitly so it
+    # cannot keep blocking later upgrades after the installer exits.
+    if [[ -n "${cm_lock:-}" ]]; then
+        flock -u "$cm_lock" || status=1
+        exec {cm_lock}>&-
+        unset cm_lock
+    fi
+    return "$status"
+}
+
+core_migration_finish() {
     local code="$1" incomplete=0
     [[ "${cm_active:-0}" != 1 || "$code" != 0 ]] || incomplete=1
     if [[ "${cm_active:-0}" == 1 ]]; then

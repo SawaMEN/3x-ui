@@ -50,10 +50,10 @@ func TestSingBoxEditorRoundTripsDoNotAccumulateRuntimeRules(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := os.MkdirAll(filepath.Dir(svc.ProcessConfigPath()), 0700); err != nil {
+		if err := os.MkdirAll(filepath.Dir(svc.ProcessConfigPath()), 0o700); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(svc.ProcessConfigPath(), data, 0600); err != nil {
+		if err := os.WriteFile(svc.ProcessConfigPath(), data, 0o600); err != nil {
 			t.Fatal(err)
 		}
 		editor, err := svc.GetEditorConfig(context.Background())
@@ -79,10 +79,10 @@ func TestSingBoxEditorDoesNotImportStaleDiskRoute(t *testing.T) {
 	setupBulkDB(t)
 	t.Setenv("XUI_BIN_FOLDER", t.TempDir())
 	svc := &SingBoxService{}
-	if err := os.MkdirAll(filepath.Dir(svc.ProcessConfigPath()), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(svc.ProcessConfigPath()), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(svc.ProcessConfigPath(), []byte(`{"route":{"rules":[{"outbound":"stale"}]}}`), 0600); err != nil {
+	if err := os.WriteFile(svc.ProcessConfigPath(), []byte(`{"route":{"rules":[{"outbound":"stale"}]}}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	editor, err := svc.GetEditorConfig(context.Background())

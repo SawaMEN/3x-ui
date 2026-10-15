@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -128,11 +129,8 @@ func TestMigrationRequirementsReturnsAddClientStatFailure(t *testing.T) {
 	}
 }
 
-// TestMigrationRequirements_CleansLegacyZeroAddrTag guards the legacy tag cleanup that
-// strips the auto-generated "0.0.0.0:" prefix. The inbound is MultiDomain TLS so the
-// externalProxy detection query returns rows and the cleanup is reached (it early-returns
-// at len(externalProxy)==0 otherwise). The cleanup must use tx.Exec, not tx.Raw, which
-// only builds a non-SELECT statement without running it.
+// Legacy auto-generated tags must be cleaned by an executed UPDATE, rather
+// than a Raw query that builds the statement without applying it.
 func TestMigrationRequirements_CleansLegacyZeroAddrTag(t *testing.T) {
 	dbDir := t.TempDir()
 	t.Setenv("XUI_DB_FOLDER", dbDir)
@@ -310,5 +308,40 @@ func TestMigrationRequirements_NormalizesShareAddressFields(t *testing.T) {
 	}
 	if gotInvalidAddress.ShareAddrStrategy != "node" || gotInvalidAddress.ShareAddr != "" {
 		t.Fatalf("invalid address share fields = (%q, %q), want (node, empty)", gotInvalidAddress.ShareAddrStrategy, gotInvalidAddress.ShareAddr)
+	}
+}
+
+func TestMigrationRequirementsWithoutMultiDomainInbounds(t *testing.T) {
+	for _, withInbound := range []bool{false, true} {
+		t.Run(fmt.Sprintf("inbound=%t", withInbound), func(t *testing.T) {
+			dir := t.TempDir()
+			t.Setenv("XUI_DB_FOLDER", dir)
+			if err := database.InitDB(filepath.Join(dir, "x-ui.db")); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = database.CloseDB() })
+			db := database.GetDB()
+			inbound := model.Inbound{
+				UserId: 1, Tag: "inbound-0.0.0.0:30003", Port: 30003,
+				Protocol: model.VLESS, Settings: `{"clients":[]}`, StreamSettings: `{"security":"none"}`,
+			}
+			if withInbound {
+				if err := db.Create(&inbound).Error; err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := (&InboundService{}).MigrationRequirements(); err != nil {
+				t.Fatalf("migration failed: %v", err)
+			}
+			if withInbound {
+				var got model.Inbound
+				if err := db.First(&got, inbound.Id).Error; err != nil {
+					t.Fatal(err)
+				}
+				if got.Tag != "inbound-30003" {
+					t.Fatalf("legacy tag = %q, want inbound-30003", got.Tag)
+				}
+			}
+		})
 	}
 }
