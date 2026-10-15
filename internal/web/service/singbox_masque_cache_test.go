@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -84,5 +85,24 @@ func TestGeneratedWARPMASQUEEnablesCacheWithoutNativeTemplate(t *testing.T) {
 	cache, ok := cfg.Experimental["cache_file"].(map[string]any)
 	if !ok || cache["store_masque_config"] != true {
 		t.Fatalf("shared config has no registration cache: %#v", cfg.Experimental)
+	}
+}
+
+func TestWARPMASQUEUsesStableCachePathWhenUnspecified(t *testing.T) {
+	cfg := singbox.NewConfig()
+	cfg.Outbounds = append(cfg.Outbounds, map[string]any{"type": "masque", "tag": "warp-masque"})
+	if err := ensureWARPMASQUECache(cfg); err != nil {
+		t.Fatal(err)
+	}
+	cache := cfg.Experimental["cache_file"].(map[string]any)
+	want := filepath.Join(filepath.Dir(singbox.GetConfigPath()), "cache.db")
+	if got := cache["path"]; got != want {
+		t.Fatalf("cache path = %v, want %q", got, want)
+	}
+	if err := ensureWARPMASQUECache(cfg); err != nil {
+		t.Fatal(err)
+	}
+	if cache["path"] != want {
+		t.Fatal("cache path changed on repeated apply")
 	}
 }
