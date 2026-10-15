@@ -1,7 +1,6 @@
 import OutboundPingButton from './OutboundPingButton';
 import { prepareRouteRule, routePorts, routeRuleSummary } from './route-rule';
 import MasqueConnectionFields from './MasqueConnectionFields';
-import { addWarpMasque } from './masque-settings';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router';
@@ -1690,9 +1689,6 @@ export default function SingBoxPage() {
               Подписки
             </Button>
             <Button onClick={() => setShareLinkOpen(true)}>Импорт ссылки</Button>
-            <Button onClick={() => setConfig((current) => addWarpMasque(current))}>
-              Добавить WARP через MASQUE
-            </Button>
             <Button
               icon={<PlusOutlined />}
               type="primary"
