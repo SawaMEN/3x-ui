@@ -275,16 +275,34 @@ export default function InboundFormModal({
   const selectableNodes = (availableNodes || []).filter(
     (n) => n.enable && nodeSupportsProtocol(n, protocol),
   );
-  const [sudokuInstalled, setSudokuInstalled] = useState(false);
+  const [installedProtocols, setInstalledProtocols] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    void HttpUtil.get<{ installed?: boolean }>('/panel/api/setting/sudoku/status', undefined, {
-      silent: true,
-    }).then((msg) => {
+    setInstalledProtocols({});
+    void Promise.all([
+      HttpUtil.get<{ installed?: boolean }>(
+        '/panel/api/setting/sudoku/status?local=true',
+        undefined,
+        {
+          silent: true,
+        },
+      ),
+      HttpUtil.get<{ pingtunnel?: { installed?: boolean }; trusttunnel?: { installed?: boolean } }>(
+        '/panel/api/server/externalvpn/status?local=true',
+        undefined,
+        { silent: true },
+      ),
+    ]).then(([sudoku, external]) => {
       if (!cancelled) {
-        setSudokuInstalled(msg?.success === true && msg.obj?.installed === true);
+        setInstalledProtocols({
+          [Protocols.SUDOKU]: sudoku.success === true && sudoku.obj?.installed === true,
+          [Protocols.PINGTUNNEL]:
+            external.success === true && external.obj?.pingtunnel?.installed === true,
+          [Protocols.TRUSTTUNNEL]:
+            external.success === true && external.obj?.trusttunnel?.installed === true,
+        });
       }
     });
     return () => {
@@ -296,11 +314,13 @@ export default function InboundFormModal({
     () =>
       PROTOCOL_OPTIONS.filter(
         (option) =>
-          option.value !== Protocols.SUDOKU ||
-          sudokuInstalled ||
-          (mode === 'edit' && protocol === Protocols.SUDOKU),
+          ![Protocols.SUDOKU, Protocols.PINGTUNNEL, Protocols.TRUSTTUNNEL].some(
+            (value) => value === option.value,
+          ) ||
+          installedProtocols[option.value] === true ||
+          (mode === 'edit' && protocol === option.value),
       ),
-    [mode, protocol, sudokuInstalled],
+    [mode, protocol, installedProtocols],
   );
   const isNodeEligible = !!NODE_ELIGIBLE_PROTOCOLS[protocol];
   /*

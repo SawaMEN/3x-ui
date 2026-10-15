@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync/atomic"
 	"testing"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
@@ -123,4 +124,30 @@ func (transport hysteriaTestTransport) RoundTrip(request *http.Request) (*http.R
 	}
 	forward.URL.Scheme, forward.URL.Host = target.Scheme, target.Host
 	return http.DefaultTransport.RoundTrip(forward)
+}
+
+func TestLocalComponentStatusDoesNotQueryReleasesOrRunBinaries(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XUI_BIN_FOLDER", dir)
+	marker := filepath.Join(dir, "executed")
+	script := fmt.Sprintf("#!/bin/sh\ntouch %q\nprintf '2.10\\n'\n", marker)
+	if err := os.WriteFile(filepath.Join(dir, "pingtunnel"), []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		http.Error(w, "unexpected upstream request", http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+	old := externalVPNHTTPClient
+	externalVPNHTTPClient = &http.Client{Transport: hysteriaTestTransport{target: server.URL}}
+	t.Cleanup(func() { externalVPNHTTPClient = old })
+	status := GetUpdateStatus(context.Background(), true)
+	if !status.Pingtunnel.Installed || calls.Load() != 0 {
+		t.Fatalf("local status: %+v, upstream requests: %d", status, calls.Load())
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatalf("local status executed a binary: %v", err)
+	}
 }

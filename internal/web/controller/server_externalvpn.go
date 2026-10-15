@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/link"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 )
 
 func (a *ServerController) initExternalVPNRouter(g *gin.RouterGroup) {
@@ -35,7 +37,11 @@ func parseExternalVPNProtocol(value string) (model.Protocol, error) {
 }
 
 func (a *ServerController) getExternalVPNUpdateStatus(c *gin.Context) {
-	jsonObj(c, externalvpn.GetUpdateStatus(c.Request.Context()), nil)
+	status := externalvpn.GetUpdateStatus(c.Request.Context(), c.Query("local") == "true")
+	if c.Query("local") != "true" {
+		status.Hysteria2.Source, status.Hysteria2.FallbackReason = service.ProtocolServerStatus(model.Hysteria)
+	}
+	jsonObj(c, status, nil)
 }
 
 func (a *ServerController) updateExternalVPNBinary(c *gin.Context) {
@@ -44,7 +50,12 @@ func (a *ServerController) updateExternalVPNBinary(c *gin.Context) {
 		jsonObj(c, gin.H{"updated": false}, err)
 		return
 	}
-	if err := externalvpn.Update(c.Request.Context(), protocol); err != nil {
+	update := func(ctx context.Context) error { return externalvpn.Update(ctx, protocol) }
+	if protocol == model.Hysteria {
+		base := update
+		update = func(ctx context.Context) error { return service.InstallProtocolServer(ctx, protocol, base) }
+	}
+	if err := update(c.Request.Context()); err != nil {
 		jsonObj(c, gin.H{"updated": false}, err)
 		return
 	}

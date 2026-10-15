@@ -9,6 +9,7 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/protocolserver"
 )
 
 var nativePendingApplyMu sync.Mutex
@@ -40,7 +41,7 @@ func (s *SingBoxService) ApplyPendingRestart(ctx context.Context) {
 	if batch := localConfigBatch(); batch != nil && batch.ConfigBatchActive() {
 		return
 	}
-	if !s.IsNeedRestartAndSetFalse() {
+	if !s.IsNeedRestartAndSetFalse() && !protocolserver.Changed() {
 		return
 	}
 	coreType, err := (&SettingService{}).GetCoreType()
@@ -86,7 +87,7 @@ func (s *SingBoxService) ApplyPendingRestart(ctx context.Context) {
 			s.SetToNeedRestart()
 			return
 		}
-		if bytes.Equal(data, s.process().AppliedConfig()) && externalvpn.OutboundsApplied(cfg.ManagedOutbounds) {
+		if bytes.Equal(data, s.process().AppliedConfig()) && externalvpn.OutboundsApplied(cfg.ManagedOutbounds) && protocolserver.Applied(cfg.ProtocolServers) {
 			// WriteConfig/editor may have published another candidate without applying
 			// it. Restore the actual applied bytes rather than treating disk as runtime.
 			if disk, err := os.ReadFile(s.ProcessConfigPath()); err != nil || !bytes.Equal(disk, data) {

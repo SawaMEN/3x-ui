@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/protocolserver"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 )
 
@@ -47,7 +48,7 @@ func ConfigureStats(cfg *singbox.Config) {
 				if name == "" {
 					name, _ = user["username"].(string)
 				}
-				if name != "" {
+				if name != "" && !strings.HasPrefix(name, protocolserver.InternalUserPrefix) {
 					users[name] = true
 				}
 			}

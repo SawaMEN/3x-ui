@@ -53,11 +53,15 @@ type releaseSpec struct {
 }
 
 type BinaryStatus struct {
-	Installed       bool   `json:"installed"`
-	Version         string `json:"version"`
-	LatestVersion   string `json:"latestVersion"`
-	UpdateAvailable bool   `json:"updateAvailable"`
-	Error           string `json:"error,omitempty"`
+	Source            string `json:"source,omitempty"`
+	FallbackReason    string `json:"fallbackReason,omitempty"`
+	Supported         bool   `json:"supported"`
+	UnsupportedReason string `json:"unsupportedReason,omitempty"`
+	Installed         bool   `json:"installed"`
+	Version           string `json:"version"`
+	LatestVersion     string `json:"latestVersion"`
+	UpdateAvailable   bool   `json:"updateAvailable"`
+	Error             string `json:"error,omitempty"`
 }
 
 type UpdateStatus struct {
@@ -94,34 +98,45 @@ func releaseSpecFor(protocol model.Protocol) (releaseSpec, error) {
 	}
 }
 
-func GetUpdateStatus(ctx context.Context) UpdateStatus {
+func GetUpdateStatus(ctx context.Context, localOnly ...bool) UpdateStatus {
 	var status UpdateStatus
 	var wg sync.WaitGroup
 	wg.Add(3)
 	go func() {
 		defer wg.Done()
-		status.Pingtunnel = binaryStatus(ctx, model.Pingtunnel)
+		status.Pingtunnel = binaryStatus(ctx, model.Pingtunnel, localOnly...)
 	}()
 	go func() {
 		defer wg.Done()
-		status.TrustTunnel = binaryStatus(ctx, model.TrustTunnel)
+		status.TrustTunnel = binaryStatus(ctx, model.TrustTunnel, localOnly...)
 	}()
 	go func() {
 		defer wg.Done()
-		status.Hysteria2 = binaryStatus(ctx, model.Hysteria)
+		status.Hysteria2 = binaryStatus(ctx, model.Hysteria, localOnly...)
 	}()
 	wg.Wait()
 	return status
 }
 
-func binaryStatus(ctx context.Context, protocol model.Protocol) BinaryStatus {
+func binaryStatus(ctx context.Context, protocol model.Protocol, localOnly ...bool) BinaryStatus {
 	spec, err := releaseSpecFor(protocol)
 	if err != nil {
 		return BinaryStatus{Error: err.Error()}
 	}
 	path := binary(protocol)
+	if protocol == model.Hysteria {
+		path = filepath.Join(config.GetBinFolderPath(), spec.binaryName)
+	}
 	info, statErr := os.Stat(path)
-	status := BinaryStatus{Installed: statErr == nil && !info.IsDir()}
+	status := BinaryStatus{Supported: runtime.GOOS == "linux" && (runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64"), Installed: statErr == nil && info.Mode().IsRegular() && info.Mode().Perm()&0o111 != 0}
+	if !status.Supported {
+		status.Installed = false
+		status.UnsupportedReason = fmt.Sprintf("%s installation from the panel supports Linux amd64/arm64; current platform: %s/%s", protocol, runtime.GOOS, runtime.GOARCH)
+		return status
+	}
+	if len(localOnly) > 0 && localOnly[0] {
+		return status
+	}
 	if status.Installed {
 		if version, versionErr := binaryVersion(ctx, path, spec.versionArgs); versionErr == nil {
 			status.Version = version
@@ -130,6 +145,11 @@ func binaryStatus(ctx context.Context, protocol model.Protocol) BinaryStatus {
 	release, err := fetchLatestRelease(ctx, spec)
 	if err != nil {
 		status.Error = err.Error()
+		return status
+	}
+	if _, err := pickReleaseAsset(spec, release, runtime.GOARCH); err != nil {
+		status.Supported = false
+		status.UnsupportedReason = err.Error()
 		return status
 	}
 	status.LatestVersion = normalizeReleaseVersion(release.TagName)

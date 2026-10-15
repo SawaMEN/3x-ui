@@ -4798,7 +4798,7 @@
     },
     {
       "name": "NaiveProxy",
-      "description": "Install the optional Caddy-Naive binary for independent configuration on Linux/amd64. Panel connections continue to use sing-box."
+      "description": "Manage the optional Caddy-Naive server on Linux/amd64. Installed binaries automatically handle panel inbounds through authenticated sing-box routing bridges."
     },
     {
       "name": "Routing Presets",
@@ -4940,6 +4940,17 @@
         ],
         "summary": "Return external VPN component installation and update status.",
         "operationId": "get_panel_api_server_externalvpn_status",
+        "parameters": [
+          {
+            "name": "local",
+            "in": "query",
+            "required": false,
+            "description": "Inspect only local installation state without querying upstream releases.",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -17854,6 +17865,17 @@
         ],
         "summary": "Return Sudoku installation status.",
         "operationId": "get_panel_api_setting_sudoku_status",
+        "parameters": [
+          {
+            "name": "local",
+            "in": "query",
+            "required": false,
+            "description": "Inspect only local installation state without querying upstream releases.",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",

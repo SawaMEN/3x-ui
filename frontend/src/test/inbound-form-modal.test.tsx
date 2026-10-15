@@ -117,6 +117,27 @@ describe('InboundFormModal', () => {
     );
   });
 
+  it.each([false, true])(
+    'shows optional tunnel protocols only when installed: %s',
+    async (installed) => {
+      vi.mocked(HttpUtil.get).mockImplementation(async (path) => ({
+        success: true,
+        msg: '',
+        obj: String(path).includes('externalvpn')
+          ? { pingtunnel: { installed }, trusttunnel: { installed } }
+          : { installed },
+      }));
+      renderModal();
+      await act(async () => {});
+      for (const protocol of ['pingtunnel', 'trusttunnel', 'sudoku']) {
+        listSelectOptions('protocol');
+        fireEvent.change(document.querySelector('#protocol')!, { target: { value: protocol } });
+        await act(async () => {});
+        expect(listSelectOptions('protocol').includes(protocol)).toBe(installed);
+      }
+    },
+  );
+
   it('field structure differs per protocol (not a vacuous snapshot loop)', async () => {
     renderModal();
     const protocols = listSelectOptions('protocol');

@@ -11,25 +11,28 @@ import (
 	"strings"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/protocolserver"
 	"github.com/SawaMEN/3x-ui/v3/internal/snell"
 )
 
 type Config struct {
-	ManagedOutbounds     []map[string]any `json:"-"`
-	Schema               string           `json:"$schema,omitempty"`
-	NTP                  map[string]any   `json:"ntp,omitempty"`
-	Certificate          map[string]any   `json:"certificate,omitempty"`
-	CertificateProviders []map[string]any `json:"certificate_providers,omitempty"`
-	HTTPClients          []map[string]any `json:"http_clients,omitempty"`
-	NetworkNamespaces    []map[string]any `json:"network_namespaces,omitempty"`
-	Log                  map[string]any   `json:"log,omitempty"`
-	DNS                  map[string]any   `json:"dns,omitempty"`
-	Inbounds             []map[string]any `json:"inbounds,omitempty"`
-	Outbounds            []map[string]any `json:"outbounds,omitempty"`
-	Route                map[string]any   `json:"route,omitempty"`
-	Endpoints            []map[string]any `json:"endpoints,omitempty"`
-	Services             []map[string]any `json:"services,omitempty"`
-	Experimental         map[string]any   `json:"experimental,omitempty"`
+	ProtocolServerFallbacks map[string]string     `json:"-"`
+	ProtocolServers         []protocolserver.Plan `json:"-"`
+	ManagedOutbounds        []map[string]any      `json:"-"`
+	Schema                  string                `json:"$schema,omitempty"`
+	NTP                     map[string]any        `json:"ntp,omitempty"`
+	Certificate             map[string]any        `json:"certificate,omitempty"`
+	CertificateProviders    []map[string]any      `json:"certificate_providers,omitempty"`
+	HTTPClients             []map[string]any      `json:"http_clients,omitempty"`
+	NetworkNamespaces       []map[string]any      `json:"network_namespaces,omitempty"`
+	Log                     map[string]any        `json:"log,omitempty"`
+	DNS                     map[string]any        `json:"dns,omitempty"`
+	Inbounds                []map[string]any      `json:"inbounds,omitempty"`
+	Outbounds               []map[string]any      `json:"outbounds,omitempty"`
+	Route                   map[string]any        `json:"route,omitempty"`
+	Endpoints               []map[string]any      `json:"endpoints,omitempty"`
+	Services                []map[string]any      `json:"services,omitempty"`
+	Experimental            map[string]any        `json:"experimental,omitempty"`
 }
 
 func NewConfig() *Config {

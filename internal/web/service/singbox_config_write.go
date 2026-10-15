@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/protocolserver"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 )
 
@@ -14,6 +15,7 @@ import (
 type nativeConfigCandidate struct {
 	path, target     string
 	managedOutbounds []map[string]any
+	protocolServers  []protocolserver.Plan
 	nativeAWGTags    []string
 }
 
@@ -54,6 +56,9 @@ func (s *SingBoxService) prepareConfigCandidate(ctx context.Context) (_ *nativeC
 }
 
 func (s *SingBoxService) prepareGeneratedConfigCandidate(ctx context.Context, cfg *singbox.Config) (_ *nativeConfigCandidate, err error) {
+	if err := protocolserver.Check(ctx, cfg.ProtocolServers); err != nil {
+		return nil, err
+	}
 	data, err := cfg.Marshal()
 	if err != nil {
 		return nil, err
@@ -93,7 +98,7 @@ func (s *SingBoxService) prepareGeneratedConfigCandidate(ctx context.Context, cf
 			}
 		}
 	}
-	return &nativeConfigCandidate{path: name, target: path, managedOutbounds: cfg.ManagedOutbounds, nativeAWGTags: nativeAWGTags}, nil
+	return &nativeConfigCandidate{path: name, target: path, managedOutbounds: cfg.ManagedOutbounds, protocolServers: cfg.ProtocolServers, nativeAWGTags: nativeAWGTags}, nil
 }
 
 // Restore a trusted applied snapshot with the same atomic/durable publication

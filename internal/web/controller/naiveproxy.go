@@ -1,12 +1,16 @@
 package controller
 
 import (
+	"context"
 	"fmt"
 	"runtime"
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/naiveproxy"
+	"github.com/SawaMEN/3x-ui/v3/internal/protocolserver"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 )
 
 type NaiveProxyController struct{}
@@ -27,11 +31,9 @@ func (a *NaiveProxyController) standaloneAllowed() error {
 }
 
 func (a *NaiveProxyController) status(c *gin.Context) {
-	if err := a.standaloneAllowed(); err != nil {
-		jsonObj(c, naiveproxy.Status{}, err)
-		return
-	}
 	status, err := naiveproxy.GetStatus(c.Request.Context())
+	status.Running = protocolserver.Running(model.NaiveProxy)
+	status.Source, status.FallbackReason = service.ProtocolServerStatus(model.NaiveProxy)
 	jsonObj(c, status, err)
 }
 
@@ -40,6 +42,10 @@ func (a *NaiveProxyController) update(c *gin.Context) {
 		jsonObj(c, naiveproxy.Status{}, err)
 		return
 	}
-	status, err := naiveproxy.Update(c.Request.Context())
-	jsonObj(c, status, err)
+	err := service.InstallProtocolServer(c.Request.Context(), model.NaiveProxy, func(ctx context.Context) error { _, err := naiveproxy.Update(ctx); return err })
+	if err != nil {
+		jsonObj(c, nil, err)
+		return
+	}
+	a.status(c)
 }

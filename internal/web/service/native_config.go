@@ -12,6 +12,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
 	"github.com/SawaMEN/3x-ui/v3/internal/hiddify"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/protocolserver"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray/geodata"
 )
@@ -353,6 +354,16 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot, ed
 			if !client.Enable {
 				continue
 			}
+			if (inbound.Protocol == model.NaiveProxy || inbound.Protocol == model.Hysteria) && protocolserver.Installed(inbound.Protocol) && client.LimitIP > 0 {
+				reason := fmt.Sprintf("standalone %s cannot preserve client source-IP limits; use sing-box", inbound.Protocol)
+				if s.strictProtocolServers {
+					return nil, fmt.Errorf("%s", reason)
+				}
+				if cfg.ProtocolServerFallbacks == nil {
+					cfg.ProtocolServerFallbacks = map[string]string{}
+				}
+				cfg.ProtocolServerFallbacks[inbound.Tag] = reason
+			}
 			entry := map[string]any{"email": client.Email}
 			if inbound.Protocol == model.MASQUE {
 				entry["enable"] = true
@@ -625,6 +636,15 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot, ed
 			return nil, err
 		}
 		if err := s.filterManagedOutboundPlans(cfg); err != nil {
+			return nil, err
+		}
+		reserved := make([]int, 0, len(inbounds))
+		for _, inbound := range inbounds {
+			if inbound != nil && inbound.Enable && inbound.NodeID == nil {
+				reserved = append(reserved, inbound.Port)
+			}
+		}
+		if err := prepareProtocolServersWithPolicy(cfg, s.strictProtocolServers, reserved...); err != nil {
 			return nil, err
 		}
 		if err := hiddify.FinalizeServerConfig(cfg); err != nil {

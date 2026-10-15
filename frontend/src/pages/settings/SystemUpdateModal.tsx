@@ -9,7 +9,6 @@ import {
   Pagination,
   Popconfirm,
   Space,
-  Select,
   Switch,
   Table,
   Tag,
@@ -48,15 +47,23 @@ type DependencyStatus = {
   updateAvailable: boolean;
   prerelease?: boolean;
   source?: 'sing-box' | 'standalone';
+  fallbackReason?: string;
+  mixed?: boolean;
   error?: string;
+  supported?: boolean;
+  unsupportedReason?: string;
 };
 
 type ExternalVPNBinaryStatus = {
+  source?: string;
+  fallbackReason?: string;
   installed?: boolean;
   version?: string;
   latestVersion?: string;
   updateAvailable?: boolean;
   error?: string;
+  supported?: boolean;
+  unsupportedReason?: string;
 };
 
 type ExternalVPNStatus = {
@@ -196,17 +203,16 @@ export default function SystemUpdateModal({
   const [packagePage, setPackagePage] = useState(1);
   const [bundledDependencies, setBundledDependencies] = useState<DependencyStatus[]>([]);
   const [standaloneDependencies, setStandaloneDependencies] = useState<DependencyStatus[]>([]);
-  const [componentSource, setComponentSource] = useState<Record<string, 'sing-box' | 'standalone'>>(
-    {},
-  );
   const dependencies = useMemo(
     () =>
-      bundledDependencies.map((dependency) =>
-        componentSource[dependency.key] === 'standalone'
-          ? standaloneDependencies.find((row) => row.key === dependency.key) || dependency
-          : dependency,
-      ),
-    [bundledDependencies, standaloneDependencies, componentSource],
+      bundledDependencies.map((dependency) => {
+        const standalone = standaloneDependencies.find((row) => row.key === dependency.key);
+        if (standalone?.installed && standalone.source !== 'sing-box') return standalone;
+        return standalone?.fallbackReason
+          ? { ...dependency, fallbackReason: standalone.fallbackReason }
+          : dependency;
+      }),
+    [bundledDependencies, standaloneDependencies],
   );
   const updatableDependencies = useMemo(
     () => [
@@ -254,6 +260,8 @@ export default function SystemUpdateModal({
         installedVersion: data?.version || '',
         availableVersion: data?.latestVersion || '',
         updateAvailable: data?.updateAvailable === true,
+        supported: data?.supported,
+        unsupportedReason: data?.unsupportedReason,
         error:
           data?.error ||
           (key === 'sudoku'
@@ -273,7 +281,11 @@ export default function SystemUpdateModal({
         return {
           key,
           label: key === 'naiveproxy' ? 'NaiveProxy' : 'Hysteria2',
-          source: 'standalone',
+          source: data?.source === 'sing-box' ? 'sing-box' : 'standalone',
+          fallbackReason: data?.fallbackReason,
+          mixed: data?.source === 'mixed',
+          supported: data?.supported,
+          unsupportedReason: data?.unsupportedReason,
           installed: data?.installed === true,
           installedVersion: data?.version || '',
           availableVersion: data?.latestVersion || '',
@@ -680,119 +692,135 @@ export default function SystemUpdateModal({
                 обновляет только уже установленные компоненты.
               </Typography.Paragraph>
               <div className="system-component-grid">
-                {dependencies.map((dependency) => (
-                  <Card
-                    key={dependency.key}
-                    size="small"
-                    className="system-component-card"
-                    title={dependency.label}
-                    extra={
-                      dependency.updateAvailable ? (
-                        <Tag color="warning">{t('pages.settings.swap.updatesAvailable')}</Tag>
-                      ) : dependency.installed ? (
-                        <Tag color="success">{t('pages.settings.swap.upToDate')}</Tag>
-                      ) : (
-                        <Tag>{t('pages.settings.swap.notInstalled')}</Tag>
-                      )
-                    }
-                  >
-                    {(dependency.key === 'naiveproxy' || dependency.key === 'hysteria2') && (
-                      <>
-                        <Select
-                          aria-label={`${dependency.label}: вариант компонента`}
-                          value={componentSource[dependency.key] || 'sing-box'}
-                          style={{ width: '100%', marginBottom: 10 }}
-                          disabled={dependencyBusy !== null || systemUpdateBusy}
-                          options={[
-                            { value: 'sing-box', label: 'Встроен в sing-box' },
-                            { value: 'standalone', label: 'Отдельная установка бинарника' },
-                          ]}
-                          onChange={(source) =>
-                            setComponentSource((current) => ({
-                              ...current,
-                              [dependency.key]: source,
-                            }))
-                          }
+                {dependencies.map((dependency) => {
+                  const standalone = standaloneDependencies.find(
+                    (row) => row.key === dependency.key,
+                  );
+                  const action = standalone || dependency;
+                  return (
+                    <Card
+                      key={dependency.key}
+                      size="small"
+                      className="system-component-card"
+                      title={dependency.label}
+                      extra={
+                        dependency.updateAvailable ? (
+                          <Tag color="warning">{t('pages.settings.swap.updatesAvailable')}</Tag>
+                        ) : dependency.installed ? (
+                          <Tag color="success">{t('pages.settings.swap.upToDate')}</Tag>
+                        ) : (
+                          <Tag>{t('pages.settings.swap.notInstalled')}</Tag>
+                        )
+                      }
+                    >
+                      {(dependency.key === 'naiveproxy' || dependency.key === 'hysteria2') && (
+                        <>
+                          <Typography.Text
+                            type="secondary"
+                            style={{ display: 'block', marginBottom: 10 }}
+                          >
+                            {dependency.mixed
+                              ? 'Совместимые входящие подключения используют отдельное ядро; остальные — sing-box.'
+                              : dependency.source === 'sing-box'
+                                ? 'Используется встроенный sing-box. Установка отдельного ядра автоматически переключит входящие подключения на него.'
+                                : 'Используется отдельное ядро. Панель управляет запуском и клиентами, маршрутизация проходит через sing-box.'}
+                          </Typography.Text>
+                        </>
+                      )}
+                      {dependency.fallbackReason && (
+                        <Alert
+                          type="warning"
+                          showIcon
+                          title="Для совместимости используется sing-box"
+                          description={dependency.fallbackReason}
+                          style={{ marginBottom: 10 }}
                         />
+                      )}
+                      {action.error && (
+                        <Alert
+                          type="warning"
+                          showIcon
+                          title={action.error}
+                          style={{ marginBottom: 10 }}
+                        />
+                      )}
+                      {dependency.key === 'pingtunnel' && (
                         <Typography.Text
                           type="secondary"
                           style={{ display: 'block', marginBottom: 10 }}
                         >
-                          {dependency.source === 'sing-box'
-                            ? 'Используется в подключениях панели. Обновляется вместе с sing-box.'
-                            : dependency.key === 'naiveproxy'
-                              ? 'Caddy-Naive для Linux/amd64. Установка для самостоятельной настройки; подключения панели продолжают использовать sing-box.'
-                              : 'Официальный Hysteria 2 для самостоятельной настройки. Подключения панели продолжают использовать sing-box.'}
+                          Pingtunnel обновляется отдельным официальным Linux-бинарником из GitHub
+                          Releases.
                         </Typography.Text>
-                      </>
-                    )}
-                    {dependency.error && (
-                      <Alert
-                        type="warning"
-                        showIcon
-                        title={dependency.error}
-                        style={{ marginBottom: 10 }}
-                      />
-                    )}
-                    {dependency.key === 'pingtunnel' && (
-                      <Typography.Text
-                        type="secondary"
-                        style={{ display: 'block', marginBottom: 10 }}
-                      >
-                        Pingtunnel обновляется отдельным официальным Linux-бинарником из GitHub
-                        Releases.
-                      </Typography.Text>
-                    )}
-                    {dependency.key === 'trusttunnel' && (
-                      <Typography.Text
-                        type="secondary"
-                        style={{ display: 'block', marginBottom: 10 }}
-                      >
-                        TrustTunnel обновляется отдельным официальным endpoint-бинарником из GitHub
-                        Releases.
-                      </Typography.Text>
-                    )}
-                    <div className="system-component-meta">
-                      <div>
-                        <Typography.Text type="secondary">
-                          {t('pages.settings.swap.installedVersion')}
+                      )}
+                      {dependency.key === 'trusttunnel' && (
+                        <Typography.Text
+                          type="secondary"
+                          style={{ display: 'block', marginBottom: 10 }}
+                        >
+                          TrustTunnel обновляется отдельным официальным endpoint-бинарником из
+                          GitHub Releases.
                         </Typography.Text>
-                        <Typography.Text strong>
-                          {dependency.installed ? dependency.installedVersion || '—' : '—'}
-                        </Typography.Text>
+                      )}
+                      <div className="system-component-meta">
+                        <div>
+                          <Typography.Text type="secondary">
+                            {t('pages.settings.swap.installedVersion')}
+                          </Typography.Text>
+                          <Typography.Text strong>
+                            {dependency.installed ? dependency.installedVersion || '—' : '—'}
+                          </Typography.Text>
+                        </div>
+                        <div>
+                          <Typography.Text type="secondary">
+                            {t('pages.settings.swap.availableVersion')}
+                          </Typography.Text>
+                          <Typography.Text strong>
+                            {dependency.availableVersion || '—'}
+                          </Typography.Text>
+                        </div>
                       </div>
-                      <div>
-                        <Typography.Text type="secondary">
-                          {t('pages.settings.swap.availableVersion')}
-                        </Typography.Text>
-                        <Typography.Text strong>
-                          {dependency.availableVersion || '—'}
-                        </Typography.Text>
-                      </div>
-                    </div>
-                    <Button
-                      size="small"
-                      icon={<DownloadOutlined />}
-                      loading={dependencyBusy === dependency.key}
-                      disabled={
-                        (!dependency.updateAvailable &&
-                          !(isDependencyInstallable(dependency) && !dependency.installed)) ||
-                        !dependency.availableVersion ||
-                        dependencyBusy !== null ||
-                        systemUpdateBusy
-                      }
-                      onClick={() => void updateDependency(dependency)}
-                    >
-                      {dependency.source === 'sing-box'
-                        ? 'Встроен в sing-box'
-                        : !dependency.installed && isDependencyInstallable(dependency)
-                          ? 'Установить'
-                          : dependency.updateAvailable
-                            ? t('pages.settings.swap.updateComponent')
-                            : t('pages.settings.swap.upToDate')}
-                    </Button>
-                  </Card>
-                ))}
+                      {standalone && !standalone.installed && (
+                        <Typography.Paragraph type="secondary">
+                          Отдельное ядро: {standalone.availableVersion || '—'}
+                        </Typography.Paragraph>
+                      )}
+                      {action.supported === false ? (
+                        <Alert
+                          type="info"
+                          showIcon
+                          title="Установка недоступна"
+                          description={
+                            action.unsupportedReason ||
+                            'Для этой архитектуры нет официального бинарника.'
+                          }
+                        />
+                      ) : (
+                        <Button
+                          size="small"
+                          icon={<DownloadOutlined />}
+                          loading={dependencyBusy === dependency.key}
+                          disabled={
+                            (!action.updateAvailable &&
+                              !(isDependencyInstallable(action) && !action.installed)) ||
+                            !action.availableVersion ||
+                            dependencyBusy !== null ||
+                            systemUpdateBusy
+                          }
+                          onClick={() => void updateDependency(action)}
+                        >
+                          {!action.installed && isDependencyInstallable(action)
+                            ? standalone
+                              ? 'Установить отдельное ядро'
+                              : 'Установить'
+                            : action.updateAvailable
+                              ? t('pages.settings.swap.updateComponent')
+                              : t('pages.settings.swap.upToDate')}
+                        </Button>
+                      )}
+                    </Card>
+                  );
+                })}
               </div>
             </Card>
 

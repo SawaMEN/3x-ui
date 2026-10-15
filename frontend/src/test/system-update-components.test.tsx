@@ -4,9 +4,15 @@ import SystemUpdateModal from '@/pages/settings/SystemUpdateModal';
 import { HttpUtil } from '@/utils';
 
 let installedHysteria = false;
+let naiveSupported = true;
+let installedNaive = false;
+let hysteriaFallback = '';
 
 beforeEach(() => {
   installedHysteria = false;
+  hysteriaFallback = '';
+  naiveSupported = true;
+  installedNaive = false;
   vi.mocked(HttpUtil.post).mockClear();
   vi.mocked(HttpUtil.get).mockImplementation(async (path) => ({
     success: true,
@@ -19,19 +25,34 @@ beforeEach(() => {
             trusttunnel: { installed: false, latestVersion: '1.1.0' },
             hysteria2: {
               installed: installedHysteria,
+              source: hysteriaFallback ? 'sing-box' : undefined,
+              fallbackReason: hysteriaFallback,
               latestVersion: '2.13.0',
               updateAvailable: installedHysteria,
             },
           }
-        : { installed: false, latestVersion: '1.0.0' },
+        : String(path).includes('naiveproxy')
+          ? {
+              installed: installedNaive,
+              supported: naiveSupported,
+              unsupportedReason: naiveSupported
+                ? undefined
+                : 'Caddy-Naive is not published for linux/arm64',
+              latestVersion: naiveSupported ? '1.0.0' : '',
+            }
+          : { installed: false, latestVersion: '1.0.0' },
   }));
-  vi.mocked(HttpUtil.post).mockImplementation(async (path) => ({
-    success: true,
-    msg: '',
-    obj: String(path).includes('/system/update/')
-      ? { supported: true, runningAsRoot: true, canUpdate: true, packages: [] }
-      : {},
-  }));
+  vi.mocked(HttpUtil.post).mockImplementation(async (path) => {
+    if (String(path).endsWith('/externalvpn/update/hysteria2')) installedHysteria = true;
+    if (String(path).endsWith('/naiveproxy/update')) installedNaive = true;
+    return {
+      success: true,
+      msg: '',
+      obj: String(path).includes('/system/update/')
+        ? { supported: true, runningAsRoot: true, canUpdate: true, packages: [] }
+        : {},
+    };
+  });
 });
 
 async function openComponents() {
@@ -80,21 +101,23 @@ it('installs Sudoku only through its own install button', async () => {
 it.each([
   ['Hysteria2', '/panel/api/server/externalvpn/update/hysteria2'],
   ['NaiveProxy', '/panel/api/naiveproxy/update'],
-])('offers %s as a built-in component or an optional separate binary', async (name, endpoint) => {
+])('automatically uses %s after installing its separate binary', async (name, endpoint) => {
   await openComponents();
-  expect(
-    (card(name).getByRole('button', { name: /Встроен в sing-box/ }) as HTMLButtonElement).disabled,
-  ).toBe(true);
-  fireEvent.mouseDown(screen.getByLabelText(`${name}: вариант компонента`));
-  fireEvent.click(await screen.findByTitle('Отдельная установка бинарника'));
-  expect(
-    card(name).getByText(/Подключения панели продолжают использовать sing-box\./i),
-  ).toBeTruthy();
-  fireEvent.click(card(name).getByRole('button', { name: /Установить/ }));
+  expect(card(name).getByText(/Используется встроенный sing-box/)).toBeTruthy();
+  fireEvent.click(card(name).getByRole('button', { name: /Установить отдельное ядро/ }));
   await waitFor(() => expect(HttpUtil.post).toHaveBeenCalledWith(endpoint));
+  await waitFor(() => expect(card(name).getByText(/Используется отдельное ядро/)).toBeTruthy());
 });
 
-it('updates an installed standalone Hysteria even while the built-in view is selected', async () => {
+it('hides the install button and explains an unsupported architecture', async () => {
+  naiveSupported = false;
+  await openComponents();
+  expect(card('NaiveProxy').getByText('Caddy-Naive is not published for linux/arm64')).toBeTruthy();
+  expect(card('NaiveProxy').queryByRole('button', { name: /Установить/ })).toBeNull();
+  expect(card('NaiveProxy').getByText(/Используется встроенный sing-box/)).toBeTruthy();
+});
+
+it('updates an installed standalone Hysteria in the general update', async () => {
   installedHysteria = true;
   await openComponents();
   fireEvent.click(screen.getByRole('button', { name: /Update panel packages & kernel/ }));
@@ -102,4 +125,12 @@ it('updates an installed standalone Hysteria even while the built-in view is sel
   await waitFor(() =>
     expect(HttpUtil.post).toHaveBeenCalledWith('/panel/api/server/externalvpn/update/hysteria2'),
   );
+});
+
+it('explains native fallback for a preinstalled server with incompatible routing', async () => {
+  installedHysteria = true;
+  hysteriaFallback = 'standalone Hysteria cannot preserve routing by authenticated user';
+  await openComponents();
+  expect(card('Hysteria2').getByText(/Используется встроенный sing-box/)).toBeTruthy();
+  expect(card('Hysteria2').getByText(hysteriaFallback)).toBeTruthy();
 });

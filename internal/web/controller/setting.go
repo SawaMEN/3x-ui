@@ -608,7 +608,7 @@ func (a *SettingController) systemUpdateApply(c *gin.Context) {
 }
 
 func (a *SettingController) sudokuStatus(c *gin.Context) {
-	status, err := sudoku.GetStatus(c.Request.Context())
+	status, err := sudoku.GetStatus(c.Request.Context(), c.Query("local") == "true")
 	if err != nil {
 		jsonObj(c, status, err)
 		return

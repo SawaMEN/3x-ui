@@ -19,7 +19,11 @@ import (
 // snapshot, and a new core process starts a fresh baseline without clearing DB
 // totals. The core owns in-memory counters; unobserved bytes on abrupt core
 // death cannot be recovered by its current API.
-func (s *SingBoxService) commitHiddifySnapshot(epoch string, stats []singbox.V2RayStat) error {
+func (s *SingBoxService) commitHiddifySnapshot(epoch string, stats []singbox.V2RayStat, namespaces ...string) error {
+	namespace := "hiddify:"
+	if len(namespaces) > 0 {
+		namespace = namespaces[0]
+	}
 	if epoch == "" {
 		return fmt.Errorf("empty hiddify statistics epoch")
 	}
@@ -48,7 +52,7 @@ func (s *SingBoxService) commitHiddifySnapshot(epoch string, stats []singbox.V2R
 		svc := &singBoxInboundService
 		err := database.GetDB().Transaction(func(tx *gorm.DB) error {
 			var stored []model.CoreTrafficCheckpoint
-			if err := tx.Where("name LIKE ?", "hiddify:%").Find(&stored).Error; err != nil {
+			if err := tx.Where("name LIKE ?", namespace+"%").Find(&stored).Error; err != nil {
 				return err
 			}
 			previous := make(map[string]model.CoreTrafficCheckpoint, len(stored))
@@ -81,7 +85,7 @@ func (s *SingBoxService) commitHiddifySnapshot(epoch string, stats []singbox.V2R
 			deltas := make([]singbox.V2RayStat, 0, len(filtered))
 			checkpoints := make([]model.CoreTrafficCheckpoint, 0, len(filtered))
 			for _, stat := range filtered {
-				name := "hiddify:" + stat.Name
+				name := namespace + stat.Name
 				row := previous[name]
 				delta := stat.Value
 				if row.Epoch == epoch && stat.Value >= row.Value {
@@ -92,7 +96,7 @@ func (s *SingBoxService) commitHiddifySnapshot(epoch string, stats []singbox.V2R
 				if strings.HasPrefix(stat.Name, "user>>>") {
 					i := strings.LastIndex(stat.Name, ">>>traffic>>>")
 					source := stat.Name[len("user>>>"):i]
-					trafficID = sourceOwners["hiddify:"+stat.Name[:i]]
+					trafficID = sourceOwners[namespace+stat.Name[:i]]
 					if trafficID == 0 {
 						trafficID = ownerIDs[source]
 					}
@@ -115,7 +119,7 @@ func (s *SingBoxService) commitHiddifySnapshot(epoch string, stats []singbox.V2R
 				}
 			}
 			// Retire counters from older processes without accumulating epoch history.
-			if err := tx.Where("name LIKE ? AND epoch <> ?", "hiddify:%", epoch).Delete(&model.CoreTrafficCheckpoint{}).Error; err != nil {
+			if err := tx.Where("name LIKE ? AND epoch <> ?", namespace+"%", epoch).Delete(&model.CoreTrafficCheckpoint{}).Error; err != nil {
 				return err
 			}
 

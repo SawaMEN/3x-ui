@@ -13,6 +13,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/hiddify"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/protocolserver"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 )
 
@@ -107,6 +108,9 @@ func (s *SingBoxService) pollHiddifyTraffic(ctx context.Context) error {
 	if err := s.commitHiddifySnapshot(epoch, stats); err != nil {
 		return err
 	}
+	if err := s.pollProtocolServerTraffic(ctx); err != nil {
+		return err
+	}
 	if err := s.enforceHiddifySessions(ctx); err != nil {
 		logger.Warning("hiddify session revocation failed; retry after config apply:", err)
 	}
@@ -139,6 +143,21 @@ func (s *SingBoxService) hiddifyPresence(ctx context.Context) (map[string]map[st
 			online[session.User] = map[string]struct{}{}
 		}
 		online[session.User][host] = struct{}{}
+	}
+	extra, extraTags, err := protocolserver.Presence(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	for email, sources := range extra {
+		if online[email] == nil {
+			online[email] = map[string]struct{}{}
+		}
+		for source := range sources {
+			online[email][source] = struct{}{}
+		}
+	}
+	for _, tag := range extraTags {
+		tags[tag] = true
 	}
 	active := []string{}
 	for tag := range tags {

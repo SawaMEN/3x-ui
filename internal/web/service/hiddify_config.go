@@ -16,14 +16,16 @@ import (
 
 // HiddifyConfigGenerator builds the full server configuration used by previews,
 // candidate validation and runtime publication. It does not write panel rows.
-type HiddifyConfigGenerator struct{}
+type HiddifyConfigGenerator struct{ StrictProtocolServers bool }
 
 func (g *HiddifyConfigGenerator) Generate() (*singbox.Config, error) {
 	snapshot, err := loadNativeConfigSnapshot()
 	if err != nil {
 		return nil, fmt.Errorf("sing-box configuration snapshot: %w", err)
 	}
-	return NativeCore(CoreTypeHiddify).generateNativeConfig(snapshot)
+	core := *NativeCore(CoreTypeHiddify)
+	core.strictProtocolServers = g.StrictProtocolServers
+	return core.generateNativeConfig(snapshot)
 }
 
 type nativeConfigSnapshot struct {

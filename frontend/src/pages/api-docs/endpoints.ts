@@ -221,6 +221,15 @@ export const sections: readonly Section[] = [
         method: 'GET',
         path: '/panel/api/server/externalvpn/status',
         summary: 'Return external VPN component installation and update status.',
+        params: [
+          {
+            name: 'local',
+            in: 'query',
+            type: 'boolean',
+            optional: true,
+            desc: 'Inspect only local installation state without querying upstream releases.',
+          },
+        ],
       },
       {
         method: 'POST',
@@ -241,7 +250,7 @@ export const sections: readonly Section[] = [
     id: 'naiveproxy',
     title: 'NaiveProxy',
     description:
-      'Install the optional Caddy-Naive binary for independent configuration on Linux/amd64. Panel connections continue to use sing-box.',
+      'Manage the optional Caddy-Naive server on Linux/amd64. Installed binaries automatically handle panel inbounds through authenticated sing-box routing bridges.',
     endpoints: [
       {
         method: 'GET',
@@ -3031,6 +3040,15 @@ export const sections: readonly Section[] = [
         method: 'GET',
         path: '/panel/api/setting/sudoku/status',
         summary: 'Return Sudoku installation status.',
+        params: [
+          {
+            name: 'local',
+            in: 'query',
+            type: 'boolean',
+            optional: true,
+            desc: 'Inspect only local installation state without querying upstream releases.',
+          },
+        ],
       },
       {
         method: 'POST',

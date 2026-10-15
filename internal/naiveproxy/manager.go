@@ -34,12 +34,16 @@ const (
 var managerMu sync.Mutex
 
 type Status struct {
-	Installed       bool   `json:"installed"`
-	Version         string `json:"version"`
-	LatestVersion   string `json:"latestVersion"`
-	UpdateAvailable bool   `json:"updateAvailable"`
-	Binary          string `json:"binary"`
-	Running         bool   `json:"running"`
+	Source            string `json:"source,omitempty"`
+	FallbackReason    string `json:"fallbackReason,omitempty"`
+	Supported         bool   `json:"supported"`
+	UnsupportedReason string `json:"unsupportedReason,omitempty"`
+	Installed         bool   `json:"installed"`
+	Version           string `json:"version"`
+	LatestVersion     string `json:"latestVersion"`
+	UpdateAvailable   bool   `json:"updateAvailable"`
+	Binary            string `json:"binary"`
+	Running           bool   `json:"running"`
 }
 
 type User struct {
@@ -77,17 +81,28 @@ type inboundSettings struct {
 
 func GetStatus(ctx context.Context) (Status, error) {
 	binary := BinaryPath()
-	_, statErr := os.Stat(binary)
+	info, statErr := os.Stat(binary)
 	status := Status{
-		Installed: statErr == nil,
+		Supported: runtime.GOOS == "linux" && runtime.GOARCH == "amd64",
+		Installed: statErr == nil && info.Mode().IsRegular() && info.Mode().Perm()&0o111 != 0,
 		Version:   installedVersion(binary),
 		Binary:    binary,
 		Running:   processRunning(),
 	}
 
+	if !status.Supported {
+		status.Installed = false
+		status.UnsupportedReason = fmt.Sprintf("Caddy-Naive server is published only for linux/amd64; current platform: %s/%s", runtime.GOOS, runtime.GOARCH)
+		return status, nil
+	}
 	rel, err := fetchLatestRelease(ctx)
 	if err != nil {
 		// Network failure must not make an installed component look absent.
+		return status, nil
+	}
+	if _, err := pickAsset(rel.Assets); err != nil {
+		status.Supported = false
+		status.UnsupportedReason = err.Error()
 		return status, nil
 	}
 	status.LatestVersion = strings.TrimSpace(rel.TagName)

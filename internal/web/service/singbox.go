@@ -17,6 +17,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
 	"github.com/SawaMEN/3x-ui/v3/internal/hiddify"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/protocolserver"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/tail"
@@ -41,7 +42,8 @@ func SetSingBoxDependencies(inbound *InboundService, settings *SettingService) {
 }
 
 type SingBoxService struct {
-	gateway *GatewayNetworkService
+	strictProtocolServers bool
+	gateway               *GatewayNetworkService
 }
 
 func singBoxInboundRequiresUsers(protocol model.Protocol) bool {
@@ -120,7 +122,7 @@ func singBoxTUICInbound(ib *model.Inbound, clients []any) (map[string]any, error
 
 // GetConfig is the single generation entry point for previews, candidates and restarts.
 func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
-	return (&HiddifyConfigGenerator{}).Generate()
+	return (&HiddifyConfigGenerator{StrictProtocolServers: s.strictProtocolServers}).Generate()
 }
 
 type SingBoxEditorSnapshot struct {
@@ -590,20 +592,15 @@ func (s *SingBoxService) restartLocked(ctx context.Context) (result error) {
 	}
 
 	tuic.GetManager().StopAll()
+	previousServers, err := protocolserver.Suspend()
+	if err != nil {
+		return errors.Join(err, protocolserver.Start(context.Background(), previousServers))
+	}
 	if err := s.restartProcess(ctx); err != nil {
-		if wasRunning && len(previous) > 0 {
-			recoveryErr := writeNativeConfigBytes(s.ProcessConfigPath(), previous)
-			if recoveryErr == nil && !s.IsRunning() {
-				recoveryCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-				recoveryErr = s.startProcess(recoveryCtx)
-				cancel()
-			}
-			if recoveryErr != nil {
-				err = errors.Join(err, fmt.Errorf("restore previous hiddify configuration: %w", recoveryErr))
-			}
-			s.process().SetError(err)
-		}
-		return err
+		return errors.Join(err, s.restoreProtocolServerRuntime(previous, previousServers, wasRunning))
+	}
+	if err := protocolserver.Start(ctx, candidate.protocolServers); err != nil {
+		return errors.Join(err, s.restoreProtocolServerRuntime(previous, previousServers, wasRunning))
 	}
 	amneziawgnet.GetOutboundManager().SetNativeTags(candidate.nativeAWGTags)
 	s.stoppedFlag().Store(false)
@@ -667,8 +664,16 @@ func (s *SingBoxService) startLocked(ctx context.Context) (result error) {
 		return err
 	}
 	defer func() { result = errors.Join(result, finishGateway()) }()
+	if err := protocolserver.StopAll(); err != nil {
+		return err
+	}
 	if err := s.startProcess(ctx); err != nil {
 		return err
+	}
+	if err := protocolserver.Start(ctx, candidate.protocolServers); err != nil {
+		recovery, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		return errors.Join(err, s.stopProcess(recovery))
 	}
 
 	amneziawgnet.GetOutboundManager().SetNativeTags(candidate.nativeAWGTags)
@@ -704,7 +709,7 @@ func (s *SingBoxService) stopLocked(ctx context.Context) (result error) {
 		return err
 	}
 	s.stoppedFlag().Store(true)
-	return nil
+	return protocolserver.StopAll()
 }
 
 func (s *SingBoxService) IsRunning() bool {
