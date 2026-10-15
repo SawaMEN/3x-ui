@@ -107,6 +107,118 @@ check_config 0
 [[ $? == 1 ]]
 ''', {"TEST_ROOT": raw})
 
+    def release_functions(self, file):
+        return "".join(function(file, name) for name in
+                       ("release_curl", "resolve_latest_tag", "select_release_tag"))
+
+    def test_install_and_update_share_release_selection(self):
+        self.assertEqual(self.release_functions("install.sh"), self.release_functions("update.sh"))
+        self.assertEqual(function("install.sh", "download_release_asset"),
+                         function("update.sh", "download_release_asset"))
+
+    def test_default_release_avoids_legacy_stable_but_explicit_tag_is_preserved(self):
+        for file in ("install.sh", "update.sh"):
+            for requested, stable_status, expected, rc in (
+                    ("", "200", "v4.0.0", 0),
+                    ("", "404", "dev-latest", 0),
+                    ("v3.9.8", "404", "v3.9.8", 0),
+                    ("", "503", "", 1)):
+                with self.subTest(file=file, requested=requested, status=stable_status):
+                    self.run_script(self.release_functions(file) + r'''
+resolve_latest_tag() { printf v4.0.0; }
+curl() {
+    case "$*" in
+        *core-migration.sh*) printf '%s' "$STATUS";;
+        *api.github.com*) printf '{"body":"legacy release"}';;
+        *) return 99;;
+    esac
+}
+value=$(select_release_tag "$REQUESTED")
+rc=$?
+[[ "$rc" == "$EXPECTED_RC" && "$value" == "$EXPECTED" ]]
+''', {"STATUS": stable_status, "REQUESTED": requested,
+      "EXPECTED": expected, "EXPECTED_RC": str(rc)})
+
+    def test_dev_selection_pins_complete_immutable_release(self):
+        for file in ("install.sh", "update.sh"):
+            self.run_script(self.release_functions(file) + r'''
+arch() { printf amd64; }
+curl() {
+    case "$*" in
+        *api.github.com*) printf '{"body":"commit=0123456789012345678901234567890123456789"}';;
+        *dev-0123456789012345678901234567890123456789/x-ui-linux-amd64.tar.gz*) printf 200;;
+        *) return 99;;
+    esac
+}
+[[ "$(select_release_tag dev)" == dev-0123456789012345678901234567890123456789 ]]
+''')
+
+    def test_failed_transport_retries_ipv4_without_partial_stdout(self):
+        for file in ("install.sh", "update.sh"):
+            self.run_script(function(file, "release_curl") + r'''
+curl() {
+    if [[ "$1" == -4 ]]; then printf success; else printf partial; return 7; fi
+}
+[[ "$(release_curl -fsSL test)" == success ]]
+''')
+
+    def test_port_detection_does_not_override_match_in_awk_end(self):
+        for file in ("install.sh", "x-ui.sh", "x-ui-core.sh"):
+            self.run_script(function(file, "is_port_in_use") + r'''
+ss() { printf 'LISTEN 0 128 127.0.0.1:2053 0.0.0.0:*\n'; }
+is_port_in_use 2053 || exit 1
+is_port_in_use 2054 && exit 1
+exit 0
+''')
+
+    def test_update_exit_status_includes_rollback_failure(self):
+        for initial, rollback, expected in ((0, 0, 0), (0, 1, 1), (42, 0, 42), (42, 1, 42)):
+            script = function("update.sh", "_report_update_exit") + f'''
+core_migration_exit() {{ return {rollback}; }}
+_write_update_status() {{ :; }}
+trap _report_update_exit EXIT
+exit {initial}
+'''
+            result = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+            self.assertEqual(result.returncode, expected, result.stderr)
+
+    def test_main_menu_returns_on_eof_and_nested_navigation(self):
+        script = function("x-ui.sh", "show_menu") + r'''
+show_status() { :; }
+show_menu </dev/null >/dev/null || exit 1
+_xui_menu_active=1
+read() { return 99; }
+show_menu || exit 1
+'''
+        self.run_script(script)
+
+    def test_asset_download_keeps_http_failure_for_diagnostics(self):
+        for file in ("install.sh", "update.sh"):
+            with tempfile.TemporaryDirectory() as raw:
+                self.run_script(function(file, "download_release_asset") + r'''
+curl() { printf 404; return 22; }
+download_release_asset https://example.invalid/missing "$TEST_ROOT/archive" >/dev/null
+rc=$?
+[[ "$rc" == 22 && "$download_http_status" == 404 ]]
+''', {"TEST_ROOT": raw})
+
+    def test_modern_release_cannot_skip_missing_checksum(self):
+        with tempfile.TemporaryDirectory() as raw:
+            self.run_script(function("install.sh", "verify_release_checksum") + r'''
+release_curl() { printf 404; }
+(verify_release_checksum https://github.com/SawaMEN/3x-ui/releases/download/dev-latest/archive "$TEST_ROOT/archive") >/dev/null
+[[ $? == 1 ]]
+''', {"TEST_ROOT": raw})
+
+    def test_unsupported_architecture_is_failure_without_deleting_script(self):
+        for file in ("install.sh", "update.sh"):
+            self.run_script(function(file, "arch") + r'''
+uname() { printf mips; }
+rm() { exit 99; }
+arch >/dev/null 2>&1
+[[ $? == 1 ]]
+''')
+
     def test_installer_aborts_if_parent_directory_is_missing(self):
         with tempfile.TemporaryDirectory() as raw:
             self.run_script(function("install.sh", "install_x-ui") + r'''

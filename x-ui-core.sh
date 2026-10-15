@@ -23,11 +23,11 @@ function LOGI() {
 is_port_in_use() {
     local port="$1"
     if command -v ss > /dev/null 2>&1; then
-        ss -ltn 2> /dev/null | awk -v p=":${port}$" '$4 ~ p {exit 0} END {exit 1}'
+        ss -ltn 2> /dev/null | awk -v p=":${port}$" '$4 ~ p {found=1; exit} END {exit !found}'
         return
     fi
     if command -v netstat > /dev/null 2>&1; then
-        netstat -lnt 2> /dev/null | awk -v p=":${port} " '$4 ~ p {exit 0} END {exit 1}'
+        netstat -lnt 2> /dev/null | awk -v p=":${port}$" '$4 ~ p {found=1; exit} END {exit !found}'
         return
     fi
     if command -v lsof > /dev/null 2>&1; then
@@ -115,7 +115,7 @@ confirm() {
 }
 
 confirm_restart() {
-    confirm "Restart the panel, Attention: Restarting the panel will also restart xray" "y"
+    confirm "Restart the panel, Attention: Restarting the panel will also restart Sing-box" "y"
     if [[ $? == 0 ]]; then
         restart
     else
@@ -1010,9 +1010,9 @@ check_xray_status() {
 show_xray_status() {
     check_xray_status
     if [[ $? == 0 ]]; then
-        echo -e "xray state: ${green}Running${plain}"
+        echo -e "Sing-box state: ${green}Running${plain}"
     else
-        echo -e "xray state: ${red}Not Running${plain}"
+        echo -e "Sing-box state: ${red}Not Running${plain}"
     fi
 }
 

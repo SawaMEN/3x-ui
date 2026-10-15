@@ -35,11 +35,12 @@ arch() {
     case "$(uname -m)" in
         x86_64 | x64 | amd64) echo 'amd64' ;;
         armv8* | arm64 | aarch64) echo 'arm64' ;;
-        *) echo -e "${green}Unsupported CPU architecture! ${plain}" && rm -f "$(realpath "$0")" && exit 1 ;;
+        *) echo "Unsupported CPU architecture: $(uname -m)" >&2; return 1 ;;
     esac
 }
 
-echo "Arch: $(arch)"
+machine_arch=$(arch) || exit 1
+echo "Arch: ${machine_arch}"
 
 # Non-interactive mode: triggered explicitly via XUI_NONINTERACTIVE=1, or
 # implicitly when stdin is not a TTY (e.g. `curl ... | bash`, cloud-init).
@@ -81,11 +82,11 @@ acme_listen_flag() {
 is_port_in_use() {
     local port="$1"
     if command -v ss > /dev/null 2>&1; then
-        ss -ltn 2> /dev/null | awk -v p=":${port}$" '$4 ~ p {exit 0} END {exit 1}'
+        ss -ltn 2> /dev/null | awk -v p=":${port}$" '$4 ~ p {found=1; exit} END {exit !found}'
         return
     fi
     if command -v netstat > /dev/null 2>&1; then
-        netstat -lnt 2> /dev/null | awk -v p=":${port} " '$4 ~ p {exit 0} END {exit 1}'
+        netstat -lnt 2> /dev/null | awk -v p=":${port}$" '$4 ~ p {found=1; exit} END {exit !found}'
         return
     fi
     if command -v lsof > /dev/null 2>&1; then
@@ -1507,12 +1508,22 @@ _install_xui_service_unit() {
 # releases/latest redirect, which is not subject to the unauthenticated API's
 # 60 req/h-per-IP limit that trips shared CI/CGNAT addresses (the install then
 # fails with "Failed to fetch x-ui version"), and falls back to the API.
+# Retry a failed transport over IPv4 without mixing partial stdout with the retry.
+release_curl() {
+    local output
+    if output=$("${curl_bin:-curl}" "$@"); then
+        printf '%s' "$output"
+        return 0
+    fi
+    "${curl_bin:-curl}" -4 "$@"
+}
+
 resolve_latest_tag() {
     local url tag page
 
     # Prefer GitHub's public /releases/latest redirect. This does not require
     # the REST API and therefore avoids the unauthenticated API rate limit.
-    url=$(curl -sSLI -o /dev/null -w '%{url_effective}'         --retry 5 --retry-delay 3 --connect-timeout 15 --max-time 60         "https://github.com/SawaMEN/3x-ui/releases/latest" 2>/dev/null)
+    url=$(release_curl -sSLI -o /dev/null -w '%{url_effective}'         --retry 5 --retry-delay 3 --connect-timeout 15 --max-time 60         "https://github.com/SawaMEN/3x-ui/releases/latest" 2>/dev/null)
     tag=${url##*/tag/}
     if [[ "$tag" != "$url" && -n "$tag" && "$tag" != "latest" ]]; then
         printf '%s\n' "$tag"
@@ -1521,7 +1532,7 @@ resolve_latest_tag() {
 
     # Some proxies/CDNs do not expose the final URL for HEAD requests.
     # Fall back to the public release HTML page, still without using the API.
-    page=$(curl -fsSL         --retry 5 --retry-delay 3 --connect-timeout 15 --max-time 60         "https://github.com/SawaMEN/3x-ui/releases/latest" 2>/dev/null) || return 1
+    page=$(release_curl -fsSL         --retry 5 --retry-delay 3 --connect-timeout 15 --max-time 60         "https://github.com/SawaMEN/3x-ui/releases/latest" 2>/dev/null) || return 1
     tag=$(printf '%s' "$page"         | grep -oE '/SawaMEN/3x-ui/releases/tag/[^"?#]+'         | head -n 1         | sed 's#.*/tag/##')
     [[ -n "$tag" ]] || return 1
     printf '%s\n' "$tag"
@@ -1533,8 +1544,8 @@ resolve_latest_tag() {
 verify_release_checksum() {
     local url="$1" file="$2" sums="$2.sha256" code expected actual
     rm -f "${sums}"
-    code=$(curl -sL --retry 3 --retry-delay 3 --connect-timeout 15 --max-time 60 -o "${sums}" -w '%{http_code}' "${url}.sha256")
-    if [[ "${code}" == "404" ]]; then
+    code=$(release_curl -sL --retry 3 --retry-delay 3 --connect-timeout 15 --max-time 60 -o "${sums}" -w '%{http_code}' "${url}.sha256")
+    if [[ "${code}" == "404" && "${url}" != */dev-*/* ]]; then
         rm -f "${sums}"
         echo -e "${yellow}No checksum published for this release, skipping verification${plain}"
         return 0
@@ -1558,19 +1569,57 @@ verify_release_checksum() {
 # Older tags predate some of these files (x-ui.rc arrived in v2.8.4). Serving
 # main's copy against an old binary is the mismatch this pinning exists to
 # prevent, so probe before anything is stopped or removed and refuse the tag.
-require_repo_files() {
-    local ref="$1" name status
-    shift
-    [[ "${ref}" == "main" ]] && return 0
-    for name in "$@"; do
-        status=$(curl -sIL --retry 3 --connect-timeout 15 -o /dev/null -w '%{http_code}' "https://raw.githubusercontent.com/SawaMEN/3x-ui/${ref}/${name}")
-        if [[ "${status}" != "200" ]]; then
-            echo -e "${red}${name} is not available for ${ref} (HTTP ${status})${plain}"
-            echo -e "${red}Install a release that ships it, or 'dev' for the rolling build. Your existing installation has not been touched.${plain}"
-            exit 1
+# The fork's old stable tags predate the core migration. Default commands
+# select a compatible build; explicitly requested versions are never substituted.
+select_release_tag() {
+    local requested="${1:-}" status metadata commit immutable
+    if [[ -z "$requested" ]]; then
+        requested=$(resolve_latest_tag) || return 1
+        status=$(release_curl -sL --retry 2 --connect-timeout 15 --max-time 60 -o /dev/null -w '%{http_code}' \
+            "https://raw.githubusercontent.com/SawaMEN/3x-ui/${requested}/core-migration.sh")
+        case "$status" in
+            200) ;;
+            404)
+                echo "Latest stable ${requested} predates the current core; selecting the project's dev build (dev-latest)." >&2
+                requested=dev-latest ;;
+            *) echo "Cannot check compatibility of ${requested} (HTTP ${status}); installation unchanged." >&2; return 1 ;;
+        esac
+    fi
+    [[ "$requested" != dev ]] || requested=dev-latest
+    if [[ "$requested" == dev-latest ]]; then
+        metadata=$(release_curl -fsSL --retry 2 --connect-timeout 15 --max-time 60 \
+            "https://api.github.com/repos/SawaMEN/3x-ui/releases/tags/dev-latest") || metadata=""
+        commit=$(printf '%s' "$metadata" | sed -nE 's/.*commit=([0-9a-f]{40}).*/\1/p' | head -n1)
+        if [[ "$commit" =~ ^[0-9a-f]{40}$ ]]; then
+            immutable="dev-${commit}"
+            status=$(release_curl -sIL --retry 2 --connect-timeout 15 --max-time 60 -o /dev/null -w '%{http_code}' \
+                "https://github.com/SawaMEN/3x-ui/releases/download/${immutable}/x-ui-linux-$(arch).tar.gz")
+            if [[ "$status" == 200 ]]; then
+                requested="$immutable"
+            elif [[ "$status" != 404 ]]; then
+                echo "Cannot resolve immutable dev release (HTTP ${status}); installation unchanged." >&2
+                return 1
+            fi
         fi
-    done
+    fi
+    printf '%s\n' "$requested"
 }
+
+
+download_release_asset() {
+    local url="$1"
+    local dest="$2"
+
+    rm -f "$dest"
+    if download_http_status=$("${curl_bin:-curl}" -fL --retry 3 --retry-delay 2 --connect-timeout 20 --max-time 900 -w '%{http_code}' -o "$dest" "$url"); then
+        return 0
+    fi
+
+    echo -e "${yellow}Initial download failed; retrying GitHub over IPv4...${plain}"
+    rm -f "$dest"
+    download_http_status=$("${curl_bin:-curl}" -4 -fL --retry 3 --retry-delay 2 --connect-timeout 20 --max-time 900 -w '%{http_code}' -o "$dest" "$url")
+}
+
 
 prepare_release_migration() {
     local cm_archive="$1" cm_listing cm_helper cm_installed_bin="${XUI_BIN_FOLDER:-$xui_folder/bin}"
@@ -1582,7 +1631,7 @@ prepare_release_migration() {
         source "$cm_helper"
         rm -f "$cm_helper"
         xui_download_archive="$cm_archive"
-        trap 'code=$?; core_migration_exit "$code" || code=1; rm -f -- "$xui_download_archive" "${xui_download_archive}.sha256"; exit "$code"' EXIT
+        trap 'code=$?; core_migration_exit "$code" || code=1; rm -f -- "$xui_download_archive" "${xui_download_archive}.sha256" "${xui_script_temp:-}"; exit "$code"' EXIT
         trap 'exit 143' TERM
         trap 'exit 130' INT
         core_migration_prepare_archive "$cm_archive" || return 1
@@ -1645,17 +1694,17 @@ install_x-ui() {
     local archive
     archive=$(mktemp "${xui_folder%/*}/.x-ui-download.XXXXXX.tar.gz") || return 1
     xui_download_archive="$archive"
-    trap 'code=$?; rm -f -- "$xui_download_archive" "$xui_download_archive.sha256"; exit "$code"' EXIT
+    trap 'code=$?; rm -f -- "$xui_download_archive" "$xui_download_archive.sha256" "${xui_script_temp:-}"; exit "$code"' EXIT
 
     # Download resources
     if [ $# == 0 ]; then
-        tag_version=$(resolve_latest_tag)
+        tag_version=$(select_release_tag)
         if [[ ! -n "$tag_version" ]]; then
             echo -e "${red}Failed to fetch x-ui version, it may be due to GitHub API restrictions, please try it later${plain}"
             exit 1
         fi
         echo -e "Got x-ui latest version: ${tag_version}, beginning the installation..."
-        curl -fLR --retry 5 --retry-delay 3 --connect-timeout 15 --speed-limit 1 --speed-time 300 -o "${archive}" "https://github.com/SawaMEN/3x-ui/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz"
+        download_release_asset "https://github.com/SawaMEN/3x-ui/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz" "${archive}"
         if [[ $? -ne 0 ]]; then
             echo -e "${red}Downloading x-ui failed, please be sure that your server can access GitHub ${plain}"
             exit 1
@@ -1667,13 +1716,12 @@ install_x-ui() {
         fi
         verify_release_checksum "https://github.com/SawaMEN/3x-ui/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz" "${archive}"
     else
-        tag_version=$1
+        tag_version=$(select_release_tag "$1") || exit 1
         # The rolling dev channel ships under a fixed, non-semver tag that is
         # force-moved to the latest main commit on every push. Accept `dev` as a
         # convenient alias and skip the numeric floor check for it.
-        if [[ "$tag_version" == "dev" || "$tag_version" == "dev-latest" ]]; then
-            tag_version="dev-latest"
-            echo -e "${yellow}Installing the rolling dev build (tag: dev-latest). This is a per-commit pre-release, not a stable version.${plain}"
+        if [[ "$tag_version" == dev-* ]]; then
+            echo -e "${yellow}Installing the rolling dev build (tag: ${tag_version}). This is a per-commit pre-release, not a stable version.${plain}"
         else
             tag_version_numeric=${tag_version#v}
             min_version="2.3.5"
@@ -1686,7 +1734,7 @@ install_x-ui() {
 
         url="https://github.com/SawaMEN/3x-ui/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz"
         echo -e "Beginning to install x-ui ${tag_version}"
-        curl -fLR --retry 5 --retry-delay 3 --connect-timeout 15 --speed-limit 1 --speed-time 300 -o "${archive}" "${url}"
+        download_release_asset "${url}" "${archive}"
         if [[ $? -ne 0 ]]; then
             echo -e "${red}Download x-ui ${tag_version} failed, please check if the version exists ${plain}"
             exit 1
@@ -1703,13 +1751,12 @@ install_x-ui() {
     local script_ref="${tag_version}"
     # The unit files are only fetched when the release tarball lacks them, so
     # they are checked at that point instead of here.
-    local required_files=("x-ui.sh")
-    [[ $release == "alpine" ]] && required_files+=("x-ui.rc")
-    require_repo_files "${script_ref}" "${required_files[@]}"
+
     local xui_script_temp="/usr/bin/x-ui-temp.$$"
     rm -f "${xui_script_temp}"
-    curl -fLRo "${xui_script_temp}" "https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/x-ui.sh"
-    if [[ $? -ne 0 ]]; then
+    if tar -tzf "${archive}" | grep -Fxq 'x-ui/x-ui.sh'; then
+        tar -xOf "${archive}" x-ui/x-ui.sh > "${xui_script_temp}" || exit 1
+    elif ! curl -fLRo "${xui_script_temp}" "https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/x-ui.sh"; then
         rm -f "${xui_script_temp}"
         echo -e "${red}Failed to download x-ui.sh${plain}"
         exit 1

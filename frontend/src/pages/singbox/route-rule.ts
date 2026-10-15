@@ -50,10 +50,39 @@ export function routeRuleSummary(rule: Rule): string {
     network: 'Сеть',
     inbound: 'Входящее',
     rule_set: 'Набор правил',
+    routingListId: 'Список',
+    routingListCategory: 'Категория',
+    ip_version: 'Версия IP',
+    auth_user: 'Пользователь подключения',
+    client: 'Клиент',
+    process_name: 'Процесс',
+    process_path: 'Путь процесса',
+    process_path_regex: 'Путь процесса (регулярное выражение)',
+    package_name: 'Приложение',
+    user: 'Пользователь',
+    user_id: 'ID пользователя',
+    clash_mode: 'Режим Clash',
+    wifi_ssid: 'Wi-Fi SSID',
+    wifi_bssid: 'Wi-Fi BSSID',
+    source_mac_address: 'MAC источника',
+    network_type: 'Тип сети',
+    network_is_expensive: 'Платная сеть',
+    network_is_constrained: 'Ограниченная сеть',
+    preferred_by: 'Предпочтительный маршрут',
+    interface_address: 'Адрес интерфейса',
+    default_interface_address: 'Адрес интерфейса по умолчанию',
   };
   const pieces = Object.entries(labels).flatMap(([key, label]) => {
     const value = rule[key];
-    const text = Array.isArray(value) ? value.join(', ') : typeof value === 'string' ? value : '';
+    const text = Array.isArray(value)
+      ? value.join(', ')
+      : typeof value === 'string' || typeof value === 'number'
+        ? String(value)
+        : value === true
+          ? 'да'
+          : value && typeof value === 'object'
+            ? JSON.stringify(value)
+            : '';
     return text ? [`${label}: ${text}`] : [];
   });
   if (routePorts(rule)) pieces.push(`Порты: ${routePorts(rule)}`);
