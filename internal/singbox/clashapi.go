@@ -99,6 +99,33 @@ func SetRuntimeConfigReader(read func() []byte) {
 	runtimeConfigReader.read = read
 }
 
+// AppliedOutboundType reads the configuration actually applied to the running
+// core. An unsaved editor template must not determine how its probes behave.
+func AppliedOutboundType(tag string) string {
+	runtimeConfigReader.RLock()
+	read := runtimeConfigReader.read
+	runtimeConfigReader.RUnlock()
+	if read == nil || tag == "" {
+		return ""
+	}
+
+	var cfg struct {
+		Outbounds []struct {
+			Tag  string `json:"tag"`
+			Type string `json:"type"`
+		} `json:"outbounds"`
+	}
+	if err := json.Unmarshal(read(), &cfg); err != nil {
+		return ""
+	}
+	for _, outbound := range cfg.Outbounds {
+		if outbound.Tag == tag {
+			return outbound.Type
+		}
+	}
+	return ""
+}
+
 func clashAPIInfoFromConfig() (string, string, error) {
 	runtimeConfigReader.RLock()
 	read := runtimeConfigReader.read
