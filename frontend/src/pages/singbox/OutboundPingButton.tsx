@@ -10,12 +10,12 @@ export default function OutboundPingButton({
   disabled?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<{ delay?: number; error?: string } | null>(null);
+  const [result, setResult] = useState<{ delay?: number; error?: string; url?: string } | null>(null);
   async function measure() {
     setBusy(true);
     setResult(null);
     try {
-      const reply = await HttpUtil.post<{ delay?: number }>(
+      const reply = await HttpUtil.post<{ delay?: number; url?: string }>(
         '/panel/api/server/singbox/outbound/check',
         { tag, timeout: 10000 },
         { silent: true },
@@ -24,7 +24,7 @@ export default function OutboundPingButton({
       const delay = reply.obj?.delay;
       if (typeof delay !== 'number' || !Number.isFinite(delay) || delay < 0)
         throw new Error('Ядро не вернуло результат проверки');
-      setResult({ delay });
+      setResult({ delay, url: reply.obj?.url });
     } catch (error) {
       setResult({ error: error instanceof Error ? error.message : String(error) });
     } finally {
@@ -50,8 +50,19 @@ export default function OutboundPingButton({
           Пинг
         </Button>
       </span>
-      {result?.delay !== undefined && <Tag color="green">{result.delay} мс</Tag>}
-      {result?.error && <Typography.Text type="warning">{result.error}</Typography.Text>}
+      {result?.delay !== undefined && (
+        <Tag color="green" title={result.url ? `Проверено через ${result.url}` : undefined}>
+          {result.delay} мс
+        </Tag>
+      )}
+      {result?.error && (
+        <Typography.Text
+          type="warning"
+          style={{ display: 'inline-block', maxWidth: 440, overflowWrap: 'anywhere', whiteSpace: 'normal' }}
+        >
+          {result.error}
+        </Typography.Text>
+      )}
     </Space>
   );
 }
