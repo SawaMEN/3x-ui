@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """Run management failures against stubs, never host services or installers."""
 import os
+import re
+import hashlib
+import runpy
+import shutil
+import tarfile
 from pathlib import Path
 import subprocess
 import tempfile
@@ -11,7 +16,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def function(file, name):
     source = (ROOT / file).read_text()
-    start = source.index(name + "() {")
+    match = re.search(r"^(?:function )?" + re.escape(name) + r"\(\) \{", source, re.M)
+    if match is None:
+        raise ValueError(f"Function {name} not found in {file}")
+    start = match.start()
     line_end = source.index("\n", start)
     if source[line_end - 1] == "}":
         return source[start:line_end] + "\n"
@@ -218,6 +226,189 @@ rm() { exit 99; }
 arch >/dev/null 2>&1
 [[ $? == 1 ]]
 ''')
+
+    def test_environment_loader_preserves_explicit_update_settings(self):
+        self.assertEqual(function("install.sh", "load_xui_env"), function("update.sh", "load_xui_env"))
+        with tempfile.TemporaryDirectory() as raw:
+            Path(raw, "env").write_text('XUI_UPDATE_TAG=stable\nXUI_DB_FOLDER=database\nXUI_BIN_FOLDER=custom-bin\n')
+            for file in ("install.sh", "update.sh"):
+                self.run_script(function(file, "load_xui_env") + r'''
+xui_env_file_path() { printf '%s/env' "$TEST_ROOT"; }
+export XUI_UPDATE_TAG=dev-latest
+unset XUI_DB_FOLDER XUI_BIN_FOLDER
+load_xui_env
+[[ "$XUI_UPDATE_TAG" == dev-latest && "$XUI_DB_FOLDER" == database && "$XUI_BIN_FOLDER" == custom-bin ]]
+[[ "$-" != *a* ]]
+set -a
+load_xui_env
+[[ "$-" == *a* ]]
+''', {"TEST_ROOT": raw})
+
+    def test_service_recovery_is_armed_before_stop(self):
+        install = (ROOT / "install.sh").read_text()
+        update = function("update.sh", "update_x-ui")
+        self.assertLess(install.index('|| cm_stopped=1'), install.index('_stop_existing_xui_for_install || exit 1'))
+        self.assertLess(update.index('        cm_stopped=1'), update.index('rc-service x-ui stop > /dev/null'))
+        for source in (install, update):
+            self.assertLess(source.index('prepare_release_host_files "${script_ref}"'), source.index('core_migration_begin ||'))
+
+    def host_file_functions(self, file):
+        return "".join(function(file, name) for name in
+                       ("rewrite_release_service_paths", "prepare_release_host_files"))
+
+    def test_both_installers_share_host_file_preflight(self):
+        self.assertEqual(self.host_file_functions("install.sh"), self.host_file_functions("update.sh"))
+
+    def test_host_files_are_prepared_before_service_stop(self):
+        for release, unit in (("debian", "x-ui.service.debian"), ("arch", "x-ui.service.arch"),
+                              ("rocky", "x-ui.service.rhel"), ("alpine", "x-ui.rc")):
+            for bundled in (True, False):
+                with self.subTest(release=release, bundled=bundled), tempfile.TemporaryDirectory() as raw:
+                    base = Path(raw)
+                    stage = base / "stage" / "x-ui"
+                    stage.mkdir(parents=True)
+                    for file in ("x-ui.sh", "x-ui-core.sh"):
+                        (stage / file).write_text("#!/bin/bash\nexit 0\n")
+                    payload = (ROOT / unit).read_text()
+                    (base / "source").write_text(payload)
+                    if bundled: (stage / unit).write_text(payload)
+                    self.run_script(self.host_file_functions("update.sh") + r'''
+cm_stage="$TEST_ROOT/stage"
+xui_folder=/usr/local/x-ui
+systemctl() { exit 99; }; rc-service() { exit 99; }
+download_release_asset() { cp "$TEST_ROOT/source" "$2"; touch "$TEST_ROOT/downloaded"; }
+prepare_release_host_files test-ref
+''', {"TEST_ROOT": raw, "release": release})
+                    self.assertEqual((stage / unit).read_text(), payload)
+                    self.assertEqual((base / "downloaded").exists(), not bundled)
+
+    def test_invalid_release_menu_fails_without_stopping_or_downloading(self):
+        with tempfile.TemporaryDirectory() as raw:
+            stage = Path(raw) / "stage" / "x-ui"
+            stage.mkdir(parents=True)
+            (stage / "x-ui.sh").write_text("if then\n")
+            self.run_script(self.host_file_functions("install.sh") + r'''
+cm_stage="$TEST_ROOT/stage"
+systemctl() { exit 99; }; download_release_asset() { exit 99; }
+prepare_release_host_files test-ref >/dev/null 2>&1
+[[ $? == 1 ]]
+''', {"TEST_ROOT": raw})
+
+    def test_custom_install_path_is_applied_to_systemd_and_openrc(self):
+        with tempfile.TemporaryDirectory() as raw:
+            base = Path(raw)
+            install = base / 'install space $cash % & "quote"' / 'x-ui'
+            install.mkdir(parents=True)
+            for kind, unit in (("systemd", "x-ui.service.debian"), ("openrc", "x-ui.rc")):
+                with self.subTest(kind=kind):
+                    target = base / unit
+                    target.write_text((ROOT / unit).read_text())
+                    self.run_script(function("install.sh", "rewrite_release_service_paths") + r'''
+xui_folder="$TEST_INSTALL"
+rewrite_release_service_paths "$TEST_FILE" "$TEST_KIND" || exit 1
+if [[ "$TEST_KIND" == openrc ]]; then
+    sh -n "$TEST_FILE" || exit 1
+    source "$TEST_FILE"
+    [[ "$command" == "$TEST_INSTALL/x-ui" ]] || exit 1
+    setup_swap() { :; }
+    start_pre || exit 1
+    [[ "$PWD" == "$TEST_INSTALL" ]] || exit 1
+fi
+''', {"TEST_INSTALL": str(install), "TEST_FILE": str(target), "TEST_KIND": kind})
+                    if kind == 'systemd':
+                        escaped = str(install).replace('\\', '\\\\').replace('"', '\\"').replace('%', '%%')
+                        self.assertIn('WorkingDirectory=' + str(install).replace('%', '%%') + '/', target.read_text())
+                        self.assertIn('ExecStart=/usr/bin/env -- "' + escaped.replace('$', '$$') + '/x-ui"', target.read_text())
+                        if shutil.which("systemd-analyze"):
+                            validation = base / "validation.service"
+                            validation.write_text(target.read_text())
+                            result = subprocess.run(["systemd-analyze", "verify", str(validation)], capture_output=True, text=True)
+                            self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_full_update_success_and_failed_start_with_sandboxed_services(self):
+        panel = runpy.run_path(str(ROOT / "tools/test-core-migration-shell.py"))["PANEL"]
+        panel = panel.replace('set -eu\n', 'set -eu\nif [[ "$1" == -v ]]; then echo test-version; exit 0; fi\n', 1)
+        for failure in (False, True):
+            with self.subTest(failed_start=failure), tempfile.TemporaryDirectory() as raw:
+                base = Path(raw)
+                old = base / "x-ui"
+                (old / "bin").mkdir(parents=True)
+                (old / "x-ui").write_text(panel + "\n# original\n")
+                (old / "x-ui").chmod(0o700)
+                (base / "database").write_text("original-data")
+                (base / "host-cli").write_text("original-menu")
+                (base / "service").mkdir()
+                (base / "service/x-ui.service").write_text("original-service")
+                (base / "running").touch()
+                bundle = base / "bundle/x-ui"
+                (bundle / "bin").mkdir(parents=True)
+                (bundle / "x-ui").write_text(panel + "\n# upgraded\n")
+                (bundle / "x-ui").chmod(0o700)
+                (bundle / "bin/hiddify-core-linux-amd64").write_text("#!/bin/bash\nexit 1\n")
+                (bundle / "bin/hiddify-core-linux-amd64").chmod(0o700)
+                for name in ("x-ui.sh", "x-ui-core.sh"):
+                    (bundle / name).write_text("#!/bin/bash\n# upgraded-menu\n")
+                (bundle / "x-ui.service.debian").write_text((ROOT / "x-ui.service.debian").read_text())
+                (bundle / "core-migration.sh").write_text((ROOT / "core-migration.sh").read_text() + r'''
+core_migration_host_paths() { cm_host_paths=("$TEST_ROOT/host-cli" "$TEST_ROOT/service/x-ui.service"); }
+core_migration_resume_gateway() { :; }
+''')
+                archive = base / "release.tar.gz"
+                with tarfile.open(archive, "w:gz") as target: target.add(bundle, arcname="x-ui")
+                script = "".join(function("update.sh", name) for name in
+                    ("rewrite_release_service_paths", "prepare_release_host_files", "_install_xui_service_unit", "update_x-ui")).replace("/usr/bin/x-ui", "${TEST_ROOT}/host-cli") + r'''
+_fail() { echo "$*" >&2; exit 2; }
+load_xui_env() { :; }
+select_release_tag() { printf dev-latest; }
+arch() { printf amd64; }
+download_release_asset() { command cp "$ARCHIVE" "$2"; }
+curl() {
+    local dest=""
+    while (( $# )); do
+        if [[ "$1" == -o ]]; then dest="$2"; shift; fi
+        shift
+    done
+    printf '%s  release.tar.gz\n' "$TEST_SHA" > "$dest"
+    printf 200
+}
+mkdir() { [[ "${@: -1}" == /var/log/x-ui ]] || command mkdir "$@"; }
+chown() { :; }; pkill() { :; }; sleep() { :; }; setup_fail2ban() { :; }
+systemctl() {
+    printf '%s\n' "$*" >> "$TEST_LOG"
+    case "$1" in
+        is-active) [[ -e "$TEST_ROOT/running" ]];;
+        is-enabled) return 0;;
+        show) printf loaded;;
+        stop) command rm -f "$TEST_ROOT/running";;
+        start)
+            # Only the new release fails; rollback must start the original.
+            if [[ "$FAIL_START" == 1 ]] && grep -q '# upgraded' "$TEST_ROOT/x-ui/x-ui"; then return 37; fi
+            touch "$TEST_ROOT/running";;
+        *) return 0;;
+    esac
+}
+release=debian
+curl_bin=curl
+xui_folder="$TEST_ROOT/x-ui"
+xui_service="$TEST_ROOT/service"
+trap 'code=$?; if declare -F core_migration_exit >/dev/null; then core_migration_exit "$code" || code=1; fi; exit "$code"' EXIT
+update_x-ui
+'''
+                env = dict(os.environ, TEST_ROOT=raw, ARCHIVE=str(archive), TEST_DB=str(base / "database"),
+                           TEST_LOG=str(base / "calls"), TEST_SHA=hashlib.sha256(archive.read_bytes()).hexdigest(),
+                           XUI_MAIN_FOLDER=str(old), XUI_SERVICE=str(base / "service"),
+                           XUI_DB_FOLDER=str(base / "db-dir"), FAIL_START=str(int(failure)))
+                result = subprocess.run(["bash", "-c", script], env=env, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 2 if failure else 0, result.stdout + result.stderr)
+                self.assertEqual((base / "database").read_text(), "original-data" if failure else "new-core\n")
+                self.assertTrue((base / "running").exists())
+                if failure:
+                    self.assertEqual((old / "x-ui").read_text(), panel + "\n# original\n")
+                    self.assertEqual((base / "host-cli").read_text(), "original-menu")
+                    self.assertEqual((base / "service/x-ui.service").read_text(), "original-service")
+                else:
+                    self.assertIn(str(old), (base / "service/x-ui.service").read_text())
+                    self.assertIn('upgraded-menu', (base / "host-cli").read_text())
 
     def test_installer_aborts_if_parent_directory_is_missing(self):
         with tempfile.TemporaryDirectory() as raw:

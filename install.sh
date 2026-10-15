@@ -31,6 +31,53 @@ else
 fi
 echo "The OS release is: $release"
 
+xui_env_file_path() {
+    case "${release}" in
+        ubuntu | debian | armbian)
+            echo "/etc/default/x-ui"
+            ;;
+        arch | manjaro | parch | alpine)
+            echo "/etc/conf.d/x-ui"
+            ;;
+        *)
+            echo "/etc/sysconfig/x-ui"
+            ;;
+    esac
+}
+
+load_xui_env() {
+    local env_file key had_allexport=0 env_status=0
+    local -a saved_keys=() saved_values=()
+    # Match the panel CLI: values explicitly supplied by the caller win over
+    # the service EnvironmentFile (including web update channel and paths).
+    while IFS= read -r key; do
+        [[ "$key" == XUI_* ]] || continue
+        saved_keys+=("$key")
+        saved_values+=("${!key}")
+    done < <(compgen -e)
+    [[ "$-" != *a* ]] || had_allexport=1
+    env_file="$(xui_env_file_path)"
+    if [[ -r "$env_file" ]]; then
+        set -a
+        # shellcheck disable=SC1090
+        source "$env_file" || env_status=$?
+        [[ "$had_allexport" == 1 ]] || set +a
+    fi
+    local i
+    for i in "${!saved_keys[@]}"; do
+        export "${saved_keys[$i]}=${saved_values[$i]}"
+    done
+    return "$env_status"
+}
+
+load_xui_env || { echo "Cannot load x-ui service environment" >&2; exit 1; }
+xui_folder="${XUI_MAIN_FOLDER:-/usr/local/x-ui}"
+xui_service="${XUI_SERVICE:-/etc/systemd/system}"
+if [[ "$xui_folder" != /*/x-ui ]]; then
+    echo "XUI_MAIN_FOLDER must be an absolute installation path ending in /x-ui" >&2
+    exit 1
+fi
+
 arch() {
     case "$(uname -m)" in
         x86_64 | x64 | amd64) echo 'amd64' ;;
@@ -1605,6 +1652,65 @@ select_release_tag() {
     printf '%s\n' "$requested"
 }
 
+rewrite_release_service_paths() {
+    local file="$1" kind="$2" line temp escaped exec_path working_path
+    [[ "$xui_folder" != /usr/local/x-ui ]] || return 0
+    escaped="${xui_folder//\\/\\\\}"
+    escaped="${escaped//\"/\\\"}"
+    if [[ "$kind" == systemd ]]; then
+        escaped="${escaped//%/%%}"
+        working_path="${xui_folder//%/%%}"
+        exec_path="${escaped//\$/\$\$}"
+    else
+        escaped="${escaped//\$/\\\$}"
+        escaped="${escaped//\`/\\\`}"
+    fi
+    temp=$(mktemp "${file}.paths.XXXXXX") || return 1
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        case "$kind:$line" in
+            systemd:WorkingDirectory=*) printf 'WorkingDirectory=%s/\n' "$working_path" ;;
+            systemd:ExecStart=*) printf 'ExecStart=/usr/bin/env -- "%s/x-ui"\n' "$exec_path" ;;
+            openrc:command=*) printf 'command="%s/x-ui"\n' "$escaped" ;;
+            'openrc:    cd /usr/local/x-ui || return 1') printf '    cd "%s" || return 1\n' "$escaped" ;;
+            *) printf '%s\n' "$line" ;;
+        esac
+    done < "$file" > "$temp" || { rm -f "$temp"; return 1; }
+    mv -f "$temp" "$file"
+}
+
+prepare_release_host_files() {
+    local ref="$1" file unit
+    for file in x-ui.sh x-ui-core.sh; do
+        [[ -s "$cm_stage/x-ui/$file" ]] && bash -n "$cm_stage/x-ui/$file" || {
+            echo "Release management script is missing or invalid: $file. Installation unchanged." >&2
+            return 1
+        }
+    done
+    if [[ "$release" == alpine ]]; then
+        file="$cm_stage/x-ui/x-ui.rc"
+        if [[ ! -s "$file" ]]; then
+            download_release_asset "https://raw.githubusercontent.com/SawaMEN/3x-ui/$ref/x-ui.rc" "$file" || return 1
+        fi
+        [[ -s "$file" ]] && sh -n "$file" || return 1
+        rewrite_release_service_paths "$file" openrc || return 1
+        return 0
+    fi
+    case "$release" in
+        ubuntu|debian|armbian) unit=x-ui.service.debian ;;
+        arch|manjaro|parch) unit=x-ui.service.arch ;;
+        *) unit=x-ui.service.rhel ;;
+    esac
+    if [[ -s "$cm_stage/x-ui/x-ui.service" ]]; then unit=x-ui.service; fi
+    cm_service_unit="$cm_stage/x-ui/$unit"
+    if [[ ! -s "$cm_service_unit" ]]; then
+        download_release_asset "https://raw.githubusercontent.com/SawaMEN/3x-ui/$ref/$unit" "$cm_service_unit" || return 1
+    fi
+    [[ -s "$cm_service_unit" ]] && grep -q '^\[Service\]$' "$cm_service_unit" && grep -q '^ExecStart=' "$cm_service_unit" && grep -q '^WorkingDirectory=' "$cm_service_unit" || {
+        echo "Release systemd unit is missing or invalid; installation unchanged." >&2
+        return 1
+    }
+    rewrite_release_service_paths "$cm_service_unit" systemd
+}
 
 download_release_asset() {
     local url="$1"
@@ -1619,7 +1725,6 @@ download_release_asset() {
     rm -f "$dest"
     download_http_status=$("${curl_bin:-curl}" -4 -fL --retry 3 --retry-delay 2 --connect-timeout 20 --max-time 900 -w '%{http_code}' -o "$dest" "$url")
 }
-
 
 prepare_release_migration() {
     local cm_archive="$1" cm_listing cm_helper cm_installed_bin="${XUI_BIN_FOLDER:-$xui_folder/bin}"
@@ -1770,11 +1875,15 @@ install_x-ui() {
     # New kernel releases require their transaction helper. Older stable tags
     # can still be installed before migration, but cannot downgrade a migrated panel.
     prepare_release_migration "${archive}" || exit 1
+    if [[ -n "${cm_stage:-}" ]]; then
+        prepare_release_host_files "${script_ref}" || exit 1
+    fi
 
     # Stop the existing service only if installed and running. The directory
     # may survive an interrupted first install without any systemd unit.
     local custom_bin_backup=""
     if [[ -e ${xui_folder}/ ]]; then
+        [[ -z "${cm_stage:-}" ]] || cm_stopped=1
         _stop_existing_xui_for_install || exit 1
         if [[ -n "${cm_stage:-}" ]]; then core_migration_begin || exit 1; fi
         # Kill any leftover mtg (MTProto) sidecars. x-ui runs them outside its own
@@ -1816,14 +1925,14 @@ install_x-ui() {
     if [[ $? -ne 0 ]]; then
         rm -f -- "${archive}"
         rm -f "${xui_script_temp}"
-        echo -e "${red}Failed to extract the x-ui release archive -- the previous installation has already been removed, so the panel will not start until this is fixed; try running the installer again${plain}"
+        echo -e "${red}Failed to extract the x-ui release archive -- the previous installation will be restored when a migration snapshot is available${plain}"
         exit 1
     fi
     rm -f -- "${archive}"
 
     if ! cd "$xui_folder" || [[ ! -s x-ui ]]; then
         rm -f "${xui_script_temp}"
-        echo -e "${red}Extracted x-ui archive is missing the x-ui binary -- the previous installation has already been removed, so the panel will not start until this is fixed; try running the installer again${plain}"
+        echo -e "${red}Extracted x-ui archive is missing the x-ui binary -- the previous installation will be restored when a migration snapshot is available${plain}"
         exit 1
     fi
     if declare -F core_migration_restore_selected_core >/dev/null; then
@@ -1970,15 +2079,19 @@ install_x-ui() {
     if [[ $release == "alpine" ]]; then
         xui_rc_temp="/etc/init.d/x-ui.tmp.$$"
         rm -f "${xui_rc_temp}"
-        curl -fLRo "${xui_rc_temp}" "https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/x-ui.rc"
+        if [[ -n "${cm_stage:-}" ]]; then
+            cp "${cm_stage}/x-ui/x-ui.rc" "${xui_rc_temp}"
+        else
+            download_release_asset "https://raw.githubusercontent.com/SawaMEN/3x-ui/${script_ref}/x-ui.rc" "${xui_rc_temp}"
+        fi
         if [[ $? -ne 0 ]]; then
             rm -f "${xui_rc_temp}"
-            echo -e "${red}Failed to download x-ui.rc${plain}"
+            echo -e "${red}Failed to stage the x-ui.rc startup script${plain}"
             exit 1
         fi
         if [[ ! -s "${xui_rc_temp}" ]]; then
             rm -f "${xui_rc_temp}"
-            echo -e "${red}Downloaded x-ui.rc is empty${plain}"
+            echo -e "${red}The x-ui.rc startup script is empty${plain}"
             exit 1
         fi
         mv -f "${xui_rc_temp}" /etc/init.d/x-ui
@@ -1993,8 +2106,12 @@ install_x-ui() {
     else
         # Install systemd service file
         service_installed=false
+        if [[ -n "${cm_service_unit:-}" ]]; then
+            _install_xui_service_unit "$cm_service_unit" false || exit 1
+            service_installed=true
+        fi
 
-        if [ -f "x-ui.service" ]; then
+        if [[ "$service_installed" == false && -f x-ui.service ]]; then
             echo -e "${green}Found x-ui.service in extracted files, installing...${plain}"
             if _install_xui_service_unit "x-ui.service" "false"; then
                 service_installed=true
@@ -2065,7 +2182,13 @@ install_x-ui() {
         fi
     fi
 
-    if [[ "${cm_active:-0}" == 1 ]]; then core_migration_commit || exit 1; fi
+    if [[ "${cm_active:-0}" == 1 ]]; then
+        core_migration_commit || exit 1
+    elif [[ -n "${cm_stage:-}" ]]; then
+        # A successful start command alone does not prove a fresh panel stayed
+        # up or launched its core. Report startup failures on first installs too.
+        "$xui_folder/x-ui" core-migrate --verify-running || exit 1
+    fi
 
     # IP Limit relies on fail2ban; install + configure it now so the feature
     # works out of the box (no-op when XUI_ENABLE_FAIL2BAN=false). Never fatal.
