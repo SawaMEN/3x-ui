@@ -119,6 +119,10 @@ var protocolInstallMu sync.Mutex
 
 // Restore the old binary and runtime if the new listener cannot serve its configuration.
 func InstallProtocolServer(ctx context.Context, protocol model.Protocol, install func(context.Context) error) error {
+	return mutateProtocolServer(ctx, protocol, install, true)
+}
+
+func mutateProtocolServer(ctx context.Context, protocol model.Protocol, install func(context.Context) error, strict bool) error {
 	protocolInstallMu.Lock()
 	defer protocolInstallMu.Unlock()
 	path := protocolserver.BinaryPath(protocol)
@@ -165,7 +169,7 @@ func InstallProtocolServer(ctx context.Context, protocol model.Protocol, install
 		return errors.Join(err, rollback())
 	}
 	nativeCopy := *SelectedNativeCore()
-	nativeCopy.strictProtocolServers = true
+	nativeCopy.strictProtocolServers = strict
 	native := &nativeCopy
 	singBoxApplyMu.Lock()
 	defer singBoxApplyMu.Unlock()

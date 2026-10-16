@@ -13,11 +13,13 @@ import {
   Table,
   Tag,
   Typography,
+  Tooltip,
   message,
 } from 'antd';
 import {
   CloudDownloadOutlined,
   DownloadOutlined,
+  DeleteOutlined,
   PoweroffOutlined,
   ReloadOutlined,
 } from '@ant-design/icons';
@@ -346,6 +348,23 @@ export default function SystemUpdateModal({
       }
 
       messageApi.success(`${dependency.label}: ${t('pages.settings.swap.updateDone')}`);
+      await loadDependencyUpdates();
+    } catch (error) {
+      messageApi.error(error instanceof Error ? error.message : String(error));
+    } finally {
+      setDependencyBusy(null);
+    }
+  };
+
+  const removeDependency = async (dependency: DependencyStatus) => {
+    setDependencyBusy(dependency.key);
+    try {
+      const response = (await HttpUtil.post(
+        `/panel/api/server/components/remove/${dependency.key}`,
+      )) as ApiMsg<unknown>;
+      if (!response?.success)
+        throw new Error(response?.msg || `Не удалось удалить ${dependency.label}`);
+      messageApi.success(`${dependency.label}: компонент удалён.`);
       await loadDependencyUpdates();
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : String(error));
@@ -697,6 +716,14 @@ export default function SystemUpdateModal({
                     (row) => row.key === dependency.key,
                   );
                   const action = standalone || dependency;
+                  const actionLabel =
+                    !action.installed && isDependencyInstallable(action)
+                      ? standalone
+                        ? 'Установить отдельное ядро'
+                        : 'Установить'
+                      : action.updateAvailable
+                        ? t('pages.settings.swap.updateComponent')
+                        : t('pages.settings.swap.upToDate');
                   return (
                     <Card
                       key={dependency.key}
@@ -785,39 +812,59 @@ export default function SystemUpdateModal({
                           Отдельное ядро: {standalone.availableVersion || '—'}
                         </Typography.Paragraph>
                       )}
-                      {action.supported === false ? (
-                        <Alert
-                          type="info"
-                          showIcon
-                          title="Установка недоступна"
-                          description={
-                            action.unsupportedReason ||
-                            'Для этой архитектуры нет официального бинарника.'
-                          }
-                        />
-                      ) : (
-                        <Button
-                          size="small"
-                          icon={<DownloadOutlined />}
-                          loading={dependencyBusy === dependency.key}
-                          disabled={
-                            (!action.updateAvailable &&
-                              !(isDependencyInstallable(action) && !action.installed)) ||
-                            !action.availableVersion ||
-                            dependencyBusy !== null ||
-                            systemUpdateBusy
-                          }
-                          onClick={() => void updateDependency(action)}
-                        >
-                          {!action.installed && isDependencyInstallable(action)
-                            ? standalone
-                              ? 'Установить отдельное ядро'
-                              : 'Установить'
-                            : action.updateAvailable
-                              ? t('pages.settings.swap.updateComponent')
-                              : t('pages.settings.swap.upToDate')}
-                        </Button>
-                      )}
+                      <Space wrap>
+                        {action.supported === false ? (
+                          <Alert
+                            type="info"
+                            showIcon
+                            title="Установка недоступна"
+                            description={
+                              action.unsupportedReason ||
+                              'Для этой архитектуры нет официального бинарника.'
+                            }
+                          />
+                        ) : (
+                          <Tooltip title={actionLabel}>
+                            <Button
+                              size="small"
+                              aria-label={actionLabel}
+                              icon={action.installed ? <ReloadOutlined /> : <DownloadOutlined />}
+                              loading={dependencyBusy === dependency.key}
+                              disabled={
+                                (!action.updateAvailable &&
+                                  !(isDependencyInstallable(action) && !action.installed)) ||
+                                !action.availableVersion ||
+                                dependencyBusy !== null ||
+                                systemUpdateBusy
+                              }
+                              onClick={() => void updateDependency(action)}
+                            />
+                          </Tooltip>
+                        )}
+                        {action.installed && (
+                          <Popconfirm
+                            title={`Удалить ${action.label}?`}
+                            description={
+                              standalone
+                                ? 'Входящие подключения переключатся на встроенный sing-box.'
+                                : 'Активные подключения этого протокола необходимо сначала отключить.'
+                            }
+                            okText={t('delete')}
+                            cancelText={t('cancel')}
+                            onConfirm={() => removeDependency(action)}
+                          >
+                            <Tooltip title={`Удалить ${action.label}`}>
+                              <Button
+                                size="small"
+                                danger
+                                aria-label={`Удалить ${action.label}`}
+                                icon={<DeleteOutlined />}
+                                disabled={dependencyBusy !== null || systemUpdateBusy}
+                              />
+                            </Tooltip>
+                          </Popconfirm>
+                        )}
+                      </Space>
                     </Card>
                   );
                 })}

@@ -45,6 +45,8 @@ beforeEach(() => {
   vi.mocked(HttpUtil.post).mockImplementation(async (path) => {
     if (String(path).endsWith('/externalvpn/update/hysteria2')) installedHysteria = true;
     if (String(path).endsWith('/naiveproxy/update')) installedNaive = true;
+    if (String(path).endsWith('/components/remove/naiveproxy')) installedNaive = false;
+    if (String(path).endsWith('/components/remove/hysteria2')) installedHysteria = false;
     return {
       success: true,
       msg: '',
@@ -133,4 +135,31 @@ it('explains native fallback for a preinstalled server with incompatible routing
   await openComponents();
   expect(card('Hysteria2').getByText(/Используется встроенный sing-box/)).toBeTruthy();
   expect(card('Hysteria2').getByText(hysteriaFallback)).toBeTruthy();
+});
+
+it.each(['NaiveProxy', 'Hysteria2'])(
+  'removes %s through a compact trash action and refreshes native status',
+  async (name) => {
+    installedNaive = name === 'NaiveProxy';
+    installedHysteria = name === 'Hysteria2';
+    const key = name === 'NaiveProxy' ? 'naiveproxy' : 'hysteria2';
+    await openComponents();
+    const button = card(name).getByRole('button', { name: `Удалить ${name}` });
+    expect(button.textContent).toBe('');
+    fireEvent.click(button);
+    expect(HttpUtil.post).not.toHaveBeenCalledWith(`/panel/api/server/components/remove/${key}`);
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+    await waitFor(() =>
+      expect(HttpUtil.post).toHaveBeenCalledWith(`/panel/api/server/components/remove/${key}`),
+    );
+    await waitFor(() =>
+      expect(card(name).queryByRole('button', { name: `Удалить ${name}` })).toBeNull(),
+    );
+    expect(card(name).getByText(/Используется встроенный sing-box/)).toBeTruthy();
+  },
+);
+
+it('does not offer removal for missing optional binaries', async () => {
+  await openComponents();
+  expect(screen.queryByRole('button', { name: /^Удалить / })).toBeNull();
 });

@@ -17,6 +17,7 @@ func (a *ServerController) initExternalVPNRouter(g *gin.RouterGroup) {
 	g.GET("/externalvpn/status", a.getExternalVPNUpdateStatus)
 	g.POST("/externalvpn/parse-link", a.parseExternalVPNLink)
 	g.POST("/externalvpn/update/:protocol", a.updateExternalVPNBinary)
+	g.POST("/components/remove/:protocol", a.removeProtocolComponent)
 }
 
 func parseExternalVPNProtocol(value string) (model.Protocol, error) {
@@ -80,4 +81,9 @@ func (a *ServerController) parseExternalVPNLink(c *gin.Context) {
 		return
 	}
 	jsonObj(c, parsed.Outbound, nil)
+}
+
+func (a *ServerController) removeProtocolComponent(c *gin.Context) {
+	err := service.RemoveProtocolComponent(c.Request.Context(), c.Param("protocol"))
+	jsonObj(c, gin.H{"removed": err == nil}, err)
 }

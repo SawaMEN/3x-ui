@@ -233,6 +233,20 @@ export const sections: readonly Section[] = [
       },
       {
         method: 'POST',
+        path: '/panel/api/server/components/remove/:protocol',
+        summary:
+          'Remove an optional managed component; NaiveProxy and Hysteria inbounds fall back to sing-box. Active tunnel dependencies must be disabled first.',
+        params: [
+          {
+            name: 'protocol',
+            in: 'path',
+            type: 'string',
+            desc: 'Component: naiveproxy, hysteria2, sudoku, pingtunnel or trusttunnel.',
+          },
+        ],
+      },
+      {
+        method: 'POST',
         path: '/panel/api/server/externalvpn/update/:protocol',
         summary: 'Install or update an external VPN component.',
         params: [

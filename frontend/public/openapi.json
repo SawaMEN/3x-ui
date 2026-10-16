@@ -4974,6 +4974,47 @@
         }
       }
     },
+    "/panel/api/server/components/remove/{protocol}": {
+      "post": {
+        "tags": [
+          "External VPN"
+        ],
+        "summary": "Remove an optional managed component; NaiveProxy and Hysteria inbounds fall back to sing-box. Active tunnel dependencies must be disabled first.",
+        "operationId": "post_panel_api_server_components_remove_protocol",
+        "parameters": [
+          {
+            "name": "protocol",
+            "in": "path",
+            "required": true,
+            "description": "Component: naiveproxy, hysteria2, sudoku, pingtunnel or trusttunnel.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/panel/api/server/externalvpn/update/{protocol}": {
       "post": {
         "tags": [
