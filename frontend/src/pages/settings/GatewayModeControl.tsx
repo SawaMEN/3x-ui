@@ -3,6 +3,7 @@ import {
   Alert,
   Button,
   Card,
+  Checkbox,
   Col,
   Input,
   InputNumber,
@@ -103,6 +104,7 @@ export default function GatewayModeControl() {
   const [discovering, setDiscovering] = useState(false);
   const [checking, setChecking] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [allowDefaultInterface, setAllowDefaultInterface] = useState(false);
   const [messageApi, contextHolder] = message.useMessage();
 
   const applyStatus = useCallback((next: GatewayStatus) => {
@@ -264,7 +266,7 @@ export default function GatewayModeControl() {
     networkConfig.lanPrefix >= 1 &&
     networkConfig.lanPrefix <= 32 &&
     networkConfig.wanInterface !== networkConfig.lanInterface &&
-    !lanInterfaceIsWAN;
+    (!lanInterfaceIsWAN || allowDefaultInterface || networkConfigured);
 
   const availableInterfaces = discovery?.interfaces || [];
   const options = useMemo(
@@ -360,6 +362,7 @@ export default function GatewayModeControl() {
                   const iface = availableInterfaces.find((entry) => entry.name === name);
                   const privateIPs = iface?.addresses.filter((addr) => addr.private) || [];
                   const address = privateIPs.length === 1 ? privateIPs[0] : null;
+                  setAllowDefaultInterface(false);
                   updateNetwork({
                     lanInterface: name,
                     lanIP: address?.ip || '',
@@ -407,9 +410,24 @@ export default function GatewayModeControl() {
             Адреса интерфейса: {selectedLAN.addresses.map((address) => address.ip + '/' + address.prefix).join(', ')}
           </div>
         ) : null}
-        {lanInterfaceIsWAN && (
+        {lanInterfaceIsWAN && !networkConfigured && (
           <Alert type="warning" showIcon title="Основной сетевой интерфейс выбран как LAN"
-            description="Для безопасности автоматический выбор WAN как LAN заблокирован. Выберите выделенный LAN-интерфейс." />
+            description={
+              <Space orientation="vertical" size={6}>
+                <span>
+                  Это нетипичная схема: ошибка в перехвате может нарушить работу сервера.
+                  Автоматически такое подключение не предлагается.
+                </span>
+                <Checkbox checked={allowDefaultInterface} disabled={locked}
+                  onChange={(event) => {
+                    setAllowDefaultInterface(event.target.checked);
+                    setPreflight(null);
+                  }}>
+                  Понимаю риск и хочу использовать этот интерфейс как LAN
+                </Checkbox>
+              </Space>
+            }
+          />
         )}
         <div className="gateway-inline-actions">
           <Button icon={<SearchOutlined />} disabled={locked || !discovery?.suggested}
