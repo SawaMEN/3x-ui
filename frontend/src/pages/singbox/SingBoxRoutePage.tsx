@@ -1,13 +1,7 @@
-import { useLocation } from 'react-router';
-
 import SingBoxPage from './SingBoxPage';
-import SingBoxUtilityPage from './SingBoxUtilityPage';
 
+// Gateway and AdBlock use the same editor navigation and theme as every other
+// sing-box section. Deep links are handled directly inside SingBoxPage.
 export default function SingBoxRoutePage() {
-  const { hash } = useLocation();
-
-  if (hash === '#gateway') return <SingBoxUtilityPage section="gateway" />;
-  if (hash === '#adblock') return <SingBoxUtilityPage section="adblock" />;
-
   return <SingBoxPage />;
 }
