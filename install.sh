@@ -1866,6 +1866,8 @@ install_x-ui() {
     # Stop the existing service only if installed and running. The directory
     # may survive an interrupted first install without any systemd unit.
     local custom_bin_backup=""
+    local telemt_was_installed=0
+    [[ -x "${xui_folder}/bin/telemt" ]] && telemt_was_installed=1
     if [[ -e ${xui_folder}/ ]]; then
         [[ -z "${cm_stage:-}" ]] || cm_stopped=1
         _stop_existing_xui_for_install || exit 1
@@ -1924,15 +1926,23 @@ install_x-ui() {
     fi
     chmod +x x-ui
     chmod +x x-ui.sh
+    # The panel never enables Telemt just because a release archive bundles it.
+    # Preserve explicitly installed runtimes during upgrades; a fresh install
+    # exposes an Install action in Settings instead of silently adding Telemt.
+    if [[ "${telemt_was_installed}" != 1 ]]; then
+        rm -f bin/telemt
+    fi
     # Telemt is an optional standalone MTProto implementation bundled with
     # x86_64/aarch64 releases. Install its unit/config template without
     # enabling it automatically.
-    if [[ -x "bin/telemt" ]]; then
+    if [[ -f "telemt.service" ]]; then
         # Telemt is installed as a root-owned executable. The service runs as
         # root so it can bind privileged ports (for example 443) and manage
         # its own network sockets without granting extra capabilities.
-        chown root:root "${xui_folder}/bin/telemt" 2> /dev/null || true
-        chmod 0755 "${xui_folder}/bin/telemt"
+        if [[ -x "bin/telemt" ]]; then
+            chown root:root "${xui_folder}/bin/telemt" 2> /dev/null || true
+            chmod 0755 "${xui_folder}/bin/telemt"
+        fi
 
         # Install the systemd unit with explicit root ownership/read-only
         # permissions. ProtectSystem=strict + ReadWritePaths=/etc/x-ui in the
@@ -1952,7 +1962,11 @@ install_x-ui() {
             install -m 0644 -o root -g root telemt-update.service "${xui_service}/telemt-update.service"
             install -m 0644 -o root -g root telemt-update.timer "${xui_service}/telemt-update.timer"
             systemctl daemon-reload 2> /dev/null || true
-            systemctl enable --now telemt-update.timer 2> /dev/null || true
+            if [[ -x "bin/telemt" ]]; then
+                systemctl enable --now telemt-update.timer 2> /dev/null || true
+            else
+                systemctl disable --now telemt-update.timer 2> /dev/null || true
+            fi
         fi
 
         # Install the automatic MEKO V3 helper for active MTProto sidecars.
@@ -2011,7 +2025,7 @@ install_x-ui() {
         while IFS= read -r -d '' f; do
             local rel="${f#"${custom_bin_backup}"/}"
             case "${rel}" in
-                config.json | mtg-linux-* | mtproto | mtproto/* | tuic | tuic/* | mieru | mieru/*) continue ;;
+                config.json | telemt | mtg-linux-* | mtproto | mtproto/* | tuic | tuic/* | mieru | mieru/*) continue ;;
             esac
             if [[ ! -e "bin/${rel}" ]]; then
                 mkdir -p "bin/$(dirname "${rel}")"
