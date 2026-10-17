@@ -337,6 +337,10 @@ type Snapshot struct {
 var statsClient = &http.Client{Timeout: 2 * time.Second, Transport: &http.Transport{Proxy: nil}}
 
 func Snapshots(ctx context.Context) ([]Snapshot, error) {
+	return collectSnapshots(ctx, true)
+}
+
+func collectSnapshots(ctx context.Context, withTraffic bool) ([]Snapshot, error) {
 	state.Lock()
 	var sources []*process
 	for _, p := range state.processes {
@@ -348,8 +352,10 @@ func Snapshots(ctx context.Context) ([]Snapshot, error) {
 	var snapshots []Snapshot
 	for _, p := range sources {
 		snapshot := Snapshot{Namespace: "hysteria:" + identifier(p.plan.Tag) + ":", Epoch: p.epoch, Tag: p.plan.Tag}
-		if err := getStats(ctx, p.plan, "/traffic", &snapshot.Counters); err != nil {
-			return nil, err
+		if withTraffic {
+			if err := getStats(ctx, p.plan, "/traffic", &snapshot.Counters); err != nil {
+				return nil, err
+			}
 		}
 		if err := getStats(ctx, p.plan, "/online", &snapshot.Online); err != nil {
 			return nil, err
@@ -384,7 +390,7 @@ func getStats(ctx context.Context, plan Plan, path string, target any) error {
 }
 
 func Presence(ctx context.Context) (map[string]map[string]struct{}, []string, error) {
-	snapshots, err := Snapshots(ctx)
+	snapshots, err := collectSnapshots(ctx, false)
 	if err != nil {
 		return nil, nil, err
 	}

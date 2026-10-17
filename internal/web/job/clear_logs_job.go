@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/hiddify"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
@@ -112,12 +113,30 @@ func (j *PruneXrayLogsJob) Run() {
 	for _, path := range []string{xray.GetIPLimitLogPath(), xray.GetIPLimitBannedLogPath(), xray.GetIPLimitBannedPrevLogPath()} {
 		truncateLogFile(path, maxXrayLogBytes)
 	}
+	truncateProtocolServerLogs(maxXrayLogBytes)
 }
 
 func wipeXrayLogs() {
 	truncateXrayLog(xray.GetAccessLogPath, 0)
 	truncateXrayLog(xray.GetErrorLogPath, 0)
 	truncateXrayLog(coreLogPath, 0)
+	truncateProtocolServerLogs(0)
+}
+
+func truncateProtocolServerLogs(maxBytes int64) {
+	dir := filepath.Join(config.GetBinFolderPath(), "protocol-servers")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			logger.Warning("Failed to list protocol server logs:", err)
+		}
+		return
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			truncateLogFile(filepath.Join(dir, entry.Name(), "server.log"), maxBytes)
+		}
+	}
 }
 
 // Read the actual output setting: templates may change it or disable logging.

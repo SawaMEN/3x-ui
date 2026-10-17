@@ -68,7 +68,7 @@ func TestPresenceExcludesIdleListeners(t *testing.T) {
 			if r.URL.Path == "/online" {
 				_, _ = io.WriteString(w, payload)
 			} else {
-				_, _ = io.WriteString(w, `{}`)
+				http.Error(w, "traffic endpoint unavailable", http.StatusServiceUnavailable)
 			}
 		}))
 		t.Cleanup(server.Close)

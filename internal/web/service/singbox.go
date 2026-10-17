@@ -700,7 +700,7 @@ func (s *SingBoxService) stopLocked(ctx context.Context) (result error) {
 	defer func() { result = errors.Join(result, finish()) }()
 
 	if s.IsRunning() {
-		if err := s.PollTraffic(ctx); err != nil {
+		if err := s.PollTraffic(recovery); err != nil {
 			logger.Warning("flush hiddify traffic before stop:", err)
 		}
 		hiddifyStats.Close()

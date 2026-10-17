@@ -209,6 +209,36 @@ func TestHiddifyPollDoesNotResetAfterLostReply(t *testing.T) {
 	phase6AssertUsage(t, 211, 207)
 }
 
+func TestHiddifyStopFlushesTrafficWithCancelledPanelContext(t *testing.T) {
+	svc, _, _ := stage5ProcessFixture(t)
+	phase6TrafficRows(t)
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := grpc.NewServer()
+	server.RegisterService(&grpc.ServiceDesc{ServiceName: "v2ray.core.app.stats.command.StatsService", HandlerType: (*interface{})(nil), Methods: []grpc.MethodDesc{{MethodName: "QueryStats", Handler: func(_ any, _ context.Context, decode func(any) error, _ grpc.UnaryServerInterceptor) (any, error) {
+		if err := decode(&statsproto.QueryStatsRequest{}); err != nil {
+			return nil, err
+		}
+		return &statsproto.QueryStatsResponse{Stat: []*statsproto.Stat{{Name: "user>>>alice>>>traffic>>>uplink", Value: 100}, {Name: "inbound>>>vpn>>>traffic>>>uplink", Value: 100}}}, nil
+	}}}}, struct{}{})
+	go server.Serve(listener)
+	t.Cleanup(server.Stop)
+	old := hiddifyStats
+	hiddifyStats = singbox.NewV2RayStatsClient(listener.Addr().String(), hiddify.StatsQueryMethod)
+	t.Cleanup(func() { hiddifyStats.Close(); hiddifyStats = old })
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := svc.Stop(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if svc.IsRunning() {
+		t.Fatal("core still running after panel shutdown")
+	}
+	phase6AssertUsage(t, 111, 107)
+}
+
 func TestHiddifyCheckpointQuotaDisablesCommittedUser(t *testing.T) {
 	setupConflictDB(t)
 	calls, configs := hiddifyApplyRecorder(t)

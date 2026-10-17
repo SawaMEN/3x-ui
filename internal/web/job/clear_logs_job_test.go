@@ -67,6 +67,42 @@ func TestPruneCurrentCoreAndIPLogs(t *testing.T) {
 	}
 }
 
+func TestProtocolServerLogsArePrunedAndCleared(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XUI_BIN_FOLDER", dir)
+	t.Setenv("XUI_LOG_FOLDER", dir)
+	oldMax := maxXrayLogBytes
+	maxXrayLogBytes = 8
+	t.Cleanup(func() { maxXrayLogBytes = oldMax })
+	path := filepath.Join(dir, "protocol-servers", "standalone", "server.log")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	writer, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer writer.Close()
+	if _, err := writer.WriteString("oversized server log"); err != nil {
+		t.Fatal(err)
+	}
+	NewPruneXrayLogsJob().Run()
+	if info, err := os.Stat(path); err != nil || info.Size() != 0 {
+		t.Fatalf("standalone log not pruned: %v", err)
+	}
+	if _, err := writer.WriteString("new"); err != nil {
+		t.Fatal(err)
+	}
+	NewPruneXrayLogsJob().Run()
+	if data, err := os.ReadFile(path); err != nil || string(data) != "new" {
+		t.Fatalf("small log or open writer changed: %q, %v", data, err)
+	}
+	NewClearLogsJob().Run()
+	if info, err := os.Stat(path); err != nil || info.Size() != 0 {
+		t.Fatalf("standalone log not cleared: %v", err)
+	}
+}
+
 func TestCoreLogDisabledAndDailyCleanup(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XUI_BIN_FOLDER", dir)
