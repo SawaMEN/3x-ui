@@ -513,7 +513,7 @@ func extractTarXZ(ctx context.Context, archivePath, dst string) error {
 	if _, err := exec.LookPath("tar"); err != nil {
 		return fmt.Errorf("tar with xz support is required to install Caddy-Naive: %w", err)
 	}
-	cmd := exec.CommandContext(ctx, "tar", "-xJf", archivePath, "-C", dst)
+	cmd := exec.CommandContext(ctx, "tar", "--no-same-owner", "--no-same-permissions", "-xJf", archivePath, "-C", dst)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("extract Caddy-Naive: %w: %s", err, strings.TrimSpace(string(output)))
 	}

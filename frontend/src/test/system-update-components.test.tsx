@@ -25,7 +25,7 @@ beforeEach(() => {
             trusttunnel: { installed: false, latestVersion: '1.1.0' },
             hysteria2: {
               installed: installedHysteria,
-              source: hysteriaFallback ? 'sing-box' : undefined,
+              source: !installedHysteria || hysteriaFallback ? 'sing-box' : 'standalone',
               fallbackReason: hysteriaFallback,
               latestVersion: '2.13.0',
               updateAvailable: installedHysteria,
@@ -34,6 +34,7 @@ beforeEach(() => {
         : String(path).includes('naiveproxy')
           ? {
               installed: installedNaive,
+              source: installedNaive ? 'standalone' : 'sing-box',
               supported: naiveSupported,
               unsupportedReason: naiveSupported
                 ? undefined

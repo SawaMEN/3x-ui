@@ -283,7 +283,8 @@ export default function SystemUpdateModal({
         return {
           key,
           label: key === 'naiveproxy' ? 'NaiveProxy' : 'Hysteria2',
-          source: data?.source === 'sing-box' ? 'sing-box' : 'standalone',
+          source:
+            data?.installed === true && data.source === 'sing-box' ? 'sing-box' : 'standalone',
           fallbackReason: data?.fallbackReason,
           mixed: data?.source === 'mixed',
           supported: data?.supported,
