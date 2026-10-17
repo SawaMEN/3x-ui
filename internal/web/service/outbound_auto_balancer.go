@@ -257,9 +257,11 @@ func chooseRotatedOutbound(results []*outbound.TestOutboundResult, current, mode
 // rotation timers. In-flight results are committed only to unchanged settings.
 func (s *OutboundSubscriptionService) ProbeAutomaticSubscriptions(forceID int) (int, error) {
 	if !autoBalanceMu.TryLock() {
-		// Scheduler and user-triggered checks share the probe engine.
-		// An overlapping call is not a failed check: leave the previous
-		// healthy selection untouched and allow the next tick to retry.
+		// The scheduler may skip an occupied probe; an explicit button press
+		// must not report success when no check was actually performed.
+		if forceID > 0 {
+			return 0, fmt.Errorf("проверка подписок уже выполняется; повторите попытку позже")
+		}
 		return 0, nil
 	}
 	defer autoBalanceMu.Unlock()
