@@ -1300,7 +1300,12 @@ update_x-ui() {
     fi
 
     local telemt_was_installed=0
-    [[ -x "${xui_folder}/bin/telemt" ]] && telemt_was_installed=1
+    local telemt_preserved_binary=""
+    if [[ -x "${xui_folder}/bin/telemt" ]]; then
+        telemt_was_installed=1
+        telemt_preserved_binary="$(mktemp "${TMPDIR:-/tmp}/x-ui-telemt.XXXXXX")" || _fail "Cannot create Telemt backup"
+        cp -p "${xui_folder}/bin/telemt" "${telemt_preserved_binary}" || _fail "Cannot preserve installed Telemt"
+    fi
     echo -e "${green}Installing new x-ui version...${plain}"
     if ! tar xzf "${archive}" "${cm_core_tar_args[@]}" -C "${install_parent}" > /dev/null 2>&1; then
         rm -f "${archive}"
@@ -1318,7 +1323,8 @@ update_x-ui() {
     chmod +x x-ui "bin/hiddify-core-linux-${machine_arch}" || _fail "Modified Sing-box binary missing"
     # Release archives may contain Telemt, but it must stay opt-in.
     if [[ "${telemt_was_installed}" == 1 ]]; then
-        [[ -f bin/telemt ]] && chmod 0755 bin/telemt
+        install -m 0755 -o root -g root "${telemt_preserved_binary}" bin/telemt || _fail "Cannot restore installed Telemt"
+        rm -f -- "${telemt_preserved_binary}"
     else
         rm -f bin/telemt
         systemctl disable --now telemt-update.timer > /dev/null 2>&1 || true
