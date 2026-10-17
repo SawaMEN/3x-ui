@@ -29,29 +29,29 @@ beforeEach(() => {
             supported: true,
             updateAvailable: false,
           }
-      : String(path).includes('externalvpn')
-        ? {
-            pingtunnel: { installed: false, latestVersion: '2.10' },
-            trusttunnel: { installed: false, latestVersion: '1.1.0' },
-            hysteria2: {
-              installed: installedHysteria,
-              source: !installedHysteria || hysteriaFallback ? 'sing-box' : 'standalone',
-              fallbackReason: hysteriaFallback,
-              latestVersion: '2.13.0',
-              updateAvailable: installedHysteria,
-            },
-          }
-        : String(path).includes('naiveproxy')
+        : String(path).includes('externalvpn')
           ? {
-              installed: installedNaive,
-              source: installedNaive ? 'standalone' : 'sing-box',
-              supported: naiveSupported,
-              unsupportedReason: naiveSupported
-                ? undefined
-                : 'Caddy-Naive is not published for linux/arm64',
-              latestVersion: naiveSupported ? '1.0.0' : '',
+              pingtunnel: { installed: false, latestVersion: '2.10' },
+              trusttunnel: { installed: false, latestVersion: '1.1.0' },
+              hysteria2: {
+                installed: installedHysteria,
+                source: !installedHysteria || hysteriaFallback ? 'sing-box' : 'standalone',
+                fallbackReason: hysteriaFallback,
+                latestVersion: '2.13.0',
+                updateAvailable: installedHysteria,
+              },
             }
-          : { installed: false, latestVersion: '1.0.0' },
+          : String(path).includes('naiveproxy')
+            ? {
+                installed: installedNaive,
+                source: installedNaive ? 'standalone' : 'sing-box',
+                supported: naiveSupported,
+                unsupportedReason: naiveSupported
+                  ? undefined
+                  : 'Caddy-Naive is not published for linux/arm64',
+                latestVersion: naiveSupported ? '1.0.0' : '',
+              }
+            : { installed: false, latestVersion: '1.0.0' },
   }));
   vi.mocked(HttpUtil.post).mockImplementation(async (path) => {
     if (String(path).endsWith('/externalvpn/update/hysteria2')) installedHysteria = true;
@@ -214,13 +214,17 @@ it('installs OxiDNS, offers DNS creation, then removes its controls', async () =
   await openComponents();
   expect(card('OxiDNS').queryByRole('link', { name: 'Создать DNS' })).toBeNull();
   fireEvent.click(card('OxiDNS').getByRole('button', { name: 'Установить OxiDNS' }));
-  await waitFor(() => expect(HttpUtil.post).toHaveBeenCalledWith(
-    '/panel/api/oxidns/install', undefined, { timeout: 180000 },
-  ));
+  await waitFor(() =>
+    expect(HttpUtil.post).toHaveBeenCalledWith('/panel/api/oxidns/install', undefined, {
+      timeout: 180000,
+    }),
+  );
   const link = await card('OxiDNS').findByRole('link', { name: 'Создать DNS' });
   expect(link.getAttribute('href')).toBe('/panel/singbox#dns');
   fireEvent.click(card('OxiDNS').getByRole('button', { name: 'Удалить OxiDNS' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
   await waitFor(() => expect(HttpUtil.post).toHaveBeenCalledWith('/panel/api/oxidns/remove'));
-  await waitFor(() => expect(card('OxiDNS').queryByRole('link', { name: 'Создать DNS' })).toBeNull());
+  await waitFor(() =>
+    expect(card('OxiDNS').queryByRole('link', { name: 'Создать DNS' })).toBeNull(),
+  );
 });
