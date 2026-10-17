@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"errors"
 	"net"
 	"strconv"
 	"strings"
@@ -183,7 +184,7 @@ func (a *InboundController) addInbound(c *gin.Context) {
 	// MTProto is not a second core: its runtime is the optional Telemt binary.
 	// Do not persist a local inbound that cannot be started.
 	if inbound.Protocol == model.MTProto && inbound.NodeID == nil && !(service.TelemtService{}).IsInstalled() {
-		jsonMsg(c, "Установите Telemt в системных компонентах перед созданием MTProto", nil)
+		jsonMsg(c, "Установите Telemt в системных компонентах перед созданием MTProto", errors.New("Telemt runtime is not installed"))
 		return
 	}
 	inbound, needRestart, err := a.inboundServiceFor(c).AddInbound(inbound)
@@ -270,7 +271,7 @@ func (a *InboundController) updateInbound(c *gin.Context) {
 	if inbound.Protocol == model.MTProto && inbound.Enable && !(service.TelemtService{}).IsInstalled() {
 		previous, previousErr := a.inboundService.GetInbound(id)
 		if previousErr == nil && previous.NodeID == nil {
-			jsonMsg(c, "Установите Telemt перед включением MTProto", nil)
+			jsonMsg(c, "Установите Telemt перед включением MTProto", errors.New("Telemt runtime is not installed"))
 			return
 		}
 	}
