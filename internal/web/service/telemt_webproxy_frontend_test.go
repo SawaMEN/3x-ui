@@ -117,7 +117,7 @@ func TestTelemtWebAlternativeFrontends(t *testing.T) {
 				t.Fatal(err)
 			}
 			config := strings.ReplaceAll(string(data), telemtWebFrontDir, dir)
-			config = strings.ReplaceAll(config, ":443", publicAddr)
+			config = telemtWebTestListenAddress(front, config, publicAddr)
 			config = strings.ReplaceAll(config, "unix//run/3x-ui-telemt-front/caddy.sock", "127.0.0.1:0")
 			path := filepath.Join(dir, "config")
 			if err := os.WriteFile(path, []byte(config), 0o600); err != nil {
@@ -209,6 +209,37 @@ func TestTelemtWebAlternativeFrontends(t *testing.T) {
 			}
 			if string(reply) != "pong" {
 				t.Fatalf("WebSocket reply: %q", reply)
+			}
+		})
+	}
+}
+
+// Rewrite the public listener without modifying a backend on port 443xx.
+func telemtWebTestListenAddress(front, config, publicAddr string) string {
+	if front == "haproxy" {
+		return strings.Replace(config, "bind :443 ssl", "bind "+publicAddr+" ssl", 1)
+	}
+	return strings.Replace(config, `":443"`, strconv.Quote(publicAddr), 1)
+}
+
+func TestTelemtWebTestListenAddressKeepsBackend(t *testing.T) {
+	const publicAddr = "127.0.0.1:39425"
+	for _, tc := range []struct {
+		frontend string
+		input    string
+		wantBind string
+	}{
+		{"haproxy", `frontend web
+    bind :443 ssl crt cert.pem
+backend telemt
+    server telemt 127.0.0.1:44353
+`, "bind " + publicAddr + " ssl"},
+		{"caddy", `{"listen":[":443"],"upstreams":[{"dial":"127.0.0.1:44353"}]}`, `"listen":["` + publicAddr + `"]`},
+	} {
+		t.Run(tc.frontend, func(t *testing.T) {
+			got := telemtWebTestListenAddress(tc.frontend, tc.input, publicAddr)
+			if !strings.Contains(got, tc.wantBind) || !strings.Contains(got, "127.0.0.1:44353") {
+				t.Fatalf("listener rewrite changed a backend or missed the bind: %s", got)
 			}
 		})
 	}
