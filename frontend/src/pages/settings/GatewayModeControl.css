@@ -84,3 +84,20 @@
     flex: 1 1 auto;
   }
 }
+
+.gateway-control .gateway-status-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.gateway-control .gateway-details {
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 10px;
+  background: transparent;
+}
+
+.gateway-control .gateway-details .ant-collapse-header {
+  font-weight: 550;
+}
