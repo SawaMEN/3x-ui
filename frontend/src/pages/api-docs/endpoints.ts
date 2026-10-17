@@ -3108,6 +3108,16 @@ export const sections: readonly Section[] = [
         summary: 'Return Telemt installation, service, version, update, and MEKO status.',
       },
       {
+        method: 'POST',
+        path: '/panel/api/telemt/install',
+        summary: 'Download and install checksum-verified official Telemt on demand. Does not start the proxy.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/telemt/remove',
+        summary: 'Uninstall Telemt runtime after disabling its service; preserve configuration and refuse while MTProto inbounds exist.',
+      },
+      {
         method: 'GET',
         path: '/panel/api/telemt/config',
         summary: 'Return the current Telemt configuration.',
