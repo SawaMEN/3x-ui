@@ -120,7 +120,7 @@ output=''
 while (( $# )); do
  if [[ "$1" == -o ]]; then output="$2"; shift 2; else url="$1"; shift; fi
 done
-if [[ -n "$output" ]]; then cp "$SERVED/${url##*/}" "$output"; else echo '{"tag_name":"3.5.14"}'; fi
+if [[ -n "$output" ]]; then cp "$SERVED/${url##*/}" "$output"; else printf '  "tag_name": "3.5.14",\\n'; fi
 """)
                 (bin / "curl").chmod(0o755)
                 (bin / "uname").write_text("#!/bin/sh\necho x86_64\n")
@@ -131,6 +131,10 @@ if [[ -n "$output" ]]; then cp "$SERVED/${url##*/}" "$output"; else echo '{"tag_
                     env=dict(os.environ, PATH=str(bin) + ":" + os.environ["PATH"],
                              SERVED=str(served), SERVICE_LOG=str(root / "service-log")))
                 self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                if failure == "checksum":
+                    self.assertIn("FAILED", result.stdout + result.stderr)
+                else:
+                    self.assertIn("binary version mismatch", result.stderr)
                 self.assertEqual(old_binary.read_text(), old)
                 self.assertFalse((root / "service-log").exists(), result.stdout + result.stderr)
 
