@@ -2026,6 +2026,7 @@ export default function SingBoxPage() {
         />
         <JsonModal
           title="Вся конфигурация sing-box"
+          buttonText="Редактировать JSON"
           value={config}
           onApply={(next) => setConfig(asObject(next))}
         />
