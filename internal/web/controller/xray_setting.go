@@ -561,6 +561,12 @@ func (a *XraySettingController) refreshOutboundSub(c *gin.Context) {
 			jsonMsg(c, "Subscription saved, but sing-box could not apply the updated connections", err)
 			return
 		}
+		// Refresh the live selector acknowledgement without waiting for the
+		// next scheduled probe/apply tick.
+		if _, err := a.OutboundSubscriptionService.ApplyAutomaticSelections(); err != nil {
+			jsonMsg(c, "Subscription applied, but automatic selector status could not be updated", err)
+			return
+		}
 	}
 	jsonObj(c, obs, nil)
 }
