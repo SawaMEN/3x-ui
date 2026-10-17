@@ -156,6 +156,9 @@ export default function GatewayModeControl() {
           return;
         }
         setDiscovery(response.obj);
+        if (!response.obj.suggested) {
+          setManualOpen(true);
+        }
         if (response.obj.suggested) {
           const suggested = response.obj.suggested;
           setNetworkConfig((current) => (current.lanInterface ? current : { ...suggested }));
@@ -271,7 +274,6 @@ export default function GatewayModeControl() {
   };
 
   const enabled = status?.enabled === true;
-  const configured = status?.configured === true;
   const coreMismatch = status?.coreMismatch === true;
   const conflict = status?.conflict === true;
   const recoveryOnly = enabled && !configured && !coreMismatch;
@@ -342,7 +344,7 @@ export default function GatewayModeControl() {
       : enabled && !networkConfigured
         ? 'Настроить шлюз'
         : 'Включить шлюз';
-  const showManual = manualOpen || (discovery !== null && !discovery.suggested && !networkConfigured);
+  const showManual = manualOpen;
   const displayLAN = networkConfig.lanInterface
     ? `${networkConfig.lanInterface} · ${networkConfig.lanIP || 'адрес не выбран'}/${networkConfig.lanPrefix}`
     : 'Не выбран';
