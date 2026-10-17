@@ -32,6 +32,17 @@ type State = Config & {
   updateAvailable: boolean;
 };
 type Response = { success?: boolean; msg?: string; obj?: State };
+type Delegation = {
+  zone: string;
+  nameServer: string;
+  expectedIP?: string;
+  addresses: string[];
+  nsFound: boolean;
+  ipMatches: boolean;
+  ready: boolean;
+  details: string;
+};
+type DelegationResponse = { success?: boolean; msg?: string; obj?: Delegation };
 const empty: State = {
   domain: '',
   serverIP: '',
@@ -57,6 +68,8 @@ export default function DNSTTSettings() {
   const [error, setError] = useState('');
   const [mode, setMode] = useState<'doh' | 'dot' | 'udp'>('doh');
   const [clientPort, setClientPort] = useState(7000);
+  const [checkingDelegation, setCheckingDelegation] = useState(false);
+  const [delegation, setDelegation] = useState<Delegation | null>(null);
 
   const reload = useCallback(async (reset = true) => {
     try {
@@ -95,7 +108,27 @@ export default function DNSTTSettings() {
   }, [reload]);
   const patch = (partial: Partial<Config>) => {
     setForm((v) => ({ ...v, ...partial }));
+    setDelegation(null);
     setError('');
+  };
+  const verifyDelegation = async () => {
+    setCheckingDelegation(true);
+    setError('');
+    try {
+      const result = (await HttpUtil.get('/panel/api/dnstt/check-delegation', undefined, {
+        silent: true,
+        timeout: 12000,
+      })) as DelegationResponse;
+      if (!result.success || !result.obj) {
+        throw new Error(result.msg || 'Не удалось проверить NS-делегирование');
+      }
+      setDelegation(result.obj);
+    } catch (cause) {
+      setDelegation(null);
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setCheckingDelegation(false);
+    }
   };
   const perform = async (path: string, body?: unknown) => {
     setBusy(true);
@@ -107,6 +140,7 @@ export default function DNSTTSettings() {
       })) as Response;
       if (!res.success || !res.obj) throw new Error(res.msg || 'Действие DNSTT не выполнено');
       setState(res.obj);
+      setDelegation(null);
       setForm({
         domain: res.obj.domain || '',
         serverIP: res.obj.serverIP || '',
@@ -296,6 +330,36 @@ export default function DNSTTSettings() {
                 description="По умолчанию DNSTT направляет подключения на 127.0.0.1:22 (SSH). Публичный ключ DNSTT подтверждает сервер, но не авторизует клиентов: не направляйте туннель на открытый SOCKS/HTTP-прокси. Порт 53/UDP нужен для NS-делегирования; при выборе другого порта обеспечьте перенаправление внешнего UDP/53 самостоятельно."
               />
             </div>
+            {state.enabled && state.running && !changed && (
+              <Space orientation="vertical" size={8} style={{ width: '100%' }}>
+                <Button
+                  loading={checkingDelegation}
+                  disabled={busy}
+                  onClick={() => void verifyDelegation()}
+                >
+                  Проверить NS-делегирование домена
+                </Button>
+                {delegation && (
+                  <Alert
+                    type={delegation.ready ? 'success' : 'warning'}
+                    showIcon
+                    title={delegation.ready ? 'DNS-делегирование найдено' : 'DNS-делегирование пока не готово'}
+                    description={
+                      <Space orientation="vertical" size={3}>
+                        <Typography.Text>{delegation.details}</Typography.Text>
+                        <Typography.Text code>{delegation.nameServer}</Typography.Text>
+                        {delegation.addresses.length > 0 && (
+                          <Typography.Text>Адреса NS: {delegation.addresses.join(', ')}</Typography.Text>
+                        )}
+                        <Typography.Text type="secondary">
+                          Проверка NS/A-записей не подтверждает доступность входящего UDP/53 или работу туннеля у оператора.
+                        </Typography.Text>
+                      </Space>
+                    }
+                  />
+                )}
+              </Space>
+            )}
             {changed && state.enabled && (
               <Alert type="warning" showIcon title="Есть неприменённые изменения" />
             )}
