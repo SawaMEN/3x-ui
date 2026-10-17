@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { Space, Switch, Tooltip, Typography, message } from 'antd';
-import { createPortal } from 'react-dom';
 
 import { HttpUtil } from '@/utils';
 
@@ -15,7 +14,6 @@ export default function TelemtSubscriptionToggle() {
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const portalTarget = document.querySelector('.telemt-header');
 
   useEffect(() => {
     let active = true;
@@ -76,9 +74,7 @@ export default function TelemtSubscriptionToggle() {
     }
   };
 
-  if (!portalTarget) return null;
-
-  return createPortal(
+  return (
     <Tooltip
       title={
         !loaded
@@ -98,7 +94,6 @@ export default function TelemtSubscriptionToggle() {
           onChange={(checked) => void updateSetting(checked)}
         />
       </Space>
-    </Tooltip>,
-    portalTarget,
+    </Tooltip>
   );
 }
