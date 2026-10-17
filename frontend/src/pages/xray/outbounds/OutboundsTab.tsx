@@ -600,7 +600,7 @@ export default function OutboundsTab({
             continue;
           }
           updated++;
-          pendingApplyId = deferApply ? sub.id : null;
+          if (sub.enabled) pendingApplyId = deferApply ? sub.id : null;
         } catch {
           failed++;
         }
