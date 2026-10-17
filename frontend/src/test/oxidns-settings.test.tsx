@@ -9,6 +9,8 @@ const original = {
   running: false,
   supported: true,
   domain: '',
+  certFile: '',
+  keyFile: '',
   doh: false,
   http3: false,
   dot: false,
@@ -61,6 +63,8 @@ beforeEach(() => {
       current = { ...current, installedVersion: 'v1.7.0' };
     } else if (endpoint.endsWith('/check')) {
       return { success: true, msg: '', obj: { healthy: true } };
+    } else if (endpoint.endsWith('/validate')) {
+      return { success: true, msg: '', obj: { valid: true } };
     }
     return { success: true, msg: '', obj: current };
   });
@@ -112,6 +116,59 @@ it('automatically prepares DoH mode and explains external prerequisites', async 
   expect(screen.getByRole('textbox', { name: 'Домен защищённого DNS' })).toBeTruthy();
   expect(screen.getByText(/не регистрирует домен, не выпускает сертификат/)).toBeTruthy();
   expect(screen.getByText(/Потребуется домен, действующий сертификат/)).toBeTruthy();
+});
+
+it('allows a different DNS subdomain and guides its DNS records and TLS setup', async () => {
+  await openDNS();
+  fireEvent.click(screen.getByRole('button', { name: 'Для телефона и браузера (DoH)' }));
+  expect(screen.getByText(/даже если адрес панели другой/)).toBeTruthy();
+  expect(screen.getByText(/публичный IPv4 вашего сервера/)).toBeTruthy();
+  expect(screen.getByText(/DNS only в Cloudflare/)).toBeTruthy();
+  expect(screen.getByText(/TCP\/8443 \(DoH\)/)).toBeTruthy();
+
+  fireEvent.change(screen.getByRole('textbox', { name: 'Домен защищённого DNS' }), {
+    target: { value: 'resolver.another-domain.net' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Проверить DNS-домен и сертификат' }));
+  await screen.findByText('Сертификат подходит выбранному DNS-поддомену');
+  expect(HttpUtil.post).toHaveBeenCalledWith(
+    '/panel/api/oxidns/validate',
+    expect.objectContaining({ domain: 'resolver.another-domain.net' }),
+    { silent: true, timeout: 12000 },
+  );
+  expect(HttpUtil.post).not.toHaveBeenCalledWith(
+    '/panel/api/oxidns/setup',
+    expect.anything(),
+    expect.anything(),
+  );
+  expect(screen.getByText(/A\/AAAA-записи и доступность портов из интернета не проверялись/)).toBeTruthy();
+});
+
+it('accepts independent certificate paths and sends them during setup', async () => {
+  await openDNS();
+  fireEvent.click(screen.getByRole('button', { name: 'Для телефона и браузера (DoH)' }));
+  fireEvent.change(screen.getByRole('textbox', { name: 'Домен защищённого DNS' }), {
+    target: { value: 'dns.another-domain.net' },
+  });
+  fireEvent.change(screen.getByRole('textbox', { name: 'Путь к сертификату DNS' }), {
+    target: { value: '/etc/letsencrypt/live/dns.another-domain.net/fullchain.pem' },
+  });
+  expect((screen.getByRole('button', { name: 'Создать и включить DNS' }) as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.change(screen.getByRole('textbox', { name: 'Путь к ключу DNS' }), {
+    target: { value: '/etc/letsencrypt/live/dns.another-domain.net/privkey.pem' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Создать и включить DNS' }));
+  await waitFor(() =>
+    expect(HttpUtil.post).toHaveBeenCalledWith(
+      '/panel/api/oxidns/setup',
+      expect.objectContaining({
+        domain: 'dns.another-domain.net',
+        certFile: '/etc/letsencrypt/live/dns.another-domain.net/fullchain.pem',
+        keyFile: '/etc/letsencrypt/live/dns.another-domain.net/privkey.pem',
+      }),
+      { silent: true, timeout: 180000 },
+    ),
+  );
 });
 
 it('keeps the initial flow simple and hides optional external modes', async () => {
@@ -216,7 +273,7 @@ it('shows diagnostics without lifecycle operations', async () => {
 it('shows bounded systemd logs through the authenticated API', async () => {
   current = { ...original, installed: true };
   await openDNS();
-  fireEvent.click(screen.getByText(/Обслуживание и диагностика OxiDNS/));
+  fireEvent.click(screen.getByText('Диагностика OxiDNS'));
   fireEvent.click(screen.getByRole('button', { name: 'Журнал службы' }));
   await screen.findByDisplayValue('Started OxiDNS test service');
   expect(HttpUtil.get).toHaveBeenCalledWith('/panel/api/oxidns/logs', undefined, {
