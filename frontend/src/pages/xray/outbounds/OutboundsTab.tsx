@@ -582,14 +582,40 @@ export default function OutboundsTab({
     if (subs.length === 0) return;
     setRefreshingAll(true);
     try {
-      for (const s of subs) {
+      let updated = 0;
+      let failed = 0;
+      let pendingApplyId: number | null = null;
+      for (const [index, sub] of subs.entries()) {
+        const deferApply = index < subs.length - 1;
         try {
-          await HttpUtil.post(`/panel/api/xray/outbound-subs/${s.id}/refresh`);
+          const reply = await HttpUtil.post(
+            `/panel/api/xray/outbound-subs/${sub.id}/refresh`,
+            deferApply ? { deferApply: true } : undefined,
+          );
+          if (!reply?.success) {
+            failed++;
+            continue;
+          }
+          updated++;
+          pendingApplyId = deferApply ? sub.id : null;
         } catch {
-          /* continue */
+          failed++;
         }
       }
-      messageApi.success(t('pages.xray.outboundSub.toastRefreshed'));
+      // If the last download failed, apply previous successful updates once.
+      if (pendingApplyId !== null) {
+        try {
+          const reply = await HttpUtil.post(`/panel/api/xray/outbound-subs/${pendingApplyId}/refresh`);
+          if (!reply?.success) failed++;
+        } catch {
+          failed++;
+        }
+      }
+      if (failed > 0) {
+        messageApi.warning(`${updated} обновлено, ${failed} ошибок при загрузке или применении`);
+      } else {
+        messageApi.success(t('pages.xray.outboundSub.toastRefreshed'));
+      }
       await loadSubs();
       onRefreshXrayData?.();
     } finally {
