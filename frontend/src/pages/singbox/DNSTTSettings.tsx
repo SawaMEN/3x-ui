@@ -72,7 +72,7 @@ export default function DNSTTSettings() {
   const [checkingDelegation, setCheckingDelegation] = useState(false);
   const [delegation, setDelegation] = useState<Delegation | null>(null);
 
-  const reload = useCallback(async (reset = true) => {
+  const reload = useCallback(async (reset = true, keepError = false) => {
     try {
       const res = (await HttpUtil.get('/panel/api/dnstt/status', undefined, {
         silent: true,
@@ -89,7 +89,7 @@ export default function DNSTTSettings() {
           enabled: res.obj.enabled,
         });
       }
-      setError('');
+      if (!keepError) setError('');
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -153,7 +153,7 @@ export default function DNSTTSettings() {
       window.dispatchEvent(new Event('dnstt:changed'));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
-      await reload(false);
+      await reload(false, true);
     } finally {
       setBusy(false);
     }
@@ -178,7 +178,7 @@ export default function DNSTTSettings() {
     resolverValid ? resolver : '<DNS_RESOLVER>',
     '-pubkey',
     publicKey || '<PUBLIC_KEY>',
-    zone || '<TUNNEL_DOMAIN>',
+    state.domain || '<TUNNEL_DOMAIN>',
     '127.0.0.1:' + clientPort,
   ].join(' ');
   const changed =
@@ -188,11 +188,15 @@ export default function DNSTTSettings() {
     form.targetPort !== state.targetPort;
   const valid =
     domainValid(zone) &&
+    Number.isInteger(form.targetPort) &&
+    Number.isInteger(form.listenPort) &&
     form.targetPort >= 1 &&
     form.targetPort <= 65535 &&
     form.listenPort >= 1 &&
     form.listenPort <= 65535 &&
-    (!form.serverIP || /^(?:\d{1,3}\.){3}\d{1,3}$/.test(form.serverIP));
+    (!form.serverIP ||
+      (/^(?:\d{1,3}\.){3}\d{1,3}$/.test(form.serverIP) &&
+        form.serverIP.split('.').every((part) => Number(part) <= 255)));
 
   // DNSTT is installed in the package/core update dialog. Do not show
   // its controls in sing-box DNS until a server binary is installed.

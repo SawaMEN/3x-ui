@@ -438,6 +438,7 @@ export default function SystemUpdateModal({
       );
       await loadDependencyUpdates();
       if (dependency.key === 'oxidns') window.dispatchEvent(new Event('oxidns:changed'));
+      if (dependency.key === 'dnstt') window.dispatchEvent(new Event('dnstt:changed'));
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : String(error));
     } finally {
@@ -852,7 +853,7 @@ export default function SystemUpdateModal({
                         >
                           {dependency.installed
                             ? 'OxiDNS установлен. Настройте провайдера, sing-box и публичные DNS-протоколы на едином экране.'
-                            : 'Быстрый запуск: откройте sing-box → DNS, выберите провайдера и нажмите «Установить и включить DNS». Установка и проверка автоматические.'}
+                            : 'Быстрый запуск: откройте sing-box → DNS, установите OxiDNS, выберите провайдера и нажмите «Включить DNS». До установки включение недоступно.'}
                         </Typography.Text>
                       )}
                       {dependency.key === 'dnstt' && (

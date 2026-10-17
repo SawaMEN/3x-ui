@@ -58,6 +58,12 @@ type Status struct {
 	NameServer        string `json:"nameServer,omitempty"`
 }
 
+// binaryReady rejects empty downloads and files that systemd cannot execute.
+func binaryReady(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.Mode().IsRegular() && info.Size() > 0 && info.Mode().Perm()&0111 != 0
+}
+
 func Defaults() Config { return Config{ListenPort: 53, TargetPort: 22} }
 func normalize(c *Config) {
 	if c.ListenPort == 0 {
@@ -112,6 +118,9 @@ func supported() (bool, string) {
 	if os.Geteuid() != 0 {
 		return false, "управление systemd требует права root"
 	}
+	if _, err := exec.LookPath("systemctl"); err != nil {
+		return false, "не найден systemctl"
+	}
 	if _, err := os.Stat("/run/systemd/system"); err != nil {
 		return false, "systemd не запущен"
 	}
@@ -139,7 +148,7 @@ func StatusNow(ctx context.Context) (Status, error) {
 	}
 	ok, reason := supported()
 	s := Status{Config: c, Supported: ok, UnsupportedReason: reason, LatestVersion: Version}
-	if f, err := os.Stat(binaryPath); err == nil && f.Mode().IsRegular() {
+	if binaryReady(binaryPath) {
 		s.Installed = true
 	}
 	if !s.Installed {
@@ -246,7 +255,7 @@ func Install(ctx context.Context) error {
 	if ok, reason := supported(); !ok {
 		return errors.New(reason)
 	}
-	if _, err := os.Stat(binaryPath); err == nil {
+	if binaryReady(binaryPath) {
 		return nil
 	}
 	data, err := download(ctx)
@@ -292,11 +301,11 @@ func Setup(ctx context.Context, c Config) error {
 	if err := Validate(c); err != nil {
 		return err
 	}
+	if !binaryReady(binaryPath) {
+		return errors.New("сначала установите DNSTT в разделе «Обновления пакетов и ядер Linux»")
+	}
 	if ok, reason := supported(); !ok {
 		return errors.New(reason)
-	}
-	if _, err := os.Stat(binaryPath); err != nil {
-		return errors.New("сначала установите DNSTT")
 	}
 	if err := keypair(ctx); err != nil {
 		return err

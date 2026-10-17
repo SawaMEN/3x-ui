@@ -100,7 +100,9 @@ export default function OxiDNSSettings() {
   const [status, setStatus] = useState<DNSState>(defaults);
   const [draft, setDraft] = useState<DNSConfig>(() => getConfig(defaults));
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState<'apply' | 'disable' | 'update' | 'remove' | null>(null);
+  const [busy, setBusy] = useState<'install' | 'apply' | 'disable' | 'update' | 'remove' | null>(
+    null,
+  );
   const [checking, setChecking] = useState(false);
   const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [updatesChecked, setUpdatesChecked] = useState(false);
@@ -194,10 +196,16 @@ export default function OxiDNSSettings() {
     }
   };
   const locked = busy !== null || checking || checkingUpdates;
-  const canApply = status.supported && !domainInvalid && !invalidPort && !conflictPorts && !unused;
+  const canApply =
+    status.installed &&
+    status.supported &&
+    !domainInvalid &&
+    !invalidPort &&
+    !conflictPorts &&
+    !unused;
   const isHealthy = status.installed && status.enabled && status.running;
   const primaryLabel = !status.installed
-    ? 'Установить и включить DNS'
+    ? 'Сначала установите OxiDNS'
     : !status.enabled
       ? 'Включить DNS'
       : dirty
@@ -223,6 +231,22 @@ export default function OxiDNSSettings() {
     return response.obj;
   };
 
+  const install = async () => {
+    setBusy('install');
+    setError('');
+    setNotice('');
+    try {
+      const next = await request('install');
+      setStatus(next);
+      setNotice('OxiDNS установлен. Проверьте настройки и нажмите «Включить DNS».');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Не удалось установить OxiDNS.');
+      await refresh(false, true, true);
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const apply = async (enable: boolean) => {
     if (enable && !canApply) {
       setError('Проверьте настройки DNS: провайдер, подключение, домен и порты.');
@@ -232,7 +256,6 @@ export default function OxiDNSSettings() {
     setNotice('');
     setError('');
     try {
-      // Setup installs the verified official binary automatically if it is missing.
       const next = await request(
         enable ? 'setup' : 'disable',
         enable ? { ...draft, domain: draft.domain.trim() } : undefined,
@@ -244,7 +267,7 @@ export default function OxiDNSSettings() {
       window.dispatchEvent(new Event('oxidns:changed'));
       setNotice(
         enable
-          ? 'OxiDNS установлен, запущен и проверен. Новая конфигурация применяется автоматически.'
+          ? 'OxiDNS запущен и проверен. Новая конфигурация применяется автоматически.'
           : 'DNS отключён. Настройки сохранены для следующего запуска.',
       );
     } catch (cause) {
@@ -414,26 +437,35 @@ export default function OxiDNSSettings() {
         <Card
           size="small"
           title={isHealthy ? 'Настройки DNS' : 'Быстрый запуск'}
-          extra={
-            !status.installed && status.supported ? (
-              <Tag color="processing">Установка автоматически</Tag>
-            ) : undefined
-          }
+          extra={!status.installed && status.supported ? <Tag>Требуется установка</Tag> : undefined}
         >
           <Space orientation="vertical" size={14} style={{ width: '100%' }}>
             <div>
               <Typography.Text strong>1. Как вы хотите использовать DNS?</Typography.Text>
               <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
-                Выберите готовый вариант. Панель заполнит параметры автоматически, их можно изменить ниже.
+                Выберите готовый вариант. Панель заполнит параметры автоматически, их можно изменить
+                ниже.
               </Typography.Paragraph>
               <Space wrap>
-                <Button type={configMode === 'local' ? 'primary' : 'default'} disabled={locked} onClick={() => chooseMode('local')}>
+                <Button
+                  type={configMode === 'local' ? 'primary' : 'default'}
+                  disabled={locked}
+                  onClick={() => chooseMode('local')}
+                >
                   Только для sing-box
                 </Button>
-                <Button type={draft.doh && !draft.dot && !draft.doq ? 'primary' : 'default'} disabled={locked} onClick={() => chooseMode('doh')}>
+                <Button
+                  type={draft.doh && !draft.dot && !draft.doq ? 'primary' : 'default'}
+                  disabled={locked}
+                  onClick={() => chooseMode('doh')}
+                >
                   Sing-box + DoH для устройств
                 </Button>
-                <Button type={configMode === 'all' ? 'primary' : 'default'} disabled={locked} onClick={() => chooseMode('all')}>
+                <Button
+                  type={configMode === 'all' ? 'primary' : 'default'}
+                  disabled={locked}
+                  onClick={() => chooseMode('all')}
+                >
                   Все протоколы
                 </Button>
               </Space>
@@ -485,6 +517,17 @@ export default function OxiDNSSettings() {
             )}
             <Typography.Text strong>3. Примените настройки</Typography.Text>
             <Space wrap>
+              {!status.installed && (
+                <Button
+                  icon={<CloudDownloadOutlined />}
+                  aria-label="Установить OxiDNS"
+                  loading={busy === 'install'}
+                  disabled={locked || !status.supported}
+                  onClick={() => void install()}
+                >
+                  Установить OxiDNS
+                </Button>
+              )}
               <Button
                 type="primary"
                 size="large"
@@ -523,9 +566,9 @@ export default function OxiDNSSettings() {
             </Space>
             {!status.installed && (
               <Typography.Text type="secondary">
-                Одна кнопка скачает официальный OxiDNS, проверит файл, создаст конфигурацию,
-                запустит службу и проверит DNS-запрос. Установка производится только на
-                поддерживаемом Linux-сервере.
+                Сначала установите компонент здесь или в разделе «Обновления пакетов и ядер Linux».
+                Установка скачает и проверит официальный файл. DNS останется выключенным до
+                применения настроек; при ошибке установки включение недоступно.
               </Typography.Text>
             )}
           </Space>
@@ -734,89 +777,100 @@ export default function OxiDNSSettings() {
         <Collapse
           activeKey={showMaintenance ? ['maintenance'] : []}
           onChange={(keys) => setShowMaintenance(keys.includes('maintenance'))}
-          items={[{ key: 'maintenance', label: <Space><SettingOutlined /> Обслуживание и диагностика OxiDNS {status.updateAvailable && <Tag color="processing">Обновление</Tag>}</Space>, children: (
-        <Card size="small" title="Управление компонентом">
-          <Space orientation="vertical" size={10} style={{ width: '100%' }}>
-            <Typography.Text type="secondary">
-              {status.installed
-                ? 'Установленная версия: ' + (status.installedVersion || 'не определена')
-                : 'Компонент ещё не установлен. Он установится автоматически при включении DNS.'}
-              {updatesChecked && status.latestVersion
-                ? '. Последняя версия: ' + status.latestVersion
-                : ''}
-            </Typography.Text>
-            {updatesChecked && status.error && (
-              <Alert type="warning" showIcon title={status.error} />
-            )}
-            {updatesChecked &&
-              status.installed &&
-              status.updateAvailable === false &&
-              !status.error && <Tag color="success">Последняя версия установлена</Tag>}
-            {status.updateAvailable && (
-              <Alert type="info" showIcon title="Доступно обновление OxiDNS" />
-            )}
-            <Space wrap>
-              <Button
-                aria-label="Проверить обновления"
-                icon={<SyncOutlined />}
-                loading={checkingUpdates}
-                disabled={locked && !checkingUpdates}
-                onClick={async () => {
-                  setCheckingUpdates(true);
-                  try {
-                    await refresh(true, true);
-                  } finally {
-                    setCheckingUpdates(false);
-                  }
-                }}
-              >
-                Проверить обновления
-              </Button>
-              {status.installed && status.updateAvailable && (
-                <Button
-                  type="primary"
-                  aria-label="Обновить OxiDNS"
-                  icon={<CloudDownloadOutlined />}
-                  loading={busy === 'update'}
-                  disabled={locked && busy !== 'update'}
-                  onClick={() => void update()}
-                >
-                  Обновить OxiDNS
-                </Button>
-              )}
-              {status.installed && (
-                <Button disabled={locked} onClick={() => void openLogs()}>
-                  Журнал службы
-                </Button>
-              )}
-              {status.installed && (
-                <Popconfirm
-                  title="Удалить OxiDNS полностью?"
-                  description="Служба будет остановлена, её файлы и настройки удалены, а sing-box переключится с OxiDNS."
-                  okText="Удалить"
-                  okButtonProps={{ danger: true }}
-                  cancelText="Отмена"
-                  onConfirm={() => void remove()}
-                >
-                  <Button
-                    danger
-                    aria-label="Удалить OxiDNS"
-                    icon={<DeleteOutlined />}
-                    loading={busy === 'remove'}
-                    disabled={locked && busy !== 'remove'}
-                  >
-                    Удалить OxiDNS
-                  </Button>
-                </Popconfirm>
-              )}
-            </Space>
-            <Typography.Text type="secondary">
-              Установка, обновление и удаление также доступны в «Настройки → Обновления пакетов и
-              ядер Linux».
-            </Typography.Text>
-          </Space>
-        </Card>
-          ) }]}
+          items={[
+            {
+              key: 'maintenance',
+              label: (
+                <Space>
+                  <SettingOutlined /> Обслуживание и диагностика OxiDNS{' '}
+                  {status.updateAvailable && <Tag color="processing">Обновление</Tag>}
+                </Space>
+              ),
+              children: (
+                <Card size="small" title="Управление компонентом">
+                  <Space orientation="vertical" size={10} style={{ width: '100%' }}>
+                    <Typography.Text type="secondary">
+                      {status.installed
+                        ? 'Установленная версия: ' + (status.installedVersion || 'не определена')
+                        : 'Компонент ещё не установлен. Он установится автоматически при включении DNS.'}
+                      {updatesChecked && status.latestVersion
+                        ? '. Последняя версия: ' + status.latestVersion
+                        : ''}
+                    </Typography.Text>
+                    {updatesChecked && status.error && (
+                      <Alert type="warning" showIcon title={status.error} />
+                    )}
+                    {updatesChecked &&
+                      status.installed &&
+                      status.updateAvailable === false &&
+                      !status.error && <Tag color="success">Последняя версия установлена</Tag>}
+                    {status.updateAvailable && (
+                      <Alert type="info" showIcon title="Доступно обновление OxiDNS" />
+                    )}
+                    <Space wrap>
+                      <Button
+                        aria-label="Проверить обновления"
+                        icon={<SyncOutlined />}
+                        loading={checkingUpdates}
+                        disabled={locked && !checkingUpdates}
+                        onClick={async () => {
+                          setCheckingUpdates(true);
+                          try {
+                            await refresh(true, true);
+                          } finally {
+                            setCheckingUpdates(false);
+                          }
+                        }}
+                      >
+                        Проверить обновления
+                      </Button>
+                      {status.installed && status.updateAvailable && (
+                        <Button
+                          type="primary"
+                          aria-label="Обновить OxiDNS"
+                          icon={<CloudDownloadOutlined />}
+                          loading={busy === 'update'}
+                          disabled={locked && busy !== 'update'}
+                          onClick={() => void update()}
+                        >
+                          Обновить OxiDNS
+                        </Button>
+                      )}
+                      {status.installed && (
+                        <Button disabled={locked} onClick={() => void openLogs()}>
+                          Журнал службы
+                        </Button>
+                      )}
+                      {status.installed && (
+                        <Popconfirm
+                          title="Удалить OxiDNS полностью?"
+                          description="Служба будет остановлена, её файлы и настройки удалены, а sing-box переключится с OxiDNS."
+                          okText="Удалить"
+                          okButtonProps={{ danger: true }}
+                          cancelText="Отмена"
+                          onConfirm={() => void remove()}
+                        >
+                          <Button
+                            danger
+                            aria-label="Удалить OxiDNS"
+                            icon={<DeleteOutlined />}
+                            loading={busy === 'remove'}
+                            disabled={locked && busy !== 'remove'}
+                          >
+                            Удалить OxiDNS
+                          </Button>
+                        </Popconfirm>
+                      )}
+                    </Space>
+                    <Typography.Text type="secondary">
+                      Установка, обновление и удаление также доступны в «Настройки → Обновления
+                      пакетов и ядер Linux».
+                    </Typography.Text>
+                  </Space>
+                </Card>
+              ),
+            },
+          ]}
         />
       </Space>
       <Modal

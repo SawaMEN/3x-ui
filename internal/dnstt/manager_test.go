@@ -156,3 +156,38 @@ func TestOfficialDNSTTTunnelRoundTrip(t *testing.T) {
 		t.Fatal(fmt.Sprintf("corrupted DNSTT data: got %q", response))
 	}
 }
+
+func TestBinaryReadiness(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "binary")
+	if binaryReady(path) || binaryReady(dir) {
+		t.Fatal("missing file or directory accepted")
+	}
+	for _, tc := range []struct {
+		content string
+		mode    os.FileMode
+		ready   bool
+	}{
+		{"", 0755, false}, {"binary", 0644, false}, {"binary", 0755, true},
+	} {
+		if err := os.WriteFile(path, []byte(tc.content), tc.mode); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(path, tc.mode); err != nil {
+			t.Fatal(err)
+		}
+		if got := binaryReady(path); got != tc.ready {
+			t.Fatalf("mode %o, contents %q: ready=%v", tc.mode, tc.content, got)
+		}
+	}
+}
+
+func TestSetupRequiresInstalledBinary(t *testing.T) {
+	if binaryReady(binaryPath) {
+		t.Skip("component already installed")
+	}
+	err := Setup(context.Background(), Config{Domain: "t.example.com", ListenPort: 53, TargetPort: 22})
+	if err == nil || !strings.Contains(err.Error(), "сначала установите DNSTT") {
+		t.Fatalf("expected installation prerequisite, got %v", err)
+	}
+}

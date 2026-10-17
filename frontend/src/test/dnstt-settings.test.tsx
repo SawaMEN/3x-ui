@@ -202,3 +202,35 @@ it('removes DNSTT with key destruction warning', async () => {
   );
   confirm.mockRestore();
 });
+
+it('preserves setup errors after refreshing status', async () => {
+  await openInstalled();
+  fireEvent.change(screen.getByRole('textbox', { name: 'Домен DNSTT' }), {
+    target: { value: 't.example.com' },
+  });
+  vi.mocked(HttpUtil.post).mockResolvedValueOnce({
+    success: false,
+    obj: null,
+    msg: 'Локальный сервис недоступен',
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Создать и включить DNSTT' }));
+  await screen.findByText('Локальный сервис недоступен');
+  await waitFor(() => expect(HttpUtil.get).toHaveBeenCalledTimes(2));
+  expect(screen.getByText('Локальный сервис недоступен')).toBeTruthy();
+});
+
+it('uses the applied domain in client commands while editing settings', async () => {
+  current = {
+    ...current,
+    installed: true,
+    enabled: true,
+    running: true,
+    domain: 't.example.com',
+    publicKey: '1234567890abcdef'.repeat(4),
+  };
+  render(<DNSTTSettings />);
+  fireEvent.change(await screen.findByRole('textbox', { name: 'Домен DNSTT' }), {
+    target: { value: 'new.example.com' },
+  });
+  expect(screen.getByText(/dnstt-client -doh .* t.example.com 127.0.0.1:7000/)).toBeTruthy();
+});

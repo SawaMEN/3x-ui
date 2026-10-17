@@ -68,6 +68,12 @@ type Status struct {
 	UnsupportedReason string `json:"unsupportedReason,omitempty"`
 }
 
+// binaryReady rejects empty downloads and files that systemd cannot execute.
+func binaryReady(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.Mode().IsRegular() && info.Size() > 0 && info.Mode().Perm()&0111 != 0
+}
+
 func Defaults() Settings {
 	return Settings{Port: 8443, DoTPort: 853, DoQPort: 853, Upstream: "quad9", UseSingBox: true}
 }
@@ -100,7 +106,7 @@ func Load() (Settings, error) {
 	// Never route sing-box to a removed OxiDNS binary, even if an older
 	// installation left behind an enabled settings.json file.
 	if c.Enabled {
-		if _, err := os.Stat(binaryPath); errors.Is(err, os.ErrNotExist) {
+		if !binaryReady(binaryPath) {
 			c.Enabled = false
 		}
 	}
@@ -113,7 +119,7 @@ func CurrentStatus(ctx context.Context) (Status, error) {
 		return Status{}, err
 	}
 	s := Status{Settings: cfg, LocalAddress: net.JoinHostPort("127.0.0.1", strconv.Itoa(localPort)), Version: Version}
-	if info, err := os.Stat(binaryPath); err == nil && info.Mode().IsRegular() {
+	if binaryReady(binaryPath) {
 		s.Installed = true
 	}
 	if !s.Installed {
@@ -519,7 +525,7 @@ func installOnly(ctx context.Context) error {
 	if err := os.MkdirAll(filepath.Join(StateDir, "data"), 0700); err != nil {
 		return err
 	}
-	if _, err := os.Stat(binaryPath); errors.Is(err, os.ErrNotExist) {
+	if !binaryReady(binaryPath) {
 		_, asset, err := Latest(ctx)
 		if err != nil {
 			return err
@@ -531,8 +537,6 @@ func installOnly(ctx context.Context) error {
 		if err := atomicWrite(binaryPath, executable, 0755); err != nil {
 			return err
 		}
-	} else if err != nil {
-		return err
 	}
 	if err := atomicWrite(servicePath, []byte(unit), 0644); err != nil {
 		return err
@@ -748,6 +752,10 @@ func Uninstall(ctx context.Context) error {
 func Setup(ctx context.Context, c Settings, certFile, keyFile string) error {
 	mu.Lock()
 	defer mu.Unlock()
+	if !binaryReady(binaryPath) {
+		return errors.New("сначала установите OxiDNS в разделе «Обновления пакетов и ядер Linux» или кнопкой «Установить OxiDNS»")
+	}
+
 	normalizePorts(&c)
 	c.Enabled = true
 	if err := validate(c, certFile, keyFile); err != nil {
