@@ -5,7 +5,7 @@
   "previous_baseline": "hiddify-core-v5-baseline.json",
   "target": {
     "repository": "https://github.com/SawaMEN/hiddify-core",
-    "commit": "0b366d6879192a33a77053fad52571223ff367b0",
+    "commit": "b310097c8e7a2655e1ab7ca61b7d66c4b77ebe0c",
     "submodules": {
       "hiddify-sing-box": "3827d3a871dd3bcc7e8265538df7ceb157dd0066",
       "ray2sing": "505d8c645f1dad54544abd024ffd8100a8d771e8"
@@ -14,7 +14,7 @@
       "hiddify-sing-box": "https://github.com/SawaMEN/hiddify-sing-box",
       "ray2sing": "https://github.com/hiddify/ray2sing"
     },
-    "version": "sawamen-0b366d687919-3827d3a871dd-panel9"
+    "version": "sawamen-b310097c8e7a-3827d3a871dd-panel9"
   },
   "runtime_contract": {
     "raw_config_command": ["srun", "-c"],
