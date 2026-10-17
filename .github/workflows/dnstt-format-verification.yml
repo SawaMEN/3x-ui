@@ -1,4 +1,4 @@
-name: DNSTT integration formatter snapshot v3
+name: DNSTT integration formatter snapshot v4
 on:
   push:
     branches: [dns]
@@ -31,8 +31,8 @@ jobs:
       - name: Canonical React formatting
         working-directory: frontend
         run: |
-          npx oxfmt src/pages/singbox/DNSTTSettings.tsx src/test/dnstt-settings.test.tsx src/pages/singbox/SingBoxPage.tsx src/pages/settings/SystemUpdateModal.tsx
-          node -e 'const fs=require("fs");for(const p of process.argv.slice(1)) console.log("OXFMT_FILE:"+p+":"+fs.readFileSync(p).toString("base64"))' src/pages/singbox/DNSTTSettings.tsx src/test/dnstt-settings.test.tsx src/pages/singbox/SingBoxPage.tsx src/pages/settings/SystemUpdateModal.tsx
+          npx oxfmt src/pages/singbox/DNSTTSettings.tsx src/test/dnstt-settings.test.tsx src/pages/singbox/SingBoxPage.tsx src/pages/settings/SystemUpdateModal.tsx src/pages/api-docs/endpoints.ts
+          node -e 'const fs=require("fs");for(const p of process.argv.slice(1)) console.log("OXFMT_FILE:"+p+":"+fs.readFileSync(p).toString("base64"))' src/pages/singbox/DNSTTSettings.tsx src/test/dnstt-settings.test.tsx src/pages/singbox/SingBoxPage.tsx src/pages/settings/SystemUpdateModal.tsx src/pages/api-docs/endpoints.ts
       - name: DNSTT interface regression tests
         working-directory: frontend
         run: npx vitest run src/test/dnstt-settings.test.tsx src/test/system-update-components.test.tsx
