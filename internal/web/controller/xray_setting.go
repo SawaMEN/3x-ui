@@ -549,6 +549,12 @@ func (a *XraySettingController) refreshOutboundSub(c *gin.Context) {
 	// Publish the new native configuration now, rather than reporting a missing
 	// sub-auto selector until an unrelated scheduled core restart.
 	markOutboundCoreRestart()
+	// Mass refreshes defer applying the intermediate state. The final
+	// request publishes all fetched connections with just one core restart.
+	if c.PostForm("deferApply") == "true" {
+		jsonObj(c, obs, nil)
+		return
+	}
 	core, coreErr := (&service.SettingService{}).GetCoreType()
 	if coreErr != nil {
 		jsonMsg(c, "Subscription updated, but the active core could not be detected", coreErr)
