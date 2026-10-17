@@ -101,6 +101,9 @@ func CurrentStatus(ctx context.Context) (Status, error) {
 		if _, systemErr := exec.LookPath("systemctl"); systemErr != nil {
 			s.Supported = false
 			s.UnsupportedReason = "не найден systemd (Docker не поддерживается)"
+		} else if _, systemErr := os.Stat("/run/systemd/system"); systemErr != nil {
+			s.Supported = false
+			s.UnsupportedReason = "systemd не запущен: автоматическая установка в Docker пока недоступна"
 		}
 	}
 	if s.InstalledVersion != "" {
@@ -411,6 +414,9 @@ func installRelease(ctx context.Context, asset releaseAsset) ([]byte, error) {
 func installOnly(ctx context.Context) error {
 	if _, err := exec.LookPath("systemctl"); err != nil {
 		return errors.New("для OxiDNS требуется Linux с systemd")
+	}
+	if _, err := os.Stat("/run/systemd/system"); err != nil {
+		return errors.New("на сервере не запущен systemd. Установка внутри Docker пока не поддерживается")
 	}
 	if _, err := releaseAssetName(); err != nil {
 		return err
