@@ -25,14 +25,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          ./frontend/node_modules/.bin/oxfmt docs/oxidns-integration.md frontend/src/pages/api-docs/endpoints.ts
           cd frontend
-          npx oxfmt ../docs/oxidns-integration.md
           npm run gen:api
           cd ..
           if ! git diff --quiet; then
             git config user.name 'github-actions[bot]'
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add docs/oxidns-integration.md docs/public/openapi.json frontend/public/openapi.json
+            git add docs/oxidns-integration.md frontend/src/pages/api-docs/endpoints.ts docs/public/openapi.json frontend/public/openapi.json
             HUSKY=0 git commit -m "chore(docs): format OxiDNS guide and regenerate OpenAPI"
             git push origin HEAD:fix/oxidns-installation-settings-separation
           fi
