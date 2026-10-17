@@ -449,13 +449,18 @@ func CheckDNS(ctx context.Context) error {
     if _, err := os.Stat(binaryPath); err != nil {
         return errors.New("сначала установите OxiDNS")
     }
+    return checkDNSAt(ctx, net.JoinHostPort("127.0.0.1", strconv.Itoa(localPort)))
+}
+
+// checkDNSAt is used by the live DNS probe and the official-binary integration test.
+func checkDNSAt(ctx context.Context, address string) error {
     lookupCtx, cancel := context.WithTimeout(ctx, 7*time.Second)
     defer cancel()
     resolver := &net.Resolver{
         PreferGo: true,
         Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
             dialer := &net.Dialer{Timeout: 2*time.Second}
-            return dialer.DialContext(ctx, network, net.JoinHostPort("127.0.0.1", strconv.Itoa(localPort)))
+            return dialer.DialContext(ctx, network, address)
         },
     }
     ips, err := resolver.LookupIP(lookupCtx, "ip4", "example.com")
