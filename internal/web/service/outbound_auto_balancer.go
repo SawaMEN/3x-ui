@@ -106,7 +106,10 @@ func subscriptionAutoOutbound(sub *model.OutboundSubscription, members []any) []
 func chooseSubscriptionOutbound(results []*outbound.TestOutboundResult, current, mode string, tolerance int) string {
 	var best, previous *outbound.TestOutboundResult
 	for _, r := range results {
-		if r == nil || !r.Success || r.HTTPStatus < 200 || r.HTTPStatus >= 300 {
+		// A completed 3xx/4xx response still proves that the tunnel reached
+		// the remote HTTP server. Prefer 2xx/3xx, but do not block every
+		// route merely because the check endpoint returns a 403/429.
+		if r == nil || !r.Success || r.HTTPStatus < 200 || r.HTTPStatus >= 500 {
 			continue
 		}
 		if mode != "speed" && r.Delay < 0 {
@@ -118,14 +121,19 @@ func chooseSubscriptionOutbound(results []*outbound.TestOutboundResult, current,
 		if r.Tag == current {
 			previous = r
 		}
-		if best == nil || (mode == "speed" && r.DownloadMbps > best.DownloadMbps) || (mode != "speed" && r.Delay < best.Delay) {
+		goodStatus := r.HTTPStatus < 400
+		bestGoodStatus := best != nil && best.HTTPStatus < 400
+		if best == nil || (goodStatus && !bestGoodStatus) ||
+			(goodStatus == bestGoodStatus &&
+				((mode == "speed" && r.DownloadMbps > best.DownloadMbps) ||
+					(mode != "speed" && r.Delay < best.Delay))) {
 			best = r
 		}
 	}
 	if best == nil {
 		return ""
 	}
-	if previous != nil {
+	if previous != nil && (previous.HTTPStatus < 400) == (best.HTTPStatus < 400) {
 		if mode == "speed" && best.DownloadMbps <= previous.DownloadMbps*1.1 {
 			return current
 		}
