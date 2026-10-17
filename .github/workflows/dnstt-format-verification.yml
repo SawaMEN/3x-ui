@@ -22,7 +22,7 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import base64
-          for path in ['internal/dnstt/manager.go','internal/dnstt/manager_test.go','internal/web/controller/dnstt.go','internal/web/controller/api.go']:
+          for path in ['internal/dnstt/manager.go','internal/dnstt/manager_test.go','internal/dnstt/lifecycle_systemd_test.go','internal/web/controller/dnstt.go','internal/web/controller/api.go']:
               print('GOFMT_FILE:'+path+':'+base64.b64encode(Path(path).read_bytes()).decode())
           PY
       - name: Install frontend dependencies
