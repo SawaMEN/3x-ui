@@ -46,7 +46,6 @@ jobs:
           sudo systemctl cat olcrtc-manager | grep -F 'OLCRTC_MANAGER_ADDR=127.0.0.1'
           sudo grep -q '^OLCRTC_MANAGER_USER=' /etc/olcrtc-manager/panel.env
           sudo grep -q '^OLCRTC_MANAGER_PASS=' /etc/olcrtc-manager/panel.env
-          export PORT
           sudo bash -c '
             set -euo pipefail
             set -a
@@ -55,13 +54,13 @@ jobs:
             for attempt in $(seq 1 15); do
               if curl --fail --silent --max-time 2 \
                 --user "${OLCRTC_MANAGER_USER}:${OLCRTC_MANAGER_PASS}" \
-                "http://127.0.0.1:${PORT}/api/settings" > /tmp/olcrtc-api-settings.json; then
+                "http://127.0.0.1:${1}/api/settings" > /tmp/olcrtc-api-settings.json; then
                 exit 0
               fi
               sleep 2
             done
             exit 1
-          '
+          ' bash "$PORT"
           sudo python3 - <<'PY'
           import json
           with open('/tmp/olcrtc-api-settings.json') as f:
