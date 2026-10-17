@@ -1299,6 +1299,8 @@ update_x-ui() {
         _fail "ERROR: x-ui not installed."
     fi
 
+    local telemt_was_installed=0
+    [[ -x "${xui_folder}/bin/telemt" ]] && telemt_was_installed=1
     echo -e "${green}Installing new x-ui version...${plain}"
     if ! tar xzf "${archive}" "${cm_core_tar_args[@]}" -C "${install_parent}" > /dev/null 2>&1; then
         rm -f "${archive}"
@@ -1314,7 +1316,13 @@ update_x-ui() {
     chmod +x x-ui > /dev/null 2>&1
 
     chmod +x x-ui "bin/hiddify-core-linux-${machine_arch}" || _fail "Modified Sing-box binary missing"
-    [[ -f bin/telemt ]] && chmod 0755 bin/telemt
+    # Release archives may contain Telemt, but it must stay opt-in.
+    if [[ "${telemt_was_installed}" == 1 ]]; then
+        [[ -f bin/telemt ]] && chmod 0755 bin/telemt
+    else
+        rm -f bin/telemt
+        systemctl disable --now telemt-update.timer > /dev/null 2>&1 || true
+    fi
     [[ -f telemt-meko-fix.sh ]] && chmod 0755 telemt-meko-fix.sh
     [[ -f telemt-update.sh ]] && chmod 0755 telemt-update.sh
     # Replace managed units on upgrades while preserving the user's settings.
