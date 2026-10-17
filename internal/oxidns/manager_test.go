@@ -31,6 +31,7 @@ func TestGenerateLocalAndDoH(t *testing.T) {
 	if !strings.Contains(yaml, "listen: \"127.0.0.1:15353\"") {
 		t.Fatal("local DNS listener missing")
 	}
+	if !strings.Contains(yaml,"type: cache") || !strings.Contains(yaml,`      - exec: "$dns_cache"`) { t.Fatal("default DNS cache missing") }
 	if strings.Contains(yaml, "http_server") {
 		t.Fatal("DoH must stay off without credentials")
 	}

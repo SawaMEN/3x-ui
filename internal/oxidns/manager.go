@@ -189,13 +189,13 @@ func Generate(c Settings, certFile, keyFile string) (string, error) {
 	}
 	addr, bootstrap, _ := upstream(c)
 	var b strings.Builder
-	lines := []string{"log:", "  level: info", "plugins:", "  - tag: forward_upstream", "    type: forward", "    args:", "      upstreams:"}
+	lines := []string{"log:", "  level: info", "plugins:", "  - tag: dns_cache", "    type: cache", "    args:", "      size: 4096", "      short_circuit: true", "      max_positive_ttl: 600", "  - tag: forward_upstream", "    type: forward", "    args:", "      upstreams:"}
 	for _, line := range lines {
 		fmt.Fprintln(&b, line)
 	}
 	fmt.Fprintln(&b, "        - addr: "+strconv.Quote(addr))
 	fmt.Fprintln(&b, "          bootstrap: "+strconv.Quote(bootstrap))
-	for _, line := range []string{"  - tag: main", "    type: sequence", "    args:", `      - exec: "$forward_upstream"`, "      - exec: accept"} {
+	for _, line := range []string{"  - tag: main", "    type: sequence", "    args:", `      - exec: "$dns_cache"`, `      - exec: "$forward_upstream"`, "      - exec: accept"} {
 		fmt.Fprintln(&b, line)
 	}
 	for _, scheme := range []string{"udp", "tcp"} {
