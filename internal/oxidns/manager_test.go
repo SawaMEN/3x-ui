@@ -9,6 +9,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/binary"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"math/big"
@@ -175,6 +176,26 @@ func TestDoHCertificateAndOfficialParser(t *testing.T) {
 	if !strings.Contains(yaml, `listen: ":8443"`) {
 		t.Fatal("unexpected DoH port")
 	}
+	cfg.HTTP3 = true
+	cfg.DoT = true
+	cfg.DoQ = true
+	yaml, err = Generate(cfg, certPath, keyPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, term := range []string{
+		"type: http_server",
+		"enable_http3: true",
+		"type: tcp_server",
+		"tag: dot_public",
+		"tag: doq_public",
+		"type: quic_server",
+		`listen: ":853"`,
+	} {
+		if !strings.Contains(yaml, term) {
+			t.Errorf("missing encrypted DNS listener field: %s", term)
+		}
+	}
 	cfg.Domain = "wrong.example.com"
 	if _, err := Generate(cfg, certPath, keyPath); err == nil {
 		t.Fatal("mismatched certificate accepted")
@@ -337,5 +358,37 @@ func TestWaitDoHReadyUsesConfiguredListener(t *testing.T) {
 	stop()
 	if err := waitDoHReady(cancelled, port); err == nil {
 		t.Fatal("closed DoH listener incorrectly accepted")
+	}
+}
+
+func TestEncryptedDNSPortValidationAndCompatibility(t *testing.T) {
+	cfg := Defaults()
+	if cfg.DoTPort != 853 || cfg.DoQPort != 853 || cfg.Port != 8443 {
+		t.Fatal("incorrect standard ports")
+	}
+	for _, test := range []struct {
+		name string
+		cfg Settings
+	}{
+		{name: "H3 requires DoH", cfg: Settings{HTTP3: true, Upstream: "quad9"}},
+		{name: "DoT conflicts local DNS", cfg: Settings{DoT: true, DoTPort: localPort, Upstream: "quad9"}},
+		{name: "DoQ conflicts local DNS", cfg: Settings{DoQ: true, DoQPort: localPort, Upstream: "quad9"}},
+		{name: "DoH and DoT TCP collision", cfg: Settings{DoH: true, DoT: true, Port: 8443, DoTPort: 8443, Upstream: "quad9"}},
+		{name: "HTTP3 and DoQ UDP collision", cfg: Settings{DoH: true, HTTP3: true, DoQ: true, Port: 8443, DoQPort: 8443, Upstream: "quad9"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := Generate(test.cfg, "", ""); err == nil {
+				t.Fatal("accepted invalid public encrypted DNS settings")
+			}
+		})
+	}
+	legacy := `{"enabled":false,"domain":"","doh":false,"port":8443,"upstream":"quad9","useSingBox":true}`
+	var restored Settings
+	if err := json.Unmarshal([]byte(legacy), &restored); err != nil {
+		t.Fatal(err)
+	}
+	normalizePorts(&restored)
+	if restored.DoTPort != 853 || restored.DoQPort != 853 || restored.DoT || restored.DoQ || restored.HTTP3 {
+		t.Errorf("legacy settings did not preserve safe public DNS defaults: %+v", restored)
 	}
 }
