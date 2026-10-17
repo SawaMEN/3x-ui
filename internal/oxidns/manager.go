@@ -578,7 +578,9 @@ func Uninstall(ctx context.Context) error {
 			}
 		}
 	}
-	if statErr == nil {
+	// A removed unit file may still have an enabled systemd symlink.
+	enabled := exec.CommandContext(ctx, "systemctl", "is-enabled", "--quiet", "x-ui-oxidns.service").Run() == nil
+	if statErr == nil || enabled {
 		if err := systemctl(ctx, "disable", "x-ui-oxidns.service"); err != nil {
 			if !strings.Contains(err.Error(), "does not exist") && !strings.Contains(err.Error(), "not loaded") {
 				return err
