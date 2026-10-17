@@ -74,7 +74,10 @@ func (o *BalanceOptions) Validate(allowPrivate bool) error {
 }
 
 func (o *BalanceOptions) apply(sub *model.OutboundSubscription) {
-	if sub.AutoBalance != o.Enabled || sub.BalanceMode != o.Mode || sub.ProbeURL != o.URL {
+	selectionChanged := sub.AutoBalance != o.Enabled || sub.BalanceMode != o.Mode || sub.ProbeURL != o.URL
+	rankingChanged := selectionChanged || sub.ProbeInterval != o.Interval || sub.Tolerance != o.Tolerance
+	healthChanged := rankingChanged || sub.HealthInterval != o.HealthInterval
+	if selectionChanged {
 		sub.SelectedTag = ""
 		sub.LastSwitch = 0
 		sub.SwitchReason = ""
@@ -83,8 +86,12 @@ func (o *BalanceOptions) apply(sub *model.OutboundSubscription) {
 	sub.AutoBalance, sub.BalanceMode, sub.ProbeURL = o.Enabled, o.Mode, o.URL
 	sub.ProbeInterval, sub.Tolerance = o.Interval, o.Tolerance
 	sub.SwitchInterval, sub.HealthInterval = o.SwitchInterval, o.HealthInterval
-	sub.LastHealth = 0
-	sub.LastProbe, sub.ProbeError, sub.ProbeResults = 0, "", ""
+	if healthChanged {
+		sub.LastHealth = 0
+	}
+	if rankingChanged {
+		sub.LastProbe, sub.ProbeError, sub.ProbeResults = 0, "", ""
+	}
 }
 
 func subscriptionAutoOutbound(sub *model.OutboundSubscription, members []any) []any {
