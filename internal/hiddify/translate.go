@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	TargetVersion    = "sawamen-0b366d687919-3827d3a871dd-panel8"
+	TargetVersion    = "sawamen-0b366d687919-3827d3a871dd-panel9"
 	TargetRevision   = "0b366d6879192a33a77053fad52571223ff367b0"
 	StatsQueryMethod = "/v2ray.core.app.stats.command.StatsService/QueryStats"
 )
