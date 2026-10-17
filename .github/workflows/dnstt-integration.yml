@@ -39,7 +39,7 @@ jobs:
           sudo env PATH="$PATH" HOME="$HOME" \
             DNSTT_SERVER_BINARY="$DNSTT_SERVER_BINARY" \
             DNSTT_SYSTEMD_TEST=1 \
-            "$(command -v go)" test -v -count=1 ./internal/dnstt -run '^TestManagedServiceLifecycle
+            "$(command -v go)" test -v -count=1 ./internal/dnstt -run TestManagedServiceLifecycle
 
       - name: Go formatting validation
         run: |
