@@ -103,7 +103,7 @@ describe('gateway settings in sing-box', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Включить шлюз' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Включить', exact: true }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Включить$/ }));
     await waitFor(() =>
       expect(vi.mocked(HttpUtil.post).mock.calls.some(([url]) => url.endsWith('/enable'))).toBe(
         true,
@@ -121,6 +121,7 @@ describe('gateway settings in sing-box', () => {
     }));
     vi.mocked(HttpUtil.post).mockResolvedValue({
       success: true,
+      msg: '',
       obj: { ready: false, problems: [], notes: [] },
     });
 
@@ -151,7 +152,7 @@ describe('gateway settings in sing-box', () => {
     expect(screen.queryByRole('button', { name: 'Включить шлюз' })).toBeNull();
     expect(screen.queryByPlaceholderText('br-lan')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Выключить шлюз' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Выключить', exact: true }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Выключить$/ }));
     await waitFor(() =>
       expect(vi.mocked(HttpUtil.post).mock.calls.some(([url]) => url.endsWith('/disable'))).toBe(
         true,
@@ -186,19 +187,24 @@ describe('gateway settings in sing-box', () => {
     let releaseFirst:
       | ((value: {
           success: boolean;
+          msg: string;
           obj: { ready: boolean; problems: string[]; notes: string[] };
         }) => void)
       | undefined;
     let checks = 0;
     vi.mocked(HttpUtil.post).mockImplementation(async (url) => {
-      if (!url.endsWith('/preflight')) return { success: true, obj: status(true) };
+      if (!url.endsWith('/preflight')) return { success: true, msg: '', obj: status(true) };
       checks += 1;
       if (checks === 1) {
-        return new Promise((resolve) => {
+        return new Promise<{
+          success: boolean;
+          msg: string;
+          obj: { ready: boolean; problems: string[]; notes: string[] };
+        }>((resolve) => {
           releaseFirst = resolve;
         });
       }
-      return { success: true, obj: { ready: true, problems: [], notes: [] } };
+      return { success: true, msg: '', obj: { ready: true, problems: [], notes: [] } };
     });
 
     render(<GatewayModeControl />);
@@ -217,6 +223,7 @@ describe('gateway settings in sing-box', () => {
 
     releaseFirst?.({
       success: true,
+      msg: '',
       obj: { ready: false, problems: ['Устаревшая проверка'], notes: [] },
     });
     await waitFor(() => {
