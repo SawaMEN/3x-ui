@@ -211,7 +211,8 @@ export const sections: readonly Section[] = [
       {
         method: 'GET',
         path: '/panel/api/olcrtc/live',
-        summary: 'Return running locations and peer counts without upstream keys or proxy credentials.',
+        summary:
+          'Return running locations and peer counts without upstream keys or proxy credentials.',
       },
       {
         method: 'GET',
