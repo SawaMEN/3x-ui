@@ -165,8 +165,16 @@ describe('gateway settings in sing-box', () => {
       obj: url.endsWith('/interfaces')
         ? {
             interfaces: [
-              { name: 'br-lan', defaultRoute: false, addresses: [{ ip: '192.168.10.1', prefix: 24, private: true }] },
-              { name: 'eth0', defaultRoute: true, addresses: [{ ip: '203.0.113.1', prefix: 24, private: false }] },
+              {
+                name: 'br-lan',
+                defaultRoute: false,
+                addresses: [{ ip: '192.168.10.1', prefix: 24, private: true }],
+              },
+              {
+                name: 'eth0',
+                defaultRoute: true,
+                addresses: [{ ip: '203.0.113.1', prefix: 24, private: false }],
+              },
             ],
             defaultWAN: 'eth0',
             suggested: network,
@@ -175,7 +183,12 @@ describe('gateway settings in sing-box', () => {
         : status(),
     }));
 
-    let releaseFirst: ((value: { success: boolean; obj: { ready: boolean; problems: string[]; notes: string[] } }) => void) | undefined;
+    let releaseFirst:
+      | ((value: {
+          success: boolean;
+          obj: { ready: boolean; problems: string[]; notes: string[] };
+        }) => void)
+      | undefined;
     let checks = 0;
     vi.mocked(HttpUtil.post).mockImplementation(async (url) => {
       if (!url.endsWith('/preflight')) return { success: true, obj: status(true) };
@@ -194,12 +207,18 @@ describe('gateway settings in sing-box', () => {
     fireEvent.change(await screen.findByPlaceholderText('192.168.50.1'), {
       target: { value: '192.168.10.2' },
     });
-    await waitFor(() => {
-      expect(checks).toBe(2);
-      expect(screen.getByText('Готов к включению')).toBeTruthy();
-    }, { timeout: 5000 });
+    await waitFor(
+      () => {
+        expect(checks).toBe(2);
+        expect(screen.getByText('Готов к включению')).toBeTruthy();
+      },
+      { timeout: 5000 },
+    );
 
-    releaseFirst?.({ success: true, obj: { ready: false, problems: ['Устаревшая проверка'], notes: [] } });
+    releaseFirst?.({
+      success: true,
+      obj: { ready: false, problems: ['Устаревшая проверка'], notes: [] },
+    });
     await waitFor(() => {
       expect(screen.getByText('Готов к включению')).toBeTruthy();
       expect(screen.queryByText('Устаревшая проверка')).toBeNull();
@@ -218,5 +237,4 @@ describe('gateway settings in sing-box', () => {
     expect(await screen.findByText('Требует внимания')).toBeTruthy();
     expect(screen.queryByText('Работает')).toBeNull();
   });
-
 });

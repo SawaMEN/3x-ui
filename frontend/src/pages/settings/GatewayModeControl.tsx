@@ -347,7 +347,8 @@ export default function GatewayModeControl() {
     };
   }, [loading, coreRunning, networkInputValid, networkConfigured, busy, runPreflight]);
 
-  const gatewayHealthy = enabled && configured && coreRunning && networkHealthy && !coreMismatch && !conflict;
+  const gatewayHealthy =
+    enabled && configured && coreRunning && networkHealthy && !coreMismatch && !conflict;
   const needsRepair = enabled && (!networkHealthy || coreMismatch);
   const gatewayActionLabel =
     coreMismatch && networkHealthy
@@ -377,20 +378,8 @@ export default function GatewayModeControl() {
               восстановление после перезагрузки настраиваются автоматически.
             </div>
           </div>
-          <Tag
-            color={
-              gatewayHealthy
-                ? 'success'
-                : enabled
-                  ? 'warning'
-                  : 'default'
-            }
-          >
-            {gatewayHealthy
-              ? 'Работает'
-              : enabled
-                ? 'Требует внимания'
-                : 'Выключен'}
+          <Tag color={gatewayHealthy ? 'success' : enabled ? 'warning' : 'default'}>
+            {gatewayHealthy ? 'Работает' : enabled ? 'Требует внимания' : 'Выключен'}
           </Tag>
         </div>
 
@@ -476,7 +465,10 @@ export default function GatewayModeControl() {
                     <CheckCircleOutlined /> Готов к включению
                   </>
                 ) : (
-                  <span>{preflight?.problems[0] || 'Проверка обнаружила ограничения. Откройте диагностику.'}</span>
+                  <span>
+                    {preflight?.problems[0] ||
+                      'Проверка обнаружила ограничения. Откройте диагностику.'}
+                  </span>
                 )}
               </div>
             )}
