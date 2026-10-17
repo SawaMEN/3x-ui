@@ -170,7 +170,7 @@ func systemctl(ctx context.Context, args ...string) error {
  return nil
 }
 
-const unit = strings.Join([]string{"[Unit]","Description=3x-ui OxiDNS","After=network-online.target","Wants=network-online.target","[Service]","Type=simple","ExecStart=/etc/x-ui/oxidns/bin/oxidns start -c /etc/x-ui/oxidns/config.yaml -d /etc/x-ui/oxidns/data","Restart=on-failure","RestartSec=3","NoNewPrivileges=true","[Install]","WantedBy=multi-user.target"},string([]byte{10}))+string([]byte{10})
+var unit = strings.Join([]string{"[Unit]","Description=3x-ui OxiDNS","After=network-online.target","Wants=network-online.target","[Service]","Type=simple","ExecStart=/etc/x-ui/oxidns/bin/oxidns start -c /etc/x-ui/oxidns/config.yaml -d /etc/x-ui/oxidns/data","Restart=on-failure","RestartSec=3","NoNewPrivileges=true","[Install]","WantedBy=multi-user.target"},string([]byte{10}))+string([]byte{10})
 
 type releaseAsset struct {
  Name string `json:"name"`
