@@ -1,4 +1,4 @@
-name: DNS lifecycle formatter snapshot
+name: DNS lifecycle formatter snapshot (final)
 on:
   push:
     branches: [dns]
