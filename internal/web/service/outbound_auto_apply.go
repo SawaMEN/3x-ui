@@ -94,6 +94,30 @@ func localAutomaticSelectorClient() (*singbox.SelectorClient, error) {
 	return singbox.NewSelectorClient(cfg.Experimental.ClashAPI.Controller, cfg.Experimental.ClashAPI.Secret)
 }
 
+// runningAutomaticSelectors reports what is actually loaded into the core.
+ // A newly imported subscription does not have a selector until the core reloads.
+func runningAutomaticSelectors(data []byte) (map[string]bool, error) {
+	if len(data) == 0 {
+		return nil, fmt.Errorf("sing-box has no applied runtime config")
+	}
+	var cfg struct {
+		Outbounds []struct {
+			Tag  string `json:"tag"`
+			Type string `json:"type"`
+		} `json:"outbounds"`
+	}
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return nil, err
+	}
+	tags := make(map[string]bool, len(cfg.Outbounds))
+	for _, outbound := range cfg.Outbounds {
+		if outbound.Type == "selector" {
+			tags[outbound.Tag] = true
+		}
+	}
+	return tags, nil
+}
+
 // ApplyAutomaticSelections retries unconfirmed selections every scheduler
 // tick. Database choice and the running core's acknowledgement stay distinct.
 func (s *OutboundSubscriptionService) ApplyAutomaticSelections() (int, error) {
@@ -115,14 +139,26 @@ func (s *OutboundSubscriptionService) ApplyAutomaticSelections() (int, error) {
 		if !SelectedNativeCore().IsRunning() {
 			err = fmt.Errorf("core is stopped; selection will apply on startup")
 		} else {
-			var client *singbox.SelectorClient
-			client, err = localAutomaticSelectorClient()
-			if err == nil {
-				defer client.Close()
-				for _, sub := range subs {
-					actual, e := client.Select(context.Background(), autoOutboundTag(sub.Id), autoRouteTarget(sub))
-					applied[sub.Id] = actual
-					failures[sub.Id] = e
+			selectors, inspectErr := runningAutomaticSelectors(SelectedNativeCore().process().AppliedConfig())
+			if inspectErr != nil {
+				err = inspectErr
+			} else {
+				var client *singbox.SelectorClient
+				client, err = localAutomaticSelectorClient()
+				if err == nil {
+					defer client.Close()
+					for _, sub := range subs {
+						tag := autoOutboundTag(sub.Id)
+						if !selectors[tag] {
+							// A fresh subscription must wait for the scheduled core
+							// restart rather than querying a missing Clash API entry.
+							failures[sub.Id] = fmt.Errorf("селектор %s ещё не загружен в ядро; требуется перезапуск sing-box", tag)
+							continue
+						}
+						actual, e := client.Select(context.Background(), tag, autoRouteTarget(sub))
+						applied[sub.Id] = actual
+						failures[sub.Id] = e
+					}
 				}
 			}
 		}
