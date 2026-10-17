@@ -35,5 +35,4 @@ jobs:
       - name: Validate DNS and DoH profiles, then forward real DNS traffic through OxiDNS
         env:
           OXIDNS_CHECK_BINARY: ${{ runner.temp }}/oxidns-official/oxidns
-        run: go test -v ./internal/oxidns -run '^(TestGeneratedYAMLAgainstOfficialBinary|TestDoHCertificateAndOfficialParser|TestOfficialOxiDNSForwardsRealTraffic)
- -count=1
+        run: go test -v ./internal/oxidns -run '^(TestGeneratedYAMLAgainstOfficialBinary|TestDoHCertificateAndOfficialParser|TestOfficialOxiDNSForwardsRealTraffic)$' -count=1
