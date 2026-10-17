@@ -268,6 +268,7 @@ export default function GatewayModeControl() {
   };
 
   const enabled = status?.enabled === true;
+  const configured = status?.configured === true;
   const coreMismatch = status?.coreMismatch === true;
   const conflict = status?.conflict === true;
   const recoveryOnly = enabled && !configured && !coreMismatch;
