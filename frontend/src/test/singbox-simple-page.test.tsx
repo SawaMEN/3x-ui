@@ -80,7 +80,7 @@ describe('simple sing-box page', () => {
       </QueryClientProvider>,
     );
     fireEvent.click(await screen.findByText('Каталог готовых списков'));
-    await screen.findByText('List catalog');
+    await screen.findByText('Built-in categories');
     const row = (await screen.findByText('geosite:youtube', {}, { timeout: 5000 })).closest('tr')!;
     fireEvent.click(within(row).getByText('Assign route').closest('button')!);
     fireEvent.click((await screen.findByText('Add routing rule')).closest('button')!);
@@ -201,7 +201,8 @@ describe('simple sing-box page', () => {
     fireEvent.change(await screen.findByLabelText('Поиск исходящих подключений'), {
       target: { value: 'tunnel' },
     });
-    const row = screen.getByText('tunnel').closest('tr')!;
+    fireEvent.click(screen.getByText('Туннели и endpoints'));
+    const row = (await screen.findByText('tunnel')).closest('tr')!;
     fireEvent.click(within(row).getByRole('button', { name: 'Изменить' }));
     const dialog = await screen.findByRole('dialog');
     fireEvent.change(await within(dialog).findByLabelText('Название подключения'), {
@@ -249,7 +250,7 @@ describe('simple sing-box page', () => {
     mount('/singbox#advanced');
     fireEvent.click(await screen.findByText('Кэш-файл и служебные API'));
     await screen.findByText('V2Ray API');
-    expect(screen.getByRole('button', { name: 'Редактировать JSON' })).toBeTruthy();
+    expect(screen.getByText('Редактировать JSON').closest('button')).toBeTruthy();
     expect(screen.queryByRole('tab', { name: 'Основные' })).toBeNull();
   });
 
@@ -394,7 +395,7 @@ it.each(['/outbound', '/routing'])('opens the matching native section for %s', a
   expect(
     await screen.findByText(
       path === '/outbound'
-        ? 'Standard core settings · Исходящие'
+        ? 'Standard core settings · Подключения'
         : 'Standard core settings · Маршрутизация',
     ),
   ).toBeTruthy();
