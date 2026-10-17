@@ -180,6 +180,12 @@ func (a *InboundController) addInbound(c *gin.Context) {
 		inbound.NodeID = nil
 	}
 
+	// MTProto is not a second core: its runtime is the optional Telemt binary.
+	// Do not persist a local inbound that cannot be started.
+	if inbound.Protocol == model.MTProto && inbound.NodeID == nil && !(service.TelemtService{}).IsInstalled() {
+		jsonMsg(c, "Установите Telemt в системных компонентах перед созданием MTProto", nil)
+		return
+	}
 	inbound, needRestart, err := a.inboundServiceFor(c).AddInbound(inbound)
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
@@ -259,6 +265,14 @@ func (a *InboundController) updateInbound(c *gin.Context) {
 	// keeps the wire shape consistent.
 	if inbound.NodeID != nil && *inbound.NodeID == 0 {
 		inbound.NodeID = nil
+	}
+	// Existing remote node inbounds depend on their node's runtime, not ours.
+	if inbound.Protocol == model.MTProto && inbound.Enable && !(service.TelemtService{}).IsInstalled() {
+		previous, previousErr := a.inboundService.GetInbound(id)
+		if previousErr == nil && previous.NodeID == nil {
+			jsonMsg(c, "Установите Telemt перед включением MTProto", nil)
+			return
+		}
 	}
 	inbound, needRestart, err := a.inboundServiceFor(c).UpdateInbound(inbound)
 	if err != nil {
