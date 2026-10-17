@@ -38,7 +38,13 @@ type SystemUpdatePackage = {
   updateAvailable: boolean;
 };
 
-type DependencyKey = 'naiveproxy' | 'hysteria2' | 'sudoku' | 'pingtunnel' | 'trusttunnel' | 'oxidns';
+type DependencyKey =
+  | 'naiveproxy'
+  | 'hysteria2'
+  | 'sudoku'
+  | 'pingtunnel'
+  | 'trusttunnel'
+  | 'oxidns';
 
 type DependencyStatus = {
   key: DependencyKey;
@@ -236,7 +242,10 @@ export default function SystemUpdateModal({
       HttpUtil.get('/panel/api/naiveproxy/status', undefined, { silent: true }) as Promise<
         ApiMsg<ExternalVPNBinaryStatus>
       >,
-      HttpUtil.get('/panel/api/oxidns/status?check=true', undefined, { silent: true, timeout: 26000 }) as Promise<
+      HttpUtil.get('/panel/api/oxidns/status?check=true', undefined, {
+        silent: true,
+        timeout: 26000,
+      }) as Promise<
         ApiMsg<ExternalVPNBinaryStatus & { installedVersion?: string; latestVersion?: string }>
       >,
     ]);
