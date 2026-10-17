@@ -429,6 +429,20 @@ export default function SystemUpdateModal({
     }
   };
 
+  const restartOlcRTC = async () => {
+    setDependencyBusy('olcrtc');
+    try {
+      const response = (await HttpUtil.post('/panel/api/olcrtc/restart')) as ApiMsg<unknown>;
+      if (!response.success) throw new Error(response.msg || 'Не удалось перезапустить OlcRTC');
+      messageApi.info('OlcRTC: перезапуск службы запущен.');
+      await loadDependencyUpdates();
+    } catch (error) {
+      messageApi.error(error instanceof Error ? error.message : String(error));
+    } finally {
+      setDependencyBusy(null);
+    }
+  };
+
   useEffect(() => {
     if (!open || !dependencies.some((dependency) => dependency.key === 'olcrtc' && dependency.busy))
       return;
@@ -897,6 +911,16 @@ export default function SystemUpdateModal({
                             disabled={!dependency.running || dependency.busy}
                           >
                             Настроить клиентов
+                          </Button>
+                        )}
+                        {dependency.key === 'olcrtc' && dependency.installed && (
+                          <Button
+                            size="small"
+                            icon={<ReloadOutlined />}
+                            onClick={() => void restartOlcRTC()}
+                            disabled={dependency.busy || systemUpdateBusy || dependencyBusy !== null}
+                          >
+                            Перезапустить службу
                           </Button>
                         )}
                         {action.supported === false ? (
