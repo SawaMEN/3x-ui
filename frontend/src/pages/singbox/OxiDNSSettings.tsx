@@ -150,8 +150,8 @@ export default function OxiDNSSettings() {
       {contextHolder}
       <Space orientation="vertical" style={{ width: '100%' }} size={14}>
         <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-          OxiDNS установлен. Выберите провайдера и нажмите «Создать и включить DNS».
-          Настройки, служба и подключение к sing-box будут созданы автоматически.
+          OxiDNS установлен. Выберите провайдера и нажмите «Создать и включить DNS». Настройки,
+          служба и подключение к sing-box будут созданы автоматически.
         </Typography.Paragraph>
         {error && <Alert type="error" showIcon title={error} />}
         {settings.enabled && !settings.running && (
@@ -290,9 +290,9 @@ export default function OxiDNSSettings() {
           </Button>
         </Space>
         <Typography.Text type="secondary">
-          Управление установкой, обновлением и удалением OxiDNS находится в разделе
-          «Обновления пакетов и ядер Linux». При удалении функции собственного DNS исчезнут,
-          а sing-box вернётся к прежним настройкам.
+          Управление установкой, обновлением и удалением OxiDNS находится в разделе «Обновления
+          пакетов и ядер Linux». При удалении функции собственного DNS исчезнут, а sing-box вернётся
+          к прежним настройкам.
         </Typography.Text>
       </Space>
     </Card>

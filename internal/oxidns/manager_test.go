@@ -31,7 +31,9 @@ func TestGenerateLocalAndDoH(t *testing.T) {
 	if !strings.Contains(yaml, "listen: \"127.0.0.1:15353\"") {
 		t.Fatal("local DNS listener missing")
 	}
-	if !strings.Contains(yaml,"type: cache") || !strings.Contains(yaml,`      - exec: "$dns_cache"`) { t.Fatal("default DNS cache missing") }
+	if !strings.Contains(yaml, "type: cache") || !strings.Contains(yaml, `      - exec: "$dns_cache"`) {
+		t.Fatal("default DNS cache missing")
+	}
 	if strings.Contains(yaml, "http_server") {
 		t.Fatal("DoH must stay off without credentials")
 	}
@@ -297,18 +299,20 @@ func TestOfficialOxiDNSForwardsRealTraffic(t *testing.T) {
 
 func TestHasManagedServer(t *testing.T) {
 	original := map[string]any{"servers": []any{
-		map[string]any{"tag":"cloudflare", "type":"https", "server":"1.1.1.1"},
+		map[string]any{"tag": "cloudflare", "type": "https", "server": "1.1.1.1"},
 	}}
 	if HasManagedServer(original) {
 		t.Fatal("ordinary DNS was treated as an OxiDNS overlay")
 	}
-	withOverlay,err:=WithSingBoxDNS(original)
-	if err!=nil { t.Fatal(err) }
+	withOverlay, err := WithSingBoxDNS(original)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !HasManagedServer(withOverlay) {
 		t.Fatal("managed DNS overlay was not detected")
 	}
-	if !HasManagedServer(map[string]any{"servers":[]any{
-		map[string]any{"tag":Tag,"type":"udp","server":"127.0.0.1"},
+	if !HasManagedServer(map[string]any{"servers": []any{
+		map[string]any{"tag": Tag, "type": "udp", "server": "127.0.0.1"},
 	}}) {
 		t.Fatal("JSON-decoded managed DNS overlay was not detected")
 	}

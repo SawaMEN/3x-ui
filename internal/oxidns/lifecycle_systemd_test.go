@@ -91,8 +91,12 @@ plugins:
 	settings.DoH = true
 	settings.Domain = "dns.example.com"
 	data, err := json.Marshal(settings)
-	if err != nil { t.Fatal(err) }
-	if err := atomicWrite(statePath, data, 0600); err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := atomicWrite(statePath, data, 0600); err != nil {
+		t.Fatal(err)
+	}
 	check := exec.CommandContext(ctx, binaryPath, "check", "-c", configPath)
 	if output, err := check.CombinedOutput(); err != nil {
 		t.Fatalf("official parser rejected lifecycle config: %v (%s)", err, output)
@@ -117,7 +121,7 @@ plugins:
 	if err := Uninstall(ctx); err != nil {
 		t.Fatalf("uninstall: %v", err)
 	}
-	for _, path := range []string{binaryPath, configPath, servicePath, statePath, filepath.Join(StateDir,"data")} {
+	for _, path := range []string{binaryPath, configPath, servicePath, statePath, filepath.Join(StateDir, "data")} {
 		if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
 			t.Errorf("managed file remains after removal: %s (%v)", path, err)
 		}
