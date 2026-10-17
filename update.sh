@@ -45,6 +45,17 @@ xui_update_log_file="/var/log/x-ui/update.log"
 xui_update_error=""
 if [[ "${XUI_UPDATE_RUN_ID:-0}" != "0" ]]; then
     mkdir -p "$(dirname "${xui_update_log_file}")" > /dev/null 2>&1 || true
+    # This log was previously append-only and grew on every web update.
+    # Retain recent diagnostics, but cap a successful history to a few MiB.
+    if [[ -f "${xui_update_log_file}" && ! -L "${xui_update_log_file}" ]]; then
+        xui_log_bytes=$(wc -c < "${xui_update_log_file}" 2> /dev/null) || xui_log_bytes=0
+        if [[ "${xui_log_bytes}" =~ ^[[:space:]]*[0-9]+[[:space:]]*$ ]] && (( xui_log_bytes > 12582912 )); then
+            if tail -c 6291456 "${xui_update_log_file}" > "${xui_update_log_file}.trim.$"; then
+                mv -f "${xui_update_log_file}.trim.$" "${xui_update_log_file}" || true
+            fi
+            rm -f "${xui_update_log_file}.trim.$"
+        fi
+    fi
     exec >>"${xui_update_log_file}" 2>&1
 fi
 
@@ -1392,6 +1403,13 @@ update_x-ui() {
 
     core_migration_commit || _fail "Updated panel did not start its modified Sing-box; restoring snapshot"
     if [[ -z "${cm_backup:-}" ]]; then config_after_update || _fail "Database migration failed; update did not complete"; fi
+
+    # Stale partial downloads / migration helpers can survive a hard reboot.
+    # Only remove our own *files* older than 48 hours after a verified update.
+    # Never touch unverified x-ui-upgrade.* rollback snapshots or core binaries.
+    while IFS= read -r -d '' stale_artifact; do
+        rm -f -- "$stale_artifact" || true
+    done < <(find "$install_parent" -maxdepth 1 -type f \\( -name '.x-ui-download.*.tar.gz' -o -name '.core-migration.*' \\) -mtime +1 -print0 2> /dev/null)
 
     # IP Limit relies on fail2ban; install + configure it now so the feature
     # works out of the box on update too (no-op when XUI_ENABLE_FAIL2BAN=false).
