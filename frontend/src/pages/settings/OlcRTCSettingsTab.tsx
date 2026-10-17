@@ -75,13 +75,13 @@ export default function OlcRTCSettingsTab() {
           <Space wrap>
             <Button
               type="primary"
-              disabled={!status?.installed || !status.running || status.busy || loading}
+              disabled={!status?.installed || !status?.running || status?.busy || loading}
               onClick={() => setClientsOpen(true)}
             >
               Настроить клиентов
             </Button>
             <Button
-              disabled={!status?.installed || status.busy || restarting || loading}
+              disabled={!status?.installed || status?.busy || restarting || loading}
               loading={restarting}
               onClick={() => void restart()}
             >
