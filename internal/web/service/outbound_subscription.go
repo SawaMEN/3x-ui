@@ -233,6 +233,23 @@ func (s *OutboundSubscriptionService) nextDefaultSubPrefix(excludeId int) (strin
 	return fmt.Sprintf("sub%d-", defaultPrefixNumber(subs, excludeId)), nil
 }
 
+// Reserved prefixes prevent two managed subscriptions from generating
+// identical tags and stopping the core on its next config reload.
+func checkSubscriptionPrefixAvailable(prefix string, excludeID int) error {
+	var count int64
+	query := database.GetDB().Model(&model.OutboundSubscription{}).Where("tag_prefix = ?", prefix)
+	if excludeID > 0 {
+		query = query.Where("id <> ?", excludeID)
+	}
+	if err := query.Count(&count).Error; err != nil {
+		return err
+	}
+	if count != 0 {
+		return fmt.Errorf("префикс %q уже используется другой подпиской", prefix)
+	}
+	return nil
+}
+
 func (s *OutboundSubscriptionService) Create(remark, rawURL, tagPrefix, userAgent string, enabled bool, updateInterval int, allowPrivate, prepend, allowInsecure bool, balance ...*BalanceOptions) (*model.OutboundSubscription, error) {
 	subscriptionOrderMu.Lock()
 	defer subscriptionOrderMu.Unlock()
@@ -252,6 +269,9 @@ func (s *OutboundSubscriptionService) Create(remark, rawURL, tagPrefix, userAgen
 		if err != nil {
 			return nil, err
 		}
+	}
+	if err := checkSubscriptionPrefixAvailable(prefix, 0); err != nil {
+		return nil, err
 	}
 	// New subscriptions go to the end of the priority order.
 	var lastPriority int
@@ -290,6 +310,8 @@ func (s *OutboundSubscriptionService) Create(remark, rawURL, tagPrefix, userAgen
 func (s *OutboundSubscriptionService) Update(id int, remark, rawURL, tagPrefix, userAgent string, enabled bool, updateInterval int, allowPrivate, prepend, allowInsecure bool, balance ...*BalanceOptions) error {
 	unlock := lockSubscription(id)
 	defer unlock()
+	subscriptionOrderMu.Lock()
+	defer subscriptionOrderMu.Unlock()
 	sub, err := s.Get(id)
 	if err != nil {
 		return err
@@ -310,6 +332,9 @@ func (s *OutboundSubscriptionService) Update(id int, remark, rawURL, tagPrefix, 
 		if err != nil {
 			return err
 		}
+	}
+	if err := checkSubscriptionPrefixAvailable(prefix, id); err != nil {
+		return err
 	}
 	// Changing the source must schedule an immediate re-fetch. Keep the
 	// previous working profiles until the replacement has been validated.
