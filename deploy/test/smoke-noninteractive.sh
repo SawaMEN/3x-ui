@@ -50,7 +50,11 @@ docker run --rm \
         if [ -n "${XUI_SMOKE_VERSION:-}" ]; then
             installed=$(/usr/local/x-ui/x-ui -v)
             expected="${XUI_SMOKE_VERSION#v}"
-            if [[ "$XUI_SMOKE_VERSION" =~ ^dev-([0-9a-f]{40})$ ]]; then
+            if [[ "$XUI_SMOKE_VERSION" == dev-latest ]]; then
+                [[ "$installed" =~ ^dev\+[0-9a-f]{8}$ ]] \
+                    || { echo "FAIL: invalid dev version $installed"; exit 1; }
+                expected="$installed"
+            elif [[ "$XUI_SMOKE_VERSION" =~ ^dev-([0-9a-f]{40})$ ]]; then
                 expected="dev+${BASH_REMATCH[1]:0:8}"
             fi
             [ "$installed" = "$expected" ] \

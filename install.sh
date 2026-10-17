@@ -1619,7 +1619,7 @@ verify_release_checksum() {
 # The fork's old stable tags predate the core migration. Default commands
 # select a compatible build; explicitly requested versions are never substituted.
 select_release_tag() {
-    local requested="${1:-}" status metadata commit immutable
+    local requested="${1:-}" status
     if [[ -z "$requested" ]]; then
         requested=$(resolve_latest_tag) || return 1
         status=$(release_curl -sL --retry 2 --connect-timeout 15 --max-time 60 -o /dev/null -w '%{http_code}' \
@@ -1633,22 +1633,6 @@ select_release_tag() {
         esac
     fi
     [[ "$requested" != dev ]] || requested=dev-latest
-    if [[ "$requested" == dev-latest ]]; then
-        metadata=$(release_curl -fsSL --retry 2 --connect-timeout 15 --max-time 60 \
-            "https://api.github.com/repos/SawaMEN/3x-ui/releases/tags/dev-latest") || metadata=""
-        commit=$(printf '%s' "$metadata" | sed -nE 's/.*commit=([0-9a-f]{40}).*/\1/p' | head -n1)
-        if [[ "$commit" =~ ^[0-9a-f]{40}$ ]]; then
-            immutable="dev-${commit}"
-            status=$(release_curl -sIL --retry 2 --connect-timeout 15 --max-time 60 -o /dev/null -w '%{http_code}' \
-                "https://github.com/SawaMEN/3x-ui/releases/download/${immutable}/x-ui-linux-$(arch).tar.gz")
-            if [[ "$status" == 200 ]]; then
-                requested="$immutable"
-            elif [[ "$status" != 404 ]]; then
-                echo "Cannot resolve immutable dev release (HTTP ${status}); installation unchanged." >&2
-                return 1
-            fi
-        fi
-    fi
     printf '%s\n' "$requested"
 }
 

@@ -41,7 +41,9 @@ class ManagementTests(unittest.TestCase):
         for tag, installed, expected in (("v3.9.8", "3.9.8", 0),
                                          ("v3.9.8", "3.9.7", 1),
                                          ("dev-" + commit, "dev+01234567", 0),
-                                         ("dev-" + commit, "dev+ffffffff", 1)):
+                                         ("dev-" + commit, "dev+ffffffff", 1),
+                                         ("dev-latest", "dev+01234567", 0),
+                                         ("dev-latest", "3.9.8", 1)):
             with self.subTest(tag=tag, installed=installed), tempfile.TemporaryDirectory() as raw:
                 panel = Path(raw) / "panel"
                 panel.write_text("#!/bin/bash\nprintf '%s\\n' \"$TEST_INSTALLED\"\n")
@@ -184,7 +186,7 @@ rc=$?
 ''', {"STATUS": stable_status, "REQUESTED": requested,
       "EXPECTED": expected, "EXPECTED_RC": str(rc)})
 
-    def test_dev_selection_pins_complete_immutable_release(self):
+    def test_dev_selection_keeps_rolling_release(self):
         for file in ("install.sh", "update.sh"):
             self.run_script(self.release_functions(file) + r'''
 arch() { printf amd64; }
@@ -195,8 +197,33 @@ curl() {
         *) return 99;;
     esac
 }
-[[ "$(select_release_tag dev)" == dev-0123456789012345678901234567890123456789 ]]
+[[ "$(select_release_tag dev)" == dev-latest ]]
+[[ "$(select_release_tag dev-latest)" == dev-latest ]]
 ''')
+
+    def test_dev_publisher_only_updates_rolling_release(self):
+        source = (ROOT / ".github/workflows/release.yml").read_text()
+        block = source.split("      - name: Publish dev-latest\n", 1)[1].split("        run: |\n", 1)[1]
+        script = "\n".join(line[10:] for line in block.splitlines())
+        commit = "0123456789012345678901234567890123456789"
+        for stale in (False, True):
+            with self.subTest(stale=stale), tempfile.TemporaryDirectory() as raw:
+                self.run_script(r'''
+git() {
+    printf 'git %s\n' "$*" >> "$TEST_LOG"
+    if [[ "$1" == rev-parse ]]; then printf '%s' "$REMOTE_COMMIT"; fi
+}
+gh() { printf 'gh %s\n' "$*" >> "$TEST_LOG"; }
+''' + script, {"COMMIT": commit, "REMOTE_COMMIT": "f" * 40 if stale else commit,
+                 "TEST_LOG": str(Path(raw) / "calls")})
+                calls = (Path(raw) / "calls").read_text()
+                self.assertNotIn("dev-" + commit, calls)
+                if stale:
+                    self.assertNotIn("gh release", calls)
+                    self.assertNotIn("git tag", calls)
+                else:
+                    self.assertIn("gh release upload dev-latest ", calls)
+                    self.assertNotIn("gh release create", calls)
 
     def test_failed_transport_retries_ipv4_without_partial_stdout(self):
         for file in ("install.sh", "update.sh"):

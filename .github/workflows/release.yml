@@ -309,21 +309,10 @@ jobs:
         run: |
           set -euo pipefail
           short="${COMMIT::8}"
-          # Publish a complete immutable release first. Installers resolve the
-          # rolling pointer once, then fetch archive/checksum/scripts from it.
-          immutable="dev-${COMMIT}"
-          git tag -f "$immutable" "$COMMIT"
-          git push origin "refs/tags/$immutable"
-          if ! gh release view "$immutable" >/dev/null 2>&1; then
-            gh release create "$immutable" --draft --prerelease --latest=false --target "$COMMIT" --title "Dev build $short" --notes "Development build from main. commit=$COMMIT"
-          fi
-          gh release upload "$immutable" dev-artifacts/*.tar.gz dev-artifacts/*.sha256 --clobber
-          gh release edit "$immutable" --draft=false --prerelease --latest=false
-
           # A slower build must not move the rolling channel backwards.
           git fetch origin main:refs/remotes/origin/main
           if [[ "$(git rev-parse origin/main)" != "$COMMIT" ]]; then
-            echo "A newer main commit exists; immutable build published, rolling pointer unchanged."
+            echo "A newer main commit exists; rolling release unchanged."
             exit 0
           fi
           git tag -f dev-latest "$COMMIT"
