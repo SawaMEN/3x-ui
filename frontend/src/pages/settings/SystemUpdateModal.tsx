@@ -472,10 +472,10 @@ export default function SystemUpdateModal({
           : dependency.key === 'telemt' && !dependency.installed
             ? 'Telemt установлен. Управление MTProto появилось в разделе «Входящие».'
             : dependency.key === 'oxidns' && !dependency.installed
-            ? 'OxiDNS установлен. Теперь можно создать собственный DNS.'
-            : dependency.key === 'dnstt' && !dependency.installed
-              ? 'DNSTT установлен. Настройте домен и ключи в разделе DNS.'
-              : `${dependency.label}: ${t('pages.settings.swap.updateDone')}`,
+              ? 'OxiDNS установлен. Теперь можно создать собственный DNS.'
+              : dependency.key === 'dnstt' && !dependency.installed
+                ? 'DNSTT установлен. Настройте домен и ключи в разделе DNS.'
+                : `${dependency.label}: ${t('pages.settings.swap.updateDone')}`,
       );
       await loadDependencyUpdates();
       if (dependency.key === 'oxidns') window.dispatchEvent(new Event('oxidns:changed'));
@@ -496,11 +496,11 @@ export default function SystemUpdateModal({
           ? '/panel/api/telemt/remove'
           : dependency.key === 'olcrtc'
             ? '/panel/api/olcrtc/remove'
-          : dependency.key === 'oxidns'
-            ? '/panel/api/oxidns/remove'
-            : dependency.key === 'dnstt'
-              ? '/panel/api/dnstt/remove'
-              : `/panel/api/server/components/remove/${dependency.key}`,
+            : dependency.key === 'oxidns'
+              ? '/panel/api/oxidns/remove'
+              : dependency.key === 'dnstt'
+                ? '/panel/api/dnstt/remove'
+                : `/panel/api/server/components/remove/${dependency.key}`,
       )) as ApiMsg<unknown>;
       if (!response?.success)
         throw new Error(response?.msg || `Не удалось удалить ${dependency.label}`);
@@ -510,10 +510,10 @@ export default function SystemUpdateModal({
           : dependency.key === 'telemt'
             ? 'Telemt удалён. Управление скрыто; конфигурация сохранена.'
             : dependency.key === 'oxidns'
-            ? 'OxiDNS удалён, собственный DNS отключён, настройки и служебные файлы очищены.'
-            : dependency.key === 'dnstt'
-              ? 'DNSTT остановлен, удалён вместе с ключами и настройками.'
-              : `${dependency.label}: компонент удалён.`,
+              ? 'OxiDNS удалён, собственный DNS отключён, настройки и служебные файлы очищены.'
+              : dependency.key === 'dnstt'
+                ? 'DNSTT остановлен, удалён вместе с ключами и настройками.'
+                : `${dependency.label}: компонент удалён.`,
       );
       await loadDependencyUpdates();
       if (dependency.key === 'oxidns') window.dispatchEvent(new Event('oxidns:changed'));
@@ -1048,12 +1048,12 @@ export default function SystemUpdateModal({
                                 : dependency.key === 'telemt'
                                   ? 'Остановит и удалит Telemt. Сначала удалите MTProto входящие; настройки Telemt сохранятся.'
                                   : dependency.key === 'oxidns'
-                                  ? 'Собственный DNS будет отключён. sing-box вернётся к прежнему DNS.'
-                                  : dependency.key === 'dnstt'
-                                    ? 'DNSTT будет остановлен, а ключи и настройки удалены без возможности восстановления.'
-                                    : standalone
-                                      ? 'Входящие подключения переключатся на встроенный sing-box.'
-                                      : 'Активные подключения этого протокола необходимо сначала отключить.'
+                                    ? 'Собственный DNS будет отключён. sing-box вернётся к прежнему DNS.'
+                                    : dependency.key === 'dnstt'
+                                      ? 'DNSTT будет остановлен, а ключи и настройки удалены без возможности восстановления.'
+                                      : standalone
+                                        ? 'Входящие подключения переключатся на встроенный sing-box.'
+                                        : 'Активные подключения этого протокола необходимо сначала отключить.'
                             }
                             okText={t('delete')}
                             cancelText={t('cancel')}
