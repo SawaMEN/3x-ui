@@ -148,6 +148,20 @@ plugins:
 	if _, err := os.Stat(configPath); err != nil {
 		t.Fatalf("old disabled configuration not restored: %v", err)
 	}
+	// A manual restart after disabling OxiDNS must not be left serving DNS.
+	if err := systemctl(ctx, "start", "x-ui-oxidns.service"); err != nil {
+		t.Fatal(err)
+	}
+	if err := waitHealthy(ctx); err != nil {
+		t.Fatalf("manually restarted DNS failed: %v", err)
+	}
+	if err := Disable(ctx); err != nil {
+		t.Fatalf("could not stop manually restarted disabled DNS: %v", err)
+	}
+	status, err = CurrentStatus(ctx)
+	if err != nil || status.Enabled || status.Running {
+		t.Fatalf("disabled service remained active: %+v %v", status, err)
+	}
 	if err := atomicWrite(binaryPath, executable, 0755); err != nil {
 		t.Fatal(err)
 	}

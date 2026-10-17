@@ -590,6 +590,9 @@ func Upgrade(ctx context.Context) error {
 			if restoreErr == nil {
 				restoreErr = waitHealthy(recovery)
 			}
+			if restoreErr == nil && c.DoH {
+				restoreErr = waitDoHReady(recovery, c.Port)
+			}
 			return errors.Join(restartErr, restoreErr)
 		}
 	}
