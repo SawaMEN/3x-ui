@@ -100,6 +100,43 @@ it('shows NS and A instructions and creates an authenticated local target', asyn
   expect(screen.getByText(/dnstt-client -doh https:\/\/cloudflare-dns.com/)).toBeTruthy();
 });
 
+it('verifies DNS delegation without changing tunnel configuration', async () => {
+  current = {
+    ...current,
+    installed: true,
+    running: true,
+    enabled: true,
+    domain: 't.example.com',
+    serverIP: '203.0.113.2',
+    publicKey: '1234567890abcdef'.repeat(4),
+  };
+  const originalGet = vi.mocked(HttpUtil.get).getMockImplementation();
+  vi.mocked(HttpUtil.get).mockImplementation(async (path, ...args) => {
+    if (String(path).endsWith('/check-delegation')) {
+      return {
+        success: true,
+        msg: '',
+        obj: {
+          zone: 't.example.com',
+          nameServer: 'ns.example.com',
+          expectedIP: '203.0.113.2',
+          addresses: ['203.0.113.2'],
+          nsFound: true,
+          ipMatches: true,
+          ready: true,
+          details: 'DNS-делегирование найдено.',
+        },
+      };
+    }
+    return originalGet!(path, ...args);
+  });
+  render(<DNSTTSettings />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Проверить NS-делегирование домена' }));
+  await screen.findByText('DNS-делегирование найдено');
+  expect(screen.getByText('ns.example.com')).toBeTruthy();
+  expect(HttpUtil.post).not.toHaveBeenCalled();
+});
+
 it('switches client resolver transport without modifying server settings', async () => {
   current = {
     ...current,
