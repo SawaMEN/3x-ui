@@ -129,6 +129,33 @@ func TestHiddifyCheckpointRollsBackWithTrafficFailure(t *testing.T) {
 	phase6AssertUsage(t, 111, 107)
 }
 
+func TestHiddifyUnchangedSnapshotDoesNotRewriteCheckpoints(t *testing.T) {
+	setupBulkDB(t)
+	phase6TrafficRows(t)
+	svc := NativeCore(CoreTypeSingBox)
+	if err := svc.commitHiddifySnapshot("core-1", phase6Snapshot(100)); err != nil {
+		t.Fatal(err)
+	}
+	db := database.GetDB()
+	if err := db.Exec(`CREATE TRIGGER reject_unchanged_checkpoint BEFORE UPDATE ON core_traffic_checkpoints
+		WHEN NEW.epoch = OLD.epoch AND NEW.value = OLD.value AND NEW.traffic_id = OLD.traffic_id
+		BEGIN SELECT RAISE(ABORT, 'unchanged checkpoint rewritten'); END`).Error; err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Exec(`DROP TRIGGER IF EXISTS reject_unchanged_checkpoint`) })
+	if err := svc.commitHiddifySnapshot("core-1", phase6Snapshot(100)); err != nil {
+		t.Fatalf("idle poll rewrote durable checkpoints: %v", err)
+	}
+	if err := svc.commitHiddifySnapshot("core-1", phase6Snapshot(125)); err != nil {
+		t.Fatal(err)
+	}
+	phase6AssertUsage(t, 136, 132)
+	if err := svc.commitHiddifySnapshot("core-2", phase6Snapshot(125)); err != nil {
+		t.Fatal(err)
+	}
+	phase6AssertUsage(t, 261, 257)
+}
+
 func TestHiddifyPollDoesNotResetAfterLostReply(t *testing.T) {
 	svc, _, _ := stage5ProcessFixture(t)
 	phase6TrafficRows(t)

@@ -20,6 +20,7 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/network"
 )
 
 type process struct {
@@ -198,7 +199,7 @@ func start(ctx context.Context, plan Plan) (*process, error) {
 			return nil, err
 		}
 		p.auth = &http.Server{Handler: authHandler(plan), ReadHeaderTimeout: 3 * time.Second, ReadTimeout: 3 * time.Second, WriteTimeout: 3 * time.Second, IdleTimeout: 5 * time.Second}
-		go func() { _ = p.auth.Serve(listener) }()
+		go func() { _ = network.ServeHTTP(p.auth, listener, "Hysteria authentication "+plan.Tag) }()
 	}
 	args := []string{"server", "--disable-update-check", "--config", path}
 	if plan.Protocol == model.NaiveProxy {
@@ -390,11 +391,15 @@ func Presence(ctx context.Context) (map[string]map[string]struct{}, []string, er
 	online := map[string]map[string]struct{}{}
 	var tags []string
 	for _, snapshot := range snapshots {
-		tags = append(tags, snapshot.Tag)
+		active := false
 		for email, count := range snapshot.Online {
 			if count > 0 {
 				online[email] = map[string]struct{}{}
+				active = true
 			}
+		}
+		if active {
+			tags = append(tags, snapshot.Tag)
 		}
 	}
 	return online, tags, nil

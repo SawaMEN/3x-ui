@@ -49,6 +49,48 @@ func testPorts(t *testing.T, n int) []int {
 	return ports
 }
 
+func TestPresenceExcludesIdleListeners(t *testing.T) {
+	state.Lock()
+	previous := state.processes
+	state.processes = map[string]*process{}
+	state.Unlock()
+	t.Cleanup(func() {
+		state.Lock()
+		state.processes = previous
+		state.Unlock()
+	})
+
+	for tag, payload := range map[string]string{
+		"idle":   `{"alice":0}`,
+		"active": `{"alice":2}`,
+	} {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/online" {
+				_, _ = io.WriteString(w, payload)
+			} else {
+				_, _ = io.WriteString(w, `{}`)
+			}
+		}))
+		t.Cleanup(server.Close)
+		state.Lock()
+		state.processes[tag] = &process{
+			plan: Plan{Protocol: model.Hysteria, Tag: tag, StatsListen: strings.TrimPrefix(server.URL, "http://")},
+			done: make(chan struct{}), epoch: "test",
+		}
+		state.Unlock()
+	}
+	users, tags, err := Presence(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(users) != 1 || users["alice"] == nil {
+		t.Fatalf("online users = %v, want alice", users)
+	}
+	if len(tags) != 1 || tags[0] != "active" {
+		t.Fatalf("active inbound tags = %v, want [active]", tags)
+	}
+}
+
 func testCertificate(t *testing.T) (string, string, *x509.CertPool) {
 	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)

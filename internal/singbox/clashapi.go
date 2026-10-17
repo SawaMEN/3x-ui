@@ -77,10 +77,12 @@ func newClashHTTPClient() *http.Client {
 	}
 }
 
+var clashHTTPClient = newClashHTTPClient()
+
 func NewClashStatsClient() *ClashStatsClient {
 	baseURL, secret, err := clashAPIInfoFromConfig()
 	return &ClashStatsClient{
-		client:    newClashHTTPClient(),
+		client:    clashHTTPClient,
 		baseURL:   baseURL,
 		secret:    secret,
 		configErr: err,

@@ -111,7 +111,10 @@ func (s *SingBoxService) commitHiddifySnapshot(epoch string, stats []singbox.V2R
 				if destination != "" {
 					deltas = append(deltas, singbox.V2RayStat{Name: destination, Value: delta})
 				}
-				checkpoints = append(checkpoints, model.CoreTrafficCheckpoint{Name: name, Epoch: epoch, Value: stat.Value, TrafficID: trafficID})
+				checkpoint := model.CoreTrafficCheckpoint{Name: name, Epoch: epoch, Value: stat.Value, TrafficID: trafficID}
+				if checkpoint != row {
+					checkpoints = append(checkpoints, checkpoint)
+				}
 			}
 			if len(checkpoints) > 0 {
 				if err := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "name"}}, DoUpdates: clause.AssignmentColumns([]string{"epoch", "value", "traffic_id"})}).CreateInBatches(checkpoints, 200).Error; err != nil {
