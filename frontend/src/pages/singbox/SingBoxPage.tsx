@@ -2189,7 +2189,12 @@ export default function SingBoxPage() {
         <Layout className="content-shell">
           <Layout.Content id="content-layout" className="content-area">
             <FloatButton.BackTop target={scrollTarget} visibilityHeight={200} />
-            <Spin spinning={loading && !utilitySection} delay={150} description={t('loading')} size="large">
+            <Spin
+              spinning={loading && !utilitySection}
+              delay={150}
+              description={t('loading')}
+              size="large"
+            >
               {fetchError && !utilitySection ? (
                 <Result
                   status="error"
@@ -2203,63 +2208,65 @@ export default function SingBoxPage() {
                 />
               ) : snapshot || utilitySection ? (
                 <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-                  {!utilitySection && <Card className="singbox-toolbar">
-                    <div className="singbox-toolbar-heading">
-                      <strong>
-                        {t('pages.coreSelection.settings')} · {SECTION_LABELS[activeSection]}
-                      </strong>
-                      <span>
-                        Сохранение проверяет настройки один раз и применяет их к работающему ядру.
-                      </span>
-                    </div>
-                    <Row gutter={[12, 12]} align="middle">
-                      <Col xs={24} md={14}>
-                        <Space wrap>
-                          <Button
-                            icon={<SaveOutlined />}
-                            type="primary"
-                            loading={saving}
-                            disabled={!dirty || loading}
-                            onClick={save}
-                          >
-                            {t('pages.singBox.save')}
-                          </Button>
-                          <Button
-                            icon={<ReloadOutlined />}
-                            loading={saving}
-                            onClick={requestRefresh}
-                          >
-                            {t('pages.singBox.refresh')}
-                          </Button>
-                          {showAdvanced && (
-                            <Button danger disabled={saving} onClick={requestReset}>
-                              {t('pages.singBox.reset')}
-                            </Button>
-                          )}
-                        </Space>
-                      </Col>
-                      <Col xs={24} md={10}>
-                        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  {!utilitySection && (
+                    <Card className="singbox-toolbar">
+                      <div className="singbox-toolbar-heading">
+                        <strong>
+                          {t('pages.coreSelection.settings')} · {SECTION_LABELS[activeSection]}
+                        </strong>
+                        <span>
+                          Сохранение проверяет настройки один раз и применяет их к работающему ядру.
+                        </span>
+                      </div>
+                      <Row gutter={[12, 12]} align="middle">
+                        <Col xs={24} md={14}>
                           <Space wrap>
-                            <Tag color={snapshot?.running ? 'success' : 'default'}>
-                              {snapshot?.running
-                                ? t('pages.singBox.running')
-                                : t('pages.singBox.stopped')}
-                            </Tag>
-                            {snapshot?.version && <Tag>{snapshot.version}</Tag>}
+                            <Button
+                              icon={<SaveOutlined />}
+                              type="primary"
+                              loading={saving}
+                              disabled={!dirty || loading}
+                              onClick={save}
+                            >
+                              {t('pages.singBox.save')}
+                            </Button>
+                            <Button
+                              icon={<ReloadOutlined />}
+                              loading={saving}
+                              onClick={requestRefresh}
+                            >
+                              {t('pages.singBox.refresh')}
+                            </Button>
                             {showAdvanced && (
-                              <Tag>
-                                {snapshot?.configSource === 'disk'
-                                  ? t('pages.singBox.sourceDisk')
-                                  : t('pages.singBox.sourceGenerated')}
-                              </Tag>
+                              <Button danger disabled={saving} onClick={requestReset}>
+                                {t('pages.singBox.reset')}
+                              </Button>
                             )}
-                            {dirty && <Tag color="warning">Есть несохранённые изменения</Tag>}
                           </Space>
-                        </div>
-                      </Col>
-                    </Row>
-                  </Card>}
+                        </Col>
+                        <Col xs={24} md={10}>
+                          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                            <Space wrap>
+                              <Tag color={snapshot?.running ? 'success' : 'default'}>
+                                {snapshot?.running
+                                  ? t('pages.singBox.running')
+                                  : t('pages.singBox.stopped')}
+                              </Tag>
+                              {snapshot?.version && <Tag>{snapshot.version}</Tag>}
+                              {showAdvanced && (
+                                <Tag>
+                                  {snapshot?.configSource === 'disk'
+                                    ? t('pages.singBox.sourceDisk')
+                                    : t('pages.singBox.sourceGenerated')}
+                                </Tag>
+                              )}
+                              {dirty && <Tag color="warning">Есть несохранённые изменения</Tag>}
+                            </Space>
+                          </div>
+                        </Col>
+                      </Row>
+                    </Card>
+                  )}
 
                   {!utilitySection && healthIssues.length > 0 && (
                     <Alert
