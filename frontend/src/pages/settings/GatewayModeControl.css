@@ -23,7 +23,7 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 14px;
-  margin-bottom: 18px;
+  margin-bottom: 16px;
 }
 
 .gateway-control .gateway-heading .ant-tag {
@@ -71,10 +71,24 @@
   line-height: 1.5;
 }
 
+.gateway-control .gateway-help {
+  color: var(--ant-color-text-secondary);
+  font-size: 13px;
+  line-height: 1.55;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--ant-color-bg-layout);
+}
+
+.gateway-control .gateway-client-tip {
+  margin-top: 14px;
+}
+
 .gateway-control .gateway-readiness {
   display: flex;
   gap: 8px;
   align-items: center;
+  flex-wrap: wrap;
   color: var(--ant-color-success-text, var(--ant-color-text-secondary));
   font-size: 13px;
 }
@@ -88,7 +102,7 @@
 }
 
 .gateway-control .gateway-primary-actions {
-  margin-top: 18px;
+  margin-top: 14px;
 }
 
 .gateway-control .gateway-full-width,
@@ -170,8 +184,12 @@
   }
 
   .gateway-control .gateway-primary-actions > .ant-btn,
-  .gateway-control .gateway-primary-actions > .ant-popconfirm,
   .gateway-control .gateway-secondary-actions > .ant-btn {
     flex: 1 1 auto;
+  }
+
+  .gateway-control .gateway-primary-actions > .ant-btn-primary,
+  .gateway-control .gateway-primary-actions > .ant-btn-dangerous {
+    flex: 1 1 100%;
   }
 }
