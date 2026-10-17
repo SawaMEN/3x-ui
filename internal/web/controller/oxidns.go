@@ -75,10 +75,19 @@ func (a *OxiDNSController) restartNative(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if !service.IsNativeCore(coreType) || !service.SelectedNativeCore().IsRunning() {
+	if !service.IsNativeCore(coreType) {
 		return nil
 	}
-	return service.SelectedNativeCore().Restart(ctx)
+	native := service.SelectedNativeCore()
+	if !native.Installed() {
+		return nil
+	}
+	if !native.IsRunning() {
+		// A stopped sing-box may still have the old OxiDNS overlay on disk.
+		// Regenerate it now so uninstall removes every runtime reference.
+		return native.WriteConfig()
+	}
+	return native.Restart(ctx)
 }
 
 // Only changes to the sing-box DNS overlay require a sing-box restart.

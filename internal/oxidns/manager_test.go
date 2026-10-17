@@ -294,3 +294,22 @@ func TestOfficialOxiDNSForwardsRealTraffic(t *testing.T) {
 	}
 	t.Fatalf("official OxiDNS failed to forward local query: %v\nservice log: %s", err, output.String())
 }
+
+func TestHasManagedServer(t *testing.T) {
+	original := map[string]any{"servers": []any{
+		map[string]any{"tag":"cloudflare", "type":"https", "server":"1.1.1.1"},
+	}}
+	if HasManagedServer(original) {
+		t.Fatal("ordinary DNS was treated as an OxiDNS overlay")
+	}
+	withOverlay,err:=WithSingBoxDNS(original)
+	if err!=nil { t.Fatal(err) }
+	if !HasManagedServer(withOverlay) {
+		t.Fatal("managed DNS overlay was not detected")
+	}
+	if !HasManagedServer(map[string]any{"servers":[]any{
+		map[string]any{"tag":Tag,"type":"udp","server":"127.0.0.1"},
+	}}) {
+		t.Fatal("JSON-decoded managed DNS overlay was not detected")
+	}
+}

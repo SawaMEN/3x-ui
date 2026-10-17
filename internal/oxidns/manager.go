@@ -722,6 +722,29 @@ func Disable(ctx context.Context) error {
 
 const Tag = "oxidns-local"
 
+// HasManagedServer detects a runtime-only DNS overlay in a JSON-decoded
+// sing-box configuration, including after the OxiDNS package was removed.
+func HasManagedServer(dns map[string]any) bool {
+	if dns == nil {
+		return false
+	}
+	switch servers := dns["servers"].(type) {
+	case []any:
+		for _, item := range servers {
+			if row, ok := item.(map[string]any); ok && row["tag"] == Tag {
+				return true
+			}
+		}
+	case []map[string]any:
+		for _, row := range servers {
+			if row["tag"] == Tag {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // WithSingBoxDNS leaves user DNS rules and upstreams intact, changing only the default.
 func WithSingBoxDNS(src map[string]any) (map[string]any, error) {
 	next := make(map[string]any, len(src)+2)

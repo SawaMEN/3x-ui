@@ -195,8 +195,14 @@ func (s *SingBoxService) GetEditorConfig(ctx context.Context) (*SingBoxEditorSna
 	raw["route"] = editable.Route
 	if ox, oxErr := oxidns.Load(); oxErr != nil {
 		return nil, oxErr
-	} else if ox.Enabled && ox.UseSingBox {
-		raw["dns"] = editable.DNS
+	} else {
+		currentDNS, _ := raw["dns"].(map[string]any)
+		// Replace a stale OxiDNS overlay read from the on-disk runtime
+		// configuration with the original editable DNS from the template.
+		// This also covers an interrupted uninstall on a stopped core.
+		if (ox.Enabled && ox.UseSingBox) || oxidns.HasManagedServer(currentDNS) {
+			raw["dns"] = editable.DNS
+		}
 	}
 	var editorConfig singbox.Config
 	if err := json.Unmarshal(data, &editorConfig); err != nil {
