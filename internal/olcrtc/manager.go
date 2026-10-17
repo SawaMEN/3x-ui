@@ -556,6 +556,7 @@ type LiveClient struct {
 	LocationCount int    `json:"locationCount"`
 	FailedCount   int    `json:"failedCount"`
 }
+
 func Live(ctx context.Context) (LiveStatus, error) {
 	body, err := apiResponse(ctx, http.MethodGet, "/api/state", nil)
 	if err != nil {
@@ -567,12 +568,12 @@ func decodeLive(body []byte) (LiveStatus, error) {
 	var result LiveStatus
 	var upstream struct {
 		Clients []struct {
-			ClientID string `json:"client_id"`
+			ClientID  string `json:"client_id"`
 			Locations []struct {
 				Running bool `json:"running"`
 				Runtime struct {
-					PeerCount *int `json:"peer_count"`
-					Status string `json:"status"`
+					PeerCount *int   `json:"peer_count"`
+					Status    string `json:"status"`
 				} `json:"runtime"`
 			} `json:"locations"`
 		} `json:"clients"`

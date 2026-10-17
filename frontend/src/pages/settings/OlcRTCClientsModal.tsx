@@ -56,7 +56,13 @@ type ApiMsg<T> = { success?: boolean; msg?: string; obj?: T };
 type LiveSummary = {
   runningCount: number;
   peerCount: number;
-  clients: { id: string; running: boolean; peerCount: number; locationCount: number; failedCount: number }[];
+  clients: {
+    id: string;
+    running: boolean;
+    peerCount: number;
+    locationCount: number;
+    failedCount: number;
+  }[];
 };
 
 const transportOptions: Record<Provider, { value: Transport; label: string }[]> = {
@@ -100,7 +106,9 @@ export default function OlcRTCClientsModal({
     try {
       const [result, state] = await Promise.all([
         HttpUtil.get('/panel/api/olcrtc/clients') as Promise<ApiMsg<Client[]>>,
-        HttpUtil.get('/panel/api/olcrtc/live', undefined, { silent: true }) as Promise<ApiMsg<LiveSummary>>,
+        HttpUtil.get('/panel/api/olcrtc/live', undefined, { silent: true }) as Promise<
+          ApiMsg<LiveSummary>
+        >,
       ]);
       if (!result.success) throw new Error(result.msg || 'Не удалось загрузить подключения');
       setClients(result.obj || []);
@@ -249,11 +257,18 @@ export default function OlcRTCClientsModal({
                     <Typography.Text strong>{client.id}</Typography.Text>
                     {live?.clients.find((item) => item.id === client.id) && (
                       <Tag
-                        color={live.clients.find((item) => item.id === client.id)?.running ? 'success' : 'warning'}
+                        color={
+                          live.clients.find((item) => item.id === client.id)?.running
+                            ? 'success'
+                            : 'warning'
+                        }
                       >
-                        {live.clients.find((item) => item.id === client.id)?.running ? 'Работает' : 'Не запущен'}
+                        {live.clients.find((item) => item.id === client.id)?.running
+                          ? 'Работает'
+                          : 'Не запущен'}
                         {' · '}
-                        {live.clients.find((item) => item.id === client.id)?.peerCount ?? 0} участников
+                        {live.clients.find((item) => item.id === client.id)?.peerCount ?? 0}{' '}
+                        участников
                       </Tag>
                     )}
                     {client.locations[0] && (

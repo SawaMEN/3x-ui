@@ -97,9 +97,9 @@ func TestClientLinkWithPayload(t *testing.T) {
 
 func TestNormalizeQuotaValidation(t *testing.T) {
 	for name, quota := range map[string]Quota{
-		"negative speed": {SpeedMbps: -1},
+		"negative speed":   {SpeedMbps: -1},
 		"negative traffic": {TrafficGB: -1},
-		"invalid date": {ExpiresAt: "2026-02-30"},
+		"invalid date":     {ExpiresAt: "2026-02-30"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			input := ClientInput{ClientID: "example", Quota: &quota}
