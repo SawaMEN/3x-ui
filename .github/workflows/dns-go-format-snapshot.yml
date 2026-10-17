@@ -1,0 +1,22 @@
+name: DNS Go formatting snapshot
+on:
+  push:
+    branches: [dns]
+    paths: ['.github/workflows/dns-go-format-snapshot.yml']
+permissions:
+  contents: read
+jobs:
+  formatted-go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Produce canonical gofmt sources
+        run: |
+          gofmt -w internal/oxidns/manager.go internal/oxidns/manager_test.go internal/web/controller/oxidns.go internal/web/service/singbox.go
+          python3 - <<'PY'
+          import base64
+          from pathlib import Path
+          for raw in ["internal/oxidns/manager.go", "internal/oxidns/manager_test.go", "internal/web/controller/oxidns.go", "internal/web/service/singbox.go"]:
+              p = Path(raw)
+              print("GOFMT_FILE:" + raw + ":" + base64.b64encode(p.read_bytes()).decode("ascii"))
+          PY
