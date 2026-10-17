@@ -331,7 +331,11 @@ describe('gateway settings in sing-box', () => {
         ? { interfaces: [], defaultWAN: 'eth0', note: '' }
         : {
             ...status(),
-            network: { ...disconnected, configured: true, error: 'Файл сетевых настроек повреждён' },
+            network: {
+              ...disconnected,
+              configured: true,
+              error: 'Файл сетевых настроек повреждён',
+            },
           },
     }));
 
@@ -340,5 +344,4 @@ describe('gateway settings in sing-box', () => {
     expect(screen.getByText('Файл сетевых настроек повреждён')).toBeTruthy();
     expect(screen.getAllByRole('alert')).toHaveLength(1);
   });
-
 });
