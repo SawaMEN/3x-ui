@@ -44,7 +44,13 @@ beforeEach(() => {
   vi.mocked(HttpUtil.post).mockImplementation(async (path, body) => {
     const endpoint = String(path);
     if (endpoint.endsWith('/setup')) {
-      current = { ...current, ...(body as Partial<typeof original>), installed: true, enabled: true, running: true };
+      current = {
+        ...current,
+        ...(body as Partial<typeof original>),
+        installed: true,
+        enabled: true,
+        running: true,
+      };
     } else if (endpoint.endsWith('/disable')) {
       current = { ...current, enabled: false, running: false };
     } else if (endpoint.endsWith('/remove')) {
@@ -195,11 +201,10 @@ it('checks the official version and makes update available from this screen', as
   await screen.findByRole('button', { name: 'Обновить OxiDNS' });
   fireEvent.click(screen.getByRole('button', { name: 'Обновить OxiDNS' }));
   await waitFor(() =>
-    expect(HttpUtil.post).toHaveBeenCalledWith(
-      '/panel/api/oxidns/update',
-      undefined,
-      { silent: true, timeout: 180000 },
-    ),
+    expect(HttpUtil.post).toHaveBeenCalledWith('/panel/api/oxidns/update', undefined, {
+      silent: true,
+      timeout: 180000,
+    }),
   );
   expect(screen.getByText(/Установленная версия: v1.7.0/)).toBeTruthy();
 });
