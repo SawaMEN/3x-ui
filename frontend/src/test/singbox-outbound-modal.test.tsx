@@ -78,7 +78,7 @@ describe('native outbound modal', () => {
         onSubscriptionURL={onSubscriptionURL}
       />,
     );
-    fireEvent.click(screen.getByRole('tab', { name: /JSON/ }));
+    fireEvent.click(screen.getByText('JSON и импорт ссылок'));
     fireEvent.change(screen.getByLabelText('Ссылка подключения'), {
       target: { value: 'https://provider.test/sub/token' },
     });
@@ -108,7 +108,7 @@ describe('native outbound modal', () => {
         onSave={onSave}
       />,
     );
-    fireEvent.click(screen.getByRole('tab', { name: /JSON/ }));
+    fireEvent.click(screen.getByText('JSON и импорт ссылок'));
     fireEvent.change(screen.getByLabelText('Ссылка подключения'), {
       target: { value: 'anytls://secret@host.test' },
     });
@@ -119,7 +119,6 @@ describe('native outbound modal', () => {
           (screen.getByLabelText('JSON editor') as HTMLTextAreaElement).value,
       ).toContain('idle_session_timeout'),
     );
-    fireEvent.click(screen.getByRole('tab', { name: /Подключение/ }));
     expect(screen.getByDisplayValue('host.test')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Добавить подключение' }));
     expect(onSave).toHaveBeenCalledWith(
@@ -138,7 +137,7 @@ describe('native outbound modal', () => {
         onSave={onSave}
       />,
     );
-    fireEvent.click(screen.getByRole('tab', { name: /JSON/ }));
+    fireEvent.click(screen.getByText('JSON и импорт ссылок'));
     fireEvent.change(screen.getByLabelText('JSON editor'), { target: { value: '{"type":' } });
     const save = screen.getByRole('button', { name: 'Сохранить изменения' }) as HTMLButtonElement;
     expect(save.disabled).toBe(true);
