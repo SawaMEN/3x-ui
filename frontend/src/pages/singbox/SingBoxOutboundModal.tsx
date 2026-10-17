@@ -111,8 +111,7 @@ export default function SingBoxOutboundModal({
   const [draft, setDraft] = useState<ConfigObject>({});
   const [additional, setAdditional] = useState<ConfigObject[]>([]);
   const [exportedLink, setExportedLink] = useState('');
-
-    [json, setJson] = useState(''),
+  const [json, setJson] = useState(''),
     [jsonError, setJsonError] = useState('');
   const [invalidOptions, setInvalidOptions] = useState<string[]>([]);
   const [error, setError] = useState(''),
