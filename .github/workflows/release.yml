@@ -309,11 +309,32 @@ jobs:
         run: |
           set -euo pipefail
           short="${COMMIT::8}"
-          # A slower build must not move the rolling channel backwards.
-          git fetch origin main:refs/remotes/origin/main
-          if [[ "$(git rev-parse origin/main)" != "$COMMIT" ]]; then
-            echo "A newer main commit exists; rolling release unchanged."
-            exit 0
+          # A slower build must not supersede newer application changes.
+          # The formatter workflow may add a bot-only formatting commit
+          # after the release build has started. Its GITHUB_TOKEN push does
+          # not trigger another release build, so allow that safe descendant.
+          git fetch --no-tags --depth=50 origin main:refs/remotes/origin/main
+          latest=$(git rev-parse origin/main)
+          if [[ "$latest" != "$COMMIT" ]]; then
+            if ! git merge-base --is-ancestor "$COMMIT" "$latest"; then
+              echo "main diverged from the build commit; rolling release unchanged."
+              exit 0
+            fi
+            while IFS= read -r revision; do
+              subject=$(git show -s --format=%s "$revision")
+              author=$(git show -s --format=%an "$revision")
+              if [[ "$subject" != "chore(format): apply oxfmt" || "$author" != "github-actions[bot]" ]]; then
+                echo "New application changes were committed; rolling release unchanged."
+                exit 0
+              fi
+              while IFS= read -r changed; do
+                if [[ "$changed" != frontend/src/* ]]; then
+                  echo "Formatter commit changed non-frontend files; rolling release unchanged."
+                  exit 0
+                fi
+              done < <(git diff-tree --no-commit-id --name-only -r "$revision")
+            done < <(git rev-list "$COMMIT..$latest")
+            echo "Only trusted formatter commits follow this build; publishing verified artifacts."
           fi
           git tag -f dev-latest "$COMMIT"
           git push -f origin refs/tags/dev-latest
