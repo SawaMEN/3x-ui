@@ -17,6 +17,7 @@ import (
 	"os/exec"
 	"regexp"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -55,7 +56,8 @@ type Location struct {
 	} `json:"endpoint"`
 	Carrier   string `json:"carrier"`
 	Transport struct {
-		Type string `json:"Type"`
+		Type string `json:"type"`
+		Payload map[string]string `json:"payload,omitempty"`
 	} `json:"transport"`
 	DNS string `json:"dns"`
 }
@@ -586,5 +588,18 @@ func ClientLink(client Client) string {
 		return ""
 	}
 	loc := client.Locations[0]
-	return "olcrtc://" + loc.Carrier + "?" + loc.Transport.Type + "@" + loc.Endpoint.RoomID + "#" + loc.Endpoint.Key + "$" + loc.Name
+	payload := ""
+	if len(loc.Transport.Payload) > 0 {
+		keys := make([]string, 0, len(loc.Transport.Payload))
+		for key := range loc.Transport.Payload {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		parts := make([]string, 0, len(keys))
+		for _, key := range keys {
+			parts = append(parts, key+"="+loc.Transport.Payload[key])
+		}
+		payload = "<" + strings.Join(parts, "&") + ">"
+	}
+	return "olcrtc://" + loc.Carrier + "?" + loc.Transport.Type + payload + "@" + loc.Endpoint.RoomID + "#" + loc.Endpoint.Key + "$" + loc.Name
 }
