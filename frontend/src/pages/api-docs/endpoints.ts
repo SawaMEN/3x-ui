@@ -798,6 +798,21 @@ export const sections: readonly Section[] = [
       },
       {
         method: 'POST',
+        path: '/panel/api/oxidns/install',
+        summary: 'Install official OxiDNS from verified GitHub release without starting it.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/oxidns/update',
+        summary: 'Update OxiDNS to the latest verified official release and roll back on failure.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/oxidns/remove',
+        summary: 'Uninstall OxiDNS, disable the service and restore native sing-box DNS.',
+      },
+      {
+        method: 'POST',
         path: '/panel/api/server/singbox/outbound/check',
         summary: 'Measure the delay of a running sing-box outbound.',
         params: [

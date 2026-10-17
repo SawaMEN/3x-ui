@@ -38,7 +38,7 @@ type SystemUpdatePackage = {
   updateAvailable: boolean;
 };
 
-type DependencyKey = 'naiveproxy' | 'hysteria2' | 'sudoku' | 'pingtunnel' | 'trusttunnel';
+type DependencyKey = 'naiveproxy' | 'hysteria2' | 'sudoku' | 'pingtunnel' | 'trusttunnel' | 'oxidns';
 
 type DependencyStatus = {
   key: DependencyKey;
@@ -107,6 +107,7 @@ type ApiMsg<T = unknown> = { success?: boolean; msg?: string; obj?: T };
 const isDependencyInstallable = (dependency: DependencyStatus) =>
   dependency.source === 'standalone' ||
   dependency.key === 'sudoku' ||
+  dependency.key === 'oxidns' ||
   dependency.key === 'pingtunnel' ||
   dependency.key === 'trusttunnel';
 
@@ -226,7 +227,7 @@ export default function SystemUpdateModal({
   const [dependencyBusy, setDependencyBusy] = useState<DependencyKey | null>(null);
 
   const loadDependencyUpdates = useCallback(async () => {
-    const [core, sudoku, external, naive] = await Promise.all([
+    const [core, sudoku, external, naive, oxidns] = await Promise.all([
       HttpUtil.get('/panel/api/setting/singbox/status') as Promise<
         ApiMsg<{ installed?: boolean; version?: string }>
       >,
@@ -234,6 +235,9 @@ export default function SystemUpdateModal({
       HttpUtil.get('/panel/api/server/externalvpn/status') as Promise<ApiMsg<ExternalVPNStatus>>,
       HttpUtil.get('/panel/api/naiveproxy/status', undefined, { silent: true }) as Promise<
         ApiMsg<ExternalVPNBinaryStatus>
+      >,
+      HttpUtil.get('/panel/api/oxidns/status?check=true', undefined, { silent: true }) as Promise<
+        ApiMsg<ExternalVPNBinaryStatus & { installedVersion?: string; latestVersion?: string }>
       >,
     ]);
     const bundled = ['naiveproxy', 'hysteria2'].map((key) => ({
@@ -275,6 +279,18 @@ export default function SystemUpdateModal({
               : undefined),
       });
     }
+    rows.push({
+      key: 'oxidns',
+      label: 'OxiDNS',
+      source: 'standalone',
+      installed: oxidns.obj?.installed === true,
+      installedVersion: oxidns.obj?.installedVersion || '',
+      availableVersion: oxidns.obj?.latestVersion || '',
+      updateAvailable: oxidns.obj?.updateAvailable === true,
+      supported: oxidns.obj?.supported,
+      unsupportedReason: oxidns.obj?.unsupportedReason,
+      error: oxidns.obj?.error || (oxidns.success ? undefined : oxidns.msg),
+    });
     setBundledDependencies(rows);
     setStandaloneDependencies(
       (['naiveproxy', 'hysteria2'] as const).map((key) => {
@@ -320,6 +336,10 @@ export default function SystemUpdateModal({
 
   const requestDependencyUpdate = useCallback(async (dependency: DependencyStatus) => {
     switch (dependency.key) {
+      case 'oxidns':
+        return (await HttpUtil.post(
+          dependency.installed ? '/panel/api/oxidns/update' : '/panel/api/oxidns/install',
+        )) as ApiMsg<unknown>;
       case 'naiveproxy':
         return (await HttpUtil.post('/panel/api/naiveproxy/update')) as ApiMsg<unknown>;
       case 'hysteria2':
@@ -359,7 +379,9 @@ export default function SystemUpdateModal({
     setDependencyBusy(dependency.key);
     try {
       const response = (await HttpUtil.post(
-        `/panel/api/server/components/remove/${dependency.key}`,
+        dependency.key === 'oxidns'
+          ? '/panel/api/oxidns/remove'
+          : `/panel/api/server/components/remove/${dependency.key}`,
       )) as ApiMsg<unknown>;
       if (!response?.success)
         throw new Error(response?.msg || `Не удалось удалить ${dependency.label}`);
@@ -768,6 +790,15 @@ export default function SystemUpdateModal({
                           style={{ marginBottom: 10 }}
                         />
                       )}
+                      {dependency.key === 'oxidns' && (
+                        <Typography.Text
+                          type="secondary"
+                          style={{ display: 'block', marginBottom: 10 }}
+                        >
+                          Собственный DNS и DoH для sing-box. Настройки находятся в разделе DNS.
+                          Установка не включает DNS автоматически.
+                        </Typography.Text>
+                      )}
                       {dependency.key === 'pingtunnel' && (
                         <Typography.Text
                           type="secondary"
@@ -842,9 +873,11 @@ export default function SystemUpdateModal({
                           <Popconfirm
                             title={`Удалить ${action.label}?`}
                             description={
-                              standalone
-                                ? 'Входящие подключения переключатся на встроенный sing-box.'
-                                : 'Активные подключения этого протокола необходимо сначала отключить.'
+                              dependency.key === 'oxidns'
+                                ? 'Собственный DNS будет отключён. sing-box вернётся к прежнему DNS.'
+                                : standalone
+                                  ? 'Входящие подключения переключатся на встроенный sing-box.'
+                                  : 'Активные подключения этого протокола необходимо сначала отключить.'
                             }
                             okText={t('delete')}
                             cancelText={t('cancel')}
