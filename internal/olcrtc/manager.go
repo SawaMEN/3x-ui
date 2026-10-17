@@ -15,7 +15,6 @@ import (
  "net/http"
  "os"
  "os/exec"
- "path/filepath"
  "regexp"
  "runtime"
  "strconv"
@@ -120,6 +119,8 @@ func GetStatus(ctx context.Context) Status {
   result.InstalledVersion=readRevisions()
   if _,e:=exec.LookPath("git"); e==nil {result.AvailableVersion=remoteRevision(ctx)}
   result.UpdateAvailable=result.AvailableVersion!="" && result.InstalledVersion!="" && result.InstalledVersion!=result.AvailableVersion
+ } else {
+  result.AvailableVersion="upstream"
  }
  state.Lock()
  result.Busy=state.busy
@@ -155,9 +156,6 @@ func Start(operation string) error {
  return nil
 }
 func install(ctx context.Context) error {
- if _,err:=exec.LookPath("curl");err!=nil { // Installer itself installs curl, but the download is done by Go.
-  _=err
- }
  request,err:=http.NewRequestWithContext(ctx,http.MethodGet,installerURL,nil)
  if err!=nil {return err}
  client:=&http.Client{Timeout:30*time.Second}
@@ -196,6 +194,7 @@ func install(ctx context.Context) error {
 }
 func remove(ctx context.Context) error {
  // Refuse to delete unrelated services or components.
+ if _,err:=os.Stat(revisionPath);err!=nil {return errors.New("this OlcRTC installation is not managed by 3x-ui")}
  data,err:=os.ReadFile(servicePath)
  if err!=nil {return fmt.Errorf("cannot verify managed service: %w",err)}
  if !bytes.Contains(data,[]byte("ExecStart=/usr/local/bin/olcrtc-manager")) {return errors.New("OlcRTC service was not created by the supported installer")}
@@ -312,6 +311,11 @@ func api(ctx context.Context,method,path string,payload any) error {
  return fmt.Errorf("OlcRTC manager: HTTP %d: %s",response.StatusCode,strings.TrimSpace(string(msg)))
 }
 func CreateClient(ctx context.Context,input ClientInput) (ClientInput,error) {
+ if input.ClientID=="" {
+  suffix,err:=randomHex(8)
+  if err!=nil {return input,err}
+  input.ClientID="user-"+suffix
+ }
  if err:=normalize(&input);err!=nil {return input,err}
  if err:=api(ctx,http.MethodPost,"/api/clients",input);err!=nil {return ClientInput{},err}
  return input,nil
