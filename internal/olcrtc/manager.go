@@ -48,6 +48,12 @@ type Status struct {
 	Operation         string `json:"operation,omitempty"`
 	Error             string `json:"error,omitempty"`
 }
+type SocksProxy struct {
+	Addr string `json:"addr,omitempty"`
+	Port int    `json:"port,omitempty"`
+	User string `json:"user,omitempty"`
+	Pass string `json:"pass,omitempty"`
+}
 type Location struct {
 	Name     string `json:"name"`
 	Endpoint struct {
@@ -59,7 +65,16 @@ type Location struct {
 		Type    string            `json:"type"`
 		Payload map[string]string `json:"payload,omitempty"`
 	} `json:"transport"`
-	DNS string `json:"dns"`
+	DNS   string     `json:"dns"`
+	Link  string     `json:"link,omitempty"`
+	Data  string     `json:"data,omitempty"`
+	Proxy SocksProxy `json:"proxy,omitempty"`
+}
+func SimpleLocation(loc Location) bool {
+	return len(loc.Transport.Payload) == 0 &&
+		loc.Proxy == (SocksProxy{}) &&
+		(loc.Link == "" || loc.Link == "direct") &&
+		(loc.Data == "" || loc.Data == "data")
 }
 type Quota struct {
 	SpeedMbps int    `json:"speed_mbps,omitempty"`
@@ -634,8 +649,8 @@ func UpdateClient(ctx context.Context, id string, input ClientInput) (ClientInpu
 		if len(existing.Locations) != 1 {
 			return input, errors.New("editing multiple-location clients is not supported in the simple editor")
 		}
-		if len(existing.Locations[0].Transport.Payload) > 0 {
-			return input, errors.New("editing custom transport payloads requires an advanced editor")
+		if !SimpleLocation(existing.Locations[0]) {
+			return input, errors.New("advanced proxy, transport or link settings cannot be edited in the simple editor")
 		}
 		// Preserve usage accounting when adjusting speed, traffic and expiry
 		// limits, and retain settings which this simple editor doesn't expose.
