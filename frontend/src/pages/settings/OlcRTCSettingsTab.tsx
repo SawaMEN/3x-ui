@@ -38,7 +38,13 @@ export default function OlcRTCSettingsTab() {
     }
   }, []);
 
-  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    let active = true;
+    void Promise.resolve().then(() => {
+      if (active) void refresh();
+    });
+    return () => { active = false; };
+  }, [refresh]);
 
   const restart = async () => {
     setRestarting(true);
