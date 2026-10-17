@@ -70,12 +70,14 @@ type Location struct {
 	Data  string     `json:"data,omitempty"`
 	Proxy SocksProxy `json:"proxy,omitempty"`
 }
+
 func SimpleLocation(loc Location) bool {
 	return len(loc.Transport.Payload) == 0 &&
 		loc.Proxy == (SocksProxy{}) &&
 		(loc.Link == "" || loc.Link == "direct") &&
 		(loc.Data == "" || loc.Data == "data")
 }
+
 type Quota struct {
 	SpeedMbps int    `json:"speed_mbps,omitempty"`
 	TrafficGB int    `json:"traffic_gb,omitempty"`

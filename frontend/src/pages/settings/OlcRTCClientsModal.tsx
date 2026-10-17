@@ -51,7 +51,13 @@ type Location = {
   transport: { type?: string; Type?: string; payload?: Record<string, string> };
   dns: string;
 };
-type Client = { id: string; locations: Location[]; quota?: ClientQuota; link: string; simpleEditable: boolean };
+type Client = {
+  id: string;
+  locations: Location[];
+  quota?: ClientQuota;
+  link: string;
+  simpleEditable: boolean;
+};
 type ApiMsg<T> = { success?: boolean; msg?: string; obj?: T };
 type LiveSummary = {
   runningCount: number;
@@ -336,7 +342,8 @@ export default function OlcRTCClientsModal({
                 </Space>
                 {!client.simpleEditable && (
                   <Typography.Text type="secondary">
-                    Дополнительные настройки этого клиента доступны только в расширенной конфигурации OlcRTC.
+                    Дополнительные настройки этого клиента доступны только в расширенной
+                    конфигурации OlcRTC.
                   </Typography.Text>
                 )}
                 {client.locations.length > 1 && (
