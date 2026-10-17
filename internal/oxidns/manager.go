@@ -94,25 +94,20 @@ func CurrentStatus(ctx context.Context) (Status,error) {
 }
 
 func validate(c Settings, certFile,keyFile string) error {
- if c.Upstream!="quad9" && c.Upstream!="cloudflare" && c.Upstream!="adguard" {
-  return errors.New("выберите DNS-провайдера")
- }
- if c.Port<1||c.Port>65535||c.Port==localPort {return errors.New("неверный HTTPS-порт")}
+ if c.Upstream!="quad9" && c.Upstream!="cloudflare" && c.Upstream!="adguard" {return errors.New("выберите DNS-провайдера")}
+ if c.Port<1 || c.Port>65535 || c.Port==localPort {return errors.New("неверный HTTPS-порт")}
  if c.DoH {
-  if len(c.Domain)<4||len(c.Domain)>253||strings.ContainsAny(c.Domain," /:\	
-")||strings.HasSuffix(c.Domain,".") {
-   return errors.New("укажите корректное доменное имя DoH")
+  if len(c.Domain)<4 || len(c.Domain)>253 || !strings.Contains(c.Domain,".") || net.ParseIP(c.Domain)!=nil {return errors.New("укажите доменное имя для DoH")}
+  for _,ch:=range c.Domain {
+   if !((ch>='a' && ch<='z')||(ch>='A' && ch<='Z')||(ch>='0' && ch<='9')||ch=='.'||ch=='-') {return errors.New("недопустимые символы в домене DoH")}
   }
-  if net.ParseIP(c.Domain)!=nil||!strings.Contains(c.Domain,".") {return errors.New("для DoH необходимо доменное имя")}
   if certFile==""||keyFile=="" {return errors.New("сначала настройте TLS-сертификат панели")}
   pair,err:=tls.LoadX509KeyPair(certFile,keyFile)
   if err!=nil{return fmt.Errorf("не удалось прочитать TLS-сертификат: %w",err)}
   leaf,err:=x509.ParseCertificate(pair.Certificate[0])
   if err!=nil{return err}
   if err:=leaf.VerifyHostname(c.Domain);err!=nil{return fmt.Errorf("сертификат не подходит домену: %w",err)}
-  if time.Now().After(leaf.NotAfter)||time.Now().Before(leaf.NotBefore) {
-   return errors.New("TLS-сертификат просрочен или ещё не действует")
-  }
+  if time.Now().After(leaf.NotAfter)||time.Now().Before(leaf.NotBefore){return errors.New("TLS-сертификат просрочен или ещё не действует")}
  }
  return nil
 }
@@ -129,48 +124,29 @@ func upstream(c Settings) (string,string) {
 func Generate(c Settings, certFile,keyFile string) (string,error) {
  if err:=validate(c,certFile,keyFile);err!=nil{return "",err}
  addr,bootstrap:=upstream(c)
- q:=strconv.Quote
  var b strings.Builder
- b.WriteString("log:
-  level: info
-plugins:
-")
- b.WriteString("  - tag: forward_upstream
-    type: forward
-    args:
-      upstreams:
-")
- b.WriteString("        - addr: "+q(addr)+"
-          bootstrap: "+q(bootstrap)+"
-")
- b.WriteString("  - tag: main
-    type: sequence
-    args:
-      - exec: "$forward_upstream"
-      - exec: accept
-")
+ lines:=[]string{"log:","  level: info","plugins:","  - tag: forward_upstream","    type: forward","    args:","      upstreams:"}
+ for _,line:=range lines{fmt.Fprintln(&b,line)}
+ fmt.Fprintln(&b,"        - addr: "+strconv.Quote(addr))
+ fmt.Fprintln(&b,"          bootstrap: "+strconv.Quote(bootstrap))
+ for _,line:=range []string{"  - tag: main","    type: sequence","    args:",`      - exec: "$forward_upstream"`,"      - exec: accept"}{fmt.Fprintln(&b,line)}
  for _,scheme:=range []string{"udp","tcp"} {
-  b.WriteString("  - tag: "+scheme+"_local
-    type: "+scheme+"_server
-    args:
-      entry: main
-      listen: "+q(net.JoinHostPort("127.0.0.1",strconv.Itoa(localPort)))+"
-")
+  fmt.Fprintln(&b,"  - tag: "+scheme+"_local")
+  fmt.Fprintln(&b,"    type: "+scheme+"_server")
+  fmt.Fprintln(&b,"    args:")
+  fmt.Fprintln(&b,"      entry: main")
+  fmt.Fprintln(&b,"      listen: "+strconv.Quote(net.JoinHostPort("127.0.0.1",strconv.Itoa(localPort))))
  }
  if c.DoH {
-  b.WriteString("  - tag: doh_public
-    type: http_server
-    args:
-")
-  b.WriteString("      listen: "+q(":"+strconv.Itoa(c.Port))+"
-")
-  b.WriteString("      cert: "+q(certFile)+"
-      key: "+q(keyFile)+"
-")
-  b.WriteString("      entries:
-        - path: "/dns-query"
-          exec: main
-")
+  fmt.Fprintln(&b,"  - tag: doh_public")
+  fmt.Fprintln(&b,"    type: http_server")
+  fmt.Fprintln(&b,"    args:")
+  fmt.Fprintln(&b,"      listen: "+strconv.Quote(":"+strconv.Itoa(c.Port)))
+  fmt.Fprintln(&b,"      cert: "+strconv.Quote(certFile))
+  fmt.Fprintln(&b,"      key: "+strconv.Quote(keyFile))
+  fmt.Fprintln(&b,"      entries:")
+  fmt.Fprintln(&b,`        - path: "/dns-query"`)
+  fmt.Fprintln(&b,"          exec: main")
  }
  return b.String(),nil
 }
@@ -194,20 +170,7 @@ func systemctl(ctx context.Context, args ...string) error {
  return nil
 }
 
-const unit = "[Unit]
-Description=3x-ui OxiDNS
-After=network-online.target
-Wants=network-online.target
-[Service]
-Type=simple
-ExecStart="+binaryPath+" start -c "+configPath+" -d "+StateDir+"/data
-Restart=on-failure
-RestartSec=3
-NoNewPrivileges=true
-[Install]
-WantedBy=multi-user.target
-"
-
+const unit = strings.Join([]string{"[Unit]","Description=3x-ui OxiDNS","After=network-online.target","Wants=network-online.target","[Service]","Type=simple","ExecStart=/etc/x-ui/oxidns/bin/oxidns start -c /etc/x-ui/oxidns/config.yaml -d /etc/x-ui/oxidns/data","Restart=on-failure","RestartSec=3","NoNewPrivileges=true","[Install]","WantedBy=multi-user.target"},string([]byte{10}))+string([]byte{10})
 
 type releaseAsset struct {
  Name string `json:"name"`
