@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation, useNavigate } from 'react-router';
+import { useLocation } from 'react-router';
 import {
   Button,
   Card,
@@ -12,7 +12,7 @@ import {
   Row,
   Spin,
   Statistic,
-  Tabs,
+  Collapse,
   message,
 } from 'antd';
 
@@ -86,13 +86,11 @@ interface ClientMatchTarget {
 }
 
 export default function InboundsPage() {
-  const navigate = useNavigate();
   const location = useLocation();
   const [telemtInstalled, setTelemtInstalled] = useState(false);
-  const activeWorkspace =
-    telemtInstalled && new URLSearchParams(location.search).get('tab') === 'telemt'
-      ? 'telemt'
-      : 'inbounds';
+  const [telemtToolsOpen, setTelemtToolsOpen] = useState<string[]>(() =>
+    new URLSearchParams(location.search).get('tab') === 'telemt' ? ['telemt'] : [],
+  );
 
   useEffect(() => {
     let mounted = true;
@@ -786,22 +784,23 @@ export default function InboundsPage() {
         <Layout className="content-shell">
           <Layout.Content id="content-layout" className="content-area">
             {telemtInstalled && (
-              <Tabs
-                activeKey={activeWorkspace}
-                onChange={(key) =>
-                  navigate(key === 'telemt' ? '/inbounds?tab=telemt' : '/inbounds')
-                }
+              <Collapse
+                style={{ marginBottom: 16 }}
+                activeKey={telemtToolsOpen}
+                onChange={(keys) => setTelemtToolsOpen(keys)}
                 items={[
-                  { key: 'inbounds', label: t('menu.inbounds') },
-                  { key: 'telemt', label: 'MTProto · Telemt' },
+                  {
+                    key: 'telemt',
+                    label: 'Telemt — настройки движка MTProto и WEB Proxy',
+                    children: (
+                      <Suspense fallback={<Spin size="large" />}>
+                        <TelemtWorkspace />
+                      </Suspense>
+                    ),
+                  },
                 ]}
               />
             )}
-            {activeWorkspace === 'telemt' ? (
-              <Suspense fallback={<Spin size="large" />}>
-                <TelemtWorkspace />
-              </Suspense>
-            ) : (
               <Spin
                 spinning={!fetched || !hostsFetched}
                 delay={200}
@@ -890,7 +889,6 @@ export default function InboundsPage() {
                   </Row>
                 )}
               </Spin>
-            )}
           </Layout.Content>
         </Layout>
 
