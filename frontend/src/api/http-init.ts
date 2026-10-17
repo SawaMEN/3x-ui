@@ -4,7 +4,7 @@ const CSRF_TOKEN_PATH = '/csrf-token';
 // Most legacy panel mutations still use application/x-www-form-urlencoded.
 // Newer API families that bind JSON bodies must opt in here so callers cannot
 // accidentally send bracket-encoded form data to a JSON decoder.
-const JSON_ONLY_API_PREFIXES = ['/panel/api/adblock/'];
+const JSON_ONLY_API_PREFIXES = ['/panel/api/adblock/', '/panel/api/gateway/'];
 
 let csrfToken: string | null = null;
 let csrfFetchPromise: Promise<string | null> | null = null;

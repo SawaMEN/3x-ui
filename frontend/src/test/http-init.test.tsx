@@ -75,6 +75,31 @@ describe('http-init fetch wrapper', () => {
     expect(headersOf().get('content-type')).toBe('application/json');
   });
 
+  it.each(['preflight', 'enable'])(
+    'sends Gateway %s network settings as JSON under a custom panel path',
+    async (action) => {
+      window.X_UI_BASE_PATH = '/private-panel/';
+      document.head.innerHTML = '<meta name="csrf-token" content="tok">';
+      http.setupHttp();
+      fetchMock.mockResolvedValue(okEnvelope());
+      const payload = {
+        network: {
+          lanInterface: 'br-lan',
+          lanIP: '192.168.10.1',
+          lanPrefix: 24,
+          wanInterface: 'eth0',
+        },
+      };
+
+      await http.httpRequest('POST', `/panel/api/gateway/${action}`, payload);
+
+      expect(urlOf()).toBe(`/private-panel/panel/api/gateway/${action}`);
+      expect(headersOf().get('content-type')).toBe('application/json; charset=UTF-8');
+      expect(JSON.parse(initOf().body as string)).toEqual(payload);
+      expect(headersOf().get('X-CSRF-Token')).toBe('tok');
+    },
+  );
+
   it('passes FormData through without a Content-Type header', async () => {
     document.head.innerHTML = '<meta name="csrf-token" content="tok">';
     http.setupHttp();
