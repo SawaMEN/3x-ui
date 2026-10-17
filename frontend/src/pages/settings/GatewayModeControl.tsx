@@ -209,6 +209,12 @@ export default function GatewayModeControl() {
     setChecking(false);
     setPreflight(null);
   };
+  const changeWANAsLANConsent = (checked: boolean) => {
+    preflightRequestId.current += 1;
+    setAllowDefaultInterface(checked);
+    setChecking(false);
+    setPreflight(null);
+  };
 
   const runPreflight = useCallback(
     async (quiet = false): Promise<boolean> => {
@@ -683,12 +689,7 @@ export default function GatewayModeControl() {
                         <Checkbox
                           checked={allowDefaultInterface}
                           disabled={locked}
-                          onChange={(event) => {
-                            preflightRequestId.current += 1;
-                            setAllowDefaultInterface(event.target.checked);
-                            setChecking(false);
-                            setPreflight(null);
-                          }}
+                          onChange={(event) => changeWANAsLANConsent(event.target.checked)}
                         >
                           Я понимаю риск и хочу использовать WAN как LAN
                         </Checkbox>
