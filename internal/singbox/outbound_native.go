@@ -54,6 +54,13 @@ func translateNativeSingBoxOutbound(raw map[string]any, protocol, tag string) (m
 	out["type"] = nativeProtocol
 	out["tag"] = tag
 
+	// Some URI decoders emit scalar values for fields that the runtime
+	// expects to have structured types. Normalize only these known legacy
+	// representations; preserve native JSON objects and future options.
+	if err := normalizeNativeShareOptionTypes(out, nativeProtocol, tag); err != nil {
+		return nil, err
+	}
+
 	if nativeOutboundSupportsDialCompatibility(nativeProtocol) {
 		if err := applyXrayOutboundCompatibility(out, raw, rawObject(raw, "streamSettings")); err != nil {
 			return nil, err
