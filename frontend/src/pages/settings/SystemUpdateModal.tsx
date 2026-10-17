@@ -44,7 +44,8 @@ type DependencyKey =
   | 'sudoku'
   | 'pingtunnel'
   | 'trusttunnel'
-  | 'oxidns';
+  | 'oxidns'
+  | 'dnstt';
 
 type DependencyStatus = {
   key: DependencyKey;
@@ -114,6 +115,7 @@ const isDependencyInstallable = (dependency: DependencyStatus) =>
   dependency.source === 'standalone' ||
   dependency.key === 'sudoku' ||
   dependency.key === 'oxidns' ||
+  dependency.key === 'dnstt' ||
   dependency.key === 'pingtunnel' ||
   dependency.key === 'trusttunnel';
 
@@ -233,7 +235,7 @@ export default function SystemUpdateModal({
   const [dependencyBusy, setDependencyBusy] = useState<DependencyKey | null>(null);
 
   const loadDependencyUpdates = useCallback(async () => {
-    const [core, sudoku, external, naive, oxidns] = await Promise.all([
+    const [core, sudoku, external, naive, oxidns, dnstt] = await Promise.all([
       HttpUtil.get('/panel/api/setting/singbox/status') as Promise<
         ApiMsg<{ installed?: boolean; version?: string }>
       >,
@@ -246,6 +248,9 @@ export default function SystemUpdateModal({
         silent: true,
         timeout: 26000,
       }) as Promise<
+        ApiMsg<ExternalVPNBinaryStatus & { installedVersion?: string; latestVersion?: string }>
+      >,
+      HttpUtil.get('/panel/api/dnstt/status', undefined, { silent: true }) as Promise<
         ApiMsg<ExternalVPNBinaryStatus & { installedVersion?: string; latestVersion?: string }>
       >,
     ]);
@@ -300,6 +305,18 @@ export default function SystemUpdateModal({
       unsupportedReason: oxidns.obj?.unsupportedReason,
       error: oxidns.obj?.error || (oxidns.success ? undefined : oxidns.msg),
     });
+    rows.push({
+      key: 'dnstt',
+      label: 'DNSTT',
+      source: 'standalone',
+      installed: dnstt.obj?.installed === true,
+      installedVersion: dnstt.obj?.installedVersion || '',
+      availableVersion: dnstt.obj?.latestVersion || '',
+      updateAvailable: dnstt.obj?.updateAvailable === true,
+      supported: dnstt.obj?.supported,
+      unsupportedReason: dnstt.obj?.unsupportedReason,
+      error: dnstt.obj?.error || (dnstt.success ? undefined : dnstt.msg),
+    });
     setBundledDependencies(rows);
     setStandaloneDependencies(
       (['naiveproxy', 'hysteria2'] as const).map((key) => {
@@ -345,6 +362,11 @@ export default function SystemUpdateModal({
 
   const requestDependencyUpdate = useCallback(async (dependency: DependencyStatus) => {
     switch (dependency.key) {
+      case 'dnstt':
+        return (await HttpUtil.post(
+          dependency.installed ? '/panel/api/dnstt/update' : '/panel/api/dnstt/install',
+          undefined, { timeout: 180000 },
+        )) as ApiMsg<unknown>;
       case 'oxidns':
         return (await HttpUtil.post(
           dependency.installed ? '/panel/api/oxidns/update' : '/panel/api/oxidns/install',
@@ -380,10 +402,13 @@ export default function SystemUpdateModal({
       messageApi.success(
         dependency.key === 'oxidns' && !dependency.installed
           ? 'OxiDNS установлен. Теперь можно создать собственный DNS.'
-          : `${dependency.label}: ${t('pages.settings.swap.updateDone')}`,
+          : dependency.key === 'dnstt' && !dependency.installed
+            ? 'DNSTT установлен. Настройте домен и ключи в разделе DNS.'
+            : `${dependency.label}: ${t('pages.settings.swap.updateDone')}`,
       );
       await loadDependencyUpdates();
       if (dependency.key === 'oxidns') window.dispatchEvent(new Event('oxidns:changed'));
+      if (dependency.key === 'dnstt') window.dispatchEvent(new Event('dnstt:changed'));
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : String(error));
     } finally {
@@ -397,14 +422,18 @@ export default function SystemUpdateModal({
       const response = (await HttpUtil.post(
         dependency.key === 'oxidns'
           ? '/panel/api/oxidns/remove'
-          : `/panel/api/server/components/remove/${dependency.key}`,
+          : dependency.key === 'dnstt'
+            ? '/panel/api/dnstt/remove'
+            : `/panel/api/server/components/remove/${dependency.key}`,
       )) as ApiMsg<unknown>;
       if (!response?.success)
         throw new Error(response?.msg || `Не удалось удалить ${dependency.label}`);
       messageApi.success(
         dependency.key === 'oxidns'
           ? 'OxiDNS удалён, собственный DNS отключён, настройки и служебные файлы очищены.'
-          : `${dependency.label}: компонент удалён.`,
+          : dependency.key === 'dnstt'
+            ? 'DNSTT остановлен, удалён вместе с ключами и настройками.'
+            : `${dependency.label}: компонент удалён.`,
       );
       await loadDependencyUpdates();
       if (dependency.key === 'oxidns') window.dispatchEvent(new Event('oxidns:changed'));
@@ -760,6 +789,8 @@ export default function SystemUpdateModal({
                     !action.installed && isDependencyInstallable(action)
                       ? dependency.key === 'oxidns'
                         ? 'Установить OxiDNS'
+                        : dependency.key === 'dnstt'
+                          ? 'Установить DNSTT'
                         : standalone
                           ? 'Установить отдельное ядро'
                           : 'Установить'
@@ -823,6 +854,12 @@ export default function SystemUpdateModal({
                             : 'Установите OxiDNS здесь, затем нажмите «Создать DNS». При удалении служба будет остановлена, настройки удалены, функции скрыты.'}
                         </Typography.Text>
                       )}
+                      {dependency.key === 'dnstt' && (
+                        <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 10 }}>
+                          Отдельный зашифрованный DNS-туннель с делегированием NS, ключами и локальной TCP-целью.
+                          Не изменяет обычный DNS и OxiDNS.
+                        </Typography.Text>
+                      )}
                       {dependency.key === 'pingtunnel' && (
                         <Typography.Text
                           type="secondary"
@@ -865,7 +902,7 @@ export default function SystemUpdateModal({
                         </Typography.Paragraph>
                       )}
                       <Space wrap>
-                        {dependency.key === 'oxidns' && dependency.installed && (
+                        {(dependency.key === 'oxidns' || dependency.key === 'dnstt') && dependency.installed && (
                           <Button
                             size="small"
                             type="primary"
@@ -873,7 +910,7 @@ export default function SystemUpdateModal({
                             href={`${(window.X_UI_BASE_PATH || '/').replace(/\/+$/, '')}/panel/singbox#dns`}
                             onClick={onClose}
                           >
-                            Создать DNS
+                            {dependency.key === 'dnstt' ? 'Настроить DNSTT' : 'Создать DNS'}
                           </Button>
                         )}
                         {action.supported === false ? (
@@ -910,6 +947,8 @@ export default function SystemUpdateModal({
                             description={
                               dependency.key === 'oxidns'
                                 ? 'Собственный DNS будет отключён. sing-box вернётся к прежнему DNS.'
+                                : dependency.key === 'dnstt'
+                                  ? 'DNSTT будет остановлен, а ключи и настройки удалены без возможности восстановления.'
                                 : standalone
                                   ? 'Входящие подключения переключатся на встроенный sing-box.'
                                   : 'Активные подключения этого протокола необходимо сначала отключить.'
