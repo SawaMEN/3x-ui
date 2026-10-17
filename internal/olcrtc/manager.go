@@ -557,11 +557,14 @@ type LiveClient struct {
 	FailedCount   int    `json:"failedCount"`
 }
 func Live(ctx context.Context) (LiveStatus, error) {
-	var result LiveStatus
 	body, err := apiResponse(ctx, http.MethodGet, "/api/state", nil)
 	if err != nil {
-		return result, err
+		return LiveStatus{}, err
 	}
+	return decodeLive(body)
+}
+func decodeLive(body []byte) (LiveStatus, error) {
+	var result LiveStatus
 	var upstream struct {
 		Clients []struct {
 			ClientID string `json:"client_id"`
