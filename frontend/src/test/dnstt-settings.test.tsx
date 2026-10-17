@@ -58,15 +58,21 @@ async function openInstalled() {
   await screen.findByRole('textbox', { name: 'Домен DNSTT' });
 }
 
-it('offers an installation workflow for a missing DNSTT binary', async () => {
+it('does not display DNSTT before package installation', async () => {
   render(<DNSTTSettings />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Установить DNSTT' }));
-  await waitFor(() =>
-    expect(HttpUtil.post).toHaveBeenCalledWith('/panel/api/dnstt/install', undefined, {
-      silent: true,
-      timeout: 180000,
-    }),
-  );
+  await waitFor(() => expect(HttpUtil.get).toHaveBeenCalledWith(
+    '/panel/api/dnstt/status', undefined, { silent: true },
+  ));
+  await waitFor(() => expect(screen.queryByText('DNS-туннель — DNSTT')).toBeNull());
+  expect(screen.queryByRole('button', { name: 'Установить DNSTT' })).toBeNull();
+  expect(HttpUtil.post).not.toHaveBeenCalled();
+});
+
+it('shows DNSTT when installed through package updates', async () => {
+  render(<DNSTTSettings />);
+  await waitFor(() => expect(HttpUtil.get).toHaveBeenCalled());
+  current = { ...current, installed: true };
+  act(() => window.dispatchEvent(new Event('dnstt:changed')));
   await screen.findByRole('textbox', { name: 'Домен DNSTT' });
 });
 
@@ -178,7 +184,7 @@ it('hides server controls when removed in another package view', async () => {
   await openInstalled();
   current = { ...original, publicKey: '' };
   act(() => window.dispatchEvent(new Event('dnstt:changed')));
-  await screen.findByRole('button', { name: 'Установить DNSTT' });
+  await waitFor(() => expect(screen.queryByText('DNS-туннель — DNSTT')).toBeNull());
   expect(screen.queryByRole('textbox', { name: 'Домен DNSTT' })).toBeNull();
 });
 

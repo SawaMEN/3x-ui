@@ -860,8 +860,9 @@ export default function SystemUpdateModal({
                           type="secondary"
                           style={{ display: 'block', marginBottom: 10 }}
                         >
-                          Отдельный зашифрованный DNS-туннель с делегированием NS, ключами и
-                          локальной TCP-целью. Не изменяет обычный DNS и OxiDNS.
+                          {dependency.installed
+                            ? 'DNSTT установлен. Нажмите «Настроить DNSTT» для создания ключей, настройки DNS-делегирования и запуска.'
+                            : 'Установите DNSTT здесь. После установки его настройки появятся в sing-box → DNS; после удаления исчезнут.'}
                         </Typography.Text>
                       )}
                       {dependency.key === 'pingtunnel' && (

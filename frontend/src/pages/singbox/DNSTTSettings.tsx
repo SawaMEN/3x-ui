@@ -194,6 +194,14 @@ export default function DNSTTSettings() {
     form.listenPort <= 65535 &&
     (!form.serverIP || /^(?:\d{1,3}\.){3}\d{1,3}$/.test(form.serverIP));
 
+  // DNSTT is installed in the package/core update dialog. Do not show
+  // its controls in sing-box DNS until a server binary is installed.
+  if (!loading && !state.installed) {
+    if (!error) return null;
+    return <Alert type="error" showIcon title="Не удалось проверить состояние DNSTT"
+      description={error} action={<Button onClick={() => void reload()}>Повторить</Button>} />;
+  }
+
   return (
     <Card
       title="DNS-туннель — DNSTT"
@@ -238,24 +246,8 @@ export default function DNSTTSettings() {
           />
         )}
 
-        {!state.installed ? (
-          <Space orientation="vertical" size={8}>
-            <Typography.Text>Сначала установите отдельный сервер DNSTT.</Typography.Text>
-            <Button
-              type="primary"
-              loading={busy}
-              disabled={state.supported === false}
-              onClick={() => void perform('install')}
-            >
-              Установить DNSTT
-            </Button>
-            <Typography.Text type="secondary">
-              Скачивается закреплённый проверяемый SHA-256 бинарник из GitHub Releases зеркала
-              NNdroid. Это сторонняя сборка, не официальный релиз автора протокола.
-            </Typography.Text>
-          </Space>
-        ) : (
-          <>
+        {state.installed && (
+          <> 
             <div>
               <Typography.Text strong>1. Поддомен DNS-туннеля</Typography.Text>
               <Input
