@@ -584,31 +584,26 @@ export default function OutboundsTab({
     try {
       let updated = 0;
       let failed = 0;
-      let pendingApplyId: number | null = null;
-      // The final enabled subscription commits the whole batch. Disabled
-      // subscriptions need fetching but never affect running outbounds.
-      const lastEnabledIndex = subs.reduce((last, sub, index) => sub.enabled ? index : last, -1);
-      for (const [index, sub] of subs.entries()) {
-        const deferApply = index !== lastEnabledIndex;
+      let needsApply = false;
+      for (const sub of subs) {
         try {
           const reply = await HttpUtil.post(
             `/panel/api/xray/outbound-subs/${sub.id}/refresh`,
-            deferApply ? { deferApply: true } : undefined,
+            { deferApply: true },
           );
           if (!reply?.success) {
             failed++;
             continue;
           }
           updated++;
-          if (sub.enabled) pendingApplyId = deferApply ? sub.id : null;
+          needsApply ||= sub.enabled;
         } catch {
           failed++;
         }
       }
-      // If the last download failed, apply previous successful updates once.
-      if (pendingApplyId !== null) {
+      if (needsApply) {
         try {
-          const reply = await HttpUtil.post(`/panel/api/xray/outbound-subs/${pendingApplyId}/refresh`);
+          const reply = await HttpUtil.post('/panel/api/xray/outbound-subs/apply');
           if (!reply?.success) failed++;
         } catch {
           failed++;
