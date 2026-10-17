@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
   Button,
@@ -80,6 +80,7 @@ type GatewayPreflight = {
   ready: boolean;
   problems: string[];
   notes: string[];
+  verifiedConfig?: string;
 };
 
 const emptyNetworkConfig: GatewayNetworkConfig = {
@@ -107,7 +108,6 @@ export default function GatewayModeControl() {
   const [busy, setBusy] = useState(false);
   const [allowDefaultInterface, setAllowDefaultInterface] = useState(false);
   const [messageApi, contextHolder] = message.useMessage();
-  const preflightSequence = useRef(0);
 
   const applyStatus = useCallback((next: GatewayStatus) => {
     setStatus(next);
@@ -206,13 +206,11 @@ export default function GatewayModeControl() {
   }, [refresh, busy, checking]);
 
   const updateNetwork = (patch: Partial<GatewayNetworkConfig>) => {
-    preflightSequence.current += 1;
     setNetworkConfig((current) => ({ ...current, ...patch }));
     setPreflight(null);
   };
 
   const runPreflight = useCallback(async (quiet = false): Promise<boolean> => {
-    const sequence = ++preflightSequence.current;
     setChecking(true);
     setPreflight(null);
     try {
@@ -221,20 +219,19 @@ export default function GatewayModeControl() {
         { network: networkConfig },
         { silent: true },
       )) as ApiMsg<GatewayPreflight>;
-      if (sequence !== preflightSequence.current) return false;
       if (!response?.success || !response.obj) {
         if (!quiet) messageApi.error(response?.msg || 'Не удалось проверить готовность');
         return false;
       }
-      setPreflight(response.obj);
+      setPreflight({ ...response.obj, verifiedConfig: JSON.stringify(networkConfig) });
       return response.obj.ready;
     } catch (error) {
-      if (sequence === preflightSequence.current && !quiet) {
+      if (!quiet) {
         messageApi.error(error instanceof Error ? error.message : 'Не удалось проверить шлюз');
       }
       return false;
     } finally {
-      if (sequence === preflightSequence.current) setChecking(false);
+      setChecking(false);
     }
   }, [networkConfig, messageApi]);
 
@@ -323,7 +320,6 @@ export default function GatewayModeControl() {
     }, 700);
     return () => {
       window.clearTimeout(timer);
-      preflightSequence.current += 1;
     };
   }, [loading, coreRunning, networkInputValid, networkConfigured, busy, runPreflight]);
 
@@ -552,7 +548,7 @@ export default function GatewayModeControl() {
             {checking ? 'Проверка…' : 'Проверить ещё раз'}
           </Button>
         </div>
-        {preflight && (
+        {preflight && preflight.verifiedConfig === JSON.stringify(networkConfig) && (
           <Alert
             showIcon
             type={preflight.ready ? 'success' : 'error'}
