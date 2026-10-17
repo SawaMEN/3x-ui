@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"errors"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -16,6 +17,7 @@ type OxiDNSController struct{ settings service.SettingService }
 func NewOxiDNSController(g *gin.RouterGroup) *OxiDNSController {
 	c := &OxiDNSController{}
 	g.GET("/status", c.status)
+	g.GET("/logs", c.logs)
 	g.POST("/check", c.checkDNS)
 	g.POST("/install", c.install)
 	g.POST("/update", c.update)
@@ -48,6 +50,24 @@ func (a *OxiDNSController) status(c *gin.Context) {
 		s.Domain = strings.TrimSpace(domain)
 	}
 	jsonObj(c, s, nil)
+}
+
+// logs reads a bounded journal tail of the dedicated OxiDNS systemd unit.
+// The endpoint is mounted under the existing authenticated panel API group.
+func (a *OxiDNSController) logs(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "journalctl", "-u", "x-ui-oxidns.service",
+		"--no-pager", "--output=short-iso", "--lines=80").CombinedOutput()
+	if err != nil {
+		jsonMsg(c, "Не удалось прочитать журнал службы OxiDNS", err)
+		return
+	}
+	// Avoid sending unbounded or unexpectedly verbose log entries to the browser.
+	if len(out) > 65536 {
+		out = out[len(out)-65536:]
+	}
+	jsonObj(c, gin.H{"logs": strings.TrimSpace(string(out))}, nil)
 }
 
 // Resolve a public domain via the local OxiDNS listener to test the full path.
