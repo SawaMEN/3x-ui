@@ -36,3 +36,11 @@ jobs:
         env:
           OXIDNS_CHECK_BINARY: ${{ runner.temp }}/oxidns-official/oxidns
         run: go test -v ./internal/oxidns -run '^(TestGeneratedYAMLAgainstOfficialBinary|TestDoHCertificateAndOfficialParser|TestOfficialOxiDNSForwardsRealTraffic)$' -count=1
+      - name: Verify real install and full removal on systemd
+        env:
+          OXIDNS_CHECK_BINARY: ${{ runner.temp }}/oxidns-official/oxidns
+        run: |
+          sudo env PATH="$PATH" HOME="$HOME" \
+            OXIDNS_CHECK_BINARY="$OXIDNS_CHECK_BINARY" \
+            OXIDNS_SYSTEMD_TEST=1 \
+            "$(command -v go)" test -v ./internal/oxidns -run '^TestManagedServiceLifecycle$' -count=1
