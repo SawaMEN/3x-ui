@@ -348,8 +348,13 @@ export default function GatewayModeControl() {
   }, [loading, coreRunning, networkInputValid, networkConfigured, busy, runPreflight]);
 
   const gatewayHealthy =
-    enabled && configured && coreRunning && networkHealthy &&
-    !coreMismatch && !conflict && !status?.network?.error;
+    enabled &&
+    configured &&
+    coreRunning &&
+    networkHealthy &&
+    !coreMismatch &&
+    !conflict &&
+    !status?.network?.error;
   const needsRepair = enabled && (!networkHealthy || coreMismatch || !!status?.network?.error);
   const gatewayActionLabel =
     coreMismatch && networkHealthy
@@ -407,13 +412,13 @@ export default function GatewayModeControl() {
                     ? 'Ошибка сетевых настроек'
                     : conflict
                       ? 'Конфликт настроек шлюза'
-                    : recoveryOnly
-                      ? 'Настройка шлюза не завершена'
-                      : coreMismatch
-                        ? 'Шлюз использует ' + ownerCore
-                        : !coreRunning
-                          ? 'Ядро остановлено'
-                          : 'Шлюз требует восстановления'
+                      : recoveryOnly
+                        ? 'Настройка шлюза не завершена'
+                        : coreMismatch
+                          ? 'Шлюз использует ' + ownerCore
+                          : !coreRunning
+                            ? 'Ядро остановлено'
+                            : 'Шлюз требует восстановления'
                 }
                 description={
                   status?.network?.error ||
