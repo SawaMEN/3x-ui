@@ -765,6 +765,7 @@ export default function SingBoxPage() {
   const resolvedSection = aliases[sectionSlug] || sectionSlug;
   const activeSection = sectionKeys.has(resolvedSection) ? resolvedSection : 'basic';
   const showAdvanced = activeSection === 'advanced';
+  const utilitySection = activeSection === 'gateway' || activeSection === 'adblock';
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [fetchError, setFetchError] = useState('');
@@ -2188,8 +2189,8 @@ export default function SingBoxPage() {
         <Layout className="content-shell">
           <Layout.Content id="content-layout" className="content-area">
             <FloatButton.BackTop target={scrollTarget} visibilityHeight={200} />
-            <Spin spinning={loading} delay={150} description={t('loading')} size="large">
-              {fetchError ? (
+            <Spin spinning={loading && !utilitySection} delay={150} description={t('loading')} size="large">
+              {fetchError && !utilitySection ? (
                 <Result
                   status="error"
                   title={t('somethingWentWrong')}
@@ -2200,9 +2201,9 @@ export default function SingBoxPage() {
                     </Button>
                   }
                 />
-              ) : snapshot ? (
+              ) : snapshot || utilitySection ? (
                 <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-                  <Card className="singbox-toolbar">
+                  {!utilitySection && <Card className="singbox-toolbar">
                     <div className="singbox-toolbar-heading">
                       <strong>
                         {t('pages.coreSelection.settings')} · {SECTION_LABELS[activeSection]}
@@ -2258,9 +2259,9 @@ export default function SingBoxPage() {
                         </div>
                       </Col>
                     </Row>
-                  </Card>
+                  </Card>}
 
-                  {healthIssues.length > 0 && (
+                  {!utilitySection && healthIssues.length > 0 && (
                     <Alert
                       type="warning"
                       showIcon
