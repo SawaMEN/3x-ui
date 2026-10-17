@@ -1,4 +1,4 @@
-name: DNSTT integration formatter snapshot v2
+name: DNSTT integration formatter snapshot v3
 on:
   push:
     branches: [dns]
