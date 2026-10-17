@@ -141,7 +141,9 @@ it('allows a different DNS subdomain and guides its DNS records and TLS setup', 
     expect.anything(),
     expect.anything(),
   );
-  expect(screen.getByText(/A\/AAAA-записи и доступность портов из интернета не проверялись/)).toBeTruthy();
+  expect(
+    screen.getByText(/A\/AAAA-записи и доступность портов из интернета не проверялись/),
+  ).toBeTruthy();
 });
 
 it('accepts independent certificate paths and sends them during setup', async () => {
@@ -153,7 +155,9 @@ it('accepts independent certificate paths and sends them during setup', async ()
   fireEvent.change(screen.getByRole('textbox', { name: 'Путь к сертификату DNS' }), {
     target: { value: '/etc/letsencrypt/live/dns.another-domain.net/fullchain.pem' },
   });
-  expect((screen.getByRole('button', { name: 'Создать и включить DNS' }) as HTMLButtonElement).disabled).toBe(true);
+  expect(
+    (screen.getByRole('button', { name: 'Создать и включить DNS' }) as HTMLButtonElement).disabled,
+  ).toBe(true);
   fireEvent.change(screen.getByRole('textbox', { name: 'Путь к ключу DNS' }), {
     target: { value: '/etc/letsencrypt/live/dns.another-domain.net/privkey.pem' },
   });

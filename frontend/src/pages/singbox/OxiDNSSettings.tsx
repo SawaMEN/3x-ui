@@ -181,7 +181,9 @@ export default function OxiDNSSettings() {
   const incompleteDNSCertificate =
     external && Boolean(draft.certFile.trim()) !== Boolean(draft.keyFile.trim());
   const externalPorts = [
-    ...(draft.doh ? [`TCP/${draft.port} (DoH)`, ...(draft.http3 ? [`UDP/${draft.port} (HTTP/3)`] : [])] : []),
+    ...(draft.doh
+      ? [`TCP/${draft.port} (DoH)`, ...(draft.http3 ? [`UDP/${draft.port} (HTTP/3)`] : [])]
+      : []),
     ...(draft.dot ? [`TCP/${draft.dotPort} (DoT)`] : []),
     ...(draft.doq ? [`UDP/${draft.doqPort} (DoQ)`] : []),
   ].join(', ');
@@ -199,7 +201,7 @@ export default function OxiDNSSettings() {
         ? 'Укажите оба пути к сертификату DNS и его ключу либо оставьте оба пустыми для сертификата панели.'
         : unused
           ? 'Включите использование в sing-box либо выберите внешний защищённый DNS.'
-        : '';
+          : '';
   const chooseMode = (mode: 'local' | 'doh' | 'all') => {
     if (mode === 'local') {
       patch({ useSingBox: true, doh: false, dot: false, doq: false, http3: false });
@@ -258,7 +260,14 @@ export default function OxiDNSSettings() {
     try {
       const next = await request(
         enable ? 'setup' : 'disable',
-        enable ? { ...draft, domain: draft.domain.trim().toLowerCase(), certFile: draft.certFile.trim(), keyFile: draft.keyFile.trim() } : undefined,
+        enable
+          ? {
+              ...draft,
+              domain: draft.domain.trim().toLowerCase(),
+              certFile: draft.certFile.trim(),
+              keyFile: draft.keyFile.trim(),
+            }
+          : undefined,
       );
       setStatus(next);
       setDraft(getConfig(next));
@@ -283,12 +292,16 @@ export default function OxiDNSSettings() {
     setDomainCheckResult(null);
     setDomainCheckError('');
     try {
-      const response = (await HttpUtil.post('/panel/api/oxidns/validate', {
-        ...draft,
-        domain: draft.domain.trim().toLowerCase(),
-        certFile: draft.certFile.trim(),
-        keyFile: draft.keyFile.trim(),
-      }, { silent: true, timeout: 12000 })) as APIResponse<{ valid: boolean }>;
+      const response = (await HttpUtil.post(
+        '/panel/api/oxidns/validate',
+        {
+          ...draft,
+          domain: draft.domain.trim().toLowerCase(),
+          certFile: draft.certFile.trim(),
+          keyFile: draft.keyFile.trim(),
+        },
+        { silent: true, timeout: 12000 },
+      )) as APIResponse<{ valid: boolean }>;
       if (!response.success || !response.obj?.valid) {
         throw new Error(response.msg || 'Сертификат не соответствует выбранному DNS-домену.');
       }
@@ -509,7 +522,6 @@ export default function OxiDNSSettings() {
                   </div>
                 </Space>
 
-
                 {external && (
                   <Card size="small" title="Свой DNS-поддомен: пошаговая настройка">
                     <Space orientation="vertical" size={12} style={{ width: '100%' }}>
@@ -539,10 +551,10 @@ export default function OxiDNSSettings() {
                           У регистратора или DNS-провайдера создайте A-запись для имени{' '}
                           <Typography.Text code copyable>
                             {draft.domain.trim() || 'dns.example.com'}
-                          </Typography.Text>
-                          {' '}со значением «публичный IPv4 вашего сервера». При наличии публичного
-                          IPv6 добавьте AAAA-запись. Для прямого DNS-сервера выключите
-                          проксирование записи (например, DNS only в Cloudflare).
+                          </Typography.Text>{' '}
+                          со значением «публичный IPv4 вашего сервера». При наличии публичного IPv6
+                          добавьте AAAA-запись. Для прямого DNS-сервера выключите проксирование
+                          записи (например, DNS only в Cloudflare).
                         </Typography.Paragraph>
                         <Typography.Text type="secondary">
                           Изменение DNS-записей может распространяться некоторое время.
@@ -554,21 +566,28 @@ export default function OxiDNSSettings() {
                           Нужен действующий сертификат для этого поддомена или подходящий wildcard
                           (например, *.example.com для dns.example.com). Если сертификат панели
                           покрывает поддомен, дополнительные поля не нужны. Иначе выпустите
-                          отдельный сертификат и укажите пути к файлам ниже. Панель не
-                          выпускает сертификаты автоматически.
+                          отдельный сертификат и укажите пути к файлам ниже. Панель не выпускает
+                          сертификаты автоматически.
                         </Typography.Paragraph>
                       </div>
                       <div>
                         <Typography.Text strong>4. Разрешите входящие порты</Typography.Text>
                         <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                          Откройте в firewall сервера и у хостера: <Typography.Text code>{externalPorts}</Typography.Text>.
-                          Убедитесь, что порты не заняты панелью, Xray или другими службами.
+                          Откройте в firewall сервера и у хостера:{' '}
+                          <Typography.Text code>{externalPorts}</Typography.Text>. Убедитесь, что
+                          порты не заняты панелью, Xray или другими службами.
                         </Typography.Paragraph>
                       </div>
                       <Button
                         onClick={() => void checkDomain()}
                         loading={checkingDomain}
-                        disabled={locked || domainInvalid || invalidPort || conflictPorts || incompleteDNSCertificate}
+                        disabled={
+                          locked ||
+                          domainInvalid ||
+                          invalidPort ||
+                          conflictPorts ||
+                          incompleteDNSCertificate
+                        }
                       >
                         Проверить DNS-домен и сертификат
                       </Button>
@@ -768,7 +787,10 @@ export default function OxiDNSSettings() {
                               служб.
                             </Typography.Text>
                           )}
-                          <Card size="small" title="Отдельный TLS-сертификат для DNS (необязательно)">
+                          <Card
+                            size="small"
+                            title="Отдельный TLS-сертификат для DNS (необязательно)"
+                          >
                             <Space orientation="vertical" size={8} style={{ width: '100%' }}>
                               <Typography.Text type="secondary">
                                 Если сертификат панели подходит DNS-поддомену, оставьте оба поля
@@ -791,13 +813,15 @@ export default function OxiDNSSettings() {
                                 onChange={(event) => patch({ keyFile: event.target.value })}
                               />
                               {incompleteDNSCertificate && (
-                                <Typography.Text type="danger">Укажите оба пути или очистите оба поля.</Typography.Text>
+                                <Typography.Text type="danger">
+                                  Укажите оба пути или очистите оба поля.
+                                </Typography.Text>
                               )}
                             </Space>
                           </Card>
                           <Typography.Text type="secondary">
-                            Перед запуском панель проверяет сертификат и выбранное имя.
-                            DNS-запись и внешний доступ к портам нужно проверить отдельно.
+                            Перед запуском панель проверяет сертификат и выбранное имя. DNS-запись и
+                            внешний доступ к портам нужно проверить отдельно.
                           </Typography.Text>
                         </>
                       )}
