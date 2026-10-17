@@ -55,6 +55,7 @@ beforeEach(() => {
   vi.mocked(HttpUtil.post).mockReset();
 });
 
+// Read-only discovery must never enable traffic interception without confirmation.
 describe('gateway settings in sing-box', () => {
   it('automatically discovers and preflights a safe LAN without enabling firewall rules', async () => {
     vi.mocked(HttpUtil.get).mockImplementation(async (url) => ({
