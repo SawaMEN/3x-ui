@@ -1,0 +1,37 @@
+name: DNSTT integration check
+on:
+  push:
+    branches: [dns]
+    paths:
+      - 'internal/dnstt/**'
+      - 'internal/web/controller/dnstt.go'
+      - '.github/workflows/dnstt-integration.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  official-tunnel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Download digest-pinned upstream-mirror binaries
+        run: |
+          set -euo pipefail
+          base="https://github.com/NNdroid/dnstt/releases/download/2026-05-01-0c5c52a"
+          curl -fsSL --retry 3 "$base/dnstt-server-linux-amd64" -o "$RUNNER_TEMP/dnstt-server"
+          curl -fsSL --retry 3 "$base/dnstt-client-linux-amd64" -o "$RUNNER_TEMP/dnstt-client"
+          echo "def817a91ea0fce57c37c3d82c97799d7caa38618b8a73e94c05c14a1300560c  $RUNNER_TEMP/dnstt-server" | sha256sum -c -
+          echo "92f7afb857740e482f577990bce601b9f0c5a9771e3890e20ce951e33e6e1e5c  $RUNNER_TEMP/dnstt-client" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/dnstt-server" "$RUNNER_TEMP/dnstt-client"
+      - name: Verify real server and client over UDP DNS
+        env:
+          DNSTT_SERVER_BINARY: ${{ runner.temp }}/dnstt-server
+          DNSTT_CLIENT_BINARY: ${{ runner.temp }}/dnstt-client
+        run: go test -v -count=1 ./internal/dnstt
+      - name: Go formatting validation
+        run: |
+          test -z "$(gofmt -l internal/dnstt/manager.go internal/dnstt/manager_test.go internal/web/controller/dnstt.go)"
