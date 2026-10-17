@@ -21,6 +21,21 @@ func TestSubscriptionReportKeepsSupportedLinksAndExplainsUnsupported(t *testing.
 	}
 }
 
+func TestSubscriptionStandardLinksBypassInstalledKernelParser(t *testing.T) {
+	// A binary that rejects "parse" must not reject ordinary share links:
+	// VLESS and Trojan are handled by the panel's own parser.
+	writeSubscriptionCheckBinary(t, "exit 9\n")
+	source := "vless://11111111-1111-4111-8111-111111111111@example.com:443?security=tls&type=tcp#vless" +
+		"\ntrojan://password@example.org:443?security=tls&type=tcp#trojan"
+	rows, identities, warnings, err := parseOutboundSubscriptionReport([]byte(source), true)
+	if err != nil || len(rows) != 2 || len(identities) != 2 || len(warnings) != 0 {
+		t.Fatalf("rows=%d ids=%d warnings=%v err=%v", len(rows), len(identities), warnings, err)
+	}
+	if rows[0]["protocol"] != "vless" || rows[1]["protocol"] != "trojan" {
+		t.Fatalf("unexpected protocols: %v, %v", rows[0]["protocol"], rows[1]["protocol"])
+	}
+}
+
 func TestSubscriptionReportNativeSettingsRemainVerbatim(t *testing.T) {
 	rows, _, _, err := parseOutboundSubscriptionReport([]byte(`[{"type":"naive","tag":"naive","server":"example.com","insecure_concurrency":12,"quic":true,"extra_headers":{"Header":"value"},"tls":{"enabled":true}},{"type":"future-protocol","tag":"future","custom":{"nested":[1,2]}}]`), true)
 	if err != nil || len(rows) != 2 {
