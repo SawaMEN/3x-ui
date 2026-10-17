@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
   Button,
@@ -165,7 +165,10 @@ export default function GatewayModeControl() {
     }).finally(() => {
       if (active) setLoading(false);
     });
-    void discover(true);
+    // Discover asynchronously to avoid synchronous state updates inside an effect.
+    void Promise.resolve().then(() => {
+      if (active) return discover(true);
+    });
     return () => { active = false; };
   }, [loadStatus, applyStatus, discover]);
 
@@ -268,14 +271,11 @@ export default function GatewayModeControl() {
     networkConfig.wanInterface !== networkConfig.lanInterface &&
     (!lanInterfaceIsWAN || allowDefaultInterface || networkConfigured);
 
-  const availableInterfaces = discovery?.interfaces || [];
-  const options = useMemo(
-    () => availableInterfaces.map((item) => ({
-      value: item.name,
-      label: item.name + (item.defaultRoute ? ' · основной маршрут' : ''),
-    })),
-    [availableInterfaces],
-  );
+  const availableInterfaces = discovery?.interfaces ?? [];
+  const options = availableInterfaces.map((item) => ({
+    value: item.name,
+    label: item.name + (item.defaultRoute ? ' · основной маршрут' : ''),
+  }));
   const selectedLAN = availableInterfaces.find((item) => item.name === networkConfig.lanInterface);
   const issues = [
     { label: 'Ядро запущено', healthy: coreRunning },
