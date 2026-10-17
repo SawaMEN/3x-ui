@@ -22,7 +22,7 @@ func NewOlcRTCController(g *gin.RouterGroup) {
 		}
 		result := make([]gin.H, 0, len(clients))
 		for _, client := range clients {
-			result = append(result, gin.H{"id": client.ID, "locations": client.Locations, "link": olcrtc.ClientLink(client)})
+			result = append(result, gin.H{"id": client.ID, "quota": client.Quota, "locations": client.Locations, "link": olcrtc.ClientLink(client)})
 		}
 		jsonObj(c, result, nil)
 	})
