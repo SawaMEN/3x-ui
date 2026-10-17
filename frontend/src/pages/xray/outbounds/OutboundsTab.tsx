@@ -472,14 +472,15 @@ export default function OutboundsTab({
     }
     setSavingSub(true);
     try {
-      const previous = editingSubId == null ? undefined : subs.find((sub) => sub.id === editingSubId);
-      const sourceChanged = previous !== undefined && (
-        previous.url !== newSub.url.trim() ||
-        (previous.tagPrefix ?? '') !== (newSub.tagPrefix ?? '') ||
-        (previous.userAgent ?? '') !== (newSub.userAgent ?? '') ||
-        previous.allowPrivate !== newSub.allowPrivate ||
-        previous.allowInsecure !== newSub.allowInsecure
-      );
+      const previous =
+        editingSubId == null ? undefined : subs.find((sub) => sub.id === editingSubId);
+      const sourceChanged =
+        previous !== undefined &&
+        (previous.url !== newSub.url.trim() ||
+          (previous.tagPrefix ?? '') !== (newSub.tagPrefix ?? '') ||
+          (previous.userAgent ?? '') !== (newSub.userAgent ?? '') ||
+          previous.allowPrivate !== newSub.allowPrivate ||
+          previous.allowInsecure !== newSub.allowInsecure);
       const url =
         editingSubId != null
           ? `/panel/api/xray/outbound-subs/${editingSubId}`
@@ -493,7 +494,8 @@ export default function OutboundsTab({
               : 'pages.xray.outboundSub.toastAdded',
           ),
         );
-        const reloadId = editingSubId == null ? r.obj?.id : sourceChanged ? editingSubId : undefined;
+        const reloadId =
+          editingSubId == null ? r.obj?.id : sourceChanged ? editingSubId : undefined;
         resetSubForm();
         await loadSubs();
         if (reloadId) await refreshOne(reloadId);
@@ -596,10 +598,9 @@ export default function OutboundsTab({
       let needsApply = false;
       for (const sub of subs) {
         try {
-          const reply = await HttpUtil.post(
-            `/panel/api/xray/outbound-subs/${sub.id}/refresh`,
-            { deferApply: true },
-          );
+          const reply = await HttpUtil.post(`/panel/api/xray/outbound-subs/${sub.id}/refresh`, {
+            deferApply: true,
+          });
           if (!reply?.success) {
             failed++;
             continue;

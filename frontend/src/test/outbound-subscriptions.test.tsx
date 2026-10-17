@@ -135,13 +135,22 @@ it('groups incompatible subscription nodes instead of printing a wall of kernel 
   vi.mocked(HttpUtil.get).mockResolvedValue({
     success: true,
     msg: '',
-    obj: [{
-      id: 4, remark: 'Compatibility', url: 'https://provider.test/sub',
-      enabled: true, autoBalance: true, outboundCount: 59, supportedCount: 56,
-      lastWarning: '3 подключений не поддерживаются текущим ядром sing-box; сохранены в подписке, но не применены: ' + problems.join('; '),
-      applyError: 'селектор sub-auto-4 ещё не загружен в ядро; требуется перезапуск sing-box',
-      probeError: 'No healthy outbound; automatic route is blocked',
-    }],
+    obj: [
+      {
+        id: 4,
+        remark: 'Compatibility',
+        url: 'https://provider.test/sub',
+        enabled: true,
+        autoBalance: true,
+        outboundCount: 59,
+        supportedCount: 56,
+        lastWarning:
+          '3 подключений не поддерживаются текущим ядром sing-box; сохранены в подписке, но не применены: ' +
+          problems.join('; '),
+        applyError: 'селектор sub-auto-4 ещё не загружен в ядро; требуется перезапуск sing-box',
+        probeError: 'No healthy outbound; automatic route is blocked',
+      },
+    ],
   });
   render(<OutboundSubscriptions open initialURL="" onClose={() => {}} onTagsChanged={() => {}} />);
   expect(await screen.findByText('Применимо: 56 из 59')).toBeTruthy();
@@ -149,7 +158,9 @@ it('groups incompatible subscription nodes instead of printing a wall of kernel 
   expect(screen.getByText('gRPC: несовместимый authority: 2')).toBeTruthy();
   expect(screen.getByText('TCP: HTTP-заголовок Xray: 1')).toBeTruthy();
   expect(screen.getByText('Изменения ожидают перезапуска sing-box')).toBeTruthy();
-  expect(screen.getByText('Нет доступных узлов: автоматический маршрут временно заблокирован')).toBeTruthy();
+  expect(
+    screen.getByText('Нет доступных узлов: автоматический маршрут временно заблокирован'),
+  ).toBeTruthy();
   fireEvent.click(screen.getByText('Показать причины по подключениям'));
   expect(await screen.findByText(problems[0])).toBeTruthy();
 });

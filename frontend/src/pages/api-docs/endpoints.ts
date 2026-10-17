@@ -2709,16 +2709,24 @@ export const sections: readonly Section[] = [
       {
         method: 'POST',
         path: '/panel/api/xray/outbound-subs/:id/refresh',
-        summary: 'Re-fetch a subscription, optionally deferring the core reload for a batch update.',
+        summary:
+          'Re-fetch a subscription, optionally deferring the core reload for a batch update.',
         params: [
           { name: 'id', in: 'path', type: 'integer', desc: 'Subscription id.' },
-          { name: 'deferApply', in: 'body (form)', type: 'boolean', desc: 'Save without immediately applying to the core; call outbound-subs/apply after the batch.', optional: true },
+          {
+            name: 'deferApply',
+            in: 'body (form)',
+            type: 'boolean',
+            desc: 'Save without immediately applying to the core; call outbound-subs/apply after the batch.',
+            optional: true,
+          },
         ],
       },
       {
         method: 'POST',
         path: '/panel/api/xray/outbound-subs/apply',
-        summary: 'Apply already downloaded outbound subscriptions in one core restart without fetching URLs again.',
+        summary:
+          'Apply already downloaded outbound subscriptions in one core restart without fetching URLs again.',
       },
       {
         method: 'POST',

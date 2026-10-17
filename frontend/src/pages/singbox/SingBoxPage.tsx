@@ -868,7 +868,7 @@ export default function SingBoxPage() {
       setSnapshot((current) => (current ? { ...current, config: next } : current));
       // Edits made during an in-flight save must remain unsaved instead of
       // being overwritten by the response from an earlier revision.
-      setConfig((current) => JSON.stringify(current) === JSON.stringify(config) ? next : current);
+      setConfig((current) => (JSON.stringify(current) === JSON.stringify(config) ? next : current));
       messageApi.success(t('pages.singBox.saved'));
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : String(error));
@@ -2133,7 +2133,13 @@ export default function SingBoxPage() {
             {renderOutbounds()}
             <Collapse
               className="singbox-advanced-groups"
-              defaultActiveKey={sectionSlug === 'balancer' ? ['groups'] : sectionSlug === 'endpoints' ? ['endpoints'] : []}
+              defaultActiveKey={
+                sectionSlug === 'balancer'
+                  ? ['groups']
+                  : sectionSlug === 'endpoints'
+                    ? ['endpoints']
+                    : []
+              }
               items={[
                 {
                   key: 'groups',

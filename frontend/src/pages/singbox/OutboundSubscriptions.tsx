@@ -34,14 +34,14 @@ type Subscription = {
   probeError?: string;
 };
 
-
 type WarningGroup = { label: string; issues: string[] };
 
 function warningCategory(message: string): string {
   const value = message.toLowerCase();
   if (value.includes('grpc authority')) return 'gRPC: несовместимый authority';
   if (value.includes('tcp header "http"')) return 'TCP: HTTP-заголовок Xray';
-  if (value.includes('hysteria') && value.includes('auth')) return 'Hysteria: параметры авторизации';
+  if (value.includes('hysteria') && value.includes('auth'))
+    return 'Hysteria: параметры авторизации';
   if (value.includes('quic transport')) return 'QUIC: несовместимый транспорт';
   if (value.includes('xhttp')) return 'XHTTP: не поддерживается';
   if (value.includes('cascade dependency')) return 'Зависимости подключений';
@@ -50,7 +50,10 @@ function warningCategory(message: string): string {
 }
 
 function SubscriptionWarning({ warning }: { warning: string }) {
-  const marker = /(\d+) подключений не поддерживаются текущим ядром ([^;]+); сохранены в подписке, но не применены:\s*/.exec(warning);
+  const marker =
+    /(\d+) подключений не поддерживаются текущим ядром ([^;]+); сохранены в подписке, но не применены:\s*/.exec(
+      warning,
+    );
   if (!marker || marker.index === undefined) {
     return warning.length < 180 ? (
       <Typography.Text type="warning">{warning}</Typography.Text>
@@ -58,12 +61,23 @@ function SubscriptionWarning({ warning }: { warning: string }) {
       <Collapse
         ghost
         size="small"
-        items={[{ key: 'warning', label: 'Предупреждения подписки', children: <Typography.Text style={{ overflowWrap: 'anywhere' }}>{warning}</Typography.Text> }]}
+        items={[
+          {
+            key: 'warning',
+            label: 'Предупреждения подписки',
+            children: (
+              <Typography.Text style={{ overflowWrap: 'anywhere' }}>{warning}</Typography.Text>
+            ),
+          },
+        ]}
       />
     );
   }
   const prefix = warning.slice(0, marker.index).trim().replace(/;$/, '');
-  const details = warning.slice(marker.index + marker[0].length).split(/;\s*(?=[^;\n]+:\s)/).filter(Boolean);
+  const details = warning
+    .slice(marker.index + marker[0].length)
+    .split(/;\s*(?=[^;\n]+:\s)/)
+    .filter(Boolean);
   const grouped = new Map<string, WarningGroup>();
   for (const detail of details) {
     const label = warningCategory(detail);
@@ -77,32 +91,52 @@ function SubscriptionWarning({ warning }: { warning: string }) {
       </Typography.Text>
       <Space size={[4, 4]} wrap>
         {Array.from(grouped.values()).map((group) => (
-          <Tag key={group.label} color="orange">{group.label}: {group.issues.length}</Tag>
+          <Tag key={group.label} color="orange">
+            {group.label}: {group.issues.length}
+          </Tag>
         ))}
       </Space>
-      {prefix && (prefix.length > 180 ? (
-        <Collapse
-          ghost
-          size="small"
-          items={[{ key: 'parser', label: 'Другие предупреждения импорта', children: <Typography.Text style={{ overflowWrap: 'anywhere' }}>{prefix}</Typography.Text> }]}
-        />
-      ) : <Typography.Text type="secondary">{prefix}</Typography.Text>)}
+      {prefix &&
+        (prefix.length > 180 ? (
+          <Collapse
+            ghost
+            size="small"
+            items={[
+              {
+                key: 'parser',
+                label: 'Другие предупреждения импорта',
+                children: (
+                  <Typography.Text style={{ overflowWrap: 'anywhere' }}>{prefix}</Typography.Text>
+                ),
+              },
+            ]}
+          />
+        ) : (
+          <Typography.Text type="secondary">{prefix}</Typography.Text>
+        ))}
       <Collapse
         ghost
         size="small"
-        items={[{
-          key: 'details',
-          label: 'Показать причины по подключениям',
-          children: (
-            <Space orientation="vertical" size={6} style={{ width: '100%' }}>
-              {details.map((detail, i) => (
-                <Typography.Text key={i} type="secondary" copyable style={{ overflowWrap: 'anywhere' }}>
-                  {detail}
-                </Typography.Text>
-              ))}
-            </Space>
-          ),
-        }]}
+        items={[
+          {
+            key: 'details',
+            label: 'Показать причины по подключениям',
+            children: (
+              <Space orientation="vertical" size={6} style={{ width: '100%' }}>
+                {details.map((detail, i) => (
+                  <Typography.Text
+                    key={i}
+                    type="secondary"
+                    copyable
+                    style={{ overflowWrap: 'anywhere' }}
+                  >
+                    {detail}
+                  </Typography.Text>
+                ))}
+              </Space>
+            ),
+          },
+        ]}
       />
     </Space>
   );
@@ -280,9 +314,13 @@ export default function OutboundSubscriptions({
                   <Space size={4} wrap>
                     {row.supportedCount !== undefined ? (
                       <>
-                        <Tag color="green">Применимо: {row.supportedCount} из {row.outboundCount}</Tag>
+                        <Tag color="green">
+                          Применимо: {row.supportedCount} из {row.outboundCount}
+                        </Tag>
                         {row.outboundCount > row.supportedCount && (
-                          <Tag color="orange">Недоступно: {row.outboundCount - row.supportedCount}</Tag>
+                          <Tag color="orange">
+                            Недоступно: {row.outboundCount - row.supportedCount}
+                          </Tag>
                         )}
                       </>
                     ) : (
@@ -290,7 +328,9 @@ export default function OutboundSubscriptions({
                     )}
                     {!row.enabled && <Tag>Отключена</Tag>}
                   </Space>
-                  {row.selectedTag && <Typography.Text type="secondary">Выбран: {row.selectedTag}</Typography.Text>}
+                  {row.selectedTag && (
+                    <Typography.Text type="secondary">Выбран: {row.selectedTag}</Typography.Text>
+                  )}
                   {row.appliedTag && row.appliedTag !== row.selectedTag && (
                     <Typography.Text type="secondary">Применён: {row.appliedTag}</Typography.Text>
                   )}
