@@ -80,6 +80,11 @@ func gatewayInterfaceFromAddresses(iface net.Interface, addresses []net.Addr, de
 // suggested. Public addresses and the host's default WAN are never proposed
 // for transparent interception automatically.
 func gatewaySuggestNetwork(interfaces []GatewayInterfaceInfo, defaultWAN string) (*GatewayNetworkConfig, string) {
+	// Missing default-route data means we cannot distinguish LAN from WAN.
+	// Never guess a transparent interception interface in that case.
+	if defaultWAN == "" {
+		return nil, "Не удалось надёжно определить основной маршрут. Укажите LAN и WAN вручную."
+	}
 	var possibilities []GatewayNetworkConfig
 	for _, iface := range interfaces {
 		if iface.DefaultRoute || iface.Name == defaultWAN {
