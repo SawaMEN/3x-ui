@@ -26,7 +26,6 @@ import {
   DeleteOutlined,
   DownloadOutlined,
   LinkOutlined,
-  PlusOutlined,
   ReloadOutlined,
   SafetyCertificateOutlined,
   SettingOutlined,
@@ -156,7 +155,6 @@ export default function TelemtPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [serviceAction, setServiceAction] = useState<ServiceAction | null>(null);
   const [configSaving, setConfigSaving] = useState(false);
-  const [proxyCreating, setProxyCreating] = useState(false);
   const [proxyDeleting, setProxyDeleting] = useState<string | null>(null);
   const [webProxyLoading, setWebProxyLoading] = useState(false);
   const [webProxyOpen, setWebProxyOpen] = useState(false);
@@ -243,25 +241,6 @@ export default function TelemtPage() {
       }
     } finally {
       setConfigSaving(false);
-    }
-  };
-
-  const createProxy = async () => {
-    setProxyCreating(true);
-    try {
-      const r = await HttpUtil.post<Proxy>(
-        '/panel/api/telemt/proxy',
-        { name: 'Telegram Proxy' },
-        jsonOptions,
-      );
-      if (r?.success && r.obj) {
-        message.success('Прокси создан и сервис применил его автоматически');
-        await Promise.all([loadStatus(), loadProxies()]);
-      } else {
-        message.error(r?.msg || 'Не удалось создать прокси');
-      }
-    } finally {
-      setProxyCreating(false);
     }
   };
 
@@ -359,7 +338,7 @@ export default function TelemtPage() {
           <div className="telemt-header-main">
             <Space size={10} wrap>
               <Typography.Title level={2} className="telemt-title">
-                Telemt
+                Telemt — движок MTProto
               </Typography.Title>
               <Tag
                 color={status.active ? 'green' : status.installed ? 'default' : 'red'}
@@ -372,7 +351,7 @@ export default function TelemtPage() {
               )}
             </Space>
             <Typography.Text type="secondary">
-              MTProto-прокси без лишних ручных действий: сервис сам применяет изменения.
+              Новые MTProto-подключения, клиенты и подписки создаются в общем списке «Входящие». Здесь доступны дополнительные возможности движка и настройки ранее созданных прокси.
             </Typography.Text>
           </div>
           <Space wrap>
@@ -645,32 +624,22 @@ export default function TelemtPage() {
           )}
         </Card>
 
-        <Card
-          className="telemt-card"
-          title={
-            <Space>
-              <PlusOutlined />
-              Прокси
-              <Tag>{proxies.length}</Tag>
-            </Space>
-          }
-          extra={
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              loading={proxyCreating}
-              disabled={!status.installed}
-              onClick={() => void createProxy()}
-            >
-              Создать прокси
-            </Button>
-          }
-        >
-          <Typography.Paragraph type="secondary" className="telemt-card-hint">
-            Адрес сервера определяется автоматически. После создания Telemt сам применит
-            пользователя и перезапустит службу только когда это действительно требуется.
-          </Typography.Paragraph>
-
+        {proxies.length > 0 && (
+          <Card
+            className="telemt-card"
+            title={
+              <Space>
+                <LinkOutlined />
+                Существующие подключения прежнего Telemt
+                <Tag>{proxies.length}</Tag>
+              </Space>
+            }
+          >
+            <Typography.Paragraph type="secondary" className="telemt-card-hint">
+              Подключения, созданные прежней отдельной службой Telemt, сохранены для
+              совместимости. Новые MTProto-подключения создаются только через
+              «Входящие → Создать подключение → MTProto».
+            </Typography.Paragraph>
           {proxies.length === 0 ? (
             <div className="telemt-empty-state">
               <Typography.Text type="secondary">Прокси пока не созданы.</Typography.Text>
@@ -714,7 +683,8 @@ export default function TelemtPage() {
               ))}
             </div>
           )}
-        </Card>
+          </Card>
+        )}
 
         <Collapse
           className="telemt-card telemt-advanced"
