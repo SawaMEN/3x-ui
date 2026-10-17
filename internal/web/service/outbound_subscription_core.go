@@ -71,6 +71,10 @@ func filterSubscriptionOutboundsForCore(label, core string, members []any) ([]an
 		return kept, compatibilityIssues, "xray"
 	}
 
+	// Kernel validation launches a separate process per node. Validate with a
+	// small bounded worker pool instead of blocking sequentially on every URI.
+	// Results are stored by input index so ordering and diagnostics stay stable.
+	nativeCheckErrors := validateNativeSubscriptionMembersConcurrently(members, core)
 	kept := make([]any, 0, len(members))
 	statusIssues := make([]string, 0)
 	compatibilityIssues := make([]string, 0)
@@ -117,7 +121,7 @@ func filterSubscriptionOutboundsForCore(label, core string, members []any) ([]an
 			continue
 		}
 		if kind != "amneziawg" {
-			if err := validateSubscriptionNativeMember(ob, core); err != nil {
+			if err := nativeCheckErrors[index]; err != nil {
 				compatibilityIssues = append(compatibilityIssues, fmt.Sprintf("%s: %v", tag, err))
 				continue
 			}
