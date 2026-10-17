@@ -49,11 +49,12 @@ func TestClientLink(t *testing.T) {
  client.ID="user-1234"
  var location Location
  location.Carrier="jitsi"
+ location.Name="Main"
  location.Transport.Type="datachannel"
  location.Endpoint.RoomID="https://meet.handyweb.org/test"
  location.Endpoint.Key=strings.Repeat("a",64)
  client.Locations=[]Location{location}
  link:=ClientLink(client)
- expected:="olcrtc://jitsi?datachannel@https://meet.handyweb.org/test#"+strings.Repeat("a",64)+"$user-1234"
+ expected:="olcrtc://jitsi?datachannel@https://meet.handyweb.org/test#"+strings.Repeat("a",64)+"$Main"
  if link!=expected {t.Fatalf("got %q, want %q",link,expected)}
 }
