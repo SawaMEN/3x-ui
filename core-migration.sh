@@ -204,6 +204,7 @@ core_migration_prepare_archive() {
     # Crash leftovers may otherwise make the safe-space preflight fail.
     # Only one installer holding this lock may delete a previous staging dir.
     core_migration_prune_stale_stages
+    core_migration_prune_stale_downloads
     core_migration_check_space "$archive" || return 1
     cm_stage=$(mktemp -d "${xui_folder%/*}/.x-ui-release.XXXXXX") || return 1
     chmod 0700 "$cm_stage" || return 1
