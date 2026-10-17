@@ -30,6 +30,8 @@ func NewGatewayController(g *gin.RouterGroup) *GatewayController {
 func (a *GatewayController) initRouter(g *gin.RouterGroup) {
 	g = g.Group("/gateway")
 	g.GET("/status", a.status)
+	g.GET("/interfaces", a.interfaces)
+	g.POST("/preflight", a.preflight)
 	g.POST("/enable", a.enable)
 	g.POST("/disable", a.disable)
 }
