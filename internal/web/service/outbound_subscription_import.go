@@ -157,7 +157,17 @@ func parseOutboundSubscriptionEntries(body []byte, tolerant bool, warnings *[]st
 			if ctx.Err() != nil {
 				return nil, nil, fmt.Errorf("subscription parsing timed out")
 			}
-			if !useKernel && !strings.Contains(line, " -> ") {
+			// Prefer the in-process, panel-tested parser for standard share links.
+			// The core CLI can reject valid VLESS/Trojan URI variants and
+			// spawning it for every line makes large subscriptions hang.
+			// Keep native CLI parsing for other schemes and multi-hop chains.
+			preferPanelParser := strings.HasPrefix(line, "vless://") ||
+				strings.HasPrefix(line, "trojan://") ||
+				strings.HasPrefix(line, "vmess://") ||
+				strings.HasPrefix(line, "ss://") ||
+				strings.HasPrefix(line, "hysteria2://") ||
+				strings.HasPrefix(line, "hy2://")
+			if !strings.Contains(line, " -> ") && (preferPanelParser || !useKernel) {
 				if parsed, err := link.ParseLink(line); err == nil && parsed != nil {
 					if err := add(map[string]any(parsed.Outbound), parsed.Identity); err != nil {
 						return nil, nil, err
