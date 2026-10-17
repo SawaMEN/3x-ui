@@ -3,7 +3,6 @@ package controller
 import (
 	"fmt"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 	"github.com/gin-gonic/gin"
 )
 
@@ -73,6 +72,3 @@ func (a *GatewayController) preflight(c *gin.Context) {
 	jsonObj(c, result, nil)
 }
 
-// Keep this compile-time reference so the service's public request format is
-// explicitly owned by the same validated Gateway network configuration.
-var _ = service.GatewayNetworkConfig{}
