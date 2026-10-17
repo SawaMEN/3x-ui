@@ -787,6 +787,11 @@ export const sections: readonly Section[] = [
         summary: 'Read DNSTT service state and public key; the private Noise key is never exposed.',
       },
       {
+        method: 'GET',
+        path: '/panel/api/dnstt/check-delegation',
+        summary: 'Check public NS delegation and nameserver IPv4 without changing DNSTT configuration.',
+      },
+      {
         method: 'POST',
         path: '/panel/api/dnstt/install',
         summary: 'Download checksum-verified DNSTT server without enabling the tunnel.',

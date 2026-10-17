@@ -19512,6 +19512,67 @@
           }
         }
       }
+    },
+    "/panel/api/dnstt/check-delegation": {
+      "get": {
+        "tags": [
+          "Server"
+        ],
+        "summary": "Check public NS delegation and nameserver IPv4 without changing DNSTT configuration.",
+        "operationId": "get_panel_api_dnstt_check_delegation",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {
+                      "type": "object",
+                      "properties": {
+                        "zone": {
+                          "type": "string"
+                        },
+                        "nameServer": {
+                          "type": "string"
+                        },
+                        "expectedIP": {
+                          "type": "string"
+                        },
+                        "addresses": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "nsFound": {
+                          "type": "boolean"
+                        },
+                        "ipMatches": {
+                          "type": "boolean"
+                        },
+                        "ready": {
+                          "type": "boolean"
+                        },
+                        "details": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 }
