@@ -3,16 +3,16 @@ package oxidns
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
-	"fmt"
-	"net"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/binary"
 	"encoding/pem"
+	"fmt"
 	"math/big"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -192,78 +192,104 @@ func TestDoHCertificateAndOfficialParser(t *testing.T) {
 // process with a deterministic local stub upstream. No external DNS service
 // or firewall access to port 853 is needed.
 func TestOfficialOxiDNSForwardsRealTraffic(t *testing.T) {
-    binaryPath := os.Getenv("OXIDNS_CHECK_BINARY")
-    if binaryPath == "" {
-        t.Skip("OXIDNS_CHECK_BINARY is not set")
-    }
-    upstreamConn, err := net.ListenPacket("udp4","127.0.0.1:0")
-    if err != nil { t.Fatal(err) }
-    defer upstreamConn.Close()
-    upstreamAddr := upstreamConn.LocalAddr().String()
+	binaryPath := os.Getenv("OXIDNS_CHECK_BINARY")
+	if binaryPath == "" {
+		t.Skip("OXIDNS_CHECK_BINARY is not set")
+	}
+	upstreamConn, err := net.ListenPacket("udp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer upstreamConn.Close()
+	upstreamAddr := upstreamConn.LocalAddr().String()
 
-    go func() {
-        buffer := make([]byte, 2048)
-        for {
-            n, peer, err := upstreamConn.ReadFrom(buffer)
-            if err != nil { return }
-            if n < 17 { continue }
-            // A client query can include EDNS0 OPT additional records.
-            // Keep only the question, so the synthetic A answer follows it
-            // directly rather than accidentally parsing OPT as an answer.
-            questionEnd := 12
-            valid := true
-            for {
-                if questionEnd >= n { valid = false; break }
-                labelLength := int(buffer[questionEnd])
-                questionEnd++
-                if labelLength == 0 { break }
-                if labelLength > 63 || questionEnd+labelLength > n { valid = false; break }
-                questionEnd += labelLength
-            }
-            if !valid || questionEnd+4 > n { continue }
-            questionEnd += 4
-            packet := make([]byte, questionEnd)
-            copy(packet,buffer[:questionEnd])
-            // Reuse the DNS transaction ID and question, returning a valid
-            // single IPv4 answer (203.0.113.7) for the queried name.
-            packet[2],packet[3]=0x81,0x80
-            binary.BigEndian.PutUint16(packet[6:8],1)
-            binary.BigEndian.PutUint16(packet[8:10],0)
-            binary.BigEndian.PutUint16(packet[10:12],0)
-            answer:=[]byte{0xc0,0x0c,0x00,0x01,0x00,0x01,0x00,0x00,0x00,0x3c,0x00,0x04,203,0,113,7}
-            packet=append(packet,answer...)
-            _,_ = upstreamConn.WriteTo(packet,peer)
-        }
-    }()
+	go func() {
+		buffer := make([]byte, 2048)
+		for {
+			n, peer, err := upstreamConn.ReadFrom(buffer)
+			if err != nil {
+				return
+			}
+			if n < 17 {
+				continue
+			}
+			// A client query can include EDNS0 OPT additional records.
+			// Keep only the question, so the synthetic A answer follows it
+			// directly rather than accidentally parsing OPT as an answer.
+			questionEnd := 12
+			valid := true
+			for {
+				if questionEnd >= n {
+					valid = false
+					break
+				}
+				labelLength := int(buffer[questionEnd])
+				questionEnd++
+				if labelLength == 0 {
+					break
+				}
+				if labelLength > 63 || questionEnd+labelLength > n {
+					valid = false
+					break
+				}
+				questionEnd += labelLength
+			}
+			if !valid || questionEnd+4 > n {
+				continue
+			}
+			questionEnd += 4
+			packet := make([]byte, questionEnd)
+			copy(packet, buffer[:questionEnd])
+			// Reuse the DNS transaction ID and question, returning a valid
+			// single IPv4 answer (203.0.113.7) for the queried name.
+			packet[2], packet[3] = 0x81, 0x80
+			binary.BigEndian.PutUint16(packet[6:8], 1)
+			binary.BigEndian.PutUint16(packet[8:10], 0)
+			binary.BigEndian.PutUint16(packet[10:12], 0)
+			answer := []byte{0xc0, 0x0c, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x3c, 0x00, 0x04, 203, 0, 113, 7}
+			packet = append(packet, answer...)
+			_, _ = upstreamConn.WriteTo(packet, peer)
+		}
+	}()
 
-    cfg := Defaults()
-    config,err:=Generate(cfg,"","")
-    if err!=nil {t.Fatal(err)}
-    original:="addr: \"tls://dns.quad9.net:853\""
-    replacement:=fmt.Sprintf("addr: \"udp://%s\"",upstreamAddr)
-    if !strings.Contains(config,original){t.Fatalf("missing upstream in generated YAML")}
-    config=strings.Replace(config,original,replacement,1)
-    config=strings.Replace(config,"          bootstrap: \"9.9.9.9:53\"\n","",1)
-    workDir:=t.TempDir()
-    configPath:=filepath.Join(workDir,"config.yaml")
-    if err:=os.WriteFile(configPath,[]byte(config),0600);err!=nil{t.Fatal(err)}
-    var output bytes.Buffer
-    command:=exec.Command(binaryPath,"start","-c",configPath,"-d",workDir)
-    command.Stdout=&output
-    command.Stderr=&output
-    if err:=command.Start();err!=nil{t.Fatal(err)}
-    defer func(){
-        _=command.Process.Kill()
-        _=command.Wait()
-    }()
+	cfg := Defaults()
+	config, err := Generate(cfg, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	original := "addr: \"tls://dns.quad9.net:853\""
+	replacement := fmt.Sprintf("addr: \"udp://%s\"", upstreamAddr)
+	if !strings.Contains(config, original) {
+		t.Fatalf("missing upstream in generated YAML")
+	}
+	config = strings.Replace(config, original, replacement, 1)
+	config = strings.Replace(config, "          bootstrap: \"9.9.9.9:53\"\n", "", 1)
+	workDir := t.TempDir()
+	configPath := filepath.Join(workDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(config), 0600); err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	command := exec.Command(binaryPath, "start", "-c", configPath, "-d", workDir)
+	command.Stdout = &output
+	command.Stderr = &output
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_ = command.Wait()
+	}()
 
-    deadline:=time.Now().Add(12*time.Second)
-    for time.Now().Before(deadline) {
-        ctx,cancel:=context.WithTimeout(context.Background(),time.Second)
-        err=checkDNSAt(ctx,"127.0.0.1:15353")
-        cancel()
-        if err==nil{return}
-        time.Sleep(150*time.Millisecond)
-    }
-    t.Fatalf("official OxiDNS failed to forward local query: %v\nservice log: %s",err,output.String())
+	deadline := time.Now().Add(12 * time.Second)
+	for time.Now().Before(deadline) {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		err = checkDNSAt(ctx, "127.0.0.1:15353")
+		cancel()
+		if err == nil {
+			return
+		}
+		time.Sleep(150 * time.Millisecond)
+	}
+	t.Fatalf("official OxiDNS failed to forward local query: %v\nservice log: %s", err, output.String())
 }

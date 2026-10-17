@@ -52,22 +52,22 @@ func (a *OxiDNSController) status(c *gin.Context) {
 
 // Resolve a public domain via the local OxiDNS listener to test the full path.
 func (a *OxiDNSController) checkDNS(c *gin.Context) {
-    ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
-    defer cancel()
-    status, err := oxidns.CurrentStatus(ctx)
-    if err != nil {
-        jsonMsg(c, "Не удалось проверить DNS", err)
-        return
-    }
-    if !status.Enabled || !status.Running {
-        jsonMsg(c, "Не удалось проверить DNS", errors.New("сначала включите собственный DNS"))
-        return
-    }
-    if err := oxidns.CheckDNS(ctx); err != nil {
-        jsonMsg(c, "Проверка DNS не пройдена", err)
-        return
-    }
-    jsonObj(c, gin.H{"healthy": true}, nil)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+	status, err := oxidns.CurrentStatus(ctx)
+	if err != nil {
+		jsonMsg(c, "Не удалось проверить DNS", err)
+		return
+	}
+	if !status.Enabled || !status.Running {
+		jsonMsg(c, "Не удалось проверить DNS", errors.New("сначала включите собственный DNS"))
+		return
+	}
+	if err := oxidns.CheckDNS(ctx); err != nil {
+		jsonMsg(c, "Проверка DNS не пройдена", err)
+		return
+	}
+	jsonObj(c, gin.H{"healthy": true}, nil)
 }
 
 func (a *OxiDNSController) restartNative(ctx context.Context) error {

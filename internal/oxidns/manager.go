@@ -452,31 +452,31 @@ func InstallOnly(ctx context.Context) error {
 // It is safe to invoke from the panel: the resolver can only dial the loopback
 // listener managed by OxiDNS, regardless of the supplied hostname.
 func CheckDNS(ctx context.Context) error {
-    if _, err := os.Stat(binaryPath); err != nil {
-        return errors.New("сначала установите OxiDNS")
-    }
-    return checkDNSAt(ctx, net.JoinHostPort("127.0.0.1", strconv.Itoa(localPort)))
+	if _, err := os.Stat(binaryPath); err != nil {
+		return errors.New("сначала установите OxiDNS")
+	}
+	return checkDNSAt(ctx, net.JoinHostPort("127.0.0.1", strconv.Itoa(localPort)))
 }
 
 // checkDNSAt is used by the live DNS probe and the official-binary integration test.
 func checkDNSAt(ctx context.Context, address string) error {
-    lookupCtx, cancel := context.WithTimeout(ctx, 7*time.Second)
-    defer cancel()
-    resolver := &net.Resolver{
-        PreferGo: true,
-        Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
-            dialer := &net.Dialer{Timeout: 2*time.Second}
-            return dialer.DialContext(ctx, network, address)
-        },
-    }
-    ips, err := resolver.LookupIP(lookupCtx, "ip4", "example.com")
-    if err != nil {
-        return fmt.Errorf("OxiDNS не разрешает домены: %w. Проверьте доступ к выбранному DNS-провайдеру (TCP 853) и настройки сервера", err)
-    }
-    if len(ips) == 0 {
-        return errors.New("OxiDNS не возвращает IP-адреса. Проверьте выбранного DNS-провайдера")
-    }
-    return nil
+	lookupCtx, cancel := context.WithTimeout(ctx, 7*time.Second)
+	defer cancel()
+	resolver := &net.Resolver{
+		PreferGo: true,
+		Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
+			dialer := &net.Dialer{Timeout: 2 * time.Second}
+			return dialer.DialContext(ctx, network, address)
+		},
+	}
+	ips, err := resolver.LookupIP(lookupCtx, "ip4", "example.com")
+	if err != nil {
+		return fmt.Errorf("OxiDNS не разрешает домены: %w. Проверьте доступ к выбранному DNS-провайдеру (TCP 853) и настройки сервера", err)
+	}
+	if len(ips) == 0 {
+		return errors.New("OxiDNS не возвращает IP-адреса. Проверьте выбранного DNS-провайдера")
+	}
+	return nil
 }
 
 func waitHealthy(ctx context.Context) error {
