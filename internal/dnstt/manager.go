@@ -89,6 +89,11 @@ func Validate(c Config) error {
 	if c.TargetPort < 1 || c.TargetPort > 65535 {
 		return errors.New("неверный локальный TCP-порт")
 	}
+	// The suggested authoritative NS hostname must be outside the
+	// delegated tunnel zone or recursive resolution can loop.
+	if strings.EqualFold(labels[0], "ns") {
+		return errors.New("имя ns.<родительский домен> зарезервировано для NS-сервера; используйте t.example.com")
+	}
 	if c.ServerIP != "" {
 		ip := net.ParseIP(c.ServerIP)
 		if ip == nil || ip.To4() == nil {
