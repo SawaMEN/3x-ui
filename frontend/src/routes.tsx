@@ -4,7 +4,6 @@ import { Spin } from 'antd';
 
 import PanelLayout from '@/layouts/PanelLayout';
 import { importWithChunkRecovery } from '@/lib/chunk-load-recovery';
-import TelemtSubscriptionToggle from '@/pages/telemt/TelemtSubscriptionToggle';
 
 const IndexPage = lazy(() => importWithChunkRecovery(() => import('@/pages/index/IndexPage')));
 const InboundsPage = lazy(() =>
@@ -32,7 +31,6 @@ const CoreConfigRoutePage = lazy(() =>
 const ApiDocsPage = lazy(() =>
   importWithChunkRecovery(() => import('@/pages/api-docs/ApiDocsPage')),
 );
-const TelemtPage = lazy(() => importWithChunkRecovery(() => import('@/pages/telemt/TelemtPage')));
 
 function withSuspense(node: React.ReactNode) {
   return (
@@ -75,15 +73,8 @@ const routes: RouteObject[] = [
       { path: 'outbound', element: withSuspense(<CoreConfigRoutePage />) },
       { path: 'routing', element: withSuspense(<CoreConfigRoutePage />) },
       { path: 'api-docs', element: withSuspense(<ApiDocsPage />) },
-      {
-        path: 'telemt',
-        element: withSuspense(
-          <>
-            <TelemtPage />
-            <TelemtSubscriptionToggle />
-          </>,
-        ),
-      },
+      // Backwards-compatible old bookmarks; Telemt now lives under Inbounds.
+      { path: 'telemt', element: <Navigate to="/inbounds?tab=telemt" replace /> },
     ],
   },
 ];

@@ -17437,6 +17437,66 @@
         }
       }
     },
+    "/panel/api/telemt/install": {
+      "post": {
+        "tags": [
+          "Telemt"
+        ],
+        "summary": "Download and install checksum-verified official Telemt on demand. Does not start the proxy.",
+        "operationId": "post_panel_api_telemt_install",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/telemt/remove": {
+      "post": {
+        "tags": [
+          "Telemt"
+        ],
+        "summary": "Uninstall Telemt runtime after disabling its service; preserve configuration and refuse while MTProto inbounds exist.",
+        "operationId": "post_panel_api_telemt_remove",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/panel/api/telemt/config": {
       "get": {
         "tags": [

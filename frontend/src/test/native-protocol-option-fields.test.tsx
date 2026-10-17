@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import SingBoxOutboundModal from '@/pages/singbox/SingBoxOutboundModal';
 import fields from '@/pages/singbox/native-outbound-fields.json';
 import { nativeOutboundTypes, nativeEndpointTypes } from '@/pages/singbox/native-import';
@@ -9,6 +9,12 @@ vi.mock('@/components/form/JsonEditor', () => ({
   ),
 }));
 describe('protocol-specific outbound options', () => {
+  // rc-trigger/Ant Design can schedule delayed state updates after modal
+  // interactions. Let those callbacks settle before Vitest disposes jsdom.
+  afterEach(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  });
+
   it('covers every selectable native outbound and endpoint', () => {
     for (const type of [...nativeOutboundTypes, ...nativeEndpointTypes])
       expect(fields.protocols).toHaveProperty(type);

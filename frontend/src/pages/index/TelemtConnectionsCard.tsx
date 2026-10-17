@@ -57,6 +57,7 @@ function formatLocation(location: TelemtIPLocation): string {
 
 export default function TelemtConnectionsCard() {
   const [rows, setRows] = useState<TelemtConnection[]>([]);
+  const [installed, setInstalled] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -64,8 +65,26 @@ export default function TelemtConnectionsCard() {
     let timer: ReturnType<typeof setTimeout> | undefined;
 
     const load = async () => {
-      setLoading(true);
       try {
+        const status = await HttpUtil.get<{
+          installed: boolean;
+          active: boolean;
+          configured: boolean;
+        }>('/panel/api/telemt/status', undefined, { silent: true });
+        if (disposed) return;
+        // The standard MTProto clients already appear in the panel's main lists.
+        // This legacy card belongs only to an active standalone Telemt service.
+        const available =
+          status?.success === true &&
+          status.obj?.installed === true &&
+          status.obj?.active === true &&
+          status.obj?.configured === true;
+        setInstalled(available);
+        if (!available) {
+          setRows([]);
+          return;
+        }
+        setLoading(true);
         const msg = await HttpUtil.get<TelemtConnection[]>(
           '/panel/api/telemt/connections',
           undefined,
@@ -176,6 +195,8 @@ export default function TelemtConnectionsCard() {
     ],
     [],
   );
+
+  if (!installed) return null;
 
   return (
     <Card
