@@ -56,6 +56,8 @@ type Location struct {
 }
 type Client struct {
  ID string `json:"client-id"`
+ Refresh string `json:"refresh,omitempty"`
+ Quota json.RawMessage `json:"quota,omitempty"`
  Locations []Location `json:"locations"`
 }
 type clientConfig struct { Clients []Client `json:"clients"`; Port int `json:"port"` }
@@ -67,6 +69,8 @@ type ClientInput struct {
  Transport string `json:"transport"`
  DNS string `json:"dns"`
  Name string `json:"name"`
+ Refresh string `json:"refresh,omitempty"`
+ Quota json.RawMessage `json:"quota,omitempty"`
 }
 var idPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$`)
 var state = struct { sync.Mutex; busy bool; operation string; lastError string }{}
@@ -192,7 +196,7 @@ func install(ctx context.Context) error {
  cmd:=exec.CommandContext(ctx,"bash",name)
  // Never publish the independent admin interface. Native settings go through 3x-ui.
  cmd.Env=append(os.Environ(),
-  "PANEL_ADDR=127.0.0.1","PANEL_TLS=0","PANEL_PORT=28999",
+  "PANEL_ADDR=127.0.0.1","PANEL_TLS=0",
   "PANEL_ADMIN_PATH=/admin","AUTO_SWAP=0")
  // Installer logs include a generated password: never return them to browsers.
  logFile,err:=os.CreateTemp("","olcrtc-install-log-*.log")
@@ -301,6 +305,8 @@ func credentials() (string,string,error) {
 }
 func api(ctx context.Context,method,path string,payload any) error {
  if !installed() {return errors.New("OlcRTC is not installed")}
+ output,activeErr:=run(ctx,"systemctl","is-active","olcrtc-manager")
+ if activeErr!=nil || output!="active" {return errors.New("OlcRTC manager service is not running")}
  cfg,err:=readConfig()
  if err!=nil{return err}
  if cfg.Port<1 || cfg.Port>65535 {return errors.New("invalid OlcRTC port")}
@@ -337,6 +343,22 @@ func CreateClient(ctx context.Context,input ClientInput) (ClientInput,error) {
 }
 func UpdateClient(ctx context.Context,id string,input ClientInput) (ClientInput,error) {
  if !idPattern.MatchString(id) {return input,errors.New("invalid client ID")}
+ cfg,err:=readConfig()
+ if err!=nil {return input,err}
+ found:=false
+ for _,existing:=range cfg.Clients {
+  if existing.ID!=id {continue}
+  found=true
+  if len(existing.Locations)!=1 {return input,errors.New("editing multiple-location clients is not supported in the simple editor")}
+  // Retain quota accounting and subscription refresh settings while editing
+  // the single configured location.
+  input.Refresh=existing.Refresh
+  input.Quota=existing.Quota
+  if input.ClientID=="" {input.ClientID=id}
+  if input.ClientID!=id {return input,errors.New("changing client IDs is not supported")}
+  break
+ }
+ if !found {return input,errors.New("client not found")}
  if err:=normalize(&input);err!=nil {return input,err}
  if err:=api(ctx,http.MethodPut,"/api/clients/"+id,input);err!=nil {return ClientInput{},err}
  return input,nil
