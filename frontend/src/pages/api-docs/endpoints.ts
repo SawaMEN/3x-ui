@@ -2709,9 +2709,16 @@ export const sections: readonly Section[] = [
       {
         method: 'POST',
         path: '/panel/api/xray/outbound-subs/:id/refresh',
-        summary:
-          'Force an immediate re-fetch of the subscription and return the parsed outbounds. Signals Xray to reload.',
-        params: [{ name: 'id', in: 'path', type: 'integer', desc: 'Subscription id.' }],
+        summary: 'Re-fetch a subscription, optionally deferring the core reload for a batch update.',
+        params: [
+          { name: 'id', in: 'path', type: 'integer', desc: 'Subscription id.' },
+          { name: 'deferApply', in: 'body (form)', type: 'boolean', desc: 'Save without immediately applying to the core; call outbound-subs/apply after the batch.', optional: true },
+        ],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/xray/outbound-subs/apply',
+        summary: 'Apply already downloaded outbound subscriptions in one core restart without fetching URLs again.',
       },
       {
         method: 'POST',
