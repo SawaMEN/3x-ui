@@ -43,7 +43,9 @@ export default function OlcRTCSettingsTab() {
     void Promise.resolve().then(() => {
       if (active) void refresh();
     });
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [refresh]);
 
   const restart = async () => {
@@ -96,7 +98,9 @@ export default function OlcRTCSettingsTab() {
           </Space>
         </>
       )}
-      <Button onClick={() => void refresh()} loading={loading}>Обновить состояние</Button>
+      <Button onClick={() => void refresh()} loading={loading}>
+        Обновить состояние
+      </Button>
       <OlcRTCClientsModal open={clientsOpen} onClose={() => setClientsOpen(false)} />
     </Space>
   );

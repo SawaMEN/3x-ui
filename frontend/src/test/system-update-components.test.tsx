@@ -220,7 +220,9 @@ it('manages OxiDNS only as a package; setup is in sing-box DNS', async () => {
       timeout: 180000,
     }),
   );
-  await waitFor(() => expect(card('OxiDNS').getByText(/Создание и настройка DNS доступны/)).toBeTruthy());
+  await waitFor(() =>
+    expect(card('OxiDNS').getByText(/Создание и настройка DNS доступны/)).toBeTruthy(),
+  );
   expect(card('OxiDNS').queryByRole('link')).toBeNull();
   fireEvent.click(card('OxiDNS').getByRole('button', { name: 'Удалить OxiDNS' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
@@ -228,4 +230,3 @@ it('manages OxiDNS only as a package; setup is in sing-box DNS', async () => {
   expect(card('OxiDNS').queryByRole('link')).toBeNull();
   expect(card('DNSTT').queryByRole('link')).toBeNull();
 });
-

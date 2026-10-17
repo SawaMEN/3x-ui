@@ -96,7 +96,11 @@ it('automatically selects the VPN preset and enables the service with one action
   expect(HttpUtil.post).toHaveBeenCalledWith(
     '/panel/api/oxidns/setup',
     expect.objectContaining({
-      useSingBox: true, doh: false, dot: false, doq: false, upstream: 'quad9',
+      useSingBox: true,
+      doh: false,
+      dot: false,
+      doq: false,
+      upstream: 'quad9',
     }),
     { silent: true, timeout: 180000 },
   );
@@ -118,24 +122,24 @@ it('keeps the initial flow simple and hides optional external modes', async () =
   fireEvent.click(screen.getByRole('switch', { name: 'Включить публичный DoH' }));
   expect(screen.getByRole('textbox', { name: 'Домен защищённого DNS' })).toBeTruthy();
   expect(screen.getByRole('spinbutton', { name: 'HTTPS-порт DoH' })).toBeTruthy();
-  expect((screen.getByRole('button', { name: 'Создать и включить DNS' }) as HTMLButtonElement).disabled).toBe(
-    true,
-  );
+  expect(
+    (screen.getByRole('button', { name: 'Создать и включить DNS' }) as HTMLButtonElement).disabled,
+  ).toBe(true);
   fireEvent.change(screen.getByRole('textbox', { name: 'Домен защищённого DNS' }), {
     target: { value: 'dns.example.com' },
   });
-  expect((screen.getByRole('button', { name: 'Создать и включить DNS' }) as HTMLButtonElement).disabled).toBe(
-    false,
-  );
+  expect(
+    (screen.getByRole('button', { name: 'Создать и включить DNS' }) as HTMLButtonElement).disabled,
+  ).toBe(false);
 });
 
 it('rejects unused DNS and can be corrected without leaving the form', async () => {
   await openDNS();
   fireEvent.click(screen.getByRole('switch', { name: 'Подключить OxiDNS к sing-box' }));
   expect(screen.getByText('DNS не будет использоваться')).toBeTruthy();
-  expect((screen.getByRole('button', { name: 'Создать и включить DNS' }) as HTMLButtonElement).disabled).toBe(
-    true,
-  );
+  expect(
+    (screen.getByRole('button', { name: 'Создать и включить DNS' }) as HTMLButtonElement).disabled,
+  ).toBe(true);
 });
 
 it('supports applying and reverting advanced options', async () => {
@@ -157,9 +161,9 @@ it('allows DoT and DoQ on the same numeric port using different transports', asy
   fireEvent.change(screen.getByRole('textbox', { name: 'Домен защищённого DNS' }), {
     target: { value: 'dns.example.com' },
   });
-  expect((screen.getByRole('button', { name: 'Создать и включить DNS' }) as HTMLButtonElement).disabled).toBe(
-    false,
-  );
+  expect(
+    (screen.getByRole('button', { name: 'Создать и включить DNS' }) as HTMLButtonElement).disabled,
+  ).toBe(false);
   fireEvent.click(screen.getByRole('button', { name: 'Создать и включить DNS' }));
   await waitFor(() =>
     expect(HttpUtil.post).toHaveBeenCalledWith(
@@ -183,9 +187,9 @@ it('prevents HTTP/3 and DoQ using the same UDP port', async () => {
     target: { value: '8443' },
   });
   expect(screen.getByText(/Конфликт TCP\/UDP-портов/)).toBeTruthy();
-  expect((screen.getByRole('button', { name: 'Создать и включить DNS' }) as HTMLButtonElement).disabled).toBe(
-    true,
-  );
+  expect(
+    (screen.getByRole('button', { name: 'Создать и включить DNS' }) as HTMLButtonElement).disabled,
+  ).toBe(true);
 });
 
 it('hides all settings after the package was removed elsewhere', async () => {
@@ -225,7 +229,7 @@ it('disables setup on unsupported platforms but explains why', async () => {
   current = { ...original, installed: true, supported: false };
   await openDNS();
   expect(screen.getByText('OxiDNS не поддерживается на этой системе')).toBeTruthy();
-  expect((screen.getByRole('button', { name: 'Создать и включить DNS' }) as HTMLButtonElement).disabled).toBe(
-    true,
-  );
+  expect(
+    (screen.getByRole('button', { name: 'Создать и включить DNS' }) as HTMLButtonElement).disabled,
+  ).toBe(true);
 });
