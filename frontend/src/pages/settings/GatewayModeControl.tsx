@@ -152,9 +152,6 @@ export default function GatewayModeControl() {
           return;
         }
         setDiscovery(response.obj);
-        if (!response.obj.suggested) {
-          setManualOpen(true);
-        }
         if (response.obj.suggested) {
           const suggested = response.obj.suggested;
           setNetworkConfig((current) => (current.lanInterface ? current : { ...suggested }));
@@ -519,6 +516,11 @@ export default function GatewayModeControl() {
                     Включить шлюз
                   </Button>
                 </Popconfirm>
+              )}
+              {!enabled && !discovery?.suggested && (
+                <Button size="large" disabled={busy} onClick={() => setManualOpen(true)}>
+                  Настроить сеть вручную
+                </Button>
               )}
               <Button
                 type="text"
