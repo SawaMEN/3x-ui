@@ -196,10 +196,16 @@ func appendTelemtWebProxyConfig(base string, state TelemtWebProxyState) (string,
 func removeTelemtWebUser(base string) string {
 	lines := strings.Split(base, "\n")
 	out := make([]string, 0, len(lines))
+	inUsers := false
 	for _, line := range lines {
-		if !strings.HasPrefix(strings.TrimSpace(line), telemtWebUser+" = ") {
-			out = append(out, line)
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "[") {
+			inUsers = trimmed == "[access.users]"
 		}
+		if inUsers && strings.HasPrefix(trimmed, telemtWebUser+" = ") {
+			continue
+		}
+		out = append(out, line)
 	}
 	return strings.Join(out, "\n")
 }
