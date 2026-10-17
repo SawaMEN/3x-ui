@@ -927,22 +927,38 @@ export default function SingBoxOutboundModal({
   );
   const detailSections = [
     ...(remote && tlsProtocols.includes(type)
-      ? [{
-          key: 'security',
-          label: <Space><SafetyCertificateOutlined /> Безопасность и TLS</Space>,
-          children: securityForm,
-        }]
+      ? [
+          {
+            key: 'security',
+            label: (
+              <Space>
+                <SafetyCertificateOutlined /> Безопасность и TLS
+              </Space>
+            ),
+            children: securityForm,
+          },
+        ]
       : []),
     ...(transportProtocols.includes(type)
-      ? [{
-          key: 'transport',
-          label: <Space><SwapOutlined /> Сетевой транспорт</Space>,
-          children: transportForm,
-        }]
+      ? [
+          {
+            key: 'transport',
+            label: (
+              <Space>
+                <SwapOutlined /> Сетевой транспорт
+              </Space>
+            ),
+            children: transportForm,
+          },
+        ]
       : []),
     {
       key: 'json',
-      label: <Space><CodeOutlined /> JSON и импорт ссылок</Space>,
+      label: (
+        <Space>
+          <CodeOutlined /> JSON и импорт ссылок
+        </Space>
+      ),
       children: jsonForm,
     },
   ];
