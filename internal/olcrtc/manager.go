@@ -61,11 +61,18 @@ type Location struct {
 	} `json:"transport"`
 	DNS string `json:"dns"`
 }
+type Quota struct {
+	SpeedMbps int    `json:"speed_mbps,omitempty"`
+	TrafficGB int    `json:"traffic_gb,omitempty"`
+	UsedGB    int    `json:"used_gb,omitempty"`
+	UsedBytes uint64 `json:"used_bytes,omitempty"`
+	ExpiresAt string `json:"expires_at,omitempty"`
+}
 type Client struct {
-	ID        string          `json:"client-id"`
-	Refresh   string          `json:"refresh,omitempty"`
-	Quota     json.RawMessage `json:"quota,omitempty"`
-	Locations []Location      `json:"locations"`
+	ID        string     `json:"client-id"`
+	Refresh   string     `json:"refresh,omitempty"`
+	Quota     Quota      `json:"quota,omitempty"`
+	Locations []Location `json:"locations"`
 }
 type clientConfig struct {
 	Clients []Client `json:"clients"`
@@ -80,7 +87,7 @@ type ClientInput struct {
 	DNS       string          `json:"dns"`
 	Name      string          `json:"name"`
 	Refresh   string          `json:"refresh,omitempty"`
-	Quota     json.RawMessage `json:"quota,omitempty"`
+	Quota     *Quota `json:"quota,omitempty"`
 }
 
 var idPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$`)
@@ -449,6 +456,16 @@ func normalize(input *ClientInput) error {
 	if input.Name == "" {
 		input.Name = "Main"
 	}
+	if input.Quota != nil {
+		if input.Quota.SpeedMbps < 0 || input.Quota.TrafficGB < 0 {
+			return errors.New("speed and traffic quotas cannot be negative")
+		}
+		if input.Quota.ExpiresAt != "" {
+			if _, err := time.Parse("2006-01-02", input.Quota.ExpiresAt); err != nil {
+				return errors.New("expiration date must be YYYY-MM-DD")
+			}
+		}
+	}
 	return nil
 }
 func credentials() (string, string, error) {
@@ -552,10 +569,19 @@ func UpdateClient(ctx context.Context, id string, input ClientInput) (ClientInpu
 		if len(existing.Locations) != 1 {
 			return input, errors.New("editing multiple-location clients is not supported in the simple editor")
 		}
-		// Retain quota accounting and subscription refresh settings while editing
-		// the single configured location.
+		if len(existing.Locations[0].Transport.Payload) > 0 {
+			return input, errors.New("editing custom transport payloads requires an advanced editor")
+		}
+		// Preserve usage accounting when adjusting speed, traffic and expiry
+		// limits, and retain settings which this simple editor doesn't expose.
 		input.Refresh = existing.Refresh
-		input.Quota = existing.Quota
+		if input.Quota == nil {
+			quota := existing.Quota
+			input.Quota = &quota
+		} else {
+			input.Quota.UsedBytes = existing.Quota.UsedBytes
+			input.Quota.UsedGB = existing.Quota.UsedGB
+		}
 		if input.ClientID == "" {
 			input.ClientID = id
 		}
