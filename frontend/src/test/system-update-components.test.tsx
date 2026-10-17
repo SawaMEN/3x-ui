@@ -210,20 +210,22 @@ it('does not treat restored connectivity as confirmation that system updates suc
   expect(screen.queryByText('System packages were updated successfully.')).toBeNull();
 });
 
-it('links to automated DNS setup before install and keeps management actions', async () => {
+it('manages OxiDNS only as a package; setup is in sing-box DNS', async () => {
   await openComponents();
-  const quickLink = card('OxiDNS').getByRole('link', { name: 'Быстрый запуск DNS' });
-  expect(quickLink.getAttribute('href')).toBe('/panel/singbox#dns');
+  expect(card('OxiDNS').getByText(/После установки в «sing-box → DNS»/)).toBeTruthy();
+  expect(card('OxiDNS').queryByRole('link')).toBeNull();
   fireEvent.click(card('OxiDNS').getByRole('button', { name: 'Установить OxiDNS' }));
   await waitFor(() =>
     expect(HttpUtil.post).toHaveBeenCalledWith('/panel/api/oxidns/install', undefined, {
       timeout: 180000,
     }),
   );
-  const installedLink = await card('OxiDNS').findByRole('link', { name: 'Настроить DNS' });
-  expect(installedLink.getAttribute('href')).toBe('/panel/singbox#dns');
+  await waitFor(() => expect(card('OxiDNS').getByText(/Создание и настройка DNS доступны/)).toBeTruthy());
+  expect(card('OxiDNS').queryByRole('link')).toBeNull();
   fireEvent.click(card('OxiDNS').getByRole('button', { name: 'Удалить OxiDNS' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
   await waitFor(() => expect(HttpUtil.post).toHaveBeenCalledWith('/panel/api/oxidns/remove'));
-  await card('OxiDNS').findByRole('link', { name: 'Быстрый запуск DNS' });
+  expect(card('OxiDNS').queryByRole('link')).toBeNull();
+  expect(card('DNSTT').queryByRole('link')).toBeNull();
 });
+
