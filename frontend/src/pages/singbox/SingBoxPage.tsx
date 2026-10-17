@@ -2048,9 +2048,11 @@ export default function SingBoxPage() {
         return (
           <Tabs
             className="singbox-subtabs"
-            activeKey={['basic', 'servers', 'rules'].includes(searchParams.get('dnsTab') || '')
-              ? searchParams.get('dnsTab')!
-              : 'basic'}
+            activeKey={
+              ['basic', 'servers', 'rules'].includes(searchParams.get('dnsTab') || '')
+                ? searchParams.get('dnsTab')!
+                : 'basic'
+            }
             onChange={(key) => {
               const next = new URLSearchParams(location.search);
               next.set('dnsTab', key);
@@ -2198,8 +2200,15 @@ export default function SingBoxPage() {
       onOk: reset,
     });
   const visibleSections = [
-    'basic', 'dns', 'routing', 'outbound', 'balancer',
-    'endpoints', 'certificates', 'network', 'advanced',
+    'basic',
+    'dns',
+    'routing',
+    'outbound',
+    'balancer',
+    'endpoints',
+    'certificates',
+    'network',
+    'advanced',
   ];
 
   return (

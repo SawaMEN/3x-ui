@@ -363,35 +363,39 @@ export default function SettingsPage() {
 
                   <Row gutter={[isMobile ? 8 : 16, isMobile ? 0 : 12]}>
                     {activeSlug !== 'gateway' && (
-                    <Col span={24}>
-                      <Card hoverable>
-                        <Row className="header-row">
-                          <Col xs={24} sm={10} className="header-actions">
-                            <Space wrap>
-                              <Button type="primary" disabled={saveDisabled} onClick={onSave}>
-                                {t('pages.settings.save')}
-                              </Button>
-                              <Button
-                                type="primary"
-                                danger
-                                disabled={!saveDisabled}
-                                onClick={restartPanel}
-                              >
-                                {t('pages.settings.restartPanel')}
-                              </Button>
-                            </Space>
-                          </Col>
-                          <Col xs={24} sm={14} className="header-info">
-                            <FloatButton.BackTop target={scrollTarget} visibilityHeight={200} />
-                            <Alert type="warning" showIcon title={t('pages.settings.infoDesc')} />
-                          </Col>
-                        </Row>
-                      </Card>
-                    </Col>
+                      <Col span={24}>
+                        <Card hoverable>
+                          <Row className="header-row">
+                            <Col xs={24} sm={10} className="header-actions">
+                              <Space wrap>
+                                <Button type="primary" disabled={saveDisabled} onClick={onSave}>
+                                  {t('pages.settings.save')}
+                                </Button>
+                                <Button
+                                  type="primary"
+                                  danger
+                                  disabled={!saveDisabled}
+                                  onClick={restartPanel}
+                                >
+                                  {t('pages.settings.restartPanel')}
+                                </Button>
+                              </Space>
+                            </Col>
+                            <Col xs={24} sm={14} className="header-info">
+                              <FloatButton.BackTop target={scrollTarget} visibilityHeight={200} />
+                              <Alert type="warning" showIcon title={t('pages.settings.infoDesc')} />
+                            </Col>
+                          </Row>
+                        </Card>
+                      </Col>
                     )}
 
                     <Col span={24}>
-                      {activeSlug === 'gateway' ? categoryBody : <Card hoverable>{categoryBody}</Card>}
+                      {activeSlug === 'gateway' ? (
+                        categoryBody
+                      ) : (
+                        <Card hoverable>{categoryBody}</Card>
+                      )}
                     </Col>
 
                     {activeSlug === 'general' && (slug === '' || slug === 'general') && (
