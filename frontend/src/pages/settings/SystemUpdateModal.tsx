@@ -868,7 +868,7 @@ export default function SystemUpdateModal({
                             size="small"
                             type="primary"
                             disabled={dependencyBusy !== null || systemUpdateBusy}
-                            href={`${(window.X_UI_BASE_PATH || '/').replace(/\\/+$/, '')}/panel/singbox#dns`}
+                            href={`${(window.X_UI_BASE_PATH || '/').replace(/\/+$/, '')}/panel/singbox#dns`}
                             onClick={onClose}
                           >
                             Создать DNS
