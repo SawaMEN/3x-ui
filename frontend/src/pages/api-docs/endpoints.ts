@@ -901,7 +901,7 @@ export const sections: readonly Section[] = [
         method: 'GET',
         path: '/panel/api/oxidns/logs',
         summary: 'Read recent OxiDNS systemd service logs for diagnostics.',
-      }
+      },
       {
         method: 'POST',
         path: '/panel/api/oxidns/check',
