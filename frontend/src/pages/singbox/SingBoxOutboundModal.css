@@ -126,3 +126,23 @@
     display: none !important;
   }
 }
+
+.outbound-editor-modal .outbound-editor-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.outbound-editor-modal .outbound-editor-advanced {
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 10px;
+  background: transparent;
+}
+
+.outbound-editor-modal .outbound-editor-advanced .ant-collapse-header {
+  font-weight: 600;
+}
+
+.outbound-editor-modal .outbound-editor-advanced .ant-collapse-content-box {
+  padding: 14px;
+}
