@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/naiveproxy"
 	"github.com/SawaMEN/3x-ui/v3/internal/protocolserver"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 )
@@ -137,6 +138,24 @@ func mutateProtocolServer(ctx context.Context, protocol model.Protocol, install 
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
+	var version []byte
+	var versionExists bool
+	versionMode := os.FileMode(0o644)
+	if protocol == model.NaiveProxy {
+		var err error
+		version, err = os.ReadFile(naiveproxy.VersionPath())
+		if err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		versionExists = err == nil
+		if versionExists {
+			info, err := os.Stat(naiveproxy.VersionPath())
+			if err != nil {
+				return err
+			}
+			versionMode = info.Mode().Perm()
+		}
+	}
 	var backup string
 	original, statErr := os.Stat(path)
 	if statErr != nil && !os.IsNotExist(statErr) {
@@ -164,15 +183,26 @@ func mutateProtocolServer(ctx context.Context, protocol model.Protocol, install 
 		}
 	}
 	rollback := func() error {
+		var result error
 		if backup != "" {
-			return os.Rename(backup, path)
+			result = os.Rename(backup, path)
+		} else {
+			result = removeComponentFile(path)
 		}
-		err := os.Remove(path)
-		if os.IsNotExist(err) {
-			return nil
+		if protocol == model.NaiveProxy {
+			if versionExists {
+				writeErr := os.WriteFile(naiveproxy.VersionPath(), version, versionMode)
+				result = errors.Join(result, writeErr)
+				if writeErr == nil {
+					result = errors.Join(result, os.Chmod(naiveproxy.VersionPath(), versionMode))
+				}
+			} else {
+				result = errors.Join(result, removeComponentFile(naiveproxy.VersionPath()))
+			}
 		}
-		return err
+		return result
 	}
+
 	previouslyInstalled := protocolserver.Installed(protocol)
 	if err := install(ctx); err != nil {
 		return errors.Join(err, rollback())

@@ -173,3 +173,26 @@ it('updates an installed Hysteria server while incompatible inbounds use sing-bo
     expect(HttpUtil.post).toHaveBeenCalledWith('/panel/api/server/externalvpn/update/hysteria2'),
   );
 });
+
+it('does not treat restored connectivity as confirmation that system updates succeeded', async () => {
+  installedHysteria = true;
+  await openComponents();
+  const originalPost = vi.mocked(HttpUtil.post).getMockImplementation()!;
+  vi.mocked(HttpUtil.post).mockImplementation(async (path, ...args) => {
+    if (String(path).includes('/system/update/apply'))
+      return { success: false, msg: 'Failed to fetch', obj: {} };
+    return originalPost(path, ...args);
+  });
+  fireEvent.click(screen.getByRole('button', { name: /Update panel packages & kernel/ }));
+  fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
+  await screen.findByText(/Соединение с панелью восстановлено/);
+  await waitFor(() =>
+    expect(
+      screen
+        .getByRole('button', { name: /Update panel packages & kernel/ })
+        .classList.contains('ant-btn-loading'),
+    ).toBe(false),
+  );
+  expect(HttpUtil.post).not.toHaveBeenCalledWith('/panel/api/server/externalvpn/update/hysteria2');
+  expect(screen.queryByText('System packages were updated successfully.')).toBeNull();
+});

@@ -3,8 +3,11 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -298,5 +301,52 @@ func TestProtocolServerUpdateKeepsExistingCompatibilityFallback(t *testing.T) {
 	}
 	if data, err := os.ReadFile(path); err != nil || string(data) != string(replacement) {
 		t.Fatalf("updated binary not retained: %v", err)
+	}
+}
+
+func TestProtocolServerRollbackRestoresVersionMetadata(t *testing.T) {
+	for _, existing := range []bool{false, true} {
+		t.Run(fmt.Sprint(existing), func(t *testing.T) {
+			t.Setenv("XUI_BIN_FOLDER", t.TempDir())
+			binary := protocolserver.BinaryPath(model.NaiveProxy)
+			marker := filepath.Join(filepath.Dir(binary), "caddy-naive.version")
+			if err := os.WriteFile(binary, []byte("original"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if existing {
+				if err := os.WriteFile(marker, []byte("old-version"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			rejected := errors.New("installation rejected")
+			err := InstallProtocolServer(context.Background(), model.NaiveProxy, func(context.Context) error {
+				if err := os.WriteFile(binary, []byte("new binary"), 0o700); err != nil {
+					return err
+				}
+				if err := os.WriteFile(marker, []byte("new-version"), 0o644); err != nil {
+					return err
+				}
+				if err := os.Chmod(marker, 0o644); err != nil {
+					return err
+				}
+				return rejected
+			})
+			if !errors.Is(err, rejected) {
+				t.Fatalf("installation error: %v", err)
+			}
+			data, err := os.ReadFile(marker)
+			if existing && (err != nil || string(data) != "old-version") {
+				t.Fatalf("rollback left wrong version: %q, %v", data, err)
+			}
+			if existing {
+				info, err := os.Stat(marker)
+				if err != nil || info.Mode().Perm() != 0o600 {
+					t.Fatalf("metadata permissions not restored: %v", err)
+				}
+			}
+			if !existing && !os.IsNotExist(err) {
+				t.Fatalf("failed installation left metadata: %q, %v", data, err)
+			}
+		})
 	}
 }

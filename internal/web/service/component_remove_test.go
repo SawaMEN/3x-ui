@@ -13,6 +13,7 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/naiveproxy"
 	"github.com/SawaMEN/3x-ui/v3/internal/protocolserver"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 )
@@ -30,11 +31,21 @@ func TestRemoveProtocolComponentFallsBackAndPreservesSettings(t *testing.T) {
 			if err := os.WriteFile(path, []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
 				t.Fatal(err)
 			}
+			if protocol == model.NaiveProxy {
+				if err := os.WriteFile(naiveproxy.VersionPath(), []byte("old-version"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
 			if err := RemoveProtocolComponent(context.Background(), component); err != nil {
 				t.Fatal(err)
 			}
 			if _, err := os.Stat(path); !os.IsNotExist(err) {
 				t.Fatalf("binary retained: %v", err)
+			}
+			if protocol == model.NaiveProxy {
+				if _, err := os.Stat(naiveproxy.VersionPath()); !os.IsNotExist(err) {
+					t.Fatalf("removal retained version marker: %v", err)
+				}
 			}
 			if !svc.IsRunning() || protocolserver.Running(protocol) {
 				t.Fatal("native fallback is not serving")

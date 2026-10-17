@@ -10,6 +10,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
+	"github.com/SawaMEN/3x-ui/v3/internal/naiveproxy"
 	"github.com/SawaMEN/3x-ui/v3/internal/protocolserver"
 	"github.com/SawaMEN/3x-ui/v3/internal/sudoku"
 )
@@ -35,7 +36,15 @@ func RemoveProtocolComponent(ctx context.Context, component string) error {
 		return fmt.Errorf("unsupported removable component %q", component)
 	}
 	if protocol == model.NaiveProxy || protocol == model.Hysteria {
-		return mutateProtocolServer(ctx, protocol, func(context.Context) error { return removeComponentFile(protocolserver.BinaryPath(protocol)) }, false)
+		return mutateProtocolServer(ctx, protocol, func(context.Context) error {
+			if err := removeComponentFile(protocolserver.BinaryPath(protocol)); err != nil {
+				return err
+			}
+			if protocol == model.NaiveProxy {
+				return removeComponentFile(naiveproxy.VersionPath())
+			}
+			return nil
+		}, false)
 	}
 	protocolInstallMu.Lock()
 	defer protocolInstallMu.Unlock()

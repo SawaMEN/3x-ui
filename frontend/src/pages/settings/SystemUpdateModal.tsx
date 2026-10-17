@@ -403,30 +403,28 @@ export default function SystemUpdateModal({
       const systemMsg = (await HttpUtil.post(
         `/panel/api/setting/system/update/apply?allPackages=${includeAllPackages}`,
       )) as ApiMsg<unknown>;
-      let systemUpdateRecovered = Boolean(systemMsg?.success);
-
       if (!systemMsg?.success) {
-        const result = normalizeSystemUpdateResult(systemMsg.obj);
+        const result = normalizeSystemUpdateResult(systemMsg?.obj);
         setSystemUpdateResult(result);
 
         const errorMessage =
           systemMsg?.msg || result.error || t('pages.settings.swap.updateFailed');
         if (isTransientFetchFailure(errorMessage)) {
           const recoveredStatus = await recoverSystemUpdateStatus();
-          systemUpdateRecovered = recoveredStatus !== null;
-
-          if (systemUpdateRecovered) {
-            messageApi.info('Соединение с панелью восстановлено; состояние обновления проверено.');
+          if (recoveredStatus !== null) {
+            messageApi.warning(
+              'Соединение с панелью восстановлено. Завершение системного обновления не подтверждено; повторите проверку состояния.',
+            );
+            await loadDependencyUpdates();
+            return;
           }
         }
 
-        if (!systemUpdateRecovered) {
-          throw new Error(errorMessage);
-        }
+        throw new Error(errorMessage);
       }
 
       if (systemMsg?.success) {
-        setSystemUpdateResult(normalizeSystemUpdateResult(systemMsg.obj));
+        setSystemUpdateResult(normalizeSystemUpdateResult(systemMsg?.obj));
       }
 
       const pending = updatableDependencies.filter(

@@ -166,7 +166,7 @@ func Update(ctx context.Context) (Status, error) {
 		_ = os.Remove(staged)
 		return Status{}, err
 	}
-	if err := os.WriteFile(versionPath(), []byte(strings.TrimSpace(rel.TagName)+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(VersionPath(), []byte(strings.TrimSpace(rel.TagName)+"\n"), 0o644); err != nil {
 		return Status{}, err
 	}
 
@@ -406,7 +406,7 @@ func validateConfig(ctx context.Context, path string) error {
 }
 
 func BinaryPath() string  { return filepath.Join(config.GetBinFolderPath(), "caddy-naive") }
-func versionPath() string { return filepath.Join(config.GetBinFolderPath(), "caddy-naive.version") }
+func VersionPath() string { return filepath.Join(config.GetBinFolderPath(), "caddy-naive.version") }
 func configPath() string  { return filepath.Join(config.GetBinFolderPath(), "caddy-naive.Caddyfile") }
 func pidPath() string     { return filepath.Join(config.GetBinFolderPath(), "caddy-naive.pid") }
 func logPath() string     { return filepath.Join(config.GetBinFolderPath(), "caddy-naive.log") }
@@ -421,7 +421,7 @@ func statusWithoutRelease() (Status, error) {
 }
 
 func installedVersion(binary string) string {
-	if data, err := os.ReadFile(versionPath()); err == nil {
+	if data, err := os.ReadFile(VersionPath()); err == nil {
 		if value := strings.TrimSpace(string(data)); value != "" {
 			return value
 		}
