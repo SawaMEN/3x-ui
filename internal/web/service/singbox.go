@@ -187,7 +187,11 @@ func (s *SingBoxService) GetEditorConfig(ctx context.Context) (*SingBoxEditorSna
 		return nil, err
 	}
 	raw["route"] = editable.Route
-	raw["dns"] = editable.DNS
+	if ox, oxErr := oxidns.Load(); oxErr != nil {
+		return nil, oxErr
+	} else if ox.Enabled && ox.UseSingBox {
+		raw["dns"] = editable.DNS
+	}
 	var editorConfig singbox.Config
 	if err := json.Unmarshal(data, &editorConfig); err != nil {
 		return nil, err
