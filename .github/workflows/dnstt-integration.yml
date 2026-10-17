@@ -32,6 +32,15 @@ jobs:
           DNSTT_SERVER_BINARY: ${{ runner.temp }}/dnstt-server
           DNSTT_CLIENT_BINARY: ${{ runner.temp }}/dnstt-client
         run: go test -v -count=1 ./internal/dnstt
+      - name: Verify real systemd install, restart and complete removal
+        env:
+          DNSTT_SERVER_BINARY: ${{ runner.temp }}/dnstt-server
+        run: |
+          sudo env PATH="$PATH" HOME="$HOME" \
+            DNSTT_SERVER_BINARY="$DNSTT_SERVER_BINARY" \
+            DNSTT_SYSTEMD_TEST=1 \
+            "$(command -v go)" test -v -count=1 ./internal/dnstt -run '^TestManagedServiceLifecycle
+
       - name: Go formatting validation
         run: |
-          test -z "$(gofmt -l internal/dnstt/manager.go internal/dnstt/manager_test.go internal/web/controller/dnstt.go)"
+          test -z "$(gofmt -l internal/dnstt/manager.go internal/dnstt/manager_test.go internal/dnstt/lifecycle_systemd_test.go internal/web/controller/dnstt.go)"
