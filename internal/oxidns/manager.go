@@ -297,6 +297,19 @@ func InstallOnly(ctx context.Context) error {
  return installOnly(ctx)
 }
 
+func waitHealthy(ctx context.Context) error {
+ address:=net.JoinHostPort("127.0.0.1",strconv.Itoa(localPort))
+ for attempt:=0;attempt<12;attempt++{
+  conn,err:=net.DialTimeout("tcp",address,300*time.Millisecond)
+  if err==nil{_ =conn.Close();return nil}
+  select{
+  case <-ctx.Done():return ctx.Err()
+  case <-time.After(300*time.Millisecond):
+  }
+ }
+ return errors.New("OxiDNS не открыл локальный DNS-порт после запуска")
+}
+
 func Upgrade(ctx context.Context) error {
  mu.Lock()
  defer mu.Unlock()
@@ -312,7 +325,10 @@ func Upgrade(ctx context.Context) error {
  if err!=nil{return err}
  if err:=atomicWrite(binaryPath,executable,0755);err!=nil{return err}
  if c.Enabled{
-  if err:=systemctl(ctx,"restart","x-ui-oxidns.service");err!=nil{
+  restartErr:=systemctl(ctx,"restart","x-ui-oxidns.service")
+  if restartErr==nil{restartErr=waitHealthy(ctx)}
+  if restartErr!=nil{
+   err:=restartErr
    restoreErr:=atomicWrite(binaryPath,oldBinary,0755)
    if restoreErr==nil {restoreErr=systemctl(ctx,"restart","x-ui-oxidns.service")}
    return errors.Join(err,restoreErr)
@@ -355,7 +371,7 @@ func Setup(ctx context.Context, c Settings, certFile,keyFile string) error {
  rollback:=func() {
   if len(oldYAML)>0 {_=atomicWrite(configPath,oldYAML,0600)} else {_=os.Remove(configPath)}
   if len(oldState)>0 {_=atomicWrite(statePath,oldState,0600)} else {_=os.Remove(statePath)}
-  if len(oldYAML)>0 {_=systemctl(ctx,"restart","x-ui-oxidns.service")} else {_=systemctl(ctx,"stop","x-ui-oxidns.service")}
+  if len(oldYAML)>0 {_=systemctl(ctx,"restart","x-ui-oxidns.service")} else {_=systemctl(ctx,"stop","x-ui-oxidns.service");_=systemctl(ctx,"disable","x-ui-oxidns.service")}
  }
  if out,err:=exec.CommandContext(ctx,binaryPath,"check","-c",configPath).CombinedOutput();err!=nil {
   rollback()
@@ -363,6 +379,7 @@ func Setup(ctx context.Context, c Settings, certFile,keyFile string) error {
  }
  if err:=systemctl(ctx,"enable","x-ui-oxidns.service");err!=nil{rollback();return err}
  if err:=systemctl(ctx,"restart","x-ui-oxidns.service");err!=nil{rollback();return err}
+ if err:=waitHealthy(ctx);err!=nil{rollback();return err}
  data,err:=json.Marshal(c)
  if err!=nil{rollback();return err}
  if err:=atomicWrite(statePath,data,0600);err!=nil{rollback();return err}
