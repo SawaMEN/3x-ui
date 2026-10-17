@@ -762,7 +762,9 @@ export default function SingBoxPage() {
     'gateway',
     'advanced',
   ]);
-  const resolvedSection = aliases[sectionSlug] || sectionSlug;
+  const resolvedSection = location.search.includes('routingTab=adblock')
+    ? 'adblock'
+    : aliases[sectionSlug] || sectionSlug;
   const activeSection = sectionKeys.has(resolvedSection) ? resolvedSection : 'basic';
   const showAdvanced = activeSection === 'advanced';
   const utilitySection = activeSection === 'gateway' || activeSection === 'adblock';
@@ -2136,6 +2138,7 @@ export default function SingBoxPage() {
             {renderOutbounds()}
             <Collapse
               className="singbox-advanced-groups"
+              defaultActiveKey={sectionSlug === 'balancer' ? ['groups'] : sectionSlug === 'endpoints' ? ['endpoints'] : []}
               items={[
                 {
                   key: 'groups',
