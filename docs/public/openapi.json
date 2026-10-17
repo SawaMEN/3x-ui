@@ -15594,6 +15594,22 @@
             }
           }
         ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "deferApply": {
+                    "type": "boolean",
+                    "description": "Save without immediately applying to the core; call outbound-subs/apply after the batch."
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful response",
@@ -15609,22 +15625,6 @@
                       "type": "string"
                     },
                     "obj": {}
-                  }
-                }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "required": false,
-          "content": {
-            "application/x-www-form-urlencoded": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "deferApply": {
-                    "type": "boolean",
-                    "description": "Save without immediately applying to the core; call outbound-subs/apply after the batch."
                   }
                 }
               }
