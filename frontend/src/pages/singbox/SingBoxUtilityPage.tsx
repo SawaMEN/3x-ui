@@ -1,4 +1,4 @@
-import { Card, ConfigProvider, FloatButton, Layout, Tabs } from 'antd';
+import { ConfigProvider, FloatButton, Layout, Tabs } from 'antd';
 import { useNavigate } from 'react-router';
 
 import AdBlockTab from '@/pages/adblock/AdBlockTab';
@@ -48,9 +48,7 @@ export default function SingBoxUtilityPage({ section }: Props) {
                 children:
                   tab.key === section ? (
                     section === 'gateway' ? (
-                      <Card hoverable>
-                        <GatewayModeControl />
-                      </Card>
+                      <GatewayModeControl />
                     ) : (
                       <AdBlockTab />
                     )
