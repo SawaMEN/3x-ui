@@ -80,7 +80,13 @@ function SubscriptionWarning({ warning }: { warning: string }) {
           <Tag key={group.label} color="orange">{group.label}: {group.issues.length}</Tag>
         ))}
       </Space>
-      {prefix && <Typography.Text type="secondary">{prefix}</Typography.Text>}
+      {prefix && (prefix.length > 180 ? (
+        <Collapse
+          ghost
+          size="small"
+          items={[{ key: 'parser', label: 'Другие предупреждения импорта', children: <Typography.Text style={{ overflowWrap: 'anywhere' }}>{prefix}</Typography.Text> }]}
+        />
+      ) : <Typography.Text type="secondary">{prefix}</Typography.Text>)}
       <Collapse
         ghost
         size="small"
