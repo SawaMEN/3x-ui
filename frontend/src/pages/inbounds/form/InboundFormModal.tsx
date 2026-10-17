@@ -294,9 +294,13 @@ export default function InboundFormModal({
         undefined,
         { silent: true },
       ),
-    ]).then(([sudoku, external]) => {
+      HttpUtil.get<{ installed?: boolean }>('/panel/api/telemt/status', undefined, {
+        silent: true,
+      }),
+    ]).then(([sudoku, external, telemt]) => {
       if (!cancelled) {
         setInstalledProtocols({
+          [Protocols.MTPROTO]: telemt.success === true && telemt.obj?.installed === true,
           [Protocols.SUDOKU]: sudoku.success === true && sudoku.obj?.installed === true,
           [Protocols.PINGTUNNEL]:
             external.success === true && external.obj?.pingtunnel?.installed === true,
@@ -314,7 +318,7 @@ export default function InboundFormModal({
     () =>
       PROTOCOL_OPTIONS.filter(
         (option) =>
-          ![Protocols.SUDOKU, Protocols.PINGTUNNEL, Protocols.TRUSTTUNNEL].some(
+          ![Protocols.MTPROTO, Protocols.SUDOKU, Protocols.PINGTUNNEL, Protocols.TRUSTTUNNEL].some(
             (value) => value === option.value,
           ) ||
           installedProtocols[option.value] === true ||
