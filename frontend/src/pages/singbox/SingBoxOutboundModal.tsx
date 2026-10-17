@@ -13,6 +13,7 @@ import {
   Button,
   Card,
   Col,
+  Collapse,
   Form,
   Input,
   InputNumber,
@@ -21,7 +22,6 @@ import {
   Select,
   Space,
   Switch,
-  Tabs,
   Tag,
 } from 'antd';
 import {
@@ -111,7 +111,7 @@ export default function SingBoxOutboundModal({
   const [draft, setDraft] = useState<ConfigObject>({});
   const [additional, setAdditional] = useState<ConfigObject[]>([]);
   const [exportedLink, setExportedLink] = useState('');
-  const [tab, setTab] = useState('connection'),
+
     [json, setJson] = useState(''),
     [jsonError, setJsonError] = useState('');
   const [invalidOptions, setInvalidOptions] = useState<string[]>([]);
@@ -138,7 +138,6 @@ export default function SingBoxOutboundModal({
     autoTagRef.current = value ? '' : text(initial.tag);
     setDraft(initial);
     setJson(JSON.stringify(initial, null, 2));
-    setTab('connection');
     setError('');
     setJsonError('');
     setLink('');
@@ -927,53 +926,24 @@ export default function SingBoxOutboundModal({
       {jsonError && <Alert type="error" showIcon title="Исправьте JSON" description={jsonError} />}
     </Space>
   );
-  const tabs = [
-    {
-      key: 'connection',
-      label: (
-        <Space>
-          <ApiOutlined />
-          Подключение
-        </Space>
-      ),
-      children: connection,
-    },
+  const detailSections = [
     ...(remote && tlsProtocols.includes(type)
-      ? [
-          {
-            key: 'security',
-            label: (
-              <Space>
-                <SafetyCertificateOutlined />
-                Безопасность
-              </Space>
-            ),
-            children: securityForm,
-          },
-        ]
+      ? [{
+          key: 'security',
+          label: <Space><SafetyCertificateOutlined /> Безопасность и TLS</Space>,
+          children: securityForm,
+        }]
       : []),
     ...(transportProtocols.includes(type)
-      ? [
-          {
-            key: 'transport',
-            label: (
-              <Space>
-                <SwapOutlined />
-                Транспорт
-              </Space>
-            ),
-            children: transportForm,
-          },
-        ]
+      ? [{
+          key: 'transport',
+          label: <Space><SwapOutlined /> Сетевой транспорт</Space>,
+          children: transportForm,
+        }]
       : []),
     {
       key: 'json',
-      label: (
-        <Space>
-          <CodeOutlined />
-          JSON / импорт
-        </Space>
-      ),
+      label: <Space><CodeOutlined /> JSON и импорт ссылок</Space>,
       children: jsonForm,
     },
   ];
@@ -1059,13 +1029,14 @@ export default function SingBoxOutboundModal({
         </Space>
       </div>
       {error && <Alert type="error" showIcon title={error} style={{ marginBottom: 16 }} />}
-      <Tabs
-        activeKey={tabs.some((t) => t.key === tab) ? tab : 'connection'}
-        onChange={(next) => {
-          if (!jsonError && !importing && invalidOptions.length === 0) setTab(next);
-        }}
-        items={tabs}
-      />
+      <div className="outbound-editor-sections">
+        {connection}
+        <Collapse
+          className="outbound-editor-advanced"
+          defaultActiveKey={remote && requiredTlsProtocols.includes(type) ? ['security'] : []}
+          items={detailSections}
+        />
+      </div>
       {isNativeEndpoint(draft) && (
         <Alert
           type="info"
