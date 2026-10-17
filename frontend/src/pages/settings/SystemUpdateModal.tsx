@@ -27,6 +27,7 @@ import {
 import { HttpUtil } from '@/utils';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import './SystemUpdateModal.css';
+import OlcRTCClientsModal from './OlcRTCClientsModal';
 
 type SystemUpdatePackage = {
   name: string;
@@ -38,7 +39,7 @@ type SystemUpdatePackage = {
   updateAvailable: boolean;
 };
 
-type DependencyKey = 'naiveproxy' | 'hysteria2' | 'sudoku' | 'pingtunnel' | 'trusttunnel';
+type DependencyKey = 'naiveproxy' | 'hysteria2' | 'sudoku' | 'pingtunnel' | 'trusttunnel' | 'olcrtc';
 
 type DependencyStatus = {
   key: DependencyKey;
@@ -54,6 +55,9 @@ type DependencyStatus = {
   error?: string;
   supported?: boolean;
   unsupportedReason?: string;
+  busy?: boolean;
+  operation?: string;
+  running?: boolean;
 };
 
 type ExternalVPNBinaryStatus = {
@@ -108,7 +112,8 @@ const isDependencyInstallable = (dependency: DependencyStatus) =>
   dependency.source === 'standalone' ||
   dependency.key === 'sudoku' ||
   dependency.key === 'pingtunnel' ||
-  dependency.key === 'trusttunnel';
+  dependency.key === 'trusttunnel' ||
+  dependency.key === 'olcrtc';
 
 const dependencyNeedsAction = (dependency: DependencyStatus) => {
   if (!dependency.availableVersion) return false;
@@ -224,9 +229,10 @@ export default function SystemUpdateModal({
     [bundledDependencies, standaloneDependencies],
   );
   const [dependencyBusy, setDependencyBusy] = useState<DependencyKey | null>(null);
+  const [olcrtcSettingsOpen, setOlcrtcSettingsOpen] = useState(false);
 
   const loadDependencyUpdates = useCallback(async () => {
-    const [core, sudoku, external, naive] = await Promise.all([
+    const [core, sudoku, external, naive, olcrtc] = await Promise.all([
       HttpUtil.get('/panel/api/setting/singbox/status') as Promise<
         ApiMsg<{ installed?: boolean; version?: string }>
       >,
@@ -234,6 +240,9 @@ export default function SystemUpdateModal({
       HttpUtil.get('/panel/api/server/externalvpn/status') as Promise<ApiMsg<ExternalVPNStatus>>,
       HttpUtil.get('/panel/api/naiveproxy/status', undefined, { silent: true }) as Promise<
         ApiMsg<ExternalVPNBinaryStatus>
+      >,
+      HttpUtil.get('/panel/api/olcrtc/status', undefined, { silent: true }) as Promise<
+        ApiMsg<ExternalVPNBinaryStatus & { busy?: boolean; operation?: string; running?: boolean }>
       >,
     ]);
     const bundled = ['naiveproxy', 'hysteria2'].map((key) => ({
@@ -275,6 +284,21 @@ export default function SystemUpdateModal({
               : undefined),
       });
     }
+    rows.push({
+      key: 'olcrtc',
+      label: 'OlcRTC',
+      source: 'standalone',
+      installed: olcrtc.obj?.installed === true,
+      installedVersion: olcrtc.obj?.installedVersion || '',
+      availableVersion: olcrtc.obj?.availableVersion || 'upstream',
+      updateAvailable: olcrtc.obj?.updateAvailable === true,
+      supported: olcrtc.obj?.supported,
+      unsupportedReason: olcrtc.obj?.unsupportedReason,
+      busy: olcrtc.obj?.busy === true,
+      running: olcrtc.obj?.running === true,
+      operation: olcrtc.obj?.operation,
+      error: olcrtc.obj?.error || (olcrtc.success ? undefined : olcrtc.msg),
+    });
     setBundledDependencies(rows);
     setStandaloneDependencies(
       (['naiveproxy', 'hysteria2'] as const).map((key) => {
@@ -320,6 +344,10 @@ export default function SystemUpdateModal({
 
   const requestDependencyUpdate = useCallback(async (dependency: DependencyStatus) => {
     switch (dependency.key) {
+      case 'olcrtc':
+        return (await HttpUtil.post(
+          dependency.installed ? '/panel/api/olcrtc/update' : '/panel/api/olcrtc/install',
+        )) as ApiMsg<unknown>;
       case 'naiveproxy':
         return (await HttpUtil.post('/panel/api/naiveproxy/update')) as ApiMsg<unknown>;
       case 'hysteria2':
@@ -346,7 +374,11 @@ export default function SystemUpdateModal({
         throw new Error(response?.msg || `Не удалось обновить ${dependency.label}`);
       }
 
-      messageApi.success(`${dependency.label}: ${t('pages.settings.swap.updateDone')}`);
+      messageApi.success(
+        dependency.key === 'olcrtc'
+          ? 'OlcRTC: операция запущена. Статус будет обновляться автоматически.'
+          : `${dependency.label}: ${t('pages.settings.swap.updateDone')}`,
+      );
       await loadDependencyUpdates();
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : String(error));
@@ -359,11 +391,17 @@ export default function SystemUpdateModal({
     setDependencyBusy(dependency.key);
     try {
       const response = (await HttpUtil.post(
-        `/panel/api/server/components/remove/${dependency.key}`,
+        dependency.key === 'olcrtc'
+          ? '/panel/api/olcrtc/remove'
+          : `/panel/api/server/components/remove/${dependency.key}`,
       )) as ApiMsg<unknown>;
       if (!response?.success)
         throw new Error(response?.msg || `Не удалось удалить ${dependency.label}`);
-      messageApi.success(`${dependency.label}: компонент удалён.`);
+      messageApi.success(
+        dependency.key === 'olcrtc'
+          ? 'OlcRTC: удаление запущено. Настройки клиентов сохранятся для повторной установки.'
+          : `${dependency.label}: компонент удалён.`,
+      );
       await loadDependencyUpdates();
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : String(error));
@@ -371,6 +409,12 @@ export default function SystemUpdateModal({
       setDependencyBusy(null);
     }
   };
+
+  useEffect(() => {
+    if (!open || !dependencies.some((dependency) => dependency.key === 'olcrtc' && dependency.busy)) return;
+    const interval = window.setInterval(() => { void loadDependencyUpdates(); }, 3000);
+    return () => window.clearInterval(interval);
+  }, [dependencies, loadDependencyUpdates, open]);
 
   const recoverSystemUpdateStatus = useCallback(async (): Promise<SystemUpdateStatus | null> => {
     const delays = [0, 1000, 2000, 4000, 6000];
@@ -545,6 +589,7 @@ export default function SystemUpdateModal({
   return (
     <>
       {contextHolder}
+      <OlcRTCClientsModal open={olcrtcSettingsOpen} onClose={() => setOlcrtcSettingsOpen(false)} />
       <Modal
         rootClassName="system-update-modal"
         open={open}
@@ -768,6 +813,16 @@ export default function SystemUpdateModal({
                           style={{ marginBottom: 10 }}
                         />
                       )}
+                      {dependency.key === 'olcrtc' && (
+                        <Typography.Paragraph type="secondary">
+                          Отдельный WebRTC-сервер через Jitsi, Телемост или WB Stream. Не заменяет sing-box.
+                          {dependency.busy
+                            ? ` Выполняется: ${dependency.operation === 'remove' ? 'удаление' : 'установка или обновление'}.`
+                            : dependency.installed
+                              ? dependency.running ? ' Служба работает.' : ' Служба остановлена.'
+                              : ' Нажмите «Установить», чтобы добавить компонент.'}
+                        </Typography.Paragraph>
+                      )}
                       {dependency.key === 'pingtunnel' && (
                         <Typography.Text
                           type="secondary"
@@ -810,6 +865,11 @@ export default function SystemUpdateModal({
                         </Typography.Paragraph>
                       )}
                       <Space wrap>
+                        {dependency.key === 'olcrtc' && dependency.installed && (
+                          <Button size="small" onClick={() => setOlcrtcSettingsOpen(true)} disabled={!dependency.running || dependency.busy}>
+                            Настроить клиентов
+                          </Button>
+                        )}
                         {action.supported === false ? (
                           <Alert
                             type="info"
@@ -826,12 +886,13 @@ export default function SystemUpdateModal({
                               size="small"
                               aria-label={actionLabel}
                               icon={action.installed ? <ReloadOutlined /> : <DownloadOutlined />}
-                              loading={dependencyBusy === dependency.key}
+                              loading={dependencyBusy === dependency.key || action.busy === true}
                               disabled={
                                 (!action.updateAvailable &&
                                   !(isDependencyInstallable(action) && !action.installed)) ||
                                 !action.availableVersion ||
                                 dependencyBusy !== null ||
+                                action.busy === true ||
                                 systemUpdateBusy
                               }
                               onClick={() => void updateDependency(action)}
@@ -842,9 +903,11 @@ export default function SystemUpdateModal({
                           <Popconfirm
                             title={`Удалить ${action.label}?`}
                             description={
-                              standalone
-                                ? 'Входящие подключения переключатся на встроенный sing-box.'
-                                : 'Активные подключения этого протокола необходимо сначала отключить.'
+                              dependency.key === 'olcrtc'
+                                ? 'Служба OlcRTC остановится, бинарники удалятся. Данные клиентов сохранятся.'
+                                : standalone
+                                  ? 'Входящие подключения переключатся на встроенный sing-box.'
+                                  : 'Активные подключения этого протокола необходимо сначала отключить.'
                             }
                             okText={t('delete')}
                             cancelText={t('cancel')}
@@ -856,7 +919,7 @@ export default function SystemUpdateModal({
                                 danger
                                 aria-label={`Удалить ${action.label}`}
                                 icon={<DeleteOutlined />}
-                                disabled={dependencyBusy !== null || systemUpdateBusy}
+                                disabled={dependencyBusy !== null || systemUpdateBusy || action.busy === true}
                               />
                             </Tooltip>
                           </Popconfirm>
