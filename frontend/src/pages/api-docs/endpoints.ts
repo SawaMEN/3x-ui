@@ -898,6 +898,11 @@ export const sections: readonly Section[] = [
         summary: 'Read integrated OxiDNS service status and settings.',
       },
       {
+        method: 'GET',
+        path: '/panel/api/oxidns/logs',
+        summary: 'Read recent OxiDNS systemd service logs for diagnostics.',
+      },
+      {
         method: 'POST',
         path: '/panel/api/oxidns/check',
         summary: 'Resolve a test domain through the managed OxiDNS listener.',
