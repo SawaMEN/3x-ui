@@ -365,7 +365,8 @@ export default function SystemUpdateModal({
       case 'dnstt':
         return (await HttpUtil.post(
           dependency.installed ? '/panel/api/dnstt/update' : '/panel/api/dnstt/install',
-          undefined, { timeout: 180000 },
+          undefined,
+          { timeout: 180000 },
         )) as ApiMsg<unknown>;
       case 'oxidns':
         return (await HttpUtil.post(
@@ -791,9 +792,9 @@ export default function SystemUpdateModal({
                         ? 'Установить OxiDNS'
                         : dependency.key === 'dnstt'
                           ? 'Установить DNSTT'
-                        : standalone
-                          ? 'Установить отдельное ядро'
-                          : 'Установить'
+                          : standalone
+                            ? 'Установить отдельное ядро'
+                            : 'Установить'
                       : action.updateAvailable
                         ? t('pages.settings.swap.updateComponent')
                         : t('pages.settings.swap.upToDate');
@@ -855,9 +856,12 @@ export default function SystemUpdateModal({
                         </Typography.Text>
                       )}
                       {dependency.key === 'dnstt' && (
-                        <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 10 }}>
-                          Отдельный зашифрованный DNS-туннель с делегированием NS, ключами и локальной TCP-целью.
-                          Не изменяет обычный DNS и OxiDNS.
+                        <Typography.Text
+                          type="secondary"
+                          style={{ display: 'block', marginBottom: 10 }}
+                        >
+                          Отдельный зашифрованный DNS-туннель с делегированием NS, ключами и
+                          локальной TCP-целью. Не изменяет обычный DNS и OxiDNS.
                         </Typography.Text>
                       )}
                       {dependency.key === 'pingtunnel' && (
@@ -902,17 +906,18 @@ export default function SystemUpdateModal({
                         </Typography.Paragraph>
                       )}
                       <Space wrap>
-                        {(dependency.key === 'oxidns' || dependency.key === 'dnstt') && dependency.installed && (
-                          <Button
-                            size="small"
-                            type="primary"
-                            disabled={dependencyBusy !== null || systemUpdateBusy}
-                            href={`${(window.X_UI_BASE_PATH || '/').replace(/\/+$/, '')}/panel/singbox#dns`}
-                            onClick={onClose}
-                          >
-                            {dependency.key === 'dnstt' ? 'Настроить DNSTT' : 'Создать DNS'}
-                          </Button>
-                        )}
+                        {(dependency.key === 'oxidns' || dependency.key === 'dnstt') &&
+                          dependency.installed && (
+                            <Button
+                              size="small"
+                              type="primary"
+                              disabled={dependencyBusy !== null || systemUpdateBusy}
+                              href={`${(window.X_UI_BASE_PATH || '/').replace(/\/+$/, '')}/panel/singbox#dns`}
+                              onClick={onClose}
+                            >
+                              {dependency.key === 'dnstt' ? 'Настроить DNSTT' : 'Создать DNS'}
+                            </Button>
+                          )}
                         {action.supported === false ? (
                           <Alert
                             type="info"
@@ -949,9 +954,9 @@ export default function SystemUpdateModal({
                                 ? 'Собственный DNS будет отключён. sing-box вернётся к прежнему DNS.'
                                 : dependency.key === 'dnstt'
                                   ? 'DNSTT будет остановлен, а ключи и настройки удалены без возможности восстановления.'
-                                : standalone
-                                  ? 'Входящие подключения переключатся на встроенный sing-box.'
-                                  : 'Активные подключения этого протокола необходимо сначала отключить.'
+                                  : standalone
+                                    ? 'Входящие подключения переключатся на встроенный sing-box.'
+                                    : 'Активные подключения этого протокола необходимо сначала отключить.'
                             }
                             okText={t('delete')}
                             cancelText={t('cancel')}

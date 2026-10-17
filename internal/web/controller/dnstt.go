@@ -28,29 +28,52 @@ func (d *DNSTTController) result(c *gin.Context) {
 }
 func (d *DNSTTController) status(c *gin.Context) { d.result(c) }
 func (d *DNSTTController) install(c *gin.Context) {
-	ctx,cancel:=context.WithTimeout(c.Request.Context(),180*time.Second);defer cancel()
-	if err:=dnstt.Install(ctx);err!=nil{jsonMsg(c,"Не удалось установить DNSTT",err);return}
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 180*time.Second)
+	defer cancel()
+	if err := dnstt.Install(ctx); err != nil {
+		jsonMsg(c, "Не удалось установить DNSTT", err)
+		return
+	}
 	d.result(c)
 }
 func (d *DNSTTController) update(c *gin.Context) {
-	ctx,cancel:=context.WithTimeout(c.Request.Context(),180*time.Second);defer cancel()
-	if err:=dnstt.Upgrade(ctx);err!=nil{jsonMsg(c,"Не удалось обновить DNSTT",err);return}
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 180*time.Second)
+	defer cancel()
+	if err := dnstt.Upgrade(ctx); err != nil {
+		jsonMsg(c, "Не удалось обновить DNSTT", err)
+		return
+	}
 	d.result(c)
 }
 func (d *DNSTTController) setup(c *gin.Context) {
 	var settings dnstt.Config
-	if err:=c.ShouldBindJSON(&settings);err!=nil{jsonMsg(c,"Проверьте поля DNSTT",err);return}
-	ctx,cancel:=context.WithTimeout(c.Request.Context(),90*time.Second);defer cancel()
-	if err:=dnstt.Setup(ctx,settings);err!=nil{jsonMsg(c,"Не удалось настроить DNSTT",err);return}
+	if err := c.ShouldBindJSON(&settings); err != nil {
+		jsonMsg(c, "Проверьте поля DNSTT", err)
+		return
+	}
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 90*time.Second)
+	defer cancel()
+	if err := dnstt.Setup(ctx, settings); err != nil {
+		jsonMsg(c, "Не удалось настроить DNSTT", err)
+		return
+	}
 	d.result(c)
 }
 func (d *DNSTTController) disable(c *gin.Context) {
-	ctx,cancel:=context.WithTimeout(c.Request.Context(),30*time.Second);defer cancel()
-	if err:=dnstt.Disable(ctx);err!=nil{jsonMsg(c,"Не удалось отключить DNSTT",err);return}
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
+	defer cancel()
+	if err := dnstt.Disable(ctx); err != nil {
+		jsonMsg(c, "Не удалось отключить DNSTT", err)
+		return
+	}
 	d.result(c)
 }
 func (d *DNSTTController) remove(c *gin.Context) {
-	ctx,cancel:=context.WithTimeout(c.Request.Context(),30*time.Second);defer cancel()
-	if err:=dnstt.Remove(ctx);err!=nil{jsonMsg(c,"Не удалось удалить DNSTT",err);return}
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
+	defer cancel()
+	if err := dnstt.Remove(ctx); err != nil {
+		jsonMsg(c, "Не удалось удалить DNSTT", err)
+		return
+	}
 	d.result(c)
 }

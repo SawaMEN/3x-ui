@@ -794,7 +794,8 @@ export const sections: readonly Section[] = [
       {
         method: 'POST',
         path: '/panel/api/dnstt/setup',
-        summary: 'Validate the delegated DNS zone and local TCP destination, generate keys and enable DNSTT.',
+        summary:
+          'Validate the delegated DNS zone and local TCP destination, generate keys and enable DNSTT.',
       },
       {
         method: 'POST',
