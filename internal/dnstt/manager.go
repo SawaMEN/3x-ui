@@ -150,7 +150,7 @@ func download(ctx context.Context) ([]byte,error) {
 	if err!=nil{return nil,err}
 	defer res.Body.Close()
 	if res.StatusCode!=http.StatusOK{return nil,fmt.Errorf("скачивание DNSTT: HTTP %d",res.StatusCode)}
-	data,err:=io.ReadAll(io.LimitReader(res.Body,32<<20+1))
+	data,err:=io.ReadAll(io.LimitReader(res.Body,(32<<20)+1))
 	if err!=nil{return nil,err}
 	if len(data)>32<<20{return nil,errors.New("слишком большой бинарник DNSTT")}
 	sum:=sha256.Sum256(data)
@@ -208,8 +208,19 @@ func Setup(ctx context.Context,c Config)error{
 		var problems error
 		if len(oldUnit)>0 {problems=errors.Join(problems,fileWrite(unitPath,oldUnit,0644))}else{if e:=os.Remove(unitPath);e!=nil&&!errors.Is(e,os.ErrNotExist){problems=errors.Join(problems,e)}}
 		if len(oldState)>0 {problems=errors.Join(problems,fileWrite(statePath,oldState,0600))}else{if e:=os.Remove(statePath);e!=nil&&!errors.Is(e,os.ErrNotExist){problems=errors.Join(problems,e)}}
-		problems=errors.Join(problems,systemctl(rec,"daemon-reload"))
-		if old.Enabled&&len(oldUnit)>0 {problems=errors.Join(problems,systemctl(rec,"enable",unitName),systemctl(rec,"restart",unitName))}else{problems=errors.Join(problems,systemctl(rec,"stop",unitName),systemctl(rec,"disable",unitName))}
+		if len(oldUnit)>0 {
+			// Stop the failed candidate before replacing its unit.
+			if serviceActive(rec) { problems=errors.Join(problems,systemctl(rec,"stop",unitName)) }
+			problems=errors.Join(problems,systemctl(rec,"daemon-reload"))
+			if old.Enabled {
+				problems=errors.Join(problems,systemctl(rec,"enable",unitName),systemctl(rec,"restart",unitName))
+			} else {
+				problems=errors.Join(problems,systemctl(rec,"disable",unitName))
+			}
+		} else {
+			if serviceActive(rec) { problems=errors.Join(problems,systemctl(rec,"stop",unitName)) }
+			problems=errors.Join(problems,systemctl(rec,"disable",unitName),systemctl(rec,"daemon-reload"))
+		}
 		return errors.Join(original,problems)
 	}
 	if err:=systemctl(ctx,"daemon-reload");err!=nil{return rollback(err)}
@@ -229,8 +240,10 @@ func Setup(ctx context.Context,c Config)error{
 func Disable(ctx context.Context)error{
 	mu.Lock();defer mu.Unlock()
 	old,err:=load();if err!=nil{return err}
-	if !old.Enabled && !serviceActive(ctx){return nil}
-	if err:=systemctl(ctx,"stop",unitName);err!=nil{return err}
+	if _,err:=os.Stat(unitPath);errors.Is(err,os.ErrNotExist) {return nil} else if err!=nil{return err}
+	if serviceActive(ctx) {
+		if err:=systemctl(ctx,"stop",unitName);err!=nil{return err}
+	}
 	if err:=systemctl(ctx,"disable",unitName);err!=nil{return err}
 	old.Enabled=false
 	data,err:=json.Marshal(old);if err!=nil{return err}
@@ -246,9 +259,13 @@ func Upgrade(ctx context.Context)error{
 	cfg,err:=load();if err!=nil{return err}
 	if err:=fileWrite(binaryPath,fresh,0755);err!=nil{return err}
 	if cfg.Enabled {
-		if err:=systemctl(ctx,"restart",unitName);err!=nil || !serviceActive(ctx) {
+		restartErr:=systemctl(ctx,"restart",unitName)
+		if restartErr==nil && !serviceActive(ctx){restartErr=errors.New("обновлённый DNSTT не запускается")}
+		if restartErr!=nil {
 			rec,cancel:=context.WithTimeout(context.Background(),20*time.Second);defer cancel()
-			return errors.Join(err,fileWrite(binaryPath,prev,0755),systemctl(rec,"restart",unitName))
+			restoreErr:=fileWrite(binaryPath,prev,0755)
+			if restoreErr==nil {restoreErr=systemctl(rec,"restart",unitName)}
+			return errors.Join(restartErr,restoreErr)
 		}
 	}
 	return fileWrite(versionPath,[]byte(Version+"\n"),0600)
@@ -256,10 +273,12 @@ func Upgrade(ctx context.Context)error{
 func Remove(ctx context.Context)error{
 	mu.Lock();defer mu.Unlock()
 	if ok,reason:=supported();!ok{return errors.New(reason)}
-	if _,err:=os.Stat(unitPath);err==nil {
-		if err:=systemctl(ctx,"stop",unitName);err!=nil{return err}
+	if info,err:=os.Stat(unitPath);err==nil && info.Mode().IsRegular() {
+		if serviceActive(ctx) {
+			if err:=systemctl(ctx,"stop",unitName);err!=nil{return err}
+		}
 		if err:=systemctl(ctx,"disable",unitName);err!=nil{return err}
-	}
+	} else if err!=nil && !errors.Is(err,os.ErrNotExist){return err}
 	if err:=os.Remove(unitPath);err!=nil&&!errors.Is(err,os.ErrNotExist){return err}
 	if err:=systemctl(ctx,"daemon-reload");err!=nil{return err}
 	return os.RemoveAll(Root)
