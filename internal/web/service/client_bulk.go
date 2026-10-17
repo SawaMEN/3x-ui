@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -359,7 +360,11 @@ func (s *ClientService) BulkAdjust(inboundSvc *InboundService, emails []string, 
 		return result, false, common.NewError("no adjustment specified")
 	}
 
-	addExpiryMs := int64(addDays) * 24 * 60 * 60 * 1000
+	const dayMillis int64 = 24 * 60 * 60 * 1000
+	if int64(addDays) > math.MaxInt64/dayMillis || int64(addDays) < math.MinInt64/dayMillis {
+		return result, false, common.NewError("day adjustment exceeds the supported range")
+	}
+	addExpiryMs := int64(addDays) * dayMillis
 
 	cleanEmails := trimmedUniqueEmails(emails)
 	if len(cleanEmails) == 0 {

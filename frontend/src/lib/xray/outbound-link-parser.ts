@@ -516,6 +516,8 @@ export function parseVmessLink(link: string): Raw | null {
   try {
     const decoded = Base64.decode(link.slice('vmess://'.length));
     const json = JSON.parse(decoded) as Record<string, unknown>;
+    if (typeof json.add !== 'string' || !json.add.trim() || typeof json.id !== 'string' || !json.id)
+      return null;
     const network = (json.net as string) || 'tcp';
     const security = json.tls === 'tls' ? 'tls' : 'none';
     const stream = buildStream(network, security);
@@ -623,7 +625,7 @@ function parseUrlLink(link: string, expectedProto: string): URL | null {
 
 export function parseVlessLink(link: string): Raw | null {
   const url = parseUrlLink(link, 'vless');
-  if (!url) return null;
+  if (!url || !url.username) return null;
   const id = decodeURIComponent(url.username);
   const address = serverHostname(url.hostname);
   const port = Number(url.port) || 443;
@@ -650,7 +652,7 @@ export function parseVlessLink(link: string): Raw | null {
 
 export function parseTrojanLink(link: string): Raw | null {
   const url = parseUrlLink(link, 'trojan');
-  if (!url) return null;
+  if (!url || !url.username) return null;
   const password = decodeURIComponent(url.username);
   const address = serverHostname(url.hostname);
   const port = Number(url.port) || 443;
@@ -812,7 +814,7 @@ function firstParam(params: URLSearchParams, ...keys: string[]): string | null {
 
 export function parseWireguardLink(link: string): Raw | null {
   const url = parseUrlLink(link, 'wireguard') ?? parseUrlLink(link, 'wg');
-  if (!url) return null;
+  if (!url || !url.username) return null;
   let secretKey: string;
   try {
     secretKey = decodeURIComponent(url.username);
@@ -843,6 +845,7 @@ export function parseWireguardLink(link: string): Raw | null {
     endpoint,
     allowedIPs,
   };
+  if (!peer.publicKey) return null;
   const psk = firstParam(params, 'presharedkey', 'preshared_key', 'pre-shared-key', 'psk');
   if (psk) peer.preSharedKey = psk;
   const keepAliveRaw = firstParam(
@@ -910,9 +913,11 @@ function parseSnellLink(link: string): Raw | null {
 }
 
 export function parseOutboundLink(link: string): Raw | null {
-  if (link.trim().startsWith('snell://')) return parseSnellLink(link.trim());
-  const trimmed = link.trim();
+  const trimmed = link
+    .trim()
+    .replace(/^[A-Za-z][A-Za-z0-9+.-]*:/, (scheme) => scheme.toLowerCase());
   if (!trimmed) return null;
+  if (trimmed.startsWith('snell://')) return parseSnellLink(trimmed);
   return (
     parseVmessLink(trimmed) ??
     parseVlessLink(trimmed) ??

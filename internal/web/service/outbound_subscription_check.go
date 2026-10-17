@@ -119,7 +119,7 @@ func validateSubscriptionNativeMember(row map[string]any, core string) error {
 			case map[string]any:
 				for field, child := range v {
 					lower := strings.ToLower(field)
-					if strings.Contains(lower, "password") || strings.Contains(lower, "secret") || strings.Contains(lower, "token") || strings.Contains(lower, "key") || lower == "psk" || lower == "auth_str" || lower == "auth" || lower == "uuid" {
+					if strings.Contains(lower, "password") || strings.Contains(lower, "secret") || strings.Contains(lower, "token") || strings.Contains(lower, "key") || lower == "psk" || lower == "auth_str" || lower == "auth" || lower == "uuid" || lower == "id" {
 						if text, ok := child.(string); ok && text != "" {
 							detail = strings.ReplaceAll(detail, text, "[скрыто]")
 						}

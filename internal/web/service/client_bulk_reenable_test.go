@@ -1,6 +1,7 @@
 package service
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -85,6 +86,28 @@ func seedLocalDisabledClient(t *testing.T, svc *ClientService, port int, stream,
 	mkTraffic(t, ib.Id, email, up, down, total, expiry, false)
 	forceRecordDisabled(t, svc, email)
 	return ib
+}
+
+func TestBulkAdjustRejectsOverflowedDayConversion(t *testing.T) {
+	setupBulkDB(t)
+	svc := &ClientService{}
+	email := "overflow-days@x"
+	seedLocalDisabledClient(t, svc, 52089, "", email, 100, time.Now().UnixMilli(), 0, 0)
+	before, err := svc.GetRecordByEmail(nil, email)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tooManyDays := math.MaxInt64/reenableDay + 1
+	if int64(int(tooManyDays)) != tooManyDays {
+		t.Skip("day conversion overflow requires 64-bit int")
+	}
+	if _, _, err := svc.BulkAdjust(&InboundService{}, []string{email}, int(tooManyDays), 0, "", nil, ""); err == nil {
+		t.Fatal("accepted day count whose millisecond conversion overflows")
+	}
+	after, err := svc.GetRecordByEmail(nil, email)
+	if err != nil || after.ExpiryTime != before.ExpiryTime {
+		t.Fatalf("rejected adjustment changed expiry: %v", err)
+	}
 }
 
 func TestBulkAdjust_ReenablesExpiredThenExtended_AllThreeLocations(t *testing.T) {

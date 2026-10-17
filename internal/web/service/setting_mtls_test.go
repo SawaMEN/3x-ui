@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -48,6 +49,64 @@ func TestEnsureNodeMtlsCA_Idempotent(t *testing.T) {
 	}
 	if !bytes.Equal(first.CertPEM, second.CertPEM) || !bytes.Equal(first.KeyPEM, second.KeyPEM) {
 		t.Fatal("EnsureNodeMtlsCA must be idempotent: second call returned different PEMs")
+	}
+}
+
+func TestEnsureNodeMtlsCAConcurrentInitialization(t *testing.T) {
+	s := setupSettingMtlsDB(t)
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	results := make(chan crypto.CertKeyPEM, 16)
+	for range cap(results) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			ca, err := s.EnsureNodeMtlsCA()
+			if err != nil {
+				t.Errorf("initialize CA: %v", err)
+				return
+			}
+			results <- ca
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(results)
+	stored, err := s.EnsureNodeMtlsCA()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for ca := range results {
+		if !bytes.Equal(ca.CertPEM, stored.CertPEM) || !bytes.Equal(ca.KeyPEM, stored.KeyPEM) {
+			t.Fatal("concurrent enrollment returned a CA different from the persisted trust anchor")
+		}
+	}
+}
+
+func TestEnsureNodeMtlsCARollsBackFailedKeyWrite(t *testing.T) {
+	s := setupSettingMtlsDB(t)
+	db := database.GetDB()
+	if err := db.Exec(`CREATE TRIGGER fail_ca_key BEFORE INSERT ON settings WHEN NEW.key = 'nodeMtlsCaKeyPem'
+		BEGIN SELECT RAISE(ABORT, 'injected CA key failure'); END`).Error; err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Exec(`DROP TRIGGER IF EXISTS fail_ca_key`) })
+	if _, err := s.EnsureNodeMtlsCA(); err == nil {
+		t.Fatal("expected injected key write failure")
+	}
+	var count int64
+	if err := db.Table("settings").Where("key IN ?", []string{settingNodeMtlsCaCert, settingNodeMtlsCaKey}).Count(&count).Error; err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("failed enrollment left %d incomplete CA settings", count)
+	}
+	if err := db.Exec(`DROP TRIGGER fail_ca_key`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.EnsureNodeMtlsCA(); err != nil {
+		t.Fatalf("retry CA enrollment: %v", err)
 	}
 }
 

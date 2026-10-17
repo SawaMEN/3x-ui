@@ -16,9 +16,14 @@ func EnsureURLScheme(raw string) string {
 	if trimmed == "" {
 		return ""
 	}
-	if strings.Contains(trimmed, "://") ||
-		strings.HasPrefix(trimmed, "mailto:") ||
-		strings.HasPrefix(trimmed, "tel:") {
+	if strings.HasPrefix(trimmed, "//") {
+		return "https:" + trimmed
+	}
+	scheme, _, explicit := strings.Cut(trimmed, "://")
+	lower := strings.ToLower(trimmed)
+	if (explicit && !strings.ContainsAny(scheme, "/?#")) ||
+		strings.HasPrefix(lower, "mailto:") ||
+		strings.HasPrefix(lower, "tel:") {
 		return trimmed
 	}
 	return "https://" + trimmed

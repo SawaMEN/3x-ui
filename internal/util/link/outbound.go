@@ -121,6 +121,9 @@ func splitLines(s string) []string {
 //   - wireguard:// (also wg://)
 func ParseLink(link string) (*ParseResult, error) {
 	link = strings.TrimSpace(link)
+	if i := strings.IndexByte(link, ':'); i >= 0 {
+		link = strings.ToLower(link[:i]) + link[i:]
+	}
 	switch {
 	case strings.HasPrefix(link, "fptn:"):
 		return parseAdditionalVPN(link, "fptn")
@@ -153,7 +156,7 @@ func parseVmess(link string) (*ParseResult, error) {
 	raw, err := base64.StdEncoding.DecodeString(padBase64(b64))
 	if err != nil {
 		// Some providers use raw URL-safe
-		raw, err = base64.RawURLEncoding.DecodeString(b64)
+		raw, err = base64.URLEncoding.DecodeString(padBase64(b64))
 	}
 	if err != nil {
 		return nil, fmt.Errorf("vmess decode: %w", err)
@@ -161,6 +164,9 @@ func parseVmess(link string) (*ParseResult, error) {
 	var j map[string]any
 	if err := json.Unmarshal(raw, &j); err != nil {
 		return nil, fmt.Errorf("vmess json: %w", err)
+	}
+	if strings.TrimSpace(getString(j, "add", "")) == "" || getString(j, "id", "") == "" {
+		return nil, fmt.Errorf("vmess requires server address and user ID")
 	}
 
 	identity := vmessIdentity(j)
@@ -320,6 +326,9 @@ func parseVless(link string) (*ParseResult, error) {
 	}
 	id := u.User.Username()
 	host := u.Hostname()
+	if id == "" || host == "" {
+		return nil, fmt.Errorf("vless requires server address and user ID")
+	}
 	port, err := parseLinkPort(u.Port(), 443)
 	if err != nil {
 		return nil, err
@@ -365,6 +374,9 @@ func parseTrojan(link string) (*ParseResult, error) {
 	}
 	pw := u.User.Username()
 	host := u.Hostname()
+	if pw == "" || host == "" {
+		return nil, fmt.Errorf("trojan requires server address and password")
+	}
 	port, err := parseLinkPort(u.Port(), 443)
 	if err != nil {
 		return nil, err
@@ -582,6 +594,9 @@ func parseHysteria2(link string) (*ParseResult, error) {
 		auth += ":" + password
 	}
 	host := u.Hostname()
+	if host == "" {
+		return nil, fmt.Errorf("hysteria2 requires server address")
+	}
 	port, err := parseLinkPort(u.Port(), 443)
 	if err != nil {
 		return nil, err
@@ -634,6 +649,9 @@ func parseWireguard(link string) (*ParseResult, error) {
 	secret := u.User.Username()
 	params := u.Query()
 	host := u.Hostname()
+	if secret == "" || host == "" || firstParam(params, "publickey", "publicKey", "public_key", "peerPublicKey") == "" {
+		return nil, fmt.Errorf("wireguard requires server address, private key and peer public key")
+	}
 	portStr := u.Port()
 	endpoint := host
 	if portStr != "" {
@@ -1178,16 +1196,24 @@ func parseLinkPort(p string, def int) (int, error) {
 func num(v any) int {
 	switch x := v.(type) {
 	case float64:
+		if x != math.Trunc(x) || x < 0 || x >= math.Exp2(strconv.IntSize-1) {
+			return -1
+		}
 		return int(x)
 	case int:
 		return x
 	case int64:
 		return int(x)
 	case string:
-		n, _ := strconv.Atoi(x)
+		n, err := strconv.Atoi(x)
+		if err != nil {
+			return -1
+		}
 		return n
+	case nil:
+		return 0
 	}
-	return 0
+	return -1
 }
 
 func getString(m map[string]any, key, def string) string {

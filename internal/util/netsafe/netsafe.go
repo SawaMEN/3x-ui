@@ -86,7 +86,11 @@ func SSRFGuardedDialContext(ctx context.Context, network, addr string) (net.Conn
 			blockedErr = fmt.Errorf("%w %s", ErrPrivateAddressBlocked, ipAddr.IP)
 			continue
 		}
-		conn, derr := defaultDialer.DialContext(ctx, network, net.JoinHostPort(ipAddr.IP.String(), port))
+		target := ipAddr.IP.String()
+		if ipAddr.Zone != "" {
+			target += "%" + ipAddr.Zone
+		}
+		conn, derr := defaultDialer.DialContext(ctx, network, net.JoinHostPort(target, port))
 		if derr == nil {
 			return conn, nil
 		}
@@ -116,11 +120,17 @@ func NormalizeHost(addr string) (string, error) {
 	if strings.HasPrefix(addr, "[") && strings.HasSuffix(addr, "]") {
 		addr = addr[1 : len(addr)-1]
 	}
+	addr = strings.TrimSuffix(addr, ".")
 	if ip := net.ParseIP(addr); ip != nil {
 		return ip.String(), nil
 	}
 	if len(addr) > 253 || !hostnamePattern.MatchString(addr) {
 		return "", fmt.Errorf("invalid host %q", addr)
+	}
+	for label := range strings.SplitSeq(addr, ".") {
+		if len(label) > 63 {
+			return "", fmt.Errorf("invalid DNS label in host %q", addr)
+		}
 	}
 	return addr, nil
 }

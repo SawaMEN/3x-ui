@@ -235,13 +235,16 @@ func (h *metricHistory) aggregate(metric string, bucketSeconds int, maxPoints in
 type persistedTier struct {
 	Resolution int
 	Samples    []MetricSample
+	OpenStart  int64
+	OpenSum    float64
+	OpenCount  int
 }
 
 type persistedSeries struct {
 	Tiers []persistedTier
 }
 
-// snapshot returns a deep copy of every series' closed buckets, safe to
+// snapshot copies closed buckets and the current accumulation, safe to
 // serialize without holding the lock during disk I/O.
 func (h *metricHistory) snapshot() map[string]persistedSeries {
 	h.mu.Lock()
@@ -252,7 +255,10 @@ func (h *metricHistory) snapshot() map[string]persistedSeries {
 		for i, tb := range s.tiers {
 			cp := make([]MetricSample, len(tb.samples))
 			tb.copyClosedSamples(cp)
-			ps.Tiers[i] = persistedTier{Resolution: tb.resolution, Samples: cp}
+			ps.Tiers[i] = persistedTier{
+				Resolution: tb.resolution, Samples: cp,
+				OpenStart: tb.openStart, OpenSum: tb.openSum, OpenCount: tb.openCount,
+			}
 		}
 		out[k] = ps
 	}
@@ -278,6 +284,9 @@ func (h *metricHistory) restore(data map[string]persistedSeries) {
 				}
 				tb.samples = make([]MetricSample, len(samples), tb.capacity)
 				copy(tb.samples, samples)
+				if pt.OpenCount > 0 {
+					tb.open, tb.openStart, tb.openSum, tb.openCount = true, pt.OpenStart, pt.OpenSum, pt.OpenCount
+				}
 				break
 			}
 		}

@@ -4,6 +4,7 @@ import (
 	"encoding/gob"
 	"fmt"
 	"os"
+	"reflect"
 	"runtime"
 	"sync"
 	"testing"
@@ -268,6 +269,28 @@ func TestSnapshotRestoreRoundTrip(t *testing.T) {
 
 	if out := h2.aggregate("cpu", 2, 60); len(out) == 0 {
 		t.Fatalf("expected restored series to aggregate")
+	}
+}
+
+func TestMetricSnapshotPreservesOpenBuckets(t *testing.T) {
+	h := newMetricHistory()
+	for _, v := range []float64{2, 4, 6} {
+		h.append("cpu", time.Unix(1200, 0), v)
+	}
+	restored := newMetricHistory()
+	restored.restore(h.snapshot())
+	for i, tier := range h.series["cpu"].tiers {
+		got := restored.series["cpu"].tiers[i].readSamples()
+		if !reflect.DeepEqual(got, tier.readSamples()) {
+			t.Fatalf("tier %d lost current bucket after restart: %v", tier.resolution, got)
+		}
+	}
+	h.append("cpu", time.Unix(1201, 0), 8)
+	restored.append("cpu", time.Unix(1201, 0), 8)
+	for i, tier := range h.series["cpu"].tiers {
+		if got := restored.series["cpu"].tiers[i].readSamples(); !reflect.DeepEqual(got, tier.readSamples()) {
+			t.Fatalf("tier %d lost sample weights after restart: %v", tier.resolution, got)
+		}
 	}
 }
 

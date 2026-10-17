@@ -21,7 +21,10 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
 )
 
-var masterClientCredentialMu sync.Mutex
+var (
+	masterClientCredentialMu sync.Mutex
+	nodeCACredentialMu       sync.Mutex
+)
 
 const (
 	settingNodeMtlsCaCert     = "nodeMtlsCaCertPem"
@@ -36,6 +39,8 @@ const (
 // on first use and reusing the stored pair thereafter. The CA private key never
 // leaves the panel.
 func (s *SettingService) EnsureNodeMtlsCA() (crypto.CertKeyPEM, error) {
+	nodeCACredentialMu.Lock()
+	defer nodeCACredentialMu.Unlock()
 	certPem, err := s.getString(settingNodeMtlsCaCert)
 	if err != nil {
 		return crypto.CertKeyPEM{}, err
@@ -57,10 +62,10 @@ func (s *SettingService) EnsureNodeMtlsCA() (crypto.CertKeyPEM, error) {
 	if err != nil {
 		return crypto.CertKeyPEM{}, err
 	}
-	if err := s.saveSetting(settingNodeMtlsCaCert, string(ca.CertPEM)); err != nil {
-		return crypto.CertKeyPEM{}, err
-	}
-	if err := s.saveSetting(settingNodeMtlsCaKey, string(ca.KeyPEM)); err != nil {
+	if err := saveCredentialSettings(map[string]string{
+		settingNodeMtlsCaCert: string(ca.CertPEM),
+		settingNodeMtlsCaKey:  string(ca.KeyPEM),
+	}); err != nil {
 		return crypto.CertKeyPEM{}, err
 	}
 	return ca, nil
@@ -147,6 +152,10 @@ func saveMasterClientCredential(client crypto.CertKeyPEM, pin string) error {
 		settingNodeMtlsClientKey:  string(client.KeyPEM),
 		settingNodeMtlsClientPin:  pin,
 	}
+	return saveCredentialSettings(values)
+}
+
+func saveCredentialSettings(values map[string]string) error {
 	return database.GetDB().Transaction(func(tx *gorm.DB) error {
 		for key, value := range values {
 			result := tx.Model(&model.Setting{}).Where("key = ?", key).Update("value", value)

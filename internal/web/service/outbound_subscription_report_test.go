@@ -158,6 +158,7 @@ func TestSubscriptionReportRejectsDuplicateTagsIncludingMalformedProfiles(t *tes
 
 func TestSubscriptionKernelValidationRedactsAuthenticationFields(t *testing.T) {
 	for _, test := range []struct{ field, secret string }{
+		{"id", "private-credential-value"},
 		{"uuid", "private-credential-value"},
 		{"auth", "private-credential-value"},
 		{"auth_str", "private-credential-value"},

@@ -415,8 +415,8 @@ func (s *ClientService) ListPaged(inboundSvc *InboundService, settingSvc *Settin
 	}
 
 	items := []ClientSlim{}
-	offset := (page - 1) * pageSize
-	if int64(offset) < filtered {
+	if filtered > 0 && int64(page-1) <= (filtered-1)/int64(pageSize) {
+		offset := (page - 1) * pageSize
 		items, err = q.pageRows(params, onlines, offset, pageSize)
 		if err != nil {
 			return nil, err

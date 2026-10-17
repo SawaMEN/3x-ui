@@ -1,6 +1,7 @@
 package service
 
 import (
+	"math"
 	"slices"
 	"strconv"
 	"testing"
@@ -135,6 +136,18 @@ func setupPagingServices(t *testing.T) (*ClientService, *InboundService, *Settin
 		t.Fatalf("set trafficDiff: %v", err)
 	}
 	return &ClientService{}, &InboundService{}, settingSvc
+}
+
+func TestListPagedHugePageIsEmpty(t *testing.T) {
+	svc, inbounds, settings := setupPagingServices(t)
+	seedPagingClients(t)
+	page, err := svc.ListPaged(inbounds, settings, ClientPageParams{Page: math.MaxInt, PageSize: 200})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 0 {
+		t.Fatalf("overflowed page returned %d clients", len(page.Items))
+	}
 }
 
 func TestListPagedFilters(t *testing.T) {
