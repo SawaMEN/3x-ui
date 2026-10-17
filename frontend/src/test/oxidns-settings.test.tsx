@@ -19,7 +19,11 @@ let current = { ...original };
 
 beforeEach(() => {
   current = { ...original };
-  vi.mocked(HttpUtil.get).mockImplementation(async () => ({ success: true, msg: '', obj: current }));
+  vi.mocked(HttpUtil.get).mockImplementation(async () => ({
+    success: true,
+    msg: '',
+    obj: current,
+  }));
   vi.mocked(HttpUtil.post).mockImplementation(async (path) => {
     if (String(path).endsWith('/setup')) {
       current = { ...current, enabled: true, running: true };
