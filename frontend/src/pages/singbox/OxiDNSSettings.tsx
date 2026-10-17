@@ -133,7 +133,8 @@ export default function OxiDNSSettings() {
   );
   const external = draft.doh || draft.dot || draft.doq;
   const domainMissing = external && !draft.domain.trim();
-  const validPort = (port: number) => Number.isInteger(port) && port > 0 && port <= 65535 && port !== 15353;
+  const validPort = (port: number) =>
+    Number.isInteger(port) && port > 0 && port <= 65535 && port !== 15353;
   const invalidPort =
     (draft.doh && !validPort(draft.port)) ||
     (draft.dot && !validPort(draft.dotPort)) ||
@@ -321,19 +322,31 @@ export default function OxiDNSSettings() {
             <Typography.Text>Включить защищённый DNS по HTTPS (DoH)</Typography.Text>
           </Space>
           <Space align="center" style={{ display: 'flex', marginTop: 8 }}>
-            <Switch aria-label="Включить DoT" checked={draft.dot}
-              disabled={busy} onChange={(dot) => patch({ dot })} />
+            <Switch
+              aria-label="Включить DoT"
+              checked={draft.dot}
+              disabled={busy}
+              onChange={(dot) => patch({ dot })}
+            />
             <Typography.Text>DNS-over-TLS (DoT) — TCP/853</Typography.Text>
           </Space>
           <Space align="center" style={{ display: 'flex', marginTop: 8 }}>
-            <Switch aria-label="Включить DoQ" checked={draft.doq}
-              disabled={busy} onChange={(doq) => patch({ doq })} />
+            <Switch
+              aria-label="Включить DoQ"
+              checked={draft.doq}
+              disabled={busy}
+              onChange={(doq) => patch({ doq })}
+            />
             <Typography.Text>DNS-over-QUIC (DoQ) — UDP/853</Typography.Text>
           </Space>
           {draft.doh && (
             <Space align="center" style={{ display: 'flex', marginTop: 8 }}>
-              <Switch aria-label="Включить HTTP/3" checked={draft.http3}
-                disabled={busy} onChange={(http3) => patch({ http3 })} />
+              <Switch
+                aria-label="Включить HTTP/3"
+                checked={draft.http3}
+                disabled={busy}
+                onChange={(http3) => patch({ http3 })}
+              />
               <Typography.Text>HTTP/3 (H3) для DoH — UDP на том же HTTPS-порту</Typography.Text>
             </Space>
           )}
@@ -365,33 +378,59 @@ export default function OxiDNSSettings() {
               {draft.doh && (
                 <div>
                   <Typography.Text>HTTPS-порт DoH (TCP; также UDP при H3)</Typography.Text>
-                  <InputNumber aria-label="HTTPS-порт DoH"
+                  <InputNumber
+                    aria-label="HTTPS-порт DoH"
                     style={{ display: 'block', marginTop: 6, width: '100%', maxWidth: 180 }}
-                    min={1} max={65535} value={draft.port} disabled={busy}
-                    onChange={(port) => patch({ port: port ?? 8443 })} />
-                  <Typography.Text type="secondary">По умолчанию 8443. Порт 443 — только если свободен.</Typography.Text>
+                    min={1}
+                    max={65535}
+                    value={draft.port}
+                    disabled={busy}
+                    onChange={(port) => patch({ port: port ?? 8443 })}
+                  />
+                  <Typography.Text type="secondary">
+                    По умолчанию 8443. Порт 443 — только если свободен.
+                  </Typography.Text>
                 </div>
               )}
               {draft.dot && (
                 <div>
                   <Typography.Text>Порт DoT (TCP)</Typography.Text>
-                  <InputNumber aria-label="Порт DoT"
+                  <InputNumber
+                    aria-label="Порт DoT"
                     style={{ display: 'block', marginTop: 6, width: '100%', maxWidth: 180 }}
-                    min={1} max={65535} value={draft.dotPort} disabled={busy}
-                    onChange={(dotPort) => patch({ dotPort: dotPort ?? 853 })} />
+                    min={1}
+                    max={65535}
+                    value={draft.dotPort}
+                    disabled={busy}
+                    onChange={(dotPort) => patch({ dotPort: dotPort ?? 853 })}
+                  />
                 </div>
               )}
               {draft.doq && (
                 <div>
                   <Typography.Text>Порт DoQ (UDP)</Typography.Text>
-                  <InputNumber aria-label="Порт DoQ"
+                  <InputNumber
+                    aria-label="Порт DoQ"
                     style={{ display: 'block', marginTop: 6, width: '100%', maxWidth: 180 }}
-                    min={1} max={65535} value={draft.doqPort} disabled={busy}
-                    onChange={(doqPort) => patch({ doqPort: doqPort ?? 853 })} />
+                    min={1}
+                    max={65535}
+                    value={draft.doqPort}
+                    disabled={busy}
+                    onChange={(doqPort) => patch({ doqPort: doqPort ?? 853 })}
+                  />
                 </div>
               )}
-              {invalidPort && <Typography.Text type="danger">Некорректный порт или порт 15353 зарезервирован локальным DNS.</Typography.Text>}
-              {conflictPorts && <Typography.Text type="danger">Конфликт портов: DoH/DoT занимают TCP, а HTTP/3/DoQ — UDP. Укажите разные порты для конфликтующих служб.</Typography.Text>}
+              {invalidPort && (
+                <Typography.Text type="danger">
+                  Некорректный порт или порт 15353 зарезервирован локальным DNS.
+                </Typography.Text>
+              )}
+              {conflictPorts && (
+                <Typography.Text type="danger">
+                  Конфликт портов: DoH/DoT занимают TCP, а HTTP/3/DoQ — UDP. Укажите разные порты
+                  для конфликтующих служб.
+                </Typography.Text>
+              )}
             </Space>
           )}
         </div>
@@ -406,20 +445,43 @@ export default function OxiDNSSettings() {
         )}
 
         {status.enabled && status.running && status.doh && status.dohUrl && (
-          <Alert type="success" showIcon title="DoH (HTTPS, HTTP/1.1 и HTTP/2)"
-            description={<Typography.Text copyable>{status.dohUrl}</Typography.Text>} />
+          <Alert
+            type="success"
+            showIcon
+            title="DoH (HTTPS, HTTP/1.1 и HTTP/2)"
+            description={<Typography.Text copyable>{status.dohUrl}</Typography.Text>}
+          />
         )}
         {status.enabled && status.running && status.doh && status.http3 && status.dohUrl && (
-          <Alert type="info" showIcon title="DoH через HTTP/3"
-            description={<>Используется тот же URL, что для DoH, поверх QUIC (UDP/{status.port}). HTTPS-клиенты должны поддерживать H3.</>} />
+          <Alert
+            type="info"
+            showIcon
+            title="DoH через HTTP/3"
+            description={
+              <>
+                Используется тот же URL, что для DoH, поверх QUIC (UDP/{status.port}). HTTPS-клиенты
+                должны поддерживать H3.
+              </>
+            }
+          />
         )}
         {status.enabled && status.running && status.dot && status.dotAddress && (
-          <Alert type="success" showIcon title="DoT — DNS-over-TLS"
-            description={<Typography.Text copyable>{`tls://${status.dotAddress}`}</Typography.Text>} />
+          <Alert
+            type="success"
+            showIcon
+            title="DoT — DNS-over-TLS"
+            description={<Typography.Text copyable>{`tls://${status.dotAddress}`}</Typography.Text>}
+          />
         )}
         {status.enabled && status.running && status.doq && status.doqAddress && (
-          <Alert type="info" showIcon title="DoQ — DNS-over-QUIC (UDP)"
-            description={<Typography.Text copyable>{`quic://${status.doqAddress}`}</Typography.Text>} />
+          <Alert
+            type="info"
+            showIcon
+            title="DoQ — DNS-over-QUIC (UDP)"
+            description={
+              <Typography.Text copyable>{`quic://${status.doqAddress}`}</Typography.Text>
+            }
+          />
         )}
         {dirty && status.enabled && (
           <Alert
@@ -435,7 +497,14 @@ export default function OxiDNSSettings() {
             type="primary"
             icon={status.enabled ? <ReloadOutlined /> : <CheckCircleOutlined />}
             loading={busy}
-            disabled={checking || !status.supported || domainMissing || invalidPort || conflictPorts || unused}
+            disabled={
+              checking ||
+              !status.supported ||
+              domainMissing ||
+              invalidPort ||
+              conflictPorts ||
+              unused
+            }
             onClick={() => void apply(true)}
           >
             {status.enabled

@@ -35,14 +35,3 @@ jobs:
         run: |
           npx oxfmt src/pages/singbox/OxiDNSSettings.tsx src/test/oxidns-settings.test.tsx src/test/system-update-components.test.tsx
           node -e 'const fs=require("fs");for(const p of process.argv.slice(1)) console.log("OXFMT_FILE:"+p+":"+fs.readFileSync(p).toString("base64"))' src/pages/singbox/OxiDNSSettings.tsx src/test/oxidns-settings.test.tsx src/test/system-update-components.test.tsx
-      - name: Canonical Go format snapshot
-        if: always()
-        run: |
-          gofmt -w internal/oxidns/manager.go internal/oxidns/manager_test.go internal/oxidns/lifecycle_systemd_test.go internal/web/controller/oxidns.go internal/web/service/singbox.go internal/web/service/singbox_template_validation_test.go
-          python3 - <<'PY'
-          import base64
-          from pathlib import Path
-          files=['internal/oxidns/manager.go','internal/oxidns/manager_test.go','internal/oxidns/lifecycle_systemd_test.go','internal/web/controller/oxidns.go','internal/web/service/singbox.go','internal/web/service/singbox_template_validation_test.go']
-          for f in files:
-              print('GOFMT_FILE:'+f+':'+base64.b64encode(Path(f).read_bytes()).decode())
-          PY

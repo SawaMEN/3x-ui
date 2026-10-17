@@ -368,7 +368,7 @@ func TestEncryptedDNSPortValidationAndCompatibility(t *testing.T) {
 	}
 	for _, test := range []struct {
 		name string
-		cfg Settings
+		cfg  Settings
 	}{
 		{name: "H3 requires DoH", cfg: Settings{HTTP3: true, Upstream: "quad9"}},
 		{name: "DoT conflicts local DNS", cfg: Settings{DoT: true, DoTPort: localPort, Upstream: "quad9"}},

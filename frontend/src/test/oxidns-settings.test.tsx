@@ -64,7 +64,18 @@ it('offers one-click local DNS without domain or HTTPS settings', async () => {
   await waitFor(() =>
     expect(HttpUtil.post).toHaveBeenCalledWith(
       '/panel/api/oxidns/setup',
-      { domain: '', doh: false, http3: false, dot: false, doq: false, port: 8443, dotPort: 853, doqPort: 853, upstream: 'quad9', useSingBox: true },
+      {
+        domain: '',
+        doh: false,
+        http3: false,
+        dot: false,
+        doq: false,
+        port: 8443,
+        dotPort: 853,
+        doqPort: 853,
+        upstream: 'quad9',
+        useSingBox: true,
+      },
       { silent: true, timeout: 180000 },
     ),
   );
@@ -123,17 +134,34 @@ it('configures DoT and DoQ together on TCP/UDP 853 with a shared certificate', a
   fireEvent.click(screen.getByRole('switch', { name: 'Включить DoQ' }));
   expect(screen.getByRole('spinbutton', { name: 'Порт DoT' })).toBeTruthy();
   expect(screen.getByRole('spinbutton', { name: 'Порт DoQ' })).toBeTruthy();
-  expect((screen.getByRole('button', { name: /Создать и включить DNS/ }) as HTMLButtonElement).disabled).toBe(true);
+  expect(
+    (screen.getByRole('button', { name: /Создать и включить DNS/ }) as HTMLButtonElement).disabled,
+  ).toBe(true);
   fireEvent.change(screen.getByRole('textbox', { name: 'Домен для DoH' }), {
     target: { value: 'dns.example.com' },
   });
-  expect((screen.getByRole('button', { name: /Создать и включить DNS/ }) as HTMLButtonElement).disabled).toBe(false);
+  expect(
+    (screen.getByRole('button', { name: /Создать и включить DNS/ }) as HTMLButtonElement).disabled,
+  ).toBe(false);
   fireEvent.click(screen.getByRole('button', { name: /Создать и включить DNS/ }));
-  await waitFor(() => expect(HttpUtil.post).toHaveBeenCalledWith(
-    '/panel/api/oxidns/setup',
-    { domain: 'dns.example.com', doh: false, http3: false, dot: true, doq: true, port: 8443, dotPort: 853, doqPort: 853, upstream: 'quad9', useSingBox: true },
-    { silent: true, timeout: 180000 },
-  ));
+  await waitFor(() =>
+    expect(HttpUtil.post).toHaveBeenCalledWith(
+      '/panel/api/oxidns/setup',
+      {
+        domain: 'dns.example.com',
+        doh: false,
+        http3: false,
+        dot: true,
+        doq: true,
+        port: 8443,
+        dotPort: 853,
+        doqPort: 853,
+        upstream: 'quad9',
+        useSingBox: true,
+      },
+      { silent: true, timeout: 180000 },
+    ),
+  );
 });
 
 it('enables H3 only for DoH and rejects collisions with DoQ UDP port', async () => {
@@ -149,7 +177,9 @@ it('enables H3 only for DoH and rejects collisions with DoQ UDP port', async () 
     target: { value: '8443' },
   });
   expect(screen.getByText(/Конфликт портов/)).toBeTruthy();
-  expect((screen.getByRole('button', { name: /Создать и включить DNS/ }) as HTMLButtonElement).disabled).toBe(true);
+  expect(
+    (screen.getByRole('button', { name: /Создать и включить DNS/ }) as HTMLButtonElement).disabled,
+  ).toBe(true);
   fireEvent.click(screen.getByRole('switch', { name: 'Включить публичный DoH' }));
   expect(screen.queryByRole('switch', { name: 'Включить HTTP/3' })).toBeNull();
 });
