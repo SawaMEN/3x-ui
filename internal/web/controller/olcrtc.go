@@ -10,6 +10,10 @@ import (
 func NewOlcRTCController(g *gin.RouterGroup) {
 	group := g.Group("/olcrtc")
 	group.GET("/status", func(c *gin.Context) { jsonObj(c, olcrtc.GetStatus(c.Request.Context()), nil) })
+	group.GET("/live", func(c *gin.Context) {
+		status, err := olcrtc.Live(c.Request.Context())
+		jsonObj(c, status, err)
+	})
 	group.POST("/install", func(c *gin.Context) { jsonObj(c, gin.H{"started": true}, olcrtc.Start("install")) })
 	group.POST("/update", func(c *gin.Context) { jsonObj(c, gin.H{"started": true}, olcrtc.Start("update")) })
 	group.POST("/remove", func(c *gin.Context) { jsonObj(c, gin.H{"started": true}, olcrtc.Start("remove")) })
