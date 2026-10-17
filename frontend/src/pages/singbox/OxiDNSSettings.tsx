@@ -72,6 +72,26 @@ export default function OxiDNSSettings() {
     return () => window.clearTimeout(timer);
   }, [refresh]);
 
+  const [checking, setChecking] = useState(false);
+
+  const checkDNS = async () => {
+    setChecking(true);
+    try {
+      const result = await HttpUtil.post('/panel/api/oxidns/check', undefined, {
+        silent: true,
+        timeout: 12000,
+      });
+      if (!result.success) {
+        throw new Error(result.msg || 'Сервер DNS не отвечает.');
+      }
+      api.success('DNS работает: доменные имена успешно разрешаются.');
+    } catch (cause) {
+      api.error(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setChecking(false);
+    }
+  };
+
   const patch = (data: Partial<DNSState>) => setSettings((current) => ({ ...current, ...data }));
 
   const apply = async (enable: boolean) => {
@@ -247,6 +267,11 @@ export default function OxiDNSSettings() {
               onClick={() => void apply(false)}
             >
               Выключить
+            </Button>
+          )}
+          {settings.enabled && settings.running && (
+            <Button loading={checking} disabled={busy} onClick={() => void checkDNS()}>
+              Проверить работу DNS
             </Button>
           )}
           <Button icon={<ReloadOutlined />} onClick={() => void refresh()} disabled={busy}>

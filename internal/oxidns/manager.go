@@ -441,13 +441,39 @@ func InstallOnly(ctx context.Context) error {
 	return installOnly(ctx)
 }
 
+// CheckDNS tests a real upstream DNS resolution, not just a listening TCP socket.
+// It is safe to invoke from the panel: the resolver can only dial the loopback
+// listener managed by OxiDNS, regardless of the supplied hostname.
+func CheckDNS(ctx context.Context) error {
+    if _, err := os.Stat(binaryPath); err != nil {
+        return errors.New("сначала установите OxiDNS")
+    }
+    lookupCtx, cancel := context.WithTimeout(ctx, 7*time.Second)
+    defer cancel()
+    resolver := &net.Resolver{
+        PreferGo: true,
+        Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
+            dialer := &net.Dialer{Timeout: 2*time.Second}
+            return dialer.DialContext(ctx, network, net.JoinHostPort("127.0.0.1", strconv.Itoa(localPort)))
+        },
+    }
+    ips, err := resolver.LookupIP(lookupCtx, "ip4", "example.com")
+    if err != nil {
+        return fmt.Errorf("OxiDNS не разрешает домены: %w. Проверьте доступ к выбранному DNS-провайдеру (TCP 853) и настройки сервера", err)
+    }
+    if len(ips) == 0 {
+        return errors.New("OxiDNS не возвращает IP-адреса. Проверьте выбранного DNS-провайдера")
+    }
+    return nil
+}
+
 func waitHealthy(ctx context.Context) error {
 	address := net.JoinHostPort("127.0.0.1", strconv.Itoa(localPort))
 	for attempt := 0; attempt < 12; attempt++ {
 		conn, err := net.DialTimeout("tcp", address, 300*time.Millisecond)
 		if err == nil {
 			_ = conn.Close()
-			return nil
+			return CheckDNS(ctx)
 		}
 		select {
 		case <-ctx.Done():

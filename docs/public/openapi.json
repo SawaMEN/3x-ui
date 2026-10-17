@@ -7505,6 +7505,36 @@
         }
       }
     },
+    "/panel/api/oxidns/check": {
+      "post": {
+        "tags": [
+          "Server"
+        ],
+        "summary": "Resolve a test domain through the managed OxiDNS listener.",
+        "operationId": "post_panel_api_oxidns_check",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/panel/api/oxidns/setup": {
       "post": {
         "tags": [

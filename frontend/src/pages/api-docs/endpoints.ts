@@ -788,6 +788,11 @@ export const sections: readonly Section[] = [
       },
       {
         method: 'POST',
+        path: '/panel/api/oxidns/check',
+        summary: 'Resolve a test domain through the managed OxiDNS listener.',
+      },
+      {
+        method: 'POST',
         path: '/panel/api/oxidns/setup',
         summary: 'Install verified OxiDNS, validate TLS and connect native sing-box DNS.',
       },
