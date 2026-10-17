@@ -48,7 +48,7 @@ type Location = {
   name: string;
   carrier: Provider;
   endpoint: { room_id: string; key: string };
-  transport: { type?: string; Type?: string; payload?: Record<string,string> };
+  transport: { type?: string; Type?: string; payload?: Record<string, string> };
   dns: string;
 };
 type Client = { id: string; locations: Location[]; quota?: ClientQuota; link: string };
@@ -291,7 +291,8 @@ export default function OlcRTCClientsModal({
                   )}
                   {typeof client.quota?.traffic_gb === 'number' && client.quota.traffic_gb > 0 && (
                     <Tag>
-                      Трафик: {((client.quota.used_bytes || 0) / 1073741824).toFixed(2)} / {client.quota.traffic_gb} ГБ
+                      Трафик: {((client.quota.used_bytes || 0) / 1073741824).toFixed(2)} /{' '}
+                      {client.quota.traffic_gb} ГБ
                     </Tag>
                   )}
                   {client.quota?.expires_at && <Tag>До {client.quota.expires_at}</Tag>}
@@ -387,8 +388,8 @@ export default function OlcRTCClientsModal({
           </Form.Item>
           <Typography.Text strong>Лимиты подключения (необязательно)</Typography.Text>
           <Typography.Paragraph type="secondary">
-            Нулевые значения означают отсутствие ограничения. Уже использованный трафик
-            сохраняется при изменении лимитов.
+            Нулевые значения означают отсутствие ограничения. Уже использованный трафик сохраняется
+            при изменении лимитов.
           </Typography.Paragraph>
           <Space wrap>
             <Form.Item name={['quota', 'speed_mbps']} label="Скорость, Мбит/с">

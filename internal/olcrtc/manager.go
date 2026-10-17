@@ -56,7 +56,7 @@ type Location struct {
 	} `json:"endpoint"`
 	Carrier   string `json:"carrier"`
 	Transport struct {
-		Type string `json:"type"`
+		Type    string            `json:"type"`
 		Payload map[string]string `json:"payload,omitempty"`
 	} `json:"transport"`
 	DNS string `json:"dns"`
@@ -79,14 +79,14 @@ type clientConfig struct {
 	Port    int      `json:"port"`
 }
 type ClientInput struct {
-	ClientID  string          `json:"client_id"`
-	RoomID    string          `json:"room_id"`
-	Key       string          `json:"key"`
-	Carrier   string          `json:"carrier"`
-	Transport string          `json:"transport"`
-	DNS       string          `json:"dns"`
-	Name      string          `json:"name"`
-	Refresh   string          `json:"refresh,omitempty"`
+	ClientID  string `json:"client_id"`
+	RoomID    string `json:"room_id"`
+	Key       string `json:"key"`
+	Carrier   string `json:"carrier"`
+	Transport string `json:"transport"`
+	DNS       string `json:"dns"`
+	Name      string `json:"name"`
+	Refresh   string `json:"refresh,omitempty"`
 	Quota     *Quota `json:"quota,omitempty"`
 }
 

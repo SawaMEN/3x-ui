@@ -918,7 +918,9 @@ export default function SystemUpdateModal({
                             size="small"
                             icon={<ReloadOutlined />}
                             onClick={() => void restartOlcRTC()}
-                            disabled={dependency.busy || systemUpdateBusy || dependencyBusy !== null}
+                            disabled={
+                              dependency.busy || systemUpdateBusy || dependencyBusy !== null
+                            }
                           >
                             Перезапустить службу
                           </Button>
