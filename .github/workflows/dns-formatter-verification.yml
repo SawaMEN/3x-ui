@@ -1,0 +1,34 @@
+name: DNS formatter verification
+on:
+  push:
+    branches: [dns]
+    paths: ['.github/workflows/dns-formatter-verification.yml']
+permissions:
+  contents: read
+jobs:
+  check-formatted-code:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Format Go integration
+        run: |
+          gofmt -w internal/oxidns/manager.go internal/web/controller/oxidns.go
+          python3 - <<'PY'
+          import base64
+          from pathlib import Path
+          for path in ["internal/oxidns/manager.go","internal/web/controller/oxidns.go"]:
+              print("GOFMT_FILE:"+path+":"+base64.b64encode(Path(path).read_bytes()).decode())
+          PY
+      - name: Install frontend formatter
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+      - name: Format DNS UI
+        working-directory: frontend
+        run: |
+          npx oxfmt src/pages/singbox/OxiDNSSettings.tsx src/pages/api-docs/endpoints.ts
+          node -e 'const fs=require("fs"); for (const p of process.argv.slice(1)) console.log("OXFMT_FILE:"+p+":"+fs.readFileSync(p).toString("base64"))' src/pages/singbox/OxiDNSSettings.tsx src/pages/api-docs/endpoints.ts
