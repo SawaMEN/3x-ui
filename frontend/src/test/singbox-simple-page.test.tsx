@@ -249,7 +249,7 @@ describe('simple sing-box page', () => {
     mount('/singbox#advanced');
     fireEvent.click(await screen.findByText('Кэш-файл и служебные API'));
     await screen.findByText('V2Ray API');
-    expect(screen.getByRole('button', { name: 'Вся конфигурация sing-box' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Редактировать JSON' })).toBeTruthy();
     expect(screen.queryByRole('tab', { name: 'Основные' })).toBeNull();
   });
 
