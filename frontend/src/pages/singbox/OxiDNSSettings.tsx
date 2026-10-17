@@ -58,7 +58,7 @@ export default function OxiDNSSettings() {
           port: settings.port, upstream: settings.upstream,
           useSingBox: settings.useSingBox,
         } : undefined,
-        { silent: true },
+        { silent: true, timeout: 180000 },
       )) as APIResponse;
       if (!result.success || !result.obj) throw new Error(result.msg || 'Не удалось изменить настройки DNS');
       setSettings(result.obj);

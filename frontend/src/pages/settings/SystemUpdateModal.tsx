@@ -236,7 +236,7 @@ export default function SystemUpdateModal({
       HttpUtil.get('/panel/api/naiveproxy/status', undefined, { silent: true }) as Promise<
         ApiMsg<ExternalVPNBinaryStatus>
       >,
-      HttpUtil.get('/panel/api/oxidns/status?check=true', undefined, { silent: true }) as Promise<
+      HttpUtil.get('/panel/api/oxidns/status?check=true', undefined, { silent: true, timeout: 26000 }) as Promise<
         ApiMsg<ExternalVPNBinaryStatus & { installedVersion?: string; latestVersion?: string }>
       >,
     ]);
@@ -339,6 +339,8 @@ export default function SystemUpdateModal({
       case 'oxidns':
         return (await HttpUtil.post(
           dependency.installed ? '/panel/api/oxidns/update' : '/panel/api/oxidns/install',
+          undefined,
+          { timeout: 180000 },
         )) as ApiMsg<unknown>;
       case 'naiveproxy':
         return (await HttpUtil.post('/panel/api/naiveproxy/update')) as ApiMsg<unknown>;

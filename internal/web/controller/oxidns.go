@@ -24,7 +24,9 @@ func NewOxiDNSController(g *gin.RouterGroup) *OxiDNSController {
 }
 
 func (a *OxiDNSController) status(c *gin.Context) {
- ctx,cancel:=context.WithTimeout(c.Request.Context(),5*time.Second)
+ timeout:=5*time.Second
+ if c.Query("check")=="true" {timeout=25*time.Second}
+ ctx,cancel:=context.WithTimeout(c.Request.Context(),timeout)
  defer cancel()
  var s oxidns.Status
  var err error
