@@ -591,140 +591,140 @@ function SingBoxRouteRuleModal({
       <div className="singbox-rule-condition-editor">
         <div className="singbox-section-description">Условия правила</div>
         <Card size="small">
-                <Row gutter={[12, 14]}>
-                  <Field label="Точные домены">
-                    <Select
-                      mode="tags"
-                      tokenSeparators={[',', '\n']}
-                      disabled={catalogManaged}
-                      style={{ width: '100%' }}
-                      value={asStringArray(draft.domain)}
-                      onChange={(v) => patch('domain', v)}
-                      placeholder="example.com"
-                    />
-                  </Field>
-                  <Field label="Домены и поддомены">
-                    <Select
-                      mode="tags"
-                      tokenSeparators={[',', '\n']}
-                      disabled={catalogManaged}
-                      style={{ width: '100%' }}
-                      value={asStringArray(draft.domain_suffix)}
-                      onChange={(v) => patch('domain_suffix', v)}
-                    />
-                  </Field>
-                  <Field label="Ключевые слова доменов">
-                    <Select
-                      mode="tags"
-                      tokenSeparators={[',', '\n']}
-                      disabled={catalogManaged}
-                      style={{ width: '100%' }}
-                      value={asStringArray(draft.domain_keyword)}
-                      onChange={(v) => patch('domain_keyword', v)}
-                    />
-                  </Field>
-                  <Field label="Регулярные выражения доменов">
-                    <Select
-                      mode="tags"
-                      tokenSeparators={[',', '\n']}
-                      disabled={catalogManaged}
-                      style={{ width: '100%' }}
-                      value={asStringArray(draft.domain_regex)}
-                      onChange={(v) => patch('domain_regex', v)}
-                    />
-                  </Field>
-                  <Field label="IP / CIDR">
-                    <Select
-                      mode="tags"
-                      tokenSeparators={[',', '\n']}
-                      disabled={catalogManaged}
-                      style={{ width: '100%' }}
-                      value={asStringArray(draft.ip_cidr)}
-                      onChange={(v) => patch('ip_cidr', v)}
-                    />
-                  </Field>
-                  <Field label="IP источника / CIDR">
-                    <Select
-                      mode="tags"
-                      tokenSeparators={[',', '\n']}
-                      style={{ width: '100%' }}
-                      value={asStringArray(draft.source_ip_cidr)}
-                      onChange={(v) => patch('source_ip_cidr', v)}
-                    />
-                  </Field>
-                  <Field label="Порты назначения">
-                    <Input
-                      value={routePorts(draft)}
-                      onChange={(e) =>
-                        setDraft((current) => {
-                          const next: JsonObject = { ...current, port: e.target.value };
-                          delete next.port_range;
-                          return next;
-                        })
-                      }
-                      placeholder="80, 443, 1000:2000"
-                    />
-                  </Field>
-                  <Field label="Порты источника">
-                    <Input
-                      value={routePorts(draft, true)}
-                      onChange={(e) =>
-                        setDraft((current) => {
-                          const next: JsonObject = { ...current, source_port: e.target.value };
-                          delete next.source_port_range;
-                          return next;
-                        })
-                      }
-                    />
-                  </Field>
-                  <Field label="Протокол">
-                    <Select
-                      mode="multiple"
-                      style={{ width: '100%' }}
-                      value={asStringArray(draft.protocol)}
-                      options={['http', 'tls', 'quic', 'dns', 'bittorrent'].map((v) => ({
-                        value: v,
-                        label: v,
-                      }))}
-                      onChange={(v) => patch('protocol', v)}
-                    />
-                  </Field>
-                  <Field label="Сеть">
-                    <Select
-                      mode="multiple"
-                      style={{ width: '100%' }}
-                      value={asStringArray(draft.network)}
-                      options={['tcp', 'udp'].map((v) => ({ value: v, label: v }))}
-                      onChange={(v) => patch('network', v)}
-                    />
-                  </Field>
-                  <Field label="Входящие подключения">
-                    <Select
-                      mode="multiple"
-                      style={{ width: '100%' }}
-                      value={asStringArray(draft.inbound)}
-                      options={inboundTags.map((v) => ({ value: v, label: v }))}
-                      onChange={(v) => patch('inbound', v)}
-                    />
-                  </Field>
-                  <Field label="Наборы правил">
-                    <Select
-                      mode="multiple"
-                      style={{ width: '100%' }}
-                      value={asStringArray(draft.rule_set)}
-                      options={ruleSetTags.map((v) => ({ value: v, label: v }))}
-                      onChange={(v) => patch('rule_set', v)}
-                    />
-                  </Field>
-                </Row>
-              </Card>
+          <Row gutter={[12, 14]}>
+            <Field label="Точные домены">
+              <Select
+                mode="tags"
+                tokenSeparators={[',', '\n']}
+                disabled={catalogManaged}
+                style={{ width: '100%' }}
+                value={asStringArray(draft.domain)}
+                onChange={(v) => patch('domain', v)}
+                placeholder="example.com"
+              />
+            </Field>
+            <Field label="Домены и поддомены">
+              <Select
+                mode="tags"
+                tokenSeparators={[',', '\n']}
+                disabled={catalogManaged}
+                style={{ width: '100%' }}
+                value={asStringArray(draft.domain_suffix)}
+                onChange={(v) => patch('domain_suffix', v)}
+              />
+            </Field>
+            <Field label="Ключевые слова доменов">
+              <Select
+                mode="tags"
+                tokenSeparators={[',', '\n']}
+                disabled={catalogManaged}
+                style={{ width: '100%' }}
+                value={asStringArray(draft.domain_keyword)}
+                onChange={(v) => patch('domain_keyword', v)}
+              />
+            </Field>
+            <Field label="Регулярные выражения доменов">
+              <Select
+                mode="tags"
+                tokenSeparators={[',', '\n']}
+                disabled={catalogManaged}
+                style={{ width: '100%' }}
+                value={asStringArray(draft.domain_regex)}
+                onChange={(v) => patch('domain_regex', v)}
+              />
+            </Field>
+            <Field label="IP / CIDR">
+              <Select
+                mode="tags"
+                tokenSeparators={[',', '\n']}
+                disabled={catalogManaged}
+                style={{ width: '100%' }}
+                value={asStringArray(draft.ip_cidr)}
+                onChange={(v) => patch('ip_cidr', v)}
+              />
+            </Field>
+            <Field label="IP источника / CIDR">
+              <Select
+                mode="tags"
+                tokenSeparators={[',', '\n']}
+                style={{ width: '100%' }}
+                value={asStringArray(draft.source_ip_cidr)}
+                onChange={(v) => patch('source_ip_cidr', v)}
+              />
+            </Field>
+            <Field label="Порты назначения">
+              <Input
+                value={routePorts(draft)}
+                onChange={(e) =>
+                  setDraft((current) => {
+                    const next: JsonObject = { ...current, port: e.target.value };
+                    delete next.port_range;
+                    return next;
+                  })
+                }
+                placeholder="80, 443, 1000:2000"
+              />
+            </Field>
+            <Field label="Порты источника">
+              <Input
+                value={routePorts(draft, true)}
+                onChange={(e) =>
+                  setDraft((current) => {
+                    const next: JsonObject = { ...current, source_port: e.target.value };
+                    delete next.source_port_range;
+                    return next;
+                  })
+                }
+              />
+            </Field>
+            <Field label="Протокол">
+              <Select
+                mode="multiple"
+                style={{ width: '100%' }}
+                value={asStringArray(draft.protocol)}
+                options={['http', 'tls', 'quic', 'dns', 'bittorrent'].map((v) => ({
+                  value: v,
+                  label: v,
+                }))}
+                onChange={(v) => patch('protocol', v)}
+              />
+            </Field>
+            <Field label="Сеть">
+              <Select
+                mode="multiple"
+                style={{ width: '100%' }}
+                value={asStringArray(draft.network)}
+                options={['tcp', 'udp'].map((v) => ({ value: v, label: v }))}
+                onChange={(v) => patch('network', v)}
+              />
+            </Field>
+            <Field label="Входящие подключения">
+              <Select
+                mode="multiple"
+                style={{ width: '100%' }}
+                value={asStringArray(draft.inbound)}
+                options={inboundTags.map((v) => ({ value: v, label: v }))}
+                onChange={(v) => patch('inbound', v)}
+              />
+            </Field>
+            <Field label="Наборы правил">
+              <Select
+                mode="multiple"
+                style={{ width: '100%' }}
+                value={asStringArray(draft.rule_set)}
+                options={ruleSetTags.map((v) => ({ value: v, label: v }))}
+                onChange={(v) => patch('rule_set', v)}
+              />
+            </Field>
+          </Row>
+        </Card>
         <div className="singbox-inline-actions">
           <JsonModal
-                  title="Правило — JSON"
-                  value={draft}
-                  onApply={(next) => setDraft(asObject(next))}
-                  buttonText="Редактировать JSON"
-                />
+            title="Правило — JSON"
+            value={draft}
+            onApply={(next) => setDraft(asObject(next))}
+            buttonText="Редактировать JSON"
+          />
         </div>
       </div>
     </Modal>
