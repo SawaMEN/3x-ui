@@ -72,11 +72,17 @@ done
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"-w 2", "--set-xmark 0x400/0x400", "--hashlimit-upto 54/minute", "--hashlimit-burst 1", "--reject-with tcp-reset"} {
+	for _, want := range []string{"-w 2", "--set-xmark 0x400/0x400", "40 & 0xFFFF0000 = 0x02040000", "--hashlimit-upto 54/minute", "--hashlimit-burst 1", "--reject-with tcp-reset"} {
 		if !strings.Contains(string(calls), want) {
 			t.Errorf("MEKO V3 lost %s", want)
 		}
 	}
+	for _, line := range strings.Split(string(calls), "\n") {
+		if strings.Contains(line, "-t filter -A TELEMT_MEKO ") && !strings.Contains(line, "-j REJECT ") && !strings.HasSuffix(line, "-j RETURN") {
+			t.Errorf("allowed SYN must return to the host firewall: %s", line)
+		}
+	}
+
 	if strings.Count(string(calls), "--hashlimit-name tm_443 ") != 2 {
 		t.Fatal("each update must deduplicate the discovered port set")
 	}
@@ -131,7 +137,7 @@ esac
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"flush table inet xui_telemt_meko", "ports { 443,8443 }", "@th,320,32 0x04020000", "ip saddr timeout 60s", "ip6 saddr timeout 60s", "54/minute burst 1 packets", "counter return"} {
+	for _, want := range []string{"flush table inet xui_telemt_meko", "ports { 443,8443 }", "@th,320,32 0x04020000", "@th,160,16 0x0204", "ip saddr timeout 60s", "ip6 saddr timeout 60s", "54/minute burst 1 packets", "counter return"} {
 		if !strings.Contains(string(batch), want) {
 			t.Errorf("missing %s: %s", want, batch)
 		}

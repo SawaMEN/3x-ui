@@ -16,7 +16,7 @@ STATE_FILE="/etc/x-ui/telemt-meko-fix.env"
 FILTER_CHAIN="TELEMT_MEKO"
 MARK_CHAIN="TELEMT_MEKO_MARK"
 MARK="0x400"
-U32_FILTER="32 & 0x000FFFFF = 0x0002FFFF && 40 & 0xFF000000 = 0x02000000 && 44 & 0xFFFF0000 = 0x01030000 && 48 & 0xFFFFFF00 = 0x01010800 && 60 & 0xFFFFFFFF = 0x04020000"
+U32_FILTER="32 & 0x000FFFFF = 0x0002FFFF && 40 & 0xFFFF0000 = 0x02040000 && 44 & 0xFFFF0000 = 0x01030000 && 48 & 0xFFFFFF00 = 0x01010800 && 60 & 0xFFFFFFFF = 0x04020000"
 
 # Load panel-managed settings for direct/manual invocations too. Explicit
 # environment values still win, which lets the backend preview/apply settings
@@ -179,7 +179,7 @@ apply_nft() {
         echo 'add set inet xui_telemt_meko ports { type inet_service; }'
         printf 'add element inet xui_telemt_meko ports { %s }\n' "$(IFS=,; echo "${ports[*]}")"
         echo 'add chain inet xui_telemt_meko input { type filter hook input priority -10; policy accept; }'
-        echo 'add rule inet xui_telemt_meko input tcp dport @ports tcp flags & (fin | syn | rst | ack) == syn @th,96,32 & 0x000fffff == 0x0002ffff @th,160,8 0x02 @th,192,16 0x0103 @th,224,24 0x010108 @th,320,32 0x04020000 counter return'
+        echo 'add rule inet xui_telemt_meko input tcp dport @ports tcp flags & (fin | syn | rst | ack) == syn @th,96,32 & 0x000fffff == 0x0002ffff @th,160,16 0x0204 @th,192,16 0x0103 @th,224,24 0x010108 @th,320,32 0x04020000 counter return'
         for port in "${ports[@]}"; do
             printf 'add rule inet xui_telemt_meko input tcp dport %s tcp flags & (fin | syn | rst | ack) == syn meter tm4_%s { ip saddr timeout 60s limit rate over %s burst %s packets } counter reject with tcp reset\n' "$port" "$port" "$RATE" "$BURST"
             printf 'add rule inet xui_telemt_meko input tcp dport %s tcp flags & (fin | syn | rst | ack) == syn meter tm6_%s { ip6 saddr timeout 60s limit rate over %s burst %s packets } counter reject with tcp reset\n' "$port" "$port" "$RATE" "$BURST"
@@ -242,14 +242,15 @@ apply() {
         # Preserve every unrelated fwmark bit. MEKO owns only bit 0x400.
         iptables -t mangle -A "$MARK_CHAIN" -p tcp --dport "$port" -m u32 --u32 "$U32_FILTER" \
             -j MARK --set-xmark "$MARK/$MARK"
-        iptables -t filter -A "$FILTER_CHAIN" -p tcp --dport "$port" --syn -m mark --mark "$MARK/$MARK" -j ACCEPT
+        # Passing the limiter must still honor the host firewall, as nft does.
+        iptables -t filter -A "$FILTER_CHAIN" -p tcp --dport "$port" --syn -m mark --mark "$MARK/$MARK" -j RETURN
 
         # xt_hashlimit stores names in an IFNAMSIZ-sized field (15 visible
         # characters on Linux). Keep the per-port name short even for 65535.
         iptables -t filter -A "$FILTER_CHAIN" -p tcp --dport "$port" --syn \
             -m hashlimit --hashlimit-name "tm_${port}" --hashlimit-mode srcip \
             --hashlimit-upto "$RATE" --hashlimit-burst "$BURST" \
-            --hashlimit-htable-expire 60000 --hashlimit-htable-size 32768 -j ACCEPT
+            --hashlimit-htable-expire 60000 --hashlimit-htable-size 32768 -j RETURN
         iptables -t filter -A "$FILTER_CHAIN" -p tcp --dport "$port" --syn \
             -j REJECT --reject-with tcp-reset
     done
