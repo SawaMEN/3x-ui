@@ -18,7 +18,6 @@ import {
 import { CheckCircleOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 
 import { HttpUtil } from '@/utils';
-import { onNumber } from '@/utils/onNumber';
 import './GatewayModeControl.css';
 
 type ApiMsg<T = unknown> = { success?: boolean; msg?: string; obj?: T };
@@ -638,7 +637,11 @@ export default function GatewayModeControl() {
                       disabled={locked}
                       className="gateway-full-width"
                       value={networkConfig.lanPrefix}
-                      onChange={onNumber((value) => updateNetwork({ lanPrefix: value }))}
+                      onChange={(value) => {
+                        if (typeof value === 'number' && Number.isFinite(value)) {
+                          updateNetwork({ lanPrefix: value });
+                        }
+                      }}
                     />
                   </Col>
                   <Col xs={24} sm={12}>
