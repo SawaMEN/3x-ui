@@ -21,6 +21,20 @@ jobs:
       - name: Install
         working-directory: frontend
         run: npm ci --no-audit --no-fund
+      - name: Validate frontend and OxiDNS UI
+        working-directory: frontend
+        run: |
+          npm run lint
+          npm run format:check
+          npm run typecheck
+          npx vitest run src/test/oxidns-settings.test.tsx src/test/system-update-components.test.tsx
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Validate OxiDNS Go integration
+        run: |
+          go test ./internal/oxidns ./internal/web/controller
       - name: Format docs and regenerate API
         shell: bash
         run: |
