@@ -2008,6 +2008,12 @@ install_x-ui() {
     fi
     [[ -f bin/mita ]] && chmod +x bin/mita
 
+    # Preserve the explicitly managed Telemt version, which can be newer than
+    # the binary bundled in this panel release. Its own updater owns upgrades.
+    if [[ "${telemt_was_installed}" == 1 && -n "${custom_bin_backup}" && -f "${custom_bin_backup}/telemt" ]]; then
+        install -m 0755 -o root -g root "${custom_bin_backup}/telemt" bin/telemt || exit 1
+    fi
+
     # Restore anything from the old bin/ that the fresh release doesn't ship
     # (custom geoip/geosite files, or anything else an admin hand-placed
     # there) -- never overwrites a same-named file the new release provides,
