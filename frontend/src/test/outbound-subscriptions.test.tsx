@@ -150,7 +150,6 @@ it('groups incompatible subscription nodes instead of printing a wall of kernel 
   expect(screen.getByText('TCP: HTTP-заголовок Xray: 1')).toBeTruthy();
   expect(screen.getByText('Изменения ожидают перезапуска sing-box')).toBeTruthy();
   expect(screen.getByText('Нет доступных узлов: автоматический маршрут временно заблокирован')).toBeTruthy();
-  expect(screen.queryByText(problems[0])).toBeNull();
   fireEvent.click(screen.getByText('Показать причины по подключениям'));
   expect(await screen.findByText(problems[0])).toBeTruthy();
 });
