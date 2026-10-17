@@ -392,7 +392,9 @@ func TestSubscriptionMetadataEditKeepsRunningProbeState(t *testing.T) {
 func TestSubscriptionRankingPolicyResetDoesNotDiscardSelectedRoute(t *testing.T) {
 	sub, _ := setupTimedBalancer(t)
 	const subscriptionURL = "https://1.1.1.1/subscription"
-	if err := database.GetDB().Model(sub).Update("url", subscriptionURL).Error; err != nil {
+	if err := database.GetDB().Model(sub).Updates(map[string]any{
+		"url": subscriptionURL, "probe_url": defaultAutomaticSpeedURL,
+	}).Error; err != nil {
 		t.Fatal(err)
 	}
 	policy := &BalanceOptions{Enabled: true, Mode: "speed", URL: defaultAutomaticSpeedURL,
