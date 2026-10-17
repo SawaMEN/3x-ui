@@ -26,7 +26,18 @@ func NewOlcRTCController(g *gin.RouterGroup) {
 		}
 		result := make([]gin.H, 0, len(clients))
 		for _, client := range clients {
-			result = append(result, gin.H{"id": client.ID, "quota": client.Quota, "locations": client.Locations, "link": olcrtc.ClientLink(client)})
+			locations := make([]gin.H, 0, len(client.Locations))
+			for _, loc := range client.Locations {
+				locations = append(locations, gin.H{
+					"name": loc.Name, "carrier": loc.Carrier,
+					"endpoint": loc.Endpoint, "transport": loc.Transport, "dns": loc.DNS,
+				})
+			}
+			simple := len(client.Locations) == 1 && olcrtc.SimpleLocation(client.Locations[0])
+			result = append(result, gin.H{
+				"id": client.ID, "quota": client.Quota, "locations": locations,
+				"simpleEditable": simple, "link": olcrtc.ClientLink(client),
+			})
 		}
 		jsonObj(c, result, nil)
 	})
