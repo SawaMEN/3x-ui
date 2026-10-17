@@ -79,8 +79,8 @@ describe('simple sing-box page', () => {
         </MemoryRouter>
       </QueryClientProvider>,
     );
-    const catalogTab = await screen.findByText('List catalog');
-    fireEvent.click(catalogTab);
+    fireEvent.click(await screen.findByText('Каталог готовых списков'));
+    await screen.findByText('List catalog');
     const row = (await screen.findByText('geosite:youtube', {}, { timeout: 5000 })).closest('tr')!;
     fireEvent.click(within(row).getByText('Assign route').closest('button')!);
     fireEvent.click((await screen.findByText('Add routing rule')).closest('button')!);
@@ -220,16 +220,17 @@ describe('simple sing-box page', () => {
     expect(sent.outbounds).toEqual(config.outbounds);
   });
 
-  it('uses the original Xray section order without a second advanced mode', async () => {
+  it('uses a single level of navigation for core, DNS, connections and Gateway', async () => {
     mount();
     await screen.findByText('Логирование');
     expect(screen.getAllByRole('radio').map((item) => item.closest('label')?.textContent)).toEqual([
       'Основные',
-      'Маршрутизация',
-      'Исходящие',
-      'Балансировщики',
       'DNS',
-      'Advanced',
+      'Маршрутизация',
+      'Подключения',
+      'AdBlock',
+      'Режим шлюза',
+      'Дополнительно',
     ]);
     expect(screen.queryByText('Быстрая настройка')).toBeNull();
     expect(screen.queryByLabelText('Расширенный режим')).toBeNull();
@@ -248,13 +249,12 @@ describe('simple sing-box page', () => {
     mount('/singbox#advanced');
     fireEvent.click(await screen.findByText('Кэш-файл и служебные API'));
     await screen.findByText('V2Ray API');
-    fireEvent.click(screen.getByText('Журнал, время и схема'));
-    await screen.findByText('Логирование');
+    expect(screen.getByRole('button', { name: 'Вся конфигурация sing-box' })).toBeTruthy();
+    expect(screen.queryByRole('tab', { name: 'Основные' })).toBeNull();
   });
 
   it('saves simple edits with custom rules intact and omits panel-managed sections', async () => {
     mount('/singbox#dns');
-    fireEvent.click(await screen.findByRole('tab', { name: 'Основные' }));
     fireEvent.click(await screen.findByLabelText('Кэш DNS'));
     fireEvent.click(screen.getByText('Save').closest('button')!);
     await waitFor(() =>
@@ -292,7 +292,6 @@ describe('simple sing-box page', () => {
 
   it('asks before discarding unsaved edits', async () => {
     mount('/singbox#dns');
-    fireEvent.click(await screen.findByRole('tab', { name: 'Основные' }));
     await screen.findByText('Определение адресов сайтов (DNS)');
     fireEvent.click(screen.getByLabelText('Кэш DNS'));
     const loads = vi.mocked(HttpUtil.get).mock.calls.length;
@@ -305,7 +304,7 @@ describe('simple sing-box page', () => {
 
   it('asks before resetting automatic settings', async () => {
     mount('/singbox#advanced');
-    await screen.findByText('Расширенная конфигурация');
+    await screen.findByText('Дополнительные настройки');
     fireEvent.click(screen.getByText('Reset to generated settings').closest('button')!);
     await screen.findAllByText('Вернуть автоматические настройки sing-box?');
     expect(HttpUtil.post).not.toHaveBeenCalled();
