@@ -1,0 +1,77 @@
+name: OlcRTC Linux smoke
+
+on:
+  pull_request:
+    paths:
+      - "internal/olcrtc/**"
+      - "internal/web/controller/olcrtc.go"
+      - "frontend/src/pages/settings/OlcRTCClientsModal.tsx"
+      - ".github/workflows/olcrtc-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  olcrtc-linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Go unit tests for the integration
+        run: go test -count=1 ./internal/olcrtc
+      - name: Install upstream OlcRTC on an isolated CI VM
+        env:
+          INSTALLER_URL: https://raw.githubusercontent.com/BigDaddy3334/olcrtc-manager-panel/df626030d21d00286304bc8ef1e990e28c247a55/scripts/install.sh
+        run: |
+          set -euo pipefail
+          curl --fail --show-error --silent --location "$INSTALLER_URL" -o /tmp/olcrtc-smoke-installer.sh
+          bash -n /tmp/olcrtc-smoke-installer.sh
+          sudo env PANEL_ADDR=127.0.0.1 PANEL_TLS=0 PANEL_ADMIN_PATH=/admin AUTO_SWAP=0 GO_BUILD_P=2 bash /tmp/olcrtc-smoke-installer.sh
+      - name: Verify service, loopback binding, credentials and local API
+        run: |
+          set -euo pipefail
+          sudo systemctl --no-pager --full status olcrtc-manager
+          test -x /usr/local/bin/olcrtc
+          test -x /usr/local/bin/olcrtc-manager
+          sudo test -s /etc/olcrtc-manager/panel.env
+          sudo test -s /etc/olcrtc-manager/config.json
+          PORT="$(sudo python3 -c 'import json; print(json.load(open("/etc/olcrtc-manager/config.json"))["port"])')"
+          # The service must be local-only; accepting connections on all interfaces
+          # would accidentally expose its independent admin UI.
+          sudo systemctl cat olcrtc-manager | grep -F 'OLCRTC_MANAGER_ADDR=127.0.0.1'
+          sudo grep -q '^OLCRTC_MANAGER_USER=' /etc/olcrtc-manager/panel.env
+          sudo grep -q '^OLCRTC_MANAGER_PASS=' /etc/olcrtc-manager/panel.env
+          sudo bash -c '
+            set -euo pipefail
+            set -a
+            source /etc/olcrtc-manager/panel.env
+            set +a
+            for attempt in $(seq 1 15); do
+              if curl --fail --silent --max-time 2 \
+                --user "${OLCRTC_MANAGER_USER}:${OLCRTC_MANAGER_PASS}" \
+                "http://127.0.0.1:${1}/api/settings" > /tmp/olcrtc-api-settings.json; then
+                exit 0
+              fi
+              sleep 2
+            done
+            exit 1
+          ' bash "$PORT"
+          sudo python3 - <<'PY'
+          import json
+          with open('/tmp/olcrtc-api-settings.json') as f:
+              response = json.load(f)
+          assert response["port"] > 0
+          assert response["admin_user"]
+          print("Authenticated local OlcRTC API responds correctly")
+          PY
+      - name: Troubleshooting on failure
+        if: failure()
+        run: |
+          sudo systemctl --no-pager --full status olcrtc-manager || true
+          sudo journalctl -u olcrtc-manager -n 100 --no-pager || true
+          # Never print panel.env or installer stdout: they contain admin credentials.
