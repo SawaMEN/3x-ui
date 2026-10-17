@@ -791,7 +791,7 @@ export default function InboundsPage() {
                 items={[
                   {
                     key: 'telemt',
-                    label: 'Telemt — настройки движка MTProto и WEB Proxy',
+                    label: `${t('menu.telemt')} — настройки движка MTProto и WEB Proxy`,
                     children: (
                       <Suspense fallback={<Spin size="large" />}>
                         <TelemtWorkspace />
