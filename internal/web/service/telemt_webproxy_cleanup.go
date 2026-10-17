@@ -28,6 +28,9 @@ type telemtConfigSnapshot struct {
 }
 
 type WebProxyEnableSnapshot struct {
+	renewalPath  string
+	renewalData  []byte
+	renewalMode  os.FileMode
 	state        TelemtWebProxyState
 	stateExisted bool
 	config       telemtConfigSnapshot
@@ -102,6 +105,8 @@ func withTelemtRollbackError(operationErr, rollbackErr error) error {
 }
 
 func (s TelemtService) SaveConfigAtomic(c TelemtConfig) error {
+	telemtWebOperationMu.Lock()
+	defer telemtWebOperationMu.Unlock()
 	snapshot, err := captureTelemtConfigSnapshot()
 	if err != nil {
 		return fmt.Errorf("telemt: capture configuration before save: %w", err)
@@ -113,6 +118,8 @@ func (s TelemtService) SaveConfigAtomic(c TelemtConfig) error {
 }
 
 func (s TelemtService) CreateProxyAtomic(req TelemtCreateRequest) (TelemtProxy, error) {
+	telemtWebOperationMu.Lock()
+	defer telemtWebOperationMu.Unlock()
 	snapshot, err := captureTelemtConfigSnapshot()
 	if err != nil {
 		return TelemtProxy{}, fmt.Errorf("telemt: capture configuration before proxy creation: %w", err)
@@ -124,7 +131,7 @@ func (s TelemtService) CreateProxyAtomic(req TelemtCreateRequest) (TelemtProxy, 
 	return proxy, nil
 }
 
-func (TelemtService) CaptureWebProxyEnableSnapshot() (WebProxyEnableSnapshot, error) {
+func (TelemtService) CaptureWebProxyEnableSnapshot(domains ...string) (WebProxyEnableSnapshot, error) {
 	state, err := readTelemtWebState()
 	if err != nil {
 		return WebProxyEnableSnapshot{}, err
@@ -137,11 +144,26 @@ func (TelemtService) CaptureWebProxyEnableSnapshot() (WebProxyEnableSnapshot, er
 	if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
 		return WebProxyEnableSnapshot{}, statErr
 	}
-	return WebProxyEnableSnapshot{
-		state:        state,
-		stateExisted: statErr == nil,
-		config:       config,
-	}, nil
+	snapshot := WebProxyEnableSnapshot{state: state, stateExisted: statErr == nil, config: config}
+	domain := state.Domain
+	if len(domains) > 0 {
+		domain = domains[0]
+	}
+	if telemtWebDomainPattern.MatchString(domain) {
+		path := "/etc/letsencrypt/renewal/" + domain + ".conf"
+		info, err := os.Stat(path)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return WebProxyEnableSnapshot{}, err
+		}
+		if err == nil {
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return WebProxyEnableSnapshot{}, err
+			}
+			snapshot.renewalPath, snapshot.renewalData, snapshot.renewalMode = path, data, info.Mode().Perm()
+		}
+	}
+	return snapshot, nil
 }
 
 func (TelemtService) WebProxyNginxInstalled() bool {
@@ -153,6 +175,10 @@ func (TelemtService) WebProxyTelemtActive() bool {
 }
 
 func ensureWebProxyBootUnit() error {
+	state, err := readTelemtWebState()
+	if err != nil {
+		return err
+	}
 	unit := `[Unit]
 Description=3X-UI Telemt WEB Proxy dependencies
 Requires=nginx.service telemt.service
@@ -167,6 +193,9 @@ RemainAfterExit=yes
 [Install]
 WantedBy=multi-user.target
 `
+	if telemtWebFrontend(state) != "nginx" {
+		unit = strings.ReplaceAll(unit, "nginx.service", telemtWebFrontUnit)
+	}
 	if err := os.WriteFile(telemtWebBootUnitPath, []byte(unit), 0o644); err != nil {
 		return fmt.Errorf("telemt: write WEB Proxy boot unit: %w", err)
 	}
@@ -262,7 +291,12 @@ func (TelemtService) RestoreFailedWebProxyEnable(snapshot WebProxyEnableSnapshot
 
 func (s TelemtService) RestoreWebProxyEnableSnapshot(snapshot WebProxyEnableSnapshot) error {
 	var rollbackErr error
-	if err := s.DisableWebProxy(); err != nil {
+	if current, _ := os.ReadFile(snapshot.renewalPath); snapshot.renewalPath != "" && !bytes.Equal(current, snapshot.renewalData) {
+		if err := os.WriteFile(snapshot.renewalPath, snapshot.renewalData, snapshot.renewalMode); err != nil {
+			rollbackErr = err
+		}
+	}
+	if err := disableTelemtWebProxy(); err != nil {
 		rollbackErr = fmt.Errorf("disable failed WEB Proxy: %w", err)
 	}
 
@@ -278,14 +312,20 @@ func (s TelemtService) RestoreWebProxyEnableSnapshot(snapshot WebProxyEnableSnap
 		rollbackErr = fmt.Errorf("restore Telemt configuration: %w", err)
 	}
 
+	if !snapshot.state.Enabled || telemtWebFrontend(snapshot.state) != "nginx" {
+		removeTelemtWebAcmeConfig()
+	}
 	if snapshot.state.Enabled {
-		if err := writeTelemtWebNginxConfig(snapshot.state); err != nil && rollbackErr == nil {
+		if err := installTelemtWebRenewalHook(snapshot.state); err != nil && rollbackErr == nil {
+			rollbackErr = err
+		}
+		if err := writeTelemtWebFrontendConfig(snapshot.state); err != nil && rollbackErr == nil {
 			rollbackErr = fmt.Errorf("restore WEB Proxy nginx config: %w", err)
 		}
-		if err := telemtWebEnsureNginxRunning(); err != nil && rollbackErr == nil {
+		if err := telemtWebEnsureFrontendRunning(snapshot.state); err != nil && rollbackErr == nil {
 			rollbackErr = fmt.Errorf("restore nginx: %w", err)
 		}
-		if err := telemtWebReloadNginx(); err != nil && rollbackErr == nil {
+		if err := telemtWebReloadFrontend(snapshot.state); err != nil && rollbackErr == nil {
 			rollbackErr = fmt.Errorf("reload restored nginx: %w", err)
 		}
 		if err := ensureWebProxyBootUnit(); err != nil && rollbackErr == nil {

@@ -14,6 +14,8 @@ on:
       - "tools/ci/**"
       - "**.sh"
       - "tools/test-*-shell.py"
+      - "tools/telemt/**"
+      - "tools/test_telemt_build.py"
   push:
     branches:
       - main
@@ -30,6 +32,8 @@ on:
       - "tools/ci/**"
       - "**.sh"
       - "tools/test-*-shell.py"
+      - "tools/telemt/**"
+      - "tools/test_telemt_build.py"
 
 permissions:
   contents: read
@@ -336,3 +340,25 @@ jobs:
       - name: Audit
         run: npm audit --omit=dev --audit-level=high
         working-directory: frontend
+
+  telemt-web-frontends:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Install WEB frontends
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y caddy haproxy
+      - name: Verify engine packaging and safe updater failures
+        run: python3 -m unittest discover -s tools -p test_telemt_build.py
+      - name: Test native HTTPS and bidirectional WebSocket routing
+        run: |
+          mkdir -p internal/web/dist
+          touch internal/web/dist/.gitkeep
+          export CADDY_TEST_BINARY=$(command -v caddy)
+          export HAPROXY_TEST_BINARY=$(command -v haproxy)
+          go test ./internal/web/service -run '^TestTelemtWeb(AlternativeFrontends|CarrierSelection|RenewalRebuilds|FrontendStops)' -v -count=1

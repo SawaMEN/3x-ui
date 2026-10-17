@@ -14,6 +14,7 @@ import {
   Modal,
   Popconfirm,
   Row,
+  Select,
   Space,
   Switch,
   Tag,
@@ -37,9 +38,22 @@ import {
 import { HttpUtil, RandomUtil } from '@/utils';
 import AppSidebar from '@/layouts/AppSidebar';
 import { useTheme } from '@/hooks/useTheme';
+import { FormProvider } from 'react-hook-form';
+import { FormField, useZodForm } from '@/components/form/rhf';
+import {
+  TelemtFrontendSchema,
+  TelemtCarrierSchema,
+  TelemtCarriersSchema,
+  TelemtWebProxyRequestSchema,
+} from '@/schemas/telemt-web';
 import './TelemtPage.css';
 
 type WebProxyStatus = {
+  frontend: string;
+  frontendActive: boolean;
+  carrier: string;
+  carriers: string[] | null;
+  carrierNegotiationSupported: boolean;
   enabled: boolean;
   supported: boolean;
   domain: string;
@@ -122,6 +136,11 @@ export default function TelemtPage() {
     updateAvailable: false,
     mekoEnabled: false,
     webProxy: {
+      frontend: 'nginx',
+      frontendActive: false,
+      carrier: 'https',
+      carriers: [],
+      carrierNegotiationSupported: false,
       enabled: false,
       supported: false,
       domain: '',
@@ -145,7 +164,12 @@ export default function TelemtPage() {
   const [proxyDeleting, setProxyDeleting] = useState<string | null>(null);
   const [webProxyLoading, setWebProxyLoading] = useState(false);
   const [webProxyOpen, setWebProxyOpen] = useState(false);
-  const [webProxyDomain, setWebProxyDomain] = useState('');
+  const webForm = useZodForm(TelemtWebProxyRequestSchema, {
+    defaultValues: { domain: '', frontend: 'nginx', carrier: 'https', carriers: [] },
+  });
+  const webProxyDomain = webForm.watch('domain');
+  const webFrontend = webForm.watch('frontend');
+  const webCarriers = webForm.watch('carriers');
 
   const loadStatus = useCallback(async () => {
     const r = await HttpUtil.get<Status>('/panel/api/telemt/status');
@@ -261,18 +285,24 @@ export default function TelemtPage() {
   };
 
   const openWebProxy = () => {
-    setWebProxyDomain(status.webProxy.domain || status.webProxy.defaultDomain || '');
+    webForm.reset({
+      domain: status.webProxy.domain || status.webProxy.defaultDomain || '',
+      frontend: TelemtFrontendSchema.catch('nginx').parse(status.webProxy.frontend),
+      carrier: TelemtCarrierSchema.catch('https').parse(status.webProxy.carrier),
+      carriers: TelemtCarriersSchema.catch([]).parse(
+        status.webProxy.carriers ||
+          (!status.webProxy.enabled && status.webProxy.carrierNegotiationSupported
+            ? ['websocket-lanes', 'websocket', 'https']
+            : []),
+      ),
+    });
     setWebProxyOpen(true);
   };
 
-  const enableWebProxy = async () => {
+  const enableWebProxy = webForm.handleSubmit(async (payload) => {
     setWebProxyLoading(true);
     try {
-      const r = await HttpUtil.post(
-        '/panel/api/telemt/webproxy/enable',
-        { domain: webProxyDomain.trim() },
-        jsonOptions,
-      );
+      const r = await HttpUtil.post('/panel/api/telemt/webproxy/enable', payload, jsonOptions);
       if (r?.success) {
         message.success(status.webProxy.enabled ? 'WEB Proxy перенастроен' : 'WEB Proxy поднят');
         setWebProxyOpen(false);
@@ -284,7 +314,7 @@ export default function TelemtPage() {
     } finally {
       setWebProxyLoading(false);
     }
-  };
+  });
 
   const disableWebProxy = async () => {
     setWebProxyLoading(true);
@@ -509,15 +539,16 @@ export default function TelemtPage() {
                           <Tag color={status.webProxy.certificateReady ? 'green' : 'warning'}>
                             TLS {status.webProxy.certificateReady ? 'готов' : 'требуется'}
                           </Tag>
-                          <Tag color={status.webProxy.nginxActive ? 'green' : 'warning'}>
-                            nginx {status.webProxy.nginxActive ? 'работает' : 'остановлен'}
+                          <Tag color={status.webProxy.frontendActive ? 'green' : 'warning'}>
+                            {status.webProxy.frontend || 'nginx'}{' '}
+                            {status.webProxy.frontendActive ? 'работает' : 'остановлен'}
                           </Tag>
                         </Space>
                       </>
                     ) : (
                       <Typography.Paragraph type="secondary">
-                        Домен → HTTPS :443 → nginx → локальный WEB transport Telemt. Заглушка и TLS
-                        настраиваются автоматически.
+                        Домен → HTTPS :443 → выбранный frontend → WEB transport Telemt. Заглушка и
+                        TLS настраиваются автоматически.
                       </Typography.Paragraph>
                     )}
                     {status.webProxy.error && (
@@ -831,7 +862,7 @@ export default function TelemtPage() {
                   <Popconfirm
                     key="disable"
                     title="Отключить Web Proxy?"
-                    description="nginx-конфигурация будет убрана, обычный Telemt останется работать."
+                    description="Конфигурация WEB frontend будет убрана, обычный Telemt останется работать."
                     okText="Отключить"
                     cancelText="Отмена"
                     onConfirm={() => void disableWebProxy()}
@@ -851,7 +882,7 @@ export default function TelemtPage() {
                 !status.installed ||
                 !status.webProxy.supported ||
                 !webProxyDomain.trim() ||
-                (!status.webProxy.port443Available && !status.webProxy.nginxActive)
+                (!status.webProxy.port443Available && !status.webProxy.frontendActive)
               }
             >
               {status.webProxy.enabled ? 'Применить' : 'Поднять'}
@@ -863,30 +894,93 @@ export default function TelemtPage() {
               type="info"
               showIcon
               message="Панель всё сделает сама"
-              description="nginx, HTTPS-сертификат, статическая заглушка и локальный WEB transport Telemt будут настроены автоматически. Ручной запуск сервисов после установки не нужен."
+              description="Выбранный HTTPS frontend, сертификат и WEB transport Telemt будут настроены автоматически. Для Caddy и HAProxy используется отдельная служба панели. При переключении возможен короткий перерыв соединений."
             />
 
-            <Form layout="vertical">
-              <Form.Item
-                label="Домен"
-                help={'По умолчанию: ' + (status.webProxy.defaultDomain || 'не определён')}
-              >
-                <Input
-                  value={webProxyDomain}
-                  onChange={(e) => setWebProxyDomain(e.target.value)}
-                  placeholder="web.example.com"
-                  disabled={webProxyLoading}
-                  addonAfter=":443"
-                />
-              </Form.Item>
-            </Form>
+            <FormProvider {...webForm}>
+              <Form layout="vertical">
+                <FormField
+                  name="domain"
+                  label="Домен"
+                  extra={'По умолчанию: ' + (status.webProxy.defaultDomain || 'не определён')}
+                >
+                  <Input
+                    placeholder="web.example.com"
+                    disabled={webProxyLoading}
+                    addonAfter=":443"
+                  />
+                </FormField>
+                <FormField name="frontend" label="HTTPS frontend">
+                  <Select
+                    disabled={webProxyLoading}
+                    options={TelemtFrontendSchema.options.map((value) => ({ value, label: value }))}
+                  />
+                </FormField>
+                <FormField
+                  name="carrier"
+                  label="Основной транспорт / запасной для клиентов без перебора"
+                >
+                  <Select
+                    disabled={webProxyLoading || !status.webProxy.carrierNegotiationSupported}
+                    options={TelemtCarrierSchema.options.map((value) => ({ value, label: value }))}
+                  />
+                </FormField>
+                <FormField
+                  name="carriers"
+                  label="Перебор транспортов"
+                  extra="Выберите транспорты в порядке попыток. Пустой список отключает перебор. Основной транспорт остаётся запасным."
+                >
+                  <Select
+                    mode="multiple"
+                    disabled={webProxyLoading || !status.webProxy.carrierNegotiationSupported}
+                    options={TelemtCarrierSchema.options.map((value) => ({ value, label: value }))}
+                  />
+                </FormField>
+                {webCarriers.map((carrier, index) => (
+                  <Space key={carrier} style={{ display: 'flex', marginTop: 4 }}>
+                    <Typography.Text>
+                      {index + 1}. {carrier}
+                    </Typography.Text>
+                    <Button
+                      size="small"
+                      aria-label={'Выше: ' + carrier}
+                      disabled={webProxyLoading || index === 0}
+                      onClick={() => {
+                        const next = [...webCarriers];
+                        [next[index - 1], next[index]] = [next[index]!, next[index - 1]!];
+                        webForm.setValue('carriers', next);
+                      }}
+                    >
+                      ↑
+                    </Button>
+                    <Button
+                      size="small"
+                      aria-label={'Ниже: ' + carrier}
+                      disabled={webProxyLoading || index === webCarriers.length - 1}
+                      onClick={() => {
+                        const next = [...webCarriers];
+                        [next[index], next[index + 1]] = [next[index + 1]!, next[index]!];
+                        webForm.setValue('carriers', next);
+                      }}
+                    >
+                      ↓
+                    </Button>
+                  </Space>
+                ))}
+                {!status.webProxy.carrierNegotiationSupported && (
+                  <Typography.Text type="secondary">
+                    Выбор транспортов требует Telemt 3.5.4 или новее.
+                  </Typography.Text>
+                )}
+              </Form>
+            </FormProvider>
 
             <Descriptions size="small" column={1} bordered>
               <Descriptions.Item label="Telemt WEB">
                 127.0.0.1:{status.webProxy.listenPort || 15080}
               </Descriptions.Item>
-              <Descriptions.Item label="nginx">
-                {status.webProxy.nginxActive ? 'запущен' : 'будет запущен автоматически'}
+              <Descriptions.Item label={webFrontend}>
+                {status.webProxy.frontendActive ? 'запущен' : 'будет запущен автоматически'}
               </Descriptions.Item>
               <Descriptions.Item label="TLS">
                 {status.webProxy.certificateReady
@@ -894,15 +988,15 @@ export default function TelemtPage() {
                   : 'сертификат будет получен автоматически'}
               </Descriptions.Item>
               <Descriptions.Item label="443">
-                {status.webProxy.nginxActive && status.webProxy.port443Owner === 'nginx'
-                  ? 'порт уже использует nginx — это нормально'
+                {status.webProxy.frontendActive
+                  ? 'порт использует текущий WEB frontend'
                   : status.webProxy.port443Available
                     ? 'порт свободен'
                     : status.webProxy.port443Owner
                       ? 'занят: ' + status.webProxy.port443Owner
                       : 'занят другим сервисом'}
               </Descriptions.Item>
-              {status.webProxy.port443Owner && status.webProxy.port443Owner !== 'nginx' && (
+              {status.webProxy.port443Owner && !status.webProxy.frontendActive && (
                 <Descriptions.Item label="Причина">
                   Остановите «{status.webProxy.port443Owner}» или перенесите его с порта 443.
                 </Descriptions.Item>

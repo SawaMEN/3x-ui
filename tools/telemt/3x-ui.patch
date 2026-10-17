@@ -1,0 +1,2120 @@
+diff --git a/docs/Architecture/Middle-end/PARTIAL_DEGRADATION.en.md b/docs/Architecture/Middle-end/PARTIAL_DEGRADATION.en.md
+new file mode 100644
+index 0000000..8339cb3
+--- /dev/null
++++ b/docs/Architecture/Middle-end/PARTIAL_DEGRADATION.en.md
+@@ -0,0 +1,347 @@
++# Partial Degradation for Middle-End Routing
++
++## Problem
++
++Before this change, conditional ME admission behaved as a global binary switch for new sessions:
++
++- if every configured DC had at least one live ME writer, new sessions used Middle-End;
++- if even one configured DC lost writer coverage, the whole admission state moved toward global fallback.
++
++This was safe, but too coarse. A single degraded DC could force unrelated healthy DCs onto direct routing.
++
++## What changed
++
++Telemt now separates two questions:
++
++1. Is the ME pool usable at all for at least some DCs?
++2. Is the ME pool usable for the specific DC requested by this session?
++
++This introduces partial degradation for new sessions:
++
++- if all covered DCs are ready, Telemt behaves as before and routes new sessions via Middle-End;
++- if only part of the covered DC set is ready, Telemt keeps Middle-End globally enabled for new sessions;
++- each new session then checks readiness for its own target DC;
++- if the target DC has live ME coverage, the session uses Middle-End;
++- if the target DC does not have live ME coverage, only that session falls back to Direct-DC.
++
++## Architectural intent
++
++The change is intentionally narrow:
++
++- it does not replace the existing global `RouteRuntimeController`;
++- it does not introduce per-session route subscriptions or a new cutover state machine;
++- it only improves route selection for new sessions when ME health is asymmetric across DCs.
++
++This keeps the current relay and cutover model intact while removing a major all-or-nothing failure mode.
++
++## Runtime semantics
++
++### Admission layer
++
++The ME admission gate now distinguishes:
++
++- full readiness: every covered configured DC has at least one live writer;
++- partial readiness: at least one covered configured DC has at least one live writer;
++- no readiness: no covered configured DC has live writer coverage.
++
++When partial readiness is present, the admission gate remains open and the global route mode stays `Middle`.
++
++### Session routing layer
++
++When a new authenticated session is about to use Middle-End, Telemt additionally checks whether ME is ready for the session target DC.
++
++- ready for target DC: session uses ME;
++- not ready for target DC: session falls back to Direct-DC;
++- all other sessions are unaffected.
++
++## Why this is useful
++
++This improves real operating behavior in hostile networks:
++
++- healthy DCs continue benefiting from ME even while one DC is degraded;
++- localized writer loss no longer causes unnecessary global degradation;
++- recovery is smoother because Telemt does not have to swing the entire proxy between all-ME and all-direct as often.
++
++## Invariants preserved
++
++This change preserves existing core behavior:
++
++- only new sessions use the refined routing decision;
++- active relay sessions still follow the existing global cutover semantics;
++- no MTProto or KDF routing contracts were changed;
++- no new blocking work was added to the relay path.
++
++## Limits
++
++This is not a full per-family or per-session routing subsystem.
++
++It should be understood as targeted hardening:
++
++- readiness is still built on top of the existing global route runtime;
++- session fallback is per target DC, not a full independent route domain;
++- existing sessions are not migrated between ME and direct modes.
++
++## Validation ideas
++
++Useful validation scenarios:
++
++1. Configure ME endpoints for multiple DCs.
++2. Make one DC lose all live ME writers while another DC remains healthy.
++3. Verify that admission stays open instead of forcing immediate global direct routing.
++4. Verify that sessions for the healthy DC still use ME.
++5. Verify that sessions for the degraded DC fall back to Direct-DC.
++
++This behavior is also covered by targeted pool-status tests for:
++
++- partial readiness with incomplete DC coverage;
++- readiness checks scoped to the requested target DC.
++
++## Admission coverage hardening
++
++During live validation of this feature, one additional failure mode was found.
++
++In an IPv4-only deployment, a single-endpoint outage could temporarily drive the
++family runtime state into suppression. The original admission coverage snapshot
++used the drain-coverage family gate, so temporary suppression could make the
++configured family set appear empty even while healthy writers for other DCs were
++still alive.
++
++In practice this produced a bad sequence:
++
++1. partial degradation activated correctly for the affected DC;
++2. the admission snapshot briefly collapsed to `covered_dcs=0 ready_dcs=0`;
++3. the proxy incorrectly switched new sessions to the global direct fallback.
++
++The fix keeps partial-degradation admission coverage based on configured ME
++families rather than the temporary suppression gate used by drain coverage.
++This preserves the intended semantics:
++
++- a single degraded DC does not erase admission coverage for unrelated healthy DCs;
++- partial degradation stays active instead of collapsing into a false global
++  not-ready state;
++- full recovery returns admission to `covered_dcs == ready_dcs` without forcing
++  an unnecessary global cutover.
++
++The transition log was also tightened so `ME partial degradation cleared` is
++emitted only for an actual recovery to full covered readiness, not for an empty
++coverage snapshot.
++
++## Live validation procedure
++
++The feature was validated on a real IPv4-only deployment using a controlled
++single-endpoint fault injection against DC3 ME routing.
++
++### Baseline
++
++Start Telemt normally and confirm:
++
++- `Conditional-admission gate: open / ME pool READY`
++- full ME connectivity for all configured DCs
++- `telemt_me_no_writer_failfast_total = 0`
++- `telemt_me_hybrid_timeout_total = 0`
++
++### Fault injection
++
++Block only the ME endpoint for one DC, leaving Direct-DC routing intact:
++
++```bash
++sudo iptables -I DOCKER-USER 1 \
++  -s 172.21.0.2 \
++  -d 149.154.175.100 \
++  -p tcp --dport 8888 \
++  -j DROP
++```
++
++This intentionally breaks only the ME path for that DC. Direct connectivity on
++port `443` remains available.
++
++### Expected degraded-state behavior
++
++With the fix applied, the expected logs are:
++
++- `ME target DC became unavailable for session routing`
++- `ME partial degradation activated covered_dcs=12 ready_dcs=11`
++- repeated single-endpoint outage reconnect attempts for the affected DC
++
++The admission metrics should also reflect the degraded state:
++
++- `telemt_me_admission_configured_dcs = 12`
++- `telemt_me_admission_ready_dcs < 12`
++- `telemt_me_partial_degradation_active = 1`
++
++What should not happen anymore:
++
++- `covered_dcs=0 ready_dcs=0`
++- `ME pool not-ready; routing new sessions via Direct-DC (fast mode)`
++- global controlled route cutover for unrelated middle sessions
++
++### Recovery
++
++Remove the firewall rule:
++
++```bash
++sudo iptables -D DOCKER-USER \
++  -s 172.21.0.2 \
++  -d 149.154.175.100 \
++  -p tcp --dport 8888 \
++  -j DROP
++```
++
++Expected recovery logs:
++
++- `Single-endpoint outage reconnect succeeded`
++- `ME target DC recovered for session routing`
++- `ME partial degradation cleared covered_dcs=12 ready_dcs=12`
++- `ME writer floor restored for DC`
++
++The admission metrics should return to the healthy baseline:
++
++- `telemt_me_admission_configured_dcs = 12`
++- `telemt_me_admission_ready_dcs = 12`
++- `telemt_me_partial_degradation_active = 0`
++
++### Observed result
++
++After the admission hardening fix:
++
++- partial degradation activated correctly for the affected DC;
++- healthy DCs stayed on Middle-End routing;
++- the admission layer no longer collapsed to a false `0/0` state;
++- recovery returned the pool to full readiness without a global fallback event.
++
++This confirms the branch now behaves as intended for the original partial
++degradation objective: one degraded DC no longer forces an unnecessary
++all-or-nothing collapse of ME admission for new sessions.
++
++## Complete test case
++
++The following end-to-end case was executed successfully on the live target.
++
++### 1. Healthy baseline
++
++Observed before fault injection:
++
++- log: `Conditional-admission gate: open / ME pool READY`
++- metrics:
++  - `telemt_me_admission_configured_dcs 12`
++  - `telemt_me_admission_ready_dcs 12`
++  - `telemt_me_partial_degradation_active 0`
++
++This confirms the admission layer starts from full coverage.
++
++### 2. Single-endpoint DC3 outage
++
++The ME endpoint `149.154.175.100:8888` was blocked with `iptables`.
++
++Observed during the fault window:
++
++- log: `ME target DC became unavailable for session routing dc=3`
++- log: `ME partial degradation activated covered_dcs=12 ready_dcs=11`
++- log: repeated `Single-endpoint outage reconnect scheduled` events for `dc=3` and `dc=-3`
++- no global `ME pool not-ready` fallback
++- no global cutover of unrelated middle sessions
++
++Observed metrics during the degraded state:
++
++- `telemt_me_admission_configured_dcs 12`
++- `telemt_me_admission_ready_dcs 10`
++- `telemt_me_partial_degradation_active 1`
++- `telemt_me_no_writer_failfast_total 0`
++- `telemt_me_hybrid_timeout_total 0`
++
++The `ready_dcs` value dropped below the first transition log because both `dc=3`
++and `dc=-3` later entered the outage state. This is expected and confirms that
++the metrics expose the actual depth of the degradation instead of only a binary
++state.
++
++### 3. Recovery after unblocking
++
++After removing the firewall rule, recovery completed without a global fallback.
++
++Observed recovery logs:
++
++- `Single-endpoint outage reconnect succeeded dc=-3`
++- `ME target DC recovered for session routing dc=-3`
++- `Single-endpoint outage reconnect succeeded dc=3`
++- `ME partial degradation cleared covered_dcs=12 ready_dcs=12`
++- `ME writer floor restored for DC dc=-3`
++- `ME writer floor restored for DC dc=3`
++
++Observed recovery metrics:
++
++- `telemt_me_admission_configured_dcs 12`
++- `telemt_me_admission_ready_dcs 12`
++- `telemt_me_partial_degradation_active 0`
++
++### Final conclusion
++
++This live test demonstrates the intended behavior end to end:
++
++- a single degraded DC no longer collapses global ME admission;
++- healthy DCs remain on Middle-End routing;
++- the degraded DC stays in localized retry and recovery handling;
++- admission metrics now expose both the transition and the recovery in a
++  directly observable form.
++
++## Future policy work
++
++The current change fixes a correctness issue in partial degradation handling:
++
++- localized ME coverage loss must not collapse admission into a false global
++  not-ready state;
++- healthy DCs must remain eligible for Middle-End routing while coverage still
++  exists.
++
++This does not yet define the final production policy for when partially
++available Middle-End should be considered operationally worse than global
++Direct-DC routing.
++
++That policy should be designed separately from this fix.
++
++### Why this is a separate problem
++
++`ready_dcs > 0` is a good correctness condition for "ME is not fully dead", but
++it is not sufficient by itself to answer whether remaining ME coverage is still
++the best choice for overall system performance.
++
++For example:
++
++- one or two healthy target DCs may still justify keeping partial ME active;
++- a very small remaining ready set may still be formally usable, but no longer
++  provide the best operational result for most new sessions.
++
++### Recommended direction
++
++If Telemt later needs an earlier global cutover policy, it should not be based
++only on "how many DCs are dead".
++
++A better design would evaluate:
++
++- coverage ratio:
++  - `ready_dcs / configured_dcs`
++- route quality signals:
++  - `telemt_me_no_writer_failfast_total`
++  - `telemt_me_hybrid_timeout_total`
++  - `telemt_me_route_drop_no_conn_total`
++  - sustained reconnect / refill churn
++- time-based hysteresis:
++  - degraded conditions should persist for a window before enabling a global
++    Direct-DC policy
++  - recovery conditions should also persist before restoring full Middle-End
++    preference
++
++### Suggested future plan
++
++1. Keep the current fix focused on correctness and observability.
++2. Continue collecting live data from admission coverage and route-quality
++   metrics.
++3. Validate additional multi-DC degradation scenarios.
++4. Design a separate quality-based fallback policy if production behavior shows
++   that partial ME should sometimes yield to global Direct-DC before
++   `ready_dcs` reaches zero.
++
++Until such a policy is designed and validated, the current behavior should be
++understood as:
++
++- correctness-first partial degradation handling;
++- not the final optimization policy for every degraded production state.
+diff --git a/docs/Architecture/Middle-end/PARTIAL_DEGRADATION.ru.md b/docs/Architecture/Middle-end/PARTIAL_DEGRADATION.ru.md
+new file mode 100644
+index 0000000..9ad6f45
+--- /dev/null
++++ b/docs/Architecture/Middle-end/PARTIAL_DEGRADATION.ru.md
+@@ -0,0 +1,351 @@
++# Partial degradation для маршрутизации Middle-End
++
++## Проблема
++
++До этого изменения conditional admission для ME фактически работал как глобальный бинарный переключатель для новых сессий:
++
++- если у каждого настроенного DC был хотя бы один живой ME writer, новые сессии шли через Middle-End;
++- если хотя бы один настроенный DC терял покрытие по writers, система начинала двигаться к глобальному fallback.
++
++Это было безопасно, но слишком грубо. Один деградировавший DC мог перевести на direct даже те DC, которые оставались полностью здоровыми.
++
++## Что изменилось
++
++Теперь Telemt разделяет два вопроса:
++
++1. Можно ли вообще использовать ME хотя бы для части DC?
++2. Можно ли использовать ME для конкретного DC, который нужен этой сессии?
++
++Это даёт partial degradation для новых сессий:
++
++- если готовы все покрываемые DC, Telemt ведёт себя как раньше и маршрутизирует новые сессии через Middle-End;
++- если готова только часть покрываемых DC, Telemt оставляет Middle-End глобально включённым для новых сессий;
++- дальше каждая новая сессия отдельно проверяет готовность именно для своего target DC;
++- если для target DC есть живое ME-покрытие, сессия идёт через Middle-End;
++- если для target DC живого ME-покрытия нет, только эта сессия уходит в Direct-DC.
++
++## Архитектурная идея
++
++Изменение специально сделано узким по области действия:
++
++- оно не заменяет существующий глобальный `RouteRuntimeController`;
++- оно не вводит новый per-session cutover state machine;
++- оно только улучшает выбор маршрута для новых сессий при асимметричной деградации ME между DC.
++
++За счёт этого сохраняется текущая модель relay и cutover, но убирается важный all-or-nothing сценарий деградации.
++
++## Поведение во время работы
++
++### Слой admission
++
++ME admission gate теперь различает:
++
++- полную готовность: у каждого покрываемого настроенного DC есть хотя бы один живой writer;
++- частичную готовность: хотя бы у одного покрываемого настроенного DC есть хотя бы один живой writer;
++- отсутствие готовности: ни у одного покрываемого настроенного DC нет живого writer coverage.
++
++Если есть partial readiness, admission gate остаётся открытым, а глобальный route mode остаётся `Middle`.
++
++### Слой выбора маршрута для сессии
++
++Когда новая аутентифицированная сессия собирается идти через Middle-End, Telemt дополнительно проверяет, готов ли ME именно для target DC этой сессии.
++
++- target DC готов: сессия идёт через ME;
++- target DC не готов: сессия уходит в Direct-DC;
++- остальные сессии это не затрагивает.
++
++## Почему это полезно
++
++Это даёт реальный выигрыш в боевых условиях:
++
++- здоровые DC продолжают пользоваться преимуществами ME даже если один DC деградировал;
++- локальная потеря writers больше не приводит к лишней глобальной деградации;
++- восстановление становится мягче, потому что прокси реже приходится переключать весь трафик между режимами all-ME и all-direct.
++
++## Какие инварианты сохранены
++
++Изменение сохраняет базовое текущее поведение:
++
++- уточнённый выбор маршрута применяется только к новым сессиям;
++- уже активные relay-сессии по-прежнему живут по существующей глобальной cutover-семантике;
++- контракты MTProto и KDF routing не менялись;
++- в relay path не добавлена блокирующая работа.
++
++## Ограничения
++
++Это не полноценная новая per-family или per-session routing subsystem.
++
++Корректнее воспринимать это как targeted hardening:
++
++- readiness всё ещё построен поверх существующего глобального route runtime;
++- fallback делается per target DC, а не через полностью независимый route domain;
++- существующие сессии не мигрируют между режимами ME и direct.
++
++## Как проверять
++
++Полезный сценарий проверки:
++
++1. Настроить ME endpoints для нескольких DC.
++2. Добиться ситуации, в которой один DC теряет все живые ME writers, а другой остаётся здоровым.
++3. Убедиться, что admission остаётся открытым и не уводит всё сразу в глобальный direct routing.
++4. Убедиться, что сессии для здорового DC продолжают идти через ME.
++5. Убедиться, что сессии для деградировавшего DC уходят в Direct-DC.
++
++Дополнительно это поведение покрыто targeted тестами pool-status для:
++
++- partial readiness при неполном покрытии DC;
++- readiness check, привязанного к конкретному target DC.
++
++## Дополнительное усиление admission coverage
++
++Во время live-проверки этой фичи обнаружился ещё один failure mode.
++
++В IPv4-only инсталляции single-endpoint outage мог временно перевести runtime
++state семьи в suppression. Изначально admission coverage snapshot использовал
++тот же family gate, что и drain coverage, поэтому временная suppression могла
++сделать configured family set пустым, хотя у других DC ещё оставались живые
++writers.
++
++На практике это давало плохую последовательность:
++
++1. partial degradation корректно активировался для проблемного DC;
++2. admission snapshot на короткое время схлопывался в `covered_dcs=0 ready_dcs=0`;
++3. прокси ошибочно переводил новые сессии в глобальный direct fallback.
++
++Исправление переводит admission coverage для partial-degradation на configured
++ME families, а не на temporary suppression gate, который используется для drain
++coverage. Это сохраняет правильную семантику:
++
++- один деградировавший DC больше не стирает admission coverage для остальных
++  здоровых DC;
++- partial degradation остаётся активным и не схлопывается в ложный global
++  not-ready state;
++- после восстановления admission возвращается в `covered_dcs == ready_dcs`
++  без лишнего глобального cutover.
++
++Дополнительно была уточнена transition-семантика логов: сообщение
++`ME partial degradation cleared` теперь пишется только при настоящем
++восстановлении полной covered readiness, а не при пустом coverage snapshot.
++
++## Как проводилась live-проверка
++
++Фича проверялась на реальной IPv4-only инсталляции через controlled
++single-endpoint fault injection для DC3 по ME-path.
++
++### Базовое состояние
++
++Перед fault injection проверялось:
++
++- `Conditional-admission gate: open / ME pool READY`
++- полная ME connectivity для всех настроенных DC
++- `telemt_me_no_writer_failfast_total = 0`
++- `telemt_me_hybrid_timeout_total = 0`
++
++### Fault injection
++
++Блокировался только ME endpoint одного DC, при этом Direct-DC оставался
++доступным:
++
++```bash
++sudo iptables -I DOCKER-USER 1 \
++  -s 172.21.0.2 \
++  -d 149.154.175.100 \
++  -p tcp --dport 8888 \
++  -j DROP
++```
++
++Эта команда специально ломает только ME path для данного DC. Direct
++connectivity на `443` при этом сохраняется.
++
++### Ожидаемое поведение в деградации
++
++С исправлением ожидаемые логи такие:
++
++- `ME target DC became unavailable for session routing`
++- `ME partial degradation activated covered_dcs=12 ready_dcs=11`
++- повторяющиеся single-endpoint outage reconnect attempts только для
++  затронутого DC
++
++Admission-метрики тоже должны отражать деградацию:
++
++- `telemt_me_admission_configured_dcs = 12`
++- `telemt_me_admission_ready_dcs < 12`
++- `telemt_me_partial_degradation_active = 1`
++
++Что больше не должно происходить:
++
++- `covered_dcs=0 ready_dcs=0`
++- `ME pool not-ready; routing new sessions via Direct-DC (fast mode)`
++- глобальный controlled route cutover для остальных middle sessions
++
++### Восстановление
++
++После снятия firewall-правила:
++
++```bash
++sudo iptables -D DOCKER-USER \
++  -s 172.21.0.2 \
++  -d 149.154.175.100 \
++  -p tcp --dport 8888 \
++  -j DROP
++```
++
++ожидались и были получены такие логи:
++
++- `Single-endpoint outage reconnect succeeded`
++- `ME target DC recovered for session routing`
++- `ME partial degradation cleared covered_dcs=12 ready_dcs=12`
++- `ME writer floor restored for DC`
++
++Admission-метрики должны вернуться в healthy baseline:
++
++- `telemt_me_admission_configured_dcs = 12`
++- `telemt_me_admission_ready_dcs = 12`
++- `telemt_me_partial_degradation_active = 0`
++
++### Результат
++
++После добавленного admission hardening фикса получилось следующее:
++
++- partial degradation корректно активировался только для проблемного DC;
++- здоровые DC продолжили работать через Middle-End;
++- admission layer больше не схлопывался в ложный `0/0` state;
++- восстановление возвращало пул в full-ready без глобального fallback event.
++
++Это подтверждает, что ветка теперь соответствует исходной цели partial
++degradation: один деградировавший DC больше не приводит к лишнему
++all-or-nothing collapse всей admission-логики для новых сессий.
++
++## Один полный тест-кейс
++
++Ниже зафиксирован полный end-to-end сценарий, который был успешно выполнен на
++live-инсталляции.
++
++### 1. Healthy baseline
++
++Перед fault injection наблюдалось:
++
++- лог: `Conditional-admission gate: open / ME pool READY`
++- метрики:
++  - `telemt_me_admission_configured_dcs 12`
++  - `telemt_me_admission_ready_dcs 12`
++  - `telemt_me_partial_degradation_active 0`
++
++Это подтверждает, что admission layer стартует из состояния полной готовности.
++
++### 2. Single-endpoint outage для DC3
++
++ME endpoint `149.154.175.100:8888` был заблокирован через `iptables`.
++
++Во время fault window наблюдалось:
++
++- лог: `ME target DC became unavailable for session routing dc=3`
++- лог: `ME partial degradation activated covered_dcs=12 ready_dcs=11`
++- лог: повторяющиеся `Single-endpoint outage reconnect scheduled` для `dc=3` и `dc=-3`
++- отсутствовал глобальный `ME pool not-ready` fallback
++- отсутствовал глобальный cutover для остальных middle sessions
++
++Метрики в деградированном состоянии:
++
++- `telemt_me_admission_configured_dcs 12`
++- `telemt_me_admission_ready_dcs 10`
++- `telemt_me_partial_degradation_active 1`
++- `telemt_me_no_writer_failfast_total 0`
++- `telemt_me_hybrid_timeout_total 0`
++
++Значение `ready_dcs` опустилось ниже первого transition log, потому что позже в
++outage вошли и `dc=3`, и `dc=-3`. Это ожидаемо и полезно: метрики показывают
++реальную глубину деградации, а не только бинарный флаг.
++
++### 3. Recovery после снятия блокировки
++
++После удаления firewall rule восстановление завершилось без глобального
++fallback.
++
++Наблюдавшиеся recovery-логи:
++
++- `Single-endpoint outage reconnect succeeded dc=-3`
++- `ME target DC recovered for session routing dc=-3`
++- `Single-endpoint outage reconnect succeeded dc=3`
++- `ME partial degradation cleared covered_dcs=12 ready_dcs=12`
++- `ME writer floor restored for DC dc=-3`
++- `ME writer floor restored for DC dc=3`
++
++Recovery-метрики:
++
++- `telemt_me_admission_configured_dcs 12`
++- `telemt_me_admission_ready_dcs 12`
++- `telemt_me_partial_degradation_active 0`
++
++### Итог
++
++Этот live-тест подтверждает целевое поведение end to end:
++
++- один деградировавший DC больше не схлопывает глобальный ME admission;
++- здоровые DC продолжают работать через Middle-End;
++- деградировавший DC остаётся в локальном retry/recovery контуре;
++- admission-метрики теперь явно показывают и деградацию, и восстановление.
++
++## Дальнейшая policy-работа
++
++Текущее изменение исправляет correctness-проблему в partial degradation:
++
++- локальная потеря ME coverage не должна схлопывать admission в ложный global
++  not-ready state;
++- пока coverage ещё существует, здоровые DC должны оставаться пригодными для
++  Middle-End routing.
++
++Но это ещё не финальная production-policy для вопроса:
++когда partially available Middle-End уже operationally хуже, чем глобальный
++Direct-DC routing.
++
++Эту policy лучше проектировать отдельно от текущего фикса.
++
++### Почему это отдельная задача
++
++Условие `ready_dcs > 0` хорошо подходит как correctness-инвариант для ответа
++"ME ещё не полностью мёртв", но само по себе не отвечает на вопрос,
++остаётся ли текущий partial ME лучшим режимом с точки зрения общей
++производительности системы.
++
++Например:
++
++- один или два живых target DC ещё могут оправдывать сохранение partial ME;
++- очень маленький remaining ready set может оставаться формально usable, но уже
++  не давать лучшего operational result для большинства новых сессий.
++
++### Предпочтительное направление
++
++Если Telemt позже понадобится более ранняя глобальная cutover-policy, она не
++должна базироваться только на "сколько DC умерло".
++
++Более правильный дизайн должен учитывать:
++
++- coverage ratio:
++  - `ready_dcs / configured_dcs`
++- quality-сигналы маршрутизации:
++  - `telemt_me_no_writer_failfast_total`
++  - `telemt_me_hybrid_timeout_total`
++  - `telemt_me_route_drop_no_conn_total`
++  - устойчивый reconnect / refill churn
++- time-based hysteresis:
++  - деградированное состояние должно держаться некоторое окно времени до
++    включения глобальной Direct-DC policy
++  - восстановление тоже должно быть устойчивым перед возвратом полного
++    Middle-End preference
++
++### Предлагаемый дальнейший план
++
++1. Оставить текущий фикс сфокусированным на correctness и observability.
++2. Продолжить сбор live-данных по admission coverage и route-quality метрикам.
++3. Провести дополнительные сценарии multi-DC degradation.
++4. Спроектировать отдельную quality-based fallback policy, если production
++   поведение покажет, что partial ME иногда должен уступать global Direct-DC
++   раньше, чем `ready_dcs` опускается до нуля.
++
++Пока такая policy не спроектирована и не провалидирована, текущее поведение
++нужно понимать так:
++
++- это correctness-first обработка partial degradation;
++- это ещё не финальная optimization-policy для всех degraded production
++  состояний.
+diff --git a/src/config/defaults.rs b/src/config/defaults.rs
+index 635bed2..0a2ece8 100644
+--- a/src/config/defaults.rs
++++ b/src/config/defaults.rs
+@@ -357,6 +357,14 @@ pub(crate) fn default_me2dc_fast() -> bool {
+     true
+ }
+ 
++pub(crate) fn default_me_direct_to_me_recovery_enabled() -> bool {
++    true
++}
++
++pub(crate) fn default_me_direct_to_me_recovery_hysteresis_secs() -> u64 {
++    10
++}
++
+ pub(crate) fn default_keepalive_interval() -> u64 {
+     8
+ }
+diff --git a/src/config/load/strict_keys.rs b/src/config/load/strict_keys.rs
+index 171896d..b54a694 100644
+--- a/src/config/load/strict_keys.rs
++++ b/src/config/load/strict_keys.rs
+@@ -47,6 +47,8 @@ const GENERAL_CONFIG_KEYS: &[&str] = &[
+     "me_init_retry_attempts",
+     "me2dc_fallback",
+     "me2dc_fast",
++    "me_direct_to_me_recovery_enabled",
++    "me_direct_to_me_recovery_hysteresis_secs",
+     "me_keepalive_enabled",
+     "me_keepalive_interval_secs",
+     "me_keepalive_jitter_secs",
+diff --git a/src/config/types/general.rs b/src/config/types/general.rs
+index 8ec14ea..0f4906f 100644
+--- a/src/config/types/general.rs
++++ b/src/config/types/general.rs
+@@ -75,6 +75,14 @@ pub struct GeneralConfig {
+     /// Active only when both `use_middle_proxy=true` and `me2dc_fallback=true`.
+     #[serde(default = "default_me2dc_fast")]
+     pub me2dc_fast: bool,
++
++    /// Return per-DC Direct fallback sessions to Middle-End once their target
++    /// DC keeps ME coverage for `me_direct_to_me_recovery_hysteresis_secs`.
++    #[serde(default = "default_me_direct_to_me_recovery_enabled")]
++    pub me_direct_to_me_recovery_enabled: bool,
++
++    #[serde(default = "default_me_direct_to_me_recovery_hysteresis_secs")]
++    pub me_direct_to_me_recovery_hysteresis_secs: u64,
+     /// Enable ME keepalive padding frames.
+     #[serde(default = "default_true")]
+     pub me_keepalive_enabled: bool,
+diff --git a/src/config/types/general_impl.rs b/src/config/types/general_impl.rs
+index 36de4da..d1bfc81 100644
+--- a/src/config/types/general_impl.rs
++++ b/src/config/types/general_impl.rs
+@@ -27,6 +27,9 @@ impl Default for GeneralConfig {
+             me_init_retry_attempts: default_me_init_retry_attempts(),
+             me2dc_fallback: default_me2dc_fallback(),
+             me2dc_fast: default_me2dc_fast(),
++            me_direct_to_me_recovery_enabled: default_me_direct_to_me_recovery_enabled(),
++            me_direct_to_me_recovery_hysteresis_secs:
++                default_me_direct_to_me_recovery_hysteresis_secs(),
+             me_keepalive_enabled: default_true(),
+             me_keepalive_interval_secs: default_keepalive_interval(),
+             me_keepalive_jitter_secs: default_keepalive_jitter(),
+diff --git a/src/maestro/admission.rs b/src/maestro/admission.rs
+index 4d2a05e..eaaa84e 100644
+--- a/src/maestro/admission.rs
++++ b/src/maestro/admission.rs
+@@ -1,3 +1,4 @@
++use std::collections::BTreeSet;
+ use std::sync::Arc;
+ use std::time::{Duration, Instant};
+ 
+@@ -6,12 +7,86 @@ use tracing::{info, warn};
+ 
+ use crate::config::ProxyConfig;
+ use crate::proxy::route_mode::{RelayRouteMode, RouteRuntimeController};
++use crate::startup::StartupTracker;
++use crate::stats::Stats;
+ use crate::transport::middle_proxy::MePool;
+ 
+ use super::generation::RuntimeTaskScope;
+ 
+ const STARTUP_FALLBACK_AFTER: Duration = Duration::from_secs(80);
+ const RUNTIME_FALLBACK_AFTER: Duration = Duration::from_secs(6);
++const COVERAGE_TRANSITION_LOG_RATE_LIMIT: Duration = Duration::from_secs(30);
++
++fn log_admission_coverage_transition(
++    previous_configured_dcs: &BTreeSet<i16>,
++    previous_ready_dcs: &BTreeSet<i16>,
++    configured_dcs: &BTreeSet<i16>,
++    ready_dcs: &BTreeSet<i16>,
++    now: Instant,
++    last_per_dc_log_at: &mut Option<Instant>,
++) {
++    let should_log_per_dc = last_per_dc_log_at.is_none_or(|last| {
++        now.saturating_duration_since(last) >= COVERAGE_TRANSITION_LOG_RATE_LIMIT
++    });
++    if should_log_per_dc {
++        for dc in configured_dcs
++            .intersection(previous_ready_dcs)
++            .copied()
++            .filter(|dc| !ready_dcs.contains(dc))
++        {
++            warn!(dc, "ME target DC became unavailable for session routing");
++        }
++
++        for dc in ready_dcs
++            .difference(previous_ready_dcs)
++            .copied()
++            .filter(|dc| configured_dcs.contains(dc))
++        {
++            info!(dc, "ME target DC recovered for session routing");
++        }
++
++        *last_per_dc_log_at = Some(now);
++    }
++
++    let was_partial = !previous_configured_dcs.is_empty()
++        && !previous_ready_dcs.is_empty()
++        && previous_ready_dcs.len() < previous_configured_dcs.len();
++    let is_partial = !configured_dcs.is_empty()
++        && !ready_dcs.is_empty()
++        && ready_dcs.len() < configured_dcs.len();
++
++    if !was_partial && is_partial {
++        warn!(
++            covered_dcs = configured_dcs.len(),
++            ready_dcs = ready_dcs.len(),
++            "ME partial degradation activated"
++        );
++    } else if was_partial
++        && !is_partial
++        && !configured_dcs.is_empty()
++        && ready_dcs == configured_dcs
++    {
++        info!(
++            covered_dcs = configured_dcs.len(),
++            ready_dcs = ready_dcs.len(),
++            "ME partial degradation cleared"
++        );
++    }
++}
++
++fn update_admission_metrics(
++    stats: &Stats,
++    configured_dcs: &BTreeSet<i16>,
++    ready_dcs: &BTreeSet<i16>,
++) {
++    stats.set_me_admission_configured_dcs_gauge(configured_dcs.len() as u64);
++    stats.set_me_admission_ready_dcs_gauge(ready_dcs.len() as u64);
++    stats.set_me_partial_degradation_active_gauge(
++        !configured_dcs.is_empty()
++            && !ready_dcs.is_empty()
++            && ready_dcs.len() < configured_dcs.len(),
++    );
++}
+ 
+ // Admission regressions cover notification loss without network startup.
+ #[cfg(test)]
+@@ -22,11 +97,13 @@ pub(crate) async fn configure_admission_gate(
+     config: &Arc<ProxyConfig>,
+     me_pool: Option<Arc<MePool>>,
+     me_pool_runtime: Arc<RwLock<Option<Arc<MePool>>>>,
++    stats: Arc<Stats>,
+     route_runtime: Arc<RouteRuntimeController>,
+     admission_tx: &watch::Sender<bool>,
+     config_rx: watch::Receiver<Arc<ProxyConfig>>,
+     me_ready_rx: watch::Receiver<u64>,
+     task_scope: RuntimeTaskScope,
++    startup_tracker: Arc<StartupTracker>,
+ ) {
+     if config.general.use_middle_proxy {
+         if me_pool.is_some() || config.general.me2dc_fallback {
+@@ -34,15 +111,30 @@ pub(crate) async fn configure_admission_gate(
+                 Some(pool) => Some(pool.clone()),
+                 None => me_pool_runtime.read().await.clone(),
+             };
+-            let initial_ready = match initial_pool.as_ref() {
+-                Some(pool) => pool.admission_ready_conditional_cast().await,
+-                None => false,
++            // PR #732: coverage snapshot (configured vs ready DCs) instead of a
++            // single all-or-nothing readiness bool. A None pool (runtime pool not
++            // yet loaded) yields an empty snapshot => not ready / not partial.
++            let initial_coverage = match initial_pool.as_ref() {
++                Some(pool) => pool.admission_coverage_snapshot().await,
++                None => Default::default(),
+             };
++            update_admission_metrics(
++                stats.as_ref(),
++                &initial_coverage.configured_dcs,
++                &initial_coverage.ready_dcs,
++            );
++            let initial_ready = !initial_coverage.configured_dcs.is_empty()
++                && initial_coverage.ready_dcs == initial_coverage.configured_dcs;
++            let initial_partial_ready = !initial_coverage.configured_dcs.is_empty()
++                && !initial_coverage.ready_dcs.is_empty()
++                && initial_coverage.ready_dcs.len() < initial_coverage.configured_dcs.len();
+             let mut fallback_enabled = config.general.me2dc_fallback;
+             let mut fast_fallback_enabled = fallback_enabled && config.general.me2dc_fast;
+             let (initial_gate_open, initial_route_mode, initial_fallback_reason) = if initial_ready
+             {
+                 (true, RelayRouteMode::Middle, None)
++            } else if initial_partial_ready {
++                (true, RelayRouteMode::Middle, None)
+             } else if fallback_enabled {
+                 (
+                     true,
+@@ -54,8 +146,13 @@ pub(crate) async fn configure_admission_gate(
+             };
+             admission_tx.send_replace(initial_gate_open);
+             let _ = route_runtime.set_mode(initial_route_mode);
++            startup_tracker.set_degraded(!initial_ready).await;
+             if initial_ready {
+                 info!("Conditional-admission gate: open / ME pool READY");
++            } else if initial_partial_ready {
++                warn!(
++                    "Conditional-admission gate: open / ME pool PARTIALLY ready, per-DC Direct fallback active"
++                );
+             } else if let Some(reason) = initial_fallback_reason {
+                 warn!(
+                     fallback_reason = reason,
+@@ -67,8 +164,10 @@ pub(crate) async fn configure_admission_gate(
+ 
+             let mut pool_for_gate = initial_pool;
+             let pool_runtime_for_gate = me_pool_runtime.clone();
++            let stats_for_gate = stats.clone();
+             let admission_tx_gate = admission_tx.clone();
+             let route_runtime_gate = route_runtime.clone();
++            let startup_tracker_gate = startup_tracker.clone();
+             let mut config_rx_gate = config_rx.clone();
+             let mut me_ready_rx_gate = me_ready_rx;
+             let mut admission_poll_ms = config.general.me_admission_poll_ms.max(1);
+@@ -76,13 +175,17 @@ pub(crate) async fn configure_admission_gate(
+                 let mut gate_open = initial_gate_open;
+                 let mut route_mode = initial_route_mode;
+                 let mut ready_observed = initial_ready;
+-                let mut not_ready_since = if initial_ready {
++                let mut not_ready_since = if initial_ready || initial_partial_ready {
+                     None
+                 } else {
+                     Some(Instant::now())
+                 };
+                 let mut config_watch_open = true;
+                 let mut me_ready_watch_open = true;
++                let mut previous_configured_dcs = initial_coverage.configured_dcs;
++                let mut previous_ready_dcs = initial_coverage.ready_dcs;
++                let mut degraded = !initial_ready;
++                let mut last_per_dc_log_at = None;
+                 loop {
+                     tokio::select! {
+                         changed = config_rx_gate.changed(), if config_watch_open => {
+@@ -114,11 +217,31 @@ pub(crate) async fn configure_admission_gate(
+                     if pool_for_gate.is_none() {
+                         pool_for_gate = pool_runtime_for_gate.read().await.clone();
+                     }
+-                    let ready = match pool_for_gate.as_ref() {
+-                        Some(pool) => pool.admission_ready_conditional_cast().await,
+-                        None => false,
++                    let coverage = match pool_for_gate.as_ref() {
++                        Some(pool) => pool.admission_coverage_snapshot().await,
++                        None => Default::default(),
+                     };
++                    let configured_dcs = coverage.configured_dcs;
++                    let ready_dcs = coverage.ready_dcs;
++                    update_admission_metrics(stats_for_gate.as_ref(), &configured_dcs, &ready_dcs);
+                     let now = Instant::now();
++                    let ready =
++                        !configured_dcs.is_empty() && ready_dcs.len() == configured_dcs.len();
++                    let partial_ready =
++                        !configured_dcs.is_empty() && !ready_dcs.is_empty() && !ready;
++                    if configured_dcs != previous_configured_dcs || ready_dcs != previous_ready_dcs
++                    {
++                        log_admission_coverage_transition(
++                            &previous_configured_dcs,
++                            &previous_ready_dcs,
++                            &configured_dcs,
++                            &ready_dcs,
++                            now,
++                            &mut last_per_dc_log_at,
++                        );
++                        previous_configured_dcs = configured_dcs.clone();
++                        previous_ready_dcs = ready_dcs.clone();
++                    }
+                     let (next_gate_open, next_route_mode, next_fallback_reason) = if ready {
+                         ready_observed = true;
+                         not_ready_since = None;
+@@ -126,6 +249,13 @@ pub(crate) async fn configure_admission_gate(
+                             pool.set_runtime_ready(true);
+                         }
+                         (true, RelayRouteMode::Middle, None)
++                    } else if partial_ready {
++                        ready_observed = true;
++                        not_ready_since = None;
++                        if let Some(pool) = pool_for_gate.as_ref() {
++                            pool.set_runtime_ready(true);
++                        }
++                        (true, RelayRouteMode::Middle, None)
+                     } else if fallback_enabled && !ready_observed {
+                         (
+                             true,
+@@ -153,16 +283,30 @@ pub(crate) async fn configure_admission_gate(
+                         }
+                     };
+                     let next_fallback_active = next_fallback_reason.is_some();
++                    let next_degraded = !ready;
++
++                    if next_degraded != degraded {
++                        degraded = next_degraded;
++                        startup_tracker_gate.set_degraded(degraded).await;
++                    }
+ 
+                     if next_route_mode != route_mode {
+                         route_mode = next_route_mode;
+                         if let Some(snapshot) = route_runtime_gate.set_mode(route_mode) {
+                             if matches!(route_mode, RelayRouteMode::Middle) {
+-                                info!(
+-                                    target_mode = route_mode.as_str(),
+-                                    cutover_generation = snapshot.generation,
+-                                    "Middle-End routing restored for new sessions"
+-                                );
++                                if ready {
++                                    info!(
++                                        target_mode = route_mode.as_str(),
++                                        cutover_generation = snapshot.generation,
++                                        "Middle-End routing restored for new sessions"
++                                    );
++                                } else {
++                                    warn!(
++                                        target_mode = route_mode.as_str(),
++                                        cutover_generation = snapshot.generation,
++                                        "ME pool partially recovered; routing new sessions via Middle-End with per-DC Direct fallback"
++                                    );
++                                }
+                             } else {
+                                 let fallback_reason = next_fallback_reason.unwrap_or("unknown");
+                                 if fallback_reason == "startup_direct_fallback" {
+@@ -206,8 +350,12 @@ pub(crate) async fn configure_admission_gate(
+                                     fallback_reason = next_fallback_reason.unwrap_or("unknown"),
+                                     "Conditional-admission gate opened in ME fallback mode"
+                                 );
+-                            } else {
++                            } else if ready {
+                                 info!("Conditional-admission gate opened / ME pool READY");
++                            } else {
++                                warn!(
++                                    "Conditional-admission gate opened / ME pool PARTIALLY ready, per-DC Direct fallback active"
++                                );
+                             }
+                         } else {
+                             warn!("Conditional-admission gate closed / ME pool is NOT ready");
+@@ -216,12 +364,42 @@ pub(crate) async fn configure_admission_gate(
+                 }
+             });
+         } else {
++            update_admission_metrics(stats.as_ref(), &BTreeSet::new(), &BTreeSet::new());
+             admission_tx.send_replace(false);
+             let _ = route_runtime.set_mode(RelayRouteMode::Direct);
++            startup_tracker.set_degraded(true).await;
+             warn!("Conditional-admission gate: closed / ME pool is UNAVAILABLE");
+         }
+     } else {
++        update_admission_metrics(stats.as_ref(), &BTreeSet::new(), &BTreeSet::new());
+         admission_tx.send_replace(true);
+         let _ = route_runtime.set_mode(RelayRouteMode::Direct);
+     }
+ }
++
++#[cfg(test)]
++mod partial_degradation_tests {
++    use super::*;
++
++    #[test]
++    fn admission_metrics_follow_coverage_snapshot() {
++        let stats = Stats::new();
++        let configured_dcs = BTreeSet::from([1, 2, 3]);
++        let partial_ready_dcs = BTreeSet::from([1, 2]);
++
++        update_admission_metrics(&stats, &configured_dcs, &partial_ready_dcs);
++        assert_eq!(stats.get_me_admission_configured_dcs_gauge(), 3);
++        assert_eq!(stats.get_me_admission_ready_dcs_gauge(), 2);
++        assert_eq!(stats.get_me_partial_degradation_active_gauge(), 1);
++
++        update_admission_metrics(&stats, &configured_dcs, &configured_dcs);
++        assert_eq!(stats.get_me_admission_configured_dcs_gauge(), 3);
++        assert_eq!(stats.get_me_admission_ready_dcs_gauge(), 3);
++        assert_eq!(stats.get_me_partial_degradation_active_gauge(), 0);
++
++        update_admission_metrics(&stats, &BTreeSet::new(), &BTreeSet::new());
++        assert_eq!(stats.get_me_admission_configured_dcs_gauge(), 0);
++        assert_eq!(stats.get_me_admission_ready_dcs_gauge(), 0);
++        assert_eq!(stats.get_me_partial_degradation_active_gauge(), 0);
++    }
++}
+diff --git a/src/maestro/admission/tests.rs b/src/maestro/admission/tests.rs
+index 572b268..1100f3b 100644
+--- a/src/maestro/admission/tests.rs
++++ b/src/maestro/admission/tests.rs
+@@ -61,11 +61,13 @@ impl GateFixture {
+             &config,
+             Some(pool.pool()),
+             Arc::new(RwLock::new(Some(pool.pool()))),
++            Arc::new(Stats::new()),
+             route.clone(),
+             &admission_tx,
+             config_rx,
+             ready_rx,
+             scope.clone(),
++            Arc::new(StartupTracker::new(0)),
+         )
+         .await;
+         drop(admission_tx);
+diff --git a/src/maestro/me_startup.rs b/src/maestro/me_startup.rs
+index 4fe5273..d481933 100644
+--- a/src/maestro/me_startup.rs
++++ b/src/maestro/me_startup.rs
+@@ -28,6 +28,23 @@ use supervisor::spawn_me_supervisors;
+ #[cfg(test)]
+ use supervisor::supervise_me_task;
+ 
++async fn log_me_init_outcome(pool: &Arc<MePool>, attempt: u32) {
++    let coverage = pool.admission_coverage_snapshot().await;
++    let configured_dcs = coverage.configured_dcs.len();
++    let ready_dcs = coverage.ready_dcs.len();
++
++    if configured_dcs > 0 && ready_dcs == configured_dcs {
++        info!(attempt, "Middle-End pool initialized successfully");
++    } else {
++        warn!(
++            attempt,
++            configured_dcs,
++            ready_dcs,
++            "Middle-End pool initialized with partial DC coverage; per-DC Direct fallback remains active while recovery continues"
++        );
++    }
++}
++
+ pub(crate) async fn initialize_me_pool(
+     use_middle_proxy: bool,
+     config: &ProxyConfig,
+@@ -349,10 +366,7 @@ pub(crate) async fn initialize_me_pool(
+                                     me_ready_tx_bg.send_modify(|version| {
+                                         *version = version.saturating_add(1);
+                                     });
+-                                    info!(
+-                                        attempt = init_attempt,
+-                                        "Middle-End pool initialized successfully"
+-                                    );
++                                    log_me_init_outcome(&pool_bg, init_attempt).await;
+                                     spawn_me_supervisors(
+                                         task_scope_bg,
+                                         pool_bg.clone(),
+@@ -416,10 +430,7 @@ pub(crate) async fn initialize_me_pool(
+                                 me_ready_tx.send_modify(|version| {
+                                     *version = version.saturating_add(1);
+                                 });
+-                                info!(
+-                                    attempt = init_attempt,
+-                                    "Middle-End pool initialized successfully"
+-                                );
++                                log_me_init_outcome(&pool, init_attempt).await;
+ 
+                                 spawn_me_supervisors(
+                                     task_scope.clone(),
+diff --git a/src/maestro/runtime_build.rs b/src/maestro/runtime_build.rs
+index 19bb0b6..ba2550f 100644
+--- a/src/maestro/runtime_build.rs
++++ b/src/maestro/runtime_build.rs
+@@ -205,11 +205,13 @@ pub(crate) async fn prepare_runtime(
+         &config,
+         me_pool.clone(),
+         me_pool_runtime.clone(),
++        stats.clone(),
+         route_runtime.clone(),
+         &admission_tx,
+         config_rx.clone(),
+         me_ready_rx,
+         task_scope.clone(),
++        startup_tracker.clone(),
+     )
+     .await;
+ 
+diff --git a/src/maestro/runtime_startup.rs b/src/maestro/runtime_startup.rs
+index d580fb0..a8294f6 100644
+--- a/src/maestro/runtime_startup.rs
++++ b/src/maestro/runtime_startup.rs
+@@ -167,8 +167,21 @@ pub(super) async fn prepare_runtime(
+         );
+     } else if me_pool.is_some() {
+         startup_tracker.set_transport_mode("middle_proxy").await;
+-        startup_tracker.set_degraded(false).await;
+-        info!("Transport: Middle-End Proxy - all DC-over-RPC");
++        if let Some(pool) = me_pool.as_ref() {
++            let coverage = pool.admission_coverage_snapshot().await;
++            let fully_covered = !coverage.configured_dcs.is_empty()
++                && coverage.ready_dcs == coverage.configured_dcs;
++            startup_tracker.set_degraded(!fully_covered).await;
++            if fully_covered {
++                info!("Transport: Middle-End Proxy - all DC-over-RPC");
++            } else {
++                warn!(
++                    configured_dcs = coverage.configured_dcs.len(),
++                    ready_dcs = coverage.ready_dcs.len(),
++                    "Transport: Middle-End Proxy with partial DC coverage and per-DC Direct fallback"
++                );
++            }
++        }
+     } else {
+         let _ = use_middle_proxy;
+         use_middle_proxy = false;
+@@ -325,11 +338,13 @@ pub(super) async fn prepare_runtime(
+         &config,
+         me_pool.clone(),
+         api_me_pool,
++        stats.clone(),
+         route_runtime,
+         &admission_tx,
+         config_rx.clone(),
+         me_ready_rx,
+         runtime_task_scope.clone(),
++        startup_tracker.clone(),
+     )
+     .await;
+     let conntrack_scope = runtime_task_scope.clone();
+diff --git a/src/metrics/render/me_floor.rs b/src/metrics/render/me_floor.rs
+index 4e1f213..01fae90 100644
+--- a/src/metrics/render/me_floor.rs
++++ b/src/metrics/render/me_floor.rs
+@@ -237,6 +237,48 @@ pub(super) fn render(
+             0
+         }
+     );
++    let _ = writeln!(
++        out,
++        "# HELP telemt_me_admission_configured_dcs Current configured DC count considered by ME admission"
++    );
++    let _ = writeln!(out, "# TYPE telemt_me_admission_configured_dcs gauge");
++    let _ = writeln!(
++        out,
++        "telemt_me_admission_configured_dcs {}",
++        if me_allows_normal {
++            stats.get_me_admission_configured_dcs_gauge()
++        } else {
++            0
++        }
++    );
++    let _ = writeln!(
++        out,
++        "# HELP telemt_me_admission_ready_dcs Current ready DC count considered by ME admission"
++    );
++    let _ = writeln!(out, "# TYPE telemt_me_admission_ready_dcs gauge");
++    let _ = writeln!(
++        out,
++        "telemt_me_admission_ready_dcs {}",
++        if me_allows_normal {
++            stats.get_me_admission_ready_dcs_gauge()
++        } else {
++            0
++        }
++    );
++    let _ = writeln!(
++        out,
++        "# HELP telemt_me_partial_degradation_active Whether ME admission is currently in partial degradation mode"
++    );
++    let _ = writeln!(out, "# TYPE telemt_me_partial_degradation_active gauge");
++    let _ = writeln!(
++        out,
++        "telemt_me_partial_degradation_active {}",
++        if me_allows_normal {
++            stats.get_me_partial_degradation_active_gauge()
++        } else {
++            0
++        }
++    );
+     let _ = writeln!(
+         out,
+         "# HELP telemt_me_floor_cap_block_total Reconnect attempts blocked by adaptive floor caps"
+diff --git a/src/metrics/tests.rs b/src/metrics/tests.rs
+index 5d974e9..cfbc82a 100644
+--- a/src/metrics/tests.rs
++++ b/src/metrics/tests.rs
+@@ -450,6 +450,9 @@ async fn test_render_has_type_annotations() {
+     assert!(
+         output.contains("# TYPE telemt_me_endpoint_quarantine_draining_suppressed_total counter")
+     );
++    assert!(output.contains("# TYPE telemt_me_admission_configured_dcs gauge"));
++    assert!(output.contains("# TYPE telemt_me_admission_ready_dcs gauge"));
++    assert!(output.contains("# TYPE telemt_me_partial_degradation_active gauge"));
+     assert!(output.contains("# TYPE telemt_me_writer_removed_total counter"));
+     assert!(
+         output.contains("# TYPE telemt_me_writer_removed_unexpected_minus_restored_total gauge")
+diff --git a/src/proxy/authenticated.rs b/src/proxy/authenticated.rs
+index a62ce25..9f7f12f 100644
+--- a/src/proxy/authenticated.rs
++++ b/src/proxy/authenticated.rs
+@@ -3,13 +3,15 @@ use std::sync::Arc;
+ 
+ use tokio::io::{AsyncRead, AsyncWrite};
+ use tokio::sync::RwLock;
+-use tracing::warn;
++use tracing::{debug, warn};
+ 
+ use crate::config::ProxyConfig;
+ use crate::crypto::SecureRandom;
+ use crate::error::{ProxyError, Result};
+ use crate::ip_tracker::UserIpTracker;
+-use crate::proxy::direct_relay::handle_via_direct_with_shared_and_conntrack;
++use crate::proxy::direct_relay::{
++    DirectMeRecovery, handle_via_direct_with_shared_and_conntrack_and_recovery,
++};
+ use crate::proxy::handshake::HandshakeSuccess;
+ use crate::proxy::middle_relay::{handle_via_middle_proxy, handle_via_middle_proxy_with_conntrack};
+ use crate::proxy::route_mode::{RelayRouteMode, RouteRuntimeController};
+@@ -119,9 +121,40 @@ where
+         None
+     };
+ 
+-    let relay_result = if deps.config.general.use_middle_proxy
+-        && matches!(route_snapshot.mode, RelayRouteMode::Middle)
+-    {
++    // Partial ME degradation: even when the global route mode is Middle and a
++    // pool is selected, route this session via ME only if its target DC has live
++    // writer coverage; otherwise only this session falls back to Direct-DC. A
++    // degraded DC no longer forces a global fallback for unrelated healthy DCs.
++    let target_dc = success.dc_idx;
++    let use_middle_for_session = if let Some(ref pool) = selected_me_pool {
++        if pool.admission_ready_for_target_dc(target_dc).await {
++            true
++        } else {
++            debug!(
++                target_dc,
++                route_generation = route_snapshot.generation,
++                "Middle-End route unavailable for target DC, falling back to Direct-DC for this session"
++            );
++            false
++        }
++    } else {
++        false
++    };
++
++    let me_recovery =
++        if deps.config.general.me_direct_to_me_recovery_enabled && !use_middle_for_session {
++            selected_me_pool.as_ref().map(|pool| DirectMeRecovery {
++                pool: Arc::clone(pool),
++                target_dc,
++                hysteresis: std::time::Duration::from_secs(
++                    deps.config.general.me_direct_to_me_recovery_hysteresis_secs,
++                ),
++            })
++        } else {
++            None
++        };
++
++    let relay_result = if use_middle_for_session {
+         if let Some(pool) = selected_me_pool {
+             if conntrack_close_policy == ConntrackClosePolicy::Publish {
+                 handle_via_middle_proxy(
+@@ -176,6 +209,7 @@ where
+                 session_cancel.clone(),
+                 conntrack_close_policy,
+                 quota_handle.clone(),
++                None,
+             )
+             .await
+         }
+@@ -191,6 +225,7 @@ where
+             session_cancel,
+             conntrack_close_policy,
+             quota_handle,
++            me_recovery,
+         )
+         .await
+     };
+@@ -209,12 +244,13 @@ async fn run_direct<R, W>(
+     session_cancel: tokio_util::sync::CancellationToken,
+     conntrack_close_policy: ConntrackClosePolicy,
+     quota_handle: UserQuotaHandle,
++    me_recovery: Option<DirectMeRecovery>,
+ ) -> Result<()>
+ where
+     R: AsyncRead + Unpin + Send + 'static,
+     W: AsyncWrite + Unpin + Send + 'static,
+ {
+-    handle_via_direct_with_shared_and_conntrack(
++    handle_via_direct_with_shared_and_conntrack_and_recovery(
+         client_reader,
+         client_writer,
+         success,
+@@ -231,6 +267,7 @@ where
+         Arc::clone(&deps.shared),
+         conntrack_close_policy,
+         quota_handle,
++        me_recovery,
+     )
+     .await
+ }
+diff --git a/src/proxy/direct_buffer_budget/controller.rs b/src/proxy/direct_buffer_budget/controller.rs
+index 589f00e..45f1c21 100644
+--- a/src/proxy/direct_buffer_budget/controller.rs
++++ b/src/proxy/direct_buffer_budget/controller.rs
+@@ -45,6 +45,8 @@ pub(crate) async fn run_direct_buffer_budget_controller(
+         .max_buffers()
+         .min(BUFFER_POOL_TRIM_HIGH_WATERMARK);
+     let mut pool_trim_armed = true;
++    #[cfg(all(target_os = "linux", target_env = "gnu"))]
++    let mut trim_ticks = 0u32;
+ 
+     loop {
+         interval.tick().await;
+@@ -89,6 +91,21 @@ pub(crate) async fn run_direct_buffer_budget_controller(
+             pool_trim_armed = false;
+         }
+ 
++        #[cfg(all(target_os = "linux", target_env = "gnu"))]
++        {
++            trim_ticks += 1;
++            if trim_ticks >= 60 {
++                trim_ticks = 0;
++                tokio::task::spawn_blocking(|| {
++                    // SAFETY: glibc malloc_trim is thread safe and receives no pointers.
++                    #[allow(unsafe_code)]
++                    unsafe {
++                        libc::malloc_trim(0);
++                    }
++                });
++            }
++        }
++
+         let pool_snapshot = buffer_pool.stats();
+         stats.set_buffer_pool_gauges(
+             pool_snapshot.pooled,
+diff --git a/src/proxy/direct_relay.rs b/src/proxy/direct_relay.rs
+index 45a1b8b..8f2c03c 100644
+--- a/src/proxy/direct_relay.rs
++++ b/src/proxy/direct_relay.rs
+@@ -30,6 +30,7 @@ use crate::stats::Stats;
+ use crate::stats::UserQuotaHandle;
+ use crate::stream::{BufferPool, CryptoReader, CryptoWriter};
+ use crate::transport::UpstreamManager;
++use crate::transport::middle_proxy::MePool;
+ #[cfg(unix)]
+ use nix::fcntl::{Flock, FlockArg, OFlag, openat};
+ #[cfg(unix)]
+@@ -39,12 +40,23 @@ use nix::sys::stat::Mode;
+ use std::os::unix::fs::OpenOptionsExt;
+ 
+ // Direct relay lifecycle and conntrack publication.
++/// Per-DC Direct fallback session that should return to Middle-End once its
++/// target DC regains ME coverage for the whole hysteresis window.
++pub(crate) struct DirectMeRecovery {
++    pub pool: Arc<MePool>,
++    pub target_dc: i16,
++    pub hysteresis: Duration,
++}
++
++const DIRECT_ME_RECOVERY_POLL_INTERVAL: Duration = Duration::from_secs(2);
++
+ mod relay;
+ // Telegram DC resolution and upstream handshake.
+ mod routing;
+ 
+ pub(crate) use relay::{
+     handle_via_direct, handle_via_direct_with_shared, handle_via_direct_with_shared_and_conntrack,
++    handle_via_direct_with_shared_and_conntrack_and_recovery,
+ };
+ use routing::*;
+ const UNKNOWN_DC_LOG_DISTINCT_LIMIT: usize = 1024;
+diff --git a/src/proxy/direct_relay/relay.rs b/src/proxy/direct_relay/relay.rs
+index 298ff5d..aa9027d 100644
+--- a/src/proxy/direct_relay/relay.rs
++++ b/src/proxy/direct_relay/relay.rs
+@@ -83,6 +83,50 @@ where
+ 
+ /// Runs Direct relay with explicit kernel-conntrack close publication policy.
+ pub(crate) async fn handle_via_direct_with_shared_and_conntrack<R, W>(
++    client_reader: CryptoReader<R>,
++    client_writer: CryptoWriter<W>,
++    success: HandshakeSuccess,
++    upstream_manager: Arc<UpstreamManager>,
++    stats: Arc<Stats>,
++    config: Arc<ProxyConfig>,
++    buffer_pool: Arc<BufferPool>,
++    rng: Arc<SecureRandom>,
++    route_rx: watch::Receiver<RouteCutoverState>,
++    route_snapshot: RouteCutoverState,
++    session_id: u64,
++    local_addr: SocketAddr,
++    session_cancel: CancellationToken,
++    shared: Arc<ProxySharedState>,
++    conntrack_close_policy: ConntrackClosePolicy,
++    quota_handle: UserQuotaHandle,
++) -> Result<()>
++where
++    R: AsyncRead + Unpin + Send + 'static,
++    W: AsyncWrite + Unpin + Send + 'static,
++{
++    handle_via_direct_with_shared_and_conntrack_and_recovery(
++        client_reader,
++        client_writer,
++        success,
++        upstream_manager,
++        stats,
++        config,
++        buffer_pool,
++        rng,
++        route_rx,
++        route_snapshot,
++        session_id,
++        local_addr,
++        session_cancel,
++        shared,
++        conntrack_close_policy,
++        quota_handle,
++        None,
++    )
++    .await
++}
++
++pub(crate) async fn handle_via_direct_with_shared_and_conntrack_and_recovery<R, W>(
+     client_reader: CryptoReader<R>,
+     client_writer: CryptoWriter<W>,
+     success: HandshakeSuccess,
+@@ -99,6 +143,7 @@ pub(crate) async fn handle_via_direct_with_shared_and_conntrack<R, W>(
+     shared: Arc<ProxySharedState>,
+     conntrack_close_policy: ConntrackClosePolicy,
+     quota_handle: UserQuotaHandle,
++    me_recovery: Option<DirectMeRecovery>,
+ ) -> Result<()>
+ where
+     R: AsyncRead + Unpin + Send + 'static,
+@@ -182,6 +227,11 @@ where
+         Arc::clone(&shared.direct_buffer_budget),
+     );
+     tokio::pin!(relay_result);
++    // Only per-DC fallback sessions poll; global Direct sessions carry None.
++    let mut recovery_poll = me_recovery
++        .as_ref()
++        .map(|_| tokio::time::interval(DIRECT_ME_RECOVERY_POLL_INTERVAL));
++    let mut me_recovery_migrate_at: Option<tokio::time::Instant> = None;
+     let relay_result = loop {
+         if let Some(cutover) =
+             affected_cutover_state(&route_rx, RelayRouteMode::Direct, route_snapshot.generation)
+@@ -198,6 +248,34 @@ where
+             tokio::time::sleep(delay).await;
+             break Err(ProxyError::RouteSwitched);
+         }
++
++        // telemt has no in-place transport swap: migration back to Middle-End
++        // is a staggered reconnect, the same way a global cutover works.
++        if let Some(rec) = me_recovery.as_ref() {
++            let route_now = *route_rx.borrow();
++            let target_ready = matches!(route_now.mode, RelayRouteMode::Middle)
++                && rec.pool.admission_ready_for_target_dc(rec.target_dc).await;
++            if target_ready {
++                let now = tokio::time::Instant::now();
++                let migrate_at = *me_recovery_migrate_at.get_or_insert(now + rec.hysteresis);
++                if now >= migrate_at {
++                    let delay = cutover_stagger_delay(session_id, route_now.generation);
++                    warn!(
++                        user = %user,
++                        dc = rec.target_dc,
++                        delay_ms = delay.as_millis() as u64,
++                        "Target DC ME recovered; migrating direct session back to Middle-End (reconnect)"
++                    );
++                    let _cutover_park_lease = stats.acquire_direct_cutover_park_lease();
++                    tokio::time::sleep(delay).await;
++                    break Err(ProxyError::RouteSwitched);
++                }
++            } else {
++                me_recovery_migrate_at = None;
++            }
++        }
++
++        let migrate_at_snapshot = me_recovery_migrate_at;
+         tokio::select! {
+             result = &mut relay_result => {
+                 break result;
+@@ -207,6 +285,20 @@ where
+                     break relay_result.await;
+                 }
+             }
++            _ = async {
++                match recovery_poll.as_mut() {
++                    Some(interval) => {
++                        interval.tick().await;
++                    }
++                    None => std::future::pending::<()>().await,
++                }
++            } => {}
++            _ = async move {
++                match migrate_at_snapshot {
++                    Some(at) => tokio::time::sleep_until(at).await,
++                    None => std::future::pending::<()>().await,
++                }
++            } => {}
+             _ = session_cancel.cancelled() => {
+                 break Err(ProxyError::UserDisabled {
+                     user: user.to_string(),
+diff --git a/src/stats/core_getters.rs b/src/stats/core_getters.rs
+index 01d4437..ad0e2e0 100644
+--- a/src/stats/core_getters.rs
++++ b/src/stats/core_getters.rs
+@@ -291,6 +291,17 @@ impl Stats {
+     pub fn get_me_writers_warm_current_gauge(&self) -> u64 {
+         self.me_writers_warm_current_gauge.load(Ordering::Relaxed)
+     }
++    pub fn get_me_admission_configured_dcs_gauge(&self) -> u64 {
++        self.me_admission_configured_dcs_gauge
++            .load(Ordering::Relaxed)
++    }
++    pub fn get_me_admission_ready_dcs_gauge(&self) -> u64 {
++        self.me_admission_ready_dcs_gauge.load(Ordering::Relaxed)
++    }
++    pub fn get_me_partial_degradation_active_gauge(&self) -> u64 {
++        self.me_partial_degradation_active_gauge
++            .load(Ordering::Relaxed)
++    }
+     pub fn get_me_floor_cap_block_total(&self) -> u64 {
+         self.me_floor_cap_block_total.load(Ordering::Relaxed)
+     }
+diff --git a/src/stats/mod.rs b/src/stats/mod.rs
+index 036bec9..681b099 100644
+--- a/src/stats/mod.rs
++++ b/src/stats/mod.rs
+@@ -223,6 +223,9 @@ pub struct Stats {
+     me_floor_warm_cap_effective_gauge: AtomicU64,
+     me_writers_active_current_gauge: AtomicU64,
+     me_writers_warm_current_gauge: AtomicU64,
++    me_admission_configured_dcs_gauge: AtomicU64,
++    me_admission_ready_dcs_gauge: AtomicU64,
++    me_partial_degradation_active_gauge: AtomicU64,
+     me_floor_cap_block_total: AtomicU64,
+     me_floor_swap_idle_total: AtomicU64,
+     me_floor_swap_idle_failed_total: AtomicU64,
+diff --git a/src/stats/writer_counters.rs b/src/stats/writer_counters.rs
+index 4e80479..c5b2d51 100644
+--- a/src/stats/writer_counters.rs
++++ b/src/stats/writer_counters.rs
+@@ -540,6 +540,24 @@ impl Stats {
+                 .store(value, Ordering::Relaxed);
+         }
+     }
++    pub fn set_me_admission_configured_dcs_gauge(&self, value: u64) {
++        if self.telemetry_me_allows_normal() {
++            self.me_admission_configured_dcs_gauge
++                .store(value, Ordering::Relaxed);
++        }
++    }
++    pub fn set_me_admission_ready_dcs_gauge(&self, value: u64) {
++        if self.telemetry_me_allows_normal() {
++            self.me_admission_ready_dcs_gauge
++                .store(value, Ordering::Relaxed);
++        }
++    }
++    pub fn set_me_partial_degradation_active_gauge(&self, value: bool) {
++        if self.telemetry_me_allows_normal() {
++            self.me_partial_degradation_active_gauge
++                .store(u64::from(value), Ordering::Relaxed);
++        }
++    }
+ 
+     pub fn set_buffer_pool_gauges(&self, pooled: usize, allocated: usize, in_use: usize) {
+         if self.telemetry_me_allows_normal() {
+diff --git a/src/transport/middle_proxy/pool/writer_admission.rs b/src/transport/middle_proxy/pool/writer_admission.rs
+index b64e3ed..b694d88 100644
+--- a/src/transport/middle_proxy/pool/writer_admission.rs
++++ b/src/transport/middle_proxy/pool/writer_admission.rs
+@@ -94,6 +94,27 @@ impl MePool {
+         required_total
+     }
+ 
++    pub(in crate::transport::middle_proxy) async fn active_writer_class_max_for_dc(
++        &self,
++        dc: i32,
++    ) -> usize {
++        let snapshot = self.endpoint_snapshot.load_full();
++        let count = snapshot.map_v4.get(&dc).map_or(0, Vec::len)
++            + snapshot.map_v6.get(&dc).map_or(0, Vec::len);
++        if count == 0 {
++            return 0;
++        }
++        let extra = if count <= 1 {
++            self.adaptive_floor_max_extra_single_per_core()
++        } else {
++            self.adaptive_floor_max_extra_multi_per_core()
++        };
++        self.required_writers_for_dc(count).saturating_add(
++            self.adaptive_floor_effective_cpu_cores()
++                .saturating_mul(extra),
++        )
++    }
++
+     /// Reports whether one writer may be opened under the selected contour policy.
+     pub(in crate::transport::middle_proxy) async fn can_open_writer_for_contour(
+         &self,
+@@ -115,6 +136,24 @@ impl MePool {
+         if !endpoint_snapshot.contains_dc_endpoint(writer_dc, target_addr) {
+             return false;
+         }
++        if contour == WriterContour::Active && intent == WriterOpenIntent::Normal {
++            let cap = self.active_writer_class_max_for_dc(writer_dc).await;
++            if cap > 0 {
++                let writers = self.writers.read().await;
++                let live = writers
++                    .iter()
++                    .filter(|w| {
++                        w.writer_dc == writer_dc
++                            && !w.draining.load(Ordering::Acquire)
++                            && WriterContour::from_u8(w.contour.load(Ordering::Acquire))
++                                == WriterContour::Active
++                    })
++                    .count();
++                if live >= cap {
++                    return false;
++                }
++            }
++        }
+         let (active_writers, warm_writers, _) = self.non_draining_writer_counts_by_contour().await;
+         let live = match contour {
+             WriterContour::Active => active_writers,
+diff --git a/src/transport/middle_proxy/pool_init.rs b/src/transport/middle_proxy/pool_init.rs
+index 4a17298..ce532ae 100644
+--- a/src/transport/middle_proxy/pool_init.rs
++++ b/src/transport/middle_proxy/pool_init.rs
+@@ -11,6 +11,23 @@ use crate::error::{ProxyError, Result};
+ 
+ use super::pool::{MePool, WriterOpenIntent};
+ 
++#[derive(Debug, Clone, PartialEq, Eq)]
++enum MeInitCoverage {
++    Full,
++    Partial { missing_dcs: Vec<i32> },
++    Empty { missing_dcs: Vec<i32> },
++}
++
++fn classify_me_init_coverage(missing_dcs: Vec<i32>, active_writers: usize) -> MeInitCoverage {
++    if missing_dcs.is_empty() {
++        MeInitCoverage::Full
++    } else if active_writers > 0 {
++        MeInitCoverage::Partial { missing_dcs }
++    } else {
++        MeInitCoverage::Empty { missing_dcs }
++    }
++}
++
+ impl MePool {
+     pub async fn init(self: &Arc<Self>, pool_size: usize, rng: &Arc<SecureRandom>) -> Result<()> {
+         let family_order = self.family_order();
+@@ -97,10 +114,20 @@ impl MePool {
+                     missing_dcs.push(*dc);
+                 }
+             }
+-            if !missing_dcs.is_empty() {
+-                return Err(ProxyError::Proxy(format!(
+-                    "ME init incomplete: no live writers for DC groups {missing_dcs:?}"
+-                )));
++            match classify_me_init_coverage(missing_dcs, self.connection_count()) {
++                MeInitCoverage::Full => {}
++                MeInitCoverage::Partial { missing_dcs } => {
++                    warn!(
++                        active_writers = self.connection_count(),
++                        missing_dc = ?missing_dcs,
++                        "ME init reached partial DC coverage; proceeding with per-DC Direct fallback while recovery continues"
++                    );
++                }
++                MeInitCoverage::Empty { missing_dcs } => {
++                    return Err(ProxyError::Proxy(format!(
++                        "ME init incomplete: no live writers for DC groups {missing_dcs:?}"
++                    )));
++                }
+             }
+ 
+             // Stage 2: continue saturating multi-endpoint DC groups in background.
+@@ -271,3 +298,36 @@ impl MePool {
+         }
+     }
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::{MeInitCoverage, classify_me_init_coverage};
++
++    #[test]
++    fn classify_me_init_coverage_reports_full_when_nothing_is_missing() {
++        assert_eq!(
++            classify_me_init_coverage(Vec::new(), 0),
++            MeInitCoverage::Full
++        );
++    }
++
++    #[test]
++    fn classify_me_init_coverage_reports_partial_when_some_writers_exist() {
++        assert_eq!(
++            classify_me_init_coverage(vec![1, 4], 3),
++            MeInitCoverage::Partial {
++                missing_dcs: vec![1, 4]
++            }
++        );
++    }
++
++    #[test]
++    fn classify_me_init_coverage_reports_empty_when_no_writers_exist() {
++        assert_eq!(
++            classify_me_init_coverage(vec![-4, 1], 0),
++            MeInitCoverage::Empty {
++                missing_dcs: vec![-4, 1]
++            }
++        );
++    }
++}
+diff --git a/src/transport/middle_proxy/pool_refill.rs b/src/transport/middle_proxy/pool_refill.rs
+index 2f9e0f5..5167228 100644
+--- a/src/transport/middle_proxy/pool_refill.rs
++++ b/src/transport/middle_proxy/pool_refill.rs
+@@ -4,6 +4,7 @@ use std::sync::Arc;
+ use std::sync::atomic::Ordering;
+ use std::time::{Duration, Instant};
+ 
++use rand::RngExt;
+ use tracing::{debug, info, warn};
+ 
+ use crate::crypto::SecureRandom;
+@@ -74,6 +75,44 @@ impl Drop for RefillRunGuard {
+     }
+ }
+ 
++// Пауза между НЕУДАЧНЫМИ попытками восполнения writer'а.
++//
++// Зачем. Циклы в `refill_writer_after_loss` крутились без единой задержки: при
++// мёртвом эндпоинте это до 32 идущих подряд connect'ов, каждый из которых
++// отбивается за один RTT. У одноэндпоинтных DC (1/2/3 — там ровно один
++// middle-proxy) это означает, что после сброса со стороны Telegram мы долбим
++// один и тот же адрес десятки раз в секунду, ничего этим не добиваясь.
++//
++// Почему только после НЕУДАЧИ. Успешная попытка выходит из цикла через
++// `return true`, поэтому на живом эндпоинте задержки не возникает вовсе: первый
++// же connect проходит, и восстановление остаётся мгновенным. Платит только тот
++// сценарий, где платить не жалко, — эндпоинт всё равно не отвечает.
++//
++// Почему с джиттером. Восполнения РАЗНЫХ эндпоинтов между собой не
++// дедуплицируются (ключ — пара dc+addr), и без разброса их попытки сходятся в
++// такт. Джиттер до 50% разводит их во времени; та же схема уже применяется в
++// health-пути (`health.rs`, JITTER_FRAC_NUM).
++//
++// Величины подобраны так, чтобы 16 попыток укладывались примерно в 12 секунд:
++// заметно спокойнее прежнего, но всё ещё быстрее health-пути с его базой 500 мс
++// и потолком 30 с, рассчитанного на долгую недоступность.
++const ME_REFILL_RETRY_DELAY_BASE_MS: u64 = 50;
++const ME_REFILL_RETRY_DELAY_CAP_MS: u64 = 1_500;
++const ME_REFILL_RETRY_JITTER_FRAC: u64 = 2; // джиттер до 50% от задержки
++
++// Задержка перед следующей попыткой: экспоненциальный рост с потолком плюс
++// джиттер. `failed_attempts` — сколько попыток уже провалилось (1 после первой).
++fn refill_retry_delay(failed_attempts: u32) -> Duration {
++    let shift = failed_attempts.saturating_sub(1).min(16);
++    let grown = ME_REFILL_RETRY_DELAY_BASE_MS
++        .checked_shl(shift)
++        .unwrap_or(ME_REFILL_RETRY_DELAY_CAP_MS);
++    let capped = grown.min(ME_REFILL_RETRY_DELAY_CAP_MS);
++    let jitter_span = (capped / ME_REFILL_RETRY_JITTER_FRAC).max(1);
++    let jitter = rand::rng().random_range(0..=jitter_span);
++    Duration::from_millis(capped.saturating_add(jitter))
++}
++
+ impl MePool {
+     pub(super) async fn sweep_endpoint_quarantine(&self) {
+         let configured = self
+@@ -528,3 +567,64 @@ mod tests {
+         );
+     }
+ }
++
++#[cfg(test)]
++mod refill_backoff_tests {
++    use super::*;
++
++    #[test]
++    fn delay_grows_and_is_capped() {
++        // Первая неудача — около базы, дальше удвоение до потолка.
++        let d1 = refill_retry_delay(1).as_millis() as u64;
++        let d2 = refill_retry_delay(2).as_millis() as u64;
++        let d9 = refill_retry_delay(9).as_millis() as u64;
++        assert!(
++            (ME_REFILL_RETRY_DELAY_BASE_MS..=ME_REFILL_RETRY_DELAY_BASE_MS * 3 / 2).contains(&d1),
++            "первая задержка вне ожидаемого окна: {d1}"
++        );
++        assert!(
++            d2 >= ME_REFILL_RETRY_DELAY_BASE_MS * 2,
++            "рост не идёт: {d2}"
++        );
++        let cap_with_jitter = ME_REFILL_RETRY_DELAY_CAP_MS
++            + ME_REFILL_RETRY_DELAY_CAP_MS / ME_REFILL_RETRY_JITTER_FRAC;
++        assert!(d9 <= cap_with_jitter, "потолок не держится: {d9}");
++    }
++
++    #[test]
++    fn delay_never_overflows_on_large_attempt_counts() {
++        // saturating/checked-арифметика: большой счётчик не должен паниковать.
++        for n in [16u32, 32, 1_000, u32::MAX] {
++            let d = refill_retry_delay(n).as_millis() as u64;
++            let cap_with_jitter = ME_REFILL_RETRY_DELAY_CAP_MS
++                + ME_REFILL_RETRY_DELAY_CAP_MS / ME_REFILL_RETRY_JITTER_FRAC;
++            assert!(d <= cap_with_jitter, "переполнение при n={n}: {d}");
++        }
++    }
++
++    #[test]
++    fn jitter_actually_varies() {
++        // Без разброса восполнения разных эндпоинтов сойдутся в такт — ради
++        // этого джиттер и добавлен, так что проверяем, что он не константа.
++        let seen: std::collections::HashSet<u64> = (0..64)
++            .map(|_| refill_retry_delay(4).as_millis() as u64)
++            .collect();
++        assert!(
++            seen.len() > 1,
++            "джиттер не работает: все значения одинаковы"
++        );
++    }
++
++    #[test]
++    fn sixteen_attempts_fit_in_reasonable_window() {
++        // Проектное ограничение: 16 попыток должны укладываться примерно в
++        // 12-20 секунд — быстрее health-пути, но не долбёжка.
++        let total: u64 = (1..=16)
++            .map(|n| refill_retry_delay(n).as_millis() as u64)
++            .sum();
++        assert!(
++            (8_000..=25_000).contains(&total),
++            "суммарное ожидание вне проектных рамок: {total} мс"
++        );
++    }
++}
+diff --git a/src/transport/middle_proxy/pool_status.rs b/src/transport/middle_proxy/pool_status.rs
+index 42bf2e3..ab93c24 100644
+--- a/src/transport/middle_proxy/pool_status.rs
++++ b/src/transport/middle_proxy/pool_status.rs
+@@ -10,6 +10,15 @@ use crate::transport::upstream::IpPreference;
+ 
+ // ME writer and DC coverage snapshots.
+ mod status_snapshot;
++
++/// DCs the ME pool is configured for versus DCs that currently hold at least one
++/// live writer of a configured address family. Partial coverage keeps Middle-End
++/// routing and sends only sessions of uncovered DCs to Direct.
++#[derive(Clone, Debug, Default)]
++pub(crate) struct MeAdmissionCoverageSnapshot {
++    pub configured_dcs: BTreeSet<i16>,
++    pub ready_dcs: BTreeSet<i16>,
++}
+ // ME runtime policy and coherent snapshot assembly.
+ mod runtime_snapshot;
+ // Hardswap ownership, coverage, and writer-replacement lifecycle state.
+diff --git a/src/transport/middle_proxy/pool_status/status_snapshot.rs b/src/transport/middle_proxy/pool_status/status_snapshot.rs
+index ffecb6f..1404dad 100644
+--- a/src/transport/middle_proxy/pool_status/status_snapshot.rs
++++ b/src/transport/middle_proxy/pool_status/status_snapshot.rs
+@@ -1,46 +1,60 @@
+ use super::*;
+ 
+ impl MePool {
+-    pub(crate) async fn admission_ready_conditional_cast(&self) -> bool {
++    pub(crate) async fn admission_coverage_snapshot(&self) -> MeAdmissionCoverageSnapshot {
++        let snapshot = self.endpoint_snapshot.load_full();
+         let mut endpoints_by_dc = BTreeMap::<i16, BTreeSet<SocketAddr>>::new();
+-        let endpoint_snapshot = self.endpoint_snapshot.load_full();
+         if self.decision.ipv4_me {
+-            let map = endpoint_snapshot.map_v4.clone();
+-            extend_signed_endpoints(&mut endpoints_by_dc, map);
++            extend_signed_endpoints(&mut endpoints_by_dc, snapshot.map_v4.clone());
+         }
+         if self.decision.ipv6_me {
+-            let map = endpoint_snapshot.map_v6.clone();
+-            extend_signed_endpoints(&mut endpoints_by_dc, map);
+-        }
+-
+-        if endpoints_by_dc.is_empty() {
+-            return false;
++            extend_signed_endpoints(&mut endpoints_by_dc, snapshot.map_v6.clone());
+         }
+-
+-        let active_generation = self.reinit.status.load().active_generation;
+-        let writers = self.writers.read().await.clone();
+-        let mut live_writers_by_dc = HashMap::<i16, usize>::new();
+-        for writer in writers.iter() {
+-            if writer.draining.load(Ordering::Relaxed)
+-                || writer.generation != active_generation
+-                || WriterContour::from_u8(writer.contour.load(Ordering::Relaxed))
++        let configured_dcs = endpoints_by_dc
++            .iter()
++            .filter(|(_, eps)| !eps.is_empty())
++            .map(|(dc, _)| *dc)
++            .collect();
++        let generation = self.reinit.status.load().active_generation;
++        let writers = self.writers.read().await;
++        let mut ready_dcs = BTreeSet::new();
++        for w in writers.iter() {
++            if w.draining.load(Ordering::Acquire)
++                || w.generation != generation
++                || WriterContour::from_u8(w.contour.load(Ordering::Acquire))
+                     != WriterContour::Active
+             {
+                 continue;
+             }
+-            if let Ok(dc) = i16::try_from(writer.writer_dc) {
+-                *live_writers_by_dc.entry(dc).or_insert(0) += 1;
++            if let Ok(dc) = i16::try_from(w.writer_dc) {
++                if endpoints_by_dc
++                    .get(&dc)
++                    .is_some_and(|eps| eps.iter().any(|addr| addr.is_ipv4() == w.addr.is_ipv4()))
++                {
++                    ready_dcs.insert(dc);
++                }
+             }
+         }
+-
+-        for dc in endpoints_by_dc.keys() {
+-            let alive = live_writers_by_dc.get(dc).copied().unwrap_or(0);
+-            if alive == 0 {
+-                return false;
+-            }
++        MeAdmissionCoverageSnapshot {
++            configured_dcs,
++            ready_dcs,
+         }
++    }
+ 
+-        true
++    pub(crate) async fn admission_ready_conditional_cast(&self) -> bool {
++        let s = self.admission_coverage_snapshot().await;
++        !s.configured_dcs.is_empty() && s.ready_dcs == s.configured_dcs
++    }
++
++    pub(crate) async fn admission_ready_for_target_dc(&self, target_dc: i16) -> bool {
++        let (dc, _) = self.resolve_target_dc_for_routing(target_dc as i32).await;
++        let Ok(dc) = i16::try_from(dc) else {
++            return false;
++        };
++        self.admission_coverage_snapshot()
++            .await
++            .ready_dcs
++            .contains(&dc)
+     }
+ 
+     #[allow(dead_code)]
+diff --git a/src/transport/middle_proxy/tests/pool_writer_security_tests.rs b/src/transport/middle_proxy/tests/pool_writer_security_tests.rs
+index 5b16b79..8fd42e5 100644
+--- a/src/transport/middle_proxy/tests/pool_writer_security_tests.rs
++++ b/src/transport/middle_proxy/tests/pool_writer_security_tests.rs
+@@ -547,3 +547,60 @@ async fn stress_parallel_duplicate_removals_are_idempotent() {
+     assert!(pool.writers.read().await.is_empty());
+     assert_eq!(pool.conn_count.load(Ordering::Relaxed), 0);
+ }
++
++#[tokio::test]
++async fn custom_active_writer_cap_is_per_dc() {
++    use super::pool::WriterOpenIntent;
++    let pool = make_pool().await;
++    let addr: SocketAddr = "127.0.0.1:8888".parse().unwrap();
++    pool.update_proxy_maps(
++        HashMap::from([
++            (2, vec![(addr.ip(), addr.port())]),
++            (3, vec![(addr.ip(), addr.port())]),
++        ]),
++        None,
++    )
++    .await;
++    let cap = pool.active_writer_class_max_for_dc(2).await;
++    assert!(cap > 0);
++    for id in 0..cap {
++        insert_writer(&pool, 1000 + id as u64, 2, addr, false, Instant::now()).await;
++    }
++    assert!(
++        !pool
++            .can_open_writer_for_contour(WriterContour::Active, WriterOpenIntent::Normal, 2, addr)
++            .await
++    );
++    assert!(
++        pool.can_open_writer_for_contour(
++            WriterContour::Active,
++            WriterOpenIntent::Coverage,
++            3,
++            addr
++        )
++        .await
++    );
++}
++
++#[tokio::test]
++async fn custom_partial_coverage_preserves_live_dc() {
++    let pool = make_pool().await;
++    let addr: SocketAddr = "127.0.0.1:8888".parse().unwrap();
++    pool.update_proxy_maps(
++        HashMap::from([
++            (2, vec![(addr.ip(), addr.port())]),
++            (3, vec![(addr.ip(), addr.port())]),
++        ]),
++        None,
++    )
++    .await;
++    insert_writer(&pool, 1001, 2, addr, false, Instant::now()).await;
++    let coverage = pool.admission_coverage_snapshot().await;
++    assert!(coverage.configured_dcs.len() > coverage.ready_dcs.len());
++    assert_eq!(coverage.ready_dcs, std::collections::BTreeSet::from([2]));
++    assert!(pool.admission_ready_for_target_dc(2).await);
++    assert!(!pool.admission_ready_for_target_dc(3).await);
++    assert!(!pool.admission_ready_conditional_cast().await);
++    insert_writer(&pool, 1002, 3, addr, false, Instant::now()).await;
++    assert!(pool.admission_ready_for_target_dc(3).await);
++}

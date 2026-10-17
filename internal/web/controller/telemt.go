@@ -64,8 +64,8 @@ func (a *TelemtController) getWebProxyStatus(c *gin.Context) service.TelemtWebPr
 	if webStatus.Enabled && !a.service.WebProxyTelemtActive() {
 		appendWebProxyError("Telemt остановлен: WEB Proxy настроен, но локальный backend не работает")
 	}
-	if webStatus.Enabled && !webStatus.NginxActive {
-		appendWebProxyError("Nginx остановлен: HTTPS endpoint WEB Proxy недоступен")
+	if webStatus.Enabled && !webStatus.FrontendActive {
+		appendWebProxyError(webStatus.Frontend + " остановлен: HTTPS endpoint WEB Proxy недоступен")
 	}
 	if webStatus.Enabled && !webStatus.CertificateReady {
 		appendWebProxyError("TLS-сертификат WEB Proxy отсутствует, просрочен или не подходит домену")
@@ -80,6 +80,7 @@ func (a *TelemtController) webProxyStatus(c *gin.Context) {
 func (a *TelemtController) enableWebProxy(c *gin.Context) {
 	var req struct {
 		Domain string `json:"domain"`
+		service.TelemtWebProxyOptions
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		jsonMsg(c, "invalid WEB Proxy request", err)
@@ -88,34 +89,11 @@ func (a *TelemtController) enableWebProxy(c *gin.Context) {
 	if strings.TrimSpace(req.Domain) == "" {
 		req.Domain = a.getWebProxyStatus(c).DefaultDomain
 	}
-	snapshot, err := a.service.CaptureWebProxyEnableSnapshot()
-	if err != nil {
-		jsonMsg(c, "failed to capture WEB Proxy state", err)
-		return
-	}
-	nginxWasInstalled := a.service.WebProxyNginxInstalled()
 	certFile, _ := a.settingService.GetCertFile()
 	keyFile, _ := a.settingService.GetKeyFile()
-	_, err = a.service.EnableWebProxy(c.Request.Context(), req.Domain, certFile, keyFile)
+	_, err := a.service.EnableWebProxy(c.Request.Context(), req.Domain, certFile, keyFile, req.TelemtWebProxyOptions)
 	if err != nil {
-		rollbackErr := a.service.RestoreFailedWebProxyEnable(snapshot)
-		if !nginxWasInstalled {
-			a.service.CleanupFailedWebProxyEnable()
-		}
-		msg := err.Error()
-		if rollbackErr != nil {
-			msg += "; WEB Proxy rollback failed: " + rollbackErr.Error()
-		}
-		jsonMsg(c, "WEB Proxy setup failed", errors.New(msg))
-		return
-	}
-	if err := a.service.EnsureWebProxyBackend(); err != nil {
-		rollbackErr := a.service.RestoreWebProxyEnableSnapshot(snapshot)
-		msg := err.Error()
-		if rollbackErr != nil {
-			msg += "; WEB Proxy rollback failed: " + rollbackErr.Error()
-		}
-		jsonMsg(c, "WEB Proxy setup failed", errors.New(msg))
+		jsonMsg(c, "WEB Proxy setup failed", err)
 		return
 	}
 	status := a.getWebProxyStatus(c)
@@ -126,10 +104,6 @@ func (a *TelemtController) enableWebProxy(c *gin.Context) {
 func (a *TelemtController) disableWebProxy(c *gin.Context) {
 	if err := a.service.DisableWebProxy(); err != nil {
 		jsonMsg(c, "failed to disable WEB Proxy", err)
-		return
-	}
-	if err := a.service.CleanupWebProxyBackendDependency(); err != nil {
-		jsonMsg(c, "WEB Proxy disabled, but failed to remove boot dependency", err)
 		return
 	}
 	jsonObj(c, a.getWebProxyStatus(c), nil)

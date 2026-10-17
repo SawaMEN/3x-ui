@@ -3,28 +3,30 @@ set -euo pipefail
 
 BIN="/usr/local/x-ui/bin/telemt"
 VERSION_FILE="/etc/x-ui/telemt.version"
-TMP_DIR="/tmp/telemt-update.$$"
-REPO="telemt/telemt"
-cleanup() { rm -rf "$TMP_DIR"; }
+TMP_DIR=""
+REPO="SawaMEN/3x-ui"
+CHANNEL="dev-latest"
+cleanup() { [[ -z "$TMP_DIR" ]] && return; rm -rf "$TMP_DIR"; }
 trap cleanup EXIT
 log() { echo "[telemt-update] $*"; }
 
 arch_name() {
   case "$(uname -m)" in
-    x86_64|amd64) echo "x86_64" ;;
-    aarch64|arm64) echo "aarch64" ;;
+    x86_64|amd64) echo "amd64" ;;
+    aarch64|arm64) echo "arm64" ;;
     *) echo "unsupported" ;;
   esac
 }
 
 get_latest_tag() {
-  curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -o /dev/null -w "%{url_effective}" "https://github.com/${REPO}/releases/latest" | sed -n "s#.*/releases/tag/##p"
+  curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 "https://github.com/${REPO}/releases/download/${CHANNEL}/telemt.version" | tr -d '[:space:]'
 }
 
 download_latest() {
   local arch="$1" tag="$2"
-  local asset="telemt-${arch}-linux-musl.tar.gz"
-  local base="https://github.com/${REPO}/releases/download/${tag}"
+  local asset="telemt-linux-${arch}.tar.gz"
+  local base="https://github.com/${REPO}/releases/download/${CHANNEL}"
+  if [[ -z "$TMP_DIR" ]]; then TMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/telemt-update.XXXXXX"); fi
   mkdir -p "$TMP_DIR"
   curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -o "$TMP_DIR/$asset" "$base/$asset"
   curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -o "$TMP_DIR/$asset.sha256" "$base/$asset.sha256"
@@ -32,11 +34,16 @@ download_latest() {
   tar -xzf "$TMP_DIR/$asset" -C "$TMP_DIR"
   test -s "$TMP_DIR/telemt"
   chmod 0755 "$TMP_DIR/telemt"
+  [[ $(tr -d '[:space:]' < "$TMP_DIR/telemt.version") == "$tag" ]] || { echo "Telemt release changed during download; retry later" >&2; return 1; }
+  [[ $("$TMP_DIR/telemt" --version | sed -nE 's/^[^0-9]*v?([0-9]+\.[0-9]+\.[0-9]+(\+[0-9A-Za-z.-]+)?).*$/\1/p') == "$tag" ]] || { echo "Telemt binary version mismatch" >&2; return 1; }
 }
 
 current_version() {
-  if [[ -s "$VERSION_FILE" ]]; then tr -d "[:space:]" < "$VERSION_FILE"; return; fi
-  if [[ -x "$BIN" ]]; then "$BIN" --version 2>/dev/null | sed -n "s/.*\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).*/\1/p" | head -n1; fi
+  if [[ -x "$BIN" ]]; then
+    "$BIN" --version 2>/dev/null | sed -nE 's/^[^0-9]*v?([0-9]+\.[0-9]+\.[0-9]+(\+[0-9A-Za-z.-]+)?).*$/\1/p' | head -n1
+    return
+  fi
+  if [[ -s "$VERSION_FILE" ]]; then tr -d "[:space:]" < "$VERSION_FILE"; fi
 }
 
 install_latest() {
@@ -71,11 +78,16 @@ recycle_inbound_sidecars() {
 
 main() {
   [[ "$EUID" -eq 0 ]] || { echo "must run as root" >&2; exit 1; }
+  if [[ "${1:-}" != "--check" ]]; then
+    command -v flock >/dev/null 2>&1 || { echo "flock (util-linux) is required" >&2; exit 1; }
+    exec 9>/run/lock/x-ui-telemt-update.lock
+    flock -w 60 9 || { echo "another Telemt update is in progress" >&2; exit 1; }
+  fi
   local arch tag current was_active=0
   arch="$(arch_name)"
   [[ "$arch" != "unsupported" ]] || { echo "unsupported CPU architecture" >&2; exit 1; }
   tag="$(get_latest_tag)"
-  [[ "$tag" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "invalid latest Telemt tag: $tag" >&2; exit 1; }
+  [[ "$tag" =~ ^[0-9]+\.[0-9]+\.[0-9]+\+3xui\.[0-9]+$ ]] || { echo "invalid latest Telemt tag: $tag" >&2; exit 1; }
   current="$(current_version || true)"
   if [[ "${1:-}" == "--check" ]]; then
     echo "current=${current:-unknown}"

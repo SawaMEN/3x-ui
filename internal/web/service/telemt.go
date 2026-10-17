@@ -280,10 +280,9 @@ func telemtLatestVersion(current string) (string, bool) {
 		}
 	}
 
-	// The bundled updater is optional and its output format has changed across
-	// releases. Fall back to the official Telemt release API so the panel can
-	// always display the latest published version independently of the updater.
-	if latest == "" {
+	// Official installations can use upstream metadata if the helper is missing.
+	// Patched installations must not advertise an unpatched replacement.
+	if latest == "" && !strings.Contains(normalizeTelemtVersion(current), "+3xui.") {
 		latest = fetchTelemtLatestRelease()
 	}
 	if latest == "" {
