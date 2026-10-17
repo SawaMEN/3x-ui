@@ -15,11 +15,7 @@ import {
   Tag,
   message,
 } from 'antd';
-import {
-  CheckCircleOutlined,
-  ReloadOutlined,
-  SearchOutlined,
-} from '@ant-design/icons';
+import { CheckCircleOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 
 import { HttpUtil } from '@/utils';
 import { onNumber } from '@/utils/onNumber';
@@ -247,9 +243,10 @@ export default function GatewayModeControl() {
     try {
       // A fresh automatic preflight is advisory; the enable endpoint always
       // revalidates the host under its operation lock before changing the system.
-      if (action === 'enable' && !(
-        preflight?.ready && preflight.verifiedConfig === JSON.stringify(networkConfig)
-      )) {
+      if (
+        action === 'enable' &&
+        !(preflight?.ready && preflight.verifiedConfig === JSON.stringify(networkConfig))
+      ) {
         const ready = await runPreflight();
         if (!ready) return;
       }
@@ -321,7 +318,12 @@ export default function GatewayModeControl() {
   const verified = preflight?.verifiedConfig === JSON.stringify(networkConfig);
   const ready = verified && preflight?.ready === true;
   const canSubmit =
-    !loading && !busy && !checking && canEnable && coreRunning && networkInputValid &&
+    !loading &&
+    !busy &&
+    !checking &&
+    canEnable &&
+    coreRunning &&
+    networkInputValid &&
     (networkConfigured || ready);
   const locked = networkConfigured || busy;
   // Automatically check a stable LAN/WAN choice, but never activate traffic
@@ -337,13 +339,14 @@ export default function GatewayModeControl() {
   }, [loading, coreRunning, networkInputValid, networkConfigured, busy, runPreflight]);
 
   const needsRepair = enabled && (!networkHealthy || coreMismatch);
-  const gatewayActionLabel = coreMismatch && networkHealthy
-    ? 'Перенести шлюз'
-    : networkConfigured && !networkHealthy
-      ? 'Восстановить шлюз'
-      : enabled && !networkConfigured
-        ? 'Настроить шлюз'
-        : 'Включить шлюз';
+  const gatewayActionLabel =
+    coreMismatch && networkHealthy
+      ? 'Перенести шлюз'
+      : networkConfigured && !networkHealthy
+        ? 'Восстановить шлюз'
+        : enabled && !networkConfigured
+          ? 'Настроить шлюз'
+          : 'Включить шлюз';
   const showManual = manualOpen;
   const displayLAN = networkConfig.lanInterface
     ? `${networkConfig.lanInterface} · ${networkConfig.lanIP || 'адрес не выбран'}/${networkConfig.lanPrefix}`
@@ -360,28 +363,55 @@ export default function GatewayModeControl() {
           <div>
             <div className="singbox-section-title">Режим шлюза</div>
             <div className="singbox-section-description">
-              Пропускает трафик устройств вашей локальной сети через sing-box.
-              Сетевые правила и восстановление после перезагрузки настраиваются автоматически.
+              Пропускает трафик устройств вашей локальной сети через sing-box. Сетевые правила и
+              восстановление после перезагрузки настраиваются автоматически.
             </div>
           </div>
-          <Tag color={networkHealthy && enabled && !coreMismatch ? 'success' : enabled ? 'warning' : 'default'}>
-            {networkHealthy && enabled && !coreMismatch ? 'Работает' : enabled ? 'Требует внимания' : 'Выключен'}
+          <Tag
+            color={
+              networkHealthy && enabled && !coreMismatch
+                ? 'success'
+                : enabled
+                  ? 'warning'
+                  : 'default'
+            }
+          >
+            {networkHealthy && enabled && !coreMismatch
+              ? 'Работает'
+              : enabled
+                ? 'Требует внимания'
+                : 'Выключен'}
           </Tag>
         </div>
 
         {status === null && !loading ? (
-          <Alert showIcon type="error" title="Состояние шлюза недоступно"
-            description="Проверьте подключение к панели и повторите запрос." />
+          <Alert
+            showIcon
+            type="error"
+            title="Состояние шлюза недоступно"
+            description="Проверьте подключение к панели и повторите запрос."
+          />
         ) : (
           <>
-            {conflict || recoveryOnly || coreMismatch || !coreRunning || (enabled && !networkHealthy) ? (
-              <Alert className="gateway-important-alert" showIcon
+            {conflict ||
+            recoveryOnly ||
+            coreMismatch ||
+            !coreRunning ||
+            (enabled && !networkHealthy) ? (
+              <Alert
+                className="gateway-important-alert"
+                showIcon
                 type={conflict || recoveryOnly ? 'error' : 'warning'}
                 title={
-                  conflict ? 'Конфликт между ядрами' :
-                  recoveryOnly ? 'Шлюз настроен не полностью' :
-                  coreMismatch ? 'Шлюз работает через ' + ownerCore :
-                  !coreRunning ? 'Ядро остановлено' : 'Необходимо восстановить шлюз'
+                  conflict
+                    ? 'Конфликт между ядрами'
+                    : recoveryOnly
+                      ? 'Шлюз настроен не полностью'
+                      : coreMismatch
+                        ? 'Шлюз работает через ' + ownerCore
+                        : !coreRunning
+                          ? 'Ядро остановлено'
+                          : 'Необходимо восстановить шлюз'
                 }
                 description={
                   conflict || recoveryOnly
@@ -395,8 +425,13 @@ export default function GatewayModeControl() {
               />
             ) : null}
             {status?.network?.error && (
-              <Alert className="gateway-important-alert" type="error" showIcon
-                title="Ошибка сети" description={status.network.error} />
+              <Alert
+                className="gateway-important-alert"
+                type="error"
+                showIcon
+                title="Ошибка сети"
+                description={status.network.error}
+              />
             )}
 
             <div className="gateway-network-overview">
@@ -426,9 +461,13 @@ export default function GatewayModeControl() {
             )}
             {!enabled && networkInputValid && verified && !checking && (
               <div className="gateway-readiness">
-                {ready
-                  ? <><CheckCircleOutlined /> Готов к включению</>
-                  : <span>Проверка обнаружила ограничения. Подробности — ниже.</span>}
+                {ready ? (
+                  <>
+                    <CheckCircleOutlined /> Готов к включению
+                  </>
+                ) : (
+                  <span>Проверка обнаружила ограничения. Подробности — ниже.</span>
+                )}
               </div>
             )}
             {!enabled && networkInputValid && checking && (
@@ -440,9 +479,14 @@ export default function GatewayModeControl() {
                 <>
                   {needsRepair && !actionBlocked && (
                     <Popconfirm
-                      title={coreMismatch ? 'Перенести шлюз на ' + selectedCore + '?' : 'Восстановить шлюз?'}
+                      title={
+                        coreMismatch
+                          ? 'Перенести шлюз на ' + selectedCore + '?'
+                          : 'Восстановить шлюз?'
+                      }
                       description="Панель повторно проверит сеть и откатит настройки при ошибке."
-                      okText="Продолжить" cancelText="Отмена"
+                      okText="Продолжить"
+                      cancelText="Отмена"
                       onConfirm={() => void runAction('enable')}
                     >
                       <Button type="primary" size="large" loading={busy} disabled={!canSubmit}>
@@ -450,9 +494,11 @@ export default function GatewayModeControl() {
                       </Button>
                     </Popconfirm>
                   )}
-                  <Popconfirm title="Выключить режим шлюза?"
+                  <Popconfirm
+                    title="Выключить режим шлюза?"
                     description="Будут удалены управляемые панелью TPROXY-правила. Настройки sing-box и пользователи сохранятся."
-                    okText="Выключить" cancelText="Отмена"
+                    okText="Выключить"
+                    cancelText="Отмена"
                     onConfirm={() => void runAction('disable')}
                   >
                     <Button danger size="large" loading={busy} disabled={busy}>
@@ -461,9 +507,12 @@ export default function GatewayModeControl() {
                   </Popconfirm>
                 </>
               ) : (
-                <Popconfirm title="Включить режим шлюза?"
+                <Popconfirm
+                  title="Включить режим шлюза?"
                   description="Панель настроит перехват трафика выбранной LAN-сети на этом сервере. Если параметры неверны, доступ по сети может быть нарушен."
-                  okText="Включить" cancelText="Отмена" disabled={!canSubmit}
+                  okText="Включить"
+                  cancelText="Отмена"
+                  disabled={!canSubmit}
                   onConfirm={() => void runAction('enable')}
                 >
                   <Button type="primary" size="large" loading={busy} disabled={!canSubmit}>
@@ -471,8 +520,13 @@ export default function GatewayModeControl() {
                   </Button>
                 </Popconfirm>
               )}
-              <Button type="text" icon={<ReloadOutlined />} loading={loading}
-                disabled={busy} onClick={() => void refresh()}>
+              <Button
+                type="text"
+                icon={<ReloadOutlined />}
+                loading={loading}
+                disabled={busy}
+                onClick={() => void refresh()}
+              >
                 Обновить
               </Button>
             </div>
@@ -482,7 +536,10 @@ export default function GatewayModeControl() {
 
       <Collapse
         className="singbox-advanced-groups gateway-settings-groups"
-        activeKey={[...(showManual ? ['network'] : []), ...(diagnosticsOpen ? ['diagnostics'] : [])]}
+        activeKey={[
+          ...(showManual ? ['network'] : []),
+          ...(diagnosticsOpen ? ['diagnostics'] : []),
+        ]}
         onChange={(keys) => {
           const opened = Array.isArray(keys) ? keys : [keys];
           setManualOpen(opened.includes('network'));
@@ -492,22 +549,31 @@ export default function GatewayModeControl() {
           {
             key: 'network',
             label: 'Параметры сети',
-            extra: <Tag color={discovery?.suggested ? 'success' : 'default'}>
-              {networkConfigured ? 'Применены' : discovery?.suggested ? 'Авто' : 'Ручной выбор'}
-            </Tag>,
+            extra: (
+              <Tag color={discovery?.suggested ? 'success' : 'default'}>
+                {networkConfigured ? 'Применены' : discovery?.suggested ? 'Авто' : 'Ручной выбор'}
+              </Tag>
+            ),
             children: (
               <Space orientation="vertical" size={14} className="gateway-fields">
                 <div className="singbox-section-description">
-                  Настройки определяются автоматически, когда найден единственный безопасный LAN-интерфейс.
-                  Изменить их при работающем шлюзе можно после выключения.
+                  Настройки определяются автоматически, когда найден единственный безопасный
+                  LAN-интерфейс. Изменить их при работающем шлюзе можно после выключения.
                 </div>
                 <Row gutter={[12, 12]}>
                   <Col xs={24} sm={12}>
-                    <label className="singbox-field-label" htmlFor="gateway-lan-interface">LAN-интерфейс</label>
+                    <label className="singbox-field-label" htmlFor="gateway-lan-interface">
+                      LAN-интерфейс
+                    </label>
                     {options.length ? (
-                      <Select id="gateway-lan-interface" aria-label="LAN-интерфейс"
-                        className="gateway-full-width" showSearch disabled={locked}
-                        value={networkConfig.lanInterface || undefined} placeholder="Выберите интерфейс"
+                      <Select
+                        id="gateway-lan-interface"
+                        aria-label="LAN-интерфейс"
+                        className="gateway-full-width"
+                        showSearch
+                        disabled={locked}
+                        value={networkConfig.lanInterface || undefined}
+                        placeholder="Выберите интерфейс"
                         options={options}
                         onChange={(name: string) => {
                           const iface = availableInterfaces.find((entry) => entry.name === name);
@@ -518,81 +584,148 @@ export default function GatewayModeControl() {
                             lanInterface: name,
                             lanIP: address?.ip || '',
                             lanPrefix: address?.prefix || 24,
-                            wanInterface: name === networkConfig.wanInterface ? '' : networkConfig.wanInterface,
+                            wanInterface:
+                              name === networkConfig.wanInterface ? '' : networkConfig.wanInterface,
                           });
                         }}
                       />
                     ) : (
-                      <Input id="gateway-lan-interface" disabled={locked}
-                        value={networkConfig.lanInterface} placeholder="br-lan"
-                        onChange={(event) => updateNetwork({ lanInterface: event.target.value })} />
+                      <Input
+                        id="gateway-lan-interface"
+                        disabled={locked}
+                        value={networkConfig.lanInterface}
+                        placeholder="br-lan"
+                        onChange={(event) => updateNetwork({ lanInterface: event.target.value })}
+                      />
                     )}
                   </Col>
                   <Col xs={24} sm={12}>
-                    <label className="singbox-field-label" htmlFor="gateway-lan-ip">IPv4-адрес LAN</label>
-                    <Input id="gateway-lan-ip" disabled={locked} placeholder="192.168.50.1"
+                    <label className="singbox-field-label" htmlFor="gateway-lan-ip">
+                      IPv4-адрес LAN
+                    </label>
+                    <Input
+                      id="gateway-lan-ip"
+                      disabled={locked}
+                      placeholder="192.168.50.1"
                       value={networkConfig.lanIP}
-                      onChange={(event) => updateNetwork({ lanIP: event.target.value })} />
+                      onChange={(event) => updateNetwork({ lanIP: event.target.value })}
+                    />
                   </Col>
                   <Col xs={24} sm={12}>
-                    <label className="singbox-field-label" htmlFor="gateway-lan-prefix">Префикс сети</label>
-                    <InputNumber id="gateway-lan-prefix" min={1} max={32} disabled={locked}
-                      className="gateway-full-width" value={networkConfig.lanPrefix}
-                      onChange={onNumber((value) => updateNetwork({ lanPrefix: value }))} />
+                    <label className="singbox-field-label" htmlFor="gateway-lan-prefix">
+                      Префикс сети
+                    </label>
+                    <InputNumber
+                      id="gateway-lan-prefix"
+                      min={1}
+                      max={32}
+                      disabled={locked}
+                      className="gateway-full-width"
+                      value={networkConfig.lanPrefix}
+                      onChange={onNumber((value) => updateNetwork({ lanPrefix: value }))}
+                    />
                   </Col>
                   <Col xs={24} sm={12}>
-                    <label className="singbox-field-label" htmlFor="gateway-wan-interface">WAN / NAT (при необходимости)</label>
+                    <label className="singbox-field-label" htmlFor="gateway-wan-interface">
+                      WAN / NAT (при необходимости)
+                    </label>
                     {options.length ? (
-                      <Select id="gateway-wan-interface" aria-label="WAN / NAT"
-                        className="gateway-full-width" allowClear showSearch disabled={locked}
-                        placeholder="Без NAT" options={options.filter((o) => o.value !== networkConfig.lanInterface)}
+                      <Select
+                        id="gateway-wan-interface"
+                        aria-label="WAN / NAT"
+                        className="gateway-full-width"
+                        allowClear
+                        showSearch
+                        disabled={locked}
+                        placeholder="Без NAT"
+                        options={options.filter((o) => o.value !== networkConfig.lanInterface)}
                         value={networkConfig.wanInterface || undefined}
-                        onChange={(name?: string) => updateNetwork({ wanInterface: name || '' })} />
+                        onChange={(name?: string) => updateNetwork({ wanInterface: name || '' })}
+                      />
                     ) : (
-                      <Input id="gateway-wan-interface" disabled={locked} placeholder="eth0"
+                      <Input
+                        id="gateway-wan-interface"
+                        disabled={locked}
+                        placeholder="eth0"
                         value={networkConfig.wanInterface}
-                        onChange={(event) => updateNetwork({ wanInterface: event.target.value })} />
+                        onChange={(event) => updateNetwork({ wanInterface: event.target.value })}
+                      />
                     )}
                   </Col>
                 </Row>
                 {selectedLAN?.addresses.length ? (
                   <div className="gateway-hint">
-                    Адреса интерфейса: {selectedLAN.addresses.map((a) => a.ip + '/' + a.prefix).join(', ')}
+                    Адреса интерфейса:{' '}
+                    {selectedLAN.addresses.map((a) => a.ip + '/' + a.prefix).join(', ')}
                   </div>
                 ) : null}
                 {lanInterfaceIsWAN && !networkConfigured && (
-                  <Alert type="warning" showIcon title="LAN совпадает с основным WAN"
-                    description={<Space orientation="vertical" size={8}>
-                      <span>Перехват на основном интерфейсе может нарушить доступ к серверу. Этот вариант не выбирается автоматически.</span>
-                      <Checkbox checked={allowDefaultInterface} disabled={locked}
-                        onChange={(event) => {
-                          setAllowDefaultInterface(event.target.checked);
-                          setPreflight(null);
-                        }}>
-                        Я понимаю риск и хочу использовать WAN как LAN
-                      </Checkbox>
-                    </Space>} />
+                  <Alert
+                    type="warning"
+                    showIcon
+                    title="LAN совпадает с основным WAN"
+                    description={
+                      <Space orientation="vertical" size={8}>
+                        <span>
+                          Перехват на основном интерфейсе может нарушить доступ к серверу. Этот
+                          вариант не выбирается автоматически.
+                        </span>
+                        <Checkbox
+                          checked={allowDefaultInterface}
+                          disabled={locked}
+                          onChange={(event) => {
+                            setAllowDefaultInterface(event.target.checked);
+                            setPreflight(null);
+                          }}
+                        >
+                          Я понимаю риск и хочу использовать WAN как LAN
+                        </Checkbox>
+                      </Space>
+                    }
+                  />
                 )}
                 <div className="gateway-secondary-actions">
-                  <Button icon={<SearchOutlined />} loading={discovering} disabled={locked}
-                    onClick={() => void discover()}>Найти интерфейсы</Button>
+                  <Button
+                    icon={<SearchOutlined />}
+                    loading={discovering}
+                    disabled={locked}
+                    onClick={() => void discover()}
+                  >
+                    Найти интерфейсы
+                  </Button>
                   {discovery?.suggested && !networkConfigured && (
-                    <Button disabled={locked} onClick={() => {
-                      setAllowDefaultInterface(false);
-                      updateNetwork({ ...discovery.suggested! });
-                    }}>Использовать найденную сеть</Button>
+                    <Button
+                      disabled={locked}
+                      onClick={() => {
+                        setAllowDefaultInterface(false);
+                        updateNetwork({ ...discovery.suggested! });
+                      }}
+                    >
+                      Использовать найденную сеть
+                    </Button>
                   )}
-                  <Button icon={<CheckCircleOutlined />} loading={checking}
+                  <Button
+                    icon={<CheckCircleOutlined />}
+                    loading={checking}
                     disabled={!networkInputValid || busy}
-                    onClick={() => void runPreflight()}>Проверить</Button>
+                    onClick={() => void runPreflight()}
+                  >
+                    Проверить
+                  </Button>
                 </div>
                 {preflight && verified && (!preflight.ready || diagnosticsOpen) && (
-                  <Alert showIcon type={preflight.ready ? 'success' : 'warning'}
+                  <Alert
+                    showIcon
+                    type={preflight.ready ? 'success' : 'warning'}
                     title={preflight.ready ? 'Готово к включению' : 'Проверьте параметры'}
-                    description={<ul className="gateway-preflight-list">
-                      {(preflight.ready ? preflight.notes : preflight.problems).map((item, i) =>
-                        <li key={i}>{item}</li>)}
-                    </ul>} />
+                    description={
+                      <ul className="gateway-preflight-list">
+                        {(preflight.ready ? preflight.notes : preflight.problems).map((item, i) => (
+                          <li key={i}>{item}</li>
+                        ))}
+                      </ul>
+                    }
+                  />
                 )}
               </Space>
             ),
@@ -605,21 +738,33 @@ export default function GatewayModeControl() {
                 <div className="gateway-check-grid">
                   {issues.map((item) => (
                     <div className="gateway-check" key={item.label}>
-                      <Tag color={item.healthy ? 'success' : 'default'}>{item.healthy ? 'OK' : '—'}</Tag>
+                      <Tag color={item.healthy ? 'success' : 'default'}>
+                        {item.healthy ? 'OK' : '—'}
+                      </Tag>
                       <span>{item.label}</span>
                     </div>
                   ))}
                 </div>
-                <div className="gateway-hint">TPROXY: {status?.port ?? 52345} · Трафик перехватывается
-                  только из выбранной IPv4-подсети. Клиенты должны использовать этот сервер как шлюз.
-                  Маршрутизация настраивается в разделе «Маршрутизация» sing-box.</div>
+                <div className="gateway-hint">
+                  TPROXY: {status?.port ?? 52345} · Трафик перехватывается только из выбранной
+                  IPv4-подсети. Клиенты должны использовать этот сервер как шлюз. Маршрутизация
+                  настраивается в разделе «Маршрутизация» sing-box.
+                </div>
                 {preflight && verified && (
-                  <Alert showIcon type={preflight.ready ? 'success' : 'warning'}
-                    title={preflight.ready ? 'Последняя проверка пройдена' : 'Проблемы при проверке'}
-                    description={<ul className="gateway-preflight-list">
-                      {(preflight.ready ? preflight.notes : preflight.problems).map((item, i) =>
-                        <li key={i}>{item}</li>)}
-                    </ul>} />
+                  <Alert
+                    showIcon
+                    type={preflight.ready ? 'success' : 'warning'}
+                    title={
+                      preflight.ready ? 'Последняя проверка пройдена' : 'Проблемы при проверке'
+                    }
+                    description={
+                      <ul className="gateway-preflight-list">
+                        {(preflight.ready ? preflight.notes : preflight.problems).map((item, i) => (
+                          <li key={i}>{item}</li>
+                        ))}
+                      </ul>
+                    }
+                  />
                 )}
               </Space>
             ),
