@@ -26,6 +26,8 @@ import { HttpUtil } from '@/utils';
 
 type DNSConfig = {
   domain: string;
+  certFile: string;
+  keyFile: string;
   doh: boolean;
   http3: boolean;
   dot: boolean;
@@ -59,6 +61,8 @@ const defaults: DNSState = {
   running: false,
   supported: true,
   domain: '',
+  certFile: '',
+  keyFile: '',
   doh: false,
   http3: false,
   dot: false,
@@ -80,6 +84,8 @@ const providers = [
 ];
 const getConfig = (state: DNSState): DNSConfig => ({
   domain: state.domain || '',
+  certFile: state.certFile || '',
+  keyFile: state.keyFile || '',
   doh: state.doh ?? false,
   http3: state.http3 ?? false,
   dot: state.dot ?? false,
@@ -98,6 +104,9 @@ export default function OxiDNSSettings() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<'apply' | 'disable' | null>(null);
   const [checking, setChecking] = useState(false);
+  const [checkingDomain, setCheckingDomain] = useState(false);
+  const [domainCheckResult, setDomainCheckResult] = useState<'ok' | 'error' | null>(null);
+  const [domainCheckError, setDomainCheckError] = useState('');
   const [verified, setVerified] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showMaintenance, setShowMaintenance] = useState(false);
@@ -149,6 +158,8 @@ export default function OxiDNSSettings() {
     setError('');
     setNotice('');
     setVerified(false);
+    setDomainCheckResult(null);
+    setDomainCheckError('');
   };
   const applied = getConfig(status);
   const dirty = (Object.keys(applied) as (keyof DNSConfig)[]).some(
@@ -167,6 +178,13 @@ export default function OxiDNSSettings() {
     (draft.doh && draft.dot && draft.port === draft.dotPort) ||
     (draft.doh && draft.http3 && draft.doq && draft.port === draft.doqPort);
   const unused = !draft.useSingBox && !external;
+  const incompleteDNSCertificate =
+    external && Boolean(draft.certFile.trim()) !== Boolean(draft.keyFile.trim());
+  const externalPorts = [
+    ...(draft.doh ? [`TCP/${draft.port} (DoH)`, ...(draft.http3 ? [`UDP/${draft.port} (HTTP/3)`] : [])] : []),
+    ...(draft.dot ? [`TCP/${draft.dotPort} (DoT)`] : []),
+    ...(draft.doq ? [`UDP/${draft.doqPort} (DoQ)`] : []),
+  ].join(', ');
   const configMode = !external ? 'local' : draft.doh && draft.dot && draft.doq ? 'all' : 'custom';
   const modeDescription = !external
     ? 'Рекомендуется для VPN: OxiDNS будет автоматически использоваться в sing-box. Домен, сертификат и открытые порты не требуются.'
@@ -174,11 +192,13 @@ export default function OxiDNSSettings() {
       ? 'Для телефонов и браузеров: появится личный адрес DNS-over-HTTPS. Потребуется домен, действующий сертификат и открытый HTTPS-порт.'
       : 'Расширенный режим: включены дополнительные DNS-протоколы. Проверьте домен, TLS-сертификат и порты перед запуском.';
   const setupHint = domainInvalid
-    ? 'Укажите домен DNS, который уже прописан в действующем TLS-сертификате панели. Для локального режима домен не нужен.'
+    ? 'Впишите полный DNS-поддомен, например dns.example.com. Он может отличаться от адреса панели.'
     : invalidPort || conflictPorts
       ? 'Измените порты: они должны быть допустимыми и не пересекаться у одинакового транспорта.'
-      : unused
-        ? 'Включите использование в sing-box либо выберите внешний защищённый DNS.'
+      : incompleteDNSCertificate
+        ? 'Укажите оба пути к сертификату DNS и его ключу либо оставьте оба пустыми для сертификата панели.'
+        : unused
+          ? 'Включите использование в sing-box либо выберите внешний защищённый DNS.'
         : '';
   const chooseMode = (mode: 'local' | 'doh' | 'all') => {
     if (mode === 'local') {
@@ -192,13 +212,14 @@ export default function OxiDNSSettings() {
       setShowAdvanced(true);
     }
   };
-  const locked = busy !== null || checking;
+  const locked = busy !== null || checking || checkingDomain;
   const canApply =
     status.installed &&
     status.supported &&
     !domainInvalid &&
     !invalidPort &&
     !conflictPorts &&
+    !incompleteDNSCertificate &&
     !unused;
   const isHealthy = status.installed && status.enabled && status.running;
   const primaryLabel = !status.enabled
@@ -237,7 +258,7 @@ export default function OxiDNSSettings() {
     try {
       const next = await request(
         enable ? 'setup' : 'disable',
-        enable ? { ...draft, domain: draft.domain.trim() } : undefined,
+        enable ? { ...draft, domain: draft.domain.trim().toLowerCase(), certFile: draft.certFile.trim(), keyFile: draft.keyFile.trim() } : undefined,
       );
       setStatus(next);
       setDraft(getConfig(next));
@@ -253,6 +274,30 @@ export default function OxiDNSSettings() {
       await refresh(true, true);
     } finally {
       setBusy(null);
+    }
+  };
+
+  const checkDomain = async () => {
+    if (!external || domainInvalid || incompleteDNSCertificate) return;
+    setCheckingDomain(true);
+    setDomainCheckResult(null);
+    setDomainCheckError('');
+    try {
+      const response = (await HttpUtil.post('/panel/api/oxidns/validate', {
+        ...draft,
+        domain: draft.domain.trim().toLowerCase(),
+        certFile: draft.certFile.trim(),
+        keyFile: draft.keyFile.trim(),
+      }, { silent: true, timeout: 12000 })) as APIResponse<{ valid: boolean }>;
+      if (!response.success || !response.obj?.valid) {
+        throw new Error(response.msg || 'Сертификат не соответствует выбранному DNS-домену.');
+      }
+      setDomainCheckResult('ok');
+    } catch (cause) {
+      setDomainCheckResult('error');
+      setDomainCheckError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setCheckingDomain(false);
     }
   };
 
@@ -464,6 +509,88 @@ export default function OxiDNSSettings() {
                   </div>
                 </Space>
 
+
+                {external && (
+                  <Card size="small" title="Свой DNS-поддомен: пошаговая настройка">
+                    <Space orientation="vertical" size={12} style={{ width: '100%' }}>
+                      <Typography.Text>
+                        DNS может работать на любом вашем поддомене, даже если адрес панели другой.
+                      </Typography.Text>
+                      <div>
+                        <Typography.Text strong>1. Укажите DNS-поддомен</Typography.Text>
+                        <Input
+                          aria-label="Домен защищённого DNS"
+                          style={{ marginTop: 6 }}
+                          placeholder="dns.example.com"
+                          value={draft.domain}
+                          status={domainInvalid ? 'error' : undefined}
+                          disabled={locked}
+                          onChange={(event) => patch({ domain: event.target.value })}
+                        />
+                        {domainInvalid && (
+                          <Typography.Text type="danger">
+                            Укажите полное имя, например dns.example.com, без https:// и пути.
+                          </Typography.Text>
+                        )}
+                      </div>
+                      <div>
+                        <Typography.Text strong>2. Создайте DNS-запись</Typography.Text>
+                        <Typography.Paragraph type="secondary" style={{ marginBottom: 4 }}>
+                          У регистратора или DNS-провайдера создайте A-запись для имени{' '}
+                          <Typography.Text code copyable>
+                            {draft.domain.trim() || 'dns.example.com'}
+                          </Typography.Text>
+                          {' '}со значением «публичный IPv4 вашего сервера». При наличии публичного
+                          IPv6 добавьте AAAA-запись. Для прямого DNS-сервера выключите
+                          проксирование записи (например, DNS only в Cloudflare).
+                        </Typography.Paragraph>
+                        <Typography.Text type="secondary">
+                          Изменение DNS-записей может распространяться некоторое время.
+                        </Typography.Text>
+                      </div>
+                      <div>
+                        <Typography.Text strong>3. Подготовьте TLS-сертификат</Typography.Text>
+                        <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+                          Нужен действующий сертификат для этого поддомена или подходящий wildcard
+                          (например, *.example.com для dns.example.com). Если сертификат панели
+                          покрывает поддомен, дополнительные поля не нужны. Иначе выпустите
+                          отдельный сертификат и укажите пути к файлам ниже. Панель не
+                          выпускает сертификаты автоматически.
+                        </Typography.Paragraph>
+                      </div>
+                      <div>
+                        <Typography.Text strong>4. Разрешите входящие порты</Typography.Text>
+                        <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+                          Откройте в firewall сервера и у хостера: <Typography.Text code>{externalPorts}</Typography.Text>.
+                          Убедитесь, что порты не заняты панелью, Xray или другими службами.
+                        </Typography.Paragraph>
+                      </div>
+                      <Button
+                        onClick={() => void checkDomain()}
+                        loading={checkingDomain}
+                        disabled={locked || domainInvalid || invalidPort || conflictPorts || incompleteDNSCertificate}
+                      >
+                        Проверить DNS-домен и сертификат
+                      </Button>
+                      {domainCheckResult === 'ok' && (
+                        <Alert
+                          type="success"
+                          showIcon
+                          title="Сертификат подходит выбранному DNS-поддомену"
+                          description="Сертификат и имя проверены. A/AAAA-записи и доступность портов из интернета не проверялись — выполните эти шаги отдельно."
+                        />
+                      )}
+                      {domainCheckResult === 'error' && (
+                        <Alert
+                          type="warning"
+                          showIcon
+                          title="Проверка TLS не пройдена"
+                          description={domainCheckError}
+                        />
+                      )}
+                    </Space>
+                  </Card>
+                )}
                 {setupHint && (
                   <Alert
                     type="warning"
@@ -585,26 +712,6 @@ export default function OxiDNSSettings() {
                       </Space>
                       {external && (
                         <>
-                          <div>
-                            <Typography.Text strong>
-                              Домен с TLS-сертификатом панели
-                            </Typography.Text>
-                            <Input
-                              aria-label="Домен защищённого DNS"
-                              style={{ marginTop: 6 }}
-                              placeholder="dns.example.com"
-                              value={draft.domain}
-                              status={domainInvalid ? 'error' : undefined}
-                              disabled={locked}
-                              onChange={(event) => patch({ domain: event.target.value })}
-                            />
-                            {domainInvalid && (
-                              <Typography.Text type="danger">
-                                Укажите корректное доменное имя, присутствующее в TLS-сертификате
-                                панели.
-                              </Typography.Text>
-                            )}
-                          </div>
                           {draft.doh && (
                             <div>
                               <Typography.Text>
@@ -661,9 +768,36 @@ export default function OxiDNSSettings() {
                               служб.
                             </Typography.Text>
                           )}
+                          <Card size="small" title="Отдельный TLS-сертификат для DNS (необязательно)">
+                            <Space orientation="vertical" size={8} style={{ width: '100%' }}>
+                              <Typography.Text type="secondary">
+                                Если сертификат панели подходит DNS-поддомену, оставьте оба поля
+                                пустыми. Для другого имени укажите абсолютные пути к существующим
+                                PEM-файлам на сервере, доступным службе OxiDNS. Это не изменяет
+                                сертификат самой панели.
+                              </Typography.Text>
+                              <Input
+                                aria-label="Путь к сертификату DNS"
+                                placeholder="/etc/letsencrypt/live/dns.example.com/fullchain.pem"
+                                value={draft.certFile}
+                                disabled={locked}
+                                onChange={(event) => patch({ certFile: event.target.value })}
+                              />
+                              <Input
+                                aria-label="Путь к ключу DNS"
+                                placeholder="/etc/letsencrypt/live/dns.example.com/privkey.pem"
+                                value={draft.keyFile}
+                                disabled={locked}
+                                onChange={(event) => patch({ keyFile: event.target.value })}
+                              />
+                              {incompleteDNSCertificate && (
+                                <Typography.Text type="danger">Укажите оба пути или очистите оба поля.</Typography.Text>
+                              )}
+                            </Space>
+                          </Card>
                           <Typography.Text type="secondary">
-                            Домен проверяется на сервере по TLS-сертификату до запуска. Убедитесь,
-                            что DNS домена указывает на сервер и необходимые порты доступны извне.
+                            Перед запуском панель проверяет сертификат и выбранное имя.
+                            DNS-запись и внешний доступ к портам нужно проверить отдельно.
                           </Typography.Text>
                         </>
                       )}
