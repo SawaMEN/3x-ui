@@ -25,6 +25,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Rerun after fixing effect lint rule
           cd frontend
           npx oxfmt src/pages/singbox/OxiDNSSettings.tsx src/pages/settings/SystemUpdateModal.tsx src/pages/settings/OlcRTCSettingsTab.tsx src/pages/settings/SettingsPage.tsx src/layouts/AppSidebar.tsx src/test/oxidns-settings.test.tsx src/test/system-update-components.test.tsx
           cd ..
