@@ -142,14 +142,20 @@ export default function OxiDNSSettings() {
   );
 
   useEffect(() => {
-    void refresh();
+    let active = true;
+    void Promise.resolve().then(() => {
+      if (active) void refresh();
+    });
     const onChanged = () => {
       setNotice('');
       setUpdatesChecked(false);
       void refresh();
     };
     window.addEventListener('oxidns:changed', onChanged);
-    return () => window.removeEventListener('oxidns:changed', onChanged);
+    return () => {
+      active = false;
+      window.removeEventListener('oxidns:changed', onChanged);
+    };
   }, [refresh]);
 
   const patch = (value: Partial<DNSConfig>) => {
