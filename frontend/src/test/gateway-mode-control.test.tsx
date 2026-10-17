@@ -91,6 +91,7 @@ describe('gateway settings in sing-box', () => {
     render(<GatewayModeControl />);
     await screen.findByText('Выберите LAN вручную');
     expect((screen.getByRole('button', { name: 'Включить шлюз' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Настроить сеть вручную' }));
     expect(await screen.findByPlaceholderText('br-lan')).toBeTruthy();
     expect(vi.mocked(HttpUtil.post).mock.calls.some(([url]) => url.endsWith('/enable'))).toBe(false);
   });
