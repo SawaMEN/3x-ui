@@ -39,7 +39,13 @@ type SystemUpdatePackage = {
   updateAvailable: boolean;
 };
 
-type DependencyKey = 'naiveproxy' | 'hysteria2' | 'sudoku' | 'pingtunnel' | 'trusttunnel' | 'olcrtc';
+type DependencyKey =
+  | 'naiveproxy'
+  | 'hysteria2'
+  | 'sudoku'
+  | 'pingtunnel'
+  | 'trusttunnel'
+  | 'olcrtc';
 
 type DependencyStatus = {
   key: DependencyKey;
@@ -424,8 +430,11 @@ export default function SystemUpdateModal({
   };
 
   useEffect(() => {
-    if (!open || !dependencies.some((dependency) => dependency.key === 'olcrtc' && dependency.busy)) return;
-    const interval = window.setInterval(() => { void loadDependencyUpdates(); }, 3000);
+    if (!open || !dependencies.some((dependency) => dependency.key === 'olcrtc' && dependency.busy))
+      return;
+    const interval = window.setInterval(() => {
+      void loadDependencyUpdates();
+    }, 3000);
     return () => window.clearInterval(interval);
   }, [dependencies, loadDependencyUpdates, open]);
 
@@ -828,11 +837,14 @@ export default function SystemUpdateModal({
                       )}
                       {dependency.key === 'olcrtc' && (
                         <Typography.Paragraph type="secondary">
-                          Отдельный WebRTC-сервер через Jitsi, Телемост или WB Stream. Не заменяет sing-box.
+                          Отдельный WebRTC-сервер через Jitsi, Телемост или WB Stream. Не заменяет
+                          sing-box.
                           {dependency.busy
                             ? ` Выполняется: ${dependency.operation === 'remove' ? 'удаление' : 'установка или обновление'}.`
                             : dependency.installed
-                              ? dependency.running ? ' Служба работает.' : ' Служба остановлена.'
+                              ? dependency.running
+                                ? ' Служба работает.'
+                                : ' Служба остановлена.'
                               : ' Нажмите «Установить», чтобы добавить компонент.'}
                         </Typography.Paragraph>
                       )}
@@ -879,7 +891,11 @@ export default function SystemUpdateModal({
                       )}
                       <Space wrap>
                         {dependency.key === 'olcrtc' && dependency.installed && (
-                          <Button size="small" onClick={() => setOlcrtcSettingsOpen(true)} disabled={!dependency.running || dependency.busy}>
+                          <Button
+                            size="small"
+                            onClick={() => setOlcrtcSettingsOpen(true)}
+                            disabled={!dependency.running || dependency.busy}
+                          >
                             Настроить клиентов
                           </Button>
                         )}
@@ -932,7 +948,11 @@ export default function SystemUpdateModal({
                                 danger
                                 aria-label={`Удалить ${action.label}`}
                                 icon={<DeleteOutlined />}
-                                disabled={dependencyBusy !== null || systemUpdateBusy || action.busy === true}
+                                disabled={
+                                  dependencyBusy !== null ||
+                                  systemUpdateBusy ||
+                                  action.busy === true
+                                }
                               />
                             </Tooltip>
                           </Popconfirm>

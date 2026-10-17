@@ -1,7 +1,27 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Alert, Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Tag, Typography, message } from 'antd';
-import { CopyOutlined, DeleteOutlined, EditOutlined, KeyOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
+import {
+  Alert,
+  Button,
+  Card,
+  Form,
+  Input,
+  Modal,
+  Popconfirm,
+  Select,
+  Space,
+  Tag,
+  Typography,
+  message,
+} from 'antd';
+import {
+  CopyOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  KeyOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+} from '@ant-design/icons';
 import { HttpUtil } from '@/utils';
 
 type Provider = 'jitsi' | 'telemost' | 'wbstream';
@@ -43,7 +63,13 @@ const transportOptions: Record<Provider, { value: Transport; label: string }[]> 
   ],
 };
 
-export default function OlcRTCClientsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export default function OlcRTCClientsModal({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: () => void;
+}) {
   const { t } = useTranslation();
   const [toast, holder] = message.useMessage();
   const [form] = Form.useForm<ClientInput>();
@@ -87,7 +113,11 @@ export default function OlcRTCClientsModal({ open, onClose }: { open: boolean; o
         : '/panel/api/olcrtc/clients';
       const result = (await HttpUtil.post(url, values)) as ApiMsg<ClientInput>;
       if (!result.success) throw new Error(result.msg || 'Не удалось сохранить подключение');
-      toast.success(editingID ? 'Настройки подключения обновлены.' : 'Подключение создано. Скопируйте ссылку клиента.');
+      toast.success(
+        editingID
+          ? 'Настройки подключения обновлены.'
+          : 'Подключение создано. Скопируйте ссылку клиента.',
+      );
       form.resetFields();
       setProvider('jitsi');
       setEditingID(null);
@@ -103,7 +133,9 @@ export default function OlcRTCClientsModal({ open, onClose }: { open: boolean; o
     if (client.locations.length !== 1) return;
     const location = client.locations[0];
     const carrier = location.carrier;
-    const transport = (location.transport?.type || location.transport?.Type || 'datachannel') as Transport;
+    const transport = (location.transport?.type ||
+      location.transport?.Type ||
+      'datachannel') as Transport;
     setEditingID(client.id);
     setProvider(carrier);
     form.setFieldsValue({
@@ -115,7 +147,9 @@ export default function OlcRTCClientsModal({ open, onClose }: { open: boolean; o
       dns: location.dns,
       name: location.name || 'Main',
     });
-    document.getElementById('olcrtc-client-editor')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    document
+      .getElementById('olcrtc-client-editor')
+      ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   };
   const cancelEdit = () => {
     setEditingID(null);
@@ -131,7 +165,11 @@ export default function OlcRTCClientsModal({ open, onClose }: { open: boolean; o
       )) as ApiMsg<unknown>;
       if (!result.success) throw new Error(result.msg || 'Не удалось изменить подключение');
       await load();
-      toast.success(action === 'delete' ? 'Подключение удалено.' : 'Ключ обновлён. Старые ссылки больше не работают.');
+      toast.success(
+        action === 'delete'
+          ? 'Подключение удалено.'
+          : 'Ключ обновлён. Старые ссылки больше не работают.',
+      );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e));
     } finally {
@@ -150,14 +188,23 @@ export default function OlcRTCClientsModal({ open, onClose }: { open: boolean; o
     >
       {holder}
       <Typography.Paragraph type="secondary">
-        OlcRTC запускается отдельной службой, а не как входящее подключение sing-box.
-        Создайте клиента, выберите сервис видеосвязи и скопируйте готовую ссылку в совместимый клиент OlcRTC.
+        OlcRTC запускается отдельной службой, а не как входящее подключение sing-box. Создайте
+        клиента, выберите сервис видеосвязи и скопируйте готовую ссылку в совместимый клиент OlcRTC.
       </Typography.Paragraph>
       {error && <Alert type="error" showIcon title={error} style={{ marginBottom: 12 }} />}
       <Card
         size="small"
         title="Клиенты"
-        extra={<Button size="small" icon={<ReloadOutlined />} loading={loading} onClick={() => void load()}>Обновить</Button>}
+        extra={
+          <Button
+            size="small"
+            icon={<ReloadOutlined />}
+            loading={loading}
+            onClick={() => void load()}
+          >
+            Обновить
+          </Button>
+        }
         style={{ marginBottom: 16 }}
       >
         {clients.length === 0 ? (
@@ -170,11 +217,21 @@ export default function OlcRTCClientsModal({ open, onClose }: { open: boolean; o
                   <Space wrap>
                     <Typography.Text strong>{client.id}</Typography.Text>
                     {client.locations[0] && (
-                      <Tag>{client.locations[0].carrier} / {client.locations[0].transport?.type || client.locations[0].transport?.Type || 'datachannel'}</Tag>
+                      <Tag>
+                        {client.locations[0].carrier} /{' '}
+                        {client.locations[0].transport?.type ||
+                          client.locations[0].transport?.Type ||
+                          'datachannel'}
+                      </Tag>
                     )}
                   </Space>
                   <Space wrap>
-                    <Button size="small" icon={<EditOutlined />} disabled={client.locations.length !== 1} onClick={() => edit(client)}>
+                    <Button
+                      size="small"
+                      icon={<EditOutlined />}
+                      disabled={client.locations.length !== 1}
+                      onClick={() => edit(client)}
+                    >
                       Изменить
                     </Button>
                     <Button
@@ -201,19 +258,30 @@ export default function OlcRTCClientsModal({ open, onClose }: { open: boolean; o
                       title={`Удалить клиента ${client.id}?`}
                       onConfirm={() => void act(client.id, 'delete')}
                     >
-                      <Button danger size="small" icon={<DeleteOutlined />} disabled={working !== null} />
+                      <Button
+                        danger
+                        size="small"
+                        icon={<DeleteOutlined />}
+                        disabled={working !== null}
+                      />
                     </Popconfirm>
                   </Space>
                 </Space>
                 {client.locations.length > 1 && (
-                  <Typography.Text type="secondary">Локаций: {client.locations.length}. Ссылка выше относится к первой.</Typography.Text>
+                  <Typography.Text type="secondary">
+                    Локаций: {client.locations.length}. Ссылка выше относится к первой.
+                  </Typography.Text>
                 )}
               </Card>
             ))}
           </Space>
         )}
       </Card>
-      <Card id="olcrtc-client-editor" size="small" title={editingID ? `Редактирование: ${editingID}` : 'Новое подключение'}>
+      <Card
+        id="olcrtc-client-editor"
+        size="small"
+        title={editingID ? `Редактирование: ${editingID}` : 'Новое подключение'}
+      >
         <Form<ClientInput>
           form={form}
           layout="vertical"
@@ -229,7 +297,12 @@ export default function OlcRTCClientsModal({ open, onClose }: { open: boolean; o
           }}
         >
           <Form.Item name="client_id" label="Имя клиента (необязательно)">
-            <Input maxLength={64} placeholder="Автоматически" autoComplete="off" disabled={editingID !== null} />
+            <Input
+              maxLength={64}
+              placeholder="Автоматически"
+              autoComplete="off"
+              disabled={editingID !== null}
+            />
           </Form.Item>
           <Space wrap style={{ display: 'flex', alignItems: 'start' }}>
             <Form.Item name="carrier" label="Сервис видеосвязи" rules={[{ required: true }]}>
@@ -261,11 +334,22 @@ export default function OlcRTCClientsModal({ open, onClose }: { open: boolean; o
                 ? 'Оставьте пустым: безопасный случайный идентификатор комнаты Jitsi будет создан автоматически.'
                 : 'Сначала создайте комнату у выбранного сервиса и вставьте её ID.'
             }
-            rules={provider === 'jitsi' ? [] : [{ required: true, message: 'Укажите ID существующей комнаты' }]}
+            rules={
+              provider === 'jitsi'
+                ? []
+                : [{ required: true, message: 'Укажите ID существующей комнаты' }]
+            }
           >
-            <Input autoComplete="off" placeholder={provider === 'jitsi' ? 'https://meet.jit.si/...' : 'ID комнаты'} />
+            <Input
+              autoComplete="off"
+              placeholder={provider === 'jitsi' ? 'https://meet.jit.si/...' : 'ID комнаты'}
+            />
           </Form.Item>
-          <Form.Item name="key" label="Ключ шифрования (необязательно)" extra="Случайный 256-битный ключ будет создан автоматически.">
+          <Form.Item
+            name="key"
+            label="Ключ шифрования (необязательно)"
+            extra="Случайный 256-битный ключ будет создан автоматически."
+          >
             <Input.Password autoComplete="new-password" placeholder="Автоматически" />
           </Form.Item>
           <Form.Item name="dns" label="DNS сервера">
