@@ -165,6 +165,7 @@ func currentSubscriptionCompatibilityWarning(previous string, issues []string, c
 	}
 	return previous + " " + summary
 }
+
 // countOutbounds returns the number of outbounds in a stored LastFetchedOutbounds
 // JSON array (0 for empty/invalid).
 func countOutbounds(raw string) int {
