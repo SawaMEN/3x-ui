@@ -216,8 +216,8 @@
   border-top: 1px solid var(--ant-color-border-secondary);
 }
 
-/* Keep one visual hierarchy for every sing-box section: section navigation,
-   then compact subtabs, then editable cards. Never nest an extra card shell. */
+/* One level of navigation and shared editor cards for DNS, routes,
+   connections, Gateway and rarely used advanced settings. */
 .singbox-page .singbox-settings-body {
   min-width: 0;
 }
@@ -249,5 +249,100 @@
   }
   .singbox-page .singbox-subtabs > .ant-tabs-nav {
     padding-inline: 8px;
+  }
+}
+
+/* Unified sing-box settings: compact, readable, responsive */
+.singbox-page .singbox-toolbar,
+.singbox-page .singbox-section-navigation,
+.singbox-page .singbox-settings-body .ant-card,
+.singbox-page .singbox-advanced-groups {
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.singbox-page .singbox-toolbar {
+  background: var(--ant-color-bg-container);
+}
+
+.singbox-page .singbox-section-navigation {
+  position: sticky;
+  top: 4px;
+  z-index: 8;
+  background: var(--ant-color-bg-container);
+}
+
+.singbox-page .singbox-section-navigation .ant-radio-group {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.singbox-page .singbox-section-navigation .ant-radio-button-wrapper {
+  height: 35px;
+  line-height: 33px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ant-color-text-secondary);
+  box-shadow: none;
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.singbox-page .singbox-section-navigation .ant-radio-button-wrapper:hover {
+  color: var(--ant-color-primary);
+  background: var(--ant-color-fill-tertiary);
+}
+
+.singbox-page .singbox-section-navigation .ant-radio-button-wrapper-checked {
+  background: var(--ant-color-primary-bg);
+  border-color: var(--ant-color-primary-border);
+  color: var(--ant-color-primary);
+}
+
+.singbox-page .singbox-settings-body .ant-collapse {
+  background: transparent;
+  border-color: var(--ant-color-border-secondary);
+}
+
+.singbox-page .singbox-advanced-groups .ant-collapse-item {
+  border-color: var(--ant-color-border-secondary);
+}
+
+.singbox-page .singbox-advanced-groups .ant-collapse-header {
+  font-weight: 600;
+}
+
+.singbox-page .singbox-rule-condition-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.singbox-page .singbox-settings-body .ant-card-head {
+  min-height: 48px;
+}
+
+@media (max-width: 640px) {
+  .singbox-page .singbox-section-navigation {
+    top: 0;
+  }
+  .singbox-page .singbox-section-navigation .ant-card-body {
+    padding: 8px;
+  }
+  .singbox-page .singbox-section-navigation .ant-radio-group {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .singbox-page .singbox-section-navigation .ant-radio-button-wrapper {
+    text-align: center;
+    padding-inline: 8px;
+  }
+  .singbox-page .singbox-toolbar .ant-card-body {
+    padding: 14px;
   }
 }
