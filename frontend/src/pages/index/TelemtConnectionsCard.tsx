@@ -66,11 +66,11 @@ export default function TelemtConnectionsCard() {
 
     const load = async () => {
       try {
-        const status = await HttpUtil.get<{ installed: boolean; active: boolean; configured: boolean }>(
-          '/panel/api/telemt/status',
-          undefined,
-          { silent: true },
-        );
+        const status = await HttpUtil.get<{
+          installed: boolean;
+          active: boolean;
+          configured: boolean;
+        }>('/panel/api/telemt/status', undefined, { silent: true });
         if (disposed) return;
         // The standard MTProto clients already appear in the panel's main lists.
         // This legacy card belongs only to an active standalone Telemt service.

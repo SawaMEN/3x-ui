@@ -337,7 +337,8 @@ export default function TelemtPage() {
               )}
             </Space>
             <Typography.Text type="secondary">
-              Новые MTProto-подключения, клиенты и подписки создаются в общем списке «Входящие». Здесь доступны дополнительные возможности движка и настройки ранее созданных прокси.
+              Новые MTProto-подключения, клиенты и подписки создаются в общем списке «Входящие».
+              Здесь доступны дополнительные возможности движка и настройки ранее созданных прокси.
             </Typography.Text>
           </div>
           <Space wrap>
@@ -546,53 +547,53 @@ export default function TelemtPage() {
             }
           >
             <Typography.Paragraph type="secondary" className="telemt-card-hint">
-              Подключения, созданные прежней отдельной службой Telemt, сохранены для
-              совместимости. Новые MTProto-подключения создаются только через
-              «Входящие → Создать подключение → MTProto».
+              Подключения, созданные прежней отдельной службой Telemt, сохранены для совместимости.
+              Новые MTProto-подключения создаются только через «Входящие → Создать подключение →
+              MTProto».
             </Typography.Paragraph>
-          {proxies.length === 0 ? (
-            <div className="telemt-empty-state">
-              <Typography.Text type="secondary">Прокси пока не созданы.</Typography.Text>
-            </div>
-          ) : (
-            <div className="telemt-proxy-list">
-              {proxies.map((item) => (
-                <div className="telemt-proxy-item" key={item.name}>
-                  <div className="telemt-proxy-main">
-                    <Space size={8} wrap>
-                      <Typography.Text strong>{item.name}</Typography.Text>
-                      <Tag>
-                        {item.host}:{item.port}
-                      </Tag>
-                      {item.tls && <Tag color="blue">Fake-TLS</Tag>}
-                    </Space>
-                    <Typography.Paragraph
-                      copyable={{ text: item.link, tooltips: ['Копировать', 'Скопировано'] }}
-                      ellipsis={{ rows: 1 }}
-                      code
-                      style={{ margin: '5px 0 0' }}
+            {proxies.length === 0 ? (
+              <div className="telemt-empty-state">
+                <Typography.Text type="secondary">Прокси пока не созданы.</Typography.Text>
+              </div>
+            ) : (
+              <div className="telemt-proxy-list">
+                {proxies.map((item) => (
+                  <div className="telemt-proxy-item" key={item.name}>
+                    <div className="telemt-proxy-main">
+                      <Space size={8} wrap>
+                        <Typography.Text strong>{item.name}</Typography.Text>
+                        <Tag>
+                          {item.host}:{item.port}
+                        </Tag>
+                        {item.tls && <Tag color="blue">Fake-TLS</Tag>}
+                      </Space>
+                      <Typography.Paragraph
+                        copyable={{ text: item.link, tooltips: ['Копировать', 'Скопировано'] }}
+                        ellipsis={{ rows: 1 }}
+                        code
+                        style={{ margin: '5px 0 0' }}
+                      >
+                        {item.link}
+                      </Typography.Paragraph>
+                    </div>
+                    <Popconfirm
+                      title="Удалить прокси?"
+                      okText="Удалить"
+                      cancelText="Отмена"
+                      onConfirm={() => void deleteProxy(item.name)}
                     >
-                      {item.link}
-                    </Typography.Paragraph>
+                      <Button
+                        danger
+                        type="text"
+                        icon={<DeleteOutlined />}
+                        aria-label={'Удалить прокси ' + item.name}
+                        loading={proxyDeleting === item.name}
+                      />
+                    </Popconfirm>
                   </div>
-                  <Popconfirm
-                    title="Удалить прокси?"
-                    okText="Удалить"
-                    cancelText="Отмена"
-                    onConfirm={() => void deleteProxy(item.name)}
-                  >
-                    <Button
-                      danger
-                      type="text"
-                      icon={<DeleteOutlined />}
-                      aria-label={'Удалить прокси ' + item.name}
-                      loading={proxyDeleting === item.name}
-                    />
-                  </Popconfirm>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
           </Card>
         )}
 
