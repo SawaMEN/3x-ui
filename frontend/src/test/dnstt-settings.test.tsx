@@ -56,8 +56,10 @@ it('shows NS and A instructions and creates an authenticated local target', asyn
   fireEvent.change(screen.getByRole('textbox', { name: 'IPv4 DNSTT' }), {
     target: { value: '203.0.113.2' },
   });
-  expect(screen.getByText(/NS\\s+t\\.example\\.com\\s+ns\\.example\\.com/)).toBeTruthy();
-  expect(screen.getByText(/A\\s+ns\\.example\\.com\\s+203\\.0\\.113\\.2/)).toBeTruthy();
+  const records = screen.getByText('Добавьте записи у DNS-провайдера').closest('[role="alert"]');
+  expect(records?.textContent).toContain('t.example.com');
+  expect(records?.textContent).toContain('ns.example.com');
+  expect(records?.textContent).toContain('203.0.113.2');
   fireEvent.click(screen.getByRole('button', { name: 'Создать и включить DNSTT' }));
   await waitFor(() => expect(HttpUtil.post).toHaveBeenCalledWith(
     '/panel/api/dnstt/setup',
