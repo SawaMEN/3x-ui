@@ -196,7 +196,10 @@ export default function DNSTTSettings() {
 
   // DNSTT is installed in the package/core update dialog. Do not show
   // its controls in sing-box DNS until a server binary is installed.
-  if (!loading && !state.installed) {
+  // Keep the card hidden during the first status request as well, so an
+  // uninstalled tunnel never flashes briefly before its status arrives.
+  if (loading) return null;
+  if (!state.installed) {
     if (!error) return null;
     return (
       <Alert
