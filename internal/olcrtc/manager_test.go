@@ -93,3 +93,25 @@ func TestClientLinkWithPayload(t *testing.T) {
 		t.Fatalf("got %q, want %q", got, expected)
 	}
 }
+
+func TestNormalizeQuotaValidation(t *testing.T) {
+	for name, quota := range map[string]Quota{
+		"negative speed": {SpeedMbps: -1},
+		"negative traffic": {TrafficGB: -1},
+		"invalid date": {ExpiresAt: "2026-02-30"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			input := ClientInput{ClientID: "example", Quota: &quota}
+			if err := normalize(&input); err == nil {
+				t.Fatalf("expected invalid quota to fail: %+v", quota)
+			}
+		})
+	}
+	valid := ClientInput{
+		ClientID: "example",
+		Quota:    &Quota{SpeedMbps: 20, TrafficGB: 100, ExpiresAt: "2026-12-31"},
+	}
+	if err := normalize(&valid); err != nil {
+		t.Fatalf("valid quota rejected: %v", err)
+	}
+}
