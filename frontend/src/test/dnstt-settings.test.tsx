@@ -152,6 +152,28 @@ it('switches client resolver transport without modifying server settings', async
   expect(HttpUtil.post).not.toHaveBeenCalled();
 });
 
+it('supports custom DoH/DoT resolvers and rejects unsafe client command arguments', async () => {
+  current = {
+    ...current,
+    installed: true,
+    enabled: true,
+    running: true,
+    domain: 't.example.com',
+    publicKey: '1234567890abcdef'.repeat(4),
+  };
+  render(<DNSTTSettings />);
+  await screen.findByRole('textbox', { name: 'DNS-резолвер клиента' });
+  fireEvent.change(screen.getByRole('textbox', { name: 'DNS-резолвер клиента' }), {
+    target: { value: 'https://dns.example.com/dns-query' },
+  });
+  expect(screen.getByText(/dnstt-client -doh https:\/\/dns.example.com\/dns-query/)).toBeTruthy();
+  fireEvent.change(screen.getByRole('textbox', { name: 'DNS-резолвер клиента' }), {
+    target: { value: 'https://dns.example.com/;rm -rf' },
+  });
+  expect(screen.getByText(/Проверьте адрес DNS-резолвера клиента/)).toBeTruthy();
+  expect(screen.getByText(/dnstt-client -doh <DNS_RESOLVER>/)).toBeTruthy();
+});
+
 it('hides server controls when removed in another package view', async () => {
   await openInstalled();
   current = { ...original, publicKey: '' };
