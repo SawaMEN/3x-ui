@@ -14,7 +14,9 @@ Interception covers IPv4 TCP/UDP arriving on the selected LAN interface from the
 
 ## Web panel and CLI
 
-Start the selected core, then enable Gateway in Settings with the LAN interface, its IPv4 address and prefix. The panel creates the core-specific listener, waits for its TCP and UDP sockets, and configures forwarding, rp_filter, policy routing, nftables and boot restoration.
+Start the selected core, then open **Settings → Gateway** or **sing-box → Gateway**. The panel now discovers UP IPv4 interfaces and reads the default IPv4 route. If exactly one private LAN address is available on an interface other than the default WAN, it offers that address, prefix, and WAN as a **suggestion**, without changing the system. Verify the choice before activation; when routes are ambiguous the panel deliberately requires manual input. A one-interface server can use its default-route interface as LAN only after explicit acknowledgment in the UI.
+
+Use **Check readiness** to inspect permissions, assigned IP, existing Gateway recovery data and reserved policy-routing/firewall resources without applying any changes. The **Enable** or **Repair** action repeats preflight and requires confirmation, then creates the core-specific listener, waits for TCP and UDP sockets, configures forwarding, rp_filter, policy routing, nftables and boot restoration, and rolls back on supported failures. Gateway status refreshes quietly while the tab is visible and lists individual checks so failures can be diagnosed; the UI remains read-only for LAN/WAN settings until Gateway is disabled.
 
 The CLI uses the same network service and selects the configured core:
 
