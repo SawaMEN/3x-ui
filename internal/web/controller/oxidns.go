@@ -19,6 +19,7 @@ func NewOxiDNSController(g *gin.RouterGroup) *OxiDNSController {
 	g.GET("/status", c.status)
 	g.GET("/logs", c.logs)
 	g.POST("/check", c.checkDNS)
+	g.POST("/validate", c.validateDomain)
 	g.POST("/install", c.install)
 	g.POST("/update", c.update)
 	g.POST("/remove", c.remove)
@@ -50,6 +51,23 @@ func (a *OxiDNSController) status(c *gin.Context) {
 		s.Domain = strings.TrimSpace(domain)
 	}
 	jsonObj(c, s, nil)
+}
+
+// validateDomain preflights certificate and port configuration without starting OxiDNS.
+// DNS A/AAAA records and reachability are outside this check.
+func (a *OxiDNSController) validateDomain(c *gin.Context) {
+	var cfg oxidns.Settings
+	if err := c.ShouldBindJSON(&cfg); err != nil {
+		jsonMsg(c, "Неверные параметры DNS", err)
+		return
+	}
+	certFile, _ := a.settings.GetCertFile()
+	keyFile, _ := a.settings.GetKeyFile()
+	if err := oxidns.ValidateConfiguration(cfg, certFile, keyFile); err != nil {
+		jsonMsg(c, "Проверка DNS-домена и TLS-сертификата не пройдена", err)
+		return
+	}
+	jsonObj(c, gin.H{"valid": true}, nil)
 }
 
 // logs reads a bounded journal tail of the dedicated OxiDNS systemd unit.

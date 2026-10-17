@@ -27,7 +27,6 @@ import {
 import { HttpUtil } from '@/utils';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import './SystemUpdateModal.css';
-import OlcRTCClientsModal from './OlcRTCClientsModal';
 
 type SystemUpdatePackage = {
   name: string;
@@ -254,7 +253,6 @@ export default function SystemUpdateModal({
     [bundledDependencies, standaloneDependencies],
   );
   const [dependencyBusy, setDependencyBusy] = useState<DependencyKey | null>(null);
-  const [olcrtcSettingsOpen, setOlcrtcSettingsOpen] = useState(false);
 
   const loadDependencyUpdates = useCallback(async () => {
     const [core, sudoku, external, naive, oxidns, dnstt, olcrtc, telemt] = await Promise.all([
@@ -528,20 +526,6 @@ export default function SystemUpdateModal({
     }
   };
 
-  const restartOlcRTC = async () => {
-    setDependencyBusy('olcrtc');
-    try {
-      const response = (await HttpUtil.post('/panel/api/olcrtc/restart')) as ApiMsg<unknown>;
-      if (!response.success) throw new Error(response.msg || 'Не удалось перезапустить OlcRTC');
-      messageApi.info('OlcRTC: перезапуск службы запущен.');
-      await loadDependencyUpdates();
-    } catch (error) {
-      messageApi.error(error instanceof Error ? error.message : String(error));
-    } finally {
-      setDependencyBusy(null);
-    }
-  };
-
   useEffect(() => {
     if (!open || !dependencies.some((dependency) => dependency.key === 'olcrtc' && dependency.busy))
       return;
@@ -724,7 +708,6 @@ export default function SystemUpdateModal({
   return (
     <>
       {contextHolder}
-      <OlcRTCClientsModal open={olcrtcSettingsOpen} onClose={() => setOlcrtcSettingsOpen(false)} />
       <Modal
         rootClassName="system-update-modal"
         open={open}
@@ -958,8 +941,8 @@ export default function SystemUpdateModal({
                           style={{ display: 'block', marginBottom: 10 }}
                         >
                           {dependency.installed
-                            ? 'OxiDNS установлен. Настройте провайдера, sing-box и публичные DNS-протоколы на едином экране.'
-                            : 'Быстрый запуск: откройте sing-box → DNS, установите OxiDNS, выберите провайдера и нажмите «Включить DNS». До установки включение недоступно.'}
+                            ? 'Установлен. Создание и настройка DNS доступны в меню «sing-box → DNS».'
+                            : 'Установите OxiDNS здесь. После установки в «sing-box → DNS» появится мастер создания DNS. Установка сама по себе службу не включает.'}
                         </Typography.Text>
                       )}
                       {dependency.key === 'dnstt' && (
@@ -968,7 +951,7 @@ export default function SystemUpdateModal({
                           style={{ display: 'block', marginBottom: 10 }}
                         >
                           {dependency.installed
-                            ? 'DNSTT установлен. Нажмите «Настроить DNSTT» для создания ключей, настройки DNS-делегирования и запуска.'
+                            ? 'DNSTT установлен. Создание ключей, DNS-делегирование и запуск доступны в меню «sing-box → DNS».'
                             : 'Установите DNSTT здесь. После установки его настройки появятся в sing-box → DNS; после удаления исчезнут.'}
                         </Typography.Text>
                       )}
@@ -1027,53 +1010,6 @@ export default function SystemUpdateModal({
                         </Typography.Paragraph>
                       )}
                       <Space wrap>
-                        {(dependency.key === 'oxidns' ||
-                          (dependency.key === 'dnstt' && dependency.installed)) && (
-                          <Button
-                            size="small"
-                            type="primary"
-                            disabled={dependencyBusy !== null || systemUpdateBusy}
-                            href={`${(window.X_UI_BASE_PATH || '/').replace(/\/+$/, '')}/panel/singbox#dns`}
-                            onClick={onClose}
-                          >
-                            {dependency.key === 'dnstt'
-                              ? 'Настроить DNSTT'
-                              : dependency.installed
-                                ? 'Настроить DNS'
-                                : 'Быстрый запуск DNS'}
-                          </Button>
-                        )}
-                        {dependency.key === 'telemt' && dependency.installed && (
-                          <Button
-                            size="small"
-                            type="primary"
-                            href={`${(window.X_UI_BASE_PATH || '/').replace(/\/+$/, '')}/panel/inbounds?tab=telemt`}
-                            onClick={onClose}
-                          >
-                            Открыть MTProto
-                          </Button>
-                        )}
-                        {dependency.key === 'olcrtc' && dependency.installed && (
-                          <Button
-                            size="small"
-                            onClick={() => setOlcrtcSettingsOpen(true)}
-                            disabled={!dependency.running || dependency.busy}
-                          >
-                            Настроить клиентов
-                          </Button>
-                        )}
-                        {dependency.key === 'olcrtc' && dependency.installed && (
-                          <Button
-                            size="small"
-                            icon={<ReloadOutlined />}
-                            onClick={() => void restartOlcRTC()}
-                            disabled={
-                              dependency.busy || systemUpdateBusy || dependencyBusy !== null
-                            }
-                          >
-                            Перезапустить службу
-                          </Button>
-                        )}
                         {action.supported === false ? (
                           <Alert
                             type="info"

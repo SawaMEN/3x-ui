@@ -8,7 +8,6 @@ import {
   Input,
   InputNumber,
   Modal,
-  Popconfirm,
   Select,
   Space,
   Switch,
@@ -18,18 +17,17 @@ import {
 } from 'antd';
 import {
   CheckCircleOutlined,
-  CloudDownloadOutlined,
-  DeleteOutlined,
   PoweroffOutlined,
   ReloadOutlined,
   SafetyCertificateOutlined,
   SettingOutlined,
-  SyncOutlined,
 } from '@ant-design/icons';
 import { HttpUtil } from '@/utils';
 
 type DNSConfig = {
   domain: string;
+  certFile: string;
+  keyFile: string;
   doh: boolean;
   http3: boolean;
   dot: boolean;
@@ -63,6 +61,8 @@ const defaults: DNSState = {
   running: false,
   supported: true,
   domain: '',
+  certFile: '',
+  keyFile: '',
   doh: false,
   http3: false,
   dot: false,
@@ -84,6 +84,8 @@ const providers = [
 ];
 const getConfig = (state: DNSState): DNSConfig => ({
   domain: state.domain || '',
+  certFile: state.certFile || '',
+  keyFile: state.keyFile || '',
   doh: state.doh ?? false,
   http3: state.http3 ?? false,
   dot: state.dot ?? false,
@@ -100,12 +102,11 @@ export default function OxiDNSSettings() {
   const [status, setStatus] = useState<DNSState>(defaults);
   const [draft, setDraft] = useState<DNSConfig>(() => getConfig(defaults));
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState<'install' | 'apply' | 'disable' | 'update' | 'remove' | null>(
-    null,
-  );
+  const [busy, setBusy] = useState<'apply' | 'disable' | null>(null);
   const [checking, setChecking] = useState(false);
-  const [checkingUpdates, setCheckingUpdates] = useState(false);
-  const [updatesChecked, setUpdatesChecked] = useState(false);
+  const [checkingDomain, setCheckingDomain] = useState(false);
+  const [domainCheckResult, setDomainCheckResult] = useState<'ok' | 'error' | null>(null);
+  const [domainCheckError, setDomainCheckError] = useState('');
   const [verified, setVerified] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showMaintenance, setShowMaintenance] = useState(false);
@@ -115,31 +116,26 @@ export default function OxiDNSSettings() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
-  const refresh = useCallback(
-    async (checkUpdates = false, keepDraft = false, keepError = false) => {
-      try {
-        const response = (await HttpUtil.get(
-          '/panel/api/oxidns/status' + (checkUpdates ? '?check=true' : ''),
-          undefined,
-          { silent: true, timeout: checkUpdates ? 26000 : 10000 },
-        )) as APIResponse;
-        if (!response.success || !response.obj)
-          throw new Error(response.msg || 'Не удалось получить состояние DNS.');
-        setStatus(response.obj);
-        if (!keepDraft) {
-          setDraft(getConfig(response.obj));
-          if (response.obj.doh || response.obj.dot || response.obj.doq) setShowAdvanced(true);
-        }
-        if (checkUpdates) setUpdatesChecked(true);
-        if (!keepError) setError('');
-      } catch (cause) {
-        setError(cause instanceof Error ? cause.message : 'Не удалось получить состояние DNS.');
-      } finally {
-        setLoading(false);
+  const refresh = useCallback(async (keepDraft = false, keepError = false) => {
+    try {
+      const response = (await HttpUtil.get('/panel/api/oxidns/status', undefined, {
+        silent: true,
+        timeout: 10000,
+      })) as APIResponse;
+      if (!response.success || !response.obj)
+        throw new Error(response.msg || 'Не удалось получить состояние DNS.');
+      setStatus(response.obj);
+      if (!keepDraft) {
+        setDraft(getConfig(response.obj));
+        if (response.obj.doh || response.obj.dot || response.obj.doq) setShowAdvanced(true);
       }
-    },
-    [],
-  );
+      if (!keepError) setError('');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Не удалось получить состояние DNS.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -148,7 +144,6 @@ export default function OxiDNSSettings() {
     });
     const onChanged = () => {
       setNotice('');
-      setUpdatesChecked(false);
       void refresh();
     };
     window.addEventListener('oxidns:changed', onChanged);
@@ -163,6 +158,8 @@ export default function OxiDNSSettings() {
     setError('');
     setNotice('');
     setVerified(false);
+    setDomainCheckResult(null);
+    setDomainCheckError('');
   };
   const applied = getConfig(status);
   const dirty = (Object.keys(applied) as (keyof DNSConfig)[]).some(
@@ -181,14 +178,30 @@ export default function OxiDNSSettings() {
     (draft.doh && draft.dot && draft.port === draft.dotPort) ||
     (draft.doh && draft.http3 && draft.doq && draft.port === draft.doqPort);
   const unused = !draft.useSingBox && !external;
+  const incompleteDNSCertificate =
+    external && Boolean(draft.certFile.trim()) !== Boolean(draft.keyFile.trim());
+  const externalPorts = [
+    ...(draft.doh
+      ? [`TCP/${draft.port} (DoH)`, ...(draft.http3 ? [`UDP/${draft.port} (HTTP/3)`] : [])]
+      : []),
+    ...(draft.dot ? [`TCP/${draft.dotPort} (DoT)`] : []),
+    ...(draft.doq ? [`UDP/${draft.doqPort} (DoQ)`] : []),
+  ].join(', ');
   const configMode = !external ? 'local' : draft.doh && draft.dot && draft.doq ? 'all' : 'custom';
+  const modeDescription = !external
+    ? 'Рекомендуется для VPN: OxiDNS будет автоматически использоваться в sing-box. Домен, сертификат и открытые порты не требуются.'
+    : draft.doh && !draft.dot && !draft.doq
+      ? 'Для телефонов и браузеров: появится личный адрес DNS-over-HTTPS. Потребуется домен, действующий сертификат и открытый HTTPS-порт.'
+      : 'Расширенный режим: включены дополнительные DNS-протоколы. Проверьте домен, TLS-сертификат и порты перед запуском.';
   const setupHint = domainInvalid
-    ? 'Для доступа с других устройств укажите домен, который указан в TLS-сертификате панели.'
+    ? 'Впишите полный DNS-поддомен, например dns.example.com. Он может отличаться от адреса панели.'
     : invalidPort || conflictPorts
       ? 'Измените порты: они должны быть допустимыми и не пересекаться у одинакового транспорта.'
-      : unused
-        ? 'Включите использование в sing-box либо выберите внешний защищённый DNS.'
-        : '';
+      : incompleteDNSCertificate
+        ? 'Укажите оба пути к сертификату DNS и его ключу либо оставьте оба пустыми для сертификата панели.'
+        : unused
+          ? 'Включите использование в sing-box либо выберите внешний защищённый DNS.'
+          : '';
   const chooseMode = (mode: 'local' | 'doh' | 'all') => {
     if (mode === 'local') {
       patch({ useSingBox: true, doh: false, dot: false, doq: false, http3: false });
@@ -201,24 +214,23 @@ export default function OxiDNSSettings() {
       setShowAdvanced(true);
     }
   };
-  const locked = busy !== null || checking || checkingUpdates;
+  const locked = busy !== null || checking || checkingDomain;
   const canApply =
     status.installed &&
     status.supported &&
     !domainInvalid &&
     !invalidPort &&
     !conflictPorts &&
+    !incompleteDNSCertificate &&
     !unused;
   const isHealthy = status.installed && status.enabled && status.running;
-  const primaryLabel = !status.installed
-    ? 'Сначала установите OxiDNS'
-    : !status.enabled
-      ? 'Включить DNS'
-      : dirty
-        ? 'Сохранить и применить'
-        : status.running
-          ? 'Перезапустить DNS'
-          : 'Повторить запуск';
+  const primaryLabel = !status.enabled
+    ? 'Создать и включить DNS'
+    : dirty
+      ? 'Сохранить и применить'
+      : status.running
+        ? 'Перезапустить DNS'
+        : 'Повторить запуск';
   const statusLabel = !status.installed
     ? 'Не установлен'
     : isHealthy
@@ -237,22 +249,6 @@ export default function OxiDNSSettings() {
     return response.obj;
   };
 
-  const install = async () => {
-    setBusy('install');
-    setError('');
-    setNotice('');
-    try {
-      const next = await request('install');
-      setStatus(next);
-      setNotice('OxiDNS установлен. Проверьте настройки и нажмите «Включить DNS».');
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Не удалось установить OxiDNS.');
-      await refresh(false, true, true);
-    } finally {
-      setBusy(null);
-    }
-  };
-
   const apply = async (enable: boolean) => {
     if (enable && !canApply) {
       setError('Проверьте настройки DNS: провайдер, подключение, домен и порты.');
@@ -264,12 +260,18 @@ export default function OxiDNSSettings() {
     try {
       const next = await request(
         enable ? 'setup' : 'disable',
-        enable ? { ...draft, domain: draft.domain.trim() } : undefined,
+        enable
+          ? {
+              ...draft,
+              domain: draft.domain.trim().toLowerCase(),
+              certFile: draft.certFile.trim(),
+              keyFile: draft.keyFile.trim(),
+            }
+          : undefined,
       );
       setStatus(next);
       setDraft(getConfig(next));
       setVerified(enable && next.running);
-      setUpdatesChecked(false);
       window.dispatchEvent(new Event('oxidns:changed'));
       setNotice(
         enable
@@ -278,9 +280,37 @@ export default function OxiDNSSettings() {
       );
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Не удалось изменить DNS.');
-      await refresh(false, true, true);
+      await refresh(true, true);
     } finally {
       setBusy(null);
+    }
+  };
+
+  const checkDomain = async () => {
+    if (!external || domainInvalid || incompleteDNSCertificate) return;
+    setCheckingDomain(true);
+    setDomainCheckResult(null);
+    setDomainCheckError('');
+    try {
+      const response = (await HttpUtil.post(
+        '/panel/api/oxidns/validate',
+        {
+          ...draft,
+          domain: draft.domain.trim().toLowerCase(),
+          certFile: draft.certFile.trim(),
+          keyFile: draft.keyFile.trim(),
+        },
+        { silent: true, timeout: 12000 },
+      )) as APIResponse<{ valid: boolean }>;
+      if (!response.success || !response.obj?.valid) {
+        throw new Error(response.msg || 'Сертификат не соответствует выбранному DNS-домену.');
+      }
+      setDomainCheckResult('ok');
+    } catch (cause) {
+      setDomainCheckResult('error');
+      setDomainCheckError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setCheckingDomain(false);
     }
   };
 
@@ -301,45 +331,6 @@ export default function OxiDNSSettings() {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setChecking(false);
-    }
-  };
-
-  const update = async () => {
-    setBusy('update');
-    setError('');
-    setNotice('');
-    try {
-      const next = await request('update');
-      setStatus(next);
-      setDraft(getConfig(next));
-      setUpdatesChecked(false);
-      window.dispatchEvent(new Event('oxidns:changed'));
-      setNotice('Компонент OxiDNS обновлён. Рабочие настройки сохранены.');
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Не удалось обновить OxiDNS.');
-      await refresh(false, true, true);
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const remove = async () => {
-    setBusy('remove');
-    setError('');
-    setNotice('');
-    try {
-      const next = await request('remove', undefined, 90000);
-      setStatus(next);
-      setDraft(getConfig(next));
-      setVerified(false);
-      setUpdatesChecked(false);
-      window.dispatchEvent(new Event('oxidns:changed'));
-      setNotice('OxiDNS удалён. Служба остановлена, настройки компонента очищены.');
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Не удалось удалить OxiDNS.');
-      await refresh(false, true, true);
-    } finally {
-      setBusy(null);
     }
   };
 
@@ -389,260 +380,156 @@ export default function OxiDNSSettings() {
       {contextHolder}
       <Space orientation="vertical" size={16} style={{ width: '100%' }}>
         <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-          Собственный DNS на вашем сервере: шифрованный DNS к выбранному провайдеру, кэширование и
-          автоматическое подключение к sing-box. Не требует домена или сертификата для локального
-          использования.
+          Создайте DNS-сервис на сервере без ручного редактирования конфигурации. OxiDNS получает
+          ответы от выбранного защищённого DNS-провайдера и кэширует их. Для VPN через sing-box
+          достаточно выбрать провайдера и включить DNS — домен не нужен.
         </Typography.Paragraph>
 
-        {status.supported === false && (
-          <Alert
-            type="warning"
-            showIcon
-            title="Автоматическая установка недоступна"
-            description={
-              status.unsupportedReason || 'Требуется Linux с запущенным systemd и права root.'
-            }
-          />
-        )}
-        {error && (
-          <Alert
-            type="error"
-            showIcon
-            title="Операция не выполнена"
-            description={error}
-            action={
-              <Button size="small" onClick={() => void refresh(false, true)}>
-                Обновить статус
-              </Button>
-            }
-          />
-        )}
-        {notice && <Alert type="success" showIcon title={notice} />}
-        {status.enabled && !status.running && (
-          <Alert
-            type="warning"
-            showIcon
-            title="Служба DNS не запущена"
-            description="Можно повторить запуск, сменить провайдера или открыть журнал ошибок ниже."
-          />
-        )}
-
-        {isHealthy && (
-          <Alert
-            type={verified ? 'success' : 'info'}
-            showIcon
-            title={verified ? 'DNS работает — запрос успешно проверен' : 'Служба OxiDNS запущена'}
-            description={
-              status.useSingBox
-                ? 'DNS подключён к sing-box. Существующие правила DNS не удалены.'
-                : 'OxiDNS работает отдельно от sing-box. Включите подключение ниже при необходимости.'
-            }
-          />
-        )}
-
-        <Card
-          size="small"
-          title={isHealthy ? 'Настройки DNS' : 'Быстрый запуск'}
-          extra={!status.installed && status.supported ? <Tag>Требуется установка</Tag> : undefined}
-        >
-          <Space orientation="vertical" size={14} style={{ width: '100%' }}>
-            <div>
-              <Typography.Text strong>1. Как вы хотите использовать DNS?</Typography.Text>
-              <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
-                Выберите готовый вариант. Панель заполнит параметры автоматически, их можно изменить
-                ниже.
-              </Typography.Paragraph>
-              <Space wrap>
-                <Button
-                  type={configMode === 'local' ? 'primary' : 'default'}
-                  disabled={locked}
-                  onClick={() => chooseMode('local')}
-                >
-                  Только для sing-box
-                </Button>
-                <Button
-                  type={draft.doh && !draft.dot && !draft.doq ? 'primary' : 'default'}
-                  disabled={locked}
-                  onClick={() => chooseMode('doh')}
-                >
-                  Sing-box + DoH для устройств
-                </Button>
-                <Button
-                  type={configMode === 'all' ? 'primary' : 'default'}
-                  disabled={locked}
-                  onClick={() => chooseMode('all')}
-                >
-                  Все протоколы
-                </Button>
-              </Space>
-            </div>
-            <Divider style={{ margin: '2px 0' }} />
-            <div>
-              <Typography.Text strong>2. DNS-провайдер</Typography.Text>
-              <Select
-                aria-label="DNS-провайдер"
-                style={{ width: '100%', marginTop: 8 }}
-                value={draft.upstream}
-                options={providers}
-                disabled={locked}
-                onChange={(upstream) => patch({ upstream })}
+        {!status.installed ? (
+          <>
+            {error && (
+              <Alert
+                type="error"
+                showIcon
+                title="Не удалось проверить OxiDNS"
+                description={error}
               />
-              <Typography.Text type="secondary">
-                Все провайдеры используются через зашифрованный DNS-over-TLS (TCP/853).
-              </Typography.Text>
-            </div>
-            <Space align="start" style={{ display: 'flex' }}>
-              <Switch
-                aria-label="Подключить OxiDNS к sing-box"
-                checked={draft.useSingBox}
-                disabled={locked}
-                onChange={(useSingBox) => patch({ useSingBox })}
-              />
-              <div>
-                <Typography.Text strong>Использовать в sing-box</Typography.Text>
-                <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                  Рекомендуется. Панель сама подключит OxiDNS как основной DNS, не удаляя
-                  пользовательские DNS-правила.
-                </Typography.Paragraph>
-              </div>
-            </Space>
-
-            {setupHint && (
-              <Alert type="warning" showIcon title="Проверьте настройку" description={setupHint} />
             )}
-            {unused && (
+            <Alert
+              type="info"
+              showIcon
+              title="Для работы требуется установка OxiDNS"
+              description={
+                <Typography.Paragraph style={{ marginBottom: 0 }}>
+                  Откройте «Настройки → Системные пакеты и ядро Linux → OxiDNS» и нажмите
+                  «Установить OxiDNS». После установки вернитесь сюда: появятся настройки для
+                  создания собственного DNS. Установка не включает DNS автоматически.
+                </Typography.Paragraph>
+              }
+            />
+          </>
+        ) : (
+          <>
+            {status.supported === false && (
               <Alert
                 type="warning"
                 showIcon
-                title="DNS не будет использоваться"
-                description="Подключите sing-box или включите хотя бы один публичный протокол в дополнительных настройках."
+                title="OxiDNS не поддерживается на этой системе"
+                description={
+                  status.unsupportedReason || 'Требуется Linux с запущенным systemd и права root.'
+                }
               />
             )}
-            {dirty && status.enabled && (
-              <Alert type="info" showIcon title="Настройки изменены, но ещё не применены" />
+            {error && (
+              <Alert
+                type="error"
+                showIcon
+                title="Операция не выполнена"
+                description={error}
+                action={
+                  <Button size="small" onClick={() => void refresh(true)}>
+                    Обновить статус
+                  </Button>
+                }
+              />
             )}
-            <Typography.Text strong>3. Примените настройки</Typography.Text>
-            <Space wrap>
-              {!status.installed && (
-                <Button
-                  icon={<CloudDownloadOutlined />}
-                  aria-label="Установить OxiDNS"
-                  loading={busy === 'install'}
-                  disabled={locked || !status.supported}
-                  onClick={() => void install()}
-                >
-                  Установить OxiDNS
-                </Button>
-              )}
-              <Button
-                type="primary"
-                size="large"
-                aria-label={primaryLabel}
-                icon={!status.installed ? <CloudDownloadOutlined /> : <CheckCircleOutlined />}
-                loading={busy === 'apply'}
-                disabled={(locked && busy !== 'apply') || !canApply}
-                onClick={() => void apply(true)}
-              >
-                {primaryLabel}
-              </Button>
-              {status.enabled && (
-                <Button
-                  danger
-                  aria-label="Выключить"
-                  icon={<PoweroffOutlined />}
-                  loading={busy === 'disable'}
-                  disabled={locked && busy !== 'disable'}
-                  onClick={() => void apply(false)}
-                >
-                  Выключить
-                </Button>
-              )}
-              {dirty && (
-                <Button
-                  disabled={locked}
-                  onClick={() => {
-                    setDraft(getConfig(status));
-                    setError('');
-                    setNotice('');
-                  }}
-                >
-                  Отменить изменения
-                </Button>
-              )}
-            </Space>
-            {!status.installed && (
-              <Typography.Text type="secondary">
-                Сначала установите компонент здесь или в разделе «Обновления пакетов и ядер Linux».
-                Установка скачает и проверит официальный файл. DNS останется выключенным до
-                применения настроек; при ошибке установки включение недоступно.
-              </Typography.Text>
+            {notice && <Alert type="success" showIcon title={notice} />}
+            {status.enabled && !status.running && (
+              <Alert
+                type="warning"
+                showIcon
+                title="Служба DNS не запущена"
+                description="Можно повторить запуск, сменить провайдера или открыть журнал ошибок ниже."
+              />
             )}
-          </Space>
-        </Card>
 
-        <Collapse
-          activeKey={showAdvanced ? ['public'] : []}
-          onChange={(keys) => setShowAdvanced(keys.includes('public'))}
-          items={[
-            {
-              key: 'public',
-              label: (
-                <Space>
-                  <SettingOutlined />
-                  <span>Дополнительные настройки: DoH, DoT, DoQ и HTTP/3</span>
-                  {external && <Tag color="processing">Включены</Tag>}
-                </Space>
-              ),
-              children: (
-                <Space orientation="vertical" size={14} style={{ width: '100%' }}>
-                  <Alert
-                    type="info"
-                    showIcon
-                    title="Защищённый DNS для других устройств"
-                    description="Необязательно. Публичные протоколы требуют домен, действующий сертификат панели и открытые порты. Панель не меняет firewall. Не включайте внешний DNS, если он вам не нужен."
+            {isHealthy && (
+              <Alert
+                type={verified ? 'success' : 'info'}
+                showIcon
+                title={
+                  verified ? 'DNS работает — запрос успешно проверен' : 'Служба OxiDNS запущена'
+                }
+                description={
+                  status.useSingBox
+                    ? 'DNS подключён к sing-box. Существующие правила DNS не удалены.'
+                    : 'OxiDNS работает отдельно от sing-box. Включите подключение ниже при необходимости.'
+                }
+              />
+            )}
+
+            <Card size="small" title={isHealthy ? 'Настройки DNS' : 'Создание собственного DNS'}>
+              <Space orientation="vertical" size={14} style={{ width: '100%' }}>
+                <div>
+                  <Typography.Text strong>Шаг 1. Для чего нужен DNS?</Typography.Text>
+                  <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
+                    Выберите задачу: необходимые параметры будут выставлены автоматически.
+                  </Typography.Paragraph>
+                  <Space wrap>
+                    <Button
+                      type={configMode === 'local' ? 'primary' : 'default'}
+                      disabled={locked}
+                      onClick={() => chooseMode('local')}
+                    >
+                      Для VPN / sing-box
+                    </Button>
+                    <Button
+                      type={draft.doh && !draft.dot && !draft.doq ? 'primary' : 'default'}
+                      disabled={locked}
+                      onClick={() => chooseMode('doh')}
+                    >
+                      Для телефона и браузера (DoH)
+                    </Button>
+                    <Button
+                      type={configMode === 'all' ? 'primary' : 'default'}
+                      disabled={locked}
+                      onClick={() => chooseMode('all')}
+                    >
+                      Все протоколы (опытным)
+                    </Button>
+                  </Space>
+                  <Alert style={{ marginTop: 12 }} type="info" showIcon title={modeDescription} />
+                </div>
+                <Divider style={{ margin: '2px 0' }} />
+                <div>
+                  <Typography.Text strong>Шаг 2. Откуда получать DNS-ответы?</Typography.Text>
+                  <Select
+                    aria-label="DNS-провайдер"
+                    style={{ width: '100%', marginTop: 8 }}
+                    value={draft.upstream}
+                    options={providers}
+                    disabled={locked}
+                    onChange={(upstream) => patch({ upstream })}
                   />
-                  <Space align="center" style={{ display: 'flex' }}>
-                    <Switch
-                      aria-label="Включить публичный DoH"
-                      checked={draft.doh}
-                      disabled={locked}
-                      onChange={(doh) => patch({ doh, ...(doh ? {} : { http3: false }) })}
-                    />
-                    <Typography.Text>DoH — DNS-over-HTTPS (TCP)</Typography.Text>
-                  </Space>
-                  {draft.doh && (
-                    <Space align="center" style={{ display: 'flex' }}>
-                      <Switch
-                        aria-label="Включить HTTP/3"
-                        checked={draft.http3}
-                        disabled={locked}
-                        onChange={(http3) => patch({ http3 })}
-                      />
-                      <Typography.Text>HTTP/3 для DoH (дополнительно UDP)</Typography.Text>
-                    </Space>
-                  )}
-                  <Space align="center" style={{ display: 'flex' }}>
-                    <Switch
-                      aria-label="Включить DoT"
-                      checked={draft.dot}
-                      disabled={locked}
-                      onChange={(dot) => patch({ dot })}
-                    />
-                    <Typography.Text>DoT — DNS-over-TLS (TCP)</Typography.Text>
-                  </Space>
-                  <Space align="center" style={{ display: 'flex' }}>
-                    <Switch
-                      aria-label="Включить DoQ"
-                      checked={draft.doq}
-                      disabled={locked}
-                      onChange={(doq) => patch({ doq })}
-                    />
-                    <Typography.Text>DoQ — DNS-over-QUIC (UDP)</Typography.Text>
-                  </Space>
-                  {external && (
-                    <>
+                  <Typography.Text type="secondary">
+                    Это внешний защищённый DNS, через который OxiDNS разрешает домены. Связь с ним
+                    шифруется по DNS-over-TLS (TCP/853).
+                  </Typography.Text>
+                </div>
+                <Space align="start" style={{ display: 'flex' }}>
+                  <Switch
+                    aria-label="Подключить OxiDNS к sing-box"
+                    checked={draft.useSingBox}
+                    disabled={locked}
+                    onChange={(useSingBox) => patch({ useSingBox })}
+                  />
+                  <div>
+                    <Typography.Text strong>Использовать в sing-box</Typography.Text>
+                    <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+                      Рекомендуется. Панель сама подключит OxiDNS как основной DNS, не удаляя
+                      пользовательские DNS-правила.
+                    </Typography.Paragraph>
+                  </div>
+                </Space>
+
+                {external && (
+                  <Card size="small" title="Свой DNS-поддомен: пошаговая настройка">
+                    <Space orientation="vertical" size={12} style={{ width: '100%' }}>
+                      <Typography.Text>
+                        DNS может работать на любом вашем поддомене, даже если адрес панели другой.
+                      </Typography.Text>
                       <div>
-                        <Typography.Text strong>Домен с TLS-сертификатом панели</Typography.Text>
+                        <Typography.Text strong>1. Укажите DNS-поддомен</Typography.Text>
                         <Input
                           aria-label="Домен защищённого DNS"
                           style={{ marginTop: 6 }}
@@ -654,230 +541,375 @@ export default function OxiDNSSettings() {
                         />
                         {domainInvalid && (
                           <Typography.Text type="danger">
-                            Укажите корректное доменное имя, присутствующее в TLS-сертификате
-                            панели.
+                            Укажите полное имя, например dns.example.com, без https:// и пути.
                           </Typography.Text>
                         )}
                       </div>
-                      {draft.doh && (
-                        <div>
-                          <Typography.Text>
-                            HTTPS-порт DoH (TCP; также UDP для HTTP/3)
-                          </Typography.Text>
-                          <InputNumber
-                            aria-label="HTTPS-порт DoH"
-                            style={{ display: 'block', marginTop: 6, width: 170 }}
-                            min={1}
-                            max={65535}
-                            value={draft.port}
-                            disabled={locked}
-                            onChange={(port) => patch({ port: port ?? 8443 })}
-                          />
-                        </div>
-                      )}
-                      {draft.dot && (
-                        <div>
-                          <Typography.Text>Порт DoT (TCP)</Typography.Text>
-                          <InputNumber
-                            aria-label="Порт DoT"
-                            style={{ display: 'block', marginTop: 6, width: 170 }}
-                            min={1}
-                            max={65535}
-                            value={draft.dotPort}
-                            disabled={locked}
-                            onChange={(dotPort) => patch({ dotPort: dotPort ?? 853 })}
-                          />
-                        </div>
-                      )}
-                      {draft.doq && (
-                        <div>
-                          <Typography.Text>Порт DoQ (UDP)</Typography.Text>
-                          <InputNumber
-                            aria-label="Порт DoQ"
-                            style={{ display: 'block', marginTop: 6, width: 170 }}
-                            min={1}
-                            max={65535}
-                            value={draft.doqPort}
-                            disabled={locked}
-                            onChange={(doqPort) => patch({ doqPort: doqPort ?? 853 })}
-                          />
-                        </div>
-                      )}
-                      {invalidPort && (
-                        <Typography.Text type="danger">
-                          Порт должен быть от 1 до 65535. Порт 15353 зарезервирован для локального
-                          DNS.
+                      <div>
+                        <Typography.Text strong>2. Создайте DNS-запись</Typography.Text>
+                        <Typography.Paragraph type="secondary" style={{ marginBottom: 4 }}>
+                          У регистратора или DNS-провайдера создайте A-запись для имени{' '}
+                          <Typography.Text code copyable>
+                            {draft.domain.trim() || 'dns.example.com'}
+                          </Typography.Text>{' '}
+                          со значением «публичный IPv4 вашего сервера». При наличии публичного IPv6
+                          добавьте AAAA-запись. Для прямого DNS-сервера выключите проксирование
+                          записи (например, DNS only в Cloudflare).
+                        </Typography.Paragraph>
+                        <Typography.Text type="secondary">
+                          Изменение DNS-записей может распространяться некоторое время.
                         </Typography.Text>
-                      )}
-                      {conflictPorts && (
-                        <Typography.Text type="danger">
-                          Конфликт TCP/UDP-портов. Выберите разные порты для конфликтующих служб.
-                        </Typography.Text>
-                      )}
-                      <Typography.Text type="secondary">
-                        Домен проверяется на сервере по TLS-сертификату до запуска. Убедитесь, что
-                        DNS домена указывает на сервер и необходимые порты доступны извне.
-                      </Typography.Text>
-                    </>
-                  )}
-                </Space>
-              ),
-            },
-          ]}
-        />
-
-        {isHealthy && (
-          <Card size="small" title="Адреса подключения">
-            <Space orientation="vertical" size={4} style={{ width: '100%' }}>
-              {endpoint(
-                'Локальный DNS для приложений сервера',
-                status.localAddress || '127.0.0.1:15353',
-                'Доступен только на сервере, не подходит для внешних устройств.',
-              )}
-              {status.doh &&
-                status.dohUrl &&
-                endpoint(
-                  'DoH — HTTPS',
-                  status.dohUrl,
-                  status.http3
-                    ? 'По этому же URL доступен HTTP/3, если его поддерживает клиент.'
-                    : 'Вставьте URL в настройки DNS-over-HTTPS клиента.',
-                )}
-              {status.dot &&
-                status.dotAddress &&
-                endpoint(
-                  'DoT — TLS',
-                  'tls://' + status.dotAddress,
-                  'Используйте домен и указанный TCP-порт.',
-                )}
-              {status.doq &&
-                status.doqAddress &&
-                endpoint(
-                  'DoQ — QUIC',
-                  'quic://' + status.doqAddress,
-                  'Используйте домен и указанный UDP-порт.',
-                )}
-              <Space wrap>
-                <Button
-                  aria-label="Проверить DNS-запрос"
-                  icon={<SafetyCertificateOutlined />}
-                  loading={checking}
-                  disabled={locked && !checking}
-                  onClick={() => void checkDNS()}
-                >
-                  Проверить DNS-запрос
-                </Button>
-                <Button
-                  aria-label="Обновить состояние"
-                  icon={<ReloadOutlined />}
-                  disabled={locked}
-                  onClick={() => void refresh()}
-                >
-                  Обновить состояние
-                </Button>
-              </Space>
-            </Space>
-          </Card>
-        )}
-
-        <Collapse
-          activeKey={showMaintenance ? ['maintenance'] : []}
-          onChange={(keys) => setShowMaintenance(keys.includes('maintenance'))}
-          items={[
-            {
-              key: 'maintenance',
-              label: (
-                <Space>
-                  <SettingOutlined /> Обслуживание и диагностика OxiDNS{' '}
-                  {status.updateAvailable && <Tag color="processing">Обновление</Tag>}
-                </Space>
-              ),
-              children: (
-                <Card size="small" title="Управление компонентом">
-                  <Space orientation="vertical" size={10} style={{ width: '100%' }}>
-                    <Typography.Text type="secondary">
-                      {status.installed
-                        ? 'Установленная версия: ' + (status.installedVersion || 'не определена')
-                        : 'Компонент ещё не установлен. Он установится автоматически при включении DNS.'}
-                      {updatesChecked && status.latestVersion
-                        ? '. Последняя версия: ' + status.latestVersion
-                        : ''}
-                    </Typography.Text>
-                    {updatesChecked && status.error && (
-                      <Alert type="warning" showIcon title={status.error} />
-                    )}
-                    {updatesChecked &&
-                      status.installed &&
-                      status.updateAvailable === false &&
-                      !status.error && <Tag color="success">Последняя версия установлена</Tag>}
-                    {status.updateAvailable && (
-                      <Alert type="info" showIcon title="Доступно обновление OxiDNS" />
-                    )}
-                    <Space wrap>
+                      </div>
+                      <div>
+                        <Typography.Text strong>3. Подготовьте TLS-сертификат</Typography.Text>
+                        <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+                          Нужен действующий сертификат для этого поддомена или подходящий wildcard
+                          (например, *.example.com для dns.example.com). Если сертификат панели
+                          покрывает поддомен, дополнительные поля не нужны. Иначе выпустите
+                          отдельный сертификат и укажите пути к файлам ниже. Панель не выпускает
+                          сертификаты автоматически.
+                        </Typography.Paragraph>
+                      </div>
+                      <div>
+                        <Typography.Text strong>4. Разрешите входящие порты</Typography.Text>
+                        <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+                          Откройте в firewall сервера и у хостера:{' '}
+                          <Typography.Text code>{externalPorts}</Typography.Text>. Убедитесь, что
+                          порты не заняты панелью, Xray или другими службами.
+                        </Typography.Paragraph>
+                      </div>
                       <Button
-                        aria-label="Проверить обновления"
-                        icon={<SyncOutlined />}
-                        loading={checkingUpdates}
-                        disabled={locked && !checkingUpdates}
-                        onClick={async () => {
-                          setCheckingUpdates(true);
-                          try {
-                            await refresh(true, true);
-                          } finally {
-                            setCheckingUpdates(false);
-                          }
-                        }}
+                        onClick={() => void checkDomain()}
+                        loading={checkingDomain}
+                        disabled={
+                          locked ||
+                          domainInvalid ||
+                          invalidPort ||
+                          conflictPorts ||
+                          incompleteDNSCertificate
+                        }
                       >
-                        Проверить обновления
+                        Проверить DNS-домен и сертификат
                       </Button>
-                      {status.installed && status.updateAvailable && (
-                        <Button
-                          type="primary"
-                          aria-label="Обновить OxiDNS"
-                          icon={<CloudDownloadOutlined />}
-                          loading={busy === 'update'}
-                          disabled={locked && busy !== 'update'}
-                          onClick={() => void update()}
-                        >
-                          Обновить OxiDNS
-                        </Button>
+                      {domainCheckResult === 'ok' && (
+                        <Alert
+                          type="success"
+                          showIcon
+                          title="Сертификат подходит выбранному DNS-поддомену"
+                          description="Сертификат и имя проверены. A/AAAA-записи и доступность портов из интернета не проверялись — выполните эти шаги отдельно."
+                        />
                       )}
-                      {status.installed && (
-                        <Button disabled={locked} onClick={() => void openLogs()}>
-                          Журнал службы
-                        </Button>
-                      )}
-                      {status.installed && (
-                        <Popconfirm
-                          title="Удалить OxiDNS полностью?"
-                          description="Служба будет остановлена, её файлы и настройки удалены, а sing-box переключится с OxiDNS."
-                          okText="Удалить"
-                          okButtonProps={{ danger: true }}
-                          cancelText="Отмена"
-                          onConfirm={() => void remove()}
-                        >
-                          <Button
-                            danger
-                            aria-label="Удалить OxiDNS"
-                            icon={<DeleteOutlined />}
-                            loading={busy === 'remove'}
-                            disabled={locked && busy !== 'remove'}
-                          >
-                            Удалить OxiDNS
-                          </Button>
-                        </Popconfirm>
+                      {domainCheckResult === 'error' && (
+                        <Alert
+                          type="warning"
+                          showIcon
+                          title="Проверка TLS не пройдена"
+                          description={domainCheckError}
+                        />
                       )}
                     </Space>
-                    <Typography.Text type="secondary">
-                      Установка, обновление и удаление также доступны в «Настройки → Обновления
-                      пакетов и ядер Linux».
-                    </Typography.Text>
+                  </Card>
+                )}
+                {setupHint && (
+                  <Alert
+                    type="warning"
+                    showIcon
+                    title="Проверьте настройку"
+                    description={setupHint}
+                  />
+                )}
+                {unused && (
+                  <Alert
+                    type="warning"
+                    showIcon
+                    title="DNS не будет использоваться"
+                    description="Подключите sing-box или включите хотя бы один публичный протокол в дополнительных настройках."
+                  />
+                )}
+                {dirty && status.enabled && (
+                  <Alert type="info" showIcon title="Настройки изменены, но ещё не применены" />
+                )}
+                <Typography.Text strong>Шаг 3. Создайте и запустите DNS</Typography.Text>
+                <Space wrap>
+                  <Button
+                    type="primary"
+                    size="large"
+                    aria-label={primaryLabel}
+                    icon={<CheckCircleOutlined />}
+                    loading={busy === 'apply'}
+                    disabled={(locked && busy !== 'apply') || !canApply}
+                    onClick={() => void apply(true)}
+                  >
+                    {primaryLabel}
+                  </Button>
+                  {status.enabled && (
+                    <Button
+                      danger
+                      aria-label="Выключить"
+                      icon={<PoweroffOutlined />}
+                      loading={busy === 'disable'}
+                      disabled={locked && busy !== 'disable'}
+                      onClick={() => void apply(false)}
+                    >
+                      Выключить
+                    </Button>
+                  )}
+                  {dirty && (
+                    <Button
+                      disabled={locked}
+                      onClick={() => {
+                        setDraft(getConfig(status));
+                        setError('');
+                        setNotice('');
+                      }}
+                    >
+                      Отменить изменения
+                    </Button>
+                  )}
+                </Space>
+              </Space>
+            </Card>
+
+            <Collapse
+              activeKey={showAdvanced ? ['public'] : []}
+              onChange={(keys) => setShowAdvanced(keys.includes('public'))}
+              items={[
+                {
+                  key: 'public',
+                  label: (
+                    <Space>
+                      <SettingOutlined />
+                      <span>Дополнительные настройки: DoH, DoT, DoQ и HTTP/3</span>
+                      {external && <Tag color="processing">Включены</Tag>}
+                    </Space>
+                  ),
+                  children: (
+                    <Space orientation="vertical" size={14} style={{ width: '100%' }}>
+                      <Alert
+                        type="info"
+                        showIcon
+                        title="Защищённый DNS для других устройств"
+                        description="Для DNS на телефоне или в браузере нужны домен с A/AAAA-записью на сервер, действующий TLS-сертификат панели и открытые порты TCP/UDP. Панель создаёт службу и адрес подключения, но не регистрирует домен, не выпускает сертификат и не меняет firewall. Для VPN через sing-box это не нужно."
+                      />
+                      <Space align="center" style={{ display: 'flex' }}>
+                        <Switch
+                          aria-label="Включить публичный DoH"
+                          checked={draft.doh}
+                          disabled={locked}
+                          onChange={(doh) => patch({ doh, ...(doh ? {} : { http3: false }) })}
+                        />
+                        <Typography.Text>DoH — DNS-over-HTTPS (TCP)</Typography.Text>
+                      </Space>
+                      {draft.doh && (
+                        <Space align="center" style={{ display: 'flex' }}>
+                          <Switch
+                            aria-label="Включить HTTP/3"
+                            checked={draft.http3}
+                            disabled={locked}
+                            onChange={(http3) => patch({ http3 })}
+                          />
+                          <Typography.Text>HTTP/3 для DoH (дополнительно UDP)</Typography.Text>
+                        </Space>
+                      )}
+                      <Space align="center" style={{ display: 'flex' }}>
+                        <Switch
+                          aria-label="Включить DoT"
+                          checked={draft.dot}
+                          disabled={locked}
+                          onChange={(dot) => patch({ dot })}
+                        />
+                        <Typography.Text>DoT — DNS-over-TLS (TCP)</Typography.Text>
+                      </Space>
+                      <Space align="center" style={{ display: 'flex' }}>
+                        <Switch
+                          aria-label="Включить DoQ"
+                          checked={draft.doq}
+                          disabled={locked}
+                          onChange={(doq) => patch({ doq })}
+                        />
+                        <Typography.Text>DoQ — DNS-over-QUIC (UDP)</Typography.Text>
+                      </Space>
+                      {external && (
+                        <>
+                          {draft.doh && (
+                            <div>
+                              <Typography.Text>
+                                HTTPS-порт DoH (TCP; также UDP для HTTP/3)
+                              </Typography.Text>
+                              <InputNumber
+                                aria-label="HTTPS-порт DoH"
+                                style={{ display: 'block', marginTop: 6, width: 170 }}
+                                min={1}
+                                max={65535}
+                                value={draft.port}
+                                disabled={locked}
+                                onChange={(port) => patch({ port: port ?? 8443 })}
+                              />
+                            </div>
+                          )}
+                          {draft.dot && (
+                            <div>
+                              <Typography.Text>Порт DoT (TCP)</Typography.Text>
+                              <InputNumber
+                                aria-label="Порт DoT"
+                                style={{ display: 'block', marginTop: 6, width: 170 }}
+                                min={1}
+                                max={65535}
+                                value={draft.dotPort}
+                                disabled={locked}
+                                onChange={(dotPort) => patch({ dotPort: dotPort ?? 853 })}
+                              />
+                            </div>
+                          )}
+                          {draft.doq && (
+                            <div>
+                              <Typography.Text>Порт DoQ (UDP)</Typography.Text>
+                              <InputNumber
+                                aria-label="Порт DoQ"
+                                style={{ display: 'block', marginTop: 6, width: 170 }}
+                                min={1}
+                                max={65535}
+                                value={draft.doqPort}
+                                disabled={locked}
+                                onChange={(doqPort) => patch({ doqPort: doqPort ?? 853 })}
+                              />
+                            </div>
+                          )}
+                          {invalidPort && (
+                            <Typography.Text type="danger">
+                              Порт должен быть от 1 до 65535. Порт 15353 зарезервирован для
+                              локального DNS.
+                            </Typography.Text>
+                          )}
+                          {conflictPorts && (
+                            <Typography.Text type="danger">
+                              Конфликт TCP/UDP-портов. Выберите разные порты для конфликтующих
+                              служб.
+                            </Typography.Text>
+                          )}
+                          <Card
+                            size="small"
+                            title="Отдельный TLS-сертификат для DNS (необязательно)"
+                          >
+                            <Space orientation="vertical" size={8} style={{ width: '100%' }}>
+                              <Typography.Text type="secondary">
+                                Если сертификат панели подходит DNS-поддомену, оставьте оба поля
+                                пустыми. Для другого имени укажите абсолютные пути к существующим
+                                PEM-файлам на сервере, доступным службе OxiDNS. Это не изменяет
+                                сертификат самой панели.
+                              </Typography.Text>
+                              <Input
+                                aria-label="Путь к сертификату DNS"
+                                placeholder="/etc/letsencrypt/live/dns.example.com/fullchain.pem"
+                                value={draft.certFile}
+                                disabled={locked}
+                                onChange={(event) => patch({ certFile: event.target.value })}
+                              />
+                              <Input
+                                aria-label="Путь к ключу DNS"
+                                placeholder="/etc/letsencrypt/live/dns.example.com/privkey.pem"
+                                value={draft.keyFile}
+                                disabled={locked}
+                                onChange={(event) => patch({ keyFile: event.target.value })}
+                              />
+                              {incompleteDNSCertificate && (
+                                <Typography.Text type="danger">
+                                  Укажите оба пути или очистите оба поля.
+                                </Typography.Text>
+                              )}
+                            </Space>
+                          </Card>
+                          <Typography.Text type="secondary">
+                            Перед запуском панель проверяет сертификат и выбранное имя. DNS-запись и
+                            внешний доступ к портам нужно проверить отдельно.
+                          </Typography.Text>
+                        </>
+                      )}
+                    </Space>
+                  ),
+                },
+              ]}
+            />
+
+            {isHealthy && (
+              <Card size="small" title="Адреса подключения">
+                <Space orientation="vertical" size={4} style={{ width: '100%' }}>
+                  {endpoint(
+                    'Локальный DNS для приложений сервера',
+                    status.localAddress || '127.0.0.1:15353',
+                    'Доступен только на сервере, не подходит для внешних устройств.',
+                  )}
+                  {status.doh &&
+                    status.dohUrl &&
+                    endpoint(
+                      'DoH — HTTPS',
+                      status.dohUrl,
+                      status.http3
+                        ? 'По этому же URL доступен HTTP/3, если его поддерживает клиент.'
+                        : 'Вставьте URL в настройки DNS-over-HTTPS клиента.',
+                    )}
+                  {status.dot &&
+                    status.dotAddress &&
+                    endpoint(
+                      'DoT — TLS',
+                      'tls://' + status.dotAddress,
+                      'Используйте домен и указанный TCP-порт.',
+                    )}
+                  {status.doq &&
+                    status.doqAddress &&
+                    endpoint(
+                      'DoQ — QUIC',
+                      'quic://' + status.doqAddress,
+                      'Используйте домен и указанный UDP-порт.',
+                    )}
+                  <Space wrap>
+                    <Button
+                      aria-label="Проверить DNS-запрос"
+                      icon={<SafetyCertificateOutlined />}
+                      loading={checking}
+                      disabled={locked && !checking}
+                      onClick={() => void checkDNS()}
+                    >
+                      Проверить DNS-запрос
+                    </Button>
+                    <Button
+                      aria-label="Обновить состояние"
+                      icon={<ReloadOutlined />}
+                      disabled={locked}
+                      onClick={() => void refresh()}
+                    >
+                      Обновить состояние
+                    </Button>
                   </Space>
-                </Card>
-              ),
-            },
-          ]}
-        />
+                </Space>
+              </Card>
+            )}
+
+            <Collapse
+              activeKey={showMaintenance ? ['maintenance'] : []}
+              onChange={(keys) => setShowMaintenance(keys.includes('maintenance'))}
+              items={[
+                {
+                  key: 'maintenance',
+                  label: (
+                    <Space>
+                      <SettingOutlined /> Диагностика OxiDNS
+                    </Space>
+                  ),
+                  children: (
+                    <Space orientation="vertical" style={{ width: '100%' }}>
+                      <Typography.Text type="secondary">
+                        Версия OxiDNS: {status.installedVersion || 'не определена'}. Для обновления
+                        или удаления откройте «Настройки → Системные пакеты и ядро Linux».
+                      </Typography.Text>
+                      <Button onClick={() => void openLogs()}>Журнал службы</Button>
+                    </Space>
+                  ),
+                },
+              ]}
+            />
+          </>
+        )}
       </Space>
       <Modal
         title="Журнал службы OxiDNS — последние 80 записей"

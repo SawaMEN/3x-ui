@@ -205,6 +205,11 @@ function AppSidebar() {
         label: t('pages.settings.panelSettings'),
       },
       {
+        key: '/settings#olcrtc',
+        icon: <CloudServerOutlined />,
+        label: 'OlcRTC — клиенты',
+      },
+      {
         key: '/settings#security',
         icon: <SafetyOutlined />,
         label: t('security'),

@@ -40,6 +40,10 @@ var mu sync.Mutex
 type Settings struct {
 	Enabled    bool   `json:"enabled"`
 	Domain     string `json:"domain"`
+	// An optional certificate pair for a dedicated DNS subdomain.
+	// Empty values keep the existing panel certificate behavior.
+	CertFile   string `json:"certFile,omitempty"`
+	KeyFile    string `json:"keyFile,omitempty"`
 	DoH        bool   `json:"doh"`
 	HTTP3      bool   `json:"http3"`
 	Port       int    `json:"port"`
@@ -183,6 +187,29 @@ func CurrentStatus(ctx context.Context) (Status, error) {
 	return s, nil
 }
 
+// tlsPaths chooses the DNS-specific certificate pair, falling back to the panel pair.
+// Never mix the key from one source with the certificate from another.
+func tlsPaths(c Settings, panelCertFile, panelKeyFile string) (string, string, error) {
+	certFile := strings.TrimSpace(c.CertFile)
+	keyFile := strings.TrimSpace(c.KeyFile)
+	if certFile == "" && keyFile == "" {
+		return panelCertFile, panelKeyFile, nil
+	}
+	if certFile == "" || keyFile == "" {
+		return "", "", errors.New("для отдельного TLS-сертификата DNS укажите оба пути: сертификат и закрытый ключ")
+	}
+	if !filepath.IsAbs(certFile) || !filepath.IsAbs(keyFile) {
+		return "", "", errors.New("пути к TLS-сертификату DNS и ключу должны быть абсолютными")
+	}
+	return certFile, keyFile, nil
+}
+
+// ValidateConfiguration checks the selected upstream, ports and TLS certificate
+// without changing the running DNS service.
+func ValidateConfiguration(c Settings, panelCertFile, panelKeyFile string) error {
+	return validate(c, panelCertFile, panelKeyFile)
+}
+
 func validate(c Settings, certFile, keyFile string) error {
 	if _, _, valid := upstream(c); !valid {
 		return errors.New("выберите DNS-провайдера")
@@ -208,6 +235,11 @@ func validate(c Settings, certFile, keyFile string) error {
 		return errors.New("DoH3 и DoQ не могут занимать один UDP-порт")
 	}
 	if c.DoH || c.DoT || c.DoQ {
+		var err error
+		certFile, keyFile, err = tlsPaths(c, certFile, keyFile)
+		if err != nil {
+			return err
+		}
 		if len(c.Domain) < 4 || len(c.Domain) > 253 || !strings.Contains(c.Domain, ".") || net.ParseIP(c.Domain) != nil {
 			return errors.New("укажите доменное имя для DoH")
 		}
@@ -217,7 +249,7 @@ func validate(c Settings, certFile, keyFile string) error {
 			}
 		}
 		if certFile == "" || keyFile == "" {
-			return errors.New("сначала настройте TLS-сертификат панели")
+			return errors.New("нужен сертификат TLS для DNS-поддомена: настройте сертификат панели, охватывающий этот поддомен, либо укажите отдельные файлы сертификата и ключа в настройках OxiDNS")
 		}
 		pair, err := tls.LoadX509KeyPair(certFile, keyFile)
 		if err != nil {
@@ -228,7 +260,7 @@ func validate(c Settings, certFile, keyFile string) error {
 			return err
 		}
 		if err := leaf.VerifyHostname(c.Domain); err != nil {
-			return fmt.Errorf("сертификат не подходит домену: %w", err)
+			return fmt.Errorf("сертификат не подходит DNS-поддомену %q: выпустите сертификат для этого имени (либо wildcard-сертификат) и укажите его файлы; подробности: %w", c.Domain, err)
 		}
 		if time.Now().After(leaf.NotAfter) || time.Now().Before(leaf.NotBefore) {
 			return errors.New("TLS-сертификат просрочен или ещё не действует")
@@ -265,6 +297,7 @@ func Generate(c Settings, certFile, keyFile string) (string, error) {
 	if err := validate(c, certFile, keyFile); err != nil {
 		return "", err
 	}
+	certFile, keyFile, _ = tlsPaths(c, certFile, keyFile)
 	addr, bootstrap, _ := upstream(c)
 	var b strings.Builder
 	lines := []string{"log:", "  level: info", "plugins:", "  - tag: dns_cache", "    type: cache", "    args:", "      size: 4096", "      short_circuit: true", "      max_positive_ttl: 600", "  - tag: forward_upstream", "    type: forward", "    args:", "      upstreams:"}
@@ -753,7 +786,7 @@ func Setup(ctx context.Context, c Settings, certFile, keyFile string) error {
 	mu.Lock()
 	defer mu.Unlock()
 	if !binaryReady(binaryPath) {
-		return errors.New("сначала установите OxiDNS в разделе «Обновления пакетов и ядер Linux» или кнопкой «Установить OxiDNS»")
+		return errors.New("сначала установите OxiDNS в разделе «Настройки → Системные пакеты и ядро Linux»")
 	}
 
 	normalizePorts(&c)

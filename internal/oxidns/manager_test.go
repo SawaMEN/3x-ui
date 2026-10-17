@@ -18,6 +18,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -200,6 +201,39 @@ func TestDoHCertificateAndOfficialParser(t *testing.T) {
 	if _, err := Generate(cfg, certPath, keyPath); err == nil {
 		t.Fatal("mismatched certificate accepted")
 	}
+	// A DNS subdomain can use its own certificate without changing the
+	// (potentially unrelated) certificate used by the panel.
+	cfg.Domain = "dns.example.com"
+	cfg.CertFile = certPath
+	cfg.KeyFile = keyPath
+	dedicated, err := Generate(cfg, "/nonexistent/panel/cert.pem", "/nonexistent/panel/key.pem")
+	if err != nil {
+		t.Fatalf("valid dedicated DNS certificate rejected: %v", err)
+	}
+	for _, path := range []string{certPath, keyPath} {
+		if !strings.Contains(dedicated, strconv.Quote(path)) {
+			t.Fatalf("OxiDNS YAML does not use dedicated certificate file %q", path)
+		}
+	}
+	if err := ValidateConfiguration(cfg, "", ""); err != nil {
+		t.Fatalf("preflight rejected DNS-specific certificate: %v", err)
+	}
+
+	cfg.KeyFile = ""
+	if _, err := Generate(cfg, certPath, keyPath); err == nil || !strings.Contains(err.Error(), "оба пути") {
+		t.Fatalf("half-configured dedicated certificate accepted: %v", err)
+	}
+	cfg.CertFile = "cert.pem"
+	cfg.KeyFile = "key.pem"
+	if _, err := Generate(cfg, certPath, keyPath); err == nil || !strings.Contains(err.Error(), "абсолютными") {
+		t.Fatalf("relative certificate paths accepted: %v", err)
+	}
+	cfg.CertFile, cfg.KeyFile = certPath, keyPath
+	cfg.Domain = "another.example.com"
+	if err := ValidateConfiguration(cfg, "", ""); err == nil || !strings.Contains(err.Error(), "DNS-поддомену") {
+		t.Fatalf("certificate for another DNS subdomain accepted: %v", err)
+	}
+
 	if binary := os.Getenv("OXIDNS_CHECK_BINARY"); binary != "" {
 		configPath := filepath.Join(workDir, "config.yaml")
 		if err := os.WriteFile(configPath, []byte(yaml), 0600); err != nil {

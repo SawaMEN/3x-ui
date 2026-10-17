@@ -8198,12 +8198,42 @@
         }
       }
     },
+    "/panel/api/oxidns/validate": {
+      "post": {
+        "tags": [
+          "Server"
+        ],
+        "summary": "Check a custom DNS subdomain, ports and selected TLS certificate without changing the running service.",
+        "operationId": "post_panel_api_oxidns_validate",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/panel/api/oxidns/setup": {
       "post": {
         "tags": [
           "Server"
         ],
-        "summary": "Install verified OxiDNS, validate TLS and connect native sing-box DNS.",
+        "summary": "Configure and start a previously installed OxiDNS service; validate selected DNS TLS files and connect sing-box DNS.",
         "operationId": "post_panel_api_oxidns_setup",
         "responses": {
           "200": {
