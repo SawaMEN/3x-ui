@@ -62,6 +62,21 @@ core_migration_prune_stale_downloads() {
     done < <(find "$parent" -mindepth 1 -maxdepth 1 -type f \( -name '.x-ui-download.??????.tar.gz' -o -name '.x-ui-download.??????.tar.gz.sha256' -o -name '.core-migration.??????' \) -mmin +60 -print0 2>/dev/null)
 }
 
+# Arch keeps every downloaded package in /var/cache/pacman/pkg by default.
+# Keep two versions for downgrades and run only after a verified panel upgrade.
+# Avoid touching system caches on other distributions or when paccache is absent.
+core_migration_prune_arch_package_cache() {
+    [[ "${XUI_AUTO_CLEAN_PACKAGE_CACHE:-true}" != false ]] || return 0
+    [[ "${release:-}" == arch || "${release:-}" == manjaro || "${release:-}" == endeavouros ]] || return 0
+    [[ -d /var/cache/pacman/pkg && ! -L /var/cache/pacman/pkg ]] || return 0
+    if ! command -v paccache >/dev/null 2>&1; then
+        echo "Arch package cache cleanup skipped: paccache (pacman-contrib) is not installed."
+        return 0
+    fi
+    echo "Pruning Arch package cache (keeping two versions of each package)."
+    paccache -rk2 || echo "Arch package cache cleanup failed; panel update remains valid." >&2
+}
+
 # Once a newer installation has been *verified*, older complete snapshots
 # are redundant. Keep the newest recoverable (unmarked) snapshot; leave unknown
 # or partially written directories untouched rather than guessing their value.
@@ -326,6 +341,7 @@ core_migration_commit() {
     core_migration_prune_snapshots || echo "Could not remove verified recovery snapshot: $cm_backup" >&2
     core_migration_prune_stale_stages verified
     core_migration_prune_stale_downloads
+    core_migration_prune_arch_package_cache
     echo "Upgrade committed; verified recovery snapshot and abandoned update files cleaned"
 }
 core_migration_exit() {
