@@ -5,12 +5,10 @@ import {
   Card,
   Col,
   Collapse,
-  ConfigProvider,
   Descriptions,
   Form,
   Input,
   InputNumber,
-  Layout,
   Modal,
   Popconfirm,
   Row,
@@ -36,8 +34,6 @@ import {
   SyncOutlined,
 } from '@ant-design/icons';
 import { HttpUtil, RandomUtil } from '@/utils';
-import AppSidebar from '@/layouts/AppSidebar';
-import { useTheme } from '@/hooks/useTheme';
 import { FormProvider } from 'react-hook-form';
 import { FormField, useZodForm } from '@/components/form/rhf';
 import {
@@ -46,6 +42,7 @@ import {
   TelemtCarriersSchema,
   TelemtWebProxyRequestSchema,
 } from '@/schemas/telemt-web';
+import TelemtSubscriptionToggle from './TelemtSubscriptionToggle';
 import './TelemtPage.css';
 
 type WebProxyStatus = {
@@ -123,7 +120,6 @@ const jsonOptions = { headers: { 'Content-Type': 'application/json' } };
 type ServiceAction = 'start' | 'stop' | 'restart' | 'enable' | 'disable' | 'update';
 
 export default function TelemtPage() {
-  const { antdThemeConfig } = useTheme();
   const [form] = Form.useForm<Config>();
   const configuredPort = Form.useWatch('port', form);
   const [status, setStatus] = useState<Status>({
@@ -357,12 +353,8 @@ export default function TelemtPage() {
       : 'Остановлен';
 
   return (
-    <ConfigProvider theme={antdThemeConfig}>
-      <Layout className="page-layout telemt-page">
-        <AppSidebar />
-        <Layout className="content-shell">
-          <Layout.Content className="content-area">
-            <div className="telemt-shell">
+    <>
+      <div className="telemt-shell telemt-integrated">
               <div className="telemt-header">
                 <div className="telemt-header-main">
                   <Space size={10} wrap>
@@ -843,11 +835,10 @@ export default function TelemtPage() {
                 Web Proxy использует отдельный локальный WEB transport на порту{' '}
                 {status.webProxy.listenPort || 15080}; наружу публикуется только HTTPS :443.
               </Typography.Paragraph>
-            </div>
-          </Layout.Content>
-        </Layout>
+      </div>
+      <TelemtSubscriptionToggle />
 
-        <Modal
+      <Modal
           open={webProxyOpen}
           title={status.webProxy.enabled ? 'Настройка Web Proxy' : 'Поднять Web Proxy'}
           onCancel={() => {
@@ -1023,8 +1014,7 @@ export default function TelemtPage() {
               </div>
             )}
           </Space>
-        </Modal>
-      </Layout>
-    </ConfigProvider>
+      </Modal>
+    </>
   );
 }
