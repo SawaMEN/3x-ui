@@ -101,6 +101,13 @@ plugins:
 		t.Fatal(err)
 	}
 	if err := waitHealthy(ctx); err != nil {
+		for _, command := range [][]string{
+			{"systemctl", "status", "x-ui-oxidns.service", "--no-pager", "-l"},
+			{"journalctl", "-u", "x-ui-oxidns.service", "--no-pager", "-n", "80"},
+		} {
+			output, commandErr := exec.CommandContext(ctx, command[0], command[1:]...).CombinedOutput()
+			t.Logf("%v (%v):\n%s", command, commandErr, output)
+		}
 		t.Fatalf("real DNS query through managed systemd service failed: %v", err)
 	}
 	status, err = CurrentStatus(ctx)

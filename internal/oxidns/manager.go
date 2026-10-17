@@ -433,6 +433,11 @@ func installOnly(ctx context.Context) error {
 	if _, err := releaseAssetName(); err != nil {
 		return err
 	}
+	// The systemd unit starts OxiDNS with -d, so its writable working
+	// directory must exist before the first service start.
+	if err := os.MkdirAll(filepath.Join(StateDir, "data"), 0700); err != nil {
+		return err
+	}
 	if _, err := os.Stat(binaryPath); errors.Is(err, os.ErrNotExist) {
 		_, asset, err := Latest(ctx)
 		if err != nil {
