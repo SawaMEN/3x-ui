@@ -355,664 +355,656 @@ export default function TelemtPage() {
   return (
     <>
       <div className="telemt-shell telemt-integrated">
-              <div className="telemt-header">
-                <div className="telemt-header-main">
-                  <Space size={10} wrap>
-                    <Typography.Title level={2} className="telemt-title">
-                      Telemt
-                    </Typography.Title>
-                    <Tag
-                      color={status.active ? 'green' : status.installed ? 'default' : 'red'}
-                      icon={status.active ? <CheckCircleOutlined /> : undefined}
-                    >
-                      {statusText}
-                    </Tag>
-                    {status.webProxy.enabled && (
-                      <Tag color="blue">WEB Proxy · {status.webProxy.domain}</Tag>
-                    )}
-                  </Space>
-                  <Typography.Text type="secondary">
-                    MTProto-прокси без лишних ручных действий: сервис сам применяет изменения.
-                  </Typography.Text>
-                </div>
-                <Space wrap>
-                  <TelemtSubscriptionToggle />
-                  <Button
-                    htmlType="button"
-                    icon={<ReloadOutlined />}
-                    loading={refreshing}
-                    onClick={() => void refreshAll()}
-                  >
-                    Обновить
-                  </Button>
-                </Space>
-              </div>
-
-              {!status.installed && (
-                <Alert
-                  className="telemt-card"
-                  type="warning"
-                  showIcon
-                  message="Telemt не установлен"
-                  description="Установите актуальную сборку 3X-UI. После установки эта страница сама подхватит бинарник и службу."
-                />
+        <div className="telemt-header">
+          <div className="telemt-header-main">
+            <Space size={10} wrap>
+              <Typography.Title level={2} className="telemt-title">
+                Telemt
+              </Typography.Title>
+              <Tag
+                color={status.active ? 'green' : status.installed ? 'default' : 'red'}
+                icon={status.active ? <CheckCircleOutlined /> : undefined}
+              >
+                {statusText}
+              </Tag>
+              {status.webProxy.enabled && (
+                <Tag color="blue">WEB Proxy · {status.webProxy.domain}</Tag>
               )}
+            </Space>
+            <Typography.Text type="secondary">
+              MTProto-прокси без лишних ручных действий: сервис сам применяет изменения.
+            </Typography.Text>
+          </div>
+          <Space wrap>
+            <TelemtSubscriptionToggle />
+            <Button
+              htmlType="button"
+              icon={<ReloadOutlined />}
+              loading={refreshing}
+              onClick={() => void refreshAll()}
+            >
+              Обновить
+            </Button>
+          </Space>
+        </div>
 
-              <Row gutter={[16, 16]}>
-                <Col xs={24} lg={16}>
-                  <Card
-                    className="telemt-card telemt-service-card"
-                    title={
-                      <Space>
-                        <ApiOutlined />
-                        Сервис
-                      </Space>
-                    }
-                    extra={
-                      <Space size={8}>
-                        <Typography.Text type="secondary">Автозапуск</Typography.Text>
-                        <Switch
-                          size="small"
-                          checked={status.enabled}
-                          disabled={!status.installed || serviceAction !== null}
-                          loading={serviceAction === 'enable' || serviceAction === 'disable'}
-                          onChange={(checked) =>
-                            void runAction(
-                              checked ? 'enable' : 'disable',
-                              checked ? 'Автозапуск включён' : 'Автозапуск выключен',
-                            )
-                          }
-                        />
-                      </Space>
-                    }
-                  >
-                    <Row gutter={[16, 16]}>
-                      <Col xs={24} md={8}>
-                        <div className="telemt-metric">
-                          <Typography.Text type="secondary">Версия</Typography.Text>
-                          <Typography.Title level={4}>{status.version || '—'}</Typography.Title>
-                          {status.updateAvailable && (
-                            <Typography.Text type="warning">
-                              Доступно {status.latestVersion}
-                            </Typography.Text>
-                          )}
-                        </div>
-                      </Col>
-                      <Col xs={24} md={8}>
-                        <div className="telemt-metric">
-                          <Typography.Text type="secondary">Конфигурация</Typography.Text>
-                          <Typography.Title level={4}>
-                            <Tag color={status.configured ? 'green' : 'default'}>
-                              {status.configured ? 'Готова' : 'Не создана'}
-                            </Tag>
-                          </Typography.Title>
-                          <Typography.Text type="secondary">
-                            Порт {configuredPort || defaults.port}
-                          </Typography.Text>
-                        </div>
-                      </Col>
-                    </Row>
+        {!status.installed && (
+          <Alert
+            className="telemt-card"
+            type="warning"
+            showIcon
+            message="Telemt не установлен"
+            description="Установите актуальную сборку 3X-UI. После установки эта страница сама подхватит бинарник и службу."
+          />
+        )}
 
-                    <Space wrap className="telemt-service-actions">
-                      {status.active ? (
-                        <Popconfirm
-                          title="Остановить Telemt?"
-                          description="Обычный и WEB Proxy трафик перестанут обслуживаться до запуска."
-                          okText="Остановить"
-                          cancelText="Отмена"
-                          onConfirm={() => void runAction('stop', 'Telemt остановлен')}
-                        >
-                          <Button
-                            danger
-                            icon={<StopOutlined />}
-                            loading={serviceAction === 'stop'}
-                            disabled={serviceAction !== null}
-                          >
-                            Остановить
-                          </Button>
-                        </Popconfirm>
-                      ) : (
-                        <Button
-                          type="primary"
-                          icon={<CheckCircleOutlined />}
-                          loading={serviceAction === 'start'}
-                          disabled={!status.installed || serviceAction !== null}
-                          onClick={() => void runAction('start', 'Telemt запущен')}
-                        >
-                          Запустить
-                        </Button>
-                      )}
-                      <Button
-                        icon={<SyncOutlined />}
-                        loading={serviceAction === 'restart'}
-                        disabled={!status.installed || serviceAction !== null}
-                        onClick={() => void runAction('restart', 'Telemt перезапущен')}
-                      >
-                        Перезапустить
-                      </Button>
-                    </Space>
-                  </Card>
-                </Col>
-
-                <Col xs={24} lg={8}>
-                  <Card
-                    className="telemt-card telemt-web-card"
-                    title={
-                      <Space>
-                        <LinkOutlined />
-                        Web Proxy
-                      </Space>
-                    }
-                    extra={
-                      status.webProxy.enabled ? (
-                        <Tag color="green">Активен</Tag>
-                      ) : (
-                        <Tag>Не настроен</Tag>
+        <Row gutter={[16, 16]}>
+          <Col xs={24} lg={16}>
+            <Card
+              className="telemt-card telemt-service-card"
+              title={
+                <Space>
+                  <ApiOutlined />
+                  Сервис
+                </Space>
+              }
+              extra={
+                <Space size={8}>
+                  <Typography.Text type="secondary">Автозапуск</Typography.Text>
+                  <Switch
+                    size="small"
+                    checked={status.enabled}
+                    disabled={!status.installed || serviceAction !== null}
+                    loading={serviceAction === 'enable' || serviceAction === 'disable'}
+                    onChange={(checked) =>
+                      void runAction(
+                        checked ? 'enable' : 'disable',
+                        checked ? 'Автозапуск включён' : 'Автозапуск выключен',
                       )
                     }
-                  >
-                    {status.webProxy.enabled ? (
-                      <>
-                        <Typography.Text strong>{status.webProxy.domain}</Typography.Text>
-                        <Typography.Paragraph type="secondary" style={{ margin: '6px 0 12px' }}>
-                          HTTPS :443 → Telemt :{status.webProxy.listenPort}
-                        </Typography.Paragraph>
-                        <div className="telemt-link-box">
-                          <Typography.Text code ellipsis>
-                            {status.webProxy.link}
-                          </Typography.Text>
-                          <Button
-                            type="text"
-                            icon={<CopyOutlined />}
-                            aria-label="Копировать ссылку WEB Proxy"
-                            onClick={() => void navigator.clipboard.writeText(status.webProxy.link)}
-                          />
-                        </div>
-                        <Space wrap className="telemt-web-meta">
-                          <Tag color={status.webProxy.certificateReady ? 'green' : 'warning'}>
-                            TLS {status.webProxy.certificateReady ? 'готов' : 'требуется'}
-                          </Tag>
-                          <Tag color={status.webProxy.frontendActive ? 'green' : 'warning'}>
-                            {status.webProxy.frontend || 'nginx'}{' '}
-                            {status.webProxy.frontendActive ? 'работает' : 'остановлен'}
-                          </Tag>
-                        </Space>
-                      </>
-                    ) : (
-                      <Typography.Paragraph type="secondary">
-                        Домен → HTTPS :443 → выбранный frontend → WEB transport Telemt. Заглушка и
-                        TLS настраиваются автоматически.
-                      </Typography.Paragraph>
+                  />
+                </Space>
+              }
+            >
+              <Row gutter={[16, 16]}>
+                <Col xs={24} md={8}>
+                  <div className="telemt-metric">
+                    <Typography.Text type="secondary">Версия</Typography.Text>
+                    <Typography.Title level={4}>{status.version || '—'}</Typography.Title>
+                    {status.updateAvailable && (
+                      <Typography.Text type="warning">
+                        Доступно {status.latestVersion}
+                      </Typography.Text>
                     )}
-                    {status.webProxy.error && (
-                      <Alert
-                        className="telemt-alert-compact"
-                        type={status.webProxy.enabled ? 'warning' : 'info'}
-                        showIcon
-                        message={status.webProxy.error}
-                      />
-                    )}
-                    <Button
-                      block
-                      type="primary"
-                      ghost={status.webProxy.enabled}
-                      icon={<LinkOutlined />}
-                      disabled={!status.installed || !status.webProxy.supported}
-                      loading={webProxyLoading}
-                      onClick={openWebProxy}
-                    >
-                      {status.webProxy.enabled ? 'Настроить Web Proxy' : 'Поднять Web Proxy'}
-                    </Button>
-                  </Card>
+                  </div>
+                </Col>
+                <Col xs={24} md={8}>
+                  <div className="telemt-metric">
+                    <Typography.Text type="secondary">Конфигурация</Typography.Text>
+                    <Typography.Title level={4}>
+                      <Tag color={status.configured ? 'green' : 'default'}>
+                        {status.configured ? 'Готова' : 'Не создана'}
+                      </Tag>
+                    </Typography.Title>
+                    <Typography.Text type="secondary">
+                      Порт {configuredPort || defaults.port}
+                    </Typography.Text>
+                  </div>
                 </Col>
               </Row>
 
-              <Card
-                className="telemt-card telemt-update-card"
-                title={
-                  <Space>
-                    <DownloadOutlined />
-                    Обновление Telemt
-                  </Space>
-                }
-              >
-                <Row gutter={[16, 16]} align="middle">
-                  <Col xs={24} md={8}>
-                    <Typography.Text type="secondary">Установленная версия</Typography.Text>
-                    <Typography.Title level={4} style={{ margin: '4px 0 0' }}>
-                      {status.installed ? status.version || 'не определена' : 'не установлена'}
-                    </Typography.Title>
-                  </Col>
-                  <Col xs={24} md={8}>
-                    <Typography.Text type="secondary">Последняя версия</Typography.Text>
-                    <Typography.Title level={4} style={{ margin: '4px 0 0' }}>
-                      {status.latestVersion || 'проверка недоступна'}
-                    </Typography.Title>
-                  </Col>
-                  <Col xs={24} md={8}>
-                    <Space wrap>
-                      {status.updateAvailable ? (
-                        <Button
-                          type="primary"
-                          icon={<DownloadOutlined />}
-                          loading={serviceAction === 'update'}
-                          disabled={!status.installed || serviceAction !== null}
-                          onClick={updateTelemt}
-                        >
-                          Обновить до {status.latestVersion}
-                        </Button>
-                      ) : (
-                        <Button
-                          icon={<ReloadOutlined />}
-                          disabled={!status.installed || serviceAction !== null}
-                          onClick={() => void loadStatus()}
-                        >
-                          Проверить обновление
-                        </Button>
-                      )}
-                    </Space>
-                  </Col>
-                </Row>
-
-                {!status.installed ? (
-                  <Alert
-                    style={{ marginTop: 16 }}
-                    type="info"
-                    showIcon
-                    message="Telemt ещё не установлен"
-                    description="После установки панель автоматически покажет текущую и последнюю доступную версию."
-                  />
-                ) : status.updateAvailable ? (
-                  <Alert
-                    style={{ marginTop: 16 }}
-                    type="warning"
-                    showIcon
-                    message={'Доступно обновление до ' + status.latestVersion}
-                    description="Обновление выполняется встроенным Telemt updater и после него возвращает сервис в рабочее состояние."
-                  />
-                ) : status.latestVersion ? (
-                  <Alert
-                    style={{ marginTop: 16 }}
-                    type="success"
-                    showIcon
-                    message="Установлена последняя версия Telemt"
-                    description="Новых опубликованных релизов для текущей проверки не найдено."
-                  />
+              <Space wrap className="telemt-service-actions">
+                {status.active ? (
+                  <Popconfirm
+                    title="Остановить Telemt?"
+                    description="Обычный и WEB Proxy трафик перестанут обслуживаться до запуска."
+                    okText="Остановить"
+                    cancelText="Отмена"
+                    onConfirm={() => void runAction('stop', 'Telemt остановлен')}
+                  >
+                    <Button
+                      danger
+                      icon={<StopOutlined />}
+                      loading={serviceAction === 'stop'}
+                      disabled={serviceAction !== null}
+                    >
+                      Остановить
+                    </Button>
+                  </Popconfirm>
                 ) : (
-                  <Alert
-                    style={{ marginTop: 16 }}
-                    type="info"
-                    showIcon
-                    message="Не удалось получить последнюю версию"
-                    description="Проверьте соединение сервера с GitHub и нажмите «Проверить» ещё раз."
-                  />
-                )}
-              </Card>
-
-              <Card
-                className="telemt-card"
-                title={
-                  <Space>
-                    <PlusOutlined />
-                    Прокси
-                    <Tag>{proxies.length}</Tag>
-                  </Space>
-                }
-                extra={
                   <Button
                     type="primary"
-                    icon={<PlusOutlined />}
-                    loading={proxyCreating}
-                    disabled={!status.installed}
-                    onClick={() => void createProxy()}
+                    icon={<CheckCircleOutlined />}
+                    loading={serviceAction === 'start'}
+                    disabled={!status.installed || serviceAction !== null}
+                    onClick={() => void runAction('start', 'Telemt запущен')}
                   >
-                    Создать прокси
+                    Запустить
                   </Button>
-                }
-              >
-                <Typography.Paragraph type="secondary" className="telemt-card-hint">
-                  Адрес сервера определяется автоматически. После создания Telemt сам применит
-                  пользователя и перезапустит службу только когда это действительно требуется.
-                </Typography.Paragraph>
-
-                {proxies.length === 0 ? (
-                  <div className="telemt-empty-state">
-                    <Typography.Text type="secondary">Прокси пока не созданы.</Typography.Text>
-                  </div>
-                ) : (
-                  <div className="telemt-proxy-list">
-                    {proxies.map((item) => (
-                      <div className="telemt-proxy-item" key={item.name}>
-                        <div className="telemt-proxy-main">
-                          <Space size={8} wrap>
-                            <Typography.Text strong>{item.name}</Typography.Text>
-                            <Tag>
-                              {item.host}:{item.port}
-                            </Tag>
-                            {item.tls && <Tag color="blue">Fake-TLS</Tag>}
-                          </Space>
-                          <Typography.Paragraph
-                            copyable={{ text: item.link, tooltips: ['Копировать', 'Скопировано'] }}
-                            ellipsis={{ rows: 1 }}
-                            code
-                            style={{ margin: '5px 0 0' }}
-                          >
-                            {item.link}
-                          </Typography.Paragraph>
-                        </div>
-                        <Popconfirm
-                          title="Удалить прокси?"
-                          okText="Удалить"
-                          cancelText="Отмена"
-                          onConfirm={() => void deleteProxy(item.name)}
-                        >
-                          <Button
-                            danger
-                            type="text"
-                            icon={<DeleteOutlined />}
-                            aria-label={'Удалить прокси ' + item.name}
-                            loading={proxyDeleting === item.name}
-                          />
-                        </Popconfirm>
-                      </div>
-                    ))}
-                  </div>
                 )}
-              </Card>
+                <Button
+                  icon={<SyncOutlined />}
+                  loading={serviceAction === 'restart'}
+                  disabled={!status.installed || serviceAction !== null}
+                  onClick={() => void runAction('restart', 'Telemt перезапущен')}
+                >
+                  Перезапустить
+                </Button>
+              </Space>
+            </Card>
+          </Col>
 
-              <Collapse
-                className="telemt-card telemt-advanced"
-                items={[
-                  {
-                    key: 'settings',
-                    label: (
-                      <Space>
-                        <SettingOutlined />
-                        Дополнительные настройки
-                      </Space>
-                    ),
-                    children: (
-                      <Form form={form} layout="vertical" onFinish={save}>
-                        <Row gutter={16}>
-                          <Col xs={24} md={8}>
-                            <Form.Item
-                              name="port"
-                              label="Порт Telemt"
-                              rules={[{ required: true }, { type: 'number', min: 1, max: 65535 }]}
-                            >
-                              <InputNumber style={{ width: '100%' }} />
-                            </Form.Item>
-                          </Col>
-                          <Col xs={24} md={16}>
-                            <Form.Item label="Основной секрет" required>
-                              <Space.Compact block>
-                                <Form.Item
-                                  name="secret"
-                                  noStyle
-                                  rules={[
-                                    { required: true },
-                                    {
-                                      pattern: /^[0-9a-fA-F]{32}$/,
-                                      message: 'Нужно ровно 32 hex-символа',
-                                    },
-                                  ]}
-                                >
-                                  <Input placeholder="32 hex-символа" autoComplete="off" />
-                                </Form.Item>
-                                <Button
-                                  htmlType="button"
-                                  icon={<SafetyCertificateOutlined />}
-                                  onClick={generateSecret}
-                                  disabled={configSaving}
-                                >
-                                  Сгенерировать
-                                </Button>
-                              </Space.Compact>
-                            </Form.Item>
-                          </Col>
-                        </Row>
-
-                        <Row gutter={16}>
-                          <Col xs={24} md={12}>
-                            <Form.Item name="sni" label="SNI / домен маскировки">
-                              <Input placeholder="petrovich.ru" />
-                            </Form.Item>
-                          </Col>
-                          <Col xs={12} sm={8} md={4}>
-                            <Form.Item name="tls" label="Fake-TLS" valuePropName="checked">
-                              <Switch />
-                            </Form.Item>
-                          </Col>
-                          <Col xs={12} sm={8} md={4}>
-                            <Form.Item name="fastMode" label="Fast mode" valuePropName="checked">
-                              <Switch />
-                            </Form.Item>
-                          </Col>
-                          <Col xs={12} sm={8} md={4}>
-                            <Form.Item name="ipv4" label="IPv4" valuePropName="checked">
-                              <Switch />
-                            </Form.Item>
-                          </Col>
-                        </Row>
-
-                        <Row gutter={16}>
-                          <Col xs={12} md={6}>
-                            <Form.Item name="ipv6" label="IPv6" valuePropName="checked">
-                              <Switch />
-                            </Form.Item>
-                          </Col>
-                          <Col xs={12} md={6}>
-                            <Form.Item name="classic" label="Classic" valuePropName="checked">
-                              <Switch />
-                            </Form.Item>
-                          </Col>
-                          <Col xs={12} md={6}>
-                            <Form.Item name="secure" label="Secure" valuePropName="checked">
-                              <Switch />
-                            </Form.Item>
-                          </Col>
-                        </Row>
-
-                        <Space wrap>
-                          <Button
-                            type="primary"
-                            htmlType="submit"
-                            loading={configSaving}
-                            disabled={!status.installed}
-                          >
-                            Сохранить и применить
-                          </Button>
-                          <Typography.Text type="secondary">
-                            При работающем сервисе перезапуск выполняется автоматически.
-                          </Typography.Text>
-                        </Space>
-                      </Form>
-                    ),
-                  },
-                ]}
-              />
-
-              <Typography.Paragraph type="secondary" className="telemt-footnote">
-                Web Proxy использует отдельный локальный WEB transport на порту{' '}
-                {status.webProxy.listenPort || 15080}; наружу публикуется только HTTPS :443.
-              </Typography.Paragraph>
-      </div>
-      <Modal
-          open={webProxyOpen}
-          title={status.webProxy.enabled ? 'Настройка Web Proxy' : 'Поднять Web Proxy'}
-          onCancel={() => {
-            if (!webProxyLoading) setWebProxyOpen(false);
-          }}
-          footer={[
-            <Button key="close" onClick={() => setWebProxyOpen(false)} disabled={webProxyLoading}>
-              Закрыть
-            </Button>,
-            ...(status.webProxy.enabled
-              ? [
-                  <Popconfirm
-                    key="disable"
-                    title="Отключить Web Proxy?"
-                    description="Конфигурация WEB frontend будет убрана, обычный Telemt останется работать."
-                    okText="Отключить"
-                    cancelText="Отмена"
-                    onConfirm={() => void disableWebProxy()}
-                  >
-                    <Button danger loading={webProxyLoading}>
-                      Отключить
-                    </Button>
-                  </Popconfirm>,
-                ]
-              : []),
-            <Button
-              key="save"
-              type="primary"
-              onClick={() => void enableWebProxy()}
-              loading={webProxyLoading}
-              disabled={
-                !status.installed ||
-                !status.webProxy.supported ||
-                !webProxyDomain.trim() ||
-                (!status.webProxy.port443Available && !status.webProxy.frontendActive)
+          <Col xs={24} lg={8}>
+            <Card
+              className="telemt-card telemt-web-card"
+              title={
+                <Space>
+                  <LinkOutlined />
+                  Web Proxy
+                </Space>
+              }
+              extra={
+                status.webProxy.enabled ? <Tag color="green">Активен</Tag> : <Tag>Не настроен</Tag>
               }
             >
-              {status.webProxy.enabled ? 'Применить' : 'Поднять'}
-            </Button>,
-          ]}
-        >
-          <Space direction="vertical" size={14} style={{ width: '100%' }}>
-            <Alert
-              type="info"
-              showIcon
-              message="Панель всё сделает сама"
-              description="Выбранный HTTPS frontend, сертификат и WEB transport Telemt будут настроены автоматически. Для Caddy и HAProxy используется отдельная служба панели. При переключении возможен короткий перерыв соединений."
-            />
-
-            <FormProvider {...webForm}>
-              <Form layout="vertical">
-                <FormField
-                  name="domain"
-                  label="Домен"
-                  extra={'По умолчанию: ' + (status.webProxy.defaultDomain || 'не определён')}
-                >
-                  <Input
-                    placeholder="web.example.com"
-                    disabled={webProxyLoading}
-                    addonAfter=":443"
-                  />
-                </FormField>
-                <FormField name="frontend" label="HTTPS frontend">
-                  <Select
-                    disabled={webProxyLoading}
-                    options={TelemtFrontendSchema.options.map((value) => ({ value, label: value }))}
-                  />
-                </FormField>
-                <FormField
-                  name="carrier"
-                  label="Основной транспорт / запасной для клиентов без перебора"
-                >
-                  <Select
-                    disabled={webProxyLoading || !status.webProxy.carrierNegotiationSupported}
-                    options={TelemtCarrierSchema.options.map((value) => ({ value, label: value }))}
-                  />
-                </FormField>
-                <FormField
-                  name="carriers"
-                  label="Перебор транспортов"
-                  extra="Выберите транспорты в порядке попыток. Пустой список отключает перебор. Основной транспорт остаётся запасным."
-                >
-                  <Select
-                    mode="multiple"
-                    disabled={webProxyLoading || !status.webProxy.carrierNegotiationSupported}
-                    options={TelemtCarrierSchema.options.map((value) => ({ value, label: value }))}
-                  />
-                </FormField>
-                {webCarriers.map((carrier, index) => (
-                  <Space key={carrier} style={{ display: 'flex', marginTop: 4 }}>
-                    <Typography.Text>
-                      {index + 1}. {carrier}
+              {status.webProxy.enabled ? (
+                <>
+                  <Typography.Text strong>{status.webProxy.domain}</Typography.Text>
+                  <Typography.Paragraph type="secondary" style={{ margin: '6px 0 12px' }}>
+                    HTTPS :443 → Telemt :{status.webProxy.listenPort}
+                  </Typography.Paragraph>
+                  <div className="telemt-link-box">
+                    <Typography.Text code ellipsis>
+                      {status.webProxy.link}
                     </Typography.Text>
                     <Button
-                      size="small"
-                      aria-label={'Выше: ' + carrier}
-                      disabled={webProxyLoading || index === 0}
-                      onClick={() => {
-                        const next = [...webCarriers];
-                        [next[index - 1], next[index]] = [next[index]!, next[index - 1]!];
-                        webForm.setValue('carriers', next);
-                      }}
-                    >
-                      ↑
-                    </Button>
-                    <Button
-                      size="small"
-                      aria-label={'Ниже: ' + carrier}
-                      disabled={webProxyLoading || index === webCarriers.length - 1}
-                      onClick={() => {
-                        const next = [...webCarriers];
-                        [next[index], next[index + 1]] = [next[index + 1]!, next[index]!];
-                        webForm.setValue('carriers', next);
-                      }}
-                    >
-                      ↓
-                    </Button>
+                      type="text"
+                      icon={<CopyOutlined />}
+                      aria-label="Копировать ссылку WEB Proxy"
+                      onClick={() => void navigator.clipboard.writeText(status.webProxy.link)}
+                    />
+                  </div>
+                  <Space wrap className="telemt-web-meta">
+                    <Tag color={status.webProxy.certificateReady ? 'green' : 'warning'}>
+                      TLS {status.webProxy.certificateReady ? 'готов' : 'требуется'}
+                    </Tag>
+                    <Tag color={status.webProxy.frontendActive ? 'green' : 'warning'}>
+                      {status.webProxy.frontend || 'nginx'}{' '}
+                      {status.webProxy.frontendActive ? 'работает' : 'остановлен'}
+                    </Tag>
                   </Space>
-                ))}
-                {!status.webProxy.carrierNegotiationSupported && (
-                  <Typography.Text type="secondary">
-                    Выбор транспортов требует Telemt 3.5.4 или новее.
-                  </Typography.Text>
-                )}
-              </Form>
-            </FormProvider>
-
-            <Descriptions size="small" column={1} bordered>
-              <Descriptions.Item label="Telemt WEB">
-                127.0.0.1:{status.webProxy.listenPort || 15080}
-              </Descriptions.Item>
-              <Descriptions.Item label={webFrontend}>
-                {status.webProxy.frontendActive ? 'запущен' : 'будет запущен автоматически'}
-              </Descriptions.Item>
-              <Descriptions.Item label="TLS">
-                {status.webProxy.certificateReady
-                  ? 'сертификат уже готов'
-                  : 'сертификат будет получен автоматически'}
-              </Descriptions.Item>
-              <Descriptions.Item label="443">
-                {status.webProxy.frontendActive
-                  ? 'порт использует текущий WEB frontend'
-                  : status.webProxy.port443Available
-                    ? 'порт свободен'
-                    : status.webProxy.port443Owner
-                      ? 'занят: ' + status.webProxy.port443Owner
-                      : 'занят другим сервисом'}
-              </Descriptions.Item>
-              {status.webProxy.port443Owner && !status.webProxy.frontendActive && (
-                <Descriptions.Item label="Причина">
-                  Остановите «{status.webProxy.port443Owner}» или перенесите его с порта 443.
-                </Descriptions.Item>
+                </>
+              ) : (
+                <Typography.Paragraph type="secondary">
+                  Домен → HTTPS :443 → выбранный frontend → WEB transport Telemt. Заглушка и TLS
+                  настраиваются автоматически.
+                </Typography.Paragraph>
               )}
-            </Descriptions>
+              {status.webProxy.error && (
+                <Alert
+                  className="telemt-alert-compact"
+                  type={status.webProxy.enabled ? 'warning' : 'info'}
+                  showIcon
+                  message={status.webProxy.error}
+                />
+              )}
+              <Button
+                block
+                type="primary"
+                ghost={status.webProxy.enabled}
+                icon={<LinkOutlined />}
+                disabled={!status.installed || !status.webProxy.supported}
+                loading={webProxyLoading}
+                onClick={openWebProxy}
+              >
+                {status.webProxy.enabled ? 'Настроить Web Proxy' : 'Поднять Web Proxy'}
+              </Button>
+            </Card>
+          </Col>
+        </Row>
 
-            {status.webProxy.error && (
-              <Alert type="warning" showIcon message={status.webProxy.error} />
-            )}
-
-            {status.webProxy.enabled && status.webProxy.link && (
-              <div>
-                <Typography.Text strong>Ссылка для Telegram</Typography.Text>
-                <div className="telemt-link-box telemt-link-box-large">
-                  <Typography.Text code>{status.webProxy.link}</Typography.Text>
+        <Card
+          className="telemt-card telemt-update-card"
+          title={
+            <Space>
+              <DownloadOutlined />
+              Обновление Telemt
+            </Space>
+          }
+        >
+          <Row gutter={[16, 16]} align="middle">
+            <Col xs={24} md={8}>
+              <Typography.Text type="secondary">Установленная версия</Typography.Text>
+              <Typography.Title level={4} style={{ margin: '4px 0 0' }}>
+                {status.installed ? status.version || 'не определена' : 'не установлена'}
+              </Typography.Title>
+            </Col>
+            <Col xs={24} md={8}>
+              <Typography.Text type="secondary">Последняя версия</Typography.Text>
+              <Typography.Title level={4} style={{ margin: '4px 0 0' }}>
+                {status.latestVersion || 'проверка недоступна'}
+              </Typography.Title>
+            </Col>
+            <Col xs={24} md={8}>
+              <Space wrap>
+                {status.updateAvailable ? (
                   <Button
-                    type="text"
-                    icon={<CopyOutlined />}
-                    onClick={() => void navigator.clipboard.writeText(status.webProxy.link)}
+                    type="primary"
+                    icon={<DownloadOutlined />}
+                    loading={serviceAction === 'update'}
+                    disabled={!status.installed || serviceAction !== null}
+                    onClick={updateTelemt}
                   >
-                    Копировать
+                    Обновить до {status.latestVersion}
                   </Button>
+                ) : (
+                  <Button
+                    icon={<ReloadOutlined />}
+                    disabled={!status.installed || serviceAction !== null}
+                    onClick={() => void loadStatus()}
+                  >
+                    Проверить обновление
+                  </Button>
+                )}
+              </Space>
+            </Col>
+          </Row>
+
+          {!status.installed ? (
+            <Alert
+              style={{ marginTop: 16 }}
+              type="info"
+              showIcon
+              message="Telemt ещё не установлен"
+              description="После установки панель автоматически покажет текущую и последнюю доступную версию."
+            />
+          ) : status.updateAvailable ? (
+            <Alert
+              style={{ marginTop: 16 }}
+              type="warning"
+              showIcon
+              message={'Доступно обновление до ' + status.latestVersion}
+              description="Обновление выполняется встроенным Telemt updater и после него возвращает сервис в рабочее состояние."
+            />
+          ) : status.latestVersion ? (
+            <Alert
+              style={{ marginTop: 16 }}
+              type="success"
+              showIcon
+              message="Установлена последняя версия Telemt"
+              description="Новых опубликованных релизов для текущей проверки не найдено."
+            />
+          ) : (
+            <Alert
+              style={{ marginTop: 16 }}
+              type="info"
+              showIcon
+              message="Не удалось получить последнюю версию"
+              description="Проверьте соединение сервера с GitHub и нажмите «Проверить» ещё раз."
+            />
+          )}
+        </Card>
+
+        <Card
+          className="telemt-card"
+          title={
+            <Space>
+              <PlusOutlined />
+              Прокси
+              <Tag>{proxies.length}</Tag>
+            </Space>
+          }
+          extra={
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              loading={proxyCreating}
+              disabled={!status.installed}
+              onClick={() => void createProxy()}
+            >
+              Создать прокси
+            </Button>
+          }
+        >
+          <Typography.Paragraph type="secondary" className="telemt-card-hint">
+            Адрес сервера определяется автоматически. После создания Telemt сам применит
+            пользователя и перезапустит службу только когда это действительно требуется.
+          </Typography.Paragraph>
+
+          {proxies.length === 0 ? (
+            <div className="telemt-empty-state">
+              <Typography.Text type="secondary">Прокси пока не созданы.</Typography.Text>
+            </div>
+          ) : (
+            <div className="telemt-proxy-list">
+              {proxies.map((item) => (
+                <div className="telemt-proxy-item" key={item.name}>
+                  <div className="telemt-proxy-main">
+                    <Space size={8} wrap>
+                      <Typography.Text strong>{item.name}</Typography.Text>
+                      <Tag>
+                        {item.host}:{item.port}
+                      </Tag>
+                      {item.tls && <Tag color="blue">Fake-TLS</Tag>}
+                    </Space>
+                    <Typography.Paragraph
+                      copyable={{ text: item.link, tooltips: ['Копировать', 'Скопировано'] }}
+                      ellipsis={{ rows: 1 }}
+                      code
+                      style={{ margin: '5px 0 0' }}
+                    >
+                      {item.link}
+                    </Typography.Paragraph>
+                  </div>
+                  <Popconfirm
+                    title="Удалить прокси?"
+                    okText="Удалить"
+                    cancelText="Отмена"
+                    onConfirm={() => void deleteProxy(item.name)}
+                  >
+                    <Button
+                      danger
+                      type="text"
+                      icon={<DeleteOutlined />}
+                      aria-label={'Удалить прокси ' + item.name}
+                      loading={proxyDeleting === item.name}
+                    />
+                  </Popconfirm>
                 </div>
-              </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        <Collapse
+          className="telemt-card telemt-advanced"
+          items={[
+            {
+              key: 'settings',
+              label: (
+                <Space>
+                  <SettingOutlined />
+                  Дополнительные настройки
+                </Space>
+              ),
+              children: (
+                <Form form={form} layout="vertical" onFinish={save}>
+                  <Row gutter={16}>
+                    <Col xs={24} md={8}>
+                      <Form.Item
+                        name="port"
+                        label="Порт Telemt"
+                        rules={[{ required: true }, { type: 'number', min: 1, max: 65535 }]}
+                      >
+                        <InputNumber style={{ width: '100%' }} />
+                      </Form.Item>
+                    </Col>
+                    <Col xs={24} md={16}>
+                      <Form.Item label="Основной секрет" required>
+                        <Space.Compact block>
+                          <Form.Item
+                            name="secret"
+                            noStyle
+                            rules={[
+                              { required: true },
+                              {
+                                pattern: /^[0-9a-fA-F]{32}$/,
+                                message: 'Нужно ровно 32 hex-символа',
+                              },
+                            ]}
+                          >
+                            <Input placeholder="32 hex-символа" autoComplete="off" />
+                          </Form.Item>
+                          <Button
+                            htmlType="button"
+                            icon={<SafetyCertificateOutlined />}
+                            onClick={generateSecret}
+                            disabled={configSaving}
+                          >
+                            Сгенерировать
+                          </Button>
+                        </Space.Compact>
+                      </Form.Item>
+                    </Col>
+                  </Row>
+
+                  <Row gutter={16}>
+                    <Col xs={24} md={12}>
+                      <Form.Item name="sni" label="SNI / домен маскировки">
+                        <Input placeholder="petrovich.ru" />
+                      </Form.Item>
+                    </Col>
+                    <Col xs={12} sm={8} md={4}>
+                      <Form.Item name="tls" label="Fake-TLS" valuePropName="checked">
+                        <Switch />
+                      </Form.Item>
+                    </Col>
+                    <Col xs={12} sm={8} md={4}>
+                      <Form.Item name="fastMode" label="Fast mode" valuePropName="checked">
+                        <Switch />
+                      </Form.Item>
+                    </Col>
+                    <Col xs={12} sm={8} md={4}>
+                      <Form.Item name="ipv4" label="IPv4" valuePropName="checked">
+                        <Switch />
+                      </Form.Item>
+                    </Col>
+                  </Row>
+
+                  <Row gutter={16}>
+                    <Col xs={12} md={6}>
+                      <Form.Item name="ipv6" label="IPv6" valuePropName="checked">
+                        <Switch />
+                      </Form.Item>
+                    </Col>
+                    <Col xs={12} md={6}>
+                      <Form.Item name="classic" label="Classic" valuePropName="checked">
+                        <Switch />
+                      </Form.Item>
+                    </Col>
+                    <Col xs={12} md={6}>
+                      <Form.Item name="secure" label="Secure" valuePropName="checked">
+                        <Switch />
+                      </Form.Item>
+                    </Col>
+                  </Row>
+
+                  <Space wrap>
+                    <Button
+                      type="primary"
+                      htmlType="submit"
+                      loading={configSaving}
+                      disabled={!status.installed}
+                    >
+                      Сохранить и применить
+                    </Button>
+                    <Typography.Text type="secondary">
+                      При работающем сервисе перезапуск выполняется автоматически.
+                    </Typography.Text>
+                  </Space>
+                </Form>
+              ),
+            },
+          ]}
+        />
+
+        <Typography.Paragraph type="secondary" className="telemt-footnote">
+          Web Proxy использует отдельный локальный WEB transport на порту{' '}
+          {status.webProxy.listenPort || 15080}; наружу публикуется только HTTPS :443.
+        </Typography.Paragraph>
+      </div>
+      <Modal
+        open={webProxyOpen}
+        title={status.webProxy.enabled ? 'Настройка Web Proxy' : 'Поднять Web Proxy'}
+        onCancel={() => {
+          if (!webProxyLoading) setWebProxyOpen(false);
+        }}
+        footer={[
+          <Button key="close" onClick={() => setWebProxyOpen(false)} disabled={webProxyLoading}>
+            Закрыть
+          </Button>,
+          ...(status.webProxy.enabled
+            ? [
+                <Popconfirm
+                  key="disable"
+                  title="Отключить Web Proxy?"
+                  description="Конфигурация WEB frontend будет убрана, обычный Telemt останется работать."
+                  okText="Отключить"
+                  cancelText="Отмена"
+                  onConfirm={() => void disableWebProxy()}
+                >
+                  <Button danger loading={webProxyLoading}>
+                    Отключить
+                  </Button>
+                </Popconfirm>,
+              ]
+            : []),
+          <Button
+            key="save"
+            type="primary"
+            onClick={() => void enableWebProxy()}
+            loading={webProxyLoading}
+            disabled={
+              !status.installed ||
+              !status.webProxy.supported ||
+              !webProxyDomain.trim() ||
+              (!status.webProxy.port443Available && !status.webProxy.frontendActive)
+            }
+          >
+            {status.webProxy.enabled ? 'Применить' : 'Поднять'}
+          </Button>,
+        ]}
+      >
+        <Space direction="vertical" size={14} style={{ width: '100%' }}>
+          <Alert
+            type="info"
+            showIcon
+            message="Панель всё сделает сама"
+            description="Выбранный HTTPS frontend, сертификат и WEB transport Telemt будут настроены автоматически. Для Caddy и HAProxy используется отдельная служба панели. При переключении возможен короткий перерыв соединений."
+          />
+
+          <FormProvider {...webForm}>
+            <Form layout="vertical">
+              <FormField
+                name="domain"
+                label="Домен"
+                extra={'По умолчанию: ' + (status.webProxy.defaultDomain || 'не определён')}
+              >
+                <Input placeholder="web.example.com" disabled={webProxyLoading} addonAfter=":443" />
+              </FormField>
+              <FormField name="frontend" label="HTTPS frontend">
+                <Select
+                  disabled={webProxyLoading}
+                  options={TelemtFrontendSchema.options.map((value) => ({ value, label: value }))}
+                />
+              </FormField>
+              <FormField
+                name="carrier"
+                label="Основной транспорт / запасной для клиентов без перебора"
+              >
+                <Select
+                  disabled={webProxyLoading || !status.webProxy.carrierNegotiationSupported}
+                  options={TelemtCarrierSchema.options.map((value) => ({ value, label: value }))}
+                />
+              </FormField>
+              <FormField
+                name="carriers"
+                label="Перебор транспортов"
+                extra="Выберите транспорты в порядке попыток. Пустой список отключает перебор. Основной транспорт остаётся запасным."
+              >
+                <Select
+                  mode="multiple"
+                  disabled={webProxyLoading || !status.webProxy.carrierNegotiationSupported}
+                  options={TelemtCarrierSchema.options.map((value) => ({ value, label: value }))}
+                />
+              </FormField>
+              {webCarriers.map((carrier, index) => (
+                <Space key={carrier} style={{ display: 'flex', marginTop: 4 }}>
+                  <Typography.Text>
+                    {index + 1}. {carrier}
+                  </Typography.Text>
+                  <Button
+                    size="small"
+                    aria-label={'Выше: ' + carrier}
+                    disabled={webProxyLoading || index === 0}
+                    onClick={() => {
+                      const next = [...webCarriers];
+                      [next[index - 1], next[index]] = [next[index]!, next[index - 1]!];
+                      webForm.setValue('carriers', next);
+                    }}
+                  >
+                    ↑
+                  </Button>
+                  <Button
+                    size="small"
+                    aria-label={'Ниже: ' + carrier}
+                    disabled={webProxyLoading || index === webCarriers.length - 1}
+                    onClick={() => {
+                      const next = [...webCarriers];
+                      [next[index], next[index + 1]] = [next[index + 1]!, next[index]!];
+                      webForm.setValue('carriers', next);
+                    }}
+                  >
+                    ↓
+                  </Button>
+                </Space>
+              ))}
+              {!status.webProxy.carrierNegotiationSupported && (
+                <Typography.Text type="secondary">
+                  Выбор транспортов требует Telemt 3.5.4 или новее.
+                </Typography.Text>
+              )}
+            </Form>
+          </FormProvider>
+
+          <Descriptions size="small" column={1} bordered>
+            <Descriptions.Item label="Telemt WEB">
+              127.0.0.1:{status.webProxy.listenPort || 15080}
+            </Descriptions.Item>
+            <Descriptions.Item label={webFrontend}>
+              {status.webProxy.frontendActive ? 'запущен' : 'будет запущен автоматически'}
+            </Descriptions.Item>
+            <Descriptions.Item label="TLS">
+              {status.webProxy.certificateReady
+                ? 'сертификат уже готов'
+                : 'сертификат будет получен автоматически'}
+            </Descriptions.Item>
+            <Descriptions.Item label="443">
+              {status.webProxy.frontendActive
+                ? 'порт использует текущий WEB frontend'
+                : status.webProxy.port443Available
+                  ? 'порт свободен'
+                  : status.webProxy.port443Owner
+                    ? 'занят: ' + status.webProxy.port443Owner
+                    : 'занят другим сервисом'}
+            </Descriptions.Item>
+            {status.webProxy.port443Owner && !status.webProxy.frontendActive && (
+              <Descriptions.Item label="Причина">
+                Остановите «{status.webProxy.port443Owner}» или перенесите его с порта 443.
+              </Descriptions.Item>
             )}
-          </Space>
+          </Descriptions>
+
+          {status.webProxy.error && (
+            <Alert type="warning" showIcon message={status.webProxy.error} />
+          )}
+
+          {status.webProxy.enabled && status.webProxy.link && (
+            <div>
+              <Typography.Text strong>Ссылка для Telegram</Typography.Text>
+              <div className="telemt-link-box telemt-link-box-large">
+                <Typography.Text code>{status.webProxy.link}</Typography.Text>
+                <Button
+                  type="text"
+                  icon={<CopyOutlined />}
+                  onClick={() => void navigator.clipboard.writeText(status.webProxy.link)}
+                >
+                  Копировать
+                </Button>
+              </div>
+            </div>
+          )}
+        </Space>
       </Modal>
     </>
   );

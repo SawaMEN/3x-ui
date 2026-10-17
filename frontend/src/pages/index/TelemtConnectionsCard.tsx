@@ -67,7 +67,9 @@ export default function TelemtConnectionsCard() {
     const load = async () => {
       try {
         const status = await HttpUtil.get<{ installed: boolean }>(
-          '/panel/api/telemt/status', undefined, { silent: true },
+          '/panel/api/telemt/status',
+          undefined,
+          { silent: true },
         );
         if (disposed) return;
         const available = status?.success === true && status.obj?.installed === true;
