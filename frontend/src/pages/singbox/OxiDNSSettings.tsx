@@ -131,7 +131,7 @@ export default function OxiDNSSettings() {
 
   // Installing/removing the package controls feature visibility. The regular
   // sing-box DNS editor is always available; OxiDNS controls are not.
-  if (!loading && !settings.installed) return null;
+  if (!loading && !settings.installed && !error) return null;
 
   return (
     <Card

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router';
 import {
   Alert,
   Button,
@@ -204,7 +203,6 @@ export default function SystemUpdateModal({
   onClose: () => void;
 }) {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const { isMobile } = useMediaQuery();
   const [messageApi, contextHolder] = message.useMessage();
   const [systemUpdateBusy, setSystemUpdateBusy] = useState(false);
@@ -870,10 +868,8 @@ export default function SystemUpdateModal({
                             size="small"
                             type="primary"
                             disabled={dependencyBusy !== null || systemUpdateBusy}
-                            onClick={() => {
-                              onClose();
-                              navigate('/singbox#dns');
-                            }}
+                            href={`${(window.X_UI_BASE_PATH || '/').replace(/\\/+$/, '')}/panel/singbox#dns`}
+                            onClick={onClose}
                           >
                             Создать DNS
                           </Button>

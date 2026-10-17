@@ -634,6 +634,10 @@ func Setup(ctx context.Context, c Settings, certFile, keyFile string) error {
 	if err != nil {
 		return err
 	}
+	previous, err := Load()
+	if err != nil {
+		return err
+	}
 	if err := installOnly(ctx); err != nil {
 		return err
 	}
@@ -642,48 +646,51 @@ func Setup(ctx context.Context, c Settings, certFile, keyFile string) error {
 	if err := atomicWrite(configPath, []byte(yaml), 0600); err != nil {
 		return err
 	}
-	rollback := func() {
+	rollback := func() error {
+		// The incoming HTTP request may already have timed out. A separate
+		// bounded context is needed to restore the old systemd state.
+		recovery, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		var restoreErr error
 		if len(oldYAML) > 0 {
-			_ = atomicWrite(configPath, oldYAML, 0600)
-		} else {
-			_ = os.Remove(configPath)
+			restoreErr = errors.Join(restoreErr, atomicWrite(configPath, oldYAML, 0600))
+		} else if err := os.Remove(configPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			restoreErr = errors.Join(restoreErr, err)
 		}
 		if len(oldState) > 0 {
-			_ = atomicWrite(statePath, oldState, 0600)
-		} else {
-			_ = os.Remove(statePath)
+			restoreErr = errors.Join(restoreErr, atomicWrite(statePath, oldState, 0600))
+		} else if err := os.Remove(statePath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			restoreErr = errors.Join(restoreErr, err)
 		}
-		if len(oldYAML) > 0 {
-			_ = systemctl(ctx, "restart", "x-ui-oxidns.service")
+		// An old configuration file can remain after Disable. Do not restart
+		// it unless OxiDNS was actually enabled before this failed Setup.
+		if previous.Enabled && len(oldYAML) > 0 {
+			restoreErr = errors.Join(restoreErr, systemctl(recovery, "enable", "x-ui-oxidns.service"))
+			restoreErr = errors.Join(restoreErr, systemctl(recovery, "restart", "x-ui-oxidns.service"))
 		} else {
-			_ = systemctl(ctx, "stop", "x-ui-oxidns.service")
-			_ = systemctl(ctx, "disable", "x-ui-oxidns.service")
+			restoreErr = errors.Join(restoreErr, systemctl(recovery, "stop", "x-ui-oxidns.service"))
+			restoreErr = errors.Join(restoreErr, systemctl(recovery, "disable", "x-ui-oxidns.service"))
 		}
+		return restoreErr
 	}
 	if out, err := exec.CommandContext(ctx, binaryPath, "check", "-c", configPath).CombinedOutput(); err != nil {
-		rollback()
-		return fmt.Errorf("OxiDNS отклонил конфигурацию: %w (%s)", err, strings.TrimSpace(string(out)))
+		return errors.Join(fmt.Errorf("OxiDNS отклонил конфигурацию: %w (%s)", err, strings.TrimSpace(string(out))), rollback())
 	}
 	if err := systemctl(ctx, "enable", "x-ui-oxidns.service"); err != nil {
-		rollback()
-		return err
+		return errors.Join(err, rollback())
 	}
 	if err := systemctl(ctx, "restart", "x-ui-oxidns.service"); err != nil {
-		rollback()
-		return err
+		return errors.Join(err, rollback())
 	}
 	if err := waitHealthy(ctx); err != nil {
-		rollback()
-		return err
+		return errors.Join(err, rollback())
 	}
 	data, err := json.Marshal(c)
 	if err != nil {
-		rollback()
-		return err
+		return errors.Join(err, rollback())
 	}
 	if err := atomicWrite(statePath, data, 0600); err != nil {
-		rollback()
-		return err
+		return errors.Join(err, rollback())
 	}
 	return nil
 }
