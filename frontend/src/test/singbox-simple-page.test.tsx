@@ -44,7 +44,7 @@ beforeEach(() => {
 
 async function openImporter() {
   fireEvent.click(await screen.findByRole('button', { name: 'Добавить outbound' }));
-  fireEvent.click(await screen.findByRole('tab', { name: /JSON/ }));
+  fireEvent.click(await screen.findByText('JSON и импорт ссылок'));
 }
 
 function mount(path = '/singbox') {
