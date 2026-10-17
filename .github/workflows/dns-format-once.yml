@@ -1,4 +1,4 @@
-name: DNS lifecycle formatter snapshot (final)
+name: DNS lifecycle formatter snapshot (complete)
 on:
   push:
     branches: [dns]
@@ -17,11 +17,12 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Canonical gofmt output
         run: |
-          gofmt -w internal/oxidns/manager.go internal/oxidns/lifecycle_systemd_test.go
+          gofmt -w internal/oxidns/manager.go internal/oxidns/manager_test.go internal/oxidns/lifecycle_systemd_test.go internal/web/controller/oxidns.go internal/web/service/singbox.go
           python3 - <<'PY'
           import base64
           from pathlib import Path
-          for p in ['internal/oxidns/manager.go','internal/oxidns/lifecycle_systemd_test.go']:
+          files = ['internal/oxidns/manager.go','internal/oxidns/manager_test.go','internal/oxidns/lifecycle_systemd_test.go','internal/web/controller/oxidns.go','internal/web/service/singbox.go']
+          for p in files:
               print('GOFMT_FILE:'+p+':'+base64.b64encode(Path(p).read_bytes()).decode())
           PY
       - name: Install frontend formatter
