@@ -19,7 +19,7 @@ let current = { ...original };
 
 beforeEach(() => {
   current = { ...original };
-  vi.mocked(HttpUtil.get).mockImplementation(async () => ({ success: true, obj: current }));
+  vi.mocked(HttpUtil.get).mockImplementation(async () => ({ success: true, msg: '', obj: current }));
   vi.mocked(HttpUtil.post).mockImplementation(async (path) => {
     if (String(path).endsWith('/setup')) {
       current = { ...current, enabled: true, running: true };
@@ -27,7 +27,7 @@ beforeEach(() => {
     if (String(path).endsWith('/disable')) {
       current = { ...current, enabled: false, running: false };
     }
-    return { success: true, obj: current };
+    return { success: true, msg: '', obj: current };
   });
   vi.mocked(HttpUtil.get).mockClear();
   vi.mocked(HttpUtil.post).mockClear();
