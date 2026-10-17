@@ -15581,7 +15581,7 @@
         "tags": [
           "Xray Settings"
         ],
-        "summary": "Force an immediate re-fetch of the subscription and return the parsed outbounds. Signals Xray to reload.",
+        "summary": "Re-fetch a subscription, optionally deferring the core reload for a batch update.",
         "operationId": "post_panel_api_xray_outbound_subs_id_refresh",
         "parameters": [
           {
@@ -15594,6 +15594,52 @@
             }
           }
         ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "deferApply": {
+                    "type": "boolean",
+                    "description": "Save without immediately applying to the core; call outbound-subs/apply after the batch."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/xray/outbound-subs/apply": {
+      "post": {
+        "tags": [
+          "Xray Settings"
+        ],
+        "summary": "Apply already downloaded outbound subscriptions in one core restart without fetching URLs again.",
+        "operationId": "post_panel_api_xray_outbound_subs_apply",
         "responses": {
           "200": {
             "description": "Successful response",
