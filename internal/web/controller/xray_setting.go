@@ -545,9 +545,18 @@ func (a *XraySettingController) refreshOutboundSub(c *gin.Context) {
 		jsonMsg(c, "Refresh failed", err)
 		return
 	}
-	// A manual refresh is an explicit request to use the updated nodes.
-	// Publish the new native configuration now, rather than reporting a missing
-	// sub-auto selector until an unrelated scheduled core restart.
+	// Disabled subscriptions are stored for later use; they have no runtime
+	// outbounds, so refreshing them must not restart the selected core.
+	sub, err := a.OutboundSubscriptionService.Get(subID)
+	if err != nil {
+		jsonMsg(c, "Subscription refreshed, but its status could not be read", err)
+		return
+	}
+	if !sub.Enabled {
+		jsonObj(c, obs, nil)
+		return
+	}
+	// A manual refresh of an active subscription must publish its nodes.
 	markOutboundCoreRestart()
 	// Mass refreshes defer applying the intermediate state. The final
 	// request publishes all fetched connections with just one core restart.
