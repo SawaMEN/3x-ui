@@ -606,7 +606,7 @@ export default function OutboundsTab({
             continue;
           }
           updated++;
-          needsApply ||= sub.enabled;
+          needsApply ||= Boolean(sub.enabled);
         } catch {
           failed++;
         }
