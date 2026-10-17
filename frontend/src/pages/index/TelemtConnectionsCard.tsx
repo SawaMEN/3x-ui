@@ -57,6 +57,7 @@ function formatLocation(location: TelemtIPLocation): string {
 
 export default function TelemtConnectionsCard() {
   const [rows, setRows] = useState<TelemtConnection[]>([]);
+  const [installed, setInstalled] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -64,8 +65,18 @@ export default function TelemtConnectionsCard() {
     let timer: ReturnType<typeof setTimeout> | undefined;
 
     const load = async () => {
-      setLoading(true);
       try {
+        const status = await HttpUtil.get<{ installed: boolean }>(
+          '/panel/api/telemt/status', undefined, { silent: true },
+        );
+        if (disposed) return;
+        const available = status?.success === true && status.obj?.installed === true;
+        setInstalled(available);
+        if (!available) {
+          setRows([]);
+          return;
+        }
+        setLoading(true);
         const msg = await HttpUtil.get<TelemtConnection[]>(
           '/panel/api/telemt/connections',
           undefined,
@@ -176,6 +187,8 @@ export default function TelemtConnectionsCard() {
     ],
     [],
   );
+
+  if (!installed) return null;
 
   return (
     <Card
