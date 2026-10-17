@@ -47,19 +47,28 @@ jobs:
           sudo grep -q '^OLCRTC_MANAGER_USER=' /etc/olcrtc-manager/panel.env
           sudo grep -q '^OLCRTC_MANAGER_PASS=' /etc/olcrtc-manager/panel.env
           export PORT
-          for attempt in $(seq 1 15); do
-            if curl --fail --silent --max-time 2 "http://127.0.0.1:${PORT}/api/auth/me" > /tmp/olcrtc-api-auth.json; then
-              break
-            fi
-            sleep 2
-          done
-          python3 - <<'PY'
+          sudo bash -c '
+            set -euo pipefail
+            set -a
+            source /etc/olcrtc-manager/panel.env
+            set +a
+            for attempt in $(seq 1 15); do
+              if curl --fail --silent --max-time 2 \
+                --user "${OLCRTC_MANAGER_USER}:${OLCRTC_MANAGER_PASS}" \
+                "http://127.0.0.1:${PORT}/api/settings" > /tmp/olcrtc-api-settings.json; then
+                exit 0
+              fi
+              sleep 2
+            done
+            exit 1
+          '
+          sudo python3 - <<'PY'
           import json
-          with open('/tmp/olcrtc-api-auth.json') as f:
+          with open('/tmp/olcrtc-api-settings.json') as f:
               response = json.load(f)
-          assert response.get("authenticated") is False
-          assert "setup_required" not in response or response["setup_required"] is False
-          print("Local OlcRTC API responds; credentials are provisioned")
+          assert response["port"] > 0
+          assert response["admin_user"]
+          print("Authenticated local OlcRTC API responds correctly")
           PY
       - name: Troubleshooting on failure
         if: failure()
