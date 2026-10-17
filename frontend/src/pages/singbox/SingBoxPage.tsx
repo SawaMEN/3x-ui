@@ -781,10 +781,7 @@ export default function SingBoxPage() {
     [],
   );
   const activeSection = sectionKeys.has(sectionSlug) ? sectionSlug : 'basic';
-  const expertSection = ['advanced', 'endpoints', 'certificates', 'network'].includes(
-    activeSection,
-  );
-  const showAdvanced = expertSection;
+  const showAdvanced = activeSection === 'advanced';
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [fetchError, setFetchError] = useState('');
@@ -2241,17 +2238,13 @@ export default function SingBoxPage() {
         </Space>
       </Card>
       <Collapse
+        defaultActiveKey={['experimental']}
         items={[
-          { key: 'basic', label: 'Журнал, время и схема', children: renderBasic() },
-          { key: 'dns', label: 'Дополнительные параметры DNS', children: renderDns() },
           {
             key: 'experimental',
             label: 'Кэш-файл и служебные API',
             children: renderExperimental(),
           },
-          { key: 'certificates', label: 'Сертификаты', children: renderCertificates() },
-          { key: 'network', label: 'Сеть и HTTP-клиенты', children: renderNetwork() },
-          { key: 'endpoints', label: 'Туннели (Endpoints)', children: renderEndpoints() },
         ]}
       />
     </Space>
@@ -2262,10 +2255,23 @@ export default function SingBoxPage() {
 
   const sectionBody = (() => {
     switch (activeSection) {
+      case 'basic':
+        return renderBasic();
       case 'dns':
         return (
           <Tabs
-            defaultActiveKey="servers"
+            className="singbox-subtabs"
+            activeKey={['basic', 'servers', 'rules'].includes(searchParams.get('dnsTab') || '')
+              ? searchParams.get('dnsTab')!
+              : 'basic'}
+            onChange={(key) => {
+              const next = new URLSearchParams(location.search);
+              next.set('dnsTab', key);
+              navigate(
+                { pathname: location.pathname, search: next.toString(), hash: location.hash },
+                { preventScrollReset: true },
+              );
+            }}
             items={[
               {
                 key: 'basic',
@@ -2294,6 +2300,7 @@ export default function SingBoxPage() {
       case 'routing':
         return (
           <Tabs
+            className="singbox-subtabs"
             activeKey={
               ['basic', 'adblock', 'catalog'].includes(searchParams.get('routingTab') || '')
                 ? searchParams.get('routingTab')!
@@ -2403,7 +2410,10 @@ export default function SingBoxPage() {
       okButtonProps: { danger: true },
       onOk: reset,
     });
-  const visibleSections = ['basic', 'routing', 'outbound', 'balancer', 'dns', 'advanced'];
+  const visibleSections = [
+    'basic', 'dns', 'routing', 'outbound', 'balancer',
+    'endpoints', 'certificates', 'network', 'advanced',
+  ];
 
   return (
     <ConfigProvider theme={antdThemeConfig}>
@@ -2527,7 +2537,7 @@ export default function SingBoxPage() {
 
                   <Card className="singbox-section-navigation">
                     <Radio.Group
-                      value={expertSection ? 'advanced' : activeSection}
+                      value={activeSection}
                       buttonStyle="solid"
                       onChange={(event) => navigate('/singbox#' + event.target.value)}
                       options={visibleSections.map((key) => ({
@@ -2537,7 +2547,7 @@ export default function SingBoxPage() {
                       optionType="button"
                     />
                   </Card>
-                  <Card className="singbox-settings-body">{sectionBody}</Card>
+                  <div className="singbox-settings-body">{sectionBody}</div>
                 </Space>
               ) : (
                 <div style={{ minHeight: 200 }} />
