@@ -146,158 +146,9 @@ func (s *OutboundSubscriptionService) List() ([]*model.OutboundSubscription, err
 	return subs, nil
 }
 
-// Compatibility is rechecked against the *current* core on each list read.
-// Old warnings must not claim that profiles remain unsupported after a core
-// upgrade or switch. Preserve independent parser warnings.
-var storedCompatibilityWarning = regexp.MustCompile(`(?:^|\\s)\\d+ подключений не поддерживаются текущим ядром [^;]+; сохранены в подписке, но не применены:.*package service
-
-import (
-	"context"
-	"crypto/tls"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"io"
-	"net/http"
-	"regexp"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
-
-	"gorm.io/gorm"
-
-	"github.com/SawaMEN/3x-ui/v3/internal/database"
-	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
-	"github.com/SawaMEN/3x-ui/v3/internal/logger"
-	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
-	"github.com/SawaMEN/3x-ui/v3/internal/util/link"
-	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
-)
-
-// filterOutboundsRejectedByCore drops outbounds the vendored xray-core config
-// loader refuses to build — since v26.7.11 that includes unencrypted
-// vless/trojan outbounds to public addresses — because one such outbound in
-// the merged config would keep the whole core from starting. When the running
-// core predates that rejection, unencrypted outbounds are kept, mirroring
-// CheckXrayConfig's version gate.
-func filterOutboundsRejectedByCore(label string, outbounds []any) ([]any, []string) {
-	kept := make([]any, 0, len(outbounds))
-	var dropped []string
-	for _, ob := range outbounds {
-		if row, ok := ob.(map[string]any); ok && externalvpn.IsAdditionalOutbound(row) {
-			if err := externalvpn.ValidateAdditionalOutbound(row); err != nil {
-				dropped = append(dropped, err.Error())
-			} else {
-				kept = append(kept, ob)
-			}
-			continue
-		}
-		raw, err := json.Marshal(ob)
-		if err == nil {
-			if buildErr := validateNativeTemplateOutbound(raw, asNativeOutboundMap(ob), CoreTypeSingBox); buildErr != nil {
-				tag := ""
-				if m, ok := ob.(map[string]any); ok {
-					tag, _ = m["tag"].(string)
-				}
-				logger.Warningf("%s: incompatible xray outbound %q: %v", label, tag, buildErr)
-				dropped = append(dropped, fmt.Sprintf("%s: %v", tag, buildErr))
-				continue
-			}
-		}
-		kept = append(kept, ob)
-	}
-	return kept, dropped
-}
-
-// maxOutboundSubscriptionBytes caps a single outbound subscription response.
-// It is larger than the 2 MiB user-facing subscription cap because an outbound
-// subscription may aggregate many upstream outbounds into one document.
-const maxOutboundSubscriptionBytes int64 = 8 << 20
-
-const defaultOutboundSubscriptionUserAgent = "3x-ui-outbound-sub/1.0"
-
-var errOutboundSubscriptionBodyTooLarge = errors.New("outbound subscription response body exceeds size limit")
-
-func readBoundedOutboundSubscriptionBody(r io.Reader) ([]byte, error) {
-	body, err := io.ReadAll(io.LimitReader(r, maxOutboundSubscriptionBytes+1))
-	if err != nil {
-		return nil, err
-	}
-	if int64(len(body)) > maxOutboundSubscriptionBytes {
-		return nil, fmt.Errorf("%w (limit: %d bytes)", errOutboundSubscriptionBodyTooLarge, maxOutboundSubscriptionBytes)
-	}
-	return body, nil
-}
-
-// OutboundSubscriptionService manages remote outbound subscriptions.
-var (
-	subscriptionOrderMu sync.Mutex
-	subscriptionLocks   = struct {
-		sync.Mutex
-		entries map[int]*subscriptionLock
-	}{entries: make(map[int]*subscriptionLock)}
-)
-
-type subscriptionLock struct {
-	sync.Mutex
-	users int
-}
-
-func lockSubscription(id int) func() {
-	subscriptionLocks.Lock()
-	entry := subscriptionLocks.entries[id]
-	if entry == nil {
-		entry = &subscriptionLock{}
-		subscriptionLocks.entries[id] = entry
-	}
-	entry.users++
-	subscriptionLocks.Unlock()
-	entry.Lock()
-	return func() {
-		entry.Unlock()
-		subscriptionLocks.Lock()
-		entry.users--
-		if entry.users == 0 {
-			delete(subscriptionLocks.entries, id)
-		}
-		subscriptionLocks.Unlock()
-	}
-}
-
-type OutboundSubscriptionService struct {
-	settingService SettingService
-}
-
-// NewOutboundSubscriptionService returns a service for managing outbound subscriptions.
-func NewOutboundSubscriptionService() *OutboundSubscriptionService {
-	return &OutboundSubscriptionService{}
-}
-
-// List returns all subscriptions (newest first).
-func (s *OutboundSubscriptionService) List() ([]*model.OutboundSubscription, error) {
-	db := database.GetDB()
-	var subs []*model.OutboundSubscription
-	if err := db.Model(&model.OutboundSubscription{}).Order("priority asc, id asc").Find(&subs).Error; err != nil {
-		return nil, err
-	}
-	for _, sub := range subs {
-		sub.OutboundCount = countOutbounds(sub.LastFetchedOutbounds)
-		var stored []any
-		if json.Unmarshal([]byte(sub.LastFetchedOutbounds), &stored) == nil {
-			compatible, issues, coreName := filterSubscriptionOutboundsWithIssues("subscription status", stored)
-			sub.SupportedCount = len(compatible)
-			sub.LastWarning = currentSubscriptionCompatibilityWarning(sub.LastWarning, issues, coreName)
-		}
-		// Don't ship the heavy raw blobs to the list view.
-		sub.LastFetchedOutbounds = ""
-		sub.LinkIdentities = ""
-	}
-	return subs, nil
-}
-
-)
+// Compatibility is rechecked against the current core on each list read.
+// Preserve independent parser warnings when removing an old core warning.
+var storedCompatibilityWarning = regexp.MustCompile(`(?:^|\s)\d+ подключений не поддерживаются текущим ядром [^;]+; сохранены в подписке, но не применены:.*$`)
 
 func currentSubscriptionCompatibilityWarning(previous string, issues []string, core string) string {
 	if location := storedCompatibilityWarning.FindStringIndex(previous); location != nil {
@@ -314,7 +165,6 @@ func currentSubscriptionCompatibilityWarning(previous string, issues []string, c
 	}
 	return previous + " " + summary
 }
-
 // countOutbounds returns the number of outbounds in a stored LastFetchedOutbounds
 // JSON array (0 for empty/invalid).
 func countOutbounds(raw string) int {
