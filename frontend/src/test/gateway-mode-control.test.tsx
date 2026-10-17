@@ -323,4 +323,22 @@ describe('gateway settings in sing-box', () => {
     expect(screen.getAllByRole('alert')).toHaveLength(1);
     expect(screen.getByText('Шлюз требует восстановления')).toBeTruthy();
   });
+  it('keeps a corrupted stored network error visible even when the gateway is off', async () => {
+    vi.mocked(HttpUtil.get).mockImplementation(async (url) => ({
+      success: true,
+      msg: '',
+      obj: url.endsWith('/interfaces')
+        ? { interfaces: [], defaultWAN: 'eth0', note: '' }
+        : {
+            ...status(),
+            network: { ...disconnected, configured: true, error: 'Файл сетевых настроек повреждён' },
+          },
+    }));
+
+    render(<GatewayModeControl />);
+    expect(await screen.findByText('Ошибка сетевых настроек')).toBeTruthy();
+    expect(screen.getByText('Файл сетевых настроек повреждён')).toBeTruthy();
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+  });
+
 });
