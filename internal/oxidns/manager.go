@@ -204,8 +204,7 @@ func Latest(ctx context.Context) (string,*releaseAsset,error) {
  if resp.StatusCode!=200{return "",nil,fmt.Errorf("GitHub API: HTTP %d",resp.StatusCode)}
  var rel upstreamRelease
  if err:=json.NewDecoder(io.LimitReader(resp.Body,1<<20)).Decode(&rel);err!=nil{return "",nil,err}
- if !strings.HasPrefix(rel.Tag,"v")||len(rel.Tag)>64||strings.ContainsAny(rel.Tag," /\	
-") {
+ if !strings.HasPrefix(rel.Tag,"v") || len(rel.Tag)>64 || strings.Contains(rel.Tag,"/") || strings.Contains(rel.Tag," ") {
   return "",nil,errors.New("неверная версия OxiDNS из GitHub")
  }
  for _,asset:=range rel.Assets{
