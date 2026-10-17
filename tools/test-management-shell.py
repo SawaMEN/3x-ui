@@ -203,32 +203,32 @@ curl() {
 
     def test_dev_publisher_only_updates_rolling_release(self):
         source = (ROOT / ".github/workflows/release.yml").read_text()
-        block = source.split("      - name: Publish dev-latest\\n", 1)[1].split("        run: |\\n", 1)[1]
-        script = "\\n".join(line[10:] for line in block.splitlines())
+        block = source.split("      - name: Publish dev-latest\n", 1)[1].split("        run: |\n", 1)[1]
+        script = "\n".join(line[10:] for line in block.splitlines())
         commit = "0123456789012345678901234567890123456789"
         revision = "e" * 40
         for mode in ("current", "diverged", "formatter", "application-change"):
             with self.subTest(mode=mode), tempfile.TemporaryDirectory() as raw:
                 self.run_script(r'''
 git() {
-    printf 'git %s\\n' "$*" >> "$TEST_LOG"
+    printf 'git %s\n' "$*" >> "$TEST_LOG"
     case "$1" in
-        rev-parse) printf '%s\\n' "$REMOTE_COMMIT";;
+        rev-parse) printf '%s\n' "$REMOTE_COMMIT";;
         merge-base) [[ "$GIT_MODE" != diverged ]];;
-        rev-list) printf '%s\\n' "$REVISION";;
+        rev-list) printf '%s\n' "$REVISION";;
         show)
             case "$*" in
                 *format=%s*)
-                    if [[ "$GIT_MODE" == formatter ]]; then printf '%s\\n' 'chore(format): apply oxfmt'
-                    else printf '%s\\n' 'fix: backend change'; fi;;
+                    if [[ "$GIT_MODE" == formatter ]]; then printf '%s\n' 'chore(format): apply oxfmt'
+                    else printf '%s\n' 'fix: backend change'; fi;;
                 *format=%an*)
-                    if [[ "$GIT_MODE" == formatter ]]; then printf '%s\\n' 'github-actions[bot]'
-                    else printf '%s\\n' 'developer'; fi;;
+                    if [[ "$GIT_MODE" == formatter ]]; then printf '%s\n' 'github-actions[bot]'
+                    else printf '%s\n' 'developer'; fi;;
             esac;;
-        diff-tree) printf '%s\\n' frontend/src/pages/settings/GatewayModeControl.tsx;;
+        diff-tree) printf '%s\n' frontend/src/pages/settings/GatewayModeControl.tsx;;
     esac
 }
-gh() { printf 'gh %s\\n' "$*" >> "$TEST_LOG"; }
+gh() { printf 'gh %s\n' "$*" >> "$TEST_LOG"; }
 ''' + script, {"COMMIT": commit,
                "REMOTE_COMMIT": commit if mode == "current" else "f" * 40,
                "REVISION": revision, "GIT_MODE": mode,
