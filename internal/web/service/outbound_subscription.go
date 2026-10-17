@@ -311,6 +311,14 @@ func (s *OutboundSubscriptionService) Update(id int, remark, rawURL, tagPrefix, 
 			return err
 		}
 	}
+	// Changing the source must schedule an immediate re-fetch. Keep the
+	// previous working profiles until the replacement has been validated.
+	sourceChanged := sub.Url != cleanURL || sub.TagPrefix != prefix ||
+		sub.UserAgent != strings.TrimSpace(userAgent) ||
+		sub.AllowPrivate != allowPrivate || sub.AllowInsecure != allowInsecure
+	if sourceChanged {
+		sub.LastUpdated = 0
+	}
 	resetSelection, resetRanking, resetHealth := false, false, false
 	if len(balance) > 0 && balance[0] != nil {
 		if err := balance[0].Validate(allowPrivate); err != nil {
@@ -334,6 +342,9 @@ func (s *OutboundSubscriptionService) Update(id int, remark, rawURL, tagPrefix, 
 		balance[0].apply(sub)
 	}
 	fields := []string{"remark", "url", "enabled", "allow_private", "allow_insecure", "user_agent", "prepend", "tag_prefix", "update_interval"}
+	if sourceChanged {
+		fields = append(fields, "last_updated")
+	}
 	if len(balance) > 0 && balance[0] != nil {
 		fields = append(fields, "auto_balance", "balance_mode", "probe_url", "probe_interval", "tolerance", "switch_interval", "health_interval")
 		// Don't overwrite concurrent probe results on a metadata-only edit.
