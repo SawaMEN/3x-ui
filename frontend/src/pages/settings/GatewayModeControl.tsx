@@ -364,14 +364,16 @@ export default function GatewayModeControl() {
   const displayWAN = networkConfig.wanInterface || 'Без NAT';
   const missingNetwork = !networkConfig.lanInterface || !networkConfig.lanIP;
   const actionBlocked = conflict || recoveryOnly;
-  const gatewayProblem = enabled && (
-    conflict || recoveryOnly || coreMismatch || !coreRunning || !networkHealthy ||
-    !!status?.network?.error
-  );
+  const gatewayProblem =
+    enabled &&
+    (conflict ||
+      recoveryOnly ||
+      coreMismatch ||
+      !coreRunning ||
+      !networkHealthy ||
+      !!status?.network?.error);
   const readinessProblems =
-    !enabled && verified && !checking && preflight && !preflight.ready
-      ? preflight.problems
-      : [];
+    !enabled && verified && !checking && preflight && !preflight.ready ? preflight.problems : [];
 
   return (
     <div className="gateway-control">
@@ -381,8 +383,8 @@ export default function GatewayModeControl() {
           <div>
             <div className="singbox-section-title">Режим шлюза</div>
             <div className="singbox-section-description">
-              Подключает устройства локальной сети к интернету через sing-box. Панель сама
-              настроит сетевые правила и восстановление после перезагрузки.
+              Подключает устройства локальной сети к интернету через sing-box. Панель сама настроит
+              сетевые правила и восстановление после перезагрузки.
             </div>
           </div>
           <Tag color={gatewayHealthy ? 'success' : enabled ? 'warning' : 'default'}>
@@ -473,7 +475,9 @@ export default function GatewayModeControl() {
                 title="Нужно исправить настройки"
                 description={
                   <ul className="gateway-preflight-list">
-                    {readinessProblems.map((problem, i) => <li key={i}>{problem}</li>)}
+                    {readinessProblems.map((problem, i) => (
+                      <li key={i}>{problem}</li>
+                    ))}
                   </ul>
                 }
               />
@@ -542,8 +546,8 @@ export default function GatewayModeControl() {
             </div>
             {enabled && (
               <div className="gateway-help gateway-client-tip">
-                На устройствах локальной сети укажите IP этого сервера как основной шлюз.
-                Правила обработки трафика задаются в разделе «Маршрутизация».
+                На устройствах локальной сети укажите IP этого сервера как основной шлюз. Правила
+                обработки трафика задаются в разделе «Маршрутизация».
               </div>
             )}
           </>
@@ -567,15 +571,19 @@ export default function GatewayModeControl() {
             label: 'Параметры сети',
             extra: (
               <Tag color={networkConfigured ? 'success' : 'default'}>
-                {networkConfigured ? 'Применены' : discovery?.suggested ? 'Автонастройка' : 'Выбор сети'}
+                {networkConfigured
+                  ? 'Применены'
+                  : discovery?.suggested
+                    ? 'Автонастройка'
+                    : 'Выбор сети'}
               </Tag>
             ),
             children: (
               <Space orientation="vertical" size={14} className="gateway-fields">
                 <div className="singbox-section-description">
-                  Выберите сеть, устройства которой будут использовать этот сервер как шлюз.
-                  Если подходящая сеть найдена, поля заполняются автоматически.
-                  Для изменения работающей конфигурации сначала выключите шлюз.
+                  Выберите сеть, устройства которой будут использовать этот сервер как шлюз. Если
+                  подходящая сеть найдена, поля заполняются автоматически. Для изменения работающей
+                  конфигурации сначала выключите шлюз.
                 </div>
                 <Row gutter={[12, 12]}>
                   <Col xs={24} sm={12}>
@@ -731,7 +739,6 @@ export default function GatewayModeControl() {
                     Проверить
                   </Button>
                 </div>
-
               </Space>
             ),
           },
@@ -761,7 +768,6 @@ export default function GatewayModeControl() {
                   IPv4-подсети. Клиенты должны использовать этот сервер как шлюз. Маршрутизация
                   настраивается в разделе «Маршрутизация» sing-box.
                 </div>
-
               </Space>
             ),
           },
