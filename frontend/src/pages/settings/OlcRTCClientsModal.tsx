@@ -53,6 +53,11 @@ type Location = {
 };
 type Client = { id: string; locations: Location[]; quota?: ClientQuota; link: string };
 type ApiMsg<T> = { success?: boolean; msg?: string; obj?: T };
+type LiveSummary = {
+  runningCount: number;
+  peerCount: number;
+  clients: { id: string; running: boolean; peerCount: number; locationCount: number; failedCount: number }[];
+};
 
 const transportOptions: Record<Provider, { value: Transport; label: string }[]> = {
   jitsi: [
@@ -84,6 +89,7 @@ export default function OlcRTCClientsModal({
   const [form] = Form.useForm<ClientInput>();
   const [provider, setProvider] = useState<Provider>('jitsi');
   const [clients, setClients] = useState<Client[]>([]);
+  const [live, setLive] = useState<LiveSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [working, setWorking] = useState<string | null>(null);
@@ -92,9 +98,13 @@ export default function OlcRTCClientsModal({
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const result = (await HttpUtil.get('/panel/api/olcrtc/clients')) as ApiMsg<Client[]>;
+      const [result, state] = await Promise.all([
+        HttpUtil.get('/panel/api/olcrtc/clients') as Promise<ApiMsg<Client[]>>,
+        HttpUtil.get('/panel/api/olcrtc/live', undefined, { silent: true }) as Promise<ApiMsg<LiveSummary>>,
+      ]);
       if (!result.success) throw new Error(result.msg || 'Не удалось загрузить подключения');
       setClients(result.obj || []);
+      setLive(state.success ? state.obj || null : null);
       setError('');
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -207,6 +217,12 @@ export default function OlcRTCClientsModal({
         клиента, выберите сервис видеосвязи и скопируйте готовую ссылку в совместимый клиент OlcRTC.
       </Typography.Paragraph>
       {error && <Alert type="error" showIcon title={error} style={{ marginBottom: 12 }} />}
+      {live && (
+        <Space wrap style={{ marginBottom: 12 }}>
+          <Tag color="processing">Запущено: {live.runningCount}</Tag>
+          <Tag>Подключённых участников: {live.peerCount}</Tag>
+        </Space>
+      )}
       <Card
         size="small"
         title="Клиенты"
@@ -231,6 +247,15 @@ export default function OlcRTCClientsModal({
                 <Space wrap style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <Space wrap>
                     <Typography.Text strong>{client.id}</Typography.Text>
+                    {live?.clients.find((item) => item.id === client.id) && (
+                      <Tag
+                        color={live.clients.find((item) => item.id === client.id)?.running ? 'success' : 'warning'}
+                      >
+                        {live.clients.find((item) => item.id === client.id)?.running ? 'Работает' : 'Не запущен'}
+                        {' · '}
+                        {live.clients.find((item) => item.id === client.id)?.peerCount ?? 0} участников
+                      </Tag>
+                    )}
                     {client.locations[0] && (
                       <Tag>
                         {client.locations[0].carrier} /{' '}
