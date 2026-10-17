@@ -172,6 +172,15 @@ export default function OxiDNSSettings() {
   const locked = busy !== null || checking || checkingUpdates;
   const canApply = status.supported && !domainInvalid && !invalidPort && !conflictPorts && !unused;
   const isHealthy = status.installed && status.enabled && status.running;
+  const primaryLabel = !status.installed
+    ? 'Установить и включить DNS'
+    : !status.enabled
+      ? 'Включить DNS'
+      : dirty
+        ? 'Сохранить и применить'
+        : status.running
+          ? 'Перезапустить DNS'
+          : 'Повторить запуск';
   const statusLabel = !status.installed
     ? 'Не установлен'
     : isHealthy
@@ -420,24 +429,18 @@ export default function OxiDNSSettings() {
               <Button
                 type="primary"
                 size="large"
+                aria-label={primaryLabel}
                 icon={!status.installed ? <CloudDownloadOutlined /> : <CheckCircleOutlined />}
                 loading={busy === 'apply'}
                 disabled={locked && busy !== 'apply' || !canApply}
                 onClick={() => void apply(true)}
               >
-                {!status.installed
-                  ? 'Установить и включить DNS'
-                  : !status.enabled
-                    ? 'Включить DNS'
-                    : dirty
-                      ? 'Сохранить и применить'
-                      : status.running
-                        ? 'Перезапустить DNS'
-                        : 'Повторить запуск'}
+                {primaryLabel}
               </Button>
               {status.enabled && (
                 <Button
                   danger
+                  aria-label="Выключить"
                   icon={<PoweroffOutlined />}
                   loading={busy === 'disable'}
                   disabled={locked && busy !== 'disable'}
@@ -629,6 +632,7 @@ export default function OxiDNSSettings() {
                 endpoint('DoQ — QUIC', 'quic://' + status.doqAddress, 'Используйте домен и указанный UDP-порт.')}
               <Space wrap>
                 <Button
+                  aria-label="Проверить DNS-запрос"
                   icon={<SafetyCertificateOutlined />}
                   loading={checking}
                   disabled={locked && !checking}
@@ -636,7 +640,7 @@ export default function OxiDNSSettings() {
                 >
                   Проверить DNS-запрос
                 </Button>
-                <Button icon={<ReloadOutlined />} disabled={locked} onClick={() => void refresh()}>
+                <Button aria-label="Обновить состояние" icon={<ReloadOutlined />} disabled={locked} onClick={() => void refresh()}>
                   Обновить состояние
                 </Button>
               </Space>
@@ -665,6 +669,7 @@ export default function OxiDNSSettings() {
             )}
             <Space wrap>
               <Button
+                aria-label="Проверить обновления"
                 icon={<SyncOutlined />}
                 loading={checkingUpdates}
                 disabled={locked && !checkingUpdates}
@@ -682,6 +687,7 @@ export default function OxiDNSSettings() {
               {status.installed && status.updateAvailable && (
                 <Button
                   type="primary"
+                  aria-label="Обновить OxiDNS"
                   icon={<CloudDownloadOutlined />}
                   loading={busy === 'update'}
                   disabled={locked && busy !== 'update'}
@@ -706,6 +712,7 @@ export default function OxiDNSSettings() {
                 >
                   <Button
                     danger
+                    aria-label="Удалить OxiDNS"
                     icon={<DeleteOutlined />}
                     loading={busy === 'remove'}
                     disabled={locked && busy !== 'remove'}
