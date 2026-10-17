@@ -479,14 +479,17 @@ func (s *SingBoxService) SaveTemplate(ctx context.Context, raw string) error {
 	rollback := func() error {
 		return errors.Join(singBoxSettingService.SetSingBoxConfigTemplate(old), s.WriteConfig())
 	}
-	if err := s.WriteConfig(); err != nil {
-		return errors.Join(err, rollback())
-	}
-	if !s.IsRunning() {
+	// A running core's Restart prepares, validates and atomically publishes
+	// the candidate itself. Writing first would do the expensive core check
+	// and config generation twice for every click in the settings UI.
+	if s.IsRunning() {
+		if err := s.Restart(ctx); err != nil {
+			return errors.Join(err, rollback(), s.Restart(ctx))
+		}
 		return nil
 	}
-	if err := s.Restart(ctx); err != nil {
-		return errors.Join(err, rollback(), s.Restart(ctx))
+	if err := s.WriteConfig(); err != nil {
+		return errors.Join(err, rollback())
 	}
 	return nil
 }
@@ -504,14 +507,17 @@ func (s *SingBoxService) ResetTemplate(ctx context.Context) error {
 	rollback := func() error {
 		return errors.Join(singBoxSettingService.SetSingBoxConfigTemplate(old), s.WriteConfig())
 	}
-	if err := s.WriteConfig(); err != nil {
-		return errors.Join(err, rollback())
-	}
-	if !s.IsRunning() {
+	// A running core's Restart prepares, validates and atomically publishes
+	// the candidate itself. Writing first would do the expensive core check
+	// and config generation twice for every click in the settings UI.
+	if s.IsRunning() {
+		if err := s.Restart(ctx); err != nil {
+			return errors.Join(err, rollback(), s.Restart(ctx))
+		}
 		return nil
 	}
-	if err := s.Restart(ctx); err != nil {
-		return errors.Join(err, rollback(), s.Restart(ctx))
+	if err := s.WriteConfig(); err != nil {
+		return errors.Join(err, rollback())
 	}
 	return nil
 }
