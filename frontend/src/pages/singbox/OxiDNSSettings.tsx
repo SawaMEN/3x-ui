@@ -4,6 +4,7 @@ import {
   Button,
   Card,
   Collapse,
+  Divider,
   Input,
   InputNumber,
   Modal,
@@ -105,6 +106,7 @@ export default function OxiDNSSettings() {
   const [updatesChecked, setUpdatesChecked] = useState(false);
   const [verified, setVerified] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showMaintenance, setShowMaintenance] = useState(false);
   const [logsOpen, setLogsOpen] = useState(false);
   const [logsBusy, setLogsBusy] = useState(false);
   const [logs, setLogs] = useState('');
@@ -171,6 +173,26 @@ export default function OxiDNSSettings() {
     (draft.doh && draft.dot && draft.port === draft.dotPort) ||
     (draft.doh && draft.http3 && draft.doq && draft.port === draft.doqPort);
   const unused = !draft.useSingBox && !external;
+  const configMode = !external ? 'local' : draft.doh && draft.dot && draft.doq ? 'all' : 'custom';
+  const setupHint = domainInvalid
+    ? 'Для доступа с других устройств укажите домен, который указан в TLS-сертификате панели.'
+    : invalidPort || conflictPorts
+      ? 'Измените порты: они должны быть допустимыми и не пересекаться у одинакового транспорта.'
+      : unused
+        ? 'Включите использование в sing-box либо выберите внешний защищённый DNS.'
+        : '';
+  const chooseMode = (mode: 'local' | 'doh' | 'all') => {
+    if (mode === 'local') {
+      patch({ useSingBox: true, doh: false, dot: false, doq: false, http3: false });
+      setShowAdvanced(false);
+    } else if (mode === 'doh') {
+      patch({ useSingBox: true, doh: true, http3: false, dot: false, doq: false });
+      setShowAdvanced(true);
+    } else {
+      patch({ useSingBox: true, doh: true, http3: true, dot: true, doq: true });
+      setShowAdvanced(true);
+    }
+  };
   const locked = busy !== null || checking || checkingUpdates;
   const canApply = status.supported && !domainInvalid && !invalidPort && !conflictPorts && !unused;
   const isHealthy = status.installed && status.enabled && status.running;
@@ -219,6 +241,7 @@ export default function OxiDNSSettings() {
       setDraft(getConfig(next));
       setVerified(enable && next.running);
       setUpdatesChecked(false);
+      window.dispatchEvent(new Event('oxidns:changed'));
       setNotice(
         enable
           ? 'OxiDNS установлен, запущен и проверен. Новая конфигурация применяется автоматически.'
@@ -261,6 +284,7 @@ export default function OxiDNSSettings() {
       setStatus(next);
       setDraft(getConfig(next));
       setUpdatesChecked(false);
+      window.dispatchEvent(new Event('oxidns:changed'));
       setNotice('Компонент OxiDNS обновлён. Рабочие настройки сохранены.');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Не удалось обновить OxiDNS.');
@@ -280,6 +304,7 @@ export default function OxiDNSSettings() {
       setDraft(getConfig(next));
       setVerified(false);
       setUpdatesChecked(false);
+      window.dispatchEvent(new Event('oxidns:changed'));
       setNotice('OxiDNS удалён. Служба остановлена, настройки компонента очищены.');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Не удалось удалить OxiDNS.');
@@ -397,7 +422,25 @@ export default function OxiDNSSettings() {
         >
           <Space orientation="vertical" size={14} style={{ width: '100%' }}>
             <div>
-              <Typography.Text strong>DNS-провайдер</Typography.Text>
+              <Typography.Text strong>1. Как вы хотите использовать DNS?</Typography.Text>
+              <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
+                Выберите готовый вариант. Панель заполнит параметры автоматически, их можно изменить ниже.
+              </Typography.Paragraph>
+              <Space wrap>
+                <Button type={configMode === 'local' ? 'primary' : 'default'} disabled={locked} onClick={() => chooseMode('local')}>
+                  Только для sing-box
+                </Button>
+                <Button type={draft.doh && !draft.dot && !draft.doq ? 'primary' : 'default'} disabled={locked} onClick={() => chooseMode('doh')}>
+                  Sing-box + DoH для устройств
+                </Button>
+                <Button type={configMode === 'all' ? 'primary' : 'default'} disabled={locked} onClick={() => chooseMode('all')}>
+                  Все протоколы
+                </Button>
+              </Space>
+            </div>
+            <Divider style={{ margin: '2px 0' }} />
+            <div>
+              <Typography.Text strong>2. DNS-провайдер</Typography.Text>
               <Select
                 aria-label="DNS-провайдер"
                 style={{ width: '100%', marginTop: 8 }}
@@ -426,6 +469,9 @@ export default function OxiDNSSettings() {
               </div>
             </Space>
 
+            {setupHint && (
+              <Alert type="warning" showIcon title="Проверьте настройку" description={setupHint} />
+            )}
             {unused && (
               <Alert
                 type="warning"
@@ -437,6 +483,7 @@ export default function OxiDNSSettings() {
             {dirty && status.enabled && (
               <Alert type="info" showIcon title="Настройки изменены, но ещё не применены" />
             )}
+            <Typography.Text strong>3. Примените настройки</Typography.Text>
             <Space wrap>
               <Button
                 type="primary"
@@ -684,7 +731,11 @@ export default function OxiDNSSettings() {
           </Card>
         )}
 
-        <Card size="small" title="Обслуживание OxiDNS">
+        <Collapse
+          activeKey={showMaintenance ? ['maintenance'] : []}
+          onChange={(keys) => setShowMaintenance(keys.includes('maintenance'))}
+          items={[{ key: 'maintenance', label: <Space><SettingOutlined /> Обслуживание и диагностика OxiDNS {status.updateAvailable && <Tag color="processing">Обновление</Tag>}</Space>, children: (
+        <Card size="small" title="Управление компонентом">
           <Space orientation="vertical" size={10} style={{ width: '100%' }}>
             <Typography.Text type="secondary">
               {status.installed
@@ -765,6 +816,8 @@ export default function OxiDNSSettings() {
             </Typography.Text>
           </Space>
         </Card>
+          ) }]}
+        />
       </Space>
       <Modal
         title="Журнал службы OxiDNS — последние 80 записей"
