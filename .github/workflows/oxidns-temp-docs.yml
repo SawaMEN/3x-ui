@@ -1,0 +1,38 @@
+name: Temporary DNS docs and OpenAPI regeneration
+on:
+  push:
+    branches: [fix/oxidns-installation-settings-separation]
+    paths: ['.github/workflows/oxidns-temp-docs.yml']
+permissions:
+  contents: write
+jobs:
+  regenerate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: fix/oxidns-installation-settings-separation
+          persist-credentials: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+      - name: Format docs and regenerate API
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd frontend
+          npx oxfmt ../docs/oxidns-integration.md
+          npm run gen:api
+          cd ..
+          if ! git diff --quiet; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add docs/oxidns-integration.md docs/public/openapi.json frontend/public/openapi.json
+            HUSKY=0 git commit -m "chore(docs): format OxiDNS guide and regenerate OpenAPI"
+            git push origin HEAD:fix/oxidns-installation-settings-separation
+          fi
