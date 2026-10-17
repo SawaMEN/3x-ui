@@ -40,7 +40,6 @@ func TestAppendTelemtWebProxyConfig(t *testing.T) {
 	}
 }
 
-
 func TestRemoveTelemtWebUserPreservesOtherTables(t *testing.T) {
 	base := "[access.users]\nwebproxy = \"old-secret\"\nxui = \"user-secret\"\n\n[other.settings]\nwebproxy = \"keep-this-setting\"\n"
 	want := "[access.users]\nxui = \"user-secret\"\n\n[other.settings]\nwebproxy = \"keep-this-setting\"\n"
