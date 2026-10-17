@@ -851,8 +851,8 @@ export default function SystemUpdateModal({
                           style={{ display: 'block', marginBottom: 10 }}
                         >
                           {dependency.installed
-                            ? 'OxiDNS установлен. Вы можете создать собственный DNS за пару кликов в разделе sing-box → DNS.'
-                            : 'Установите OxiDNS здесь, затем нажмите «Создать DNS». При удалении служба будет остановлена, настройки удалены, функции скрыты.'}
+                            ? 'OxiDNS установлен. Настройте провайдера, sing-box и публичные DNS-протоколы на едином экране.'
+                            : 'Быстрый запуск: откройте sing-box → DNS, выберите провайдера и нажмите «Установить и включить DNS». Установка и проверка автоматические.'}
                         </Typography.Text>
                       )}
                       {dependency.key === 'dnstt' && (
@@ -906,8 +906,8 @@ export default function SystemUpdateModal({
                         </Typography.Paragraph>
                       )}
                       <Space wrap>
-                        {(dependency.key === 'oxidns' || dependency.key === 'dnstt') &&
-                          dependency.installed && (
+                        {(dependency.key === 'oxidns' ||
+                          (dependency.key === 'dnstt' && dependency.installed)) && (
                             <Button
                               size="small"
                               type="primary"
@@ -915,7 +915,11 @@ export default function SystemUpdateModal({
                               href={`${(window.X_UI_BASE_PATH || '/').replace(/\/+$/, '')}/panel/singbox#dns`}
                               onClick={onClose}
                             >
-                              {dependency.key === 'dnstt' ? 'Настроить DNSTT' : 'Создать DNS'}
+                              {dependency.key === 'dnstt'
+                                ? 'Настроить DNSTT'
+                                : dependency.installed
+                                  ? 'Настроить DNS'
+                                  : 'Быстрый запуск DNS'}
                             </Button>
                           )}
                         {action.supported === false ? (
