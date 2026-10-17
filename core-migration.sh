@@ -59,7 +59,7 @@ core_migration_prune_stale_downloads() {
         [[ -f "$old" && ! -L "$old" && "$old" != "${xui_download_archive:-}" ]] || continue
         echo "Removing abandoned release download: $old"
         rm -f -- "$old" || echo "Cannot remove abandoned release download: $old" >&2
-    done < <(find "$parent" -mindepth 1 -maxdepth 1 -type f \\( -name '.x-ui-download.??????.tar.gz' -o -name '.x-ui-download.??????.tar.gz.sha256' -o -name '.core-migration.??????' \\) -mmin +60 -print0 2>/dev/null)
+    done < <(find "$parent" -mindepth 1 -maxdepth 1 -type f \( -name '.x-ui-download.??????.tar.gz' -o -name '.x-ui-download.??????.tar.gz.sha256' -o -name '.core-migration.??????' \) -mmin +60 -print0 2>/dev/null)
 }
 
 # Once a newer installation has been *verified*, older complete snapshots
