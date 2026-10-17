@@ -19,6 +19,7 @@ import {
   LogoutOutlined,
   MailOutlined,
   MenuOutlined,
+  MessageOutlined,
   PushpinFilled,
   PushpinOutlined,
   SafetyOutlined,
