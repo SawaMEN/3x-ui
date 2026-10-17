@@ -1409,7 +1409,7 @@ update_x-ui() {
     # Never touch unverified x-ui-upgrade.* rollback snapshots or core binaries.
     while IFS= read -r -d '' stale_artifact; do
         rm -f -- "$stale_artifact" || true
-    done < <(find "$install_parent" -maxdepth 1 -type f \\( -name '.x-ui-download.*.tar.gz' -o -name '.core-migration.*' \\) -mtime +1 -print0 2> /dev/null)
+    done < <(find "$install_parent" -maxdepth 1 -type f \( -name '.x-ui-download.*.tar.gz' -o -name '.core-migration.*' \) -mtime +1 -print0 2> /dev/null)
 
     # IP Limit relies on fail2ban; install + configure it now so the feature
     # works out of the box on update too (no-op when XUI_ENABLE_FAIL2BAN=false).
