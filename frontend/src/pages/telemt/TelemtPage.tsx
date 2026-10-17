@@ -376,6 +376,7 @@ export default function TelemtPage() {
                   </Typography.Text>
                 </div>
                 <Space wrap>
+                  <TelemtSubscriptionToggle />
                   <Button
                     htmlType="button"
                     icon={<ReloadOutlined />}
@@ -836,8 +837,6 @@ export default function TelemtPage() {
                 {status.webProxy.listenPort || 15080}; наружу публикуется только HTTPS :443.
               </Typography.Paragraph>
       </div>
-      <TelemtSubscriptionToggle />
-
       <Modal
           open={webProxyOpen}
           title={status.webProxy.enabled ? 'Настройка Web Proxy' : 'Поднять Web Proxy'}
