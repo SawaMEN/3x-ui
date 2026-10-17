@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -59,6 +60,27 @@ func (a *OxiDNSController) restartNative(ctx context.Context) error {
 	return service.SelectedNativeCore().Restart(ctx)
 }
 
+// Only changes to the sing-box DNS overlay require a sing-box restart.
+func needsNativeDNSRestart(before, after oxidns.Settings) bool {
+	return (before.Enabled && before.UseSingBox) != (after.Enabled && after.UseSingBox)
+}
+
+// Restore the previous usable DNS service if the sing-box change cannot be applied.
+func (a *OxiDNSController) restoreDNS(previous oxidns.Settings, certFile, keyFile string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	var err error
+	if previous.Enabled {
+		err = oxidns.Setup(ctx, previous, certFile, keyFile)
+	} else {
+		err = oxidns.Disable(ctx)
+	}
+	if err != nil {
+		return err
+	}
+	return a.restartNative(ctx)
+}
+
 func (a *OxiDNSController) setup(c *gin.Context) {
 	var cfg oxidns.Settings
 	if err := c.ShouldBindJSON(&cfg); err != nil {
@@ -75,35 +97,54 @@ func (a *OxiDNSController) setup(c *gin.Context) {
 		domain, _ := a.settings.GetWebDomain()
 		cfg.Domain = strings.TrimSpace(domain)
 	}
-	cert, _ := a.settings.GetCertFile()
-	key, _ := a.settings.GetKeyFile()
+	previous, err := oxidns.Load()
+	if err != nil {
+		jsonMsg(c, "Не удалось прочитать прежние настройки DNS", err)
+		return
+	}
+	certFile, _ := a.settings.GetCertFile()
+	keyFile, _ := a.settings.GetKeyFile()
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 180*time.Second)
 	defer cancel()
-	if err := oxidns.Setup(ctx, cfg, cert, key); err != nil {
+	cfg.Enabled = true
+	if err := oxidns.Setup(ctx, cfg, certFile, keyFile); err != nil {
 		jsonMsg(c, "Не удалось включить OxiDNS", err)
 		return
 	}
-	if err := a.restartNative(ctx); err != nil {
-		jsonMsg(c, "OxiDNS включён, но sing-box не применил DNS. Проверьте ядро и повторите запуск.", err)
-		return
+	if needsNativeDNSRestart(previous, cfg) {
+		if err := a.restartNative(ctx); err != nil {
+			rollbackErr := a.restoreDNS(previous, certFile, keyFile)
+			jsonMsg(c, "Не удалось применить OxiDNS к sing-box; восстановлены предыдущие настройки, если это было возможно", errors.Join(err, rollbackErr))
+			return
+		}
 	}
-	s, err := oxidns.CurrentStatus(ctx)
-	jsonObj(c, s, err)
+	status, err := oxidns.CurrentStatus(ctx)
+	jsonObj(c, status, err)
 }
 
 func (a *OxiDNSController) disable(c *gin.Context) {
+	previous, err := oxidns.Load()
+	if err != nil {
+		jsonMsg(c, "Не удалось прочитать прежние настройки DNS", err)
+		return
+	}
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 60*time.Second)
 	defer cancel()
 	if err := oxidns.Disable(ctx); err != nil {
 		jsonMsg(c, "Не удалось отключить OxiDNS", err)
 		return
 	}
-	if err := a.restartNative(ctx); err != nil {
-		jsonMsg(c, "OxiDNS отключён, но sing-box не обновил DNS", err)
-		return
+	if previous.Enabled && previous.UseSingBox {
+		if err := a.restartNative(ctx); err != nil {
+			certFile, _ := a.settings.GetCertFile()
+			keyFile, _ := a.settings.GetKeyFile()
+			rollbackErr := a.restoreDNS(previous, certFile, keyFile)
+			jsonMsg(c, "Не удалось переключить DNS sing-box; предпринята попытка восстановления", errors.Join(err, rollbackErr))
+			return
+		}
 	}
-	s, err := oxidns.CurrentStatus(ctx)
-	jsonObj(c, s, err)
+	status, err := oxidns.CurrentStatus(ctx)
+	jsonObj(c, status, err)
 }
 
 func (a *OxiDNSController) install(c *gin.Context) {
@@ -129,16 +170,32 @@ func (a *OxiDNSController) update(c *gin.Context) {
 }
 
 func (a *OxiDNSController) remove(c *gin.Context) {
+	previous, err := oxidns.Load()
+	if err != nil {
+		jsonMsg(c, "Не удалось прочитать прежние настройки DNS", err)
+		return
+	}
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 90*time.Second)
 	defer cancel()
+	if previous.Enabled {
+		if err := oxidns.Disable(ctx); err != nil {
+			jsonMsg(c, "Не удалось остановить OxiDNS перед удалением", err)
+			return
+		}
+		if previous.UseSingBox {
+			if err := a.restartNative(ctx); err != nil {
+				certFile, _ := a.settings.GetCertFile()
+				keyFile, _ := a.settings.GetKeyFile()
+				rollbackErr := a.restoreDNS(previous, certFile, keyFile)
+				jsonMsg(c, "OxiDNS оставлен на сервере: sing-box не удалось переключить на прежний DNS", errors.Join(err, rollbackErr))
+				return
+			}
+		}
+	}
 	if err := oxidns.Uninstall(ctx); err != nil {
 		jsonMsg(c, "Не удалось удалить OxiDNS", err)
 		return
 	}
-	if err := a.restartNative(ctx); err != nil {
-		jsonMsg(c, "OxiDNS удалён, но sing-box не обновил DNS", err)
-		return
-	}
-	s, err := oxidns.CurrentStatus(ctx)
-	jsonObj(c, s, err)
+	status, err := oxidns.CurrentStatus(ctx)
+	jsonObj(c, status, err)
 }
