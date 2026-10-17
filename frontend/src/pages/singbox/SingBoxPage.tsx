@@ -2019,7 +2019,7 @@ export default function SingBoxPage() {
 
   const renderAdvanced = () => (
     <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-      <Card className="singbox-item-card">
+      <Card className="singbox-item-card" aria-label={t('pages.singBox.sections.advanced')}>
         <SectionHeader
           title="Дополнительные настройки"
           description="Редкие параметры скрыты по умолчанию, а полный JSON доступен по кнопке."
