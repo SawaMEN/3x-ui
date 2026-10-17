@@ -762,9 +762,20 @@ export default function SingBoxPage() {
         : location.hash.replace(/^#/, '');
   // Legacy deep links remain valid, with no second layer of section tabs.
   const aliases: Record<string, string> = {
-    balancer: 'outbound', endpoints: 'outbound', certificates: 'advanced', network: 'advanced',
+    balancer: 'outbound',
+    endpoints: 'outbound',
+    certificates: 'advanced',
+    network: 'advanced',
   };
-  const sectionKeys = new Set(['basic', 'dns', 'routing', 'outbound', 'adblock', 'gateway', 'advanced']);
+  const sectionKeys = new Set([
+    'basic',
+    'dns',
+    'routing',
+    'outbound',
+    'adblock',
+    'gateway',
+    'advanced',
+  ]);
   const resolvedSection = aliases[sectionSlug] || sectionSlug;
   const activeSection = sectionKeys.has(resolvedSection) ? resolvedSection : 'basic';
   const showAdvanced = activeSection === 'advanced';
@@ -865,7 +876,7 @@ export default function SingBoxPage() {
       if (!msg?.success) throw new Error(msg?.msg || 'Не удалось сохранить настройки sing-box');
       // The backend has already validated and published the applied settings.
       // A follow-up GET immediately reruns expensive config generation.
-      setSnapshot((current) => current ? { ...current, config: next } : current);
+      setSnapshot((current) => (current ? { ...current, config: next } : current));
       setConfig(next);
       messageApi.success(t('pages.singBox.saved'));
     } catch (error) {
@@ -1365,7 +1376,11 @@ export default function SingBoxPage() {
         <div className="singbox-section-header">
           <div>
             <div className="singbox-section-title">
-              {onlyEndpoints ? 'Туннели и endpoints' : onlyGroups ? 'Балансировщики' : 'Исходящие подключения'}
+              {onlyEndpoints
+                ? 'Туннели и endpoints'
+                : onlyGroups
+                  ? 'Балансировщики'
+                  : 'Исходящие подключения'}
             </div>
             <div className="singbox-section-description">
               {onlyEndpoints
@@ -1387,14 +1402,26 @@ export default function SingBoxPage() {
             <Button
               icon={<PlusOutlined />}
               type="primary"
-              aria-label={onlyEndpoints ? 'Добавить endpoint' : onlyGroups ? 'Добавить балансировщик' : 'Добавить outbound'}
+              aria-label={
+                onlyEndpoints
+                  ? 'Добавить endpoint'
+                  : onlyGroups
+                    ? 'Добавить балансировщик'
+                    : 'Добавить outbound'
+              }
               onClick={() => {
                 setEditingOutbound(null);
-                setNewOutboundType(onlyEndpoints ? 'masque-client' : onlyGroups ? 'selector' : 'vless');
+                setNewOutboundType(
+                  onlyEndpoints ? 'masque-client' : onlyGroups ? 'selector' : 'vless',
+                );
                 setOutboundModalOpen(true);
               }}
             >
-              {onlyEndpoints ? 'Добавить endpoint' : onlyGroups ? 'Добавить балансировщик' : 'Добавить outbound'}
+              {onlyEndpoints
+                ? 'Добавить endpoint'
+                : onlyGroups
+                  ? 'Добавить балансировщик'
+                  : 'Добавить outbound'}
             </Button>
           </Space>
         </div>
@@ -2004,17 +2031,33 @@ export default function SingBoxPage() {
   const renderAdvanced = () => (
     <Space orientation="vertical" size={12} style={{ width: '100%' }}>
       <Card className="singbox-item-card">
-        <SectionHeader title="Дополнительные настройки"
-          description="Редкие параметры скрыты по умолчанию, а полный JSON доступен по кнопке." />
-        <JsonModal title="Вся конфигурация sing-box" value={config}
-          onApply={(next) => setConfig(asObject(next))} />
+        <SectionHeader
+          title="Дополнительные настройки"
+          description="Редкие параметры скрыты по умолчанию, а полный JSON доступен по кнопке."
+        />
+        <JsonModal
+          title="Вся конфигурация sing-box"
+          value={config}
+          onApply={(next) => setConfig(asObject(next))}
+        />
       </Card>
-      <Collapse className="singbox-advanced-groups" items={[
-        { key: 'cert', label: 'Сертификаты и провайдеры', children: renderCertificates() },
-        { key: 'network', label: 'HTTP-клиенты и сетевые пространства', children: renderNetwork() },
-        { key: 'experimental', label: 'Кэш-файл и служебные API', children: renderExperimental() },
-        { key: 'schema', label: 'Схема JSON', children: renderSchema() },
-      ]} />
+      <Collapse
+        className="singbox-advanced-groups"
+        items={[
+          { key: 'cert', label: 'Сертификаты и провайдеры', children: renderCertificates() },
+          {
+            key: 'network',
+            label: 'HTTP-клиенты и сетевые пространства',
+            children: renderNetwork(),
+          },
+          {
+            key: 'experimental',
+            label: 'Кэш-файл и служебные API',
+            children: renderExperimental(),
+          },
+          { key: 'schema', label: 'Схема JSON', children: renderSchema() },
+        ]}
+      />
     </Space>
   );
 
@@ -2034,7 +2077,11 @@ export default function SingBoxPage() {
         return (
           <Space orientation="vertical" size={12} style={{ width: '100%' }}>
             <SimpleSettings config={config} onChange={setConfig} />
-            <NativeDnsServers config={config} onChange={setConfig} subscriptionTags={snapshot?.subscriptionTags} />
+            <NativeDnsServers
+              config={config}
+              onChange={setConfig}
+              subscriptionTags={snapshot?.subscriptionTags}
+            />
             <NativeDnsRules config={config} onChange={setConfig} />
           </Space>
         );
@@ -2042,43 +2089,69 @@ export default function SingBoxPage() {
         return (
           <Space orientation="vertical" size={12} style={{ width: '100%' }}>
             <Card className="singbox-item-card">
-              <NativeRoutingBasic config={config} onChange={setConfig} subscriptionTags={snapshot?.subscriptionTags || []} />
+              <NativeRoutingBasic
+                config={config}
+                onChange={setConfig}
+                subscriptionTags={snapshot?.subscriptionTags || []}
+              />
             </Card>
             {renderRoute()}
-            <Collapse className="singbox-advanced-groups" items={[{
-              key: 'catalog', label: 'Каталог готовых списков', children: (
-                <RoutingCatalogTab
-                  outboundTags={Array.from(new Set(
-                    [...asObjectArray(config.outbounds), ...asObjectArray(config.endpoints)]
-                      .map((o) => asString(o.tag)).filter(Boolean).concat(snapshot?.subscriptionTags || []),
-                  ))}
-                  assignedRules={catalogAssignedRules(asObjectArray(asObject(config.route).rules))}
-                  onAssign={(selection, outbound) => setConfig((current) => {
-                    const route = asObject(current.route);
-                    return {
-                      ...current,
-                      route: {
-                        ...route,
-                        rules: putNativeCatalogRule(
-                          asObjectArray(route.rules),
-                          nativeCatalogRule(selection, outbound),
+            <Collapse
+              className="singbox-advanced-groups"
+              items={[
+                {
+                  key: 'catalog',
+                  label: 'Каталог готовых списков',
+                  children: (
+                    <RoutingCatalogTab
+                      outboundTags={Array.from(
+                        new Set(
+                          [...asObjectArray(config.outbounds), ...asObjectArray(config.endpoints)]
+                            .map((o) => asString(o.tag))
+                            .filter(Boolean)
+                            .concat(snapshot?.subscriptionTags || []),
                         ),
-                      },
-                    };
-                  })}
-                />
-              ),
-            }]} />
+                      )}
+                      assignedRules={catalogAssignedRules(
+                        asObjectArray(asObject(config.route).rules),
+                      )}
+                      onAssign={(selection, outbound) =>
+                        setConfig((current) => {
+                          const route = asObject(current.route);
+                          return {
+                            ...current,
+                            route: {
+                              ...route,
+                              rules: putNativeCatalogRule(
+                                asObjectArray(route.rules),
+                                nativeCatalogRule(selection, outbound),
+                              ),
+                            },
+                          };
+                        })
+                      }
+                    />
+                  ),
+                },
+              ]}
+            />
           </Space>
         );
       case 'outbound':
         return (
           <Space orientation="vertical" size={12} style={{ width: '100%' }}>
             {renderOutbounds()}
-            <Collapse className="singbox-advanced-groups" items={[
-              { key: 'groups', label: 'Балансировщики и группы выбора', children: renderOutbounds(false, true) },
-              { key: 'endpoints', label: 'Туннели и endpoints', children: renderEndpoints() },
-            ]} />
+            <Collapse
+              className="singbox-advanced-groups"
+              items={[
+                {
+                  key: 'groups',
+                  label: 'Балансировщики и группы выбора',
+                  children: renderOutbounds(false, true),
+                },
+                { key: 'endpoints', label: 'Туннели и endpoints', children: renderEndpoints() },
+              ]}
+            />
           </Space>
         );
       case 'adblock':
@@ -2148,7 +2221,9 @@ export default function SingBoxPage() {
                       <strong>
                         {t('pages.coreSelection.settings')} · {SECTION_LABELS[activeSection]}
                       </strong>
-                      <span>Сохранение проверяет настройки один раз и применяет их к работающему ядру.</span>
+                      <span>
+                        Сохранение проверяет настройки один раз и применяет их к работающему ядру.
+                      </span>
                     </div>
                     <Row gutter={[12, 12]} align="middle">
                       <Col xs={24} md={14}>
@@ -2242,7 +2317,9 @@ export default function SingBoxPage() {
                     <Radio.Group
                       value={activeSection}
                       buttonStyle="solid"
-                      onChange={(event) => navigate('/singbox#' + event.target.value, { preventScrollReset: true })}
+                      onChange={(event) =>
+                        navigate('/singbox#' + event.target.value, { preventScrollReset: true })
+                      }
                       options={visibleSections.map((key) => ({
                         value: key,
                         label: SECTION_LABELS[key],
