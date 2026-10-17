@@ -863,7 +863,8 @@ export const sections: readonly Section[] = [
       {
         method: 'GET',
         path: '/panel/api/dnstt/check-delegation',
-        summary: 'Check public NS delegation and nameserver IPv4 without changing DNSTT configuration.',
+        summary:
+          'Check public NS delegation and nameserver IPv4 without changing DNSTT configuration.',
       },
       {
         method: 'POST',
