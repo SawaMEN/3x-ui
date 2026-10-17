@@ -163,3 +163,27 @@ func TestDecodeLiveInvalidJSON(t *testing.T) {
 		t.Fatal("invalid JSON must be rejected")
 	}
 }
+
+func TestSimpleLocationRejectsAdvancedConfiguration(t *testing.T) {
+	loc := Location{}
+	loc.Link = "direct"
+	loc.Data = "data"
+	if !SimpleLocation(loc) {
+		t.Fatal("default OlcRTC location must be editable")
+	}
+	loc.Proxy.Addr = "127.0.0.1"
+	loc.Proxy.Port = 1080
+	if SimpleLocation(loc) {
+		t.Fatal("custom SOCKS5 proxy credentials could be destroyed by simple editor")
+	}
+	loc.Proxy = SocksProxy{}
+	loc.Transport.Payload = map[string]string{"vp8-fps": "20"}
+	if SimpleLocation(loc) {
+		t.Fatal("custom transport payload could be destroyed by simple editor")
+	}
+	loc.Transport.Payload = nil
+	loc.Link = "bridge"
+	if SimpleLocation(loc) {
+		t.Fatal("non-default link settings could be destroyed by simple editor")
+	}
+}
