@@ -227,6 +227,9 @@ func (a *APIController) initRouter(g *gin.RouterGroup) {
 	// Standalone NaiveProxy is used only when Xray is selected.
 	NewNaiveProxyController(api)
 
+	// Independent OlcRTC component and user management.
+	NewOlcRTCController(api)
+
 	routingPresets := api.Group("/xray/routingPresets")
 	NewRoutingPresetController(routingPresets)
 	NewRoutingCatalogController(api.Group("/xray/routingCatalog"))

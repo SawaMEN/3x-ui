@@ -27,6 +27,7 @@ import {
 import { HttpUtil } from '@/utils';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import './SystemUpdateModal.css';
+import OlcRTCClientsModal from './OlcRTCClientsModal';
 
 type SystemUpdatePackage = {
   name: string;
@@ -45,7 +46,8 @@ type DependencyKey =
   | 'pingtunnel'
   | 'trusttunnel'
   | 'oxidns'
-  | 'dnstt';
+  | 'dnstt'
+  | 'olcrtc';
 
 type DependencyStatus = {
   key: DependencyKey;
@@ -61,6 +63,9 @@ type DependencyStatus = {
   error?: string;
   supported?: boolean;
   unsupportedReason?: string;
+  busy?: boolean;
+  operation?: string;
+  running?: boolean;
 };
 
 type ExternalVPNBinaryStatus = {
@@ -79,6 +84,19 @@ type ExternalVPNStatus = {
   hysteria2?: ExternalVPNBinaryStatus;
   pingtunnel?: ExternalVPNBinaryStatus;
   trusttunnel?: ExternalVPNBinaryStatus;
+};
+
+type OlcRTCStatus = {
+  installed?: boolean;
+  installedVersion?: string;
+  availableVersion?: string;
+  updateAvailable?: boolean;
+  busy?: boolean;
+  operation?: string;
+  running?: boolean;
+  supported?: boolean;
+  unsupportedReason?: string;
+  error?: string;
 };
 
 type SystemUpdateStatus = {
@@ -117,7 +135,8 @@ const isDependencyInstallable = (dependency: DependencyStatus) =>
   dependency.key === 'oxidns' ||
   dependency.key === 'dnstt' ||
   dependency.key === 'pingtunnel' ||
-  dependency.key === 'trusttunnel';
+  dependency.key === 'trusttunnel' ||
+  dependency.key === 'olcrtc';
 
 const dependencyNeedsAction = (dependency: DependencyStatus) => {
   if (!dependency.availableVersion) return false;
@@ -233,9 +252,10 @@ export default function SystemUpdateModal({
     [bundledDependencies, standaloneDependencies],
   );
   const [dependencyBusy, setDependencyBusy] = useState<DependencyKey | null>(null);
+  const [olcrtcSettingsOpen, setOlcrtcSettingsOpen] = useState(false);
 
   const loadDependencyUpdates = useCallback(async () => {
-    const [core, sudoku, external, naive, oxidns, dnstt] = await Promise.all([
+    const [core, sudoku, external, naive, oxidns, dnstt, olcrtc] = await Promise.all([
       HttpUtil.get('/panel/api/setting/singbox/status') as Promise<
         ApiMsg<{ installed?: boolean; version?: string }>
       >,
@@ -252,6 +272,9 @@ export default function SystemUpdateModal({
       >,
       HttpUtil.get('/panel/api/dnstt/status', undefined, { silent: true }) as Promise<
         ApiMsg<ExternalVPNBinaryStatus & { installedVersion?: string; latestVersion?: string }>
+      >,
+      HttpUtil.get('/panel/api/olcrtc/status', undefined, { silent: true }) as Promise<
+        ApiMsg<OlcRTCStatus>
       >,
     ]);
     const bundled = ['naiveproxy', 'hysteria2'].map((key) => ({
@@ -317,6 +340,21 @@ export default function SystemUpdateModal({
       unsupportedReason: dnstt.obj?.unsupportedReason,
       error: dnstt.obj?.error || (dnstt.success ? undefined : dnstt.msg),
     });
+    rows.push({
+      key: 'olcrtc',
+      label: 'OlcRTC',
+      source: 'standalone',
+      installed: olcrtc.obj?.installed === true,
+      installedVersion: olcrtc.obj?.installedVersion || '',
+      availableVersion: olcrtc.obj?.availableVersion || 'upstream',
+      updateAvailable: olcrtc.obj?.updateAvailable === true,
+      supported: olcrtc.obj?.supported,
+      unsupportedReason: olcrtc.obj?.unsupportedReason,
+      busy: olcrtc.obj?.busy === true,
+      running: olcrtc.obj?.running === true,
+      operation: olcrtc.obj?.operation,
+      error: olcrtc.obj?.error || (olcrtc.success ? undefined : olcrtc.msg),
+    });
     setBundledDependencies(rows);
     setStandaloneDependencies(
       (['naiveproxy', 'hysteria2'] as const).map((key) => {
@@ -374,6 +412,10 @@ export default function SystemUpdateModal({
           undefined,
           { timeout: 180000 },
         )) as ApiMsg<unknown>;
+      case 'olcrtc':
+        return (await HttpUtil.post(
+          dependency.installed ? '/panel/api/olcrtc/update' : '/panel/api/olcrtc/install',
+        )) as ApiMsg<unknown>;
       case 'naiveproxy':
         return (await HttpUtil.post('/panel/api/naiveproxy/update')) as ApiMsg<unknown>;
       case 'hysteria2':
@@ -401,11 +443,13 @@ export default function SystemUpdateModal({
       }
 
       messageApi.success(
-        dependency.key === 'oxidns' && !dependency.installed
-          ? 'OxiDNS установлен. Теперь можно создать собственный DNS.'
-          : dependency.key === 'dnstt' && !dependency.installed
-            ? 'DNSTT установлен. Настройте домен и ключи в разделе DNS.'
-            : `${dependency.label}: ${t('pages.settings.swap.updateDone')}`,
+        dependency.key === 'olcrtc'
+          ? 'OlcRTC: операция запущена. Статус будет обновляться автоматически.'
+          : dependency.key === 'oxidns' && !dependency.installed
+            ? 'OxiDNS установлен. Теперь можно создать собственный DNS.'
+            : dependency.key === 'dnstt' && !dependency.installed
+              ? 'DNSTT установлен. Настройте домен и ключи в разделе DNS.'
+              : `${dependency.label}: ${t('pages.settings.swap.updateDone')}`,
       );
       await loadDependencyUpdates();
       if (dependency.key === 'oxidns') window.dispatchEvent(new Event('oxidns:changed'));
@@ -421,20 +465,24 @@ export default function SystemUpdateModal({
     setDependencyBusy(dependency.key);
     try {
       const response = (await HttpUtil.post(
-        dependency.key === 'oxidns'
-          ? '/panel/api/oxidns/remove'
-          : dependency.key === 'dnstt'
-            ? '/panel/api/dnstt/remove'
-            : `/panel/api/server/components/remove/${dependency.key}`,
+        dependency.key === 'olcrtc'
+          ? '/panel/api/olcrtc/remove'
+          : dependency.key === 'oxidns'
+            ? '/panel/api/oxidns/remove'
+            : dependency.key === 'dnstt'
+              ? '/panel/api/dnstt/remove'
+              : `/panel/api/server/components/remove/${dependency.key}`,
       )) as ApiMsg<unknown>;
       if (!response?.success)
         throw new Error(response?.msg || `Не удалось удалить ${dependency.label}`);
       messageApi.success(
-        dependency.key === 'oxidns'
-          ? 'OxiDNS удалён, собственный DNS отключён, настройки и служебные файлы очищены.'
-          : dependency.key === 'dnstt'
-            ? 'DNSTT остановлен, удалён вместе с ключами и настройками.'
-            : `${dependency.label}: компонент удалён.`,
+        dependency.key === 'olcrtc'
+          ? 'OlcRTC: удаление запущено. Настройки клиентов сохранятся для повторной установки.'
+          : dependency.key === 'oxidns'
+            ? 'OxiDNS удалён, собственный DNS отключён, настройки и служебные файлы очищены.'
+            : dependency.key === 'dnstt'
+              ? 'DNSTT остановлен, удалён вместе с ключами и настройками.'
+              : `${dependency.label}: компонент удалён.`,
       );
       await loadDependencyUpdates();
       if (dependency.key === 'oxidns') window.dispatchEvent(new Event('oxidns:changed'));
@@ -445,6 +493,29 @@ export default function SystemUpdateModal({
       setDependencyBusy(null);
     }
   };
+
+  const restartOlcRTC = async () => {
+    setDependencyBusy('olcrtc');
+    try {
+      const response = (await HttpUtil.post('/panel/api/olcrtc/restart')) as ApiMsg<unknown>;
+      if (!response.success) throw new Error(response.msg || 'Не удалось перезапустить OlcRTC');
+      messageApi.info('OlcRTC: перезапуск службы запущен.');
+      await loadDependencyUpdates();
+    } catch (error) {
+      messageApi.error(error instanceof Error ? error.message : String(error));
+    } finally {
+      setDependencyBusy(null);
+    }
+  };
+
+  useEffect(() => {
+    if (!open || !dependencies.some((dependency) => dependency.key === 'olcrtc' && dependency.busy))
+      return;
+    const interval = window.setInterval(() => {
+      void loadDependencyUpdates();
+    }, 3000);
+    return () => window.clearInterval(interval);
+  }, [dependencies, loadDependencyUpdates, open]);
 
   const recoverSystemUpdateStatus = useCallback(async (): Promise<SystemUpdateStatus | null> => {
     const delays = [0, 1000, 2000, 4000, 6000];
@@ -619,6 +690,7 @@ export default function SystemUpdateModal({
   return (
     <>
       {contextHolder}
+      <OlcRTCClientsModal open={olcrtcSettingsOpen} onClose={() => setOlcrtcSettingsOpen(false)} />
       <Modal
         rootClassName="system-update-modal"
         open={open}
@@ -866,6 +938,19 @@ export default function SystemUpdateModal({
                             : 'Установите DNSTT здесь. После установки его настройки появятся в sing-box → DNS; после удаления исчезнут.'}
                         </Typography.Text>
                       )}
+                      {dependency.key === 'olcrtc' && (
+                        <Typography.Paragraph type="secondary">
+                          Отдельный WebRTC-сервер через Jitsi, Телемост или WB Stream. Не заменяет
+                          sing-box.
+                          {dependency.busy
+                            ? ` Выполняется: ${dependency.operation === 'remove' ? 'удаление' : 'установка или обновление'}.`
+                            : dependency.installed
+                              ? dependency.running
+                                ? ' Служба работает.'
+                                : ' Служба остановлена.'
+                              : ' Нажмите «Установить», чтобы добавить компонент.'}
+                        </Typography.Paragraph>
+                      )}
                       {dependency.key === 'pingtunnel' && (
                         <Typography.Text
                           type="secondary"
@@ -924,6 +1009,27 @@ export default function SystemUpdateModal({
                                 : 'Быстрый запуск DNS'}
                           </Button>
                         )}
+                        {dependency.key === 'olcrtc' && dependency.installed && (
+                          <Button
+                            size="small"
+                            onClick={() => setOlcrtcSettingsOpen(true)}
+                            disabled={!dependency.running || dependency.busy}
+                          >
+                            Настроить клиентов
+                          </Button>
+                        )}
+                        {dependency.key === 'olcrtc' && dependency.installed && (
+                          <Button
+                            size="small"
+                            icon={<ReloadOutlined />}
+                            onClick={() => void restartOlcRTC()}
+                            disabled={
+                              dependency.busy || systemUpdateBusy || dependencyBusy !== null
+                            }
+                          >
+                            Перезапустить службу
+                          </Button>
+                        )}
                         {action.supported === false ? (
                           <Alert
                             type="info"
@@ -940,12 +1046,13 @@ export default function SystemUpdateModal({
                               size="small"
                               aria-label={actionLabel}
                               icon={action.installed ? <ReloadOutlined /> : <DownloadOutlined />}
-                              loading={dependencyBusy === dependency.key}
+                              loading={dependencyBusy === dependency.key || action.busy === true}
                               disabled={
                                 (!action.updateAvailable &&
                                   !(isDependencyInstallable(action) && !action.installed)) ||
                                 !action.availableVersion ||
                                 dependencyBusy !== null ||
+                                action.busy === true ||
                                 systemUpdateBusy
                               }
                               onClick={() => void updateDependency(action)}
@@ -956,13 +1063,15 @@ export default function SystemUpdateModal({
                           <Popconfirm
                             title={`Удалить ${action.label}?`}
                             description={
-                              dependency.key === 'oxidns'
-                                ? 'Собственный DNS будет отключён. sing-box вернётся к прежнему DNS.'
-                                : dependency.key === 'dnstt'
-                                  ? 'DNSTT будет остановлен, а ключи и настройки удалены без возможности восстановления.'
-                                  : standalone
-                                    ? 'Входящие подключения переключатся на встроенный sing-box.'
-                                    : 'Активные подключения этого протокола необходимо сначала отключить.'
+                              dependency.key === 'olcrtc'
+                                ? 'Служба OlcRTC остановится, бинарники удалятся. Данные клиентов сохранятся.'
+                                : dependency.key === 'oxidns'
+                                  ? 'Собственный DNS будет отключён. sing-box вернётся к прежнему DNS.'
+                                  : dependency.key === 'dnstt'
+                                    ? 'DNSTT будет остановлен, а ключи и настройки удалены без возможности восстановления.'
+                                    : standalone
+                                      ? 'Входящие подключения переключатся на встроенный sing-box.'
+                                      : 'Активные подключения этого протокола необходимо сначала отключить.'
                             }
                             okText={t('delete')}
                             cancelText={t('cancel')}
@@ -974,7 +1083,11 @@ export default function SystemUpdateModal({
                                 danger
                                 aria-label={`Удалить ${action.label}`}
                                 icon={<DeleteOutlined />}
-                                disabled={dependencyBusy !== null || systemUpdateBusy}
+                                disabled={
+                                  dependencyBusy !== null ||
+                                  systemUpdateBusy ||
+                                  action.busy === true
+                                }
                               />
                             </Tooltip>
                           </Popconfirm>

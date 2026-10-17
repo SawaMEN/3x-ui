@@ -198,6 +198,80 @@ const hwidStatusErrorResponses = {
 
 export const sections: readonly Section[] = [
   {
+    id: 'olcrtc',
+    title: 'OlcRTC',
+    description:
+      'Manage the standalone OlcRTC WebRTC service and its clients. The upstream administrator listens only on loopback; all operations use authenticated 3x-ui API routes.',
+    endpoints: [
+      {
+        method: 'GET',
+        path: '/panel/api/olcrtc/status',
+        summary: 'Return OlcRTC installation, version, operation and systemd status.',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/olcrtc/live',
+        summary:
+          'Return running locations and peer counts without upstream keys or proxy credentials.',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/olcrtc/clients',
+        summary: 'List OlcRTC clients, quotas and connection links.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/olcrtc/install',
+        summary: 'Start installation of the managed OlcRTC server and manager.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/olcrtc/update',
+        summary: 'Start an asynchronous update of the managed OlcRTC installation.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/olcrtc/remove',
+        summary: 'Stop and remove managed OlcRTC binaries while retaining client configuration.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/olcrtc/restart',
+        summary: 'Restart the OlcRTC manager systemd service.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/olcrtc/clients',
+        summary: 'Create an OlcRTC client with an optional generated ID, room and encryption key.',
+        body: '{ "client_id": "alice", "carrier": "jitsi", "transport": "datachannel", "room_id": "https://meet.handyweb.org/room", "dns": "1.1.1.1:53" }',
+      },
+      {
+        method: 'PUT',
+        path: '/panel/api/olcrtc/clients/:id',
+        summary: 'Update a simple OlcRTC client, preserving quota usage.',
+        params: [{ name: 'id', in: 'path', type: 'string', desc: 'OlcRTC client ID.' }],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/olcrtc/clients/:id/update',
+        summary: 'Update a simple OlcRTC client through the panel JSON-only endpoint.',
+        params: [{ name: 'id', in: 'path', type: 'string', desc: 'OlcRTC client ID.' }],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/olcrtc/clients/:id/delete',
+        summary: 'Delete an OlcRTC client and its managed locations.',
+        params: [{ name: 'id', in: 'path', type: 'string', desc: 'OlcRTC client ID.' }],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/olcrtc/clients/:id/rotate-key',
+        summary: 'Rotate encryption keys for an OlcRTC client and invalidate old links.',
+        params: [{ name: 'id', in: 'path', type: 'string', desc: 'OlcRTC client ID.' }],
+      },
+    ],
+  },
+  {
     id: 'externalvpn',
     title: 'External VPN',
     description: 'Inspect and update standalone external VPN components.',
