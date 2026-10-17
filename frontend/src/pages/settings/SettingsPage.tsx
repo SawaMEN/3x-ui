@@ -389,7 +389,7 @@ export default function SettingsPage() {
                     </Col>
 
                     <Col span={24}>
-                      category === 'gateway' ? categoryBody : <Card hoverable>{categoryBody}</Card>
+                      {activeSlug === 'gateway' ? categoryBody : <Card hoverable>{categoryBody}</Card>}
                     </Col>
 
                     {activeSlug === 'general' && (slug === '' || slug === 'general') && (
