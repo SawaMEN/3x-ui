@@ -6,6 +6,14 @@ import (
  "testing"
  "os"
  "os/exec"
+ "crypto/ecdsa"
+ "crypto/elliptic"
+ "crypto/rand"
+ "crypto/x509"
+ "crypto/x509/pkix"
+ "encoding/pem"
+ "math/big"
+ "time"
  "path/filepath"
 )
 
@@ -80,5 +88,45 @@ func TestGeneratedYAMLAgainstOfficialBinary(t *testing.T) {
     t.Fatalf("official OxiDNS rejected %s: %v\n%s\n%s",provider,err,output,payload)
    }
   })
+ }
+}
+
+func TestDoHCertificateAndOfficialParser(t *testing.T) {
+ workDir:=t.TempDir()
+ key,err:=ecdsa.GenerateKey(elliptic.P256(),rand.Reader)
+ if err!=nil{t.Fatal(err)}
+ cert:=&x509.Certificate{
+  SerialNumber:big.NewInt(1),
+  Subject:pkix.Name{CommonName:"dns.example.com"},
+  DNSNames:[]string{"dns.example.com"},
+  NotBefore:time.Now().Add(-time.Hour),
+  NotAfter:time.Now().Add(time.Hour),
+  KeyUsage:x509.KeyUsageDigitalSignature,
+  ExtKeyUsage:[]x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+ }
+ der,err:=x509.CreateCertificate(rand.Reader,cert,cert,&key.PublicKey,key)
+ if err!=nil{t.Fatal(err)}
+ keyDer,err:=x509.MarshalECPrivateKey(key)
+ if err!=nil{t.Fatal(err)}
+ certPath:=filepath.Join(workDir,"cert.pem")
+ keyPath:=filepath.Join(workDir,"key.pem")
+ if err:=os.WriteFile(certPath,pem.EncodeToMemory(&pem.Block{Type:"CERTIFICATE",Bytes:der}),0600);err!=nil{t.Fatal(err)}
+ if err:=os.WriteFile(keyPath,pem.EncodeToMemory(&pem.Block{Type:"EC PRIVATE KEY",Bytes:keyDer}),0600);err!=nil{t.Fatal(err)}
+ cfg:=Defaults()
+ cfg.DoH=true
+ cfg.Domain="dns.example.com"
+ yaml,err:=Generate(cfg,certPath,keyPath)
+ if err!=nil{t.Fatal(err)}
+ if !strings.Contains(yaml,"type: http_server") || !strings.Contains(yaml,"/dns-query") {
+  t.Fatal("DoH listener and path were not generated")
+ }
+ if !strings.Contains(yaml,`listen: ":8443"`) {t.Fatal("unexpected DoH port")}
+ cfg.Domain="wrong.example.com"
+ if _,err:=Generate(cfg,certPath,keyPath);err==nil{t.Fatal("mismatched certificate accepted")}
+ if binary:=os.Getenv("OXIDNS_CHECK_BINARY");binary!=""{
+  configPath:=filepath.Join(workDir,"config.yaml")
+  if err:=os.WriteFile(configPath,[]byte(yaml),0600);err!=nil{t.Fatal(err)}
+  cmd:=exec.Command(binary,"check","-c",configPath,"-d",workDir)
+  if output,err:=cmd.CombinedOutput();err!=nil{t.Fatalf("official OxiDNS rejected DoH: %v\n%s\n%s",err,output,yaml)}
  }
 }
