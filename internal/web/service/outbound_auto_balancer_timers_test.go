@@ -353,9 +353,9 @@ func TestSubscriptionMetadataEditKeepsRunningProbeState(t *testing.T) {
 	sub, _ := setupTimedBalancer(t)
 	const subscriptionURL = "https://1.1.1.1/subscription"
 	if err := database.GetDB().Model(sub).Updates(map[string]any{
-		"url": subscriptionURL,
+		"url":          subscriptionURL,
 		"balance_mode": "latency",
-		"tolerance": 50,
+		"tolerance":    50,
 	}).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -397,8 +397,10 @@ func TestSubscriptionRankingPolicyResetDoesNotDiscardSelectedRoute(t *testing.T)
 	}).Error; err != nil {
 		t.Fatal(err)
 	}
-	policy := &BalanceOptions{Enabled: true, Mode: "speed", URL: defaultAutomaticSpeedURL,
-		Interval: 1800, Tolerance: 50, SwitchInterval: 900, HealthInterval: 30}
+	policy := &BalanceOptions{
+		Enabled: true, Mode: "speed", URL: defaultAutomaticSpeedURL,
+		Interval: 1800, Tolerance: 50, SwitchInterval: 900, HealthInterval: 30,
+	}
 	if err := (&OutboundSubscriptionService{}).Update(sub.Id, "speed", subscriptionURL, "stable-", "", true, 600, false, true, false, policy); err != nil {
 		t.Fatal(err)
 	}

@@ -71,4 +71,3 @@ func (a *GatewayController) preflight(c *gin.Context) {
 	}
 	jsonObj(c, result, nil)
 }
-

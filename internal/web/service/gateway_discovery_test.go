@@ -40,16 +40,16 @@ func TestGatewaySuggestionsAreConservative(t *testing.T) {
 	if suggested == nil || suggested.LANInterface != "br-lan" || suggested.LANIP != "192.168.30.1" || suggested.LANPrefix != 24 || suggested.WANInterface != "eth0" {
 		t.Fatalf("expected dedicated private LAN suggestion; got %#v", suggested)
 	}
-	for _, tc := range []struct{
-		name string
+	for _, tc := range []struct {
+		name       string
 		interfaces []GatewayInterfaceInfo
-		wan string
+		wan        string
 	}{
 		{"unknown-route", []GatewayInterfaceInfo{lan}, ""},
 		{"default-route-only", []GatewayInterfaceInfo{wan}, "eth0"},
-		{"ambiguous-lan", []GatewayInterfaceInfo{lan, {Name:"eth1", Addresses: []GatewayInterfaceAddress{{IP:"10.10.0.1", Prefix:24, Private:true}}}, wan}, "eth0"},
-		{"public-lan", []GatewayInterfaceInfo{{Name:"eth1", Addresses: []GatewayInterfaceAddress{{IP:"198.51.100.22", Prefix:24}}}, wan}, "eth0"},
-		{"host-only", []GatewayInterfaceInfo{{Name:"br-lan", Addresses: []GatewayInterfaceAddress{{IP:"192.168.0.1", Prefix:32, Private:true}}}, wan}, "eth0"},
+		{"ambiguous-lan", []GatewayInterfaceInfo{lan, {Name: "eth1", Addresses: []GatewayInterfaceAddress{{IP: "10.10.0.1", Prefix: 24, Private: true}}}, wan}, "eth0"},
+		{"public-lan", []GatewayInterfaceInfo{{Name: "eth1", Addresses: []GatewayInterfaceAddress{{IP: "198.51.100.22", Prefix: 24}}}, wan}, "eth0"},
+		{"host-only", []GatewayInterfaceInfo{{Name: "br-lan", Addresses: []GatewayInterfaceAddress{{IP: "192.168.0.1", Prefix: 32, Private: true}}}, wan}, "eth0"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got, _ := gatewaySuggestNetwork(tc.interfaces, tc.wan); got != nil {

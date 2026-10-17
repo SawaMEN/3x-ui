@@ -436,7 +436,7 @@ func (s *Server) startTask(restartXray bool, loc *time.Location) {
 	})
 
 	// Outbound subscription auto-refresh (respects per-sub updateInterval)
-	_, _ = s.cron.AddJob(cadenceOutboundSub, job.NewOutboundSubscriptionJob())
+	_, _ = s.cron.AddJob(cadenceOutboundSub, job.NewOutboundSubscriptionJob(s.ctx))
 	_, _ = s.cron.AddJob("@every 1m", job.NewRoutingCatalogJob())
 	_, _ = s.cron.AddJob("@every 10s", job.NewOutboundAutoBalancerJob())
 
@@ -871,9 +871,23 @@ func (s *Server) StopPanelOnly() error {
 
 func (s *Server) stop(stopXray bool, stopTgBot bool) error {
 	var err1, err2 error
+	err1 = s.closeHTTP()
 	s.cancel()
+	if s.wsHub != nil {
+		s.wsHub.Stop()
+	}
+	waitCtx := context.Background()
+	if !stopXray {
+		var cancel context.CancelFunc
+		waitCtx, cancel = context.WithTimeout(waitCtx, 5*time.Second)
+		defer cancel()
+	}
+	var cronDone <-chan struct{}
+	if s.cron != nil {
+		cronDone = s.cron.Stop().Done()
+	}
 	if s.api != nil {
-		s.api.WaitBackground()
+		err1 = common.Combine(err1, waitPanelTask(waitCtx, "API workers", s.api.WaitBackground))
 	}
 	if stopXray {
 		if coreType, _ := s.settingService.GetCoreType(); service.IsNativeCore(coreType) {
@@ -889,11 +903,13 @@ func (s *Server) stop(stopXray bool, stopTgBot bool) error {
 		mieru.GetManager().StopAll()
 		amneziawgnet.GetOutboundManager().StopAll()
 	}
-	if err := service.VKTurnProxyRuntime().ShutdownForRestart(); err != nil {
-		logger.Warning("vk-turn-proxy shutdown failed:", err)
+	if stopXray {
+		if err := service.VKTurnProxyRuntime().ShutdownForRestart(); err != nil {
+			logger.Warning("vk-turn-proxy shutdown failed:", err)
+		}
 	}
-	if s.cron != nil {
-		<-s.cron.Stop().Done()
+	if cronDone != nil {
+		err1 = common.Combine(err1, waitPanelTask(waitCtx, "scheduled jobs", func() { <-cronDone }))
 	}
 	if stopXray {
 		tuic.GetManager().StopAll()
@@ -911,7 +927,10 @@ func (s *Server) stop(stopXray bool, stopTgBot bool) error {
 		}
 	}
 	if s.bus != nil {
-		s.bus.Stop()
+		err1 = common.Combine(err1, waitPanelTask(waitCtx, "notification handlers", s.bus.Stop))
+	}
+	if stopXray {
+		retiredPanelTasks.Wait()
 	}
 	if err := service.PersistSystemMetrics(); err != nil {
 		logger.Warning("persist system metrics on shutdown failed:", err)
@@ -924,13 +943,6 @@ func (s *Server) stop(stopXray bool, stopTgBot bool) error {
 	}
 	if s.discordGateway != nil && s.discordGateway.IsRunning() {
 		s.discordGateway.Stop()
-	}
-	// Gracefully stop WebSocket hub
-	if s.wsHub != nil {
-		s.wsHub.Stop()
-	}
-	if s.listener != nil {
-		err1 = common.Combine(err1, s.listener.Close())
 	}
 	return common.Combine(err1, err2)
 }

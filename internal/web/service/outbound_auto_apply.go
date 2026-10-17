@@ -95,7 +95,7 @@ func localAutomaticSelectorClient() (*singbox.SelectorClient, error) {
 }
 
 // runningAutomaticSelectors reports what is actually loaded into the core.
- // A newly imported subscription does not have a selector until the core reloads.
+// A newly imported subscription does not have a selector until the core reloads.
 func runningAutomaticSelectors(data []byte) (map[string]bool, error) {
 	if len(data) == 0 {
 		return nil, fmt.Errorf("sing-box has no applied runtime config")

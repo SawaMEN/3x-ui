@@ -423,11 +423,11 @@ func (s *OutboundSubscriptionService) Refresh(id int) ([]any, error) {
 	return outbounds, err
 }
 
-// RefreshAllEnabled fetches every enabled subscription whose due time has passed
-// (lastUpdated + updateInterval <= now). It returns the number of subscriptions
-// whose stored outbound configuration changed.
-func (s *OutboundSubscriptionService) RefreshAllEnabled() (int, error) {
-	db := database.GetDB()
+// RefreshAllEnabled refreshes due subscriptions and counts changed configurations.
+// The optional lifecycle context cancels network work when the panel restarts.
+func (s *OutboundSubscriptionService) RefreshAllEnabled(parents ...context.Context) (int, error) {
+	ctx := outboundRefreshContext(parents)
+	db := database.GetDB().WithContext(ctx)
 	var subs []*model.OutboundSubscription
 	if err := db.Where("enabled = ?", true).Find(&subs).Error; err != nil {
 		return 0, err
@@ -435,9 +435,15 @@ func (s *OutboundSubscriptionService) RefreshAllEnabled() (int, error) {
 	now := time.Now().Unix()
 	refreshed := 0
 	for _, sub := range subs {
+		if err := ctx.Err(); err != nil {
+			return refreshed, err
+		}
 		due := sub.LastUpdated + int64(sub.UpdateInterval)
 		if sub.LastUpdated == 0 || due <= now {
-			if _, changed, err := s.fetchAndStoreWithChange(sub); err != nil {
+			if _, changed, err := s.fetchAndStoreWithChange(sub, ctx); err != nil {
+				if ctx.Err() != nil {
+					return refreshed, ctx.Err()
+				}
 				logger.Warningf("outbound sub %d (%s) refresh failed: %v", sub.Id, sub.Remark, err)
 				// continue with others
 			} else if changed {
@@ -445,7 +451,7 @@ func (s *OutboundSubscriptionService) RefreshAllEnabled() (int, error) {
 			}
 		}
 	}
-	return refreshed, nil
+	return refreshed, ctx.Err()
 }
 
 // subscriptionFetchClient builds the HTTP client used to fetch a subscription.
@@ -484,20 +490,38 @@ func (s *OutboundSubscriptionService) fetchAndStore(sub *model.OutboundSubscript
 	return out, err
 }
 
-func (s *OutboundSubscriptionService) fetchAndStoreWithChange(sub *model.OutboundSubscription) ([]any, bool, error) {
+func (s *OutboundSubscriptionService) fetchAndStoreWithChange(sub *model.OutboundSubscription, parents ...context.Context) ([]any, bool, error) {
+	ctx := outboundRefreshContext(parents)
+	if err := ctx.Err(); err != nil {
+		return nil, false, err
+	}
 	unlock := lockSubscription(sub.Id)
 	defer unlock()
+	if err := ctx.Err(); err != nil {
+		return nil, false, err
+	}
 	fresh, err := s.Get(sub.Id)
 	if err != nil {
 		return nil, false, err
 	}
 	*sub = *fresh
 	previous := sub.LastFetchedOutbounds
-	out, err := s.fetchAndStoreLocked(sub)
+	out, err := s.fetchAndStoreLocked(sub, ctx)
 	return out, err == nil && previous != sub.LastFetchedOutbounds, err
 }
 
-func (s *OutboundSubscriptionService) fetchAndStoreLocked(sub *model.OutboundSubscription) ([]any, error) {
+func outboundRefreshContext(parents []context.Context) context.Context {
+	if len(parents) > 0 && parents[0] != nil {
+		return parents[0]
+	}
+	return context.Background()
+}
+
+func (s *OutboundSubscriptionService) fetchAndStoreLocked(sub *model.OutboundSubscription, parents ...context.Context) ([]any, error) {
+	ctx := outboundRefreshContext(parents)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	// Re-sanitize on every fetch (handles legacy rows + defense in depth against
 	// any direct DB tampering). Private targets are blocked unless this
 	// subscription was explicitly created with AllowPrivate.
@@ -527,7 +551,7 @@ func (s *OutboundSubscriptionService) fetchAndStoreLocked(sub *model.OutboundSub
 		return rejectPrivateHost(ctx, req.URL.Hostname())
 	}
 
-	reqCtx := netsafe.ContextWithAllowPrivate(context.Background(), sub.AllowPrivate)
+	reqCtx := netsafe.ContextWithAllowPrivate(ctx, sub.AllowPrivate)
 	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, sub.Url, nil)
 	if err != nil {
 		s.recordError(sub, err)
@@ -541,6 +565,9 @@ func (s *OutboundSubscriptionService) fetchAndStoreLocked(sub *model.OutboundSub
 
 	resp, err := client.Do(req)
 	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		s.recordError(sub, err)
 		return nil, err
 	}
@@ -552,6 +579,9 @@ func (s *OutboundSubscriptionService) fetchAndStoreLocked(sub *model.OutboundSub
 		return nil, err
 	}
 	body, err := readBoundedOutboundSubscriptionBody(resp.Body)
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	if err != nil {
 		s.recordError(sub, err)
 		return nil, err
@@ -648,6 +678,9 @@ func (s *OutboundSubscriptionService) fetchAndStoreLocked(sub *model.OutboundSub
 		}
 	}
 
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	// Persist the complete outbound set (as compact JSON array).
 	obsJSON, _ := json.Marshal(stored)
 
