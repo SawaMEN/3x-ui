@@ -63,6 +63,7 @@ func (a *XraySettingController) initRouter(g *gin.RouterGroup) {
 	// Outbound subscription (remote outbound lists)
 	g.GET("/outbound-subs", a.listOutboundSubs)
 	g.POST("/outbound-subs", a.createOutboundSub)
+	g.POST("/outbound-subs/apply", a.applyOutboundSubs)
 	g.POST("/outbound-subs/:id/refresh", a.refreshOutboundSub)
 	g.POST("/outbound-subs/:id/probe", a.probeOutboundSub)
 	g.POST("/outbound-subs/:id/move", a.moveOutboundSub)
@@ -564,26 +565,41 @@ func (a *XraySettingController) refreshOutboundSub(c *gin.Context) {
 		jsonObj(c, obs, nil)
 		return
 	}
-	core, coreErr := (&service.SettingService{}).GetCoreType()
-	if coreErr != nil {
-		jsonMsg(c, "Subscription updated, but the active core could not be detected", coreErr)
+	if err := a.applyOutboundSubscriptionChanges(c.Request.Context()); err != nil {
+		jsonMsg(c, "Subscription saved, but runtime apply failed", err)
 		return
 	}
-	if service.IsNativeCore(core) && service.SelectedNativeCore().IsRunning() {
-		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-		defer cancel()
-		if err := service.SelectedNativeCore().Restart(ctx); err != nil {
-			jsonMsg(c, "Subscription saved, but sing-box could not apply the updated connections", err)
-			return
-		}
-		// Refresh the live selector acknowledgement without waiting for the
-		// next scheduled probe/apply tick.
-		if _, err := a.OutboundSubscriptionService.ApplyAutomaticSelections(); err != nil {
-			jsonMsg(c, "Subscription applied, but automatic selector status could not be updated", err)
-			return
-		}
-	}
 	jsonObj(c, obs, nil)
+}
+
+// applyOutboundSubs publishes all already fetched profiles in one restart.
+// It never re-downloads subscriptions, even when the final fetch failed.
+func (a *XraySettingController) applyOutboundSubs(c *gin.Context) {
+	markOutboundCoreRestart()
+	if err := a.applyOutboundSubscriptionChanges(c.Request.Context()); err != nil {
+		jsonMsg(c, "Failed to apply outbound subscriptions", err)
+		return
+	}
+	jsonObj(c, "", nil)
+}
+
+func (a *XraySettingController) applyOutboundSubscriptionChanges(ctx context.Context) error {
+	core, err := (&service.SettingService{}).GetCoreType()
+	if err != nil {
+		return err
+	}
+	if !service.IsNativeCore(core) || !service.SelectedNativeCore().IsRunning() {
+		return nil
+	}
+	applyCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+	if err := service.SelectedNativeCore().Restart(applyCtx); err != nil {
+		return fmt.Errorf("sing-box restart: %w", err)
+	}
+	if _, err := a.OutboundSubscriptionService.ApplyAutomaticSelections(); err != nil {
+		return fmt.Errorf("automatic selector acknowledgement: %w", err)
+	}
+	return nil
 }
 
 func (a *XraySettingController) moveOutboundSub(c *gin.Context) {
