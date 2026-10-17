@@ -21,6 +21,27 @@ func TestSubscriptionReportKeepsSupportedLinksAndExplainsUnsupported(t *testing.
 	}
 }
 
+func TestSubscriptionTolerantImportSkipsServerListeners(t *testing.T) {
+	t.Setenv("XUI_BIN_FOLDER", t.TempDir())
+	source := []byte(`[
+		{"type":"socks","tag":"proxy","server":"example.org","server_port":1080},
+		{"protocol":"singbox:masque-server","tag":"listener","settings":{"listen":"0.0.0.0","listen_port":443}}
+	]`)
+	rows, identities, warnings, err := parseOutboundSubscriptionReport(source, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || len(identities) != 1 || len(warnings) != 1 {
+		t.Fatalf("server listener not skipped: rows=%v ids=%v warnings=%v", rows, identities, warnings)
+	}
+	if rows[0]["tag"] != "proxy" || !strings.Contains(warnings[0], "Серверный профиль") {
+		t.Fatalf("unexpected result: rows=%v warnings=%v", rows, warnings)
+	}
+	if _, _, _, err := parseOutboundSubscriptionReport(source, false); err == nil {
+		t.Fatal("strict import must reject a server listener")
+	}
+}
+
 func TestSubscriptionStandardLinksBypassInstalledKernelParser(t *testing.T) {
 	// A binary that rejects "parse" must not reject ordinary share links:
 	// VLESS and Trojan are handled by the panel's own parser.
