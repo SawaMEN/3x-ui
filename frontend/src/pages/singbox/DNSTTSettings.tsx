@@ -68,6 +68,7 @@ export default function DNSTTSettings() {
   const [error, setError] = useState('');
   const [mode, setMode] = useState<'doh' | 'dot' | 'udp'>('doh');
   const [clientPort, setClientPort] = useState(7000);
+  const [resolver, setResolver] = useState('https://cloudflare-dns.com/dns-query');
   const [checkingDelegation, setCheckingDelegation] = useState(false);
   const [delegation, setDelegation] = useState<Delegation | null>(null);
 
@@ -164,13 +165,16 @@ export default function DNSTTSettings() {
   }, [form.domain]);
   const publicKey = state.publicKey || '';
   const zone = form.domain.trim().toLowerCase().replace(/\.$/, '');
+  // Client resolvers are independent from the DNS listener on the VPS.
+  // Reject whitespace/shell characters so the copyable command cannot
+  // accidentally become a different shell command.
+  const resolverValid = mode === 'doh'
+    ? /^https:\/\/[a-zA-Z0-9.-]+(?::\d{1,5})?\/[a-zA-Z0-9_./%~-]+$/.test(resolver)
+    : /^(?:[a-zA-Z0-9.-]+|\[[0-9a-fA-F:]+\]):\d{1,5}$/.test(resolver);
   const command = [
     'dnstt-client',
-    mode === 'doh'
-      ? '-doh https://cloudflare-dns.com/dns-query'
-      : mode === 'dot'
-        ? '-dot 1.1.1.1:853'
-        : '-udp 1.1.1.1:53',
+    mode === 'doh' ? '-doh' : mode === 'dot' ? '-dot' : '-udp',
+    resolverValid ? resolver : '<DNS_RESOLVER>',
     '-pubkey',
     publicKey || '<PUBLIC_KEY>',
     zone || '<TUNNEL_DOMAIN>',
@@ -416,8 +420,29 @@ export default function DNSTTSettings() {
                       { value: 'dot', label: 'DNS over TLS — DoT' },
                       { value: 'udp', label: 'Обычный UDP DNS' },
                     ]}
-                    onChange={setMode}
+                    onChange={(next) => {
+                      setMode(next);
+                      setResolver(
+                        next === 'doh'
+                          ? 'https://cloudflare-dns.com/dns-query'
+                          : next === 'dot'
+                            ? '1.1.1.1:853'
+                            : '1.1.1.1:53',
+                      );
+                    }}
                   />
+                  <Input
+                    aria-label="DNS-резолвер клиента"
+                    value={resolver}
+                    status={!resolverValid ? 'error' : undefined}
+                    placeholder={mode === 'doh' ? 'https://cloudflare-dns.com/dns-query' : '1.1.1.1:853'}
+                    onChange={(event) => setResolver(event.target.value.trim())}
+                  />
+                  {!resolverValid && (
+                    <Typography.Text type="danger">
+                      Проверьте адрес DNS-резолвера клиента. Для DoH нужен HTTPS URL, для DoT/UDP — адрес:порт.
+                    </Typography.Text>
+                  )}
                   <Space>
                     <Typography.Text>Локальный TCP-порт клиента:</Typography.Text>
                     <InputNumber
@@ -428,7 +453,7 @@ export default function DNSTTSettings() {
                       onChange={(v) => setClientPort(v ?? 7000)}
                     />
                   </Space>
-                  <Typography.Text code copyable style={{ overflowWrap: 'anywhere' }}>
+                  <Typography.Text code copyable={resolverValid} style={{ overflowWrap: 'anywhere' }}>
                     {command}
                   </Typography.Text>
                   <Typography.Text type="secondary">
