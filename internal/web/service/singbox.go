@@ -16,8 +16,8 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
 	"github.com/SawaMEN/3x-ui/v3/internal/hiddify"
-	"github.com/SawaMEN/3x-ui/v3/internal/oxidns"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/oxidns"
 	"github.com/SawaMEN/3x-ui/v3/internal/protocolserver"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
@@ -124,12 +124,18 @@ func singBoxTUICInbound(ib *model.Inbound, clients []any) (map[string]any, error
 // GetConfig is the single generation entry point for previews, candidates and restarts.
 func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 	cfg, err := (&HiddifyConfigGenerator{StrictProtocolServers: s.strictProtocolServers}).Generate()
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	settings, err := oxidns.Load()
-	if err != nil { return nil, fmt.Errorf("OxiDNS settings: %w", err) }
+	if err != nil {
+		return nil, fmt.Errorf("OxiDNS settings: %w", err)
+	}
 	if settings.Enabled && settings.UseSingBox {
 		cfg.DNS, err = oxidns.WithSingBoxDNS(cfg.DNS)
-		if err != nil { return nil, err }
+		if err != nil {
+			return nil, err
+		}
 	}
 	return cfg, nil
 }
