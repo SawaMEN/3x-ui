@@ -98,15 +98,25 @@ func remoteRevision(ctx context.Context) string {
  updateCache.Lock()
  defer updateCache.Unlock()
  if time.Since(updateCache.when)<5*time.Minute { return updateCache.sha }
- short,cancel:=context.WithTimeout(ctx,7*time.Second)
- defer cancel()
- output,err:=run(short,"git","ls-remote",managerRepo,"refs/heads/main")
- if err==nil {
+ revisions:=make([]string,0,2)
+ for _,item:=range []struct{repo,ref string}{{managerRepo,"refs/heads/main"},{serverRepo,"refs/heads/master"}} {
+  short,cancel:=context.WithTimeout(ctx,7*time.Second)
+  output,err:=run(short,"git","ls-remote",item.repo,item.ref)
+  cancel()
+  if err!=nil {revisions=nil;break}
   fields:=strings.Fields(output)
-  if len(fields)>0 && len(fields[0])==40 {updateCache.sha=fields[0]}
+  if len(fields)==0 || len(fields[0])!=40 {revisions=nil;break}
+  revisions=append(revisions,fields[0])
  }
+ if len(revisions)==2 {updateCache.sha=strings.Join(revisions,"|")}
  updateCache.when=time.Now()
  return updateCache.sha
+}
+func revisionLabel(value string) string {
+ parts:=strings.Split(value,"|")
+ if len(parts)!=2 {return value}
+ shorten:=func(sha string) string {if len(sha)>8 {return sha[:8]};return sha}
+ return "manager "+shorten(parts[0])+" / olcrtc "+shorten(parts[1])
 }
 func GetStatus(ctx context.Context) Status {
  yes,reason:=Supported()
@@ -116,9 +126,12 @@ func GetStatus(ctx context.Context) Status {
   output,err:=run(check,"systemctl","is-active","olcrtc-manager")
   cancel()
   result.Running=err==nil && output=="active"
-  result.InstalledVersion=readRevisions()
-  if _,e:=exec.LookPath("git"); e==nil {result.AvailableVersion=remoteRevision(ctx)}
-  result.UpdateAvailable=result.AvailableVersion!="" && result.InstalledVersion!="" && result.InstalledVersion!=result.AvailableVersion
+  current:=readRevisions()
+  latest:=""
+  if _,e:=exec.LookPath("git"); e==nil {latest=remoteRevision(ctx)}
+  result.InstalledVersion=revisionLabel(current)
+  result.AvailableVersion=revisionLabel(latest)
+  result.UpdateAvailable=latest!="" && current!=latest
  } else {
   result.AvailableVersion="upstream"
  }
@@ -156,6 +169,9 @@ func Start(operation string) error {
  return nil
 }
 func install(ctx context.Context) error {
+ if installed() {
+  if _,err:=os.Stat(revisionPath);err!=nil {return errors.New("an existing OlcRTC installation is not managed by 3x-ui")}
+ }
  request,err:=http.NewRequestWithContext(ctx,http.MethodGet,installerURL,nil)
  if err!=nil {return err}
  client:=&http.Client{Timeout:30*time.Second}
@@ -187,9 +203,8 @@ func install(ctx context.Context) error {
  cmd.Stderr=logFile
  if err:=cmd.Run();err!=nil {return fmt.Errorf("OlcRTC installation failed; check system packages, free RAM and Go toolchain (%w)",err)}
  if _,err:=run(ctx,"systemctl","restart","olcrtc-manager");err!=nil {return fmt.Errorf("installed but unable to restart olcrtc-manager: %w",err)}
- if before!="" {
-  if err:=os.WriteFile(revisionPath,[]byte(before+"\n"),0600);err!=nil {return err}
- }
+ if before=="" {before="unknown|unknown"}
+ if err:=os.WriteFile(revisionPath,[]byte(before+"\n"),0600);err!=nil {return err}
  return nil
 }
 func remove(ctx context.Context) error {
@@ -247,7 +262,7 @@ func normalize(input *ClientInput) error {
  if input.RoomID=="" && input.Carrier=="jitsi" {
   suffix,err:=randomHex(12)
   if err!=nil {return err}
-  input.RoomID="https://meet.jit.si/olcrtc-"+suffix
+  input.RoomID="https://meet.handyweb.org/olcrtc-"+suffix
  }
  if input.RoomID=="" || input.RoomID=="any" || len(input.RoomID)>512 {return errors.New("enter an existing room ID or URL for the selected provider")}
  if input.Carrier=="jitsi" {
