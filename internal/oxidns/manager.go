@@ -204,6 +204,12 @@ func tlsPaths(c Settings, panelCertFile, panelKeyFile string) (string, string, e
 	return certFile, keyFile, nil
 }
 
+// ValidateConfiguration checks the selected upstream, ports and TLS certificate
+// without changing the running DNS service.
+func ValidateConfiguration(c Settings, panelCertFile, panelKeyFile string) error {
+	return validate(c, panelCertFile, panelKeyFile)
+}
+
 func validate(c Settings, certFile, keyFile string) error {
 	if _, _, valid := upstream(c); !valid {
 		return errors.New("выберите DNS-провайдера")
