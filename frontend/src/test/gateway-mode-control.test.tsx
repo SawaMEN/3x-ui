@@ -269,8 +269,16 @@ describe('gateway settings in sing-box', () => {
       obj: url.endsWith('/interfaces')
         ? {
             interfaces: [
-              { name: 'br-lan', defaultRoute: false, addresses: [{ ip: '192.168.10.1', prefix: 24, private: true }] },
-              { name: 'eth0', defaultRoute: true, addresses: [{ ip: '203.0.113.1', prefix: 24, private: false }] },
+              {
+                name: 'br-lan',
+                defaultRoute: false,
+                addresses: [{ ip: '192.168.10.1', prefix: 24, private: true }],
+              },
+              {
+                name: 'eth0',
+                defaultRoute: true,
+                addresses: [{ ip: '203.0.113.1', prefix: 24, private: false }],
+              },
             ],
             defaultWAN: 'eth0',
             suggested: network,
@@ -302,8 +310,12 @@ describe('gateway settings in sing-box', () => {
         ? { interfaces: [], defaultWAN: 'eth0', note: '' }
         : {
             ...status(true),
-            network: { ...status(true).network, listenerReady: false, error: 'Не удалось запустить TPROXY' },
-        },
+            network: {
+              ...status(true).network,
+              listenerReady: false,
+              error: 'Не удалось запустить TPROXY',
+            },
+          },
     }));
 
     render(<GatewayModeControl />);
@@ -311,5 +323,4 @@ describe('gateway settings in sing-box', () => {
     expect(screen.getAllByRole('alert')).toHaveLength(1);
     expect(screen.getByText('Шлюз требует восстановления')).toBeTruthy();
   });
-
 });
