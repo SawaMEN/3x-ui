@@ -2053,9 +2053,24 @@ export default function SingBoxPage() {
 
   // Compute once per render, not once for every outbound row.
   const overview = [
-    { key: 'dns', label: 'DNS', value: asObjectArray(asObject(config.dns).servers).length, unit: 'серверов' },
-    { key: 'routing', label: 'Маршрутизация', value: asObjectArray(asObject(config.route).rules).length, unit: 'правил' },
-    { key: 'outbound', label: 'Подключения', value: asObjectArray(config.outbounds).length + asObjectArray(config.endpoints).length, unit: 'исходящих' },
+    {
+      key: 'dns',
+      label: 'DNS',
+      value: asObjectArray(asObject(config.dns).servers).length,
+      unit: 'серверов',
+    },
+    {
+      key: 'routing',
+      label: 'Маршрутизация',
+      value: asObjectArray(asObject(config.route).rules).length,
+      unit: 'правил',
+    },
+    {
+      key: 'outbound',
+      label: 'Подключения',
+      value: asObjectArray(config.outbounds).length + asObjectArray(config.endpoints).length,
+      unit: 'исходящих',
+    },
     { key: 'gateway', label: 'Режим шлюза', value: null, unit: 'Автоматическая настройка' },
   ];
 
@@ -2068,12 +2083,18 @@ export default function SingBoxPage() {
         return (
           <Space orientation="vertical" size={12} style={{ width: '100%' }}>
             <Card className="singbox-overview-card">
-              <SectionHeader title="Обзор настроек"
-                description="Частые действия под рукой; подробные параметры открываются только в выбранном разделе." />
+              <SectionHeader
+                title="Обзор настроек"
+                description="Частые действия под рукой; подробные параметры открываются только в выбранном разделе."
+              />
               <div className="singbox-overview-grid">
                 {overview.map((entry) => (
-                  <button key={entry.key} type="button" className="singbox-overview-link"
-                    onClick={() => navigate('/singbox#' + entry.key, { preventScrollReset: true })}>
+                  <button
+                    key={entry.key}
+                    type="button"
+                    className="singbox-overview-link"
+                    onClick={() => navigate('/singbox#' + entry.key, { preventScrollReset: true })}
+                  >
                     <span className="singbox-overview-label">{entry.label}</span>
                     <strong>{entry.value == null ? 'Настроить' : entry.value}</strong>
                     <span className="singbox-overview-unit">{entry.unit}</span>

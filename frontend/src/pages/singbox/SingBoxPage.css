@@ -368,7 +368,9 @@
   text-align: left;
   color: var(--ant-color-text);
   cursor: pointer;
-  transition: border-color 150ms ease, background 150ms ease;
+  transition:
+    border-color 150ms ease,
+    background 150ms ease;
 }
 
 .singbox-page .singbox-overview-link:hover,
