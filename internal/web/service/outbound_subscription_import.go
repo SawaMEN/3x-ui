@@ -56,9 +56,9 @@ func parseOutboundSubscriptionEntries(body []byte, tolerant bool, warnings *[]st
 		case "singbox:masque-server", "singbox:openvpn-server", "singbox:tunnel_server":
 			if tolerant {
 				warn("Серверный профиль из подписки пропущен: он не является исходящим подключением")
-			} else {
-				return fmt.Errorf("subscription cannot import server listeners as cascade clients")
+				return nil // Do not silently import a listener as an outbound.
 			}
+			return fmt.Errorf("subscription cannot import server listeners as cascade clients")
 		}
 		if len(out) >= 4096 {
 			return fmt.Errorf("subscription contains too many connections")
