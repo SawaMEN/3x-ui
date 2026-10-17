@@ -908,20 +908,20 @@ export default function SystemUpdateModal({
                       <Space wrap>
                         {(dependency.key === 'oxidns' ||
                           (dependency.key === 'dnstt' && dependency.installed)) && (
-                            <Button
-                              size="small"
-                              type="primary"
-                              disabled={dependencyBusy !== null || systemUpdateBusy}
-                              href={`${(window.X_UI_BASE_PATH || '/').replace(/\/+$/, '')}/panel/singbox#dns`}
-                              onClick={onClose}
-                            >
-                              {dependency.key === 'dnstt'
-                                ? 'Настроить DNSTT'
-                                : dependency.installed
-                                  ? 'Настроить DNS'
-                                  : 'Быстрый запуск DNS'}
-                            </Button>
-                          )}
+                          <Button
+                            size="small"
+                            type="primary"
+                            disabled={dependencyBusy !== null || systemUpdateBusy}
+                            href={`${(window.X_UI_BASE_PATH || '/').replace(/\/+$/, '')}/panel/singbox#dns`}
+                            onClick={onClose}
+                          >
+                            {dependency.key === 'dnstt'
+                              ? 'Настроить DNSTT'
+                              : dependency.installed
+                                ? 'Настроить DNS'
+                                : 'Быстрый запуск DNS'}
+                          </Button>
+                        )}
                         {action.supported === false ? (
                           <Alert
                             type="info"
