@@ -910,12 +910,14 @@ export const sections: readonly Section[] = [
       {
         method: 'POST',
         path: '/panel/api/oxidns/validate',
-        summary: 'Check a custom DNS subdomain, ports and selected TLS certificate without changing the running service.',
+        summary:
+          'Check a custom DNS subdomain, ports and selected TLS certificate without changing the running service.',
       },
       {
         method: 'POST',
         path: '/panel/api/oxidns/setup',
-        summary: 'Configure and start a previously installed OxiDNS service; validate selected DNS TLS files and connect sing-box DNS.',
+        summary:
+          'Configure and start a previously installed OxiDNS service; validate selected DNS TLS files and connect sing-box DNS.',
       },
       {
         method: 'POST',

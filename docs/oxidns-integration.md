@@ -70,7 +70,7 @@ https://dns.example.com:8443/dns-query
 
 - GET /panel/api/oxidns/status (с ?check=true проверяет последний официальный релиз);
 - GET /panel/api/oxidns/logs (последние 80 записей журнала выделенной systemd-службы);
-- POST /panel/api/oxidns/setup и /disable (setup требует предварительной установки компонента); 
+- POST /panel/api/oxidns/setup и /disable (setup требует предварительной установки компонента);
 - POST /panel/api/oxidns/validate (проверка выбранной конфигурации, включая DNS-имя и сертификат, без применения);
 - POST /panel/api/oxidns/install, /update и /remove.
 
