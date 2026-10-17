@@ -348,3 +348,60 @@
     padding: 14px;
   }
 }
+
+.singbox-page .singbox-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.singbox-page .singbox-overview-link {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  padding: 18px;
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 12px;
+  background: var(--ant-color-bg-layout);
+  text-align: left;
+  color: var(--ant-color-text);
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+
+.singbox-page .singbox-overview-link:hover,
+.singbox-page .singbox-overview-link:focus-visible {
+  border-color: var(--ant-color-primary);
+  background: var(--ant-color-primary-bg);
+  outline: none;
+}
+
+.singbox-page .singbox-overview-label {
+  font-size: 13px;
+  color: var(--ant-color-text-secondary);
+}
+
+.singbox-page .singbox-overview-link strong {
+  font-size: 24px;
+  line-height: 1.25;
+  font-weight: 650;
+}
+
+.singbox-page .singbox-overview-unit {
+  font-size: 12px;
+  color: var(--ant-color-text-tertiary);
+}
+
+@media (max-width: 800px) {
+  .singbox-page .singbox-overview-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 460px) {
+  .singbox-page .singbox-overview-link {
+    padding: 12px;
+  }
+}
