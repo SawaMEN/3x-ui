@@ -54,6 +54,11 @@ type Status struct {
  LocalAddress string `json:"localAddress"`
  Version string `json:"version"`
  Error string `json:"error,omitempty"`
+ InstalledVersion string `json:"installedVersion"`
+ LatestVersion string `json:"latestVersion"`
+ UpdateAvailable bool `json:"updateAvailable"`
+ Supported bool `json:"supported"`
+ UnsupportedReason string `json:"unsupportedReason,omitempty"`
 }
 
 func Defaults() Settings { return Settings{Port:8443, Upstream:"quad9", UseSingBox:true} }
@@ -72,6 +77,10 @@ func CurrentStatus(ctx context.Context) (Status,error) {
  if err!=nil{return Status{},err}
  s:=Status{Settings:cfg,LocalAddress:net.JoinHostPort("127.0.0.1",strconv.Itoa(localPort)),Version:Version}
  if _,err:=os.Stat(binaryPath);err==nil{s.Installed=true}
+ s.InstalledVersion=installedVersion(ctx)
+ _,err=releaseAssetName()
+ s.Supported=err==nil
+ if err!=nil{s.UnsupportedReason=err.Error()}
  if cfg.DoH && cfg.Domain!="" {
   port:=""
   if cfg.Port!=443 {port=":"+strconv.Itoa(cfg.Port)}
@@ -199,55 +208,174 @@ NoNewPrivileges=true
 WantedBy=multi-user.target
 "
 
-func asset() (string,string,error) {
+
+type releaseAsset struct {
+ Name string `json:"name"`
+ Digest string `json:"digest"`
+ URL string `json:"browser_download_url"`
+}
+
+type upstreamRelease struct {
+ Tag string `json:"tag_name"`
+ Assets []releaseAsset `json:"assets"`
+}
+
+func releaseAssetName() (string,error) {
  switch runtime.GOOS+"/"+runtime.GOARCH {
- case "linux/amd64":return "oxidns-x86_64-unknown-linux-musl.tar.gz","2ac8e103e03407a73c29da848f6ce2d524e751ce1da8a744aa9168fc1384e3b0",nil
- case "linux/arm64":return "oxidns-aarch64-unknown-linux-musl.tar.gz","d879d4b9199c5c911d296af4df8d9e974523fb98a6ee2418ae7274d152365e42",nil
- default:return "","",fmt.Errorf("автоматическая установка поддерживает только Linux amd64/arm64, текущая система: %s/%s",runtime.GOOS,runtime.GOARCH)
+ case "linux/amd64":return "oxidns-x86_64-unknown-linux-musl.tar.gz",nil
+ case "linux/arm64":return "oxidns-aarch64-unknown-linux-musl.tar.gz",nil
+ default:return "",fmt.Errorf("OxiDNS поддерживается только на Linux amd64 и arm64 (%s/%s)",runtime.GOOS,runtime.GOARCH)
  }
 }
 
-func install(ctx context.Context) error {
- if _,err:=exec.LookPath("systemctl");err!=nil{return errors.New("для автоматического запуска требуется systemd (Docker пока не поддерживается)")}
- name,digest,err:=asset()
- if err!=nil{return err}
- if err:=os.MkdirAll(StateDir+"/bin",0700);err!=nil{return err}
- if _,err:=os.Stat(binaryPath);errors.Is(err,os.ErrNotExist) {
-  url:="https://github.com/svenshi/oxidns/releases/download/"+Version+"/"+name
-  req,err:=http.NewRequestWithContext(ctx,http.MethodGet,url,nil)
-  if err!=nil{return err}
-  client:=&http.Client{Timeout:120*time.Second}
-  res,err:=client.Do(req)
-  if err!=nil{return err}
-  defer res.Body.Close()
-  if res.StatusCode!=200{return fmt.Errorf("GitHub вернул HTTP %d",res.StatusCode)}
-  data,err:=io.ReadAll(io.LimitReader(res.Body,32<<20))
-  if err!=nil{return err}
-  if len(data)>=32<<20{return errors.New("архив превышает допустимый размер")}
-  got:=sha256.Sum256(data)
-  if hex.EncodeToString(got[:])!=digest{return errors.New("контрольная сумма официального OxiDNS не совпадает")}
-  gz,err:=gzip.NewReader(bytes.NewReader(data))
-  if err!=nil{return err}
-  defer gz.Close()
-  archive:=tar.NewReader(gz)
-  found:=false
-  for {
-   hdr,err:=archive.Next()
-   if errors.Is(err,io.EOF){break}
-   if err!=nil{return err}
-   if hdr.Typeflag!=tar.TypeReg && hdr.Typeflag!=tar.TypeRegA {continue}
-   if filepath.Base(hdr.Name)!="oxidns" {continue}
-   if hdr.Size<=0||hdr.Size>32<<20{return errors.New("неверный размер исполняемого файла")}
-   executable,err:=io.ReadAll(io.LimitReader(archive,hdr.Size))
-   if err!=nil{return err}
-   if int64(len(executable))!=hdr.Size{return errors.New("неполный исполняемый файл")}
-   if err:=atomicWrite(binaryPath,executable,0755);err!=nil{return err}
-   found=true
-   break
+func Latest(ctx context.Context) (string,*releaseAsset,error) {
+ name,err:=releaseAssetName()
+ if err!=nil{return "",nil,err}
+ req,err:=http.NewRequestWithContext(ctx,http.MethodGet,"https://api.github.com/repos/svenshi/oxidns/releases/latest",nil)
+ if err!=nil{return "",nil,err}
+ req.Header.Set("Accept","application/vnd.github+json")
+ client:=&http.Client{Timeout:20*time.Second}
+ resp,err:=client.Do(req)
+ if err!=nil{return "",nil,err}
+ defer resp.Body.Close()
+ if resp.StatusCode!=200{return "",nil,fmt.Errorf("GitHub API: HTTP %d",resp.StatusCode)}
+ var rel upstreamRelease
+ if err:=json.NewDecoder(io.LimitReader(resp.Body,1<<20)).Decode(&rel);err!=nil{return "",nil,err}
+ if !strings.HasPrefix(rel.Tag,"v")||len(rel.Tag)>64||strings.ContainsAny(rel.Tag," /\	
+") {
+  return "",nil,errors.New("неверная версия OxiDNS из GitHub")
+ }
+ for _,asset:=range rel.Assets{
+  expectedURL:="https://github.com/svenshi/oxidns/releases/download/"+rel.Tag+"/"+name
+  if asset.Name==name && asset.URL==expectedURL && strings.HasPrefix(asset.Digest,"sha256:") && len(asset.Digest)==71 {
+   if _,err:=hex.DecodeString(strings.TrimPrefix(asset.Digest,"sha256:"));err==nil{
+    return rel.Tag,&asset,nil
+   }
   }
-  if !found{return errors.New("в официальном архиве не найден бинарник oxidns")}
+ }
+ return "",nil,errors.New("официальный архив OxiDNS или SHA-256 не найдены")
+}
+
+func installedVersion(ctx context.Context) string {
+ if _,err:=os.Stat(binaryPath);err!=nil{return ""}
+ ctx,cancel:=context.WithTimeout(ctx,3*time.Second)
+ defer cancel()
+ data,err:=exec.CommandContext(ctx,binaryPath,"--version").Output()
+ if err!=nil{return ""}
+ for _,field:=range strings.Fields(string(data)){
+  part:=strings.TrimPrefix(field,"v")
+  if len(part)>0 && part[0]>='0' && part[0]<='9' && strings.Count(part,".")>=2 {
+   return "v"+part
+  }
+ }
+ return ""
+}
+
+func StatusWithUpdates(ctx context.Context) (Status,error) {
+ s,err:=CurrentStatus(ctx)
+ if err!=nil{return s,err}
+ latest,_,err:=Latest(ctx)
+ if err!=nil {s.Error="Не удалось проверить GitHub: "+err.Error();return s,nil}
+ s.LatestVersion=latest
+ s.UpdateAvailable=s.Installed && s.InstalledVersion!="" && s.InstalledVersion!=latest
+ return s,nil
+}
+
+func installRelease(ctx context.Context, asset releaseAsset) ([]byte,error) {
+ req,err:=http.NewRequestWithContext(ctx,http.MethodGet,asset.URL,nil)
+ if err!=nil{return nil,err}
+ client:=&http.Client{Timeout:120*time.Second}
+ res,err:=client.Do(req)
+ if err!=nil{return nil,err}
+ defer res.Body.Close()
+ if res.StatusCode!=200{return nil,fmt.Errorf("GitHub вернул HTTP %d",res.StatusCode)}
+ data,err:=io.ReadAll(io.LimitReader(res.Body,32<<20))
+ if err!=nil{return nil,err}
+ if len(data)>=32<<20{return nil,errors.New("архив превышает ограничение 32 MiB")}
+ got:=sha256.Sum256(data)
+ if hex.EncodeToString(got[:])!=strings.TrimPrefix(asset.Digest,"sha256:") {
+  return nil,errors.New("контрольная сумма официального архива не совпадает")
+ }
+ gz,err:=gzip.NewReader(bytes.NewReader(data))
+ if err!=nil{return nil,err}
+ defer gz.Close()
+ archive:=tar.NewReader(gz)
+ for{
+  hdr,err:=archive.Next()
+  if errors.Is(err,io.EOF){break}
+  if err!=nil{return nil,err}
+  if hdr.Typeflag!=tar.TypeReg && hdr.Typeflag!=tar.TypeRegA {continue}
+  if filepath.Base(hdr.Name)!="oxidns"{continue}
+  if hdr.Size<1 || hdr.Size>32<<20{return nil,errors.New("неверный размер бинарника")}
+  data,err:=io.ReadAll(io.LimitReader(archive,hdr.Size))
+  if err!=nil{return nil,err}
+  if int64(len(data))!=hdr.Size{return nil,errors.New("неполный бинарник OxiDNS")}
+  return data,nil
+ }
+ return nil,errors.New("не найден исполняемый файл oxidns")
+}
+
+func installOnly(ctx context.Context) error {
+ if _,err:=exec.LookPath("systemctl");err!=nil{return errors.New("для OxiDNS требуется Linux с systemd")}
+ if _,err:=releaseAssetName();err!=nil{return err}
+ if _,err:=os.Stat(binaryPath);errors.Is(err,os.ErrNotExist) {
+  _,asset,err:=Latest(ctx)
+  if err!=nil{return err}
+  executable,err:=installRelease(ctx,*asset)
+  if err!=nil{return err}
+  if err:=atomicWrite(binaryPath,executable,0755);err!=nil{return err}
  } else if err!=nil{return err}
  if err:=atomicWrite(servicePath,[]byte(unit),0644);err!=nil{return err}
+ return systemctl(ctx,"daemon-reload")
+}
+
+func InstallOnly(ctx context.Context) error {
+ mu.Lock()
+ defer mu.Unlock()
+ return installOnly(ctx)
+}
+
+func Upgrade(ctx context.Context) error {
+ mu.Lock()
+ defer mu.Unlock()
+ if _,err:=os.Stat(binaryPath);err!=nil{return errors.New("сначала установите OxiDNS")}
+ latest,asset,err:=Latest(ctx)
+ if err!=nil{return err}
+ if installedVersion(ctx)==latest{return nil}
+ executable,err:=installRelease(ctx,*asset)
+ if err!=nil{return err}
+ oldBinary,err:=os.ReadFile(binaryPath)
+ if err!=nil{return err}
+ c,err:=Load()
+ if err!=nil{return err}
+ if err:=atomicWrite(binaryPath,executable,0755);err!=nil{return err}
+ if c.Enabled{
+  if err:=systemctl(ctx,"restart","x-ui-oxidns.service");err!=nil{
+   restoreErr:=atomicWrite(binaryPath,oldBinary,0755)
+   if restoreErr==nil {restoreErr=systemctl(ctx,"restart","x-ui-oxidns.service")}
+   return errors.Join(err,restoreErr)
+  }
+ }
+ return nil
+}
+
+func Uninstall(ctx context.Context) error {
+ mu.Lock()
+ defer mu.Unlock()
+ cfg,err:=Load()
+ if err!=nil{return err}
+ cfg.Enabled=false
+ data,_:=json.Marshal(cfg)
+ if err:=atomicWrite(statePath,data,0600);err!=nil{return err}
+ if err:=systemctl(ctx,"stop","x-ui-oxidns.service");err!=nil{
+  if !strings.Contains(err.Error(),"not loaded") && !strings.Contains(err.Error(),"not found"){return err}
+ }
+ if err:=systemctl(ctx,"disable","x-ui-oxidns.service");err!=nil{
+  if !strings.Contains(err.Error(),"does not exist") && !strings.Contains(err.Error(),"not loaded"){return err}
+ }
+ for _,path:=range []string{binaryPath,servicePath,configPath}{
+  if err:=os.Remove(path);err!=nil&&!errors.Is(err,os.ErrNotExist){return err}
+ }
  return systemctl(ctx,"daemon-reload")
 }
 
@@ -258,7 +386,7 @@ func Setup(ctx context.Context, c Settings, certFile,keyFile string) error {
  if err:=validate(c,certFile,keyFile);err!=nil{return err}
  yaml,err:=Generate(c,certFile,keyFile)
  if err!=nil{return err}
- if err:=install(ctx);err!=nil{return err}
+ if err:=installOnly(ctx);err!=nil{return err}
  oldYAML,_:=os.ReadFile(configPath)
  oldState,_:=os.ReadFile(statePath)
  if err:=atomicWrite(configPath,[]byte(yaml),0600);err!=nil{return err}
