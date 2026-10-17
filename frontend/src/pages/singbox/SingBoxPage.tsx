@@ -52,6 +52,8 @@ import SimpleSettings from './SimpleSettings';
 import NativeRoutingBasic from './NativeRoutingBasic';
 import { basicRuleTitle } from './native-routing-basic';
 import NativeDnsServers from './NativeDnsServers';
+import OxiDNSSettings from './OxiDNSSettings';
+import DNSTTSettings from './DNSTTSettings';
 import NativeDnsRules from './NativeDnsRules';
 import { putConnection, removeConnection } from './config-references';
 import { setDefaultDomainResolver } from './simple-settings';
@@ -2109,6 +2111,8 @@ export default function SingBoxPage() {
       case 'dns':
         return (
           <Space orientation="vertical" size={12} style={{ width: '100%' }}>
+            <OxiDNSSettings />
+            <DNSTTSettings />
             <SimpleSettings config={config} onChange={setConfig} />
             <NativeDnsServers
               config={config}

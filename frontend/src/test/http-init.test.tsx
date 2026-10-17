@@ -100,6 +100,16 @@ describe('http-init fetch wrapper', () => {
     },
   );
 
+  it.each(['oxidns', 'dnstt', 'olcrtc'])('sends %s setup settings as JSON', async (component) => {
+    document.head.innerHTML = '<meta name="csrf-token" content="tok">';
+    http.setupHttp();
+    fetchMock.mockResolvedValue(okEnvelope());
+    const payload = { domain: 't.example.com', enabled: true };
+    await http.httpRequest('POST', `/panel/api/${component}/setup`, payload);
+    expect(headersOf().get('content-type')).toBe('application/json; charset=UTF-8');
+    expect(JSON.parse(initOf().body as string)).toEqual(payload);
+  });
+
   it('passes FormData through without a Content-Type header', async () => {
     document.head.innerHTML = '<meta name="csrf-token" content="tok">';
     http.setupHttp();

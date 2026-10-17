@@ -856,6 +856,77 @@ export const sections: readonly Section[] = [
         summary: 'Return the selected core and its supported panel capabilities.',
       },
       {
+        method: 'GET',
+        path: '/panel/api/dnstt/status',
+        summary: 'Read DNSTT service state and public key; the private Noise key is never exposed.',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/dnstt/check-delegation',
+        summary: 'Check public NS delegation and nameserver IPv4 without changing DNSTT configuration.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/dnstt/install',
+        summary: 'Download checksum-verified DNSTT server without enabling the tunnel.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/dnstt/setup',
+        summary:
+          'Validate the delegated DNS zone and local TCP destination, generate keys and enable DNSTT.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/dnstt/disable',
+        summary: 'Stop and disable DNSTT while preserving its keys and configuration.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/dnstt/update',
+        summary: 'Upgrade DNSTT with rollback if the service fails to restart.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/dnstt/remove',
+        summary: 'Stop DNSTT, disable systemd and delete the binary, settings and keys.',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/oxidns/status',
+        summary: 'Read integrated OxiDNS service status and settings.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/oxidns/check',
+        summary: 'Resolve a test domain through the managed OxiDNS listener.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/oxidns/setup',
+        summary: 'Install verified OxiDNS, validate TLS and connect native sing-box DNS.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/oxidns/disable',
+        summary: 'Disable OxiDNS and restore the configured sing-box DNS.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/oxidns/install',
+        summary: 'Install official OxiDNS from verified GitHub release without starting it.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/oxidns/update',
+        summary: 'Update OxiDNS to the latest verified official release and roll back on failure.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/oxidns/remove',
+        summary: 'Uninstall OxiDNS, disable the service and restore native sing-box DNS.',
+      },
+      {
         method: 'POST',
         path: '/panel/api/server/singbox/outbound/check',
         summary: 'Measure the delay of a running sing-box outbound.',

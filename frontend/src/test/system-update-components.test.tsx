@@ -4,12 +4,14 @@ import SystemUpdateModal from '@/pages/settings/SystemUpdateModal';
 import { HttpUtil } from '@/utils';
 
 let installedHysteria = false;
+let installedOxiDNS = false;
 let naiveSupported = true;
 let installedNaive = false;
 let hysteriaFallback = '';
 
 beforeEach(() => {
   installedHysteria = false;
+  installedOxiDNS = false;
   hysteriaFallback = '';
   naiveSupported = true;
   installedNaive = false;
@@ -19,33 +21,43 @@ beforeEach(() => {
     msg: '',
     obj: String(path).includes('singbox')
       ? { installed: true, version: '1.13.0' }
-      : String(path).includes('externalvpn')
+      : String(path).includes('/oxidns/status')
         ? {
-            pingtunnel: { installed: false, latestVersion: '2.10' },
-            trusttunnel: { installed: false, latestVersion: '1.1.0' },
-            hysteria2: {
-              installed: installedHysteria,
-              source: !installedHysteria || hysteriaFallback ? 'sing-box' : 'standalone',
-              fallbackReason: hysteriaFallback,
-              latestVersion: '2.13.0',
-              updateAvailable: installedHysteria,
-            },
+            installed: installedOxiDNS,
+            installedVersion: installedOxiDNS ? 'v1.6.1' : '',
+            latestVersion: 'v1.6.1',
+            supported: true,
+            updateAvailable: false,
           }
-        : String(path).includes('naiveproxy')
+        : String(path).includes('externalvpn')
           ? {
-              installed: installedNaive,
-              source: installedNaive ? 'standalone' : 'sing-box',
-              supported: naiveSupported,
-              unsupportedReason: naiveSupported
-                ? undefined
-                : 'Caddy-Naive is not published for linux/arm64',
-              latestVersion: naiveSupported ? '1.0.0' : '',
+              pingtunnel: { installed: false, latestVersion: '2.10' },
+              trusttunnel: { installed: false, latestVersion: '1.1.0' },
+              hysteria2: {
+                installed: installedHysteria,
+                source: !installedHysteria || hysteriaFallback ? 'sing-box' : 'standalone',
+                fallbackReason: hysteriaFallback,
+                latestVersion: '2.13.0',
+                updateAvailable: installedHysteria,
+              },
             }
-          : { installed: false, latestVersion: '1.0.0' },
+          : String(path).includes('naiveproxy')
+            ? {
+                installed: installedNaive,
+                source: installedNaive ? 'standalone' : 'sing-box',
+                supported: naiveSupported,
+                unsupportedReason: naiveSupported
+                  ? undefined
+                  : 'Caddy-Naive is not published for linux/arm64',
+                latestVersion: naiveSupported ? '1.0.0' : '',
+              }
+            : { installed: false, latestVersion: '1.0.0' },
   }));
   vi.mocked(HttpUtil.post).mockImplementation(async (path) => {
     if (String(path).endsWith('/externalvpn/update/hysteria2')) installedHysteria = true;
     if (String(path).endsWith('/naiveproxy/update')) installedNaive = true;
+    if (String(path).endsWith('/oxidns/install')) installedOxiDNS = true;
+    if (String(path).endsWith('/oxidns/remove')) installedOxiDNS = false;
     if (String(path).endsWith('/components/remove/naiveproxy')) installedNaive = false;
     if (String(path).endsWith('/components/remove/hysteria2')) installedHysteria = false;
     return {
@@ -196,4 +208,22 @@ it('does not treat restored connectivity as confirmation that system updates suc
   );
   expect(HttpUtil.post).not.toHaveBeenCalledWith('/panel/api/server/externalvpn/update/hysteria2');
   expect(screen.queryByText('System packages were updated successfully.')).toBeNull();
+});
+
+it('links to automated DNS setup before install and keeps management actions', async () => {
+  await openComponents();
+  const quickLink = card('OxiDNS').getByRole('link', { name: 'Быстрый запуск DNS' });
+  expect(quickLink.getAttribute('href')).toBe('/panel/singbox#dns');
+  fireEvent.click(card('OxiDNS').getByRole('button', { name: 'Установить OxiDNS' }));
+  await waitFor(() =>
+    expect(HttpUtil.post).toHaveBeenCalledWith('/panel/api/oxidns/install', undefined, {
+      timeout: 180000,
+    }),
+  );
+  const installedLink = await card('OxiDNS').findByRole('link', { name: 'Настроить DNS' });
+  expect(installedLink.getAttribute('href')).toBe('/panel/singbox#dns');
+  fireEvent.click(card('OxiDNS').getByRole('button', { name: 'Удалить OxiDNS' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+  await waitFor(() => expect(HttpUtil.post).toHaveBeenCalledWith('/panel/api/oxidns/remove'));
+  await card('OxiDNS').findByRole('link', { name: 'Быстрый запуск DNS' });
 });

@@ -7475,6 +7475,396 @@
         }
       }
     },
+    "/panel/api/dnstt/status": {
+      "get": {
+        "tags": [
+          "Server"
+        ],
+        "summary": "Read DNSTT service state and public key; the private Noise key is never exposed.",
+        "operationId": "get_panel_api_dnstt_status",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/dnstt/install": {
+      "post": {
+        "tags": [
+          "Server"
+        ],
+        "summary": "Download checksum-verified DNSTT server without enabling the tunnel.",
+        "operationId": "post_panel_api_dnstt_install",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/dnstt/setup": {
+      "post": {
+        "tags": [
+          "Server"
+        ],
+        "summary": "Validate the delegated DNS zone and local TCP destination, generate keys and enable DNSTT.",
+        "operationId": "post_panel_api_dnstt_setup",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/dnstt/disable": {
+      "post": {
+        "tags": [
+          "Server"
+        ],
+        "summary": "Stop and disable DNSTT while preserving its keys and configuration.",
+        "operationId": "post_panel_api_dnstt_disable",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/dnstt/update": {
+      "post": {
+        "tags": [
+          "Server"
+        ],
+        "summary": "Upgrade DNSTT with rollback if the service fails to restart.",
+        "operationId": "post_panel_api_dnstt_update",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/dnstt/remove": {
+      "post": {
+        "tags": [
+          "Server"
+        ],
+        "summary": "Stop DNSTT, disable systemd and delete the binary, settings and keys.",
+        "operationId": "post_panel_api_dnstt_remove",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/oxidns/status": {
+      "get": {
+        "tags": [
+          "Server"
+        ],
+        "summary": "Read integrated OxiDNS service status and settings.",
+        "operationId": "get_panel_api_oxidns_status",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/oxidns/check": {
+      "post": {
+        "tags": [
+          "Server"
+        ],
+        "summary": "Resolve a test domain through the managed OxiDNS listener.",
+        "operationId": "post_panel_api_oxidns_check",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/oxidns/setup": {
+      "post": {
+        "tags": [
+          "Server"
+        ],
+        "summary": "Install verified OxiDNS, validate TLS and connect native sing-box DNS.",
+        "operationId": "post_panel_api_oxidns_setup",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/oxidns/disable": {
+      "post": {
+        "tags": [
+          "Server"
+        ],
+        "summary": "Disable OxiDNS and restore the configured sing-box DNS.",
+        "operationId": "post_panel_api_oxidns_disable",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/oxidns/install": {
+      "post": {
+        "tags": [
+          "Server"
+        ],
+        "summary": "Install official OxiDNS from verified GitHub release without starting it.",
+        "operationId": "post_panel_api_oxidns_install",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/oxidns/update": {
+      "post": {
+        "tags": [
+          "Server"
+        ],
+        "summary": "Update OxiDNS to the latest verified official release and roll back on failure.",
+        "operationId": "post_panel_api_oxidns_update",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/oxidns/remove": {
+      "post": {
+        "tags": [
+          "Server"
+        ],
+        "summary": "Uninstall OxiDNS, disable the service and restore native sing-box DNS.",
+        "operationId": "post_panel_api_oxidns_remove",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/panel/api/server/singbox/outbound/check": {
       "post": {
         "tags": [
@@ -19115,6 +19505,67 @@
                       "type": "string"
                     },
                     "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/dnstt/check-delegation": {
+      "get": {
+        "tags": [
+          "Server"
+        ],
+        "summary": "Check public NS delegation and nameserver IPv4 without changing DNSTT configuration.",
+        "operationId": "get_panel_api_dnstt_check_delegation",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {
+                      "type": "object",
+                      "properties": {
+                        "zone": {
+                          "type": "string"
+                        },
+                        "nameServer": {
+                          "type": "string"
+                        },
+                        "expectedIP": {
+                          "type": "string"
+                        },
+                        "addresses": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "nsFound": {
+                          "type": "boolean"
+                        },
+                        "ipMatches": {
+                          "type": "boolean"
+                        },
+                        "ready": {
+                          "type": "boolean"
+                        },
+                        "details": {
+                          "type": "string"
+                        }
+                      }
+                    }
                   }
                 }
               }

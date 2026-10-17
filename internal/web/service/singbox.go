@@ -17,6 +17,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
 	"github.com/SawaMEN/3x-ui/v3/internal/hiddify"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/oxidns"
 	"github.com/SawaMEN/3x-ui/v3/internal/protocolserver"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
@@ -122,7 +123,21 @@ func singBoxTUICInbound(ib *model.Inbound, clients []any) (map[string]any, error
 
 // GetConfig is the single generation entry point for previews, candidates and restarts.
 func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
-	return (&HiddifyConfigGenerator{StrictProtocolServers: s.strictProtocolServers}).Generate()
+	cfg, err := (&HiddifyConfigGenerator{StrictProtocolServers: s.strictProtocolServers}).Generate()
+	if err != nil {
+		return nil, err
+	}
+	settings, err := oxidns.Load()
+	if err != nil {
+		return nil, fmt.Errorf("OxiDNS settings: %w", err)
+	}
+	if settings.Enabled && settings.UseSingBox {
+		cfg.DNS, err = oxidns.WithSingBoxDNS(cfg.DNS)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return cfg, nil
 }
 
 type SingBoxEditorSnapshot struct {
@@ -178,6 +193,17 @@ func (s *SingBoxService) GetEditorConfig(ctx context.Context) (*SingBoxEditorSna
 		return nil, err
 	}
 	raw["route"] = editable.Route
+	if ox, oxErr := oxidns.Load(); oxErr != nil {
+		return nil, oxErr
+	} else {
+		currentDNS, _ := raw["dns"].(map[string]any)
+		// Replace a stale OxiDNS overlay read from the on-disk runtime
+		// configuration with the original editable DNS from the template.
+		// This also covers an interrupted uninstall on a stopped core.
+		if (ox.Enabled && ox.UseSingBox) || oxidns.HasManagedServer(currentDNS) {
+			raw["dns"] = editable.DNS
+		}
+	}
 	var editorConfig singbox.Config
 	if err := json.Unmarshal(data, &editorConfig); err != nil {
 		return nil, err
@@ -273,6 +299,17 @@ func normalizeSingBoxTemplate(raw string) (string, error) {
 		return "", fmt.Errorf("sing-box settings must be a JSON object")
 	}
 
+	// Runtime-only OxiDNS overlays must never be persisted in an editable
+	// template: after uninstall they would keep pointing to a dead resolver.
+	if data, ok := obj["dns"]; ok {
+		var dns map[string]any
+		if err := json.Unmarshal(data, &dns); err != nil {
+			return "", fmt.Errorf("invalid native DNS settings: %w", err)
+		}
+		if oxidns.HasManagedServer(dns) || dns["final"] == oxidns.Tag {
+			return "", fmt.Errorf("OxiDNS DNS is managed automatically; remove the reserved %q server and final tag from the editable template", oxidns.Tag)
+		}
+	}
 	for key := range obj {
 		if key == "inbounds" || key == "services" {
 			delete(obj, key)

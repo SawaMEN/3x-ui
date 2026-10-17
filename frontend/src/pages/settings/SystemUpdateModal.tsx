@@ -45,6 +45,8 @@ type DependencyKey =
   | 'sudoku'
   | 'pingtunnel'
   | 'trusttunnel'
+  | 'oxidns'
+  | 'dnstt'
   | 'olcrtc';
 
 type DependencyStatus = {
@@ -130,6 +132,8 @@ type ApiMsg<T = unknown> = { success?: boolean; msg?: string; obj?: T };
 const isDependencyInstallable = (dependency: DependencyStatus) =>
   dependency.source === 'standalone' ||
   dependency.key === 'sudoku' ||
+  dependency.key === 'oxidns' ||
+  dependency.key === 'dnstt' ||
   dependency.key === 'pingtunnel' ||
   dependency.key === 'trusttunnel' ||
   dependency.key === 'olcrtc';
@@ -251,7 +255,7 @@ export default function SystemUpdateModal({
   const [olcrtcSettingsOpen, setOlcrtcSettingsOpen] = useState(false);
 
   const loadDependencyUpdates = useCallback(async () => {
-    const [core, sudoku, external, naive, olcrtc] = await Promise.all([
+    const [core, sudoku, external, naive, oxidns, dnstt, olcrtc] = await Promise.all([
       HttpUtil.get('/panel/api/setting/singbox/status') as Promise<
         ApiMsg<{ installed?: boolean; version?: string }>
       >,
@@ -259,6 +263,15 @@ export default function SystemUpdateModal({
       HttpUtil.get('/panel/api/server/externalvpn/status') as Promise<ApiMsg<ExternalVPNStatus>>,
       HttpUtil.get('/panel/api/naiveproxy/status', undefined, { silent: true }) as Promise<
         ApiMsg<ExternalVPNBinaryStatus>
+      >,
+      HttpUtil.get('/panel/api/oxidns/status?check=true', undefined, {
+        silent: true,
+        timeout: 26000,
+      }) as Promise<
+        ApiMsg<ExternalVPNBinaryStatus & { installedVersion?: string; latestVersion?: string }>
+      >,
+      HttpUtil.get('/panel/api/dnstt/status', undefined, { silent: true }) as Promise<
+        ApiMsg<ExternalVPNBinaryStatus & { installedVersion?: string; latestVersion?: string }>
       >,
       HttpUtil.get('/panel/api/olcrtc/status', undefined, { silent: true }) as Promise<
         ApiMsg<OlcRTCStatus>
@@ -303,6 +316,30 @@ export default function SystemUpdateModal({
               : undefined),
       });
     }
+    rows.push({
+      key: 'oxidns',
+      label: 'OxiDNS',
+      source: 'standalone',
+      installed: oxidns.obj?.installed === true,
+      installedVersion: oxidns.obj?.installedVersion || '',
+      availableVersion: oxidns.obj?.latestVersion || '',
+      updateAvailable: oxidns.obj?.updateAvailable === true,
+      supported: oxidns.obj?.supported,
+      unsupportedReason: oxidns.obj?.unsupportedReason,
+      error: oxidns.obj?.error || (oxidns.success ? undefined : oxidns.msg),
+    });
+    rows.push({
+      key: 'dnstt',
+      label: 'DNSTT',
+      source: 'standalone',
+      installed: dnstt.obj?.installed === true,
+      installedVersion: dnstt.obj?.installedVersion || '',
+      availableVersion: dnstt.obj?.latestVersion || '',
+      updateAvailable: dnstt.obj?.updateAvailable === true,
+      supported: dnstt.obj?.supported,
+      unsupportedReason: dnstt.obj?.unsupportedReason,
+      error: dnstt.obj?.error || (dnstt.success ? undefined : dnstt.msg),
+    });
     rows.push({
       key: 'olcrtc',
       label: 'OlcRTC',
@@ -363,6 +400,18 @@ export default function SystemUpdateModal({
 
   const requestDependencyUpdate = useCallback(async (dependency: DependencyStatus) => {
     switch (dependency.key) {
+      case 'dnstt':
+        return (await HttpUtil.post(
+          dependency.installed ? '/panel/api/dnstt/update' : '/panel/api/dnstt/install',
+          undefined,
+          { timeout: 180000 },
+        )) as ApiMsg<unknown>;
+      case 'oxidns':
+        return (await HttpUtil.post(
+          dependency.installed ? '/panel/api/oxidns/update' : '/panel/api/oxidns/install',
+          undefined,
+          { timeout: 180000 },
+        )) as ApiMsg<unknown>;
       case 'olcrtc':
         return (await HttpUtil.post(
           dependency.installed ? '/panel/api/olcrtc/update' : '/panel/api/olcrtc/install',
@@ -396,9 +445,15 @@ export default function SystemUpdateModal({
       messageApi.success(
         dependency.key === 'olcrtc'
           ? 'OlcRTC: операция запущена. Статус будет обновляться автоматически.'
-          : `${dependency.label}: ${t('pages.settings.swap.updateDone')}`,
+          : dependency.key === 'oxidns' && !dependency.installed
+            ? 'OxiDNS установлен. Теперь можно создать собственный DNS.'
+            : dependency.key === 'dnstt' && !dependency.installed
+              ? 'DNSTT установлен. Настройте домен и ключи в разделе DNS.'
+              : `${dependency.label}: ${t('pages.settings.swap.updateDone')}`,
       );
       await loadDependencyUpdates();
+      if (dependency.key === 'oxidns') window.dispatchEvent(new Event('oxidns:changed'));
+      if (dependency.key === 'dnstt') window.dispatchEvent(new Event('dnstt:changed'));
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : String(error));
     } finally {
@@ -412,16 +467,26 @@ export default function SystemUpdateModal({
       const response = (await HttpUtil.post(
         dependency.key === 'olcrtc'
           ? '/panel/api/olcrtc/remove'
-          : `/panel/api/server/components/remove/${dependency.key}`,
+          : dependency.key === 'oxidns'
+            ? '/panel/api/oxidns/remove'
+            : dependency.key === 'dnstt'
+              ? '/panel/api/dnstt/remove'
+              : `/panel/api/server/components/remove/${dependency.key}`,
       )) as ApiMsg<unknown>;
       if (!response?.success)
         throw new Error(response?.msg || `Не удалось удалить ${dependency.label}`);
       messageApi.success(
         dependency.key === 'olcrtc'
           ? 'OlcRTC: удаление запущено. Настройки клиентов сохранятся для повторной установки.'
-          : `${dependency.label}: компонент удалён.`,
+          : dependency.key === 'oxidns'
+            ? 'OxiDNS удалён, собственный DNS отключён, настройки и служебные файлы очищены.'
+            : dependency.key === 'dnstt'
+              ? 'DNSTT остановлен, удалён вместе с ключами и настройками.'
+              : `${dependency.label}: компонент удалён.`,
       );
       await loadDependencyUpdates();
+      if (dependency.key === 'oxidns') window.dispatchEvent(new Event('oxidns:changed'));
+      if (dependency.key === 'dnstt') window.dispatchEvent(new Event('dnstt:changed'));
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : String(error));
     } finally {
@@ -796,9 +861,13 @@ export default function SystemUpdateModal({
                   const action = standalone || dependency;
                   const actionLabel =
                     !action.installed && isDependencyInstallable(action)
-                      ? standalone
-                        ? 'Установить отдельное ядро'
-                        : 'Установить'
+                      ? dependency.key === 'oxidns'
+                        ? 'Установить OxiDNS'
+                        : dependency.key === 'dnstt'
+                          ? 'Установить DNSTT'
+                          : standalone
+                            ? 'Установить отдельное ядро'
+                            : 'Установить'
                       : action.updateAvailable
                         ? t('pages.settings.swap.updateComponent')
                         : t('pages.settings.swap.upToDate');
@@ -848,6 +917,26 @@ export default function SystemUpdateModal({
                           title={action.error}
                           style={{ marginBottom: 10 }}
                         />
+                      )}
+                      {dependency.key === 'oxidns' && (
+                        <Typography.Text
+                          type="secondary"
+                          style={{ display: 'block', marginBottom: 10 }}
+                        >
+                          {dependency.installed
+                            ? 'OxiDNS установлен. Настройте провайдера, sing-box и публичные DNS-протоколы на едином экране.'
+                            : 'Быстрый запуск: откройте sing-box → DNS, установите OxiDNS, выберите провайдера и нажмите «Включить DNS». До установки включение недоступно.'}
+                        </Typography.Text>
+                      )}
+                      {dependency.key === 'dnstt' && (
+                        <Typography.Text
+                          type="secondary"
+                          style={{ display: 'block', marginBottom: 10 }}
+                        >
+                          {dependency.installed
+                            ? 'DNSTT установлен. Нажмите «Настроить DNSTT» для создания ключей, настройки DNS-делегирования и запуска.'
+                            : 'Установите DNSTT здесь. После установки его настройки появятся в sing-box → DNS; после удаления исчезнут.'}
+                        </Typography.Text>
                       )}
                       {dependency.key === 'olcrtc' && (
                         <Typography.Paragraph type="secondary">
@@ -904,6 +993,22 @@ export default function SystemUpdateModal({
                         </Typography.Paragraph>
                       )}
                       <Space wrap>
+                        {(dependency.key === 'oxidns' ||
+                          (dependency.key === 'dnstt' && dependency.installed)) && (
+                          <Button
+                            size="small"
+                            type="primary"
+                            disabled={dependencyBusy !== null || systemUpdateBusy}
+                            href={`${(window.X_UI_BASE_PATH || '/').replace(/\/+$/, '')}/panel/singbox#dns`}
+                            onClick={onClose}
+                          >
+                            {dependency.key === 'dnstt'
+                              ? 'Настроить DNSTT'
+                              : dependency.installed
+                                ? 'Настроить DNS'
+                                : 'Быстрый запуск DNS'}
+                          </Button>
+                        )}
                         {dependency.key === 'olcrtc' && dependency.installed && (
                           <Button
                             size="small"
@@ -960,9 +1065,13 @@ export default function SystemUpdateModal({
                             description={
                               dependency.key === 'olcrtc'
                                 ? 'Служба OlcRTC остановится, бинарники удалятся. Данные клиентов сохранятся.'
-                                : standalone
-                                  ? 'Входящие подключения переключатся на встроенный sing-box.'
-                                  : 'Активные подключения этого протокола необходимо сначала отключить.'
+                                : dependency.key === 'oxidns'
+                                  ? 'Собственный DNS будет отключён. sing-box вернётся к прежнему DNS.'
+                                  : dependency.key === 'dnstt'
+                                    ? 'DNSTT будет остановлен, а ключи и настройки удалены без возможности восстановления.'
+                                    : standalone
+                                      ? 'Входящие подключения переключатся на встроенный sing-box.'
+                                      : 'Активные подключения этого протокола необходимо сначала отключить.'
                             }
                             okText={t('delete')}
                             cancelText={t('cancel')}
