@@ -758,9 +758,11 @@ export default function SystemUpdateModal({
                   const action = standalone || dependency;
                   const actionLabel =
                     !action.installed && isDependencyInstallable(action)
-                      ? standalone
-                        ? 'Установить отдельное ядро'
-                        : 'Установить'
+                      ? dependency.key === 'oxidns'
+                        ? 'Установить OxiDNS'
+                        : standalone
+                          ? 'Установить отдельное ядро'
+                          : 'Установить'
                       : action.updateAvailable
                         ? t('pages.settings.swap.updateComponent')
                         : t('pages.settings.swap.upToDate');
