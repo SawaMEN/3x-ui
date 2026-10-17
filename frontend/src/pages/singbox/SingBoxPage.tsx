@@ -1,6 +1,6 @@
 import OutboundPingButton from './OutboundPingButton';
 import { prepareRouteRule, routePorts, routeRuleSummary } from './route-rule';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
@@ -864,7 +864,9 @@ export default function SingBoxPage() {
       // The backend has already validated and published the applied settings.
       // A follow-up GET immediately reruns expensive config generation.
       setSnapshot((current) => (current ? { ...current, config: next } : current));
-      setConfig(next);
+      // Edits made during an in-flight save must remain unsaved instead of
+      // being overwritten by the response from an earlier revision.
+      setConfig((current) => JSON.stringify(current) === JSON.stringify(config) ? next : current);
       messageApi.success(t('pages.singBox.saved'));
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : String(error));
@@ -1484,9 +1486,7 @@ export default function SingBoxPage() {
               width: 100,
               render: (_: unknown, row: JsonObject) => {
                 const name = asString(row.tag);
-                const broken = singBoxHealthIssues(config, snapshot?.subscriptionTags || []).some(
-                  (issue) => issue.includes('"' + name + '"'),
-                );
+                const broken = healthIssues.some((issue) => issue.includes('"' + name + '"'));
                 return (
                   <Space orientation="vertical">
                     {broken ? <Tag color="error">Проверить</Tag> : <Tag color="success">ОК</Tag>}
@@ -2048,8 +2048,14 @@ export default function SingBoxPage() {
     </Space>
   );
 
-  const healthIssues = singBoxHealthIssues(config, snapshot?.subscriptionTags || []);
-  const dirty = !!snapshot && JSON.stringify(snapshot.config) !== JSON.stringify(config);
+  const healthIssues = useMemo(
+    () => singBoxHealthIssues(config, snapshot?.subscriptionTags || []),
+    [config, snapshot?.subscriptionTags],
+  );
+  const dirty = useMemo(
+    () => !!snapshot && JSON.stringify(snapshot.config) !== JSON.stringify(config),
+    [config, snapshot],
+  );
 
   const sectionBody = (() => {
     switch (activeSection) {
