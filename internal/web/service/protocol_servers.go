@@ -19,10 +19,10 @@ import (
 )
 
 func prepareProtocolServers(cfg *singbox.Config, reserved ...int) error {
-	return prepareProtocolServersWithPolicy(cfg, false, reserved...)
+	return prepareProtocolServersWithPolicy(cfg, "", reserved...)
 }
 
-func prepareProtocolServersWithPolicy(cfg *singbox.Config, strict bool, reserved ...int) error {
+func prepareProtocolServersWithPolicy(cfg *singbox.Config, strict model.Protocol, reserved ...int) error {
 	occupied := map[int]bool{10086: true, 9090: true}
 	for _, port := range reserved {
 		occupied[port] = true
@@ -46,7 +46,7 @@ func prepareProtocolServersWithPolicy(cfg *singbox.Config, strict bool, reserved
 		}
 		tag, _ := inbound["tag"].(string)
 		if reason := cfg.ProtocolServerFallbacks[tag]; reason != "" {
-			if strict {
+			if strict == protocol {
 				return fmt.Errorf("%s", reason)
 			}
 			continue
@@ -66,7 +66,7 @@ func prepareProtocolServersWithPolicy(cfg *singbox.Config, strict bool, reserved
 			err = validateHysteriaUserRoutes(&candidate)
 		}
 		if err != nil {
-			if strict {
+			if strict == protocol {
 				return err
 			}
 			if cfg.ProtocolServerFallbacks == nil {
@@ -123,8 +123,16 @@ func InstallProtocolServer(ctx context.Context, protocol model.Protocol, install
 }
 
 func mutateProtocolServer(ctx context.Context, protocol model.Protocol, install func(context.Context) error, strict bool) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	protocolInstallMu.Lock()
 	defer protocolInstallMu.Unlock()
+	singBoxApplyMu.Lock()
+	defer singBoxApplyMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	path := protocolserver.BinaryPath(protocol)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
@@ -165,14 +173,20 @@ func mutateProtocolServer(ctx context.Context, protocol model.Protocol, install 
 		}
 		return err
 	}
+	previouslyInstalled := protocolserver.Installed(protocol)
 	if err := install(ctx); err != nil {
 		return errors.Join(err, rollback())
 	}
+	if err := ctx.Err(); err != nil {
+		return errors.Join(err, rollback())
+	}
 	nativeCopy := *SelectedNativeCore()
-	nativeCopy.strictProtocolServers = strict
+	if strict && !previouslyInstalled {
+		nativeCopy.strictProtocolServers = protocol
+	} else {
+		nativeCopy.strictProtocolServers = ""
+	}
 	native := &nativeCopy
-	singBoxApplyMu.Lock()
-	defer singBoxApplyMu.Unlock()
 	if !native.IsRunning() {
 		cfg, err := native.GetConfig()
 		if err == nil {
@@ -194,7 +208,7 @@ func mutateProtocolServer(ctx context.Context, protocol model.Protocol, install 
 		}
 		recovery, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		native.strictProtocolServers = false
+		native.strictProtocolServers = ""
 		return errors.Join(err, native.restartLocked(recovery))
 	}
 	return nil

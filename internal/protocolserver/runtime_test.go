@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -379,5 +380,31 @@ func TestOfficialNaiveQUICOnlyDoesNotOccupyTCP(t *testing.T) {
 	_ = listener.Close()
 	if !Running(model.NaiveProxy) {
 		t.Fatal("QUIC-only Naive is not running")
+	}
+}
+
+func TestInstalledSelectionMustBeAppliedEvenWithoutStandalonePlans(t *testing.T) {
+	if !Supported(model.Hysteria, runtime.GOOS, runtime.GOARCH) {
+		t.Skip("unsupported platform")
+	}
+	t.Setenv("XUI_BIN_FOLDER", t.TempDir())
+	t.Cleanup(func() { _ = StopAll() })
+	if err := Start(context.Background(), nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(BinaryPath(model.Hysteria), []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if !Changed() {
+		t.Fatal("installation did not request apply")
+	}
+	if Applied(nil) {
+		t.Fatal("new binary selection was treated as already applied")
+	}
+	if err := Start(context.Background(), nil); err != nil {
+		t.Fatal(err)
+	}
+	if Changed() {
+		t.Fatal("selection keeps requesting redundant applies")
 	}
 }

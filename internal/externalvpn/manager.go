@@ -65,6 +65,10 @@ func directory() string {
 }
 
 func binary(protocol model.Protocol) string {
+	return findBinary(protocol, true)
+}
+
+func findBinary(protocol model.Protocol, managed bool) string {
 	name := string(protocol)
 	if protocol == model.TrustTunnel {
 		name = "trusttunnel_endpoint"
@@ -72,15 +76,36 @@ func binary(protocol model.Protocol) string {
 	if runtime.GOOS == "windows" {
 		name += ".exe"
 	}
-	for _, path := range []string{filepath.Join(config.GetBinFolderPath(), name), "/usr/local/bin/" + name, "/usr/bin/" + name} {
+	target := filepath.Join(config.GetBinFolderPath(), name)
+	candidates := []string{"/usr/local/bin/" + name, "/usr/bin/" + name}
+	if path, err := exec.LookPath(name); err == nil {
+		candidates = append(candidates, path)
+	}
+	if managed {
+		candidates = append([]string{target}, candidates...)
+	}
+	targetAbs, _ := filepath.Abs(target)
+	for _, path := range candidates {
+		pathAbs, _ := filepath.Abs(path)
+		if !managed && pathAbs == targetAbs {
+			continue
+		}
 		if info, err := os.Stat(path); err == nil && !info.IsDir() {
 			return path
 		}
 	}
-	if path, err := exec.LookPath(name); err == nil {
-		return path
+	if managed {
+		return target
 	}
-	return filepath.Join(config.GetBinFolderPath(), name)
+	return ""
+}
+
+// Do not claim removal while a separately installed system binary remains usable.
+func CheckManagedRemoval(protocol model.Protocol) error {
+	if path := findBinary(protocol, false); path != "" {
+		return fmt.Errorf("%s is also installed outside the panel at %s; remove that installation manually first", protocol, path)
+	}
+	return nil
 }
 
 func writePrivate(path string, data []byte) error {

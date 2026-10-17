@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"os"
 	"path/filepath"
@@ -154,5 +155,52 @@ func TestRemoveProtocolComponentStopsStandaloneAndAppliesNativeListener(t *testi
 	}
 	if protocolserver.Running(model.NaiveProxy) || !svc.IsRunning() || !strings.Contains(string(svc.process().AppliedConfig()), `"type": "naive"`) {
 		t.Fatal("removal did not stop standalone and apply native listener")
+	}
+}
+
+func TestRemoveProtocolComponentCancellationPreservesStoppedInstallation(t *testing.T) {
+	setupBulkDB(t)
+	t.Setenv("XUI_BIN_FOLDER", t.TempDir())
+	path := protocolserver.BinaryPath(model.NaiveProxy)
+	if err := os.WriteFile(path, []byte("original"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := RemoveProtocolComponent(ctx, "naiveproxy"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled removal: %v", err)
+	}
+	if data, err := os.ReadFile(path); err != nil || string(data) != "original" {
+		t.Fatalf("cancelled removal changed binary: %v", err)
+	}
+}
+
+func TestRemoveProtocolComponentDoesNotReportSuccessForSystemFallback(t *testing.T) {
+	setupBulkDB(t)
+	dir, outside := t.TempDir(), t.TempDir()
+	t.Setenv("XUI_BIN_FOLDER", dir)
+	t.Setenv("PATH", outside)
+	systemPath := filepath.Join(outside, "pingtunnel")
+	if err := os.WriteFile(systemPath, []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for _, panelCopy := range []bool{false, true} {
+		if panelCopy {
+			if err := os.WriteFile(filepath.Join(dir, "pingtunnel"), []byte("panel"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+		}
+		err := RemoveProtocolComponent(context.Background(), "pingtunnel")
+		if err == nil || !strings.Contains(err.Error(), "outside the panel") {
+			t.Fatalf("system binary removal reported success (panel copy %v): %v", panelCopy, err)
+		}
+		if data, err := os.ReadFile(systemPath); err != nil || !strings.Contains(string(data), "#!/bin/sh") {
+			t.Fatal("modified system installation")
+		}
+		if panelCopy {
+			if _, err := os.Stat(filepath.Join(dir, "pingtunnel")); err != nil {
+				t.Fatal("partially removed panel installation")
+			}
+		}
 	}
 }

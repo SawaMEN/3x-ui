@@ -51,6 +51,11 @@ func RemoveProtocolComponent(ctx context.Context, component string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	if protocol != model.Sudoku {
+		if err := externalvpn.CheckManagedRemoval(protocol); err != nil {
+			return err
+		}
+	}
 	if err := removeComponentFile(path); err != nil {
 		return err
 	}

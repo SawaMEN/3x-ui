@@ -16,7 +16,7 @@ import (
 
 // HiddifyConfigGenerator builds the full server configuration used by previews,
 // candidate validation and runtime publication. It does not write panel rows.
-type HiddifyConfigGenerator struct{ StrictProtocolServers bool }
+type HiddifyConfigGenerator struct{ StrictProtocolServers model.Protocol }
 
 func (g *HiddifyConfigGenerator) Generate() (*singbox.Config, error) {
 	snapshot, err := loadNativeConfigSnapshot()

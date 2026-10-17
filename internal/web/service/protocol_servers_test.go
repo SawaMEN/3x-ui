@@ -224,7 +224,11 @@ func TestProtocolServerUpgradeFallsBackWithoutDroppingPolicy(t *testing.T) {
 			Inbounds: []map[string]any{{"type": "hysteria2", "tag": "hy", "listen_port": 443, "users": []map[string]any{{"name": "alice", "password": "secret"}}, "tls": map[string]any{"certificate_path": "/cert", "key_path": "/key"}}},
 			Route:    map[string]any{"rules": []map[string]any{{"auth_user": []string{"alice"}, "outbound": "direct"}}},
 		}
-		err := prepareProtocolServersWithPolicy(cfg, strict)
+		strictProtocol := model.Protocol("")
+		if strict {
+			strictProtocol = model.Hysteria
+		}
+		err := prepareProtocolServersWithPolicy(cfg, strictProtocol)
 		if strict {
 			if err == nil {
 				t.Fatal("new install accepted incompatible user routing")
@@ -237,5 +241,62 @@ func TestProtocolServerUpgradeFallsBackWithoutDroppingPolicy(t *testing.T) {
 		if len(cfg.ProtocolServers) != 0 || cfg.Inbounds[0]["type"] != "hysteria2" || !strings.Contains(cfg.ProtocolServerFallbacks["hy"], "authenticated user") {
 			t.Fatalf("upgrade did not preserve native routing: %+v", cfg)
 		}
+	}
+}
+
+func TestProtocolServerInstallPreservesOtherProtocolFallback(t *testing.T) {
+	if !protocolserver.Supported(model.NaiveProxy, runtime.GOOS, runtime.GOARCH) {
+		t.Skip("unsupported platform")
+	}
+	svc, _, _ := stage5ProcessFixture(t)
+	inbound := seedHiddifyConfigInbound(t, model.Hysteria, `{}`, `{"network":"tcp","security":"tls","tlsSettings":{"certificates":[{"certificateFile":"/cert","keyFile":"/key"}]}}`)
+	if err := database.GetDB().Model(&model.ClientRecord{}).Where("email = ?", "alice").Update("limit_ip", 1).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(protocolserver.BinaryPath(model.Hysteria), []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Restart(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := InstallProtocolServer(context.Background(), model.NaiveProxy, func(context.Context) error {
+		return os.WriteFile(protocolserver.BinaryPath(model.NaiveProxy), []byte("#!/bin/sh\nexit 0\n"), 0o700)
+	}); err != nil {
+		t.Fatalf("unrelated Hysteria fallback blocked Naive installation: %v", err)
+	}
+	cfg, err := svc.GetConfig()
+	if err != nil || cfg.ProtocolServerFallbacks[inbound.Tag] == "" || !svc.IsRunning() {
+		t.Fatalf("Hysteria fallback was lost: %v", err)
+	}
+}
+
+func TestProtocolServerUpdateKeepsExistingCompatibilityFallback(t *testing.T) {
+	if !protocolserver.Supported(model.Hysteria, runtime.GOOS, runtime.GOARCH) {
+		t.Skip("unsupported platform")
+	}
+	svc, _, _ := stage5ProcessFixture(t)
+	inbound := seedHiddifyConfigInbound(t, model.Hysteria, `{}`, `{"network":"tcp","security":"tls","tlsSettings":{"certificates":[{"certificateFile":"/cert","keyFile":"/key"}]}}`)
+	if err := database.GetDB().Model(&model.ClientRecord{}).Where("email = ?", "alice").Update("limit_ip", 1).Error; err != nil {
+		t.Fatal(err)
+	}
+	path := protocolserver.BinaryPath(model.Hysteria)
+	if err := os.WriteFile(path, []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Restart(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	replacement := []byte("#!/bin/sh\n# updated version\nexit 0\n")
+	if err := InstallProtocolServer(context.Background(), model.Hysteria, func(context.Context) error {
+		return os.WriteFile(path, replacement, 0o700)
+	}); err != nil {
+		t.Fatalf("existing fallback blocked binary update: %v", err)
+	}
+	cfg, err := svc.GetConfig()
+	if err != nil || cfg.ProtocolServerFallbacks[inbound.Tag] == "" || !svc.IsRunning() {
+		t.Fatalf("existing native fallback lost: %v", err)
+	}
+	if data, err := os.ReadFile(path); err != nil || string(data) != string(replacement) {
+		t.Fatalf("updated binary not retained: %v", err)
 	}
 }

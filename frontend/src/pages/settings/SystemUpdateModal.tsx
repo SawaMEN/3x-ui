@@ -320,10 +320,8 @@ export default function SystemUpdateModal({
   const requestDependencyUpdate = useCallback(async (dependency: DependencyStatus) => {
     switch (dependency.key) {
       case 'naiveproxy':
-        if (dependency.source !== 'standalone') throw new Error('Выберите отдельную установку.');
         return (await HttpUtil.post('/panel/api/naiveproxy/update')) as ApiMsg<unknown>;
       case 'hysteria2':
-        if (dependency.source !== 'standalone') throw new Error('Выберите отдельную установку.');
         return (await HttpUtil.post(
           '/panel/api/server/externalvpn/update/hysteria2',
         )) as ApiMsg<unknown>;

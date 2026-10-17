@@ -163,3 +163,13 @@ it('does not offer removal for missing optional binaries', async () => {
   await openComponents();
   expect(screen.queryByRole('button', { name: /^Удалить / })).toBeNull();
 });
+
+it('updates an installed Hysteria server while incompatible inbounds use sing-box', async () => {
+  installedHysteria = true;
+  hysteriaFallback = 'Cannot preserve per-user routing';
+  await openComponents();
+  fireEvent.click(card('Hysteria2').getByRole('button', { name: 'Update' }));
+  await waitFor(() =>
+    expect(HttpUtil.post).toHaveBeenCalledWith('/panel/api/server/externalvpn/update/hysteria2'),
+  );
+});

@@ -78,7 +78,7 @@ func Changed() bool {
 func Applied(plans []Plan) bool {
 	state.Lock()
 	defer state.Unlock()
-	if len(plans) != len(state.processes) {
+	if state.selected != selection() || len(plans) != len(state.processes) {
 		return false
 	}
 	for _, plan := range plans {

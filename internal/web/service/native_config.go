@@ -356,7 +356,7 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot, ed
 			}
 			if (inbound.Protocol == model.NaiveProxy || inbound.Protocol == model.Hysteria) && protocolserver.Installed(inbound.Protocol) && client.LimitIP > 0 {
 				reason := fmt.Sprintf("standalone %s cannot preserve client source-IP limits; use sing-box", inbound.Protocol)
-				if s.strictProtocolServers {
+				if s.strictProtocolServers == inbound.Protocol {
 					return nil, fmt.Errorf("%s", reason)
 				}
 				if cfg.ProtocolServerFallbacks == nil {

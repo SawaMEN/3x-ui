@@ -42,7 +42,7 @@ func SetSingBoxDependencies(inbound *InboundService, settings *SettingService) {
 }
 
 type SingBoxService struct {
-	strictProtocolServers bool
+	strictProtocolServers model.Protocol
 	gateway               *GatewayNetworkService
 }
 
