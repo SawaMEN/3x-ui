@@ -329,6 +329,40 @@ core_migration_prune_snapshots
 [[ ! -e "$cm_backup" ]]
 ''')
 
+    def test_abandoned_release_staging_pruned_only_under_lock(self):
+        with tempfile.TemporaryDirectory() as raw:
+            base = Path(raw)
+            old = base / ".x-ui-release.ABC123"
+            recent = base / ".x-ui-release.NEW123"
+            backup = base / "x-ui-upgrade.REC123"
+            foreign = base / ".x-ui-release-not-ours"
+            for folder in (old, recent, backup, foreign):
+                folder.mkdir()
+                (folder / "payload").write_text("keep")
+            # Staging older than an hour has no active transaction once we
+            # have the upgrade lock. Recovery copies must always survive.
+            old_time = (base / "payload_timestamp")
+            old_time.write_text("reference")
+            timestamp = old.stat().st_mtime - 7200
+            os.utime(old, (timestamp, timestamp))
+            (base / ".x-ui-release.SYM123").symlink_to(old, target_is_directory=True)
+            self.run_script(base, r'''
+xui_folder="$TEST_ROOT/x-ui"
+# Without an upgrade lock even abandoned staging is not eligible.
+core_migration_prune_stale_stages
+[[ -d "$TEST_ROOT/.x-ui-release.ABC123" ]]
+exec {cm_lock}>"$TEST_ROOT/.x-ui-upgrade.lock"
+flock -n "$cm_lock"
+core_migration_prune_stale_stages
+[[ ! -e "$TEST_ROOT/.x-ui-release.ABC123" ]]
+[[ -d "$TEST_ROOT/.x-ui-release.NEW123" ]]
+[[ -d "$TEST_ROOT/x-ui-upgrade.REC123" ]]
+[[ -d "$TEST_ROOT/.x-ui-release-not-ours" ]]
+[[ -L "$TEST_ROOT/.x-ui-release.SYM123" ]]
+flock -u "$cm_lock"
+exec {cm_lock}>&-
+''')
+
     def test_low_space_rejects_release_before_staging_or_service_stop(self):
         with tempfile.TemporaryDirectory() as raw:
             base = Path(raw)
