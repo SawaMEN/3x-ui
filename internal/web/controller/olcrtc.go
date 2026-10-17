@@ -29,12 +29,14 @@ func NewOlcRTCController(g *gin.RouterGroup) {
   obj,err:=olcrtc.CreateClient(c.Request.Context(),input)
   jsonObj(c,obj,err)
  })
- group.PUT("/clients/:id",func(c *gin.Context){
+ updateClient:=func(c *gin.Context){
   var input olcrtc.ClientInput
   if err:=c.ShouldBindJSON(&input);err!=nil {jsonObj(c,nil,err);return}
   obj,err:=olcrtc.UpdateClient(c.Request.Context(),c.Param("id"),input)
   jsonObj(c,obj,err)
- })
+ }
+ group.PUT("/clients/:id",updateClient)
+ group.POST("/clients/:id/update",updateClient)
  group.POST("/clients/:id/delete",func(c *gin.Context){
   err:=olcrtc.DeleteClient(c.Request.Context(),c.Param("id"))
   jsonObj(c,gin.H{"removed":err==nil},err)
