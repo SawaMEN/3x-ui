@@ -348,3 +348,61 @@ func TestManualBalancerCheckSelectsMeasuredBestWithinTolerance(t *testing.T) {
 		t.Fatal(saved, err)
 	}
 }
+
+func TestSubscriptionMetadataEditKeepsRunningProbeState(t *testing.T) {
+	sub, _ := setupTimedBalancer(t)
+	const subscriptionURL = "https://1.1.1.1/subscription"
+	if err := database.GetDB().Model(sub).Updates(map[string]any{
+		"url": subscriptionURL,
+		"balance_mode": "latency",
+		"tolerance": 50,
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	svc := &OutboundSubscriptionService{}
+	before, err := svc.Get(sub.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy := &BalanceOptions{Enabled: true, Mode: "latency", Interval: 3600, Tolerance: 50, SwitchInterval: 900, HealthInterval: 30}
+	if err := svc.Update(sub.Id, "renamed", subscriptionURL, "stable-", "", true, 600, false, true, false, policy); err != nil {
+		t.Fatal(err)
+	}
+	after, err := svc.Get(sub.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.SelectedTag != before.SelectedTag || after.AppliedTag != before.AppliedTag ||
+		after.LastProbe != before.LastProbe || after.LastHealth != before.LastHealth ||
+		after.LastSwitch != before.LastSwitch || after.ProbeResults != before.ProbeResults {
+		t.Fatalf("metadata update discarded probe/selection state: before=%+v after=%+v", before, after)
+	}
+
+	policy.HealthInterval = 60
+	if err := svc.Update(sub.Id, "renamed", subscriptionURL, "stable-", "", true, 600, false, true, false, policy); err != nil {
+		t.Fatal(err)
+	}
+	after, _ = svc.Get(sub.Id)
+	if after.LastHealth != 0 || after.LastProbe != before.LastProbe ||
+		after.SelectedTag != before.SelectedTag || after.ProbeResults != before.ProbeResults {
+		t.Fatalf("health interval change must reset only health schedule: %+v", after)
+	}
+}
+
+func TestSubscriptionRankingPolicyResetDoesNotDiscardSelectedRoute(t *testing.T) {
+	sub, _ := setupTimedBalancer(t)
+	const subscriptionURL = "https://1.1.1.1/subscription"
+	if err := database.GetDB().Model(sub).Update("url", subscriptionURL).Error; err != nil {
+		t.Fatal(err)
+	}
+	policy := &BalanceOptions{Enabled: true, Mode: "speed", URL: defaultAutomaticSpeedURL,
+		Interval: 1800, Tolerance: 50, SwitchInterval: 900, HealthInterval: 30}
+	if err := (&OutboundSubscriptionService{}).Update(sub.Id, "speed", subscriptionURL, "stable-", "", true, 600, false, true, false, policy); err != nil {
+		t.Fatal(err)
+	}
+	after, _ := (&OutboundSubscriptionService{}).Get(sub.Id)
+	if after.SelectedTag != sub.SelectedTag || after.LastProbe != 0 || after.LastHealth != 0 ||
+		after.ProbeResults != "" || after.LastSwitch != sub.LastSwitch {
+		t.Fatalf("ranking frequency update lost route or retained stale rankings: %+v", after)
+	}
+}
