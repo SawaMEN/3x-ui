@@ -158,4 +158,65 @@ describe('gateway settings in sing-box', () => {
       ),
     );
   });
+  it('ignores an outdated preflight result after the LAN configuration changes', async () => {
+    vi.mocked(HttpUtil.get).mockImplementation(async (url) => ({
+      success: true,
+      msg: '',
+      obj: url.endsWith('/interfaces')
+        ? {
+            interfaces: [
+              { name: 'br-lan', defaultRoute: false, addresses: [{ ip: '192.168.10.1', prefix: 24, private: true }] },
+              { name: 'eth0', defaultRoute: true, addresses: [{ ip: '203.0.113.1', prefix: 24, private: false }] },
+            ],
+            defaultWAN: 'eth0',
+            suggested: network,
+            note: 'Автоматическая настройка',
+          }
+        : status(),
+    }));
+
+    let releaseFirst: ((value: { success: boolean; obj: { ready: boolean; problems: string[]; notes: string[] } }) => void) | undefined;
+    let checks = 0;
+    vi.mocked(HttpUtil.post).mockImplementation(async (url) => {
+      if (!url.endsWith('/preflight')) return { success: true, obj: status(true) };
+      checks += 1;
+      if (checks === 1) {
+        return new Promise((resolve) => {
+          releaseFirst = resolve;
+        });
+      }
+      return { success: true, obj: { ready: true, problems: [], notes: [] } };
+    });
+
+    render(<GatewayModeControl />);
+    await waitFor(() => expect(checks).toBe(1), { timeout: 5000 });
+    fireEvent.click(screen.getByText('Параметры сети'));
+    fireEvent.change(await screen.findByPlaceholderText('192.168.50.1'), {
+      target: { value: '192.168.10.2' },
+    });
+    await waitFor(() => {
+      expect(checks).toBe(2);
+      expect(screen.getByText('Готов к включению')).toBeTruthy();
+    }, { timeout: 5000 });
+
+    releaseFirst?.({ success: true, obj: { ready: false, problems: ['Устаревшая проверка'], notes: [] } });
+    await waitFor(() => {
+      expect(screen.getByText('Готов к включению')).toBeTruthy();
+      expect(screen.queryByText('Устаревшая проверка')).toBeNull();
+    });
+  });
+
+  it('does not report an offline core as a working gateway', async () => {
+    vi.mocked(HttpUtil.get).mockImplementation(async (url) => ({
+      success: true,
+      msg: '',
+      obj: url.endsWith('/interfaces')
+        ? { interfaces: [], defaultWAN: 'eth0', note: 'Нет отдельного LAN' }
+        : { ...status(true), coreRunning: false, canEnable: false },
+    }));
+    render(<GatewayModeControl />);
+    expect(await screen.findByText('Требует внимания')).toBeTruthy();
+    expect(screen.queryByText('Работает')).toBeNull();
+  });
+
 });
