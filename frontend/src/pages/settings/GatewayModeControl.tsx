@@ -720,7 +720,7 @@ export default function GatewayModeControl() {
                     disabled={locked}
                     onClick={() => void discover()}
                   >
-                    Найти интерфейсы
+                    Обновить список сетей
                   </Button>
                   {discovery?.suggested && !networkConfigured && (
                     <Button
@@ -739,7 +739,7 @@ export default function GatewayModeControl() {
                     disabled={!networkInputValid || busy}
                     onClick={() => void runPreflight()}
                   >
-                    Проверить
+                    Проверить сеть
                   </Button>
                 </div>
               </Space>
