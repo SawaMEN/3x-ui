@@ -68,9 +68,3 @@ jobs:
       - name: Validate DNSTT code formatting
         working-directory: frontend
         run: npx oxfmt --check src/pages/singbox/DNSTTSettings.tsx src/test/dnstt-settings.test.tsx
-      - name: Capture canonical formatting
-        if: always()
-        working-directory: frontend
-        run: |
-          npx oxfmt src/pages/singbox/DNSTTSettings.tsx src/test/dnstt-settings.test.tsx
-          node -e 'const fs=require("fs");for(const p of process.argv.slice(1)) console.log("DNSTT_FMT:"+p+":"+fs.readFileSync(p).toString("base64"))' src/pages/singbox/DNSTTSettings.tsx src/test/dnstt-settings.test.tsx

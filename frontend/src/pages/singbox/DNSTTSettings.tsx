@@ -168,9 +168,10 @@ export default function DNSTTSettings() {
   // Client resolvers are independent from the DNS listener on the VPS.
   // Reject whitespace/shell characters so the copyable command cannot
   // accidentally become a different shell command.
-  const resolverValid = mode === 'doh'
-    ? /^https:\/\/[a-zA-Z0-9.-]+(?::\d{1,5})?\/[a-zA-Z0-9_./%~-]+$/.test(resolver)
-    : /^(?:[a-zA-Z0-9.-]+|\[[0-9a-fA-F:]+\]):\d{1,5}$/.test(resolver);
+  const resolverValid =
+    mode === 'doh'
+      ? /^https:\/\/[a-zA-Z0-9.-]+(?::\d{1,5})?\/[a-zA-Z0-9_./%~-]+$/.test(resolver)
+      : /^(?:[a-zA-Z0-9.-]+|\[[0-9a-fA-F:]+\]):\d{1,5}$/.test(resolver);
   const command = [
     'dnstt-client',
     mode === 'doh' ? '-doh' : mode === 'dot' ? '-dot' : '-udp',
@@ -347,16 +348,23 @@ export default function DNSTTSettings() {
                   <Alert
                     type={delegation.ready ? 'success' : 'warning'}
                     showIcon
-                    title={delegation.ready ? 'DNS-делегирование найдено' : 'DNS-делегирование пока не готово'}
+                    title={
+                      delegation.ready
+                        ? 'DNS-делегирование найдено'
+                        : 'DNS-делегирование пока не готово'
+                    }
                     description={
                       <Space orientation="vertical" size={3}>
                         <Typography.Text>{delegation.details}</Typography.Text>
                         <Typography.Text code>{delegation.nameServer}</Typography.Text>
                         {delegation.addresses.length > 0 && (
-                          <Typography.Text>Адреса NS: {delegation.addresses.join(', ')}</Typography.Text>
+                          <Typography.Text>
+                            Адреса NS: {delegation.addresses.join(', ')}
+                          </Typography.Text>
                         )}
                         <Typography.Text type="secondary">
-                          Проверка NS/A-записей не подтверждает доступность входящего UDP/53 или работу туннеля у оператора.
+                          Проверка NS/A-записей не подтверждает доступность входящего UDP/53 или
+                          работу туннеля у оператора.
                         </Typography.Text>
                       </Space>
                     }
@@ -435,12 +443,15 @@ export default function DNSTTSettings() {
                     aria-label="DNS-резолвер клиента"
                     value={resolver}
                     status={!resolverValid ? 'error' : undefined}
-                    placeholder={mode === 'doh' ? 'https://cloudflare-dns.com/dns-query' : '1.1.1.1:853'}
+                    placeholder={
+                      mode === 'doh' ? 'https://cloudflare-dns.com/dns-query' : '1.1.1.1:853'
+                    }
                     onChange={(event) => setResolver(event.target.value.trim())}
                   />
                   {!resolverValid && (
                     <Typography.Text type="danger">
-                      Проверьте адрес DNS-резолвера клиента. Для DoH нужен HTTPS URL, для DoT/UDP — адрес:порт.
+                      Проверьте адрес DNS-резолвера клиента. Для DoH нужен HTTPS URL, для DoT/UDP —
+                      адрес:порт.
                     </Typography.Text>
                   )}
                   <Space>
@@ -453,7 +464,11 @@ export default function DNSTTSettings() {
                       onChange={(v) => setClientPort(v ?? 7000)}
                     />
                   </Space>
-                  <Typography.Text code copyable={resolverValid} style={{ overflowWrap: 'anywhere' }}>
+                  <Typography.Text
+                    code
+                    copyable={resolverValid}
+                    style={{ overflowWrap: 'anywhere' }}
+                  >
                     {command}
                   </Typography.Text>
                   <Typography.Text type="secondary">
