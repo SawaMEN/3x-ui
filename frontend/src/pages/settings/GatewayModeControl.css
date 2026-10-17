@@ -1,103 +1,177 @@
+/* Shared visual language with the sing-box editor. */
 .gateway-control {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   min-width: 0;
 }
 
+.gateway-control .gateway-main-card,
+.gateway-control .gateway-settings-groups {
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 12px;
+  background: var(--ant-color-bg-container);
+  box-shadow: none;
+}
+
+.gateway-control .gateway-main-card .ant-card-body {
+  padding: 20px;
+}
+
 .gateway-control .gateway-heading {
-  margin-bottom: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 18px;
 }
 
-.gateway-control .gateway-card {
-  border-color: var(--ant-color-border-secondary);
+.gateway-control .gateway-heading .ant-tag {
+  margin: 2px 0 0;
+  white-space: nowrap;
 }
 
-.gateway-control .gateway-card .ant-card-head-title {
-  font-size: 15px;
-  font-weight: 650;
+.gateway-control .gateway-important-alert {
+  margin-bottom: 12px;
 }
 
-.gateway-control .gateway-full-width {
+.gateway-control .gateway-network-overview {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.gateway-control .gateway-overview-line {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: var(--ant-color-bg-layout);
+}
+
+.gateway-control .gateway-overview-label {
+  font-size: 12px;
+  color: var(--ant-color-text-secondary);
+}
+
+.gateway-control .gateway-overview-line strong {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+  color: var(--ant-color-text);
+}
+
+.gateway-control .gateway-auto-summary {
+  color: var(--ant-color-text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.gateway-control .gateway-readiness {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--ant-color-success-text, var(--ant-color-text-secondary));
+  font-size: 13px;
+}
+
+.gateway-control .gateway-primary-actions,
+.gateway-control .gateway-secondary-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.gateway-control .gateway-primary-actions {
+  margin-top: 18px;
+}
+
+.gateway-control .gateway-full-width,
+.gateway-control .gateway-fields {
   width: 100%;
 }
 
 .gateway-control .singbox-field-label {
   display: block;
-  margin-bottom: 6px;
   font-size: 12px;
   color: var(--ant-color-text-secondary);
+  margin-bottom: 6px;
 }
 
-.gateway-control .gateway-discovery-note {
-  margin-bottom: 14px;
+.gateway-control .gateway-settings-groups .ant-collapse-header {
+  font-weight: 600;
+}
+
+.gateway-control .gateway-settings-groups .ant-collapse-content-box {
+  padding: 16px;
 }
 
 .gateway-control .gateway-hint {
-  margin: 12px 0 0;
   color: var(--ant-color-text-secondary);
   font-size: 12px;
   line-height: 1.5;
 }
 
-.gateway-control .gateway-inline-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  align-items: center;
-  margin-top: 16px;
-}
-
 .gateway-control .gateway-check-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(185px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
   gap: 8px;
 }
 
 .gateway-control .gateway-check {
   display: flex;
-  align-items: center;
   gap: 8px;
-  min-width: 0;
+  align-items: center;
   padding: 10px 12px;
   border: 1px solid var(--ant-color-border-secondary);
-  border-radius: 10px;
+  border-radius: 9px;
   font-size: 13px;
 }
 
 .gateway-control .gateway-check .ant-tag {
-  flex: none;
   margin-inline-end: 0;
 }
 
 .gateway-control .gateway-preflight-list {
   margin: 0;
-  padding-left: 18px;
+  padding-inline-start: 18px;
+}
+
+@media (max-width: 760px) {
+  .gateway-control .gateway-network-overview {
+    grid-template-columns: 1fr;
+  }
+
+  .gateway-control .gateway-overview-line {
+    flex-direction: row;
+    justify-content: space-between;
+    gap: 14px;
+  }
 }
 
 @media (max-width: 640px) {
-  .gateway-control .gateway-card .ant-card-body {
+  .gateway-control .gateway-main-card .ant-card-body,
+  .gateway-control .gateway-settings-groups .ant-collapse-content-box {
     padding: 14px;
   }
 
-  .gateway-control .gateway-inline-actions > .ant-btn {
+  .gateway-control .gateway-heading {
+    flex-wrap: wrap;
+  }
+
+  .gateway-control .gateway-overview-line {
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .gateway-control .gateway-primary-actions > .ant-btn,
+  .gateway-control .gateway-primary-actions > .ant-popconfirm,
+  .gateway-control .gateway-secondary-actions > .ant-btn {
     flex: 1 1 auto;
   }
-}
-
-.gateway-control .gateway-status-summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.gateway-control .gateway-details {
-  border: 1px solid var(--ant-color-border-secondary);
-  border-radius: 10px;
-  background: transparent;
-}
-
-.gateway-control .gateway-details .ant-collapse-header {
-  font-weight: 550;
 }
