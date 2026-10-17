@@ -111,7 +111,7 @@ func StatusNow(ctx context.Context) (Status,error) {
 		if len(k)==64 { if _,e:=hex.DecodeString(k);e==nil {s.PublicKey=k} }
 	}
 	if c.Domain!="" {s.NameServer="ns."+strings.Join(strings.Split(c.Domain,".")[1:],".")}
-	if ok && c.Enabled {s.Running=exec.CommandContext(ctx,"systemctl","is-active","--quiet",unitName).Run()==nil}
+	if ok {s.Running=exec.CommandContext(ctx,"systemctl","is-active","--quiet",unitName).Run()==nil}
 	return s,nil
 }
 func fileWrite(path string,b []byte,mode os.FileMode) error {
@@ -273,12 +273,15 @@ func Upgrade(ctx context.Context)error{
 func Remove(ctx context.Context)error{
 	mu.Lock();defer mu.Unlock()
 	if ok,reason:=supported();!ok{return errors.New(reason)}
-	if info,err:=os.Stat(unitPath);err==nil && info.Mode().IsRegular() {
-		if serviceActive(ctx) {
-			if err:=systemctl(ctx,"stop",unitName);err!=nil{return err}
-		}
+	if _,err:=os.Stat(unitPath);err!=nil && !errors.Is(err,os.ErrNotExist){return err}
+	// systemd may still hold a unit in memory after an interrupted removal.
+	if serviceActive(ctx) {
+		if err:=systemctl(ctx,"stop",unitName);err!=nil{return err}
+	}
+	if _,err:=os.Stat(unitPath);err==nil ||
+		exec.CommandContext(ctx,"systemctl","is-enabled","--quiet",unitName).Run()==nil {
 		if err:=systemctl(ctx,"disable",unitName);err!=nil{return err}
-	} else if err!=nil && !errors.Is(err,os.ErrNotExist){return err}
+	}
 	if err:=os.Remove(unitPath);err!=nil&&!errors.Is(err,os.ErrNotExist){return err}
 	if err:=systemctl(ctx,"daemon-reload");err!=nil{return err}
 	return os.RemoveAll(Root)
