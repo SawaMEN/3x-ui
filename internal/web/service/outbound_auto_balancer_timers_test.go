@@ -408,3 +408,35 @@ func TestSubscriptionRankingPolicyResetDoesNotDiscardSelectedRoute(t *testing.T)
 		t.Fatalf("ranking frequency update lost route or retained stale rankings: %+v", after)
 	}
 }
+
+func TestSubscriptionSourceEditSchedulesRefreshWithoutDroppingNodes(t *testing.T) {
+	sub, _ := setupTimedBalancer(t)
+	const oldURL = "https://1.1.1.1/old"
+	const newURL = "https://1.1.1.1/new"
+	const previousUpdate int64 = 1800000000
+	if err := database.GetDB().Model(sub).Updates(map[string]any{
+		"url": oldURL, "tag_prefix": "stable-", "last_updated": previousUpdate,
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	svc := &OutboundSubscriptionService{}
+	policy := &BalanceOptions{Enabled: true, Mode: "speed", Interval: 3600, SwitchInterval: 900, HealthInterval: 30}
+	if err := svc.Update(sub.Id, "new remark", oldURL, "stable-", "", true, 600, false, true, false, policy); err != nil {
+		t.Fatal(err)
+	}
+	unchanged, err := svc.Get(sub.Id)
+	if err != nil || unchanged.LastUpdated != previousUpdate {
+		t.Fatalf("metadata update scheduled an unnecessary download: %+v, %v", unchanged, err)
+	}
+	if err := svc.Update(sub.Id, "new remark", newURL, "stable-", "", true, 600, false, true, false, policy); err != nil {
+		t.Fatal(err)
+	}
+	changed, err := svc.Get(sub.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed.LastUpdated != 0 || changed.LastFetchedOutbounds != sub.LastFetchedOutbounds ||
+		changed.SelectedTag != sub.SelectedTag {
+		t.Fatalf("source edit discarded the old working route before refresh: %+v", changed)
+	}
+}
