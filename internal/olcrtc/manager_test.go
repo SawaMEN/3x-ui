@@ -1,6 +1,7 @@
 package olcrtc
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -113,5 +114,52 @@ func TestNormalizeQuotaValidation(t *testing.T) {
 	}
 	if err := normalize(&valid); err != nil {
 		t.Fatalf("valid quota rejected: %v", err)
+	}
+}
+
+func TestDecodeLiveRedactsSecrets(t *testing.T) {
+	raw := []byte(`{
+		"running_count": 1,
+		"peer_count": 2,
+		"clients": [{
+			"client_id": "alice",
+			"locations": [{
+				"name": "Main",
+				"key": "highly-sensitive-secret",
+				"uri": "olcrtc://private-connection",
+				"room_id": "private-room",
+				"proxy": {"pass": "private-password"},
+				"running": true,
+				"runtime": {"status": "running", "peer_count": 2}
+			}, {
+				"running": false,
+				"runtime": {"status": "stopped"}
+			}]
+		}]
+	}`)
+	result, err := decodeLive(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.PeerCount != 2 || result.RunningCount != 1 || len(result.Clients) != 1 {
+		t.Fatalf("unexpected aggregate state: %+v", result)
+	}
+	c := result.Clients[0]
+	if !c.Running || c.FailedCount != 1 || c.LocationCount != 2 || c.PeerCount != 2 {
+		t.Fatalf("unexpected client summary: %+v", c)
+	}
+	response, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, secret := range []string{"highly-sensitive-secret", "private-room", "private-password", "private-connection"} {
+		if strings.Contains(string(response), secret) {
+			t.Fatalf("sensitive data leaked in live status: %s", secret)
+		}
+	}
+}
+func TestDecodeLiveInvalidJSON(t *testing.T) {
+	if _, err := decodeLive([]byte("{")); err == nil {
+		t.Fatal("invalid JSON must be rejected")
 	}
 }
