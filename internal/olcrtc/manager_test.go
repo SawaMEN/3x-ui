@@ -76,3 +76,20 @@ func TestClientLink(t *testing.T) {
 		t.Fatalf("got %q, want %q", link, expected)
 	}
 }
+
+func TestClientLinkWithPayload(t *testing.T) {
+	client := Client{ID: "test"}
+	var location Location
+	location.Name = "Office"
+	location.Carrier = "wbstream"
+	location.Transport.Type = "vp8channel"
+	location.Transport.Payload = map[string]string{"vp8-batch": "4", "vp8-fps": "30"}
+	location.Endpoint.RoomID = "room-id"
+	location.Endpoint.Key = strings.Repeat("f", 64)
+	client.Locations = []Location{location}
+	got := ClientLink(client)
+	expected := "olcrtc://wbstream?vp8channel<vp8-batch=4&vp8-fps=30>@room-id#" + strings.Repeat("f", 64) + "$Office"
+	if got != expected {
+		t.Fatalf("got %q, want %q", got, expected)
+	}
+}
