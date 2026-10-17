@@ -22,6 +22,8 @@ import (
 	"github.com/pelletier/go-toml/v2"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/mtproto"
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
 
 var telemtLatestCache struct {
@@ -858,8 +860,26 @@ func (TelemtService) Apply(action string) error {
 		}
 		return nil
 	case "remove":
-		// Active MTProto inbounds use the same official binary as sidecars.
-		// Refuse removal while any panel-managed inbound configuration exists.
+		// The single MTProto protocol runs through Telemt sidecars. A disabled
+		// inbound still references this engine and may be re-enabled later, so
+		// prevent uninstall even when there are no generated TOML files.
+		db := database.GetDB()
+		if db == nil {
+			return errors.New("telemt: database unavailable; refusing unsafe removal")
+		}
+		var inboundCount int64
+		if err := db.Model(&model.Inbound{}).
+			Where("protocol = ? AND node_id IS NULL", model.MTProto).
+			Count(&inboundCount).Error; err != nil {
+			return fmt.Errorf("telemt: check MTProto inbound dependencies: %w", err)
+		}
+		if inboundCount > 0 {
+			return fmt.Errorf("telemt: %d MTProto inbound(s) still use Telemt; delete them before uninstalling", inboundCount)
+		}
+		if mtproto.GetManager().HasRunning() {
+			return errors.New("telemt: managed MTProto processes are still running; refusing removal")
+		}
+		// Preserve files/configuration; only uninstall the binary when unused.
 		configs, err := filepath.Glob(filepath.Join(filepath.Dir(telemtBinaryPath), "mtproto", "telemt-*.toml"))
 		if err != nil {
 			return err
