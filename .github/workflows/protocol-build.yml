@@ -27,5 +27,8 @@ jobs:
       - name: Check frontend types and build
         working-directory: frontend
         run: npm run typecheck && npm run build:ci
-      - name: Build panel without running tests
+      - name: Build panel
         run: go build -p 12 ./...
+      - name: Gateway discovery regression tests
+        run: go test -p 4 ./internal/web/service -run '^TestGateway(DefaultRouteInterface|DiscoveryFiltersAddresses|SuggestionsAreConservative)
+ -count=1
