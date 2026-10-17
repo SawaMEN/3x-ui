@@ -78,6 +78,19 @@ type ExternalVPNStatus = {
   trusttunnel?: ExternalVPNBinaryStatus;
 };
 
+type OlcRTCStatus = {
+  installed?: boolean;
+  installedVersion?: string;
+  availableVersion?: string;
+  updateAvailable?: boolean;
+  busy?: boolean;
+  operation?: string;
+  running?: boolean;
+  supported?: boolean;
+  unsupportedReason?: string;
+  error?: string;
+};
+
 type SystemUpdateStatus = {
   distribution: string;
   version: string;
@@ -242,7 +255,7 @@ export default function SystemUpdateModal({
         ApiMsg<ExternalVPNBinaryStatus>
       >,
       HttpUtil.get('/panel/api/olcrtc/status', undefined, { silent: true }) as Promise<
-        ApiMsg<ExternalVPNBinaryStatus & { busy?: boolean; operation?: string; running?: boolean }>
+        ApiMsg<OlcRTCStatus>
       >,
     ]);
     const bundled = ['naiveproxy', 'hysteria2'].map((key) => ({
