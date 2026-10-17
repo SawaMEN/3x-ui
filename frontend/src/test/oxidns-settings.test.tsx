@@ -35,7 +35,7 @@ beforeEach(() => {
 
 async function openInstalled() {
   render(<OxiDNSSettings />);
-  await screen.findByRole('button', { name: 'Создать и включить DNS' });
+  await screen.findByText('1. Выберите DNS-провайдера');
 }
 
 it('hides the DNS wizard when OxiDNS has been removed', async () => {
@@ -51,12 +51,14 @@ it('offers one-click local DNS without domain or HTTPS settings', async () => {
   expect(screen.queryByRole('textbox', { name: 'Домен для DoH' })).toBeNull();
   expect(screen.queryByRole('spinbutton', { name: 'HTTPS-порт DoH' })).toBeNull();
 
-  fireEvent.click(screen.getByRole('button', { name: 'Создать и включить DNS' }));
-  await waitFor(() => expect(HttpUtil.post).toHaveBeenCalledWith(
-    '/panel/api/oxidns/setup',
-    { domain: '', doh: false, port: 8443, upstream: 'quad9', useSingBox: true },
-    { silent: true, timeout: 180000 },
-  ));
+  fireEvent.click(screen.getByRole('button', { name: /Создать и включить DNS/ }));
+  await waitFor(() =>
+    expect(HttpUtil.post).toHaveBeenCalledWith(
+      '/panel/api/oxidns/setup',
+      { domain: '', doh: false, port: 8443, upstream: 'quad9', useSingBox: true },
+      { silent: true, timeout: 180000 },
+    ),
+  );
   await screen.findByText('DNS проверен и работает');
   expect(screen.getByText('127.0.0.1:15353')).toBeTruthy();
 });
@@ -66,20 +68,26 @@ it('requires a domain only when public DoH is enabled', async () => {
   fireEvent.click(screen.getByRole('switch', { name: 'Включить публичный DoH' }));
   expect(screen.getByRole('textbox', { name: 'Домен для DoH' })).toBeTruthy();
   expect(screen.getByRole('spinbutton', { name: 'HTTPS-порт DoH' })).toBeTruthy();
-  expect((screen.getByRole('button', { name: 'Создать и включить DNS' }) as HTMLButtonElement).disabled).toBe(true);
+  expect(
+    (screen.getByRole('button', { name: /Создать и включить DNS/ }) as HTMLButtonElement).disabled,
+  ).toBe(true);
   expect(HttpUtil.post).not.toHaveBeenCalled();
 
   fireEvent.change(screen.getByRole('textbox', { name: 'Домен для DoH' }), {
     target: { value: 'dns.example.com' },
   });
-  expect((screen.getByRole('button', { name: 'Создать и включить DNS' }) as HTMLButtonElement).disabled).toBe(false);
+  expect(
+    (screen.getByRole('button', { name: /Создать и включить DNS/ }) as HTMLButtonElement).disabled,
+  ).toBe(false);
 });
 
 it('warns when the resolver has no consumers', async () => {
   await openInstalled();
   fireEvent.click(screen.getByRole('switch', { name: 'Использовать OxiDNS в sing-box' }));
   expect(screen.getByText('DNS пока не подключён ни к одному клиенту')).toBeTruthy();
-  expect((screen.getByRole('button', { name: 'Создать и включить DNS' }) as HTMLButtonElement).disabled).toBe(true);
+  expect(
+    (screen.getByRole('button', { name: /Создать и включить DNS/ }) as HTMLButtonElement).disabled,
+  ).toBe(true);
 });
 
 it('shows unapplied changes and allows resetting the provider', async () => {
@@ -87,7 +95,7 @@ it('shows unapplied changes and allows resetting the provider', async () => {
   await openInstalled();
   fireEvent.click(screen.getByRole('switch', { name: 'Включить публичный DoH' }));
   expect(screen.getByText('Есть неприменённые изменения')).toBeTruthy();
-  expect(screen.getByRole('button', { name: 'Сохранить и применить' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: /Сохранить и применить/ })).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Отменить изменения' }));
   expect(screen.queryByRole('textbox', { name: 'Домен для DoH' })).toBeNull();
   expect(screen.queryByText('Есть неприменённые изменения')).toBeNull();
