@@ -69,9 +69,12 @@ export default function OlcRTCClientsModal({ open, onClose }: { open: boolean; o
 
   useEffect(() => {
     if (!open) return;
-    form.resetFields();
-    setProvider('jitsi');
-    void load();
+    const timer = window.setTimeout(() => {
+      form.resetFields();
+      setProvider('jitsi');
+      void load();
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [open, form, load]);
 
   const save = async (values: ClientInput) => {
