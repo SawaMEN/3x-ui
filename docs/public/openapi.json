@@ -4793,6 +4793,10 @@
   ],
   "tags": [
     {
+      "name": "OlcRTC",
+      "description": "Manage the standalone OlcRTC WebRTC service and its clients. The upstream administrator listens only on loopback; all operations use authenticated 3x-ui API routes."
+    },
+    {
       "name": "External VPN",
       "description": "Inspect and update standalone external VPN components."
     },
@@ -4878,6 +4882,425 @@
     }
   ],
   "paths": {
+    "/panel/api/olcrtc/status": {
+      "get": {
+        "tags": [
+          "OlcRTC"
+        ],
+        "summary": "Return OlcRTC installation, version, operation and systemd status.",
+        "operationId": "get_panel_api_olcrtc_status",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/olcrtc/live": {
+      "get": {
+        "tags": [
+          "OlcRTC"
+        ],
+        "summary": "Return running locations and peer counts without upstream keys or proxy credentials.",
+        "operationId": "get_panel_api_olcrtc_live",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/olcrtc/clients": {
+      "get": {
+        "tags": [
+          "OlcRTC"
+        ],
+        "summary": "List OlcRTC clients, quotas and connection links.",
+        "operationId": "get_panel_api_olcrtc_clients",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "OlcRTC"
+        ],
+        "summary": "Create an OlcRTC client with an optional generated ID, room and encryption key.",
+        "operationId": "post_panel_api_olcrtc_clients",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "client_id": "alice",
+                "carrier": "jitsi",
+                "transport": "datachannel",
+                "room_id": "https://meet.handyweb.org/room",
+                "dns": "1.1.1.1:53"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/olcrtc/install": {
+      "post": {
+        "tags": [
+          "OlcRTC"
+        ],
+        "summary": "Start installation of the managed OlcRTC server and manager.",
+        "operationId": "post_panel_api_olcrtc_install",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/olcrtc/update": {
+      "post": {
+        "tags": [
+          "OlcRTC"
+        ],
+        "summary": "Start an asynchronous update of the managed OlcRTC installation.",
+        "operationId": "post_panel_api_olcrtc_update",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/olcrtc/remove": {
+      "post": {
+        "tags": [
+          "OlcRTC"
+        ],
+        "summary": "Stop and remove managed OlcRTC binaries while retaining client configuration.",
+        "operationId": "post_panel_api_olcrtc_remove",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/olcrtc/restart": {
+      "post": {
+        "tags": [
+          "OlcRTC"
+        ],
+        "summary": "Restart the OlcRTC manager systemd service.",
+        "operationId": "post_panel_api_olcrtc_restart",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/olcrtc/clients/{id}": {
+      "put": {
+        "tags": [
+          "OlcRTC"
+        ],
+        "summary": "Update a simple OlcRTC client, preserving quota usage.",
+        "operationId": "put_panel_api_olcrtc_clients_id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "OlcRTC client ID.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/olcrtc/clients/{id}/update": {
+      "post": {
+        "tags": [
+          "OlcRTC"
+        ],
+        "summary": "Update a simple OlcRTC client through the panel JSON-only endpoint.",
+        "operationId": "post_panel_api_olcrtc_clients_id_update",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "OlcRTC client ID.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/olcrtc/clients/{id}/delete": {
+      "post": {
+        "tags": [
+          "OlcRTC"
+        ],
+        "summary": "Delete an OlcRTC client and its managed locations.",
+        "operationId": "post_panel_api_olcrtc_clients_id_delete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "OlcRTC client ID.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/olcrtc/clients/{id}/rotate-key": {
+      "post": {
+        "tags": [
+          "OlcRTC"
+        ],
+        "summary": "Rotate encryption keys for an OlcRTC client and invalidate old links.",
+        "operationId": "post_panel_api_olcrtc_clients_id_rotate_key",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "OlcRTC client ID.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/panel/api/server/externalvpn/parse-link": {
       "post": {
         "tags": [
@@ -7505,6 +7928,36 @@
         }
       }
     },
+    "/panel/api/dnstt/check-delegation": {
+      "get": {
+        "tags": [
+          "Server"
+        ],
+        "summary": "Check public NS delegation and nameserver IPv4 without changing DNSTT configuration.",
+        "operationId": "get_panel_api_dnstt_check_delegation",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/panel/api/dnstt/install": {
       "post": {
         "tags": [
@@ -7662,6 +8115,36 @@
         ],
         "summary": "Read integrated OxiDNS service status and settings.",
         "operationId": "get_panel_api_oxidns_status",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/oxidns/logs": {
+      "get": {
+        "tags": [
+          "Server"
+        ],
+        "summary": "Read recent OxiDNS systemd service logs for diagnostics.",
+        "operationId": "get_panel_api_oxidns_logs",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -19505,67 +19988,6 @@
                       "type": "string"
                     },
                     "obj": {}
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/panel/api/dnstt/check-delegation": {
-      "get": {
-        "tags": [
-          "Server"
-        ],
-        "summary": "Check public NS delegation and nameserver IPv4 without changing DNSTT configuration.",
-        "operationId": "get_panel_api_dnstt_check_delegation",
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "msg": {
-                      "type": "string"
-                    },
-                    "obj": {
-                      "type": "object",
-                      "properties": {
-                        "zone": {
-                          "type": "string"
-                        },
-                        "nameServer": {
-                          "type": "string"
-                        },
-                        "expectedIP": {
-                          "type": "string"
-                        },
-                        "addresses": {
-                          "type": "array",
-                          "items": {
-                            "type": "string"
-                          }
-                        },
-                        "nsFound": {
-                          "type": "boolean"
-                        },
-                        "ipMatches": {
-                          "type": "boolean"
-                        },
-                        "ready": {
-                          "type": "boolean"
-                        },
-                        "details": {
-                          "type": "string"
-                        }
-                      }
-                    }
                   }
                 }
               }
