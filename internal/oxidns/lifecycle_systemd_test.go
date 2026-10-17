@@ -2,6 +2,7 @@ package oxidns
 
 import (
 	"context"
+	"fmt"
 	"encoding/json"
 	"errors"
 	"os"
@@ -117,6 +118,38 @@ plugins:
 	status, err = CurrentStatus(ctx)
 	if err != nil || !status.Installed || !status.Enabled || !status.Running {
 		t.Fatalf("installed service should be running: %+v %v", status, err)
+	}
+	// Simulate a configuration-check failure while leaving start functional.
+	// Previously enabled DNS must keep working; disabled DNS must stay off.
+	wrapper := fmt.Sprintf("#!/bin/sh\nif [ \"$1\" = \"check\" ]; then exit 42; fi\nexec %q \"$@\"\n", official)
+	if err := atomicWrite(binaryPath, []byte(wrapper), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := Setup(ctx, Defaults(), "", ""); err == nil {
+		t.Fatal("expected a deliberately failed OxiDNS configuration check")
+	}
+	if err := waitHealthy(ctx); err != nil {
+		t.Fatalf("previously enabled DNS was not restored: %v", err)
+	}
+	status, err = CurrentStatus(ctx)
+	if err != nil || !status.Enabled || !status.Running {
+		t.Fatalf("failed setup disabled running DNS: %+v %v", status, err)
+	}
+	if err := Disable(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := Setup(ctx, Defaults(), "", ""); err == nil {
+		t.Fatal("expected disabled service setup to fail")
+	}
+	status, err = CurrentStatus(ctx)
+	if err != nil || status.Enabled || status.Running {
+		t.Fatalf("failed setup restarted disabled DNS: %+v %v", status, err)
+	}
+	if _, err := os.Stat(configPath); err != nil {
+		t.Fatalf("old disabled configuration not restored: %v", err)
+	}
+	if err := atomicWrite(binaryPath, executable, 0755); err != nil {
+		t.Fatal(err)
 	}
 	if err := Uninstall(ctx); err != nil {
 		t.Fatalf("uninstall: %v", err)

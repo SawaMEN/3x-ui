@@ -638,11 +638,19 @@ func Setup(ctx context.Context, c Settings, certFile, keyFile string) error {
 	if err != nil {
 		return err
 	}
+	// Read existing config before changing anything. Permission and I/O
+	// errors must not erase a previously working DNS configuration.
+	oldYAML, err := os.ReadFile(configPath)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("предыдущая конфигурация OxiDNS: %w", err)
+	}
+	oldState, err := os.ReadFile(statePath)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("предыдущие настройки OxiDNS: %w", err)
+	}
 	if err := installOnly(ctx); err != nil {
 		return err
 	}
-	oldYAML, _ := os.ReadFile(configPath)
-	oldState, _ := os.ReadFile(statePath)
 	if err := atomicWrite(configPath, []byte(yaml), 0600); err != nil {
 		return err
 	}
