@@ -35,8 +35,17 @@ function status(enabled = false) {
     coreRunning: true,
     port: 52345,
     network: enabled
-      ? { ...disconnected, configured: true, forwarding: true, nat: true,
-          persistent: true, listenerReady: true, rpFilter: true, policyRoute: true, nftables: true }
+      ? {
+          ...disconnected,
+          configured: true,
+          forwarding: true,
+          nat: true,
+          persistent: true,
+          listenerReady: true,
+          rpFilter: true,
+          policyRoute: true,
+          nftables: true,
+        }
       : disconnected,
   };
 }
@@ -54,8 +63,16 @@ describe('gateway settings in sing-box', () => {
       obj: url.endsWith('/interfaces')
         ? {
             interfaces: [
-              { name: 'br-lan', defaultRoute: false, addresses: [{ ip: '192.168.10.1', prefix: 24, private: true }] },
-              { name: 'eth0', defaultRoute: true, addresses: [{ ip: '203.0.113.1', prefix: 24, private: false }] },
+              {
+                name: 'br-lan',
+                defaultRoute: false,
+                addresses: [{ ip: '192.168.10.1', prefix: 24, private: true }],
+              },
+              {
+                name: 'eth0',
+                defaultRoute: true,
+                addresses: [{ ip: '203.0.113.1', prefix: 24, private: false }],
+              },
             ],
             defaultWAN: 'eth0',
             suggested: network,
@@ -63,19 +80,34 @@ describe('gateway settings in sing-box', () => {
           }
         : status(),
     }));
-    vi.mocked(HttpUtil.post).mockResolvedValue({ success: true, msg: '', obj: { ready: true, problems: [], notes: [] } });
+    vi.mocked(HttpUtil.post).mockResolvedValue({
+      success: true,
+      msg: '',
+      obj: { ready: true, problems: [], notes: [] },
+    });
 
     render(<GatewayModeControl />);
     expect(await screen.findByText('br-lan · 192.168.10.1/24')).toBeTruthy();
-    await waitFor(() => {
-      expect(screen.getByText('Готов к включению')).toBeTruthy();
-      expect((screen.getByRole('button', { name: 'Включить шлюз' }) as HTMLButtonElement).disabled).toBe(false);
-    }, { timeout: 5000 });
-    expect(vi.mocked(HttpUtil.post).mock.calls.some(([url]) => url.endsWith('/enable'))).toBe(false);
+    await waitFor(
+      () => {
+        expect(screen.getByText('Готов к включению')).toBeTruthy();
+        expect(
+          (screen.getByRole('button', { name: 'Включить шлюз' }) as HTMLButtonElement).disabled,
+        ).toBe(false);
+      },
+      { timeout: 5000 },
+    );
+    expect(vi.mocked(HttpUtil.post).mock.calls.some(([url]) => url.endsWith('/enable'))).toBe(
+      false,
+    );
 
     fireEvent.click(screen.getByRole('button', { name: 'Включить шлюз' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Включить', exact: true }));
-    await waitFor(() => expect(vi.mocked(HttpUtil.post).mock.calls.some(([url]) => url.endsWith('/enable'))).toBe(true));
+    await waitFor(() =>
+      expect(vi.mocked(HttpUtil.post).mock.calls.some(([url]) => url.endsWith('/enable'))).toBe(
+        true,
+      ),
+    );
   });
 
   it('never guesses an unsafe LAN and exposes manual settings if discovery is ambiguous', async () => {
@@ -86,19 +118,27 @@ describe('gateway settings in sing-box', () => {
         ? { interfaces: [], defaultWAN: 'eth0', note: 'Выберите LAN вручную' }
         : status(),
     }));
-    vi.mocked(HttpUtil.post).mockResolvedValue({ success: true, obj: { ready: false, problems: [], notes: [] } });
+    vi.mocked(HttpUtil.post).mockResolvedValue({
+      success: true,
+      obj: { ready: false, problems: [], notes: [] },
+    });
 
     render(<GatewayModeControl />);
     await screen.findByText('Выберите LAN вручную');
-    expect((screen.getByRole('button', { name: 'Включить шлюз' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(
+      (screen.getByRole('button', { name: 'Включить шлюз' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Настроить сеть вручную' }));
     expect(await screen.findByPlaceholderText('br-lan')).toBeTruthy();
-    expect(vi.mocked(HttpUtil.post).mock.calls.some(([url]) => url.endsWith('/enable'))).toBe(false);
+    expect(vi.mocked(HttpUtil.post).mock.calls.some(([url]) => url.endsWith('/enable'))).toBe(
+      false,
+    );
   });
 
   it('shows only the relevant off action when the gateway is healthy', async () => {
     vi.mocked(HttpUtil.get).mockImplementation(async (url) => ({
-      success: true, msg: '',
+      success: true,
+      msg: '',
       obj: url.endsWith('/interfaces')
         ? { interfaces: [], defaultWAN: 'eth0', note: 'Настроено вручную' }
         : status(true),
@@ -111,6 +151,10 @@ describe('gateway settings in sing-box', () => {
     expect(screen.queryByPlaceholderText('br-lan')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Выключить шлюз' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Выключить', exact: true }));
-    await waitFor(() => expect(vi.mocked(HttpUtil.post).mock.calls.some(([url]) => url.endsWith('/disable'))).toBe(true));
+    await waitFor(() =>
+      expect(vi.mocked(HttpUtil.post).mock.calls.some(([url]) => url.endsWith('/disable'))).toBe(
+        true,
+      ),
+    );
   });
 });
