@@ -416,6 +416,7 @@ func TestSubscriptionSourceEditSchedulesRefreshWithoutDroppingNodes(t *testing.T
 	const previousUpdate int64 = 1800000000
 	if err := database.GetDB().Model(sub).Updates(map[string]any{
 		"url": oldURL, "tag_prefix": "stable-", "last_updated": previousUpdate,
+		"probe_url": defaultAutomaticSpeedURL,
 	}).Error; err != nil {
 		t.Fatal(err)
 	}
