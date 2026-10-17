@@ -1,4 +1,4 @@
-name: DNSTT integration formatter snapshot
+name: DNSTT integration formatter snapshot v2
 on:
   push:
     branches: [dns]
@@ -18,7 +18,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Canonical Go formatting
         run: |
-          gofmt -w internal/dnstt/manager.go internal/dnstt/manager_test.go internal/web/controller/dnstt.go internal/web/controller/api.go
+          gofmt -w internal/dnstt/manager.go internal/dnstt/manager_test.go internal/dnstt/lifecycle_systemd_test.go internal/web/controller/dnstt.go internal/web/controller/api.go
           python3 - <<'PY'
           from pathlib import Path
           import base64
