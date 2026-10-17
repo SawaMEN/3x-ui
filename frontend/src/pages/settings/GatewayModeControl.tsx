@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Button,
@@ -99,6 +99,8 @@ export default function GatewayModeControl() {
   const [loading, setLoading] = useState(true);
   const [discovering, setDiscovering] = useState(false);
   const [checking, setChecking] = useState(false);
+  // A manual edit may overtake a network preflight. Only its newest result is valid.
+  const preflightRequestId = useRef(0);
   const [busy, setBusy] = useState(false);
   const [allowDefaultInterface, setAllowDefaultInterface] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
@@ -202,12 +204,15 @@ export default function GatewayModeControl() {
   }, [refresh, busy, checking]);
 
   const updateNetwork = (patch: Partial<GatewayNetworkConfig>) => {
+    preflightRequestId.current += 1;
     setNetworkConfig((current) => ({ ...current, ...patch }));
+    setChecking(false);
     setPreflight(null);
   };
 
   const runPreflight = useCallback(
     async (quiet = false): Promise<boolean> => {
+      const requestId = ++preflightRequestId.current;
       setChecking(true);
       setPreflight(null);
       try {
@@ -216,6 +221,7 @@ export default function GatewayModeControl() {
           { network: networkConfig },
           { silent: true },
         )) as ApiMsg<GatewayPreflight>;
+        if (requestId !== preflightRequestId.current) return false;
         if (!response?.success || !response.obj) {
           if (!quiet) messageApi.error(response?.msg || 'Не удалось проверить готовность');
           return false;
@@ -223,12 +229,12 @@ export default function GatewayModeControl() {
         setPreflight({ ...response.obj, verifiedConfig: JSON.stringify(networkConfig) });
         return response.obj.ready;
       } catch (error) {
-        if (!quiet) {
+        if (requestId === preflightRequestId.current && !quiet) {
           messageApi.error(error instanceof Error ? error.message : 'Не удалось проверить шлюз');
         }
         return false;
       } finally {
-        setChecking(false);
+        if (requestId === preflightRequestId.current) setChecking(false);
       }
     },
     [networkConfig, messageApi],
@@ -336,6 +342,7 @@ export default function GatewayModeControl() {
     };
   }, [loading, coreRunning, networkInputValid, networkConfigured, busy, runPreflight]);
 
+  const gatewayHealthy = enabled && configured && coreRunning && networkHealthy && !coreMismatch && !conflict;
   const needsRepair = enabled && (!networkHealthy || coreMismatch);
   const gatewayActionLabel =
     coreMismatch && networkHealthy
@@ -367,14 +374,14 @@ export default function GatewayModeControl() {
           </div>
           <Tag
             color={
-              networkHealthy && enabled && !coreMismatch
+              gatewayHealthy
                 ? 'success'
                 : enabled
                   ? 'warning'
                   : 'default'
             }
           >
-            {networkHealthy && enabled && !coreMismatch
+            {gatewayHealthy
               ? 'Работает'
               : enabled
                 ? 'Требует внимания'
@@ -464,7 +471,7 @@ export default function GatewayModeControl() {
                     <CheckCircleOutlined /> Готов к включению
                   </>
                 ) : (
-                  <span>Проверка обнаружила ограничения. Подробности — ниже.</span>
+                  <span>{preflight?.problems[0] || 'Проверка обнаружила ограничения. Откройте диагностику.'}</span>
                 )}
               </div>
             )}
@@ -677,7 +684,9 @@ export default function GatewayModeControl() {
                           checked={allowDefaultInterface}
                           disabled={locked}
                           onChange={(event) => {
+                            preflightRequestId.current += 1;
                             setAllowDefaultInterface(event.target.checked);
+                            setChecking(false);
                             setPreflight(null);
                           }}
                         >
