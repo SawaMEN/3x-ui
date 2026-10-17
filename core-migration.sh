@@ -32,6 +32,20 @@ core_migration_check_space() {
     fi
 }
 
+# Staging contains only an unpacked release, never user data or rollback
+# state. A SIGKILL/OOM/power loss bypasses EXIT traps and can leave hundreds
+# of MiB per attempt. Reclaim abandoned staging *under the upgrade lock*
+# before the next disk-space check. Do not delete recovery snapshots.
+core_migration_prune_stale_stages() {
+    local parent="${xui_folder%/*}" old
+    [[ -n "${cm_lock:-}" && -d "$parent" && ! -L "$parent" ]] || return 0
+    while IFS= read -r -d '' old; do
+        [[ -d "$old" && ! -L "$old" ]] || continue
+        echo "Removing abandoned release staging: $old"
+        rm -rf -- "$old" || echo "Cannot remove abandoned release staging: $old" >&2
+    done < <(find "$parent" -mindepth 1 -maxdepth 1 -type d \\( -name '.x-ui-release.??????' \\) -mmin +60 -print0 2>/dev/null)
+}
+
 core_migration_prune_snapshots() {
     local old marker=".x-ui-upgrade-verified"
     [[ -n "${cm_backup:-}" && -d "$cm_backup" ]] || return 0
@@ -126,6 +140,9 @@ core_migration_prepare_archive() {
         unset cm_lock
         return 1
     fi
+    # Crash leftovers may otherwise make the safe-space preflight fail.
+    # Only one installer holding this lock may delete a previous staging dir.
+    core_migration_prune_stale_stages
     core_migration_check_space "$archive" || return 1
     cm_stage=$(mktemp -d "${xui_folder%/*}/.x-ui-release.XXXXXX") || return 1
     chmod 0700 "$cm_stage" || return 1
