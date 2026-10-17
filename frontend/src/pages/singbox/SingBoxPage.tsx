@@ -1,6 +1,6 @@
 import OutboundPingButton from './OutboundPingButton';
 import { prepareRouteRule, routePorts, routeRuleSummary } from './route-rule';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
@@ -24,7 +24,6 @@ import {
   Spin,
   Switch,
   Table,
-  Tabs,
   Radio,
   Tag,
   Empty,
@@ -589,13 +588,9 @@ function SingBoxRouteRuleModal({
           </Field>
         </Row>
       </Card>
-      <Tabs
-        items={[
-          {
-            key: 'match',
-            label: 'Условия',
-            children: (
-              <Card size="small">
+      <div className="singbox-rule-condition-editor">
+        <div className="singbox-section-description">Условия правила</div>
+        <Card size="small">
                 <Row gutter={[12, 14]}>
                   <Field label="Точные домены">
                     <Select
@@ -723,24 +718,15 @@ function SingBoxRouteRuleModal({
                   </Field>
                 </Row>
               </Card>
-            ),
-          },
-          {
-            key: 'advanced',
-            label: 'JSON',
-            children: (
-              <Card size="small">
-                <JsonModal
+        <div className="singbox-inline-actions">
+          <JsonModal
                   title="Правило — JSON"
                   value={draft}
                   onApply={(next) => setDraft(asObject(next))}
                   buttonText="Редактировать JSON"
                 />
-              </Card>
-            ),
-          },
-        ]}
-      />
+        </div>
+      </div>
     </Modal>
   );
 }
