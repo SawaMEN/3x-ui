@@ -38,12 +38,57 @@ core_migration_check_space() {
 # before the next disk-space check. Do not delete recovery snapshots.
 core_migration_prune_stale_stages() {
     local parent="${xui_folder%/*}" old
+    local -a age=(-mmin +60)
     [[ -n "${cm_lock:-}" && -d "$parent" && ! -L "$parent" ]] || return 0
+    # At verified commit, no other updater owns the lock. Reclaim even recent
+    # leftovers. Before a new update, keep a one-hour grace for diagnostics.
+    [[ "${1:-}" != verified ]] || age=()
     while IFS= read -r -d '' old; do
-        [[ -d "$old" && ! -L "$old" ]] || continue
+        [[ -d "$old" && ! -L "$old" && "$old" != "${cm_stage:-}" ]] || continue
         echo "Removing abandoned release staging: $old"
         rm -rf -- "$old" || echo "Cannot remove abandoned release staging: $old" >&2
-    done < <(find "$parent" -mindepth 1 -maxdepth 1 -type d -name '.x-ui-release.??????' -mmin +60 -print0 2>/dev/null)
+    done < <(find "$parent" -mindepth 1 -maxdepth 1 -type d -name '.x-ui-release.??????' "${age[@]}" -print0 2>/dev/null)
+}
+
+# Only the panel-owned temp downloads/helpers, not package caches, certificates
+# or user configuration. Run with the exclusive update lock after verification.
+core_migration_prune_stale_downloads() {
+    local parent="${xui_folder%/*}" old
+    [[ -n "${cm_lock:-}" && -d "$parent" && ! -L "$parent" ]] || return 0
+    while IFS= read -r -d '' old; do
+        [[ -f "$old" && ! -L "$old" && "$old" != "${xui_download_archive:-}" ]] || continue
+        echo "Removing abandoned release download: $old"
+        rm -f -- "$old" || echo "Cannot remove abandoned release download: $old" >&2
+    done < <(find "$parent" -mindepth 1 -maxdepth 1 -type f \\( -name '.x-ui-download.??????.tar.gz' -o -name '.x-ui-download.??????.tar.gz.sha256' -o -name '.core-migration.??????' \\) -mmin +60 -print0 2>/dev/null)
+}
+
+# Once a newer installation has been *verified*, older complete snapshots
+# are redundant. Keep the newest recoverable (unmarked) snapshot; leave unknown
+# or partially written directories untouched rather than guessing their value.
+core_migration_prune_recovery_history() {
+    local parent="${xui_folder%/*}" old newest="" marker=".x-ui-upgrade-verified"
+    [[ -n "${cm_lock:-}" && -d "$parent" && ! -L "$parent" ]] || return 0
+    for old in "$parent"/x-ui-upgrade.??????; do
+        [[ "$old" != "${cm_backup:-}" && -d "$old" && ! -L "$old" ]] || continue
+        [[ ! -e "$old/$marker" && ! -L "$old/$marker" ]] || continue
+        [[ -d "$old/installation" && ! -L "$old/installation" ]] || continue
+        [[ -f "$old/installation/x-ui" && ! -L "$old/installation/x-ui" ]] || continue
+        [[ -d "$old/data" && ! -L "$old/data" ]] || continue
+        # Keep at least one complete, most recent recovery snapshot.
+        if [[ -z "$newest" || "$old" -nt "$newest" ]]; then
+            newest="$old"
+        fi
+    done
+    [[ -n "$newest" ]] || return 0
+    for old in "$parent"/x-ui-upgrade.??????; do
+        [[ "$old" != "$newest" && "$old" != "${cm_backup:-}" && -d "$old" && ! -L "$old" ]] || continue
+        [[ ! -e "$old/$marker" && ! -L "$old/$marker" ]] || continue
+        [[ -d "$old/installation" && ! -L "$old/installation" ]] || continue
+        [[ -f "$old/installation/x-ui" && ! -L "$old/installation/x-ui" ]] || continue
+        [[ -d "$old/data" && ! -L "$old/data" ]] || continue
+        echo "Removing obsolete recovery snapshot (newest retained at $newest): $old"
+        rm -rf -- "$old" || echo "Cannot remove obsolete recovery snapshot: $old" >&2
+    done
 }
 
 core_migration_prune_snapshots() {
@@ -61,7 +106,8 @@ core_migration_prune_snapshots() {
     # Keeping a full copy of every successful installation nearly doubles
     # the VPS disk usage. Once the new panel and core are confirmed running,
     # discard this transaction's large offline snapshot as well.
-    rm -rf -- "$cm_backup"
+    rm -rf -- "$cm_backup" || return 1
+    core_migration_prune_recovery_history
 }
 
 # Compare executable identities, rather than panel versions or file timestamps.
@@ -278,7 +324,9 @@ core_migration_commit() {
     # Cleanup is after verification and disarming rollback. A cleanup error
     # cannot turn a healthy release into an attempted rollback without staging.
     core_migration_prune_snapshots || echo "Could not remove verified recovery snapshot: $cm_backup" >&2
-    echo "Upgrade committed; successful transaction snapshot removed"
+    core_migration_prune_stale_stages verified
+    core_migration_prune_stale_downloads
+    echo "Upgrade committed; verified recovery snapshot and abandoned update files cleaned"
 }
 core_migration_exit() {
     local status=0
