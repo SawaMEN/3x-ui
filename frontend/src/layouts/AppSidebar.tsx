@@ -19,7 +19,6 @@ import {
   LogoutOutlined,
   MailOutlined,
   MenuOutlined,
-  MessageOutlined,
   PushpinFilled,
   PushpinOutlined,
   SafetyOutlined,
@@ -74,7 +73,6 @@ type IconName =
   | 'logout'
   | 'outbound'
   | 'routing'
-  | 'telemt'
   | 'tool';
 const iconByName: Record<IconName, ComponentType> = {
   dashboard: DashboardOutlined,
@@ -88,7 +86,6 @@ const iconByName: Record<IconName, ComponentType> = {
   logout: LogoutOutlined,
   outbound: ExportOutlined,
   routing: SwapOutlined,
-  telemt: MessageOutlined,
   tool: ToolOutlined,
 };
 function readSidebarPinned() {
@@ -256,7 +253,6 @@ function AppSidebar() {
       { key: '/firewall', icon: 'firewall' as IconName, title: firewallTitle },
       { key: '/outbound', icon: 'outbound' as IconName, title: t('menu.outbounds') },
       { key: '/routing', icon: 'routing' as IconName, title: t('menu.routing') },
-      { key: '/telemt', icon: 'telemt' as IconName, title: t('menu.telemt') },
       { key: '/settings', icon: 'setting' as IconName, title: t('menu.settings') },
       {
         key: '/singbox',
