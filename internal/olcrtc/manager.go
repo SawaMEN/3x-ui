@@ -376,5 +376,5 @@ func RotateKey(ctx context.Context,id string) error {
 func ClientLink(client Client) string {
  if len(client.Locations)==0 {return ""}
  loc:=client.Locations[0]
- return "olcrtc://"+loc.Carrier+"?"+loc.Transport.Type+"@"+loc.Endpoint.RoomID+"#"+loc.Endpoint.Key+"$"+client.ID
+ return "olcrtc://"+loc.Carrier+"?"+loc.Transport.Type+"@"+loc.Endpoint.RoomID+"#"+loc.Endpoint.Key+"$"+loc.Name
 }
