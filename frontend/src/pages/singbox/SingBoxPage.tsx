@@ -1,6 +1,6 @@
 import OutboundPingButton from './OutboundPingButton';
 import { prepareRouteRule, routePorts, routeRuleSummary } from './route-rule';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
@@ -2050,14 +2050,9 @@ export default function SingBoxPage() {
     </Space>
   );
 
-  const healthIssues = useMemo(
-    () => singBoxHealthIssues(config, snapshot?.subscriptionTags || []),
-    [config, snapshot?.subscriptionTags],
-  );
-  const dirty = useMemo(
-    () => !!snapshot && JSON.stringify(snapshot.config) !== JSON.stringify(config),
-    [config, snapshot],
-  );
+  // Compute once per render, not once for every outbound row.
+  const healthIssues = singBoxHealthIssues(config, snapshot?.subscriptionTags || []);
+  const dirty = !!snapshot && JSON.stringify(snapshot.config) !== JSON.stringify(config);
 
   const sectionBody = (() => {
     switch (activeSection) {
