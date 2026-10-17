@@ -280,9 +280,8 @@ func telemtLatestVersion(current string) (string, bool) {
 		}
 	}
 
-	// Official installations can use upstream metadata if the helper is missing.
-	// Patched installations must not advertise an unpatched replacement.
-	if latest == "" && !strings.Contains(normalizeTelemtVersion(current), "+3xui.") {
+	// The official release is also the migration target for legacy +3xui builds.
+	if latest == "" {
 		latest = fetchTelemtLatestRelease()
 	}
 	if latest == "" {

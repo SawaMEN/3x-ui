@@ -66,5 +66,5 @@ Omitted transport/frontend fields preserve existing choices. Passing
 Native tests exercise HTTPS routing, certificate trust, unknown-host rejection,
 forwarding-header replacement and bidirectional WebSocket transfer with Caddy
 and HAProxy. They also run the generated carrier configuration against the
-patched Telemt binary. These checks do not measure accessibility from a
+official Telemt binary. These checks do not measure accessibility from a
 particular mobile operator.

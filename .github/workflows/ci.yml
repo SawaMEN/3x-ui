@@ -15,7 +15,7 @@ on:
       - "**.sh"
       - "tools/test-*-shell.py"
       - "tools/telemt/**"
-      - "tools/test_telemt_build.py"
+      - "tools/test_official_telemt.py"
   push:
     branches:
       - main
@@ -33,7 +33,7 @@ on:
       - "**.sh"
       - "tools/test-*-shell.py"
       - "tools/telemt/**"
-      - "tools/test_telemt_build.py"
+      - "tools/test_official_telemt.py"
 
 permissions:
   contents: read
@@ -341,6 +341,35 @@ jobs:
         run: npm audit --omit=dev --audit-level=high
         working-directory: frontend
 
+  official-telemt-native:
+    name: Official Telemt integration (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: amd64
+            runner: ubuntu-latest
+          - platform: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Download verified official release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/telemt/fetch.py --arch "${{ matrix.platform }}" --output "$RUNNER_TEMP/telemt-official"
+      - name: Test config, reload and WEB carrier negotiation
+        env:
+          TELEMT_TEST_BINARY: ${{ runner.temp }}/telemt-official/telemt
+        run: |
+          mkdir -p internal/web/dist
+          touch internal/web/dist/.gitkeep
+          go test ./internal/mtproto ./internal/web/service -run '^Test(OfficialTelemtConfigAndReload|NativeTelemtWebCarrierConfig)$' -v -count=1
+
   telemt-web-frontends:
     runs-on: ubuntu-latest
     steps:
@@ -353,8 +382,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y caddy haproxy
-      - name: Verify engine packaging and safe updater failures
-        run: python3 -m unittest discover -s tools -p test_telemt_build.py
+      - name: Verify official Telemt download integrity and updater
+        run: python3 -m unittest discover -s tools -p test_official_telemt.py
       - name: Test native HTTPS and bidirectional WebSocket routing
         run: |
           mkdir -p internal/web/dist
