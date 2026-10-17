@@ -60,9 +60,11 @@ async function openInstalled() {
 
 it('does not display DNSTT before package installation', async () => {
   render(<DNSTTSettings />);
-  await waitFor(() => expect(HttpUtil.get).toHaveBeenCalledWith(
-    '/panel/api/dnstt/status', undefined, { silent: true },
-  ));
+  await waitFor(() =>
+    expect(HttpUtil.get).toHaveBeenCalledWith('/panel/api/dnstt/status', undefined, {
+      silent: true,
+    }),
+  );
   await waitFor(() => expect(screen.queryByText('DNS-туннель — DNSTT')).toBeNull());
   expect(screen.queryByRole('button', { name: 'Установить DNSTT' })).toBeNull();
   expect(HttpUtil.post).not.toHaveBeenCalled();

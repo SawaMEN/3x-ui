@@ -198,8 +198,15 @@ export default function DNSTTSettings() {
   // its controls in sing-box DNS until a server binary is installed.
   if (!loading && !state.installed) {
     if (!error) return null;
-    return <Alert type="error" showIcon title="Не удалось проверить состояние DNSTT"
-      description={error} action={<Button onClick={() => void reload()}>Повторить</Button>} />;
+    return (
+      <Alert
+        type="error"
+        showIcon
+        title="Не удалось проверить состояние DNSTT"
+        description={error}
+        action={<Button onClick={() => void reload()}>Повторить</Button>}
+      />
+    );
   }
 
   return (
@@ -247,7 +254,7 @@ export default function DNSTTSettings() {
         )}
 
         {state.installed && (
-          <> 
+          <>
             <div>
               <Typography.Text strong>1. Поддомен DNS-туннеля</Typography.Text>
               <Input
