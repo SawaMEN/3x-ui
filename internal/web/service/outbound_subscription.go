@@ -290,7 +290,16 @@ func (s *OutboundSubscriptionService) Update(id int, remark, rawURL, tagPrefix, 
 			return err
 		}
 	}
-	resetSelection := len(balance) > 0 && balance[0] != nil && (sub.AutoBalance != balance[0].Enabled || sub.BalanceMode != balance[0].Mode || sub.ProbeURL != balance[0].URL)
+	resetSelection, resetRanking, resetHealth := false, false, false
+	if len(balance) > 0 && balance[0] != nil {
+		if err := balance[0].Validate(allowPrivate); err != nil {
+			return err
+		}
+		policy := balance[0]
+		resetSelection = sub.AutoBalance != policy.Enabled || sub.BalanceMode != policy.Mode || sub.ProbeURL != policy.URL
+		resetRanking = resetSelection || sub.ProbeInterval != policy.Interval || sub.Tolerance != policy.Tolerance
+		resetHealth = resetRanking || sub.HealthInterval != policy.HealthInterval
+	}
 	sub.Remark = strings.TrimSpace(remark)
 	sub.Url = cleanURL
 	sub.Enabled = enabled
@@ -301,15 +310,18 @@ func (s *OutboundSubscriptionService) Update(id int, remark, rawURL, tagPrefix, 
 	sub.TagPrefix = prefix
 	sub.UpdateInterval = updateInterval
 	if len(balance) > 0 && balance[0] != nil {
-		if err := balance[0].Validate(allowPrivate); err != nil {
-			return err
-		}
 		balance[0].apply(sub)
 	}
 	fields := []string{"remark", "url", "enabled", "allow_private", "allow_insecure", "user_agent", "prepend", "tag_prefix", "update_interval"}
 	if len(balance) > 0 && balance[0] != nil {
-		fields = append(fields, "auto_balance", "balance_mode", "probe_url", "probe_interval", "tolerance", "switch_interval", "health_interval", "last_health", "last_probe", "probe_error", "probe_results")
-		// Include runtime resets only when the balance policy actually changed.
+		fields = append(fields, "auto_balance", "balance_mode", "probe_url", "probe_interval", "tolerance", "switch_interval", "health_interval")
+		// Don't overwrite concurrent probe results on a metadata-only edit.
+		if resetRanking {
+			fields = append(fields, "last_probe", "probe_error", "probe_results")
+		}
+		if resetHealth {
+			fields = append(fields, "last_health")
+		}
 		if resetSelection {
 			fields = append(fields, "selected_tag", "last_switch", "switch_reason", "applied_tag", "apply_error")
 		}
