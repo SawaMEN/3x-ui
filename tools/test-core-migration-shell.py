@@ -363,6 +363,94 @@ flock -u "$cm_lock"
 exec {cm_lock}>&-
 ''')
 
+    def test_verified_update_prunes_old_complete_recoveries_but_keeps_latest(self):
+        with tempfile.TemporaryDirectory() as raw:
+            base = Path(raw)
+            backup_names = ("AAA111", "BBB222", "CCC333")
+            for index, name in enumerate(backup_names):
+                folder = base / ("x-ui-upgrade." + name)
+                (folder / "installation").mkdir(parents=True)
+                (folder / "installation" / "x-ui").write_text("old-panel")
+                (folder / "data").mkdir()
+                (folder / "data" / "database").write_text("recovery-data")
+                stamp = 1000000000 + index * 100
+                os.utime(folder, (stamp, stamp))
+            unknown = base / "x-ui-upgrade.OTHER1"
+            unknown.mkdir()
+            (unknown / "private-data").write_text("do-not-touch")
+            incomplete = base / "x-ui-upgrade.FAILED"
+            (incomplete / "installation").mkdir(parents=True)
+            (incomplete / "installation" / "x-ui").write_text("partial")
+            (base / "x-ui-upgrade.SYM123").symlink_to(
+                base / "x-ui-upgrade.AAA111", target_is_directory=True
+            )
+            current = base / "x-ui-upgrade.CURRENT"
+            current.mkdir()
+            self.run_script(base, r'''
+xui_folder="$TEST_ROOT/x-ui"
+cm_backup="$TEST_ROOT/x-ui-upgrade.CURRENT"
+# No lock: verified snapshots may be pruned, but unmarked backup history stays.
+core_migration_prune_recovery_history
+[[ -d "$TEST_ROOT/x-ui-upgrade.AAA111" ]]
+exec {cm_lock}>"$TEST_ROOT/.x-ui-upgrade.lock"
+flock -n "$cm_lock"
+core_migration_prune_snapshots
+[[ ! -e "$TEST_ROOT/x-ui-upgrade.CURRENT" ]]
+[[ ! -e "$TEST_ROOT/x-ui-upgrade.AAA111" ]]
+[[ ! -e "$TEST_ROOT/x-ui-upgrade.BBB222" ]]
+[[ -f "$TEST_ROOT/x-ui-upgrade.CCC333/data/database" ]]
+[[ -f "$TEST_ROOT/x-ui-upgrade.OTHER1/private-data" ]]
+[[ -f "$TEST_ROOT/x-ui-upgrade.FAILED/installation/x-ui" ]]
+[[ -L "$TEST_ROOT/x-ui-upgrade.SYM123" ]]
+flock -u "$cm_lock"
+exec {cm_lock}>&-
+''')
+
+    def test_success_reclaims_recent_staging_and_old_downloads_only(self):
+        with tempfile.TemporaryDirectory() as raw:
+            base = Path(raw)
+            for name in ("OLD123", "LIVE12", "SYM123"):
+                folder = base / (".x-ui-release." + name)
+                if name == "SYM123":
+                    folder.symlink_to(base / ".x-ui-release.OLD123", target_is_directory=True)
+                else:
+                    folder.mkdir()
+                    (folder / "x-ui").write_text("staged")
+            for name in (
+                ".x-ui-download.OLD123.tar.gz",
+                ".x-ui-download.OLD123.tar.gz.sha256",
+                ".core-migration.OLD123",
+                ".x-ui-download.NEW123.tar.gz",
+            ):
+                (base / name).write_text("temporary")
+            for name in (".x-ui-download.OLD123.tar.gz",
+                         ".x-ui-download.OLD123.tar.gz.sha256",
+                         ".core-migration.OLD123"):
+                old = base / name
+                stamp = old.stat().st_mtime - 7200
+                os.utime(old, (stamp, stamp))
+            (base / ".core-migration.SYM123").symlink_to(base / ".core-migration.OLD123")
+            (base / "my-release.tar.gz").write_text("unrelated")
+            self.run_script(base, r'''
+xui_folder="$TEST_ROOT/x-ui"
+cm_stage="$TEST_ROOT/.x-ui-release.LIVE12"
+exec {cm_lock}>"$TEST_ROOT/.x-ui-upgrade.lock"
+flock -n "$cm_lock"
+core_migration_prune_stale_stages verified
+core_migration_prune_stale_downloads
+[[ ! -e "$TEST_ROOT/.x-ui-release.OLD123" ]]
+[[ -d "$cm_stage" ]]
+[[ -L "$TEST_ROOT/.x-ui-release.SYM123" ]]
+[[ ! -e "$TEST_ROOT/.x-ui-download.OLD123.tar.gz" ]]
+[[ ! -e "$TEST_ROOT/.x-ui-download.OLD123.tar.gz.sha256" ]]
+[[ ! -e "$TEST_ROOT/.core-migration.OLD123" ]]
+[[ -f "$TEST_ROOT/.x-ui-download.NEW123.tar.gz" ]]
+[[ -f "$TEST_ROOT/my-release.tar.gz" ]]
+[[ -L "$TEST_ROOT/.core-migration.SYM123" ]]
+flock -u "$cm_lock"
+exec {cm_lock}>&-
+''')
+
     def test_low_space_rejects_release_before_staging_or_service_stop(self):
         with tempfile.TemporaryDirectory() as raw:
             base = Path(raw)
