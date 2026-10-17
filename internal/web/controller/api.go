@@ -217,6 +217,9 @@ func (a *APIController) initRouter(g *gin.RouterGroup) {
 	// OxiDNS belongs to the built-in sing-box DNS settings.
 	NewOxiDNSController(api.Group("/oxidns"))
 
+	// DNSTT is an independent DNS TCP tunnel, not a resolver or OxiDNS listener.
+	NewDNSTTController(api.Group("/dnstt"))
+
 	// Telemt standalone MTProto service
 	telemt := api.Group("/telemt")
 	NewTelemtController(telemt, a.settingService)
