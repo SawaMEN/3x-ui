@@ -199,7 +199,7 @@ func GetStatus(ctx context.Context) Status {
 // Start launches a single long-running installation operation; the HTTP request
 // returns immediately and the UI polls status. No user-controlled commands.
 func Start(operation string) error {
-	if operation != "install" && operation != "update" && operation != "remove" {
+	if operation != "install" && operation != "update" && operation != "remove" && operation != "restart" {
 		return errors.New("unknown OlcRTC operation")
 	}
 	if operation != "remove" {
@@ -220,9 +220,16 @@ func Start(operation string) error {
 		ctx, cancel := context.WithTimeout(context.Background(), 35*time.Minute)
 		defer cancel()
 		var err error
-		if operation == "remove" {
+		switch operation {
+		case "remove":
 			err = remove(ctx)
-		} else {
+		case "restart":
+			if !installed() {
+				err = errors.New("OlcRTC is not installed")
+			} else {
+				_, err = run(ctx, "systemctl", "restart", "olcrtc-manager")
+			}
+		default:
 			err = install(ctx)
 		}
 		state.Lock()
