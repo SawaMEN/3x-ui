@@ -585,8 +585,11 @@ export default function OutboundsTab({
       let updated = 0;
       let failed = 0;
       let pendingApplyId: number | null = null;
+      // The final enabled subscription commits the whole batch. Disabled
+      // subscriptions need fetching but never affect running outbounds.
+      const lastEnabledIndex = subs.reduce((last, sub, index) => sub.enabled ? index : last, -1);
       for (const [index, sub] of subs.entries()) {
-        const deferApply = index < subs.length - 1;
+        const deferApply = index !== lastEnabledIndex;
         try {
           const reply = await HttpUtil.post(
             `/panel/api/xray/outbound-subs/${sub.id}/refresh`,
