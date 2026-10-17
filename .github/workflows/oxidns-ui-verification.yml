@@ -33,5 +33,5 @@ jobs:
         if: always()
         working-directory: frontend
         run: |
-          npx oxfmt src/pages/singbox/OxiDNSSettings.tsx src/test/oxidns-settings.test.tsx src/test/system-update-components.test.tsx
-          node -e 'const fs=require("fs");for(const p of process.argv.slice(1)) console.log("OXFMT_FILE:"+p+":"+fs.readFileSync(p).toString("base64"))' src/pages/singbox/OxiDNSSettings.tsx src/test/oxidns-settings.test.tsx src/test/system-update-components.test.tsx
+          npx oxfmt src/pages/settings/SystemUpdateModal.tsx src/pages/singbox/OxiDNSSettings.tsx src/test/oxidns-settings.test.tsx src/test/system-update-components.test.tsx
+          node -e 'const fs=require("fs");for(const p of process.argv.slice(1)) console.log("OXFMT_FILE:"+p+":"+fs.readFileSync(p).toString("base64"))' src/pages/settings/SystemUpdateModal.tsx src/pages/singbox/OxiDNSSettings.tsx src/test/oxidns-settings.test.tsx src/test/system-update-components.test.tsx
