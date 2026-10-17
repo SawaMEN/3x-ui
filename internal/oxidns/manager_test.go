@@ -207,8 +207,23 @@ func TestOfficialOxiDNSForwardsRealTraffic(t *testing.T) {
             n, peer, err := upstreamConn.ReadFrom(buffer)
             if err != nil { return }
             if n < 17 { continue }
-            packet := make([]byte, n)
-            copy(packet,buffer[:n])
+            // A client query can include EDNS0 OPT additional records.
+            // Keep only the question, so the synthetic A answer follows it
+            // directly rather than accidentally parsing OPT as an answer.
+            questionEnd := 12
+            valid := true
+            for {
+                if questionEnd >= n { valid = false; break }
+                labelLength := int(buffer[questionEnd])
+                questionEnd++
+                if labelLength == 0 { break }
+                if labelLength > 63 || questionEnd+labelLength > n { valid = false; break }
+                questionEnd += labelLength
+            }
+            if !valid || questionEnd+4 > n { continue }
+            questionEnd += 4
+            packet := make([]byte, questionEnd)
+            copy(packet,buffer[:questionEnd])
             // Reuse the DNS transaction ID and question, returning a valid
             // single IPv4 answer (203.0.113.7) for the queried name.
             packet[2],packet[3]=0x81,0x80
