@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Tag, Typography, message } from 'antd';
-import { CopyOutlined, DeleteOutlined, KeyOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
+import { CopyOutlined, DeleteOutlined, EditOutlined, KeyOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import { HttpUtil } from '@/utils';
 
 type Provider = 'jitsi' | 'telemost' | 'wbstream';
@@ -52,6 +52,7 @@ export default function OlcRTCClientsModal({ open, onClose }: { open: boolean; o
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [working, setWorking] = useState<string | null>(null);
+  const [editingID, setEditingID] = useState<string | null>(null);
   const [error, setError] = useState('');
   const load = useCallback(async () => {
     setLoading(true);
@@ -72,6 +73,7 @@ export default function OlcRTCClientsModal({ open, onClose }: { open: boolean; o
     const timer = window.setTimeout(() => {
       form.resetFields();
       setProvider('jitsi');
+      setEditingID(null);
       void load();
     }, 0);
     return () => window.clearTimeout(timer);
@@ -80,17 +82,45 @@ export default function OlcRTCClientsModal({ open, onClose }: { open: boolean; o
   const save = async (values: ClientInput) => {
     setSaving(true);
     try {
-      const result = (await HttpUtil.post('/panel/api/olcrtc/clients', values)) as ApiMsg<ClientInput>;
-      if (!result.success) throw new Error(result.msg || 'Не удалось создать подключение');
+      const url = editingID
+        ? `/panel/api/olcrtc/clients/${encodeURIComponent(editingID)}/update`
+        : '/panel/api/olcrtc/clients';
+      const result = (await HttpUtil.post(url, values)) as ApiMsg<ClientInput>;
+      if (!result.success) throw new Error(result.msg || 'Не удалось сохранить подключение');
+      toast.success(editingID ? 'Настройки подключения обновлены.' : 'Подключение создано. Скопируйте ссылку клиента.');
       form.resetFields();
       setProvider('jitsi');
-      toast.success('Подключение создано. Скопируйте ссылку клиента.');
+      setEditingID(null);
       await load();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e));
     } finally {
       setSaving(false);
     }
+  };
+
+  const edit = (client: Client) => {
+    if (client.locations.length !== 1) return;
+    const location = client.locations[0];
+    const carrier = location.carrier;
+    const transport = (location.transport?.type || location.transport?.Type || 'datachannel') as Transport;
+    setEditingID(client.id);
+    setProvider(carrier);
+    form.setFieldsValue({
+      client_id: client.id,
+      carrier,
+      transport,
+      room_id: location.endpoint.room_id,
+      key: location.endpoint.key,
+      dns: location.dns,
+      name: location.name || 'Main',
+    });
+    document.getElementById('olcrtc-client-editor')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
+  const cancelEdit = () => {
+    setEditingID(null);
+    setProvider('jitsi');
+    form.resetFields();
   };
 
   const act = async (id: string, action: 'delete' | 'rotate-key') => {
@@ -144,6 +174,9 @@ export default function OlcRTCClientsModal({ open, onClose }: { open: boolean; o
                     )}
                   </Space>
                   <Space wrap>
+                    <Button size="small" icon={<EditOutlined />} disabled={client.locations.length !== 1} onClick={() => edit(client)}>
+                      Изменить
+                    </Button>
                     <Button
                       size="small"
                       icon={<CopyOutlined />}
@@ -180,7 +213,7 @@ export default function OlcRTCClientsModal({ open, onClose }: { open: boolean; o
           </Space>
         )}
       </Card>
-      <Card size="small" title="Новое подключение">
+      <Card id="olcrtc-client-editor" size="small" title={editingID ? `Редактирование: ${editingID}` : 'Новое подключение'}>
         <Form<ClientInput>
           form={form}
           layout="vertical"
@@ -196,7 +229,7 @@ export default function OlcRTCClientsModal({ open, onClose }: { open: boolean; o
           }}
         >
           <Form.Item name="client_id" label="Имя клиента (необязательно)">
-            <Input maxLength={64} placeholder="Автоматически" autoComplete="off" />
+            <Input maxLength={64} placeholder="Автоматически" autoComplete="off" disabled={editingID !== null} />
           </Form.Item>
           <Space wrap style={{ display: 'flex', alignItems: 'start' }}>
             <Form.Item name="carrier" label="Сервис видеосвязи" rules={[{ required: true }]}>
@@ -238,9 +271,12 @@ export default function OlcRTCClientsModal({ open, onClose }: { open: boolean; o
           <Form.Item name="dns" label="DNS сервера">
             <Input placeholder="1.1.1.1:53" />
           </Form.Item>
-          <Button type="primary" htmlType="submit" icon={<PlusOutlined />} loading={saving} block>
-            Создать подключение
-          </Button>
+          <Space wrap>
+            <Button type="primary" htmlType="submit" icon={<PlusOutlined />} loading={saving}>
+              {editingID ? 'Сохранить настройки' : 'Создать подключение'}
+            </Button>
+            {editingID && <Button onClick={cancelEdit}>Отмена</Button>}
+          </Space>
         </Form>
       </Card>
       <Alert
