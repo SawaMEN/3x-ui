@@ -210,30 +210,33 @@ export default function GatewayModeControl() {
     setPreflight(null);
   };
 
-  const runPreflight = useCallback(async (quiet = false): Promise<boolean> => {
-    setChecking(true);
-    setPreflight(null);
-    try {
-      const response = (await HttpUtil.post(
-        '/panel/api/gateway/preflight',
-        { network: networkConfig },
-        { silent: true },
-      )) as ApiMsg<GatewayPreflight>;
-      if (!response?.success || !response.obj) {
-        if (!quiet) messageApi.error(response?.msg || 'Не удалось проверить готовность');
+  const runPreflight = useCallback(
+    async (quiet = false): Promise<boolean> => {
+      setChecking(true);
+      setPreflight(null);
+      try {
+        const response = (await HttpUtil.post(
+          '/panel/api/gateway/preflight',
+          { network: networkConfig },
+          { silent: true },
+        )) as ApiMsg<GatewayPreflight>;
+        if (!response?.success || !response.obj) {
+          if (!quiet) messageApi.error(response?.msg || 'Не удалось проверить готовность');
+          return false;
+        }
+        setPreflight({ ...response.obj, verifiedConfig: JSON.stringify(networkConfig) });
+        return response.obj.ready;
+      } catch (error) {
+        if (!quiet) {
+          messageApi.error(error instanceof Error ? error.message : 'Не удалось проверить шлюз');
+        }
         return false;
+      } finally {
+        setChecking(false);
       }
-      setPreflight({ ...response.obj, verifiedConfig: JSON.stringify(networkConfig) });
-      return response.obj.ready;
-    } catch (error) {
-      if (!quiet) {
-        messageApi.error(error instanceof Error ? error.message : 'Не удалось проверить шлюз');
-      }
-      return false;
-    } finally {
-      setChecking(false);
-    }
-  }, [networkConfig, messageApi]);
+    },
+    [networkConfig, messageApi],
+  );
 
   const runAction = async (action: 'enable' | 'disable') => {
     if (busy) return;
@@ -532,10 +535,14 @@ export default function GatewayModeControl() {
           />
         )}
         <div className="gateway-inline-actions">
-          {discovery?.suggested && !networkConfigured &&
+          {discovery?.suggested &&
+            !networkConfigured &&
             JSON.stringify(discovery.suggested) !== JSON.stringify(networkConfig) && (
-              <Button icon={<SearchOutlined />} disabled={locked}
-                onClick={() => updateNetwork({ ...discovery.suggested! })}>
+              <Button
+                icon={<SearchOutlined />}
+                disabled={locked}
+                onClick={() => updateNetwork({ ...discovery.suggested! })}
+              >
                 Заполнить автоматически
               </Button>
             )}
@@ -574,28 +581,42 @@ export default function GatewayModeControl() {
         }
       >
         <Space wrap className="gateway-status-summary">
-          <Tag color={coreRunning ? 'success' : 'error'}>Ядро: {coreRunning ? 'работает' : 'остановлено'}</Tag>
+          <Tag color={coreRunning ? 'success' : 'error'}>
+            Ядро: {coreRunning ? 'работает' : 'остановлено'}
+          </Tag>
           <Tag color={networkHealthy ? 'success' : networkConfigured ? 'warning' : 'default'}>
-            Linux: {networkHealthy ? 'готов' : networkConfigured ? 'требует восстановления' : 'не настроен'}
+            Linux:{' '}
+            {networkHealthy
+              ? 'готов'
+              : networkConfigured
+                ? 'требует восстановления'
+                : 'не настроен'}
           </Tag>
           <Tag color={status?.network?.persistent ? 'success' : 'default'}>
             Автовосстановление: {status?.network?.persistent ? 'активно' : 'неактивно'}
           </Tag>
         </Space>
-        <Collapse className="gateway-details" items={[{
-          key: 'diagnostics',
-          label: 'Подробная диагностика',
-          children: (
-            <div className="gateway-check-grid">
-          {issues.map((item) => (
-            <div className="gateway-check" key={item.label}>
-              <Tag color={item.healthy ? 'success' : 'default'}>{item.healthy ? 'OK' : '—'}</Tag>
-              <span>{item.label}</span>
-            </div>
-          ))}
-        </div>
-          ),
-        }]} />
+        <Collapse
+          className="gateway-details"
+          items={[
+            {
+              key: 'diagnostics',
+              label: 'Подробная диагностика',
+              children: (
+                <div className="gateway-check-grid">
+                  {issues.map((item) => (
+                    <div className="gateway-check" key={item.label}>
+                      <Tag color={item.healthy ? 'success' : 'default'}>
+                        {item.healthy ? 'OK' : '—'}
+                      </Tag>
+                      <span>{item.label}</span>
+                    </div>
+                  ))}
+                </div>
+              ),
+            },
+          ]}
+        />
         <Typography.Paragraph type="secondary" className="gateway-hint">
           Перехват ограничен выбранной IPv4 LAN-подсетью. Клиенты должны использовать этот сервер
           как свой шлюз. Исходящий маршрут задаётся обычными правилами выбранного ядра. Изменение
