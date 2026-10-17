@@ -71,6 +71,7 @@ https://dns.example.com:8443/dns-query
 
 Google Public DNS подключается по DoT (dns.google:853, bootstrap 8.8.8.8).
 Яндекс DNS использует официальные режимы с шифрованием DoT:
+
 - **Базовый:** common.dot.dns.yandex.net:853, bootstrap 77.88.8.8;
 - **Безопасный:** safe.dot.dns.yandex.net:853, bootstrap 77.88.8.88;
 - **Семейный:** family.dot.dns.yandex.net:853, bootstrap 77.88.8.7.
