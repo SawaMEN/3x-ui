@@ -1350,9 +1350,10 @@ export default function SingBoxPage() {
       .map((item, index): JsonObject => ({ ...item, __index: index }))
       .filter(
         (item) =>
-          (!onlyEndpoints || isNativeEndpoint(item)) &&
-          (onlyEndpoints ||
-            ['selector', 'urltest', 'balancer'].includes(asString(item.type)) === onlyGroups) &&
+          (onlyEndpoints
+            ? isNativeEndpoint(item)
+            : !isNativeEndpoint(item) &&
+              ['selector', 'urltest', 'balancer'].includes(asString(item.type)) === onlyGroups) &&
           [item.tag, item.type, item.server]
             .join(' ')
             .toLowerCase()
@@ -1364,12 +1365,14 @@ export default function SingBoxPage() {
         <div className="singbox-section-header">
           <div>
             <div className="singbox-section-title">
-              {onlyGroups ? 'Балансировщики' : 'Исходящие подключения'}
+              {onlyEndpoints ? 'Туннели и endpoints' : onlyGroups ? 'Балансировщики' : 'Исходящие подключения'}
             </div>
             <div className="singbox-section-description">
-              {onlyGroups
-                ? 'Группы выбора и проверки подключений.'
-                : 'Серверы и туннели. Группы находятся в разделе «Балансировщики».'}
+              {onlyEndpoints
+                ? 'Туннельные исходящие подключения sing-box.'
+                : onlyGroups
+                  ? 'Автоматический выбор и группы подключений.'
+                  : 'Серверы и прокси. Группы и туннели доступны ниже в раскрывающихся секциях.'}
             </div>
           </div>
           <Space wrap>
@@ -1384,14 +1387,14 @@ export default function SingBoxPage() {
             <Button
               icon={<PlusOutlined />}
               type="primary"
-              aria-label={onlyGroups ? 'Добавить балансировщик' : 'Добавить outbound'}
+              aria-label={onlyEndpoints ? 'Добавить endpoint' : onlyGroups ? 'Добавить балансировщик' : 'Добавить outbound'}
               onClick={() => {
                 setEditingOutbound(null);
-                setNewOutboundType(onlyGroups ? 'selector' : 'vless');
+                setNewOutboundType(onlyEndpoints ? 'masque-client' : onlyGroups ? 'selector' : 'vless');
                 setOutboundModalOpen(true);
               }}
             >
-              {onlyGroups ? 'Добавить балансировщик' : 'Добавить outbound'}
+              {onlyEndpoints ? 'Добавить endpoint' : onlyGroups ? 'Добавить балансировщик' : 'Добавить outbound'}
             </Button>
           </Space>
         </div>
