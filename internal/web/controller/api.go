@@ -214,6 +214,9 @@ func (a *APIController) initRouter(g *gin.RouterGroup) {
 	hosts := api.Group("/hosts")
 	a.hostController = NewHostController(hosts)
 
+	// OxiDNS belongs to the built-in sing-box DNS settings.
+	NewOxiDNSController(api.Group("/oxidns"))
+
 	// Telemt standalone MTProto service
 	telemt := api.Group("/telemt")
 	NewTelemtController(telemt, a.settingService)

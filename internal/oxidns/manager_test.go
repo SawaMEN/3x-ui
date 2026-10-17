@@ -2,6 +2,7 @@ package oxidns
 
 import (
  "strings"
+ "reflect"
  "testing"
 )
 
@@ -26,7 +27,7 @@ func TestPreserveSingBoxDNSRules(t *testing.T) {
  if err!=nil{t.Fatal(err)}
  if result["final"]!=Tag{t.Fatal("wrong default")}
  if original["final"]!="google"{t.Fatal("modified input")}
- if result["rules"]!=original["rules"]{t.Fatal("replaced routing rules")}
+ if !reflect.DeepEqual(result["rules"],original["rules"]){t.Fatal("replaced routing rules")}
  if len(result["servers"].([]map[string]any))!=2{t.Fatal("user server lost")}
  if _,err:=WithSingBoxDNS(result);err==nil{t.Fatal("must reject colliding managed tag")}
 }

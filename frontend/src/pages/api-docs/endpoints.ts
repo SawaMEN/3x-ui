@@ -782,6 +782,21 @@ export const sections: readonly Section[] = [
         summary: 'Return the selected core and its supported panel capabilities.',
       },
       {
+        method: 'GET',
+        path: '/panel/api/oxidns/status',
+        summary: 'Read integrated OxiDNS service status and settings.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/oxidns/setup',
+        summary: 'Install verified OxiDNS, validate TLS and connect native sing-box DNS.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/oxidns/disable',
+        summary: 'Disable OxiDNS and restore the configured sing-box DNS.',
+      },
+      {
         method: 'POST',
         path: '/panel/api/server/singbox/outbound/check',
         summary: 'Measure the delay of a running sing-box outbound.',
