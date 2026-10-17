@@ -108,6 +108,7 @@ describe('gateway settings in sing-box', () => {
     render(<GatewayModeControl />);
     await screen.findByText('Работает');
     expect(screen.queryByRole('button', { name: 'Включить шлюз' })).toBeNull();
+    expect(screen.queryByPlaceholderText('br-lan')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Выключить шлюз' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Выключить', exact: true }));
     await waitFor(() => expect(vi.mocked(HttpUtil.post).mock.calls.some(([url]) => url.endsWith('/disable'))).toBe(true));
