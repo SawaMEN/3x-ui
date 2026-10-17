@@ -51,7 +51,7 @@ type Location = {
   transport: { type?: string; Type?: string; payload?: Record<string, string> };
   dns: string;
 };
-type Client = { id: string; locations: Location[]; quota?: ClientQuota; link: string };
+type Client = { id: string; locations: Location[]; quota?: ClientQuota; link: string; simpleEditable: boolean };
 type ApiMsg<T> = { success?: boolean; msg?: string; obj?: T };
 type LiveSummary = {
   runningCount: number;
@@ -157,7 +157,7 @@ export default function OlcRTCClientsModal({
   };
 
   const edit = (client: Client) => {
-    if (client.locations.length !== 1) return;
+    if (!client.simpleEditable || client.locations.length !== 1) return;
     const location = client.locations[0];
     const carrier = location.carrier;
     const transport = (location.transport?.type ||
@@ -284,10 +284,7 @@ export default function OlcRTCClientsModal({
                     <Button
                       size="small"
                       icon={<EditOutlined />}
-                      disabled={
-                        client.locations.length !== 1 ||
-                        Object.keys(client.locations[0]?.transport?.payload || {}).length > 0
-                      }
+                      disabled={!client.simpleEditable}
                       onClick={() => edit(client)}
                     >
                       Изменить
@@ -337,6 +334,11 @@ export default function OlcRTCClientsModal({
                   )}
                   {client.quota?.expires_at && <Tag>До {client.quota.expires_at}</Tag>}
                 </Space>
+                {!client.simpleEditable && (
+                  <Typography.Text type="secondary">
+                    Дополнительные настройки этого клиента доступны только в расширенной конфигурации OlcRTC.
+                  </Typography.Text>
+                )}
                 {client.locations.length > 1 && (
                   <Typography.Text type="secondary">
                     Локаций: {client.locations.length}. Ссылка выше относится к первой.
