@@ -111,28 +111,31 @@ export default function OxiDNSSettings() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
-  const refresh = useCallback(async (checkUpdates = false, keepDraft = false, keepError = false) => {
-    try {
-      const response = (await HttpUtil.get(
-        '/panel/api/oxidns/status' + (checkUpdates ? '?check=true' : ''),
-        undefined,
-        { silent: true, timeout: checkUpdates ? 26000 : 10000 },
-      )) as APIResponse;
-      if (!response.success || !response.obj)
-        throw new Error(response.msg || 'Не удалось получить состояние DNS.');
-      setStatus(response.obj);
-      if (!keepDraft) {
-        setDraft(getConfig(response.obj));
-        if (response.obj.doh || response.obj.dot || response.obj.doq) setShowAdvanced(true);
+  const refresh = useCallback(
+    async (checkUpdates = false, keepDraft = false, keepError = false) => {
+      try {
+        const response = (await HttpUtil.get(
+          '/panel/api/oxidns/status' + (checkUpdates ? '?check=true' : ''),
+          undefined,
+          { silent: true, timeout: checkUpdates ? 26000 : 10000 },
+        )) as APIResponse;
+        if (!response.success || !response.obj)
+          throw new Error(response.msg || 'Не удалось получить состояние DNS.');
+        setStatus(response.obj);
+        if (!keepDraft) {
+          setDraft(getConfig(response.obj));
+          if (response.obj.doh || response.obj.dot || response.obj.doq) setShowAdvanced(true);
+        }
+        if (checkUpdates) setUpdatesChecked(true);
+        if (!keepError) setError('');
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : 'Не удалось получить состояние DNS.');
+      } finally {
+        setLoading(false);
       }
-      if (checkUpdates) setUpdatesChecked(true);
-      if (!keepError) setError('');
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Не удалось получить состояние DNS.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    },
+    [],
+  );
 
   useEffect(() => {
     void refresh();
@@ -157,8 +160,7 @@ export default function OxiDNSSettings() {
   );
   const external = draft.doh || draft.dot || draft.doq;
   const domainInvalid =
-    external &&
-    !/^(?=.{4,253}$)[a-z0-9-]+(?:\.[a-z0-9-]+)+$/i.test(draft.domain.trim());
+    external && !/^(?=.{4,253}$)[a-z0-9-]+(?:\.[a-z0-9-]+)+$/i.test(draft.domain.trim());
   const validPort = (port: number) =>
     Number.isInteger(port) && port > 0 && port <= 65535 && port !== 15353;
   const invalidPort =
@@ -308,7 +310,9 @@ export default function OxiDNSSettings() {
 
   const endpoint = (title: string, value: string, description: string) => (
     <div style={{ padding: '8px 0' }}>
-      <Typography.Text strong style={{ display: 'block' }}>{title}</Typography.Text>
+      <Typography.Text strong style={{ display: 'block' }}>
+        {title}
+      </Typography.Text>
       <Typography.Text code copyable style={{ overflowWrap: 'anywhere' }}>
         {value}
       </Typography.Text>
@@ -341,7 +345,9 @@ export default function OxiDNSSettings() {
             type="warning"
             showIcon
             title="Автоматическая установка недоступна"
-            description={status.unsupportedReason || 'Требуется Linux с запущенным systemd и права root.'}
+            description={
+              status.unsupportedReason || 'Требуется Linux с запущенным systemd и права root.'
+            }
           />
         )}
         {error && (
@@ -350,7 +356,11 @@ export default function OxiDNSSettings() {
             showIcon
             title="Операция не выполнена"
             description={error}
-            action={<Button size="small" onClick={() => void refresh(false, true)}>Обновить статус</Button>}
+            action={
+              <Button size="small" onClick={() => void refresh(false, true)}>
+                Обновить статус
+              </Button>
+            }
           />
         )}
         {notice && <Alert type="success" showIcon title={notice} />}
@@ -368,16 +378,22 @@ export default function OxiDNSSettings() {
             type={verified ? 'success' : 'info'}
             showIcon
             title={verified ? 'DNS работает — запрос успешно проверен' : 'Служба OxiDNS запущена'}
-            description={status.useSingBox
-              ? 'DNS подключён к sing-box. Существующие правила DNS не удалены.'
-              : 'OxiDNS работает отдельно от sing-box. Включите подключение ниже при необходимости.'}
+            description={
+              status.useSingBox
+                ? 'DNS подключён к sing-box. Существующие правила DNS не удалены.'
+                : 'OxiDNS работает отдельно от sing-box. Включите подключение ниже при необходимости.'
+            }
           />
         )}
 
         <Card
           size="small"
           title={isHealthy ? 'Настройки DNS' : 'Быстрый запуск'}
-          extra={!status.installed && status.supported ? <Tag color="processing">Установка автоматически</Tag> : undefined}
+          extra={
+            !status.installed && status.supported ? (
+              <Tag color="processing">Установка автоматически</Tag>
+            ) : undefined
+          }
         >
           <Space orientation="vertical" size={14} style={{ width: '100%' }}>
             <div>
@@ -419,11 +435,7 @@ export default function OxiDNSSettings() {
               />
             )}
             {dirty && status.enabled && (
-              <Alert
-                type="info"
-                showIcon
-                title="Настройки изменены, но ещё не применены"
-              />
+              <Alert type="info" showIcon title="Настройки изменены, но ещё не применены" />
             )}
             <Space wrap>
               <Button
@@ -432,7 +444,7 @@ export default function OxiDNSSettings() {
                 aria-label={primaryLabel}
                 icon={!status.installed ? <CloudDownloadOutlined /> : <CheckCircleOutlined />}
                 loading={busy === 'apply'}
-                disabled={locked && busy !== 'apply' || !canApply}
+                disabled={(locked && busy !== 'apply') || !canApply}
                 onClick={() => void apply(true)}
               >
                 {primaryLabel}
@@ -546,13 +558,16 @@ export default function OxiDNSSettings() {
                         />
                         {domainInvalid && (
                           <Typography.Text type="danger">
-                            Укажите корректное доменное имя, присутствующее в TLS-сертификате панели.
+                            Укажите корректное доменное имя, присутствующее в TLS-сертификате
+                            панели.
                           </Typography.Text>
                         )}
                       </div>
                       {draft.doh && (
                         <div>
-                          <Typography.Text>HTTPS-порт DoH (TCP; также UDP для HTTP/3)</Typography.Text>
+                          <Typography.Text>
+                            HTTPS-порт DoH (TCP; также UDP для HTTP/3)
+                          </Typography.Text>
                           <InputNumber
                             aria-label="HTTPS-порт DoH"
                             style={{ display: 'block', marginTop: 6, width: 170 }}
@@ -594,7 +609,8 @@ export default function OxiDNSSettings() {
                       )}
                       {invalidPort && (
                         <Typography.Text type="danger">
-                          Порт должен быть от 1 до 65535. Порт 15353 зарезервирован для локального DNS.
+                          Порт должен быть от 1 до 65535. Порт 15353 зарезервирован для локального
+                          DNS.
                         </Typography.Text>
                       )}
                       {conflictPorts && (
@@ -603,8 +619,8 @@ export default function OxiDNSSettings() {
                         </Typography.Text>
                       )}
                       <Typography.Text type="secondary">
-                        Домен проверяется на сервере по TLS-сертификату до запуска. Убедитесь, что DNS
-                        домена указывает на сервер и необходимые порты доступны извне.
+                        Домен проверяется на сервере по TLS-сертификату до запуска. Убедитесь, что
+                        DNS домена указывает на сервер и необходимые порты доступны извне.
                       </Typography.Text>
                     </>
                   )}
@@ -622,14 +638,29 @@ export default function OxiDNSSettings() {
                 status.localAddress || '127.0.0.1:15353',
                 'Доступен только на сервере, не подходит для внешних устройств.',
               )}
-              {status.doh && status.dohUrl &&
-                endpoint('DoH — HTTPS', status.dohUrl, status.http3
-                  ? 'По этому же URL доступен HTTP/3, если его поддерживает клиент.'
-                  : 'Вставьте URL в настройки DNS-over-HTTPS клиента.')}
-              {status.dot && status.dotAddress &&
-                endpoint('DoT — TLS', 'tls://' + status.dotAddress, 'Используйте домен и указанный TCP-порт.')}
-              {status.doq && status.doqAddress &&
-                endpoint('DoQ — QUIC', 'quic://' + status.doqAddress, 'Используйте домен и указанный UDP-порт.')}
+              {status.doh &&
+                status.dohUrl &&
+                endpoint(
+                  'DoH — HTTPS',
+                  status.dohUrl,
+                  status.http3
+                    ? 'По этому же URL доступен HTTP/3, если его поддерживает клиент.'
+                    : 'Вставьте URL в настройки DNS-over-HTTPS клиента.',
+                )}
+              {status.dot &&
+                status.dotAddress &&
+                endpoint(
+                  'DoT — TLS',
+                  'tls://' + status.dotAddress,
+                  'Используйте домен и указанный TCP-порт.',
+                )}
+              {status.doq &&
+                status.doqAddress &&
+                endpoint(
+                  'DoQ — QUIC',
+                  'quic://' + status.doqAddress,
+                  'Используйте домен и указанный UDP-порт.',
+                )}
               <Space wrap>
                 <Button
                   aria-label="Проверить DNS-запрос"
@@ -640,7 +671,12 @@ export default function OxiDNSSettings() {
                 >
                   Проверить DNS-запрос
                 </Button>
-                <Button aria-label="Обновить состояние" icon={<ReloadOutlined />} disabled={locked} onClick={() => void refresh()}>
+                <Button
+                  aria-label="Обновить состояние"
+                  icon={<ReloadOutlined />}
+                  disabled={locked}
+                  onClick={() => void refresh()}
+                >
                   Обновить состояние
                 </Button>
               </Space>
@@ -661,9 +697,10 @@ export default function OxiDNSSettings() {
             {updatesChecked && status.error && (
               <Alert type="warning" showIcon title={status.error} />
             )}
-            {updatesChecked && status.installed && status.updateAvailable === false && !status.error && (
-              <Tag color="success">Последняя версия установлена</Tag>
-            )}
+            {updatesChecked &&
+              status.installed &&
+              status.updateAvailable === false &&
+              !status.error && <Tag color="success">Последняя версия установлена</Tag>}
             {status.updateAvailable && (
               <Alert type="info" showIcon title="Доступно обновление OxiDNS" />
             )}
@@ -723,7 +760,8 @@ export default function OxiDNSSettings() {
               )}
             </Space>
             <Typography.Text type="secondary">
-              Установка, обновление и удаление также доступны в «Настройки → Обновления пакетов и ядер Linux».
+              Установка, обновление и удаление также доступны в «Настройки → Обновления пакетов и
+              ядер Linux».
             </Typography.Text>
           </Space>
         </Card>
@@ -746,7 +784,9 @@ export default function OxiDNSSettings() {
             autoSize={{ minRows: 10, maxRows: 24 }}
             style={{ fontFamily: 'monospace', fontSize: 12 }}
           />
-          <Button onClick={() => void openLogs()} loading={logsBusy}>Обновить журнал</Button>
+          <Button onClick={() => void openLogs()} loading={logsBusy}>
+            Обновить журнал
+          </Button>
         </Space>
       </Modal>
     </Card>
