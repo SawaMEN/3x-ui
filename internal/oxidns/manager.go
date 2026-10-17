@@ -343,7 +343,8 @@ func StatusWithUpdates(ctx context.Context) (Status, error) {
 		return s, nil
 	}
 	s.LatestVersion = latest
-	s.UpdateAvailable = s.Installed && s.InstalledVersion != "" && s.InstalledVersion != latest
+	// An installed binary with an unreadable version should be replaceable by an official release.
+	s.UpdateAvailable = s.Installed && s.InstalledVersion != latest
 	return s, nil
 }
 
@@ -536,11 +537,6 @@ func Uninstall(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	cfg.Enabled = false
-	data, _ := json.Marshal(cfg)
-	if err := atomicWrite(statePath, data, 0600); err != nil {
-		return err
-	}
 	if err := systemctl(ctx, "stop", "x-ui-oxidns.service"); err != nil {
 		if !strings.Contains(err.Error(), "not loaded") && !strings.Contains(err.Error(), "not found") {
 			return err
@@ -550,6 +546,15 @@ func Uninstall(ctx context.Context) error {
 		if !strings.Contains(err.Error(), "does not exist") && !strings.Contains(err.Error(), "not loaded") {
 			return err
 		}
+	}
+	// Preserve the original state until the service has actually stopped.
+	cfg.Enabled = false
+	data, err := json.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+	if err := atomicWrite(statePath, data, 0600); err != nil {
+		return err
 	}
 	for _, path := range []string{binaryPath, servicePath, configPath} {
 		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -624,9 +629,12 @@ func Setup(ctx context.Context, c Settings, certFile, keyFile string) error {
 	return nil
 }
 
+// Disable stops OxiDNS first and persists the disabled state only after
+// systemd confirms both operations. Failures restore the running service.
 func Disable(ctx context.Context) error {
 	mu.Lock()
 	defer mu.Unlock()
+
 	c, err := Load()
 	if err != nil {
 		return err
@@ -634,15 +642,23 @@ func Disable(ctx context.Context) error {
 	if !c.Enabled {
 		return nil
 	}
-	c.Enabled = false
-	data, _ := json.Marshal(c)
-	if err := atomicWrite(statePath, data, 0600); err != nil {
-		return err
-	}
 	if err := systemctl(ctx, "stop", "x-ui-oxidns.service"); err != nil {
 		return err
 	}
-	return systemctl(ctx, "disable", "x-ui-oxidns.service")
+	if err := systemctl(ctx, "disable", "x-ui-oxidns.service"); err != nil {
+		return errors.Join(err, systemctl(ctx, "start", "x-ui-oxidns.service"))
+	}
+	c.Enabled = false
+	data, err := json.Marshal(c)
+	if err == nil {
+		err = atomicWrite(statePath, data, 0600)
+	}
+	if err != nil {
+		return errors.Join(err,
+			systemctl(ctx, "enable", "x-ui-oxidns.service"),
+			systemctl(ctx, "start", "x-ui-oxidns.service"))
+	}
+	return nil
 }
 
 const Tag = "oxidns-local"
