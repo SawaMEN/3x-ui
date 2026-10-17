@@ -49,13 +49,13 @@ export default function OxiDNSSettings() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
-  const refresh = useCallback(async (resetDraft = true) => {
+  const refresh = useCallback(async (resetDraft = true, preserveError = false) => {
     try {
       const response = (await HttpUtil.get('/panel/api/oxidns/status', undefined, { silent: true })) as APIResponse;
       if (!response.success || !response.obj) throw new Error(response.msg || 'Не удалось получить состояние DNS.');
       setStatus(response.obj);
       if (resetDraft) setDraft(getConfig(response.obj));
-      setError('');
+      if (!preserveError) setError('');
       setVerified(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Не удалось получить состояние DNS.');
@@ -82,6 +82,7 @@ export default function OxiDNSSettings() {
   };
   const dirty = (Object.keys(getConfig(status)) as (keyof DNSConfig)[]).some((key) => draft[key] !== status[key]);
   const domainMissing = draft.doh && !draft.domain.trim();
+  const invalidPort = draft.doh && (draft.port < 1 || draft.port > 65535 || draft.port === 15353);
   const unused = !draft.useSingBox && !draft.doh;
 
   const apply = async (enable: boolean) => {
@@ -107,7 +108,7 @@ export default function OxiDNSSettings() {
         : 'OxiDNS остановлен. Настройки сохранены для повторного включения.');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Не удалось изменить DNS.');
-      await refresh(false);
+      await refresh(false, true);
     } finally {
       setBusy(false);
     }
@@ -239,6 +240,7 @@ export default function OxiDNSSettings() {
                 <Typography.Text type="secondary">
                   По умолчанию 8443. Порт 443 можно использовать, только если он свободен.
                 </Typography.Text>
+                {invalidPort && <Typography.Text type="danger">Укажите свободный HTTPS-порт, отличный от 15353.</Typography.Text>}
               </div>
             </Space>
           )}
@@ -257,7 +259,7 @@ export default function OxiDNSSettings() {
 
         <Space wrap>
           <Button type="primary" icon={status.enabled ? <ReloadOutlined /> : <CheckCircleOutlined />}
-            loading={busy} disabled={checking || !status.supported || domainMissing || unused}
+            loading={busy} disabled={checking || !status.supported || domainMissing || invalidPort || unused}
             onClick={() => void apply(true)}>
             {status.enabled ? dirty ? 'Сохранить и применить' : 'Перезапустить DNS' : 'Создать и включить DNS'}
           </Button>
