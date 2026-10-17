@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -544,8 +545,23 @@ func (a *XraySettingController) refreshOutboundSub(c *gin.Context) {
 		jsonMsg(c, "Refresh failed", err)
 		return
 	}
-	// Signal that xray should pick up the new outbounds on next restart/reload
+	// A manual refresh is an explicit request to use the updated nodes.
+	// Publish the new native configuration now, rather than reporting a missing
+	// sub-auto selector until an unrelated scheduled core restart.
 	markOutboundCoreRestart()
+	core, coreErr := (&service.SettingService{}).GetCoreType()
+	if coreErr != nil {
+		jsonMsg(c, "Subscription updated, but the active core could not be detected", coreErr)
+		return
+	}
+	if service.IsNativeCore(core) && service.SelectedNativeCore().IsRunning() {
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		if err := service.SelectedNativeCore().Restart(ctx); err != nil {
+			jsonMsg(c, "Subscription saved, but sing-box could not apply the updated connections", err)
+			return
+		}
+	}
 	jsonObj(c, obs, nil)
 }
 
