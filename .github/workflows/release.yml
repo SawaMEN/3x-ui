@@ -397,3 +397,8 @@ jobs:
             gh release create dev-latest --prerelease --latest=false --target "$COMMIT" --title "Dev build $short" --notes "Rolling development build from main. commit=$COMMIT"
           fi
           gh release upload dev-latest dev-artifacts/*.tar.gz dev-artifacts/*.sha256 --clobber
+          # Retire old patched Telemt artifacts from the reused dev-latest release.
+          # Engines are now supplied exclusively by telemt/telemt.
+          for old_asset in telemt.version telemt-linux-amd64.tar.gz telemt-linux-amd64.tar.gz.sha256 telemt-linux-arm64.tar.gz telemt-linux-arm64.tar.gz.sha256; do
+            gh release delete-asset dev-latest "$old_asset" --yes 2>/dev/null || true
+          done
