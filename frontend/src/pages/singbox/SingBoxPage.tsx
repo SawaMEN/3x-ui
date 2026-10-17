@@ -43,6 +43,7 @@ import {
 } from '@ant-design/icons';
 
 import AdBlockTab from '@/pages/adblock/AdBlockTab';
+import GatewayModeControl from '@/pages/settings/GatewayModeControl';
 import { SettingListItem } from '@/components/ui';
 import AppSidebar from '@/layouts/AppSidebar';
 import { HttpUtil } from '@/utils';
@@ -750,7 +751,6 @@ export default function SingBoxPage() {
   const [modalApi, modalContextHolder] = Modal.useModal();
   const { antdThemeConfig, isDark, isUltra } = useTheme();
   const location = useLocation();
-  const searchParams = new URLSearchParams(location.search);
   const navigate = useNavigate();
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [config, setConfig] = useState<ConfigMap>({});
@@ -760,22 +760,13 @@ export default function SingBoxPage() {
       : location.pathname === '/routing'
         ? 'routing'
         : location.hash.replace(/^#/, '');
-  const sectionKeys = useMemo(
-    () =>
-      new Set([
-        'basic',
-        'dns',
-        'routing',
-        'outbound',
-        'balancer',
-        'endpoints',
-        'certificates',
-        'network',
-        'advanced',
-      ]),
-    [],
-  );
-  const activeSection = sectionKeys.has(sectionSlug) ? sectionSlug : 'basic';
+  // Legacy deep links remain valid, with no second layer of section tabs.
+  const aliases: Record<string, string> = {
+    balancer: 'outbound', endpoints: 'outbound', certificates: 'advanced', network: 'advanced',
+  };
+  const sectionKeys = new Set(['basic', 'dns', 'routing', 'outbound', 'adblock', 'gateway', 'advanced']);
+  const resolvedSection = aliases[sectionSlug] || sectionSlug;
+  const activeSection = sectionKeys.has(resolvedSection) ? resolvedSection : 'basic';
   const showAdvanced = activeSection === 'advanced';
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -784,12 +775,10 @@ export default function SingBoxPage() {
     basic: 'Основные',
     dns: 'DNS',
     routing: 'Маршрутизация',
-    outbound: 'Исходящие',
-    balancer: 'Балансировщики',
-    endpoints: 'Endpoints',
-    certificates: 'Сертификаты',
-    network: 'Сеть',
-    advanced: t('pages.singBox.sections.advanced'),
+    outbound: 'Подключения',
+    adblock: 'AdBlock',
+    gateway: 'Режим шлюза',
+    advanced: 'Дополнительно',
   };
 
   const [subscriptionsOpen, setSubscriptionsOpen] = useState(false);
@@ -874,8 +863,11 @@ export default function SingBoxPage() {
         config: JSON.stringify(next),
       })) as ApiMsg;
       if (!msg?.success) throw new Error(msg?.msg || 'Не удалось сохранить настройки sing-box');
+      // The backend has already validated and published the applied settings.
+      // A follow-up GET immediately reruns expensive config generation.
+      setSnapshot((current) => current ? { ...current, config: next } : current);
+      setConfig(next);
       messageApi.success(t('pages.singBox.saved'));
-      await refresh();
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : String(error));
     } finally {
@@ -2008,32 +2000,18 @@ export default function SingBoxPage() {
 
   const renderAdvanced = () => (
     <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-      <Card>
-        <SectionHeader
-          title="Расширенная конфигурация"
-          description="Редкие параметры и полный JSON доступны только здесь, чтобы основной интерфейс не был перегружен."
-        />
-        <Space wrap>
-          <JsonModal
-            title="Вся конфигурация sing-box"
-            value={config}
-            onApply={(next) => setConfig(asObject(next))}
-          />
-          <Button icon={<ReloadOutlined />} onClick={() => requestRefresh()} disabled={saving}>
-            Обновить из файла
-          </Button>
-        </Space>
+      <Card className="singbox-item-card">
+        <SectionHeader title="Дополнительные настройки"
+          description="Редкие параметры скрыты по умолчанию, а полный JSON доступен по кнопке." />
+        <JsonModal title="Вся конфигурация sing-box" value={config}
+          onApply={(next) => setConfig(asObject(next))} />
       </Card>
-      <Collapse
-        defaultActiveKey={['experimental']}
-        items={[
-          {
-            key: 'experimental',
-            label: 'Кэш-файл и служебные API',
-            children: renderExperimental(),
-          },
-        ]}
-      />
+      <Collapse className="singbox-advanced-groups" items={[
+        { key: 'cert', label: 'Сертификаты и провайдеры', children: renderCertificates() },
+        { key: 'network', label: 'HTTP-клиенты и сетевые пространства', children: renderNetwork() },
+        { key: 'experimental', label: 'Кэш-файл и служебные API', children: renderExperimental() },
+        { key: 'schema', label: 'Схема JSON', children: renderSchema() },
+      ]} />
     </Space>
   );
 
@@ -2043,135 +2021,71 @@ export default function SingBoxPage() {
   const sectionBody = (() => {
     switch (activeSection) {
       case 'basic':
-        return renderBasic();
+        return (
+          <Space orientation="vertical" size={12} style={{ width: '100%' }}>
+            {renderLog()}
+            {renderNtp()}
+          </Space>
+        );
       case 'dns':
         return (
-          <Tabs
-            className="singbox-subtabs"
-            activeKey={
-              ['basic', 'servers', 'rules'].includes(searchParams.get('dnsTab') || '')
-                ? searchParams.get('dnsTab')!
-                : 'basic'
-            }
-            onChange={(key) => {
-              const next = new URLSearchParams(location.search);
-              next.set('dnsTab', key);
-              navigate(
-                { pathname: location.pathname, search: next.toString(), hash: location.hash },
-                { preventScrollReset: true },
-              );
-            }}
-            items={[
-              {
-                key: 'basic',
-                label: 'Основные',
-                children: <SimpleSettings config={config} onChange={setConfig} />,
-              },
-              {
-                key: 'servers',
-                label: 'DNS-серверы',
-                children: (
-                  <NativeDnsServers
-                    config={config}
-                    onChange={setConfig}
-                    subscriptionTags={snapshot?.subscriptionTags}
-                  />
-                ),
-              },
-              {
-                key: 'rules',
-                label: 'Правила DNS',
-                children: <NativeDnsRules config={config} onChange={setConfig} />,
-              },
-            ]}
-          />
+          <Space orientation="vertical" size={12} style={{ width: '100%' }}>
+            <SimpleSettings config={config} onChange={setConfig} />
+            <NativeDnsServers config={config} onChange={setConfig} subscriptionTags={snapshot?.subscriptionTags} />
+            <NativeDnsRules config={config} onChange={setConfig} />
+          </Space>
         );
       case 'routing':
         return (
-          <Tabs
-            className="singbox-subtabs"
-            activeKey={
-              ['basic', 'adblock', 'catalog'].includes(searchParams.get('routingTab') || '')
-                ? searchParams.get('routingTab')!
-                : 'rules'
-            }
-            onChange={(key) => {
-              const next = new URLSearchParams(location.search);
-              next.set('routingTab', key);
-              navigate(
-                { pathname: location.pathname, search: next.toString(), hash: location.hash },
-                { preventScrollReset: true },
-              );
-            }}
-            items={[
-              {
-                key: 'basic',
-                label: 'Основные',
-                children: (
-                  <NativeRoutingBasic
-                    config={config}
-                    onChange={setConfig}
-                    subscriptionTags={snapshot?.subscriptionTags || []}
-                  />
-                ),
-              },
-              {
-                key: 'rules',
-                label: 'Правила',
-                children: renderRoute(),
-              },
-              {
-                key: 'catalog',
-                label: t('pages.xray.routingCatalog.title'),
-                children: (
-                  <RoutingCatalogTab
-                    outboundTags={Array.from(
-                      new Set(
-                        [...asObjectArray(config.outbounds), ...asObjectArray(config.endpoints)]
-                          .map((o) => asString(o.tag))
-                          .filter(Boolean)
-                          .concat(snapshot?.subscriptionTags || []),
-                      ),
-                    )}
-                    assignedRules={catalogAssignedRules(
-                      asObjectArray(asObject(config.route).rules),
-                    )}
-                    onAssign={(selection, outbound) =>
-                      setConfig((current) => {
-                        const route = asObject(current.route);
-                        return {
-                          ...current,
-                          route: {
-                            ...route,
-                            rules: putNativeCatalogRule(
-                              asObjectArray(route.rules),
-                              nativeCatalogRule(selection, outbound),
-                            ),
-                          },
-                        };
-                      })
-                    }
-                  />
-                ),
-              },
-              { key: 'adblock', label: 'AdBlock', children: <AdBlockTab /> },
-            ]}
-          />
+          <Space orientation="vertical" size={12} style={{ width: '100%' }}>
+            <Card className="singbox-item-card">
+              <NativeRoutingBasic config={config} onChange={setConfig} subscriptionTags={snapshot?.subscriptionTags || []} />
+            </Card>
+            {renderRoute()}
+            <Collapse className="singbox-advanced-groups" items={[{
+              key: 'catalog', label: 'Каталог готовых списков', children: (
+                <RoutingCatalogTab
+                  outboundTags={Array.from(new Set(
+                    [...asObjectArray(config.outbounds), ...asObjectArray(config.endpoints)]
+                      .map((o) => asString(o.tag)).filter(Boolean).concat(snapshot?.subscriptionTags || []),
+                  ))}
+                  assignedRules={catalogAssignedRules(asObjectArray(asObject(config.route).rules))}
+                  onAssign={(selection, outbound) => setConfig((current) => {
+                    const route = asObject(current.route);
+                    return {
+                      ...current,
+                      route: {
+                        ...route,
+                        rules: putNativeCatalogRule(
+                          asObjectArray(route.rules),
+                          nativeCatalogRule(selection, outbound),
+                        ),
+                      },
+                    };
+                  })}
+                />
+              ),
+            }]} />
+          </Space>
         );
       case 'outbound':
-        return renderOutbounds();
-      case 'balancer':
-        return renderOutbounds(false, true);
-      case 'endpoints':
-        return renderEndpoints();
-      case 'certificates':
-        return renderCertificates();
-      case 'network':
-        return renderNetwork();
+        return (
+          <Space orientation="vertical" size={12} style={{ width: '100%' }}>
+            {renderOutbounds()}
+            <Collapse className="singbox-advanced-groups" items={[
+              { key: 'groups', label: 'Балансировщики и группы выбора', children: renderOutbounds(false, true) },
+              { key: 'endpoints', label: 'Туннели и endpoints', children: renderEndpoints() },
+            ]} />
+          </Space>
+        );
+      case 'adblock':
+        return <AdBlockTab />;
+      case 'gateway':
+        return <GatewayModeControl />;
       case 'advanced':
         return renderAdvanced();
       default:
-        return renderLog();
+        return renderBasic();
     }
   })();
 
@@ -2199,17 +2113,7 @@ export default function SingBoxPage() {
       okButtonProps: { danger: true },
       onOk: reset,
     });
-  const visibleSections = [
-    'basic',
-    'dns',
-    'routing',
-    'outbound',
-    'balancer',
-    'endpoints',
-    'certificates',
-    'network',
-    'advanced',
-  ];
+  const visibleSections = ['basic', 'dns', 'routing', 'outbound', 'adblock', 'gateway', 'advanced'];
 
   return (
     <ConfigProvider theme={antdThemeConfig}>
@@ -2222,7 +2126,7 @@ export default function SingBoxPage() {
         <Layout className="content-shell">
           <Layout.Content id="content-layout" className="content-area">
             <FloatButton.BackTop target={scrollTarget} visibilityHeight={200} />
-            <Spin spinning={loading || saving} delay={150} description={t('loading')} size="large">
+            <Spin spinning={loading} delay={150} description={t('loading')} size="large">
               {fetchError ? (
                 <Result
                   status="error"
@@ -2241,7 +2145,7 @@ export default function SingBoxPage() {
                       <strong>
                         {t('pages.coreSelection.settings')} · {SECTION_LABELS[activeSection]}
                       </strong>
-                      <span>Сохранение применит настройки и перезапустит работающее ядро.</span>
+                      <span>Сохранение проверяет настройки один раз и применяет их к работающему ядру.</span>
                     </div>
                     <Row gutter={[12, 12]} align="middle">
                       <Col xs={24} md={14}>
@@ -2331,11 +2235,11 @@ export default function SingBoxPage() {
                     />
                   )}
 
-                  <Card className="singbox-section-navigation">
+                  <Card className="singbox-section-navigation" size="small">
                     <Radio.Group
                       value={activeSection}
                       buttonStyle="solid"
-                      onChange={(event) => navigate('/singbox#' + event.target.value)}
+                      onChange={(event) => navigate('/singbox#' + event.target.value, { preventScrollReset: true })}
                       options={visibleSections.map((key) => ({
                         value: key,
                         label: SECTION_LABELS[key],
