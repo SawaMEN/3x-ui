@@ -77,44 +77,37 @@ function showAdvanced() {
   fireEvent.click(screen.getByText(/Дополнительные настройки: DoH/));
 }
 
-it('requires installation before activation and preserves settings', async () => {
+it('does not expose DNS configuration or package installation before OxiDNS is installed', async () => {
   current = { ...original };
-  await openDNS();
-  expect(
-    (screen.getByRole('button', { name: 'Сначала установите OxiDNS' }) as HTMLButtonElement)
-      .disabled,
-  ).toBe(true);
-  fireEvent.click(screen.getByRole('button', { name: 'Установить OxiDNS' }));
-  await screen.findByRole('button', { name: 'Включить DNS' });
-  expect(current.enabled).toBe(false);
-  expect(HttpUtil.post).toHaveBeenCalledWith('/panel/api/oxidns/install', undefined, {
-    silent: true,
-    timeout: 180000,
-  });
-  expect(HttpUtil.post).not.toHaveBeenCalledWith(
-    '/panel/api/oxidns/setup',
-    expect.anything(),
-    expect.anything(),
-  );
-  fireEvent.click(screen.getByRole('button', { name: 'Включить DNS' }));
-  await screen.findByText(/DNS работает — запрос успешно проверен/);
+  render(<OxiDNSSettings />);
+  await screen.findByText('Для работы требуется установка OxiDNS');
+  expect(screen.getByText(/Системные пакеты и ядро Linux/)).toBeTruthy();
+  expect(screen.queryByRole('combobox', { name: 'DNS-провайдер' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Установить OxiDNS' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Создать и включить DNS' })).toBeNull();
+  expect(HttpUtil.post).not.toHaveBeenCalled();
 });
 
-it('keeps activation blocked after a failed installation', async () => {
-  current = { ...original };
-  vi.mocked(HttpUtil.post).mockResolvedValueOnce({
-    success: false,
-    msg: 'Ошибка скачивания',
-    obj: null,
-  });
+it('automatically selects the VPN preset and enables the service with one action', async () => {
   await openDNS();
-  fireEvent.click(screen.getByRole('button', { name: 'Установить OxiDNS' }));
-  await screen.findByText('Ошибка скачивания');
-  expect(
-    (screen.getByRole('button', { name: 'Сначала установите OxiDNS' }) as HTMLButtonElement)
-      .disabled,
-  ).toBe(true);
-  expect(current.enabled).toBe(false);
+  expect(screen.getByText(/Домен, сертификат и открытые порты не требуются/)).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Создать и включить DNS' }));
+  await screen.findByText(/DNS работает — запрос успешно проверен/);
+  expect(HttpUtil.post).toHaveBeenCalledWith(
+    '/panel/api/oxidns/setup',
+    expect.objectContaining({
+      useSingBox: true, doh: false, dot: false, doq: false, upstream: 'quad9',
+    }),
+    { silent: true, timeout: 180000 },
+  );
+});
+
+it('automatically prepares DoH mode and explains external prerequisites', async () => {
+  await openDNS();
+  fireEvent.click(screen.getByRole('button', { name: 'Для телефона и браузера (DoH)' }));
+  expect(screen.getByRole('textbox', { name: 'Домен защищённого DNS' })).toBeTruthy();
+  expect(screen.getByText(/не регистрирует домен, не выпускает сертификат/)).toBeTruthy();
+  expect(screen.getByText(/Потребуется домен, действующий сертификат/)).toBeTruthy();
 });
 
 it('keeps the initial flow simple and hides optional external modes', async () => {
@@ -125,13 +118,13 @@ it('keeps the initial flow simple and hides optional external modes', async () =
   fireEvent.click(screen.getByRole('switch', { name: 'Включить публичный DoH' }));
   expect(screen.getByRole('textbox', { name: 'Домен защищённого DNS' })).toBeTruthy();
   expect(screen.getByRole('spinbutton', { name: 'HTTPS-порт DoH' })).toBeTruthy();
-  expect((screen.getByRole('button', { name: 'Включить DNS' }) as HTMLButtonElement).disabled).toBe(
+  expect((screen.getByRole('button', { name: 'Создать и включить DNS' }) as HTMLButtonElement).disabled).toBe(
     true,
   );
   fireEvent.change(screen.getByRole('textbox', { name: 'Домен защищённого DNS' }), {
     target: { value: 'dns.example.com' },
   });
-  expect((screen.getByRole('button', { name: 'Включить DNS' }) as HTMLButtonElement).disabled).toBe(
+  expect((screen.getByRole('button', { name: 'Создать и включить DNS' }) as HTMLButtonElement).disabled).toBe(
     false,
   );
 });
@@ -140,7 +133,7 @@ it('rejects unused DNS and can be corrected without leaving the form', async () 
   await openDNS();
   fireEvent.click(screen.getByRole('switch', { name: 'Подключить OxiDNS к sing-box' }));
   expect(screen.getByText('DNS не будет использоваться')).toBeTruthy();
-  expect((screen.getByRole('button', { name: 'Включить DNS' }) as HTMLButtonElement).disabled).toBe(
+  expect((screen.getByRole('button', { name: 'Создать и включить DNS' }) as HTMLButtonElement).disabled).toBe(
     true,
   );
 });
@@ -164,10 +157,10 @@ it('allows DoT and DoQ on the same numeric port using different transports', asy
   fireEvent.change(screen.getByRole('textbox', { name: 'Домен защищённого DNS' }), {
     target: { value: 'dns.example.com' },
   });
-  expect((screen.getByRole('button', { name: 'Включить DNS' }) as HTMLButtonElement).disabled).toBe(
+  expect((screen.getByRole('button', { name: 'Создать и включить DNS' }) as HTMLButtonElement).disabled).toBe(
     false,
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Включить DNS' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Создать и включить DNS' }));
   await waitFor(() =>
     expect(HttpUtil.post).toHaveBeenCalledWith(
       '/panel/api/oxidns/setup',
@@ -190,37 +183,30 @@ it('prevents HTTP/3 and DoQ using the same UDP port', async () => {
     target: { value: '8443' },
   });
   expect(screen.getByText(/Конфликт TCP\/UDP-портов/)).toBeTruthy();
-  expect((screen.getByRole('button', { name: 'Включить DNS' }) as HTMLButtonElement).disabled).toBe(
+  expect((screen.getByRole('button', { name: 'Создать и включить DNS' }) as HTMLButtonElement).disabled).toBe(
     true,
   );
 });
 
-it('shows the installer again after removal in another settings window', async () => {
+it('hides all settings after the package was removed elsewhere', async () => {
   current = { ...original, installed: true };
   await openDNS();
   current = { ...original, installed: false };
   act(() => window.dispatchEvent(new Event('oxidns:changed')));
-  await screen.findByRole('button', { name: 'Установить OxiDNS' });
-  expect(
-    (screen.getByRole('button', { name: 'Сначала установите OxiDNS' }) as HTMLButtonElement)
-      .disabled,
-  ).toBe(true);
+  await screen.findByText('Для работы требуется установка OxiDNS');
+  expect(screen.queryByRole('combobox', { name: 'DNS-провайдер' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Установить OxiDNS' })).toBeNull();
 });
 
-it('checks the official version and makes update available from this screen', async () => {
+it('shows diagnostics without lifecycle operations', async () => {
   current = { ...original, installed: true, installedVersion: 'v1.6.1' };
   await openDNS();
-  fireEvent.click(screen.getByText(/Обслуживание и диагностика OxiDNS/));
-  fireEvent.click(screen.getByRole('button', { name: 'Проверить обновления' }));
-  await screen.findByRole('button', { name: 'Обновить OxiDNS' });
-  fireEvent.click(screen.getByRole('button', { name: 'Обновить OxiDNS' }));
-  await waitFor(() =>
-    expect(HttpUtil.post).toHaveBeenCalledWith('/panel/api/oxidns/update', undefined, {
-      silent: true,
-      timeout: 180000,
-    }),
-  );
-  expect(screen.getByText(/Установленная версия: v1.7.0/)).toBeTruthy();
+  fireEvent.click(screen.getByText('Диагностика OxiDNS'));
+  expect(screen.getByText(/Версия OxiDNS: v1.6.1/)).toBeTruthy();
+  expect(screen.getByText(/Для обновления или удаления/)).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Проверить обновления' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Обновить OxiDNS' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Удалить OxiDNS' })).toBeNull();
 });
 
 it('shows bounded systemd logs through the authenticated API', async () => {
@@ -238,8 +224,8 @@ it('shows bounded systemd logs through the authenticated API', async () => {
 it('disables setup on unsupported platforms but explains why', async () => {
   current = { ...original, installed: true, supported: false };
   await openDNS();
-  expect(screen.getByText('Автоматическая установка недоступна')).toBeTruthy();
-  expect((screen.getByRole('button', { name: 'Включить DNS' }) as HTMLButtonElement).disabled).toBe(
+  expect(screen.getByText('OxiDNS не поддерживается на этой системе')).toBeTruthy();
+  expect((screen.getByRole('button', { name: 'Создать и включить DNS' }) as HTMLButtonElement).disabled).toBe(
     true,
   );
 });
