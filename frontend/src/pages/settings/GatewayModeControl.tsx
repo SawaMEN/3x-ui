@@ -358,13 +358,20 @@ export default function GatewayModeControl() {
         : enabled && !networkConfigured
           ? 'Настроить шлюз'
           : 'Включить шлюз';
-  const showManual = manualOpen;
   const displayLAN = networkConfig.lanInterface
     ? `${networkConfig.lanInterface} · ${networkConfig.lanIP || 'адрес не выбран'}/${networkConfig.lanPrefix}`
-    : 'Не выбран';
-  const displayWAN = networkConfig.wanInterface || 'Без отдельного WAN / NAT';
+    : 'Не настроена';
+  const displayWAN = networkConfig.wanInterface || 'Без NAT';
   const missingNetwork = !networkConfig.lanInterface || !networkConfig.lanIP;
   const actionBlocked = conflict || recoveryOnly;
+  const gatewayProblem = enabled && (
+    conflict || recoveryOnly || coreMismatch || !coreRunning || !networkHealthy ||
+    !!status?.network?.error
+  );
+  const readinessProblems =
+    !enabled && verified && !checking && preflight && !preflight.ready
+      ? preflight.problems
+      : [];
 
   return (
     <div className="gateway-control">
@@ -374,8 +381,8 @@ export default function GatewayModeControl() {
           <div>
             <div className="singbox-section-title">Режим шлюза</div>
             <div className="singbox-section-description">
-              Пропускает трафик устройств вашей локальной сети через sing-box. Сетевые правила и
-              восстановление после перезагрузки настраиваются автоматически.
+              Подключает устройства локальной сети к интернету через sing-box. Панель сама
+              настроит сетевые правила и восстановление после перезагрузки.
             </div>
           </div>
           <Tag color={gatewayHealthy ? 'success' : enabled ? 'warning' : 'default'}>
@@ -392,44 +399,32 @@ export default function GatewayModeControl() {
           />
         ) : (
           <>
-            {conflict ||
-            recoveryOnly ||
-            coreMismatch ||
-            !coreRunning ||
-            (enabled && !networkHealthy) ? (
+            {gatewayProblem && (
               <Alert
                 className="gateway-important-alert"
                 showIcon
-                type={conflict || recoveryOnly ? 'error' : 'warning'}
+                type={conflict || recoveryOnly || !!status?.network?.error ? 'error' : 'warning'}
                 title={
                   conflict
-                    ? 'Конфликт между ядрами'
+                    ? 'Конфликт настроек шлюза'
                     : recoveryOnly
-                      ? 'Шлюз настроен не полностью'
+                      ? 'Настройка шлюза не завершена'
                       : coreMismatch
-                        ? 'Шлюз работает через ' + ownerCore
+                        ? 'Шлюз использует ' + ownerCore
                         : !coreRunning
                           ? 'Ядро остановлено'
-                          : 'Необходимо восстановить шлюз'
+                          : 'Шлюз требует восстановления'
                 }
                 description={
-                  conflict || recoveryOnly
-                    ? 'Для исправления сначала выключите шлюз. Существующие правила будут удалены безопасно.'
+                  status?.network?.error ||
+                  (conflict || recoveryOnly
+                    ? 'Выключите шлюз, затем включите его снова. Панель очистит только свои сетевые правила.'
                     : coreMismatch
-                      ? 'Можно перенести настройки на текущее ядро после проверки.'
+                      ? 'Перенесите шлюз на текущее ядро кнопкой ниже.'
                       : !coreRunning
-                        ? 'Сначала запустите sing-box.'
-                        : 'Попробуйте восстановить настройки одним действием.'
+                        ? 'Запустите ' + selectedCore + ' и обновите состояние.'
+                        : 'Нажмите «Восстановить шлюз», чтобы повторно применить настройки.')
                 }
-              />
-            ) : null}
-            {status?.network?.error && (
-              <Alert
-                className="gateway-important-alert"
-                type="error"
-                showIcon
-                title="Ошибка сети"
-                description={status.network.error}
               />
             )}
 
@@ -439,7 +434,7 @@ export default function GatewayModeControl() {
                 <strong>{displayLAN}</strong>
               </div>
               <div className="gateway-overview-line">
-                <span className="gateway-overview-label">Выход в интернет</span>
+                <span className="gateway-overview-label">Интернет (WAN)</span>
                 <strong>{displayWAN}</strong>
               </div>
               <div className="gateway-overview-line">
@@ -448,32 +443,40 @@ export default function GatewayModeControl() {
               </div>
             </div>
 
-            {!enabled && discovery?.note && (
-              <div className="gateway-auto-summary">
-                {discovery.suggested && !missingNetwork
-                  ? 'Сеть определена автоматически. Проверьте адрес и включите шлюз.'
-                  : discovery.note}
+            {!enabled && !coreRunning && (
+              <div className="gateway-help" role="status">
+                Для включения сначала запустите {selectedCore}.
               </div>
             )}
-            {!enabled && !discovery && discovering && (
-              <div className="gateway-auto-summary">Определяем локальную сеть…</div>
-            )}
-            {!enabled && networkInputValid && verified && !checking && (
-              <div className="gateway-readiness">
-                {ready ? (
-                  <>
-                    <CheckCircleOutlined /> Готов к включению
-                  </>
-                ) : (
-                  <span>
-                    {preflight?.problems[0] ||
-                      'Проверка обнаружила ограничения. Откройте диагностику.'}
-                  </span>
-                )}
+            {!enabled && coreRunning && missingNetwork && (
+              <div className="gateway-help" role="status">
+                {discovering
+                  ? 'Ищем подходящую локальную сеть…'
+                  : discovery?.note || 'Выберите локальную сеть в параметрах ниже.'}
               </div>
             )}
-            {!enabled && networkInputValid && checking && (
-              <div className="gateway-auto-summary">Проверяем готовность сети…</div>
+            {!enabled && coreRunning && !missingNetwork && checking && (
+              <div className="gateway-auto-summary" role="status">
+                Проверяем настройки сети…
+              </div>
+            )}
+            {!enabled && coreRunning && ready && !checking && (
+              <div className="gateway-readiness" role="status">
+                <CheckCircleOutlined /> Сеть готова. Можно включать шлюз.
+              </div>
+            )}
+            {readinessProblems.length > 0 && (
+              <Alert
+                className="gateway-important-alert"
+                showIcon
+                type="warning"
+                title="Нужно исправить настройки"
+                description={
+                  <ul className="gateway-preflight-list">
+                    {readinessProblems.map((problem, i) => <li key={i}>{problem}</li>)}
+                  </ul>
+                }
+              />
             )}
 
             <div className="gateway-primary-actions">
@@ -486,7 +489,7 @@ export default function GatewayModeControl() {
                           ? 'Перенести шлюз на ' + selectedCore + '?'
                           : 'Восстановить шлюз?'
                       }
-                      description="Панель повторно проверит сеть и откатит настройки при ошибке."
+                      description="Панель проверит настройки перед применением."
                       okText="Продолжить"
                       cancelText="Отмена"
                       onConfirm={() => void runAction('enable')}
@@ -498,7 +501,7 @@ export default function GatewayModeControl() {
                   )}
                   <Popconfirm
                     title="Выключить режим шлюза?"
-                    description="Будут удалены управляемые панелью TPROXY-правила. Настройки sing-box и пользователи сохранятся."
+                    description="Панель удалит правила шлюза. Настройки sing-box и пользователи сохранятся."
                     okText="Выключить"
                     cancelText="Отмена"
                     onConfirm={() => void runAction('disable')}
@@ -511,7 +514,7 @@ export default function GatewayModeControl() {
               ) : (
                 <Popconfirm
                   title="Включить режим шлюза?"
-                  description="Панель настроит перехват трафика выбранной LAN-сети на этом сервере. Если параметры неверны, доступ по сети может быть нарушен."
+                  description="Устройства выбранной сети смогут использовать сервер как шлюз. Убедитесь, что указан правильный LAN-интерфейс."
                   okText="Включить"
                   cancelText="Отмена"
                   disabled={!canSubmit}
@@ -524,7 +527,7 @@ export default function GatewayModeControl() {
               )}
               {!enabled && !discovery?.suggested && (
                 <Button size="large" disabled={busy} onClick={() => setManualOpen(true)}>
-                  Настроить сеть вручную
+                  Выбрать сеть
                 </Button>
               )}
               <Button
@@ -537,6 +540,12 @@ export default function GatewayModeControl() {
                 Обновить
               </Button>
             </div>
+            {enabled && (
+              <div className="gateway-help gateway-client-tip">
+                На устройствах локальной сети укажите IP этого сервера как основной шлюз.
+                Правила обработки трафика задаются в разделе «Маршрутизация».
+              </div>
+            )}
           </>
         )}
       </Card>
@@ -544,7 +553,7 @@ export default function GatewayModeControl() {
       <Collapse
         className="singbox-advanced-groups gateway-settings-groups"
         activeKey={[
-          ...(showManual ? ['network'] : []),
+          ...(manualOpen ? ['network'] : []),
           ...(diagnosticsOpen ? ['diagnostics'] : []),
         ]}
         onChange={(keys) => {
@@ -557,15 +566,16 @@ export default function GatewayModeControl() {
             key: 'network',
             label: 'Параметры сети',
             extra: (
-              <Tag color={discovery?.suggested ? 'success' : 'default'}>
-                {networkConfigured ? 'Применены' : discovery?.suggested ? 'Авто' : 'Ручной выбор'}
+              <Tag color={networkConfigured ? 'success' : 'default'}>
+                {networkConfigured ? 'Применены' : discovery?.suggested ? 'Автонастройка' : 'Выбор сети'}
               </Tag>
             ),
             children: (
               <Space orientation="vertical" size={14} className="gateway-fields">
                 <div className="singbox-section-description">
-                  Настройки определяются автоматически, когда найден единственный безопасный
-                  LAN-интерфейс. Изменить их при работающем шлюзе можно после выключения.
+                  Выберите сеть, устройства которой будут использовать этот сервер как шлюз.
+                  Если подходящая сеть найдена, поля заполняются автоматически.
+                  Для изменения работающей конфигурации сначала выключите шлюз.
                 </div>
                 <Row gutter={[12, 12]}>
                   <Col xs={24} sm={12}>
@@ -721,20 +731,7 @@ export default function GatewayModeControl() {
                     Проверить
                   </Button>
                 </div>
-                {preflight && verified && (!preflight.ready || diagnosticsOpen) && (
-                  <Alert
-                    showIcon
-                    type={preflight.ready ? 'success' : 'warning'}
-                    title={preflight.ready ? 'Готово к включению' : 'Проверьте параметры'}
-                    description={
-                      <ul className="gateway-preflight-list">
-                        {(preflight.ready ? preflight.notes : preflight.problems).map((item, i) => (
-                          <li key={i}>{item}</li>
-                        ))}
-                      </ul>
-                    }
-                  />
-                )}
+
               </Space>
             ),
           },
@@ -743,37 +740,28 @@ export default function GatewayModeControl() {
             label: 'Диагностика',
             children: (
               <Space orientation="vertical" size={12} className="gateway-fields">
-                <div className="gateway-check-grid">
-                  {issues.map((item) => (
-                    <div className="gateway-check" key={item.label}>
-                      <Tag color={item.healthy ? 'success' : 'default'}>
-                        {item.healthy ? 'OK' : '—'}
-                      </Tag>
-                      <span>{item.label}</span>
-                    </div>
-                  ))}
-                </div>
+                {enabled ? (
+                  <div className="gateway-check-grid">
+                    {issues.map((item) => (
+                      <div className="gateway-check" key={item.label}>
+                        <Tag color={item.healthy ? 'success' : 'default'}>
+                          {item.healthy ? 'OK' : '—'}
+                        </Tag>
+                        <span>{item.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="gateway-hint">
+                    Проверка сетевых служб появится после включения шлюза.
+                  </div>
+                )}
                 <div className="gateway-hint">
                   TPROXY: {status?.port ?? 52345} · Трафик перехватывается только из выбранной
                   IPv4-подсети. Клиенты должны использовать этот сервер как шлюз. Маршрутизация
                   настраивается в разделе «Маршрутизация» sing-box.
                 </div>
-                {preflight && verified && (
-                  <Alert
-                    showIcon
-                    type={preflight.ready ? 'success' : 'warning'}
-                    title={
-                      preflight.ready ? 'Последняя проверка пройдена' : 'Проблемы при проверке'
-                    }
-                    description={
-                      <ul className="gateway-preflight-list">
-                        {(preflight.ready ? preflight.notes : preflight.problems).map((item, i) => (
-                          <li key={i}>{item}</li>
-                        ))}
-                      </ul>
-                    }
-                  />
-                )}
+
               </Space>
             ),
           },
