@@ -91,7 +91,7 @@ describe('gateway settings in sing-box', () => {
     expect(await screen.findByText('br-lan · 192.168.10.1/24')).toBeTruthy();
     await waitFor(
       () => {
-        expect(screen.getByText('Готов к включению')).toBeTruthy();
+        expect(screen.getByText('Сеть готова. Можно включать шлюз.')).toBeTruthy();
         expect(
           (screen.getByRole('button', { name: 'Включить шлюз' }) as HTMLButtonElement).disabled,
         ).toBe(false);
@@ -130,7 +130,7 @@ describe('gateway settings in sing-box', () => {
     expect(
       (screen.getByRole('button', { name: 'Включить шлюз' }) as HTMLButtonElement).disabled,
     ).toBe(true);
-    fireEvent.click(screen.getByRole('button', { name: 'Настроить сеть вручную' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Выбрать сеть' }));
     expect(await screen.findByPlaceholderText('br-lan')).toBeTruthy();
     expect(vi.mocked(HttpUtil.post).mock.calls.some(([url]) => url.endsWith('/enable'))).toBe(
       false,
@@ -216,7 +216,7 @@ describe('gateway settings in sing-box', () => {
     await waitFor(
       () => {
         expect(checks).toBe(2);
-        expect(screen.getByText('Готов к включению')).toBeTruthy();
+        expect(screen.getByText('Сеть готова. Можно включать шлюз.')).toBeTruthy();
       },
       { timeout: 5000 },
     );
@@ -227,7 +227,7 @@ describe('gateway settings in sing-box', () => {
       obj: { ready: false, problems: ['Устаревшая проверка'], notes: [] },
     });
     await waitFor(() => {
-      expect(screen.getByText('Готов к включению')).toBeTruthy();
+      expect(screen.getByText('Сеть готова. Можно включать шлюз.')).toBeTruthy();
       expect(screen.queryByText('Устаревшая проверка')).toBeNull();
     });
   });
@@ -243,5 +243,105 @@ describe('gateway settings in sing-box', () => {
     render(<GatewayModeControl />);
     expect(await screen.findByText('Требует внимания')).toBeTruthy();
     expect(screen.queryByText('Работает')).toBeNull();
+  });
+  it('does not show a warning for a disabled gateway just because the core is stopped', async () => {
+    vi.mocked(HttpUtil.get).mockImplementation(async (url) => ({
+      success: true,
+      msg: '',
+      obj: url.endsWith('/interfaces')
+        ? { interfaces: [], defaultWAN: 'eth0', note: 'Выберите сеть вручную' }
+        : { ...status(), coreRunning: false, canEnable: false },
+    }));
+
+    render(<GatewayModeControl />);
+    expect(await screen.findByText('Для включения сначала запустите sing-box.')).toBeTruthy();
+    expect(screen.queryByText('Ядро остановлено')).toBeNull();
+    expect(screen.queryByText('Требует внимания')).toBeNull();
+    fireEvent.click(screen.getByText('Диагностика'));
+    expect(screen.getByText('Проверка сетевых служб появится после включения шлюза.')).toBeTruthy();
+    expect(screen.queryByText('IPv4 forwarding')).toBeNull();
+  });
+
+  it('shows a failed readiness check once, including when diagnostics are opened', async () => {
+    vi.mocked(HttpUtil.get).mockImplementation(async (url) => ({
+      success: true,
+      msg: '',
+      obj: url.endsWith('/interfaces')
+        ? {
+            interfaces: [
+              {
+                name: 'br-lan',
+                defaultRoute: false,
+                addresses: [{ ip: '192.168.10.1', prefix: 24, private: true }],
+              },
+              {
+                name: 'eth0',
+                defaultRoute: true,
+                addresses: [{ ip: '203.0.113.1', prefix: 24, private: false }],
+              },
+            ],
+            defaultWAN: 'eth0',
+            suggested: network,
+            note: 'Автоматическая настройка',
+          }
+        : status(),
+    }));
+    vi.mocked(HttpUtil.post).mockResolvedValue({
+      success: true,
+      msg: '',
+      obj: { ready: false, problems: ['Не найден модуль TPROXY'], notes: [] },
+    });
+
+    render(<GatewayModeControl />);
+    await screen.findByText('Нужно исправить настройки');
+    expect(screen.getAllByText('Не найден модуль TPROXY')).toHaveLength(1);
+    expect(
+      (screen.getByRole('button', { name: 'Включить шлюз' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    fireEvent.click(screen.getByText('Диагностика'));
+    expect(screen.getAllByText('Не найден модуль TPROXY')).toHaveLength(1);
+  });
+
+  it('shows the actual network error in a single gateway alert', async () => {
+    vi.mocked(HttpUtil.get).mockImplementation(async (url) => ({
+      success: true,
+      msg: '',
+      obj: url.endsWith('/interfaces')
+        ? { interfaces: [], defaultWAN: 'eth0', note: '' }
+        : {
+            ...status(true),
+            network: {
+              ...status(true).network,
+              listenerReady: false,
+              error: 'Не удалось запустить TPROXY',
+            },
+          },
+    }));
+
+    render(<GatewayModeControl />);
+    expect(await screen.findByText('Не удалось запустить TPROXY')).toBeTruthy();
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(screen.getByText('Шлюз требует восстановления')).toBeTruthy();
+  });
+  it('keeps a corrupted stored network error visible even when the gateway is off', async () => {
+    vi.mocked(HttpUtil.get).mockImplementation(async (url) => ({
+      success: true,
+      msg: '',
+      obj: url.endsWith('/interfaces')
+        ? { interfaces: [], defaultWAN: 'eth0', note: '' }
+        : {
+            ...status(),
+            network: {
+              ...disconnected,
+              configured: true,
+              error: 'Файл сетевых настроек повреждён',
+            },
+          },
+    }));
+
+    render(<GatewayModeControl />);
+    expect(await screen.findByText('Ошибка сетевых настроек')).toBeTruthy();
+    expect(screen.getByText('Файл сетевых настроек повреждён')).toBeTruthy();
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
   });
 });
