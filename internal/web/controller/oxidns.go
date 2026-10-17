@@ -120,6 +120,12 @@ func (a *OxiDNSController) setup(c *gin.Context) {
 	if cfg.Port == 0 {
 		cfg.Port = 8443
 	}
+	if cfg.DoTPort == 0 {
+		cfg.DoTPort = 853
+	}
+	if cfg.DoQPort == 0 {
+		cfg.DoQPort = 853
+	}
 	if cfg.Upstream == "" {
 		cfg.Upstream = "quad9"
 	}

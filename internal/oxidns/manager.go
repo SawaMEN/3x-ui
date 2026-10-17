@@ -41,7 +41,12 @@ type Settings struct {
 	Enabled    bool   `json:"enabled"`
 	Domain     string `json:"domain"`
 	DoH        bool   `json:"doh"`
+	HTTP3      bool   `json:"http3"`
 	Port       int    `json:"port"`
+	DoT        bool   `json:"dot"`
+	DoTPort    int    `json:"dotPort"`
+	DoQ        bool   `json:"doq"`
+	DoQPort    int    `json:"doqPort"`
 	Upstream   string `json:"upstream"`
 	UseSingBox bool   `json:"useSingBox"`
 }
@@ -51,6 +56,8 @@ type Status struct {
 	Installed         bool   `json:"installed"`
 	Running           bool   `json:"running"`
 	DoHURL            string `json:"dohUrl,omitempty"`
+	DoTAddress        string `json:"dotAddress,omitempty"`
+	DoQAddress        string `json:"doqAddress,omitempty"`
 	LocalAddress      string `json:"localAddress"`
 	Version           string `json:"version"`
 	Error             string `json:"error,omitempty"`
@@ -61,7 +68,21 @@ type Status struct {
 	UnsupportedReason string `json:"unsupportedReason,omitempty"`
 }
 
-func Defaults() Settings { return Settings{Port: 8443, Upstream: "quad9", UseSingBox: true} }
+func Defaults() Settings {
+	return Settings{Port: 8443, DoTPort: 853, DoQPort: 853, Upstream: "quad9", UseSingBox: true}
+}
+
+func normalizePorts(c *Settings) {
+	if c.Port == 0 {
+		c.Port = 8443
+	}
+	if c.DoTPort == 0 {
+		c.DoTPort = 853
+	}
+	if c.DoQPort == 0 {
+		c.DoQPort = 853
+	}
+}
 
 func Load() (Settings, error) {
 	c := Defaults()
@@ -75,6 +96,7 @@ func Load() (Settings, error) {
 	if err := json.Unmarshal(data, &c); err != nil {
 		return c, err
 	}
+	normalizePorts(&c)
 	// Never route sing-box to a removed OxiDNS binary, even if an older
 	// installation left behind an enabled settings.json file.
 	if c.Enabled {
@@ -138,6 +160,20 @@ func CurrentStatus(ctx context.Context) (Status, error) {
 			s.DoHURL = "https://" + s.Domain + port + "/dns-query"
 		}
 	}
+	if s.Installed && s.Enabled && s.Running && s.Domain != "" {
+		if s.DoT {
+			address := net.JoinHostPort("127.0.0.1", strconv.Itoa(s.DoTPort))
+			if conn, dialErr := net.DialTimeout("tcp", address, 250*time.Millisecond); dialErr == nil {
+				_ = conn.Close()
+				s.DoTAddress = net.JoinHostPort(s.Domain, strconv.Itoa(s.DoTPort))
+			}
+		}
+		if s.DoQ {
+			// UDP is connectionless: this is the configured endpoint of a
+			// running OxiDNS service, not a claim that a client probe passed.
+			s.DoQAddress = net.JoinHostPort(s.Domain, strconv.Itoa(s.DoQPort))
+		}
+	}
 	return s, nil
 }
 
@@ -145,10 +181,27 @@ func validate(c Settings, certFile, keyFile string) error {
 	if _, _, valid := upstream(c); !valid {
 		return errors.New("выберите DNS-провайдера")
 	}
-	if c.Port < 1 || c.Port > 65535 || c.Port == localPort {
-		return errors.New("неверный HTTPS-порт")
+	normalizePorts(&c)
+	validPort := func(port int) bool { return port > 0 && port <= 65535 && port != localPort }
+	if c.DoH && !validPort(c.Port) {
+		return errors.New("неверный HTTPS-порт DoH")
 	}
-	if c.DoH {
+	if c.DoT && !validPort(c.DoTPort) {
+		return errors.New("неверный TCP-порт DoT")
+	}
+	if c.DoQ && !validPort(c.DoQPort) {
+		return errors.New("неверный UDP-порт DoQ")
+	}
+	if c.HTTP3 && !c.DoH {
+		return errors.New("HTTP/3 требует включённого DoH")
+	}
+	if c.DoH && c.DoT && c.Port == c.DoTPort {
+		return errors.New("DoH и DoT не могут занимать один TCP-порт")
+	}
+	if c.DoH && c.HTTP3 && c.DoQ && c.Port == c.DoQPort {
+		return errors.New("DoH3 и DoQ не могут занимать один UDP-порт")
+	}
+	if c.DoH || c.DoT || c.DoQ {
 		if len(c.Domain) < 4 || len(c.Domain) > 253 || !strings.Contains(c.Domain, ".") || net.ParseIP(c.Domain) != nil {
 			return errors.New("укажите доменное имя для DoH")
 		}
@@ -202,6 +255,7 @@ func upstream(c Settings) (address, bootstrap string, valid bool) {
 
 // JSON-quoted scalar strings are valid YAML strings and cannot inject plugin fields.
 func Generate(c Settings, certFile, keyFile string) (string, error) {
+	normalizePorts(&c)
 	if err := validate(c, certFile, keyFile); err != nil {
 		return "", err
 	}
@@ -230,9 +284,30 @@ func Generate(c Settings, certFile, keyFile string) (string, error) {
 		fmt.Fprintln(&b, "      listen: "+strconv.Quote(":"+strconv.Itoa(c.Port)))
 		fmt.Fprintln(&b, "      cert: "+strconv.Quote(certFile))
 		fmt.Fprintln(&b, "      key: "+strconv.Quote(keyFile))
+		if c.HTTP3 {
+			fmt.Fprintln(&b, "      enable_http3: true")
+		}
 		fmt.Fprintln(&b, "      entries:")
 		fmt.Fprintln(&b, `        - path: "/dns-query"`)
 		fmt.Fprintln(&b, "          exec: main")
+	}
+	if c.DoT {
+		fmt.Fprintln(&b, "  - tag: dot_public")
+		fmt.Fprintln(&b, "    type: tcp_server")
+		fmt.Fprintln(&b, "    args:")
+		fmt.Fprintln(&b, "      entry: main")
+		fmt.Fprintln(&b, "      listen: "+strconv.Quote(":"+strconv.Itoa(c.DoTPort)))
+		fmt.Fprintln(&b, "      cert: "+strconv.Quote(certFile))
+		fmt.Fprintln(&b, "      key: "+strconv.Quote(keyFile))
+	}
+	if c.DoQ {
+		fmt.Fprintln(&b, "  - tag: doq_public")
+		fmt.Fprintln(&b, "    type: quic_server")
+		fmt.Fprintln(&b, "    args:")
+		fmt.Fprintln(&b, "      entry: main")
+		fmt.Fprintln(&b, "      listen: "+strconv.Quote(":"+strconv.Itoa(c.DoQPort)))
+		fmt.Fprintln(&b, "      cert: "+strconv.Quote(certFile))
+		fmt.Fprintln(&b, "      key: "+strconv.Quote(keyFile))
 	}
 	return b.String(), nil
 }
@@ -578,6 +653,9 @@ func Upgrade(ctx context.Context) error {
 		if restartErr == nil && c.DoH {
 			restartErr = waitDoHReady(ctx, c.Port)
 		}
+		if restartErr == nil && c.DoT {
+			restartErr = waitDoHReady(ctx, c.DoTPort)
+		}
 		if restartErr != nil {
 			// The original request may have timed out during a failed upgrade.
 			// Always attempt to restore and recheck the previous executable.
@@ -592,6 +670,9 @@ func Upgrade(ctx context.Context) error {
 			}
 			if restoreErr == nil && c.DoH {
 				restoreErr = waitDoHReady(recovery, c.Port)
+			}
+			if restoreErr == nil && c.DoT {
+				restoreErr = waitDoHReady(recovery, c.DoTPort)
 			}
 			return errors.Join(restartErr, restoreErr)
 		}
@@ -667,6 +748,7 @@ func Uninstall(ctx context.Context) error {
 func Setup(ctx context.Context, c Settings, certFile, keyFile string) error {
 	mu.Lock()
 	defer mu.Unlock()
+	normalizePorts(&c)
 	c.Enabled = true
 	if err := validate(c, certFile, keyFile); err != nil {
 		return err
@@ -736,6 +818,11 @@ func Setup(ctx context.Context, c Settings, certFile, keyFile string) error {
 	}
 	if c.DoH {
 		if err := waitDoHReady(ctx, c.Port); err != nil {
+			return errors.Join(err, rollback())
+		}
+	}
+	if c.DoT {
+		if err := waitDoHReady(ctx, c.DoTPort); err != nil {
 			return errors.Join(err, rollback())
 		}
 	}
