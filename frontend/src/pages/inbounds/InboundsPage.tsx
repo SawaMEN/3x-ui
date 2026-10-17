@@ -1,5 +1,6 @@
-import { lazy, useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useLocation } from 'react-router';
 import {
   Button,
   Card,
@@ -11,6 +12,7 @@ import {
   Row,
   Spin,
   Statistic,
+  Collapse,
   message,
 } from 'antd';
 
@@ -42,6 +44,7 @@ import { useNodesQuery } from '@/api/queries/useNodesQuery';
 import { useHostsQuery } from '@/api/queries/useHostsQuery';
 import { withMtprotoHostEndpoints } from '@/lib/hosts/host-link';
 import AppSidebar from '@/layouts/AppSidebar';
+const TelemtWorkspace = lazy(() => import('@/pages/telemt/TelemtPage'));
 const TextModal = lazy(() => import('@/components/feedback/TextModal'));
 import type { TextModalTab } from '@/components/feedback/TextModal';
 const PromptModal = lazy(() => import('@/components/feedback/PromptModal'));
@@ -83,6 +86,35 @@ interface ClientMatchTarget {
 }
 
 export default function InboundsPage() {
+  const location = useLocation();
+  const [telemtInstalled, setTelemtInstalled] = useState(false);
+  const [telemtToolsOpen, setTelemtToolsOpen] = useState<string[]>(() =>
+    new URLSearchParams(location.search).get('tab') === 'telemt' ? ['telemt'] : [],
+  );
+
+  useEffect(() => {
+    let mounted = true;
+    const refreshTelemt = async () => {
+      try {
+        const response = await HttpUtil.get<{ installed: boolean }>(
+          '/panel/api/telemt/status',
+          undefined,
+          { silent: true },
+        );
+        if (mounted)
+          setTelemtInstalled(response?.success === true && response.obj?.installed === true);
+      } catch {
+        if (mounted) setTelemtInstalled(false);
+      }
+    };
+    void refreshTelemt();
+    window.addEventListener('telemt:changed', refreshTelemt);
+    return () => {
+      mounted = false;
+      window.removeEventListener('telemt:changed', refreshTelemt);
+    };
+  }, []);
+
   const { t } = useTranslation();
   const { isDark, isUltra, antdThemeConfig } = useTheme();
   const { isMobile } = useMediaQuery();
@@ -751,6 +783,24 @@ export default function InboundsPage() {
 
         <Layout className="content-shell">
           <Layout.Content id="content-layout" className="content-area">
+            {telemtInstalled && (
+              <Collapse
+                style={{ marginBottom: 16 }}
+                activeKey={telemtToolsOpen}
+                onChange={(keys) => setTelemtToolsOpen(keys)}
+                items={[
+                  {
+                    key: 'telemt',
+                    label: `${t('menu.telemt')} — настройки движка MTProto и WEB Proxy`,
+                    children: (
+                      <Suspense fallback={<Spin size="large" />}>
+                        <TelemtWorkspace />
+                      </Suspense>
+                    ),
+                  },
+                ]}
+              />
+            )}
             <Spin
               spinning={!fetched || !hostsFetched}
               delay={200}

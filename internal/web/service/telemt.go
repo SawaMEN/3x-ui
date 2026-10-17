@@ -21,6 +21,8 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/mtproto"
 )
 
@@ -243,15 +245,20 @@ func ensureTelemtConfig() error {
 	return nil
 }
 
+func (TelemtService) IsInstalled() bool {
+	info, err := os.Stat(telemtBinaryPath)
+	return err == nil && info.Mode().IsRegular() && info.Mode().Perm()&0o111 != 0
+}
+
 func (TelemtService) Status() TelemtStatus {
-	_, binErr := os.Stat(telemtBinaryPath)
+	installed := (TelemtService{}).IsInstalled()
 	_, cfgErr := os.Stat(telemtConfigPath)
 	version := ""
-	if binErr == nil {
+	if installed {
 		version = telemtVersion()
 	}
 	latest, available := telemtLatestVersion(version)
-	return TelemtStatus{Installed: binErr == nil, Active: systemctl("is-active", "--quiet", telemtServiceName) == nil, Enabled: systemctl("is-enabled", "--quiet", telemtServiceName) == nil, Configured: cfgErr == nil, Version: version, LatestVersion: latest, UpdateAvailable: available, MekoEnabled: systemctl("is-enabled", "--quiet", telemtMekoServiceName) == nil}
+	return TelemtStatus{Installed: installed, Active: systemctl("is-active", "--quiet", telemtServiceName) == nil, Enabled: systemctl("is-enabled", "--quiet", telemtServiceName) == nil, Configured: cfgErr == nil, Version: version, LatestVersion: latest, UpdateAvailable: available, MekoEnabled: systemctl("is-enabled", "--quiet", telemtMekoServiceName) == nil}
 }
 
 func telemtLatestVersion(current string) (string, bool) {
@@ -841,6 +848,66 @@ func telemtGeneratedLink(username string, tls bool) (string, error) {
 
 func (TelemtService) Apply(action string) error {
 	switch action {
+	case "install":
+		if (TelemtService{}).IsInstalled() {
+			return errors.New("telemt: component is already installed")
+		}
+		if err := telemtUpdate(); err != nil {
+			return err
+		}
+		if !(TelemtService{}).IsInstalled() {
+			return errors.New("telemt: installer finished without an executable binary")
+		}
+		return nil
+	case "remove":
+		// The single MTProto protocol runs through Telemt sidecars. A disabled
+		// inbound still references this engine and may be re-enabled later, so
+		// prevent uninstall even when there are no generated TOML files.
+		db := database.GetDB()
+		if db == nil {
+			return errors.New("telemt: database unavailable; refusing unsafe removal")
+		}
+		var inboundCount int64
+		if err := db.Model(&model.Inbound{}).
+			Where("protocol = ? AND node_id IS NULL", model.MTProto).
+			Count(&inboundCount).Error; err != nil {
+			return fmt.Errorf("telemt: check MTProto inbound dependencies: %w", err)
+		}
+		if inboundCount > 0 {
+			return fmt.Errorf("telemt: %d MTProto inbound(s) still use Telemt; delete them before uninstalling", inboundCount)
+		}
+		if mtproto.GetManager().HasRunning() {
+			return errors.New("telemt: managed MTProto processes are still running; refusing removal")
+		}
+		// Preserve files/configuration; only uninstall the binary when unused.
+		configs, err := filepath.Glob(filepath.Join(filepath.Dir(telemtBinaryPath), "mtproto", "telemt-*.toml"))
+		if err != nil {
+			return err
+		}
+		if len(configs) != 0 {
+			return errors.New("telemt: remove MTProto inbounds before uninstalling the runtime")
+		}
+		if systemctl("is-active", "--quiet", telemtServiceName) == nil {
+			if err := systemctl("stop", telemtServiceName); err != nil {
+				return err
+			}
+		}
+		if systemctl("is-enabled", "--quiet", telemtServiceName) == nil {
+			if err := systemctl("disable", telemtServiceName); err != nil {
+				return err
+			}
+		}
+		// The optional updater must not reinstall Telemt after removal.
+		if systemctl("is-enabled", "--quiet", "telemt-update.timer") == nil {
+			if err := systemctl("disable", "--now", "telemt-update.timer"); err != nil {
+				return err
+			}
+		}
+		if err := os.Remove(telemtBinaryPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		_ = os.Remove("/etc/x-ui/telemt.version")
+		return nil
 	case "start", "stop", "restart", "enable", "disable":
 		return systemctl(action, telemtServiceName)
 	case "update":

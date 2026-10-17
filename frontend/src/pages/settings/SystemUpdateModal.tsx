@@ -46,7 +46,8 @@ type DependencyKey =
   | 'trusttunnel'
   | 'oxidns'
   | 'dnstt'
-  | 'olcrtc';
+  | 'olcrtc'
+  | 'telemt';
 
 type DependencyStatus = {
   key: DependencyKey;
@@ -135,7 +136,8 @@ const isDependencyInstallable = (dependency: DependencyStatus) =>
   dependency.key === 'dnstt' ||
   dependency.key === 'pingtunnel' ||
   dependency.key === 'trusttunnel' ||
-  dependency.key === 'olcrtc';
+  dependency.key === 'olcrtc' ||
+  dependency.key === 'telemt';
 
 const dependencyNeedsAction = (dependency: DependencyStatus) => {
   if (!dependency.availableVersion) return false;
@@ -253,7 +255,7 @@ export default function SystemUpdateModal({
   const [dependencyBusy, setDependencyBusy] = useState<DependencyKey | null>(null);
 
   const loadDependencyUpdates = useCallback(async () => {
-    const [core, sudoku, external, naive, oxidns, dnstt, olcrtc] = await Promise.all([
+    const [core, sudoku, external, naive, oxidns, dnstt, olcrtc, telemt] = await Promise.all([
       HttpUtil.get('/panel/api/setting/singbox/status') as Promise<
         ApiMsg<{ installed?: boolean; version?: string }>
       >,
@@ -273,6 +275,14 @@ export default function SystemUpdateModal({
       >,
       HttpUtil.get('/panel/api/olcrtc/status', undefined, { silent: true }) as Promise<
         ApiMsg<OlcRTCStatus>
+      >,
+      HttpUtil.get('/panel/api/telemt/status', undefined, { silent: true }) as Promise<
+        ApiMsg<{
+          installed?: boolean;
+          version?: string;
+          latestVersion?: string;
+          updateAvailable?: boolean;
+        }>
       >,
     ]);
     const bundled = ['naiveproxy', 'hysteria2'].map((key) => ({
@@ -353,6 +363,16 @@ export default function SystemUpdateModal({
       operation: olcrtc.obj?.operation,
       error: olcrtc.obj?.error || (olcrtc.success ? undefined : olcrtc.msg),
     });
+    rows.push({
+      key: 'telemt',
+      label: 'Telemt · MTProto',
+      source: 'standalone',
+      installed: telemt.success === true && telemt.obj?.installed === true,
+      installedVersion: telemt.obj?.version || '',
+      availableVersion: telemt.obj?.latestVersion || 'официальный релиз',
+      updateAvailable: telemt.obj?.updateAvailable === true,
+      error: telemt.success ? undefined : telemt.msg,
+    });
     setBundledDependencies(rows);
     setStandaloneDependencies(
       (['naiveproxy', 'hysteria2'] as const).map((key) => {
@@ -398,6 +418,12 @@ export default function SystemUpdateModal({
 
   const requestDependencyUpdate = useCallback(async (dependency: DependencyStatus) => {
     switch (dependency.key) {
+      case 'telemt':
+        return (await HttpUtil.post(
+          dependency.installed ? '/panel/api/telemt/action' : '/panel/api/telemt/install',
+          dependency.installed ? { action: 'update' } : undefined,
+          { timeout: 360000, headers: { 'Content-Type': 'application/json' } },
+        )) as ApiMsg<unknown>;
       case 'dnstt':
         return (await HttpUtil.post(
           dependency.installed ? '/panel/api/dnstt/update' : '/panel/api/dnstt/install',
@@ -443,7 +469,9 @@ export default function SystemUpdateModal({
       messageApi.success(
         dependency.key === 'olcrtc'
           ? 'OlcRTC: операция запущена. Статус будет обновляться автоматически.'
-          : dependency.key === 'oxidns' && !dependency.installed
+          : dependency.key === 'telemt' && !dependency.installed
+            ? 'Telemt установлен. Управление MTProto появилось в разделе «Входящие».'
+            : dependency.key === 'oxidns' && !dependency.installed
             ? 'OxiDNS установлен. Теперь можно создать собственный DNS.'
             : dependency.key === 'dnstt' && !dependency.installed
               ? 'DNSTT установлен. Настройте домен и ключи в разделе DNS.'
@@ -452,6 +480,7 @@ export default function SystemUpdateModal({
       await loadDependencyUpdates();
       if (dependency.key === 'oxidns') window.dispatchEvent(new Event('oxidns:changed'));
       if (dependency.key === 'dnstt') window.dispatchEvent(new Event('dnstt:changed'));
+      if (dependency.key === 'telemt') window.dispatchEvent(new Event('telemt:changed'));
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : String(error));
     } finally {
@@ -463,8 +492,10 @@ export default function SystemUpdateModal({
     setDependencyBusy(dependency.key);
     try {
       const response = (await HttpUtil.post(
-        dependency.key === 'olcrtc'
-          ? '/panel/api/olcrtc/remove'
+        dependency.key === 'telemt'
+          ? '/panel/api/telemt/remove'
+          : dependency.key === 'olcrtc'
+            ? '/panel/api/olcrtc/remove'
           : dependency.key === 'oxidns'
             ? '/panel/api/oxidns/remove'
             : dependency.key === 'dnstt'
@@ -476,7 +507,9 @@ export default function SystemUpdateModal({
       messageApi.success(
         dependency.key === 'olcrtc'
           ? 'OlcRTC: удаление запущено. Настройки клиентов сохранятся для повторной установки.'
-          : dependency.key === 'oxidns'
+          : dependency.key === 'telemt'
+            ? 'Telemt удалён. Управление скрыто; конфигурация сохранена.'
+            : dependency.key === 'oxidns'
             ? 'OxiDNS удалён, собственный DNS отключён, настройки и служебные файлы очищены.'
             : dependency.key === 'dnstt'
               ? 'DNSTT остановлен, удалён вместе с ключами и настройками.'
@@ -485,6 +518,7 @@ export default function SystemUpdateModal({
       await loadDependencyUpdates();
       if (dependency.key === 'oxidns') window.dispatchEvent(new Event('oxidns:changed'));
       if (dependency.key === 'dnstt') window.dispatchEvent(new Event('dnstt:changed'));
+      if (dependency.key === 'telemt') window.dispatchEvent(new Event('telemt:changed'));
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : String(error));
     } finally {
@@ -1011,7 +1045,9 @@ export default function SystemUpdateModal({
                             description={
                               dependency.key === 'olcrtc'
                                 ? 'Служба OlcRTC остановится, бинарники удалятся. Данные клиентов сохранятся.'
-                                : dependency.key === 'oxidns'
+                                : dependency.key === 'telemt'
+                                  ? 'Остановит и удалит Telemt. Сначала удалите MTProto входящие; настройки Telemt сохранятся.'
+                                  : dependency.key === 'oxidns'
                                   ? 'Собственный DNS будет отключён. sing-box вернётся к прежнему DNS.'
                                   : dependency.key === 'dnstt'
                                     ? 'DNSTT будет остановлен, а ключи и настройки удалены без возможности восстановления.'

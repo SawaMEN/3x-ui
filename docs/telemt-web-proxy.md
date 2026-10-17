@@ -1,9 +1,23 @@
 # WEB Proxy: transports and HTTPS frontend
 
-The Telemt page can enable or reconfigure WEB Proxy using **nginx**, **Caddy**
-or **HAProxy**. nginx remains the default for existing installations.
+Telemt is an optional MTProto runtime integrated into the 3x-ui **Входящие** workspace.
+It is not installed or enabled just by installing/updating the panel. Under
+**Настройки → Обновления пакетов и ядер Linux**, install the official Telemt
+binary (checksum-verified), then open **Входящие**. Create MTProto inbounds through the existing
+**Создать подключение → MTProto** workflow. Telemt is the runtime behind this
+single protocol; no separate Telemt protocol or proxy-creation screen exists. The
+Telemt runtime settings panel and MTProto selection in the new inbound form
+are absent until installation, and
+the API refuses operational requests while the binary is missing. Existing
+configured users, service settings, Web Proxy modes, and subscription settings
+are retained when updating the panel. Removal requires deleting the related
+MTProto inbounds first; Telemt's saved configuration is preserved for a future
+reinstall.
 
-1. Open **Telemt → Настроить Web Proxy** (or **Поднять Web Proxy**).
+The integrated workspace can enable or reconfigure WEB Proxy using **nginx**,
+**Caddy** or **HAProxy**. nginx remains the default for existing installations.
+
+1. Open **Входящие → Telemt — настройки движка MTProto и WEB Proxy → Настроить Web Proxy** (or **Поднять Web Proxy**).
 2. Enter a public domain pointing to this server and select an HTTPS frontend.
 3. Select the primary/fallback carrier and, optionally, an ordered carrier list.
 4. Use the up/down buttons to set attempt order and apply the settings.
