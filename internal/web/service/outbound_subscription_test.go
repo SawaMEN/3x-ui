@@ -460,3 +460,29 @@ func outboundsContainTag(outbounds []any, tag string) bool {
 	}
 	return false
 }
+
+func TestSubscriptionRejectsDuplicateTagPrefixes(t *testing.T) {
+	setupSettingTestDB(t)
+	svc := &OutboundSubscriptionService{}
+	first, err := svc.Create("first", "https://1.1.1.1/sub-one", "shared-", "", true, 600, false, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Create("second", "https://1.1.1.1/sub-two", "shared-", "", true, 600, false, false, false); err == nil {
+		t.Fatal("accepted a duplicate subscription tag prefix")
+	}
+	second, err := svc.Create("second", "https://1.1.1.1/sub-two", "unique-", "", true, 600, false, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Update(second.Id, "second", second.Url, "shared-", "", true, 600, false, false, false); err == nil {
+		t.Fatal("accepted a duplicate prefix during update")
+	}
+	saved, err := svc.Get(second.Id)
+	if err != nil || saved.TagPrefix != "unique-" {
+		t.Fatalf("rejected update modified the saved subscription: %+v err=%v", saved, err)
+	}
+	if err := svc.Update(first.Id, "renamed", first.Url, "shared-", "", true, 600, false, false, false); err != nil {
+		t.Fatalf("subscription cannot retain its own prefix: %v", err)
+	}
+}

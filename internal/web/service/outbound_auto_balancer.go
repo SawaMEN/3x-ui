@@ -74,7 +74,10 @@ func (o *BalanceOptions) Validate(allowPrivate bool) error {
 }
 
 func (o *BalanceOptions) apply(sub *model.OutboundSubscription) {
-	if sub.AutoBalance != o.Enabled || sub.BalanceMode != o.Mode || sub.ProbeURL != o.URL {
+	selectionChanged := sub.AutoBalance != o.Enabled || sub.BalanceMode != o.Mode || sub.ProbeURL != o.URL
+	rankingChanged := selectionChanged || sub.ProbeInterval != o.Interval || sub.Tolerance != o.Tolerance
+	healthChanged := rankingChanged || sub.HealthInterval != o.HealthInterval
+	if selectionChanged {
 		sub.SelectedTag = ""
 		sub.LastSwitch = 0
 		sub.SwitchReason = ""
@@ -83,8 +86,12 @@ func (o *BalanceOptions) apply(sub *model.OutboundSubscription) {
 	sub.AutoBalance, sub.BalanceMode, sub.ProbeURL = o.Enabled, o.Mode, o.URL
 	sub.ProbeInterval, sub.Tolerance = o.Interval, o.Tolerance
 	sub.SwitchInterval, sub.HealthInterval = o.SwitchInterval, o.HealthInterval
-	sub.LastHealth = 0
-	sub.LastProbe, sub.ProbeError, sub.ProbeResults = 0, "", ""
+	if healthChanged {
+		sub.LastHealth = 0
+	}
+	if rankingChanged {
+		sub.LastProbe, sub.ProbeError, sub.ProbeResults = 0, "", ""
+	}
 }
 
 func subscriptionAutoOutbound(sub *model.OutboundSubscription, members []any) []any {
@@ -99,7 +106,10 @@ func subscriptionAutoOutbound(sub *model.OutboundSubscription, members []any) []
 func chooseSubscriptionOutbound(results []*outbound.TestOutboundResult, current, mode string, tolerance int) string {
 	var best, previous *outbound.TestOutboundResult
 	for _, r := range results {
-		if r == nil || !r.Success || r.HTTPStatus < 200 || r.HTTPStatus >= 300 {
+		// A completed 3xx/4xx response still proves that the tunnel reached
+		// the remote HTTP server. Prefer 2xx/3xx, but do not block every
+		// route merely because the check endpoint returns a 403/429.
+		if r == nil || !r.Success || r.HTTPStatus < 200 || r.HTTPStatus >= 500 {
 			continue
 		}
 		if mode != "speed" && r.Delay < 0 {
@@ -111,14 +121,19 @@ func chooseSubscriptionOutbound(results []*outbound.TestOutboundResult, current,
 		if r.Tag == current {
 			previous = r
 		}
-		if best == nil || (mode == "speed" && r.DownloadMbps > best.DownloadMbps) || (mode != "speed" && r.Delay < best.Delay) {
+		goodStatus := r.HTTPStatus < 400
+		bestGoodStatus := best != nil && best.HTTPStatus < 400
+		if best == nil || (goodStatus && !bestGoodStatus) ||
+			(goodStatus == bestGoodStatus &&
+				((mode == "speed" && r.DownloadMbps > best.DownloadMbps) ||
+					(mode != "speed" && r.Delay < best.Delay))) {
 			best = r
 		}
 	}
 	if best == nil {
 		return ""
 	}
-	if previous != nil {
+	if previous != nil && (previous.HTTPStatus < 400) == (best.HTTPStatus < 400) {
 		if mode == "speed" && best.DownloadMbps <= previous.DownloadMbps*1.1 {
 			return current
 		}
@@ -242,9 +257,11 @@ func chooseRotatedOutbound(results []*outbound.TestOutboundResult, current, mode
 // rotation timers. In-flight results are committed only to unchanged settings.
 func (s *OutboundSubscriptionService) ProbeAutomaticSubscriptions(forceID int) (int, error) {
 	if !autoBalanceMu.TryLock() {
-		// Scheduler and user-triggered checks share the probe engine.
-		// An overlapping call is not a failed check: leave the previous
-		// healthy selection untouched and allow the next tick to retry.
+		// The scheduler may skip an occupied probe; an explicit button press
+		// must not report success when no check was actually performed.
+		if forceID > 0 {
+			return 0, fmt.Errorf("проверка подписок уже выполняется; повторите попытку позже")
+		}
 		return 0, nil
 	}
 	defer autoBalanceMu.Unlock()

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
   Button,
+  Collapse,
   Drawer,
   Form,
   Input,
@@ -10,6 +11,7 @@ import {
   Space,
   Switch,
   Table,
+  Tag,
   Typography,
 } from 'antd';
 import OutboundPingButton from './OutboundPingButton';
@@ -31,6 +33,127 @@ type Subscription = {
   probeResults?: string;
   probeError?: string;
 };
+
+type WarningGroup = { label: string; issues: string[] };
+
+function warningCategory(message: string): string {
+  const value = message.toLowerCase();
+  if (value.includes('grpc authority')) return 'gRPC: несовместимый authority';
+  if (value.includes('tcp header "http"')) return 'TCP: HTTP-заголовок Xray';
+  if (value.includes('hysteria') && value.includes('auth'))
+    return 'Hysteria: параметры авторизации';
+  if (value.includes('quic transport')) return 'QUIC: несовместимый транспорт';
+  if (value.includes('xhttp')) return 'XHTTP: не поддерживается';
+  if (value.includes('cascade dependency')) return 'Зависимости подключений';
+  if (value.includes('не поддерживается')) return 'Протокол не поддерживается';
+  return 'Другие ограничения';
+}
+
+function SubscriptionWarning({ warning }: { warning: string }) {
+  const marker =
+    /(\d+) подключений не поддерживаются текущим ядром ([^;]+); сохранены в подписке, но не применены:\s*/.exec(
+      warning,
+    );
+  if (!marker || marker.index === undefined) {
+    return warning.length < 180 ? (
+      <Typography.Text type="warning">{warning}</Typography.Text>
+    ) : (
+      <Collapse
+        ghost
+        size="small"
+        items={[
+          {
+            key: 'warning',
+            label: 'Предупреждения подписки',
+            children: (
+              <Typography.Text style={{ overflowWrap: 'anywhere' }}>{warning}</Typography.Text>
+            ),
+          },
+        ]}
+      />
+    );
+  }
+  const prefix = warning.slice(0, marker.index).trim().replace(/;$/, '');
+  const details = warning
+    .slice(marker.index + marker[0].length)
+    .split(/;\s*(?=[^;\n]+:\s)/)
+    .filter(Boolean);
+  const grouped = new Map<string, WarningGroup>();
+  for (const detail of details) {
+    const label = warningCategory(detail);
+    if (!grouped.has(label)) grouped.set(label, { label, issues: [] });
+    grouped.get(label)?.issues.push(detail);
+  }
+  return (
+    <Space orientation="vertical" size={4} style={{ maxWidth: '100%', width: '100%' }}>
+      <Typography.Text type="warning">
+        {marker[1]} подключений сохранены, но не работают с ядром {marker[2]}
+      </Typography.Text>
+      <Space size={[4, 4]} wrap>
+        {Array.from(grouped.values()).map((group) => (
+          <Tag key={group.label} color="orange">
+            {group.label}: {group.issues.length}
+          </Tag>
+        ))}
+      </Space>
+      {prefix &&
+        (prefix.length > 180 ? (
+          <Collapse
+            ghost
+            size="small"
+            items={[
+              {
+                key: 'parser',
+                label: 'Другие предупреждения импорта',
+                children: (
+                  <Typography.Text style={{ overflowWrap: 'anywhere' }}>{prefix}</Typography.Text>
+                ),
+              },
+            ]}
+          />
+        ) : (
+          <Typography.Text type="secondary">{prefix}</Typography.Text>
+        ))}
+      <Collapse
+        ghost
+        size="small"
+        items={[
+          {
+            key: 'details',
+            label: 'Показать причины по подключениям',
+            children: (
+              <Space orientation="vertical" size={6} style={{ width: '100%' }}>
+                {details.map((detail, i) => (
+                  <Typography.Text
+                    key={i}
+                    type="secondary"
+                    copyable
+                    style={{ overflowWrap: 'anywhere' }}
+                  >
+                    {detail}
+                  </Typography.Text>
+                ))}
+              </Space>
+            ),
+          },
+        ]}
+      />
+    </Space>
+  );
+}
+
+function subscriptionStatusMessage(message: string): string {
+  if (message.includes('ещё не загружен в ядро')) {
+    return 'Изменения ожидают перезапуска sing-box';
+  }
+  if (message.includes('No healthy outbound')) {
+    return 'Нет доступных узлов: автоматический маршрут временно заблокирован';
+  }
+  if (message.includes('core is stopped')) {
+    return 'Ядро остановлено — выбор применится после запуска';
+  }
+  return message;
+}
 
 export default function OutboundSubscriptions({
   open,
@@ -139,7 +262,7 @@ export default function OutboundSubscriptions({
           type="info"
           showIcon
           title="Добавьте подписку и выберите её в поле «Подключиться через»"
-          description="Тег sub-auto-ID автоматически выбирает лучшее доступное подключение и сохраняет его, пока оно работает. Кнопка «Пинг» измеряет задержку через применённый балансировщик. Список подключений обновляется по расписанию; также можно выбрать отдельный узел подписки. UDP-цепочка требует поддержки UDP у промежуточного узла."
+          description="Рабочие подключения выбираются автоматически. Несовместимые профили сохраняются для других версий ядра; подробности скрыты до раскрытия. Обновление также применяет изменения к запущенному sing-box."
         />
         {error && <Alert type="error" showIcon title={error} />}
         <Form layout="vertical">
@@ -188,27 +311,43 @@ export default function OutboundSubscriptions({
                   <Typography.Text code>
                     {row.autoBalance ? `sub-auto-${row.id}` : `${row.outboundCount} узлов`}
                   </Typography.Text>
-                  <Typography.Text type="secondary">
-                    {row.outboundCount} подключений{row.enabled ? '' : ' · отключена'}
-                  </Typography.Text>
-                  {row.supportedCount !== undefined && (
-                    <Typography.Text type="secondary">
-                      Применимо: {row.supportedCount} из {row.outboundCount}
-                    </Typography.Text>
+                  <Space size={4} wrap>
+                    {row.supportedCount !== undefined ? (
+                      <>
+                        <Tag color="green">
+                          Применимо: {row.supportedCount} из {row.outboundCount}
+                        </Tag>
+                        {row.outboundCount > row.supportedCount && (
+                          <Tag color="orange">
+                            Недоступно: {row.outboundCount - row.supportedCount}
+                          </Tag>
+                        )}
+                      </>
+                    ) : (
+                      <Tag>{row.outboundCount} подключений</Tag>
+                    )}
+                    {!row.enabled && <Tag>Отключена</Tag>}
+                  </Space>
+                  {row.selectedTag && (
+                    <Typography.Text type="secondary">Выбран: {row.selectedTag}</Typography.Text>
                   )}
-                  {row.selectedTag && <Typography.Text>Выбран: {row.selectedTag}</Typography.Text>}
-                  {row.appliedTag && (
+                  {row.appliedTag && row.appliedTag !== row.selectedTag && (
                     <Typography.Text type="secondary">Применён: {row.appliedTag}</Typography.Text>
                   )}
-                  {row.lastWarning && (
-                    <Typography.Text type="warning">{row.lastWarning}</Typography.Text>
-                  )}
+                  {row.lastWarning && <SubscriptionWarning warning={row.lastWarning} />}
                   {row.applyError && (
-                    <Typography.Text type="warning">Не применено: {row.applyError}</Typography.Text>
+                    <Typography.Text type="warning" title={row.applyError}>
+                      {subscriptionStatusMessage(row.applyError)}
+                    </Typography.Text>
                   )}
-                  {(row.lastError || row.probeError) && (
-                    <Typography.Text type="danger">
-                      {row.lastError || row.probeError}
+                  {row.probeError && (
+                    <Typography.Text type="warning" title={row.probeError}>
+                      {subscriptionStatusMessage(row.probeError)}
+                    </Typography.Text>
+                  )}
+                  {row.lastError && (
+                    <Typography.Text type="danger" style={{ overflowWrap: 'anywhere' }}>
+                      {row.lastError}
                     </Typography.Text>
                   )}
                 </Space>
@@ -219,7 +358,7 @@ export default function OutboundSubscriptions({
               render: (_, row) => (
                 <Space wrap>
                   <Button disabled={busy} onClick={() => void run(() => refresh(row.id))}>
-                    Обновить
+                    Обновить и применить
                   </Button>
                   <Button
                     disabled={busy || !row.enabled || !row.autoBalance || !row.outboundCount}

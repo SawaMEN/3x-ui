@@ -285,3 +285,20 @@ func TestSubscriptionTrimsProviderNamesAndPreservesReferences(t *testing.T) {
 		t.Fatalf("group references were not renamed: %v", settings)
 	}
 }
+
+func TestSubscriptionCompatibilityWarningsUseCurrentCore(t *testing.T) {
+	old := "Строка 2: некорректный профиль; " +
+		"13 подключений не поддерживаются текущим ядром sing-box; сохранены в подписке, но не применены: node-1: old reason"
+	if got := currentSubscriptionCompatibilityWarning(old, nil, "xray"); got != "Строка 2: некорректный профиль;" {
+		t.Fatalf("old compatibility warning survived core switch: %q", got)
+	}
+	updated := currentSubscriptionCompatibilityWarning(old, []string{"new-node: incompatible protocol"}, "hiddify-core")
+	if !strings.Contains(updated, "1 подключений не поддерживаются текущим ядром hiddify-core") ||
+		strings.Contains(updated, "node-1: old reason") ||
+		!strings.Contains(updated, "Строка 2: некорректный профиль;") {
+		t.Fatalf("warning did not follow the running core: %q", updated)
+	}
+	if got := currentSubscriptionCompatibilityWarning(updated, []string{"new-node: incompatible protocol"}, "hiddify-core"); got != updated {
+		t.Fatalf("status was appended twice: %q", got)
+	}
+}

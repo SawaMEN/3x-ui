@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -62,6 +63,7 @@ func (a *XraySettingController) initRouter(g *gin.RouterGroup) {
 	// Outbound subscription (remote outbound lists)
 	g.GET("/outbound-subs", a.listOutboundSubs)
 	g.POST("/outbound-subs", a.createOutboundSub)
+	g.POST("/outbound-subs/apply", a.applyOutboundSubs)
 	g.POST("/outbound-subs/:id/refresh", a.refreshOutboundSub)
 	g.POST("/outbound-subs/:id/probe", a.probeOutboundSub)
 	g.POST("/outbound-subs/:id/move", a.moveOutboundSub)
@@ -544,9 +546,60 @@ func (a *XraySettingController) refreshOutboundSub(c *gin.Context) {
 		jsonMsg(c, "Refresh failed", err)
 		return
 	}
-	// Signal that xray should pick up the new outbounds on next restart/reload
+	// Disabled subscriptions are stored for later use; they have no runtime
+	// outbounds, so refreshing them must not restart the selected core.
+	sub, err := a.OutboundSubscriptionService.Get(subID)
+	if err != nil {
+		jsonMsg(c, "Subscription refreshed, but its status could not be read", err)
+		return
+	}
+	if !sub.Enabled {
+		jsonObj(c, obs, nil)
+		return
+	}
+	// A manual refresh of an active subscription must publish its nodes.
 	markOutboundCoreRestart()
+	// Mass refreshes defer applying the intermediate state. The final
+	// request publishes all fetched connections with just one core restart.
+	if c.PostForm("deferApply") == "true" {
+		jsonObj(c, obs, nil)
+		return
+	}
+	if err := a.applyOutboundSubscriptionChanges(c.Request.Context()); err != nil {
+		jsonMsg(c, "Subscription saved, but runtime apply failed", err)
+		return
+	}
 	jsonObj(c, obs, nil)
+}
+
+// applyOutboundSubs publishes all already fetched profiles in one restart.
+// It never re-downloads subscriptions, even when the final fetch failed.
+func (a *XraySettingController) applyOutboundSubs(c *gin.Context) {
+	markOutboundCoreRestart()
+	if err := a.applyOutboundSubscriptionChanges(c.Request.Context()); err != nil {
+		jsonMsg(c, "Failed to apply outbound subscriptions", err)
+		return
+	}
+	jsonObj(c, "", nil)
+}
+
+func (a *XraySettingController) applyOutboundSubscriptionChanges(ctx context.Context) error {
+	core, err := (&service.SettingService{}).GetCoreType()
+	if err != nil {
+		return err
+	}
+	if !service.IsNativeCore(core) || !service.SelectedNativeCore().IsRunning() {
+		return nil
+	}
+	applyCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+	if err := service.SelectedNativeCore().Restart(applyCtx); err != nil {
+		return fmt.Errorf("sing-box restart: %w", err)
+	}
+	if _, err := a.OutboundSubscriptionService.ApplyAutomaticSelections(); err != nil {
+		return fmt.Errorf("automatic selector acknowledgement: %w", err)
+	}
+	return nil
 }
 
 func (a *XraySettingController) moveOutboundSub(c *gin.Context) {

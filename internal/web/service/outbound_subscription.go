@@ -135,14 +135,35 @@ func (s *OutboundSubscriptionService) List() ([]*model.OutboundSubscription, err
 		sub.OutboundCount = countOutbounds(sub.LastFetchedOutbounds)
 		var stored []any
 		if json.Unmarshal([]byte(sub.LastFetchedOutbounds), &stored) == nil {
-			compatible, _, _ := filterSubscriptionOutboundsWithIssues("subscription status", stored)
+			compatible, issues, coreName := filterSubscriptionOutboundsWithIssues("subscription status", stored)
 			sub.SupportedCount = len(compatible)
+			sub.LastWarning = currentSubscriptionCompatibilityWarning(sub.LastWarning, issues, coreName)
 		}
 		// Don't ship the heavy raw blobs to the list view.
 		sub.LastFetchedOutbounds = ""
 		sub.LinkIdentities = ""
 	}
 	return subs, nil
+}
+
+// Compatibility is rechecked against the current core on each list read.
+// Preserve independent parser warnings when removing an old core warning.
+var storedCompatibilityWarning = regexp.MustCompile(`(?:^|\s)\d+ подключений не поддерживаются текущим ядром [^;]+; сохранены в подписке, но не применены:.*$`)
+
+func currentSubscriptionCompatibilityWarning(previous string, issues []string, core string) string {
+	if location := storedCompatibilityWarning.FindStringIndex(previous); location != nil {
+		previous = previous[:location[0]]
+	}
+	previous = strings.TrimSpace(previous)
+	if len(issues) == 0 {
+		return previous
+	}
+	summary := fmt.Sprintf("%d подключений не поддерживаются текущим ядром %s; сохранены в подписке, но не применены: %s",
+		len(issues), core, strings.Join(issues, "; "))
+	if previous == "" {
+		return summary
+	}
+	return previous + " " + summary
 }
 
 // countOutbounds returns the number of outbounds in a stored LastFetchedOutbounds
@@ -212,6 +233,23 @@ func (s *OutboundSubscriptionService) nextDefaultSubPrefix(excludeId int) (strin
 	return fmt.Sprintf("sub%d-", defaultPrefixNumber(subs, excludeId)), nil
 }
 
+// Reserved prefixes prevent two managed subscriptions from generating
+// identical tags and stopping the core on its next config reload.
+func checkSubscriptionPrefixAvailable(prefix string, excludeID int) error {
+	var count int64
+	query := database.GetDB().Model(&model.OutboundSubscription{}).Where("tag_prefix = ?", prefix)
+	if excludeID > 0 {
+		query = query.Where("id <> ?", excludeID)
+	}
+	if err := query.Count(&count).Error; err != nil {
+		return err
+	}
+	if count != 0 {
+		return fmt.Errorf("префикс %q уже используется другой подпиской", prefix)
+	}
+	return nil
+}
+
 func (s *OutboundSubscriptionService) Create(remark, rawURL, tagPrefix, userAgent string, enabled bool, updateInterval int, allowPrivate, prepend, allowInsecure bool, balance ...*BalanceOptions) (*model.OutboundSubscription, error) {
 	subscriptionOrderMu.Lock()
 	defer subscriptionOrderMu.Unlock()
@@ -231,6 +269,9 @@ func (s *OutboundSubscriptionService) Create(remark, rawURL, tagPrefix, userAgen
 		if err != nil {
 			return nil, err
 		}
+	}
+	if err := checkSubscriptionPrefixAvailable(prefix, 0); err != nil {
+		return nil, err
 	}
 	// New subscriptions go to the end of the priority order.
 	var lastPriority int
@@ -269,6 +310,8 @@ func (s *OutboundSubscriptionService) Create(remark, rawURL, tagPrefix, userAgen
 func (s *OutboundSubscriptionService) Update(id int, remark, rawURL, tagPrefix, userAgent string, enabled bool, updateInterval int, allowPrivate, prepend, allowInsecure bool, balance ...*BalanceOptions) error {
 	unlock := lockSubscription(id)
 	defer unlock()
+	subscriptionOrderMu.Lock()
+	defer subscriptionOrderMu.Unlock()
 	sub, err := s.Get(id)
 	if err != nil {
 		return err
@@ -290,7 +333,27 @@ func (s *OutboundSubscriptionService) Update(id int, remark, rawURL, tagPrefix, 
 			return err
 		}
 	}
-	resetSelection := len(balance) > 0 && balance[0] != nil && (sub.AutoBalance != balance[0].Enabled || sub.BalanceMode != balance[0].Mode || sub.ProbeURL != balance[0].URL)
+	if err := checkSubscriptionPrefixAvailable(prefix, id); err != nil {
+		return err
+	}
+	// Changing the source must schedule an immediate re-fetch. Keep the
+	// previous working profiles until the replacement has been validated.
+	sourceChanged := sub.Url != cleanURL || sub.TagPrefix != prefix ||
+		sub.UserAgent != strings.TrimSpace(userAgent) ||
+		sub.AllowPrivate != allowPrivate || sub.AllowInsecure != allowInsecure
+	if sourceChanged {
+		sub.LastUpdated = 0
+	}
+	resetSelection, resetRanking, resetHealth := false, false, false
+	if len(balance) > 0 && balance[0] != nil {
+		if err := balance[0].Validate(allowPrivate); err != nil {
+			return err
+		}
+		policy := balance[0]
+		resetSelection = sub.AutoBalance != policy.Enabled || sub.BalanceMode != policy.Mode || sub.ProbeURL != policy.URL
+		resetRanking = resetSelection || sub.ProbeInterval != policy.Interval || sub.Tolerance != policy.Tolerance
+		resetHealth = resetRanking || sub.HealthInterval != policy.HealthInterval
+	}
 	sub.Remark = strings.TrimSpace(remark)
 	sub.Url = cleanURL
 	sub.Enabled = enabled
@@ -301,15 +364,21 @@ func (s *OutboundSubscriptionService) Update(id int, remark, rawURL, tagPrefix, 
 	sub.TagPrefix = prefix
 	sub.UpdateInterval = updateInterval
 	if len(balance) > 0 && balance[0] != nil {
-		if err := balance[0].Validate(allowPrivate); err != nil {
-			return err
-		}
 		balance[0].apply(sub)
 	}
 	fields := []string{"remark", "url", "enabled", "allow_private", "allow_insecure", "user_agent", "prepend", "tag_prefix", "update_interval"}
+	if sourceChanged {
+		fields = append(fields, "last_updated")
+	}
 	if len(balance) > 0 && balance[0] != nil {
-		fields = append(fields, "auto_balance", "balance_mode", "probe_url", "probe_interval", "tolerance", "switch_interval", "health_interval", "last_health", "last_probe", "probe_error", "probe_results")
-		// Include runtime resets only when the balance policy actually changed.
+		fields = append(fields, "auto_balance", "balance_mode", "probe_url", "probe_interval", "tolerance", "switch_interval", "health_interval")
+		// Don't overwrite concurrent probe results on a metadata-only edit.
+		if resetRanking {
+			fields = append(fields, "last_probe", "probe_error", "probe_results")
+		}
+		if resetHealth {
+			fields = append(fields, "last_health")
+		}
 		if resetSelection {
 			fields = append(fields, "selected_tag", "last_switch", "switch_reason", "applied_tag", "apply_error")
 		}
@@ -590,13 +659,7 @@ func (s *OutboundSubscriptionService) fetchAndStoreLocked(sub *model.OutboundSub
 	sub.LinkIdentities = string(identJSON)
 	sub.LastUpdated = time.Now().Unix()
 	sub.LastError = ""
-	sub.LastWarning = strings.Join(parseWarnings, "; ")
-	if len(compatibilityIssues) > 0 {
-		sub.LastWarning = strings.TrimSpace(sub.LastWarning + " " + fmt.Sprintf(
-			"%d подключений не поддерживаются текущим ядром %s; сохранены в подписке, но не применены: %s",
-			len(compatibilityIssues), coreName, strings.Join(compatibilityIssues, "; "),
-		))
-	}
+	sub.LastWarning = currentSubscriptionCompatibilityWarning(strings.Join(parseWarnings, "; "), compatibilityIssues, coreName)
 
 	updates := map[string]any{
 		"last_fetched_outbounds": sub.LastFetchedOutbounds, "link_identities": sub.LinkIdentities,

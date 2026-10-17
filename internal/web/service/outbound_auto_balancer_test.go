@@ -171,3 +171,32 @@ func TestOutboundRefreshPreservesConcurrentBalancerEdit(t *testing.T) {
 		t.Fatalf("%+v %v", saved, err)
 	}
 }
+
+func TestAutoBalancerHTTPChallengeCountsAsReachableFallback(t *testing.T) {
+	results := []*outbound.TestOutboundResult{
+		{Tag: "challenged", Success: true, HTTPStatus: 403, Delay: 15},
+		{Tag: "server-error", Success: true, HTTPStatus: 503, Delay: 1},
+	}
+	if got := chooseSubscriptionOutbound(results, "", "latency", 0); got != "challenged" {
+		t.Fatalf("a reachable HTTP challenge should not block the route, got %q", got)
+	}
+	results = append(results, &outbound.TestOutboundResult{Tag: "ok", Success: true, HTTPStatus: 204, Delay: 100})
+	if got := chooseSubscriptionOutbound(results, "challenged", "latency", 500); got != "ok" {
+		t.Fatalf("prefer an actual 2xx response even outside latency tolerance, got %q", got)
+	}
+	if got := chooseSubscriptionOutbound(results, "ok", "latency", 500); got != "ok" {
+		t.Fatalf("must retain a healthy response within latency tolerance, got %q", got)
+	}
+}
+
+func TestManualAutomaticProbeReportsConcurrentCheck(t *testing.T) {
+	autoBalanceMu.Lock()
+	defer autoBalanceMu.Unlock()
+	svc := &OutboundSubscriptionService{}
+	if count, err := svc.ProbeAutomaticSubscriptions(12); err == nil || count != 0 {
+		t.Fatalf("manual check must not claim success when skipped: count=%d err=%v", count, err)
+	}
+	if count, err := svc.ProbeAutomaticSubscriptions(0); err != nil || count != 0 {
+		t.Fatalf("scheduler should quietly retry an occupied check: count=%d err=%v", count, err)
+	}
+}

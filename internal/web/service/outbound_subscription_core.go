@@ -26,6 +26,10 @@ func subscriptionCompatibilityCategory(issue string) string {
 		return "gRPC multiMode"
 	case strings.Contains(lower, "grpc initial_windows_size"):
 		return "gRPC window settings"
+	case strings.Contains(lower, "tcp header \"http\""):
+		return "Xray TCP HTTP header"
+	case strings.Contains(lower, "hysteria") && strings.Contains(lower, "auth"):
+		return "Hysteria auth"
 	case strings.Contains(lower, "xray quic transport"):
 		return "Xray QUIC transport"
 	default:

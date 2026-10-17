@@ -43,6 +43,12 @@ func normalizeOutboundsForRuntime(outbounds []map[string]any) ([]map[string]any,
 		switch outboundType {
 		case "tun", "redirect", "tproxy":
 			return nil, fmt.Errorf("outbounds[%d].type %q is an inbound type and cannot be used as a sing-box outbound", index, outboundType)
+		case "hysteria":
+			// Normalize decoded subscription profiles as well as native editor
+			// profiles: some URI parsers emit auth as a []string.
+			if err := normalizeHysteriaShareAuth(outbound, rawString(outbound, "tag")); err != nil {
+				return nil, fmt.Errorf("outbounds[%d]: %w", index, err)
+			}
 		}
 		if err := validateRuntimeHysteriaOutbound(outbound, outboundType); err != nil {
 			return nil, fmt.Errorf("outbounds[%d]: %w", index, err)

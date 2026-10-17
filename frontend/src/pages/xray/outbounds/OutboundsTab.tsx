@@ -472,6 +472,15 @@ export default function OutboundsTab({
     }
     setSavingSub(true);
     try {
+      const previous =
+        editingSubId == null ? undefined : subs.find((sub) => sub.id === editingSubId);
+      const sourceChanged =
+        previous !== undefined &&
+        (previous.url !== newSub.url.trim() ||
+          (previous.tagPrefix ?? '') !== (newSub.tagPrefix ?? '') ||
+          (previous.userAgent ?? '') !== (newSub.userAgent ?? '') ||
+          previous.allowPrivate !== newSub.allowPrivate ||
+          previous.allowInsecure !== newSub.allowInsecure);
       const url =
         editingSubId != null
           ? `/panel/api/xray/outbound-subs/${editingSubId}`
@@ -485,10 +494,11 @@ export default function OutboundsTab({
               : 'pages.xray.outboundSub.toastAdded',
           ),
         );
-        const createdId = editingSubId == null ? r.obj?.id : undefined;
+        const reloadId =
+          editingSubId == null ? r.obj?.id : sourceChanged ? editingSubId : undefined;
         resetSubForm();
         await loadSubs();
-        if (createdId) await refreshOne(createdId);
+        if (reloadId) await refreshOne(reloadId);
         onRefreshXrayData?.();
       } else {
         messageApi.error(r?.msg || t('pages.xray.outboundSub.toastAddFailed'));
@@ -537,6 +547,7 @@ export default function OutboundsTab({
       );
       if (r?.success) {
         await loadSubs();
+        if (!sub.enabled) await refreshOne(sub.id);
         onRefreshXrayData?.();
       } else {
         messageApi.error(r?.msg || t('pages.xray.outboundSub.toastAddFailed'));
@@ -582,14 +593,37 @@ export default function OutboundsTab({
     if (subs.length === 0) return;
     setRefreshingAll(true);
     try {
-      for (const s of subs) {
+      let updated = 0;
+      let failed = 0;
+      let needsApply = false;
+      for (const sub of subs) {
         try {
-          await HttpUtil.post(`/panel/api/xray/outbound-subs/${s.id}/refresh`);
+          const reply = await HttpUtil.post(`/panel/api/xray/outbound-subs/${sub.id}/refresh`, {
+            deferApply: true,
+          });
+          if (!reply?.success) {
+            failed++;
+            continue;
+          }
+          updated++;
+          needsApply ||= Boolean(sub.enabled);
         } catch {
-          /* continue */
+          failed++;
         }
       }
-      messageApi.success(t('pages.xray.outboundSub.toastRefreshed'));
+      if (needsApply) {
+        try {
+          const reply = await HttpUtil.post('/panel/api/xray/outbound-subs/apply');
+          if (!reply?.success) failed++;
+        } catch {
+          failed++;
+        }
+      }
+      if (failed > 0) {
+        messageApi.warning(`${updated} обновлено, ${failed} ошибок при загрузке или применении`);
+      } else {
+        messageApi.success(t('pages.xray.outboundSub.toastRefreshed'));
+      }
       await loadSubs();
       onRefreshXrayData?.();
     } finally {
