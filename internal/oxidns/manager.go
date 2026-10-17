@@ -75,6 +75,13 @@ func Load() (Settings, error) {
 	if err := json.Unmarshal(data, &c); err != nil {
 		return c, err
 	}
+	// Never route sing-box to a removed OxiDNS binary, even if an older
+	// installation left behind an enabled settings.json file.
+	if c.Enabled {
+		if _, err := os.Stat(binaryPath); errors.Is(err, os.ErrNotExist) {
+			c.Enabled = false
+		}
+	}
 	return c, nil
 }
 
@@ -84,8 +91,13 @@ func CurrentStatus(ctx context.Context) (Status, error) {
 		return Status{}, err
 	}
 	s := Status{Settings: cfg, LocalAddress: net.JoinHostPort("127.0.0.1", strconv.Itoa(localPort)), Version: Version}
-	if _, err := os.Stat(binaryPath); err == nil {
+	if info, err := os.Stat(binaryPath); err == nil && info.Mode().IsRegular() {
 		s.Installed = true
+	}
+	if !s.Installed {
+		// Hide configuration for an uninstalled component, including data
+		// left by an older installation.
+		s.Settings = Defaults()
 	}
 	s.InstalledVersion = installedVersion(ctx)
 	_, err = releaseAssetName()
@@ -541,24 +553,32 @@ func Upgrade(ctx context.Context) error {
 	return nil
 }
 
+// Uninstall is idempotent: stop the dedicated service, remove only managed
+// OxiDNS files, and discard DNS preferences once the removal succeeds.
+// No sing-box templates, panel certificates, or host DNS settings are changed.
 func Uninstall(ctx context.Context) error {
 	mu.Lock()
 	defer mu.Unlock()
+	if _, err := os.Stat(servicePath); err == nil {
+		if err := systemctl(ctx, "stop", "x-ui-oxidns.service"); err != nil {
+			if !strings.Contains(err.Error(), "not loaded") && !strings.Contains(err.Error(), "not found") {
+				return err
+			}
+		}
+		if err := systemctl(ctx, "disable", "x-ui-oxidns.service"); err != nil {
+			if !strings.Contains(err.Error(), "does not exist") && !strings.Contains(err.Error(), "not loaded") {
+				return err
+			}
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	// Ensure any interrupted deletion is safe: no enabled DNS overlay can
+	// remain while its service files and binary are being removed.
 	cfg, err := Load()
 	if err != nil {
 		return err
 	}
-	if err := systemctl(ctx, "stop", "x-ui-oxidns.service"); err != nil {
-		if !strings.Contains(err.Error(), "not loaded") && !strings.Contains(err.Error(), "not found") {
-			return err
-		}
-	}
-	if err := systemctl(ctx, "disable", "x-ui-oxidns.service"); err != nil {
-		if !strings.Contains(err.Error(), "does not exist") && !strings.Contains(err.Error(), "not loaded") {
-			return err
-		}
-	}
-	// Preserve the original state until the service has actually stopped.
 	cfg.Enabled = false
 	data, err := json.Marshal(cfg)
 	if err != nil {
@@ -567,12 +587,25 @@ func Uninstall(ctx context.Context) error {
 	if err := atomicWrite(statePath, data, 0600); err != nil {
 		return err
 	}
-	for _, path := range []string{binaryPath, servicePath, configPath} {
+	for _, path := range []string{binaryPath, configPath, servicePath} {
 		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
 	}
-	return systemctl(ctx, "daemon-reload")
+	if err := systemctl(ctx, "daemon-reload"); err != nil {
+		return err
+	}
+	// OxiDNS owns this directory; it contains only its runtime cache/data.
+	if err := os.RemoveAll(filepath.Join(StateDir, "data")); err != nil {
+		return err
+	}
+	if err := os.Remove(statePath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	// Remove empty directories, but leave foreign/unexpected files alone.
+	_ = os.Remove(filepath.Join(StateDir, "bin"))
+	_ = os.Remove(StateDir)
+	return nil
 }
 
 func Setup(ctx context.Context, c Settings, certFile, keyFile string) error {

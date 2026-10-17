@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router';
 import {
   Alert,
   Button,
@@ -203,6 +204,7 @@ export default function SystemUpdateModal({
   onClose: () => void;
 }) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { isMobile } = useMediaQuery();
   const [messageApi, contextHolder] = message.useMessage();
   const [systemUpdateBusy, setSystemUpdateBusy] = useState(false);
@@ -377,8 +379,13 @@ export default function SystemUpdateModal({
         throw new Error(response?.msg || `Не удалось обновить ${dependency.label}`);
       }
 
-      messageApi.success(`${dependency.label}: ${t('pages.settings.swap.updateDone')}`);
+      messageApi.success(
+        dependency.key === 'oxidns' && !dependency.installed
+          ? 'OxiDNS установлен. Теперь можно создать собственный DNS.'
+          : `${dependency.label}: ${t('pages.settings.swap.updateDone')}`,
+      );
       await loadDependencyUpdates();
+      if (dependency.key === 'oxidns') window.dispatchEvent(new Event('oxidns:changed'));
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : String(error));
     } finally {
@@ -396,8 +403,13 @@ export default function SystemUpdateModal({
       )) as ApiMsg<unknown>;
       if (!response?.success)
         throw new Error(response?.msg || `Не удалось удалить ${dependency.label}`);
-      messageApi.success(`${dependency.label}: компонент удалён.`);
+      messageApi.success(
+        dependency.key === 'oxidns'
+          ? 'OxiDNS удалён, собственный DNS отключён, настройки и служебные файлы очищены.'
+          : `${dependency.label}: компонент удалён.`,
+      );
       await loadDependencyUpdates();
+      if (dependency.key === 'oxidns') window.dispatchEvent(new Event('oxidns:changed'));
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : String(error));
     } finally {
@@ -806,8 +818,9 @@ export default function SystemUpdateModal({
                           type="secondary"
                           style={{ display: 'block', marginBottom: 10 }}
                         >
-                          Собственный DNS и DoH для sing-box. Настройки находятся в разделе DNS.
-                          Установка не включает DNS автоматически.
+                          {dependency.installed
+                            ? 'OxiDNS установлен. Вы можете создать собственный DNS за пару кликов в разделе sing-box → DNS.'
+                            : 'Установите OxiDNS здесь, затем нажмите «Создать DNS». При удалении служба будет остановлена, настройки удалены, функции скрыты.'}
                         </Typography.Text>
                       )}
                       {dependency.key === 'pingtunnel' && (
@@ -852,6 +865,19 @@ export default function SystemUpdateModal({
                         </Typography.Paragraph>
                       )}
                       <Space wrap>
+                        {dependency.key === 'oxidns' && dependency.installed && (
+                          <Button
+                            size="small"
+                            type="primary"
+                            disabled={dependencyBusy !== null || systemUpdateBusy}
+                            onClick={() => {
+                              onClose();
+                              navigate('/singbox#dns');
+                            }}
+                          >
+                            Создать DNS
+                          </Button>
+                        )}
                         {action.supported === false ? (
                           <Alert
                             type="info"

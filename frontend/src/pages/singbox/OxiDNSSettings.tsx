@@ -69,7 +69,14 @@ export default function OxiDNSSettings() {
     const timer = window.setTimeout(() => {
       void refresh();
     }, 0);
-    return () => window.clearTimeout(timer);
+    const onComponentChanged = () => {
+      void refresh();
+    };
+    window.addEventListener('oxidns:changed', onComponentChanged);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('oxidns:changed', onComponentChanged);
+    };
   }, [refresh]);
 
   const [checking, setChecking] = useState(false);
@@ -122,6 +129,10 @@ export default function OxiDNSSettings() {
     }
   };
 
+  // Installing/removing the package controls feature visibility. The regular
+  // sing-box DNS editor is always available; OxiDNS controls are not.
+  if (!loading && !settings.installed) return null;
+
   return (
     <Card
       title="Собственный DNS — OxiDNS"
@@ -139,8 +150,8 @@ export default function OxiDNSSettings() {
       {contextHolder}
       <Space orientation="vertical" style={{ width: '100%' }} size={14}>
         <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-          Панель может сама установить и настроить защищённый DNS. Выберите провайдера и нажмите
-          «Установить и включить». Никаких команд и редактирования файлов не требуется.
+          OxiDNS установлен. Выберите провайдера и нажмите «Создать и включить DNS».
+          Настройки, служба и подключение к sing-box будут созданы автоматически.
         </Typography.Paragraph>
         {error && <Alert type="error" showIcon title={error} />}
         {settings.enabled && !settings.running && (
@@ -257,7 +268,7 @@ export default function OxiDNSSettings() {
             disabled={settings.supported === false}
             onClick={() => void apply(true)}
           >
-            {settings.enabled ? 'Сохранить и применить' : 'Установить и включить'}
+            {settings.enabled ? 'Сохранить и применить' : 'Создать и включить DNS'}
           </Button>
           {settings.enabled && (
             <Button
@@ -279,8 +290,9 @@ export default function OxiDNSSettings() {
           </Button>
         </Space>
         <Typography.Text type="secondary">
-          Установка и обновление самой программы OxiDNS — в разделе «Обновления пакетов и ядер
-          Linux». Здесь настраиваются только DNS и его подключение к sing-box.
+          Управление установкой, обновлением и удалением OxiDNS находится в разделе
+          «Обновления пакетов и ядер Linux». При удалении функции собственного DNS исчезнут,
+          а sing-box вернётся к прежним настройкам.
         </Typography.Text>
       </Space>
     </Card>
