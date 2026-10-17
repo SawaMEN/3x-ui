@@ -121,16 +121,22 @@ func CurrentStatus(ctx context.Context) (Status, error) {
 	if s.InstalledVersion != "" {
 		s.Version = s.InstalledVersion
 	}
-	if cfg.DoH && cfg.Domain != "" {
-		port := ""
-		if cfg.Port != 443 {
-			port = ":" + strconv.Itoa(cfg.Port)
-		}
-		s.DoHURL = "https://" + cfg.Domain + port + "/dns-query"
-	}
 	if s.Installed {
 		cmd := exec.CommandContext(ctx, "systemctl", "is-active", "--quiet", "x-ui-oxidns.service")
 		s.Running = cmd.Run() == nil
+	}
+	// A saved DoH domain is not a usable endpoint when the service is
+	// disabled, removed, or its HTTPS listener has stopped.
+	if s.Installed && s.Enabled && s.Running && s.DoH && s.Domain != "" {
+		address := net.JoinHostPort("127.0.0.1", strconv.Itoa(s.Port))
+		if conn, dialErr := net.DialTimeout("tcp", address, 250*time.Millisecond); dialErr == nil {
+			_ = conn.Close()
+			port := ""
+			if s.Port != 443 {
+				port = ":" + strconv.Itoa(s.Port)
+			}
+			s.DoHURL = "https://" + s.Domain + port + "/dns-query"
+		}
 	}
 	return s, nil
 }
@@ -513,6 +519,29 @@ func waitHealthy(ctx context.Context) error {
 	return errors.New("OxiDNS не открыл локальный DNS-порт после запуска")
 }
 
+// waitDoHReady verifies that the configured public HTTPS listener actually
+// starts. Local DNS success alone does not prove that DoH was activated.
+func waitDoHReady(ctx context.Context, port int) error {
+	address := net.JoinHostPort("127.0.0.1", strconv.Itoa(port))
+	var lastErr error
+	for attempt := 0; attempt < 12; attempt++ {
+		dialCtx, cancel := context.WithTimeout(ctx, time.Second)
+		conn, err := (&net.Dialer{}).DialContext(dialCtx, "tcp", address)
+		cancel()
+		if err == nil {
+			_ = conn.Close()
+			return nil
+		}
+		lastErr = err
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(250 * time.Millisecond):
+		}
+	}
+	return fmt.Errorf("HTTPS-порт DoH %d не отвечает после запуска: %w", port, lastErr)
+}
+
 func Upgrade(ctx context.Context) error {
 	mu.Lock()
 	defer mu.Unlock()
@@ -545,6 +574,9 @@ func Upgrade(ctx context.Context) error {
 		restartErr := systemctl(ctx, "restart", "x-ui-oxidns.service")
 		if restartErr == nil {
 			restartErr = waitHealthy(ctx)
+		}
+		if restartErr == nil && c.DoH {
+			restartErr = waitDoHReady(ctx, c.Port)
 		}
 		if restartErr != nil {
 			// The original request may have timed out during a failed upgrade.
@@ -699,6 +731,11 @@ func Setup(ctx context.Context, c Settings, certFile, keyFile string) error {
 	if err := waitHealthy(ctx); err != nil {
 		return errors.Join(err, rollback())
 	}
+	if c.DoH {
+		if err := waitDoHReady(ctx, c.Port); err != nil {
+			return errors.Join(err, rollback())
+		}
+	}
 	data, err := json.Marshal(c)
 	if err != nil {
 		return errors.Join(err, rollback())
@@ -720,6 +757,21 @@ func Disable(ctx context.Context) error {
 		return err
 	}
 	if !c.Enabled {
+		// An interrupted setup or manual systemd start can leave the service
+		// running despite disabled settings. Ensure "disable" is effective.
+		if _, err := os.Stat(servicePath); errors.Is(err, os.ErrNotExist) {
+			return nil
+		} else if err != nil {
+			return err
+		}
+		if exec.CommandContext(ctx, "systemctl", "is-active", "--quiet", "x-ui-oxidns.service").Run() == nil {
+			if err := systemctl(ctx, "stop", "x-ui-oxidns.service"); err != nil {
+				return err
+			}
+		}
+		if exec.CommandContext(ctx, "systemctl", "is-enabled", "--quiet", "x-ui-oxidns.service").Run() == nil {
+			return systemctl(ctx, "disable", "x-ui-oxidns.service")
+		}
 		return nil
 	}
 	if err := systemctl(ctx, "stop", "x-ui-oxidns.service"); err != nil {

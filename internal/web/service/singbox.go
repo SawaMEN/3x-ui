@@ -299,6 +299,17 @@ func normalizeSingBoxTemplate(raw string) (string, error) {
 		return "", fmt.Errorf("sing-box settings must be a JSON object")
 	}
 
+	// Runtime-only OxiDNS overlays must never be persisted in an editable
+	// template: after uninstall they would keep pointing to a dead resolver.
+	if data, ok := obj["dns"]; ok {
+		var dns map[string]any
+		if err := json.Unmarshal(data, &dns); err != nil {
+			return "", fmt.Errorf("invalid native DNS settings: %w", err)
+		}
+		if oxidns.HasManagedServer(dns) || dns["final"] == oxidns.Tag {
+			return "", fmt.Errorf("OxiDNS DNS is managed automatically; remove the reserved %q server and final tag from the editable template", oxidns.Tag)
+		}
+	}
 	for key := range obj {
 		if key == "inbounds" || key == "services" {
 			delete(obj, key)

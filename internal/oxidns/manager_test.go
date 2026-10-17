@@ -317,3 +317,25 @@ func TestHasManagedServer(t *testing.T) {
 		t.Fatal("JSON-decoded managed DNS overlay was not detected")
 	}
 }
+
+func TestWaitDoHReadyUsesConfiguredListener(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	port := listener.Addr().(*net.TCPAddr).Port
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := waitDoHReady(ctx, port); err != nil {
+		t.Fatalf("listening HTTPS port was not detected: %v", err)
+	}
+	if err := listener.Close(); err != nil {
+		t.Fatal(err)
+	}
+	cancelled, stop := context.WithCancel(context.Background())
+	stop()
+	if err := waitDoHReady(cancelled, port); err == nil {
+		t.Fatal("closed DoH listener incorrectly accepted")
+	}
+}
