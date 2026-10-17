@@ -13,6 +13,7 @@ func NewOlcRTCController(g *gin.RouterGroup) {
 	group.POST("/install", func(c *gin.Context) { jsonObj(c, gin.H{"started": true}, olcrtc.Start("install")) })
 	group.POST("/update", func(c *gin.Context) { jsonObj(c, gin.H{"started": true}, olcrtc.Start("update")) })
 	group.POST("/remove", func(c *gin.Context) { jsonObj(c, gin.H{"started": true}, olcrtc.Start("remove")) })
+	group.POST("/restart", func(c *gin.Context) { jsonObj(c, gin.H{"started": true}, olcrtc.Start("restart")) })
 	group.GET("/clients", func(c *gin.Context) {
 		clients, err := olcrtc.Clients()
 		if err != nil {
