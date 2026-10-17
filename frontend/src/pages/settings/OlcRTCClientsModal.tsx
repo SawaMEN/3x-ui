@@ -6,6 +6,7 @@ import {
   Card,
   Form,
   Input,
+  InputNumber,
   Modal,
   Popconfirm,
   Select,
@@ -26,6 +27,13 @@ import { HttpUtil } from '@/utils';
 
 type Provider = 'jitsi' | 'telemost' | 'wbstream';
 type Transport = 'datachannel' | 'vp8channel' | 'seichannel' | 'videochannel';
+type ClientQuota = {
+  speed_mbps?: number;
+  traffic_gb?: number;
+  used_bytes?: number;
+  used_gb?: number;
+  expires_at?: string;
+};
 type ClientInput = {
   client_id: string;
   carrier: Provider;
@@ -34,15 +42,16 @@ type ClientInput = {
   key: string;
   dns: string;
   name: string;
+  quota?: ClientQuota;
 };
 type Location = {
   name: string;
   carrier: Provider;
   endpoint: { room_id: string; key: string };
-  transport: { type?: string; Type?: string };
+  transport: { type?: string; Type?: string; payload?: Record<string,string> };
   dns: string;
 };
-type Client = { id: string; locations: Location[]; link: string };
+type Client = { id: string; locations: Location[]; quota?: ClientQuota; link: string };
 type ApiMsg<T> = { success?: boolean; msg?: string; obj?: T };
 
 const transportOptions: Record<Provider, { value: Transport; label: string }[]> = {
@@ -146,6 +155,11 @@ export default function OlcRTCClientsModal({
       key: location.endpoint.key,
       dns: location.dns,
       name: location.name || 'Main',
+      quota: {
+        speed_mbps: client.quota?.speed_mbps ?? 0,
+        traffic_gb: client.quota?.traffic_gb ?? 0,
+        expires_at: client.quota?.expires_at ?? '',
+      },
     });
     document
       .getElementById('olcrtc-client-editor')
@@ -165,6 +179,7 @@ export default function OlcRTCClientsModal({
       )) as ApiMsg<unknown>;
       if (!result.success) throw new Error(result.msg || 'Не удалось изменить подключение');
       await load();
+      if (editingID === id) cancelEdit();
       toast.success(
         action === 'delete'
           ? 'Подключение удалено.'
@@ -229,7 +244,10 @@ export default function OlcRTCClientsModal({
                     <Button
                       size="small"
                       icon={<EditOutlined />}
-                      disabled={client.locations.length !== 1}
+                      disabled={
+                        client.locations.length !== 1 ||
+                        Object.keys(client.locations[0]?.transport?.payload || {}).length > 0
+                      }
                       onClick={() => edit(client)}
                     >
                       Изменить
@@ -267,6 +285,17 @@ export default function OlcRTCClientsModal({
                     </Popconfirm>
                   </Space>
                 </Space>
+                <Space wrap>
+                  {typeof client.quota?.speed_mbps === 'number' && client.quota.speed_mbps > 0 && (
+                    <Tag>До {client.quota.speed_mbps} Мбит/с</Tag>
+                  )}
+                  {typeof client.quota?.traffic_gb === 'number' && client.quota.traffic_gb > 0 && (
+                    <Tag>
+                      Трафик: {((client.quota.used_bytes || 0) / 1073741824).toFixed(2)} / {client.quota.traffic_gb} ГБ
+                    </Tag>
+                  )}
+                  {client.quota?.expires_at && <Tag>До {client.quota.expires_at}</Tag>}
+                </Space>
                 {client.locations.length > 1 && (
                   <Typography.Text type="secondary">
                     Локаций: {client.locations.length}. Ссылка выше относится к первой.
@@ -294,6 +323,7 @@ export default function OlcRTCClientsModal({
             key: '',
             dns: '1.1.1.1:53',
             name: 'Main',
+            quota: { speed_mbps: 0, traffic_gb: 0, expires_at: '' },
           }}
         >
           <Form.Item name="client_id" label="Имя клиента (необязательно)">
@@ -355,6 +385,22 @@ export default function OlcRTCClientsModal({
           <Form.Item name="dns" label="DNS сервера">
             <Input placeholder="1.1.1.1:53" />
           </Form.Item>
+          <Typography.Text strong>Лимиты подключения (необязательно)</Typography.Text>
+          <Typography.Paragraph type="secondary">
+            Нулевые значения означают отсутствие ограничения. Уже использованный трафик
+            сохраняется при изменении лимитов.
+          </Typography.Paragraph>
+          <Space wrap>
+            <Form.Item name={['quota', 'speed_mbps']} label="Скорость, Мбит/с">
+              <InputNumber min={0} max={1000000} placeholder="Без ограничений" />
+            </Form.Item>
+            <Form.Item name={['quota', 'traffic_gb']} label="Трафик, ГБ">
+              <InputNumber min={0} max={1000000} placeholder="Без ограничений" />
+            </Form.Item>
+            <Form.Item name={['quota', 'expires_at']} label="Действует до">
+              <Input placeholder="ГГГГ-ММ-ДД" />
+            </Form.Item>
+          </Space>
           <Space wrap>
             <Button type="primary" htmlType="submit" icon={<PlusOutlined />} loading={saving}>
               {editingID ? 'Сохранить настройки' : 'Создать подключение'}
