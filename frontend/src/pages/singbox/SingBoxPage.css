@@ -215,3 +215,39 @@
 .singbox-settings-body .setting-list-item + .setting-list-item {
   border-top: 1px solid var(--ant-color-border-secondary);
 }
+
+/* Keep one visual hierarchy for every sing-box section: section navigation,
+   then compact subtabs, then editable cards. Never nest an extra card shell. */
+.singbox-page .singbox-settings-body {
+  min-width: 0;
+}
+.singbox-page .singbox-settings-body > .ant-card,
+.singbox-page .singbox-settings-body > .ant-space {
+  width: 100%;
+}
+.singbox-page .singbox-subtabs > .ant-tabs-nav {
+  padding: 4px 12px;
+  margin-bottom: 16px;
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 10px;
+  background: var(--ant-color-bg-container);
+}
+.singbox-page .singbox-subtabs .ant-tabs-content-holder {
+  min-width: 0;
+}
+.singbox-page .singbox-section-navigation .ant-card-body {
+  padding: 12px;
+}
+@media (max-width: 720px) {
+  .singbox-page .singbox-section-navigation .ant-radio-group {
+    width: 100%;
+    gap: 6px;
+  }
+  .singbox-page .singbox-section-navigation .ant-radio-button-wrapper {
+    flex: 1 1 auto;
+    text-align: center;
+  }
+  .singbox-page .singbox-subtabs > .ant-tabs-nav {
+    padding-inline: 8px;
+  }
+}
