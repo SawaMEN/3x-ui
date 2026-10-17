@@ -21,7 +21,8 @@ Rust-движок с собственными модулями и формато
 2. Операция выполняется сервером асинхронно; карточка показывает ход работы
    и ошибки. Установщик работает с правами root на Debian/Ubuntu,
    Linux amd64/arm64 под systemd.
-3. После успешного запуска используйте **Настроить клиентов**.
+3. После успешного запуска используйте **Настроить клиентов**. Если служба
+   остановлена, доступна кнопка **Перезапустить службу**.
 4. Создайте клиента: идентификатор, ключ шифрования и URL комнаты Jitsi
    сгенерируются автоматически, если оставить их пустыми. Скопируйте ссылку
    `olcrtc://` в приложение, **умеющее работать с OlcRTC**.
@@ -76,7 +77,7 @@ cat /etc/olcrtc-manager/config.json
 API панели (требуется сессия администратора / admin API token):
 
 - `GET /panel/api/olcrtc/status`
-- `POST /panel/api/olcrtc/install|update|remove`
+- `POST /panel/api/olcrtc/install|update|remove|restart`
 - `GET /panel/api/olcrtc/clients`
 - `POST /panel/api/olcrtc/clients`
 - `PUT /panel/api/olcrtc/clients/:id`
@@ -84,4 +85,5 @@ API панели (требуется сессия администратора /
 - `POST /panel/api/olcrtc/clients/:id/rotate-key`
 
 Для создания/обновления используются JSON-поля `client_id`, `carrier`,
-`transport`, `room_id`, `key`, `dns`, `name`.
+`transport`, `room_id`, `key`, `dns`, `name`, необязательный объект
+`quota` (`speed_mbps`, `traffic_gb`, `expires_at`).
