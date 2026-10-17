@@ -15,7 +15,7 @@ on:
       - "**.sh"
       - "tools/fetch-latest-kernel.py"
       - "tools/telemt/**"
-      - "tools/test_telemt_build.py"
+      - "tools/test_official_telemt.py"
       - "frontend/**"
       - "x-ui.service.debian"
       - "x-ui.service.arch"
@@ -93,61 +93,59 @@ jobs:
           if-no-files-found: error
           compression-level: 0
 
+  resolve-telemt:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Resolve official stable Telemt release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag=$(python3 tools/telemt/fetch.py --latest-tag)
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
   telemt:
-    name: Build patched Telemt (${{ matrix.platform }})
-    env:
-      CARGO_INCREMENTAL: "0"
-      CARGO_PROFILE_TEST_DEBUG: "0"
+    name: Verify official Telemt (${{ matrix.platform }})
+    needs: [resolve-telemt]
     strategy:
       fail-fast: false
       matrix:
         include:
           - platform: amd64
             runner: ubuntu-latest
-            target: x86_64-unknown-linux-musl
           - platform: arm64
             runner: ubuntu-24.04-arm
-            target: aarch64-unknown-linux-musl
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
-      - name: Install native musl toolchain
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y musl-tools pkg-config
-          rustup target add ${{ matrix.target }}
-      - uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            telemt-source/target
-          key: telemt-${{ matrix.platform }}-${{ hashFiles('tools/telemt/**') }}
-      - name: Test and build Telemt
-        env:
-          CC_x86_64_unknown_linux_musl: musl-gcc
-          CC_aarch64_unknown_linux_musl: musl-gcc
-          CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
-        run: bash tools/telemt/build.sh telemt-source telemt-build ${{ matrix.target }}
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
-      - name: Verify panel API reload and WEB carriers against the built engine
+      - name: Download verified official Telemt binary
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TELEMT_TAG: ${{ needs.resolve-telemt.outputs.tag }}
+        run: python3 tools/telemt/fetch.py --arch "${{ matrix.platform }}" --tag "$TELEMT_TAG" --output "$RUNNER_TEMP/telemt-build"
+      - name: Verify panel API reload and WEB carriers against official Telemt
+        env:
+          TELEMT_TEST_BINARY: ${{ runner.temp }}/telemt-build/telemt
         run: |
           mkdir -p internal/web/dist
           touch internal/web/dist/.gitkeep
-          export TELEMT_TEST_BINARY="$GITHUB_WORKSPACE/telemt-build/telemt"
           go test ./internal/mtproto ./internal/web/service -run '^Test(OfficialTelemtConfigAndReload|NativeTelemtWebCarrierConfig)$' -v -count=1
       - uses: actions/upload-artifact@v7
         with:
           name: telemt-linux-${{ matrix.platform }}
-          path: telemt-build/telemt*
+          path: ${{ runner.temp }}/telemt-build/telemt
           if-no-files-found: error
 
   build:
-    needs: [frontend, resolve-kernel, telemt]
+    needs: [frontend, resolve-kernel, telemt, resolve-telemt]
     permissions:
       contents: write
     env:
@@ -180,7 +178,7 @@ jobs:
           name: frontend-dist
           path: internal/web/dist
 
-      - name: Download tested Telemt build
+      - name: Download tested official Telemt executable
         uses: actions/download-artifact@v8
         with:
           name: telemt-linux-${{ matrix.platform }}
@@ -337,16 +335,6 @@ jobs:
           overwrite: true
           prerelease: false
 
-      - name: Upload stable Telemt assets
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-        uses: svenstaro/upload-release-action@v2
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ github.ref_name }}
-          file: telemt-build/telemt-linux-*.tar.gz*
-          file_glob: true
-          overwrite: true
-          prerelease: false
 
   publish-dev:
     name: Publish rolling dev release
@@ -365,7 +353,7 @@ jobs:
       - name: Download Linux build artifacts
         uses: actions/download-artifact@v8
         with:
-          pattern: "*-linux-*"
+          pattern: "x-ui-linux-*"
           path: dev-artifacts
           merge-multiple: true
 
@@ -409,4 +397,3 @@ jobs:
             gh release create dev-latest --prerelease --latest=false --target "$COMMIT" --title "Dev build $short" --notes "Rolling development build from main. commit=$COMMIT"
           fi
           gh release upload dev-latest dev-artifacts/*.tar.gz dev-artifacts/*.sha256 --clobber
-          gh release upload dev-latest dev-artifacts/telemt.version --clobber

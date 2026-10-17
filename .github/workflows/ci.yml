@@ -15,7 +15,7 @@ on:
       - "**.sh"
       - "tools/test-*-shell.py"
       - "tools/telemt/**"
-      - "tools/test_telemt_build.py"
+      - "tools/test_official_telemt.py"
   push:
     branches:
       - main
@@ -33,7 +33,7 @@ on:
       - "**.sh"
       - "tools/test-*-shell.py"
       - "tools/telemt/**"
-      - "tools/test_telemt_build.py"
+      - "tools/test_official_telemt.py"
 
 permissions:
   contents: read
@@ -353,8 +353,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y caddy haproxy
-      - name: Verify engine packaging and safe updater failures
-        run: python3 -m unittest discover -s tools -p test_telemt_build.py
+      - name: Verify official Telemt download integrity and updater
+        run: python3 -m unittest discover -s tools -p test_official_telemt.py
       - name: Test native HTTPS and bidirectional WebSocket routing
         run: |
           mkdir -p internal/web/dist
