@@ -1,0 +1,28 @@
+name: DNS format snapshot
+on:
+  push:
+    branches: [dns]
+    paths:
+      - '.github/workflows/dns-format-snapshot.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  formatted-sources:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend tools
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+      - name: Format and print source snapshot
+        working-directory: frontend
+        run: |
+          npx oxfmt src/pages/singbox/OxiDNSSettings.tsx src/pages/settings/SystemUpdateModal.tsx
+          node -e 'const fs=require("fs"); for (const p of process.argv.slice(1)) console.log("OXFMT_FILE:"+p+":"+fs.readFileSync(p).toString("base64"))' src/pages/singbox/OxiDNSSettings.tsx src/pages/settings/SystemUpdateModal.tsx
