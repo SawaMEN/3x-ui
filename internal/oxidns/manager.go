@@ -559,20 +559,28 @@ func Upgrade(ctx context.Context) error {
 func Uninstall(ctx context.Context) error {
 	mu.Lock()
 	defer mu.Unlock()
-	if _, err := os.Stat(servicePath); err == nil {
+	_, statErr := os.Stat(servicePath)
+	if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
+		return statErr
+	}
+	// A previous interrupted removal can leave the service loaded by
+	// systemd even after its unit file has disappeared.
+	active := exec.CommandContext(ctx, "systemctl", "is-active", "--quiet", "x-ui-oxidns.service").Run() == nil
+	if active || statErr == nil {
 		if err := systemctl(ctx, "stop", "x-ui-oxidns.service"); err != nil {
 			if !strings.Contains(err.Error(), "not loaded") && !strings.Contains(err.Error(), "not found") {
 				return err
 			}
 		}
+	}
+	if statErr == nil {
 		if err := systemctl(ctx, "disable", "x-ui-oxidns.service"); err != nil {
 			if !strings.Contains(err.Error(), "does not exist") && !strings.Contains(err.Error(), "not loaded") {
 				return err
 			}
 		}
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return err
 	}
+
 	// Ensure any interrupted deletion is safe: no enabled DNS overlay can
 	// remain while its service files and binary are being removed.
 	cfg, err := Load()
