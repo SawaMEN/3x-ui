@@ -20,6 +20,10 @@ type TelemtController struct {
 func NewTelemtController(g *gin.RouterGroup, settingService service.SettingService) *TelemtController {
 	a := &TelemtController{settingService: settingService}
 	g.GET("/status", a.status)
+	g.POST("/install", a.install)
+	// Only discovery and installation are available before the binary exists.
+	g.Use(a.requireInstalled)
+	g.POST("/remove", a.remove)
 	g.GET("/webproxy/status", a.webProxyStatus)
 	g.POST("/webproxy/enable", a.enableWebProxy)
 	g.POST("/webproxy/disable", a.disableWebProxy)
@@ -35,6 +39,33 @@ func NewTelemtController(g *gin.RouterGroup, settingService service.SettingServi
 	g.GET("/connections", a.connections)
 	g.POST("/action", a.action)
 	return a
+}
+
+func (a *TelemtController) requireInstalled(c *gin.Context) {
+	if !a.service.IsInstalled() {
+		c.AbortWithStatusJSON(http.StatusConflict, gin.H{
+			"success": false,
+			"msg": "Telemt не установлен. Установите компонент в настройках системы.",
+		})
+		return
+	}
+	c.Next()
+}
+
+func (a *TelemtController) install(c *gin.Context) {
+	if err := a.service.Apply("install"); err != nil {
+		jsonMsg(c, "failed to install Telemt", err)
+		return
+	}
+	jsonObj(c, a.service.Status(), nil)
+}
+
+func (a *TelemtController) remove(c *gin.Context) {
+	if err := a.service.Apply("remove"); err != nil {
+		jsonMsg(c, "failed to remove Telemt", err)
+		return
+	}
+	jsonObj(c, a.service.Status(), nil)
 }
 
 func (a *TelemtController) status(c *gin.Context) {
