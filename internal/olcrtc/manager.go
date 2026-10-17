@@ -488,30 +488,30 @@ func credentials() (string, string, error) {
 	}
 	return result["OLCRTC_MANAGER_USER"], result["OLCRTC_MANAGER_PASS"], nil
 }
-func api(ctx context.Context, method, path string, payload any) error {
+func apiResponse(ctx context.Context, method, path string, payload any) ([]byte, error) {
 	if !installed() {
-		return errors.New("OlcRTC is not installed")
+		return nil, errors.New("OlcRTC is not installed")
 	}
 	output, activeErr := run(ctx, "systemctl", "is-active", "olcrtc-manager")
 	if activeErr != nil || output != "active" {
-		return errors.New("OlcRTC manager service is not running")
+		return nil, errors.New("OlcRTC manager service is not running")
 	}
 	cfg, err := readConfig()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if cfg.Port < 1 || cfg.Port > 65535 {
-		return errors.New("invalid OlcRTC port")
+		return nil, errors.New("invalid OlcRTC port")
 	}
 	username, password, err := credentials()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var body io.Reader
 	if payload != nil {
 		data, err := json.Marshal(payload)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		body = bytes.NewReader(data)
 	}
@@ -519,7 +519,7 @@ func api(ctx context.Context, method, path string, payload any) error {
 	url := "http://127.0.0.1:" + strconv.Itoa(cfg.Port) + path
 	req, err := http.NewRequestWithContext(ctx, method, url, body)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	req.SetBasicAuth(username, password)
 	if body != nil {
@@ -527,15 +527,76 @@ func api(ctx context.Context, method, path string, payload any) error {
 	}
 	response, err := (&http.Client{Timeout: 25 * time.Second}).Do(req)
 	if err != nil {
-		return fmt.Errorf("OlcRTC manager is unavailable: %w", err)
+		return nil, fmt.Errorf("OlcRTC manager is unavailable: %w", err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode >= 200 && response.StatusCode < 300 {
-		return nil
+		return io.ReadAll(io.LimitReader(response.Body, 1<<20))
 	}
 	msg, _ := io.ReadAll(io.LimitReader(response.Body, 2048))
-	return fmt.Errorf("OlcRTC manager: HTTP %d: %s", response.StatusCode, strings.TrimSpace(string(msg)))
+	return nil, fmt.Errorf("OlcRTC manager: HTTP %d: %s", response.StatusCode, strings.TrimSpace(string(msg)))
 }
+func api(ctx context.Context, method, path string, payload any) error {
+	_, err := apiResponse(ctx, method, path, payload)
+	return err
+}
+
+// LiveStatus only exposes aggregate metrics and connection health. Upstream
+// /api/state includes sensitive room keys and proxy credentials, which must
+// never be forwarded to the browser as raw JSON.
+type LiveStatus struct {
+	RunningCount int          `json:"runningCount"`
+	PeerCount    int          `json:"peerCount"`
+	Clients      []LiveClient `json:"clients"`
+}
+type LiveClient struct {
+	ID            string `json:"id"`
+	Running       bool   `json:"running"`
+	PeerCount     int    `json:"peerCount"`
+	LocationCount int    `json:"locationCount"`
+	FailedCount   int    `json:"failedCount"`
+}
+func Live(ctx context.Context) (LiveStatus, error) {
+	var result LiveStatus
+	body, err := apiResponse(ctx, http.MethodGet, "/api/state", nil)
+	if err != nil {
+		return result, err
+	}
+	var upstream struct {
+		Clients []struct {
+			ClientID string `json:"client_id"`
+			Locations []struct {
+				Running bool `json:"running"`
+				Runtime struct {
+					PeerCount *int `json:"peer_count"`
+					Status string `json:"status"`
+				} `json:"runtime"`
+			} `json:"locations"`
+		} `json:"clients"`
+	}
+	if err := json.Unmarshal(body, &upstream); err != nil {
+		return result, fmt.Errorf("decode OlcRTC status: %w", err)
+	}
+	result.Clients = make([]LiveClient, 0, len(upstream.Clients))
+	for _, client := range upstream.Clients {
+		row := LiveClient{ID: client.ClientID, LocationCount: len(client.Locations)}
+		for _, location := range client.Locations {
+			if location.Running {
+				row.Running = true
+				result.RunningCount++
+			} else {
+				row.FailedCount++
+			}
+			if location.Runtime.PeerCount != nil && *location.Runtime.PeerCount > 0 {
+				row.PeerCount += *location.Runtime.PeerCount
+				result.PeerCount += *location.Runtime.PeerCount
+			}
+		}
+		result.Clients = append(result.Clients, row)
+	}
+	return result, nil
+}
+
 func CreateClient(ctx context.Context, input ClientInput) (ClientInput, error) {
 	if input.ClientID == "" {
 		suffix, err := randomHex(8)
