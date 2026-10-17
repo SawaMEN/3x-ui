@@ -43,7 +43,7 @@ core_migration_prune_stale_stages() {
         [[ -d "$old" && ! -L "$old" ]] || continue
         echo "Removing abandoned release staging: $old"
         rm -rf -- "$old" || echo "Cannot remove abandoned release staging: $old" >&2
-    done < <(find "$parent" -mindepth 1 -maxdepth 1 -type d \\( -name '.x-ui-release.??????' \\) -mmin +60 -print0 2>/dev/null)
+    done < <(find "$parent" -mindepth 1 -maxdepth 1 -type d -name '.x-ui-release.??????' -mmin +60 -print0 2>/dev/null)
 }
 
 core_migration_prune_snapshots() {
