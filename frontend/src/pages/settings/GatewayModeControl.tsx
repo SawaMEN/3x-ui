@@ -348,14 +348,15 @@ export default function GatewayModeControl() {
   }, [loading, coreRunning, networkInputValid, networkConfigured, busy, runPreflight]);
 
   const gatewayHealthy =
-    enabled && configured && coreRunning && networkHealthy && !coreMismatch && !conflict;
-  const needsRepair = enabled && (!networkHealthy || coreMismatch);
+    enabled && configured && coreRunning && networkHealthy &&
+    !coreMismatch && !conflict && !status?.network?.error;
+  const needsRepair = enabled && (!networkHealthy || coreMismatch || !!status?.network?.error);
   const gatewayActionLabel =
     coreMismatch && networkHealthy
       ? 'Перенести шлюз'
-      : networkConfigured && !networkHealthy
+      : networkConfigured
         ? 'Восстановить шлюз'
-        : enabled && !networkConfigured
+        : enabled
           ? 'Настроить шлюз'
           : 'Включить шлюз';
   const displayLAN = networkConfig.lanInterface
@@ -365,13 +366,8 @@ export default function GatewayModeControl() {
   const missingNetwork = !networkConfig.lanInterface || !networkConfig.lanIP;
   const actionBlocked = conflict || recoveryOnly;
   const gatewayProblem =
-    enabled &&
-    (conflict ||
-      recoveryOnly ||
-      coreMismatch ||
-      !coreRunning ||
-      !networkHealthy ||
-      !!status?.network?.error);
+    (enabled && (conflict || recoveryOnly || coreMismatch || !coreRunning || !networkHealthy)) ||
+    !!status?.network?.error;
   const readinessProblems =
     !enabled && verified && !checking && preflight && !preflight.ready ? preflight.problems : [];
 
@@ -407,8 +403,10 @@ export default function GatewayModeControl() {
                 showIcon
                 type={conflict || recoveryOnly || !!status?.network?.error ? 'error' : 'warning'}
                 title={
-                  conflict
-                    ? 'Конфликт настроек шлюза'
+                  !enabled && status?.network?.error
+                    ? 'Ошибка сетевых настроек'
+                    : conflict
+                      ? 'Конфликт настроек шлюза'
                     : recoveryOnly
                       ? 'Настройка шлюза не завершена'
                       : coreMismatch
