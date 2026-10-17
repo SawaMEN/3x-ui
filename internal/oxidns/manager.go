@@ -97,7 +97,7 @@ func CurrentStatus(ctx context.Context) (Status,error) {
 }
 
 func validate(c Settings, certFile,keyFile string) error {
- if c.Upstream!="quad9" && c.Upstream!="cloudflare" && c.Upstream!="adguard" {return errors.New("выберите DNS-провайдера")}
+ if _,_,valid:=upstream(c);!valid {return errors.New("выберите DNS-провайдера")}
  if c.Port<1 || c.Port>65535 || c.Port==localPort {return errors.New("неверный HTTPS-порт")}
  if c.DoH {
   if len(c.Domain)<4 || len(c.Domain)>253 || !strings.Contains(c.Domain,".") || net.ParseIP(c.Domain)!=nil {return errors.New("укажите доменное имя для DoH")}
@@ -115,18 +115,24 @@ func validate(c Settings, certFile,keyFile string) error {
  return nil
 }
 
-func upstream(c Settings) (string,string) {
+// DNS upstreams use authenticated TLS and official bootstrap addresses.
+func upstream(c Settings) (address,bootstrap string,valid bool) {
  switch c.Upstream {
- case "cloudflare": return "tls://one.one.one.one:853","1.1.1.1:53"
- case "adguard": return "tls://dns.adguard-dns.com:853","94.140.14.14:53"
- default: return "tls://dns.quad9.net:853","9.9.9.9:53"
+ case "quad9": return "tls://dns.quad9.net:853","9.9.9.9:53",true
+ case "cloudflare": return "tls://one.one.one.one:853","1.1.1.1:53",true
+ case "adguard": return "tls://dns.adguard-dns.com:853","94.140.14.14:53",true
+ case "google": return "tls://dns.google:853","8.8.8.8:53",true
+ case "yandex-basic": return "tls://common.dot.dns.yandex.net:853","77.88.8.8:53",true
+ case "yandex-safe": return "tls://safe.dot.dns.yandex.net:853","77.88.8.88:53",true
+ case "yandex-family": return "tls://family.dot.dns.yandex.net:853","77.88.8.7:53",true
+ default: return "","",false
  }
 }
 
 // JSON-quoted scalar strings are valid YAML strings and cannot inject plugin fields.
 func Generate(c Settings, certFile,keyFile string) (string,error) {
  if err:=validate(c,certFile,keyFile);err!=nil{return "",err}
- addr,bootstrap:=upstream(c)
+ addr,bootstrap,_:=upstream(c)
  var b strings.Builder
  lines:=[]string{"log:","  level: info","plugins:","  - tag: forward_upstream","    type: forward","    args:","      upstreams:"}
  for _,line:=range lines{fmt.Fprintln(&b,line)}

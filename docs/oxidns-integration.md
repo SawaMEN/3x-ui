@@ -5,7 +5,7 @@
 ## Быстрая настройка
 
 1. Откройте **sing-box → DNS → Собственный DNS — OxiDNS**.
-2. Выберите провайдера (по умолчанию Quad9).
+2. Выберите провайдера (по умолчанию Quad9). Доступны Google Public DNS, Яндекс DNS (Базовый, Безопасный и Семейный), Cloudflare и AdGuard DNS.
 3. Оставьте включённым «Использовать этот DNS в sing-box».
 4. Нажмите **Установить и включить**.
 
@@ -51,3 +51,15 @@ https://dns.example.com:8443/dns-query
 - POST /panel/api/oxidns/install, /update и /remove.
 
 Код управления службой находится в internal/oxidns/; интеграция sing-box — в internal/web/service/singbox.go. Поля управления OxiDNS не сохраняются в пользовательском JSON sing-box.
+
+## Google и Яндекс DNS
+
+Google Public DNS подключается по DoT (dns.google:853, bootstrap 8.8.8.8).
+Яндекс DNS использует официальные режимы с шифрованием DoT:
+- **Базовый:** common.dot.dns.yandex.net:853, bootstrap 77.88.8.8;
+- **Безопасный:** safe.dot.dns.yandex.net:853, bootstrap 77.88.8.88;
+- **Семейный:** family.dot.dns.yandex.net:853, bootstrap 77.88.8.7.
+
+Выбранный режим применяется после нажатия «Сохранить и применить», остальная конфигурация sing-box сохраняется. Уровень фильтрации определяется самими DNS-провайдерами, а не программой 3x-ui.
+
+Источники: https://dns.yandex.ru/ и https://developers.google.com/speed/public-dns/docs/dns-over-tls

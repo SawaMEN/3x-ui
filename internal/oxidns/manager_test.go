@@ -31,3 +31,31 @@ func TestPreserveSingBoxDNSRules(t *testing.T) {
  if len(result["servers"].([]map[string]any))!=2{t.Fatal("user server lost")}
  if _,err:=WithSingBoxDNS(result);err==nil{t.Fatal("must reject colliding managed tag")}
 }
+
+func TestDNSProviders(t *testing.T) {
+ tests:=[]struct{
+  name string
+  address string
+  bootstrap string
+ }{
+  {"google","tls://dns.google:853","8.8.8.8:53"},
+  {"yandex-basic","tls://common.dot.dns.yandex.net:853","77.88.8.8:53"},
+  {"yandex-safe","tls://safe.dot.dns.yandex.net:853","77.88.8.88:53"},
+  {"yandex-family","tls://family.dot.dns.yandex.net:853","77.88.8.7:53"},
+ }
+ for _,tc:=range tests {
+  t.Run(tc.name,func(t *testing.T) {
+   cfg:=Defaults()
+   cfg.Upstream=tc.name
+   address,bootstrap,valid:=upstream(cfg)
+   if !valid || address!=tc.address || bootstrap!=tc.bootstrap {
+    t.Fatalf("unexpected upstream for %s: %q %q %v",tc.name,address,bootstrap,valid)
+   }
+   yaml,err:=Generate(cfg,"","")
+   if err!=nil {t.Fatal(err)}
+   for _,item:=range []string{tc.address,tc.bootstrap} {
+    if !strings.Contains(yaml,item){t.Fatalf("missing upstream value %s",item)}
+   }
+  })
+ }
+}

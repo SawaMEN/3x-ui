@@ -103,6 +103,10 @@ export default function OxiDNSSettings() {
               { value: 'quad9', label: 'Quad9 — защищённый DNS (рекомендуется)' },
               { value: 'cloudflare', label: 'Cloudflare — быстрый DNS' },
               { value: 'adguard', label: 'AdGuard DNS — фильтрация рекламы' },
+              { value: 'google', label: 'Google Public DNS — без дополнительной фильтрации' },
+              { value: 'yandex-basic', label: 'Яндекс DNS — Базовый' },
+              { value: 'yandex-safe', label: 'Яндекс DNS — Безопасный (защита от опасных сайтов)' },
+              { value: 'yandex-family', label: 'Яндекс DNS — Семейный (фильтрация взрослого контента)' },
             ]}
             onChange={(value) => patch({ upstream: value })}
           />
