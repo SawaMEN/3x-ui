@@ -222,7 +222,7 @@ export default function OutboundSubscriptions({
           type="info"
           showIcon
           title="Добавьте подписку и выберите её в поле «Подключиться через»"
-          description="Тег sub-auto-ID автоматически выбирает лучшее доступное подключение и сохраняет его, пока оно работает. Кнопка «Пинг» измеряет задержку через применённый балансировщик. Список подключений обновляется по расписанию; также можно выбрать отдельный узел подписки. UDP-цепочка требует поддержки UDP у промежуточного узла."
+          description="Рабочие подключения выбираются автоматически. Несовместимые профили сохраняются для других версий ядра; подробности скрыты до раскрытия. Обновление также применяет изменения к запущенному sing-box."
         />
         {error && <Alert type="error" showIcon title={error} />}
         <Form layout="vertical">
@@ -312,7 +312,7 @@ export default function OutboundSubscriptions({
               render: (_, row) => (
                 <Space wrap>
                   <Button disabled={busy} onClick={() => void run(() => refresh(row.id))}>
-                    Обновить
+                    Обновить и применить
                   </Button>
                   <Button
                     disabled={busy || !row.enabled || !row.autoBalance || !row.outboundCount}
