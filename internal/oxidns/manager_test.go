@@ -4,6 +4,9 @@ import (
  "strings"
  "reflect"
  "testing"
+ "os"
+ "os/exec"
+ "path/filepath"
 )
 
 func TestGenerateLocalAndDoH(t *testing.T) {
@@ -55,6 +58,26 @@ func TestDNSProviders(t *testing.T) {
    if err!=nil {t.Fatal(err)}
    for _,item:=range []string{tc.address,tc.bootstrap} {
     if !strings.Contains(yaml,item){t.Fatalf("missing upstream value %s",item)}
+   }
+  })
+ }
+}
+
+func TestGeneratedYAMLAgainstOfficialBinary(t *testing.T) {
+ binary:=os.Getenv("OXIDNS_CHECK_BINARY")
+ if binary==""{t.Skip("set OXIDNS_CHECK_BINARY to verify official OxiDNS parser")}
+ for _,provider:=range []string{"quad9","cloudflare","adguard","google","yandex-basic","yandex-safe","yandex-family"} {
+  t.Run(provider,func(t *testing.T){
+   cfg:=Defaults()
+   cfg.Upstream=provider
+   payload,err:=Generate(cfg,"","")
+   if err!=nil{t.Fatal(err)}
+   workDir:=t.TempDir()
+   configFile:=filepath.Join(workDir,"config.yaml")
+   if err:=os.WriteFile(configFile,[]byte(payload),0600);err!=nil{t.Fatal(err)}
+   command:=exec.Command(binary,"check","-c",configFile,"-d",workDir)
+   if output,err:=command.CombinedOutput();err!=nil{
+    t.Fatalf("official OxiDNS rejected %s: %v\n%s\n%s",provider,err,output,payload)
    }
   })
  }
