@@ -13,6 +13,7 @@ type DNSTTController struct{}
 func NewDNSTTController(group *gin.RouterGroup) *DNSTTController {
 	c := &DNSTTController{}
 	group.GET("/status", c.status)
+	group.GET("/check-delegation", c.delegation)
 	group.POST("/install", c.install)
 	group.POST("/update", c.update)
 	group.POST("/setup", c.setup)
@@ -76,4 +77,11 @@ func (d *DNSTTController) remove(c *gin.Context) {
 		return
 	}
 	d.result(c)
+}
+
+func (d *DNSTTController) delegation(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+	result, err := dnstt.CheckDelegation(ctx)
+	jsonObj(c, result, err)
 }
