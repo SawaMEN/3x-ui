@@ -472,6 +472,14 @@ export default function OutboundsTab({
     }
     setSavingSub(true);
     try {
+      const previous = editingSubId == null ? undefined : subs.find((sub) => sub.id === editingSubId);
+      const sourceChanged = previous !== undefined && (
+        previous.url !== newSub.url.trim() ||
+        (previous.tagPrefix ?? '') !== (newSub.tagPrefix ?? '') ||
+        (previous.userAgent ?? '') !== (newSub.userAgent ?? '') ||
+        previous.allowPrivate !== newSub.allowPrivate ||
+        previous.allowInsecure !== newSub.allowInsecure
+      );
       const url =
         editingSubId != null
           ? `/panel/api/xray/outbound-subs/${editingSubId}`
@@ -485,10 +493,10 @@ export default function OutboundsTab({
               : 'pages.xray.outboundSub.toastAdded',
           ),
         );
-        const createdId = editingSubId == null ? r.obj?.id : undefined;
+        const reloadId = editingSubId == null ? r.obj?.id : sourceChanged ? editingSubId : undefined;
         resetSubForm();
         await loadSubs();
-        if (createdId) await refreshOne(createdId);
+        if (reloadId) await refreshOne(reloadId);
         onRefreshXrayData?.();
       } else {
         messageApi.error(r?.msg || t('pages.xray.outboundSub.toastAddFailed'));
@@ -537,6 +545,7 @@ export default function OutboundsTab({
       );
       if (r?.success) {
         await loadSubs();
+        if (!sub.enabled) await refreshOne(sub.id);
         onRefreshXrayData?.();
       } else {
         messageApi.error(r?.msg || t('pages.xray.outboundSub.toastAddFailed'));
