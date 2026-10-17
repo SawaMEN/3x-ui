@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Button,
   Card,
   Checkbox,
+  Collapse,
   Col,
   Input,
   InputNumber,
@@ -106,6 +107,7 @@ export default function GatewayModeControl() {
   const [busy, setBusy] = useState(false);
   const [allowDefaultInterface, setAllowDefaultInterface] = useState(false);
   const [messageApi, contextHolder] = message.useMessage();
+  const preflightSequence = useRef(0);
 
   const applyStatus = useCallback((next: GatewayStatus) => {
     setStatus(next);
@@ -204,34 +206,37 @@ export default function GatewayModeControl() {
   }, [refresh, busy, checking]);
 
   const updateNetwork = (patch: Partial<GatewayNetworkConfig>) => {
+    preflightSequence.current += 1;
     setNetworkConfig((current) => ({ ...current, ...patch }));
     setPreflight(null);
   };
 
-  const runPreflight = async (): Promise<boolean> => {
+  const runPreflight = useCallback(async (quiet = false): Promise<boolean> => {
+    const sequence = ++preflightSequence.current;
     setChecking(true);
     setPreflight(null);
     try {
       const response = (await HttpUtil.post(
         '/panel/api/gateway/preflight',
-        {
-          network: networkConfig,
-        },
+        { network: networkConfig },
         { silent: true },
       )) as ApiMsg<GatewayPreflight>;
+      if (sequence !== preflightSequence.current) return false;
       if (!response?.success || !response.obj) {
-        messageApi.error(response?.msg || 'Не удалось проверить готовность');
+        if (!quiet) messageApi.error(response?.msg || 'Не удалось проверить готовность');
         return false;
       }
       setPreflight(response.obj);
       return response.obj.ready;
     } catch (error) {
-      messageApi.error(error instanceof Error ? error.message : 'Не удалось проверить шлюз');
+      if (sequence === preflightSequence.current && !quiet) {
+        messageApi.error(error instanceof Error ? error.message : 'Не удалось проверить шлюз');
+      }
       return false;
     } finally {
-      setChecking(false);
+      if (sequence === preflightSequence.current) setChecking(false);
     }
-  };
+  }, [networkConfig, messageApi]);
 
   const runAction = async (action: 'enable' | 'disable') => {
     if (busy) return;
@@ -308,7 +313,20 @@ export default function GatewayModeControl() {
     { label: 'Автовосстановление', healthy: status?.network?.persistent === true },
   ];
   const canSubmit = !loading && !busy && !checking && canEnable && coreRunning && networkInputValid;
-  const locked = networkConfigured || busy || checking;
+  const locked = networkConfigured || busy;
+  // Automatically check a stable LAN/WAN choice, but never activate traffic
+  // interception without explicit confirmation. Stale check results are ignored.
+  useEffect(() => {
+    if (loading || !coreRunning || !networkInputValid || networkConfigured || busy) return;
+    const timer = window.setTimeout(() => {
+      void runPreflight(true);
+    }, 700);
+    return () => {
+      window.clearTimeout(timer);
+      preflightSequence.current += 1;
+    };
+  }, [loading, coreRunning, networkInputValid, networkConfigured, busy, runPreflight]);
+
   const gatewayActionLabel =
     coreMismatch && networkHealthy
       ? 'Перенести на ' + selectedCore
@@ -518,22 +536,20 @@ export default function GatewayModeControl() {
           />
         )}
         <div className="gateway-inline-actions">
-          <Button
-            icon={<SearchOutlined />}
-            disabled={locked || !discovery?.suggested}
-            onClick={() => {
-              if (discovery?.suggested) updateNetwork({ ...discovery.suggested });
-            }}
-          >
-            Применить предложенные параметры
-          </Button>
+          {discovery?.suggested && !networkConfigured &&
+            JSON.stringify(discovery.suggested) !== JSON.stringify(networkConfig) && (
+              <Button icon={<SearchOutlined />} disabled={locked}
+                onClick={() => updateNetwork({ ...discovery.suggested! })}>
+                Заполнить автоматически
+              </Button>
+            )}
           <Button
             icon={<CheckCircleOutlined />}
             loading={checking}
             disabled={!networkInputValid || busy}
             onClick={() => void runPreflight()}
           >
-            Проверить готовность
+            {checking ? 'Проверка…' : 'Проверить ещё раз'}
           </Button>
         </div>
         {preflight && (
@@ -561,7 +577,20 @@ export default function GatewayModeControl() {
           </Button>
         }
       >
-        <div className="gateway-check-grid">
+        <Space wrap className="gateway-status-summary">
+          <Tag color={coreRunning ? 'success' : 'error'}>Ядро: {coreRunning ? 'работает' : 'остановлено'}</Tag>
+          <Tag color={networkHealthy ? 'success' : networkConfigured ? 'warning' : 'default'}>
+            Linux: {networkHealthy ? 'готов' : networkConfigured ? 'требует восстановления' : 'не настроен'}
+          </Tag>
+          <Tag color={status?.network?.persistent ? 'success' : 'default'}>
+            Автовосстановление: {status?.network?.persistent ? 'активно' : 'неактивно'}
+          </Tag>
+        </Space>
+        <Collapse className="gateway-details" items={[{
+          key: 'diagnostics',
+          label: 'Подробная диагностика',
+          children: (
+            <div className="gateway-check-grid">
           {issues.map((item) => (
             <div className="gateway-check" key={item.label}>
               <Tag color={item.healthy ? 'success' : 'default'}>{item.healthy ? 'OK' : '—'}</Tag>
@@ -569,6 +598,8 @@ export default function GatewayModeControl() {
             </div>
           ))}
         </div>
+          ),
+        }]} />
         <Typography.Paragraph type="secondary" className="gateway-hint">
           Перехват ограничен выбранной IPv4 LAN-подсетью. Клиенты должны использовать этот сервер
           как свой шлюз. Исходящий маршрут задаётся обычными правилами выбранного ядра. Изменение
