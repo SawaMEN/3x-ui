@@ -17,17 +17,17 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Format Go integration
         run: |
-          gofmt -w internal/oxidns/manager.go internal/web/controller/oxidns.go
+          gofmt -w internal/oxidns/manager.go internal/oxidns/manager_test.go internal/web/controller/oxidns.go
           python3 - <<'PY'
           import base64
           from pathlib import Path
-          for path in ["internal/oxidns/manager.go","internal/web/controller/oxidns.go"]:
+          for path in ["internal/oxidns/manager.go","internal/oxidns/manager_test.go","internal/web/controller/oxidns.go"]:
               print("GOFMT_FILE:"+path+":"+base64.b64encode(Path(path).read_bytes()).decode())
           PY
       - name: Install frontend formatter
         working-directory: frontend
         run: npm ci --no-audit --no-fund
-      - name: Format DNS UI
+      - name: Format DNS UI and endpoints
         working-directory: frontend
         run: |
           npx oxfmt src/pages/singbox/OxiDNSSettings.tsx src/pages/api-docs/endpoints.ts
