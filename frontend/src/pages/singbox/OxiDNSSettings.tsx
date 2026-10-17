@@ -53,16 +53,21 @@ export default function OxiDNSSettings() {
   const [error, setError] = useState('');
 
   const refresh = useCallback(async () => {
-    const response = (await HttpUtil.get('/panel/api/oxidns/status', undefined, {
-      silent: true,
-    })) as APIResponse;
-    if (response.success && response.obj) {
-      setSettings(response.obj);
-      setError('');
-    } else {
-      setError(response.msg || 'Не удалось получить настройки DNS.');
+    try {
+      const response = (await HttpUtil.get('/panel/api/oxidns/status', undefined, {
+        silent: true,
+      })) as APIResponse;
+      if (response.success && response.obj) {
+        setSettings(response.obj);
+        setError('');
+      } else {
+        setError(response.msg || 'Не удалось получить настройки DNS.');
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Не удалось получить настройки DNS.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   useEffect(() => {

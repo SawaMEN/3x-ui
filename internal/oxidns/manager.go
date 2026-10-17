@@ -547,12 +547,18 @@ func Upgrade(ctx context.Context) error {
 			restartErr = waitHealthy(ctx)
 		}
 		if restartErr != nil {
-			err := restartErr
+			// The original request may have timed out during a failed upgrade.
+			// Always attempt to restore and recheck the previous executable.
+			recovery, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
 			restoreErr := atomicWrite(binaryPath, oldBinary, 0755)
 			if restoreErr == nil {
-				restoreErr = systemctl(ctx, "restart", "x-ui-oxidns.service")
+				restoreErr = systemctl(recovery, "restart", "x-ui-oxidns.service")
 			}
-			return errors.Join(err, restoreErr)
+			if restoreErr == nil {
+				restoreErr = waitHealthy(recovery)
+			}
+			return errors.Join(restartErr, restoreErr)
 		}
 	}
 	return nil
@@ -720,7 +726,10 @@ func Disable(ctx context.Context) error {
 		return err
 	}
 	if err := systemctl(ctx, "disable", "x-ui-oxidns.service"); err != nil {
-		return errors.Join(err, systemctl(ctx, "start", "x-ui-oxidns.service"))
+		recovery, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		return errors.Join(err, systemctl(recovery, "enable", "x-ui-oxidns.service"),
+			systemctl(recovery, "start", "x-ui-oxidns.service"))
 	}
 	c.Enabled = false
 	data, err := json.Marshal(c)
@@ -728,9 +737,11 @@ func Disable(ctx context.Context) error {
 		err = atomicWrite(statePath, data, 0600)
 	}
 	if err != nil {
+		recovery, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
 		return errors.Join(err,
-			systemctl(ctx, "enable", "x-ui-oxidns.service"),
-			systemctl(ctx, "start", "x-ui-oxidns.service"))
+			systemctl(recovery, "enable", "x-ui-oxidns.service"),
+			systemctl(recovery, "start", "x-ui-oxidns.service"))
 	}
 	return nil
 }
