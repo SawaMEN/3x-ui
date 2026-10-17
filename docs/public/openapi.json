@@ -7475,6 +7475,186 @@
         }
       }
     },
+    "/panel/api/dnstt/status": {
+      "get": {
+        "tags": [
+          "Server"
+        ],
+        "summary": "Read DNSTT service state and public key; the private Noise key is never exposed.",
+        "operationId": "get_panel_api_dnstt_status",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/dnstt/install": {
+      "post": {
+        "tags": [
+          "Server"
+        ],
+        "summary": "Download checksum-verified DNSTT server without enabling the tunnel.",
+        "operationId": "post_panel_api_dnstt_install",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/dnstt/setup": {
+      "post": {
+        "tags": [
+          "Server"
+        ],
+        "summary": "Validate the delegated DNS zone and local TCP destination, generate keys and enable DNSTT.",
+        "operationId": "post_panel_api_dnstt_setup",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/dnstt/disable": {
+      "post": {
+        "tags": [
+          "Server"
+        ],
+        "summary": "Stop and disable DNSTT while preserving its keys and configuration.",
+        "operationId": "post_panel_api_dnstt_disable",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/dnstt/update": {
+      "post": {
+        "tags": [
+          "Server"
+        ],
+        "summary": "Upgrade DNSTT with rollback if the service fails to restart.",
+        "operationId": "post_panel_api_dnstt_update",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/dnstt/remove": {
+      "post": {
+        "tags": [
+          "Server"
+        ],
+        "summary": "Stop DNSTT, disable systemd and delete the binary, settings and keys.",
+        "operationId": "post_panel_api_dnstt_remove",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/panel/api/oxidns/status": {
       "get": {
         "tags": [

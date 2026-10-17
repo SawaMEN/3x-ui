@@ -783,6 +783,36 @@ export const sections: readonly Section[] = [
       },
       {
         method: 'GET',
+        path: '/panel/api/dnstt/status',
+        summary: 'Read DNSTT service state and public key; the private Noise key is never exposed.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/dnstt/install',
+        summary: 'Download checksum-verified DNSTT server without enabling the tunnel.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/dnstt/setup',
+        summary: 'Validate the delegated DNS zone and local TCP destination, generate keys and enable DNSTT.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/dnstt/disable',
+        summary: 'Stop and disable DNSTT while preserving its keys and configuration.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/dnstt/update',
+        summary: 'Upgrade DNSTT with rollback if the service fails to restart.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/dnstt/remove',
+        summary: 'Stop DNSTT, disable systemd and delete the binary, settings and keys.',
+      },
+      {
+        method: 'GET',
         path: '/panel/api/oxidns/status',
         summary: 'Read integrated OxiDNS service status and settings.',
       },
