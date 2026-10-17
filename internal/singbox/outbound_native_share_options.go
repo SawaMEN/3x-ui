@@ -11,15 +11,8 @@ import (
 // stays unchanged.
 func normalizeNativeShareOptionTypes(out map[string]any, protocol, tag string) error {
 	if protocol == "hysteria" {
-		// Hysteria v1 uses auth (byte array) OR auth_str (plain string).
-		// Emitting a string under auth makes sing-box fail JSON unmarshalling.
-		if auth, ok := out["auth"].(string); ok {
-			if auth != "" {
-				if current, exists := out["auth_str"].(string); !exists || current == "" {
-					out["auth_str"] = auth
-				}
-			}
-			delete(out, "auth")
+		if err := normalizeHysteriaShareAuth(out, tag); err != nil {
+			return err
 		}
 	}
 	if protocol != "naive" {
@@ -64,5 +57,52 @@ func normalizeNativeShareOptionTypes(out map[string]any, protocol, tag string) e
 	} else {
 		out["extra_headers"] = headers
 	}
+	return nil
+}
+
+// normalizeHysteriaShareAuth accepts both common URI-decoder shapes: a plain
+// string and a one-element string array. The latter otherwise reaches the
+// kernel as auth[0] and fails JSON unmarshalling into a uint8.
+func normalizeHysteriaShareAuth(out map[string]any, tag string) error {
+	value, exists := out["auth"]
+	if !exists {
+		return nil
+	}
+	var auth string
+	switch typed := value.(type) {
+	case string:
+		auth = typed
+	case []string:
+		if len(typed) == 0 {
+			delete(out, "auth")
+			return nil
+		}
+		if len(typed) != 1 {
+			return fmt.Errorf("hysteria outbound %q requires a single authentication string", tag)
+		}
+		auth = typed[0]
+	case []any:
+		if len(typed) == 0 {
+			delete(out, "auth")
+			return nil
+		}
+		if first, ok := typed[0].(string); ok {
+			if len(typed) != 1 {
+				return fmt.Errorf("hysteria outbound %q requires a single authentication string", tag)
+			}
+			auth = first
+		} else {
+			// Proper native JSON may contain a byte array; preserve it.
+			return nil
+		}
+	default:
+		return nil
+	}
+	if auth != "" {
+		if existing, ok := out["auth_str"].(string); !ok || existing == "" {
+			out["auth_str"] = auth
+		}
+	}
+	delete(out, "auth")
 	return nil
 }
