@@ -1,0 +1,36 @@
+name: Temporary frontend formatter for PR 214
+
+on:
+  push:
+    branches:
+      - feature/dns-olcrtc-arch-20261019
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install and format changed files
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npx oxfmt src/pages/olcrtc/OlcRTCPage.tsx src/pages/singbox/DnsWorkspace.tsx src/routes.tsx src/test/singbox-simple-page.test.tsx
+      - name: Commit formatting
+        run: |
+          if ! git diff --quiet -- frontend/src; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add frontend/src
+            git commit -m "style(frontend): apply oxfmt to DNS and OlcRTC changes"
+            git push origin HEAD:feature/dns-olcrtc-arch-20261019
+          fi
