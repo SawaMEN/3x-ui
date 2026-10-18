@@ -457,7 +457,9 @@ func (TelemtService) RefreshMekoFix() (applyErr error) {
 	// Re-read the kernel rule set: a zero exit code is not proof that both
 	// families and every selected listener were actually installed.
 	applied := TelemtService{}.GetMekoConfig()
-	if !applied.Healthy || !sameMekoPorts(applied.Ports, applied.AppliedPorts) || !sameMekoPorts(applied.Ports, applied.VerifiedPorts) {
+	// A previous failed apply may still be shown in mekoApplyError until this
+	// invocation returns. Verify fresh kernel state, not cached error history.
+	if !applied.Applied || !sameMekoPorts(applied.Ports, applied.AppliedPorts) || !sameMekoPorts(applied.Ports, applied.VerifiedPorts) {
 		return fmt.Errorf("telemt meko: firewall verification failed: desired=%v applied=%v backend=%s error=%s", applied.Ports, applied.AppliedPorts, applied.Backend, applied.StatusError)
 	}
 	mekoApplyState.fingerprint = fingerprint
