@@ -329,42 +329,71 @@ apply() {
 }
 
 status() {
-    local installed=false backend=none
-    local -a applied_ports=()
-    if type -P iptables >/dev/null 2>&1; then
-        if jump_is_first_unique filter INPUT "$FILTER_CHAIN" && \
-           jump_is_first_unique mangle PREROUTING "$MARK_CHAIN"; then
-            installed=true
-            backend=iptables
-        fi
-        if iptables -t filter -S "$FILTER_CHAIN" >/dev/null 2>&1; then
-            mapfile -t applied_ports < <(
-                iptables -t filter -S "$FILTER_CHAIN" 2>/dev/null \
-                    | awk '{ for (i=1; i<=NF; i++) if ($i=="--dport") print $(i+1) }' \
-                    | awk '/^[0-9]+$/ { seen[$1]=1 } END { for (p in seen) print p }' \
-                    | sort -n
-            )
-        fi
-    fi
-    if command -v nft >/dev/null 2>&1 && nft list chain inet xui_telemt_meko input 2>/dev/null | grep -q 'reject with tcp reset'; then
-        installed=true
+    local installed=false backend=none rules="" mark_rules="" port
+    local -a applied_ports=() verified_ports=()
+    local verified_all=true
+
+    # An existing table or a REJECT alone is not proof that selected ports
+    # are protected. Verify both address families and the iOS bypass.
+    if command -v nft >/dev/null 2>&1 &&
+       rules="$(nft -n list chain inet xui_telemt_meko input 2>/dev/null)" &&
+       [[ "$rules" == *'reject with tcp reset'* ]]; then
         backend=nftables
         mapfile -t applied_ports < <(nft -n list set inet xui_telemt_meko ports 2>/dev/null | awk '
             /elements = {/ { inside=1; sub(/^.*elements = {/, "") }
             inside { end=($0 ~ /}/); gsub(/[{},]/, " "); for (i=1; i<=NF; i++) if ($i ~ /^[0-9]+$/) print $i; if (end) exit }
         ' | sort -n)
+        [[ "$rules" == *'tcp dport @ports'* && "$rules" == *'@th,320,32'* ]] || verified_all=false
+        for port in "${applied_ports[@]}"; do
+            if [[ "$rules" == *"meter tm4_${port} "* &&
+                  "$rules" == *"meter tm6_${port} "* ]] &&
+               (( $(grep -Fc "tcp dport ${port} " <<< "$rules") >= 2 )); then
+                verified_ports+=("$port")
+            else
+                verified_all=false
+            fi
+        done
+        if [[ "$verified_all" == true && ${#applied_ports[@]} -gt 0 ]]; then
+            installed=true
+        fi
+    elif type -P iptables >/dev/null 2>&1 &&
+         jump_is_first_unique filter INPUT "$FILTER_CHAIN" &&
+         jump_is_first_unique mangle PREROUTING "$MARK_CHAIN"; then
+        backend=iptables
+        rules="$(iptables -t filter -S "$FILTER_CHAIN" 2>/dev/null || true)"
+        mark_rules="$(iptables -t mangle -S "$MARK_CHAIN" 2>/dev/null || true)"
+        mapfile -t applied_ports < <(
+            printf '$s\n' "$rules" |
+                awk '{ for (i=1; i<=NF; i++) if ($i=="--dport") print $(i+1) }' |
+                awk '/^[0-9]+$/ { seen[$1]=1 } END { for (p in seen) print p }' |
+                sort -n
+        )
+        for port in "${applied_ports[@]}"; do
+            if grep -F " --dport ${port} " <<< "$rules" | grep -Fq -- "--hashlimit-name tm_${port} " &&
+               grep -F " --dport ${port} " <<< "$rules" | grep -Fq -- "-j REJECT" &&
+               grep -F " --dport ${port} " <<< "$mark_rules" | grep -Fq -- "-m u32"; then
+                verified_ports+=("$port")
+            else
+                verified_all=false
+            fi
+        done
+        if [[ "$verified_all" == true && ${#applied_ports[@]} -gt 0 ]]; then
+            installed=true
+        fi
     fi
+
     mapfile -t ports < <(collect_ports)
     if [[ ! -v TELEMT_PORTS ]]; then
         if (( ${#ports[@]} > 0 )); then ENABLED=1; else ENABLED=0; fi
     fi
-    printf 'enabled=%s\n' "$(enabled && echo true || echo false)"
-    printf 'installed=%s\n' "$installed"
-    printf 'backend=%s\n' "$backend"
-    printf 'ports=%s\n' "$(IFS=,; echo "${ports[*]:-}")"
-    printf 'applied_ports=%s\n' "$(IFS=,; echo "${applied_ports[*]:-}")"
-    printf 'rate=%s\n' "$RATE"
-    printf 'burst=%s\n' "$BURST"
+    printf 'enabled=$s\n' "$(enabled && echo true || echo false)"
+    printf 'installed=$s\n' "$installed"
+    printf 'backend=$s\n' "$backend"
+    printf 'ports=$s\n' "$(IFS=,; echo "${ports[*]:-}")"
+    printf 'applied_ports=$s\n' "$(IFS=,; echo "${applied_ports[*]:-}")"
+    printf 'verified_ports=$s\n' "$(IFS=,; echo "${verified_ports[*]:-}")"
+    printf 'rate=$s\n' "$RATE"
+    printf 'burst=$s\n' "$BURST"
 }
 
 case "${1:-apply}" in
