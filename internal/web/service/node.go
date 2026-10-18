@@ -1012,7 +1012,6 @@ func (s *NodeService) UpdateHeartbeat(id int, p HeartbeatPatch) error {
 		"last_heartbeat": p.LastHeartbeat,
 		"latency_ms":     p.LatencyMs,
 		"panel_version":  p.PanelVersion,
-		"panel_edition":  p.PanelEdition,
 		"core_type":      p.CoreType,
 		"running_core":   p.RunningCore,
 		"cpu_pct":        p.CpuPct,
@@ -1023,6 +1022,9 @@ func (s *NodeService) UpdateHeartbeat(id int, p HeartbeatPatch) error {
 		"last_error":     p.LastError,
 		"xray_state":     p.XrayState,
 		"xray_error":     p.XrayError,
+	}
+	if p.Status == "online" {
+		updates["panel_edition"] = p.PanelEdition
 	}
 	if p.CoreInfoKnown {
 		updates["core_version"], updates["core_state"], updates["core_error"] = p.CoreVersion, p.CoreState, p.CoreError
