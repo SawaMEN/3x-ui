@@ -44,13 +44,17 @@ export type MtprotoClient = z.infer<typeof MtprotoClientSchema>;
 // Telemt listener/network/access options or to the optional selected-core egress bridge.
 export const MtprotoInboundSettingsSchema = z.object({
   // One MTProto protocol, with a separately provisioned HTTPS WEB transport.
-  webProxy: z.object({
-    enabled: z.boolean().default(false),
-    domain: z.string().default(''),
-    frontend: z.enum(['nginx', 'caddy', 'haproxy']).default('nginx'),
-    carrier: z.enum(['https', 'https-lanes', 'websocket', 'websocket-lanes']).default('https'),
-    carriers: z.array(z.enum(['https', 'https-lanes', 'websocket', 'websocket-lanes'])).default([]),
-  }).optional(),
+  webProxy: z
+    .object({
+      enabled: z.boolean().default(false),
+      domain: z.string().default(''),
+      frontend: z.enum(['nginx', 'caddy', 'haproxy']).default('nginx'),
+      carrier: z.enum(['https', 'https-lanes', 'websocket', 'websocket-lanes']).default('https'),
+      carriers: z
+        .array(z.enum(['https', 'https-lanes', 'websocket', 'websocket-lanes']))
+        .default([]),
+    })
+    .optional(),
   fakeTlsDomain: z.string().default('www.cloudflare.com'),
   maskHost: z.string().optional(),
   maskPort: z.number().int().min(0).max(65535).optional(),

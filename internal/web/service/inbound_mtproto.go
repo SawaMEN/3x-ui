@@ -54,7 +54,9 @@ func (s *InboundService) DesiredMtprotoInstances() ([]mtproto.Instance, error) {
 
 	instances := make([]mtproto.Instance, 0, len(inbounds))
 	for _, ib := range inbounds {
-		if mtproto.WebProxyInbound(ib) { continue }
+		if mtproto.WebProxyInbound(ib) {
+			continue
+		}
 		inst, ok := mtproto.InstanceFromInbound(ib)
 		if !ok {
 			continue

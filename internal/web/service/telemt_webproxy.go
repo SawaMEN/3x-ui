@@ -45,9 +45,9 @@ var (
 )
 
 type TelemtWebProxyState struct {
-	ManagedInboundID int `json:"managedInboundId,omitempty"`
-	BackendPort int `json:"backendPort,omitempty"`
-	UserFingerprint string `json:"userFingerprint,omitempty"`
+	ManagedInboundID   int      `json:"managedInboundId,omitempty"`
+	BackendPort        int      `json:"backendPort,omitempty"`
+	UserFingerprint    string   `json:"userFingerprint,omitempty"`
 	Frontend           string   `json:"frontend,omitempty"`
 	Carrier            string   `json:"carrier,omitempty"`
 	Carriers           []string `json:"carriers,omitempty"`

@@ -8,7 +8,9 @@ import { useOutboundTags } from '@/api/queries/useOutboundTags';
 export default function MtprotoFields() {
   const { t, i18n } = useTranslation();
   const { control } = useFormContext();
-  const webProxyEnabled = useWatch({ control, name: 'settings.webProxy.enabled' }) as boolean | undefined;
+  const webProxyEnabled = useWatch({ control, name: 'settings.webProxy.enabled' }) as
+    | boolean
+    | undefined;
   const routeThroughXray = useWatch({ control, name: 'settings.routeThroughXray' }) as
     | boolean
     | undefined;
@@ -24,7 +26,11 @@ export default function MtprotoFields() {
       <FormField
         name={['settings', 'webProxy', 'enabled']}
         label={`${t('menu.telemt')} · WEB Proxy (HTTPS)`}
-        tooltip={i18n.resolvedLanguage?.startsWith('ru') ? 'Входящий MTProto создаёт и автоматически запускает WEB Proxy через HTTPS. Отдельно включать Telemt не требуется.' : 'This MTProto inbound automatically provisions the HTTPS WEB Proxy. No separate Telemt toggle is needed.'}
+        tooltip={
+          i18n.resolvedLanguage?.startsWith('ru')
+            ? 'Входящий MTProto создаёт и автоматически запускает WEB Proxy через HTTPS. Отдельно включать Telemt не требуется.'
+            : 'This MTProto inbound automatically provisions the HTTPS WEB Proxy. No separate Telemt toggle is needed.'
+        }
         valueProp="checked"
       >
         <Switch />
@@ -35,188 +41,203 @@ export default function MtprotoFields() {
             <Input placeholder="web.example.com" />
           </FormField>
           <FormField name={['settings', 'webProxy', 'frontend']} label="HTTPS frontend">
-            <Select options={['nginx', 'caddy', 'haproxy'].map(value => ({value, label:value}))} />
+            <Select
+              options={['nginx', 'caddy', 'haproxy'].map((value) => ({ value, label: value }))}
+            />
           </FormField>
           <FormField name={['settings', 'webProxy', 'carrier']} label="WEB carrier">
-            <Select options={['https','https-lanes','websocket','websocket-lanes'].map(value => ({value, label:value}))} />
+            <Select
+              options={['https', 'https-lanes', 'websocket', 'websocket-lanes'].map((value) => ({
+                value,
+                label: value,
+              }))}
+            />
           </FormField>
           <FormField name={['settings', 'webProxy', 'carriers']} label="Приоритет транспортов">
-            <Select mode="multiple" options={['https','https-lanes','websocket','websocket-lanes'].map(value => ({value, label:value}))} />
+            <Select
+              mode="multiple"
+              options={['https', 'https-lanes', 'websocket', 'websocket-lanes'].map((value) => ({
+                value,
+                label: value,
+              }))}
+            />
           </FormField>
         </>
       )}
       {!webProxyEnabled && (
-      <>
-      <FormField
-        name={['settings', 'fakeTlsDomain']}
-        label={t('pages.inbounds.form.fakeTlsDomain')}
-        tooltip={t('pages.inbounds.form.mtprotoFakeTlsDomainHint')}
-      >
-        <Input placeholder="www.cloudflare.com" />
-      </FormField>
-      <FormField
-        name={['settings', 'throttleMaxConnections']}
-        label={t('pages.inbounds.form.mtgThrottleMaxConnections')}
-        tooltip={t('pages.inbounds.form.mtgThrottleMaxConnectionsHint')}
-      >
-        <InputNumber min={0} placeholder="0" style={{ width: '100%' }} />
-      </FormField>
-      <FormField
-        name={['settings', 'routeThroughXray']}
-        label={t('pages.inbounds.form.mtgRouteThroughXray')}
-        tooltip={routeThroughXrayHint}
-        valueProp="checked"
-      >
-        <Switch />
-      </FormField>
-      {routeThroughXray && (
-        <FormField
-          name={['settings', 'outboundTag']}
-          label={t('pages.inbounds.form.mtgRouteOutbound')}
-          tooltip={t('pages.inbounds.form.mtgRouteOutboundHint')}
-        >
-          <Select
-            id="mtprotoOutboundTag"
-            allowClear
-            showSearch
-            placeholder={t('pages.inbounds.form.mtgRouteOutboundPlaceholder')}
-            options={(outboundTags ?? []).map((tag) => ({ value: tag, label: tag }))}
+        <>
+          <FormField
+            name={['settings', 'fakeTlsDomain']}
+            label={t('pages.inbounds.form.fakeTlsDomain')}
+            tooltip={t('pages.inbounds.form.mtprotoFakeTlsDomainHint')}
+          >
+            <Input placeholder="www.cloudflare.com" />
+          </FormField>
+          <FormField
+            name={['settings', 'throttleMaxConnections']}
+            label={t('pages.inbounds.form.mtgThrottleMaxConnections')}
+            tooltip={t('pages.inbounds.form.mtgThrottleMaxConnectionsHint')}
+          >
+            <InputNumber min={0} placeholder="0" style={{ width: '100%' }} />
+          </FormField>
+          <FormField
+            name={['settings', 'routeThroughXray']}
+            label={t('pages.inbounds.form.mtgRouteThroughXray')}
+            tooltip={routeThroughXrayHint}
+            valueProp="checked"
+          >
+            <Switch />
+          </FormField>
+          {routeThroughXray && (
+            <FormField
+              name={['settings', 'outboundTag']}
+              label={t('pages.inbounds.form.mtgRouteOutbound')}
+              tooltip={t('pages.inbounds.form.mtgRouteOutboundHint')}
+            >
+              <Select
+                id="mtprotoOutboundTag"
+                allowClear
+                showSearch
+                placeholder={t('pages.inbounds.form.mtgRouteOutboundPlaceholder')}
+                options={(outboundTags ?? []).map((tag) => ({ value: tag, label: tag }))}
+              />
+            </FormField>
+          )}
+          <Collapse
+            items={[
+              {
+                key: 'advanced',
+                label: t('pages.inbounds.form.telemtAdvanced'),
+                children: (
+                  <>
+                    <FormField
+                      name={['settings', 'allowLegacyModes']}
+                      label={t('pages.inbounds.form.telemtLegacyModes')}
+                      tooltip={t('pages.inbounds.form.telemtLegacyModesHint')}
+                      valueProp="checked"
+                      transform={{ input: (value) => value ?? true }}
+                    >
+                      <Switch />
+                    </FormField>
+                    <FormField
+                      name={['settings', 'tlsMask']}
+                      label={t('pages.inbounds.form.telemtTlsMask')}
+                      tooltip={t('pages.inbounds.form.telemtTlsMaskHint')}
+                      valueProp="checked"
+                      transform={{ input: (value) => value ?? true }}
+                    >
+                      <Switch />
+                    </FormField>
+                    <FormField
+                      name={['settings', 'tlsEmulation']}
+                      label={t('pages.inbounds.form.telemtTlsEmulation')}
+                      tooltip={t('pages.inbounds.form.telemtTlsEmulationHint')}
+                      valueProp="checked"
+                      transform={{ input: (value) => value ?? true }}
+                    >
+                      <Switch />
+                    </FormField>
+                    <FormField
+                      name={['settings', 'unknownSniAction']}
+                      label={t('pages.inbounds.form.telemtUnknownSniAction')}
+                      transform={{ input: (value) => value ?? 'mask' }}
+                    >
+                      <Select
+                        options={['mask', 'drop', 'accept', 'reject_handshake'].map((value) => ({
+                          value,
+                          label: t(`pages.inbounds.form.telemtSni_${value}`),
+                        }))}
+                      />
+                    </FormField>
+                    <FormField
+                      name={['settings', 'proxyProtocolListener']}
+                      label={t('pages.inbounds.form.mtgProxyProtocolListener')}
+                      valueProp="checked"
+                    >
+                      <Switch />
+                    </FormField>
+                    {proxyProtocolEnabled && (
+                      <FormField
+                        name={['settings', 'proxyProtocolTrustedCidrs']}
+                        label={t('pages.inbounds.form.telemtTrustedProxies')}
+                        tooltip={t('pages.inbounds.form.telemtTrustedProxiesHint')}
+                        transform={{ input: (value) => value ?? ['127.0.0.0/8', '::1/128'] }}
+                      >
+                        <Select mode="tags" tokenSeparators={[',', ' ']} />
+                      </FormField>
+                    )}
+                    <FormField
+                      name={['settings', 'preferIp']}
+                      label={t('pages.inbounds.form.mtgPreferIp')}
+                    >
+                      <Select
+                        allowClear
+                        placeholder={t('pages.inbounds.form.telemtAutoIp')}
+                        options={[
+                          { value: 'prefer-ipv6', label: 'prefer-ipv6' },
+                          { value: 'prefer-ipv4', label: 'prefer-ipv4' },
+                          { value: 'only-ipv6', label: 'only-ipv6' },
+                          { value: 'only-ipv4', label: 'only-ipv4' },
+                        ]}
+                      />
+                    </FormField>
+                    <FormField
+                      name={['settings', 'debug']}
+                      label={t('pages.inbounds.form.mtgDebug')}
+                      valueProp="checked"
+                    >
+                      <Switch />
+                    </FormField>
+                    <FormField
+                      name={['settings', 'publicIpv4']}
+                      label={t('pages.inbounds.form.mtgPublicIpv4')}
+                      tooltip={t('pages.inbounds.form.mtgPublicIpHint')}
+                    >
+                      <Input allowClear placeholder="1.2.3.4" />
+                    </FormField>
+                    <FormField
+                      name={['settings', 'publicIpv6']}
+                      label={t('pages.inbounds.form.mtgPublicIpv6')}
+                      tooltip={t('pages.inbounds.form.mtgPublicIpHint')}
+                    >
+                      <Input allowClear placeholder="2001:db8::1" />
+                    </FormField>
+                    <FormField
+                      name={['settings', 'maskHost']}
+                      label={t('pages.inbounds.form.telemtMaskHost')}
+                      tooltip={t('pages.inbounds.form.telemtMaskHostHint')}
+                      transform={{ input: (value) => value ?? legacyFronting?.ip ?? '' }}
+                    >
+                      <Input allowClear placeholder="nginx.example.com" />
+                    </FormField>
+                    <FormField
+                      name={['settings', 'maskPort']}
+                      label={t('pages.inbounds.form.telemtMaskPort')}
+                      transform={{ input: (value) => value ?? legacyFronting?.port ?? 443 }}
+                    >
+                      <InputNumber min={1} max={65535} style={{ width: '100%' }} />
+                    </FormField>
+                    <FormField
+                      name={['settings', 'maskProxyProtocol']}
+                      label={t('pages.inbounds.form.telemtMaskProxyProtocol')}
+                      transform={{
+                        input: (value) => value ?? (legacyFronting?.proxyProtocol ? 1 : 0),
+                      }}
+                    >
+                      <Select
+                        options={[
+                          { value: 0, label: t('pages.inbounds.form.telemtDisabled') },
+                          { value: 1, label: 'PROXY v1' },
+                          { value: 2, label: 'PROXY v2' },
+                        ]}
+                      />
+                    </FormField>
+                  </>
+                ),
+              },
+            ]}
           />
-        </FormField>
-      )}
-      <Collapse
-        items={[ 
-          {
-            key: 'advanced',
-            label: t('pages.inbounds.form.telemtAdvanced'),
-            children: (
-              <>
-                <FormField
-                  name={['settings', 'allowLegacyModes']}
-                  label={t('pages.inbounds.form.telemtLegacyModes')}
-                  tooltip={t('pages.inbounds.form.telemtLegacyModesHint')}
-                  valueProp="checked"
-                  transform={{ input: (value) => value ?? true }}
-                >
-                  <Switch />
-                </FormField>
-                <FormField
-                  name={['settings', 'tlsMask']}
-                  label={t('pages.inbounds.form.telemtTlsMask')}
-                  tooltip={t('pages.inbounds.form.telemtTlsMaskHint')}
-                  valueProp="checked"
-                  transform={{ input: (value) => value ?? true }}
-                >
-                  <Switch />
-                </FormField>
-                <FormField
-                  name={['settings', 'tlsEmulation']}
-                  label={t('pages.inbounds.form.telemtTlsEmulation')}
-                  tooltip={t('pages.inbounds.form.telemtTlsEmulationHint')}
-                  valueProp="checked"
-                  transform={{ input: (value) => value ?? true }}
-                >
-                  <Switch />
-                </FormField>
-                <FormField
-                  name={['settings', 'unknownSniAction']}
-                  label={t('pages.inbounds.form.telemtUnknownSniAction')}
-                  transform={{ input: (value) => value ?? 'mask' }}
-                >
-                  <Select
-                    options={['mask', 'drop', 'accept', 'reject_handshake'].map((value) => ({
-                      value,
-                      label: t(`pages.inbounds.form.telemtSni_${value}`),
-                    }))}
-                  />
-                </FormField>
-                <FormField
-                  name={['settings', 'proxyProtocolListener']}
-                  label={t('pages.inbounds.form.mtgProxyProtocolListener')}
-                  valueProp="checked"
-                >
-                  <Switch />
-                </FormField>
-                {proxyProtocolEnabled && (
-                  <FormField
-                    name={['settings', 'proxyProtocolTrustedCidrs']}
-                    label={t('pages.inbounds.form.telemtTrustedProxies')}
-                    tooltip={t('pages.inbounds.form.telemtTrustedProxiesHint')}
-                    transform={{ input: (value) => value ?? ['127.0.0.0/8', '::1/128'] }}
-                  >
-                    <Select mode="tags" tokenSeparators={[',', ' ']} />
-                  </FormField>
-                )}
-                <FormField
-                  name={['settings', 'preferIp']}
-                  label={t('pages.inbounds.form.mtgPreferIp')}
-                >
-                  <Select
-                    allowClear
-                    placeholder={t('pages.inbounds.form.telemtAutoIp')}
-                    options={[
-                      { value: 'prefer-ipv6', label: 'prefer-ipv6' },
-                      { value: 'prefer-ipv4', label: 'prefer-ipv4' },
-                      { value: 'only-ipv6', label: 'only-ipv6' },
-                      { value: 'only-ipv4', label: 'only-ipv4' },
-                    ]}
-                  />
-                </FormField>
-                <FormField
-                  name={['settings', 'debug']}
-                  label={t('pages.inbounds.form.mtgDebug')}
-                  valueProp="checked"
-                >
-                  <Switch />
-                </FormField>
-                <FormField
-                  name={['settings', 'publicIpv4']}
-                  label={t('pages.inbounds.form.mtgPublicIpv4')}
-                  tooltip={t('pages.inbounds.form.mtgPublicIpHint')}
-                >
-                  <Input allowClear placeholder="1.2.3.4" />
-                </FormField>
-                <FormField
-                  name={['settings', 'publicIpv6']}
-                  label={t('pages.inbounds.form.mtgPublicIpv6')}
-                  tooltip={t('pages.inbounds.form.mtgPublicIpHint')}
-                >
-                  <Input allowClear placeholder="2001:db8::1" />
-                </FormField>
-                <FormField
-                  name={['settings', 'maskHost']}
-                  label={t('pages.inbounds.form.telemtMaskHost')}
-                  tooltip={t('pages.inbounds.form.telemtMaskHostHint')}
-                  transform={{ input: (value) => value ?? legacyFronting?.ip ?? '' }}
-                >
-                  <Input allowClear placeholder="nginx.example.com" />
-                </FormField>
-                <FormField
-                  name={['settings', 'maskPort']}
-                  label={t('pages.inbounds.form.telemtMaskPort')}
-                  transform={{ input: (value) => value ?? legacyFronting?.port ?? 443 }}
-                >
-                  <InputNumber min={1} max={65535} style={{ width: '100%' }} />
-                </FormField>
-                <FormField
-                  name={['settings', 'maskProxyProtocol']}
-                  label={t('pages.inbounds.form.telemtMaskProxyProtocol')}
-                  transform={{ input: (value) => value ?? (legacyFronting?.proxyProtocol ? 1 : 0) }}
-                >
-                  <Select
-                    options={[
-                      { value: 0, label: t('pages.inbounds.form.telemtDisabled') },
-                      { value: 1, label: 'PROXY v1' },
-                      { value: 2, label: 'PROXY v2' },
-                    ]}
-                  />
-                </FormField>
-              </>
-            ),
-          },
-        ]}
-      />
-      </>
+        </>
       )}
     </>
   );
