@@ -4,6 +4,7 @@ import { useFormContext, useWatch } from 'react-hook-form';
 
 import { FormField } from '@/components/form/rhf';
 import { useOutboundTags } from '@/api/queries/useOutboundTags';
+import MtprotoMekoStatus from './MtprotoMekoStatus';
 
 export default function MtprotoFields() {
   const { t, i18n } = useTranslation();
@@ -81,6 +82,7 @@ export default function MtprotoFields() {
           </FormField>
           {mekoEnabled && (
             <>
+              <MtprotoMekoStatus />
               <FormField
                 name={['settings', 'mekoRatePerMinute']}
                 label={i18n.resolvedLanguage?.startsWith('ru') ? 'Лимит SYN на IP (в минуту)' : 'SYN limit per IP (per minute)'}
