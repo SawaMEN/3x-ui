@@ -177,7 +177,11 @@ export default function TelemtPage() {
   const webCarriers = webForm.watch('carriers');
   const webCarriersKey = (webCarriers || []).join('|');
   const webPreflightKey = JSON.stringify([
-    webProxyDomain, webFrontend, webCarrier, webCarriersKey, webPreflightRefresh,
+    webProxyDomain,
+    webFrontend,
+    webCarrier,
+    webCarriersKey,
+    webPreflightRefresh,
   ]);
   const webPreflightCurrent = webPreflight?.requestKey === webPreflightKey ? webPreflight : null;
   const webPreflightChecking = webProxyOpen && webPreflightCurrent === null;
@@ -208,19 +212,28 @@ export default function TelemtPage() {
             requestKey: webPreflightKey,
             domain: webProxyDomain || '',
             frontend: webFrontend || 'nginx',
-            checks: [{ id: 'request', ok: false, message: response?.msg || 'Ошибка проверки WEB Proxy' }],
+            checks: [
+              { id: 'request', ok: false, message: response?.msg || 'Ошибка проверки WEB Proxy' },
+            ],
             warnings: [],
           });
         }
       } catch {
-        if (active) setWebPreflight({
-          ready: false,
-          requestKey: webPreflightKey,
-          domain: webProxyDomain || '',
-          frontend: webFrontend || 'nginx',
-          checks: [{ id: 'network', ok: false, message: 'Не удалось связаться с сервером для проверки WEB Proxy.' }],
-          warnings: [],
-        });
+        if (active)
+          setWebPreflight({
+            ready: false,
+            requestKey: webPreflightKey,
+            domain: webProxyDomain || '',
+            frontend: webFrontend || 'nginx',
+            checks: [
+              {
+                id: 'network',
+                ok: false,
+                message: 'Не удалось связаться с сервером для проверки WEB Proxy.',
+              },
+            ],
+            warnings: [],
+          });
       }
     }, 400);
     return () => {
@@ -915,20 +928,33 @@ export default function TelemtPage() {
               Проверить заново
             </Button>
           </Space>
-          {webPreflightChecking && <Alert type="info" showIcon message="Проверяются DNS, порты, Telemt, frontend и TLS…" />}
+          {webPreflightChecking && (
+            <Alert type="info" showIcon message="Проверяются DNS, порты, Telemt, frontend и TLS…" />
+          )}
           {!webPreflightChecking && webPreflightCurrent && (
             <>
               <Alert
                 type={webPreflightCurrent.ready ? 'success' : 'error'}
                 showIcon
-                message={webPreflightCurrent.ready ? 'Предварительные проверки пройдены' : 'Запуск заблокирован до устранения ошибок'}
-                description={webPreflightCurrent.ready
-                  ? 'Компоненты и сертификат будут настроены автоматически. Проверьте замечания о внешней сети ниже.'
-                  : 'Исправьте условия с отметкой «Ошибка». До этого конфигурация не изменяется.'}
+                message={
+                  webPreflightCurrent.ready
+                    ? 'Предварительные проверки пройдены'
+                    : 'Запуск заблокирован до устранения ошибок'
+                }
+                description={
+                  webPreflightCurrent.ready
+                    ? 'Компоненты и сертификат будут настроены автоматически. Проверьте замечания о внешней сети ниже.'
+                    : 'Исправьте условия с отметкой «Ошибка». До этого конфигурация не изменяется.'
+                }
               />
               <Descriptions size="small" column={1} bordered>
                 {webPreflightCurrent.checks.map((check) => (
-                  <Descriptions.Item key={check.id} label={<Tag color={check.ok ? 'success' : 'error'}>{check.ok ? 'OK' : 'Ошибка'}</Tag>}>
+                  <Descriptions.Item
+                    key={check.id}
+                    label={
+                      <Tag color={check.ok ? 'success' : 'error'}>{check.ok ? 'OK' : 'Ошибка'}</Tag>
+                    }
+                  >
                     {check.message}
                   </Descriptions.Item>
                 ))}
@@ -956,7 +982,6 @@ export default function TelemtPage() {
                 ? 'готов для выбранного frontend'
                 : 'см. предварительную проверку'}
             </Descriptions.Item>
-
           </Descriptions>
 
           {status.webProxy.error && (
