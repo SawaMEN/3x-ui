@@ -78,12 +78,16 @@ func (s TelemtService) PreflightWebProxy(ctx context.Context, domain string, opt
 		}
 	}
 
-	// A configured WEB frontend is allowed to reuse its own listening socket.
-	// Switching frontends can free it during the transactional reconfigure.
-	previousOwned := state.Enabled && telemtWebFrontendActive(state)
-	portReady := telemtWebFrontendCanOwn443(TelemtWebProxyState{Frontend: options.Frontend}) || previousOwned
-	owner := telemtWebPortOwner(443)
-	check("https-port", portReady, fmt.Sprintf("HTTPS frontend должен иметь доступ к TCP 443 (занят: %s).", owner))
+	// A running service on another port is not evidence that it owns 443.
+	// Only reuse a socket when the observed owner is the configured frontend.
+	owner := strings.ToLower(telemtWebPortOwner(443))
+	currentFront := telemtWebFrontend(state)
+	previousOwned := state.Enabled && telemtWebFrontendActive(state) &&
+		((currentFront == "nginx" && telemtWebNginxOwnsPort443() && telemtWebPortOwnedOnlyBy(owner, "nginx")) ||
+			(currentFront != "nginx" && telemtWebPortOwnedOnlyBy(owner, currentFront)))
+	nginxShared := options.Frontend == "nginx" && telemtWebNginxOwnsPort443() && telemtWebPortOwnedOnlyBy(owner, "nginx")
+	portReady := telemtWebPortAvailable(443) || previousOwned || nginxShared
+	check("https-port", portReady, fmt.Sprintf("HTTPS frontend должен иметь доступ к TCP 443 (владелец: %s).", owner))
 	if options.Frontend == "nginx" && telemtWebCommandExists("nginx") {
 		conflict, inspectErr := telemtWebNginxHostConflict(ctx, domain)
 		check("nginx-vhost", inspectErr == nil && !conflict, "Nginx: домен уже обслуживается другим HTTPS vhost либо нельзя проверить конфигурацию.")
@@ -114,6 +118,20 @@ func (s TelemtService) PreflightWebProxy(ctx context.Context, domain string, opt
 		}
 	}
 	return result, nil
+}
+
+// ss can report several owners for separate IPv4/IPv6 listeners. Any
+// non-frontend owner makes a wildcard bind unsafe.
+func telemtWebPortOwnedOnlyBy(owners, frontend string) bool {
+	if owners == "" {
+		return false
+	}
+	for _, owner := range strings.Split(owners, ",") {
+		if strings.TrimSpace(owner) != frontend {
+			return false
+		}
+	}
+	return true
 }
 
 // Verify the private key actually belongs to the certificate, in addition
