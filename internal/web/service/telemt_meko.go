@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pelletier/go-toml/v2"
@@ -337,13 +339,50 @@ func sameMekoPorts(a, b []int) bool {
 	return true
 }
 
+var mekoApplyState struct {
+	sync.Mutex
+	fingerprint string
+}
+
+// The applied port set alone cannot tell us if the per-inbound rate or burst
+// changed. Hash only the MEKO metadata of selected configs, not client secrets
+// or volatile Telemt process settings.
+func desiredMekoPolicyFingerprint(cfg TelemtMekoConfig) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "rate=%d,burst=%d;", cfg.RatePerMinute, cfg.Burst)
+	pattern := filepath.Join(filepath.Dir(telemtBinaryPath), "mtproto", "telemt-*.toml")
+	paths, _ := filepath.Glob(pattern)
+	sort.Strings(paths)
+	for _, path := range paths {
+		data, err := os.ReadFile(path)
+		if err != nil || !strings.HasPrefix(string(data), "# x-ui-meko-fix=1\n") {
+			continue
+		}
+		fmt.Fprintf(&b, "%d;", telemtPortFromConfig(path))
+		for _, line := range strings.Split(string(data), "\n") {
+			if strings.HasPrefix(line, "# x-ui-meko-rate=") || strings.HasPrefix(line, "# x-ui-meko-burst=") {
+				b.WriteString(line)
+				b.WriteByte(';')
+			}
+			if strings.HasPrefix(line, "[general]") {
+				break
+			}
+		}
+	}
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(b.String())))
+}
+
 // RefreshMekoFix reconciles the MEKO firewall rules with the Telemt processes
 // currently generated from MTProto inbounds. It is intentionally a no-op when
 // the configured and applied port sets already match, so the hashlimit buckets
 // are not reset by every MTProto traffic polling cycle.
 func (TelemtService) RefreshMekoFix() error {
+	mekoApplyState.Lock()
+	defer mekoApplyState.Unlock()
 	cfg := TelemtService{}.GetMekoConfig()
+	fingerprint := desiredMekoPolicyFingerprint(cfg)
 	if !cfg.Enabled {
+		mekoApplyState.fingerprint = ""
 		if cfg.Applied {
 			_, err := runTelemtMekoScript("remove", cfg)
 			return err
@@ -364,9 +403,20 @@ func (TelemtService) RefreshMekoFix() error {
 			return err
 		}
 	}
-	if cfg.Applied && sameMekoPorts(cfg.Ports, cfg.AppliedPorts) {
+	if cfg.Applied && sameMekoPorts(cfg.Ports, cfg.AppliedPorts) &&
+		mekoApplyState.fingerprint == fingerprint {
 		return nil
 	}
 	_, err := runTelemtMekoScript("apply", cfg)
-	return err
+	if err != nil {
+		return err
+	}
+	// Re-read the kernel rule set: a zero exit code is not proof that both
+	// families and every selected listener were actually installed.
+	applied := TelemtService{}.GetMekoConfig()
+	if !applied.Applied || !sameMekoPorts(applied.Ports, applied.AppliedPorts) {
+		return fmt.Errorf("telemt meko: firewall verification failed: desired=%v applied=%v backend=%s error=%s", applied.Ports, applied.AppliedPorts, applied.Backend, applied.StatusError)
+	}
+	mekoApplyState.fingerprint = fingerprint
+	return nil
 }
