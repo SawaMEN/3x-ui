@@ -49,13 +49,20 @@ describe('Telemt WEB settings', () => {
           ? []
           : {},
     }));
-    vi.mocked(HttpUtil.post).mockResolvedValue({ success: true, msg: '', obj: {} });
+    vi.mocked(HttpUtil.post).mockImplementation(async (url) => ({
+      success: true,
+      msg: '',
+      obj: url.endsWith('/preflight')
+        ? { ready: true, domain: 'web.example.com', frontend: 'caddy', checks: [], warnings: [] }
+        : {},
+    }));
     render(<TelemtPage />);
     fireEvent.click(
       await screen.findByRole('button', { name: /Настроить Web Proxy/ }, { timeout: 5000 }),
     );
     expect(screen.getByLabelText('Домен')).toHaveProperty('value', 'web.example.com');
     fireEvent.click(screen.getByRole('button', { name: 'Выше: websocket' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Применить' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Применить' }));
     await waitFor(() =>
       expect(vi.mocked(HttpUtil.post)).toHaveBeenCalledWith(
