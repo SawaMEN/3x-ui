@@ -115,16 +115,20 @@ func renderTelemtConfig(c TelemtConfig) (string, error) {
 
 	listeners := ""
 	webState, webStateErr := readTelemtWebState()
-	if webStateErr != nil { return "", webStateErr }
+	if webStateErr != nil {
+		return "", webStateErr
+	}
 	if webState.ManagedInboundID > 0 {
-		if webState.BackendPort <= 0 { return "", errors.New("telemt: managed WEB backend has no local control port") }
+		if webState.BackendPort <= 0 {
+			return "", errors.New("telemt: managed WEB backend has no local control port")
+		}
 		// The HTTPS frontend alone owns a public listener. The auxiliary
 		// MTProto listener is confined to loopback and cannot collide with
 		// ordinary public MTProto inbounds.
 		c.Port = webState.BackendPort
 		listeners = fmt.Sprintf("[[server.listeners]]\nip = %s\n\n", strconv.Quote("127.0.0.1"))
 	}
- 	if c.IPv4 && webState.ManagedInboundID == 0 {
+	if c.IPv4 && webState.ManagedInboundID == 0 {
 		listeners += "[[server.listeners]]\nip = \"0.0.0.0\"\n\n"
 	}
 	if c.IPv6 && webState.ManagedInboundID == 0 {

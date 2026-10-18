@@ -72,7 +72,9 @@ func (j *MtprotoJob) Run() {
 	} else {
 		deltas = append(deltas, webDeltas...)
 		onlineEmails = append(onlineEmails, webOnline...)
-		if webTag != "" { activeTags = append(activeTags, webTag) }
+		if webTag != "" {
+			activeTags = append(activeTags, webTag)
+		}
 	}
 
 	// A routed inbound's total is already metered through the Xray bridge by

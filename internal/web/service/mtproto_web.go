@@ -3,10 +3,10 @@ package service
 import (
 	"context"
 	"crypto/sha256"
-	"net/http"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -222,7 +222,7 @@ func mtprotoWebUsername(inboundID int, email string) string {
 var mtprotoWebTraffic struct {
 	sync.Mutex
 	inboundID int
-	last map[string]int64
+	last      map[string]int64
 }
 
 // CollectMtprotoWebTraffic maps cumulative WEB backend counters back onto the
@@ -234,7 +234,9 @@ func CollectMtprotoWebTraffic(ctx context.Context) ([]mtproto.Traffic, []string,
 	defer mtprotoWebTraffic.Unlock()
 
 	state, err := readTelemtWebState()
-	if err != nil { return nil, nil, "", err }
+	if err != nil {
+		return nil, nil, "", err
+	}
 	if !state.Enabled || state.ManagedInboundID == 0 {
 		mtprotoWebTraffic.inboundID = 0
 		mtprotoWebTraffic.last = nil
@@ -242,9 +244,13 @@ func CollectMtprotoWebTraffic(ctx context.Context) ([]mtproto.Traffic, []string,
 	}
 
 	var inbound model.Inbound
-	if err := database.GetDB().First(&inbound, state.ManagedInboundID).Error; err != nil { return nil, nil, "", err }
+	if err := database.GetDB().First(&inbound, state.ManagedInboundID).Error; err != nil {
+		return nil, nil, "", err
+	}
 	inst, ok := mtproto.InstanceFromInbound(&inbound)
-	if !ok { return nil, nil, "", nil }
+	if !ok {
+		return nil, nil, "", nil
+	}
 
 	usersByName := make(map[string]string, len(inst.Secrets))
 	for _, sec := range inst.Secrets {
@@ -254,23 +260,33 @@ func CollectMtprotoWebTraffic(ctx context.Context) ([]mtproto.Traffic, []string,
 		mtprotoWebTraffic.inboundID = inbound.Id
 		mtprotoWebTraffic.last = make(map[string]int64)
 	}
-	if systemctl("is-active", "--quiet", telemtServiceName) != nil { return nil, nil, "", nil }
+	if systemctl("is-active", "--quiet", telemtServiceName) != nil {
+		return nil, nil, "", nil
+	}
 
 	client := &http.Client{Timeout: 4 * time.Second, Transport: telemtMonitorTransport{ctx}}
 	snapshot, err := fetchTelemtUserStats(client)
-	if err != nil { return nil, nil, "", err }
+	if err != nil {
+		return nil, nil, "", err
+	}
 
 	var deltas []mtproto.Traffic
 	var online []string
 	for _, user := range snapshot {
 		email, wanted := usersByName[user.Username]
-		if !wanted { continue }
-		if user.CurrentConnections > 0 { online = append(online, email) }
+		if !wanted {
+			continue
+		}
+		if user.CurrentConnections > 0 {
+			online = append(online, email)
+		}
 		current := max(user.TotalOctets, 0)
 		last, had := mtprotoWebTraffic.last[user.Username]
 		if had {
 			delta := current - last
-			if delta < 0 { delta = current } // Telemt restarted/reset its counter.
+			if delta < 0 {
+				delta = current
+			} // Telemt restarted/reset its counter.
 			if delta > 0 {
 				deltas = append(deltas, mtproto.Traffic{Tag: inbound.Tag, Email: email, Down: delta})
 			}
