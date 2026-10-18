@@ -46,9 +46,11 @@ func mtprotoWebCandidates() ([]*model.Inbound, error) {
 // ValidateMtprotoWebInbound ensures only one local HTTPS frontend owns port 443.
 // This is checked before database mutations as well as by periodic reconciliation.
 func ValidateMtprotoWebInbound(ib *model.Inbound) error {
-    if ib == nil || ib.Protocol != model.MTProto || ib.NodeID != nil || !ib.Enable { return nil }
+    if ib == nil || ib.Protocol != model.MTProto { return nil }
     opts, err := mtprotoWebForInbound(ib)
     if err != nil || !opts.Enabled { return err }
+    if ib.NodeID != nil { return errors.New("MTProto WEB Proxy is currently supported only on the local server") }
+    if !ib.Enable { return nil }
     if !telemtWebDomainPattern.MatchString(strings.TrimSpace(opts.Domain)) { return errors.New("MTProto WEB Proxy requires a valid public domain") }
     if _, err := normalizeTelemtWebOptions(TelemtWebProxyOptions{Frontend:opts.Frontend, Carrier:opts.Carrier, Carriers:opts.Carriers}); err != nil { return err }
     others, err := mtprotoWebCandidates()
@@ -66,7 +68,7 @@ var mtprotoWebLastError time.Time
 // Ordinary MTProto sidecars remain managed independently by internal/mtproto.
 // Legacy installations with an unowned WEB Proxy are never changed implicitly.
 func ReconcileMtprotoWebProxy(ctx context.Context) error {
-    mtprotoWebSyncMu.Lock()
+    if !mtprotoWebSyncMu.TryLock() { return nil }
     defer mtprotoWebSyncMu.Unlock()
     selected, err := mtprotoWebCandidates()
     if err != nil { return err }
@@ -103,6 +105,8 @@ func ReconcileMtprotoWebProxy(ctx context.Context) error {
         cfg, cfgErr := svc.GetConfig()
         if cfgErr != nil { return cfgErr }
         if saveErr := svc.SaveConfig(cfg); saveErr != nil { return saveErr }
+        state.UserFingerprint = fingerprint
+        if err := writeTelemtWebState(state); err != nil { return err }
         return svc.EnsureWebProxyBackend()
     }
     // Avoid repeatedly attempting certificate issuance on every periodic job
