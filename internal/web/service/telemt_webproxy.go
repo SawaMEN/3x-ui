@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/hex"
@@ -168,6 +169,7 @@ func appendTelemtWebProxyConfig(base string, state TelemtWebProxyState) (string,
 	}
 	managedUsers := ""
 	managedProfiles := ""
+	var managedQuotas, managedExpirations, managedIPLimits strings.Builder
 	if state.ManagedInboundID != 0 {
 		var inbound model.Inbound
 		if err := database.GetDB().First(&inbound, state.ManagedInboundID).Error; err != nil {
@@ -177,10 +179,21 @@ func appendTelemtWebProxyConfig(base string, state TelemtWebProxyState) (string,
 		if !ok {
 			return "", errors.New("telemt web proxy: managed inbound has no enabled clients")
 		}
-		for n, user := range inst.Secrets {
-			name := fmt.Sprintf("mtweb_%d_%d", state.ManagedInboundID, n)
+		for _, user := range inst.Secrets {
+			// Stable identities retain per-user counters across list reordering.
+			digest := sha256.Sum256([]byte(user.Name))
+			name := fmt.Sprintf("mtweb_%d_%x", state.ManagedInboundID, digest[:8])
 			managedUsers += fmt.Sprintf("%q = %q\n", name, user.Secret)
 			managedProfiles += fmt.Sprintf("\n[[web.vhosts.profiles]]\nuser = %q\nsecret_mode = \"dd\"\n", name)
+			if user.QuotaBytes > 0 {
+				fmt.Fprintf(&managedQuotas, "%q = %d\n", name, user.QuotaBytes)
+			}
+			if user.ExpiresUnix > 0 {
+				fmt.Fprintf(&managedExpirations, "%q = %q\n", name, time.Unix(user.ExpiresUnix, 0).UTC().Format(time.RFC3339))
+			}
+			if user.LimitIP > 0 {
+				fmt.Fprintf(&managedIPLimits, "%q = %d\n", name, user.LimitIP)
+			}
 		}
 	}
 	section := "[access.users]"
@@ -220,6 +233,17 @@ func appendTelemtWebProxyConfig(base string, state TelemtWebProxyState) (string,
 	}
 	if state.ManagedInboundID != 0 {
 		webConfig = strings.Replace(webConfig, "\n[[web.vhosts.profiles]]\nuser = \"webproxy\"\nsecret_mode = \"dd\"\n", managedProfiles, 1)
+	}
+	if state.ManagedInboundID != 0 {
+		if managedQuotas.Len() > 0 {
+			base += "\n[access.user_data_quota]\n" + managedQuotas.String()
+		}
+		if managedExpirations.Len() > 0 {
+			base += "\n[access.user_expirations]\n" + managedExpirations.String()
+		}
+		if managedIPLimits.Len() > 0 {
+			base += "\n[access.user_max_unique_ips]\n" + managedIPLimits.String()
+		}
 	}
 	return strings.TrimRight(base, "\n") + "\n" + webConfig, nil
 }
