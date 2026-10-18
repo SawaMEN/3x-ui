@@ -309,12 +309,13 @@ apply() {
 }
 
 status() {
-    local installed=false
+    local installed=false backend=none
     local -a applied_ports=()
     if type -P iptables >/dev/null 2>&1; then
         if jump_is_first_unique filter INPUT "$FILTER_CHAIN" && \
            jump_is_first_unique mangle PREROUTING "$MARK_CHAIN"; then
             installed=true
+            backend=iptables
         fi
         if iptables -t filter -S "$FILTER_CHAIN" >/dev/null 2>&1; then
             mapfile -t applied_ports < <(
@@ -327,6 +328,7 @@ status() {
     fi
     if command -v nft >/dev/null 2>&1 && nft list chain inet xui_telemt_meko input 2>/dev/null | grep -q 'reject with tcp reset'; then
         installed=true
+        backend=nftables
         mapfile -t applied_ports < <(nft -n list set inet xui_telemt_meko ports 2>/dev/null | awk '
             /elements = {/ { inside=1; sub(/^.*elements = {/, "") }
             inside { end=($0 ~ /}/); gsub(/[{},]/, " "); for (i=1; i<=NF; i++) if ($i ~ /^[0-9]+$/) print $i; if (end) exit }
@@ -338,6 +340,7 @@ status() {
     fi
     printf 'enabled=%s\n' "$(enabled && echo true || echo false)"
     printf 'installed=%s\n' "$installed"
+    printf 'backend=%s\n' "$backend"
     printf 'ports=%s\n' "$(IFS=,; echo "${ports[*]:-}")"
     printf 'applied_ports=%s\n' "$(IFS=,; echo "${applied_ports[*]:-}")"
     printf 'rate=%s\n' "$RATE"
