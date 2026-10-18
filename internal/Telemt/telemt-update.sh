@@ -8,9 +8,28 @@ REPO="telemt/telemt"
 CONFIG_DIR="$(dirname "$BIN")/mtproto"
 SERVICE_CONFIG="/etc/x-ui/telemt.toml"
 managed_configs=()
-cleanup() { [[ -z "$TMP_DIR" ]] && return; rm -rf "$TMP_DIR"; }
-trap cleanup EXIT
+transaction_active=0
+rollback_service_active=0
+rollback_version=""
+keep_backup=0
 log() { echo "[telemt-update] $*"; }
+cleanup() {
+  if [[ -n "$TMP_DIR" && "$keep_backup" == 0 ]]; then rm -rf "$TMP_DIR"; fi
+}
+finish_update() {
+  local result=$?
+  trap - EXIT
+  if (( transaction_active )); then
+    rollback_update || log "Automatic recovery failed; backup retained in $TMP_DIR"
+    result=1
+  fi
+  cleanup
+  exit "$result"
+}
+trap finish_update EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 arch_name() {
   case "$(uname -m)" in
@@ -76,12 +95,15 @@ download_latest() {
 
 install_latest() {
   local version="$1"
-  install -d -m 0755 -o root -g root "$(dirname "$BIN")"
-  install -m 0755 -o root -g root "$TMP_DIR/telemt" "${BIN}.new"
-  mv -f "${BIN}.new" "$BIN"
-  printf '%s\n' "$version" > "$VERSION_FILE"
-  chown root:root "$VERSION_FILE"
-  chmod 0644 "$VERSION_FILE"
+  # This function is used in an if condition, where Bash disables errexit.
+  # Every mutation must therefore propagate its own failure explicitly.
+  install -d -m 0755 -o root -g root "$(dirname "$BIN")" || return 1
+  install -m 0755 -o root -g root "$TMP_DIR/telemt" "${BIN}.new" || return 1
+  mv -f "${BIN}.new" "$BIN" || return 1
+  printf '%s\n' "$version" > "${VERSION_FILE}.new" || return 1
+  chown root:root "${VERSION_FILE}.new" || return 1
+  chmod 0644 "${VERSION_FILE}.new" || return 1
+  mv -f "${VERSION_FILE}.new" "$VERSION_FILE" || return 1
 }
 
 snapshot_inbound_sidecars() {
@@ -138,6 +160,36 @@ recycle_inbound_sidecars() {
   done <<< "$pids"
 }
 
+rollback_update() {
+  # Do not interrupt recovery a second time or delete its only backup on error.
+  trap '' HUP INT TERM
+  transaction_active=0
+  keep_backup=1
+  log "Installation interrupted or failed; restoring previous Telemt"
+  rm -f "${BIN}.new" "${VERSION_FILE}.new" || return 1
+  if [[ -f "$TMP_DIR/previous-telemt" ]]; then
+    cp -p "$TMP_DIR/previous-telemt" "${BIN}.new" || return 1
+    mv -f "${BIN}.new" "$BIN" || return 1
+  else
+    rm -f "$BIN" || return 1
+  fi
+  if [[ -f "$TMP_DIR/previous-version" ]]; then
+    cp -p "$TMP_DIR/previous-version" "${VERSION_FILE}.new" || return 1
+    mv -f "${VERSION_FILE}.new" "$VERSION_FILE" || return 1
+  else
+    rm -f "$VERSION_FILE" || return 1
+  fi
+  if (( rollback_service_active )); then
+    systemctl restart telemt.service || { log "Previous engine restored; service restart failed"; return 1; }
+  fi
+  recycle_inbound_sidecars || { log "Could not signal managed instances during recovery"; return 1; }
+  if [[ -n "$rollback_version" ]] && ! wait_for_inbound_sidecars "$rollback_version"; then
+    log "Previous binary restored, but some MTProto instances still need recovery"
+    return 1
+  fi
+  keep_backup=0
+}
+
 main() {
   [[ "$EUID" -eq 0 ]] || { echo "must run as root" >&2; exit 1; }
   if [[ "${1:-}" != "--check" ]]; then
@@ -170,8 +222,12 @@ main() {
   snapshot_inbound_sidecars
   [[ ! -e "$BIN" ]] || cp -p "$BIN" "$TMP_DIR/previous-telemt"
   [[ ! -e "$VERSION_FILE" ]] || cp -p "$VERSION_FILE" "$TMP_DIR/previous-version"
+  rollback_version="$current"
+  # Arm recovery before stopping any service or replacing files.
+  transaction_active=1
   if systemctl is-active --quiet telemt.service 2>/dev/null; then
     was_active=1
+    rollback_service_active=1
     # Panel-managed WEB uses this service and a generated local control API.
     # Include it in readiness checks while retaining compatibility with old
     # standalone installations that never had an API configured.
@@ -190,24 +246,7 @@ main() {
     if ! recycle_inbound_sidecars || ! wait_for_inbound_sidecars "$version"; then update_failed=1; fi
   fi
   if (( update_failed )); then
-    log "Installation or startup failed; rolling back"
-    rm -f "${BIN}.new"
-    if [[ -f "$TMP_DIR/previous-telemt" ]]; then
-      cp -p "$TMP_DIR/previous-telemt" "${BIN}.new"
-      mv -f "${BIN}.new" "$BIN"
-    else
-      rm -f "$BIN"
-    fi
-    if [[ -f "$TMP_DIR/previous-version" ]]; then
-      cp -p "$TMP_DIR/previous-version" "$VERSION_FILE"
-    else
-      rm -f "$VERSION_FILE"
-    fi
-    if (( was_active )); then systemctl restart telemt.service || true; fi
-    recycle_inbound_sidecars || log "Could not signal managed instances during recovery"
-    if [[ -n "$current" ]] && ! wait_for_inbound_sidecars "$current"; then
-      log "Previous binary restored, but some MTProto instances still need recovery"
-    fi
+    rollback_update || log "Automatic recovery failed; backup retained in $TMP_DIR"
     return 1
   fi
   # Keep an offline recovery copy after a successful upgrade as well.
@@ -218,6 +257,7 @@ main() {
       cp -p "$TMP_DIR/previous-version" "${VERSION_FILE}.previous"
     fi
   fi
+  transaction_active=0
   log "Official Telemt $version installed."
 }
 main "$@"

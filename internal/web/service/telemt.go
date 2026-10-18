@@ -402,7 +402,12 @@ const (
 func telemtUpdaterCommand(ctx context.Context, path string, args ...string) *exec.Cmd {
 	// Bash can read a previously installed 0644 script even before its mode is
 	// repaired. It also works when an old archive lost the executable bit.
-	return exec.CommandContext(ctx, "/bin/bash", append([]string{path}, args...)...)
+	cmd := exec.CommandContext(ctx, "/bin/bash", append([]string{path}, args...)...)
+	// Let Bash's signal trap restore a partially replaced engine on timeout.
+	// SIGKILL would bypass both the transaction rollback and cleanup traps.
+	cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
+	cmd.WaitDelay = time.Minute
+	return cmd
 }
 
 func repairTelemtUpdaterMode(path string) error {

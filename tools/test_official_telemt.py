@@ -264,6 +264,69 @@ main
                     self.assertEqual(Path(str(binary) + ".previous").read_text(), old)
                     self.assertEqual(Path(str(version) + ".previous").read_text(), "3.5.13\n")
 
+    def test_write_failures_and_termination_restore_previous_installation(self):
+        for fault in ("install", "rename", "version-mode", "terminate", "restore-error"):
+            with self.subTest(fault=fault), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                binary, version = root / "telemt", root / "version"
+                old = "#!/bin/sh\necho Telemt 3.5.13\n"
+                binary.write_text(old)
+                binary.chmod(0o755)
+                version.write_text("3.5.13\n")
+                source = (ROOT / "internal/Telemt/telemt-update.sh").read_text().rsplit('main "$@"', 1)[0]
+                for key, value in (("BIN", binary), ("VERSION_FILE", version)):
+                    source = re.sub("^" + key + "=.*$", key + "=" + shlex.quote(str(value)), source, flags=re.M)
+                source = source.replace('[[ "$EUID" -eq 0 ]]', "true")
+                source = source.replace("/run/lock/x-ui-telemt-update.lock", str(root / "lock"))
+                source += r'''
+get_latest_tag() { echo 3.5.14; }
+arch_name() { echo x86_64; }
+systemctl() { return 1; }
+download_latest() {
+  TMP_DIR="$(mktemp -d)"
+  printf '#!/bin/sh\necho Telemt 3.5.14\n' > "$TMP_DIR/telemt"
+  command chmod 755 "$TMP_DIR/telemt"
+}
+snapshot_inbound_sidecars() { managed_configs=(managed-inbound); }
+recycle_inbound_sidecars() { return 0; }
+install() {
+  if [[ "$FAULT" == install && "${@: -1}" == "${BIN}.new" ]]; then return 1; fi
+  command install "$@"
+}
+mv() {
+  if [[ "$FAULT" == rename && "${@: -1}" == "$BIN" && ! -e "$FAULT_MARK" ]]; then
+    touch "$FAULT_MARK"; return 1
+  fi
+  command mv "$@"
+}
+chmod() {
+  if [[ "$FAULT" == version-mode && "${@: -1}" == "$VERSION_FILE"* ]]; then return 1; fi
+  command chmod "$@"
+}
+cp() {
+  if [[ "$FAULT" == restore-error && "${@: -1}" == "${BIN}.new" ]]; then return 1; fi
+  command cp "$@"
+}
+wait_for_inbound_sidecars() {
+  if [[ "$FAULT" == terminate && "$1" == 3.5.14 ]]; then kill -TERM "$$"; fi
+  [[ "$FAULT" != restore-error || "$1" != 3.5.14 ]]
+}
+main
+'''
+                script = root / "update.sh"
+                script.write_text(source)
+                result = subprocess.run(["bash", str(script)], text=True, capture_output=True,
+                                        env=dict(os.environ, FAULT=fault, FAULT_MARK=str(root / "fault-fired"), TMPDIR=str(root)))
+                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                if fault == "restore-error":
+                    backups = list(root.rglob("previous-telemt"))
+                    self.assertEqual(len(backups), 1, result.stdout + result.stderr)
+                    self.assertEqual(backups[0].read_text(), old)
+                    self.assertIn("backup retained", result.stdout)
+                    continue
+                self.assertEqual(binary.read_text(), old, result.stdout + result.stderr)
+                self.assertEqual(version.read_text(), "3.5.13\n", result.stdout + result.stderr)
+
     def test_health_probe_is_local_authenticated_and_matches_running_version(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
