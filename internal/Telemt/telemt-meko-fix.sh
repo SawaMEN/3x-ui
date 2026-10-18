@@ -336,14 +336,16 @@ status() {
     # An existing table or a REJECT alone is not proof that selected ports
     # are protected. Verify both address families and the iOS bypass.
     if command -v nft >/dev/null 2>&1 &&
-       rules="$(nft -n list chain inet xui_telemt_meko input 2>/dev/null)" &&
-       [[ "$rules" == *'reject with tcp reset'* ]]; then
+       nft list table inet xui_telemt_meko >/dev/null 2>&1; then
+        rules="$(nft -n list chain inet xui_telemt_meko input 2>/dev/null || true)"
         backend=nftables
         mapfile -t applied_ports < <(nft -n list set inet xui_telemt_meko ports 2>/dev/null | awk '
             /elements = {/ { inside=1; sub(/^.*elements = {/, "") }
             inside { end=($0 ~ /}/); gsub(/[{},]/, " "); for (i=1; i<=NF; i++) if ($i ~ /^[0-9]+$/) print $i; if (end) exit }
         ' | sort -n)
-        [[ "$rules" == *'tcp dport @ports'* && "$rules" == *'@th,320,32'* ]] || verified_all=false
+        [[ "$rules" == *'tcp dport @ports'* &&
+           "$rules" == *'@th,320,32'* &&
+           "$rules" == *'reject with tcp reset'* ]] || verified_all=false
         for port in "${applied_ports[@]}"; do
             if [[ "$rules" == *"meter tm4_${port} "* &&
                   "$rules" == *"meter tm6_${port} "* ]] &&
