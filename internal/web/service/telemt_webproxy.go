@@ -46,6 +46,7 @@ var (
 
 type TelemtWebProxyState struct {
 	ManagedInboundID int `json:"managedInboundId,omitempty"`
+	BackendPort int `json:"backendPort,omitempty"`
 	UserFingerprint string `json:"userFingerprint,omitempty"`
 	Frontend           string   `json:"frontend,omitempty"`
 	Carrier            string   `json:"carrier,omitempty"`
@@ -147,6 +148,7 @@ func clearTelemtWebState() error {
 }
 
 func appendTelemtWebProxyConfig(base string, state TelemtWebProxyState) (string, error) {
+	base = removeTelemtWebUser(base)
 	if !state.Enabled {
 		return base, nil
 	}
@@ -164,7 +166,6 @@ func appendTelemtWebProxyConfig(base string, state TelemtWebProxyState) (string,
 			return "", err
 		}
 	}
-	base = removeTelemtWebUser(base)
 	managedUsers := ""
 	managedProfiles := ""
 	if state.ManagedInboundID != 0 {
