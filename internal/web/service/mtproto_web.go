@@ -229,22 +229,22 @@ var mtprotoWebTraffic struct {
 // usual MTProto clients. Telemt currently reports aggregate octets, not reliable
 // direction-specific counters, so they are recorded as Down, just like raw
 // MTProto sidecars. A failed poll never advances the previous snapshot.
-func CollectMtprotoWebTraffic(ctx context.Context) ([]mtproto.Traffic, []string, error) {
+func CollectMtprotoWebTraffic(ctx context.Context) ([]mtproto.Traffic, []string, string, error) {
 	mtprotoWebTraffic.Lock()
 	defer mtprotoWebTraffic.Unlock()
 
 	state, err := readTelemtWebState()
-	if err != nil { return nil, nil, err }
+	if err != nil { return nil, nil, "", err }
 	if !state.Enabled || state.ManagedInboundID == 0 {
 		mtprotoWebTraffic.inboundID = 0
 		mtprotoWebTraffic.last = nil
-		return nil, nil, nil
+		return nil, nil, "", nil
 	}
 
 	var inbound model.Inbound
-	if err := database.GetDB().First(&inbound, state.ManagedInboundID).Error; err != nil { return nil, nil, err }
+	if err := database.GetDB().First(&inbound, state.ManagedInboundID).Error; err != nil { return nil, nil, "", err }
 	inst, ok := mtproto.InstanceFromInbound(&inbound)
-	if !ok { return nil, nil, nil }
+	if !ok { return nil, nil, "", nil }
 
 	usersByName := make(map[string]string, len(inst.Secrets))
 	for _, sec := range inst.Secrets {
@@ -254,11 +254,11 @@ func CollectMtprotoWebTraffic(ctx context.Context) ([]mtproto.Traffic, []string,
 		mtprotoWebTraffic.inboundID = inbound.Id
 		mtprotoWebTraffic.last = make(map[string]int64)
 	}
-	if systemctl("is-active", "--quiet", telemtServiceName) != nil { return nil, nil, nil }
+	if systemctl("is-active", "--quiet", telemtServiceName) != nil { return nil, nil, "", nil }
 
 	client := &http.Client{Timeout: 4 * time.Second, Transport: telemtMonitorTransport{ctx}}
 	snapshot, err := fetchTelemtUserStats(client)
-	if err != nil { return nil, nil, err }
+	if err != nil { return nil, nil, "", err }
 
 	var deltas []mtproto.Traffic
 	var online []string
@@ -277,7 +277,7 @@ func CollectMtprotoWebTraffic(ctx context.Context) ([]mtproto.Traffic, []string,
 		}
 		mtprotoWebTraffic.last[user.Username] = current
 	}
-	return deltas, online, nil
+	return deltas, online, inbound.Tag, nil
 }
 
 func mtprotoWebFingerprint(ib *model.Inbound) string {
