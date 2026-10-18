@@ -277,7 +277,9 @@ func (TelemtService) Status() TelemtStatus {
 	latest, available := telemtLatestVersion(version)
 	// A present but non-reporting executable may be corrupt or incompatible.
 	// Offer an explicit repair through the regular update action.
-	if installed && version == "" { available = true }
+	if installed && version == "" {
+		available = true
+	}
 	supported := runtime.GOOS == "linux" && (runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64")
 	reason := ""
 	if !supported {
