@@ -100,6 +100,17 @@ func (s TelemtService) PreflightWebProxy(ctx context.Context, domain string, opt
 		}
 	}
 
+	// A temporarily stopped panel on :443 is invisible to a socket probe.
+	// Keep the administrator UI accessible across subsequent panel restarts.
+	panelPort, panelPortErr := (&SettingService{}).GetPort()
+	if panelPortErr != nil {
+		check("panel-port", false, "Не удалось прочитать порт панели: "+panelPortErr.Error())
+	} else if panelPort == 443 {
+		check("panel-port", false, "Панель настроена на TCP 443. Перенесите порт панели перед включением WEB Proxy, иначе она и HTTPS frontend будут конфликтовать.")
+	} else {
+		check("panel-port", true, fmt.Sprintf("Панель использует порт %d и не конфликтует с WEB HTTPS :443.", panelPort))
+	}
+
 	// A running service on another port is not evidence that it owns 443.
 	// Only reuse a socket when the observed owner is the configured frontend.
 	owner := strings.ToLower(telemtWebPortOwner(443))
