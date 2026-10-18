@@ -154,22 +154,22 @@ if [[ -n "$output" ]]; then cp "$SERVED/${url##*/}" "$output"; else printf '  "t
                 served = root / "served"
                 served.mkdir()
                 asset = served / "telemt-x86_64-linux-musl.tar.gz"
-                binary = b"#!/bin/sh\\necho Telemt 3.5.14\\n"
+                binary = b"#!/bin/sh\necho Telemt 3.5.14\n"
                 with tarfile.open(asset, "w:gz") as tar:
                     info = tarfile.TarInfo("telemt")
                     info.size = len(binary)
                     tar.addfile(info, io.BytesIO(binary))
                 (served / (asset.name + ".sha256")).write_text(
-                    hashlib.sha256(asset.read_bytes()).hexdigest() + "  " + asset.name + "\\n"
+                    hashlib.sha256(asset.read_bytes()).hexdigest() + "  " + asset.name + "\n"
                 )
                 old_binary = root / "telemt"
-                original = ("#!/bin/sh\\necho Telemt " + installed + "\\n").encode() if installed else None
+                original = ("#!/bin/sh\necho Telemt " + installed + "\n").encode() if installed else None
                 if original:
                     old_binary.write_bytes(original)
                     old_binary.chmod(0o755)
                 version = root / "version"
                 if installed:
-                    version.write_text(installed + "\\n")
+                    version.write_text(installed + "\n")
                 script = (ROOT / "internal/Telemt/telemt-update.sh").read_text()
                 for key, value in (
                     ("BIN", old_binary), ("VERSION_FILE", version), ("TMP_DIR", root / "download")
@@ -190,9 +190,9 @@ while (( $# )); do
 done
 if [[ -n "$output" ]]; then cp "$SERVED/${url##*/}" "$output"; else printf '  "tag_name": "3.5.14",\\n'; fi
 """,
-                    "uname": "#!/bin/sh\\necho x86_64\\n",
+                    "uname": "#!/bin/sh\necho x86_64\n",
                     "systemctl": '#!/bin/sh\necho "$*" >> "$SERVICE_LOG"\nexit 1\n',
-                    "pgrep": "#!/bin/sh\\nexit 1\\n",
+                    "pgrep": "#!/bin/sh\nexit 1\n",
                 }
                 for command, body in commands.items():
                     target = stubs / command
