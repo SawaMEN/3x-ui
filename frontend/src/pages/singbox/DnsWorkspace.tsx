@@ -18,7 +18,6 @@ type ServiceAvailability = {
   error: boolean;
 };
 
-
 type Props = {
   config: ConfigObject;
   onChange: (value: ConfigObject) => void;
@@ -36,15 +35,21 @@ export default function DnsWorkspace({ config, onChange, subscriptionTags = [] }
     let active = true;
     const refresh = async () => {
       const results = await Promise.allSettled([
-        HttpUtil.get('/panel/api/oxidns/status', undefined, { silent: true }) as Promise<InstalledResponse>,
-        HttpUtil.get('/panel/api/dnstt/status', undefined, { silent: true }) as Promise<InstalledResponse>,
+        HttpUtil.get('/panel/api/oxidns/status', undefined, {
+          silent: true,
+        }) as Promise<InstalledResponse>,
+        HttpUtil.get('/panel/api/dnstt/status', undefined, {
+          silent: true,
+        }) as Promise<InstalledResponse>,
       ]);
       if (!active) return;
       const installed = (index: number) => {
         const result = results[index];
-        return result.status === 'fulfilled' &&
+        return (
+          result.status === 'fulfilled' &&
           result.value.success === true &&
-          result.value.obj?.installed === true;
+          result.value.obj?.installed === true
+        );
       };
       setServices({
         checked: true,
@@ -175,8 +180,8 @@ export default function DnsWorkspace({ config, onChange, subscriptionTags = [] }
       )}
       {services.checked && !services.error && !services.oxidns && !services.dnstt && (
         <Typography.Text type="secondary">
-          Дополнительные DNS-компоненты не установлены. Установка доступна в разделе
-          «Настройки → Системные пакеты и ядра».
+          Дополнительные DNS-компоненты не установлены. Установка доступна в разделе «Настройки →
+          Системные пакеты и ядра».
         </Typography.Text>
       )}
       <Typography.Text type="secondary">
