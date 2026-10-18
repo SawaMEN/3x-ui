@@ -83,10 +83,17 @@ export default function MtprotoMekoStatus() {
     type = 'error';
     description = message;
   } else if (wanted && active && status?.healthy) {
-    type = 'success';
-    description = russian
-      ? `MEKO применён к TCP-порту ${port}. Firewall: ${status.backend || 'неизвестно'}.`
-      : `MEKO applied to TCP port ${port}. Firewall: ${status.backend || 'unknown'}.`;
+    // The iptables fallback handles IPv4 only. It must not look like full
+    // dual-stack protection when the host also exposes the MTProto port on IPv6.
+    type = status.backend === 'iptables' ? 'warning' : 'success';
+    description =
+      status.backend === 'iptables'
+        ? russian
+          ? `MEKO применён к TCP-порту ${port} только для IPv4 (iptables). Для IPv6 нужен nftables.`
+          : `MEKO applies to TCP port ${port} on IPv4 only (iptables). Install nftables for IPv6.`
+        : russian
+          ? `MEKO применён к TCP-порту ${port}. Firewall: ${status.backend || 'неизвестно'}.`
+          : `MEKO applied to TCP port ${port}. Firewall: ${status.backend || 'unknown'}.`;
   } else if (wanted) {
     type = 'warning';
     description = russian
