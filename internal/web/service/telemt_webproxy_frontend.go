@@ -105,6 +105,19 @@ func (s TelemtService) EnableWebProxy(ctx context.Context, domain, cert, key str
 	if (len(o.Carriers) > 0 || o.Carrier != "https") && !telemtWebVersionAtLeast(telemtVersion(), "3.5.4") {
 		return TelemtWebProxyStatus{}, errors.New("WEB carrier selection requires Telemt 3.5.4 or newer")
 	}
+	// Fail before changing packages, certificates, state or listeners.
+	preflight, err := s.PreflightWebProxy(ctx, domain, o, cert, key)
+	if err != nil {
+		return TelemtWebProxyStatus{}, err
+	}
+	if !preflight.Ready {
+		for _, check := range preflight.Checks {
+			if !check.OK {
+				return TelemtWebProxyStatus{}, fmt.Errorf("WEB Proxy preflight (%s): %s", check.ID, check.Message)
+			}
+		}
+		return TelemtWebProxyStatus{}, errors.New("WEB Proxy prerequisites are not met")
+	}
 	snapshot, err := s.CaptureWebProxyEnableSnapshot(domain)
 	if err != nil {
 		return TelemtWebProxyStatus{}, err
