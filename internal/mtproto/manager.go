@@ -37,6 +37,7 @@ type Instance struct {
 	Listen  string
 	Port    int
 	Secrets []SecretEntry
+	MekoFix bool
 
 	Debug                     bool
 	ProxyProtocolListener     bool
@@ -70,6 +71,7 @@ func (inst Instance) structuralFingerprint() string {
 	return strings.Join([]string{
 		inst.bindTo(),
 		strconv.FormatBool(inst.Debug),
+		strconv.FormatBool(inst.MekoFix),
 		strconv.FormatBool(inst.ProxyProtocolListener),
 		inst.PreferIP,
 		strconv.Itoa(inst.ThrottleMaxConnections),
@@ -200,6 +202,7 @@ func InstanceFromInbound(ib *model.Inbound) (Instance, bool) {
 	var parsed struct {
 		ProxyProtocolListener     bool     `json:"proxyProtocolListener"`
 		Debug                     bool     `json:"debug"`
+		MekoFix                   bool     `json:"mekoFix"`
 		FakeTLSDomain             string   `json:"fakeTlsDomain"`
 		TLSMask                   *bool    `json:"tlsMask"`
 		AllowLegacyModes          *bool    `json:"allowLegacyModes"`
@@ -294,6 +297,7 @@ func InstanceFromInbound(ib *model.Inbound) (Instance, bool) {
 		Listen:                    ib.Listen,
 		Port:                      ib.Port,
 		Secrets:                   secrets,
+		MekoFix:                   parsed.MekoFix,
 		Debug:                     parsed.Debug,
 		ProxyProtocolListener:     parsed.ProxyProtocolListener,
 		PreferIP:                  parsed.PreferIP,
@@ -642,6 +646,11 @@ func (inst Instance) useMiddleProxy() bool {
 
 func renderConfig(inst Instance, apiPort int, apiToken string) string {
 	var b strings.Builder
+	if inst.MekoFix {
+		// Only configs explicitly marked by an ordinary MTProto inbound may
+		// contribute ports to the MEKO firewall rule set.
+		b.WriteString("# x-ui-meko-fix=1\n")
+	}
 	fmt.Fprintf(&b, "[general]\ndata_path = %s\nfast_mode = true\nuse_middle_proxy = %t\n", tomlQuote(filepath.Join(configDir(), "state", strconv.Itoa(inst.Id))), inst.useMiddleProxy())
 	if inst.Debug {
 		b.WriteString("log_level = \"debug\"\n")
