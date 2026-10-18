@@ -181,7 +181,9 @@ esac
 		t.Fatalf("nft failure must not install a second limiter: err=%v output=%s", err, out)
 	}
 	current, err := os.ReadFile(filepath.Join(dir, "batch"))
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	if string(batch) != string(current) {
 		t.Fatal("failed replacement changed last successful nft configuration")
 	}
