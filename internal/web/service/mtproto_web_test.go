@@ -30,7 +30,12 @@ func TestManagedMtprotoWebProfilesUseClientCredentials(t *testing.T) {
     settings := `{"clients":[{"email":"alice","enable":true,"secret":"00112233445566778899aabbccddeeff","totalGB":1024,"limitIp":2},{"email":"bob","enable":true,"secret":"11223344556677889900aabbccddeeff"}]}`
     seedInboundConflict(t, "mt-web-users", "", 46042, model.MTProto, "", settings)
     inbound := loadInboundByTag(t, "mt-web-users")
-    base := "[access.users]\\nxui = \\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\"\\n\\n[[upstreams]]\\ntype = \\"direct\\"\\n"
+    base := `[access.users]
+xui = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+[[upstreams]]
+type = "direct"
+`
     state := TelemtWebProxyState{
         Enabled:true, ManagedInboundID:inbound.Id, Domain:"web.example.com",
         Secret:"0123456789abcdef0123456789abcdef",
