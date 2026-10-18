@@ -334,3 +334,30 @@ func TestMekoIndependentInboundLimits(t *testing.T) {
 		t.Fatal("disabling one MEKO inbound should remove only its port")
 	}
 }
+
+func TestMekoPolicyEditsDoNotRestartTelemt(t *testing.T) {
+	base := Instance{Id: 7, Port: 8443, Secrets: []SecretEntry{{Name: "a", Secret: "0123456789abcdef0123456789abcdef"}}}
+	modified := base
+	modified.MekoFix = true
+	modified.MekoRatePerMinute = 120
+	modified.MekoBurst = 8
+	if base.structuralFingerprint() != modified.structuralFingerprint() {
+		t.Fatal("changing only MEKO firewall policy must not restart Telemt")
+	}
+	if base.mekoFingerprint() == modified.mekoFingerprint() {
+		t.Fatal("MEKO fingerprint must change when the per-port policy changes")
+	}
+	if base.secretsFingerprint() != modified.secretsFingerprint() {
+		t.Fatal("MEKO changes must not alter users")
+	}
+	config := renderConfig(modified, 9000, "token")
+	for _, marker := range []string{"# x-ui-meko-fix=1\n", "# x-ui-meko-rate=120\n", "# x-ui-meko-burst=8\n"} {
+		if !strings.Contains(config, marker) {
+			t.Fatalf("missing selected port marker %q", marker)
+		}
+	}
+	off := renderConfig(base, 9000, "token")
+	if strings.Contains(off, "# x-ui-meko-") {
+		t.Fatal("MEKO metadata must never appear in unselected proxy configs")
+	}
+}
