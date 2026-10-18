@@ -14,6 +14,7 @@ on:
       - "tools/ci/**"
       - "**.sh"
       - "tools/test-*-shell.py"
+      - "tools/test-meko-firewall.py"
       - "tools/telemt/**"
       - "tools/test_official_telemt.py"
   push:
@@ -33,6 +34,7 @@ on:
       - "tools/ci/**"
       - "**.sh"
       - "tools/test-*-shell.py"
+      - "tools/test-meko-firewall.py"
       - "tools/telemt/**"
       - "tools/test_official_telemt.py"
 
@@ -62,6 +64,16 @@ jobs:
         run: |
           python3 tools/test-core-migration-shell.py
           python3 tools/test-management-shell.py
+
+  meko-firewall:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install firewall tools
+        run: sudo apt-get update && sudo apt-get install -y nftables iptables
+      - name: Test actual MEKO rules in an isolated network namespace
+        run: sudo unshare --net -- python3 tools/test-meko-firewall.py
 
   go-test:
     if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
