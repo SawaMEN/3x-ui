@@ -194,6 +194,9 @@ func initModels() error {
 	if err := migrateClientEmailLowerIndex(); err != nil {
 		return err
 	}
+	if err := migrateNodePanelEdition(); err != nil {
+		return err
+	}
 	if IsPostgres() {
 		if err := resyncPostgresSequences(db, models); err != nil {
 			log.Printf("Error resyncing postgres sequences: %v", err)
@@ -404,6 +407,13 @@ func migrateSyncOrphanColumns() error {
 
 // The client identity checks match emails case-insensitively; without an
 // expression index (which no GORM struct tag can declare) they seq-scan.
+func migrateNodePanelEdition() error {
+	if !db.Migrator().HasColumn(&model.Node{}, "panel_edition") {
+		return nil
+	}
+	return db.Model(&model.Node{}).Where("panel_edition IS NULL OR panel_edition = ?", "").Update("panel_edition", "unknown").Error
+}
+
 func migrateClientEmailLowerIndex() error {
 	if db.Migrator().HasIndex(&model.ClientRecord{}, "idx_clients_email_lower") {
 		return nil
