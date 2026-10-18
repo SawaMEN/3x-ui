@@ -1185,6 +1185,9 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 	if err := validateInboundRuntimeProtocol(inbound.Protocol, inbound); err != nil {
 		return inbound, false, err
 	}
+	if err := ValidateMtprotoWebInbound(inbound); err != nil {
+		return inbound, false, err
+	}
 	if !s.FromNodeSync {
 		if err := validateInboundTLSCertificates(inbound.StreamSettings); err != nil {
 			return inbound, false, err
@@ -1777,6 +1780,11 @@ func (s *InboundService) SetInboundEnable(id int, enable bool) (bool, error) {
 		if err := validateInboundRuntimeProtocol(inbound.Protocol, inbound); err != nil {
 			return false, err
 		}
+		candidate := *inbound
+		candidate.Enable = true
+		if err := ValidateMtprotoWebInbound(&candidate); err != nil {
+			return false, err
+		}
 	}
 
 	db := database.GetDB()
@@ -1891,6 +1899,9 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 	}
 	// Keep node ownership authoritative before protocol validation and port allocation.
 	inbound.NodeID = oldInbound.NodeID
+	if err := ValidateMtprotoWebInbound(inbound); err != nil {
+		return inbound, false, err
+	}
 	if err := normalizeTuicSettings(inbound); err != nil {
 		return inbound, false, err
 	}

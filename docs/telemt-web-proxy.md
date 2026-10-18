@@ -1,26 +1,59 @@
 # WEB Proxy: transports and HTTPS frontend
 
-Telemt is an optional MTProto runtime integrated into the 3x-ui **Входящие** workspace.
-It is not installed or enabled just by installing/updating the panel. Under
-**Настройки → Обновления пакетов и ядер Linux**, install the official Telemt
-binary (checksum-verified), then open **Входящие**. Create MTProto inbounds through the existing
-**Создать подключение → MTProto** workflow. Telemt is the runtime behind this
-single protocol; no separate Telemt protocol or proxy-creation screen exists. The
-Telemt runtime settings panel and MTProto selection in the new inbound form
-are absent until installation, and
-the API refuses operational requests while the binary is missing. Existing
-configured users, service settings, Web Proxy modes, and subscription settings
-are retained when updating the panel. Removal requires deleting the related
-MTProto inbounds first; Telemt's saved configuration is preserved for a future
-reinstall.
+Telemt is an optional runtime for the existing **MTProto** inbound protocol in
+3x-ui. To install it, use **Настройки → Обновления пакетов и ядер Linux**.
+There is **no manual Telemt start/stop menu**. The panel manages service
+lifecycles from enabled MTProto inbounds:
 
-The integrated workspace can enable or reconfigure WEB Proxy using **nginx**,
-**Caddy** or **HAProxy**. nginx remains the default for existing installations.
+- **Ordinary MTProto**: in **Входящие → Создать подключение → MTProto**, leave
+  WEB Proxy disabled. The panel runs a supervised Telemt sidecar for the
+  inbound; removing/disabling the inbound stops that sidecar. Links are
+  `tg://proxy` in the usual client, QR and subscription workflows. The optional
+  **Fix by MEKO V3** switch is bound to this inbound's TCP port and defaults
+  to off. It does not apply to any WEB Proxy frontend/backend or other ports.
+- **WEB Proxy**: in the same MTProto form, enable **WEB Proxy (HTTPS)**, provide
+  a public domain and choose nginx, Caddy or HAProxy and HTTP carrier(s).
+  The WEB frontend and its Telemt backend are provisioned from the inbound.
+  The individual client links are `tg://webproxy`, generated in the same
+  client, QR and subscription interfaces, using each MTProto client's secret.
+  Disabling/deleting the last managed WEB inbound stops its frontend/backend.
+  WEB mode is currently supported only on the local server, with **one**
+  managed WEB inbound per server because its HTTPS frontend owns port 443.
 
-1. Open **Входящие → Telemt — настройки движка MTProto и WEB Proxy → Настроить Web Proxy** (or **Поднять Web Proxy**).
-2. Enter a public domain pointing to this server and select an HTTPS frontend.
-3. Select the primary/fallback carrier and, optionally, an ordered carrier list.
-4. Use the up/down buttons to set attempt order and apply the settings.
+### Ordinary MTProto: Fix by MEKO V3
+
+Fix by MEKO is **opt-in per ordinary MTProto inbound** and targets the
+inbound's listening TCP port. The **WEB Proxy** transport never uses these
+rules. Rate (SYN/minute per source IP) and burst can be tuned on each inbound;
+default policy is 54/minute, burst 1. MEKO is a connection-attempt limiter, **not
+a substitute for a general host firewall or a guarantee of reachability from a
+filtered network**.
+
+The panel's MEKO helper owns a dedicated nftables table
+(`inet xui_telemt_meko`) and falls back to managed iptables chains when
+nftables is unavailable. On an existing nftables installation, updates replace
+the owned table in **one atomic transaction**; an unsuccessful replacement does
+not install a second limiter via iptables. The iptables fallback currently
+filters IPv4 only, so install nftables when ordinary MTProto accepts IPv6.
+Neither backend changes unrelated SSH rules or other nftables tables.
+
+The MEKO systemd unit is enabled only while at least one opted-in ordinary
+MTProto inbound exists. Port changes, disable/delete, and changes in per-inbound
+limits trigger reconciliation. If a sidecar fails to start, its generated port
+selection is removed rather than applying MEKO to a service that might later
+reuse the port. The inbound form displays selected versus actually applied
+ports, reports firewall errors, and offers **Retry MEKO** after saving.
+
+Do not enable Telemt's built-in `server.listeners.synlimit` on a port that is
+already managed by the external MEKO helper: stacking two independent SYN
+limiters may reject legitimate connections. MEKO's iOS-like TCP signature is a
+heuristic and may vary with OS and network path. Validate rate/burst against
+real traffic and check both IPv4 and IPv6 before deployment.
+
+New WEB inbounds will not take over a previously configured independent
+WEB Proxy automatically. The legacy configuration is preserved, and the old
+WEB frontend must be disabled before a new inbound can claim port 443.
+Legacy standalone Telemt credentials are not deleted or automatically migrated.
 
 Supported carriers are `https`, `https-lanes`, `websocket` and
 `websocket-lanes`. Selection/negotiation requires Telemt 3.5.4 or newer. An empty

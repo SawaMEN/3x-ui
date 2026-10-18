@@ -866,6 +866,17 @@ export function genMtprotoLink(input: GenMtprotoLinkInput): string {
   const { inbound, address, port = inbound.port, clientSecret = '' } = input;
   if (inbound.protocol !== 'mtproto') return '';
   if (clientSecret.length === 0) return '';
+  const web = (inbound.settings as { webProxy?: { enabled?: boolean; domain?: string } }).webProxy;
+  if (web?.enabled) {
+    const rawSecret = /^(?:ee|dd)[0-9a-fA-F]{32}/.test(clientSecret)
+      ? clientSecret.slice(2, 34)
+      : clientSecret;
+    if (!/^[0-9a-fA-F]{32}$/.test(rawSecret) || !web.domain) return '';
+    const url = new URL('tg://webproxy');
+    url.searchParams.set('server', web.domain);
+    url.searchParams.set('secret', 'dd' + rawSecret);
+    return url.toString();
+  }
   const url = new URL('tg://proxy');
   url.searchParams.set('server', address);
   url.searchParams.set('port', String(port));

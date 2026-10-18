@@ -32,11 +32,16 @@ type SecretEntry struct {
 }
 
 type Instance struct {
-	Id      int
-	Tag     string
-	Listen  string
-	Port    int
-	Secrets []SecretEntry
+	Id                   int
+	Tag                  string
+	Listen               string
+	Port                 int
+	Secrets              []SecretEntry
+	MekoFix              bool
+	MekoRatePerMinute    int
+	MekoBurst            int
+	MekoIOSRatePerMinute int
+	MekoIOSBurst         int
 
 	Debug                     bool
 	ProxyProtocolListener     bool
@@ -91,6 +96,12 @@ func (inst Instance) structuralFingerprint() string {
 	}, "|")
 }
 
+// MEKO modifies only host firewall policy. Keep it separate from the Telemt
+// structural fingerprint so editing a SYN limit does not disconnect users.
+func (inst Instance) mekoFingerprint() string {
+	return fmt.Sprintf("%t:%d:%d:%d:%d", inst.MekoFix, inst.MekoRatePerMinute, inst.MekoBurst, inst.MekoIOSRatePerMinute, inst.MekoIOSBurst)
+}
+
 func (inst Instance) secretsFingerprint() string {
 	pairs := make([]string, 0, len(inst.Secrets))
 	for _, e := range inst.Secrets {
@@ -127,6 +138,7 @@ type managed struct {
 	tag          string
 	structuralFP string
 	secretsFP    string
+	mekoFP       string
 	apiPort      int
 	apiToken     string
 	last         map[string]clientCounters
@@ -178,6 +190,21 @@ func validRawSecret(secret string) bool {
 	return err == nil
 }
 
+// WebProxyInbound is a separate HTTPS transport of the existing MTProto protocol.
+// Its users are still resolved by InstanceFromInbound, but it runs through the
+// managed WEB backend instead of a normal listener sidecar.
+func WebProxyInbound(ib *model.Inbound) bool {
+	if ib == nil || ib.Protocol != model.MTProto {
+		return false
+	}
+	var settings struct {
+		WebProxy struct {
+			Enabled bool `json:"enabled"`
+		} `json:"webProxy"`
+	}
+	return json.Unmarshal([]byte(ib.Settings), &settings) == nil && settings.WebProxy.Enabled
+}
+
 func InstanceFromInbound(ib *model.Inbound) (Instance, bool) {
 	if ib == nil || ib.Protocol != model.MTProto {
 		return Instance{}, false
@@ -185,6 +212,11 @@ func InstanceFromInbound(ib *model.Inbound) (Instance, bool) {
 	var parsed struct {
 		ProxyProtocolListener     bool     `json:"proxyProtocolListener"`
 		Debug                     bool     `json:"debug"`
+		MekoFix                   bool     `json:"mekoFix"`
+		MekoRatePerMinute         int      `json:"mekoRatePerMinute"`
+		MekoBurst                 int      `json:"mekoBurst"`
+		MekoIOSRatePerMinute      int      `json:"mekoIosRatePerMinute"`
+		MekoIOSBurst              int      `json:"mekoIosBurst"`
 		FakeTLSDomain             string   `json:"fakeTlsDomain"`
 		TLSMask                   *bool    `json:"tlsMask"`
 		AllowLegacyModes          *bool    `json:"allowLegacyModes"`
@@ -279,6 +311,11 @@ func InstanceFromInbound(ib *model.Inbound) (Instance, bool) {
 		Listen:                    ib.Listen,
 		Port:                      ib.Port,
 		Secrets:                   secrets,
+		MekoFix:                   parsed.MekoFix,
+		MekoRatePerMinute:         parsed.MekoRatePerMinute,
+		MekoBurst:                 parsed.MekoBurst,
+		MekoIOSRatePerMinute:      parsed.MekoIOSRatePerMinute,
+		MekoIOSBurst:              parsed.MekoIOSBurst,
 		Debug:                     parsed.Debug,
 		ProxyProtocolListener:     parsed.ProxyProtocolListener,
 		PreferIP:                  parsed.PreferIP,
@@ -356,10 +393,17 @@ func stopManaged(cur *managed) error {
 }
 
 func (m *Manager) ensureLocked(inst Instance) error {
-	structFP, secFP := inst.structuralFingerprint(), inst.secretsFingerprint()
+	structFP, secFP, mekoFP := inst.structuralFingerprint(), inst.secretsFingerprint(), inst.mekoFingerprint()
 	if cur, ok := m.procs[inst.Id]; ok {
 		switch ensureActionFor(cur.proc.IsRunning(), cur.structuralFP, cur.secretsFP, structFP, secFP) {
 		case ensureNoop:
+			if cur.mekoFP != mekoFP {
+				if err := writeConfig(configPathForID(inst.Id), inst, cur.apiPort, cur.apiToken); err != nil {
+					return err
+				}
+				cur.mekoFP = mekoFP
+				scheduleMekoSync()
+			}
 			cur.tag = inst.Tag
 			cur.userEmails = nativeUserEmails(inst.Secrets)
 			return nil
@@ -370,6 +414,8 @@ func (m *Manager) ensureLocked(inst Instance) error {
 			if reloadTelemt(cur.apiPort, cur.apiToken) {
 				cur.tag = inst.Tag
 				cur.secretsFP = secFP
+				cur.mekoFP = mekoFP
+				scheduleMekoSync()
 				cur.userEmails = nativeUserEmails(inst.Secrets)
 				logger.Infof("mtproto: reloaded Telemt users for inbound %d", inst.Id)
 				return nil
@@ -398,6 +444,13 @@ func (m *Manager) ensureLocked(inst Instance) error {
 	}
 	proc := newProcess(cfg, fmt.Sprintf("inbound %d", inst.Id))
 	if err := proc.Start(); err != nil {
+		// A failed startup must not leave an opted-in config advertising a
+		// port to the MEKO helper. The next reconcile will retry the inbound;
+		// until then, do not apply its firewall rules to an unrelated listener.
+		if removeErr := os.Remove(cfg); removeErr != nil && !os.IsNotExist(removeErr) {
+			return fmt.Errorf("mtproto: Telemt start failed: %w; cleanup config: %v", err, removeErr)
+		}
+		scheduleMekoSync()
 		return err
 	}
 	m.procs[inst.Id] = &managed{
@@ -405,11 +458,13 @@ func (m *Manager) ensureLocked(inst Instance) error {
 		tag:          inst.Tag,
 		structuralFP: structFP,
 		secretsFP:    secFP,
+		mekoFP:       mekoFP,
 		apiPort:      apiPort,
 		apiToken:     apiToken,
 		last:         map[string]clientCounters{},
 		userEmails:   nativeUserEmails(inst.Secrets),
 	}
+	scheduleMekoSync()
 	logger.Infof("mtproto: started Telemt for inbound %d on %s", inst.Id, inst.bindTo())
 	return nil
 }
@@ -627,6 +682,23 @@ func (inst Instance) useMiddleProxy() bool {
 
 func renderConfig(inst Instance, apiPort int, apiToken string) string {
 	var b strings.Builder
+	if inst.MekoFix {
+		// Only configs explicitly marked by an ordinary MTProto inbound may
+		// contribute ports to the MEKO firewall rule set.
+		b.WriteString("# x-ui-meko-fix=1\n")
+		if inst.MekoRatePerMinute >= 1 && inst.MekoRatePerMinute <= 60000 {
+			fmt.Fprintf(&b, "# x-ui-meko-rate=%d\n", inst.MekoRatePerMinute)
+		}
+		if inst.MekoBurst >= 1 && inst.MekoBurst <= 1000 {
+			fmt.Fprintf(&b, "# x-ui-meko-burst=%d\n", inst.MekoBurst)
+		}
+		if inst.MekoIOSRatePerMinute >= 1 && inst.MekoIOSRatePerMinute <= 60000 {
+			fmt.Fprintf(&b, "# x-ui-meko-ios-rate=%d\n", inst.MekoIOSRatePerMinute)
+		}
+		if inst.MekoIOSBurst >= 1 && inst.MekoIOSBurst <= 1000 {
+			fmt.Fprintf(&b, "# x-ui-meko-ios-burst=%d\n", inst.MekoIOSBurst)
+		}
+	}
 	fmt.Fprintf(&b, "[general]\ndata_path = %s\nfast_mode = true\nuse_middle_proxy = %t\n", tomlQuote(filepath.Join(configDir(), "state", strconv.Itoa(inst.Id))), inst.useMiddleProxy())
 	if inst.Debug {
 		b.WriteString("log_level = \"debug\"\n")

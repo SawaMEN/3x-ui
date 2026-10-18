@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pelletier/go-toml/v2"
@@ -26,10 +28,14 @@ const (
 type TelemtMekoConfig struct {
 	Enabled       bool   `json:"enabled"`
 	Applied       bool   `json:"applied"`
+	Healthy       bool   `json:"healthy"`
+	Backend       string `json:"backend"`
+	StatusError   string `json:"statusError,omitempty"`
 	RatePerMinute int    `json:"ratePerMinute"`
 	Burst         int    `json:"burst"`
 	Ports         []int  `json:"ports"`
 	AppliedPorts  []int  `json:"appliedPorts"`
+	VerifiedPorts []int  `json:"verifiedPorts"`
 	Fingerprint   string `json:"fingerprint"`
 	Mark          string `json:"mark"`
 }
@@ -110,7 +116,9 @@ func readTelemtMekoEnv(cfg *TelemtMekoConfig) {
 
 func telemtPortFromConfig(path string) int {
 	data, err := os.ReadFile(path)
-	if err != nil {
+	if err != nil || !strings.HasPrefix(string(data), "# x-ui-meko-fix=1\n") {
+		// Old sidecars, unselected ports and standalone WEB Proxy must never
+		// acquire MEKO rules just because they share the Telemt executable.
 		return 0
 	}
 	var raw struct {
@@ -135,13 +143,6 @@ func discoverTelemtMekoPorts() []int {
 			if port := telemtPortFromConfig(path); port > 0 {
 				seen[port] = struct{}{}
 			}
-		}
-	}
-	// The standalone Telemt page can still run its own service for WEB Proxy.
-	// Cover that port as well, but only while the standalone service is active.
-	if systemctl("is-active", "--quiet", telemtServiceName) == nil {
-		if port := telemtPortFromConfig(telemtConfigPath); port > 0 {
-			seen[port] = struct{}{}
 		}
 	}
 	ports := make([]int, 0, len(seen))
@@ -179,10 +180,10 @@ func runTelemtMekoScript(action string, cfg TelemtMekoConfig) ([]byte, error) {
 	return out, nil
 }
 
-func readTelemtMekoRuntime(cfg *TelemtMekoConfig) {
+func readTelemtMekoRuntime(cfg *TelemtMekoConfig) error {
 	out, err := runTelemtMekoScript("status", *cfg)
 	if err != nil {
-		return
+		return err
 	}
 	for _, line := range strings.Split(string(out), "\n") {
 		key, value, ok := strings.Cut(strings.TrimSpace(line), "=")
@@ -192,24 +193,43 @@ func readTelemtMekoRuntime(cfg *TelemtMekoConfig) {
 		switch key {
 		case "installed":
 			cfg.Applied = value == "true"
+		case "backend":
+			cfg.Backend = value
 		case "ports":
 			cfg.Ports = parseMekoPortList(value)
 		case "applied_ports":
 			cfg.AppliedPorts = parseMekoPortList(value)
+		case "verified_ports":
+			cfg.VerifiedPorts = parseMekoPortList(value)
 		}
 	}
+	return nil
 }
 
 func (TelemtService) GetMekoConfig() TelemtMekoConfig {
 	cfg := defaultTelemtMekoConfig()
 	readTelemtMekoEnv(&cfg)
 	cfg.Ports = discoverTelemtMekoPorts()
-	readTelemtMekoRuntime(&cfg)
+	// Per-inbound selection owns whether MEKO is enabled. A previous global
+	// toggle must not unexpectedly disable an opted-in ordinary MTProto port.
+	cfg.Enabled = len(cfg.Ports) > 0
+	if err := readTelemtMekoRuntime(&cfg); err != nil {
+		cfg.StatusError = err.Error()
+	}
+	mekoApplyError.RLock()
+	if cfg.StatusError == "" {
+		cfg.StatusError = mekoApplyError.message
+	}
+	mekoApplyError.RUnlock()
+	cfg.Healthy = cfg.StatusError == "" && (cfg.Enabled && cfg.Applied && sameMekoPorts(cfg.Ports, cfg.AppliedPorts) && sameMekoPorts(cfg.Ports, cfg.VerifiedPorts) || !cfg.Enabled && !cfg.Applied && len(cfg.AppliedPorts) == 0)
 	if cfg.Ports == nil {
 		cfg.Ports = []int{}
 	}
 	if cfg.AppliedPorts == nil {
 		cfg.AppliedPorts = []int{}
+	}
+	if cfg.VerifiedPorts == nil {
+		cfg.VerifiedPorts = []int{}
 	}
 	return cfg
 }
@@ -281,6 +301,11 @@ func ensureTelemtMekoAssets() error {
 }
 
 func (TelemtService) SaveMekoConfig(cfg TelemtMekoConfig) error {
+	// MEKO activation is owned by selected ordinary MTProto inbounds, never
+	// by the deprecated global Telemt switch or an arbitrary API payload.
+	// Legacy callers may still change default rate/burst, but cannot disable
+	// protection for an opted-in port or enable it on unrelated listeners.
+	cfg.Enabled = len(discoverTelemtMekoPorts()) > 0
 	if err := validateTelemtMekoConfig(cfg); err != nil {
 		return err
 	}
@@ -330,20 +355,89 @@ func sameMekoPorts(a, b []int) bool {
 	return true
 }
 
+// The last application error belongs to the MEKO runtime, not to a single
+// request. Expose it alongside the actual kernel state instead of silently
+// logging a failed firewall change after the user saved an inbound.
+var mekoApplyError struct {
+	sync.RWMutex
+	message string
+}
+
+var mekoApplyState struct {
+	sync.Mutex
+	fingerprint string
+}
+
+// The applied port set alone cannot tell us if the per-inbound rate or burst
+// changed. Hash only the MEKO metadata of selected configs, not client secrets
+// or volatile Telemt process settings.
+func desiredMekoPolicyFingerprint(cfg TelemtMekoConfig) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "rate=%d,burst=%d;", cfg.RatePerMinute, cfg.Burst)
+	pattern := filepath.Join(filepath.Dir(telemtBinaryPath), "mtproto", "telemt-*.toml")
+	paths, _ := filepath.Glob(pattern)
+	sort.Strings(paths)
+	for _, path := range paths {
+		data, err := os.ReadFile(path)
+		if err != nil || !strings.HasPrefix(string(data), "# x-ui-meko-fix=1\n") {
+			continue
+		}
+		fmt.Fprintf(&b, "%d;", telemtPortFromConfig(path))
+		for _, line := range strings.Split(string(data), "\n") {
+			if strings.HasPrefix(line, "# x-ui-meko-rate=") || strings.HasPrefix(line, "# x-ui-meko-burst=") || strings.HasPrefix(line, "# x-ui-meko-ios-rate=") || strings.HasPrefix(line, "# x-ui-meko-ios-burst=") {
+				b.WriteString(line)
+				b.WriteByte(';')
+			}
+			if strings.HasPrefix(line, "[general]") {
+				break
+			}
+		}
+	}
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(b.String())))
+}
+
 // RefreshMekoFix reconciles the MEKO firewall rules with the Telemt processes
 // currently generated from MTProto inbounds. It is intentionally a no-op when
 // the configured and applied port sets already match, so the hashlimit buckets
 // are not reset by every MTProto traffic polling cycle.
-func (TelemtService) RefreshMekoFix() error {
+func (TelemtService) RefreshMekoFix() (applyErr error) {
+	defer func() {
+		mekoApplyError.Lock()
+		if applyErr != nil {
+			mekoApplyError.message = applyErr.Error()
+		} else {
+			mekoApplyError.message = ""
+		}
+		mekoApplyError.Unlock()
+	}()
+	mekoApplyState.Lock()
+	defer mekoApplyState.Unlock()
 	cfg := TelemtService{}.GetMekoConfig()
+	fingerprint := desiredMekoPolicyFingerprint(cfg)
 	if !cfg.Enabled {
-		if cfg.Applied {
+		mekoApplyState.fingerprint = ""
+		// A disabled/removed final inbound should also disable the owned
+		// oneshot service. Otherwise systemd can re-create obsolete rules on
+		// the next panel start even though no MTProto port opted in.
+		if systemctl("is-enabled", "--quiet", telemtMekoServiceName) == nil {
+			if err := systemctl("disable", "--now", telemtMekoServiceName); err != nil {
+				return fmt.Errorf("telemt meko: disable unused unit: %w", err)
+			}
+		}
+		// Even an incomplete or damaged owned ruleset must be removed once
+		// the last opted-in MTProto inbound disappears. Otherwise stale
+		// firewall rules can survive forever with Applied=false.
+		if cfg.Applied || cfg.Backend != "" && cfg.Backend != "none" || len(cfg.AppliedPorts) > 0 {
 			_, err := runTelemtMekoScript("remove", cfg)
 			return err
 		}
 		return nil
 	}
 	if !cfg.Applied && len(cfg.Ports) == 0 {
+		return nil
+	}
+	if cfg.Healthy && sameMekoPorts(cfg.Ports, cfg.VerifiedPorts) &&
+		mekoApplyState.fingerprint == fingerprint {
 		return nil
 	}
 	if err := ensureTelemtMekoAssets(); err != nil {
@@ -353,13 +447,29 @@ func (TelemtService) RefreshMekoFix() error {
 		if err := writeTelemtMekoEnv(cfg); err != nil {
 			return err
 		}
+	} else if err != nil {
+		return fmt.Errorf("telemt meko: inspect settings: %w", err)
+	}
+	// An existing env file does not imply the systemd unit was enabled.
+	// Repair unit enablement automatically so the selected ports survive
+	// reboot/panel restart even on upgraded installations.
+	if systemctl("is-enabled", "--quiet", telemtMekoServiceName) != nil {
 		if err := systemctl("enable", "--now", telemtMekoServiceName); err != nil {
-			return err
+			return fmt.Errorf("telemt meko: enable service: %w", err)
 		}
 	}
-	if cfg.Applied && sameMekoPorts(cfg.Ports, cfg.AppliedPorts) {
-		return nil
-	}
 	_, err := runTelemtMekoScript("apply", cfg)
-	return err
+	if err != nil {
+		return err
+	}
+	// Re-read the kernel rule set: a zero exit code is not proof that both
+	// families and every selected listener were actually installed.
+	applied := TelemtService{}.GetMekoConfig()
+	// A previous failed apply may still be shown in mekoApplyError until this
+	// invocation returns. Verify fresh kernel state, not cached error history.
+	if !applied.Applied || !sameMekoPorts(applied.Ports, applied.AppliedPorts) || !sameMekoPorts(applied.Ports, applied.VerifiedPorts) {
+		return fmt.Errorf("telemt meko: firewall verification failed: desired=%v applied=%v backend=%s error=%s", applied.Ports, applied.AppliedPorts, applied.Backend, applied.StatusError)
+	}
+	mekoApplyState.fingerprint = fingerprint
+	return nil
 }

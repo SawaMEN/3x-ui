@@ -17,6 +17,17 @@ spec = importlib.util.spec_from_file_location("fetch_official_telemt", ROOT / "t
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
+def unprivileged_updater(source):
+    """Exercise real file mutations in temp dirs without requiring root in CI.
+
+    Production ownership and root checks remain unchanged. Fault-injection
+    wrappers still exercise install/rename/chmod failures and rollback.
+    """
+    return (source.replace('[[ "$EUID" -eq 0 ]]', "true")
+            .replace("-o root -g root", "")
+            .replace("chown root:root", "true"))
+
+
 class OfficialTelemtTests(unittest.TestCase):
     def release(self):
         names = list(module.ASSETS.values())
@@ -108,7 +119,7 @@ class TelemtUpdaterTests(unittest.TestCase):
                 source = (ROOT / "internal/Telemt/telemt-update.sh").read_text()
                 for key, value in (("BIN", old_binary), ("VERSION_FILE", version), ("TMP_DIR", root / "download")):
                     source = re.sub("^" + key + "=.*$", key + "=" + shlex.quote(str(value)), source, flags=re.M)
-                source = source.replace('[[ "$EUID" -eq 0 ]]', "true")
+                source = unprivileged_updater(source)
                 source = source.replace("/run/lock/x-ui-telemt-update.lock", str(root / "lock"))
                 script = root / "update.sh"
                 script.write_text(source)
@@ -137,6 +148,218 @@ if [[ -n "$output" ]]; then cp "$SERVED/${url##*/}" "$output"; else printf '  "t
                     self.assertIn("binary version mismatch", result.stderr)
                 self.assertEqual(old_binary.read_text(), old)
                 self.assertFalse((root / "service-log").exists(), result.stdout + result.stderr)
+
+
+    def test_install_upgrade_and_no_downgrade(self):
+        """The panel updater installs when absent, upgrades old builds, and leaves newer builds alone."""
+        cases = [
+            ("fresh", None, True),
+            ("upgrade", "3.5.13", True),
+            ("legacy-custom", "3.5.14+3xui.1", True),
+            ("up-to-date", "3.5.14", False),
+            ("newer", "3.6.0", False),
+        ]
+        for name, installed, changes in cases:
+            with self.subTest(case=name), tempfile.TemporaryDirectory() as path:
+                root = Path(path)
+                served = root / "served"
+                served.mkdir()
+                asset = served / "telemt-x86_64-linux-musl.tar.gz"
+                binary = b"#!/bin/sh\necho Telemt 3.5.14\n"
+                with tarfile.open(asset, "w:gz") as tar:
+                    info = tarfile.TarInfo("telemt")
+                    info.size = len(binary)
+                    tar.addfile(info, io.BytesIO(binary))
+                (served / (asset.name + ".sha256")).write_text(
+                    hashlib.sha256(asset.read_bytes()).hexdigest() + "  " + asset.name + "\n"
+                )
+                old_binary = root / "telemt"
+                original = ("#!/bin/sh\necho Telemt " + installed + "\n").encode() if installed else None
+                if original:
+                    old_binary.write_bytes(original)
+                    old_binary.chmod(0o755)
+                version = root / "version"
+                if installed:
+                    version.write_text(installed + "\n")
+                script = (ROOT / "internal/Telemt/telemt-update.sh").read_text()
+                for key, value in (
+                    ("BIN", old_binary), ("VERSION_FILE", version), ("TMP_DIR", root / "download")
+                ):
+                    script = re.sub("^" + key + "=.*$", key + "=" + shlex.quote(str(value)), script, flags=re.M)
+                script = unprivileged_updater(script)
+                script = script.replace("/run/lock/x-ui-telemt-update.lock", str(root / "lock"))
+                path_script = root / "update.sh"
+                path_script.write_text(script)
+                stubs = root / "stubs"
+                stubs.mkdir()
+                commands = {
+                    "curl": """#!/bin/bash
+set -eu
+output=''
+while (( $# )); do
+ if [[ "$1" == -o ]]; then output="$2"; shift 2; else url="$1"; shift; fi
+done
+if [[ -n "$output" ]]; then cp "$SERVED/${url##*/}" "$output"; else printf '  "tag_name": "3.5.14",\\n'; fi
+""",
+                    "uname": "#!/bin/sh\necho x86_64\n",
+                    "systemctl": '#!/bin/sh\necho "$*" >> "$SERVICE_LOG"\nexit 1\n',
+                    "pgrep": "#!/bin/sh\nexit 1\n",
+                }
+                for command, body in commands.items():
+                    target = stubs / command
+                    target.write_text(body)
+                    target.chmod(0o755)
+                env = dict(os.environ, PATH=str(stubs) + ":" + os.environ["PATH"],
+                           SERVED=str(served), SERVICE_LOG=str(root / "service-log"))
+                result = subprocess.run(["bash", str(path_script)], capture_output=True, text=True, env=env)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                if changes:
+                    self.assertEqual(old_binary.read_bytes(), binary, name)
+                    self.assertEqual(version.read_text().strip(), "3.5.14", name)
+                else:
+                    self.assertEqual(old_binary.read_bytes(), original, name)
+                    self.assertEqual(version.read_text().strip(), installed, name)
+                self.assertFalse((root / "download").exists(), "temporary artifacts should be cleaned")
+
+class ManagedTelemtUpdateTests(unittest.TestCase):
+    def test_managed_failure_restores_binary_and_rechecks_previous_version(self):
+        for fail in (False, True):
+            with self.subTest(failed_start=fail), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                binary = root / "telemt"
+                old = "#!/bin/sh\necho Telemt 3.5.13\n"
+                binary.write_text(old)
+                binary.chmod(0o755)
+                version = root / "version"
+                version.write_text("3.5.13\n")
+                source = (ROOT / "internal/Telemt/telemt-update.sh").read_text()
+                source = source.rsplit('main "$@"', 1)[0]
+                for key, value in (("BIN", binary), ("VERSION_FILE", version)):
+                    source = re.sub("^" + key + "=.*$", key + "=" + shlex.quote(str(value)), source, flags=re.M)
+                source = unprivileged_updater(source)
+                source = source.replace("/run/lock/x-ui-telemt-update.lock", str(root / "lock"))
+                # Replace external downloads and process control, retaining the
+                # actual install, transaction, persistent backup and rollback.
+                source += r'''
+get_latest_tag() { echo 3.5.14; }
+arch_name() { echo x86_64; }
+systemctl() { return 1; }
+download_latest() {
+  TMP_DIR="$(mktemp -d)"
+  printf '#!/bin/sh\necho Telemt 3.5.14\n' > "$TMP_DIR/telemt"
+  chmod 755 "$TMP_DIR/telemt"
+}
+snapshot_inbound_sidecars() { managed_configs=(managed-inbound); }
+recycle_inbound_sidecars() { echo recycle >> "$TEST_LOG"; }
+wait_for_inbound_sidecars() {
+  echo "verify $1" >> "$TEST_LOG"
+  [[ "$FAIL_NEW" != 1 || "$1" != 3.5.14 ]]
+}
+main
+'''
+                script = root / "update.sh"
+                script.write_text(source)
+                result = subprocess.run(["bash", str(script)], text=True, capture_output=True,
+                                        env=dict(os.environ, TEST_LOG=str(root / "events"), FAIL_NEW=str(int(fail))))
+                events = (root / "events").read_text()
+                self.assertIn("verify 3.5.14", events)
+                if fail:
+                    self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                    self.assertEqual(binary.read_text(), old)
+                    self.assertEqual(version.read_text(), "3.5.13\n")
+                    self.assertIn("verify 3.5.13", events)
+                    self.assertEqual(events.count("recycle"), 2)
+                else:
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                    self.assertEqual(version.read_text(), "3.5.14\n")
+                    self.assertEqual(Path(str(binary) + ".previous").read_text(), old)
+                    self.assertEqual(Path(str(version) + ".previous").read_text(), "3.5.13\n")
+
+    def test_write_failures_and_termination_restore_previous_installation(self):
+        for fault in ("install", "rename", "version-mode", "terminate", "restore-error"):
+            with self.subTest(fault=fault), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                binary, version = root / "telemt", root / "version"
+                old = "#!/bin/sh\necho Telemt 3.5.13\n"
+                binary.write_text(old)
+                binary.chmod(0o755)
+                version.write_text("3.5.13\n")
+                source = (ROOT / "internal/Telemt/telemt-update.sh").read_text().rsplit('main "$@"', 1)[0]
+                for key, value in (("BIN", binary), ("VERSION_FILE", version)):
+                    source = re.sub("^" + key + "=.*$", key + "=" + shlex.quote(str(value)), source, flags=re.M)
+                source = unprivileged_updater(source)
+                source = source.replace("/run/lock/x-ui-telemt-update.lock", str(root / "lock"))
+                source += r'''
+get_latest_tag() { echo 3.5.14; }
+arch_name() { echo x86_64; }
+systemctl() { return 1; }
+download_latest() {
+  TMP_DIR="$(mktemp -d)"
+  printf '#!/bin/sh\necho Telemt 3.5.14\n' > "$TMP_DIR/telemt"
+  command chmod 755 "$TMP_DIR/telemt"
+}
+snapshot_inbound_sidecars() { managed_configs=(managed-inbound); }
+recycle_inbound_sidecars() { return 0; }
+install() {
+  if [[ "$FAULT" == install && "${@: -1}" == "${BIN}.new" ]]; then return 1; fi
+  command install "$@"
+}
+mv() {
+  if [[ "$FAULT" == rename && "${@: -1}" == "$BIN" && ! -e "$FAULT_MARK" ]]; then
+    touch "$FAULT_MARK"; return 1
+  fi
+  command mv "$@"
+}
+chmod() {
+  if [[ "$FAULT" == version-mode && "${@: -1}" == "$VERSION_FILE"* ]]; then return 1; fi
+  command chmod "$@"
+}
+cp() {
+  if [[ "$FAULT" == restore-error && "${@: -1}" == "${BIN}.new" ]]; then return 1; fi
+  command cp "$@"
+}
+wait_for_inbound_sidecars() {
+  if [[ "$FAULT" == terminate && "$1" == 3.5.14 ]]; then kill -TERM "$$"; fi
+  [[ "$FAULT" != restore-error || "$1" != 3.5.14 ]]
+}
+main
+'''
+                script = root / "update.sh"
+                script.write_text(source)
+                result = subprocess.run(["bash", str(script)], text=True, capture_output=True,
+                                        env=dict(os.environ, FAULT=fault, FAULT_MARK=str(root / "fault-fired"), TMPDIR=str(root)))
+                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                if fault == "restore-error":
+                    backups = list(root.rglob("previous-telemt"))
+                    self.assertEqual(len(backups), 1, result.stdout + result.stderr)
+                    self.assertEqual(backups[0].read_text(), old)
+                    self.assertIn("backup retained", result.stdout)
+                    continue
+                self.assertEqual(binary.read_text(), old, result.stdout + result.stderr)
+                self.assertEqual(version.read_text(), "3.5.13\n", result.stdout + result.stderr)
+
+    def test_health_probe_is_local_authenticated_and_matches_running_version(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = root / "telemt.toml"
+            config.write_text('[server.api]\nlisten = "127.0.0.1:9091"\nauth_header = "Bearer abc123"\n')
+            source = (ROOT / "internal/Telemt/telemt-update.sh").read_text().rsplit('main "$@"', 1)[0]
+            source += r'''
+curl() {
+  [[ "$*" == *'http://127.0.0.1:9091/v1/system/info'* ]] || return 1
+  [[ "$*" != *abc123* ]] || return 1
+  input="$(cat)"
+  [[ "$input" == 'header = "Authorization: Bearer abc123"' ]] || return 1
+  echo '{"data":{"version":"3.5.14"}}'
+}
+inbound_has_version "$TEST_CONFIG" "$TEST_VERSION"
+'''
+            script = root / "probe.sh"
+            script.write_text(source)
+            for expected, success in (("3.5.14", True), ("3.5.13", False)):
+                result = subprocess.run(["bash", str(script)], text=True, capture_output=True,
+                                        env=dict(os.environ, TEST_CONFIG=str(config), TEST_VERSION=expected))
+                self.assertEqual(result.returncode == 0, success, result.stdout + result.stderr)
 
 if __name__ == "__main__":
     unittest.main()

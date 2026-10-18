@@ -1854,6 +1854,25 @@ func (s *SubService) genMtprotoLink(inbound *model.Inbound, email string) string
 			endpoints = overrides
 		}
 	}
+	var mode struct {
+		WebProxy struct {
+			Enabled bool   `json:"enabled"`
+			Domain  string `json:"domain"`
+		} `json:"webProxy"`
+	}
+	if json.Unmarshal([]byte(inbound.Settings), &mode) == nil && mode.WebProxy.Enabled {
+		secret := strings.TrimSpace(resolved.Secret)
+		if len(secret) >= 34 && (strings.HasPrefix(secret, "ee") || strings.HasPrefix(secret, "dd")) {
+			secret = secret[2:34]
+		}
+		if len(secret) != 32 || strings.TrimSpace(mode.WebProxy.Domain) == "" {
+			return ""
+		}
+		return buildLinkWithParams("tg://webproxy", map[string]string{
+			"server": mode.WebProxy.Domain,
+			"secret": "dd" + secret,
+		}, "")
+	}
 	links := make([]string, 0, len(endpoints))
 	for _, endpoint := range endpoints {
 		links = append(links, buildLinkWithParams("tg://proxy", map[string]string{

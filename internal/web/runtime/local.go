@@ -77,6 +77,10 @@ func (l *Local) AddInbound(ctx context.Context, ib *model.Inbound) error {
 		return externalvpn.GetManager().Ensure(inst)
 	}
 	if ib.Protocol == model.MTProto {
+		if mtproto.WebProxyInbound(ib) {
+			mtproto.GetManager().Remove(ib.Id)
+			return nil
+		}
 		inst, ok := mtproto.InstanceFromInbound(ib)
 		if !ok {
 			return nil
@@ -208,6 +212,10 @@ func (l *Local) updateMtprotoInbound(ctx context.Context, oldIb, newIb *model.In
 		_ = l.DelInbound(ctx, oldIb)
 	}
 	if !newIb.Enable {
+		mtproto.GetManager().Remove(newIb.Id)
+		return nil
+	}
+	if mtproto.WebProxyInbound(newIb) {
 		mtproto.GetManager().Remove(newIb.Id)
 		return nil
 	}

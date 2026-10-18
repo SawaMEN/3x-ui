@@ -16,6 +16,8 @@ STATE_FILE="/etc/x-ui/telemt-meko-fix.env"
 FILTER_CHAIN="TELEMT_MEKO"
 MARK_CHAIN="TELEMT_MEKO_MARK"
 MARK="0x400"
+IOS_RATE="900/minute"
+IOS_BURST="30"
 U32_FILTER="32 & 0x000FFFFF = 0x0002FFFF && 40 & 0xFFFF0000 = 0x02040000 && 44 & 0xFFFF0000 = 0x01030000 && 48 & 0xFFFFFF00 = 0x01010800 && 60 & 0xFFFFFFFF = 0x04020000"
 
 # Load panel-managed settings for direct/manual invocations too. Explicit
@@ -96,28 +98,71 @@ valid_port() {
     [[ "$1" =~ ^[0-9]+$ ]] && (( 10#$1 >= 1 && 10#$1 <= 65535 ))
 }
 
-collect_ports() {
-    local -a found=()
-    local p f
-
+# Return sorted port/rate/burst triples. The matching sidecar TOML is the
+# sole authority: no generic TCP listener, WEB backend or old Telemt config is
+# ever selected merely because it listens on the same server.
+collect_port_policies() {
+    local p f rate burst ios_rate ios_burst
     if [[ -n "${TELEMT_PORTS:-}" ]]; then
-        IFS=', ' read -r -a found <<< "$TELEMT_PORTS"
+        local -a overridden=()
+        IFS=', ' read -r -a overridden <<< "$TELEMT_PORTS"
+        for p in "${overridden[@]}"; do
+            valid_port "$p" || continue
+            printf '%s %s %s %s %s\n' "$((10#$p))" "$RATE" "$BURST" "$IOS_RATE" "$IOS_BURST"
+        done
     else
         shopt -s nullglob
         for f in $CONFIG_GLOB; do
+            [[ "$(head -n 1 "$f" 2>/dev/null)" == "# x-ui-meko-fix=1" ]] || continue
             p="$(read_port "$f" || true)"
-            valid_port "$p" && found+=("$p")
+            valid_port "$p" || continue
+            rate="$(sed -n 's/^# x-ui-meko-rate=//p' "$f" | head -n 1)"
+            burst="$(sed -n 's/^# x-ui-meko-burst=//p' "$f" | head -n 1)"
+            if [[ -n "$rate" ]]; then
+                rate="$(normalize_rate "$rate")" || {
+                    log "Invalid per-port MEKO rate for $p; using global rate" >&2
+                    rate="$RATE"
+                }
+            else
+                rate="$RATE"
+            fi
+            if [[ -n "$burst" ]]; then
+                burst="$(normalize_burst "$burst")" || {
+                    log "Invalid per-port MEKO burst for $p; using global burst" >&2
+                    burst="$BURST"
+                }
+            else
+                burst="$BURST"
+            fi
+            ios_rate="$(sed -n 's/^# x-ui-meko-ios-rate=//p' "$f" | head -n 1)"
+            ios_burst="$(sed -n 's/^# x-ui-meko-ios-burst=//p' "$f" | head -n 1)"
+            ios_rate="$(normalize_rate "${ios_rate:-$IOS_RATE}")" || ios_rate="$IOS_RATE"
+            ios_burst="$(normalize_burst "${ios_burst:-$IOS_BURST}")" || ios_burst="$IOS_BURST"
+            printf '%s %s %s %s %s\n' "$((10#$p))" "$rate" "$burst" "$ios_rate" "$ios_burst"
         done
         shopt -u nullglob
-
-        if [[ -r "$LEGACY_CONFIG" ]] && command -v systemctl >/dev/null 2>&1 && \
-           systemctl is-active --quiet telemt.service 2>/dev/null; then
-            p="$(read_port "$LEGACY_CONFIG" || true)"
-            valid_port "$p" && found+=("$p")
-        fi
     fi
+}
 
-    printf '%s\n' "${found[@]}" | awk '/^[0-9]+$/ && $1>=1 && $1<=65535 { seen[$1]=1 } END { for (p in seen) print p }' | sort -n
+collect_ports() {
+    collect_port_policies | awk '$1 ~ /^[0-9]+$/ && $1>=1 && $1<=65535 {print $1}' | sort -nu
+}
+
+load_port_policies() {
+    ports=()
+    port_rates=()
+    port_bursts=()
+    port_ios_rates=()
+    port_ios_bursts=()
+    local p rate burst ios_rate ios_burst
+    while read -r p rate burst ios_rate ios_burst; do
+        valid_port "$p" || continue
+        ports+=("$p")
+        port_rates+=("$rate")
+        port_bursts+=("$burst")
+        port_ios_rates+=("$ios_rate")
+        port_ios_bursts+=("$ios_burst")
+    done < <(collect_port_policies | sort -n -k1,1 -u)
 }
 
 ensure_u32() {
@@ -172,41 +217,72 @@ remove() {
 # Payload offsets are relative to TCP, so the same iOS signature handles IPv6.
 # Accepted SYNs return to the host firewall; its access policy is preserved.
 apply_nft() {
-    local port
+    local port rate burst i
+    local table_present=0
+
+    # Replace the owned table in ONE nft transaction. An independent
+    # "delete table" followed by "add table" would briefly remove protection;
+    # plain "add table" fails on every subsequent update. A rejected batch
+    # leaves the previous table intact.
+    if nft list table inet xui_telemt_meko >/dev/null 2>&1; then
+        table_present=1
+    fi
     {
+        if (( table_present )); then
+            echo 'delete table inet xui_telemt_meko'
+        fi
         echo 'add table inet xui_telemt_meko'
-        echo 'flush table inet xui_telemt_meko'
         echo 'add set inet xui_telemt_meko ports { type inet_service; }'
         printf 'add element inet xui_telemt_meko ports { %s }\n' "$(IFS=,; echo "${ports[*]}")"
         echo 'add chain inet xui_telemt_meko input { type filter hook input priority -10; policy accept; }'
+        # Fingerprints are a compatibility heuristic, not authentication.
+        # Bound this path too so copying an iOS SYN cannot bypass every limit.
+        for i in "${!ports[@]}"; do
+            port="${ports[$i]}"
+            for family in 4 6; do
+                local address="ip saddr"
+                [[ "$family" != 6 ]] || address="ip6 saddr"
+                printf 'add rule inet xui_telemt_meko input tcp dport %s tcp flags & (fin | syn | rst | ack) == syn @th,96,32 & 0x000fffff == 0x0002ffff @th,160,16 0x0204 @th,192,16 0x0103 @th,224,24 0x010108 @th,320,32 0x04020000 meter ti%s_%s { %s timeout 60s limit rate over %s burst %s packets } counter reject with tcp reset\n' "$port" "$family" "$port" "$address" "${port_ios_rates[$i]}" "${port_ios_bursts[$i]}"
+            done
+        done
         echo 'add rule inet xui_telemt_meko input tcp dport @ports tcp flags & (fin | syn | rst | ack) == syn @th,96,32 & 0x000fffff == 0x0002ffff @th,160,16 0x0204 @th,192,16 0x0103 @th,224,24 0x010108 @th,320,32 0x04020000 counter return'
-        for port in "${ports[@]}"; do
-            printf 'add rule inet xui_telemt_meko input tcp dport %s tcp flags & (fin | syn | rst | ack) == syn meter tm4_%s { ip saddr timeout 60s limit rate over %s burst %s packets } counter reject with tcp reset\n' "$port" "$port" "$RATE" "$BURST"
-            printf 'add rule inet xui_telemt_meko input tcp dport %s tcp flags & (fin | syn | rst | ack) == syn meter tm6_%s { ip6 saddr timeout 60s limit rate over %s burst %s packets } counter reject with tcp reset\n' "$port" "$port" "$RATE" "$BURST"
+        for i in "${!ports[@]}"; do
+            port="${ports[$i]}"
+            rate="${port_rates[$i]}"
+            burst="${port_bursts[$i]}"
+            printf 'add rule inet xui_telemt_meko input tcp dport %s tcp flags & (fin | syn | rst | ack) == syn meter tm4_%s { ip saddr timeout 60s limit rate over %s burst %s packets } counter reject with tcp reset\n' "$port" "$port" "$rate" "$burst"
+            printf 'add rule inet xui_telemt_meko input tcp dport %s tcp flags & (fin | syn | rst | ack) == syn meter tm6_%s { ip6 saddr timeout 60s limit rate over %s burst %s packets } counter reject with tcp reset\n' "$port" "$port" "$rate" "$burst"
         done
     } | nft -f -
 }
 
 apply() {
+    # Disabling must always work, even when old rate/burst settings are invalid.
+    mapfile -t ports < <(collect_ports)
+    # The selected inbound's switch wins over obsolete global service
+    # settings (systemd passes those as environment variables). An explicit
+    # TELEMT_PORTS override is reserved for administrative/test commands.
+    if [[ ! -v TELEMT_PORTS ]]; then
+        if (( ${#ports[@]} > 0 )); then ENABLED=1; else ENABLED=0; fi
+    fi
     if ! enabled; then
         remove
         log "MEKO V3 is disabled by panel settings"
         return 0
     fi
 
-    # Rate/burst only matter while adding hashlimit rules. Keep cleanup usable
-    # even if the persisted state was edited or corrupted by hand.
     normalize_limits
+    load_port_policies
 
-    mapfile -t ports < <(collect_ports)
     if (( ${#ports[@]} == 0 )); then
         remove
         log "No active Telemt MTProto ports found; rules left clean"
         return 0
     fi
 
-    if command -v nft >/dev/null 2>&1 && apply_nft; then
-        # Remove only the legacy managed chains, leaving the new nft table.
+    if command -v nft >/dev/null 2>&1; then
+        if apply_nft; then
+            # Remove only the legacy managed chains, leaving the new nft table.
         if type -P iptables >/dev/null 2>&1; then
             remove_jump_all filter INPUT "$FILTER_CHAIN"
             remove_jump_all mangle PREROUTING "$MARK_CHAIN"
@@ -215,8 +291,16 @@ apply() {
             iptables -t mangle -F "$MARK_CHAIN" 2>/dev/null || true
             iptables -t mangle -X "$MARK_CHAIN" 2>/dev/null || true
         fi
-        log "MEKO V3 nftables applied to IPv4/IPv6 ports: ${ports[*]}"
-        return 0
+            log "MEKO V3 nftables applied to IPv4/IPv6 ports: ${ports[*]}"
+            return 0
+        fi
+        # Do not install another limiter over a pre-existing nft limiter.
+        # This would silently double-filter traffic and obscure why users
+        # cannot connect. Leave the old atomic nft rules in place instead.
+        if nft list table inet xui_telemt_meko >/dev/null 2>&1; then
+            log "Existing MEKO nft table could not be updated; refusing iptables fallback" >&2
+            return 1
+        fi
     fi
     type -P iptables >/dev/null 2>&1 || { log "nftables or iptables is required"; exit 1; }
     ensure_u32 || { log "xt_u32 is not available; MEKO V3 cannot be enabled"; exit 1; }
@@ -235,21 +319,29 @@ apply() {
     # INPUT ACCEPT rule or Telemt SYN packets could bypass the fix entirely.
     iptables -t filter -I INPUT 1 -j "$FILTER_CHAIN"
 
-    local port
-    for port in "${ports[@]}"; do
+    local port rate burst i
+    for i in "${!ports[@]}"; do
+        port="${ports[$i]}"
+        rate="${port_rates[$i]}"
+        burst="${port_bursts[$i]}"
         valid_port "$port" || continue
 
         # Preserve every unrelated fwmark bit. MEKO owns only bit 0x400.
         iptables -t mangle -A "$MARK_CHAIN" -p tcp --dport "$port" -m u32 --u32 "$U32_FILTER" \
             -j MARK --set-xmark "$MARK/$MARK"
         # Passing the limiter must still honor the host firewall, as nft does.
-        iptables -t filter -A "$FILTER_CHAIN" -p tcp --dport "$port" --syn -m mark --mark "$MARK/$MARK" -j RETURN
+        iptables -t filter -A "$FILTER_CHAIN" -p tcp --dport "$port" --syn -m mark --mark "$MARK/$MARK" \
+            -m hashlimit --hashlimit-name "ti_${port}" --hashlimit-mode srcip \
+            --hashlimit-upto "${port_ios_rates[$i]}" --hashlimit-burst "${port_ios_bursts[$i]}" \
+            --hashlimit-htable-expire 60000 --hashlimit-htable-size 32768 -j RETURN
+        iptables -t filter -A "$FILTER_CHAIN" -p tcp --dport "$port" --syn -m mark --mark "$MARK/$MARK" \
+            -j REJECT --reject-with tcp-reset
 
         # xt_hashlimit stores names in an IFNAMSIZ-sized field (15 visible
         # characters on Linux). Keep the per-port name short even for 65535.
         iptables -t filter -A "$FILTER_CHAIN" -p tcp --dport "$port" --syn \
             -m hashlimit --hashlimit-name "tm_${port}" --hashlimit-mode srcip \
-            --hashlimit-upto "$RATE" --hashlimit-burst "$BURST" \
+            --hashlimit-upto "$rate" --hashlimit-burst "$burst" \
             --hashlimit-htable-expire 60000 --hashlimit-htable-size 32768 -j RETURN
         iptables -t filter -A "$FILTER_CHAIN" -p tcp --dport "$port" --syn \
             -j REJECT --reject-with tcp-reset
@@ -261,35 +353,140 @@ apply() {
     log "MEKO V3 applied to Telemt MTProto ports: ${ports[*]} (rate=${RATE}, burst=${BURST})"
 }
 
+# nft/xtables can print an equivalent rate in a different time unit.
+# Compare rational rates rather than literal strings (60/min == 1/sec).
+limiter_matches_policy() {
+    local backend="$1" rate="$2" burst="$3"
+    awk -v backend="$backend" -v wanted_rate="$rate" -v wanted_burst="$burst" '
+        function seconds(unit) {
+            if (unit == "second" || unit == "sec") return 1
+            if (unit == "minute" || unit == "min") return 60
+            if (unit == "hour") return 3600
+            if (unit == "day") return 86400
+            return 0
+        }
+        function matches(rate, burst, actual, wanted, a, b) {
+            if (split(rate, actual, "/") != 2 || split(wanted_rate, wanted, "/") != 2) return 0
+            a = seconds(actual[2]); b = seconds(wanted[2])
+            return a && b && actual[1] ~ /^[0-9]+$/ && burst ~ /^[0-9]+$/ &&
+                actual[1] * b == wanted[1] * a && burst == wanted_burst
+        }
+        {
+            rate = ""; burst = ""
+            for (i = 1; i <= NF; i++) {
+                if (backend == "nftables" && $i == "rate" && $(i+1) == "over") rate = $(i+2)
+                if (backend == "nftables" && $i == "burst") burst = $(i+1)
+                if (backend == "iptables" && $i == "--hashlimit-upto") rate = $(i+1)
+                if (backend == "iptables" && $i == "--hashlimit-burst") burst = $(i+1)
+            }
+            if (matches(rate, burst)) found = 1
+        }
+        END { exit !found }
+    '
+}
+
 status() {
-    local installed=false
-    local -a applied_ports=()
-    if type -P iptables >/dev/null 2>&1; then
-        if jump_is_first_unique filter INPUT "$FILTER_CHAIN" && \
-           jump_is_first_unique mangle PREROUTING "$MARK_CHAIN"; then
-            installed=true
-        fi
-        if iptables -t filter -S "$FILTER_CHAIN" >/dev/null 2>&1; then
-            mapfile -t applied_ports < <(
-                iptables -t filter -S "$FILTER_CHAIN" 2>/dev/null \
-                    | awk '{ for (i=1; i<=NF; i++) if ($i=="--dport") print $(i+1) }' \
-                    | awk '/^[0-9]+$/ { seen[$1]=1 } END { for (p in seen) print p }' \
-                    | sort -n
-            )
-        fi
-    fi
-    if command -v nft >/dev/null 2>&1 && nft list chain inet xui_telemt_meko input 2>/dev/null | grep -q 'reject with tcp reset'; then
-        installed=true
+    local installed=false backend=none rules="" mark_rules="" port
+    local -a applied_ports=() verified_ports=()
+    local verified_all=true i
+    local -A desired_rates=() desired_bursts=() desired_ios_rates=() desired_ios_bursts=()
+    normalize_limits
+    load_port_policies
+    for i in "${!ports[@]}"; do
+        desired_rates["${ports[$i]}"]="${port_rates[$i]}"
+        desired_bursts["${ports[$i]}"]="${port_bursts[$i]}"
+        desired_ios_rates["${ports[$i]}"]="${port_ios_rates[$i]}"
+        desired_ios_bursts["${ports[$i]}"]="${port_ios_bursts[$i]}"
+    done
+
+    # An existing table or a REJECT alone is not proof that selected ports
+    # are protected. Verify both address families and the iOS bypass.
+    if command -v nft >/dev/null 2>&1 &&
+       nft list table inet xui_telemt_meko >/dev/null 2>&1; then
+        rules="$(nft -n list chain inet xui_telemt_meko input 2>/dev/null || true)"
+        backend=nftables
         mapfile -t applied_ports < <(nft -n list set inet xui_telemt_meko ports 2>/dev/null | awk '
             /elements = {/ { inside=1; sub(/^.*elements = {/, "") }
             inside { end=($0 ~ /}/); gsub(/[{},]/, " "); for (i=1; i<=NF; i++) if ($i ~ /^[0-9]+$/) print $i; if (end) exit }
         ' | sort -n)
+        # A detached regular chain can contain all expected rules while
+        # protecting no traffic. Require our base-chain hook and priority.
+        grep -Eq 'type filter hook input priority (-10|filter - 10); policy accept;' <<< "$rules" || verified_all=false
+        # All iOS signature offsets and RETURN must occur on the same rule.
+        # nft may normalize masks and flag order when listing rules.
+        if ! grep -F 'tcp dport @ports' <<< "$rules" |
+             grep -F '@th,96,32' | grep -F '@th,160,16' |
+             grep -F '@th,192,16' | grep -F '@th,224,24' | grep -F '@th,320,32' |
+             grep -Eq 'counter( packets [0-9]+ bytes [0-9]+)? return'; then
+            verified_all=false
+        fi
+        for port in "${applied_ports[@]}"; do
+            # Verify the actual IPv4 AND IPv6 reject rules for this port.
+            # A named meter without a matching reject action is insufficient.
+            if grep -F "tcp dport ${port} " <<< "$rules" |
+                   grep -F "meter tm4_${port} " | grep -F "ip saddr" | grep -F "reject with tcp reset" |
+                   limiter_matches_policy nftables "${desired_rates[$port]:-}" "${desired_bursts[$port]:-}" &&
+               grep -F "tcp dport ${port} " <<< "$rules" |
+                   grep -F "meter tm6_${port} " | grep -F "ip6 saddr" | grep -F "reject with tcp reset" |
+                   limiter_matches_policy nftables "${desired_rates[$port]:-}" "${desired_bursts[$port]:-}" &&
+               grep -F "tcp dport ${port} " <<< "$rules" |
+                   grep -F "meter ti4_${port} " | grep -F "ip saddr" | grep -F "reject with tcp reset" |
+                   limiter_matches_policy nftables "${desired_ios_rates[$port]:-}" "${desired_ios_bursts[$port]:-}" &&
+               grep -F "tcp dport ${port} " <<< "$rules" |
+                   grep -F "meter ti6_${port} " | grep -F "ip6 saddr" | grep -F "reject with tcp reset" |
+                   limiter_matches_policy nftables "${desired_ios_rates[$port]:-}" "${desired_ios_bursts[$port]:-}"; then
+                verified_ports+=("$port")
+            else
+                verified_all=false
+            fi
+        done
+        if [[ "$verified_all" == true && ${#applied_ports[@]} -gt 0 ]]; then
+            installed=true
+        fi
+    elif type -P iptables >/dev/null 2>&1 &&
+         iptables -t filter -S "$FILTER_CHAIN" >/dev/null 2>&1; then
+        backend=iptables
+        if ! jump_is_first_unique filter INPUT "$FILTER_CHAIN" ||
+           ! jump_is_first_unique mangle PREROUTING "$MARK_CHAIN"; then
+            verified_all=false
+        fi
+        rules="$(iptables -t filter -S "$FILTER_CHAIN" 2>/dev/null || true)"
+        mark_rules="$(iptables -t mangle -S "$MARK_CHAIN" 2>/dev/null || true)"
+        mapfile -t applied_ports < <(
+            printf '%s\n' "$rules" |
+                awk '{ for (i=1; i<=NF; i++) if ($i=="--dport") print $(i+1) }' |
+                awk '/^[0-9]+$/ { seen[$1]=1 } END { for (p in seen) print p }' |
+                sort -n
+        )
+        for port in "${applied_ports[@]}"; do
+            if grep -F " --dport ${port} " <<< "$rules" | grep -F -- "--hashlimit-name tm_${port} " |
+                   grep -F -- "-j RETURN" |
+                   limiter_matches_policy iptables "${desired_rates[$port]:-}" "${desired_bursts[$port]:-}" &&
+               grep -F " --dport ${port} " <<< "$rules" | grep -F -- "--hashlimit-name ti_${port} " |
+                   grep -F -- "-j RETURN" |
+                   limiter_matches_policy iptables "${desired_ios_rates[$port]:-}" "${desired_ios_bursts[$port]:-}" &&
+               grep -F " --dport ${port} " <<< "$rules" | grep -Fq -- "-j REJECT" &&
+               grep -F " --dport ${port} " <<< "$mark_rules" | grep -Fq -- "-m u32"; then
+                verified_ports+=("$port")
+            else
+                verified_all=false
+            fi
+        done
+        if [[ "$verified_all" == true && ${#applied_ports[@]} -gt 0 ]]; then
+            installed=true
+        fi
     fi
+
     mapfile -t ports < <(collect_ports)
+    if [[ ! -v TELEMT_PORTS ]]; then
+        if (( ${#ports[@]} > 0 )); then ENABLED=1; else ENABLED=0; fi
+    fi
     printf 'enabled=%s\n' "$(enabled && echo true || echo false)"
     printf 'installed=%s\n' "$installed"
+    printf 'backend=%s\n' "$backend"
     printf 'ports=%s\n' "$(IFS=,; echo "${ports[*]:-}")"
     printf 'applied_ports=%s\n' "$(IFS=,; echo "${applied_ports[*]:-}")"
+    printf 'verified_ports=%s\n' "$(IFS=,; echo "${verified_ports[*]:-}")"
     printf 'rate=%s\n' "$RATE"
     printf 'burst=%s\n' "$BURST"
 }
