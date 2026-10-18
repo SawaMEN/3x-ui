@@ -328,10 +328,49 @@ apply() {
     log "MEKO V3 applied to Telemt MTProto ports: ${ports[*]} (rate=${RATE}, burst=${BURST})"
 }
 
+# nft/xtables can print an equivalent rate in a different time unit.
+# Compare rational rates rather than literal strings (60/min == 1/sec).
+limiter_matches_policy() {
+    local backend="$1" rate="$2" burst="$3"
+    awk -v backend="$backend" -v wanted_rate="$rate" -v wanted_burst="$burst" '
+        function seconds(unit) {
+            if (unit == "second" || unit == "sec") return 1
+            if (unit == "minute" || unit == "min") return 60
+            if (unit == "hour") return 3600
+            if (unit == "day") return 86400
+            return 0
+        }
+        function matches(rate, burst, actual, wanted, a, b) {
+            if (split(rate, actual, "/") != 2 || split(wanted_rate, wanted, "/") != 2) return 0
+            a = seconds(actual[2]); b = seconds(wanted[2])
+            return a && b && actual[1] ~ /^[0-9]+$/ && burst ~ /^[0-9]+$/ &&
+                actual[1] * b == wanted[1] * a && burst == wanted_burst
+        }
+        {
+            rate = ""; burst = ""
+            for (i = 1; i <= NF; i++) {
+                if (backend == "nftables" && $i == "rate" && $(i+1) == "over") rate = $(i+2)
+                if (backend == "nftables" && $i == "burst") burst = $(i+1)
+                if (backend == "iptables" && $i == "--hashlimit-upto") rate = $(i+1)
+                if (backend == "iptables" && $i == "--hashlimit-burst") burst = $(i+1)
+            }
+            if (matches(rate, burst)) found = 1
+        }
+        END { exit !found }
+    '
+}
+
 status() {
     local installed=false backend=none rules="" mark_rules="" port
     local -a applied_ports=() verified_ports=()
-    local verified_all=true
+    local verified_all=true i
+    local -A desired_rates=() desired_bursts=()
+    normalize_limits
+    load_port_policies
+    for i in "${!ports[@]}"; do
+        desired_rates["${ports[$i]}"]="${port_rates[$i]}"
+        desired_bursts["${ports[$i]}"]="${port_bursts[$i]}"
+    done
 
     # An existing table or a REJECT alone is not proof that selected ports
     # are protected. Verify both address families and the iOS bypass.
@@ -358,9 +397,11 @@ status() {
             # Verify the actual IPv4 AND IPv6 reject rules for this port.
             # A named meter without a matching reject action is insufficient.
             if grep -F "tcp dport ${port} " <<< "$rules" |
-                   grep -F "meter tm4_${port} " | grep -F "ip saddr" | grep -Fq "reject with tcp reset" &&
+                   grep -F "meter tm4_${port} " | grep -F "ip saddr" | grep -F "reject with tcp reset" |
+                   limiter_matches_policy nftables "${desired_rates[$port]:-}" "${desired_bursts[$port]:-}" &&
                grep -F "tcp dport ${port} " <<< "$rules" |
-                   grep -F "meter tm6_${port} " | grep -F "ip6 saddr" | grep -Fq "reject with tcp reset"; then
+                   grep -F "meter tm6_${port} " | grep -F "ip6 saddr" | grep -F "reject with tcp reset" |
+                   limiter_matches_policy nftables "${desired_rates[$port]:-}" "${desired_bursts[$port]:-}"; then
                 verified_ports+=("$port")
             else
                 verified_all=false
@@ -385,7 +426,9 @@ status() {
                 sort -n
         )
         for port in "${applied_ports[@]}"; do
-            if grep -F " --dport ${port} " <<< "$rules" | grep -Fq -- "--hashlimit-name tm_${port} " &&
+            if grep -F " --dport ${port} " <<< "$rules" | grep -F -- "--hashlimit-name tm_${port} " |
+                   grep -F -- "-j RETURN" |
+                   limiter_matches_policy iptables "${desired_rates[$port]:-}" "${desired_bursts[$port]:-}" &&
                grep -F " --dport ${port} " <<< "$rules" | grep -Fq -- "-j REJECT" &&
                grep -F " --dport ${port} " <<< "$mark_rules" | grep -Fq -- "-m u32"; then
                 verified_ports+=("$port")

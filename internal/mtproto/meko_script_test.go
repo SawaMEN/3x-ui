@@ -130,7 +130,7 @@ case "$*" in
         sed -n 's/^add rule inet xui_telemt_meko input //p' "$MEKO_TEST_DIR/batch" | grep -v 'meter tm6_'
     else
         sed -n 's/^add rule inet xui_telemt_meko input //p' "$MEKO_TEST_DIR/batch"
-    fi
+    fi | sed "s|54/minute|${MEKO_TEST_ACTUAL_RATE:-54/minute}|g; s|burst 1 packets|burst ${MEKO_TEST_ACTUAL_BURST:-1} packets|g"
     ;;
  '-n list set inet xui_telemt_meko ports') printf 'elements = { 443,\n 8443 }\n' ;;
  'delete table inet xui_telemt_meko') touch "$MEKO_TEST_DIR/deleted"; rm -f "$MEKO_TEST_DIR/nft-installed" ;;
@@ -213,6 +213,32 @@ esac
 	}
 	if !strings.Contains(string(partial), "installed=false") || strings.Contains(string(partial), "verified_ports=443,8443") {
 		t.Fatalf("missing IPv6 meter incorrectly reported healthy firewall: %s", partial)
+	}
+
+	// Same ports and rule names with stale limits must be repaired. Rate
+	// display normalization by nft must not cause endless reapplication.
+	for _, tc := range []struct {
+		name    string
+		env     string
+		healthy bool
+	}{
+		{"stale rate", "MEKO_TEST_ACTUAL_RATE=540/minute", false},
+		{"stale burst", "MEKO_TEST_ACTUAL_BURST=2", false},
+		{"equivalent hourly rate", "MEKO_TEST_ACTUAL_RATE=3240/hour", true},
+		{"unknown rate unit", "MEKO_TEST_ACTUAL_RATE=54/unknown", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cmd := exec.Command("bash", helper, "status")
+			cmd.Env = append(os.Environ(), "PATH="+dir+":"+os.Getenv("PATH"),
+				"MEKO_TEST_DIR="+dir, "TELEMT_PORTS=8443,443", "TELEMT_MEKO_ENABLED=1", tc.env)
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("policy status: %v: %s", err, out)
+			}
+			if strings.Contains(string(out), "installed=true") != tc.healthy {
+				t.Fatalf("unexpected policy verification: %s", out)
+			}
+		})
 	}
 
 	// Existing rules in a detached chain, or a damaged iOS exception,
@@ -438,5 +464,63 @@ func TestMekoPolicyEditsDoNotRestartTelemt(t *testing.T) {
 	off := renderConfig(base, 9000, "token")
 	if strings.Contains(off, "# x-ui-meko-") {
 		t.Fatal("MEKO metadata must never appear in unselected proxy configs")
+	}
+}
+
+func TestMekoIptablesStatusChecksEffectiveLimits(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("Linux helper")
+	}
+	if _, err := exec.LookPath("flock"); err != nil {
+		t.Skip("flock unavailable")
+	}
+	dir := t.TempDir()
+	raw, err := os.ReadFile("../Telemt/telemt-meko-fix.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := strings.ReplaceAll(string(raw), "/run/lock/x-ui-telemt-meko.lock", filepath.Join(dir, "lock"))
+	script = strings.ReplaceAll(script, "/etc/x-ui/telemt-meko-fix.env", filepath.Join(dir, "state.env"))
+	helper := filepath.Join(dir, "helper.sh")
+	if err := os.WriteFile(helper, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	mock := `#!/usr/bin/env bash
+set -eu
+case "$*" in
+ '-w 2 -t filter -L INPUT --line-numbers -n') echo '1 TELEMT_MEKO all -- 0.0.0.0/0 0.0.0.0/0' ;;
+ '-w 2 -t mangle -L PREROUTING --line-numbers -n') echo '1 TELEMT_MEKO_MARK all -- 0.0.0.0/0 0.0.0.0/0' ;;
+ '-w 2 -t filter -S TELEMT_MEKO')
+    echo "-A TELEMT_MEKO -p tcp --dport 443 --syn -m hashlimit --hashlimit-name tm_443 --hashlimit-upto ${MEKO_TEST_ACTUAL_RATE:-1/sec} --hashlimit-burst ${MEKO_TEST_ACTUAL_BURST:-8} -j RETURN"
+    echo '-A TELEMT_MEKO -p tcp --dport 443 --syn -j REJECT --reject-with tcp-reset'
+    ;;
+ '-w 2 -t mangle -S TELEMT_MEKO_MARK') echo '-A TELEMT_MEKO_MARK -p tcp --dport 443 -m u32 --u32 signature -j MARK --set-xmark 0x400/0x400' ;;
+ *) exit 1 ;;
+esac
+`
+	for name, body := range map[string]string{"iptables": mock, "nft": "#!/bin/sh\nexit 1\n"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tc := range []struct {
+		env     string
+		healthy bool
+	}{
+		{"MEKO_TEST_ACTUAL_RATE=1/sec", true},
+		{"MEKO_TEST_ACTUAL_RATE=60/min", true},
+		{"MEKO_TEST_ACTUAL_RATE=2/sec", false},
+		{"MEKO_TEST_ACTUAL_BURST=1", false},
+	} {
+		cmd := exec.Command("bash", helper, "status")
+		cmd.Env = append(os.Environ(), "PATH="+dir+":"+os.Getenv("PATH"),
+			"TELEMT_PORTS=443", "TELEMT_MEKO_RATE=60/minute", "TELEMT_MEKO_BURST=8", tc.env)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("iptables status: %v: %s", err, out)
+		}
+		if strings.Contains(string(out), "installed=true") != tc.healthy {
+			t.Fatalf("%s: incorrect policy verification: %s", tc.env, out)
+		}
 	}
 }
