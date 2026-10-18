@@ -266,6 +266,7 @@ export function generateMtprotoSecret(domain: string): string {
 
 export function createDefaultMtprotoInboundSettings(): MtprotoInboundSettings {
   return {
+    mekoFix: false,
     fakeTlsDomain: 'www.cloudflare.com',
     tlsMask: true,
     allowLegacyModes: false,
