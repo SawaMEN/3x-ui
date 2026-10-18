@@ -359,9 +359,12 @@ status() {
             installed=true
         fi
     elif type -P iptables >/dev/null 2>&1 &&
-         jump_is_first_unique filter INPUT "$FILTER_CHAIN" &&
-         jump_is_first_unique mangle PREROUTING "$MARK_CHAIN"; then
+         iptables -t filter -S "$FILTER_CHAIN" >/dev/null 2>&1; then
         backend=iptables
+        if ! jump_is_first_unique filter INPUT "$FILTER_CHAIN" ||
+           ! jump_is_first_unique mangle PREROUTING "$MARK_CHAIN"; then
+            verified_all=false
+        fi
         rules="$(iptables -t filter -S "$FILTER_CHAIN" 2>/dev/null || true)"
         mark_rules="$(iptables -t mangle -S "$MARK_CHAIN" 2>/dev/null || true)"
         mapfile -t applied_ports < <(
