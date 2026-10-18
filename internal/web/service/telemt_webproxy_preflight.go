@@ -49,7 +49,11 @@ func (s TelemtService) PreflightWebProxy(ctx context.Context, domain string, opt
 	}
 
 	validDomain := len(domain) <= 253 && telemtWebDomainPattern.MatchString(domain)
-	check("domain", validDomain, "Требуется публичный домен (FQDN), например web.example.com; IP и localhost не подходят.")
+	if validDomain {
+		check("domain", true, "Публичный домен: "+domain)
+	} else {
+		check("domain", false, "Требуется публичный домен (FQDN), например web.example.com; IP и localhost не подходят.")
+	}
 	if validDomain {
 		if addr, err := resolveTelemtWebPublicAddr(domain); err != nil {
 			check("dns", false, err.Error())
@@ -62,21 +66,37 @@ func (s TelemtService) PreflightWebProxy(ctx context.Context, domain string, opt
 	}
 	version := telemtVersion()
 	engineReady := s.IsInstalled() && telemtWebVersionAtLeast(version, telemtWebMinEngine)
-	check("engine", engineReady, fmt.Sprintf("Telemt WEB требует установленного Telemt %s+ (текущая версия: %s).", telemtWebMinEngine, version))
+	if engineReady {
+		check("engine", true, "Telemt установлен, версия "+version+" поддерживает WEB Proxy.")
+	} else {
+		check("engine", false, fmt.Sprintf("Telemt WEB требует установленного Telemt %s+ (текущая версия: %s).", telemtWebMinEngine, version))
+	}
 	if (len(options.Carriers) > 0 || options.Carrier != "https") && !telemtWebVersionAtLeast(version, "3.5.4") {
 		check("carriers", false, "Выбранные WEB-транспорты требуют Telemt 3.5.4+.")
 	}
-	check("privileges", os.Geteuid() == 0, "Для автоматической настройки нужны права root.")
+	if os.Geteuid() == 0 {
+		check("privileges", true, "Права root доступны.")
+	} else {
+		check("privileges", false, "Для автоматической настройки нужны права root.")
+	}
 
 	nativePort, configErr := telemtWebNativePort()
 	if configErr != nil {
 		check("config", false, "Не удаётся прочитать конфигурацию Telemt: "+configErr.Error())
 	} else {
 		nativeConflict := state.ManagedInboundID == 0 && nativePort == 443
-		check("native-port", !nativeConflict, "Обычный listener Telemt настроен на 443. Сначала перенесите его на другой порт: WEB HTTPS frontend должен владеть TCP 443.")
+		if nativeConflict {
+			check("native-port", false, "Обычный listener Telemt настроен на 443. Сначала перенесите его на другой порт: WEB HTTPS frontend должен владеть TCP 443.")
+		} else {
+			check("native-port", true, fmt.Sprintf("Обычный порт Telemt: %d; конфликтов с TCP 443 нет.", nativePort))
+		}
 		if !state.Enabled {
-			_, portErr := pickTelemtWebListenPort(nativePort)
-			check("backend", portErr == nil, "Нужен свободный локальный порт WEB backend в диапазоне 15080–15179.")
+			backendPort, portErr := pickTelemtWebListenPort(nativePort)
+			if portErr != nil {
+				check("backend", false, "Нужен свободный локальный порт WEB backend в диапазоне 15080–15179.")
+			} else {
+				check("backend", true, fmt.Sprintf("Свободен локальный порт WEB backend %d.", backendPort))
+			}
 		}
 	}
 
@@ -89,16 +109,32 @@ func (s TelemtService) PreflightWebProxy(ctx context.Context, domain string, opt
 			(currentFront != "nginx" && telemtWebPortOwnedOnlyBy(owner, currentFront)))
 	nginxShared := options.Frontend == "nginx" && telemtWebNginxOwnsPort443() && telemtWebPortOwnedOnlyBy(owner, "nginx")
 	portReady := telemtWebPortAvailable(443) || previousOwned || nginxShared
-	check("https-port", portReady, fmt.Sprintf("HTTPS frontend должен иметь доступ к TCP 443 (владелец: %s).", owner))
+	if portReady {
+		check("https-port", true, "TCP 443 доступен или уже управляется WEB frontend.")
+	} else {
+		check("https-port", false, fmt.Sprintf("HTTPS frontend должен иметь доступ к TCP 443 (владелец: %s).", owner))
+	}
 	if options.Frontend == "nginx" && telemtWebCommandExists("nginx") {
 		conflict, inspectErr := telemtWebNginxHostConflict(ctx, domain)
-		check("nginx-vhost", inspectErr == nil && !conflict, "Nginx: домен уже обслуживается другим HTTPS vhost либо нельзя проверить конфигурацию.")
+		if inspectErr == nil && !conflict {
+			check("nginx-vhost", true, "Нет конкурирующего HTTPS vhost Nginx для домена.")
+		} else {
+			check("nginx-vhost", false, "Nginx: домен уже обслуживается другим HTTPS vhost либо нельзя проверить конфигурацию.")
+		}
 	}
 	if options.Frontend != "nginx" {
-		check("systemd", telemtWebCommandExists("systemctl"), "Caddy и HAProxy требуют systemd.")
+		if telemtWebCommandExists("systemctl") {
+			check("systemd", true, "Systemd доступен для управления WEB frontend.")
+		} else {
+			check("systemd", false, "Caddy и HAProxy требуют systemd.")
+		}
 	}
 	if !telemtWebCommandExists(options.Frontend) {
-		check("package-manager", telemtWebPackageManager() != "", "Для автоматической установки HTTPS frontend необходим поддерживаемый менеджер пакетов.")
+		if manager := telemtWebPackageManager(); manager != "" {
+			check("package-manager", true, "Автоматическая установка через "+manager+".")
+		} else {
+			check("package-manager", false, "Для автоматической установки HTTPS frontend необходим поддерживаемый менеджер пакетов.")
+		}
 	}
 	if validDomain {
 		acmeCert := "/etc/letsencrypt/live/" + domain + "/fullchain.pem"
@@ -112,13 +148,25 @@ func (s TelemtService) PreflightWebProxy(ctx context.Context, domain string, opt
 			check("tls", true, "Подходящий действующий TLS-сертификат будет использован повторно.")
 		} else {
 			port80Ready := telemtWebPortAvailable(80) || (options.Frontend == "nginx" && telemtWebNginxOwnsPort(80))
-			check("acme-port", port80Ready, "Для автоматического выпуска TLS-сертификата HTTP-01 требуется свободный TCP 80 или Nginx на TCP 80.")
+			if port80Ready {
+				check("acme-port", true, "Порт TCP 80 подходит для автоматического получения сертификата.")
+			} else {
+				check("acme-port", false, "Для автоматического выпуска TLS-сертификата HTTP-01 требуется свободный TCP 80 или Nginx на TCP 80.")
+			}
 			if options.Frontend == "nginx" && telemtWebNginxOwnsPort(80) {
 				conflict, inspectErr := telemtWebNginxPortHostConflict(ctx, domain, 80)
-				check("nginx-acme-vhost", inspectErr == nil && !conflict, "Уже есть Nginx HTTP vhost на этом домене: ACME HTTP-01 будет перехвачен. Подключите готовый сертификат или перенастройте HTTP vhost.")
+				if inspectErr == nil && !conflict {
+					check("nginx-acme-vhost", true, "HTTP-01 не конфликтует с существующими Nginx vhost.")
+				} else {
+					check("nginx-acme-vhost", false, "Уже есть Nginx HTTP vhost на этом домене: ACME HTTP-01 будет перехвачен. Подключите готовый сертификат или перенастройте HTTP vhost.")
+				}
 			}
 			if !telemtWebCommandExists("certbot") {
-				check("certbot", telemtWebPackageManager() != "", "Для автоматической установки Certbot необходим поддерживаемый менеджер пакетов.")
+				if manager := telemtWebPackageManager(); manager != "" {
+					check("certbot", true, "Certbot будет установлен автоматически через "+manager+".")
+				} else {
+					check("certbot", false, "Для автоматической установки Certbot необходим поддерживаемый менеджер пакетов.")
+				}
 			}
 			result.Warnings = append(result.Warnings, "Выпуск сертификата HTTP-01 требует внешнего доступа к TCP 80; локальная проверка не подтверждает правила облачного firewall.")
 		}
