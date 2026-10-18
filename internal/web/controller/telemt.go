@@ -31,6 +31,7 @@ func NewTelemtController(g *gin.RouterGroup, settingService service.SettingServi
 	g.POST("/config", a.saveConfig)
 	g.GET("/meko/config", a.mekoConfig)
 	g.POST("/meko/config", a.saveMekoConfig)
+	g.POST("/meko/reconcile", a.reconcileMeko)
 	g.GET("/subscription-proxy", a.subscriptionProxySetting)
 	g.POST("/subscription-proxy", a.saveSubscriptionProxySetting)
 	g.GET("/proxy", a.listProxy)
@@ -174,6 +175,16 @@ func (a *TelemtController) saveMekoConfig(c *gin.Context) {
 	}
 	if err := a.service.SaveMekoConfig(cfg); err != nil {
 		jsonMsg(c, err.Error(), err)
+		return
+	}
+	jsonObj(c, a.service.GetMekoConfig(), nil)
+}
+
+// Force an immediate apply and verify actual firewall state after a user
+// changes MEKO settings, without waiting for the periodic MTProto poll.
+func (a *TelemtController) reconcileMeko(c *gin.Context) {
+	if err := a.service.RefreshMekoFix(); err != nil {
+		jsonMsg(c, "MEKO firewall rules could not be applied", err)
 		return
 	}
 	jsonObj(c, a.service.GetMekoConfig(), nil)
