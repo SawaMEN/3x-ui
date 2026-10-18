@@ -105,16 +105,14 @@ collect_ports() {
     else
         shopt -s nullglob
         for f in $CONFIG_GLOB; do
+            # Only ordinary MTProto inbounds whose MEKO switch was explicitly
+            # enabled carry this marker. Older sidecars are never selected.
+            [[ "$(head -n 1 "$f" 2>/dev/null)" == "# x-ui-meko-fix=1" ]] || continue
             p="$(read_port "$f" || true)"
             valid_port "$p" && found+=("$p")
         done
         shopt -u nullglob
 
-        if [[ -r "$LEGACY_CONFIG" ]] && command -v systemctl >/dev/null 2>&1 && \
-           systemctl is-active --quiet telemt.service 2>/dev/null; then
-            p="$(read_port "$LEGACY_CONFIG" || true)"
-            valid_port "$p" && found+=("$p")
-        fi
     fi
 
     printf '%s\n' "${found[@]}" | awk '/^[0-9]+$/ && $1>=1 && $1<=65535 { seen[$1]=1 } END { for (p in seen) print p }' | sort -n
@@ -188,6 +186,13 @@ apply_nft() {
 }
 
 apply() {
+    mapfile -t ports < <(collect_ports)
+    # Legacy global MEKO=0 must not block a new per-inbound selection.
+    # Explicit TELEMT_MEKO_ENABLED in the command environment remains an
+    # override for tests, administrators and controlled removal.
+    if [[ ! -v TELEMT_MEKO_ENABLED && ${#ports[@]} -gt 0 ]]; then
+        ENABLED=1
+    fi
     if ! enabled; then
         remove
         log "MEKO V3 is disabled by panel settings"
@@ -198,7 +203,6 @@ apply() {
     # even if the persisted state was edited or corrupted by hand.
     normalize_limits
 
-    mapfile -t ports < <(collect_ports)
     if (( ${#ports[@]} == 0 )); then
         remove
         log "No active Telemt MTProto ports found; rules left clean"
@@ -286,6 +290,9 @@ status() {
         ' | sort -n)
     fi
     mapfile -t ports < <(collect_ports)
+    if [[ ! -v TELEMT_MEKO_ENABLED ]]; then
+        if (( ${#ports[@]} > 0 )); then ENABLED=1; else ENABLED=0; fi
+    fi
     printf 'enabled=%s\n' "$(enabled && echo true || echo false)"
     printf 'installed=%s\n' "$installed"
     printf 'ports=%s\n' "$(IFS=,; echo "${ports[*]:-}")"
