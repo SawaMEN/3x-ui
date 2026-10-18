@@ -140,6 +140,9 @@ const isDependencyInstallable = (dependency: DependencyStatus) =>
   dependency.key === 'telemt';
 
 const dependencyNeedsAction = (dependency: DependencyStatus) => {
+  // Installation remains possible when the version endpoint is unreachable.
+  if (dependency.key === 'telemt' && !dependency.installed)
+    return dependency.supported !== false;
   if (!dependency.availableVersion) return false;
   if (isDependencyInstallable(dependency)) {
     return !dependency.installed || dependency.updateAvailable;
@@ -282,6 +285,8 @@ export default function SystemUpdateModal({
           version?: string;
           latestVersion?: string;
           updateAvailable?: boolean;
+          supported?: boolean;
+          unsupportedReason?: string;
         }>
       >,
     ]);
@@ -369,8 +374,10 @@ export default function SystemUpdateModal({
       source: 'standalone',
       installed: telemt.success === true && telemt.obj?.installed === true,
       installedVersion: telemt.obj?.version || '',
-      availableVersion: telemt.obj?.latestVersion || 'официальный релиз',
+      availableVersion: telemt.obj?.latestVersion || '',
       updateAvailable: telemt.obj?.updateAvailable === true,
+      supported: telemt.obj?.supported,
+      unsupportedReason: telemt.obj?.unsupportedReason,
       error: telemt.success ? undefined : telemt.msg,
     });
     setBundledDependencies(rows);
@@ -470,7 +477,7 @@ export default function SystemUpdateModal({
         dependency.key === 'olcrtc'
           ? 'OlcRTC: операция запущена. Статус будет обновляться автоматически.'
           : dependency.key === 'telemt' && !dependency.installed
-            ? 'Telemt установлен. Управление MTProto появилось в разделе «Входящие».'
+            ? 'Telemt установлен. Прокси создаются через «Входящие → MTProto».'
             : dependency.key === 'oxidns' && !dependency.installed
               ? 'OxiDNS установлен. Теперь можно создать собственный DNS.'
               : dependency.key === 'dnstt' && !dependency.installed
@@ -508,7 +515,7 @@ export default function SystemUpdateModal({
         dependency.key === 'olcrtc'
           ? 'OlcRTC: удаление запущено. Настройки клиентов сохранятся для повторной установки.'
           : dependency.key === 'telemt'
-            ? 'Telemt удалён. Управление скрыто; конфигурация сохранена.'
+            ? 'Telemt удалён. Сохранённые настройки не изменены.'
             : dependency.key === 'oxidns'
               ? 'OxiDNS удалён, собственный DNS отключён, настройки и служебные файлы очищены.'
               : dependency.key === 'dnstt'
@@ -955,6 +962,16 @@ export default function SystemUpdateModal({
                             : 'Установите DNSTT здесь. После установки его настройки появятся в sing-box → DNS; после удаления исчезнут.'}
                         </Typography.Text>
                       )}
+                      {dependency.key === 'telemt' && (
+                        <Typography.Text
+                          type="secondary"
+                          style={{ display: 'block', marginBottom: 10 }}
+                        >
+                          Движок обычного MTProto и WEB Proxy. После установки создавайте
+                          подключения через «Входящие → MTProto». Отдельное включение
+                          службы не требуется.
+                        </Typography.Text>
+                      )}
                       {dependency.key === 'olcrtc' && (
                         <Typography.Paragraph type="secondary">
                           Отдельный WebRTC-сервер через Jitsi, Телемост или WB Stream. Не заменяет
@@ -1030,7 +1047,8 @@ export default function SystemUpdateModal({
                               disabled={
                                 (!action.updateAvailable &&
                                   !(isDependencyInstallable(action) && !action.installed)) ||
-                                !action.availableVersion ||
+                                (!action.availableVersion &&
+                                  !(action.key === 'telemt' && !action.installed)) ||
                                 dependencyBusy !== null ||
                                 action.busy === true ||
                                 systemUpdateBusy
