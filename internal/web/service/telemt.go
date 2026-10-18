@@ -122,7 +122,7 @@ func renderTelemtConfig(c TelemtConfig) (string, error) {
 		// MTProto listener is confined to loopback and cannot collide with
 		// ordinary public MTProto inbounds.
 		c.Port = webState.BackendPort
-		listeners = "[[server.listeners]]\\nip = \\"127.0.0.1\\"\\n\\n"
+		listeners = fmt.Sprintf("[[server.listeners]]\nip = %s\n\n", strconv.Quote("127.0.0.1"))
 	}
  	if c.IPv4 && webState.ManagedInboundID == 0 {
 		listeners += "[[server.listeners]]\nip = \"0.0.0.0\"\n\n"
