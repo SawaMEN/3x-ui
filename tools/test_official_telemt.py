@@ -138,5 +138,77 @@ if [[ -n "$output" ]]; then cp "$SERVED/${url##*/}" "$output"; else printf '  "t
                 self.assertEqual(old_binary.read_text(), old)
                 self.assertFalse((root / "service-log").exists(), result.stdout + result.stderr)
 
+
+    def test_install_upgrade_and_no_downgrade(self):
+        """The panel updater installs when absent, upgrades old builds, and leaves newer builds alone."""
+        cases = [
+            ("fresh", None, True),
+            ("upgrade", "3.5.13", True),
+            ("legacy-custom", "3.5.14+3xui.1", True),
+            ("up-to-date", "3.5.14", False),
+            ("newer", "3.6.0", False),
+        ]
+        for name, installed, changes in cases:
+            with self.subTest(case=name), tempfile.TemporaryDirectory() as path:
+                root = Path(path)
+                served = root / "served"
+                served.mkdir()
+                asset = served / "telemt-x86_64-linux-musl.tar.gz"
+                binary = b"#!/bin/sh\\necho Telemt 3.5.14\\n"
+                with tarfile.open(asset, "w:gz") as tar:
+                    info = tarfile.TarInfo("telemt")
+                    info.size = len(binary)
+                    tar.addfile(info, io.BytesIO(binary))
+                (served / (asset.name + ".sha256")).write_text(
+                    hashlib.sha256(asset.read_bytes()).hexdigest() + "  " + asset.name + "\\n"
+                )
+                old_binary = root / "telemt"
+                original = ("#!/bin/sh\\necho Telemt " + installed + "\\n").encode() if installed else None
+                if original:
+                    old_binary.write_bytes(original)
+                    old_binary.chmod(0o755)
+                version = root / "version"
+                if installed:
+                    version.write_text(installed + "\\n")
+                script = (ROOT / "internal/Telemt/telemt-update.sh").read_text()
+                for key, value in (
+                    ("BIN", old_binary), ("VERSION_FILE", version), ("TMP_DIR", root / "download")
+                ):
+                    script = re.sub("^" + key + "=.*$", key + "=" + shlex.quote(str(value)), script, flags=re.M)
+                script = script.replace('[[ "$EUID" -eq 0 ]]', "true")
+                script = script.replace("/run/lock/x-ui-telemt-update.lock", str(root / "lock"))
+                path_script = root / "update.sh"
+                path_script.write_text(script)
+                stubs = root / "stubs"
+                stubs.mkdir()
+                commands = {
+                    "curl": """#!/bin/bash
+set -eu
+output=''
+while (( $# )); do
+ if [[ "$1" == -o ]]; then output="$2"; shift 2; else url="$1"; shift; fi
+done
+if [[ -n "$output" ]]; then cp "$SERVED/${url##*/}" "$output"; else printf '  "tag_name": "3.5.14",\\n'; fi
+""",
+                    "uname": "#!/bin/sh\\necho x86_64\\n",
+                    "systemctl": "#!/bin/sh\\necho \\"$*\\" >> \\"$SERVICE_LOG\\"\\nexit 1\\n",
+                    "pgrep": "#!/bin/sh\\nexit 1\\n",
+                }
+                for command, body in commands.items():
+                    target = stubs / command
+                    target.write_text(body)
+                    target.chmod(0o755)
+                env = dict(os.environ, PATH=str(stubs) + ":" + os.environ["PATH"],
+                           SERVED=str(served), SERVICE_LOG=str(root / "service-log"))
+                result = subprocess.run(["bash", str(path_script)], capture_output=True, text=True, env=env)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                if changes:
+                    self.assertEqual(old_binary.read_bytes(), binary, name)
+                    self.assertEqual(version.read_text().strip(), "3.5.14", name)
+                else:
+                    self.assertEqual(old_binary.read_bytes(), original, name)
+                    self.assertEqual(version.read_text().strip(), installed, name)
+                self.assertFalse((root / "download").exists(), "temporary artifacts should be cleaned")
+
 if __name__ == "__main__":
     unittest.main()
