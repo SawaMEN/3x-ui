@@ -26,6 +26,9 @@ const (
 type TelemtMekoConfig struct {
 	Enabled       bool   `json:"enabled"`
 	Applied       bool   `json:"applied"`
+	Healthy       bool   `json:"healthy"`
+	Backend       string `json:"backend"`
+	StatusError   string `json:"statusError,omitempty"`
 	RatePerMinute int    `json:"ratePerMinute"`
 	Burst         int    `json:"burst"`
 	Ports         []int  `json:"ports"`
@@ -174,10 +177,10 @@ func runTelemtMekoScript(action string, cfg TelemtMekoConfig) ([]byte, error) {
 	return out, nil
 }
 
-func readTelemtMekoRuntime(cfg *TelemtMekoConfig) {
+func readTelemtMekoRuntime(cfg *TelemtMekoConfig) error {
 	out, err := runTelemtMekoScript("status", *cfg)
 	if err != nil {
-		return
+		return err
 	}
 	for _, line := range strings.Split(string(out), "\n") {
 		key, value, ok := strings.Cut(strings.TrimSpace(line), "=")
@@ -187,12 +190,15 @@ func readTelemtMekoRuntime(cfg *TelemtMekoConfig) {
 		switch key {
 		case "installed":
 			cfg.Applied = value == "true"
+		case "backend":
+			cfg.Backend = value
 		case "ports":
 			cfg.Ports = parseMekoPortList(value)
 		case "applied_ports":
 			cfg.AppliedPorts = parseMekoPortList(value)
 		}
 	}
+	return nil
 }
 
 func (TelemtService) GetMekoConfig() TelemtMekoConfig {
@@ -202,7 +208,10 @@ func (TelemtService) GetMekoConfig() TelemtMekoConfig {
 	// Per-inbound selection owns whether MEKO is enabled. A previous global
 	// toggle must not unexpectedly disable an opted-in ordinary MTProto port.
 	cfg.Enabled = len(cfg.Ports) > 0
-	readTelemtMekoRuntime(&cfg)
+	if err := readTelemtMekoRuntime(&cfg); err != nil {
+		cfg.StatusError = err.Error()
+	}
+	cfg.Healthy = cfg.StatusError == "" && (cfg.Enabled && cfg.Applied && sameMekoPorts(cfg.Ports, cfg.AppliedPorts) || !cfg.Enabled && !cfg.Applied && len(cfg.AppliedPorts) == 0)
 	if cfg.Ports == nil {
 		cfg.Ports = []int{}
 	}
