@@ -96,26 +96,63 @@ valid_port() {
     [[ "$1" =~ ^[0-9]+$ ]] && (( 10#$1 >= 1 && 10#$1 <= 65535 ))
 }
 
-collect_ports() {
-    local -a found=()
-    local p f
-
+# Return sorted port/rate/burst triples. The matching sidecar TOML is the
+# sole authority: no generic TCP listener, WEB backend or old Telemt config is
+# ever selected merely because it listens on the same server.
+collect_port_policies() {
+    local p f rate burst
     if [[ -n "${TELEMT_PORTS:-}" ]]; then
-        IFS=', ' read -r -a found <<< "$TELEMT_PORTS"
+        local -a overridden=()
+        IFS=', ' read -r -a overridden <<< "$TELEMT_PORTS"
+        for p in "${overridden[@]}"; do
+            valid_port "$p" || continue
+            printf '%s %s %s\n' "$((10#$p))" "$RATE" "$BURST"
+        done
     else
         shopt -s nullglob
         for f in $CONFIG_GLOB; do
-            # Only ordinary MTProto inbounds whose MEKO switch was explicitly
-            # enabled carry this marker. Older sidecars are never selected.
             [[ "$(head -n 1 "$f" 2>/dev/null)" == "# x-ui-meko-fix=1" ]] || continue
             p="$(read_port "$f" || true)"
-            valid_port "$p" && found+=("$p")
+            valid_port "$p" || continue
+            rate="$(sed -n 's/^# x-ui-meko-rate=//p' "$f" | head -n 1)"
+            burst="$(sed -n 's/^# x-ui-meko-burst=//p' "$f" | head -n 1)"
+            if [[ -n "$rate" ]]; then
+                rate="$(normalize_rate "$rate")" || {
+                    log "Invalid per-port MEKO rate for $p; using global rate" >&2
+                    rate="$RATE"
+                }
+            else
+                rate="$RATE"
+            fi
+            if [[ -n "$burst" ]]; then
+                burst="$(normalize_burst "$burst")" || {
+                    log "Invalid per-port MEKO burst for $p; using global burst" >&2
+                    burst="$BURST"
+                }
+            else
+                burst="$BURST"
+            fi
+            printf '%s %s %s\n' "$((10#$p))" "$rate" "$burst"
         done
         shopt -u nullglob
-
     fi
+}
 
-    printf '%s\n' "${found[@]}" | awk '/^[0-9]+$/ && $1>=1 && $1<=65535 { seen[$1]=1 } END { for (p in seen) print p }' | sort -n
+collect_ports() {
+    collect_port_policies | awk '$1 ~ /^[0-9]+$/ && $1>=1 && $1<=65535 {print $1}' | sort -nu
+}
+
+load_port_policies() {
+    ports=()
+    port_rates=()
+    port_bursts=()
+    local p rate burst
+    while read -r p rate burst; do
+        valid_port "$p" || continue
+        ports+=("$p")
+        port_rates+=("$rate")
+        port_bursts+=("$burst")
+    done < <(collect_port_policies | sort -n -k1,1 -u)
 }
 
 ensure_u32() {
@@ -170,7 +207,7 @@ remove() {
 # Payload offsets are relative to TCP, so the same iOS signature handles IPv6.
 # Accepted SYNs return to the host firewall; its access policy is preserved.
 apply_nft() {
-    local port
+    local port rate burst i
     {
         echo 'add table inet xui_telemt_meko'
         echo 'flush table inet xui_telemt_meko'
@@ -178,15 +215,19 @@ apply_nft() {
         printf 'add element inet xui_telemt_meko ports { %s }\n' "$(IFS=,; echo "${ports[*]}")"
         echo 'add chain inet xui_telemt_meko input { type filter hook input priority -10; policy accept; }'
         echo 'add rule inet xui_telemt_meko input tcp dport @ports tcp flags & (fin | syn | rst | ack) == syn @th,96,32 & 0x000fffff == 0x0002ffff @th,160,16 0x0204 @th,192,16 0x0103 @th,224,24 0x010108 @th,320,32 0x04020000 counter return'
-        for port in "${ports[@]}"; do
-            printf 'add rule inet xui_telemt_meko input tcp dport %s tcp flags & (fin | syn | rst | ack) == syn meter tm4_%s { ip saddr timeout 60s limit rate over %s burst %s packets } counter reject with tcp reset\n' "$port" "$port" "$RATE" "$BURST"
-            printf 'add rule inet xui_telemt_meko input tcp dport %s tcp flags & (fin | syn | rst | ack) == syn meter tm6_%s { ip6 saddr timeout 60s limit rate over %s burst %s packets } counter reject with tcp reset\n' "$port" "$port" "$RATE" "$BURST"
+        for i in "${!ports[@]}"; do
+            port="${ports[$i]}"
+            rate="${port_rates[$i]}"
+            burst="${port_bursts[$i]}"
+            printf 'add rule inet xui_telemt_meko input tcp dport %s tcp flags & (fin | syn | rst | ack) == syn meter tm4_%s { ip saddr timeout 60s limit rate over %s burst %s packets } counter reject with tcp reset\n' "$port" "$port" "$rate" "$burst"
+            printf 'add rule inet xui_telemt_meko input tcp dport %s tcp flags & (fin | syn | rst | ack) == syn meter tm6_%s { ip6 saddr timeout 60s limit rate over %s burst %s packets } counter reject with tcp reset\n' "$port" "$port" "$rate" "$burst"
         done
     } | nft -f -
 }
 
 apply() {
-    mapfile -t ports < <(collect_ports)
+    normalize_limits
+    load_port_policies
     # The selected inbound's switch wins over obsolete global service
     # settings (systemd passes those as environment variables). An explicit
     # TELEMT_PORTS override is reserved for administrative/test commands.
@@ -198,10 +239,6 @@ apply() {
         log "MEKO V3 is disabled by panel settings"
         return 0
     fi
-
-    # Rate/burst only matter while adding hashlimit rules. Keep cleanup usable
-    # even if the persisted state was edited or corrupted by hand.
-    normalize_limits
 
     if (( ${#ports[@]} == 0 )); then
         remove
@@ -239,8 +276,11 @@ apply() {
     # INPUT ACCEPT rule or Telemt SYN packets could bypass the fix entirely.
     iptables -t filter -I INPUT 1 -j "$FILTER_CHAIN"
 
-    local port
-    for port in "${ports[@]}"; do
+    local port rate burst i
+    for i in "${!ports[@]}"; do
+        port="${ports[$i]}"
+        rate="${port_rates[$i]}"
+        burst="${port_bursts[$i]}"
         valid_port "$port" || continue
 
         # Preserve every unrelated fwmark bit. MEKO owns only bit 0x400.
@@ -253,7 +293,7 @@ apply() {
         # characters on Linux). Keep the per-port name short even for 65535.
         iptables -t filter -A "$FILTER_CHAIN" -p tcp --dport "$port" --syn \
             -m hashlimit --hashlimit-name "tm_${port}" --hashlimit-mode srcip \
-            --hashlimit-upto "$RATE" --hashlimit-burst "$BURST" \
+            --hashlimit-upto "$rate" --hashlimit-burst "$burst" \
             --hashlimit-htable-expire 60000 --hashlimit-htable-size 32768 -j RETURN
         iptables -t filter -A "$FILTER_CHAIN" -p tcp --dport "$port" --syn \
             -j REJECT --reject-with tcp-reset
