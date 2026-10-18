@@ -347,9 +347,12 @@ status() {
            "$rules" == *'@th,320,32'* &&
            "$rules" == *'reject with tcp reset'* ]] || verified_all=false
         for port in "${applied_ports[@]}"; do
-            if [[ "$rules" == *"meter tm4_${port} "* &&
-                  "$rules" == *"meter tm6_${port} "* ]] &&
-               (( $(grep -Fc "tcp dport ${port} " <<< "$rules") >= 2 )); then
+            # Verify the actual IPv4 AND IPv6 reject rules for this port.
+            # A named meter without a matching reject action is insufficient.
+            if grep -F "tcp dport ${port} " <<< "$rules" |
+                   grep -F "meter tm4_${port} " | grep -F "ip saddr" | grep -Fq "reject with tcp reset" &&
+               grep -F "tcp dport ${port} " <<< "$rules" |
+                   grep -F "meter tm6_${port} " | grep -F "ip6 saddr" | grep -Fq "reject with tcp reset"; then
                 verified_ports+=("$port")
             else
                 verified_all=false
