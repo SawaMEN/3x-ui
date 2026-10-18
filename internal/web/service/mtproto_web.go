@@ -92,7 +92,9 @@ func ReconcileMtprotoWebProxy(ctx context.Context) error {
         return errors.New("mtproto web: legacy WEB Proxy is active; migrate or disable it before creating a managed WEB inbound")
     }
     if state.Enabled && state.ManagedInboundID != 0 && state.ManagedInboundID != ib.Id {
-        return errors.New("mtproto web: different inbound already owns the WEB frontend")
+        // Ownership moves in two steps: stop the old frontend first, then
+        // allow the new inbound to acquire port 443 on the next reconcile.
+        return (TelemtService{}).DisableWebProxy()
     }
 
     fingerprint := mtprotoWebFingerprint(ib)
@@ -116,8 +118,18 @@ func ReconcileMtprotoWebProxy(ctx context.Context) error {
     settings := SettingService{}
     cert, _ := settings.GetCertFile()
     key, _ := settings.GetKeyFile()
+    previousState := state
+    state.ManagedInboundID = ib.Id
+    if state.BackendPort == 0 {
+        port, portErr := mtproto.FreeLocalPort()
+        if portErr != nil { return portErr }
+        state.BackendPort = port
+    }
+    state.UserFingerprint = fingerprint
+    if err := writeTelemtWebState(state); err != nil { return err }
     if _, err := svc.EnableWebProxy(ctx, domain, cert, key, normalized); err != nil {
         mtprotoWebLastError = time.Now()
+        _ = writeTelemtWebState(previousState)
         return err
     }
     state, err = readTelemtWebState()
