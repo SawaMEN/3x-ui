@@ -58,17 +58,17 @@ type TelemtConfig struct {
 }
 
 type TelemtStatus struct {
-	Supported       bool                 `json:"supported"`
-	UnsupportedReason string             `json:"unsupportedReason,omitempty"`
-	Installed       bool                 `json:"installed"`
-	Active          bool                 `json:"active"`
-	Enabled         bool                 `json:"enabled"`
-	Configured      bool                 `json:"configured"`
-	Version         string               `json:"version"`
-	LatestVersion   string               `json:"latestVersion"`
-	UpdateAvailable bool                 `json:"updateAvailable"`
-	MekoEnabled     bool                 `json:"mekoEnabled"`
-	WebProxy        TelemtWebProxyStatus `json:"webProxy"`
+	Supported         bool                 `json:"supported"`
+	UnsupportedReason string               `json:"unsupportedReason,omitempty"`
+	Installed         bool                 `json:"installed"`
+	Active            bool                 `json:"active"`
+	Enabled           bool                 `json:"enabled"`
+	Configured        bool                 `json:"configured"`
+	Version           string               `json:"version"`
+	LatestVersion     string               `json:"latestVersion"`
+	UpdateAvailable   bool                 `json:"updateAvailable"`
+	MekoEnabled       bool                 `json:"mekoEnabled"`
+	WebProxy          TelemtWebProxyStatus `json:"webProxy"`
 }
 
 type TelemtProxy struct {
@@ -302,17 +302,25 @@ func telemtNeedsUpdate(current, latest string) bool {
 		out := make([]int, 3)
 		for i, part := range v {
 			n, err := strconv.Atoi(part)
-			if err != nil { return nil, false }
+			if err != nil {
+				return nil, false
+			}
 			out[i] = n
 		}
 		return out, true
 	}
 	installed, okInstalled := parts(current)
 	upstream, okLatest := parts(latest)
-	if !okInstalled || !okLatest { return false }
+	if !okInstalled || !okLatest {
+		return false
+	}
 	for i := range installed {
-		if installed[i] < upstream[i] { return true }
-		if installed[i] > upstream[i] { return false }
+		if installed[i] < upstream[i] {
+			return true
+		}
+		if installed[i] > upstream[i] {
+			return false
+		}
 	}
 	return strings.Contains(strings.ToLower(current), "+3xui")
 }
@@ -324,7 +332,9 @@ func telemtLatestVersion(current string) (string, bool) {
 	// Include failed lookups in the cache. Otherwise a GitHub outage can
 	// block every settings refresh for another eight seconds.
 	ttl := 10 * time.Minute
-	if telemtLatestCache.latest == "" { ttl = 2 * time.Minute }
+	if telemtLatestCache.latest == "" {
+		ttl = 2 * time.Minute
+	}
 	if telemtLatestCache.current == current &&
 		time.Since(telemtLatestCache.checked) < ttl {
 		latest := telemtLatestCache.latest

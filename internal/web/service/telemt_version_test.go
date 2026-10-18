@@ -29,7 +29,7 @@ func TestTelemtVersionEqualityDoesNotReportUpdate(t *testing.T) {
 func TestTelemtNeedsUpdate(t *testing.T) {
 	cases := []struct {
 		name, current, latest string
-		want bool
+		want                  bool
 	}{
 		{"new upstream", "telemt 3.5.13", "3.5.14", true},
 		{"major version", "telemt 2.9.99", "3.0.0", true},

@@ -141,8 +141,7 @@ const isDependencyInstallable = (dependency: DependencyStatus) =>
 
 const dependencyNeedsAction = (dependency: DependencyStatus) => {
   // Installation remains possible when the version endpoint is unreachable.
-  if (dependency.key === 'telemt' && !dependency.installed)
-    return dependency.supported !== false;
+  if (dependency.key === 'telemt' && !dependency.installed) return dependency.supported !== false;
   if (!dependency.availableVersion) return false;
   if (isDependencyInstallable(dependency)) {
     return !dependency.installed || dependency.updateAvailable;
@@ -968,8 +967,8 @@ export default function SystemUpdateModal({
                           style={{ display: 'block', marginBottom: 10 }}
                         >
                           Движок обычного MTProto и WEB Proxy. После установки создавайте
-                          подключения через «Входящие → MTProto». Отдельное включение
-                          службы не требуется.
+                          подключения через «Входящие → MTProto». Отдельное включение службы не
+                          требуется.
                         </Typography.Text>
                       )}
                       {dependency.key === 'olcrtc' && (
