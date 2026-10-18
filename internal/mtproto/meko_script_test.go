@@ -110,10 +110,11 @@ func TestMekoNftBatchAndStatus(t *testing.T) {
 	mock := `#!/usr/bin/env bash
 set -eu
 case "$*" in
- '-f -') cat > "$MEKO_TEST_DIR/batch" ;;
+ '-f -') cat > "$MEKO_TEST_DIR/batch"; touch "$MEKO_TEST_DIR/nft-installed" ;;
+ 'list table inet xui_telemt_meko') test -e "$MEKO_TEST_DIR/nft-installed" ;;
  'list chain inet xui_telemt_meko input') echo 'reject with tcp reset' ;;
  '-n list set inet xui_telemt_meko ports') printf 'elements = { 443,\n 8443 }\n' ;;
- 'delete table inet xui_telemt_meko') touch "$MEKO_TEST_DIR/deleted" ;;
+ 'delete table inet xui_telemt_meko') touch "$MEKO_TEST_DIR/deleted"; rm -f "$MEKO_TEST_DIR/nft-installed" ;;
  *) exit 1 ;;
 esac
 `
@@ -138,13 +139,29 @@ esac
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"flush table inet xui_telemt_meko", "ports { 443,8443 }", "@th,320,32 0x04020000", "@th,160,16 0x0204", "ip saddr timeout 60s", "ip6 saddr timeout 60s", "54/minute burst 1 packets", "counter return"} {
+	for _, want := range []string{"add table inet xui_telemt_meko", "ports { 443,8443 }", "@th,320,32 0x04020000", "@th,160,16 0x0204", "ip saddr timeout 60s", "ip6 saddr timeout 60s", "54/minute burst 1 packets", "counter return"} {
 		if !strings.Contains(string(batch), want) {
 			t.Errorf("missing %s: %s", want, batch)
 		}
 	}
 	if strings.Count(string(batch), "reject with tcp reset") != 4 {
 		t.Fatal("expected one IPv4 and IPv6 limiter per port")
+	}
+	if strings.Contains(string(batch), "delete table") {
+		t.Fatal("first apply should not delete a missing nft table")
+	}
+	// Reapplying with an existing named set must replace the owned table
+	// atomically, without a period of unprotected firewall state.
+	run("apply", "1")
+	batch, err = os.ReadFile(filepath.Join(dir, "batch"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(batch), "delete table inet xui_telemt_meko\\nadd table inet xui_telemt_meko") {
+		t.Fatalf("subsequent apply must replace nft table atomically: %s", batch)
+	}
+	if strings.Contains(string(batch), "flush table") {
+		t.Fatal("flush table retains named sets and breaks their re-creation")
 	}
 	status := run("status", "1")
 	if !strings.Contains(status, "installed=true") || !strings.Contains(status, "applied_ports=443,8443") {
