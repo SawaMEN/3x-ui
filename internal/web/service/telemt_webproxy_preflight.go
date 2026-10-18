@@ -8,8 +8,10 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
-	"time"
 	"strings"
+	"time"
+
+	"github.com/pelletier/go-toml/v2"
 )
 
 // TelemtWebPreflight is a read-only deployment plan. The enable endpoint runs
@@ -66,14 +68,14 @@ func (s TelemtService) PreflightWebProxy(ctx context.Context, domain string, opt
 	}
 	check("privileges", os.Geteuid() == 0, "Для автоматической настройки нужны права root.")
 
-	cfg, configErr := s.GetConfig()
+	nativePort, configErr := telemtWebNativePort()
 	if configErr != nil {
 		check("config", false, "Не удаётся прочитать конфигурацию Telemt: "+configErr.Error())
 	} else {
-		nativeConflict := state.ManagedInboundID == 0 && cfg.Port == 443
+		nativeConflict := state.ManagedInboundID == 0 && nativePort == 443
 		check("native-port", !nativeConflict, "Обычный listener Telemt настроен на 443. Сначала перенесите его на другой порт: WEB HTTPS frontend должен владеть TCP 443.")
 		if !state.Enabled {
-			_, portErr := pickTelemtWebListenPort(cfg.Port)
+			_, portErr := pickTelemtWebListenPort(nativePort)
 			check("backend", portErr == nil, "Нужен свободный локальный порт WEB backend в диапазоне 15080–15179.")
 		}
 	}
@@ -122,6 +124,30 @@ func (s TelemtService) PreflightWebProxy(ctx context.Context, domain string, opt
 		}
 	}
 	return result, nil
+}
+
+// Do not call GetConfig here: it creates or upgrades the real Telemt config
+// on disk. A preflight must not change configuration merely by being opened.
+func telemtWebNativePort() (int, error) {
+	data, err := os.ReadFile(telemtConfigPath)
+	if os.IsNotExist(err) {
+		return defaultTelemtConfig().Port, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	var config struct {
+		Server struct {
+			Port int `toml:"port"`
+		} `toml:"server"`
+	}
+	if err := toml.Unmarshal(data, &config); err != nil {
+		return 0, err
+	}
+	if config.Server.Port < 1 || config.Server.Port > 65535 {
+		return 0, fmt.Errorf("invalid Telemt native port: %d", config.Server.Port)
+	}
+	return config.Server.Port, nil
 }
 
 // ss can report several owners for separate IPv4/IPv6 listeners. Any
