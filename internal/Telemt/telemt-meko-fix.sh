@@ -363,7 +363,7 @@ status() {
         rules="$(iptables -t filter -S "$FILTER_CHAIN" 2>/dev/null || true)"
         mark_rules="$(iptables -t mangle -S "$MARK_CHAIN" 2>/dev/null || true)"
         mapfile -t applied_ports < <(
-            printf '$s\n' "$rules" |
+            printf '%s\n' "$rules" |
                 awk '{ for (i=1; i<=NF; i++) if ($i=="--dport") print $(i+1) }' |
                 awk '/^[0-9]+$/ { seen[$1]=1 } END { for (p in seen) print p }' |
                 sort -n
@@ -386,14 +386,14 @@ status() {
     if [[ ! -v TELEMT_PORTS ]]; then
         if (( ${#ports[@]} > 0 )); then ENABLED=1; else ENABLED=0; fi
     fi
-    printf 'enabled=$s\n' "$(enabled && echo true || echo false)"
-    printf 'installed=$s\n' "$installed"
-    printf 'backend=$s\n' "$backend"
-    printf 'ports=$s\n' "$(IFS=,; echo "${ports[*]:-}")"
-    printf 'applied_ports=$s\n' "$(IFS=,; echo "${applied_ports[*]:-}")"
-    printf 'verified_ports=$s\n' "$(IFS=,; echo "${verified_ports[*]:-}")"
-    printf 'rate=$s\n' "$RATE"
-    printf 'burst=$s\n' "$BURST"
+    printf 'enabled=%s\n' "$(enabled && echo true || echo false)"
+    printf 'installed=%s\n' "$installed"
+    printf 'backend=%s\n' "$backend"
+    printf 'ports=%s\n' "$(IFS=,; echo "${ports[*]:-}")"
+    printf 'applied_ports=%s\n' "$(IFS=,; echo "${applied_ports[*]:-}")"
+    printf 'verified_ports=%s\n' "$(IFS=,; echo "${verified_ports[*]:-}")"
+    printf 'rate=%s\n' "$RATE"
+    printf 'burst=%s\n' "$BURST"
 }
 
 case "${1:-apply}" in
