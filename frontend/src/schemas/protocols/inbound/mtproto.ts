@@ -55,6 +55,7 @@ export const MtprotoInboundSettingsSchema = z.object({
         .default([]),
     })
     .optional(),
+  mekoFix: z.boolean().default(false),
   fakeTlsDomain: z.string().default('www.cloudflare.com'),
   maskHost: z.string().optional(),
   maskPort: z.number().int().min(0).max(65535).optional(),
