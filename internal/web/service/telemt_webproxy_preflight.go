@@ -111,6 +111,10 @@ func (s TelemtService) PreflightWebProxy(ctx context.Context, domain string, opt
 		} else {
 			port80Ready := telemtWebPortAvailable(80) || (options.Frontend == "nginx" && telemtWebNginxOwnsPort(80))
 			check("acme-port", port80Ready, "Для автоматического выпуска TLS-сертификата HTTP-01 требуется свободный TCP 80 или Nginx на TCP 80.")
+			if options.Frontend == "nginx" && telemtWebNginxOwnsPort(80) {
+				conflict, inspectErr := telemtWebNginxPortHostConflict(ctx, domain, 80)
+				check("nginx-acme-vhost", inspectErr == nil && !conflict, "Уже есть Nginx HTTP vhost на этом домене: ACME HTTP-01 будет перехвачен. Подключите готовый сертификат или перенастройте HTTP vhost.")
+			}
 			if !telemtWebCommandExists("certbot") {
 				check("certbot", telemtWebPackageManager() != "", "Для автоматической установки Certbot необходим поддерживаемый менеджер пакетов.")
 			}
@@ -155,6 +159,10 @@ func telemtWebCertificatePairReady(certFile, keyFile, domain string) bool {
 // Parse nginx -T by server blocks, rather than simply searching for the
 // hostname (which would incorrectly reject HTTP-only ACME virtual hosts).
 func telemtWebNginxHostConflict(ctx context.Context, domain string) (bool, error) {
+	return telemtWebNginxPortHostConflict(ctx, domain, 443)
+}
+
+func telemtWebNginxPortHostConflict(ctx context.Context, domain string, port int) (bool, error) {
 	if domain == "" {
 		return false, nil
 	}
@@ -164,12 +172,16 @@ func telemtWebNginxHostConflict(ctx context.Context, domain string) (bool, error
 	if err != nil {
 		return false, fmt.Errorf("nginx -T failed: %w", err)
 	}
-	return telemtWebNginxConfigHasHost(string(output), domain), nil
+	return telemtWebNginxConfigHasHostPort(string(output), domain, port), nil
 }
 
 var telemtWebServerStart = regexp.MustCompile(`\bserver\s*\{`)
 
 func telemtWebNginxConfigHasHost(config, domain string) bool {
+	return telemtWebNginxConfigHasHostPort(config, domain, 443)
+}
+
+func telemtWebNginxConfigHasHostPort(config, domain string, port int) bool {
 	currentFile := ""
 	var block strings.Builder
 	inServer, depth, skip := false, 0, false
@@ -194,7 +206,7 @@ func telemtWebNginxConfigHasHost(config, domain string) bool {
 		if depth != 0 {
 			continue
 		}
-		if !skip && telemtWebNginxServerMatches(block.String(), domain) {
+		if !skip && telemtWebNginxServerMatchesPort(block.String(), domain, port) {
 			return true
 		}
 		inServer = false
@@ -207,16 +219,17 @@ var (
 	telemtWebNginxNames = regexp.MustCompile(`(?m)^\s*server_name\s+([^;]+);`)
 )
 
-func telemtWebNginxServerMatches(block, domain string) bool {
-	has443 := false
+func telemtWebNginxServerMatchesPort(block, domain string, port int) bool {
+	hasPort := false
 	for _, match := range telemtWebNginxListen.FindAllStringSubmatch(block, -1) {
 		for _, field := range strings.Fields(match[1]) {
-			if field == "443" || field == ":443" || strings.HasSuffix(field, "]:443") || strings.HasSuffix(field, ":443") {
-				has443 = true
+			portStr := fmt.Sprint(port)
+			if field == portStr || field == ":"+portStr || strings.HasSuffix(field, "]:"+portStr) || strings.HasSuffix(field, ":"+portStr) {
+				hasPort = true
 			}
 		}
 	}
-	if !has443 {
+	if !hasPort {
 		return false
 	}
 	for _, match := range telemtWebNginxNames.FindAllStringSubmatch(block, -1) {
