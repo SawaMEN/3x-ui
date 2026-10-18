@@ -17,6 +17,17 @@ spec = importlib.util.spec_from_file_location("fetch_official_telemt", ROOT / "t
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
+def unprivileged_updater(source):
+    """Exercise real file mutations in temp dirs without requiring root in CI.
+
+    Production ownership and root checks remain unchanged. Fault-injection
+    wrappers still exercise install/rename/chmod failures and rollback.
+    """
+    return (source.replace('[[ "$EUID" -eq 0 ]]', "true")
+            .replace("-o root -g root", "")
+            .replace("chown root:root", "true"))
+
+
 class OfficialTelemtTests(unittest.TestCase):
     def release(self):
         names = list(module.ASSETS.values())
@@ -108,7 +119,7 @@ class TelemtUpdaterTests(unittest.TestCase):
                 source = (ROOT / "internal/Telemt/telemt-update.sh").read_text()
                 for key, value in (("BIN", old_binary), ("VERSION_FILE", version), ("TMP_DIR", root / "download")):
                     source = re.sub("^" + key + "=.*$", key + "=" + shlex.quote(str(value)), source, flags=re.M)
-                source = source.replace('[[ "$EUID" -eq 0 ]]', "true")
+                source = unprivileged_updater(source)
                 source = source.replace("/run/lock/x-ui-telemt-update.lock", str(root / "lock"))
                 script = root / "update.sh"
                 script.write_text(source)
@@ -175,7 +186,7 @@ if [[ -n "$output" ]]; then cp "$SERVED/${url##*/}" "$output"; else printf '  "t
                     ("BIN", old_binary), ("VERSION_FILE", version), ("TMP_DIR", root / "download")
                 ):
                     script = re.sub("^" + key + "=.*$", key + "=" + shlex.quote(str(value)), script, flags=re.M)
-                script = script.replace('[[ "$EUID" -eq 0 ]]', "true")
+                script = unprivileged_updater(script)
                 script = script.replace("/run/lock/x-ui-telemt-update.lock", str(root / "lock"))
                 path_script = root / "update.sh"
                 path_script.write_text(script)
@@ -225,7 +236,7 @@ class ManagedTelemtUpdateTests(unittest.TestCase):
                 source = source.rsplit('main "$@"', 1)[0]
                 for key, value in (("BIN", binary), ("VERSION_FILE", version)):
                     source = re.sub("^" + key + "=.*$", key + "=" + shlex.quote(str(value)), source, flags=re.M)
-                source = source.replace('[[ "$EUID" -eq 0 ]]', "true")
+                source = unprivileged_updater(source)
                 source = source.replace("/run/lock/x-ui-telemt-update.lock", str(root / "lock"))
                 # Replace external downloads and process control, retaining the
                 # actual install, transaction, persistent backup and rollback.
@@ -276,7 +287,7 @@ main
                 source = (ROOT / "internal/Telemt/telemt-update.sh").read_text().rsplit('main "$@"', 1)[0]
                 for key, value in (("BIN", binary), ("VERSION_FILE", version)):
                     source = re.sub("^" + key + "=.*$", key + "=" + shlex.quote(str(value)), source, flags=re.M)
-                source = source.replace('[[ "$EUID" -eq 0 ]]', "true")
+                source = unprivileged_updater(source)
                 source = source.replace("/run/lock/x-ui-telemt-update.lock", str(root / "lock"))
                 source += r'''
 get_latest_tag() { echo 3.5.14; }
