@@ -17,6 +17,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/mtproto"
 )
 
 const (
@@ -41,6 +45,8 @@ var (
 )
 
 type TelemtWebProxyState struct {
+	ManagedInboundID int `json:"managedInboundId,omitempty"`
+	UserFingerprint string `json:"userFingerprint,omitempty"`
 	Frontend           string   `json:"frontend,omitempty"`
 	Carrier            string   `json:"carrier,omitempty"`
 	Carriers           []string `json:"carriers,omitempty"`
@@ -159,6 +165,23 @@ func appendTelemtWebProxyConfig(base string, state TelemtWebProxyState) (string,
 		}
 	}
 	base = removeTelemtWebUser(base)
+	managedUsers := ""
+	managedProfiles := ""
+	if state.ManagedInboundID != 0 {
+		var inbound model.Inbound
+		if err := database.GetDB().First(&inbound, state.ManagedInboundID).Error; err != nil {
+			return "", fmt.Errorf("telemt web proxy: load managed inbound: %w", err)
+		}
+		inst, ok := mtproto.InstanceFromInbound(&inbound)
+		if !ok {
+			return "", errors.New("telemt web proxy: managed inbound has no enabled clients")
+		}
+		for n, user := range inst.Secrets {
+			name := fmt.Sprintf("mtweb_%d_%d", state.ManagedInboundID, n)
+			managedUsers += fmt.Sprintf("%q = %q\\n", name, user.Secret)
+			managedProfiles += fmt.Sprintf("\\n[[web.vhosts.profiles]]\\nuser = %q\\nsecret_mode = \\"dd\\"\\n", name)
+		}
+	}
 	section := "[access.users]"
 	idx := strings.Index(base, section)
 	if idx < 0 {
@@ -168,7 +191,11 @@ func appendTelemtWebProxyConfig(base string, state TelemtWebProxyState) (string,
 	if next := strings.Index(base[idx+len(section):], "\n["); next >= 0 {
 		insertAt = idx + len(section) + next + 1
 	}
-	base = base[:insertAt] + fmt.Sprintf("%s = \"%s\"\n", telemtWebUser, state.Secret) + base[insertAt:]
+	if state.ManagedInboundID != 0 {
+		base = base[:insertAt] + managedUsers + base[insertAt:]
+	} else {
+		base = base[:insertAt] + fmt.Sprintf("%s = \"%s\"\n", telemtWebUser, state.Secret) + base[insertAt:]
+	}
 	decoyDir := state.DecoyDir
 	if decoyDir == "" {
 		decoyDir = telemtWebDecoyDir
@@ -190,6 +217,9 @@ func appendTelemtWebProxyConfig(base string, state TelemtWebProxyState) (string,
 		}
 		webConfig = strings.Replace(webConfig, "[web]\nenabled = true\n", "[web]\nenabled = true\ncarriers = ["+strings.Join(values, ", ")+"]\n", 1)
 	}
+	if state.ManagedInboundID != 0 {
+		webConfig = strings.Replace(webConfig, "\\n[[web.vhosts.profiles]]\\nuser = \\"webproxy\\"\\nsecret_mode = \\"dd\\"\\n", managedProfiles, 1)
+	}
 	return strings.TrimRight(base, "\n") + "\n" + webConfig, nil
 }
 
@@ -202,7 +232,7 @@ func removeTelemtWebUser(base string) string {
 		if strings.HasPrefix(trimmed, "[") {
 			inUsers = trimmed == "[access.users]"
 		}
-		if inUsers && strings.HasPrefix(trimmed, telemtWebUser+" = ") {
+		if inUsers && (strings.HasPrefix(trimmed, telemtWebUser+" = ") || strings.HasPrefix(trimmed, "\\\"mtweb_")) {
 			continue
 		}
 		out = append(out, line)
