@@ -97,10 +97,10 @@ func (s TelemtService) PreflightWebProxy(ctx context.Context, domain string, opt
 	if validDomain {
 		acmeCert := "/etc/letsencrypt/live/" + domain + "/fullchain.pem"
 		acmeKey := "/etc/letsencrypt/live/" + domain + "/privkey.pem"
-		certReady := (telemtWebCertificateCoversDomain(panelCert, domain) && telemtWebFileReadable(panelKey)) ||
-			(telemtWebCertificateCoversDomain(acmeCert, domain) && telemtWebFileReadable(acmeKey))
+		certReady := (telemtWebCertificatePairReady(panelCert, panelKey, domain)) ||
+			(telemtWebCertificatePairReady(acmeCert, acmeKey, domain))
 		if state.Enabled && state.Domain == domain {
-			certReady = certReady || (telemtWebCertificateCoversDomain(state.CertFile, domain) && telemtWebFileReadable(state.KeyFile))
+			certReady = certReady || (telemtWebCertificatePairReady(state.CertFile, state.KeyFile, domain))
 		}
 		if certReady {
 			check("tls", true, "Подходящий действующий TLS-сертификат будет использован повторно.")
