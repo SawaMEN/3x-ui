@@ -255,7 +255,7 @@ func removeTelemtWebUser(base string) string {
 		if strings.HasPrefix(trimmed, "[") {
 			inUsers = trimmed == "[access.users]"
 		}
-		if inUsers && (strings.HasPrefix(trimmed, telemtWebUser+" = ") || strings.HasPrefix(trimmed, "\\\"mtweb_")) {
+		if inUsers && (strings.HasPrefix(trimmed, telemtWebUser+" = ") || strings.HasPrefix(trimmed, "\"mtweb_")) {
 			continue
 		}
 		out = append(out, line)

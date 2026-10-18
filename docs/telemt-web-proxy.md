@@ -20,6 +20,31 @@ lifecycles from enabled MTProto inbounds:
   WEB mode is currently supported only on the local server, with **one**
   managed WEB inbound per server because its HTTPS frontend owns port 443.
 
+### WEB: domain and port selection
+
+The form sets the public port to **443** automatically; the loopback backend
+port is allocated separately. The inbound's general listen address does not
+restrict the HTTPS frontend. Existing WEB records with another stored port
+still reserve TCP 443 in conflict checks.
+
+The panel domain is suggested when available. You can use it or a separate
+public domain: A/AAAA records must point to this server and the certificate
+must cover the chosen name. The form preserves a previously entered domain.
+One domain can serve WEB on 443 and the panel on another port, for example
+`https://web.example.com:2053/panel-path/`. If the panel itself already listens
+on 443, move it using panel settings first. This integration does not migrate
+the panel listener or route its login UI through the WEB decoy vhost. Existing
+reverse-proxy vhosts for the same domain need administrator reconciliation.
+
+Use **Check WEB Proxy readiness** to refresh the runtime and port diagnostics.
+A successful bind check does not verify DNS or external firewall reachability.
+Permit TCP 443 in host/provider firewalls and TCP 80 when HTTP certificate
+issuance/renewal is used. DNS and provider firewalls require access to their
+respective control planes and are not changed by the panel.
+
+Periodic inbound reconciliation also restarts a stopped managed HTTPS
+frontend when its Telemt backend remains active.
+
 ### Ordinary MTProto: Fix by MEKO V3
 
 Fix by MEKO is **opt-in per ordinary MTProto inbound** and targets the

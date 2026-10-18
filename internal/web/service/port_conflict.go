@@ -12,6 +12,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/mieru"
+	"github.com/SawaMEN/3x-ui/v3/internal/mtproto"
 	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 
@@ -26,6 +27,9 @@ type listenerSpan struct {
 }
 
 func inboundListenerSpans(ib *model.Inbound) []listenerSpan {
+	if mtproto.WebProxyInbound(ib) {
+		return []listenerSpan{{443, 443, transportTCP}}
+	}
 	if ib.Protocol == model.Tun {
 		return nil
 	}
@@ -267,6 +271,13 @@ func (s *InboundService) checkPortConflict(inbound *model.Inbound, ignoreId int)
 }
 
 func checkPortConflictTx(db *gorm.DB, inbound *model.Inbound, ignoreId int) (*portConflictDetail, error) {
+	// WEB frontends bind HTTPS independently of the legacy inbound listen/port.
+	if mtproto.WebProxyInbound(inbound) {
+		copy := *inbound
+		copy.Listen = ""
+		copy.Port = 443
+		inbound = &copy
+	}
 	if inbound.Protocol == model.Pingtunnel {
 		var other model.Inbound
 		err := db.Where("protocol = ? AND enable = ? AND id <> ? AND node_id IS NULL", model.Pingtunnel, true, ignoreId).First(&other).Error
@@ -425,7 +436,7 @@ func checkPortConflictTx(db *gorm.DB, inbound *model.Inbound, ignoreId int) (*po
 	var candidates []*model.Inbound
 	q := db.Model(model.Inbound{})
 	if inbound.Protocol != model.Mieru {
-		q = q.Where("port = ? OR protocol = ?", inbound.Port, model.Mieru)
+		q = q.Where("port = ? OR protocol IN ?", inbound.Port, []model.Protocol{model.Mieru, model.MTProto})
 	}
 	if ignoreId > 0 {
 		q = q.Where("id != ?", ignoreId)
@@ -437,6 +448,11 @@ func checkPortConflictTx(db *gorm.DB, inbound *model.Inbound, ignoreId int) (*po
 	for _, c := range candidates {
 		if !sameNode(c.NodeID, inbound.NodeID) {
 			continue
+		}
+		if mtproto.WebProxyInbound(c) {
+			copy := *c
+			copy.Listen = ""
+			c = &copy
 		}
 		if !listenOverlaps(c.Listen, inbound.Listen) {
 			continue
