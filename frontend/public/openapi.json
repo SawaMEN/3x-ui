@@ -19799,6 +19799,52 @@
         }
       }
     },
+    "/panel/api/telemt/webproxy/preflight": {
+      "post": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Check WEB Proxy domain, TLS, DNS, port and frontend prerequisites without applying changes.",
+        "operationId": "post_panel_api_telemt_webproxy_preflight",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "domain": "web.example.com",
+                "frontend": "nginx",
+                "carrier": "https",
+                "carriers": []
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/panel/api/telemt/webproxy/enable": {
       "post": {
         "tags": [
