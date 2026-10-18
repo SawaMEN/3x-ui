@@ -6,6 +6,7 @@ VERSION_FILE="/etc/x-ui/telemt.version"
 TMP_DIR=""
 REPO="telemt/telemt"
 CONFIG_DIR="$(dirname "$BIN")/mtproto"
+SERVICE_CONFIG="/etc/x-ui/telemt.toml"
 managed_configs=()
 cleanup() { [[ -z "$TMP_DIR" ]] && return; rm -rf "$TMP_DIR"; }
 trap cleanup EXIT
@@ -171,6 +172,13 @@ main() {
   [[ ! -e "$VERSION_FILE" ]] || cp -p "$VERSION_FILE" "$TMP_DIR/previous-version"
   if systemctl is-active --quiet telemt.service 2>/dev/null; then
     was_active=1
+    # Panel-managed WEB uses this service and a generated local control API.
+    # Include it in readiness checks while retaining compatibility with old
+    # standalone installations that never had an API configured.
+    if [[ -r "$SERVICE_CONFIG" ]] &&
+       grep -Eq '^auth_header = "Bearer [a-f0-9]{64}"$' "$SERVICE_CONFIG"; then
+      managed_configs+=("$SERVICE_CONFIG")
+    fi
     systemctl stop telemt.service
   fi
   local update_failed=0

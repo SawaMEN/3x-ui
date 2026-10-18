@@ -430,7 +430,7 @@ export default function SystemUpdateModal({
         return (await HttpUtil.post(
           dependency.installed ? '/panel/api/telemt/action' : '/panel/api/telemt/install',
           dependency.installed ? { action: 'update' } : undefined,
-          { timeout: 360000, headers: { 'Content-Type': 'application/json' } },
+          { timeout: 960000, headers: { 'Content-Type': 'application/json' } },
         )) as ApiMsg<unknown>;
       case 'dnstt':
         return (await HttpUtil.post(
