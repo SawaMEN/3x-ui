@@ -2,7 +2,8 @@ import { Card, ConfigProvider, Layout } from 'antd';
 
 import AppSidebar from '@/layouts/AppSidebar';
 import { useTheme } from '@/hooks/useTheme';
-import OlcRTCSettingsTab from '@/pages/settings/OlcRTCSettingsTab';
+import OlcRTCManagement from './OlcRTCManagement';
+import '@/pages/singbox/SingBoxPage.css';
 
 export default function OlcRTCPage() {
   const { antdThemeConfig, isDark, isUltra } = useTheme();
@@ -14,7 +15,7 @@ export default function OlcRTCPage() {
         <Layout className="content-shell">
           <Layout.Content id="content-layout" className="content-area">
             <Card>
-              <OlcRTCSettingsTab />
+              <OlcRTCManagement />
             </Card>
           </Layout.Content>
         </Layout>
