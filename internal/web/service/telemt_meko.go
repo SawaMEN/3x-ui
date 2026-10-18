@@ -405,6 +405,14 @@ func (TelemtService) RefreshMekoFix() (applyErr error) {
 	fingerprint := desiredMekoPolicyFingerprint(cfg)
 	if !cfg.Enabled {
 		mekoApplyState.fingerprint = ""
+		// A disabled/removed final inbound should also disable the owned
+		// oneshot service. Otherwise systemd can re-create obsolete rules on
+		// the next panel start even though no MTProto port opted in.
+		if systemctl("is-enabled", "--quiet", telemtMekoServiceName) == nil {
+			if err := systemctl("disable", "--now", telemtMekoServiceName); err != nil {
+				return fmt.Errorf("telemt meko: disable unused unit: %w", err)
+			}
+		}
 		if cfg.Applied {
 			_, err := runTelemtMekoScript("remove", cfg)
 			return err
@@ -425,8 +433,15 @@ func (TelemtService) RefreshMekoFix() (applyErr error) {
 		if err := writeTelemtMekoEnv(cfg); err != nil {
 			return err
 		}
+	} else if err != nil {
+		return fmt.Errorf("telemt meko: inspect settings: %w", err)
+	}
+	// An existing env file does not imply the systemd unit was enabled.
+	// Repair unit enablement automatically so the selected ports survive
+	// reboot/panel restart even on upgraded installations.
+	if systemctl("is-enabled", "--quiet", telemtMekoServiceName) != nil {
 		if err := systemctl("enable", "--now", telemtMekoServiceName); err != nil {
-			return err
+			return fmt.Errorf("telemt meko: enable service: %w", err)
 		}
 	}
 	_, err := runTelemtMekoScript("apply", cfg)
