@@ -110,7 +110,15 @@ func TestMekoNftBatchAndStatus(t *testing.T) {
 	mock := `#!/usr/bin/env bash
 set -eu
 case "$*" in
- '-f -') cat > "$MEKO_TEST_DIR/batch"; touch "$MEKO_TEST_DIR/nft-installed" ;;
+ '-f -')
+    if [[ "${MEKO_TEST_FAIL_NFT:-0}" == "1" ]]; then
+        cat >/dev/null
+        echo "simulated invalid nft batch" >&2
+        exit 1
+    fi
+    cat > "$MEKO_TEST_DIR/batch"
+    touch "$MEKO_TEST_DIR/nft-installed"
+    ;;
  'list table inet xui_telemt_meko') test -e "$MEKO_TEST_DIR/nft-installed" ;;
  'list chain inet xui_telemt_meko input') echo 'reject with tcp reset' ;;
  '-n list set inet xui_telemt_meko ports') printf 'elements = { 443,\n 8443 }\n' ;;
@@ -162,6 +170,20 @@ esac
 	}
 	if strings.Contains(string(batch), "flush table") {
 		t.Fatal("flush table retains named sets and breaks their re-creation")
+	}
+	// A syntax/kernel failure while replacing an existing nft table must
+	// leave its previous configuration intact and MUST NOT fall back to
+	// a second iptables limiter on top of still-active nft rules.
+	cmd := exec.Command("bash", helper, "apply")
+	cmd.Env = append(os.Environ(), "PATH="+dir+":"+os.Getenv("PATH"), "MEKO_TEST_DIR="+dir,
+		"TELEMT_PORTS=8443,443", "TELEMT_MEKO_ENABLED=1", "MEKO_TEST_FAIL_NFT=1")
+	if out, err := cmd.CombinedOutput(); err == nil || !strings.Contains(string(out), "refusing iptables fallback") {
+		t.Fatalf("nft failure must not install a second limiter: err=%v output=%s", err, out)
+	}
+	current, err := os.ReadFile(filepath.Join(dir, "batch"))
+	if err != nil { t.Fatal(err) }
+	if string(batch) != string(current) {
+		t.Fatal("failed replacement changed last successful nft configuration")
 	}
 	status := run("status", "1")
 	if !strings.Contains(status, "installed=true") || !strings.Contains(status, "applied_ports=443,8443") {
