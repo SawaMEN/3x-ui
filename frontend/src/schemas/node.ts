@@ -41,6 +41,7 @@ export const NodeRecordSchema = z
     coreType: z.string().optional(),
     runningCore: z.string().optional(),
     panelVersion: z.string().optional(),
+    panelEdition: z.string().optional(),
     uptimeSecs: z.number().optional(),
     netUp: z.number().optional(),
     netDown: z.number().optional(),
