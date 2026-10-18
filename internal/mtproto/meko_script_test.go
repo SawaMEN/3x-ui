@@ -208,7 +208,9 @@ func TestMekoOnlySelectsExplicitOrdinaryInboundPorts(t *testing.T) {
 	status := func() string {
 		t.Helper()
 		cmd := exec.Command("bash", helper, "status")
-		cmd.Env = append(os.Environ(), "PATH="+dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+		cmd.Env = append(os.Environ(), "PATH="+dir+string(os.PathListSeparator)+os.Getenv("PATH"), "TELEMT_MEKO_ENABLED=0")
+		// Simulate the legacy systemd EnvironmentFile setting MEKO=0.
+		// Explicitly opted-in inbounds must still take precedence.
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("MEKO status: %v: %s", err, out)
@@ -226,6 +228,9 @@ func TestMekoOnlySelectsExplicitOrdinaryInboundPorts(t *testing.T) {
 	if ports := selected(); ports != "7443,8443" {
 		t.Fatalf("wrong selected ordinary ports: %q", ports)
 	}
+	if out := status(); !strings.Contains(out, "enabled=true") {
+		t.Fatalf("old globally disabled MEKO state blocked per-inbound selection: %s", out)
+	}
 	writeConfig("telemt-1.toml", false, 8443)
 	if ports := selected(); ports != "7443" {
 		t.Fatalf("disabling one MEKO inbound must not affect another: %q", ports)
@@ -233,6 +238,9 @@ func TestMekoOnlySelectsExplicitOrdinaryInboundPorts(t *testing.T) {
 	writeConfig("telemt-3.toml", false, 7443)
 	if ports := selected(); ports != "" {
 		t.Fatalf("no opted-in inbounds should yield no MEKO ports: %q", ports)
+	}
+	if out := status(); !strings.Contains(out, "enabled=false") {
+		t.Fatalf("MEKO remained enabled with no selected ports: %s", out)
 	}
 }
 
