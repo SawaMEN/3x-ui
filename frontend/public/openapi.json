@@ -7566,6 +7566,7 @@
                       "state": "running",
                       "version": "v25.10.31"
                     },
+                    "panelEdition": "sawamen",
                     "tcpCount": 42,
                     "load": {
                       "load1": 0.5,
