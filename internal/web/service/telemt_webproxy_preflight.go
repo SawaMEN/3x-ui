@@ -2,10 +2,13 @@ package service
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"os"
 	"os/exec"
 	"regexp"
+	"time"
 	"strings"
 )
 
@@ -111,6 +114,24 @@ func (s TelemtService) PreflightWebProxy(ctx context.Context, domain string, opt
 		}
 	}
 	return result, nil
+}
+
+// Verify the private key actually belongs to the certificate, in addition
+// to checking hostname and validity. A readable but mismatched key is not TLS.
+func telemtWebCertificatePairReady(certFile, keyFile, domain string) bool {
+	if certFile == "" || keyFile == "" || domain == "" {
+		return false
+	}
+	pair, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil || len(pair.Certificate) == 0 {
+		return false
+	}
+	cert, err := x509.ParseCertificate(pair.Certificate[0])
+	if err != nil {
+		return false
+	}
+	now := time.Now()
+	return !now.Before(cert.NotBefore) && now.Before(cert.NotAfter) && cert.VerifyHostname(domain) == nil
 }
 
 // Parse nginx -T by server blocks, rather than simply searching for the
