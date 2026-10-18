@@ -62,7 +62,9 @@ describe('Telemt WEB settings', () => {
     );
     expect(screen.getByLabelText('Домен')).toHaveProperty('value', 'web.example.com');
     fireEvent.click(screen.getByRole('button', { name: 'Выше: websocket' }));
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Применить' })).toHaveProperty('disabled', false));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Применить' })).toHaveProperty('disabled', false),
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Применить' }));
     await waitFor(() =>
       expect(vi.mocked(HttpUtil.post)).toHaveBeenCalledWith(

@@ -3387,7 +3387,8 @@ export const sections: readonly Section[] = [
       {
         method: 'POST',
         path: '/panel/api/telemt/webproxy/preflight',
-        summary: 'Check WEB Proxy domain, TLS, DNS, port and frontend prerequisites without applying changes.',
+        summary:
+          'Check WEB Proxy domain, TLS, DNS, port and frontend prerequisites without applying changes.',
         body: '{ "domain": "web.example.com", "frontend": "nginx", "carrier": "https", "carriers": [] }',
       },
       {
