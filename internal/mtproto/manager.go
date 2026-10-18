@@ -438,6 +438,13 @@ func (m *Manager) ensureLocked(inst Instance) error {
 	}
 	proc := newProcess(cfg, fmt.Sprintf("inbound %d", inst.Id))
 	if err := proc.Start(); err != nil {
+		// A failed startup must not leave an opted-in config advertising a
+		// port to the MEKO helper. The next reconcile will retry the inbound;
+		// until then, do not apply its firewall rules to an unrelated listener.
+		if removeErr := os.Remove(cfg); removeErr != nil && !os.IsNotExist(removeErr) {
+			return fmt.Errorf("mtproto: Telemt start failed: %w; cleanup config: %v", err, removeErr)
+		}
+		scheduleMekoSync()
 		return err
 	}
 	m.procs[inst.Id] = &managed{
