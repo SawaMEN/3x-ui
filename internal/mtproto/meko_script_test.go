@@ -1,6 +1,7 @@
 package mtproto
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -152,5 +153,88 @@ esac
 	run("apply", "0")
 	if _, err := os.Stat(filepath.Join(dir, "deleted")); err != nil {
 		t.Fatal("disable did not remove owned nft table")
+	}
+}
+
+
+func TestMekoOnlySelectsExplicitOrdinaryInboundPorts(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("Linux MEKO helper")
+	}
+	if _, err := exec.LookPath("flock"); err != nil {
+		t.Skip("flock unavailable")
+	}
+	dir := t.TempDir()
+	configDir := filepath.Join(dir, "mtproto")
+	if err := os.Mkdir(configDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	writeConfig := func(name string, selected bool, port int) {
+		t.Helper()
+		body := ""
+		if selected {
+			body = "# x-ui-meko-fix=1\n"
+		}
+		body += fmt.Sprintf("[server]\nport = %d\n", port)
+		if err := os.WriteFile(filepath.Join(configDir, name), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeConfig("telemt-1.toml", true, 8443)
+	writeConfig("telemt-2.toml", false, 9443)
+	writeConfig("telemt-3.toml", true, 7443)
+	legacy := filepath.Join(dir, "telemt.toml")
+	if err := os.WriteFile(legacy, []byte("[server]\nport = 443\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile("../Telemt/telemt-meko-fix.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := string(data)
+	script = strings.ReplaceAll(script, "/run/lock/x-ui-telemt-meko.lock", filepath.Join(dir, "lock"))
+	script = strings.ReplaceAll(script, "/etc/x-ui/telemt-meko-fix.env", filepath.Join(dir, "state.env"))
+	script = strings.ReplaceAll(script, "/usr/local/x-ui/bin/mtproto/telemt-*.toml", filepath.Join(configDir, "telemt-*.toml"))
+	script = strings.ReplaceAll(script, "/etc/x-ui/telemt.toml", legacy)
+	helper := filepath.Join(dir, "meko.sh")
+	if err := os.WriteFile(helper, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for _, tool := range []string{"iptables", "nft"} {
+		if err := os.WriteFile(filepath.Join(dir, tool), []byte("#!/bin/sh\nexit 1\n"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	status := func() string {
+		t.Helper()
+		cmd := exec.Command("bash", helper, "status")
+		cmd.Env = append(os.Environ(), "PATH="+dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("MEKO status: %v: %s", err, out)
+		}
+		return string(out)
+	}
+	if output := status(); !strings.Contains(output, "ports=7443,8443") || strings.Contains(output, "9443") || strings.Contains(output, "443,") {
+		t.Fatalf("wrong selected ports: %s", output)
+	}
+	writeConfig("telemt-1.toml", false, 8443)
+	if output := status(); !strings.Contains(output, "ports=7443") || strings.Contains(output, "8443") {
+		t.Fatalf("disabling one MEKO inbound must not affect another: %s", output)
+	}
+	writeConfig("telemt-3.toml", false, 7443)
+	if output := status(); !strings.Contains(output, "ports=") || strings.Contains(output, "ports=7") {
+		t.Fatalf("no opted-in inbounds should yield no MEKO ports: %s", output)
+	}
+}
+
+func TestMekoRenderedConfigMarkerIsOptIn(t *testing.T) {
+	inst := Instance{Id: 1, Port: 8443}
+	if strings.Contains(renderConfig(inst, 9000, "token"), "# x-ui-meko-fix=1") {
+		t.Fatal("MEKO marker appeared on an ordinary inbound without the switch")
+	}
+	inst.MekoFix = true
+	if !strings.HasPrefix(renderConfig(inst, 9000, "token"), "# x-ui-meko-fix=1\n") {
+		t.Fatal("MEKO-enabled inbound must write its selected-port marker")
 	}
 }
