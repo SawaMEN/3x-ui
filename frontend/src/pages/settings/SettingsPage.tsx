@@ -42,7 +42,6 @@ import SubscriptionFormatsTab from './SubscriptionFormatsTab';
 import SubscriptionBalancersTab from './SubscriptionBalancersTab';
 import SwapSettingsTab from './SwapSettingsTab';
 import SystemUpdateModal from './SystemUpdateModal';
-import OlcRTCSettingsTab from './OlcRTCSettingsTab';
 import GatewayModeControl from './GatewayModeControl';
 import './SettingsPage.css';
 import './TemporaryUiHides.css';
@@ -53,7 +52,6 @@ interface ApiMsg {
 
 const tabSlugs = [
   'general',
-  'olcrtc',
   'security',
   'telegram',
   'email',
@@ -275,8 +273,6 @@ export default function SettingsPage() {
 
   const categoryBody = useMemo(() => {
     switch (activeSlug) {
-      case 'olcrtc':
-        return <OlcRTCSettingsTab />;
       case 'security':
         return (
           <SecurityTab
@@ -311,6 +307,8 @@ export default function SettingsPage() {
         );
     }
   }, [activeSlug, allSetting, updateSetting, saveAll, savePayload]);
+
+  if (slug === 'olcrtc') return <Navigate to="/olcrtc" replace />;
 
   if (slug === 'adblock') {
     if (!fetched) return <Spin />;
