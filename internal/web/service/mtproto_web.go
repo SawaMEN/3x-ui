@@ -2,6 +2,7 @@ package service
 
 import (
     "context"
+    "crypto/sha256"
     "encoding/json"
     "errors"
     "fmt"
@@ -141,5 +142,6 @@ func mtprotoWebFingerprint(ib *model.Inbound) string {
     for _, user := range inst.Secrets {
         parts = append(parts, user.Name+":"+user.Secret+":"+fmt.Sprint(user.QuotaBytes)+":"+fmt.Sprint(user.ExpiresUnix)+":"+fmt.Sprint(user.LimitIP))
     }
-    return strings.Join(parts, "|")
+    fingerprint := sha256.Sum256([]byte(strings.Join(parts, "|")))
+    return fmt.Sprintf("%x", fingerprint)
 }
