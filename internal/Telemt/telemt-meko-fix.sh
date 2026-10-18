@@ -226,8 +226,8 @@ apply_nft() {
 }
 
 apply() {
-    normalize_limits
-    load_port_policies
+    # Disabling must always work, even when old rate/burst settings are invalid.
+    mapfile -t ports < <(collect_ports)
     # The selected inbound's switch wins over obsolete global service
     # settings (systemd passes those as environment variables). An explicit
     # TELEMT_PORTS override is reserved for administrative/test commands.
@@ -239,6 +239,9 @@ apply() {
         log "MEKO V3 is disabled by panel settings"
         return 0
     fi
+
+    normalize_limits
+    load_port_policies
 
     if (( ${#ports[@]} == 0 )); then
         remove
