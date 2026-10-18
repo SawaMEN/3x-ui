@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -57,6 +58,8 @@ type TelemtConfig struct {
 }
 
 type TelemtStatus struct {
+	Supported       bool                 `json:"supported"`
+	UnsupportedReason string             `json:"unsupportedReason,omitempty"`
 	Installed       bool                 `json:"installed"`
 	Active          bool                 `json:"active"`
 	Enabled         bool                 `json:"enabled"`
@@ -272,47 +275,69 @@ func (TelemtService) Status() TelemtStatus {
 		version = telemtVersion()
 	}
 	latest, available := telemtLatestVersion(version)
-	return TelemtStatus{Installed: installed, Active: systemctl("is-active", "--quiet", telemtServiceName) == nil, Enabled: systemctl("is-enabled", "--quiet", telemtServiceName) == nil, Configured: cfgErr == nil, Version: version, LatestVersion: latest, UpdateAvailable: available, MekoEnabled: systemctl("is-enabled", "--quiet", telemtMekoServiceName) == nil}
+	supported := runtime.GOOS == "linux" && (runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64")
+	reason := ""
+	if !supported {
+		reason = "Официальный Telemt поддерживается на Linux amd64 и arm64."
+	}
+	return TelemtStatus{Installed: installed, Supported: supported, UnsupportedReason: reason, Active: systemctl("is-active", "--quiet", telemtServiceName) == nil, Enabled: systemctl("is-enabled", "--quiet", telemtServiceName) == nil, Configured: cfgErr == nil, Version: version, LatestVersion: latest, UpdateAvailable: available, MekoEnabled: systemctl("is-enabled", "--quiet", telemtMekoServiceName) == nil}
+}
+
+// telemtNeedsUpdate compares the official stable version numerically. It also
+// migrates legacy +3xui builds to the unmodified upstream binary without ever
+// offering a downgrade from a newer installed Telemt.
+func telemtNeedsUpdate(current, latest string) bool {
+	if current == "" || latest == "" {
+		return false
+	}
+	parts := func(value string) ([]int, bool) {
+		match := telemtVersionPattern.FindStringSubmatch(value)
+		if len(match) < 2 {
+			return nil, false
+		}
+		v := strings.Split(strings.SplitN(strings.SplitN(match[1], "+", 2)[0], "-", 2)[0], ".")
+		if len(v) != 3 {
+			return nil, false
+		}
+		out := make([]int, 3)
+		for i, part := range v {
+			n, err := strconv.Atoi(part)
+			if err != nil { return nil, false }
+			out[i] = n
+		}
+		return out, true
+	}
+	installed, okInstalled := parts(current)
+	upstream, okLatest := parts(latest)
+	if !okInstalled || !okLatest { return false }
+	for i := range installed {
+		if installed[i] < upstream[i] { return true }
+		if installed[i] > upstream[i] { return false }
+	}
+	return strings.Contains(strings.ToLower(current), "+3xui")
 }
 
 func telemtLatestVersion(current string) (string, bool) {
 	telemtLatestCache.Lock()
 	defer telemtLatestCache.Unlock()
 
-	// Do not perform a network request on every status refresh.
-	if telemtLatestCache.latest != "" &&
-		telemtLatestCache.current == current &&
-		time.Since(telemtLatestCache.checked) < 10*time.Minute {
+	// Include failed lookups in the cache. Otherwise a GitHub outage can
+	// block every settings refresh for another eight seconds.
+	ttl := 10 * time.Minute
+	if telemtLatestCache.latest == "" { ttl = 2 * time.Minute }
+	if telemtLatestCache.current == current &&
+		time.Since(telemtLatestCache.checked) < ttl {
 		latest := telemtLatestCache.latest
-		return latest, current != "" && normalizeTelemtVersion(current) != normalizeTelemtVersion(latest)
+		return latest, telemtNeedsUpdate(current, latest)
 	}
 
-	latest := ""
-	if _, err := os.Stat("/usr/local/x-ui/telemt-update.sh"); err == nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-		out, _ := telemtUpdaterCommand(ctx, telemtUpdaterPath, "--check").CombinedOutput()
-		cancel()
-
-		for _, line := range strings.Split(string(out), "\n") {
-			if strings.HasPrefix(line, "latest=") {
-				latest = strings.TrimSpace(strings.TrimPrefix(line, "latest="))
-				break
-			}
-		}
-	}
-
-	// The official release is also the migration target for legacy +3xui builds.
-	if latest == "" {
-		latest = fetchTelemtLatestRelease()
-	}
-	if latest == "" {
-		return "", false
-	}
-
+	// One bounded request rather than the updater's GitHub request followed
+	// by another identical fallback request on failure.
+	latest := fetchTelemtLatestRelease()
 	telemtLatestCache.latest = latest
 	telemtLatestCache.checked = time.Now()
 	telemtLatestCache.current = current
-	return latest, current != "" && normalizeTelemtVersion(current) != normalizeTelemtVersion(latest)
+	return latest, telemtNeedsUpdate(current, latest)
 }
 
 var telemtVersionPattern = regexp.MustCompile(`(?i)v?(\d+\.\d+\.\d+(?:[-+][0-9a-z.-]+)?)`)
@@ -863,6 +888,9 @@ func telemtGeneratedLink(username string, tls bool) (string, error) {
 func (TelemtService) Apply(action string) error {
 	switch action {
 	case "install":
+		if runtime.GOOS != "linux" || (runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64") {
+			return errors.New("telemt: unsupported platform (requires Linux amd64 or arm64)")
+		}
 		if (TelemtService{}).IsInstalled() {
 			return errors.New("telemt: component is already installed")
 		}
@@ -925,6 +953,9 @@ func (TelemtService) Apply(action string) error {
 	case "start", "stop", "restart", "enable", "disable":
 		return systemctl(action, telemtServiceName)
 	case "update":
+		if !(TelemtService{}).IsInstalled() {
+			return errors.New("telemt: not installed; use install")
+		}
 		return telemtUpdate()
 	case "meko-enable", "meko-disable":
 		cfg := TelemtService{}.GetMekoConfig()
