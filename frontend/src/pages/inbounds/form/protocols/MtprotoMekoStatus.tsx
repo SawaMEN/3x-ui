@@ -44,7 +44,10 @@ export default function MtprotoMekoStatus() {
   }, []);
 
   useEffect(() => {
-    void refresh();
+    // Defer the initial network request to avoid synchronous state updates
+    // while React is committing the inbound form.
+    const timer = window.setTimeout(() => void refresh(), 0);
+    return () => window.clearTimeout(timer);
   }, [refresh]);
 
   const wanted = !!port && status?.ports?.includes(port);
