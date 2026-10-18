@@ -419,7 +419,10 @@ func (TelemtService) RefreshMekoFix() (applyErr error) {
 				return fmt.Errorf("telemt meko: disable unused unit: %w", err)
 			}
 		}
-		if cfg.Applied {
+		// Even an incomplete or damaged owned ruleset must be removed once
+		// the last opted-in MTProto inbound disappears. Otherwise stale
+		// firewall rules can survive forever with Applied=false.
+		if cfg.Applied || cfg.Backend != "" && cfg.Backend != "none" || len(cfg.AppliedPorts) > 0 {
 			_, err := runTelemtMekoScript("remove", cfg)
 			return err
 		}
