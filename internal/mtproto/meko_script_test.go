@@ -254,3 +254,83 @@ func TestMekoRenderedConfigMarkerIsOptIn(t *testing.T) {
 		t.Fatal("MEKO-enabled inbound must write its selected-port marker")
 	}
 }
+
+func TestMekoIndependentInboundLimits(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("Linux helper")
+	}
+	if _, err := exec.LookPath("flock"); err != nil {
+		t.Skip("flock unavailable")
+	}
+	dir := t.TempDir()
+	configs := filepath.Join(dir, "mtproto")
+	if err := os.Mkdir(configs, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	write := func(name string, selected bool, port, rate, burst int) {
+		t.Helper()
+		body := ""
+		if selected {
+			body = fmt.Sprintf("# x-ui-meko-fix=1\n# x-ui-meko-rate=%d\n# x-ui-meko-burst=%d\n", rate, burst)
+		}
+		body += fmt.Sprintf("[server]\nport = %d\n", port)
+		if err := os.WriteFile(filepath.Join(configs, name), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("telemt-1.toml", true, 8443, 120, 8)
+	write("telemt-2.toml", true, 7443, 54, 1)
+	write("telemt-3.toml", false, 9443, 0, 0)
+
+	raw, err := os.ReadFile("../Telemt/telemt-meko-fix.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := strings.ReplaceAll(string(raw), "/run/lock/x-ui-telemt-meko.lock", filepath.Join(dir, "lock"))
+	script = strings.ReplaceAll(script, "/etc/x-ui/telemt-meko-fix.env", filepath.Join(dir, "state.env"))
+	script = strings.ReplaceAll(script, "/usr/local/x-ui/bin/mtproto/telemt-*.toml", filepath.Join(configs, "telemt-*.toml"))
+	helper := filepath.Join(dir, "helper.sh")
+	if err := os.WriteFile(helper, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	mock := "#!/usr/bin/env bash\nset -eu\nif [[ \"$*\" == \"-f -\" ]]; then cat > \"$MEKO_TEST_DIR/batch\"; exit 0; fi\nexit 1\n"
+	if err := os.WriteFile(filepath.Join(dir, "nft"), []byte(mock), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "iptables"), []byte("#!/bin/sh\nexit 1\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	apply := func() string {
+		t.Helper()
+		cmd := exec.Command("bash", helper, "apply")
+		cmd.Env = append(os.Environ(), "PATH="+dir+string(os.PathListSeparator)+os.Getenv("PATH"),
+			"MEKO_TEST_DIR="+dir, "TELEMT_MEKO_ENABLED=0", "TELEMT_MEKO_RATE=54/minute", "TELEMT_MEKO_BURST=1")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("apply: %v: %s", err, out)
+		}
+		batch, err := os.ReadFile(filepath.Join(dir, "batch"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(batch)
+	}
+	batch := apply()
+	for _, want := range []string{"ports { 7443,8443 }", "120/minute burst 8 packets", "54/minute burst 1 packets"} {
+		if !strings.Contains(batch, want) {
+			t.Errorf("missing %q: %s", want, batch)
+		}
+	}
+	if strings.Contains(batch, "tcp dport 9443") {
+		t.Fatal("disabled inbound acquired rules")
+	}
+	write("telemt-1.toml", true, 8443, 240, 4)
+	batch = apply()
+	if !strings.Contains(batch, "240/minute burst 4 packets") || strings.Contains(batch, "120/minute burst 8 packets") {
+		t.Fatal("changed per-port rate was not applied")
+	}
+	write("telemt-1.toml", false, 8443, 0, 0)
+	batch = apply()
+	if !strings.Contains(batch, "ports { 7443 }") || strings.Contains(batch, "tcp dport 8443") {
+		t.Fatal("disabling one MEKO inbound should remove only its port")
+	}
+}
