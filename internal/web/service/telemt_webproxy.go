@@ -178,8 +178,8 @@ func appendTelemtWebProxyConfig(base string, state TelemtWebProxyState) (string,
 		}
 		for n, user := range inst.Secrets {
 			name := fmt.Sprintf("mtweb_%d_%d", state.ManagedInboundID, n)
-			managedUsers += fmt.Sprintf("%q = %q\\n", name, user.Secret)
-			managedProfiles += fmt.Sprintf("\\n[[web.vhosts.profiles]]\\nuser = %q\\nsecret_mode = \\"dd\\"\\n", name)
+			managedUsers += fmt.Sprintf("%q = %q\n", name, user.Secret)
+			managedProfiles += fmt.Sprintf("\n[[web.vhosts.profiles]]\nuser = %q\nsecret_mode = \"dd\"\n", name)
 		}
 	}
 	section := "[access.users]"
@@ -218,7 +218,7 @@ func appendTelemtWebProxyConfig(base string, state TelemtWebProxyState) (string,
 		webConfig = strings.Replace(webConfig, "[web]\nenabled = true\n", "[web]\nenabled = true\ncarriers = ["+strings.Join(values, ", ")+"]\n", 1)
 	}
 	if state.ManagedInboundID != 0 {
-		webConfig = strings.Replace(webConfig, "\\n[[web.vhosts.profiles]]\\nuser = \\"webproxy\\"\\nsecret_mode = \\"dd\\"\\n", managedProfiles, 1)
+		webConfig = strings.Replace(webConfig, "\n[[web.vhosts.profiles]]\nuser = \"webproxy\"\nsecret_mode = \"dd\"\n", managedProfiles, 1)
 	}
 	return strings.TrimRight(base, "\n") + "\n" + webConfig, nil
 }
