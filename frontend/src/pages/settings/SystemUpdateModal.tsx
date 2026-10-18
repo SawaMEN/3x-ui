@@ -141,8 +141,9 @@ const isDependencyInstallable = (dependency: DependencyStatus) =>
 
 const dependencyNeedsAction = (dependency: DependencyStatus) => {
   // Installation remains possible when the version endpoint is unreachable.
-  if (dependency.key === 'telemt')
-    return dependency.supported !== false && (!dependency.installed || dependency.updateAvailable);
+  if (dependency.key === 'telemt') {
+    return !dependency.installed || dependency.updateAvailable;
+  }
   if (!dependency.availableVersion) return false;
   if (isDependencyInstallable(dependency)) {
     return !dependency.installed || dependency.updateAvailable;
