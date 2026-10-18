@@ -67,6 +67,18 @@ export default function MtprotoFields() {
       {!webProxyEnabled && (
         <>
           <FormField
+            name={['settings', 'mekoFix']}
+            label="Fix by MEKO V3"
+            tooltip={
+              i18n.resolvedLanguage?.startsWith('ru')
+                ? 'Применить MEKO V3 только к TCP-порту этого обычного MTProto-прокси. На другие порты и WEB Proxy правила не распространяются.'
+                : 'Apply MEKO V3 only to this ordinary MTProto inbound TCP port. Other ports and WEB Proxy are unaffected.'
+            }
+            valueProp="checked"
+          >
+            <Switch />
+          </FormField>
+          <FormField
             name={['settings', 'fakeTlsDomain']}
             label={t('pages.inbounds.form.fakeTlsDomain')}
             tooltip={t('pages.inbounds.form.mtprotoFakeTlsDomainHint')}
