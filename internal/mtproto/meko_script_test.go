@@ -120,7 +120,13 @@ case "$*" in
     touch "$MEKO_TEST_DIR/nft-installed"
     ;;
  'list table inet xui_telemt_meko') test -e "$MEKO_TEST_DIR/nft-installed" ;;
- 'list chain inet xui_telemt_meko input') echo 'reject with tcp reset' ;;
+ '-n list chain inet xui_telemt_meko input')
+    if [[ "${MEKO_TEST_DROP_IPV6:-0}" == "1" ]]; then
+        sed -n 's/^add rule inet xui_telemt_meko input //p' "$MEKO_TEST_DIR/batch" | grep -v 'meter tm6_'
+    else
+        sed -n 's/^add rule inet xui_telemt_meko input //p' "$MEKO_TEST_DIR/batch"
+    fi
+    ;;
  '-n list set inet xui_telemt_meko ports') printf 'elements = { 443,\n 8443 }\n' ;;
  'delete table inet xui_telemt_meko') touch "$MEKO_TEST_DIR/deleted"; rm -f "$MEKO_TEST_DIR/nft-installed" ;;
  *) exit 1 ;;
@@ -188,9 +194,22 @@ esac
 		t.Fatal("failed replacement changed last successful nft configuration")
 	}
 	status := run("status", "1")
-	if !strings.Contains(status, "installed=true") || !strings.Contains(status, "applied_ports=443,8443") {
+	if !strings.Contains(status, "installed=true") || !strings.Contains(status, "applied_ports=443,8443") || !strings.Contains(status, "verified_ports=443,8443") {
 		t.Fatalf("incorrect status: %s", status)
 	}
+	// A table with the right port set but missing one address-family meter
+	// must not report a successful, dual-stack MEKO deployment.
+	incomplete := exec.Command("bash", helper, "status")
+	incomplete.Env = append(os.Environ(), "PATH="+dir+":"+os.Getenv("PATH"),
+		"MEKO_TEST_DIR="+dir, "TELEMT_PORTS=8443,443", "TELEMT_MEKO_ENABLED=1", "MEKO_TEST_DROP_IPV6=1")
+	partial, partialErr := incomplete.CombinedOutput()
+	if partialErr != nil {
+		t.Fatalf("partial firewall status: %v: %s", partialErr, partial)
+	}
+	if !strings.Contains(string(partial), "installed=false") || strings.Contains(string(partial), "verified_ports=443,8443") {
+		t.Fatalf("missing IPv6 meter incorrectly reported healthy firewall: %s", partial)
+	}
+
 	run("apply", "0")
 	if _, err := os.Stat(filepath.Join(dir, "deleted")); err != nil {
 		t.Fatal("disable did not remove owned nft table")
