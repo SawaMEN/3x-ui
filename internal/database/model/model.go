@@ -832,6 +832,7 @@ type Node struct {
 	CoreType         string             `json:"coreType" gorm:"column:core_type"`
 	RunningCore      string             `json:"runningCore" gorm:"column:running_core"`
 	PanelVersion     string             `json:"panelVersion" gorm:"column:panel_version" example:"v3.x.x"`
+	PanelEdition     string             `json:"panelEdition" gorm:"column:panel_edition;default:unknown" example:"sawamen"`
 	CpuPct           float64            `json:"cpuPct" example:"23.5"`
 	MemPct           float64            `json:"memPct" example:"45.1"`
 	UptimeSecs       uint64             `json:"uptimeSecs" example:"86400"`
@@ -888,6 +889,7 @@ type NodeSummary struct {
 	LastHeartbeat    int64              `json:"lastHeartbeat"`
 	LatencyMs        int                `json:"latencyMs"`
 	PanelVersion     string             `json:"panelVersion"`
+	PanelEdition     string             `json:"panelEdition"`
 	XrayVersion      string             `json:"xrayVersion"`
 	SingBoxVersion   string             `json:"singboxVersion"`
 	SingBoxInstalled bool               `json:"singboxInstalled"`
