@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Button } from 'antd';
+import { Alert, Button, Space } from 'antd';
 import { useFormContext, useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 
@@ -23,6 +23,7 @@ export default function MtprotoMekoStatus() {
   const [status, setStatus] = useState<MekoStatus | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [applying, setApplying] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -40,6 +41,27 @@ export default function MtprotoMekoStatus() {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setLoading(false);
+    }
+  }, []);
+
+  const applyNow = useCallback(async () => {
+    setApplying(true);
+    try {
+      const response = (await HttpUtil.post('/panel/api/telemt/meko/reconcile', {})) as {
+        success: boolean;
+        msg?: string;
+        obj?: MekoStatus;
+      };
+      if (!response.success || !response.obj) {
+        setError(response.msg || 'MEKO firewall apply failed');
+        return;
+      }
+      setStatus(response.obj);
+      setError(response.obj.statusError || '');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setApplying(false);
     }
   }, []);
 
@@ -84,9 +106,21 @@ export default function MtprotoMekoStatus() {
       message={russian ? 'Фактический статус Fix by MEKO' : 'Fix by MEKO firewall status'}
       description={description}
       action={
-        <Button size="small" loading={loading} onClick={() => void refresh()}>
-          {russian ? 'Обновить' : 'Refresh'}
-        </Button>
+        <Space size="small" wrap>
+          <Button size="small" loading={loading} disabled={applying} onClick={() => void refresh()}>
+            {russian ? 'Проверить' : 'Check'}
+          </Button>
+          {wanted && (
+            <Button
+              size="small"
+              loading={applying}
+              disabled={loading}
+              onClick={() => void applyNow()}
+            >
+              {russian ? 'Применить повторно' : 'Retry MEKO'}
+            </Button>
+          )}
+        </Space>
       }
     />
   );
