@@ -3408,6 +3408,10 @@
           "outboundTag": {
             "type": "string"
           },
+          "panelEdition": {
+            "example": "sawamen",
+            "type": "string"
+          },
           "panelVersion": {
             "example": "v3.x.x",
             "type": "string"
@@ -3528,6 +3532,7 @@
           "netUp",
           "onlineCount",
           "outboundTag",
+          "panelEdition",
           "panelVersion",
           "pinnedCertSha256",
           "port",
@@ -3780,6 +3785,10 @@
             "example": "direct",
             "type": "string"
           },
+          "panelEdition": {
+            "example": "sawamen",
+            "type": "string"
+          },
           "panelVersion": {
             "example": "v3.x.x",
             "type": "string"
@@ -3887,6 +3896,7 @@
           "netUp",
           "onlineCount",
           "outboundTag",
+          "panelEdition",
           "panelVersion",
           "pinnedCertSha256",
           "port",
@@ -4075,6 +4085,10 @@
             "example": 45.2,
             "type": "number"
           },
+          "panelEdition": {
+            "example": "sawamen",
+            "type": "string"
+          },
           "panelVersion": {
             "example": "v3.x.x",
             "type": "string"
@@ -4127,6 +4141,7 @@
           "error",
           "latencyMs",
           "memPct",
+          "panelEdition",
           "panelVersion",
           "presenceRegistry",
           "runningCore",
@@ -12889,6 +12904,7 @@
                       "netUp": 2097152,
                       "onlineCount": 5,
                       "outboundTag": "direct",
+                      "panelEdition": "sawamen",
                       "panelVersion": "v3.x.x",
                       "parentGuid": "",
                       "pinnedCertSha256": "",
@@ -13101,6 +13117,7 @@
                     "netUp": 2097152,
                     "onlineCount": 5,
                     "outboundTag": "direct",
+                    "panelEdition": "sawamen",
                     "panelVersion": "v3.x.x",
                     "parentGuid": "",
                     "pinnedCertSha256": "",
@@ -13262,6 +13279,7 @@
                     "netUp": 2097152,
                     "onlineCount": 5,
                     "outboundTag": "direct",
+                    "panelEdition": "sawamen",
                     "panelVersion": "v3.x.x",
                     "parentGuid": "",
                     "pinnedCertSha256": "",
@@ -13503,6 +13521,7 @@
                     "error": "",
                     "latencyMs": 42,
                     "memPct": 45.2,
+                    "panelEdition": "sawamen",
                     "panelVersion": "v3.x.x",
                     "presenceRegistry": "",
                     "runningCore": "",
@@ -18497,6 +18516,7 @@
                   "netUp": 2097152,
                   "onlineCount": 5,
                   "outboundTag": "direct",
+                  "panelEdition": "sawamen",
                   "panelVersion": "v3.x.x",
                   "parentGuid": "",
                   "pinnedCertSha256": "",
