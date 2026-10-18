@@ -35,6 +35,7 @@ type TelemtMekoConfig struct {
 	Burst         int    `json:"burst"`
 	Ports         []int  `json:"ports"`
 	AppliedPorts  []int  `json:"appliedPorts"`
+	VerifiedPorts []int  `json:"verifiedPorts"`
 	Fingerprint   string `json:"fingerprint"`
 	Mark          string `json:"mark"`
 }
@@ -198,6 +199,8 @@ func readTelemtMekoRuntime(cfg *TelemtMekoConfig) error {
 			cfg.Ports = parseMekoPortList(value)
 		case "applied_ports":
 			cfg.AppliedPorts = parseMekoPortList(value)
+		case "verified_ports":
+			cfg.VerifiedPorts = parseMekoPortList(value)
 		}
 	}
 	return nil
@@ -218,12 +221,15 @@ func (TelemtService) GetMekoConfig() TelemtMekoConfig {
 		cfg.StatusError = mekoApplyError.message
 	}
 	mekoApplyError.RUnlock()
-	cfg.Healthy = cfg.StatusError == "" && (cfg.Enabled && cfg.Applied && sameMekoPorts(cfg.Ports, cfg.AppliedPorts) || !cfg.Enabled && !cfg.Applied && len(cfg.AppliedPorts) == 0)
+	cfg.Healthy = cfg.StatusError == "" && (cfg.Enabled && cfg.Applied && sameMekoPorts(cfg.Ports, cfg.AppliedPorts) && sameMekoPorts(cfg.Ports, cfg.VerifiedPorts) || !cfg.Enabled && !cfg.Applied && len(cfg.AppliedPorts) == 0)
 	if cfg.Ports == nil {
 		cfg.Ports = []int{}
 	}
 	if cfg.AppliedPorts == nil {
 		cfg.AppliedPorts = []int{}
+	}
+	if cfg.VerifiedPorts == nil {
+		cfg.VerifiedPorts = []int{}
 	}
 	return cfg
 }
@@ -422,7 +428,7 @@ func (TelemtService) RefreshMekoFix() (applyErr error) {
 	if !cfg.Applied && len(cfg.Ports) == 0 {
 		return nil
 	}
-	if cfg.Applied && sameMekoPorts(cfg.Ports, cfg.AppliedPorts) &&
+	if cfg.Healthy && sameMekoPorts(cfg.Ports, cfg.VerifiedPorts) &&
 		mekoApplyState.fingerprint == fingerprint {
 		return nil
 	}
@@ -451,7 +457,7 @@ func (TelemtService) RefreshMekoFix() (applyErr error) {
 	// Re-read the kernel rule set: a zero exit code is not proof that both
 	// families and every selected listener were actually installed.
 	applied := TelemtService{}.GetMekoConfig()
-	if !applied.Applied || !sameMekoPorts(applied.Ports, applied.AppliedPorts) {
+	if !applied.Healthy || !sameMekoPorts(applied.Ports, applied.AppliedPorts) || !sameMekoPorts(applied.Ports, applied.VerifiedPorts) {
 		return fmt.Errorf("telemt meko: firewall verification failed: desired=%v applied=%v backend=%s error=%s", applied.Ports, applied.AppliedPorts, applied.Backend, applied.StatusError)
 	}
 	mekoApplyState.fingerprint = fingerprint
