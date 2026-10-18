@@ -74,7 +74,7 @@ const routes: RouteObject[] = [
       { path: 'routing', element: withSuspense(<CoreConfigRoutePage />) },
       { path: 'api-docs', element: withSuspense(<ApiDocsPage />) },
       // Backwards-compatible old bookmarks; Telemt now lives under Inbounds.
-      { path: 'telemt', element: <Navigate to="/inbounds?tab=telemt" replace /> },
+      { path: 'telemt', element: <Navigate to="/inbounds" replace /> },
     ],
   },
 ];
