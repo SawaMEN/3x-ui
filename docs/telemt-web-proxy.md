@@ -10,20 +10,7 @@ lifecycles from enabled MTProto inbounds:
   inbound; removing/disabling the inbound stops that sidecar. Links are
   `tg://proxy` in the usual client, QR and subscription workflows. The optional
   **Fix by MEKO V3** switch is bound to this inbound's TCP port and defaults
-  to off. Optionally set a per-inbound **SYN rate/minute** and **burst**
-  (defaults: 54/minute and burst 1). Changing these settings updates the
-  firewall without restarting the Telemt process or disconnecting clients.
-  The inbound editor displays the selected port, actual applied firewall
-  backend and an error when the live rules do not match. Click **Refresh**
-  after saving. It does not apply to WEB Proxy or other ports.
-
-  MEKO is implemented by a separate host-owned firewall helper (nftables
-  preferred, iptables/u32 fallback), not Telemt's built-in `synlimit`. These
-  two limiters must not be enabled on the same listener simultaneously. The
-  helper changes only its own netfilter table/chains, never generic SSH rules
-  or unrelated VPN ports. Actual behavior depends on Linux kernel, netfilter
-  capabilities, external firewall managers, client NAT and network conditions;
-  rate limiting is not a guarantee against censorship or service blocking.
+  to off. It does not apply to any WEB Proxy frontend/backend or other ports.
 - **WEB Proxy**: in the same MTProto form, enable **WEB Proxy (HTTPS)**, provide
   a public domain and choose nginx, Caddy or HAProxy and HTTP carrier(s).
   The WEB frontend and its Telemt backend are provisioned from the inbound.
