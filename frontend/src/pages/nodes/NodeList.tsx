@@ -128,6 +128,25 @@ function StatusLabel({ record }: { record: HealthProps }) {
   return <span>{t(`pages.nodes.statusValues.${record.status || 'unknown'}`)}</span>;
 }
 
+function PanelEditionTag({ edition }: { edition?: string }) {
+  const { t } = useTranslation();
+  if (edition === 'sawamen') {
+    return (
+      <Tag color="blue" style={{ margin: 0 }}>
+        {t('pages.nodes.panelEditionFork')}
+      </Tag>
+    );
+  }
+  if (edition === 'unmarked') {
+    return (
+      <Tooltip title={t('pages.nodes.panelEditionUnmarkedHint')}>
+        <Tag style={{ margin: 0 }}>{t('pages.nodes.panelEditionUnmarked')}</Tag>
+      </Tooltip>
+    );
+  }
+  return <Tag style={{ margin: 0 }}>{t('pages.nodes.panelEditionUnknown')}</Tag>;
+}
+
 function formatPct(p?: number): string {
   if (typeof p !== 'number' || Number.isNaN(p)) return '-';
   return `${p.toFixed(1)}%`;
@@ -489,6 +508,7 @@ function NodeList({
           return (
             <Space size={4}>
               <span>{record.panelVersion || '-'}</span>
+              <PanelEditionTag edition={record.panelEdition} />
               {canUpdate && (
                 <Tooltip title={`${t('pages.nodes.updateAvailable')}: ${latestVersion}`}>
                   <Tag
@@ -694,6 +714,7 @@ function NodeList({
                       <ApartmentOutlined style={{ opacity: 0.6 }} />
                       <StatusDot record={record} />
                       <span className="node-name">{record.name}</span>
+                      <PanelEditionTag edition={record.panelEdition} />
                       <div className="card-actions">
                         <Tag icon={<ApartmentOutlined />} style={{ margin: 0 }}>
                           {t('pages.nodes.subNode')}
@@ -743,6 +764,7 @@ function NodeList({
                       />
                       <StatusDot record={record} />
                       <span className="node-name">{record.name}</span>
+                      <PanelEditionTag edition={record.panelEdition} />
                       <div className="card-actions">
                         <Tooltip title={t('info')}>
                           <InfoCircleOutlined
@@ -935,6 +957,10 @@ function NodeList({
                     {t('pages.nodes.panelVersion') || 'Panel version'}
                   </span>
                   <Tag>{statsNode.panelVersion || '-'}</Tag>
+                </div>
+                <div className="stat-row">
+                  <span className="stat-label">{t('pages.nodes.panelEdition')}</span>
+                  <PanelEditionTag edition={statsNode.panelEdition} />
                 </div>
                 <div className="stat-row">
                   <span className="stat-label">{t('pages.nodes.uptime')}</span>

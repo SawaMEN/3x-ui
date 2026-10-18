@@ -284,6 +284,7 @@ func (a *ServerController) status(c *gin.Context) {
 		return
 	}
 
+	obj["panelEdition"] = "sawamen"
 	obj["singbox"] = singBoxStatus
 	selected := gin.H{"state": status.Xray.State, "errorMsg": status.Xray.ErrorMsg, "version": status.Xray.Version}
 	if coreType == service.CoreTypeSingBox {

@@ -3382,6 +3382,10 @@ export const SCHEMAS: Record<string, unknown> = {
       "outboundTag": {
         "type": "string"
       },
+      "panelEdition": {
+        "example": "sawamen",
+        "type": "string"
+      },
       "panelVersion": {
         "example": "v3.x.x",
         "type": "string"
@@ -3502,6 +3506,7 @@ export const SCHEMAS: Record<string, unknown> = {
       "netUp",
       "onlineCount",
       "outboundTag",
+      "panelEdition",
       "panelVersion",
       "pinnedCertSha256",
       "port",
@@ -3754,6 +3759,10 @@ export const SCHEMAS: Record<string, unknown> = {
         "example": "direct",
         "type": "string"
       },
+      "panelEdition": {
+        "example": "sawamen",
+        "type": "string"
+      },
       "panelVersion": {
         "example": "v3.x.x",
         "type": "string"
@@ -3861,6 +3870,7 @@ export const SCHEMAS: Record<string, unknown> = {
       "netUp",
       "onlineCount",
       "outboundTag",
+      "panelEdition",
       "panelVersion",
       "pinnedCertSha256",
       "port",
@@ -4049,6 +4059,10 @@ export const SCHEMAS: Record<string, unknown> = {
         "example": 45.2,
         "type": "number"
       },
+      "panelEdition": {
+        "example": "sawamen",
+        "type": "string"
+      },
       "panelVersion": {
         "example": "v3.x.x",
         "type": "string"
@@ -4101,6 +4115,7 @@ export const SCHEMAS: Record<string, unknown> = {
       "error",
       "latencyMs",
       "memPct",
+      "panelEdition",
       "panelVersion",
       "presenceRegistry",
       "runningCore",

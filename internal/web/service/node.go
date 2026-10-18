@@ -47,6 +47,7 @@ type HeartbeatPatch struct {
 	CoreType         string
 	RunningCore      string
 	PanelVersion     string
+	PanelEdition     string
 	Guid             string
 	CpuPct           float64
 	MemPct           float64
@@ -1022,6 +1023,9 @@ func (s *NodeService) UpdateHeartbeat(id int, p HeartbeatPatch) error {
 		"xray_state":     p.XrayState,
 		"xray_error":     p.XrayError,
 	}
+	if p.Status == "online" && p.PanelEdition != "" {
+		updates["panel_edition"] = p.PanelEdition
+	}
 	if p.CoreInfoKnown {
 		updates["core_version"], updates["core_state"], updates["core_error"] = p.CoreVersion, p.CoreState, p.CoreError
 		if p.CoreCapabilities == nil {
@@ -1243,6 +1247,7 @@ func (s *NodeService) probe(ctx context.Context, n *model.Node, proxyURL string)
 	patch := HeartbeatPatch{
 		LastHeartbeat: time.Now().Unix(),
 		CoreType:      normalizeNodeCoreType(n.CoreType),
+		PanelEdition:  n.PanelEdition,
 	}
 
 	addr, err := netsafe.NormalizeHost(n.Address)
@@ -1330,6 +1335,7 @@ func (s *NodeService) probe(ctx context.Context, n *model.Node, proxyURL string)
 				ErrorMsg     string             `json:"errorMsg"`
 			} `json:"core"`
 			PanelVersion string `json:"panelVersion"`
+			PanelEdition string `json:"panelEdition"`
 			PanelGuid    string `json:"panelGuid"`
 			Uptime       uint64 `json:"uptime"`
 			NetIO        struct {
@@ -1416,6 +1422,10 @@ func (s *NodeService) probe(ctx context.Context, n *model.Node, proxyURL string)
 		}
 	}
 	patch.PanelVersion = o.PanelVersion
+	patch.PanelEdition = "unmarked"
+	if o.PanelEdition == "sawamen" {
+		patch.PanelEdition = "sawamen"
+	}
 	patch.Guid = o.PanelGuid
 	patch.UptimeSecs = o.Uptime
 	patch.NetUp = o.NetIO.Up
@@ -1437,6 +1447,7 @@ type ProbeResultUI struct {
 	CoreType         string             `json:"coreType"`
 	RunningCore      string             `json:"runningCore"`
 	PanelVersion     string             `json:"panelVersion" example:"v3.x.x"`
+	PanelEdition     string             `json:"panelEdition" example:"sawamen"`
 	CpuPct           float64            `json:"cpuPct" example:"12.5"`
 	MemPct           float64            `json:"memPct" example:"45.2"`
 	UptimeSecs       uint64             `json:"uptimeSecs" example:"86400"`
@@ -1460,6 +1471,7 @@ func (p HeartbeatPatch) ToUI(ok bool) ProbeResultUI {
 		CoreType:     p.CoreType,
 		RunningCore:  p.RunningCore,
 		PanelVersion: p.PanelVersion,
+		PanelEdition: p.PanelEdition,
 		CpuPct:       p.CpuPct,
 		MemPct:       p.MemPct,
 		UptimeSecs:   p.UptimeSecs,

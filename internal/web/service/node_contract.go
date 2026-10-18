@@ -41,6 +41,7 @@ type NodeView struct {
 	CoreType            string             `json:"coreType"`
 	RunningCore         string             `json:"runningCore"`
 	PanelVersion        string             `json:"panelVersion" example:"v3.x.x"`
+	PanelEdition        string             `json:"panelEdition" example:"sawamen"`
 	CpuPct              float64            `json:"cpuPct" example:"12.5"`
 	MemPct              float64            `json:"memPct" example:"45.2"`
 	UptimeSecs          uint64             `json:"uptimeSecs" example:"86400"`
@@ -97,6 +98,7 @@ func toNodeView(n *model.Node) *NodeView {
 		CoreType:      canonicalCoreType(n.CoreType),
 		RunningCore:   canonicalCoreType(n.RunningCore),
 		PanelVersion:  n.PanelVersion,
+		PanelEdition:  n.PanelEdition,
 		CpuPct:        n.CpuPct,
 		MemPct:        n.MemPct,
 		UptimeSecs:    n.UptimeSecs,
