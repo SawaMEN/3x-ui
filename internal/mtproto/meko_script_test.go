@@ -215,16 +215,24 @@ func TestMekoOnlySelectsExplicitOrdinaryInboundPorts(t *testing.T) {
 		}
 		return string(out)
 	}
-	if output := status(); !strings.Contains(output, "ports=7443,8443") || strings.Contains(output, "9443") || strings.Contains(output, "443,") {
-		t.Fatalf("wrong selected ports: %s", output)
+	selected := func() string {
+		for _, line := range strings.Split(status(), "\n") {
+			if strings.HasPrefix(line, "ports=") {
+				return strings.TrimPrefix(line, "ports=")
+			}
+		}
+		return "missing ports field"
+	}
+	if ports := selected(); ports != "7443,8443" {
+		t.Fatalf("wrong selected ordinary ports: %q", ports)
 	}
 	writeConfig("telemt-1.toml", false, 8443)
-	if output := status(); !strings.Contains(output, "ports=7443") || strings.Contains(output, "8443") {
-		t.Fatalf("disabling one MEKO inbound must not affect another: %s", output)
+	if ports := selected(); ports != "7443" {
+		t.Fatalf("disabling one MEKO inbound must not affect another: %q", ports)
 	}
 	writeConfig("telemt-3.toml", false, 7443)
-	if output := status(); !strings.Contains(output, "ports=") || strings.Contains(output, "ports=7") {
-		t.Fatalf("no opted-in inbounds should yield no MEKO ports: %s", output)
+	if ports := selected(); ports != "" {
+		t.Fatalf("no opted-in inbounds should yield no MEKO ports: %q", ports)
 	}
 }
 
