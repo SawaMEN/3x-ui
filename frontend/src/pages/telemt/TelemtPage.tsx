@@ -65,6 +65,7 @@ type WebProxyStatus = {
 };
 
 type WebPreflight = {
+  requestKey?: string;
   ready: boolean;
   domain: string;
   frontend: string;
@@ -166,7 +167,6 @@ export default function TelemtPage() {
   const [webProxyLoading, setWebProxyLoading] = useState(false);
   const [webProxyOpen, setWebProxyOpen] = useState(false);
   const [webPreflight, setWebPreflight] = useState<WebPreflight | null>(null);
-  const [webPreflightChecking, setWebPreflightChecking] = useState(false);
   const [webPreflightRefresh, setWebPreflightRefresh] = useState(0);
   const webForm = useZodForm(TelemtWebProxyRequestSchema, {
     defaultValues: { domain: '', frontend: 'nginx', carrier: 'https', carriers: [] },
@@ -176,14 +176,17 @@ export default function TelemtPage() {
   const webCarrier = webForm.watch('carrier');
   const webCarriers = webForm.watch('carriers');
   const webCarriersKey = (webCarriers || []).join('|');
+  const webPreflightKey = JSON.stringify([
+    webProxyDomain, webFrontend, webCarrier, webCarriersKey, webPreflightRefresh,
+  ]);
+  const webPreflightCurrent = webPreflight?.requestKey === webPreflightKey ? webPreflight : null;
+  const webPreflightChecking = webProxyOpen && webPreflightCurrent === null;
 
   // Validate the proposed domain/frontend, not the last saved configuration.
   // Ignore out-of-order responses when the form is edited during a DNS probe.
   useEffect(() => {
     if (!webProxyOpen) return;
     let active = true;
-    setWebPreflight(null);
-    setWebPreflightChecking(true);
     const timer = window.setTimeout(async () => {
       try {
         const response = await HttpUtil.post<WebPreflight>(
@@ -198,10 +201,11 @@ export default function TelemtPage() {
         );
         if (!active) return;
         if (response?.success && response.obj) {
-          setWebPreflight(response.obj);
+          setWebPreflight({ ...response.obj, requestKey: webPreflightKey });
         } else {
           setWebPreflight({
             ready: false,
+            requestKey: webPreflightKey,
             domain: webProxyDomain || '',
             frontend: webFrontend || 'nginx',
             checks: [{ id: 'request', ok: false, message: response?.msg || 'Ошибка проверки WEB Proxy' }],
@@ -211,20 +215,19 @@ export default function TelemtPage() {
       } catch {
         if (active) setWebPreflight({
           ready: false,
+          requestKey: webPreflightKey,
           domain: webProxyDomain || '',
           frontend: webFrontend || 'nginx',
           checks: [{ id: 'network', ok: false, message: 'Не удалось связаться с сервером для проверки WEB Proxy.' }],
           warnings: [],
         });
-      } finally {
-        if (active) setWebPreflightChecking(false);
       }
     }, 400);
     return () => {
       active = false;
       window.clearTimeout(timer);
     };
-  }, [webProxyOpen, webProxyDomain, webFrontend, webCarrier, webCarriersKey, webPreflightRefresh]);
+  }, [webProxyOpen, webProxyDomain, webFrontend, webCarrier, webCarriersKey, webPreflightKey]);
 
   const loadStatus = useCallback(async () => {
     const r = await HttpUtil.get<Status>('/panel/api/telemt/status');
@@ -812,7 +815,7 @@ export default function TelemtPage() {
               !status.installed ||
               !status.webProxy.supported ||
               webPreflightChecking ||
-              !webPreflight?.ready
+              !webPreflightCurrent?.ready
             }
           >
             {status.webProxy.enabled ? 'Применить' : 'Поднять'}
@@ -913,24 +916,24 @@ export default function TelemtPage() {
             </Button>
           </Space>
           {webPreflightChecking && <Alert type="info" showIcon message="Проверяются DNS, порты, Telemt, frontend и TLS…" />}
-          {!webPreflightChecking && webPreflight && (
+          {!webPreflightChecking && webPreflightCurrent && (
             <>
               <Alert
-                type={webPreflight.ready ? 'success' : 'error'}
+                type={webPreflightCurrent.ready ? 'success' : 'error'}
                 showIcon
-                message={webPreflight.ready ? 'Предварительные проверки пройдены' : 'Запуск заблокирован до устранения ошибок'}
-                description={webPreflight.ready
+                message={webPreflightCurrent.ready ? 'Предварительные проверки пройдены' : 'Запуск заблокирован до устранения ошибок'}
+                description={webPreflightCurrent.ready
                   ? 'Компоненты и сертификат будут настроены автоматически. Проверьте замечания о внешней сети ниже.'
                   : 'Исправьте условия с отметкой «Ошибка». До этого конфигурация не изменяется.'}
               />
               <Descriptions size="small" column={1} bordered>
-                {webPreflight.checks.map((check) => (
+                {webPreflightCurrent.checks.map((check) => (
                   <Descriptions.Item key={check.id} label={<Tag color={check.ok ? 'success' : 'error'}>{check.ok ? 'OK' : 'Ошибка'}</Tag>}>
                     {check.message}
                   </Descriptions.Item>
                 ))}
               </Descriptions>
-              {webPreflight.warnings.map((warning) => (
+              {webPreflightCurrent.warnings.map((warning) => (
                 <Alert key={warning} type="warning" showIcon message={warning} />
               ))}
             </>
@@ -949,7 +952,7 @@ export default function TelemtPage() {
                 : 'автоматический выпуск при успешной проверке выше'}
             </Descriptions.Item>
             <Descriptions.Item label="443">
-              {webPreflight?.checks.find((check) => check.id === 'https-port')?.ok
+              {webPreflightCurrent?.checks.find((check) => check.id === 'https-port')?.ok
                 ? 'готов для выбранного frontend'
                 : 'см. предварительную проверку'}
             </Descriptions.Item>
