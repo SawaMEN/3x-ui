@@ -301,6 +301,11 @@ func ensureTelemtMekoAssets() error {
 }
 
 func (TelemtService) SaveMekoConfig(cfg TelemtMekoConfig) error {
+	// MEKO activation is owned by selected ordinary MTProto inbounds, never
+	// by the deprecated global Telemt switch or an arbitrary API payload.
+	// Legacy callers may still change default rate/burst, but cannot disable
+	// protection for an opted-in port or enable it on unrelated listeners.
+	cfg.Enabled = len(discoverTelemtMekoPorts()) > 0
 	if err := validateTelemtMekoConfig(cfg); err != nil {
 		return err
 	}
