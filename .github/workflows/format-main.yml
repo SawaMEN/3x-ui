@@ -2,11 +2,10 @@ name: Format main
 
 on:
   push:
-    branches: [main, fix/telemt-web-automation]
+    branches: [main]
     paths:
       - "frontend/src/**"
       - "frontend/tools/**"
-      - ".github/workflows/format-main.yml"
 
 permissions:
   contents: write
@@ -34,4 +33,4 @@ jobs:
           git add frontend/src
           if git diff --cached --quiet; then exit 0; fi
           git commit -m "chore(format): apply oxfmt"
-          git push origin HEAD:${{ github.ref_name }}
+          git push origin HEAD:main
