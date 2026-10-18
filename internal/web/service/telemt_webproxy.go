@@ -80,6 +80,7 @@ type TelemtWebProxyStatus struct {
 	CertificateReady            bool     `json:"certificateReady"`
 	CertificateFile             string   `json:"certificateFile"`
 	ListenPort                  int      `json:"listenPort"`
+	Port443Free                 bool     `json:"port443Free"`
 	Port443Available            bool     `json:"port443Available"`
 	Port443Owner                string   `json:"port443Owner"`
 	Error                       string   `json:"error"`
@@ -274,7 +275,7 @@ func (TelemtService) WebProxyStatus(defaultDomain, panelCert, panelKey string) (
 	nginxOwns443 := telemtWebNginxOwnsPort443()
 	frontendActive := state.Enabled && telemtWebFrontendActive(state) && (frontend != "nginx" || nginxOwns443)
 	portOwner := telemtWebPortOwner(443)
-	status := TelemtWebProxyStatus{Frontend: frontend, FrontendActive: frontendActive, Carrier: telemtWebCarrier(state), Carriers: state.Carriers, CarrierNegotiationSupported: telemtWebVersionAtLeast(version, "3.5.4"), Enabled: state.Enabled, Supported: telemtWebVersionAtLeast(version, telemtWebMinEngine), Domain: state.Domain, DefaultDomain: defaultDomain, NginxInstalled: telemtWebCommandExists("nginx"), NginxActive: nginxActive, Port443Available: telemtWebFrontendCanOwn443(state), Port443Owner: portOwner, ListenPort: state.ListenPort, CertificateFile: state.CertFile}
+	status := TelemtWebProxyStatus{Frontend: frontend, FrontendActive: frontendActive, Carrier: telemtWebCarrier(state), Carriers: state.Carriers, CarrierNegotiationSupported: telemtWebVersionAtLeast(version, "3.5.4"), Enabled: state.Enabled, Supported: telemtWebVersionAtLeast(version, telemtWebMinEngine), Domain: state.Domain, DefaultDomain: defaultDomain, NginxInstalled: telemtWebCommandExists("nginx"), NginxActive: nginxActive, Port443Free: telemtWebPortAvailable(443), Port443Available: telemtWebFrontendCanOwn443(state), Port443Owner: portOwner, ListenPort: state.ListenPort, CertificateFile: state.CertFile}
 	if state.Enabled && state.Domain != "" && state.Secret != "" {
 		status.Link = telemtWebLink(state.Domain, state.Secret)
 	}
