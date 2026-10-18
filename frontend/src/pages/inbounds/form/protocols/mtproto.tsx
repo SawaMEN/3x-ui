@@ -23,7 +23,7 @@ export default function MtprotoFields() {
     <>
       <FormField
         name={['settings', 'webProxy', 'enabled']}
-        label={i18n.resolvedLanguage?.startsWith('ru') ? 'Отдельный WEB Proxy (HTTPS)' : 'Separate WEB Proxy (HTTPS)'}
+        label={`${t('menu.telemt')} · WEB Proxy (HTTPS)`}
         tooltip={i18n.resolvedLanguage?.startsWith('ru') ? 'Входящий MTProto создаёт и автоматически запускает WEB Proxy через HTTPS. Отдельно включать Telemt не требуется.' : 'This MTProto inbound automatically provisions the HTTPS WEB Proxy. No separate Telemt toggle is needed.'}
         valueProp="checked"
       >
