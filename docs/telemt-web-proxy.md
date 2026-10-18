@@ -8,7 +8,9 @@ lifecycles from enabled MTProto inbounds:
 - **Ordinary MTProto**: in **Входящие → Создать подключение → MTProto**, leave
   WEB Proxy disabled. The panel runs a supervised Telemt sidecar for the
   inbound; removing/disabling the inbound stops that sidecar. Links are
-  `tg://proxy` in the usual client, QR and subscription workflows.
+  `tg://proxy` in the usual client, QR and subscription workflows. The optional
+  **Fix by MEKO V3** switch is bound to this inbound's TCP port and defaults
+  to off. It does not apply to any WEB Proxy frontend/backend or other ports.
 - **WEB Proxy**: in the same MTProto form, enable **WEB Proxy (HTTPS)**, provide
   a public domain and choose nginx, Caddy or HAProxy and HTTP carrier(s).
   The WEB frontend and its Telemt backend are provisioned from the inbound.
