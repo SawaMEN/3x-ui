@@ -8,6 +8,7 @@ import { useOutboundTags } from '@/api/queries/useOutboundTags';
 export default function MtprotoFields() {
   const { t, i18n } = useTranslation();
   const { control } = useFormContext();
+  const webProxyEnabled = useWatch({ control, name: 'settings.webProxy.enabled' }) as boolean | undefined;
   const routeThroughXray = useWatch({ control, name: 'settings.routeThroughXray' }) as
     | boolean
     | undefined;
@@ -20,6 +21,32 @@ export default function MtprotoFields() {
 
   return (
     <>
+      <FormField
+        name={['settings', 'webProxy', 'enabled']}
+        label={i18n.resolvedLanguage?.startsWith('ru') ? 'Отдельный WEB Proxy (HTTPS)' : 'Separate WEB Proxy (HTTPS)'}
+        tooltip={i18n.resolvedLanguage?.startsWith('ru') ? 'Входящий MTProto создаёт и автоматически запускает WEB Proxy через HTTPS. Отдельно включать Telemt не требуется.' : 'This MTProto inbound automatically provisions the HTTPS WEB Proxy. No separate Telemt toggle is needed.'}
+        valueProp="checked"
+      >
+        <Switch />
+      </FormField>
+      {webProxyEnabled && (
+        <>
+          <FormField name={['settings', 'webProxy', 'domain']} label="Домен WEB Proxy">
+            <Input placeholder="web.example.com" />
+          </FormField>
+          <FormField name={['settings', 'webProxy', 'frontend']} label="HTTPS frontend">
+            <Select options={['nginx', 'caddy', 'haproxy'].map(value => ({value, label:value}))} />
+          </FormField>
+          <FormField name={['settings', 'webProxy', 'carrier']} label="WEB carrier">
+            <Select options={['https','https-lanes','websocket','websocket-lanes'].map(value => ({value, label:value}))} />
+          </FormField>
+          <FormField name={['settings', 'webProxy', 'carriers']} label="Приоритет транспортов">
+            <Select mode="multiple" options={['https','https-lanes','websocket','websocket-lanes'].map(value => ({value, label:value}))} />
+          </FormField>
+        </>
+      )}
+      {!webProxyEnabled && (
+      <>
       <FormField
         name={['settings', 'fakeTlsDomain']}
         label={t('pages.inbounds.form.fakeTlsDomain')}
@@ -58,7 +85,7 @@ export default function MtprotoFields() {
         </FormField>
       )}
       <Collapse
-        items={[
+        items={[ 
           {
             key: 'advanced',
             label: t('pages.inbounds.form.telemtAdvanced'),
@@ -189,6 +216,8 @@ export default function MtprotoFields() {
           },
         ]}
       />
+      </>
+      )}
     </>
   );
 }
