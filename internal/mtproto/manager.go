@@ -38,6 +38,8 @@ type Instance struct {
 	Port    int
 	Secrets []SecretEntry
 	MekoFix bool
+	MekoRatePerMinute int
+	MekoBurst int
 
 	Debug                     bool
 	ProxyProtocolListener     bool
@@ -72,6 +74,8 @@ func (inst Instance) structuralFingerprint() string {
 		inst.bindTo(),
 		strconv.FormatBool(inst.Debug),
 		strconv.FormatBool(inst.MekoFix),
+		strconv.Itoa(inst.MekoRatePerMinute),
+		strconv.Itoa(inst.MekoBurst),
 		strconv.FormatBool(inst.ProxyProtocolListener),
 		inst.PreferIP,
 		strconv.Itoa(inst.ThrottleMaxConnections),
@@ -203,6 +207,8 @@ func InstanceFromInbound(ib *model.Inbound) (Instance, bool) {
 		ProxyProtocolListener     bool     `json:"proxyProtocolListener"`
 		Debug                     bool     `json:"debug"`
 		MekoFix                   bool     `json:"mekoFix"`
+		MekoRatePerMinute         int      `json:"mekoRatePerMinute"`
+		MekoBurst                 int      `json:"mekoBurst"`
 		FakeTLSDomain             string   `json:"fakeTlsDomain"`
 		TLSMask                   *bool    `json:"tlsMask"`
 		AllowLegacyModes          *bool    `json:"allowLegacyModes"`
@@ -298,6 +304,8 @@ func InstanceFromInbound(ib *model.Inbound) (Instance, bool) {
 		Port:                      ib.Port,
 		Secrets:                   secrets,
 		MekoFix:                   parsed.MekoFix,
+		MekoRatePerMinute:         parsed.MekoRatePerMinute,
+		MekoBurst:                 parsed.MekoBurst,
 		Debug:                     parsed.Debug,
 		ProxyProtocolListener:     parsed.ProxyProtocolListener,
 		PreferIP:                  parsed.PreferIP,
@@ -650,6 +658,12 @@ func renderConfig(inst Instance, apiPort int, apiToken string) string {
 		// Only configs explicitly marked by an ordinary MTProto inbound may
 		// contribute ports to the MEKO firewall rule set.
 		b.WriteString("# x-ui-meko-fix=1\n")
+		if inst.MekoRatePerMinute >= 1 && inst.MekoRatePerMinute <= 60000 {
+			fmt.Fprintf(&b, "# x-ui-meko-rate=%d\n", inst.MekoRatePerMinute)
+		}
+		if inst.MekoBurst >= 1 && inst.MekoBurst <= 1000 {
+			fmt.Fprintf(&b, "# x-ui-meko-burst=%d\n", inst.MekoBurst)
+		}
 	}
 	fmt.Fprintf(&b, "[general]\ndata_path = %s\nfast_mode = true\nuse_middle_proxy = %t\n", tomlQuote(filepath.Join(configDir(), "state", strconv.Itoa(inst.Id))), inst.useMiddleProxy())
 	if inst.Debug {
