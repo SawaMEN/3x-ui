@@ -141,7 +141,7 @@ const isDependencyInstallable = (dependency: DependencyStatus) =>
 
 const dependencyNeedsAction = (dependency: DependencyStatus) => {
   // Installation remains possible when the version endpoint is unreachable.
-  if (dependency.key === 'telemt') {
+  if (dependency.key === 'telemt' || dependency.key === 'olcrtc') {
     return !dependency.installed || dependency.updateAvailable;
   }
   if (!dependency.availableVersion) return false;
@@ -360,7 +360,7 @@ export default function SystemUpdateModal({
       source: 'standalone',
       installed: olcrtc.obj?.installed === true,
       installedVersion: olcrtc.obj?.installedVersion || '',
-      availableVersion: olcrtc.obj?.availableVersion || 'upstream',
+      availableVersion: olcrtc.obj?.availableVersion || '',
       updateAvailable: olcrtc.obj?.updateAvailable === true,
       supported: olcrtc.obj?.supported,
       unsupportedReason: olcrtc.obj?.unsupportedReason,
@@ -1050,7 +1050,7 @@ export default function SystemUpdateModal({
                                   !(isDependencyInstallable(action) && !action.installed)) ||
                                 (!action.availableVersion &&
                                   !(
-                                    action.key === 'telemt' &&
+                                    (action.key === 'telemt' || action.key === 'olcrtc') &&
                                     (!action.installed || action.updateAvailable)
                                   )) ||
                                 dependencyBusy !== null ||

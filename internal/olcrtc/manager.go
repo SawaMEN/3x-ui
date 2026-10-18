@@ -215,6 +215,9 @@ func remoteRevision(ctx context.Context) string {
 	}
 	if len(revisions) == 2 {
 		updateCache.sha = strings.Join(revisions, "|")
+	} else {
+		// A failed lookup must not keep advertising a stale upstream revision.
+		updateCache.sha = ""
 	}
 	updateCache.when = time.Now()
 	return updateCache.sha
@@ -235,21 +238,20 @@ func revisionLabel(value string) string {
 func GetStatus(ctx context.Context) Status {
 	yes, reason := Supported()
 	result := Status{Installed: installed(), Supported: yes, UnsupportedReason: reason}
+	// Show real upstream revisions even before installation, when reachable.
+	latest := ""
+	if _, err := exec.LookPath("git"); err == nil {
+		latest = remoteRevision(ctx)
+	}
+	result.AvailableVersion = revisionLabel(latest)
 	if result.Installed {
 		check, cancel := context.WithTimeout(ctx, 3*time.Second)
 		output, err := run(check, "systemctl", "is-active", "olcrtc-manager")
 		cancel()
 		result.Running = err == nil && output == "active"
 		current := readRevisions()
-		latest := ""
-		if _, e := exec.LookPath("git"); e == nil {
-			latest = remoteRevision(ctx)
-		}
 		result.InstalledVersion = revisionLabel(current)
-		result.AvailableVersion = revisionLabel(latest)
 		result.UpdateAvailable = latest != "" && current != latest
-	} else {
-		result.AvailableVersion = "upstream"
 	}
 	state.Lock()
 	result.Busy = state.busy
@@ -306,6 +308,341 @@ func Start(operation string) error {
 	}()
 	return nil
 }
+// Upstream logs may include freshly generated admin credentials. Never expose
+// raw installer logs through the API: only allow-list executable names.
+var installerMissingCommand = regexp.MustCompile(`(?m)line [0-9]+: ([A-Za-z0-9_.+-]{1,64}): command not found// Package olcrtc manages the independent olcRTC server and its upstream manager.
+// It never modifies the panel's sing-box core or inbound configuration.
+package olcrtc
+
+import (
+	"bytes"
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"os"
+	"os/exec"
+	"regexp"
+	"runtime"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+)
+
+const (
+	configPath   = "/etc/olcrtc-manager/config.json"
+	envPath      = "/etc/olcrtc-manager/panel.env"
+	revisionPath = "/etc/olcrtc-manager/.3x-ui-revisions"
+	servicePath  = "/etc/systemd/system/olcrtc-manager.service"
+	// The installer is pinned to the reviewed upstream revision. Source branches
+	// used by upstream's installer are deliberately updated by Update().
+	installerURL = "https://raw.githubusercontent.com/BigDaddy3334/olcrtc-manager-panel/df626030d21d00286304bc8ef1e990e28c247a55/scripts/install.sh"
+	managerRepo  = "https://github.com/BigDaddy3334/olcrtc-manager-panel.git"
+	serverRepo   = "https://github.com/openlibrecommunity/olcrtc.git"
+)
+
+type Status struct {
+	Installed         bool   `json:"installed"`
+	Running           bool   `json:"running"`
+	InstalledVersion  string `json:"installedVersion"`
+	AvailableVersion  string `json:"availableVersion"`
+	UpdateAvailable   bool   `json:"updateAvailable"`
+	Supported         bool   `json:"supported"`
+	UnsupportedReason string `json:"unsupportedReason,omitempty"`
+	Busy              bool   `json:"busy"`
+	Operation         string `json:"operation,omitempty"`
+	Error             string `json:"error,omitempty"`
+}
+type SocksProxy struct {
+	Addr string `json:"addr,omitempty"`
+	Port int    `json:"port,omitempty"`
+	User string `json:"user,omitempty"`
+	Pass string `json:"pass,omitempty"`
+}
+type Location struct {
+	Name     string `json:"name"`
+	Endpoint struct {
+		RoomID string `json:"room_id"`
+		Key    string `json:"key"`
+	} `json:"endpoint"`
+	Carrier   string `json:"carrier"`
+	Transport struct {
+		Type    string            `json:"type"`
+		Payload map[string]string `json:"payload,omitempty"`
+	} `json:"transport"`
+	DNS   string     `json:"dns"`
+	Link  string     `json:"link,omitempty"`
+	Data  string     `json:"data,omitempty"`
+	Proxy SocksProxy `json:"proxy,omitempty"`
+}
+
+func SimpleLocation(loc Location) bool {
+	return len(loc.Transport.Payload) == 0 &&
+		loc.Proxy == (SocksProxy{}) &&
+		(loc.Link == "" || loc.Link == "direct") &&
+		(loc.Data == "" || loc.Data == "data")
+}
+
+type Quota struct {
+	SpeedMbps int    `json:"speed_mbps,omitempty"`
+	TrafficGB int    `json:"traffic_gb,omitempty"`
+	UsedGB    int    `json:"used_gb,omitempty"`
+	UsedBytes uint64 `json:"used_bytes,omitempty"`
+	ExpiresAt string `json:"expires_at,omitempty"`
+}
+type Client struct {
+	ID        string     `json:"client-id"`
+	Refresh   string     `json:"refresh,omitempty"`
+	Quota     Quota      `json:"quota,omitempty"`
+	Locations []Location `json:"locations"`
+}
+type clientConfig struct {
+	Clients []Client `json:"clients"`
+	Port    int      `json:"port"`
+}
+type ClientInput struct {
+	ClientID  string `json:"client_id"`
+	RoomID    string `json:"room_id"`
+	Key       string `json:"key"`
+	Carrier   string `json:"carrier"`
+	Transport string `json:"transport"`
+	DNS       string `json:"dns"`
+	Name      string `json:"name"`
+	Refresh   string `json:"refresh,omitempty"`
+	Quota     *Quota `json:"quota,omitempty"`
+}
+
+var idPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$`)
+var state = struct {
+	sync.Mutex
+	busy      bool
+	operation string
+	lastError string
+}{}
+var updateCache = struct {
+	sync.Mutex
+	when time.Time
+	sha  string
+}{}
+
+func Supported() (bool, string) {
+	if runtime.GOOS != "linux" || (runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64") {
+		return false, "OlcRTC поддерживается здесь на Linux amd64/arm64"
+	}
+	if os.Geteuid() != 0 {
+		return false, "Для установки нужны права root"
+	}
+	if installerPackageManager() == "" {
+		return false, "Автоматическая установка доступна для Debian/Ubuntu (apt) и Arch Linux (pacman)"
+	}
+	if _, err := exec.LookPath("systemctl"); err != nil {
+		return false, "Для установки необходим systemd"
+	}
+	return true, ""
+}
+// Prefer the distribution's own package manager. Do not run pacman -Sy
+// from the panel: a partial Arch upgrade can leave the host inconsistent.
+func installerPackageManager() string {
+	data, _ := os.ReadFile("/etc/os-release")
+	id := ""
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(line, "ID=") {
+			id = strings.Trim(strings.TrimPrefix(line, "ID="), "\"'")
+			break
+		}
+	}
+	if id == "arch" {
+		if _, err := exec.LookPath("pacman"); err == nil {
+			return "pacman"
+		}
+		return ""
+	}
+	if _, err := exec.LookPath("apt-get"); err == nil {
+		return "apt"
+	}
+	return ""
+}
+
+// The upstream installer is pinned but currently accepts apt only. Add the
+// Arch-specific dependency installation before the apt branch without forking
+// its build/service setup. Fail closed if upstream changes this anchor.
+func addArchPackagesToInstaller(original []byte) ([]byte, error) {
+	const marker = "install_packages() {\n"
+	const aptOnly = "unsupported OS: this installer currently supports apt-based Linux distributions"
+	if bytes.Count(original, []byte(marker)) != 1 || !bytes.Contains(original, []byte(aptOnly)) {
+		return nil, errors.New("upstream OlcRTC installer changed; refusing unsafe Arch patch")
+	}
+	const arch = "	if command -v pacman >/dev/null 2>&1; then\n" +
+		"		pacman -S --noconfirm --needed ca-certificates curl git tar xz iproute2 iptables openssl\n" +
+		"		return\n" +
+		"	fi\n"
+	return bytes.Replace(original, []byte(marker), []byte(marker+arch), 1), nil
+}
+
+func installed() bool {
+	a, e := os.Stat("/usr/local/bin/olcrtc")
+	if e != nil || a.IsDir() {
+		return false
+	}
+	b, e := os.Stat("/usr/local/bin/olcrtc-manager")
+	return e == nil && !b.IsDir()
+}
+func run(ctx context.Context, name string, args ...string) (string, error) {
+	cmd := exec.CommandContext(ctx, name, args...)
+	out, err := cmd.CombinedOutput()
+	return strings.TrimSpace(string(out)), err
+}
+func readRevisions() string {
+	data, _ := os.ReadFile(revisionPath)
+	return strings.TrimSpace(string(data))
+}
+func remoteRevision(ctx context.Context) string {
+	updateCache.Lock()
+	defer updateCache.Unlock()
+	if time.Since(updateCache.when) < 5*time.Minute {
+		return updateCache.sha
+	}
+	revisions := make([]string, 0, 2)
+	for _, item := range []struct{ repo, ref string }{{managerRepo, "refs/heads/main"}, {serverRepo, "refs/heads/master"}} {
+		short, cancel := context.WithTimeout(ctx, 7*time.Second)
+		output, err := run(short, "git", "ls-remote", item.repo, item.ref)
+		cancel()
+		if err != nil {
+			revisions = nil
+			break
+		}
+		fields := strings.Fields(output)
+		if len(fields) == 0 || len(fields[0]) != 40 {
+			revisions = nil
+			break
+		}
+		revisions = append(revisions, fields[0])
+	}
+	if len(revisions) == 2 {
+		updateCache.sha = strings.Join(revisions, "|")
+	} else {
+		// A failed lookup must not keep advertising a stale upstream revision.
+		updateCache.sha = ""
+	}
+	updateCache.when = time.Now()
+	return updateCache.sha
+}
+func revisionLabel(value string) string {
+	parts := strings.Split(value, "|")
+	if len(parts) != 2 {
+		return value
+	}
+	shorten := func(sha string) string {
+		if len(sha) > 8 {
+			return sha[:8]
+		}
+		return sha
+	}
+	return "manager " + shorten(parts[0]) + " / olcrtc " + shorten(parts[1])
+}
+func GetStatus(ctx context.Context) Status {
+	yes, reason := Supported()
+	result := Status{Installed: installed(), Supported: yes, UnsupportedReason: reason}
+	// Show real upstream revisions even before installation, when reachable.
+	latest := ""
+	if _, err := exec.LookPath("git"); err == nil {
+		latest = remoteRevision(ctx)
+	}
+	result.AvailableVersion = revisionLabel(latest)
+	if result.Installed {
+		check, cancel := context.WithTimeout(ctx, 3*time.Second)
+		output, err := run(check, "systemctl", "is-active", "olcrtc-manager")
+		cancel()
+		result.Running = err == nil && output == "active"
+		current := readRevisions()
+		result.InstalledVersion = revisionLabel(current)
+		result.UpdateAvailable = latest != "" && current != latest
+	}
+	state.Lock()
+	result.Busy = state.busy
+	result.Operation = state.operation
+	result.Error = state.lastError
+	state.Unlock()
+	return result
+}
+
+// Start launches a single long-running installation operation; the HTTP request
+// returns immediately and the UI polls status. No user-controlled commands.
+func Start(operation string) error {
+	if operation != "install" && operation != "update" && operation != "remove" && operation != "restart" {
+		return errors.New("unknown OlcRTC operation")
+	}
+	if operation != "remove" {
+		if yes, reason := Supported(); !yes {
+			return errors.New(reason)
+		}
+	}
+	state.Lock()
+	if state.busy {
+		state.Unlock()
+		return errors.New("OlcRTC operation is already running")
+	}
+	state.busy = true
+	state.operation = operation
+	state.lastError = ""
+	state.Unlock()
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 35*time.Minute)
+		defer cancel()
+		var err error
+		switch operation {
+		case "remove":
+			err = remove(ctx)
+		case "restart":
+			if !installed() {
+				err = errors.New("OlcRTC is not installed")
+			} else {
+				_, err = run(ctx, "systemctl", "restart", "olcrtc-manager")
+			}
+		default:
+			err = install(ctx)
+		}
+		state.Lock()
+		state.busy = false
+		if err != nil {
+			state.lastError = err.Error()
+		} else {
+			state.lastError = ""
+		}
+		state.Unlock()
+	}()
+	return nil
+}
+)
+
+func installerFailure(err error, logPath string) error {
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && exitErr.ExitCode() == 127 {
+		if output, readErr := os.ReadFile(logPath); readErr == nil {
+			matches := installerMissingCommand.FindAllSubmatch(output, -1)
+			for i := len(matches) - 1; i >= 0; i-- {
+				command := string(matches[i][1])
+				switch command {
+				case "go", "git", "curl", "tar", "apt-get", "pacman", "systemctl",
+					"bash", "hostname", "awk", "sed", "sort", "head", "grep", "install",
+					"ln", "rm", "mkdir", "mktemp", "ss", "seq", "od", "tr", "openssl",
+					"chmod", "fallocate", "mkswap", "swapon", "dd", "cat", "ip", "iptables", "tc":
+					return fmt.Errorf("OlcRTC installer: command %q not found (exit status 127); check PATH and packages", command)
+				}
+			}
+		}
+		return errors.New("OlcRTC installer: required command not found (exit status 127); check PATH and packages")
+	}
+	return fmt.Errorf("OlcRTC installation failed; check system packages, free RAM and Go toolchain (%w)", err)
+}
+
 func install(ctx context.Context) error {
 	if installed() {
 		if _, err := os.Stat(revisionPath); err != nil {
@@ -355,6 +692,9 @@ func install(ctx context.Context) error {
 	cmd := exec.CommandContext(ctx, "bash", name)
 	// Never publish the independent admin interface. Native settings go through 3x-ui.
 	cmd.Env = append(os.Environ(),
+		// The Go toolchain installed by upstream must be available to the
+		// script even if systemd launched 3x-ui without /usr/local/bin in PATH.
+		"PATH=/usr/local/go/bin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
 		"PANEL_ADDR=127.0.0.1", "PANEL_TLS=0",
 		"PANEL_ADMIN_PATH=/admin", "AUTO_SWAP=0")
 	// Installer logs include a generated password: never return them to browsers.
@@ -367,15 +707,24 @@ func install(ctx context.Context) error {
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("OlcRTC installation failed; check system packages, free RAM and Go toolchain (%w)", err)
+		return installerFailure(err, logFile.Name())
 	}
 	if _, err := run(ctx, "systemctl", "restart", "olcrtc-manager"); err != nil {
 		return fmt.Errorf("installed but unable to restart olcrtc-manager: %w", err)
 	}
-	if before == "" {
-		before = "unknown|unknown"
+	// git may have been installed by this run; bypass the preinstall cache.
+	updateCache.Lock()
+	updateCache.when = time.Time{}
+	updateCache.sha = ""
+	updateCache.Unlock()
+	after := remoteRevision(ctx)
+	if after == "" {
+		after = before
 	}
-	if err := os.WriteFile(revisionPath, []byte(before+"\n"), 0600); err != nil {
+	if after == "" {
+		after = "unknown|unknown"
+	}
+	if err := os.WriteFile(revisionPath, []byte(after+"\n"), 0600); err != nil {
 		return err
 	}
 	return nil

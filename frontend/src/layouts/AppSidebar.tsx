@@ -110,6 +110,35 @@ function AppSidebar() {
   const { allSetting } = useAllSettings();
   const showSubFormats = !!(allSetting.subJsonEnable || allSetting.subClashEnable);
   const showSubBalancers = !!allSetting.subJsonEnable;
+  const [olcrtcInstalled, setOlcrtcInstalled] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    const refreshOlcRTC = async () => {
+      try {
+        const response = (await HttpUtil.get('/panel/api/olcrtc/status', undefined, {
+          silent: true,
+        })) as { success?: boolean; obj?: { installed?: boolean } };
+        if (active && response.success && response.obj) {
+          setOlcrtcInstalled(response.obj.installed === true);
+        }
+      } catch {
+        // Do not show the menu before a confirmed installation. Preserve the
+        // last successful state if a later request fails temporarily.
+      }
+    };
+    void refreshOlcRTC();
+    const timer = window.setInterval(() => {
+      if (!document.hidden) void refreshOlcRTC();
+    }, 15000);
+    window.addEventListener('focus', refreshOlcRTC);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refreshOlcRTC);
+    };
+  }, []);
+
   const firewallTitle = (i18n.resolvedLanguage || i18n.language || '')
     .toLowerCase()
     .startsWith('ru')
@@ -248,7 +277,9 @@ function AppSidebar() {
       { key: '/', icon: 'dashboard' as IconName, title: t('menu.dashboard') },
       { key: '/inbounds', icon: 'inbound' as IconName, title: t('menu.inbounds') },
       { key: '/clients', icon: 'team' as IconName, title: t('menu.clients') },
-      { key: '/olcrtc', icon: 'team' as IconName, title: 'OlcRTC — клиенты' },
+      ...(olcrtcInstalled
+        ? [{ key: '/olcrtc', icon: 'team' as IconName, title: 'OlcRTC — клиенты' }]
+        : []),
       { key: '/groups', icon: 'groups' as IconName, title: t('menu.groups') },
       { key: '/nodes', icon: 'cluster' as IconName, title: t('menu.nodes') },
       { key: '/hosts', icon: 'hosts' as IconName, title: t('menu.hosts') },
@@ -265,7 +296,7 @@ function AppSidebar() {
       { key: LOGOUT_KEY, icon: 'logout' as IconName, title: t('logout') },
     ];
     return base;
-  }, [t, firewallTitle, singBoxChildren]);
+  }, [t, firewallTitle, singBoxChildren, olcrtcInstalled]);
 
   const navItems = useMemo(() => tabs.filter((tab) => tab.icon !== 'logout'), [tabs]);
   const utilItems = useMemo(() => tabs.filter((tab) => tab.icon === 'logout'), [tabs]);
