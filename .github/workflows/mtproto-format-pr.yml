@@ -18,12 +18,12 @@ jobs:
           go-version-file: go.mod
       - uses: actions/setup-node@v7
         with:
-          node-version-file: frontend/.nvmrc
+          node-version-file: .nvmrc
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - name: Canonical Go formatting
         run: |
-          gofmt -w internal/mtproto/manager.go internal/web/runtime/local.go internal/web/service/inbound_mtproto.go internal/web/service/inbound.go internal/web/service/mtproto_web.go internal/web/service/telemt_webproxy.go internal/web/job/mtproto_job.go internal/sub/service.go
+          gofmt -w internal/mtproto/manager.go internal/web/runtime/local.go internal/web/service/inbound_mtproto.go internal/web/service/inbound.go internal/web/service/mtproto_web.go internal/web/service/telemt.go internal/web/service/telemt_webproxy.go internal/web/job/mtproto_job.go internal/sub/service.go internal/sub/service_mtproto_test.go
       - name: Canonical frontend formatting
         working-directory: frontend
         run: |
