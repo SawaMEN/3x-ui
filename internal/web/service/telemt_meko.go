@@ -213,6 +213,11 @@ func (TelemtService) GetMekoConfig() TelemtMekoConfig {
 	if err := readTelemtMekoRuntime(&cfg); err != nil {
 		cfg.StatusError = err.Error()
 	}
+	mekoApplyError.RLock()
+	if cfg.StatusError == "" {
+		cfg.StatusError = mekoApplyError.message
+	}
+	mekoApplyError.RUnlock()
 	cfg.Healthy = cfg.StatusError == "" && (cfg.Enabled && cfg.Applied && sameMekoPorts(cfg.Ports, cfg.AppliedPorts) || !cfg.Enabled && !cfg.Applied && len(cfg.AppliedPorts) == 0)
 	if cfg.Ports == nil {
 		cfg.Ports = []int{}
@@ -339,6 +344,14 @@ func sameMekoPorts(a, b []int) bool {
 	return true
 }
 
+// The last application error belongs to the MEKO runtime, not to a single
+// request. Expose it alongside the actual kernel state instead of silently
+// logging a failed firewall change after the user saved an inbound.
+var mekoApplyError struct {
+	sync.RWMutex
+	message string
+}
+
 var mekoApplyState struct {
 	sync.Mutex
 	fingerprint string
@@ -376,7 +389,16 @@ func desiredMekoPolicyFingerprint(cfg TelemtMekoConfig) string {
 // currently generated from MTProto inbounds. It is intentionally a no-op when
 // the configured and applied port sets already match, so the hashlimit buckets
 // are not reset by every MTProto traffic polling cycle.
-func (TelemtService) RefreshMekoFix() error {
+func (TelemtService) RefreshMekoFix() (applyErr error) {
+	defer func() {
+		mekoApplyError.Lock()
+		if applyErr != nil {
+			mekoApplyError.message = applyErr.Error()
+		} else {
+			mekoApplyError.message = ""
+		}
+		mekoApplyError.Unlock()
+	}()
 	mekoApplyState.Lock()
 	defer mekoApplyState.Unlock()
 	cfg := TelemtService{}.GetMekoConfig()
@@ -392,6 +414,10 @@ func (TelemtService) RefreshMekoFix() error {
 	if !cfg.Applied && len(cfg.Ports) == 0 {
 		return nil
 	}
+	if cfg.Applied && sameMekoPorts(cfg.Ports, cfg.AppliedPorts) &&
+		mekoApplyState.fingerprint == fingerprint {
+		return nil
+	}
 	if err := ensureTelemtMekoAssets(); err != nil {
 		return err
 	}
@@ -402,10 +428,6 @@ func (TelemtService) RefreshMekoFix() error {
 		if err := systemctl("enable", "--now", telemtMekoServiceName); err != nil {
 			return err
 		}
-	}
-	if cfg.Applied && sameMekoPorts(cfg.Ports, cfg.AppliedPorts) &&
-		mekoApplyState.fingerprint == fingerprint {
-		return nil
 	}
 	_, err := runTelemtMekoScript("apply", cfg)
 	if err != nil {
