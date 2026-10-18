@@ -37,6 +37,12 @@ server {
     server_name other.example.com;
 }
 `
+	if !telemtWebNginxConfigHasHostPort(config, "acme.example.com", 80) {
+		t.Fatal("HTTP-only vhost should conflict with installing a duplicate HTTP-01 challenge vhost")
+	}
+	if telemtWebNginxConfigHasHostPort(config, "web.example.com", 80) {
+		t.Fatal("existing HTTPS WEB vhost is not an HTTP-01 conflict")
+	}
 	for _, tt := range []struct {
 		domain string
 		want bool
