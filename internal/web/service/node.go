@@ -1023,7 +1023,7 @@ func (s *NodeService) UpdateHeartbeat(id int, p HeartbeatPatch) error {
 		"xray_state":     p.XrayState,
 		"xray_error":     p.XrayError,
 	}
-	if p.Status == "online" {
+	if p.Status == "online" && p.PanelEdition != "" {
 		updates["panel_edition"] = p.PanelEdition
 	}
 	if p.CoreInfoKnown {
