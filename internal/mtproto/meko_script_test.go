@@ -156,7 +156,6 @@ esac
 	}
 }
 
-
 func TestMekoOnlySelectsExplicitOrdinaryInboundPorts(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("Linux MEKO helper")

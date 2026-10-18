@@ -32,14 +32,14 @@ type SecretEntry struct {
 }
 
 type Instance struct {
-	Id      int
-	Tag     string
-	Listen  string
-	Port    int
-	Secrets []SecretEntry
-	MekoFix bool
+	Id                int
+	Tag               string
+	Listen            string
+	Port              int
+	Secrets           []SecretEntry
+	MekoFix           bool
 	MekoRatePerMinute int
-	MekoBurst int
+	MekoBurst         int
 
 	Debug                     bool
 	ProxyProtocolListener     bool
