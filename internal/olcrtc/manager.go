@@ -127,14 +127,53 @@ func Supported() (bool, string) {
 	if os.Geteuid() != 0 {
 		return false, "Для установки нужны права root"
 	}
-	if _, err := exec.LookPath("apt-get"); err != nil {
-		return false, "Автоматическая установка поддерживает Debian/Ubuntu (apt)"
+	if installerPackageManager() == "" {
+		return false, "Автоматическая установка доступна для Debian/Ubuntu (apt) и Arch Linux (pacman)"
 	}
 	if _, err := exec.LookPath("systemctl"); err != nil {
 		return false, "Для установки необходим systemd"
 	}
 	return true, ""
 }
+// Prefer the distribution's own package manager. Do not run pacman -Sy
+// from the panel: a partial Arch upgrade can leave the host inconsistent.
+func installerPackageManager() string {
+	data, _ := os.ReadFile("/etc/os-release")
+	id := ""
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(line, "ID=") {
+			id = strings.Trim(strings.TrimPrefix(line, "ID="), "\"'")
+			break
+		}
+	}
+	if id == "arch" {
+		if _, err := exec.LookPath("pacman"); err == nil {
+			return "pacman"
+		}
+		return ""
+	}
+	if _, err := exec.LookPath("apt-get"); err == nil {
+		return "apt"
+	}
+	return ""
+}
+
+// The upstream installer is pinned but currently accepts apt only. Add the
+// Arch-specific dependency installation before the apt branch without forking
+// its build/service setup. Fail closed if upstream changes this anchor.
+func addArchPackagesToInstaller(original []byte) ([]byte, error) {
+	const marker = "install_packages() {\n"
+	const aptOnly = "unsupported OS: this installer currently supports apt-based Linux distributions"
+	if bytes.Count(original, []byte(marker)) != 1 || !bytes.Contains(original, []byte(aptOnly)) {
+		return nil, errors.New("upstream OlcRTC installer changed; refusing unsafe Arch patch")
+	}
+	const arch = "	if command -v pacman >/dev/null 2>&1; then\n" +
+		"		pacman -S --noconfirm --needed ca-certificates curl git tar xz iproute2 iptables openssl\n" +
+		"		return\n" +
+		"	fi\n"
+	return bytes.Replace(original, []byte(marker), []byte(marker+arch), 1), nil
+}
+
 func installed() bool {
 	a, e := os.Stat("/usr/local/bin/olcrtc")
 	if e != nil || a.IsDir() {
@@ -292,6 +331,12 @@ func install(ctx context.Context) error {
 	}
 	if !bytes.HasPrefix(data, []byte("#!/usr/bin/env bash")) {
 		return errors.New("unexpected upstream installer format")
+	}
+	if installerPackageManager() == "pacman" {
+		data, err = addArchPackagesToInstaller(data)
+		if err != nil {
+			return err
+		}
 	}
 	tmp, err := os.CreateTemp("", "olcrtc-installer-*.sh")
 	if err != nil {
