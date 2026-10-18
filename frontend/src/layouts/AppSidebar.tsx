@@ -205,11 +205,6 @@ function AppSidebar() {
         label: t('pages.settings.panelSettings'),
       },
       {
-        key: '/settings#olcrtc',
-        icon: <CloudServerOutlined />,
-        label: 'OlcRTC — клиенты',
-      },
-      {
         key: '/settings#security',
         icon: <SafetyOutlined />,
         label: t('security'),
@@ -253,6 +248,7 @@ function AppSidebar() {
       { key: '/', icon: 'dashboard' as IconName, title: t('menu.dashboard') },
       { key: '/inbounds', icon: 'inbound' as IconName, title: t('menu.inbounds') },
       { key: '/clients', icon: 'team' as IconName, title: t('menu.clients') },
+      { key: '/olcrtc', icon: 'team' as IconName, title: 'OlcRTC — клиенты' },
       { key: '/groups', icon: 'groups' as IconName, title: t('menu.groups') },
       { key: '/nodes', icon: 'cluster' as IconName, title: t('menu.nodes') },
       { key: '/hosts', icon: 'hosts' as IconName, title: t('menu.hosts') },

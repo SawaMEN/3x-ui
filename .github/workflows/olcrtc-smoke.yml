@@ -5,7 +5,7 @@ on:
     paths:
       - "internal/olcrtc/**"
       - "internal/web/controller/olcrtc.go"
-      - "frontend/src/pages/settings/OlcRTCClientsModal.tsx"
+      - "frontend/src/pages/olcrtc/**"
       - ".github/workflows/olcrtc-smoke.yml"
   workflow_dispatch:
 
@@ -32,6 +32,10 @@ jobs:
           curl --fail --show-error --silent --location "$INSTALLER_URL" -o /tmp/olcrtc-smoke-installer.sh
           bash -n /tmp/olcrtc-smoke-installer.sh
           sudo env PANEL_ADDR=127.0.0.1 PANEL_TLS=0 PANEL_ADMIN_PATH=/admin AUTO_SWAP=0 GO_BUILD_P=2 bash /tmp/olcrtc-smoke-installer.sh
+      - name: Validate the pinned upstream installer source
+        env:
+          OLCRTC_PINNED_INSTALLER_PATH: /tmp/olcrtc-smoke-installer.sh
+        run: go test -count=1 ./internal/olcrtc -run '^TestPinnedUpstreamArchInstaller$'
       - name: Verify service, loopback binding, credentials and local API
         run: |
           set -euo pipefail
@@ -75,3 +79,26 @@ jobs:
           sudo systemctl --no-pager --full status olcrtc-manager || true
           sudo journalctl -u olcrtc-manager -n 100 --no-pager || true
           # Never print panel.env or installer stdout: they contain admin credentials.
+
+  olcrtc-arch-installer:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: Update Arch packages and install test prerequisites
+        run: |
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm --needed go bash curl ca-certificates git tar xz iproute2 iptables openssl
+      - name: Validate Go integration on real Arch Linux
+        run: |
+          go version
+          go test -count=1 ./internal/olcrtc
+      - name: Patch the pinned production installer and validate Bash syntax
+        env:
+          OLCRTC_PINNED_INSTALLER_PATH: /tmp/olcrtc-pinned-installer.sh
+        run: |
+          curl --fail --show-error --silent --location \
+            https://raw.githubusercontent.com/BigDaddy3334/olcrtc-manager-panel/df626030d21d00286304bc8ef1e990e28c247a55/scripts/install.sh \
+            -o "$OLCRTC_PINNED_INSTALLER_PATH"
+          go test -count=1 ./internal/olcrtc -run '^Test(PinnedUpstreamArchInstaller|ArchRuntimeDetectsPacman)$' -v

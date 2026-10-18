@@ -12,7 +12,7 @@ type Status = {
 };
 type Response = { success?: boolean; msg?: string; obj?: Status };
 
-export default function OlcRTCSettingsTab() {
+export default function OlcRTCManagement() {
   const [status, setStatus] = useState<Status | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
