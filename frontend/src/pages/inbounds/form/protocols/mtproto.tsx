@@ -11,6 +11,7 @@ export default function MtprotoFields() {
   const webProxyEnabled = useWatch({ control, name: 'settings.webProxy.enabled' }) as
     | boolean
     | undefined;
+  const mekoEnabled = useWatch({ control, name: 'settings.mekoFix' }) as boolean | undefined;
   const routeThroughXray = useWatch({ control, name: 'settings.routeThroughXray' }) as
     | boolean
     | undefined;
@@ -78,6 +79,23 @@ export default function MtprotoFields() {
           >
             <Switch />
           </FormField>
+          {mekoEnabled && (
+            <>
+              <FormField
+                name={['settings', 'mekoRatePerMinute']}
+                label={i18n.resolvedLanguage?.startsWith('ru') ? 'Лимит SYN на IP (в минуту)' : 'SYN limit per IP (per minute)'}
+                tooltip={i18n.resolvedLanguage?.startsWith('ru') ? 'Для этого порта. Если пусто, используется общий лимит (обычно 54/мин). Слишком низкий лимит может затруднить подключение через NAT.' : 'Only this port. If empty, use the global limit (normally 54/min). Low limits may prevent connections behind NAT.'}
+              >
+                <InputNumber min={1} max={60000} placeholder="54" style={{ width: '100%' }} />
+              </FormField>
+              <FormField
+                name={['settings', 'mekoBurst']}
+                label={i18n.resolvedLanguage?.startsWith('ru') ? 'Допустимый всплеск SYN (burst)' : 'Allowed SYN burst'}
+              >
+                <InputNumber min={1} max={1000} placeholder="1" style={{ width: '100%' }} />
+              </FormField>
+            </>
+          )}
           <FormField
             name={['settings', 'fakeTlsDomain']}
             label={t('pages.inbounds.form.fakeTlsDomain')}
