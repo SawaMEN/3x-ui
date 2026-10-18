@@ -187,11 +187,11 @@ apply_nft() {
 
 apply() {
     mapfile -t ports < <(collect_ports)
-    # Legacy global MEKO=0 must not block a new per-inbound selection.
-    # Explicit TELEMT_MEKO_ENABLED in the command environment remains an
-    # override for tests, administrators and controlled removal.
-    if [[ ! -v TELEMT_MEKO_ENABLED && ${#ports[@]} -gt 0 ]]; then
-        ENABLED=1
+    # The selected inbound's switch wins over obsolete global service
+    # settings (systemd passes those as environment variables). An explicit
+    # TELEMT_PORTS override is reserved for administrative/test commands.
+    if [[ ! -v TELEMT_PORTS ]]; then
+        if (( ${#ports[@]} > 0 )); then ENABLED=1; else ENABLED=0; fi
     fi
     if ! enabled; then
         remove
@@ -290,7 +290,7 @@ status() {
         ' | sort -n)
     fi
     mapfile -t ports < <(collect_ports)
-    if [[ ! -v TELEMT_MEKO_ENABLED ]]; then
+    if [[ ! -v TELEMT_PORTS ]]; then
         if (( ${#ports[@]} > 0 )); then ENABLED=1; else ENABLED=0; fi
     fi
     printf 'enabled=%s\n' "$(enabled && echo true || echo false)"
