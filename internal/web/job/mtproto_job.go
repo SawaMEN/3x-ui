@@ -1,7 +1,9 @@
 package job
 
 import (
+	"context"
 	"sync"
+	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
@@ -103,4 +105,14 @@ func (j *MtprotoJob) Run() {
 	}
 
 	j.inboundService.RefreshLocalOnlineClients(onlineEmails, activeTags)
+	// WEB Proxy uses its own HTTPS frontend and Telemt backend, while ordinary
+	// MTProto inbounds above run as raw sidecars. Reconcile in a separate
+	// goroutine to avoid holding the traffic-poll lock during ACME requests.
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+		defer cancel()
+		if err := service.ReconcileMtprotoWebProxy(ctx); err != nil {
+			logger.Warning("mtproto job: reconcile WEB Proxy failed:", err)
+		}
+	}()
 }
