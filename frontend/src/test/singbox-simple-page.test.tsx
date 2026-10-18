@@ -271,6 +271,39 @@ describe('simple sing-box page', () => {
     expect(sent.dns.servers[0]).toMatchObject({ type: 'https', server: '9.9.9.9' });
   });
 
+  it('hides optional DNS component controls when they are not installed', async () => {
+    mount('/singbox#dns');
+    await screen.findByText(/Дополнительные DNS-компоненты не установлены/);
+    expect(screen.queryByText('Установленные DNS-компоненты')).toBeNull();
+    expect(screen.queryByText('OxiDNS — собственный DNS')).toBeNull();
+  });
+
+  it('shows only confirmed installed DNS components', async () => {
+    vi.mocked(HttpUtil.get).mockImplementation(async (url) => {
+      if (url === '/panel/api/oxidns/status') {
+        return { success: true, msg: '', obj: { installed: true, supported: true } };
+      }
+      if (url === '/panel/api/dnstt/status') {
+        return { success: true, msg: '', obj: { installed: false } };
+      }
+      return {
+        success: true,
+        msg: '',
+        obj: {
+          config: structuredClone(config),
+          running: true,
+          version: '1.14.0',
+          configSource: 'disk',
+          managedSections: ['inbounds'],
+        },
+      };
+    });
+    mount('/singbox#dns');
+    fireEvent.click(await screen.findByText('Установленные DNS-компоненты'));
+    expect(await screen.findByText('OxiDNS — собственный DNS')).toBeTruthy();
+    expect(screen.queryByText('DNSTT —')).toBeNull();
+  });
+
   it('exposes rare settings inside expandable expert sections', async () => {
     mount('/singbox#advanced');
     fireEvent.click(await screen.findByText('Кэш-файл и служебные API'));
