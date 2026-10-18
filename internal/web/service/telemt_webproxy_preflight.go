@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
-	"time"
 )
 
 // TelemtWebPreflight is a read-only deployment plan. The enable endpoint runs
