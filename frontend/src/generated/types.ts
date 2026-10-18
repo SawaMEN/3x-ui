@@ -784,6 +784,7 @@ export interface Node {
   netUp: number;
   onlineCount: number;
   outboundTag: string;
+  panelEdition: string;
   panelVersion: string;
   parentGuid?: string;
   pinnedCertSha256: string;
@@ -859,6 +860,7 @@ export interface NodeView {
   netUp: number;
   onlineCount: number;
   outboundTag: string;
+  panelEdition: string;
   panelVersion: string;
   parentGuid?: string;
   pinnedCertSha256: string;
@@ -921,6 +923,7 @@ export interface ProbeResultUI {
   error: string;
   latencyMs: number;
   memPct: number;
+  panelEdition: string;
   panelVersion: string;
   presenceRegistry: string;
   runningCore: string;
