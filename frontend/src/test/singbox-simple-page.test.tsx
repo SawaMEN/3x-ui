@@ -250,6 +250,7 @@ describe('simple sing-box page', () => {
   it('offers automatic DNS setup and keeps optional components closed', async () => {
     vi.mocked(HttpUtil.get).mockResolvedValue({
       success: true,
+      msg: '',
       obj: {
         config: { ...structuredClone(config), dns: { servers: [], rules: [] } },
         running: true,
