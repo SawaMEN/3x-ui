@@ -280,9 +280,9 @@ func (TelemtService) WebProxyStatus(defaultDomain, panelCert, panelKey string) (
 		status.Link = telemtWebLink(state.Domain, state.Secret)
 	}
 	if state.CertFile != "" {
-		status.CertificateReady = telemtWebCertificateCoversDomain(state.CertFile, state.Domain) && telemtWebFileReadable(state.KeyFile)
+		status.CertificateReady = telemtWebCertificatePairReady(state.CertFile, state.KeyFile, state.Domain)
 	} else if panelCert != "" {
-		status.CertificateReady = telemtWebCertificateCoversDomain(panelCert, state.Domain) && telemtWebFileReadable(panelKey)
+		status.CertificateReady = telemtWebCertificatePairReady(panelCert, panelKey, state.Domain)
 		status.CertificateFile = panelCert
 	}
 	if !status.Supported {
@@ -611,7 +611,7 @@ func writeTelemtWebNginxConfig(state TelemtWebProxyState) error {
 	if state.CertFile == "" || state.KeyFile == "" {
 		return errors.New("WEB Proxy certificate is not configured")
 	}
-	if !telemtWebCertificateCoversDomain(state.CertFile, state.Domain) {
+	if !telemtWebCertificatePairReady(state.CertFile, state.KeyFile, state.Domain) {
 		return fmt.Errorf("certificate does not cover domain %s", state.Domain)
 	}
 	listen := "listen 443 ssl;"
@@ -884,12 +884,12 @@ func telemtWebEnsureNginxPackage(ctx context.Context) error {
 }
 
 func telemtWebEnsureCertificate(ctx context.Context, domain, panelCert, panelKey string) (string, string, error) {
-	if telemtWebCertificateCoversDomain(panelCert, domain) && telemtWebFileReadable(panelKey) {
+	if telemtWebCertificatePairReady(panelCert, panelKey, domain) {
 		return panelCert, panelKey, nil
 	}
 	acmeCert := "/etc/letsencrypt/live/" + domain + "/fullchain.pem"
 	acmeKey := "/etc/letsencrypt/live/" + domain + "/privkey.pem"
-	if telemtWebCertificateCoversDomain(acmeCert, domain) && telemtWebFileReadable(acmeKey) {
+	if telemtWebCertificatePairReady(acmeCert, acmeKey, domain) {
 		return acmeCert, acmeKey, nil
 	}
 	if !telemtWebPortAvailable(80) && !telemtWebNginxOwnsPort(80) {
@@ -916,7 +916,7 @@ func telemtWebEnsureCertificate(ctx context.Context, domain, panelCert, panelKey
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return "", "", fmt.Errorf("certbot failed: %s", strings.TrimSpace(string(out)))
 	}
-	if !telemtWebCertificateCoversDomain(acmeCert, domain) || !telemtWebFileReadable(acmeKey) {
+	if !telemtWebCertificatePairReady(acmeCert, acmeKey, domain) {
 		return "", "", errors.New("certbot completed but certificate files are missing or invalid")
 	}
 	if err := installTelemtWebRenewalHook(); err != nil {
