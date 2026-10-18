@@ -218,12 +218,12 @@ func telemtWebFrontendCertificate(ctx context.Context, s TelemtWebProxyState, do
 	if telemtWebFrontend(s) == "nginx" {
 		return telemtWebEnsureCertificate(ctx, domain, cert, key)
 	}
-	if telemtWebCertificateCoversDomain(cert, domain) && telemtWebFileReadable(key) {
+	if telemtWebCertificatePairReady(cert, key, domain) {
 		return cert, key, nil
 	}
 	cert = "/etc/letsencrypt/live/" + domain + "/fullchain.pem"
 	key = "/etc/letsencrypt/live/" + domain + "/privkey.pem"
-	if telemtWebCertificateCoversDomain(cert, domain) && telemtWebFileReadable(key) {
+	if telemtWebCertificatePairReady(cert, key, domain) {
 		return cert, key, nil
 	}
 	if !telemtWebPortAvailable(80) {
@@ -237,7 +237,7 @@ func telemtWebFrontendCertificate(ctx context.Context, s TelemtWebProxyState, do
 	if err := runTelemtWebCommand(ctx, "certbot", "certonly", "--standalone", "--non-interactive", "--agree-tos", "--register-unsafely-without-email", "--preferred-challenges", "http", "--cert-name", domain, "-d", domain); err != nil {
 		return "", "", err
 	}
-	if !telemtWebCertificateCoversDomain(cert, domain) || !telemtWebFileReadable(key) {
+	if !telemtWebCertificatePairReady(cert, key, domain) {
 		return "", "", errors.New("issued WEB certificate is missing or invalid")
 	}
 	return cert, key, nil
@@ -319,7 +319,7 @@ func writeTelemtWebFrontendConfig(s TelemtWebProxyState) error {
 	if telemtWebFrontend(s) == "nginx" {
 		return writeTelemtWebNginxConfig(s)
 	}
-	if !telemtWebCertificateCoversDomain(s.CertFile, s.Domain) {
+	if !telemtWebCertificatePairReady(s.CertFile, s.KeyFile, s.Domain) {
 		return errors.New("WEB certificate does not cover the domain")
 	}
 	aliases, upstream, err := telemtWebSubscriptionTargets(&SettingService{})
