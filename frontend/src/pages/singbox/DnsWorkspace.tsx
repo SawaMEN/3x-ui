@@ -31,8 +31,8 @@ export default function DnsWorkspace({ config, onChange, subscriptionTags = [] }
           <div>
             <div className="singbox-section-title">DNS sing-box</div>
             <div className="singbox-section-description">
-              Настройте DNS в одном месте. Готовый профиль автоматически добавляет сервер,
-              проверку TLS и DNS по умолчанию, сохраняя ваши правила.
+              Настройте DNS в одном месте. Готовый профиль автоматически добавляет сервер, проверку
+              TLS и DNS по умолчанию, сохраняя ваши правила.
             </div>
           </div>
           <Space wrap>
@@ -48,7 +48,9 @@ export default function DnsWorkspace({ config, onChange, subscriptionTags = [] }
             type="warning"
             showIcon
             style={{ marginBottom: 16 }}
-            title={noServers ? 'DNS-сервер не выбран' : 'DNS по умолчанию отсутствует среди серверов'}
+            title={
+              noServers ? 'DNS-сервер не выбран' : 'DNS по умолчанию отсутствует среди серверов'
+            }
             description="Можно автоматически создать безопасный профиль. Изменения вступят в силу после сохранения настроек ядра."
             action={
               <Button
@@ -76,7 +78,11 @@ export default function DnsWorkspace({ config, onChange, subscriptionTags = [] }
         items={[
           {
             key: 'servers',
-            label: <>DNS-серверы <Tag>{servers.length}</Tag></>,
+            label: (
+              <>
+                DNS-серверы <Tag>{servers.length}</Tag>
+              </>
+            ),
             children: (
               <NativeDnsServers
                 config={config}
@@ -87,7 +93,11 @@ export default function DnsWorkspace({ config, onChange, subscriptionTags = [] }
           },
           {
             key: 'rules',
-            label: <>Правила DNS <Tag>{rules.length}</Tag></>,
+            label: (
+              <>
+                Правила DNS <Tag>{rules.length}</Tag>
+              </>
+            ),
             children: <NativeDnsRules config={config} onChange={onChange} />,
           },
           {

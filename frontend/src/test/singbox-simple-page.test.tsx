@@ -262,9 +262,9 @@ describe('simple sing-box page', () => {
     fireEvent.click(setup);
     fireEvent.click(screen.getByText('Save').closest('button')!);
     await waitFor(() => expect(HttpUtil.post).toHaveBeenCalled());
-    const call = vi.mocked(HttpUtil.post).mock.calls.find(([url]) =>
-      url === '/panel/api/setting/singbox/config',
-    )!;
+    const call = vi
+      .mocked(HttpUtil.post)
+      .mock.calls.find(([url]) => url === '/panel/api/setting/singbox/config')!;
     const sent = JSON.parse(String((call[1] as { config: string }).config));
     expect(sent.dns.final).toBe('panel-dns-quad9');
     expect(sent.dns.servers[0]).toMatchObject({ type: 'https', server: '9.9.9.9' });

@@ -12,9 +12,7 @@ const InboundsPage = lazy(() =>
 const ClientsPage = lazy(() =>
   importWithChunkRecovery(() => import('@/pages/clients/ClientsPage')),
 );
-const OlcRTCPage = lazy(() =>
-  importWithChunkRecovery(() => import('@/pages/olcrtc/OlcRTCPage')),
-);
+const OlcRTCPage = lazy(() => importWithChunkRecovery(() => import('@/pages/olcrtc/OlcRTCPage')));
 const GroupsPage = lazy(() => importWithChunkRecovery(() => import('@/pages/groups/GroupsPage')));
 const NodesPage = lazy(() => importWithChunkRecovery(() => import('@/pages/nodes/NodesPage')));
 const HostsPage = lazy(() => importWithChunkRecovery(() => import('@/pages/hosts/HostsPage')));

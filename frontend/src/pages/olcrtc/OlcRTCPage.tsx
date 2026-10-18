@@ -10,7 +10,9 @@ export default function OlcRTCPage() {
 
   return (
     <ConfigProvider theme={antdThemeConfig}>
-      <Layout className={`singbox-page ${isDark ? 'is-dark ' : ''}${isUltra ? 'is-ultra' : ''}`.trim()}>
+      <Layout
+        className={`singbox-page ${isDark ? 'is-dark ' : ''}${isUltra ? 'is-ultra' : ''}`.trim()}
+      >
         <AppSidebar />
         <Layout className="content-shell">
           <Layout.Content id="content-layout" className="content-area">
