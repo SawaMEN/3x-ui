@@ -6,10 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/pelletier/go-toml/v2"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
@@ -120,7 +123,10 @@ func ReconcileMtprotoWebProxy(ctx context.Context) error {
 		if state.ManagedInboundID == 0 {
 			return nil
 		}
-		return (TelemtService{}).DisableWebProxy()
+		if err := (TelemtService{}).DisableWebProxy(); err != nil {
+			return err
+		}
+		return stopMtprotoWebServiceIfUnused()
 	}
 
 	ib := selected[0]
@@ -205,6 +211,31 @@ func ReconcileMtprotoWebProxy(ctx context.Context) error {
 		return err
 	}
 	return svc.SaveConfig(cfg)
+}
+
+// Stop the standalone WEB backend only when it has no independent/legacy
+// credentials. Old proxy and subscription users must remain reachable.
+func stopMtprotoWebServiceIfUnused() error {
+	data, err := os.ReadFile(telemtConfigPath)
+	if err != nil && !errors.Is(err, os.ErrNotExist) { return err }
+	var cfg struct {
+		Access struct { Users map[string]string `toml:"users"` } `toml:"access"`
+	}
+	if len(data) != 0 {
+		if err := toml.Unmarshal(data, &cfg); err != nil { return err }
+	}
+	for name := range cfg.Access.Users {
+		if name != "xui" && name != telemtWebUser && !strings.HasPrefix(name, "mtweb_") {
+			return nil
+		}
+	}
+	if systemctl("is-active", "--quiet", telemtServiceName) == nil {
+		if err := systemctl("stop", telemtServiceName); err != nil { return err }
+	}
+	if systemctl("is-enabled", "--quiet", telemtServiceName) == nil {
+		return systemctl("disable", telemtServiceName)
+	}
+	return nil
 }
 
 func mtprotoWebHasUsers(ib *model.Inbound) bool {
