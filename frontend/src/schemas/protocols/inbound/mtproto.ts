@@ -55,7 +55,10 @@ export const MtprotoInboundSettingsSchema = z.object({
         .default([]),
     })
     .optional(),
-  mekoFix: z.boolean().default(false),
+  // Optional on older inbounds: leaving it absent must not change persisted fixtures.
+  mekoFix: z.boolean().optional(),
+  mekoRatePerMinute: z.number().int().min(1).max(60000).optional(),
+  mekoBurst: z.number().int().min(1).max(1000).optional(),
   fakeTlsDomain: z.string().default('www.cloudflare.com'),
   maskHost: z.string().optional(),
   maskPort: z.number().int().min(0).max(65535).optional(),
