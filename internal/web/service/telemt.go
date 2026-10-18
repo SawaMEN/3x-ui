@@ -114,10 +114,20 @@ func renderTelemtConfig(c TelemtConfig) (string, error) {
 	}
 
 	listeners := ""
-	if c.IPv4 {
+	webState, webStateErr := readTelemtWebState()
+	if webStateErr != nil { return "", webStateErr }
+	if webState.ManagedInboundID > 0 {
+		if webState.BackendPort <= 0 { return "", errors.New("telemt: managed WEB backend has no local control port") }
+		// The HTTPS frontend alone owns a public listener. The auxiliary
+		// MTProto listener is confined to loopback and cannot collide with
+		// ordinary public MTProto inbounds.
+		c.Port = webState.BackendPort
+		listeners = "[[server.listeners]]\\nip = \\"127.0.0.1\\"\\n\\n"
+	}
+ 	if c.IPv4 && webState.ManagedInboundID == 0 {
 		listeners += "[[server.listeners]]\nip = \"0.0.0.0\"\n\n"
 	}
-	if c.IPv6 {
+	if c.IPv6 && webState.ManagedInboundID == 0 {
 		listeners += "[[server.listeners]]\nip = \"::\"\n\n"
 	}
 
@@ -160,7 +170,7 @@ func preserveTelemtUsers(base string) string {
 	preserved := make([]string, 0, len(lines))
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		if trimmed == "" || strings.HasPrefix(trimmed, "xui = ") || strings.HasPrefix(trimmed, telemtWebUser+" = ") {
+		if trimmed == "" || strings.HasPrefix(trimmed, "xui = ") || strings.HasPrefix(trimmed, telemtWebUser+" = ") || strings.HasPrefix(trimmed, "\"mtweb_") {
 			continue
 		}
 		preserved = append(preserved, line)
