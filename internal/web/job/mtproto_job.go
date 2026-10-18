@@ -66,6 +66,14 @@ func (j *MtprotoJob) Run() {
 	}
 
 	deltas, onlineEmails := mgr.CollectTrafficConsistent()
+	webDeltas, webOnline, webErr := service.CollectMtprotoWebTraffic(context.Background())
+	if webErr != nil {
+		logger.Warning("mtproto job: WEB traffic poll failed:", webErr)
+	} else {
+		deltas = append(deltas, webDeltas...)
+		onlineEmails = append(onlineEmails, webOnline...)
+		for _, delta := range webDeltas { activeTags = append(activeTags, delta.Tag) }
+	}
 
 	// A routed inbound's total is already metered through the Xray bridge by
 	// xray_traffic_job, so only non-routed inbounds are rolled up here; per-client
