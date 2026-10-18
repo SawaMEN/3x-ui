@@ -191,7 +191,7 @@ done
 if [[ -n "$output" ]]; then cp "$SERVED/${url##*/}" "$output"; else printf '  "tag_name": "3.5.14",\\n'; fi
 """,
                     "uname": "#!/bin/sh\\necho x86_64\\n",
-                    "systemctl": "#!/bin/sh\\necho \\"$*\\" >> \\"$SERVICE_LOG\\"\\nexit 1\\n",
+                    "systemctl": '#!/bin/sh\necho "$*" >> "$SERVICE_LOG"\nexit 1\n',
                     "pgrep": "#!/bin/sh\\nexit 1\\n",
                 }
                 for command, body in commands.items():
