@@ -191,32 +191,62 @@ func readRevisions() string {
 	data, _ := os.ReadFile(revisionPath)
 	return strings.TrimSpace(string(data))
 }
+var revisionSHA = regexp.MustCompile("^[a-fA-F0-9]{40}$")
+
+// The GitHub HTTPS API works before git is installed on a minimal server.
+func fetchGitHubRevision(ctx context.Context, endpoint string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil { return "", err }
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("User-Agent", "3x-ui-olcrtc")
+	response, err := (&http.Client{Timeout: 4 * time.Second}).Do(req)
+	if err != nil { return "", err }
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("GitHub revisions: HTTP %d", response.StatusCode)
+	}
+	var data struct { SHA string }
+	if err := json.NewDecoder(io.LimitReader(response.Body, 256<<10)).Decode(&data); err != nil { return "", err }
+	if !revisionSHA.MatchString(data.SHA) { return "", errors.New("invalid upstream revision") }
+	return strings.ToLower(data.SHA), nil
+}
+
+func resolveRemoteRevision(ctx context.Context, endpoint, repo, ref string) string {
+	lookup, cancel := context.WithTimeout(ctx, 7*time.Second)
+	defer cancel()
+	if sha, err := fetchGitHubRevision(lookup, endpoint); err == nil { return sha }
+	// Fallback to git if GitHub's API is blocked or rate-limited.
+	if _, err := exec.LookPath("git"); err != nil { return "" }
+	output, err := run(lookup, "git", "ls-remote", repo, ref)
+	if err != nil { return "" }
+	fields := strings.Fields(output)
+	if len(fields) > 0 && revisionSHA.MatchString(fields[0]) { return strings.ToLower(fields[0]) }
+	return ""
+}
+
 func remoteRevision(ctx context.Context) string {
 	updateCache.Lock()
 	defer updateCache.Unlock()
-	if time.Since(updateCache.when) < 5*time.Minute {
-		return updateCache.sha
+	if time.Since(updateCache.when) < 5*time.Minute { return updateCache.sha }
+	sources := [...]struct{ endpoint, repo, ref string }{
+		{"https://api.github.com/repos/BigDaddy3334/olcrtc-manager-panel/commits/main", managerRepo, "refs/heads/main"},
+		{"https://api.github.com/repos/openlibrecommunity/olcrtc/commits/master", serverRepo, "refs/heads/master"},
 	}
-	revisions := make([]string, 0, 2)
-	for _, item := range []struct{ repo, ref string }{{managerRepo, "refs/heads/main"}, {serverRepo, "refs/heads/master"}} {
-		short, cancel := context.WithTimeout(ctx, 7*time.Second)
-		output, err := run(short, "git", "ls-remote", item.repo, item.ref)
-		cancel()
-		if err != nil {
-			revisions = nil
-			break
-		}
-		fields := strings.Fields(output)
-		if len(fields) == 0 || len(fields[0]) != 40 {
-			revisions = nil
-			break
-		}
-		revisions = append(revisions, fields[0])
+	var revisions [2]string
+	var lookups sync.WaitGroup
+	for i := range sources {
+		lookups.Add(1)
+		go func(index int) {
+			defer lookups.Done()
+			item := sources[index]
+			revisions[index] = resolveRemoteRevision(ctx, item.endpoint, item.repo, item.ref)
+		}(i)
 	}
-	if len(revisions) == 2 {
-		updateCache.sha = strings.Join(revisions, "|")
+	lookups.Wait()
+	if revisions[0] != "" && revisions[1] != "" {
+		updateCache.sha = strings.Join(revisions[:], "|")
 	} else {
-		// A failed lookup must not keep advertising a stale upstream revision.
+		// A failed lookup must not advertise a stale upstream revision.
 		updateCache.sha = ""
 	}
 	updateCache.when = time.Now()
@@ -238,11 +268,8 @@ func revisionLabel(value string) string {
 func GetStatus(ctx context.Context) Status {
 	yes, reason := Supported()
 	result := Status{Installed: installed(), Supported: yes, UnsupportedReason: reason}
-	// Show real upstream revisions even before installation, when reachable.
-	latest := ""
-	if _, err := exec.LookPath("git"); err == nil {
-		latest = remoteRevision(ctx)
-	}
+	// Query upstream via HTTPS even when git has not been installed.
+	latest := remoteRevision(ctx)
 	result.AvailableVersion = revisionLabel(latest)
 	if result.Installed {
 		check, cancel := context.WithTimeout(ctx, 3*time.Second)
@@ -321,7 +348,7 @@ func installerFailure(err error, logPath string) error {
 				switch command {
 				case "go", "git", "curl", "tar", "apt-get", "pacman", "systemctl",
 					"bash", "hostname", "awk", "sed", "sort", "head", "grep", "install",
-					"ln", "rm", "mkdir", "mktemp", "ss", "seq", "od", "tr", "openssl",
+					"ln", "rm", "mkdir", "mktemp", "ss", "seq", "od", "tr", "id", "tail", "cut", "openssl",
 					"chmod", "fallocate", "mkswap", "swapon", "dd", "cat", "ip", "iptables", "tc":
 					return fmt.Errorf("OlcRTC installer: command %q not found (exit status 127); check PATH and packages", command)
 				}
@@ -332,11 +359,67 @@ func installerFailure(err error, logPath string) error {
 	return fmt.Errorf("OlcRTC installation failed; check system packages, free RAM and Go toolchain (%w)", err)
 }
 
+// These commands are used by the pinned install.sh global initializers
+// before install_packages runs. Minimal server images may be missing them.
+var initialInstallerCommands = []string{"bash", "id", "od", "tr", "seq", "ss", "grep", "awk", "hostname"}
+
+func missingInstallerCommands() []string {
+	var missing []string
+	for _, name := range initialInstallerCommands {
+		if _, err := exec.LookPath(name); err != nil { missing = append(missing, name) }
+	}
+	return missing
+}
+
+func installerPrerequisitePackages(pm string) []string {
+	switch pm {
+	case "apt":
+		return []string{"bash", "coreutils", "gawk", "grep", "hostname", "iproute2"}
+	case "pacman":
+		return []string{"bash", "coreutils", "gawk", "grep", "inetutils", "iproute2"}
+	default:
+		return nil
+	}
+}
+
+func prepareInstallerHost(ctx context.Context) error {
+	missing := missingInstallerCommands()
+	if len(missing) == 0 { return nil }
+	pm := installerPackageManager()
+	packages := installerPrerequisitePackages(pm)
+	if len(packages) == 0 {
+		return fmt.Errorf("OlcRTC installer: missing commands: %s (unsupported package manager)", strings.Join(missing, ", "))
+	}
+	var commands [][]string
+	switch pm {
+	case "apt":
+		commands = append(commands, []string{"apt-get", "update"})
+		commands = append(commands, append([]string{"apt-get", "install", "-y", "--no-install-recommends"}, packages...))
+	case "pacman":
+		// Do not run pacman -Sy: partial upgrades are unsafe on Arch.
+		commands = append(commands, append([]string{"pacman", "-S", "--noconfirm", "--needed"}, packages...))
+	}
+	for _, args := range commands {
+		cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+		cmd.Stdout, cmd.Stderr = io.Discard, io.Discard
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("OlcRTC prerequisites: %s failed (missing: %s): %w", args[0], strings.Join(missing, ", "), err)
+		}
+	}
+	if remaining := missingInstallerCommands(); len(remaining) > 0 {
+		return fmt.Errorf("OlcRTC installer: required commands still missing: %s", strings.Join(remaining, ", "))
+	}
+	return nil
+}
+
 func install(ctx context.Context) error {
 	if installed() {
 		if _, err := os.Stat(revisionPath); err != nil {
 			return errors.New("an existing OlcRTC installation is not managed by 3x-ui")
 		}
+	}
+	if err := prepareInstallerHost(ctx); err != nil {
+		return err
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, installerURL, nil)
 	if err != nil {
