@@ -208,9 +208,20 @@ remove() {
 # Accepted SYNs return to the host firewall; its access policy is preserved.
 apply_nft() {
     local port rate burst i
+    local table_present=0
+
+    # Replace the owned table in ONE nft transaction. An independent
+    # "delete table" followed by "add table" would briefly remove protection;
+    # plain "add table" fails on every subsequent update. A rejected batch
+    # leaves the previous table intact.
+    if nft list table inet xui_telemt_meko >/dev/null 2>&1; then
+        table_present=1
+    fi
     {
+        if (( table_present )); then
+            echo 'delete table inet xui_telemt_meko'
+        fi
         echo 'add table inet xui_telemt_meko'
-        echo 'flush table inet xui_telemt_meko'
         echo 'add set inet xui_telemt_meko ports { type inet_service; }'
         printf 'add element inet xui_telemt_meko ports { %s }\n' "$(IFS=,; echo "${ports[*]}")"
         echo 'add chain inet xui_telemt_meko input { type filter hook input priority -10; policy accept; }'
@@ -249,8 +260,9 @@ apply() {
         return 0
     fi
 
-    if command -v nft >/dev/null 2>&1 && apply_nft; then
-        # Remove only the legacy managed chains, leaving the new nft table.
+    if command -v nft >/dev/null 2>&1; then
+        if apply_nft; then
+            # Remove only the legacy managed chains, leaving the new nft table.
         if type -P iptables >/dev/null 2>&1; then
             remove_jump_all filter INPUT "$FILTER_CHAIN"
             remove_jump_all mangle PREROUTING "$MARK_CHAIN"
@@ -259,8 +271,16 @@ apply() {
             iptables -t mangle -F "$MARK_CHAIN" 2>/dev/null || true
             iptables -t mangle -X "$MARK_CHAIN" 2>/dev/null || true
         fi
-        log "MEKO V3 nftables applied to IPv4/IPv6 ports: ${ports[*]}"
-        return 0
+            log "MEKO V3 nftables applied to IPv4/IPv6 ports: ${ports[*]}"
+            return 0
+        fi
+        # Do not install another limiter over a pre-existing nft limiter.
+        # This would silently double-filter traffic and obscure why users
+        # cannot connect. Leave the old atomic nft rules in place instead.
+        if nft list table inet xui_telemt_meko >/dev/null 2>&1; then
+            log "Existing MEKO nft table could not be updated; refusing iptables fallback" >&2
+            return 1
+        fi
     fi
     type -P iptables >/dev/null 2>&1 || { log "nftables or iptables is required"; exit 1; }
     ensure_u32 || { log "xt_u32 is not available; MEKO V3 cannot be enabled"; exit 1; }
