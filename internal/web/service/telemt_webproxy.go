@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"crypto/sha256"
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/hex"
@@ -181,8 +180,7 @@ func appendTelemtWebProxyConfig(base string, state TelemtWebProxyState) (string,
 		}
 		for _, user := range inst.Secrets {
 			// Stable identities retain per-user counters across list reordering.
-			digest := sha256.Sum256([]byte(user.Name))
-			name := fmt.Sprintf("mtweb_%d_%x", state.ManagedInboundID, digest[:8])
+			name := mtprotoWebUsername(state.ManagedInboundID, user.Name)
 			managedUsers += fmt.Sprintf("%q = %q\n", name, user.Secret)
 			managedProfiles += fmt.Sprintf("\n[[web.vhosts.profiles]]\nuser = %q\nsecret_mode = \"dd\"\n", name)
 			if user.QuotaBytes > 0 {
