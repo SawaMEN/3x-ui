@@ -5,6 +5,8 @@ BIN="/usr/local/x-ui/bin/telemt"
 VERSION_FILE="/etc/x-ui/telemt.version"
 TMP_DIR=""
 REPO="telemt/telemt"
+CONFIG_DIR="$(dirname "$BIN")/mtproto"
+managed_configs=()
 cleanup() { [[ -z "$TMP_DIR" ]] && return; rm -rf "$TMP_DIR"; }
 trap cleanup EXIT
 log() { echo "[telemt-update] $*"; }
@@ -81,15 +83,53 @@ install_latest() {
   chmod 0644 "$VERSION_FILE"
 }
 
+snapshot_inbound_sidecars() {
+  managed_configs=()
+  local config
+  shopt -s nullglob
+  for config in "$CONFIG_DIR"/telemt-*.toml; do
+    managed_configs+=("$config")
+  done
+  shopt -u nullglob
+}
+
+# Re-read API credentials on each attempt: the panel allocates a new API port
+# and token when it restarts a sidecar. Never place credentials in argv/logs.
+inbound_has_version() {
+  local config="$1" expected="$2" listen auth info actual
+  [[ -r "$config" ]] || return 1
+  listen="$(awk '/^\[server.api\]/{api=1;next} /^\[/{api=0} api && /^listen = /{gsub(/^listen = "|"$/, "");print;exit}' "$config")"
+  auth="$(awk '/^\[server.api\]/{api=1;next} /^\[/{api=0} api && /^auth_header = /{gsub(/^auth_header = "|"$/, "");print;exit}' "$config")"
+  [[ "$listen" =~ ^127\.0\.0\.1:[0-9]+$ && "$auth" =~ ^Bearer\ [a-f0-9]+$ ]] || return 1
+  info="$(printf 'header = "Authorization: %s"\n' "$auth" |
+    curl --config - --noproxy '*' -fsS --connect-timeout 1 --max-time 2 "http://${listen}/v1/system/info" 2>/dev/null)" || return 1
+  actual="$(sed -nE 's/.*"version"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' <<< "$info")"
+  [[ "${actual#v}" == "${expected#v}" ]]
+}
+
+wait_for_inbound_sidecars() {
+  local expected="$1" config pending attempt deadline=$((SECONDS + 45))
+  (( ${#managed_configs[@]} > 0 )) || return 0
+  for ((attempt=0; attempt<30; attempt++)); do
+    pending=0
+    for config in "${managed_configs[@]}"; do
+      (( SECONDS < deadline )) || { log "MTProto recovery deadline exceeded"; return 1; }
+      if ! inbound_has_version "$config" "$expected"; then pending=1; fi
+    done
+    (( pending )) || return 0
+    sleep 1
+  done
+  log "Managed MTProto instances did not become healthy on Telemt $expected"
+  return 1
+}
+
 recycle_inbound_sidecars() {
   # Panel-managed MTProto sidecars respawn using the newly installed binary.
-  local pattern="${BIN} run /usr/local/x-ui/bin/mtproto/telemt-"
+  (( ${#managed_configs[@]} > 0 )) || return 0
   local pids=""
-  if command -v pgrep >/dev/null 2>&1; then
-    pids="$(pgrep -f "$pattern" 2>/dev/null || true)"
-  else
-    pids="$(ps -eo pid=,args= 2>/dev/null | awk -v p="$pattern" 'index($0,p) {print $1}')"
-  fi
+  # Match executable and subcommand fields, not a regex anywhere in argv.
+  pids="$(ps -eo pid=,args= 2>/dev/null | awk -v bin="$BIN" -v dir="$CONFIG_DIR/telemt-" \
+    '$2 == bin && $3 == "run" && index($4, dir) == 1 {print $1}')" || return 1
   [[ -n "$pids" ]] || return 0
   while read -r pid; do
     [[ "$pid" =~ ^[0-9]+$ ]] || continue
@@ -126,13 +166,22 @@ main() {
   log "updating Telemt ${current:-unknown} -> official $version"
   download_latest "$arch" "$tag" "$version"
   # All validations must complete before stopping a live service.
+  snapshot_inbound_sidecars
   [[ ! -e "$BIN" ]] || cp -p "$BIN" "$TMP_DIR/previous-telemt"
   [[ ! -e "$VERSION_FILE" ]] || cp -p "$VERSION_FILE" "$TMP_DIR/previous-version"
   if systemctl is-active --quiet telemt.service 2>/dev/null; then
     was_active=1
     systemctl stop telemt.service
   fi
-  if ! install_latest "$version" || { (( was_active )) && ! systemctl start telemt.service; }; then
+  local update_failed=0
+  if ! install_latest "$version"; then
+    update_failed=1
+  elif (( was_active )) && ! systemctl start telemt.service; then
+    update_failed=1
+  else
+    if ! recycle_inbound_sidecars || ! wait_for_inbound_sidecars "$version"; then update_failed=1; fi
+  fi
+  if (( update_failed )); then
     log "Installation or startup failed; rolling back"
     rm -f "${BIN}.new"
     if [[ -f "$TMP_DIR/previous-telemt" ]]; then
@@ -146,10 +195,21 @@ main() {
     else
       rm -f "$VERSION_FILE"
     fi
-    if (( was_active )); then systemctl start telemt.service || true; fi
+    if (( was_active )); then systemctl restart telemt.service || true; fi
+    recycle_inbound_sidecars || log "Could not signal managed instances during recovery"
+    if [[ -n "$current" ]] && ! wait_for_inbound_sidecars "$current"; then
+      log "Previous binary restored, but some MTProto instances still need recovery"
+    fi
     return 1
   fi
-  recycle_inbound_sidecars
+  # Keep an offline recovery copy after a successful upgrade as well.
+  if [[ -f "$TMP_DIR/previous-telemt" ]]; then
+    install -m 0755 "$TMP_DIR/previous-telemt" "${BIN}.previous.new"
+    mv -f "${BIN}.previous.new" "${BIN}.previous"
+    if [[ -f "$TMP_DIR/previous-version" ]]; then
+      cp -p "$TMP_DIR/previous-version" "${VERSION_FILE}.previous"
+    fi
+  fi
   log "Official Telemt $version installed."
 }
 main "$@"

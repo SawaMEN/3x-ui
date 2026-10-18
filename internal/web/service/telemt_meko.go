@@ -384,7 +384,7 @@ func desiredMekoPolicyFingerprint(cfg TelemtMekoConfig) string {
 		}
 		fmt.Fprintf(&b, "%d;", telemtPortFromConfig(path))
 		for _, line := range strings.Split(string(data), "\n") {
-			if strings.HasPrefix(line, "# x-ui-meko-rate=") || strings.HasPrefix(line, "# x-ui-meko-burst=") {
+			if strings.HasPrefix(line, "# x-ui-meko-rate=") || strings.HasPrefix(line, "# x-ui-meko-burst=") || strings.HasPrefix(line, "# x-ui-meko-ios-rate=") || strings.HasPrefix(line, "# x-ui-meko-ios-burst=") {
 				b.WriteString(line)
 				b.WriteByte(';')
 			}

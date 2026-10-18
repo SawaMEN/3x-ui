@@ -158,13 +158,13 @@ esac
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"add table inet xui_telemt_meko", "ports { 443,8443 }", "@th,320,32 0x04020000", "@th,160,16 0x0204", "ip saddr timeout 60s", "ip6 saddr timeout 60s", "54/minute burst 1 packets", "counter return"} {
+	for _, want := range []string{"add table inet xui_telemt_meko", "ports { 443,8443 }", "@th,320,32 0x04020000", "@th,160,16 0x0204", "ip saddr timeout 60s", "ip6 saddr timeout 60s", "54/minute burst 1 packets", "900/minute burst 30 packets", "meter ti4_443", "meter ti6_443", "counter return"} {
 		if !strings.Contains(string(batch), want) {
 			t.Errorf("missing %s: %s", want, batch)
 		}
 	}
-	if strings.Count(string(batch), "reject with tcp reset") != 4 {
-		t.Fatal("expected one IPv4 and IPv6 limiter per port")
+	if strings.Count(string(batch), "reject with tcp reset") != 8 {
+		t.Fatal("expected IPv4 and IPv6 limiters for both SYN classes per port")
 	}
 	if strings.Contains(string(batch), "delete table") {
 		t.Fatal("first apply should not delete a missing nft table")
@@ -446,6 +446,8 @@ func TestMekoPolicyEditsDoNotRestartTelemt(t *testing.T) {
 	modified.MekoFix = true
 	modified.MekoRatePerMinute = 120
 	modified.MekoBurst = 8
+	modified.MekoIOSRatePerMinute = 600
+	modified.MekoIOSBurst = 20
 	if base.structuralFingerprint() != modified.structuralFingerprint() {
 		t.Fatal("changing only MEKO firewall policy must not restart Telemt")
 	}
@@ -456,7 +458,7 @@ func TestMekoPolicyEditsDoNotRestartTelemt(t *testing.T) {
 		t.Fatal("MEKO changes must not alter users")
 	}
 	config := renderConfig(modified, 9000, "token")
-	for _, marker := range []string{"# x-ui-meko-fix=1\n", "# x-ui-meko-rate=120\n", "# x-ui-meko-burst=8\n"} {
+	for _, marker := range []string{"# x-ui-meko-fix=1\n", "# x-ui-meko-rate=120\n", "# x-ui-meko-burst=8\n", "# x-ui-meko-ios-rate=600\n", "# x-ui-meko-ios-burst=20\n"} {
 		if !strings.Contains(config, marker) {
 			t.Fatalf("missing selected port marker %q", marker)
 		}
@@ -493,6 +495,7 @@ case "$*" in
  '-w 2 -t filter -S TELEMT_MEKO')
     echo "-A TELEMT_MEKO -p tcp --dport 443 --syn -m hashlimit --hashlimit-name tm_443 --hashlimit-upto ${MEKO_TEST_ACTUAL_RATE:-1/sec} --hashlimit-burst ${MEKO_TEST_ACTUAL_BURST:-8} -j RETURN"
     echo '-A TELEMT_MEKO -p tcp --dport 443 --syn -j REJECT --reject-with tcp-reset'
+    echo '-A TELEMT_MEKO -p tcp --dport 443 --syn -m mark --mark 0x400/0x400 -m hashlimit --hashlimit-name ti_443 --hashlimit-upto 900/min --hashlimit-burst 30 -j RETURN'
     ;;
  '-w 2 -t mangle -S TELEMT_MEKO_MARK') echo '-A TELEMT_MEKO_MARK -p tcp --dport 443 -m u32 --u32 signature -j MARK --set-xmark 0x400/0x400' ;;
  *) exit 1 ;;

@@ -476,7 +476,7 @@ func telemtUpdate() error {
 	if err := ensureTelemtUpdater(); err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
 	out, err := telemtUpdaterCommand(ctx, telemtUpdaterPath).CombinedOutput()
 	if err != nil {

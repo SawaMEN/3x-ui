@@ -83,31 +83,85 @@ export default function MtprotoFields() {
           {mekoEnabled && (
             <>
               <MtprotoMekoStatus />
-              <FormField
-                name={['settings', 'mekoRatePerMinute']}
-                label={
-                  i18n.resolvedLanguage?.startsWith('ru')
-                    ? 'Лимит SYN на IP (в минуту)'
-                    : 'SYN limit per IP (per minute)'
-                }
-                tooltip={
-                  i18n.resolvedLanguage?.startsWith('ru')
-                    ? 'Для этого порта. Если пусто, используется общий лимит (обычно 54/мин). Слишком низкий лимит может затруднить подключение через NAT.'
-                    : 'Only this port. If empty, use the global limit (normally 54/min). Low limits may prevent connections behind NAT.'
-                }
-              >
-                <InputNumber min={1} max={60000} placeholder="54" style={{ width: '100%' }} />
-              </FormField>
-              <FormField
-                name={['settings', 'mekoBurst']}
-                label={
-                  i18n.resolvedLanguage?.startsWith('ru')
-                    ? 'Допустимый всплеск SYN (burst)'
-                    : 'Allowed SYN burst'
-                }
-              >
-                <InputNumber min={1} max={1000} placeholder="1" style={{ width: '100%' }} />
-              </FormField>
+              <Collapse
+                items={[
+                  {
+                    key: 'meko-limits',
+                    label: i18n.resolvedLanguage?.startsWith('ru')
+                      ? 'Лимиты защиты — настроены автоматически'
+                      : 'Protection limits — configured automatically',
+                    children: (
+                      <>
+                        <FormField
+                          name={['settings', 'mekoRatePerMinute']}
+                          label={
+                            i18n.resolvedLanguage?.startsWith('ru')
+                              ? 'Лимит SYN на IP (в минуту)'
+                              : 'SYN limit per IP (per minute)'
+                          }
+                          tooltip={
+                            i18n.resolvedLanguage?.startsWith('ru')
+                              ? 'Для этого порта. Если пусто, используется общий лимит (обычно 54/мин). Слишком низкий лимит может затруднить подключение через NAT.'
+                              : 'Only this port. If empty, use the global limit (normally 54/min). Low limits may prevent connections behind NAT.'
+                          }
+                        >
+                          <InputNumber
+                            min={1}
+                            max={60000}
+                            placeholder="54"
+                            style={{ width: '100%' }}
+                          />
+                        </FormField>
+                        <FormField
+                          name={['settings', 'mekoBurst']}
+                          label={
+                            i18n.resolvedLanguage?.startsWith('ru')
+                              ? 'Допустимый всплеск SYN (burst)'
+                              : 'Allowed SYN burst'
+                          }
+                        >
+                          <InputNumber
+                            min={1}
+                            max={1000}
+                            placeholder="1"
+                            style={{ width: '100%' }}
+                          />
+                        </FormField>
+                        <FormField
+                          name={['settings', 'mekoIosRatePerMinute']}
+                          label={
+                            i18n.resolvedLanguage?.startsWith('ru')
+                              ? 'iOS SYN на IP (в минуту)'
+                              : 'iOS SYN per IP (per minute)'
+                          }
+                        >
+                          <InputNumber
+                            min={1}
+                            max={60000}
+                            placeholder="900"
+                            style={{ width: '100%' }}
+                          />
+                        </FormField>
+                        <FormField
+                          name={['settings', 'mekoIosBurst']}
+                          label={
+                            i18n.resolvedLanguage?.startsWith('ru')
+                              ? 'Всплеск SYN для iOS'
+                              : 'iOS SYN burst'
+                          }
+                        >
+                          <InputNumber
+                            min={1}
+                            max={1000}
+                            placeholder="30"
+                            style={{ width: '100%' }}
+                          />
+                        </FormField>
+                      </>
+                    ),
+                  },
+                ]}
+              />
             </>
           )}
           <FormField

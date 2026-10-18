@@ -210,5 +210,82 @@ if [[ -n "$output" ]]; then cp "$SERVED/${url##*/}" "$output"; else printf '  "t
                     self.assertEqual(version.read_text().strip(), installed, name)
                 self.assertFalse((root / "download").exists(), "temporary artifacts should be cleaned")
 
+class ManagedTelemtUpdateTests(unittest.TestCase):
+    def test_managed_failure_restores_binary_and_rechecks_previous_version(self):
+        for fail in (False, True):
+            with self.subTest(failed_start=fail), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                binary = root / "telemt"
+                old = "#!/bin/sh\necho Telemt 3.5.13\n"
+                binary.write_text(old)
+                binary.chmod(0o755)
+                version = root / "version"
+                version.write_text("3.5.13\n")
+                source = (ROOT / "internal/Telemt/telemt-update.sh").read_text()
+                source = source.rsplit('main "$@"', 1)[0]
+                for key, value in (("BIN", binary), ("VERSION_FILE", version)):
+                    source = re.sub("^" + key + "=.*$", key + "=" + shlex.quote(str(value)), source, flags=re.M)
+                source = source.replace('[[ "$EUID" -eq 0 ]]', "true")
+                source = source.replace("/run/lock/x-ui-telemt-update.lock", str(root / "lock"))
+                # Replace external downloads and process control, retaining the
+                # actual install, transaction, persistent backup and rollback.
+                source += r'''
+get_latest_tag() { echo 3.5.14; }
+arch_name() { echo x86_64; }
+systemctl() { return 1; }
+download_latest() {
+  TMP_DIR="$(mktemp -d)"
+  printf '#!/bin/sh\necho Telemt 3.5.14\n' > "$TMP_DIR/telemt"
+  chmod 755 "$TMP_DIR/telemt"
+}
+snapshot_inbound_sidecars() { managed_configs=(managed-inbound); }
+recycle_inbound_sidecars() { echo recycle >> "$TEST_LOG"; }
+wait_for_inbound_sidecars() {
+  echo "verify $1" >> "$TEST_LOG"
+  [[ "$FAIL_NEW" != 1 || "$1" != 3.5.14 ]]
+}
+main
+'''
+                script = root / "update.sh"
+                script.write_text(source)
+                result = subprocess.run(["bash", str(script)], text=True, capture_output=True,
+                                        env=dict(os.environ, TEST_LOG=str(root / "events"), FAIL_NEW=str(int(fail))))
+                events = (root / "events").read_text()
+                self.assertIn("verify 3.5.14", events)
+                if fail:
+                    self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                    self.assertEqual(binary.read_text(), old)
+                    self.assertEqual(version.read_text(), "3.5.13\n")
+                    self.assertIn("verify 3.5.13", events)
+                    self.assertEqual(events.count("recycle"), 2)
+                else:
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                    self.assertEqual(version.read_text(), "3.5.14\n")
+                    self.assertEqual(Path(str(binary) + ".previous").read_text(), old)
+                    self.assertEqual(Path(str(version) + ".previous").read_text(), "3.5.13\n")
+
+    def test_health_probe_is_local_authenticated_and_matches_running_version(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = root / "telemt.toml"
+            config.write_text('[server.api]\nlisten = "127.0.0.1:9091"\nauth_header = "Bearer abc123"\n')
+            source = (ROOT / "internal/Telemt/telemt-update.sh").read_text().rsplit('main "$@"', 1)[0]
+            source += r'''
+curl() {
+  [[ "$*" == *'http://127.0.0.1:9091/v1/system/info'* ]] || return 1
+  [[ "$*" != *abc123* ]] || return 1
+  input="$(cat)"
+  [[ "$input" == 'header = "Authorization: Bearer abc123"' ]] || return 1
+  echo '{"data":{"version":"3.5.14"}}'
+}
+inbound_has_version "$TEST_CONFIG" "$TEST_VERSION"
+'''
+            script = root / "probe.sh"
+            script.write_text(source)
+            for expected, success in (("3.5.14", True), ("3.5.13", False)):
+                result = subprocess.run(["bash", str(script)], text=True, capture_output=True,
+                                        env=dict(os.environ, TEST_CONFIG=str(config), TEST_VERSION=expected))
+                self.assertEqual(result.returncode == 0, success, result.stdout + result.stderr)
+
 if __name__ == "__main__":
     unittest.main()

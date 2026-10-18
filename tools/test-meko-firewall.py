@@ -40,9 +40,10 @@ def main():
         for key in ('TELEMT_PORTS', 'TELEMT_MEKO_ENABLED', 'TELEMT_MEKO_RATE', 'TELEMT_MEKO_BURST'):
             os.environ.pop(key, None)
 
-        def config(port, rate, burst):
+        def config(port, rate, burst, ios_rate=900, ios_burst=30):
             (configs / 'telemt-1.toml').write_text(
                 f'# x-ui-meko-fix=1\n# x-ui-meko-rate={rate}\n# x-ui-meko-burst={burst}\n'
+                f'# x-ui-meko-ios-rate={ios_rate}\n# x-ui-meko-ios-burst={ios_burst}\n'
                 f'[server]\nport = {port}\n')
 
         def apply():
@@ -71,6 +72,11 @@ def main():
 
         config(7443, 240, 4)
         assert status()['installed'] == 'false', 'Old limits incorrectly verified'
+        apply()
+        healthy(7443)
+
+        config(7443, 240, 4, ios_rate=600, ios_burst=20)
+        assert status()['installed'] == 'false', 'Old iOS limits incorrectly verified'
         apply()
         healthy(7443)
 

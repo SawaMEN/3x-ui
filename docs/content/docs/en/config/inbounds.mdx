@@ -116,8 +116,10 @@ and sponsor tags are not delivered through middle proxies.
 **Fix by MEKO V3** is an individual switch on every ordinary MTProto inbound.
 Enabling it applies firewall rules only to that inbound's TCP listener port,
 not other MTProto inbounds or WEB Proxy; it defaults to off. The default limits
-are 54 SYN/minute per source IP, burst 1, and an iOS MEKO V3 signature
-exemption. nftables covers IPv4/IPv6; iptables provides an IPv4 fallback with
+are 54 SYN/minute per source IP, burst 1, for ordinary traffic and
+900 SYN/minute, burst 30, for iOS-like MEKO V3 fingerprints. Both classes are
+bounded. Limits are configured automatically; per-inbound overrides are available
+in the collapsed protection settings. nftables covers IPv4/IPv6; iptables provides an IPv4 fallback with
 `xt_u32` and `hashlimit`. util-linux `flock` is required.
 
 New inbounds use FakeTLS only; existing raw/dd clients retain legacy mode

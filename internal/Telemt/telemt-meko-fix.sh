@@ -16,6 +16,8 @@ STATE_FILE="/etc/x-ui/telemt-meko-fix.env"
 FILTER_CHAIN="TELEMT_MEKO"
 MARK_CHAIN="TELEMT_MEKO_MARK"
 MARK="0x400"
+IOS_RATE="900/minute"
+IOS_BURST="30"
 U32_FILTER="32 & 0x000FFFFF = 0x0002FFFF && 40 & 0xFFFF0000 = 0x02040000 && 44 & 0xFFFF0000 = 0x01030000 && 48 & 0xFFFFFF00 = 0x01010800 && 60 & 0xFFFFFFFF = 0x04020000"
 
 # Load panel-managed settings for direct/manual invocations too. Explicit
@@ -100,13 +102,13 @@ valid_port() {
 # sole authority: no generic TCP listener, WEB backend or old Telemt config is
 # ever selected merely because it listens on the same server.
 collect_port_policies() {
-    local p f rate burst
+    local p f rate burst ios_rate ios_burst
     if [[ -n "${TELEMT_PORTS:-}" ]]; then
         local -a overridden=()
         IFS=', ' read -r -a overridden <<< "$TELEMT_PORTS"
         for p in "${overridden[@]}"; do
             valid_port "$p" || continue
-            printf '%s %s %s\n' "$((10#$p))" "$RATE" "$BURST"
+            printf '%s %s %s %s %s\n' "$((10#$p))" "$RATE" "$BURST" "$IOS_RATE" "$IOS_BURST"
         done
     else
         shopt -s nullglob
@@ -132,7 +134,11 @@ collect_port_policies() {
             else
                 burst="$BURST"
             fi
-            printf '%s %s %s\n' "$((10#$p))" "$rate" "$burst"
+            ios_rate="$(sed -n 's/^# x-ui-meko-ios-rate=//p' "$f" | head -n 1)"
+            ios_burst="$(sed -n 's/^# x-ui-meko-ios-burst=//p' "$f" | head -n 1)"
+            ios_rate="$(normalize_rate "${ios_rate:-$IOS_RATE}")" || ios_rate="$IOS_RATE"
+            ios_burst="$(normalize_burst "${ios_burst:-$IOS_BURST}")" || ios_burst="$IOS_BURST"
+            printf '%s %s %s %s %s\n' "$((10#$p))" "$rate" "$burst" "$ios_rate" "$ios_burst"
         done
         shopt -u nullglob
     fi
@@ -146,12 +152,16 @@ load_port_policies() {
     ports=()
     port_rates=()
     port_bursts=()
-    local p rate burst
-    while read -r p rate burst; do
+    port_ios_rates=()
+    port_ios_bursts=()
+    local p rate burst ios_rate ios_burst
+    while read -r p rate burst ios_rate ios_burst; do
         valid_port "$p" || continue
         ports+=("$p")
         port_rates+=("$rate")
         port_bursts+=("$burst")
+        port_ios_rates+=("$ios_rate")
+        port_ios_bursts+=("$ios_burst")
     done < <(collect_port_policies | sort -n -k1,1 -u)
 }
 
@@ -225,6 +235,16 @@ apply_nft() {
         echo 'add set inet xui_telemt_meko ports { type inet_service; }'
         printf 'add element inet xui_telemt_meko ports { %s }\n' "$(IFS=,; echo "${ports[*]}")"
         echo 'add chain inet xui_telemt_meko input { type filter hook input priority -10; policy accept; }'
+        # Fingerprints are a compatibility heuristic, not authentication.
+        # Bound this path too so copying an iOS SYN cannot bypass every limit.
+        for i in "${!ports[@]}"; do
+            port="${ports[$i]}"
+            for family in 4 6; do
+                local address="ip saddr"
+                [[ "$family" != 6 ]] || address="ip6 saddr"
+                printf 'add rule inet xui_telemt_meko input tcp dport %s tcp flags & (fin | syn | rst | ack) == syn @th,96,32 & 0x000fffff == 0x0002ffff @th,160,16 0x0204 @th,192,16 0x0103 @th,224,24 0x010108 @th,320,32 0x04020000 meter ti%s_%s { %s timeout 60s limit rate over %s burst %s packets } counter reject with tcp reset\n' "$port" "$family" "$port" "$address" "${port_ios_rates[$i]}" "${port_ios_bursts[$i]}"
+            done
+        done
         echo 'add rule inet xui_telemt_meko input tcp dport @ports tcp flags & (fin | syn | rst | ack) == syn @th,96,32 & 0x000fffff == 0x0002ffff @th,160,16 0x0204 @th,192,16 0x0103 @th,224,24 0x010108 @th,320,32 0x04020000 counter return'
         for i in "${!ports[@]}"; do
             port="${ports[$i]}"
@@ -310,7 +330,12 @@ apply() {
         iptables -t mangle -A "$MARK_CHAIN" -p tcp --dport "$port" -m u32 --u32 "$U32_FILTER" \
             -j MARK --set-xmark "$MARK/$MARK"
         # Passing the limiter must still honor the host firewall, as nft does.
-        iptables -t filter -A "$FILTER_CHAIN" -p tcp --dport "$port" --syn -m mark --mark "$MARK/$MARK" -j RETURN
+        iptables -t filter -A "$FILTER_CHAIN" -p tcp --dport "$port" --syn -m mark --mark "$MARK/$MARK" \
+            -m hashlimit --hashlimit-name "ti_${port}" --hashlimit-mode srcip \
+            --hashlimit-upto "${port_ios_rates[$i]}" --hashlimit-burst "${port_ios_bursts[$i]}" \
+            --hashlimit-htable-expire 60000 --hashlimit-htable-size 32768 -j RETURN
+        iptables -t filter -A "$FILTER_CHAIN" -p tcp --dport "$port" --syn -m mark --mark "$MARK/$MARK" \
+            -j REJECT --reject-with tcp-reset
 
         # xt_hashlimit stores names in an IFNAMSIZ-sized field (15 visible
         # characters on Linux). Keep the per-port name short even for 65535.
@@ -364,12 +389,14 @@ status() {
     local installed=false backend=none rules="" mark_rules="" port
     local -a applied_ports=() verified_ports=()
     local verified_all=true i
-    local -A desired_rates=() desired_bursts=()
+    local -A desired_rates=() desired_bursts=() desired_ios_rates=() desired_ios_bursts=()
     normalize_limits
     load_port_policies
     for i in "${!ports[@]}"; do
         desired_rates["${ports[$i]}"]="${port_rates[$i]}"
         desired_bursts["${ports[$i]}"]="${port_bursts[$i]}"
+        desired_ios_rates["${ports[$i]}"]="${port_ios_rates[$i]}"
+        desired_ios_bursts["${ports[$i]}"]="${port_ios_bursts[$i]}"
     done
 
     # An existing table or a REJECT alone is not proof that selected ports
@@ -401,7 +428,13 @@ status() {
                    limiter_matches_policy nftables "${desired_rates[$port]:-}" "${desired_bursts[$port]:-}" &&
                grep -F "tcp dport ${port} " <<< "$rules" |
                    grep -F "meter tm6_${port} " | grep -F "ip6 saddr" | grep -F "reject with tcp reset" |
-                   limiter_matches_policy nftables "${desired_rates[$port]:-}" "${desired_bursts[$port]:-}"; then
+                   limiter_matches_policy nftables "${desired_rates[$port]:-}" "${desired_bursts[$port]:-}" &&
+               grep -F "tcp dport ${port} " <<< "$rules" |
+                   grep -F "meter ti4_${port} " | grep -F "ip saddr" | grep -F "reject with tcp reset" |
+                   limiter_matches_policy nftables "${desired_ios_rates[$port]:-}" "${desired_ios_bursts[$port]:-}" &&
+               grep -F "tcp dport ${port} " <<< "$rules" |
+                   grep -F "meter ti6_${port} " | grep -F "ip6 saddr" | grep -F "reject with tcp reset" |
+                   limiter_matches_policy nftables "${desired_ios_rates[$port]:-}" "${desired_ios_bursts[$port]:-}"; then
                 verified_ports+=("$port")
             else
                 verified_all=false
@@ -429,6 +462,9 @@ status() {
             if grep -F " --dport ${port} " <<< "$rules" | grep -F -- "--hashlimit-name tm_${port} " |
                    grep -F -- "-j RETURN" |
                    limiter_matches_policy iptables "${desired_rates[$port]:-}" "${desired_bursts[$port]:-}" &&
+               grep -F " --dport ${port} " <<< "$rules" | grep -F -- "--hashlimit-name ti_${port} " |
+                   grep -F -- "-j RETURN" |
+                   limiter_matches_policy iptables "${desired_ios_rates[$port]:-}" "${desired_ios_bursts[$port]:-}" &&
                grep -F " --dport ${port} " <<< "$rules" | grep -Fq -- "-j REJECT" &&
                grep -F " --dport ${port} " <<< "$mark_rules" | grep -Fq -- "-m u32"; then
                 verified_ports+=("$port")

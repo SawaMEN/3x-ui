@@ -32,14 +32,16 @@ type SecretEntry struct {
 }
 
 type Instance struct {
-	Id                int
-	Tag               string
-	Listen            string
-	Port              int
-	Secrets           []SecretEntry
-	MekoFix           bool
-	MekoRatePerMinute int
-	MekoBurst         int
+	Id                   int
+	Tag                  string
+	Listen               string
+	Port                 int
+	Secrets              []SecretEntry
+	MekoFix              bool
+	MekoRatePerMinute    int
+	MekoBurst            int
+	MekoIOSRatePerMinute int
+	MekoIOSBurst         int
 
 	Debug                     bool
 	ProxyProtocolListener     bool
@@ -97,7 +99,7 @@ func (inst Instance) structuralFingerprint() string {
 // MEKO modifies only host firewall policy. Keep it separate from the Telemt
 // structural fingerprint so editing a SYN limit does not disconnect users.
 func (inst Instance) mekoFingerprint() string {
-	return fmt.Sprintf("%t:%d:%d", inst.MekoFix, inst.MekoRatePerMinute, inst.MekoBurst)
+	return fmt.Sprintf("%t:%d:%d:%d:%d", inst.MekoFix, inst.MekoRatePerMinute, inst.MekoBurst, inst.MekoIOSRatePerMinute, inst.MekoIOSBurst)
 }
 
 func (inst Instance) secretsFingerprint() string {
@@ -213,6 +215,8 @@ func InstanceFromInbound(ib *model.Inbound) (Instance, bool) {
 		MekoFix                   bool     `json:"mekoFix"`
 		MekoRatePerMinute         int      `json:"mekoRatePerMinute"`
 		MekoBurst                 int      `json:"mekoBurst"`
+		MekoIOSRatePerMinute      int      `json:"mekoIosRatePerMinute"`
+		MekoIOSBurst              int      `json:"mekoIosBurst"`
 		FakeTLSDomain             string   `json:"fakeTlsDomain"`
 		TLSMask                   *bool    `json:"tlsMask"`
 		AllowLegacyModes          *bool    `json:"allowLegacyModes"`
@@ -310,6 +314,8 @@ func InstanceFromInbound(ib *model.Inbound) (Instance, bool) {
 		MekoFix:                   parsed.MekoFix,
 		MekoRatePerMinute:         parsed.MekoRatePerMinute,
 		MekoBurst:                 parsed.MekoBurst,
+		MekoIOSRatePerMinute:      parsed.MekoIOSRatePerMinute,
+		MekoIOSBurst:              parsed.MekoIOSBurst,
 		Debug:                     parsed.Debug,
 		ProxyProtocolListener:     parsed.ProxyProtocolListener,
 		PreferIP:                  parsed.PreferIP,
@@ -685,6 +691,12 @@ func renderConfig(inst Instance, apiPort int, apiToken string) string {
 		}
 		if inst.MekoBurst >= 1 && inst.MekoBurst <= 1000 {
 			fmt.Fprintf(&b, "# x-ui-meko-burst=%d\n", inst.MekoBurst)
+		}
+		if inst.MekoIOSRatePerMinute >= 1 && inst.MekoIOSRatePerMinute <= 60000 {
+			fmt.Fprintf(&b, "# x-ui-meko-ios-rate=%d\n", inst.MekoIOSRatePerMinute)
+		}
+		if inst.MekoIOSBurst >= 1 && inst.MekoIOSBurst <= 1000 {
+			fmt.Fprintf(&b, "# x-ui-meko-ios-burst=%d\n", inst.MekoIOSBurst)
 		}
 	}
 	fmt.Fprintf(&b, "[general]\ndata_path = %s\nfast_mode = true\nuse_middle_proxy = %t\n", tomlQuote(filepath.Join(configDir(), "state", strconv.Itoa(inst.Id))), inst.useMiddleProxy())
