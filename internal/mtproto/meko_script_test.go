@@ -157,7 +157,7 @@ esac
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(batch), "delete table inet xui_telemt_meko\\nadd table inet xui_telemt_meko") {
+	if !strings.Contains(string(batch), "delete table inet xui_telemt_meko\nadd table inet xui_telemt_meko") {
 		t.Fatalf("subsequent apply must replace nft table atomically: %s", batch)
 	}
 	if strings.Contains(string(batch), "flush table") {
