@@ -121,7 +121,12 @@ case "$*" in
     ;;
  'list table inet xui_telemt_meko') test -e "$MEKO_TEST_DIR/nft-installed" ;;
  '-n list chain inet xui_telemt_meko input')
-    if [[ "${MEKO_TEST_DROP_IPV6:-0}" == "1" ]]; then
+    if [[ "${MEKO_TEST_DROP_HOOK:-0}" != "1" ]]; then
+        echo 'type filter hook input priority -10; policy accept;'
+    fi
+    if [[ "${MEKO_TEST_DROP_BYPASS:-0}" == "1" ]]; then
+        sed -n 's/^add rule inet xui_telemt_meko input //p' "$MEKO_TEST_DIR/batch" | sed 's/counter return/counter/'
+    elif [[ "${MEKO_TEST_DROP_IPV6:-0}" == "1" ]]; then
         sed -n 's/^add rule inet xui_telemt_meko input //p' "$MEKO_TEST_DIR/batch" | grep -v 'meter tm6_'
     else
         sed -n 's/^add rule inet xui_telemt_meko input //p' "$MEKO_TEST_DIR/batch"
@@ -208,6 +213,21 @@ esac
 	}
 	if !strings.Contains(string(partial), "installed=false") || strings.Contains(string(partial), "verified_ports=443,8443") {
 		t.Fatalf("missing IPv6 meter incorrectly reported healthy firewall: %s", partial)
+	}
+
+	// Existing rules in a detached chain, or a damaged iOS exception,
+	// must never produce a successful status merely because meters exist.
+	for _, damage := range []string{"MEKO_TEST_DROP_HOOK=1", "MEKO_TEST_DROP_BYPASS=1"} {
+		cmd := exec.Command("bash", helper, "status")
+		cmd.Env = append(os.Environ(), "PATH="+dir+":"+os.Getenv("PATH"),
+			"MEKO_TEST_DIR="+dir, "TELEMT_PORTS=8443,443", "TELEMT_MEKO_ENABLED=1", damage)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("damaged firewall status: %v: %s", err, out)
+		}
+		if !strings.Contains(string(out), "installed=false") {
+			t.Fatalf("%s incorrectly reported healthy firewall: %s", damage, out)
+		}
 	}
 
 	run("apply", "0")

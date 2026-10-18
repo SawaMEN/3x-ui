@@ -343,9 +343,17 @@ status() {
             /elements = {/ { inside=1; sub(/^.*elements = {/, "") }
             inside { end=($0 ~ /}/); gsub(/[{},]/, " "); for (i=1; i<=NF; i++) if ($i ~ /^[0-9]+$/) print $i; if (end) exit }
         ' | sort -n)
-        [[ "$rules" == *'tcp dport @ports'* &&
-           "$rules" == *'@th,320,32'* &&
-           "$rules" == *'reject with tcp reset'* ]] || verified_all=false
+        # A detached regular chain can contain all expected rules while
+        # protecting no traffic. Require our base-chain hook and priority.
+        grep -Eq 'type filter hook input priority (-10|filter - 10); policy accept;' <<< "$rules" || verified_all=false
+        # All iOS signature offsets and RETURN must occur on the same rule.
+        # nft may normalize masks and flag order when listing rules.
+        if ! grep -F 'tcp dport @ports' <<< "$rules" |
+             grep -F '@th,96,32' | grep -F '@th,160,16' |
+             grep -F '@th,192,16' | grep -F '@th,224,24' | grep -F '@th,320,32' |
+             grep -Eq 'counter( packets [0-9]+ bytes [0-9]+)? return'; then
+            verified_all=false
+        fi
         for port in "${applied_ports[@]}"; do
             # Verify the actual IPv4 AND IPv6 reject rules for this port.
             # A named meter without a matching reject action is insufficient.
