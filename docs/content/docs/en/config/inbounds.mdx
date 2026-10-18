@@ -113,11 +113,12 @@ Sponsor tags automatically enable Telegram middle proxies for direct egress.
 When routing through the local Xray or Sing-box SOCKS bridge, that route takes precedence
 and sponsor tags are not delivered through middle proxies.
 
-**MEKO V3** is applied automatically on Linux and follows active MTProto ports.
-The defaults are 54 SYN/minute per source IP, burst 1, and an exemption for the
-MEKO V3 iOS fingerprint. Native nftables handles IPv4 and IPv6; older systems
-fall back to IPv4 iptables with `xt_u32` and `hashlimit`. util-linux `flock` is
-required. An explicitly saved disabled state is respected.
+**Fix by MEKO V3** is an individual switch on every ordinary MTProto inbound.
+Enabling it applies firewall rules only to that inbound's TCP listener port,
+not other MTProto inbounds or WEB Proxy; it defaults to off. The default limits
+are 54 SYN/minute per source IP, burst 1, and an iOS MEKO V3 signature
+exemption. nftables covers IPv4/IPv6; iptables provides an IPv4 fallback with
+`xt_u32` and `hashlimit`. util-linux `flock` is required.
 
 New inbounds use FakeTLS only; existing raw/dd clients retain legacy mode
 compatibility. Advanced settings include camouflage destination, trusted PROXY
