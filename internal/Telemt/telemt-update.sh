@@ -20,6 +20,7 @@ arch_name() {
 get_latest_tag() {
   # Only the official published stable release; GitHub excludes prereleases.
   curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 \
+    --connect-timeout 10 --max-time 60 \
     "https://api.github.com/repos/${REPO}/releases/latest" |
     sed -nE 's/^[[:space:]]*"tag_name"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p'
 }
@@ -38,14 +39,31 @@ current_version() {
   if [[ -s "$VERSION_FILE" ]]; then tr -d '[:space:]' < "$VERSION_FILE"; fi
 }
 
+# Do not silently replace a newer installed build with the older latest
+# stable release. A same-version legacy +3xui fork is still migrated to the
+# official unmodified binary.
+version_is_newer() {
+  local installed="${1%%[+-]*}" latest="${2%%[+-]*}"
+  installed="${installed#v}"; latest="${latest#v}"
+  [[ "$installed" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && "$latest" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
+  local ia ib ic la lb lc
+  IFS=. read -r ia ib ic <<< "$installed"
+  IFS=. read -r la lb lc <<< "$latest"
+  (( 10#$ia > 10#$la )) && return 0
+  (( 10#$ia < 10#$la )) && return 1
+  (( 10#$ib > 10#$lb )) && return 0
+  (( 10#$ib < 10#$lb )) && return 1
+  (( 10#$ic > 10#$lc ))
+}
+
 download_latest() {
   local arch="$1" tag="$2" version="$3"
   local asset="telemt-${arch}-linux-musl.tar.gz"
   local base="https://github.com/${REPO}/releases/download/${tag}"
   [[ -n "$TMP_DIR" ]] || TMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/telemt-update.XXXXXX")
   mkdir -p "$TMP_DIR"
-  curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -o "$TMP_DIR/$asset" "$base/$asset"
-  curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -o "$TMP_DIR/$asset.sha256" "$base/$asset.sha256"
+  curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 --connect-timeout 10 --max-time 180 -o "$TMP_DIR/$asset" "$base/$asset"
+  curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 --connect-timeout 10 --max-time 60 -o "$TMP_DIR/$asset.sha256" "$base/$asset.sha256"
   ( cd "$TMP_DIR"; sha256sum -c "$asset.sha256" )
   [[ "$(tar -tzf "$TMP_DIR/$asset")" == "telemt" ]] || { echo "Unexpected official Telemt archive layout" >&2; return 1; }
   tar -xzf "$TMP_DIR/$asset" -C "$TMP_DIR" --no-same-owner --no-same-permissions telemt
@@ -96,11 +114,13 @@ main() {
   if [[ "${1:-}" == "--check" ]]; then
     echo "current=${current:-unknown}"
     echo "latest=$version"
-    [[ "${current#v}" == "$version" ]]
-    exit $?
+    if [[ "${current#v}" == "$version" ]] || version_is_newer "$current" "$version"; then
+      exit 0
+    fi
+    exit 1
   fi
-  if [[ "${current#v}" == "$version" && -x "$BIN" ]]; then
-    log "Official Telemt $version is already installed."
+  if [[ -x "$BIN" ]] && { [[ "${current#v}" == "$version" ]] || version_is_newer "$current" "$version"; }; then
+    log "Telemt ${current#v} is already installed (latest stable: $version)."
     exit 0
   fi
   log "updating Telemt ${current:-unknown} -> official $version"
