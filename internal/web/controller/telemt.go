@@ -25,6 +25,7 @@ func NewTelemtController(g *gin.RouterGroup, settingService service.SettingServi
 	g.Use(a.requireInstalled)
 	g.POST("/remove", a.remove)
 	g.GET("/webproxy/status", a.webProxyStatus)
+	g.POST("/webproxy/preflight", a.webProxyPreflight)
 	g.POST("/webproxy/enable", a.enableWebProxy)
 	g.POST("/webproxy/disable", a.disableWebProxy)
 	g.GET("/config", a.config)
@@ -107,6 +108,21 @@ func (a *TelemtController) getWebProxyStatus(c *gin.Context) service.TelemtWebPr
 
 func (a *TelemtController) webProxyStatus(c *gin.Context) {
 	jsonObj(c, a.getWebProxyStatus(c), nil)
+}
+
+func (a *TelemtController) webProxyPreflight(c *gin.Context) {
+	var req struct {
+		Domain string `json:"domain"`
+		service.TelemtWebProxyOptions
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		jsonMsg(c, "invalid WEB Proxy preflight request", err)
+		return
+	}
+	certFile, _ := a.settingService.GetCertFile()
+	keyFile, _ := a.settingService.GetKeyFile()
+	result, err := a.service.PreflightWebProxy(c.Request.Context(), req.Domain, req.TelemtWebProxyOptions, certFile, keyFile)
+	jsonObj(c, result, err)
 }
 
 func (a *TelemtController) enableWebProxy(c *gin.Context) {

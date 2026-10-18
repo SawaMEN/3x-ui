@@ -272,6 +272,19 @@ export default function InboundFormModal({
   } = useInboundFallbacks(dbInbound, dbInbounds);
 
   const protocol = (useWatch({ control, name: 'protocol' }) ?? '') as string;
+  const mtprotoWebEnabled = useWatch({ control, name: 'settings.webProxy.enabled' });
+  const isMtprotoWeb = protocol === Protocols.MTPROTO && !!mtprotoWebEnabled;
+  useEffect(() => {
+    if (
+      !open ||
+      !isMtprotoWeb ||
+      getV('protocol') !== Protocols.MTPROTO ||
+      !getV('settings.webProxy.enabled')
+    )
+      return;
+    setV('port', 443);
+    setV('listen', '');
+  }, [open, isMtprotoWeb, getV, setV]);
   const selectableNodes = (availableNodes || []).filter(
     (n) => n.enable && nodeSupportsProtocol(n, protocol),
   );
@@ -796,7 +809,7 @@ export default function InboundFormModal({
         name="listen"
         label={labelWithHint(t('pages.inbounds.address'), t('pages.inbounds.form.listenHelp'))}
       >
-        <Input placeholder={t('pages.inbounds.monitorDesc')} />
+        <Input disabled={isMtprotoWeb} placeholder={t('pages.inbounds.monitorDesc')} />
       </FormField>
 
       {protocol !== Protocols.MTPROTO && (
@@ -873,7 +886,10 @@ export default function InboundFormModal({
       >
         <InputNumber
           disabled={
-            protocol === Protocols.PINGTUNNEL || protocol === Protocols.TUN || hasMieruPortBindings
+            isMtprotoWeb ||
+            protocol === Protocols.PINGTUNNEL ||
+            protocol === Protocols.TUN ||
+            hasMieruPortBindings
           }
           min={
             protocol === Protocols.PINGTUNNEL || isUdsListen

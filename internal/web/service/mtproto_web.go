@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -78,12 +78,44 @@ func ValidateMtprotoWebInbound(ib *model.Inbound) error {
 	if !ib.Enable {
 		return nil
 	}
-	if !telemtWebDomainPattern.MatchString(strings.TrimSpace(opts.Domain)) {
+	domain := normalizeTelemtWebDomain(opts.Domain)
+	if domain == "" {
+		domain, err = (&SettingService{}).GetWebDomain()
+		if err != nil {
+			return err
+		}
+		domain = normalizeTelemtWebDomain(domain)
+	}
+	if !telemtWebDomainPattern.MatchString(domain) || len(domain) > 253 {
 		return errors.New("MTProto WEB Proxy requires a valid public domain")
 	}
 	if _, err := normalizeTelemtWebOptions(TelemtWebProxyOptions{Frontend: opts.Frontend, Carrier: opts.Carrier, Carriers: opts.Carriers}); err != nil {
 		return err
 	}
+	// Persist the effective endpoint so clients, API and subscriptions agree.
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(ib.Settings), &payload); err != nil {
+		return err
+	}
+	var webPayload map[string]json.RawMessage
+	if err := json.Unmarshal(payload["webProxy"], &webPayload); err != nil {
+		return err
+	}
+	webPayload["domain"], err = json.Marshal(domain)
+	if err != nil {
+		return err
+	}
+	payload["webProxy"], err = json.Marshal(webPayload)
+	if err != nil {
+		return err
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	ib.Settings = string(encoded)
+	ib.Port = 443
+	ib.Listen = ""
 	others, err := mtprotoWebCandidates()
 	if err != nil {
 		return err
@@ -155,6 +187,15 @@ func ReconcileMtprotoWebProxy(ctx context.Context) error {
 		strings.Join(state.Carriers, ",") == strings.Join(normalized.Carriers, ",")
 	svc := TelemtService{}
 	if unchanged && state.UserFingerprint == fingerprint && svc.WebProxyTelemtActive() {
+		// Recover the HTTPS entry point even when only its process was stopped.
+		if !telemtWebFrontendActive(state) {
+			telemtWebOperationMu.Lock()
+			defer telemtWebOperationMu.Unlock()
+			if err := telemtWebEnsureFrontendRunning(state); err != nil {
+				return err
+			}
+			return telemtWebWaitFrontendReady(ctx, state)
+		}
 		return nil
 	}
 	if unchanged {
@@ -217,12 +258,18 @@ func ReconcileMtprotoWebProxy(ctx context.Context) error {
 // credentials. Old proxy and subscription users must remain reachable.
 func stopMtprotoWebServiceIfUnused() error {
 	data, err := os.ReadFile(telemtConfigPath)
-	if err != nil && !errors.Is(err, os.ErrNotExist) { return err }
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
 	var cfg struct {
-		Access struct { Users map[string]string `toml:"users"` } `toml:"access"`
+		Access struct {
+			Users map[string]string `toml:"users"`
+		} `toml:"access"`
 	}
 	if len(data) != 0 {
-		if err := toml.Unmarshal(data, &cfg); err != nil { return err }
+		if err := toml.Unmarshal(data, &cfg); err != nil {
+			return err
+		}
 	}
 	for name := range cfg.Access.Users {
 		if name != "xui" && name != telemtWebUser && !strings.HasPrefix(name, "mtweb_") {
@@ -230,7 +277,9 @@ func stopMtprotoWebServiceIfUnused() error {
 		}
 	}
 	if systemctl("is-active", "--quiet", telemtServiceName) == nil {
-		if err := systemctl("stop", telemtServiceName); err != nil { return err }
+		if err := systemctl("stop", telemtServiceName); err != nil {
+			return err
+		}
 	}
 	if systemctl("is-enabled", "--quiet", telemtServiceName) == nil {
 		return systemctl("disable", telemtServiceName)

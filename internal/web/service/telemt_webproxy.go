@@ -80,6 +80,7 @@ type TelemtWebProxyStatus struct {
 	CertificateReady            bool     `json:"certificateReady"`
 	CertificateFile             string   `json:"certificateFile"`
 	ListenPort                  int      `json:"listenPort"`
+	Port443Free                 bool     `json:"port443Free"`
 	Port443Available            bool     `json:"port443Available"`
 	Port443Owner                string   `json:"port443Owner"`
 	Error                       string   `json:"error"`
@@ -255,7 +256,7 @@ func removeTelemtWebUser(base string) string {
 		if strings.HasPrefix(trimmed, "[") {
 			inUsers = trimmed == "[access.users]"
 		}
-		if inUsers && (strings.HasPrefix(trimmed, telemtWebUser+" = ") || strings.HasPrefix(trimmed, "\\\"mtweb_")) {
+		if inUsers && (strings.HasPrefix(trimmed, telemtWebUser+" = ") || strings.HasPrefix(trimmed, "\"mtweb_")) {
 			continue
 		}
 		out = append(out, line)
@@ -274,14 +275,14 @@ func (TelemtService) WebProxyStatus(defaultDomain, panelCert, panelKey string) (
 	nginxOwns443 := telemtWebNginxOwnsPort443()
 	frontendActive := state.Enabled && telemtWebFrontendActive(state) && (frontend != "nginx" || nginxOwns443)
 	portOwner := telemtWebPortOwner(443)
-	status := TelemtWebProxyStatus{Frontend: frontend, FrontendActive: frontendActive, Carrier: telemtWebCarrier(state), Carriers: state.Carriers, CarrierNegotiationSupported: telemtWebVersionAtLeast(version, "3.5.4"), Enabled: state.Enabled, Supported: telemtWebVersionAtLeast(version, telemtWebMinEngine), Domain: state.Domain, DefaultDomain: defaultDomain, NginxInstalled: telemtWebCommandExists("nginx"), NginxActive: nginxActive, Port443Available: telemtWebFrontendCanOwn443(state), Port443Owner: portOwner, ListenPort: state.ListenPort, CertificateFile: state.CertFile}
+	status := TelemtWebProxyStatus{Frontend: frontend, FrontendActive: frontendActive, Carrier: telemtWebCarrier(state), Carriers: state.Carriers, CarrierNegotiationSupported: telemtWebVersionAtLeast(version, "3.5.4"), Enabled: state.Enabled, Supported: telemtWebVersionAtLeast(version, telemtWebMinEngine), Domain: state.Domain, DefaultDomain: defaultDomain, NginxInstalled: telemtWebCommandExists("nginx"), NginxActive: nginxActive, Port443Free: telemtWebPortAvailable(443), Port443Available: telemtWebFrontendCanOwn443(state), Port443Owner: portOwner, ListenPort: state.ListenPort, CertificateFile: state.CertFile}
 	if state.Enabled && state.Domain != "" && state.Secret != "" {
 		status.Link = telemtWebLink(state.Domain, state.Secret)
 	}
 	if state.CertFile != "" {
-		status.CertificateReady = telemtWebCertificateCoversDomain(state.CertFile, state.Domain) && telemtWebFileReadable(state.KeyFile)
+		status.CertificateReady = telemtWebCertificatePairReady(state.CertFile, state.KeyFile, state.Domain)
 	} else if panelCert != "" {
-		status.CertificateReady = telemtWebCertificateCoversDomain(panelCert, state.Domain) && telemtWebFileReadable(panelKey)
+		status.CertificateReady = telemtWebCertificatePairReady(panelCert, panelKey, state.Domain)
 		status.CertificateFile = panelCert
 	}
 	if !status.Supported {
@@ -535,6 +536,16 @@ func resolveTelemtWebPublicAddr(domain string) (string, error) {
 		if ip := selectTelemtWebPublicIP(ips, local); ip != nil {
 			return net.JoinHostPort(ip.String(), "443"), nil
 		}
+		// Reject addresses pointing elsewhere on the same public IP family.
+		// A host can legitimately have public IPv6 but NAT-forwarded IPv4;
+		// that mixed-family case must retain the NAT fallback below.
+		for _, own := range local {
+			for _, candidate := range ips {
+				if isPublic(candidate) && (own.To4() != nil) == (candidate.To4() != nil) {
+					return "", fmt.Errorf("WEB Proxy domain %s points to a different public server: none of its A/AAAA addresses match local public interfaces", domain)
+				}
+			}
+		}
 	}
 	// Public IPs behind NAT are not assigned to a local interface. Preserve
 	// the DNS fallback for those installations.
@@ -610,7 +621,7 @@ func writeTelemtWebNginxConfig(state TelemtWebProxyState) error {
 	if state.CertFile == "" || state.KeyFile == "" {
 		return errors.New("WEB Proxy certificate is not configured")
 	}
-	if !telemtWebCertificateCoversDomain(state.CertFile, state.Domain) {
+	if !telemtWebCertificatePairReady(state.CertFile, state.KeyFile, state.Domain) {
 		return fmt.Errorf("certificate does not cover domain %s", state.Domain)
 	}
 	listen := "listen 443 ssl;"
@@ -883,12 +894,12 @@ func telemtWebEnsureNginxPackage(ctx context.Context) error {
 }
 
 func telemtWebEnsureCertificate(ctx context.Context, domain, panelCert, panelKey string) (string, string, error) {
-	if telemtWebCertificateCoversDomain(panelCert, domain) && telemtWebFileReadable(panelKey) {
+	if telemtWebCertificatePairReady(panelCert, panelKey, domain) {
 		return panelCert, panelKey, nil
 	}
 	acmeCert := "/etc/letsencrypt/live/" + domain + "/fullchain.pem"
 	acmeKey := "/etc/letsencrypt/live/" + domain + "/privkey.pem"
-	if telemtWebCertificateCoversDomain(acmeCert, domain) && telemtWebFileReadable(acmeKey) {
+	if telemtWebCertificatePairReady(acmeCert, acmeKey, domain) {
 		return acmeCert, acmeKey, nil
 	}
 	if !telemtWebPortAvailable(80) && !telemtWebNginxOwnsPort(80) {
@@ -915,7 +926,7 @@ func telemtWebEnsureCertificate(ctx context.Context, domain, panelCert, panelKey
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return "", "", fmt.Errorf("certbot failed: %s", strings.TrimSpace(string(out)))
 	}
-	if !telemtWebCertificateCoversDomain(acmeCert, domain) || !telemtWebFileReadable(acmeKey) {
+	if !telemtWebCertificatePairReady(acmeCert, acmeKey, domain) {
 		return "", "", errors.New("certbot completed but certificate files are missing or invalid")
 	}
 	if err := installTelemtWebRenewalHook(); err != nil {

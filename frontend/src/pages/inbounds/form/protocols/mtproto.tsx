@@ -1,9 +1,11 @@
 import { useTranslation } from 'react-i18next';
-import { Collapse, Input, InputNumber, Select, Switch } from 'antd';
+import { Alert, Collapse, Input, InputNumber, Select, Switch } from 'antd';
 import { useFormContext, useWatch } from 'react-hook-form';
 
 import { FormField } from '@/components/form/rhf';
 import { useOutboundTags } from '@/api/queries/useOutboundTags';
+import MtprotoWebStatus from './MtprotoWebStatus';
+import { TelemtWebProxyRequestSchema } from '@/schemas/telemt-web';
 import MtprotoMekoStatus from './MtprotoMekoStatus';
 
 export default function MtprotoFields() {
@@ -39,8 +41,33 @@ export default function MtprotoFields() {
       </FormField>
       {webProxyEnabled && (
         <>
-          <FormField name={['settings', 'webProxy', 'domain']} label="Домен WEB Proxy">
-            <Input placeholder="web.example.com" />
+          <Alert
+            type="info"
+            showIcon
+            message={
+              i18n.resolvedLanguage?.startsWith('ru')
+                ? 'WEB Proxy: внешний TCP-порт 443 — автоматически'
+                : 'WEB Proxy: public TCP port 443 — automatic'
+            }
+            description={
+              i18n.resolvedLanguage?.startsWith('ru')
+                ? 'Можно использовать домен панели или отдельный домен. A/AAAA должны указывать на этот сервер. Панель автоматически настроит HTTPS frontend, сертификат и локальный backend. Если сама панель или другой сервис занимает 443, сначала перенесите его на другой порт; для панели и WEB допустим один домен с разными портами. Для выпуска и продления сертификата через HTTP нужен доступный снаружи TCP 80; для работы — TCP 443. Разрешите их в firewall сервера и хостера. Поддерживается один WEB inbound на локальном сервере.'
+                : 'Use the panel domain or a separate domain with A/AAAA pointing to this server. HTTPS frontend, certificate and loopback backend are configured automatically. Move the panel or another service off port 443 first if necessary; the same domain can serve the panel on another port. HTTP certificate issuance and renewal need public TCP 80; proxy traffic needs TCP 443. Allow these ports in host and provider firewalls. One local WEB inbound is supported.'
+            }
+          />
+          <MtprotoWebStatus />
+          <FormField
+            name={['settings', 'webProxy', 'domain']}
+            label="Домен WEB Proxy"
+            rules={{
+              validate: (value) =>
+                TelemtWebProxyRequestSchema.shape.domain.safeParse(value).success ||
+                (i18n.resolvedLanguage?.startsWith('ru')
+                  ? 'Укажите домен без https://, порта и пути, например web.example.com'
+                  : 'Enter a domain without scheme, port or path, e.g. web.example.com'),
+            }}
+          >
+            <Input placeholder="web.example.com" addonAfter=":443" />
           </FormField>
           <FormField name={['settings', 'webProxy', 'frontend']} label="HTTPS frontend">
             <Select

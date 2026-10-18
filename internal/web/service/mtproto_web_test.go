@@ -72,3 +72,49 @@ type = "direct"
 		t.Fatal("stale WEB account survived after transport was disabled")
 	}
 }
+
+func TestValidateMtprotoWebCanonicalEndpoint(t *testing.T) {
+	setupConflictDB(t)
+	ib := &model.Inbound{Protocol: model.MTProto, Enable: true, Port: 46099, Listen: "127.0.0.2", Settings: `{"webProxy":{"enabled":true,"domain":" HTTPS://Web.Example.COM/ "},"clients":[],"custom":"preserve"}`}
+	if err := ValidateMtprotoWebInbound(ib); err != nil {
+		t.Fatal(err)
+	}
+	opts, err := mtprotoWebForInbound(ib)
+	if err != nil || opts.Domain != "web.example.com" || ib.Port != 443 || ib.Listen != "" {
+		t.Fatalf("incorrect effective WEB endpoint: %+v opts=%+v err=%v", ib, opts, err)
+	}
+	if !strings.Contains(ib.Settings, `"custom":"preserve"`) {
+		t.Fatal("unrelated setting lost")
+	}
+	if strings.Contains(ib.Settings, `"carriers":null`) {
+		t.Fatal("absent carriers must not become null: frontend rejects null arrays")
+	}
+}
+
+func TestCheckPortConflictMtprotoWebEffectivePort(t *testing.T) {
+	const web = `{"webProxy":{"enabled":true,"domain":"web.example.com"}}`
+	t.Run("existing legacy WEB reserves 443 on every interface", func(t *testing.T) {
+		setupConflictDB(t)
+		seedInboundConflict(t, "legacy-web", "127.0.0.2", 46099, model.MTProto, "", web)
+		for _, tc := range []struct {
+			port     int
+			protocol model.Protocol
+			conflict bool
+		}{
+			{443, model.VLESS, true}, {46099, model.VLESS, false}, {443, model.Hysteria, false},
+		} {
+			got, err := (&InboundService{}).checkPortConflict(&model.Inbound{Protocol: tc.protocol, Port: tc.port, Listen: "127.0.0.3"}, 0)
+			if err != nil || (got != nil) != tc.conflict {
+				t.Fatalf("port=%d protocol=%s conflict=%+v err=%v", tc.port, tc.protocol, got, err)
+			}
+		}
+	})
+	t.Run("new WEB conflicts with existing TCP 443", func(t *testing.T) {
+		setupConflictDB(t)
+		seedInboundConflict(t, "vless-443", "127.0.0.3", 443, model.VLESS, "", "{}")
+		got, err := (&InboundService{}).checkPortConflict(&model.Inbound{Protocol: model.MTProto, Port: 46099, Listen: "127.0.0.2", Settings: web}, 0)
+		if err != nil || got == nil || got.Port != 443 {
+			t.Fatalf("conflict=%+v err=%v", got, err)
+		}
+	})
+}

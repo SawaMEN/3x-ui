@@ -20,6 +20,63 @@ lifecycles from enabled MTProto inbounds:
   WEB mode is currently supported only on the local server, with **one**
   managed WEB inbound per server because its HTTPS frontend owns port 443.
 
+### WEB: domain and port selection
+
+The form sets the public port to **443** automatically; the loopback backend
+port is allocated separately. The inbound's general listen address does not
+restrict the HTTPS frontend. Existing WEB records with another stored port
+still reserve TCP 443 in conflict checks.
+
+The panel domain is suggested when available. You can use it or a separate
+public domain: A/AAAA records must point to this server and the certificate
+must cover the chosen name. The form preserves a previously entered domain.
+One domain can serve WEB on 443 and the panel on another port, for example
+`https://web.example.com:2053/panel-path/`. If the panel itself already listens
+on 443, move it using panel settings first. This integration does not migrate
+the panel listener or route its login UI through the WEB decoy vhost. Existing
+reverse-proxy vhosts for the same domain need administrator reconciliation.
+
+The WEB setup dialog now performs a **read-only preflight** automatically on every
+domain, frontend or carrier change, and offers **Check again**. It checks the
+actual proposed domain rather than the previously saved WEB status. Enabling
+WEB reruns the same preflight server-side before writing any configuration.
+
+Preflight requires: a valid public FQDN; public DNS resolution (matching this
+server's public network interface when one is assigned); an installed Telemt
+binary of the required version; root privileges; an available local backend
+port; TCP 443 available for the managed frontend (or already served by it);
+no second Nginx HTTPS vhost for the same domain; a supported package manager
+when an absent frontend or Certbot needs installation; and either a valid,
+unexpired TLS certificate/private-key pair for the FQDN, or TCP 80 available
+for automatic Let's Encrypt HTTP-01 issuance. Carriers other than the base
+HTTPS transport require Telemt 3.5.4+.
+
+If a normal Telemt listener is already configured on TCP 443, preflight
+blocks WEB deployment: moving that native listener automatically would break
+existing MTProxy links. Change its port in Telemt settings first. Without a
+public FQDN, use ordinary MTProxy instead of Telegram Desktop WEB Proxy.
+
+**External checks remain necessary:** DNS must point directly to the server
+(not to a CDN), cloud/provider firewalls must permit inbound TCP 443 and TCP
+80 for certificate issuance, and NAT deployments must forward these ports.
+Local preflight cannot truthfully establish the remote reachability of a
+public address. A successful preflight is a prerequisite check, not a promise
+that an external Telegram client can connect.
+
+Read-only endpoint: `POST /panel/api/telemt/webproxy/preflight` with the same
+`domain`, `frontend`, `carrier` and `carriers` fields as the enable
+endpoint. Its response contains `ready`, individual `checks` and
+non-blocking `warnings`. The enable endpoint refuses a failed preflight.
+
+Use **Check WEB Proxy readiness** to refresh the runtime and port diagnostics.
+A successful bind check does not verify DNS or external firewall reachability.
+Permit TCP 443 in host/provider firewalls and TCP 80 when HTTP certificate
+issuance/renewal is used. DNS and provider firewalls require access to their
+respective control planes and are not changed by the panel.
+
+Periodic inbound reconciliation also restarts a stopped managed HTTPS
+frontend when its Telemt backend remains active.
+
 ### Ordinary MTProto: Fix by MEKO V3
 
 Fix by MEKO is **opt-in per ordinary MTProto inbound** and targets the
