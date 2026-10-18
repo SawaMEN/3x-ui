@@ -73,9 +73,6 @@ func (inst Instance) structuralFingerprint() string {
 	return strings.Join([]string{
 		inst.bindTo(),
 		strconv.FormatBool(inst.Debug),
-		strconv.FormatBool(inst.MekoFix),
-		strconv.Itoa(inst.MekoRatePerMinute),
-		strconv.Itoa(inst.MekoBurst),
 		strconv.FormatBool(inst.ProxyProtocolListener),
 		inst.PreferIP,
 		strconv.Itoa(inst.ThrottleMaxConnections),
@@ -95,6 +92,12 @@ func (inst Instance) structuralFingerprint() string {
 		strconv.Itoa(inst.MaskPort),
 		strconv.Itoa(inst.MaskProxyProtocol),
 	}, "|")
+}
+
+// MEKO modifies only host firewall policy. Keep it separate from the Telemt
+// structural fingerprint so editing a SYN limit does not disconnect users.
+func (inst Instance) mekoFingerprint() string {
+	return fmt.Sprintf("%t:%d:%d", inst.MekoFix, inst.MekoRatePerMinute, inst.MekoBurst)
 }
 
 func (inst Instance) secretsFingerprint() string {
@@ -133,6 +136,7 @@ type managed struct {
 	tag          string
 	structuralFP string
 	secretsFP    string
+	mekoFP       string
 	apiPort      int
 	apiToken     string
 	last         map[string]clientCounters
@@ -383,10 +387,17 @@ func stopManaged(cur *managed) error {
 }
 
 func (m *Manager) ensureLocked(inst Instance) error {
-	structFP, secFP := inst.structuralFingerprint(), inst.secretsFingerprint()
+	structFP, secFP, mekoFP := inst.structuralFingerprint(), inst.secretsFingerprint(), inst.mekoFingerprint()
 	if cur, ok := m.procs[inst.Id]; ok {
 		switch ensureActionFor(cur.proc.IsRunning(), cur.structuralFP, cur.secretsFP, structFP, secFP) {
 		case ensureNoop:
+			if cur.mekoFP != mekoFP {
+				if err := writeConfig(configPathForID(inst.Id), inst, cur.apiPort, cur.apiToken); err != nil {
+					return err
+				}
+				cur.mekoFP = mekoFP
+				scheduleMekoSync()
+			}
 			cur.tag = inst.Tag
 			cur.userEmails = nativeUserEmails(inst.Secrets)
 			return nil
@@ -397,6 +408,8 @@ func (m *Manager) ensureLocked(inst Instance) error {
 			if reloadTelemt(cur.apiPort, cur.apiToken) {
 				cur.tag = inst.Tag
 				cur.secretsFP = secFP
+				cur.mekoFP = mekoFP
+				scheduleMekoSync()
 				cur.userEmails = nativeUserEmails(inst.Secrets)
 				logger.Infof("mtproto: reloaded Telemt users for inbound %d", inst.Id)
 				return nil
@@ -432,11 +445,13 @@ func (m *Manager) ensureLocked(inst Instance) error {
 		tag:          inst.Tag,
 		structuralFP: structFP,
 		secretsFP:    secFP,
+		mekoFP:       mekoFP,
 		apiPort:      apiPort,
 		apiToken:     apiToken,
 		last:         map[string]clientCounters{},
 		userEmails:   nativeUserEmails(inst.Secrets),
 	}
+	scheduleMekoSync()
 	logger.Infof("mtproto: started Telemt for inbound %d on %s", inst.Id, inst.bindTo())
 	return nil
 }
