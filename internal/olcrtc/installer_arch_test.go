@@ -2,6 +2,8 @@ package olcrtc
 
 import (
 	"bytes"
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
 )
@@ -59,5 +61,44 @@ func TestArchInstallerPackagesContainRequiredTools(t *testing.T) {
 		if !strings.Contains(string(got), pkg) {
 			t.Fatalf("missing Arch dependency %s", pkg)
 		}
+	}
+}
+
+func TestPinnedUpstreamArchInstaller(t *testing.T) {
+	path := os.Getenv("OLCRTC_PINNED_INSTALLER_PATH")
+	if path == "" {
+		t.Skip("set OLCRTC_PINNED_INSTALLER_PATH for pinned upstream smoke check")
+	}
+	original, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	patched, err := addArchPackagesToInstaller(original)
+	if err != nil {
+		t.Fatalf("cannot apply Arch support to pinned upstream installer: %v", err)
+	}
+	check := exec.Command("bash", "-n")
+	check.Stdin = bytes.NewReader(patched)
+	if output, err := check.CombinedOutput(); err != nil {
+		t.Fatalf("patched installer fails bash syntax check: %s: %v", output, err)
+	}
+	if !bytes.Contains(patched, []byte("pacman -S --noconfirm --needed ca-certificates")) {
+		t.Fatal("patched installer lacks Arch dependencies")
+	}
+	if !bytes.Contains(patched, []byte("apt-get install -y --no-install-recommends")) {
+		t.Fatal("patched installer lost its Debian/Ubuntu installation path")
+	}
+}
+
+func TestArchRuntimeDetectsPacman(t *testing.T) {
+	data, err := os.ReadFile("/etc/os-release")
+	if err != nil {
+		t.Skip("OS release information is unavailable")
+	}
+	if !bytes.Contains(data, []byte("ID=arch\n")) {
+		t.Skip("Arch Linux specific test")
+	}
+	if got := installerPackageManager(); got != "pacman" {
+		t.Fatalf("expected Arch package manager pacman, got %q", got)
 	}
 }
