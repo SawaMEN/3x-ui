@@ -25,3 +25,28 @@ func TestTelemtVersionEqualityDoesNotReportUpdate(t *testing.T) {
 		t.Fatalf("equal Telemt versions were normalized differently: %q vs %q", current, latest)
 	}
 }
+
+func TestTelemtNeedsUpdate(t *testing.T) {
+	cases := []struct {
+		name, current, latest string
+		want bool
+	}{
+		{"new upstream", "telemt 3.5.13", "3.5.14", true},
+		{"major version", "telemt 2.9.99", "3.0.0", true},
+		{"up to date", "telemt 3.5.14", "3.5.14", false},
+		{"v prefix", "telemt v3.5.14", "v3.5.14", false},
+		{"legacy patched migration", "telemt 3.5.14+3xui.1", "3.5.14", true},
+		{"patched build newer than upstream", "telemt 3.5.15+3xui.1", "3.5.14", false},
+		{"never downgrade", "telemt 3.6.0", "3.5.14", false},
+		{"missing current", "", "3.5.14", false},
+		{"missing latest", "3.5.14", "", false},
+		{"invalid", "not a version", "3.5.14", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := telemtNeedsUpdate(tc.current, tc.latest); got != tc.want {
+				t.Fatalf("telemtNeedsUpdate(%q, %q) = %v, want %v", tc.current, tc.latest, got, tc.want)
+			}
+		})
+	}
+}
