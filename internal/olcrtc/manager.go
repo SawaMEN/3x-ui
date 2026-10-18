@@ -215,6 +215,9 @@ func remoteRevision(ctx context.Context) string {
 	}
 	if len(revisions) == 2 {
 		updateCache.sha = strings.Join(revisions, "|")
+	} else {
+		// A failed lookup must not keep advertising a stale upstream revision.
+		updateCache.sha = ""
 	}
 	updateCache.when = time.Now()
 	return updateCache.sha
@@ -235,21 +238,20 @@ func revisionLabel(value string) string {
 func GetStatus(ctx context.Context) Status {
 	yes, reason := Supported()
 	result := Status{Installed: installed(), Supported: yes, UnsupportedReason: reason}
+	// Show real upstream revisions even before installation, when reachable.
+	latest := ""
+	if _, err := exec.LookPath("git"); err == nil {
+		latest = remoteRevision(ctx)
+	}
+	result.AvailableVersion = revisionLabel(latest)
 	if result.Installed {
 		check, cancel := context.WithTimeout(ctx, 3*time.Second)
 		output, err := run(check, "systemctl", "is-active", "olcrtc-manager")
 		cancel()
 		result.Running = err == nil && output == "active"
 		current := readRevisions()
-		latest := ""
-		if _, e := exec.LookPath("git"); e == nil {
-			latest = remoteRevision(ctx)
-		}
 		result.InstalledVersion = revisionLabel(current)
-		result.AvailableVersion = revisionLabel(latest)
 		result.UpdateAvailable = latest != "" && current != latest
-	} else {
-		result.AvailableVersion = "upstream"
 	}
 	state.Lock()
 	result.Busy = state.busy
@@ -306,6 +308,30 @@ func Start(operation string) error {
 	}()
 	return nil
 }
+// Upstream logs may include freshly generated admin credentials. Never expose
+// raw installer logs through the API: only allow-list executable names.
+var installerMissingCommand = regexp.MustCompile(`(?m)line [0-9]+: ([A-Za-z0-9_.+-]{1,64}): command not found$`)
+func installerFailure(err error, logPath string) error {
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && exitErr.ExitCode() == 127 {
+		if output, readErr := os.ReadFile(logPath); readErr == nil {
+			matches := installerMissingCommand.FindAllSubmatch(output, -1)
+			for i := len(matches) - 1; i >= 0; i-- {
+				command := string(matches[i][1])
+				switch command {
+				case "go", "git", "curl", "tar", "apt-get", "pacman", "systemctl",
+					"bash", "hostname", "awk", "sed", "sort", "head", "grep", "install",
+					"ln", "rm", "mkdir", "mktemp", "ss", "seq", "od", "tr", "openssl",
+					"chmod", "fallocate", "mkswap", "swapon", "dd", "cat", "ip", "iptables", "tc":
+					return fmt.Errorf("OlcRTC installer: command %q not found (exit status 127); check PATH and packages", command)
+				}
+			}
+		}
+		return errors.New("OlcRTC installer: required command not found (exit status 127); check PATH and packages")
+	}
+	return fmt.Errorf("OlcRTC installation failed; check system packages, free RAM and Go toolchain (%w)", err)
+}
+
 func install(ctx context.Context) error {
 	if installed() {
 		if _, err := os.Stat(revisionPath); err != nil {
@@ -355,6 +381,9 @@ func install(ctx context.Context) error {
 	cmd := exec.CommandContext(ctx, "bash", name)
 	// Never publish the independent admin interface. Native settings go through 3x-ui.
 	cmd.Env = append(os.Environ(),
+		// The Go toolchain installed by upstream must be available to the
+		// script even if systemd launched 3x-ui without /usr/local/bin in PATH.
+		"PATH=/usr/local/go/bin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
 		"PANEL_ADDR=127.0.0.1", "PANEL_TLS=0",
 		"PANEL_ADMIN_PATH=/admin", "AUTO_SWAP=0")
 	// Installer logs include a generated password: never return them to browsers.
@@ -367,15 +396,24 @@ func install(ctx context.Context) error {
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("OlcRTC installation failed; check system packages, free RAM and Go toolchain (%w)", err)
+		return installerFailure(err, logFile.Name())
 	}
 	if _, err := run(ctx, "systemctl", "restart", "olcrtc-manager"); err != nil {
 		return fmt.Errorf("installed but unable to restart olcrtc-manager: %w", err)
 	}
-	if before == "" {
-		before = "unknown|unknown"
+	// git may have been installed by this run; bypass the preinstall cache.
+	updateCache.Lock()
+	updateCache.when = time.Time{}
+	updateCache.sha = ""
+	updateCache.Unlock()
+	after := remoteRevision(ctx)
+	if after == "" {
+		after = before
 	}
-	if err := os.WriteFile(revisionPath, []byte(before+"\n"), 0600); err != nil {
+	if after == "" {
+		after = "unknown|unknown"
+	}
+	if err := os.WriteFile(revisionPath, []byte(after+"\n"), 0600); err != nil {
 		return err
 	}
 	return nil

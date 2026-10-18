@@ -2,6 +2,9 @@ package olcrtc
 
 import (
 	"encoding/json"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -185,5 +188,34 @@ func TestSimpleLocationRejectsAdvancedConfiguration(t *testing.T) {
 	loc.Link = "bridge"
 	if SimpleLocation(loc) {
 		t.Fatal("non-default link settings could be destroyed by simple editor")
+	}
+}
+
+// An upstream installer may print credentials before failing; never leak them.
+func TestInstallerFailureExit127RedactsCredentials(t *testing.T) {
+	exitError := exec.Command("sh", "-c", "exit 127").Run()
+	if exitError == nil {
+		t.Fatal("expected exit status 127")
+	}
+	logFile := filepath.Join(t.TempDir(), "installer.log")
+	if err := os.WriteFile(logFile, []byte("/tmp/install.sh: line 174: go: command not found\nPassword: private-admin-password\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	got := installerFailure(exitError, logFile).Error()
+	if !strings.Contains(got, "go") || !strings.Contains(got, "127") || strings.Contains(got, "private-admin-password") {
+		t.Fatalf("unexpected installer diagnostic: %s", got)
+	}
+	if err := os.WriteFile(logFile, []byte("/tmp/install.sh: line 174: private-admin-password: command not found\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	got = installerFailure(exitError, logFile).Error()
+	if strings.Contains(got, "private-admin-password") || !strings.Contains(got, "127") {
+		t.Fatalf("unsafe installer diagnostic: %s", got)
+	}
+}
+
+func TestMissingUpstreamRevisionIsNotAdvertisedAsAvailable(t *testing.T) {
+	if got := revisionLabel(""); got != "" {
+		t.Fatalf("expected an empty label for an unknown revision, got %q", got)
 	}
 }
