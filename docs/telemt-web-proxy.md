@@ -20,6 +20,36 @@ lifecycles from enabled MTProto inbounds:
   WEB mode is currently supported only on the local server, with **one**
   managed WEB inbound per server because its HTTPS frontend owns port 443.
 
+### Ordinary MTProto: Fix by MEKO V3
+
+Fix by MEKO is **opt-in per ordinary MTProto inbound** and targets the
+inbound's listening TCP port. The **WEB Proxy** transport never uses these
+rules. Rate (SYN/minute per source IP) and burst can be tuned on each inbound;
+default policy is 54/minute, burst 1. MEKO is a connection-attempt limiter, **not
+a substitute for a general host firewall or a guarantee of reachability from a
+filtered network**.
+
+The panel's MEKO helper owns a dedicated nftables table
+(`inet xui_telemt_meko`) and falls back to managed iptables chains when
+nftables is unavailable. On an existing nftables installation, updates replace
+the owned table in **one atomic transaction**; an unsuccessful replacement does
+not install a second limiter via iptables. The iptables fallback currently
+filters IPv4 only, so install nftables when ordinary MTProto accepts IPv6.
+Neither backend changes unrelated SSH rules or other nftables tables.
+
+The MEKO systemd unit is enabled only while at least one opted-in ordinary
+MTProto inbound exists. Port changes, disable/delete, and changes in per-inbound
+limits trigger reconciliation. If a sidecar fails to start, its generated port
+selection is removed rather than applying MEKO to a service that might later
+reuse the port. The inbound form displays selected versus actually applied
+ports, reports firewall errors, and offers **Retry MEKO** after saving.
+
+Do not enable Telemt's built-in `server.listeners.synlimit` on a port that is
+already managed by the external MEKO helper: stacking two independent SYN
+limiters may reject legitimate connections. MEKO's iOS-like TCP signature is a
+heuristic and may vary with OS and network path. Validate rate/burst against
+real traffic and check both IPv4 and IPv6 before deployment.
+
 New WEB inbounds will not take over a previously configured independent
 WEB Proxy automatically. The legacy configuration is preserved, and the old
 WEB frontend must be disabled before a new inbound can claim port 443.
