@@ -194,7 +194,7 @@ export default function TelemtPage() {
             carrier: webCarrier || 'https',
             carriers: webCarriersKey ? webCarriersKey.split('|') : [],
           },
-          jsonOptions,
+          { ...jsonOptions, silent: true },
         );
         if (!active) return;
         if (response?.success && response.obj) {
