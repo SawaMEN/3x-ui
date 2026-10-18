@@ -131,7 +131,11 @@ function StatusLabel({ record }: { record: HealthProps }) {
 function PanelEditionTag({ edition }: { edition?: string }) {
   const { t } = useTranslation();
   if (edition === 'sawamen') {
-    return <Tag color="blue" style={{ margin: 0 }}>{t('pages.nodes.panelEditionFork')}</Tag>;
+    return (
+      <Tag color="blue" style={{ margin: 0 }}>
+        {t('pages.nodes.panelEditionFork')}
+      </Tag>
+    );
   }
   if (edition === 'unmarked') {
     return (
