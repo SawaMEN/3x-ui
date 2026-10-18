@@ -178,6 +178,15 @@ func validRawSecret(secret string) bool {
 	return err == nil
 }
 
+// WebProxyInbound is a separate HTTPS transport of the existing MTProto protocol.
+// Its users are still resolved by InstanceFromInbound, but it runs through the
+// managed WEB backend instead of a normal listener sidecar.
+func WebProxyInbound(ib *model.Inbound) bool {
+	if ib == nil || ib.Protocol != model.MTProto { return false }
+	var settings struct { WebProxy struct { Enabled bool `json:"enabled"` } `json:"webProxy"` }
+	return json.Unmarshal([]byte(ib.Settings), &settings) == nil && settings.WebProxy.Enabled
+}
+
 func InstanceFromInbound(ib *model.Inbound) (Instance, bool) {
 	if ib == nil || ib.Protocol != model.MTProto {
 		return Instance{}, false
