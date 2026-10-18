@@ -1049,7 +1049,10 @@ export default function SystemUpdateModal({
                                 (!action.updateAvailable &&
                                   !(isDependencyInstallable(action) && !action.installed)) ||
                                 (!action.availableVersion &&
-                                  !(action.key === 'telemt' && (!action.installed || action.updateAvailable))) ||
+                                  !(
+                                    action.key === 'telemt' &&
+                                    (!action.installed || action.updateAvailable)
+                                  )) ||
                                 dependencyBusy !== null ||
                                 action.busy === true ||
                                 systemUpdateBusy
