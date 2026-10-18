@@ -536,11 +536,15 @@ func resolveTelemtWebPublicAddr(domain string) (string, error) {
 		if ip := selectTelemtWebPublicIP(ips, local); ip != nil {
 			return net.JoinHostPort(ip.String(), "443"), nil
 		}
-		// When this host actually has public interface addresses, a DNS
-		// record pointing elsewhere is not a valid WEB public_addr. Do not
-		// silently fall back to the first DNS result (e.g. a CDN edge).
-		if len(local) > 0 {
-			return "", fmt.Errorf("WEB Proxy domain %s points to a different public server: none of its A/AAAA addresses match local public interfaces", domain)
+		// Reject addresses pointing elsewhere on the same public IP family.
+		// A host can legitimately have public IPv6 but NAT-forwarded IPv4;
+		// that mixed-family case must retain the NAT fallback below.
+		for _, own := range local {
+			for _, candidate := range ips {
+				if isPublic(candidate) && (own.To4() != nil) == (candidate.To4() != nil) {
+					return "", fmt.Errorf("WEB Proxy domain %s points to a different public server: none of its A/AAAA addresses match local public interfaces", domain)
+				}
+			}
 		}
 	}
 	// Public IPs behind NAT are not assigned to a local interface. Preserve
