@@ -75,7 +75,10 @@ export default function MtprotoMekoStatus() {
 
   const wanted = !!port && status?.ports?.includes(port);
   const active =
-    !!port && status?.appliedPorts?.includes(port) && status?.verifiedPorts?.includes(port) && status?.applied;
+    !!port &&
+    status?.appliedPorts?.includes(port) &&
+    status?.verifiedPorts?.includes(port) &&
+    status?.applied;
   const message = error || status?.statusError;
   let type: 'success' | 'warning' | 'error' | 'info' = 'info';
   let description = russian
@@ -98,7 +101,8 @@ export default function MtprotoMekoStatus() {
           : `MEKO applied to TCP port ${port}. Firewall: ${status.backend || 'unknown'}.`;
   } else if (wanted) {
     type = 'warning';
-    const incomplete = !!status?.appliedPorts?.includes(port) && !status?.verifiedPorts?.includes(port);
+    const incomplete =
+      !!status?.appliedPorts?.includes(port) && !status?.verifiedPorts?.includes(port);
     description = incomplete
       ? russian
         ? `На порту ${port} обнаружены неполные правила MEKO. Проверьте nftables/iptables и повторите применение.`
