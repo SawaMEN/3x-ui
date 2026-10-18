@@ -110,7 +110,9 @@ func readTelemtMekoEnv(cfg *TelemtMekoConfig) {
 
 func telemtPortFromConfig(path string) int {
 	data, err := os.ReadFile(path)
-	if err != nil {
+	if err != nil || !strings.HasPrefix(string(data), "# x-ui-meko-fix=1\n") {
+		// Old sidecars, unselected ports and standalone WEB Proxy must never
+		// acquire MEKO rules just because they share the Telemt executable.
 		return 0
 	}
 	var raw struct {
@@ -135,13 +137,6 @@ func discoverTelemtMekoPorts() []int {
 			if port := telemtPortFromConfig(path); port > 0 {
 				seen[port] = struct{}{}
 			}
-		}
-	}
-	// The standalone Telemt page can still run its own service for WEB Proxy.
-	// Cover that port as well, but only while the standalone service is active.
-	if systemctl("is-active", "--quiet", telemtServiceName) == nil {
-		if port := telemtPortFromConfig(telemtConfigPath); port > 0 {
-			seen[port] = struct{}{}
 		}
 	}
 	ports := make([]int, 0, len(seen))
@@ -204,6 +199,9 @@ func (TelemtService) GetMekoConfig() TelemtMekoConfig {
 	cfg := defaultTelemtMekoConfig()
 	readTelemtMekoEnv(&cfg)
 	cfg.Ports = discoverTelemtMekoPorts()
+	// Per-inbound selection owns whether MEKO is enabled. A previous global
+	// toggle must not unexpectedly disable an opted-in ordinary MTProto port.
+	cfg.Enabled = len(cfg.Ports) > 0
 	readTelemtMekoRuntime(&cfg)
 	if cfg.Ports == nil {
 		cfg.Ports = []int{}
