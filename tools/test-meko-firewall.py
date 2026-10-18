@@ -21,7 +21,11 @@ def run(*args):
 def main():
     # unshare --net leaves PID 1 in the host namespace. Refuse accidental
     # direct invocation even by root; never alter the runner's own firewall.
-    if os.readlink('/proc/self/ns/net') == os.readlink('/proc/1/ns/net'):
+    try:
+        isolated = os.readlink('/proc/self/ns/net') != os.readlink('/proc/1/ns/net')
+    except OSError as error:
+        raise RuntimeError('Cannot verify isolated network namespace; refusing firewall access') from error
+    if not isolated:
         raise RuntimeError('Refusing host namespace; run through sudo unshare --net --')
     source = Path(__file__).resolve().parents[1] / 'internal/Telemt/telemt-meko-fix.sh'
     with tempfile.TemporaryDirectory(prefix='meko-firewall-') as directory:
