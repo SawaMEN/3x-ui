@@ -25,9 +25,9 @@ type TelemtWebPreflight struct {
 }
 
 type TelemtWebPreflightCheck struct {
-	ID       string `json:"id"`
-	OK       bool   `json:"ok"`
-	Message  string `json:"message"`
+	ID      string `json:"id"`
+	OK      bool   `json:"ok"`
+	Message string `json:"message"`
 }
 
 func (s TelemtService) PreflightWebProxy(ctx context.Context, domain string, options TelemtWebProxyOptions, panelCert, panelKey string) (TelemtWebPreflight, error) {
@@ -74,6 +74,9 @@ func (s TelemtService) PreflightWebProxy(ctx context.Context, domain string, opt
 	if (len(options.Carriers) > 0 || options.Carrier != "https") && !telemtWebVersionAtLeast(version, "3.5.4") {
 		check("carriers", false, "Выбранные WEB-транспорты требуют Telemt 3.5.4+.")
 	}
+	if options.Carrier != "https" {
+		result.Warnings = append(result.Warnings, "Для совместимости с Telegram iOS выберите HTTPS как основной транспорт. WebSocket можно оставить в списке автоматического выбора для поддерживающих его клиентов.")
+	}
 	if os.Geteuid() == 0 {
 		check("privileges", true, "Права root доступны.")
 	} else {
@@ -86,16 +89,16 @@ func (s TelemtService) PreflightWebProxy(ctx context.Context, domain string, opt
 	} else {
 		nativeConflict := state.ManagedInboundID == 0 && nativePort == 443
 		if nativeConflict {
-			check("native-port", false, "Обычный listener Telemt настроен на 443. Сначала перенесите его на другой порт: WEB HTTPS frontend должен владеть TCP 443.")
+			check("native-port", false, "Обычный listener Telemt настроен на 443. Сначала перенесите его на другой порт: HTTPS-сервер WEB Proxy должен использовать TCP 443.")
 		} else {
 			check("native-port", true, fmt.Sprintf("Обычный порт Telemt: %d; конфликтов с TCP 443 нет.", nativePort))
 		}
 		if !state.Enabled {
 			backendPort, portErr := pickTelemtWebListenPort(nativePort)
 			if portErr != nil {
-				check("backend", false, "Нужен свободный локальный порт WEB backend в диапазоне 15080–15179.")
+				check("backend", false, "Нужен свободный порт локального Telemt в диапазоне 15080–15179.")
 			} else {
-				check("backend", true, fmt.Sprintf("Свободен локальный порт WEB backend %d.", backendPort))
+				check("backend", true, fmt.Sprintf("Свободен порт локального Telemt %d.", backendPort))
 			}
 		}
 	}
@@ -106,7 +109,7 @@ func (s TelemtService) PreflightWebProxy(ctx context.Context, domain string, opt
 	if panelPortErr != nil {
 		check("panel-port", false, "Не удалось прочитать порт панели: "+panelPortErr.Error())
 	} else if panelPort == 443 {
-		check("panel-port", false, "Панель настроена на TCP 443. Перенесите порт панели перед включением WEB Proxy, иначе она и HTTPS frontend будут конфликтовать.")
+		check("panel-port", false, "Панель настроена на TCP 443. Перенесите порт панели перед включением WEB Proxy, иначе она и HTTPS-сервер WEB Proxy будут конфликтовать.")
 	} else {
 		check("panel-port", true, fmt.Sprintf("Панель использует порт %d и не конфликтует с WEB HTTPS :443.", panelPort))
 	}
@@ -121,9 +124,9 @@ func (s TelemtService) PreflightWebProxy(ctx context.Context, domain string, opt
 	nginxShared := options.Frontend == "nginx" && telemtWebNginxOwnsPort443() && telemtWebPortOwnedOnlyBy(owner, "nginx")
 	portReady := telemtWebPortAvailable(443) || previousOwned || nginxShared
 	if portReady {
-		check("https-port", true, "TCP 443 доступен или уже управляется WEB frontend.")
+		check("https-port", true, "TCP 443 доступен или уже управляется HTTPS-сервером WEB Proxy.")
 	} else {
-		check("https-port", false, fmt.Sprintf("HTTPS frontend должен иметь доступ к TCP 443 (владелец: %s).", owner))
+		check("https-port", false, fmt.Sprintf("HTTPS-сервер WEB Proxy должен иметь доступ к TCP 443 (владелец: %s).", owner))
 	}
 	if options.Frontend == "nginx" && telemtWebCommandExists("nginx") {
 		conflict, inspectErr := telemtWebNginxHostConflict(ctx, domain)
@@ -135,7 +138,7 @@ func (s TelemtService) PreflightWebProxy(ctx context.Context, domain string, opt
 	}
 	if options.Frontend != "nginx" {
 		if telemtWebCommandExists("systemctl") {
-			check("systemd", true, "Systemd доступен для управления WEB frontend.")
+			check("systemd", true, "Systemd доступен для управления HTTPS-сервером WEB Proxy.")
 		} else {
 			check("systemd", false, "Caddy и HAProxy требуют systemd.")
 		}
@@ -144,7 +147,7 @@ func (s TelemtService) PreflightWebProxy(ctx context.Context, domain string, opt
 		if manager := telemtWebPackageManager(); manager != "" {
 			check("package-manager", true, "Автоматическая установка через "+manager+".")
 		} else {
-			check("package-manager", false, "Для автоматической установки HTTPS frontend необходим поддерживаемый менеджер пакетов.")
+			check("package-manager", false, "Для автоматической установки HTTPS-сервера WEB Proxy необходим поддерживаемый менеджер пакетов.")
 		}
 	}
 	if validDomain {
@@ -301,7 +304,7 @@ func telemtWebNginxConfigHasHostPort(config, domain string, port int) bool {
 
 var (
 	telemtWebNginxListen = regexp.MustCompile(`(?m)^\s*listen\s+([^;]+);`)
-	telemtWebNginxNames = regexp.MustCompile(`(?m)^\s*server_name\s+([^;]+);`)
+	telemtWebNginxNames  = regexp.MustCompile(`(?m)^\s*server_name\s+([^;]+);`)
 )
 
 func telemtWebNginxServerMatchesPort(block, domain string, port int) bool {

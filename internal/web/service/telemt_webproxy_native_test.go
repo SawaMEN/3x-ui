@@ -3,12 +3,14 @@ package service
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -30,7 +32,7 @@ func TestNativeTelemtWebCarrierConfig(t *testing.T) {
 		return port
 	}
 	rawPort, webPort := freePort(), freePort()
-	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("web-decoy"), 0o600); err != nil {
+	if err := writeTelemtWebDecoy("example.com", dir); err != nil {
 		t.Fatal(err)
 	}
 	base := fmt.Sprintf("[general]\ndata_path = %q\nuse_middle_proxy = false\n\n[general.modes]\nclassic = true\nsecure = true\ntls = false\n\n[network]\nipv4 = true\nipv6 = false\n\n[server]\nport = %d\n\n[[server.listeners]]\nip = \"127.0.0.1\"\n\n[access.users]\nxui = \"0123456789abcdef0123456789abcdef\"\n\n[[upstreams]]\ntype = \"direct\"\n", dir, rawPort)
@@ -69,15 +71,19 @@ func TestNativeTelemtWebCarrierConfig(t *testing.T) {
 			t.Fatalf("Telemt exited before WEB startup: %s", logs)
 		default:
 		}
-		req, err := http.NewRequestWithContext(ctx, http.MethodHead, "http://"+net.JoinHostPort("127.0.0.1", strconv.Itoa(webPort))+"/", nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+net.JoinHostPort("127.0.0.1", strconv.Itoa(webPort))+"/", nil)
 		if err != nil {
 			t.Fatal(err)
 		}
 		req.Host = "example.com"
 		resp, err := client.Do(req)
 		if err == nil {
+			body, readErr := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
 			_ = resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {
+				if readErr != nil || !strings.Contains(string(body), "example.com — Fieldnotes") {
+					t.Fatalf("Telemt did not serve the generated cover site: %s, %v", body, readErr)
+				}
 				return
 			}
 		}

@@ -41,6 +41,7 @@ import {
   TelemtWebProxyRequestSchema,
 } from '@/schemas/telemt-web';
 import TelemtSubscriptionToggle from './TelemtSubscriptionToggle';
+import TelemtWebGuide, { telemtWebFieldHelp } from './TelemtWebGuide';
 import './TelemtPage.css';
 
 type WebProxyStatus = {
@@ -789,8 +790,8 @@ export default function TelemtPage() {
         />
 
         <Typography.Paragraph type="secondary" className="telemt-footnote">
-          Web Proxy использует отдельный локальный WEB transport на порту{' '}
-          {status.webProxy.listenPort || 15080}; наружу публикуется только HTTPS :443.
+          Web Proxy передаёт трафик локальному Telemt на порту {status.webProxy.listenPort || 15080}
+          ; наружу публикуется только HTTPS :443.
         </Typography.Paragraph>
       </div>
       <Modal
@@ -808,7 +809,7 @@ export default function TelemtPage() {
                 <Popconfirm
                   key="disable"
                   title="Отключить Web Proxy?"
-                  description="Конфигурация WEB frontend будет убрана, обычный Telemt останется работать."
+                  description="Настройки HTTPS-сервера WEB Proxy будут убраны, обычный Telemt останется работать."
                   okText="Отключить"
                   cancelText="Отмена"
                   onConfirm={() => void disableWebProxy()}
@@ -840,8 +841,10 @@ export default function TelemtPage() {
             type="info"
             showIcon
             message="Панель всё сделает сама"
-            description="Выбранный HTTPS frontend, сертификат и WEB transport Telemt будут настроены автоматически. Для Caddy и HAProxy используется отдельная служба панели. При переключении возможен короткий перерыв соединений."
+            description="Панель установит выбранный HTTPS-сервер, получит сертификат и настроит локальный Telemt автоматически. Для Caddy и HAProxy используется отдельная служба панели. При переключении возможен короткий перерыв соединений."
           />
+
+          <TelemtWebGuide domain={webForm.watch('domain')} />
 
           <FormProvider {...webForm}>
             <Form layout="vertical">
@@ -852,7 +855,11 @@ export default function TelemtPage() {
               >
                 <Input placeholder="web.example.com" disabled={webProxyLoading} addonAfter=":443" />
               </FormField>
-              <FormField name="frontend" label="HTTPS frontend">
+              <FormField
+                name="frontend"
+                label="Сервер HTTPS (frontend)"
+                extra={telemtWebFieldHelp.ru.frontend}
+              >
                 <Select
                   disabled={webProxyLoading}
                   options={TelemtFrontendSchema.options.map((value) => ({ value, label: value }))}
@@ -860,7 +867,8 @@ export default function TelemtPage() {
               </FormField>
               <FormField
                 name="carrier"
-                label="Основной транспорт / запасной для клиентов без перебора"
+                label="Основной транспорт (WEB carrier)"
+                extra={telemtWebFieldHelp.ru.carrier}
               >
                 <Select
                   disabled={webProxyLoading || !status.webProxy.carrierNegotiationSupported}
@@ -870,7 +878,7 @@ export default function TelemtPage() {
               <FormField
                 name="carriers"
                 label="Перебор транспортов"
-                extra="Выберите транспорты в порядке попыток. Пустой список отключает перебор. Основной транспорт остаётся запасным."
+                extra={telemtWebFieldHelp.ru.carriers}
               >
                 <Select
                   mode="multiple"

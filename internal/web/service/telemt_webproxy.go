@@ -604,14 +604,6 @@ func telemtWebCertificateCoversDomain(path, domain string) bool {
 	return cert.NotBefore.Before(time.Now()) && cert.NotAfter.After(time.Now()) && cert.VerifyHostname(domain) == nil
 }
 
-func writeTelemtWebDecoy(domain, dir string) error {
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
-	content := fmt.Sprintf("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>%s</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;font-family:system-ui,-apple-system,sans-serif;background:#f5f7fa;color:#222}main{max-width:720px;padding:48px;text-align:center}h1{font-size:48px;font-weight:600}p{font-size:18px;color:#667085}</style></head><body><main><h1>%s</h1><p>Welcome. This website is protected by HTTPS.</p></main></body></html>", domain, domain)
-	return os.WriteFile(filepath.Join(dir, "index.html"), []byte(content), 0o644)
-}
-
 func writeTelemtWebNginxConfig(state TelemtWebProxyState) error {
 	if data, err := os.ReadFile("/etc/letsencrypt/renewal/" + state.Domain + ".conf"); err == nil && telemtWebRenewalMode(data) == "managed-webroot" {
 		if err := telemtWebWriteAcmeNginxConfig(state.Domain); err != nil {
