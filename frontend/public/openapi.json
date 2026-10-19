@@ -4639,6 +4639,10 @@
       },
       "TelemtWebSiteOptions": {
         "properties": {
+          "catalog": {
+            "example": "builtin",
+            "type": "string"
+          },
           "description": {
             "example": "Stories from quiet places.",
             "type": "string"
@@ -4648,6 +4652,10 @@
           },
           "mode": {
             "example": "auto",
+            "type": "string"
+          },
+          "template": {
+            "example": "notes",
             "type": "string"
           },
           "theme": {
@@ -19900,7 +19908,7 @@
         ],
         "summary": "Enable the Telemt Web Proxy.",
         "operationId": "post_panel_api_telemt_webproxy_enable",
-        "description": "Optional site selects automatic setup, a locally generated theme or administrator-supplied HTML (maximum 256 KiB). Omit site to preserve the current selection; use mode auto to restore the default.",
+        "description": "Optional site selects automatic setup, a bundled catalog page or a locally generated theme. Omit site to preserve the current selection; use mode auto to restore the default. Previously saved HTML sites remain supported for compatibility.",
         "requestBody": {
           "required": false,
           "content": {
@@ -19910,7 +19918,7 @@
                 "properties": {
                   "site": {
                     "type": "object",
-                    "description": "TelemtWebSiteOptions: mode auto|generate|html; theme notes|technology|travel|nature; optional title, description and html."
+                    "description": "TelemtWebSiteOptions: mode auto|catalog|generate; catalog builtin|mtproxyl and a matching template; optional theme, title and description. Legacy html is retained for existing sites."
                   }
                 }
               }

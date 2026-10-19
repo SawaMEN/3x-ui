@@ -32,7 +32,7 @@ func TestTelemtWebDecoyPreservesSite(t *testing.T) {
 		t.Fatalf("reconfiguration replaced the site: %q, %v", got, err)
 	}
 	entries, err := os.ReadDir(dir)
-	if err != nil || len(entries) != 1 {
+	if err != nil || len(entries) != 2 {
 		t.Fatalf("temporary page leaked: %v, %v", entries, err)
 	}
 }
@@ -124,5 +124,54 @@ func TestTelemtWebSiteValidationAndEscaping(t *testing.T) {
 	}
 	if !telemtWebSitesEqual(nil, &TelemtWebSiteOptions{Mode: "auto"}) || telemtWebSitesEqual(nil, site) {
 		t.Fatal("site reconciliation does not preserve the default or detect changes")
+	}
+}
+
+func TestTelemtWebCatalogBundles(t *testing.T) {
+	for catalog, templates := range map[string][]string{"builtin": {"notes", "technology", "travel", "nature"}, "mtproxyl": {"stub", "catrunner", "mekorunner"}} {
+		for _, name := range templates {
+			t.Run(catalog+"/"+name, func(t *testing.T) {
+				root := t.TempDir()
+				site := &TelemtWebSiteOptions{Mode: "catalog", Catalog: catalog, Template: name}
+				dir, err := prepareTelemtWebSite("example.com", filepath.Join(root, "default"), filepath.Join(root, "sites"), site)
+				if err != nil {
+					t.Fatal(err)
+				}
+				page, err := os.ReadFile(filepath.Join(dir, "index.html"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if strings.Contains(string(page), "<style>") || strings.Contains(string(page), "<script>") || strings.Contains(string(page), "fonts.googleapis") || strings.Contains(string(page), "fonts.gstatic") {
+					t.Fatal("catalog page needs inline or remote resources")
+				}
+				if !strings.Contains(string(page), `href="/site.css"`) {
+					t.Fatal("missing local stylesheet")
+				}
+				if _, err := os.ReadFile(filepath.Join(dir, "site.css")); err != nil {
+					t.Fatal(err)
+				}
+				if name == "catrunner" || name == "mekorunner" {
+					if !strings.Contains(string(page), `src="/site.js"`) {
+						t.Fatal("missing local game script")
+					}
+					if _, err := os.ReadFile(filepath.Join(dir, "site.js")); err != nil {
+						t.Fatal(err)
+					}
+				}
+				reused, err := prepareTelemtWebSite("example.com", filepath.Join(root, "default"), filepath.Join(root, "sites"), site)
+				if err != nil || reused != dir {
+					t.Fatalf("catalog snapshot was not reused: %v", err)
+				}
+			})
+		}
+	}
+	for _, site := range []*TelemtWebSiteOptions{
+		{Mode: "catalog", Catalog: "builtin", Template: "catrunner"},
+		{Mode: "catalog", Catalog: "mtproxyl", Template: "../../etc"},
+		{Mode: "catalog", Catalog: "https://example.com", Template: "notes"},
+	} {
+		if err := validateTelemtWebSite(site); err == nil {
+			t.Fatal("accepted an unknown catalog selection")
+		}
 	}
 }

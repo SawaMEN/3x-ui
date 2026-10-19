@@ -42,35 +42,48 @@ snapshot. The built-in page is used only when `index.html` is absent. Files
 must be readable by Telemt. Changing a saved domain preserves site content;
 update any domain-specific text in a custom or previously generated page.
 
-### Optional themed pages and imported HTML
+### Optional ready-made catalogs
 
 Leave **Cover website: optional customization** closed for fully automatic
-setup. The same optional controls are available in the MTProto inbound form
-and in the standalone Telemt WEB dialog:
+setup. To choose a ready-made site, select **Choose from ready-made catalogs**,
+choose the **Catalog** and **Ready-made page**, then save/apply. The panel
+installs the page with all its assets and applies the normal readiness checks
+and rollback. No file uploads, direct URLs, API keys or separate hosting are
+required. The same controls appear in both the inbound and standalone forms.
 
-- **Automatic** preserves the default site's existing `index.html` and creates
-  the built-in page if it is absent.
-- **Generate a themed page** creates a self-contained page for a personal
-  journal, technology, travel or nature. Title and introduction are optional;
-  empty fields use the theme defaults. This is a local template generator,
-  without an AI service, API credentials or payment.
-- **Upload ready-made HTML** accepts a downloaded or separately generated
-  `.html`/`.htm` file, or pasted HTML. Maximum UTF-8 size is **256 KiB**. Embed
-  CSS and images in the document; ZIP archives and multi-file sites are not
-  imported. Uploading a file does not publish it until settings are saved.
+| Catalog | Ready-made pages |
+| --- | --- |
+| 3x-ui pages | Personal journal, Technology, Travel, Nature |
+| MTProxyL collection | Simple maintenance page, Cat Runner, Meko Runner |
 
-The panel prepares generated/imported sites in separate content-addressed
-snapshots under `/var/lib/x-ui/telemt-web-sites/`. It does not overwrite the
-active or default page when preparing a replacement. Existing setup rollback
-restores the old state, directory and Telemt configuration after a failed
-activation. Identical content reuses a snapshot. Applying a new selection
-restarts Telemt to rebuild its static snapshot and may briefly interrupt WEB
-sessions. Returning to Automatic reconnects the preserved default directory.
+The catalogs ship inside the panel binary, so activation requires no download
+from an external catalog. MTProxyL sources are pinned to `6d7021c` and retain
+the MIT license; see `internal/web/service/telemt_sites/mtproxyl/README.md`.
+The file-manager template is excluded because it depends on remote Tailwind
+and Lucide scripts. Bundled games use local scripts/styles and system-font
+fallbacks instead of fetching Google Fonts.
 
-`site` is optional in the existing enable/preflight request. Omitting it on
-the standalone enable API preserves the current site; pass `{"mode":"auto"}`
-to select the default. Older inbound records without `site` mean Automatic.
-For example:
+Telemt's static-site Content Security Policy requires local stylesheet and
+script files. New automatic, generated and catalog pages therefore deploy
+`site.css` and, where needed, `site.js` alongside `index.html`. No weakening of
+Telemt's headers is required. Complete snapshots include all assets and reuse
+identical content; a failed activation preserves the previously active site.
+Existing automatic/custom sites are kept unchanged.
+
+**Generate a themed page** remains available when a custom title and
+introduction are wanted. This uses local templates for journal, technology,
+travel or nature; there is no AI service or payment. Returning to Automatic
+reconnects the preserved default directory. Changes apply after saving and may
+briefly interrupt WEB sessions while Telemt rebuilds its static snapshot.
+
+The old HTML upload and paste fields have been removed from the interface.
+Previously saved HTML sites remain active and appear as **Previously installed
+page**; choose another mode to replace them. The legacy `html` API format is
+retained for compatibility. No arbitrary URL downloader is implemented.
+
+`site` remains optional in enable/preflight requests. Omission preserves the
+current standalone selection; `{"mode":"auto"}` restores the default. An
+older inbound without `site` means Automatic. Catalog example:
 
 ```json
 {
@@ -79,18 +92,16 @@ For example:
   "carrier": "https",
   "carriers": [],
   "site": {
-    "mode": "generate",
-    "theme": "travel",
-    "title": "A travel notebook",
-    "description": "Stories from quiet places."
+    "mode": "catalog",
+    "catalog": "mtproxyl",
+    "template": "catrunner"
   }
 }
 ```
 
-For imported HTML, use `{"mode":"html","html":"<!doctype html><html>...</html>"}`.
-Only administrator-supplied HTML is accepted; the server does not fetch
-arbitrary remote URLs. Download a template to your device and choose its HTML
-file in the form.
+Catalog/template IDs are validated as fixed pairs. URLs, filesystem paths,
+unknown catalogs and templates from another collection are rejected before
+setup changes any files or services.
 
 ### Comparison with MTProxyL
 
@@ -104,10 +115,10 @@ wire protocol.
 | --- | --- | --- |
 | HTTPS server, certificate and local WEB listener | Managed by the panel | Managed by the setup wizard/CLI |
 | Carrier selection and ordered negotiation | Inbound and Telemt forms | Wizard/CLI settings |
-| Cover website | Automatic static site, themed local generation or uploaded HTML; preserve existing content | Empty, static directory or HTTP origin; template, URL or local site sources |
+| Cover website | Automatic static site, two bundled catalogs or themed local generation; preserve existing content | Empty, static directory or HTTP origin; template, URL or local site sources |
 | Ordinary MTProto and WEB | Separate managed inbounds; one local WEB inbound | WEB-only or combined; additional shared/split frontend layouts |
 | Readiness | DNS/port/certificate preflight, private HTTP and public TLS checks, rollback | Listener/static-snapshot checks and managed restart when needed |
-| Site customization in this change | Automatic default, four themes, custom title/introduction and single-file HTML import | More site-source and deployment choices |
+| Site customization in this change | Automatic default, seven ready-made pages in two catalogs and themed generation | More site-source and deployment choices |
 
 This integration keeps the existing one-WEB-inbound deployment model. DNS,
 provider firewall changes, real certificate issuance and a Telegram connection

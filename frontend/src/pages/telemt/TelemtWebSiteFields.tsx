@@ -1,9 +1,9 @@
-import { useState } from 'react';
-import { Alert, Button, Collapse, Input, Select, Upload } from 'antd';
+import { Alert, Collapse, Input, Select } from 'antd';
 import { useFormContext, useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 
 import { FormField } from '@/components/form/rhf';
+import { TelemtWebCatalogs } from '@/schemas/telemt-web-catalog';
 
 export default function TelemtWebSiteFields({
   prefix = 'site',
@@ -16,7 +16,14 @@ export default function TelemtWebSiteFields({
   const { i18n } = useTranslation();
   const ru = i18n.resolvedLanguage?.startsWith('ru');
   const mode = useWatch({ control, name: `${prefix}.mode` }) as string | undefined;
-  const [uploadError, setUploadError] = useState('');
+  const catalog = useWatch({ control, name: `${prefix}.catalog` }) as
+    | 'builtin'
+    | 'mtproxyl'
+    | undefined;
+  const template = useWatch({ control, name: `${prefix}.template` }) as string | undefined;
+  const selectedCatalog = catalog === 'mtproxyl' ? 'mtproxyl' : 'builtin';
+  const templates = TelemtWebCatalogs[selectedCatalog].templates;
+  const selectedTemplate = templates.find((entry) => entry.id === template);
   return (
     <Collapse
       items={[
@@ -32,10 +39,13 @@ export default function TelemtWebSiteFields({
                 label={ru ? 'Вариант сайта' : 'Website source'}
                 transform={{ input: (value) => value || 'auto' }}
                 onAfterChange={(value) => {
-                  setUploadError('');
                   setValue(
                     prefix,
-                    { mode: value, ...(value === 'generate' ? { theme: 'notes' } : {}) },
+                    {
+                      mode: value,
+                      ...(value === 'generate' ? { theme: 'notes' } : {}),
+                      ...(value === 'catalog' ? { catalog: 'builtin', template: 'notes' } : {}),
+                    },
                     { shouldDirty: true, shouldValidate: true },
                   );
                 }}
@@ -57,9 +67,22 @@ export default function TelemtWebSiteFields({
                       label: ru ? 'Создать страницу по теме' : 'Generate a themed page',
                     },
                     {
-                      value: 'html',
-                      label: ru ? 'Загрузить готовый HTML' : 'Upload ready-made HTML',
+                      value: 'catalog',
+                      label: ru
+                        ? 'Выбрать из готовых каталогов'
+                        : 'Choose from ready-made catalogs',
                     },
+                    ...(mode === 'html'
+                      ? [
+                          {
+                            value: 'html',
+                            label: ru
+                              ? 'Ранее установленная страница'
+                              : 'Previously installed page',
+                            disabled: true,
+                          },
+                        ]
+                      : []),
                   ]}
                 />
               </FormField>
@@ -95,54 +118,79 @@ export default function TelemtWebSiteFields({
                   </FormField>
                 </>
               )}
-              {mode === 'html' && (
+              {mode === 'catalog' && (
                 <>
-                  <Upload
-                    accept=".html,.htm,text/html"
-                    maxCount={1}
-                    showUploadList={false}
-                    disabled={disabled}
-                    beforeUpload={async (file) => {
-                      try {
-                        if (file.size > 256 * 1024)
-                          throw new Error(
-                            ru ? 'Максимальный размер — 256 КиБ.' : 'Maximum size: 256 KiB.',
-                          );
-                        const text = await file.text();
-                        if (!/<html[\s>]/i.test(text) || text.includes('\0'))
-                          throw new Error(
-                            ru
-                              ? 'Нужен полный HTML-документ.'
-                              : 'A complete HTML document is required.',
-                          );
-                        setValue(`${prefix}.html`, text, {
-                          shouldDirty: true,
-                          shouldValidate: true,
-                        });
-                        setUploadError('');
-                      } catch (error) {
-                        setUploadError(error instanceof Error ? error.message : String(error));
-                      }
-                      return false;
-                    }}
-                  >
-                    <Button disabled={disabled}>
-                      {ru ? 'Выбрать HTML-файл' : 'Choose HTML file'}
-                    </Button>
-                  </Upload>
-                  {uploadError && <Alert type="error" showIcon message={uploadError} />}
                   <FormField
-                    name={`${prefix}.html`}
-                    label={ru ? 'HTML страницы' : 'Page HTML'}
-                    extra={
-                      ru
-                        ? 'Можно загрузить заранее скачанный шаблон или вставить HTML. До 256 КиБ; CSS и изображения включите в файл. ZIP и папки не поддерживаются. Страница появится после сохранения.'
-                        : 'Upload a downloaded template or paste HTML. Up to 256 KiB; embed CSS and images in the file. ZIP archives and folders are not supported. The page goes live after saving.'
+                    name={`${prefix}.catalog`}
+                    label={ru ? 'Каталог' : 'Catalog'}
+                    onAfterChange={(value) =>
+                      setValue(`${prefix}.template`, value === 'mtproxyl' ? 'stub' : 'notes', {
+                        shouldDirty: true,
+                        shouldValidate: true,
+                      })
                     }
                   >
-                    <Input.TextArea disabled={disabled} rows={5} />
+                    <Select
+                      disabled={disabled}
+                      options={Object.entries(TelemtWebCatalogs).map(([value, entry]) => ({
+                        value,
+                        label: ru ? entry.ru : entry.en,
+                      }))}
+                    />
                   </FormField>
+                  <FormField
+                    name={`${prefix}.template`}
+                    label={ru ? 'Готовая страница' : 'Ready-made page'}
+                  >
+                    <Select
+                      disabled={disabled}
+                      options={templates.map((entry) => ({
+                        value: entry.id,
+                        label: ru ? entry.ru : entry.en,
+                      }))}
+                    />
+                  </FormField>
+                  <Alert
+                    type="info"
+                    showIcon
+                    message={
+                      selectedTemplate
+                        ? ru
+                          ? selectedTemplate.ru
+                          : selectedTemplate.en
+                        : ru
+                          ? 'Выберите страницу'
+                          : 'Choose a page'
+                    }
+                    description={
+                      <>
+                        <p>
+                          {selectedTemplate &&
+                            (ru ? selectedTemplate.descriptionRu : selectedTemplate.descriptionEn)}
+                        </p>
+                        {ru
+                          ? 'Нажмите «Сохранить» или «Применить»: панель сама установит страницу и все её ресурсы. Каталоги входят в панель; файлы, ссылки, ключи и дополнительные настройки не нужны. Сайт можно открыть по ссылке выше после сохранения.'
+                          : 'Save or apply: the panel installs the page and all its assets automatically. Catalogs are bundled with the panel; no files, URLs, keys or extra settings are needed. Open the website using the link above after saving.'}
+                      </>
+                    }
+                  />
                 </>
+              )}
+              {mode === 'html' && (
+                <Alert
+                  type="info"
+                  showIcon
+                  message={
+                    ru
+                      ? 'Ранее загруженная страница сохранена'
+                      : 'Previously uploaded page preserved'
+                  }
+                  description={
+                    ru
+                      ? 'Она продолжит работать. Чтобы заменить её, выберите готовый каталог, генерацию по теме или автоматический вариант.'
+                      : 'It will keep working. Choose a catalog, themed generation or automatic setup to replace it.'
+                  }
+                />
               )}
             </>
           ),

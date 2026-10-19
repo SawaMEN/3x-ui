@@ -32,10 +32,30 @@ describe('optional Telemt cover site', () => {
       site: { mode: 'generate', theme: 'notes', title: 'My notebook', description: undefined },
     });
     fireEvent.mouseDown(screen.getByLabelText('Website source'));
-    fireEvent.click(await screen.findByText('Upload ready-made HTML'));
-    const html = '<html><body>Downloaded template</body></html>';
-    fireEvent.change(screen.getByLabelText('Page HTML'), { target: { value: html } });
+    fireEvent.click(await screen.findByText('Choose from ready-made catalogs'));
+    expect(screen.queryByText('Choose HTML file')).toBeNull();
+    expect(screen.queryByLabelText('Page HTML')).toBeNull();
     fireEvent.click(screen.getByText('Save'));
-    expect(save).toHaveBeenLastCalledWith({ site: { mode: 'html', html } });
+    expect(save).toHaveBeenLastCalledWith({
+      site: { mode: 'catalog', catalog: 'builtin', template: 'notes' },
+    });
+    fireEvent.mouseDown(screen.getByLabelText('Catalog'));
+    fireEvent.click(await screen.findByText('MTProxyL collection'));
+    fireEvent.click(screen.getByText('Save'));
+    expect(save).toHaveBeenLastCalledWith({
+      site: { mode: 'catalog', catalog: 'mtproxyl', template: 'stub' },
+    });
+    fireEvent.mouseDown(screen.getByLabelText('Ready-made page'));
+    fireEvent.click(await screen.findByText('Cat Runner — cat game'));
+    fireEvent.click(screen.getByText('Save'));
+    expect(save).toHaveBeenLastCalledWith({
+      site: { mode: 'catalog', catalog: 'mtproxyl', template: 'catrunner' },
+    });
+    fireEvent.mouseDown(screen.getByLabelText('Catalog'));
+    fireEvent.click(await screen.findByText('3x-ui pages'));
+    fireEvent.click(screen.getByText('Save'));
+    expect(save).toHaveBeenLastCalledWith({
+      site: { mode: 'catalog', catalog: 'builtin', template: 'notes' },
+    });
   });
 });

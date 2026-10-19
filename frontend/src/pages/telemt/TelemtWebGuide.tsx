@@ -16,8 +16,8 @@ export default function TelemtWebGuide({ domain }: { domain?: string }) {
         <>
           <p>
             {ru
-              ? 'По умолчанию панель создаст простой сайт с заметками. Другую тему или готовый HTML можно выбрать в необязательных настройках ниже. В браузере посетитель увидит сайт, а Telegram с WEB-ссылкой подключится к прокси на том же домене. Отдельный хостинг, сайт или порт для заглушки не нужны. Существующий сайт сохраняется при повторной настройке.'
-              : 'By default setup creates a simple notes website. Choose another theme or ready-made HTML in the optional settings below. Browser visitors see the website; Telegram with a WEB link connects to the proxy on the same domain. No separate hosting, website or public port is needed. Reconfiguration preserves an existing site.'}
+              ? 'По умолчанию панель создаст простой сайт с заметками. Другую тему или страницу из готовых каталогов можно выбрать в необязательных настройках ниже. В браузере посетитель увидит сайт, а Telegram с WEB-ссылкой подключится к прокси на том же домене. Отдельный хостинг, сайт или порт для заглушки не нужны. Существующий сайт сохраняется при повторной настройке.'
+              : 'By default setup creates a simple notes website. Choose another theme or a ready-made catalog page in the optional settings below. Browser visitors see the website; Telegram with a WEB link connects to the proxy on the same domain. No separate hosting, website or public port is needed. Reconfiguration preserves an existing site.'}
           </p>
           <p>
             {ru

@@ -1056,9 +1056,11 @@ export interface SubBalancer {
 }
 
 export interface TelemtWebSiteOptions {
+  catalog?: string;
   description?: string;
   html?: string;
   mode: string;
+  template?: string;
   theme?: string;
   title?: string;
 }

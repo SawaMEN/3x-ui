@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isTelemtWebCatalogTemplate } from './telemt-web-catalog';
 
 export const TelemtFrontendSchema = z.enum(['nginx', 'caddy', 'haproxy']);
 export const TelemtCarrierSchema = z.enum(['https', 'https-lanes', 'websocket', 'websocket-lanes']);
@@ -8,7 +9,9 @@ export const TelemtCarriersSchema = z
   .refine((values) => new Set(values).size === values.length);
 export const TelemtWebSiteSchema = z
   .object({
-    mode: z.enum(['auto', 'generate', 'html']).default('auto'),
+    mode: z.enum(['auto', 'catalog', 'generate', 'html']).default('auto'),
+    catalog: z.enum(['builtin', 'mtproxyl']).optional(),
+    template: z.string().optional(),
     theme: z.enum(['notes', 'technology', 'travel', 'nature']).optional(),
     title: z.string().max(80).optional(),
     description: z.string().max(300).optional(),
@@ -27,7 +30,12 @@ export const TelemtWebSiteSchema = z
       path: ['html'],
       message: 'Загрузите полный HTML-документ',
     },
+  )
+  .refine(
+    (site) => site.mode !== 'catalog' || isTelemtWebCatalogTemplate(site.catalog, site.template),
+    { path: ['template'], message: 'Выберите страницу из каталога' },
   );
+
 export type TelemtWebSite = z.infer<typeof TelemtWebSiteSchema>;
 
 export const TelemtWebProxyRequestSchema = z.object({

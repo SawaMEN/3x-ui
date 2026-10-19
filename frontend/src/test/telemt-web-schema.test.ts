@@ -44,3 +44,21 @@ describe('Telemt optional cover website', () => {
       expect(TelemtWebSiteSchema.safeParse(site).success).toBe(false);
   });
 });
+
+describe('Telemt ready-made catalogs', () => {
+  it('accepts fixed catalog selections and rejects unknown or mismatched entries', () => {
+    for (const site of [
+      { mode: 'catalog', catalog: 'builtin', template: 'travel' },
+      { mode: 'catalog', catalog: 'mtproxyl', template: 'catrunner' },
+    ]) {
+      expect(TelemtWebSiteSchema.parse(site)).toEqual(site);
+    }
+    for (const site of [
+      { mode: 'catalog', catalog: 'builtin', template: 'catrunner' },
+      { mode: 'catalog', catalog: 'mtproxyl', template: '../../etc' },
+      { mode: 'catalog', catalog: 'https://example.com', template: 'notes' },
+    ]) {
+      expect(TelemtWebSiteSchema.safeParse(site).success).toBe(false);
+    }
+  });
+});

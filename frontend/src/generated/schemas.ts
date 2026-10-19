@@ -4613,6 +4613,10 @@ export const SCHEMAS: Record<string, unknown> = {
   },
   "TelemtWebSiteOptions": {
     "properties": {
+      "catalog": {
+        "example": "builtin",
+        "type": "string"
+      },
       "description": {
         "example": "Stories from quiet places.",
         "type": "string"
@@ -4622,6 +4626,10 @@ export const SCHEMAS: Record<string, unknown> = {
       },
       "mode": {
         "example": "auto",
+        "type": "string"
+      },
+      "template": {
+        "example": "notes",
         "type": "string"
       },
       "theme": {

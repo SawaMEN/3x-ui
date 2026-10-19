@@ -2,7 +2,7 @@ package service
 
 import (
 	"crypto/sha256"
-	_ "embed"
+	"embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -24,6 +24,8 @@ type TelemtWebSiteOptions struct {
 	Title       string `json:"title,omitempty" example:"A travel notebook"`
 	Description string `json:"description,omitempty" example:"Stories from quiet places."`
 	HTML        string `json:"html,omitempty"`
+	Catalog     string `json:"catalog,omitempty" example:"builtin"`
+	Template    string `json:"template,omitempty" example:"notes"`
 }
 
 func telemtWebSitesEqual(a, b *TelemtWebSiteOptions) bool {
@@ -54,19 +56,40 @@ func validateTelemtWebSite(site *TelemtWebSiteOptions) error {
 			return nil
 		}
 		return errors.New("WEB site: unsupported theme")
+	case "catalog":
+		if site.Catalog == "builtin" {
+			switch site.Template {
+			case "notes", "technology", "travel", "nature":
+				return nil
+			}
+		}
+		if site.Catalog == "mtproxyl" {
+			switch site.Template {
+			case "stub", "catrunner", "mekorunner":
+				return nil
+			}
+		}
+		return errors.New("WEB site: choose a supported catalog and template")
 	case "html":
 		if strings.TrimSpace(site.HTML) == "" || strings.ContainsRune(site.HTML, '\x00') || !telemtWebSiteHTMLDocument.MatchString(site.HTML) {
 			return errors.New("WEB site: upload a complete non-empty HTML document")
 		}
 		return nil
 	default:
-		return errors.New("WEB site: mode must be auto, generate or html")
+		return errors.New("WEB site: mode must be auto, catalog or generate (html is retained for existing sites)")
 	}
 }
 
 func renderTelemtWebSite(domain string, site *TelemtWebSiteOptions) (string, error) {
 	if err := validateTelemtWebSite(site); err != nil {
 		return "", err
+	}
+	if site != nil && site.Mode == "catalog" {
+		if site.Catalog == "mtproxyl" {
+			data, err := telemtWebCatalogFiles.ReadFile("telemt_sites/mtproxyl/" + site.Template + ".html")
+			return string(data), err
+		}
+		return renderTelemtWebSite(domain, &TelemtWebSiteOptions{Mode: "generate", Theme: site.Template})
 	}
 	if site != nil && site.Mode == "html" {
 		return site.HTML, nil
@@ -111,34 +134,94 @@ func prepareTelemtWebSite(domain, defaultDir, sitesDir string, site *TelemtWebSi
 	if err != nil {
 		return "", err
 	}
-	// Content-addressed snapshots leave the active site intact until setup succeeds.
-	dir := filepath.Join(sitesDir, fmt.Sprintf("%x", sha256.Sum256([]byte(page))))
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", err
+	files := telemtWebPageFiles(page)
+	if site.Mode == "html" {
+		files = map[string]string{"index.html": page}
 	}
-	index := filepath.Join(dir, "index.html")
-	if data, err := os.ReadFile(index); err == nil {
-		if string(data) != page {
-			return "", errors.New("WEB site: existing snapshot contents do not match")
+	if site.Mode == "catalog" && site.Catalog == "mtproxyl" {
+		license, err := telemtWebCatalogFiles.ReadFile("telemt_sites/mtproxyl/LICENSE.txt")
+		if err != nil {
+			return "", err
 		}
-		return dir, nil
+		files["LICENSE.txt"] = string(license)
 	}
-	tmp, err := os.CreateTemp(dir, ".index-*.html")
+	data, err := json.Marshal(files)
 	if err != nil {
 		return "", err
 	}
-	defer os.Remove(tmp.Name())
-	_, writeErr := tmp.WriteString(page)
-	if err := errors.Join(writeErr, tmp.Close()); err != nil {
+	// Each immutable snapshot includes its resources, preserving the active site on failure.
+	dir := filepath.Join(sitesDir, fmt.Sprintf("%x", sha256.Sum256(data)))
+	if _, err := os.Stat(dir); err == nil {
+		for name, want := range files {
+			got, err := os.ReadFile(filepath.Join(dir, name))
+			if err != nil || string(got) != want {
+				return "", errors.New("WEB site: existing snapshot contents do not match")
+			}
+		}
+		return dir, nil
+	} else if !errors.Is(err, os.ErrNotExist) {
 		return "", err
 	}
-	if err := os.Chmod(tmp.Name(), 0o644); err != nil {
+	if err := os.MkdirAll(sitesDir, 0o755); err != nil {
 		return "", err
 	}
-	if err := os.Link(tmp.Name(), index); err != nil {
+	tmp, err := os.MkdirTemp(sitesDir, ".site-")
+	if err != nil {
+		return "", err
+	}
+	defer os.RemoveAll(tmp)
+	for name, content := range files {
+		if err := os.WriteFile(filepath.Join(tmp, name), []byte(content), 0o644); err != nil {
+			return "", err
+		}
+	}
+	if err := os.Chmod(tmp, 0o755); err != nil {
+		return "", err
+	}
+	if err := os.Rename(tmp, dir); err != nil {
 		return "", err
 	}
 	return dir, nil
+}
+
+//go:embed telemt_sites/mtproxyl/*.html telemt_sites/mtproxyl/LICENSE.txt
+var telemtWebCatalogFiles embed.FS
+
+var (
+	telemtWebInlineStyle  = regexp.MustCompile(`(?is)<style\b[^>]*>(.*?)</style>`)
+	telemtWebInlineScript = regexp.MustCompile(`(?is)<script>(.*?)</script>`)
+	telemtWebRemoteFont   = regexp.MustCompile(`(?i)<link[^>]+href="https://fonts\.(?:googleapis|gstatic)\.com[^>]*>`)
+)
+
+func telemtWebPageFiles(page string) map[string]string {
+	page = telemtWebRemoteFont.ReplaceAllString(page, "")
+	files := map[string]string{}
+	var styles, scripts []string
+	for _, match := range telemtWebInlineStyle.FindAllStringSubmatch(page, -1) {
+		styles = append(styles, match[1])
+	}
+	for _, match := range telemtWebInlineScript.FindAllStringSubmatch(page, -1) {
+		scripts = append(scripts, match[1])
+	}
+	if len(styles) > 0 {
+		files["site.css"] = strings.Join(styles, "\n")
+		page = telemtWebInlineStyle.ReplaceAllString(page, "")
+		page = strings.Replace(page, "</head>", `<link rel="stylesheet" href="/site.css"></head>`, 1)
+	}
+	if len(scripts) > 0 {
+		files["site.js"] = strings.Join(scripts, ";\n")
+		page = telemtWebInlineScript.ReplaceAllString(page, "")
+		page = strings.Replace(page, "</body>", `<script src="/site.js"></script></body>`, 1)
+	}
+	for _, color := range []string{"#fd79a8", "#a855f7"} {
+		attr := `style="color:` + color + `"`
+		if strings.Contains(page, attr) {
+			page = strings.ReplaceAll(page, attr, "")
+			files["site.css"] += "\n#combo-sc{color:" + color + "}"
+		}
+	}
+	files["index.html"] = page
+	return files
 }
 
 //go:embed telemt_web_decoy.html
@@ -167,7 +250,16 @@ func writeTelemtWebDecoy(domain, dir string) error {
 	}
 	defer os.Remove(tmp.Name())
 	content := strings.ReplaceAll(telemtWebDecoyHTML, "{{DOMAIN}}", html.EscapeString(domain))
-	_, writeErr := tmp.WriteString(content)
+	files := telemtWebPageFiles(content)
+	for name, data := range files {
+		if name != "index.html" {
+			if err := os.WriteFile(filepath.Join(dir, name), []byte(data), 0o644); err != nil {
+				_ = tmp.Close()
+				return err
+			}
+		}
+	}
+	_, writeErr := tmp.WriteString(files["index.html"])
 	closeErr := tmp.Close()
 	if err := errors.Join(writeErr, closeErr); err != nil {
 		return err

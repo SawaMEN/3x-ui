@@ -26,6 +26,10 @@ func TestNativeTelemtWebCarrierConfig(t *testing.T) {
 		marker string
 	}{
 		{"automatic", nil, "example.com — Fieldnotes"},
+		{"catalog-notes", &TelemtWebSiteOptions{Mode: "catalog", Catalog: "builtin", Template: "notes"}, "Fieldnotes"},
+		{"catalog-stub", &TelemtWebSiteOptions{Mode: "catalog", Catalog: "mtproxyl", Template: "stub"}, "Сайт временно недоступен"},
+		{"catalog-catrunner", &TelemtWebSiteOptions{Mode: "catalog", Catalog: "mtproxyl", Template: "catrunner"}, "Cat Runner"},
+		{"catalog-mekorunner", &TelemtWebSiteOptions{Mode: "catalog", Catalog: "mtproxyl", Template: "mekorunner"}, "Meko Runner"},
 		{"generated", &TelemtWebSiteOptions{Mode: "generate", Theme: "travel", Title: "Native Travel Check"}, "Native Travel Check"},
 		{"imported", &TelemtWebSiteOptions{Mode: "html", HTML: "<!doctype html><html><head><title>Native Imported Page</title></head><body>Ready</body></html>"}, "Native Imported Page"},
 	} {
@@ -98,6 +102,36 @@ func testNativeTelemtWebSite(t *testing.T, binary string, site *TelemtWebSiteOpt
 			if resp.StatusCode == http.StatusOK {
 				if readErr != nil || !strings.Contains(string(body), marker) {
 					t.Fatalf("Telemt did not serve the generated cover site: %s, %v", body, readErr)
+				}
+				entries, err := os.ReadDir(siteDir)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, entry := range entries {
+					if entry.Name() == "index.html" {
+						continue
+					}
+					assetReq, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+net.JoinHostPort("127.0.0.1", strconv.Itoa(webPort))+"/"+entry.Name(), nil)
+					if err != nil {
+						t.Fatal(err)
+					}
+					assetReq.Host = "example.com"
+					asset, err := client.Do(assetReq)
+					if err != nil {
+						t.Fatal(err)
+					}
+					data, err := io.ReadAll(io.LimitReader(asset.Body, 256<<10))
+					_ = asset.Body.Close()
+					expected, readErr := os.ReadFile(filepath.Join(siteDir, entry.Name()))
+					if err != nil || readErr != nil || asset.StatusCode != http.StatusOK || string(data) != string(expected) {
+						t.Fatalf("asset %s not served correctly: HTTP %d, %v, %v", entry.Name(), asset.StatusCode, err, readErr)
+					}
+					if strings.HasSuffix(entry.Name(), ".css") && !strings.Contains(asset.Header.Get("Content-Type"), "text/css") {
+						t.Fatal("invalid CSS content type")
+					}
+					if strings.HasSuffix(entry.Name(), ".js") && !strings.Contains(asset.Header.Get("Content-Type"), "javascript") {
+						t.Fatal("invalid JavaScript content type")
+					}
 				}
 				return
 			}
