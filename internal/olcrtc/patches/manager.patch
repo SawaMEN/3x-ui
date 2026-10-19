@@ -1,0 +1,369 @@
+--- a/cmd/olcrtc-manager/main.go
++++ b/cmd/olcrtc-manager/main.go
+@@ -312,14 +312,21 @@
+ 
+ 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+ 	defer stop()
++	runtimeCtx, runtimeStop := context.WithCancel(context.Background())
++	defer runtimeStop()
+ 
+ 	supervisor := NewSupervisor(olcrtcPath, startInstance)
+ 	quotaEnforcer := NewQuotaEnforcer(configPath, supervisor)
+ 	supervisor.SetQuotaEnforcer(quotaEnforcer)
+-	if err := supervisor.StartAll(ctx, cfg); err != nil {
++	if err := supervisor.StartAll(runtimeCtx, cfg); err != nil {
+ 		return err
+ 	}
+ 	defer supervisor.StopAll()
++	defer func() {
++		if err := quotaEnforcer.Collect(context.Background()); err != nil {
++			log.Printf("final quota collection failed: %v", err)
++		}
++	}()
+ 	go quotaEnforcer.Run(ctx)
+ 
+ 	reloadc := make(chan os.Signal, 1)
+@@ -340,7 +347,7 @@
+ 		if err := reloaded.Validate(); err != nil {
+ 			return err
+ 		}
+-		return supervisor.Reload(ctx, reloaded)
++		return supervisor.Reload(runtimeCtx, reloaded)
+ 	}
+ 
+ 	handler := http.NewServeMux()
+@@ -599,7 +606,7 @@
+ 
+ 	server := &http.Server{
+ 		Addr:              net.JoinHostPort(listenAddr, strconv.Itoa(cfg.Port)),
+-		Handler:           securityHeaders(handler),
++		Handler:           securityHeaders(configTransactions(configPath, handler, reload)),
+ 		ReadHeaderTimeout: 5 * time.Second,
+ 	}
+ 	tlsCert, tlsKey, tlsEnabled, err := tlsFilesFromEnv()
+@@ -631,7 +638,10 @@
+ 			defer cancel()
+ 			return server.Shutdown(shutdownCtx)
+ 		case <-reloadc:
+-			if err := reload(); err != nil {
++			configTransactionMu.Lock()
++			err := reload()
++			configTransactionMu.Unlock()
++			if err != nil {
+ 				log.Printf("reload failed: %v", err)
+ 				continue
+ 			}
+@@ -671,7 +681,11 @@
+ 			s.processes = make(map[string]*process)
+ 			return err
+ 		}
+-		s.registerQuotaLocked(loc, quotaForClient(cfg, loc.ClientID), p)
++		if err := s.registerQuotaLocked(loc, quotaForClient(cfg, loc.ClientID), p); err != nil {
++			stopProcessMap(s.processes)
++			s.processes = make(map[string]*process)
++			return err
++		}
+ 		key := locationKey(loc)
+ 		s.processes[key] = p
+ 		s.monitorProcess(ctx, key, p)
+@@ -697,7 +711,10 @@
+ 		currentLoc, exists := current[id]
+ 		if exists && reflect.DeepEqual(currentLoc, nextLoc) {
+ 			if p := s.processes[id]; p != nil {
+-				s.registerQuotaLocked(nextLoc, quotaForClient(cfg, nextLoc.ClientID), p)
++				if err := s.registerQuotaLocked(nextLoc, quotaForClient(cfg, nextLoc.ClientID), p); err != nil {
++					stopProcessMap(started)
++					return err
++				}
+ 			}
+ 			continue
+ 		}
+@@ -707,7 +724,10 @@
+ 			stopProcessMap(started)
+ 			return err
+ 		}
+-		s.registerQuotaLocked(nextLoc, quotaForClient(cfg, nextLoc.ClientID), p)
++		if err := s.registerQuotaLocked(nextLoc, quotaForClient(cfg, nextLoc.ClientID), p); err != nil {
++			stopProcessMap(started)
++			return err
++		}
+ 		started[id] = p
+ 	}
+ 
+@@ -868,7 +888,10 @@
+ 			s.mu.Unlock()
+ 			return err
+ 		}
+-		s.registerQuotaLocked(loc, quota, next)
++		if err := s.registerQuotaLocked(loc, quota, next); err != nil {
++			s.mu.Unlock()
++			return err
++		}
+ 		s.processes[key] = next
+ 		s.monitorProcess(ctx, key, next)
+ 		s.mu.Unlock()
+@@ -888,7 +911,9 @@
+ 	if err != nil {
+ 		return err
+ 	}
+-	s.registerQuotaLocked(loc, s.clientQuotaLocked(loc.ClientID), next)
++	if err := s.registerQuotaLocked(loc, s.clientQuotaLocked(loc.ClientID), next); err != nil {
++		return err
++	}
+ 	s.processes[key] = next
+ 	s.monitorProcess(ctx, key, next)
+ 	return nil
+@@ -918,20 +943,25 @@
+ 			log.Printf("olcrtc restart for %s failed: %v", key, startErr)
+ 			return
+ 		}
+-		s.registerQuotaLocked(p.location, s.clientQuotaLocked(p.location.ClientID), next)
++		if err := s.registerQuotaLocked(p.location, s.clientQuotaLocked(p.location.ClientID), next); err != nil {
++			log.Printf("restart quota setup failed: %v", err)
++			return
++		}
+ 		next.restarts = p.restarts + 1
+ 		s.processes[key] = next
+ 		s.monitorProcess(ctx, key, next)
+ 	}()
+ }
+ 
+-func (s *Supervisor) registerQuotaLocked(loc Location, quota Quota, p *process) {
++func (s *Supervisor) registerQuotaLocked(loc Location, quota Quota, p *process) error {
+ 	if s.quota == nil {
+-		return
++		return nil
+ 	}
+ 	if err := s.quota.Register(loc, quota, p); err != nil {
+-		log.Printf("quota accounting unavailable for %s: %v", locationKey(loc), err)
+-	}
++		stopProcess(p)
++		return fmt.Errorf("quota setup for %s: %w", locationKey(loc), err)
++	}
++	return nil
+ }
+ 
+ func (s *Supervisor) clientQuotaLocked(clientID string) Quota {
+@@ -979,7 +1009,10 @@
+ 		if quotaStatus(client.Quota, now) == "active" {
+ 			for _, loc := range client.Locations {
+ 				if p := s.processes[locationKey(loc)]; p != nil {
+-					s.registerQuotaLocked(loc, client.Quota, p)
++					if err := s.registerQuotaLocked(loc, client.Quota, p); err != nil {
++						log.Printf("quota setup failed: %v", err)
++						s.stopLocked(locationKey(loc))
++					}
+ 				}
+ 			}
+ 			continue
+@@ -1247,6 +1280,7 @@
+ 	req.FromClient = strings.TrimSpace(req.FromClient)
+ 	req.Refresh = strings.TrimSpace(req.Refresh)
+ 	req.Quota = normalizeQuota(req.Quota)
++	req.Quota.UsedBytes, req.Quota.UsedGB = 0, 0
+ 	if req.ClientID == "" {
+ 		return "", errors.New("client_id is required")
+ 	}
+@@ -1339,6 +1373,8 @@
+ 			}
+ 		}
+ 		cfg.Clients[i].Refresh = req.Refresh
++		req.Quota.UsedBytes = cfg.Clients[i].Quota.UsedBytes
++		req.Quota.UsedGB = cfg.Clients[i].Quota.UsedGB
+ 		cfg.Clients[i].Quota = req.Quota
+ 		if locations != nil {
+ 			cfg.Clients[i].Locations = locations
+@@ -2310,7 +2346,7 @@
+ 	if p.netns != nil {
+ 		last := uint64(0)
+ 		if iface != "" {
+-			if bytes, err := interfaceTXBytes(iface); err == nil {
++			if bytes, err := interfaceTrafficBytes(iface); err == nil {
+ 				last = bytes
+ 			}
+ 		}
+@@ -2322,7 +2358,7 @@
+ 		q.mu.Unlock()
+ 		if quota.SpeedMbps > 0 {
+ 			if err := applyNetnsSpeed(context.Background(), p.netns, quota.SpeedMbps); err != nil {
+-				log.Printf("speed limit unavailable for %s: %v", key, err)
++				return err
+ 			}
+ 		} else {
+ 			_ = runCmd(context.Background(), "tc", "qdisc", "del", "dev", p.netns.HostIf, "root")
+@@ -2354,7 +2390,7 @@
+ 	}
+ 	if quota.SpeedMbps > 0 && dev != "" && iface == "" {
+ 		if err := q.applySpeedLimit(context.Background(), dev, classID, quota.SpeedMbps); err != nil {
+-			log.Printf("speed limit unavailable for %s: %v", key, err)
++			return err
+ 		}
+ 	}
+ 	return nil
+@@ -2379,10 +2415,12 @@
+ }
+ 
+ func (q *QuotaEnforcer) Collect(ctx context.Context) error {
++	configTransactionMu.Lock()
++	defer configTransactionMu.Unlock()
+ 	q.mu.Lock()
+-	rules := make([]quotaRule, 0, len(q.rules))
+-	for _, rule := range q.rules {
+-		rules = append(rules, rule)
++	rules := make(map[string]quotaRule, len(q.rules))
++	for key, rule := range q.rules {
++		rules[key] = rule
+ 	}
+ 	q.mu.Unlock()
+ 	if len(rules) == 0 {
+@@ -2390,7 +2428,8 @@
+ 	}
+ 
+ 	deltaByClient := make(map[string]uint64)
+-	for _, rule := range rules {
++	nextLast := make(map[string]uint64)
++	for key, rule := range rules {
+ 		bytes, err := q.ruleBytes(ctx, rule)
+ 		if err != nil {
+ 			if errors.Is(err, os.ErrNotExist) {
+@@ -2401,9 +2440,12 @@
+ 		if bytes > rule.Last {
+ 			deltaByClient[rule.ClientID] += bytes - rule.Last
+ 		}
+-		q.updateLast(rule.ClassID, bytes)
++		nextLast[key] = bytes
+ 	}
+ 	if len(deltaByClient) == 0 {
++		for id, value := range nextLast {
++			q.updateRuleLast(id, rules[id], value)
++		}
+ 		return nil
+ 	}
+ 
+@@ -2428,27 +2470,28 @@
+ 			return err
+ 		}
+ 	}
++	// Advance counters only after the durable config update succeeds.
++	for id, value := range nextLast {
++		q.updateRuleLast(id, rules[id], value)
++	}
+ 	if q.supervisor != nil {
+ 		q.supervisor.ApplyQuotaConfig(cfg, time.Now())
+ 	}
+ 	return nil
+ }
+ 
+-func (q *QuotaEnforcer) updateLast(classID uint32, bytes uint64) {
++func (q *QuotaEnforcer) updateRuleLast(key string, previous quotaRule, value uint64) {
+ 	q.mu.Lock()
+ 	defer q.mu.Unlock()
+-	for key, rule := range q.rules {
+-		if rule.ClassID == classID {
+-			rule.Last = bytes
+-			q.rules[key] = rule
+-			return
+-		}
++	if current, ok := q.rules[key]; ok && current.Iface == previous.Iface && current.Last == previous.Last {
++		current.Last = value
++		q.rules[key] = current
+ 	}
+ }
+ 
+ func (q *QuotaEnforcer) ruleBytes(ctx context.Context, rule quotaRule) (uint64, error) {
+ 	if rule.Iface != "" {
+-		return interfaceTXBytes(rule.Iface)
++		return interfaceTrafficBytes(rule.Iface)
+ 	}
+ 	inBytes, err := q.chainBytes(ctx, "INPUT", rule.ClassID)
+ 	if err != nil {
+@@ -2457,12 +2500,20 @@
+ 	return inBytes, nil
+ }
+ 
+-func interfaceTXBytes(iface string) (uint64, error) {
+-	data, err := os.ReadFile(filepath.Join("/sys/class/net", iface, "statistics", "tx_bytes"))
+-	if err != nil {
+-		return 0, err
+-	}
+-	return strconv.ParseUint(strings.TrimSpace(string(data)), 10, 64)
++func interfaceTrafficBytes(iface string) (uint64, error) {
++	var total uint64
++	for _, counter := range []string{"rx_bytes", "tx_bytes"} {
++		data, err := os.ReadFile(filepath.Join("/sys/class/net", iface, "statistics", counter))
++		if err != nil {
++			return 0, err
++		}
++		n, err := strconv.ParseUint(strings.TrimSpace(string(data)), 10, 64)
++		if err != nil {
++			return 0, err
++		}
++		total += n
++	}
++	return total, nil
+ }
+ 
+ func (q *QuotaEnforcer) chainBytes(ctx context.Context, chain string, classID uint32) (uint64, error) {
+@@ -2690,14 +2741,7 @@
+ 	if err != nil {
+ 		return fmt.Errorf("marshal config: %w", err)
+ 	}
+-	tmp := path + ".tmp"
+-	if err := os.WriteFile(tmp, append(data, '\n'), 0o600); err != nil {
+-		return fmt.Errorf("write temp config: %w", err)
+-	}
+-	if err := os.Rename(tmp, path); err != nil {
+-		return fmt.Errorf("replace config: %w", err)
+-	}
+-	return nil
++	return atomicConfigWrite(path, append(data, '\n'))
+ }
+ 
+ func backupConfig(path string) {
+@@ -2860,13 +2904,20 @@
+ 		cleanupNetns(ctx, ns)
+ 		return nil, err
+ 	}
+-	_ = runCmd(ctx, "sysctl", "-w", "net.ipv4.ip_forward=1")
+-	addNetnsFirewall(ctx, ns)
++	if err := runCmd(ctx, "sysctl", "-w", "net.ipv4.ip_forward=1"); err != nil {
++		cleanupNetns(ctx, ns)
++		return nil, err
++	}
++	if err := addNetnsFirewall(ctx, ns); err != nil {
++		cleanupNetns(ctx, ns)
++		return nil, err
++	}
+ 
+ 	quota := quotaForClientConfigPath(loc.ClientID)
+ 	if quota.SpeedMbps > 0 {
+ 		if err := applyNetnsSpeed(ctx, ns, quota.SpeedMbps); err != nil {
+-			log.Printf("speed limit unavailable for %s: %v", locationKey(loc), err)
++			cleanupNetns(ctx, ns)
++			return nil, err
+ 		}
+ 	}
+ 	return ns, nil
+@@ -2894,11 +2945,18 @@
+ 	_ = os.RemoveAll(filepath.Join("/etc/netns", ns.Name))
+ }
+ 
+-func addNetnsFirewall(ctx context.Context, ns *netnsRuntime) {
++func addNetnsFirewall(ctx context.Context, ns *netnsRuntime) error {
+ 	delNetnsFirewall(ctx, ns)
+-	_ = runCmd(ctx, "iptables", "-t", "nat", "-I", "POSTROUTING", "1", "-s", ns.NsIP+"/32", "-o", ns.Dev, "-j", "MASQUERADE", "-m", "comment", "--comment", "olcrtc-manager-netns")
+-	_ = runCmd(ctx, "iptables", "-I", "FORWARD", "1", "-i", ns.HostIf, "-o", ns.Dev, "-j", "ACCEPT", "-m", "comment", "--comment", "olcrtc-manager-netns")
+-	_ = runCmd(ctx, "iptables", "-I", "FORWARD", "1", "-i", ns.Dev, "-o", ns.HostIf, "-m", "conntrack", "--ctstate", "RELATED,ESTABLISHED", "-j", "ACCEPT", "-m", "comment", "--comment", "olcrtc-manager-netns")
++	if err := runCmd(ctx, "iptables", "-t", "nat", "-I", "POSTROUTING", "1", "-s", ns.NsIP+"/32", "-o", ns.Dev, "-j", "MASQUERADE", "-m", "comment", "--comment", "olcrtc-manager-netns"); err != nil {
++		return err
++	}
++	if err := runCmd(ctx, "iptables", "-I", "FORWARD", "1", "-i", ns.HostIf, "-o", ns.Dev, "-j", "ACCEPT", "-m", "comment", "--comment", "olcrtc-manager-netns"); err != nil {
++		return err
++	}
++	if err := runCmd(ctx, "iptables", "-I", "FORWARD", "1", "-i", ns.Dev, "-o", ns.HostIf, "-m", "conntrack", "--ctstate", "RELATED,ESTABLISHED", "-j", "ACCEPT", "-m", "comment", "--comment", "olcrtc-manager-netns"); err != nil {
++		return err
++	}
++	return nil
+ }
+ 
+ func delNetnsFirewall(ctx context.Context, ns *netnsRuntime) {

@@ -73,12 +73,14 @@ func TestAdapterBuildFailureDoesNotDeployAndCleansWorkspace(t *testing.T) {
 	root := t.TempDir()
 	// Host commands are replaced with shell functions: this exercises the real
 	// adapter's ordering and EXIT trap without installing anything on the host.
-	script := `set -euo pipefail
+	script := "set -euo pipefail\n" + strings.TrimSuffix(string(installerAdapter), "main \"$@\"\n") + `
 need_root() { :; }
 install_packages() { :; }
-install_go() { :; }
+managed_toolchain() { :; }
+git() { :; }
+cp() { :; }
 ensure_build_memory() { :; }
-clone_repo() { mkdir -p "$3/cmd/olcrtc-manager/web/dist"; touch "$3/cmd/olcrtc-manager/web/dist/index.html"; }
+managed_sources() { mkdir -p "$3/cmd/olcrtc-manager/web/dist"; touch "$3/cmd/olcrtc-manager/web/dist/index.html"; }
 mktemp() { command mktemp -d "$TEST_ROOT/work.XXXXXX"; }
 go() { case "$PWD" in */panel) return 64;; esac; }
 install() { echo unexpected-deployment; return 99; }
@@ -86,7 +88,11 @@ OLCRTC_REPO=server
 OLCRTC_REF=master
 PANEL_REPO=manager
 PANEL_REF=main
-` + string(installerAdapter)
+CONFIG_DIR="$TEST_ROOT/config"
+MANAGER_PATCH_PATH=unused
+MANAGER_SAFETY_PATH=unused
+main
+`
 	cmd := exec.Command("bash")
 	cmd.Stdin = strings.NewReader(script)
 	cmd.Env = append(os.Environ(), "TEST_ROOT="+root)
@@ -167,5 +173,90 @@ func TestManagedInstallationSmoke(t *testing.T) {
 	}
 	if !installed() || !validRevisions(readRevisions()) {
 		t.Fatal("installation or built revisions missing")
+	}
+}
+
+func TestMaintenanceRejectsClientOperations(t *testing.T) {
+	operationMu.Lock()
+	defer operationMu.Unlock()
+	if _, err := Clients(); err == nil {
+		t.Fatal("read allowed during deployment")
+	}
+	if _, err := CreateClient(context.Background(), ClientInput{}); err == nil {
+		t.Fatal("mutation allowed during deployment")
+	}
+}
+
+func TestDeploymentRollbackAndRecovery(t *testing.T) {
+	for _, failure := range []string{"health", "deploy", "crash", "success"} {
+		t.Run(failure, func(t *testing.T) {
+			root := t.TempDir()
+			config := filepath.Join(root, "config")
+			bin := filepath.Join(root, "bin")
+			unit := filepath.Join(root, "unit")
+			for _, p := range []string{config, bin, unit} {
+				if err := os.Mkdir(p, 0700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			files := []string{bin + "/olcrtc", bin + "/olcrtc-manager", config + "/config.json", config + "/panel.env", config + "/.3x-ui-revisions", unit + "/manager.service"}
+			for i, p := range files {
+				if err := os.WriteFile(p, []byte(fmt.Sprintf("old-%d", i)), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			definitions := strings.TrimSuffix(string(installerAdapter), "main \"$@\"\n")
+			mocks := `
+need_root() { :; }
+install_packages() { :; }
+managed_toolchain() { :; }
+ensure_build_memory() { :; }
+managed_sources() { mkdir -p "$3/cmd/olcrtc-manager/web/dist"; touch "$3/cmd/olcrtc-manager/web/dist/index.html"; }
+git() { :; }
+go() { while [ "$#" -gt 0 ]; do if [ "$1" = '-o' ]; then printf 'new-binary' > "$2"; return; fi; shift; done; }
+systemctl() { printf '%s\n' "$*" >> "$TEST_ROOT/systemctl.log"; }
+detect_manager_features() { :; }
+write_config_if_missing() { printf 'new-config' > "$CONFIG_PATH"; }
+apply_config_port() { :; }
+write_panel_env_if_missing() { printf 'new-env' > "$PANEL_ENV_PATH"; }
+install_service() { printf 'new-unit' > "$MANAGED_SERVICE_PATH"; }
+install() { if [ "$FAILURE" = deploy ] && [ "${@: -1}" = "$MANAGED_BIN_DIR/olcrtc-manager.new" ]; then return 64; fi; command install "$@"; }
+manager_ready() { case "$FAILURE" in health) return 1;; crash) kill -KILL $$;; *) return 0;; esac; }
+`
+			env := append(os.Environ(), "TEST_ROOT="+root, "FAILURE="+failure, "CONFIG_DIR="+config, "CONFIG_PATH="+config+"/config.json", "PANEL_ENV_PATH="+config+"/panel.env", "MANAGED_BIN_DIR="+bin, "MANAGED_SERVICE_PATH="+files[5], "BUILT_REVISIONS_PATH="+root+"/built", "MANAGER_PATCH_PATH="+root+"/patch", "MANAGER_SAFETY_PATH="+root+"/safety", "PANEL_REF="+managerRevision, "OLCRTC_REF="+serverRevision, "PANEL_REPO=manager", "OLCRTC_REPO=server", "MANAGER_PATCH_VERSION="+managerPatchVersion)
+			_ = os.WriteFile(root+"/safety", []byte("package main"), 0600)
+			cmd := exec.Command("bash")
+			cmd.Env = env
+			cmd.Stdin = strings.NewReader("set -euo pipefail\n" + definitions + mocks + "\nmain\n")
+			out, err := cmd.CombinedOutput()
+			if failure == "success" {
+				if err != nil {
+					t.Fatalf("install: %v: %s", err, out)
+				}
+			} else if err == nil {
+				t.Fatal("failure ignored")
+			}
+			if failure == "crash" {
+				// Simulate restarting the panel after SIGKILL/power loss: recovery uses the
+				// durable snapshot, not local variables in the terminated process.
+				cmd = exec.Command("bash")
+				cmd.Env = env
+				cmd.Stdin = strings.NewReader("set -euo pipefail\n" + definitions + mocks + "\ntransaction=\"$CONFIG_DIR/.3x-ui-transaction\"\nrecover_install\n")
+				if out, err = cmd.CombinedOutput(); err != nil {
+					t.Fatalf("recovery: %v: %s", err, out)
+				}
+			}
+			if failure != "success" {
+				for i, p := range files {
+					b, err := os.ReadFile(p)
+					if err != nil || string(b) != fmt.Sprintf("old-%d", i) {
+						t.Fatalf("%s was not restored: %q, %v", p, b, err)
+					}
+				}
+			}
+			if _, err := os.Stat(config + "/.3x-ui-transaction"); !os.IsNotExist(err) {
+				t.Fatal("transaction not cleaned")
+			}
+		})
 	}
 }

@@ -1,10 +1,7 @@
 package olcrtc
 
 import (
-	"context"
 	"encoding/json"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -220,41 +217,6 @@ func TestInstallerFailureExit127RedactsCredentials(t *testing.T) {
 func TestMissingUpstreamRevisionIsNotAdvertisedAsAvailable(t *testing.T) {
 	if got := revisionLabel(""); got != "" {
 		t.Fatalf("expected an empty label for an unknown revision, got %q", got)
-	}
-}
-
-func TestGitHubRevisionWithoutInstalledGit(t *testing.T) {
-	sha := strings.Repeat("a", 40)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("User-Agent") != "3x-ui-olcrtc" {
-			t.Error("missing GitHub User-Agent")
-		}
-		_ = json.NewEncoder(w).Encode(map[string]string{"sha": sha})
-	}))
-	defer server.Close()
-	got, err := fetchGitHubRevision(context.Background(), server.URL)
-	if err != nil || got != sha {
-		t.Fatalf("API revision = %q, error = %v", got, err)
-	}
-}
-
-func TestGitHubRevisionRejectsBadResponses(t *testing.T) {
-	for _, response := range []string{"{}", "{", "{\"sha\":\"bad\"}"} {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			_, _ = w.Write([]byte(response))
-		}))
-		_, err := fetchGitHubRevision(context.Background(), server.URL)
-		server.Close()
-		if err == nil {
-			t.Fatalf("accepted invalid response %q", response)
-		}
-	}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusForbidden)
-	}))
-	defer server.Close()
-	if _, err := fetchGitHubRevision(context.Background(), server.URL); err == nil {
-		t.Fatal("HTTP 403 must not advertise a revision")
 	}
 }
 

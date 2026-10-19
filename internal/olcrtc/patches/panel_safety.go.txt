@@ -1,0 +1,100 @@
+package main
+
+import (
+	"bytes"
+	"fmt"
+	"net/http"
+	"os"
+	"path/filepath"
+	"sync"
+)
+
+// One lock covers read-modify-write AND reload, including quota collection.
+var configTransactionMu sync.Mutex
+
+func atomicConfigWrite(path string, data []byte) error {
+	f, err := os.CreateTemp(filepath.Dir(path), ".olcrtc-config-*")
+	if err != nil {
+		return err
+	}
+	name := f.Name()
+	defer os.Remove(name)
+	if _, err = f.Write(data); err != nil {
+		f.Close()
+		return err
+	}
+	if err = f.Sync(); err != nil {
+		f.Close()
+		return err
+	}
+	if err = f.Close(); err != nil {
+		return err
+	}
+	if err = os.Rename(name, path); err != nil {
+		return err
+	}
+	dir, err := os.Open(filepath.Dir(path))
+	if err != nil {
+		return err
+	}
+	defer dir.Close()
+	return dir.Sync()
+}
+
+type configResponse struct {
+	header http.Header
+	status int
+	body   bytes.Buffer
+}
+
+func (w *configResponse) Header() http.Header { return w.header }
+func (w *configResponse) WriteHeader(status int) {
+	if w.status == 0 {
+		w.status = status
+	}
+}
+func (w *configResponse) Write(p []byte) (int, error) {
+	if w.status == 0 {
+		w.status = 200
+	}
+	return w.body.Write(p)
+}
+
+func configTransactions(path string, next http.Handler, reload func() error) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions {
+			next.ServeHTTP(w, r)
+			return
+		}
+		configTransactionMu.Lock()
+		defer configTransactionMu.Unlock()
+		before, err := os.ReadFile(path)
+		if err != nil {
+			http.Error(w, "cannot snapshot manager configuration", 500)
+			return
+		}
+		result := &configResponse{header: make(http.Header)}
+		next.ServeHTTP(result, r)
+		if result.status == 0 {
+			result.status = 200
+		}
+		if result.status >= 400 {
+			after, readErr := os.ReadFile(path)
+			if readErr != nil || !bytes.Equal(before, after) {
+				if err := atomicConfigWrite(path, before); err != nil {
+					http.Error(w, "configuration rollback failed", 500)
+					return
+				}
+				if err := reload(); err != nil {
+					http.Error(w, fmt.Sprintf("configuration restored; reload failed: %v", err), 500)
+					return
+				}
+			}
+		}
+		for k, v := range result.header {
+			w.Header()[k] = v
+		}
+		w.WriteHeader(result.status)
+		_, _ = w.Write(result.body.Bytes())
+	})
+}

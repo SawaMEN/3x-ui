@@ -23,7 +23,7 @@ import {
   PlusOutlined,
   ReloadOutlined,
 } from '@ant-design/icons';
-import { HttpUtil } from '@/utils';
+import { ClipboardManager, HttpUtil } from '@/utils';
 
 type Provider = 'jitsi' | 'telemost' | 'wbstream';
 type Transport = 'datachannel' | 'vp8channel' | 'seichannel' | 'videochannel';
@@ -112,9 +112,9 @@ export default function OlcRTCClientsModal({
     try {
       const [result, state] = await Promise.all([
         HttpUtil.get('/panel/api/olcrtc/clients') as Promise<ApiMsg<Client[]>>,
-        HttpUtil.get('/panel/api/olcrtc/live', undefined, { silent: true }) as Promise<
-          ApiMsg<LiveSummary>
-        >,
+        HttpUtil.get('/panel/api/olcrtc/live', undefined, { silent: true }).catch(() => ({
+          success: false,
+        })) as Promise<ApiMsg<LiveSummary>>,
       ]);
       if (!result.success) throw new Error(result.msg || 'Не удалось загрузить подключения');
       setClients(result.obj || []);
@@ -300,10 +300,10 @@ export default function OlcRTCClientsModal({
                       icon={<CopyOutlined />}
                       disabled={!client.link}
                       onClick={() => {
-                        void navigator.clipboard.writeText(client.link).then(
-                          () => toast.success('Ссылка скопирована.'),
-                          () => toast.error('Браузер запретил копирование.'),
-                        );
+                        void ClipboardManager.copyText(client.link).then((ok) => {
+                          if (ok) toast.success('Ссылка скопирована.');
+                          else toast.error('Браузер запретил копирование.');
+                        });
                       }}
                     >
                       Ссылка

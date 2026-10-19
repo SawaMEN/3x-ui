@@ -24,6 +24,17 @@ jobs:
           cache: true
       - name: Go unit tests for the integration
         run: go test -count=1 ./internal/olcrtc
+      - name: Test the patched manager, real Linux network namespace and quotas
+        run: |
+          git init -q /tmp/olcrtc-reviewed-manager
+          git -C /tmp/olcrtc-reviewed-manager remote add origin https://github.com/BigDaddy3334/olcrtc-manager-panel.git
+          git -C /tmp/olcrtc-reviewed-manager fetch --depth 1 origin df626030d21d00286304bc8ef1e990e28c247a55
+          git -C /tmp/olcrtc-reviewed-manager checkout --detach FETCH_HEAD
+          git -C /tmp/olcrtc-reviewed-manager apply "$GITHUB_WORKSPACE/internal/olcrtc/patches/manager.patch"
+          cp internal/olcrtc/patches/panel_safety.go.txt /tmp/olcrtc-reviewed-manager/cmd/olcrtc-manager/panel_safety.go
+          cp internal/olcrtc/patches/panel_safety_test.go.txt /tmp/olcrtc-reviewed-manager/cmd/olcrtc-manager/panel_safety_test.go
+          cd /tmp/olcrtc-reviewed-manager
+          sudo env PATH="$PATH" OLCRTC_KERNEL_TEST=1 go test -race -count=1 ./cmd/olcrtc-manager
       - name: Install OlcRTC through the production integration on an isolated CI VM
         env:
           INSTALLER_URL: https://raw.githubusercontent.com/BigDaddy3334/olcrtc-manager-panel/df626030d21d00286304bc8ef1e990e28c247a55/scripts/install.sh

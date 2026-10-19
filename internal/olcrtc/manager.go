@@ -6,7 +6,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
-	_ "embed"
+	"embed"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -33,9 +33,12 @@ const (
 	installLogPath = "/var/log/3x-ui/olcrtc/install.log"
 	// The installer is pinned to the reviewed upstream revision. Source branches
 	// used by upstream's installer are deliberately updated by Update().
-	installerURL = "https://raw.githubusercontent.com/BigDaddy3334/olcrtc-manager-panel/df626030d21d00286304bc8ef1e990e28c247a55/scripts/install.sh"
-	managerRepo  = "https://github.com/BigDaddy3334/olcrtc-manager-panel.git"
-	serverRepo   = "https://github.com/openlibrecommunity/olcrtc.git"
+	installerURL        = "https://raw.githubusercontent.com/BigDaddy3334/olcrtc-manager-panel/df626030d21d00286304bc8ef1e990e28c247a55/scripts/install.sh"
+	managerRepo         = "https://github.com/BigDaddy3334/olcrtc-manager-panel.git"
+	serverRepo          = "https://github.com/openlibrecommunity/olcrtc.git"
+	managerRevision     = "df626030d21d00286304bc8ef1e990e28c247a55"
+	serverRevision      = "f3ad8fb7c0d0fa981423f83269526fa94077c23d"
+	managerPatchVersion = "panel-v2"
 )
 
 type Status struct {
@@ -110,16 +113,12 @@ type ClientInput struct {
 }
 
 var idPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$`)
+var operationMu sync.RWMutex
 var state = struct {
 	sync.Mutex
 	busy      bool
 	operation string
 	lastError string
-}{}
-var updateCache = struct {
-	sync.Mutex
-	when time.Time
-	sha  string
 }{}
 
 func Supported() (bool, string) {
@@ -171,7 +170,7 @@ func addArchPackagesToInstaller(original []byte) ([]byte, error) {
 		return nil, errors.New("upstream OlcRTC installer changed; refusing unsafe Arch patch")
 	}
 	const arch = "	if command -v pacman >/dev/null 2>&1; then\n" +
-		"		pacman -S --noconfirm --needed ca-certificates curl git tar xz iproute2 iptables openssl\n" +
+		"		pacman -S --noconfirm --needed ca-certificates curl git tar xz iproute2 iptables openssl procps-ng\n" +
 		"		return\n" +
 		"	fi\n"
 	return bytes.Replace(original, []byte(marker), []byte(marker+arch), 1), nil
@@ -197,86 +196,9 @@ func readRevisions() string {
 
 var revisionSHA = regexp.MustCompile("^[a-fA-F0-9]{40}$")
 
-// The GitHub HTTPS API works before git is installed on a minimal server.
-func fetchGitHubRevision(ctx context.Context, endpoint string) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "3x-ui-olcrtc")
-	response, err := (&http.Client{Timeout: 4 * time.Second}).Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("GitHub revisions: HTTP %d", response.StatusCode)
-	}
-	var data struct{ SHA string }
-	if err := json.NewDecoder(io.LimitReader(response.Body, 256<<10)).Decode(&data); err != nil {
-		return "", err
-	}
-	if !revisionSHA.MatchString(data.SHA) {
-		return "", errors.New("invalid upstream revision")
-	}
-	return strings.ToLower(data.SHA), nil
-}
-
-func resolveRemoteRevision(ctx context.Context, endpoint, repo, ref string) string {
-	lookup, cancel := context.WithTimeout(ctx, 7*time.Second)
-	defer cancel()
-	if sha, err := fetchGitHubRevision(lookup, endpoint); err == nil {
-		return sha
-	}
-	// Fallback to git if GitHub's API is blocked or rate-limited.
-	if _, err := exec.LookPath("git"); err != nil {
-		return ""
-	}
-	output, err := run(lookup, "git", "ls-remote", repo, ref)
-	if err != nil {
-		return ""
-	}
-	fields := strings.Fields(output)
-	if len(fields) > 0 && revisionSHA.MatchString(fields[0]) {
-		return strings.ToLower(fields[0])
-	}
-	return ""
-}
-
-func remoteRevision(ctx context.Context) string {
-	updateCache.Lock()
-	defer updateCache.Unlock()
-	if time.Since(updateCache.when) < 5*time.Minute {
-		return updateCache.sha
-	}
-	sources := [...]struct{ endpoint, repo, ref string }{
-		{"https://api.github.com/repos/BigDaddy3334/olcrtc-manager-panel/commits/main", managerRepo, "refs/heads/main"},
-		{"https://api.github.com/repos/openlibrecommunity/olcrtc/commits/master", serverRepo, "refs/heads/master"},
-	}
-	var revisions [2]string
-	var lookups sync.WaitGroup
-	for i := range sources {
-		lookups.Add(1)
-		go func(index int) {
-			defer lookups.Done()
-			item := sources[index]
-			revisions[index] = resolveRemoteRevision(ctx, item.endpoint, item.repo, item.ref)
-		}(i)
-	}
-	lookups.Wait()
-	if revisions[0] != "" && revisions[1] != "" {
-		updateCache.sha = strings.Join(revisions[:], "|")
-	} else {
-		// A failed lookup must not advertise a stale upstream revision.
-		updateCache.sha = ""
-	}
-	updateCache.when = time.Now()
-	return updateCache.sha
-}
 func revisionLabel(value string) string {
 	parts := strings.Split(value, "|")
-	if len(parts) != 2 {
+	if len(parts) != 2 && len(parts) != 3 {
 		return value
 	}
 	shorten := func(sha string) string {
@@ -285,13 +207,17 @@ func revisionLabel(value string) string {
 		}
 		return sha
 	}
-	return "manager " + shorten(parts[0]) + " / olcrtc " + shorten(parts[1])
+	label := "manager " + shorten(parts[0]) + " / olcrtc " + shorten(parts[1])
+	if len(parts) == 3 {
+		label += " / " + parts[2]
+	}
+	return label
 }
 func GetStatus(ctx context.Context) Status {
 	yes, reason := Supported()
 	result := Status{Installed: installed(), Supported: yes, UnsupportedReason: reason}
-	// Query upstream via HTTPS even when git has not been installed.
-	latest := remoteRevision(ctx)
+	// Only reviewed source and patch revisions are installable.
+	latest := supportedRevision()
 	result.AvailableVersion = revisionLabel(latest)
 	if result.Installed {
 		check, cancel := context.WithTimeout(ctx, 3*time.Second)
@@ -331,23 +257,27 @@ func Start(operation string) error {
 	state.lastError = ""
 	state.Unlock()
 	go func() {
+		operationMu.Lock()
+		defer operationMu.Unlock()
 		ctx, cancel := context.WithTimeout(context.Background(), 35*time.Minute)
 		defer cancel()
 		var err error
-		switch operation {
-		case "remove":
-			err = remove(ctx)
-		case "restart":
-			if !installed() {
-				err = errors.New("OlcRTC is not installed")
-			} else {
-				_, err = run(ctx, "systemctl", "restart", "olcrtc-manager")
-				if err == nil {
-					err = waitForManager(ctx)
+		if err = recoverPending(ctx); err == nil {
+			switch operation {
+			case "remove":
+				err = remove(ctx)
+			case "restart":
+				if !installed() {
+					err = errors.New("OlcRTC is not installed")
+				} else {
+					_, err = run(ctx, "systemctl", "restart", "olcrtc-manager")
+					if err == nil {
+						err = waitForManager(ctx)
+					}
 				}
+			default:
+				err = install(ctx)
 			}
-		default:
-			err = install(ctx)
 		}
 		state.Lock()
 		state.busy = false
@@ -363,7 +293,7 @@ func Start(operation string) error {
 
 // Upstream logs may include freshly generated admin credentials. Never expose
 // raw installer logs through the API: only allow-list executable names.
-var installerStage = regexp.MustCompile(`(?m)^3XUI_OLCRTC_STAGE=(packages|toolchain|memory|sources|build-server|build-manager|deploy|config|service|complete)$`)
+var installerStage = regexp.MustCompile(`(?m)^3XUI_OLCRTC_STAGE=(packages|toolchain|memory|sources|build-server|build-manager|deploy|config|service|health|rollback|complete)$`)
 var installerMissingCommand = regexp.MustCompile(`(?m)line [0-9]+: ([A-Za-z0-9_.+-]{1,64}): command not found$`)
 
 func installerFailure(err error, logPath string) error {
@@ -394,7 +324,7 @@ func installerFailure(err error, logPath string) error {
 
 // These commands are used by the pinned install.sh global initializers
 // before install_packages runs. Minimal server images may be missing them.
-var initialInstallerCommands = []string{"bash", "id", "od", "tr", "seq", "ss", "grep", "awk"}
+var initialInstallerCommands = []string{"bash", "id", "od", "tr", "seq", "ss", "grep", "awk", "cp", "mv", "sync", "sha256sum", "dirname"}
 
 func missingInstallerCommands() []string {
 	var missing []string
@@ -478,6 +408,20 @@ func install(ctx context.Context) error {
 	if !bytes.HasPrefix(data, []byte("#!/usr/bin/env bash")) {
 		return errors.New("unexpected upstream installer format")
 	}
+	patchDir, err := os.MkdirTemp("", "olcrtc-patches-*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(patchDir)
+	for _, name := range []string{"manager.patch", "panel_safety.go.txt"} {
+		content, err := managerPatches.ReadFile("patches/" + name)
+		if err != nil {
+			return err
+		}
+		if err = os.WriteFile(patchDir+"/"+name, content, 0600); err != nil {
+			return err
+		}
+	}
 	data, err = managedInstaller(data, installerPackageManager())
 	if err != nil {
 		return err
@@ -503,8 +447,9 @@ func install(ctx context.Context) error {
 	_ = revisions.Close()
 	defer os.Remove(builtPath)
 	cmd := exec.CommandContext(ctx, "bash", name)
+	configureInstallerProcess(cmd)
 	// Never publish the independent admin interface. Native settings go through 3x-ui.
-	cmd.Env = installerEnvironment(builtPath)
+	cmd.Env = append(installerEnvironment(builtPath), "MANAGER_PATCH_PATH="+patchDir+"/manager.patch", "MANAGER_SAFETY_PATH="+patchDir+"/panel_safety.go.txt")
 	// Installer logs include a generated password: never return them to browsers.
 	logFile, err := os.CreateTemp("", "olcrtc-install-log-*.log")
 	if err != nil {
@@ -527,9 +472,7 @@ func install(ctx context.Context) error {
 		}
 		return failure
 	}
-	if _, err := run(ctx, "systemctl", "restart", "olcrtc-manager"); err != nil {
-		return fmt.Errorf("installed but unable to restart olcrtc-manager: %w", err)
-	}
+
 	// Record the commits actually checked out, never remote branch tips which
 	// may have advanced during a long build.
 	built, err := os.ReadFile(builtPath)
@@ -587,6 +530,10 @@ func readConfig() (clientConfig, error) {
 	return cfg, nil
 }
 func Clients() ([]Client, error) {
+	if err := beginClientOperation(); err != nil {
+		return nil, err
+	}
+	defer operationMu.RUnlock()
 	if !installed() {
 		return nil, errors.New("OlcRTC is not installed")
 	}
@@ -784,6 +731,10 @@ type LiveClient struct {
 }
 
 func Live(ctx context.Context) (LiveStatus, error) {
+	if err := beginClientOperation(); err != nil {
+		return LiveStatus{}, err
+	}
+	defer operationMu.RUnlock()
 	body, err := apiResponse(ctx, http.MethodGet, "/api/state", nil)
 	if err != nil {
 		return LiveStatus{}, err
@@ -828,6 +779,10 @@ func decodeLive(body []byte) (LiveStatus, error) {
 }
 
 func CreateClient(ctx context.Context, input ClientInput) (ClientInput, error) {
+	if err := beginClientOperation(); err != nil {
+		return input, err
+	}
+	defer operationMu.RUnlock()
 	if input.ClientID == "" {
 		suffix, err := randomHex(8)
 		if err != nil {
@@ -844,6 +799,10 @@ func CreateClient(ctx context.Context, input ClientInput) (ClientInput, error) {
 	return input, nil
 }
 func UpdateClient(ctx context.Context, id string, input ClientInput) (ClientInput, error) {
+	if err := beginClientOperation(); err != nil {
+		return input, err
+	}
+	defer operationMu.RUnlock()
 	if !idPattern.MatchString(id) {
 		return input, errors.New("invalid client ID")
 	}
@@ -893,12 +852,20 @@ func UpdateClient(ctx context.Context, id string, input ClientInput) (ClientInpu
 	return input, nil
 }
 func DeleteClient(ctx context.Context, id string) error {
+	if err := beginClientOperation(); err != nil {
+		return err
+	}
+	defer operationMu.RUnlock()
 	if !idPattern.MatchString(id) {
 		return errors.New("invalid client ID")
 	}
 	return api(ctx, http.MethodDelete, "/api/clients/"+id, nil)
 }
 func RotateKey(ctx context.Context, id string) error {
+	if err := beginClientOperation(); err != nil {
+		return err
+	}
+	defer operationMu.RUnlock()
 	if !idPattern.MatchString(id) {
 		return errors.New("invalid client ID")
 	}
@@ -939,6 +906,7 @@ func managedInstaller(original []byte, pm string) ([]byte, error) {
 			return nil, err
 		}
 	}
+	original = bytes.ReplaceAll(original, []byte("apt-get install -y --no-install-recommends ca-certificates curl git tar xz-utils iproute2 iptables openssl"), []byte("apt-get install -y --no-install-recommends ca-certificates curl git tar xz-utils iproute2 iptables openssl procps"))
 	const start = `main "$@"`
 	const execStart = "ExecStart=/usr/local/bin/olcrtc-manager -config $CONFIG_PATH"
 	if bytes.Count(original, []byte(start)) != 1 || bytes.Count(original, []byte(execStart)) != 1 {
@@ -947,12 +915,13 @@ func managedInstaller(original []byte, pm string) ([]byte, error) {
 	// A preserved panel.env may contain TLS or bind settings from an earlier
 	// standalone installation. Enforce the local HTTP API in systemd itself.
 	original = bytes.Replace(original, []byte(execStart), []byte(execStart+" -addr 127.0.0.1\nUnsetEnvironment=OLCRTC_MANAGER_TLS_CERT OLCRTC_MANAGER_TLS_KEY"), 1)
+	original = bytes.ReplaceAll(original, []byte("/etc/systemd/system/olcrtc-manager.service"), []byte("$MANAGED_SERVICE_PATH"))
 	return bytes.Replace(original, []byte(start), installerAdapter, 1), nil
 }
 
 func validRevisions(value string) bool {
 	parts := strings.Split(value, "|")
-	return len(parts) == 2 && revisionSHA.MatchString(parts[0]) && revisionSHA.MatchString(parts[1])
+	return (len(parts) == 2 || (len(parts) == 3 && parts[2] == managerPatchVersion)) && revisionSHA.MatchString(parts[0]) && revisionSHA.MatchString(parts[1])
 }
 
 func managerHTTPClient() *http.Client {
@@ -987,7 +956,44 @@ func installerEnvironment(builtPath string) []string {
 		// initializer. A local HTTP service does not need a public IP.
 		"PANEL_CERT_IP=127.0.0.1", "PANEL_PUBLIC_HOST=127.0.0.1",
 		"PANEL_REPO="+managerRepo, "OLCRTC_REPO="+serverRepo,
-		"PANEL_REF=main", "OLCRTC_REF=master",
+		"PANEL_REF="+managerRevision, "OLCRTC_REF="+serverRevision,
+		"MANAGER_PATCH_VERSION="+managerPatchVersion,
+		"MANAGED_BIN_DIR=/usr/local/bin", "MANAGED_SERVICE_PATH="+servicePath,
 		"CONFIG_DIR=/etc/olcrtc-manager", "CONFIG_PATH="+configPath, "PANEL_ENV_PATH="+envPath,
 		"BUILT_REVISIONS_PATH="+builtPath)
+}
+
+//go:embed patches/*
+var managerPatches embed.FS
+
+func supportedRevision() string {
+	return managerRevision + "|" + serverRevision + "|" + managerPatchVersion
+}
+
+func beginClientOperation() error {
+	if !operationMu.TryRLock() {
+		return errors.New("OlcRTC maintenance is running; retry after it completes")
+	}
+	state.Lock()
+	busy := state.busy
+	state.Unlock()
+	if busy {
+		operationMu.RUnlock()
+		return errors.New("OlcRTC maintenance is running; retry after it completes")
+	}
+	return nil
+}
+
+func recoverPending(ctx context.Context) error {
+	if _, err := os.Stat("/etc/olcrtc-manager/.3x-ui-transaction"); os.IsNotExist(err) {
+		return nil
+	}
+	definitions := strings.TrimSuffix(string(installerAdapter), "main \"$@\"\n")
+	cmd := exec.CommandContext(ctx, "bash")
+	cmd.Env = installerEnvironment("")
+	cmd.Stdin = strings.NewReader("set -euo pipefail\n" + definitions + "\ntransaction=\"$CONFIG_DIR/.3x-ui-transaction\"\nrecover_install\n")
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("OlcRTC interrupted deployment recovery failed; snapshot retained: %w", err)
+	}
+	return nil
 }
