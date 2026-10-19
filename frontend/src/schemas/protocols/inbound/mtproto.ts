@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { TelemtWebSiteSchema } from '@/schemas/telemt-web';
 
 // Legacy mtg-multi domain-fronting payload. Telemt migrates these fields to its native mask host/port;
 // keep the shape in the schema only so existing saved inbounds can round-trip
@@ -46,6 +47,7 @@ export const MtprotoInboundSettingsSchema = z.object({
   // One MTProto protocol, with a separately provisioned HTTPS WEB transport.
   webProxy: z
     .object({
+      site: TelemtWebSiteSchema.optional(),
       enabled: z.boolean().default(false),
       domain: z.string().default(''),
       frontend: z.enum(['nginx', 'caddy', 'haproxy']).default('nginx'),

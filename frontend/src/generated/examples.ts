@@ -1135,6 +1135,15 @@ export const EXAMPLES: Record<string, unknown> = {
     "strategy": "random",
     "updatedAt": 1710000000000
   },
+  "TelemtWebSiteOptions": {
+    "catalog": "builtin",
+    "description": "Stories from quiet places.",
+    "html": "",
+    "mode": "auto",
+    "template": "notes",
+    "theme": "travel",
+    "title": "A travel notebook"
+  },
   "Traffic": {
     "Down": 2097152,
     "IsInbound": true,

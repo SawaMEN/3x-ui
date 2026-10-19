@@ -1121,6 +1121,17 @@ export const SubBalancerSchema = z.object({
 });
 export type SubBalancer = z.infer<typeof SubBalancerSchema>;
 
+export const TelemtWebSiteOptionsSchema = z.object({
+  catalog: z.string().optional(),
+  description: z.string().optional(),
+  html: z.string().optional(),
+  mode: z.string(),
+  template: z.string().optional(),
+  theme: z.string().optional(),
+  title: z.string().optional(),
+});
+export type TelemtWebSiteOptions = z.infer<typeof TelemtWebSiteOptionsSchema>;
+
 export const TrafficSchema = z.object({
   Down: z.number().int(),
   IsInbound: z.boolean(),

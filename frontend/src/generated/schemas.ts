@@ -4611,6 +4611,41 @@ export const SCHEMAS: Record<string, unknown> = {
     ],
     "type": "object"
   },
+  "TelemtWebSiteOptions": {
+    "properties": {
+      "catalog": {
+        "example": "builtin",
+        "type": "string"
+      },
+      "description": {
+        "example": "Stories from quiet places.",
+        "type": "string"
+      },
+      "html": {
+        "type": "string"
+      },
+      "mode": {
+        "example": "auto",
+        "type": "string"
+      },
+      "template": {
+        "example": "notes",
+        "type": "string"
+      },
+      "theme": {
+        "example": "travel",
+        "type": "string"
+      },
+      "title": {
+        "example": "A travel notebook",
+        "type": "string"
+      }
+    },
+    "required": [
+      "mode"
+    ],
+    "type": "object"
+  },
   "Traffic": {
     "description": "Traffic represents network traffic statistics reported by a core.\nIt tracks upload and download bytes for inbound or outbound traffic.",
     "properties": {

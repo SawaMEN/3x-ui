@@ -3395,6 +3395,17 @@ export const sections: readonly Section[] = [
         method: 'POST',
         path: '/panel/api/telemt/webproxy/enable',
         summary: 'Enable the Telemt Web Proxy.',
+        description:
+          'Optional site selects automatic setup, a bundled catalog page or a locally generated theme. Omit site to preserve the current selection; use mode auto to restore the default. Previously saved HTML sites remain supported for compatibility.',
+        params: [
+          {
+            name: 'site',
+            in: 'body (json)',
+            type: 'object',
+            optional: true,
+            desc: 'TelemtWebSiteOptions: mode auto|catalog|generate; catalog builtin|mtproxyl and a matching template; optional theme, title and description. Legacy html is retained for existing sites.',
+          },
+        ],
       },
       {
         method: 'POST',

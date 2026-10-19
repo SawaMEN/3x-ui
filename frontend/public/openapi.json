@@ -4637,6 +4637,41 @@
         ],
         "type": "object"
       },
+      "TelemtWebSiteOptions": {
+        "properties": {
+          "catalog": {
+            "example": "builtin",
+            "type": "string"
+          },
+          "description": {
+            "example": "Stories from quiet places.",
+            "type": "string"
+          },
+          "html": {
+            "type": "string"
+          },
+          "mode": {
+            "example": "auto",
+            "type": "string"
+          },
+          "template": {
+            "example": "notes",
+            "type": "string"
+          },
+          "theme": {
+            "example": "travel",
+            "type": "string"
+          },
+          "title": {
+            "example": "A travel notebook",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "type": "object"
+      },
       "Traffic": {
         "description": "Traffic represents network traffic statistics reported by a core.\nIt tracks upload and download bytes for inbound or outbound traffic.",
         "properties": {
@@ -19873,6 +19908,23 @@
         ],
         "summary": "Enable the Telemt Web Proxy.",
         "operationId": "post_panel_api_telemt_webproxy_enable",
+        "description": "Optional site selects automatic setup, a bundled catalog page or a locally generated theme. Omit site to preserve the current selection; use mode auto to restore the default. Previously saved HTML sites remain supported for compatibility.",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "site": {
+                    "type": "object",
+                    "description": "TelemtWebSiteOptions: mode auto|catalog|generate; catalog builtin|mtproxyl and a matching template; optional theme, title and description. Legacy html is retained for existing sites."
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful response",

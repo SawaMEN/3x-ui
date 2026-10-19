@@ -7,10 +7,15 @@ import { useOutboundTags } from '@/api/queries/useOutboundTags';
 import MtprotoWebStatus from './MtprotoWebStatus';
 import { TelemtWebProxyRequestSchema } from '@/schemas/telemt-web';
 import MtprotoMekoStatus from './MtprotoMekoStatus';
+import TelemtWebSiteFields from '@/pages/telemt/TelemtWebSiteFields';
+import TelemtWebGuide, { telemtWebFieldHelp } from '@/pages/telemt/TelemtWebGuide';
 
 export default function MtprotoFields() {
   const { t, i18n } = useTranslation();
   const { control } = useFormContext();
+  const ru = i18n.resolvedLanguage?.startsWith('ru') ?? false;
+  const help = telemtWebFieldHelp[ru ? 'ru' : 'en'];
+  const webDomain = useWatch({ control, name: 'settings.webProxy.domain' }) as string | undefined;
   const webProxyEnabled = useWatch({ control, name: 'settings.webProxy.enabled' }) as
     | boolean
     | undefined;
@@ -51,11 +56,13 @@ export default function MtprotoFields() {
             }
             description={
               i18n.resolvedLanguage?.startsWith('ru')
-                ? 'Можно использовать домен панели или отдельный домен. A/AAAA должны указывать на этот сервер. Панель автоматически настроит HTTPS frontend, сертификат и локальный backend. Если сама панель или другой сервис занимает 443, сначала перенесите его на другой порт; для панели и WEB допустим один домен с разными портами. Для выпуска и продления сертификата через HTTP нужен доступный снаружи TCP 80; для работы — TCP 443. Разрешите их в firewall сервера и хостера. Поддерживается один WEB inbound на локальном сервере.'
+                ? 'Можно использовать домен панели или отдельный домен. A/AAAA должны указывать на этот сервер. Панель автоматически установит HTTPS-сервер, получит сертификат и настроит локальный Telemt. Если сама панель или другой сервис занимает 443, сначала перенесите его на другой порт; для панели и WEB допустим один домен с разными портами. Для выпуска и продления сертификата через HTTP нужен доступный снаружи TCP 80; для работы — TCP 443. Разрешите их в firewall сервера и хостера. Поддерживается один WEB inbound на локальном сервере.'
                 : 'Use the panel domain or a separate domain with A/AAAA pointing to this server. HTTPS frontend, certificate and loopback backend are configured automatically. Move the panel or another service off port 443 first if necessary; the same domain can serve the panel on another port. HTTP certificate issuance and renewal need public TCP 80; proxy traffic needs TCP 443. Allow these ports in host and provider firewalls. One local WEB inbound is supported.'
             }
           />
           <MtprotoWebStatus />
+          <TelemtWebGuide domain={webDomain} />
+          <TelemtWebSiteFields prefix="settings.webProxy.site" />
           <FormField
             name={['settings', 'webProxy', 'domain']}
             label="Домен WEB Proxy"
@@ -69,12 +76,20 @@ export default function MtprotoFields() {
           >
             <Input placeholder="web.example.com" addonAfter=":443" />
           </FormField>
-          <FormField name={['settings', 'webProxy', 'frontend']} label="HTTPS frontend">
+          <FormField
+            name={['settings', 'webProxy', 'frontend']}
+            label={ru ? 'Сервер HTTPS (frontend)' : 'HTTPS server (frontend)'}
+            extra={help.frontend}
+          >
             <Select
               options={['nginx', 'caddy', 'haproxy'].map((value) => ({ value, label: value }))}
             />
           </FormField>
-          <FormField name={['settings', 'webProxy', 'carrier']} label="WEB carrier">
+          <FormField
+            name={['settings', 'webProxy', 'carrier']}
+            label={ru ? 'Основной транспорт (WEB carrier)' : 'Primary transport (WEB carrier)'}
+            extra={help.carrier}
+          >
             <Select
               options={['https', 'https-lanes', 'websocket', 'websocket-lanes'].map((value) => ({
                 value,
@@ -82,7 +97,11 @@ export default function MtprotoFields() {
               }))}
             />
           </FormField>
-          <FormField name={['settings', 'webProxy', 'carriers']} label="Приоритет транспортов">
+          <FormField
+            name={['settings', 'webProxy', 'carriers']}
+            label={ru ? 'Приоритет транспортов' : 'Transport priority'}
+            extra={help.carriers}
+          >
             <Select
               mode="multiple"
               options={['https', 'https-lanes', 'websocket', 'websocket-lanes'].map((value) => ({

@@ -3,12 +3,14 @@ package service
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -18,6 +20,24 @@ func TestNativeTelemtWebCarrierConfig(t *testing.T) {
 	if binary == "" {
 		t.Skip("set TELEMT_TEST_BINARY for native WEB transport validation")
 	}
+	for _, tc := range []struct {
+		name   string
+		site   *TelemtWebSiteOptions
+		marker string
+	}{
+		{"automatic", nil, "example.com — Fieldnotes"},
+		{"catalog-notes", &TelemtWebSiteOptions{Mode: "catalog", Catalog: "builtin", Template: "notes"}, "Fieldnotes"},
+		{"catalog-stub", &TelemtWebSiteOptions{Mode: "catalog", Catalog: "mtproxyl", Template: "stub"}, "Сайт временно недоступен"},
+		{"catalog-catrunner", &TelemtWebSiteOptions{Mode: "catalog", Catalog: "mtproxyl", Template: "catrunner"}, "Cat Runner"},
+		{"catalog-mekorunner", &TelemtWebSiteOptions{Mode: "catalog", Catalog: "mtproxyl", Template: "mekorunner"}, "Meko Runner"},
+		{"generated", &TelemtWebSiteOptions{Mode: "generate", Theme: "travel", Title: "Native Travel Check"}, "Native Travel Check"},
+		{"imported", &TelemtWebSiteOptions{Mode: "html", HTML: "<!doctype html><html><head><title>Native Imported Page</title></head><body>Ready</body></html>"}, "Native Imported Page"},
+	} {
+		t.Run(tc.name, func(t *testing.T) { testNativeTelemtWebSite(t, binary, tc.site, tc.marker) })
+	}
+}
+
+func testNativeTelemtWebSite(t *testing.T, binary string, site *TelemtWebSiteOptions, marker string) {
 	dir := t.TempDir()
 	freePort := func() int {
 		t.Helper()
@@ -30,11 +50,12 @@ func TestNativeTelemtWebCarrierConfig(t *testing.T) {
 		return port
 	}
 	rawPort, webPort := freePort(), freePort()
-	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("web-decoy"), 0o600); err != nil {
+	siteDir, err := prepareTelemtWebSite("example.com", filepath.Join(dir, "default"), filepath.Join(dir, "sites"), site)
+	if err != nil {
 		t.Fatal(err)
 	}
 	base := fmt.Sprintf("[general]\ndata_path = %q\nuse_middle_proxy = false\n\n[general.modes]\nclassic = true\nsecure = true\ntls = false\n\n[network]\nipv4 = true\nipv6 = false\n\n[server]\nport = %d\n\n[[server.listeners]]\nip = \"127.0.0.1\"\n\n[access.users]\nxui = \"0123456789abcdef0123456789abcdef\"\n\n[[upstreams]]\ntype = \"direct\"\n", dir, rawPort)
-	config, err := appendTelemtWebProxyConfig(base, TelemtWebProxyState{Enabled: true, Domain: "example.com", Secret: "abcdef0123456789abcdef0123456789", PublicAddr: "203.0.113.1:443", ListenPort: webPort, DecoyDir: dir, Carrier: "https", Carriers: []string{"websocket-lanes", "websocket", "https-lanes", "https"}})
+	config, err := appendTelemtWebProxyConfig(base, TelemtWebProxyState{Enabled: true, Domain: "example.com", Secret: "abcdef0123456789abcdef0123456789", PublicAddr: "203.0.113.1:443", ListenPort: webPort, DecoyDir: siteDir, Carrier: "https", Carriers: []string{"websocket-lanes", "websocket", "https-lanes", "https"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,15 +90,49 @@ func TestNativeTelemtWebCarrierConfig(t *testing.T) {
 			t.Fatalf("Telemt exited before WEB startup: %s", logs)
 		default:
 		}
-		req, err := http.NewRequestWithContext(ctx, http.MethodHead, "http://"+net.JoinHostPort("127.0.0.1", strconv.Itoa(webPort))+"/", nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+net.JoinHostPort("127.0.0.1", strconv.Itoa(webPort))+"/", nil)
 		if err != nil {
 			t.Fatal(err)
 		}
 		req.Host = "example.com"
 		resp, err := client.Do(req)
 		if err == nil {
+			body, readErr := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
 			_ = resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {
+				if readErr != nil || !strings.Contains(string(body), marker) {
+					t.Fatalf("Telemt did not serve the generated cover site: %s, %v", body, readErr)
+				}
+				entries, err := os.ReadDir(siteDir)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, entry := range entries {
+					if entry.Name() == "index.html" {
+						continue
+					}
+					assetReq, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+net.JoinHostPort("127.0.0.1", strconv.Itoa(webPort))+"/"+entry.Name(), nil)
+					if err != nil {
+						t.Fatal(err)
+					}
+					assetReq.Host = "example.com"
+					asset, err := client.Do(assetReq)
+					if err != nil {
+						t.Fatal(err)
+					}
+					data, err := io.ReadAll(io.LimitReader(asset.Body, 256<<10))
+					_ = asset.Body.Close()
+					expected, readErr := os.ReadFile(filepath.Join(siteDir, entry.Name()))
+					if err != nil || readErr != nil || asset.StatusCode != http.StatusOK || string(data) != string(expected) {
+						t.Fatalf("asset %s not served correctly: HTTP %d, %v, %v", entry.Name(), asset.StatusCode, err, readErr)
+					}
+					if strings.HasSuffix(entry.Name(), ".css") && !strings.Contains(asset.Header.Get("Content-Type"), "text/css") {
+						t.Fatal("invalid CSS content type")
+					}
+					if strings.HasSuffix(entry.Name(), ".js") && !strings.Contains(asset.Header.Get("Content-Type"), "javascript") {
+						t.Fatal("invalid JavaScript content type")
+					}
+				}
 				return
 			}
 		}

@@ -1055,6 +1055,16 @@ export interface SubBalancer {
   updatedAt: number;
 }
 
+export interface TelemtWebSiteOptions {
+  catalog?: string;
+  description?: string;
+  html?: string;
+  mode: string;
+  template?: string;
+  theme?: string;
+  title?: string;
+}
+
 export interface Traffic {
   Down: number;
   IsInbound: boolean;

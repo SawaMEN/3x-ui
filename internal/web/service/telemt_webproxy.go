@@ -45,45 +45,47 @@ var (
 )
 
 type TelemtWebProxyState struct {
-	ManagedInboundID   int      `json:"managedInboundId,omitempty"`
-	BackendPort        int      `json:"backendPort,omitempty"`
-	UserFingerprint    string   `json:"userFingerprint,omitempty"`
-	Frontend           string   `json:"frontend,omitempty"`
-	Carrier            string   `json:"carrier,omitempty"`
-	Carriers           []string `json:"carriers,omitempty"`
-	Enabled            bool     `json:"enabled"`
-	Domain             string   `json:"domain"`
-	Secret             string   `json:"secret"`
-	DecoyDir           string   `json:"decoyDir"`
-	ListenPort         int      `json:"listenPort"`
-	CertFile           string   `json:"certFile"`
-	KeyFile            string   `json:"keyFile"`
-	PublicAddr         string   `json:"publicAddr,omitempty"`
-	NginxManaged       bool     `json:"nginxManaged,omitempty"`
-	NginxWasEnabled    bool     `json:"nginxWasEnabled,omitempty"`
-	NginxStateCaptured bool     `json:"nginxStateCaptured,omitempty"`
+	Site               *TelemtWebSiteOptions `json:"site,omitempty"`
+	ManagedInboundID   int                   `json:"managedInboundId,omitempty"`
+	BackendPort        int                   `json:"backendPort,omitempty"`
+	UserFingerprint    string                `json:"userFingerprint,omitempty"`
+	Frontend           string                `json:"frontend,omitempty"`
+	Carrier            string                `json:"carrier,omitempty"`
+	Carriers           []string              `json:"carriers,omitempty"`
+	Enabled            bool                  `json:"enabled"`
+	Domain             string                `json:"domain"`
+	Secret             string                `json:"secret"`
+	DecoyDir           string                `json:"decoyDir"`
+	ListenPort         int                   `json:"listenPort"`
+	CertFile           string                `json:"certFile"`
+	KeyFile            string                `json:"keyFile"`
+	PublicAddr         string                `json:"publicAddr,omitempty"`
+	NginxManaged       bool                  `json:"nginxManaged,omitempty"`
+	NginxWasEnabled    bool                  `json:"nginxWasEnabled,omitempty"`
+	NginxStateCaptured bool                  `json:"nginxStateCaptured,omitempty"`
 }
 
 type TelemtWebProxyStatus struct {
-	Frontend                    string   `json:"frontend"`
-	FrontendActive              bool     `json:"frontendActive"`
-	Carrier                     string   `json:"carrier"`
-	Carriers                    []string `json:"carriers"`
-	CarrierNegotiationSupported bool     `json:"carrierNegotiationSupported"`
-	Enabled                     bool     `json:"enabled"`
-	Supported                   bool     `json:"supported"`
-	Domain                      string   `json:"domain"`
-	DefaultDomain               string   `json:"defaultDomain"`
-	Link                        string   `json:"link"`
-	NginxInstalled              bool     `json:"nginxInstalled"`
-	NginxActive                 bool     `json:"nginxActive"`
-	CertificateReady            bool     `json:"certificateReady"`
-	CertificateFile             string   `json:"certificateFile"`
-	ListenPort                  int      `json:"listenPort"`
-	Port443Free                 bool     `json:"port443Free"`
-	Port443Available            bool     `json:"port443Available"`
-	Port443Owner                string   `json:"port443Owner"`
-	Error                       string   `json:"error"`
+	Site                        *TelemtWebSiteOptions `json:"site,omitempty"`
+	Frontend                    string                `json:"frontend"`
+	FrontendActive              bool                  `json:"frontendActive"`
+	Carrier                     string                `json:"carrier"`
+	Carriers                    []string              `json:"carriers"`
+	CarrierNegotiationSupported bool                  `json:"carrierNegotiationSupported"`
+	Enabled                     bool                  `json:"enabled"`
+	Supported                   bool                  `json:"supported"`
+	Domain                      string                `json:"domain"`
+	DefaultDomain               string                `json:"defaultDomain"`
+	Link                        string                `json:"link"`
+	NginxInstalled              bool                  `json:"nginxInstalled"`
+	NginxActive                 bool                  `json:"nginxActive"`
+	CertificateReady            bool                  `json:"certificateReady"`
+	CertificateFile             string                `json:"certificateFile"`
+	ListenPort                  int                   `json:"listenPort"`
+	Port443Free                 bool                  `json:"port443Free"`
+	Port443Available            bool                  `json:"port443Available"`
+	Port443Owner                string                `json:"port443Owner"`
+	Error                       string                `json:"error"`
 }
 
 func readTelemtWebState() (TelemtWebProxyState, error) {
@@ -275,7 +277,7 @@ func (TelemtService) WebProxyStatus(defaultDomain, panelCert, panelKey string) (
 	nginxOwns443 := telemtWebNginxOwnsPort443()
 	frontendActive := state.Enabled && telemtWebFrontendActive(state) && (frontend != "nginx" || nginxOwns443)
 	portOwner := telemtWebPortOwner(443)
-	status := TelemtWebProxyStatus{Frontend: frontend, FrontendActive: frontendActive, Carrier: telemtWebCarrier(state), Carriers: state.Carriers, CarrierNegotiationSupported: telemtWebVersionAtLeast(version, "3.5.4"), Enabled: state.Enabled, Supported: telemtWebVersionAtLeast(version, telemtWebMinEngine), Domain: state.Domain, DefaultDomain: defaultDomain, NginxInstalled: telemtWebCommandExists("nginx"), NginxActive: nginxActive, Port443Free: telemtWebPortAvailable(443), Port443Available: telemtWebFrontendCanOwn443(state), Port443Owner: portOwner, ListenPort: state.ListenPort, CertificateFile: state.CertFile}
+	status := TelemtWebProxyStatus{Site: state.Site, Frontend: frontend, FrontendActive: frontendActive, Carrier: telemtWebCarrier(state), Carriers: state.Carriers, CarrierNegotiationSupported: telemtWebVersionAtLeast(version, "3.5.4"), Enabled: state.Enabled, Supported: telemtWebVersionAtLeast(version, telemtWebMinEngine), Domain: state.Domain, DefaultDomain: defaultDomain, NginxInstalled: telemtWebCommandExists("nginx"), NginxActive: nginxActive, Port443Free: telemtWebPortAvailable(443), Port443Available: telemtWebFrontendCanOwn443(state), Port443Owner: portOwner, ListenPort: state.ListenPort, CertificateFile: state.CertFile}
 	if state.Enabled && state.Domain != "" && state.Secret != "" {
 		status.Link = telemtWebLink(state.Domain, state.Secret)
 	}
@@ -336,7 +338,8 @@ func enableTelemtWebProxy(ctx context.Context, domain, panelCert, panelKey strin
 	if err := telemtWebEnsureFrontendPackage(ctx, state); err != nil {
 		return TelemtWebProxyStatus{}, err
 	}
-	if err := writeTelemtWebDecoy(domain, telemtWebDecoyDir); err != nil {
+	decoyDir, err := prepareTelemtWebSite(domain, telemtWebDecoyDir, telemtWebDecoyDir+"-sites", options.Site)
+	if err != nil {
 		return TelemtWebProxyStatus{}, err
 	}
 	publicAddr, err := resolveTelemtWebPublicAddr(domain)
@@ -394,7 +397,8 @@ func enableTelemtWebProxy(ctx context.Context, domain, panelCert, panelKey strin
 	}
 	state.Enabled = true
 	state.Domain = domain
-	state.DecoyDir = telemtWebDecoyDir
+	state.DecoyDir = decoyDir
+	state.Site = options.Site
 	state.CertFile = certFile
 	state.KeyFile = keyFile
 	state.PublicAddr = publicAddr
@@ -602,14 +606,6 @@ func telemtWebCertificateCoversDomain(path, domain string) bool {
 		return false
 	}
 	return cert.NotBefore.Before(time.Now()) && cert.NotAfter.After(time.Now()) && cert.VerifyHostname(domain) == nil
-}
-
-func writeTelemtWebDecoy(domain, dir string) error {
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
-	content := fmt.Sprintf("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>%s</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;font-family:system-ui,-apple-system,sans-serif;background:#f5f7fa;color:#222}main{max-width:720px;padding:48px;text-align:center}h1{font-size:48px;font-weight:600}p{font-size:18px;color:#667085}</style></head><body><main><h1>%s</h1><p>Welcome. This website is protected by HTTPS.</p></main></body></html>", domain, domain)
-	return os.WriteFile(filepath.Join(dir, "index.html"), []byte(content), 0o644)
 }
 
 func writeTelemtWebNginxConfig(state TelemtWebProxyState) error {
