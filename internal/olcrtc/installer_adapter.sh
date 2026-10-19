@@ -16,8 +16,30 @@ managed_toolchain() {
 		tar -C "$cache" -xzf "$archive"
 		printf '%s\n' "$checksum" > "$cache/checksum"
 	fi
-	unset GOROOT GOTOOLDIR
-	export PATH="$cache/go/bin:$PATH" GOTOOLCHAIN=local GOENV=off GOWORK=off GOFLAGS=
+	export PATH="$cache/go/bin:$PATH"
+	managed_build_environment "$arch" /opt/3x-ui/olcrtc/cache
+}
+
+managed_build_environment() {
+	local arch="$1" cache="$2"
+	# systemd does not set HOME for a system service without User=. Never use
+	# Go's home-relative defaults or the panel's runtime/cache settings.
+	mkdir -p -m 0700 "$cache" "$cache/build" "$cache/modules" "$cache/gopath"
+	unset GOROOT GOTOOLDIR GOEXPERIMENT
+	export GOTOOLCHAIN=local GOENV=off GOWORK=off GOFLAGS=
+	export GOPATH="$cache/gopath" GOCACHE="$cache/build" GOMODCACHE="$cache/modules"
+	export GOOS=linux GOARCH="$arch" GOAMD64=v1 GOARM64=v8.0 CGO_ENABLED=0
+	export GOMAXPROCS=2 GOMEMLIMIT=256MiB GOGC=80
+	GO_BUILD_P=1
+}
+
+managed_dependencies() {
+	local source="$1" attempt
+	for attempt in 1 2 3; do
+		if (cd "$source" && go mod download); then return 0; fi
+		[ "$attempt" -lt 3 ] || return 1
+		sleep "$((attempt * 2))"
+	done
 }
 
 managed_sources() {
@@ -139,10 +161,14 @@ main() {
 	git -C "$panel_src" apply --check "$MANAGER_PATCH_PATH"
 	git -C "$panel_src" apply "$MANAGER_PATCH_PATH"
 	cp "$MANAGER_SAFETY_PATH" "$panel_src/cmd/olcrtc-manager/panel_safety.go"
+	printf '3XUI_OLCRTC_STAGE=dependencies-server\n'
+	managed_dependencies "$olcrtc_src"
 	printf '3XUI_OLCRTC_STAGE=build-server\n'
 	(cd "$olcrtc_src" && CGO_ENABLED=0 go build -p "${GO_BUILD_P:-2}" -o "$work/olcrtc" ./cmd/olcrtc)
-	printf '3XUI_OLCRTC_STAGE=build-manager\n'
 	[ -f "$panel_src/cmd/olcrtc-manager/web/dist/index.html" ] || die 'manager frontend bundle is missing'
+	printf '3XUI_OLCRTC_STAGE=dependencies-manager\n'
+	managed_dependencies "$panel_src"
+	printf '3XUI_OLCRTC_STAGE=build-manager\n'
 	(cd "$panel_src" && CGO_ENABLED=0 go build -p "${GO_BUILD_P:-2}" -o "$work/olcrtc-manager" ./cmd/olcrtc-manager)
 	printf '3XUI_OLCRTC_STAGE=deploy\n'
 	snapshot_install

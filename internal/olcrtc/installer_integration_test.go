@@ -82,7 +82,7 @@ cp() { :; }
 ensure_build_memory() { :; }
 managed_sources() { mkdir -p "$3/cmd/olcrtc-manager/web/dist"; touch "$3/cmd/olcrtc-manager/web/dist/index.html"; }
 mktemp() { command mktemp -d "$TEST_ROOT/work.XXXXXX"; }
-go() { case "$PWD" in */panel) return 64;; esac; }
+go() { [ "$1" = mod ] && return 0; case "$PWD" in */panel) return 64;; esac; }
 install() { echo unexpected-deployment; return 99; }
 OLCRTC_REPO=server
 OLCRTC_REF=master
@@ -165,6 +165,11 @@ func TestManagedInstallationSmoke(t *testing.T) {
 	}
 	if yes, reason := Supported(); !yes {
 		t.Fatal(reason)
+	}
+	// The test runner itself needs Go caches, but the installer must establish
+	// its own paths just as it must when x-ui is started by systemd.
+	for _, key := range []string{"GOPATH", "GOCACHE", "GOMODCACHE"} {
+		t.Setenv(key, "")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Minute)
 	defer cancel()
@@ -258,5 +263,90 @@ manager_ready() { case "$FAILURE" in health) return 1;; crash) kill -KILL $$;; *
 				t.Fatal("transaction not cleaned")
 			}
 		})
+	}
+}
+
+func TestManagedBuildWithoutHomeOrGoCaches(t *testing.T) {
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("Go compiler required")
+	}
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.test/olcrtc-build\n\ngo 1.24\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\nfunc main() { println(\"home-independent\") }\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	definitions := strings.TrimSuffix(string(installerAdapter), "main \"$@\"\n")
+	script := "set -euo pipefail\n" + definitions + `
+managed_build_environment "$(go env GOHOSTARCH)" "$TEST_ROOT/cache"
+cd "$TEST_ROOT"
+go build -p "$GO_BUILD_P" -o "$TEST_ROOT/hello" .
+"$TEST_ROOT/hello"
+`
+	// Obtain host architecture before removing the caller's Go environment.
+	arch, err := exec.Command("go", "env", "GOHOSTARCH").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	script = strings.Replace(script, "$(go env GOHOSTARCH)", strings.TrimSpace(string(arch)), 1)
+	cmd := exec.Command("bash")
+	for _, item := range os.Environ() {
+		key, _, _ := strings.Cut(item, "=")
+		if key != "HOME" && !strings.HasPrefix(key, "GO") {
+			cmd.Env = append(cmd.Env, item)
+		}
+	}
+	cmd.Env = append(cmd.Env, "TEST_ROOT="+root, "GOFLAGS=-invalid-flag", "GOOS=plan9", "GOARCH=mips", "GOMEMLIMIT=invalid")
+	cmd.Stdin = strings.NewReader(script)
+	if out, err := cmd.CombinedOutput(); err != nil || !strings.Contains(string(out), "home-independent") {
+		t.Fatalf("home-independent build: %v: %s", err, out)
+	}
+}
+
+func TestInstallerBuildDiagnosticsDoNotExposeRawOutput(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "log")
+	for marker, hint := range map[string]string{
+		"go: module cache not found: neither GOMODCACHE nor GOPATH is set": "Go cache paths",
+		"compile: signal: killed": "memory",
+		"no space left on device": "disk space",
+	} {
+		if err := os.WriteFile(path, []byte("3XUI_OLCRTC_STAGE=build-server\n"+marker+"\nPassword: secret\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		got := installerFailure(fmt.Errorf("exit status 1"), path).Error()
+		if !strings.Contains(got, hint) || strings.Contains(got, "secret") {
+			t.Fatalf("unexpected diagnostic: %s", got)
+		}
+	}
+}
+
+func TestDependencyDownloadRetriesWithoutRetryingBuild(t *testing.T) {
+	for _, fail := range []bool{false, true} {
+		root := t.TempDir()
+		definitions := strings.TrimSuffix(string(installerAdapter), "main \"$@\"\n")
+		script := "set -euo pipefail\n" + definitions + `
+sleep() { :; }
+go() {
+  [ "$*" = 'mod download' ] || exit 99
+  local attempt=0
+  [ ! -f "$TEST_ROOT/attempts" ] || attempt="$(cat "$TEST_ROOT/attempts")"
+  attempt=$((attempt + 1))
+  printf '%s' "$attempt" > "$TEST_ROOT/attempts"
+  [ "$attempt" -ge 3 ] && [ "$FAIL" = false ]
+}
+managed_dependencies "$TEST_ROOT"
+`
+		cmd := exec.Command("bash")
+		cmd.Env = append(os.Environ(), "TEST_ROOT="+root, fmt.Sprintf("FAIL=%v", fail))
+		cmd.Stdin = strings.NewReader(script)
+		out, err := cmd.CombinedOutput()
+		if (err != nil) != fail {
+			t.Fatalf("dependency retry result: %v: %s", err, out)
+		}
+		attempts, err := os.ReadFile(filepath.Join(root, "attempts"))
+		if err != nil || string(attempts) != "3" {
+			t.Fatalf("expected three bounded attempts: %s: %v", attempts, err)
+		}
 	}
 }
