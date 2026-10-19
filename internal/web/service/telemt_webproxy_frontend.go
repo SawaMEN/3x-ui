@@ -27,12 +27,16 @@ const telemtWebFrontDir = "/etc/x-ui/telemt-web-front"
 var telemtWebOperationMu sync.Mutex
 
 type TelemtWebProxyOptions struct {
-	Frontend string   `json:"frontend"`
-	Carrier  string   `json:"carrier"`
-	Carriers []string `json:"carriers"`
+	Site     *TelemtWebSiteOptions `json:"site,omitempty"`
+	Frontend string                `json:"frontend"`
+	Carrier  string                `json:"carrier"`
+	Carriers []string              `json:"carriers"`
 }
 
 func normalizeTelemtWebOptions(o TelemtWebProxyOptions) (TelemtWebProxyOptions, error) {
+	if err := validateTelemtWebSite(o.Site); err != nil {
+		return o, err
+	}
 	if o.Frontend == "" {
 		o.Frontend = "nginx"
 	}
@@ -86,8 +90,11 @@ func (s TelemtService) EnableWebProxy(ctx context.Context, domain, cert, key str
 	if err != nil {
 		return TelemtWebProxyStatus{}, err
 	}
-	o := TelemtWebProxyOptions{Frontend: old.Frontend, Carrier: old.Carrier, Carriers: old.Carriers}
+	o := TelemtWebProxyOptions{Frontend: old.Frontend, Carrier: old.Carrier, Carriers: old.Carriers, Site: old.Site}
 	if len(options) > 0 {
+		if options[0].Site != nil {
+			o.Site = options[0].Site
+		}
 		if options[0].Frontend != "" {
 			o.Frontend = options[0].Frontend
 		}

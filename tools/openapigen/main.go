@@ -119,6 +119,7 @@ func run(root, outDir string) error {
 				"TemplateView",
 				"TemplateDetail",
 				"TemplateSanitizeResult",
+				"TelemtWebSiteOptions",
 				"RoutingPresetInput",
 				"RoutingPresetView",
 				"RoutingPresetDetail",

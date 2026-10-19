@@ -3395,6 +3395,17 @@ export const sections: readonly Section[] = [
         method: 'POST',
         path: '/panel/api/telemt/webproxy/enable',
         summary: 'Enable the Telemt Web Proxy.',
+        description:
+          'Optional site selects automatic setup, a locally generated theme or administrator-supplied HTML (maximum 256 KiB). Omit site to preserve the current selection; use mode auto to restore the default.',
+        params: [
+          {
+            name: 'site',
+            in: 'body (json)',
+            type: 'object',
+            optional: true,
+            desc: 'TelemtWebSiteOptions: mode auto|generate|html; theme notes|technology|travel|nature; optional title, description and html.',
+          },
+        ],
       },
       {
         method: 'POST',

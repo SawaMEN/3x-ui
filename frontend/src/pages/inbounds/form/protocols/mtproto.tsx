@@ -7,6 +7,7 @@ import { useOutboundTags } from '@/api/queries/useOutboundTags';
 import MtprotoWebStatus from './MtprotoWebStatus';
 import { TelemtWebProxyRequestSchema } from '@/schemas/telemt-web';
 import MtprotoMekoStatus from './MtprotoMekoStatus';
+import TelemtWebSiteFields from '@/pages/telemt/TelemtWebSiteFields';
 import TelemtWebGuide, { telemtWebFieldHelp } from '@/pages/telemt/TelemtWebGuide';
 
 export default function MtprotoFields() {
@@ -61,6 +62,7 @@ export default function MtprotoFields() {
           />
           <MtprotoWebStatus />
           <TelemtWebGuide domain={webDomain} />
+          <TelemtWebSiteFields prefix="settings.webProxy.site" />
           <FormField
             name={['settings', 'webProxy', 'domain']}
             label="Домен WEB Proxy"

@@ -4637,6 +4637,33 @@
         ],
         "type": "object"
       },
+      "TelemtWebSiteOptions": {
+        "properties": {
+          "description": {
+            "example": "Stories from quiet places.",
+            "type": "string"
+          },
+          "html": {
+            "type": "string"
+          },
+          "mode": {
+            "example": "auto",
+            "type": "string"
+          },
+          "theme": {
+            "example": "travel",
+            "type": "string"
+          },
+          "title": {
+            "example": "A travel notebook",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "type": "object"
+      },
       "Traffic": {
         "description": "Traffic represents network traffic statistics reported by a core.\nIt tracks upload and download bytes for inbound or outbound traffic.",
         "properties": {
@@ -19873,6 +19900,23 @@
         ],
         "summary": "Enable the Telemt Web Proxy.",
         "operationId": "post_panel_api_telemt_webproxy_enable",
+        "description": "Optional site selects automatic setup, a locally generated theme or administrator-supplied HTML (maximum 256 KiB). Omit site to preserve the current selection; use mode auto to restore the default.",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "site": {
+                    "type": "object",
+                    "description": "TelemtWebSiteOptions: mode auto|generate|html; theme notes|technology|travel|nature; optional title, description and html."
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful response",

@@ -41,10 +41,13 @@ import {
   TelemtWebProxyRequestSchema,
 } from '@/schemas/telemt-web';
 import TelemtSubscriptionToggle from './TelemtSubscriptionToggle';
+import TelemtWebSiteFields from './TelemtWebSiteFields';
+import { TelemtWebSiteSchema, type TelemtWebSite } from '@/schemas/telemt-web';
 import TelemtWebGuide, { telemtWebFieldHelp } from './TelemtWebGuide';
 import './TelemtPage.css';
 
 type WebProxyStatus = {
+  site?: TelemtWebSite;
   frontend: string;
   frontendActive: boolean;
   carrier: string;
@@ -176,12 +179,15 @@ export default function TelemtPage() {
   const webFrontend = webForm.watch('frontend');
   const webCarrier = webForm.watch('carrier');
   const webCarriers = webForm.watch('carriers');
+  const webSite = webForm.watch('site');
+  const webSiteKey = JSON.stringify(webSite);
   const webCarriersKey = (webCarriers || []).join('|');
   const webPreflightKey = JSON.stringify([
     webProxyDomain,
     webFrontend,
     webCarrier,
     webCarriersKey,
+    webSiteKey,
     webPreflightRefresh,
   ]);
   const webPreflightCurrent = webPreflight?.requestKey === webPreflightKey ? webPreflight : null;
@@ -201,6 +207,7 @@ export default function TelemtPage() {
             frontend: webFrontend || 'nginx',
             carrier: webCarrier || 'https',
             carriers: webCarriersKey ? webCarriersKey.split('|') : [],
+            site: webSiteKey ? (JSON.parse(webSiteKey) as TelemtWebSite) : undefined,
           },
           { ...jsonOptions, silent: true },
         );
@@ -241,7 +248,15 @@ export default function TelemtPage() {
       active = false;
       window.clearTimeout(timer);
     };
-  }, [webProxyOpen, webProxyDomain, webFrontend, webCarrier, webCarriersKey, webPreflightKey]);
+  }, [
+    webProxyOpen,
+    webProxyDomain,
+    webFrontend,
+    webCarrier,
+    webCarriersKey,
+    webSiteKey,
+    webPreflightKey,
+  ]);
 
   const loadStatus = useCallback(async () => {
     const r = await HttpUtil.get<Status>('/panel/api/telemt/status');
@@ -338,6 +353,7 @@ export default function TelemtPage() {
 
   const openWebProxy = () => {
     webForm.reset({
+      site: TelemtWebSiteSchema.optional().catch(undefined).parse(status.webProxy.site),
       domain: status.webProxy.domain || status.webProxy.defaultDomain || '',
       frontend: TelemtFrontendSchema.catch('nginx').parse(status.webProxy.frontend),
       carrier: TelemtCarrierSchema.catch('https').parse(status.webProxy.carrier),
@@ -848,6 +864,7 @@ export default function TelemtPage() {
 
           <FormProvider {...webForm}>
             <Form layout="vertical">
+              <TelemtWebSiteFields disabled={webProxyLoading} />
               <FormField
                 name="domain"
                 label="Домен"
