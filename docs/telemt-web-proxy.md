@@ -10,15 +10,15 @@ allocates the private Telemt port and manages the services. Open the website
 from the form after saving; use the client's `tg://webproxy` link in a Telegram
 version that supports WEB Proxy.
 
-| Interface setting | Meaning |
-| --- | --- |
-| HTTPS server (frontend) | nginx, Caddy or HAProxy accepts encrypted connections on public TCP 443 and forwards them to private Telemt. The panel configures the selected program. |
-| Primary transport (WEB carrier) | How Telegram data travels inside HTTPS. `https` is the compatibility fallback, including native iOS clients without negotiation metadata. |
-| `websocket` | One persistent WebSocket carries the logical streams. |
-| `https-lanes` / `websocket-lanes` | Independent HTTPS sequencing/polling or WebSocket connections for individual logical streams. Requires compatible clients. |
-| Transport priority / negotiation | Clients supporting negotiation try the selected transports in order at session startup. Other clients use the primary transport. Empty means no negotiation; active sessions never migrate. |
-| Local backend | Telemt's private HTTP listener on loopback; it must not be exposed to the Internet. |
-| Cover site / decoy | Ordinary browser requests receive a regular website; authenticated Telegram requests enter the proxy. A website does not guarantee resistance to detection or blocking. |
+| Interface setting                 | Meaning                                                                                                                                                                                     |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| HTTPS server (frontend)           | nginx, Caddy or HAProxy accepts encrypted connections on public TCP 443 and forwards them to private Telemt. The panel configures the selected program.                                     |
+| Primary transport (WEB carrier)   | How Telegram data travels inside HTTPS. `https` is the compatibility fallback, including native iOS clients without negotiation metadata.                                                   |
+| `websocket`                       | One persistent WebSocket carries the logical streams.                                                                                                                                       |
+| `https-lanes` / `websocket-lanes` | Independent HTTPS sequencing/polling or WebSocket connections for individual logical streams. Requires compatible clients.                                                                  |
+| Transport priority / negotiation  | Clients supporting negotiation try the selected transports in order at session startup. Other clients use the primary transport. Empty means no negotiation; active sessions never migrate. |
+| Local backend                     | Telemt's private HTTP listener on loopback; it must not be exposed to the Internet.                                                                                                         |
+| Cover site / decoy                | Ordinary browser requests receive a regular website; authenticated Telegram requests enter the proxy. A website does not guarantee resistance to detection or blocking.                     |
 
 ### Automatic cover website
 
@@ -51,9 +51,9 @@ installs the page with all its assets and applies the normal readiness checks
 and rollback. No file uploads, direct URLs, API keys or separate hosting are
 required. The same controls appear in both the inbound and standalone forms.
 
-| Catalog | Ready-made pages |
-| --- | --- |
-| 3x-ui pages | Personal journal, Technology, Travel, Nature |
+| Catalog             | Ready-made pages                                 |
+| ------------------- | ------------------------------------------------ |
+| 3x-ui pages         | Personal journal, Technology, Travel, Nature     |
 | MTProxyL collection | Simple maintenance page, Cat Runner, Meko Runner |
 
 The catalogs ship inside the panel binary, so activation requires no download
@@ -111,14 +111,14 @@ Source review: `SawaMEN/3x-ui` at `d6fe19c`,
 Both managers use Telemt's WEB implementation; MTProxyL is not a different
 wire protocol.
 
-| Capability | 3x-ui | MTProxyL source reviewed |
-| --- | --- | --- |
-| HTTPS server, certificate and local WEB listener | Managed by the panel | Managed by the setup wizard/CLI |
-| Carrier selection and ordered negotiation | Inbound and Telemt forms | Wizard/CLI settings |
-| Cover website | Automatic static site, two bundled catalogs or themed local generation; preserve existing content | Empty, static directory or HTTP origin; template, URL or local site sources |
-| Ordinary MTProto and WEB | Separate managed inbounds; one local WEB inbound | WEB-only or combined; additional shared/split frontend layouts |
-| Readiness | DNS/port/certificate preflight, private HTTP and public TLS checks, rollback | Listener/static-snapshot checks and managed restart when needed |
-| Site customization in this change | Automatic default, seven ready-made pages in two catalogs and themed generation | More site-source and deployment choices |
+| Capability                                       | 3x-ui                                                                                             | MTProxyL source reviewed                                                    |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| HTTPS server, certificate and local WEB listener | Managed by the panel                                                                              | Managed by the setup wizard/CLI                                             |
+| Carrier selection and ordered negotiation        | Inbound and Telemt forms                                                                          | Wizard/CLI settings                                                         |
+| Cover website                                    | Automatic static site, two bundled catalogs or themed local generation; preserve existing content | Empty, static directory or HTTP origin; template, URL or local site sources |
+| Ordinary MTProto and WEB                         | Separate managed inbounds; one local WEB inbound                                                  | WEB-only or combined; additional shared/split frontend layouts              |
+| Readiness                                        | DNS/port/certificate preflight, private HTTP and public TLS checks, rollback                      | Listener/static-snapshot checks and managed restart when needed             |
+| Site customization in this change                | Automatic default, seven ready-made pages in two catalogs and themed generation                   | More site-source and deployment choices                                     |
 
 This integration keeps the existing one-WEB-inbound deployment model. DNS,
 provider firewall changes, real certificate issuance and a Telegram connection
