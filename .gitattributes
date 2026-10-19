@@ -9,3 +9,6 @@ deploy/hiddify/*.patch whitespace=-space-before-tab
 
 # Empty unified-diff context lines contain the required space prefix.
 tools/telemt/*.patch whitespace=-blank-at-eol
+
+# Go patch context uses a space prefix before tabs and empty lines.
+internal/olcrtc/patches/*.patch whitespace=-space-before-tab,-blank-at-eol
