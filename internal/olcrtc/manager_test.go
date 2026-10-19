@@ -2,9 +2,9 @@ package olcrtc
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -226,12 +226,16 @@ func TestMissingUpstreamRevisionIsNotAdvertisedAsAvailable(t *testing.T) {
 func TestGitHubRevisionWithoutInstalledGit(t *testing.T) {
 	sha := strings.Repeat("a", 40)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("User-Agent") != "3x-ui-olcrtc" { t.Error("missing GitHub User-Agent") }
+		if r.Header.Get("User-Agent") != "3x-ui-olcrtc" {
+			t.Error("missing GitHub User-Agent")
+		}
 		_ = json.NewEncoder(w).Encode(map[string]string{"sha": sha})
 	}))
 	defer server.Close()
 	got, err := fetchGitHubRevision(context.Background(), server.URL)
-	if err != nil || got != sha { t.Fatalf("API revision = %q, error = %v", got, err) }
+	if err != nil || got != sha {
+		t.Fatalf("API revision = %q, error = %v", got, err)
+	}
 }
 
 func TestGitHubRevisionRejectsBadResponses(t *testing.T) {
@@ -241,7 +245,9 @@ func TestGitHubRevisionRejectsBadResponses(t *testing.T) {
 		}))
 		_, err := fetchGitHubRevision(context.Background(), server.URL)
 		server.Close()
-		if err == nil { t.Fatalf("accepted invalid response %q", response) }
+		if err == nil {
+			t.Fatalf("accepted invalid response %q", response)
+		}
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -255,13 +261,19 @@ func TestGitHubRevisionRejectsBadResponses(t *testing.T) {
 func TestInstallerPrerequisitesCoverEarlyCommands(t *testing.T) {
 	for _, tc := range []struct{ manager, pkg string }{
 		{"apt", "coreutils"}, {"apt", "iproute2"}, {"apt", "gawk"},
-		{"pacman", "coreutils"}, {"pacman", "iproute2"}, {"pacman", "inetutils"},
+		{"pacman", "coreutils"}, {"pacman", "iproute2"}, {"pacman", "gawk"},
 	} {
 		found := false
 		for _, pkg := range installerPrerequisitePackages(tc.manager) {
-			if pkg == tc.pkg { found = true }
+			if pkg == tc.pkg {
+				found = true
+			}
 		}
-		if !found { t.Fatalf("%s lacks %s", tc.manager, tc.pkg) }
+		if !found {
+			t.Fatalf("%s lacks %s", tc.manager, tc.pkg)
+		}
 	}
-	if installerPrerequisitePackages("unsupported") != nil { t.Fatal("unsupported manager has packages") }
+	if installerPrerequisitePackages("unsupported") != nil {
+		t.Fatal("unsupported manager has packages")
+	}
 }

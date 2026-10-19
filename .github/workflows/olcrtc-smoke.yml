@@ -24,18 +24,18 @@ jobs:
           cache: true
       - name: Go unit tests for the integration
         run: go test -count=1 ./internal/olcrtc
-      - name: Install upstream OlcRTC on an isolated CI VM
+      - name: Install OlcRTC through the production integration on an isolated CI VM
         env:
           INSTALLER_URL: https://raw.githubusercontent.com/BigDaddy3334/olcrtc-manager-panel/df626030d21d00286304bc8ef1e990e28c247a55/scripts/install.sh
         run: |
           set -euo pipefail
           curl --fail --show-error --silent --location "$INSTALLER_URL" -o /tmp/olcrtc-smoke-installer.sh
           bash -n /tmp/olcrtc-smoke-installer.sh
-          sudo env PANEL_ADDR=127.0.0.1 PANEL_TLS=0 PANEL_ADMIN_PATH=/admin AUTO_SWAP=0 GO_BUILD_P=2 bash /tmp/olcrtc-smoke-installer.sh
+          sudo env PATH="$PATH" OLCRTC_RUN_INSTALL_SMOKE=1 go test -count=1 ./internal/olcrtc -run '^TestManagedInstallationSmoke$' -timeout 28m
       - name: Validate the pinned upstream installer source
         env:
           OLCRTC_PINNED_INSTALLER_PATH: /tmp/olcrtc-smoke-installer.sh
-        run: go test -count=1 ./internal/olcrtc -run '^TestPinnedUpstreamArchInstaller$'
+        run: go test -count=1 ./internal/olcrtc -run '^TestPinned(UpstreamArchInstaller|InstallerInitializersWithoutHostnameI)$'
       - name: Verify service, loopback binding, credentials and local API
         run: |
           set -euo pipefail
@@ -101,4 +101,4 @@ jobs:
           curl --fail --show-error --silent --location \
             https://raw.githubusercontent.com/BigDaddy3334/olcrtc-manager-panel/df626030d21d00286304bc8ef1e990e28c247a55/scripts/install.sh \
             -o "$OLCRTC_PINNED_INSTALLER_PATH"
-          go test -count=1 ./internal/olcrtc -run '^Test(PinnedUpstreamArchInstaller|ArchRuntimeDetectsPacman)$' -v
+          go test -count=1 ./internal/olcrtc -run '^Test(PinnedUpstreamArchInstaller|PinnedInstallerInitializersWithoutHostnameI|ArchRuntimeDetectsPacman)$' -v
