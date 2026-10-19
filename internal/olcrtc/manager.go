@@ -38,7 +38,7 @@ const (
 	serverRepo          = "https://github.com/openlibrecommunity/olcrtc.git"
 	managerRevision     = "df626030d21d00286304bc8ef1e990e28c247a55"
 	serverRevision      = "f3ad8fb7c0d0fa981423f83269526fa94077c23d"
-	managerPatchVersion = "panel-v2"
+	managerPatchVersion = "panel-v3"
 )
 
 type Status struct {
@@ -293,7 +293,7 @@ func Start(operation string) error {
 
 // Upstream logs may include freshly generated admin credentials. Never expose
 // raw installer logs through the API: only allow-list executable names.
-var installerStage = regexp.MustCompile(`(?m)^3XUI_OLCRTC_STAGE=(packages|toolchain|memory|sources|build-server|build-manager|deploy|config|service|health|rollback|complete)$`)
+var installerStage = regexp.MustCompile(`(?m)^3XUI_OLCRTC_STAGE=(packages|toolchain|memory|sources|dependencies-server|dependencies-manager|build-server|build-manager|deploy|config|service|health|rollback|complete)$`)
 var installerMissingCommand = regexp.MustCompile(`(?m)line [0-9]+: ([A-Za-z0-9_.+-]{1,64}): command not found$`)
 
 func installerFailure(err error, logPath string) error {
@@ -316,7 +316,19 @@ func installerFailure(err error, logPath string) error {
 	}
 	if output, readErr := os.ReadFile(logPath); readErr == nil {
 		if matches := installerStage.FindAllSubmatch(output, -1); len(matches) > 0 {
-			return fmt.Errorf("OlcRTC installation failed at stage %s (%w)", matches[len(matches)-1][1], err)
+			stage := string(matches[len(matches)-1][1])
+			hint := ""
+			if stage == "build-server" || stage == "build-manager" || strings.HasPrefix(stage, "dependencies-") {
+				switch {
+				case bytes.Contains(output, []byte("neither GOMODCACHE nor GOPATH is set")), bytes.Contains(output, []byte("GOCACHE is not defined")):
+					hint = "; Go cache paths are missing in the service environment"
+				case bytes.Contains(output, []byte("no space left on device")):
+					hint = "; insufficient disk space for Go sources or build cache"
+				case bytes.Contains(output, []byte("signal: killed")), bytes.Contains(output, []byte("cannot allocate memory")):
+					hint = "; compiler was killed or could not allocate memory; check RAM, swap and service memory limits"
+				}
+			}
+			return fmt.Errorf("OlcRTC installation failed at stage %s (%w)%s", stage, err, hint)
 		}
 	}
 	return fmt.Errorf("OlcRTC installation failed before build initialization (%w)", err)

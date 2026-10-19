@@ -42,7 +42,9 @@ jobs:
           set -euo pipefail
           curl --fail --show-error --silent --location "$INSTALLER_URL" -o /tmp/olcrtc-smoke-installer.sh
           bash -n /tmp/olcrtc-smoke-installer.sh
-          sudo env PATH="$PATH" OLCRTC_RUN_INSTALL_SMOKE=1 go test -count=1 ./internal/olcrtc -run '^TestManagedInstallationSmoke$' -timeout 28m
+          sudo env -u HOME -u GOPATH -u GOCACHE -u GOMODCACHE PATH="$PATH" \
+            GOPATH=/tmp/olcrtc-smoke-go GOCACHE=/tmp/olcrtc-smoke-cache \
+            OLCRTC_RUN_INSTALL_SMOKE=1 go test -count=1 ./internal/olcrtc -run '^TestManagedInstallationSmoke$' -timeout 28m
       - name: Validate the pinned upstream installer source
         env:
           OLCRTC_PINNED_INSTALLER_PATH: /tmp/olcrtc-smoke-installer.sh

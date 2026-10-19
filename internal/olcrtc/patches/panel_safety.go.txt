@@ -233,3 +233,21 @@ func cleanupOwnedFirewall(ctx context.Context) {
 		}
 	}
 }
+
+// Staged replacements must not steal accounting from the active processes if
+// a later location fails to start and the configuration is rolled back.
+func (q *QuotaEnforcer) snapshotRules() map[string]quotaRule {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	rules := make(map[string]quotaRule, len(q.rules))
+	for key, rule := range q.rules {
+		rules[key] = rule
+	}
+	return rules
+}
+
+func (q *QuotaEnforcer) restoreRules(rules map[string]quotaRule) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.rules = rules
+}

@@ -290,7 +290,7 @@ export default function OlcRTCClientsModal({
                     <Button
                       size="small"
                       icon={<EditOutlined />}
-                      disabled={!client.simpleEditable}
+                      disabled={!client.simpleEditable || saving || working !== null}
                       onClick={() => edit(client)}
                     >
                       Изменить
@@ -313,7 +313,12 @@ export default function OlcRTCClientsModal({
                       description="Старые подключения перестанут работать."
                       onConfirm={() => void act(client.id, 'rotate-key')}
                     >
-                      <Button size="small" icon={<KeyOutlined />} loading={working === client.id} />
+                      <Button
+                        size="small"
+                        icon={<KeyOutlined />}
+                        loading={working === client.id}
+                        disabled={saving || working !== null}
+                      />
                     </Popconfirm>
                     <Popconfirm
                       title={`Удалить клиента ${client.id}?`}
@@ -323,7 +328,7 @@ export default function OlcRTCClientsModal({
                         danger
                         size="small"
                         icon={<DeleteOutlined />}
-                        disabled={working !== null}
+                        disabled={saving || working !== null}
                       />
                     </Popconfirm>
                   </Space>
@@ -363,6 +368,7 @@ export default function OlcRTCClientsModal({
       >
         <Form<ClientInput>
           form={form}
+          disabled={saving || working !== null}
           layout="vertical"
           onFinish={(values) => void save(values)}
           initialValues={{
@@ -442,10 +448,10 @@ export default function OlcRTCClientsModal({
           </Typography.Paragraph>
           <Space wrap>
             <Form.Item name={['quota', 'speed_mbps']} label="Скорость, Мбит/с">
-              <InputNumber min={0} max={1000000} placeholder="Без ограничений" />
+              <InputNumber min={0} max={1000000} precision={0} placeholder="Без ограничений" />
             </Form.Item>
             <Form.Item name={['quota', 'traffic_gb']} label="Трафик, ГБ">
-              <InputNumber min={0} max={1000000} placeholder="Без ограничений" />
+              <InputNumber min={0} max={1000000} precision={0} placeholder="Без ограничений" />
             </Form.Item>
             <Form.Item name={['quota', 'expires_at']} label="Действует до">
               <Input placeholder="ГГГГ-ММ-ДД" />
@@ -455,7 +461,11 @@ export default function OlcRTCClientsModal({
             <Button type="primary" htmlType="submit" icon={<PlusOutlined />} loading={saving}>
               {editingID ? 'Сохранить настройки' : 'Создать подключение'}
             </Button>
-            {editingID && <Button onClick={cancelEdit}>Отмена</Button>}
+            {editingID && (
+              <Button onClick={cancelEdit} disabled={saving}>
+                Отмена
+              </Button>
+            )}
           </Space>
         </Form>
       </Card>

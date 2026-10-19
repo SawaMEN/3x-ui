@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -230,5 +231,58 @@ func TestPanelCleanupDoesNotDeleteHostTrafficControl(t *testing.T) {
 	}
 	if ownedNamespace.MatchString("olc-other-vpn") || ownedVeth.MatchString("olh-other-vpn") {
 		t.Fatal("cleanup ownership is too broad")
+	}
+}
+
+func TestPanelStoppingOldProcessPreservesReplacementQuota(t *testing.T) {
+	loc := testLocation("https://meet.handyweb.org/room", "Main")
+	key := locationKey(loc)
+	q := &QuotaEnforcer{rules: map[string]quotaRule{key: {ClientID: loc.ClientID, Iface: "new-interface", Last: 123}}}
+	old := &process{netns: &netnsRuntime{HostIf: "old-interface"}}
+	s := NewSupervisor("unused", nil)
+	s.quota = q
+	s.processes[key] = old
+	s.stopLocked(key)
+	if rule, ok := q.rules[key]; !ok || rule.Iface != "new-interface" || rule.Last != 123 {
+		t.Fatalf("stopping old process deleted replacement accounting: %+v", q.rules)
+	}
+}
+
+func TestPanelFailedReloadRestoresActiveQuotaRules(t *testing.T) {
+	dir := t.TempDir()
+	for _, command := range []string{"ip", "tc"} {
+		if err := os.WriteFile(filepath.Join(dir, command), []byte("#!/bin/sh\nexit 0\n"), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
+	oldA, oldB := testLocation("room-a", "A"), testLocation("room-b", "B")
+	q := &QuotaEnforcer{rules: map[string]quotaRule{}}
+	starts := 0
+	s := NewSupervisor("unused", func(ctx context.Context, path string, loc Location) (*process, error) {
+		starts++
+		if starts == 2 {
+			return nil, fmt.Errorf("second location failed")
+		}
+		return &process{location: loc, cmd: &exec.Cmd{Process: &os.Process{Pid: 1 << 29}}, netns: &netnsRuntime{HostIf: "lo"}}, nil
+	})
+	s.quota = q
+	for _, loc := range []Location{oldA, oldB} {
+		key := locationKey(loc)
+		s.processes[key] = &process{location: loc}
+		q.rules[key] = quotaRule{ClientID: loc.ClientID, Iface: "old-interface", Last: 123}
+	}
+	nextA, nextB := oldA, oldB
+	nextA.Endpoint.Key, nextB.Endpoint.Key = "changed-key", "changed-key"
+	if err := s.Reload(context.Background(), testConfig(nextA, nextB)); err == nil {
+		t.Fatal("reload should fail")
+	}
+	if starts != 2 || len(q.rules) != 2 {
+		t.Fatalf("failed to exercise staged replacement: starts=%d rules=%+v", starts, q.rules)
+	}
+	for _, rule := range q.rules {
+		if rule.Iface != "old-interface" || rule.Last != 123 {
+			t.Fatalf("failed reload stole active accounting: %+v", rule)
+		}
 	}
 }

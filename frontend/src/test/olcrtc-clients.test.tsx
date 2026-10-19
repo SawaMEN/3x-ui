@@ -37,3 +37,37 @@ test('copies a connection through the shared HTTP-compatible clipboard helper', 
   fireEvent.click(screen.getByRole('button', { name: /Ссылка/ }));
   await waitFor(() => expect(copy).toHaveBeenCalledWith('olcrtc://test-link'));
 });
+
+test('refreshes service state until a background restart completes', async () => {
+  vi.useFakeTimers();
+  try {
+    const { act } = await import('@testing-library/react');
+    const { default: OlcRTCManagement } = await import('@/pages/olcrtc/OlcRTCManagement');
+    const get = vi
+      .spyOn(HttpUtil, 'get')
+      .mockResolvedValueOnce({
+        success: true,
+        obj: { installed: true, running: false, busy: true },
+      } as never)
+      .mockResolvedValueOnce({
+        success: true,
+        obj: { installed: true, running: true, busy: false },
+      } as never);
+    renderWithProviders(<OlcRTCManagement />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(screen.getByText('Служба остановлена')).toBeTruthy();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(screen.getByText('Служба работает')).toBeTruthy();
+    const calls = get.mock.calls.length;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+    expect(get.mock.calls.length).toBe(calls);
+  } finally {
+    vi.useRealTimers();
+  }
+});

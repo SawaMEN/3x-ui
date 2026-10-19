@@ -48,6 +48,21 @@ export default function OlcRTCManagement() {
     };
   }, [refresh]);
 
+  useEffect(() => {
+    if (!status?.busy) return;
+    let active = true;
+    let timer: number;
+    const poll = async () => {
+      await refresh();
+      if (active) timer = window.setTimeout(() => void poll(), 1500);
+    };
+    timer = window.setTimeout(() => void poll(), 1500);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [status?.busy, refresh]);
+
   const restart = async () => {
     setRestarting(true);
     try {
