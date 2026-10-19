@@ -324,7 +324,7 @@ func installerFailure(err error, logPath string) error {
 
 // These commands are used by the pinned install.sh global initializers
 // before install_packages runs. Minimal server images may be missing them.
-var initialInstallerCommands = []string{"bash", "id", "od", "tr", "seq", "ss", "grep", "awk", "cp", "mv", "sync", "sha256sum", "dirname"}
+var initialInstallerCommands = []string{"bash", "id", "od", "tr", "seq", "ss", "grep", "awk", "cp", "mv", "sync", "sha256sum", "dirname", "base64"}
 
 func missingInstallerCommands() []string {
 	var missing []string
@@ -916,6 +916,7 @@ func managedInstaller(original []byte, pm string) ([]byte, error) {
 	// standalone installation. Enforce the local HTTP API in systemd itself.
 	original = bytes.Replace(original, []byte(execStart), []byte(execStart+" -addr 127.0.0.1\nUnsetEnvironment=OLCRTC_MANAGER_TLS_CERT OLCRTC_MANAGER_TLS_KEY"), 1)
 	original = bytes.ReplaceAll(original, []byte("/etc/systemd/system/olcrtc-manager.service"), []byte("$MANAGED_SERVICE_PATH"))
+	original = bytes.ReplaceAll(original, []byte("TimeoutStopSec=10s"), []byte("TimeoutStopSec=30s"))
 	return bytes.Replace(original, []byte(start), installerAdapter, 1), nil
 }
 

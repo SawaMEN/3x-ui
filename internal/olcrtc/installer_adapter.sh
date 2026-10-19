@@ -3,14 +3,14 @@ managed_toolchain() {
 	local arch checksum cache archive
 	arch="$(go_arch)"
 	case "$arch" in
-		amd64) checksum=2b2cfc7148493da5e73981bffbf3353af381d5f93e789c82c79aff64962eb556 ;;
-		arm64) checksum=9d89a3ea57d141c2b22d70083f2c8459ba3890f2d9e818e7e933b75614936565 ;;
+		amd64) checksum=ecbadb99091a3f46e31f5f934b068b1864eafa7995211b39eaddf76996045fe5 ;;
+		arm64) checksum=94f3e30b8e374bc285e7dadc11e0865726b9bc6e85b841ccceaabc0214c6b7c8 ;;
 		*) die 'unsupported toolchain architecture' ;;
 	esac
-	cache="/opt/3x-ui/olcrtc/toolchains/go1.26.3-$arch"
+	cache="/opt/3x-ui/olcrtc/toolchains/go1.27.2-$arch"
 	if [ ! -x "$cache/go/bin/go" ] || [ "$(cat "$cache/checksum" 2>/dev/null || true)" != "$checksum" ]; then
 		archive="$work/go.tar.gz"
-		curl -fsSL --retry 3 --connect-timeout 15 --max-time 300 "https://go.dev/dl/go1.26.3.linux-$arch.tar.gz" -o "$archive"
+		curl -fsSL --retry 3 --connect-timeout 15 --max-time 300 "https://go.dev/dl/go1.27.2.linux-$arch.tar.gz" -o "$archive"
 		printf '%s  %s\n' "$checksum" "$archive" | sha256sum -c -
 		mkdir -p -m 0700 "$cache"
 		tar -C "$cache" -xzf "$archive"
@@ -106,12 +106,13 @@ snapshot_install() {
 }
 
 manager_ready() {
-	local user pass attempt
+	local user pass attempt auth
 	user="$(read_env_value OLCRTC_MANAGER_USER "$PANEL_ENV_PATH")"
 	pass="$(read_env_value OLCRTC_MANAGER_PASS "$PANEL_ENV_PATH")"
 	[ -n "$user" ] && [ -n "$pass" ] || return 1
+	auth="$(printf '%s' "$user:$pass" | base64 | tr -d '\n')"
 	for attempt in $(seq 1 15); do
-		if curl --fail --silent --max-time 2 --noproxy '*' --user "$user:$pass" "http://127.0.0.1:$PANEL_PORT/api/settings" -o /dev/null; then return 0; fi
+		if printf 'header = "Authorization: Basic %s"\n' "$auth" | curl --config - --fail --silent --max-time 2 --noproxy '*' "http://127.0.0.1:$PANEL_PORT/api/settings" -o /dev/null; then return 0; fi
 		sleep 1
 	done
 	return 1

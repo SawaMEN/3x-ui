@@ -2,11 +2,21 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"hash/fnv"
+	"log"
+	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"sync"
+	"time"
 )
 
 // One lock covers read-modify-write AND reload, including quota collection.
@@ -97,4 +107,129 @@ func configTransactions(path string, next http.Handler, reload func() error) htt
 		w.WriteHeader(result.status)
 		_, _ = w.Write(result.body.Bytes())
 	})
+}
+
+var namespaceAllocationMu sync.Mutex
+
+// Rekey/reload can briefly run old and new processes together. A subnet derived
+// only from the room would give both namespaces the same host-side route.
+func allocateNamespaceIPs(ctx context.Context, seed string) (string, string, error) {
+	check, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(check, "ip", "-j", "-4", "route", "show", "table", "all").Output()
+	if err != nil {
+		return "", "", fmt.Errorf("inspect namespace subnets: %w", err)
+	}
+	var routes []struct {
+		Dst string `json:"dst"`
+	}
+	if err = json.Unmarshal(out, &routes); err != nil {
+		return "", "", err
+	}
+	occupied := make([]string, 0, len(routes))
+	for _, route := range routes {
+		if route.Dst != "default" {
+			occupied = append(occupied, route.Dst)
+		}
+	}
+	return chooseNamespaceIPs(seed, occupied)
+}
+func chooseNamespaceIPs(seed string, occupied []string) (string, string, error) {
+	var networks []*net.IPNet
+	for _, cidr := range occupied {
+		if !strings.Contains(cidr, "/") {
+			cidr += "/32"
+		}
+		_, block, err := net.ParseCIDR(cidr)
+		if err == nil {
+			networks = append(networks, block)
+		}
+	}
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(seed))
+	start := int(h.Sum32() % 16000)
+	for i := 0; i < 16000; i++ {
+		n := (start + i) % 16000
+		host := fmt.Sprintf("10.%d.%d.%d", 200+n/4096, (n%4096)/16, 1+(n%16)*4)
+		peer := fmt.Sprintf("10.%d.%d.%d", 200+n/4096, (n%4096)/16, 2+(n%16)*4)
+		hostIP := net.ParseIP(host)
+		_, candidate, _ := net.ParseCIDR(host + "/30")
+		conflict := false
+		for _, network := range networks {
+			if network.Contains(hostIP) || candidate.Contains(network.IP) {
+				conflict = true
+				break
+			}
+		}
+		if !conflict {
+			return host, peer, nil
+		}
+	}
+	return "", "", errors.New("no free OlcRTC /30 subnet; host routes overlap the 10.200.0.0/14 pool")
+}
+
+// Process exit and cleanup completion are distinct: returning from main before
+// cleanup goroutines finish leaks network namespaces and NAT rules on restart.
+func waitNamespaceCleanup(processes map[string]*process) {
+	timer := time.NewTimer(5 * time.Second)
+	defer timer.Stop()
+	for _, p := range processes {
+		if p.cleaned == nil {
+			continue
+		}
+		select {
+		case <-p.cleaned:
+		case <-timer.C:
+			for _, pending := range processes {
+				if pending.cmd != nil && pending.cmd.Process != nil {
+					_ = pending.cmd.Process.Kill()
+				}
+			}
+			wait := time.NewTimer(15 * time.Second)
+			defer wait.Stop()
+			for _, pending := range processes {
+				if pending.cleaned != nil {
+					select {
+					case <-pending.cleaned:
+					case <-wait.C:
+						log.Printf("namespace cleanup timed out during shutdown")
+						return
+					}
+				}
+			}
+			return
+		}
+	}
+}
+
+var ownedNamespace = regexp.MustCompile(`^olc-[0-9a-f]{8}-[0-9a-f]{4}$`)
+var ownedVeth = regexp.MustCompile(`^olh[0-9a-f]{12}$`)
+
+func cleanupOwnedFirewall(ctx context.Context) {
+	for _, table := range []string{"filter", "nat"} {
+		out, err := exec.CommandContext(ctx, "iptables", "-w", "5", "-t", table, "-S").Output()
+		if err != nil {
+			continue
+		}
+		for _, line := range strings.Split(string(out), "\n") {
+			args := strings.Fields(line)
+			if len(args) < 2 || args[0] != "-A" {
+				continue
+			}
+			owned := false
+			for i := 0; i+1 < len(args); i++ {
+				if args[i] == "--comment" {
+					comment := strings.Trim(args[i+1], "\\\"")
+					if comment == "olcrtc-manager" || comment == "olcrtc-manager-netns" {
+						args[i+1] = comment
+						owned = true
+					}
+				}
+			}
+			if owned {
+				args[0] = "-D"
+				_ = runCmd(ctx, "iptables", append([]string{"-t", table}, args...)...)
+			}
+		}
+	}
 }

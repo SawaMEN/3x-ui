@@ -255,7 +255,7 @@ export default function OlcRTCClientsModal({
         {clients.length === 0 ? (
           <Typography.Text type="secondary">Подключений пока нет.</Typography.Text>
         ) : (
-          <Space direction="vertical" style={{ width: '100%' }}>
+          <Space orientation="vertical" style={{ width: '100%' }}>
             {clients.map((client) => (
               <Card key={client.id} size="small">
                 <Space wrap style={{ display: 'flex', justifyContent: 'space-between' }}>

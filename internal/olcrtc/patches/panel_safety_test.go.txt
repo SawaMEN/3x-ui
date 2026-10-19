@@ -176,3 +176,59 @@ func TestPanelKernelNetworkAndQuota(t *testing.T) {
 		t.Fatal("veth leaked")
 	}
 }
+
+func TestPanelNamespaceSubnetsAvoidExistingRoutes(t *testing.T) {
+	first, _, err := chooseNamespaceIPs("room", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, _, err := chooseNamespaceIPs("room", []string{first + "/30"})
+	if err != nil || second == first {
+		t.Fatalf("overlapping namespace route: %s, %v", second, err)
+	}
+	if _, _, err := chooseNamespaceIPs("room", []string{"10.0.0.0/8"}); err == nil {
+		t.Fatal("host network overlap ignored")
+	}
+}
+
+func TestPanelShutdownWaitsForNamespaceCleanup(t *testing.T) {
+	p := &process{cleaned: make(chan struct{})}
+	s := NewSupervisor("", nil)
+	s.processes["test"] = p
+	finished := make(chan struct{})
+	go func() { s.StopAll(); close(finished) }()
+	select {
+	case <-finished:
+		t.Fatal("shutdown returned before cleanup")
+	case <-time.After(20 * time.Millisecond):
+	}
+	close(p.cleaned)
+	select {
+	case <-finished:
+	case <-time.After(time.Second):
+		t.Fatal("shutdown did not finish after cleanup")
+	}
+}
+
+func TestPanelCleanupDoesNotDeleteHostTrafficControl(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "tc-called")
+	for _, name := range []string{"ip", "iptables", "tc"} {
+		script := "#!/bin/sh\nexit 0\n"
+		if name == "tc" {
+			script = "#!/bin/sh\ntouch '" + logPath + "'\n"
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(script), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
+	q := &QuotaEnforcer{}
+	q.cleanupStale(context.Background())
+	if _, err := os.Stat(logPath); !os.IsNotExist(err) {
+		t.Fatal("manager altered shared host qdisc")
+	}
+	if ownedNamespace.MatchString("olc-other-vpn") || ownedVeth.MatchString("olh-other-vpn") {
+		t.Fatal("cleanup ownership is too broad")
+	}
+}

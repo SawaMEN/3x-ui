@@ -1,6 +1,14 @@
 --- a/cmd/olcrtc-manager/main.go
 +++ b/cmd/olcrtc-manager/main.go
-@@ -312,14 +312,21 @@
+@@ -261,6 +261,7 @@
+ 	running  bool
+ 	restarts int
+ 	mu       sync.RWMutex
++	cleaned  chan struct{}
+ }
+ 
+ type starter func(context.Context, string, Location) (*process, error)
+@@ -312,14 +313,21 @@
  
  	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
  	defer stop()
@@ -23,7 +31,7 @@
  	go quotaEnforcer.Run(ctx)
  
  	reloadc := make(chan os.Signal, 1)
-@@ -340,7 +347,7 @@
+@@ -340,7 +348,7 @@
  		if err := reloaded.Validate(); err != nil {
  			return err
  		}
@@ -32,7 +40,7 @@
  	}
  
  	handler := http.NewServeMux()
-@@ -599,7 +606,7 @@
+@@ -599,7 +607,7 @@
  
  	server := &http.Server{
  		Addr:              net.JoinHostPort(listenAddr, strconv.Itoa(cfg.Port)),
@@ -41,7 +49,7 @@
  		ReadHeaderTimeout: 5 * time.Second,
  	}
  	tlsCert, tlsKey, tlsEnabled, err := tlsFilesFromEnv()
-@@ -631,7 +638,10 @@
+@@ -631,7 +639,10 @@
  			defer cancel()
  			return server.Shutdown(shutdownCtx)
  		case <-reloadc:
@@ -53,7 +61,7 @@
  				log.Printf("reload failed: %v", err)
  				continue
  			}
-@@ -671,7 +681,11 @@
+@@ -671,7 +682,11 @@
  			s.processes = make(map[string]*process)
  			return err
  		}
@@ -66,7 +74,7 @@
  		key := locationKey(loc)
  		s.processes[key] = p
  		s.monitorProcess(ctx, key, p)
-@@ -697,7 +711,10 @@
+@@ -697,7 +712,10 @@
  		currentLoc, exists := current[id]
  		if exists && reflect.DeepEqual(currentLoc, nextLoc) {
  			if p := s.processes[id]; p != nil {
@@ -78,7 +86,7 @@
  			}
  			continue
  		}
-@@ -707,7 +724,10 @@
+@@ -707,7 +725,10 @@
  			stopProcessMap(started)
  			return err
  		}
@@ -90,7 +98,27 @@
  		started[id] = p
  	}
  
-@@ -868,7 +888,10 @@
+@@ -728,14 +749,16 @@
+ 
+ func (s *Supervisor) StopAll() {
+ 	s.mu.Lock()
+-	defer s.mu.Unlock()
++	processes := s.processes
+ 	if s.quota != nil {
+-		for id := range s.processes {
++		for id := range processes {
+ 			s.quota.Unregister(id)
+ 		}
+ 	}
+-	stopProcessMap(s.processes)
++	stopProcessMap(processes)
+ 	s.processes = make(map[string]*process)
++	s.mu.Unlock()
++	waitNamespaceCleanup(processes)
+ }
+ 
+ func (s *Supervisor) UpdateSettings(cfg Config) {
+@@ -868,7 +891,10 @@
  			s.mu.Unlock()
  			return err
  		}
@@ -102,7 +130,7 @@
  		s.processes[key] = next
  		s.monitorProcess(ctx, key, next)
  		s.mu.Unlock()
-@@ -888,7 +911,9 @@
+@@ -888,7 +914,9 @@
  	if err != nil {
  		return err
  	}
@@ -113,7 +141,7 @@
  	s.processes[key] = next
  	s.monitorProcess(ctx, key, next)
  	return nil
-@@ -918,20 +943,25 @@
+@@ -918,20 +946,25 @@
  			log.Printf("olcrtc restart for %s failed: %v", key, startErr)
  			return
  		}
@@ -144,7 +172,7 @@
  }
  
  func (s *Supervisor) clientQuotaLocked(clientID string) Quota {
-@@ -979,7 +1009,10 @@
+@@ -979,7 +1012,10 @@
  		if quotaStatus(client.Quota, now) == "active" {
  			for _, loc := range client.Locations {
  				if p := s.processes[locationKey(loc)]; p != nil {
@@ -156,7 +184,7 @@
  				}
  			}
  			continue
-@@ -1247,6 +1280,7 @@
+@@ -1247,6 +1283,7 @@
  	req.FromClient = strings.TrimSpace(req.FromClient)
  	req.Refresh = strings.TrimSpace(req.Refresh)
  	req.Quota = normalizeQuota(req.Quota)
@@ -164,7 +192,7 @@
  	if req.ClientID == "" {
  		return "", errors.New("client_id is required")
  	}
-@@ -1339,6 +1373,8 @@
+@@ -1339,6 +1376,8 @@
  			}
  		}
  		cfg.Clients[i].Refresh = req.Refresh
@@ -173,17 +201,26 @@
  		cfg.Clients[i].Quota = req.Quota
  		if locations != nil {
  			cfg.Clients[i].Locations = locations
-@@ -2310,7 +2346,7 @@
+@@ -2308,26 +2347,24 @@
+ 	}
+ 
  	if p.netns != nil {
- 		last := uint64(0)
- 		if iface != "" {
+-		last := uint64(0)
+-		if iface != "" {
 -			if bytes, err := interfaceTXBytes(iface); err == nil {
-+			if bytes, err := interfaceTrafficBytes(iface); err == nil {
- 				last = bytes
- 			}
- 		}
-@@ -2322,7 +2358,7 @@
- 		q.mu.Unlock()
+-				last = bytes
+-			}
+-		}
+-		q.mu.Lock()
+-		if existing, ok := q.rules[key]; ok && existing.Iface == iface {
+-			last = existing.Last
+-		}
+-		q.rules[key] = quotaRule{ClientID: loc.ClientID, ClassID: classID, Cgroup: cgroup, Dev: dev, Iface: iface, Last: last}
+-		q.mu.Unlock()
++		last, err := interfaceTrafficBytes(iface)
++		if err != nil {
++			return fmt.Errorf("namespace traffic counter unavailable: %w", err)
++		}
  		if quota.SpeedMbps > 0 {
  			if err := applyNetnsSpeed(context.Background(), p.netns, quota.SpeedMbps); err != nil {
 -				log.Printf("speed limit unavailable for %s: %v", key, err)
@@ -191,7 +228,18 @@
  			}
  		} else {
  			_ = runCmd(context.Background(), "tc", "qdisc", "del", "dev", p.netns.HostIf, "root")
-@@ -2354,7 +2390,7 @@
+ 			_ = runCmd(context.Background(), "ip", "netns", "exec", p.netns.Name, "tc", "qdisc", "del", "dev", p.netns.NsIf, "root")
+ 		}
++		q.mu.Lock()
++		if existing, ok := q.rules[key]; ok && existing.Iface == iface {
++			last = existing.Last
++		}
++		q.rules[key] = quotaRule{ClientID: loc.ClientID, ClassID: classID, Cgroup: cgroup, Dev: dev, Iface: iface, Last: last}
++		q.mu.Unlock()
+ 		return nil
+ 	}
+ 
+@@ -2354,7 +2391,7 @@
  	}
  	if quota.SpeedMbps > 0 && dev != "" && iface == "" {
  		if err := q.applySpeedLimit(context.Background(), dev, classID, quota.SpeedMbps); err != nil {
@@ -200,7 +248,16 @@
  		}
  	}
  	return nil
-@@ -2379,10 +2415,12 @@
+@@ -2371,7 +2408,7 @@
+ 		return
+ 	}
+ 	q.deleteRule(context.Background(), "INPUT", rule.ClassID)
+-	if rule.Dev != "" {
++	if rule.Iface == "" && rule.Dev != "" {
+ 		q.deleteSpeedLimit(context.Background(), rule.Dev, rule.ClassID)
+ 	}
+ 	_ = os.Remove(filepath.Join(rule.Cgroup, "tasks"))
+@@ -2379,10 +2416,12 @@
  }
  
  func (q *QuotaEnforcer) Collect(ctx context.Context) error {
@@ -216,7 +273,7 @@
  	}
  	q.mu.Unlock()
  	if len(rules) == 0 {
-@@ -2390,7 +2428,8 @@
+@@ -2390,7 +2429,8 @@
  	}
  
  	deltaByClient := make(map[string]uint64)
@@ -226,7 +283,7 @@
  		bytes, err := q.ruleBytes(ctx, rule)
  		if err != nil {
  			if errors.Is(err, os.ErrNotExist) {
-@@ -2401,9 +2440,12 @@
+@@ -2401,9 +2441,12 @@
  		if bytes > rule.Last {
  			deltaByClient[rule.ClientID] += bytes - rule.Last
  		}
@@ -240,7 +297,7 @@
  		return nil
  	}
  
-@@ -2428,27 +2470,28 @@
+@@ -2428,27 +2471,28 @@
  			return err
  		}
  	}
@@ -277,7 +334,7 @@
  	}
  	inBytes, err := q.chainBytes(ctx, "INPUT", rule.ClassID)
  	if err != nil {
-@@ -2457,12 +2500,20 @@
+@@ -2457,12 +2501,20 @@
  	return inBytes, nil
  }
  
@@ -304,7 +361,58 @@
  }
  
  func (q *QuotaEnforcer) chainBytes(ctx context.Context, chain string, classID uint32) (uint64, error) {
-@@ -2690,14 +2741,7 @@
+@@ -2497,21 +2549,9 @@
+ }
+ 
+ func (q *QuotaEnforcer) cleanupStale(ctx context.Context) {
+-	for _, chain := range []string{"INPUT", "OUTPUT"} {
+-		for i := 0; i < 64; i++ {
+-			line, ok := q.firstCgroupRuleLine(ctx, chain)
+-			if !ok {
+-				break
+-			}
+-			if err := q.iptables(ctx, "-D", chain, strconv.Itoa(line)); err != nil {
+-				break
+-			}
+-		}
+-	}
+-	if dev := defaultRouteInterface(ctx); dev != "" {
+-		_ = q.tc(ctx, "qdisc", "del", "dev", dev, "root")
+-		_ = q.tc(ctx, "qdisc", "del", "dev", dev, "ingress")
+-	}
++	// A shared host qdisc may belong to another VPN or administrator. Only
++	// namespace-owned devices and exact, tagged rules belong to this service.
++	cleanupOwnedFirewall(ctx)
+ 	cleanupManagerNetns(ctx)
+ 	_ = os.RemoveAll("/sys/fs/cgroup/net_cls,net_prio/olcrtc-manager")
+ }
+@@ -2520,7 +2560,7 @@
+ 	if out, err := exec.CommandContext(ctx, "ip", "netns", "list").Output(); err == nil {
+ 		for _, line := range strings.Split(string(out), "\n") {
+ 			name := strings.Fields(line)
+-			if len(name) == 0 || !strings.HasPrefix(name[0], "olc-") {
++			if len(name) == 0 || !ownedNamespace.MatchString(name[0]) {
+ 				continue
+ 			}
+ 			_ = runCmd(ctx, "ip", "netns", "del", name[0])
+@@ -2535,7 +2575,7 @@
+ 			}
+ 			name := strings.TrimSuffix(fields[1], ":")
+ 			name = strings.Split(name, "@")[0]
+-			if strings.HasPrefix(name, "olh") {
++			if ownedVeth.MatchString(name) {
+ 				_ = runCmd(ctx, "ip", "link", "del", name)
+ 			}
+ 		}
+@@ -2569,6 +2609,7 @@
+ }
+ 
+ func (q *QuotaEnforcer) iptablesOutput(ctx context.Context, args ...string) ([]byte, error) {
++	args = append([]string{"-w", "5"}, args...)
+ 	cmdCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+ 	defer cancel()
+ 	out, err := exec.CommandContext(cmdCtx, "iptables", args...).CombinedOutput()
+@@ -2690,14 +2731,7 @@
  	if err != nil {
  		return fmt.Errorf("marshal config: %w", err)
  	}
@@ -320,7 +428,44 @@
  }
  
  func backupConfig(path string) {
-@@ -2860,13 +2904,20 @@
+@@ -2778,7 +2812,14 @@
+ 	deadline := time.Now().Add(timeout)
+ 	for {
+ 		if !p.state().Running {
+-			return nil
++			if p.cleaned == nil {
++				return nil
++			}
++			select {
++			case <-p.cleaned:
++				return nil
++			default:
++			}
+ 		}
+ 		if time.Now().After(deadline) {
+ 			return errors.New("timed out waiting for olcrtc to stop")
+@@ -2801,6 +2842,8 @@
+ }
+ 
+ func setupNetns(ctx context.Context, loc Location) (*netnsRuntime, error) {
++	namespaceAllocationMu.Lock()
++	defer namespaceAllocationMu.Unlock()
+ 	key := locationKey(loc)
+ 	token := fmt.Sprintf("%08x", quotaClassID(key)&0xffffffff)
+ 	suffix, err := randomHex(2)
+@@ -2813,7 +2856,10 @@
+ 		NsIf:   "oln" + token + suffix,
+ 		Dev:    defaultRouteInterface(ctx),
+ 	}
+-	hostIP, nsIP := netnsIPs(key)
++	hostIP, nsIP, err := allocateNamespaceIPs(ctx, ns.Name)
++	if err != nil {
++		return nil, err
++	}
+ 	ns.HostIP = hostIP
+ 	ns.NsIP = nsIP
+ 	if ns.Dev == "" {
+@@ -2860,13 +2906,20 @@
  		cleanupNetns(ctx, ns)
  		return nil, err
  	}
@@ -344,7 +489,7 @@
  		}
  	}
  	return ns, nil
-@@ -2894,11 +2945,18 @@
+@@ -2894,11 +2947,18 @@
  	_ = os.RemoveAll(filepath.Join("/etc/netns", ns.Name))
  }
  
@@ -367,3 +512,26 @@
  }
  
  func delNetnsFirewall(ctx context.Context, ns *netnsRuntime) {
+@@ -2966,6 +3026,9 @@
+ }
+ 
+ func runCmd(ctx context.Context, name string, args ...string) error {
++	if name == "iptables" {
++		args = append([]string{"-w", "5"}, args...)
++	}
+ 	cmdCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+ 	defer cancel()
+ 	out, err := exec.CommandContext(cmdCtx, name, args...).CombinedOutput()
+@@ -3002,10 +3065,11 @@
+ 		return nil, fmt.Errorf("start olcrtc for %s: %w", locationKey(loc), err)
+ 	}
+ 
+-	p := &process{location: loc, cmd: cmd, netns: ns, logs: logs, done: make(chan error, 1), started: time.Now(), running: true}
++	p := &process{location: loc, cmd: cmd, netns: ns, logs: logs, done: make(chan error, 1), cleaned: make(chan struct{}), started: time.Now(), running: true}
+ 	log.Printf("started olcrtc for %s in %s: %s %s", locationKey(loc), ns.Name, olcrtcPath, configPath)
+ 
+ 	go func() {
++		defer close(p.cleaned)
+ 		err := cmd.Wait()
+ 		p.markExited(err)
+ 		cleanupNetns(context.Background(), ns)
