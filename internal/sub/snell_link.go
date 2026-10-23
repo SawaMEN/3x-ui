@@ -32,7 +32,7 @@ func (s *SubService) genSnellLink(ib *model.Inbound, email string) string {
 				q.Set("mode", settings.Mode)
 			} else {
 				q.Set("obfs", settings.ObfsMode)
-				if settings.ObfsHost != "" {
+				if settings.ObfsMode == "http" && settings.ObfsHost != "" {
 					q.Set("obfs-host", settings.ObfsHost)
 				}
 			}

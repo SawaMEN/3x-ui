@@ -1531,7 +1531,9 @@ export function genLink(input: GenLinkInput): string {
       if (settings.version === 6) params.set('mode', settings.mode);
       else {
         params.set('obfs', settings.obfsMode);
-        params.set('obfs-host', settings.obfsHost);
+        if (settings.obfsMode === 'http' && settings.obfsHost) {
+          params.set('obfs-host', settings.obfsHost);
+        }
       }
       const host = address.includes(':') ? `[${address.replace(/^\[|\]$/g, '')}]` : address;
       return `snell://${encodeURIComponent(settings.psk)}@${host}:${port}?${params}#${encodeURIComponent(remark)}`;
