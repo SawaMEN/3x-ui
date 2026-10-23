@@ -74,7 +74,11 @@ export default function AdditionalOutboundEditor({
         </>
       ) : (
         <>
-          <Alert type="info" showIcon description={t('pages.inbounds.form.snellOutboundHint')} />
+          <Alert
+            type="info"
+            showIcon
+            description={t('pages.inbounds.form.snellOutboundHint')}
+          />
           <Form.Item label={t('pages.inbounds.form.snellVersion')}>
             <Select
               value={Number(settings.version ?? 4) === 6 ? 6 : 4}
@@ -118,10 +122,13 @@ export default function AdditionalOutboundEditor({
                 <Select
                   value={String(settings.obfs_mode ?? 'none')}
                   options={['none', 'http'].map((mode) => ({ value: mode, label: mode }))}
-                  onChange={(obfs_mode) => update({
-                    obfs_mode,
-                    obfs_host: obfs_mode === 'http' ? (settings.obfs_host ?? 'bing.com') : undefined,
-                  })}
+                  onChange={(obfs_mode) =>
+                    update({
+                      obfs_mode,
+                      obfs_host:
+                        obfs_mode === 'http' ? (settings.obfs_host ?? 'bing.com') : undefined,
+                    })
+                  }
                 />
               </Form.Item>
               {settings.obfs_mode === 'http' && (
@@ -146,10 +153,7 @@ export default function AdditionalOutboundEditor({
             />
           </Form.Item>
           <Form.Item label={t('pages.inbounds.form.snellReuse')}>
-            <Switch
-              checked={settings.reuse === true}
-              onChange={(reuse) => update({ reuse })}
-            />
+            <Switch checked={settings.reuse === true} onChange={(reuse) => update({ reuse })} />
           </Form.Item>
           <Button
             onClick={() =>

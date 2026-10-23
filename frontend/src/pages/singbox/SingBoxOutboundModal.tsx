@@ -436,12 +436,17 @@ export default function SingBoxOutboundModal({
             {type === 'snell' && (
               <>
                 <Field label="PSK">{input('psk', true)}</Field>
-                <Field label="User key" hint="Required for a multi-user Snell server">{input('userkey', true)}</Field>
+                <Field label="User key" hint="Required for a multi-user Snell server">
+                  {input('userkey', true)}
+                </Field>
                 <Field label="Версия">
                   <Select
                     aria-label="Версия Snell"
                     value={Number(draft.version) === 6 ? 6 : 4}
-                    options={[{ value: 4, label: 'v4 (server v5)' }, { value: 6, label: 'v6' }]}
+                    options={[
+                      { value: 4, label: 'v4 (server v5)' },
+                      { value: 6, label: 'v6' },
+                    ]}
                     onChange={(v) => {
                       const next = { ...draft, version: v };
                       delete next.mode;
@@ -483,7 +488,11 @@ export default function SingBoxOutboundModal({
                 <Field label="Network">
                   <Select
                     value={text(draft.network)}
-                    options={[{ value: '', label: 'TCP + UDP' }, { value: 'tcp', label: 'TCP' }, { value: 'udp', label: 'UDP' }]}
+                    options={[
+                      { value: '', label: 'TCP + UDP' },
+                      { value: 'tcp', label: 'TCP' },
+                      { value: 'udp', label: 'UDP' },
+                    ]}
                     onChange={(v) => patch('network', v)}
                   />
                 </Field>

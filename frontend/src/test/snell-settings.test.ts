@@ -13,13 +13,20 @@ describe('Snell settings and subscription links', () => {
   it('checks v6 PSK byte limits but accepts the v5-compatible PSK', () => {
     expect(SnellInboundSettingsSchema.safeParse({ version: 6, psk: 'short' }).success).toBe(false);
     expect(SnellInboundSettingsSchema.safeParse({ version: 5, psk: 'short' }).success).toBe(true);
-    expect(SnellInboundSettingsSchema.safeParse({ version: 6, psk: '😀'.repeat(3) }).success).toBe(true);
-    expect(SnellInboundSettingsSchema.safeParse({ version: 6, psk: 'a'.repeat(256) }).success).toBe(false);
-    expect(SnellInboundSettingsSchema.safeParse({ version: 6, psk: 'bad\nkey' }).success).toBe(false);
+    expect(
+      SnellInboundSettingsSchema.safeParse({ version: 6, psk: '😀'.repeat(3) }).success,
+    ).toBe(true);
+    expect(
+      SnellInboundSettingsSchema.safeParse({ version: 6, psk: 'a'.repeat(256) }).success,
+    ).toBe(false);
+    expect(SnellInboundSettingsSchema.safeParse({ version: 6, psk: 'bad\nkey' }).success).toBe(
+      false,
+    );
   });
 
   it('imports a multi-user v5 link as client v4 with HTTP obfuscation', () => {
-    const link = 'snell://deploy-psk@example.org:443?version=4&userkey=user-key&obfs=http&obfs-host=www.example.org#Snell';
+    const link =
+      'snell://deploy-psk@example.org:443?version=4&userkey=user-key&obfs=http&obfs-host=www.example.org#Snell';
     const parsed = parseOutboundLink(link);
     expect(parsed?.protocol).toBe('snell');
     expect(parsed?.settings).toMatchObject({
@@ -32,9 +39,12 @@ describe('Snell settings and subscription links', () => {
   });
 
   it('imports a v6 link with mode and a distinct user key', () => {
-    const link = 'snell://deploy-psk-12345@example.org:443?version=6&userkey=another-key&mode=unshaped#Snell';
+    const link =
+      'snell://deploy-psk-12345@example.org:443?version=6&userkey=another-key&mode=unshaped#Snell';
     expect(parseOutboundLink(link)?.settings).toMatchObject({
-      version: 6, mode: 'unshaped', userkey: 'another-key',
+      version: 6,
+      mode: 'unshaped',
+      userkey: 'another-key',
     });
   });
 });

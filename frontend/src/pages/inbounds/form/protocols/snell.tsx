@@ -8,14 +8,15 @@ export default function SnellFields() {
   const { control, setValue } = useFormContext();
   const version = useWatch({ control, name: 'settings.version' });
   const obfsMode = useWatch({ control, name: 'settings.obfsMode' });
+
   function preset(nextVersion: 5 | 6) {
     setValue('settings.version', nextVersion, { shouldDirty: true, shouldValidate: true });
     setValue('settings.mode', 'default', { shouldDirty: true });
-    // Prefer the wire-compatible default. HTTP obfuscation is opt-in:
-    // it must match every v4 client and is not a TLS or QUIC transport.
+    // HTTP obfuscation is opt-in: it must match every v4 client and is not TLS.
     setValue('settings.obfsMode', 'none', { shouldDirty: true });
     setValue('settings.obfsHost', 'bing.com', { shouldDirty: true });
   }
+
   return (
     <>
       <Alert type="info" showIcon description={t('pages.inbounds.form.snellHint')} />
@@ -43,27 +44,38 @@ export default function SnellFields() {
       {version === 6 ? (
         <>
           <FormField name={['settings', 'mode']} label={t('pages.inbounds.form.snellMode')}>
-            <Select options={[
-              { value: 'default', label: 'default' },
-              { value: 'unshaped', label: 'unshaped' },
-            ]} />
+            <Select
+              options={[
+                { value: 'default', label: 'default' },
+                { value: 'unshaped', label: 'unshaped' },
+              ]}
+            />
           </FormField>
           <Alert type="info" description={t('pages.inbounds.form.snellModeHint')} />
         </>
       ) : (
         <>
           <FormField name={['settings', 'obfsMode']} label={t('pages.inbounds.form.snellObfs')}>
-            <Select options={[
-              { value: 'none', label: 'none' },
-              { value: 'http', label: 'http' },
-            ]} />
+            <Select
+              options={[
+                { value: 'none', label: 'none' },
+                { value: 'http', label: 'http' },
+              ]}
+            />
           </FormField>
           {obfsMode === 'http' && (
             <>
-              <FormField name={['settings', 'obfsHost']} label={t('pages.inbounds.form.snellObfsHost')}>
+              <FormField
+                name={['settings', 'obfsHost']}
+                label={t('pages.inbounds.form.snellObfsHost')}
+              >
                 <Input placeholder="bing.com" />
               </FormField>
-              <Alert type="warning" showIcon description={t('pages.inbounds.form.snellObfsHint')} />
+              <Alert
+                type="warning"
+                showIcon
+                description={t('pages.inbounds.form.snellObfsHint')}
+              />
             </>
           )}
         </>
