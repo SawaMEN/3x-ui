@@ -436,13 +436,59 @@ export default function SingBoxOutboundModal({
             {type === 'snell' && (
               <>
                 <Field label="PSK">{input('psk', true)}</Field>
+                <Field label="User key" hint="Required for a multi-user Snell server">{input('userkey', true)}</Field>
                 <Field label="Версия">
                   <Select
                     aria-label="Версия Snell"
-                    value={draft.version || 4}
-                    options={[4, 6].map((v) => ({ value: v, label: String(v) }))}
-                    onChange={(v) => patch('version', v)}
+                    value={Number(draft.version) === 6 ? 6 : 4}
+                    options={[{ value: 4, label: 'v4 (server v5)' }, { value: 6, label: 'v6' }]}
+                    onChange={(v) => {
+                      const next = { ...draft, version: v };
+                      delete next.mode;
+                      delete next.obfs_mode;
+                      delete next.obfs_host;
+                      if (v === 6) next.mode = 'default';
+                      else next.obfs_mode = 'none';
+                      update(next);
+                    }}
                   />
+                </Field>
+                {Number(draft.version) === 6 ? (
+                  <Field label="Traffic shaping">
+                    <Select
+                      value={text(draft.mode) || 'default'}
+                      options={options(['default', 'unshaped'])}
+                      onChange={(v) => patch('mode', v)}
+                    />
+                  </Field>
+                ) : (
+                  <>
+                    <Field label="HTTP obfuscation">
+                      <Select
+                        value={text(draft.obfs_mode) || 'none'}
+                        options={options(['none', 'http'])}
+                        onChange={(v) => {
+                          const next = { ...draft, obfs_mode: v };
+                          if (v === 'none') delete next.obfs_host;
+                          else if (!text(next.obfs_host)) next.obfs_host = 'bing.com';
+                          update(next);
+                        }}
+                      />
+                    </Field>
+                    {text(draft.obfs_mode) === 'http' && (
+                      <Field label="HTTP Host">{input('obfs_host', false, 'bing.com')}</Field>
+                    )}
+                  </>
+                )}
+                <Field label="Network">
+                  <Select
+                    value={text(draft.network)}
+                    options={[{ value: '', label: 'TCP + UDP' }, { value: 'tcp', label: 'TCP' }, { value: 'udp', label: 'UDP' }]}
+                    onChange={(v) => patch('network', v)}
+                  />
+                </Field>
+                <Field label="Connection reuse">
+                  <Switch checked={draft.reuse === true} onChange={(v) => patch('reuse', v)} />
                 </Field>
               </>
             )}

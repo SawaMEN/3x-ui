@@ -1,4 +1,4 @@
-import { Alert, Button, Form, Input, InputNumber, Select, Space } from 'antd';
+import { Alert, Button, Form, Input, InputNumber, Select, Space, Switch } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { InstallVPNButton } from '@/pages/inbounds/form/protocols/additional-vpn';
 
@@ -74,18 +74,19 @@ export default function AdditionalOutboundEditor({
         </>
       ) : (
         <>
-          <Form.Item label="Snell">
+          <Alert type="info" showIcon description={t('pages.inbounds.form.snellOutboundHint')} />
+          <Form.Item label={t('pages.inbounds.form.snellVersion')}>
             <Select
-              value={Number(settings.version ?? 4)}
+              value={Number(settings.version ?? 4) === 6 ? 6 : 4}
               options={[
-                { value: 4, label: 'v4 / v5' },
+                { value: 4, label: 'v4 (server v5)' },
                 { value: 6, label: 'v6' },
               ]}
-              onChange={(version) =>
+              onChange={(version: 4 | 6) =>
                 update({
                   version,
                   mode: version === 6 ? 'default' : undefined,
-                  obfs_mode: undefined,
+                  obfs_mode: version === 4 ? 'none' : undefined,
                   obfs_host: undefined,
                 })
               }
@@ -101,6 +102,53 @@ export default function AdditionalOutboundEditor({
             <Input.Password
               value={String(settings.userkey ?? '')}
               onChange={(e) => update({ userkey: e.target.value })}
+            />
+          </Form.Item>
+          {Number(settings.version ?? 4) === 6 ? (
+            <Form.Item label={t('pages.inbounds.form.snellMode')}>
+              <Select
+                value={String(settings.mode ?? 'default')}
+                options={['default', 'unshaped'].map((mode) => ({ value: mode, label: mode }))}
+                onChange={(mode) => update({ mode })}
+              />
+            </Form.Item>
+          ) : (
+            <>
+              <Form.Item label={t('pages.inbounds.form.snellObfs')}>
+                <Select
+                  value={String(settings.obfs_mode ?? 'none')}
+                  options={['none', 'http'].map((mode) => ({ value: mode, label: mode }))}
+                  onChange={(obfs_mode) => update({
+                    obfs_mode,
+                    obfs_host: obfs_mode === 'http' ? (settings.obfs_host ?? 'bing.com') : undefined,
+                  })}
+                />
+              </Form.Item>
+              {settings.obfs_mode === 'http' && (
+                <Form.Item label={t('pages.inbounds.form.snellObfsHost')}>
+                  <Input
+                    value={String(settings.obfs_host ?? 'bing.com')}
+                    onChange={(e) => update({ obfs_host: e.target.value })}
+                  />
+                </Form.Item>
+              )}
+            </>
+          )}
+          <Form.Item label={t('pages.inbounds.form.snellNetwork')}>
+            <Select
+              value={String(settings.network ?? '')}
+              options={[
+                { value: '', label: 'TCP + UDP' },
+                { value: 'tcp', label: 'TCP' },
+                { value: 'udp', label: 'UDP' },
+              ]}
+              onChange={(network) => update({ network })}
+            />
+          </Form.Item>
+          <Form.Item label={t('pages.inbounds.form.snellReuse')}>
+            <Switch
+              checked={settings.reuse === true}
+              onChange={(reuse) => update({ reuse })}
             />
           </Form.Item>
           <Button
