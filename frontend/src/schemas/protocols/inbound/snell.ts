@@ -11,8 +11,12 @@ export const SnellInboundSettingsSchema = z.object({
   obfsHost: z.string().default('bing.com'),
   clients: z.array(NaiveClientSchema).default([]),
 }).superRefine((value, ctx) => {
-  const controls = /[\u0000-\u001f\u007f-\u009f]/u;
-  if (controls.test(value.psk)) {
+  const containsControl = (input: string) =>
+    Array.from(input).some((character) => {
+      const code = character.codePointAt(0) ?? 0;
+      return code < 32 || (code >= 127 && code <= 159);
+    });
+  if (containsControl(value.psk)) {
     ctx.addIssue({ code: 'custom', path: ['psk'], message: 'PSK must not contain control characters' });
   }
   if (value.version === 6 && value.psk !== '') {
@@ -21,7 +25,7 @@ export const SnellInboundSettingsSchema = z.object({
       ctx.addIssue({ code: 'custom', path: ['psk'], message: 'Snell v6 PSK must be 12–255 bytes' });
     }
   }
-  if (controls.test(value.obfsHost)) {
+  if (containsControl(value.obfsHost)) {
     ctx.addIssue({ code: 'custom', path: ['obfsHost'], message: 'HTTP Host must not contain control characters' });
   }
 });
