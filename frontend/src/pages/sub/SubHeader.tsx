@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Menu, Popover, Space } from 'antd';
 import {
@@ -14,13 +14,21 @@ import { pauseAnimationsUntilLeave, useTheme } from '@/hooks/useTheme';
 
 interface SubHeaderProps {
   title: string;
+  logoURL?: string;
   sId: string;
   email: string;
   lang: string;
   onLangChange: (lang: string) => void;
 }
 
-export default function SubHeader({ title, sId, email, lang, onLangChange }: SubHeaderProps) {
+export default function SubHeader({
+  title,
+  logoURL,
+  sId,
+  email,
+  lang,
+  onLangChange,
+}: SubHeaderProps) {
   const { t } = useTranslation();
   const { isDark, isUltra, toggleTheme, toggleUltra } = useTheme();
 
@@ -54,13 +62,23 @@ export default function SubHeader({ title, sId, email, lang, onLangChange }: Sub
   );
 
   const themeIcon = !isDark ? <SunOutlined /> : !isUltra ? <MoonOutlined /> : <MoonFilled />;
+  const [failedLogo, setFailedLogo] = useState('');
   const initial = Array.from(title)[0]?.toUpperCase();
 
   return (
     <header className="sub-header">
       <div className="sub-brand">
         <span className="sub-brand-mark" aria-hidden="true">
-          {initial ?? <WifiOutlined />}
+          {logoURL && failedLogo !== logoURL ? (
+            <img
+              src={logoURL}
+              alt=""
+              referrerPolicy="no-referrer"
+              onError={() => setFailedLogo(logoURL)}
+            />
+          ) : (
+            (initial ?? <WifiOutlined />)
+          )}
         </span>
         <div className="sub-brand-text">
           <div className="sub-brand-title" dir="auto">

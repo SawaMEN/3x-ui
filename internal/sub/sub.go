@@ -18,6 +18,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/locale"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/middleware"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/network"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 
@@ -62,9 +63,17 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 		return nil, err
 	}
 
-	if subDomain != "" {
-		engine.Use(s.subscriptionDomainValidator(subDomain))
-	}
+	engine.Use(s.subscriptionDomainValidator(subDomain))
+	engine.Use(func(c *gin.Context) {
+		if enabled, _ := s.settingService.GetSubCDNEnable(); enabled && !strings.Contains(c.Request.URL.Path, "/assets/") {
+			c.Header("Cache-Control", "private, no-store, max-age=0")
+			c.Header("CDN-Cache-Control", "no-store")
+			c.Header("Cloudflare-CDN-Cache-Control", "no-store")
+			c.Header("Vary", "Accept, User-Agent, X-HWID")
+		}
+	})
+
+	engine.Use(middleware.RootRedirect(s.settingService.GetRootRedirectURL))
 
 	LinksPath, err := s.settingService.GetSubPath()
 	if err != nil {
@@ -391,7 +400,12 @@ func (s *Server) subscriptionDomainValidator(primary string) gin.HandlerFunc {
 	primary = normalizeRequestHost(primary)
 	return func(c *gin.Context) {
 		host := normalizeRequestHost(c.Request.Host)
-		if host == primary {
+		domains, err := s.settingService.GetSubscriptionAllowedHosts(primary)
+		if err != nil {
+			c.AbortWithStatus(http.StatusServiceUnavailable)
+			return
+		}
+		if len(domains) == 0 || domains[host] {
 			c.Next()
 			return
 		}

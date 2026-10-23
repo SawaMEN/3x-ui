@@ -20,6 +20,7 @@ import { catTabLabel } from './catTabLabel';
 import { sanitizePath, normalizePath } from './uriPath';
 import HappSettingsContent from './HappSettingsContent';
 import { remoteSourceBadge } from './subscriptionShared';
+import SubscriptionDomains from './SubscriptionDomains';
 
 interface SubscriptionGeneralTabProps {
   allSetting: AllSetting;
@@ -134,6 +135,7 @@ export default function SubscriptionGeneralTab({
                   }
                 />
               )}
+              <SubscriptionDomains allSetting={allSetting} updateSetting={updateSetting} />
               <SettingListItem
                 paddings="small"
                 title={t('pages.settings.subListen')}
@@ -388,6 +390,62 @@ export default function SubscriptionGeneralTab({
                   metadataOnly
                 />
               </SettingListItem>
+              <SettingListItem
+                paddings="small"
+                title={t('pages.settings.subAppearanceEnable')}
+                description={t('pages.settings.subAppearanceDesc')}
+              >
+                <Switch
+                  checked={allSetting.subAppearanceEnable}
+                  onChange={(v) => updateSetting({ subAppearanceEnable: v })}
+                />
+              </SettingListItem>
+              {allSetting.subAppearanceEnable && (
+                <>
+                  <SettingListItem paddings="small" title={t('pages.settings.subAppearanceTitle')}>
+                    <Input
+                      value={allSetting.subAppearanceTitle}
+                      maxLength={160}
+                      onChange={(e) => updateSetting({ subAppearanceTitle: e.target.value })}
+                    />
+                  </SettingListItem>
+                  <SettingListItem
+                    paddings="small"
+                    title={t('pages.settings.subAppearanceDescription')}
+                  >
+                    <Input.TextArea
+                      rows={3}
+                      maxLength={2000}
+                      value={allSetting.subAppearanceDescription}
+                      onChange={(e) => updateSetting({ subAppearanceDescription: e.target.value })}
+                    />
+                  </SettingListItem>
+                  <SettingListItem
+                    paddings="small"
+                    title={t('pages.settings.subAppearanceLogoURL')}
+                  >
+                    <Input
+                      placeholder="https://example.com/logo.png"
+                      value={allSetting.subAppearanceLogoURL}
+                      onChange={(e) => updateSetting({ subAppearanceLogoURL: e.target.value })}
+                    />
+                  </SettingListItem>
+                  <SettingListItem paddings="small" title={t('pages.settings.subAppearanceAccent')}>
+                    <Input
+                      type="color"
+                      aria-label={t('pages.settings.subAppearanceAccent')}
+                      value={allSetting.subAppearanceAccent}
+                      onChange={(e) => updateSetting({ subAppearanceAccent: e.target.value })}
+                    />
+                  </SettingListItem>
+                  <Alert
+                    showIcon
+                    type="info"
+                    style={{ margin: '12px 20px' }}
+                    title={t('pages.settings.subAppearancePreviewHint')}
+                  />
+                </>
+              )}
               <SettingListItem
                 paddings="small"
                 title={t('pages.settings.subThemeDir')}

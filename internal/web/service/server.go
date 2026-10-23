@@ -1372,6 +1372,7 @@ func (s *ServerService) GetMigration() ([]byte, string, error) {
 // destination unreachable on its own address, or impersonating the source.
 var hostBoundSettingKeys = []string{
 	"webListen", "webDomain", "webPort", "webCertFile", "webKeyFile", "webBasePath",
+	"subPublicURL", "subAllowedDomains", "subCDNEnable",
 	"subListen", "subDomain", "subPort", "subCertFile", "subKeyFile", "subURI", "subJsonURI",
 	"secret", "panelGuid",
 	"nodeMtlsCaCertPem", "nodeMtlsCaKeyPem", "nodeMtlsClientCertPem",

@@ -2088,7 +2088,25 @@
         "updateComponentFailed": "Could not update {component}.",
         "partialUpdate": "System packages were updated, but these components could not be updated: {components}.",
         "rebootFailed": "Could not start the server reboot."
-      }
+      },
+      "rootRedirectEnable": "Domain root redirect",
+      "rootRedirectDesc": "Redirects GET/HEAD requests to / on the panel and subscription listeners. Choose a site or enter your own URL. Other routes keep working. If the panel path is /, open /?panel=1 to sign in. DNS and HTTPS must already point to this server.",
+      "rootRedirectURL": "Destination website",
+      "subAppearanceEnable": "Custom subscription appearance",
+      "subAppearanceDesc": "Minimal style inspired by WhiteMAX: centered heading, neutral background, subtle grid and rounded buttons. Disabling restores the standard page. A custom template directory takes priority.",
+      "subAppearanceTitle": "Page title",
+      "subAppearanceDescription": "Page description",
+      "subAppearanceLogoURL": "Logo URL (HTTP/HTTPS)",
+      "subAppearanceAccent": "Accent color",
+      "subAppearancePreviewHint": "Save settings, then open a client subscription link in a browser to see the page. Empty title uses the subscription title.",
+      "subPublicURL": "Public subscription address",
+      "subPublicURLDesc": "Separate from the panel: https://sub.example.com. This address takes priority over the per-format URLs below; paths are appended automatically. DNS must point to your reverse proxy or CDN.",
+      "subAllowedDomains": "Additional subscription domains",
+      "subAllowedDomainsDesc": "Comma-separated hostnames. The primary subscription domain and public address are allowed automatically. These domains serve subscriptions, not the admin panel.",
+      "subCDNEnable": "Subscription through CDN",
+      "subCDNDesc": "Requires a public HTTPS address. Prevents CDN caching of personal subscription responses. In Cloudflare, use Full (strict), bypass cache and disable browser challenges for subscription URLs. CDN DNS records and certificates are configured outside the panel.",
+      "subReverseProxy": "Caddy reverse proxy configuration",
+      "subReverseProxyDesc": "Run Caddy on the same server with ports 80/443 available. It obtains the public certificate automatically. Keep the subscription listener on 127.0.0.1 and direct the subscription domain to this server; the panel stays on its own address."
     },
     "xray": {
       "restartSuccess": "Xray has been successfully relaunched.",

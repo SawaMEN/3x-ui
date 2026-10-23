@@ -216,6 +216,12 @@
           "restartXrayOnClientDisable": {
             "type": "boolean"
           },
+          "rootRedirectEnable": {
+            "type": "boolean"
+          },
+          "rootRedirectURL": {
+            "type": "string"
+          },
           "sessionMaxAge": {
             "maximum": 525600,
             "minimum": 1,
@@ -263,8 +269,29 @@
           "smtpUsername": {
             "type": "string"
           },
+          "subAllowedDomains": {
+            "type": "string"
+          },
           "subAnnounce": {
             "type": "string"
+          },
+          "subAppearanceAccent": {
+            "type": "string"
+          },
+          "subAppearanceDescription": {
+            "type": "string"
+          },
+          "subAppearanceEnable": {
+            "type": "boolean"
+          },
+          "subAppearanceLogoURL": {
+            "type": "string"
+          },
+          "subAppearanceTitle": {
+            "type": "string"
+          },
+          "subCDNEnable": {
+            "type": "boolean"
           },
           "subCalendarExpireInclusive": {
             "type": "boolean"
@@ -446,6 +473,9 @@
           "subProfileUrl": {
             "type": "string"
           },
+          "subPublicURL": {
+            "type": "string"
+          },
           "subRoutingRules": {
             "type": "string"
           },
@@ -596,6 +626,8 @@
           "realityScanCandidates",
           "remarkTemplate",
           "restartXrayOnClientDisable",
+          "rootRedirectEnable",
+          "rootRedirectURL",
           "sessionMaxAge",
           "smtpCpu",
           "smtpEnable",
@@ -609,7 +641,14 @@
           "smtpPort",
           "smtpTo",
           "smtpUsername",
+          "subAllowedDomains",
           "subAnnounce",
+          "subAppearanceAccent",
+          "subAppearanceDescription",
+          "subAppearanceEnable",
+          "subAppearanceLogoURL",
+          "subAppearanceTitle",
+          "subCDNEnable",
           "subCalendarExpireInclusive",
           "subCertFile",
           "subClashAutoDetect",
@@ -669,6 +708,7 @@
           "subPort",
           "subProfileMode",
           "subProfileUrl",
+          "subPublicURL",
           "subRoutingRules",
           "subShowIdentityOnAllLinks",
           "subSupportUrl",
@@ -875,6 +915,12 @@
           "restartXrayOnClientDisable": {
             "type": "boolean"
           },
+          "rootRedirectEnable": {
+            "type": "boolean"
+          },
+          "rootRedirectURL": {
+            "type": "string"
+          },
           "sessionMaxAge": {
             "maximum": 525600,
             "minimum": 1,
@@ -922,8 +968,29 @@
           "smtpUsername": {
             "type": "string"
           },
+          "subAllowedDomains": {
+            "type": "string"
+          },
           "subAnnounce": {
             "type": "string"
+          },
+          "subAppearanceAccent": {
+            "type": "string"
+          },
+          "subAppearanceDescription": {
+            "type": "string"
+          },
+          "subAppearanceEnable": {
+            "type": "boolean"
+          },
+          "subAppearanceLogoURL": {
+            "type": "string"
+          },
+          "subAppearanceTitle": {
+            "type": "string"
+          },
+          "subCDNEnable": {
+            "type": "boolean"
           },
           "subCalendarExpireInclusive": {
             "type": "boolean"
@@ -1105,6 +1172,9 @@
           "subProfileUrl": {
             "type": "string"
           },
+          "subPublicURL": {
+            "type": "string"
+          },
           "subRoutingRules": {
             "type": "string"
           },
@@ -1263,6 +1333,8 @@
           "realityScanCandidates",
           "remarkTemplate",
           "restartXrayOnClientDisable",
+          "rootRedirectEnable",
+          "rootRedirectURL",
           "sessionMaxAge",
           "smtpCpu",
           "smtpEnable",
@@ -1276,7 +1348,14 @@
           "smtpPort",
           "smtpTo",
           "smtpUsername",
+          "subAllowedDomains",
           "subAnnounce",
+          "subAppearanceAccent",
+          "subAppearanceDescription",
+          "subAppearanceEnable",
+          "subAppearanceLogoURL",
+          "subAppearanceTitle",
+          "subCDNEnable",
           "subCalendarExpireInclusive",
           "subCertFile",
           "subClashAutoDetect",
@@ -1336,6 +1415,7 @@
           "subPort",
           "subProfileMode",
           "subProfileUrl",
+          "subPublicURL",
           "subRoutingRules",
           "subShowIdentityOnAllLinks",
           "subSupportUrl",

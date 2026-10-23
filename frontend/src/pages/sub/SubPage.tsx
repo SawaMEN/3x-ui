@@ -10,6 +10,7 @@ import {
   Tabs,
   Typography,
   message,
+  theme,
 } from 'antd';
 import type { TabsProps } from 'antd';
 import {
@@ -37,6 +38,7 @@ import {
   resolveSubStatus,
 } from './subPageModel';
 import './SubPage.css';
+import './SubMinimal.css';
 
 const subData = window.__SUB_PAGE_DATA__ || {};
 
@@ -44,7 +46,8 @@ const sId = subData.sId || '';
 const subUrl = subData.subUrl || '';
 const subJsonUrl = subData.subJsonUrl || '';
 const subClashUrl = subData.subClashUrl || '';
-const subTitle = subData.subTitle || '';
+const appearance = subData.appearance?.enabled ? subData.appearance : undefined;
+const subTitle = appearance?.title || subData.subTitle || '';
 const subSupportUrl = subData.subSupportUrl || '';
 const updateHours = Number(subData.subUpdates || 0);
 const announce = subData.announce || '';
@@ -288,13 +291,30 @@ export default function SubPage() {
   }, [t, copy, open, telemtData, telemtLoading, telemtError]);
 
   const direction = RTL_LANGUAGES.has(lang) ? 'rtl' : 'ltr';
-  const pageClass = ['subscription-page', isDark && 'is-dark', isUltra && 'is-ultra']
+  const pageClass = [
+    'subscription-page',
+    isDark && 'is-dark',
+    isUltra && 'is-ultra',
+    appearance && 'sub-minimal',
+  ]
     .filter(Boolean)
     .join(' ');
 
-  const themeConfig = antdThemeConfig;
+  const themeConfig = appearance
+    ? {
+        algorithm: isDark ? theme.darkAlgorithm : theme.defaultAlgorithm,
+        token: {
+          colorPrimary: appearance.accent,
+          colorBgLayout: isDark ? '#2a2a2e' : '#f2f2f5',
+          colorBgContainer: isDark ? '#303034' : '#ffffff',
+          colorText: isDark ? '#f5f5f5' : '#1a1a1a',
+          borderRadius: 16,
+          fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
+        },
+      }
+    : antdThemeConfig;
   const subscriptionStyle = {
-    '--sub-accent': antdThemeConfig.token?.colorPrimary,
+    '--sub-accent': appearance?.accent || antdThemeConfig.token?.colorPrimary,
     '--sub-grad-from': antdThemeConfig.token?.colorPrimary,
     '--sub-ink-from': antdThemeConfig.token?.colorPrimary,
     '--bg-page': antdThemeConfig.token?.colorBgLayout,
@@ -312,11 +332,28 @@ export default function SubPage() {
           <Card className="sub-card">
             <SubHeader
               title={subTitle}
+              logoURL={appearance?.logoURL}
               sId={sId}
               email={clientEmail}
               lang={lang}
               onLangChange={onLangChange}
             />
+            {appearance?.description && (
+              <p className="sub-minimal-description" dir="auto">
+                {appearance.description}
+              </p>
+            )}
+            {appearance && subUrl && (
+              <Button
+                type="primary"
+                size="large"
+                className="sub-minimal-connect"
+                icon={<LinkOutlined />}
+                onClick={() => void copy(subUrl)}
+              >
+                {t('pages.inbounds.copyLink')}
+              </Button>
+            )}
             {announce && <Alert type="info" showIcon title={announce} className="sub-announce" />}
             <SubHero {...heroData} lang={lang} />
             {tabs.length > 0 && <Tabs className="sub-tabs" tabBarGutter={24} items={tabs} />}

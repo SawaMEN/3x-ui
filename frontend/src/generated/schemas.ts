@@ -190,6 +190,12 @@ export const SCHEMAS: Record<string, unknown> = {
       "restartXrayOnClientDisable": {
         "type": "boolean"
       },
+      "rootRedirectEnable": {
+        "type": "boolean"
+      },
+      "rootRedirectURL": {
+        "type": "string"
+      },
       "sessionMaxAge": {
         "maximum": 525600,
         "minimum": 1,
@@ -237,8 +243,29 @@ export const SCHEMAS: Record<string, unknown> = {
       "smtpUsername": {
         "type": "string"
       },
+      "subAllowedDomains": {
+        "type": "string"
+      },
       "subAnnounce": {
         "type": "string"
+      },
+      "subAppearanceAccent": {
+        "type": "string"
+      },
+      "subAppearanceDescription": {
+        "type": "string"
+      },
+      "subAppearanceEnable": {
+        "type": "boolean"
+      },
+      "subAppearanceLogoURL": {
+        "type": "string"
+      },
+      "subAppearanceTitle": {
+        "type": "string"
+      },
+      "subCDNEnable": {
+        "type": "boolean"
       },
       "subCalendarExpireInclusive": {
         "type": "boolean"
@@ -420,6 +447,9 @@ export const SCHEMAS: Record<string, unknown> = {
       "subProfileUrl": {
         "type": "string"
       },
+      "subPublicURL": {
+        "type": "string"
+      },
       "subRoutingRules": {
         "type": "string"
       },
@@ -570,6 +600,8 @@ export const SCHEMAS: Record<string, unknown> = {
       "realityScanCandidates",
       "remarkTemplate",
       "restartXrayOnClientDisable",
+      "rootRedirectEnable",
+      "rootRedirectURL",
       "sessionMaxAge",
       "smtpCpu",
       "smtpEnable",
@@ -583,7 +615,14 @@ export const SCHEMAS: Record<string, unknown> = {
       "smtpPort",
       "smtpTo",
       "smtpUsername",
+      "subAllowedDomains",
       "subAnnounce",
+      "subAppearanceAccent",
+      "subAppearanceDescription",
+      "subAppearanceEnable",
+      "subAppearanceLogoURL",
+      "subAppearanceTitle",
+      "subCDNEnable",
       "subCalendarExpireInclusive",
       "subCertFile",
       "subClashAutoDetect",
@@ -643,6 +682,7 @@ export const SCHEMAS: Record<string, unknown> = {
       "subPort",
       "subProfileMode",
       "subProfileUrl",
+      "subPublicURL",
       "subRoutingRules",
       "subShowIdentityOnAllLinks",
       "subSupportUrl",
@@ -849,6 +889,12 @@ export const SCHEMAS: Record<string, unknown> = {
       "restartXrayOnClientDisable": {
         "type": "boolean"
       },
+      "rootRedirectEnable": {
+        "type": "boolean"
+      },
+      "rootRedirectURL": {
+        "type": "string"
+      },
       "sessionMaxAge": {
         "maximum": 525600,
         "minimum": 1,
@@ -896,8 +942,29 @@ export const SCHEMAS: Record<string, unknown> = {
       "smtpUsername": {
         "type": "string"
       },
+      "subAllowedDomains": {
+        "type": "string"
+      },
       "subAnnounce": {
         "type": "string"
+      },
+      "subAppearanceAccent": {
+        "type": "string"
+      },
+      "subAppearanceDescription": {
+        "type": "string"
+      },
+      "subAppearanceEnable": {
+        "type": "boolean"
+      },
+      "subAppearanceLogoURL": {
+        "type": "string"
+      },
+      "subAppearanceTitle": {
+        "type": "string"
+      },
+      "subCDNEnable": {
+        "type": "boolean"
       },
       "subCalendarExpireInclusive": {
         "type": "boolean"
@@ -1079,6 +1146,9 @@ export const SCHEMAS: Record<string, unknown> = {
       "subProfileUrl": {
         "type": "string"
       },
+      "subPublicURL": {
+        "type": "string"
+      },
       "subRoutingRules": {
         "type": "string"
       },
@@ -1237,6 +1307,8 @@ export const SCHEMAS: Record<string, unknown> = {
       "realityScanCandidates",
       "remarkTemplate",
       "restartXrayOnClientDisable",
+      "rootRedirectEnable",
+      "rootRedirectURL",
       "sessionMaxAge",
       "smtpCpu",
       "smtpEnable",
@@ -1250,7 +1322,14 @@ export const SCHEMAS: Record<string, unknown> = {
       "smtpPort",
       "smtpTo",
       "smtpUsername",
+      "subAllowedDomains",
       "subAnnounce",
+      "subAppearanceAccent",
+      "subAppearanceDescription",
+      "subAppearanceEnable",
+      "subAppearanceLogoURL",
+      "subAppearanceTitle",
+      "subCDNEnable",
       "subCalendarExpireInclusive",
       "subCertFile",
       "subClashAutoDetect",
@@ -1310,6 +1389,7 @@ export const SCHEMAS: Record<string, unknown> = {
       "subPort",
       "subProfileMode",
       "subProfileUrl",
+      "subPublicURL",
       "subRoutingRules",
       "subShowIdentityOnAllLinks",
       "subSupportUrl",

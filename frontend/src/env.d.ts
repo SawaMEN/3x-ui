@@ -1,6 +1,13 @@
 /// <reference types="vite/client" />
 
 interface SubPageData {
+  appearance?: {
+    enabled: boolean;
+    title: string;
+    description: string;
+    logoURL: string;
+    accent: string;
+  };
   sId?: string;
   enabled?: boolean;
   download?: string;

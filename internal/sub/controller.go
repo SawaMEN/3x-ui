@@ -649,6 +649,10 @@ func (a *SUBController) serveSubPage(c *gin.Context, basePath string, page PageD
 	}
 
 	subData := a.subPageContext(page)
+	appearance, err := a.settingService.GetSubscriptionAppearance()
+	if err == nil {
+		subData["appearance"] = appearance
+	}
 
 	// When an admin has configured a custom subscription theme, render it
 	// instead of the default SPA. We render into a buffer first so a template
