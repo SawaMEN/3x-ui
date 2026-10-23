@@ -21,13 +21,16 @@ export default function SnellFields() {
       <Alert type="info" showIcon description={t('pages.inbounds.form.snellHint')} />
       <Button onClick={() => preset(6)}>{t('pages.inbounds.form.snellAuto')}</Button>
       <Button onClick={() => preset(5)}>{t('pages.inbounds.form.snellCompatible')}</Button>
-      <FormField name={['settings', 'version']} label={t('pages.inbounds.form.snellVersion')}>
+      <FormField
+        name={['settings', 'version']}
+        label={t('pages.inbounds.form.snellVersion')}
+        onAfterChange={(v) => preset(v === 5 ? 5 : 6)}
+      >
         <Select
           options={[
             { value: 6, label: 'v6' },
             { value: 5, label: 'v5 (v4 client, no QUIC Proxy)' },
           ]}
-          onChange={(v: 5 | 6) => preset(v)}
         />
       </FormField>
       <FormField name={['settings', 'psk']} label="PSK">
