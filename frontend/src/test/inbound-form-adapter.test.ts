@@ -294,6 +294,45 @@ describe('formValuesToWirePayload', () => {
   });
 });
 
+describe('Snell version-specific form serialization', () => {
+  it('omits old HTTP obfuscation fields for v6', () => {
+    const values = rawInboundToFormValues({
+      ...vlessRow,
+      protocol: 'snell',
+      settings: {
+        version: 6,
+        psk: 'a-secure-psk-for-version-6',
+        mode: 'default',
+        obfsMode: 'none',
+        obfsHost: 'unused.example',
+        clients: [],
+      },
+    });
+    const settings = JSON.parse(formValuesToWirePayload(values).settings);
+    expect(settings.version).toBe(6);
+    expect(settings).not.toHaveProperty('obfsMode');
+    expect(settings).not.toHaveProperty('obfsHost');
+  });
+  it('omits traffic shaping and unused Host for v5', () => {
+    const values = rawInboundToFormValues({
+      ...vlessRow,
+      protocol: 'snell',
+      settings: {
+        version: 5,
+        psk: 'existing-psk',
+        mode: 'default',
+        obfsMode: 'none',
+        obfsHost: 'unused.example',
+        clients: [],
+      },
+    });
+    const settings = JSON.parse(formValuesToWirePayload(values).settings);
+    expect(settings.version).toBe(5);
+    expect(settings).not.toHaveProperty('mode');
+    expect(settings).not.toHaveProperty('obfsHost');
+  });
+});
+
 describe('disableFlow', () => {
   it('DBInbound constructor preserves disableFlow from the API row', () => {
     expect(new DBInbound({ disableFlow: true }).disableFlow).toBe(true);

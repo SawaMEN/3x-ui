@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import registry from '@/pages/singbox/native-outbound-fields.json';
+import { dedicatedFields } from '@/pages/singbox/ProtocolOptionFields';
 import { autoConfigureOutbound } from '@/pages/singbox/outbound-automation';
 import {
   optionVisible,
@@ -47,6 +48,15 @@ describe('automatic native protocol configuration', () => {
       [{ protocol: 'TCP', port: 8443 }],
     );
   });
+  it('renders each Snell field only once; network and reuse stay advanced', () => {
+    const dedicated = dedicatedFields('snell');
+    for (const field of ['psk', 'userkey', 'version', 'mode', 'obfs_mode', 'obfs_host']) {
+      expect(dedicated.has(field)).toBe(true);
+    }
+    expect(dedicated.has('network')).toBe(false);
+    expect(dedicated.has('reuse')).toBe(false);
+  });
+
   it('cleans only incompatible version-dependent fields', () => {
     const schema = registry.protocols.snell as OptionSchema;
     const configured = patchOption(

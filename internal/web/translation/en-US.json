@@ -830,6 +830,7 @@
         "snellCompatible": "Compatible v5 / v4",
         "snellMode": "Traffic mode",
         "snellVersion": "Snell version",
+        "snellAdvanced": "Additional Snell settings",
         "snellPskHint": "Leave PSK blank for automatic generation on save. A custom v6 PSK must be 12–255 bytes. Changing PSK requires clients to refresh their subscriptions.",
         "snellModeHint": "default is the recommended protected mode; unshaped disables traffic shaping. Insecure unsafe-raw is deliberately unavailable.",
         "snellObfs": "HTTP obfuscation",
