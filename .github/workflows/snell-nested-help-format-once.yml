@@ -1,0 +1,33 @@
+name: One-time Snell nested help formatting
+on:
+  push:
+    branches:
+      - fix/snell-reliability
+    paths:
+      - .github/workflows/snell-nested-help-format-once.yml
+permissions:
+  contents: write
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+      - name: Format
+        working-directory: frontend
+        run: npx oxfmt src/pages/singbox/snell-help.ts src/pages/singbox/ProtocolOptionFields.tsx src/test/native-protocol-option-fields.test.tsx
+      - name: Commit
+        run: |
+          if git diff --quiet -- frontend; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend
+          git commit -m "chore(snell): format nested help"
+          git push origin HEAD:fix/snell-reliability
