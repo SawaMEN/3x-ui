@@ -9,6 +9,7 @@ const SnellInboundBaseSchema = z.object({
   mode: z.enum(['default', 'unshaped']).default('default'),
   obfsMode: z.enum(['none', 'http']).default('none'),
   obfsHost: z.string().default('bing.com'),
+  quicProxy: z.boolean().default(false),
   clients: z.array(NaiveClientSchema).default([]),
 });
 
@@ -23,6 +24,13 @@ export const SnellInboundSettingsSchema = SnellInboundBaseSchema.superRefine((va
       code: 'custom',
       path: ['psk'],
       message: 'PSK must not contain control characters',
+    });
+  }
+  if (value.version === 6 && value.quicProxy) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['quicProxy'],
+      message: 'Snell QUIC Proxy is supported only with v5',
     });
   }
   if (value.version === 6 && value.psk !== '') {

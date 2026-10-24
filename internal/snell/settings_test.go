@@ -2,6 +2,7 @@ package snell
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -133,5 +134,31 @@ func TestSnellRejectsInvalidSecretsAndDuplicateUsers(t *testing.T) {
 	}
 	if _, err := Parse(`{"version":6,"psk":"123456789012","mode":"unsafe-raw"}`); err == nil || !strings.Contains(err.Error(), "mode") {
 		t.Fatal("unsafe-raw must not be enabled by presets or accepted by the panel")
+	}
+}
+
+func TestSnellRejectsOverlongUserKey(t *testing.T) {
+	userKey := strings.Repeat("x", 256)
+	_, err := Parse(`{"version":5,"psk":"secret","clients":[{"email":"alice","password":"` + userKey + `","enable":true}]}`)
+	if err == nil || !strings.Contains(err.Error(), "255") {
+		t.Fatalf("expected invalid userkey length, got %v", err)
+	}
+}
+
+func TestSnellQuicOnlyForV5(t *testing.T) {
+	for _, tt := range []struct {
+		version int
+		wantOK bool
+	}{
+		{version: 5, wantOK: true},
+		{version: 6, wantOK: false},
+	} {
+		settings, err := Parse(fmt.Sprintf(`{"version":%d,"psk":"123456789012","quicProxy":true}`, tt.version))
+		if tt.wantOK && (err != nil || !settings.QuicProxy) {
+			t.Fatalf("v%d should support QUIC Proxy: %v", tt.version, err)
+		}
+		if !tt.wantOK && err == nil {
+			t.Fatalf("v%d must reject QUIC Proxy", tt.version)
+		}
 	}
 }

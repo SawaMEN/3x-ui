@@ -18,6 +18,7 @@ type Settings struct {
 	Mode     string         `json:"mode"`
 	ObfsMode string         `json:"obfsMode"`
 	ObfsHost string         `json:"obfsHost"`
+	QuicProxy bool          `json:"quicProxy,omitempty"`
 	Clients  []model.Client `json:"clients"`
 }
 
@@ -47,6 +48,9 @@ func Parse(raw string) (Settings, error) {
 		return s, fmt.Errorf("Snell requires a PSK without control characters")
 	}
 	if s.Version == 6 {
+		if s.QuicProxy {
+			return s, fmt.Errorf("Snell QUIC Proxy is only supported by v5")
+		}
 		if len(s.PSK) < 12 || len(s.PSK) > 255 {
 			return s, fmt.Errorf("Snell v6 PSK must be 12..255 bytes")
 		}
@@ -82,6 +86,9 @@ func Parse(raw string) (Settings, error) {
 		}
 		if containsControl(name) || containsControl(c.Password) {
 			return s, fmt.Errorf("Snell user names and keys cannot contain control characters")
+		}
+		if len(c.Password) > 255 {
+			return s, fmt.Errorf("Snell user key must be at most 255 bytes")
 		}
 		if seenNames[strings.ToLower(name)] {
 			return s, fmt.Errorf("Snell client names must be unique")
@@ -157,6 +164,7 @@ func Prepare(ib *model.Inbound, previous string) error {
 		return err
 	}
 	if s.Version == 6 {
+		delete(raw, "quicProxy")
 		delete(raw, "obfsMode")
 		delete(raw, "obfsHost")
 		if s.Mode == "" || s.Mode == "default" {
@@ -164,6 +172,9 @@ func Prepare(ib *model.Inbound, previous string) error {
 		}
 	} else {
 		delete(raw, "mode")
+		if !s.QuicProxy {
+			delete(raw, "quicProxy")
+		}
 		if s.ObfsMode == "" || s.ObfsMode == "none" {
 			delete(raw, "obfsMode")
 			delete(raw, "obfsHost")
