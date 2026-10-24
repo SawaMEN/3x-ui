@@ -79,6 +79,8 @@ export const AllSettingSchema = z.object({
   realityScanCandidates: z.string(),
   remarkTemplate: z.string(),
   restartXrayOnClientDisable: z.boolean(),
+  rootRedirectEnable: z.boolean(),
+  rootRedirectURL: z.string(),
   sessionMaxAge: z.number().int().min(1).max(525600),
   smtpCpu: z.number().int().min(0).max(100),
   smtpEnable: z.boolean(),
@@ -92,7 +94,14 @@ export const AllSettingSchema = z.object({
   smtpPort: z.number().int().min(1).max(65535),
   smtpTo: z.string(),
   smtpUsername: z.string(),
+  subAllowedDomains: z.string(),
   subAnnounce: z.string(),
+  subAppearanceAccent: z.string(),
+  subAppearanceDescription: z.string(),
+  subAppearanceEnable: z.boolean(),
+  subAppearanceLogoURL: z.string(),
+  subAppearanceTitle: z.string(),
+  subCDNEnable: z.boolean(),
   subCalendarExpireInclusive: z.boolean(),
   subCertFile: z.string(),
   subClashAutoDetect: z.boolean(),
@@ -152,6 +161,7 @@ export const AllSettingSchema = z.object({
   subPort: z.number().int().min(1).max(65535),
   subProfileMode: z.string(),
   subProfileUrl: z.string(),
+  subPublicURL: z.string(),
   subRoutingRules: z.string(),
   subShowIdentityOnAllLinks: z.boolean(),
   subSupportUrl: z.string(),
@@ -239,6 +249,8 @@ export const AllSettingViewSchema = z.object({
   realityScanCandidates: z.string(),
   remarkTemplate: z.string(),
   restartXrayOnClientDisable: z.boolean(),
+  rootRedirectEnable: z.boolean(),
+  rootRedirectURL: z.string(),
   sessionMaxAge: z.number().int().min(1).max(525600),
   smtpCpu: z.number().int().min(0).max(100),
   smtpEnable: z.boolean(),
@@ -252,7 +264,14 @@ export const AllSettingViewSchema = z.object({
   smtpPort: z.number().int().min(1).max(65535),
   smtpTo: z.string(),
   smtpUsername: z.string(),
+  subAllowedDomains: z.string(),
   subAnnounce: z.string(),
+  subAppearanceAccent: z.string(),
+  subAppearanceDescription: z.string(),
+  subAppearanceEnable: z.boolean(),
+  subAppearanceLogoURL: z.string(),
+  subAppearanceTitle: z.string(),
+  subCDNEnable: z.boolean(),
   subCalendarExpireInclusive: z.boolean(),
   subCertFile: z.string(),
   subClashAutoDetect: z.boolean(),
@@ -312,6 +331,7 @@ export const AllSettingViewSchema = z.object({
   subPort: z.number().int().min(1).max(65535),
   subProfileMode: z.string(),
   subProfileUrl: z.string(),
+  subPublicURL: z.string(),
   subRoutingRules: z.string(),
   subShowIdentityOnAllLinks: z.boolean(),
   subSupportUrl: z.string(),
@@ -539,6 +559,68 @@ export const ClientsSummarySchema = z.object({
   total: z.number().int(),
 });
 export type ClientsSummary = z.infer<typeof ClientsSummarySchema>;
+
+export const DomainFrontCertificateSchema = z.object({
+  autoRenew: z.boolean(),
+  certFile: z.string(),
+  daysLeft: z.number().int(),
+  error: z.string(),
+  expiresAt: z.number().int(),
+  issuer: z.string(),
+  mode: z.string(),
+  name: z.string(),
+  renewal: z.string(),
+  source: z.string(),
+  state: z.string(),
+});
+export type DomainFrontCertificate = z.infer<typeof DomainFrontCertificateSchema>;
+
+export const DomainFrontCheckSchema = z.object({
+  addresses: z.array(z.string()),
+  checkedAt: z.number().int(),
+  daysLeft: z.number().int(),
+  error: z.string(),
+  expiresAt: z.number().int(),
+  issuer: z.string(),
+  name: z.string(),
+});
+export type DomainFrontCheck = z.infer<typeof DomainFrontCheckSchema>;
+
+export const DomainFrontConfigSchema = z.object({
+  acceptTerms: z.boolean(),
+  domains: z.array(z.lazy(() => DomainFrontDomainSchema)),
+  email: z.string(),
+  enabled: z.boolean(),
+  httpPort: z.number().int(),
+  httpsPort: z.number().int(),
+  listen: z.string(),
+  publicPort: z.number().int(),
+  staging: z.boolean(),
+  subscriptionDomain: z.string(),
+});
+export type DomainFrontConfig = z.infer<typeof DomainFrontConfigSchema>;
+
+export const DomainFrontDomainSchema = z.object({
+  certFile: z.string(),
+  enabled: z.boolean(),
+  inboundIds: z.array(z.number().int()),
+  keyFile: z.string(),
+  mode: z.string(),
+  name: z.string(),
+  origin: z.string(),
+  panel: z.boolean(),
+  tls: z.string(),
+});
+export type DomainFrontDomain = z.infer<typeof DomainFrontDomainSchema>;
+
+export const DomainFrontStatusSchema = z.object({
+  certificates: z.array(z.lazy(() => DomainFrontCertificateSchema)),
+  config: z.lazy(() => DomainFrontConfigSchema),
+  error: z.string(),
+  existingCertificates: z.array(z.lazy(() => DomainFrontCertificateSchema)).optional(),
+  running: z.boolean(),
+});
+export type DomainFrontStatus = z.infer<typeof DomainFrontStatusSchema>;
 
 export const FallbackParentInfoSchema = z.object({
   masterId: z.number().int(),

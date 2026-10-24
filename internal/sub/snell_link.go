@@ -29,10 +29,14 @@ func (s *SubService) genSnellLink(ib *model.Inbound, email string) string {
 		for _, ep := range s.shareEndpointsForInbound(ib) {
 			q := url.Values{"version": {strconv.Itoa(settings.ClientVersion())}, "userkey": {c.Password}}
 			if settings.Version == 6 {
-				q.Set("mode", settings.Mode)
+				if settings.Mode != "" && settings.Mode != "default" {
+					q.Set("mode", settings.Mode)
+				}
 			} else {
-				q.Set("obfs", settings.ObfsMode)
-				if settings.ObfsHost != "" {
+				if settings.ObfsMode != "" && settings.ObfsMode != "none" {
+					q.Set("obfs", settings.ObfsMode)
+				}
+				if settings.ObfsMode == "http" && settings.ObfsHost != "" {
 					q.Set("obfs-host", settings.ObfsHost)
 				}
 			}

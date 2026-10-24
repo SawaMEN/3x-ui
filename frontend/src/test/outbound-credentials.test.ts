@@ -84,6 +84,16 @@ describe('protocol credential generation', () => {
 });
 
 describe('protocol-specific automatic requirements', () => {
+  it('does not invent a Snell PSK for a server it does not control', () => {
+    const result = autoConfigureOutbound({ type: 'snell', tag: 'snell', server: 'vpn.test' });
+    expect(result).toMatchObject({ server_port: 443, version: 6 });
+    expect(result).not.toHaveProperty('psk');
+    expect(result).not.toHaveProperty('userkey');
+    expect(generateOutboundCredentials({ type: 'snell' }, true)).not.toHaveProperty('psk');
+    expect(
+      autoConfigureOutbound({ ...result, psk: 'server-psk', userkey: 'server-user' }),
+    ).toMatchObject({ psk: 'server-psk', userkey: 'server-user' });
+  });
   it('enables the TLS required by TrustTunnel and generates authentication', () => {
     expect(autoConfigureOutbound({ type: 'trusttunnel', server: 'vpn.test' })).toMatchObject({
       tls: { enabled: true, server_name: 'vpn.test' },

@@ -66,22 +66,25 @@ import ProtocolOptionFields from './ProtocolOptionFields';
 import nativeFields from './native-outbound-fields.json';
 import { patchOption, type OptionSchema } from './protocol-option-model';
 import MasqueConnectionFields from './MasqueConnectionFields';
+import { snellHelp } from './snell-help';
 import './SingBoxOutboundModal.css';
 function Field({
   label,
   children,
   wide = false,
   hint,
+  tooltip,
 }: {
   label: string;
   children: ReactNode;
   wide?: boolean;
   hint?: string;
+  tooltip?: string;
 }) {
   const id = useId();
   return (
     <Col xs={24} sm={wide ? 24 : 12}>
-      <Form.Item label={label} extra={hint} htmlFor={id}>
+      <Form.Item label={label} tooltip={tooltip} extra={hint} htmlFor={id}>
         {isValidElement(children)
           ? cloneElement(children as ReactElement<{ id?: string }>, { id })
           : children}
@@ -251,15 +254,19 @@ export default function SingBoxOutboundModal({
         title={
           type === 'masque'
             ? 'Cloudflare WARP через MASQUE'
-            : 'Автоматическая настройка подключения'
+            : type === 'snell'
+              ? 'Snell: данные берутся с сервера'
+              : 'Автоматическая настройка подключения'
         }
         description={
           type === 'masque'
             ? 'Устройство WARP регистрируется ядром sing-box при первом запуске. Выберите HTTP/3 или HTTP/2, сохраните подключение и примените настройки ядра. Кэш регистрации включается автоматически — свой MASQUE-сервер и отдельные ключи не нужны.'
-            : 'Импортируйте ссылку — адрес, ключи и настройки заполнятся сами. Необязательные параметры выбирает ядро. Недостающие учётные данные создаются автоматически; существующие сохраняются. Новые данные нужно указать и на удалённом сервере.'
+            : type === 'snell'
+              ? 'Импортируйте подписку или укажите PSK с сервера. User key нужен только для многопользовательского сервера. Версия v6 и необязательные настройки выбраны автоматически. Случайные клиентские ключи Snell не создаются.'
+              : 'Импортируйте ссылку — адрес, ключи и настройки заполнятся сами. Необязательные параметры выбирает ядро. Недостающие учётные данные создаются автоматически; существующие сохраняются. Новые данные нужно указать и на удалённом сервере.'
         }
         action={
-          type === 'masque' ? undefined : (
+          type === 'masque' || type === 'snell' ? undefined : (
             <Button
               disabled={!!jsonError || invalidOptions.length > 0}
               onClick={() =>
@@ -276,7 +283,7 @@ export default function SingBoxOutboundModal({
           )
         }
       />
-      {type !== 'masque' && (
+      {type !== 'masque' && type !== 'snell' && (
         <Space wrap style={{ marginBottom: 16 }}>
           <Button
             disabled={!!jsonError || invalidOptions.length > 0}
@@ -334,7 +341,7 @@ export default function SingBoxOutboundModal({
         </Button>
       </Space.Compact>
       <Row gutter={24}>
-        <Field label="Протокол">
+        <Field label="Протокол" tooltip={type === 'snell' ? snellHelp('type') : undefined}>
           <Select
             showSearch
             optionFilterProp="label"
@@ -362,13 +369,20 @@ export default function SingBoxOutboundModal({
             }}
           />
         </Field>
-        <Field label="Название подключения" hint="Используется в маршрутах и группах.">
+        <Field
+          label="Название подключения"
+          hint="Используется в маршрутах и группах."
+          tooltip={type === 'snell' ? snellHelp('tag') : undefined}
+        >
           {input('tag', false, 'proxy')}
         </Field>
         {remote && (
           <>
             {nativeServerTypes.includes(type) && (
-              <Field label="Адрес сервера">
+              <Field
+                label="Адрес сервера"
+                tooltip={type === 'snell' ? snellHelp('server') : undefined}
+              >
                 <Input
                   value={text(draft.server)}
                   onChange={(e) => update(changeServer(draft, e.target.value.trim()))}
@@ -378,7 +392,10 @@ export default function SingBoxOutboundModal({
             )}
             {nativeServerTypes.includes(type) &&
               !['mieru', 'openconnect', 'pingtunnel'].includes(type) && (
-                <Field label="Порт">
+                <Field
+                  label="Порт"
+                  tooltip={type === 'snell' ? snellHelp('server_port') : undefined}
+                >
                   <InputNumber
                     style={{ width: '100%' }}
                     value={typeof draft.server_port === 'number' ? draft.server_port : undefined}
@@ -435,15 +452,60 @@ export default function SingBoxOutboundModal({
             )}
             {type === 'snell' && (
               <>
-                <Field label="PSK">{input('psk', true)}</Field>
-                <Field label="Версия">
+                <Field label="PSK" tooltip={snellHelp('psk')}>
+                  {input('psk', true)}
+                </Field>
+                <Field label="Ключ пользователя" tooltip={snellHelp('userkey')}>
+                  {input('userkey', true)}
+                </Field>
+                <Field label="Версия" tooltip={snellHelp('version')}>
                   <Select
                     aria-label="Версия Snell"
-                    value={draft.version || 4}
-                    options={[4, 6].map((v) => ({ value: v, label: String(v) }))}
-                    onChange={(v) => patch('version', v)}
+                    value={Number(draft.version) === 6 ? 6 : 4}
+                    options={[
+                      { value: 4, label: 'v4 (server v5)' },
+                      { value: 6, label: 'v6' },
+                    ]}
+                    onChange={(v) => {
+                      const next: ConfigObject = { ...draft, version: v };
+                      delete next.mode;
+                      delete next.obfs_mode;
+                      delete next.obfs_host;
+                      if (v === 6) next.mode = 'default';
+                      else next.obfs_mode = 'none';
+                      update(next);
+                    }}
                   />
                 </Field>
+                {Number(draft.version) === 6 ? (
+                  <Field label="Режим трафика" tooltip={snellHelp('mode')}>
+                    <Select
+                      value={text(draft.mode) || 'default'}
+                      options={options(['default', 'unshaped'])}
+                      onChange={(v) => patch('mode', v)}
+                    />
+                  </Field>
+                ) : (
+                  <>
+                    <Field label="HTTP-маскировка" tooltip={snellHelp('obfs_mode')}>
+                      <Select
+                        value={text(draft.obfs_mode) || 'none'}
+                        options={options(['none', 'http'])}
+                        onChange={(v) => {
+                          const next: ConfigObject = { ...draft, obfs_mode: v };
+                          if (v === 'none') delete next.obfs_host;
+                          else if (!text(next.obfs_host)) next.obfs_host = 'bing.com';
+                          update(next);
+                        }}
+                      />
+                    </Field>
+                    {text(draft.obfs_mode) === 'http' && (
+                      <Field label="HTTP Host" tooltip={snellHelp('obfs_host')}>
+                        {input('obfs_host', false, 'bing.com')}
+                      </Field>
+                    )}
+                  </>
+                )}
               </>
             )}
             {type === 'shadowtls' && (
@@ -567,6 +629,7 @@ export default function SingBoxOutboundModal({
             label="Подключиться через"
             wide
             hint="Без выбора подключение идёт напрямую к серверу."
+            tooltip={type === 'snell' ? snellHelp('detour') : undefined}
           >
             <Select
               allowClear

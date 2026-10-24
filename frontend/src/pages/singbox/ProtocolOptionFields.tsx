@@ -1,6 +1,7 @@
 import { useId, useState } from 'react';
 import { Button, Card, Col, Collapse, Form, Input, InputNumber, Row, Select, Space } from 'antd';
 import fields from './native-outbound-fields.json';
+import { snellHelp } from './snell-help';
 import { object, type ConfigObject } from './simple-settings';
 import {
   optionVisible,
@@ -187,7 +188,9 @@ export function dedicatedFields(type: string): Set<string> {
   if (type === 'mieru') add('server_port');
   if (type === 'ssh') add('user');
   if (type === 'hysteria') add('auth_str', 'up_mbps', 'down_mbps');
-  if (type === 'snell') add('psk', 'version');
+  // Version-specific Snell fields already have one dedicated editor each.
+  // Network and connection reuse remain optional under advanced settings.
+  if (type === 'snell') add('psk', 'userkey', 'version', 'mode', 'obfs_mode', 'obfs_host');
   if (type === 'shadowtls') add('version');
   if (type === 'shadowsocks') add('method');
   if (type === 'vmess') add('security');
@@ -330,6 +333,7 @@ function OptionControl({
   onChange,
   onValidity,
   depth,
+  snell = false,
 }: {
   descriptor: OptionDescriptor;
   value: unknown;
@@ -338,6 +342,7 @@ function OptionControl({
   onChange: (next: unknown) => void;
   onValidity: (key: string, valid: boolean) => void;
   depth: number;
+  snell?: boolean;
 }) {
   const id = useId();
   const props = { id, 'aria-label': label };
@@ -450,6 +455,7 @@ function OptionControl({
           prefix={path}
           labelPrefix={label}
           depth={depth + 1}
+          snell={snell}
           onChange={(key, next) => {
             const updated = patchOption(object(value), key, next, childSchema);
             onChange(Object.keys(updated).length ? updated : undefined);
@@ -487,6 +493,7 @@ function OptionControl({
               label={`${label} ${index + 1}`}
               path={`${path}.${index}`}
               depth={depth + 1}
+              snell={snell}
               onChange={(next) =>
                 onChange(values.map((existing, i) => (i === index ? next : existing)))
               }
@@ -546,12 +553,14 @@ function OptionGrid({
   depth = 0,
   onChange,
   onValidity,
+  snell = false,
 }: {
   schema: OptionSchema;
   value: ConfigObject;
   prefix?: string;
   labelPrefix?: string;
   depth?: number;
+  snell?: boolean;
   onChange: (key: string, next: unknown) => void;
   onValidity: (key: string, valid: boolean) => void;
 }) {
@@ -569,13 +578,14 @@ function OptionGrid({
               xs={24}
               sm={['object', 'array', 'json', 'headers'].includes(descriptor.kind) ? 24 : 12}
             >
-              <Form.Item label={title}>
+              <Form.Item label={title} tooltip={snell ? snellHelp(key, path) : undefined}>
                 <OptionControl
                   descriptor={descriptor}
                   value={value[key]}
                   label={label}
                   path={path}
                   depth={depth}
+                  snell={snell}
                   onChange={(next) => onChange(key, next)}
                   onValidity={onValidity}
                 />
@@ -598,7 +608,12 @@ export default function ProtocolOptionFields({
 }) {
   const type = String(value.type || '');
   const hidden = dedicatedFields(type);
-  const schema = registry.protocols[type] || {};
+  // sing-box Snell "network" is a single string, not a list.
+  // Keep the optional control in the generic advanced section.
+  const schema: OptionSchema =
+    type === 'snell'
+      ? { ...registry.protocols.snell, network: { kind: 'string', enum: ['tcp', 'udp'] } }
+      : registry.protocols[type] || {};
   const own = Object.fromEntries(
     Object.entries(schema).filter(
       ([key]) => !hidden.has(key) && !registry.dialerFields.includes(key),
@@ -637,7 +652,13 @@ export default function ProtocolOptionFields({
   );
   return (
     <Col span={24}>
-      <OptionGrid schema={primary} value={value} onChange={onChange} onValidity={onValidity} />
+      <OptionGrid
+        schema={primary}
+        value={value}
+        onChange={onChange}
+        onValidity={onValidity}
+        snell={type === 'snell'}
+      />
       {Object.keys(advanced).length > 0 && (
         <Collapse
           ghost
@@ -651,6 +672,7 @@ export default function ProtocolOptionFields({
                   value={value}
                   onChange={onChange}
                   onValidity={onValidity}
+                  snell={type === 'snell'}
                 />
               ),
             },
@@ -670,6 +692,7 @@ export default function ProtocolOptionFields({
                   value={value}
                   onChange={onChange}
                   onValidity={onValidity}
+                  snell={type === 'snell'}
                 />
               ),
             },

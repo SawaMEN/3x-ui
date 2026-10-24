@@ -88,4 +88,26 @@ describe('httpRequest against the MSW-mocked network', () => {
     expect(res.status).toBe(200);
     expect(res.data).toEqual({ success: true, obj: { up: true } });
   });
+  it('sends nested domain configuration as JSON with CSRF protection', async () => {
+    const payload = {
+      enabled: true,
+      domains: [{ name: 'sub.example.com', mode: 'sub_link_only', inboundIds: [], panel: false }],
+    };
+    let received: unknown;
+    let contentType: string | null = null;
+    let token: string | null = null;
+    server.use(
+      http.post(`${ORIGIN}/panel/api/domains/apply`, async ({ request }) => {
+        contentType = request.headers.get('Content-Type');
+        token = request.headers.get('X-CSRF-Token');
+        received = await request.json();
+        return HttpResponse.json({ success: true, obj: {} });
+      }),
+    );
+    const response = await httpRequest('POST', '/panel/api/domains/apply', payload);
+    expect(response.status).toBe(200);
+    expect(received).toEqual(payload);
+    expect(contentType).toBe('application/json; charset=UTF-8');
+    expect(token).toBe(CSRF_TOKEN);
+  });
 });

@@ -56,6 +56,8 @@ export const EXAMPLES: Record<string, unknown> = {
     "realityScanCandidates": "",
     "remarkTemplate": "",
     "restartXrayOnClientDisable": false,
+    "rootRedirectEnable": false,
+    "rootRedirectURL": "",
     "sessionMaxAge": 1,
     "smtpCpu": 0,
     "smtpEnable": false,
@@ -69,7 +71,14 @@ export const EXAMPLES: Record<string, unknown> = {
     "smtpPort": 1,
     "smtpTo": "",
     "smtpUsername": "",
+    "subAllowedDomains": "",
     "subAnnounce": "",
+    "subAppearanceAccent": "",
+    "subAppearanceDescription": "",
+    "subAppearanceEnable": false,
+    "subAppearanceLogoURL": "",
+    "subAppearanceTitle": "",
+    "subCDNEnable": false,
     "subCalendarExpireInclusive": false,
     "subCertFile": "",
     "subClashAutoDetect": false,
@@ -129,6 +138,7 @@ export const EXAMPLES: Record<string, unknown> = {
     "subPort": 1,
     "subProfileMode": "",
     "subProfileUrl": "",
+    "subPublicURL": "",
     "subRoutingRules": "",
     "subShowIdentityOnAllLinks": false,
     "subSupportUrl": "",
@@ -214,6 +224,8 @@ export const EXAMPLES: Record<string, unknown> = {
     "realityScanCandidates": "",
     "remarkTemplate": "",
     "restartXrayOnClientDisable": false,
+    "rootRedirectEnable": false,
+    "rootRedirectURL": "",
     "sessionMaxAge": 1,
     "smtpCpu": 0,
     "smtpEnable": false,
@@ -227,7 +239,14 @@ export const EXAMPLES: Record<string, unknown> = {
     "smtpPort": 1,
     "smtpTo": "",
     "smtpUsername": "",
+    "subAllowedDomains": "",
     "subAnnounce": "",
+    "subAppearanceAccent": "",
+    "subAppearanceDescription": "",
+    "subAppearanceEnable": false,
+    "subAppearanceLogoURL": "",
+    "subAppearanceTitle": "",
+    "subCDNEnable": false,
     "subCalendarExpireInclusive": false,
     "subCertFile": "",
     "subClashAutoDetect": false,
@@ -287,6 +306,7 @@ export const EXAMPLES: Record<string, unknown> = {
     "subPort": 1,
     "subProfileMode": "",
     "subProfileUrl": "",
+    "subPublicURL": "",
     "subRoutingRules": "",
     "subShowIdentityOnAllLinks": false,
     "subSupportUrl": "",
@@ -552,6 +572,129 @@ export const EXAMPLES: Record<string, unknown> = {
     ],
     "onlineCount": 1,
     "total": 2000
+  },
+  "DomainFrontCertificate": {
+    "autoRenew": false,
+    "certFile": "",
+    "daysLeft": 0,
+    "error": "",
+    "expiresAt": 0,
+    "issuer": "",
+    "mode": "",
+    "name": "",
+    "renewal": "",
+    "source": "",
+    "state": ""
+  },
+  "DomainFrontCheck": {
+    "addresses": [
+      ""
+    ],
+    "checkedAt": 0,
+    "daysLeft": 0,
+    "error": "",
+    "expiresAt": 0,
+    "issuer": "",
+    "name": ""
+  },
+  "DomainFrontConfig": {
+    "acceptTerms": false,
+    "domains": [
+      {
+        "certFile": "",
+        "enabled": false,
+        "inboundIds": [
+          0
+        ],
+        "keyFile": "",
+        "mode": "sub_link_only",
+        "name": "sub.example.com",
+        "origin": "",
+        "panel": false,
+        "tls": "auto"
+      }
+    ],
+    "email": "",
+    "enabled": false,
+    "httpPort": 80,
+    "httpsPort": 443,
+    "listen": "",
+    "publicPort": 443,
+    "staging": false,
+    "subscriptionDomain": ""
+  },
+  "DomainFrontDomain": {
+    "certFile": "",
+    "enabled": false,
+    "inboundIds": [
+      0
+    ],
+    "keyFile": "",
+    "mode": "sub_link_only",
+    "name": "sub.example.com",
+    "origin": "",
+    "panel": false,
+    "tls": "auto"
+  },
+  "DomainFrontStatus": {
+    "certificates": [
+      {
+        "autoRenew": false,
+        "certFile": "",
+        "daysLeft": 0,
+        "error": "",
+        "expiresAt": 0,
+        "issuer": "",
+        "mode": "",
+        "name": "",
+        "renewal": "",
+        "source": "",
+        "state": ""
+      }
+    ],
+    "config": {
+      "acceptTerms": false,
+      "domains": [
+        {
+          "certFile": "",
+          "enabled": false,
+          "inboundIds": [
+            0
+          ],
+          "keyFile": "",
+          "mode": "sub_link_only",
+          "name": "sub.example.com",
+          "origin": "",
+          "panel": false,
+          "tls": "auto"
+        }
+      ],
+      "email": "",
+      "enabled": false,
+      "httpPort": 80,
+      "httpsPort": 443,
+      "listen": "",
+      "publicPort": 443,
+      "staging": false,
+      "subscriptionDomain": ""
+    },
+    "error": "",
+    "existingCertificates": [
+      {
+        "autoRenew": false,
+        "certFile": "",
+        "daysLeft": 0,
+        "error": "",
+        "expiresAt": 0,
+        "issuer": "",
+        "mode": "",
+        "name": "",
+        "renewal": "",
+        "source": "",
+        "state": ""
+      }
+    ],
+    "running": false
   },
   "FallbackParentInfo": {
     "masterId": 0,

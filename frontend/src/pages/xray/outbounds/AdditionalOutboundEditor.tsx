@@ -19,11 +19,17 @@ export default function AdditionalOutboundEditor({
   const protocol = raw?.protocol;
   if (!['fptn', 'openflux', 'snell', 'singbox:snell'].includes(String(protocol))) return null;
   const settings = (raw.settings ?? {}) as Record<string, unknown>;
+  const isSnell = protocol === 'snell' || protocol === 'singbox:snell';
+  const snellVersion = Number(settings.version ?? 6) === 4 ? 4 : 6;
+  const modeOptions = ['default', 'unshaped'].map((mode) => ({ value: mode, label: mode }));
+  const obfsOptions = ['none', 'http'].map((mode) => ({ value: mode, label: mode }));
   const update = (values: Record<string, unknown>) =>
     onChange(JSON.stringify({ ...raw, settings: { ...settings, ...values } }, null, 2));
   return (
     <Space orientation="vertical" style={{ width: '100%' }}>
-      <Alert type="info" showIcon description={t('pages.inbounds.form.vpnOutboundHint')} />
+      {!isSnell && (
+        <Alert type="info" showIcon description={t('pages.inbounds.form.vpnOutboundHint')} />
+      )}
       {protocol === 'fptn' ? (
         <>
           <InstallVPNButton protocol="fptn" />
@@ -74,42 +80,81 @@ export default function AdditionalOutboundEditor({
         </>
       ) : (
         <>
-          <Form.Item label="Snell">
+          <Alert type="info" showIcon description={t('pages.inbounds.form.snellOutboundHint')} />
+          <Form.Item
+            label={t('pages.inbounds.form.snellVersion')}
+            tooltip={t('pages.inbounds.form.snellVersionTooltip')}
+          >
             <Select
-              value={Number(settings.version ?? 4)}
+              value={snellVersion}
               options={[
-                { value: 4, label: 'v4 / v5' },
+                { value: 4, label: 'v4 (server v5)' },
                 { value: 6, label: 'v6' },
               ]}
-              onChange={(version) =>
+              onChange={(version: 4 | 6) =>
                 update({
                   version,
                   mode: version === 6 ? 'default' : undefined,
-                  obfs_mode: undefined,
+                  obfs_mode: version === 4 ? 'none' : undefined,
                   obfs_host: undefined,
                 })
               }
             />
           </Form.Item>
-          <Form.Item label="PSK">
+          <Form.Item label="PSK" tooltip={t('pages.inbounds.form.snellPskTooltip')}>
             <Input.Password
               value={String(settings.psk ?? '')}
               onChange={(e) => update({ psk: e.target.value })}
             />
           </Form.Item>
-          <Form.Item label="User key">
+          <Form.Item label="User key" tooltip={t('pages.inbounds.form.snellUserkeyTooltip')}>
             <Input.Password
               value={String(settings.userkey ?? '')}
               onChange={(e) => update({ userkey: e.target.value })}
             />
           </Form.Item>
-          <Button
-            onClick={() =>
-              update({ version: 6, mode: 'default', obfs_mode: undefined, obfs_host: undefined })
-            }
-          >
-            {t('pages.inbounds.form.snellAuto')}
-          </Button>
+          {snellVersion === 6 ? (
+            <Form.Item
+              label={t('pages.inbounds.form.snellMode')}
+              tooltip={t('pages.inbounds.form.snellModeTooltip')}
+            >
+              <Select
+                value={String(settings.mode ?? 'default')}
+                options={modeOptions}
+                onChange={(mode) => update({ mode })}
+              />
+            </Form.Item>
+          ) : (
+            <>
+              <Form.Item
+                label={t('pages.inbounds.form.snellObfs')}
+                tooltip={t('pages.inbounds.form.snellObfsTooltip')}
+              >
+                <Select
+                  value={String(settings.obfs_mode ?? 'none')}
+                  options={obfsOptions}
+                  onChange={(obfs_mode) =>
+                    update({
+                      obfs_mode,
+                      obfs_host:
+                        obfs_mode === 'http' ? (settings.obfs_host ?? 'bing.com') : undefined,
+                    })
+                  }
+                />
+              </Form.Item>
+              {settings.obfs_mode === 'http' && (
+                <Form.Item
+                  label={t('pages.inbounds.form.snellObfsHost')}
+                  tooltip={t('pages.inbounds.form.snellObfsHostTooltip')}
+                >
+                  <Input
+                    value={String(settings.obfs_host ?? 'bing.com')}
+                    onChange={(e) => update({ obfs_host: e.target.value })}
+                  />
+                </Form.Item>
+              )}
+            </>
+          )}
         </>
       )}
     </Space>

@@ -8,6 +8,16 @@ export class AllSetting {
   webPort = 2053;
   webCertFile = '';
   webKeyFile = '';
+  rootRedirectEnable = false;
+  rootRedirectURL = 'https://www.wikipedia.org/';
+  subAppearanceEnable = false;
+  subAppearanceTitle = '';
+  subAppearanceDescription = '';
+  subAppearanceLogoURL = '';
+  subAppearanceAccent = '#808080';
+  subPublicURL = '';
+  subAllowedDomains = '';
+  subCDNEnable = false;
   webBasePath = '/';
   sessionMaxAge = 360;
   trustedProxyCIDRs = '127.0.0.1/32,::1/128';

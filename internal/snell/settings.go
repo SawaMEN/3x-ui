@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"unicode"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
@@ -18,6 +19,12 @@ type Settings struct {
 	ObfsMode string         `json:"obfsMode"`
 	ObfsHost string         `json:"obfsHost"`
 	Clients  []model.Client `json:"clients"`
+}
+
+// Reject control characters in credentials and HTTP Host values before they
+// reach the native core or are exported to subscription URLs.
+func containsControl(s string) bool {
+	return strings.IndexFunc(s, unicode.IsControl) >= 0
 }
 
 func Secret() (string, error) {
@@ -36,7 +43,7 @@ func Parse(raw string) (Settings, error) {
 	if s.Version != 5 && s.Version != 6 {
 		return s, fmt.Errorf("Snell server version must be 5 or 6")
 	}
-	if s.PSK == "" || strings.ContainsAny(s.PSK, "\r\n\x00") {
+	if s.PSK == "" || containsControl(s.PSK) {
 		return s, fmt.Errorf("Snell requires a PSK without control characters")
 	}
 	if s.Version == 6 {
@@ -57,18 +64,33 @@ func Parse(raw string) (Settings, error) {
 			return s, fmt.Errorf("Snell v5 does not support traffic shaping modes")
 		}
 	}
-	seen := map[string]bool{}
+	// obfs_host is a client-side HTTP Host value (not a server listen option).
+	// Validate it even on the inbound so exported links cannot contain
+	// control characters; keep legacy non-HTTP hosts harmlessly stored.
+	if containsControl(s.ObfsHost) {
+		return s, fmt.Errorf("Snell HTTP obfuscation host contains control characters")
+	}
+	seenKeys := map[string]bool{}
+	seenNames := map[string]bool{}
 	for _, c := range s.Clients {
 		if !c.Enable {
 			continue
 		}
-		if c.Email == "" || c.Password == "" {
+		name := strings.TrimSpace(c.Email)
+		if name == "" || c.Password == "" {
 			return s, fmt.Errorf("Snell clients require a name and user key")
 		}
-		if seen[c.Password] {
+		if containsControl(name) || containsControl(c.Password) {
+			return s, fmt.Errorf("Snell user names and keys cannot contain control characters")
+		}
+		if seenNames[strings.ToLower(name)] {
+			return s, fmt.Errorf("Snell client names must be unique")
+		}
+		if seenKeys[c.Password] {
 			return s, fmt.Errorf("Snell user keys must be unique")
 		}
-		seen[c.Password] = true
+		seenNames[strings.ToLower(name)] = true
+		seenKeys[c.Password] = true
 	}
 	return s, nil
 }
@@ -129,9 +151,30 @@ func Prepare(ib *model.Inbound, previous string) error {
 	if err != nil {
 		return err
 	}
-	ib.Settings = string(data)
-	_, err = Parse(ib.Settings)
-	return err
+	// Reject unsupported combinations before removing inactive defaults.
+	s, err := Parse(string(data))
+	if err != nil {
+		return err
+	}
+	if s.Version == 6 {
+		delete(raw, "obfsMode")
+		delete(raw, "obfsHost")
+		if s.Mode == "" || s.Mode == "default" {
+			delete(raw, "mode")
+		}
+	} else {
+		delete(raw, "mode")
+		if s.ObfsMode == "" || s.ObfsMode == "none" {
+			delete(raw, "obfsMode")
+			delete(raw, "obfsHost")
+		}
+	}
+	canonical, err := json.Marshal(raw)
+	if err != nil {
+		return err
+	}
+	ib.Settings = string(canonical)
+	return nil
 }
 
 // sing-box deliberately calls the v5-compatible outbound version 4.

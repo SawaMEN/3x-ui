@@ -18,6 +18,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/locale"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/middleware"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/network"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 
@@ -62,9 +63,17 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 		return nil, err
 	}
 
-	if subDomain != "" {
-		engine.Use(s.subscriptionDomainValidator(subDomain))
-	}
+	engine.Use(s.subscriptionDomainValidator(subDomain))
+	engine.Use(func(c *gin.Context) {
+		if enabled, _ := s.settingService.GetSubCDNEnable(); enabled && !strings.Contains(c.Request.URL.Path, "/assets/") {
+			c.Header("Cache-Control", "private, no-store, max-age=0")
+			c.Header("CDN-Cache-Control", "no-store")
+			c.Header("Cloudflare-CDN-Cache-Control", "no-store")
+			c.Header("Vary", "Accept, User-Agent, X-HWID")
+		}
+	})
+
+	engine.Use(middleware.RootRedirect(s.settingService.GetRootRedirectURL))
 
 	LinksPath, err := s.settingService.GetSubPath()
 	if err != nil {
@@ -391,7 +400,12 @@ func (s *Server) subscriptionDomainValidator(primary string) gin.HandlerFunc {
 	primary = normalizeRequestHost(primary)
 	return func(c *gin.Context) {
 		host := normalizeRequestHost(c.Request.Host)
-		if host == primary {
+		domains, err := s.settingService.GetSubscriptionAllowedHosts(primary)
+		if err != nil {
+			c.AbortWithStatus(http.StatusServiceUnavailable)
+			return
+		}
+		if len(domains) == 0 || domains[host] {
 			c.Next()
 			return
 		}
@@ -589,10 +603,11 @@ func (s *Server) Start() (err error) {
 	}
 
 	if certFile != "" || keyFile != "" {
-		cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+		cert, err := network.NewFileCertificate(certFile, keyFile)
 		if err == nil {
 			c := &tls.Config{
-				Certificates: []tls.Certificate{cert},
+				GetCertificate: service.DomainFrontTLS(cert.GetCertificate, listen, port),
+				NextProtos:     []string{"h2", "http/1.1", "acme-tls/1"},
 			}
 			listener = network.NewAutoHttpsListener(listener)
 			listener = tls.NewListener(listener, c)
@@ -608,7 +623,7 @@ func (s *Server) Start() (err error) {
 
 	s.routerMu.Lock()
 	s.httpServer = &http.Server{
-		Handler: engine,
+		Handler: service.DomainFrontHandler(engine, listen, port, certFile != "" && keyFile != ""),
 		// The subscription server is the most exposed (public) listener; without
 		// these a few slow-header connections exhaust it (Slowloris). Mirrors the
 		// panel server timeouts in internal/web/web.go.
@@ -618,6 +633,10 @@ func (s *Server) Start() (err error) {
 		IdleTimeout:       120 * time.Second,
 	}
 	s.routerMu.Unlock()
+
+	s.httpServer.Protocols = new(http.Protocols)
+	s.httpServer.Protocols.SetHTTP1(true)
+	s.httpServer.Protocols.SetHTTP2(true)
 
 	go func(server *http.Server) {
 		_ = network.ServeHTTP(server, listener, "Subscription server")

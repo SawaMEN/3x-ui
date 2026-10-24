@@ -219,6 +219,7 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	if err != nil {
 		return nil, err
 	}
+	engine.Use(middleware.RootRedirect(s.settingService.GetRootRedirectURL))
 	engine.Use(gzip.Gzip(gzip.DefaultCompression))
 	assetsBasePath := basePath + "assets/"
 
@@ -704,10 +705,11 @@ func (s *Server) start(restartXray bool, startTgBot bool) (err error) {
 		return err
 	}
 	if certFile != "" || keyFile != "" {
-		cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+		cert, err := network.NewFileCertificate(certFile, keyFile)
 		if err == nil {
 			c := &tls.Config{
-				Certificates: []tls.Certificate{cert},
+				GetCertificate: service.DomainFrontTLS(cert.GetCertificate, listen, port),
+				NextProtos:     []string{"h2", "http/1.1", "acme-tls/1"},
 			}
 			// Opt-in node mTLS: when a trust CA is configured, request and verify
 			// client certs (VerifyClientCertIfGiven keeps browsers working). With
@@ -736,12 +738,16 @@ func (s *Server) start(restartXray bool, startTgBot bool) (err error) {
 	s.listener = listener
 
 	s.httpServer = &http.Server{
-		Handler:           engine,
+		Handler:           service.DomainFrontHandler(engine, listen, port, certFile != "" && keyFile != ""),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
+
+	s.httpServer.Protocols = new(http.Protocols)
+	s.httpServer.Protocols.SetHTTP1(true)
+	s.httpServer.Protocols.SetHTTP2(true)
 
 	go func(server *http.Server) {
 		_ = network.ServeHTTP(server, listener, "Web server")

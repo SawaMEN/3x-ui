@@ -1371,7 +1371,9 @@ func (s *ServerService) GetMigration() ([]byte, string, error) {
 // uses towards its nodes. An import that overwrites them leaves the
 // destination unreachable on its own address, or impersonating the source.
 var hostBoundSettingKeys = []string{
+	"domainFrontConfig",
 	"webListen", "webDomain", "webPort", "webCertFile", "webKeyFile", "webBasePath",
+	"subPublicURL", "subAllowedDomains", "subCDNEnable",
 	"subListen", "subDomain", "subPort", "subCertFile", "subKeyFile", "subURI", "subJsonURI",
 	"secret", "panelGuid",
 	"nodeMtlsCaCertPem", "nodeMtlsCaKeyPem", "nodeMtlsClientCertPem",

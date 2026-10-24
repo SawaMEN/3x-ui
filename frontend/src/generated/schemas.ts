@@ -190,6 +190,12 @@ export const SCHEMAS: Record<string, unknown> = {
       "restartXrayOnClientDisable": {
         "type": "boolean"
       },
+      "rootRedirectEnable": {
+        "type": "boolean"
+      },
+      "rootRedirectURL": {
+        "type": "string"
+      },
       "sessionMaxAge": {
         "maximum": 525600,
         "minimum": 1,
@@ -237,8 +243,29 @@ export const SCHEMAS: Record<string, unknown> = {
       "smtpUsername": {
         "type": "string"
       },
+      "subAllowedDomains": {
+        "type": "string"
+      },
       "subAnnounce": {
         "type": "string"
+      },
+      "subAppearanceAccent": {
+        "type": "string"
+      },
+      "subAppearanceDescription": {
+        "type": "string"
+      },
+      "subAppearanceEnable": {
+        "type": "boolean"
+      },
+      "subAppearanceLogoURL": {
+        "type": "string"
+      },
+      "subAppearanceTitle": {
+        "type": "string"
+      },
+      "subCDNEnable": {
+        "type": "boolean"
       },
       "subCalendarExpireInclusive": {
         "type": "boolean"
@@ -420,6 +447,9 @@ export const SCHEMAS: Record<string, unknown> = {
       "subProfileUrl": {
         "type": "string"
       },
+      "subPublicURL": {
+        "type": "string"
+      },
       "subRoutingRules": {
         "type": "string"
       },
@@ -570,6 +600,8 @@ export const SCHEMAS: Record<string, unknown> = {
       "realityScanCandidates",
       "remarkTemplate",
       "restartXrayOnClientDisable",
+      "rootRedirectEnable",
+      "rootRedirectURL",
       "sessionMaxAge",
       "smtpCpu",
       "smtpEnable",
@@ -583,7 +615,14 @@ export const SCHEMAS: Record<string, unknown> = {
       "smtpPort",
       "smtpTo",
       "smtpUsername",
+      "subAllowedDomains",
       "subAnnounce",
+      "subAppearanceAccent",
+      "subAppearanceDescription",
+      "subAppearanceEnable",
+      "subAppearanceLogoURL",
+      "subAppearanceTitle",
+      "subCDNEnable",
       "subCalendarExpireInclusive",
       "subCertFile",
       "subClashAutoDetect",
@@ -643,6 +682,7 @@ export const SCHEMAS: Record<string, unknown> = {
       "subPort",
       "subProfileMode",
       "subProfileUrl",
+      "subPublicURL",
       "subRoutingRules",
       "subShowIdentityOnAllLinks",
       "subSupportUrl",
@@ -849,6 +889,12 @@ export const SCHEMAS: Record<string, unknown> = {
       "restartXrayOnClientDisable": {
         "type": "boolean"
       },
+      "rootRedirectEnable": {
+        "type": "boolean"
+      },
+      "rootRedirectURL": {
+        "type": "string"
+      },
       "sessionMaxAge": {
         "maximum": 525600,
         "minimum": 1,
@@ -896,8 +942,29 @@ export const SCHEMAS: Record<string, unknown> = {
       "smtpUsername": {
         "type": "string"
       },
+      "subAllowedDomains": {
+        "type": "string"
+      },
       "subAnnounce": {
         "type": "string"
+      },
+      "subAppearanceAccent": {
+        "type": "string"
+      },
+      "subAppearanceDescription": {
+        "type": "string"
+      },
+      "subAppearanceEnable": {
+        "type": "boolean"
+      },
+      "subAppearanceLogoURL": {
+        "type": "string"
+      },
+      "subAppearanceTitle": {
+        "type": "string"
+      },
+      "subCDNEnable": {
+        "type": "boolean"
       },
       "subCalendarExpireInclusive": {
         "type": "boolean"
@@ -1079,6 +1146,9 @@ export const SCHEMAS: Record<string, unknown> = {
       "subProfileUrl": {
         "type": "string"
       },
+      "subPublicURL": {
+        "type": "string"
+      },
       "subRoutingRules": {
         "type": "string"
       },
@@ -1237,6 +1307,8 @@ export const SCHEMAS: Record<string, unknown> = {
       "realityScanCandidates",
       "remarkTemplate",
       "restartXrayOnClientDisable",
+      "rootRedirectEnable",
+      "rootRedirectURL",
       "sessionMaxAge",
       "smtpCpu",
       "smtpEnable",
@@ -1250,7 +1322,14 @@ export const SCHEMAS: Record<string, unknown> = {
       "smtpPort",
       "smtpTo",
       "smtpUsername",
+      "subAllowedDomains",
       "subAnnounce",
+      "subAppearanceAccent",
+      "subAppearanceDescription",
+      "subAppearanceEnable",
+      "subAppearanceLogoURL",
+      "subAppearanceTitle",
+      "subCDNEnable",
       "subCalendarExpireInclusive",
       "subCertFile",
       "subClashAutoDetect",
@@ -1310,6 +1389,7 @@ export const SCHEMAS: Record<string, unknown> = {
       "subPort",
       "subProfileMode",
       "subProfileUrl",
+      "subPublicURL",
       "subRoutingRules",
       "subShowIdentityOnAllLinks",
       "subSupportUrl",
@@ -2175,6 +2255,232 @@ export const SCHEMAS: Record<string, unknown> = {
       "online",
       "onlineCount",
       "total"
+    ],
+    "type": "object"
+  },
+  "DomainFrontCertificate": {
+    "properties": {
+      "autoRenew": {
+        "type": "boolean"
+      },
+      "certFile": {
+        "type": "string"
+      },
+      "daysLeft": {
+        "type": "integer"
+      },
+      "error": {
+        "type": "string"
+      },
+      "expiresAt": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "issuer": {
+        "type": "string"
+      },
+      "mode": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "renewal": {
+        "type": "string"
+      },
+      "source": {
+        "type": "string"
+      },
+      "state": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "autoRenew",
+      "certFile",
+      "daysLeft",
+      "error",
+      "expiresAt",
+      "issuer",
+      "mode",
+      "name",
+      "renewal",
+      "source",
+      "state"
+    ],
+    "type": "object"
+  },
+  "DomainFrontCheck": {
+    "properties": {
+      "addresses": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "checkedAt": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "daysLeft": {
+        "type": "integer"
+      },
+      "error": {
+        "type": "string"
+      },
+      "expiresAt": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "issuer": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "addresses",
+      "checkedAt",
+      "daysLeft",
+      "error",
+      "expiresAt",
+      "issuer",
+      "name"
+    ],
+    "type": "object"
+  },
+  "DomainFrontConfig": {
+    "properties": {
+      "acceptTerms": {
+        "type": "boolean"
+      },
+      "domains": {
+        "items": {
+          "$ref": "#/components/schemas/DomainFrontDomain"
+        },
+        "type": "array"
+      },
+      "email": {
+        "type": "string"
+      },
+      "enabled": {
+        "type": "boolean"
+      },
+      "httpPort": {
+        "example": 80,
+        "type": "integer"
+      },
+      "httpsPort": {
+        "example": 443,
+        "type": "integer"
+      },
+      "listen": {
+        "type": "string"
+      },
+      "publicPort": {
+        "example": 443,
+        "type": "integer"
+      },
+      "staging": {
+        "type": "boolean"
+      },
+      "subscriptionDomain": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "acceptTerms",
+      "domains",
+      "email",
+      "enabled",
+      "httpPort",
+      "httpsPort",
+      "listen",
+      "publicPort",
+      "staging",
+      "subscriptionDomain"
+    ],
+    "type": "object"
+  },
+  "DomainFrontDomain": {
+    "properties": {
+      "certFile": {
+        "type": "string"
+      },
+      "enabled": {
+        "type": "boolean"
+      },
+      "inboundIds": {
+        "items": {
+          "type": "integer"
+        },
+        "type": "array"
+      },
+      "keyFile": {
+        "type": "string"
+      },
+      "mode": {
+        "example": "sub_link_only",
+        "type": "string"
+      },
+      "name": {
+        "example": "sub.example.com",
+        "type": "string"
+      },
+      "origin": {
+        "type": "string"
+      },
+      "panel": {
+        "type": "boolean"
+      },
+      "tls": {
+        "example": "auto",
+        "type": "string"
+      }
+    },
+    "required": [
+      "certFile",
+      "enabled",
+      "inboundIds",
+      "keyFile",
+      "mode",
+      "name",
+      "origin",
+      "panel",
+      "tls"
+    ],
+    "type": "object"
+  },
+  "DomainFrontStatus": {
+    "properties": {
+      "certificates": {
+        "items": {
+          "$ref": "#/components/schemas/DomainFrontCertificate"
+        },
+        "type": "array"
+      },
+      "config": {
+        "$ref": "#/components/schemas/DomainFrontConfig"
+      },
+      "error": {
+        "type": "string"
+      },
+      "existingCertificates": {
+        "items": {
+          "$ref": "#/components/schemas/DomainFrontCertificate"
+        },
+        "type": "array"
+      },
+      "running": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "certificates",
+      "config",
+      "error",
+      "running"
     ],
     "type": "object"
   },

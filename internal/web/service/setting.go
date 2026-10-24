@@ -54,6 +54,19 @@ const (
 )
 
 var defaultValueMap = map[string]string{
+	"domainFrontConfig": "",
+	"subPublicURL":      "",
+	"subAllowedDomains": "",
+	"subCDNEnable":      "false",
+
+	"rootRedirectEnable":       "false",
+	"rootRedirectURL":          "https://www.wikipedia.org/",
+	"subAppearanceEnable":      "false",
+	"subAppearanceTitle":       "",
+	"subAppearanceDescription": "",
+	"subAppearanceLogoURL":     "",
+	"subAppearanceAccent":      "#808080",
+
 	"xrayTemplateConfig": xrayTemplateConfig,
 	"coreType":           "sing-box",
 	"webListen":          "",
@@ -1085,10 +1098,22 @@ func (s *SettingService) GetPageSize() (int, error) {
 }
 
 func (s *SettingService) GetSubURI() (string, error) {
+	if publicURL, err := s.GetSubPublicURL(); err != nil {
+		return "", err
+	} else if publicURL != "" {
+		path, err := s.GetSubPath()
+		return publicURL + path, err
+	}
 	return s.getString("subURI")
 }
 
 func (s *SettingService) GetSubJsonURI() (string, error) {
+	if publicURL, err := s.GetSubPublicURL(); err != nil {
+		return "", err
+	} else if publicURL != "" {
+		path, err := s.GetSubJsonPath()
+		return publicURL + path, err
+	}
 	return s.getString("subJsonURI")
 }
 
@@ -1101,6 +1126,12 @@ func (s *SettingService) GetSubClashPath() (string, error) {
 }
 
 func (s *SettingService) GetSubClashURI() (string, error) {
+	if publicURL, err := s.GetSubPublicURL(); err != nil {
+		return "", err
+	} else if publicURL != "" {
+		path, err := s.GetSubClashPath()
+		return publicURL + path, err
+	}
 	return s.getString("subClashURI")
 }
 
@@ -1518,6 +1549,12 @@ type SecretClears struct {
 }
 
 func (s *SettingService) UpdateAllSetting(allSetting *entity.AllSetting, clears SecretClears) error {
+	if err := validateSubscriptionDomains(allSetting); err != nil {
+		return err
+	}
+	if err := validatePresentationSettings(allSetting); err != nil {
+		return err
+	}
 	allSetting.CoreType = canonicalCoreType(allSetting.CoreType)
 	switch allSetting.SubProfileMode {
 	case "", SubProfileModeNone, SubProfileModeBuiltin, SubProfileModeCustom:
@@ -1814,6 +1851,9 @@ func extractHostname(host string) string {
 // Information page) and the subscription page so both render subscription
 // URLs identically.
 func (s *SettingService) BuildSubURIBase(host string) string {
+	if publicURL, _ := s.GetSubPublicURL(); publicURL != "" {
+		return publicURL
+	}
 	subPort, _ := s.GetSubPort()
 	subDomain, _ := s.GetSubDomain()
 	subKeyFile, _ := s.GetSubKeyFile()

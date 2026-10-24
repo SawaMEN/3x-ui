@@ -2317,6 +2317,27 @@ export const sections: readonly Section[] = [
       'Panel configuration and user credentials. All endpoints live under /panel/api/setting and require a logged-in session or Bearer token.',
     endpoints: [
       {
+        method: 'GET',
+        path: '/panel/api/domains/status',
+        responseSchema: 'DomainFrontStatus',
+        summary:
+          'Read domain roles, native HTTPS gateway state, ACME certificate issuer, expiry and remaining days.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/domains/apply',
+        responseSchema: 'DomainFrontStatus',
+        summary:
+          'Validate, apply and persist domain gateway configuration with rollback on listener failure. ACME issuance and renewal run automatically in the background.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/domains/check',
+        responseSchema: 'DomainFrontCheck',
+        summary:
+          'Check DNS resolution and the public TLS certificate for one saved domain. Public CDN edge TLS is reported separately from the locally managed origin certificate.',
+      },
+      {
         method: 'POST',
         path: '/panel/api/setting/all',
         summary:

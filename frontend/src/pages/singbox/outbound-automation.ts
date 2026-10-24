@@ -24,7 +24,7 @@ export function autoConfigureOutbound(value: ConfigObject): ConfigObject {
     if (next[key] === undefined || next[key] === null || next[key] === '') next[key] = fallback;
   }
   if (type === 'snell' && ![4, 6].includes(Number(next.version)))
-    next = patchOption(next, 'version', 4, schema);
+    next = patchOption(next, 'version', 6, schema);
   if (requiredTlsProtocols.includes(type) || type === 'trojan') {
     next.tls = { ...object(next.tls), enabled: true };
   }

@@ -66,7 +66,6 @@ export function generateOutboundCredentials(
         ? base64(bytes(next.method === '2022-blake3-aes-128-gcm' ? 16 : 32))
         : password(),
     );
-  if (type === 'snell') fill('psk', () => base64(bytes(32)));
   if (type === 'ssh' && !next.private_key && !next.private_key_path) {
     fill('user', () => `vpn_${hex(bytes(6))}`);
     fill('password', password);

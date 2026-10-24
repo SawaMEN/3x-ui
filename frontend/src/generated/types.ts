@@ -64,6 +64,8 @@ export interface AllSetting {
   realityScanCandidates: string;
   remarkTemplate: string;
   restartXrayOnClientDisable: boolean;
+  rootRedirectEnable: boolean;
+  rootRedirectURL: string;
   sessionMaxAge: number;
   smtpCpu: number;
   smtpEnable: boolean;
@@ -77,7 +79,14 @@ export interface AllSetting {
   smtpPort: number;
   smtpTo: string;
   smtpUsername: string;
+  subAllowedDomains: string;
   subAnnounce: string;
+  subAppearanceAccent: string;
+  subAppearanceDescription: string;
+  subAppearanceEnable: boolean;
+  subAppearanceLogoURL: string;
+  subAppearanceTitle: string;
+  subCDNEnable: boolean;
   subCalendarExpireInclusive: boolean;
   subCertFile: string;
   subClashAutoDetect: boolean;
@@ -137,6 +146,7 @@ export interface AllSetting {
   subPort: number;
   subProfileMode: string;
   subProfileUrl: string;
+  subPublicURL: string;
   subRoutingRules: string;
   subShowIdentityOnAllLinks: boolean;
   subSupportUrl: string;
@@ -223,6 +233,8 @@ export interface AllSettingView {
   realityScanCandidates: string;
   remarkTemplate: string;
   restartXrayOnClientDisable: boolean;
+  rootRedirectEnable: boolean;
+  rootRedirectURL: string;
   sessionMaxAge: number;
   smtpCpu: number;
   smtpEnable: boolean;
@@ -236,7 +248,14 @@ export interface AllSettingView {
   smtpPort: number;
   smtpTo: string;
   smtpUsername: string;
+  subAllowedDomains: string;
   subAnnounce: string;
+  subAppearanceAccent: string;
+  subAppearanceDescription: string;
+  subAppearanceEnable: boolean;
+  subAppearanceLogoURL: string;
+  subAppearanceTitle: string;
+  subCDNEnable: boolean;
   subCalendarExpireInclusive: boolean;
   subCertFile: string;
   subClashAutoDetect: boolean;
@@ -296,6 +315,7 @@ export interface AllSettingView {
   subPort: number;
   subProfileMode: string;
   subProfileUrl: string;
+  subPublicURL: string;
   subRoutingRules: string;
   subShowIdentityOnAllLinks: boolean;
   subSupportUrl: string;
@@ -509,6 +529,63 @@ export interface ClientsSummary {
   online: string[];
   onlineCount: number;
   total: number;
+}
+
+export interface DomainFrontCertificate {
+  autoRenew: boolean;
+  certFile: string;
+  daysLeft: number;
+  error: string;
+  expiresAt: number;
+  issuer: string;
+  mode: string;
+  name: string;
+  renewal: string;
+  source: string;
+  state: string;
+}
+
+export interface DomainFrontCheck {
+  addresses: string[];
+  checkedAt: number;
+  daysLeft: number;
+  error: string;
+  expiresAt: number;
+  issuer: string;
+  name: string;
+}
+
+export interface DomainFrontConfig {
+  acceptTerms: boolean;
+  domains: DomainFrontDomain[];
+  email: string;
+  enabled: boolean;
+  httpPort: number;
+  httpsPort: number;
+  listen: string;
+  publicPort: number;
+  staging: boolean;
+  subscriptionDomain: string;
+}
+
+export interface DomainFrontDomain {
+  certFile: string;
+  enabled: boolean;
+  inboundIds: number[];
+  keyFile: string;
+  mode: string;
+  name: string;
+  origin: string;
+  panel: boolean;
+  tls: string;
+}
+
+export interface DomainFrontStatus {
+  certificates: DomainFrontCertificate[];
+  config: DomainFrontConfig;
+  error: string;
+  existingCertificates?: DomainFrontCertificate[];
+  running: boolean;
 }
 
 export interface FallbackParentInfo {

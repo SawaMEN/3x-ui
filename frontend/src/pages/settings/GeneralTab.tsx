@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   Alert,
+  AutoComplete,
   Button,
   Checkbox,
   Input,
@@ -386,6 +387,33 @@ export default function GeneralTab({
               <div>
                 <SettingListItem
                   paddings="small"
+                  title={t('pages.settings.rootRedirectEnable')}
+                  description={t('pages.settings.rootRedirectDesc')}
+                >
+                  <Switch
+                    checked={allSetting.rootRedirectEnable}
+                    onChange={(v) => updateSetting({ rootRedirectEnable: v })}
+                  />
+                </SettingListItem>
+                {allSetting.rootRedirectEnable && (
+                  <SettingListItem paddings="small" title={t('pages.settings.rootRedirectURL')}>
+                    <AutoComplete
+                      aria-label={t('pages.settings.rootRedirectURL')}
+                      style={{ width: '100%' }}
+                      value={allSetting.rootRedirectURL}
+                      options={[
+                        'https://www.wikipedia.org/',
+                        'https://www.microsoft.com/',
+                        'https://www.apple.com/',
+                        'https://www.cloudflare.com/',
+                      ].map((value) => ({ value, label: value }))}
+                      onChange={(value) => updateSetting({ rootRedirectURL: value })}
+                      placeholder="https://example.com/"
+                    />
+                  </SettingListItem>
+                )}
+                <SettingListItem
+                  paddings="small"
                   title={t('pages.settings.panelListeningIP')}
                   description={t('pages.settings.panelListeningIPDesc')}
                 >
@@ -634,6 +662,16 @@ export default function GeneralTab({
             label: catTabLabel(<SafetyCertificateOutlined />, t('pages.settings.certs'), isMobile),
             children: (
               <>
+                <Alert
+                  type="info"
+                  showIcon
+                  title={t('pages.settings.domains.existingDesc')}
+                  action={
+                    <Button onClick={() => navigate('/panel/settings#domains')}>
+                      {t('pages.settings.domains.title')}
+                    </Button>
+                  }
+                />
                 <SettingListItem
                   paddings="small"
                   title={t('pages.settings.publicKeyPath')}
