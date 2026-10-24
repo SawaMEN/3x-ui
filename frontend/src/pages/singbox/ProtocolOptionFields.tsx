@@ -333,6 +333,7 @@ function OptionControl({
   onChange,
   onValidity,
   depth,
+  snell = false,
 }: {
   descriptor: OptionDescriptor;
   value: unknown;
@@ -341,6 +342,7 @@ function OptionControl({
   onChange: (next: unknown) => void;
   onValidity: (key: string, valid: boolean) => void;
   depth: number;
+  snell?: boolean;
 }) {
   const id = useId();
   const props = { id, 'aria-label': label };
@@ -453,6 +455,7 @@ function OptionControl({
           prefix={path}
           labelPrefix={label}
           depth={depth + 1}
+          snell={snell}
           onChange={(key, next) => {
             const updated = patchOption(object(value), key, next, childSchema);
             onChange(Object.keys(updated).length ? updated : undefined);
@@ -490,6 +493,7 @@ function OptionControl({
               label={`${label} ${index + 1}`}
               path={`${path}.${index}`}
               depth={depth + 1}
+              snell={snell}
               onChange={(next) =>
                 onChange(values.map((existing, i) => (i === index ? next : existing)))
               }
@@ -581,6 +585,7 @@ function OptionGrid({
                   label={label}
                   path={path}
                   depth={depth}
+                  snell={snell}
                   onChange={(next) => onChange(key, next)}
                   onValidity={onValidity}
                 />

@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import SingBoxOutboundModal from '@/pages/singbox/SingBoxOutboundModal';
 import fields from '@/pages/singbox/native-outbound-fields.json';
+import { snellHelp, snellOptionHelp } from '@/pages/singbox/snell-help';
 import { nativeOutboundTypes, nativeEndpointTypes } from '@/pages/singbox/native-import';
 vi.mock('@/components/form/JsonEditor', () => ({
   default: ({ value }: { value: string }) => (
@@ -13,6 +14,27 @@ describe('protocol-specific outbound options', () => {
   // interactions. Let those callbacks settle before Vitest disposes jsdom.
   afterEach(async () => {
     await new Promise((resolve) => setTimeout(resolve, 100));
+  });
+
+  it('provides Russian question-mark help for every Snell option', () => {
+    for (const key of Object.keys(fields.protocols.snell)) {
+      expect(snellOptionHelp[key], key).toBeTruthy();
+      expect(snellHelp(key)).toMatch(/[А-Яа-яЁё]/);
+    }
+    expect(snellHelp('unknown_future_option')).toMatch(/[А-Яа-яЁё]/);
+  });
+
+  it('shows question-mark hints for Snell credential and version fields', () => {
+    render(
+      <SingBoxOutboundModal
+        open
+        value={{ type: 'snell', tag: 'snell', version: 6, server: 'example.org', server_port: 443, psk: 'a-valid-server-psk-123' }}
+        existingTags={[]}
+        onCancel={() => {}}
+        onSave={() => {}}
+      />,
+    );
+    expect(document.querySelectorAll('.ant-form-item-tooltip').length).toBeGreaterThanOrEqual(7);
   });
 
   it('covers every selectable native outbound and endpoint', () => {
