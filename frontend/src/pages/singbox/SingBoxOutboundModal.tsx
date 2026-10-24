@@ -452,7 +452,7 @@ export default function SingBoxOutboundModal({
                       { value: 6, label: 'v6' },
                     ]}
                     onChange={(v) => {
-                      const next = { ...draft, version: v };
+                      const next: ConfigObject = { ...draft, version: v };
                       delete next.mode;
                       delete next.obfs_mode;
                       delete next.obfs_host;
@@ -477,7 +477,7 @@ export default function SingBoxOutboundModal({
                         value={text(draft.obfs_mode) || 'none'}
                         options={options(['none', 'http'])}
                         onChange={(v) => {
-                          const next = { ...draft, obfs_mode: v };
+                          const next: ConfigObject = { ...draft, obfs_mode: v };
                           if (v === 'none') delete next.obfs_host;
                           else if (!text(next.obfs_host)) next.obfs_host = 'bing.com';
                           update(next);
