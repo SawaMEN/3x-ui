@@ -101,7 +101,7 @@ const snellNestedHelp: Record<string, string> = {
 
 // Every visible native Snell setting gets a Russian help icon.
 export function snellHelp(field: string, path = field): string {
-  const normalized = path.replace(/\\.\\d+(?=\\.|$)/g, '.*');
+  const normalized = path.replace(/\.\d+(?=\.|$)/g, '.*');
   return (
     snellNestedHelp[normalized] ??
     snellOptionHelp[field] ??
