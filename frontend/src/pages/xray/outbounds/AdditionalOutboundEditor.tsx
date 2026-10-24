@@ -80,11 +80,7 @@ export default function AdditionalOutboundEditor({
         </>
       ) : (
         <>
-          <Alert
-            type="info"
-            showIcon
-            description={t('pages.inbounds.form.snellOutboundHint')}
-          />
+          <Alert type="info" showIcon description={t('pages.inbounds.form.snellOutboundHint')} />
           <Form.Item label={t('pages.inbounds.form.snellVersion')}>
             <Select
               value={snellVersion}

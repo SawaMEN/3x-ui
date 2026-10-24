@@ -55,11 +55,7 @@ export default function SnellFields() {
               >
                 <Input placeholder="bing.com" />
               </FormField>
-              <Alert
-                type="warning"
-                showIcon
-                description={t('pages.inbounds.form.snellObfsHint')}
-              />
+              <Alert type="warning" showIcon description={t('pages.inbounds.form.snellObfsHint')} />
             </>
           )}
         </>
