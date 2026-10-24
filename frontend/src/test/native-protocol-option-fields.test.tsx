@@ -28,7 +28,14 @@ describe('protocol-specific outbound options', () => {
     render(
       <SingBoxOutboundModal
         open
-        value={{ type: 'snell', tag: 'snell', version: 6, server: 'example.org', server_port: 443, psk: 'a-valid-server-psk-123' }}
+        value={{
+          type: 'snell',
+          tag: 'snell',
+          version: 6,
+          server: 'example.org',
+          server_port: 443,
+          psk: 'a-valid-server-psk-123',
+        }}
         existingTags={[]}
         onCancel={() => {}}
         onSave={() => {}}

@@ -81,7 +81,10 @@ export default function AdditionalOutboundEditor({
       ) : (
         <>
           <Alert type="info" showIcon description={t('pages.inbounds.form.snellOutboundHint')} />
-          <Form.Item label={t('pages.inbounds.form.snellVersion')} tooltip={t('pages.inbounds.form.snellVersionTooltip')}>
+          <Form.Item
+            label={t('pages.inbounds.form.snellVersion')}
+            tooltip={t('pages.inbounds.form.snellVersionTooltip')}
+          >
             <Select
               value={snellVersion}
               options={[
@@ -111,7 +114,10 @@ export default function AdditionalOutboundEditor({
             />
           </Form.Item>
           {snellVersion === 6 ? (
-            <Form.Item label={t('pages.inbounds.form.snellMode')} tooltip={t('pages.inbounds.form.snellModeTooltip')}>
+            <Form.Item
+              label={t('pages.inbounds.form.snellMode')}
+              tooltip={t('pages.inbounds.form.snellModeTooltip')}
+            >
               <Select
                 value={String(settings.mode ?? 'default')}
                 options={modeOptions}
@@ -120,7 +126,10 @@ export default function AdditionalOutboundEditor({
             </Form.Item>
           ) : (
             <>
-              <Form.Item label={t('pages.inbounds.form.snellObfs')} tooltip={t('pages.inbounds.form.snellObfsTooltip')}>
+              <Form.Item
+                label={t('pages.inbounds.form.snellObfs')}
+                tooltip={t('pages.inbounds.form.snellObfsTooltip')}
+              >
                 <Select
                   value={String(settings.obfs_mode ?? 'none')}
                   options={obfsOptions}
@@ -134,7 +143,10 @@ export default function AdditionalOutboundEditor({
                 />
               </Form.Item>
               {settings.obfs_mode === 'http' && (
-                <Form.Item label={t('pages.inbounds.form.snellObfsHost')} tooltip={t('pages.inbounds.form.snellObfsHostTooltip')}>
+                <Form.Item
+                  label={t('pages.inbounds.form.snellObfsHost')}
+                  tooltip={t('pages.inbounds.form.snellObfsHostTooltip')}
+                >
                   <Input
                     value={String(settings.obfs_host ?? 'bing.com')}
                     onChange={(e) => update({ obfs_host: e.target.value })}

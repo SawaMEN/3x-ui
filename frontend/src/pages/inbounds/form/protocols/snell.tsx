@@ -18,7 +18,11 @@ export default function SnellFields() {
 
   const advanced = (
     <>
-      <FormField name={['settings', 'psk']} label="PSK" tooltip={t('pages.inbounds.form.snellPskTooltip')}>
+      <FormField
+        name={['settings', 'psk']}
+        label="PSK"
+        tooltip={t('pages.inbounds.form.snellPskTooltip')}
+      >
         <Input.Password
           placeholder={t('pages.inbounds.form.additionalSecretAuto')}
           autoComplete="new-password"
@@ -26,7 +30,11 @@ export default function SnellFields() {
       </FormField>
       {version === 6 ? (
         <>
-          <FormField name={['settings', 'mode']} label={t('pages.inbounds.form.snellMode')} tooltip={t('pages.inbounds.form.snellModeTooltip')}>
+          <FormField
+            name={['settings', 'mode']}
+            label={t('pages.inbounds.form.snellMode')}
+            tooltip={t('pages.inbounds.form.snellModeTooltip')}
+          >
             <Select
               options={[
                 { value: 'default', label: 'default' },
@@ -37,7 +45,11 @@ export default function SnellFields() {
         </>
       ) : (
         <>
-          <FormField name={['settings', 'obfsMode']} label={t('pages.inbounds.form.snellObfs')} tooltip={t('pages.inbounds.form.snellObfsTooltip')}>
+          <FormField
+            name={['settings', 'obfsMode']}
+            label={t('pages.inbounds.form.snellObfs')}
+            tooltip={t('pages.inbounds.form.snellObfsTooltip')}
+          >
             <Select
               options={[
                 { value: 'none', label: 'none' },
@@ -50,7 +62,7 @@ export default function SnellFields() {
               <FormField
                 name={['settings', 'obfsHost']}
                 label={t('pages.inbounds.form.snellObfsHost')}
-        tooltip={t('pages.inbounds.form.snellObfsHostTooltip')}
+                tooltip={t('pages.inbounds.form.snellObfsHostTooltip')}
               >
                 <Input placeholder="bing.com" />
               </FormField>

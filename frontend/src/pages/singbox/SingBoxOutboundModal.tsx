@@ -379,7 +379,10 @@ export default function SingBoxOutboundModal({
         {remote && (
           <>
             {nativeServerTypes.includes(type) && (
-              <Field label="Адрес сервера" tooltip={type === 'snell' ? snellHelp('server') : undefined}>
+              <Field
+                label="Адрес сервера"
+                tooltip={type === 'snell' ? snellHelp('server') : undefined}
+              >
                 <Input
                   value={text(draft.server)}
                   onChange={(e) => update(changeServer(draft, e.target.value.trim()))}
@@ -389,7 +392,10 @@ export default function SingBoxOutboundModal({
             )}
             {nativeServerTypes.includes(type) &&
               !['mieru', 'openconnect', 'pingtunnel'].includes(type) && (
-                <Field label="Порт" tooltip={type === 'snell' ? snellHelp('server_port') : undefined}>
+                <Field
+                  label="Порт"
+                  tooltip={type === 'snell' ? snellHelp('server_port') : undefined}
+                >
                   <InputNumber
                     style={{ width: '100%' }}
                     value={typeof draft.server_port === 'number' ? draft.server_port : undefined}
@@ -446,7 +452,9 @@ export default function SingBoxOutboundModal({
             )}
             {type === 'snell' && (
               <>
-                <Field label="PSK" tooltip={snellHelp('psk')}>{input('psk', true)}</Field>
+                <Field label="PSK" tooltip={snellHelp('psk')}>
+                  {input('psk', true)}
+                </Field>
                 <Field label="Ключ пользователя" tooltip={snellHelp('userkey')}>
                   {input('userkey', true)}
                 </Field>
