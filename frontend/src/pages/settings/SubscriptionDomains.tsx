@@ -19,10 +19,13 @@ export default function SubscriptionDomains({
   const managed =
     status?.config.enabled && status.config.subscriptionDomain ? status.config : undefined;
   const domain = managed?.domains.find((item) => item.name === managed.subscriptionDomain);
-  const publicURL = managed
+  const automaticURL = managed
     ? `https://${managed.subscriptionDomain}${managed.publicPort === 443 ? '' : `:${managed.publicPort}`}`
-    : allSetting.subPublicURL;
-  const config = managed ? '' : subscriptionCaddyConfig(allSetting);
+    : '';
+  const overridden = !!allSetting.subPublicURL.trim();
+  const publicURL = allSetting.subPublicURL;
+  const usingManaged = !!managed && !overridden;
+  const config = usingManaged ? '' : subscriptionCaddyConfig(allSetting);
   return (
     <>
       {managed && (
@@ -30,9 +33,10 @@ export default function SubscriptionDomains({
           type="info"
           showIcon
           title={t('pages.settings.domains.managedSubscription')}
+          description={automaticURL}
           action={
-            <Button onClick={() => navigate('/panel/settings#domains')}>
-              {t('pages.settings.domains.title')}
+            <Button onClick={() => navigate('/settings?subscriptionTab=tls#subscription')}>
+              {t('pages.settings.domains.subscriptionTitle')}
             </Button>
           }
         />
@@ -40,14 +44,22 @@ export default function SubscriptionDomains({
       <SettingListItem
         paddings="small"
         title={t('pages.settings.subPublicURL')}
-        description={t('pages.settings.subPublicURLDesc')}
+        description={
+          <>
+            {t('pages.settings.subPublicURLDesc')} {t('pages.settings.domains.publicOverrideHelp')}
+          </>
+        }
       >
         <Input
           aria-label={t('pages.settings.subPublicURL')}
-          placeholder="https://sub.example.com"
+          placeholder={automaticURL || 'https://sub.example.com'}
           value={publicURL}
-          disabled={!!managed}
-          onChange={(e) => updateSetting({ subPublicURL: e.target.value })}
+          onChange={(e) =>
+            updateSetting({
+              subPublicURL: e.target.value,
+              ...(managed && !e.target.value.trim() ? { subCDNEnable: false } : {}),
+            })
+          }
         />
       </SettingListItem>
       <SettingListItem
@@ -70,8 +82,8 @@ export default function SubscriptionDomains({
       >
         <Switch
           aria-label={t('pages.settings.subCDNEnable')}
-          checked={managed ? domain?.mode === 'cdn' : allSetting.subCDNEnable}
-          disabled={!!managed}
+          checked={usingManaged ? domain?.mode === 'cdn' : allSetting.subCDNEnable}
+          disabled={usingManaged}
           onChange={(value) => updateSetting({ subCDNEnable: value })}
         />
       </SettingListItem>

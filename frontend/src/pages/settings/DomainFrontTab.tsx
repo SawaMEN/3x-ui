@@ -38,7 +38,12 @@ import {
 import type { DomainConfigForm, DomainForm } from '@/schemas/domain-front';
 import { useInboundOptions } from '@/api/queries/useInboundOptions';
 
-export default function DomainFrontTab() {
+interface DomainFrontTabProps {
+  scope?: 'panel' | 'subscription';
+  beforeApply?: () => Promise<{ success?: boolean } | null | undefined>;
+}
+
+export default function DomainFrontTab({ scope, beforeApply }: DomainFrontTabProps = {}) {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const statusQuery = useDomainFrontStatus();
@@ -66,6 +71,7 @@ export default function DomainFrontTab() {
   const [checking, setChecking] = useState<string>();
   const [expanded, setExpanded] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  const [separatePublicPort, setSeparatePublicPort] = useState(false);
   const [editing, setEditing] = useState<number>();
   const [primaryDomain, setPrimaryDomain] = useState(false);
   const [autoCheck, setAutoCheck] = useState(() => {
@@ -100,6 +106,7 @@ export default function DomainFrontTab() {
     }
     setBusy(true);
     try {
+      if (beforeApply && !(await beforeApply())?.success) return;
       const msg = await HttpUtil.post('/panel/api/domains/apply', parsed.data, { silent: true });
       if (!msg?.success) throw new Error(msg?.msg || t('somethingWentWrong'));
       const next = DomainFrontStatusSchema.parse(msg.obj);
@@ -136,11 +143,17 @@ export default function DomainFrontTab() {
   function openEditor(index: number) {
     form.resetFields();
     form.setFieldsValue(
-      index < 0 ? { ...defaultDomain, mode: 'sub_link_only' } : draft.domains[index],
+      index < 0
+        ? {
+            ...defaultDomain,
+            mode: scope === 'panel' ? 'direct' : 'sub_link_only',
+            panel: scope === 'panel',
+          }
+        : draft.domains[index],
     );
     setPrimaryDomain(
       index < 0
-        ? !draft.subscriptionDomain
+        ? scope !== 'panel' && !draft.subscriptionDomain
         : draft.subscriptionDomain === draft.domains[index].name,
     );
     setEditing(index);
@@ -151,7 +164,12 @@ export default function DomainFrontTab() {
     const domain = DomainFormSchema.parse({
       ...defaultDomain,
       ...value,
-      panel: value.mode === 'sub_link_only' ? false : !!value.panel,
+      panel:
+        value.mode === 'sub_link_only'
+          ? false
+          : scope === 'subscription'
+            ? !!old?.panel
+            : !!value.panel,
       inboundIds: value.mode === 'sub_link_only' ? [] : (value.inboundIds ?? []),
       origin: value.mode === 'relay' ? value.origin : '',
       certFile: value.tls === 'manual' ? value.certFile : '',
@@ -190,7 +208,23 @@ export default function DomainFrontTab() {
           description={statusQuery.error.message}
         />
       )}
-      <Typography.Title level={3}>{label('title')}</Typography.Title>
+      <Typography.Title level={4}>
+        {label(
+          scope === 'panel'
+            ? 'panelTitle'
+            : scope === 'subscription'
+              ? 'subscriptionTitle'
+              : 'title',
+        )}
+      </Typography.Title>
+      {scope && (
+        <Alert
+          type="info"
+          showIcon
+          title={label('sharedSettings')}
+          description={label('sharedSettingsDesc')}
+        />
+      )}
       <Alert
         type="info"
         showIcon
@@ -280,21 +314,23 @@ export default function DomainFrontTab() {
               onChange={(e) => update({ email: e.target.value })}
             />
           </Form.Item>
-          <Form.Item
-            label={label('canonical')}
-            tooltip={label('canonicalDesc')}
-            extra={label('canonicalDesc')}
-          >
-            <Select
-              aria-label={label('canonical')}
-              allowClear
-              value={draft.subscriptionDomain || undefined}
-              onChange={(value) => update({ subscriptionDomain: value || '' })}
-              options={draft.domains
-                .filter((d) => d.enabled)
-                .map((d) => ({ value: d.name, label: d.name }))}
-            />
-          </Form.Item>
+          {scope !== 'panel' && (
+            <Form.Item
+              label={label('canonical')}
+              tooltip={label('canonicalDesc')}
+              extra={label('canonicalDesc')}
+            >
+              <Select
+                aria-label={label('canonical')}
+                allowClear
+                value={draft.subscriptionDomain || undefined}
+                onChange={(value) => update({ subscriptionDomain: value || '' })}
+                options={draft.domains
+                  .filter((d) => d.enabled)
+                  .map((d) => ({ value: d.name, label: d.name }))}
+              />
+            </Form.Item>
+          )}
           <Form.Item tooltip={label('autoCheckHelp')} label={label('autoCheck')}>
             <Switch
               aria-label={label('autoCheck')}
@@ -356,21 +392,38 @@ export default function DomainFrontTab() {
                           max={65535}
                           value={draft.httpsPort}
                           onChange={(v) => {
-                            if (v != null) update({ httpsPort: v });
+                            if (v != null)
+                              update({
+                                httpsPort: v,
+                                ...(!separatePublicPort && draft.publicPort === draft.httpsPort
+                                  ? { publicPort: v }
+                                  : {}),
+                              });
                           }}
                         />
                       </Form.Item>
-                      <Form.Item label={label('publicPort')} tooltip={label('publicPortHelp')}>
-                        <InputNumber
-                          min={1}
-                          max={65535}
-                          value={draft.publicPort}
-                          onChange={(v) => {
-                            if (v != null) update({ publicPort: v });
-                          }}
-                        />
-                      </Form.Item>
+                      {(separatePublicPort || draft.publicPort !== draft.httpsPort) && (
+                        <Form.Item label={label('publicPort')} tooltip={label('publicPortHelp')}>
+                          <InputNumber
+                            min={1}
+                            max={65535}
+                            value={draft.publicPort}
+                            onChange={(v) => {
+                              if (v != null) update({ publicPort: v });
+                            }}
+                          />
+                        </Form.Item>
+                      )}
                     </Space>
+                    <Checkbox
+                      checked={separatePublicPort || draft.publicPort !== draft.httpsPort}
+                      onChange={(event) => {
+                        setSeparatePublicPort(event.target.checked);
+                        if (!event.target.checked) update({ publicPort: draft.httpsPort });
+                      }}
+                    >
+                      {label('portMapping')}
+                    </Checkbox>
                     <Typography.Paragraph type="secondary">
                       {label('portsHelp')}
                     </Typography.Paragraph>
@@ -404,7 +457,9 @@ export default function DomainFrontTab() {
       >
         <Table
           rowKey="name"
-          dataSource={draft.domains}
+          dataSource={
+            scope === 'panel' ? draft.domains.filter((domain) => domain.panel) : draft.domains
+          }
           pagination={false}
           scroll={{ x: 760 }}
           locale={{ emptyText: label('empty') }}
@@ -474,9 +529,15 @@ export default function DomainFrontTab() {
             },
             {
               title: label('actions'),
-              render: (_, d, index) => (
+              render: (_, d) => (
                 <Space orientation="vertical">
-                  <Button onClick={() => openEditor(index)}>{label('edit')}</Button>
+                  <Button
+                    onClick={() =>
+                      openEditor(draft.domains.findIndex((domain) => domain.name === d.name))
+                    }
+                  >
+                    {label('edit')}
+                  </Button>
                   <Button
                     loading={checking === d.name}
                     disabled={dirty || !initialized}
@@ -488,7 +549,7 @@ export default function DomainFrontTab() {
                     title={label('removeConfirm')}
                     onConfirm={() =>
                       update({
-                        domains: draft.domains.filter((_, i) => i !== index),
+                        domains: draft.domains.filter((domain) => domain.name !== d.name),
                         subscriptionDomain:
                           draft.subscriptionDomain === d.name ? '' : draft.subscriptionDomain,
                       })
@@ -615,14 +676,16 @@ export default function DomainFrontTab() {
           )}
           {mode !== 'sub_link_only' && (
             <>
-              <Form.Item
-                name="panel"
-                label={label('panelAllowed')}
-                tooltip={label('panelHelp')}
-                valuePropName="checked"
-              >
-                <Checkbox />
-              </Form.Item>
+              {scope !== 'subscription' && (
+                <Form.Item
+                  name="panel"
+                  label={label('panelAllowed')}
+                  tooltip={label('panelHelp')}
+                  valuePropName="checked"
+                >
+                  <Checkbox />
+                </Form.Item>
+              )}
               <Form.Item
                 name="inboundIds"
                 label={label('inbounds')}
@@ -639,14 +702,19 @@ export default function DomainFrontTab() {
               </Form.Item>
             </>
           )}
-          <Form.Item label={label('useForSubscription')} tooltip={label('useForSubscriptionHelp')}>
-            <Checkbox
-              checked={primaryDomain}
-              onChange={(event) => setPrimaryDomain(event.target.checked)}
+          {scope !== 'panel' && (
+            <Form.Item
+              label={label('useForSubscription')}
+              tooltip={label('useForSubscriptionHelp')}
             >
-              {label('useForSubscription')}
-            </Checkbox>
-          </Form.Item>
+              <Checkbox
+                checked={primaryDomain}
+                onChange={(event) => setPrimaryDomain(event.target.checked)}
+              >
+                {label('useForSubscription')}
+              </Checkbox>
+            </Form.Item>
+          )}
           <Form.Item
             name="tls"
             label={label('tlsLabel')}

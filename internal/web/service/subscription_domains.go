@@ -12,6 +12,13 @@ import (
 )
 
 func (s *SettingService) GetSubPublicURL() (string, error) {
+	raw, err := s.getString("subPublicURL")
+	if err != nil {
+		return "", err
+	}
+	if raw = strings.TrimSpace(raw); raw != "" {
+		return strings.TrimRight(raw, "/"), nil
+	}
 	cfg, err := s.GetDomainFrontConfig()
 	if err != nil {
 		return "", err
@@ -23,14 +30,17 @@ func (s *SettingService) GetSubPublicURL() (string, error) {
 		}
 		return "https://" + host, nil
 	}
-	raw, err := s.getString("subPublicURL")
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimRight(raw, "/"), nil
+	return "", nil
 }
 
 func (s *SettingService) GetSubCDNEnable() (bool, error) {
+	publicURL, err := s.getString("subPublicURL")
+	if err != nil {
+		return false, err
+	}
+	if strings.TrimSpace(publicURL) != "" {
+		return s.getBool("subCDNEnable")
+	}
 	cfg, err := s.GetDomainFrontConfig()
 	if err != nil {
 		return false, err

@@ -57,7 +57,7 @@ describe('SubscriptionGeneralTab', () => {
 
     chooseSelectOption('sub-profile-mode', 'Built-in subscription page');
     expect(screen.getByTestId('profile-settings').textContent).toBe(`builtin|${storedUrl}`);
-    expect(screen.getByRole('alert').textContent).toContain(warning);
+    expect(screen.getByText(warning)).toBeTruthy();
     expect(screen.queryByDisplayValue(storedUrl)).toBeNull();
 
     chooseSelectOption('sub-profile-mode', 'Custom website');
