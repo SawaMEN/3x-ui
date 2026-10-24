@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
@@ -11,6 +12,17 @@ import (
 )
 
 func (s *SettingService) GetSubPublicURL() (string, error) {
+	cfg, err := s.GetDomainFrontConfig()
+	if err != nil {
+		return "", err
+	}
+	if cfg.Enabled && cfg.SubscriptionDomain != "" {
+		host := cfg.SubscriptionDomain
+		if cfg.PublicPort != 443 {
+			host = net.JoinHostPort(host, strconv.Itoa(cfg.PublicPort))
+		}
+		return "https://" + host, nil
+	}
 	raw, err := s.getString("subPublicURL")
 	if err != nil {
 		return "", err
@@ -22,6 +34,17 @@ func (s *SettingService) GetSubCDNEnable() (bool, error) { return s.getBool("sub
 
 func (s *SettingService) GetSubscriptionAllowedHosts(primary string) (map[string]bool, error) {
 	hosts := map[string]bool{}
+	cfg, err := s.GetDomainFrontConfig()
+	if err != nil {
+		return nil, err
+	}
+	if cfg.Enabled {
+		for _, d := range cfg.Domains {
+			if d.Enabled {
+				hosts[d.Name] = true
+			}
+		}
+	}
 	if primary != "" {
 		hosts[strings.TrimSuffix(strings.ToLower(primary), ".")] = true
 	}

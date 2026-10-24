@@ -43,6 +43,7 @@ import SubscriptionBalancersTab from './SubscriptionBalancersTab';
 import SwapSettingsTab from './SwapSettingsTab';
 import SystemUpdateModal from './SystemUpdateModal';
 import GatewayModeControl from './GatewayModeControl';
+import DomainFrontTab from './DomainFrontTab';
 import './SettingsPage.css';
 import './TemporaryUiHides.css';
 
@@ -60,6 +61,7 @@ const tabSlugs = [
   'subscription-formats',
   'subscription-balancers',
   'gateway',
+  'domains',
 ];
 
 function scrollTarget() {
@@ -293,6 +295,8 @@ export default function SettingsPage() {
         return <SubscriptionFormatsTab allSetting={allSetting} updateSetting={updateSetting} />;
       case 'subscription-balancers':
         return <SubscriptionBalancersTab allSetting={allSetting} updateSetting={updateSetting} />;
+      case 'domains':
+        return <DomainFrontTab />;
       case 'gateway':
         return <GatewayModeControl />;
       default:
@@ -364,7 +368,7 @@ export default function SettingsPage() {
                   )}
 
                   <Row gutter={[isMobile ? 8 : 16, isMobile ? 0 : 12]}>
-                    {activeSlug !== 'gateway' && (
+                    {activeSlug !== 'gateway' && activeSlug !== 'domains' && (
                       <Col span={24}>
                         <Card hoverable>
                           <Row className="header-row">
@@ -393,7 +397,7 @@ export default function SettingsPage() {
                     )}
 
                     <Col span={24}>
-                      {activeSlug === 'gateway' ? (
+                      {activeSlug === 'gateway' || activeSlug === 'domains' ? (
                         categoryBody
                       ) : (
                         <Card hoverable>{categoryBody}</Card>

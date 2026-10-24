@@ -21,6 +21,7 @@ func main() {
 
 func run(root, outDir string) error {
 	requests := []packageRequest{
+		{Path: resolveRel(root, "internal/domainfront"), StructAllow: setOf("DomainFrontConfig", "DomainFrontDomain", "DomainFrontCertificate", "DomainFrontStatus", "DomainFrontCheck")},
 		{
 			Path:        resolveRel(root, "internal/core"),
 			StructAllow: setOf("Capabilities"),

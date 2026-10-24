@@ -54,6 +54,7 @@ const (
 )
 
 var defaultValueMap = map[string]string{
+	"domainFrontConfig": "",
 	"subPublicURL":      "",
 	"subAllowedDomains": "",
 	"subCDNEnable":      "false",

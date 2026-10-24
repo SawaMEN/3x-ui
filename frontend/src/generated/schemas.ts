@@ -2258,6 +2258,214 @@ export const SCHEMAS: Record<string, unknown> = {
     ],
     "type": "object"
   },
+  "DomainFrontCertificate": {
+    "properties": {
+      "autoRenew": {
+        "type": "boolean"
+      },
+      "daysLeft": {
+        "type": "integer"
+      },
+      "error": {
+        "type": "string"
+      },
+      "expiresAt": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "issuer": {
+        "type": "string"
+      },
+      "mode": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "state": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "autoRenew",
+      "daysLeft",
+      "error",
+      "expiresAt",
+      "issuer",
+      "mode",
+      "name",
+      "state"
+    ],
+    "type": "object"
+  },
+  "DomainFrontCheck": {
+    "properties": {
+      "addresses": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "checkedAt": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "daysLeft": {
+        "type": "integer"
+      },
+      "error": {
+        "type": "string"
+      },
+      "expiresAt": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "issuer": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "addresses",
+      "checkedAt",
+      "daysLeft",
+      "error",
+      "expiresAt",
+      "issuer",
+      "name"
+    ],
+    "type": "object"
+  },
+  "DomainFrontConfig": {
+    "properties": {
+      "acceptTerms": {
+        "type": "boolean"
+      },
+      "domains": {
+        "items": {
+          "$ref": "#/components/schemas/DomainFrontDomain"
+        },
+        "type": "array"
+      },
+      "email": {
+        "type": "string"
+      },
+      "enabled": {
+        "type": "boolean"
+      },
+      "httpPort": {
+        "example": 80,
+        "type": "integer"
+      },
+      "httpsPort": {
+        "example": 443,
+        "type": "integer"
+      },
+      "listen": {
+        "type": "string"
+      },
+      "publicPort": {
+        "example": 443,
+        "type": "integer"
+      },
+      "staging": {
+        "type": "boolean"
+      },
+      "subscriptionDomain": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "acceptTerms",
+      "domains",
+      "email",
+      "enabled",
+      "httpPort",
+      "httpsPort",
+      "listen",
+      "publicPort",
+      "staging",
+      "subscriptionDomain"
+    ],
+    "type": "object"
+  },
+  "DomainFrontDomain": {
+    "properties": {
+      "certFile": {
+        "type": "string"
+      },
+      "enabled": {
+        "type": "boolean"
+      },
+      "inboundIds": {
+        "items": {
+          "type": "integer"
+        },
+        "type": "array"
+      },
+      "keyFile": {
+        "type": "string"
+      },
+      "mode": {
+        "example": "sub_link_only",
+        "type": "string"
+      },
+      "name": {
+        "example": "sub.example.com",
+        "type": "string"
+      },
+      "origin": {
+        "type": "string"
+      },
+      "panel": {
+        "type": "boolean"
+      },
+      "tls": {
+        "example": "auto",
+        "type": "string"
+      }
+    },
+    "required": [
+      "certFile",
+      "enabled",
+      "inboundIds",
+      "keyFile",
+      "mode",
+      "name",
+      "origin",
+      "panel",
+      "tls"
+    ],
+    "type": "object"
+  },
+  "DomainFrontStatus": {
+    "properties": {
+      "certificates": {
+        "items": {
+          "$ref": "#/components/schemas/DomainFrontCertificate"
+        },
+        "type": "array"
+      },
+      "config": {
+        "$ref": "#/components/schemas/DomainFrontConfig"
+      },
+      "error": {
+        "type": "string"
+      },
+      "running": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "certificates",
+      "config",
+      "error",
+      "running"
+    ],
+    "type": "object"
+  },
   "FallbackParentInfo": {
     "description": "FallbackParentInfo carries everything the frontend needs to rewrite a\nchild inbound's client link: where to connect (the master's address\nand port) and which path matched on the master's fallbacks array.\nThe frontend already has the master inbound in its dbInbounds list,\nso we only ship identifiers + the match path here.",
     "properties": {

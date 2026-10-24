@@ -20,6 +20,7 @@ export const keys = {
   settings: {
     root: () => ['settings'] as const,
     all: () => ['settings', 'all'] as const,
+    domains: () => ['settings', 'domains'] as const,
     defaults: () => ['settings', 'defaults'] as const,
     factoryDefaults: () => ['settings', 'factoryDefaults'] as const,
   },

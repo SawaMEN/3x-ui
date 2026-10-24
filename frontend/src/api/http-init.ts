@@ -7,6 +7,7 @@ const CSRF_TOKEN_PATH = '/csrf-token';
 const JSON_ONLY_API_PREFIXES = [
   '/panel/api/adblock/',
   '/panel/api/gateway/',
+  '/panel/api/domains/',
   '/panel/api/oxidns/',
   '/panel/api/dnstt/',
   '/panel/api/olcrtc/',
