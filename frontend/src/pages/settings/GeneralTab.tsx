@@ -1,3 +1,4 @@
+import DomainFrontTab from './DomainFrontTab';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router';
@@ -54,6 +55,7 @@ interface GeneralTabProps {
 export default function GeneralTab({
   allSetting,
   updateSetting,
+  saveSettings,
   onOpenSwap,
   onOpenSystemUpdate,
 }: GeneralTabProps) {
@@ -662,16 +664,6 @@ export default function GeneralTab({
             label: catTabLabel(<SafetyCertificateOutlined />, t('pages.settings.certs'), isMobile),
             children: (
               <>
-                <Alert
-                  type="info"
-                  showIcon
-                  title={t('pages.settings.domains.existingDesc')}
-                  action={
-                    <Button onClick={() => navigate('/panel/settings#domains')}>
-                      {t('pages.settings.domains.title')}
-                    </Button>
-                  }
-                />
                 <SettingListItem
                   paddings="small"
                   title={t('pages.settings.publicKeyPath')}
@@ -692,6 +684,7 @@ export default function GeneralTab({
                     onChange={(e) => updateSetting({ webKeyFile: e.target.value })}
                   />
                 </SettingListItem>
+                <DomainFrontTab scope="panel" beforeApply={saveSettings} />
               </>
             ),
           },

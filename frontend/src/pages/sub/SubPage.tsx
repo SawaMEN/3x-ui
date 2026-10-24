@@ -10,7 +10,6 @@ import {
   Tabs,
   Typography,
   message,
-  theme,
 } from 'antd';
 import type { TabsProps } from 'antd';
 import {
@@ -291,28 +290,17 @@ export default function SubPage() {
   }, [t, copy, open, telemtData, telemtLoading, telemtError]);
 
   const direction = RTL_LANGUAGES.has(lang) ? 'rtl' : 'ltr';
-  const pageClass = [
-    'subscription-page',
-    isDark && 'is-dark',
-    isUltra && 'is-ultra',
-    appearance && 'sub-minimal',
-  ]
+  const pageClass = ['subscription-page', isDark && 'is-dark', isUltra && 'is-ultra', 'sub-minimal']
     .filter(Boolean)
     .join(' ');
 
-  const themeConfig = appearance
-    ? {
-        algorithm: isDark ? theme.darkAlgorithm : theme.defaultAlgorithm,
-        token: {
-          colorPrimary: appearance.accent,
-          colorBgLayout: isDark ? '#2a2a2e' : '#f2f2f5',
-          colorBgContainer: isDark ? '#303034' : '#ffffff',
-          colorText: isDark ? '#f5f5f5' : '#1a1a1a',
-          borderRadius: 16,
-          fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
-        },
-      }
-    : antdThemeConfig;
+  const themeConfig = {
+    ...antdThemeConfig,
+    token: {
+      ...antdThemeConfig.token,
+      ...(appearance ? { colorPrimary: appearance.accent, colorLink: appearance.accent } : {}),
+    },
+  };
   const subscriptionStyle = {
     '--sub-accent': appearance?.accent || antdThemeConfig.token?.colorPrimary,
     '--sub-grad-from': antdThemeConfig.token?.colorPrimary,
@@ -343,7 +331,7 @@ export default function SubPage() {
                 {appearance.description}
               </p>
             )}
-            {appearance && subUrl && (
+            {subUrl && (
               <Button
                 type="primary"
                 size="large"

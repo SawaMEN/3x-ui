@@ -1,4 +1,4 @@
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, useLocation } from 'react-router';
 import { AllSetting } from '@/models/setting';
 import SubscriptionDomains from '@/pages/settings/SubscriptionDomains';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
@@ -120,6 +120,17 @@ function fixture(existing = false) {
   };
 }
 
+function LocationProbe() {
+  const location = useLocation();
+  return (
+    <output data-testid="location">
+      {location.pathname}
+      {location.search}
+      {location.hash}
+    </output>
+  );
+}
+
 describe('domain and TLS dashboard', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -158,11 +169,10 @@ describe('domain and TLS dashboard', () => {
     const update = vi.fn();
     renderWithProviders(
       <MemoryRouter>
+        <LocationProbe />
         <DomainFrontTab />
         <SubscriptionDomains
-          allSetting={
-            new AllSetting({ subPublicURL: 'https://old.example.com', subCDNEnable: false })
-          }
+          allSetting={new AllSetting({ subPublicURL: '', subCDNEnable: false })}
           updateSetting={update}
         />
       </MemoryRouter>,
@@ -172,13 +182,64 @@ describe('domain and TLS dashboard', () => {
     const address = (await screen.findByRole('textbox', {
       name: 'Public subscription address',
     })) as HTMLInputElement;
-    await waitFor(() => expect(address.value).toBe('https://sub.example.com'));
-    expect(address.disabled).toBe(true);
+    await waitFor(() => expect(address.placeholder).toBe('https://sub.example.com'));
+    expect(address.value).toBe('');
+    expect(address.disabled).toBe(false);
     expect(
       screen.getByRole('switch', { name: 'Subscription through CDN' }).getAttribute('aria-checked'),
     ).toBe('true');
     expect(screen.queryByRole('textbox', { name: 'Caddy reverse proxy configuration' })).toBeNull();
     expect(update).not.toHaveBeenCalled();
+    fireEvent.change(address, { target: { value: 'https://external.example.com' } });
+    expect(update).toHaveBeenLastCalledWith({ subPublicURL: 'https://external.example.com' });
+    fireEvent.change(address, { target: { value: ' ' } });
+    expect(update).toHaveBeenLastCalledWith({ subPublicURL: ' ', subCDNEnable: false });
+    fireEvent.click(screen.getByRole('button', { name: 'Subscription domains and certificates' }));
+    expect(screen.getByTestId('location').textContent).toBe(
+      '/settings?subscriptionTab=tls#subscription',
+    );
+  });
+
+  it('saves service settings before applying the shared gateway and stops if saving fails', async () => {
+    const f = fixture();
+    const beforeApply = vi.fn(async () => ({ success: false }));
+    renderWithProviders(<DomainFrontTab scope="subscription" beforeApply={beforeApply} />);
+    fireEvent.change(await screen.findByDisplayValue('old@example.com'), {
+      target: { value: 'new@example.com' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save and apply' }));
+    await waitFor(() => expect(beforeApply).toHaveBeenCalledOnce());
+    expect(f.applied).toBeUndefined();
+    await waitFor(() =>
+      expect(
+        screen
+          .getByRole('button', { name: 'Save and apply' })
+          .classList.contains('ant-btn-loading'),
+      ).toBe(false),
+    );
+    beforeApply.mockResolvedValue({ success: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Save and apply' }));
+    await waitFor(() => expect(f.applied?.email).toBe('new@example.com'));
+  });
+
+  it('edits a panel domain by identity without changing hidden subscription domains', async () => {
+    const f = fixture();
+    f.config.domains.push({ ...defaultDomain, name: 'panel.example.com', panel: true });
+    renderWithProviders(<DomainFrontTab scope="panel" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    expect(screen.getByDisplayValue('panel.example.com')).toBeTruthy();
+    fireEvent.change(screen.getByDisplayValue('panel.example.com'), {
+      target: { value: 'admin.example.com' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    await screen.findByText('admin.example.com');
+    fireEvent.click(screen.getByRole('button', { name: 'Save and apply' }));
+    await waitFor(() =>
+      expect(f.applied?.domains.map((d) => d.name)).toEqual([
+        'sub.example.com',
+        'admin.example.com',
+      ]),
+    );
   });
 
   it.each([
