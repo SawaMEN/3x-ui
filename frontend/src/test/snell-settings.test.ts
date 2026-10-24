@@ -35,6 +35,20 @@ describe('Snell settings and subscription links', () => {
     });
   });
 
+  it('preserves Snell v5 in a QUIC proxy link', () => {
+    const link = 'snell://deploy-psk@example.org:443?version=5&userkey=user-key#QUIC';
+    expect(parseOutboundLink(link)?.settings).toMatchObject({
+      version: 5,
+      psk: 'deploy-psk',
+      userkey: 'user-key',
+    });
+  });
+
+  it('rejects QUIC Proxy on v6 and accepts v5', () => {
+    expect(SnellInboundSettingsSchema.safeParse({ version: 5, quicProxy: true, psk: 'secret' }).success).toBe(true);
+    expect(SnellInboundSettingsSchema.safeParse({ version: 6, quicProxy: true, psk: '123456789012' }).success).toBe(false);
+  });
+
   it('imports a v6 link with mode and a distinct user key', () => {
     const link =
       'snell://deploy-psk-12345@example.org:443?version=6&userkey=another-key&mode=unshaped#Snell';

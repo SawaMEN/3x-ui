@@ -14,6 +14,7 @@ export default function SnellFields() {
     setValue('settings.mode', 'default', { shouldDirty: true });
     setValue('settings.obfsMode', 'none', { shouldDirty: true });
     setValue('settings.obfsHost', 'bing.com', { shouldDirty: true });
+    setValue('settings.quicProxy', false, { shouldDirty: true });
   }
 
   const advanced = (
@@ -57,6 +58,13 @@ export default function SnellFields() {
               ]}
             />
           </FormField>
+          <FormField
+            name={['settings', 'quicProxy']}
+            label="QUIC Proxy (UDP)"
+            tooltip="Snell v5: QUIC Initial шифруется, а последующие UDP-пакеты передаются напрямую. Клиент и сервер должны поддерживать v5; откройте UDP-порт."
+          >
+            <Select options={[{ value: false, label: 'Выключено' }, { value: true, label: 'Включено' }]} />
+          </FormField>
           {obfsMode === 'http' && (
             <>
               <FormField
@@ -85,7 +93,7 @@ export default function SnellFields() {
         <Select
           options={[
             { value: 6, label: 'v6' },
-            { value: 5, label: 'v5 (v4 client, no QUIC Proxy)' },
+            { value: 5, label: 'v5 (QUIC Proxy optional)' },
           ]}
         />
       </FormField>
