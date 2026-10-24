@@ -151,9 +151,30 @@ func Prepare(ib *model.Inbound, previous string) error {
 	if err != nil {
 		return err
 	}
-	ib.Settings = string(data)
-	_, err = Parse(ib.Settings)
-	return err
+	// Reject unsupported combinations before removing inactive defaults.
+	s, err := Parse(string(data))
+	if err != nil {
+		return err
+	}
+	if s.Version == 6 {
+		delete(raw, "obfsMode")
+		delete(raw, "obfsHost")
+		if s.Mode == "" || s.Mode == "default" {
+			delete(raw, "mode")
+		}
+	} else {
+		delete(raw, "mode")
+		if s.ObfsMode == "" || s.ObfsMode == "none" {
+			delete(raw, "obfsMode")
+			delete(raw, "obfsHost")
+		}
+	}
+	canonical, err := json.Marshal(raw)
+	if err != nil {
+		return err
+	}
+	ib.Settings = string(canonical)
+	return nil
 }
 
 // sing-box deliberately calls the v5-compatible outbound version 4.

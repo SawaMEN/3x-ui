@@ -407,6 +407,15 @@ export function dropLegacyOptionalEmpties(
 
 export function formValuesToWirePayload(values: InboundFormValues): WireInboundPayload {
   const settingsPruned = (pruneEmpty(values.settings ?? {}) ?? {}) as Record<string, unknown>;
+  if (values.protocol === 'snell') {
+    if (settingsPruned.version === 5) {
+      delete settingsPruned.mode;
+      if (settingsPruned.obfsMode !== 'http') delete settingsPruned.obfsHost;
+    } else {
+      delete settingsPruned.obfsMode;
+      delete settingsPruned.obfsHost;
+    }
+  }
   const shadowTls = settingsPruned.shadowTls as Record<string, unknown> | undefined;
   const shadowTlsEnabled = shadowTls?.enabled === true;
   const legacyShadowsocksWrapper = shadowTlsEnabled && values.protocol === 'shadowsocks';

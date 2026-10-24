@@ -40,6 +40,38 @@ func TestPrepareGeneratesAndPreservesSnellSecrets(t *testing.T) {
 	}
 }
 
+func TestSnellSettingsKeepOnlyApplicableVersionFields(t *testing.T) {
+	cases := []struct {
+		name string
+		settings string
+		forbidden []string
+	}{
+		{"v6", `{"version":6,"mode":"default","obfsMode":"none","obfsHost":"old.example"}`, []string{"mode", "obfsMode", "obfsHost"}},
+		{"v5", `{"version":5,"mode":"default","obfsMode":"none","obfsHost":"old.example"}`, []string{"mode", "obfsMode", "obfsHost"}},
+		{"v5 HTTP", `{"version":5,"mode":"default","obfsMode":"http","obfsHost":"web.example"}`, []string{"mode"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			inbound := &model.Inbound{Protocol: model.Snell, Settings: tc.settings}
+			if err := Prepare(inbound, ""); err != nil {
+				t.Fatal(err)
+			}
+			var fields map[string]any
+			if err := json.Unmarshal([]byte(inbound.Settings), &fields); err != nil {
+				t.Fatal(err)
+			}
+			for _, key := range tc.forbidden {
+				if _, ok := fields[key]; ok {
+					t.Fatalf("unused field %q present in %s", key, inbound.Settings)
+				}
+			}
+			if tc.name == "v5 HTTP" && fields["obfsHost"] != "web.example" {
+				t.Fatalf("HTTP Host missing in %s", inbound.Settings)
+			}
+		})
+	}
+}
+
 func TestSnellVersionSpecificOutbound(t *testing.T) {
 	client := model.Client{Email: "alice", Password: "user-secret", Enable: true}
 	for _, tc := range []struct {
