@@ -1,0 +1,42 @@
+name: One-time Snell help formatting
+on:
+  push:
+    branches:
+      - fix/snell-reliability
+    paths:
+      - .github/workflows/snell-help-format-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+      - name: Format changed Snell frontend files
+        working-directory: frontend
+        run: |
+          npx oxfmt \
+            src/pages/inbounds/form/protocols/snell.tsx \
+            src/pages/singbox/snell-help.ts \
+            src/pages/singbox/SingBoxOutboundModal.tsx \
+            src/pages/singbox/ProtocolOptionFields.tsx \
+            src/pages/xray/outbounds/AdditionalOutboundEditor.tsx \
+            src/test/native-protocol-option-fields.test.tsx
+      - name: Commit formatter changes
+        run: |
+          if git diff --quiet -- frontend; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend
+          git commit -m "chore(snell): format Russian help tooltips"
+          git push origin HEAD:fix/snell-reliability
