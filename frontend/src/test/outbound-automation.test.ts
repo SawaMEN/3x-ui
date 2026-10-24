@@ -55,6 +55,7 @@ describe('automatic native protocol configuration', () => {
     }
     expect(dedicated.has('network')).toBe(false);
     expect(dedicated.has('reuse')).toBe(false);
+    expect(registry.protocols.snell.network.kind).toBe('network');
   });
 
   it('cleans only incompatible version-dependent fields', () => {

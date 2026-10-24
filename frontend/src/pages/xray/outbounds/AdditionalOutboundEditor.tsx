@@ -19,11 +19,15 @@ export default function AdditionalOutboundEditor({
   const protocol = raw?.protocol;
   if (!['fptn', 'openflux', 'snell', 'singbox:snell'].includes(String(protocol))) return null;
   const settings = (raw.settings ?? {}) as Record<string, unknown>;
+  const isSnell = protocol === 'snell' || protocol === 'singbox:snell';
+  const snellVersion = Number(settings.version ?? 6) === 4 ? 4 : 6;
+  const modeOptions = ['default', 'unshaped'].map((mode) => ({ value: mode, label: mode }));
+  const obfsOptions = ['none', 'http'].map((mode) => ({ value: mode, label: mode }));
   const update = (values: Record<string, unknown>) =>
     onChange(JSON.stringify({ ...raw, settings: { ...settings, ...values } }, null, 2));
   return (
     <Space orientation="vertical" style={{ width: '100%' }}>
-      {protocol !== 'snell' && protocol !== 'singbox:snell' && (
+      {!isSnell && (
         <Alert type="info" showIcon description={t('pages.inbounds.form.vpnOutboundHint')} />
       )}
       {protocol === 'fptn' ? (
@@ -83,7 +87,7 @@ export default function AdditionalOutboundEditor({
           />
           <Form.Item label={t('pages.inbounds.form.snellVersion')}>
             <Select
-              value={Number(settings.version ?? 4) === 6 ? 6 : 4}
+              value={snellVersion}
               options={[
                 { value: 4, label: 'v4 (server v5)' },
                 { value: 6, label: 'v6' },
@@ -110,11 +114,11 @@ export default function AdditionalOutboundEditor({
               onChange={(e) => update({ userkey: e.target.value })}
             />
           </Form.Item>
-          {Number(settings.version ?? 4) === 6 ? (
+          {snellVersion === 6 ? (
             <Form.Item label={t('pages.inbounds.form.snellMode')}>
               <Select
                 value={String(settings.mode ?? 'default')}
-                options={['default', 'unshaped'].map((mode) => ({ value: mode, label: mode }))}
+                options={modeOptions}
                 onChange={(mode) => update({ mode })}
               />
             </Form.Item>
@@ -123,7 +127,7 @@ export default function AdditionalOutboundEditor({
               <Form.Item label={t('pages.inbounds.form.snellObfs')}>
                 <Select
                   value={String(settings.obfs_mode ?? 'none')}
-                  options={['none', 'http'].map((mode) => ({ value: mode, label: mode }))}
+                  options={obfsOptions}
                   onChange={(obfs_mode) =>
                     update({
                       obfs_mode,

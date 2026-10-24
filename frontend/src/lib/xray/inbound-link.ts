@@ -1531,7 +1531,9 @@ export function genLink(input: GenLinkInput): string {
       if (settings.version === 6) {
         if (settings.mode && settings.mode !== 'default') params.set('mode', settings.mode);
       } else {
-        if (settings.obfsMode && settings.obfsMode !== 'none') params.set('obfs', settings.obfsMode);
+        if (settings.obfsMode && settings.obfsMode !== 'none') {
+          params.set('obfs', settings.obfsMode);
+        }
         if (settings.obfsMode === 'http' && settings.obfsHost) {
           params.set('obfs-host', settings.obfsHost);
         }

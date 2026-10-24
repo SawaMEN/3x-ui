@@ -600,7 +600,12 @@ export default function ProtocolOptionFields({
 }) {
   const type = String(value.type || '');
   const hidden = dedicatedFields(type);
-  const schema = registry.protocols[type] || {};
+  // sing-box Snell "network" is a single string, not a list.
+  // Keep the optional control in the generic advanced section.
+  const schema: OptionSchema =
+    type === 'snell'
+      ? { ...registry.protocols.snell, network: { kind: 'string', enum: ['tcp', 'udp'] } }
+      : registry.protocols[type] || {};
   const own = Object.fromEntries(
     Object.entries(schema).filter(
       ([key]) => !hidden.has(key) && !registry.dialerFields.includes(key),

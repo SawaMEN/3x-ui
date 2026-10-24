@@ -3,6 +3,9 @@ import { SnellInboundSettingsSchema } from '@/schemas/protocols/inbound/snell';
 import { parseOutboundLink } from '@/lib/xray/outbound-link-parser';
 
 describe('Snell settings and subscription links', () => {
+  const valid = (version: 5 | 6, psk: string) =>
+    SnellInboundSettingsSchema.safeParse({ version, psk }).success;
+
   it('keeps an empty PSK for secure generation on save', () => {
     const parsed = SnellInboundSettingsSchema.parse({});
     expect(parsed.version).toBe(6);
@@ -11,17 +14,11 @@ describe('Snell settings and subscription links', () => {
   });
 
   it('checks v6 PSK byte limits but accepts the v5-compatible PSK', () => {
-    expect(SnellInboundSettingsSchema.safeParse({ version: 6, psk: 'short' }).success).toBe(false);
-    expect(SnellInboundSettingsSchema.safeParse({ version: 5, psk: 'short' }).success).toBe(true);
-    expect(
-      SnellInboundSettingsSchema.safeParse({ version: 6, psk: '😀'.repeat(3) }).success,
-    ).toBe(true);
-    expect(
-      SnellInboundSettingsSchema.safeParse({ version: 6, psk: 'a'.repeat(256) }).success,
-    ).toBe(false);
-    expect(SnellInboundSettingsSchema.safeParse({ version: 6, psk: 'bad\nkey' }).success).toBe(
-      false,
-    );
+    expect(valid(6, 'short')).toBe(false);
+    expect(valid(5, 'short')).toBe(true);
+    expect(valid(6, '😀'.repeat(3))).toBe(true);
+    expect(valid(6, 'a'.repeat(256))).toBe(false);
+    expect(valid(6, 'bad\nkey')).toBe(false);
   });
 
   it('imports a multi-user v5 link as client v4 with HTTP obfuscation', () => {
