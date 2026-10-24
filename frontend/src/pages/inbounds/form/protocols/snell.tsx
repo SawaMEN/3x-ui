@@ -18,7 +18,7 @@ export default function SnellFields() {
 
   const advanced = (
     <>
-      <FormField name={['settings', 'psk']} label="PSK">
+      <FormField name={['settings', 'psk']} label="PSK" tooltip={t('pages.inbounds.form.snellPskTooltip')}>
         <Input.Password
           placeholder={t('pages.inbounds.form.additionalSecretAuto')}
           autoComplete="new-password"
@@ -27,7 +27,7 @@ export default function SnellFields() {
       <Alert type="info" showIcon description={t('pages.inbounds.form.snellPskHint')} />
       {version === 6 ? (
         <>
-          <FormField name={['settings', 'mode']} label={t('pages.inbounds.form.snellMode')}>
+          <FormField name={['settings', 'mode']} label={t('pages.inbounds.form.snellMode')} tooltip={t('pages.inbounds.form.snellModeTooltip')}>
             <Select
               options={[
                 { value: 'default', label: 'default' },
@@ -39,7 +39,7 @@ export default function SnellFields() {
         </>
       ) : (
         <>
-          <FormField name={['settings', 'obfsMode']} label={t('pages.inbounds.form.snellObfs')}>
+          <FormField name={['settings', 'obfsMode']} label={t('pages.inbounds.form.snellObfs')} tooltip={t('pages.inbounds.form.snellObfsTooltip')}>
             <Select
               options={[
                 { value: 'none', label: 'none' },
@@ -52,6 +52,7 @@ export default function SnellFields() {
               <FormField
                 name={['settings', 'obfsHost']}
                 label={t('pages.inbounds.form.snellObfsHost')}
+        tooltip={t('pages.inbounds.form.snellObfsHostTooltip')}
               >
                 <Input placeholder="bing.com" />
               </FormField>
@@ -69,6 +70,7 @@ export default function SnellFields() {
       <FormField
         name={['settings', 'version']}
         label={t('pages.inbounds.form.snellVersion')}
+        tooltip={t('pages.inbounds.form.snellVersionTooltip')}
         onAfterChange={(value) => setVersion(value === 5 ? 5 : 6)}
       >
         <Select

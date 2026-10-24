@@ -1,6 +1,7 @@
 import { useId, useState } from 'react';
 import { Button, Card, Col, Collapse, Form, Input, InputNumber, Row, Select, Space } from 'antd';
 import fields from './native-outbound-fields.json';
+import { snellHelp } from './snell-help';
 import { object, type ConfigObject } from './simple-settings';
 import {
   optionVisible,
@@ -548,12 +549,14 @@ function OptionGrid({
   depth = 0,
   onChange,
   onValidity,
+  snell = false,
 }: {
   schema: OptionSchema;
   value: ConfigObject;
   prefix?: string;
   labelPrefix?: string;
   depth?: number;
+  snell?: boolean;
   onChange: (key: string, next: unknown) => void;
   onValidity: (key: string, valid: boolean) => void;
 }) {
@@ -571,7 +574,7 @@ function OptionGrid({
               xs={24}
               sm={['object', 'array', 'json', 'headers'].includes(descriptor.kind) ? 24 : 12}
             >
-              <Form.Item label={title}>
+              <Form.Item label={title} tooltip={snell ? snellHelp(key) : undefined}>
                 <OptionControl
                   descriptor={descriptor}
                   value={value[key]}
@@ -644,7 +647,13 @@ export default function ProtocolOptionFields({
   );
   return (
     <Col span={24}>
-      <OptionGrid schema={primary} value={value} onChange={onChange} onValidity={onValidity} />
+      <OptionGrid
+        schema={primary}
+        value={value}
+        onChange={onChange}
+        onValidity={onValidity}
+        snell={type === 'snell'}
+      />
       {Object.keys(advanced).length > 0 && (
         <Collapse
           ghost
@@ -658,6 +667,7 @@ export default function ProtocolOptionFields({
                   value={value}
                   onChange={onChange}
                   onValidity={onValidity}
+                  snell={type === 'snell'}
                 />
               ),
             },
@@ -677,6 +687,7 @@ export default function ProtocolOptionFields({
                   value={value}
                   onChange={onChange}
                   onValidity={onValidity}
+                  snell={type === 'snell'}
                 />
               ),
             },

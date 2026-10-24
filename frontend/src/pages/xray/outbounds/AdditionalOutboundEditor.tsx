@@ -81,7 +81,7 @@ export default function AdditionalOutboundEditor({
       ) : (
         <>
           <Alert type="info" showIcon description={t('pages.inbounds.form.snellOutboundHint')} />
-          <Form.Item label={t('pages.inbounds.form.snellVersion')}>
+          <Form.Item label={t('pages.inbounds.form.snellVersion')} tooltip={t('pages.inbounds.form.snellVersionTooltip')}>
             <Select
               value={snellVersion}
               options={[
@@ -98,20 +98,20 @@ export default function AdditionalOutboundEditor({
               }
             />
           </Form.Item>
-          <Form.Item label="PSK">
+          <Form.Item label="PSK" tooltip={t('pages.inbounds.form.snellPskTooltip')}>
             <Input.Password
               value={String(settings.psk ?? '')}
               onChange={(e) => update({ psk: e.target.value })}
             />
           </Form.Item>
-          <Form.Item label="User key">
+          <Form.Item label="User key" tooltip={t('pages.inbounds.form.snellUserkeyTooltip')}>
             <Input.Password
               value={String(settings.userkey ?? '')}
               onChange={(e) => update({ userkey: e.target.value })}
             />
           </Form.Item>
           {snellVersion === 6 ? (
-            <Form.Item label={t('pages.inbounds.form.snellMode')}>
+            <Form.Item label={t('pages.inbounds.form.snellMode')} tooltip={t('pages.inbounds.form.snellModeTooltip')}>
               <Select
                 value={String(settings.mode ?? 'default')}
                 options={modeOptions}
@@ -120,7 +120,7 @@ export default function AdditionalOutboundEditor({
             </Form.Item>
           ) : (
             <>
-              <Form.Item label={t('pages.inbounds.form.snellObfs')}>
+              <Form.Item label={t('pages.inbounds.form.snellObfs')} tooltip={t('pages.inbounds.form.snellObfsTooltip')}>
                 <Select
                   value={String(settings.obfs_mode ?? 'none')}
                   options={obfsOptions}
@@ -134,7 +134,7 @@ export default function AdditionalOutboundEditor({
                 />
               </Form.Item>
               {settings.obfs_mode === 'http' && (
-                <Form.Item label={t('pages.inbounds.form.snellObfsHost')}>
+                <Form.Item label={t('pages.inbounds.form.snellObfsHost')} tooltip={t('pages.inbounds.form.snellObfsHostTooltip')}>
                   <Input
                     value={String(settings.obfs_host ?? 'bing.com')}
                     onChange={(e) => update({ obfs_host: e.target.value })}
