@@ -12,6 +12,13 @@ import (
 )
 
 func (s *SettingService) GetSubPublicURL() (string, error) {
+	raw, err := s.getString("subPublicURL")
+	if err != nil {
+		return "", err
+	}
+	if raw = strings.TrimSpace(raw); raw != "" {
+		return strings.TrimRight(raw, "/"), nil
+	}
 	cfg, err := s.GetDomainFrontConfig()
 	if err != nil {
 		return "", err
@@ -23,14 +30,17 @@ func (s *SettingService) GetSubPublicURL() (string, error) {
 		}
 		return "https://" + host, nil
 	}
-	raw, err := s.getString("subPublicURL")
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimRight(raw, "/"), nil
+	return "", nil
 }
 
 func (s *SettingService) GetSubCDNEnable() (bool, error) {
+	publicURL, err := s.getString("subPublicURL")
+	if err != nil {
+		return false, err
+	}
+	if strings.TrimSpace(publicURL) != "" {
+		return s.getBool("subCDNEnable")
+	}
 	cfg, err := s.GetDomainFrontConfig()
 	if err != nil {
 		return false, err
@@ -88,6 +98,12 @@ func validateSubscriptionDomains(settings *entity.AllSetting) error {
 		u, err := url.Parse(settings.SubPublicURL)
 		if err != nil || u.Hostname() == "" || (u.Scheme != "https" && u.Scheme != "http") || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
 			return fmt.Errorf("subscription public URL must be an HTTP/HTTPS origin without a path, credentials, query or fragment")
+		}
+		if port := u.Port(); port != "" {
+			n, err := strconv.Atoi(port)
+			if err != nil || n < 1 || n > 65535 {
+				return fmt.Errorf("subscription public port must be between 1 and 65535")
+			}
 		}
 		if _, err := netsafe.NormalizeHost(u.Hostname()); err != nil {
 			return fmt.Errorf("invalid subscription public hostname: %w", err)

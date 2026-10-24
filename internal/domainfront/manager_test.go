@@ -18,6 +18,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -415,6 +416,9 @@ func testCachedAutomaticCertificate(t *testing.T, mode string) {
 	if err := manager.Apply(context.Background(), cfg, Backend{SubscriptionTarget: origin.URL, SubscriptionPaths: []string{"/sub/"}, Certificates: files}); err != nil {
 		t.Fatal(err)
 	}
+	if got := len(manager.runtime.cache.AllMatchingCertificates("auto.example.com")); got == 0 {
+		t.Fatal("saved certificate must be ready before Apply returns")
+	}
 	transport := &http.Transport{TLSClientConfig: &tls.Config{RootCAs: roots, ServerName: "auto.example.com", MinVersion: tls.VersionTLS12}}
 	defer transport.CloseIdleConnections()
 	client := &http.Client{Transport: transport, Timeout: 5 * time.Second}
@@ -441,5 +445,39 @@ func testCachedAutomaticCertificate(t *testing.T, mode string) {
 	}
 	if !status.Certificates[0].AutoRenew || status.Certificates[0].DaysLeft != 90 || status.Certificates[0].State != "valid" {
 		t.Fatalf("cached auto TLS = %#v", status)
+	}
+}
+
+func TestInvalidCachedCertificateReleasesGatewayPorts(t *testing.T) {
+	dir := t.TempDir()
+	storage := &certmagic.FileStorage{Path: dir}
+	issuer := &certmagic.ACMEIssuer{CA: certmagic.LetsEncryptProductionCA}
+	name := "broken.example.com"
+	for key, value := range map[string][]byte{
+		certmagic.StorageKeys.SiteCert(issuer.IssuerKey(), name):       []byte("invalid certificate"),
+		certmagic.StorageKeys.SitePrivateKey(issuer.IssuerKey(), name): []byte("invalid private key"),
+		certmagic.StorageKeys.SiteMeta(issuer.IssuerKey(), name):       []byte(`{"sans":["broken.example.com"]}`),
+	} {
+		if err := storage.Store(context.Background(), key, value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cfg := DefaultConfig()
+	cfg.Enabled, cfg.AcceptTerms = true, true
+	cfg.Listen = "127.0.0.1"
+	cfg.HTTPPort, cfg.HTTPSPort = unusedPort(t), unusedPort(t)
+	cfg.PublicPort = cfg.HTTPSPort
+	cfg.Domains = []DomainFrontDomain{{Name: name, Mode: "sub_link_only", Enabled: true, TLS: "certmagic"}}
+	manager := NewManager(dir)
+	defer manager.Stop()
+	if err := manager.Apply(context.Background(), cfg, Backend{}); err == nil || !strings.Contains(err.Error(), "cached certificate") {
+		t.Fatalf("invalid cached certificate error = %v", err)
+	}
+	for _, port := range []int{cfg.HTTPPort, cfg.HTTPSPort} {
+		listener, err := net.Listen("tcp", net.JoinHostPort(cfg.Listen, strconv.Itoa(port)))
+		if err != nil {
+			t.Fatalf("failed startup leaked port %d: %v", port, err)
+		}
+		_ = listener.Close()
 	}
 }

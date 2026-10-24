@@ -10,7 +10,7 @@ import {
 } from '@ant-design/icons';
 
 import { LanguageManager } from '@/utils';
-import { pauseAnimationsUntilLeave, useTheme } from '@/hooks/useTheme';
+import { useTheme } from '@/hooks/useTheme';
 
 interface SubHeaderProps {
   title: string;
@@ -30,20 +30,15 @@ export default function SubHeader({
   onLangChange,
 }: SubHeaderProps) {
   const { t } = useTranslation();
-  const { isDark, isUltra, toggleTheme, toggleUltra } = useTheme();
-
-  const cycleTheme = () => {
-    pauseAnimationsUntilLeave('sub-theme-cycle');
-    if (!isDark) {
-      toggleTheme();
-      if (isUltra) toggleUltra();
-    } else if (!isUltra) {
-      toggleUltra();
-    } else {
-      toggleUltra();
-      toggleTheme();
-    }
-  };
+  const { isDark, isUltra, mode, setThemeMode, lowPower, toggleLowPower } = useTheme();
+  const themes = [
+    { key: 'light', label: 'Light / Светлая' },
+    { key: 'dark', label: 'Dark / Тёмная' },
+    { key: 'ultra-dark', label: 'Ultra Dark' },
+    { key: 'blue-gray', label: 'Blue Gray' },
+    { key: 'colorful', label: 'Colorful' },
+    { key: 'cyberpunk', label: 'Cyberpunk' },
+  ];
 
   const langMenuItems = useMemo(
     () =>
@@ -90,16 +85,29 @@ export default function SubHeader({
         </div>
       </div>
       <div className="sub-toolbar">
-        <Button
-          id="sub-theme-cycle"
-          shape="circle"
-          size="large"
-          className="toolbar-btn"
-          aria-label={t('menu.theme')}
-          title={t('menu.theme')}
-          icon={themeIcon}
-          onClick={cycleTheme}
-        />
+        <Popover
+          placement="bottomRight"
+          trigger="click"
+          content={
+            <Menu
+              selectedKeys={[lowPower ? 'dark' : mode]}
+              items={themes}
+              onClick={({ key }) => {
+                if (lowPower && key !== 'dark') toggleLowPower();
+                setThemeMode(key as typeof mode);
+              }}
+            />
+          }
+        >
+          <Button
+            shape="circle"
+            size="large"
+            className="toolbar-btn"
+            aria-label={t('menu.theme')}
+            title={t('menu.theme')}
+            icon={themeIcon}
+          />
+        </Popover>
         <Popover
           rootClassName={isDark ? 'dark' : 'light'}
           placement="bottomRight"

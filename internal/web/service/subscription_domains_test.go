@@ -1,8 +1,10 @@
 package service
 
 import (
+	"encoding/json"
 	"testing"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/domainfront"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/entity"
 )
 
@@ -53,6 +55,8 @@ func TestSubscriptionDomainValidation(t *testing.T) {
 		want     string
 	}{
 		{"path", entity.AllSetting{SubPublicURL: "https://sub.example.com/private/"}, "subscription public URL must be an HTTP/HTTPS origin without a path, credentials, query or fragment"},
+		{"zero port", entity.AllSetting{SubPublicURL: "https://sub.example.com:0"}, "subscription public port must be between 1 and 65535"},
+		{"large port", entity.AllSetting{SubPublicURL: "https://sub.example.com:65536"}, "subscription public port must be between 1 and 65535"},
 		{"cdn without address", entity.AllSetting{SubCDNEnable: true}, "CDN mode requires a subscription public URL"},
 		{"cdn without TLS", entity.AllSetting{SubCDNEnable: true, SubPublicURL: "http://sub.example.com"}, "CDN subscription public URL must use HTTPS"},
 	} {
@@ -62,5 +66,51 @@ func TestSubscriptionDomainValidation(t *testing.T) {
 				t.Fatalf("error = %v, want %q", err, tc.want)
 			}
 		})
+	}
+}
+
+func TestExplicitSubscriptionOriginOverridesManagedDomain(t *testing.T) {
+	setupConflictDB(t)
+	s := &SettingService{}
+	cfg := domainfront.DefaultConfig()
+	cfg.Enabled = true
+	cfg.SubscriptionDomain = "managed.example.com"
+	cfg.PublicPort = 8443
+	cfg.Domains = []domainfront.DomainFrontDomain{{Name: cfg.SubscriptionDomain, Enabled: true, Mode: "cdn", TLS: "auto"}}
+	raw, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for key, value := range map[string]string{
+		"domainFrontConfig": string(raw), "subPublicURL": "https://external.example.com",
+		"subCDNEnable": "false", "subPath": "/sub/", "subJsonPath": "/json/", "subClashPath": "/clash/",
+	} {
+		if err := s.setString(key, value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tc := range []struct {
+		get  func() (string, error)
+		want string
+	}{
+		{s.GetSubURI, "https://external.example.com/sub/"},
+		{s.GetSubJsonURI, "https://external.example.com/json/"},
+		{s.GetSubClashURI, "https://external.example.com/clash/"},
+	} {
+		if got, err := tc.get(); err != nil || got != tc.want {
+			t.Fatalf("origin = %q, %v; want %q", got, err, tc.want)
+		}
+	}
+	if cdn, err := s.GetSubCDNEnable(); err != nil || cdn {
+		t.Fatalf("explicit CDN = %v, %v", cdn, err)
+	}
+	if err := s.setString("subPublicURL", ""); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := s.GetSubPublicURL(); err != nil || got != "https://managed.example.com:8443" {
+		t.Fatalf("automatic origin = %q, %v", got, err)
+	}
+	if cdn, err := s.GetSubCDNEnable(); err != nil || !cdn {
+		t.Fatalf("automatic CDN = %v, %v", cdn, err)
 	}
 }
