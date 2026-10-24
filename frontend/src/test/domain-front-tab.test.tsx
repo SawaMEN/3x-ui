@@ -42,24 +42,27 @@ function fixture(existing = false) {
         ]
       : [],
     error: '',
-    certificates: [
-      {
-        name: config.domains[0].name,
-        mode: 'auto',
-        state: 'valid',
-        autoRenew: true,
-        issuer: 'Test issuer',
-        expiresAt: Math.floor(Date.now() / 1000) + 45 * 86400,
-        daysLeft: 45,
-        error: '',
-        source: 'panel',
-        renewal: 'acme.sh',
-        certFile: '/root/cert/sub.example.com/fullchain.pem',
-      },
-    ],
+    certificates: config.domains.length
+      ? [
+          {
+            name: config.domains[0].name,
+            mode: 'auto',
+            state: 'valid',
+            autoRenew: true,
+            issuer: 'Test issuer',
+            expiresAt: Math.floor(Date.now() / 1000) + 45 * 86400,
+            daysLeft: 45,
+            error: '',
+            source: 'panel',
+            renewal: 'acme.sh',
+            certFile: '/root/cert/sub.example.com/fullchain.pem',
+          },
+        ]
+      : [],
   });
   let applied: DomainConfigForm | undefined;
   let reads = 0;
+  const checked: string[] = [];
   server.use(
     http.get('*/panel/api/domains/status', () => {
       reads++;
@@ -88,11 +91,13 @@ function fixture(existing = false) {
       applied = DomainConfigFormSchema.parse(await request.json());
       return HttpResponse.json({ success: true, obj: { ...status(), config: applied } });
     }),
-    http.post('*/panel/api/domains/check', () =>
-      HttpResponse.json({
+    http.post('*/panel/api/domains/check', async ({ request }) => {
+      const body = (await request.json()) as { name: string };
+      checked.push(body.name);
+      return HttpResponse.json({
         success: true,
         obj: {
-          name: 'sub.example.com',
+          name: body.name,
           addresses: ['203.0.113.8'],
           checkedAt: 1,
           expiresAt: Math.floor(Date.now() / 1000) + 80 * 86400,
@@ -100,11 +105,12 @@ function fixture(existing = false) {
           issuer: 'CDN edge issuer',
           error: '',
         },
-      }),
-    ),
+      });
+    }),
   );
   return {
     config,
+    checked,
     get applied() {
       return applied;
     },
@@ -117,6 +123,7 @@ function fixture(existing = false) {
 describe('domain and TLS dashboard', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    localStorage.removeItem('xui-domain-auto-check');
     window.X_UI_BASE_PATH = 'http://localhost';
     setupHttp();
   });
@@ -189,6 +196,50 @@ describe('domain and TLS dashboard', () => {
     );
     fireEvent.click(screen.getByText('Save and apply').closest('button')!);
     await waitFor(() => expect(f.applied?.domains[0].tls).toBe(tlsMode));
+  });
+
+  it('suggests a subscription-only domain, explains it and checks it automatically after apply', async () => {
+    const f = fixture();
+    f.config.domains = [];
+    f.config.subscriptionDomain = '';
+    renderWithProviders(<DomainFrontTab />);
+    await screen.findByDisplayValue('old@example.com');
+    fireEvent.click(screen.getByRole('button', { name: /Add domain/ }));
+    const input = screen.getByPlaceholderText('sub.example.com');
+    const help = document.querySelector('label[for="name"] .anticon-question-circle');
+    expect(help).toBeTruthy();
+    fireEvent.mouseEnter(help!);
+    expect(await screen.findByText(/Domain name only, such as/)).toBeTruthy();
+    fireEvent.mouseLeave(help!);
+    expect(
+      (screen.getByRole('checkbox', { name: 'Use in subscription links' }) as HTMLInputElement)
+        .checked,
+    ).toBe(true);
+    fireEvent.change(input, { target: { value: 'new.example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    await waitFor(() =>
+      expect(document.querySelector('.ant-table-tbody')?.textContent).toContain('new.example.com'),
+    );
+    fireEvent.click(screen.getByText('Save and apply').closest('button')!);
+    await waitFor(() => expect(f.applied?.subscriptionDomain).toBe('new.example.com'));
+    expect(f.applied?.domains[0]).toMatchObject({
+      mode: 'sub_link_only',
+      tls: 'auto',
+      panel: false,
+      inboundIds: [],
+    });
+    await waitFor(() => expect(f.checked).toEqual(['new.example.com']));
+  });
+
+  it('allows automatic DNS checks to be disabled', async () => {
+    const f = fixture();
+    renderWithProviders(<DomainFrontTab />);
+    const email = await screen.findByDisplayValue('old@example.com');
+    fireEvent.change(email, { target: { value: 'changed@example.com' } });
+    fireEvent.click(screen.getByRole('switch', { name: 'Check DNS/TLS after apply' }));
+    fireEvent.click(screen.getByText('Save and apply').closest('button')!);
+    await waitFor(() => expect(f.applied?.email).toBe('changed@example.com'));
+    expect(f.checked).toEqual([]);
   });
 
   it('clears panel and VPN bindings when a domain becomes subscription-only', async () => {
