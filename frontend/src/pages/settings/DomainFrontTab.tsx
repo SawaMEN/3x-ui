@@ -20,10 +20,11 @@ import {
   Switch,
   Table,
   Tag,
+  Tooltip,
   Typography,
   message,
 } from 'antd';
-import { PlusOutlined, ReloadOutlined } from '@ant-design/icons';
+import { PlusOutlined, ReloadOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import { HttpUtil } from '@/utils';
 import { antdRule } from '@/utils/antdRule';
 import { DomainFrontStatusSchema, DomainFrontCheckSchema } from '@/generated/zod';
@@ -66,6 +67,14 @@ export default function DomainFrontTab() {
   const [expanded, setExpanded] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<number>();
+  const [primaryDomain, setPrimaryDomain] = useState(false);
+  const [autoCheck, setAutoCheck] = useState(() => {
+    try {
+      return localStorage.getItem('xui-domain-auto-check') !== 'false';
+    } catch {
+      return true;
+    }
+  });
   const [form] = Form.useForm<DomainForm>();
   const [messageApi, holder] = message.useMessage();
   const mode = Form.useWatch('mode', form);
@@ -101,6 +110,8 @@ export default function DomainFrontTab() {
       void queryClient.invalidateQueries({ queryKey: keys.settings.defaults() });
       void queryClient.invalidateQueries({ queryKey: keys.settings.all() });
       messageApi.success(t('pages.settings.domains.applied'));
+      if (autoCheck && saved.enabled && saved.subscriptionDomain)
+        void check(saved.subscriptionDomain);
     } catch (e) {
       messageApi.error(e instanceof Error ? e.message : t('somethingWentWrong'));
       void load();
@@ -124,7 +135,14 @@ export default function DomainFrontTab() {
   }
   function openEditor(index: number) {
     form.resetFields();
-    form.setFieldsValue(index < 0 ? defaultDomain : draft.domains[index]);
+    form.setFieldsValue(
+      index < 0 ? { ...defaultDomain, mode: 'sub_link_only' } : draft.domains[index],
+    );
+    setPrimaryDomain(
+      index < 0
+        ? !draft.subscriptionDomain
+        : draft.subscriptionDomain === draft.domains[index].name,
+    );
     setEditing(index);
   }
   async function saveDomain() {
@@ -143,11 +161,11 @@ export default function DomainFrontTab() {
     if (editing != null && editing >= 0) domains[editing] = domain;
     else domains.push(domain);
     const canonical =
-      draft.subscriptionDomain === old?.name
-        ? domain.enabled
-          ? domain.name
-          : ''
-        : draft.subscriptionDomain;
+      primaryDomain && domain.enabled
+        ? domain.name
+        : draft.subscriptionDomain === old?.name
+          ? ''
+          : draft.subscriptionDomain;
     update({ domains, subscriptionDomain: canonical });
     setEditing(undefined);
   }
@@ -243,14 +261,18 @@ export default function DomainFrontTab() {
         }
       >
         <Form layout="vertical">
-          <Form.Item label={label('enabled')} extra={label('enabledDesc')}>
+          <Form.Item
+            label={label('enabled')}
+            tooltip={label('enabledDesc')}
+            extra={label('enabledDesc')}
+          >
             <Switch
               aria-label={label('enabled')}
               checked={draft.enabled}
               onChange={(v) => update({ enabled: v })}
             />
           </Form.Item>
-          <Form.Item label={label('email')} extra={label('emailDesc')}>
+          <Form.Item label={label('email')} tooltip={label('emailDesc')} extra={label('emailDesc')}>
             <Input
               aria-label={label('email')}
               type="email"
@@ -258,7 +280,11 @@ export default function DomainFrontTab() {
               onChange={(e) => update({ email: e.target.value })}
             />
           </Form.Item>
-          <Form.Item label={label('canonical')} extra={label('canonicalDesc')}>
+          <Form.Item
+            label={label('canonical')}
+            tooltip={label('canonicalDesc')}
+            extra={label('canonicalDesc')}
+          >
             <Select
               aria-label={label('canonical')}
               allowClear
@@ -267,6 +293,20 @@ export default function DomainFrontTab() {
               options={draft.domains
                 .filter((d) => d.enabled)
                 .map((d) => ({ value: d.name, label: d.name }))}
+            />
+          </Form.Item>
+          <Form.Item tooltip={label('autoCheckHelp')} label={label('autoCheck')}>
+            <Switch
+              aria-label={label('autoCheck')}
+              checked={autoCheck}
+              onChange={(value) => {
+                setAutoCheck(value);
+                try {
+                  localStorage.setItem('xui-domain-auto-check', String(value));
+                } catch {
+                  /* Browser preferences may be unavailable. */
+                }
+              }}
             />
           </Form.Item>
           <Checkbox
@@ -278,6 +318,13 @@ export default function DomainFrontTab() {
               Let’s Encrypt
             </a>
           </Checkbox>
+          <Tooltip title={label('termsHelp')}>
+            <QuestionCircleOutlined
+              aria-label={label('termsHelp')}
+              tabIndex={0}
+              style={{ marginInlineStart: 8 }}
+            />
+          </Tooltip>
           <Collapse
             style={{ marginTop: 16 }}
             items={[
@@ -286,14 +333,14 @@ export default function DomainFrontTab() {
                 label: label('advanced'),
                 children: (
                   <>
-                    <Form.Item label={label('listen')}>
+                    <Form.Item label={label('listen')} tooltip={label('listenHelp')}>
                       <Input
                         value={draft.listen}
                         onChange={(e) => update({ listen: e.target.value })}
                       />
                     </Form.Item>
                     <Space wrap>
-                      <Form.Item label={label('httpPort')}>
+                      <Form.Item label={label('httpPort')} tooltip={label('httpPortHelp')}>
                         <InputNumber
                           min={1}
                           max={65535}
@@ -303,7 +350,7 @@ export default function DomainFrontTab() {
                           }}
                         />
                       </Form.Item>
-                      <Form.Item label={label('httpsPort')}>
+                      <Form.Item label={label('httpsPort')} tooltip={label('httpsPortHelp')}>
                         <InputNumber
                           min={1}
                           max={65535}
@@ -313,7 +360,7 @@ export default function DomainFrontTab() {
                           }}
                         />
                       </Form.Item>
-                      <Form.Item label={label('publicPort')}>
+                      <Form.Item label={label('publicPort')} tooltip={label('publicPortHelp')}>
                         <InputNumber
                           min={1}
                           max={65535}
@@ -509,6 +556,7 @@ export default function DomainFrontTab() {
           <Form.Item
             name="name"
             label={label('name')}
+            tooltip={label('nameHelp')}
             rules={[
               antdRule(DomainFormSchema.shape.name, t),
               {
@@ -525,12 +573,18 @@ export default function DomainFrontTab() {
           >
             <Input placeholder="sub.example.com" />
           </Form.Item>
-          <Form.Item name="enabled" label={label('domainEnabled')} valuePropName="checked">
+          <Form.Item
+            name="enabled"
+            label={label('domainEnabled')}
+            tooltip={label('domainEnabledHelp')}
+            valuePropName="checked"
+          >
             <Switch />
           </Form.Item>
           <Form.Item
             name="mode"
             label={label('modeLabel')}
+            tooltip={label('modeHelp')}
             rules={[antdRule(DomainFormSchema.shape.mode, t)]}
           >
             <Select
@@ -552,6 +606,7 @@ export default function DomainFrontTab() {
             <Form.Item
               name="origin"
               label={label('origin')}
+              tooltip={label('originDesc')}
               rules={[{ required: true, message: label('originRequired') }]}
               extra={label('originDesc')}
             >
@@ -560,10 +615,20 @@ export default function DomainFrontTab() {
           )}
           {mode !== 'sub_link_only' && (
             <>
-              <Form.Item name="panel" valuePropName="checked">
-                <Checkbox>{label('panelAllowed')}</Checkbox>
+              <Form.Item
+                name="panel"
+                label={label('panelAllowed')}
+                tooltip={label('panelHelp')}
+                valuePropName="checked"
+              >
+                <Checkbox />
               </Form.Item>
-              <Form.Item name="inboundIds" label={label('inbounds')} extra={label('inboundsDesc')}>
+              <Form.Item
+                name="inboundIds"
+                label={label('inbounds')}
+                tooltip={label('inboundsDesc')}
+                extra={label('inboundsDesc')}
+              >
                 <Select
                   mode="multiple"
                   options={compatible.map((o) => ({
@@ -574,9 +639,18 @@ export default function DomainFrontTab() {
               </Form.Item>
             </>
           )}
+          <Form.Item label={label('useForSubscription')} tooltip={label('useForSubscriptionHelp')}>
+            <Checkbox
+              checked={primaryDomain}
+              onChange={(event) => setPrimaryDomain(event.target.checked)}
+            >
+              {label('useForSubscription')}
+            </Checkbox>
+          </Form.Item>
           <Form.Item
             name="tls"
             label={label('tlsLabel')}
+            tooltip={label('tlsHelp')}
             rules={[antdRule(DomainFormSchema.shape.tls, t)]}
           >
             <Select
@@ -599,10 +673,20 @@ export default function DomainFrontTab() {
           </Typography.Paragraph>
           {tls === 'manual' && (
             <>
-              <Form.Item name="certFile" label={label('certFile')} rules={[{ required: true }]}>
+              <Form.Item
+                name="certFile"
+                label={label('certFile')}
+                tooltip={label('certFileHelp')}
+                rules={[{ required: true }]}
+              >
                 <Input placeholder="/etc/ssl/fullchain.pem" />
               </Form.Item>
-              <Form.Item name="keyFile" label={label('keyFile')} rules={[{ required: true }]}>
+              <Form.Item
+                name="keyFile"
+                label={label('keyFile')}
+                tooltip={label('keyFileHelp')}
+                rules={[{ required: true }]}
+              >
                 <Input placeholder="/etc/ssl/privkey.pem" />
               </Form.Item>
             </>

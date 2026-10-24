@@ -2234,7 +2234,23 @@
           "manual": "Manual replacement"
         },
         "certmagicDesc": "CertMagic obtains and renews a separate certificate for this domain, even when a matching panel certificate exists. Validation ports must be reachable and the Let’s Encrypt agreement accepted.",
-        "existingTLSDesc": "Use only an already configured certificate matching this domain, preserving its renewal mechanism. Apply fails if none exists; no new certificate is requested."
+        "existingTLSDesc": "Use only an already configured certificate matching this domain, preserving its renewal mechanism. Apply fails if none exists; no new certificate is requested.",
+        "listenHelp": "Listener address. Usually keep 0.0.0.0 for all IPv4 interfaces. A matching panel or subscription listener is shared automatically. Third-party servers are not stopped.",
+        "httpPortHelp": "Local HTTP port for HTTPS redirects and ACME validation, normally 80. Integrated standalone acme.sh renewal requires public port 80. With NAT, forward external 80 to this local port.",
+        "httpsPortHelp": "Local HTTPS gateway port, normally 443. A matching panel or subscription HTTPS listener is shared. A conflicting third-party listener causes apply to roll back.",
+        "publicPortHelp": "The port users connect to and that appears in subscription links, normally 443. Change only for NAT or an external proxy; it may differ from the local HTTPS port.",
+        "nameHelp": "Domain name only, such as sub.example.com, without https://, port or path. Point DNS to the server or CDN first. Automatic TLS selects the certificate and renewal after apply.",
+        "domainEnabledHelp": "Serve this domain while the gateway is running. Disabled domains are excluded from VPN endpoints. Select another primary subscription domain before disabling the current one.",
+        "modeHelp": "Subscription only exposes subscriptions without panel or VPN access. Direct connects directly. CDN uses your CDN provider. Relay forwards allowed HTTP paths to an HTTPS origin. Choosing a role does not create DNS records or a CDN account.",
+        "panelHelp": "Allow the admin panel on this domain. Off by default and unavailable for Subscription only. Panel access is never enabled automatically.",
+        "tlsHelp": "Automatic selects an existing certificate or CertMagic. CertMagic obtains and renews a separate certificate. Existing only reuses panel, subscription or installer certificates. Manual uses your file paths. Each domain has its own selection.",
+        "certFileHelp": "Server path to a PEM certificate with its full chain, matching this domain. This does not upload a file from your device. Choose Automatic to find existing files automatically.",
+        "keyFileHelp": "Server path to the matching private key. Key contents are never returned through this interface.",
+        "useForSubscription": "Use in subscription links",
+        "useForSubscriptionHelp": "Use this domain as the public address in subscription links, QR codes and the subscription page. The first new domain is suggested automatically; you can uncheck it. Other domains remain available as additional addresses.",
+        "autoCheck": "Check DNS/TLS after apply",
+        "autoCheckHelp": "Check the saved primary domain automatically, showing DNS addresses and the certificate visible from the server. New certificate issuance may still be pending; wait and check again if needed. Disable to check manually.",
+        "termsHelp": "Agreement is needed for new certificates issued by CertMagic. Reusing an acme.sh certificate does not require accepting a new agreement. Consent is never selected automatically."
       }
     },
     "xray": {
