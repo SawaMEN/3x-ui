@@ -24,7 +24,6 @@ export default function SnellFields() {
           autoComplete="new-password"
         />
       </FormField>
-      <Alert type="info" showIcon description={t('pages.inbounds.form.snellPskHint')} />
       {version === 6 ? (
         <>
           <FormField name={['settings', 'mode']} label={t('pages.inbounds.form.snellMode')} tooltip={t('pages.inbounds.form.snellModeTooltip')}>
@@ -35,7 +34,6 @@ export default function SnellFields() {
               ]}
             />
           </FormField>
-          <Alert type="info" description={t('pages.inbounds.form.snellModeHint')} />
         </>
       ) : (
         <>
@@ -56,7 +54,6 @@ export default function SnellFields() {
               >
                 <Input placeholder="bing.com" />
               </FormField>
-              <Alert type="warning" showIcon description={t('pages.inbounds.form.snellObfsHint')} />
             </>
           )}
         </>
