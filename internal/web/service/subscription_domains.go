@@ -30,7 +30,20 @@ func (s *SettingService) GetSubPublicURL() (string, error) {
 	return strings.TrimRight(raw, "/"), nil
 }
 
-func (s *SettingService) GetSubCDNEnable() (bool, error) { return s.getBool("subCDNEnable") }
+func (s *SettingService) GetSubCDNEnable() (bool, error) {
+	cfg, err := s.GetDomainFrontConfig()
+	if err != nil {
+		return false, err
+	}
+	if cfg.Enabled && cfg.SubscriptionDomain != "" {
+		for _, d := range cfg.Domains {
+			if d.Enabled && d.Name == cfg.SubscriptionDomain {
+				return d.Mode == "cdn", nil
+			}
+		}
+	}
+	return s.getBool("subCDNEnable")
+}
 
 func (s *SettingService) GetSubscriptionAllowedHosts(primary string) (map[string]bool, error) {
 	hosts := map[string]bool{}

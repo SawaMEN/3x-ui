@@ -533,12 +533,15 @@ export interface ClientsSummary {
 
 export interface DomainFrontCertificate {
   autoRenew: boolean;
+  certFile: string;
   daysLeft: number;
   error: string;
   expiresAt: number;
   issuer: string;
   mode: string;
   name: string;
+  renewal: string;
+  source: string;
   state: string;
 }
 
@@ -581,6 +584,7 @@ export interface DomainFrontStatus {
   certificates: DomainFrontCertificate[];
   config: DomainFrontConfig;
   error: string;
+  existingCertificates?: DomainFrontCertificate[];
   running: boolean;
 }
 

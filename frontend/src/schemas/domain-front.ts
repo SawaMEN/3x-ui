@@ -5,7 +5,7 @@ import {
 } from '@/generated/zod';
 
 export const DomainModeSchema = z.enum(['direct', 'cdn', 'relay', 'sub_link_only']);
-export const DomainTLSModeSchema = z.enum(['auto', 'manual']);
+export const DomainTLSModeSchema = z.enum(['auto', 'certmagic', 'existing', 'manual']);
 const hostname = z
   .string()
   .trim()
@@ -29,12 +29,6 @@ export const DomainConfigFormSchema = ConfigResponseSchema.extend({
   publicPort: z.number().int().min(1).max(65535),
   email: z.union([z.literal(''), z.email()]),
 }).superRefine((cfg, ctx) => {
-  if (cfg.enabled && cfg.domains.some((d) => d.enabled && d.tls === 'auto') && !cfg.acceptTerms)
-    ctx.addIssue({
-      code: 'custom',
-      path: ['acceptTerms'],
-      message: 'pages.settings.domains.termsRequired',
-    });
   if (cfg.httpPort === cfg.httpsPort)
     ctx.addIssue({
       code: 'custom',

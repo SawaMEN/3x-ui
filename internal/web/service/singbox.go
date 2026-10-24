@@ -572,6 +572,13 @@ func (s *SingBoxService) Restart(ctx context.Context) error {
 }
 
 func (s *SingBoxService) restartLocked(ctx context.Context) (result error) {
+	defer func() {
+		if result == nil {
+			if err := RefreshDomainFrontRoutes(); err != nil {
+				logger.Warning("Could not refresh domain gateway routes:", err)
+			}
+		}
+	}()
 	unchanged, err := nativeConfigBatchGuard()
 	if err != nil {
 		return err
@@ -659,6 +666,13 @@ func (s *SingBoxService) Start(ctx context.Context) error {
 }
 
 func (s *SingBoxService) startLocked(ctx context.Context) (result error) {
+	defer func() {
+		if result == nil {
+			if err := RefreshDomainFrontRoutes(); err != nil {
+				logger.Warning("Could not refresh domain gateway routes:", err)
+			}
+		}
+	}()
 	if s.IsRunning() {
 		return s.resumeGateway(ctx)
 	}

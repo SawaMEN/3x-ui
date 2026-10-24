@@ -3,6 +3,7 @@ package domainfront
 import (
 	"fmt"
 	"net"
+	"net/http"
 	"net/mail"
 	"net/url"
 	"strconv"
@@ -43,7 +44,25 @@ type Route struct {
 	H2C    bool
 }
 
+type CertificateFiles struct {
+	CertFile  string
+	KeyFile   string
+	Source    string
+	Renewal   string
+	AutoRenew bool
+	Warning   string
+}
+
 type Backend struct {
+	PanelHandler        http.Handler
+	SubscriptionHandler http.Handler
+	SharedHTTP          bool
+	SharedHTTPS         bool
+	Certificates        map[string]CertificateFiles
+	ChallengeRoots      map[string]string
+	GetRedirect         func() (string, error)
+	SubscriptionHost    string
+
 	SubscriptionTarget string
 	PanelTarget        string
 	PanelHost          string
@@ -57,7 +76,9 @@ func DefaultConfig() DomainFrontConfig {
 	return DomainFrontConfig{Listen: "0.0.0.0", HTTPPort: 80, HTTPSPort: 443, PublicPort: 443, Domains: []DomainFrontDomain{}}
 }
 
-func (c *DomainFrontConfig) Validate() error {
+func (c *DomainFrontConfig) Validate() error { return c.ValidateWithCertificates(nil) }
+
+func (c *DomainFrontConfig) ValidateWithCertificates(files map[string]CertificateFiles) error {
 	if c.Domains == nil {
 		c.Domains = []DomainFrontDomain{}
 	}
@@ -109,14 +130,18 @@ func (c *DomainFrontConfig) Validate() error {
 			return fmt.Errorf("unknown domain mode: %s", d.Mode)
 		}
 		switch d.TLS {
-		case "auto":
-			auto = auto || d.Enabled
+		case "auto", "certmagic", "existing":
+			_, inherited := files[d.Name]
+			if d.TLS == "existing" && c.Enabled && d.Enabled && !inherited {
+				return fmt.Errorf("%s: no matching existing panel, subscription or installer certificate", d.Name)
+			}
+			auto = auto || (d.Enabled && (d.TLS == "certmagic" || d.TLS == "auto" && !inherited))
 		case "manual":
 			if d.CertFile == "" || d.KeyFile == "" {
 				return fmt.Errorf("certificate and private key files are required for %s", d.Name)
 			}
 		default:
-			return fmt.Errorf("TLS must be auto or manual")
+			return fmt.Errorf("TLS must be auto, certmagic, existing or manual")
 		}
 		if d.Mode == "sub_link_only" && (d.Panel || len(d.InboundIDs) > 0) {
 			return fmt.Errorf("subscription-only domains cannot expose the panel or VPN inbounds")

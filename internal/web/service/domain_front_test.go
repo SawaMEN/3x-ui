@@ -52,7 +52,7 @@ func TestDomainGatewayCanonicalURLsAndHostRoles(t *testing.T) {
 	if err := s.setString("subPath", "/sub/"); err != nil {
 		t.Fatal(err)
 	}
-	inbound := &model.Inbound{Id: 21, Enable: true}
+	inbound := &model.Inbound{Id: 21, Enable: true, Port: 15001, StreamSettings: `{"network":"ws","security":"none","wsSettings":{"path":"/vpn"}}`}
 	cfg := domainfront.DefaultConfig()
 	cfg.Enabled = true
 	cfg.SubscriptionDomain = "only.example.com"
@@ -71,12 +71,25 @@ func TestDomainGatewayCanonicalURLsAndHostRoles(t *testing.T) {
 	if got, err := s.GetSubURI(); err != nil || got != "https://only.example.com/sub/" {
 		t.Fatalf("subscription URL = %q, %v", got, err)
 	}
+	cfg.SubscriptionDomain = "cdn.example.com"
+	raw, _ = json.Marshal(cfg)
+	if err := s.setString("domainFrontConfig", string(raw)); err != nil {
+		t.Fatal(err)
+	}
+	if enabled, err := s.GetSubCDNEnable(); err != nil || !enabled {
+		t.Fatalf("managed CDN did not reach subscription middleware: %v, %v", enabled, err)
+	}
 	hosts, err := s.DomainFrontHosts([]*model.Inbound{inbound})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(hosts[21]) != 1 || hosts[21][0].Address != "cdn.example.com" || hosts[21][0].Security != "tls" || hosts[21][0].Port != 443 {
 		t.Fatalf("managed hosts = %#v", hosts[21])
+	}
+	inbound.StreamSettings = `{"network":"tcp","security":"none"}`
+	stale, err := s.DomainFrontHosts([]*model.Inbound{inbound})
+	if err != nil || len(stale[21]) != 0 {
+		t.Fatalf("incompatible transport still exported through gateway: %#v, %v", stale, err)
 	}
 	allowed, err := s.GetSubscriptionAllowedHosts("origin.example.com")
 	if err != nil {

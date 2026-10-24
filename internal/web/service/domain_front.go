@@ -36,7 +36,11 @@ func (s *SettingService) GetDomainFrontConfig() (domainfront.DomainFrontConfig, 
 		return cfg, err
 	}
 	if strings.TrimSpace(raw) == "" {
-		return cfg, nil
+		settings, err := s.GetAllSetting()
+		if err != nil {
+			return cfg, err
+		}
+		return seedDomainFront(settings), nil
 	}
 	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
 		return cfg, fmt.Errorf("domain configuration: %w", err)
@@ -52,14 +56,24 @@ func DomainFrontStatus() (domainfront.DomainFrontStatus, error) {
 	}
 	domainFrontState.Lock()
 	defer domainFrontState.Unlock()
-	return managedDomainFront().Status(cfg), nil
+	files, _, err := s.domainCertificateFiles(cfg)
+	if err != nil {
+		return domainfront.DomainFrontStatus{}, err
+	}
+	result := managedDomainFront().StatusWithCertificates(cfg, files)
+	result.ExistingCertificates = s.existingDomainCertificates()
+	return result, nil
 }
 
 func ApplyDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig) (domainfront.DomainFrontStatus, error) {
 	domainFrontState.Lock()
 	defer domainFrontState.Unlock()
 	s := &SettingService{}
-	if err := cfg.Validate(); err != nil {
+	files, states, err := s.domainCertificateFiles(cfg)
+	if err != nil {
+		return domainfront.DomainFrontStatus{}, err
+	}
+	if err := cfg.ValidateWithCertificates(files); err != nil {
 		return domainfront.DomainFrontStatus{}, err
 	}
 	backend, err := s.domainFrontBackend(cfg)
@@ -70,8 +84,15 @@ func ApplyDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig) (d
 	if err != nil {
 		return domainfront.DomainFrontStatus{}, err
 	}
+	backend.Certificates = files
+	roots, rollback, err := prepareDomainACME(cfg, files, states)
+	if err != nil {
+		return domainfront.DomainFrontStatus{}, err
+	}
+	backend.ChallengeRoots = roots
 	manager := managedDomainFront()
 	if err := manager.Apply(ctx, cfg, backend); err != nil {
+		rollback()
 		return manager.Status(old), err
 	}
 	raw, err := json.Marshal(cfg)
@@ -79,13 +100,16 @@ func ApplyDomainFront(ctx context.Context, cfg domainfront.DomainFrontConfig) (d
 		err = s.setString("domainFrontConfig", string(raw))
 	}
 	if err != nil {
+		rollback()
 		oldBackend, buildErr := s.domainFrontBackend(old)
 		if buildErr == nil {
 			_ = manager.Apply(ctx, old, oldBackend)
 		}
 		return manager.Status(old), err
 	}
-	return manager.Status(cfg), nil
+	result := manager.StatusWithCertificates(cfg, files)
+	result.ExistingCertificates = s.existingDomainCertificates()
+	return result, nil
 }
 
 func StartDomainFront() error {
@@ -96,11 +120,25 @@ func StartDomainFront() error {
 	if err != nil {
 		return err
 	}
-	backend, err := s.domainFrontBackend(cfg)
+	backend, err := s.domainFrontBackend(domainFrontRoutingConfig(cfg))
 	if err != nil {
 		return err
 	}
-	return managedDomainFront().Apply(context.Background(), cfg, backend)
+	files, states, err := s.domainCertificateFiles(cfg)
+	if err != nil {
+		return err
+	}
+	backend.Certificates = files
+	roots, rollback, err := prepareDomainACME(cfg, files, states)
+	if err != nil {
+		return err
+	}
+	backend.ChallengeRoots = roots
+	if err := managedDomainFront().Apply(context.Background(), cfg, backend); err != nil {
+		rollback()
+		return err
+	}
+	return nil
 }
 
 func StopDomainFront() {
@@ -130,11 +168,31 @@ func (s *SettingService) domainFrontBackend(cfg domainfront.DomainFrontConfig) (
 	backend := domainfront.Backend{
 		SubscriptionTarget: localDomainTarget(settings.SubListen, settings.SubPort, settings.SubCertFile != "" && settings.SubKeyFile != ""),
 		PanelTarget:        localDomainTarget(settings.WebListen, settings.WebPort, settings.WebCertFile != "" && settings.WebKeyFile != ""),
-		PanelHost:          settings.WebDomain, PanelPath: settings.WebBasePath,
+		PanelHost:          certificateHost(settings.WebCertFile, settings.WebDomain), PanelPath: settings.WebBasePath,
 		SubscriptionPaths: []string{settings.SubPath, settings.SubJsonPath, settings.SubClashPath, "/assets/"},
 		Routes:            map[string][]domainfront.Route{},
 	}
-	backend.RedirectURL, _ = s.GetRootRedirectURL()
+	panelPort := settings.WebPort
+	if override, configured, err := config.GetPortOverride(); configured && err == nil {
+		panelPort = override
+		backend.PanelTarget = localDomainTarget(settings.WebListen, panelPort, settings.WebCertFile != "" && settings.WebKeyFile != "")
+	}
+	backend.SharedHTTP, backend.SharedHTTPS = domainSharesListener(cfg, settings.WebListen, panelPort, settings.WebCertFile != "" && settings.WebKeyFile != "")
+	if backend.SharedHTTP || backend.SharedHTTPS {
+		backend.PanelHandler = registeredDomainHandler(settings.WebListen, panelPort, settings.WebCertFile != "" && settings.WebKeyFile != "")
+	}
+	if settings.SubEnable {
+		sharedHTTP, sharedHTTPS := domainSharesListener(cfg, settings.SubListen, settings.SubPort, settings.SubCertFile != "" && settings.SubKeyFile != "")
+		if sharedHTTP || sharedHTTPS {
+			backend.SubscriptionHandler = registeredDomainHandler(settings.SubListen, settings.SubPort, settings.SubCertFile != "" && settings.SubKeyFile != "")
+		}
+		backend.SharedHTTP = backend.SharedHTTP || sharedHTTP
+		backend.SharedHTTPS = backend.SharedHTTPS || sharedHTTPS
+	}
+	backend.GetRedirect = s.GetRootRedirectURL
+	if settings.SubCertFile != "" && settings.SubKeyFile != "" {
+		backend.SubscriptionHost = certificateHost(settings.SubCertFile, settings.SubDomain)
+	}
 	for _, d := range cfg.Domains {
 		if !d.Enabled {
 			continue
@@ -245,7 +303,8 @@ func (s *SettingService) DomainFrontHosts(inbounds []*model.Inbound) (map[int][]
 	}
 	wanted := map[int]bool{}
 	for _, inbound := range inbounds {
-		wanted[inbound.Id] = true
+		_, routeErr := domainInboundRoute(inbound, "")
+		wanted[inbound.Id] = routeErr == nil
 	}
 	for _, d := range cfg.Domains {
 		if !d.Enabled || d.Mode == "sub_link_only" {
@@ -258,4 +317,40 @@ func (s *SettingService) DomainFrontHosts(inbounds []*model.Inbound) (map[int][]
 		}
 	}
 	return out, nil
+}
+
+func RefreshDomainFrontRoutes() error {
+	domainFrontState.Lock()
+	defer domainFrontState.Unlock()
+	if domainFrontState.manager == nil {
+		return nil
+	}
+	s := &SettingService{}
+	cfg, err := s.GetDomainFrontConfig()
+	if err != nil || !cfg.Enabled {
+		return err
+	}
+	backend, err := s.domainFrontBackend(domainFrontRoutingConfig(cfg))
+	if err != nil {
+		return err
+	}
+	return domainFrontState.manager.RefreshRoutes(backend)
+}
+
+func domainFrontRoutingConfig(cfg domainfront.DomainFrontConfig) domainfront.DomainFrontConfig {
+	cfg.Domains = append([]domainfront.DomainFrontDomain(nil), cfg.Domains...)
+	for i := range cfg.Domains {
+		ids := []int{}
+		for _, id := range cfg.Domains[i].InboundIDs {
+			var inbound model.Inbound
+			if err := database.GetDB().First(&inbound, id).Error; err != nil {
+				continue
+			}
+			if _, err := domainInboundRoute(&inbound, cfg.Domains[i].Name); err == nil {
+				ids = append(ids, id)
+			}
+		}
+		cfg.Domains[i].InboundIDs = ids
+	}
+	return cfg
 }

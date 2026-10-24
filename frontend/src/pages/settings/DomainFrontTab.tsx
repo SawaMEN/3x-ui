@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { keys } from '@/api/queryKeys';
+import { useDomainFrontStatus } from '@/api/queries/useDomainFrontStatus';
 import { useServerDraft } from '@/hooks/useServerDraft';
 import { useTranslation } from 'react-i18next';
 import {
@@ -39,16 +40,7 @@ import { useInboundOptions } from '@/api/queries/useInboundOptions';
 export default function DomainFrontTab() {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
-  const statusQuery = useQuery({
-    queryKey: keys.settings.domains(),
-    queryFn: async () => {
-      const msg = await HttpUtil.get('/panel/api/domains/status', undefined, { silent: true });
-      if (!msg?.success) throw new Error(msg?.msg || t('somethingWentWrong'));
-      return DomainFrontStatusSchema.parse(msg.obj);
-    },
-    refetchInterval: 60000,
-    refetchIntervalInBackground: false,
-  });
+  const statusQuery = useDomainFrontStatus();
   const status = statusQuery.data;
   const config = status?.config;
   const server = useMemo(
@@ -79,6 +71,10 @@ export default function DomainFrontTab() {
   const mode = Form.useWatch('mode', form);
   const tls = Form.useWatch('tls', form);
   const label = (key: string) => t(`pages.settings.domains.${key}`);
+  const renewalLabel = (value: string) =>
+    value === 'external' || value === 'manual' ? label(`renewal.${value}`) : value;
+  const certificateError = (value: string) =>
+    value === 'acme_schedule_missing' ? label('acmeScheduleMissing') : value;
 
   function load() {
     return statusQuery.refetch();
@@ -103,6 +99,7 @@ export default function DomainFrontTab() {
       markSaved(saved);
       queryClient.setQueryData(keys.settings.domains(), next);
       void queryClient.invalidateQueries({ queryKey: keys.settings.defaults() });
+      void queryClient.invalidateQueries({ queryKey: keys.settings.all() });
       messageApi.success(t('pages.settings.domains.applied'));
     } catch (e) {
       messageApi.error(e instanceof Error ? e.message : t('somethingWentWrong'));
@@ -182,6 +179,33 @@ export default function DomainFrontTab() {
         title={label('automation')}
         description={label('automationDesc')}
       />
+      {!!status?.existingCertificates?.length && (
+        <Card title={label('existingCertificates')}>
+          <Typography.Paragraph type="secondary">{label('existingDesc')}</Typography.Paragraph>
+          <Space orientation="vertical">
+            {status.existingCertificates.map((cert) => (
+              <div key={cert.name}>
+                <Typography.Text strong>{label(`source.${cert.source}`)}</Typography.Text>
+                {' · '}
+                {cert.issuer}
+                {' · '}
+                {label('remaining')}: {cert.daysLeft} {label('days')}
+                {' · '}
+                {date(cert.expiresAt)}
+                {' · '}
+                {renewalLabel(cert.renewal)}
+                {cert.autoRenew && <Tag color="green">{label('autoRenew')}</Tag>}
+                <div>
+                  <Typography.Text copyable>{cert.certFile}</Typography.Text>
+                </div>
+                {cert.error && (
+                  <Typography.Text type="warning">{certificateError(cert.error)}</Typography.Text>
+                )}
+              </div>
+            ))}
+          </Space>
+        </Card>
+      )}
       <Collapse
         items={[
           {
@@ -372,6 +396,12 @@ export default function DomainFrontTab() {
                       {label(`state.${cert?.state || 'unsaved'}`)}
                     </Tag>
                     <span>{label(`tls.${d.tls}`)}</span>
+                    {cert?.source && (
+                      <Typography.Text type="secondary">
+                        {label(`source.${cert.source}`)} · {renewalLabel(cert.renewal)}
+                      </Typography.Text>
+                    )}
+                    {cert?.certFile && <Typography.Text copyable>{cert.certFile}</Typography.Text>}
                     {cert?.expiresAt ? (
                       <>
                         <span>
@@ -386,7 +416,11 @@ export default function DomainFrontTab() {
                     {cert?.autoRenew && (
                       <Typography.Text type="secondary">{label('autoRenew')}</Typography.Text>
                     )}
-                    {cert?.error && <Typography.Text type="danger">{cert.error}</Typography.Text>}
+                    {cert?.error && (
+                      <Typography.Text type="danger">
+                        {certificateError(cert.error)}
+                      </Typography.Text>
+                    )}
                   </Space>
                 );
               },
@@ -546,11 +580,22 @@ export default function DomainFrontTab() {
             rules={[antdRule(DomainFormSchema.shape.tls, t)]}
           >
             <Select
-              options={['auto', 'manual'].map((value) => ({ value, label: label(`tls.${value}`) }))}
+              options={['auto', 'certmagic', 'existing', 'manual'].map((value) => ({
+                value,
+                label: label(`tls.${value}`),
+              }))}
             />
           </Form.Item>
           <Typography.Paragraph type="secondary">
-            {label(tls === 'manual' ? 'manualDesc' : 'autoDesc')}
+            {label(
+              tls === 'manual'
+                ? 'manualDesc'
+                : tls === 'certmagic'
+                  ? 'certmagicDesc'
+                  : tls === 'existing'
+                    ? 'existingTLSDesc'
+                    : 'autoDesc',
+            )}
           </Typography.Paragraph>
           {tls === 'manual' && (
             <>

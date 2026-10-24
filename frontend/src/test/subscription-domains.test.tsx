@@ -1,3 +1,4 @@
+import { MemoryRouter } from 'react-router';
 import { fireEvent, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { AllSetting } from '@/models/setting';
@@ -8,10 +9,12 @@ describe('subscription public domain settings', () => {
   it('keeps the public HTTPS address independent of the listener port and emits editable settings', () => {
     const update = vi.fn();
     renderWithProviders(
-      <SubscriptionDomains
-        allSetting={new AllSetting({ subPublicURL: 'https://cdn.example.com', subPort: 2096 })}
-        updateSetting={update}
-      />,
+      <MemoryRouter>
+        <SubscriptionDomains
+          allSetting={new AllSetting({ subPublicURL: 'https://cdn.example.com', subPort: 2096 })}
+          updateSetting={update}
+        />
+      </MemoryRouter>,
     );
     const config = screen.getByRole('textbox', {
       name: 'Caddy reverse proxy configuration',

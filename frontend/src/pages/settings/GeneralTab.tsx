@@ -662,6 +662,16 @@ export default function GeneralTab({
             label: catTabLabel(<SafetyCertificateOutlined />, t('pages.settings.certs'), isMobile),
             children: (
               <>
+                <Alert
+                  type="info"
+                  showIcon
+                  title={t('pages.settings.domains.existingDesc')}
+                  action={
+                    <Button onClick={() => navigate('/panel/settings#domains')}>
+                      {t('pages.settings.domains.title')}
+                    </Button>
+                  }
+                />
                 <SettingListItem
                   paddings="small"
                   title={t('pages.settings.publicKeyPath')}

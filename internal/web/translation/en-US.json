@@ -2110,7 +2110,7 @@
       "domains": {
         "title": "Domains and TLS",
         "automation": "Automatic HTTPS gateway",
-        "automationDesc": "Add domains, choose their role and apply. The embedded gateway obtains and renews Let’s Encrypt certificates, publishes bound VPN endpoints and builds subscription URLs. Certificates and keys are stored on the server; no external Caddy installation is required.",
+        "automationDesc": "Panel, subscription and redirect settings are shared. Existing certificates and acme.sh renewal are preserved. New domains use built-in automatic TLS.",
         "help": "What each mode does",
         "mode": {
           "direct": "Direct",
@@ -2142,7 +2142,7 @@
         "httpPort": "Local HTTP port",
         "httpsPort": "Local HTTPS port",
         "publicPort": "Public HTTPS port",
-        "portsHelp": "Defaults are 80/443. Custom local ports require forwarding public ACME ports 80/443 to them. If nginx, HAProxy, Caddy or a VPN inbound owns these ports, change that deployment first. The gateway does not stop other services.",
+        "portsHelp": "An existing panel or subscription HTTPS listener is shared when its port matches. Other occupied ports are not stopped automatically.",
         "staging": "Use Let’s Encrypt staging",
         "stagingDesc": "For setup testing without consuming production issuance limits. Test certificates are not trusted by browsers. Turn this off and apply again for a public trusted certificate.",
         "list": "Domains",
@@ -2164,8 +2164,10 @@
           "unsaved": "Not applied"
         },
         "tls": {
-          "auto": "Let’s Encrypt — automatic",
-          "manual": "Own certificate — manual"
+          "auto": "Automatic — existing or Let’s Encrypt",
+          "manual": "Own certificate — manual",
+          "certmagic": "Let’s Encrypt — issue and renew with CertMagic",
+          "existing": "Existing — panel, subscription or installer"
         },
         "remaining": "Days remaining",
         "days": "days",
@@ -2193,13 +2195,30 @@
         "inboundsDesc": "Only enabled local HTTP-compatible inbounds are listed. Their clients receive additional endpoints with this domain, TLS and the public HTTPS port. Existing manual Host entries are retained.",
         "tlsLabel": "Certificate management",
         "manualDesc": "Read an existing certificate and private key from server files. Certificate lifetime is displayed, but this mode does not renew it automatically. Reapply after replacing the files.",
-        "autoDesc": "Let’s Encrypt issues the certificate after domain ownership validation. CertMagic, the TLS automation library used by Caddy, handles renewal and retries without cron or an external service. The lifetime and errors are refreshed automatically every minute while this section is open.",
+        "autoDesc": "Reuse a matching panel, subscription or installer acme.sh certificate and its renewal first. For new domains, the gateway obtains and renews a certificate after accepting the Let’s Encrypt agreement.",
         "certFile": "Full-chain certificate file",
         "keyFile": "Private key file",
         "invalidHostname": "Enter a DNS hostname without scheme, port or path",
         "termsRequired": "Accept the Let’s Encrypt agreement",
         "differentPorts": "HTTP and HTTPS ports must differ",
-        "duplicate": "Domain names must be unique"
+        "duplicate": "Domain names must be unique",
+        "existingCertificates": "Existing certificates",
+        "existingDesc": "Certificates configured here are also used by matching gateway domains. Installer acme.sh renewal is preserved; renewed files are loaded automatically. See Domains and TLS for expiry and renewal status.",
+        "managedSubscription": "The public subscription address and CDN mode are controlled by Domains and TLS. Other subscription settings and aliases still apply.",
+        "source": {
+          "panel": "Panel certificate",
+          "subscription": "Subscription certificate",
+          "installer": "Installer certificate",
+          "gateway": "Gateway certificate",
+          "manual": "Manual files"
+        },
+        "acmeScheduleMissing": "The acme.sh configuration exists, but its renewal schedule was not found. Check crontab -l; the certificate alone does not confirm automatic renewal.",
+        "renewal": {
+          "external": "Externally managed renewal",
+          "manual": "Manual replacement"
+        },
+        "certmagicDesc": "CertMagic obtains and renews a separate certificate for this domain, even when a matching panel certificate exists. Validation ports must be reachable and the Let’s Encrypt agreement accepted.",
+        "existingTLSDesc": "Use only an already configured certificate matching this domain, preserving its renewal mechanism. Apply fails if none exists; no new certificate is requested."
       }
     },
     "xray": {

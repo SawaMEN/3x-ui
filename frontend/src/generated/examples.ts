@@ -575,12 +575,15 @@ export const EXAMPLES: Record<string, unknown> = {
   },
   "DomainFrontCertificate": {
     "autoRenew": false,
+    "certFile": "",
     "daysLeft": 0,
     "error": "",
     "expiresAt": 0,
     "issuer": "",
     "mode": "",
     "name": "",
+    "renewal": "",
+    "source": "",
     "state": ""
   },
   "DomainFrontCheck": {
@@ -637,12 +640,15 @@ export const EXAMPLES: Record<string, unknown> = {
     "certificates": [
       {
         "autoRenew": false,
+        "certFile": "",
         "daysLeft": 0,
         "error": "",
         "expiresAt": 0,
         "issuer": "",
         "mode": "",
         "name": "",
+        "renewal": "",
+        "source": "",
         "state": ""
       }
     ],
@@ -673,6 +679,21 @@ export const EXAMPLES: Record<string, unknown> = {
       "subscriptionDomain": ""
     },
     "error": "",
+    "existingCertificates": [
+      {
+        "autoRenew": false,
+        "certFile": "",
+        "daysLeft": 0,
+        "error": "",
+        "expiresAt": 0,
+        "issuer": "",
+        "mode": "",
+        "name": "",
+        "renewal": "",
+        "source": "",
+        "state": ""
+      }
+    ],
     "running": false
   },
   "FallbackParentInfo": {
