@@ -167,7 +167,7 @@ export function outboundDefaults(type: string, tag: string, group: string[] = []
     ...(type === 'vmess' ? { security: 'auto' } : {}),
     ...(type === 'shadowsocks' ? { method: 'aes-128-gcm' } : {}),
     ...(type === 'shadowtls' ? { version: 3 } : {}),
-    ...(type === 'snell' ? { version: 4 } : {}),
+    ...(type === 'snell' ? { version: 6 } : {}),
     ...(type === 'hysteria' ? { up_mbps: 100, down_mbps: 100 } : {}),
     ...([
       'trojan',

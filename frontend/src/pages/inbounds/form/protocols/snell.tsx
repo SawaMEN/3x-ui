@@ -1,4 +1,4 @@
-import { Alert, Button, Input, Select } from 'antd';
+import { Alert, Collapse, Input, Select } from 'antd';
 import { useFormContext, useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { FormField } from '@/components/form/rhf';
@@ -20,8 +20,6 @@ export default function SnellFields() {
   return (
     <>
       <Alert type="info" showIcon description={t('pages.inbounds.form.snellHint')} />
-      <Button onClick={() => preset(6)}>{t('pages.inbounds.form.snellAuto')}</Button>
-      <Button onClick={() => preset(5)}>{t('pages.inbounds.form.snellCompatible')}</Button>
       <FormField
         name={['settings', 'version']}
         label={t('pages.inbounds.form.snellVersion')}
@@ -34,52 +32,65 @@ export default function SnellFields() {
           ]}
         />
       </FormField>
-      <FormField name={['settings', 'psk']} label="PSK">
-        <Input.Password
-          placeholder={t('pages.inbounds.form.additionalSecretAuto')}
-          autoComplete="new-password"
-        />
-      </FormField>
-      <Alert type="info" showIcon description={t('pages.inbounds.form.snellPskHint')} />
-      {version === 6 ? (
-        <>
-          <FormField name={['settings', 'mode']} label={t('pages.inbounds.form.snellMode')}>
-            <Select
-              options={[
-                { value: 'default', label: 'default' },
-                { value: 'unshaped', label: 'unshaped' },
-              ]}
-            />
-          </FormField>
-          <Alert type="info" description={t('pages.inbounds.form.snellModeHint')} />
-        </>
-      ) : (
-        <>
-          <FormField name={['settings', 'obfsMode']} label={t('pages.inbounds.form.snellObfs')}>
-            <Select
-              options={[
-                { value: 'none', label: 'none' },
-                { value: 'http', label: 'http' },
-              ]}
-            />
-          </FormField>
-          {obfsMode === 'http' && (
-            <>
-              <FormField
-                name={['settings', 'obfsHost']}
-                label={t('pages.inbounds.form.snellObfsHost')}
-              >
-                <Input placeholder="bing.com" />
-              </FormField>
-              <Alert
-                type="warning"
-                showIcon
-                description={t('pages.inbounds.form.snellObfsHint')}
+      <Collapse
+        ghost
+        items={[
+          {
+            key: 'advanced',
+            label: t('pages.inbounds.form.snellAdvanced'),
+            children: (
+              <>
+            <FormField name={['settings', 'psk']} label="PSK">
+              <Input.Password
+                placeholder={t('pages.inbounds.form.additionalSecretAuto')}
+                autoComplete="new-password"
               />
-            </>
-          )}
-        </>
-      )}
+            </FormField>
+            <Alert type="info" showIcon description={t('pages.inbounds.form.snellPskHint')} />
+            {version === 6 ? (
+              <>
+                <FormField name={['settings', 'mode']} label={t('pages.inbounds.form.snellMode')}>
+                  <Select
+                    options={[
+                      { value: 'default', label: 'default' },
+                      { value: 'unshaped', label: 'unshaped' },
+                    ]}
+                  />
+                </FormField>
+                <Alert type="info" description={t('pages.inbounds.form.snellModeHint')} />
+              </>
+            ) : (
+              <>
+                <FormField name={['settings', 'obfsMode']} label={t('pages.inbounds.form.snellObfs')}>
+                  <Select
+                    options={[
+                      { value: 'none', label: 'none' },
+                      { value: 'http', label: 'http' },
+                    ]}
+                  />
+                </FormField>
+                {obfsMode === 'http' && (
+                  <>
+                    <FormField
+                      name={['settings', 'obfsHost']}
+                      label={t('pages.inbounds.form.snellObfsHost')}
+                    >
+                      <Input placeholder="bing.com" />
+                    </FormField>
+                    <Alert
+                      type="warning"
+                      showIcon
+                      description={t('pages.inbounds.form.snellObfsHint')}
+                    />
+                  </>
+                )}
+              </>
+            )}
+                    </>
+            ),
+          },
+        ]}
+      />
     </>
   );
 }

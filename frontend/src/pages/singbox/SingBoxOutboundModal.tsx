@@ -485,20 +485,6 @@ export default function SingBoxOutboundModal({
                     )}
                   </>
                 )}
-                <Field label="Network">
-                  <Select
-                    value={text(draft.network)}
-                    options={[
-                      { value: '', label: 'TCP + UDP' },
-                      { value: 'tcp', label: 'TCP' },
-                      { value: 'udp', label: 'UDP' },
-                    ]}
-                    onChange={(v) => patch('network', v)}
-                  />
-                </Field>
-                <Field label="Connection reuse">
-                  <Switch checked={draft.reuse === true} onChange={(v) => patch('reuse', v)} />
-                </Field>
               </>
             )}
             {type === 'shadowtls' && (

@@ -187,7 +187,9 @@ export function dedicatedFields(type: string): Set<string> {
   if (type === 'mieru') add('server_port');
   if (type === 'ssh') add('user');
   if (type === 'hysteria') add('auth_str', 'up_mbps', 'down_mbps');
-  if (type === 'snell') add('psk', 'version');
+  // Version-specific Snell fields already have one dedicated editor each.
+  // Network and connection reuse remain optional under advanced settings.
+  if (type === 'snell') add('psk', 'userkey', 'version', 'mode', 'obfs_mode', 'obfs_host');
   if (type === 'shadowtls') add('version');
   if (type === 'shadowsocks') add('method');
   if (type === 'vmess') add('security');

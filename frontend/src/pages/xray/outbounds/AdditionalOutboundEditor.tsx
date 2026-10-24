@@ -1,4 +1,4 @@
-import { Alert, Button, Form, Input, InputNumber, Select, Space, Switch } from 'antd';
+import { Alert, Button, Form, Input, InputNumber, Select, Space } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { InstallVPNButton } from '@/pages/inbounds/form/protocols/additional-vpn';
 
@@ -23,7 +23,9 @@ export default function AdditionalOutboundEditor({
     onChange(JSON.stringify({ ...raw, settings: { ...settings, ...values } }, null, 2));
   return (
     <Space orientation="vertical" style={{ width: '100%' }}>
-      <Alert type="info" showIcon description={t('pages.inbounds.form.vpnOutboundHint')} />
+      {protocol !== 'snell' && protocol !== 'singbox:snell' && (
+        <Alert type="info" showIcon description={t('pages.inbounds.form.vpnOutboundHint')} />
+      )}
       {protocol === 'fptn' ? (
         <>
           <InstallVPNButton protocol="fptn" />
@@ -141,27 +143,6 @@ export default function AdditionalOutboundEditor({
               )}
             </>
           )}
-          <Form.Item label={t('pages.inbounds.form.snellNetwork')}>
-            <Select
-              value={String(settings.network ?? '')}
-              options={[
-                { value: '', label: 'TCP + UDP' },
-                { value: 'tcp', label: 'TCP' },
-                { value: 'udp', label: 'UDP' },
-              ]}
-              onChange={(network) => update({ network })}
-            />
-          </Form.Item>
-          <Form.Item label={t('pages.inbounds.form.snellReuse')}>
-            <Switch checked={settings.reuse === true} onChange={(reuse) => update({ reuse })} />
-          </Form.Item>
-          <Button
-            onClick={() =>
-              update({ version: 6, mode: 'default', obfs_mode: undefined, obfs_host: undefined })
-            }
-          >
-            {t('pages.inbounds.form.snellAuto')}
-          </Button>
         </>
       )}
     </Space>
