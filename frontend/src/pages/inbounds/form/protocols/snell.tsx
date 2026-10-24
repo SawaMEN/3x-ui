@@ -1,4 +1,4 @@
-import { Alert, Collapse, Input, Select } from 'antd';
+import { Alert, Collapse, Input, Select, Switch } from 'antd';
 import { useFormContext, useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { FormField } from '@/components/form/rhf';
@@ -61,9 +61,10 @@ export default function SnellFields() {
           <FormField
             name={['settings', 'quicProxy']}
             label="QUIC Proxy (UDP)"
+            valueProp="checked"
             tooltip="Snell v5: QUIC Initial шифруется, а последующие UDP-пакеты передаются напрямую. Клиент и сервер должны поддерживать v5; откройте UDP-порт."
           >
-            <Select options={[{ value: false, label: 'Выключено' }, { value: true, label: 'Включено' }]} />
+            <Switch />
           </FormField>
           {obfsMode === 'http' && (
             <>
