@@ -7,14 +7,14 @@
     "repository": "https://github.com/SawaMEN/hiddify-core",
     "commit": "b310097c8e7a2655e1ab7ca61b7d66c4b77ebe0c",
     "submodules": {
-      "hiddify-sing-box": "1836279aa58a4b621c4721759f9abec9fdf4f5eb",
+      "hiddify-sing-box": "8ac485de9ea1a665086be16cee92e8b5fe660ba0",
       "ray2sing": "505d8c645f1dad54544abd024ffd8100a8d771e8"
     },
     "submodule_repositories": {
       "hiddify-sing-box": "https://github.com/SawaMEN/hiddify-sing-box",
       "ray2sing": "https://github.com/hiddify/ray2sing"
     },
-    "version": "sawamen-b310097c8e7a-1836279aa58a-snellquic1"
+    "version": "sawamen-b310097c8e7a-8ac485de9ea1-snellquic1"
   },
   "runtime_contract": {
     "raw_config_command": [
@@ -103,7 +103,7 @@
       "with_xui_panel",
       "with_masque"
     ],
-    "sing_box_version": "sawamen-1836279aa58a",
+    "sing_box_version": "sawamen-8ac485de9ea1",
     "check_command_overlay": "deploy/hiddify/cmd_xui_check.go.in",
     "runtime_dependencies": [
       "matching libcronet for Naive outbound"
