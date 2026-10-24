@@ -2263,6 +2263,9 @@ export const SCHEMAS: Record<string, unknown> = {
       "autoRenew": {
         "type": "boolean"
       },
+      "certFile": {
+        "type": "string"
+      },
       "daysLeft": {
         "type": "integer"
       },
@@ -2282,18 +2285,27 @@ export const SCHEMAS: Record<string, unknown> = {
       "name": {
         "type": "string"
       },
+      "renewal": {
+        "type": "string"
+      },
+      "source": {
+        "type": "string"
+      },
       "state": {
         "type": "string"
       }
     },
     "required": [
       "autoRenew",
+      "certFile",
       "daysLeft",
       "error",
       "expiresAt",
       "issuer",
       "mode",
       "name",
+      "renewal",
+      "source",
       "state"
     ],
     "type": "object"
@@ -2453,6 +2465,12 @@ export const SCHEMAS: Record<string, unknown> = {
       },
       "error": {
         "type": "string"
+      },
+      "existingCertificates": {
+        "items": {
+          "$ref": "#/components/schemas/DomainFrontCertificate"
+        },
+        "type": "array"
       },
       "running": {
         "type": "boolean"

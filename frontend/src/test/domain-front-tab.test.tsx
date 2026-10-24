@@ -1,3 +1,6 @@
+import { MemoryRouter } from 'react-router';
+import { AllSetting } from '@/models/setting';
+import SubscriptionDomains from '@/pages/settings/SubscriptionDomains';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -9,7 +12,7 @@ import { server } from './msw/server';
 import './setup.msw';
 import { chooseSelectOption, renderWithProviders } from './test-utils';
 
-function fixture() {
+function fixture(existing = false) {
   const config: DomainConfigForm = {
     ...defaultDomainConfig,
     enabled: true,
@@ -21,6 +24,23 @@ function fixture() {
   const status = () => ({
     config,
     running: true,
+    existingCertificates: existing
+      ? [
+          {
+            name: 'panel',
+            mode: 'auto',
+            state: 'valid',
+            autoRenew: true,
+            source: 'panel',
+            renewal: 'acme.sh',
+            certFile: '/root/cert/existing/fullchain.pem',
+            issuer: 'Installer issuer',
+            expiresAt: Math.floor(Date.now() / 1000) + 40 * 86400,
+            daysLeft: 40,
+            error: '',
+          },
+        ]
+      : [],
     error: '',
     certificates: [
       {
@@ -32,6 +52,9 @@ function fixture() {
         expiresAt: Math.floor(Date.now() / 1000) + 45 * 86400,
         daysLeft: 45,
         error: '',
+        source: 'panel',
+        renewal: 'acme.sh',
+        certFile: '/root/cert/sub.example.com/fullchain.pem',
       },
     ],
   });
@@ -119,6 +142,53 @@ describe('domain and TLS dashboard', () => {
         (screen.getByText('Save and apply').closest('button') as HTMLButtonElement).disabled,
       ).toBe(true),
     );
+  });
+
+  it('shares existing installer certificates and the managed subscription address across settings', async () => {
+    const f = fixture(true);
+    f.config.domains[0].mode = 'cdn';
+    f.config.acceptTerms = false;
+    const update = vi.fn();
+    renderWithProviders(
+      <MemoryRouter>
+        <DomainFrontTab />
+        <SubscriptionDomains
+          allSetting={
+            new AllSetting({ subPublicURL: 'https://old.example.com', subCDNEnable: false })
+          }
+          updateSetting={update}
+        />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText(/Installer issuer/)).toBeTruthy();
+    expect(screen.getByText('/root/cert/existing/fullchain.pem')).toBeTruthy();
+    const address = (await screen.findByRole('textbox', {
+      name: 'Public subscription address',
+    })) as HTMLInputElement;
+    await waitFor(() => expect(address.value).toBe('https://sub.example.com'));
+    expect(address.disabled).toBe(true);
+    expect(
+      screen.getByRole('switch', { name: 'Subscription through CDN' }).getAttribute('aria-checked'),
+    ).toBe('true');
+    expect(screen.queryByRole('textbox', { name: 'Caddy reverse proxy configuration' })).toBeNull();
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['certmagic', 'Let’s Encrypt — issue and renew with CertMagic'],
+    ['existing', 'Existing — panel, subscription or installer'],
+  ])('allows explicitly selecting %s per domain', async (tlsMode, title) => {
+    const f = fixture();
+    renderWithProviders(<DomainFrontTab />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    await screen.findByRole('dialog');
+    chooseSelectOption('tls', title);
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    await waitFor(() =>
+      expect(document.querySelector('.ant-table-tbody')?.textContent).toContain(title),
+    );
+    fireEvent.click(screen.getByText('Save and apply').closest('button')!);
+    await waitFor(() => expect(f.applied?.domains[0].tls).toBe(tlsMode));
   });
 
   it('clears panel and VPN bindings when a domain becomes subscription-only', async () => {

@@ -562,12 +562,15 @@ export type ClientsSummary = z.infer<typeof ClientsSummarySchema>;
 
 export const DomainFrontCertificateSchema = z.object({
   autoRenew: z.boolean(),
+  certFile: z.string(),
   daysLeft: z.number().int(),
   error: z.string(),
   expiresAt: z.number().int(),
   issuer: z.string(),
   mode: z.string(),
   name: z.string(),
+  renewal: z.string(),
+  source: z.string(),
   state: z.string(),
 });
 export type DomainFrontCertificate = z.infer<typeof DomainFrontCertificateSchema>;
@@ -614,6 +617,7 @@ export const DomainFrontStatusSchema = z.object({
   certificates: z.array(z.lazy(() => DomainFrontCertificateSchema)),
   config: z.lazy(() => DomainFrontConfigSchema),
   error: z.string(),
+  existingCertificates: z.array(z.lazy(() => DomainFrontCertificateSchema)).optional(),
   running: z.boolean(),
 });
 export type DomainFrontStatus = z.infer<typeof DomainFrontStatusSchema>;

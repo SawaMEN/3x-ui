@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/caddyserver/certmagic"
@@ -34,13 +35,17 @@ type DomainFrontCertificate struct {
 	ExpiresAt int64  `json:"expiresAt"`
 	DaysLeft  int    `json:"daysLeft"`
 	Error     string `json:"error"`
+	Source    string `json:"source"`
+	Renewal   string `json:"renewal"`
+	CertFile  string `json:"certFile"`
 }
 
 type DomainFrontStatus struct {
-	Config       DomainFrontConfig        `json:"config"`
-	Running      bool                     `json:"running"`
-	Error        string                   `json:"error"`
-	Certificates []DomainFrontCertificate `json:"certificates"`
+	Config               DomainFrontConfig        `json:"config"`
+	Running              bool                     `json:"running"`
+	Error                string                   `json:"error"`
+	Certificates         []DomainFrontCertificate `json:"certificates"`
+	ExistingCertificates []DomainFrontCertificate `json:"existingCertificates,omitempty"`
 }
 
 type Manager struct {
@@ -51,24 +56,30 @@ type Manager struct {
 }
 
 type frontRuntime struct {
-	cfg         DomainFrontConfig
-	backend     Backend
-	listeners   []net.Listener
-	httpServer  *http.Server
-	httpsServer *http.Server
-	cache       *certmagic.Cache
-	magic       *certmagic.Config
-	issuer      *certmagic.ACMEIssuer
-	manual      map[string]*tls.Certificate
-	cancel      context.CancelFunc
-	mu          sync.Mutex
-	errors      map[string]string
+	cfg            DomainFrontConfig
+	backend        Backend
+	challengeRoots map[string]string
+	listeners      []net.Listener
+	httpServer     *http.Server
+	httpsServer    *http.Server
+	cache          *certmagic.Cache
+	magic          *certmagic.Config
+	issuer         *certmagic.ACMEIssuer
+	manual         map[string]*tls.Certificate
+	external       map[string]*network.FileCertificate
+	cancel         context.CancelFunc
+	mu             sync.Mutex
+	errors         map[string]string
+	handlerHTTPS   http.Handler
+	routing        atomic.Pointer[http.Handler]
+	handlerHTTP    http.Handler
+	tlsConfig      *tls.Config
 }
 
 func NewManager(cachePath string) *Manager { return &Manager{cachePath: cachePath} }
 
 func (m *Manager) Apply(ctx context.Context, cfg DomainFrontConfig, backend Backend) error {
-	if err := cfg.Validate(); err != nil {
+	if err := cfg.ValidateWithCertificates(backend.Certificates); err != nil {
 		return err
 	}
 	m.mu.Lock()
@@ -131,8 +142,26 @@ func (m *Manager) start(ctx context.Context, cfg DomainFrontConfig, backend Back
 	if err := os.MkdirAll(m.cachePath, 0o700); err != nil {
 		return nil, err
 	}
-	r := &frontRuntime{cfg: cfg, backend: backend, manual: map[string]*tls.Certificate{}, errors: map[string]string{}}
+	r := &frontRuntime{cfg: cfg, backend: backend, challengeRoots: backend.ChallengeRoots, manual: map[string]*tls.Certificate{}, external: map[string]*network.FileCertificate{}, errors: map[string]string{}}
+	if r.challengeRoots == nil {
+		r.challengeRoots = map[string]string{}
+	}
 	for _, d := range cfg.Domains {
+		if files, ok := backend.Certificates[d.Name]; ok && d.Enabled && (d.TLS == "auto" || d.TLS == "existing") {
+			cert, err := network.NewFileCertificate(files.CertFile, files.KeyFile)
+			if err != nil {
+				return nil, fmt.Errorf("%s: %w", d.Name, err)
+			}
+			pair, _ := cert.GetCertificate(nil)
+			leaf, err := x509.ParseCertificate(pair.Certificate[0])
+			if err != nil {
+				return nil, err
+			}
+			if err := leaf.VerifyHostname(d.Name); err != nil {
+				return nil, err
+			}
+			r.external[d.Name] = cert
+		}
 		if !d.Enabled || d.TLS != "manual" {
 			continue
 		}
@@ -150,16 +179,25 @@ func (m *Manager) start(ctx context.Context, cfg DomainFrontConfig, backend Back
 		r.manual[d.Name] = &pair
 	}
 	var lc net.ListenConfig
-	plain, err := lc.Listen(ctx, "tcp", net.JoinHostPort(cfg.Listen, strconv.Itoa(cfg.HTTPPort)))
-	if err != nil {
-		return nil, fmt.Errorf("HTTP listener: %w", err)
+	var plain, secure net.Listener
+	var err error
+	if !backend.SharedHTTP {
+		plain, err = lc.Listen(ctx, "tcp", net.JoinHostPort(cfg.Listen, strconv.Itoa(cfg.HTTPPort)))
+		if err != nil {
+			return nil, fmt.Errorf("HTTP listener: %w", err)
+		}
+		r.listeners = append(r.listeners, plain)
 	}
-	secure, err := lc.Listen(ctx, "tcp", net.JoinHostPort(cfg.Listen, strconv.Itoa(cfg.HTTPSPort)))
-	if err != nil {
-		_ = plain.Close()
-		return nil, fmt.Errorf("HTTPS listener: %w", err)
+	if !backend.SharedHTTPS {
+		secure, err = lc.Listen(ctx, "tcp", net.JoinHostPort(cfg.Listen, strconv.Itoa(cfg.HTTPSPort)))
+		if err != nil {
+			for _, listener := range r.listeners {
+				_ = listener.Close()
+			}
+			return nil, fmt.Errorf("HTTPS listener: %w", err)
+		}
+		r.listeners = append(r.listeners, secure)
 	}
-	r.listeners = []net.Listener{plain, secure}
 	logger := zap.New(zapcore.NewCore(zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()), zapcore.AddSync(os.Stderr), zap.WarnLevel))
 	r.cache = certmagic.NewCache(certmagic.CacheOptions{Logger: logger, GetConfigForCert: func(certmagic.Certificate) (*certmagic.Config, error) { return r.magic, nil }})
 	r.magic = certmagic.New(r.cache, certmagic.Config{Storage: &certmagic.FileStorage{Path: m.cachePath}, Logger: logger, OnEvent: r.event})
@@ -177,31 +215,44 @@ func (m *Manager) start(ctx context.Context, cfg DomainFrontConfig, backend Back
 		if !ok {
 			return nil, fmt.Errorf("unknown TLS domain")
 		}
+		if cert := r.external[d.Name]; cert != nil {
+			return cert.GetCertificate(hello)
+		}
 		if d.TLS == "manual" {
 			return r.manual[d.Name], nil
 		}
 		return r.magic.GetCertificate(hello)
 	}
-	handler, err := r.handler()
+	snapshot := &frontRuntime{cfg: cfg, backend: backend}
+	handler, err := snapshot.handler()
 	if err != nil {
-		_ = plain.Close()
-		_ = secure.Close()
+		for _, listener := range r.listeners {
+			_ = listener.Close()
+		}
 		r.cache.Stop()
 		return nil, err
 	}
-	r.httpServer = &http.Server{Handler: r.issuer.HTTPChallengeHandler(http.HandlerFunc(r.redirectHTTPS)), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute, MaxHeaderBytes: 1 << 20}
-	r.httpsServer = &http.Server{Handler: handler, TLSConfig: tlsCfg, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute, MaxHeaderBytes: 1 << 20}
+	r.routing.Store(&handler)
+	r.handlerHTTPS = http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) { (*r.routing.Load()).ServeHTTP(w, req) })
+	r.tlsConfig = tlsCfg
+	r.handlerHTTP = r.issuer.HTTPChallengeHandler(http.HandlerFunc(r.externalChallenge))
+	r.httpServer = &http.Server{Handler: r.handlerHTTP, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute, MaxHeaderBytes: 1 << 20}
+	r.httpsServer = &http.Server{Handler: r.handlerHTTPS, TLSConfig: tlsCfg, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute, MaxHeaderBytes: 1 << 20}
 	r.httpsServer.Protocols = new(http.Protocols)
 	r.httpsServer.Protocols.SetHTTP1(true)
 	r.httpsServer.Protocols.SetHTTP2(true)
 
 	runCtx, cancel := context.WithCancel(context.Background())
 	r.cancel = cancel
-	go func() { _ = network.ServeHTTP(r.httpServer, plain, "Domain HTTP server") }()
-	go func() { _ = network.ServeHTTP(r.httpsServer, tls.NewListener(secure, tlsCfg), "Domain HTTPS server") }()
+	if plain != nil {
+		go func() { _ = network.ServeHTTP(r.httpServer, plain, "Domain HTTP server") }()
+	}
+	if secure != nil {
+		go func() { _ = network.ServeHTTP(r.httpsServer, tls.NewListener(secure, tlsCfg), "Domain HTTPS server") }()
+	}
 	var names []string
 	for _, d := range cfg.Domains {
-		if d.Enabled && d.TLS == "auto" {
+		if d.Enabled && (d.TLS == "auto" || d.TLS == "certmagic") && r.external[d.Name] == nil {
 			names = append(names, d.Name)
 		}
 	}
@@ -256,19 +307,44 @@ func (r *frontRuntime) event(_ context.Context, event string, data map[string]an
 }
 
 func (m *Manager) Status(cfg DomainFrontConfig) DomainFrontStatus {
+	return m.StatusWithCertificates(cfg, nil)
+}
+
+func (m *Manager) StatusWithCertificates(cfg DomainFrontConfig, files map[string]CertificateFiles) DomainFrontStatus {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	out := DomainFrontStatus{Config: cfg, Running: m.runtime != nil, Error: m.lastError, Certificates: []DomainFrontCertificate{}}
 	for _, d := range cfg.Domains {
-		entry := DomainFrontCertificate{Name: d.Name, Mode: d.TLS, State: "disabled", AutoRenew: out.Running && d.Enabled && cfg.Enabled && d.TLS == "auto"}
-		if !cfg.Enabled || !d.Enabled {
+		entry := DomainFrontCertificate{Name: d.Name, Mode: d.TLS, State: "disabled", AutoRenew: out.Running && d.Enabled && cfg.Enabled && (d.TLS == "auto" || d.TLS == "certmagic")}
+		if !d.Enabled {
 			out.Certificates = append(out.Certificates, entry)
 			continue
 		}
 		entry.State = "pending"
+		entry.Source, entry.Renewal = "gateway", "certmagic"
+		if d.TLS == "manual" {
+			entry.Source, entry.Renewal = "manual", "manual"
+		}
+		external, inherited := files[d.Name]
+		if m.runtime != nil {
+			if active, ok := m.runtime.backend.Certificates[d.Name]; ok {
+				external, inherited = active, true
+			}
+		}
+		if inherited && (d.TLS == "auto" || d.TLS == "existing") {
+			entry.Source, entry.Renewal, entry.CertFile = external.Source, external.Renewal, external.CertFile
+			entry.AutoRenew, entry.Error = external.AutoRenew, external.Warning
+		}
 		var raw []byte
 		var err error
-		if d.TLS == "manual" {
+		if inherited && (d.TLS == "auto" || d.TLS == "existing") {
+			if m.runtime != nil && m.runtime.external[d.Name] != nil {
+				pair, _ := m.runtime.external[d.Name].GetCertificate(nil)
+				raw = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: pair.Certificate[0]})
+			} else {
+				raw, err = os.ReadFile(external.CertFile)
+			}
+		} else if d.TLS == "manual" {
 			if m.runtime != nil && m.runtime.manual[d.Name] != nil {
 				raw = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: m.runtime.manual[d.Name].Certificate[0]})
 			} else {
@@ -288,7 +364,7 @@ func (m *Manager) Status(cfg DomainFrontConfig) DomainFrontStatus {
 				m.runtime.mu.Unlock()
 			}
 		}
-		if err != nil && d.TLS == "manual" {
+		if err != nil && (d.TLS == "manual" || inherited) {
 			entry.Error = err.Error()
 		}
 
@@ -380,15 +456,18 @@ func pathWithin(path, prefix string) bool {
 func (r *frontRuntime) domainHandler(d DomainFrontDomain) (http.Handler, error) {
 	subTarget := r.backend.SubscriptionTarget
 	subHost := d.Name
+	if r.backend.SubscriptionHost != "" {
+		subHost = r.backend.SubscriptionHost
+	}
 	if d.Mode == "relay" {
 		subTarget = d.Origin
 		subHost = ""
 	}
-	subscription, err := proxy(subTarget, subHost, false)
+	subscriptionProxy, err := proxy(subTarget, subHost, false)
 	if err != nil {
 		return nil, err
 	}
-	subscription.ModifyResponse = func(response *http.Response) error {
+	subscriptionProxy.ModifyResponse = func(response *http.Response) error {
 		if err := proxyTrailers(response); err != nil {
 			return err
 		}
@@ -396,6 +475,10 @@ func (r *frontRuntime) domainHandler(d DomainFrontDomain) (http.Handler, error) 
 		response.Header.Set("CDN-Cache-Control", "no-store")
 		response.Header.Set("Cloudflare-CDN-Cache-Control", "no-store")
 		return nil
+	}
+	var subscription http.Handler = subscriptionProxy
+	if r.backend.SubscriptionHandler != nil && d.Mode != "relay" {
+		subscription = localHandler(r.backend.SubscriptionHandler, d.Name, true)
 	}
 	var panel http.Handler
 	if d.Panel && d.Mode != "sub_link_only" {
@@ -407,6 +490,9 @@ func (r *frontRuntime) domainHandler(d DomainFrontDomain) (http.Handler, error) 
 		panel, err = proxy(target, host, false)
 		if err != nil {
 			return nil, err
+		}
+		if r.backend.PanelHandler != nil && d.Mode != "relay" {
+			panel = localHandler(r.backend.PanelHandler, host, false)
 		}
 	}
 	type routeHandler struct {
@@ -444,8 +530,12 @@ func (r *frontRuntime) domainHandler(d DomainFrontDomain) (http.Handler, error) 
 				return
 			}
 		}
-		if req.URL.Path == "/" && r.backend.RedirectURL != "" && req.URL.Query().Get("panel") != "1" && (req.Method == http.MethodGet || req.Method == http.MethodHead) {
-			u, err := url.Parse(r.backend.RedirectURL)
+		redirectURL := r.backend.RedirectURL
+		if r.backend.GetRedirect != nil {
+			redirectURL, _ = r.backend.GetRedirect()
+		}
+		if req.URL.Path == "/" && redirectURL != "" && req.URL.Query().Get("panel") != "1" && (req.Method == http.MethodGet || req.Method == http.MethodHead) {
+			u, err := url.Parse(redirectURL)
 			if err == nil && !strings.EqualFold(u.Hostname(), d.Name) {
 				w.Header().Set("Referrer-Policy", "no-referrer")
 				http.Redirect(w, req, u.String(), http.StatusFound)

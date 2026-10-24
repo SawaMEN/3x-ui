@@ -2289,6 +2289,9 @@
           "autoRenew": {
             "type": "boolean"
           },
+          "certFile": {
+            "type": "string"
+          },
           "daysLeft": {
             "type": "integer"
           },
@@ -2308,18 +2311,27 @@
           "name": {
             "type": "string"
           },
+          "renewal": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
           "state": {
             "type": "string"
           }
         },
         "required": [
           "autoRenew",
+          "certFile",
           "daysLeft",
           "error",
           "expiresAt",
           "issuer",
           "mode",
           "name",
+          "renewal",
+          "source",
           "state"
         ],
         "type": "object"
@@ -2479,6 +2491,12 @@
           },
           "error": {
             "type": "string"
+          },
+          "existingCertificates": {
+            "items": {
+              "$ref": "#/components/schemas/DomainFrontCertificate"
+            },
+            "type": "array"
           },
           "running": {
             "type": "boolean"
@@ -15098,12 +15116,15 @@
                     "certificates": [
                       {
                         "autoRenew": false,
+                        "certFile": "",
                         "daysLeft": 0,
                         "error": "",
                         "expiresAt": 0,
                         "issuer": "",
                         "mode": "",
                         "name": "",
+                        "renewal": "",
+                        "source": "",
                         "state": ""
                       }
                     ],
@@ -15134,6 +15155,21 @@
                       "subscriptionDomain": ""
                     },
                     "error": "",
+                    "existingCertificates": [
+                      {
+                        "autoRenew": false,
+                        "certFile": "",
+                        "daysLeft": 0,
+                        "error": "",
+                        "expiresAt": 0,
+                        "issuer": "",
+                        "mode": "",
+                        "name": "",
+                        "renewal": "",
+                        "source": "",
+                        "state": ""
+                      }
+                    ],
                     "running": false
                   }
                 }
@@ -15175,12 +15211,15 @@
                     "certificates": [
                       {
                         "autoRenew": false,
+                        "certFile": "",
                         "daysLeft": 0,
                         "error": "",
                         "expiresAt": 0,
                         "issuer": "",
                         "mode": "",
                         "name": "",
+                        "renewal": "",
+                        "source": "",
                         "state": ""
                       }
                     ],
@@ -15211,6 +15250,21 @@
                       "subscriptionDomain": ""
                     },
                     "error": "",
+                    "existingCertificates": [
+                      {
+                        "autoRenew": false,
+                        "certFile": "",
+                        "daysLeft": 0,
+                        "error": "",
+                        "expiresAt": 0,
+                        "issuer": "",
+                        "mode": "",
+                        "name": "",
+                        "renewal": "",
+                        "source": "",
+                        "state": ""
+                      }
+                    ],
                     "running": false
                   }
                 }

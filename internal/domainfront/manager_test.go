@@ -366,6 +366,13 @@ func TestReconfigureThroughGatewayKeepsApplyResponseAlive(t *testing.T) {
 }
 
 func TestCachedAutomaticCertificateStartsWithoutReissuing(t *testing.T) {
+	for _, mode := range []string{"auto", "certmagic"} {
+		t.Run(mode, func(t *testing.T) { testCachedAutomaticCertificate(t, mode) })
+	}
+}
+
+func testCachedAutomaticCertificate(t *testing.T, mode string) {
+	t.Helper()
 	certFile, keyFile, roots := testCertificate(t, "auto.example.com", 90)
 	certPEM, err := os.ReadFile(certFile)
 	if err != nil {
@@ -396,10 +403,16 @@ func TestCachedAutomaticCertificateStartsWithoutReissuing(t *testing.T) {
 	cfg.HTTPPort = unusedPort(t)
 	cfg.HTTPSPort = unusedPort(t)
 	cfg.PublicPort = cfg.HTTPSPort
-	cfg.Domains = []DomainFrontDomain{{Name: "auto.example.com", Mode: "sub_link_only", Enabled: true, TLS: "auto"}}
+	cfg.Domains = []DomainFrontDomain{{Name: "auto.example.com", Mode: "sub_link_only", Enabled: true, TLS: mode}}
 	manager := NewManager(dir)
 	defer manager.Stop()
-	if err := manager.Apply(context.Background(), cfg, Backend{SubscriptionTarget: origin.URL, SubscriptionPaths: []string{"/sub/"}}); err != nil {
+	reuseCert, reuseKey, _ := testCertificate(t, "reuse.example.com", 45)
+	cfg.Domains = append(cfg.Domains, DomainFrontDomain{Name: "reuse.example.com", Mode: "sub_link_only", Enabled: true, TLS: "existing"})
+	files := map[string]CertificateFiles{"reuse.example.com": {CertFile: reuseCert, KeyFile: reuseKey, Source: "panel", Renewal: "acme.sh", AutoRenew: true}}
+	if mode == "certmagic" {
+		files["auto.example.com"] = CertificateFiles{CertFile: "must-not-use", KeyFile: "must-not-use", Source: "panel"}
+	}
+	if err := manager.Apply(context.Background(), cfg, Backend{SubscriptionTarget: origin.URL, SubscriptionPaths: []string{"/sub/"}, Certificates: files}); err != nil {
 		t.Fatal(err)
 	}
 	transport := &http.Transport{TLSClientConfig: &tls.Config{RootCAs: roots, ServerName: "auto.example.com", MinVersion: tls.VersionTLS12}}
@@ -420,6 +433,12 @@ func TestCachedAutomaticCertificateStartsWithoutReissuing(t *testing.T) {
 		t.Fatalf("cached TLS response = %d %q", response.StatusCode, body)
 	}
 	status := manager.Status(cfg)
+	if manager.runtime.external["auto.example.com"] != nil || status.Certificates[0].Source != "gateway" || status.Certificates[0].Renewal != "certmagic" {
+		t.Fatalf("new domain is not managed by CertMagic: %#v", status.Certificates[0])
+	}
+	if status.Certificates[1].Source != "panel" || status.Certificates[1].DaysLeft != 45 || !status.Certificates[1].AutoRenew {
+		t.Fatalf("mixed external renewal lost: %#v", status.Certificates[1])
+	}
 	if !status.Certificates[0].AutoRenew || status.Certificates[0].DaysLeft != 90 || status.Certificates[0].State != "valid" {
 		t.Fatalf("cached auto TLS = %#v", status)
 	}
