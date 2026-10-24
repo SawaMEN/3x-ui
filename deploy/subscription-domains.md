@@ -1,5 +1,10 @@
 # Separate subscription domains and CDN
 
+For the integrated automated gateway with Direct/CDN/Relay/subscription-only roles
+and certificate lifetime monitoring, use **Settings → Domains and TLS**; see
+[domains-and-tls.md](domains-and-tls.md). The options below remain available for
+deployments that use their own external reverse proxy.
+
 Configure **Settings → Subscription → Panel settings**:
 
 - **Public subscription address**: `https://sub.example.com` (no path). The panel,

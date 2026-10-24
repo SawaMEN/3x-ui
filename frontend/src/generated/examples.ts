@@ -573,6 +573,108 @@ export const EXAMPLES: Record<string, unknown> = {
     "onlineCount": 1,
     "total": 2000
   },
+  "DomainFrontCertificate": {
+    "autoRenew": false,
+    "daysLeft": 0,
+    "error": "",
+    "expiresAt": 0,
+    "issuer": "",
+    "mode": "",
+    "name": "",
+    "state": ""
+  },
+  "DomainFrontCheck": {
+    "addresses": [
+      ""
+    ],
+    "checkedAt": 0,
+    "daysLeft": 0,
+    "error": "",
+    "expiresAt": 0,
+    "issuer": "",
+    "name": ""
+  },
+  "DomainFrontConfig": {
+    "acceptTerms": false,
+    "domains": [
+      {
+        "certFile": "",
+        "enabled": false,
+        "inboundIds": [
+          0
+        ],
+        "keyFile": "",
+        "mode": "sub_link_only",
+        "name": "sub.example.com",
+        "origin": "",
+        "panel": false,
+        "tls": "auto"
+      }
+    ],
+    "email": "",
+    "enabled": false,
+    "httpPort": 80,
+    "httpsPort": 443,
+    "listen": "",
+    "publicPort": 443,
+    "staging": false,
+    "subscriptionDomain": ""
+  },
+  "DomainFrontDomain": {
+    "certFile": "",
+    "enabled": false,
+    "inboundIds": [
+      0
+    ],
+    "keyFile": "",
+    "mode": "sub_link_only",
+    "name": "sub.example.com",
+    "origin": "",
+    "panel": false,
+    "tls": "auto"
+  },
+  "DomainFrontStatus": {
+    "certificates": [
+      {
+        "autoRenew": false,
+        "daysLeft": 0,
+        "error": "",
+        "expiresAt": 0,
+        "issuer": "",
+        "mode": "",
+        "name": "",
+        "state": ""
+      }
+    ],
+    "config": {
+      "acceptTerms": false,
+      "domains": [
+        {
+          "certFile": "",
+          "enabled": false,
+          "inboundIds": [
+            0
+          ],
+          "keyFile": "",
+          "mode": "sub_link_only",
+          "name": "sub.example.com",
+          "origin": "",
+          "panel": false,
+          "tls": "auto"
+        }
+      ],
+      "email": "",
+      "enabled": false,
+      "httpPort": 80,
+      "httpsPort": 443,
+      "listen": "",
+      "publicPort": 443,
+      "staging": false,
+      "subscriptionDomain": ""
+    },
+    "error": "",
+    "running": false
+  },
   "FallbackParentInfo": {
     "masterId": 0,
     "path": ""

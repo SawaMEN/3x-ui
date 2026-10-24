@@ -560,6 +560,64 @@ export const ClientsSummarySchema = z.object({
 });
 export type ClientsSummary = z.infer<typeof ClientsSummarySchema>;
 
+export const DomainFrontCertificateSchema = z.object({
+  autoRenew: z.boolean(),
+  daysLeft: z.number().int(),
+  error: z.string(),
+  expiresAt: z.number().int(),
+  issuer: z.string(),
+  mode: z.string(),
+  name: z.string(),
+  state: z.string(),
+});
+export type DomainFrontCertificate = z.infer<typeof DomainFrontCertificateSchema>;
+
+export const DomainFrontCheckSchema = z.object({
+  addresses: z.array(z.string()),
+  checkedAt: z.number().int(),
+  daysLeft: z.number().int(),
+  error: z.string(),
+  expiresAt: z.number().int(),
+  issuer: z.string(),
+  name: z.string(),
+});
+export type DomainFrontCheck = z.infer<typeof DomainFrontCheckSchema>;
+
+export const DomainFrontConfigSchema = z.object({
+  acceptTerms: z.boolean(),
+  domains: z.array(z.lazy(() => DomainFrontDomainSchema)),
+  email: z.string(),
+  enabled: z.boolean(),
+  httpPort: z.number().int(),
+  httpsPort: z.number().int(),
+  listen: z.string(),
+  publicPort: z.number().int(),
+  staging: z.boolean(),
+  subscriptionDomain: z.string(),
+});
+export type DomainFrontConfig = z.infer<typeof DomainFrontConfigSchema>;
+
+export const DomainFrontDomainSchema = z.object({
+  certFile: z.string(),
+  enabled: z.boolean(),
+  inboundIds: z.array(z.number().int()),
+  keyFile: z.string(),
+  mode: z.string(),
+  name: z.string(),
+  origin: z.string(),
+  panel: z.boolean(),
+  tls: z.string(),
+});
+export type DomainFrontDomain = z.infer<typeof DomainFrontDomainSchema>;
+
+export const DomainFrontStatusSchema = z.object({
+  certificates: z.array(z.lazy(() => DomainFrontCertificateSchema)),
+  config: z.lazy(() => DomainFrontConfigSchema),
+  error: z.string(),
+  running: z.boolean(),
+});
+export type DomainFrontStatus = z.infer<typeof DomainFrontStatusSchema>;
+
 export const FallbackParentInfoSchema = z.object({
   masterId: z.number().int(),
   path: z.string().optional(),

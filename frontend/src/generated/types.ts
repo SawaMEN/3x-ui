@@ -531,6 +531,59 @@ export interface ClientsSummary {
   total: number;
 }
 
+export interface DomainFrontCertificate {
+  autoRenew: boolean;
+  daysLeft: number;
+  error: string;
+  expiresAt: number;
+  issuer: string;
+  mode: string;
+  name: string;
+  state: string;
+}
+
+export interface DomainFrontCheck {
+  addresses: string[];
+  checkedAt: number;
+  daysLeft: number;
+  error: string;
+  expiresAt: number;
+  issuer: string;
+  name: string;
+}
+
+export interface DomainFrontConfig {
+  acceptTerms: boolean;
+  domains: DomainFrontDomain[];
+  email: string;
+  enabled: boolean;
+  httpPort: number;
+  httpsPort: number;
+  listen: string;
+  publicPort: number;
+  staging: boolean;
+  subscriptionDomain: string;
+}
+
+export interface DomainFrontDomain {
+  certFile: string;
+  enabled: boolean;
+  inboundIds: number[];
+  keyFile: string;
+  mode: string;
+  name: string;
+  origin: string;
+  panel: boolean;
+  tls: string;
+}
+
+export interface DomainFrontStatus {
+  certificates: DomainFrontCertificate[];
+  config: DomainFrontConfig;
+  error: string;
+  running: boolean;
+}
+
 export interface FallbackParentInfo {
   masterId: number;
   path?: string;

@@ -95,6 +95,13 @@ func (s *SubService) primeHosts(inbounds []*model.Inbound) error {
 			s.hostsByInbound[host.InboundId] = append(s.hostsByInbound[host.InboundId], host)
 		}
 	}
+	managed, err := s.settingService.DomainFrontHosts(inbounds)
+	if err != nil {
+		return err
+	}
+	for id, hosts := range managed {
+		s.hostsByInbound[id] = append(s.hostsByInbound[id], hosts...)
+	}
 	return nil
 }
 

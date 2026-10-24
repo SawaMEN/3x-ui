@@ -153,6 +153,9 @@ func runWebServer() {
 		logger.Warning("Could not update Telemt WEB subscription routes: ", err)
 	}
 
+	if err := service.StartDomainFront(); err != nil {
+		logger.Warning("Domain HTTPS gateway: ", err)
+	}
 	sigCh := make(chan os.Signal, 8)
 	// Trap shutdown signals
 	signal.Notify(sigCh, syscall.SIGHUP, syscall.SIGTERM, sys.SIGUSR1, os.Interrupt)
@@ -189,6 +192,7 @@ func runWebServer() {
 		switch sig {
 		case syscall.SIGHUP:
 			logger.Info("Received SIGHUP signal. Restarting servers...")
+			service.StopDomainFront()
 
 			err := subServer.Stop()
 			if err != nil {
@@ -214,6 +218,9 @@ func runWebServer() {
 			if err != nil {
 				logger.Errorf("Subscription server unavailable after restart; panel remains running: %v", err)
 			}
+			if err := service.StartDomainFront(); err != nil {
+				logger.Warning("Domain HTTPS gateway: ", err)
+			}
 			if err := service.RefreshTelemtWebSubscriptionRoutes(); err != nil {
 				logger.Warning("Could not update Telemt WEB subscription routes after restart: ", err)
 			}
@@ -228,6 +235,7 @@ func runWebServer() {
 			}
 
 		default:
+			service.StopDomainFront()
 			if stopTunnelHealthMonitor != nil {
 				stopTunnelHealthMonitor()
 			}
