@@ -162,3 +162,18 @@ func TestSnellQuicOnlyForV5(t *testing.T) {
 		}
 	}
 }
+
+func TestSnellQuicClientVersionAndSettings(t *testing.T) {
+	active := Settings{Version: 5, PSK: "testing-psk", QuicProxy: true}
+	if got := active.ClientVersion(); got != 5 {
+		t.Fatalf("QUIC client version = %d, want 5", got)
+	}
+	plain := Settings{Version: 5, PSK: "testing-psk"}
+	if got := plain.ClientVersion(); got != 4 {
+		t.Fatalf("compatible client version = %d, want 4", got)
+	}
+	outbound := active.Outbound("example.com", 443, model.Client{Email: "user", Password: "key"})
+	if outbound["version"] != 5 || outbound["userkey"] != "key" {
+		t.Fatalf("QUIC outbound lost v5 or userkey: %#v", outbound)
+	}
+}
