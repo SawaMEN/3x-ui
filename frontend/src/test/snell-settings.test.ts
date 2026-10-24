@@ -45,8 +45,18 @@ describe('Snell settings and subscription links', () => {
   });
 
   it('rejects QUIC Proxy on v6 and accepts v5', () => {
-    expect(SnellInboundSettingsSchema.safeParse({ version: 5, quicProxy: true, psk: 'secret' }).success).toBe(true);
-    expect(SnellInboundSettingsSchema.safeParse({ version: 6, quicProxy: true, psk: '123456789012' }).success).toBe(false);
+    const v5 = SnellInboundSettingsSchema.safeParse({
+      version: 5,
+      quicProxy: true,
+      psk: 'secret',
+    });
+    const v6 = SnellInboundSettingsSchema.safeParse({
+      version: 6,
+      quicProxy: true,
+      psk: '123456789012',
+    });
+    expect(v5.success).toBe(true);
+    expect(v6.success).toBe(false);
   });
 
   it('imports a v6 link with mode and a distinct user key', () => {
