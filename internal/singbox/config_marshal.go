@@ -231,8 +231,8 @@ func validateSingBoxRequiredFields(outbound map[string]any, protocol, tag string
 		}
 	case "snell":
 		version := rawInt(outbound, "version")
-		if version != 4 && version != 6 {
-			return fmt.Errorf("sing-box outbound %q Snell requires version 4 or 6", tag)
+		if version != 4 && version != 5 && version != 6 {
+			return fmt.Errorf("sing-box outbound %q Snell requires version 4, 5 or 6", tag)
 		}
 		if version == 6 && (len(rawString(outbound, "psk")) < 12 || len(rawString(outbound, "psk")) > 255) {
 			return fmt.Errorf("sing-box outbound %q Snell v6 PSK must be 12..255 bytes", tag)

@@ -21,9 +21,6 @@ func parseSnell(link string) (*ParseResult, error) {
 	if err != nil || (version != 4 && version != 5 && version != 6) {
 		return nil, fmt.Errorf("invalid Snell version")
 	}
-	if version == 5 {
-		version = 4
-	}
 	psk := u.User.Username()
 	if psk == "" {
 		return nil, fmt.Errorf("Snell requires PSK")

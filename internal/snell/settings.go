@@ -191,6 +191,9 @@ func Prepare(ib *model.Inbound, previous string) error {
 // sing-box deliberately calls the v5-compatible outbound version 4.
 func (s Settings) ClientVersion() int {
 	if s.Version == 5 {
+		if s.QuicProxy {
+			return 5
+		}
 		return 4
 	}
 	return 6
