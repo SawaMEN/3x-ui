@@ -30,7 +30,6 @@ interface SubscriptionGeneralTabProps {
 }
 
 const PANEL_SETTINGS_TAB = '1';
-const HAPP_SETTINGS_TAB = '5';
 
 function uriWithSubscriptionPort(uri: string, previousPort: number, nextPort: number): string {
   if (!uri) return uri;
@@ -66,12 +65,23 @@ export default function SubscriptionGeneralTab({
   const [searchParams] = useSearchParams();
   const { isMobile } = useMediaQuery();
   // Keep the URL semantic while mapping to the legacy numeric key used by these inner tabs.
-  const initialTab =
-    searchParams.get('subscriptionTab') === 'happ'
-      ? HAPP_SETTINGS_TAB
-      : searchParams.get('subscriptionTab') === 'tls'
-        ? '4'
-        : PANEL_SETTINGS_TAB;
+  const tabSlugs: Record<string, string> = {
+    '1': 'general',
+    '2': 'information',
+    '3': 'profile',
+    '4': 'tls',
+    '5': 'happ',
+    '6': 'clash',
+    '7': 'incy',
+  };
+  const activeTab =
+    Object.keys(tabSlugs).find((key) => tabSlugs[key] === searchParams.get('subscriptionTab')) ??
+    PANEL_SETTINGS_TAB;
+  const changeTab = (key: string) => {
+    const params = new URLSearchParams(searchParams);
+    params.set('subscriptionTab', tabSlugs[key]);
+    navigate({ search: params.toString(), hash: '#subscription' });
+  };
 
   const changeSubscriptionPort = (nextPort: number) => {
     updateSetting({
@@ -95,8 +105,8 @@ export default function SubscriptionGeneralTab({
 
   return (
     <Tabs
-      key={initialTab}
-      defaultActiveKey={initialTab}
+      activeKey={activeTab}
+      onChange={changeTab}
       items={[
         {
           key: '1',

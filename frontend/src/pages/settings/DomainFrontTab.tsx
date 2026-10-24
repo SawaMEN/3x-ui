@@ -381,6 +381,7 @@ export default function DomainFrontTab({ scope, beforeApply }: DomainFrontTabPro
                           min={1}
                           max={65535}
                           value={draft.httpPort}
+                          aria-label={label('httpPort')}
                           onChange={(v) => {
                             if (v != null) update({ httpPort: v });
                           }}
@@ -391,6 +392,7 @@ export default function DomainFrontTab({ scope, beforeApply }: DomainFrontTabPro
                           min={1}
                           max={65535}
                           value={draft.httpsPort}
+                          aria-label={label('httpsPort')}
                           onChange={(v) => {
                             if (v != null)
                               update({
@@ -408,6 +410,7 @@ export default function DomainFrontTab({ scope, beforeApply }: DomainFrontTabPro
                             min={1}
                             max={65535}
                             value={draft.publicPort}
+                            aria-label={label('publicPort')}
                             onChange={(v) => {
                               if (v != null) update({ publicPort: v });
                             }}

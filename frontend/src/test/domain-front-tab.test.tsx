@@ -6,6 +6,7 @@ import { http, HttpResponse } from 'msw';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupHttp } from '@/api/http-init';
 import DomainFrontTab from '@/pages/settings/DomainFrontTab';
+import SubscriptionGeneralTab from '@/pages/settings/SubscriptionGeneralTab';
 import { defaultDomainConfig, defaultDomain, DomainConfigFormSchema } from '@/schemas/domain-front';
 import type { DomainConfigForm } from '@/schemas/domain-front';
 import { server } from './msw/server';
@@ -240,6 +241,63 @@ describe('domain and TLS dashboard', () => {
         'admin.example.com',
       ]),
     );
+  });
+
+  it('preserves a dirty TLS draft when navigating away and back through the subscription link', async () => {
+    fixture();
+    renderWithProviders(
+      <MemoryRouter initialEntries={['/settings?subscriptionTab=tls#subscription']}>
+        <SubscriptionGeneralTab allSetting={new AllSetting()} updateSetting={vi.fn()} />
+      </MemoryRouter>,
+    );
+    fireEvent.change(await screen.findByDisplayValue('old@example.com'), {
+      target: { value: 'unsaved@example.com' },
+    });
+    fireEvent.click(screen.getByRole('tab', { name: /General/i }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Subscription domains and certificates' }),
+    );
+    expect(await screen.findByDisplayValue('unsaved@example.com')).toBeTruthy();
+    expect(screen.getByRole('tab', { name: /Certificates/i }).getAttribute('aria-selected')).toBe(
+      'true',
+    );
+  });
+
+  it('keeps the panel binding when editing a shared domain in subscription settings', async () => {
+    const f = fixture();
+    f.config.domains[0].mode = 'direct';
+    f.config.domains[0].panel = true;
+    renderWithProviders(<DomainFrontTab scope="subscription" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    expect(screen.queryByRole('checkbox', { name: 'Allow admin panel access' })).toBeNull();
+    fireEvent.change(screen.getByDisplayValue('sub.example.com'), {
+      target: { value: 'shared.example.com' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    await screen.findAllByText('shared.example.com');
+    fireEvent.click(screen.getByRole('button', { name: 'Save and apply' }));
+    await waitFor(() => expect(f.applied?.domains[0].panel).toBe(true));
+  });
+
+  it('follows the gateway HTTPS port unless a NAT mapping is explicitly enabled', async () => {
+    const f = fixture();
+    renderWithProviders(<DomainFrontTab />);
+    await screen.findByDisplayValue('old@example.com');
+    fireEvent.click(screen.getByText('Advanced network and testing settings'));
+    const gateway = await screen.findByRole('spinbutton', { name: 'HTTPS gateway port' });
+    expect(
+      screen.queryByRole('spinbutton', { name: 'External HTTPS port (NAT / proxy)' }),
+    ).toBeNull();
+    fireEvent.change(gateway, { target: { value: '8443' } });
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: 'Use a different external port (NAT / proxy)' }),
+    );
+    const external = screen.getByRole('spinbutton', { name: 'External HTTPS port (NAT / proxy)' });
+    expect((external as HTMLInputElement).value).toBe('8443');
+    fireEvent.change(external, { target: { value: '9443' } });
+    fireEvent.change(gateway, { target: { value: '7443' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save and apply' }));
+    await waitFor(() => expect(f.applied).toMatchObject({ httpsPort: 7443, publicPort: 9443 }));
   });
 
   it.each([

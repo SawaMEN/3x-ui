@@ -99,6 +99,12 @@ func validateSubscriptionDomains(settings *entity.AllSetting) error {
 		if err != nil || u.Hostname() == "" || (u.Scheme != "https" && u.Scheme != "http") || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
 			return fmt.Errorf("subscription public URL must be an HTTP/HTTPS origin without a path, credentials, query or fragment")
 		}
+		if port := u.Port(); port != "" {
+			n, err := strconv.Atoi(port)
+			if err != nil || n < 1 || n > 65535 {
+				return fmt.Errorf("subscription public port must be between 1 and 65535")
+			}
+		}
 		if _, err := netsafe.NormalizeHost(u.Hostname()); err != nil {
 			return fmt.Errorf("invalid subscription public hostname: %w", err)
 		}

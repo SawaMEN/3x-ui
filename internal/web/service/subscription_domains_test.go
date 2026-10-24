@@ -55,6 +55,8 @@ func TestSubscriptionDomainValidation(t *testing.T) {
 		want     string
 	}{
 		{"path", entity.AllSetting{SubPublicURL: "https://sub.example.com/private/"}, "subscription public URL must be an HTTP/HTTPS origin without a path, credentials, query or fragment"},
+		{"zero port", entity.AllSetting{SubPublicURL: "https://sub.example.com:0"}, "subscription public port must be between 1 and 65535"},
+		{"large port", entity.AllSetting{SubPublicURL: "https://sub.example.com:65536"}, "subscription public port must be between 1 and 65535"},
 		{"cdn without address", entity.AllSetting{SubCDNEnable: true}, "CDN mode requires a subscription public URL"},
 		{"cdn without TLS", entity.AllSetting{SubCDNEnable: true, SubPublicURL: "http://sub.example.com"}, "CDN subscription public URL must use HTTPS"},
 	} {
