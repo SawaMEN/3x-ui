@@ -22,6 +22,8 @@ describe('protocol-specific outbound options', () => {
       expect(snellHelp(key)).toMatch(/[А-Яа-яЁё]/);
     }
     expect(snellHelp('unknown_future_option')).toMatch(/[А-Яа-яЁё]/);
+    expect(snellHelp('server', 'domain_resolver.server')).toContain('DNS-сервер');
+    expect(snellHelp('type', 'final_mask.tcp.0.type')).toContain('TCP-маскировки');
   });
 
   it('shows question-mark hints for Snell credential and version fields', () => {

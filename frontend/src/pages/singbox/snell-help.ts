@@ -66,10 +66,44 @@ export const snellOptionHelp: Record<string, string> = {
     'Дополнительные параметры низкоуровневой маскировки, если они поддерживаются установленным ядром. Оставьте пустыми при стандартном Snell.',
 };
 
-// Nested sing-box advanced structures can change with core versions.
-// Never leave a visible Snell setting without a Russian help icon.
-export function snellHelp(field: string): string {
+// Nested fields have their own meaning: e.g. domain_resolver.server is a DNS
+// server, not the remote Snell server. Normalize array indices for masks.
+const snellNestedHelp: Record<string, string> = {
+  'domain_resolver.server':
+    'DNS-сервер или его тег, через который разрешается домен Snell-сервера. Обычно достаточно DNS, уже выбранного в панели.',
+  'domain_resolver.strategy':
+    'Предпочтение IPv4 или IPv6 для DNS-запросов этого подключения. Меняйте только при проблемах с разрешением адресов.',
+  'domain_resolver.client_subnet':
+    'Подсеть клиента для уточнения DNS-ответов. Обычно оставляют пустой, чтобы не раскрывать лишние сетевые сведения.',
+  'domain_resolver.disable_cache':
+    'Отключает кеширование DNS для данного резолвера. Обычно включённый кеш ускоряет последующие подключения.',
+  'domain_resolver.disable_optimistic_cache':
+    'Отключает использование устаревших записей DNS до получения свежего ответа. По умолчанию ядро управляет этим автоматически.',
+  'domain_resolver.rewrite_ttl':
+    'Переопределяет срок жизни DNS-ответа в секундах. Обычно не требуется.',
+  'domain_resolver.timeout':
+    'Максимальное время ожидания DNS-ответа. Если пусто, используется системное значение ядра.',
+  'final_mask.quicParams':
+    'Расширенные параметры QUIC-подобной маскировки трафика в формате JSON. Не задавайте без совместимой конфигурации сервера.',
+  'final_mask.tcp':
+    'Список дополнительных способов маскировки исходящего TCP-трафика. Оставьте пустым для обычного Snell.',
+  'final_mask.udp':
+    'Список дополнительных способов маскировки UDP-трафика. Оставьте пустым, если специальные маски не используются.',
+  'final_mask.tcp.*.type':
+    'Название способа дополнительной TCP-маскировки. Должно поддерживаться установленным ядром.',
+  'final_mask.udp.*.type':
+    'Название способа дополнительной UDP-маскировки. Должно поддерживаться установленным ядром.',
+  'final_mask.tcp.*.settings':
+    'JSON-параметры выбранной TCP-маскировки. Не меняйте без документации этого режима.',
+  'final_mask.udp.*.settings':
+    'JSON-параметры выбранной UDP-маскировки. Не меняйте без документации этого режима.',
+};
+
+// Every visible native Snell setting gets a Russian help icon.
+export function snellHelp(field: string, path = field): string {
+  const normalized = path.replace(/\\.\\d+(?=\\.|$)/g, '.*');
   return (
+    snellNestedHelp[normalized] ??
     snellOptionHelp[field] ??
     'Дополнительная настройка sing-box для Snell. Оставьте значение по умолчанию, если не используете специальную конфигурацию или не уверены в назначении параметра.'
   );

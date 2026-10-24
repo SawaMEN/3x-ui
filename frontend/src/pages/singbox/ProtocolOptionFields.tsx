@@ -578,7 +578,7 @@ function OptionGrid({
               xs={24}
               sm={['object', 'array', 'json', 'headers'].includes(descriptor.kind) ? 24 : 12}
             >
-              <Form.Item label={title} tooltip={snell ? snellHelp(key) : undefined}>
+              <Form.Item label={title} tooltip={snell ? snellHelp(key, path) : undefined}>
                 <OptionControl
                   descriptor={descriptor}
                   value={value[key]}
