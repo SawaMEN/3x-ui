@@ -240,6 +240,9 @@ func validateSingBoxRequiredFields(outbound map[string]any, protocol, tag string
 		if rawString(outbound, "psk") == "" {
 			return fmt.Errorf("sing-box outbound %q Snell requires PSK", tag)
 		}
+		if len(rawString(outbound, "userkey")) > 255 {
+			return fmt.Errorf("sing-box outbound %q Snell user key must be at most 255 bytes", tag)
+		}
 		if version == 6 {
 			mode := rawString(outbound, "mode")
 			if mode != "" && mode != "default" && mode != "unshaped" {

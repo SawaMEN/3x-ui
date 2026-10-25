@@ -13,13 +13,13 @@ import (
 )
 
 type Settings struct {
-	Version  int            `json:"version"`
-	PSK      string         `json:"psk"`
-	Mode     string         `json:"mode"`
-	ObfsMode string         `json:"obfsMode"`
-	ObfsHost string         `json:"obfsHost"`
-	QuicProxy bool          `json:"quicProxy,omitempty"`
-	Clients  []model.Client `json:"clients"`
+	Version   int            `json:"version"`
+	PSK       string         `json:"psk"`
+	Mode      string         `json:"mode"`
+	ObfsMode  string         `json:"obfsMode"`
+	ObfsHost  string         `json:"obfsHost"`
+	QuicProxy bool           `json:"quicProxy,omitempty"`
+	Clients   []model.Client `json:"clients"`
 }
 
 // Reject control characters in credentials and HTTP Host values before they
@@ -132,7 +132,7 @@ func Prepare(ib *model.Inbound, previous string) error {
 	}
 	previousKeys := map[string]string{}
 	for _, c := range old.Clients {
-		previousKeys[c.Email] = c.Password
+		previousKeys[strings.ToLower(strings.TrimSpace(c.Email))] = c.Password
 	}
 	if clients, ok := raw["clients"].([]any); ok {
 		for _, entry := range clients {
@@ -142,7 +142,7 @@ func Prepare(ib *model.Inbound, previous string) error {
 			}
 			if c["password"] == nil || c["password"] == "" {
 				email, _ := c["email"].(string)
-				secret := previousKeys[email]
+				secret := previousKeys[strings.ToLower(strings.TrimSpace(email))]
 				if secret == "" {
 					var err error
 					secret, err = Secret()

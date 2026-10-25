@@ -1,5 +1,5 @@
 .subscription-page.sub-minimal {
-  --bg-page: #f2f2f5 !important;
+  --bg-page: var(--ant-color-bg-layout) !important;
   --sub-card-bg: transparent !important;
   --sub-grad-from: #666 !important;
   --sub-grad-to: #aaa;
@@ -16,7 +16,7 @@
   font-family: Inter, system-ui, -apple-system, sans-serif;
 }
 .subscription-page.sub-minimal.is-dark {
-  --bg-page: #2a2a2e !important;
+  --bg-page: var(--ant-color-bg-layout) !important;
   --sub-ink-from: #eee !important;
   --sub-ink-to: #aaa;
   --sub-grid: rgba(255, 255, 255, 0.025);

@@ -69,3 +69,24 @@ describe('Snell settings and subscription links', () => {
     });
   });
 });
+
+it('validates Snell user keys by UTF-8 byte length and rejects duplicates', () => {
+  const check = (clients: unknown[]) =>
+    SnellInboundSettingsSchema.safeParse({ version: 6, clients }).success;
+  expect(check([{ email: 'alice', password: 'я'.repeat(128) }])).toBe(false);
+  expect(check([{ email: 'alice', password: 'x'.repeat(255) }])).toBe(true);
+  expect(check([{ email: 'alice', password: '' }])).toBe(true);
+  expect(check([{ email: 'alice', password: 'bad\nkey' }])).toBe(false);
+  expect(
+    check([
+      { email: 'Alice', password: 'one' },
+      { email: 'alice', password: 'two' },
+    ]),
+  ).toBe(false);
+  expect(
+    check([
+      { email: 'alice', password: 'key' },
+      { email: 'bob', password: 'key' },
+    ]),
+  ).toBe(false);
+});

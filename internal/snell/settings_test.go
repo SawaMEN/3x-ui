@@ -43,8 +43,8 @@ func TestPrepareGeneratesAndPreservesSnellSecrets(t *testing.T) {
 
 func TestSnellSettingsKeepOnlyApplicableVersionFields(t *testing.T) {
 	cases := []struct {
-		name string
-		settings string
+		name      string
+		settings  string
 		forbidden []string
 	}{
 		{"v6", `{"version":6,"mode":"default","obfsMode":"none","obfsHost":"old.example"}`, []string{"mode", "obfsMode", "obfsHost"}},
@@ -148,7 +148,7 @@ func TestSnellRejectsOverlongUserKey(t *testing.T) {
 func TestSnellQuicOnlyForV5(t *testing.T) {
 	for _, tt := range []struct {
 		version int
-		wantOK bool
+		wantOK  bool
 	}{
 		{version: 5, wantOK: true},
 		{version: 6, wantOK: false},
@@ -175,5 +175,20 @@ func TestSnellQuicClientVersionAndSettings(t *testing.T) {
 	outbound := active.Outbound("example.com", 443, model.Client{Email: "user", Password: "key"})
 	if outbound["version"] != 5 || outbound["userkey"] != "key" {
 		t.Fatalf("QUIC outbound lost v5 or userkey: %#v", outbound)
+	}
+}
+
+func TestPreparePreservesKeyWhenEmailCaseChanges(t *testing.T) {
+	previous := `{"version":6,"psk":"123456789012","clients":[{"email":"Alice","password":"existing-key","enable":true}]}`
+	inbound := &model.Inbound{Protocol: model.Snell, Settings: `{"version":6,"clients":[{"email":"alice","enable":true}]}`}
+	if err := Prepare(inbound, previous); err != nil {
+		t.Fatal(err)
+	}
+	settings, err := Parse(inbound.Settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if settings.Clients[0].Password != "existing-key" {
+		t.Fatal("email case change rotated the user key and invalidated subscriptions")
 	}
 }

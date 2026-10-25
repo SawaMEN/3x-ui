@@ -250,11 +250,6 @@ function AppSidebar() {
         label: t('pages.settings.discordSettings'),
       },
       {
-        key: '/settings#domains',
-        icon: <CloudServerOutlined />,
-        label: t('pages.settings.domains.title'),
-      },
-      {
         key: '/settings#subscription',
         icon: <CloudServerOutlined />,
         label: t('pages.settings.subSettings'),
