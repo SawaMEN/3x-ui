@@ -62,7 +62,7 @@ export default function SnellFields() {
             name={['settings', 'quicProxy']}
             label="QUIC Proxy (UDP)"
             valueProp="checked"
-            tooltip="Snell v5: QUIC Initial шифруется, а последующие UDP-пакеты передаются напрямую. Клиент и сервер должны поддерживать v5; откройте UDP-порт."
+            tooltip="Snell v5: QUIC v1/v2 передаётся по UDP, остальной UDP — через TCP. Нужен совместимый клиент v5. Откройте TCP и UDP на одном порту."
           >
             <Switch />
           </FormField>
