@@ -105,7 +105,15 @@
     "support": "Support",
     "qrTitle": "Scan. Import. Connect.",
     "qrHint": "Scan with your client app. Keep this code private.",
-    "saveQr": "Save QR"
+    "saveQr": "Save QR",
+    "themes": {
+      "light": "Light",
+      "dark": "Dark",
+      "ultra-dark": "Ultra Dark",
+      "colorful": "Colorful",
+      "blue-gray": "Blue Gray",
+      "cyberpunk": "Cyberpunk"
+    }
   },
   "menu": {
     "theme": "Theme",
@@ -903,7 +911,19 @@
         "masqueStreamWindow": "Stream receive window",
         "masqueConnectionWindow": "Connection receive window",
         "masqueInterface": "Network interface",
-        "masqueWindowHint": "An integer with a size unit, for example 64 MB or 512 KB."
+        "masqueWindowHint": "An integer with a size unit, for example 64 MB or 512 KB.",
+        "cascadeHints": {
+          "title": "Cascade egress limitations",
+          "local": "Panel routing rules select the outbound. To select a separate exit, add a rule for this inbound.",
+          "remote": "Configure routing and compatible servers separately on a remote node: the central panel does not automatically transfer its outbounds to that node.",
+          "udp": "UDP payload requires UDP support in the selected outbound and every cascade hop. Without it, UDP fails; the panel does not automatically bypass the cascade with a direct connection.",
+          "users": "Per-user (auth_user) routing is unavailable across this bridge. Use inbound, domain or IP rules. Individual quotas and statistics are preserved.",
+          "pingtunnel": "Requires Pingtunnel 3.0 or newer and ICMP allowed along the entire path. The old forward field is ignored; panel routing selects the exit.",
+          "sudoku": "Requires the Sudoku server built by this panel with panel-egress support. Stock upstream binaries are incompatible and will not start. Install the component from a panel release or the Sidecar egress regression artifact.",
+          "vkLocal": "Select an enabled local inbound. Disabling the target blocks VK TURN forwarding. Rules for the VK inbound apply to traffic after the nested VPN is terminated.",
+          "vkWireguard": "The WireGuard target must be enabled and hosted on this server. Disabling it blocks VK TURN forwarding. An additional authenticated WireGuard port listens on all interfaces; account for it in your firewall.",
+          "vkExternal": "The external target receives UDP through the selected exit and must be reachable from the final cascade server. For WireGuard/Hysteria2 on this server, select a local inbound instead of localhost."
+        }
       },
       "info": {
         "mode": "Mode",
@@ -2109,7 +2129,7 @@
       "rootRedirectDesc": "Redirects GET/HEAD requests to / on the panel and subscription listeners. Choose a site or enter your own URL. Other routes keep working. If the panel path is /, open /?panel=1 to sign in. DNS and HTTPS must already point to this server.",
       "rootRedirectURL": "Destination website",
       "subAppearanceEnable": "Custom subscription appearance",
-      "subAppearanceDesc": "Minimal style inspired by WhiteMAX: centered heading, neutral background, subtle grid and rounded buttons. Disabling restores the standard page. A custom template directory takes priority.",
+      "subAppearanceDesc": "Subscription page title, logo and theme. Classic appearance is kept by default.",
       "subAppearanceTitle": "Page title",
       "subAppearanceDescription": "Page description",
       "subAppearanceLogoURL": "Logo URL (HTTP/HTTPS)",
@@ -2124,6 +2144,12 @@
       "subReverseProxy": "Caddy reverse proxy configuration",
       "subReverseProxyDesc": "Run Caddy on the same server with ports 80/443 available. It obtains the public certificate automatically. Keep the subscription listener on 127.0.0.1 and direct the subscription domain to this server; the panel stays on its own address.",
       "domains": {
+        "publicOverrideHelp": "An explicit address takes priority for all subscription formats. Leave empty to use the selected domain automatically. Configure DNS and proxying for an external address; this field does not create them.",
+        "portMapping": "Use a different external port (NAT / proxy)",
+        "sharedSettingsDesc": "Panel and subscriptions have their own ports and can run without the gateway. Enable it for a shared domain-based HTTPS entry point, automatic certificates and proxying. Both sections edit the same gateway. Save and apply saves service settings first, then applies the gateway. Service port changes require a panel restart.",
+        "sharedSettings": "Shared HTTPS gateway (optional)",
+        "subscriptionTitle": "Subscription domains and certificates",
+        "panelTitle": "Panel domains and certificates",
         "title": "Domains and TLS",
         "automation": "Automatic HTTPS gateway",
         "automationDesc": "Panel, subscription and redirect settings are shared. Existing certificates and acme.sh renewal are preserved. New domains use built-in automatic TLS.",
@@ -2156,9 +2182,9 @@
         "advanced": "Advanced network and testing settings",
         "listen": "Local bind IP",
         "httpPort": "Local HTTP port",
-        "httpsPort": "Local HTTPS port",
-        "publicPort": "Public HTTPS port",
-        "portsHelp": "An existing panel or subscription HTTPS listener is shared when its port matches. Other occupied ports are not stopped automatically.",
+        "httpsPort": "HTTPS gateway port",
+        "publicPort": "External HTTPS port (NAT / proxy)",
+        "portsHelp": "These are shared gateway ports. Panel and subscription listener ports remain in their own settings. Normally use 443; the external port follows it. A different external port is only for actual NAT/proxy mappings: it affects generated links and does not open a port. An existing panel/subscription HTTPS listener is shared when possible; other port conflicts are rejected.",
         "staging": "Use Let’s Encrypt staging",
         "stagingDesc": "For setup testing without consuming production issuance limits. Test certificates are not trusted by browsers. Turn this off and apply again for a public trusted certificate.",
         "list": "Domains",
@@ -2220,7 +2246,7 @@
         "duplicate": "Domain names must be unique",
         "existingCertificates": "Existing certificates",
         "existingDesc": "Certificates configured here are also used by matching gateway domains. Installer acme.sh renewal is preserved; renewed files are loaded automatically. See Domains and TLS for expiry and renewal status.",
-        "managedSubscription": "The public subscription address and CDN mode are controlled by Domains and TLS. Other subscription settings and aliases still apply.",
+        "managedSubscription": "Automatic address from the selected subscription domain",
         "source": {
           "panel": "Panel certificate",
           "subscription": "Subscription certificate",
@@ -2250,8 +2276,11 @@
         "useForSubscriptionHelp": "Use this domain as the public address in subscription links, QR codes and the subscription page. The first new domain is suggested automatically; you can uncheck it. Other domains remain available as additional addresses.",
         "autoCheck": "Check DNS/TLS after apply",
         "autoCheckHelp": "Check the saved primary domain automatically, showing DNS addresses and the certificate visible from the server. New certificate issuance may still be pending; wait and check again if needed. Disable to check manually.",
-        "termsHelp": "Agreement is needed for new certificates issued by CertMagic. Reusing an acme.sh certificate does not require accepting a new agreement. Consent is never selected automatically."
-      }
+        "termsHelp": "Agreement is needed for new certificates issued by CertMagic. Reusing an acme.sh certificate does not require accepting a new agreement. Consent is never selected automatically.",
+        "manualSettings": "Manual HTTPS and external proxy"
+      },
+      "subAppearanceTheme": "Page theme",
+      "subAppearanceClassic": "Classic appearance"
     },
     "xray": {
       "restartSuccess": "Xray has been successfully relaunched.",

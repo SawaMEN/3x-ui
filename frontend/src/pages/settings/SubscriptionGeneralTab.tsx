@@ -5,7 +5,6 @@ import {
   IdcardOutlined,
   InfoCircleOutlined,
   NodeIndexOutlined,
-  SafetyCertificateOutlined,
   SettingOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
@@ -20,7 +19,6 @@ import { catTabLabel } from './catTabLabel';
 import { sanitizePath, normalizePath } from './uriPath';
 import HappSettingsContent from './HappSettingsContent';
 import { remoteSourceBadge } from './subscriptionShared';
-import SubscriptionDomains from './SubscriptionDomains';
 
 interface SubscriptionGeneralTabProps {
   allSetting: AllSetting;
@@ -135,7 +133,6 @@ export default function SubscriptionGeneralTab({
                   }
                 />
               )}
-              <SubscriptionDomains allSetting={allSetting} updateSetting={updateSetting} />
               <SettingListItem
                 paddings="small"
                 title={t('pages.settings.subListen')}
@@ -402,6 +399,17 @@ export default function SubscriptionGeneralTab({
               </SettingListItem>
               {allSetting.subAppearanceEnable && (
                 <>
+                  <SettingListItem paddings="small" title={t('pages.settings.subAppearanceTheme')}>
+                    <Select
+                      aria-label={t('pages.settings.subAppearanceTheme')}
+                      value={allSetting.subAppearanceTheme}
+                      options={[
+                        { value: 'classic', label: t('pages.settings.subAppearanceClassic') },
+                        { value: 'whitemax', label: 'WhiteMax' },
+                      ]}
+                      onChange={(value) => updateSetting({ subAppearanceTheme: value })}
+                    />
+                  </SettingListItem>
                   <SettingListItem paddings="small" title={t('pages.settings.subAppearanceTitle')}>
                     <Input
                       value={allSetting.subAppearanceTitle}
@@ -466,44 +474,6 @@ export default function SubscriptionGeneralTab({
                   value={allSetting.subThemeDir}
                   placeholder="/etc/3x-ui/sub_templates/my-theme/"
                   onChange={(e) => updateSetting({ subThemeDir: e.target.value })}
-                />
-              </SettingListItem>
-            </>
-          ),
-        },
-        {
-          key: '4',
-          label: catTabLabel(<SafetyCertificateOutlined />, t('pages.settings.certs'), isMobile),
-          children: (
-            <>
-              <Alert
-                type="info"
-                showIcon
-                title={t('pages.settings.domains.existingDesc')}
-                action={
-                  <Button onClick={() => navigate('/panel/settings#domains')}>
-                    {t('pages.settings.domains.title')}
-                  </Button>
-                }
-              />
-              <SettingListItem
-                paddings="small"
-                title={t('pages.settings.subCertPath')}
-                description={t('pages.settings.subCertPathDesc')}
-              >
-                <Input
-                  value={allSetting.subCertFile}
-                  onChange={(e) => updateSetting({ subCertFile: e.target.value })}
-                />
-              </SettingListItem>
-              <SettingListItem
-                paddings="small"
-                title={t('pages.settings.subKeyPath')}
-                description={t('pages.settings.subKeyPathDesc')}
-              >
-                <Input
-                  value={allSetting.subKeyFile}
-                  onChange={(e) => updateSetting({ subKeyFile: e.target.value })}
                 />
               </SettingListItem>
             </>

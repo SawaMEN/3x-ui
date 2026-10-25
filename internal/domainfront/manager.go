@@ -7,6 +7,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io/fs"
 	"math"
 	"net"
 	"net/http"
@@ -207,6 +208,23 @@ func (m *Manager) start(ctx context.Context, cfg DomainFrontConfig, backend Back
 	}
 	r.issuer = certmagic.NewACMEIssuer(r.magic, certmagic.ACMEIssuer{CA: ca, Email: cfg.Email, Agreed: cfg.AcceptTerms, AltHTTPPort: cfg.HTTPPort, AltTLSALPNPort: cfg.HTTPSPort, Logger: logger})
 	r.magic.Issuers = []certmagic.Issuer{r.issuer}
+	// ManageAsync also loads saved certificates asynchronously. Warm the cache
+	// before serving HTTPS so the first handshake after a restart does not race
+	// that loader. New certificates are still obtained in the background.
+	var names []string
+	for _, d := range cfg.Domains {
+		if !d.Enabled || (d.TLS != "auto" && d.TLS != "certmagic") || r.external[d.Name] != nil {
+			continue
+		}
+		names = append(names, d.Name)
+		if _, err := r.magic.CacheManagedCertificate(ctx, d.Name); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			for _, listener := range r.listeners {
+				_ = listener.Close()
+			}
+			r.cache.Stop()
+			return nil, fmt.Errorf("%s: cached certificate: %w", d.Name, err)
+		}
+	}
 	tlsCfg := r.magic.TLSConfig()
 	tlsCfg.MinVersion = tls.VersionTLS12
 	tlsCfg.NextProtos = append([]string{"h2", "http/1.1"}, tlsCfg.NextProtos...)
@@ -250,16 +268,17 @@ func (m *Manager) start(ctx context.Context, cfg DomainFrontConfig, backend Back
 	if secure != nil {
 		go func() { _ = network.ServeHTTP(r.httpsServer, tls.NewListener(secure, tlsCfg), "Domain HTTPS server") }()
 	}
-	var names []string
-	for _, d := range cfg.Domains {
-		if d.Enabled && (d.TLS == "auto" || d.TLS == "certmagic") && r.external[d.Name] == nil {
-			names = append(names, d.Name)
-		}
-	}
 	if err := r.magic.ManageAsync(runCtx, names); err != nil {
 		r.close()
 		return nil, err
 	}
+	// Preloaded certificates are already managed, so ManageAsync skips them.
+	// Check renewal now as well as on CertMagic's normal maintenance interval.
+	go func() {
+		if err := r.cache.RenewManagedCertificates(runCtx); err != nil && runCtx.Err() == nil {
+			logger.Warn("checking cached certificate renewal", zap.Error(err))
+		}
+	}()
 	return r, nil
 }
 

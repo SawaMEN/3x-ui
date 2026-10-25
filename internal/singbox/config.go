@@ -669,6 +669,9 @@ func TranslateXrayInbound(raw map[string]any) (map[string]any, error) {
 		} else if s.ObfsMode != "" {
 			out["obfs_mode"] = s.ObfsMode
 		}
+		if s.QuicProxy {
+			out["quic_proxy"] = true
+		}
 	}
 	if protocol == "anytls" {
 		tls := rawObject(settings, "tls")

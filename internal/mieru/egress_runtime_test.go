@@ -58,7 +58,22 @@ func TestMieruPayloadAcrossTCPAndUDP(t *testing.T) {
 					return
 				}
 				io.CopyN(io.Discard, c, int64(hello[1]))
-				c.Write([]byte{5, 0})
+				c.Write([]byte{5, 2})
+				var auth [2]byte
+				if _, e := io.ReadFull(c, auth[:]); e != nil {
+					return
+				}
+				user := make([]byte, int(auth[1]))
+				io.ReadFull(c, user)
+				var plen [1]byte
+				io.ReadFull(c, plen[:])
+				pass := make([]byte, int(plen[0]))
+				io.ReadFull(c, pass)
+				if string(user) != SocksUsername() || string(pass) != SocksPassword() {
+					c.Write([]byte{1, 1})
+					return
+				}
+				c.Write([]byte{1, 0})
 				var header [4]byte
 				if _, e := io.ReadFull(c, header[:]); e != nil {
 					return

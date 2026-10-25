@@ -160,25 +160,45 @@ describe('domain and TLS dashboard', () => {
       <MemoryRouter>
         <DomainFrontTab />
         <SubscriptionDomains
-          allSetting={
-            new AllSetting({ subPublicURL: 'https://old.example.com', subCDNEnable: false })
-          }
+          allSetting={new AllSetting({ subPublicURL: '', subCDNEnable: false })}
           updateSetting={update}
         />
       </MemoryRouter>,
     );
+    fireEvent.click(await screen.findByText('Existing certificates'));
     expect(await screen.findByText(/Installer issuer/)).toBeTruthy();
     expect(screen.getByText('/root/cert/existing/fullchain.pem')).toBeTruthy();
     const address = (await screen.findByRole('textbox', {
       name: 'Public subscription address',
     })) as HTMLInputElement;
-    await waitFor(() => expect(address.value).toBe('https://sub.example.com'));
-    expect(address.disabled).toBe(true);
+    await waitFor(() => expect(address.placeholder).toBe('https://sub.example.com'));
+    expect(address.disabled).toBe(false);
     expect(
       screen.getByRole('switch', { name: 'Subscription through CDN' }).getAttribute('aria-checked'),
     ).toBe('true');
     expect(screen.queryByRole('textbox', { name: 'Caddy reverse proxy configuration' })).toBeNull();
     expect(update).not.toHaveBeenCalled();
+  });
+
+  it('follows the gateway HTTPS port unless a NAT mapping is explicitly enabled', async () => {
+    const f = fixture();
+    renderWithProviders(<DomainFrontTab />);
+    await screen.findByDisplayValue('old@example.com');
+    fireEvent.click(screen.getByText('Advanced network and testing settings'));
+    const gateway = await screen.findByRole('spinbutton', { name: 'HTTPS gateway port' });
+    expect(
+      screen.queryByRole('spinbutton', { name: 'External HTTPS port (NAT / proxy)' }),
+    ).toBeNull();
+    fireEvent.change(gateway, { target: { value: '8443' } });
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: 'Use a different external port (NAT / proxy)' }),
+    );
+    const external = screen.getByRole('spinbutton', { name: 'External HTTPS port (NAT / proxy)' });
+    expect((external as HTMLInputElement).value).toBe('8443');
+    fireEvent.change(external, { target: { value: '9443' } });
+    fireEvent.change(gateway, { target: { value: '7443' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save and apply' }));
+    await waitFor(() => expect(f.applied).toMatchObject({ httpsPort: 7443, publicPort: 9443 }));
   });
 
   it.each([
@@ -231,15 +251,44 @@ describe('domain and TLS dashboard', () => {
     await waitFor(() => expect(f.checked).toEqual(['new.example.com']));
   });
 
-  it('allows automatic DNS checks to be disabled', async () => {
+  it('checks DNS automatically without an extra toggle', async () => {
     const f = fixture();
     renderWithProviders(<DomainFrontTab />);
     const email = await screen.findByDisplayValue('old@example.com');
     fireEvent.change(email, { target: { value: 'changed@example.com' } });
-    fireEvent.click(screen.getByRole('switch', { name: 'Check DNS/TLS after apply' }));
-    fireEvent.click(screen.getByText('Save and apply').closest('button')!);
-    await waitFor(() => expect(f.applied?.email).toBe('changed@example.com'));
-    expect(f.checked).toEqual([]);
+    expect(screen.queryByRole('switch', { name: 'Check DNS/TLS after apply' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Save and apply' }));
+    await waitFor(() => expect(f.checked).toEqual(['sub.example.com']));
+  });
+
+  it('saves manual settings with the same apply action', async () => {
+    fixture();
+    const save = vi.fn().mockResolvedValue(true);
+    renderWithProviders(
+      <MemoryRouter>
+        <DomainFrontTab
+          allSetting={new AllSetting()}
+          updateSetting={vi.fn()}
+          settingsDirty
+          saveSettings={save}
+        />
+      </MemoryRouter>,
+    );
+    await screen.findByDisplayValue('old@example.com');
+    fireEvent.click(screen.getByRole('button', { name: 'Save and apply' }));
+    await waitFor(() => expect(save).toHaveBeenCalledOnce());
+  });
+
+  it('does not apply domain changes if saving manual settings fails', async () => {
+    const f = fixture();
+    const save = vi.fn().mockResolvedValue(false);
+    renderWithProviders(<DomainFrontTab settingsDirty saveSettings={save} />);
+    fireEvent.change(await screen.findByDisplayValue('old@example.com'), {
+      target: { value: 'changed@example.com' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save and apply' }));
+    await waitFor(() => expect(save).toHaveBeenCalledOnce());
+    expect(f.applied).toBeUndefined();
   });
 
   it('clears panel and VPN bindings when a domain becomes subscription-only', async () => {

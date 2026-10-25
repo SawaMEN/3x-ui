@@ -1,18 +1,14 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Menu, Popover, Space } from 'antd';
-import {
-  MoonFilled,
-  MoonOutlined,
-  SunOutlined,
-  TranslationOutlined,
-  WifiOutlined,
-} from '@ant-design/icons';
+import { Button, Dropdown, Menu, Popover, Space } from 'antd';
+import { MoonOutlined, SunOutlined, TranslationOutlined, WifiOutlined } from '@ant-design/icons';
 
 import { LanguageManager } from '@/utils';
-import { pauseAnimationsUntilLeave, useTheme } from '@/hooks/useTheme';
+import { useTheme } from '@/hooks/useTheme';
 
 interface SubHeaderProps {
+  whiteMax: boolean;
+  onWhiteMaxChange: (value: boolean) => void;
   title: string;
   logoURL?: string;
   sId: string;
@@ -23,6 +19,8 @@ interface SubHeaderProps {
 
 export default function SubHeader({
   title,
+  whiteMax,
+  onWhiteMaxChange,
   logoURL,
   sId,
   email,
@@ -30,21 +28,7 @@ export default function SubHeader({
   onLangChange,
 }: SubHeaderProps) {
   const { t } = useTranslation();
-  const { isDark, isUltra, toggleTheme, toggleUltra } = useTheme();
-
-  const cycleTheme = () => {
-    pauseAnimationsUntilLeave('sub-theme-cycle');
-    if (!isDark) {
-      toggleTheme();
-      if (isUltra) toggleUltra();
-    } else if (!isUltra) {
-      toggleUltra();
-    } else {
-      toggleUltra();
-      toggleTheme();
-    }
-  };
-
+  const { mode, isDark, setThemeMode, lowPower, toggleLowPower } = useTheme();
   const langMenuItems = useMemo(
     () =>
       (LanguageManager.supportedLanguages as { value: string; name: string; icon: string }[]).map(
@@ -61,7 +45,7 @@ export default function SubHeader({
     [],
   );
 
-  const themeIcon = !isDark ? <SunOutlined /> : !isUltra ? <MoonOutlined /> : <MoonFilled />;
+  const themeIcon = whiteMax || !isDark ? <SunOutlined /> : <MoonOutlined />;
   const [failedLogo, setFailedLogo] = useState('');
   const initial = Array.from(title)[0]?.toUpperCase();
 
@@ -90,16 +74,32 @@ export default function SubHeader({
         </div>
       </div>
       <div className="sub-toolbar">
-        <Button
-          id="sub-theme-cycle"
-          shape="circle"
-          size="large"
-          className="toolbar-btn"
-          aria-label={t('menu.theme')}
-          title={t('menu.theme')}
-          icon={themeIcon}
-          onClick={cycleTheme}
-        />
+        <Dropdown
+          menu={{
+            selectedKeys: [whiteMax ? 'whitemax' : mode],
+            items: ['light', 'dark', 'ultra-dark', 'colorful', 'blue-gray', 'cyberpunk']
+              .map((key) => ({
+                key,
+                label: t(`subscription.themes.${key}`),
+              }))
+              .concat([{ key: 'whitemax', label: 'WhiteMax' }]),
+            onClick: ({ key }) => {
+              if (lowPower && key !== 'dark') toggleLowPower();
+              onWhiteMaxChange(key === 'whitemax');
+              if (key !== 'whitemax') setThemeMode(key as typeof mode);
+            },
+          }}
+          trigger={['click']}
+        >
+          <Button
+            shape="circle"
+            size="large"
+            className="toolbar-btn"
+            aria-label={t('menu.theme')}
+            title={t('menu.theme')}
+            icon={themeIcon}
+          />
+        </Dropdown>
         <Popover
           rootClassName={isDark ? 'dark' : 'light'}
           placement="bottomRight"

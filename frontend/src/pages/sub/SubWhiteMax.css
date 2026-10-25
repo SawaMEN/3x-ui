@@ -1,5 +1,7 @@
-.subscription-page.sub-minimal {
+/* Optional WhiteMAX appearance. Classic subscription styles stay untouched. */
+.subscription-page.sub-whitemax {
   --bg-page: #f2f2f5 !important;
+  --sub-accent: #808080;
   --sub-card-bg: transparent !important;
   --sub-grad-from: #666 !important;
   --sub-grad-to: #aaa;
@@ -15,7 +17,7 @@
   --sub-hairline: linear-gradient(90deg, transparent, #8885, transparent);
   font-family: Inter, system-ui, -apple-system, sans-serif;
 }
-.subscription-page.sub-minimal.is-dark {
+.subscription-page.sub-whitemax.is-dark {
   --bg-page: #2a2a2e !important;
   --sub-ink-from: #eee !important;
   --sub-ink-to: #aaa;
@@ -23,38 +25,38 @@
   --sub-row-bg: rgba(255, 255, 255, 0.04);
   --sub-row-border: rgba(255, 255, 255, 0.1);
 }
-.sub-minimal .sub-aurora::before,
-.sub-minimal .sub-aurora::after,
-.sub-minimal .sub-card::before,
-.sub-minimal .sub-card::after {
+.sub-whitemax .sub-aurora::before,
+.sub-whitemax .sub-aurora::after,
+.sub-whitemax .sub-card::before,
+.sub-whitemax .sub-card::after {
   display: none;
 }
-.sub-minimal .sub-aurora-grid {
+.sub-whitemax .sub-aurora-grid {
   background-size: 60px 60px;
   mask-image: linear-gradient(black, transparent);
 }
-.sub-minimal .sub-content {
+.sub-whitemax .sub-content {
   max-width: 960px;
   width: 100%;
   margin-inline: auto;
   padding-top: 64px;
 }
-.subscription-page.sub-minimal .sub-card {
+.subscription-page.sub-whitemax .sub-card {
   border: 0;
   box-shadow: none;
   backdrop-filter: none;
 }
-.sub-minimal .sub-header {
+.sub-whitemax .sub-header {
   position: relative;
   padding-top: 48px;
   justify-content: center;
 }
-.sub-minimal .sub-brand {
+.sub-whitemax .sub-brand {
   flex-direction: column;
   text-align: center;
   gap: 20px;
 }
-.sub-minimal .sub-brand-mark {
+.sub-whitemax .sub-brand-mark {
   width: 80px;
   height: 80px;
   border-radius: 24px;
@@ -69,23 +71,23 @@
   object-fit: contain;
   border-radius: inherit;
 }
-.sub-minimal .sub-brand-title {
+.sub-whitemax .sub-brand-title {
   font-size: clamp(30px, 6vw, 58px);
   font-weight: 800;
   letter-spacing: -0.045em;
   background: none;
   -webkit-text-fill-color: currentColor;
 }
-.sub-minimal .sub-brand-id {
+.sub-whitemax .sub-brand-id {
   max-width: 100%;
   overflow-wrap: anywhere;
 }
-.sub-minimal .sub-toolbar {
+.sub-whitemax .sub-toolbar {
   position: absolute;
   inset-inline-end: 0;
   top: 0;
 }
-.sub-minimal-description {
+.sub-whitemax-description {
   margin: 24px auto;
   max-width: 560px;
   text-align: center;
@@ -95,30 +97,30 @@
   font-size: 18px;
   line-height: 1.7;
 }
-.sub-minimal .sub-minimal-connect {
+.sub-whitemax .sub-whitemax-connect {
   display: flex;
   margin: 28px auto 48px;
   min-height: 52px;
   padding-inline: 28px;
   border-radius: 16px;
 }
-.sub-minimal .sub-hero {
+.sub-whitemax .sub-hero {
   margin-top: 40px;
 }
-.sub-minimal .sub-tabs {
+.sub-whitemax .sub-tabs {
   margin-top: 40px;
 }
-.sub-minimal .ant-btn {
+.sub-whitemax .ant-btn {
   border-radius: 14px;
 }
 @media (max-width: 600px) {
-  .sub-minimal .sub-content {
+  .sub-whitemax .sub-content {
     padding-top: 16px;
   }
-  .sub-minimal .sub-brand-id {
+  .sub-whitemax .sub-brand-id {
     font-size: 11px;
   }
-  .sub-minimal .sub-minimal-connect {
+  .sub-whitemax .sub-whitemax-connect {
     max-width: 100%;
     min-width: 0;
   }

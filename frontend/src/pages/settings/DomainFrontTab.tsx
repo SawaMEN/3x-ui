@@ -36,9 +36,22 @@ import {
   defaultDomainConfig,
 } from '@/schemas/domain-front';
 import type { DomainConfigForm, DomainForm } from '@/schemas/domain-front';
+import type { AllSetting } from '@/models/setting';
+import { SettingListItem } from '@/components/ui';
+import SubscriptionDomains from './SubscriptionDomains';
 import { useInboundOptions } from '@/api/queries/useInboundOptions';
 
-export default function DomainFrontTab() {
+export default function DomainFrontTab({
+  allSetting,
+  updateSetting,
+  saveSettings,
+  settingsDirty = false,
+}: {
+  saveSettings?: () => Promise<boolean | undefined>;
+  settingsDirty?: boolean;
+  allSetting?: AllSetting;
+  updateSetting?: (patch: Partial<AllSetting>) => void;
+}) {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const statusQuery = useDomainFrontStatus();
@@ -66,15 +79,9 @@ export default function DomainFrontTab() {
   const [checking, setChecking] = useState<string>();
   const [expanded, setExpanded] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  const [separatePublicPort, setSeparatePublicPort] = useState(false);
   const [editing, setEditing] = useState<number>();
   const [primaryDomain, setPrimaryDomain] = useState(false);
-  const [autoCheck, setAutoCheck] = useState(() => {
-    try {
-      return localStorage.getItem('xui-domain-auto-check') !== 'false';
-    } catch {
-      return true;
-    }
-  });
   const [form] = Form.useForm<DomainForm>();
   const [messageApi, holder] = message.useMessage();
   const mode = Form.useWatch('mode', form);
@@ -100,6 +107,8 @@ export default function DomainFrontTab() {
     }
     setBusy(true);
     try {
+      if (settingsDirty && saveSettings && !(await saveSettings())) return;
+      if (!dirty) return;
       const msg = await HttpUtil.post('/panel/api/domains/apply', parsed.data, { silent: true });
       if (!msg?.success) throw new Error(msg?.msg || t('somethingWentWrong'));
       const next = DomainFrontStatusSchema.parse(msg.obj);
@@ -110,8 +119,7 @@ export default function DomainFrontTab() {
       void queryClient.invalidateQueries({ queryKey: keys.settings.defaults() });
       void queryClient.invalidateQueries({ queryKey: keys.settings.all() });
       messageApi.success(t('pages.settings.domains.applied'));
-      if (autoCheck && saved.enabled && saved.subscriptionDomain)
-        void check(saved.subscriptionDomain);
+      if (saved.enabled && saved.subscriptionDomain) void check(saved.subscriptionDomain);
     } catch (e) {
       messageApi.error(e instanceof Error ? e.message : t('somethingWentWrong'));
       void load();
@@ -198,31 +206,45 @@ export default function DomainFrontTab() {
         description={label('automationDesc')}
       />
       {!!status?.existingCertificates?.length && (
-        <Card title={label('existingCertificates')}>
-          <Typography.Paragraph type="secondary">{label('existingDesc')}</Typography.Paragraph>
-          <Space orientation="vertical">
-            {status.existingCertificates.map((cert) => (
-              <div key={cert.name}>
-                <Typography.Text strong>{label(`source.${cert.source}`)}</Typography.Text>
-                {' · '}
-                {cert.issuer}
-                {' · '}
-                {label('remaining')}: {cert.daysLeft} {label('days')}
-                {' · '}
-                {date(cert.expiresAt)}
-                {' · '}
-                {renewalLabel(cert.renewal)}
-                {cert.autoRenew && <Tag color="green">{label('autoRenew')}</Tag>}
-                <div>
-                  <Typography.Text copyable>{cert.certFile}</Typography.Text>
-                </div>
-                {cert.error && (
-                  <Typography.Text type="warning">{certificateError(cert.error)}</Typography.Text>
-                )}
-              </div>
-            ))}
-          </Space>
-        </Card>
+        <Collapse
+          items={[
+            {
+              key: 'certificates',
+              label: label('existingCertificates'),
+              children: (
+                <>
+                  <Typography.Paragraph type="secondary">
+                    {label('existingDesc')}
+                  </Typography.Paragraph>
+                  <Space orientation="vertical">
+                    {status.existingCertificates.map((cert) => (
+                      <div key={cert.name}>
+                        <Typography.Text strong>{label(`source.${cert.source}`)}</Typography.Text>
+                        {' · '}
+                        {cert.issuer}
+                        {' · '}
+                        {label('remaining')}: {cert.daysLeft} {label('days')}
+                        {' · '}
+                        {date(cert.expiresAt)}
+                        {' · '}
+                        {renewalLabel(cert.renewal)}
+                        {cert.autoRenew && <Tag color="green">{label('autoRenew')}</Tag>}
+                        <div>
+                          <Typography.Text copyable>{cert.certFile}</Typography.Text>
+                        </div>
+                        {cert.error && (
+                          <Typography.Text type="warning">
+                            {certificateError(cert.error)}
+                          </Typography.Text>
+                        )}
+                      </div>
+                    ))}
+                  </Space>
+                </>
+              ),
+            },
+          ]}
+        />
       )}
       <Collapse
         items={[
@@ -261,52 +283,19 @@ export default function DomainFrontTab() {
         }
       >
         <Form layout="vertical">
-          <Form.Item
-            label={label('enabled')}
-            tooltip={label('enabledDesc')}
-            extra={label('enabledDesc')}
-          >
+          <Form.Item label={label('enabled')} tooltip={label('enabledDesc')}>
             <Switch
               aria-label={label('enabled')}
               checked={draft.enabled}
               onChange={(v) => update({ enabled: v })}
             />
           </Form.Item>
-          <Form.Item label={label('email')} tooltip={label('emailDesc')} extra={label('emailDesc')}>
+          <Form.Item label={label('email')} tooltip={label('emailDesc')}>
             <Input
               aria-label={label('email')}
               type="email"
               value={draft.email}
               onChange={(e) => update({ email: e.target.value })}
-            />
-          </Form.Item>
-          <Form.Item
-            label={label('canonical')}
-            tooltip={label('canonicalDesc')}
-            extra={label('canonicalDesc')}
-          >
-            <Select
-              aria-label={label('canonical')}
-              allowClear
-              value={draft.subscriptionDomain || undefined}
-              onChange={(value) => update({ subscriptionDomain: value || '' })}
-              options={draft.domains
-                .filter((d) => d.enabled)
-                .map((d) => ({ value: d.name, label: d.name }))}
-            />
-          </Form.Item>
-          <Form.Item tooltip={label('autoCheckHelp')} label={label('autoCheck')}>
-            <Switch
-              aria-label={label('autoCheck')}
-              checked={autoCheck}
-              onChange={(value) => {
-                setAutoCheck(value);
-                try {
-                  localStorage.setItem('xui-domain-auto-check', String(value));
-                } catch {
-                  /* Browser preferences may be unavailable. */
-                }
-              }}
             />
           </Form.Item>
           <Checkbox
@@ -345,6 +334,7 @@ export default function DomainFrontTab() {
                           min={1}
                           max={65535}
                           value={draft.httpPort}
+                          aria-label={label('httpPort')}
                           onChange={(v) => {
                             if (v != null) update({ httpPort: v });
                           }}
@@ -355,22 +345,41 @@ export default function DomainFrontTab() {
                           min={1}
                           max={65535}
                           value={draft.httpsPort}
+                          aria-label={label('httpsPort')}
                           onChange={(v) => {
-                            if (v != null) update({ httpsPort: v });
+                            if (v != null)
+                              update({
+                                httpsPort: v,
+                                ...(!separatePublicPort && draft.publicPort === draft.httpsPort
+                                  ? { publicPort: v }
+                                  : {}),
+                              });
                           }}
                         />
                       </Form.Item>
-                      <Form.Item label={label('publicPort')} tooltip={label('publicPortHelp')}>
-                        <InputNumber
-                          min={1}
-                          max={65535}
-                          value={draft.publicPort}
-                          onChange={(v) => {
-                            if (v != null) update({ publicPort: v });
-                          }}
-                        />
-                      </Form.Item>
+                      {(separatePublicPort || draft.publicPort !== draft.httpsPort) && (
+                        <Form.Item label={label('publicPort')} tooltip={label('publicPortHelp')}>
+                          <InputNumber
+                            min={1}
+                            max={65535}
+                            value={draft.publicPort}
+                            aria-label={label('publicPort')}
+                            onChange={(v) => {
+                              if (v != null) update({ publicPort: v });
+                            }}
+                          />
+                        </Form.Item>
+                      )}
                     </Space>
+                    <Checkbox
+                      checked={separatePublicPort || draft.publicPort !== draft.httpsPort}
+                      onChange={(event) => {
+                        setSeparatePublicPort(event.target.checked);
+                        if (!event.target.checked) update({ publicPort: draft.httpsPort });
+                      }}
+                    >
+                      {label('portMapping')}
+                    </Checkbox>
                     <Typography.Paragraph type="secondary">
                       {label('portsHelp')}
                     </Typography.Paragraph>
@@ -448,7 +457,6 @@ export default function DomainFrontTab() {
                         {label(`source.${cert.source}`)} · {renewalLabel(cert.renewal)}
                       </Typography.Text>
                     )}
-                    {cert?.certFile && <Typography.Text copyable>{cert.certFile}</Typography.Text>}
                     {cert?.expiresAt ? (
                       <>
                         <span>
@@ -460,9 +468,6 @@ export default function DomainFrontTab() {
                         <Typography.Text type="secondary">{cert.issuer}</Typography.Text>
                       </>
                     ) : null}
-                    {cert?.autoRenew && (
-                      <Typography.Text type="secondary">{label('autoRenew')}</Typography.Text>
-                    )}
                     {cert?.error && (
                       <Typography.Text type="danger">
                         {certificateError(cert.error)}
@@ -475,8 +480,10 @@ export default function DomainFrontTab() {
             {
               title: label('actions'),
               render: (_, d, index) => (
-                <Space orientation="vertical">
-                  <Button onClick={() => openEditor(index)}>{label('edit')}</Button>
+                <Space wrap>
+                  <Button size="small" onClick={() => openEditor(index)}>
+                    {label('edit')}
+                  </Button>
                   <Button
                     loading={checking === d.name}
                     disabled={dirty || !initialized}
@@ -494,7 +501,9 @@ export default function DomainFrontTab() {
                       })
                     }
                   >
-                    <Button danger>{label('remove')}</Button>
+                    <Button danger size="small">
+                      {label('remove')}
+                    </Button>
                   </Popconfirm>
                 </Space>
               ),
@@ -526,12 +535,44 @@ export default function DomainFrontTab() {
           }}
         />
       </Card>
+      {allSetting && updateSetting && (
+        <Collapse
+          items={[
+            {
+              key: 'manual-tls',
+              label: t('pages.settings.domains.manualSettings'),
+              children: (
+                <>
+                  <SubscriptionDomains allSetting={allSetting} updateSetting={updateSetting} />
+                  {(['webCertFile', 'webKeyFile', 'subCertFile', 'subKeyFile'] as const).map(
+                    (key) => (
+                      <SettingListItem
+                        key={key}
+                        paddings="small"
+                        title={t(
+                          `pages.settings.${({ webCertFile: 'publicKeyPath', webKeyFile: 'privateKeyPath', subCertFile: 'subCertPath', subKeyFile: 'subKeyPath' } as const)[key]}`,
+                        )}
+                      >
+                        <Input
+                          value={allSetting[key]}
+                          onChange={(e) => updateSetting({ [key]: e.target.value })}
+                        />
+                      </SettingListItem>
+                    ),
+                  )}
+                </>
+              ),
+            },
+          ]}
+        />
+      )}
+
       <Space wrap>
         <Button
           type="primary"
           loading={busy}
           aria-label={label('apply')}
-          disabled={!dirty || loading}
+          disabled={(!dirty && !settingsDirty) || loading}
           onClick={() => void apply()}
         >
           {label('apply')}

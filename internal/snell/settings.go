@@ -13,12 +13,13 @@ import (
 )
 
 type Settings struct {
-	Version  int            `json:"version"`
-	PSK      string         `json:"psk"`
-	Mode     string         `json:"mode"`
-	ObfsMode string         `json:"obfsMode"`
-	ObfsHost string         `json:"obfsHost"`
-	Clients  []model.Client `json:"clients"`
+	Version   int            `json:"version"`
+	PSK       string         `json:"psk"`
+	Mode      string         `json:"mode"`
+	ObfsMode  string         `json:"obfsMode"`
+	ObfsHost  string         `json:"obfsHost"`
+	QuicProxy bool           `json:"quicProxy,omitempty"`
+	Clients   []model.Client `json:"clients"`
 }
 
 // Reject control characters in credentials and HTTP Host values before they
@@ -47,6 +48,9 @@ func Parse(raw string) (Settings, error) {
 		return s, fmt.Errorf("Snell requires a PSK without control characters")
 	}
 	if s.Version == 6 {
+		if s.QuicProxy {
+			return s, fmt.Errorf("Snell QUIC Proxy is only supported by v5")
+		}
 		if len(s.PSK) < 12 || len(s.PSK) > 255 {
 			return s, fmt.Errorf("Snell v6 PSK must be 12..255 bytes")
 		}
@@ -82,6 +86,9 @@ func Parse(raw string) (Settings, error) {
 		}
 		if containsControl(name) || containsControl(c.Password) {
 			return s, fmt.Errorf("Snell user names and keys cannot contain control characters")
+		}
+		if len(c.Password) > 255 {
+			return s, fmt.Errorf("Snell user key must be at most 255 bytes")
 		}
 		if seenNames[strings.ToLower(name)] {
 			return s, fmt.Errorf("Snell client names must be unique")
@@ -125,7 +132,7 @@ func Prepare(ib *model.Inbound, previous string) error {
 	}
 	previousKeys := map[string]string{}
 	for _, c := range old.Clients {
-		previousKeys[c.Email] = c.Password
+		previousKeys[strings.ToLower(strings.TrimSpace(c.Email))] = c.Password
 	}
 	if clients, ok := raw["clients"].([]any); ok {
 		for _, entry := range clients {
@@ -135,7 +142,7 @@ func Prepare(ib *model.Inbound, previous string) error {
 			}
 			if c["password"] == nil || c["password"] == "" {
 				email, _ := c["email"].(string)
-				secret := previousKeys[email]
+				secret := previousKeys[strings.ToLower(strings.TrimSpace(email))]
 				if secret == "" {
 					var err error
 					secret, err = Secret()
@@ -157,6 +164,7 @@ func Prepare(ib *model.Inbound, previous string) error {
 		return err
 	}
 	if s.Version == 6 {
+		delete(raw, "quicProxy")
 		delete(raw, "obfsMode")
 		delete(raw, "obfsHost")
 		if s.Mode == "" || s.Mode == "default" {
@@ -164,6 +172,9 @@ func Prepare(ib *model.Inbound, previous string) error {
 		}
 	} else {
 		delete(raw, "mode")
+		if !s.QuicProxy {
+			delete(raw, "quicProxy")
+		}
 		if s.ObfsMode == "" || s.ObfsMode == "none" {
 			delete(raw, "obfsMode")
 			delete(raw, "obfsHost")
@@ -180,6 +191,9 @@ func Prepare(ib *model.Inbound, previous string) error {
 // sing-box deliberately calls the v5-compatible outbound version 4.
 func (s Settings) ClientVersion() int {
 	if s.Version == 5 {
+		if s.QuicProxy {
+			return 5
+		}
 		return 4
 	}
 	return 6

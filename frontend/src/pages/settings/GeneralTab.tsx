@@ -21,7 +21,6 @@ import {
   BellOutlined,
   ClockCircleOutlined,
   GlobalOutlined,
-  SafetyCertificateOutlined,
   SettingOutlined,
   ReloadOutlined,
   SwapOutlined,
@@ -652,44 +651,6 @@ export default function GeneralTab({
                     max={100}
                     style={{ width: '100%' }}
                     onChange={onNumber((v) => updateSetting({ trafficDiff: v }))}
-                  />
-                </SettingListItem>
-              </>
-            ),
-          },
-          {
-            key: '3',
-            label: catTabLabel(<SafetyCertificateOutlined />, t('pages.settings.certs'), isMobile),
-            children: (
-              <>
-                <Alert
-                  type="info"
-                  showIcon
-                  title={t('pages.settings.domains.existingDesc')}
-                  action={
-                    <Button onClick={() => navigate('/panel/settings#domains')}>
-                      {t('pages.settings.domains.title')}
-                    </Button>
-                  }
-                />
-                <SettingListItem
-                  paddings="small"
-                  title={t('pages.settings.publicKeyPath')}
-                  description={t('pages.settings.publicKeyPathDesc')}
-                >
-                  <Input
-                    value={allSetting.webCertFile}
-                    onChange={(e) => updateSetting({ webCertFile: e.target.value })}
-                  />
-                </SettingListItem>
-                <SettingListItem
-                  paddings="small"
-                  title={t('pages.settings.privateKeyPath')}
-                  description={t('pages.settings.privateKeyPathDesc')}
-                >
-                  <Input
-                    value={allSetting.webKeyFile}
-                    onChange={(e) => updateSetting({ webKeyFile: e.target.value })}
                   />
                 </SettingListItem>
               </>

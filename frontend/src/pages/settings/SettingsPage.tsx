@@ -115,7 +115,7 @@ export default function SettingsPage() {
   const [systemUpdateOpen, setSystemUpdateOpen] = useState(false);
   const location = useLocation();
   const slug = location.hash.replace(/^#/, '');
-  const activeSlug = tabSlugs.includes(slug) ? slug : 'general';
+  const activeSlug = slug === 'certs' ? 'domains' : tabSlugs.includes(slug) ? slug : 'general';
 
   const activeThemeMode = lowPower ? 'dark' : mode;
 
@@ -273,7 +273,7 @@ export default function SettingsPage() {
     return classes.join(' ');
   }, [isDark, isUltra]);
 
-  const categoryBody = useMemo(() => {
+  const categoryBody = (() => {
     switch (activeSlug) {
       case 'security':
         return (
@@ -296,7 +296,14 @@ export default function SettingsPage() {
       case 'subscription-balancers':
         return <SubscriptionBalancersTab allSetting={allSetting} updateSetting={updateSetting} />;
       case 'domains':
-        return <DomainFrontTab />;
+        return (
+          <DomainFrontTab
+            allSetting={allSetting}
+            updateSetting={updateSetting}
+            saveSettings={onSave}
+            settingsDirty={!saveDisabled}
+          />
+        );
       case 'gateway':
         return <GatewayModeControl />;
       default:
@@ -310,7 +317,7 @@ export default function SettingsPage() {
           />
         );
     }
-  }, [activeSlug, allSetting, updateSetting, saveAll, savePayload]);
+  })();
 
   if (slug === 'olcrtc') return <Navigate to="/olcrtc" replace />;
 

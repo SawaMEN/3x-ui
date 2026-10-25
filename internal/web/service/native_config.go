@@ -344,7 +344,7 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot, ed
 			}
 			for _, client := range local.Clients {
 				if client.Enable {
-					snellKeys[client.Email] = client.Password
+					snellKeys[strings.ToLower(strings.TrimSpace(client.Email))] = client.Password
 				}
 			}
 		}
@@ -395,7 +395,7 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot, ed
 					entry["security"] = client.Security
 				}
 			case model.Snell:
-				password, present := snellKeys[client.Email]
+				password, present := snellKeys[strings.ToLower(strings.TrimSpace(client.Email))]
 				if !present {
 					continue
 				}
@@ -663,7 +663,13 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot, ed
 		if err := prepareProtocolServersWithPolicy(cfg, s.strictProtocolServers, reserved...); err != nil {
 			return nil, err
 		}
-		if err := hiddify.FinalizeServerConfig(cfg); err != nil {
+		var unmeteredTags []string
+		for _, inbound := range inbounds {
+			if inbound != nil && inbound.Enable && inbound.NodeID == nil && inbound.Protocol == model.Mieru {
+				unmeteredTags = append(unmeteredTags, inbound.Tag)
+			}
+		}
+		if err := hiddify.FinalizeServerConfig(cfg, unmeteredTags...); err != nil {
 			return nil, err
 		}
 		if cfg.Log == nil {

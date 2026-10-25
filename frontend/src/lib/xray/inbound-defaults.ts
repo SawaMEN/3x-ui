@@ -542,6 +542,7 @@ export function createDefaultInboundSettings(protocol: string): AnyInboundSettin
         mode: 'default',
         obfsMode: 'none',
         obfsHost: 'bing.com',
+        quicProxy: false,
         clients: [],
       };
     case 'anytls':

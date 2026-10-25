@@ -10,7 +10,6 @@ import {
   Tabs,
   Typography,
   message,
-  theme,
 } from 'antd';
 import type { TabsProps } from 'antd';
 import {
@@ -24,7 +23,7 @@ import {
 
 import { ClipboardManager, LanguageManager } from '@/utils';
 import { setMessageInstance } from '@/utils/messageBus';
-import { useTheme } from '@/hooks/useTheme';
+import { buildAntdThemeConfig, useTheme } from '@/hooks/useTheme';
 import SubAppsTab from './SubAppsTab';
 import SubConfigsTab from './SubConfigsTab';
 import SubHeader from './SubHeader';
@@ -38,7 +37,7 @@ import {
   resolveSubStatus,
 } from './subPageModel';
 import './SubPage.css';
-import './SubMinimal.css';
+import './SubWhiteMax.css';
 
 const subData = window.__SUB_PAGE_DATA__ || {};
 
@@ -97,6 +96,7 @@ const RTL_LANGUAGES = new Set(['fa-IR', 'ar-EG']);
 export default function SubPage() {
   const { t } = useTranslation();
   const { isDark, isUltra, antdThemeConfig } = useTheme();
+  const [whiteMax, setWhiteMax] = useState(appearance?.theme === 'whitemax');
   const [messageApi, messageContextHolder] = message.useMessage();
   useEffect(() => {
     setMessageInstance(messageApi);
@@ -293,36 +293,36 @@ export default function SubPage() {
   const direction = RTL_LANGUAGES.has(lang) ? 'rtl' : 'ltr';
   const pageClass = [
     'subscription-page',
-    isDark && 'is-dark',
-    isUltra && 'is-ultra',
-    appearance && 'sub-minimal',
+    !whiteMax && isDark && 'is-dark',
+    !whiteMax && isUltra && 'is-ultra',
+    whiteMax && 'sub-whitemax',
   ]
     .filter(Boolean)
     .join(' ');
 
-  const themeConfig = appearance
-    ? {
-        algorithm: isDark ? theme.darkAlgorithm : theme.defaultAlgorithm,
-        token: {
-          colorPrimary: appearance.accent,
-          colorBgLayout: isDark ? '#2a2a2e' : '#f2f2f5',
-          colorBgContainer: isDark ? '#303034' : '#ffffff',
-          colorText: isDark ? '#f5f5f5' : '#1a1a1a',
-          borderRadius: 16,
-          fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
-        },
-      }
-    : antdThemeConfig;
-  const subscriptionStyle = {
-    '--sub-accent': appearance?.accent || antdThemeConfig.token?.colorPrimary,
-    '--sub-grad-from': antdThemeConfig.token?.colorPrimary,
-    '--sub-ink-from': antdThemeConfig.token?.colorPrimary,
-    '--bg-page': antdThemeConfig.token?.colorBgLayout,
-    '--sub-card-bg': antdThemeConfig.token?.colorBgContainer,
-  } as React.CSSProperties;
+  const subscriptionStyle = appearance
+    ? ({
+        '--sub-accent': appearance.accent,
+      } as React.CSSProperties)
+    : undefined;
 
   return (
-    <ConfigProvider theme={themeConfig} direction={direction}>
+    <ConfigProvider
+      theme={
+        whiteMax
+          ? {
+              ...buildAntdThemeConfig('light'),
+              token: {
+                ...buildAntdThemeConfig('light').token,
+                colorPrimary: appearance?.accent || '#808080',
+                colorBgLayout: '#f2f2f5',
+                fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
+              },
+            }
+          : antdThemeConfig
+      }
+      direction={direction}
+    >
       {messageContextHolder}
       <Layout className={pageClass} dir={direction} style={subscriptionStyle}>
         <div className="sub-aurora" aria-hidden="true">
@@ -332,6 +332,8 @@ export default function SubPage() {
           <Card className="sub-card">
             <SubHeader
               title={subTitle}
+              whiteMax={whiteMax}
+              onWhiteMaxChange={setWhiteMax}
               logoURL={appearance?.logoURL}
               sId={sId}
               email={clientEmail}
@@ -339,7 +341,7 @@ export default function SubPage() {
               onLangChange={onLangChange}
             />
             {appearance?.description && (
-              <p className="sub-minimal-description" dir="auto">
+              <p className="sub-whitemax-description" dir="auto">
                 {appearance.description}
               </p>
             )}
@@ -347,7 +349,7 @@ export default function SubPage() {
               <Button
                 type="primary"
                 size="large"
-                className="sub-minimal-connect"
+                className="sub-whitemax-connect"
                 icon={<LinkOutlined />}
                 onClick={() => void copy(subUrl)}
               >

@@ -86,7 +86,11 @@ func injectSingBoxSidecarEgress(cfg *singbox.Config, inbounds []*model.Inbound) 
 			continue
 		}
 		if routedSidecar(ib.Protocol) {
-			if err := add(ib, map[string]any{"type": "socks"}, sidecaregress.Port(ib.Id)); err != nil {
+			row := map[string]any{"type": "socks"}
+			if ib.Protocol == model.Mieru {
+				row["users"] = []map[string]any{{"username": mieru.SocksUsername(), "password": mieru.SocksPassword()}}
+			}
+			if err := add(ib, row, sidecaregress.Port(ib.Id)); err != nil {
 				return err
 			}
 			if ib.Protocol == model.Mieru || ib.Protocol == model.TrustTunnel {

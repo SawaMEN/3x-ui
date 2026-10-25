@@ -1,6 +1,9 @@
 package singbox
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestTranslateNativeSingBoxStableOutboundMatrix(t *testing.T) {
 	tests := []struct {
@@ -83,5 +86,16 @@ func TestTranslateNativeSingBoxStableOutboundMatrix(t *testing.T) {
 				t.Fatalf("translated outbound does not pass validation: %v", err)
 			}
 		})
+	}
+}
+
+func TestSnellV6OutboundRejectsOversizedUserKey(t *testing.T) {
+	outbound := map[string]any{"type": "snell", "tag": "snell-v6", "server": "example.org", "server_port": 443, "version": 6, "psk": "123456789012", "userkey": strings.Repeat("я", 128)}
+	if err := validateSingBoxRequiredFields(outbound, "snell", "snell-v6"); err == nil {
+		t.Fatal("accepted user key exceeding 255-byte limit")
+	}
+	outbound["userkey"] = strings.Repeat("x", 255)
+	if err := validateSingBoxRequiredFields(outbound, "snell", "snell-v6"); err != nil {
+		t.Fatal(err)
 	}
 }
