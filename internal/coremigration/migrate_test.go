@@ -222,7 +222,7 @@ func TestMigrationStartupFailureRestoresExactDatabaseAndConfig(t *testing.T) {
 
 func TestMigrationRejectsUnsupportedActiveInboundWithoutDisablingUsers(t *testing.T) {
 	r, p, dir := fixture(t)
-	if err := database.GetDB().Model(&model.Inbound{}).Where("tag = ?", "migration-vless").Update("protocol", model.WireGuard).Error; err != nil {
+	if err := database.GetDB().Model(&model.Inbound{}).Where("tag = ?", "migration-vless").Update("protocol", model.Tunnel).Error; err != nil {
 		t.Fatal(err)
 	}
 	before := preserved(t)

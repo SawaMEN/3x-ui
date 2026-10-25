@@ -29,6 +29,7 @@ func FinalizeServerConfig(cfg *singbox.Config) error {
 	if err := json.Unmarshal(data, &normalized); err != nil {
 		return err
 	}
+	normalized.SidecarTrafficTags = cfg.SidecarTrafficTags
 	ConfigureStats(&normalized)
 	cfg.Experimental = normalized.Experimental
 	return ValidateConfigReferences(wire)
@@ -39,7 +40,7 @@ func FinalizeServerConfig(cfg *singbox.Config) error {
 func ConfigureStats(cfg *singbox.Config) {
 	users, tags, outbounds := map[string]bool{}, map[string]bool{}, map[string]bool{}
 	for _, listener := range append(slices.Clone(cfg.Inbounds), cfg.Endpoints...) {
-		if tag, _ := listener["tag"].(string); tag != "" {
+		if tag, _ := listener["tag"].(string); tag != "" && !cfg.SidecarTrafficTags[tag] {
 			tags[tag] = true
 		}
 		for _, key := range []string{"users", "peers"} {

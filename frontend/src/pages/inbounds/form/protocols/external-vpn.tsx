@@ -45,9 +45,9 @@ export function PingtunnelFields() {
       >
         <InputNumber min={0} addonAfter="ms" />
       </FormField>
-      <FormField name={['settings', 'forward']} label={t('pages.inbounds.form.pingtunnelForward')}>
-        <Input placeholder="socks5://127.0.0.1:2080" />
-      </FormField>
+      <div style={{ marginBottom: 16 }}>
+        Выход в интернет задаётся общими правилами маршрутизации панели.
+      </div>
       <FormField
         name={['settings', 'congestion']}
         label={t('pages.inbounds.form.pingtunnelCongestion')}

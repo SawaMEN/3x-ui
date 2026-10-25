@@ -13,6 +13,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/sidecaregress"
 )
 
 type PortBinding struct {
@@ -330,6 +331,10 @@ func renderConfig(inst Instance) map[string]any {
 		"dns": map[string]any{
 			"dualStack": "PREFER_IPv4",
 		},
+	}
+	out["egress"] = map[string]any{
+		"proxies": []any{map[string]any{"name": "panel", "protocol": "SOCKS5_PROXY_PROTOCOL", "host": "127.0.0.1", "port": sidecaregress.Port(inst.Id)}},
+		"rules":   []any{map[string]any{"ipRanges": []string{"*"}, "domainNames": []string{"*"}, "action": "PROXY", "proxyNames": []string{"panel"}}},
 	}
 	if inst.Listen != "" {
 		out["listenIPAddress"] = inst.Listen

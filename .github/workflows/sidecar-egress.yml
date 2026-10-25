@@ -1,0 +1,43 @@
+name: Sidecar egress regression
+on:
+  push:
+    branches: [FIXX]
+  pull_request:
+    paths:
+      - 'internal/sidecaregress/**'
+      - 'internal/sudoku/**'
+      - 'internal/mieru/**'
+      - 'internal/externalvpn/**'
+      - 'internal/web/service/singbox*'
+      - 'deploy/panel-tunnel/**'
+      - 'tools/build-panel-tunnel.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Build and test pinned protocol sidecar
+        run: python3 tools/build-panel-tunnel.py --output "$RUNNER_TEMP/panel-tunnel/sudoku-tunnel" --test
+      - name: Download official TrustTunnel endpoint for interoperability
+        run: |
+          curl -fL --retry 3 -o "$RUNNER_TEMP/trust.tar.gz" https://github.com/TrustTunnel/TrustTunnel/releases/download/v1.1.0/trusttunnel-v1.1.0-linux-x86_64.tar.gz
+          tar -xzf "$RUNNER_TEMP/trust.tar.gz" -C "$RUNNER_TEMP"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: panel-tunnel-linux-amd64
+          path: ${{ runner.temp }}/panel-tunnel
+          if-no-files-found: error
+      - name: Test panel contracts and routing
+        env:
+          SUDOKU_TEST_BINARY: ${{ runner.temp }}/panel-tunnel/sudoku-tunnel
+          TRUSTTUNNEL_TEST_BINARY: ${{ runner.temp }}/trusttunnel-v1.1.0-linux-x86_64/trusttunnel_endpoint
+        run: |
+          mkdir -p internal/web/dist
+          touch internal/web/dist/.gitkeep
+          go test ./internal/sudoku ./internal/mieru ./internal/externalvpn ./internal/hiddify ./internal/web/service -count=1 -timeout=600s

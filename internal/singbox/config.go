@@ -16,6 +16,7 @@ import (
 )
 
 type Config struct {
+	SidecarTrafficTags      map[string]bool       `json:"-"`
 	ProtocolServerFallbacks map[string]string     `json:"-"`
 	ProtocolServers         []protocolserver.Plan `json:"-"`
 	ManagedOutbounds        []map[string]any      `json:"-"`

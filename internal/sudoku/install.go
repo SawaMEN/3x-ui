@@ -11,12 +11,14 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 )
 
-const releasesAPI = "https://api.github.com/repos/SUDOKU-ASCII/sudoku/releases"
+const releasesAPI = "https://api.github.com/repos/SawaMEN/3x-ui/releases"
 
 type release struct {
 	TagName string `json:"tag_name"`
@@ -132,6 +134,14 @@ func InstallLatest(ctx context.Context, binDir string) (string, error) {
 	if err := os.Chmod(staged, 0o755); err != nil {
 		return "", err
 	}
+	// Stock upstream binaries ignore unknown JSON fields. Verify the explicit
+	// CLI contract so an update cannot silently restore direct server egress.
+	checkCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	output, _ := exec.CommandContext(checkCtx, staged, "-h").CombinedOutput()
+	cancel()
+	if !strings.Contains(string(output), "-panel-egress") {
+		return "", fmt.Errorf("downloaded protocol server lacks panel-egress support")
+	}
 	if err := os.Rename(staged, target); err != nil {
 		return "", err
 	}
@@ -178,7 +188,7 @@ func pickAsset(assets []struct {
 			URL  string
 		}{}, fmt.Errorf("Sudoku is not published for %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
-	prefix := "sudoku-" + runtime.GOOS + "-" + arch
+	prefix := "panel-tunnel-" + runtime.GOOS + "-" + arch
 	var out struct {
 		Name string
 		URL  string

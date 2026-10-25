@@ -11,6 +11,7 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/sidecaregress"
 )
 
 type Instance struct {
@@ -49,6 +50,9 @@ func GetManager() *Manager {
 }
 
 func (m *Manager) Reconcile(ctx context.Context, desired []Instance) {
+	for i := range desired {
+		desired[i].Config.PanelEgress = sidecaregress.Address(desired[i].ID)
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -276,6 +280,7 @@ func marshalConfig(cfg Config) ([]byte, error) {
 }
 
 func writeCandidateConfig(binDir string, id int, cfg Config) (string, error) {
+	cfg.PanelEgress = sidecaregress.Address(id)
 	dir := configDir(binDir)
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return "", err
