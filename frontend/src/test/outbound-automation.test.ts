@@ -69,10 +69,15 @@ describe('automatic native protocol configuration', () => {
     expect(configured).toEqual({ version: 6, custom: 'keep' });
     expect(optionVisible(schema.mode, configured)).toBe(true);
     expect(optionVisible(schema.obfs_mode, configured)).toBe(false);
+    for (const version of [4, 5]) {
+      expect(
+        patchOption({ ...configured, mode: 'unshaped' }, 'version', version, schema),
+      ).not.toHaveProperty('mode');
+    }
+    expect(registry.protocols.snell.version.enum).toEqual([4, 5, 6]);
     expect(
-      patchOption({ ...configured, mode: 'unshaped' }, 'version', 4, schema),
-    ).not.toHaveProperty('mode');
-    expect(registry.protocols.snell.version.enum).toEqual([4, 6]);
+      autoConfigureOutbound({ type: 'snell', version: 5, psk: 'existing-server-key' }),
+    ).toMatchObject({ version: 5, psk: 'existing-server-key' });
   });
   it('contains structured controls for protocol-specific lists and nested options', () => {
     expect(registry.protocols.wireguard.peers).toMatchObject({
