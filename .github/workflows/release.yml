@@ -308,9 +308,16 @@ jobs:
           HIDDIFY_CONFIG_CHECK_BINARY: ${{ github.workspace }}/x-ui/bin/hiddify-core-linux-amd64
         run: go test ./internal/hiddify -run '^TestPinnedBinaryChecksGeneratedConfigurations$' -count=1
 
+      - name: Build protocol sidecar with panel egress
+        run: |
+          python3 tools/build-panel-tunnel.py --arch "${{ matrix.platform }}" --output "$RUNNER_TEMP/panel-tunnel/sudoku-tunnel" --test
+          cp "$RUNNER_TEMP/panel-tunnel/sudoku-tunnel" x-ui/bin/sudoku-tunnel
+          cp "$RUNNER_TEMP/panel-tunnel/panel-tunnel-LICENSE" x-ui/bin/panel-tunnel-LICENSE
+          tar -czf panel-tunnel-linux-${{ matrix.platform }}.tar.gz -C "$RUNNER_TEMP/panel-tunnel" sudoku-tunnel panel-tunnel-LICENSE panel-tunnel-source.tar.gz
+
       - name: Package
         run: |
-          for component in pingtunnel trusttunnel_endpoint sudoku-tunnel caddy-naive hysteria; do
+          for component in pingtunnel trusttunnel_endpoint caddy-naive hysteria; do
             test ! -e "x-ui/bin/$component"
           done
           tar -zcf x-ui-linux-${{ matrix.platform }}.tar.gz x-ui
@@ -323,6 +330,20 @@ jobs:
           path: |
             x-ui-linux-${{ matrix.platform }}.tar.gz
             x-ui-linux-${{ matrix.platform }}.tar.gz.sha256
+
+      - name: Upload protocol sidecar artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: panel-tunnel-linux-${{ matrix.platform }}
+          path: panel-tunnel-linux-${{ matrix.platform }}.tar.gz
+
+      - name: Publish protocol sidecar
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ github.ref_name }}
+          file: panel-tunnel-linux-${{ matrix.platform }}.tar.gz
 
       - name: Upload stable release assets
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')

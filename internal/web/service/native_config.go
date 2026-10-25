@@ -322,6 +322,14 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot, ed
 		if listen, ok := raw["listen"].(string); !ok || strings.TrimSpace(listen) == "" {
 			raw["listen"] = "0.0.0.0"
 		}
+		if inbound.Protocol == model.WireGuard {
+			endpoint, err := singBoxWireGuardInbound(inbound, clientsByInbound[inbound.Id])
+			if err != nil {
+				return nil, err
+			}
+			cfg.Endpoints = append(cfg.Endpoints, endpoint)
+			continue
+		}
 		dbClients := clientsByInbound[inbound.Id]
 		// Snell user keys belong to this inbound. Keep the runtime credentials
 		// identical to the native subscription even when the global client has
@@ -559,7 +567,7 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot, ed
 	}
 	managedMASQUETags := make(map[string]bool)
 	for _, inbound := range inbounds {
-		if inbound != nil && inbound.Protocol == model.MASQUE && inbound.NodeID == nil {
+		if inbound != nil && (inbound.Protocol == model.MASQUE || inbound.Protocol == model.WireGuard) && inbound.NodeID == nil {
 			managedMASQUETags[inbound.Tag] = true
 		}
 	}
@@ -604,10 +612,10 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot, ed
 			return nil, err
 		}
 	}
-	if err := injectSingBoxAmneziaWGEgress(cfg, inbounds); err != nil {
+	if err := injectSingBoxSidecarEgress(cfg, inbounds); err != nil {
 		return nil, err
 	}
-	if err := injectSingBoxMieruEgress(cfg, inbounds); err != nil {
+	if err := injectSingBoxAmneziaWGEgress(cfg, inbounds); err != nil {
 		return nil, err
 	}
 	for _, inbound := range inbounds {

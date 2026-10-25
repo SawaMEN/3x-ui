@@ -19,6 +19,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/oxidns"
 	"github.com/SawaMEN/3x-ui/v3/internal/protocolserver"
+	"github.com/SawaMEN/3x-ui/v3/internal/sidecaregress"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/tail"
@@ -883,6 +884,12 @@ func (s *SingBoxService) ProcessConfigPath() string {
 
 func init() {
 	singbox.SetRuntimeConfigReader(func() []byte { return SelectedNativeCore().process().AppliedConfig() })
+	sidecaregress.SetRuntimeReader(func() []byte {
+		if !SelectedNativeCore().IsRunning() {
+			return nil
+		}
+		return SelectedNativeCore().process().AppliedConfig()
+	})
 }
 
 var nativeTemplateFields = map[string]bool{

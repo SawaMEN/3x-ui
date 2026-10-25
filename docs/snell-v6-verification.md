@@ -81,9 +81,9 @@ The fixes are published through the existing PR branches. The published core
 commit has the same verified Git tree `408721e5b83c69f8b1479548f60521cc443817c5`;
 only Git commit metadata differs from the local test checkpoint.
 
-Snell v5 QUIC Proxy remains experimental and disabled by default. Codec unit
-tests are not evidence of actual HTTP/3 or Surge interoperability.
-
+At this earlier v6 audit checkpoint, Snell v5 QUIC Proxy was experimental and
+disabled by default. Codec unit tests alone were not evidence of actual HTTP/3
+or Surge interoperability.
 
 Subsequent Snell v5 QUIC wire-format fixes and actual HTTP/3 interoperability
 checks are documented in [snell-v5-verification.md](snell-v5-verification.md).

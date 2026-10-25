@@ -19,8 +19,10 @@ func TestUpdateLocalMieruSettingsDoesNotDereferenceNodeID(t *testing.T) {
 	}
 	update := existing
 	update.Settings = `{"protocols":["TCP","UDP"],"clients":[]}`
-	if _, _, err := (&InboundService{}).UpdateInbound(&update); err != nil {
+	if _, restart, err := (&InboundService{}).UpdateInbound(&update); err != nil {
 		t.Fatalf("save local Mieru settings: %v", err)
+	} else if !restart {
+		t.Fatal("Mieru edit did not schedule core bridge refresh")
 	}
 
 	var saved model.Inbound
