@@ -23,7 +23,7 @@ import {
 
 import { ClipboardManager, LanguageManager } from '@/utils';
 import { setMessageInstance } from '@/utils/messageBus';
-import { buildAntdThemeConfig, useTheme } from '@/hooks/useTheme';
+import { useTheme } from '@/hooks/useTheme';
 import SubAppsTab from './SubAppsTab';
 import SubConfigsTab from './SubConfigsTab';
 import SubHeader from './SubHeader';
@@ -38,6 +38,8 @@ import {
 } from './subPageModel';
 import './SubPage.css';
 import './SubWhiteMax.css';
+import WhiteMaxBackdrop from './WhiteMaxBackdrop';
+import { whiteMaxTheme, readWhiteMaxDark } from './whiteMaxTheme';
 
 const subData = window.__SUB_PAGE_DATA__ || {};
 
@@ -97,6 +99,16 @@ export default function SubPage() {
   const { t } = useTranslation();
   const { isDark, isUltra, antdThemeConfig } = useTheme();
   const [whiteMax, setWhiteMax] = useState(appearance?.theme === 'whitemax');
+  const [whiteMaxDark, setWhiteMaxDark] = useState(readWhiteMaxDark);
+  const toggleWhiteMaxDark = () => {
+    const next = !whiteMaxDark;
+    setWhiteMaxDark(next);
+    try {
+      localStorage.setItem('xui-whitemax-palette', next ? 'dark' : 'light');
+    } catch {
+      /* Storage can be unavailable. */
+    }
+  };
   const [messageApi, messageContextHolder] = message.useMessage();
   useEffect(() => {
     setMessageInstance(messageApi);
@@ -293,46 +305,39 @@ export default function SubPage() {
   const direction = RTL_LANGUAGES.has(lang) ? 'rtl' : 'ltr';
   const pageClass = [
     'subscription-page',
-    !whiteMax && isDark && 'is-dark',
+    (whiteMax ? whiteMaxDark : isDark) && 'is-dark',
     !whiteMax && isUltra && 'is-ultra',
     whiteMax && 'sub-whitemax',
   ]
     .filter(Boolean)
     .join(' ');
 
-  const subscriptionStyle = appearance
-    ? ({
-        '--sub-accent': appearance.accent,
-      } as React.CSSProperties)
-    : undefined;
+  const subscriptionStyle = {
+    ...(appearance && !whiteMax ? { '--sub-accent': appearance.accent } : {}),
+    colorScheme: (whiteMax ? whiteMaxDark : isDark) ? 'dark' : 'light',
+  } as React.CSSProperties;
 
   return (
     <ConfigProvider
-      theme={
-        whiteMax
-          ? {
-              ...buildAntdThemeConfig('light'),
-              token: {
-                ...buildAntdThemeConfig('light').token,
-                colorPrimary: appearance?.accent || '#808080',
-                colorBgLayout: '#f2f2f5',
-                fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
-              },
-            }
-          : antdThemeConfig
-      }
+      theme={whiteMax ? whiteMaxTheme(whiteMaxDark) : antdThemeConfig}
       direction={direction}
     >
       {messageContextHolder}
       <Layout className={pageClass} dir={direction} style={subscriptionStyle}>
-        <div className="sub-aurora" aria-hidden="true">
-          <span className="sub-aurora-grid" />
-        </div>
+        {whiteMax ? (
+          <WhiteMaxBackdrop />
+        ) : (
+          <div className="sub-aurora" aria-hidden="true">
+            <span className="sub-aurora-grid" />
+          </div>
+        )}
         <Layout.Content className="sub-content">
           <Card className="sub-card">
             <SubHeader
               title={subTitle}
               whiteMax={whiteMax}
+              whiteMaxDark={whiteMaxDark}
+              onWhiteMaxDarkChange={toggleWhiteMaxDark}
               onWhiteMaxChange={setWhiteMax}
               logoURL={appearance?.logoURL}
               sId={sId}
@@ -345,7 +350,7 @@ export default function SubPage() {
                 {appearance.description}
               </p>
             )}
-            {appearance && subUrl && (
+            {(appearance || whiteMax) && subUrl && (
               <Button
                 type="primary"
                 size="large"
