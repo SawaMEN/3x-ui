@@ -1,8 +1,7 @@
-import { Alert, Button, Input, Switch } from 'antd';
+import { Alert, Input, Switch } from 'antd';
 import { useTranslation } from 'react-i18next';
 import type { AllSetting } from '@/models/setting';
 import { SettingListItem } from '@/components/ui';
-import { useNavigate } from 'react-router';
 import { useDomainFrontStatus } from '@/api/queries/useDomainFrontStatus';
 import { subscriptionCaddyConfig } from './subscription-domains';
 
@@ -14,7 +13,6 @@ export default function SubscriptionDomains({
   updateSetting: (patch: Partial<AllSetting>) => void;
 }) {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const { data: status } = useDomainFrontStatus();
   const managed =
     status?.config.enabled && status.config.subscriptionDomain ? status.config : undefined;
@@ -34,11 +32,6 @@ export default function SubscriptionDomains({
           showIcon
           title={t('pages.settings.domains.managedSubscription')}
           description={automaticURL}
-          action={
-            <Button onClick={() => navigate('/settings?subscriptionTab=tls#subscription')}>
-              {t('pages.settings.domains.subscriptionTitle')}
-            </Button>
-          }
         />
       )}
       <SettingListItem

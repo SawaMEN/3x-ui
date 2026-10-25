@@ -105,7 +105,15 @@
     "support": "Support",
     "qrTitle": "Scan. Import. Connect.",
     "qrHint": "Scan with your client app. Keep this code private.",
-    "saveQr": "Save QR"
+    "saveQr": "Save QR",
+    "themes": {
+      "light": "Light",
+      "dark": "Dark",
+      "ultra-dark": "Ultra Dark",
+      "colorful": "Colorful",
+      "blue-gray": "Blue Gray",
+      "cyberpunk": "Cyberpunk"
+    }
   },
   "menu": {
     "theme": "Theme",
@@ -2109,7 +2117,7 @@
       "rootRedirectDesc": "Redirects GET/HEAD requests to / on the panel and subscription listeners. Choose a site or enter your own URL. Other routes keep working. If the panel path is /, open /?panel=1 to sign in. DNS and HTTPS must already point to this server.",
       "rootRedirectURL": "Destination website",
       "subAppearanceEnable": "Custom subscription appearance",
-      "subAppearanceDesc": "Minimal style inspired by WhiteMAX: centered heading, neutral background, subtle grid and rounded buttons. Disabling restores the standard page. A custom template directory takes priority.",
+      "subAppearanceDesc": "Subscription page title, logo and theme. Classic appearance is kept by default.",
       "subAppearanceTitle": "Page title",
       "subAppearanceDescription": "Page description",
       "subAppearanceLogoURL": "Logo URL (HTTP/HTTPS)",
@@ -2256,8 +2264,11 @@
         "useForSubscriptionHelp": "Use this domain as the public address in subscription links, QR codes and the subscription page. The first new domain is suggested automatically; you can uncheck it. Other domains remain available as additional addresses.",
         "autoCheck": "Check DNS/TLS after apply",
         "autoCheckHelp": "Check the saved primary domain automatically, showing DNS addresses and the certificate visible from the server. New certificate issuance may still be pending; wait and check again if needed. Disable to check manually.",
-        "termsHelp": "Agreement is needed for new certificates issued by CertMagic. Reusing an acme.sh certificate does not require accepting a new agreement. Consent is never selected automatically."
-      }
+        "termsHelp": "Agreement is needed for new certificates issued by CertMagic. Reusing an acme.sh certificate does not require accepting a new agreement. Consent is never selected automatically.",
+        "manualSettings": "Manual HTTPS and external proxy"
+      },
+      "subAppearanceTheme": "Page theme",
+      "subAppearanceClassic": "Classic appearance"
     },
     "xray": {
       "restartSuccess": "Xray has been successfully relaunched.",

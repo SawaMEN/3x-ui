@@ -10,6 +10,7 @@ import (
 )
 
 type SubscriptionAppearance struct {
+	Theme       string `json:"theme"`
 	Enabled     bool   `json:"enabled"`
 	Title       string `json:"title"`
 	Description string `json:"description"`
@@ -37,6 +38,7 @@ func (s *SettingService) GetSubscriptionAppearance() (SubscriptionAppearance, er
 	}
 	appearance.Enabled = true
 	for key, target := range map[string]*string{
+		"subAppearanceTheme":       &appearance.Theme,
 		"subAppearanceTitle":       &appearance.Title,
 		"subAppearanceDescription": &appearance.Description,
 		"subAppearanceLogoURL":     &appearance.LogoURL,
@@ -65,6 +67,12 @@ func validatePresentationSettings(settings *entity.AllSetting) error {
 	}
 	if settings.RootRedirectEnable && settings.RootRedirectURL == "" {
 		return fmt.Errorf("root redirect URL is required")
+	}
+	if settings.SubAppearanceTheme == "" {
+		settings.SubAppearanceTheme = "classic"
+	}
+	if settings.SubAppearanceTheme != "classic" && settings.SubAppearanceTheme != "whitemax" {
+		return fmt.Errorf("unsupported subscription theme")
 	}
 	settings.SubAppearanceAccent = strings.TrimSpace(settings.SubAppearanceAccent)
 	if settings.SubAppearanceAccent == "" {

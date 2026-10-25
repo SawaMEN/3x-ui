@@ -287,6 +287,9 @@
           "subAppearanceLogoURL": {
             "type": "string"
           },
+          "subAppearanceTheme": {
+            "type": "string"
+          },
           "subAppearanceTitle": {
             "type": "string"
           },
@@ -647,6 +650,7 @@
           "subAppearanceDescription",
           "subAppearanceEnable",
           "subAppearanceLogoURL",
+          "subAppearanceTheme",
           "subAppearanceTitle",
           "subCDNEnable",
           "subCalendarExpireInclusive",
@@ -984,6 +988,9 @@
             "type": "boolean"
           },
           "subAppearanceLogoURL": {
+            "type": "string"
+          },
+          "subAppearanceTheme": {
             "type": "string"
           },
           "subAppearanceTitle": {
@@ -1354,6 +1361,7 @@
           "subAppearanceDescription",
           "subAppearanceEnable",
           "subAppearanceLogoURL",
+          "subAppearanceTheme",
           "subAppearanceTitle",
           "subCDNEnable",
           "subCalendarExpireInclusive",

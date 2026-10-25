@@ -12,6 +12,7 @@ func TestPresentationSettingsRejectUnsafeInput(t *testing.T) {
 		settings entity.AllSetting
 		want     string
 	}{
+		{"unknown theme", entity.AllSetting{SubAppearanceTheme: "unknown"}, "unsupported subscription theme"},
 		{"missing destination", entity.AllSetting{RootRedirectEnable: true}, "root redirect URL is required"},
 		{"script destination", entity.AllSetting{RootRedirectURL: "javascript:alert(1)"}, `invalid root redirect URL: unsupported URL scheme "javascript"`},
 		{"script logo", entity.AllSetting{SubAppearanceLogoURL: "data:image/svg+xml,test"}, `invalid subscription logo URL: unsupported URL scheme "data"`},
@@ -23,5 +24,19 @@ func TestPresentationSettingsRejectUnsafeInput(t *testing.T) {
 				t.Fatalf("error = %v, want %q", err, tc.want)
 			}
 		})
+	}
+}
+
+func TestSubscriptionThemeKeepsClassicForExistingSettings(t *testing.T) {
+	settings := entity.AllSetting{SubAppearanceEnable: true}
+	if err := validatePresentationSettings(&settings); err != nil {
+		t.Fatal(err)
+	}
+	if settings.SubAppearanceTheme != "classic" {
+		t.Fatal("existing branding must retain classic layout")
+	}
+	settings.SubAppearanceTheme = "whitemax"
+	if err := validatePresentationSettings(&settings); err != nil {
+		t.Fatal(err)
 	}
 }

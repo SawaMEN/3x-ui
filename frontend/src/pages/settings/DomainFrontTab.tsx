@@ -36,14 +36,22 @@ import {
   defaultDomainConfig,
 } from '@/schemas/domain-front';
 import type { DomainConfigForm, DomainForm } from '@/schemas/domain-front';
+import type { AllSetting } from '@/models/setting';
+import { SettingListItem } from '@/components/ui';
+import SubscriptionDomains from './SubscriptionDomains';
 import { useInboundOptions } from '@/api/queries/useInboundOptions';
 
-interface DomainFrontTabProps {
-  scope?: 'panel' | 'subscription';
-  beforeApply?: () => Promise<{ success?: boolean } | null | undefined>;
-}
-
-export default function DomainFrontTab({ scope, beforeApply }: DomainFrontTabProps = {}) {
+export default function DomainFrontTab({
+  allSetting,
+  updateSetting,
+  saveSettings,
+  settingsDirty = false,
+}: {
+  saveSettings?: () => Promise<boolean | undefined>;
+  settingsDirty?: boolean;
+  allSetting?: AllSetting;
+  updateSetting?: (patch: Partial<AllSetting>) => void;
+}) {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const statusQuery = useDomainFrontStatus();
@@ -74,13 +82,6 @@ export default function DomainFrontTab({ scope, beforeApply }: DomainFrontTabPro
   const [separatePublicPort, setSeparatePublicPort] = useState(false);
   const [editing, setEditing] = useState<number>();
   const [primaryDomain, setPrimaryDomain] = useState(false);
-  const [autoCheck, setAutoCheck] = useState(() => {
-    try {
-      return localStorage.getItem('xui-domain-auto-check') !== 'false';
-    } catch {
-      return true;
-    }
-  });
   const [form] = Form.useForm<DomainForm>();
   const [messageApi, holder] = message.useMessage();
   const mode = Form.useWatch('mode', form);
@@ -106,7 +107,8 @@ export default function DomainFrontTab({ scope, beforeApply }: DomainFrontTabPro
     }
     setBusy(true);
     try {
-      if (beforeApply && !(await beforeApply())?.success) return;
+      if (settingsDirty && saveSettings && !(await saveSettings())) return;
+      if (!dirty) return;
       const msg = await HttpUtil.post('/panel/api/domains/apply', parsed.data, { silent: true });
       if (!msg?.success) throw new Error(msg?.msg || t('somethingWentWrong'));
       const next = DomainFrontStatusSchema.parse(msg.obj);
@@ -117,8 +119,7 @@ export default function DomainFrontTab({ scope, beforeApply }: DomainFrontTabPro
       void queryClient.invalidateQueries({ queryKey: keys.settings.defaults() });
       void queryClient.invalidateQueries({ queryKey: keys.settings.all() });
       messageApi.success(t('pages.settings.domains.applied'));
-      if (autoCheck && saved.enabled && saved.subscriptionDomain)
-        void check(saved.subscriptionDomain);
+      if (saved.enabled && saved.subscriptionDomain) void check(saved.subscriptionDomain);
     } catch (e) {
       messageApi.error(e instanceof Error ? e.message : t('somethingWentWrong'));
       void load();
@@ -143,17 +144,11 @@ export default function DomainFrontTab({ scope, beforeApply }: DomainFrontTabPro
   function openEditor(index: number) {
     form.resetFields();
     form.setFieldsValue(
-      index < 0
-        ? {
-            ...defaultDomain,
-            mode: scope === 'panel' ? 'direct' : 'sub_link_only',
-            panel: scope === 'panel',
-          }
-        : draft.domains[index],
+      index < 0 ? { ...defaultDomain, mode: 'sub_link_only' } : draft.domains[index],
     );
     setPrimaryDomain(
       index < 0
-        ? scope !== 'panel' && !draft.subscriptionDomain
+        ? !draft.subscriptionDomain
         : draft.subscriptionDomain === draft.domains[index].name,
     );
     setEditing(index);
@@ -164,12 +159,7 @@ export default function DomainFrontTab({ scope, beforeApply }: DomainFrontTabPro
     const domain = DomainFormSchema.parse({
       ...defaultDomain,
       ...value,
-      panel:
-        value.mode === 'sub_link_only'
-          ? false
-          : scope === 'subscription'
-            ? !!old?.panel
-            : !!value.panel,
+      panel: value.mode === 'sub_link_only' ? false : !!value.panel,
       inboundIds: value.mode === 'sub_link_only' ? [] : (value.inboundIds ?? []),
       origin: value.mode === 'relay' ? value.origin : '',
       certFile: value.tls === 'manual' ? value.certFile : '',
@@ -208,23 +198,7 @@ export default function DomainFrontTab({ scope, beforeApply }: DomainFrontTabPro
           description={statusQuery.error.message}
         />
       )}
-      <Typography.Title level={4}>
-        {label(
-          scope === 'panel'
-            ? 'panelTitle'
-            : scope === 'subscription'
-              ? 'subscriptionTitle'
-              : 'title',
-        )}
-      </Typography.Title>
-      {scope && (
-        <Alert
-          type="info"
-          showIcon
-          title={label('sharedSettings')}
-          description={label('sharedSettingsDesc')}
-        />
-      )}
+      <Typography.Title level={3}>{label('title')}</Typography.Title>
       <Alert
         type="info"
         showIcon
@@ -232,31 +206,45 @@ export default function DomainFrontTab({ scope, beforeApply }: DomainFrontTabPro
         description={label('automationDesc')}
       />
       {!!status?.existingCertificates?.length && (
-        <Card title={label('existingCertificates')}>
-          <Typography.Paragraph type="secondary">{label('existingDesc')}</Typography.Paragraph>
-          <Space orientation="vertical">
-            {status.existingCertificates.map((cert) => (
-              <div key={cert.name}>
-                <Typography.Text strong>{label(`source.${cert.source}`)}</Typography.Text>
-                {' · '}
-                {cert.issuer}
-                {' · '}
-                {label('remaining')}: {cert.daysLeft} {label('days')}
-                {' · '}
-                {date(cert.expiresAt)}
-                {' · '}
-                {renewalLabel(cert.renewal)}
-                {cert.autoRenew && <Tag color="green">{label('autoRenew')}</Tag>}
-                <div>
-                  <Typography.Text copyable>{cert.certFile}</Typography.Text>
-                </div>
-                {cert.error && (
-                  <Typography.Text type="warning">{certificateError(cert.error)}</Typography.Text>
-                )}
-              </div>
-            ))}
-          </Space>
-        </Card>
+        <Collapse
+          items={[
+            {
+              key: 'certificates',
+              label: label('existingCertificates'),
+              children: (
+                <>
+                  <Typography.Paragraph type="secondary">
+                    {label('existingDesc')}
+                  </Typography.Paragraph>
+                  <Space orientation="vertical">
+                    {status.existingCertificates.map((cert) => (
+                      <div key={cert.name}>
+                        <Typography.Text strong>{label(`source.${cert.source}`)}</Typography.Text>
+                        {' · '}
+                        {cert.issuer}
+                        {' · '}
+                        {label('remaining')}: {cert.daysLeft} {label('days')}
+                        {' · '}
+                        {date(cert.expiresAt)}
+                        {' · '}
+                        {renewalLabel(cert.renewal)}
+                        {cert.autoRenew && <Tag color="green">{label('autoRenew')}</Tag>}
+                        <div>
+                          <Typography.Text copyable>{cert.certFile}</Typography.Text>
+                        </div>
+                        {cert.error && (
+                          <Typography.Text type="warning">
+                            {certificateError(cert.error)}
+                          </Typography.Text>
+                        )}
+                      </div>
+                    ))}
+                  </Space>
+                </>
+              ),
+            },
+          ]}
+        />
       )}
       <Collapse
         items={[
@@ -295,54 +283,19 @@ export default function DomainFrontTab({ scope, beforeApply }: DomainFrontTabPro
         }
       >
         <Form layout="vertical">
-          <Form.Item
-            label={label('enabled')}
-            tooltip={label('enabledDesc')}
-            extra={label('enabledDesc')}
-          >
+          <Form.Item label={label('enabled')} tooltip={label('enabledDesc')}>
             <Switch
               aria-label={label('enabled')}
               checked={draft.enabled}
               onChange={(v) => update({ enabled: v })}
             />
           </Form.Item>
-          <Form.Item label={label('email')} tooltip={label('emailDesc')} extra={label('emailDesc')}>
+          <Form.Item label={label('email')} tooltip={label('emailDesc')}>
             <Input
               aria-label={label('email')}
               type="email"
               value={draft.email}
               onChange={(e) => update({ email: e.target.value })}
-            />
-          </Form.Item>
-          {scope !== 'panel' && (
-            <Form.Item
-              label={label('canonical')}
-              tooltip={label('canonicalDesc')}
-              extra={label('canonicalDesc')}
-            >
-              <Select
-                aria-label={label('canonical')}
-                allowClear
-                value={draft.subscriptionDomain || undefined}
-                onChange={(value) => update({ subscriptionDomain: value || '' })}
-                options={draft.domains
-                  .filter((d) => d.enabled)
-                  .map((d) => ({ value: d.name, label: d.name }))}
-              />
-            </Form.Item>
-          )}
-          <Form.Item tooltip={label('autoCheckHelp')} label={label('autoCheck')}>
-            <Switch
-              aria-label={label('autoCheck')}
-              checked={autoCheck}
-              onChange={(value) => {
-                setAutoCheck(value);
-                try {
-                  localStorage.setItem('xui-domain-auto-check', String(value));
-                } catch {
-                  /* Browser preferences may be unavailable. */
-                }
-              }}
             />
           </Form.Item>
           <Checkbox
@@ -460,9 +413,7 @@ export default function DomainFrontTab({ scope, beforeApply }: DomainFrontTabPro
       >
         <Table
           rowKey="name"
-          dataSource={
-            scope === 'panel' ? draft.domains.filter((domain) => domain.panel) : draft.domains
-          }
+          dataSource={draft.domains}
           pagination={false}
           scroll={{ x: 760 }}
           locale={{ emptyText: label('empty') }}
@@ -506,7 +457,6 @@ export default function DomainFrontTab({ scope, beforeApply }: DomainFrontTabPro
                         {label(`source.${cert.source}`)} · {renewalLabel(cert.renewal)}
                       </Typography.Text>
                     )}
-                    {cert?.certFile && <Typography.Text copyable>{cert.certFile}</Typography.Text>}
                     {cert?.expiresAt ? (
                       <>
                         <span>
@@ -518,9 +468,6 @@ export default function DomainFrontTab({ scope, beforeApply }: DomainFrontTabPro
                         <Typography.Text type="secondary">{cert.issuer}</Typography.Text>
                       </>
                     ) : null}
-                    {cert?.autoRenew && (
-                      <Typography.Text type="secondary">{label('autoRenew')}</Typography.Text>
-                    )}
                     {cert?.error && (
                       <Typography.Text type="danger">
                         {certificateError(cert.error)}
@@ -532,13 +479,9 @@ export default function DomainFrontTab({ scope, beforeApply }: DomainFrontTabPro
             },
             {
               title: label('actions'),
-              render: (_, d) => (
-                <Space orientation="vertical">
-                  <Button
-                    onClick={() =>
-                      openEditor(draft.domains.findIndex((domain) => domain.name === d.name))
-                    }
-                  >
+              render: (_, d, index) => (
+                <Space wrap>
+                  <Button size="small" onClick={() => openEditor(index)}>
                     {label('edit')}
                   </Button>
                   <Button
@@ -552,13 +495,15 @@ export default function DomainFrontTab({ scope, beforeApply }: DomainFrontTabPro
                     title={label('removeConfirm')}
                     onConfirm={() =>
                       update({
-                        domains: draft.domains.filter((domain) => domain.name !== d.name),
+                        domains: draft.domains.filter((_, i) => i !== index),
                         subscriptionDomain:
                           draft.subscriptionDomain === d.name ? '' : draft.subscriptionDomain,
                       })
                     }
                   >
-                    <Button danger>{label('remove')}</Button>
+                    <Button danger size="small">
+                      {label('remove')}
+                    </Button>
                   </Popconfirm>
                 </Space>
               ),
@@ -590,12 +535,44 @@ export default function DomainFrontTab({ scope, beforeApply }: DomainFrontTabPro
           }}
         />
       </Card>
+      {allSetting && updateSetting && (
+        <Collapse
+          items={[
+            {
+              key: 'manual-tls',
+              label: t('pages.settings.domains.manualSettings'),
+              children: (
+                <>
+                  <SubscriptionDomains allSetting={allSetting} updateSetting={updateSetting} />
+                  {(['webCertFile', 'webKeyFile', 'subCertFile', 'subKeyFile'] as const).map(
+                    (key) => (
+                      <SettingListItem
+                        key={key}
+                        paddings="small"
+                        title={t(
+                          `pages.settings.${({ webCertFile: 'publicKeyPath', webKeyFile: 'privateKeyPath', subCertFile: 'subCertPath', subKeyFile: 'subKeyPath' } as const)[key]}`,
+                        )}
+                      >
+                        <Input
+                          value={allSetting[key]}
+                          onChange={(e) => updateSetting({ [key]: e.target.value })}
+                        />
+                      </SettingListItem>
+                    ),
+                  )}
+                </>
+              ),
+            },
+          ]}
+        />
+      )}
+
       <Space wrap>
         <Button
           type="primary"
           loading={busy}
           aria-label={label('apply')}
-          disabled={!dirty || loading}
+          disabled={(!dirty && !settingsDirty) || loading}
           onClick={() => void apply()}
         >
           {label('apply')}
@@ -679,16 +656,14 @@ export default function DomainFrontTab({ scope, beforeApply }: DomainFrontTabPro
           )}
           {mode !== 'sub_link_only' && (
             <>
-              {scope !== 'subscription' && (
-                <Form.Item
-                  name="panel"
-                  label={label('panelAllowed')}
-                  tooltip={label('panelHelp')}
-                  valuePropName="checked"
-                >
-                  <Checkbox />
-                </Form.Item>
-              )}
+              <Form.Item
+                name="panel"
+                label={label('panelAllowed')}
+                tooltip={label('panelHelp')}
+                valuePropName="checked"
+              >
+                <Checkbox />
+              </Form.Item>
               <Form.Item
                 name="inboundIds"
                 label={label('inbounds')}
@@ -705,19 +680,14 @@ export default function DomainFrontTab({ scope, beforeApply }: DomainFrontTabPro
               </Form.Item>
             </>
           )}
-          {scope !== 'panel' && (
-            <Form.Item
-              label={label('useForSubscription')}
-              tooltip={label('useForSubscriptionHelp')}
+          <Form.Item label={label('useForSubscription')} tooltip={label('useForSubscriptionHelp')}>
+            <Checkbox
+              checked={primaryDomain}
+              onChange={(event) => setPrimaryDomain(event.target.checked)}
             >
-              <Checkbox
-                checked={primaryDomain}
-                onChange={(event) => setPrimaryDomain(event.target.checked)}
-              >
-                {label('useForSubscription')}
-              </Checkbox>
-            </Form.Item>
-          )}
+              {label('useForSubscription')}
+            </Checkbox>
+          </Form.Item>
           <Form.Item
             name="tls"
             label={label('tlsLabel')}

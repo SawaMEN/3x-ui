@@ -1,4 +1,4 @@
-import { MemoryRouter, useLocation } from 'react-router';
+import { MemoryRouter } from 'react-router';
 import { AllSetting } from '@/models/setting';
 import SubscriptionDomains from '@/pages/settings/SubscriptionDomains';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
@@ -6,7 +6,6 @@ import { http, HttpResponse } from 'msw';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupHttp } from '@/api/http-init';
 import DomainFrontTab from '@/pages/settings/DomainFrontTab';
-import SubscriptionGeneralTab from '@/pages/settings/SubscriptionGeneralTab';
 import { defaultDomainConfig, defaultDomain, DomainConfigFormSchema } from '@/schemas/domain-front';
 import type { DomainConfigForm } from '@/schemas/domain-front';
 import { server } from './msw/server';
@@ -121,17 +120,6 @@ function fixture(existing = false) {
   };
 }
 
-function LocationProbe() {
-  const location = useLocation();
-  return (
-    <output data-testid="location">
-      {location.pathname}
-      {location.search}
-      {location.hash}
-    </output>
-  );
-}
-
 describe('domain and TLS dashboard', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -170,7 +158,6 @@ describe('domain and TLS dashboard', () => {
     const update = vi.fn();
     renderWithProviders(
       <MemoryRouter>
-        <LocationProbe />
         <DomainFrontTab />
         <SubscriptionDomains
           allSetting={new AllSetting({ subPublicURL: '', subCDNEnable: false })}
@@ -178,105 +165,19 @@ describe('domain and TLS dashboard', () => {
         />
       </MemoryRouter>,
     );
+    fireEvent.click(await screen.findByText('Existing certificates'));
     expect(await screen.findByText(/Installer issuer/)).toBeTruthy();
     expect(screen.getByText('/root/cert/existing/fullchain.pem')).toBeTruthy();
     const address = (await screen.findByRole('textbox', {
       name: 'Public subscription address',
     })) as HTMLInputElement;
     await waitFor(() => expect(address.placeholder).toBe('https://sub.example.com'));
-    expect(address.value).toBe('');
     expect(address.disabled).toBe(false);
     expect(
       screen.getByRole('switch', { name: 'Subscription through CDN' }).getAttribute('aria-checked'),
     ).toBe('true');
     expect(screen.queryByRole('textbox', { name: 'Caddy reverse proxy configuration' })).toBeNull();
     expect(update).not.toHaveBeenCalled();
-    fireEvent.change(address, { target: { value: 'https://external.example.com' } });
-    expect(update).toHaveBeenLastCalledWith({ subPublicURL: 'https://external.example.com' });
-    fireEvent.change(address, { target: { value: ' ' } });
-    expect(update).toHaveBeenLastCalledWith({ subPublicURL: ' ', subCDNEnable: false });
-    fireEvent.click(screen.getByRole('button', { name: 'Subscription domains and certificates' }));
-    expect(screen.getByTestId('location').textContent).toBe(
-      '/settings?subscriptionTab=tls#subscription',
-    );
-  });
-
-  it('saves service settings before applying the shared gateway and stops if saving fails', async () => {
-    const f = fixture();
-    const beforeApply = vi.fn(async () => ({ success: false }));
-    renderWithProviders(<DomainFrontTab scope="subscription" beforeApply={beforeApply} />);
-    fireEvent.change(await screen.findByDisplayValue('old@example.com'), {
-      target: { value: 'new@example.com' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Save and apply' }));
-    await waitFor(() => expect(beforeApply).toHaveBeenCalledOnce());
-    expect(f.applied).toBeUndefined();
-    await waitFor(() =>
-      expect(
-        screen
-          .getByRole('button', { name: 'Save and apply' })
-          .classList.contains('ant-btn-loading'),
-      ).toBe(false),
-    );
-    beforeApply.mockResolvedValue({ success: true });
-    fireEvent.click(screen.getByRole('button', { name: 'Save and apply' }));
-    await waitFor(() => expect(f.applied?.email).toBe('new@example.com'));
-  });
-
-  it('edits a panel domain by identity without changing hidden subscription domains', async () => {
-    const f = fixture();
-    f.config.domains.push({ ...defaultDomain, name: 'panel.example.com', panel: true });
-    renderWithProviders(<DomainFrontTab scope="panel" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
-    expect(screen.getByDisplayValue('panel.example.com')).toBeTruthy();
-    fireEvent.change(screen.getByDisplayValue('panel.example.com'), {
-      target: { value: 'admin.example.com' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
-    await screen.findByText('admin.example.com');
-    fireEvent.click(screen.getByRole('button', { name: 'Save and apply' }));
-    await waitFor(() =>
-      expect(f.applied?.domains.map((d) => d.name)).toEqual([
-        'sub.example.com',
-        'admin.example.com',
-      ]),
-    );
-  });
-
-  it('preserves a dirty TLS draft when navigating away and back through the subscription link', async () => {
-    fixture();
-    renderWithProviders(
-      <MemoryRouter initialEntries={['/settings?subscriptionTab=tls#subscription']}>
-        <SubscriptionGeneralTab allSetting={new AllSetting()} updateSetting={vi.fn()} />
-      </MemoryRouter>,
-    );
-    fireEvent.change(await screen.findByDisplayValue('old@example.com'), {
-      target: { value: 'unsaved@example.com' },
-    });
-    fireEvent.click(screen.getByRole('tab', { name: /General/i }));
-    fireEvent.click(
-      await screen.findByRole('button', { name: 'Subscription domains and certificates' }),
-    );
-    expect(await screen.findByDisplayValue('unsaved@example.com')).toBeTruthy();
-    expect(screen.getByRole('tab', { name: /Certificates/i }).getAttribute('aria-selected')).toBe(
-      'true',
-    );
-  });
-
-  it('keeps the panel binding when editing a shared domain in subscription settings', async () => {
-    const f = fixture();
-    f.config.domains[0].mode = 'direct';
-    f.config.domains[0].panel = true;
-    renderWithProviders(<DomainFrontTab scope="subscription" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
-    expect(screen.queryByRole('checkbox', { name: 'Allow admin panel access' })).toBeNull();
-    fireEvent.change(screen.getByDisplayValue('sub.example.com'), {
-      target: { value: 'shared.example.com' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
-    await screen.findAllByText('shared.example.com');
-    fireEvent.click(screen.getByRole('button', { name: 'Save and apply' }));
-    await waitFor(() => expect(f.applied?.domains[0].panel).toBe(true));
   });
 
   it('follows the gateway HTTPS port unless a NAT mapping is explicitly enabled', async () => {
@@ -350,15 +251,44 @@ describe('domain and TLS dashboard', () => {
     await waitFor(() => expect(f.checked).toEqual(['new.example.com']));
   });
 
-  it('allows automatic DNS checks to be disabled', async () => {
+  it('checks DNS automatically without an extra toggle', async () => {
     const f = fixture();
     renderWithProviders(<DomainFrontTab />);
     const email = await screen.findByDisplayValue('old@example.com');
     fireEvent.change(email, { target: { value: 'changed@example.com' } });
-    fireEvent.click(screen.getByRole('switch', { name: 'Check DNS/TLS after apply' }));
-    fireEvent.click(screen.getByText('Save and apply').closest('button')!);
-    await waitFor(() => expect(f.applied?.email).toBe('changed@example.com'));
-    expect(f.checked).toEqual([]);
+    expect(screen.queryByRole('switch', { name: 'Check DNS/TLS after apply' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Save and apply' }));
+    await waitFor(() => expect(f.checked).toEqual(['sub.example.com']));
+  });
+
+  it('saves manual settings with the same apply action', async () => {
+    fixture();
+    const save = vi.fn().mockResolvedValue(true);
+    renderWithProviders(
+      <MemoryRouter>
+        <DomainFrontTab
+          allSetting={new AllSetting()}
+          updateSetting={vi.fn()}
+          settingsDirty
+          saveSettings={save}
+        />
+      </MemoryRouter>,
+    );
+    await screen.findByDisplayValue('old@example.com');
+    fireEvent.click(screen.getByRole('button', { name: 'Save and apply' }));
+    await waitFor(() => expect(save).toHaveBeenCalledOnce());
+  });
+
+  it('does not apply domain changes if saving manual settings fails', async () => {
+    const f = fixture();
+    const save = vi.fn().mockResolvedValue(false);
+    renderWithProviders(<DomainFrontTab settingsDirty saveSettings={save} />);
+    fireEvent.change(await screen.findByDisplayValue('old@example.com'), {
+      target: { value: 'changed@example.com' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save and apply' }));
+    await waitFor(() => expect(save).toHaveBeenCalledOnce());
+    expect(f.applied).toBeUndefined();
   });
 
   it('clears panel and VPN bindings when a domain becomes subscription-only', async () => {

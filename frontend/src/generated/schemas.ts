@@ -261,6 +261,9 @@ export const SCHEMAS: Record<string, unknown> = {
       "subAppearanceLogoURL": {
         "type": "string"
       },
+      "subAppearanceTheme": {
+        "type": "string"
+      },
       "subAppearanceTitle": {
         "type": "string"
       },
@@ -621,6 +624,7 @@ export const SCHEMAS: Record<string, unknown> = {
       "subAppearanceDescription",
       "subAppearanceEnable",
       "subAppearanceLogoURL",
+      "subAppearanceTheme",
       "subAppearanceTitle",
       "subCDNEnable",
       "subCalendarExpireInclusive",
@@ -958,6 +962,9 @@ export const SCHEMAS: Record<string, unknown> = {
         "type": "boolean"
       },
       "subAppearanceLogoURL": {
+        "type": "string"
+      },
+      "subAppearanceTheme": {
         "type": "string"
       },
       "subAppearanceTitle": {
@@ -1328,6 +1335,7 @@ export const SCHEMAS: Record<string, unknown> = {
       "subAppearanceDescription",
       "subAppearanceEnable",
       "subAppearanceLogoURL",
+      "subAppearanceTheme",
       "subAppearanceTitle",
       "subCDNEnable",
       "subCalendarExpireInclusive",

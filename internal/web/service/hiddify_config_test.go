@@ -115,10 +115,12 @@ func TestHiddifyFullDatabaseProtocolConfigurations(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
+			seedProtocolCascade(t, ib.Tag)
 			cfg, err := (&HiddifyConfigGenerator{}).Generate()
 			if err != nil {
 				t.Fatal(err)
 			}
+			assertProtocolCascade(t, cfg, ib.Tag)
 			data := checkGeneratedHiddifyConfig(t, cfg)
 			if !strings.Contains(string(data), ib.Tag) || !strings.Contains(string(data), `"alice"`) {
 				t.Fatal("managed listener or identity missing")

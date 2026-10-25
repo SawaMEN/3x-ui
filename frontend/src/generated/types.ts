@@ -85,6 +85,7 @@ export interface AllSetting {
   subAppearanceDescription: string;
   subAppearanceEnable: boolean;
   subAppearanceLogoURL: string;
+  subAppearanceTheme: string;
   subAppearanceTitle: string;
   subCDNEnable: boolean;
   subCalendarExpireInclusive: boolean;
@@ -254,6 +255,7 @@ export interface AllSettingView {
   subAppearanceDescription: string;
   subAppearanceEnable: boolean;
   subAppearanceLogoURL: string;
+  subAppearanceTheme: string;
   subAppearanceTitle: string;
   subCDNEnable: boolean;
   subCalendarExpireInclusive: boolean;

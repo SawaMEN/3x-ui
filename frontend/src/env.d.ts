@@ -2,6 +2,7 @@
 
 interface SubPageData {
   appearance?: {
+    theme?: 'classic' | 'whitemax';
     enabled: boolean;
     title: string;
     description: string;

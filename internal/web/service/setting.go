@@ -61,6 +61,7 @@ var defaultValueMap = map[string]string{
 
 	"rootRedirectEnable":       "false",
 	"rootRedirectURL":          "https://www.wikipedia.org/",
+	"subAppearanceTheme": "classic",
 	"subAppearanceEnable":      "false",
 	"subAppearanceTitle":       "",
 	"subAppearanceDescription": "",
