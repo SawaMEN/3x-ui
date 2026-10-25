@@ -336,7 +336,7 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot, ed
 			}
 			for _, client := range local.Clients {
 				if client.Enable {
-					snellKeys[client.Email] = client.Password
+					snellKeys[strings.ToLower(strings.TrimSpace(client.Email))] = client.Password
 				}
 			}
 		}
@@ -387,7 +387,7 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot, ed
 					entry["security"] = client.Security
 				}
 			case model.Snell:
-				password, present := snellKeys[client.Email]
+				password, present := snellKeys[strings.ToLower(strings.TrimSpace(client.Email))]
 				if !present {
 					continue
 				}

@@ -84,6 +84,8 @@ cp "$task_root/deploy/hiddify/vision_padding_test.go.in" "$task_source/core/xui-
   cd -- "$task_source/core"
   GOTOOLCHAIN="${target[5]}" go mod edit -replace github.com/metacubex/utls=./xui-dependencies/utls -replace github.com/sagernet/sing-vmess=./xui-dependencies/sing-vmess
   GOTOOLCHAIN="${target[5]}" go mod edit -replace github.com/xtls/xray-core=./xui-dependencies/xray-core
+  # Reconcile the module graph after applying the pinned fork and overlays.
+  GOTOOLCHAIN="${target[5]}" go mod tidy
 )
 
 task_goos=${GOOS:-$(go env GOOS)}
@@ -108,6 +110,7 @@ if [[ "$task_goos" == "$(go env GOHOSTOS)" && "$task_goarch" == "$(go env GOHOST
   (
     cd -- "$task_source/core"
     CGO_ENABLED="$task_cgo" GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_link_flags" -tags "${target[3]}" github.com/sagernet/sing-box/experimental/clashapi/trafficontrol -run '^TestXUIPanelAuthenticatedUserIsConnectionMetadata$' -count=1
+    CGO_ENABLED="$task_cgo" GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_link_flags" -tags "${target[3]}" github.com/sagernet/sing-box/protocol/snell -run '^TestSnellV6' -count=1 -timeout=60s
     CGO_ENABLED="$task_cgo" GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_link_flags" -tags "${target[3]}" github.com/sagernet/sing-box/option -run '^TestXUIPanelHTTP1RoundTrip$' -count=1
     CGO_ENABLED="$task_cgo" GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_link_flags" -tags "${target[3]}" github.com/sagernet/sing-box/route/rule -run '^TestXUIPanelSniffOverrideAction$' -count=1
     CGO_ENABLED="$task_cgo" GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_link_flags" -tags "${target[3]}" github.com/sagernet/sing-box/common/tls github.com/sagernet/sing-box/protocol/vless github.com/sagernet/sing-vmess/vless -run '^TestXUIPanel(Reality|Preconnect|Vision|Reverse|Encryption)' -count=1 -timeout=60s

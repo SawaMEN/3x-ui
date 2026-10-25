@@ -894,7 +894,7 @@ function parseSnellLink(link: string): Raw | null {
     const settings: Raw = {
       server: u.hostname.replace(/^\[|\]$/g, ''),
       server_port: port,
-      version: version === 5 ? 4 : version,
+      version,
       psk,
     };
     for (const [query, key] of [

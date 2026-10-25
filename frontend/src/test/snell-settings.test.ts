@@ -35,6 +35,30 @@ describe('Snell settings and subscription links', () => {
     });
   });
 
+  it('preserves Snell v5 in a QUIC proxy link', () => {
+    const link = 'snell://deploy-psk@example.org:443?version=5&userkey=user-key#QUIC';
+    expect(parseOutboundLink(link)?.settings).toMatchObject({
+      version: 5,
+      psk: 'deploy-psk',
+      userkey: 'user-key',
+    });
+  });
+
+  it('rejects QUIC Proxy on v6 and accepts v5', () => {
+    const v5 = SnellInboundSettingsSchema.safeParse({
+      version: 5,
+      quicProxy: true,
+      psk: 'secret',
+    });
+    const v6 = SnellInboundSettingsSchema.safeParse({
+      version: 6,
+      quicProxy: true,
+      psk: '123456789012',
+    });
+    expect(v5.success).toBe(true);
+    expect(v6.success).toBe(false);
+  });
+
   it('imports a v6 link with mode and a distinct user key', () => {
     const link =
       'snell://deploy-psk-12345@example.org:443?version=6&userkey=another-key&mode=unshaped#Snell';
@@ -44,4 +68,25 @@ describe('Snell settings and subscription links', () => {
       userkey: 'another-key',
     });
   });
+});
+
+it('validates Snell user keys by UTF-8 byte length and rejects duplicates', () => {
+  const check = (clients: unknown[]) =>
+    SnellInboundSettingsSchema.safeParse({ version: 6, clients }).success;
+  expect(check([{ email: 'alice', password: 'я'.repeat(128) }])).toBe(false);
+  expect(check([{ email: 'alice', password: 'x'.repeat(255) }])).toBe(true);
+  expect(check([{ email: 'alice', password: '' }])).toBe(true);
+  expect(check([{ email: 'alice', password: 'bad\nkey' }])).toBe(false);
+  expect(
+    check([
+      { email: 'Alice', password: 'one' },
+      { email: 'alice', password: 'two' },
+    ]),
+  ).toBe(false);
+  expect(
+    check([
+      { email: 'alice', password: 'key' },
+      { email: 'bob', password: 'key' },
+    ]),
+  ).toBe(false);
 });

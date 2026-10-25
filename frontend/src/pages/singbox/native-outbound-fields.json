@@ -4602,14 +4602,14 @@
       "obfs_host": {
         "kind": "string",
         "when": {
-          "version": [4]
+          "version": [4, 5]
         }
       },
       "obfs_mode": {
         "enum": ["none", "http", "tls"],
         "kind": "string",
         "when": {
-          "version": [4]
+          "version": [4, 5]
         }
       },
       "protect_path": {
@@ -4658,7 +4658,7 @@
         "kind": "string"
       },
       "version": {
-        "enum": [4, 6],
+        "enum": [4, 5, 6],
         "integer": true,
         "kind": "number",
         "required": true
