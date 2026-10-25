@@ -604,6 +604,9 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot, ed
 			return nil, err
 		}
 	}
+	if err := injectSingBoxAmneziaWGEgress(cfg, inbounds); err != nil {
+		return nil, err
+	}
 	for _, inbound := range inbounds {
 		if err := injectSingBoxMtprotoEgress(cfg, inbound); err != nil {
 			return nil, err

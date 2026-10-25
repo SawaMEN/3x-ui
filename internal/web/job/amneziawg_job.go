@@ -7,150 +7,52 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawgnet"
-	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // AmneziaWGJob converges embedded AmneziaWG interfaces (inbounds AND the
-// template's "amneziawg" outbounds) every 10s. When sing-box is selected,
-// traffic is sampled directly from each embedded device; Xray already owns
-// accounting when Xray is the selected core.
+// template's "amneziawg" outbounds) every 10s. Payload accounting belongs
+// to the core SOCKS relay; device diagnostics only supply handshake presence.
 type AmneziaWGJob struct {
 	inboundService service.InboundService
 	settingService service.SettingService
 	runMu          sync.Mutex
-	mu             sync.Mutex
-	lastTraffic    map[amneziaWGTrafficKey]amneziaWGTrafficSample
-	pending        pendingTrafficBatch
-}
-
-type amneziaWGTrafficKey struct {
-	inboundID int
-	email     string
-}
-
-type amneziaWGTrafficSample struct {
-	rx uint64
-	tx uint64
 }
 
 // NewAmneziaWGJob creates a new AmneziaWG reconcile job instance.
 func NewAmneziaWGJob() *AmneziaWGJob {
-	return &AmneziaWGJob{lastTraffic: make(map[amneziaWGTrafficKey]amneziaWGTrafficSample)}
+	return &AmneziaWGJob{}
 }
 
 const amneziaWGOnlineWindow = 3 * time.Minute
 
-// pruneAmneziaWGBaselines removes only baselines that are known to be stale.
-// A desired inbound whose diagnostics are temporarily unavailable must retain
-// its baseline; otherwise the next successful cumulative sample would replay
-// already-accounted bytes as fresh traffic.
-func pruneAmneziaWGBaselines(
-	last map[amneziaWGTrafficKey]amneziaWGTrafficSample,
-	desiredIDs map[int]struct{},
-	observedIDs map[int]struct{},
-	current map[amneziaWGTrafficKey]struct{},
-) {
-	for key := range last {
-		if _, desired := desiredIDs[key.inboundID]; !desired {
-			delete(last, key)
-			continue
-		}
-		if _, observed := observedIDs[key.inboundID]; !observed {
-			continue
-		}
-		if _, present := current[key]; !present {
-			delete(last, key)
-		}
-	}
-}
-
-func (j *AmneziaWGJob) collectTraffic(coreType string, desired []amneziawg.Instance) {
-	// Diagnostics expose cumulative counters. Serialize sampling and persistence
-	// so overlapping scheduler runs cannot advance the baseline out of order.
+// refreshOnline uses handshakes for peer presence, including idle tunnels.
+// Do not add device byte counters: the core already counts TCP/UDP payload
+// under the same email and inbound tag, so adding them would charge twice.
+func (j *AmneziaWGJob) refreshOnline(coreType string, desired []amneziawg.Instance) {
 	j.runMu.Lock()
 	defer j.runMu.Unlock()
-
-	// The baseline is advanced when diagnostics are sampled. If the database
-	// rejected the previous AddTraffic call, retry that exact consumed batch
-	// before reading a newer cumulative snapshot.
-	if j.pending.hasData() {
-		if _, _, err := j.pending.flush(j.inboundService.AddTraffic); err != nil {
-			logger.Warning("amneziawg job: retry pending traffic failed:", err)
-			return
-		}
-	}
-
 	if !service.IsNativeCore(coreType) || len(desired) == 0 {
 		return
 	}
 	now := time.Now()
-	var traffic []*coremodel.Traffic
-	var clientTraffic []*coremodel.ClientTraffic
-	activeEmails := make([]string, 0)
-	activeTags := make([]string, 0)
-	seenActiveTags := make(map[string]struct{})
-	desiredIDs := make(map[int]struct{}, len(desired))
-	observedIDs := make(map[int]struct{}, len(desired))
-	current := make(map[amneziaWGTrafficKey]struct{})
-
+	var activeEmails, activeTags []string
+	seenTags := map[string]bool{}
 	for _, inst := range desired {
-		desiredIDs[inst.Id] = struct{}{}
 		diag, err := j.inboundService.GetAmneziaWGDiagnostics(inst.Id)
 		if err != nil || !diag.Running {
 			continue
 		}
-		observedIDs[inst.Id] = struct{}{}
 		for _, client := range diag.Clients {
-			key := amneziaWGTrafficKey{inboundID: inst.Id, email: client.Email}
-			current[key] = struct{}{}
-			j.mu.Lock()
-			prev := j.lastTraffic[key]
-			j.lastTraffic[key] = amneziaWGTrafficSample{rx: client.RxBytes, tx: client.TxBytes}
-			j.mu.Unlock()
-
-			deltaRx, deltaTx := client.RxBytes, client.TxBytes
-			if prev.rx <= client.RxBytes {
-				deltaRx = client.RxBytes - prev.rx
-			}
-			if prev.tx <= client.TxBytes {
-				deltaTx = client.TxBytes - prev.tx
-			}
-			if deltaRx > 0 || deltaTx > 0 {
-				up := unsignedTrafficDelta(deltaRx)
-				down := unsignedTrafficDelta(deltaTx)
-				traffic = append(traffic, &coremodel.Traffic{
-					IsInbound: true,
-					Tag:       inst.Tag,
-					Up:        up,
-					Down:      down,
-				})
-				clientTraffic = append(clientTraffic, &coremodel.ClientTraffic{
-					Email: client.Email,
-					Up:    up,
-					Down:  down,
-				})
-			}
 			if !client.LastHandshake.IsZero() && now.Sub(client.LastHandshake) <= amneziaWGOnlineWindow {
 				activeEmails = append(activeEmails, client.Email)
-				if _, ok := seenActiveTags[inst.Tag]; !ok {
-					seenActiveTags[inst.Tag] = struct{}{}
+				if !seenTags[inst.Tag] {
 					activeTags = append(activeTags, inst.Tag)
+					seenTags[inst.Tag] = true
 				}
 			}
-		}
-	}
-
-	j.mu.Lock()
-	pruneAmneziaWGBaselines(j.lastTraffic, desiredIDs, observedIDs, current)
-	j.mu.Unlock()
-
-	if len(traffic) > 0 || len(clientTraffic) > 0 {
-		if _, _, err := j.inboundService.AddTraffic(traffic, clientTraffic); err != nil {
-			j.pending.remember(traffic, clientTraffic)
-			logger.Warning("amneziawg job: add traffic failed; batch queued for retry:", err)
 		}
 	}
 	if len(activeEmails) > 0 {
@@ -189,7 +91,7 @@ func (j *AmneziaWGJob) Run() {
 	amneziawgnet.GetManager().Reconcile(wanted)
 
 	coreType, _ := j.settingService.GetCoreType()
-	j.collectTraffic(coreType, desired)
+	j.refreshOnline(coreType, desired)
 
 	outboundDesired, err := j.desiredOutboundInstances()
 	if err != nil {
