@@ -1,69 +1,173 @@
-/* Optional WhiteMAX appearance. Classic subscription styles stay untouched. */
+@import '@fontsource-variable/inter/index.css';
+@import '@fontsource-variable/dm-sans/index.css';
+
+/* WhiteMAX reference: whitemaxmod.com, inspected 25 October 2026.
+   Recreates its neutral palette, radial backdrop, 66px grid, particles,
+   centered wordmark and pill controls for subscription content. */
 .subscription-page.sub-whitemax {
-  --bg-page: #f2f2f5 !important;
-  --sub-accent: #808080;
-  --sub-card-bg: transparent !important;
-  --sub-grad-from: #666 !important;
-  --sub-grad-to: #aaa;
-  --sub-ink-from: #444 !important;
-  --sub-ink-to: #777;
-  --sub-grid: rgba(0, 0, 0, 0.035);
-  --sub-tile-bg: rgba(128, 128, 128, 0.05);
-  --sub-tile-border: rgba(128, 128, 128, 0.12);
-  --sub-row-bg: rgba(128, 128, 128, 0.04);
-  --sub-row-border: rgba(128, 128, 128, 0.15);
-  --sub-row-bg-hover: rgba(128, 128, 128, 0.09);
-  --sub-row-border-hover: var(--sub-accent);
-  --sub-hairline: linear-gradient(90deg, transparent, #8885, transparent);
-  font-family: Inter, system-ui, -apple-system, sans-serif;
+  --wm-background: radial-gradient(
+    at 50% 30%,
+    #d8d8e0 0%,
+    #dddde4 25%,
+    #e2e2e8 50%,
+    #e8e8ec 70%,
+    #eeeef2 85%,
+    #f2f2f5 100%
+  );
+  --wm-rgb: 0, 0, 0;
+  --wm-text: #1a1a1a;
+  --wm-muted: #555555;
+  --wm-primary: #1a1a1a;
+  --wm-primary-ink: #ffffff;
+  --wm-primary-shadow: rgba(0, 0, 0, 0.2);
+  --wm-grid-ink: rgba(0, 0, 0, 0.05);
+  --wm-grid-opacity: 0.25;
+  --sub-accent: #1a1a1a;
+  --sub-grad-from: #1a1a1a;
+  --sub-grad-to: #777777;
+  --sub-ink-from: #1a1a1a;
+  --sub-ink-to: #777777;
+  --sub-card-bg: transparent;
+  --sub-card-border: transparent;
+  --sub-card-shadow: none;
+  --sub-tile-bg: rgba(0, 0, 0, 0.05);
+  --sub-tile-border: rgba(0, 0, 0, 0.08);
+  --sub-row-bg: rgba(0, 0, 0, 0.05);
+  --sub-row-border: rgba(0, 0, 0, 0.08);
+  --sub-row-bg-hover: rgba(0, 0, 0, 0.1);
+  --sub-row-border-hover: rgba(0, 0, 0, 0.15);
+  --sub-row-glow: transparent;
+  --sub-glass-bg: rgba(240, 240, 243, 0.95);
+  --sub-hairline: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.08), transparent);
+  min-height: 100dvh;
+  background: #f2f2f5;
+  color: var(--wm-text);
+  font-family: 'Inter Variable', Inter, system-ui, -apple-system, sans-serif;
+  font-size: 17.6px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
 }
 .subscription-page.sub-whitemax.is-dark {
-  --bg-page: #2a2a2e !important;
-  --sub-ink-from: #eee !important;
-  --sub-ink-to: #aaa;
-  --sub-grid: rgba(255, 255, 255, 0.025);
+  --wm-background: radial-gradient(
+    at 50% 30%,
+    #3a3a40 0%,
+    #333338 25%,
+    #2d2d32 50%,
+    #2a2a2e 70%,
+    #25252a 85%,
+    #222226 100%
+  );
+  --wm-rgb: 255, 255, 255;
+  --wm-text: #ffffff;
+  --wm-muted: #aaaaaa;
+  --wm-primary: #ffffff;
+  --wm-primary-ink: #1a1a1a;
+  --wm-primary-shadow: rgba(255, 255, 255, 0.2);
+  --wm-grid-ink: rgba(255, 255, 255, 0.03);
+  --wm-grid-opacity: 0.2;
+  --sub-accent: #ffffff;
+  --sub-grad-from: #ffffff;
+  --sub-grad-to: #666666;
+  --sub-ink-from: #ffffff;
+  --sub-ink-to: #aaaaaa;
+  --sub-tile-bg: rgba(255, 255, 255, 0.04);
+  --sub-tile-border: rgba(255, 255, 255, 0.08);
   --sub-row-bg: rgba(255, 255, 255, 0.04);
-  --sub-row-border: rgba(255, 255, 255, 0.1);
+  --sub-row-border: rgba(255, 255, 255, 0.08);
+  --sub-row-bg-hover: rgba(255, 255, 255, 0.08);
+  --sub-row-border-hover: rgba(255, 255, 255, 0.15);
+  --sub-glass-bg: rgba(40, 40, 46, 0.95);
+  --sub-hairline: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+  background: #2a2a2e;
 }
-.sub-whitemax .sub-aurora::before,
-.sub-whitemax .sub-aurora::after,
-.sub-whitemax .sub-card::before,
-.sub-whitemax .sub-card::after {
-  display: none;
+.sub-whitemax .wm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  background: var(--wm-background);
 }
-.sub-whitemax .sub-aurora-grid {
-  background-size: 60px 60px;
-  mask-image: linear-gradient(black, transparent);
+.sub-whitemax .wm-glow,
+.sub-whitemax .wm-grid,
+.sub-whitemax .wm-particles {
+  position: absolute;
+  inset: 0;
+}
+.sub-whitemax .wm-glow {
+  background:
+    radial-gradient(600px at 25% 35%, rgba(var(--wm-rgb), 0.05), transparent),
+    radial-gradient(600px at 75% 65%, rgba(var(--wm-rgb), 0.035), transparent);
+  animation: wm-glow 10s ease-in-out infinite alternate;
+}
+.sub-whitemax .wm-grid {
+  opacity: var(--wm-grid-opacity);
+  background-image:
+    linear-gradient(var(--wm-grid-ink) 1px, transparent 1px),
+    linear-gradient(90deg, var(--wm-grid-ink) 1px, transparent 1px);
+  background-size: 66px 66px;
+}
+.sub-whitemax .wm-particles span {
+  position: absolute;
+  width: var(--wm-dot-size);
+  height: var(--wm-dot-size);
+  border-radius: 50%;
+  background: rgba(var(--wm-rgb), 0.25);
+  opacity: 0.45;
+  animation: wm-float var(--wm-dot-duration) var(--wm-dot-delay) ease-in-out infinite alternate;
+}
+@keyframes wm-glow {
+  to {
+    transform: translate(2%, -2%);
+    opacity: 0.6;
+  }
+}
+@keyframes wm-float {
+  to {
+    transform: translate(16px, -50px);
+    opacity: 0.85;
+  }
 }
 .sub-whitemax .sub-content {
-  max-width: 960px;
+  max-width: 770px;
   width: 100%;
   margin-inline: auto;
-  padding-top: 64px;
+  padding: 0 28px 48px;
 }
 .subscription-page.sub-whitemax .sub-card {
+  max-width: none;
+  background: transparent;
   border: 0;
   box-shadow: none;
   backdrop-filter: none;
 }
+.sub-whitemax .sub-card > .ant-card-body {
+  padding: 0;
+}
+.sub-whitemax .sub-card::before,
+.sub-whitemax .sub-card::after {
+  display: none;
+}
 .sub-whitemax .sub-header {
   position: relative;
-  padding-top: 48px;
+  padding: 110px 0 0;
   justify-content: center;
+  margin-bottom: 0;
 }
 .sub-whitemax .sub-brand {
   flex-direction: column;
   text-align: center;
-  gap: 20px;
+  gap: 28px;
 }
 .sub-whitemax .sub-brand-mark {
-  width: 80px;
-  height: 80px;
-  border-radius: 24px;
-  background: var(--sub-row-bg);
-  color: inherit;
+  width: 110px;
+  height: 110px;
+  border-radius: 28px;
+  background: linear-gradient(160deg, #625c51, #363842);
+  color: #ffffff;
+  font-size: 64px;
+  border: 0;
   box-shadow: none;
-  border: 1px solid var(--sub-row-border);
 }
 .sub-brand-mark img {
   width: 100%;
@@ -72,56 +176,147 @@
   border-radius: inherit;
 }
 .sub-whitemax .sub-brand-title {
-  font-size: clamp(30px, 6vw, 58px);
+  font-family: 'DM Sans Variable', 'DM Sans', 'Inter Variable', Inter, system-ui, sans-serif;
+  font-size: 52px;
   font-weight: 800;
-  letter-spacing: -0.045em;
+  line-height: 1.6;
+  letter-spacing: -1.5px;
   background: none;
+  color: var(--wm-text);
   -webkit-text-fill-color: currentColor;
+  overflow-wrap: anywhere;
 }
 .sub-whitemax .sub-brand-id {
   max-width: 100%;
+  color: var(--wm-muted);
   overflow-wrap: anywhere;
 }
 .sub-whitemax .sub-toolbar {
-  position: absolute;
-  inset-inline-end: 0;
-  top: 0;
+  position: fixed;
+  top: 20px;
+  inset-inline-end: 20px;
+  z-index: 10;
+  gap: 8px;
 }
-.sub-whitemax-description {
-  margin: 24px auto;
-  max-width: 560px;
+.sub-whitemax .toolbar-btn.ant-btn {
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  color: var(--wm-muted);
+  background: rgba(var(--wm-rgb), 0.06);
+  backdrop-filter: blur(10px);
+}
+.sub-whitemax .toolbar-btn.ant-btn:hover {
+  background: rgba(var(--wm-rgb), 0.12);
+  color: var(--wm-text);
+}
+.sub-whitemax .sub-whitemax-description {
+  margin: 31px auto 0;
+  max-width: 440px;
   text-align: center;
   white-space: pre-wrap;
-  color: inherit;
-  opacity: 0.7;
-  font-size: 18px;
-  line-height: 1.7;
+  color: var(--wm-muted);
+  font-size: 18.7px;
+  line-height: 1.6;
+}
+.sub-whitemax .ant-btn {
+  border-radius: 50px;
+  font-weight: 600;
+}
+.sub-whitemax .ant-btn-default {
+  border-color: transparent;
+  background: rgba(var(--wm-rgb), 0.04);
+  color: var(--wm-muted);
+}
+.sub-whitemax .ant-btn-primary {
+  border: 0;
+  background: var(--wm-primary);
+  color: var(--wm-primary-ink);
+  box-shadow: 0 4px 26px var(--wm-primary-shadow);
+}
+.sub-whitemax .ant-btn-primary:hover {
+  background: var(--wm-primary);
+  color: var(--wm-primary-ink);
+  box-shadow: 0 8px 38px var(--wm-primary-shadow);
+  transform: translateY(-2px);
 }
 .sub-whitemax .sub-whitemax-connect {
   display: flex;
-  margin: 28px auto 48px;
-  min-height: 52px;
-  padding-inline: 28px;
-  border-radius: 16px;
+  margin: 40px auto 0;
+  min-height: 59px;
+  padding: 12px 44px;
+  font-size: 17.6px;
+  max-width: 100%;
+  white-space: normal;
+  height: auto;
 }
 .sub-whitemax .sub-hero {
-  margin-top: 40px;
+  margin-top: 62px;
+  border: 0;
+  background: transparent;
 }
 .sub-whitemax .sub-tabs {
-  margin-top: 40px;
+  margin-top: 48px;
 }
-.sub-whitemax .ant-btn {
-  border-radius: 14px;
+.sub-whitemax .sub-label {
+  letter-spacing: 2px;
+  font-weight: 500;
+}
+.sub-whitemax .sub-muted,
+.sub-whitemax .sub-label {
+  color: var(--wm-muted);
+}
+.sub-whitemax .sub-big-num {
+  color: var(--wm-text);
+  background: none;
+  -webkit-text-fill-color: currentColor;
+}
+.sub-whitemax .sub-tabs.ant-tabs .ant-tabs-ink-bar {
+  background: var(--wm-primary);
+  box-shadow: none;
+}
+.sub-whitemax .sub-footer {
+  margin-top: 62px;
+  color: var(--wm-muted);
 }
 @media (max-width: 600px) {
   .sub-whitemax .sub-content {
-    padding-top: 16px;
+    padding-inline: 20px;
+  }
+  .sub-whitemax .sub-header {
+    padding-top: 100px;
+  }
+  .sub-whitemax .sub-brand-title {
+    font-size: 40px;
   }
   .sub-whitemax .sub-brand-id {
-    font-size: 11px;
+    font-size: 12px;
+  }
+  .sub-whitemax .sub-toolbar {
+    top: 16px;
+    inset-inline-end: 16px;
   }
   .sub-whitemax .sub-whitemax-connect {
-    max-width: 100%;
-    min-width: 0;
+    padding-inline: 30px;
   }
+  .sub-whitemax .sub-whitemax-description {
+    font-size: 17px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sub-whitemax .wm-glow,
+  .sub-whitemax .wm-particles span {
+    animation: none;
+  }
+  .sub-whitemax .ant-btn-primary:hover {
+    transform: none;
+  }
+}
+html[data-low-power='true'] .sub-whitemax .wm-glow,
+html[data-low-power='true'] .sub-whitemax .wm-particles span {
+  animation: none;
+}
+html[data-low-power='true'] .sub-whitemax .wm-particles span:nth-child(n + 17) {
+  display: none;
 }

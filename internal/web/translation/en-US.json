@@ -113,7 +113,8 @@
       "colorful": "Colorful",
       "blue-gray": "Blue Gray",
       "cyberpunk": "Cyberpunk"
-    }
+    },
+    "whiteMaxToggle": "Light / dark WhiteMAX"
   },
   "menu": {
     "theme": "Theme",
