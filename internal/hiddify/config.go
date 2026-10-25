@@ -12,7 +12,7 @@ import (
 
 // FinalizeServerConfig owns Hiddify's server policy after template merging.
 // Validate the actual normalized wire graph, not the intermediate Xray schema.
-func FinalizeServerConfig(cfg *singbox.Config) error {
+func FinalizeServerConfig(cfg *singbox.Config, unmeteredTags ...string) error {
 	if cfg == nil {
 		return fmt.Errorf("hiddify server configuration is nil")
 	}
@@ -29,16 +29,22 @@ func FinalizeServerConfig(cfg *singbox.Config) error {
 	if err := json.Unmarshal(data, &normalized); err != nil {
 		return err
 	}
-	ConfigureStats(&normalized)
+	ConfigureStats(&normalized, unmeteredTags...)
 	cfg.Experimental = normalized.Experimental
 	return ValidateConfigReferences(wire)
 }
 
 // ConfigureStats includes native template users and endpoint peers, and produces
 // stable sets even when one canonical user is attached to several listeners.
-func ConfigureStats(cfg *singbox.Config) {
+func ConfigureStats(cfg *singbox.Config, unmeteredTags ...string) {
 	users, tags, outbounds := map[string]bool{}, map[string]bool{}, map[string]bool{}
 	for _, listener := range append(slices.Clone(cfg.Inbounds), cfg.Endpoints...) {
+		// Sidecars account their own traffic. Their routing bridges must not
+		// charge the same inbound bytes a second time.
+		tag, _ := listener["tag"].(string)
+		if slices.Contains(unmeteredTags, tag) {
+			continue
+		}
 		if tag, _ := listener["tag"].(string); tag != "" {
 			tags[tag] = true
 		}

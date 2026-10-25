@@ -327,6 +327,10 @@ func renderConfig(inst Instance) map[string]any {
 		"users":        users,
 		"loggingLevel": inst.LoggingLevel,
 		"mtu":          inst.MTU,
+		"egress": map[string]any{
+			"proxies": []any{map[string]any{"name": "panel", "protocol": "SOCKS5_PROXY_PROTOCOL", "host": "127.0.0.1", "port": SOCKSPortForInbound(inst.Id), "socks5Authentication": map[string]any{"user": SocksUsername(), "password": SocksPassword()}}},
+			"rules":   []any{map[string]any{"ipRanges": []string{"*"}, "domainNames": []string{"*"}, "action": "PROXY", "proxyNames": []string{"panel"}}},
+		},
 		"dns": map[string]any{
 			"dualStack": "PREFER_IPv4",
 		},

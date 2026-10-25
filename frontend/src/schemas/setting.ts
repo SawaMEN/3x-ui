@@ -23,6 +23,7 @@ export const AllSettingSchema = z
     webKeyFile: z.string().optional(),
     rootRedirectEnable: z.boolean().optional(),
     rootRedirectURL: z.string().optional(),
+    subAppearanceTheme: z.enum(['classic', 'whitemax']).optional(),
     subAppearanceEnable: z.boolean().optional(),
     subAppearanceTitle: z.string().optional(),
     subAppearanceDescription: z.string().optional(),

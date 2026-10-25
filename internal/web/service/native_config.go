@@ -426,16 +426,6 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot, ed
 			logger.Warningf("Skipping sing-box inbound %q (%s): no active users", inbound.Tag, inbound.Protocol)
 			continue
 		}
-		if inbound.Protocol == model.TUIC {
-			translated, err := singBoxTUICInbound(inbound, clients)
-			if err != nil {
-				unsupported = append(unsupported, fmt.Sprintf("%s: %v", inbound.Tag, err))
-				continue
-			}
-			cfg.Inbounds = append(cfg.Inbounds, translated)
-			continue
-		}
-
 		settings, _ := raw["settings"].(map[string]any)
 		if settings == nil {
 			settings = map[string]any{}
@@ -457,6 +447,18 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot, ed
 		}
 		if sniffRule != nil {
 			sniffRules = append(sniffRules, sniffRule)
+		}
+		// TUIC carries the same destination traffic as the other listeners.
+		// Preserve sniffing before its specialized credential/TLS translation,
+		// so domain and protocol rules choose the same cascade for every inbound.
+		if inbound.Protocol == model.TUIC {
+			translated, err := singBoxTUICInbound(inbound, clients)
+			if err != nil {
+				unsupported = append(unsupported, fmt.Sprintf("%s: %v", inbound.Tag, err))
+				continue
+			}
+			cfg.Inbounds = append(cfg.Inbounds, translated)
+			continue
 		}
 
 		// NaiveProxy is a native TLS protocol in sing-box. Keep the ordinary
@@ -602,6 +604,12 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot, ed
 			return nil, err
 		}
 	}
+	if err := injectSingBoxAmneziaWGEgress(cfg, inbounds); err != nil {
+		return nil, err
+	}
+	if err := injectSingBoxMieruEgress(cfg, inbounds); err != nil {
+		return nil, err
+	}
 	for _, inbound := range inbounds {
 		if err := injectSingBoxMtprotoEgress(cfg, inbound); err != nil {
 			return nil, err
@@ -647,7 +655,13 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot, ed
 		if err := prepareProtocolServersWithPolicy(cfg, s.strictProtocolServers, reserved...); err != nil {
 			return nil, err
 		}
-		if err := hiddify.FinalizeServerConfig(cfg); err != nil {
+		var unmeteredTags []string
+		for _, inbound := range inbounds {
+			if inbound != nil && inbound.Enable && inbound.NodeID == nil && inbound.Protocol == model.Mieru {
+				unmeteredTags = append(unmeteredTags, inbound.Tag)
+			}
+		}
+		if err := hiddify.FinalizeServerConfig(cfg, unmeteredTags...); err != nil {
 			return nil, err
 		}
 		if cfg.Log == nil {

@@ -10,6 +10,7 @@ export class AllSetting {
   webKeyFile = '';
   rootRedirectEnable = false;
   rootRedirectURL = 'https://www.wikipedia.org/';
+  subAppearanceTheme: 'classic' | 'whitemax' = 'classic';
   subAppearanceEnable = false;
   subAppearanceTitle = '';
   subAppearanceDescription = '';

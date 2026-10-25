@@ -40,6 +40,11 @@ func TranslateXrayRoutingWithGeoData(raw map[string]any, store *geodata.Store) (
 		if !ok {
 			return nil, fmt.Errorf("routing rule %d has invalid configuration", i)
 		}
+		// enabled is panel metadata. Drop disabled policies before translating
+		// matchers, otherwise an old direct/block rule can override a cascade.
+		if xr["enabled"] == false {
+			continue
+		}
 		r := map[string]any{}
 		for _, key := range []string{"attrs", "vlessRoute", "localIP", "localPort", "process", "localOS", "webhook"} {
 			value := xr[key]

@@ -1,4 +1,3 @@
-import DomainFrontTab from './DomainFrontTab';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router';
@@ -22,7 +21,6 @@ import {
   BellOutlined,
   ClockCircleOutlined,
   GlobalOutlined,
-  SafetyCertificateOutlined,
   SettingOutlined,
   ReloadOutlined,
   SwapOutlined,
@@ -55,7 +53,6 @@ interface GeneralTabProps {
 export default function GeneralTab({
   allSetting,
   updateSetting,
-  saveSettings,
   onOpenSwap,
   onOpenSystemUpdate,
 }: GeneralTabProps) {
@@ -656,35 +653,6 @@ export default function GeneralTab({
                     onChange={onNumber((v) => updateSetting({ trafficDiff: v }))}
                   />
                 </SettingListItem>
-              </>
-            ),
-          },
-          {
-            key: '3',
-            label: catTabLabel(<SafetyCertificateOutlined />, t('pages.settings.certs'), isMobile),
-            children: (
-              <>
-                <SettingListItem
-                  paddings="small"
-                  title={t('pages.settings.publicKeyPath')}
-                  description={t('pages.settings.publicKeyPathDesc')}
-                >
-                  <Input
-                    value={allSetting.webCertFile}
-                    onChange={(e) => updateSetting({ webCertFile: e.target.value })}
-                  />
-                </SettingListItem>
-                <SettingListItem
-                  paddings="small"
-                  title={t('pages.settings.privateKeyPath')}
-                  description={t('pages.settings.privateKeyPathDesc')}
-                >
-                  <Input
-                    value={allSetting.webKeyFile}
-                    onChange={(e) => updateSetting({ webKeyFile: e.target.value })}
-                  />
-                </SettingListItem>
-                <DomainFrontTab scope="panel" beforeApply={saveSettings} />
               </>
             ),
           },

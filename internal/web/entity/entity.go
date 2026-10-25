@@ -30,6 +30,7 @@ type AllSetting struct {
 	WebKeyFile               string `json:"webKeyFile" form:"webKeyFile"`
 	RootRedirectEnable       bool   `json:"rootRedirectEnable" form:"rootRedirectEnable"`
 	RootRedirectURL          string `json:"rootRedirectURL" form:"rootRedirectURL"`
+	SubAppearanceTheme       string `json:"subAppearanceTheme" form:"subAppearanceTheme"`
 	SubAppearanceEnable      bool   `json:"subAppearanceEnable" form:"subAppearanceEnable"`
 	SubAppearanceTitle       string `json:"subAppearanceTitle" form:"subAppearanceTitle"`
 	SubAppearanceDescription string `json:"subAppearanceDescription" form:"subAppearanceDescription"`
