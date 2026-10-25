@@ -77,6 +77,15 @@ func inboundTransports(protocol model.Protocol, streamSettings, settings string)
 	// Native sidecars expose their transport choice in protocol settings rather
 	// than Xray streamSettings.
 	switch protocol {
+	case model.Snell:
+		var st struct {
+			Version   int  `json:"version"`
+			QuicProxy bool `json:"quicProxy"`
+		}
+		if json.Unmarshal([]byte(settings), &st) == nil && st.Version == 5 && st.QuicProxy {
+			return transportTCP | transportUDP
+		}
+		return transportTCP
 	case model.MASQUE:
 		var st struct {
 			Version []int `json:"version"`

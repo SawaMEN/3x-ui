@@ -67,6 +67,10 @@ func TestInboundTransports(t *testing.T) {
 		settings       string
 		want           transportBits
 	}{
+		{"snell v5 TCP", model.Snell, ``, `{"version":5}`, transportTCP},
+		{"snell v5 QUIC uses both", model.Snell, ``, `{"version":5,"quicProxy":true}`, transportTCP | transportUDP},
+		{"snell v6 TCP", model.Snell, ``, `{"version":6}`, transportTCP},
+		{"snell v6 ignores invalid QUIC flag", model.Snell, ``, `{"version":6,"quicProxy":true}`, transportTCP},
 		{"vless default tcp", model.VLESS, `{"network":"tcp"}`, ``, transportTCP},
 		{"vless ws (still tcp)", model.VLESS, `{"network":"ws"}`, ``, transportTCP},
 		{"vless kcp is udp", model.VLESS, `{"network":"kcp"}`, ``, transportUDP},
@@ -967,5 +971,27 @@ func TestCheckPortConflict_AmneziawgnetSocksRelayReverseDirectionBlockedOnUpdate
 	}
 	if got == nil {
 		t.Fatalf("awg-1's own derived relay port %d collides with vless-1's real port; must be rejected", relayPort)
+	}
+}
+
+func TestCheckPortConflict_SnellQUICReservesUDP(t *testing.T) {
+	setupConflictDB(t)
+	seedInboundConflict(t, "udp-listener", "127.0.0.1", 19443, model.Hysteria, "", `{}`)
+	inbound := &model.Inbound{Tag: "snell", Listen: "127.0.0.1", Port: 19443, Protocol: model.Snell, Settings: `{"version":5,"quicProxy":true}`}
+	svc := &InboundService{}
+	hit, err := svc.checkPortConflict(inbound, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hit == nil {
+		t.Fatal("Snell QUIC must conflict with UDP on the same address and port")
+	}
+	inbound.Settings = `{"version":5,"quicProxy":false}`
+	hit, err = svc.checkPortConflict(inbound, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hit != nil {
+		t.Fatal("TCP-only Snell should coexist with UDP")
 	}
 }

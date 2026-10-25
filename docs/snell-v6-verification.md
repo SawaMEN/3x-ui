@@ -83,3 +83,8 @@ only Git commit metadata differs from the local test checkpoint.
 
 Snell v5 QUIC Proxy remains experimental and disabled by default. Codec unit
 tests are not evidence of actual HTTP/3 or Surge interoperability.
+
+
+Subsequent Snell v5 QUIC wire-format fixes and actual HTTP/3 interoperability
+checks are documented in [snell-v5-verification.md](snell-v5-verification.md).
+The experimental status above describes this earlier v6 audit checkpoint.
