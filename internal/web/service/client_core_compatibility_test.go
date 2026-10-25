@@ -81,14 +81,14 @@ func TestSyncClientCoreCompatibilitySwitchesAutomaticClientState(t *testing.T) {
 		}
 	}
 
-	check("wg@example", false, CoreTypeSingBox)
+	check("wg@example", true, "")
 	check("vless@example", true, "")
 	check("naive@example", true, "")
 
 	if err := SyncClientCoreCompatibility(legacyCoreTypeHiddify, CoreTypeXray); err != nil {
 		t.Fatal(err)
 	}
-	check("wg@example", false, CoreTypeSingBox)
+	check("wg@example", true, "")
 	check("naive@example", true, "")
 }
 

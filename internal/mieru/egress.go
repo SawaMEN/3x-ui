@@ -3,16 +3,14 @@ package mieru
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"github.com/SawaMEN/3x-ui/v3/internal/sidecaregress"
 	"sync"
 )
 
 // Each Mita instance enters the panel router under its original inbound tag.
 // This range is separate from the TUIC and AmneziaWG bridge ranges.
 func SOCKSPortForInbound(id int) int {
-	if id <= 0 {
-		id = 1
-	}
-	return 59000 + (id-1)%1000
+	return sidecaregress.Port(id)
 }
 
 var passwordOnce sync.Once

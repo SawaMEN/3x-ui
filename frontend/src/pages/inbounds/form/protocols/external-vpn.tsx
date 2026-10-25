@@ -1,3 +1,4 @@
+import CascadeHint from './cascade-hint';
 import { useState } from 'react';
 import { Alert, Button, Collapse, Form, Input, InputNumber, Select, Space, message } from 'antd';
 import { useFormContext, useWatch } from 'react-hook-form';
@@ -15,6 +16,7 @@ export function PingtunnelFields() {
   return (
     <>
       <Alert type="info" showIcon description={t('pages.inbounds.form.pingtunnelHint')} />
+      <CascadeHint protocol="pingtunnel" />
       <FormField name={['settings', 'key']} label={t('pages.inbounds.form.pingtunnelKey')}>
         <InputNumber min={0} max={2147483647} />
       </FormField>
@@ -44,9 +46,6 @@ export function PingtunnelFields() {
         label={t('pages.inbounds.form.pingtunnelConnectTimeout')}
       >
         <InputNumber min={0} addonAfter="ms" />
-      </FormField>
-      <FormField name={['settings', 'forward']} label={t('pages.inbounds.form.pingtunnelForward')}>
-        <Input placeholder="socks5://127.0.0.1:2080" />
       </FormField>
       <FormField
         name={['settings', 'congestion']}
@@ -145,6 +144,7 @@ export function TrustTunnelFields() {
   return (
     <>
       <Alert type="info" showIcon description={t('pages.inbounds.form.trusttunnelHint')} />
+      <CascadeHint protocol="trusttunnel" />
       <FormField
         name={['settings', 'hostname']}
         label={t('pages.inbounds.form.trusttunnelHostname')}

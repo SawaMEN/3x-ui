@@ -25,6 +25,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/sidecaregress"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/random"
 	"github.com/SawaMEN/3x-ui/v3/internal/vkturnproxy"
@@ -469,7 +470,7 @@ func (s *VKTurnProxyService) runningSpecsSnapshot() map[int]vkturnproxy.Spec {
 func (s *VKTurnProxyService) loadDesiredSpecs(running map[int]vkturnproxy.Spec) (map[int]vkturnproxy.Spec, error) {
 	db := database.GetDB()
 	var inbounds []*model.Inbound
-	if err := db.Where("protocol = ? AND enable = ?", model.VKTurnProxy, true).Find(&inbounds).Error; err != nil {
+	if err := db.Where("protocol = ? AND enable = ? AND node_id IS NULL", model.VKTurnProxy, true).Find(&inbounds).Error; err != nil {
 		return nil, err
 	}
 
@@ -496,6 +497,11 @@ func (s *VKTurnProxyService) loadDesiredSpecs(running map[int]vkturnproxy.Spec) 
 			logger.Warningf("skip vk-turn-proxy inbound %d: %v", inbound.Id, err)
 			continue
 		}
+
+		if !sidecaregress.Ready(inbound.Id, inbound.Tag, true) {
+			continue
+		}
+		connect = sidecaregress.UDPAddress(inbound.Id)
 
 		listenHost := strings.TrimSpace(inbound.Listen)
 		if listenHost == "" || listenHost == "0.0.0.0" || listenHost == "::" || listenHost == "::0" {

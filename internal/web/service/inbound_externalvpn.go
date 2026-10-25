@@ -9,6 +9,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
 	"github.com/SawaMEN/3x-ui/v3/internal/masque"
+	"github.com/SawaMEN/3x-ui/v3/internal/sidecaregress"
 	"github.com/SawaMEN/3x-ui/v3/internal/snell"
 )
 
@@ -116,6 +117,9 @@ func (s *InboundService) DesiredExternalVPNInstances() ([]externalvpn.Instance, 
 	}
 	out := make([]externalvpn.Instance, 0, len(rows))
 	for _, row := range rows {
+		if routedSidecar(row.Protocol) && !sidecaregress.Ready(row.Id, row.Tag, false) {
+			continue
+		}
 		inst, err := externalvpn.FromInbound(row)
 		if err != nil {
 			return nil, fmt.Errorf("inbound %d: %w", row.Id, err)

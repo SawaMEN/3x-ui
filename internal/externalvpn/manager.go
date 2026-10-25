@@ -30,6 +30,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/sidecaregress"
 )
 
 type running struct {
@@ -191,14 +192,14 @@ func files(inst Instance, metricsAddr string) ([]string, error) {
 	}
 	if inst.Protocol == model.Pingtunnel {
 		path := filepath.Join(folder, "server.json")
-		data, err := json.Marshal(map[string]any{"type": "server", "key": inst.Settings.Key, "encrypt": inst.Settings.Encrypt, "encrypt_key": inst.Settings.EncryptKey, "icmp_listen": defaultListen(inst.Listen), "maxconn": inst.Settings.MaxConn, "conntt": inst.Settings.ConnectTimeout, "forward": inst.Settings.Forward, "nolog": 1})
+		data, err := json.Marshal(map[string]any{"type": "server", "key": inst.Settings.Key, "encrypt": inst.Settings.Encrypt, "encrypt_key": inst.Settings.EncryptKey, "icmp_listen": defaultListen(inst.Listen), "maxconn": inst.Settings.MaxConn, "conntt": inst.Settings.ConnectTimeout, "forward": "socks5://" + sidecaregress.Address(inst.ID), "nolog": 1})
 		if err != nil {
 			return nil, err
 		}
 		if err := writePrivate(path, data); err != nil {
 			return nil, err
 		}
-		args := []string{"-c", path}
+		args := []string{"-c", path, "-forward", "socks5://" + sidecaregress.Address(inst.ID)}
 		if inst.Settings.Congestion == "none" {
 			// Pingtunnel's JSON loader ignores empty strings; disable via an explicit flag.
 			args = append(args, "-congestion", "")
@@ -220,7 +221,7 @@ func files(inst Instance, metricsAddr string) ([]string, error) {
 		return nil, err
 	}
 	vpn := filepath.Join(folder, "vpn.toml")
-	settings := fmt.Sprintf("listen_address = %s\ncredentials_file = %s\nallow_private_network_connections = false\n[listen_protocols.http1]\n[listen_protocols.http2]\n[listen_protocols.quic]\n[forward_protocol]\ndirect = {}\n[metrics]\naddress = %s\nper_client_metrics = true\n", tomlString(inst.Bind()), tomlString(credentials), tomlString(metricsAddr))
+	settings := fmt.Sprintf("listen_address = %s\ncredentials_file = %s\nallow_private_network_connections = false\n[listen_protocols.http1]\n[listen_protocols.http2]\n[listen_protocols.quic]\n[forward_protocol.socks5]\naddress = %s\nextended_auth = false\n[metrics]\naddress = %s\nper_client_metrics = true\n", tomlString(inst.Bind()), tomlString(credentials), tomlString(sidecaregress.Address(inst.ID)), tomlString(metricsAddr))
 	if err := writePrivate(vpn, []byte(settings)); err != nil {
 		return nil, err
 	}
@@ -262,6 +263,20 @@ func certificateRenewalNeeded(inst Instance) bool {
 	return err != nil || time.Until(cert.NotAfter) < 30*24*time.Hour
 }
 
+// Releases before 3.0 can forward TCP while sending UDP directly. Do not
+// accept them for a managed cascade, even if they recognize the forward flag.
+func requirePingtunnelForwardVersion(path string) error {
+	version, err := binaryVersion(context.Background(), path, []string{"-version"})
+	if err != nil {
+		return fmt.Errorf("Pingtunnel 3.0+ is required for TCP/UDP egress: %w", err)
+	}
+	major, err := strconv.Atoi(strings.Split(version, ".")[0])
+	if err != nil || major < 3 {
+		return fmt.Errorf("Pingtunnel 3.0+ is required for TCP/UDP egress; installed: %s", version)
+	}
+	return nil
+}
+
 func (m *Manager) Ensure(inst Instance) error {
 	if err := inst.Validate(); err != nil {
 		return err
@@ -294,6 +309,9 @@ func (m *Manager) ensureLocked(inst Instance) error {
 		}
 	}
 	if inst.Protocol == model.Pingtunnel {
+		if err := requirePingtunnelForwardVersion(binary(inst.Protocol)); err != nil {
+			return err
+		}
 		for id, proc := range m.procs {
 			if id != inst.ID && proc.protocol == model.Pingtunnel {
 				return fmt.Errorf("only one Pingtunnel listener may run per server")

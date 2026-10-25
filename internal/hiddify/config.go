@@ -29,6 +29,7 @@ func FinalizeServerConfig(cfg *singbox.Config, unmeteredTags ...string) error {
 	if err := json.Unmarshal(data, &normalized); err != nil {
 		return err
 	}
+	normalized.SidecarTrafficTags = cfg.SidecarTrafficTags
 	ConfigureStats(&normalized, unmeteredTags...)
 	cfg.Experimental = normalized.Experimental
 	return ValidateConfigReferences(wire)
@@ -39,13 +40,11 @@ func FinalizeServerConfig(cfg *singbox.Config, unmeteredTags ...string) error {
 func ConfigureStats(cfg *singbox.Config, unmeteredTags ...string) {
 	users, tags, outbounds := map[string]bool{}, map[string]bool{}, map[string]bool{}
 	for _, listener := range append(slices.Clone(cfg.Inbounds), cfg.Endpoints...) {
-		// Sidecars account their own traffic. Their routing bridges must not
-		// charge the same inbound bytes a second time.
 		tag, _ := listener["tag"].(string)
-		if slices.Contains(unmeteredTags, tag) {
+		if slices.Contains(unmeteredTags, tag) || cfg.SidecarTrafficTags[tag] {
 			continue
 		}
-		if tag, _ := listener["tag"].(string); tag != "" {
+		if tag != "" {
 			tags[tag] = true
 		}
 		for _, key := range []string{"users", "peers"} {

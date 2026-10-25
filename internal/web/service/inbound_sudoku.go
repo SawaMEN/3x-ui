@@ -15,6 +15,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/sidecaregress"
 	"github.com/SawaMEN/3x-ui/v3/internal/sudoku"
 )
 
@@ -290,6 +291,9 @@ func DesiredSudokuInstances() ([]sudoku.Instance, error) {
 
 	desired := make([]sudoku.Instance, 0, len(inbounds))
 	for _, inbound := range inbounds {
+		if !sidecaregress.Ready(inbound.Id, inbound.Tag, false) {
+			continue
+		}
 		if err := EnsureSudokuCredentials(inbound.Id); err != nil {
 			logger.Warningf("sudoku: credentials for inbound %d: %v", inbound.Id, err)
 			continue
@@ -312,6 +316,7 @@ func DesiredSudokuInstances() ([]sudoku.Instance, error) {
 			ID:  current.Id,
 			Tag: current.Tag,
 			Config: sudoku.Config{
+				PanelEgress:        sidecaregress.Address(current.Id),
 				Mode:               "server",
 				Transport:          "tcp",
 				LocalPort:          current.Port,

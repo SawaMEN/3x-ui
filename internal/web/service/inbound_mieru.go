@@ -10,6 +10,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/mieru"
+	"github.com/SawaMEN/3x-ui/v3/internal/sidecaregress"
 )
 
 func validateMieruInbound(inbound *model.Inbound, clients []model.Client) error {
@@ -63,6 +64,9 @@ func (s *InboundService) DesiredMieruInstances() ([]mieru.Instance, error) {
 		disabled[row.InboundId][row.Email] = struct{}{}
 	}
 	for _, ib := range inbounds {
+		if !sidecaregress.Ready(ib.Id, ib.Tag, false) {
+			continue
+		}
 		if inst, ok := mieru.InstanceFromInbound(ib); ok {
 			if off := disabled[ib.Id]; len(off) > 0 {
 				users := inst.Users[:0]

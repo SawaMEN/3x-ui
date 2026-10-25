@@ -2,6 +2,7 @@ package sudoku
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -65,7 +66,11 @@ func (p *Process) Start(binary string) error {
 		return err
 	}
 
-	cmd := exec.CommandContext(context.Background(), binary, "-c", p.configPath)
+	address, err := panelEgressAddress(p.configPath)
+	if err != nil {
+		return err
+	}
+	cmd := exec.CommandContext(context.Background(), binary, "-c", p.configPath, "-panel-egress", address)
 	cmd.Env = append(os.Environ(), "SUDOKU_LOG_NO_TIMESTAMP=true")
 	lw := &logWriter{label: p.label}
 	cmd.Stdout = lw
@@ -97,11 +102,32 @@ func (p *Process) Start(binary string) error {
 	}
 }
 
+func panelEgressAddress(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	var cfg struct {
+		PanelEgress string `json:"panel_egress"`
+	}
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return "", err
+	}
+	if cfg.PanelEgress == "" {
+		return "", fmt.Errorf("protocol server has no panel egress; regenerate its configuration")
+	}
+	return cfg.PanelEgress, nil
+}
+
 func validateConfig(binary, path string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), configTestTimeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, binary, "-test", "-c", path)
+	address, err := panelEgressAddress(path)
+	if err != nil {
+		return err
+	}
+	cmd := exec.CommandContext(ctx, binary, "-test", "-c", path, "-panel-egress", address)
 	cmd.Env = append(os.Environ(), "SUDOKU_LOG_NO_TIMESTAMP=true")
 	output, err := cmd.CombinedOutput()
 	if ctx.Err() != nil {

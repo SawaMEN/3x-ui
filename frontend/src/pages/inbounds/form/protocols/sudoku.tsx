@@ -1,3 +1,4 @@
+import CascadeHint from './cascade-hint';
 import { Alert, Collapse, Input, InputNumber, Select, Switch } from 'antd';
 import { useFormContext, useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
@@ -11,6 +12,7 @@ export default function SudokuFields() {
   const maskMode = useWatch({ control, name: 'settings.httpmask.mode' });
   return (
     <>
+      <CascadeHint protocol="sudoku" />
       <Alert type="info" showIcon description={t('pages.inbounds.form.sudokuHint')} />
       <FormField
         name={['settings', 'key']}
