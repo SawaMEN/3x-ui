@@ -715,7 +715,7 @@ func main() {
 		encryptNodeTokens()
 	case "gateway":
 		if err := gateway.CLI(os.Args[2:]); err != nil {
-			log.Fatal(err)
+			log.Fatal("gateway command failed; check the gateway configuration and arguments")
 		}
 	case "core-migrate":
 		if err := coremigration.CLIWithInitializer(os.Args[2:], initNodeTokenCrypto); err != nil {

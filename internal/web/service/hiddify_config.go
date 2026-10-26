@@ -138,7 +138,7 @@ func (s *nativeConfigSnapshot) applyOverlays(cfg *singbox.Config) error {
 			return fmt.Errorf("hiddify cannot create node %d egress bridge for %q", node.Id, node.OutboundTag)
 		}
 	}
-	values := make(map[string]string, len(defaultValueMap)+len(s.settings))
+	values := make(map[string]string, len(defaultValueMap))
 	for key, value := range defaultValueMap {
 		values[key] = value
 	}

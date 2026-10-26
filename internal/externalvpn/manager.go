@@ -70,9 +70,18 @@ func binary(protocol model.Protocol) string {
 }
 
 func findBinary(protocol model.Protocol, managed bool) string {
-	name := string(protocol)
-	if protocol == model.TrustTunnel {
+	var name string
+	switch protocol {
+	case model.Pingtunnel:
+		name = "pingtunnel"
+	case model.TrustTunnel:
 		name = "trusttunnel_endpoint"
+	case model.FPTN:
+		name = "fptn"
+	case model.OpenFlux:
+		name = "openflux"
+	default:
+		return ""
 	}
 	if runtime.GOOS == "windows" {
 		name += ".exe"

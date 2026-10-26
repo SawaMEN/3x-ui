@@ -414,9 +414,7 @@ func normalizeBasePath(p string) string {
 	if p == "" {
 		return "/"
 	}
-	if !strings.HasPrefix(p, "/") {
-		p = "/" + p
-	}
+	p = "/" + strings.TrimLeft(p, "/\\")
 	if !strings.HasSuffix(p, "/") {
 		p = p + "/"
 	}
