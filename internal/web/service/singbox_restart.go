@@ -3,9 +3,12 @@ package service
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
@@ -13,6 +16,13 @@ import (
 )
 
 var nativePendingApplyMu sync.Mutex
+
+// Protected by singBoxApplyMu; light service values share one native runtime.
+var nativeApplyRetry struct {
+	hash  [sha256.Size]byte
+	next  time.Time
+	delay time.Duration
+}
 
 // SetToNeedRestart marks the selected sing-box runtime config as stale.
 // Inbound/client controllers use the same deferred-restart model as Xray
@@ -74,6 +84,7 @@ func (s *SingBoxService) ApplyPendingRestart(ctx context.Context) {
 		s.SetToNeedRestart()
 		return
 	}
+	var candidateHash [sha256.Size]byte
 	{
 		cfg, err := s.GetConfig()
 		if err != nil {
@@ -97,7 +108,19 @@ func (s *SingBoxService) ApplyPendingRestart(ctx context.Context) {
 					return
 				}
 			}
+			nativeApplyRetry.delay = 0
 			s.process().SetError(nil)
+			return
+		}
+		metadata, err := json.Marshal([]any{cfg.ManagedOutbounds, cfg.ProtocolServers})
+		if err != nil {
+			s.process().SetError(err)
+			s.SetToNeedRestart()
+			return
+		}
+		candidateHash = sha256.Sum256(append(data, metadata...))
+		if nativeApplyRetry.delay > 0 && nativeApplyRetry.hash == candidateHash && time.Now().Before(nativeApplyRetry.next) {
+			s.SetToNeedRestart()
 			return
 		}
 	}
@@ -106,7 +129,15 @@ func (s *SingBoxService) ApplyPendingRestart(ctx context.Context) {
 		if errors.Is(err, errNativeConfigBatchChanged) {
 			return
 		}
+		if nativeApplyRetry.hash != candidateHash {
+			nativeApplyRetry.delay = 0
+		}
+		nativeApplyRetry.delay = min(max(nativeApplyRetry.delay*2, 5*time.Second), time.Minute)
+		nativeApplyRetry.hash = candidateHash
+		nativeApplyRetry.next = time.Now().Add(nativeApplyRetry.delay)
 		s.process().SetError(err)
-		logger.Error("apply native core configuration failed:", err)
+		logger.Errorf("apply native core configuration failed; retry in %s: %v", nativeApplyRetry.delay, err)
+		return
 	}
+	nativeApplyRetry.delay = 0
 }

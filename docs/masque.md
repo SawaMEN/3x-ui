@@ -21,7 +21,9 @@ or control characters and must be unique within the panel identity namespace. HT
 and HTTP/2 bind TCP on the same port. Port conflicts respect selected versions.
 
 Use a **sing-box JSON subscription** with a client based on a MASQUE-capable
-sing-box core. The profile contains `masque-client` under `endpoints` and routes
+sing-box core. Hiddify and recognized sing-box clients receive native JSON
+automatically from `/sub/` and `/json/` when MASQUE is present; other callers
+can request `?format=sing-box` explicitly. The profile contains `masque-client` under `endpoints` and routes
 to its tag. The highest enabled HTTP version is preferred regardless of form
 selection order, with automatic fallback to lower versions. Host TLS overrides
 (SNI, explicit blank SNI, insecure and ALPN) are retained. Standalone profiles

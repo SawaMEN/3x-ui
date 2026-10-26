@@ -19,10 +19,11 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
-	"github.com/gin-gonic/gin"
 )
 
 const (
@@ -508,9 +509,8 @@ func (a *SUBController) subs(c *gin.Context) {
 		logSubscriptionRoute(userAgent, "hiddify-native-sing-box")
 		return
 	}
-	// A raw URI cannot represent a ShadowTLS detour. Known sing-box clients
-	// need the complete native graph even when generic JSON auto-detection is off.
-	if wantsNativeSingBox(userAgent) && a.hasNativeTLSSubscription(c.Param("subid")) && a.serveJsonBody(c, true, "application/json; charset=utf-8", false, true) {
+	// MASQUE endpoints and ShadowTLS detours require native JSON for sing-box clients.
+	if wantsNativeSingBox(userAgent) && a.hasNativeSingBoxSubscription(c.Param("subid")) && a.serveJsonBody(c, true, "application/json; charset=utf-8", false, true) {
 		a.recordSubscriptionFetch(c)
 		logSubscriptionRoute(userAgent, "native-sing-box")
 		return
@@ -589,15 +589,12 @@ func (a *SUBController) hasHiddifyNativeSubscription(subID string) bool {
 	return false
 }
 
-func (a *SUBController) hasNativeTLSSubscription(subID string) bool {
-	// getInboundsBySubId populates per-request client and host caches. Never
-	// mutate the shared controller service during concurrent subscription
-	// fetches: that can intermittently mix users or hide the native protocol.
+func (a *SUBController) hasNativeSingBoxSubscription(subID string) bool {
 	inbounds, err := a.subService.ForRequest("").getInboundsBySubId(subID)
 	if err != nil {
 		return false
 	}
-	return containsNativeTLSSubscription(inbounds)
+	return containsNativeTLSSubscription(inbounds) || containsSubscriptionProtocol(inbounds, model.MASQUE)
 }
 
 func (a *SUBController) recordSubscriptionFetch(c *gin.Context) {
@@ -926,7 +923,7 @@ func (a *SUBController) serveJsonBody(c *gin.Context, alwaysReturnArray bool, co
 	// importing app does not identify itself in User-Agent.
 	if format == "hiddify" || (isHiddify && (forceSingBox || format == "sing-box" || a.hasHiddifyNativeSubscription(subId))) {
 		jsonSub, header, err = a.subJsonService.GetHiddifySingBoxJson(subId, host)
-	} else if forceSingBox || format == "sing-box" {
+	} else if forceSingBox || format == "sing-box" || (wantsNativeSingBox(c.Request.UserAgent()) && a.hasNativeSingBoxSubscription(subId)) {
 		jsonSub, header, err = a.subJsonService.GetSingBoxJson(subId, host, alwaysReturnArray)
 	} else {
 		jsonSub, header, err = a.subJsonService.GetJson(subId, host, alwaysReturnArray)
