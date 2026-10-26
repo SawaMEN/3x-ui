@@ -6,6 +6,7 @@ import { http, HttpResponse } from 'msw';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupHttp } from '@/api/http-init';
 import DomainFrontTab from '@/pages/settings/DomainFrontTab';
+import AdditionalSettingsTab from '@/pages/settings/AdditionalSettingsTab';
 import { defaultDomainConfig, defaultDomain, DomainConfigFormSchema } from '@/schemas/domain-front';
 import type { DomainConfigForm } from '@/schemas/domain-front';
 import { server } from './msw/server';
@@ -261,20 +262,58 @@ describe('domain and TLS dashboard', () => {
     await waitFor(() => expect(f.checked).toEqual(['sub.example.com']));
   });
 
-  it('saves manual settings with the same apply action', async () => {
+  it('preserves a domain draft when navigating between additional settings tabs', async () => {
+    const f = fixture();
+    server.use(
+      http.get('*/panel/api/setting/singbox/status', () =>
+        HttpResponse.json({ success: true, obj: { installed: true, running: true } }),
+      ),
+      http.get('*/panel/api/server/status', () =>
+        HttpResponse.json({ success: true, obj: { core: { running: 'sing-box' } } }),
+      ),
+    );
+    renderWithProviders(
+      <MemoryRouter initialEntries={['/settings#advanced/domains']}>
+        <AdditionalSettingsTab
+          allSetting={new AllSetting()}
+          updateSetting={vi.fn()}
+          settingsDirty={false}
+          saveSettings={vi.fn().mockResolvedValue(true)}
+        />
+      </MemoryRouter>,
+    );
+    fireEvent.change(await screen.findByDisplayValue('old@example.com'), {
+      target: { value: 'draft@example.com' },
+    });
+    fireEvent.click(screen.getByRole('tab', { name: /Proxy Core/ }));
+    await screen.findByText('Running');
+    fireEvent.click(screen.getByRole('tab', { name: /Domains and TLS/ }));
+    expect(screen.getByDisplayValue('draft@example.com')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Save and apply' }));
+    await waitFor(() => expect(f.applied?.email).toBe('draft@example.com'));
+  });
+
+  it('saves root redirect settings from the top of the domain panel', async () => {
     fixture();
     const save = vi.fn().mockResolvedValue(true);
+    const update = vi.fn();
     renderWithProviders(
       <MemoryRouter>
         <DomainFrontTab
-          allSetting={new AllSetting()}
-          updateSetting={vi.fn()}
+          allSetting={
+            new AllSetting({ rootRedirectEnable: true, rootRedirectURL: 'https://example.com/' })
+          }
+          updateSetting={update}
           settingsDirty
           saveSettings={save}
         />
       </MemoryRouter>,
     );
     await screen.findByDisplayValue('old@example.com');
+    const destination = screen.getByDisplayValue('https://example.com/');
+    expect(destination.closest('.domain-redirect-settings')).toBeTruthy();
+    fireEvent.change(destination, { target: { value: 'https://new.example.com/' } });
+    expect(update).toHaveBeenCalledWith({ rootRedirectURL: 'https://new.example.com/' });
     fireEvent.click(screen.getByRole('button', { name: 'Save and apply' }));
     await waitFor(() => expect(save).toHaveBeenCalledOnce());
   });

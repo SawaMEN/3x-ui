@@ -2,28 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
-import {
-  Alert,
-  AutoComplete,
-  Button,
-  Checkbox,
-  Input,
-  InputNumber,
-  Modal,
-  Select,
-  Space,
-  Switch,
-  Tabs,
-  message,
-} from 'antd';
+import { Alert, Checkbox, Input, InputNumber, Modal, Select, Switch, Tabs, message } from 'antd';
 import {
   ApartmentOutlined,
   BellOutlined,
   ClockCircleOutlined,
   GlobalOutlined,
   SettingOutlined,
-  ReloadOutlined,
-  SwapOutlined,
 } from '@ant-design/icons';
 import type { AllSetting } from '@/models/setting';
 import { isOutboundProtocol } from '@/schemas/primitives';
@@ -35,7 +20,6 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { catTabLabel } from './catTabLabel';
 import { sanitizePath, normalizePath } from './uriPath';
 import SecretInput from './SecretInput';
-import CoreSelection from './CoreSelection';
 
 interface ApiMsg<T = unknown> {
   success?: boolean;
@@ -45,17 +29,9 @@ interface ApiMsg<T = unknown> {
 interface GeneralTabProps {
   allSetting: AllSetting;
   updateSetting: (patch: Partial<AllSetting>) => void;
-  saveSettings?: () => Promise<{ success?: boolean; msg?: string }>;
-  onOpenSwap?: () => void;
-  onOpenSystemUpdate?: () => void;
 }
 
-export default function GeneralTab({
-  allSetting,
-  updateSetting,
-  onOpenSwap,
-  onOpenSystemUpdate,
-}: GeneralTabProps) {
+export default function GeneralTab({ allSetting, updateSetting }: GeneralTabProps) {
   const { t } = useTranslation();
   const { isMobile } = useMediaQuery();
   const portOverride =
@@ -66,7 +42,6 @@ export default function GeneralTab({
   const queryClient = useQueryClient();
   const hashToTab: Record<string, string> = {
     '#general': '1',
-    '#core': 'core',
     '#notifications': '2',
     '#certs': '3',
     '#external': '4',
@@ -78,7 +53,6 @@ export default function GeneralTab({
   const onTabChange = (key: string) => {
     const tabToHash: Record<string, string> = {
       '1': 'general',
-      core: 'core',
       '2': 'notifications',
       '3': 'certs',
       '4': 'external',
@@ -93,8 +67,6 @@ export default function GeneralTab({
   const [inboundOptions, setInboundOptions] = useState<{ label: string; value: string }[]>([]);
   const [outboundTagList, setOutboundTagList] = useState<string[]>([]);
   const [balancerTagList, setBalancerTagList] = useState<string[]>([]);
-  const [singBoxInstalled, setSingBoxInstalled] = useState<boolean | null>(null);
-  const [runningCore, setRunningCore] = useState<'sing-box' | 'none'>('none');
   const [hiddifyOpen, setHiddifyOpen] = useState(false);
   const [hiddifyFile, setHiddifyFile] = useState<File | null>(null);
   const [hiddifyPreview, setHiddifyPreview] = useState<{
@@ -179,61 +151,6 @@ export default function GeneralTab({
       setHiddifyBusy(false);
     }
   };
-
-  useEffect(() => {
-    let cancelled = false;
-    let timer: ReturnType<typeof setInterval> | undefined;
-
-    const refreshCoreStatus = async () => {
-      try {
-        const [singMsg, serverMsg] = await Promise.all([
-          HttpUtil.get('/panel/api/setting/singbox/status') as Promise<
-            ApiMsg<{ installed: boolean; running: boolean }>
-          >,
-          HttpUtil.get('/panel/api/server/status') as Promise<
-            ApiMsg<{
-              core?: { running?: 'sing-box' };
-            }>
-          >,
-        ]);
-        if (cancelled) return false;
-        setSingBoxInstalled(Boolean(singMsg?.success && singMsg.obj?.installed));
-        const singRunning = Boolean(singMsg?.success && singMsg.obj?.running);
-        const actualCore = serverMsg.obj?.core?.running || (singRunning ? 'sing-box' : 'none');
-        setRunningCore(actualCore);
-        return actualCore === 'sing-box';
-      } catch {
-        if (!cancelled) setRunningCore('none');
-        return false;
-      }
-    };
-
-    void refreshCoreStatus().then((matched) => {
-      if (cancelled || matched) return;
-      // Core restart happens on the server after settings are saved. Poll only
-      // while the selected core and the actually running core differ, so the
-      // status card updates immediately after the switch completes.
-      timer = setInterval(() => {
-        void refreshCoreStatus().then((done) => {
-          if (done && timer) {
-            clearInterval(timer);
-            timer = undefined;
-          }
-        });
-      }, 1000);
-    });
-
-    const onCoreSettingsSaved = () => {
-      void refreshCoreStatus();
-    };
-    window.addEventListener('xui-core-settings-saved', onCoreSettingsSaved);
-
-    return () => {
-      cancelled = true;
-      if (timer) clearInterval(timer);
-      window.removeEventListener('xui-core-settings-saved', onCoreSettingsSaved);
-    };
-  }, [allSetting.coreType]);
 
   useEffect(() => {
     let cancelled = false;
@@ -384,33 +301,6 @@ export default function GeneralTab({
             label: catTabLabel(<SettingOutlined />, t('pages.settings.panelSettings'), isMobile),
             children: (
               <div>
-                <SettingListItem
-                  paddings="small"
-                  title={t('pages.settings.rootRedirectEnable')}
-                  description={t('pages.settings.rootRedirectDesc')}
-                >
-                  <Switch
-                    checked={allSetting.rootRedirectEnable}
-                    onChange={(v) => updateSetting({ rootRedirectEnable: v })}
-                  />
-                </SettingListItem>
-                {allSetting.rootRedirectEnable && (
-                  <SettingListItem paddings="small" title={t('pages.settings.rootRedirectURL')}>
-                    <AutoComplete
-                      aria-label={t('pages.settings.rootRedirectURL')}
-                      style={{ width: '100%' }}
-                      value={allSetting.rootRedirectURL}
-                      options={[
-                        'https://www.wikipedia.org/',
-                        'https://www.microsoft.com/',
-                        'https://www.apple.com/',
-                        'https://www.cloudflare.com/',
-                      ].map((value) => ({ value, label: value }))}
-                      onChange={(value) => updateSetting({ rootRedirectURL: value })}
-                      placeholder="https://example.com/"
-                    />
-                  </SettingListItem>
-                )}
                 <SettingListItem
                   paddings="small"
                   title={t('pages.settings.panelListeningIP')}
@@ -596,24 +486,6 @@ export default function GeneralTab({
                     options={langOptions}
                   />
                 </SettingListItem>
-              </div>
-            ),
-          },
-          {
-            key: 'core',
-            label: catTabLabel(<SettingOutlined />, t('pages.settings.coreType'), isMobile),
-            children: (
-              <div className="core-settings-panel">
-                <h3>{t('pages.settings.coreType')}</h3>
-                <CoreSelection installed={singBoxInstalled} running={runningCore === 'sing-box'} />
-                <Space wrap className="core-settings-tools">
-                  <Button icon={<SwapOutlined />} onClick={() => onOpenSwap?.()}>
-                    {t('pages.settings.swap.openFromCore')}
-                  </Button>
-                  <Button icon={<ReloadOutlined />} onClick={() => onOpenSystemUpdate?.()}>
-                    {t('pages.settings.swap.systemUpdates')}
-                  </Button>
-                </Space>
               </div>
             ),
           },

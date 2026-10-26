@@ -93,7 +93,7 @@ test('returns to the compact rail after unpinning', () => {
   expect(localStorage.getItem('sidebar-pinned')).toBe('false');
 });
 
-test('keeps core and swap controls in general settings, not the sidebar submenu', () => {
+test('groups host tools under additional settings instead of separate sidebar entries', () => {
   vi.mocked(useAllSettings).mockReturnValue({ allSetting: { coreType: 'xray' } } as never);
   const view = renderWithProviders(
     <MemoryRouter initialEntries={['/settings#general']}>
@@ -104,6 +104,8 @@ test('keeps core and swap controls in general settings, not the sidebar submenu'
   const sidebarRoot = view.container.querySelector('.ant-sidebar');
   fireEvent.mouseEnter(sidebarRoot!);
   expect(screen.getByText('General')).toBeTruthy();
+  expect(screen.getByText('Additional settings')).toBeTruthy();
+  expect(screen.queryByText('Firewall')).toBeNull();
   expect(screen.queryByText('Proxy Core')).toBeNull();
   expect(screen.queryByText('Swap / ZRAM')).toBeNull();
   expect(screen.queryByText('API Docs')).toBeNull();

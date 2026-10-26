@@ -40,12 +40,10 @@ import DiscordTab from './DiscordTab';
 import SubscriptionGeneralTab from './SubscriptionGeneralTab';
 import SubscriptionFormatsTab from './SubscriptionFormatsTab';
 import SubscriptionBalancersTab from './SubscriptionBalancersTab';
-import SwapSettingsTab from './SwapSettingsTab';
-import SystemUpdateModal from './SystemUpdateModal';
+import AdditionalSettingsTab from './AdditionalSettingsTab';
 import GatewayModeControl from './GatewayModeControl';
-import DomainFrontTab from './DomainFrontTab';
 import './SettingsPage.css';
-import './TemporaryUiHides.css';
+import { getAdditionalSettingsTab } from './additional-settings';
 
 interface ApiMsg {
   success?: boolean;
@@ -61,7 +59,7 @@ const tabSlugs = [
   'subscription-formats',
   'subscription-balancers',
   'gateway',
-  'domains',
+  'advanced',
 ];
 
 function scrollTarget() {
@@ -111,11 +109,13 @@ export default function SettingsPage() {
   }, [fetched, allSetting]);
 
   const [alertVisible, setAlertVisible] = useState(true);
-  const [swapOpen, setSwapOpen] = useState(false);
-  const [systemUpdateOpen, setSystemUpdateOpen] = useState(false);
   const location = useLocation();
   const slug = location.hash.replace(/^#/, '');
-  const activeSlug = slug === 'certs' ? 'domains' : tabSlugs.includes(slug) ? slug : 'general';
+  const activeSlug = getAdditionalSettingsTab(location.hash)
+    ? 'advanced'
+    : tabSlugs.includes(slug)
+      ? slug
+      : 'general';
 
   const activeThemeMode = lowPower ? 'dark' : mode;
 
@@ -295,9 +295,9 @@ export default function SettingsPage() {
         return <SubscriptionFormatsTab allSetting={allSetting} updateSetting={updateSetting} />;
       case 'subscription-balancers':
         return <SubscriptionBalancersTab allSetting={allSetting} updateSetting={updateSetting} />;
-      case 'domains':
+      case 'advanced':
         return (
-          <DomainFrontTab
+          <AdditionalSettingsTab
             allSetting={allSetting}
             updateSetting={updateSetting}
             saveSettings={onSave}
@@ -307,15 +307,7 @@ export default function SettingsPage() {
       case 'gateway':
         return <GatewayModeControl />;
       default:
-        return (
-          <GeneralTab
-            allSetting={allSetting}
-            updateSetting={updateSetting}
-            saveSettings={saveAll}
-            onOpenSwap={() => setSwapOpen(true)}
-            onOpenSystemUpdate={() => setSystemUpdateOpen(true)}
-          />
-        );
+        return <GeneralTab allSetting={allSetting} updateSetting={updateSetting} />;
     }
   })();
 
@@ -375,7 +367,7 @@ export default function SettingsPage() {
                   )}
 
                   <Row gutter={[isMobile ? 8 : 16, isMobile ? 0 : 12]}>
-                    {activeSlug !== 'gateway' && activeSlug !== 'domains' && (
+                    {activeSlug !== 'gateway' && activeSlug !== 'advanced' && (
                       <Col span={24}>
                         <Card hoverable>
                           <Row className="header-row">
@@ -404,7 +396,7 @@ export default function SettingsPage() {
                     )}
 
                     <Col span={24}>
-                      {activeSlug === 'gateway' || activeSlug === 'domains' ? (
+                      {activeSlug === 'gateway' ? (
                         categoryBody
                       ) : (
                         <Card hoverable>{categoryBody}</Card>
@@ -495,25 +487,6 @@ export default function SettingsPage() {
           </Layout.Content>
         </Layout>
       </Layout>
-      <Modal
-        open={swapOpen}
-        title={t('pages.settings.swap.menu')}
-        width={isMobile ? 'calc(100vw - 16px)' : 'min(1360px, calc(100vw - 32px))'}
-        rootClassName="swap-settings-modal"
-        destroyOnClose
-        footer={null}
-        styles={{
-          body: {
-            maxHeight: 'calc(100vh - 160px)',
-            overflowY: 'auto',
-            overflowX: 'hidden',
-          },
-        }}
-        onCancel={() => setSwapOpen(false)}
-      >
-        <SwapSettingsTab />
-      </Modal>
-      <SystemUpdateModal open={systemUpdateOpen} onClose={() => setSystemUpdateOpen(false)} />
     </ConfigProvider>
   );
 }
