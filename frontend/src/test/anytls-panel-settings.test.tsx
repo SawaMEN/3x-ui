@@ -47,15 +47,13 @@ describe('AnyTLS certificate defaults', () => {
   it.each([null, 7])(
     'uses the selected server certificate identity for node %s',
     async (nodeId) => {
-      const get = vi
-        .spyOn(HttpUtil, 'get')
-        .mockResolvedValue(
-          new Msg(true, '', {
-            webCertFile: '/selected/cert',
-            webKeyFile: '/selected/key',
-            webDomain: 'selected.example',
-          }),
-        );
+      const get = vi.spyOn(HttpUtil, 'get').mockResolvedValue(
+        new Msg(true, '', {
+          webCertFile: '/selected/cert',
+          webKeyFile: '/selected/key',
+          webDomain: 'selected.example',
+        }),
+      );
       renderWithProviders(<Harness nodeId={nodeId} />);
       clickInsert();
       await waitFor(() =>
