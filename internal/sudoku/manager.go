@@ -3,6 +3,7 @@ package sudoku
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,7 +12,6 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
-	"github.com/SawaMEN/3x-ui/v3/internal/sidecaregress"
 )
 
 type Instance struct {
@@ -50,9 +50,6 @@ func GetManager() *Manager {
 }
 
 func (m *Manager) Reconcile(ctx context.Context, desired []Instance) {
-	for i := range desired {
-		desired[i].Config.PanelEgress = sidecaregress.Address(desired[i].ID)
-	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -280,7 +277,6 @@ func marshalConfig(cfg Config) ([]byte, error) {
 }
 
 func writeCandidateConfig(binDir string, id int, cfg Config) (string, error) {
-	cfg.PanelEgress = sidecaregress.Address(id)
 	dir := configDir(binDir)
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return "", err
@@ -419,4 +415,20 @@ func stringTrim(b []byte) string {
 		start++
 	}
 	return string(b[start:end])
+}
+
+// Check confirms that an installation has actually applied every desired
+// listener rather than only downloading an executable successfully.
+func (m *Manager) Check(desired []Instance) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var result error
+	for _, inst := range desired {
+		if message := m.lastErr[inst.ID]; message != "" {
+			result = errors.Join(result, fmt.Errorf("Sudoku inbound %d: %s", inst.ID, message))
+		} else if cur := m.procs[inst.ID]; cur == nil || cur.proc == nil || !cur.proc.IsRunning() {
+			result = errors.Join(result, fmt.Errorf("Sudoku inbound %d is not running", inst.ID))
+		}
+	}
+	return result
 }

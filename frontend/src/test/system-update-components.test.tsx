@@ -109,7 +109,9 @@ it('installs Sudoku only through its own install button', async () => {
   await openComponents();
   fireEvent.click(card('Sudoku').getByRole('button', { name: /Установить/ }));
   await waitFor(() =>
-    expect(HttpUtil.post).toHaveBeenCalledWith('/panel/api/setting/sudoku/update'),
+    expect(HttpUtil.post).toHaveBeenCalledWith('/panel/api/setting/sudoku/update', undefined, {
+      timeout: 200000,
+    }),
   );
 });
 

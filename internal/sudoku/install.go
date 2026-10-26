@@ -5,7 +5,6 @@ import (
 	"archive/zip"
 	"compress/gzip"
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,15 +16,12 @@ import (
 	"runtime"
 	"strings"
 	"time"
-
-	"github.com/SawaMEN/3x-ui/v3/internal/config"
 )
 
-const releasesAPI = "https://api.github.com/repos/SawaMEN/3x-ui/releases"
+const releasesAPI = "https://api.github.com/repos/SUDOKU-ASCII/sudoku/releases"
 
 type release struct {
 	TagName string `json:"tag_name"`
-	Body    string `json:"body"`
 	Assets  []struct {
 		Name string `json:"name"`
 		URL  string `json:"browser_download_url"`
@@ -41,16 +37,14 @@ func LatestRelease(ctx context.Context) (string, error) {
 }
 
 func fetchLatestRelease(ctx context.Context) (release, error) {
-	return fetchRelease(ctx, http.DefaultClient, config.IsDevBuild())
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	return fetchRelease(ctx, http.DefaultClient)
 }
 
-// Keep the component on the panel's release channel. GitHub's /latest endpoint
-// excludes prereleases, so dev panels must explicitly request the rolling tag.
-func fetchRelease(ctx context.Context, client *http.Client, dev bool) (release, error) {
+// Both stable and development panels use the official stable Sudoku release.
+func fetchRelease(ctx context.Context, client *http.Client) (release, error) {
 	endpoint := releasesAPI + "/latest"
-	if dev {
-		endpoint = releasesAPI + "/tags/dev-latest"
-	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return release{}, err
@@ -76,26 +70,12 @@ func fetchRelease(ctx context.Context, client *http.Client, dev bool) (release, 
 	return rel, nil
 }
 
-// dev-latest is reused for every build. The publisher records the exact commit
-// in the release notes, which also matches the version bundled in the panel.
 func releaseVersion(rel release) (string, error) {
 	tag := strings.TrimSpace(rel.TagName)
 	if tag == "" {
 		return "", fmt.Errorf("Sudoku release API returned an empty tag")
 	}
-	if tag != "dev-latest" {
-		return tag, nil
-	}
-	for _, field := range strings.Fields(rel.Body) {
-		if !strings.HasPrefix(field, "commit=") {
-			continue
-		}
-		commit := strings.TrimPrefix(field, "commit=")
-		if _, err := hex.DecodeString(commit); len(commit) == 40 && err == nil {
-			return "dev+" + strings.ToLower(commit), nil
-		}
-	}
-	return "", fmt.Errorf("Sudoku dev release is missing its build commit")
+	return tag, nil
 }
 
 func GetBinaryPath(binDir string) string {
@@ -170,13 +150,17 @@ func InstallLatest(ctx context.Context, binDir string) (string, error) {
 	if err := os.Chmod(staged, 0o755); err != nil {
 		return "", err
 	}
-	// Stock upstream binaries ignore unknown JSON fields. Verify the explicit
-	// CLI contract so an update cannot silently restore direct server egress.
+	// Check the official CLI before replacing an existing working executable.
 	checkCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	output, _ := exec.CommandContext(checkCtx, staged, "-h").CombinedOutput()
+	output, checkErr := exec.CommandContext(checkCtx, staged, "-h").CombinedOutput()
 	cancel()
-	if !strings.Contains(string(output), "-panel-egress") {
-		return "", fmt.Errorf("downloaded protocol server lacks panel-egress support")
+	if checkErr != nil {
+		return "", fmt.Errorf("check downloaded Sudoku executable: %w", checkErr)
+	}
+	for _, flag := range []string{"-c ", "-test", "-keygen"} {
+		if !strings.Contains(string(output), flag) {
+			return "", fmt.Errorf("downloaded Sudoku executable lacks %s support", strings.TrimSpace(flag))
+		}
 	}
 	if err := os.Rename(staged, target); err != nil {
 		return "", err
@@ -228,7 +212,7 @@ func pickAsset(assets []struct {
 			URL  string
 		}{}, fmt.Errorf("Sudoku is not published for %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
-	prefix := "panel-tunnel-" + runtime.GOOS + "-" + arch
+	prefix := "sudoku-" + runtime.GOOS + "-" + arch
 	var out struct {
 		Name string
 		URL  string

@@ -2,7 +2,7 @@ import { Alert } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useFormContext, useWatch } from 'react-hook-form';
 
-type Protocol = 'mieru' | 'trusttunnel' | 'pingtunnel' | 'sudoku' | 'vk';
+type Protocol = 'mieru' | 'trusttunnel' | 'pingtunnel' | 'vk';
 
 export default function CascadeHint({ protocol }: { protocol: Protocol }) {
   const { t } = useTranslation();
@@ -13,7 +13,6 @@ export default function CascadeHint({ protocol }: { protocol: Protocol }) {
     mieru: t('pages.inbounds.form.cascadeHints.users'),
     trusttunnel: t('pages.inbounds.form.cascadeHints.users'),
     pingtunnel: t('pages.inbounds.form.cascadeHints.pingtunnel'),
-    sudoku: t('pages.inbounds.form.cascadeHints.sudoku'),
     vk:
       forwardType === 'wireguardInbound'
         ? t('pages.inbounds.form.cascadeHints.vkWireguard')

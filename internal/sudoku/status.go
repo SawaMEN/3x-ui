@@ -16,6 +16,7 @@ type Status struct {
 	Version           string `json:"version"`
 	LatestVersion     string `json:"latestVersion"`
 	UpdateAvailable   bool   `json:"updateAvailable"`
+	Error             string `json:"error,omitempty"`
 }
 
 func GetStatus(ctx context.Context, localOnly ...bool) (Status, error) {
@@ -24,6 +25,9 @@ func GetStatus(ctx context.Context, localOnly ...bool) (Status, error) {
 		Supported: runtime.GOOS == "linux" && (runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64"),
 		Installed: IsInstalled(binDir),
 		Version:   readInstalledVersion(binDir),
+	}
+	if !status.Installed {
+		status.Version = ""
 	}
 	if !status.Supported {
 		status.Installed = false
@@ -35,6 +39,7 @@ func GetStatus(ctx context.Context, localOnly ...bool) (Status, error) {
 	}
 	release, latestErr := fetchLatestRelease(ctx)
 	if latestErr != nil {
+		status.Error = latestErr.Error()
 		return status, nil
 	}
 	if _, err := pickAsset(release.Assets); err != nil {

@@ -24,10 +24,7 @@ func NewSudokuJob(ctx context.Context) *SudokuJob {
 }
 
 func (j *SudokuJob) Run() {
-	desired, err := service.DesiredSudokuInstances()
-	if err != nil {
-		logger.Warning("sudoku job: build desired instances failed:", err)
-		return
+	if err := service.ReconcileSudoku(j.ctx); err != nil {
+		logger.Warning("sudoku job: reconciliation failed:", err)
 	}
-	sudoku.GetManager().Reconcile(j.ctx, desired)
 }

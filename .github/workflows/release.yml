@@ -14,8 +14,6 @@ on:
       - "go.sum"
       - "**.sh"
       - "tools/fetch-latest-kernel.py"
-      - "tools/build-panel-tunnel.py"
-      - "deploy/panel-tunnel/**"
       - "tools/telemt/**"
       - "tools/test_official_telemt.py"
       - "frontend/**"
@@ -312,22 +310,9 @@ jobs:
           HIDDIFY_CONFIG_CHECK_BINARY: ${{ github.workspace }}/x-ui/bin/hiddify-core-linux-amd64
         run: go test ./internal/hiddify -run '^TestPinnedBinaryChecksGeneratedConfigurations$' -count=1
 
-      - name: Build protocol sidecar with panel egress
-        run: |
-          python3 tools/build-panel-tunnel.py --arch "${{ matrix.platform }}" --output "$RUNNER_TEMP/panel-tunnel/sudoku-tunnel" --test
-          cp "$RUNNER_TEMP/panel-tunnel/sudoku-tunnel" x-ui/bin/sudoku-tunnel
-          cp "$RUNNER_TEMP/panel-tunnel/panel-tunnel-LICENSE" x-ui/bin/panel-tunnel-LICENSE
-          cp "$RUNNER_TEMP/panel-tunnel/panel-tunnel-source.tar.gz" x-ui/bin/panel-tunnel-source.tar.gz
-          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
-            printf '%s\n' "$GITHUB_REF_NAME" > x-ui/bin/sudoku.version
-          else
-            printf 'dev+%s\n' "$GITHUB_SHA" > x-ui/bin/sudoku.version
-          fi
-          tar -czf panel-tunnel-linux-${{ matrix.platform }}.tar.gz -C "$RUNNER_TEMP/panel-tunnel" sudoku-tunnel panel-tunnel-LICENSE panel-tunnel-source.tar.gz
-
       - name: Package
         run: |
-          for component in pingtunnel trusttunnel_endpoint caddy-naive hysteria; do
+          for component in pingtunnel trusttunnel_endpoint caddy-naive hysteria sudoku-tunnel; do
             test ! -e "x-ui/bin/$component"
           done
           tar -zcf x-ui-linux-${{ matrix.platform }}.tar.gz x-ui
@@ -340,21 +325,6 @@ jobs:
           path: |
             x-ui-linux-${{ matrix.platform }}.tar.gz
             x-ui-linux-${{ matrix.platform }}.tar.gz.sha256
-
-      - name: Upload protocol sidecar artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: panel-tunnel-linux-${{ matrix.platform }}
-          path: panel-tunnel-linux-${{ matrix.platform }}.tar.gz
-
-      - name: Publish protocol sidecar
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-        uses: svenstaro/upload-release-action@v2
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ github.ref_name }}
-          file: panel-tunnel-linux-${{ matrix.platform }}.tar.gz
-          overwrite: true
 
       - name: Upload stable release assets
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
@@ -389,19 +359,11 @@ jobs:
           path: dev-artifacts
           merge-multiple: true
 
-      - name: Download protocol sidecar artifacts
-        uses: actions/download-artifact@v8
-        with:
-          pattern: "panel-tunnel-linux-*"
-          path: dev-artifacts
-          merge-multiple: true
-
       - name: Verify complete rolling release
         run: |
           for arch in amd64 arm64; do
             test -s "dev-artifacts/x-ui-linux-$arch.tar.gz"
             test -s "dev-artifacts/x-ui-linux-$arch.tar.gz.sha256"
-            test -s "dev-artifacts/panel-tunnel-linux-$arch.tar.gz"
           done
 
       - name: Publish dev-latest
@@ -444,8 +406,7 @@ jobs:
             gh release create dev-latest --prerelease --latest=false --target "$COMMIT" --title "Dev build $short" --notes "Rolling development build from main. commit=$COMMIT"
           fi
           gh release upload dev-latest dev-artifacts/*.tar.gz dev-artifacts/*.sha256 --clobber
-          # Retire old patched Telemt artifacts from the reused dev-latest release.
-          # Engines are now supplied exclusively by telemt/telemt.
-          for old_asset in telemt.version telemt-linux-amd64.tar.gz telemt-linux-amd64.tar.gz.sha256 telemt-linux-arm64.tar.gz telemt-linux-arm64.tar.gz.sha256; do
+          # Retire patched protocol servers; components use official releases.
+          for old_asset in panel-tunnel-linux-amd64.tar.gz panel-tunnel-linux-arm64.tar.gz telemt.version telemt-linux-amd64.tar.gz telemt-linux-amd64.tar.gz.sha256 telemt-linux-arm64.tar.gz telemt-linux-arm64.tar.gz.sha256; do
             gh release delete-asset dev-latest "$old_asset" --yes 2>/dev/null || true
           done

@@ -1,16 +1,20 @@
 name: Sidecar egress regression
 on:
   push:
-    branches: [FIXX]
+    branches: [main]
   pull_request:
     paths:
       - 'internal/sidecaregress/**'
       - 'internal/sudoku/**'
+      - 'internal/web/service/inbound_sudoku*'
+      - 'internal/web/service/sudoku_component*'
+      - 'internal/web/controller/sudoku*'
+      - 'internal/web/controller/setting.go'
+      - 'internal/web/job/sudoku_job.go'
+      - '.github/workflows/sidecar-egress.yml'
       - 'internal/mieru/**'
       - 'internal/externalvpn/**'
       - 'internal/web/service/singbox*'
-      - 'deploy/panel-tunnel/**'
-      - 'tools/build-panel-tunnel.py'
   workflow_dispatch:
 permissions:
   contents: read
@@ -22,22 +26,25 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - name: Build and test pinned protocol sidecar
-        run: python3 tools/build-panel-tunnel.py --output "$RUNNER_TEMP/panel-tunnel/sudoku-tunnel" --test
+      - name: Download official Sudoku release for interoperability
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag=$(gh api repos/SUDOKU-ASCII/sudoku/releases/latest --jq '.tag_name')
+          test -n "$tag"
+          mkdir -p "$RUNNER_TEMP/sudoku"
+          curl -fL --retry 3 -o "$RUNNER_TEMP/sudoku.tar.gz" "https://github.com/SUDOKU-ASCII/sudoku/releases/download/$tag/sudoku-linux-amd64.tar.gz"
+          tar -xzf "$RUNNER_TEMP/sudoku.tar.gz" -C "$RUNNER_TEMP/sudoku"
       - name: Download official TrustTunnel endpoint for interoperability
         run: |
           curl -fL --retry 3 -o "$RUNNER_TEMP/trust.tar.gz" https://github.com/TrustTunnel/TrustTunnel/releases/download/v1.1.0/trusttunnel-v1.1.0-linux-x86_64.tar.gz
           tar -xzf "$RUNNER_TEMP/trust.tar.gz" -C "$RUNNER_TEMP"
-      - uses: actions/upload-artifact@v7
-        with:
-          name: panel-tunnel-linux-amd64
-          path: ${{ runner.temp }}/panel-tunnel
-          if-no-files-found: error
       - name: Test panel contracts and routing
         env:
-          SUDOKU_TEST_BINARY: ${{ runner.temp }}/panel-tunnel/sudoku-tunnel
+          SUDOKU_TEST_BINARY: ${{ runner.temp }}/sudoku/sudoku
           TRUSTTUNNEL_TEST_BINARY: ${{ runner.temp }}/trusttunnel-v1.1.0-linux-x86_64/trusttunnel_endpoint
         run: |
           mkdir -p internal/web/dist
           touch internal/web/dist/.gitkeep
-          go test ./internal/sudoku ./internal/mieru ./internal/externalvpn ./internal/hiddify ./internal/web/service -count=1 -timeout=600s
+          go test ./internal/sudoku ./internal/mieru ./internal/externalvpn ./internal/hiddify ./internal/web/service ./internal/web/controller -count=1 -timeout=600s

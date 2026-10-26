@@ -177,3 +177,14 @@ func TestSudokuCredentialsFailedSaveRemainsRecoverable(t *testing.T) {
 		t.Fatalf("recovery failed: %v, %v", pending, err)
 	}
 }
+
+func TestDesiredSudokuInstancesDoNotRequireCoreRelay(t *testing.T) {
+	inbound, _ := setupSudokuCredentials(t)
+	desired, err := DesiredSudokuInstances()
+	if err != nil || len(desired) != 1 || desired[0].ID != inbound.Id {
+		t.Fatalf("official server depends on a core relay: %+v, %v", desired, err)
+	}
+	if desired[0].Config.Mode != "server" || !sudoku.ValidPublicKey(desired[0].Config.Key) {
+		t.Fatalf("invalid official server configuration: %+v", desired[0].Config)
+	}
+}

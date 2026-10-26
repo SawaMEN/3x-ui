@@ -12,83 +12,66 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-
-	"github.com/SawaMEN/3x-ui/v3/internal/config"
 )
-
-const testReleaseCommit = "0123456789abcdef0123456789abcdef01234567"
 
 type releaseTransport func(*http.Request) (*http.Response, error)
 
 func (f releaseTransport) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
-
 func jsonReleaseResponse(body string) *http.Response {
 	return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body))}
 }
 
-func TestFetchReleaseChannel(t *testing.T) {
-	for _, dev := range []bool{false, true} {
-		t.Run(map[bool]string{false: "stable", true: "dev"}[dev], func(t *testing.T) {
-			wantURL := releasesAPI + "/latest"
-			rel := release{TagName: "v3.9.8"}
-			if dev {
-				wantURL = releasesAPI + "/tags/dev-latest"
-				rel = release{TagName: "dev-latest", Body: "Rolling development build from main. commit=" + testReleaseCommit}
-			}
-			client := &http.Client{Transport: releaseTransport(func(req *http.Request) (*http.Response, error) {
-				if req.URL.String() != wantURL {
-					t.Fatalf("release URL = %s, want %s", req.URL, wantURL)
-				}
-				data, err := json.Marshal(rel)
-				if err != nil {
-					t.Fatal(err)
-				}
-				return jsonReleaseResponse(string(data)), nil
-			})}
-			got, err := fetchRelease(context.Background(), client, dev)
-			if err != nil || got.TagName != rel.TagName {
-				t.Fatalf("release = %+v, error = %v", got, err)
-			}
-		})
+// CI also runs this package with the panel's development build ldflags.
+// The official stable release must be used in both panel channels.
+func TestFetchOfficialRelease(t *testing.T) {
+	client := &http.Client{Transport: releaseTransport(func(req *http.Request) (*http.Response, error) {
+		if req.URL.String() != "https://api.github.com/repos/SUDOKU-ASCII/sudoku/releases/latest" {
+			t.Fatalf("unexpected release URL: %s", req.URL)
+		}
+		return jsonReleaseResponse(`{"tag_name":"v0.5.2.0"}`), nil
+	})}
+	got, err := fetchRelease(context.Background(), client)
+	if err != nil || got.TagName != "v0.5.2.0" {
+		t.Fatalf("release = %+v, error = %v", got, err)
 	}
 }
 
-func TestRollingReleaseVersion(t *testing.T) {
-	for _, tc := range []struct{ name, tag, body, want string }{
-		{"stable", " v3.9.8 ", "", "v3.9.8"},
-		{"rolling", "dev-latest", "Rolling build\ncommit=" + testReleaseCommit, "dev+" + testReleaseCommit},
-		{"missing tag", "", "", ""},
-		{"missing commit", "dev-latest", "Rolling build", ""},
-		{"short commit", "dev-latest", "commit=01234567", ""},
-		{"invalid commit", "dev-latest", "commit=" + strings.Repeat("z", 40), ""},
+func TestReleaseVersion(t *testing.T) {
+	for _, tc := range []struct{ tag, want string }{
+		{" v0.5.2.0 ", "v0.5.2.0"}, {"", ""}, {"  ", ""},
 	} {
-		t.Run(tc.name, func(t *testing.T) {
-			got, err := releaseVersion(release{TagName: tc.tag, Body: tc.body})
-			if got != tc.want || (err != nil) != (tc.want == "") {
-				t.Fatalf("version = %q, error = %v; want %q", got, err, tc.want)
-			}
-		})
+		got, err := releaseVersion(release{TagName: tc.tag})
+		if got != tc.want || (err != nil) != (tc.want == "") {
+			t.Fatalf("version = %q, error = %v; want %q", got, err, tc.want)
+		}
 	}
 }
 
-// Exercise the same public install/status functions in stable and dev builds.
-// The dev CI invocation injects config.buildCommit using the release ldflags.
-func TestInstallAndStatusRelease(t *testing.T) {
+func TestInstallAndStatusOfficialRelease(t *testing.T) {
 	if runtime.GOOS != "linux" || (runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64") {
-		t.Skip("panel sidecar is published for Linux amd64/arm64")
+		t.Skip("Linux component")
 	}
-	for _, compatible := range []bool{true, false} {
-		t.Run(map[bool]string{true: "panel egress", false: "reject upstream"}[compatible], func(t *testing.T) {
+	for _, valid := range []bool{true, false} {
+		t.Run(map[bool]string{true: "official CLI", false: "invalid executable"}[valid], func(t *testing.T) {
 			binDir := t.TempDir()
 			t.Setenv("XUI_BIN_FOLDER", binDir)
-			payload := "#!/bin/sh\necho 'usage: -panel-egress address'\n"
-			if !compatible {
-				payload = "#!/bin/sh\necho 'usage: stock upstream'\n"
+			// A previous panel build must be offered an update and replaced without
+			// changing the existing keys/configuration directory.
+			const previous = "previous executable"
+			if err := os.WriteFile(GetBinaryPath(binDir), []byte(previous), 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := writeInstalledVersion(binDir, "dev+0123456789abcdef0123456789abcdef01234567"); err != nil {
+				t.Fatal(err)
+			}
+			payload := "#!/bin/sh\necho 'usage: -c string -test -keygen'\n"
+			if !valid {
+				payload = "#!/bin/sh\nexit 1\n"
 			}
 			var archive bytes.Buffer
 			gz := gzip.NewWriter(&archive)
 			tw := tar.NewWriter(gz)
-			if err := tw.WriteHeader(&tar.Header{Name: "sudoku-tunnel", Mode: 0755, Size: int64(len(payload))}); err != nil {
+			if err := tw.WriteHeader(&tar.Header{Name: "sudoku", Mode: 0755, Size: int64(len(payload))}); err != nil {
 				t.Fatal(err)
 			}
 			if _, err := io.WriteString(tw, payload); err != nil {
@@ -100,40 +83,35 @@ func TestInstallAndStatusRelease(t *testing.T) {
 			if err := gz.Close(); err != nil {
 				t.Fatal(err)
 			}
-
-			revision := testReleaseCommit
+			const assetURL = "https://github.com/SUDOKU-ASCII/sudoku/releases/download/v0.5.2.0/sudoku-linux-test.tar.gz"
+			tag := "v0.5.2.0"
 			oldClient := http.DefaultClient
 			t.Cleanup(func() { http.DefaultClient = oldClient })
 			http.DefaultClient = &http.Client{Transport: releaseTransport(func(req *http.Request) (*http.Response, error) {
-				if req.URL.String() == "https://example.com/panel-tunnel.tar.gz" {
+				if req.URL.String() == assetURL {
 					return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader(archive.Bytes()))}, nil
 				}
-				wantURL := releasesAPI + "/latest"
-				tag := "v3.9.8"
-				if config.IsDevBuild() {
-					wantURL = releasesAPI + "/tags/dev-latest"
-					tag = "dev-latest"
-				}
-				if req.URL.String() != wantURL {
+				if req.URL.String() != "https://api.github.com/repos/SUDOKU-ASCII/sudoku/releases/latest" {
 					t.Fatalf("unexpected request: %s", req.URL)
 				}
-				data, err := json.Marshal(map[string]any{
-					"tag_name": tag, "body": "Rolling build commit=" + revision,
-					"assets": []map[string]string{{"name": "panel-tunnel-linux-" + runtime.GOARCH + ".tar.gz", "browser_download_url": "https://example.com/panel-tunnel.tar.gz"}},
-				})
+				data, err := json.Marshal(map[string]any{"tag_name": tag, "assets": []map[string]string{{"name": "sudoku-linux-" + runtime.GOARCH + ".tar.gz", "browser_download_url": assetURL}}})
 				if err != nil {
 					t.Fatal(err)
 				}
 				return jsonReleaseResponse(string(data)), nil
 			})}
-
+			status, err := GetStatus(context.Background())
+			if err != nil || !status.UpdateAvailable {
+				t.Fatalf("legacy build update not detected: %+v %v", status, err)
+			}
 			path, err := InstallLatest(context.Background(), binDir)
-			if !compatible {
-				if err == nil || !strings.Contains(err.Error(), "lacks panel-egress") {
-					t.Fatalf("incompatible install error = %v", err)
+			if !valid {
+				if err == nil {
+					t.Fatal("invalid executable accepted")
 				}
-				if IsInstalled(binDir) {
-					t.Fatal("installed incompatible binary")
+				data, _ := os.ReadFile(GetBinaryPath(binDir))
+				if string(data) != previous {
+					t.Fatal("failed installation replaced working executable")
 				}
 				return
 			}
@@ -143,24 +121,38 @@ func TestInstallAndStatusRelease(t *testing.T) {
 			if data, err := os.ReadFile(path); err != nil || string(data) != payload {
 				t.Fatalf("installed payload = %q, error = %v", data, err)
 			}
-			status, err := GetStatus(context.Background())
-			if err != nil || !status.Installed || !status.Supported || status.UpdateAvailable {
-				t.Fatalf("status after install: %+v, error = %v", status, err)
+			status, err = GetStatus(context.Background())
+			if err != nil || !status.Installed || !status.Supported || status.UpdateAvailable || status.Version != tag || status.LatestVersion != tag {
+				t.Fatalf("status after install: %+v %v", status, err)
 			}
-			wantVersion := "v3.9.8"
-			if config.IsDevBuild() {
-				wantVersion = "dev+" + revision
-			}
-			if status.Version != wantVersion || status.LatestVersion != wantVersion {
-				t.Fatalf("wrong version: %+v", status)
-			}
-			if config.IsDevBuild() {
-				revision = strings.Repeat("a", 40)
-				status, err = GetStatus(context.Background())
-				if err != nil || !status.UpdateAvailable || status.LatestVersion != "dev+"+revision {
-					t.Fatalf("new rolling build not detected: %+v, error = %v", status, err)
-				}
+			tag = "v0.5.3"
+			status, err = GetStatus(context.Background())
+			if err != nil || !status.UpdateAvailable || status.LatestVersion != tag {
+				t.Fatalf("new upstream release not detected: %+v %v", status, err)
 			}
 		})
+	}
+}
+
+func TestStatusShowsReleaseFailureAndHidesRemovedVersion(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XUI_BIN_FOLDER", dir)
+	if err := writeInstalledVersion(dir, "v0.5.2.0"); err != nil {
+		t.Fatal(err)
+	}
+	oldClient := http.DefaultClient
+	t.Cleanup(func() { http.DefaultClient = oldClient })
+	requests := 0
+	http.DefaultClient = &http.Client{Transport: releaseTransport(func(req *http.Request) (*http.Response, error) {
+		requests++
+		return &http.Response{StatusCode: http.StatusForbidden, Status: "403 Forbidden", Body: io.NopCloser(strings.NewReader("rate limited"))}, nil
+	})}
+	local, err := GetStatus(context.Background(), true)
+	if err != nil || local.Version != "" || local.Installed || requests != 0 {
+		t.Fatalf("removed local status: %+v %v requests=%d", local, err, requests)
+	}
+	remote, err := GetStatus(context.Background())
+	if err != nil || remote.Error == "" || remote.Version != "" || !remote.Supported {
+		t.Fatalf("release failure hidden: %+v %v", remote, err)
 	}
 }

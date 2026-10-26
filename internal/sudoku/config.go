@@ -10,7 +10,6 @@ type HTTPMaskConfig struct {
 }
 
 type Config struct {
-	PanelEgress        string         `json:"panel_egress"`
 	Mode               string         `json:"mode"`
 	Transport          string         `json:"transport"`
 	LocalPort          int            `json:"local_port"`
