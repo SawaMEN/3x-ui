@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/core"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/entity"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/global"
@@ -204,23 +206,10 @@ func (a *ServerController) startTask() {
 		}
 	})
 
-	// Keep the rolling dev updater independent from the shared cron scheduler.
-	// This guarantees that dev checks still run even if another cron task fails
-	// to register or the scheduler is not started yet.
-	go func() {
-		time.Sleep(15 * time.Second)
-		check := func() {
-			if err := a.panelService.AutoUpdateDevChannel(); err != nil {
-				logger.Warning("automatic dev panel update check failed:", err)
-			}
-		}
-		check()
-		ticker := time.NewTicker(5 * time.Minute)
-		defer ticker.Stop()
-		for range ticker.C {
-			check()
-		}
-	}()
+	ctx := global.GetWebServer().GetCtx()
+	common.GoRecover("dev panel updater", func() {
+		runDevUpdateChecks(ctx, a.panelService.AutoUpdateDevChannel)
+	})
 }
 
 // status returns the current server status information. The legacy `xray`
@@ -794,4 +783,29 @@ func (a *ServerController) getAmneziaWGMetrics(c *gin.Context) {
 	}
 	c.Header("Cache-Control", "no-store")
 	c.Data(http.StatusOK, "text/plain; version=0.0.4; charset=utf-8", []byte(metrics))
+}
+
+func runDevUpdateChecks(ctx context.Context, check func() error) {
+	delay := time.NewTimer(15 * time.Second)
+	defer delay.Stop()
+	select {
+	case <-ctx.Done():
+		return
+	case <-delay.C:
+	}
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+		if err := check(); err != nil {
+			logger.Warning("automatic dev panel update check failed:", err)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
 }

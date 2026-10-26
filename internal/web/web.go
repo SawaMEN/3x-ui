@@ -397,29 +397,23 @@ func (s *Server) startTask(restartXray bool, loc *time.Location) {
 
 	// Reconcile mtproto (mtg) sidecars and scrape their traffic
 	mtJob := job.NewMtprotoJob()
-	_, _ = s.cron.AddJob(cadenceMtproto, mtJob)
-	go mtJob.Run()
+	scheduleStartupJob(s.cron, cadenceMtproto, mtJob)
 
 	// Reconcile embedded AmneziaWG interfaces; traffic rides Xray's own stats
 	awgJob := job.NewAmneziaWGJob()
-	_, _ = s.cron.AddJob(cadenceAmneziaWG, awgJob)
-	go awgJob.Run()
+	scheduleStartupJob(s.cron, cadenceAmneziaWG, awgJob)
 
 	tuicJob := job.NewTuicJob()
-	_, _ = s.cron.AddJob(cadenceTuic, tuicJob)
-	go tuicJob.Run()
+	scheduleStartupJob(s.cron, cadenceTuic, tuicJob)
 
 	externalJob := job.NewExternalVPNJob()
-	_, _ = s.cron.AddJob("@every 10s", externalJob)
-	go externalJob.Run()
+	scheduleStartupJob(s.cron, "@every 10s", externalJob)
 
 	mieruJob := job.NewMieruJob()
-	_, _ = s.cron.AddJob(cadenceMieru, mieruJob)
-	go mieruJob.Run()
+	scheduleStartupJob(s.cron, cadenceMieru, mieruJob)
 
 	sudokuJob := job.NewSudokuJob(s.ctx)
-	_, _ = s.cron.AddJob(cadenceSudoku, sudokuJob)
-	go sudokuJob.Run()
+	scheduleStartupJob(s.cron, cadenceSudoku, sudokuJob)
 
 	// check client ips from log file every 10 sec
 	_, _ = s.cron.AddJob(cadenceClientIPScan, job.NewCheckClientIpJob())
@@ -997,4 +991,15 @@ func scheduleSettingJob(c *cron.Cron, name, spec, fallback string, j cron.Job) c
 	}
 	logger.Infof("%s scheduled, run at %s", name, spec)
 	return c.Schedule(schedule, j)
+}
+
+// Initial and periodic runs share cron's panic recovery and overlap guard.
+func scheduleStartupJob(c *cron.Cron, spec string, j cron.Job) cron.EntryID {
+	id, err := c.AddJob(spec, j)
+	if err != nil {
+		logger.Errorf("schedule startup job %q: %v", spec, err)
+		return 0
+	}
+	go c.Entry(id).WrappedJob.Run()
+	return id
 }
