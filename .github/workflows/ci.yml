@@ -90,10 +90,6 @@ jobs:
         run: mkdir -p internal/web/dist && touch internal/web/dist/.gitkeep
       - name: Download Go dependencies
         run: bash tools/ci/download-go-modules.sh
-      - name: Test
-        run: |
-          go test -p 12 -vet=off -shuffle=on -count=1 ./...
-
       - name: Fetch verified release core for AWG integration
         env:
           GH_TOKEN: ${{ github.token }}
@@ -101,7 +97,11 @@ jobs:
       - name: Verify native subscription protocol exports
         env:
           HIDDIFY_TEST_BINARY: ${{ runner.temp }}/awg-core/hiddify-core-linux-amd64
-        run: go test ./internal/sub -run '^(TestHiddify(ExtendedProtocolsSurviveMixedSubscription|MixedWireGuardKeepsEveryEndpoint)|TestAnyTLSShadowTLS(AutomaticTLSIdentityAndRoutes|SubscriptionConnections))$' -count=1
+        run: go test ./internal/sub -run '^(TestHiddify(ExtendedProtocolsSurviveMixedSubscription|MixedWireGuardKeepsEveryEndpoint)|TestAnyTLSShadowTLS(AutomaticTLSIdentityAndRoutes|SubscriptionConnections))$' -count=1 -v
+      - name: Test
+        run: |
+          go test -p 12 -vet=off -shuffle=on -count=1 ./...
+
       - name: Verify native AWG configuration and TCP/UDP tunnel
         env:
           HIDDIFY_CONFIG_CHECK_BINARY: ${{ runner.temp }}/awg-core/hiddify-core-linux-amd64

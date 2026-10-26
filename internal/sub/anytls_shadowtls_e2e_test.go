@@ -212,6 +212,7 @@ func TestAnyTLSShadowTLSSubscriptionConnections(t *testing.T) {
 					_ = c.Close()
 				}
 				if err == nil {
+					t.Logf("%s traffic passed through the generated AnyTLS + ShadowTLS subscription", network)
 					return
 				}
 				last = err
