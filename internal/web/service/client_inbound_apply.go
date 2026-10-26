@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
+
 	"maps"
 	"strings"
 	"time"
-
-	"gorm.io/gorm"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
@@ -18,6 +19,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/random"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
+	"gorm.io/gorm"
 )
 
 // droppedClientNeedsRestart is what restartXrayOnClientDisable asks for: the core
@@ -58,6 +60,7 @@ func advancePushedInbound(rt runtime.Runtime, prevSettings string, ib *model.Inb
 // semantics of DelInboundClientByEmail for each removed client. needRestart is
 // the OR across all removals.
 func (s *ClientService) delInboundClients(inboundSvc *InboundService, inboundId int, recs []*model.ClientRecord, keepTraffic bool) (bool, error) {
+	defer InvalidateSubData()
 	if len(recs) == 0 {
 		return false, nil
 	}
@@ -330,6 +333,7 @@ func (s *ClientService) checkEmailsExistForClients(inboundSvc *InboundService, c
 }
 
 func (s *ClientService) AddInboundClient(inboundSvc *InboundService, data *model.Inbound) (bool, error) {
+	defer InvalidateSubData()
 	defer beginLocalConfigBatch()()
 	if oldInbound, err := inboundSvc.GetInbound(data.Id); err == nil && oldInbound.Protocol == model.VKTurnProxy {
 		return inboundSvc.AddVKTurnProxyClient(data)
@@ -373,6 +377,9 @@ func (s *ClientService) AddInboundClient(inboundSvc *InboundService, data *model
 
 	oldInbound, err := inboundSvc.GetInbound(data.Id)
 	if err != nil {
+		return false, err
+	}
+	if err := validateClientsKeepAlive(oldInbound.Protocol, clients); err != nil {
 		return false, err
 	}
 	if err := validateMieruInbound(oldInbound, clients); err != nil {
@@ -442,6 +449,10 @@ func (s *ClientService) AddInboundClient(inboundSvc *InboundService, data *model
 	}
 
 	var portCtx portConflictContext
+	if err := validateAmneziaWGClientWrite(oldInbound, clients); err != nil {
+		return false, err
+	}
+
 	if oldInbound.Protocol == model.AmneziaWG {
 		portCtx, err = inboundSvc.loadPortConflictContext(database.GetDB(), oldInbound.NodeID)
 		if err != nil {
@@ -692,6 +703,7 @@ func (s *ClientService) AddInboundClient(inboundSvc *InboundService, data *model
 }
 
 func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *model.Inbound, oldEmail string) (bool, error) {
+	defer InvalidateSubData()
 	defer beginLocalConfigBatch()()
 	if oldInbound, err := inboundSvc.GetInbound(data.Id); err == nil && oldInbound.Protocol == model.VKTurnProxy {
 		if clientID, ok := inboundSvc.vkTurnProxyClientIDByEmail(data.Id, oldEmail); ok {
@@ -729,6 +741,15 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 	oldClients, err := inboundSvc.GetClients(oldInbound)
 	if err != nil {
 		return false, err
+	}
+	for i, client := range clients {
+		identity := client.Email
+		if i == 0 {
+			identity = oldEmail
+		}
+		if err := validateClientKeepAliveAgainstExisting(oldInbound.Protocol, client, oldClients, identity); err != nil {
+			return false, err
+		}
 	}
 
 	newClientId := ""
@@ -841,6 +862,10 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 			clients[0].ForwardedPorts = old.ForwardedPorts
 		}
 	}
+	if err := validateAmneziaWGClientWrite(oldInbound, clients); err != nil {
+		return false, err
+	}
+
 	if oldInbound.Protocol == model.AmneziaWG {
 		if err := validateAWGClientOptions(oldInbound.Settings, clients); err != nil {
 			return false, err
@@ -1166,6 +1191,7 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 }
 
 func (s *ClientService) DelInboundClientByEmail(inboundSvc *InboundService, inboundId int, email string, keepTraffic bool, fullDelete bool) (bool, error) {
+	defer InvalidateSubData()
 	defer beginLocalConfigBatch()()
 	defer lockInbound(inboundId).Unlock()
 
@@ -1566,4 +1592,31 @@ func (s *ClientService) ResetClientTrafficLimitByEmail(inboundSvc *InboundServic
 	return s.applyClientFieldByEmail(inboundSvc, clientEmail, func(c map[string]any) {
 		c["totalGB"] = totalGB * 1024 * 1024 * 1024
 	})
+}
+
+func validateAmneziaWGClientWrite(inbound *model.Inbound, clients []model.Client) error {
+	if inbound.Protocol != model.AmneziaWG {
+		return nil
+	}
+	var settings amneziawg.InboundSettings
+	if err := json.Unmarshal([]byte(inbound.Settings), &settings); err != nil {
+		return fmt.Errorf("amneziawg: invalid settings: %w", err)
+	}
+	for _, client := range clients {
+		for _, value := range []struct{ field, value string }{
+			{"email", client.Email},
+			{"publicKey", client.PublicKey},
+			{"preSharedKey", client.PreSharedKey},
+		} {
+			if err := amneziawg.ValidateConfigValue(value.field, value.value); err != nil {
+				return fmt.Errorf("amneziawg: client %q: %w", client.Email, err)
+			}
+		}
+		for _, allowedIP := range client.AllowedIPs {
+			if err := amneziawg.ValidateConfigValue("allowedIPs", allowedIP); err != nil {
+				return fmt.Errorf("amneziawg: client %q: %w", client.Email, err)
+			}
+		}
+	}
+	return nil
 }

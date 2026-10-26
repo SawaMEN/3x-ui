@@ -4,14 +4,6 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
-	"maps"
-	"net"
-	"net/url"
-	"slices"
-	"sort"
-	"strings"
-	"sync"
-	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
@@ -22,6 +14,16 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/snell"
 	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/json_util"
+
+	"maps"
+	"net"
+	"net/url"
+	"slices"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/util/random"
 	wgutil "github.com/SawaMEN/3x-ui/v3/internal/util/wireguard"
 )
@@ -134,6 +136,7 @@ func (s *SubJsonService) GetJson(subId string, host string, alwaysReturnArray bo
 	if len(inbounds) == 0 && len(externalLinks) == 0 {
 		return "", "", nil
 	}
+
 	// JSON uses Xray's outbound model. Refuse the whole format when any linked
 	// inbound cannot be represented, otherwise auto-detection could silently
 	// drop one connection and still return HTTP 200.
@@ -143,10 +146,12 @@ func (s *SubJsonService) GetJson(subId string, host string, alwaysReturnArray bo
 
 	var header string
 	var hasInactiveExternal bool
+	var hasBoundClosed bool
 	var hasEnabledClient bool
 
 	seenEmails := make(map[string]struct{})
 	entries := make([]subConfigEntry, 0, len(inbounds))
+	var ordered []orderedSubEntry[func() subConfigEntry]
 	// Prepare Inbounds
 	for _, inbound := range inbounds {
 		clients := subReq.matchingClients(inbound, subId)
@@ -154,17 +159,23 @@ func (s *SubJsonService) GetJson(subId string, host string, alwaysReturnArray bo
 			continue
 		}
 		subReq.projectThroughFallbackMaster(inbound)
-		hostEps := subReq.hostEndpoints(inbound, "json")
-		if hostEps != nil && len(hostEps) == 0 {
-			for _, client := range clients {
-				seenEmails[client.Email] = struct{}{}
-				hasEnabledClient = hasEnabledClient || client.Enable
+		if eps := subReq.hostEndpoints(inbound, "json"); eps != nil && len(eps) == 0 {
+			for _, c := range clients {
+				seenEmails[c.Email] = struct{}{}
+				hasEnabledClient = hasEnabledClient || c.Enable
 			}
 			continue
 		}
-		if len(hostEps) > 0 {
-			injectExternalProxy(inbound, hostEps)
-			delete(subReq.streamSettingsByInbound, inbound.Id)
+		var baseEps []map[string]any
+		baseStream := inbound.StreamSettings
+		// getConfig rewrites inbound.Listen/Port per endpoint while rendering a client, so bound
+		// endpoints resolve against this pre-loop snapshot.
+		baseInbound := *inbound
+		if !subReq.hostsFirst {
+			if baseEps = subReq.hostEndpoints(inbound, "json"); len(baseEps) > 0 {
+				injectExternalProxy(inbound, baseEps)
+				delete(subReq.streamSettingsByInbound, inbound.Id)
+			}
 		}
 
 		var inboundConfigs []json_util.RawMessage
@@ -176,11 +187,35 @@ func (s *SubJsonService) GetJson(subId string, host string, alwaysReturnArray bo
 			if !client.Enable {
 				continue
 			}
-			configs := s.getConfig(subReq, inbound, client, host)
-			if len(configs) == 0 {
+			if subReq.hostsFirst {
+				variants, closed := subReq.clientHostVariants(&baseInbound, client, "json")
+				hasBoundClosed = hasBoundClosed || closed
+				for _, variant := range variants {
+					render := func() subConfigEntry {
+						configs := s.getConfig(subReq, variant.inbound(subReq, inbound), client, host)
+						return subConfigEntry{sortIndex: inbound.SubSortIndex, id: inbound.Id, configs: configs, hostOrder: variant.order}
+					}
+					ordered = append(ordered, orderedSubEntry[func() subConfigEntry]{variant.order, render})
+				}
+				continue
+			}
+			effective := inbound
+			if effectiveEps, bound := subReq.clientHostEndpoints(&baseInbound, client, "json", baseEps); bound {
+				if len(effectiveEps) == 0 {
+					hasBoundClosed = true
+					continue
+				}
+				clone := baseInbound
+				clone.StreamSettings = baseStream
+				injectExternalProxy(&clone, effectiveEps)
+				effective = &clone
+				delete(subReq.streamSettingsByInbound, inbound.Id)
+			}
+			generated := s.getConfig(subReq, effective, client, host)
+			if len(generated) == 0 {
 				return "", "", errSubscriptionFormatUnsupported
 			}
-			inboundConfigs = append(inboundConfigs, configs...)
+			inboundConfigs = append(inboundConfigs, generated...)
 		}
 		if len(inboundConfigs) > 0 {
 			entries = append(entries, subConfigEntry{
@@ -188,6 +223,14 @@ func (s *SubJsonService) GetJson(subId string, host string, alwaysReturnArray bo
 				id:        inbound.Id,
 				configs:   inboundConfigs,
 			})
+		}
+	}
+	if subReq.hostsFirst {
+		// Render in final endpoint order so first-link usage remarks stay first.
+		for _, render := range orderedSubValues(ordered) {
+			if entry := render(); len(entry.configs) > 0 {
+				entries = append(entries, entry)
+			}
 		}
 	}
 	entries = s.appendBalancerEntries(entries)
@@ -204,6 +247,23 @@ func (s *SubJsonService) GetJson(subId string, host string, alwaysReturnArray bo
 		return entries[i].id < entries[j].id
 	})
 	var configArray []json_util.RawMessage
+	if subReq.hostsFirst {
+		// Preserve balancer slots from the legacy sort; reorder endpoint slots only.
+		var endpoints []subConfigEntry
+		for _, entry := range entries {
+			if entry.kind == 0 {
+				endpoints = append(endpoints, entry)
+			}
+		}
+		sort.SliceStable(endpoints, func(i, j int) bool { return hostOrderLess(endpoints[i].hostOrder, endpoints[j].hostOrder) })
+		next := 0
+		for i := range entries {
+			if entries[i].kind == 0 {
+				entries[i] = endpoints[next]
+				next++
+			}
+		}
+	}
 	for _, entry := range entries {
 		configArray = append(configArray, entry.configs...)
 	}
@@ -237,7 +297,7 @@ func (s *SubJsonService) GetJson(subId string, host string, alwaysReturnArray bo
 		}
 	}
 
-	if len(configArray) == 0 && !hasInactiveExternal {
+	if len(configArray) == 0 && !hasInactiveExternal && !hasBoundClosed {
 		return "", "", nil
 	}
 
@@ -299,6 +359,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 	// truth without depending on serialized Xray subscription documents.
 	subReq := s.SubService.ForRequest(host)
 	subReq.subscriptionBody = true
+	subReq.nativeProfile = true
 	inbounds, err := subReq.getInboundsBySubId(subId)
 	if err != nil {
 		return "", "", err
@@ -359,6 +420,29 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 		return "", subReq.subscriptionUserinfo(traffic), nil
 	}
 
+	expanded := make(map[*model.Inbound]bool)
+	if subReq.hostsFirst {
+		var ordered []orderedSubEntry[*model.Inbound]
+		for _, inbound := range inbounds {
+			subReq.projectThroughFallbackMaster(inbound)
+			for _, client := range clientsFor(inbound) {
+				variants, _ := subReq.clientHostVariants(inbound, client, "json")
+				for _, variant := range variants {
+					clone := variant.inbound(subReq, inbound)
+					matchedClients[clone] = []model.Client{client}
+					expanded[clone] = true
+					ordered = append(ordered, orderedSubEntry[*model.Inbound]{variant.order, clone})
+				}
+			}
+		}
+		inbounds = orderedSubValues(ordered)
+	}
+	nativeHostEndpoints := func(inbound *model.Inbound) []map[string]any {
+		if expanded[inbound] {
+			return nil
+		}
+		return subReq.hostEndpoints(inbound, "json")
+	}
 	// Detached users are represented by inactive metadata entries so their
 	// subscriptions remain addressable. Those entries are not proxy links and
 	// must not turn a WireGuard-only subscription into a mixed profile.
@@ -371,6 +455,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 	}
 	var wireguardConfigs []json.RawMessage
 	for _, inbound := range inbounds {
+		delete(subReq.streamSettingsByInbound, inbound.Id)
 		clients := clientsFor(inbound)
 		if inbound.Protocol != model.WireGuard {
 			if len(clients) > 0 {
@@ -383,7 +468,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 		}
 		subReq.projectThroughFallbackMaster(inbound)
 		var settings map[string]any
-		if endpoints := subReq.hostEndpoints(inbound, "json"); len(endpoints) > 0 {
+		if endpoints := nativeHostEndpoints(inbound); len(endpoints) > 0 {
 			injectExternalProxy(inbound, endpoints)
 			delete(subReq.streamSettingsByInbound, inbound.Id)
 		}
@@ -400,6 +485,20 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 			seenEmails[client.Email] = struct{}{}
 			if !client.Enable || client.PrivateKey == "" || serverPublicKey == "" {
 				continue
+			}
+
+			inbound := inbound
+			if !expanded[inbound] {
+				endpoints, bound := subReq.clientHostEndpoints(inbound, client, "json", nativeHostEndpoints(inbound))
+				if bound && len(endpoints) == 0 {
+					continue
+				}
+				if bound {
+					clone := *inbound
+					injectExternalProxy(&clone, endpoints)
+					inbound = &clone
+					delete(subReq.streamSettingsByInbound, inbound.Id)
+				}
 			}
 			addresses := append([]string(nil), client.AllowedIPs...)
 			if len(addresses) == 0 {
@@ -419,7 +518,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 				if client.PreSharedKey != "" {
 					peer["pre_shared_key"] = client.PreSharedKey
 				}
-				if client.KeepAlive != nil && *client.KeepAlive > 0 {
+				if client.KeepAliveSeconds() > 0 {
 					peer["persistent_keepalive_interval"] = *client.KeepAlive
 				}
 				endpoint := map[string]any{
@@ -500,6 +599,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 	formatUnsupported := false
 	nativeTLSGenerated := false
 	for _, inbound := range inbounds {
+		delete(subReq.streamSettingsByInbound, inbound.Id)
 		clients := clientsFor(inbound)
 		if len(clients) == 0 {
 			continue
@@ -512,7 +612,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 			continue
 		}
 		subReq.projectThroughFallbackMaster(inbound)
-		hostEps := subReq.hostEndpoints(inbound, "json")
+		hostEps := nativeHostEndpoints(inbound)
 		if hostEps != nil && len(hostEps) == 0 {
 			for _, client := range clients {
 				seenEmails[client.Email] = struct{}{}
@@ -537,6 +637,20 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 			}
 			if !client.Enable {
 				continue
+			}
+
+			inbound := inbound
+			if !expanded[inbound] {
+				endpoints, bound := subReq.clientHostEndpoints(inbound, client, "json", nativeHostEndpoints(inbound))
+				if bound && len(endpoints) == 0 {
+					continue
+				}
+				if bound {
+					clone := *inbound
+					injectExternalProxy(&clone, endpoints)
+					inbound = &clone
+					delete(subReq.streamSettingsByInbound, inbound.Id)
+				}
 			}
 			if model.ShadowTLSTransport(inbound.Settings) != nil {
 				generated := 0
@@ -910,6 +1024,7 @@ func containsSubscriptionProtocol(inbounds []*model.Inbound, protocol model.Prot
 // subConfigEntry is one ordered block of the JSON subscription: an inbound's
 // configs (kind 0) or a balancer config (kind 1).
 type subConfigEntry struct {
+	hostOrder *hostEntryOrder
 	sortIndex int
 	kind      int
 	id        int
@@ -1301,6 +1416,11 @@ func (s *SubJsonService) getConfig(subReq *SubService, inbound *model.Inbound, c
 			liftHostTLSVerification(newStream)
 		}
 		applyHostStreamOverrides(extPrxy, newStream)
+		if ts, ok := newStream["tlsSettings"].(map[string]any); ok && security == "tls" {
+			cs, _ := ts["cipherSuites"].(string)
+			fp, _ := ts["fingerprint"].(string)
+			ts["fingerprint"] = fingerprintForCipherSuites(fp, cs)
+		}
 		hostMux := hostMuxOverride(extPrxy)
 		streamSettings, _ := json.MarshalIndent(newStream, "", "  ")
 
@@ -1382,6 +1502,7 @@ func (s *SubJsonService) streamData(stream string, clientKey string) map[string]
 		}
 	}
 	delete(streamSettings, "sockopt")
+	dropServerOnlyFinalMasks(streamSettings["finalmask"])
 
 	if s.finalMask != "" {
 		s.applyGlobalFinalMask(streamSettings)

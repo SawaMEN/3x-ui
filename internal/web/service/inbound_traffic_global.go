@@ -8,19 +8,12 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
-
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
-// AcceptGlobalTraffic ingests a master panel's aggregated per-client usage
-// into client_global_traffics, keyed by (masterGuid, email). The numbers are
-// display/enforcement inputs only — client_traffics keeps this panel's
-// local-only counters, so the pushing master's (and any other master's)
-// delta accounting over our snapshot stays correct.
-//
-// Rows are overwritten, not max-merged: a reset on the master propagates here
-// on its next push. Emails this panel doesn't host are dropped.
+// AcceptGlobalTraffic overwrites hosted clients' per-master usage, including lower resets.
+// Identical usage refreshes hourly; client_traffics remains local-only for delta accounting.
 func (s *InboundService) AcceptGlobalTraffic(masterGuid string, traffics []*coremodel.ClientTraffic) error {
 	masterGuid = strings.TrimSpace(masterGuid)
 	if masterGuid == "" {
@@ -57,7 +50,9 @@ func (s *InboundService) AcceptGlobalTraffic(masterGuid string, traffics []*core
 			return nil
 		}
 
-		now := time.Now().UnixMilli()
+		now := db.NowFunc()
+		updatedAt := now.UnixMilli()
+		heartbeatCutoff := now.Add(-globalTrafficHeartbeatInterval).UnixMilli()
 		rows := make([]model.ClientGlobalTraffic, 0, len(known))
 		for _, email := range known {
 			t := byEmail[email]
@@ -69,7 +64,7 @@ func (s *InboundService) AcceptGlobalTraffic(masterGuid string, traffics []*core
 				Email:      email,
 				Up:         t.Up,
 				Down:       t.Down,
-				UpdatedAt:  now,
+				UpdatedAt:  updatedAt,
 			})
 		}
 
@@ -78,6 +73,15 @@ func (s *InboundService) AcceptGlobalTraffic(masterGuid string, traffics []*core
 				if err := tx.Clauses(clause.OnConflict{
 					Columns:   []clause.Column{{Name: "master_guid"}, {Name: "email"}},
 					DoUpdates: clause.AssignmentColumns([]string{"up", "down", "updated_at"}),
+					Where: clause.Where{Exprs: []clause.Expression{clause.Expr{
+						SQL: `(client_global_traffics.up IS NULL
+							OR client_global_traffics.up <> excluded.up
+							OR client_global_traffics.down IS NULL
+							OR client_global_traffics.down <> excluded.down
+							OR client_global_traffics.updated_at IS NULL
+							OR client_global_traffics.updated_at <= ?)`,
+						Vars: []any{heartbeatCutoff},
+					}}},
 				}).Create(&batch).Error; err != nil {
 					return err
 				}
@@ -99,17 +103,13 @@ func chunkGlobalRows(rows []model.ClientGlobalTraffic, size int) [][]model.Clien
 	return out
 }
 
-// overlayGlobalTraffic raises Up/Down on the given rows to the largest global
-// value any master still pushing for that email reported. Read-path only —
-// callers hand it rows about to be serialized for display; the stored counters
-// are untouched. Rows older than globalTrafficFreshWindow are ignored: they
-// come from a master that stopped pushing, and folding their frozen counters
-// in would keep showing usage the client no longer has (#6113).
+// overlayGlobalTraffic applies each direction's largest fresh per-master value for display.
+// Stored local counters remain untouched; stale masters cannot inflate usage (#6113).
 func overlayGlobalTraffic(db *gorm.DB, rows []*coremodel.ClientTraffic) {
 	if len(rows) == 0 {
 		return
 	}
-	freshSince := globalTrafficFreshSince()
+	freshSince := globalTrafficFreshSince(db.NowFunc())
 	// Cheap short-circuit for the common case (a panel no master pushes to).
 	var probe int64
 	if err := db.Model(&model.ClientGlobalTraffic{}).
@@ -217,3 +217,5 @@ func clearGlobalTraffic(tx *gorm.DB, emails ...string) error {
 	}
 	return nil
 }
+
+const globalTrafficHeartbeatInterval = time.Hour

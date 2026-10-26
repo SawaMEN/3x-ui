@@ -10,14 +10,13 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/gin-contrib/sessions"
-	"github.com/gin-contrib/sessions/cookie"
-	"github.com/gin-gonic/gin"
-
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/crypto"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/session"
+	"github.com/gin-contrib/sessions"
+	"github.com/gin-contrib/sessions/cookie"
+	"github.com/gin-gonic/gin"
 )
 
 // newAPIAuthTestEngine builds a gin engine that mirrors the production auth
@@ -138,6 +137,48 @@ func TestCheckAPIAuth_AcceptsVerifiedClientCert(t *testing.T) {
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("admin-only ping status = %d, want 403; body=%s", w.Code, w.Body.String())
 	}
+
+	for _, legacyScope := range []string{model.ApiScopeAdmin, model.ApiScopeMonitor, model.ApiScopeNodeSync} {
+		plaintext := "mtls-" + legacyScope + "-token"
+		if err := database.GetDB().Create(&model.ApiToken{
+			Name:    "mtls-" + legacyScope,
+			Token:   crypto.HashTokenSHA256(plaintext),
+			Enabled: true,
+			Scope:   legacyScope,
+		}).Error; err != nil {
+			t.Fatalf("seed %s token: %v", legacyScope, err)
+		}
+		legacy := httptest.NewRequest(http.MethodGet, "/panel/api/server/status", nil)
+		legacy.Header.Set("Authorization", "Bearer "+plaintext)
+		legacy.TLS = &tls.ConnectionState{
+			VerifiedChains: [][]*x509.Certificate{{&x509.Certificate{}}},
+		}
+		w = httptest.NewRecorder()
+		engine.ServeHTTP(w, legacy)
+		if w.Code != http.StatusOK || w.Body.String() != `{"api_authed":true,"scope":"node-sync"}` {
+			t.Fatalf("mTLS %s response = %d %s, want preserved node-sync scope", legacyScope, w.Code, w.Body.String())
+		}
+	}
+
+	const plaintext = "mtls-node-admin-token"
+	if err := database.GetDB().Create(&model.ApiToken{
+		Name:    "mtls-node-admin",
+		Token:   crypto.HashTokenSHA256(plaintext),
+		Enabled: true,
+		Scope:   model.ApiScopeNodeAdmin,
+	}).Error; err != nil {
+		t.Fatalf("seed node-admin token: %v", err)
+	}
+	allowed := httptest.NewRequest(http.MethodPost, "/panel/api/server/updatePanel", nil)
+	allowed.Header.Set("Authorization", "Bearer "+plaintext)
+	allowed.TLS = &tls.ConnectionState{
+		VerifiedChains: [][]*x509.Certificate{{&x509.Certificate{}}},
+	}
+	w = httptest.NewRecorder()
+	engine.ServeHTTP(w, allowed)
+	if w.Code != http.StatusOK || w.Body.String() != `{"reached":true}` {
+		t.Fatalf("mTLS node-admin response = %d %s, want 200 update launch", w.Code, w.Body.String())
+	}
 }
 
 func TestNodeSyncScopeAllowlistMatchesRemoteInventory(t *testing.T) {
@@ -154,7 +195,6 @@ func TestNodeSyncScopeAllowlistMatchesRemoteInventory(t *testing.T) {
 		"/clients/update/:email":                      {http.MethodPost: {}},
 		"/server/restartXrayService":                  {http.MethodPost: {}},
 		"/server/restartCoreService":                  {http.MethodPost: {}},
-		"/server/updatePanel":                         {http.MethodPost: {}},
 		"/server/getWebCertFiles":                     {http.MethodGet: {}},
 		"/server/descendants":                         {http.MethodGet: {}},
 		"/server/singbox/sessions":                    {http.MethodGet: {}},
@@ -193,7 +233,7 @@ func TestNodeSyncScopeUsesFullPathPatterns(t *testing.T) {
 		{"detach email parameter", http.MethodPost, "/panel/api/clients/alice@example.com/detach", http.StatusOK},
 		{"reset inbound id parameter", http.MethodPost, "/panel/api/inbounds/42/resetTraffic", http.StatusOK},
 		{"client IP by guid endpoint", http.MethodPost, "/panel/api/clients/clientIpsByGuid", http.StatusOK},
-		{"update panel sync endpoint", http.MethodPost, "/panel/api/server/updatePanel", http.StatusOK},
+		{"update panel sync endpoint", http.MethodPost, "/panel/api/server/updatePanel", http.StatusForbidden},
 		{"admin ping forbidden", http.MethodGet, "/panel/api/ping", http.StatusForbidden},
 	}
 	for _, tc := range cases {
@@ -304,5 +344,42 @@ func TestCheckAPIAuth_SessionLoginPasses(t *testing.T) {
 	pingResp.Body.Close()
 	if pingResp.StatusCode != http.StatusOK {
 		t.Fatalf("session ping status = %d, want 200", pingResp.StatusCode)
+	}
+}
+
+func TestPanelUpdateRequiresNodeAdminScope(t *testing.T) {
+	engine, _ := newAPIAuthTestEngine(t)
+
+	cases := []struct {
+		name     string
+		scope    string
+		wantCode int
+		wantBody string
+	}{
+		{"node sync denied", model.ApiScopeNodeSync, http.StatusForbidden, `{"msg":"this API token is not permitted to access this endpoint","success":false}`},
+		{"node admin allowed", model.ApiScopeNodeAdmin, http.StatusOK, `{"reached":true}`},
+		{"monitor denied", model.ApiScopeMonitor, http.StatusForbidden, `{"msg":"this API token is not permitted to access this endpoint","success":false}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			plaintext := tc.name + "-token"
+			if err := database.GetDB().Create(&model.ApiToken{
+				Name:    tc.name,
+				Token:   crypto.HashTokenSHA256(plaintext),
+				Enabled: true,
+				Scope:   tc.scope,
+			}).Error; err != nil {
+				t.Fatalf("seed token: %v", err)
+			}
+
+			req := httptest.NewRequest(http.MethodPost, "/panel/api/server/updatePanel", nil)
+			req.Header.Set("Authorization", "Bearer "+plaintext)
+			w := httptest.NewRecorder()
+			engine.ServeHTTP(w, req)
+
+			if w.Code != tc.wantCode || w.Body.String() != tc.wantBody {
+				t.Fatalf("response = %d %s, want %d %s", w.Code, w.Body.String(), tc.wantCode, tc.wantBody)
+			}
+		})
 	}
 }

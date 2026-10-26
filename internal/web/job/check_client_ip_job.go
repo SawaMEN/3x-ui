@@ -21,10 +21,7 @@ import (
 )
 
 // IPWithTimestamp tracks an IP address with its last seen timestamp
-type IPWithTimestamp struct {
-	IP        string `json:"ip"`
-	Timestamp int64  `json:"timestamp"`
-}
+type IPWithTimestamp = model.ClientIpEntry
 
 // CheckClientIpJob monitors client IP addresses and manages IP blocking based
 // on configured limits. Client IPs come from the active core API; no access log
@@ -508,6 +505,11 @@ func (j *CheckClientIpJob) updateInboundClientIps(tx *gorm.DB, inboundClientIps 
 		// Nothing to enforce (collection-only run, no limit on the clients row,
 		// or inbound disabled): record the observed IPs for the panel and return.
 		jsonIps, _ := json.Marshal(newIpsWithTime)
+		model.SortClientIpEntries(newIpsWithTime)
+		jsonIps, _ = json.Marshal(newIpsWithTime)
+		if inboundClientIps.Ips == string(jsonIps) {
+			return false, false
+		}
 		inboundClientIps.Ips = string(jsonIps)
 		if err := tx.Save(inboundClientIps).Error; err != nil {
 			logger.Error("failed to save inboundClientIps:", err)
@@ -568,7 +570,11 @@ func (j *CheckClientIpJob) updateInboundClientIps(tx *gorm.DB, inboundClientIps 
 	dbIps := make([]IPWithTimestamp, 0, len(keptLive)+len(historicalIps))
 	dbIps = append(dbIps, keptLive...)
 	dbIps = append(dbIps, historicalIps...)
+	model.SortClientIpEntries(dbIps)
 	jsonIps, _ := json.Marshal(dbIps)
+	if inboundClientIps.Ips == string(jsonIps) {
+		return shouldCleanLog, banned
+	}
 	inboundClientIps.Ips = string(jsonIps)
 
 	if err := tx.Save(inboundClientIps).Error; err != nil {

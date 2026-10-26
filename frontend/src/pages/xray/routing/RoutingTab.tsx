@@ -25,6 +25,7 @@ import RouteTester from './RouteTester';
 import RuleFormModal from './RuleFormModal';
 import type { RoutingRule } from './RuleFormModal';
 import RuleCardList from './RuleCardList';
+import { usePointerRowReorder } from '@/hooks/usePointerRowReorder';
 import { useRoutingColumns } from './useRoutingColumns';
 import { arrJoin, originalRuleIndex } from './helpers';
 import type { RuleRow } from './types';
@@ -62,8 +63,7 @@ export default function RoutingTab({
   const [ruleModalOpen, setRuleModalOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<RoutingRule | null>(null);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
-  const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
+  const rulesContainerRef = useRef<HTMLDivElement>(null);
 
   const [routingPresets, setRoutingPresets] = useState<
     { id: number; name: string; description: string; ruleCount: number }[]
@@ -73,18 +73,6 @@ export default function RoutingTab({
   const [presetName, setPresetName] = useState('');
   const [presetDescription, setPresetDescription] = useState('');
   const [presetBusy, setPresetBusy] = useState(false);
-  const dragRef = useRef<{
-    from: number | null;
-    to: number | null;
-    startY: number;
-    moved: boolean;
-  }>({
-    from: null,
-    to: null,
-    startY: 0,
-    moved: false,
-  });
-
   const rules = useMemo(
     () => (templateSettings?.routing?.rules || []) as RoutingRule[],
     [templateSettings?.routing?.rules],
@@ -392,43 +380,15 @@ export default function RoutingTab({
     });
   }
 
-  function onHandlePointerDown(idx: number, ev: React.PointerEvent) {
-    if (ev.button != null && ev.button !== 0) return;
-    ev.preventDefault();
-    try {
-      (ev.currentTarget as Element).setPointerCapture(ev.pointerId);
-    } catch {
-      /* ignore */
-    }
-    dragRef.current = { from: idx, to: idx, startY: ev.clientY, moved: false };
-    setDraggedIndex(idx);
-    setDropTargetIndex(idx);
-
-    const onMove = (e: PointerEvent) => {
-      const state = dragRef.current;
-      if (state.from == null) return;
-      if (!state.moved && Math.abs(e.clientY - state.startY) < 5) return;
-      state.moved = true;
-      const el = document.elementFromPoint(e.clientX, e.clientY);
-      if (!el) return;
-      const target = el.closest('[data-row-key]');
-      if (!target) return;
-      const newIdx = Number(target.getAttribute('data-row-key'));
-      if (Number.isFinite(newIdx) && newIdx !== state.to) {
-        state.to = newIdx;
-        setDropTargetIndex(newIdx);
-      }
-    };
-
-    const onUp = () => {
-      document.removeEventListener('pointermove', onMove);
-      document.removeEventListener('pointerup', onUp);
-      document.removeEventListener('pointercancel', onUp);
-      const { from, to, moved } = dragRef.current;
-      dragRef.current = { from: null, to: null, startY: 0, moved: false };
-      setDraggedIndex(null);
-      setDropTargetIndex(null);
-      if (!moved || from == null || to == null || from === to) return;
+  const { drag, onPointerDown: onHandlePointerDown } = usePointerRowReorder({
+    containerRef: rulesContainerRef,
+    getRowKey: (row) => {
+      const key = Number(row.dataset.rowKey);
+      // Desktop table keys are original rule indices; mobile cards use visible positions.
+      const index = isMobile ? key : rows.findIndex((rule) => rule.key === key);
+      return Number.isInteger(index) && index >= 0 && index < rows.length ? index : null;
+    },
+    onDrop: ({ from, to }) => {
       const fromOrig = originalRuleIndex(rowsRef.current, from);
       const toOrig = originalRuleIndex(rowsRef.current, to);
       mutate((tt) => {
@@ -437,12 +397,10 @@ export default function RoutingTab({
         const [movedItem] = list.splice(fromOrig, 1);
         list.splice(toOrig, 0, movedItem);
       });
-    };
-
-    document.addEventListener('pointermove', onMove);
-    document.addEventListener('pointerup', onUp);
-    document.addEventListener('pointercancel', onUp);
-  }
+    },
+  });
+  const draggedIndex = drag?.from ?? null;
+  const dropTargetIndex = drag?.to ?? null;
 
   const hasSource = rows.some((r) => r.sourceIP || r.sourcePort || r.vlessRoute);
   const hasBalancer = rows.some((r) => r.balancerTag);
@@ -560,41 +518,42 @@ export default function RoutingTab({
                   </Dropdown>
                 </Space>
 
-                {isMobile ? (
-                  <RuleCardList
-                    rows={rows}
-                    draggedIndex={draggedIndex}
-                    dropTargetIndex={dropTargetIndex}
-                    onHandlePointerDown={onHandlePointerDown}
-                    openEdit={openEdit}
-                    moveUp={moveUp}
-                    moveDown={moveDown}
-                    confirmDelete={confirmDelete}
-                    toggleRule={toggleRule}
-                  />
-                ) : (
-                  <Table
-                    columns={desktopColumns}
-                    dataSource={rows}
-                    rowKey={(r) => r.key}
-                    pagination={false}
-                    scroll={{ x: tableScrollX }}
-                    size="small"
-                    className="routing-table"
-                    onRow={(_record, index) => {
-                      const classes: string[] = [];
-                      const i = index ?? -1;
-                      if (draggedIndex === i) classes.push('row-dragging');
-                      if (dropTargetIndex === i && draggedIndex !== i && draggedIndex != null) {
-                        classes.push(i > draggedIndex ? 'drop-after' : 'drop-before');
-                      }
-                      return {
-                        className: classes.join(' '),
-                        'data-row-key': i,
-                      } as React.HTMLAttributes<HTMLElement>;
-                    }}
-                  />
-                )}
+                <div ref={rulesContainerRef}>
+                  {isMobile ? (
+                    <RuleCardList
+                      rows={rows}
+                      draggedIndex={draggedIndex}
+                      dropTargetIndex={dropTargetIndex}
+                      onHandlePointerDown={onHandlePointerDown}
+                      openEdit={openEdit}
+                      moveUp={moveUp}
+                      moveDown={moveDown}
+                      confirmDelete={confirmDelete}
+                      toggleRule={toggleRule}
+                    />
+                  ) : (
+                    <Table
+                      columns={desktopColumns}
+                      dataSource={rows}
+                      rowKey={(r) => r.key}
+                      pagination={false}
+                      scroll={{ x: tableScrollX }}
+                      size="small"
+                      className="routing-table"
+                      onRow={(_record, index) => {
+                        const classes: string[] = [];
+                        const i = index ?? -1;
+                        if (draggedIndex === i) classes.push('row-dragging');
+                        if (dropTargetIndex === i && draggedIndex !== i && draggedIndex != null) {
+                          classes.push(i > draggedIndex ? 'drop-after' : 'drop-before');
+                        }
+                        return {
+                          className: classes.join(' '),
+                        } as React.HTMLAttributes<HTMLElement>;
+                      }}
+                    />
+                  )}
+                </div>
               </Space>
             ),
           },

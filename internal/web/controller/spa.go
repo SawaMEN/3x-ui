@@ -8,7 +8,6 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/web/entity"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/middleware"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/session"
-
 	"github.com/gin-gonic/gin"
 )
 
@@ -33,7 +32,7 @@ func NewXUIController(g *gin.RouterGroup) *XUIController {
 func (a *XUIController) initRouter(g *gin.RouterGroup) {
 	g = g.Group("/panel")
 	g.Use(a.checkLogin)
-	g.Use(middleware.CSRFMiddleware())
+	g.Use(middleware.CSRFMiddleware(getRemoteIp))
 
 	g.GET("/", a.panelSPA)
 	g.GET("/inbounds", a.panelSPA)

@@ -326,6 +326,7 @@ export default function GeoBrowserModal({
               value={categoryQuery}
               onChange={(event) => setCategoryQuery(event.target.value)}
               placeholder={t('pages.xray.geoBrowser.searchCategory')}
+              aria-label={t('pages.xray.geoBrowser.searchCategory')}
               allowClear
             />
             <Button
@@ -390,6 +391,7 @@ export default function GeoBrowserModal({
                       value={entryQuery}
                       onChange={(event) => setEntryQuery(event.target.value)}
                       placeholder={t('pages.xray.geoBrowser.searchEntries')}
+                      aria-label={t('pages.xray.geoBrowser.searchEntries')}
                       allowClear
                       className="geo-entry-filter"
                     />

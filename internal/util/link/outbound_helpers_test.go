@@ -127,12 +127,12 @@ func TestParse_RealitySecurityMapped(t *testing.T) {
 }
 
 func TestParse_TLSSecurityMapped(t *testing.T) {
-	res, err := ParseLink("trojan://pw@h.com:443?type=tcp&security=tls&sni=SNI&fp=chrome&alpn=h2,http/1.1&ech=ECH&vcn=VCN&pcs=PCS")
+	res, err := ParseLink("trojan://pw@h.com:443?type=tcp&security=tls&sni=SNI&fp=chrome&alpn=h2,http/1.1&ech=ECH&vcn=VCN&pcs=PCS&cs=TLS_AES_128_GCM_SHA256")
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
 	tls := streamSub(t, res, "tlsSettings")
-	if tls["serverName"] != "SNI" || tls["fingerprint"] != "chrome" || tls["echConfigList"] != "ECH" || tls["verifyPeerCertByName"] != "VCN" || tls["pinnedPeerCertSha256"] != "PCS" {
+	if tls["serverName"] != "SNI" || tls["fingerprint"] != "chrome" || tls["echConfigList"] != "ECH" || tls["verifyPeerCertByName"] != "VCN" || tls["pinnedPeerCertSha256"] != "PCS" || tls["cipherSuites"] != "TLS_AES_128_GCM_SHA256" {
 		t.Errorf("tlsSettings fields = %#v", tls)
 	}
 	if alpn, _ := tls["alpn"].([]string); !reflect.DeepEqual(alpn, []string{"h2", "http/1.1"}) {
@@ -403,5 +403,18 @@ func TestParse_VmessFinalMask(t *testing.T) {
 	want := []any{map[string]any{"type": "salamander", "settings": map[string]any{"password": "obfspw123"}}}
 	if !reflect.DeepEqual(udp, want) {
 		t.Fatalf("finalmask.udp = %#v, want %#v", udp, want)
+	}
+}
+
+func TestParse_VmessCipherSuites(t *testing.T) {
+	inner := `{"v":"2","add":"h","port":443,"id":"11111111-2222-4333-8444-555555555555","net":"ws","tls":"tls","cs":"TLS_AES_128_GCM_SHA256"}`
+	link := "vmess://" + base64.StdEncoding.EncodeToString([]byte(inner))
+	res, err := ParseLink(link)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	tls := streamSub(t, res, "tlsSettings")
+	if tls["cipherSuites"] != "TLS_AES_128_GCM_SHA256" {
+		t.Errorf("tlsSettings cipherSuites = %v, want TLS_AES_128_GCM_SHA256", tls["cipherSuites"])
 	}
 }

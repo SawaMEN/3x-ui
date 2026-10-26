@@ -6,18 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"maps"
-	"net"
-	"net/url"
-	"slices"
-	"sort"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
-
-	"github.com/gin-gonic/gin"
-	"github.com/goccy/go-json"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
@@ -29,9 +17,22 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/sudoku"
 	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
+
+	"maps"
+	"net"
+	"net/url"
+	"slices"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/util/random"
 	wgutil "github.com/SawaMEN/3x-ui/v3/internal/util/wireguard"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
+	"github.com/gin-gonic/gin"
+	"github.com/goccy/go-json"
 )
 
 const salamanderWarningCacheSize = 2048
@@ -144,6 +145,7 @@ type SubService struct {
 	// other context — the sub info page, the panel's link/QR displays — renders
 	// the name-only template, like Remnawave.
 	subscriptionBody bool
+	nativeProfile    bool
 	// usageShown emits info once per subscription identity, including twins.
 	// PrepareForRequest resets this per-request state.
 	usageShown                 map[string]bool
@@ -183,6 +185,10 @@ type SubService struct {
 	settingsByInbound       map[int]map[string]any
 	streamSettingsByInbound map[int]map[string]any
 	hostsByInbound          map[int][]*model.Host
+	settingsCache           *inboundSettingsCache
+	hostGroupOrders         map[string]hostEntryOrder
+	hostsFirst              bool
+	sharedGroupSni          map[string]string
 }
 
 // NewSubService creates a new subscription service with the given configuration.
@@ -222,6 +228,10 @@ func (s *SubService) PrepareForRequest(host string) {
 	s.settingsByInbound = map[int]map[string]any{}
 	s.streamSettingsByInbound = map[int]map[string]any{}
 	s.hostsByInbound = nil
+	s.hostGroupOrders = nil
+	s.sharedGroupSni = nil
+	mode, _ := s.settingService.GetSubHostSortMode()
+	s.hostsFirst = mode == "hosts-first"
 	s.loadNodes()
 	s.loadRemarkSettings()
 	s.subCalendarExpireInclusive, _ = s.settingService.GetSubCalendarExpireInclusive()
@@ -465,6 +475,17 @@ func (s *SubService) matchingClients(inbound *model.Inbound, subId string) []mod
 			}
 		}
 	}
+	if inbound.Protocol == model.WireGuard || inbound.Protocol == model.AmneziaWG {
+		var stored map[string]json.RawMessage
+		legacyNative := s.nativeProfile && json.Unmarshal([]byte(inbound.Settings), &stored) == nil && stored["clients"] == nil
+		if !legacyNative {
+			var err error
+			clients, err = s.overlayInboundTunnelIdentity(inbound, clients)
+			if err != nil {
+				return nil
+			}
+		}
+	}
 	var out []model.Client
 	seen := make(map[string]struct{}, len(clients))
 	for _, client := range clients {
@@ -560,6 +581,7 @@ func (s *SubService) resolveInfoNodeRemark(subId string, uniqueEmails []string, 
 
 func (s *SubService) getSubs(subId string) ([]string, []string, int64, coremodel.ClientTraffic, error) {
 	var result []string
+	var ordered []orderedSubEntry[func() string]
 	var emails []string
 	var traffic coremodel.ClientTraffic
 	var hasEnabledClient bool
@@ -585,33 +607,53 @@ func (s *SubService) getSubs(subId string) ([]string, []string, int64, coremodel
 		s.projectThroughFallbackMaster(inbound)
 		// Host overrides apply AFTER fallback projection so a host's
 		// address/TLS wins over the projected master stream.
-		hostEps := s.hostEndpoints(inbound, "raw")
+		var hostEps []map[string]any
+		if !s.hostsFirst {
+			hostEps = s.hostEndpoints(inbound, "raw")
+		}
 		for _, client := range clients {
 			if client.Enable {
 				hasEnabledClient = true
 			}
 			var link string
-			if hostEps != nil {
-				link = s.linkFromHosts(inbound, client, hostEps)
+			if s.hostsFirst {
+				variants, closed := s.clientHostVariants(inbound, client, "raw")
+				if closed {
+					seenEmails[client.Email] = struct{}{}
+					continue
+				}
+				for _, variant := range variants {
+					render := func() string {
+						if variant.host != nil {
+							return s.linkFromHosts(inbound, client, variant.endpoint(s, inbound))
+						}
+						return s.GetLink(inbound, client.Email)
+					}
+					ordered = append(ordered, orderedSubEntry[func() string]{variant.order, render})
+				}
+			} else if effectiveEps, bound := s.clientHostEndpoints(inbound, client, "raw", hostEps); (bound || effectiveEps != nil) && len(effectiveEps) == 0 {
+				seenEmails[client.Email] = struct{}{}
+				continue
+			} else if len(effectiveEps) > 0 {
+				link = s.linkFromHosts(inbound, client, effectiveEps)
+				if link == "" {
+					link = s.GetLink(inbound, client.Email)
+				}
 			} else {
 				link = s.GetLink(inbound, client.Email)
 			}
-			if inbound.Protocol == model.NaiveProxy && hostEps == nil {
-				// Without Host rows, render the plain inbound endpoint. When Host
-				// rows exist, linkFromHosts already rendered a clone carrying those
-				// endpoints, so do not overwrite it with the base inbound again.
-				link = s.genNaiveSubscriptionLink(inbound, client.Email)
+			if !s.hostsFirst && strings.TrimSpace(link) != "" {
+				result = append(result, link)
 			}
-			// A client can legitimately remain part of the subscription while
-			// its current protocol settings produce no share-link (for example,
-			// a malformed/unsupported endpoint). Keep its usage in the
-			// Subscription-Userinfo header, but never emit a blank profile line.
-			seenEmails[client.Email] = struct{}{}
-			if strings.TrimSpace(link) == "" {
-				continue
-			}
-			result = append(result, link)
 			emails = append(emails, client.Email)
+			seenEmails[client.Email] = struct{}{}
+		}
+	}
+	if s.hostsFirst {
+		for _, render := range orderedSubValues(ordered) {
+			if link := render(); strings.TrimSpace(link) != "" {
+				result = append(result, link)
+			}
 		}
 	}
 	for _, ext := range externalLinks {
@@ -736,9 +778,13 @@ func (s *SubService) inboundLinks(inbound *model.Inbound) []string {
 			continue
 		}
 		seen[key] = struct{}{}
+		effectiveEps, bound := s.clientHostEndpoints(inbound, client, "raw", hostEps)
+		if bound && len(effectiveEps) == 0 {
+			continue
+		}
 		var link string
-		if len(hostEps) > 0 && inbound.Protocol != model.TrustTunnel {
-			link = s.linkFromHosts(inbound, client, hostEps)
+		if len(effectiveEps) > 0 && inbound.Protocol != model.TrustTunnel {
+			link = s.linkFromHosts(inbound, client, effectiveEps)
 		} else {
 			link = s.GetLink(inbound, client.Email)
 		}
@@ -857,26 +903,7 @@ func subscriptionExpiryFromClient(nowMs, expiryTime int64) int64 {
 }
 
 func (s *SubService) getInboundsBySubId(subId string) ([]*model.Inbound, error) {
-	db := database.GetDB()
-	var inbounds []*model.Inbound
-	protocols := []string{
-		"vmess", "vless", "trojan", "shadowsocks", "hysteria",
-		"wireguard", "amneziawg", "mtproto", "tuic", "naive", "anytls", "shadowtls", "mieru",
-		"vk-turn-proxy", "trusttunnel", "sudoku", "snell", "masque", "fptn", "openflux",
-	}
-	err := db.Model(model.Inbound{}).
-		Where(`id in (
-			SELECT DISTINCT inbounds.id
-			FROM inbounds
-			JOIN client_inbounds ON client_inbounds.inbound_id = inbounds.id
-			JOIN clients ON clients.id = client_inbounds.client_id
-			WHERE
-				inbounds.protocol IN ?
-				AND clients.sub_id = ? AND inbounds.enable = ?
-		)`, protocols, subId, true).
-		Order("sub_sort_index ASC").
-		Order("id ASC").
-		Find(&inbounds).Error
+	inbounds, err := s.loadInboundsBySubId(subId)
 	if err != nil {
 		return nil, err
 	}
@@ -899,7 +926,7 @@ func (s *SubService) getInboundsBySubId(subId string) ([]*model.Inbound, error) 
 		s.subscriptionClientsByInbound[inbound.Id] = clientsByInbound[inbound.Id]
 	}
 	s.indexStatsBySubId(subId)
-	if err := s.primeHosts(inbounds); err != nil {
+	if err := s.loadSubscriptionHosts(inbounds); err != nil {
 		return nil, err
 	}
 	return inbounds, nil
@@ -1707,19 +1734,11 @@ func amneziaWGConfigText(server *amneziawg.ServerSettings, client *model.Client,
 		return ""
 	}
 	server = &adjusted
-	// These land unescaped in [Interface]; a newline here would inject a
-	// config line (e.g. a rogue PostUp) into the subscriber's .conf.
-	for _, v := range []string{client.PrivateKey, server.PrimaryDNS, server.SecondaryDNS, remark} {
-		if strings.ContainsAny(v, "\r\n") {
-			return ""
-		}
+	lines := []string{
+		"[Interface]",
+		"PrivateKey = " + client.PrivateKey,
+		"Address = " + strings.Join(client.AllowedIPs, ", "),
 	}
-
-	var b strings.Builder
-
-	b.WriteString("[Interface]\n")
-	fmt.Fprintf(&b, "PrivateKey = %s\n", client.PrivateKey)
-	fmt.Fprintf(&b, "Address = %s\n", strings.Join(client.AllowedIPs, ", "))
 
 	var dns []string
 	if server.PrimaryDNS != "" {
@@ -1729,30 +1748,34 @@ func amneziaWGConfigText(server *amneziawg.ServerSettings, client *model.Client,
 		dns = append(dns, server.SecondaryDNS)
 	}
 	if len(dns) > 0 {
-		fmt.Fprintf(&b, "DNS = %s\n", strings.Join(dns, ", "))
+		lines = append(lines, "DNS = "+strings.Join(dns, ", "))
 	}
 	// Always emitted: a missing MTU line leaves the client on its own 1420
 	// default and fragments the client-to-server direction once S4 passes 20.
-	fmt.Fprintf(&b, "MTU = %d\n", amneziawg.EffectiveMTU(server.MTU, server.S4))
+	lines = append(lines, fmt.Sprintf("MTU = %d", amneziawg.EffectiveMTU(server.MTU, server.S4)))
 
-	fmt.Fprintf(&b, "Jc = %d\n", server.Jc)
-	fmt.Fprintf(&b, "Jmin = %d\n", server.Jmin)
-	fmt.Fprintf(&b, "Jmax = %d\n", server.Jmax)
-	fmt.Fprintf(&b, "S1 = %d\n", server.S1)
-	fmt.Fprintf(&b, "S2 = %d\n", server.S2)
+	lines = append(lines,
+		fmt.Sprintf("Jc = %d", server.Jc),
+		fmt.Sprintf("Jmin = %d", server.Jmin),
+		fmt.Sprintf("Jmax = %d", server.Jmax),
+		fmt.Sprintf("S1 = %d", server.S1),
+		fmt.Sprintf("S2 = %d", server.S2),
+	)
 	if server.S3 > 0 {
-		fmt.Fprintf(&b, "S3 = %d\n", server.S3)
+		lines = append(lines, fmt.Sprintf("S3 = %d", server.S3))
 	}
 	if server.S4 > 0 {
-		fmt.Fprintf(&b, "S4 = %d\n", server.S4)
+		lines = append(lines, fmt.Sprintf("S4 = %d", server.S4))
 	}
-	fmt.Fprintf(&b, "H1 = %s\n", amneziaWGHeaderOrDefault(server.H1, "1"))
-	fmt.Fprintf(&b, "H2 = %s\n", amneziaWGHeaderOrDefault(server.H2, "2"))
-	fmt.Fprintf(&b, "H3 = %s\n", amneziaWGHeaderOrDefault(server.H3, "3"))
-	fmt.Fprintf(&b, "H4 = %s\n", amneziaWGHeaderOrDefault(server.H4, "4"))
+	lines = append(lines,
+		"H1 = "+amneziaWGHeaderOrDefault(server.H1, "1"),
+		"H2 = "+amneziaWGHeaderOrDefault(server.H2, "2"),
+		"H3 = "+amneziaWGHeaderOrDefault(server.H3, "3"),
+		"H4 = "+amneziaWGHeaderOrDefault(server.H4, "4"),
+	)
 	for i, v := range []string{server.I1, server.I2, server.I3, server.I4, server.I5} {
 		if v != "" {
-			fmt.Fprintf(&b, "I%d = %s\n", i+1, v)
+			lines = append(lines, fmt.Sprintf("I%d = %s", i+1, v))
 		}
 	}
 	optional := []struct{ key, v string }{
@@ -1766,33 +1789,40 @@ func amneziaWGConfigText(server *amneziawg.ServerSettings, client *model.Client,
 	}
 	for _, p := range optional {
 		if p.v != "" {
-			fmt.Fprintf(&b, "%s = %s\n", p.key, p.v)
+			lines = append(lines, p.key+" = "+p.v)
 		}
 	}
 	if server.RandomTrailers {
-		b.WriteString("RandomTrailers = on\n")
+		lines = append(lines, "RandomTrailers = on")
 	}
 	if server.DisableCookies {
-		b.WriteString("DisableCookies = on\n")
+		lines = append(lines, "DisableCookies = on")
 	}
 
 	// Peer field order follows wg-quick(8) and the panel's other two AmneziaWG
 	// emitters (genAmneziaWGConfig, buildAmneziaWGClientConfig); all three are
 	// independent implementations, so any drift here is invisible until a user
 	// compares a subscription link against a downloaded .conf.
-	fmt.Fprintf(&b, "\n# %s\n", remark)
-	b.WriteString("[Peer]\n")
-	fmt.Fprintf(&b, "PublicKey = %s\n", server.PublicKey)
+	lines = append(lines, "", "# "+remark, "[Peer]", "PublicKey = "+server.PublicKey)
 	if client.PreSharedKey != "" {
-		fmt.Fprintf(&b, "PresharedKey = %s\n", client.PreSharedKey)
+		lines = append(lines, "PresharedKey = "+client.PreSharedKey)
 	}
-	b.WriteString("AllowedIPs = 0.0.0.0/0, ::/0\n")
-	fmt.Fprintf(&b, "Endpoint = %s", joinHostPort(host, port))
-	if ka := client.KeepAliveSeconds(); ka > 0 {
-		fmt.Fprintf(&b, "\nPersistentKeepalive = %d", ka)
+	lines = append(lines, "AllowedIPs = 0.0.0.0/0, ::/0", "Endpoint = "+joinHostPort(host, port))
+	if client.KeepAlive != nil {
+		keepAlive := client.KeepAliveText()
+		if (strings.Contains(keepAlive, "-") && client.KeepAlive.Validate(true) == nil) || client.KeepAlive.Seconds() > 0 {
+			lines = append(lines, "PersistentKeepalive = "+keepAlive)
+		}
 	}
 
-	return b.String()
+	// A control character would split its line, and the split can re-open
+	// [Interface], whose PostUp runs as root wherever awg-quick applies this.
+	for _, line := range lines {
+		if amneziawg.ValidateConfigValue("config line", line) != nil {
+			return ""
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 // genAmneziaWGLink builds a per-client vpn://<base64url .conf text> share
@@ -2005,6 +2035,7 @@ func (s *SubService) genVlessLink(inbound *model.Inbound, email string) string {
 		applyShareTLSParams(stream, params)
 	case "reality":
 		applyShareRealityParams(stream, params, subKey(client))
+		params["support-x25519mlkem768"] = "true"
 	default:
 		params["security"] = "none"
 	}
@@ -2666,6 +2697,11 @@ func applyShareTLSParams(stream map[string]any, params map[string]string) {
 		if pins, ok := pinnedSha256List(tlsSettings); ok {
 			params["pcs"] = strings.Join(pins, ",")
 		}
+		if csValue, ok := searchKey(tlsSetting, "cipherSuites"); ok {
+			if cs, _ := csValue.(string); cs != "" {
+				params["cs"] = cs
+			}
+		}
 	}
 }
 
@@ -2700,6 +2736,11 @@ func applyVmessTLSParams(stream map[string]any, obj map[string]any) {
 		}
 		if pins, ok := pinnedSha256List(tlsSettings); ok {
 			obj["pcs"] = strings.Join(pins, ",")
+		}
+		if csValue, ok := searchKey(tlsSetting, "cipherSuites"); ok {
+			if cs, _ := csValue.(string); cs != "" {
+				obj["cs"] = cs
+			}
 		}
 	}
 }
@@ -2840,6 +2881,10 @@ func deriveSpiderX(seed, clientKey string) string {
 }
 
 func buildVmessLink(obj map[string]any) string {
+	if cs, _ := obj["cs"].(string); cs != "" {
+		fp, _ := obj["fp"].(string)
+		obj["fp"] = fingerprintForCipherSuites(fp, cs)
+	}
 	jsonStr, _ := json.MarshalIndent(obj, "", "  ")
 	return "vmess://" + base64.StdEncoding.EncodeToString(jsonStr)
 }
@@ -2847,7 +2892,7 @@ func buildVmessLink(obj map[string]any) string {
 func cloneVmessShareObj(baseObj map[string]any, newSecurity string) map[string]any {
 	newObj := map[string]any{}
 	for key, value := range baseObj {
-		if newSecurity != "none" || (key != "alpn" && key != "sni" && key != "fp" && key != "pcs") {
+		if newSecurity != "none" || (key != "alpn" && key != "sni" && key != "fp" && key != "pcs" && key != "cs") {
 			newObj[key] = value
 		}
 	}
@@ -2876,6 +2921,9 @@ func applyExternalProxyTLSObj(ep map[string]any, obj map[string]any, security st
 	if ech, ok := ep["echConfigList"].(string); ok && ech != "" {
 		obj["ech"] = ech
 	}
+	if cs, ok := externalProxyCipherSuites(ep); ok {
+		obj["cs"] = cs
+	}
 }
 
 func applyExternalProxyTLSParams(ep map[string]any, params map[string]string, security string) {
@@ -2899,6 +2947,9 @@ func applyExternalProxyTLSParams(ep map[string]any, params map[string]string, se
 	}
 	if ech, ok := ep["echConfigList"].(string); ok && ech != "" {
 		params["ech"] = ech
+	}
+	if cs, ok := externalProxyCipherSuites(ep); ok {
+		params["cs"] = cs
 	}
 }
 
@@ -3170,10 +3221,13 @@ func appendQueryAndFragment(link string, params map[string]string, fragment, sec
 			if securityOverride != "" && k == "security" {
 				v = securityOverride
 			}
-			if omitTLSFields && (k == "alpn" || k == "sni" || k == "fp" || k == "pcs") {
+			if omitTLSFields && (k == "alpn" || k == "sni" || k == "fp" || k == "pcs" || k == "cs") {
 				continue
 			}
 			q.Set(k, v)
+		}
+		if fp := fingerprintForCipherSuites(q.Get("fp"), q.Get("cs")); fp != q.Get("fp") {
+			q.Set("fp", fp)
 		}
 		encoded := q.Encode()
 		if encoded != "" {
@@ -4079,4 +4133,160 @@ func extraSalamanderKeys(settings map[string]any, expressedPacketSize bool) []st
 	}
 	sort.Strings(extra)
 	return extra
+}
+
+// enableSettingsCache gives the subscription server's service its inbound settings cache, purged
+// on every panel mutation; release unhooks it when the server stops.
+func (s *SubService) enableSettingsCache() (release func()) {
+	s.settingsCache = newInboundSettingsCache(settingsCacheTTL)
+	return service.RegisterSubDataInvalidator(s.settingsCache.purgeAll)
+}
+
+func (s *SubService) loadInboundsBySubId(subId string) ([]*model.Inbound, error) {
+	db := database.GetDB()
+	cached := s.settingsCache != nil && s.subscriptionBody
+	query := db.Model(model.Inbound{}).Where(`id in (
+		SELECT DISTINCT inbounds.id
+		FROM inbounds
+		JOIN client_inbounds ON client_inbounds.inbound_id = inbounds.id
+		JOIN clients ON clients.id = client_inbounds.client_id
+		WHERE
+			inbounds.protocol in ('vmess','vless','trojan','shadowsocks','hysteria','wireguard','amneziawg','mtproto','tuic','masque','naive','anytls','shadowtls','mieru','vk-turn-proxy','trusttunnel','sudoku','snell','fptn','openflux')
+			AND clients.sub_id = ? AND inbounds.enable = ?
+	)`, subId, true).Order("sub_sort_index ASC").Order("id ASC")
+	if cached {
+		query = query.Omit("settings")
+	}
+	var inbounds []*model.Inbound
+	if err := query.Find(&inbounds).Error; err != nil {
+		return nil, err
+	}
+	if cached {
+		for _, inbound := range inbounds {
+			settings, err := s.subscriptionSettings(inbound)
+			if err != nil {
+				return nil, err
+			}
+			inbound.Settings = settings
+		}
+	}
+	s.indexStatsBySubId(subId)
+	return inbounds, nil
+}
+
+// subscriptionSettings is an inbound's settings for a subscription body: WireGuard and AmneziaWG
+// keep their peers, every other protocol gets the shared copy without the clients array.
+func (s *SubService) subscriptionSettings(inbound *model.Inbound) (string, error) {
+	load := func() (string, error) {
+		var settings string
+		err := database.GetDB().Model(&model.Inbound{}).Select("settings").Where("id = ?", inbound.Id).Row().Scan(&settings)
+		return settings, err
+	}
+	if inbound.Protocol != model.VLESS && inbound.Protocol != model.VMESS && inbound.Protocol != model.Trojan && inbound.Protocol != model.Shadowsocks {
+		return load()
+	}
+	return s.settingsCache.settingsFor(inbound.Id, load)
+}
+
+// fingerprintForCipherSuites returns the fingerprint a client needs for cs to apply:
+// xray drops cipherSuites under every uTLS fingerprint and reads an empty one as chrome.
+func fingerprintForCipherSuites(fp, cs string) string {
+	if cs != "" && fp == "" {
+		return "unsafe"
+	}
+	return fp
+}
+
+func deepCopyJSONValue(v any) any {
+	switch val := v.(type) {
+	case map[string]any:
+		if val == nil {
+			return val
+		}
+		out := make(map[string]any, len(val))
+		for k, item := range val {
+			out[k] = deepCopyJSONValue(item)
+		}
+		return out
+	case []any:
+		if val == nil {
+			return val
+		}
+		out := make([]any, len(val))
+		for i, item := range val {
+			out[i] = deepCopyJSONValue(item)
+		}
+		return out
+	default:
+		return v
+	}
+}
+
+func externalProxyCipherSuites(ep map[string]any) (string, bool) {
+	if cs, ok := ep["cipherSuites"].(string); ok && cs != "" {
+		return cs, true
+	}
+	return "", false
+}
+
+// dropServerOnlyFinalMasks removes the inbound "filter" mask (xray-core 26.10.21, #7206): it only
+// screens the listener's source IPs, and a client core older than it refuses the unknown type.
+func dropServerOnlyFinalMasks(finalmask any) {
+	fm, _ := finalmask.(map[string]any)
+	for _, layer := range []string{"tcp", "udp"} {
+		masks, ok := fm[layer].([]any)
+		if !ok {
+			continue
+		}
+		kept := slices.DeleteFunc(masks, func(entry any) bool {
+			mask, _ := entry.(map[string]any)
+			maskType, _ := mask["type"].(string)
+			return strings.EqualFold(maskType, "filter")
+		})
+		if len(kept) == 0 {
+			delete(fm, layer)
+		} else {
+			fm[layer] = kept
+		}
+	}
+}
+
+// overlayInboundTunnelIdentity copies per-inbound tunnel fields from settings.
+// An unmatched peer is dropped, malformed settings yield nothing, and empty optional secrets replace shared values (#6641).
+func (s *SubService) overlayInboundTunnelIdentity(inbound *model.Inbound, clients []model.Client) ([]model.Client, error) {
+	embedded, err := s.inboundService.GetClients(inbound)
+	if err != nil {
+		return nil, err
+	}
+	byEmail := make(map[string]model.Client, len(embedded))
+	for i := range embedded {
+		key := strings.ToLower(embedded[i].Email)
+		if key == "" {
+			continue
+		}
+		if _, exists := byEmail[key]; exists {
+			continue
+		}
+		byEmail[key] = embedded[i]
+	}
+	out := make([]model.Client, 0, len(clients))
+	for _, client := range clients {
+		peer, ok := byEmail[strings.ToLower(client.Email)]
+		if !ok {
+			continue
+		}
+		client.PrivateKey = peer.PrivateKey
+		client.PublicKey = peer.PublicKey
+		client.PreSharedKey = peer.PreSharedKey
+		// append onto nil copies a non-empty list and clears a shared address when settings omit one.
+		client.AllowedIPs = append([]string(nil), peer.AllowedIPs...)
+		if peer.KeepAlive == nil {
+			client.KeepAlive = nil
+		} else {
+			keepalive := *peer.KeepAlive
+			client.KeepAlive = &keepalive
+		}
+		out = append(out, client)
+	}
+	return out, nil
 }

@@ -492,6 +492,8 @@ function applySecurityParams(stream: Raw, params: URLSearchParams): void {
     tls.echConfigList = params.get('ech') ?? '';
     tls.verifyPeerCertByName = params.get('vcn') ?? '';
     tls.pinnedPeerCertSha256 = params.get('pcs') ?? '';
+    const cs = params.get('cs');
+    if (cs) tls.cipherSuites = cs;
   } else if (stream.security === 'reality') {
     const reality = stream.realitySettings as Raw;
     reality.serverName = params.get('sni') ?? '';
@@ -575,6 +577,7 @@ export function parseVmessLink(link: string): Raw | null {
       if (typeof json.ech === 'string') tls.echConfigList = json.ech;
       if (typeof json.vcn === 'string') tls.verifyPeerCertByName = json.vcn;
       if (typeof json.pcs === 'string') tls.pinnedPeerCertSha256 = json.pcs;
+      if (typeof json.cs === 'string') tls.cipherSuites = json.cs;
     }
 
     const port = json.port === undefined || json.port === '' ? 443 : Number(json.port);

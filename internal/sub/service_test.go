@@ -7,9 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/enfein/mieru/v3/pkg/appctl"
-
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/enfein/mieru/v3/pkg/appctl"
 )
 
 func TestClashTransportCapabilities(t *testing.T) {
@@ -1504,5 +1503,64 @@ func TestGenHysteriaLinkKeepsHopPortsWithExternalProxy(t *testing.T) {
 		if !strings.Contains(link, "mport=20000-50000") {
 			t.Fatalf("external-proxy link lost the UDP hop range: %s", link)
 		}
+	}
+}
+
+// Xray drops cipherSuites under every uTLS fingerprint and reads an empty one as
+// chrome, so a vmess link with cs and no fingerprint must carry fp=unsafe.
+func TestBuildVmessLink_CipherSuitesPinUnsafeFingerprint(t *testing.T) {
+	cases := []struct {
+		name   string
+		obj    map[string]any
+		wantFp any
+	}{
+		{"cs with empty fp", map[string]any{"cs": "TLS_AES_128_GCM_SHA256", "fp": ""}, "unsafe"},
+		{"cs with no fp key", map[string]any{"cs": "TLS_AES_128_GCM_SHA256"}, "unsafe"},
+		{"cs with explicit fp", map[string]any{"cs": "TLS_AES_128_GCM_SHA256", "fp": "firefox"}, "firefox"},
+		{"no cs", map[string]any{"fp": ""}, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			decoded, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(buildVmessLink(tc.obj), "vmess://"))
+			if err != nil {
+				t.Fatalf("base64 decode failed: %v", err)
+			}
+			var roundTrip map[string]any
+			if err := json.Unmarshal(decoded, &roundTrip); err != nil {
+				t.Fatalf("decoded payload is not JSON: %v", err)
+			}
+			if roundTrip["fp"] != tc.wantFp {
+				t.Fatalf("fp = %#v, want %#v", roundTrip["fp"], tc.wantFp)
+			}
+		})
+	}
+}
+
+func TestApplyExternalProxyTLSParams_SetsCipherSuites(t *testing.T) {
+	params := map[string]string{"security": "tls"}
+	ep := map[string]any{
+		"dest":         "proxy.example.com",
+		"cipherSuites": "TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256",
+	}
+
+	applyExternalProxyTLSParams(ep, params, "tls")
+
+	if params["cs"] != "TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256" {
+		t.Fatalf("cs = %q, want TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256", params["cs"])
+	}
+}
+
+func TestApplyShareTLSParams_SetsCipherSuites(t *testing.T) {
+	stream := map[string]any{
+		"security": "tls",
+		"tlsSettings": map[string]any{
+			"cipherSuites": "TLS_AES_128_GCM_SHA256",
+		},
+	}
+	params := map[string]string{}
+	applyShareTLSParams(stream, params)
+
+	if params["cs"] != "TLS_AES_128_GCM_SHA256" {
+		t.Fatalf("cs = %q, want TLS_AES_128_GCM_SHA256", params["cs"])
 	}
 }

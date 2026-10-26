@@ -14,9 +14,6 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/google/uuid"
-	"gorm.io/gorm"
-
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
@@ -24,6 +21,8 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/masque"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/random"
+	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 func hasForbiddenClientChar(s string) bool {
@@ -110,9 +109,7 @@ func (c ClientResetCycle) Depleted() bool {
 // period, independent of the cycle configured on the inbounds they belong to.
 func (s *ClientService) GetClientsByTrafficReset(period string) ([]ClientResetCycle, error) {
 	var cycles []ClientResetCycle
-	err := database.GetDB().Table("clients c").
-		Select("c.email, c.traffic_reset_day, c.enable, COALESCE(ct.total, 0) AS total, COALESCE(ct.up, 0) + COALESCE(ct.down, 0) AS used").
-		Joins("LEFT JOIN client_traffics ct ON ct.email = c.email").
+	err := clientResetCycles(database.GetDB()).
 		Where("c.traffic_reset = ?", period).
 		Scan(&cycles).Error
 	if err != nil {
@@ -208,6 +205,12 @@ func (s *ClientService) Create(inboundSvc *InboundService, payload *ClientCreate
 		if getErr != nil {
 			return false, fmt.Errorf("inbound %d: %w", ibId, getErr)
 		}
+		if err := validateClientKeepAlive(inbound.Protocol, client); err != nil {
+			return false, err
+		}
+		if err := validateAmneziaWGClientWrite(inbound, []model.Client{client}); err != nil {
+			return false, err
+		}
 		if err := s.fillProtocolDefaults(&client, inbound); err != nil {
 			return false, fmt.Errorf("inbound %d: %w", ibId, err)
 		}
@@ -238,6 +241,12 @@ func (s *ClientService) Create(inboundSvc *InboundService, payload *ClientCreate
 	// A re-created email is a live identity again: a delete tombstone left
 	// standing makes the next node merge prune the new client's inbound links.
 	withdrawClientTombstones(client.Email)
+	if client.ClientHostRuleIds != nil {
+		if err := database.GetDB().Model(&model.ClientRecord{}).Where("email = ?", client.Email).Update("client_host_rule_ids", model.EncodeClientHostRuleIds(model.NormalizeClientHostRuleIds(client.ClientHostRuleIds))).Error; err != nil {
+			return needRestart, err
+		}
+	}
+
 	return needRestart, s.setClientLimitHwidByEmail(nil, client.Email, payload.LimitHwid)
 }
 
@@ -614,6 +623,21 @@ func (s *ClientService) Update(inboundSvc *InboundService, id int, updated model
 	if err := validateClientTrafficReset(updated.TrafficReset, updated.TrafficResetDay); err != nil {
 		return false, err
 	}
+	if updated.KeepAlive != nil {
+		for _, ibID := range attachedIds {
+			ib, err := inboundSvc.GetInbound(ibID)
+			if err != nil {
+				return false, err
+			}
+			old, err := inboundSvc.GetClients(ib)
+			if err != nil {
+				return false, err
+			}
+			if err := validateClientKeepAliveAgainstExisting(ib.Protocol, updated, old, existing.Email); err != nil {
+				return false, err
+			}
+		}
+	}
 	normalizeClientTrafficReset(&updated)
 	if updated.SubID == "" {
 		updated.SubID = existing.SubID
@@ -748,6 +772,10 @@ func (s *ClientService) Update(inboundSvc *InboundService, id int, updated model
 	if len(inboundIds) == 0 {
 		merged := *existing
 		applyClientRecordMerge(&merged, updated.ToRecord())
+		keepAliveLegacy, keepAliveRange, err := model.KeepAliveStorage(merged.KeepAlive)
+		if err != nil {
+			return needRestart, err
+		}
 		awgOptions, err := json.Marshal(merged.AWGClientOptions)
 		if err != nil {
 			return needRestart, err
@@ -755,29 +783,31 @@ func (s *ClientService) Update(inboundSvc *InboundService, id int, updated model
 		if err := database.GetDB().Model(&model.ClientRecord{}).
 			Where("id = ?", id).
 			Updates(map[string]any{
-				"sub_id":             merged.SubID,
-				"uuid":               merged.UUID,
-				"password":           merged.Password,
-				"auth":               merged.Auth,
-				"secret":             merged.Secret,
-				"flow":               merged.Flow,
-				"security":           merged.Security,
-				"wg_private_key":     merged.PrivateKey,
-				"wg_public_key":      merged.PublicKey,
-				"wg_allowed_ips":     merged.AllowedIPs,
-				"wg_pre_shared_key":  merged.PreSharedKey,
-				"wg_keep_alive":      merged.KeepAlive,
-				"awg_client_options": string(awgOptions),
-				"limit_ip":           merged.LimitIP,
-				"total_gb":           merged.TotalGB,
-				"expiry_time":        merged.ExpiryTime,
-				"tg_id":              merged.TgID,
-				"comment":            merged.Comment,
-				"reset":              merged.Reset,
-				"reset_day":          merged.ResetDay,
-				"reset_max":          merged.ResetMax,
-				"traffic_reset":      merged.TrafficReset,
-				"traffic_reset_day":  merged.TrafficResetDay,
+				"sub_id":               merged.SubID,
+				"uuid":                 merged.UUID,
+				"password":             merged.Password,
+				"auth":                 merged.Auth,
+				"secret":               merged.Secret,
+				"flow":                 merged.Flow,
+				"security":             merged.Security,
+				"wg_private_key":       merged.PrivateKey,
+				"wg_public_key":        merged.PublicKey,
+				"wg_allowed_ips":       merged.AllowedIPs,
+				"wg_pre_shared_key":    merged.PreSharedKey,
+				"wg_keep_alive":        keepAliveLegacy,
+				"wg_keep_alive_range":  keepAliveRange,
+				"client_host_rule_ids": model.EncodeClientHostRuleIds(merged.ClientHostRuleIds),
+				"awg_client_options":   string(awgOptions),
+				"limit_ip":             merged.LimitIP,
+				"total_gb":             merged.TotalGB,
+				"expiry_time":          merged.ExpiryTime,
+				"tg_id":                merged.TgID,
+				"comment":              merged.Comment,
+				"reset":                merged.Reset,
+				"reset_day":            merged.ResetDay,
+				"reset_max":            merged.ResetMax,
+				"traffic_reset":        merged.TrafficReset,
+				"traffic_reset_day":    merged.TrafficResetDay,
 			}).Error; err != nil {
 			return needRestart, err
 		}
@@ -837,6 +867,12 @@ func (s *ClientService) Update(inboundSvc *InboundService, id int, updated model
 		UpdateColumn("updated_at", time.Now().UnixMilli()).Error; err != nil {
 		return needRestart, err
 	}
+	if updated.ClientHostRuleIds != nil {
+		if err := database.GetDB().Model(&model.ClientRecord{}).Where("id = ?", id).Update("client_host_rule_ids", model.EncodeClientHostRuleIds(model.NormalizeClientHostRuleIds(updated.ClientHostRuleIds))).Error; err != nil {
+			return needRestart, err
+		}
+	}
+
 	return needRestart, nil
 }
 
@@ -1205,4 +1241,34 @@ func (s *ClientService) Detach(inboundSvc *InboundService, id int, inboundIds []
 		}})
 	}
 	return fanoutInboundApplies(applies)
+}
+
+func clientResetCycles(tx *gorm.DB) *gorm.DB {
+	return tx.Table("clients c").
+		Select("c.email, c.traffic_reset_day, c.enable, COALESCE(ct.total, 0) AS total, COALESCE(ct.up, 0) + COALESCE(ct.down, 0) AS used").
+		Joins("LEFT JOIN client_traffics ct ON ct.email = c.email")
+}
+
+// quotaDisabledEmails lists the disabled clients whose usage reached their quota,
+// only those in within unless it is nil. Read it before zeroing the counters,
+// which hides why a client is off.
+func quotaDisabledEmails(tx *gorm.DB, within []string) ([]string, error) {
+	var cycles []ClientResetCycle
+	if err := clientResetCycles(tx).Where("c.enable = ?", false).Scan(&cycles).Error; err != nil {
+		return nil, err
+	}
+	var in map[string]bool
+	if within != nil {
+		in = make(map[string]bool, len(within))
+		for _, e := range within {
+			in[e] = true
+		}
+	}
+	var emails []string
+	for _, c := range cycles {
+		if c.Depleted() && (in == nil || in[c.Email]) {
+			emails = append(emails, c.Email)
+		}
+	}
+	return emails, nil
 }

@@ -19,5 +19,4 @@ func (j *CheckHashStorageJob) Run() {
 		return
 	}
 	storage.RemoveExpiredHashes()
-	j.tgbotService.PruneExpiredState()
 }

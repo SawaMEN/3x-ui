@@ -134,6 +134,7 @@ func runWebServer() {
 		logger.Info("Migrated imported Hiddify subscription URLs to individual clients")
 	}
 
+	service.RegisterSubLinkProvider(sub.NewLinkProvider())
 	server := web.NewServer()
 	global.SetWebServer(server)
 	err = server.Start()
@@ -142,7 +143,6 @@ func runWebServer() {
 	}
 
 	sub.SetDistFS(web.EmbeddedDist())
-	service.RegisterSubLinkProvider(sub.NewLinkProvider())
 	subServer := sub.NewServer()
 	global.SetSubServer(subServer)
 	err = subServer.Start()

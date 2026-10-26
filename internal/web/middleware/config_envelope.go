@@ -6,9 +6,8 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/gin-gonic/gin"
-
 	"github.com/SawaMEN/3x-ui/v3/internal/util/wirecodec"
+	"github.com/gin-gonic/gin"
 )
 
 // maxDecodedConfigBytes caps a decompressed request body (defense in depth on
@@ -22,7 +21,7 @@ const maxDecodedConfigBytes = 8 << 20
 // panels and plain calls keep working (mixed-version safe).
 func ConfigEnvelopeMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Header(wirecodec.CapsHeader, wirecodec.CapZstd)
+		c.Header(wirecodec.CapsHeader, wirecodec.NodeCaps)
 
 		enc := c.GetHeader("Content-Encoding")
 		sum := c.GetHeader(wirecodec.HashHeader)

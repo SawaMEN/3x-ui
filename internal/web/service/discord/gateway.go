@@ -14,13 +14,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/gorilla/websocket"
-
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
+	"github.com/gorilla/websocket"
 )
 
 const (
@@ -502,9 +501,6 @@ func (g *GatewayClient) sendStatus(ctx context.Context) {
 		hostname = "3x-ui"
 	}
 
-	days := status.Uptime / 86400
-	hours := (status.Uptime % 86400) / 3600
-
 	var onlines []string
 	if process := service.OnlinePresence(); process != nil {
 		onlines = process.GetOnlineClients()
@@ -530,7 +526,7 @@ func (g *GatewayClient) sendStatus(ctx context.Context) {
 		Fields: []EmbedField{
 			{Name: tr("discord.fields.panelVersion"), Value: config.GetPanelVersion(), Inline: true},
 			{Name: tr("discord.fields.xrayCore"), Value: fmt.Sprintf("%s (%s)", status.Xray.Version, status.Xray.State), Inline: true},
-			{Name: tr("pages.index.uptime"), Value: tr("discord.values.uptime", "Days=="+fmt.Sprint(days), "Hours=="+fmt.Sprint(hours)), Inline: true},
+			{Name: tr("pages.index.uptime"), Value: formatStatusUptime(status, tr), Inline: true},
 			{Name: tr("discord.fields.systemLoad"), Value: fmt.Sprintf("%.2f, %.2f, %.2f", load1, load2, load3), Inline: true},
 			{Name: tr("pages.index.memory"), Value: fmt.Sprintf("%s / %s", common.FormatTraffic(int64(status.Mem.Current)), common.FormatTraffic(int64(status.Mem.Total))), Inline: true},
 			{Name: tr("pages.index.historyTitleOnline"), Value: strconv.Itoa(len(onlines)), Inline: true},

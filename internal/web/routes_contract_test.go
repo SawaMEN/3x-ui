@@ -10,25 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/robfig/cron/v3"
-
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/global"
+	"github.com/robfig/cron/v3"
 )
-
-/*
-frontend/src/pages/api-docs/endpoints.ts and focused companion registry files
-are hand-maintained API registries: a route omitted there silently vanishes
-from the generated OpenAPI docs, and an entry for a removed route documents
-an endpoint that 404s. This test constructs the real router and diffs it
-against the registries both ways.
-
-Scope: everything under /panel/api/ plus the session-auth surface the
-registry also documents (/login, /logout, /csrf-token, /getTwoFactorEnable,
-/ws). SPA page routes are UI, not API, and stay out; registry paths that
-start with "/{" describe the standalone subscription server, which this
-engine does not serve.
-*/
 
 var contractExtraRoutes = map[string]bool{
 	"POST /login":              true,
@@ -62,7 +47,7 @@ func registeredContractRoutes(t *testing.T) map[string]bool {
 	t.Cleanup(func() { _ = database.CloseDB() })
 
 	previous := global.GetWebServer()
-	s := NewServer()
+	s := NewServer(nil)
 	s.cron = cron.New(cron.WithLocation(time.Local), cron.WithSeconds())
 	global.SetWebServer(s)
 	t.Cleanup(func() {

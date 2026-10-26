@@ -18,8 +18,6 @@ import (
 	"sync"
 	"time"
 
-	"gorm.io/gorm"
-
 	"github.com/SawaMEN/3x-ui/v3/internal/core"
 	"github.com/SawaMEN/3x-ui/v3/internal/crypto/nodetoken"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
@@ -28,6 +26,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
+	"gorm.io/gorm"
 )
 
 type HeartbeatPatch struct {
@@ -39,19 +38,20 @@ type HeartbeatPatch struct {
 	SingBoxInstalled bool
 	SingBoxKnown     bool
 	// CoreInfoKnown distinguishes a valid legacy response from a failed probe.
-	CoreInfoKnown    bool
-	CoreVersion      string
-	CoreState        string
-	CoreError        string
-	CoreCapabilities *core.Capabilities
-	CoreType         string
-	RunningCore      string
-	PanelVersion     string
-	PanelEdition     string
-	Guid             string
-	CpuPct           float64
-	MemPct           float64
-	UptimeSecs       uint64
+	CoreInfoKnown      bool
+	CoreVersion        string
+	CoreState          string
+	CoreError          string
+	CoreCapabilities   *core.Capabilities
+	CoreType           string
+	RunningCore        string
+	PanelVersion       string
+	PanelEdition       string
+	Guid               string
+	CpuPct             float64
+	MemPct             float64
+	UptimeSecs         uint64
+	UnavailableMetrics []string
 	// NetUp/NetDown are the node's current interface throughput (bytes/sec),
 	// summed over non-virtual interfaces, read from its status response.
 	NetUp     uint64
@@ -1007,21 +1007,28 @@ func (s *NodeService) UpdatePanels(ids []int, dev bool) ([]NodeUpdateResult, err
 
 func (s *NodeService) UpdateHeartbeat(id int, p HeartbeatPatch) error {
 	db := database.GetDB()
+	// Map updates bypass GORM field serializers. Encode the availability list
+	// explicitly so it survives list requests and panel restarts.
+	unavailable, err := json.Marshal(p.UnavailableMetrics)
+	if err != nil {
+		return err
+	}
 	updates := map[string]any{
-		"status":         p.Status,
-		"last_heartbeat": p.LastHeartbeat,
-		"latency_ms":     p.LatencyMs,
-		"panel_version":  p.PanelVersion,
-		"core_type":      p.CoreType,
-		"running_core":   p.RunningCore,
-		"cpu_pct":        p.CpuPct,
-		"mem_pct":        p.MemPct,
-		"uptime_secs":    p.UptimeSecs,
-		"net_up":         p.NetUp,
-		"net_down":       p.NetDown,
-		"last_error":     p.LastError,
-		"xray_state":     p.XrayState,
-		"xray_error":     p.XrayError,
+		"unavailable_metrics": string(unavailable),
+		"status":              p.Status,
+		"last_heartbeat":      p.LastHeartbeat,
+		"latency_ms":          p.LatencyMs,
+		"panel_version":       p.PanelVersion,
+		"core_type":           p.CoreType,
+		"running_core":        p.RunningCore,
+		"cpu_pct":             p.CpuPct,
+		"mem_pct":             p.MemPct,
+		"uptime_secs":         p.UptimeSecs,
+		"net_up":              p.NetUp,
+		"net_down":            p.NetDown,
+		"last_error":          p.LastError,
+		"xray_state":          p.XrayState,
+		"xray_error":          p.XrayError,
 	}
 	if p.Status == "online" && p.PanelEdition != "" {
 		updates["panel_edition"] = p.PanelEdition
@@ -1058,7 +1065,9 @@ func (s *NodeService) UpdateHeartbeat(id int, p HeartbeatPatch) error {
 	}
 	if p.Status == "online" {
 		now := time.Unix(p.LastHeartbeat, 0)
-		nodeMetrics.append(nodeMetricKey(id, "cpu"), now, p.CpuPct)
+		if !slices.Contains(p.UnavailableMetrics, "cpu") {
+			nodeMetrics.append(nodeMetricKey(id, "cpu"), now, p.CpuPct)
+		}
 		nodeMetrics.append(nodeMetricKey(id, "mem"), now, p.MemPct)
 		nodeMetrics.append(nodeMetricKey(id, "netUp"), now, float64(p.NetUp))
 		nodeMetrics.append(nodeMetricKey(id, "netDown"), now, float64(p.NetDown))
@@ -1237,7 +1246,7 @@ func (s *NodeService) withOutboundBridge(nodeID int, outboundTag string, fn func
 
 // A status envelope holds a handful of scalars; the cap keeps a hostile or
 // broken node from dictating the master's allocation on every heartbeat.
-const maxProbeBodyBytes = 1 << 20 // 1 MiB
+const maxProbeBodyBytes = 1 << 20
 
 func (s *NodeService) probe(ctx context.Context, n *model.Node, proxyURL string) (HeartbeatPatch, error) {
 	// Keep the last known configured core even when the HTTP probe fails.
@@ -1310,8 +1319,9 @@ func (s *NodeService) probe(ctx context.Context, n *model.Node, proxyURL string)
 		Success bool   `json:"success"`
 		Msg     string `json:"msg"`
 		Obj     *struct {
-			CpuPct float64 `json:"cpu"`
-			Mem    struct {
+			CpuPct             float64  `json:"cpu"`
+			UnavailableMetrics []string `json:"unavailableMetrics"`
+			Mem                struct {
 				Current uint64 `json:"current"`
 				Total   uint64 `json:"total"`
 			} `json:"mem"`
@@ -1360,6 +1370,7 @@ func (s *NodeService) probe(ctx context.Context, n *model.Node, proxyURL string)
 	}
 	o := envelope.Obj
 	patch.CpuPct = o.CpuPct
+	patch.UnavailableMetrics = o.UnavailableMetrics
 	if o.Mem.Total > 0 {
 		patch.MemPct = float64(o.Mem.Current) * 100.0 / float64(o.Mem.Total)
 	}
@@ -1434,24 +1445,25 @@ func (s *NodeService) probe(ctx context.Context, n *model.Node, proxyURL string)
 }
 
 type ProbeResultUI struct {
-	Status           string             `json:"status" example:"online"`
-	LatencyMs        int                `json:"latencyMs" example:"42"`
-	XrayVersion      string             `json:"xrayVersion" example:"25.10.31"`
-	SingBoxVersion   string             `json:"singboxVersion"`
-	SingBoxInstalled bool               `json:"singboxInstalled"`
-	SingBoxKnown     bool               `json:"singboxKnown"`
-	CoreVersion      string             `json:"coreVersion"`
-	CoreState        string             `json:"coreState"`
-	CoreError        string             `json:"coreError"`
-	CoreCapabilities *core.Capabilities `json:"coreCapabilities"`
-	CoreType         string             `json:"coreType"`
-	RunningCore      string             `json:"runningCore"`
-	PanelVersion     string             `json:"panelVersion" example:"v3.x.x"`
-	PanelEdition     string             `json:"panelEdition" example:"sawamen"`
-	CpuPct           float64            `json:"cpuPct" example:"12.5"`
-	MemPct           float64            `json:"memPct" example:"45.2"`
-	UptimeSecs       uint64             `json:"uptimeSecs" example:"86400"`
-	Error            string             `json:"error"`
+	Status             string             `json:"status" example:"online"`
+	LatencyMs          int                `json:"latencyMs" example:"42"`
+	XrayVersion        string             `json:"xrayVersion" example:"25.10.31"`
+	SingBoxVersion     string             `json:"singboxVersion"`
+	SingBoxInstalled   bool               `json:"singboxInstalled"`
+	SingBoxKnown       bool               `json:"singboxKnown"`
+	CoreVersion        string             `json:"coreVersion"`
+	CoreState          string             `json:"coreState"`
+	CoreError          string             `json:"coreError"`
+	CoreCapabilities   *core.Capabilities `json:"coreCapabilities"`
+	CoreType           string             `json:"coreType"`
+	RunningCore        string             `json:"runningCore"`
+	PanelVersion       string             `json:"panelVersion" example:"v3.x.x"`
+	PanelEdition       string             `json:"panelEdition" example:"sawamen"`
+	CpuPct             float64            `json:"cpuPct" example:"12.5"`
+	MemPct             float64            `json:"memPct" example:"45.2"`
+	UptimeSecs         uint64             `json:"uptimeSecs" example:"86400"`
+	UnavailableMetrics []string           `json:"unavailableMetrics,omitempty"`
+	Error              string             `json:"error"`
 	// XrayState/XrayError are populated on successful probes even when the node's
 	// Xray core is not healthy. The UI uses them for a distinct "panel ok, xray failed" indicator.
 	XrayState    string `json:"presenceRegistry"`
@@ -1468,18 +1480,19 @@ func (p HeartbeatPatch) ToUI(ok bool) ProbeResultUI {
 		SingBoxInstalled: p.SingBoxInstalled,
 		SingBoxKnown:     p.SingBoxKnown,
 		CoreVersion:      p.CoreVersion, CoreState: p.CoreState, CoreError: p.CoreError, CoreCapabilities: p.CoreCapabilities,
-		CoreType:     p.CoreType,
-		RunningCore:  p.RunningCore,
-		PanelVersion: p.PanelVersion,
-		PanelEdition: p.PanelEdition,
-		CpuPct:       p.CpuPct,
-		MemPct:       p.MemPct,
-		UptimeSecs:   p.UptimeSecs,
-		Error:        FriendlyProbeError(p.LastError),
-		XrayState:    p.XrayState,
-		XrayError:    p.XrayError,
-		SingBoxState: p.SingBoxState,
-		SingBoxError: p.SingBoxError,
+		CoreType:           p.CoreType,
+		RunningCore:        p.RunningCore,
+		PanelVersion:       p.PanelVersion,
+		PanelEdition:       p.PanelEdition,
+		CpuPct:             p.CpuPct,
+		MemPct:             p.MemPct,
+		UptimeSecs:         p.UptimeSecs,
+		UnavailableMetrics: p.UnavailableMetrics,
+		Error:              FriendlyProbeError(p.LastError),
+		XrayState:          p.XrayState,
+		XrayError:          p.XrayError,
+		SingBoxState:       p.SingBoxState,
+		SingBoxError:       p.SingBoxError,
 	}
 	if ok {
 		r.Status = "online"
@@ -1494,4 +1507,10 @@ func FriendlyProbeError(msg string) string {
 		return "the server speaks HTTP, not HTTPS; set the node scheme to http"
 	}
 	return msg
+}
+
+func (s *NodeService) SetDownNotified(id int, notified bool) error {
+	return database.GetDB().Model(model.Node{}).
+		Where("id = ?", id).
+		Update("down_notified", notified).Error
 }

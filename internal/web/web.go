@@ -143,7 +143,10 @@ type Server struct {
 }
 
 // NewServer creates a new web server instance with a cancellable context.
-func NewServer() *Server {
+func NewServer(providers ...service.SubLinkProvider) *Server {
+	if len(providers) > 0 && providers[0] != nil {
+		service.RegisterSubLinkProvider(providers[0])
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Server{
 		ctx:    ctx,
@@ -822,6 +825,10 @@ func (s *Server) start(restartXray bool, startTgBot bool) (err error) {
 		return nil
 	})
 
+	controller.SetTgBotCapsFunc(func() (controller.TgBotCapabilities, error) {
+		caps, err := s.tgbotService.Capabilities()
+		return controller.TgBotCapabilities{InlineEnabled: caps.InlineEnabled, GroupPrivacy: caps.GroupPrivacy, Username: caps.Username, Running: caps.Running}, err
+	})
 	controller.SetReloadTgbotFunc(func() {
 		enabled, err := s.settingService.GetTgbotEnabled()
 		if err != nil || !enabled {

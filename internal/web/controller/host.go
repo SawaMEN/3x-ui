@@ -6,7 +6,6 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/web/entity"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/middleware"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
-
 	"github.com/gin-gonic/gin"
 )
 
@@ -22,6 +21,7 @@ func NewHostController(g *gin.RouterGroup) *HostController {
 
 func (a *HostController) initRouter(g *gin.RouterGroup) {
 	g.GET("/list", a.list)
+	g.GET("/raw", a.raw)
 	g.GET("/get/:groupId", a.get)
 	g.GET("/byInbound/:inboundId", a.byInbound)
 	g.GET("/tags", a.tags)
@@ -174,4 +174,15 @@ func (a *HostController) bulkDel(c *gin.Context) {
 		return
 	}
 	jsonMsg(c, I18nWeb(c, "pages.hosts.toasts.delete"), nil)
+}
+
+// raw lists every host row with its numeric id for id-based pickers such as
+// the per-client host rule override.
+func (a *HostController) raw(c *gin.Context) {
+	hosts, err := a.hostService.GetRawHosts()
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.hosts.toasts.list"), err)
+		return
+	}
+	jsonObj(c, hosts, nil)
 }

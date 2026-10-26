@@ -7,10 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/amnezia-vpn/amneziawg-go/v3/device"
-
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/wireguard"
+	"github.com/amnezia-vpn/amneziawg-go/v3/device"
 )
 
 // TestManagerLifecycle exercises Ensure/Reconcile's reconfigure-in-place vs.

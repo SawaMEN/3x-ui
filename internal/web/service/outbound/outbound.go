@@ -10,12 +10,11 @@ import (
 	"sync"
 	"time"
 
-	"gorm.io/gorm"
-
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"gorm.io/gorm"
 )
 
 // OutboundService provides business logic for managing Xray outbound configurations.
@@ -289,7 +288,7 @@ func extractOutboundEndpoints(ob map[string]any) []string {
 		if len(out) == 0 {
 			addServer(settings["address"], settings["port"])
 		}
-	case "hysteria":
+	case "hysteria", "masque":
 		addServer(settings["address"], settings["port"])
 	case "trojan", "shadowsocks", "http", "socks":
 		if servers, ok := settings["servers"].([]any); ok {

@@ -13,6 +13,9 @@ const absolutePath = z
 export const SubProfileModeSchema = z.enum(['none', 'builtin', 'custom']);
 export type SubProfileMode = z.infer<typeof SubProfileModeSchema>;
 
+export const SubHostSortModeSchema = z.enum(['inbound-first', 'hosts-first']);
+export type SubHostSortMode = z.infer<typeof SubHostSortModeSchema>;
+
 export const AllSettingSchema = z
   .object({
     coreType: z.enum(['xray', 'sing-box']).optional(),
@@ -44,6 +47,7 @@ export const AllSettingSchema = z
     remarkTemplate: z.string().optional(),
     subShowIdentityOnAllLinks: z.boolean().optional(),
     subInfoNodeEnable: z.boolean().optional(),
+    subHostSortMode: SubHostSortModeSchema.optional(),
     subCalendarExpireInclusive: z.boolean().optional(),
     subExpiredTemplate: z.string().optional(),
     subTrafficDepletedTemplate: z.string().optional(),
@@ -57,6 +61,7 @@ export const AllSettingSchema = z
     tgBotBackup: z.boolean().optional(),
     tgCpu: z.number().int().min(0).max(100).optional(),
     outboundDownThreshold: z.number().int().min(1).max(100).optional(),
+    nodeDownThreshold: z.number().int().min(1).max(100).optional(),
     tgLang: z.string().optional(),
     twoFactorEnable: z.boolean().optional(),
     twoFactorToken: z.string().optional(),
@@ -97,6 +102,7 @@ export const AllSettingSchema = z
     subClashURI: z.string().optional(),
     subClashEnableRouting: z.boolean().optional(),
     subClashRules: z.string().optional(),
+    subClashRemoteDNS: z.boolean().optional(),
     subJsonMux: z.string().optional(),
     subJsonRules: z.string().optional(),
     subJsonRoutingRules: z.string().optional(),

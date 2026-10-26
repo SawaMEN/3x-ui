@@ -7,6 +7,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/config"
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/crypto"
+
 	"io"
 	"log"
 	"math"
@@ -14,23 +20,20 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/config"
-	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
-	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/util/crypto"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/random"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/sys"
-
 	"github.com/mattn/go-sqlite3"
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 	"gorm.io/gorm/logger"
 )
 
@@ -57,12 +60,6 @@ func Dialect() string {
 	return db.Name()
 }
 
-const (
-	defaultUsername       = "admin"
-	defaultPassword       = "admin"
-	sqliteBackupDirPrefix = ".x-ui-backup-"
-)
-
 func allModels() []any {
 	return []any{
 		&model.User{},
@@ -84,6 +81,7 @@ func allModels() []any {
 		&model.ClientGroup{},
 		&model.InboundFallback{},
 		&model.Host{},
+		&model.HostTombstone{},
 		&model.NodeClientTraffic{},
 		&model.NodeClientIp{},
 		&model.ClientGlobalTraffic{},
@@ -114,6 +112,9 @@ func migrateOutboundSubscriptionUserAgentColumn() error {
 }
 
 func initModels() error {
+	if err := migrateClientKeepAliveRangeColumn(); err != nil {
+		return err
+	}
 	if err := migrateClientTrafficLastSubFetchColumn(); err != nil {
 		return err
 	}
@@ -835,24 +836,10 @@ func mtprotoInboundClientEmail(remark string, used map[string]struct{}) string {
 // first run, so a freshly imported inbound must be converted here instead. Blank
 // or malformed streamSettings, or one without externalProxy entries, is a no-op.
 func CreateHostsFromExternalProxy(tx *gorm.DB, inboundId int, streamSettings string) (int, error) {
-	if strings.TrimSpace(streamSettings) == "" {
-		return 0, nil
-	}
-	var stream map[string]any
-	if err := json.Unmarshal([]byte(streamSettings), &stream); err != nil {
-		return 0, nil
-	}
-	eps, ok := stream["externalProxy"].([]any)
-	if !ok || len(eps) == 0 {
-		return 0, nil
-	}
+	imports, _ := externalProxyHosts(inboundId, streamSettings)
 	created := 0
-	for i, raw := range eps {
-		ep, ok := raw.(map[string]any)
-		if !ok {
-			continue
-		}
-		if err := tx.Create(externalProxyEntryToHost(inboundId, i, ep)).Error; err != nil {
+	for _, host := range imports {
+		if err := tx.Create(host).Error; err != nil {
 			return created, err
 		}
 		created++
@@ -891,10 +878,12 @@ func externalProxyEntryToHost(inboundId, index int, ep map[string]any) *model.Ho
 		Port:                 port,
 		Security:             security,
 		Sni:                  sni,
+		Snis:                 anyToNonEmptyStrings([]any{sni}),
 		Fingerprint:          fingerprint,
 		Alpn:                 anyToNonEmptyStrings(ep["alpn"]),
 		PinnedPeerCertSha256: anyToNonEmptyStrings(ep["pinnedPeerCertSha256"]),
 		EchConfigList:        ech,
+		RandomCount:          1,
 	}
 }
 
@@ -922,13 +911,18 @@ func anyToNonEmptyStrings(v any) []string {
 }
 
 func pruneOrphanedHosts() error {
-	res := db.Exec("DELETE FROM hosts WHERE inbound_id NOT IN (SELECT id FROM inbounds)")
-	if res.Error != nil {
-		log.Printf("Error pruning orphaned hosts rows: %v", res.Error)
-		return res.Error
+	var pruned int64
+	err := db.Transaction(func(tx *gorm.DB) error {
+		var err error
+		pruned, err = DeleteHosts(tx, "inbound_id NOT IN (SELECT id FROM inbounds)")
+		return err
+	})
+	if err != nil {
+		log.Printf("Error pruning orphaned hosts rows: %v", err)
+		return err
 	}
-	if res.RowsAffected > 0 {
-		log.Printf("Pruned %d orphaned hosts row(s)", res.RowsAffected)
+	if pruned > 0 {
+		log.Printf("Pruned %d orphaned hosts row(s)", pruned)
 	}
 	return nil
 }
@@ -1269,28 +1263,6 @@ func isIgnorableDuplicateColumnErr(gdb *gorm.DB, err error, mdl any) bool {
 	return false
 }
 
-func initUser() error {
-	empty, err := isTableEmpty("users")
-	if err != nil {
-		log.Printf("Error checking if users table is empty: %v", err)
-		return err
-	}
-	if empty {
-		hashedPassword, err := crypto.HashPasswordAsBcrypt(defaultPassword)
-		if err != nil {
-			log.Printf("Error hashing default password: %v", err)
-			return err
-		}
-
-		user := &model.User{
-			Username: defaultUsername,
-			Password: hashedPassword,
-		}
-		return db.Create(user).Error
-	}
-	return nil
-}
-
 func seedRandomSubscriptionPaths() error {
 	settings := []model.Setting{
 		{Key: "subPath", Value: "/" + random.NumLower(16) + "/"},
@@ -1315,7 +1287,7 @@ func runSeeders(isUsersEmpty bool) error {
 	}
 
 	if empty && isUsersEmpty {
-		seeders := []string{"UserPasswordHash", "ClientsTable", "InboundClientsArrayFix", "InboundClientTgIdFix2", "InboundClientSubIdFix", "FreedomFinalRulesReverseFix", "FreedomFinalRulesPrivateEgressBlock", "UppercaseFreedomFinalRulesFix", "InboundRealityFinalmaskTcpStrip", "ApiTokensHash", "LegacyProxySettingsCleanup", "OutboundRemovedKeysFix", "FreedomDomainStrategyFix", "DNSOutboundLegacyKeysFix", "DNSOutboundQTypeZeroFix", "HostVerifyPeerCertByNameBoolFix", "WireguardPeersToClients", "MtprotoSecretsToClients", "NodeInboundsAdopted", "ResetIpLimitNoFail2ban", "VKTurnAcceptClientKeysDefaultOn"}
+		seeders := []string{"UserPasswordHash", "ClientsTable", "InboundClientsArrayFix", "InboundClientTgIdFix2", "InboundClientSubIdFix", "FreedomFinalRulesReverseFix", "FreedomFinalRulesPrivateEgressBlock", "UppercaseFreedomFinalRulesFix", "InboundRealityFinalmaskTcpStrip", "ApiTokensHash", "LegacyProxySettingsCleanup", "OutboundRemovedKeysFix", "FreedomDomainStrategyFix", "DNSOutboundLegacyKeysFix", "DNSOutboundQTypeZeroFix", "HostVerifyPeerCertByNameBoolFix", "WireguardPeersToClients", "MtprotoSecretsToClients", "NodeInboundsAdopted", "HostMihomoX25519Reset", "NodeDownNotified", "ResetIpLimitNoFail2ban", "VKTurnAcceptClientKeysDefaultOn"}
 		for _, name := range seeders {
 			if err := db.Create(&model.HistoryOfSeeders{SeederName: name}).Error; err != nil {
 				return err
@@ -1501,6 +1473,16 @@ func runSeeders(isUsersEmpty bool) error {
 
 	// Idempotent, not seeder-gated: bad values can re-enter via a restored
 	// backup, so re-check on every start.
+	if !slices.Contains(seedersHistory, "HostMihomoX25519Reset") {
+		if err := resetPreexistingMihomoX25519(); err != nil {
+			return err
+		}
+	}
+	if !slices.Contains(seedersHistory, "NodeDownNotified") {
+		if err := seedNodeDownNotified(); err != nil {
+			return err
+		}
+	}
 	return normalizeSettingPaths()
 }
 
@@ -2888,9 +2870,10 @@ func InitDB(dbPath string) error {
 			return err
 		}
 	}
-
-	if err := initUser(); err != nil {
+	if username, password, err := EnsureFirstUser(); err != nil {
 		return err
+	} else if username != "" {
+		log.Printf("Initial panel credentials: username=%s password=%s", username, password)
 	}
 	return runSeeders(isUsersEmpty)
 }
@@ -3143,4 +3126,209 @@ func ValidateSQLiteDB(dbPath string) error {
 		return errors.New("sqlite integrity check failed: " + res)
 	}
 	return nil
+}
+
+const sqliteBackupDirPrefix = ".x-ui-backup-"
+
+func migrateClientKeepAliveRangeColumn() error {
+	migrator := db.Migrator()
+	if !migrator.HasTable(&model.ClientRecord{}) || migrator.HasColumn(&model.ClientRecord{}, "wg_keep_alive_range") {
+		return nil
+	}
+	return migrator.AddColumn(&model.ClientRecord{}, "KeepAliveRange")
+}
+
+// mihomo_x25519 was saved but ignored until it began dropping ML-KEM, so rows set
+// back then are cleared once rather than silently changing their subscriptions.
+func resetPreexistingMihomoX25519() error {
+	return db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&model.Host{}).Where("mihomo_x25519 = ?", true).Update("mihomo_x25519", false).Error; err != nil {
+			return err
+		}
+		return tx.Create(&model.HistoryOfSeeders{SeederName: "HostMihomoX25519Reset"}).Error
+	})
+}
+
+// SyncHostsFromExternalProxy carries the entries an inbound update changed onto the hosts
+// still exactly as imported; a stream without the externalProxy key leaves hosts alone.
+func SyncHostsFromExternalProxy(tx *gorm.DB, inboundId int, oldStreamSettings, newStreamSettings string) error {
+	newImports, listed := externalProxyHosts(inboundId, newStreamSettings)
+	if !listed {
+		return nil
+	}
+	oldImports, _ := externalProxyHosts(inboundId, oldStreamSettings)
+	gone, added := changedImports(oldImports, newImports)
+	if len(gone) == 0 && len(added) == 0 {
+		return nil
+	}
+	untouched, err := untouchedImportedHosts(tx, inboundId, oldImports)
+	if err != nil || untouched == nil {
+		return err
+	}
+	for i, old := range gone {
+		host := untouched[old]
+		if host == nil {
+			continue
+		}
+		if i >= len(added) {
+			if _, err := DeleteHosts(tx, "id = ?", host.Id); err != nil {
+				return err
+			}
+			continue
+		}
+		added[i].Id, added[i].GroupId, added[i].SortOrder, added[i].CreatedAt = host.Id, host.GroupId, host.SortOrder, host.CreatedAt
+		if err := tx.Save(added[i]).Error; err != nil {
+			return err
+		}
+	}
+	for _, host := range added[min(len(gone), len(added)):] {
+		if err := tx.Create(host).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// changedImports drops the entries both lists share and returns, in list order, the old
+// positions that changed or went away and the new entries that changed or appeared.
+func changedImports(oldImports, newImports []*model.Host) ([]int, []*model.Host) {
+	kept := make([]bool, len(oldImports))
+	var added []*model.Host
+	for _, next := range newImports {
+		match := -1
+		for i, prev := range oldImports {
+			if !kept[i] && sameImportedHost(prev, next) {
+				match = i
+				break
+			}
+		}
+		if match < 0 {
+			added = append(added, next)
+			continue
+		}
+		kept[match] = true
+	}
+	var gone []int
+	for i := range oldImports {
+		if !kept[i] {
+			gone = append(gone, i)
+		}
+	}
+	return gone, added
+}
+
+// untouchedImportedHosts pairs each old import with a row still equal to it and alone in its
+// group (nil where the admin edited, shared or deleted it); nil when no row qualifies.
+func untouchedImportedHosts(tx *gorm.DB, inboundId int, imports []*model.Host) ([]*model.Host, error) {
+	var stored []*model.Host
+	if err := tx.Where("inbound_id = ?", inboundId).Order("sort_order asc, id asc").Find(&stored).Error; err != nil {
+		return nil, err
+	}
+	paired := make([]*model.Host, len(imports))
+	found := false
+	for i, want := range imports {
+		for _, host := range stored {
+			if slices.Contains(paired, host) || !sameImportedHost(host, want) {
+				continue
+			}
+			var groupRows int64
+			if err := tx.Model(&model.Host{}).Where("group_id = ?", host.GroupId).Count(&groupRows).Error; err != nil {
+				return nil, err
+			}
+			if groupRows == 1 {
+				paired[i], found = host, true
+				break
+			}
+		}
+	}
+	if !found {
+		return nil, nil
+	}
+	return paired, nil
+}
+
+// externalProxyHosts maps each entry to the host an import creates; the bool reports whether
+// the stream carries an externalProxy list at all, an empty one included.
+func externalProxyHosts(inboundId int, streamSettings string) ([]*model.Host, bool) {
+	if strings.TrimSpace(streamSettings) == "" {
+		return nil, false
+	}
+	var stream map[string]any
+	if err := json.Unmarshal([]byte(streamSettings), &stream); err != nil {
+		return nil, false
+	}
+	eps, listed := stream["externalProxy"].([]any)
+	var hosts []*model.Host
+	for i, raw := range eps {
+		if ep, ok := raw.(map[string]any); ok {
+			hosts = append(hosts, externalProxyEntryToHost(inboundId, i, ep))
+		}
+	}
+	return hosts, listed
+}
+
+// sameImportedHost compares every field but row identity and placement, so a host the
+// admin changed in any way no longer counts as the import; empty lists match nil.
+func sameImportedHost(a, b *model.Host) bool {
+	return reflect.DeepEqual(importedHostFields(*a), importedHostFields(*b))
+}
+
+// DeleteHosts deletes the hosts matching query and keeps each one's inbound in host_tombstones, in
+// the caller's transaction, so a client still bound to one fails closed on that inbound alone.
+func DeleteHosts(tx *gorm.DB, query any, args ...any) (int64, error) {
+	var tombstones []model.HostTombstone
+	if err := tx.Model(&model.Host{}).Select("id AS host_id, inbound_id").Where(query, args...).Scan(&tombstones).Error; err != nil {
+		return 0, err
+	}
+	if len(tombstones) == 0 {
+		return 0, nil
+	}
+	// migrate-db resyncs the hosts sequence to MAX(id), so a deleted id can return; keep its latest inbound.
+	if err := tx.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "host_id"}},
+		DoUpdates: clause.AssignmentColumns([]string{"inbound_id"}),
+	}).CreateInBatches(&tombstones, 500).Error; err != nil {
+		return 0, err
+	}
+	res := tx.Where(query, args...).Delete(&model.Host{})
+	return res.RowsAffected, res.Error
+}
+
+// EnsureFirstUser creates the panel's first user with random credentials and returns
+// them, or returns "" when one exists; only the starting server calls it, so it can print them.
+func EnsureFirstUser() (username, password string, err error) {
+	empty, err := isTableEmpty("users")
+	if err != nil || !empty {
+		return "", "", err
+	}
+	username, password = random.Seq(10), random.Seq(16)
+	hashedPassword, err := crypto.HashPasswordAsBcrypt(password)
+	if err != nil {
+		return "", "", err
+	}
+	if err := db.Create(&model.User{Username: username, Password: hashedPassword}).Error; err != nil {
+		return "", "", err
+	}
+	return username, password, nil
+}
+
+// seedNodeDownNotified treats nodes already offline at upgrade as announced,
+// so the first heartbeat after it does not re-send their node.down.
+func seedNodeDownNotified() error {
+	if err := db.Model(&model.Node{}).
+		Where("status = ?", "offline").
+		Update("down_notified", true).Error; err != nil {
+		return err
+	}
+	return db.Create(&model.HistoryOfSeeders{SeederName: "NodeDownNotified"}).Error
+}
+
+func importedHostFields(h model.Host) model.Host {
+	h.Id, h.GroupId, h.SortOrder, h.CreatedAt, h.UpdatedAt = 0, "", 0, 0, 0
+	for _, list := range []*[]string{&h.Tags, &h.Alpn, &h.PinnedPeerCertSha256, &h.ExcludeFromSubTypes, &h.NodeGuids} {
+		if len(*list) == 0 {
+			*list = nil
+		}
+	}
+	return h
 }
