@@ -52,7 +52,8 @@ func fptnCertificateFiles(inst Instance, folder string) (string, string, error) 
 	if err != nil {
 		return "", "", err
 	}
-	if _, ok := pair.PrivateKey.(*rsa.PrivateKey); !ok {
+	privateKey, ok := pair.PrivateKey.(*rsa.PrivateKey)
+	if !ok {
 		return "", "", fmt.Errorf("FPTN requires an RSA certificate for its RS256 access tokens")
 	}
 	if time.Now().Before(leaf.NotBefore) || !time.Now().Before(leaf.NotAfter) {
@@ -61,14 +62,15 @@ func fptnCertificateFiles(inst Instance, folder string) (string, string, error) 
 	if err := leaf.VerifyHostname(s.Hostname); err != nil {
 		return "", "", err
 	}
-	if s.Certificate != "" {
-		return s.Certificate, s.PrivateKey, nil
+	var certificatePEM []byte
+	for _, der := range pair.Certificate {
+		certificatePEM = append(certificatePEM, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})...)
 	}
 	cert, key := filepath.Join(folder, "cert.pem"), filepath.Join(folder, "key.pem")
-	if err := writePrivate(cert, []byte(s.CertificatePEM)); err != nil {
+	if err := writePrivate(cert, certificatePEM); err != nil {
 		return "", "", err
 	}
-	if err := writePrivate(key, []byte(s.PrivateKeyPEM)); err != nil {
+	if err := writePrivate(key, pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(privateKey)})); err != nil {
 		return "", "", err
 	}
 	return cert, key, nil

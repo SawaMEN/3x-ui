@@ -883,7 +883,8 @@ func (s *Server) relayUDPResponses(
 	if size <= 0 || size > maxSafeUdpRelayPacketSize {
 		return
 	}
-	buf := make([]byte, int(uint16(size))+263)
+	buf := make([]byte, size)
+	buf = append(buf, make([]byte, 263)...)
 	var nextPktID uint16
 	for {
 		srcAddr, respPayload, err := sess.relay.Receive(buf)
