@@ -2312,7 +2312,6 @@ func (s *SubService) genHysteriaLink(inbound *model.Inbound, email string) strin
 	if int(version) == 1 {
 		protocol = "hysteria"
 	}
-	remarkProtocol := protocol
 
 	// Set before the externalProxy fan-out: a Host overrides only the
 	// address, so every endpoint inherits the inbound's UDP hop range.
@@ -2358,7 +2357,7 @@ func (s *SubService) genHysteriaLink(inbound *model.Inbound, email string) strin
 	// No external proxy configured — use the inbound's resolved address so
 	// node-managed inbounds get the node's host instead of the central panel's.
 	link := fmt.Sprintf("%s://%s@%s", protocol, auth, joinHostPort(s.resolveInboundAddress(inbound), inbound.Port))
-	return buildLinkWithParams(link, params, s.genRemark(inbound, email, remarkProtocol, "quic"))
+	return buildLinkWithParams(link, params, s.genRemark(inbound, email, "", "quic"))
 }
 
 // hysteriaHopPorts returns the configured Hysteria2 UDP port-hopping range, or

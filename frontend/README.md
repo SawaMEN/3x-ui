@@ -30,7 +30,7 @@ production-style links work without round-tripping through Go.
 | Command | What |
 |---|---|
 | `npm run dev` | Vite dev server with API + WS proxy to Go |
-| `npm run build` | Regenerates OpenAPI + Zod, then builds into `../internal/web/dist/` |
+| `npm run build` | Regenerates OpenAPI, then builds into `../internal/web/dist/` |
 | `npm run preview` | Serve the built bundle locally |
 | `npm run typecheck` | `tsc --noEmit` (strict, no emit) |
 | `npm run lint` | oxlint over `src/` + `tools/` (`.oxlintrc.json`) |

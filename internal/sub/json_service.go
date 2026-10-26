@@ -526,7 +526,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 				}
 				endpoint := map[string]any{
 					"type":        "wireguard",
-					"tag":         fmt.Sprintf("WireGuard · %s-%d", client.Email, len(wireguardConfigs)+1),
+					"tag":         subReq.endpointRemark(inbound, client.Email, shareEndpoint.ep, ""),
 					"address":     addresses,
 					"private_key": client.PrivateKey,
 					"peers":       []any{peer},
@@ -685,7 +685,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 						native := s.genNativeTLSLikeEndpoint(subReq, inbound, client, endpoint)
 						if s.wrapNativeShadowTLS(inbound, native, endpoint.ep) {
 							generated++
-							native["tag"] = fmt.Sprintf("AnyTLS + ShadowTLS · %s-%d", client.Email, len(proxies)+1)
+							native["tag"] = subReq.endpointRemark(inbound, client.Email, endpoint.ep, "")
 							proxies = append(proxies, nativeOutbound{out: native})
 						}
 					}
@@ -712,7 +712,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 							continue
 						}
 						generated++
-						native["tag"] = fmt.Sprintf("ShadowTLS · %s-%d", client.Email, len(proxies)+1)
+						native["tag"] = subReq.endpointRemark(inbound, client.Email, endpointCopies[index], "")
 						proxies = append(proxies, nativeOutbound{out: native})
 					}
 				}
@@ -772,14 +772,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 					if err := json.Unmarshal(nativeRaw, &native); err != nil || native == nil {
 						continue
 					}
-					tag := client.Email
-					if tag == "" {
-						tag = fmt.Sprintf("proxy-%d", len(proxies)+1)
-					}
-					if len(proxies) > 0 {
-						tag = fmt.Sprintf("%s-%d", tag, len(proxies)+1)
-					}
-					native["tag"] = tag
+					native["tag"] = subReq.endpointRemark(inbound, client.Email, endpoint, "")
 					proxies = append(proxies, nativeOutbound{out: native})
 					generated++
 				}
@@ -798,19 +791,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 					if native == nil {
 						continue
 					}
-					tag := client.Email
-					if inbound.Protocol == model.ShadowTLS {
-						tag = "ShadowTLS · " + tag
-					} else {
-						tag = "AnyTLS · " + tag
-					}
-					if tag == "" {
-						tag = fmt.Sprintf("proxy-%d", len(proxies)+1)
-					}
-					if len(proxies) > 0 {
-						tag = fmt.Sprintf("%s-%d", tag, len(proxies)+1)
-					}
-					native["tag"] = tag
+					native["tag"] = subReq.endpointRemark(inbound, client.Email, endpoint.ep, "")
 					proxies = append(proxies, nativeOutbound{out: native})
 					generated++
 				}
@@ -828,7 +809,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 				if err == nil && client.Password != "" {
 					for _, endpoint := range subReq.shareEndpointsForInbound(inbound) {
 						native := settings.Outbound(endpoint.Address, endpoint.Port, client)
-						native["tag"] = fmt.Sprintf("Snell · %s-%d", client.Email, len(proxies)+1)
+						native["tag"] = subReq.endpointRemark(inbound, client.Email, endpoint.ep, "")
 						proxies = append(proxies, nativeOutbound{out: native})
 						generated++
 					}
@@ -849,7 +830,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 					if native == nil {
 						continue
 					}
-					native["tag"] = fmt.Sprintf("MASQUE · %s-%d", client.Email, len(proxies)+1)
+					native["tag"] = subReq.endpointRemark(inbound, client.Email, endpoint.ep, "")
 					proxies = append(proxies, nativeOutbound{out: native})
 					generated++
 				}
@@ -873,14 +854,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 					if native == nil {
 						continue
 					}
-					tag := client.Email
-					if tag == "" {
-						tag = fmt.Sprintf("proxy-%d", len(proxies)+1)
-					}
-					if len(proxies) > 0 {
-						tag = fmt.Sprintf("%s-%d", tag, len(proxies)+1)
-					}
-					native["tag"] = tag
+					native["tag"] = subReq.endpointRemark(inbound, client.Email, endpoint, "")
 					proxies = append(proxies, nativeOutbound{out: native})
 					generated++
 				}
@@ -918,14 +892,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 					}
 					native = translated
 				}
-				tag := client.Email
-				if tag == "" {
-					tag = fmt.Sprintf("proxy-%d", len(proxies)+1)
-				}
-				if len(proxies) > 0 {
-					tag = fmt.Sprintf("%s-%d", tag, len(proxies)+1)
-				}
-				native["tag"] = tag
+				native["tag"], _ = xrayCfg["remarks"].(string)
 				proxies = append(proxies, nativeOutbound{out: native})
 			}
 		}

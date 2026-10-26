@@ -2,7 +2,7 @@
 
 Ветка: `update`. Целевое ядро: модифицированный **Sing-box**,
 собранный из `SawaMEN/hiddify-core` по текущему
-[hiddify-core-target.json](hiddify-core-target.json).
+[hiddify-core-target.json](../../hiddify-core-target.json).
 Старый тип `hiddify-core` остаётся входным алиасом; результат — `sing-box`.
 Этап 10 (удаление старых интеграций и смена поведения новых установок) сюда не входит.
 

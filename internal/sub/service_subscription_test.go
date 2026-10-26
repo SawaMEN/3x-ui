@@ -458,8 +458,8 @@ func TestGetSubs_Hysteria2AndNaiveKeepSeparateConnections(t *testing.T) {
 	if hysteriaLink == "" || naiveLink == "" {
 		t.Fatalf("subscription must contain one Hysteria2 and one Naive link: %v", links)
 	}
-	if !strings.Contains(hysteriaLink, "#shared-hysteria2-") {
-		t.Fatalf("Hysteria2 remark does not identify its protocol: %s", hysteriaLink)
+	if !strings.HasSuffix(hysteriaLink, "#shared-shared%40example.com") {
+		t.Fatalf("Hysteria2 must use the shared remark format: %s", hysteriaLink)
 	}
 	if !strings.Contains(naiveLink, "naive.example.com:42132") || !strings.Contains(naiveLink, "shared%40example.com") {
 		t.Fatalf("Naive link does not identify its connection: %s", naiveLink)

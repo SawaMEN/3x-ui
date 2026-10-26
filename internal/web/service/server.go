@@ -277,7 +277,9 @@ func (s *ServerService) isFail2banInstalled() bool {
 		return s.fail2banInstalled
 	}
 
-	err := exec.CommandContext(context.Background(), "fail2ban-client", "-h").Run()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	err := exec.CommandContext(ctx, "fail2ban-client", "-h").Run()
 	s.fail2banInstalled = err == nil
 	s.fail2banCheckedAt = time.Now()
 	return s.fail2banInstalled

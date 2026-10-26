@@ -27,4 +27,28 @@ describe('AntdRootConfig locale', () => {
 
     expect(document.querySelector('.ant-empty-description')?.textContent).toBe(emptyText);
   });
+  it('still renders when the component locale chunk cannot load', async () => {
+    vi.resetModules();
+    document.cookie = 'lang=ru-RU; path=/';
+    vi.doMock('antd/es/locale/ru_RU', () => {
+      throw new Error('Failed to fetch dynamically imported module');
+    });
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const { readyI18n } = await import('@/i18n/react');
+      await readyI18n('panel');
+      const { AntdRootConfig } = await import('@/i18n/AntdRootConfig');
+      const { Empty } = await import('antd');
+      render(
+        <AntdRootConfig>
+          <Empty />
+        </AntdRootConfig>,
+      );
+      expect(document.querySelector('.ant-empty-description')?.textContent).toBe('No data');
+      expect(log).toHaveBeenCalled();
+    } finally {
+      vi.doUnmock('antd/es/locale/ru_RU');
+      log.mockRestore();
+    }
+  });
 });

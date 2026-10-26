@@ -157,7 +157,7 @@ func TestHiddifyExtendedProtocolsSurviveMixedSubscription(t *testing.T) {
 			settings["server"] = map[string]any{"privateKey": serverKey, "publicKey": serverPub, "jc": 4, "jmin": 40, "jmax": 80, "s1": 12, "s2": 12, "s3": 12, "s4": 12, "h1": "11", "h2": "12", "h3": "13", "h4": "14"}
 		}
 		raw, _ := json.Marshal(settings)
-		ib := &model.Inbound{UserId: 1, Tag: string(protocol), Protocol: protocol, Enable: true, Port: 2012, Settings: string(raw), NodeID: &node.Id}
+		ib := &model.Inbound{UserId: 1, Tag: string(protocol), Protocol: protocol, Remark: "Office", Enable: true, Port: 2012, Settings: string(raw), NodeID: &node.Id}
 		if protocol == model.FPTN || protocol == model.OpenFlux {
 			if err := externalvpn.PrepareAdditional(ib, ""); err != nil {
 				t.Fatal(err)
@@ -196,6 +196,9 @@ func TestHiddifyExtendedProtocolsSurviveMixedSubscription(t *testing.T) {
 		t.Fatalf("missing AWG: %s", data)
 	}
 	for _, ob := range cfg.Outbounds {
+		if tag, _ := ob["tag"].(string); !strings.HasPrefix(tag, "Office-extended") {
+			t.Fatalf("protocol bypassed the shared remark: %s", data)
+		}
 		if ob["type"] != "openflux" && ob["server"] != "edge.example" {
 			t.Fatalf("lost public endpoint: %s", data)
 		}

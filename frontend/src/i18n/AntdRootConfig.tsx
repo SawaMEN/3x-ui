@@ -24,7 +24,12 @@ const antdLocaleLoaders: Record<string, () => Promise<{ default: Locale }>> = {
 let antdLocale: Locale | undefined;
 
 export async function loadAntdLocale(language: string): Promise<void> {
-  antdLocale = (await antdLocaleLoaders[language]?.())?.default;
+  try {
+    antdLocale = (await antdLocaleLoaders[language]?.())?.default;
+  } catch (error) {
+    console.error('Unable to load component locale, using English', error);
+    antdLocale = undefined;
+  }
 }
 
 // A Form.Item tooltip icon sits inside its <label>, so its "question-circle" name
