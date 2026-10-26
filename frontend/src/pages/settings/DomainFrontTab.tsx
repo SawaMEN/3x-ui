@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { keys } from '@/api/queryKeys';
 import { useDomainFrontStatus } from '@/api/queries/useDomainFrontStatus';
@@ -38,7 +39,6 @@ import {
 import type { DomainConfigForm, DomainForm } from '@/schemas/domain-front';
 import type { AllSetting } from '@/models/setting';
 import { SettingListItem } from '@/components/ui';
-import SubscriptionDomains from './SubscriptionDomains';
 import { useInboundOptions } from '@/api/queries/useInboundOptions';
 
 export default function DomainFrontTab({
@@ -543,7 +543,7 @@ export default function DomainFrontTab({
               label: t('pages.settings.domains.manualSettings'),
               children: (
                 <>
-                  <SubscriptionDomains allSetting={allSetting} updateSetting={updateSetting} />
+                  <Link to="/settings#subscription">{t('pages.settings.subscriptionAccess')}</Link>
                   {(['webCertFile', 'webKeyFile', 'subCertFile', 'subKeyFile'] as const).map(
                     (key) => (
                       <SettingListItem

@@ -34,6 +34,7 @@ export const AllSettingSchema = z
     subAppearanceAccent: z.string().optional(),
     subPublicURL: z.string().optional(),
     subAllowedDomains: z.string().optional(),
+    subRestrictDomains: z.boolean().optional(),
     subCDNEnable: z.boolean().optional(),
     webBasePath: absolutePath.optional(),
     sessionMaxAge: z.number().int().min(1).max(525600).optional(),

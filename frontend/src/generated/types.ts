@@ -152,6 +152,7 @@ export interface AllSetting {
   subProfileMode: string;
   subProfileUrl: string;
   subPublicURL: string;
+  subRestrictDomains: boolean;
   subRoutingRules: string;
   subShowIdentityOnAllLinks: boolean;
   subSupportUrl: string;
@@ -325,6 +326,7 @@ export interface AllSettingView {
   subProfileMode: string;
   subProfileUrl: string;
   subPublicURL: string;
+  subRestrictDomains: boolean;
   subRoutingRules: string;
   subShowIdentityOnAllLinks: boolean;
   subSupportUrl: string;

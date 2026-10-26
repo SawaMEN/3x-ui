@@ -37,6 +37,7 @@ type AllSetting struct {
 	SubAppearanceLogoURL     string `json:"subAppearanceLogoURL" form:"subAppearanceLogoURL"`
 	SubAppearanceAccent      string `json:"subAppearanceAccent" form:"subAppearanceAccent"`
 	SubPublicURL             string `json:"subPublicURL" form:"subPublicURL"`
+	SubRestrictDomains       bool   `json:"subRestrictDomains" form:"subRestrictDomains"`
 	SubAllowedDomains        string `json:"subAllowedDomains" form:"subAllowedDomains"`
 	SubCDNEnable             bool   `json:"subCDNEnable" form:"subCDNEnable"`
 	WebBasePath              string `json:"webBasePath" form:"webBasePath"`

@@ -114,3 +114,51 @@ func TestExplicitSubscriptionOriginOverridesManagedDomain(t *testing.T) {
 		t.Fatalf("automatic CDN = %v, %v", cdn, err)
 	}
 }
+
+func TestRestrictedSubscriptionHostsExcludeImplicitDomains(t *testing.T) {
+	setupConflictDB(t)
+	s := &SettingService{}
+	cfg := domainfront.DefaultConfig()
+	cfg.Enabled = true
+	cfg.SubscriptionDomain = "managed.example.com"
+	cfg.Domains = []domainfront.DomainFrontDomain{
+		{Name: "managed.example.com", Enabled: true, Mode: "direct", TLS: "auto"},
+		{Name: "panel.example.com", Enabled: true, Mode: "direct", TLS: "auto", Panel: true},
+	}
+	raw, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for key, value := range map[string]string{
+		"domainFrontConfig": string(raw), "subRestrictDomains": "true",
+		"subPublicURL": "https://selected.example.com:8443", "subAllowedDomains": "extra.example.com",
+	} {
+		if err := s.saveSetting(key, value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	hosts, err := s.GetSubscriptionAllowedHosts("origin.example.com")
+	if err != nil || len(hosts) != 2 || !hosts["selected.example.com"] || !hosts["extra.example.com"] {
+		t.Fatalf("restricted hosts = %#v, %v", hosts, err)
+	}
+	if got, err := s.GetSubPublicURL(); err != nil || got != "https://selected.example.com:8443" {
+		t.Fatalf("public URL = %q, %v", got, err)
+	}
+	if err := s.saveSetting("subAllowedDomains", ""); err != nil {
+		t.Fatal(err)
+	}
+	hosts, err = s.GetSubscriptionAllowedHosts("origin.example.com")
+	if err != nil || len(hosts) != 1 || !hosts["selected.example.com"] {
+		t.Fatalf("single domain = %#v, %v", hosts, err)
+	}
+	if err := validateSubscriptionDomains(&entity.AllSetting{SubRestrictDomains: true}); err == nil {
+		t.Fatal("restricted access accepted without a public origin")
+	}
+	if err := s.saveSetting("subRestrictDomains", "false"); err != nil {
+		t.Fatal(err)
+	}
+	hosts, err = s.GetSubscriptionAllowedHosts("origin.example.com")
+	if err != nil || !hosts["managed.example.com"] || !hosts["panel.example.com"] || !hosts["origin.example.com"] {
+		t.Fatalf("legacy hosts = %#v, %v", hosts, err)
+	}
+}

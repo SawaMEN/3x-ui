@@ -11,6 +11,10 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/web/entity"
 )
 
+func (s *SettingService) GetSubRestrictDomains() (bool, error) {
+	return s.getBool("subRestrictDomains")
+}
+
 func (s *SettingService) GetSubPublicURL() (string, error) {
 	raw, err := s.getString("subPublicURL")
 	if err != nil {
@@ -57,18 +61,22 @@ func (s *SettingService) GetSubCDNEnable() (bool, error) {
 
 func (s *SettingService) GetSubscriptionAllowedHosts(primary string) (map[string]bool, error) {
 	hosts := map[string]bool{}
+	restricted, err := s.getBool("subRestrictDomains")
+	if err != nil {
+		return nil, err
+	}
 	cfg, err := s.GetDomainFrontConfig()
 	if err != nil {
 		return nil, err
 	}
-	if cfg.Enabled {
+	if cfg.Enabled && !restricted {
 		for _, d := range cfg.Domains {
 			if d.Enabled {
 				hosts[d.Name] = true
 			}
 		}
 	}
-	if primary != "" {
+	if primary != "" && !restricted {
 		hosts[strings.TrimSuffix(strings.ToLower(primary), ".")] = true
 	}
 	publicURL, err := s.GetSubPublicURL()
@@ -89,11 +97,17 @@ func (s *SettingService) GetSubscriptionAllowedHosts(primary string) (map[string
 	for _, host := range strings.FieldsFunc(aliases, func(r rune) bool { return r == ',' || r == '\n' || r == ' ' || r == ';' }) {
 		hosts[strings.TrimSuffix(strings.ToLower(host), ".")] = true
 	}
+	if restricted && publicURL == "" {
+		return nil, fmt.Errorf("restricted subscriptions require a public subscription URL")
+	}
 	return hosts, nil
 }
 
 func validateSubscriptionDomains(settings *entity.AllSetting) error {
 	settings.SubPublicURL = strings.TrimSpace(settings.SubPublicURL)
+	if settings.SubRestrictDomains && settings.SubPublicURL == "" {
+		return fmt.Errorf("restricted subscriptions require a public subscription URL")
+	}
 	if settings.SubPublicURL != "" {
 		u, err := url.Parse(settings.SubPublicURL)
 		if err != nil || u.Hostname() == "" || (u.Scheme != "https" && u.Scheme != "http") || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {

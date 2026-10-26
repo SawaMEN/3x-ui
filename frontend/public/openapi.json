@@ -491,6 +491,9 @@
           "subPublicURL": {
             "type": "string"
           },
+          "subRestrictDomains": {
+            "type": "boolean"
+          },
           "subRoutingRules": {
             "type": "string"
           },
@@ -728,6 +731,7 @@
           "subProfileMode",
           "subProfileUrl",
           "subPublicURL",
+          "subRestrictDomains",
           "subRoutingRules",
           "subShowIdentityOnAllLinks",
           "subSupportUrl",
@@ -1209,6 +1213,9 @@
           "subPublicURL": {
             "type": "string"
           },
+          "subRestrictDomains": {
+            "type": "boolean"
+          },
           "subRoutingRules": {
             "type": "string"
           },
@@ -1454,6 +1461,7 @@
           "subProfileMode",
           "subProfileUrl",
           "subPublicURL",
+          "subRestrictDomains",
           "subRoutingRules",
           "subShowIdentityOnAllLinks",
           "subSupportUrl",

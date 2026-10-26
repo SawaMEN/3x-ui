@@ -18,6 +18,7 @@ export class AllSetting {
   subAppearanceAccent = '#808080';
   subPublicURL = '';
   subAllowedDomains = '';
+  subRestrictDomains = false;
   subCDNEnable = false;
   webBasePath = '/';
   sessionMaxAge = 360;

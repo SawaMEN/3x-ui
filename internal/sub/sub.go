@@ -418,7 +418,12 @@ func (s *Server) subscriptionDomainValidator(primary string) gin.HandlerFunc {
 		// A legacy Hiddify URL may intentionally use its imported public domain,
 		// but only when the main panel listener already validated and forwarded it.
 		// Direct requests on subPort must obey the normal subscription domain rule.
-		if isLegacyHiddifyPanelForward(c.Request) {
+		restricted, restrictionErr := s.settingService.GetSubRestrictDomains()
+		if restrictionErr != nil {
+			c.AbortWithStatus(http.StatusServiceUnavailable)
+			return
+		}
+		if !restricted && isLegacyHiddifyPanelForward(c.Request) {
 			aliases, err := s.settingService.GetHiddifyLegacySubscriptionAliases()
 			if err == nil {
 				if subID, ok := legacyHiddifySubID(c.Request.URL.Path, aliases); ok && s.settingService.IsHiddifySubscriptionPath(subID, c.Request.URL.Path) {

@@ -7,6 +7,17 @@ deployments that use their own external reverse proxy.
 
 Configure **Settings → Subscription → Panel settings**:
 
+- **Subscription domains**: select one or more enabled names from Domains and TLS,
+  or enter externally managed names. The first name becomes the public origin;
+  the remaining names become aliases. Selecting names enables **Use only selected
+  domains**, which rejects other gateway domains and the internal listener hostname.
+  Disable the restriction to restore the previous automatic domain allowance.
+- **Public subscription port**: changes the port advertised in all subscription
+  formats, independently of the internal subscription listener. For integrated
+  domains, use the gateway public port configured in Domains and TLS; external
+  proxies must forward the selected public port to the internal subscription port.
+  Editing this field does not rebind the gateway or configure an external proxy.
+
 - **Public subscription address**: `https://sub.example.com` (no path). The panel,
   subscription page and Telegram bot use this origin for raw, JSON and Clash URLs.
   Their existing path settings are appended automatically. This explicitly overrides

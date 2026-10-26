@@ -8,8 +8,6 @@ import { useTheme } from '@/hooks/useTheme';
 
 interface SubHeaderProps {
   whiteMax: boolean;
-  whiteMaxDark?: boolean;
-  onWhiteMaxDarkChange?: () => void;
   onWhiteMaxChange: (value: boolean) => void;
   title: string;
   logoURL?: string;
@@ -22,8 +20,6 @@ interface SubHeaderProps {
 export default function SubHeader({
   title,
   whiteMax,
-  whiteMaxDark = true,
-  onWhiteMaxDarkChange,
   onWhiteMaxChange,
   logoURL,
   sId,
@@ -49,7 +45,7 @@ export default function SubHeader({
     [],
   );
 
-  const effectiveDark = whiteMax ? whiteMaxDark : isDark;
+  const effectiveDark = whiteMax || isDark;
   const themeIcon = !effectiveDark ? <SunOutlined /> : <MoonOutlined />;
   const [failedLogo, setFailedLogo] = useState('');
   const initial = Array.from(title)[0]?.toUpperCase();
@@ -79,17 +75,6 @@ export default function SubHeader({
         </div>
       </div>
       <div className="sub-toolbar">
-        {whiteMax && (
-          <Button
-            shape="circle"
-            size="large"
-            className="toolbar-btn"
-            aria-label={t('subscription.whiteMaxToggle')}
-            title={t('subscription.whiteMaxToggle')}
-            onClick={onWhiteMaxDarkChange}
-            icon={whiteMaxDark ? <SunOutlined /> : <MoonOutlined />}
-          />
-        )}
         <Dropdown
           menu={{
             selectedKeys: [whiteMax ? 'whitemax' : mode],

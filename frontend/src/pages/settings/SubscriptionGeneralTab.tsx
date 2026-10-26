@@ -18,6 +18,7 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { catTabLabel } from './catTabLabel';
 import { sanitizePath, normalizePath } from './uriPath';
 import HappSettingsContent from './HappSettingsContent';
+import SubscriptionDomains from './SubscriptionDomains';
 import { remoteSourceBadge } from './subscriptionShared';
 
 interface SubscriptionGeneralTabProps {
@@ -137,6 +138,7 @@ export default function SubscriptionGeneralTab({
                   }
                 />
               )}
+              <SubscriptionDomains allSetting={allSetting} updateSetting={updateSetting} />
               <SettingListItem
                 paddings="small"
                 title={t('pages.settings.subHostSortMode')}

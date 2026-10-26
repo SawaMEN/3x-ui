@@ -30,3 +30,39 @@ describe('subscription public domain settings', () => {
     expect(update).toHaveBeenCalledWith({ subCDNEnable: true });
   });
 });
+
+describe('restricted subscription domain selection', () => {
+  it('saves the public port and all selected hosts without changing the internal listener', () => {
+    const update = vi.fn();
+    renderWithProviders(
+      <MemoryRouter>
+        <SubscriptionDomains
+          allSetting={
+            new AllSetting({
+              subPublicURL: 'https://first.example.com',
+              subAllowedDomains: 'second.example.com',
+              subPort: 2096,
+            })
+          }
+          updateSetting={update}
+        />
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByRole('switch', { name: 'Use only selected domains' }));
+    expect(update).toHaveBeenLastCalledWith({
+      subRestrictDomains: true,
+      subPublicURL: 'https://first.example.com',
+      subAllowedDomains: 'second.example.com',
+      subCDNEnable: false,
+    });
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Public subscription port' }), {
+      target: { value: '8443' },
+    });
+    expect(update).toHaveBeenLastCalledWith({
+      subRestrictDomains: true,
+      subPublicURL: 'https://first.example.com:8443',
+      subAllowedDomains: 'second.example.com',
+      subCDNEnable: false,
+    });
+  });
+});
