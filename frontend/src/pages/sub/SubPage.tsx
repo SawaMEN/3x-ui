@@ -39,7 +39,7 @@ import {
 import './SubPage.css';
 import './SubWhiteMax.css';
 import WhiteMaxBackdrop from './WhiteMaxBackdrop';
-import { whiteMaxTheme, readWhiteMaxDark } from './whiteMaxTheme';
+import { whiteMaxTheme } from './whiteMaxTheme';
 
 const subData = window.__SUB_PAGE_DATA__ || {};
 
@@ -99,16 +99,6 @@ export default function SubPage() {
   const { t } = useTranslation();
   const { isDark, isUltra, antdThemeConfig } = useTheme();
   const [whiteMax, setWhiteMax] = useState(appearance?.theme === 'whitemax');
-  const [whiteMaxDark, setWhiteMaxDark] = useState(readWhiteMaxDark);
-  const toggleWhiteMaxDark = () => {
-    const next = !whiteMaxDark;
-    setWhiteMaxDark(next);
-    try {
-      localStorage.setItem('xui-whitemax-palette', next ? 'dark' : 'light');
-    } catch {
-      /* Storage can be unavailable. */
-    }
-  };
   const [messageApi, messageContextHolder] = message.useMessage();
   useEffect(() => {
     setMessageInstance(messageApi);
@@ -305,7 +295,7 @@ export default function SubPage() {
   const direction = RTL_LANGUAGES.has(lang) ? 'rtl' : 'ltr';
   const pageClass = [
     'subscription-page',
-    (whiteMax ? whiteMaxDark : isDark) && 'is-dark',
+    (whiteMax || isDark) && 'is-dark',
     !whiteMax && isUltra && 'is-ultra',
     whiteMax && 'sub-whitemax',
   ]
@@ -314,14 +304,11 @@ export default function SubPage() {
 
   const subscriptionStyle = {
     ...(appearance && !whiteMax ? { '--sub-accent': appearance.accent } : {}),
-    colorScheme: (whiteMax ? whiteMaxDark : isDark) ? 'dark' : 'light',
+    colorScheme: whiteMax || isDark ? 'dark' : 'light',
   } as React.CSSProperties;
 
   return (
-    <ConfigProvider
-      theme={whiteMax ? whiteMaxTheme(whiteMaxDark) : antdThemeConfig}
-      direction={direction}
-    >
+    <ConfigProvider theme={whiteMax ? whiteMaxTheme() : antdThemeConfig} direction={direction}>
       {messageContextHolder}
       <Layout className={pageClass} dir={direction} style={subscriptionStyle}>
         {whiteMax ? (
@@ -336,8 +323,6 @@ export default function SubPage() {
             <SubHeader
               title={subTitle}
               whiteMax={whiteMax}
-              whiteMaxDark={whiteMaxDark}
-              onWhiteMaxDarkChange={toggleWhiteMaxDark}
               onWhiteMaxChange={setWhiteMax}
               logoURL={appearance?.logoURL}
               sId={sId}

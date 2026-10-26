@@ -453,6 +453,9 @@ export const SCHEMAS: Record<string, unknown> = {
       "subPublicURL": {
         "type": "string"
       },
+      "subRestrictDomains": {
+        "type": "boolean"
+      },
       "subRoutingRules": {
         "type": "string"
       },
@@ -687,6 +690,7 @@ export const SCHEMAS: Record<string, unknown> = {
       "subProfileMode",
       "subProfileUrl",
       "subPublicURL",
+      "subRestrictDomains",
       "subRoutingRules",
       "subShowIdentityOnAllLinks",
       "subSupportUrl",
@@ -1156,6 +1160,9 @@ export const SCHEMAS: Record<string, unknown> = {
       "subPublicURL": {
         "type": "string"
       },
+      "subRestrictDomains": {
+        "type": "boolean"
+      },
       "subRoutingRules": {
         "type": "string"
       },
@@ -1398,6 +1405,7 @@ export const SCHEMAS: Record<string, unknown> = {
       "subProfileMode",
       "subProfileUrl",
       "subPublicURL",
+      "subRestrictDomains",
       "subRoutingRules",
       "subShowIdentityOnAllLinks",
       "subSupportUrl",

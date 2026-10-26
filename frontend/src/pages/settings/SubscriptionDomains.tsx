@@ -1,4 +1,4 @@
-import { Alert, Input, Switch } from 'antd';
+import { Alert, Input, InputNumber, Select, Switch, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import type { AllSetting } from '@/models/setting';
 import { SettingListItem } from '@/components/ui';
@@ -24,8 +24,96 @@ export default function SubscriptionDomains({
   const publicURL = allSetting.subPublicURL;
   const usingManaged = !!managed && !overridden;
   const config = usingManaged ? '' : subscriptionCaddyConfig(allSetting);
+  let origin: URL | undefined;
+  try {
+    origin = new URL(publicURL || automaticURL);
+  } catch {
+    /* The manual origin may be incomplete while editing. */
+  }
+  const selected = [
+    ...new Set([
+      ...(origin ? [origin.hostname] : []),
+      ...allSetting.subAllowedDomains.split(/[,;\s]+/).filter(Boolean),
+    ]),
+  ];
+  const port = origin ? Number(origin.port || (origin.protocol === 'http:' ? 80 : 443)) : 443;
+  function selectDomains(domains: string[], nextPort = port) {
+    const names = [...new Set(domains.map((name) => name.trim().toLowerCase()).filter(Boolean))];
+    if (!names.length) return;
+    const scheme = origin?.protocol || 'https:';
+    const defaultPort = scheme === 'https:' ? 443 : 80;
+    updateSetting({
+      subRestrictDomains: true,
+      subPublicURL: `${scheme}//${names[0]}${nextPort === defaultPort ? '' : `:${nextPort}`}`,
+      subAllowedDomains: names.slice(1).join(','),
+      subCDNEnable:
+        status?.config.domains.find((item) => item.name === names[0])?.mode === 'cdn' ||
+        (!status?.config.domains.some((item) => item.name === names[0]) && allSetting.subCDNEnable),
+    });
+  }
   return (
     <>
+      <Typography.Title level={5}>{t('pages.settings.subscriptionAccess')}</Typography.Title>
+      <SettingListItem
+        paddings="small"
+        title={t('pages.settings.subRestrictDomains')}
+        description={t('pages.settings.subRestrictDomainsDesc')}
+      >
+        <Switch
+          aria-label={t('pages.settings.subRestrictDomains')}
+          checked={allSetting.subRestrictDomains}
+          disabled={!selected.length}
+          onChange={(enabled) =>
+            enabled ? selectDomains(selected) : updateSetting({ subRestrictDomains: false })
+          }
+        />
+      </SettingListItem>
+      <SettingListItem
+        paddings="small"
+        title={t('pages.settings.subSelectedDomains')}
+        description={t('pages.settings.subSelectedDomainsDesc')}
+      >
+        <Select
+          mode="tags"
+          aria-label={t('pages.settings.subSelectedDomains')}
+          style={{ width: '100%' }}
+          value={selected}
+          tokenSeparators={[',', ';', ' ']}
+          options={status?.config.domains
+            .filter((item) => item.enabled)
+            .map((item) => ({
+              value: item.name,
+              label: item.name,
+            }))}
+          onChange={(names: string[]) => {
+            if (names.length) selectDomains(names);
+          }}
+        />
+      </SettingListItem>
+      <SettingListItem
+        paddings="small"
+        title={t('pages.settings.subPublicPort')}
+        description={t('pages.settings.subPublicPortDesc')}
+      >
+        <InputNumber
+          min={1}
+          max={65535}
+          precision={0}
+          aria-label={t('pages.settings.subPublicPort')}
+          value={port}
+          disabled={!selected.length}
+          onChange={(value) => {
+            if (value != null) selectDomains(selected, value);
+          }}
+        />
+      </SettingListItem>
+      {status?.config.enabled &&
+        selected.some((name) =>
+          status.config.domains.some((item) => item.enabled && item.name === name),
+        ) &&
+        port !== status.config.publicPort && (
+          <Alert type="warning" showIcon title={t('pages.settings.subGatewayPortMismatch')} />
+        )}
       {managed && (
         <Alert
           type="info"

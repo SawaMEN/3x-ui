@@ -1373,7 +1373,7 @@ func (s *ServerService) GetMigration() ([]byte, string, error) {
 var hostBoundSettingKeys = []string{
 	"domainFrontConfig",
 	"webListen", "webDomain", "webPort", "webCertFile", "webKeyFile", "webBasePath",
-	"subPublicURL", "subAllowedDomains", "subCDNEnable",
+	"subPublicURL", "subAllowedDomains", "subCDNEnable", "subRestrictDomains",
 	"subListen", "subDomain", "subPort", "subCertFile", "subKeyFile", "subURI", "subJsonURI",
 	"secret", "panelGuid",
 	"nodeMtlsCaCertPem", "nodeMtlsCaKeyPem", "nodeMtlsClientCertPem",

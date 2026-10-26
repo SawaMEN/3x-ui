@@ -7,49 +7,6 @@
 .subscription-page.sub-whitemax {
   --wm-background: radial-gradient(
     at 50% 30%,
-    #d8d8e0 0%,
-    #dddde4 25%,
-    #e2e2e8 50%,
-    #e8e8ec 70%,
-    #eeeef2 85%,
-    #f2f2f5 100%
-  );
-  --wm-rgb: 0, 0, 0;
-  --wm-text: #1a1a1a;
-  --wm-muted: #555555;
-  --wm-primary: #1a1a1a;
-  --wm-primary-ink: #ffffff;
-  --wm-primary-shadow: rgba(0, 0, 0, 0.2);
-  --wm-grid-ink: rgba(0, 0, 0, 0.05);
-  --wm-grid-opacity: 0.25;
-  --sub-accent: #1a1a1a;
-  --sub-grad-from: #1a1a1a;
-  --sub-grad-to: #777777;
-  --sub-ink-from: #1a1a1a;
-  --sub-ink-to: #777777;
-  --sub-card-bg: transparent;
-  --sub-card-border: transparent;
-  --sub-card-shadow: none;
-  --sub-tile-bg: rgba(0, 0, 0, 0.05);
-  --sub-tile-border: rgba(0, 0, 0, 0.08);
-  --sub-row-bg: rgba(0, 0, 0, 0.05);
-  --sub-row-border: rgba(0, 0, 0, 0.08);
-  --sub-row-bg-hover: rgba(0, 0, 0, 0.1);
-  --sub-row-border-hover: rgba(0, 0, 0, 0.15);
-  --sub-row-glow: transparent;
-  --sub-glass-bg: rgba(240, 240, 243, 0.95);
-  --sub-hairline: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.08), transparent);
-  min-height: 100dvh;
-  background: #f2f2f5;
-  color: var(--wm-text);
-  font-family: 'Inter Variable', Inter, system-ui, -apple-system, sans-serif;
-  font-size: 17.6px;
-  line-height: 1.6;
-  -webkit-font-smoothing: antialiased;
-}
-.subscription-page.sub-whitemax.is-dark {
-  --wm-background: radial-gradient(
-    at 50% 30%,
     #3a3a40 0%,
     #333338 25%,
     #2d2d32 50%,
@@ -78,7 +35,17 @@
   --sub-row-border-hover: rgba(255, 255, 255, 0.15);
   --sub-glass-bg: rgba(40, 40, 46, 0.95);
   --sub-hairline: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+  --sub-card-bg: transparent;
+  --sub-card-border: transparent;
+  --sub-card-shadow: none;
+  --sub-row-glow: transparent;
+  min-height: 100dvh;
   background: #2a2a2e;
+  color: var(--wm-text);
+  font-family: 'Inter Variable', Inter, system-ui, -apple-system, sans-serif;
+  font-size: 17.6px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
 }
 .sub-whitemax .wm-backdrop {
   position: fixed;
