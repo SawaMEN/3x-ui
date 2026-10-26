@@ -7,6 +7,7 @@ import { useServerDraft } from '@/hooks/useServerDraft';
 import { useTranslation } from 'react-i18next';
 import {
   Alert,
+  AutoComplete,
   Button,
   Card,
   Checkbox,
@@ -198,7 +199,37 @@ export default function DomainFrontTab({
           description={statusQuery.error.message}
         />
       )}
-      <Typography.Title level={3}>{label('title')}</Typography.Title>
+      {allSetting && updateSetting && (
+        <div className="domain-redirect-settings">
+          <SettingListItem
+            paddings="small"
+            title={t('pages.settings.rootRedirectEnable')}
+            description={t('pages.settings.rootRedirectDesc')}
+          >
+            <Switch
+              checked={allSetting.rootRedirectEnable}
+              onChange={(v) => updateSetting({ rootRedirectEnable: v })}
+            />
+          </SettingListItem>
+          {allSetting.rootRedirectEnable && (
+            <SettingListItem paddings="small" title={t('pages.settings.rootRedirectURL')}>
+              <AutoComplete
+                aria-label={t('pages.settings.rootRedirectURL')}
+                style={{ width: '100%' }}
+                value={allSetting.rootRedirectURL}
+                options={[
+                  'https://www.wikipedia.org/',
+                  'https://www.microsoft.com/',
+                  'https://www.apple.com/',
+                  'https://www.cloudflare.com/',
+                ].map((value) => ({ value, label: value }))}
+                onChange={(value) => updateSetting({ rootRedirectURL: value })}
+                placeholder="https://example.com/"
+              />
+            </SettingListItem>
+          )}
+        </div>
+      )}
       <Alert
         type="info"
         showIcon

@@ -32,6 +32,7 @@ import {
 import { HttpUtil } from '@/utils';
 import { useTheme } from '@/hooks/useTheme';
 import { useAllSettings } from '@/api/queries/useAllSettings';
+import { getAdditionalSettingsTab } from '@/pages/settings/additional-settings';
 import './AppSidebar.css';
 
 const LOGOUT_KEY = '__logout__';
@@ -103,7 +104,7 @@ function saveSidebarPinned(pinned: boolean) {
 }
 
 function AppSidebar() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { mode } = useTheme();
   const navigate = useNavigate();
   const { pathname, hash } = useLocation();
@@ -139,11 +140,6 @@ function AppSidebar() {
     };
   }, []);
 
-  const firewallTitle = (i18n.resolvedLanguage || i18n.language || '')
-    .toLowerCase()
-    .startsWith('ru')
-    ? 'Файрволл'
-    : 'Firewall';
   const [hovered, setHovered] = useState(() => hoveredAcrossRemounts);
   const [pinned, setPinned] = useState(readSidebarPinned);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -250,9 +246,9 @@ function AppSidebar() {
         label: t('pages.settings.discordSettings'),
       },
       {
-        key: '/settings#domains',
+        key: '/settings#advanced',
         icon: <CloudServerOutlined />,
-        label: t('pages.settings.domains.title'),
+        label: t('pages.settings.advanced.title'),
       },
       {
         key: '/settings#subscription',
@@ -288,7 +284,6 @@ function AppSidebar() {
       { key: '/groups', icon: 'groups' as IconName, title: t('menu.groups') },
       { key: '/nodes', icon: 'cluster' as IconName, title: t('menu.nodes') },
       { key: '/hosts', icon: 'hosts' as IconName, title: t('menu.hosts') },
-      { key: '/firewall', icon: 'firewall' as IconName, title: firewallTitle },
       { key: '/outbound', icon: 'outbound' as IconName, title: t('menu.outbounds') },
       { key: '/routing', icon: 'routing' as IconName, title: t('menu.routing') },
       { key: '/settings', icon: 'setting' as IconName, title: t('menu.settings') },
@@ -301,7 +296,7 @@ function AppSidebar() {
       { key: LOGOUT_KEY, icon: 'logout' as IconName, title: t('logout') },
     ];
     return base;
-  }, [t, firewallTitle, singBoxChildren, olcrtcInstalled]);
+  }, [t, singBoxChildren, olcrtcInstalled]);
 
   const navItems = useMemo(() => tabs.filter((tab) => tab.icon !== 'logout'), [tabs]);
   const utilItems = useMemo(() => tabs.filter((tab) => tab.icon === 'logout'), [tabs]);
@@ -311,7 +306,7 @@ function AppSidebar() {
   const singBoxActive = pathname === '/singbox';
   const gatewayActive = settingsActive && hash === '#gateway';
   const selectedKey = settingsActive
-    ? `/settings${hash || '#general'}`
+    ? `/settings${getAdditionalSettingsTab(hash) ? '#advanced' : hash || '#general'}`
     : xrayActive
       ? `/singbox${hash || '#basic'}`
       : singBoxActive

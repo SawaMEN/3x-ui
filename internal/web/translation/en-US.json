@@ -1515,6 +1515,16 @@
       "dragToReorder": "Drag to reorder"
     },
     "settings": {
+      "advanced": {
+        "title": "Additional settings",
+        "firewall": "Firewall",
+        "components": "Component installation and updates",
+        "system": "Linux package and kernel updates",
+        "updateComponents": "Update components",
+        "confirmComponents": "Update installed components?",
+        "componentsDescription": "Install optional components individually. Update components updates only components that are already installed.",
+        "componentsUpdated": "Components were updated successfully."
+      },
       "defaultTag": "Default",
       "title": "Panel Settings",
       "save": "Save",

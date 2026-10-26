@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
-import SystemUpdateModal from '@/pages/settings/SystemUpdateModal';
+import SystemUpdatePanel from '@/pages/settings/SystemUpdatePanel';
 import { HttpUtil } from '@/utils';
 
 let installedHysteria = false;
@@ -16,6 +16,7 @@ beforeEach(() => {
   naiveSupported = true;
   installedNaive = false;
   vi.mocked(HttpUtil.post).mockClear();
+  vi.mocked(HttpUtil.get).mockClear();
   vi.mocked(HttpUtil.get).mockImplementation(async (path) => ({
     success: true,
     msg: '',
@@ -71,7 +72,7 @@ beforeEach(() => {
 });
 
 async function openComponents() {
-  render(<SystemUpdateModal open onClose={() => {}} />);
+  render(<SystemUpdatePanel section="components" />);
   await screen.findByText('Pingtunnel');
   await waitFor(() =>
     expect(
@@ -86,9 +87,14 @@ function card(name: string) {
   return within(node);
 }
 
-it('keeps missing optional components out of the general update', async () => {
-  await openComponents();
-  fireEvent.click(screen.getByRole('button', { name: /Update panel packages & kernel/ }));
+it('updates Linux packages without loading or updating optional components', async () => {
+  installedHysteria = true;
+  render(<SystemUpdatePanel section="system" />);
+  const update = screen.getByRole('button', {
+    name: /Update panel packages & kernel/,
+  }) as HTMLButtonElement;
+  await waitFor(() => expect(update.disabled).toBe(false));
+  fireEvent.click(update);
   fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
   await waitFor(() =>
     expect(HttpUtil.post).toHaveBeenCalledWith(
@@ -96,12 +102,18 @@ it('keeps missing optional components out of the general update', async () => {
     ),
   );
   await screen.findByText('System packages were updated successfully.');
+  expect(HttpUtil.get).not.toHaveBeenCalledWith('/panel/api/server/externalvpn/status');
+  expect(HttpUtil.post).not.toHaveBeenCalledWith('/panel/api/server/externalvpn/update/hysteria2');
+  expect(screen.queryByText('Pingtunnel')).toBeNull();
+});
+
+it('does not offer a bulk install for missing optional components', async () => {
+  await openComponents();
   expect(
-    vi
-      .mocked(HttpUtil.post)
-      .mock.calls.some(([path]) =>
-        /\/(sudoku|naiveproxy)\/update|externalvpn\/update/.test(String(path)),
-      ),
+    (screen.getByRole('button', { name: /Update components/ }) as HTMLButtonElement).disabled,
+  ).toBe(true);
+  expect(
+    vi.mocked(HttpUtil.post).mock.calls.some(([path]) => String(path).includes('/system/update/')),
   ).toBe(false);
 });
 
@@ -134,14 +146,17 @@ it('hides the install button and explains an unsupported architecture', async ()
   expect(card('NaiveProxy').getByText(/Используется встроенный sing-box/)).toBeTruthy();
 });
 
-it('updates an installed standalone Hysteria in the general update', async () => {
+it('updates installed components without updating Linux packages', async () => {
   installedHysteria = true;
   await openComponents();
-  fireEvent.click(screen.getByRole('button', { name: /Update panel packages & kernel/ }));
+  fireEvent.click(screen.getByRole('button', { name: /Update components/ }));
   fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
   await waitFor(() =>
     expect(HttpUtil.post).toHaveBeenCalledWith('/panel/api/server/externalvpn/update/hysteria2'),
   );
+  expect(
+    vi.mocked(HttpUtil.post).mock.calls.some(([path]) => String(path).includes('/system/update/')),
+  ).toBe(false);
 });
 
 it('explains native fallback for a preinstalled server with incompatible routing', async () => {
@@ -191,7 +206,13 @@ it('updates an installed Hysteria server while incompatible inbounds use sing-bo
 
 it('does not treat restored connectivity as confirmation that system updates succeeded', async () => {
   installedHysteria = true;
-  await openComponents();
+  render(<SystemUpdatePanel section="system" />);
+  await waitFor(() =>
+    expect(
+      (screen.getByRole('button', { name: /Update panel packages & kernel/ }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false),
+  );
   const originalPost = vi.mocked(HttpUtil.post).getMockImplementation()!;
   vi.mocked(HttpUtil.post).mockImplementation(async (path, ...args) => {
     if (String(path).includes('/system/update/apply'))

@@ -28,7 +28,6 @@ import {
 import { HttpUtil } from '@/utils';
 import { onNumber } from '@/utils/onNumber';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import SystemUpdateModal from './SystemUpdateModal';
 
 type ApiMsg<T = unknown> = { success?: boolean; msg?: string; obj?: T };
 
@@ -266,7 +265,6 @@ export default function SwapSettingsTab() {
   const [zramLimit, setZramLimit] = useState(0);
   const [zramAlgorithm, setZramAlgorithm] = useState('');
   const [swappiness, setSwappiness] = useState(60);
-  const [systemUpdateOpen, setSystemUpdateOpen] = useState(false);
 
   const refresh = useCallback(
     async (quiet = false) => {
@@ -457,13 +455,6 @@ export default function SwapSettingsTab() {
               loading={busy}
             >
               {t('pages.settings.swap.apply')}
-            </Button>
-            <Button
-              icon={<ReloadOutlined />}
-              onClick={() => setSystemUpdateOpen(true)}
-              disabled={busy}
-            >
-              {t('pages.settings.swap.systemUpdates')}
             </Button>
           </Space>
           {status?.recommendation && (
@@ -780,9 +771,8 @@ export default function SwapSettingsTab() {
   }
 
   return (
-    <>
+    <div className="swap-settings-panel">
       {contextHolder}
-      <SystemUpdateModal open={systemUpdateOpen} onClose={() => setSystemUpdateOpen(false)} />
       {loadError && (
         <Alert type="warning" showIcon closable style={{ marginBottom: 12 }} title={loadError} />
       )}
@@ -841,6 +831,6 @@ export default function SwapSettingsTab() {
             : undefined
         }
       />
-    </>
+    </div>
   );
 }

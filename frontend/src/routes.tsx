@@ -16,9 +16,6 @@ const OlcRTCPage = lazy(() => importWithChunkRecovery(() => import('@/pages/olcr
 const GroupsPage = lazy(() => importWithChunkRecovery(() => import('@/pages/groups/GroupsPage')));
 const NodesPage = lazy(() => importWithChunkRecovery(() => import('@/pages/nodes/NodesPage')));
 const HostsPage = lazy(() => importWithChunkRecovery(() => import('@/pages/hosts/HostsPage')));
-const FirewallPage = lazy(() =>
-  importWithChunkRecovery(() => import('@/pages/firewall/FirewallPage')),
-);
 const SettingsPage = lazy(() =>
   importWithChunkRecovery(() => import('@/pages/settings/SettingsPage')),
 );
@@ -66,7 +63,7 @@ const routes: RouteObject[] = [
       { path: 'groups', element: withSuspense(<GroupsPage />) },
       { path: 'nodes', element: withSuspense(<NodesPage />) },
       { path: 'hosts', element: withSuspense(<HostsPage />) },
-      { path: 'firewall', element: withSuspense(<FirewallPage />) },
+      { path: 'firewall', element: <Navigate to="/settings#advanced/firewall" replace /> },
       { path: 'settings', element: withSuspense(<SettingsPage />) },
       { path: 'xray', element: <Navigate to="/singbox" replace /> },
       { path: 'singbox', element: withSuspense(<SingBoxPage />) },
