@@ -14,6 +14,8 @@ on:
       - "go.sum"
       - "**.sh"
       - "tools/fetch-latest-kernel.py"
+      - "tools/build-panel-tunnel.py"
+      - "deploy/panel-tunnel/**"
       - "tools/telemt/**"
       - "tools/test_official_telemt.py"
       - "frontend/**"
@@ -77,7 +79,9 @@ jobs:
         run: bash tools/ci/download-go-modules.sh
 
       - name: Run Go tests
-        run: make test-go
+        run: |
+          make test-go
+          go test ./internal/sudoku -count=1 -ldflags "-X github.com/SawaMEN/3x-ui/v3/internal/config.buildCommit=${GITHUB_SHA}"
 
       - name: Build frontend bundle
         run: |
@@ -313,6 +317,12 @@ jobs:
           python3 tools/build-panel-tunnel.py --arch "${{ matrix.platform }}" --output "$RUNNER_TEMP/panel-tunnel/sudoku-tunnel" --test
           cp "$RUNNER_TEMP/panel-tunnel/sudoku-tunnel" x-ui/bin/sudoku-tunnel
           cp "$RUNNER_TEMP/panel-tunnel/panel-tunnel-LICENSE" x-ui/bin/panel-tunnel-LICENSE
+          cp "$RUNNER_TEMP/panel-tunnel/panel-tunnel-source.tar.gz" x-ui/bin/panel-tunnel-source.tar.gz
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            printf '%s\n' "$GITHUB_REF_NAME" > x-ui/bin/sudoku.version
+          else
+            printf 'dev+%s\n' "$GITHUB_SHA" > x-ui/bin/sudoku.version
+          fi
           tar -czf panel-tunnel-linux-${{ matrix.platform }}.tar.gz -C "$RUNNER_TEMP/panel-tunnel" sudoku-tunnel panel-tunnel-LICENSE panel-tunnel-source.tar.gz
 
       - name: Package
@@ -344,6 +354,7 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ github.ref_name }}
           file: panel-tunnel-linux-${{ matrix.platform }}.tar.gz
+          overwrite: true
 
       - name: Upload stable release assets
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
@@ -377,6 +388,21 @@ jobs:
           pattern: "x-ui-linux-*"
           path: dev-artifacts
           merge-multiple: true
+
+      - name: Download protocol sidecar artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: "panel-tunnel-linux-*"
+          path: dev-artifacts
+          merge-multiple: true
+
+      - name: Verify complete rolling release
+        run: |
+          for arch in amd64 arm64; do
+            test -s "dev-artifacts/x-ui-linux-$arch.tar.gz"
+            test -s "dev-artifacts/x-ui-linux-$arch.tar.gz.sha256"
+            test -s "dev-artifacts/panel-tunnel-linux-$arch.tar.gz"
+          done
 
       - name: Publish dev-latest
         env:

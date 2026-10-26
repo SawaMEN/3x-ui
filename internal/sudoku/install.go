@@ -5,6 +5,7 @@ import (
 	"archive/zip"
 	"compress/gzip"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,12 +17,15 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/config"
 )
 
 const releasesAPI = "https://api.github.com/repos/SawaMEN/3x-ui/releases"
 
 type release struct {
 	TagName string `json:"tag_name"`
+	Body    string `json:"body"`
 	Assets  []struct {
 		Name string `json:"name"`
 		URL  string `json:"browser_download_url"`
@@ -33,17 +37,27 @@ func LatestRelease(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return strings.TrimSpace(rel.TagName), nil
+	return releaseVersion(rel)
 }
 
 func fetchLatestRelease(ctx context.Context) (release, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, releasesAPI+"/latest", nil)
+	return fetchRelease(ctx, http.DefaultClient, config.IsDevBuild())
+}
+
+// Keep the component on the panel's release channel. GitHub's /latest endpoint
+// excludes prereleases, so dev panels must explicitly request the rolling tag.
+func fetchRelease(ctx context.Context, client *http.Client, dev bool) (release, error) {
+	endpoint := releasesAPI + "/latest"
+	if dev {
+		endpoint = releasesAPI + "/tags/dev-latest"
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return release{}, err
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("User-Agent", "3x-ui")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return release{}, fmt.Errorf("fetch Sudoku release: %w", err)
 	}
@@ -56,10 +70,32 @@ func fetchLatestRelease(ctx context.Context) (release, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil {
 		return release{}, err
 	}
-	if strings.TrimSpace(rel.TagName) == "" {
-		return release{}, fmt.Errorf("Sudoku release API returned an empty tag")
+	if _, err := releaseVersion(rel); err != nil {
+		return release{}, err
 	}
 	return rel, nil
+}
+
+// dev-latest is reused for every build. The publisher records the exact commit
+// in the release notes, which also matches the version bundled in the panel.
+func releaseVersion(rel release) (string, error) {
+	tag := strings.TrimSpace(rel.TagName)
+	if tag == "" {
+		return "", fmt.Errorf("Sudoku release API returned an empty tag")
+	}
+	if tag != "dev-latest" {
+		return tag, nil
+	}
+	for _, field := range strings.Fields(rel.Body) {
+		if !strings.HasPrefix(field, "commit=") {
+			continue
+		}
+		commit := strings.TrimPrefix(field, "commit=")
+		if _, err := hex.DecodeString(commit); len(commit) == 40 && err == nil {
+			return "dev+" + strings.ToLower(commit), nil
+		}
+	}
+	return "", fmt.Errorf("Sudoku dev release is missing its build commit")
 }
 
 func GetBinaryPath(binDir string) string {
@@ -145,7 +181,11 @@ func InstallLatest(ctx context.Context, binDir string) (string, error) {
 	if err := os.Rename(staged, target); err != nil {
 		return "", err
 	}
-	if err := writeInstalledVersion(binDir, rel.TagName); err != nil {
+	version, err := releaseVersion(rel)
+	if err != nil {
+		return "", err
+	}
+	if err := writeInstalledVersion(binDir, version); err != nil {
 		return "", err
 	}
 	return target, nil

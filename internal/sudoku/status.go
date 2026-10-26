@@ -42,7 +42,10 @@ func GetStatus(ctx context.Context, localOnly ...bool) (Status, error) {
 		status.UnsupportedReason = err.Error()
 		return status, nil
 	}
-	latest := strings.TrimSpace(release.TagName)
+	latest, err := releaseVersion(release)
+	if err != nil {
+		return status, nil
+	}
 	status.LatestVersion = latest
 	if status.Installed && latest != "" {
 		status.UpdateAvailable = status.Version == "" || normalizeReleaseVersion(status.Version) != normalizeReleaseVersion(latest)
