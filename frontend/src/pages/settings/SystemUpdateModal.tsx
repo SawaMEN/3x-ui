@@ -455,7 +455,9 @@ export default function SystemUpdateModal({
           '/panel/api/server/externalvpn/update/hysteria2',
         )) as ApiMsg<unknown>;
       case 'sudoku':
-        return (await HttpUtil.post('/panel/api/setting/sudoku/update')) as ApiMsg<unknown>;
+        return (await HttpUtil.post('/panel/api/setting/sudoku/update', undefined, {
+          timeout: 200000,
+        })) as ApiMsg<unknown>;
       case 'pingtunnel':
       case 'trusttunnel':
         return (await HttpUtil.post(

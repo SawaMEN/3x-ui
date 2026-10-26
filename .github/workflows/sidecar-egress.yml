@@ -7,6 +7,10 @@ on:
       - 'internal/sidecaregress/**'
       - 'internal/sudoku/**'
       - 'internal/web/service/inbound_sudoku*'
+      - 'internal/web/service/sudoku_component*'
+      - 'internal/web/controller/sudoku*'
+      - 'internal/web/controller/setting.go'
+      - 'internal/web/job/sudoku_job.go'
       - '.github/workflows/sidecar-egress.yml'
       - 'internal/mieru/**'
       - 'internal/externalvpn/**'
@@ -43,4 +47,4 @@ jobs:
         run: |
           mkdir -p internal/web/dist
           touch internal/web/dist/.gitkeep
-          go test ./internal/sudoku ./internal/mieru ./internal/externalvpn ./internal/hiddify ./internal/web/service -count=1 -timeout=600s
+          go test ./internal/sudoku ./internal/mieru ./internal/externalvpn ./internal/hiddify ./internal/web/service ./internal/web/controller -count=1 -timeout=600s

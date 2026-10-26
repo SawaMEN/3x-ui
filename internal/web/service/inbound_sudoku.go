@@ -276,6 +276,10 @@ func EnsureSudokuCredentials(inboundID int) error {
 }
 
 func DesiredSudokuInstances() ([]sudoku.Instance, error) {
+	return desiredSudokuInstances(false)
+}
+
+func desiredSudokuInstances(strict bool) ([]sudoku.Instance, error) {
 	if !sudoku.IsInstalled(config.GetBinFolderPath()) {
 		return []sudoku.Instance{}, nil
 	}
@@ -291,6 +295,9 @@ func DesiredSudokuInstances() ([]sudoku.Instance, error) {
 	desired := make([]sudoku.Instance, 0, len(inbounds))
 	for _, inbound := range inbounds {
 		if err := EnsureSudokuCredentials(inbound.Id); err != nil {
+			if strict {
+				return nil, fmt.Errorf("Sudoku inbound %d credentials: %w", inbound.Id, err)
+			}
 			logger.Warningf("sudoku: credentials for inbound %d: %v", inbound.Id, err)
 			continue
 		}
@@ -304,6 +311,9 @@ func DesiredSudokuInstances() ([]sudoku.Instance, error) {
 		}
 		settings, err := normalizeSudokuSettings(current.Settings)
 		if err != nil {
+			if strict {
+				return nil, fmt.Errorf("Sudoku inbound %d settings: %w", current.Id, err)
+			}
 			logger.Warningf("sudoku: invalid settings for inbound %d: %v", current.Id, err)
 			continue
 		}

@@ -618,11 +618,13 @@ func (a *SettingController) sudokuStatus(c *gin.Context) {
 }
 
 func (a *SettingController) sudokuUpdate(c *gin.Context) {
-	if err := sudoku.Update(c.Request.Context()); err != nil {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 3*time.Minute)
+	defer cancel()
+	if err := service.UpdateSudoku(ctx); err != nil {
 		jsonObj(c, gin.H{"updated": false}, err)
 		return
 	}
-	status, err := sudoku.GetStatus(c.Request.Context())
+	status, err := sudoku.GetStatus(c.Request.Context(), true)
 	if err != nil {
 		jsonObj(c, gin.H{"updated": true}, nil)
 		return

@@ -3,6 +3,7 @@ package sudoku
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -414,4 +415,20 @@ func stringTrim(b []byte) string {
 		start++
 	}
 	return string(b[start:end])
+}
+
+// Check confirms that an installation has actually applied every desired
+// listener rather than only downloading an executable successfully.
+func (m *Manager) Check(desired []Instance) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var result error
+	for _, inst := range desired {
+		if message := m.lastErr[inst.ID]; message != "" {
+			result = errors.Join(result, fmt.Errorf("Sudoku inbound %d: %s", inst.ID, message))
+		} else if cur := m.procs[inst.ID]; cur == nil || cur.proc == nil || !cur.proc.IsRunning() {
+			result = errors.Join(result, fmt.Errorf("Sudoku inbound %d is not running", inst.ID))
+		}
+	}
+	return result
 }

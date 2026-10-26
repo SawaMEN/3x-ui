@@ -171,7 +171,10 @@ func officialSudokuUDPEcho(t *testing.T, socksAddr string, targetPort int) {
 	if _, err := io.ReadFull(ctrl, reply); err != nil || reply[1] != 0 || reply[3] != 1 {
 		t.Fatalf("UDP associate: %v %v", reply, err)
 	}
-	addr := &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: int(binary.BigEndian.Uint16(reply[8:]))}
+	addr := &net.UDPAddr{IP: net.IP(reply[4:8]), Port: int(binary.BigEndian.Uint16(reply[8:]))}
+	if addr.IP.IsUnspecified() {
+		addr.IP = ctrl.RemoteAddr().(*net.TCPAddr).IP
+	}
 	conn, err := net.DialUDP("udp4", nil, addr)
 	if err != nil {
 		t.Fatal(err)

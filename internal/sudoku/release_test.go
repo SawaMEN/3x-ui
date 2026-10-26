@@ -133,3 +133,26 @@ func TestInstallAndStatusOfficialRelease(t *testing.T) {
 		})
 	}
 }
+
+func TestStatusShowsReleaseFailureAndHidesRemovedVersion(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XUI_BIN_FOLDER", dir)
+	if err := writeInstalledVersion(dir, "v0.5.2.0"); err != nil {
+		t.Fatal(err)
+	}
+	oldClient := http.DefaultClient
+	t.Cleanup(func() { http.DefaultClient = oldClient })
+	requests := 0
+	http.DefaultClient = &http.Client{Transport: releaseTransport(func(req *http.Request) (*http.Response, error) {
+		requests++
+		return &http.Response{StatusCode: http.StatusForbidden, Status: "403 Forbidden", Body: io.NopCloser(strings.NewReader("rate limited"))}, nil
+	})}
+	local, err := GetStatus(context.Background(), true)
+	if err != nil || local.Version != "" || local.Installed || requests != 0 {
+		t.Fatalf("removed local status: %+v %v requests=%d", local, err, requests)
+	}
+	remote, err := GetStatus(context.Background())
+	if err != nil || remote.Error == "" || remote.Version != "" || !remote.Supported {
+		t.Fatalf("release failure hidden: %+v %v", remote, err)
+	}
+}

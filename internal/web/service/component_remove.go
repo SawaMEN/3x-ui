@@ -70,6 +70,7 @@ func RemoveProtocolComponent(ctx context.Context, component string) error {
 	}
 	if protocol == model.Sudoku {
 		sudoku.GetManager().StopAll()
+		return removeComponentFile(filepath.Join(config.GetBinFolderPath(), "sudoku.version"))
 	} else {
 		externalvpn.GetManager().StopProtocol(protocol)
 	}

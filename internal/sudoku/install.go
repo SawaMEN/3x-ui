@@ -37,6 +37,8 @@ func LatestRelease(ctx context.Context) (string, error) {
 }
 
 func fetchLatestRelease(ctx context.Context) (release, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
 	return fetchRelease(ctx, http.DefaultClient)
 }
 
