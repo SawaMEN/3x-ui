@@ -855,6 +855,7 @@
         "snellReuse": "Connection reuse",
         "snellOutboundHint": "For Snell v5 choose client v5 with QUIC Proxy, or v4 for UDP-over-TCP. v6 requires a 12–255-byte PSK. User key is required for a multi-user server.",
         "additionalSecretAuto": "Empty — generate on save",
+        "anytlsInsertPanelSettings": "Insert panel settings",
         "anytlsHint": "AnyTLS runs over TCP and requires TLS. Add users in Clients. With both paths empty, the panel or subscription HTTPS certificate is used.",
         "anytlsServerName": "Server name (SNI)",
         "anytlsServerNameHint": "The client's TLS verification name, included in the anytls:// link. Set it to the certificate's domain, particularly when connecting by IP.",
