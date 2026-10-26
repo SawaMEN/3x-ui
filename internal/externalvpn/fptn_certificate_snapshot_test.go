@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -35,7 +36,9 @@ func TestFPTNCertificateUsesValidatedPrivateSnapshot(t *testing.T) {
 	if _, err := tls.LoadX509KeyPair(gotCert, gotKey); err != nil {
 		t.Fatalf("source mutation changed the validated snapshot: %v", err)
 	}
-	if info, err := os.Stat(gotKey); err != nil || info.Mode().Perm() != 0o600 {
-		t.Fatalf("snapshot key must be private: %v", err)
+	if runtime.GOOS != "windows" {
+		if info, err := os.Stat(gotKey); err != nil || info.Mode().Perm() != 0o600 {
+			t.Fatalf("snapshot key must be private: %v", err)
+		}
 	}
 }
