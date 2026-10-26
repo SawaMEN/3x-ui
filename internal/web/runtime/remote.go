@@ -712,6 +712,7 @@ func (r *Remote) UpdatePanel(ctx context.Context, dev bool) error {
 
 // WebCertFiles holds a node's own web TLS certificate and key file paths.
 type WebCertFiles struct {
+	WebDomain   string `json:"webDomain,omitempty"`
 	WebCertFile string `json:"webCertFile"`
 	WebKeyFile  string `json:"webKeyFile"`
 }

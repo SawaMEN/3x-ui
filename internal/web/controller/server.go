@@ -661,7 +661,11 @@ func (a *ServerController) getWebCertFiles(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
-	jsonObj(c, gin.H{"webCertFile": certFile, "webKeyFile": keyFile}, nil)
+	domain, _ := a.settingService.GetWebDomain()
+	if name := service.NativeTLSCertificateName(certFile, domain); name != "" {
+		domain = name
+	}
+	jsonObj(c, gin.H{"webCertFile": certFile, "webKeyFile": keyFile, "webDomain": domain}, nil)
 }
 
 // getNewX25519Cert generates a new X25519 certificate.

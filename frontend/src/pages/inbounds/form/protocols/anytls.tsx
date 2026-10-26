@@ -20,7 +20,7 @@ export default function AnyTlsFields() {
       const response =
         typeof nodeId === 'number'
           ? await HttpUtil.get(`/panel/api/nodes/webCert/${nodeId}`, undefined, { silent: true })
-          : await HttpUtil.post('/panel/api/setting/all', undefined, { silent: true });
+          : await HttpUtil.get('/panel/api/server/getWebCertFiles', undefined, { silent: true });
       if (!response?.success) {
         messageApi.warning(response?.msg || t('pages.inbounds.setDefaultCertEmpty'));
         return;
@@ -38,9 +38,8 @@ export default function AnyTlsFields() {
       setValue('settings.tls.certificatePath', certificatePath, options);
       setValue('settings.tls.keyPath', keyPath, options);
       setValue('settings.tls.enabled', true, options);
-      // The node endpoint supplies its own file paths. Never copy the central
-      // panel's hostname into an inbound running on another server.
-      if (typeof nodeId !== 'number' && settings?.webDomain?.trim()) {
+      // Both endpoints return the selected server's certificate identity.
+      if (settings?.webDomain?.trim()) {
         setValue('settings.tls.serverName', settings.webDomain.trim(), options);
       }
       messageApi.success(t('pages.inbounds.setSuccess'));

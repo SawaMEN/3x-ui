@@ -474,53 +474,17 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot, ed
 		// the inbound does not explicitly provide its own pair.
 		if inbound.Protocol == model.MASQUE || inbound.Protocol == model.NaiveProxy || inbound.Protocol == model.AnyTLS {
 			tls, _ := settings["tls"].(map[string]any)
-			if tls == nil {
-				tls = map[string]any{}
-			}
-			tls["enabled"] = true
-			certPath, _ := tls["certificatePath"].(string)
-			certPath = strings.TrimSpace(certPath)
-			keyPath, _ := tls["keyPath"].(string)
-			keyPath = strings.TrimSpace(keyPath)
-			if (certPath == "") != (keyPath == "") {
+			resolved, tlsErr := ResolveNativeTLSSettings(tls, func(key string) (string, error) {
+				return nativeConfigSetting(snapshot, key, func() (string, error) { return NativeTLSSetting(key) })
+			})
+			if tlsErr != nil {
 				protocolName := string(inbound.Protocol)
 				if inbound.Protocol == model.AnyTLS {
 					protocolName = "AnyTLS"
 				}
-				return nil, fmt.Errorf("%s inbound %q must provide both TLS certificate and private key, or neither", protocolName, inbound.Tag)
+				return nil, fmt.Errorf("%s inbound %q %w", protocolName, inbound.Tag, tlsErr)
 			}
-			if certPath == "" {
-				// Prefer the panel HTTPS certificate, then fall back to the
-				// dedicated subscription HTTPS certificate. Both are valid
-				// certificate sources for a native Naive TLS listener.
-				webCertPath, _ := nativeConfigSetting(snapshot, "webCertFile", singBoxSettingService.GetCertFile)
-				webKeyPath, _ := nativeConfigSetting(snapshot, "webKeyFile", singBoxSettingService.GetKeyFile)
-				webCertPath = strings.TrimSpace(webCertPath)
-				webKeyPath = strings.TrimSpace(webKeyPath)
-				if webCertPath != "" && webKeyPath != "" {
-					certPath = webCertPath
-					keyPath = webKeyPath
-				} else {
-					subCertPath, _ := nativeConfigSetting(snapshot, "subCertFile", singBoxSettingService.GetSubCertFile)
-					subKeyPath, _ := nativeConfigSetting(snapshot, "subKeyFile", singBoxSettingService.GetSubKeyFile)
-					subCertPath = strings.TrimSpace(subCertPath)
-					subKeyPath = strings.TrimSpace(subKeyPath)
-					if subCertPath != "" && subKeyPath != "" {
-						certPath = subCertPath
-						keyPath = subKeyPath
-					}
-				}
-			}
-			if certPath == "" || keyPath == "" {
-				protocolName := string(inbound.Protocol)
-				if inbound.Protocol == model.AnyTLS {
-					protocolName = "AnyTLS"
-				}
-				return nil, fmt.Errorf("%s inbound %q requires a complete TLS certificate/private-key pair (inbound, panel HTTPS, or subscription HTTPS)", protocolName, inbound.Tag)
-			}
-			tls["certificatePath"] = certPath
-			tls["keyPath"] = keyPath
-			settings["tls"] = tls
+			settings["tls"] = resolved
 		}
 
 		raw["settings"] = settings

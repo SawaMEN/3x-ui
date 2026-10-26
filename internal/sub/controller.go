@@ -508,6 +508,13 @@ func (a *SUBController) subs(c *gin.Context) {
 		logSubscriptionRoute(userAgent, "hiddify-native-sing-box")
 		return
 	}
+	// A raw URI cannot represent a ShadowTLS detour. Known sing-box clients
+	// need the complete native graph even when generic JSON auto-detection is off.
+	if wantsNativeSingBox(userAgent) && a.hasNativeTLSSubscription(c.Param("subid")) && a.serveJsonBody(c, true, "application/json; charset=utf-8", false, true) {
+		a.recordSubscriptionFetch(c)
+		logSubscriptionRoute(userAgent, "native-sing-box")
+		return
+	}
 	if shouldAutoServeClash(a.subClashAutoDetect, a.clashEnabled, false, userAgent, a.clashUserAgent) && a.serveClashBody(c, false, false) {
 		a.recordSubscriptionFetch(c)
 		logSubscriptionRoute(userAgent, "clash")
@@ -551,6 +558,16 @@ func (a *SUBController) subs(c *gin.Context) {
 		}
 		a.recordSubscriptionFetch(c)
 	}
+}
+
+func wantsNativeSingBox(agent string) bool {
+	agent = strings.ToLower(agent)
+	for _, name := range []string{"sing-box", "singbox", "nekobox", "nekoray"} {
+		if strings.Contains(agent, name) {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *SUBController) hasHiddifyNativeSubscription(subID string) bool {

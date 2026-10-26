@@ -14,6 +14,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/snell"
 	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/json_util"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 
 	"maps"
 	"net"
@@ -1830,7 +1831,12 @@ func (s *SubJsonService) wrapNativeShadowTLS(inbound *model.Inbound, inner map[s
 	}
 	handshake, _ := transport["handshake"].(map[string]any)
 	sni, _ := handshake["server"].(string)
-	if strings.TrimSpace(sni) == "" {
+	sni = strings.TrimSpace(sni)
+	if sni == "" {
+		sni, _ = handshake["address"].(string)
+		sni = strings.TrimSpace(sni)
+	}
+	if sni == "" {
 		sni = "cloudflare.com"
 	}
 	if endpoint != nil {
@@ -1924,11 +1930,29 @@ func (s *SubJsonService) genNativeTLSLikeEndpoint(subReq *SubService, inbound *m
 			"password":    client.Password,
 		}
 		tls := map[string]any{"enabled": true}
-		if rawTLS, ok := settings["tls"].(map[string]any); ok {
-			if serverName, ok := rawTLS["serverName"].(string); ok && strings.TrimSpace(serverName) != "" {
-				tls["server_name"] = strings.TrimSpace(serverName)
+		rawTLS, _ := settings["tls"].(map[string]any)
+		// A node's certificate files are remote paths; never read them from the
+		// central panel. Local listeners share runtime certificate fallback rules.
+		if inbound.NodeID == nil {
+			var lookup func(string) (string, error)
+			if database.GetDB() != nil {
+				lookup = service.NativeTLSSetting
+			}
+			if resolved, err := service.ResolveNativeTLSSettings(rawTLS, lookup); err == nil {
+				rawTLS = resolved
+				settings["tls"] = resolved
 			}
 		}
+		if serverName, _ := rawTLS["serverName"].(string); strings.TrimSpace(serverName) != "" {
+			tls["server_name"] = strings.TrimSpace(serverName)
+		}
+		if inbound.NodeID == nil {
+			certPath, _ := rawTLS["certificatePath"].(string)
+			if certificate := service.NativeTLSClientCertificate(certPath); certificate != "" {
+				tls["certificate"] = []string{certificate}
+			}
+		}
+
 		// A wrapped AnyTLS connection performs a second, independent TLS
 		// handshake *inside* the ShadowTLS detour. Host SNI, ALPN and
 		// allowInsecure overrides describe the outer ShadowTLS handshake,
