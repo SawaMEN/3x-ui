@@ -719,7 +719,7 @@ func main() {
 		}
 	case "core-migrate":
 		if err := coremigration.CLIWithInitializer(os.Args[2:], initNodeTokenCrypto); err != nil {
-			log.Fatal(err)
+			log.Fatal("core migration failed; check the migration configuration and arguments")
 		}
 	case "migrate-db":
 		if err := migrateDbCmd.Parse(os.Args[2:]); err != nil {
