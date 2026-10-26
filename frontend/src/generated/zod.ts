@@ -12,6 +12,9 @@ export type Protocol = z.infer<typeof ProtocolSchema>;
 export const VKTurnProxyForwardTypeSchema = z.string();
 export type VKTurnProxyForwardType = z.infer<typeof VKTurnProxyForwardTypeSchema>;
 
+export const clientResetPolicySchema = z.number().int();
+export type clientResetPolicy = z.infer<typeof clientResetPolicySchema>;
+
 export const staticEgressResolverSchema = z.string();
 export type staticEgressResolver = z.infer<typeof staticEgressResolverSchema>;
 
