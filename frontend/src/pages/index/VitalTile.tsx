@@ -48,14 +48,14 @@ export default function VitalTile({
         <span className="ov-tile-number">{available ? percent.toFixed(1) : '—'}</span>
         {available && <span className="ov-tile-unit">%</span>}
       </div>
-      <div className="ov-tile-detail">{detail}</div>
+      <div className="ov-tile-detail">{available ? detail : '—'}</div>
       <div className="ov-tile-foot">
         <span>{available ? footLeft : '—'}</span>
         <span>{available ? footRight : '—'}</span>
       </div>
       <div className="ov-tile-chart">
         <Sparkline
-          data={data}
+          data={available ? data : []}
           height={isMobile ? 48 : 62}
           strokeWidth={1.5}
           fillOpacity={0.3}

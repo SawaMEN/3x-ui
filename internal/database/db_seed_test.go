@@ -266,8 +266,8 @@ func TestInitDBLeavesNoGuessableCredential(t *testing.T) {
 	}
 }
 
-// The server prints what EnsureFirstUser returns as the only copy of the first
-// login, so it must be the stored credential, and a restart must not mint another.
+// EnsureFirstUser returns the generated credentials without persisting plaintext.
+// The stored hash must match, and a restart must not mint another user.
 func TestEnsureFirstUserCreatesOneWorkingCredential(t *testing.T) {
 	if err := InitDB(filepath.Join(t.TempDir(), "x-ui.db")); err != nil {
 		t.Fatalf("InitDB: %v", err)

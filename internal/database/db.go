@@ -2870,10 +2870,10 @@ func InitDB(dbPath string) error {
 			return err
 		}
 	}
-	if username, password, err := EnsureFirstUser(); err != nil {
+	if username, _, err := EnsureFirstUser(); err != nil {
 		return err
 	} else if username != "" {
-		log.Printf("Initial panel credentials: username=%s password=%s", username, password)
+		log.Print("Initial panel user created. Set login credentials with: x-ui setting -username <username> -password <password>")
 	}
 	return runSeeders(isUsersEmpty)
 }
@@ -3295,7 +3295,7 @@ func DeleteHosts(tx *gorm.DB, query any, args ...any) (int64, error) {
 }
 
 // EnsureFirstUser creates the panel's first user with random credentials and returns
-// them, or returns "" when one exists; only the starting server calls it, so it can print them.
+// them, or returns "" when one exists. Callers must not log the password.
 func EnsureFirstUser() (username, password string, err error) {
 	empty, err := isTableEmpty("users")
 	if err != nil || !empty {

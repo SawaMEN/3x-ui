@@ -4,12 +4,16 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/database/dbtest"
 )
 
 func TestServerStopWhenXrayNotRunningSucceeds(t *testing.T) {
 	t.Setenv("XUI_DB_FOLDER", t.TempDir())
+	dbtest.InitDB(t, filepath.Join(t.TempDir(), "x-ui.db"))
 	s := NewServer(nil)
 	if err := s.Stop(); err != nil {
 		t.Fatalf("expected nil error when stopping server with unstarted xray, got: %v", err)
@@ -18,6 +22,7 @@ func TestServerStopWhenXrayNotRunningSucceeds(t *testing.T) {
 
 func TestServerStopPanelOnlyWithPreclosedListenerSucceeds(t *testing.T) {
 	t.Setenv("XUI_DB_FOLDER", t.TempDir())
+	dbtest.InitDB(t, filepath.Join(t.TempDir(), "x-ui.db"))
 	s := NewServer(nil)
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
