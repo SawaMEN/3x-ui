@@ -245,11 +245,20 @@ func TestHiddifyPendingApplyBatchNoopAndRollback(t *testing.T) {
 	if got, _ := os.ReadFile(svc.ProcessConfigPath()); string(got) != string(stable) || string(svc.process().AppliedConfig()) != string(stable) {
 		t.Fatal("failed candidate displaced last applied config")
 	}
+	svc.ApplyPendingRestart(context.Background())
+	if !svc.IsRunning() || !svc.restartFlag().Load() || stage5Starts(t, starts) != 4 {
+		t.Fatal("unchanged failing inbound caused another restart instead of waiting for retry")
+	}
+	time.Sleep(5100 * time.Millisecond)
+	svc.ApplyPendingRestart(context.Background())
+	if !svc.IsRunning() || !svc.restartFlag().Load() || stage5Starts(t, starts) != 6 {
+		t.Fatal("failed candidate was not retried after the delay")
+	}
 	if err := database.GetDB().Model(ib).Update("tag", "stage5-fixed").Error; err != nil {
 		t.Fatal(err)
 	}
 	svc.ApplyPendingRestart(context.Background())
-	if svc.restartFlag().Load() || stage5Starts(t, starts) != 5 || !strings.Contains(string(svc.process().AppliedConfig()), "stage5-fixed") {
+	if svc.restartFlag().Load() || stage5Starts(t, starts) != 7 || !strings.Contains(string(svc.process().AppliedConfig()), "stage5-fixed") {
 		t.Fatal("corrected DB state did not retry")
 	}
 	if err := svc.Stop(context.Background()); err != nil {
@@ -257,7 +266,7 @@ func TestHiddifyPendingApplyBatchNoopAndRollback(t *testing.T) {
 	}
 	svc.SetToNeedRestart()
 	svc.ApplyPendingRestart(context.Background())
-	if svc.IsRunning() || stage5Starts(t, starts) != 5 {
+	if svc.IsRunning() || stage5Starts(t, starts) != 7 {
 		t.Fatal("pending apply undid manual stop")
 	}
 }
@@ -511,5 +520,35 @@ func TestHiddifyCoreFailureRollsBackExternalOutbound(t *testing.T) {
 	}
 	if !svc.IsRunning() || !svc.restartFlag().Load() || string(stable) != string(svc.process().AppliedConfig()) || string(before) != string(after) {
 		t.Fatal("failed core candidate displaced stable sidecar or configuration")
+	}
+}
+
+func TestInboundEditsDoNotRestartUnchangedNativeConfiguration(t *testing.T) {
+	svc, starts, _ := stage5ProcessFixture(t)
+	inbounds := &InboundService{}
+	inbound := &model.Inbound{Enable: true, Protocol: model.VLESS, Listen: "127.0.0.1", Port: 24143, Tag: "edit-check", Settings: clientsSettings(t, []model.Client{{Email: "edit-check", ID: "11111111-1111-4111-8111-111111111111", Enable: true}}), StreamSettings: `{"network":"tcp","security":"none"}`}
+	if _, _, err := inbounds.AddInbound(inbound); err != nil {
+		t.Fatal(err)
+	}
+	svc.ApplyPendingRestart(context.Background())
+	if stage5Starts(t, starts) != 2 {
+		t.Fatal("added inbound did not start")
+	}
+	inbound.Remark = "new subscription label"
+	inbound.SubSortIndex = 12
+	if _, _, err := inbounds.UpdateInbound(inbound); err != nil {
+		t.Fatal(err)
+	}
+	svc.ApplyPendingRestart(context.Background())
+	if stage5Starts(t, starts) != 2 || !svc.IsRunning() {
+		t.Fatal("subscription-only edit interrupted the running core")
+	}
+	inbound.Port = 24144
+	if _, _, err := inbounds.UpdateInbound(inbound); err != nil {
+		t.Fatal(err)
+	}
+	svc.ApplyPendingRestart(context.Background())
+	if stage5Starts(t, starts) != 3 || !svc.IsRunning() || !strings.Contains(string(svc.process().AppliedConfig()), "24144") {
+		t.Fatal("listener edit was not applied exactly once")
 	}
 }

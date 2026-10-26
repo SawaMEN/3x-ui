@@ -2,6 +2,8 @@ package sub
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -68,6 +70,33 @@ func TestMASQUEFullSubscription(t *testing.T) {
 			cmd.Dir = filepath.Dir(binary)
 			if output, err := cmd.CombinedOutput(); err != nil {
 				t.Fatalf("generated MASQUE subscription: %v: %s", err, output)
+			}
+		}
+	}
+	router := newSubscriptionTestRouter(subscriptionTestRouterConfig{})
+	for _, agent := range []string{"Hiddify/4.0", "sing-box/1.15.0", "NekoBox/1.5"} {
+		for _, path := range []string{"/sub/masque-sub", "/json/masque-sub"} {
+			request := httptest.NewRequest(http.MethodGet, path, nil)
+			request.Header.Set("User-Agent", agent)
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, request)
+			if response.Code != http.StatusOK {
+				t.Fatalf("%s %s returned %d: %s", agent, path, response.Code, response.Body.String())
+			}
+			var configs []map[string]any
+			if err := json.Unmarshal(response.Body.Bytes(), &configs); err != nil {
+				var cfg map[string]any
+				if err := json.Unmarshal(response.Body.Bytes(), &cfg); err != nil {
+					t.Fatalf("%s %s did not return native JSON: %s", agent, path, response.Body.String())
+				}
+				configs = []map[string]any{cfg}
+			}
+			if len(configs) != 1 {
+				t.Fatalf("%s %s exported %d profiles", agent, path, len(configs))
+			}
+			endpoints, _ := configs[0]["endpoints"].([]any)
+			if len(endpoints) != 1 || endpoints[0].(map[string]any)["type"] != "masque-client" || endpoints[0].(map[string]any)["password"] != "current" {
+				t.Fatalf("%s %s lost MASQUE credentials: %s", agent, path, response.Body.String())
 			}
 		}
 	}

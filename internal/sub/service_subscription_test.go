@@ -224,7 +224,7 @@ func TestGetSubsIncludesAnyTLSAndShadowTLS(t *testing.T) {
 		t.Fatalf("sing-box subscription is missing ShadowTLS default handshake: %v\n%s", err, jsonSub)
 	}
 	controller := &SUBController{subService: NewSubService("")}
-	if !controller.hasNativeTLSSubscription(subID) {
+	if !controller.hasNativeSingBoxSubscription(subID) {
 		t.Fatal("AnyTLS/ShadowTLS inbound missing from native subscription detection")
 	}
 	// An unrelated protocol without a sing-box outbound must not force the
