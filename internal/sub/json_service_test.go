@@ -1010,6 +1010,7 @@ func TestGetSingBoxJsonEmitsNativeOutbound(t *testing.T) {
 }
 
 func TestGetConfigSkipsPlaintextHysteriaExternalProxy(t *testing.T) {
+	initSubDB(t)
 	inbound := &model.Inbound{
 		Protocol: model.Hysteria, Listen: "203.0.113.1", Port: 443,
 		Settings:       `{"version":2}`,
