@@ -731,7 +731,7 @@
           "listen": "Inbound listen",
           "custom": "Custom"
         },
-        "sudokuHint": "The panel generates the server key and separate client keys when saved. Use the sudoku:// link from the clients list to connect.",
+        "sudokuHint": "Uses the official Sudoku server; installs and updates come from SUDOKU-ASCII/sudoku. Traffic exits directly from the server, without panel core routing, cascades or core traffic counters. The panel generates the server key and separate client keys when saved. Use the sudoku:// link from the clients list to connect.",
         "sudokuKey": "Server public key",
         "sudokuKeyHint": "Generated when the inbound is saved. The server private key is stored separately, and clients receive individual keys.",
         "sudokuKeyPending": "Generated when saved",
@@ -921,7 +921,6 @@
           "udp": "UDP payload requires UDP support in the selected outbound and every cascade hop. Without it, UDP fails; the panel does not automatically bypass the cascade with a direct connection.",
           "users": "Per-user (auth_user) routing is unavailable across this bridge. Use inbound, domain or IP rules. Individual quotas and statistics are preserved.",
           "pingtunnel": "Requires Pingtunnel 3.0 or newer and ICMP allowed along the entire path. The old forward field is ignored; panel routing selects the exit.",
-          "sudoku": "Requires the Sudoku server built by this panel with panel-egress support. Stock upstream binaries are incompatible and will not start. Install the component from a panel release or the Sidecar egress regression artifact.",
           "vkLocal": "Select an enabled local inbound. Disabling the target blocks VK TURN forwarding. Rules for the VK inbound apply to traffic after the nested VPN is terminated.",
           "vkWireguard": "The WireGuard target must be enabled and hosted on this server. Disabling it blocks VK TURN forwarding. An additional authenticated WireGuard port listens on all interfaces; account for it in your firewall.",
           "vkExternal": "The external target receives UDP through the selected exit and must be reachable from the final cascade server. For WireGuard/Hysteria2 on this server, select a local inbound instead of localhost."

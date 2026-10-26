@@ -14,7 +14,7 @@ import (
 )
 
 func routedSidecar(protocol model.Protocol) bool {
-	return protocol == model.Mieru || protocol == model.TrustTunnel || protocol == model.Pingtunnel || protocol == model.Sudoku
+	return protocol == model.Mieru || protocol == model.TrustTunnel || protocol == model.Pingtunnel
 }
 
 func usesCoreSidecarRelay(ib *model.Inbound) bool {
