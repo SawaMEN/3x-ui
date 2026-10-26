@@ -117,6 +117,17 @@ func TestNativeTLSCertificateIdentityIsSafeAndDeterministic(t *testing.T) {
 	if err != nil || identity["serverName"] != "vpn.example.test" {
 		t.Fatalf("wildcard name not usable: %v %#v", err, identity)
 	}
+
+	for _, name := range []string{"camouflage.invalid", "selected.example.test"} {
+		resolved, err := service.ResolveNativeTLSSettings(map[string]any{"certificatePath": cert, "keyPath": key, "serverName": name}, nil)
+		expected := "selected.example.test"
+		if name == "camouflage.invalid" {
+			expected = "vpn.example.test"
+		}
+		if err != nil || resolved["serverName"] != expected {
+			t.Fatalf("stale/valid explicit SNI %q: %v %#v", name, err, resolved)
+		}
+	}
 	if _, err := service.ResolveNativeTLSSettings(map[string]any{"certificatePath": cert}, nil); err == nil {
 		t.Fatal("half certificate pair was accepted")
 	}

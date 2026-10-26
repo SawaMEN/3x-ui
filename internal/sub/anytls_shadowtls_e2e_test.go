@@ -185,6 +185,9 @@ func TestAnyTLSShadowTLSSubscriptionConnections(t *testing.T) {
 	for deadline := time.Now().Add(3 * time.Second); time.Now().Before(deadline); {
 		data, _ := os.ReadFile(serverLog)
 		if strings.Contains(string(data), "create netlink socket: operation not permitted") {
+			if os.Getenv("CI") == "true" {
+				t.Fatalf("CI must exercise real AnyTLS + ShadowTLS TCP/UDP traffic; core startup failed: %s", data)
+			}
 			t.Skip("core configurations accepted; runtime netlink sockets are unavailable on this host")
 		}
 		if strings.Contains(string(data), "sing-box started") {

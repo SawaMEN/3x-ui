@@ -45,16 +45,20 @@ func ResolveNativeTLSSettings(raw map[string]any, lookup func(string) (string, e
 	tls["enabled"], tls["certificatePath"], tls["keyPath"] = true, cert, key
 	name, _ := tls["serverName"].(string)
 	name = strings.TrimSpace(name)
-	if name == "" {
-		var preferred []string
-		if lookup != nil {
-			for _, field := range []string{"webDomain", "subDomain"} {
-				v, _ := lookup(field)
-				preferred = append(preferred, v)
-			}
+	// An older configuration may contain the camouflage SNI or a stale
+	// panel domain. Prefer an explicit name only when the actual certificate
+	// covers it; otherwise repair the effective listener/client identity.
+	preferred := []string{name}
+	if lookup != nil {
+		for _, field := range []string{"webDomain", "subDomain"} {
+			v, _ := lookup(field)
+			preferred = append(preferred, v)
 		}
-		name = NativeTLSCertificateName(cert, preferred...)
 	}
+	if actual := NativeTLSCertificateName(cert, preferred...); actual != "" {
+		name = actual
+	}
+
 	if name != "" {
 		tls["serverName"] = name
 	}
