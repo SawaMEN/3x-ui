@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -83,9 +84,8 @@ func normalizeNodeCoreType(value string) string {
 
 type NodeService struct{}
 
-// FetchCertFingerprint connects to the node over HTTPS without verifying the
-// certificate and returns the leaf certificate's SHA-256 as base64, so the UI
-// can offer a "fetch and pin current certificate" action.
+// FetchCertFingerprint reads the peer certificate from verified TLS or its
+// verification error; an untrusted peer never receives an HTTP request.
 func (s *NodeService) FetchCertFingerprint(ctx context.Context, n *model.Node) (string, error) {
 	addr, err := netsafe.NormalizeHost(n.Address)
 	if err != nil {
@@ -112,21 +112,28 @@ func (s *NodeService) FetchCertFingerprint(ctx context.Context, n *model.Node) (
 	if err != nil {
 		return "", err
 	}
-	client := &http.Client{
-		Transport: &http.Transport{
-			DialContext:     netsafe.SSRFGuardedDialContext,
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, // lgtm[go/disabled-certificate-check]
-		},
-	}
+	transport := &http.Transport{DialContext: netsafe.SSRFGuardedDialContext}
+	defer transport.CloseIdleConnections()
+	client := &http.Client{Transport: transport, Timeout: 10 * time.Second,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	var certificates []*x509.Certificate
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", err
+		var verificationError *tls.CertificateVerificationError
+		if !errors.As(err, &verificationError) {
+			return "", err
+		}
+		certificates = verificationError.UnverifiedCertificates
+	} else {
+		defer resp.Body.Close()
+		if resp.TLS != nil {
+			certificates = resp.TLS.PeerCertificates
+		}
 	}
-	defer resp.Body.Close()
-	if resp.TLS == nil || len(resp.TLS.PeerCertificates) == 0 {
+	if len(certificates) == 0 {
 		return "", common.NewError("node did not present a TLS certificate")
 	}
-	sum := sha256.Sum256(resp.TLS.PeerCertificates[0].Raw)
+	sum := sha256.Sum256(certificates[0].Raw)
 	return base64.StdEncoding.EncodeToString(sum[:]), nil
 }
 

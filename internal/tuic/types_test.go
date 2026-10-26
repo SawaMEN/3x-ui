@@ -83,15 +83,20 @@ func TestStructuralFingerprintDetectsCertificateRenewalAtSamePath(t *testing.T) 
 	dir := t.TempDir()
 	certPath := filepath.Join(dir, "fullchain.pem")
 	keyPath := filepath.Join(dir, "privkey.pem")
-	if err := os.WriteFile(certPath, []byte("certificate-v1"), 0o600); err != nil {
+	cert, key := generateTestCert(t)
+	if err := os.WriteFile(certPath, cert, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(keyPath, []byte("key-v1"), 0o600); err != nil {
+	if err := os.WriteFile(keyPath, key, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	inst := Instance{Listen: "0.0.0.0", Port: 443, Certificate: certPath, PrivateKey: keyPath}
 	before := inst.StructuralFingerprint()
-	if err := os.WriteFile(certPath, []byte("certificate-v2"), 0o600); err != nil {
+	cert, key = generateTestCert(t)
+	if err := os.WriteFile(certPath, cert, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(keyPath, key, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if before == inst.StructuralFingerprint() {

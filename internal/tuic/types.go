@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -60,8 +59,7 @@ func (inst Instance) BindTo() string {
 func (inst Instance) StructuralFingerprint() string {
 	parts := []string{
 		inst.BindTo(),
-		fingerprintMaterial(inst.Certificate),
-		fingerprintMaterial(inst.PrivateKey),
+		inst.certificateFingerprint(),
 		strings.Join(inst.ALPN, ","),
 		strconv.FormatBool(inst.ZeroRTTHandshake),
 		strconv.Itoa(inst.MaxIdleTime),
@@ -71,14 +69,16 @@ func (inst Instance) StructuralFingerprint() string {
 	return strings.Join(parts, "|")
 }
 
-func fingerprintMaterial(value string) string {
-	material := []byte(value)
-	if value != "" && !strings.Contains(value, "-----BEGIN ") {
-		if file, err := os.ReadFile(value); err == nil {
-			material = file
-		}
+func (inst Instance) certificateFingerprint() string {
+	pair, err := loadCertificate(inst.Certificate, inst.PrivateKey)
+	if err != nil {
+		return "invalid-certificate"
 	}
-	return fmt.Sprintf("%x", sha256.Sum256(material))
+	hash := sha256.New()
+	for _, der := range pair.Certificate {
+		_, _ = hash.Write(der)
+	}
+	return fmt.Sprintf("%x", hash.Sum(nil))
 }
 
 func (inst Instance) UsersFingerprint() string {
