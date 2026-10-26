@@ -19,6 +19,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 	"github.com/gin-gonic/gin"
@@ -501,7 +502,7 @@ func (a *SUBController) subs(c *gin.Context) {
 	if !a.enforceHwid(c) {
 		return
 	}
-	if strings.Contains(strings.ToLower(userAgent), "hiddify") && a.hasNativeTLSSubscription(c.Param("subid")) &&
+	if strings.Contains(strings.ToLower(userAgent), "hiddify") && a.hasHiddifyNativeSubscription(c.Param("subid")) &&
 		a.serveJsonBody(c, true, "application/json; charset=utf-8", false, true) {
 		a.recordSubscriptionFetch(c)
 		logSubscriptionRoute(userAgent, "hiddify-native-sing-box")
@@ -550,6 +551,25 @@ func (a *SUBController) subs(c *gin.Context) {
 		}
 		a.recordSubscriptionFetch(c)
 	}
+}
+
+func (a *SUBController) hasHiddifyNativeSubscription(subID string) bool {
+	req := a.subService.ForRequest("")
+	inbounds, err := req.getInboundsBySubId(subID)
+	if err != nil {
+		return false
+	}
+	for _, inbound := range inbounds {
+		if !hiddifyExtendedProtocol(inbound.Protocol) && inbound.Protocol != model.MASQUE && inbound.Protocol != model.WireGuard && !containsNativeTLSSubscription([]*model.Inbound{inbound}) {
+			continue
+		}
+		for _, client := range req.matchingClients(inbound, subID) {
+			if client.Enable {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (a *SUBController) hasNativeTLSSubscription(subID string) bool {
@@ -887,7 +907,7 @@ func (a *SUBController) serveJsonBody(c *gin.Context, alwaysReturnArray bool, co
 	// user imported the panel's /json/ subscription path. Plain Xray JSON
 	// cannot encode either protocol. An explicit format also works when the
 	// importing app does not identify itself in User-Agent.
-	if format == "hiddify" || (isHiddify && (forceSingBox || format == "sing-box" || a.hasNativeTLSSubscription(subId))) {
+	if format == "hiddify" || (isHiddify && (forceSingBox || format == "sing-box" || a.hasHiddifyNativeSubscription(subId))) {
 		jsonSub, header, err = a.subJsonService.GetHiddifySingBoxJson(subId, host)
 	} else if forceSingBox || format == "sing-box" {
 		jsonSub, header, err = a.subJsonService.GetSingBoxJson(subId, host, alwaysReturnArray)

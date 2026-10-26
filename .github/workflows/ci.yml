@@ -98,6 +98,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 tools/fetch-latest-kernel.py --arch amd64 --output "$RUNNER_TEMP/awg-core"
+      - name: Verify native subscription protocol exports
+        env:
+          HIDDIFY_TEST_BINARY: ${{ runner.temp }}/awg-core/hiddify-core-linux-amd64
+        run: go test ./internal/sub -run '^TestHiddify(ExtendedProtocolsSurviveMixedSubscription|MixedWireGuardKeepsEveryEndpoint)$' -count=1
       - name: Verify native AWG configuration and TCP/UDP tunnel
         env:
           HIDDIFY_CONFIG_CHECK_BINARY: ${{ runner.temp }}/awg-core/hiddify-core-linux-amd64

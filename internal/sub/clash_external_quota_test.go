@@ -25,6 +25,8 @@ func clashSubRouter(t *testing.T) *gin.Engine {
 		router.Group("/"),
 		WithSUBJsonEnabled(true),
 		WithSUBClashEnabled(true),
+		WithSUBClashAutoDetect(true),
+		WithSUBClashUserAgentRegex("Clash"),
 		WithSUBEncryption(false),
 	)
 	return router
@@ -58,20 +60,24 @@ func seedClashQuotaSub(t *testing.T, subID string, expiry int64) {
 	}
 }
 
-// B's node cannot be represented in Clash, but B still owns quota: the header
-// must keep counting B's traffic, not quietly serve A's numbers alone.
+// Automatic Clash detection must fall back to the complete raw subscription
+// when an external link is unrepresentable, keeping both nodes and their quota.
 func TestClashQuotaHeaderCountsDroppedExternalLink(t *testing.T) {
 	initSubDB(t)
 	subID := "clash-quota-drop"
 	expiry := time.Now().Add(24 * time.Hour).UnixMilli()
 	seedClashQuotaSub(t, subID, expiry)
 
-	w := fetchClashSub(t, clashSubRouter(t), "/clash/"+subID+"?view=raw")
+	router := clashSubRouter(t)
+	req := httptest.NewRequest(http.MethodGet, "/sub/"+subID, nil)
+	req.Header.Set("User-Agent", "Clash")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200; body=%s", w.Code, w.Body.String())
 	}
-	if strings.Contains(w.Body.String(), "198.51.100.9") {
-		t.Fatalf("unrepresentable node leaked into the profile: %s", w.Body.String())
+	if !strings.Contains(w.Body.String(), "198.51.100.9") || !strings.Contains(w.Body.String(), "vless://") {
+		t.Fatalf("fallback lost a node: %s", w.Body.String())
 	}
 	wantHeader := fmt.Sprintf("upload=111; download=222; total=3072; expire=%d", expiry/1000)
 	if got := w.Header().Get("Subscription-Userinfo"); got != wantHeader {

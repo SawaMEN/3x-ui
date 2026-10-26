@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -170,10 +171,15 @@ func doFetchSubscriptionLinks(rawURL string) ([]string, error) {
 	if len(body) > subscriptionMaxBytes {
 		return nil, errSubscriptionBodyTooLarge
 	}
-	return decodeSubscriptionBody(body), nil
+	links := decodeSubscriptionBody(body)
+	if len(links) == 0 && strings.TrimSpace(string(body)) != "" {
+		return nil, errInvalidSubscriptionBody
+	}
+	return links, nil
 }
 
 var (
+	errInvalidSubscriptionBody  = &subError{"subscription response contains no share links"}
 	errBadStatus                = &subError{"non-2xx subscription response"}
 	errSubscriptionBodyTooLarge = &subError{"subscription response body exceeds size limit"}
 )
@@ -239,7 +245,7 @@ func decodeSubscriptionBody(body []byte) []string {
 		if ln == "" || strings.HasPrefix(ln, "#") {
 			continue
 		}
-		if strings.Contains(ln, "://") {
+		if looksLikeSubscriptionLink(ln) {
 			out = append(out, ln)
 		}
 	}
@@ -261,4 +267,28 @@ func tryDecodeBase64Body(s string) (string, bool) {
 		return string(b), true
 	}
 	return "", false
+}
+
+// Keep unfamiliar URI schemes for client-side import, including opaque fptn:
+// tokens. Reject HTML and arbitrary text containing an embedded URL.
+func looksLikeSubscriptionLink(line string) bool {
+	address := strings.SplitN(line, "#", 2)[0]
+	if strings.ContainsAny(address, "<>\"' \t") {
+		return false
+	}
+	colon := strings.IndexByte(line, ':')
+	if colon <= 0 || colon == len(line)-1 {
+		return false
+	}
+	for i, r := range line[:colon] {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (i > 0 && ((r >= '0' && r <= '9') || r == '+' || r == '-' || r == '.'))) {
+			return false
+		}
+	}
+	scheme := strings.ToLower(line[:colon])
+	if scheme == "http" || scheme == "https" {
+		u, err := url.Parse(address)
+		return err == nil && u.User != nil && u.Hostname() != "" && u.Port() != ""
+	}
+	return strings.HasPrefix(line[colon+1:], "//") || scheme == "fptn"
 }

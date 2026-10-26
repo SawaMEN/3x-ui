@@ -206,7 +206,7 @@ func buildHiddifySingBoxSubscription(proxies []map[string]any) (string, error) {
 			delete(proxy, "_panel_shadowtls_transport")
 			outbounds = append(outbounds, transport)
 		}
-		if proxy["type"] == "masque-client" {
+		if proxy["type"] == "masque-client" || proxy["type"] == "wireguard" || proxy["type"] == "awg" {
 			endpoints = append(endpoints, proxy)
 		} else {
 			outbounds = append(outbounds, proxy)

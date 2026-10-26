@@ -158,6 +158,8 @@ func (s *SubClashService) getClash(subId string, host string, legacy bool) (stri
 			}
 			if proxy := s.clashProxyFromExternal(el.Link, name); proxy != nil {
 				proxies = append(proxies, proxy)
+			} else {
+				return "", "", errSubscriptionFormatUnsupported
 			}
 		}
 	}

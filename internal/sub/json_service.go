@@ -454,6 +454,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 		}
 	}
 	var wireguardConfigs []json.RawMessage
+	wireguardEndpoints := make(map[*model.Inbound][]map[string]any)
 	for _, inbound := range inbounds {
 		delete(subReq.streamSettingsByInbound, inbound.Id)
 		clients := clientsFor(inbound)
@@ -481,6 +482,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 		if pub, err := wgutil.PublicKeyFromPrivate(secretKey); err == nil {
 			serverPublicKey = pub
 		}
+		originalInbound := inbound
 		for _, client := range clients {
 			seenEmails[client.Email] = struct{}{}
 			if !client.Enable || client.PrivateKey == "" || serverPublicKey == "" {
@@ -523,7 +525,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 				}
 				endpoint := map[string]any{
 					"type":        "wireguard",
-					"tag":         "wg-endpoint",
+					"tag":         fmt.Sprintf("WireGuard · %s-%d", client.Email, len(wireguardConfigs)+1),
 					"address":     addresses,
 					"private_key": client.PrivateKey,
 					"peers":       []any{peer},
@@ -547,7 +549,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 						map[string]any{"type": "block", "tag": "blocked"},
 					},
 					"route": map[string]any{
-						"rules":                 []any{map[string]any{"action": "route", "outbound": "wg-endpoint"}},
+						"rules":                 []any{map[string]any{"action": "route", "outbound": endpoint["tag"]}},
 						"final":                 "direct",
 						"auto_detect_interface": true,
 					},
@@ -555,13 +557,14 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 				encoded, err := json.MarshalIndent(cfg, "", "  ")
 				if err == nil {
 					wireguardConfigs = append(wireguardConfigs, encoded)
+					wireguardEndpoints[originalInbound] = append(wireguardEndpoints[originalInbound], endpoint)
 					hasEnabledClient = true
 				}
 			}
 		}
 	}
 
-	if wireguardOnly {
+	if wireguardOnly && !hiddify {
 		if len(wireguardConfigs) == 0 {
 			return "", "", errSubscriptionFormatUnsupported
 		}
@@ -587,12 +590,13 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 	// Hiddify with native AnyTLS / ShadowTLS, retain importable nodes even when
 	// other protocols cannot be represented; otherwise the client may get
 	// only raw links and silently drop AnyTLS (and every ShadowTLS detour).
-	// WireGuard endpoint profiles are emitted separately above. A mixed
-	// WireGuard + proxy subscription cannot be represented by the current
-	// separated-profile builder without routing one profile through another,
-	// so reject it instead of falling back to the deprecated WireGuard outbound.
+	// Stock sing-box still uses separated WireGuard profiles. Hiddify can
+	// merge its WireGuard/AWG endpoints with proxies in one native document.
 	nativeTLSForHiddify := hiddify && containsNativeTLSSubscription(inbounds)
-	if !nativeTLSForHiddify && (containsSubscriptionProtocol(inbounds, model.WireGuard) || containsUnsupportedSingBoxProtocol(inbounds)) {
+	if (!hiddify && containsSubscriptionProtocol(inbounds, model.WireGuard)) ||
+		(!nativeTLSForHiddify && slices.ContainsFunc(inbounds, func(ib *model.Inbound) bool {
+			return singBoxUnsupportedProtocol(ib.Protocol) && !(hiddify && hiddifyExtendedProtocol(ib.Protocol))
+		})) {
 		return "", "", errSubscriptionFormatUnsupported
 	}
 
@@ -604,11 +608,19 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 		if len(clients) == 0 {
 			continue
 		}
+		if hiddify && inbound.Protocol == model.WireGuard {
+			if len(wireguardEndpoints[inbound]) == 0 {
+				formatUnsupported = true
+			}
+			for _, endpoint := range wireguardEndpoints[inbound] {
+				proxies = append(proxies, nativeOutbound{out: endpoint})
+			}
+			continue
+		}
 		// Hiddify can import the supported sing-box outbounds even when another
 		// inbound in this subscription is not representable as an outbound.
 		// Do not let that unrelated inbound remove ShadowTLS from the profile.
-		if nativeTLSForHiddify && (inbound.Protocol == model.WireGuard ||
-			singBoxUnsupportedProtocol(inbound.Protocol)) {
+		if nativeTLSForHiddify && singBoxUnsupportedProtocol(inbound.Protocol) && !hiddifyExtendedProtocol(inbound.Protocol) {
 			continue
 		}
 		subReq.projectThroughFallbackMaster(inbound)
@@ -651,6 +663,16 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 					inbound = &clone
 					delete(subReq.streamSettingsByInbound, inbound.Id)
 				}
+			}
+			if hiddify && hiddifyExtendedProtocol(inbound.Protocol) {
+				generated := s.genHiddifyExtended(subReq, inbound, client)
+				if len(generated) == 0 {
+					formatUnsupported = true
+				}
+				for _, ob := range generated {
+					proxies = append(proxies, nativeOutbound{out: ob})
+				}
+				continue
 			}
 			if model.ShadowTLSTransport(inbound.Settings) != nil {
 				generated := 0
