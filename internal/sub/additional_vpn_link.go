@@ -17,7 +17,7 @@ func (s *SubService) genAdditionalVPNLink(ib *model.Inbound, email string) strin
 	}
 	var links []string
 	for _, ep := range s.shareEndpointsForInbound(ib) {
-		link, err := externalvpn.ExportAdditionalLink(inst, email, ep.Address, ep.Port, ib.Remark)
+		link, err := externalvpn.ExportAdditionalLink(inst, email, ep.Address, ep.Port, s.endpointRemark(ib, email, ep.ep, ""))
 		if err == nil {
 			links = append(links, link)
 		}

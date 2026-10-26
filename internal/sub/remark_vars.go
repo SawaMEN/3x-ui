@@ -666,7 +666,13 @@ func (s *SubService) genTemplatedRemark(inbound *model.Inbound, client model.Cli
 	if out := expandRemarkVars(tmpl, ctx); strings.TrimSpace(out) != "" {
 		return out
 	}
-	return ctx.configName()
+	if name := ctx.configName(); name != "" {
+		return name
+	}
+	if name := fallbackRemark(hostRemark, client.Email); name != "" {
+		return name
+	}
+	return string(inbound.Protocol)
 }
 
 // genHostRemark builds one host endpoint's remark for a specific client. With a

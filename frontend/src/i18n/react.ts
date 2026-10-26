@@ -38,10 +38,15 @@ export async function readyI18n(scope: LanguageScope = 'panel') {
       | (() => Promise<{ default: Record<string, unknown> }>)
       | undefined;
     if (loader) {
-      const mod = await loader();
-      const messages = (mod.default ?? mod) as Record<string, unknown>;
-      i18next.addResourceBundle(active, 'translation', messages, true, true);
-      await i18next.changeLanguage(active);
+      try {
+        const mod = await loader();
+        const messages = (mod.default ?? mod) as Record<string, unknown>;
+        i18next.addResourceBundle(active, 'translation', messages, true, true);
+        await i18next.changeLanguage(active);
+      } catch (error) {
+        console.error('Unable to load locale, using English', error);
+        await i18next.changeLanguage(FALLBACK);
+      }
     }
   }
   // The html files ship lang="en"; screen readers pick their voice from it (s-ui#1293).

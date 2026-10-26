@@ -50,7 +50,7 @@ Cross-building the Linux SQLite target from Windows (or vice versa) requires a s
 ## First-time setup
 
 ```bash
-git clone https://github.com/MHSanaei/3x-ui.git
+git clone https://github.com/SawaMEN/3x-ui.git
 cd 3x-ui
 
 cp .env.example .env

@@ -39,9 +39,7 @@ function withSuspense(node: React.ReactNode) {
       fallback={
         <div
           style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 1000,
+            minHeight: 240,
             display: 'flex',
             justifyContent: 'center',
             alignItems: 'center',

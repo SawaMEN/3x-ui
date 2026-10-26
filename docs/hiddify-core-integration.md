@@ -32,7 +32,7 @@
 подписки, лимиты и синхронизация узлов используют общие модели напрямую.
 Таблицы, идентификаторы и контракты JSON сохранены. Xray wire-сериализация
 остаётся в адаптере; общие DTO не подменяют native-конфиг Hiddify.
-Проверки: [hiddify-core-stage-3-verification.md](hiddify-core-stage-3-verification.md).
+Проверки: [hiddify-core-stage-3-verification.md](reports/hiddify-core/hiddify-core-stage-3-verification.md).
 
 ## Генерация полного серверного конфига
 
@@ -46,7 +46,7 @@ Infrastructure, AdBlock и managed YouTube используют тот же сн
 и ограничения DNS-групп; отсутствующий egress target возвращает ошибку.
 Настоящее ядро проверено на успешной публикации и отказе candidate с
 сохранением старого файла.
-Подробности: [hiddify-core-stage-4-verification.md](hiddify-core-stage-4-verification.md).
+Подробности: [hiddify-core-stage-4-verification.md](reports/hiddify-core/hiddify-core-stage-4-verification.md).
 
 ## Применение изменений панели
 
@@ -59,7 +59,7 @@ config и процесс; desired state остаётся для retry.
 
 Raw `srun` не предоставляет client RPC `/hcore.Core/HotReload`, поэтому
 применение использует контролируемый restart без объявления HotInboundReload.
-Проверки и границы: [hiddify-core-stage-5-verification.md](hiddify-core-stage-5-verification.md).
+Проверки и границы: [hiddify-core-stage-5-verification.md](reports/hiddify-core/hiddify-core-stage-5-verification.md).
 
 ## Runtime и управление процессом
 
@@ -121,7 +121,7 @@ protobuf (`proto`), чтобы стандартный gRPC-сервер прин
 Квоты, expiry/autorenew и session revocation используют зафиксированное состояние.
 Clash adapter общий для service и local runtime; online/IP отражают его снимок.
 Проверки и открытая приёмка сохранения последних байтов при остановке ядра:
-[hiddify-core-stage-6-verification.md](hiddify-core-stage-6-verification.md).
+[hiddify-core-stage-6-verification.md](reports/hiddify-core/hiddify-core-stage-6-verification.md).
 
 ## Границы этапа
 
@@ -132,9 +132,9 @@ Gateway и sidecar bridges продолжают использовать име�
 полный паритет дополнительных протоколов сохраняются до проверки каждого переноса.
 
 Проверки второго этапа и их фактические результаты записаны в
-[hiddify-core-stage-2-verification.md](hiddify-core-stage-2-verification.md).
+[hiddify-core-stage-2-verification.md](reports/hiddify-core/hiddify-core-stage-2-verification.md).
 
-Повторная проверка и исправления этапов 1–5: [отчёт](hiddify-core-stages-1-5-review.md).
+Повторная проверка и исправления этапов 1–5: [отчёт](reports/hiddify-core/hiddify-core-stages-1-5-review.md).
 
 ## Этап 7: подписки и удалённые узлы
 
@@ -144,7 +144,7 @@ Hiddify native JSON использует адаптер собственного
 импортированные URL и прежние клиентские форматы сохраняются.
 
 Реализованные сценарии, проверки и открытая эксплуатационная приёмка:
-[отчёт этапа 7](hiddify-core-stage-7-verification.md).
+[отчёт этапа 7](reports/hiddify-core/hiddify-core-stage-7-verification.md).
 
 ## Этап 8: Gateway и дополнительные сервисы
 
@@ -154,7 +154,7 @@ DNS rule и переводит настройки TUN с защитой от м�
 FPTN bridge запускает закреплённый модифицированный Sing-box вместо отдельного sing-box.
 
 Проверки, ограничения совместного TUN/TPROXY и открытая приёмка реального
-сетевого трафика: [отчёт этапа 8](hiddify-core-stage-8-verification.md).
+сетевого трафика: [отчёт этапа 8](reports/hiddify-core/hiddify-core-stage-8-verification.md).
 
 ## Этап 9: установленные панели
 
@@ -165,13 +165,13 @@ FPTN bridge запускает закреплённый модифицирова
 Пользователи, секреты, подписки, узлы и записанная статистика сохраняются.
 
 Инструкции и точные границы проверки:
-[отчёт этапа 9](hiddify-core-stage-9-verification.md).
+[отчёт этапа 9](reports/hiddify-core/hiddify-core-stage-9-verification.md).
 Полноценный privileged upgrade/traffic/reboot и live PostgreSQL restore
 требуют отдельной эксплуатационной приёмки.
 
 ## Повторная проверка этапов 1–9
 
-[Общий отчёт](hiddify-core-stages-1-9-review.md) содержит проверенные контракты,
+[Общий отчёт](reports/hiddify-core/hiddify-core-stages-1-9-review.md) содержит проверенные контракты,
 исправления stale backups, legacy alias, runtime environment и rollback,
 результаты регрессий и оставшуюся эксплуатационную приёмку.
 
@@ -183,7 +183,7 @@ runtime страницы. Клиентские форматы подписок �
 сохранены. Старые рабочие бинарники удаляются после успешной проверки запуска;
 installation/database snapshot остаётся для восстановления.
 
-[Изменения, миграция контейнеров и границы проверки](hiddify-core-stage-10-verification.md).
+[Изменения, миграция контейнеров и границы проверки](reports/hiddify-core/hiddify-core-stage-10-verification.md).
 
 Новые параметры Vision и REALITY в сборке panel5 описаны в
 [sing-box-protection-support.md](sing-box-protection-support.md).

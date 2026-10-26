@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -36,7 +35,7 @@ func (s *SubJsonService) genHiddifyExtended(subReq *SubService, ib *model.Inboun
 		if ob == nil {
 			continue
 		}
-		ob["tag"] = fmt.Sprintf("%s · %s", ib.Protocol, subReq.endpointRemark(ib, client.Email, ep.ep, ""))
+		ob["tag"] = subReq.endpointRemark(ib, client.Email, ep.ep, "")
 		result = append(result, ob)
 	}
 	return result

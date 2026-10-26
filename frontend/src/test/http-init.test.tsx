@@ -184,27 +184,52 @@ describe('http-init fetch wrapper', () => {
     expect(dataCalls).toBe(2);
   });
 
-  it('redirects once on 401 and never settles', async () => {
+  it('redirects once on 401 and rejects so pending buttons can reset', async () => {
     window.X_UI_BASE_PATH = '/xui';
     document.head.innerHTML = '<meta name="csrf-token" content="tok">';
     http.setupHttp();
-    fetchMock.mockResolvedValue(new Response('', { status: 401 }));
+    fetchMock.mockImplementation(() => Promise.resolve(new Response('', { status: 401 })));
 
-    const pending = Symbol('pending');
-    const first = await Promise.race([
-      http.httpRequest('POST', '/p', { a: 1 }),
-      new Promise((resolve) => setTimeout(() => resolve(pending), 20)),
-    ]);
-    expect(first).toBe(pending);
+    await expect(http.httpRequest('POST', '/p', { a: 1 })).rejects.toMatchObject({ status: 401 });
+    await expect(http.httpRequest('POST', '/p', { a: 1 })).rejects.toMatchObject({ status: 401 });
     expect(replaceMock).toHaveBeenCalledTimes(1);
     expect(replaceMock).toHaveBeenCalledWith('/xui');
+  });
 
-    const second = await Promise.race([
-      http.httpRequest('POST', '/p', { a: 1 }),
-      new Promise((resolve) => setTimeout(() => resolve(pending), 20)),
-    ]);
-    expect(second).toBe(pending);
-    expect(replaceMock).toHaveBeenCalledTimes(1);
+  it('bounds requests and CSRF acquisition by default', async () => {
+    http.setupHttp();
+    fetchMock.mockResolvedValueOnce(csrfResponse('tok')).mockResolvedValueOnce(okEnvelope());
+    await http.httpRequest('POST', '/p', {});
+    expect(initOf(0).signal).toBeInstanceOf(AbortSignal);
+    expect(initOf(1).signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('cancels a request waiting for CSRF without blocking other requests', async () => {
+    let releaseToken!: (response: Response) => void;
+    fetchMock.mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) => {
+          releaseToken = resolve;
+        }),
+    );
+    fetchMock.mockImplementation(() => Promise.resolve(okEnvelope()));
+    const short = http.httpRequest('POST', '/short', {}, { timeout: 20 });
+    const long = http.httpRequest('POST', '/long', {}, { timeout: 1000 });
+    await expect(short).rejects.toMatchObject({ name: 'TimeoutError' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    releaseToken(csrfResponse('tok'));
+    await expect(long).resolves.toMatchObject({ status: 200 });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('preserves an already aborted signal without AbortSignal.any', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const timeout = AbortSignal.timeout.bind(AbortSignal);
+    vi.stubGlobal('AbortSignal', { timeout });
+    fetchMock.mockResolvedValue(okEnvelope());
+    await http.httpRequest('GET', '/p', undefined, { signal: controller.signal, timeout: 1000 });
+    expect(initOf().signal?.aborted).toBe(true);
   });
 
   it('parses empty, 204, non-JSON, and malformed bodies tolerantly', async () => {

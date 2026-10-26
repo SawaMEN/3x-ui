@@ -352,6 +352,9 @@ func (s *SubService) endpointRemark(inbound *model.Inbound, email string, ep map
 	var extra string
 	if ep != nil {
 		extra, _ = ep["remark"].(string)
+		if isHostEndpoint(ep) {
+			return s.genHostRemark(inbound, s.lookupClient(inbound, email), extra, transport)
+		}
 	}
 	return s.genRemark(inbound, email, extra, transport)
 }

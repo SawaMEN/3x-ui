@@ -31,4 +31,21 @@ describe('readyI18n page language', () => {
 
     expect(document.documentElement.lang).toBe('en-US');
   });
+  it('renders in English when the selected locale chunk cannot load', async () => {
+    vi.resetModules();
+    document.cookie = 'lang=ru-RU; path=/';
+    vi.doMock('../../../internal/web/translation/ru-RU.json', () => {
+      throw new Error('Failed to fetch dynamically imported module');
+    });
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const { readyI18n } = await import('@/i18n/react');
+      await readyI18n('panel');
+      expect(document.documentElement.lang).toBe('en-US');
+      expect(log).toHaveBeenCalled();
+    } finally {
+      vi.doUnmock('../../../internal/web/translation/ru-RU.json');
+      log.mockRestore();
+    }
+  });
 });
