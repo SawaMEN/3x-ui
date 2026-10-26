@@ -137,7 +137,7 @@ export default function SubHeader({
             size="large"
             className="toolbar-btn"
             aria-label={t('pages.settings.language')}
-            icon={<TranslationOutlined />}
+            icon={<TranslationOutlined aria-hidden />}
           />
         </Popover>
       </div>

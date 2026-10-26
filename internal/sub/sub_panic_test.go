@@ -5,10 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gin-gonic/gin"
-
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/gin-gonic/gin"
 )
 
 func TestGetSubsToleratesUnusualStreamSettings(t *testing.T) {
@@ -99,7 +98,7 @@ func TestGetClashEmitsPinnedCertSha256(t *testing.T) {
 	stream := `{"network":"tcp","security":"tls","tlsSettings":{"serverName":"pin.sni","settings":{"pinnedPeerCertSha256":["` + pin + `"]}}}`
 	seedSubInbound(t, "pin1", "pin", 46300, 1, stream)
 
-	out, _, err := NewSubClashService(false, "", NewSubService("")).GetClash("pin1", "sub.example.com")
+	out, _, err := NewSubClashService(false, "", NewSubService(""), false).GetClash("pin1", "sub.example.com")
 	if err != nil {
 		t.Fatalf("GetClash: %v", err)
 	}
@@ -122,7 +121,7 @@ func TestJsonAndClashTolerateExternalProxyMissingPort(t *testing.T) {
 		t.Fatal("GetJson returned empty for an externalProxy entry missing port")
 	}
 
-	clashOut, _, err := NewSubClashService(false, "", NewSubService("")).GetClash("extp1", "sub.example.com")
+	clashOut, _, err := NewSubClashService(false, "", NewSubService(""), false).GetClash("extp1", "sub.example.com")
 	if err != nil {
 		t.Fatalf("GetClash: %v", err)
 	}

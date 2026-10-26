@@ -5,8 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"gorm.io/gorm"
-
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
@@ -14,6 +12,7 @@ import (
 	ldaputil "github.com/SawaMEN/3x-ui/v3/internal/util/ldap"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/totp"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
+	"gorm.io/gorm"
 )
 
 // UserService provides business logic for user management and authentication.
@@ -187,4 +186,17 @@ func (s *UserService) UpdateFirstUser(username string, password string) error {
 	user.Password = hashedPassword
 	user.LoginEpoch++
 	return db.Save(user).Error
+}
+
+// HasDefaultCredential reports that nobody has chosen the login yet: a database
+// holds no user before the first start, and an older one may still hold admin/admin.
+func (s *UserService) HasDefaultCredential() (bool, error) {
+	user, err := s.GetFirstUser()
+	if database.IsNotFound(err) {
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return user.Username == "admin" && crypto.CheckPasswordHash(user.Password, "admin"), nil
 }

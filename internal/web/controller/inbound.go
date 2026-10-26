@@ -70,7 +70,7 @@ func (a *InboundController) inboundServiceFor(c *gin.Context) *service.InboundSe
 	scope, _ := c.Get("api_token_scope")
 	// A master enrolled with an admin token (the -getApiToken default) has no
 	// node-sync scope, so it marks every request it sends instead.
-	svc.FromNodeSync = scope == model.ApiScopeNodeSync || c.GetHeader(wirecodec.MasterPushHeader) != ""
+	svc.FromNodeSync = (scope == model.ApiScopeNodeSync || scope == model.ApiScopeNodeAdmin) || c.GetHeader(wirecodec.MasterPushHeader) != ""
 	return &svc
 }
 

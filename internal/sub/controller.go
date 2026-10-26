@@ -19,10 +19,9 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/gin-gonic/gin"
-
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
+	"github.com/gin-gonic/gin"
 )
 
 const (
@@ -87,6 +86,8 @@ type SUBController struct {
 
 	subTemplateMu    sync.RWMutex
 	subTemplateCache map[string]*cachedSubTemplate
+
+	releaseSettingsCache func()
 }
 
 type subControllerConfig struct {
@@ -114,6 +115,7 @@ type subControllerConfig struct {
 	subJsonObservatory    string
 	subClashEnableRouting bool
 	subClashRules         string
+	subClashRemoteDNS     bool
 
 	subTitle         string
 	subSupportURL    string
@@ -279,6 +281,7 @@ func NewSUBController(g *gin.RouterGroup, options ...SUBControllerOption) *SUBCo
 	}
 
 	sub := NewSubService(config.remarkTemplate)
+	releaseSettingsCache := sub.enableSettingsCache()
 	subJsonSvc := NewSubJsonService(config.subJsonMux, config.subJsonRules, config.subJsonFinalMask, config.subJsonRoutingRules, sub)
 	subJsonSvc.SetObservatoryConfig(config.subJsonObservatory)
 	subJsonSvc.SetDnsConfig(config.subJsonDns)
@@ -312,9 +315,10 @@ func NewSUBController(g *gin.RouterGroup, options ...SUBControllerOption) *SUBCo
 
 		subService:      sub,
 		subJsonService:  subJsonSvc,
-		subClashService: NewSubClashService(config.subClashEnableRouting, config.subClashRules, sub),
+		subClashService: NewSubClashService(config.subClashEnableRouting, config.subClashRules, sub, config.subClashRemoteDNS),
 
-		subTemplateCache: map[string]*cachedSubTemplate{},
+		subTemplateCache:     map[string]*cachedSubTemplate{},
+		releaseSettingsCache: releaseSettingsCache,
 	}
 	a.initRouter(g)
 	return a
@@ -323,18 +327,18 @@ func NewSUBController(g *gin.RouterGroup, options ...SUBControllerOption) *SUBCo
 // initRouter registers HTTP routes for subscription links and JSON endpoints
 // on the provided router group.
 func (a *SUBController) initRouter(g *gin.RouterGroup) {
-	gLink := g.Group(a.subPath)
+	gLink := g.Group(a.subPath, setNoCacheHeaders)
 	gLink.GET(":subid", a.subs)
 	gLink.HEAD(":subid", a.subs)
 	gLink.GET(":subid/hwid-status", a.hwidStatus)
 	gLink.HEAD(":subid/hwid-status", a.hwidStatus)
 	if a.jsonEnabled {
-		gJson := g.Group(a.subJsonPath)
+		gJson := g.Group(a.subJsonPath, setNoCacheHeaders)
 		gJson.GET(":subid", a.subJsons)
 		gJson.HEAD(":subid", a.subJsons)
 	}
 	if a.clashEnabled {
-		gClash := g.Group(a.subClashPath)
+		gClash := g.Group(a.subClashPath, setNoCacheHeaders)
 		gClash.GET(":subid", a.subClashs)
 		gClash.HEAD(":subid", a.subClashs)
 		if sameSubscriptionPath(a.subClashPath, subMihomoPath) {
@@ -342,14 +346,14 @@ func (a *SUBController) initRouter(g *gin.RouterGroup) {
 		} else if owner := a.configuredSubscriptionPathOwner(subMihomoPath); owner != "" {
 			logger.Warningf("Mihomo subscription alias %q is unavailable because it conflicts with the configured %s path", subMihomoPath, owner)
 		} else {
-			gMihomo := g.Group(subMihomoPath)
+			gMihomo := g.Group(subMihomoPath, setNoCacheHeaders)
 			gMihomo.GET(":subid", a.subClashs)
 			gMihomo.HEAD(":subid", a.subClashs)
 		}
 		if owner := a.configuredSubscriptionPathOwner(subClashLegacyPath); owner != "" {
 			logger.Warningf("Legacy Clash subscription alias %q is unavailable because it conflicts with the configured %s path", subClashLegacyPath, owner)
 		} else {
-			gLegacy := g.Group(subClashLegacyPath)
+			gLegacy := g.Group(subClashLegacyPath, setNoCacheHeaders)
 			gLegacy.GET(":subid", a.subClashLegacy)
 			gLegacy.HEAD(":subid", a.subClashLegacy)
 		}
@@ -404,7 +408,6 @@ func (a *SUBController) maybeServeSubInfo(c *gin.Context) bool {
 	info := a.subPageContext(page)
 	delete(info, "links")
 	info["emails"] = dedupeEmails(page.Emails)
-	setNoCacheHeaders(c)
 	c.JSON(http.StatusOK, info)
 	return true
 }
@@ -668,7 +671,6 @@ func (a *SUBController) serveSubPage(c *gin.Context, basePath string, page PageD
 			if execErr := tmpl.Execute(&buf, subData); execErr != nil {
 				logger.Error("sub: custom template execution failed, using default page:", execErr)
 			} else {
-				setNoCacheHeaders(c)
 				c.Data(http.StatusOK, "text/html; charset=utf-8", buf.Bytes())
 				return
 			}
@@ -697,7 +699,6 @@ func (a *SUBController) serveSubPage(c *gin.Context, basePath string, page PageD
 		`window.__SUB_PAGE_DATA__=` + string(subDataJSON) + `;</script></head>`)
 	out := bytes.Replace(body, []byte("</head>"), inject, 1)
 
-	setNoCacheHeaders(c)
 	c.Data(http.StatusOK, "text/html; charset=utf-8", out)
 }
 
@@ -784,12 +785,11 @@ func (a *SUBController) hwidStatus(c *gin.Context) {
 		writeSubError(c, err)
 		return
 	}
-	setNoCacheHeaders(c)
 	c.JSON(http.StatusOK, status)
 }
 
-// setNoCacheHeaders marks a subscription page response as non-cacheable so VPN
-// clients and browsers always fetch fresh traffic/expiry data.
+// setNoCacheHeaders runs on every subscription route group: each one serves a per-subscriber body
+// with live traffic, expiry and routing headers that no cache may keep.
 func setNoCacheHeaders(c *gin.Context) {
 	c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
 	c.Header("Pragma", "no-cache")
@@ -1058,4 +1058,13 @@ func (a *SUBController) ApplyCommonHeaders(
 	}
 
 	ApplyHappHeaders(c, a.happConfig, happManaged)
+}
+
+func WithSUBClashRemoteDNS(value bool) SUBControllerOption {
+	return func(config *subControllerConfig) { config.subClashRemoteDNS = value }
+}
+
+// Close unhooks the controller's settings cache from panel mutations.
+func (a *SUBController) Close() {
+	a.releaseSettingsCache()
 }

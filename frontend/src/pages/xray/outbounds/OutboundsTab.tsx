@@ -1,6 +1,6 @@
 import OutboundPingButton from '@/pages/singbox/OutboundPingButton';
 import { normalizeOutboundJsonImport } from './singbox-native-outbound';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useId, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Button,
@@ -166,6 +166,7 @@ export default function OutboundsTab({
   onRefreshXrayData,
 }: OutboundsTabProps) {
   const { t } = useTranslation();
+  const uid = useId();
   const [modal, modalContextHolder] = Modal.useModal();
   const [messageApi, messageContextHolder] = message.useMessage();
   const [testMode, setTestMode] = useState<OutboundTestMode>('tcp');
@@ -665,34 +666,44 @@ export default function OutboundsTab({
         <Row gutter={[12, 12]} align="middle" justify="space-between">
           <Col xs={24} sm={12}>
             <Space size="small" wrap>
-              <Button type="primary" icon={<PlusOutlined />} onClick={openAdd}>
+              <Button type="primary" icon={<PlusOutlined aria-hidden />} onClick={openAdd}>
                 {!isMobile && t('pages.xray.Outbounds')}
               </Button>
-              <Button icon={<CloudOutlined />} onClick={openSubManager}>
+              <Button icon={<CloudOutlined aria-hidden />} onClick={openSubManager}>
                 {t('pages.xray.outboundSub.manage')}
               </Button>
               <Dropdown
                 trigger={['click']}
                 menu={{
                   items: [
-                    { key: 'warp', icon: <CloudOutlined />, label: 'WARP', onClick: onShowWarp },
-                    { key: 'nord', icon: <ApiOutlined />, label: 'NordVPN', onClick: onShowNord },
+                    {
+                      key: 'warp',
+                      icon: <CloudOutlined aria-hidden />,
+                      label: 'WARP',
+                      onClick: onShowWarp,
+                    },
+                    {
+                      key: 'nord',
+                      icon: <ApiOutlined aria-hidden />,
+                      label: 'NordVPN',
+                      onClick: onShowNord,
+                    },
                     {
                       key: 'pia',
-                      icon: <ApiOutlined />,
+                      icon: <ApiOutlined aria-hidden />,
                       label: t('pages.xray.pia.menu'),
                       onClick: onShowPia,
                     },
                     { type: 'divider' },
                     {
                       key: 'import',
-                      icon: <ImportOutlined />,
+                      icon: <ImportOutlined aria-hidden />,
                       label: t('pages.xray.importOutbounds'),
                       onClick: () => setImportOpen(true),
                     },
                     {
                       key: 'export',
-                      icon: <ExportOutlined />,
+                      icon: <ExportOutlined aria-hidden />,
                       label: t('pages.xray.exportOutbounds'),
                       disabled: outbounds.length === 0,
                       onClick: exportOutbounds,
@@ -700,7 +711,7 @@ export default function OutboundsTab({
                   ],
                 }}
               >
-                <Button icon={<MoreOutlined />}>{t('more')}</Button>
+                <Button icon={<MoreOutlined aria-hidden />}>{t('more')}</Button>
               </Dropdown>
             </Space>
           </Col>
@@ -721,7 +732,7 @@ export default function OutboundsTab({
               <Button
                 type="primary"
                 loading={testingAll}
-                icon={<PlayCircleOutlined />}
+                icon={<PlayCircleOutlined aria-hidden />}
                 onClick={() => onTestAll(testMode)}
               >
                 {!isMobile && t('pages.xray.outbound.testAll')}
@@ -733,7 +744,10 @@ export default function OutboundsTab({
                 title={t('pages.inbounds.resetAllTrafficContent')}
                 onConfirm={() => onResetTraffic('-alltags-')}
               >
-                <Button aria-label={t('pages.inbounds.resetTraffic')} icon={<RetweetOutlined />} />
+                <Button
+                  aria-label={t('pages.inbounds.resetTraffic')}
+                  icon={<RetweetOutlined aria-hidden />}
+                />
               </Popconfirm>
             </Space>
           </Col>
@@ -761,7 +775,7 @@ export default function OutboundsTab({
             locale={{
               emptyText: (
                 <div className="card-empty">
-                  <ExportOutlined style={{ fontSize: 32, marginBottom: 8 }} />
+                  <ExportOutlined aria-hidden style={{ fontSize: 32, marginBottom: 8 }} />
                   <div>{t('noData')}</div>
                 </div>
               ),
@@ -829,37 +843,42 @@ export default function OutboundsTab({
               </div>
             )}
             <Form layout="vertical" size="small">
-              <Form.Item label={t('pages.xray.outboundSub.remark')}>
+              <Form.Item label={t('pages.xray.outboundSub.remark')} htmlFor={`${uid}-remark`}>
                 <Input
+                  id={`${uid}-remark`}
                   value={newSub.remark}
                   onChange={(e) => setNewSub({ ...newSub, remark: e.target.value })}
                   placeholder={t('pages.xray.outboundSub.remarkPlaceholder')}
                 />
               </Form.Item>
-              <Form.Item label={t('pages.xray.outboundSub.url')} required>
+              <Form.Item label={t('pages.xray.outboundSub.url')} htmlFor={`${uid}-url`} required>
                 <Input
+                  id={`${uid}-url`}
                   value={newSub.url}
                   onChange={(e) => setNewSub({ ...newSub, url: e.target.value })}
                   placeholder={t('pages.xray.outboundSub.urlPlaceholder')}
                 />
               </Form.Item>
-              <Form.Item label={t('pages.xray.outboundSub.tagPrefix')}>
+              <Form.Item label={t('pages.xray.outboundSub.tagPrefix')} htmlFor={`${uid}-tagPrefix`}>
                 <Input
+                  id={`${uid}-tagPrefix`}
                   value={newSub.tagPrefix}
                   onChange={(e) => setNewSub({ ...newSub, tagPrefix: e.target.value })}
                   placeholder={t('pages.xray.outboundSub.tagPrefixPlaceholder')}
                 />
               </Form.Item>
-              <Form.Item label={t('pages.xray.outboundSub.userAgent')}>
+              <Form.Item label={t('pages.xray.outboundSub.userAgent')} htmlFor={`${uid}-userAgent`}>
                 <Input
+                  id={`${uid}-userAgent`}
                   value={newSub.userAgent}
                   onChange={(e) => setNewSub({ ...newSub, userAgent: e.target.value })}
                   placeholder={defaultOutboundSubscriptionUserAgent}
                 />
               </Form.Item>
-              <Form.Item label={t('pages.xray.outboundSub.interval')}>
+              <Form.Item label={t('pages.xray.outboundSub.interval')} htmlFor={`${uid}-interval`}>
                 <Space>
                   <InputNumber
+                    id={`${uid}-interval`}
                     min={0}
                     value={intervalHours}
                     onChange={onNumber((v) => setIntervalHM(v, intervalMinutes))}
@@ -867,6 +886,7 @@ export default function OutboundsTab({
                   />{' '}
                   {t('pages.xray.outboundSub.hours')}
                   <InputNumber
+                    aria-label={t('pages.xray.outboundSub.minutes')}
                     min={0}
                     max={59}
                     value={intervalMinutes}
@@ -879,14 +899,19 @@ export default function OutboundsTab({
                   {t('pages.xray.outboundSub.intervalHint')}
                 </div>
               </Form.Item>
-              <Form.Item label={t('pages.xray.outboundSub.enabled')}>
+              <Form.Item label={t('pages.xray.outboundSub.enabled')} htmlFor={`${uid}-enabled`}>
                 <Switch
+                  id={`${uid}-enabled`}
                   checked={newSub.enabled}
                   onChange={(v) => setNewSub({ ...newSub, enabled: v })}
                 />
               </Form.Item>
-              <Form.Item label={t('pages.xray.outboundSub.allowPrivate')}>
+              <Form.Item
+                label={t('pages.xray.outboundSub.allowPrivate')}
+                htmlFor={`${uid}-allowPrivate`}
+              >
                 <Switch
+                  id={`${uid}-allowPrivate`}
                   checked={newSub.allowPrivate}
                   onChange={(v) => setNewSub({ ...newSub, allowPrivate: v })}
                 />
@@ -894,8 +919,12 @@ export default function OutboundsTab({
                   {t('pages.xray.outboundSub.allowPrivateHint')}
                 </div>
               </Form.Item>
-              <Form.Item label={t('pages.hosts.fields.allowInsecure')}>
+              <Form.Item
+                label={t('pages.hosts.fields.allowInsecure')}
+                htmlFor={`${uid}-allowInsecure`}
+              >
                 <Switch
+                  id={`${uid}-allowInsecure`}
                   checked={newSub.allowInsecure}
                   onChange={(v) => setNewSub({ ...newSub, allowInsecure: v })}
                 />
@@ -988,6 +1017,7 @@ export default function OutboundsTab({
               )}
               <Form.Item label={t('pages.xray.outboundSub.prepend')}>
                 <Switch
+                  id={`${uid}-prepend`}
                   checked={newSub.prepend}
                   onChange={(v) => setNewSub({ ...newSub, prepend: v })}
                 />
@@ -1000,11 +1030,21 @@ export default function OutboundsTab({
                   type="primary"
                   onClick={saveSub}
                   loading={savingSub}
-                  icon={editingSubId != null ? <EditOutlined /> : <PlusOutlined />}
+                  icon={
+                    editingSubId != null ? (
+                      <EditOutlined aria-hidden />
+                    ) : (
+                      <PlusOutlined aria-hidden />
+                    )
+                  }
                 >
                   {editingSubId != null ? t('save') : t('pages.xray.outboundSub.addButton')}
                 </Button>
-                <Button onClick={previewSub} loading={previewing} icon={<EyeOutlined />}>
+                <Button
+                  onClick={previewSub}
+                  loading={previewing}
+                  icon={<EyeOutlined aria-hidden />}
+                >
                   {t('pages.xray.outboundSub.preview')}
                 </Button>
                 {editingSubId != null && <Button onClick={resetSubForm}>{t('cancel')}</Button>}
@@ -1049,7 +1089,7 @@ export default function OutboundsTab({
               <Button
                 aria-label={t('refresh')}
                 size="small"
-                icon={<ReloadOutlined />}
+                icon={<ReloadOutlined aria-hidden />}
                 onClick={loadSubs}
                 loading={subsLoading}
               />
@@ -1057,7 +1097,7 @@ export default function OutboundsTab({
                 <Button
                   size="small"
                   type="primary"
-                  icon={<ReloadOutlined />}
+                  icon={<ReloadOutlined aria-hidden />}
                   onClick={refreshAllSubs}
                   loading={refreshingAll}
                 >
@@ -1085,7 +1125,7 @@ export default function OutboundsTab({
                           aria-label={t('pages.inbounds.form.moveUp')}
                           type="text"
                           size="small"
-                          icon={<ArrowUpOutlined />}
+                          icon={<ArrowUpOutlined aria-hidden />}
                           disabled={index === 0 || busyId === r.id}
                           onClick={() => moveSub(r.id, 'up')}
                         />
@@ -1093,7 +1133,7 @@ export default function OutboundsTab({
                           aria-label={t('pages.inbounds.form.moveDown')}
                           type="text"
                           size="small"
-                          icon={<ArrowDownOutlined />}
+                          icon={<ArrowDownOutlined aria-hidden />}
                           disabled={index === subs.length - 1 || busyId === r.id}
                           onClick={() => moveSub(r.id, 'down')}
                         />
@@ -1216,7 +1256,10 @@ export default function OutboundsTab({
                         </Tooltip>
                       ) : (
                         <Tooltip title={t('pages.xray.outboundSub.statusOk')}>
-                          <CheckCircleOutlined style={{ color: '#008771' }} />
+                          <CheckCircleOutlined
+                            style={{ color: '#008771' }}
+                            aria-label={t('pages.xray.outboundSub.statusOk')}
+                          />
                         </Tooltip>
                       ),
                   },
@@ -1234,6 +1277,7 @@ export default function OutboundsTab({
                     render: (_: unknown, r: OutboundSub) => (
                       <Switch
                         size="small"
+                        aria-label={t('pages.xray.outboundSub.colEnabled')}
                         checked={!!r.enabled}
                         loading={busyId === r.id}
                         onChange={() => toggleEnabled(r)}
@@ -1248,14 +1292,14 @@ export default function OutboundsTab({
                         <Button
                           aria-label={t('edit')}
                           size="small"
-                          icon={<EditOutlined />}
+                          icon={<EditOutlined aria-hidden />}
                           onClick={() => openEditSub(r)}
                           title={t('edit')}
                         />
                         <Button
                           aria-label={t('pages.xray.outboundSub.refreshNow')}
                           size="small"
-                          icon={<ReloadOutlined />}
+                          icon={<ReloadOutlined aria-hidden />}
                           loading={refreshingId === r.id}
                           onClick={() => refreshOne(r.id)}
                           title={t('pages.xray.outboundSub.refreshNow')}
@@ -1270,7 +1314,7 @@ export default function OutboundsTab({
                             aria-label={t('delete')}
                             size="small"
                             danger
-                            icon={<DeleteOutlined />}
+                            icon={<DeleteOutlined aria-hidden />}
                           />
                         </Popconfirm>
                       </Space>

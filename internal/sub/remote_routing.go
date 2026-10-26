@@ -14,17 +14,13 @@ import (
 	"sync"
 	"time"
 
-	yaml "github.com/goccy/go-yaml"
-
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
+	yaml "github.com/goccy/go-yaml"
 )
-
-// Remote sources reuse the existing settings fields (one HTTPS URL = remote,
-// else inline) so no second mode toggle can disagree with the field contents.
 
 type remoteRoutingKind string
 
@@ -494,7 +490,7 @@ func normalizeClashRouting(body []byte) (string, map[string]any, error) {
 	}
 	hasSupportedKey := false
 	for key := range document {
-		if remoteClashAllowedKey(key) {
+		if remoteClashKeyClasses[key] == remoteClashRouteGraph {
 			hasSupportedKey = true
 			break
 		}
@@ -509,7 +505,7 @@ func normalizeClashRouting(body []byte) (string, map[string]any, error) {
 		}},
 		"rules": []string{"MATCH,PROXY"},
 	}
-	if err := mergeRemoteClashRules(base, document); err != nil {
+	if err := mergeRemoteClashRules(base, document, false); err != nil {
 		return "", nil, fmt.Errorf("invalid remote Clash routing schema: %w", err)
 	}
 	return text, document, nil

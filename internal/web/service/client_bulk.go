@@ -8,14 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
-
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
-
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -1055,6 +1053,7 @@ func (s *ClientService) bulkDelInboundClients(
 ) bulkInboundDeleteResult {
 	res := bulkInboundDeleteResult{perEmailSkipped: map[string]string{}}
 
+	defer InvalidateSubData()
 	defer lockInbound(inboundId).Unlock()
 
 	oldInbound, err := inboundSvc.GetInbound(inboundId)

@@ -138,7 +138,7 @@ export default function HappSettingsContent({
                   title={t('pages.settings.subHappVisualBuilder')}
                   description={t('pages.settings.subHappVisualBuilderDesc')}
                 >
-                  <Button icon={<BuildOutlined />} onClick={() => setIsModalOpen(true)}>
+                  <Button icon={<BuildOutlined aria-hidden />} onClick={() => setIsModalOpen(true)}>
                     {t('pages.settings.subHappVisualBuilder')}
                   </Button>
                 </SettingListItem>

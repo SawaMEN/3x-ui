@@ -7,16 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
-	"regexp"
-	"slices"
-	"sort"
-	"strings"
-	"time"
-
-	"github.com/google/uuid"
-	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
@@ -26,8 +16,19 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/mtproto"
 	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
+
+	"net"
+	"regexp"
+	"slices"
+	"sort"
+	"strings"
+	"time"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
 	wgutil "github.com/SawaMEN/3x-ui/v3/internal/util/wireguard"
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type InboundService struct {
@@ -1161,6 +1162,7 @@ func (s *InboundService) normalizeMtprotoXrayPort(inbound *model.Inbound, oldSet
 // then saves the inbound to the database and optionally adds it to the running Xray instance.
 // Returns the created inbound, whether Xray needs restart, and any error.
 func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, bool, error) {
+	defer InvalidateSubData()
 	defer beginLocalConfigBatch()()
 	inbound.Id = 0
 	if err := normalizeTuicSettings(inbound); err != nil {
@@ -1517,6 +1519,7 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 }
 
 func (s *InboundService) DelInbound(id int) (bool, error) {
+	defer InvalidateSubData()
 	defer beginLocalConfigBatch()()
 	needRestart, nodePush, err := s.delInbound(id)
 	if nodePush != nil {
@@ -1590,14 +1593,14 @@ func (s *InboundService) delInbound(id int) (bool, func(), error) {
 		s.cleanupVKTurnProxyInboundPeers(&ib)
 	}
 
-	if err := db.Transaction(func(tx *gorm.DB) error {
+	if err := runSerializedTx(func(tx *gorm.DB) error {
 		if err := s.clientService.DetachInbound(tx, id); err != nil {
 			return err
 		}
 		if err := tx.Delete(model.Inbound{}, id).Error; err != nil {
 			return err
 		}
-		if err := tx.Where("inbound_id = ?", id).Delete(&model.Host{}).Error; err != nil {
+		if _, err := database.DeleteHosts(tx, "inbound_id = ?", id); err != nil {
 			return err
 		}
 		// Drop the deleted inbound from any sub-balancer that selects it; a
@@ -1666,6 +1669,7 @@ type BulkDelInboundReport struct {
 // the rest; the aggregated needRestart is returned so the caller restarts
 // xray at most once.
 func (s *InboundService) DelInbounds(ids []int) (BulkDelInboundResult, bool, error) {
+	defer InvalidateSubData()
 	defer beginLocalConfigBatch()()
 	result := BulkDelInboundResult{}
 	needRestart := false
@@ -1719,6 +1723,7 @@ func (s *InboundService) GetInboundDetail(id int) (*model.Inbound, error) {
 // SetInboundSubSortIndex changes only the subscription sort order, so a
 // reorder cannot carry a stale settings/client payload over another edit.
 func (s *InboundService) SetInboundSubSortIndex(id int, index int) error {
+	defer InvalidateSubData()
 	index = normalizeSubSortIndex(index)
 	inbound, err := s.GetInbound(id)
 	if err != nil {
@@ -1765,6 +1770,7 @@ func (s *InboundService) SetInboundSubSortIndex(id int, index int) error {
 }
 
 func (s *InboundService) SetInboundEnable(id int, enable bool) (bool, error) {
+	defer InvalidateSubData()
 	defer beginLocalConfigBatch()()
 	inbound, err := s.GetInbound(id)
 	if err != nil {
@@ -1879,6 +1885,7 @@ func (s *InboundService) SetInboundEnable(id int, enable bool) (bool, error) {
 }
 
 func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, bool, error) {
+	defer InvalidateSubData()
 	defer beginLocalConfigBatch()()
 	legacyShareAddr := legacyMtprotoShareAddr(inbound)
 	inbound.TrafficResetDay = normalizeTrafficResetDay(inbound.TrafficResetDay)
@@ -2011,12 +2018,19 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 	var postCommitApply func()
 
 	txErr := runSerializedTx(func(tx *gorm.DB) error {
+		var current model.Inbound
+		if err := tx.First(&current, inbound.Id).Error; err != nil {
+			return err
+		}
 		conflict, cErr := checkPortConflictTx(tx, inbound, inbound.Id)
 		if cErr != nil {
 			return cErr
 		}
 		if conflict != nil {
 			return common.NewError(conflict.String())
+		}
+		if err := database.SyncHostsFromExternalProxy(tx, inbound.Id, oldInbound.StreamSettings, inbound.StreamSettings); err != nil {
+			return err
 		}
 		if err := s.updateClientTraffics(tx, oldInbound, inbound); err != nil {
 			return err

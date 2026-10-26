@@ -15,6 +15,7 @@ import {
 } from '@ant-design/icons';
 
 import { formatPanelVersion } from '@/lib/panel-version';
+import { activateOnKey } from '@/utils/a11y';
 import type { Status } from '@/models/status';
 
 interface OverviewActionBarProps {
@@ -137,7 +138,7 @@ export default function OverviewActionBar({
         ? [
             {
               key: 'amneziawgLogs',
-              icon: <ApiOutlined />,
+              icon: <ApiOutlined aria-hidden />,
               text: t('pages.index.amneziawgLogs'),
               onClick: onOpenAmneziaWGLogs,
             },
@@ -145,13 +146,13 @@ export default function OverviewActionBar({
         : []),
       {
         key: 'config',
-        icon: <ControlOutlined />,
+        icon: <ControlOutlined aria-hidden />,
         text: t('pages.index.config'),
         onClick: onOpenConfig,
       },
       {
         key: 'backup',
-        icon: <CloudServerOutlined />,
+        icon: <CloudServerOutlined aria-hidden />,
         text: t('pages.index.backupTitle'),
         onClick: onOpenBackup,
       },
@@ -159,7 +160,7 @@ export default function OverviewActionBar({
     [
       {
         key: 'history',
-        icon: <AreaChartOutlined />,
+        icon: <AreaChartOutlined aria-hidden />,
         text: t('pages.index.systemHistoryTitle'),
         onClick: onOpenSystemHistory,
       },
@@ -218,8 +219,11 @@ export default function OverviewActionBar({
         <Tag
           className="ov-update-tag"
           color="warning"
-          icon={<CloudDownloadOutlined />}
+          icon={<CloudDownloadOutlined aria-hidden />}
+          role="button"
+          tabIndex={0}
           onClick={onOpenPanelUpdate}
+          onKeyDown={activateOnKey(onOpenPanelUpdate)}
         >
           {`${t('update')} ${formatPanelVersion(latestVersion)}`}
         </Tag>

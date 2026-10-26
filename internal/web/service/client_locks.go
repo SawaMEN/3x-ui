@@ -9,7 +9,6 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
-
 	"gorm.io/gorm"
 )
 
@@ -350,4 +349,16 @@ func jsonClientInt64(v any) (int64, bool) {
 		return 0, false
 	}
 	return int64(n), true
+}
+
+// liftTombstonesOnCommit withdraws the delete tombstones of clients a serialized
+// tx re-created once it commits; a rolled-back create leaves them standing.
+func liftTombstonesOnCommit(tx *gorm.DB, created []*model.ClientRecord) {
+	state := serializedTxOf(tx)
+	if state == nil {
+		return
+	}
+	for _, rec := range created {
+		state.createdClientEmails = append(state.createdClientEmails, rec.Email)
+	}
 }

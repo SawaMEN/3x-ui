@@ -134,6 +134,7 @@ func runWebServer() {
 		logger.Info("Migrated imported Hiddify subscription URLs to individual clients")
 	}
 
+	service.RegisterSubLinkProvider(sub.NewLinkProvider())
 	server := web.NewServer()
 	global.SetWebServer(server)
 	err = server.Start()
@@ -142,7 +143,6 @@ func runWebServer() {
 	}
 
 	sub.SetDistFS(web.EmbeddedDist())
-	service.RegisterSubLinkProvider(sub.NewLinkProvider())
 	subServer := sub.NewServer()
 	global.SetSubServer(subServer)
 	err = subServer.Start()
@@ -715,11 +715,11 @@ func main() {
 		encryptNodeTokens()
 	case "gateway":
 		if err := gateway.CLI(os.Args[2:]); err != nil {
-			log.Fatal(err)
+			log.Fatal("gateway command failed; check the gateway configuration and arguments")
 		}
 	case "core-migrate":
 		if err := coremigration.CLIWithInitializer(os.Args[2:], initNodeTokenCrypto); err != nil {
-			log.Fatal(err)
+			log.Fatal("core migration failed; check the migration configuration and arguments")
 		}
 	case "migrate-db":
 		if err := migrateDbCmd.Parse(os.Args[2:]); err != nil {

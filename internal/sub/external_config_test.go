@@ -7,9 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/goccy/go-json"
-
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/goccy/go-json"
 )
 
 func TestApplyRemarkToLinkRewritesFragment(t *testing.T) {
@@ -155,7 +154,7 @@ func TestLinkDisplayName(t *testing.T) {
 
 func TestClashProxyFromExternalTrojanReality(t *testing.T) {
 	link := "trojan://provider-pass@37.27.201.56:8443?type=tcp&security=reality&sni=aws.amazon.com&pbk=PBK&sid=298b44&fp=chrome#srv"
-	svc := NewSubClashService(false, "", NewSubService(""))
+	svc := NewSubClashService(false, "", NewSubService(""), false)
 	proxy := svc.clashProxyFromExternal(link, "DE-Provider")
 	if proxy == nil {
 		t.Fatal("expected a clash proxy, got nil")

@@ -10,7 +10,6 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
-
 	"gorm.io/gorm"
 )
 
@@ -38,7 +37,11 @@ func (s *ClientService) BulkResetTraffic(inboundSvc *InboundService, emails []st
 	return affected, err
 }
 
-func (s *ClientService) ResetAllClientTraffics(inboundSvc *InboundService, id int) error {
+func (s *ClientService) ResetAllClientTraffics(inboundSvc *InboundService, id int, quotaOnly ...bool) error {
+	policy := resetEveryClient
+	if len(quotaOnly) > 0 && quotaOnly[0] {
+		policy = resetQuotaDisabled
+	}
 	_, _, err := s.resetClientTrafficSet(inboundSvc, func(tx *gorm.DB) ([]string, error) {
 		var emails []string
 		if id == -1 {
@@ -51,7 +54,7 @@ func (s *ClientService) ResetAllClientTraffics(inboundSvc *InboundService, id in
 			Joins("JOIN clients c ON c.id = ci.client_id").Where("ci.inbound_id = ?", id).
 			Pluck("c.email", &emails).Error
 		return emails, err
-	}, &id)
+	}, &id, policy)
 	return err
 }
 
@@ -60,9 +63,17 @@ func (s *ClientService) ResetAllTraffics() (bool, error) {
 		var emails []string
 		err := tx.Model(&coremodel.ClientTraffic{}).Pluck("email", &emails).Error
 		return emails, err
-	}, nil)
+	}, nil, resetQuotaDepleted)
 	return affected > 0 || needRestart, err
 }
+
+type clientResetPolicy uint8
+
+const (
+	resetEveryClient clientResetPolicy = iota
+	resetQuotaDisabled
+	resetQuotaDepleted
+)
 
 type clientTrafficResetPlan struct {
 	inbound model.Inbound
@@ -73,7 +84,7 @@ type clientTrafficResetPlan struct {
 // I/O is deliberately outside the serial writer, so a slow node cannot stall
 // traffic polling. A failed node keeps its old receipt baseline: its next poll
 // must not add all of its pre-reset usage back to the central counter.
-func (s *ClientService) resetClientTrafficSet(inboundSvc *InboundService, selectEmails func(*gorm.DB) ([]string, error), resetInboundID *int) (int, bool, error) {
+func (s *ClientService) resetClientTrafficSet(inboundSvc *InboundService, selectEmails func(*gorm.DB) ([]string, error), resetInboundID *int, policies ...clientResetPolicy) (int, bool, error) {
 	var emails []string
 	var plans []clientTrafficResetPlan
 	var affected int
@@ -88,7 +99,22 @@ func (s *ClientService) resetClientTrafficSet(inboundSvc *InboundService, select
 		if len(emails) == 0 {
 			return nil
 		}
-		plans, needRestart, err = reenableResetClientsTx(tx, emails)
+		restoreEmails := emails
+		if len(policies) > 0 && policies[0] != resetEveryClient {
+			restoreEmails = nil
+			for _, batch := range chunkStrings(emails, sqlInChunk) {
+				var selected []string
+				query := tx.Model(&coremodel.ClientTraffic{}).Where("email IN ? AND enable = ?", batch, false)
+				if policies[0] == resetQuotaDepleted {
+					query = query.Where("total > 0 AND (up >= total OR down >= total OR up >= total - down)")
+				}
+				if e := query.Pluck("email", &selected).Error; e != nil {
+					return e
+				}
+				restoreEmails = append(restoreEmails, selected...)
+			}
+		}
+		plans, needRestart, err = reenableResetClientsTx(tx, restoreEmails)
 		if err != nil {
 			return err
 		}

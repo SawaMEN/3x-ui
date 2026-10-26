@@ -15,9 +15,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
-	"gorm.io/gorm"
-
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
@@ -31,6 +28,8 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/web/entity"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray/dnsconf"
+	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 //go:embed config.json
@@ -61,7 +60,7 @@ var defaultValueMap = map[string]string{
 
 	"rootRedirectEnable":       "false",
 	"rootRedirectURL":          "https://www.wikipedia.org/",
-	"subAppearanceTheme": "classic",
+	"subAppearanceTheme":       "classic",
 	"subAppearanceEnable":      "false",
 	"subAppearanceTitle":       "",
 	"subAppearanceDescription": "",
@@ -99,6 +98,7 @@ var defaultValueMap = map[string]string{
 	"remarkTemplate":              DefaultRemarkTemplate,
 	"subShowIdentityOnAllLinks":   "false",
 	"subInfoNodeEnable":           "false",
+	"subHostSortMode":             "inbound-first",
 	"subCalendarExpireInclusive":  "false",
 	"subExpiredTemplate":          DefaultSubExpiredTemplate,
 	"subTrafficDepletedTemplate":  DefaultSubTrafficDepletedTemplate,
@@ -172,6 +172,7 @@ var defaultValueMap = map[string]string{
 	"subClashURI":                 "",
 	"subClashEnableRouting":       "false",
 	"subClashRules":               "",
+	"subClashRemoteDNS":           "false",
 	"subJsonMux":                  "",
 	"subJsonRules":                "",
 	"subJsonRoutingRules":         "",
@@ -224,6 +225,8 @@ var defaultValueMap = map[string]string{
 
 	// Consecutive failed observatory probes before an outbound.down event fires
 	"outboundDownThreshold": "3",
+
+	"nodeDownThreshold": "1",
 
 	// Email (SMTP) notifications
 	"smtpEnable":         "false",
@@ -1338,8 +1341,6 @@ func (s *SettingService) GetLdapDefaultLimitIP() (int, error) {
 	return s.getInt("ldapDefaultLimitIP")
 }
 
-// Event bus — per-subscriber event filtering
-
 func (s *SettingService) GetTgEnabledEvents() (string, error) {
 	return s.getString("tgEnabledEvents")
 }
@@ -1355,8 +1356,6 @@ func (s *SettingService) GetSmtpEnabledEvents() (string, error) {
 func (s *SettingService) SetSmtpEnabledEvents(events string) error {
 	return s.setString("smtpEnabledEvents", events)
 }
-
-// Email (SMTP) settings
 
 func (s *SettingService) GetSmtpEnable() (bool, error) {
 	return s.getBool("smtpEnable")
@@ -1445,8 +1444,6 @@ func (s *SettingService) GetSmtpMemory() (int, error) {
 func (s *SettingService) SetSmtpMemory(value int) error {
 	return s.setInt("smtpMemory", value)
 }
-
-// Discord bot settings
 
 func (s *SettingService) GetDiscordBotEnable() (bool, error) {
 	return s.getBool("discordBotEnable")
@@ -1550,6 +1547,13 @@ type SecretClears struct {
 }
 
 func (s *SettingService) UpdateAllSetting(allSetting *entity.AllSetting, clears SecretClears) error {
+	switch allSetting.SubHostSortMode {
+	case "":
+		allSetting.SubHostSortMode = "inbound-first"
+	case "inbound-first", "hosts-first":
+	default:
+		return errors.New("subscription host sort mode must be inbound-first or hosts-first")
+	}
 	if err := validateSubscriptionDomains(allSetting); err != nil {
 		return err
 	}
@@ -1980,4 +1984,20 @@ func (s *SettingService) GetFactoryDefaults() map[string]string {
 		}
 	}
 	return result
+}
+
+func (s *SettingService) GetSubHostSortMode() (string, error) {
+	return s.getString("subHostSortMode")
+}
+
+func (s *SettingService) GetSubClashRemoteDNS() (bool, error) {
+	return s.getBool("subClashRemoteDNS")
+}
+
+func (s *SettingService) GetNodeDownThreshold() (int, error) {
+	return s.getInt("nodeDownThreshold")
+}
+
+func (s *SettingService) SetNodeDownThreshold(value int) error {
+	return s.setInt("nodeDownThreshold", value)
 }

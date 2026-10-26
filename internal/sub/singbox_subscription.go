@@ -172,7 +172,7 @@ func buildHiddifySingBoxSubscription(proxies []map[string]any) (string, error) {
 		}
 		reserved[tag] = true
 	}
-	usedTags := make(map[string]bool, len(proxies)*2)
+	usedTags := make(map[string]bool, len(proxies))
 	named := make([]map[string]any, 0, len(proxies))
 	for _, original := range proxies {
 		proxy := maps.Clone(original)
@@ -191,7 +191,7 @@ func buildHiddifySingBoxSubscription(proxies []map[string]any) (string, error) {
 		named = append(named, proxy)
 	}
 	endpoints := make([]any, 0)
-	outbounds := make([]any, 0, len(proxies)*2)
+	outbounds := make([]any, 0, len(proxies))
 	for i, original := range named {
 		proxy := maps.Clone(original)
 		if transport, ok := proxy["_panel_shadowtls_transport"].(map[string]any); ok {

@@ -50,6 +50,7 @@ export const EXAMPLES: Record<string, unknown> = {
     "ldapUserAttr": "",
     "ldapUserFilter": "",
     "ldapVlessField": "",
+    "nodeDownThreshold": 1,
     "outboundDownThreshold": 1,
     "pageSize": 0,
     "panelOutbound": "",
@@ -86,6 +87,7 @@ export const EXAMPLES: Record<string, unknown> = {
     "subClashEnable": false,
     "subClashEnableRouting": false,
     "subClashPath": "",
+    "subClashRemoteDNS": false,
     "subClashRules": "",
     "subClashURI": "",
     "subClashUserAgentRegex": "",
@@ -118,6 +120,7 @@ export const EXAMPLES: Record<string, unknown> = {
     "subHappTunMode": "",
     "subHappTunType": "",
     "subHideSettings": false,
+    "subHostSortMode": "inbound-first",
     "subIncyEnableRouting": false,
     "subIncyRoutingRules": "",
     "subInfoNodeEnable": false,
@@ -219,6 +222,7 @@ export const EXAMPLES: Record<string, unknown> = {
     "ldapUserAttr": "",
     "ldapUserFilter": "",
     "ldapVlessField": "",
+    "nodeDownThreshold": 1,
     "outboundDownThreshold": 1,
     "pageSize": 0,
     "panelOutbound": "",
@@ -255,6 +259,7 @@ export const EXAMPLES: Record<string, unknown> = {
     "subClashEnable": false,
     "subClashEnableRouting": false,
     "subClashPath": "",
+    "subClashRemoteDNS": false,
     "subClashRules": "",
     "subClashURI": "",
     "subClashUserAgentRegex": "",
@@ -287,6 +292,7 @@ export const EXAMPLES: Record<string, unknown> = {
     "subHappTunMode": "",
     "subHappTunType": "",
     "subHideSettings": false,
+    "subHostSortMode": "inbound-first",
     "subIncyEnableRouting": false,
     "subIncyRoutingRules": "",
     "subInfoNodeEnable": false,
@@ -397,6 +403,10 @@ export const EXAMPLES: Record<string, unknown> = {
     "allowedIPsByInbound": {},
     "auth": "",
     "awgClientOptions": null,
+    "clientHostRuleIds": [
+      1,
+      2
+    ],
     "comment": "",
     "created_at": 0,
     "email": "",
@@ -406,7 +416,7 @@ export const EXAMPLES: Record<string, unknown> = {
     "forwardedPorts": "",
     "group": "",
     "id": "",
-    "keepAlive": null,
+    "keepAlive": 0,
     "limitIp": 0,
     "password": "",
     "preSharedKey": "",
@@ -486,6 +496,10 @@ export const EXAMPLES: Record<string, unknown> = {
     "allowedIPs": "",
     "auth": "",
     "awgClientOptions": null,
+    "clientHostRuleIds": [
+      1,
+      2
+    ],
     "comment": "",
     "createdAt": 0,
     "email": "",
@@ -790,11 +804,16 @@ export const EXAMPLES: Record<string, unknown> = {
       ""
     ],
     "port": 8443,
+    "randomCount": 1,
     "remark": "cdn-front",
     "security": "same",
     "serverDescription": "",
     "shuffleHost": false,
     "sni": "",
+    "sniSharedRandom": false,
+    "snis": [
+      ""
+    ],
     "sockoptParams": null,
     "sortOrder": 0,
     "tags": [
@@ -839,11 +858,16 @@ export const EXAMPLES: Record<string, unknown> = {
       ""
     ],
     "port": 0,
+    "randomCount": 1,
     "remark": "",
     "security": "same",
     "serverDescription": "",
     "shuffleHost": false,
     "sni": "",
+    "sniSharedRandom": false,
+    "snis": [
+      ""
+    ],
     "sockoptParams": "",
     "sortOrder": 0,
     "tags": [
@@ -1029,6 +1053,9 @@ export const EXAMPLES: Record<string, unknown> = {
     "status": "online",
     "tlsVerifyMode": "verify",
     "transitive": false,
+    "unavailableMetrics": [
+      ""
+    ],
     "updatedAt": 1700000000,
     "uptimeSecs": 86400,
     "xrayError": "",
@@ -1106,6 +1133,9 @@ export const EXAMPLES: Record<string, unknown> = {
     "status": "online",
     "tlsVerifyMode": "verify",
     "transitive": false,
+    "unavailableMetrics": [
+      ""
+    ],
     "updatedAt": 1700003600,
     "uptimeSecs": 86400,
     "xrayError": "",
@@ -1158,6 +1188,9 @@ export const EXAMPLES: Record<string, unknown> = {
     "singboxState": "",
     "singboxVersion": "",
     "status": "online",
+    "unavailableMetrics": [
+      ""
+    ],
     "uptimeSecs": 86400,
     "xrayError": "",
     "xrayVersion": "25.10.31"
@@ -1288,6 +1321,12 @@ export const EXAMPLES: Record<string, unknown> = {
     "template": "notes",
     "theme": "travel",
     "title": "A travel notebook"
+  },
+  "TgBotCapabilities": {
+    "groupPrivacy": false,
+    "inlineEnabled": true,
+    "running": true,
+    "username": "xui_bot"
   },
   "Traffic": {
     "Down": 2097152,

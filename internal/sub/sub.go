@@ -21,7 +21,6 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/web/middleware"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/network"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
-
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -189,6 +188,11 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	SubClashRules, err := s.settingService.GetSubClashRules()
 	if err != nil {
 		SubClashRules = ""
+	}
+
+	SubClashRemoteDNS, err := s.settingService.GetSubClashRemoteDNS()
+	if err != nil {
+		SubClashRemoteDNS = false
 	}
 
 	SubTitle, err := s.settingService.GetSubTitle()
@@ -360,6 +364,7 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 		WithSUBJsonObservatory(SubJsonObservatory),
 		WithSUBClashEnableRouting(SubClashEnableRouting),
 		WithSUBClashRules(SubClashRules),
+		WithSUBClashRemoteDNS(SubClashRemoteDNS),
 		WithSUBTitle(SubTitle),
 		WithSUBSupportURL(SubSupportUrl),
 		WithSUBProfileURL(SubProfileUrl),
@@ -648,6 +653,9 @@ func (s *Server) Start() (err error) {
 // Stop gracefully shuts down the subscription server and closes the listener.
 func (s *Server) Stop() error {
 	s.cancel()
+	if s.sub != nil {
+		s.sub.Close()
+	}
 
 	var err1 error
 	var err2 error

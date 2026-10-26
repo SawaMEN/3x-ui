@@ -1,18 +1,16 @@
 package panel
 
 import (
-	"crypto/subtle"
 	"errors"
 	"strings"
 	"time"
-
-	"gorm.io/gorm"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/crypto"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/random"
+	"gorm.io/gorm"
 )
 
 type ApiTokenService struct{}
@@ -60,8 +58,10 @@ func NormalizeScope(scope string) (string, error) {
 		return model.ApiScopeMonitor, nil
 	case model.ApiScopeNodeSync:
 		return model.ApiScopeNodeSync, nil
+	case model.ApiScopeNodeAdmin:
+		return model.ApiScopeNodeAdmin, nil
 	default:
-		return "", common.NewError("scope must be 'admin', 'monitor', or 'node-sync'")
+		return "", common.NewError("scope must be 'admin', 'monitor', 'node-sync', or 'node-admin'")
 	}
 }
 
@@ -254,36 +254,26 @@ func requireExpectedScope(expectedScope string) (string, error) {
 	return scope, nil
 }
 
-// MatchToken returns the enabled, non-expired api_token row whose stored
-// SHA-256 hash matches the presented bearer value, or (nil,false). The loop
-// scans every enabled row with constant-time compares, then applies expiry and
-// scope checks to avoid treating corrupt values as admin.
+// MatchToken seeks the enabled row by the presented value's SHA-256 (comparing hashes leaks nothing
+// usable), then checks scope and expiry so a corrupt value is never treated as admin.
 func (s *ApiTokenService) MatchToken(presented string) (*model.ApiToken, bool) {
 	if presented == "" {
 		return nil, false
 	}
 	db := database.GetDB()
-	var rows []*model.ApiToken
-	if err := db.Model(model.ApiToken{}).Where("enabled = ?", true).Find(&rows).Error; err != nil {
+	var row model.ApiToken
+	if err := db.Model(model.ApiToken{}).
+		Where("token = ? AND enabled = ?", crypto.HashTokenSHA256(presented), true).
+		First(&row).Error; err != nil {
 		return nil, false
 	}
-	presentedHash := []byte(crypto.HashTokenSHA256(presented))
-	var matched *model.ApiToken
-	for _, r := range rows {
-		if subtle.ConstantTimeCompare([]byte(r.Token), presentedHash) == 1 {
-			matched = r
-		}
-	}
-	if matched == nil {
+	if !model.IsKnownApiScope(row.Scope) {
 		return nil, false
 	}
-	if !model.IsKnownApiScope(matched.Scope) {
+	if row.ExpiresAt != 0 && nowMilli() >= row.ExpiresAt {
 		return nil, false
 	}
-	if matched.ExpiresAt != 0 && nowMilli() >= matched.ExpiresAt {
-		return nil, false
-	}
-	return matched, true
+	return &row, true
 }
 
 // Match is the legacy boolean form for callers that do not need scope.

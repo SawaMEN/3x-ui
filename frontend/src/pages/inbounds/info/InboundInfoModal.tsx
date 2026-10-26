@@ -544,7 +544,7 @@ export default function InboundInfoModal({
             <Tooltip title={t('copy')}>
               <Button
                 size="small"
-                icon={<CopyOutlined />}
+                icon={<CopyOutlined aria-hidden />}
                 aria-label={t('copy')}
                 onClick={() => copyText(clientSettings.tgId, t)}
               />
@@ -563,7 +563,7 @@ export default function InboundInfoModal({
                 <Tooltip title={t('copy')}>
                   <Button
                     size="small"
-                    icon={<CopyOutlined />}
+                    icon={<CopyOutlined aria-hidden />}
                     aria-label={t('copy')}
                     onClick={() => copyText(link.link, t)}
                   />
@@ -584,7 +584,7 @@ export default function InboundInfoModal({
               <Tooltip title={t('copy')}>
                 <Button
                   size="small"
-                  icon={<CopyOutlined />}
+                  icon={<CopyOutlined aria-hidden />}
                   aria-label={t('copy')}
                   onClick={() => copyText(subLink, t)}
                 />
@@ -606,7 +606,7 @@ export default function InboundInfoModal({
                 <Tooltip title={t('copy')}>
                   <Button
                     size="small"
-                    icon={<CopyOutlined />}
+                    icon={<CopyOutlined aria-hidden />}
                     aria-label={t('copy')}
                     onClick={() => copyText(subJsonLink, t)}
                   />
@@ -730,7 +730,7 @@ export default function InboundInfoModal({
                     <Button
                       size="small"
                       className="value-copy"
-                      icon={<CopyOutlined />}
+                      icon={<CopyOutlined aria-hidden />}
                       aria-label={t('copy')}
                       onClick={() => copyText(encryptionLabel, t)}
                     />
@@ -1000,7 +1000,7 @@ export default function InboundInfoModal({
                         <Button
                           size="small"
                           type="text"
-                          icon={<CopyOutlined />}
+                          icon={<CopyOutlined aria-hidden />}
                           aria-label={t('copy')}
                           onClick={() => copyText(`${account.user}:${account.pass}`, t)}
                         />
@@ -1116,7 +1116,7 @@ export default function InboundInfoModal({
                     <Tooltip title={t('copy')}>
                       <Button
                         size="small"
-                        icon={<CopyOutlined />}
+                        icon={<CopyOutlined aria-hidden />}
                         aria-label={t('copy')}
                         onClick={() => copyText(`${account.user}:${account.pass}`, t)}
                       />

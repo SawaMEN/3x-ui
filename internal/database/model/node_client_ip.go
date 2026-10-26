@@ -1,9 +1,12 @@
 package model
 
-// ClientIpEntry is the wire/JSON shape of a single observed client IP with the
-// last time it was seen (unix seconds). It mirrors job.IPWithTimestamp and the
-// service-internal clientIpEntry so the per-node attribution blob round-trips
-// with the existing inbound_client_ips storage.
+import (
+	"cmp"
+	"encoding/json"
+	"slices"
+)
+
+// ClientIpEntry records an observed client IP and its last-seen Unix timestamp.
 type ClientIpEntry struct {
 	IP        string `json:"ip"`
 	Timestamp int64  `json:"timestamp"`
@@ -24,4 +27,22 @@ type NodeClientIp struct {
 	NodeGuid string `json:"nodeGuid" gorm:"uniqueIndex:idx_nodeip_guid_email,priority:1;not null"`
 	Email    string `json:"email" gorm:"uniqueIndex:idx_nodeip_guid_email,priority:2;not null"`
 	Ips      string `json:"ips"`
+}
+
+func SortClientIpEntries(entries []ClientIpEntry) {
+	slices.SortFunc(entries, func(a, b ClientIpEntry) int {
+		if order := cmp.Compare(a.Timestamp, b.Timestamp); order != 0 {
+			return order
+		}
+		return cmp.Compare(a.IP, b.IP)
+	})
+}
+
+func MarshalClientIpEntries(entries []ClientIpEntry) (string, error) {
+	if len(entries) == 0 {
+		return "[]", nil
+	}
+	SortClientIpEntries(entries)
+	encoded, err := json.Marshal(entries)
+	return string(encoded), err
 }

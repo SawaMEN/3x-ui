@@ -1010,6 +1010,7 @@ func TestGetSingBoxJsonEmitsNativeOutbound(t *testing.T) {
 }
 
 func TestGetConfigSkipsPlaintextHysteriaExternalProxy(t *testing.T) {
+	initSubDB(t)
 	inbound := &model.Inbound{
 		Protocol: model.Hysteria, Listen: "203.0.113.1", Port: 443,
 		Settings:       `{"version":2}`,
@@ -1020,5 +1021,26 @@ func TestGetConfigSkipsPlaintextHysteriaExternalProxy(t *testing.T) {
 	subReq := NewSubService("").ForRequest("sub.example.com")
 	if raws := svc.getConfig(subReq, inbound, client, "sub.example.com"); len(raws) != 0 {
 		t.Fatalf("plaintext Hysteria external endpoint must be skipped from JSON output, got %d configs", len(raws))
+	}
+}
+
+// The inbound "filter" mask (xray-core 26.10.21) screens the listener's source IPs: it would hand
+// clients the server's IP policy, and a client core older than it refuses the unknown type.
+func TestSubJsonServiceDropsTheServerOnlyFilterMask(t *testing.T) {
+	svc := NewSubJsonService("", "", "", "", nil)
+	stream := svc.streamData(`{"network":"kcp","security":"none","finalmask":{
+		"tcp":[{"type":"filter","settings":{"allowedSourceIPs":["10.0.0.0/8"]}}],
+		"udp":[{"type":"filter","settings":{"blockedSourceIPs":["geoip:cn"]}},{"type":"mkcp-legacy","settings":{"header":""}}]}}`, "")
+
+	finalmask, _ := stream["finalmask"].(map[string]any)
+	if _, ok := finalmask["tcp"]; ok {
+		t.Fatalf("finalmask.tcp = %#v, want it gone with its only mask", finalmask["tcp"])
+	}
+	udp, _ := finalmask["udp"].([]any)
+	if len(udp) != 1 {
+		t.Fatalf("finalmask.udp = %#v, want only the mkcp-legacy mask", udp)
+	}
+	if mask, _ := udp[0].(map[string]any); mask["type"] != "mkcp-legacy" {
+		t.Fatalf("finalmask.udp[0] = %#v, want mkcp-legacy", mask)
 	}
 }

@@ -292,3 +292,14 @@ func clientRecordsByEmail(tx *gorm.DB, emails []string) (map[string]*model.Clien
 	}
 	return byEmail, nil
 }
+
+// sub_id carries a plain index, not a unique one: one subscription can cover
+// several clients, so callers acting on a subId must handle all of them.
+func (s *ClientService) GetRecordsBySubID(subId string) ([]*model.ClientRecord, error) {
+	if subId == "" {
+		return nil, errors.New("sub_id must not be empty")
+	}
+	var rows []*model.ClientRecord
+	err := database.GetDB().Where("sub_id = ?", subId).Order("id ASC").Find(&rows).Error
+	return rows, err
+}
