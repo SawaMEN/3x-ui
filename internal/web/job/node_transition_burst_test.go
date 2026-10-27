@@ -10,13 +10,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/op/go-logging"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/eventbus"
 	xuilogger "github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
-	"github.com/op/go-logging"
 )
 
 // goingDownNodes seeds n online nodes whose address refuses connections, so the

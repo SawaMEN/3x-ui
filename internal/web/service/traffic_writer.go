@@ -8,9 +8,10 @@ import (
 	"sync"
 	"time"
 
+	"gorm.io/gorm"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
-	"gorm.io/gorm"
 )
 
 const (
@@ -201,10 +202,6 @@ func serializedTxOf(tx *gorm.DB) *serializedTx {
 	}
 	state, _ := tx.Statement.Context.Value(serializedTxContextKey{}).(*serializedTx)
 	return state
-}
-
-func isSerializedTx(tx *gorm.DB) bool {
-	return serializedTxOf(tx) != nil
 }
 
 type serializedTxContextKey struct{}

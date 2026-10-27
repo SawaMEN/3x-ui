@@ -37,7 +37,7 @@ func installSudoku(ctx context.Context, install func(context.Context) error) err
 		return err
 	}
 	dir := config.GetBinFolderPath()
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
 	var restores []func() error

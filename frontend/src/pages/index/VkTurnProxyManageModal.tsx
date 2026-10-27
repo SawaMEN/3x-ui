@@ -123,7 +123,7 @@ export default function VkTurnProxyManageModal({
               </Tag>
             </div>
             {status.errorMsg && (
-              <Alert type="error" showIcon className="mb-12" message={status.errorMsg} />
+              <Alert type="error" showIcon className="mb-12" title={status.errorMsg} />
             )}
           </div>
         )}
@@ -134,7 +134,7 @@ export default function VkTurnProxyManageModal({
           <Button onClick={() => runAction('restart')}>{t('pages.index.vkTurnRestart')}</Button>
         </Space>
 
-        <Alert type="info" showIcon className="mb-12" message={t('pages.index.vkTurnVersions')} />
+        <Alert type="info" showIcon className="mb-12" title={t('pages.index.vkTurnVersions')} />
         <div className="version-list">
           {versions.map((version, index) => (
             <div key={version} className="version-list-item">

@@ -3,10 +3,8 @@ package service
 import (
 	"context"
 	"crypto/rand"
-	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"net"
@@ -589,25 +587,6 @@ func selectTelemtWebPublicIP(dns, local []net.IP) net.IP {
 	return nil
 }
 
-func telemtWebCertificateCoversDomain(path, domain string) bool {
-	if path == "" || domain == "" {
-		return false
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return false
-	}
-	block, _ := pem.Decode(data)
-	if block == nil {
-		return false
-	}
-	cert, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		return false
-	}
-	return cert.NotBefore.Before(time.Now()) && cert.NotAfter.After(time.Now()) && cert.VerifyHostname(domain) == nil
-}
-
 func writeTelemtWebNginxConfig(state TelemtWebProxyState) error {
 	if data, err := os.ReadFile("/etc/letsencrypt/renewal/" + state.Domain + ".conf"); err == nil && telemtWebRenewalMode(data) == "managed-webroot" {
 		if err := telemtWebWriteAcmeNginxConfig(state.Domain); err != nil {
@@ -1117,13 +1096,6 @@ func atoiTelemtWeb(value string) int {
 }
 
 func telemtWebCommandExists(name string) bool { _, err := exec.LookPath(name); return err == nil }
-func telemtWebFileReadable(path string) bool {
-	if path == "" {
-		return false
-	}
-	_, err := os.Stat(path)
-	return err == nil
-}
 
 func runTelemtWebCommand(ctx context.Context, args ...string) error {
 	if len(args) == 0 {

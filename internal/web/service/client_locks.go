@@ -6,10 +6,11 @@ import (
 	"sync"
 	"time"
 
+	"gorm.io/gorm"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
-	"gorm.io/gorm"
 )
 
 // Short-lived tombstone of just-deleted client emails so that a node snapshot

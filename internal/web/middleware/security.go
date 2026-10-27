@@ -5,9 +5,10 @@ import (
 	"encoding/base64"
 	"net/http"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/session"
-	"github.com/gin-gonic/gin"
 )
 
 // SecurityHeadersMiddleware adds browser hardening headers to panel responses.

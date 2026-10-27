@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useId } from 'react';
+import { useRefreshRequest } from '@/hooks/useRefreshRequest';
+import { useCallback, useMemo, useState, useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Checkbox, Empty, Form, Input, Modal, Select, Tag } from 'antd';
 import { DownloadOutlined, SyncOutlined } from '@ant-design/icons';
 
-import { HttpUtil, FileManager, IntlUtil, PromiseUtil, SizeFormatter } from '@/utils';
+import { HttpUtil, FileManager, IntlUtil, SizeFormatter } from '@/utils';
 import { activateOnKey } from '@/utils/a11y';
 import { useDatepicker } from '@/hooks/useDatepicker';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -36,52 +37,38 @@ export default function AmneziaWGLogModal({ open, onClose }: AmneziaWGLogModalPr
   const [rows, setRows] = useState('50');
   const [filter, setFilter] = useState('');
   const [autoUpdate, setAutoUpdate] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [logs, setLogs] = useState<Partial<AmneziaWGLogs>>({});
-
+  const load = useCallback(
+    async (signal: AbortSignal): Promise<Partial<AmneziaWGLogs> | undefined> => {
+      const msg = await HttpUtil.post<AmneziaWGLogs>(
+        `/panel/api/server/amneziawglogs/${rows}`,
+        { filter },
+        { signal },
+      );
+      if (!msg?.success || !msg.obj || typeof msg.obj !== 'object') return undefined;
+      return {
+        ...msg.obj,
+        peers: Array.isArray(msg.obj.peers)
+          ? msg.obj.peers.filter((peer) => peer && typeof peer === 'object')
+          : [],
+        events: Array.isArray(msg.obj.events)
+          ? msg.obj.events.filter((event) => typeof event === 'string')
+          : [],
+      };
+    },
+    [rows, filter],
+  );
+  const {
+    data: logs,
+    loading,
+    refresh,
+  } = useRefreshRequest(
+    open,
+    load,
+    {} as Partial<AmneziaWGLogs>,
+    autoUpdate ? AUTO_UPDATE_INTERVAL : 0,
+  );
   const peers = useMemo(() => logs.peers ?? [], [logs.peers]);
   const events = useMemo(() => logs.events ?? [], [logs.events]);
-
-  const runRefresh = useCallback(async () => {
-    try {
-      const msg = await HttpUtil.post<AmneziaWGLogs>(`/panel/api/server/amneziawglogs/${rows}`, {
-        filter,
-      });
-      if (msg?.success) setLogs(msg.obj || {});
-      await PromiseUtil.sleep(300);
-    } finally {
-      setLoading(false);
-    }
-  }, [rows, filter]);
-
-  const refresh = useCallback(() => {
-    setLoading(true);
-    void runRefresh();
-  }, [runRefresh]);
-
-  const refreshRef = useRef(refresh);
-  useEffect(() => {
-    refreshRef.current = refresh;
-  });
-
-  // The spinner is raised during render so the fetch effect stays side-effect
-  // free until its response lands.
-  const refreshKey = open ? `${rows}|${filter}` : null;
-  const [loadingKey, setLoadingKey] = useState<string | null>(null);
-  if (refreshKey !== loadingKey) {
-    setLoadingKey(refreshKey);
-    if (refreshKey) setLoading(true);
-  }
-
-  useEffect(() => {
-    if (open) void runRefresh();
-  }, [open, rows, filter, runRefresh]);
-
-  useEffect(() => {
-    if (!open || !autoUpdate) return;
-    const id = setInterval(() => refreshRef.current(), AUTO_UPDATE_INTERVAL);
-    return () => clearInterval(id);
-  }, [open, autoUpdate]);
 
   function fullDate(value?: number): string {
     return value ? IntlUtil.formatDate(value, datepicker) : '';
@@ -89,7 +76,8 @@ export default function AmneziaWGLogModal({ open, onClose }: AmneziaWGLogModalPr
 
   function download() {
     const peerLines = peers.map((p) => {
-      const at = p.handshake ? new Date(p.handshake).toISOString() : 'never';
+      const date = new Date(p.handshake || 0);
+      const at = p.handshake && Number.isFinite(date.getTime()) ? date.toISOString() : 'never';
       return `${at} IFACE=${p.interface || ''} INBOUND=${p.tag || ''} EMAIL=${p.email || ''} ENDPOINT=${p.endpoint || '-'} ALLOWEDIPS=${p.allowedIPs || ''} UP=${p.up ?? 0} DOWN=${p.down ?? 0} ONLINE=${p.online ? 'yes' : 'no'}`;
     });
     FileManager.downloadTextFile([...peerLines, '', ...events].join('\n'), 'amneziawg.log');

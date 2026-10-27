@@ -4,8 +4,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/dnstt"
 	"github.com/gin-gonic/gin"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/dnstt"
 )
 
 type DNSTTController struct{}
@@ -21,6 +22,7 @@ func NewDNSTTController(group *gin.RouterGroup) *DNSTTController {
 	group.POST("/remove", c.remove)
 	return c
 }
+
 func (d *DNSTTController) result(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
@@ -37,6 +39,7 @@ func (d *DNSTTController) install(c *gin.Context) {
 	}
 	d.result(c)
 }
+
 func (d *DNSTTController) update(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 180*time.Second)
 	defer cancel()
@@ -46,6 +49,7 @@ func (d *DNSTTController) update(c *gin.Context) {
 	}
 	d.result(c)
 }
+
 func (d *DNSTTController) setup(c *gin.Context) {
 	var settings dnstt.Config
 	if err := c.ShouldBindJSON(&settings); err != nil {
@@ -60,6 +64,7 @@ func (d *DNSTTController) setup(c *gin.Context) {
 	}
 	d.result(c)
 }
+
 func (d *DNSTTController) disable(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
 	defer cancel()
@@ -69,6 +74,7 @@ func (d *DNSTTController) disable(c *gin.Context) {
 	}
 	d.result(c)
 }
+
 func (d *DNSTTController) remove(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
 	defer cancel()

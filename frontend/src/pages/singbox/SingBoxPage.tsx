@@ -283,7 +283,7 @@ function JsonModal({
         onCancel={() => setOpen(false)}
         onOk={apply}
       >
-        {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 12 }} />}
+        {error && <Alert type="error" showIcon title={error} style={{ marginBottom: 12 }} />}
         <Input.TextArea
           value={text}
           onChange={(event) => setText(event.target.value)}
@@ -528,7 +528,7 @@ function SingBoxRouteRuleModal({
       <Alert
         type="info"
         showIcon
-        message="Фильтр → назначение"
+        title="Фильтр → назначение"
         description="Правила редактируются так же, как в Xray: условия собираются полями, JSON оставлен для редких параметров."
         style={{ marginBottom: 12 }}
       />
@@ -2319,7 +2319,7 @@ export default function SingBoxPage() {
                     <Alert
                       type="warning"
                       showIcon
-                      message={'Проверка конфигурации: ' + healthIssues.length + ' предупреждений'}
+                      title={'Проверка конфигурации: ' + healthIssues.length + ' предупреждений'}
                       description={
                         <ul className="singbox-issue-list">
                           {healthIssues.slice(0, 8).map((issue) => (

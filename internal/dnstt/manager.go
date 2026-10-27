@@ -61,7 +61,7 @@ type Status struct {
 // binaryReady rejects empty downloads and files that systemd cannot execute.
 func binaryReady(path string) bool {
 	info, err := os.Stat(path)
-	return err == nil && info.Mode().IsRegular() && info.Size() > 0 && info.Mode().Perm()&0111 != 0
+	return err == nil && info.Mode().IsRegular() && info.Size() > 0 && info.Mode().Perm()&0o111 != 0
 }
 
 func Defaults() Config { return Config{ListenPort: 53, TargetPort: 22} }
@@ -108,6 +108,7 @@ func Validate(c Config) error {
 	}
 	return nil
 }
+
 func supported() (bool, string) {
 	if runtime.GOOS != "linux" {
 		return false, "DNSTT требует Linux"
@@ -126,6 +127,7 @@ func supported() (bool, string) {
 	}
 	return true, ""
 }
+
 func load() (Config, error) {
 	c := Defaults()
 	data, err := os.ReadFile(statePath)
@@ -141,6 +143,7 @@ func load() (Config, error) {
 	normalize(&c)
 	return c, nil
 }
+
 func StatusNow(ctx context.Context) (Status, error) {
 	c, err := load()
 	if err != nil {
@@ -152,7 +155,7 @@ func StatusNow(ctx context.Context) (Status, error) {
 		s.Installed = true
 	}
 	if !s.Installed {
-		s.Config.Enabled = false
+		s.Enabled = false
 		return s, nil
 	}
 	if version, err := os.ReadFile(versionPath); err == nil {
@@ -175,8 +178,9 @@ func StatusNow(ctx context.Context) (Status, error) {
 	}
 	return s, nil
 }
+
 func fileWrite(path string, b []byte, mode os.FileMode) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
 	f, err := os.CreateTemp(filepath.Dir(path), ".dnstt-*")
@@ -201,6 +205,7 @@ func fileWrite(path string, b []byte, mode os.FileMode) error {
 	}
 	return os.Rename(f.Name(), path)
 }
+
 func systemctl(ctx context.Context, args ...string) error {
 	cmd := exec.CommandContext(ctx, "systemctl", args...)
 	if out, err := cmd.CombinedOutput(); err != nil {
@@ -208,6 +213,7 @@ func systemctl(ctx context.Context, args ...string) error {
 	}
 	return nil
 }
+
 func asset() (string, string, error) {
 	switch runtime.GOOS + "/" + runtime.GOARCH {
 	case "linux/amd64":
@@ -218,6 +224,7 @@ func asset() (string, string, error) {
 		return "", "", errors.New("DNSTT не поддерживается на этой архитектуре")
 	}
 }
+
 func download(ctx context.Context) ([]byte, error) {
 	url, digest, err := asset()
 	if err != nil {
@@ -249,6 +256,7 @@ func download(ctx context.Context) ([]byte, error) {
 	}
 	return data, nil
 }
+
 func Install(ctx context.Context) error {
 	mu.Lock()
 	defer mu.Unlock()
@@ -262,14 +270,16 @@ func Install(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err = fileWrite(binaryPath, data, 0755); err != nil {
+	if err = fileWrite(binaryPath, data, 0o755); err != nil {
 		return err
 	}
-	return fileWrite(versionPath, []byte(Version+"\n"), 0600)
+	return fileWrite(versionPath, []byte(Version+"\n"), 0o600)
 }
+
 func serviceUnit(c Config) string {
 	return "[Unit]\nDescription=3x-ui DNSTT DNS transport tunnel\nAfter=network-online.target\nWants=network-online.target\n[Service]\nType=simple\nExecStart=" + binaryPath + " -udp :" + strconv.Itoa(c.ListenPort) + " -privkey-file " + privatePath + " " + c.Domain + " 127.0.0.1:" + strconv.Itoa(c.TargetPort) + "\nRestart=on-failure\nRestartSec=3\nNoNewPrivileges=true\nProtectSystem=full\nProtectHome=true\nCapabilityBoundingSet=CAP_NET_BIND_SERVICE\nAmbientCapabilities=CAP_NET_BIND_SERVICE\n[Install]\nWantedBy=multi-user.target\n"
 }
+
 func keypair(ctx context.Context) error {
 	private, err := os.Stat(privatePath)
 	pub, pubErr := os.Stat(publicPath)
@@ -279,21 +289,23 @@ func keypair(ctx context.Context) error {
 	if !errors.Is(err, os.ErrNotExist) || !errors.Is(pubErr, os.ErrNotExist) {
 		return errors.New("набор ключей DNSTT неполный: восстановите оба файла ключей или переустановите DNSTT")
 	}
-	if err := os.MkdirAll(Root, 0700); err != nil {
+	if err := os.MkdirAll(Root, 0o700); err != nil {
 		return err
 	}
 	cmd := exec.CommandContext(ctx, binaryPath, "-gen-key", "-privkey-file", privatePath, "-pubkey-file", publicPath)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("генерация ключей DNSTT: %w (%s)", err, out)
 	}
-	if err := os.Chmod(privatePath, 0600); err != nil {
+	if err := os.Chmod(privatePath, 0o600); err != nil {
 		return err
 	}
-	return os.Chmod(publicPath, 0644)
+	return os.Chmod(publicPath, 0o644)
 }
+
 func serviceActive(ctx context.Context) bool {
 	return exec.CommandContext(ctx, "systemctl", "is-active", "--quiet", unitName).Run() == nil
 }
+
 func Setup(ctx context.Context, c Config) error {
 	mu.Lock()
 	defer mu.Unlock()
@@ -329,7 +341,7 @@ func Setup(ctx context.Context, c Config) error {
 		return fmt.Errorf("нет локального TCP-сервиса 127.0.0.1:%d: %w", c.TargetPort, err)
 	}
 	conn.Close()
-	if err := fileWrite(unitPath, []byte(serviceUnit(c)), 0644); err != nil {
+	if err := fileWrite(unitPath, []byte(serviceUnit(c)), 0o644); err != nil {
 		return err
 	}
 	rollback := func(original error) error {
@@ -337,14 +349,14 @@ func Setup(ctx context.Context, c Config) error {
 		defer cancel()
 		var problems error
 		if len(oldUnit) > 0 {
-			problems = errors.Join(problems, fileWrite(unitPath, oldUnit, 0644))
+			problems = errors.Join(problems, fileWrite(unitPath, oldUnit, 0o644))
 		} else {
 			if e := os.Remove(unitPath); e != nil && !errors.Is(e, os.ErrNotExist) {
 				problems = errors.Join(problems, e)
 			}
 		}
 		if len(oldState) > 0 {
-			problems = errors.Join(problems, fileWrite(statePath, oldState, 0600))
+			problems = errors.Join(problems, fileWrite(statePath, oldState, 0o600))
 		} else {
 			if e := os.Remove(statePath); e != nil && !errors.Is(e, os.ErrNotExist) {
 				problems = errors.Join(problems, e)
@@ -396,11 +408,12 @@ func Setup(ctx context.Context, c Config) error {
 	if err != nil {
 		return rollback(err)
 	}
-	if err := fileWrite(statePath, data, 0600); err != nil {
+	if err := fileWrite(statePath, data, 0o600); err != nil {
 		return rollback(err)
 	}
 	return nil
 }
+
 func Disable(ctx context.Context) error {
 	mu.Lock()
 	defer mu.Unlock()
@@ -426,8 +439,9 @@ func Disable(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return fileWrite(statePath, data, 0600)
+	return fileWrite(statePath, data, 0o600)
 }
+
 func Upgrade(ctx context.Context) error {
 	mu.Lock()
 	defer mu.Unlock()
@@ -450,7 +464,7 @@ func Upgrade(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := fileWrite(binaryPath, fresh, 0755); err != nil {
+	if err := fileWrite(binaryPath, fresh, 0o755); err != nil {
 		return err
 	}
 	if cfg.Enabled {
@@ -461,15 +475,16 @@ func Upgrade(ctx context.Context) error {
 		if restartErr != nil {
 			rec, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			defer cancel()
-			restoreErr := fileWrite(binaryPath, prev, 0755)
+			restoreErr := fileWrite(binaryPath, prev, 0o755)
 			if restoreErr == nil {
 				restoreErr = systemctl(rec, "restart", unitName)
 			}
 			return errors.Join(restartErr, restoreErr)
 		}
 	}
-	return fileWrite(versionPath, []byte(Version+"\n"), 0600)
+	return fileWrite(versionPath, []byte(Version+"\n"), 0o600)
 }
+
 func Remove(ctx context.Context) error {
 	mu.Lock()
 	defer mu.Unlock()

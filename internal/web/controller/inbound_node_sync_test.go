@@ -9,11 +9,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/crypto"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
-	"github.com/gin-gonic/gin"
 )
 
 // A sub-node stores whatever the master pushes. A master row whose certificate

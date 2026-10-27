@@ -7,8 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/goccy/go-json"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
 
 func TestApplyRemarkToLinkRewritesFragment(t *testing.T) {

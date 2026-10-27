@@ -199,7 +199,7 @@ func TestGoldenInboundFixturesBuildInXray(t *testing.T) {
 }
 
 // TestGoldenInboundFullFixturesBuildInXray runs the complete panel Inbound
-// model through GenXrayInboundConfig, the conversion both the full-config and
+// model through GenInboundConfig, the conversion both the full-config and
 // the live AddInbound paths use, and builds the result.
 func TestGoldenInboundFullFixturesBuildInXray(t *testing.T) {
 	for name, fixture := range goldenFixtures(t, "inbound-full") {

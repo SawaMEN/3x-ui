@@ -6,11 +6,12 @@ import (
 	"sort"
 	"time"
 
+	"gorm.io/gorm"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
-	"gorm.io/gorm"
 )
 
 func (s *ClientService) ResetTrafficByEmail(inboundSvc *InboundService, email string) (bool, error) {

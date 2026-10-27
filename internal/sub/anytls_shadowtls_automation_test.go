@@ -90,10 +90,10 @@ func TestAnyTLSShadowTLSAutomaticTLSIdentityAndRoutes(t *testing.T) {
 	raw, _ := os.ReadFile(cert)
 	cert2, _ := anyTLSCertificate(t, "rotated.example")
 	replacement, _ := os.ReadFile(cert2)
-	if err := os.WriteFile(cert, replacement, 0600); err != nil {
+	if err := os.WriteFile(cert, replacement, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	defer os.WriteFile(cert, raw, 0600)
+	defer os.WriteFile(cert, raw, 0o600)
 	got, _, err := NewSubJsonService("", "", "", "", NewSubService("")).GetHiddifySingBoxJson(client.SubID, "sub.example")
 	if err != nil || !strings.Contains(got, `"server_name": "rotated.example"`) {
 		t.Fatalf("certificate renewal left stale identity: %v %s", err, got)

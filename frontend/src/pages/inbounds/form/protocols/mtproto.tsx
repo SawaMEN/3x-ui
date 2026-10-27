@@ -68,7 +68,7 @@ export default function MtprotoFields() {
           <Alert
             type="info"
             showIcon
-            message={
+            title={
               i18n.resolvedLanguage?.startsWith('ru')
                 ? 'WEB Proxy: внешний TCP-порт 443 — автоматически'
                 : 'WEB Proxy: public TCP port 443 — automatic'
@@ -93,7 +93,7 @@ export default function MtprotoFields() {
                   : 'Enter a domain without scheme, port or path, e.g. web.example.com'),
             }}
           >
-            <Input placeholder="web.example.com" addonAfter=":443" />
+            <Input placeholder="web.example.com" suffix=":443" />
           </FormField>
           <FormField
             name={['settings', 'webProxy', 'frontend']}

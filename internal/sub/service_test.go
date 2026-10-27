@@ -7,8 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/enfein/mieru/v3/pkg/appctl"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
 
 func TestClashTransportCapabilities(t *testing.T) {

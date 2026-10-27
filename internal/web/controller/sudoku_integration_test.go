@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -18,11 +19,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/sudoku"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
-	"github.com/gin-gonic/gin"
 )
 
 type sudokuHTTPTransport func(*http.Request) (*http.Response, error)
@@ -66,7 +68,7 @@ func TestSudokuPanelInstallUpdateRollbackAndRemove(t *testing.T) {
 		var b bytes.Buffer
 		gz := gzip.NewWriter(&b)
 		tw := tar.NewWriter(gz)
-		if err := tw.WriteHeader(&tar.Header{Name: "sudoku", Mode: 0755, Size: int64(len(payload))}); err != nil {
+		if err := tw.WriteHeader(&tar.Header{Name: "sudoku", Mode: 0o755, Size: int64(len(payload))}); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := tw.Write(payload); err != nil {
@@ -91,7 +93,7 @@ func TestSudokuPanelInstallUpdateRollbackAndRemove(t *testing.T) {
 		switch req.URL.String() {
 		case "https://api.github.com/repos/SUDOKU-ASCII/sudoku/releases/latest":
 			if failRelease {
-				return &http.Response{StatusCode: 503, Status: "503 Unavailable", Body: io.NopCloser(strings.NewReader("unavailable"))}, nil
+				return &http.Response{StatusCode: http.StatusServiceUnavailable, Status: "503 Unavailable", Body: io.NopCloser(strings.NewReader("unavailable"))}, nil
 			}
 			body, _ = json.Marshal(map[string]any{"tag_name": tag, "assets": []map[string]string{{"name": "sudoku-linux-" + runtime.GOARCH + ".tar.gz", "browser_download_url": assetURL}}})
 		case assetURL:
@@ -99,7 +101,7 @@ func TestSudokuPanelInstallUpdateRollbackAndRemove(t *testing.T) {
 		default:
 			t.Fatalf("unexpected HTTP request: %s", req.URL)
 		}
-		return &http.Response{StatusCode: 200, Body: io.NopCloser(bytes.NewReader(body))}, nil
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader(body))}, nil
 	})}
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
@@ -180,9 +182,10 @@ func TestSudokuPanelInstallUpdateRollbackAndRemove(t *testing.T) {
 	request("POST", "/panel/api/setting/sudoku/update", false)
 	_ = connection.SetReadDeadline(time.Now().Add(30 * time.Millisecond))
 	var probe [1]byte
+	var netErr net.Error
 	if _, err := connection.Read(probe[:]); err == nil {
 		t.Fatal("unexpected server response")
-	} else if e, ok := err.(net.Error); !ok || !e.Timeout() {
+	} else if !errors.As(err, &netErr) || !netErr.Timeout() {
 		t.Fatalf("download failure interrupted the existing connection: %v", err)
 	}
 	failRelease = false

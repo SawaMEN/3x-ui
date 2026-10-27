@@ -45,9 +45,9 @@ server {
 	}
 	for _, tt := range []struct {
 		domain string
-		want bool
+		want   bool
 	}{
-		{"web.example.com", false}, // our own managed WEB vhost
+		{"web.example.com", false},  // our own managed WEB vhost
 		{"acme.example.com", false}, // HTTP-only ACME
 		{"existing.example.com", true},
 		{"a.shared.example.com", true},
@@ -68,12 +68,12 @@ func telemtWebTestCertificate(t *testing.T, key *ecdsa.PrivateKey, notAfter time
 	}
 	template := &x509.Certificate{
 		SerialNumber: serial,
-		Subject: pkix.Name{CommonName: "web.example.com"},
-		DNSNames: []string{"web.example.com"},
-		NotBefore: time.Now().Add(-time.Hour),
-		NotAfter: notAfter,
-		KeyUsage: x509.KeyUsageDigitalSignature,
-		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		Subject:      pkix.Name{CommonName: "web.example.com"},
+		DNSNames:     []string{"web.example.com"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     notAfter,
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 	}
 	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
 	if err != nil {
@@ -84,11 +84,11 @@ func telemtWebTestCertificate(t *testing.T, key *ecdsa.PrivateKey, notAfter time
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
-	certFile, keyFile := filepath.Join(dir,"cert.pem"), filepath.Join(dir,"key.pem")
-	if err := os.WriteFile(certFile, pem.EncodeToMemory(&pem.Block{Type:"CERTIFICATE", Bytes:der}), 0o600); err != nil {
+	certFile, keyFile := filepath.Join(dir, "cert.pem"), filepath.Join(dir, "key.pem")
+	if err := os.WriteFile(certFile, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(keyFile, pem.EncodeToMemory(&pem.Block{Type:"EC PRIVATE KEY", Bytes:privateDER}), 0o600); err != nil {
+	if err := os.WriteFile(keyFile, pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: privateDER}), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	return certFile, keyFile

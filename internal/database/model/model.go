@@ -10,10 +10,11 @@ import (
 	"strconv"
 	"strings"
 
+	"gorm.io/gorm"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/core"
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/json_util"
-	"gorm.io/gorm"
 )
 
 // Protocol represents the protocol type for panel inbounds.
@@ -1584,10 +1585,6 @@ func MergeClientRecord(existing *ClientRecord, incoming *ClientRecord) []ClientM
 	}
 	return conflicts
 }
-
-// GenXrayInboundConfig retains the previous method name for callers.
-// Deprecated: use GenInboundConfig and adapt at the core boundary.
-func (i *Inbound) GenXrayInboundConfig() *coremodel.InboundConfig { return i.GenInboundConfig() }
 
 const (
 	ApiScopeAdmin     = "admin"

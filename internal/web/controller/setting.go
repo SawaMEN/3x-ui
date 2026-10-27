@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/gateway"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/sudoku"
@@ -22,7 +24,6 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service/email"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service/panel"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/session"
-	"github.com/gin-gonic/gin"
 )
 
 // updateUserForm represents the form for updating user credentials.

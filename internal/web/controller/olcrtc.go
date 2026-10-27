@@ -1,8 +1,9 @@
 package controller
 
 import (
-	"github.com/SawaMEN/3x-ui/v3/internal/olcrtc"
 	"github.com/gin-gonic/gin"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/olcrtc"
 )
 
 // OlcRTC is a separate WebRTC service, not a sing-box inbound. All endpoints

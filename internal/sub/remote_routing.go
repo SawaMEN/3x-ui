@@ -14,12 +14,13 @@ import (
 	"sync"
 	"time"
 
+	yaml "github.com/goccy/go-yaml"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
-	yaml "github.com/goccy/go-yaml"
 )
 
 type remoteRoutingKind string

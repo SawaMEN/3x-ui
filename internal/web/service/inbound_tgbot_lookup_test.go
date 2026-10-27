@@ -9,12 +9,13 @@ import (
 	"testing"
 	"time"
 
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/dbtest"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 )
 
 // Legacy JSON of either serialization style must remain discoverable after

@@ -307,7 +307,7 @@ export function FirewallManager() {
         title={canInstallUfw ? text.noFirewall : status.message || text.unsupported}
         description={
           canInstallUfw ? (
-            <Space direction="vertical" size="small">
+            <Space orientation="vertical" size="small">
               <Typography.Text>{text.installUfwHint}</Typography.Text>
               <Button
                 type="primary"
@@ -328,7 +328,7 @@ export function FirewallManager() {
   }
 
   return (
-    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+    <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
       <Space size="large" wrap>
         <Space>
           <Switch

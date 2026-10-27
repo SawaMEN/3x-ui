@@ -46,7 +46,6 @@ func normalizeHiddifySubURI(value string) string {
 // regular subscription port and keeps every consumer (UI, Happ, Telegram and
 // exports) on the same standard-443 URL.
 func (r *ClientRecord) AfterFind(_ *gorm.DB) error {
-
 	if r.KeepAliveLegacy != 0 {
 		r.KeepAlive = KeepAliveValue(strconv.Itoa(r.KeepAliveLegacy))
 	} else if r.KeepAliveRange != "" {

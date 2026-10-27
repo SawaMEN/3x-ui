@@ -43,10 +43,10 @@ func anyTLSCertificate(t *testing.T, names ...string) (string, string) {
 	}
 	dir := t.TempDir()
 	certPath, keyPath := filepath.Join(dir, "cert.pem"), filepath.Join(dir, "key.pem")
-	if err := os.WriteFile(certPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0600); err != nil {
+	if err := os.WriteFile(certPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(keyPath, pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: secret}), 0600); err != nil {
+	if err := os.WriteFile(keyPath, pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: secret}), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	return certPath, keyPath
@@ -71,7 +71,7 @@ func runAnyTLSCore(t *testing.T, binary string, cfg map[string]any) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, data, 0600); err != nil {
+	if err := os.WriteFile(path, data, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	check := exec.Command(binary, "check", "-c", path)
@@ -80,7 +80,7 @@ func runAnyTLSCore(t *testing.T, binary string, cfg map[string]any) string {
 		t.Fatalf("core check: %v %s", err, out)
 	}
 	logPath := filepath.Join(dir, "core.log")
-	log, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY, 0600)
+	log, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		t.Fatal(err)
 	}

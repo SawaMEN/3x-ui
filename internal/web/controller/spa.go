@@ -5,10 +5,11 @@ import (
 	"path"
 	"strings"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/web/entity"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/middleware"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/session"
-	"github.com/gin-gonic/gin"
 )
 
 // XUIController is the main controller for the X-UI panel, serving the SPA shell.

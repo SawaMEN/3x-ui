@@ -448,7 +448,7 @@ func (m *Manager) ensureLocked(inst Instance) error {
 		// port to the MEKO helper. The next reconcile will retry the inbound;
 		// until then, do not apply its firewall rules to an unrelated listener.
 		if removeErr := os.Remove(cfg); removeErr != nil && !os.IsNotExist(removeErr) {
-			return fmt.Errorf("mtproto: Telemt start failed: %w; cleanup config: %v", err, removeErr)
+			return fmt.Errorf("mtproto: Telemt start failed: %w; cleanup config: %w", err, removeErr)
 		}
 		scheduleMekoSync()
 		return err

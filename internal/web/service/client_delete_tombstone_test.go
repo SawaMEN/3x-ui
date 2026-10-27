@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"testing"
 
+	"gorm.io/gorm"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
-	"gorm.io/gorm"
 )
 
 // Delete tombstones up front and keeps the record when an inbound fails. A

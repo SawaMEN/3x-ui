@@ -8,13 +8,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
-	"github.com/google/uuid"
-	"gorm.io/gorm"
 )
 
 // BulkAttachResult reports the outcome of a bulk attach across target inbounds.
@@ -1313,6 +1314,10 @@ func (s *ClientService) BulkCreate(inboundSvc *InboundService, payloads []Client
 			continue
 		}
 		if verr := validateClientResetDay(client.ResetDay); verr != nil {
+			skip(email, verr.Error())
+			continue
+		}
+		if verr := validateClientReset(client.Reset); verr != nil {
 			skip(email, verr.Error())
 			continue
 		}

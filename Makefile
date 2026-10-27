@@ -31,7 +31,7 @@ lint-go: dist-stub ## golangci-lint on Go sources
 
 .PHONY: lint-fe
 lint-fe: ## oxlint on frontend sources
-	cd $(FRONTEND) && npm run lint
+	cd $(FRONTEND) && npm run lint && npm run lint:deprecated
 
 .PHONY: lint
 lint: lint-go lint-fe ## All linters

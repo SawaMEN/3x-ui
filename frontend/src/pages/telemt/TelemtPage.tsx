@@ -463,7 +463,7 @@ export default function TelemtPage() {
             className="telemt-card"
             type="warning"
             showIcon
-            message="Telemt не установлен"
+            title="Telemt не установлен"
             description="Установите актуальную сборку 3X-UI. После установки эта страница сама подхватит бинарник и службу."
           />
         )}
@@ -471,7 +471,7 @@ export default function TelemtPage() {
         <Alert
           type="info"
           showIcon
-          message="MTProto работает через Telemt автоматически"
+          title="MTProto работает через Telemt автоматически"
           description="Для обычных входящих MTProto не нужно включать отдельную службу. Создавайте входящие и управляйте клиентами через основной список. Установка, обновление и удаление движка выполняются только в системных компонентах."
         />
         <Row gutter={[16, 16]}>
@@ -621,7 +621,7 @@ export default function TelemtPage() {
                   className="telemt-alert-compact"
                   type={status.webProxy.enabled ? 'warning' : 'info'}
                   showIcon
-                  message={status.webProxy.error}
+                  title={status.webProxy.error}
                 />
               )}
               <Button
@@ -860,11 +860,11 @@ export default function TelemtPage() {
           </Button>,
         ]}
       >
-        <Space direction="vertical" size={14} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={14} style={{ width: '100%' }}>
           <Alert
             type="info"
             showIcon
-            message="Панель всё сделает сама"
+            title="Панель всё сделает сама"
             description="Панель установит выбранный HTTPS-сервер, получит сертификат и настроит локальный Telemt автоматически. Для Caddy и HAProxy используется отдельная служба панели. При переключении возможен короткий перерыв соединений."
           />
 
@@ -878,7 +878,7 @@ export default function TelemtPage() {
                 label="Домен"
                 extra={'По умолчанию: ' + (status.webProxy.defaultDomain || 'не определён')}
               >
-                <Input placeholder="web.example.com" disabled={webProxyLoading} addonAfter=":443" />
+                <Input placeholder="web.example.com" disabled={webProxyLoading} suffix=":443" />
               </FormField>
               <FormField
                 name="frontend"
@@ -962,14 +962,14 @@ export default function TelemtPage() {
             </Button>
           </Space>
           {webPreflightChecking && (
-            <Alert type="info" showIcon message="Проверяются DNS, порты, Telemt, frontend и TLS…" />
+            <Alert type="info" showIcon title="Проверяются DNS, порты, Telemt, frontend и TLS…" />
           )}
           {!webPreflightChecking && webPreflightCurrent && (
             <>
               <Alert
                 type={webPreflightCurrent.ready ? 'success' : 'error'}
                 showIcon
-                message={
+                title={
                   webPreflightCurrent.ready
                     ? 'Предварительные проверки пройдены'
                     : 'Запуск заблокирован до устранения ошибок'
@@ -993,7 +993,7 @@ export default function TelemtPage() {
                 ))}
               </Descriptions>
               {webPreflightCurrent.warnings.map((warning) => (
-                <Alert key={warning} type="warning" showIcon message={warning} />
+                <Alert key={warning} type="warning" showIcon title={warning} />
               ))}
             </>
           )}
@@ -1017,9 +1017,7 @@ export default function TelemtPage() {
             </Descriptions.Item>
           </Descriptions>
 
-          {status.webProxy.error && (
-            <Alert type="warning" showIcon message={status.webProxy.error} />
-          )}
+          {status.webProxy.error && <Alert type="warning" showIcon title={status.webProxy.error} />}
 
           {status.webProxy.enabled && status.webProxy.link && (
             <div>

@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"strings"
 
+	"gorm.io/gorm"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"gorm.io/gorm"
 )
 
 type FallbackService struct{}
@@ -165,12 +166,6 @@ func (s *FallbackService) HasDerivedFallbackTo(tx *gorm.DB, childId int) (bool, 
 	var n int64
 	err := tx.Model(&model.InboundFallback{}).Where("child_id = ? AND TRIM(dest) = ''", childId).Count(&n).Error
 	return n > 0, err
-}
-
-// fallbackTargetChanged reports whether an edit changed what a derived fallback is built from.
-func fallbackTargetChanged(before, after *model.Inbound) bool {
-	return before.Listen != after.Listen || before.Port != after.Port ||
-		acceptsProxyProtocol(before.StreamSettings) != acceptsProxyProtocol(after.StreamSettings)
 }
 
 // proxyProtocolTransportKey maps the transports whose settings carry acceptProxyProtocol;

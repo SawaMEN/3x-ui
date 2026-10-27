@@ -952,7 +952,7 @@ export default function InboundFormModal({
         <Alert
           type="info"
           showIcon
-          message={t('pages.inbounds.form.shadowTlsProtocol', { protocol })}
+          title={t('pages.inbounds.form.shadowTlsProtocol', { protocol })}
           description={t('pages.inbounds.form.shadowTlsHint')}
         />
       )}

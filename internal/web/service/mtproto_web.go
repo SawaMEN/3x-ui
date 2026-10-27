@@ -129,8 +129,10 @@ func ValidateMtprotoWebInbound(ib *model.Inbound) error {
 	return nil
 }
 
-var mtprotoWebSyncMu sync.Mutex
-var mtprotoWebLastError time.Time
+var (
+	mtprotoWebSyncMu    sync.Mutex
+	mtprotoWebLastError time.Time
+)
 
 // ReconcileMtprotoWebProxy derives service state from MTProto inbounds.
 // Ordinary MTProto sidecars remain managed independently by internal/mtproto.

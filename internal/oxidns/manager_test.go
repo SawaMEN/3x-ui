@@ -45,6 +45,7 @@ func TestGenerateLocalAndDoH(t *testing.T) {
 		}
 	}
 }
+
 func TestRejectUntrustedProvider(t *testing.T) {
 	cfg := Defaults()
 	cfg.Upstream = "foo\n    type: bad"
@@ -52,6 +53,7 @@ func TestRejectUntrustedProvider(t *testing.T) {
 		t.Fatal("unvalidated upstream accepted")
 	}
 }
+
 func TestPreserveSingBoxDNSRules(t *testing.T) {
 	original := map[string]any{"servers": []any{map[string]any{"tag": "google", "type": "https", "server": "dns.google"}}, "rules": []any{map[string]any{"domain_suffix": []string{"internal"}, "server": "google"}}, "final": "google", "strategy": "ipv4_only"}
 	result, err := WithSingBoxDNS(original)
@@ -122,7 +124,7 @@ func TestGeneratedYAMLAgainstOfficialBinary(t *testing.T) {
 			}
 			workDir := t.TempDir()
 			configFile := filepath.Join(workDir, "config.yaml")
-			if err := os.WriteFile(configFile, []byte(payload), 0600); err != nil {
+			if err := os.WriteFile(configFile, []byte(payload), 0o600); err != nil {
 				t.Fatal(err)
 			}
 			command := exec.Command(binary, "check", "-c", configFile, "-d", workDir)
@@ -158,10 +160,10 @@ func TestDoHCertificateAndOfficialParser(t *testing.T) {
 	}
 	certPath := filepath.Join(workDir, "cert.pem")
 	keyPath := filepath.Join(workDir, "key.pem")
-	if err := os.WriteFile(certPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0600); err != nil {
+	if err := os.WriteFile(certPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(keyPath, pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDer}), 0600); err != nil {
+	if err := os.WriteFile(keyPath, pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDer}), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	cfg := Defaults()
@@ -236,7 +238,7 @@ func TestDoHCertificateAndOfficialParser(t *testing.T) {
 
 	if binary := os.Getenv("OXIDNS_CHECK_BINARY"); binary != "" {
 		configPath := filepath.Join(workDir, "config.yaml")
-		if err := os.WriteFile(configPath, []byte(yaml), 0600); err != nil {
+		if err := os.WriteFile(configPath, []byte(yaml), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		cmd := exec.Command(binary, "check", "-c", configPath, "-d", workDir)
@@ -324,7 +326,7 @@ func TestOfficialOxiDNSForwardsRealTraffic(t *testing.T) {
 	config = strings.Replace(config, "          bootstrap: \"9.9.9.9:53\"\n", "", 1)
 	workDir := t.TempDir()
 	configPath := filepath.Join(workDir, "config.yaml")
-	if err := os.WriteFile(configPath, []byte(config), 0600); err != nil {
+	if err := os.WriteFile(configPath, []byte(config), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	var output bytes.Buffer
@@ -438,7 +440,7 @@ func TestBinaryReadiness(t *testing.T) {
 		mode    os.FileMode
 		ready   bool
 	}{
-		{"", 0755, false}, {"binary", 0644, false}, {"binary", 0755, true},
+		{"", 0o755, false}, {"binary", 0o644, false}, {"binary", 0o755, true},
 	} {
 		if err := os.WriteFile(path, []byte(tc.content), tc.mode); err != nil {
 			t.Fatal(err)

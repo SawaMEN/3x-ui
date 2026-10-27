@@ -9,9 +9,9 @@ import (
 // array. An unnormalized array reaches the kernel as invalid auth[0].
 func TestHysteriaShareAuthenticationShapes(t *testing.T) {
 	for _, tc := range []struct {
-		name string
+		name  string
 		value any
-		want string
+		want  string
 	}{
 		{"string", "plain-password", "plain-password"},
 		{"json-string-array", []any{"plain-password"}, "plain-password"},

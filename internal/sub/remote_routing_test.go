@@ -14,9 +14,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/gin-gonic/gin"
 	yaml "github.com/goccy/go-yaml"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
 )
 
 func mergeRemoteClashRulesYAML(base map[string]any, raw string, allowClientConfig bool) error {

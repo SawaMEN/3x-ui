@@ -45,7 +45,7 @@ export function PingtunnelFields() {
         name={['settings', 'connectTimeout']}
         label={t('pages.inbounds.form.pingtunnelConnectTimeout')}
       >
-        <InputNumber min={0} addonAfter="ms" />
+        <InputNumber min={0} suffix="ms" />
       </FormField>
       <FormField
         name={['settings', 'congestion']}
@@ -161,7 +161,7 @@ export function TrustTunnelFields() {
       <Alert
         type="success"
         showIcon
-        message={
+        title={
           certificate && privateKey
             ? t('pages.inbounds.form.trusttunnelCustomCertificate', {
                 defaultValue: 'TLS: certificate from panel/custom files',

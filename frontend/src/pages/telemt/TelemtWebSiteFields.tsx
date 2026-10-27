@@ -153,7 +153,7 @@ export default function TelemtWebSiteFields({
                   <Alert
                     type="info"
                     showIcon
-                    message={
+                    title={
                       selectedTemplate
                         ? ru
                           ? selectedTemplate.ru
@@ -180,7 +180,7 @@ export default function TelemtWebSiteFields({
                 <Alert
                   type="info"
                   showIcon
-                  message={
+                  title={
                     ru
                       ? 'Ранее загруженная страница сохранена'
                       : 'Previously uploaded page preserved'

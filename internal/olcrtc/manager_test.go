@@ -27,6 +27,7 @@ func TestNormalizeJitsiDefaults(t *testing.T) {
 		t.Fatalf("unexpected DNS: %s", input.DNS)
 	}
 }
+
 func TestNormalizeRejectsUnsupportedCombinations(t *testing.T) {
 	for _, tc := range []struct{ carrier, transport string }{
 		{"telemost", "datachannel"},
@@ -42,6 +43,7 @@ func TestNormalizeRejectsUnsupportedCombinations(t *testing.T) {
 		})
 	}
 }
+
 func TestNormalizeRequiresExternalRoom(t *testing.T) {
 	for _, provider := range []string{"telemost", "wbstream"} {
 		input := ClientInput{ClientID: "test", Carrier: provider}
@@ -50,6 +52,7 @@ func TestNormalizeRequiresExternalRoom(t *testing.T) {
 		}
 	}
 }
+
 func TestNormalizeRejectsBadInputs(t *testing.T) {
 	for name, input := range map[string]ClientInput{
 		"unsafe client": {ClientID: "../escape", Carrier: "jitsi"},
@@ -64,6 +67,7 @@ func TestNormalizeRejectsBadInputs(t *testing.T) {
 		})
 	}
 }
+
 func TestClientLink(t *testing.T) {
 	var client Client
 	client.ID = "user-1234"
@@ -161,6 +165,7 @@ func TestDecodeLiveRedactsSecrets(t *testing.T) {
 		}
 	}
 }
+
 func TestDecodeLiveInvalidJSON(t *testing.T) {
 	if _, err := decodeLive([]byte("{")); err == nil {
 		t.Fatal("invalid JSON must be rejected")
@@ -198,14 +203,14 @@ func TestInstallerFailureExit127RedactsCredentials(t *testing.T) {
 		t.Fatal("expected exit status 127")
 	}
 	logFile := filepath.Join(t.TempDir(), "installer.log")
-	if err := os.WriteFile(logFile, []byte("/tmp/install.sh: line 174: go: command not found\nPassword: private-admin-password\n"), 0600); err != nil {
+	if err := os.WriteFile(logFile, []byte("/tmp/install.sh: line 174: go: command not found\nPassword: private-admin-password\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	got := installerFailure(exitError, logFile).Error()
 	if !strings.Contains(got, "go") || !strings.Contains(got, "127") || strings.Contains(got, "private-admin-password") {
 		t.Fatalf("unexpected installer diagnostic: %s", got)
 	}
-	if err := os.WriteFile(logFile, []byte("/tmp/install.sh: line 174: private-admin-password: command not found\n"), 0600); err != nil {
+	if err := os.WriteFile(logFile, []byte("/tmp/install.sh: line 174: private-admin-password: command not found\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	got = installerFailure(exitError, logFile).Error()
@@ -222,8 +227,12 @@ func TestMissingUpstreamRevisionIsNotAdvertisedAsAvailable(t *testing.T) {
 
 func TestInstallerPrerequisitesCoverEarlyCommands(t *testing.T) {
 	for _, tc := range []struct{ manager, pkg string }{
-		{"apt", "coreutils"}, {"apt", "iproute2"}, {"apt", "gawk"},
-		{"pacman", "coreutils"}, {"pacman", "iproute2"}, {"pacman", "gawk"},
+		{"apt", "coreutils"},
+		{"apt", "iproute2"},
+		{"apt", "gawk"},
+		{"pacman", "coreutils"},
+		{"pacman", "iproute2"},
+		{"pacman", "gawk"},
 	} {
 		found := false
 		for _, pkg := range installerPrerequisitePackages(tc.manager) {

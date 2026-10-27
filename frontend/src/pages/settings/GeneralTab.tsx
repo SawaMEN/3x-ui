@@ -862,7 +862,7 @@ export default function GeneralTab({ allSetting, updateSetting }: GeneralTabProp
               style={{ marginTop: 16 }}
               type="info"
               showIcon
-              message={`Пользователей в копии: ${hiddifyPreview.users}. Выбрано: ${hiddifySelected.length}.`}
+              title={`Пользователей в копии: ${hiddifyPreview.users}. Выбрано: ${hiddifySelected.length}.`}
               description={
                 <ul style={{ paddingLeft: 20, marginBottom: 0 }}>
                   {hiddifyPreview.warnings.map((warning) => (
@@ -916,7 +916,7 @@ export default function GeneralTab({ allSetting, updateSetting }: GeneralTabProp
             style={{ marginTop: 12 }}
             type="warning"
             showIcon
-            message={`Добавлено: ${hiddifyResult.created}. Пропущено: ${hiddifyResult.skipped.length}.`}
+            title={`Добавлено: ${hiddifyResult.created}. Пропущено: ${hiddifyResult.skipped.length}.`}
             description={hiddifyResult.skipped.map((item) => (
               <div key={item.email}>
                 {item.email}: {item.reason}

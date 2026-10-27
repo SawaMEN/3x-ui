@@ -246,7 +246,7 @@ func TestStripInboundXhttpClientFields_NonXhttpPassthrough(t *testing.T) {
 	}
 }
 
-func TestGenXrayInboundConfig_OmitsInboundXmuxButDbRowUnchanged(t *testing.T) {
+func TestGenInboundConfig_OmitsInboundXmuxButDbRowUnchanged(t *testing.T) {
 	stream := `{
 		"network": "xhttp",
 		"xhttpSettings": {
@@ -263,9 +263,9 @@ func TestGenXrayInboundConfig_OmitsInboundXmuxButDbRowUnchanged(t *testing.T) {
 		Settings:       `{"clients":[],"decryption":"none"}`,
 		StreamSettings: stream,
 	}
-	cfg := in.GenXrayInboundConfig()
+	cfg := in.GenInboundConfig()
 	if strings.Contains(string(cfg.StreamSettings), `"xmux"`) {
-		t.Fatalf("GenXrayInboundConfig must not emit xmux: %s", cfg.StreamSettings)
+		t.Fatalf("GenInboundConfig must not emit xmux: %s", cfg.StreamSettings)
 	}
 	if strings.Contains(in.StreamSettings, `"xmux"`) == false {
 		t.Fatal("inbound row streamSettings must still carry xmux for subscriptions")

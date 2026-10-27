@@ -487,7 +487,7 @@ func (s *VKTurnProxyService) loadDesiredSpecs(running map[int]vkturnproxy.Spec) 
 			continue
 		}
 
-		connect, err := s.inboundService.resolveVKTurnProxyForwardAddress(settings)
+		_, err = s.inboundService.resolveVKTurnProxyForwardAddress(settings)
 		if err != nil {
 			if carried, ok := running[inbound.Id]; ok {
 				logger.Warningf("keep running vk-turn-proxy inbound %d on forward-resolve error: %v", inbound.Id, err)
@@ -501,7 +501,7 @@ func (s *VKTurnProxyService) loadDesiredSpecs(running map[int]vkturnproxy.Spec) 
 		if !sidecaregress.Ready(inbound.Id, inbound.Tag, true) {
 			continue
 		}
-		connect = sidecaregress.UDPAddress(inbound.Id)
+		connect := sidecaregress.UDPAddress(inbound.Id)
 
 		listenHost := strings.TrimSpace(inbound.Listen)
 		if listenHost == "" || listenHost == "0.0.0.0" || listenHost == "::" || listenHost == "::0" {

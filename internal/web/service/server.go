@@ -15,14 +15,10 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-
-	"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
-
 	"io"
 	"maps"
 	"math"
 	"mime/multipart"
-	stdnet "net"
 	"net/http"
 	"net/url"
 	"os"
@@ -37,6 +33,19 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
+
+	stdnet "net"
+
+	"github.com/google/uuid"
+	utls "github.com/refraction-networking/utls"
+	"github.com/shirou/gopsutil/v4/cpu"
+	"github.com/shirou/gopsutil/v4/disk"
+	"github.com/shirou/gopsutil/v4/host"
+	"github.com/shirou/gopsutil/v4/load"
+	"github.com/shirou/gopsutil/v4/mem"
+	"github.com/shirou/gopsutil/v4/net"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawgnet"
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
@@ -49,14 +58,6 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/util/sys"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray/geodata"
-	"github.com/google/uuid"
-	utls "github.com/refraction-networking/utls"
-	"github.com/shirou/gopsutil/v4/cpu"
-	"github.com/shirou/gopsutil/v4/disk"
-	"github.com/shirou/gopsutil/v4/host"
-	"github.com/shirou/gopsutil/v4/load"
-	"github.com/shirou/gopsutil/v4/mem"
-	"github.com/shirou/gopsutil/v4/net"
 )
 
 // ProcessState represents the current state of a system process.
@@ -170,7 +171,6 @@ type ServerService struct {
 	cachedIPv4         string
 	cachedIPv6         string
 	noIPv6             bool
-	resolvingIPs       bool
 	mu                 sync.Mutex
 	lastCPUTimes       cpu.TimesStat
 	hasLastCPUSample   bool
@@ -597,7 +597,6 @@ func (s *ServerService) GetStatus(lastStatus *Status) *Status {
 			status.Swap.Current = swapInfo.Used
 			status.Swap.Total = swapInfo.Total
 		}
-
 	}
 
 	// Disk stats
