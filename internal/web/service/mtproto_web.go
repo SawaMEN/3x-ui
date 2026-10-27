@@ -23,6 +23,7 @@ type mtprotoWebSettings struct {
 	Site     *TelemtWebSiteOptions `json:"site,omitempty"`
 	Enabled  bool                  `json:"enabled"`
 	Domain   string                `json:"domain"`
+	BasePath string                `json:"basePath"`
 	Frontend string                `json:"frontend"`
 	Carrier  string                `json:"carrier"`
 	Carriers []string              `json:"carriers"`
@@ -90,7 +91,7 @@ func ValidateMtprotoWebInbound(ib *model.Inbound) error {
 	if !telemtWebDomainPattern.MatchString(domain) || len(domain) > 253 {
 		return errors.New("MTProto WEB Proxy requires a valid public domain")
 	}
-	if _, err := normalizeTelemtWebOptions(TelemtWebProxyOptions{Frontend: opts.Frontend, Carrier: opts.Carrier, Carriers: opts.Carriers, Site: opts.Site}); err != nil {
+	if _, err := normalizeTelemtWebOptions(TelemtWebProxyOptions{Frontend: opts.Frontend, Carrier: opts.Carrier, Carriers: opts.Carriers, Site: opts.Site, BasePath: &opts.BasePath}); err != nil {
 		return err
 	}
 	// Persist the effective endpoint so clients, API and subscriptions agree.
@@ -173,7 +174,7 @@ func ReconcileMtprotoWebProxy(ctx context.Context) error {
 	if opts.Site == nil {
 		opts.Site = &TelemtWebSiteOptions{Mode: "auto"}
 	}
-	normalized, err := normalizeTelemtWebOptions(TelemtWebProxyOptions{Frontend: opts.Frontend, Carrier: opts.Carrier, Carriers: opts.Carriers, Site: opts.Site})
+	normalized, err := normalizeTelemtWebOptions(TelemtWebProxyOptions{Frontend: opts.Frontend, Carrier: opts.Carrier, Carriers: opts.Carriers, Site: opts.Site, BasePath: &opts.BasePath})
 	if err != nil {
 		return err
 	}
@@ -188,7 +189,7 @@ func ReconcileMtprotoWebProxy(ctx context.Context) error {
 
 	fingerprint := mtprotoWebFingerprint(ib)
 	unchanged := state.Enabled && state.ManagedInboundID == ib.Id &&
-		state.Domain == domain && telemtWebFrontend(state) == normalized.Frontend &&
+		state.Domain == domain && state.BasePath == opts.BasePath && telemtWebFrontend(state) == normalized.Frontend &&
 		telemtWebCarrier(state) == normalized.Carrier &&
 		strings.Join(state.Carriers, ",") == strings.Join(normalized.Carriers, ",") &&
 		telemtWebSitesEqual(state.Site, normalized.Site)
