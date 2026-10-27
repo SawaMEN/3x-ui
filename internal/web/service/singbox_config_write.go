@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/clientlimit"
 	"github.com/SawaMEN/3x-ui/v3/internal/protocolserver"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 )
@@ -13,6 +14,7 @@ import (
 // Check a candidate before replacing the file used by the running core. A
 // failed check leaves both the existing config and the process untouched.
 type nativeConfigCandidate struct {
+	speedLimitPlan   clientlimit.Plan
 	path, target     string
 	managedOutbounds []map[string]any
 	protocolServers  []protocolserver.Plan
@@ -98,7 +100,7 @@ func (s *SingBoxService) prepareGeneratedConfigCandidate(ctx context.Context, cf
 			}
 		}
 	}
-	return &nativeConfigCandidate{path: name, target: path, managedOutbounds: cfg.ManagedOutbounds, protocolServers: cfg.ProtocolServers, nativeAWGTags: nativeAWGTags}, nil
+	return &nativeConfigCandidate{speedLimitPlan: cfg.SpeedLimitPlan, path: name, target: path, managedOutbounds: cfg.ManagedOutbounds, protocolServers: cfg.ProtocolServers, nativeAWGTags: nativeAWGTags}, nil
 }
 
 // Restore a trusted applied snapshot with the same atomic/durable publication

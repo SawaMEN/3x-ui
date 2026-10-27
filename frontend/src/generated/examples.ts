@@ -415,6 +415,7 @@ export const EXAMPLES: Record<string, unknown> = {
     "reverse": null,
     "secret": "ee1234567890abcdef1234567890abcd7777772e636c6f7564666c6172652e636f6d",
     "security": "",
+    "speedLimit": null,
     "subId": "",
     "sudokuPrivateKey": "",
     "tgId": 0,
@@ -452,6 +453,7 @@ export const EXAMPLES: Record<string, unknown> = {
         "reset": 0,
         "resetDay": 0,
         "resetMax": 0,
+        "speedLimit": null,
         "subId": "abcd1234",
         "totalGB": 53687091200,
         "traffic": null,
@@ -510,6 +512,7 @@ export const EXAMPLES: Record<string, unknown> = {
     "reverse": null,
     "secret": "",
     "security": "",
+    "speedLimit": null,
     "subId": "",
     "tgId": 0,
     "totalGB": 0,
@@ -537,10 +540,16 @@ export const EXAMPLES: Record<string, unknown> = {
     "reset": 0,
     "resetDay": 0,
     "resetMax": 0,
+    "speedLimit": null,
     "subId": "abcd1234",
     "totalGB": 53687091200,
     "traffic": null,
     "updatedAt": 1735100000000
+  },
+  "ClientSpeedLimit": {
+    "downloadMbps": 0,
+    "enabled": false,
+    "uploadMbps": 0
   },
   "ClientTraffic": {
     "down": 2097152,

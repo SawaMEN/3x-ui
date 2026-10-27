@@ -98,6 +98,11 @@ jobs:
         env:
           HIDDIFY_TEST_BINARY: ${{ runner.temp }}/awg-core/hiddify-core-linux-amd64
         run: go test ./internal/sub -run '^(TestHiddify(ExtendedProtocolsSurviveMixedSubscription|MixedWireGuardKeepsEveryEndpoint)|TestAnyTLSShadowTLS(AutomaticTLSIdentityAndRoutes|SubscriptionConnections))$' -count=1 -v
+      - name: Verify live client speed limits over TCP and UDP
+        env:
+          HIDDIFY_CONFIG_CHECK_BINARY: ${{ runner.temp }}/awg-core/hiddify-core-linux-amd64
+        run: go test ./internal/web/service -run '^TestClientSpeedLimitLiveCore$' -count=1 -v
+
       - name: Test
         run: |
           go test -p 12 -vet=off -shuffle=on -count=1 ./...

@@ -624,6 +624,11 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot, ed
 				reserved = append(reserved, inbound.Port)
 			}
 		}
+		if snapshot != nil {
+			if err := injectClientSpeedLimits(cfg, snapshot.clients, inbounds); err != nil {
+				return nil, err
+			}
+		}
 		if err := prepareProtocolServersWithPolicy(cfg, s.strictProtocolServers, reserved...); err != nil {
 			return nil, err
 		}

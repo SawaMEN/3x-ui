@@ -10,12 +10,14 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/clientlimit"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/protocolserver"
 	"github.com/SawaMEN/3x-ui/v3/internal/snell"
 )
 
 type Config struct {
+	SpeedLimitPlan          clientlimit.Plan      `json:"-"`
 	SidecarTrafficTags      map[string]bool       `json:"-"`
 	ProtocolServerFallbacks map[string]string     `json:"-"`
 	ProtocolServers         []protocolserver.Plan `json:"-"`

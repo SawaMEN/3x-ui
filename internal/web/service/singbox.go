@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawgnet"
+	"github.com/SawaMEN/3x-ui/v3/internal/clientlimit"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
 	"github.com/SawaMEN/3x-ui/v3/internal/hiddify"
@@ -629,6 +630,11 @@ func (s *SingBoxService) restartLocked(ctx context.Context) (result error) {
 	if !unchanged() {
 		return errNativeConfigBatchChanged
 	}
+	finishLimits, err := clientlimit.Default.Apply(candidate.speedLimitPlan)
+	if err != nil {
+		return err
+	}
+	defer func() { finishLimits(applied) }()
 	if err := candidate.publish(ctx); err != nil {
 		s.process().SetError(err)
 		return err
@@ -675,6 +681,9 @@ func (s *SingBoxService) startLocked(ctx context.Context) (result error) {
 		}
 	}()
 	if s.IsRunning() {
+		if clientlimit.Default.Address() == "" && strings.Contains(string(s.process().AppliedConfig()), clientlimit.InternalPrefix) {
+			return s.restartLocked(ctx)
+		}
 		return s.resumeGateway(ctx)
 	}
 	if err := s.guardStoppedGateway(ctx); err != nil {
@@ -711,6 +720,11 @@ func (s *SingBoxService) startLocked(ctx context.Context) (result error) {
 	if !unchanged() {
 		return errNativeConfigBatchChanged
 	}
+	finishLimits, err := clientlimit.Default.Apply(candidate.speedLimitPlan)
+	if err != nil {
+		return err
+	}
+	defer func() { finishLimits(applied) }()
 	if err := candidate.publish(ctx); err != nil {
 		s.process().SetError(err)
 		return err
@@ -748,6 +762,7 @@ func (s *SingBoxService) Stop(ctx context.Context) error {
 }
 
 func (s *SingBoxService) stopLocked(ctx context.Context) (result error) {
+	defer clientlimit.Default.Close()
 	// Shutdown callers may have already cancelled the panel context.
 	recovery, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

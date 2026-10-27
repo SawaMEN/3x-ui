@@ -410,6 +410,7 @@ export interface Client {
   reverse?: ClientReverse | null;
   secret?: string;
   security: string;
+  speedLimit?: ClientSpeedLimit | null;
   subId: string;
   sudokuPrivateKey?: string;
   tgId: number;
@@ -465,6 +466,7 @@ export interface ClientRecord {
   reverse: unknown;
   secret: string;
   security: string;
+  speedLimit?: ClientSpeedLimit | null;
   subId: string;
   tgId: number;
   totalGB: number;
@@ -491,10 +493,17 @@ export interface ClientSlim {
   reset: number;
   resetDay: number;
   resetMax: number;
+  speedLimit?: ClientSpeedLimit | null;
   subId: string;
   totalGB: number;
   traffic?: ClientTraffic | null;
   updatedAt: number;
+}
+
+export interface ClientSpeedLimit {
+  downloadMbps: number;
+  enabled: boolean;
+  uploadMbps: number;
 }
 
 export interface ClientTraffic {

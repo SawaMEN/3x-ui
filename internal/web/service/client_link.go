@@ -63,6 +63,9 @@ func applyClientRecordMerge(row *model.ClientRecord, incoming *model.ClientRecor
 		row.AWGClientOptions = incoming.AWGClientOptions
 	}
 	row.SubID = incoming.SubID
+	if incoming.SpeedLimit != nil {
+		row.SpeedLimit = incoming.SpeedLimit
+	}
 	row.LimitIP = incoming.LimitIP
 	row.TotalGB = incoming.TotalGB
 	row.ExpiryTime = incoming.ExpiryTime
@@ -165,6 +168,12 @@ func (s *ClientService) syncInboundClients(tx *gorm.DB, inboundId int, clients [
 			continue
 		}
 
+		if err := clients[i].SpeedLimit.Validate(); err != nil {
+			return err
+		}
+		if limit := clients[i].SpeedLimit; limit != nil && limit.Enabled && !model.SupportsClientSpeedLimit(inbound.Protocol) {
+			return fmt.Errorf("client speed limit is not supported for %s", inbound.Protocol)
+		}
 		incoming := clients[i].ToRecord()
 		// ToRecord copies the raw email; store the trimmed key this function
 		// looks up by, or a padded email is inserted and never found again.
@@ -181,6 +190,9 @@ func (s *ClientService) syncInboundClients(tx *gorm.DB, inboundId int, clients [
 
 		before := *row
 		applyClientRecordMerge(row, incoming)
+		if row.SpeedLimit != nil && row.SpeedLimit.Enabled && !model.SupportsClientSpeedLimit(inbound.Protocol) {
+			return fmt.Errorf("client speed limit is not supported for %s", inbound.Protocol)
+		}
 		_, outranked := onLowerTunnel[row.Id]
 		keepLinkOwnedFields(row, &before, isTunnel && !outranked)
 		preservedUpdatedAt := max(incoming.UpdatedAt, row.UpdatedAt)

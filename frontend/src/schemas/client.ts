@@ -23,6 +23,12 @@ export const ClientTrafficSchema = z.object({
   resetCount: z.number().optional(),
 });
 
+export const ClientSpeedLimitSchema = z.object({
+  enabled: z.boolean(),
+  uploadMbps: z.number().int().min(0).max(100000),
+  downloadMbps: z.number().int().min(0).max(100000),
+});
+
 export const ClientRecordSchema = z
   .object({
     id: z.number().optional(),
@@ -38,6 +44,7 @@ export const ClientRecordSchema = z
     clientHostRuleIds: z.array(z.number().int()).nullable().optional(),
     totalGB: z.number().optional(),
     expiryTime: z.number().optional(),
+    speedLimit: ClientSpeedLimitSchema.nullable().optional(),
     limitIp: z.number().optional(),
     limitHwid: z.number().optional(),
     tgId: z.union([z.number(), z.string()]).optional(),
@@ -316,39 +323,47 @@ export function hasForbiddenClientChars(value: string): boolean {
   return false;
 }
 
-export const ClientFormSchema = z.object({
-  email: z
-    .string()
-    .trim()
-    .min(1, 'pages.clients.email')
-    .refine((v) => !hasForbiddenClientChars(v), 'pages.clients.emailInvalidChars'),
-  subId: z.string().refine((v) => !hasForbiddenClientChars(v), 'pages.clients.subIdInvalidChars'),
-  uuid: z.string(),
-  password: z.string(),
-  auth: z.string(),
-  flow: z.string(),
-  security: z.string(),
-  // Host rules the client is bound to; null/omitted preserves, empty clears.
-  clientHostRuleIds: z.array(z.number().int()).nullable().optional(),
-  reverseTag: z.string(),
-  totalGB: z.number().min(0),
-  delayedStart: z.boolean(),
-  delayedDays: z.number().int().min(0),
-  reset: z.number().int().min(0),
-  resetDay: z.number().int().min(0).max(31),
-  resetMax: z.number().int().min(0),
-  trafficReset: z.enum(['never', 'hourly', 'daily', 'weekly', 'monthly']),
-  trafficResetDay: z.number().int().min(1).max(31),
-  limitIp: z.number().int().min(0),
-  limitHwid: z.number().int().min(0),
-  tgId: z.number().int().min(0),
-  group: z.string(),
-  comment: z.string(),
-  enable: z.boolean(),
-  inboundIds: z.array(z.number()),
-});
+export const ClientFormSchema = z
+  .object({
+    email: z
+      .string()
+      .trim()
+      .min(1, 'pages.clients.email')
+      .refine((v) => !hasForbiddenClientChars(v), 'pages.clients.emailInvalidChars'),
+    subId: z.string().refine((v) => !hasForbiddenClientChars(v), 'pages.clients.subIdInvalidChars'),
+    uuid: z.string(),
+    password: z.string(),
+    auth: z.string(),
+    flow: z.string(),
+    security: z.string(),
+    // Host rules the client is bound to; null/omitted preserves, empty clears.
+    clientHostRuleIds: z.array(z.number().int()).nullable().optional(),
+    reverseTag: z.string(),
+    totalGB: z.number().min(0),
+    delayedStart: z.boolean(),
+    delayedDays: z.number().int().min(0),
+    reset: z.number().int().min(0),
+    resetDay: z.number().int().min(0).max(31),
+    resetMax: z.number().int().min(0),
+    trafficReset: z.enum(['never', 'hourly', 'daily', 'weekly', 'monthly']),
+    trafficResetDay: z.number().int().min(1).max(31),
+    speedLimitEnabled: z.boolean().default(false),
+    uploadMbps: z.number().int().min(0).max(100000).default(0),
+    downloadMbps: z.number().int().min(0).max(100000).default(0),
+    limitIp: z.number().int().min(0),
+    limitHwid: z.number().int().min(0),
+    tgId: z.number().int().min(0),
+    group: z.string(),
+    comment: z.string(),
+    enable: z.boolean(),
+    inboundIds: z.array(z.number()),
+  })
+  .refine((v) => !v.speedLimitEnabled || v.uploadMbps > 0 || v.downloadMbps > 0, {
+    path: ['downloadMbps'],
+    message: 'pages.clients.speedLimitRequired',
+  });
 
-export const ClientCreateFormSchema = ClientFormSchema.extend({
+export const ClientCreateFormSchema = ClientFormSchema.safeExtend({
   inboundIds: z.array(z.number()).min(1, 'pages.clients.selectInbound'),
 });
 

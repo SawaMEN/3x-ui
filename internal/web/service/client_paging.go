@@ -23,6 +23,7 @@ type ClientSlim struct {
 	Enable     bool                     `json:"enable" example:"true"`
 	TotalGB    int64                    `json:"totalGB" example:"53687091200"`
 	ExpiryTime int64                    `json:"expiryTime" example:"1735689600000"`
+	SpeedLimit *model.ClientSpeedLimit  `json:"speedLimit,omitempty"`
 	LimitIP    int                      `json:"limitIp" example:"0"`
 	LimitHwid  int                      `json:"limitHwid" example:"0"`
 	Reset      int                      `json:"reset" example:"0"`
@@ -638,6 +639,7 @@ func toClientSlim(c ClientWithAttachments) ClientSlim {
 		Enable:     c.Enable,
 		TotalGB:    c.TotalGB,
 		ExpiryTime: c.ExpiryTime,
+		SpeedLimit: c.SpeedLimit,
 		LimitIP:    c.LimitIP,
 		LimitHwid:  c.LimitHwid,
 		Reset:      c.Reset,

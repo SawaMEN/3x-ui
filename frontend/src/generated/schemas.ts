@@ -1694,6 +1694,14 @@ export const SCHEMAS: Record<string, unknown> = {
         "description": "Security method (e.g., \"auto\", \"aes-128-gcm\")",
         "type": "string"
       },
+      "speedLimit": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ClientSpeedLimit"
+          }
+        ],
+        "nullable": true
+      },
       "subId": {
         "description": "Subscription identifier",
         "type": "string"
@@ -1929,6 +1937,14 @@ export const SCHEMAS: Record<string, unknown> = {
       "security": {
         "type": "string"
       },
+      "speedLimit": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ClientSpeedLimit"
+          }
+        ],
+        "nullable": true
+      },
       "subId": {
         "type": "string"
       },
@@ -2060,6 +2076,14 @@ export const SCHEMAS: Record<string, unknown> = {
         "example": 0,
         "type": "integer"
       },
+      "speedLimit": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ClientSpeedLimit"
+          }
+        ],
+        "nullable": true
+      },
       "subId": {
         "example": "abcd1234",
         "type": "string"
@@ -2097,6 +2121,26 @@ export const SCHEMAS: Record<string, unknown> = {
       "subId",
       "totalGB",
       "updatedAt"
+    ],
+    "type": "object"
+  },
+  "ClientSpeedLimit": {
+    "description": "Mbps are decimal megabits per second; zero leaves that direction unlimited.",
+    "properties": {
+      "downloadMbps": {
+        "type": "integer"
+      },
+      "enabled": {
+        "type": "boolean"
+      },
+      "uploadMbps": {
+        "type": "integer"
+      }
+    },
+    "required": [
+      "downloadMbps",
+      "enabled",
+      "uploadMbps"
     ],
     "type": "object"
   },

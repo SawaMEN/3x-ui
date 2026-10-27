@@ -59,6 +59,21 @@ import { ClientFormSchema, ClientCreateFormSchema, type ClientFormValues } from 
 import type { AwgClientOptions } from '@/schemas/awg-client-options';
 import './ClientFormModal.css';
 
+const SPEED_LIMIT_PROTOCOLS = new Set([
+  'vmess',
+  'vless',
+  'http',
+  'trojan',
+  'shadowsocks',
+  'mixed',
+  'hysteria',
+  'tuic',
+  'naive',
+  'anytls',
+  'snell',
+  'shadowtls',
+]);
+
 const FLOW_OPTIONS = Object.values(TLS_FLOW_CONTROL);
 const VMESS_SECURITY_OPTIONS = ['auto', 'aes-128-gcm', 'chacha20-poly1305'] as const;
 
@@ -157,6 +172,9 @@ const EMPTY: Values = {
   resetMax: 0,
   trafficReset: 'never' as const,
   trafficResetDay: 1,
+  speedLimitEnabled: false,
+  uploadMbps: 0,
+  downloadMbps: 0,
   limitIp: 0,
   limitHwid: 0,
   tgId: 0,
@@ -273,6 +291,10 @@ export default function ClientFormModal({
   const limitHwid = useWatch({ control: methods.control, name: 'limitHwid' });
   const auth = useWatch({ control: methods.control, name: 'auth' });
   const wgPrivateKey = useWatch({ control: methods.control, name: 'wgPrivateKey' });
+  const speedLimitUnsupported = inbounds.some(
+    (ib) => (inboundIds || []).includes(ib.id) && !SPEED_LIMIT_PROTOCOLS.has(ib.protocol || ''),
+  );
+  const speedLimitEnabled = useWatch({ control: methods.control, name: 'speedLimitEnabled' });
   const limitIp = useWatch({ control: methods.control, name: 'limitIp' });
   const {
     fields: externalLinkFields,
@@ -375,6 +397,9 @@ export default function ClientFormModal({
         resetMax: Number(client.resetMax) || 0,
         trafficReset: (client.trafficReset as ClientFormValues['trafficReset']) || 'never',
         trafficResetDay: Number(client.trafficResetDay) || 1,
+        speedLimitEnabled: client.speedLimit?.enabled ?? false,
+        uploadMbps: client.speedLimit?.uploadMbps ?? 0,
+        downloadMbps: client.speedLimit?.downloadMbps ?? 0,
         limitIp: client.limitIp || 0,
         limitHwid: client.limitHwid || 0,
         tgId: Number(client.tgId) || 0,
@@ -765,6 +790,9 @@ export default function ClientFormModal({
       resetMax: values.resetMax,
       trafficReset: values.trafficReset,
       trafficResetDay: values.trafficResetDay,
+      speedLimitEnabled: values.speedLimitEnabled,
+      uploadMbps: values.uploadMbps,
+      downloadMbps: values.downloadMbps,
       limitIp: values.limitIp,
       limitHwid: values.limitHwid,
       tgId: values.tgId,
@@ -802,6 +830,11 @@ export default function ClientFormModal({
       resetMax: Number(values.resetMax) || 0,
       trafficReset: values.trafficReset || 'never',
       trafficResetDay: Number(values.trafficResetDay) || 1,
+      speedLimit: {
+        enabled: values.speedLimitEnabled,
+        uploadMbps: Number(values.uploadMbps) || 0,
+        downloadMbps: Number(values.downloadMbps) || 0,
+      },
       limitIp: Number(values.limitIp) || 0,
       limitHwid: Number(values.limitHwid) || 0,
       tgId: Number(values.tgId) || 0,
@@ -994,6 +1027,57 @@ export default function ClientFormModal({
                           >
                             <InputNumber min={0} step={1} style={{ width: '100%' }} />
                           </FormField>
+                        </Col>
+                        <Col xs={24}>
+                          <FormField
+                            name="speedLimitEnabled"
+                            label={t('pages.clients.speedLimit')}
+                            valueProp="checked"
+                          >
+                            <Switch disabled={speedLimitUnsupported && !speedLimitEnabled} />
+                          </FormField>
+                          {speedLimitUnsupported && (
+                            <Typography.Paragraph type="warning">
+                              {t('pages.clients.speedLimitUnsupported')}
+                            </Typography.Paragraph>
+                          )}
+                          {speedLimitEnabled && (
+                            <>
+                              <Typography.Paragraph type="secondary">
+                                {t('pages.clients.speedLimitDesc')}
+                              </Typography.Paragraph>
+                              <Row gutter={16}>
+                                <Col xs={24} sm={12}>
+                                  <FormField
+                                    name="downloadMbps"
+                                    label={t('pages.clients.downloadMbps')}
+                                    transform={{ output: (v) => Number(v) || 0 }}
+                                  >
+                                    <InputNumber
+                                      min={0}
+                                      max={100000}
+                                      precision={0}
+                                      style={{ width: '100%' }}
+                                    />
+                                  </FormField>
+                                </Col>
+                                <Col xs={24} sm={12}>
+                                  <FormField
+                                    name="uploadMbps"
+                                    label={t('pages.clients.uploadMbps')}
+                                    transform={{ output: (v) => Number(v) || 0 }}
+                                  >
+                                    <InputNumber
+                                      min={0}
+                                      max={100000}
+                                      precision={0}
+                                      style={{ width: '100%' }}
+                                    />
+                                  </FormField>
+                                </Col>
+                              </Row>
+                            </>
+                          )}
                         </Col>
                         <Col xs={24} md={12}>
                           <Form.Item

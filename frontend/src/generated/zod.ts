@@ -433,6 +433,7 @@ export const ClientSchema = z.object({
   reverse: z.lazy(() => ClientReverseSchema).nullable().optional(),
   secret: z.string().optional(),
   security: z.string(),
+  speedLimit: z.lazy(() => ClientSpeedLimitSchema).nullable().optional(),
   subId: z.string(),
   sudokuPrivateKey: z.string().optional(),
   tgId: z.number().int(),
@@ -491,6 +492,7 @@ export const ClientRecordSchema = z.object({
   reverse: z.unknown(),
   secret: z.string(),
   security: z.string(),
+  speedLimit: z.lazy(() => ClientSpeedLimitSchema).nullable().optional(),
   subId: z.string(),
   tgId: z.number().int(),
   totalGB: z.number().int(),
@@ -519,12 +521,20 @@ export const ClientSlimSchema = z.object({
   reset: z.number().int(),
   resetDay: z.number().int(),
   resetMax: z.number().int(),
+  speedLimit: z.lazy(() => ClientSpeedLimitSchema).nullable().optional(),
   subId: z.string(),
   totalGB: z.number().int(),
   traffic: z.lazy(() => ClientTrafficSchema).nullable().optional(),
   updatedAt: z.number().int(),
 });
 export type ClientSlim = z.infer<typeof ClientSlimSchema>;
+
+export const ClientSpeedLimitSchema = z.object({
+  downloadMbps: z.number().int(),
+  enabled: z.boolean(),
+  uploadMbps: z.number().int(),
+});
+export type ClientSpeedLimit = z.infer<typeof ClientSpeedLimitSchema>;
 
 export const ClientTrafficSchema = z.object({
   down: z.number().int(),

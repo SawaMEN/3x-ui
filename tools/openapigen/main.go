@@ -43,6 +43,7 @@ func run(root, outDir string) error {
 				"AWGClientOptions",
 				"Client",
 				"ClientRecord",
+				"ClientSpeedLimit",
 				"ClientInbound",
 				"InboundFallback",
 				"Host",
