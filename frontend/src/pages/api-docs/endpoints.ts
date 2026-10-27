@@ -3178,6 +3178,23 @@ export const sections: readonly Section[] = [
       },
       {
         method: 'GET',
+        path: '/panel/api/telemt/published',
+        summary:
+          'List local MTProto profiles allowed to appear on a parent panel. Admin and node-sync authentication only.',
+        responseSchema: 'TelegramProxyProfile',
+        responseSchemaArray: true,
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/telemt/remote-proxies',
+        summary:
+          'List Telegram profiles published by enabled remote nodes. Available without a local Telemt installation.',
+        responseSchema: 'RemoteTelegramProxy',
+        responseSchemaArray: true,
+      },
+
+      {
+        method: 'GET',
         path: '/panel/api/telemt/subscription/:subid',
         summary:
           'Return existing Telegram proxy profiles for one subscription on this node. Requires admin, node-sync or node-admin authentication; does not create users.',

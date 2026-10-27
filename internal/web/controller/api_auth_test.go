@@ -10,13 +10,14 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/gin-contrib/sessions"
+	"github.com/gin-contrib/sessions/cookie"
+	"github.com/gin-gonic/gin"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/crypto"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/session"
-	"github.com/gin-contrib/sessions"
-	"github.com/gin-contrib/sessions/cookie"
-	"github.com/gin-gonic/gin"
 )
 
 // newAPIAuthTestEngine builds a gin engine that mirrors the production auth
@@ -214,6 +215,7 @@ func TestNodeSyncScopeAllowlistMatchesRemoteInventory(t *testing.T) {
 		"/clients/clientIpsByGuid":                    {http.MethodPost: {}},
 		"/hosts/list":                                 {http.MethodGet: {}},
 		"/telemt/subscription/:subid":                 {http.MethodGet: {}},
+		"/telemt/published":                           {http.MethodGet: {}},
 	}
 	if !reflect.DeepEqual(nodeSyncScopeAllow, expected) {
 		t.Fatalf("node-sync allowlist drift:\n got: %#v\nwant: %#v", nodeSyncScopeAllow, expected)

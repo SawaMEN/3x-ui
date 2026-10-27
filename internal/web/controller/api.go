@@ -6,13 +6,14 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/middleware"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service/panel"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service/tgbot"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/session"
-	"github.com/gin-gonic/gin"
 )
 
 // APIController handles the main API routes for the 3x-ui panel, including inbounds and server management.
@@ -135,6 +136,7 @@ var nodeSyncScopeAllow = map[string]map[string]struct{}{
 	"/clients/clientIpsByGuid":                    {http.MethodPost: {}},
 	"/hosts/list":                                 {http.MethodGet: {}},
 	"/telemt/subscription/:subid":                 {http.MethodGet: {}},
+	"/telemt/published":                           {http.MethodGet: {}},
 }
 
 // enforceTokenScope applies explicit allowlists to restricted API tokens.

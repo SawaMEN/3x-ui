@@ -146,6 +146,9 @@ export interface AllSetting {
   subRoutingRules: string;
   subShowIdentityOnAllLinks: boolean;
   subSupportUrl: string;
+  subTelegramLocalEnable: boolean;
+  subTelegramRemoteEnable: boolean;
+  subTelegramWebEnable: boolean;
   subThemeDir: string;
   subTitle: string;
   subTrafficDepletedTemplate: string;
@@ -309,6 +312,9 @@ export interface AllSettingView {
   subRoutingRules: string;
   subShowIdentityOnAllLinks: boolean;
   subSupportUrl: string;
+  subTelegramLocalEnable: boolean;
+  subTelegramRemoteEnable: boolean;
+  subTelegramWebEnable: boolean;
   subThemeDir: string;
   subTitle: string;
   subTrafficDepletedTemplate: string;
@@ -1038,6 +1044,12 @@ export interface RealityScanResult {
   tls13: boolean;
   tlsVersion: string;
   x25519: boolean;
+}
+
+export interface RemoteTelegramProxy {
+  nodeId: number;
+  nodeName: string;
+  profile: TelegramProxyProfile;
 }
 
 export interface RoutingPresetDetail {

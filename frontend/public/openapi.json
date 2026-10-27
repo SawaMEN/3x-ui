@@ -469,6 +469,15 @@
           "subSupportUrl": {
             "type": "string"
           },
+          "subTelegramLocalEnable": {
+            "type": "boolean"
+          },
+          "subTelegramRemoteEnable": {
+            "type": "boolean"
+          },
+          "subTelegramWebEnable": {
+            "type": "boolean"
+          },
           "subThemeDir": {
             "type": "string"
           },
@@ -691,6 +700,9 @@
           "subRoutingRules",
           "subShowIdentityOnAllLinks",
           "subSupportUrl",
+          "subTelegramLocalEnable",
+          "subTelegramRemoteEnable",
+          "subTelegramWebEnable",
           "subThemeDir",
           "subTitle",
           "subTrafficDepletedTemplate",
@@ -1144,6 +1156,15 @@
           "subSupportUrl": {
             "type": "string"
           },
+          "subTelegramLocalEnable": {
+            "type": "boolean"
+          },
+          "subTelegramRemoteEnable": {
+            "type": "boolean"
+          },
+          "subTelegramWebEnable": {
+            "type": "boolean"
+          },
           "subThemeDir": {
             "type": "string"
           },
@@ -1373,6 +1394,9 @@
           "subRoutingRules",
           "subShowIdentityOnAllLinks",
           "subSupportUrl",
+          "subTelegramLocalEnable",
+          "subTelegramRemoteEnable",
+          "subTelegramWebEnable",
           "subThemeDir",
           "subTitle",
           "subTrafficDepletedTemplate",
@@ -4616,6 +4640,25 @@
           "tls13",
           "tlsVersion",
           "x25519"
+        ],
+        "type": "object"
+      },
+      "RemoteTelegramProxy": {
+        "properties": {
+          "nodeId": {
+            "type": "integer"
+          },
+          "nodeName": {
+            "type": "string"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/TelegramProxyProfile"
+          }
+        },
+        "required": [
+          "nodeId",
+          "nodeName",
+          "profile"
         ],
         "type": "object"
       },
@@ -18409,6 +18452,104 @@
                     },
                     "obj": {}
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/telemt/published": {
+      "get": {
+        "tags": [
+          "Telemt"
+        ],
+        "summary": "List local MTProto profiles allowed to appear on a parent panel. Admin and node-sync authentication only.",
+        "operationId": "get_panel_api_telemt_published",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/TelegramProxyProfile"
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": [
+                    {
+                      "host": "",
+                      "link": "",
+                      "name": "",
+                      "port": 0,
+                      "tls": false
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/telemt/remote-proxies": {
+      "get": {
+        "tags": [
+          "Telemt"
+        ],
+        "summary": "List Telegram profiles published by enabled remote nodes. Available without a local Telemt installation.",
+        "operationId": "get_panel_api_telemt_remote_proxies",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/RemoteTelegramProxy"
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": [
+                    {
+                      "nodeId": 0,
+                      "nodeName": "",
+                      "profile": {
+                        "host": "",
+                        "link": "",
+                        "name": "",
+                        "port": 0,
+                        "tls": false
+                      }
+                    }
+                  ]
                 }
               }
             }

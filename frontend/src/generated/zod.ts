@@ -163,6 +163,9 @@ export const AllSettingSchema = z.object({
   subRoutingRules: z.string(),
   subShowIdentityOnAllLinks: z.boolean(),
   subSupportUrl: z.string(),
+  subTelegramLocalEnable: z.boolean(),
+  subTelegramRemoteEnable: z.boolean(),
+  subTelegramWebEnable: z.boolean(),
   subThemeDir: z.string(),
   subTitle: z.string(),
   subTrafficDepletedTemplate: z.string(),
@@ -327,6 +330,9 @@ export const AllSettingViewSchema = z.object({
   subRoutingRules: z.string(),
   subShowIdentityOnAllLinks: z.boolean(),
   subSupportUrl: z.string(),
+  subTelegramLocalEnable: z.boolean(),
+  subTelegramRemoteEnable: z.boolean(),
+  subTelegramWebEnable: z.boolean(),
   subThemeDir: z.string(),
   subTitle: z.string(),
   subTrafficDepletedTemplate: z.string(),
@@ -1105,6 +1111,13 @@ export const RealityScanResultSchema = z.object({
   x25519: z.boolean(),
 });
 export type RealityScanResult = z.infer<typeof RealityScanResultSchema>;
+
+export const RemoteTelegramProxySchema = z.object({
+  nodeId: z.number().int(),
+  nodeName: z.string(),
+  profile: z.lazy(() => TelegramProxyProfileSchema),
+});
+export type RemoteTelegramProxy = z.infer<typeof RemoteTelegramProxySchema>;
 
 export const RoutingPresetDetailSchema = z.object({
   createdAt: z.number().int(),

@@ -44,6 +44,8 @@ export type MtprotoClient = z.infer<typeof MtprotoClientSchema>;
 // Xray/Sing-box, so they have no stream settings. Settings below map to native
 // Telemt listener/network/access options or to the optional selected-core egress bridge.
 export const MtprotoInboundSettingsSchema = z.object({
+  showOnParent: z.boolean().optional(),
+  showInSubscription: z.boolean().optional(),
   // One MTProto protocol, with a separately provisioned HTTPS WEB transport.
   webProxy: z
     .object({

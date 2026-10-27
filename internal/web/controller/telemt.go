@@ -22,6 +22,8 @@ type TelemtController struct {
 func NewTelemtController(g *gin.RouterGroup, settingService service.SettingService) *TelemtController {
 	a := &TelemtController{settingService: settingService}
 	g.GET("/status", a.status)
+	g.GET("/published", a.publishedProxies)
+	g.GET("/remote-proxies", a.remoteProxies)
 	g.GET("/subscription/:subid", a.subscriptionProfile)
 	g.POST("/install", a.install)
 	// Only discovery and installation are available before the binary exists.
@@ -368,4 +370,16 @@ func (a *TelemtController) subscriptionProfile(c *gin.Context) {
 	defer cancel()
 	profile, err := a.service.SubscriptionProxyView(ctx, c.Param("subid"), publicHostFromRequest(c))
 	jsonObj(c, profile, err)
+}
+
+func (a *TelemtController) publishedProxies(c *gin.Context) {
+	c.Header("Cache-Control", "private, no-store")
+	profiles, err := (&service.InboundService{}).PublishedTelegramProxies(c.Request.Context(), publicHostFromRequest(c))
+	jsonObj(c, profiles, err)
+}
+
+func (a *TelemtController) remoteProxies(c *gin.Context) {
+	c.Header("Cache-Control", "private, no-store")
+	profiles, err := service.RemoteTelegramProxies(c.Request.Context())
+	jsonObj(c, profiles, err)
 }

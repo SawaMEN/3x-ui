@@ -18,3 +18,13 @@ func (r *Remote) FetchTelegramSubscription(ctx context.Context, subID string) (c
 	err = json.Unmarshal(response.Obj, &result)
 	return result, err
 }
+
+func (r *Remote) FetchPublishedTelegramProxies(ctx context.Context) ([]coremodel.TelegramProxyProfile, error) {
+	response, err := r.do(ctx, http.MethodGet, "/panel/api/telemt/published", nil)
+	if err != nil {
+		return nil, err
+	}
+	var result []coremodel.TelegramProxyProfile
+	err = json.Unmarshal(response.Obj, &result)
+	return result, err
+}

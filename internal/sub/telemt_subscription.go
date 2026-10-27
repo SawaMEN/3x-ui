@@ -3,8 +3,6 @@ package sub
 import (
 	"context"
 	"net/http"
-	"net/url"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -75,11 +73,22 @@ func serveTelemtSubscription(c *gin.Context) {
 		c.Status(http.StatusInternalServerError)
 		return
 	}
+	visibility, err := settings.GetTelegramPageVisibility()
+	if err != nil {
+		c.Status(http.StatusInternalServerError)
+		return
+	}
 	remoteProfiles := make(chan []telemtSubscriptionPayload, 1)
-	go func() { remoteProfiles <- remoteTelegramSubscriptions(ctx, subID) }()
+	go func() {
+		if visibility.Remote {
+			remoteProfiles <- remoteTelegramSubscriptions(ctx, subID)
+		} else {
+			remoteProfiles <- nil
+		}
+	}()
 	telemt := service.TelemtService{}
 	payload := telemtSubscriptionPayload{}
-	if featureEnabled && telemt.IsEnabled() {
+	if visibility.Local && featureEnabled && telemt.IsEnabled() {
 		// Existing subscriptions may predate eager Telemt provisioning; ensure the
 		// local profile idempotently without starting a stopped service.
 		if personal, err := telemt.EnsureSubscriptionProxyContext(ctx, subID, host); err == nil {
@@ -101,7 +110,7 @@ func serveTelemtSubscription(c *gin.Context) {
 	seen := make(map[string]bool)
 	add := func(link, name string) {
 		profile, ok := telegramProfileFromLink(link, name)
-		if ok && !seen[profile.Link] {
+		if ok && (visibility.Web || !strings.HasPrefix(profile.Link, "tg://webproxy")) && !seen[profile.Link] {
 			seen[profile.Link] = true
 			payload.Proxies = append(payload.Proxies, profile)
 		}
@@ -126,21 +135,7 @@ func serveTelemtSubscription(c *gin.Context) {
 }
 
 func telegramProfileFromLink(link, name string) (telemtSubscriptionProfile, bool) {
-	u, err := url.Parse(link)
-	if err != nil {
-		return telemtSubscriptionProfile{}, false
-	}
-	web := u.Scheme == "tg" && u.Host == "webproxy"
-	proxy := u.Scheme == "tg" && u.Host == "proxy"
-	if !web && !proxy {
-		return telemtSubscriptionProfile{}, false
-	}
-	q := u.Query()
-	port, _ := strconv.Atoi(q.Get("port"))
-	if q.Get("server") == "" || q.Get("secret") == "" || (proxy && (port < 1 || port > 65535)) {
-		return telemtSubscriptionProfile{}, false
-	}
-	return telemtSubscriptionProfile{Name: name, Host: q.Get("server"), Port: port, TLS: strings.HasPrefix(q.Get("secret"), "ee"), Link: link}, true
+	return coremodel.ParseTelegramProxyLink(link, name)
 }
 
 // Node requests share one deadline and a small worker pool; an offline node

@@ -10,6 +10,14 @@ _openapi:
       title: Return Telemt installation, service, version, update, and MEKO status.
       url: '#return-telemt-installation-service-version-update-and-meko-status'
     - depth: 2
+      title: List local MTProto profiles allowed to appear on a parent panel. Admin
+        and node-sync authentication only.
+      url: '#list-local-mtproto-profiles-allowed-to-appear-on-a-parent-panel-admin-and-node-sync-authentication-only'
+    - depth: 2
+      title: List Telegram profiles published by enabled remote nodes. Available
+        without a local Telemt installation.
+      url: '#list-telegram-profiles-published-by-enabled-remote-nodes-available-without-a-local-telemt-installation'
+    - depth: 2
       title: Return existing Telegram proxy profiles for one subscription on this
         node. Requires admin, node-sync or node-admin authentication; does not
         create users.
@@ -49,6 +57,12 @@ _openapi:
     headings:
       - content: Return Telemt installation, service, version, update, and MEKO status.
         id: return-telemt-installation-service-version-update-and-meko-status
+      - content: List local MTProto profiles allowed to appear on a parent panel. Admin
+          and node-sync authentication only.
+        id: list-local-mtproto-profiles-allowed-to-appear-on-a-parent-panel-admin-and-node-sync-authentication-only
+      - content: List Telegram profiles published by enabled remote nodes. Available
+          without a local Telemt installation.
+        id: list-telegram-profiles-published-by-enabled-remote-nodes-available-without-a-local-telemt-installation
       - content: Return existing Telegram proxy profiles for one subscription on this
           node. Requires admin, node-sync or node-admin authentication; does not
           create users.
@@ -85,7 +99,7 @@ export default function Layout(props) {
   return (
     <>
       {props.children}
-      <OpenAPIPage document="./public/openapi.json" webhooks={[]} operations={[{"path":"/panel/api/telemt/status","method":"get"},{"path":"/panel/api/telemt/subscription/{subid}","method":"get"},{"path":"/panel/api/telemt/install","method":"post"},{"path":"/panel/api/telemt/remove","method":"post"},{"path":"/panel/api/telemt/config","method":"get"},{"path":"/panel/api/telemt/config","method":"post"},{"path":"/panel/api/telemt/proxy","method":"get"},{"path":"/panel/api/telemt/proxy","method":"post"},{"path":"/panel/api/telemt/proxy/{name}","method":"delete"},{"path":"/panel/api/telemt/connections","method":"get"},{"path":"/panel/api/telemt/action","method":"post"}]} showTitle />
+      <OpenAPIPage document="./public/openapi.json" webhooks={[]} operations={[{"path":"/panel/api/telemt/status","method":"get"},{"path":"/panel/api/telemt/published","method":"get"},{"path":"/panel/api/telemt/remote-proxies","method":"get"},{"path":"/panel/api/telemt/subscription/{subid}","method":"get"},{"path":"/panel/api/telemt/install","method":"post"},{"path":"/panel/api/telemt/remove","method":"post"},{"path":"/panel/api/telemt/config","method":"get"},{"path":"/panel/api/telemt/config","method":"post"},{"path":"/panel/api/telemt/proxy","method":"get"},{"path":"/panel/api/telemt/proxy","method":"post"},{"path":"/panel/api/telemt/proxy/{name}","method":"delete"},{"path":"/panel/api/telemt/connections","method":"get"},{"path":"/panel/api/telemt/action","method":"post"}]} showTitle />
     </>
   );
 }

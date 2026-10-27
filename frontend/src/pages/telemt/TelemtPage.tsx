@@ -41,6 +41,7 @@ import {
   TelemtWebProxyRequestSchema,
 } from '@/schemas/telemt-web';
 import TelemtSubscriptionToggle from './TelemtSubscriptionToggle';
+import RemoteTelegramProxies from './RemoteTelegramProxies';
 import TelemtWebSiteFields from './TelemtWebSiteFields';
 import { TelemtWebSiteSchema, type TelemtWebSite } from '@/schemas/telemt-web';
 import TelemtWebGuide, { telemtWebFieldHelp } from './TelemtWebGuide';
@@ -260,7 +261,10 @@ export default function TelemtPage() {
 
   const loadStatus = useCallback(async () => {
     const r = await HttpUtil.get<Status>('/panel/api/telemt/status');
-    if (r?.success && r.obj) setStatus(r.obj);
+    if (r?.success && r.obj) {
+      setStatus(r.obj);
+      return r.obj;
+    }
   }, []);
 
   const loadConfig = useCallback(async () => {
@@ -283,7 +287,9 @@ export default function TelemtPage() {
   const refreshAll = useCallback(async () => {
     setRefreshing(true);
     try {
-      await Promise.all([loadStatus(), loadConfig(), loadProxies()]);
+      const current = await loadStatus();
+      if (current?.installed) await Promise.all([loadConfig(), loadProxies()]);
+      else setProxies([]);
     } finally {
       setRefreshing(false);
     }
@@ -449,6 +455,8 @@ export default function TelemtPage() {
             </Button>
           </Space>
         </div>
+
+        <RemoteTelegramProxies />
 
         {!status.installed && (
           <Alert

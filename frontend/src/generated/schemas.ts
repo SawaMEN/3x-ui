@@ -443,6 +443,15 @@ export const SCHEMAS: Record<string, unknown> = {
       "subSupportUrl": {
         "type": "string"
       },
+      "subTelegramLocalEnable": {
+        "type": "boolean"
+      },
+      "subTelegramRemoteEnable": {
+        "type": "boolean"
+      },
+      "subTelegramWebEnable": {
+        "type": "boolean"
+      },
       "subThemeDir": {
         "type": "string"
       },
@@ -665,6 +674,9 @@ export const SCHEMAS: Record<string, unknown> = {
       "subRoutingRules",
       "subShowIdentityOnAllLinks",
       "subSupportUrl",
+      "subTelegramLocalEnable",
+      "subTelegramRemoteEnable",
+      "subTelegramWebEnable",
       "subThemeDir",
       "subTitle",
       "subTrafficDepletedTemplate",
@@ -1118,6 +1130,15 @@ export const SCHEMAS: Record<string, unknown> = {
       "subSupportUrl": {
         "type": "string"
       },
+      "subTelegramLocalEnable": {
+        "type": "boolean"
+      },
+      "subTelegramRemoteEnable": {
+        "type": "boolean"
+      },
+      "subTelegramWebEnable": {
+        "type": "boolean"
+      },
       "subThemeDir": {
         "type": "string"
       },
@@ -1347,6 +1368,9 @@ export const SCHEMAS: Record<string, unknown> = {
       "subRoutingRules",
       "subShowIdentityOnAllLinks",
       "subSupportUrl",
+      "subTelegramLocalEnable",
+      "subTelegramRemoteEnable",
+      "subTelegramWebEnable",
       "subThemeDir",
       "subTitle",
       "subTrafficDepletedTemplate",
@@ -4590,6 +4614,25 @@ export const SCHEMAS: Record<string, unknown> = {
       "tls13",
       "tlsVersion",
       "x25519"
+    ],
+    "type": "object"
+  },
+  "RemoteTelegramProxy": {
+    "properties": {
+      "nodeId": {
+        "type": "integer"
+      },
+      "nodeName": {
+        "type": "string"
+      },
+      "profile": {
+        "$ref": "#/components/schemas/TelegramProxyProfile"
+      }
+    },
+    "required": [
+      "nodeId",
+      "nodeName",
+      "profile"
     ],
     "type": "object"
   },

@@ -962,7 +962,11 @@
         "echKeyHint": "Only for direct connections — leave empty when the inbound sits behind a CDN.",
         "maxVersion": "Max version",
         "headerName": "Header name",
-        "headerValue": "Header value"
+        "headerValue": "Header value",
+        "telemtShowOnParent": "Show on parent node",
+        "telemtShowOnParentHint": "Allow the parent panel to display this MTProto inbound in Telegram Proxy. Turning this off also hides it from parent subscriptions.",
+        "telemtShowInSubscription": "Show in subscriptions",
+        "telemtShowInSubscriptionHint": "Include the Telegram link only in subscriptions belonging to clients of this inbound. Parent-panel publication is controlled separately."
       },
       "info": {
         "mode": "Mode",
@@ -2341,7 +2345,13 @@
       "subHostSortMode": "Subscription Node Ordering",
       "subHostSortInbound": "Inbound order (default)",
       "subHostSortHosts": "Hosts order",
-      "subHostSortModeDesc": "Hosts order follows the Hosts page across inbounds. This controls the order emitted by the server; client apps may apply their own sorting."
+      "subHostSortModeDesc": "Hosts order follows the Hosts page across inbounds. This controls the order emitted by the server; client apps may apply their own sorting.",
+      "subTelegramLocalEnable": "Local Telegram proxies on subscription page",
+      "subTelegramLocalEnableDesc": "Show this panel’s Telegram proxies on the subscription web page.",
+      "subTelegramRemoteEnable": "Remote-node Telegram proxies on subscription page",
+      "subTelegramRemoteEnableDesc": "Show subscriber-specific remote proxies permitted for publication. When disabled, this page does not query remote nodes.",
+      "subTelegramWebEnable": "WEB proxies on subscription page",
+      "subTelegramWebEnableDesc": "Show Telegram WEB proxies from the local panel and permitted remote nodes."
     },
     "xray": {
       "restartSuccess": "Xray has been successfully relaunched.",
@@ -2971,6 +2981,13 @@
       "sourceDisk": "Actual file",
       "sourceGenerated": "Generated",
       "actualTitle": "Actual sing-box configuration"
+    },
+    "telemt": {
+      "remoteTitle": "Remote-node Telegram proxies",
+      "remoteRefresh": "Refresh remote proxies",
+      "remoteHint": "Enabled MTProto inbounds whose nodes allow “Show on parent node” appear here. A local Telemt installation is not required.",
+      "remoteError": "Unable to refresh remote proxies.",
+      "remoteEmpty": "No published proxies. Enable publication in the MTProto inbound settings on the remote node."
     }
   },
   "tgbot": {
