@@ -172,10 +172,10 @@ func TestClientSpeedLimitLiveCore(t *testing.T) {
 	defer u.Close()
 	_ = u.SetDeadline(time.Now().Add(10 * time.Second))
 	targetPort := udp.LocalAddr().(*net.UDPAddr).Port
-	packet := append([]byte{0, 0, 0, 1, 127, 0, 0, 1, byte(targetPort >> 8), byte(targetPort)}, bytes.Repeat([]byte{'u'}, 16384)...)
+	packet := append([]byte{0, 0, 0, 1, 127, 0, 0, 1, byte(targetPort >> 8), byte(targetPort)}, bytes.Repeat([]byte{'u'}, 4096)...)
 	started := time.Now()
 	buf := make([]byte, 65536)
-	for range 16 {
+	for range 64 {
 		if _, err = u.Write(packet); err != nil {
 			t.Fatal(err)
 		}
@@ -183,12 +183,45 @@ func TestClientSpeedLimitLiveCore(t *testing.T) {
 		if e != nil {
 			t.Fatal(e)
 		}
-		if !bytes.Equal(buf[:n], packet) {
-			t.Fatal("live UDP payload changed")
+		source, sourcePort, payload := speedUDPReply(t, buf[:n])
+		if !source.Equal(net.IPv4(127, 0, 0, 1)) || sourcePort != targetPort || !bytes.Equal(payload, packet[10:]) {
+			t.Fatalf("live UDP mismatch: source=%v:%d expected=127.0.0.1:%d payload=%d expected=%d header=%x", source, sourcePort, targetPort, len(payload), len(packet)-10, buf[:min(n, 24)])
 		}
 	}
 	t.Logf("alice: 256 KiB UDP round trip in %v", time.Since(started))
 	if time.Since(started) < 1400*time.Millisecond {
 		t.Fatal("real UDP associations bypassed cap")
 	}
+}
+
+// A SOCKS reply may encode an IPv4 source as IPv4-mapped IPv6.
+func speedUDPReply(t *testing.T, packet []byte) (net.IP, int, []byte) {
+	t.Helper()
+	if len(packet) < 4 || packet[0] != 0 || packet[1] != 0 || packet[2] != 0 {
+		t.Fatalf("invalid UDP reply header: %x", packet[:min(len(packet), 24)])
+	}
+	start, size := 4, 0
+	switch packet[3] {
+	case 1:
+		size = 4
+	case 4:
+		size = 16
+	case 3:
+		if len(packet) < 5 {
+			t.Fatal("truncated UDP reply domain length")
+		}
+		start = 5
+		size = int(packet[4])
+	default:
+		t.Fatalf("invalid UDP reply address type %d", packet[3])
+	}
+	end := start + size
+	if len(packet) < end+2 {
+		t.Fatal("truncated UDP reply address")
+	}
+	ip := net.IP(packet[start:end])
+	if packet[3] == 3 {
+		ip = net.ParseIP(string(packet[start:end]))
+	}
+	return ip, int(packet[end])<<8 | int(packet[end+1]), packet[end+2:]
 }

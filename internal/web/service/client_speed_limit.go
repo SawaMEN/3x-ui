@@ -124,7 +124,7 @@ func injectClientSpeedLimits(cfg *singbox.Config, clients map[int][]model.Client
 		id := fmt.Sprintf("%s%d_%d_%d", clientlimit.InternalPrefix, len(routes), limit.UploadMbps, limit.DownloadMbps)
 		routes[key] = id
 		cfg.SpeedLimitPlan.Routes = append(cfg.SpeedLimitPlan.Routes, clientlimit.Route{ID: id, Email: email, UploadMbps: limit.UploadMbps, DownloadMbps: limit.DownloadMbps})
-		cfg.Outbounds = append(cfg.Outbounds, map[string]any{"type": "socks", "tag": id, "server": "127.0.0.1", "server_port": clientlimit.ListenPort, "version": "5", "username": id, "password": clientlimit.Default.Password()})
+		cfg.Outbounds = append(cfg.Outbounds, map[string]any{"type": "socks", "tag": id, "server": "127.0.0.1", "server_port": clientlimit.ListenPort, "version": "5", "udp_over_tcp": map[string]any{"enabled": true, "version": 2}, "username": id, "password": clientlimit.Default.Password()})
 		accounts = append(accounts, map[string]any{"username": id, "password": clientlimit.Default.Password()})
 		returns = append(returns, map[string]any{"inbound": []string{bridgeTag}, "auth_user": []string{id}, "action": "route", "outbound": target})
 		return id, nil
