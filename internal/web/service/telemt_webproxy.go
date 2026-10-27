@@ -691,8 +691,8 @@ func writeTelemtWebNginxConfig(state TelemtWebProxyState) error {
 	if state.CertFile == "" || state.KeyFile == "" {
 		return errors.New("WEB Proxy certificate is not configured")
 	}
-	if !telemtWebCertificatePairReady(state.CertFile, state.KeyFile, state.Domain) {
-		return fmt.Errorf("certificate does not cover domain %s", state.Domain)
+	if !telemtWebCertificateCoversHosts(state.CertFile, state.KeyFile, telemtWebHosts(state)) {
+		return errors.New("WEB certificate does not cover all configured domains")
 	}
 	listen := "listen 443 ssl;"
 	if host, _, err := net.SplitHostPort(state.PublicAddr); err == nil && net.ParseIP(host) != nil && net.ParseIP(host).To4() == nil {
@@ -702,7 +702,7 @@ func writeTelemtWebNginxConfig(state TelemtWebProxyState) error {
 	if err != nil {
 		return err
 	}
-	config := fmt.Sprintf("map $http_upgrade $xui_telemt_connection_upgrade {\n    default upgrade;\n    ''      '';\n}\n\nupstream xui_telemt_web {\n    server %s:%d;\n    keepalive 64;\n}\n\nserver {\n    %s\n    server_name %s;\n    access_log off;\n\n    ssl_certificate %s;\n    ssl_certificate_key %s;\n    ssl_protocols TLSv1.2 TLSv1.3;\n    client_max_body_size 2m;\n\n%s    location / {\n        proxy_pass http://xui_telemt_web;\n        proxy_http_version 1.1;\n        proxy_set_header Host $host;\n        proxy_set_header X-Forwarded-For $remote_addr;\n        proxy_set_header Upgrade $http_upgrade;\n        proxy_set_header Connection $xui_telemt_connection_upgrade;\n        proxy_connect_timeout 5s;\n        proxy_read_timeout 65s;\n        proxy_send_timeout 65s;\n        proxy_request_buffering off;\n        proxy_buffering off;\n        proxy_next_upstream off;\n    }\n}\n", telemtWebListenIP, state.ListenPort, listen, state.Domain, state.CertFile, state.KeyFile, locations)
+	config := fmt.Sprintf("map $http_upgrade $xui_telemt_connection_upgrade {\n    default upgrade;\n    ''      '';\n}\n\nupstream xui_telemt_web {\n    server %s:%d;\n    keepalive 64;\n}\n\nserver {\n    %s\n    server_name %s;\n    access_log off;\n\n    ssl_certificate %s;\n    ssl_certificate_key %s;\n    ssl_protocols TLSv1.2 TLSv1.3;\n    client_max_body_size 2m;\n\n%s    location / {\n        proxy_pass http://xui_telemt_web;\n        proxy_http_version 1.1;\n        proxy_set_header Host $host;\n        proxy_set_header X-Forwarded-For $remote_addr;\n        proxy_set_header Upgrade $http_upgrade;\n        proxy_set_header Connection $xui_telemt_connection_upgrade;\n        proxy_connect_timeout 5s;\n        proxy_read_timeout 65s;\n        proxy_send_timeout 65s;\n        proxy_request_buffering off;\n        proxy_buffering off;\n        proxy_next_upstream off;\n    }\n}\n", telemtWebListenIP, state.ListenPort, listen, strings.Join(telemtWebHosts(state), " "), state.CertFile, state.KeyFile, locations)
 	if err := os.MkdirAll(filepath.Dir(telemtWebNginxConf), 0o755); err != nil {
 		return err
 	}
