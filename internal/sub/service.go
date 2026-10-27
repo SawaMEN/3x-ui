@@ -6,6 +6,15 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"maps"
+	"net"
+	"net/url"
+	"slices"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
@@ -18,21 +27,12 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 
-	"maps"
-	"net"
-	"net/url"
-	"slices"
-	"sort"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
+	"github.com/gin-gonic/gin"
+	"github.com/goccy/go-json"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/util/random"
 	wgutil "github.com/SawaMEN/3x-ui/v3/internal/util/wireguard"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
-	"github.com/gin-gonic/gin"
-	"github.com/goccy/go-json"
 )
 
 const salamanderWarningCacheSize = 2048
@@ -598,6 +598,13 @@ func (s *SubService) getSubs(subId string) ([]string, []string, int64, coremodel
 		return nil, nil, 0, traffic, nil
 	}
 
+	visibility := service.TelegramPageVisibility{Local: true, Remote: true, Web: true}
+	if !s.subscriptionBody {
+		visibility, err = s.settingService.GetTelegramPageVisibility()
+		if err != nil {
+			return nil, nil, 0, traffic, err
+		}
+	}
 	seenEmails := make(map[string]struct{})
 	for _, inbound := range inbounds {
 		clients := s.matchingClients(inbound, subId)
@@ -614,6 +621,14 @@ func (s *SubService) getSubs(subId string) ([]string, []string, int64, coremodel
 		for _, client := range clients {
 			if client.Enable {
 				hasEnabledClient = true
+			}
+			if !telegramInboundOnPage(inbound, visibility) {
+				emails = append(emails, client.Email)
+				seenEmails[client.Email] = struct{}{}
+				if result == nil {
+					result = []string{}
+				}
+				continue
 			}
 			var link string
 			if s.hostsFirst {
@@ -669,6 +684,13 @@ func (s *SubService) getSubs(subId string) ([]string, []string, int64, coremodel
 		}
 		for _, el := range expandEntry(ext) {
 			if link := applyRemarkToLink(el.Link, el.Name); link != "" {
+				if !s.subscriptionBody && !telegramLinkOnPage(link, visibility) {
+					seenEmails[ext.Email] = struct{}{}
+					if result == nil {
+						result = []string{}
+					}
+					continue
+				}
 				result = append(result, link)
 				emails = append(emails, ext.Email)
 				seenEmails[ext.Email] = struct{}{}

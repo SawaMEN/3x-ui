@@ -33,6 +33,24 @@ export default function MtprotoFields() {
   return (
     <>
       <FormField
+        name={['settings', 'showOnParent']}
+        label={t('pages.inbounds.form.telemtShowOnParent')}
+        extra={t('pages.inbounds.form.telemtShowOnParentHint')}
+        valueProp="checked"
+        transform={{ input: (value) => value ?? true }}
+      >
+        <Switch />
+      </FormField>
+      <FormField
+        name={['settings', 'showInSubscription']}
+        label={t('pages.inbounds.form.telemtShowInSubscription')}
+        extra={t('pages.inbounds.form.telemtShowInSubscriptionHint')}
+        valueProp="checked"
+        transform={{ input: (value) => value ?? true }}
+      >
+        <Switch />
+      </FormField>
+      <FormField
         name={['settings', 'webProxy', 'enabled']}
         label={`${t('menu.telemt')} · WEB Proxy (HTTPS)`}
         tooltip={

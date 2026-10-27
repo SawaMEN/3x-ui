@@ -98,6 +98,21 @@ func TestTelegramSubscriptionIncludesRemoteProfilesWithoutLocalTelemt(t *testing
 	if unknown.Code != http.StatusNotFound || calls.Load() != 1 {
 		t.Fatalf("unknown subscription reached nodes: status=%d calls=%d", unknown.Code, calls.Load())
 	}
+	if err := db.Where("key = ?", "subTelegramRemoteEnable").Assign(model.Setting{Value: "false"}).FirstOrCreate(&model.Setting{Key: "subTelegramRemoteEnable"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	response = httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "http://sub.example/sub/telemt/"+subID, nil))
+	if calls.Load() != 1 {
+		t.Fatal("remote page toggle still queried nodes")
+	}
+	payload.Proxies = nil
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.Enabled || len(payload.Proxies) != 0 {
+		t.Fatalf("remote page toggle leaked mirrored links: %s", response.Body.String())
+	}
 	if err := db.Model(node).Update("enable", false).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -130,5 +145,95 @@ func TestTelegramSubscriptionNodeDeadline(t *testing.T) {
 		if len(result.Proxies) != 0 {
 			t.Fatalf("slow node returned credentials: %+v", result)
 		}
+	}
+}
+
+func TestTelegramPublicationAndPageVisibility(t *testing.T) {
+	initSubDB(t)
+	db := database.GetDB()
+	client := &model.ClientRecord{Email: "visibility@example.com", SubID: "visibility-sub", Enable: true, Secret: mtprotoTestSecret}
+	if err := db.Create(client).Error; err != nil {
+		t.Fatal(err)
+	}
+	nodeID := 99
+	inbound := &model.Inbound{Tag: "visible-telegram", Enable: true, NodeID: &nodeID, Protocol: model.MTProto, Port: 8443, ShareAddrStrategy: "custom", ShareAddr: "node.example", Settings: `{}`}
+	if err := db.Create(inbound).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.ClientInbound{ClientId: client.Id, InboundId: inbound.Id}).Error; err != nil {
+		t.Fatal(err)
+	}
+	page := func() []string {
+		t.Helper()
+		request := NewSubService("").ForRequest("parent.example")
+		request.subscriptionBody = false
+		links, emails, _, _, err := request.getSubs(client.SubID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(emails) != 1 || emails[0] != client.Email {
+			t.Fatalf("visibility lost subscription identity: %v", emails)
+		}
+		return links
+	}
+	if links := page(); len(links) != 1 {
+		t.Fatalf("legacy inbound should remain visible: %v", links)
+	}
+	if err := db.Model(inbound).Update("settings", `{"showOnParent":false}`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if links := page(); len(links) != 0 {
+		t.Fatalf("hidden parent inbound exposed: %v", links)
+	}
+	request := NewSubService("").ForRequest("parent.example")
+	request.subscriptionBody = true
+	raw, _, _, _, err := request.getSubs(client.SubID)
+	if err != nil || len(raw) != 0 {
+		t.Fatalf("parent publication bypass through raw links: %v %v", raw, err)
+	}
+	if err := db.Model(inbound).Update("settings", `{"showOnParent":true}`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Where("key = ?", "subTelegramRemoteEnable").Assign(model.Setting{Value: "false"}).FirstOrCreate(&model.Setting{Key: "subTelegramRemoteEnable"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if links := page(); len(links) != 0 {
+		t.Fatalf("remote page toggle ignored: %v", links)
+	}
+	request = NewSubService("").ForRequest("parent.example")
+	request.subscriptionBody = true
+	raw, _, _, _, err = request.getSubs(client.SubID)
+	if err != nil || len(raw) != 1 {
+		t.Fatalf("page-only toggle changed raw subscription: %v %v", raw, err)
+	}
+	if err := db.Model(inbound).Update("node_id", nil).Error; err != nil {
+		t.Fatal(err)
+	}
+	if links := page(); len(links) != 1 {
+		t.Fatalf("remote toggle hid local proxy: %v", links)
+	}
+	if err := db.Where("key = ?", "subTelegramLocalEnable").Assign(model.Setting{Value: "false"}).FirstOrCreate(&model.Setting{Key: "subTelegramLocalEnable"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if links := page(); len(links) != 0 {
+		t.Fatalf("local page toggle ignored: %v", links)
+	}
+	if err := db.Model(&model.Setting{}).Where("key = ?", "subTelegramLocalEnable").Update("value", "true").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(inbound).Update("settings", `{"showInSubscription":false}`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if links := page(); len(links) != 0 {
+		t.Fatalf("inbound subscription toggle ignored: %v", links)
+	}
+	if err := db.Model(inbound).Update("settings", `{"webProxy":{"enabled":true,"domain":"web.example"}}`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Where("key = ?", "subTelegramWebEnable").Assign(model.Setting{Value: "false"}).FirstOrCreate(&model.Setting{Key: "subTelegramWebEnable"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if links := page(); len(links) != 0 {
+		t.Fatalf("WEB toggle ignored: %v", links)
 	}
 }

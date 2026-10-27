@@ -38,6 +38,9 @@ export const AllSettingSchema = z
     webKeyFile: z.string().optional(),
     rootRedirectEnable: z.boolean().optional(),
     rootRedirectURL: z.string().optional(),
+    subTelegramLocalEnable: z.boolean().optional(),
+    subTelegramRemoteEnable: z.boolean().optional(),
+    subTelegramWebEnable: z.boolean().optional(),
     subAppearanceTheme: z
       .preprocess((value) => (value === 'whitemax' ? 'luna' : value), SubscriptionThemeSchema)
       .optional(),

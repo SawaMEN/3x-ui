@@ -15,6 +15,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
@@ -28,8 +31,6 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/web/entity"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray/dnsconf"
-	"github.com/google/uuid"
-	"gorm.io/gorm"
 )
 
 //go:embed config.json
@@ -61,6 +62,9 @@ var defaultValueMap = map[string]string{
 
 	"rootRedirectEnable":       "false",
 	"rootRedirectURL":          "https://www.wikipedia.org/",
+	"subTelegramLocalEnable":   "true",
+	"subTelegramRemoteEnable":  "true",
+	"subTelegramWebEnable":     "true",
 	"subAppearanceTheme":       "classic",
 	"subAppearanceEnable":      "false",
 	"subAppearanceTitle":       "",

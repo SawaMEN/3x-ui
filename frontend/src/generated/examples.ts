@@ -137,6 +137,9 @@ export const EXAMPLES: Record<string, unknown> = {
     "subRoutingRules": "",
     "subShowIdentityOnAllLinks": false,
     "subSupportUrl": "",
+    "subTelegramLocalEnable": false,
+    "subTelegramRemoteEnable": false,
+    "subTelegramWebEnable": false,
     "subThemeDir": "",
     "subTitle": "",
     "subTrafficDepletedTemplate": "",
@@ -299,6 +302,9 @@ export const EXAMPLES: Record<string, unknown> = {
     "subRoutingRules": "",
     "subShowIdentityOnAllLinks": false,
     "subSupportUrl": "",
+    "subTelegramLocalEnable": false,
+    "subTelegramRemoteEnable": false,
+    "subTelegramWebEnable": false,
     "subThemeDir": "",
     "subTitle": "",
     "subTrafficDepletedTemplate": "",
@@ -1200,6 +1206,17 @@ export const EXAMPLES: Record<string, unknown> = {
     "tls13": true,
     "tlsVersion": "1.3",
     "x25519": true
+  },
+  "RemoteTelegramProxy": {
+    "nodeId": 0,
+    "nodeName": "",
+    "profile": {
+      "host": "",
+      "link": "",
+      "name": "",
+      "port": 0,
+      "tls": false
+    }
   },
   "RoutingPresetDetail": {
     "createdAt": 0,

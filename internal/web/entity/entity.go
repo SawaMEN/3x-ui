@@ -30,6 +30,9 @@ type AllSetting struct {
 	WebKeyFile               string `json:"webKeyFile" form:"webKeyFile"`
 	RootRedirectEnable       bool   `json:"rootRedirectEnable" form:"rootRedirectEnable"`
 	RootRedirectURL          string `json:"rootRedirectURL" form:"rootRedirectURL"`
+	SubTelegramLocalEnable   bool   `json:"subTelegramLocalEnable" form:"subTelegramLocalEnable"`
+	SubTelegramRemoteEnable  bool   `json:"subTelegramRemoteEnable" form:"subTelegramRemoteEnable"`
+	SubTelegramWebEnable     bool   `json:"subTelegramWebEnable" form:"subTelegramWebEnable"`
 	SubAppearanceTheme       string `json:"subAppearanceTheme" form:"subAppearanceTheme"`
 	SubAppearanceEnable      bool   `json:"subAppearanceEnable" form:"subAppearanceEnable"`
 	SubAppearanceTitle       string `json:"subAppearanceTitle" form:"subAppearanceTitle"`

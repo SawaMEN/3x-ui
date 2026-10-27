@@ -413,6 +413,27 @@ export default function SubscriptionGeneralTab({
                   metadataOnly
                 />
               </SettingListItem>
+
+              {(
+                [
+                  'subTelegramLocalEnable',
+                  'subTelegramRemoteEnable',
+                  'subTelegramWebEnable',
+                ] as const
+              ).map((key) => (
+                <SettingListItem
+                  key={key}
+                  paddings="small"
+                  title={t(`pages.settings.${key}`)}
+                  description={t(`pages.settings.${key}Desc`)}
+                >
+                  <Switch
+                    aria-label={t(`pages.settings.${key}`)}
+                    checked={allSetting[key]}
+                    onChange={(value) => updateSetting({ [key]: value })}
+                  />
+                </SettingListItem>
+              ))}
               <SettingListItem paddings="small" title={t('pages.settings.subAppearanceTheme')}>
                 <Select
                   id="sub-appearance-theme"

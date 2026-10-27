@@ -10,6 +10,9 @@ export class AllSetting {
   webKeyFile = '';
   rootRedirectEnable = false;
   rootRedirectURL = 'https://www.wikipedia.org/';
+  subTelegramLocalEnable = true;
+  subTelegramRemoteEnable = true;
+  subTelegramWebEnable = true;
   subAppearanceTheme: SubscriptionTheme = 'classic';
   subAppearanceEnable = false;
   subAppearanceTitle = '';

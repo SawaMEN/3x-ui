@@ -86,6 +86,7 @@ func run(root, outDir string) error {
 				"ClientTraffic",
 				"TelegramProxyProfile",
 				"TelegramSubscription",
+				"RemoteTelegramProxy",
 				"Traffic",
 			),
 			AliasAllow: setOf(),
