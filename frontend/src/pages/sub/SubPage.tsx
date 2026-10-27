@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, Button, Card, ConfigProvider, Layout, Tabs, message } from 'antd';
 import type { TabsProps } from 'antd';
@@ -14,12 +14,9 @@ import {
 import { ClipboardManager, LanguageManager } from '@/utils';
 import { setMessageInstance } from '@/utils/messageBus';
 import { useTheme } from '@/hooks/useTheme';
-import SubAppsTab from './SubAppsTab';
-import SubConfigsTab from './SubConfigsTab';
 import SubHeader from './SubHeader';
 import SubHero from './SubHero';
 import SubLinksTab from './SubLinksTab';
-import SubTelegramTab from './SubTelegramTab';
 import { telegramProfiles } from './telegramProfiles';
 import type { TelegramSubscription } from '@/generated/types';
 import {
@@ -33,6 +30,11 @@ import './SubPage.css';
 import './SubLuna.css';
 import LunaBackdrop from './LunaBackdrop';
 import { lunaTheme } from './lunaTheme';
+
+// Keep the first (links) tab eager; load larger, less-used tabs on demand.
+const SubAppsTab = lazy(() => import('./SubAppsTab'));
+const SubConfigsTab = lazy(() => import('./SubConfigsTab'));
+const SubTelegramTab = lazy(() => import('./SubTelegramTab'));
 
 const subData = window.__SUB_PAGE_DATA__ || {};
 
@@ -173,7 +175,11 @@ export default function SubPage() {
         key: 'apps',
         icon: <AppstoreOutlined aria-hidden />,
         label: t('subscription.tabApps'),
-        children: <SubAppsTab apps={apps} initialPlatform={initialPlatform} onOpen={open} />,
+        children: (
+          <Suspense fallback={<div className="sub-muted">{t('loading')}</div>}>
+            <SubAppsTab apps={apps} initialPlatform={initialPlatform} onOpen={open} />
+          </Suspense>
+        ),
       });
     }
     const profiles = telegramProfiles(telemtData, links);
@@ -183,13 +189,15 @@ export default function SubPage() {
         icon: <ApiOutlined />,
         label: 'Telegram Proxy',
         children: (
-          <SubTelegramTab
-            profiles={profiles}
-            loading={telemtLoading}
-            error={telemtError}
-            onCopy={copy}
-            onOpen={open}
-          />
+          <Suspense fallback={<div className="sub-muted">{t('loading')}</div>}>
+            <SubTelegramTab
+              profiles={profiles}
+              loading={telemtLoading}
+              error={telemtError}
+              onCopy={copy}
+              onOpen={open}
+            />
+          </Suspense>
         ),
       });
     }
@@ -203,7 +211,11 @@ export default function SubPage() {
             <span className="sub-tab-count">{links.length}</span>
           </>
         ),
-        children: <SubConfigsTab links={links} onCopy={copy} />,
+        children: (
+          <Suspense fallback={<div className="sub-muted">{t('loading')}</div>}>
+            <SubConfigsTab links={links} onCopy={copy} />
+          </Suspense>
+        ),
       });
     }
     return items;
@@ -240,6 +252,7 @@ export default function SubPage() {
             <SubHeader
               title={subTitle}
               isDark={luna || isDark}
+              isLuna={luna}
               logoURL={appearance?.logoURL}
               sId={sId}
               email={clientEmail}
