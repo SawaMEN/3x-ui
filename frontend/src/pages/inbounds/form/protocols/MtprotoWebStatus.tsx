@@ -60,7 +60,9 @@ export default function MtprotoWebStatus() {
       ? ru
         ? 'Установите или обновите Telemt в Настройки → Обновления пакетов и ядер Linux.'
         : 'Install or update Telemt in Settings → Linux package and core updates.'
-      : status?.port443Available ? status.error : undefined);
+      : status?.port443Available
+        ? status.error
+        : undefined);
   const defaultDomain = TelemtWebProxyRequestSchema.shape.domain.safeParse(status?.defaultDomain);
   return (
     <Space orientation="vertical" style={{ width: '100%', marginBlock: 12 }}>
