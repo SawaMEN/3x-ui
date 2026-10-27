@@ -1,6 +1,7 @@
 package sub
 
 import (
+	"encoding/base64"
 	"net/url"
 	"strings"
 	"testing"
@@ -196,5 +197,33 @@ func TestGenMtprotoWEBProxyLinkUsesInboundDomainAndClientSecret(t *testing.T) {
 	}
 	if u.Query().Get("secret") != "dd"+mtprotoTestSecret[2:34] {
 		t.Fatal("WEB link did not use this inbound's per-client secret")
+	}
+}
+
+func TestGenMtprotoWEBProxyAliasesWithHiddenPath(t *testing.T) {
+	inbound := &model.Inbound{
+		Protocol: model.MTProto,
+		Settings: `{"webProxy":{"enabled":true,"domain":"web.example.com","aliases":["alt.example.com"],"basePath":"app/sync"},"clients":[{"email":"user","enable":true,"secret":"` + mtprotoTestSecret + `"}]}`,
+	}
+	links := strings.Split((&SubService{}).genMtprotoLink(inbound, "user"), "\n")
+	if len(links) != 2 {
+		t.Fatalf("expected two WEB links, got %v", links)
+	}
+	for i, link := range links {
+		u, err := url.Parse(link)
+		if err != nil {
+			t.Fatal(err)
+		}
+		host := "web.example.com"
+		if i == 1 {
+			host = "alt.example.com"
+		}
+		if got := u.Query().Get("server"); got != host+"/app/sync" {
+			t.Errorf("server %d = %q", i, got)
+		}
+		secret, err := base64.RawURLEncoding.DecodeString(u.Query().Get("secret"))
+		if err != nil || len(secret) != 18 || secret[0] != 0x70 || secret[1] != 0xdd {
+			t.Errorf("link %d has invalid WEB path secret: %v", i, err)
+		}
 	}
 }
