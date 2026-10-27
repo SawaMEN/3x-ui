@@ -653,7 +653,7 @@ export default function TelemtPage() {
                   настраиваются автоматически.
                 </Typography.Paragraph>
               )}
-              {status.webProxy.error && (
+              {!webProxyOpen && status.webProxy.error && (
                 <Alert
                   className="telemt-alert-compact"
                   type={status.webProxy.enabled ? 'warning' : 'info'}
@@ -1047,14 +1047,7 @@ export default function TelemtPage() {
                 ? 'существующий сертификат готов (проверьте выбранный домен выше)'
                 : 'автоматический выпуск при успешной проверке выше'}
             </Descriptions.Item>
-            <Descriptions.Item label="443">
-              {webPreflightCurrent?.checks.find((check) => check.id === 'https-port')?.ok
-                ? 'готов для выбранного frontend'
-                : 'см. предварительную проверку'}
-            </Descriptions.Item>
           </Descriptions>
-
-          {status.webProxy.error && <Alert type="warning" showIcon title={status.webProxy.error} />}
 
           {status.webProxy.enabled && status.webProxy.link && (
             <div>

@@ -39,7 +39,7 @@ const telemtWebDomainPatternSource = "^(?:[A-Za-z0-9]" +
 var (
 	telemtWebDomainPattern    = regexp.MustCompile(telemtWebDomainPatternSource)
 	telemtWebVersionPattern   = regexp.MustCompile(`(?i)v?([0-9]+)\.([0-9]+)\.([0-9]+)`)
-	telemtWebPortOwnerPattern = regexp.MustCompile(`users:\(\("([^"]+)"`)
+	telemtWebPortOwnerPattern = regexp.MustCompile(`\("([^"]+)",pid=\d+`)
 )
 
 type TelemtWebProxyState struct {
@@ -274,8 +274,8 @@ func (TelemtService) WebProxyStatus(defaultDomain, panelCert, panelKey string) (
 	frontend := telemtWebFrontend(state)
 	nginxOwns443 := telemtWebNginxOwnsPort443()
 	frontendActive := state.Enabled && telemtWebFrontendActive(state) && (frontend != "nginx" || nginxOwns443)
-	portOwner := telemtWebPortOwner(443)
-	status := TelemtWebProxyStatus{Site: state.Site, Frontend: frontend, FrontendActive: frontendActive, Carrier: telemtWebCarrier(state), Carriers: state.Carriers, CarrierNegotiationSupported: telemtWebVersionAtLeast(version, "3.5.4"), Enabled: state.Enabled, Supported: telemtWebVersionAtLeast(version, telemtWebMinEngine), Domain: state.Domain, DefaultDomain: defaultDomain, NginxInstalled: telemtWebCommandExists("nginx"), NginxActive: nginxActive, Port443Free: telemtWebPortAvailable(443), Port443Available: telemtWebFrontendCanOwn443(state), Port443Owner: portOwner, ListenPort: state.ListenPort, CertificateFile: state.CertFile}
+	port443, inspectionErr := inspectTelemtWebPort443(state, frontend)
+	status := TelemtWebProxyStatus{Site: state.Site, Frontend: frontend, FrontendActive: frontendActive, Carrier: telemtWebCarrier(state), Carriers: state.Carriers, CarrierNegotiationSupported: telemtWebVersionAtLeast(version, "3.5.4"), Enabled: state.Enabled, Supported: telemtWebVersionAtLeast(version, telemtWebMinEngine), Domain: state.Domain, DefaultDomain: defaultDomain, NginxInstalled: telemtWebCommandExists("nginx"), NginxActive: nginxActive, Port443Free: port443.Free, Port443Available: port443.Available, Port443Owner: port443.Owner, ListenPort: state.ListenPort, CertificateFile: state.CertFile}
 	if state.Enabled && state.Domain != "" && state.Secret != "" {
 		status.Link = telemtWebLink(state.Domain, state.Secret)
 	}
@@ -288,11 +288,17 @@ func (TelemtService) WebProxyStatus(defaultDomain, panelCert, panelKey string) (
 	if !status.Supported {
 		status.Error = fmt.Sprintf("Telemt %s does not support WEB Proxy; requires %s or newer", version, telemtWebMinEngine)
 	}
-	if !status.Port443Available && !nginxOwns443 && !frontendActive {
-		if portOwner != "" {
-			status.Error = fmt.Sprintf("Порт 443 занят процессом «%s». Остановите этот сервис или освободите порт 443 для WEB Proxy.", portOwner)
+	if inspectionErr != nil {
+		status.Error = "Не удалось проверить TCP 443: " + inspectionErr.Error()
+	} else if !port443.Available {
+		if port443.Owner != "" {
+			if port443.Free {
+				status.Error = fmt.Sprintf("TCP 443 зарезервирован настройками панели: %s.", port443.Owner)
+			} else {
+				status.Error = fmt.Sprintf("TCP 443 занят: %s.", port443.Owner)
+			}
 		} else {
-			status.Error = "Порт 443 занят другим сервисом. Освободите порт 443 для WEB Proxy."
+			status.Error = "TCP 443 занят другим сервисом."
 		}
 	}
 	return status, nil
@@ -310,16 +316,22 @@ func enableTelemtWebProxy(ctx context.Context, domain, panelCert, panelKey strin
 	if !telemtWebVersionAtLeast(version, telemtWebMinEngine) {
 		return TelemtWebProxyStatus{}, fmt.Errorf("Telemt %s does not support WEB Proxy; requires %s or newer", version, telemtWebMinEngine)
 	}
-	if !telemtWebFrontendCanOwn443(TelemtWebProxyState{Frontend: options.Frontend}) {
-		owner := telemtWebPortOwner(443)
-		if owner != "" {
-			return TelemtWebProxyStatus{}, fmt.Errorf("Порт 443 занят процессом «%s». Освободите порт 443 для WEB Proxy.", owner)
-		}
-		return TelemtWebProxyStatus{}, errors.New("Порт 443 занят другим сервисом. Освободите порт 443 для WEB Proxy.")
-	}
 	state, err := readTelemtWebState()
 	if err != nil {
 		return TelemtWebProxyStatus{}, err
+	}
+	port443, err := inspectTelemtWebPort443(state, options.Frontend)
+	if err != nil {
+		return TelemtWebProxyStatus{}, err
+	}
+	if !port443.Available {
+		if port443.Owner != "" {
+			if port443.Free {
+				return TelemtWebProxyStatus{}, fmt.Errorf("TCP 443 зарезервирован настройками панели: %s", port443.Owner)
+			}
+			return TelemtWebProxyStatus{}, fmt.Errorf("TCP 443 занят: %s", port443.Owner)
+		}
+		return TelemtWebProxyStatus{}, errors.New("TCP 443 занят другим сервисом")
 	}
 	oldState := state
 	state.Frontend, state.Carrier, state.Carriers = options.Frontend, options.Carrier, options.Carriers
@@ -1036,26 +1048,26 @@ func telemtWebPortOwner(port int) string {
 	if err != nil {
 		return ""
 	}
+	return parseTelemtWebPortOwners(string(output))
+}
+
+// parseTelemtWebPortOwners collects every process from each ss users:(...) list,
+// rather than only the first process on a socket.
+func parseTelemtWebPortOwners(output string) string {
 	seen := map[string]struct{}{}
 	owners := make([]string, 0, 2)
-	for _, match := range telemtWebPortOwnerPattern.FindAllStringSubmatch(string(output), -1) {
+	for _, match := range telemtWebPortOwnerPattern.FindAllStringSubmatch(output, -1) {
 		if len(match) < 2 || match[1] == "" {
 			continue
 		}
-		if _, ok := seen[match[1]]; ok {
+		name := strings.ToLower(match[1])
+		if _, ok := seen[name]; ok {
 			continue
 		}
-		seen[match[1]] = struct{}{}
-		owners = append(owners, match[1])
+		seen[name] = struct{}{}
+		owners = append(owners, name)
 	}
 	return strings.Join(owners, ", ")
-}
-
-func telemtWebNginxCanOwn443() bool {
-	if telemtWebNginxActive() {
-		return telemtWebNginxOwnsPort443() || telemtWebPortAvailable(443)
-	}
-	return telemtWebPortAvailable(443)
 }
 
 func telemtWebNginxOwnsPort(port int) bool {
