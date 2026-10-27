@@ -53,10 +53,57 @@ func TestTelemtWebPathLink(t *testing.T) {
 	}
 }
 
-func TestTelemtWebConfigIncludesOptionalBasePath(t *testing.T) {
-	// Configuration builders must keep old single-domain data compatible.
-	const secret = "0123456789abcdef0123456789abcdef"
-	_ = secret
-	// Standalone link changes are covered above. Managed config rendering
-	// is integration-tested with a running Telemt engine.
+func TestTelemtWebAliases(t *testing.T) {
+	got, err := normalizeTelemtWebAliases("web.example.org", []string{"B.example.org", "a.example.org"})
+	if err != nil || strings.Join(got, ",") != "a.example.org,b.example.org" {
+		t.Fatalf("aliases = %v, err = %v", got, err)
+	}
+	for _, tc := range [][]string{
+		{"web.example.org"},
+		{"a.example.org", "a.example.org"},
+		{"invalid localhost"},
+		{"a.example.org", "b.example.org", "c.example.org", "d.example.org", "e.example.org", "f.example.org", "g.example.org", "h.example.org"},
+	} {
+		if _, err := normalizeTelemtWebAliases("web.example.org", tc); err == nil {
+			t.Errorf("invalid aliases accepted: %v", tc)
+		}
+	}
+}
+
+func TestTelemtWebOriginSecurity(t *testing.T) {
+	if err := validateTelemtWebSite(&TelemtWebSiteOptions{Mode: "origin", Origin: "http://127.0.0.1:8080"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateTelemtWebSite(&TelemtWebSiteOptions{Mode: "origin", Origin: "http://[::1]:18081"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, origin := range []string{
+		"http://localhost:8080",
+		"http://example.com:8080",
+		"http://127.0.0.1:8080/private",
+		"http://127.0.0.1:8080?secret=a",
+		"http://user:pass@127.0.0.1:8080",
+		"https://127.0.0.1:8080",
+		"http://127.0.0.1:0",
+	} {
+		if err := validateTelemtWebSite(&TelemtWebSiteOptions{Mode: "origin", Origin: origin}); err == nil {
+			t.Errorf("unsafe local HTTP origin accepted: %s", origin)
+		}
+	}
+}
+
+func TestTelemtWebFrontendAliases(t *testing.T) {
+	for _, frontend := range []string{"caddy", "haproxy"} {
+		state := TelemtWebProxyState{
+			Domain: "web.example.org", Aliases: []string{"alt.example.org"},
+			Frontend: frontend, ListenPort: 15080, PublicAddr: "203.0.113.9:443",
+		}
+		data, err := telemtWebFrontendConfig(state, telemtWebSubscriptionTarget{})
+		if err != nil {
+			t.Fatalf("%s config: %v", frontend, err)
+		}
+		if !strings.Contains(string(data), "web.example.org") || !strings.Contains(string(data), "alt.example.org") {
+			t.Fatalf("%s did not include both WEB hostnames", frontend)
+		}
+	}
 }
