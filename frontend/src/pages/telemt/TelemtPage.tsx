@@ -70,6 +70,15 @@ type WebProxyStatus = {
   error: string;
 };
 
+type WebDiagnostics = {
+  available: boolean;
+  lifecycle: string;
+  listeners: string[];
+  capacity?: Record<string, unknown>;
+  carrierNegotiation?: Record<string, unknown>;
+  checkedAt: string;
+};
+
 type WebPreflight = {
   requestKey?: string;
   ready: boolean;
@@ -179,6 +188,9 @@ export default function TelemtPage() {
   const [configSaving, setConfigSaving] = useState(false);
   const [proxyDeleting, setProxyDeleting] = useState<string | null>(null);
   const [webProxyLoading, setWebProxyLoading] = useState(false);
+  const [webDiagnostics, setWebDiagnostics] = useState<WebDiagnostics | null>(null);
+  const [webDiagnosticsError, setWebDiagnosticsError] = useState('');
+  const [webDiagnosticsLoading, setWebDiagnosticsLoading] = useState(false);
   const [webProxyOpen, setWebProxyOpen] = useState(false);
   const [webPreflight, setWebPreflight] = useState<WebPreflight | null>(null);
   const [webPreflightRefresh, setWebPreflightRefresh] = useState(0);
@@ -1069,6 +1081,46 @@ export default function TelemtPage() {
           </Descriptions>
 
           {status.webProxy.error && <Alert type="warning" showIcon title={status.webProxy.error} />}
+          <Button
+            disabled={!status.webProxy.enabled}
+            loading={webDiagnosticsLoading}
+            onClick={() => {
+              setWebDiagnosticsLoading(true);
+              setWebDiagnosticsError('');
+              void HttpUtil.get<WebDiagnostics>('/panel/api/telemt/webproxy/diagnostics', undefined, { silent: true })
+                .then((response) => {
+                  if (response?.success && response.obj) {
+                    setWebDiagnostics(response.obj);
+                  } else {
+                    setWebDiagnostics(null);
+                    setWebDiagnosticsError(response?.msg || 'Не удалось прочитать WEB runtime');
+                  }
+                })
+                .catch((cause: unknown) => {
+                  setWebDiagnostics(null);
+                  setWebDiagnosticsError(cause instanceof Error ? cause.message : String(cause));
+                })
+                .finally(() => setWebDiagnosticsLoading(false));
+            }}
+          >
+            Диагностика WEB Proxy
+          </Button>
+          {webDiagnosticsError && <Alert type="warning" showIcon title={webDiagnosticsError} />}
+          {webDiagnostics && (
+            <Descriptions bordered size="small" column={1}>
+              <Descriptions.Item label="Runtime">
+                {webDiagnostics.available ? 'доступен' : 'недоступен'}
+              </Descriptions.Item>
+              <Descriptions.Item label="Состояние">{webDiagnostics.lifecycle}</Descriptions.Item>
+              <Descriptions.Item label="Слушатели">{webDiagnostics.listeners?.join(', ') || '—'}</Descriptions.Item>
+              <Descriptions.Item label="Ёмкость">
+                <Typography.Text code>{JSON.stringify(webDiagnostics.capacity ?? {})}</Typography.Text>
+              </Descriptions.Item>
+              <Descriptions.Item label="Согласование транспорта">
+                <Typography.Text code>{JSON.stringify(webDiagnostics.carrierNegotiation ?? {})}</Typography.Text>
+              </Descriptions.Item>
+            </Descriptions>
+          )}
 
           {status.webProxy.enabled && status.webProxy.link && (
             <div>
