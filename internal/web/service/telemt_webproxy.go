@@ -81,6 +81,7 @@ type TelemtWebProxyStatus struct {
 	Aliases                     []string              `json:"aliases,omitempty"`
 	DefaultDomain               string                `json:"defaultDomain"`
 	Link                        string                `json:"link"`
+	Links                       []string              `json:"links,omitempty"`
 	NginxInstalled              bool                  `json:"nginxInstalled"`
 	NginxActive                 bool                  `json:"nginxActive"`
 	CertificateReady            bool                  `json:"certificateReady"`
@@ -322,8 +323,11 @@ func (TelemtService) WebProxyStatus(defaultDomain, panelCert, panelKey string) (
 	frontendActive := state.Enabled && telemtWebFrontendActive(state) && (frontend != "nginx" || nginxOwns443)
 	port443, inspectionErr := inspectTelemtWebPort443(state, frontend)
 	status := TelemtWebProxyStatus{Aliases: state.Aliases, Site: state.Site, Frontend: frontend, FrontendActive: frontendActive, Carrier: telemtWebCarrier(state), Carriers: state.Carriers, CarrierNegotiationSupported: telemtWebVersionAtLeast(version, "3.5.4"), Enabled: state.Enabled, Supported: telemtWebVersionAtLeast(version, telemtWebMinEngine), Domain: state.Domain, BasePath: state.BasePath, DefaultDomain: defaultDomain, NginxInstalled: telemtWebCommandExists("nginx"), NginxActive: nginxActive, Port443Free: port443.Free, Port443Available: port443.Available, Port443Owner: port443.Owner, ListenPort: state.ListenPort, CertificateFile: state.CertFile}
-	if state.Enabled && state.Domain != "" && state.Secret != "" {
-		status.Link = telemtWebLinkWithPath(state.Domain, state.Secret, state.BasePath)
+	if state.Enabled && state.ManagedInboundID == 0 && state.Domain != "" && state.Secret != "" {
+		for _, host := range telemtWebHosts(state) {
+			status.Links = append(status.Links, telemtWebLinkWithPath(host, state.Secret, state.BasePath))
+		}
+		status.Link = status.Links[0]
 	}
 	if state.CertFile != "" {
 		status.CertificateReady = telemtWebCertificatePairReady(state.CertFile, state.KeyFile, state.Domain)
