@@ -27,8 +27,10 @@ retain their earlier subscription naming template until a mode is saved; the
 editor defaults to the remark option. Export/import and node synchronization
 carry the selected mode with the client.
 
-The SNI scanner ships with 60 candidate TLS endpoints. Existing installations
-using the previous ten default candidates receive the expanded list automatically.
+The SNI scanner ships with 160 candidate TLS endpoints. Existing installations
+using the previous 10- or 60-entry defaults receive the expanded list automatically.
+The list includes Ozon, hh.ru, Russian shopping, banking, media, travel and
+telecom services, plus popular international services.
 Custom candidate lists remain authoritative; an empty list uses the defaults.
 Candidates are probes, not guaranteed compatible targets: search checks their
 certificates and TLS capabilities. Reachability can differ between the panel,

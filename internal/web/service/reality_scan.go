@@ -39,9 +39,8 @@ var legacyRealityScanCandidates = []string{
 	"dl.google.com:443",
 }
 
-// Candidate seeds, not a promise of reachability or protocol compatibility.
-// Each search probes certificates and TLS capabilities before offering them.
-var defaultRealityScanCandidates = []string{
+// Previously shipped 60-entry default, retained for exact-match upgrades.
+var previousRealityScanCandidates = []string{
 	"www.cloudflare.com:443",
 	"www.microsoft.com:443",
 	"www.amazon.com:443",
@@ -104,13 +103,119 @@ var defaultRealityScanCandidates = []string{
 	"www.gosuslugi.ru:443",
 }
 
+// Candidate seeds, not a promise of reachability or protocol compatibility.
+// Each search probes certificates and TLS capabilities before offering them.
+var defaultRealityScanCandidates = slices.Concat(previousRealityScanCandidates, []string{
+	"ozon.ru:443",
+	"hh.ru:443",
+	"www.hh.ru:443",
+	"superjob.ru:443",
+	"rabota.ru:443",
+	"zarplata.ru:443",
+	"market.yandex.ru:443",
+	"dzen.ru:443",
+	"rutube.ru:443",
+	"kinopoisk.ru:443",
+	"music.yandex.ru:443",
+	"disk.yandex.ru:443",
+	"cloud.yandex.ru:443",
+	"2gis.ru:443",
+	"www.tutu.ru:443",
+	"www.aviasales.ru:443",
+	"travel.yandex.ru:443",
+	"www.cian.ru:443",
+	"www.domclick.ru:443",
+	"www.sravni.ru:443",
+	"www.banki.ru:443",
+	"www.tbank.ru:443",
+	"www.vtb.ru:443",
+	"alfabank.ru:443",
+	"www.gazprombank.ru:443",
+	"www.mts.ru:443",
+	"megafon.ru:443",
+	"beeline.ru:443",
+	"t2.ru:443",
+	"www.rostelecom.ru:443",
+	"www.rbc.ru:443",
+	"www.ria.ru:443",
+	"tass.ru:443",
+	"lenta.ru:443",
+	"www.gazeta.ru:443",
+	"www.kommersant.ru:443",
+	"www.vedomosti.ru:443",
+	"www.interfax.ru:443",
+	"habr.com:443",
+	"www.dns-shop.ru:443",
+	"www.mvideo.ru:443",
+	"www.eldorado.ru:443",
+	"www.citilink.ru:443",
+	"www.lamoda.ru:443",
+	"www.sportmaster.ru:443",
+	"www.detmir.ru:443",
+	"www.vseinstrumenti.ru:443",
+	"www.auchan.ru:443",
+	"www.perekrestok.ru:443",
+	"www.magnit.ru:443",
+	"www.lenta.com:443",
+	"www.sdek.ru:443",
+	"www.pochta.ru:443",
+	"www.rzd.ru:443",
+	"www.aeroflot.ru:443",
+	"www.pobeda.aero:443",
+	"www.kaspersky.ru:443",
+	"www.drweb.ru:443",
+	"www.ivi.ru:443",
+	"www.okko.tv:443",
+	"www.netflix.com:443",
+	"www.youtube.com:443",
+	"www.reddit.com:443",
+	"www.twitch.tv:443",
+	"www.pinterest.com:443",
+	"www.instagram.com:443",
+	"www.facebook.com:443",
+	"www.linkedin.com:443",
+	"www.tiktok.com:443",
+	"www.paypal.com:443",
+	"www.ebay.com:443",
+	"www.aliexpress.com:443",
+	"www.booking.com:443",
+	"www.airbnb.com:443",
+	"www.tripadvisor.com:443",
+	"www.imdb.com:443",
+	"www.bbc.com:443",
+	"www.cnn.com:443",
+	"www.nytimes.com:443",
+	"www.theguardian.com:443",
+	"www.bloomberg.com:443",
+	"www.reuters.com:443",
+	"www.notion.so:443",
+	"www.figma.com:443",
+	"www.canva.com:443",
+	"www.npmjs.com:443",
+	"pypi.org:443",
+	"store.steampowered.com:443",
+	"www.epicgames.com:443",
+	"www.roblox.com:443",
+	"discord.com:443",
+	"telegram.org:443",
+	"www.whatsapp.com:443",
+	"www.signal.org:443",
+	"proton.me:443",
+	"www.fastly.com:443",
+	"www.digitalocean.com:443",
+	"www.akamai.com:443",
+	"www.ovhcloud.com:443",
+	"www.hetzner.com:443",
+})
+
 // DefaultRealityScanCandidatesCSV is the shipped default for the
 // realityScanCandidates setting (comma-separated host:port list).
 var DefaultRealityScanCandidatesCSV = strings.Join(defaultRealityScanCandidates, ",")
 
-// Expand only the previously shipped default. Custom lists remain authoritative.
+// Expand only exact previously shipped defaults. Custom lists remain authoritative.
 func expandedRealityScanCandidates(csv string) string {
-	if slices.Equal(parseRealityScanCandidateCSV(csv), legacyRealityScanCandidates) {
+	tokens := parseRealityScanCandidateCSV(csv)
+	if slices.Equal(tokens, legacyRealityScanCandidates) || slices.Equal(tokens, previousRealityScanCandidates) {
 		return DefaultRealityScanCandidatesCSV
 	}
 	return csv
