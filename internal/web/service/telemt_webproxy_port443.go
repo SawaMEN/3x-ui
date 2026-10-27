@@ -75,7 +75,7 @@ func telemtWebPanelPort443Owner(state TelemtWebProxyState) (string, error) {
 		return "обычный Telemt MTProto (server.port = 443 в telemt.toml)", nil
 	}
 
-return telemtWebInboundPort443Owner(state)
+	return telemtWebInboundPort443Owner(state)
 }
 
 func telemtWebInboundPort443Owner(state TelemtWebProxyState) (string, error) {
