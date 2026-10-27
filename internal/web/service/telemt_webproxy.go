@@ -231,6 +231,14 @@ func appendTelemtWebProxyConfig(base string, state TelemtWebProxyState) (string,
 	if state.BasePath != "" {
 		webConfig = strings.Replace(webConfig, "public_addr = "+strconv.Quote(publicAddr), "base_path = "+strconv.Quote(state.BasePath)+"\npublic_addr = "+strconv.Quote(publicAddr), 1)
 	}
+	if err := validateTelemtWebSite(state.Site); err != nil {
+		return "", err
+	}
+	if state.Site != nil && state.Site.Mode == "origin" {
+		staticDecoy := fmt.Sprintf("[web.vhosts.decoy]\nmode = \"static_directory\"\ndirectory = %q\nindex = \"index.html\"", decoyDir)
+		originDecoy := fmt.Sprintf("[web.vhosts.decoy]\nmode = \"http_upstream\"\nupstream = %q", state.Site.Origin)
+		webConfig = strings.Replace(webConfig, staticDecoy, originDecoy, 1)
+	}
 	webConfig = strings.Replace(webConfig, "carrier = \"https\"", "carrier = "+strconv.Quote(options.Carrier), 1)
 	if len(options.Carriers) > 0 {
 		values := make([]string, 0, len(options.Carriers))
