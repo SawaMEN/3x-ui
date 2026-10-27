@@ -95,7 +95,8 @@ func ValidateMtprotoWebInbound(ib *model.Inbound) error {
 	if _, err := normalizeTelemtWebAliases(domain, opts.Aliases); err != nil {
 		return err
 	}
-	if _, err := normalizeTelemtWebOptions(TelemtWebProxyOptions{Frontend: opts.Frontend, Carrier: opts.Carrier, Carriers: opts.Carriers, Site: opts.Site, BasePath: &opts.BasePath, Aliases: &opts.Aliases}); err != nil {
+	normalizedSettings, err := normalizeTelemtWebOptions(TelemtWebProxyOptions{Frontend: opts.Frontend, Carrier: opts.Carrier, Carriers: opts.Carriers, Site: opts.Site, BasePath: &opts.BasePath, Aliases: &opts.Aliases})
+	if err != nil {
 		return err
 	}
 	// Persist the effective endpoint so clients, API and subscriptions agree.
@@ -108,6 +109,14 @@ func ValidateMtprotoWebInbound(ib *model.Inbound) error {
 		return err
 	}
 	webPayload["domain"], err = json.Marshal(domain)
+	if err != nil {
+		return err
+	}
+	webPayload["basePath"], err = json.Marshal(*normalizedSettings.BasePath)
+	if err != nil {
+		return err
+	}
+	webPayload["aliases"], err = json.Marshal(*normalizedSettings.Aliases)
 	if err != nil {
 		return err
 	}
@@ -193,7 +202,7 @@ func ReconcileMtprotoWebProxy(ctx context.Context) error {
 
 	fingerprint := mtprotoWebFingerprint(ib)
 	unchanged := state.Enabled && state.ManagedInboundID == ib.Id &&
-		state.Domain == domain && state.BasePath == opts.BasePath && strings.Join(state.Aliases, ",") == strings.Join(*normalized.Aliases, ",") && telemtWebFrontend(state) == normalized.Frontend &&
+		state.Domain == domain && state.BasePath == *normalized.BasePath && strings.Join(state.Aliases, ",") == strings.Join(*normalized.Aliases, ",") && telemtWebFrontend(state) == normalized.Frontend &&
 		telemtWebCarrier(state) == normalized.Carrier &&
 		strings.Join(state.Carriers, ",") == strings.Join(normalized.Carriers, ",") &&
 		telemtWebSitesEqual(state.Site, normalized.Site)
