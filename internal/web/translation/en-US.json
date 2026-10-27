@@ -994,6 +994,10 @@
       "dragToReorder": "Drag to reorder"
     },
     "clients": {
+      "connectionName": "Connection name",
+      "connectionNameHint": "One display name for this client across all protocols, share links and subscription formats. Leave empty to use the subscription naming template. Formats that require unique names add numeric suffixes.",
+      "connectionNameAuto": "Use subscription naming template",
+      "connectionNameInvalid": "Use up to 256 characters without control characters.",
       "tabBasics": "Basics",
       "tabCredentials": "Credentials",
       "tabLinks": "Links",

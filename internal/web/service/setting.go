@@ -328,6 +328,7 @@ func (s *SettingService) GetAllSetting() (*entity.AllSetting, error) {
 		allSetting.SubProfileMode = ""
 	}
 	allSetting.SubProfileMode = effectiveSubProfileMode(allSetting.SubProfileMode, allSetting.SubProfileUrl)
+	allSetting.RealityScanCandidates = expandedRealityScanCandidates(allSetting.RealityScanCandidates)
 	allSetting.CoreType = canonicalCoreType(allSetting.CoreType)
 	return allSetting, nil
 }
@@ -760,7 +761,8 @@ func (s *SettingService) GetTrustedProxyCIDRs() (string, error) {
 }
 
 func (s *SettingService) GetRealityScanCandidates() (string, error) {
-	return s.getString("realityScanCandidates")
+	csv, err := s.getString("realityScanCandidates")
+	return expandedRealityScanCandidates(csv), err
 }
 
 func (s *SettingService) GetRemarkTemplate() (string, error) {
@@ -1470,6 +1472,7 @@ func (s *SettingService) UpdateAllSetting(allSetting *entity.AllSetting, clears 
 	if err := validatePresentationSettings(allSetting); err != nil {
 		return err
 	}
+	allSetting.RealityScanCandidates = expandedRealityScanCandidates(allSetting.RealityScanCandidates)
 	allSetting.CoreType = canonicalCoreType(allSetting.CoreType)
 	switch allSetting.SubProfileMode {
 	case "", SubProfileModeNone, SubProfileModeBuiltin, SubProfileModeCustom:

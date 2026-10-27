@@ -26,7 +26,7 @@ const (
 	realityScanMaxTotal    = 512
 )
 
-var defaultRealityScanCandidates = []string{
+var legacyRealityScanCandidates = []string{
 	"www.cloudflare.com:443",
 	"www.microsoft.com:443",
 	"www.amazon.com:443",
@@ -39,9 +39,82 @@ var defaultRealityScanCandidates = []string{
 	"dl.google.com:443",
 }
 
+// Candidate seeds, not a promise of reachability or protocol compatibility.
+// Each search probes certificates and TLS capabilities before offering them.
+var defaultRealityScanCandidates = []string{
+	"www.cloudflare.com:443",
+	"www.microsoft.com:443",
+	"www.amazon.com:443",
+	"aws.amazon.com:443",
+	"www.samsung.com:443",
+	"www.nvidia.com:443",
+	"www.amd.com:443",
+	"www.intel.com:443",
+	"www.sony.com:443",
+	"dl.google.com:443",
+	"www.google.com:443",
+	"www.bing.com:443",
+	"www.apple.com:443",
+	"www.mozilla.org:443",
+	"www.firefox.com:443",
+	"www.wikipedia.org:443",
+	"www.github.com:443",
+	"github.com:443",
+	"www.gitlab.com:443",
+	"about.gitlab.com:443",
+	"www.adobe.com:443",
+	"www.autodesk.com:443",
+	"www.cisco.com:443",
+	"www.dell.com:443",
+	"www.hp.com:443",
+	"www.lenovo.com:443",
+	"www.asus.com:443",
+	"www.acer.com:443",
+	"www.logitech.com:443",
+	"www.canon.com:443",
+	"www.nikon.com:443",
+	"www.panasonic.com:443",
+	"www.philips.com:443",
+	"www.bosch.com:443",
+	"www.siemens.com:443",
+	"www.ibm.com:443",
+	"www.oracle.com:443",
+	"www.sap.com:443",
+	"www.salesforce.com:443",
+	"www.atlassian.com:443",
+	"www.dropbox.com:443",
+	"www.zoom.com:443",
+	"www.spotify.com:443",
+	"www.yahoo.com:443",
+	"www.duckduckgo.com:443",
+	"www.debian.org:443",
+	"www.ubuntu.com:443",
+	"www.kernel.org:443",
+	"www.python.org:443",
+	"www.rust-lang.org:443",
+	"yandex.ru:443",
+	"ya.ru:443",
+	"vk.com:443",
+	"ok.ru:443",
+	"mail.ru:443",
+	"www.ozon.ru:443",
+	"www.wildberries.ru:443",
+	"www.avito.ru:443",
+	"www.sberbank.ru:443",
+	"www.gosuslugi.ru:443",
+}
+
 // DefaultRealityScanCandidatesCSV is the shipped default for the
 // realityScanCandidates setting (comma-separated host:port list).
 var DefaultRealityScanCandidatesCSV = strings.Join(defaultRealityScanCandidates, ",")
+
+// Expand only the previously shipped default. Custom lists remain authoritative.
+func expandedRealityScanCandidates(csv string) string {
+	if slices.Equal(parseRealityScanCandidateCSV(csv), legacyRealityScanCandidates) {
+		return DefaultRealityScanCandidatesCSV
+	}
+	return csv
+}
 
 type RealityScanResult struct {
 	Target   string `json:"target" example:"www.cloudflare.com:443"`

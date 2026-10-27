@@ -138,6 +138,9 @@ func (s *ClientService) Create(inboundSvc *InboundService, payload *ClientCreate
 	if err := validateClientResetDay(client.ResetDay); err != nil {
 		return false, err
 	}
+	if err := client.ValidateConnectionName(); err != nil {
+		return false, err
+	}
 	if err := client.SpeedLimit.Validate(); err != nil {
 		return false, err
 	}
@@ -623,8 +626,14 @@ func (s *ClientService) Update(inboundSvc *InboundService, id int, updated model
 	if err := validateClientResetDay(updated.ResetDay); err != nil {
 		return false, err
 	}
+	if updated.ConnectionName == nil {
+		updated.ConnectionName = existing.ConnectionName
+	}
 	if updated.SpeedLimit == nil {
 		updated.SpeedLimit = existing.SpeedLimit
+	}
+	if err := updated.ValidateConnectionName(); err != nil {
+		return false, err
 	}
 	if err := updated.SpeedLimit.Validate(); err != nil {
 		return false, err
@@ -826,6 +835,7 @@ func (s *ClientService) Update(inboundSvc *InboundService, id int, updated model
 				"client_host_rule_ids": model.EncodeClientHostRuleIds(merged.ClientHostRuleIds),
 				"awg_client_options":   string(awgOptions),
 				"speed_limit":          string(speedLimit),
+				"connection_name":      merged.ConnectionName,
 				"limit_ip":             merged.LimitIP,
 				"total_gb":             merged.TotalGB,
 				"expiry_time":          merged.ExpiryTime,

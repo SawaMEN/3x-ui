@@ -17,13 +17,14 @@ import (
 // externalLinkEntry is one client × external-link row resolved for a request.
 // Active applies the owning client's enabled and expiry state.
 type externalLinkEntry struct {
-	Kind       string
-	Value      string
-	Remark     string
-	NamePrefix string
-	Email      string
-	Enable     bool
-	Active     bool
+	Kind           string
+	Value          string
+	Remark         string
+	NamePrefix     string
+	ConnectionName string
+	Email          string
+	Enable         bool
+	Active         bool
 }
 
 // expandedLink is a single share link contributed by an entry, with the display
@@ -70,13 +71,14 @@ func (s *SubService) getClientExternalLinksBySubId(subId string) ([]externalLink
 		rec := byId[r.ClientId]
 		represented[r.ClientId] = struct{}{}
 		out = append(out, externalLinkEntry{
-			Kind:       r.Kind,
-			Value:      r.Value,
-			Remark:     r.Remark,
-			NamePrefix: r.NamePrefix,
-			Email:      rec.Email,
-			Enable:     rec.Enable,
-			Active:     rec.Enable && (rec.ExpiryTime <= 0 || rec.ExpiryTime > now),
+			Kind:           r.Kind,
+			Value:          r.Value,
+			Remark:         r.Remark,
+			NamePrefix:     r.NamePrefix,
+			Email:          rec.Email,
+			ConnectionName: rec.ToClient().ConnectionDisplayName(),
+			Enable:         rec.Enable,
+			Active:         rec.Enable && (rec.ExpiryTime <= 0 || rec.ExpiryTime > now),
 		})
 	}
 
@@ -107,7 +109,7 @@ func expandEntry(e externalLinkEntry) []expandedLink {
 		}
 		out := make([]expandedLink, 0, len(res.links))
 		for _, l := range res.links {
-			out = append(out, expandedLink{Link: l, Name: prefixedLinkName(linkDisplayName(l), e.NamePrefix, e.Email)})
+			out = append(out, expandedLink{Link: l, Name: e.displayName(prefixedLinkName(linkDisplayName(l), e.NamePrefix, e.Email))})
 		}
 		return out
 	}
@@ -115,7 +117,14 @@ func expandEntry(e externalLinkEntry) []expandedLink {
 	if name == "" {
 		name = linkDisplayName(e.Value)
 	}
-	return []expandedLink{{Link: e.Value, Name: name}}
+	return []expandedLink{{Link: e.Value, Name: e.displayName(name)}}
+}
+
+func (e externalLinkEntry) displayName(fallback string) string {
+	if name := strings.TrimSpace(e.ConnectionName); name != "" {
+		return name
+	}
+	return fallback
 }
 
 // linkDisplayName extracts the human-readable name already carried by a share

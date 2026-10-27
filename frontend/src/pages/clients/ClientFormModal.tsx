@@ -179,6 +179,7 @@ const EMPTY: Values = {
   limitHwid: 0,
   tgId: 0,
   group: '',
+  connectionName: '',
   comment: '',
   enable: true,
   inboundIds: [],
@@ -404,6 +405,7 @@ export default function ClientFormModal({
         limitHwid: client.limitHwid || 0,
         tgId: Number(client.tgId) || 0,
         group: client.group || '',
+        connectionName: client.connectionName || '',
         comment: client.comment || '',
         enable: !!client.enable,
         inboundIds: Array.isArray(attachedIds) ? [...attachedIds] : [],
@@ -797,6 +799,7 @@ export default function ClientFormModal({
       limitHwid: values.limitHwid,
       tgId: values.tgId,
       group: values.group,
+      connectionName: values.connectionName.trim(),
       comment: values.comment,
       enable: values.enable,
       inboundIds: values.inboundIds,
@@ -839,6 +842,7 @@ export default function ClientFormModal({
       limitHwid: Number(values.limitHwid) || 0,
       tgId: Number(values.tgId) || 0,
       group: values.group,
+      connectionName: values.connectionName.trim(),
       comment: values.comment,
       enable: !!values.enable,
     };
@@ -1254,6 +1258,17 @@ export default function ClientFormModal({
 
                       <Row gutter={16}>
                         <Col xs={24} md={12}>
+                          <FormField
+                            name="connectionName"
+                            label={t('pages.clients.connectionName')}
+                            extra={t('pages.clients.connectionNameHint')}
+                          >
+                            <Input
+                              maxLength={256}
+                              allowClear
+                              placeholder={t('pages.clients.connectionNameAuto')}
+                            />
+                          </FormField>
                           <FormField name="comment" label={t('pages.clients.comment')}>
                             <Input />
                           </FormField>

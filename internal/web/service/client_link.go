@@ -63,6 +63,10 @@ func applyClientRecordMerge(row *model.ClientRecord, incoming *model.ClientRecor
 		row.AWGClientOptions = incoming.AWGClientOptions
 	}
 	row.SubID = incoming.SubID
+	if incoming.ConnectionName != nil {
+		name := *incoming.ConnectionName
+		row.ConnectionName = &name
+	}
 	if incoming.SpeedLimit != nil {
 		row.SpeedLimit = incoming.SpeedLimit
 	}
@@ -168,6 +172,9 @@ func (s *ClientService) syncInboundClients(tx *gorm.DB, inboundId int, clients [
 			continue
 		}
 
+		if err := clients[i].ValidateConnectionName(); err != nil {
+			return err
+		}
 		if err := clients[i].SpeedLimit.Validate(); err != nil {
 			return err
 		}

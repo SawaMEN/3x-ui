@@ -1603,6 +1603,11 @@ export const SCHEMAS: Record<string, unknown> = {
         "description": "Client comment",
         "type": "string"
       },
+      "connectionName": {
+        "description": "Shared display name for this client across protocols. Omission preserves it.",
+        "nullable": true,
+        "type": "string"
+      },
       "created_at": {
         "description": "Creation timestamp",
         "format": "int64",
@@ -1863,6 +1868,10 @@ export const SCHEMAS: Record<string, unknown> = {
       "comment": {
         "type": "string"
       },
+      "connectionName": {
+        "nullable": true,
+        "type": "string"
+      },
       "createdAt": {
         "format": "int64",
         "type": "integer"
@@ -2022,6 +2031,10 @@ export const SCHEMAS: Record<string, unknown> = {
     "properties": {
       "comment": {
         "example": "Primary device",
+        "type": "string"
+      },
+      "connectionName": {
+        "nullable": true,
         "type": "string"
       },
       "createdAt": {
