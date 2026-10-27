@@ -215,7 +215,7 @@ func ReconcileMtprotoWebProxy(ctx context.Context) error {
 		if cfgErr != nil {
 			return cfgErr
 		}
-		if saveErr := svc.SaveConfig(cfg); saveErr != nil {
+		if saveErr := svc.SaveWebUsersHotReload(cfg); saveErr != nil {
 			return saveErr
 		}
 		state.UserFingerprint = fingerprint
