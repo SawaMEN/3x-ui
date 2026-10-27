@@ -107,11 +107,13 @@ it('updates Linux packages without loading or updating optional components', asy
   expect(screen.queryByText('Pingtunnel')).toBeNull();
 });
 
-it('does not offer a bulk install for missing optional components', async () => {
+it('shows only component cards without the toolbar or enclosing card', async () => {
   await openComponents();
-  expect(
-    (screen.getByRole('button', { name: /Update components/ }) as HTMLButtonElement).disabled,
-  ).toBe(true);
+  expect(screen.queryByRole('button', { name: /Update components/ })).toBeNull();
+  expect(screen.queryByRole('button', { name: /Check for updates/ })).toBeNull();
+  expect(screen.getByText('Sudoku').closest('.system-update-section')).toBeNull();
+  expect(screen.queryByText('Panel dependencies')).toBeNull();
+  expect(screen.queryByText(/Install optional components individually/)).toBeNull();
   expect(
     vi.mocked(HttpUtil.post).mock.calls.some(([path]) => String(path).includes('/system/update/')),
   ).toBe(false);
@@ -149,8 +151,8 @@ it('hides the install button and explains an unsupported architecture', async ()
 it('updates installed components without updating Linux packages', async () => {
   installedHysteria = true;
   await openComponents();
-  fireEvent.click(screen.getByRole('button', { name: /Update components/ }));
-  fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
+  expect(screen.queryByRole('button', { name: /Update components/ })).toBeNull();
+  fireEvent.click(card('Hysteria2').getByRole('button', { name: 'Update' }));
   await waitFor(() =>
     expect(HttpUtil.post).toHaveBeenCalledWith('/panel/api/server/externalvpn/update/hysteria2'),
   );

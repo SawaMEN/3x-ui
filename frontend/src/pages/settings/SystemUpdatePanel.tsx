@@ -243,13 +243,6 @@ export default function SystemUpdatePanel({ section }: { section: 'components' |
       }),
     [bundledDependencies, standaloneDependencies],
   );
-  const updatableDependencies = useMemo(
-    () => [
-      ...bundledDependencies.filter((row) => row.source !== 'sing-box'),
-      ...standaloneDependencies,
-    ],
-    [bundledDependencies, standaloneDependencies],
-  );
   const [dependencyBusy, setDependencyBusy] = useState<DependencyKey | null>(null);
 
   const loadDependencyUpdates = useCallback(async () => {
@@ -569,7 +562,7 @@ export default function SystemUpdatePanel({ section }: { section: 'components' |
     return null;
   }, [includeAllPackages]);
 
-  const applyAllUpdates = async () => {
+  const applySystemUpdates = async () => {
     setSystemUpdateBusy(true);
     try {
       if (!componentsOnly) {
@@ -599,47 +592,8 @@ export default function SystemUpdatePanel({ section }: { section: 'components' |
           setSystemUpdateResult(normalizeSystemUpdateResult(systemMsg?.obj));
         }
       }
-      const pending = (componentsOnly ? updatableDependencies : []).filter(
-        (dependency) => dependency.installed && dependencyNeedsAction(dependency),
-      );
-
-      const failed: string[] = [];
-      const updatedTargets = new Set<string>();
-      for (const dependency of pending) {
-        const target = dependency.key;
-        if (updatedTargets.has(target)) {
-          continue;
-        }
-        try {
-          updatedTargets.add(target);
-          setDependencyBusy(dependency.key);
-          const response = await requestDependencyUpdate(dependency);
-          if (!response?.success) {
-            failed.push(dependency.label);
-          }
-        } catch {
-          failed.push(dependency.label);
-        } finally {
-          setDependencyBusy(null);
-        }
-      }
-
-      if (componentsOnly) await loadDependencyUpdates();
-      else await recoverSystemUpdateStatus();
-
-      if (failed.length) {
-        messageApi.warning(
-          t('pages.settings.swap.partialUpdate', { components: failed.join(', ') }),
-        );
-      } else {
-        messageApi.success(
-          t(
-            componentsOnly
-              ? 'pages.settings.advanced.componentsUpdated'
-              : 'pages.settings.swap.updateDone',
-          ),
-        );
-      }
+      await recoverSystemUpdateStatus();
+      messageApi.success(t('pages.settings.swap.updateDone'));
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : String(error));
     } finally {
@@ -694,13 +648,6 @@ export default function SystemUpdatePanel({ section }: { section: 'components' |
     Boolean(systemUpdate?.kernel.rebootRequired) || Boolean(systemUpdateResult?.rebootRequired);
   const allPackagesMode = systemUpdate?.allPackages ?? includeAllPackages;
   const isArch = systemUpdate?.packageManager === 'pacman';
-  const componentUpdatesAvailable = updatableDependencies.some(
-    (dependency) => dependency.installed && dependencyNeedsAction(dependency),
-  );
-  const unstableComponentUpdateAvailable = dependencies.some(
-    (dependency) => dependency.prerelease && dependency.updateAvailable,
-  );
-
   const renderPackageStatus = (row: SystemUpdatePackage) => (
     <Space size={4} wrap>
       <Tag color={row.kernel ? 'geekblue' : 'blue'}>
@@ -720,298 +667,272 @@ export default function SystemUpdatePanel({ section }: { section: 'components' |
   return (
     <div className="system-update-content">
       {contextHolder}
-      <div className="system-update-actions">
-        <Button
-          block={isMobile}
-          icon={<ReloadOutlined />}
-          onClick={() => void checkSystemUpdates()}
-          loading={systemUpdateBusy}
-          disabled={dependencyBusy !== null}
-        >
-          {t('pages.settings.swap.checkUpdates')}
-        </Button>
-        {!componentsOnly && rebootRequired && (
+      {!componentsOnly && (
+        <div className="system-update-actions">
           <Button
-            danger
             block={isMobile}
-            icon={<PoweroffOutlined />}
-            onClick={() => void rebootSystem()}
+            icon={<ReloadOutlined />}
+            onClick={() => void checkSystemUpdates()}
             loading={systemUpdateBusy}
-            disabled={!systemUpdate?.runningAsRoot || dependencyBusy !== null}
+            disabled={dependencyBusy !== null}
           >
-            {t('pages.settings.swap.rebootSystem')}
+            {t('pages.settings.swap.checkUpdates')}
           </Button>
-        )}
-        <Popconfirm
-          title={
-            componentsOnly
-              ? t('pages.settings.advanced.confirmComponents')
-              : t(
-                  allPackagesMode
-                    ? 'pages.settings.swap.updateAllConfirm'
-                    : 'pages.settings.swap.updateConfirm',
-                )
-          }
-          description={
-            unstableComponentUpdateAvailable
-              ? t('pages.settings.swap.unstableUpdateConfirm')
-              : undefined
-          }
-          onConfirm={() => void applyAllUpdates()}
-          disabled={
-            (!componentsOnly && (!systemUpdate?.supported || !systemUpdate?.runningAsRoot)) ||
-            systemUpdateBusy ||
-            dependencyBusy !== null ||
-            (componentsOnly ? !componentUpdatesAvailable : !systemUpdate?.canUpdate)
-          }
-        >
-          <Button
-            type="primary"
-            block={isMobile}
-            icon={<CloudDownloadOutlined />}
-            loading={systemUpdateBusy}
+          {rebootRequired && (
+            <Button
+              danger
+              block={isMobile}
+              icon={<PoweroffOutlined />}
+              onClick={() => void rebootSystem()}
+              loading={systemUpdateBusy}
+              disabled={!systemUpdate?.runningAsRoot || dependencyBusy !== null}
+            >
+              {t('pages.settings.swap.rebootSystem')}
+            </Button>
+          )}
+          <Popconfirm
+            title={t(
+              allPackagesMode
+                ? 'pages.settings.swap.updateAllConfirm'
+                : 'pages.settings.swap.updateConfirm',
+            )}
+            onConfirm={() => void applySystemUpdates()}
             disabled={
-              (!componentsOnly && (!systemUpdate?.supported || !systemUpdate?.runningAsRoot)) ||
+              !systemUpdate?.supported ||
+              !systemUpdate?.runningAsRoot ||
+              systemUpdateBusy ||
               dependencyBusy !== null ||
-              (componentsOnly ? !componentUpdatesAvailable : !systemUpdate?.canUpdate)
+              !systemUpdate?.canUpdate
             }
           >
-            {componentsOnly
-              ? t('pages.settings.advanced.updateComponents')
-              : t(
-                  allPackagesMode
-                    ? 'pages.settings.swap.updateAllNow'
-                    : 'pages.settings.swap.updateNow',
-                )}
-          </Button>
-        </Popconfirm>
-      </div>
+            <Button
+              type="primary"
+              block={isMobile}
+              icon={<CloudDownloadOutlined />}
+              loading={systemUpdateBusy}
+              disabled={
+                !systemUpdate?.supported ||
+                !systemUpdate?.runningAsRoot ||
+                dependencyBusy !== null ||
+                !systemUpdate?.canUpdate
+              }
+            >
+              {t(
+                allPackagesMode
+                  ? 'pages.settings.swap.updateAllNow'
+                  : 'pages.settings.swap.updateNow',
+              )}
+            </Button>
+          </Popconfirm>
+        </div>
+      )}
       {componentsOnly ? (
-        <Card
-          size="small"
-          title={t('pages.settings.swap.componentUpdatesTitle')}
-          className="system-update-section"
-        >
-          <Typography.Paragraph type="secondary">
-            {t('pages.settings.advanced.componentsDescription')}
-          </Typography.Paragraph>
-          <div className="system-component-grid">
-            {dependencies.map((dependency) => {
-              const standalone = standaloneDependencies.find((row) => row.key === dependency.key);
-              const action = standalone || dependency;
-              const actionLabel =
-                !action.installed && isDependencyInstallable(action)
-                  ? dependency.key === 'oxidns'
-                    ? 'Установить OxiDNS'
-                    : dependency.key === 'dnstt'
-                      ? 'Установить DNSTT'
-                      : standalone
-                        ? 'Установить отдельное ядро'
-                        : 'Установить'
-                  : action.updateAvailable
-                    ? t('pages.settings.swap.updateComponent')
-                    : t('pages.settings.swap.upToDate');
-              return (
-                <Card
-                  key={dependency.key}
-                  size="small"
-                  className="system-component-card"
-                  title={dependency.label}
-                  extra={
-                    dependency.updateAvailable ? (
-                      <Tag color="warning">{t('pages.settings.swap.updatesAvailable')}</Tag>
-                    ) : dependency.installed ? (
-                      <Tag color="success">{t('pages.settings.swap.upToDate')}</Tag>
-                    ) : (
-                      <Tag>{t('pages.settings.swap.notInstalled')}</Tag>
-                    )
-                  }
-                >
-                  {(dependency.key === 'naiveproxy' || dependency.key === 'hysteria2') && (
-                    <>
-                      <Typography.Text
+        <div className="system-component-grid">
+          {dependencies.map((dependency) => {
+            const standalone = standaloneDependencies.find((row) => row.key === dependency.key);
+            const action = standalone || dependency;
+            const actionLabel =
+              !action.installed && isDependencyInstallable(action)
+                ? dependency.key === 'oxidns'
+                  ? 'Установить OxiDNS'
+                  : dependency.key === 'dnstt'
+                    ? 'Установить DNSTT'
+                    : standalone
+                      ? 'Установить отдельное ядро'
+                      : 'Установить'
+                : action.updateAvailable
+                  ? t('pages.settings.swap.updateComponent')
+                  : t('pages.settings.swap.upToDate');
+            return (
+              <Card
+                key={dependency.key}
+                size="small"
+                className="system-component-card"
+                title={dependency.label}
+                extra={
+                  dependency.updateAvailable ? (
+                    <Tag color="warning">{t('pages.settings.swap.updatesAvailable')}</Tag>
+                  ) : dependency.installed ? (
+                    <Tag color="success">{t('pages.settings.swap.upToDate')}</Tag>
+                  ) : (
+                    <Tag>{t('pages.settings.swap.notInstalled')}</Tag>
+                  )
+                }
+              >
+                {dependency.fallbackReason && (
+                  <Alert
+                    type="warning"
+                    showIcon
+                    title="Для совместимости используется sing-box"
+                    description={dependency.fallbackReason}
+                    style={{ marginBottom: 10 }}
+                  />
+                )}
+                {action.error && (
+                  <Alert
+                    type="warning"
+                    showIcon
+                    title={action.error}
+                    style={{ marginBottom: 10 }}
+                  />
+                )}
+                {dependency.key !== 'sudoku' && (
+                  <details className="system-component-details" open={!isMobile}>
+                    <summary>{t('info')}</summary>
+                    {(dependency.key === 'naiveproxy' || dependency.key === 'hysteria2') && (
+                      <>
+                        <Typography.Text type="secondary" className="system-component-description">
+                          {dependency.mixed
+                            ? 'Совместимые входящие подключения используют отдельное ядро; остальные — sing-box.'
+                            : dependency.source === 'sing-box'
+                              ? 'Используется встроенный sing-box. Установка отдельного ядра автоматически переключит входящие подключения на него.'
+                              : 'Используется отдельное ядро. Панель управляет запуском и клиентами, маршрутизация проходит через sing-box.'}
+                        </Typography.Text>
+                      </>
+                    )}
+                    {dependency.key === 'oxidns' && (
+                      <Typography.Text type="secondary" className="system-component-description">
+                        {dependency.installed
+                          ? 'Установлен. Создание и настройка DNS доступны в меню «sing-box → DNS».'
+                          : 'Установите OxiDNS здесь. После установки в «sing-box → DNS» появится мастер создания DNS. Установка сама по себе службу не включает.'}
+                      </Typography.Text>
+                    )}
+                    {dependency.key === 'dnstt' && (
+                      <Typography.Text type="secondary" className="system-component-description">
+                        {dependency.installed
+                          ? 'DNSTT установлен. Создание ключей, DNS-делегирование и запуск доступны в меню «sing-box → DNS».'
+                          : 'Установите DNSTT здесь. После установки его настройки появятся в sing-box → DNS; после удаления исчезнут.'}
+                      </Typography.Text>
+                    )}
+                    {dependency.key === 'telemt' && (
+                      <Typography.Text type="secondary" className="system-component-description">
+                        Движок обычного MTProto и WEB Proxy. После установки создавайте подключения
+                        через «Входящие → MTProto». Отдельное включение службы не требуется.
+                      </Typography.Text>
+                    )}
+                    {dependency.key === 'olcrtc' && (
+                      <Typography.Paragraph
                         type="secondary"
-                        style={{ display: 'block', marginBottom: 10 }}
+                        className="system-component-description"
                       >
-                        {dependency.mixed
-                          ? 'Совместимые входящие подключения используют отдельное ядро; остальные — sing-box.'
-                          : dependency.source === 'sing-box'
-                            ? 'Используется встроенный sing-box. Установка отдельного ядра автоматически переключит входящие подключения на него.'
-                            : 'Используется отдельное ядро. Панель управляет запуском и клиентами, маршрутизация проходит через sing-box.'}
+                        Отдельный WebRTC-сервер через Jitsi, Телемост или WB Stream. Не заменяет
+                        sing-box.
+                        {dependency.busy
+                          ? ` Выполняется: ${dependency.operation === 'remove' ? 'удаление' : 'установка или обновление'}.`
+                          : dependency.installed
+                            ? dependency.running
+                              ? ' Служба работает.'
+                              : ' Служба остановлена.'
+                            : ' Нажмите «Установить», чтобы добавить компонент.'}
+                      </Typography.Paragraph>
+                    )}
+                    {dependency.key === 'pingtunnel' && (
+                      <Typography.Text type="secondary" className="system-component-description">
+                        Pingtunnel обновляется отдельным официальным Linux-бинарником из GitHub
+                        Releases.
                       </Typography.Text>
-                    </>
-                  )}
-                  {dependency.fallbackReason && (
-                    <Alert
-                      type="warning"
-                      showIcon
-                      title="Для совместимости используется sing-box"
-                      description={dependency.fallbackReason}
-                      style={{ marginBottom: 10 }}
-                    />
-                  )}
-                  {action.error && (
-                    <Alert
-                      type="warning"
-                      showIcon
-                      title={action.error}
-                      style={{ marginBottom: 10 }}
-                    />
-                  )}
-                  {dependency.key === 'oxidns' && (
-                    <Typography.Text
-                      type="secondary"
-                      style={{ display: 'block', marginBottom: 10 }}
-                    >
-                      {dependency.installed
-                        ? 'Установлен. Создание и настройка DNS доступны в меню «sing-box → DNS».'
-                        : 'Установите OxiDNS здесь. После установки в «sing-box → DNS» появится мастер создания DNS. Установка сама по себе службу не включает.'}
-                    </Typography.Text>
-                  )}
-                  {dependency.key === 'dnstt' && (
-                    <Typography.Text
-                      type="secondary"
-                      style={{ display: 'block', marginBottom: 10 }}
-                    >
-                      {dependency.installed
-                        ? 'DNSTT установлен. Создание ключей, DNS-делегирование и запуск доступны в меню «sing-box → DNS».'
-                        : 'Установите DNSTT здесь. После установки его настройки появятся в sing-box → DNS; после удаления исчезнут.'}
-                    </Typography.Text>
-                  )}
-                  {dependency.key === 'telemt' && (
-                    <Typography.Text
-                      type="secondary"
-                      style={{ display: 'block', marginBottom: 10 }}
-                    >
-                      Движок обычного MTProto и WEB Proxy. После установки создавайте подключения
-                      через «Входящие → MTProto». Отдельное включение службы не требуется.
-                    </Typography.Text>
-                  )}
-                  {dependency.key === 'olcrtc' && (
-                    <Typography.Paragraph type="secondary">
-                      Отдельный WebRTC-сервер через Jitsi, Телемост или WB Stream. Не заменяет
-                      sing-box.
-                      {dependency.busy
-                        ? ` Выполняется: ${dependency.operation === 'remove' ? 'удаление' : 'установка или обновление'}.`
-                        : dependency.installed
-                          ? dependency.running
-                            ? ' Служба работает.'
-                            : ' Служба остановлена.'
-                          : ' Нажмите «Установить», чтобы добавить компонент.'}
-                    </Typography.Paragraph>
-                  )}
-                  {dependency.key === 'pingtunnel' && (
-                    <Typography.Text
-                      type="secondary"
-                      style={{ display: 'block', marginBottom: 10 }}
-                    >
-                      Pingtunnel обновляется отдельным официальным Linux-бинарником из GitHub
-                      Releases.
-                    </Typography.Text>
-                  )}
-                  {dependency.key === 'trusttunnel' && (
-                    <Typography.Text
-                      type="secondary"
-                      style={{ display: 'block', marginBottom: 10 }}
-                    >
-                      TrustTunnel обновляется отдельным официальным endpoint-бинарником из GitHub
-                      Releases.
-                    </Typography.Text>
-                  )}
-                  <div className="system-component-meta">
-                    <div>
-                      <Typography.Text type="secondary">
-                        {t('pages.settings.swap.installedVersion')}
+                    )}
+                    {dependency.key === 'trusttunnel' && (
+                      <Typography.Text type="secondary" className="system-component-description">
+                        TrustTunnel обновляется отдельным официальным endpoint-бинарником из GitHub
+                        Releases.
                       </Typography.Text>
-                      <Typography.Text strong>
-                        {dependency.installed ? dependency.installedVersion || '—' : '—'}
-                      </Typography.Text>
-                    </div>
-                    <div>
-                      <Typography.Text type="secondary">
-                        {t('pages.settings.swap.availableVersion')}
-                      </Typography.Text>
-                      <Typography.Text strong>{dependency.availableVersion || '—'}</Typography.Text>
-                    </div>
+                    )}
+                  </details>
+                )}
+                <div className="system-component-meta">
+                  <div>
+                    <Typography.Text type="secondary">
+                      {t('pages.settings.swap.installedVersion')}
+                    </Typography.Text>
+                    <Typography.Text strong>
+                      {dependency.installed ? dependency.installedVersion || '—' : '—'}
+                    </Typography.Text>
                   </div>
-                  {standalone && !standalone.installed && (
-                    <Typography.Paragraph type="secondary">
-                      Отдельное ядро: {standalone.availableVersion || '—'}
-                    </Typography.Paragraph>
-                  )}
-                  <Space wrap>
-                    {action.supported === false ? (
-                      <Alert
-                        type="info"
-                        showIcon
-                        title="Установка недоступна"
-                        description={
-                          action.unsupportedReason ||
-                          'Для этой архитектуры нет официального бинарника.'
+                  <div>
+                    <Typography.Text type="secondary">
+                      {t('pages.settings.swap.availableVersion')}
+                    </Typography.Text>
+                    <Typography.Text strong>{dependency.availableVersion || '—'}</Typography.Text>
+                  </div>
+                </div>
+                {standalone && !standalone.installed && (
+                  <Typography.Paragraph type="secondary" className="system-component-description">
+                    Отдельное ядро: {standalone.availableVersion || '—'}
+                  </Typography.Paragraph>
+                )}
+                <Space wrap className="system-component-actions">
+                  {action.supported === false ? (
+                    <Alert
+                      type="info"
+                      showIcon
+                      title="Установка недоступна"
+                      description={
+                        action.unsupportedReason ||
+                        'Для этой архитектуры нет официального бинарника.'
+                      }
+                    />
+                  ) : (
+                    <Tooltip title={actionLabel}>
+                      <Button
+                        size="small"
+                        aria-label={actionLabel}
+                        icon={action.installed ? <ReloadOutlined /> : <DownloadOutlined />}
+                        loading={dependencyBusy === dependency.key || action.busy === true}
+                        disabled={
+                          (!action.updateAvailable &&
+                            !(isDependencyInstallable(action) && !action.installed)) ||
+                          (!action.availableVersion &&
+                            !(
+                              (action.key === 'telemt' || action.key === 'olcrtc') &&
+                              (!action.installed || action.updateAvailable)
+                            )) ||
+                          dependencyBusy !== null ||
+                          action.busy === true ||
+                          systemUpdateBusy
                         }
+                        onClick={() => void updateDependency(action)}
                       />
-                    ) : (
-                      <Tooltip title={actionLabel}>
+                    </Tooltip>
+                  )}
+                  {action.installed && (
+                    <Popconfirm
+                      title={`Удалить ${action.label}?`}
+                      description={
+                        dependency.key === 'olcrtc'
+                          ? 'Служба OlcRTC остановится, бинарники удалятся. Данные клиентов сохранятся.'
+                          : dependency.key === 'telemt'
+                            ? 'Остановит и удалит Telemt. Сначала удалите MTProto входящие; настройки Telemt сохранятся.'
+                            : dependency.key === 'oxidns'
+                              ? 'Собственный DNS будет отключён. sing-box вернётся к прежнему DNS.'
+                              : dependency.key === 'dnstt'
+                                ? 'DNSTT будет остановлен, а ключи и настройки удалены без возможности восстановления.'
+                                : standalone
+                                  ? 'Входящие подключения переключатся на встроенный sing-box.'
+                                  : 'Активные подключения этого протокола необходимо сначала отключить.'
+                      }
+                      okText={t('delete')}
+                      cancelText={t('cancel')}
+                      onConfirm={() => removeDependency(action)}
+                    >
+                      <Tooltip title={`Удалить ${action.label}`}>
                         <Button
                           size="small"
-                          aria-label={actionLabel}
-                          icon={action.installed ? <ReloadOutlined /> : <DownloadOutlined />}
-                          loading={dependencyBusy === dependency.key || action.busy === true}
+                          danger
+                          aria-label={`Удалить ${action.label}`}
+                          icon={<DeleteOutlined />}
                           disabled={
-                            (!action.updateAvailable &&
-                              !(isDependencyInstallable(action) && !action.installed)) ||
-                            (!action.availableVersion &&
-                              !(
-                                (action.key === 'telemt' || action.key === 'olcrtc') &&
-                                (!action.installed || action.updateAvailable)
-                              )) ||
-                            dependencyBusy !== null ||
-                            action.busy === true ||
-                            systemUpdateBusy
+                            dependencyBusy !== null || systemUpdateBusy || action.busy === true
                           }
-                          onClick={() => void updateDependency(action)}
                         />
                       </Tooltip>
-                    )}
-                    {action.installed && (
-                      <Popconfirm
-                        title={`Удалить ${action.label}?`}
-                        description={
-                          dependency.key === 'olcrtc'
-                            ? 'Служба OlcRTC остановится, бинарники удалятся. Данные клиентов сохранятся.'
-                            : dependency.key === 'telemt'
-                              ? 'Остановит и удалит Telemt. Сначала удалите MTProto входящие; настройки Telemt сохранятся.'
-                              : dependency.key === 'oxidns'
-                                ? 'Собственный DNS будет отключён. sing-box вернётся к прежнему DNS.'
-                                : dependency.key === 'dnstt'
-                                  ? 'DNSTT будет остановлен, а ключи и настройки удалены без возможности восстановления.'
-                                  : standalone
-                                    ? 'Входящие подключения переключатся на встроенный sing-box.'
-                                    : 'Активные подключения этого протокола необходимо сначала отключить.'
-                        }
-                        okText={t('delete')}
-                        cancelText={t('cancel')}
-                        onConfirm={() => removeDependency(action)}
-                      >
-                        <Tooltip title={`Удалить ${action.label}`}>
-                          <Button
-                            size="small"
-                            danger
-                            aria-label={`Удалить ${action.label}`}
-                            icon={<DeleteOutlined />}
-                            disabled={
-                              dependencyBusy !== null || systemUpdateBusy || action.busy === true
-                            }
-                          />
-                        </Tooltip>
-                      </Popconfirm>
-                    )}
-                  </Space>
-                </Card>
-              );
-            })}
-          </div>
-        </Card>
+                    </Popconfirm>
+                  )}
+                </Space>
+              </Card>
+            );
+          })}
+        </div>
       ) : !systemUpdate ? (
         <Alert type="info" showIcon title={t('pages.settings.swap.checkUpdates')} />
       ) : (
