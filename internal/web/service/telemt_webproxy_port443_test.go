@@ -32,15 +32,16 @@ func TestTelemtWebInboundTCP443Owner(t *testing.T) {
 			t.Fatalf("panel inbound owner = %q; err = %v", owner, err)
 		}
 	})
-	t.Run("ignores a disabled inbound", func(t *testing.T) {
+	t.Run("identifies a disabled inbound as reserved", func(t *testing.T) {
 		setupConflictDB(t)
 		seedInboundConflict(t, "disabled-443", "", 443, model.VLESS, "", "{}")
 		if err := database.GetDB().Model(&model.Inbound{}).Where("tag = ?", "disabled-443").
 			Update("enable", false).Error; err != nil {
 			t.Fatal(err)
 		}
-		if owner, err := telemtWebInboundPort443Owner(TelemtWebProxyState{}); err != nil || owner != "" {
-			t.Fatalf("disabled inbound blocked port: %q, %v", owner, err)
+		if owner, err := telemtWebInboundPort443Owner(TelemtWebProxyState{}); err != nil ||
+			!strings.Contains(owner, "disabled-443") || !strings.Contains(owner, "отключено") {
+			t.Fatalf("disabled reservation was not identified: %q, %v", owner, err)
 		}
 	})
 	t.Run("ignores remote node inbounds", func(t *testing.T) {
