@@ -2,7 +2,7 @@
 
 interface SubPageData {
   appearance?: {
-    theme?: 'classic' | 'whitemax';
+    theme?: import('@/schemas/setting').SubscriptionTheme | 'whitemax';
     enabled: boolean;
     title: string;
     description: string;

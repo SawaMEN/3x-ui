@@ -32,13 +32,17 @@ func (s *SettingService) GetRootRedirectURL() (string, error) {
 
 func (s *SettingService) GetSubscriptionAppearance() (SubscriptionAppearance, error) {
 	var appearance SubscriptionAppearance
+	theme, err := s.getString("subAppearanceTheme")
+	if err != nil {
+		return appearance, err
+	}
+	appearance.Theme = normalizeSubscriptionTheme(theme)
 	enabled, err := s.getBool("subAppearanceEnable")
 	if err != nil || !enabled {
 		return appearance, err
 	}
 	appearance.Enabled = true
 	for key, target := range map[string]*string{
-		"subAppearanceTheme":       &appearance.Theme,
 		"subAppearanceTitle":       &appearance.Title,
 		"subAppearanceDescription": &appearance.Description,
 		"subAppearanceLogoURL":     &appearance.LogoURL,
@@ -68,10 +72,10 @@ func validatePresentationSettings(settings *entity.AllSetting) error {
 	if settings.RootRedirectEnable && settings.RootRedirectURL == "" {
 		return fmt.Errorf("root redirect URL is required")
 	}
-	if settings.SubAppearanceTheme == "" {
-		settings.SubAppearanceTheme = "classic"
-	}
-	if settings.SubAppearanceTheme != "classic" && settings.SubAppearanceTheme != "whitemax" {
+	settings.SubAppearanceTheme = normalizeSubscriptionTheme(settings.SubAppearanceTheme)
+	switch settings.SubAppearanceTheme {
+	case "classic", "luna", "light", "dark", "ultra-dark", "colorful", "blue-gray", "cyberpunk":
+	default:
 		return fmt.Errorf("unsupported subscription theme")
 	}
 	settings.SubAppearanceAccent = strings.TrimSpace(settings.SubAppearanceAccent)
@@ -85,4 +89,15 @@ func validatePresentationSettings(settings *entity.AllSetting) error {
 		return fmt.Errorf("subscription title or description is too long")
 	}
 	return nil
+}
+
+func normalizeSubscriptionTheme(theme string) string {
+	switch theme {
+	case "":
+		return "classic"
+	case "whitemax":
+		return "luna"
+	default:
+		return theme
+	}
 }

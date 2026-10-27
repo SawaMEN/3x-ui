@@ -355,10 +355,16 @@ interface ThemeContextValue {
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
-export function ThemeProvider({ children }: { children: ReactNode }) {
+export function ThemeProvider({
+  children,
+  fixedMode,
+}: {
+  children: ReactNode;
+  fixedMode?: ThemeMode;
+}) {
   const [mode, setMode] = useState<ThemeMode>(initialMode);
   const [lowPower, setLowPower] = useState<boolean>(() => readLowPower());
-  const activeMode: ThemeMode = lowPower ? 'dark' : mode;
+  const activeMode: ThemeMode = fixedMode ?? (lowPower ? 'dark' : mode);
   const isDark =
     activeMode === 'dark' ||
     activeMode === 'ultra-dark' ||
@@ -368,11 +374,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useLayoutEffect(() => {
     applyDom(activeMode, lowPower);
+    if (fixedMode) return;
     localStorage.setItem(STORAGE_THEME, mode);
     localStorage.setItem(STORAGE_LOW_POWER, String(lowPower));
     localStorage.setItem(STORAGE_DARK, String(isDark));
     localStorage.setItem(STORAGE_ULTRA, String(isUltra));
-  }, [activeMode, mode, isDark, isUltra, lowPower]);
+  }, [activeMode, mode, isDark, isUltra, lowPower, fixedMode]);
 
   const toggleTheme = useCallback(
     () =>

@@ -44,7 +44,6 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/web/network"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
-	"github.com/SawaMEN/3x-ui/v3/internal/web/service/discord"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service/email"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service/panel"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service/tgbot"
@@ -129,14 +128,11 @@ type Server struct {
 	xrayService    service.CoreService
 	settingService service.SettingService
 	tgbotService   tgbot.Tgbot
-	discordService *discord.DiscordService
-	discordGateway *discord.GatewayClient
 
 	wsHub *websocket.Hub
 
-	bus                  *eventbus.Bus
-	cron                 *cron.Cron
-	discordNotifyEntryID cron.EntryID
+	bus  *eventbus.Bus
+	cron *cron.Cron
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -481,16 +477,6 @@ func (s *Server) startTask(restartXray bool, loc *time.Location) {
 		_, _ = s.cron.AddJob(cadenceCheckHash, job.NewCheckHashStorageJob())
 	}
 
-	// Discord-bot-dependent jobs: periodic stats report + database backup.
-	isDiscordEnabled, err := s.settingService.GetDiscordBotEnable()
-	if (err == nil) && isDiscordEnabled {
-		runtime, err := s.settingService.GetDiscordRunTime()
-		if err != nil {
-			logger.Warningf("Discord notify: failed to load runtime: %v", err)
-		}
-		s.discordNotifyEntryID = scheduleSettingJob(s.cron, "Discord notify", runtime, "@daily", job.NewDiscordNotifyJob(s.discordService))
-	}
-
 	// CPU monitor publishes cpu.high events; register it whenever any notifier
 	// (Telegram or Email) wants them, independent of the Telegram bot being on.
 	if s.cpuAlarmWanted() {
@@ -538,13 +524,6 @@ func (s *Server) cpuAlarmWanted() bool {
 			return true
 		}
 	}
-	if on, _ := s.settingService.GetDiscordBotEnable(); on {
-		events, _ := s.settingService.GetDiscordEnabledEvents()
-		cpu, _ := s.settingService.GetDiscordCpu()
-		if wants(events, cpu) {
-			return true
-		}
-	}
 	return false
 }
 
@@ -571,13 +550,6 @@ func (s *Server) memoryAlarmWanted() bool {
 	if on, _ := s.settingService.GetSmtpEnable(); on {
 		events, _ := s.settingService.GetSmtpEnabledEvents()
 		mem, _ := s.settingService.GetSmtpMemory()
-		if wants(events, mem) {
-			return true
-		}
-	}
-	if on, _ := s.settingService.GetDiscordBotEnable(); on {
-		events, _ := s.settingService.GetDiscordEnabledEvents()
-		mem, _ := s.settingService.GetDiscordMemory()
 		if wants(events, mem) {
 			return true
 		}
@@ -764,15 +736,6 @@ func (s *Server) start(restartXray bool, startTgBot bool) (err error) {
 	// Wire email service to controller for test endpoint
 	controller.SetEmailService(emailService)
 
-	// Register discord subscriber (always — it checks discordBotEnable at runtime)
-	s.discordService = discord.NewDiscordService(s.settingService)
-	discordSub := discord.NewSubscriber(s.settingService, s.discordService)
-	s.bus.Subscribe("discord-notifier", discordSub.HandleEvent)
-
-	// Wire discord service to controller for test endpoint
-	controller.SetDiscordService(s.discordService)
-
-	serverService := &service.ServerService{}
 	inboundService := &service.InboundService{}
 	// Wire sing-box to the same initialized inbound service used by the panel.
 	// Do not construct a second empty InboundService: it would lose the panel's
@@ -781,32 +744,6 @@ func (s *Server) start(restartXray bool, startTgBot bool) (err error) {
 	if err := systemswap.Ensure(s.ctx); err != nil && !errors.Is(err, systemswap.ErrUnsupported) {
 		logger.Warning("restore managed swap/zram state failed:", err)
 	}
-	s.discordGateway = discord.NewGatewayClient(s.discordService, s.settingService, serverService, inboundService, &s.xrayService)
-
-	// Wire reload discord callback for settings updates
-	controller.SetReloadDiscordFunc(func() {
-		if s.discordNotifyEntryID != 0 {
-			s.cron.Remove(s.discordNotifyEntryID)
-			s.discordNotifyEntryID = 0
-		}
-		enabled, err := s.settingService.GetDiscordBotEnable()
-		if err != nil || !enabled {
-			if s.discordGateway != nil && s.discordGateway.IsRunning() {
-				s.discordGateway.Stop()
-			}
-			return
-		}
-		runtime, err := s.settingService.GetDiscordRunTime()
-		if err != nil {
-			logger.Warningf("Discord notify: failed to load runtime: %v", err)
-		}
-		s.discordNotifyEntryID = scheduleSettingJob(s.cron, "Discord notify", runtime, "@daily", job.NewDiscordNotifyJob(s.discordService))
-
-		if s.discordGateway != nil && !s.discordGateway.IsRunning() {
-			_ = s.discordGateway.Start(s.ctx)
-		}
-	})
-
 	// Wire Telegram test function to controller
 	controller.SetTestTgFunc(func() error {
 		if !s.tgbotService.IsRunning() {
@@ -855,11 +792,6 @@ func (s *Server) start(restartXray bool, startTgBot bool) (err error) {
 			// Subscribe Telegram notifications for event bus
 			s.bus.Subscribe("tg-notifier", s.tgbotService.HandleEvent)
 		}
-	}
-
-	isDiscordEnabled, err := s.settingService.GetDiscordBotEnable()
-	if (err == nil) && isDiscordEnabled && s.discordGateway != nil {
-		_ = s.discordGateway.Start(s.ctx)
 	}
 
 	s.api.StartBackground(s.ctx)
@@ -947,9 +879,6 @@ func (s *Server) stop(stopXray bool, stopTgBot bool) error {
 	}
 	if stopTgBot && s.tgbotService.IsRunning() {
 		s.tgbotService.Stop()
-	}
-	if s.discordGateway != nil && s.discordGateway.IsRunning() {
-		s.discordGateway.Stop()
 	}
 	return common.Combine(err1, err2)
 }

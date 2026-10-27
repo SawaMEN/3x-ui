@@ -852,20 +852,35 @@ func (TelemtService) DeleteProxy(username string) error {
 }
 
 func telemtGeneratedLink(username string, tls bool) (string, error) {
+	return telemtGeneratedLinkContext(context.Background(), username, tls)
+}
+
+func telemtGeneratedLinkContext(ctx context.Context, username string, tls bool) (string, error) {
 	client := &http.Client{Timeout: 5 * time.Second}
 	endpoint := "/v1/users/" + url.PathEscape(username)
 	var lastErr error
 	for i := 0; i < 10; i++ {
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
 		req, err := telemtAPIRequest(http.MethodGet, endpoint)
 		if err != nil {
 			lastErr = err
-			time.Sleep(300 * time.Millisecond)
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-time.After(300 * time.Millisecond):
+			}
 			continue
 		}
-		resp, err := client.Do(req)
+		resp, err := client.Do(req.WithContext(ctx))
 		if err != nil {
 			lastErr = err
-			time.Sleep(300 * time.Millisecond)
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-time.After(300 * time.Millisecond):
+			}
 			continue
 		}
 		var envelope map[string]interface{}
@@ -873,13 +888,21 @@ func telemtGeneratedLink(username string, tls bool) (string, error) {
 		resp.Body.Close()
 		if err != nil {
 			lastErr = err
-			time.Sleep(300 * time.Millisecond)
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-time.After(300 * time.Millisecond):
+			}
 			continue
 		}
 		ok, _ := envelope["ok"].(bool)
 		if !ok {
 			lastErr = errors.New("Telemt API returned an error")
-			time.Sleep(300 * time.Millisecond)
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-time.After(300 * time.Millisecond):
+			}
 			continue
 		}
 		data, _ := envelope["data"].(map[string]interface{})
@@ -897,7 +920,11 @@ func telemtGeneratedLink(username string, tls bool) (string, error) {
 			}
 		}
 		lastErr = errors.New("Telemt API returned no client link")
-		time.Sleep(300 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-time.After(300 * time.Millisecond):
+		}
 	}
 	if lastErr == nil {
 		lastErr = errors.New("Telemt API is unavailable")

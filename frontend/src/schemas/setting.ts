@@ -10,6 +10,18 @@ const absolutePath = z
     'URI path cannot contain . or .. segments',
   );
 
+export const SubscriptionThemeSchema = z.enum([
+  'classic',
+  'luna',
+  'light',
+  'dark',
+  'ultra-dark',
+  'colorful',
+  'blue-gray',
+  'cyberpunk',
+]);
+export type SubscriptionTheme = z.infer<typeof SubscriptionThemeSchema>;
+
 export const SubProfileModeSchema = z.enum(['none', 'builtin', 'custom']);
 export type SubProfileMode = z.infer<typeof SubProfileModeSchema>;
 
@@ -26,7 +38,9 @@ export const AllSettingSchema = z
     webKeyFile: z.string().optional(),
     rootRedirectEnable: z.boolean().optional(),
     rootRedirectURL: z.string().optional(),
-    subAppearanceTheme: z.enum(['classic', 'whitemax']).optional(),
+    subAppearanceTheme: z
+      .preprocess((value) => (value === 'whitemax' ? 'luna' : value), SubscriptionThemeSchema)
+      .optional(),
     subAppearanceEnable: z.boolean().optional(),
     subAppearanceTitle: z.string().optional(),
     subAppearanceDescription: z.string().optional(),
@@ -163,17 +177,6 @@ export const AllSettingSchema = z
     hasWarpSecret: z.boolean().optional(),
     hasNordSecret: z.boolean().optional(),
     hasSmtpPassword: z.boolean().optional(),
-    hasDiscordBotToken: z.boolean().optional(),
-    discordBotEnable: z.boolean().optional(),
-    discordBotToken: z.string().optional(),
-    discordChannelId: z.string().optional(),
-    discordAdminIds: z.string().optional(),
-    discordRunTime: z.string().optional(),
-    discordBotBackup: z.boolean().optional(),
-    discordCpu: z.number().int().min(0).max(100).optional(),
-    discordMemory: z.number().int().min(0).max(100).optional(),
-    discordLang: z.string().optional(),
-    discordEnabledEvents: z.string().optional(),
   })
   .loose();
 

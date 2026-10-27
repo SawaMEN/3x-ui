@@ -23,16 +23,6 @@ export interface AWGClientOptions {
 export interface AllSetting {
   coreType: string;
   datepicker: string;
-  discordAdminIds: string;
-  discordBotBackup: boolean;
-  discordBotEnable: boolean;
-  discordBotToken: string;
-  discordChannelId: string;
-  discordCpu: number;
-  discordEnabledEvents: string;
-  discordLang: string;
-  discordMemory: number;
-  discordRunTime: string;
   expireDiff: number;
   externalTrafficInformEnable: boolean;
   externalTrafficInformURI: string;
@@ -189,22 +179,11 @@ export interface AllSetting {
 export interface AllSettingView {
   coreType: string;
   datepicker: string;
-  discordAdminIds: string;
-  discordBotBackup: boolean;
-  discordBotEnable: boolean;
-  discordBotToken: string;
-  discordChannelId: string;
-  discordCpu: number;
-  discordEnabledEvents: string;
-  discordLang: string;
-  discordMemory: number;
-  discordRunTime: string;
   expireDiff: number;
   externalTrafficInformEnable: boolean;
   externalTrafficInformURI: string;
   happLinkEnable: boolean;
   hasApiToken: boolean;
-  hasDiscordBotToken: boolean;
   hasLdapPassword: boolean;
   hasNordSecret: boolean;
   hasSmtpPassword: boolean;
@@ -1152,6 +1131,22 @@ export interface SubBalancer {
   sortOrder: number;
   strategy: string;
   updatedAt: number;
+}
+
+export interface TelegramProxyProfile {
+  host: string;
+  link: string;
+  name?: string;
+  port: number;
+  tls: boolean;
+}
+
+export interface TelegramSubscription {
+  enabled: boolean;
+  personal?: TelegramProxyProfile | null;
+  proxies?: TelegramProxyProfile[];
+  webProxy?: string;
+  webProxyEnabled: boolean;
 }
 
 export interface TelemtWebSiteOptions {

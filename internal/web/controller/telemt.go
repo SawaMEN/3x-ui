@@ -1,11 +1,13 @@
 package controller
 
 import (
+	"context"
 	"errors"
 	"net"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -20,6 +22,7 @@ type TelemtController struct {
 func NewTelemtController(g *gin.RouterGroup, settingService service.SettingService) *TelemtController {
 	a := &TelemtController{settingService: settingService}
 	g.GET("/status", a.status)
+	g.GET("/subscription/:subid", a.subscriptionProfile)
 	g.POST("/install", a.install)
 	// Only discovery and installation are available before the binary exists.
 	g.Use(a.requireInstalled)
@@ -47,7 +50,7 @@ func (a *TelemtController) requireInstalled(c *gin.Context) {
 	if !a.service.IsInstalled() {
 		c.AbortWithStatusJSON(http.StatusConflict, gin.H{
 			"success": false,
-			"msg": "Telemt не установлен. Установите компонент в настройках системы.",
+			"msg":     "Telemt не установлен. Установите компонент в настройках системы.",
 		})
 		return
 	}
@@ -357,4 +360,12 @@ func (a *TelemtController) action(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "obj": a.service.Status()})
+}
+
+func (a *TelemtController) subscriptionProfile(c *gin.Context) {
+	c.Header("Cache-Control", "private, no-store")
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 3*time.Second)
+	defer cancel()
+	profile, err := a.service.SubscriptionProxyView(ctx, c.Param("subid"), publicHostFromRequest(c))
+	jsonObj(c, profile, err)
 }

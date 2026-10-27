@@ -111,8 +111,11 @@
       "ultra-dark": "Ultra Dark",
       "colorful": "Colorful",
       "blue-gray": "Blue Gray",
-      "cyberpunk": "Cyberpunk"
-    }
+      "cyberpunk": "Cyberpunk",
+      "luna": "Luna"
+    },
+    "telegramUnavailable": "Some Telegram proxies are temporarily unavailable. Try reloading this page later.",
+    "openTelegram": "Open in Telegram"
   },
   "menu": {
     "theme": "Theme",
@@ -2062,30 +2065,6 @@
       "subHappGroupThemes": "Appearance & Theme",
       "subHappGroupFailover": "Migration & App Management",
       "subHappGroupAndroid": "Android Per-App Proxy",
-      "discordSettings": "Discord Bot",
-      "discordBotEnable": "Enable Discord Notifications",
-      "discordBotEnableDesc": "Send system and event alerts to a Discord channel via bot",
-      "discordBotToken": "Discord Bot Token",
-      "discordBotTokenDesc": "Bot token from the Discord Developer Portal",
-      "discordTokenConfigured": "Token is configured. Enter a new token to replace it.",
-      "discordTokenPlaceholder": "Enter bot token",
-      "discordChannelId": "Channel ID",
-      "discordChannelIdDesc": "The Discord channel ID where notifications will be sent",
-      "discordAdminIds": "Admin User IDs",
-      "discordAdminIdsDesc": "Comma-separated Discord user IDs allowed to run bot commands. Messages from anyone else are ignored, and an empty list turns commands off.",
-      "discordEventBusNotify": "Discord Notifications",
-      "testDiscord": "Send Test Notification",
-      "testDiscordDesc": "Send a test notification to verify your bot token and channel ID",
-      "discordNotInitialized": "Discord service not initialized",
-      "discordBotNotEnabled": "Discord bot is not enabled",
-      "discordTestFailed": "Discord test failed",
-      "discordTestSuccess": "Test notification sent successfully",
-      "discordBotLanguage": "Discord Bot Language",
-      "discordNotifyTime": "Notification Time",
-      "discordNotifyTimeDesc": "How often the Discord bot sends periodic reports. Pick a preset interval, or choose Custom to enter a raw crontab expression.",
-      "discordNotifyBackup": "Database Backup",
-      "discordNotifyBackupDesc": "Send a database backup file with a report.",
-      "discordEventBusNotifyDesc": "Select which events trigger Discord notifications",
       "swap": {
         "menu": "Swap / ZRAM",
         "overview": "Overview",
@@ -3238,81 +3217,6 @@
       "xrayNotRunning": "❗ Xray Core is not running.",
       "startDesc": "Show the main menu",
       "statusOk": "✅ Bot is OK!"
-    }
-  },
-  "discord": {
-    "test": {
-      "title": "3x-ui Discord Notification Test",
-      "body": "This is a test notification confirming that Discord notifications are configured correctly."
-    },
-    "footer": "3x-ui Panel",
-    "fields": {
-      "panelVersion": "Panel Version",
-      "xrayCore": "sing-box",
-      "systemLoad": "System Load",
-      "networkTraffic": "Network Traffic",
-      "totalUsed": "Total Used",
-      "quota": "Quota",
-      "error": "Error",
-      "delay": "Delay",
-      "outbound": "Outbound",
-      "node": "Node",
-      "threshold": "Threshold",
-      "reason": "Reason",
-      "time": "Time",
-      "source": "Source"
-    },
-    "values": {
-      "uptime": "{{ .Days }}d {{ .Hours }}h",
-      "traffic": "↑{{ .Up }}  ↓{{ .Down }} (Total: {{ .Total }})",
-      "counts": "Total: {{ .Total }} | Depleting: {{ .Depleting }} | Disabled: {{ .Disabled }}",
-      "inbound": "Protocol: `{{ .Protocol }}` | Port: `{{ .Port }}` | Clients: `{{ .Clients }}` | Traffic: `↑{{ .Up }} ↓{{ .Down }}` | State: `{{ .State }}`"
-    },
-    "alerts": {
-      "outboundDown": "Outbound Down",
-      "outboundUp": "Outbound Up",
-      "nodeDown": "Node Down",
-      "nodeUp": "Node Up",
-      "xrayCrash": "sing-box Crashed",
-      "cpuHigh": "CPU Threshold Exceeded",
-      "memoryHigh": "Memory Threshold Exceeded",
-      "loginSuccess": "Login Success",
-      "loginFailed": "Login Failed"
-    },
-    "report": {
-      "title": "📊 3x-ui Status Report",
-      "summary": "Periodic server and proxy status report for **{{ .Host }}**",
-      "footer": "3x-ui Scheduled Report • Schedule: {{ .RunTime }}"
-    },
-    "commands": {
-      "helpTitle": "🤖 3x-ui Discord Bot Commands",
-      "helpDescription": "Available commands for monitoring and managing the 3x-ui server:",
-      "helpStatus": "Display system load, RAM, CPU, connections, and online users",
-      "helpReport": "Generate a full status report (with DB backup if configured)",
-      "helpBackup": "Send the database backup file immediately",
-      "helpUsage": "Query traffic usage, quota, and expiry for a client",
-      "helpInbounds": "List all configured inbounds with ports and client stats",
-      "helpRestart": "Restart the sing-box",
-      "helpHelp": "Display this list of available commands",
-      "statusTitle": "⚡ 3x-ui Server Status",
-      "statusDescription": "Current operational metrics for **{{ .Host }}**",
-      "backupTitle": "🗄️ Database Backup",
-      "backupDescription": "Backup archive for 3x-ui generated at `{{ .Time }}`",
-      "backupUnavailable": "❌ Backup service unavailable",
-      "backupFailed": "❌ Failed to read database backup: {{ .Error }}",
-      "usageHint": "⚠️ Usage: `!usage <email>` or `/usage <email>`",
-      "usageTitle": "👤 Client Usage: {{ .Email }}",
-      "usageDescription": "Inbound: **{{ .Remark }}** (Port {{ .Port }})",
-      "clientNotFound": "⚠️ Client `{{ .Email }}` was not found in any configured inbound.",
-      "inboundsUnavailable": "❌ Inbound service unavailable",
-      "inboundsFailed": "❌ Failed to load inbounds: {{ .Error }}",
-      "inboundsTitle": "🔌 Configured Inbounds",
-      "inboundsDescription": "Total inbounds: **{{ .Count }}**",
-      "noInbounds": "ℹ️ No inbounds configured.",
-      "xrayUnavailable": "❌ sing-box service unavailable",
-      "restarting": "🔄 Restarting sing-box...",
-      "restartFailed": "❌ Failed to restart sing-box: {{ .Error }}",
-      "restartSuccess": "✅ sing-box restarted successfully."
     }
   },
   "email": {

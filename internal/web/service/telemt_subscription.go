@@ -47,7 +47,11 @@ func isTelemtSubscriptionUsername(username string) bool {
 // creating it on first use. Repeated calls keep the same username and secret.
 // It never starts a stopped Telemt service. When Telemt is installed but stopped,
 // the user is persisted to telemt.toml and becomes active on the next normal start.
-func (TelemtService) EnsureSubscriptionProxy(subID, host string) (TelemtProxy, error) {
+func (s TelemtService) EnsureSubscriptionProxy(subID, host string) (TelemtProxy, error) {
+	return s.EnsureSubscriptionProxyContext(context.Background(), subID, host)
+}
+
+func (TelemtService) EnsureSubscriptionProxyContext(ctx context.Context, subID, host string) (TelemtProxy, error) {
 	subID = strings.TrimSpace(subID)
 	host = strings.TrimSpace(host)
 	if subID == "" {
@@ -125,7 +129,7 @@ func (TelemtService) EnsureSubscriptionProxy(subID, host string) (TelemtProxy, e
 		}, nil
 	}
 
-	link, err := telemtGeneratedLink(username, raw.General.Modes.TLS)
+	link, err := telemtGeneratedLinkContext(ctx, username, raw.General.Modes.TLS)
 	if err != nil {
 		return TelemtProxy{}, fmt.Errorf("telemt: failed to obtain subscription link: %w", err)
 	}

@@ -37,6 +37,25 @@ function LocationProbe() {
 }
 
 describe('SubscriptionGeneralTab', () => {
+  it('saves the subscription theme while custom branding is disabled and loads legacy WhiteMax as Luna', () => {
+    const updateSetting = vi.fn();
+    const page = renderWithProviders(
+      <MemoryRouter>
+        <SubscriptionGeneralTab
+          allSetting={
+            new AllSetting({ subAppearanceTheme: 'whitemax', subAppearanceEnable: false })
+          }
+          updateSetting={updateSetting}
+        />
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByRole('tab', { name: /Profile/ }));
+    expect(screen.getByText('Luna')).toBeTruthy();
+    chooseSelectOption('sub-appearance-theme', 'Light');
+    expect(updateSetting).toHaveBeenCalledWith({ subAppearanceTheme: 'light' });
+    page.unmount();
+  });
+
   it('selects and reloads the saved subscription node ordering mode', () => {
     const updateSetting = vi.fn();
     const { unmount } = renderWithProviders(

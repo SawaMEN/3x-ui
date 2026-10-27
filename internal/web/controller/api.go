@@ -134,6 +134,7 @@ var nodeSyncScopeAllow = map[string]map[string]struct{}{
 	"/server/clientIps":                           {http.MethodGet: {}, http.MethodPost: {}},
 	"/clients/clientIpsByGuid":                    {http.MethodPost: {}},
 	"/hosts/list":                                 {http.MethodGet: {}},
+	"/telemt/subscription/:subid":                 {http.MethodGet: {}},
 }
 
 // enforceTokenScope applies explicit allowlists to restricted API tokens.

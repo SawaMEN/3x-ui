@@ -67,10 +67,6 @@ _openapi:
         so the panel warns when it is off.
       url: '#report-what-the-configured-bot-can-do-inline-mode-is-a-botfather-switch-so-the-panel-warns-when-it-is-off'
     - depth: 2
-      title: Test Discord bot connection by sending a test embed to the configured
-        channel.
-      url: '#test-discord-bot-connection-by-sending-a-test-embed-to-the-configured-channel'
-    - depth: 2
       title: Return the built-in default Xray JSON config template that ships with
         this panel version.
       url: '#return-the-built-in-default-xray-json-config-template-that-ships-with-this-panel-version'
@@ -122,9 +118,6 @@ _openapi:
       - content: Report what the configured bot can do. Inline mode is a BotFather
           switch, so the panel warns when it is off.
         id: report-what-the-configured-bot-can-do-inline-mode-is-a-botfather-switch-so-the-panel-warns-when-it-is-off
-      - content: Test Discord bot connection by sending a test embed to the configured
-          channel.
-        id: test-discord-bot-connection-by-sending-a-test-embed-to-the-configured-channel
       - content: Return the built-in default Xray JSON config template that ships with
           this panel version.
         id: return-the-built-in-default-xray-json-config-template-that-ships-with-this-panel-version
@@ -138,7 +131,7 @@ export default function Layout(props) {
   return (
     <>
       {props.children}
-      <OpenAPIPage document="./public/openapi.json" webhooks={[]} operations={[{"path":"/panel/api/domains/status","method":"get"},{"path":"/panel/api/domains/apply","method":"post"},{"path":"/panel/api/domains/check","method":"post"},{"path":"/panel/api/setting/all","method":"post"},{"path":"/panel/api/setting/defaultSettings","method":"post"},{"path":"/panel/api/setting/factoryDefaults","method":"post"},{"path":"/panel/api/setting/update","method":"post"},{"path":"/panel/api/setting/validateRegex","method":"post"},{"path":"/panel/api/setting/updateUser","method":"post"},{"path":"/panel/api/setting/restartPanel","method":"post"},{"path":"/panel/api/setting/testSmtp","method":"post"},{"path":"/panel/api/setting/testTgBot","method":"post"},{"path":"/panel/api/setting/tgBotCapabilities","method":"post"},{"path":"/panel/api/setting/testDiscord","method":"post"},{"path":"/panel/api/setting/getDefaultJsonConfig","method":"get"}]} showTitle />
+      <OpenAPIPage document="./public/openapi.json" webhooks={[]} operations={[{"path":"/panel/api/domains/status","method":"get"},{"path":"/panel/api/domains/apply","method":"post"},{"path":"/panel/api/domains/check","method":"post"},{"path":"/panel/api/setting/all","method":"post"},{"path":"/panel/api/setting/defaultSettings","method":"post"},{"path":"/panel/api/setting/factoryDefaults","method":"post"},{"path":"/panel/api/setting/update","method":"post"},{"path":"/panel/api/setting/validateRegex","method":"post"},{"path":"/panel/api/setting/updateUser","method":"post"},{"path":"/panel/api/setting/restartPanel","method":"post"},{"path":"/panel/api/setting/testSmtp","method":"post"},{"path":"/panel/api/setting/testTgBot","method":"post"},{"path":"/panel/api/setting/tgBotCapabilities","method":"post"},{"path":"/panel/api/setting/getDefaultJsonConfig","method":"get"}]} showTitle />
     </>
   );
 }

@@ -1,5 +1,5 @@
 import { ObjectUtil } from '@/utils';
-import type { SubProfileMode, SubHostSortMode } from '@/schemas/setting';
+import type { SubProfileMode, SubHostSortMode, SubscriptionTheme } from '@/schemas/setting';
 
 export class AllSetting {
   coreType: 'xray' | 'sing-box' = 'sing-box';
@@ -10,7 +10,7 @@ export class AllSetting {
   webKeyFile = '';
   rootRedirectEnable = false;
   rootRedirectURL = 'https://www.wikipedia.org/';
-  subAppearanceTheme: 'classic' | 'whitemax' = 'classic';
+  subAppearanceTheme: SubscriptionTheme = 'classic';
   subAppearanceEnable = false;
   subAppearanceTitle = '';
   subAppearanceDescription = '';
@@ -168,22 +168,13 @@ export class AllSetting {
   clearTgBotToken = false;
   clearLdapPassword = false;
   clearSmtpPassword = false;
-  discordBotEnable = false;
-  discordBotToken = '';
-  discordChannelId = '';
-  discordAdminIds = '';
-  discordRunTime = '@daily';
-  discordBotBackup = false;
-  discordCpu = 80;
-  discordMemory = 80;
-  discordLang = 'en-US';
-  discordEnabledEvents = 'login.attempt,cpu.high';
-  hasDiscordBotToken = false;
-  clearDiscordBotToken = false;
 
   constructor(data?: unknown) {
     if (data != null) {
       ObjectUtil.cloneProps(this, data);
+      if ((data as { subAppearanceTheme?: string }).subAppearanceTheme === 'whitemax') {
+        this.subAppearanceTheme = 'luna';
+      }
     }
     // Legacy settings with a custom URL retain it until an explicit mode is saved.
     if (

@@ -76,40 +76,6 @@
           "datepicker": {
             "type": "string"
           },
-          "discordAdminIds": {
-            "type": "string"
-          },
-          "discordBotBackup": {
-            "type": "boolean"
-          },
-          "discordBotEnable": {
-            "type": "boolean"
-          },
-          "discordBotToken": {
-            "type": "string"
-          },
-          "discordChannelId": {
-            "type": "string"
-          },
-          "discordCpu": {
-            "maximum": 100,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "discordEnabledEvents": {
-            "type": "string"
-          },
-          "discordLang": {
-            "type": "string"
-          },
-          "discordMemory": {
-            "maximum": 100,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "discordRunTime": {
-            "type": "string"
-          },
           "expireDiff": {
             "minimum": 0,
             "type": "integer"
@@ -602,16 +568,6 @@
         "required": [
           "coreType",
           "datepicker",
-          "discordAdminIds",
-          "discordBotBackup",
-          "discordBotEnable",
-          "discordBotToken",
-          "discordChannelId",
-          "discordCpu",
-          "discordEnabledEvents",
-          "discordLang",
-          "discordMemory",
-          "discordRunTime",
           "expireDiff",
           "externalTrafficInformEnable",
           "externalTrafficInformURI",
@@ -774,40 +730,6 @@
           "datepicker": {
             "type": "string"
           },
-          "discordAdminIds": {
-            "type": "string"
-          },
-          "discordBotBackup": {
-            "type": "boolean"
-          },
-          "discordBotEnable": {
-            "type": "boolean"
-          },
-          "discordBotToken": {
-            "type": "string"
-          },
-          "discordChannelId": {
-            "type": "string"
-          },
-          "discordCpu": {
-            "maximum": 100,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "discordEnabledEvents": {
-            "type": "string"
-          },
-          "discordLang": {
-            "type": "string"
-          },
-          "discordMemory": {
-            "maximum": 100,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "discordRunTime": {
-            "type": "string"
-          },
           "expireDiff": {
             "minimum": 0,
             "type": "integer"
@@ -822,9 +744,6 @@
             "type": "boolean"
           },
           "hasApiToken": {
-            "type": "boolean"
-          },
-          "hasDiscordBotToken": {
             "type": "boolean"
           },
           "hasLdapPassword": {
@@ -1324,22 +1243,11 @@
         "required": [
           "coreType",
           "datepicker",
-          "discordAdminIds",
-          "discordBotBackup",
-          "discordBotEnable",
-          "discordBotToken",
-          "discordChannelId",
-          "discordCpu",
-          "discordEnabledEvents",
-          "discordLang",
-          "discordMemory",
-          "discordRunTime",
           "expireDiff",
           "externalTrafficInformEnable",
           "externalTrafficInformURI",
           "happLinkEnable",
           "hasApiToken",
-          "hasDiscordBotToken",
           "hasLdapPassword",
           "hasNordSecret",
           "hasSmtpPassword",
@@ -5072,6 +4980,65 @@
           "sortOrder",
           "strategy",
           "updatedAt"
+        ],
+        "type": "object"
+      },
+      "TelegramProxyProfile": {
+        "description": "TelegramProxyProfile contains only the credentials intended for one subscriber.",
+        "properties": {
+          "host": {
+            "type": "string"
+          },
+          "link": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer"
+          },
+          "tls": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "host",
+          "link",
+          "port",
+          "tls"
+        ],
+        "type": "object"
+      },
+      "TelegramSubscription": {
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "personal": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TelegramProxyProfile"
+              }
+            ],
+            "nullable": true
+          },
+          "proxies": {
+            "items": {
+              "$ref": "#/components/schemas/TelegramProxyProfile"
+            },
+            "type": "array"
+          },
+          "webProxy": {
+            "type": "string"
+          },
+          "webProxyEnabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled",
+          "webProxyEnabled"
         ],
         "type": "object"
       },
@@ -16077,40 +16044,6 @@
         }
       }
     },
-    "/panel/api/setting/testDiscord": {
-      "post": {
-        "tags": [
-          "Settings"
-        ],
-        "summary": "Test Discord bot connection by sending a test embed to the configured channel.",
-        "operationId": "post_panel_api_setting_testDiscord",
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "msg": {
-                      "type": "string"
-                    },
-                    "obj": {}
-                  }
-                },
-                "example": {
-                  "success": true,
-                  "msg": "Test notification sent successfully"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/panel/api/setting/getDefaultJsonConfig": {
       "get": {
         "tags": [
@@ -18475,6 +18408,67 @@
                       "type": "string"
                     },
                     "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/telemt/subscription/{subid}": {
+      "get": {
+        "tags": [
+          "Telemt"
+        ],
+        "summary": "Return existing Telegram proxy profiles for one subscription on this node. Requires admin, node-sync or node-admin authentication; does not create users.",
+        "operationId": "get_panel_api_telemt_subscription_subid",
+        "parameters": [
+          {
+            "name": "subid",
+            "in": "path",
+            "required": true,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {
+                      "$ref": "#/components/schemas/TelegramSubscription"
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": {
+                    "enabled": false,
+                    "personal": null,
+                    "proxies": [
+                      {
+                        "host": "",
+                        "link": "",
+                        "name": "",
+                        "port": 0,
+                        "tls": false
+                      }
+                    ],
+                    "webProxy": "",
+                    "webProxyEnabled": false
                   }
                 }
               }
