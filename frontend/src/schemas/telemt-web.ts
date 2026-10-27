@@ -4,7 +4,10 @@ import { isTelemtWebCatalogTemplate, TelemtWebThemes } from './telemt-web-catalo
 export const TelemtFrontendSchema = z.enum(['nginx', 'caddy', 'haproxy']);
 export const TelemtCarrierSchema = z.enum(['https', 'https-lanes', 'websocket', 'websocket-lanes']);
 export const TelemtWebBasePathSchema = z.string().trim().refine(
-  (value) => value === '' || (value.length >= 6 && value.length <= 96 && /^[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*$/.test(value.replace(/^\/+|\/+$/g, ''))),
+  (value) => {
+    const path = value.replace(/^\/+|\/+$/g, '');
+    return path === '' || (path.length >= 6 && path.length <= 96 && /^[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*$/.test(path));
+  },
   'Путь должен содержать 6–96 символов: буквы, цифры, /, - или _',
 );
 
