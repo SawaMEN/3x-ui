@@ -138,6 +138,9 @@ func (s *ClientService) Create(inboundSvc *InboundService, payload *ClientCreate
 	if err := validateClientResetDay(client.ResetDay); err != nil {
 		return false, err
 	}
+	if err := client.SpeedLimit.Validate(); err != nil {
+		return false, err
+	}
 	if err := validateClientResetMax(client.ResetMax); err != nil {
 		return false, err
 	}
@@ -204,6 +207,9 @@ func (s *ClientService) Create(inboundSvc *InboundService, payload *ClientCreate
 		inbound, getErr := inboundSvc.GetInbound(ibId)
 		if getErr != nil {
 			return false, fmt.Errorf("inbound %d: %w", ibId, getErr)
+		}
+		if limit := client.SpeedLimit; limit != nil && limit.Enabled && !model.SupportsClientSpeedLimit(inbound.Protocol) {
+			return false, fmt.Errorf("client speed limit is not supported for %s", inbound.Protocol)
 		}
 		if err := validateClientKeepAlive(inbound.Protocol, client); err != nil {
 			return false, err
@@ -617,6 +623,12 @@ func (s *ClientService) Update(inboundSvc *InboundService, id int, updated model
 	if err := validateClientResetDay(updated.ResetDay); err != nil {
 		return false, err
 	}
+	if updated.SpeedLimit == nil {
+		updated.SpeedLimit = existing.SpeedLimit
+	}
+	if err := updated.SpeedLimit.Validate(); err != nil {
+		return false, err
+	}
 	if err := validateClientResetMax(updated.ResetMax); err != nil {
 		return false, err
 	}
@@ -635,6 +647,17 @@ func (s *ClientService) Update(inboundSvc *InboundService, id int, updated model
 			}
 			if err := validateClientKeepAliveAgainstExisting(ib.Protocol, updated, old, existing.Email); err != nil {
 				return false, err
+			}
+		}
+	}
+	if updated.SpeedLimit != nil && updated.SpeedLimit.Enabled {
+		for _, ibID := range attachedIds {
+			ib, err := inboundSvc.GetInbound(ibID)
+			if err != nil {
+				return false, err
+			}
+			if !model.SupportsClientSpeedLimit(ib.Protocol) {
+				return false, fmt.Errorf("client speed limit is not supported for %s", ib.Protocol)
 			}
 		}
 	}
@@ -776,6 +799,10 @@ func (s *ClientService) Update(inboundSvc *InboundService, id int, updated model
 		if err != nil {
 			return needRestart, err
 		}
+		speedLimit, err := json.Marshal(merged.SpeedLimit)
+		if err != nil {
+			return needRestart, err
+		}
 		awgOptions, err := json.Marshal(merged.AWGClientOptions)
 		if err != nil {
 			return needRestart, err
@@ -798,6 +825,7 @@ func (s *ClientService) Update(inboundSvc *InboundService, id int, updated model
 				"wg_keep_alive_range":  keepAliveRange,
 				"client_host_rule_ids": model.EncodeClientHostRuleIds(merged.ClientHostRuleIds),
 				"awg_client_options":   string(awgOptions),
+				"speed_limit":          string(speedLimit),
 				"limit_ip":             merged.LimitIP,
 				"total_gb":             merged.TotalGB,
 				"expiry_time":          merged.ExpiryTime,

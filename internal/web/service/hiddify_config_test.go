@@ -125,6 +125,23 @@ func TestHiddifyFullDatabaseProtocolConfigurations(t *testing.T) {
 			if !strings.Contains(string(data), ib.Tag) || !strings.Contains(string(data), `"alice"`) {
 				t.Fatal("managed listener or identity missing")
 			}
+			if model.SupportsClientSpeedLimit(tc.protocol) {
+				limit, err := json.Marshal(&model.ClientSpeedLimit{Enabled: true, UploadMbps: 5, DownloadMbps: 10})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := database.GetDB().Model(&model.ClientRecord{}).Where("email = ?", "alice").Update("speed_limit", string(limit)).Error; err != nil {
+					t.Fatal(err)
+				}
+				limited, err := NativeCore(CoreTypeHiddify).GetConfig()
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(limited.SpeedLimitPlan.Routes) == 0 {
+					t.Fatal("supported protocol lost per-user speed enforcement")
+				}
+				checkGeneratedHiddifyConfig(t, limited)
+			}
 		})
 	}
 }

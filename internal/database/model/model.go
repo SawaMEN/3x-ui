@@ -940,7 +940,8 @@ type Client struct {
 	Secret              string            `json:"secret,omitempty" example:"ee1234567890abcdef1234567890abcd7777772e636c6f7564666c6172652e636f6d"`
 	AdTag               string            `json:"adTag,omitempty" example:"0123456789abcdef0123456789abcdef"`
 	SudokuPrivateKey    string            `json:"sudokuPrivateKey,omitempty" gorm:"-"`
-	Email               string            `json:"email"`                        // Client email identifier
+	Email               string            `json:"email"` // Client email identifier
+	SpeedLimit          *ClientSpeedLimit `json:"speedLimit,omitempty"`
 	LimitIP             int               `json:"limitIp"`                      // IP limit for this client
 	TotalGB             int64             `json:"totalGB" form:"totalGB"`       // Total traffic limit in GB
 	ExpiryTime          int64             `json:"expiryTime" form:"expiryTime"` // Expiration timestamp
@@ -982,6 +983,7 @@ type ClientRecord struct {
 	AWGClientOptions  *AWGClientOptions `json:"awgClientOptions,omitempty" gorm:"serializer:json;column:awg_client_options"`
 	Secret            string            `json:"secret" gorm:"column:secret"`
 	AdTag             string            `json:"adTag" gorm:"column:ad_tag;default:''"`
+	SpeedLimit        *ClientSpeedLimit `json:"speedLimit,omitempty" gorm:"serializer:json;column:speed_limit"`
 	LimitIP           int               `json:"limitIp" gorm:"column:limit_ip"`
 	LimitHwid         int               `json:"limitHwid" gorm:"column:limit_hwid;default:0"`
 	TotalGB           int64             `json:"totalGB" gorm:"column:total_gb"`
@@ -1194,6 +1196,7 @@ func (c *Client) ToRecord() *ClientRecord {
 		Flow:              c.Flow,
 		Security:          c.Security,
 		ClientHostRuleIds: CloneClientHostRuleIds(c.ClientHostRuleIds),
+		SpeedLimit:        c.SpeedLimit,
 		LimitIP:           c.LimitIP,
 		TotalGB:           c.TotalGB,
 		ExpiryTime:        c.ExpiryTime,
@@ -1254,6 +1257,7 @@ func (r *ClientRecord) ToClient() *Client {
 		Flow:              r.Flow,
 		Security:          r.Security,
 		ClientHostRuleIds: CloneClientHostRuleIds(r.ClientHostRuleIds),
+		SpeedLimit:        r.SpeedLimit,
 		LimitIP:           r.LimitIP,
 		TotalGB:           r.TotalGB,
 		ExpiryTime:        r.ExpiryTime,
@@ -1364,6 +1368,10 @@ func MergeClientRecord(existing *ClientRecord, incoming *ClientRecord) []ClientM
 
 	incomingNewer := incoming.UpdatedAt > existing.UpdatedAt ||
 		(incoming.UpdatedAt == existing.UpdatedAt && incoming.CreatedAt > existing.CreatedAt)
+	if incoming.SpeedLimit != nil && (existing.SpeedLimit == nil || incomingNewer) {
+		limit := *incoming.SpeedLimit
+		existing.SpeedLimit = &limit
+	}
 
 	if existing.UUID != incoming.UUID && incoming.UUID != "" {
 		if incomingNewer || existing.UUID == "" {

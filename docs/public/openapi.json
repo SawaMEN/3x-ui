@@ -1720,6 +1720,14 @@
             "description": "Security method (e.g., \"auto\", \"aes-128-gcm\")",
             "type": "string"
           },
+          "speedLimit": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ClientSpeedLimit"
+              }
+            ],
+            "nullable": true
+          },
           "subId": {
             "description": "Subscription identifier",
             "type": "string"
@@ -1955,6 +1963,14 @@
           "security": {
             "type": "string"
           },
+          "speedLimit": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ClientSpeedLimit"
+              }
+            ],
+            "nullable": true
+          },
           "subId": {
             "type": "string"
           },
@@ -2086,6 +2102,14 @@
             "example": 0,
             "type": "integer"
           },
+          "speedLimit": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ClientSpeedLimit"
+              }
+            ],
+            "nullable": true
+          },
           "subId": {
             "example": "abcd1234",
             "type": "string"
@@ -2123,6 +2147,26 @@
           "subId",
           "totalGB",
           "updatedAt"
+        ],
+        "type": "object"
+      },
+      "ClientSpeedLimit": {
+        "description": "Mbps are decimal megabits per second; zero leaves that direction unlimited.",
+        "properties": {
+          "downloadMbps": {
+            "type": "integer"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "uploadMbps": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "downloadMbps",
+          "enabled",
+          "uploadMbps"
         ],
         "type": "object"
       },
@@ -10891,6 +10935,7 @@
                         "reset": 0,
                         "resetDay": 0,
                         "resetMax": 0,
+                        "speedLimit": null,
                         "subId": "abcd1234",
                         "totalGB": 53687091200,
                         "traffic": null,
