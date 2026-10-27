@@ -61,6 +61,7 @@ type WebProxyStatus = {
   aliases: string[];
   defaultDomain: string;
   link: string;
+  links?: string[];
   nginxInstalled: boolean;
   nginxActive: boolean;
   certificateReady: boolean;
@@ -174,6 +175,7 @@ export default function TelemtPage() {
       aliases: [],
       defaultDomain: '',
       link: '',
+      links: [],
       nginxInstalled: false,
       nginxActive: false,
       certificateReady: false,
@@ -1139,17 +1141,19 @@ export default function TelemtPage() {
 
           {status.webProxy.enabled && status.webProxy.link && (
             <div>
-              <Typography.Text strong>Ссылка для Telegram</Typography.Text>
-              <div className="telemt-link-box telemt-link-box-large">
-                <Typography.Text code>{status.webProxy.link}</Typography.Text>
-                <Button
-                  type="text"
-                  icon={<CopyOutlined />}
-                  onClick={() => void navigator.clipboard.writeText(status.webProxy.link)}
-                >
-                  Копировать
-                </Button>
-              </div>
+              <Typography.Text strong>Ссылки для Telegram</Typography.Text>
+              {(status.webProxy.links?.length ? status.webProxy.links : [status.webProxy.link]).map((link) => (
+                <div className="telemt-link-box telemt-link-box-large" key={link}>
+                  <Typography.Text code>{link}</Typography.Text>
+                  <Button
+                    type="text"
+                    icon={<CopyOutlined />}
+                    onClick={() => void navigator.clipboard.writeText(link)}
+                  >
+                    Копировать
+                  </Button>
+                </div>
+              ))}
             </div>
           )}
         </Space>
