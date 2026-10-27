@@ -308,7 +308,7 @@ func telemtWebFrontendConfig(s TelemtWebProxyState, sub telemtWebSubscriptionTar
 			routes = append(routes, map[string]any{"match": []any{map[string]any{"path": sub.Paths}}, "handle": []any{proxy(sub.Upstream)}, "terminal": true})
 		}
 		routes = append(routes, map[string]any{"handle": []any{proxy("http://" + backend)}})
-		server := map[string]any{"listen": []string{":443"}, "automatic_https": map[string]any{"disable": true}, "tls_connection_policies": []any{map[string]any{}}, "routes": []any{map[string]any{"match": []any{map[string]any{"host": []string{s.Domain}}}, "handle": []any{map[string]any{"handler": "subroute", "routes": routes}}, "terminal": true}, map[string]any{"handle": []any{map[string]any{"handler": "static_response", "status_code": 404}}}}}
+		server := map[string]any{"listen": []string{":443"}, "automatic_https": map[string]any{"disable": true}, "tls_connection_policies": []any{map[string]any{}}, "routes": []any{map[string]any{"match": []any{map[string]any{"host": telemtWebHosts(s)}}, "handle": []any{map[string]any{"handler": "subroute", "routes": routes}}, "terminal": true}, map[string]any{"handle": []any{map[string]any{"handler": "static_response", "status_code": 404}}}}}
 		config := map[string]any{"admin": map[string]any{"listen": "unix//run/3x-ui-telemt-front/caddy.sock", "config": map[string]any{"persist": false}}, "apps": map[string]any{"tls": map[string]any{"certificates": map[string]any{"load_files": []any{map[string]any{"certificate": s.CertFile, "key": s.KeyFile}}}}, "http": map[string]any{"servers": map[string]any{"web": server}}}}
 		return json.MarshalIndent(config, "", "  ")
 	case "haproxy":
@@ -318,7 +318,7 @@ func telemtWebFrontendConfig(s TelemtWebProxyState, sub telemtWebSubscriptionTar
 		}
 		var b strings.Builder
 		b.WriteString("global\n    maxconn 4096\n\ndefaults\n    mode http\n    timeout connect 5s\n    timeout client 65s\n    timeout server 65s\n    timeout tunnel 1h\n\nfrontend web\n    bind " + bind + " ssl crt " + telemtWebFrontDir + "/tls.pem alpn h2,http/1.1\n")
-		fmt.Fprintf(&b, "    http-request deny deny_status 404 unless { hdr(host),field(1,:) -i %s }\n", s.Domain)
+		fmt.Fprintf(&b, "    http-request deny deny_status 404 unless { hdr(host),field(1,:) -i %s }\n", strings.Join(telemtWebHosts(s), " "))
 		b.WriteString("    http-request set-header X-Forwarded-For %[src]\n    http-request set-header X-Forwarded-Proto https\n")
 		if len(sub.Paths) > 0 {
 			for _, path := range sub.Paths {
@@ -348,8 +348,8 @@ func writeTelemtWebFrontendConfig(s TelemtWebProxyState) error {
 	if telemtWebFrontend(s) == "nginx" {
 		return writeTelemtWebNginxConfig(s)
 	}
-	if !telemtWebCertificatePairReady(s.CertFile, s.KeyFile, s.Domain) {
-		return errors.New("WEB certificate does not cover the domain")
+	if !telemtWebCertificateCoversHosts(s.CertFile, s.KeyFile, telemtWebHosts(s)) {
+		return errors.New("WEB certificate does not cover all configured domains")
 	}
 	aliases, upstream, err := telemtWebSubscriptionTargets(&SettingService{})
 	if err != nil {
