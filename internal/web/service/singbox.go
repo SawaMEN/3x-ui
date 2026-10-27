@@ -681,6 +681,9 @@ func (s *SingBoxService) startLocked(ctx context.Context) (result error) {
 		}
 	}()
 	if s.IsRunning() {
+		if clientlimit.Default.Address() == "" && strings.Contains(string(s.process().AppliedConfig()), clientlimit.InternalPrefix) {
+			return s.restartLocked(ctx)
+		}
 		return s.resumeGateway(ctx)
 	}
 	if err := s.guardStoppedGateway(ctx); err != nil {

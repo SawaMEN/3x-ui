@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -118,5 +119,31 @@ func TestClientSpeedLimitPreservesRouteOrderAndRejects(t *testing.T) {
 	}
 	if err := injectClientSpeedLimits(singbox.NewConfig(), nil, nil); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestClientSpeedLimitRecoversListenerWithRunningCore(t *testing.T) {
+	svc, starts, _ := stage5ProcessFixture(t)
+	defer clientlimit.Default.Close()
+	seedHiddifyConfigInbound(t, model.VLESS, `{"decryption":"none"}`, `{"network":"tcp"}`)
+	if err := database.GetDB().Model(&model.ClientRecord{}).Where("email = ?", "alice").Update("speed_limit", encodeSpeedLimit(&model.ClientSpeedLimit{Enabled: true, UploadMbps: 1})).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Restart(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if clientlimit.Default.Address() == "" {
+		t.Fatal("limiter not started")
+	}
+	before := stage5Starts(t, starts)
+	clientlimit.Default.Close()
+	if !svc.IsRunning() {
+		t.Fatal("core unexpectedly stopped")
+	}
+	if err := svc.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if clientlimit.Default.Address() == "" || stage5Starts(t, starts) != before+1 {
+		t.Fatal("running core was resumed without restoring its limiter")
 	}
 }
