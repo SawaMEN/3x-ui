@@ -14,12 +14,13 @@ export const TelemtCarriersSchema = z
   .refine((values) => new Set(values).size === values.length);
 export const TelemtWebSiteSchema = z
   .object({
-    mode: z.enum(['auto', 'catalog', 'generate', 'html']).default('auto'),
+    mode: z.enum(['auto', 'catalog', 'generate', 'html', 'origin']).default('auto'),
     catalog: z.enum(['builtin', 'mtproxyl']).optional(),
     template: z.string().optional(),
     theme: z.enum(TelemtWebThemes).optional(),
     title: z.string().max(80).optional(),
     description: z.string().max(300).optional(),
+    origin: z.string().optional(),
     html: z
       .string()
       .refine(
@@ -35,6 +36,23 @@ export const TelemtWebSiteSchema = z
       path: ['html'],
       message: 'Загрузите полный HTML-документ',
     },
+  )
+  .refine(
+    (site) => {
+      if (site.mode !== 'origin') return true;
+      try {
+        const url = new URL(site.origin || '');
+        const port = Number(url.port);
+        return url.protocol === 'http:' &&
+          ['127.0.0.1', '[::1]'].includes(url.hostname) &&
+          !!url.port && port > 0 && port <= 65535 &&
+          url.pathname === '/' && !url.username && !url.password &&
+          !url.search && !url.hash;
+      } catch {
+        return false;
+      }
+    },
+    { path: ['origin'], message: 'Укажите локальный HTTP-адрес, например http://127.0.0.1:8080' },
   )
   .refine(
     (site) => site.mode !== 'catalog' || isTelemtWebCatalogTemplate(site.catalog, site.template),
