@@ -195,7 +195,8 @@ export default function RealityTargetScannerModal({
     {
       title: '',
       key: 'action',
-      width: 64,
+      width: 100,
+      fixed: 'right',
       render: (_, row) => (
         <Button
           type="link"
