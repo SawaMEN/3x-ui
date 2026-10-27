@@ -413,6 +413,7 @@ export const ClientSchema = z.object({
   awgClientOptions: z.lazy(() => AWGClientOptionsSchema).nullable().optional(),
   clientHostRuleIds: z.array(z.number().int()).optional(),
   comment: z.string(),
+  connectionNameMode: z.string().nullable().optional(),
   created_at: z.number().int().optional(),
   email: z.string(),
   enable: z.boolean(),
@@ -470,6 +471,7 @@ export const ClientRecordSchema = z.object({
   awgClientOptions: z.lazy(() => AWGClientOptionsSchema).nullable().optional(),
   clientHostRuleIds: z.array(z.number().int()).optional(),
   comment: z.string(),
+  connectionNameMode: z.string().nullable().optional(),
   createdAt: z.number().int(),
   email: z.string(),
   enable: z.boolean(),
@@ -510,6 +512,7 @@ export type ClientReverse = z.infer<typeof ClientReverseSchema>;
 
 export const ClientSlimSchema = z.object({
   comment: z.string().optional(),
+  connectionNameMode: z.string().nullable().optional(),
   createdAt: z.number().int(),
   email: z.string(),
   enable: z.boolean(),

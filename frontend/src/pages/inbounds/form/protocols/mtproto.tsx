@@ -3,6 +3,7 @@ import { Alert, Collapse, Input, InputNumber, Select, Switch } from 'antd';
 import { useFormContext, useWatch } from 'react-hook-form';
 
 import { FormField } from '@/components/form/rhf';
+import SniSearchInput from '../security/SniSearchInput';
 import { useOutboundTags } from '@/api/queries/useOutboundTags';
 import MtprotoWebStatus from './MtprotoWebStatus';
 import { TelemtWebProxyRequestSchema } from '@/schemas/telemt-web';
@@ -233,7 +234,7 @@ export default function MtprotoFields() {
             label={t('pages.inbounds.form.fakeTlsDomain')}
             tooltip={t('pages.inbounds.form.mtprotoFakeTlsDomainHint')}
           >
-            <Input placeholder="www.cloudflare.com" />
+            <SniSearchInput purpose="fakeTls" placeholder="www.cloudflare.com" />
           </FormField>
           <FormField
             name={['settings', 'throttleMaxConnections']}

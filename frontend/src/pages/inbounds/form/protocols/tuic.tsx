@@ -6,7 +6,6 @@ import {
   Collapse,
   Divider,
   Form,
-  Input,
   InputNumber,
   Select,
   Space,
@@ -17,6 +16,7 @@ import { CloudDownloadOutlined, SyncOutlined } from '@ant-design/icons';
 import { useFormContext, useWatch } from 'react-hook-form';
 
 import { FormField } from '@/components/form/rhf';
+import SniSearchInput from '../security/SniSearchInput';
 import { HttpUtil } from '@/utils';
 
 export default function TuicFields() {
@@ -259,12 +259,12 @@ export default function TuicFields() {
         label={t('pages.xray.tuic.sni')}
         tooltip={t('pages.xray.tuic.sniHint')}
       >
-        <Input
+        <SniSearchInput
           id={`${uid}-sni`}
           aria-describedby={`${uid}-sni-hint`}
           value={sni}
           placeholder="example.com"
-          onChange={(e) => handleSniChange(e.target.value)}
+          onChange={handleSniChange}
         />
         <span id={`${uid}-sni-hint`} hidden>
           {t('pages.xray.tuic.sniHint')}

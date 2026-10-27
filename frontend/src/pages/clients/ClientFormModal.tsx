@@ -179,6 +179,7 @@ const EMPTY: Values = {
   limitHwid: 0,
   tgId: 0,
   group: '',
+  connectionNameMode: 'remark',
   comment: '',
   enable: true,
   inboundIds: [],
@@ -404,6 +405,7 @@ export default function ClientFormModal({
         limitHwid: client.limitHwid || 0,
         tgId: Number(client.tgId) || 0,
         group: client.group || '',
+        connectionNameMode: client.connectionNameMode || 'remark',
         comment: client.comment || '',
         enable: !!client.enable,
         inboundIds: Array.isArray(attachedIds) ? [...attachedIds] : [],
@@ -797,6 +799,7 @@ export default function ClientFormModal({
       limitHwid: values.limitHwid,
       tgId: values.tgId,
       group: values.group,
+      connectionNameMode: values.connectionNameMode,
       comment: values.comment,
       enable: values.enable,
       inboundIds: values.inboundIds,
@@ -839,6 +842,7 @@ export default function ClientFormModal({
       limitHwid: Number(values.limitHwid) || 0,
       tgId: Number(values.tgId) || 0,
       group: values.group,
+      connectionNameMode: values.connectionNameMode,
       comment: values.comment,
       enable: !!values.enable,
     };
@@ -1254,6 +1258,22 @@ export default function ClientFormModal({
 
                       <Row gutter={16}>
                         <Col xs={24} md={12}>
+                          <FormField
+                            name="connectionNameMode"
+                            label={t('pages.clients.connectionNameMode')}
+                            extra={t('pages.clients.connectionNameModeHint')}
+                          >
+                            <Select
+                              options={[
+                                { value: 'remark', label: t('pages.clients.connectionNameRemark') },
+                                {
+                                  value: 'remark-client',
+                                  label: t('pages.clients.connectionNameRemarkClient'),
+                                },
+                                { value: 'client', label: t('pages.clients.connectionNameClient') },
+                              ]}
+                            />
+                          </FormField>
                           <FormField name="comment" label={t('pages.clients.comment')}>
                             <Input />
                           </FormField>

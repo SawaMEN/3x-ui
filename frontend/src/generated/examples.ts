@@ -395,6 +395,7 @@ export const EXAMPLES: Record<string, unknown> = {
       2
     ],
     "comment": "",
+    "connectionNameMode": null,
     "created_at": 0,
     "email": "",
     "enable": false,
@@ -439,6 +440,7 @@ export const EXAMPLES: Record<string, unknown> = {
     "items": [
       {
         "comment": "Primary device",
+        "connectionNameMode": null,
         "createdAt": 1735000000000,
         "email": "alice@example.com",
         "enable": true,
@@ -490,6 +492,7 @@ export const EXAMPLES: Record<string, unknown> = {
       2
     ],
     "comment": "",
+    "connectionNameMode": null,
     "createdAt": 0,
     "email": "",
     "enable": false,
@@ -526,6 +529,7 @@ export const EXAMPLES: Record<string, unknown> = {
   },
   "ClientSlim": {
     "comment": "Primary device",
+    "connectionNameMode": null,
     "createdAt": 1735000000000,
     "email": "alice@example.com",
     "enable": true,

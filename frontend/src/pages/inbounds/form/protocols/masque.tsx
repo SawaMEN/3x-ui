@@ -2,6 +2,7 @@ import { Alert, Button, Collapse, Input, InputNumber, Select, Space } from 'antd
 import { useFormContext, useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { FormField } from '@/components/form/rhf';
+import SniSearchInput from '../security/SniSearchInput';
 import { MasqueInboundSettingsSchema } from '@/schemas/protocols/inbound/masque';
 
 export default function MasqueFields() {
@@ -70,7 +71,7 @@ export default function MasqueFields() {
         style={{ marginBottom: 12 }}
       />
       <FormField name={['settings', 'tls', 'serverName']} label="SNI">
-        <Input placeholder="example.com" />
+        <SniSearchInput placeholder="example.com" />
       </FormField>
       <Alert
         type="success"

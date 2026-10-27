@@ -1629,6 +1629,11 @@
             "description": "Client comment",
             "type": "string"
           },
+          "connectionNameMode": {
+            "description": "Naming mode: remark, remark-client, or client. Omission preserves it.",
+            "nullable": true,
+            "type": "string"
+          },
           "created_at": {
             "description": "Creation timestamp",
             "format": "int64",
@@ -1889,6 +1894,10 @@
           "comment": {
             "type": "string"
           },
+          "connectionNameMode": {
+            "nullable": true,
+            "type": "string"
+          },
           "createdAt": {
             "format": "int64",
             "type": "integer"
@@ -2048,6 +2057,10 @@
         "properties": {
           "comment": {
             "example": "Primary device",
+            "type": "string"
+          },
+          "connectionNameMode": {
+            "nullable": true,
             "type": "string"
           },
           "createdAt": {
@@ -10921,6 +10934,7 @@
                     "items": [
                       {
                         "comment": "Primary device",
+                        "connectionNameMode": null,
                         "createdAt": 1735000000000,
                         "email": "alice@example.com",
                         "enable": true,

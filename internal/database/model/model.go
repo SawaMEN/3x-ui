@@ -940,7 +940,8 @@ type Client struct {
 	Secret              string            `json:"secret,omitempty" example:"ee1234567890abcdef1234567890abcd7777772e636c6f7564666c6172652e636f6d"`
 	AdTag               string            `json:"adTag,omitempty" example:"0123456789abcdef0123456789abcdef"`
 	SudokuPrivateKey    string            `json:"sudokuPrivateKey,omitempty" gorm:"-"`
-	Email               string            `json:"email"` // Client email identifier
+	Email               string            `json:"email"`                        // Client email identifier
+	ConnectionNameMode  *string           `json:"connectionNameMode,omitempty"` // Naming mode: remark, remark-client, or client. Omission preserves it.
 	SpeedLimit          *ClientSpeedLimit `json:"speedLimit,omitempty"`
 	LimitIP             int               `json:"limitIp"`                      // IP limit for this client
 	TotalGB             int64             `json:"totalGB" form:"totalGB"`       // Total traffic limit in GB
@@ -961,34 +962,35 @@ type Client struct {
 }
 
 type ClientRecord struct {
-	Id                int               `json:"id" gorm:"primaryKey;autoIncrement"`
-	Email             string            `json:"email" gorm:"uniqueIndex;not null"`
-	SubID             string            `json:"subId" gorm:"index;column:sub_id"`
-	HiddifySubURI     string            `json:"hiddifySubURI,omitempty" gorm:"column:hiddify_sub_uri;default:''"`
-	UUID              string            `json:"uuid" gorm:"column:uuid"`
-	Password          string            `json:"password"`
-	Auth              string            `json:"auth"`
-	Flow              string            `json:"flow"`
-	Security          string            `json:"security"`
-	Reverse           string            `json:"reverse" gorm:"column:reverse"`
-	ClientHostRuleIds []int             `json:"clientHostRuleIds,omitempty" gorm:"serializer:json;column:client_host_rule_ids" example:"[1,2]"`
-	PrivateKey        string            `json:"privateKey" gorm:"column:wg_private_key"`
-	PublicKey         string            `json:"publicKey" gorm:"column:wg_public_key"`
-	AllowedIPs        string            `json:"allowedIPs" gorm:"column:wg_allowed_ips"`
-	PreSharedKey      string            `json:"preSharedKey" gorm:"column:wg_pre_shared_key"`
-	KeepAlive         KeepAliveValue    `json:"keepAlive" gorm:"-"` // Numeric values or AmneziaWG ranges.
-	KeepAliveLegacy   int               `json:"-" gorm:"column:wg_keep_alive;default:0"`
-	KeepAliveRange    KeepAliveValue    `json:"-" gorm:"column:wg_keep_alive_range;type:text;default:''"`
-	ForwardedPorts    string            `json:"forwardedPorts" gorm:"column:wg_forwarded_ports"`
-	AWGClientOptions  *AWGClientOptions `json:"awgClientOptions,omitempty" gorm:"serializer:json;column:awg_client_options"`
-	Secret            string            `json:"secret" gorm:"column:secret"`
-	AdTag             string            `json:"adTag" gorm:"column:ad_tag;default:''"`
-	SpeedLimit        *ClientSpeedLimit `json:"speedLimit,omitempty" gorm:"serializer:json;column:speed_limit"`
-	LimitIP           int               `json:"limitIp" gorm:"column:limit_ip"`
-	LimitHwid         int               `json:"limitHwid" gorm:"column:limit_hwid;default:0"`
-	TotalGB           int64             `json:"totalGB" gorm:"column:total_gb"`
-	ExpiryTime        int64             `json:"expiryTime" gorm:"column:expiry_time"`
-	Enable            bool              `json:"enable" gorm:"default:true"`
+	Id                 int               `json:"id" gorm:"primaryKey;autoIncrement"`
+	Email              string            `json:"email" gorm:"uniqueIndex;not null"`
+	SubID              string            `json:"subId" gorm:"index;column:sub_id"`
+	HiddifySubURI      string            `json:"hiddifySubURI,omitempty" gorm:"column:hiddify_sub_uri;default:''"`
+	UUID               string            `json:"uuid" gorm:"column:uuid"`
+	Password           string            `json:"password"`
+	Auth               string            `json:"auth"`
+	Flow               string            `json:"flow"`
+	Security           string            `json:"security"`
+	Reverse            string            `json:"reverse" gorm:"column:reverse"`
+	ClientHostRuleIds  []int             `json:"clientHostRuleIds,omitempty" gorm:"serializer:json;column:client_host_rule_ids" example:"[1,2]"`
+	PrivateKey         string            `json:"privateKey" gorm:"column:wg_private_key"`
+	PublicKey          string            `json:"publicKey" gorm:"column:wg_public_key"`
+	AllowedIPs         string            `json:"allowedIPs" gorm:"column:wg_allowed_ips"`
+	PreSharedKey       string            `json:"preSharedKey" gorm:"column:wg_pre_shared_key"`
+	KeepAlive          KeepAliveValue    `json:"keepAlive" gorm:"-"` // Numeric values or AmneziaWG ranges.
+	KeepAliveLegacy    int               `json:"-" gorm:"column:wg_keep_alive;default:0"`
+	KeepAliveRange     KeepAliveValue    `json:"-" gorm:"column:wg_keep_alive_range;type:text;default:''"`
+	ForwardedPorts     string            `json:"forwardedPorts" gorm:"column:wg_forwarded_ports"`
+	AWGClientOptions   *AWGClientOptions `json:"awgClientOptions,omitempty" gorm:"serializer:json;column:awg_client_options"`
+	Secret             string            `json:"secret" gorm:"column:secret"`
+	AdTag              string            `json:"adTag" gorm:"column:ad_tag;default:''"`
+	ConnectionNameMode *string           `json:"connectionNameMode,omitempty" gorm:"column:connection_name_mode"`
+	SpeedLimit         *ClientSpeedLimit `json:"speedLimit,omitempty" gorm:"serializer:json;column:speed_limit"`
+	LimitIP            int               `json:"limitIp" gorm:"column:limit_ip"`
+	LimitHwid          int               `json:"limitHwid" gorm:"column:limit_hwid;default:0"`
+	TotalGB            int64             `json:"totalGB" gorm:"column:total_gb"`
+	ExpiryTime         int64             `json:"expiryTime" gorm:"column:expiry_time"`
+	Enable             bool              `json:"enable" gorm:"default:true"`
 	// Set automatically when a core switch disables this client because its protocol is unsupported.
 	// It is cleared by explicit user changes and when the client becomes compatible again.
 	AutoDisabledByCore string `json:"-" gorm:"column:auto_disabled_by_core;default:''"`
@@ -1188,29 +1190,30 @@ func KeepAlivePtr(v int) *KeepAliveValue {
 
 func (c *Client) ToRecord() *ClientRecord {
 	rec := &ClientRecord{
-		Email:             c.Email,
-		SubID:             c.SubID,
-		UUID:              c.ID,
-		Password:          c.Password,
-		Auth:              c.Auth,
-		Flow:              c.Flow,
-		Security:          c.Security,
-		ClientHostRuleIds: CloneClientHostRuleIds(c.ClientHostRuleIds),
-		SpeedLimit:        c.SpeedLimit,
-		LimitIP:           c.LimitIP,
-		TotalGB:           c.TotalGB,
-		ExpiryTime:        c.ExpiryTime,
-		Enable:            c.Enable,
-		TgID:              c.TgID,
-		Group:             c.Group,
-		Comment:           c.Comment,
-		Reset:             c.Reset,
-		ResetDay:          c.ResetDay,
-		ResetMax:          c.ResetMax,
-		TrafficReset:      c.TrafficReset,
-		TrafficResetDay:   c.TrafficResetDay,
-		CreatedAt:         c.CreatedAt,
-		UpdatedAt:         c.UpdatedAt,
+		Email:              c.Email,
+		SubID:              c.SubID,
+		UUID:               c.ID,
+		Password:           c.Password,
+		Auth:               c.Auth,
+		Flow:               c.Flow,
+		Security:           c.Security,
+		ClientHostRuleIds:  CloneClientHostRuleIds(c.ClientHostRuleIds),
+		ConnectionNameMode: c.ConnectionNameMode,
+		SpeedLimit:         c.SpeedLimit,
+		LimitIP:            c.LimitIP,
+		TotalGB:            c.TotalGB,
+		ExpiryTime:         c.ExpiryTime,
+		Enable:             c.Enable,
+		TgID:               c.TgID,
+		Group:              c.Group,
+		Comment:            c.Comment,
+		Reset:              c.Reset,
+		ResetDay:           c.ResetDay,
+		ResetMax:           c.ResetMax,
+		TrafficReset:       c.TrafficReset,
+		TrafficResetDay:    c.TrafficResetDay,
+		CreatedAt:          c.CreatedAt,
+		UpdatedAt:          c.UpdatedAt,
 
 		PrivateKey:       c.PrivateKey,
 		PublicKey:        c.PublicKey,
@@ -1249,29 +1252,30 @@ func splitWireguardAllowedIPs(csv string) []string {
 
 func (r *ClientRecord) ToClient() *Client {
 	c := &Client{
-		ID:                r.UUID,
-		Email:             r.Email,
-		SubID:             r.SubID,
-		Password:          r.Password,
-		Auth:              r.Auth,
-		Flow:              r.Flow,
-		Security:          r.Security,
-		ClientHostRuleIds: CloneClientHostRuleIds(r.ClientHostRuleIds),
-		SpeedLimit:        r.SpeedLimit,
-		LimitIP:           r.LimitIP,
-		TotalGB:           r.TotalGB,
-		ExpiryTime:        r.ExpiryTime,
-		Enable:            r.Enable,
-		TgID:              r.TgID,
-		Group:             r.Group,
-		Comment:           r.Comment,
-		Reset:             r.Reset,
-		ResetDay:          r.ResetDay,
-		ResetMax:          r.ResetMax,
-		TrafficReset:      r.TrafficReset,
-		TrafficResetDay:   r.TrafficResetDay,
-		CreatedAt:         r.CreatedAt,
-		UpdatedAt:         r.UpdatedAt,
+		ID:                 r.UUID,
+		Email:              r.Email,
+		SubID:              r.SubID,
+		Password:           r.Password,
+		Auth:               r.Auth,
+		Flow:               r.Flow,
+		Security:           r.Security,
+		ClientHostRuleIds:  CloneClientHostRuleIds(r.ClientHostRuleIds),
+		ConnectionNameMode: r.ConnectionNameMode,
+		SpeedLimit:         r.SpeedLimit,
+		LimitIP:            r.LimitIP,
+		TotalGB:            r.TotalGB,
+		ExpiryTime:         r.ExpiryTime,
+		Enable:             r.Enable,
+		TgID:               r.TgID,
+		Group:              r.Group,
+		Comment:            r.Comment,
+		Reset:              r.Reset,
+		ResetDay:           r.ResetDay,
+		ResetMax:           r.ResetMax,
+		TrafficReset:       r.TrafficReset,
+		TrafficResetDay:    r.TrafficResetDay,
+		CreatedAt:          r.CreatedAt,
+		UpdatedAt:          r.UpdatedAt,
 
 		PrivateKey:       r.PrivateKey,
 		PublicKey:        r.PublicKey,
@@ -1368,6 +1372,10 @@ func MergeClientRecord(existing *ClientRecord, incoming *ClientRecord) []ClientM
 
 	incomingNewer := incoming.UpdatedAt > existing.UpdatedAt ||
 		(incoming.UpdatedAt == existing.UpdatedAt && incoming.CreatedAt > existing.CreatedAt)
+	if incoming.ConnectionNameMode != nil && (existing.ConnectionNameMode == nil || incomingNewer) {
+		name := *incoming.ConnectionNameMode
+		existing.ConnectionNameMode = &name
+	}
 	if incoming.SpeedLimit != nil && (existing.SpeedLimit == nil || incomingNewer) {
 		limit := *incoming.SpeedLimit
 		existing.SpeedLimit = &limit

@@ -23,6 +23,7 @@ import { useFieldArray, useFormContext, useWatch } from 'react-hook-form';
 import { CipherSuitesSelect } from '@/components/form';
 import DynamicEchHelper from '@/components/form/DynamicEchHelper';
 import { FormField } from '@/components/form/rhf';
+import SniSearchInput from './SniSearchInput';
 import {
   ALPN_OPTION,
   DOMAIN_STRATEGY_OPTION,
@@ -336,7 +337,7 @@ export default function TlsForm({
   return (
     <>
       <FormField name={['streamSettings', 'tlsSettings', 'serverName']} label="SNI">
-        <Input placeholder={t('pages.inbounds.form.serverNameIndication')} />
+        <SniSearchInput placeholder={t('pages.inbounds.form.serverNameIndication')} />
       </FormField>
       <FormField
         name={['streamSettings', 'tlsSettings', 'cipherSuites']}

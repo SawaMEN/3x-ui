@@ -4,6 +4,7 @@ import { Alert, Button, Collapse, Form, Input, message } from 'antd';
 import { useFormContext, useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { FormField } from '@/components/form/rhf';
+import SniSearchInput from '../security/SniSearchInput';
 import { HttpUtil } from '@/utils';
 import { ANYTLS_DEFAULT_PADDING_SCHEME } from '@/schemas/protocols/inbound/anytls';
 
@@ -59,7 +60,7 @@ export default function AnyTlsFields() {
         label={t('pages.inbounds.form.anytlsServerName')}
         tooltip={t('pages.inbounds.form.anytlsServerNameHint')}
       >
-        <Input placeholder="vpn.example.com" />
+        <SniSearchInput placeholder="vpn.example.com" />
       </FormField>
       <FormField
         name={['settings', 'tls', 'certificatePath']}

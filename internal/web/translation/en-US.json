@@ -687,6 +687,11 @@
         "realityTargetInvalidPort": "REALITY target has an invalid port",
         "scan": "Scan",
         "findTargets": "Find Targets",
+        "sniSearch": "Find SNI",
+        "sniScanTitle": "SNI search",
+        "sniScanTlsDesc": "Check a domain, IP or CIDR range, or leave the field empty to scan common candidates. This checks remote TLS certificates over TCP; it does not verify QUIC support. For TLS inbounds, use a domain covered by your server certificate and configure DNS to reach your server. Selecting an SNI does not install its certificate.",
+        "sniScanTargetDesc": "Check a domain, IP or CIDR range, or leave the field empty to scan common candidates. Select a domain with a trusted certificate and TLS 1.3 support. This checks the TLS endpoint; it does not guarantee that the target is reachable from every client network.",
+        "sniScanUnavailable": "A trusted certificate with a usable domain is required; ShadowTLS and FakeTLS also require TLS 1.3.",
         "scanModalTitle": "REALITY Target Scanner",
         "scanModalDesc": "Validate a domain, or scan an IP / CIDR range to discover new REALITY targets from their certificates. Leave the box empty to probe common candidates.",
         "scanDiscoverPlaceholder": "IP, CIDR, or domain — leave empty for common candidates",
@@ -989,6 +994,11 @@
       "dragToReorder": "Drag to reorder"
     },
     "clients": {
+      "connectionNameMode": "Connection naming",
+      "connectionNameModeHint": "Client means its email identifier. When the connection remark is empty, the first two options use the client email without a leading hyphen. Formats requiring unique names add numeric suffixes.",
+      "connectionNameRemark": "Connection name (remark)",
+      "connectionNameRemarkClient": "Name-client",
+      "connectionNameClient": "Client",
       "tabBasics": "Basics",
       "tabCredentials": "Credentials",
       "tabLinks": "Links",

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Input, Modal, Space, Table, Tag, Tooltip, Typography } from 'antd';
+import { Alert, Button, Input, Modal, Space, Table, Tag, Tooltip, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 
 import type { RealityScanResult } from '@/generated/types';
@@ -8,12 +8,29 @@ import type { RealityScanResult } from '@/generated/types';
 // xray-core ML-DSA-65 REALITY min peer cert-chain size (not defined in this repo).
 export const MLDSA65_MIN_CERT_CHAIN_BYTES = 3500;
 
+export type SniScanPurpose = 'reality' | 'tls' | 'shadowtls' | 'fakeTls';
+
+export function scannedServerName(result: RealityScanResult): string {
+  // A verified hostname is usable even when covered only by a wildcard SAN
+  // (the backend intentionally omits wildcard patterns from serverNames).
+  if (result.certValid && /[a-z]/i.test(result.host) && !result.host.includes(':')) {
+    return result.host;
+  }
+  return result.serverNames?.[0] ?? '';
+}
+
+export function canUseScannedTarget(result: RealityScanResult, purpose: SniScanPurpose): boolean {
+  if (purpose === 'reality') return true;
+  return result.certValid && !!scannedServerName(result) && (purpose === 'tls' || result.tls13);
+}
+
 interface RealityTargetScannerModalProps {
   open: boolean;
   onClose: () => void;
   scanRealityCandidates: (targets?: string) => Promise<RealityScanResult[]>;
   onPick: (result: RealityScanResult) => void;
   mldsa65Enabled?: boolean;
+  purpose?: SniScanPurpose;
 }
 
 export default function RealityTargetScannerModal({
@@ -22,27 +39,35 @@ export default function RealityTargetScannerModal({
   scanRealityCandidates,
   onPick,
   mldsa65Enabled = false,
+  purpose = 'reality',
 }: RealityTargetScannerModalProps) {
   const { t } = useTranslation();
+  const [error, setError] = useState(false);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<RealityScanResult[]>([]);
   const scanRef = useRef(scanRealityCandidates);
+  const requestId = useRef(0);
   useEffect(() => {
     scanRef.current = scanRealityCandidates;
   });
 
   const applyScan = useCallback(async (targets?: string) => {
+    const id = ++requestId.current;
     try {
-      setResults(await scanRef.current(targets));
+      const rows = await scanRef.current(targets);
+      if (id === requestId.current) setResults(rows);
+    } catch {
+      if (id === requestId.current) setError(true);
     } finally {
-      setLoading(false);
+      if (id === requestId.current) setLoading(false);
     }
   }, []);
 
   const runScan = useCallback(
     (targets?: string) => {
       setLoading(true);
+      setError(false);
       setResults([]);
       void applyScan(targets);
     },
@@ -55,14 +80,19 @@ export default function RealityTargetScannerModal({
   if (open !== scannedOpen) {
     setScannedOpen(open);
     if (open) {
+      setError(false);
       setResults([]);
       setLoading(true);
     }
   }
 
+  const invalidateScan = useCallback(() => {
+    requestId.current++;
+  }, []);
   useEffect(() => {
     if (open) void applyScan();
-  }, [open, applyScan]);
+    return invalidateScan;
+  }, [open, applyScan, invalidateScan]);
 
   const columns: ColumnsType<RealityScanResult> = [
     {
@@ -87,10 +117,12 @@ export default function RealityTargetScannerModal({
       key: 'feasible',
       width: 95,
       render: (feasible: boolean, row) =>
-        feasible ? (
+        (purpose === 'reality' ? feasible : canUseScannedTarget(row, purpose)) ? (
           <Tag color="success">{t('pages.inbounds.form.scanFeasible')}</Tag>
         ) : (
-          <Tooltip title={row.reason}>
+          <Tooltip
+            title={purpose === 'reality' ? row.reason : t('pages.inbounds.form.sniScanUnavailable')}
+          >
             <Tag color="warning">{t('pages.inbounds.form.scanNotFeasible')}</Tag>
           </Tooltip>
         ),
@@ -163,11 +195,13 @@ export default function RealityTargetScannerModal({
     {
       title: '',
       key: 'action',
-      width: 64,
+      width: 100,
+      fixed: 'right',
       render: (_, row) => (
         <Button
           type="link"
           size="small"
+          disabled={!canUseScannedTarget(row, purpose)}
           onClick={() => {
             onPick(row);
             onClose();
@@ -191,12 +225,14 @@ export default function RealityTargetScannerModal({
           {t('close')}
         </Button>,
       ]}
-      title={t('pages.inbounds.form.scanModalTitle')}
+      title={t(`pages.inbounds.form.${purpose === 'reality' ? 'scanModalTitle' : 'sniScanTitle'}`)}
       width={1080}
     >
       <Space orientation="vertical" size="small" style={{ width: '100%' }}>
         <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-          {t('pages.inbounds.form.scanModalDesc')}
+          {t(
+            `pages.inbounds.form.${purpose === 'reality' ? 'scanModalDesc' : purpose === 'tls' ? 'sniScanTlsDesc' : 'sniScanTargetDesc'}`,
+          )}
         </Typography.Paragraph>
         <Input.Search
           aria-label={t('pages.inbounds.form.scanDiscoverPlaceholder')}
@@ -208,14 +244,31 @@ export default function RealityTargetScannerModal({
           onSearch={() => runScan(query.trim() || undefined)}
           placeholder={t('pages.inbounds.form.scanDiscoverPlaceholder')}
         />
+        {error && (
+          <Alert type="error" showIcon title={t('pages.inbounds.toasts.scanRealityTargetError')} />
+        )}
         <Table<RealityScanResult>
           size="small"
           rowKey="target"
           loading={loading}
-          columns={columns}
-          dataSource={results}
+          columns={
+            purpose === 'reality'
+              ? columns
+              : columns.filter(
+                  (column) => column.key !== 'curveID' && column.key !== 'certChainBytes',
+                )
+          }
+          dataSource={
+            purpose === 'reality'
+              ? results
+              : [...results].sort(
+                  (a, b) =>
+                    Number(canUseScannedTarget(b, purpose)) -
+                      Number(canUseScannedTarget(a, purpose)) || a.latencyMs - b.latencyMs,
+                )
+          }
           pagination={false}
-          scroll={{ y: 360 }}
+          scroll={{ x: 850, y: 360 }}
         />
       </Space>
     </Modal>
