@@ -30,6 +30,7 @@ type TelemtWebProxyOptions struct {
 	Site     *TelemtWebSiteOptions `json:"site,omitempty"`
 	Frontend string                `json:"frontend"`
 	Carrier  string                `json:"carrier"`
+	BasePath *string               `json:"basePath,omitempty"`
 	Carriers []string              `json:"carriers"`
 }
 
@@ -42,6 +43,13 @@ func normalizeTelemtWebOptions(o TelemtWebProxyOptions) (TelemtWebProxyOptions, 
 	}
 	if o.Carrier == "" {
 		o.Carrier = "https"
+	}
+	if o.BasePath != nil {
+		path, err := normalizeTelemtWebBasePath(*o.BasePath)
+		if err != nil {
+			return o, err
+		}
+		o.BasePath = &path
 	}
 	if !slices.Contains([]string{"nginx", "caddy", "haproxy"}, o.Frontend) {
 		return o, errors.New("WEB Proxy frontend must be nginx, caddy or haproxy")
@@ -90,8 +98,11 @@ func (s TelemtService) EnableWebProxy(ctx context.Context, domain, cert, key str
 	if err != nil {
 		return TelemtWebProxyStatus{}, err
 	}
-	o := TelemtWebProxyOptions{Frontend: old.Frontend, Carrier: old.Carrier, Carriers: old.Carriers, Site: old.Site}
+	o := TelemtWebProxyOptions{Frontend: old.Frontend, Carrier: old.Carrier, Carriers: old.Carriers, Site: old.Site, BasePath: &old.BasePath}
 	if len(options) > 0 {
+		if options[0].BasePath != nil {
+			o.BasePath = options[0].BasePath
+		}
 		if options[0].Site != nil {
 			o.Site = options[0].Site
 		}
