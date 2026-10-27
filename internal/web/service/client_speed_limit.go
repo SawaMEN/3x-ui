@@ -1,8 +1,6 @@
 package service
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -116,14 +114,15 @@ func injectClientSpeedLimits(cfg *singbox.Config, clients map[int][]model.Client
 		if _, ok := outbounds[target]; !ok {
 			return "", fmt.Errorf("speed limiter references unknown outbound %q", target)
 		}
-		key := email + "\x00" + target
+		limit := limits[email]
+		key := fmt.Sprintf("%s\x00%s\x00%d/%d", email, target, limit.UploadMbps, limit.DownloadMbps)
 		if tag := routes[key]; tag != "" {
 			return tag, nil
 		}
-		hash := sha256.Sum256([]byte(key))
-		id := clientlimit.InternalPrefix + hex.EncodeToString(hash[:16])
+		// Route IDs are non-secret; authentication uses the random process password.
+		// Include rates so config comparison detects edits to an existing cap.
+		id := fmt.Sprintf("%s%d_%d_%d", clientlimit.InternalPrefix, len(routes), limit.UploadMbps, limit.DownloadMbps)
 		routes[key] = id
-		limit := limits[email]
 		cfg.SpeedLimitPlan.Routes = append(cfg.SpeedLimitPlan.Routes, clientlimit.Route{ID: id, Email: email, UploadMbps: limit.UploadMbps, DownloadMbps: limit.DownloadMbps})
 		cfg.Outbounds = append(cfg.Outbounds, map[string]any{"type": "socks", "tag": id, "server": "127.0.0.1", "server_port": clientlimit.ListenPort, "version": "5", "username": id, "password": clientlimit.Default.Password()})
 		accounts = append(accounts, map[string]any{"username": id, "password": clientlimit.Default.Password()})

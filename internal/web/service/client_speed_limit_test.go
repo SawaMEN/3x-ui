@@ -147,3 +147,34 @@ func TestClientSpeedLimitRecoversListenerWithRunningCore(t *testing.T) {
 		t.Fatal("running core was resumed without restoring its limiter")
 	}
 }
+
+func TestClientSpeedLimitRateEditsApplyToRunningCore(t *testing.T) {
+	svc, starts, _ := stage5ProcessFixture(t)
+	defer clientlimit.Default.Close()
+	seedHiddifyConfigInbound(t, model.VLESS, `{"decryption":"none"}`, `{"network":"tcp"}`)
+	setLimit := func(up, down int) {
+		t.Helper()
+		if err := database.GetDB().Model(&model.ClientRecord{}).Where("email = ?", "alice").Update("speed_limit", encodeSpeedLimit(&model.ClientSpeedLimit{Enabled: true, UploadMbps: up, DownloadMbps: down})).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	setLimit(1, 2)
+	if err := svc.Restart(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	for _, rates := range [][2]int{{5, 2}, {5, 10}, {0, 10}} {
+		before := stage5Starts(t, starts)
+		previous := string(svc.process().AppliedConfig())
+		setLimit(rates[0], rates[1])
+		svc.SetToNeedRestart()
+		svc.ApplyPendingRestart(context.Background())
+		if svc.restartFlag().Load() || stage5Starts(t, starts) != before+1 || string(svc.process().AppliedConfig()) == previous {
+			t.Fatalf("new rates %v did not reach running limiter", rates)
+		}
+		svc.SetToNeedRestart()
+		svc.ApplyPendingRestart(context.Background())
+		if stage5Starts(t, starts) != before+1 {
+			t.Fatal("unchanged rates triggered another restart")
+		}
+	}
+}
