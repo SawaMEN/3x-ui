@@ -87,12 +87,8 @@ func (s TelemtService) PreflightWebProxy(ctx context.Context, domain string, opt
 	if configErr != nil {
 		check("config", false, "Не удаётся прочитать конфигурацию Telemt: "+configErr.Error())
 	} else {
-		nativeConflict := state.ManagedInboundID == 0 && nativePort == 443
-		if nativeConflict {
-			check("native-port", false, "Обычный listener Telemt настроен на 443. Сначала перенесите его на другой порт: HTTPS-сервер WEB Proxy должен использовать TCP 443.")
-		} else {
-			check("native-port", true, fmt.Sprintf("Обычный порт Telemt: %d; конфликтов с TCP 443 нет.", nativePort))
-		}
+		// Conflicts on 443 are reported once by the shared https-port check.
+		// This includes the native Telemt listener, even if Telemt is stopped.
 		if !state.Enabled {
 			backendPort, portErr := pickTelemtWebListenPort(nativePort)
 			if portErr != nil {
@@ -103,30 +99,17 @@ func (s TelemtService) PreflightWebProxy(ctx context.Context, domain string, opt
 		}
 	}
 
-	// A temporarily stopped panel on :443 is invisible to a socket probe.
-	// Keep the administrator UI accessible across subsequent panel restarts.
-	panelPort, panelPortErr := (&SettingService{}).GetPort()
-	if panelPortErr != nil {
-		check("panel-port", false, "Не удалось прочитать порт панели: "+panelPortErr.Error())
-	} else if panelPort == 443 {
-		check("panel-port", false, "Панель настроена на TCP 443. Перенесите порт панели перед включением WEB Proxy, иначе она и HTTPS-сервер WEB Proxy будут конфликтовать.")
+	// One authoritative check reports both system processes and saved panel
+	// listeners, including the admin UI and enabled inbound configurations.
+	port443, inspectionErr := inspectTelemtWebPort443(state, options.Frontend)
+	if inspectionErr != nil {
+		check("https-port", false, "Не удалось проверить TCP 443: "+inspectionErr.Error())
+	} else if port443.Available {
+		check("https-port", true, "TCP 443 доступен для выбранного HTTPS frontend.")
+	} else if port443.Owner != "" {
+		check("https-port", false, "TCP 443 занят: "+port443.Owner+".")
 	} else {
-		check("panel-port", true, fmt.Sprintf("Панель использует порт %d и не конфликтует с WEB HTTPS :443.", panelPort))
-	}
-
-	// A running service on another port is not evidence that it owns 443.
-	// Only reuse a socket when the observed owner is the configured frontend.
-	owner := strings.ToLower(telemtWebPortOwner(443))
-	currentFront := telemtWebFrontend(state)
-	previousOwned := state.Enabled && telemtWebFrontendActive(state) &&
-		((currentFront == "nginx" && telemtWebNginxOwnsPort443() && telemtWebPortOwnedOnlyBy(owner, "nginx")) ||
-			(currentFront != "nginx" && telemtWebPortOwnedOnlyBy(owner, currentFront)))
-	nginxShared := options.Frontend == "nginx" && telemtWebNginxOwnsPort443() && telemtWebPortOwnedOnlyBy(owner, "nginx")
-	portReady := telemtWebPortAvailable(443) || previousOwned || nginxShared
-	if portReady {
-		check("https-port", true, "TCP 443 доступен или уже управляется HTTPS-сервером WEB Proxy.")
-	} else {
-		check("https-port", false, fmt.Sprintf("HTTPS-сервер WEB Proxy должен иметь доступ к TCP 443 (владелец: %s).", owner))
+		check("https-port", false, "TCP 443 занят другим сервисом.")
 	}
 	if options.Frontend == "nginx" && telemtWebCommandExists("nginx") {
 		conflict, inspectErr := telemtWebNginxHostConflict(ctx, domain)
