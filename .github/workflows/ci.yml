@@ -107,6 +107,11 @@ jobs:
           HIDDIFY_CONFIG_CHECK_BINARY: ${{ runner.temp }}/awg-core/hiddify-core-linux-amd64
         run: go test ./internal/web/service -run '^TestNativeAWG' -count=1
 
+      - name: Verify live client speed limits over TCP and UDP
+        env:
+          HIDDIFY_CONFIG_CHECK_BINARY: ${{ runner.temp }}/awg-core/hiddify-core-linux-amd64
+        run: go test ./internal/web/service -run '^TestClientSpeedLimitLiveCore$' -count=1 -v
+
   postgres-durable-first:
     if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
     runs-on: ubuntu-latest
