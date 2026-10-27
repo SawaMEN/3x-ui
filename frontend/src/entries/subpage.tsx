@@ -6,7 +6,6 @@ import { readyI18n } from '@/i18n/react';
 import { AntdRootConfig } from '@/i18n/AntdRootConfig';
 import { ThemeProvider } from '@/hooks/useTheme';
 import { subscriptionThemeMode } from '@/pages/sub/lunaTheme';
-import { QueryProvider } from '@/api/QueryProvider';
 import SubPage from '@/pages/sub/SubPage';
 
 const messageContainer = document.getElementById('message');
@@ -22,9 +21,7 @@ readyI18n('subscription').then(() => {
         <ThemeProvider
           fixedMode={subscriptionThemeMode(window.__SUB_PAGE_DATA__?.appearance?.theme)}
         >
-          <QueryProvider>
-            <SubPage />
-          </QueryProvider>
+          <SubPage />
         </ThemeProvider>
       </AntdRootConfig>,
     );
