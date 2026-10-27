@@ -173,6 +173,7 @@ func appendTelemtWebProxyConfig(base string, state TelemtWebProxyState) (string,
 	}
 	managedUsers := ""
 	managedProfiles := ""
+	managedUserCount := 0
 	var managedQuotas, managedExpirations, managedIPLimits strings.Builder
 	if state.ManagedInboundID != 0 {
 		var inbound model.Inbound
@@ -183,6 +184,7 @@ func appendTelemtWebProxyConfig(base string, state TelemtWebProxyState) (string,
 		if !ok {
 			return "", errors.New("telemt web proxy: managed inbound has no enabled clients")
 		}
+		managedUserCount = len(inst.Secrets)
 		for _, user := range inst.Secrets {
 			// Stable identities retain per-user counters across list reordering.
 			name := mtprotoWebUsername(state.ManagedInboundID, user.Name)
@@ -240,6 +242,10 @@ func appendTelemtWebProxyConfig(base string, state TelemtWebProxyState) (string,
 	if state.ManagedInboundID != 0 {
 		webConfig = strings.Replace(webConfig, "\n[[web.vhosts.profiles]]\nuser = \"webproxy\"\nsecret_mode = \"dd\"\n", managedProfiles, 1)
 	}
+	// Explicit WEB admission bounds with headroom for reconfiguration. These
+	// limits apply to the WEB listener only, not ordinary MTProto sidecars.
+	maxProfiles := max(64, managedUserCount+16)
+	webConfig = strings.Replace(webConfig, "[web]\nenabled = true\n", fmt.Sprintf("[web]\nenabled = true\nlimits.max_profiles = %d\nlimits.max_vhosts = 1\n", maxProfiles), 1)
 	if state.ManagedInboundID != 0 {
 		if managedQuotas.Len() > 0 {
 			base += "\n[access.user_data_quota]\n" + managedQuotas.String()
