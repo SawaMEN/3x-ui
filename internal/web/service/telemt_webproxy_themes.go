@@ -7,7 +7,9 @@ import (
 	"strings"
 )
 
-type telemtWebArticle struct{ Number, Title, Text string }
+type telemtWebArticle struct {
+	Number, Title, Text string
+}
 type telemtWebTheme struct {
 	Media                                                                              bool
 	Layout, Title, Headline, Description, Section, Action, AboutTitle, About, Category string
