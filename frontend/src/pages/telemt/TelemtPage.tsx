@@ -58,6 +58,7 @@ type WebProxyStatus = {
   supported: boolean;
   domain: string;
   basePath: string;
+  aliases: string[];
   defaultDomain: string;
   link: string;
   nginxInstalled: boolean;
@@ -170,6 +171,7 @@ export default function TelemtPage() {
       supported: false,
       domain: '',
       basePath: '',
+      aliases: [],
       defaultDomain: '',
       link: '',
       nginxInstalled: false,
@@ -195,18 +197,21 @@ export default function TelemtPage() {
   const [webPreflight, setWebPreflight] = useState<WebPreflight | null>(null);
   const [webPreflightRefresh, setWebPreflightRefresh] = useState(0);
   const webForm = useZodForm(TelemtWebProxyRequestSchema, {
-    defaultValues: { domain: '', basePath: '', frontend: 'nginx', carrier: 'https', carriers: [] },
+    defaultValues: { domain: '', aliases: [], basePath: '', frontend: 'nginx', carrier: 'https', carriers: [] },
   });
   const webProxyDomain = webForm.watch('domain');
   const webBasePath = webForm.watch('basePath');
+  const webAliases = webForm.watch('aliases');
   const webFrontend = webForm.watch('frontend');
   const webCarrier = webForm.watch('carrier');
   const webCarriers = webForm.watch('carriers');
   const webSite = webForm.watch('site');
   const webSiteKey = JSON.stringify(webSite);
+  const webAliasesKey = (webAliases || []).join('|');
   const webCarriersKey = (webCarriers || []).join('|');
   const webPreflightKey = JSON.stringify([
     webProxyDomain,
+    webAliasesKey,
     webBasePath,
     webFrontend,
     webCarrier,
@@ -230,6 +235,7 @@ export default function TelemtPage() {
           {
             domain: webProxyDomain || '',
             basePath: webBasePath || '',
+            aliases: webAliasesKey ? webAliasesKey.split('|') : [],
             frontend: webFrontend || 'nginx',
             carrier: webCarrier || 'https',
             carriers: webCarriersKey ? webCarriersKey.split('|') : [],
@@ -279,6 +285,7 @@ export default function TelemtPage() {
     webProxyOpen,
     webProxyDomain,
     webBasePath,
+    webAliasesKey,
     webFrontend,
     webCarrier,
     webCarriersKey,
@@ -409,6 +416,7 @@ export default function TelemtPage() {
       site: TelemtWebSiteSchema.optional().catch(undefined).parse(status.webProxy.site),
       domain: status.webProxy.domain || status.webProxy.defaultDomain || '',
       basePath: status.webProxy.basePath || '',
+      aliases: status.webProxy.aliases || [],
       frontend: TelemtFrontendSchema.catch('nginx').parse(status.webProxy.frontend),
       carrier: TelemtCarrierSchema.catch('https').parse(status.webProxy.carrier),
       carriers: TelemtCarriersSchema.catch([]).parse(
@@ -935,6 +943,13 @@ export default function TelemtPage() {
                 extra={'По умолчанию: ' + (status.webProxy.defaultDomain || 'не определён')}
               >
                 <Input placeholder="web.example.com" disabled={webProxyLoading} suffix=":443" />
+              </FormField>
+              <FormField
+                name="aliases"
+                label="Дополнительные WEB-домены"
+                extra="До 7 доменов. Необходим существующий сертификат SAN/wildcard на все имена."
+              >
+                <Select mode="tags" tokenSeparators={[',', ' ']} placeholder="web2.example.com" disabled={webProxyLoading} />
               </FormField>
               <FormField
                 name="basePath"
