@@ -2452,12 +2452,6 @@ export const sections: readonly Section[] = [
         responseSchema: 'TgBotCapabilities',
       },
       {
-        method: 'POST',
-        path: '/panel/api/setting/testDiscord',
-        summary: 'Test Discord bot connection by sending a test embed to the configured channel.',
-        response: '{\n  "success": true,\n  "msg": "Test notification sent successfully"\n}',
-      },
-      {
         method: 'GET',
         path: '/panel/api/setting/getDefaultJsonConfig',
         summary:
@@ -3181,6 +3175,13 @@ export const sections: readonly Section[] = [
         method: 'GET',
         path: '/panel/api/telemt/status',
         summary: 'Return Telemt installation, service, version, update, and MEKO status.',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/telemt/subscription/:subid',
+        summary:
+          'Return existing Telegram proxy profiles for one subscription on this node. Requires admin, node-sync or node-admin authentication; does not create users.',
+        responseSchema: 'TelegramSubscription',
       },
       {
         method: 'POST',

@@ -40,16 +40,6 @@ export type AWGClientOptions = z.infer<typeof AWGClientOptionsSchema>;
 export const AllSettingSchema = z.object({
   coreType: z.string(),
   datepicker: z.string(),
-  discordAdminIds: z.string(),
-  discordBotBackup: z.boolean(),
-  discordBotEnable: z.boolean(),
-  discordBotToken: z.string(),
-  discordChannelId: z.string(),
-  discordCpu: z.number().int().min(0).max(100),
-  discordEnabledEvents: z.string(),
-  discordLang: z.string(),
-  discordMemory: z.number().int().min(0).max(100),
-  discordRunTime: z.string(),
   expireDiff: z.number().int().min(0),
   externalTrafficInformEnable: z.boolean(),
   externalTrafficInformURI: z.string(),
@@ -207,22 +197,11 @@ export type AllSetting = z.infer<typeof AllSettingSchema>;
 export const AllSettingViewSchema = z.object({
   coreType: z.string(),
   datepicker: z.string(),
-  discordAdminIds: z.string(),
-  discordBotBackup: z.boolean(),
-  discordBotEnable: z.boolean(),
-  discordBotToken: z.string(),
-  discordChannelId: z.string(),
-  discordCpu: z.number().int().min(0).max(100),
-  discordEnabledEvents: z.string(),
-  discordLang: z.string(),
-  discordMemory: z.number().int().min(0).max(100),
-  discordRunTime: z.string(),
   expireDiff: z.number().int().min(0),
   externalTrafficInformEnable: z.boolean(),
   externalTrafficInformURI: z.string(),
   happLinkEnable: z.boolean(),
   hasApiToken: z.boolean(),
-  hasDiscordBotToken: z.boolean(),
   hasLdapPassword: z.boolean(),
   hasNordSecret: z.boolean(),
   hasSmtpPassword: z.boolean(),
@@ -1226,6 +1205,24 @@ export const SubBalancerSchema = z.object({
   updatedAt: z.number().int(),
 });
 export type SubBalancer = z.infer<typeof SubBalancerSchema>;
+
+export const TelegramProxyProfileSchema = z.object({
+  host: z.string(),
+  link: z.string(),
+  name: z.string().optional(),
+  port: z.number().int(),
+  tls: z.boolean(),
+});
+export type TelegramProxyProfile = z.infer<typeof TelegramProxyProfileSchema>;
+
+export const TelegramSubscriptionSchema = z.object({
+  enabled: z.boolean(),
+  personal: z.lazy(() => TelegramProxyProfileSchema).nullable().optional(),
+  proxies: z.array(z.lazy(() => TelegramProxyProfileSchema)).optional(),
+  webProxy: z.string().optional(),
+  webProxyEnabled: z.boolean(),
+});
+export type TelegramSubscription = z.infer<typeof TelegramSubscriptionSchema>;
 
 export const TelemtWebSiteOptionsSchema = z.object({
   catalog: z.string().optional(),

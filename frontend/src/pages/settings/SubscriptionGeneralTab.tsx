@@ -413,6 +413,22 @@ export default function SubscriptionGeneralTab({
                   metadataOnly
                 />
               </SettingListItem>
+              <SettingListItem paddings="small" title={t('pages.settings.subAppearanceTheme')}>
+                <Select
+                  id="sub-appearance-theme"
+                  aria-label={t('pages.settings.subAppearanceTheme')}
+                  value={allSetting.subAppearanceTheme}
+                  style={{ width: '100%' }}
+                  options={[
+                    { value: 'classic', label: t('pages.settings.subAppearanceClassic') },
+                    { value: 'luna', label: t('subscription.themes.luna') },
+                    ...(
+                      ['light', 'dark', 'ultra-dark', 'colorful', 'blue-gray', 'cyberpunk'] as const
+                    ).map((value) => ({ value, label: t(`subscription.themes.${value}`) })),
+                  ]}
+                  onChange={(value) => updateSetting({ subAppearanceTheme: value })}
+                />
+              </SettingListItem>
               <SettingListItem
                 paddings="small"
                 title={t('pages.settings.subAppearanceEnable')}
@@ -425,17 +441,6 @@ export default function SubscriptionGeneralTab({
               </SettingListItem>
               {allSetting.subAppearanceEnable && (
                 <>
-                  <SettingListItem paddings="small" title={t('pages.settings.subAppearanceTheme')}>
-                    <Select
-                      aria-label={t('pages.settings.subAppearanceTheme')}
-                      value={allSetting.subAppearanceTheme}
-                      options={[
-                        { value: 'classic', label: t('pages.settings.subAppearanceClassic') },
-                        { value: 'whitemax', label: 'WhiteMax' },
-                      ]}
-                      onChange={(value) => updateSetting({ subAppearanceTheme: value })}
-                    />
-                  </SettingListItem>
                   <SettingListItem paddings="small" title={t('pages.settings.subAppearanceTitle')}>
                     <Input
                       value={allSetting.subAppearanceTitle}

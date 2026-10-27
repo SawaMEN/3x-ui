@@ -84,6 +84,8 @@ func run(root, outDir string) error {
 			Path: resolveRel(root, "internal/coremodel"),
 			StructAllow: setOf(
 				"ClientTraffic",
+				"TelegramProxyProfile",
+				"TelegramSubscription",
 				"Traffic",
 			),
 			AliasAllow: setOf(),

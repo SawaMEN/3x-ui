@@ -40,3 +40,31 @@ func TestSubscriptionThemeKeepsClassicForExistingSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestSubscriptionThemeAppliesWithoutCustomBranding(t *testing.T) {
+	setupSettingTestDB(t)
+	service := &SettingService{}
+	if err := service.saveSetting("subAppearanceTheme", "whitemax"); err != nil {
+		t.Fatal(err)
+	}
+	appearance, err := service.GetSubscriptionAppearance()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if appearance.Enabled || appearance.Theme != "luna" {
+		t.Fatalf("appearance = %+v, want disabled branding and Luna", appearance)
+	}
+	for _, theme := range []string{"luna", "light", "dark", "ultra-dark", "colorful", "blue-gray", "cyberpunk"} {
+		settings := entity.AllSetting{SubAppearanceTheme: theme}
+		if err := validatePresentationSettings(&settings); err != nil {
+			t.Fatalf("theme %s: %v", theme, err)
+		}
+		if err := service.saveSetting("subAppearanceTheme", settings.SubAppearanceTheme); err != nil {
+			t.Fatal(err)
+		}
+		appearance, err = service.GetSubscriptionAppearance()
+		if err != nil || appearance.Theme != theme {
+			t.Fatalf("saved theme %s returned %+v, %v", theme, appearance, err)
+		}
+	}
+}

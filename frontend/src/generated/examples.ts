@@ -14,16 +14,6 @@ export const EXAMPLES: Record<string, unknown> = {
   "AllSetting": {
     "coreType": "",
     "datepicker": "",
-    "discordAdminIds": "",
-    "discordBotBackup": false,
-    "discordBotEnable": false,
-    "discordBotToken": "",
-    "discordChannelId": "",
-    "discordCpu": 0,
-    "discordEnabledEvents": "",
-    "discordLang": "",
-    "discordMemory": 0,
-    "discordRunTime": "",
     "expireDiff": 0,
     "externalTrafficInformEnable": false,
     "externalTrafficInformURI": "",
@@ -179,22 +169,11 @@ export const EXAMPLES: Record<string, unknown> = {
   "AllSettingView": {
     "coreType": "",
     "datepicker": "",
-    "discordAdminIds": "",
-    "discordBotBackup": false,
-    "discordBotEnable": false,
-    "discordBotToken": "",
-    "discordChannelId": "",
-    "discordCpu": 0,
-    "discordEnabledEvents": "",
-    "discordLang": "",
-    "discordMemory": 0,
-    "discordRunTime": "",
     "expireDiff": 0,
     "externalTrafficInformEnable": false,
     "externalTrafficInformURI": "",
     "happLinkEnable": false,
     "hasApiToken": false,
-    "hasDiscordBotToken": false,
     "hasLdapPassword": false,
     "hasNordSecret": false,
     "hasSmtpPassword": false,
@@ -1314,6 +1293,28 @@ export const EXAMPLES: Record<string, unknown> = {
     "sortOrder": 1,
     "strategy": "random",
     "updatedAt": 1710000000000
+  },
+  "TelegramProxyProfile": {
+    "host": "",
+    "link": "",
+    "name": "",
+    "port": 0,
+    "tls": false
+  },
+  "TelegramSubscription": {
+    "enabled": false,
+    "personal": null,
+    "proxies": [
+      {
+        "host": "",
+        "link": "",
+        "name": "",
+        "port": 0,
+        "tls": false
+      }
+    ],
+    "webProxy": "",
+    "webProxyEnabled": false
   },
   "TelemtWebSiteOptions": {
     "catalog": "builtin",

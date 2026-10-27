@@ -240,18 +240,6 @@ var defaultValueMap = map[string]string{
 	"smtpTo":             "",
 	"smtpEncryptionType": "starttls", // no, starttls, tls
 
-	// Discord bot notifications
-	"discordBotEnable":     "false",
-	"discordBotToken":      "",
-	"discordChannelId":     "",
-	"discordAdminIds":      "",
-	"discordRunTime":       "@daily",
-	"discordBotBackup":     "false",
-	"discordCpu":           "80",
-	"discordMemory":        "80",
-	"discordLang":          "en-US",
-	"discordEnabledEvents": "login.attempt,cpu.high",
-
 	"singBoxConfigTemplate": "",
 }
 
@@ -352,7 +340,6 @@ func (s *SettingService) GetAllSettingView() (*entity.AllSettingView, error) {
 	view.HasWarpSecret = secretConfigured(mustString(s.GetWarp()))
 	view.HasNordSecret = secretConfigured(mustString(s.GetNord()))
 	view.HasSmtpPassword = secretConfigured(allSetting.SmtpPassword)
-	view.HasDiscordBotToken = secretConfigured(allSetting.DiscordBotToken)
 	var apiTokenCount int64
 	if err := database.GetDB().Model(model.ApiToken{}).Where("enabled = ?", true).Count(&apiTokenCount).Error; err == nil {
 		view.HasApiToken = apiTokenCount > 0
@@ -361,7 +348,6 @@ func (s *SettingService) GetAllSettingView() (*entity.AllSettingView, error) {
 	view.TwoFactorToken = ""
 	view.LdapPassword = ""
 	view.SmtpPassword = ""
-	view.DiscordBotToken = ""
 	return view, nil
 }
 
@@ -1446,86 +1432,6 @@ func (s *SettingService) SetSmtpMemory(value int) error {
 	return s.setInt("smtpMemory", value)
 }
 
-func (s *SettingService) GetDiscordBotEnable() (bool, error) {
-	return s.getBool("discordBotEnable")
-}
-
-func (s *SettingService) SetDiscordBotEnable(value bool) error {
-	return s.setBool("discordBotEnable", value)
-}
-
-func (s *SettingService) GetDiscordBotToken() (string, error) {
-	return s.getString("discordBotToken")
-}
-
-func (s *SettingService) SetDiscordBotToken(value string) error {
-	return s.setString("discordBotToken", value)
-}
-
-func (s *SettingService) GetDiscordChannelId() (string, error) {
-	return s.getString("discordChannelId")
-}
-
-func (s *SettingService) SetDiscordChannelId(value string) error {
-	return s.setString("discordChannelId", value)
-}
-
-func (s *SettingService) GetDiscordAdminIds() (string, error) {
-	return s.getString("discordAdminIds")
-}
-
-func (s *SettingService) SetDiscordAdminIds(value string) error {
-	return s.setString("discordAdminIds", value)
-}
-
-func (s *SettingService) GetDiscordEnabledEvents() (string, error) {
-	return s.getString("discordEnabledEvents")
-}
-
-func (s *SettingService) SetDiscordEnabledEvents(events string) error {
-	return s.setString("discordEnabledEvents", events)
-}
-
-func (s *SettingService) GetDiscordCpu() (int, error) {
-	return s.getInt("discordCpu")
-}
-
-func (s *SettingService) SetDiscordCpu(value int) error {
-	return s.setInt("discordCpu", value)
-}
-
-func (s *SettingService) GetDiscordMemory() (int, error) {
-	return s.getInt("discordMemory")
-}
-
-func (s *SettingService) SetDiscordMemory(value int) error {
-	return s.setInt("discordMemory", value)
-}
-
-func (s *SettingService) GetDiscordRunTime() (string, error) {
-	return s.getString("discordRunTime")
-}
-
-func (s *SettingService) SetDiscordRunTime(value string) error {
-	return s.setString("discordRunTime", value)
-}
-
-func (s *SettingService) GetDiscordBotBackup() (bool, error) {
-	return s.getBool("discordBotBackup")
-}
-
-func (s *SettingService) SetDiscordBotBackup(value bool) error {
-	return s.setBool("discordBotBackup", value)
-}
-
-func (s *SettingService) GetDiscordLang() (string, error) {
-	return s.getString("discordLang")
-}
-
-func (s *SettingService) SetDiscordLang(value string) error {
-	return s.setString("discordLang", value)
-}
-
 // GetOutboundDownThreshold returns how many consecutive failed observatory
 // probes an outbound must accumulate before an outbound.down notification is
 // emitted. 1 preserves the legacy "notify on the first failed probe" behaviour.
@@ -1541,10 +1447,9 @@ func (s *SettingService) SetOutboundDownThreshold(value int) error {
 // flag, a blank submitted secret means "unchanged" (the field is always served
 // blank to the browser) and the stored value is preserved.
 type SecretClears struct {
-	TgBotToken      bool
-	LdapPassword    bool
-	SmtpPassword    bool
-	DiscordBotToken bool
+	TgBotToken   bool
+	LdapPassword bool
+	SmtpPassword bool
 }
 
 func (s *SettingService) UpdateAllSetting(allSetting *entity.AllSetting, clears SecretClears) error {
@@ -1726,13 +1631,6 @@ func (s *SettingService) preserveRedactedSecrets(allSetting *entity.AllSetting, 
 			return err
 		}
 		allSetting.SmtpPassword = value
-	}
-	if !clears.DiscordBotToken && strings.TrimSpace(allSetting.DiscordBotToken) == "" {
-		value, err := s.GetDiscordBotToken()
-		if err != nil {
-			return err
-		}
-		allSetting.DiscordBotToken = value
 	}
 	return nil
 }
@@ -1957,11 +1855,10 @@ func (s *SettingService) GetDefaultSettings(host string) (any, error) {
 }
 
 var factoryDefaultSecretKeys = map[string]bool{
-	"tgBotToken":      true,
-	"twoFactorToken":  true,
-	"ldapPassword":    true,
-	"smtpPassword":    true,
-	"discordBotToken": true,
+	"tgBotToken":     true,
+	"twoFactorToken": true,
+	"ldapPassword":   true,
+	"smtpPassword":   true,
 }
 
 /*

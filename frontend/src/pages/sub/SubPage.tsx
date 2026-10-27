@@ -1,16 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  Alert,
-  Button,
-  Card,
-  ConfigProvider,
-  Layout,
-  Space,
-  Tabs,
-  Typography,
-  message,
-} from 'antd';
+import { Alert, Button, Card, ConfigProvider, Layout, Tabs, message } from 'antd';
 import type { TabsProps } from 'antd';
 import {
   ApiOutlined,
@@ -29,6 +19,9 @@ import SubConfigsTab from './SubConfigsTab';
 import SubHeader from './SubHeader';
 import SubHero from './SubHero';
 import SubLinksTab from './SubLinksTab';
+import SubTelegramTab from './SubTelegramTab';
+import { telegramProfiles } from './telegramProfiles';
+import type { TelegramSubscription } from '@/generated/types';
 import {
   buildSubApps,
   buildTelemtEndpoint,
@@ -37,9 +30,9 @@ import {
   resolveSubStatus,
 } from './subPageModel';
 import './SubPage.css';
-import './SubWhiteMax.css';
-import WhiteMaxBackdrop from './WhiteMaxBackdrop';
-import { whiteMaxTheme } from './whiteMaxTheme';
+import './SubLuna.css';
+import LunaBackdrop from './LunaBackdrop';
+import { lunaTheme } from './lunaTheme';
 
 const subData = window.__SUB_PAGE_DATA__ || {};
 
@@ -48,6 +41,7 @@ const subUrl = subData.subUrl || '';
 const subJsonUrl = subData.subJsonUrl || '';
 const subClashUrl = subData.subClashUrl || '';
 const appearance = subData.appearance?.enabled ? subData.appearance : undefined;
+const luna = ['luna', 'whitemax'].includes(subData.appearance?.theme ?? '');
 const subTitle = appearance?.title || subData.subTitle || '';
 const subSupportUrl = subData.subSupportUrl || '';
 const updateHours = Number(subData.subUpdates || 0);
@@ -61,20 +55,6 @@ const usedByte =
 const expireMs = Number(subData.expire || 0) * 1000;
 const clientEmail = [...new Set(linkEmails.filter(Boolean))].join(', ');
 const loadedAt = Date.now();
-
-type TelemtProxyProfile = {
-  host: string;
-  port: number;
-  tls: boolean;
-  link: string;
-};
-
-type TelemtSubscriptionData = {
-  enabled?: boolean;
-  personal?: TelemtProxyProfile;
-  webProxyEnabled?: boolean;
-  webProxy?: string;
-};
 
 const heroData = {
   status: resolveSubStatus({ enabled: !!subData.enabled, usedByte, totalByte, expireMs }, loadedAt),
@@ -98,14 +78,13 @@ const RTL_LANGUAGES = new Set(['fa-IR', 'ar-EG']);
 export default function SubPage() {
   const { t } = useTranslation();
   const { isDark, isUltra, antdThemeConfig } = useTheme();
-  const [whiteMax, setWhiteMax] = useState(appearance?.theme === 'whitemax');
   const [messageApi, messageContextHolder] = message.useMessage();
   useEffect(() => {
     setMessageInstance(messageApi);
   }, [messageApi]);
   const [lang, setLang] = useState<string>(() => LanguageManager.getLanguage('subscription'));
   const telemtEndpoint = buildTelemtEndpoint(window.location.href, sId);
-  const [telemtData, setTelemtData] = useState<TelemtSubscriptionData>({});
+  const [telemtData, setTelemtData] = useState<Partial<TelegramSubscription>>({});
   const [telemtLoading, setTelemtLoading] = useState(() => Boolean(telemtEndpoint));
   const [telemtError, setTelemtError] = useState(() => !telemtEndpoint);
 
@@ -113,6 +92,11 @@ export default function SubPage() {
     if (!telemtEndpoint) return;
 
     const controller = new AbortController();
+    const timeout = window.setTimeout(() => {
+      setTelemtLoading(false);
+      setTelemtError(true);
+      controller.abort();
+    }, 8000);
 
     void fetch(telemtEndpoint, {
       method: 'GET',
@@ -124,7 +108,7 @@ export default function SubPage() {
         if (!response.ok) {
           throw new Error(`Telemt subscription request failed with ${response.status}`);
         }
-        return (await response.json()) as TelemtSubscriptionData;
+        return (await response.json()) as TelegramSubscription;
       })
       .then((data) => {
         setTelemtData(data);
@@ -137,12 +121,16 @@ export default function SubPage() {
         }
       })
       .finally(() => {
+        window.clearTimeout(timeout);
         if (!controller.signal.aborted) {
           setTelemtLoading(false);
         }
       });
 
-    return () => controller.abort();
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
   }, [telemtEndpoint]);
 
   const onLangChange = useCallback((next: string) => {
@@ -188,91 +176,20 @@ export default function SubPage() {
         children: <SubAppsTab apps={apps} initialPlatform={initialPlatform} onOpen={open} />,
       });
     }
-    if (telemtData.enabled) {
+    const profiles = telegramProfiles(telemtData, links);
+    if (profiles.length > 0 || telemtLoading || telemtError) {
       items.push({
         key: 'telemt',
         icon: <ApiOutlined />,
         label: 'Telegram Proxy',
         children: (
-          <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-            {telemtError && (
-              <Alert
-                type="warning"
-                showIcon
-                title="Telegram Proxy data is temporarily unavailable"
-                description="The subscription is still available. Check the Telemt and Web Proxy settings, then reload this page."
-              />
-            )}
-
-            <Card size="small" title="Personal Telegram Proxy">
-              {telemtData.personal?.link ? (
-                <Space direction="vertical" size="small" style={{ width: '100%' }}>
-                  <Typography.Text type="secondary">
-                    Individual proxy profile for this subscription · {telemtData.personal.host}:
-                    {telemtData.personal.port}
-                  </Typography.Text>
-                  <Typography.Paragraph
-                    copyable={{ text: telemtData.personal.link }}
-                    style={{ marginBottom: 0 }}
-                  >
-                    <Typography.Link href={telemtData.personal.link}>
-                      {telemtData.personal.link}
-                    </Typography.Link>
-                  </Typography.Paragraph>
-                  <Button
-                    type="primary"
-                    icon={<ApiOutlined />}
-                    onClick={() => open(telemtData.personal!.link)}
-                  >
-                    Open in Telegram
-                  </Button>
-                </Space>
-              ) : (
-                <Typography.Text type="secondary">
-                  {telemtLoading
-                    ? 'Loading personal Telemt profile…'
-                    : telemtError
-                      ? 'Unable to load the personal Telemt profile.'
-                      : 'Personal Telemt proxy is currently unavailable for this subscription.'}
-                </Typography.Text>
-              )}
-            </Card>
-
-            {telemtData.webProxyEnabled && (
-              <Card size="small" title="Web Proxy">
-                {telemtData.webProxy ? (
-                  <Space direction="vertical" size="small" style={{ width: '100%' }}>
-                    <Typography.Text type="secondary">
-                      Shared Web Proxy for all subscription users
-                    </Typography.Text>
-                    <Typography.Paragraph
-                      copyable={{ text: telemtData.webProxy }}
-                      style={{ marginBottom: 0 }}
-                    >
-                      <Typography.Link href={telemtData.webProxy}>
-                        {telemtData.webProxy}
-                      </Typography.Link>
-                    </Typography.Paragraph>
-                    <Button
-                      type="primary"
-                      icon={<ApiOutlined />}
-                      onClick={() => open(telemtData.webProxy!)}
-                    >
-                      Open in Telegram
-                    </Button>
-                  </Space>
-                ) : (
-                  <Typography.Text type="secondary">
-                    {telemtLoading
-                      ? 'Loading shared Web Proxy…'
-                      : telemtError
-                        ? 'Unable to load the shared Web Proxy.'
-                        : 'Shared Web Proxy is enabled but currently unavailable.'}
-                  </Typography.Text>
-                )}
-              </Card>
-            )}
-          </Space>
+          <SubTelegramTab
+            profiles={profiles}
+            loading={telemtLoading}
+            error={telemtError}
+            onCopy={copy}
+            onOpen={open}
+          />
         ),
       });
     }
@@ -295,24 +212,24 @@ export default function SubPage() {
   const direction = RTL_LANGUAGES.has(lang) ? 'rtl' : 'ltr';
   const pageClass = [
     'subscription-page',
-    (whiteMax || isDark) && 'is-dark',
-    !whiteMax && isUltra && 'is-ultra',
-    whiteMax && 'sub-whitemax',
+    (luna || isDark) && 'is-dark',
+    !luna && isUltra && 'is-ultra',
+    luna && 'sub-luna',
   ]
     .filter(Boolean)
     .join(' ');
 
   const subscriptionStyle = {
-    ...(appearance && !whiteMax ? { '--sub-accent': appearance.accent } : {}),
-    colorScheme: whiteMax || isDark ? 'dark' : 'light',
+    ...(appearance && !luna ? { '--sub-accent': appearance.accent } : {}),
+    colorScheme: luna || isDark ? 'dark' : 'light',
   } as React.CSSProperties;
 
   return (
-    <ConfigProvider theme={whiteMax ? whiteMaxTheme() : antdThemeConfig} direction={direction}>
+    <ConfigProvider theme={luna ? lunaTheme() : antdThemeConfig} direction={direction}>
       {messageContextHolder}
       <Layout className={pageClass} dir={direction} style={subscriptionStyle}>
-        {whiteMax ? (
-          <WhiteMaxBackdrop />
+        {luna ? (
+          <LunaBackdrop />
         ) : (
           <div className="sub-aurora" aria-hidden="true">
             <span className="sub-aurora-grid" />
@@ -322,8 +239,7 @@ export default function SubPage() {
           <Card className="sub-card">
             <SubHeader
               title={subTitle}
-              whiteMax={whiteMax}
-              onWhiteMaxChange={setWhiteMax}
+              isDark={luna || isDark}
               logoURL={appearance?.logoURL}
               sId={sId}
               email={clientEmail}
@@ -331,15 +247,15 @@ export default function SubPage() {
               onLangChange={onLangChange}
             />
             {appearance?.description && (
-              <p className="sub-whitemax-description" dir="auto">
+              <p className="sub-luna-description" dir="auto">
                 {appearance.description}
               </p>
             )}
-            {(appearance || whiteMax) && subUrl && (
+            {(appearance || luna) && subUrl && (
               <Button
                 type="primary"
                 size="large"
-                className="sub-whitemax-connect"
+                className="sub-luna-connect"
                 icon={<LinkOutlined />}
                 onClick={() => void copy(subUrl)}
               >

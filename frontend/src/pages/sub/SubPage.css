@@ -725,7 +725,7 @@ a.sub-row-title:hover {
 
 /* Cyberpunk identity: public subscriptions get the same neon atmosphere as
    the panel and login, while preserving the subscription card's glass layer. */
-body.theme-cyberpunk .subscription-page:not(.sub-whitemax) {
+body.theme-cyberpunk .subscription-page:not(.sub-luna) {
   --sub-grad-from: #00eeff;
   --sub-grad-to: #ff2bd6;
   --sub-ink-from: #7df8ff;
@@ -762,12 +762,12 @@ body.theme-cyberpunk .subscription-page:not(.sub-whitemax) {
   --sub-glass-bg: rgba(7, 11, 20, 0.5);
 }
 
-body.theme-cyberpunk .subscription-page:not(.sub-whitemax) .sub-aurora::before,
-body.theme-cyberpunk .subscription-page:not(.sub-whitemax) .sub-aurora::after {
+body.theme-cyberpunk .subscription-page:not(.sub-luna) .sub-aurora::before,
+body.theme-cyberpunk .subscription-page:not(.sub-luna) .sub-aurora::after {
   filter: blur(96px) saturate(130%);
 }
 
-body.theme-cyberpunk .subscription-page:not(.sub-whitemax)::after {
+body.theme-cyberpunk .subscription-page:not(.sub-luna)::after {
   content: '';
   position: fixed;
   inset: 0;
@@ -798,29 +798,29 @@ body.theme-cyberpunk .subscription-page:not(.sub-whitemax)::after {
   animation: sub-cyber-scan 18s linear infinite;
 }
 
-body.theme-cyberpunk .subscription-page:not(.sub-whitemax) .sub-card {
+body.theme-cyberpunk .subscription-page:not(.sub-luna) .sub-card {
   border-color: rgba(0, 238, 255, 0.15);
 }
 
-body.theme-cyberpunk .subscription-page:not(.sub-whitemax) .sub-brand-mark {
+body.theme-cyberpunk .subscription-page:not(.sub-luna) .sub-brand-mark {
   background: linear-gradient(135deg, #00eeff, #7d7bff 46%, #ff2bd6);
   box-shadow:
     0 0 18px rgba(0, 238, 255, 0.18),
     0 10px 24px -12px rgba(255, 43, 214, 0.34);
 }
 
-body.theme-cyberpunk .subscription-page:not(.sub-whitemax) .sub-tabs.ant-tabs .ant-tabs-ink-bar {
+body.theme-cyberpunk .subscription-page:not(.sub-luna) .sub-tabs.ant-tabs .ant-tabs-ink-bar {
   background: linear-gradient(90deg, #00eeff, #ff2bd6) !important;
   box-shadow: 0 0 12px rgba(0, 238, 255, 0.24);
 }
 
-body.theme-cyberpunk .subscription-page:not(.sub-whitemax) .toolbar-btn {
+body.theme-cyberpunk .subscription-page:not(.sub-luna) .toolbar-btn {
   border-color: rgba(0, 238, 255, 0.16);
   color: #00eeff;
   background: rgba(7, 11, 20, 0.5);
 }
 
-body.theme-cyberpunk .subscription-page:not(.sub-whitemax) .toolbar-btn:hover {
+body.theme-cyberpunk .subscription-page:not(.sub-luna) .toolbar-btn:hover {
   border-color: rgba(255, 43, 214, 0.34);
   color: #ff2bd6;
 }
@@ -841,7 +841,37 @@ body.theme-cyberpunk .subscription-page:not(.sub-whitemax) .toolbar-btn:hover {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  body.theme-cyberpunk .subscription-page:not(.sub-whitemax)::after {
+  body.theme-cyberpunk .subscription-page:not(.sub-luna)::after {
     animation: none;
+  }
+}
+
+.sub-telegram-profile {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--sub-row-border);
+  border-radius: 14px;
+  background: var(--sub-row-bg);
+}
+.sub-telegram-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.sub-telegram-profile .sub-row-main {
+  min-width: min(100%, 180px);
+}
+@media (max-width: 480px) {
+  .sub-telegram-profile .sub-row-main {
+    flex-basis: 100%;
+  }
+  .sub-telegram-actions {
+    width: 100%;
+  }
+  .sub-telegram-actions > .ant-btn:first-child {
+    flex: 1;
   }
 }
