@@ -61,6 +61,8 @@ export default function MtprotoWebStatus() {
         ? 'Установите или обновите Telemt в Настройки → Обновления пакетов и ядер Linux.'
         : 'Install or update Telemt in Settings → Linux package and core updates.'
       : status?.error);
+  const portProblemAlreadyShown =
+    status?.port443Available === false && /(?:tcp|порт)\s*443/i.test(problem || '');
   const defaultDomain = TelemtWebProxyRequestSchema.shape.domain.safeParse(status?.defaultDomain);
   return (
     <Space orientation="vertical" style={{ width: '100%', marginBlock: 12 }}>
@@ -114,7 +116,7 @@ export default function MtprotoWebStatus() {
           )}
         </>
       )}
-      {!loading && !error && status && !status.port443Available && (
+      {!loading && !error && status && !status.port443Available && !portProblemAlreadyShown && (
         <Alert
           type="warning"
           showIcon
