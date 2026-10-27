@@ -74,6 +74,9 @@ func telemtWebPanelPort443Owner(state TelemtWebProxyState) (string, error) {
 	if nativePort == 443 && state.ManagedInboundID == 0 {
 		return "обычный Telemt MTProto (server.port = 443 в telemt.toml)", nil
 	}
+	if reservedAPIPort() == 443 {
+		return "внутренний Xray API панели (127.0.0.1:443)", nil
+	}
 
 	return telemtWebInboundPort443Owner(state)
 }
@@ -84,7 +87,7 @@ func telemtWebInboundPort443Owner(state TelemtWebProxyState) (string, error) {
 		return "", fmt.Errorf("база подключений недоступна")
 	}
 	var inbounds []model.Inbound
-	if err := db.Where("node_id IS NULL AND enable = ?", true).Find(&inbounds).Error; err != nil {
+	if err := db.Where("node_id IS NULL").Find(&inbounds).Error; err != nil {
 		return "", err
 	}
 	for _, inbound := range inbounds {
@@ -103,7 +106,11 @@ func telemtWebInboundPort443Owner(state TelemtWebProxyState) (string, error) {
 		if name == "" {
 			name = fmt.Sprintf("#%d", inbound.Id)
 		}
-		return fmt.Sprintf("подключение «%s» (%s, ID %d) в разделе «Подключения»", name, inbound.Protocol, inbound.Id), nil
+		status := ""
+		if !inbound.Enable {
+			status = ", отключено"
+		}
+		return fmt.Sprintf("подключение «%s» (%s, ID %d%s) в разделе «Подключения»", name, inbound.Protocol, inbound.Id, status), nil
 	}
 	return "", nil
 }
