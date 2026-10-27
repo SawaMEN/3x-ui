@@ -120,7 +120,7 @@ describe('SNI search in protocol forms', () => {
       expect(post).toHaveBeenCalledWith(
         '/panel/api/server/scanRealityTargets',
         {},
-        { silent: true },
+        { silent: true, timeout: 360_000 },
       );
       const saved = values();
       expect(path.split('.').reduce((value, key) => value[key], saved)).toBe('edge.example');
@@ -172,7 +172,7 @@ describe('SNI search in protocol forms', () => {
       expect(post).toHaveBeenLastCalledWith(
         '/panel/api/server/scanRealityTargets',
         { targets: 'example.org, 203.0.113.0/30' },
-        { silent: true },
+        { silent: true, timeout: 360_000 },
       ),
     );
   });

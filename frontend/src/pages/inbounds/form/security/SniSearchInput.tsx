@@ -37,7 +37,7 @@ export default function SniSearchInput({
     const response = await HttpUtil.post<RealityScanResult[]>(
       '/panel/api/server/scanRealityTargets',
       targets ? { targets } : {},
-      { silent: true },
+      { silent: true, timeout: 360_000 },
     );
     if (!response?.success || !Array.isArray(response.obj)) {
       messageApi.error(response?.msg || t('pages.inbounds.toasts.scanRealityTargetError'));

@@ -27,8 +27,8 @@ retain their earlier subscription naming template until a mode is saved; the
 editor defaults to the remark option. Export/import and node synchronization
 carry the selected mode with the client.
 
-The SNI scanner ships with 160 candidate TLS endpoints. Existing installations
-using the previous 10- or 60-entry defaults receive the expanded list automatically.
+The SNI scanner ships with 800 candidate TLS endpoints. Existing installations
+using the previous 10-, 60- or 160-entry defaults receive the expanded list automatically.
 The list includes Ozon, hh.ru, Russian shopping, banking, media, travel and
 telecom services, plus popular international services.
 Custom candidate lists remain authoritative; an empty list uses the defaults.
@@ -36,3 +36,8 @@ Candidates are probes, not guaranteed compatible targets: search checks their
 certificates and TLS capabilities. Reachability can differ between the panel,
 remote nodes, and client networks. Ordinary TLS inbounds still need an SNI covered
 by their own server certificate; selecting a remote name does not install it.
+
+Additional international candidates are drawn from [Majestic Million](https://majestic.com/reports/majestic-million).
+The scanner accepts up to 1,024 targets with 32 concurrent probes. Large scans
+can take several minutes; scan requests allow six minutes. Reverse proxies
+serving the panel must allow the same response time for this endpoint.

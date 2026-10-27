@@ -219,6 +219,9 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 		return nil, err
 	}
 	engine.Use(middleware.RootRedirect(s.settingService.GetRootRedirectURL))
+	// Set the deadline before gzip wraps the response writer: its wrapper does
+	// not expose the underlying writer to http.ResponseController.
+	engine.Use(middleware.SniScanDeadline(basePath + "panel/api/server/scanRealityTargets"))
 	engine.Use(gzip.Gzip(gzip.DefaultCompression))
 	assetsBasePath := basePath + "assets/"
 

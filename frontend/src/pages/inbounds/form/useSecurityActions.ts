@@ -164,7 +164,7 @@ export function useSecurityActions({
     const msg = await HttpUtil.post<RealityScanResult[]>(
       '/panel/api/server/scanRealityTargets',
       targets ? { targets } : {},
-      { silent: true },
+      { silent: true, timeout: 360_000 },
     );
     if (!msg?.success || !Array.isArray(msg.obj)) {
       messageApi.error(msg?.msg || t('pages.inbounds.toasts.scanRealityTargetError'));

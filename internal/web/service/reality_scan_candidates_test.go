@@ -10,13 +10,18 @@ func TestRealityScanExpandedDefaultsPreserveCustomLists(t *testing.T) {
 	svc := &SettingService{}
 	cases := []struct{ name, stored, want string }{
 		{"legacy default", strings.Join(legacyRealityScanCandidates, ","), DefaultRealityScanCandidatesCSV},
+		{"160-entry default", strings.Join(previous160RealityScanCandidates, ","), DefaultRealityScanCandidatesCSV},
+		{"modified 160-entry default", strings.Join(previous160RealityScanCandidates[:159], ","), strings.Join(previous160RealityScanCandidates[:159], ",")},
 		{"previous default", strings.Join(previousRealityScanCandidates, ","), DefaultRealityScanCandidatesCSV},
 		{"modified previous default", strings.Join(previousRealityScanCandidates[:59], ","), strings.Join(previousRealityScanCandidates[:59], ",")},
 		{"custom list", "custom.example:8443,203.0.113.0/30", "custom.example:8443,203.0.113.0/30"},
 		{"empty fallback", "", ""},
 	}
-	if len(defaultRealityScanCandidates) != 160 {
-		t.Fatalf("expected 160 seeds, got %d", len(defaultRealityScanCandidates))
+	if len(defaultRealityScanCandidates) != 800 {
+		t.Fatalf("expected 800 seeds, got %d", len(defaultRealityScanCandidates))
+	}
+	if len(defaultRealityScanCandidates) > realityScanMaxTotal {
+		t.Fatal("default candidates exceed scan limit")
 	}
 	seen := map[string]bool{}
 	for _, target := range defaultRealityScanCandidates {
@@ -42,7 +47,7 @@ func TestRealityScanExpandedDefaultsPreserveCustomLists(t *testing.T) {
 				t.Fatalf("settings UI: %v %+v", err, all)
 			}
 			tokens := (&ServerService{}).realityScanCandidateTokens()
-			if tc.stored == "" && len(tokens) != 160 {
+			if tc.stored == "" && len(tokens) != 800 {
 				t.Fatal("empty list did not use expanded seeds")
 			}
 		})
