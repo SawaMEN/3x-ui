@@ -116,7 +116,11 @@ describe('MTProto publication controls', () => {
     expect(screen.getByRole('link', { name: 'Open in Telegram' }).getAttribute('href')).toContain(
       'tg://proxy?',
     );
-    await waitFor(() => expect(get).toHaveBeenCalledWith('/panel/api/telemt/status'));
+    await waitFor(() =>
+      expect(get).toHaveBeenCalledWith('/panel/api/telemt/status', undefined, {
+        signal: expect.any(AbortSignal),
+      }),
+    );
     expect(get.mock.calls.some(([url]) => url.endsWith('/config') || url.endsWith('/proxy'))).toBe(
       false,
     );
