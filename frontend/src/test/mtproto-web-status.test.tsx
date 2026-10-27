@@ -64,6 +64,23 @@ describe('MTProto WEB automation', () => {
     await screen.findByText(/TCP 443.*x-ui/);
     expect(screen.getByLabelText('domain')).toHaveProperty('value', 'edited.example.com');
   });
+  it('shows one warning with the panel inbound name and does not repeat status.error', async () => {
+    vi.mocked(HttpUtil.get).mockResolvedValue({
+      success: true,
+      msg: '',
+      obj: {
+        ...ready,
+        port443Available: false,
+        port443Free: false,
+        port443Owner: 'подключение «web-main» (vless, ID 12) в разделе «Подключения»',
+        error: 'TCP 443 занят: подключение «web-main» (vless, ID 12).',
+      },
+    });
+    render(<Harness />);
+    await screen.findByText(/TCP 443.*web-main/);
+    expect(screen.getAllByText(/TCP 443.*web-main/)).toHaveLength(1);
+  });
+
   it('rechecks port availability and can explicitly restore the default domain', async () => {
     vi.mocked(HttpUtil.get)
       .mockResolvedValueOnce({ success: true, msg: '', obj: ready })
