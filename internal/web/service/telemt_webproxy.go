@@ -256,6 +256,29 @@ func appendTelemtWebProxyConfig(base string, state TelemtWebProxyState) (string,
 	// limits apply to the WEB listener only, not ordinary MTProto sidecars.
 	maxProfiles := max(64, (managedUserCount+16)*(len(state.Aliases)+1))
 	webConfig = strings.Replace(webConfig, "[web]\nenabled = true\n", fmt.Sprintf("[web]\nenabled = true\nlimits.max_profiles = %d\nlimits.max_vhosts = %d\n", maxProfiles, len(state.Aliases)+1), 1)
+	// Extra hostnames share the same loopback WEB listener and per-user
+	// profiles. Each vhost advertises its own resolved public endpoint.
+	for _, alias := range state.Aliases {
+		aliasAddr, resolveErr := resolveTelemtWebPublicAddr(alias)
+		if resolveErr != nil {
+			return "", fmt.Errorf("WEB alias %s: %w", alias, resolveErr)
+		}
+		webConfig += fmt.Sprintf("\n[[web.vhosts]]\nhost = %q\n", alias)
+		if state.BasePath != "" {
+			webConfig += fmt.Sprintf("base_path = %q\n", state.BasePath)
+		}
+		webConfig += fmt.Sprintf("public_addr = %q\n", aliasAddr)
+		if state.Site != nil && state.Site.Mode == "origin" {
+			webConfig += fmt.Sprintf("\n[web.vhosts.decoy]\nmode = \"http_upstream\"\nupstream = %q\n", state.Site.Origin)
+		} else {
+			webConfig += fmt.Sprintf("\n[web.vhosts.decoy]\nmode = \"static_directory\"\ndirectory = %q\nindex = \"index.html\"\n", decoyDir)
+		}
+		if state.ManagedInboundID != 0 {
+			webConfig += managedProfiles
+		} else {
+			webConfig += fmt.Sprintf("\n[[web.vhosts.profiles]]\nuser = %q\nsecret_mode = \"dd\"\n", telemtWebUser)
+		}
+	}
 	if state.ManagedInboundID != 0 {
 		if managedQuotas.Len() > 0 {
 			base += "\n[access.user_data_quota]\n" + managedQuotas.String()
