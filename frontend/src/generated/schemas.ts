@@ -1603,8 +1603,8 @@ export const SCHEMAS: Record<string, unknown> = {
         "description": "Client comment",
         "type": "string"
       },
-      "connectionName": {
-        "description": "Shared display name for this client across protocols. Omission preserves it.",
+      "connectionNameMode": {
+        "description": "Naming mode: remark, remark-client, or client. Omission preserves it.",
         "nullable": true,
         "type": "string"
       },
@@ -1868,7 +1868,7 @@ export const SCHEMAS: Record<string, unknown> = {
       "comment": {
         "type": "string"
       },
-      "connectionName": {
+      "connectionNameMode": {
         "nullable": true,
         "type": "string"
       },
@@ -2033,7 +2033,7 @@ export const SCHEMAS: Record<string, unknown> = {
         "example": "Primary device",
         "type": "string"
       },
-      "connectionName": {
+      "connectionNameMode": {
         "nullable": true,
         "type": "string"
       },

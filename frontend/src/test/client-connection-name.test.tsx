@@ -2,9 +2,10 @@ import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
 import ClientFormModal from '@/pages/clients/ClientFormModal';
 import { ClientFormSchema } from '@/schemas/client';
+import type { ClientRecord } from '@/schemas/client';
 import { renderWithProviders } from './test-utils';
 
-function open(connectionName?: string) {
+function open(mode?: ClientRecord['connectionNameMode']) {
   const save = vi.fn().mockResolvedValue({ success: true });
   renderWithProviders(
     <ClientFormModal
@@ -15,7 +16,7 @@ function open(connectionName?: string) {
         subId: 'namedsub',
         uuid: '11111111-1111-4111-8111-111111111111',
         enable: true,
-        connectionName,
+        connectionNameMode: mode,
       }}
       inbounds={[{ id: 1, protocol: 'vless', tag: 'in', port: 443 }]}
       attachedIds={[1]}
@@ -26,41 +27,47 @@ function open(connectionName?: string) {
   return save;
 }
 
-it('saves one client connection name and retains it on unrelated edits', async () => {
-  const save = open('Мой VPN / #1');
-  expect(await screen.findByRole('textbox', { name: 'Connection name' })).toHaveProperty(
-    'value',
-    'Мой VPN / #1',
+it.each(['remark', 'remark-client', 'client'] as const)(
+  'preserves selected mode %s on unrelated edits',
+  async (mode) => {
+    const save = open(mode);
+    await screen.findByRole('combobox', { name: 'Connection naming' });
+    fireEvent.click(screen.getByRole('button', { name: /save/i }));
+    await waitFor(() => expect(save).toHaveBeenCalled());
+    expect(save.mock.calls[0][0].connectionNameMode).toBe(mode);
+  },
+);
+
+it('offers exactly the three requested choices and saves a different selection', async () => {
+  const save = open('remark');
+  const select = await screen.findByRole('combobox', { name: 'Connection naming' });
+  fireEvent.mouseDown(
+    select.closest('.ant-select')!.querySelector('.ant-select-selector') || select,
   );
+  const labels = ['Connection name (remark)', 'Name-client', 'Client'];
+  await waitFor(() =>
+    expect(
+      document.querySelectorAll(
+        '.ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option',
+      ).length,
+    ).toBe(3),
+  );
+  const options = Array.from(
+    document.querySelectorAll(
+      '.ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option',
+    ),
+  );
+  expect(options.map((option) => option.getAttribute('title'))).toEqual(labels);
+  fireEvent.click(options[1]);
   fireEvent.click(screen.getByRole('button', { name: /save/i }));
   await waitFor(() => expect(save).toHaveBeenCalled());
-  expect(save.mock.calls[0][0].connectionName).toBe('Мой VPN / #1');
+  expect(save.mock.calls[0][0].connectionNameMode).toBe('remark-client');
 });
 
-it('explicitly clears the override to restore the subscription naming template', async () => {
-  const save = open('Old name');
-  fireEvent.change(await screen.findByRole('textbox', { name: 'Connection name' }), {
-    target: { value: '' },
-  });
-  fireEvent.click(screen.getByRole('button', { name: /save/i }));
-  await waitFor(() => expect(save).toHaveBeenCalled());
-  expect(save.mock.calls[0][0].connectionName).toBe('');
-});
-
-it('adds and trims a name for a client created before the option existed', async () => {
+it('defaults to the connection remark and rejects unsupported modes', async () => {
   const save = open();
-  fireEvent.change(await screen.findByRole('textbox', { name: 'Connection name' }), {
-    target: { value: '  Общий VPN  ' },
-  });
-  fireEvent.click(screen.getByRole('button', { name: /save/i }));
+  fireEvent.click(await screen.findByRole('button', { name: /save/i }));
   await waitFor(() => expect(save).toHaveBeenCalled());
-  expect(save.mock.calls[0][0].connectionName).toBe('Общий VPN');
-});
-
-it('rejects oversized names and control characters in the form schema', () => {
-  const name = ClientFormSchema.shape.connectionName;
-  expect(name.safeParse('a'.repeat(257)).success).toBe(false);
-  expect(name.safeParse('A\nB').success).toBe(false);
-  expect(name.safeParse('A\u0085B').success).toBe(false);
-  expect(name.safeParse('VPN #1').success).toBe(true);
+  expect(save.mock.calls[0][0].connectionNameMode).toBe('remark');
+  expect(ClientFormSchema.shape.connectionNameMode.safeParse('arbitrary name').success).toBe(false);
 });

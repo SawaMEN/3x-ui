@@ -1316,7 +1316,7 @@ func (s *ClientService) BulkCreate(inboundSvc *InboundService, payloads []Client
 			skip(email, verr.Error())
 			continue
 		}
-		if verr := client.ValidateConnectionName(); verr != nil {
+		if verr := client.ValidateConnectionNameMode(); verr != nil {
 			skip(email, verr.Error())
 			continue
 		}

@@ -51,13 +51,14 @@ func TestNativeSubscriptionUsesSharedRemarkTemplate(t *testing.T) {
 	}
 }
 
-func TestClientConnectionNameOverridesAllSubscriptionFormats(t *testing.T) {
+func TestClientConnectionNameModeOverridesAllSubscriptionFormats(t *testing.T) {
 	for _, protocol := range []model.Protocol{model.VMESS, model.VLESS, model.Trojan, model.Hysteria, model.TUIC, model.AnyTLS, model.NaiveProxy, model.Snell, model.Mieru} {
 		t.Run(string(protocol), func(t *testing.T) {
 			initSubDB(t)
 			db := database.GetDB()
-			name := "Мой VPN / #1"
-			client := &model.ClientRecord{Email: "named@example.com", SubID: "named", UUID: "11111111-2222-4333-8444-555555555555", Password: "secret-password-123456789012345678", Auth: "secret-auth", Enable: true, ConnectionName: &name}
+			mode := model.ConnectionNameRemarkClient
+			name := "Protocol-specific name-named@example.com"
+			client := &model.ClientRecord{Email: "named@example.com", SubID: "named", UUID: "11111111-2222-4333-8444-555555555555", Password: "secret-password-123456789012345678", Auth: "secret-auth", Enable: true, ConnectionNameMode: &mode}
 			if err := db.Create(client).Error; err != nil {
 				t.Fatal(err)
 			}
@@ -111,11 +112,12 @@ func TestClientConnectionNameOverridesAllSubscriptionFormats(t *testing.T) {
 	}
 }
 
-func TestClientConnectionNameRawLinksAndUniqueProfileNames(t *testing.T) {
+func TestClientConnectionNameModeRawLinksAndUniqueProfileNames(t *testing.T) {
 	initSubDB(t)
 	db := database.GetDB()
-	name := "VPN / #1"
-	client := &model.ClientRecord{Email: "raw-name@example.com", SubID: "raw-names", UUID: "11111111-2222-4333-8444-555555555555", Password: "test-secret", Enable: true, ConnectionName: &name}
+	mode := model.ConnectionNameClient
+	name := "raw-name@example.com"
+	client := &model.ClientRecord{Email: "raw-name@example.com", SubID: "raw-names", UUID: "11111111-2222-4333-8444-555555555555", Password: "test-secret", Enable: true, ConnectionNameMode: &mode}
 	if err := db.Create(client).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -173,11 +175,12 @@ func TestClientConnectionNameRawLinksAndUniqueProfileNames(t *testing.T) {
 	}
 }
 
-func TestClientConnectionNameAppliesToExternalLinks(t *testing.T) {
+func TestClientConnectionNameModeAppliesToExternalLinks(t *testing.T) {
 	initSubDB(t)
 	db := database.GetDB()
-	name := "Единый VPN"
-	row := model.ClientRecord{Email: "external-name", SubID: "external-name-sub", Enable: true, ConnectionName: &name}
+	mode := model.ConnectionNameRemarkClient
+	name := "Separate remark-external-name"
+	row := model.ClientRecord{Email: "external-name", SubID: "external-name-sub", Enable: true, ConnectionNameMode: &mode}
 	if err := db.Create(&row).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -196,5 +199,31 @@ func TestClientConnectionNameAppliesToExternalLinks(t *testing.T) {
 	parsed, err := url.Parse(links[0])
 	if err != nil || parsed.Fragment != name {
 		t.Fatalf("link name: %s %v", links[0], err)
+	}
+}
+
+func TestClientNamingModesWithEmptyRemark(t *testing.T) {
+	for _, protocol := range []model.Protocol{model.VMESS, model.VLESS, model.Trojan, model.Hysteria, model.TUIC, model.AnyTLS, model.NaiveProxy, model.Snell, model.Mieru} {
+		for _, tc := range []struct{ mode, remark, want string }{
+			{model.ConnectionNameRemark, "Германия", "Германия"},
+			{model.ConnectionNameRemarkClient, "Германия", "Германия-ivan"},
+			{model.ConnectionNameClient, "Германия", "ivan"},
+			{model.ConnectionNameRemark, "", "ivan"},
+			{model.ConnectionNameRemarkClient, " \t ", "ivan"},
+			{model.ConnectionNameClient, "", "ivan"},
+		} {
+			for _, template := range []string{"", "{{PROTOCOL}} {{INBOUND}}-{{EMAIL}}"} {
+				svc := NewSubService(template)
+				inbound := &model.Inbound{Id: 1, Protocol: protocol, Remark: tc.remark}
+				client := model.Client{Email: "ivan", ConnectionNameMode: &tc.mode}
+				svc.primeLinkClients(inbound.Id, []model.Client{client}, true)
+				if got := svc.genRemark(inbound, client.Email, "different host", "quic"); got != tc.want {
+					t.Fatalf("%s/%s remark=%q: %q != %q", protocol, tc.mode, tc.remark, got, tc.want)
+				}
+				if got := svc.genHostRemark(inbound, client, "different host", "quic"); got != tc.want {
+					t.Fatalf("host %s/%s: %q != %q", protocol, tc.mode, got, tc.want)
+				}
+			}
+		}
 	}
 }

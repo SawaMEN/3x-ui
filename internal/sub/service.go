@@ -3315,7 +3315,7 @@ func cloneStringMap(source map[string]string) map[string]string {
 // remark, extra and email joined by "-".
 func (s *SubService) genRemark(inbound *model.Inbound, email string, extra string, transport string) string {
 	client := s.lookupClient(inbound, email)
-	if name := client.ConnectionDisplayName(); name != "" {
+	if name := client.ConnectionDisplayName(inbound.Remark); name != "" {
 		return name
 	}
 	if s.remarkTemplate != "" {

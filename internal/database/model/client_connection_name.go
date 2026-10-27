@@ -3,27 +3,52 @@ package model
 import (
 	"errors"
 	"strings"
-	"unicode"
-	"unicode/utf8"
 )
 
-// ValidateConnectionName preserves an omitted override and normalizes an explicit
-// empty value to the automatic naming mode. This is display metadata, not identity.
-func (c *Client) ValidateConnectionName() error {
-	if c.ConnectionName == nil {
+const (
+	ConnectionNameRemark       = "remark"
+	ConnectionNameRemarkClient = "remark-client"
+	ConnectionNameClient       = "client"
+)
+
+// Omission preserves the saved mode and older callers' naming templates.
+func (c *Client) ValidateConnectionNameMode() error {
+	if c.ConnectionNameMode == nil {
 		return nil
 	}
-	name := strings.TrimSpace(*c.ConnectionName)
-	if utf8.RuneCountInString(name) > 256 || strings.ContainsFunc(name, unicode.IsControl) {
-		return errors.New("connection name must be at most 256 characters without control characters")
+	switch *c.ConnectionNameMode {
+	case ConnectionNameRemark, ConnectionNameRemarkClient, ConnectionNameClient:
+		return nil
+	default:
+		return errors.New("connection name mode must be remark, remark-client, or client")
 	}
-	c.ConnectionName = &name
-	return nil
 }
 
-func (c Client) ConnectionDisplayName() string {
-	if c.ConnectionName == nil {
+// Client means its email identifier. A blank remark falls back to that identifier
+// in both remark modes, keeping names usable and avoiding a leading separator.
+func (c Client) ConnectionDisplayName(remark string) string {
+	if c.ConnectionNameMode == nil {
 		return ""
 	}
-	return strings.TrimSpace(*c.ConnectionName)
+	email := strings.TrimSpace(c.Email)
+	remark = strings.TrimSpace(remark)
+	switch *c.ConnectionNameMode {
+	case ConnectionNameClient:
+		return email
+	case ConnectionNameRemark:
+		if remark != "" {
+			return remark
+		}
+		return email
+	case ConnectionNameRemarkClient:
+		if remark != "" && email != "" {
+			return remark + "-" + email
+		}
+		if remark != "" {
+			return remark
+		}
+		return email
+	default:
+		return ""
+	}
 }

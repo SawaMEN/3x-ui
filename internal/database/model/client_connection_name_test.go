@@ -1,41 +1,48 @@
 package model
 
-import (
-	"strings"
-	"testing"
-)
+import "testing"
 
-func TestClientConnectionNameValidationAndRoundTrip(t *testing.T) {
-	name := "  Домашний VPN / #1  "
-	c := Client{ConnectionName: &name}
-	if err := c.ValidateConnectionName(); err != nil {
-		t.Fatal(err)
+func TestClientConnectionNameModes(t *testing.T) {
+	for _, tc := range []struct{ mode, remark, want string }{
+		{ConnectionNameRemark, " Frankfurt ", "Frankfurt"},
+		{ConnectionNameRemarkClient, "Frankfurt", "Frankfurt-alice"},
+		{ConnectionNameClient, "Frankfurt", "alice"},
+		{ConnectionNameRemark, "", "alice"},
+		{ConnectionNameRemarkClient, " \t ", "alice"},
+		{ConnectionNameClient, "", "alice"},
+	} {
+		t.Run(tc.mode+"/"+tc.remark, func(t *testing.T) {
+			c := Client{Email: "alice", ConnectionNameMode: &tc.mode}
+			if err := c.ValidateConnectionNameMode(); err != nil {
+				t.Fatal(err)
+			}
+			if got := c.ToRecord().ToClient().ConnectionDisplayName(tc.remark); got != tc.want {
+				t.Fatalf("got %q, want %q", got, tc.want)
+			}
+		})
 	}
-	if got := c.ToRecord().ToClient().ConnectionDisplayName(); got != "Домашний VPN / #1" {
-		t.Fatal(got)
-	}
-	for _, invalid := range []string{strings.Repeat("я", 257), "a\nb", "a\x00b", "a\u0085b"} {
-		c.ConnectionName = &invalid
-		if err := c.ValidateConnectionName(); err == nil {
-			t.Fatalf("accepted %q", invalid)
+	for _, mode := range []string{"", "invalid", "remark-client-client"} {
+		c := Client{ConnectionNameMode: &mode}
+		if err := c.ValidateConnectionNameMode(); err == nil {
+			t.Fatalf("accepted %q", mode)
 		}
 	}
 }
 
-func TestMergeClientConnectionNamePreservesOmissionAndHonorsNewerClear(t *testing.T) {
-	name := "VPN"
-	existing := &ClientRecord{ConnectionName: &name, UpdatedAt: 2}
+func TestMergeClientConnectionNameModePreservesOmissionAndNewerSelection(t *testing.T) {
+	mode := ConnectionNameRemark
+	existing := &ClientRecord{ConnectionNameMode: &mode, UpdatedAt: 2}
 	MergeClientRecord(existing, &ClientRecord{UpdatedAt: 3})
-	if existing.ConnectionName == nil || *existing.ConnectionName != name {
-		t.Fatal("omission erased name")
+	if existing.ConnectionNameMode == nil || *existing.ConnectionNameMode != mode {
+		t.Fatal("omission erased mode")
 	}
-	empty := ""
-	MergeClientRecord(existing, &ClientRecord{ConnectionName: &empty, UpdatedAt: 1})
-	if *existing.ConnectionName != name {
-		t.Fatal("old node snapshot erased name")
+	next := ConnectionNameClient
+	MergeClientRecord(existing, &ClientRecord{ConnectionNameMode: &next, UpdatedAt: 1})
+	if *existing.ConnectionNameMode != mode {
+		t.Fatal("stale snapshot changed mode")
 	}
-	MergeClientRecord(existing, &ClientRecord{ConnectionName: &empty, UpdatedAt: 4})
-	if existing.ConnectionName == nil || *existing.ConnectionName != "" {
-		t.Fatal("explicit clear lost")
+	MergeClientRecord(existing, &ClientRecord{ConnectionNameMode: &next, UpdatedAt: 4})
+	if *existing.ConnectionNameMode != next {
+		t.Fatal("newer selection lost")
 	}
 }

@@ -390,7 +390,7 @@ export interface Client {
   awgClientOptions?: AWGClientOptions | null;
   clientHostRuleIds?: number[];
   comment: string;
-  connectionName?: string | null;
+  connectionNameMode?: string | null;
   created_at?: number;
   email: string;
   enable: boolean;
@@ -445,7 +445,7 @@ export interface ClientRecord {
   awgClientOptions?: AWGClientOptions | null;
   clientHostRuleIds?: number[];
   comment: string;
-  connectionName?: string | null;
+  connectionNameMode?: string | null;
   createdAt: number;
   email: string;
   enable: boolean;
@@ -484,7 +484,7 @@ export interface ClientReverse {
 
 export interface ClientSlim {
   comment?: string;
-  connectionName?: string | null;
+  connectionNameMode?: string | null;
   createdAt: number;
   email: string;
   enable: boolean;

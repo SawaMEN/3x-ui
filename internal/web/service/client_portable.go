@@ -131,7 +131,7 @@ func (s *ClientService) ImportClients(inboundSvc *InboundService, items []Client
 				skipOrphan(email, verr.Error())
 				continue
 			}
-			if verr := client.ValidateConnectionName(); verr != nil {
+			if verr := client.ValidateConnectionNameMode(); verr != nil {
 				skipOrphan(email, verr.Error())
 				continue
 			}

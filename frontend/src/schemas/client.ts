@@ -49,7 +49,7 @@ export const ClientRecordSchema = z
     limitHwid: z.number().optional(),
     tgId: z.union([z.number(), z.string()]).optional(),
     group: z.string().optional(),
-    connectionName: z.string().nullable().optional(),
+    connectionNameMode: z.enum(['remark', 'remark-client', 'client']).nullable().optional(),
     comment: z.string().optional(),
     enable: z.boolean().optional(),
     reset: z.number().optional(),
@@ -355,19 +355,7 @@ export const ClientFormSchema = z
     limitHwid: z.number().int().min(0),
     tgId: z.number().int().min(0),
     group: z.string(),
-    connectionName: z
-      .string()
-      .trim()
-      .max(256, 'pages.clients.connectionNameInvalid')
-      .refine(
-        (value) =>
-          Array.from(value).every((char) => {
-            const code = char.codePointAt(0)!;
-            return code >= 32 && (code < 127 || code > 159);
-          }),
-        'pages.clients.connectionNameInvalid',
-      )
-      .default(''),
+    connectionNameMode: z.enum(['remark', 'remark-client', 'client']).default('remark'),
     comment: z.string(),
     enable: z.boolean(),
     inboundIds: z.array(z.number()),

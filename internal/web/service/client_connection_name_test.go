@@ -8,16 +8,16 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
 
-func TestClientConnectionNamePersistence(t *testing.T) {
+func TestClientConnectionNameModePersistence(t *testing.T) {
 	setupBulkDB(t)
 	svc := &ClientService{}
 	ib := mkInbound(t, 30121, model.VLESS, `{"decryption":"none","clients":[]}`)
-	name := "Единое имя"
-	client := model.Client{Email: "named", ID: "11111111-1111-4111-8111-111111111111", Enable: true, ConnectionName: &name}
+	name := model.ConnectionNameClient
+	client := model.Client{Email: "named", ID: "11111111-1111-4111-8111-111111111111", Enable: true, ConnectionNameMode: &name}
 	if err := svc.SyncInbound(nil, ib.Id, []model.Client{client}); err != nil {
 		t.Fatal(err)
 	}
-	client.ConnectionName = nil
+	client.ConnectionNameMode = nil
 	if err := svc.SyncInbound(nil, ib.Id, []model.Client{client}); err != nil {
 		t.Fatal(err)
 	}
@@ -25,24 +25,24 @@ func TestClientConnectionNamePersistence(t *testing.T) {
 	if err != nil || len(rows) != 1 {
 		t.Fatalf("reload: %v %+v", err, rows)
 	}
-	if rows[0].ConnectionName == nil || *rows[0].ConnectionName != name {
+	if rows[0].ConnectionNameMode == nil || *rows[0].ConnectionNameMode != name {
 		t.Fatal("old request erased name")
 	}
 	exported, err := svc.ExportAll()
-	if err != nil || len(exported) != 1 || exported[0].Client.ConnectionDisplayName() != name {
+	if err != nil || len(exported) != 1 || exported[0].Client.ConnectionDisplayName("ignored") != client.Email {
 		t.Fatalf("export: %v %+v", err, exported)
 	}
 	slim := clientSlimFromRecordForNameTest(t, rows[0])
-	if slim.ConnectionName == nil || *slim.ConnectionName != name {
+	if slim.ConnectionNameMode == nil || *slim.ConnectionNameMode != name {
 		t.Fatal("paging dropped name")
 	}
-	empty := ""
-	client.ConnectionName = &empty
+	empty := model.ConnectionNameRemark
+	client.ConnectionNameMode = &empty
 	if err := svc.SyncInbound(nil, ib.Id, []model.Client{client}); err != nil {
 		t.Fatal(err)
 	}
 	rows, err = svc.ListForInbound(nil, ib.Id)
-	if err != nil || rows[0].ConnectionName == nil || *rows[0].ConnectionName != "" {
+	if err != nil || rows[0].ConnectionNameMode == nil || *rows[0].ConnectionNameMode != model.ConnectionNameRemark {
 		t.Fatal("clear failed", err)
 	}
 }
@@ -62,17 +62,17 @@ func clientSlimFromRecordForNameTest(t *testing.T, row model.Client) ClientSlim 
 	return ClientSlim{}
 }
 
-func TestClientConnectionNameOrphanUpdateAndImport(t *testing.T) {
+func TestClientConnectionNameModeOrphanUpdateAndImport(t *testing.T) {
 	setupBulkDB(t)
 	svc := &ClientService{}
-	name := "original"
-	row := model.ClientRecord{Email: "orphan-name", Enable: true, ConnectionName: &name}
+	name := model.ConnectionNameRemark
+	row := model.ClientRecord{Email: "orphan-name", Enable: true, ConnectionNameMode: &name}
 	if err := database.GetDB().Create(&row).Error; err != nil {
 		t.Fatal(err)
 	}
-	next := "Renamed VPN"
+	next := model.ConnectionNameRemarkClient
 	update := *row.ToClient()
-	update.ConnectionName = &next
+	update.ConnectionNameMode = &next
 	if _, err := svc.Update(&InboundService{}, row.Id, update, 0); err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +80,7 @@ func TestClientConnectionNameOrphanUpdateAndImport(t *testing.T) {
 	if err := database.GetDB().First(&saved, row.Id).Error; err != nil {
 		t.Fatal(err)
 	}
-	if saved.ConnectionName == nil || *saved.ConnectionName != next {
+	if saved.ConnectionNameMode == nil || *saved.ConnectionNameMode != next {
 		t.Fatalf("orphan update lost name: %+v", saved)
 	}
 	exported, err := svc.ExportAll()
@@ -105,7 +105,7 @@ func TestClientConnectionNameOrphanUpdateAndImport(t *testing.T) {
 	if err = database.GetDB().Where("email = ?", "imported-name").First(&restored).Error; err != nil {
 		t.Fatal(err)
 	}
-	if restored.ConnectionName == nil || *restored.ConnectionName != next {
+	if restored.ConnectionNameMode == nil || *restored.ConnectionNameMode != next {
 		t.Fatal("import lost name")
 	}
 }

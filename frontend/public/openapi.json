@@ -1629,8 +1629,8 @@
             "description": "Client comment",
             "type": "string"
           },
-          "connectionName": {
-            "description": "Shared display name for this client across protocols. Omission preserves it.",
+          "connectionNameMode": {
+            "description": "Naming mode: remark, remark-client, or client. Omission preserves it.",
             "nullable": true,
             "type": "string"
           },
@@ -1894,7 +1894,7 @@
           "comment": {
             "type": "string"
           },
-          "connectionName": {
+          "connectionNameMode": {
             "nullable": true,
             "type": "string"
           },
@@ -2059,7 +2059,7 @@
             "example": "Primary device",
             "type": "string"
           },
-          "connectionName": {
+          "connectionNameMode": {
             "nullable": true,
             "type": "string"
           },
@@ -10934,7 +10934,7 @@
                     "items": [
                       {
                         "comment": "Primary device",
-                        "connectionName": null,
+                        "connectionNameMode": null,
                         "createdAt": 1735000000000,
                         "email": "alice@example.com",
                         "enable": true,

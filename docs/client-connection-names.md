@@ -1,23 +1,31 @@
 # Client connection names and SNI discovery
 
-Each client can have a **Connection name**, configured in the client editor. This
-single name overrides protocol-specific and host-specific names in share links,
-QR links, Xray JSON, sing-box/Hiddify, and Clash/Mihomo subscriptions. It also
-applies to external links and external subscriptions attached to the client.
+The client editor offers three connection naming modes:
 
-An empty name restores the existing subscription naming template. Changing this
-field does not change the client email, subscription ID, or credentials. Clients
-must refresh their subscription to receive the updated names.
+| Mode                     | Inbound remark `Germany`, client email `ivan` |
+| ------------------------ | --------------------------------------------- |
+| Connection name (remark) | `Germany`                                     |
+| Name-client              | `Germany-ivan`                                |
+| Client                   | `ivan`                                        |
 
-Clash/Mihomo and Hiddify sing-box require unique proxy names. When several entries
-share the configured name, they keep the common base and receive numeric suffixes
-such as `My VPN`, `My VPN-2`, and `My VPN-3`. Telegram proxy deep links do not carry
-a connection-name field.
+The name comes from the inbound connection's remark. Client means its email
+identifier. A blank or whitespace-only remark falls back to the client email in
+both remark modes, without a leading hyphen. The same rule applies to every
+protocol, share/QR link, Xray JSON, sing-box/Hiddify, and Clash/Mihomo subscription.
+For attached external links, the connection name is the external link's remark
+or existing label.
 
-The client API accepts `connectionName` as an optional string of up to 256
-characters without control characters. Omitting the field preserves the stored
-override; sending an empty string clears it. Export/import and node synchronization
-carry the override with the client.
+Clash/Mihomo and Hiddify sing-box require unique proxy names. Duplicate names
+receive numeric suffixes such as `Germany`, `Germany-2`, and `Germany-3`. Telegram
+proxy deep links do not carry a connection-name field. Clients must refresh their
+subscription to see changes. Client identity, credentials, and subscription IDs
+are unaffected.
+
+The client API accepts optional `connectionNameMode`: `remark`, `remark-client`,
+or `client`. Omission preserves the saved choice. Existing clients without a mode
+retain their earlier subscription naming template until a mode is saved; the
+editor defaults to the remark option. Export/import and node synchronization
+carry the selected mode with the client.
 
 The SNI scanner ships with 60 candidate TLS endpoints. Existing installations
 using the previous ten default candidates receive the expanded list automatically.
