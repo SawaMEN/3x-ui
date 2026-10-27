@@ -180,11 +180,6 @@ func TestUpdateAllSettingClearsFlaggedSecrets(t *testing.T) {
 	if got, _ := s.GetLdapPassword(); got != "" {
 		t.Fatalf("ldap password = %q, want cleared", got)
 	}
-
-	view, err = s.GetAllSettingView()
-	if err != nil {
-		t.Fatal(err)
-	}
 }
 
 func TestSanitizePublicHTTPURLBlocksPrivateAddressUnlessAllowed(t *testing.T) {
