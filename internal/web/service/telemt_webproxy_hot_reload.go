@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -80,14 +81,6 @@ func (s TelemtService) SaveWebUsersHotReload(cfg TelemtConfig) error {
 }
 
 func webProfileCapacity(config []byte) string {
-	for _, line := range strings.Split(string(config), "\n") {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "limits.max_profiles =") || strings.HasPrefix(line, "limits.max_vhosts =") {
-			// Parse both fields; this small key-only comparison cannot mistake
-			// profile users or unrelated payload for a capacity change.
-			_ = line
-		}
-	}
 	var maxProfiles, maxVhosts string
 	for _, line := range strings.Split(string(config), "\n") {
 		line = strings.TrimSpace(line)
@@ -120,8 +113,15 @@ func telemtWebReloadRuntime(ctx context.Context) error {
 		return resp.StatusCode, body, nil
 	}
 	code, accepted, err := perform(http.MethodPost, "/v1/system/reload")
-	if err != nil || (code != http.StatusAccepted && code != http.StatusOK) || !accepted.OK {
-		return fmt.Errorf("Telemt WEB reload rejected: status %d: %w", code, errors.Join(err, errors.New("invalid reload response")))
+	if code == http.StatusOK && errors.Is(err, io.EOF) {
+		// Older Telemt versions complete synchronous reload without JSON.
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("Telemt WEB reload request failed (HTTP %d): %w", code, err)
+	}
+	if (code != http.StatusAccepted && code != http.StatusOK) || !accepted.OK {
+		return fmt.Errorf("Telemt WEB reload rejected: HTTP %d", code)
 	}
 	if accepted.Data.ReloadID == 0 {
 		if code == http.StatusOK {
