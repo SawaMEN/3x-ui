@@ -61,15 +61,14 @@ export const TelemtWebSiteSchema = z
 
 export type TelemtWebSite = z.infer<typeof TelemtWebSiteSchema>;
 
+export const TelemtWebDomainSchema = z.string().trim().min(1).max(253)
+  .regex(/^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$/);
+
 export const TelemtWebProxyRequestSchema = z.object({
+  aliases: z.array(TelemtWebDomainSchema).max(7).default([]),
   basePath: TelemtWebBasePathSchema.default(''),
   site: TelemtWebSiteSchema.optional(),
-  domain: z
-    .string()
-    .trim()
-    .min(1)
-    .max(253)
-    .regex(/^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$/),
+  domain: TelemtWebDomainSchema,
   frontend: TelemtFrontendSchema,
   carrier: TelemtCarrierSchema,
   carriers: TelemtCarriersSchema,
