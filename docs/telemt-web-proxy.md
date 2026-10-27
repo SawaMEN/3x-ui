@@ -51,10 +51,19 @@ installs the page with all its assets and applies the normal readiness checks
 and rollback. No file uploads, direct URLs, API keys or separate hosting are
 required. The same controls appear in both the inbound and standalone forms.
 
-| Catalog             | Ready-made pages                                 |
-| ------------------- | ------------------------------------------------ |
-| 3x-ui pages         | Personal journal, Technology, Travel, Nature     |
-| MTProxyL collection | Simple maintenance page, Cat Runner, Meko Runner |
+| Catalog             | Ready-made pages                                                                                                                                                                                                                                                                              |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 3x-ui pages         | Personal journal, Technology, Travel, Nature; Coffee house, Bakery, Photography, Architecture, Reading room, Ceramics studio, Garden journal, Night sky, Kitchen notebook, Cycling journal, Listening room, Coworking space; Video magazine, Cinema journal, Games magazine, Learning library |
+| MTProxyL collection | Simple maintenance page, Cat Runner, Meko Runner                                                                                                                                                                                                                                              |
+
+The 20 built-in themes are available in both catalog and generated modes.
+Generated mode accepts an optional title and description. Video magazine,
+Cinema journal, Games magazine and Learning library imitate content-rich media
+portals with illustrated covers, six stories, curated lists, local search and
+category filters. Story links open the corresponding reading-room entry.
+They do not host videos or download media: illustrations are inline SVG and
+all CSS/JavaScript is served locally. The sites also remain readable without
+JavaScript. Layouts adapt to mobile screens and respect reduced-motion settings.
 
 The catalogs ship inside the panel binary, so activation requires no download
 from an external catalog. MTProxyL sources are pinned to `6d7021c` and retain

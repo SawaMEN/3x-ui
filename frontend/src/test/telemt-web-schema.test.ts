@@ -1,3 +1,4 @@
+import { TelemtWebCatalogs } from '@/schemas/telemt-web-catalog';
 import { describe, expect, it } from 'vitest';
 import { TelemtWebProxyRequestSchema, TelemtWebSiteSchema } from '@/schemas/telemt-web';
 
@@ -60,5 +61,16 @@ describe('Telemt ready-made catalogs', () => {
     ]) {
       expect(TelemtWebSiteSchema.safeParse(site).success).toBe(false);
     }
+  });
+});
+
+describe('all built-in cover sites', () => {
+  it.each(TelemtWebCatalogs.builtin.templates)('accepts $id in both selection modes', ({ id }) => {
+    expect(
+      TelemtWebSiteSchema.safeParse({ mode: 'catalog', catalog: 'builtin', template: id }).success,
+    ).toBe(true);
+    expect(
+      TelemtWebSiteSchema.safeParse({ mode: 'generate', theme: id, title: 'My site' }).success,
+    ).toBe(true);
   });
 });
