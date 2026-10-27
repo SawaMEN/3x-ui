@@ -75,6 +75,10 @@ func telemtWebPanelPort443Owner(state TelemtWebProxyState) (string, error) {
 		return "обычный Telemt MTProto (server.port = 443 в telemt.toml)", nil
 	}
 
+return telemtWebInboundPort443Owner(state)
+}
+
+func telemtWebInboundPort443Owner(state TelemtWebProxyState) (string, error) {
 	db := database.GetDB()
 	if db == nil {
 		return "", fmt.Errorf("база подключений недоступна")
