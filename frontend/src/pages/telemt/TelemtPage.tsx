@@ -57,6 +57,7 @@ type WebProxyStatus = {
   enabled: boolean;
   supported: boolean;
   domain: string;
+  basePath: string;
   defaultDomain: string;
   link: string;
   nginxInstalled: boolean;
@@ -159,6 +160,7 @@ export default function TelemtPage() {
       enabled: false,
       supported: false,
       domain: '',
+      basePath: '',
       defaultDomain: '',
       link: '',
       nginxInstalled: false,
@@ -181,9 +183,10 @@ export default function TelemtPage() {
   const [webPreflight, setWebPreflight] = useState<WebPreflight | null>(null);
   const [webPreflightRefresh, setWebPreflightRefresh] = useState(0);
   const webForm = useZodForm(TelemtWebProxyRequestSchema, {
-    defaultValues: { domain: '', frontend: 'nginx', carrier: 'https', carriers: [] },
+    defaultValues: { domain: '', basePath: '', frontend: 'nginx', carrier: 'https', carriers: [] },
   });
   const webProxyDomain = webForm.watch('domain');
+  const webBasePath = webForm.watch('basePath');
   const webFrontend = webForm.watch('frontend');
   const webCarrier = webForm.watch('carrier');
   const webCarriers = webForm.watch('carriers');
@@ -192,6 +195,7 @@ export default function TelemtPage() {
   const webCarriersKey = (webCarriers || []).join('|');
   const webPreflightKey = JSON.stringify([
     webProxyDomain,
+    webBasePath,
     webFrontend,
     webCarrier,
     webCarriersKey,
@@ -213,6 +217,7 @@ export default function TelemtPage() {
           '/panel/api/telemt/webproxy/preflight',
           {
             domain: webProxyDomain || '',
+            basePath: webBasePath || '',
             frontend: webFrontend || 'nginx',
             carrier: webCarrier || 'https',
             carriers: webCarriersKey ? webCarriersKey.split('|') : [],
@@ -261,6 +266,7 @@ export default function TelemtPage() {
   }, [
     webProxyOpen,
     webProxyDomain,
+    webBasePath,
     webFrontend,
     webCarrier,
     webCarriersKey,
@@ -390,6 +396,7 @@ export default function TelemtPage() {
     webForm.reset({
       site: TelemtWebSiteSchema.optional().catch(undefined).parse(status.webProxy.site),
       domain: status.webProxy.domain || status.webProxy.defaultDomain || '',
+      basePath: status.webProxy.basePath || '',
       frontend: TelemtFrontendSchema.catch('nginx').parse(status.webProxy.frontend),
       carrier: TelemtCarrierSchema.catch('https').parse(status.webProxy.carrier),
       carriers: TelemtCarriersSchema.catch([]).parse(
@@ -916,6 +923,13 @@ export default function TelemtPage() {
                 extra={'По умолчанию: ' + (status.webProxy.defaultDomain || 'не определён')}
               >
                 <Input placeholder="web.example.com" disabled={webProxyLoading} suffix=":443" />
+              </FormField>
+              <FormField
+                name="basePath"
+                label="Скрытый URL-путь (необязательно)"
+                extra="Например app/sync. Без пути старые tg://webproxy ссылки остаются прежними."
+              >
+                <Input placeholder="app/sync" disabled={webProxyLoading} />
               </FormField>
               <FormField
                 name="frontend"
