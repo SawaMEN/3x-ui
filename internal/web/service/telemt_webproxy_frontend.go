@@ -244,6 +244,21 @@ func telemtWebEnsureFrontendPackage(ctx context.Context, s TelemtWebProxyState) 
 }
 
 func telemtWebFrontendCertificate(ctx context.Context, s TelemtWebProxyState, domain, cert, key string) (string, string, error) {
+	if len(s.Aliases) > 0 {
+		hosts := telemtWebHosts(s)
+		if telemtWebCertificateCoversHosts(cert, key, hosts) {
+			return cert, key, nil
+		}
+		acmeCert := "/etc/letsencrypt/live/" + domain + "/fullchain.pem"
+		acmeKey := "/etc/letsencrypt/live/" + domain + "/privkey.pem"
+		if telemtWebCertificateCoversHosts(acmeCert, acmeKey, hosts) {
+			return acmeCert, acmeKey, nil
+		}
+		if telemtWebCertificateCoversHosts(s.CertFile, s.KeyFile, hosts) {
+			return s.CertFile, s.KeyFile, nil
+		}
+		return "", "", errors.New("additional WEB domains require an existing SAN or wildcard certificate covering every hostname")
+	}
 	if telemtWebFrontend(s) == "nginx" {
 		return telemtWebEnsureCertificate(ctx, domain, cert, key)
 	}
