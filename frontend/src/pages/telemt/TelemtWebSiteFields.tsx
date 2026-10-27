@@ -91,12 +91,10 @@ export default function TelemtWebSiteFields({
                   <FormField name={`${prefix}.theme`} label={ru ? 'Тема страницы' : 'Page theme'}>
                     <Select
                       disabled={disabled}
-                      options={[
-                        { value: 'notes', label: ru ? 'Личный блог' : 'Personal journal' },
-                        { value: 'technology', label: ru ? 'Технологии' : 'Technology' },
-                        { value: 'travel', label: ru ? 'Путешествия' : 'Travel' },
-                        { value: 'nature', label: ru ? 'Природа' : 'Nature' },
-                      ]}
+                      options={TelemtWebCatalogs.builtin.templates.map((entry) => ({
+                        value: entry.id,
+                        label: ru ? entry.ru : entry.en,
+                      }))}
                     />
                   </FormField>
                   <FormField

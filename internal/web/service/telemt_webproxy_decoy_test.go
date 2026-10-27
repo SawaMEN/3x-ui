@@ -130,7 +130,11 @@ func TestTelemtWebSiteValidationAndEscaping(t *testing.T) {
 }
 
 func TestTelemtWebCatalogBundles(t *testing.T) {
-	for catalog, templates := range map[string][]string{"builtin": {"notes", "technology", "travel", "nature"}, "mtproxyl": {"stub", "catrunner", "mekorunner"}} {
+	builtins := []string{"notes", "technology", "travel", "nature"}
+	for name := range telemtWebThemes {
+		builtins = append(builtins, name)
+	}
+	for catalog, templates := range map[string][]string{"builtin": builtins, "mtproxyl": {"stub", "catrunner", "mekorunner"}} {
 		for _, name := range templates {
 			t.Run(catalog+"/"+name, func(t *testing.T) {
 				root := t.TempDir()
@@ -175,5 +179,37 @@ func TestTelemtWebCatalogBundles(t *testing.T) {
 		if err := validateTelemtWebSite(site); err == nil {
 			t.Fatal("accepted an unknown catalog selection")
 		}
+	}
+}
+
+func TestTelemtWebNewThemes(t *testing.T) {
+	for name, theme := range telemtWebThemes {
+		t.Run(name, func(t *testing.T) {
+			site := &TelemtWebSiteOptions{Mode: "generate", Theme: name, Title: `<script>alert(1)</script>`, Description: `A & B "C"`}
+			page, err := renderTelemtWebSite("example.com", site)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(page, "&lt;script&gt;") || !strings.Contains(page, "A &amp; B") || strings.Contains(page, "<script>alert(1)") || strings.Contains(page, "ZgotmplZ") {
+				t.Fatal("custom content is not safely rendered")
+			}
+			for _, article := range theme.Articles {
+				if !strings.Contains(page, article.Title) {
+					t.Fatalf("missing article %s", article.Title)
+				}
+			}
+			if !strings.Contains(page, "example.com") || len(page) > telemtWebSiteMaxBytes {
+				t.Fatal("missing domain or oversized page")
+			}
+			files := telemtWebPageFiles(page)
+			if theme.Media && (!strings.Contains(files["site.js"], "addEventListener") || strings.Contains(files["index.html"], "<script>")) {
+				t.Fatal("media page script was not extracted for CSP")
+			}
+			catalog, err := renderTelemtWebSite("example.com", &TelemtWebSiteOptions{Mode: "catalog", Catalog: "builtin", Template: name})
+			generated, genErr := renderTelemtWebSite("example.com", &TelemtWebSiteOptions{Mode: "generate", Theme: name})
+			if err != nil || genErr != nil || catalog != generated {
+				t.Fatal("catalog and generation disagree")
+			}
+		})
 	}
 }

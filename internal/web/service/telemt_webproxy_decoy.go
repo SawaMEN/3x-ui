@@ -51,15 +51,13 @@ func validateTelemtWebSite(site *TelemtWebSiteOptions) error {
 	case "", "auto":
 		return nil
 	case "generate":
-		switch site.Theme {
-		case "", "notes", "technology", "travel", "nature":
+		if site.Theme == "" || isTelemtWebTheme(site.Theme) {
 			return nil
 		}
 		return errors.New("WEB site: unsupported theme")
 	case "catalog":
 		if site.Catalog == "builtin" {
-			switch site.Template {
-			case "notes", "technology", "travel", "nature":
+			if isTelemtWebTheme(site.Template) {
 				return nil
 			}
 		}
@@ -93,6 +91,11 @@ func renderTelemtWebSite(domain string, site *TelemtWebSiteOptions) (string, err
 	}
 	if site != nil && site.Mode == "html" {
 		return site.HTML, nil
+	}
+	if site != nil && site.Mode == "generate" {
+		if theme, ok := telemtWebThemes[site.Theme]; ok {
+			return renderTelemtWebTheme(domain, site, theme)
+		}
 	}
 	page := strings.ReplaceAll(telemtWebDecoyHTML, "{{DOMAIN}}", html.EscapeString(domain))
 	if site == nil || site.Mode != "generate" {

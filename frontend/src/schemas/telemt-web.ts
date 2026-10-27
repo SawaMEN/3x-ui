@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { isTelemtWebCatalogTemplate } from './telemt-web-catalog';
+import { isTelemtWebCatalogTemplate, TelemtWebThemes } from './telemt-web-catalog';
 
 export const TelemtFrontendSchema = z.enum(['nginx', 'caddy', 'haproxy']);
 export const TelemtCarrierSchema = z.enum(['https', 'https-lanes', 'websocket', 'websocket-lanes']);
@@ -12,7 +12,7 @@ export const TelemtWebSiteSchema = z
     mode: z.enum(['auto', 'catalog', 'generate', 'html']).default('auto'),
     catalog: z.enum(['builtin', 'mtproxyl']).optional(),
     template: z.string().optional(),
-    theme: z.enum(['notes', 'technology', 'travel', 'nature']).optional(),
+    theme: z.enum(TelemtWebThemes).optional(),
     title: z.string().max(80).optional(),
     description: z.string().max(300).optional(),
     html: z
