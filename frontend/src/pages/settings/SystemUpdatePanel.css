@@ -4,7 +4,7 @@
   gap: 12px;
 }
 
-.system-update-section .ant-card-body {
+.system-update-section > .ant-card-body {
   padding: 12px;
 }
 
@@ -35,6 +35,19 @@
   flex-direction: column;
   gap: 10px;
   padding: 12px;
+}
+
+.system-component-description.ant-typography {
+  display: block;
+  margin-bottom: 0;
+}
+
+.system-component-details > summary {
+  display: none;
+}
+
+.system-component-actions {
+  margin-top: auto;
 }
 
 .system-component-meta {
@@ -91,7 +104,7 @@
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 768px) {
   .system-update-actions {
     display: grid;
     grid-template-columns: 1fr;
@@ -99,7 +112,73 @@
   }
 
   .system-component-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    align-items: start;
+  }
+
+  .system-component-card .ant-card-head {
+    min-height: 36px;
+    padding-inline: 10px;
+  }
+
+  .system-component-card .ant-card-head-wrapper {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+    padding-block: 8px;
+  }
+
+  .system-component-card .ant-card-head-title {
+    flex: auto;
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .system-component-card .ant-card-extra {
+    max-width: 100%;
+    margin-inline-start: 0;
+    font-size: 12px;
+  }
+
+  .system-component-card .ant-tag {
+    margin-inline-end: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .system-component-card .ant-card-body {
+    gap: 6px;
+    padding: 10px;
+    font-size: 12px;
+    overflow-wrap: anywhere;
+  }
+
+  .system-component-description.ant-typography,
+  .system-component-meta .ant-typography {
+    font-size: 12px;
+  }
+
+  .system-component-details > summary {
+    display: list-item;
+    color: var(--ant-color-text-secondary);
+    cursor: pointer;
+    min-height: 32px;
+    align-content: center;
+  }
+
+  .system-component-details[open] > summary {
+    margin-bottom: 6px;
+  }
+
+  .system-component-card .ant-alert {
+    padding: 8px;
+  }
+
+  .system-component-actions .ant-btn {
+    min-width: 36px;
+    height: 36px;
   }
 
   .system-component-meta {
@@ -113,5 +192,11 @@
   .system-update-overview .ant-descriptions-item-label,
   .system-update-overview .ant-descriptions-item-content {
     padding: 8px 10px;
+  }
+}
+
+@media (max-width: 359px) {
+  .system-component-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
