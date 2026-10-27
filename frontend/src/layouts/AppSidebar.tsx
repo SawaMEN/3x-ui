@@ -229,6 +229,11 @@ function AppSidebar() {
         label: t('pages.settings.panelSettings'),
       },
       {
+        key: '/settings#advanced',
+        icon: <CloudServerOutlined />,
+        label: t('pages.settings.advanced.title'),
+      },
+      {
         key: '/settings#security',
         icon: <SafetyOutlined />,
         label: t('security'),
@@ -239,11 +244,6 @@ function AppSidebar() {
         label: t('pages.settings.TGBotSettings'),
       },
       { key: '/settings#email', icon: <MailOutlined />, label: t('pages.settings.emailSettings') },
-      {
-        key: '/settings#advanced',
-        icon: <CloudServerOutlined />,
-        label: t('pages.settings.advanced.title'),
-      },
       {
         key: '/settings#subscription',
         icon: <CloudServerOutlined />,

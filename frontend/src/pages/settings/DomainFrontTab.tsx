@@ -41,6 +41,7 @@ import type { DomainConfigForm, DomainForm } from '@/schemas/domain-front';
 import type { AllSetting } from '@/models/setting';
 import { SettingListItem } from '@/components/ui';
 import { useInboundOptions } from '@/api/queries/useInboundOptions';
+import { redirectSiteOptions } from './redirect-sites';
 
 export default function DomainFrontTab({
   allSetting,
@@ -217,12 +218,12 @@ export default function DomainFrontTab({
                 aria-label={t('pages.settings.rootRedirectURL')}
                 style={{ width: '100%' }}
                 value={allSetting.rootRedirectURL}
-                options={[
-                  'https://www.wikipedia.org/',
-                  'https://www.microsoft.com/',
-                  'https://www.apple.com/',
-                  'https://www.cloudflare.com/',
-                ].map((value) => ({ value, label: value }))}
+                options={redirectSiteOptions}
+                filterOption={(input, option) =>
+                  (option?.value ?? '').toLowerCase().includes(input.toLowerCase())
+                }
+                defaultActiveFirstOption={false}
+                allowClear
                 onChange={(value) => updateSetting({ rootRedirectURL: value })}
                 placeholder="https://example.com/"
               />
