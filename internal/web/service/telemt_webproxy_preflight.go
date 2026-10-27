@@ -107,7 +107,11 @@ func (s TelemtService) PreflightWebProxy(ctx context.Context, domain string, opt
 	} else if port443.Available {
 		check("https-port", true, "TCP 443 доступен для выбранного HTTPS frontend.")
 	} else if port443.Owner != "" {
-		check("https-port", false, "TCP 443 занят: "+port443.Owner+".")
+		if port443.Free {
+			check("https-port", false, "TCP 443 зарезервирован настройками панели: "+port443.Owner+".")
+		} else {
+			check("https-port", false, "TCP 443 занят: "+port443.Owner+".")
+		}
 	} else {
 		check("https-port", false, "TCP 443 занят другим сервисом.")
 	}
