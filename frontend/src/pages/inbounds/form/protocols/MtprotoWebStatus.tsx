@@ -120,8 +120,12 @@ export default function MtprotoWebStatus() {
           showIcon
           title={
             ru
-              ? `TCP 443 занят: ${status.port443Owner || 'другой сервис'}. Перенесите этот сервис на другой порт перед сохранением WEB Proxy.`
-              : `TCP 443 is occupied: ${status.port443Owner || 'another service'}. Move it to another port before saving WEB Proxy.`
+              ? status.port443Free === true
+                ? `TCP 443 зарезервирован в панели: ${status.port443Owner || 'другое подключение'}. Измените его порт перед сохранением WEB Proxy.`
+                : `TCP 443 занят: ${status.port443Owner || 'другой сервис'}. Перенесите этот сервис на другой порт перед сохранением WEB Proxy.`
+              : status.port443Free === true
+                ? `TCP 443 is reserved in the panel: ${status.port443Owner || 'another listener'}. Change its port before saving WEB Proxy.`
+                : `TCP 443 is occupied: ${status.port443Owner || 'another service'}. Move it to another port before saving WEB Proxy.`
           }
         />
       )}
