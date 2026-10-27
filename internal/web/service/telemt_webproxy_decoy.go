@@ -7,6 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"net"
+	"net/url"
+	"strconv"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -20,6 +23,7 @@ var telemtWebSiteHTMLDocument = regexp.MustCompile(`(?i)<html(?:\s|>)`)
 
 type TelemtWebSiteOptions struct {
 	Mode        string `json:"mode" example:"auto"`
+	Origin      string `json:"origin,omitempty" example:"http://127.0.0.1:8080"`
 	Theme       string `json:"theme,omitempty" example:"travel"`
 	Title       string `json:"title,omitempty" example:"A travel notebook"`
 	Description string `json:"description,omitempty" example:"Stories from quiet places."`
@@ -50,6 +54,8 @@ func validateTelemtWebSite(site *TelemtWebSiteOptions) error {
 	switch site.Mode {
 	case "", "auto":
 		return nil
+	case "origin":
+		return validateTelemtWebOrigin(site.Origin)
 	case "generate":
 		if site.Theme == "" || isTelemtWebTheme(site.Theme) {
 			return nil
@@ -74,8 +80,23 @@ func validateTelemtWebSite(site *TelemtWebSiteOptions) error {
 		}
 		return nil
 	default:
-		return errors.New("WEB site: mode must be auto, catalog or generate (html is retained for existing sites)")
+		return errors.New("WEB site: mode must be auto, origin, catalog or generate (html is retained for existing sites)")
 	}
+}
+
+// An HTTP decoy is only allowed to reach a local numeric IP literal: no
+// arbitrary remote URL, credentials, redirects, paths or DNS rebinding.
+func validateTelemtWebOrigin(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "http" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" {
+		return errors.New("WEB origin must be http://127.0.0.1:PORT (without path, query or credentials)")
+	}
+	ip := net.ParseIP(u.Hostname())
+	port, portErr := strconv.Atoi(u.Port())
+	if ip == nil || !ip.IsLoopback() || portErr != nil || port < 1 || port > 65535 {
+		return errors.New("WEB origin must be a loopback IP with a valid TCP port")
+	}
+	return nil
 }
 
 func renderTelemtWebSite(domain string, site *TelemtWebSiteOptions) (string, error) {
@@ -129,6 +150,11 @@ func renderTelemtWebSite(domain string, site *TelemtWebSiteOptions) (string, err
 func prepareTelemtWebSite(domain, defaultDir, sitesDir string, site *TelemtWebSiteOptions) (string, error) {
 	if err := validateTelemtWebSite(site); err != nil {
 		return "", err
+	}
+	if site != nil && site.Mode == "origin" {
+		// Telemt forwards anonymous requests to the local HTTP origin. No
+		// generated website files are needed in this mode.
+		return defaultDir, nil
 	}
 	if site == nil || site.Mode == "" || site.Mode == "auto" {
 		return defaultDir, writeTelemtWebDecoy(domain, defaultDir)
