@@ -1063,13 +1063,6 @@ func parseTelemtWebPortOwners(output string) string {
 	return strings.Join(owners, ", ")
 }
 
-func telemtWebNginxCanOwn443() bool {
-	if telemtWebNginxActive() {
-		return telemtWebNginxOwnsPort443() || telemtWebPortAvailable(443)
-	}
-	return telemtWebPortAvailable(443)
-}
-
 func telemtWebNginxOwnsPort(port int) bool {
 	if !telemtWebCommandExists("ss") {
 		return false
