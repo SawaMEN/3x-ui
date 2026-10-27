@@ -292,7 +292,11 @@ func (TelemtService) WebProxyStatus(defaultDomain, panelCert, panelKey string) (
 		status.Error = "Не удалось проверить TCP 443: " + inspectionErr.Error()
 	} else if !port443.Available {
 		if port443.Owner != "" {
-			status.Error = fmt.Sprintf("TCP 443 занят: %s.", port443.Owner)
+			if port443.Free {
+				status.Error = fmt.Sprintf("TCP 443 зарезервирован настройками панели: %s.", port443.Owner)
+			} else {
+				status.Error = fmt.Sprintf("TCP 443 занят: %s.", port443.Owner)
+			}
 		} else {
 			status.Error = "TCP 443 занят другим сервисом."
 		}
