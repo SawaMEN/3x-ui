@@ -326,6 +326,9 @@ func enableTelemtWebProxy(ctx context.Context, domain, panelCert, panelKey strin
 	}
 	if !port443.Available {
 		if port443.Owner != "" {
+			if port443.Free {
+				return TelemtWebProxyStatus{}, fmt.Errorf("TCP 443 зарезервирован настройками панели: %s", port443.Owner)
+			}
 			return TelemtWebProxyStatus{}, fmt.Errorf("TCP 443 занят: %s", port443.Owner)
 		}
 		return TelemtWebProxyStatus{}, errors.New("TCP 443 занят другим сервисом")
