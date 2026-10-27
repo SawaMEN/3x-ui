@@ -4,8 +4,10 @@ package sidecaregress
 
 import "fmt"
 
-const BasePort = 60000
-const Slots = 1000
+const (
+	BasePort = 60000
+	Slots    = 1000
+)
 
 func Port(id int) int          { return BasePort + 2*((id-1)%Slots) }
 func Address(id int) string    { return fmt.Sprintf("127.0.0.1:%d", Port(id)) }

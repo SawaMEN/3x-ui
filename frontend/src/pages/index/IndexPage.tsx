@@ -255,7 +255,7 @@ export default function IndexPage() {
                     <Alert
                       type="error"
                       showIcon
-                      message={portBindError}
+                      title={portBindError}
                       style={{ marginBottom: 16 }}
                     />
                   )}

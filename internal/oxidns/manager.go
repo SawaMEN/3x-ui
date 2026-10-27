@@ -38,8 +38,8 @@ const (
 var mu sync.Mutex
 
 type Settings struct {
-	Enabled    bool   `json:"enabled"`
-	Domain     string `json:"domain"`
+	Enabled bool   `json:"enabled"`
+	Domain  string `json:"domain"`
 	// An optional certificate pair for a dedicated DNS subdomain.
 	// Empty values keep the existing panel certificate behavior.
 	CertFile   string `json:"certFile,omitempty"`
@@ -75,7 +75,7 @@ type Status struct {
 // binaryReady rejects empty downloads and files that systemd cannot execute.
 func binaryReady(path string) bool {
 	info, err := os.Stat(path)
-	return err == nil && info.Mode().IsRegular() && info.Size() > 0 && info.Mode().Perm()&0111 != 0
+	return err == nil && info.Mode().IsRegular() && info.Size() > 0 && info.Mode().Perm()&0o111 != 0
 }
 
 func Defaults() Settings {
@@ -161,7 +161,7 @@ func CurrentStatus(ctx context.Context) (Status, error) {
 	// disabled, removed, or its HTTPS listener has stopped.
 	if s.Installed && s.Enabled && s.Running && s.DoH && s.Domain != "" {
 		address := net.JoinHostPort("127.0.0.1", strconv.Itoa(s.Port))
-		if conn, dialErr := net.DialTimeout("tcp", address, 250*time.Millisecond); dialErr == nil {
+		if conn, dialErr := (&net.Dialer{Timeout: 250 * time.Millisecond}).DialContext(ctx, "tcp", address); dialErr == nil {
 			_ = conn.Close()
 			port := ""
 			if s.Port != 443 {
@@ -173,7 +173,7 @@ func CurrentStatus(ctx context.Context) (Status, error) {
 	if s.Installed && s.Enabled && s.Running && s.Domain != "" {
 		if s.DoT {
 			address := net.JoinHostPort("127.0.0.1", strconv.Itoa(s.DoTPort))
-			if conn, dialErr := net.DialTimeout("tcp", address, 250*time.Millisecond); dialErr == nil {
+			if conn, dialErr := (&net.Dialer{Timeout: 250 * time.Millisecond}).DialContext(ctx, "tcp", address); dialErr == nil {
 				_ = conn.Close()
 				s.DoTAddress = net.JoinHostPort(s.Domain, strconv.Itoa(s.DoTPort))
 			}
@@ -244,7 +244,9 @@ func validate(c Settings, certFile, keyFile string) error {
 			return errors.New("укажите доменное имя для DoH")
 		}
 		for _, ch := range c.Domain {
-			if !((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '.' || ch == '-') {
+			letter := (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')
+			digit := ch >= '0' && ch <= '9'
+			if !letter && !digit && ch != '.' && ch != '-' {
 				return errors.New("недопустимые символы в домене DoH")
 			}
 		}
@@ -352,7 +354,7 @@ func Generate(c Settings, certFile, keyFile string) (string, error) {
 }
 
 func atomicWrite(path string, data []byte, mode os.FileMode) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
 	f, err := os.CreateTemp(filepath.Dir(path), ".oxidns-*")
@@ -427,7 +429,7 @@ func Latest(ctx context.Context) (string, *releaseAsset, error) {
 		return "", nil, err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return "", nil, fmt.Errorf("GitHub API: HTTP %d", resp.StatusCode)
 	}
 	var rel upstreamRelease
@@ -494,7 +496,7 @@ func installRelease(ctx context.Context, asset releaseAsset) ([]byte, error) {
 		return nil, err
 	}
 	defer res.Body.Close()
-	if res.StatusCode != 200 {
+	if res.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("GitHub вернул HTTP %d", res.StatusCode)
 	}
 	data, err := io.ReadAll(io.LimitReader(res.Body, 32<<20))
@@ -522,7 +524,7 @@ func installRelease(ctx context.Context, asset releaseAsset) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		if hdr.Typeflag != tar.TypeReg && hdr.Typeflag != tar.TypeRegA {
+		if hdr.Typeflag != tar.TypeReg && hdr.Typeflag != 0 {
 			continue
 		}
 		if filepath.Base(hdr.Name) != "oxidns" {
@@ -555,7 +557,7 @@ func installOnly(ctx context.Context) error {
 	}
 	// The systemd unit starts OxiDNS with -d, so its writable working
 	// directory must exist before the first service start.
-	if err := os.MkdirAll(filepath.Join(StateDir, "data"), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Join(StateDir, "data"), 0o700); err != nil {
 		return err
 	}
 	if !binaryReady(binaryPath) {
@@ -567,11 +569,11 @@ func installOnly(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		if err := atomicWrite(binaryPath, executable, 0755); err != nil {
+		if err := atomicWrite(binaryPath, executable, 0o755); err != nil {
 			return err
 		}
 	}
-	if err := atomicWrite(servicePath, []byte(unit), 0644); err != nil {
+	if err := atomicWrite(servicePath, []byte(unit), 0o644); err != nil {
 		return err
 	}
 	return systemctl(ctx, "daemon-reload")
@@ -617,7 +619,7 @@ func checkDNSAt(ctx context.Context, address string) error {
 func waitHealthy(ctx context.Context) error {
 	address := net.JoinHostPort("127.0.0.1", strconv.Itoa(localPort))
 	for attempt := 0; attempt < 12; attempt++ {
-		conn, err := net.DialTimeout("tcp", address, 300*time.Millisecond)
+		conn, err := (&net.Dialer{Timeout: 300 * time.Millisecond}).DialContext(ctx, "tcp", address)
 		if err == nil {
 			_ = conn.Close()
 			return CheckDNS(ctx)
@@ -679,7 +681,7 @@ func Upgrade(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := atomicWrite(binaryPath, executable, 0755); err != nil {
+	if err := atomicWrite(binaryPath, executable, 0o755); err != nil {
 		return err
 	}
 	if c.Enabled {
@@ -698,7 +700,7 @@ func Upgrade(ctx context.Context) error {
 			// Always attempt to restore and recheck the previous executable.
 			recovery, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			restoreErr := atomicWrite(binaryPath, oldBinary, 0755)
+			restoreErr := atomicWrite(binaryPath, oldBinary, 0o755)
 			if restoreErr == nil {
 				restoreErr = systemctl(recovery, "restart", "x-ui-oxidns.service")
 			}
@@ -758,7 +760,7 @@ func Uninstall(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := atomicWrite(statePath, data, 0600); err != nil {
+	if err := atomicWrite(statePath, data, 0o600); err != nil {
 		return err
 	}
 	for _, path := range []string{binaryPath, configPath, servicePath} {
@@ -815,7 +817,7 @@ func Setup(ctx context.Context, c Settings, certFile, keyFile string) error {
 	if err := installOnly(ctx); err != nil {
 		return err
 	}
-	if err := atomicWrite(configPath, []byte(yaml), 0600); err != nil {
+	if err := atomicWrite(configPath, []byte(yaml), 0o600); err != nil {
 		return err
 	}
 	rollback := func() error {
@@ -825,12 +827,12 @@ func Setup(ctx context.Context, c Settings, certFile, keyFile string) error {
 		defer cancel()
 		var restoreErr error
 		if len(oldYAML) > 0 {
-			restoreErr = errors.Join(restoreErr, atomicWrite(configPath, oldYAML, 0600))
+			restoreErr = errors.Join(restoreErr, atomicWrite(configPath, oldYAML, 0o600))
 		} else if err := os.Remove(configPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 			restoreErr = errors.Join(restoreErr, err)
 		}
 		if len(oldState) > 0 {
-			restoreErr = errors.Join(restoreErr, atomicWrite(statePath, oldState, 0600))
+			restoreErr = errors.Join(restoreErr, atomicWrite(statePath, oldState, 0o600))
 		} else if err := os.Remove(statePath); err != nil && !errors.Is(err, os.ErrNotExist) {
 			restoreErr = errors.Join(restoreErr, err)
 		}
@@ -871,7 +873,7 @@ func Setup(ctx context.Context, c Settings, certFile, keyFile string) error {
 	if err != nil {
 		return errors.Join(err, rollback())
 	}
-	if err := atomicWrite(statePath, data, 0600); err != nil {
+	if err := atomicWrite(statePath, data, 0o600); err != nil {
 		return errors.Join(err, rollback())
 	}
 	return nil
@@ -917,7 +919,7 @@ func Disable(ctx context.Context) error {
 	c.Enabled = false
 	data, err := json.Marshal(c)
 	if err == nil {
-		err = atomicWrite(statePath, data, 0600)
+		err = atomicWrite(statePath, data, 0o600)
 	}
 	if err != nil {
 		recovery, cancel := context.WithTimeout(context.Background(), 30*time.Second)

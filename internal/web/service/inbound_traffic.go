@@ -6,9 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"math"
 	"slices"
 	"strings"
 	"time"
+
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
@@ -16,8 +20,6 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
-	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 // A client with a renewal day set auto-renews too, so it must not read as
@@ -144,45 +146,14 @@ func (s *InboundService) addClientTraffic(tx *gorm.DB, traffics []*coremodel.Cli
 		return fmt.Errorf("resolve client traffic identities: %w", err)
 	}
 
-	// The same email can be reported by multiple local inbounds or sidecars.
-	// Aggregate first to keep the SQL IN list small and preserve every delta.
-	emails := make([]string, 0, len(traffics))
-	trafficByEmail := make(map[string]*coremodel.ClientTraffic, len(traffics))
-	for _, traffic := range traffics {
-		if traffic == nil || traffic.Email == "" {
-			continue
-		}
-		item := trafficByEmail[traffic.Email]
-		if item == nil {
-			item = &coremodel.ClientTraffic{}
-			trafficByEmail[traffic.Email] = item
-			emails = append(emails, traffic.Email)
-		}
-		item.Up = sumTrafficDelta(item.Up, traffic.Up)
-		item.Down = sumTrafficDelta(item.Down, traffic.Down)
-	}
+	emails, trafficByEmail := aggregateClientTraffic(traffics)
 	if len(emails) == 0 {
 		return nil
 	}
-	dbClientTraffics := make([]*coremodel.ClientTraffic, 0, len(traffics))
-	// Match purely by email. client_traffics is email-keyed (one shared row per
-	// email regardless of how many inbounds the client is attached to), and these
-	// emails come from the local xray's report, so they always belong to a client
-	// attached to a local inbound. The old `inbound_id NOT IN (node inbounds)`
-	// filter dropped the local traffic of a client attached to both a node and the
-	// mother inbound whenever the node inbound happened to be attached first — its
-	// shared row then carried the node inbound's id (AddClientStat used to use
-	// OnConflict DoNothing and never refreshed it; it now refreshes inbound_id on
-	// conflict, but this filter was removed rather than relying on that ordering).
-	err = tx.Model(coremodel.ClientTraffic{}).
-		Where("email IN (?)", emails).
-		Order("id").
-		Find(&dbClientTraffics).Error
+	dbClientTraffics, err := loadClientTrafficRows(tx, emails)
 	if err != nil {
 		return err
 	}
-
-	// Avoid empty slice error
 	if len(dbClientTraffics) == 0 {
 		return nil
 	}
@@ -203,15 +174,8 @@ func (s *InboundService) addClientTraffic(tx *gorm.DB, traffics []*coremodel.Cli
 		if !ok || (t.Up == 0 && t.Down == 0) {
 			continue
 		}
-		up, down := t.Up, t.Down
-		// Clamp against the stored row before SQL addition. Even a LEAST/MIN
-		// expression can overflow int64 while evaluating col + delta.
-		if remaining := max(int64(0), database.TrafficMax-ct.Up); up > remaining {
-			up = remaining
-		}
-		if remaining := max(int64(0), database.TrafficMax-ct.Down); down > remaining {
-			down = remaining
-		}
+		up := clampTrafficDeltaToStored(ct.Up, t.Up)
+		down := clampTrafficDeltaToStored(ct.Down, t.Down)
 		if err = tx.Exec(
 			fmt.Sprintf(
 				`UPDATE client_traffics SET up = %s, down = %s, last_online = %s WHERE email = ?`,
@@ -243,6 +207,7 @@ func (s *InboundService) addClientTraffic(tx *gorm.DB, traffics []*coremodel.Cli
 }
 
 func sumTrafficDelta(current, delta int64) int64 {
+	current = min(max(current, 0), database.TrafficMax)
 	if delta <= 0 {
 		return current
 	}
@@ -250,6 +215,16 @@ func sumTrafficDelta(current, delta int64) int64 {
 		return database.TrafficMax
 	}
 	return current + delta
+}
+
+func delayedExpiryDeadline(now, expiry int64) int64 {
+	if expiry >= 0 {
+		return expiry
+	}
+	if expiry < now-math.MaxInt64 {
+		return math.MaxInt64
+	}
+	return now - expiry
 }
 
 func (s *InboundService) adjustTraffics(tx *gorm.DB, dbClientTraffics []*coremodel.ClientTraffic) ([]*coremodel.ClientTraffic, map[string]int64, error) {
@@ -262,7 +237,7 @@ func (s *InboundService) adjustTraffics(tx *gorm.DB, dbClientTraffics []*coremod
 	newExpiryByEmail := make(map[string]int64, len(dbClientTraffics))
 	for traffic_index := range dbClientTraffics {
 		if dbClientTraffics[traffic_index].ExpiryTime < 0 {
-			newExpiryByEmail[dbClientTraffics[traffic_index].Email] = now - dbClientTraffics[traffic_index].ExpiryTime
+			newExpiryByEmail[dbClientTraffics[traffic_index].Email] = delayedExpiryDeadline(now, dbClientTraffics[traffic_index].ExpiryTime)
 		}
 	}
 	if len(newExpiryByEmail) == 0 {
@@ -278,22 +253,24 @@ func (s *InboundService) adjustTraffics(tx *gorm.DB, dbClientTraffics []*coremod
 	// authoritative. client_traffics.inbound_id goes stale when an inbound is
 	// deleted and recreated, which would leave the negative expiry unconverted.
 	var inboundIds []int
-	err := tx.Table("client_inbounds").
-		Joins("JOIN clients ON clients.id = client_inbounds.client_id").
-		Where("clients.email IN (?)", delayedEmails).
-		Distinct().
-		Pluck("client_inbounds.inbound_id", &inboundIds).Error
-	if err != nil {
-		return nil, nil, err
+	for _, batch := range chunkStrings(delayedEmails, sqlInChunk) {
+		var ids []int
+		if err := tx.Table("client_inbounds").Joins("JOIN clients ON clients.id = client_inbounds.client_id").Where("clients.email IN ?", batch).Distinct().Pluck("client_inbounds.inbound_id", &ids).Error; err != nil {
+			return nil, nil, err
+		}
+		inboundIds = append(inboundIds, ids...)
 	}
+	inboundIds = uniqueInts(inboundIds)
 	if len(inboundIds) == 0 {
 		return dbClientTraffics, nil, nil
 	}
-
 	var inbounds []*model.Inbound
-	err = tx.Model(model.Inbound{}).Where("id IN (?)", inboundIds).Find(&inbounds).Error
-	if err != nil {
-		return nil, nil, err
+	for _, batch := range chunkInts(inboundIds, sqlInChunk) {
+		var page []*model.Inbound
+		if err := tx.Where("id IN ?", batch).Find(&page).Error; err != nil {
+			return nil, nil, err
+		}
+		inbounds = append(inbounds, page...)
 	}
 	for inbound_index := range inbounds {
 		settings := map[string]any{}
@@ -302,7 +279,10 @@ func (s *InboundService) adjustTraffics(tx *gorm.DB, dbClientTraffics []*coremod
 		if ok {
 			var newClients []any
 			for client_index := range clients {
-				c := clients[client_index].(map[string]any)
+				c, ok := clients[client_index].(map[string]any)
+				if !ok || c == nil {
+					continue
+				}
 				email, _ := c["email"].(string)
 				if newExpiry, ok := newExpiryByEmail[email]; ok {
 					c["expiryTime"] = newExpiry
@@ -332,23 +312,18 @@ func (s *InboundService) adjustTraffics(tx *gorm.DB, dbClientTraffics []*coremod
 		}
 	}
 
-	err = tx.Save(inbounds).Error
-	if err != nil {
-		logger.Warning("AddClientTraffic update inbounds ", err)
-		logger.Error(inbounds)
-	} else {
-		for _, ib := range inbounds {
-			if ib == nil {
-				continue
-			}
-			cs, gcErr := s.GetClients(ib)
-			if gcErr != nil {
-				logger.Warning("AddClientTraffic sync clients: GetClients failed", gcErr)
-				continue
-			}
-			if syncErr := s.clientService.SyncInbound(tx, ib.Id, cs); syncErr != nil {
-				logger.Warning("AddClientTraffic sync clients: SyncInbound failed", syncErr)
-			}
+	for batch := range slices.Chunk(inbounds, sqlInChunk) {
+		if err := tx.Save(batch).Error; err != nil {
+			return nil, nil, fmt.Errorf("persist delayed-start inbounds: %w", err)
+		}
+	}
+	for _, ib := range inbounds {
+		cs, err := s.GetClients(ib)
+		if err != nil {
+			return nil, nil, fmt.Errorf("read delayed-start clients: %w", err)
+		}
+		if err = s.clientService.SyncInbound(tx, ib.Id, cs); err != nil {
+			return nil, nil, fmt.Errorf("sync delayed-start clients: %w", err)
 		}
 	}
 
@@ -472,6 +447,7 @@ func (s *InboundService) autoRenewClients(tx *gorm.DB, mutationBatch *trafficMut
 		settings := map[string]any{}
 		_ = json.Unmarshal([]byte(inbounds[inbound_index].Settings), &settings)
 		clients, _ := settings["clients"].([]any)
+		clients = slices.DeleteFunc(clients, func(entry any) bool { cm, ok := entry.(map[string]any); return !ok || cm == nil })
 		if len(clients) == 0 {
 			continue
 		}
@@ -480,7 +456,10 @@ func (s *InboundService) autoRenewClients(tx *gorm.DB, mutationBatch *trafficMut
 			cipher, _ = settings["method"].(string)
 		}
 		for client_index := range clients {
-			c := clients[client_index].(map[string]any)
+			c, ok := clients[client_index].(map[string]any)
+			if !ok || c == nil {
+				continue
+			}
 			email, _ := c["email"].(string)
 			traffic, ok := trafficByEmail[email]
 			if !ok {
@@ -504,9 +483,17 @@ func (s *InboundService) autoRenewClients(tx *gorm.DB, mutationBatch *trafficMut
 					newExpiryTime = at.UnixMilli()
 				}
 			}
+			traffic.ResetCount = max(traffic.ResetCount, 0)
 			renewals := 0
-			for newExpiryTime < now {
-				if traffic.ResetMax > 0 && traffic.ResetCount+renewals >= traffic.ResetMax {
+			if traffic.ResetDay <= 0 {
+				var err error
+				newExpiryTime, renewals, err = nextIntervalRenewal(newExpiryTime, now, traffic.Reset, traffic.ResetCount, traffic.ResetMax)
+				if err != nil {
+					return false, 0, fmt.Errorf("renew %s: %w", email, err)
+				}
+			}
+			for traffic.ResetDay > 0 && newExpiryTime < now {
+				if traffic.ResetMax > 0 && renewals >= traffic.ResetMax-traffic.ResetCount {
 					break
 				}
 				if traffic.ResetDay > 0 {
@@ -514,14 +501,16 @@ func (s *InboundService) autoRenewClients(tx *gorm.DB, mutationBatch *trafficMut
 					// renewal date does not drift the way a fixed 30-day step does.
 					at = nextCalendarRenewal(at, traffic.ResetDay, renewLocation)
 					newExpiryTime = at.UnixMilli()
-				} else {
-					newExpiryTime += (int64(traffic.Reset) * 86400000)
 				}
 				renewals++
 			}
 			if renewals > 0 {
 				traffic.ExpiryTime = newExpiryTime
-				traffic.ResetCount += renewals
+				if renewals > math.MaxInt-traffic.ResetCount {
+					traffic.ResetCount = math.MaxInt
+				} else {
+					traffic.ResetCount += renewals
+				}
 			}
 			c["expiryTime"] = traffic.ExpiryTime
 			if traffic.ExpiryTime <= now {
@@ -560,26 +549,24 @@ func (s *InboundService) autoRenewClients(tx *gorm.DB, mutationBatch *trafficMut
 		}
 		inbounds[inbound_index].Settings = string(newSettings)
 	}
-	err = tx.Save(inbounds).Error
-	if err != nil {
-		return false, 0, err
+	for batch := range slices.Chunk(inbounds, sqlInChunk) {
+		if err = tx.Save(batch).Error; err != nil {
+			return false, 0, err
+		}
 	}
 	for _, ib := range inbounds {
-		if ib == nil {
-			continue
+		cs, err := s.GetClients(ib)
+		if err != nil {
+			return false, 0, fmt.Errorf("read renewed clients: %w", err)
 		}
-		cs, gcErr := s.GetClients(ib)
-		if gcErr != nil {
-			logger.Warning("autoRenewClients sync clients: GetClients failed", gcErr)
-			continue
-		}
-		if syncErr := s.clientService.SyncInbound(tx, ib.Id, cs); syncErr != nil {
-			logger.Warning("autoRenewClients sync clients: SyncInbound failed", syncErr)
+		if err = s.clientService.SyncInbound(tx, ib.Id, cs); err != nil {
+			return false, 0, fmt.Errorf("sync renewed clients: %w", err)
 		}
 	}
-	err = tx.Save(traffics).Error
-	if err != nil {
-		return false, 0, err
+	for batch := range slices.Chunk(traffics, sqlInChunk) {
+		if err = tx.Save(batch).Error; err != nil {
+			return false, 0, err
+		}
 	}
 	// A renewed client starts a fresh quota window: drop the cross-panel rows
 	// too, or the stale pushed totals would re-deplete it immediately.

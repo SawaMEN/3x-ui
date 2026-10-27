@@ -19,6 +19,8 @@ import (
 	"sync"
 	"time"
 
+	"gorm.io/gorm"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/core"
 	"github.com/SawaMEN/3x-ui/v3/internal/crypto/nodetoken"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
@@ -27,7 +29,6 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
-	"gorm.io/gorm"
 )
 
 type HeartbeatPatch struct {
@@ -114,8 +115,10 @@ func (s *NodeService) FetchCertFingerprint(ctx context.Context, n *model.Node) (
 	}
 	transport := &http.Transport{DialContext: netsafe.SSRFGuardedDialContext}
 	defer transport.CloseIdleConnections()
-	client := &http.Client{Transport: transport, Timeout: 10 * time.Second,
-		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	client := &http.Client{
+		Transport: transport, Timeout: 10 * time.Second,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
 	var certificates []*x509.Certificate
 	resp, err := client.Do(req)
 	if err != nil {

@@ -467,7 +467,9 @@ func (j *CheckClientIpJob) checkFail2BanInstalled() bool {
 
 	cmd := "fail2ban-client"
 	args := []string{"-h"}
-	err := exec.CommandContext(context.Background(), cmd, args...).Run()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	err := exec.CommandContext(ctx, cmd, args...).Run()
 	return err == nil
 }
 
@@ -504,9 +506,8 @@ func (j *CheckClientIpJob) updateInboundClientIps(tx *gorm.DB, inboundClientIps 
 	if !enforce || limitIp <= 0 || !inbound.Enable {
 		// Nothing to enforce (collection-only run, no limit on the clients row,
 		// or inbound disabled): record the observed IPs for the panel and return.
-		jsonIps, _ := json.Marshal(newIpsWithTime)
 		model.SortClientIpEntries(newIpsWithTime)
-		jsonIps, _ = json.Marshal(newIpsWithTime)
+		jsonIps, _ := json.Marshal(newIpsWithTime)
 		if inboundClientIps.Ips == string(jsonIps) {
 			return false, false
 		}

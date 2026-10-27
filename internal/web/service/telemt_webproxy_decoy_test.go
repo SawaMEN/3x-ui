@@ -104,7 +104,9 @@ func TestTelemtWebSiteSnapshotsPreserveActiveSite(t *testing.T) {
 
 func TestTelemtWebSiteValidationAndEscaping(t *testing.T) {
 	for _, invalid := range []*TelemtWebSiteOptions{
-		{Mode: "download"}, {Mode: "generate", Theme: "../../etc"}, {Mode: "html"},
+		{Mode: "download"},
+		{Mode: "generate", Theme: "../../etc"},
+		{Mode: "html"},
 		{Mode: "html", HTML: "<html>" + strings.Repeat("a", telemtWebSiteMaxBytes)},
 		{Mode: "html", HTML: "<html>\x00</html>"},
 	} {

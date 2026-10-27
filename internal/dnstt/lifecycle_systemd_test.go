@@ -44,10 +44,10 @@ func TestManagedServiceLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := fileWrite(binaryPath, payload, 0755); err != nil {
+	if err := fileWrite(binaryPath, payload, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := fileWrite(versionPath, []byte(Version+"\n"), 0600); err != nil {
+	if err := fileWrite(versionPath, []byte(Version+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	ssh, err := net.Listen("tcp", "127.0.0.1:0")

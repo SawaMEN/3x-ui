@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"gorm.io/gorm"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
@@ -12,7 +14,6 @@ import (
 	ldaputil "github.com/SawaMEN/3x-ui/v3/internal/util/ldap"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/totp"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
-	"gorm.io/gorm"
 )
 
 // UserService provides business logic for user management and authentication.

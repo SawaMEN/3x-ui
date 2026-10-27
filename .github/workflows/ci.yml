@@ -285,7 +285,7 @@ jobs:
         uses: golangci/golangci-lint-action@v9
         with:
           version: latest
-          args: --fix --issues-exit-code=0
+          args: --timeout=5m
 
   arch-linux:
     if: github.event_name == 'pull_request' || !startsWith(github.event.head_commit.message, 'chore(format):')
@@ -337,6 +337,9 @@ jobs:
         working-directory: frontend
       - name: Lint
         run: npm run lint
+        working-directory: frontend
+      - name: Reject deprecated frontend APIs
+        run: npm run lint:deprecated
         working-directory: frontend
       # Keep formatting as a hard gate; formatter-only commits are still validated on PRs.
       - name: Format check

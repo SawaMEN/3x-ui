@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/netip"
 	"runtime/debug"
 	"slices"
@@ -14,6 +15,9 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
@@ -21,8 +25,6 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/masque"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/random"
-	"github.com/google/uuid"
-	"gorm.io/gorm"
 )
 
 func hasForbiddenClientChar(s string) bool {
@@ -64,6 +66,13 @@ func validateClientTrafficReset(period string, day int) error {
 
 // Rejected rather than clamped: nextCalendarRenewal would silently move an
 // out-of-range day, and a negative one drops out of the renewal query entirely.
+func validateClientReset(period int) error {
+	if period < 0 || int64(period) > math.MaxInt64/86400000 {
+		return common.NewError("client reset period is outside the supported range")
+	}
+	return nil
+}
+
 func validateClientResetDay(day int) error {
 	if day < 0 || day > 31 {
 		return common.NewError("client resetDay must be between 0 and 31, got:", day)
@@ -136,6 +145,9 @@ func (s *ClientService) Create(inboundSvc *InboundService, payload *ClientCreate
 		return false, err
 	}
 	if err := validateClientResetDay(client.ResetDay); err != nil {
+		return false, err
+	}
+	if err := validateClientReset(client.Reset); err != nil {
 		return false, err
 	}
 	if err := client.ValidateConnectionNameMode(); err != nil {
@@ -631,6 +643,9 @@ func (s *ClientService) Update(inboundSvc *InboundService, id int, updated model
 	}
 	if updated.SpeedLimit == nil {
 		updated.SpeedLimit = existing.SpeedLimit
+	}
+	if err := validateClientReset(updated.Reset); err != nil {
+		return false, err
 	}
 	if err := updated.ValidateConnectionNameMode(); err != nil {
 		return false, err
@@ -1285,28 +1300,4 @@ func clientResetCycles(tx *gorm.DB) *gorm.DB {
 	return tx.Table("clients c").
 		Select("c.email, c.traffic_reset_day, c.enable, COALESCE(ct.total, 0) AS total, COALESCE(ct.up, 0) + COALESCE(ct.down, 0) AS used").
 		Joins("LEFT JOIN client_traffics ct ON ct.email = c.email")
-}
-
-// quotaDisabledEmails lists the disabled clients whose usage reached their quota,
-// only those in within unless it is nil. Read it before zeroing the counters,
-// which hides why a client is off.
-func quotaDisabledEmails(tx *gorm.DB, within []string) ([]string, error) {
-	var cycles []ClientResetCycle
-	if err := clientResetCycles(tx).Where("c.enable = ?", false).Scan(&cycles).Error; err != nil {
-		return nil, err
-	}
-	var in map[string]bool
-	if within != nil {
-		in = make(map[string]bool, len(within))
-		for _, e := range within {
-			in[e] = true
-		}
-	}
-	var emails []string
-	for _, c := range cycles {
-		if c.Depleted() && (in == nil || in[c.Email]) {
-			emails = append(emails, c.Email)
-		}
-	}
-	return emails, nil
 }

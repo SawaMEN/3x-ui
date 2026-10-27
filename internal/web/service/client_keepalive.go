@@ -54,12 +54,3 @@ func validateClientKeepAliveAgainstExisting(protocol model.Protocol, client mode
 	}
 	return validateClientKeepAlive(protocol, client)
 }
-
-func validateClientsKeepAliveAgainstExisting(protocol model.Protocol, clients, existing []model.Client) error {
-	for _, client := range clients {
-		if err := validateClientKeepAliveAgainstExisting(protocol, client, existing); err != nil {
-			return fmt.Errorf("client %q: %w", client.Email, err)
-		}
-	}
-	return nil
-}

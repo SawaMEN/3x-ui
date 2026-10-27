@@ -4,12 +4,13 @@ import (
 	"strings"
 	"time"
 
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
-	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 // AcceptGlobalTraffic overwrites hosted clients' per-master usage, including lower resets.

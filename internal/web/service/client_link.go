@@ -5,10 +5,11 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/database"
-	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
 
 // applyClientRecordMerge merges incoming client-record fields onto row using the
@@ -172,6 +173,9 @@ func (s *ClientService) syncInboundClients(tx *gorm.DB, inboundId int, clients [
 			continue
 		}
 
+		if err := validateClientReset(clients[i].Reset); err != nil {
+			return err
+		}
 		if err := clients[i].ValidateConnectionNameMode(); err != nil {
 			return err
 		}

@@ -112,61 +112,6 @@ func (j *NodeHeartbeatJob) probeOne(n *model.Node) service.HeartbeatPatch {
 	return patch
 }
 
-func selectedNodeCoreHealth(patch service.HeartbeatPatch) (string, string) {
-	core := strings.ToLower(strings.TrimSpace(patch.CoreType))
-	if core == "" {
-		core = strings.ToLower(strings.TrimSpace(patch.RunningCore))
-	}
-	switch core {
-	case service.CoreTypeSingBox:
-		return patch.SingBoxState, patch.SingBoxError
-	case service.CoreTypeXray:
-		return patch.XrayState, patch.XrayError
-	default:
-		if strings.EqualFold(strings.TrimSpace(patch.RunningCore), service.CoreTypeSingBox) {
-			return patch.SingBoxState, patch.SingBoxError
-		}
-		return patch.XrayState, patch.XrayError
-	}
-}
-
-// nodeTransitionEvent is node.down / node.up on a genuine state change only; an unknown
-// previous status (fresh start) counts as not-online, so it never yields node.down.
-func nodeTransitionEvent(n *model.Node, prevStatus string, patch service.HeartbeatPatch) *eventbus.Event {
-	var eventType eventbus.EventType
-	switch {
-	case prevStatus == "online" && patch.Status == "offline":
-		eventType = eventbus.EventNodeDown
-	case prevStatus != "online" && patch.Status == "online":
-		eventType = eventbus.EventNodeUp
-	default:
-		return nil
-	}
-	source := n.Name
-	if source == "" {
-		source = "node-" + strconv.Itoa(n.Id)
-	}
-	coreState, coreError := selectedNodeCoreHealth(patch)
-	return &eventbus.Event{
-		Type:   eventType,
-		Source: source,
-		Data: &eventbus.NodeHealthData{
-			NodeId:       n.Id,
-			LatencyMs:    patch.LatencyMs,
-			CpuPct:       patch.CpuPct,
-			MemPct:       patch.MemPct,
-			CoreType:     patch.CoreType,
-			RunningCore:  patch.RunningCore,
-			CoreState:    coreState,
-			CoreError:    coreError,
-			XrayState:    patch.XrayState,
-			XrayError:    patch.XrayError,
-			SingBoxState: patch.SingBoxState,
-			SingBoxError: patch.SingBoxError,
-		},
-	}
-}
-
 // publishNodeTransitions sends one tick's transitions, folding a same-direction burst
 // (a master-side blip flips every node at once) into one event naming the nodes.
 func publishNodeTransitions(events []eventbus.Event) {

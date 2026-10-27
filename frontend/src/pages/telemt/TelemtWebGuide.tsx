@@ -11,7 +11,7 @@ export default function TelemtWebGuide({ domain }: { domain?: string }) {
     <Alert
       type="info"
       showIcon
-      message={ru ? 'Сайт-заглушка — автоматически' : 'Cover website — automatic'}
+      title={ru ? 'Сайт-заглушка — автоматически' : 'Cover website — automatic'}
       description={
         <>
           <p>

@@ -9,13 +9,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/op/go-logging"
+	"gorm.io/gorm"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	xuilogger "github.com/SawaMEN/3x-ui/v3/internal/logger"
-	"github.com/op/go-logging"
-	"gorm.io/gorm"
 )
 
 // setupScaleDB opens package-isolated PostgreSQL or opt-in SQLite (XUI_SCALE_TEST); otherwise it skips.

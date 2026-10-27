@@ -14,6 +14,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"regexp"
@@ -112,14 +113,16 @@ type ClientInput struct {
 	Quota     *Quota `json:"quota,omitempty"`
 }
 
-var idPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$`)
-var operationMu sync.RWMutex
-var state = struct {
-	sync.Mutex
-	busy      bool
-	operation string
-	lastError string
-}{}
+var (
+	idPattern   = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$`)
+	operationMu sync.RWMutex
+	state       = struct {
+		sync.Mutex
+		busy      bool
+		operation string
+		lastError string
+	}{}
+)
 
 func Supported() (bool, string) {
 	if runtime.GOOS != "linux" || (runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64") {
@@ -184,11 +187,13 @@ func installed() bool {
 	b, e := os.Stat("/usr/local/bin/olcrtc-manager")
 	return e == nil && !b.IsDir()
 }
+
 func run(ctx context.Context, name string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
 	out, err := cmd.CombinedOutput()
 	return strings.TrimSpace(string(out)), err
 }
+
 func readRevisions() string {
 	data, _ := os.ReadFile(revisionPath)
 	return strings.TrimSpace(string(data))
@@ -213,6 +218,7 @@ func revisionLabel(value string) string {
 	}
 	return label
 }
+
 func GetStatus(ctx context.Context) Status {
 	yes, reason := Supported()
 	result := Status{Installed: installed(), Supported: yes, UnsupportedReason: reason}
@@ -293,8 +299,10 @@ func Start(operation string) error {
 
 // Upstream logs may include freshly generated admin credentials. Never expose
 // raw installer logs through the API: only allow-list executable names.
-var installerStage = regexp.MustCompile(`(?m)^3XUI_OLCRTC_STAGE=(packages|toolchain|memory|sources|dependencies-server|dependencies-manager|build-server|build-manager|deploy|config|service|health|rollback|complete)$`)
-var installerMissingCommand = regexp.MustCompile(`(?m)line [0-9]+: ([A-Za-z0-9_.+-]{1,64}): command not found$`)
+var (
+	installerStage          = regexp.MustCompile(`(?m)^3XUI_OLCRTC_STAGE=(packages|toolchain|memory|sources|dependencies-server|dependencies-manager|build-server|build-manager|deploy|config|service|health|rollback|complete)$`)
+	installerMissingCommand = regexp.MustCompile(`(?m)line [0-9]+: ([A-Za-z0-9_.+-]{1,64}): command not found$`)
+)
 
 func installerFailure(err error, logPath string) error {
 	var exitErr *exec.ExitError
@@ -430,7 +438,7 @@ func install(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		if err = os.WriteFile(patchDir+"/"+name, content, 0600); err != nil {
+		if err = os.WriteFile(patchDir+"/"+name, content, 0o600); err != nil {
 			return err
 		}
 	}
@@ -476,8 +484,8 @@ func install(ctx context.Context) error {
 		// Keep a root-only diagnostic after the temporary file is removed.
 		// It can contain credentials, so never return its contents via API.
 		if output, readErr := os.ReadFile(logFile.Name()); readErr == nil {
-			if os.MkdirAll("/var/log/3x-ui/olcrtc", 0700) == nil {
-				if os.WriteFile(installLogPath, output, 0600) == nil {
+			if os.MkdirAll("/var/log/3x-ui/olcrtc", 0o700) == nil {
+				if os.WriteFile(installLogPath, output, 0o600) == nil {
 					return fmt.Errorf("%w; root-only log: %s", failure, installLogPath)
 				}
 			}
@@ -494,11 +502,12 @@ func install(ctx context.Context) error {
 	if !validRevisions(strings.TrimSpace(string(built))) {
 		return errors.New("installer did not report valid built revisions")
 	}
-	if err := os.WriteFile(revisionPath, built, 0600); err != nil {
+	if err := os.WriteFile(revisionPath, built, 0o600); err != nil {
 		return err
 	}
 	return waitForManager(ctx)
 }
+
 func remove(ctx context.Context) error {
 	// Refuse to delete unrelated services or components.
 	if _, err := os.Stat(revisionPath); err != nil {
@@ -523,6 +532,7 @@ func remove(ctx context.Context) error {
 	// Preserve client config and secrets for a future reinstall.
 	return err
 }
+
 func readConfig() (clientConfig, error) {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
@@ -541,6 +551,7 @@ func readConfig() (clientConfig, error) {
 	}
 	return cfg, nil
 }
+
 func Clients() ([]Client, error) {
 	if err := beginClientOperation(); err != nil {
 		return nil, err
@@ -555,6 +566,7 @@ func Clients() ([]Client, error) {
 	}
 	return cfg.Clients, nil
 }
+
 func randomHex(n int) (string, error) {
 	value := make([]byte, n)
 	if _, err := rand.Read(value); err != nil {
@@ -562,6 +574,7 @@ func randomHex(n int) (string, error) {
 	}
 	return hex.EncodeToString(value), nil
 }
+
 func normalize(input *ClientInput) error {
 	input.ClientID = strings.TrimSpace(input.ClientID)
 	input.RoomID = strings.TrimSpace(input.RoomID)
@@ -606,8 +619,8 @@ func normalize(input *ClientInput) error {
 		return errors.New("enter an existing room ID or URL for the selected provider")
 	}
 	if input.Carrier == "jitsi" {
-		parsed, err := http.NewRequest(http.MethodGet, input.RoomID, nil)
-		if err != nil || parsed.URL.Scheme != "https" || parsed.URL.Host == "" || parsed.URL.User != nil {
+		parsed, err := url.Parse(input.RoomID)
+		if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil {
 			return errors.New("Jitsi room must be an HTTPS URL")
 		}
 	}
@@ -653,6 +666,7 @@ func normalize(input *ClientInput) error {
 	}
 	return nil
 }
+
 func credentials() (string, string, error) {
 	data, err := os.ReadFile(envPath)
 	if err != nil {
@@ -673,6 +687,7 @@ func credentials() (string, string, error) {
 	}
 	return result["OLCRTC_MANAGER_USER"], result["OLCRTC_MANAGER_PASS"], nil
 }
+
 func apiResponse(ctx context.Context, method, path string, payload any) ([]byte, error) {
 	if !installed() {
 		return nil, errors.New("OlcRTC is not installed")
@@ -721,6 +736,7 @@ func apiResponse(ctx context.Context, method, path string, payload any) ([]byte,
 	msg, _ := io.ReadAll(io.LimitReader(response.Body, 2048))
 	return nil, fmt.Errorf("OlcRTC manager: HTTP %d: %s", response.StatusCode, strings.TrimSpace(string(msg)))
 }
+
 func api(ctx context.Context, method, path string, payload any) error {
 	_, err := apiResponse(ctx, method, path, payload)
 	return err
@@ -753,6 +769,7 @@ func Live(ctx context.Context) (LiveStatus, error) {
 	}
 	return decodeLive(body)
 }
+
 func decodeLive(body []byte) (LiveStatus, error) {
 	var result LiveStatus
 	var upstream struct {
@@ -810,6 +827,7 @@ func CreateClient(ctx context.Context, input ClientInput) (ClientInput, error) {
 	}
 	return input, nil
 }
+
 func UpdateClient(ctx context.Context, id string, input ClientInput) (ClientInput, error) {
 	if err := beginClientOperation(); err != nil {
 		return input, err
@@ -863,6 +881,7 @@ func UpdateClient(ctx context.Context, id string, input ClientInput) (ClientInpu
 	}
 	return input, nil
 }
+
 func DeleteClient(ctx context.Context, id string) error {
 	if err := beginClientOperation(); err != nil {
 		return err
@@ -873,6 +892,7 @@ func DeleteClient(ctx context.Context, id string) error {
 	}
 	return api(ctx, http.MethodDelete, "/api/clients/"+id, nil)
 }
+
 func RotateKey(ctx context.Context, id string) error {
 	if err := beginClientOperation(); err != nil {
 		return err

@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRefreshRequest } from '@/hooks/useRefreshRequest';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Form, Modal, Select, Space } from 'antd';
 import { DownloadOutlined, SyncOutlined } from '@ant-design/icons';
 
-import { HttpUtil, FileManager, PromiseUtil } from '@/utils';
+import { HttpUtil, FileManager } from '@/utils';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { parseLogLine } from './logParse';
 import './LogModal.css';
@@ -21,31 +22,20 @@ export default function VkTurnProxyLogModal({ open, onClose }: VkTurnProxyLogMod
   const { isMobile } = useMediaQuery();
   const [rows, setRows] = useState('20');
   const [level, setLevel] = useState('info');
-  const [loading, setLoading] = useState(false);
-  const [logs, setLogs] = useState<string[]>([]);
-  const openRef = useRef(open);
-
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    try {
-      const msg = await HttpUtil.post<string[]>(`/panel/api/server/vk-turn-proxy/logs/${rows}`, {
-        level,
-      });
-      if (msg?.success) {
-        setLogs(msg.obj || []);
-      }
-      await PromiseUtil.sleep(300);
-    } finally {
-      setLoading(false);
-    }
-  }, [rows, level]);
-
-  useEffect(() => {
-    openRef.current = open;
-    if (!open) return;
-    const timer = window.setTimeout(() => void refresh(), 0);
-    return () => window.clearTimeout(timer);
-  }, [open, refresh, rows, level]);
+  const load = useCallback(
+    async (signal: AbortSignal) => {
+      const msg = await HttpUtil.post<string[]>(
+        `/panel/api/server/vk-turn-proxy/logs/${rows}`,
+        { level },
+        { signal },
+      );
+      return msg?.success && Array.isArray(msg.obj)
+        ? msg.obj.filter((line) => typeof line === 'string')
+        : undefined;
+    },
+    [rows, level],
+  );
+  const { data: logs, loading, refresh } = useRefreshRequest(open, load, [] as string[]);
 
   const parsedLogs = useMemo(() => logs.map(parseLogLine), [logs]);
 

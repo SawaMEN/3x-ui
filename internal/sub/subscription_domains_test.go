@@ -59,8 +59,10 @@ func TestRestrictedSubscriptionRejectsListenerHost(t *testing.T) {
 		host   string
 		status int
 	}{
-		{"first.example.com:8443", 204}, {"second.example.com:8443", 204},
-		{"origin.example.com", 403}, {"panel.example.com", 403},
+		{"first.example.com:8443", 204},
+		{"second.example.com:8443", 204},
+		{"origin.example.com", 403},
+		{"panel.example.com", 403},
 	} {
 		response := httptest.NewRecorder()
 		router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "https://"+tc.host+"/sub/token", nil))

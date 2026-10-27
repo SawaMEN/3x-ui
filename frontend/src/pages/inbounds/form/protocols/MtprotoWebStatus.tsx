@@ -64,7 +64,7 @@ export default function MtprotoWebStatus() {
   const defaultDomain = TelemtWebProxyRequestSchema.shape.domain.safeParse(status?.defaultDomain);
   return (
     <Space orientation="vertical" style={{ width: '100%', marginBlock: 12 }}>
-      {problem && <Alert type="warning" showIcon message={problem} />}
+      {problem && <Alert type="warning" showIcon title={problem} />}
       {!loading && !error && status && (
         <>
           <Typography.Text>
@@ -92,7 +92,7 @@ export default function MtprotoWebStatus() {
             <Alert
               type="success"
               showIcon
-              message={
+              title={
                 status.port443Free === true
                   ? ru
                     ? 'TCP 443 свободен'
@@ -118,7 +118,7 @@ export default function MtprotoWebStatus() {
         <Alert
           type="warning"
           showIcon
-          message={
+          title={
             ru
               ? `TCP 443 занят: ${status.port443Owner || 'другой сервис'}. Перенесите этот сервис на другой порт перед сохранением WEB Proxy.`
               : `TCP 443 is occupied: ${status.port443Owner || 'another service'}. Move it to another port before saving WEB Proxy.`

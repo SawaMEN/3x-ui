@@ -2,7 +2,6 @@ package dnstt
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"net"
 	"os"
@@ -38,6 +37,7 @@ func TestValidateDNSTT(t *testing.T) {
 		}
 	}
 }
+
 func TestDNSTTDefaultsAndUnitSafety(t *testing.T) {
 	c := Defaults()
 	if c.ListenPort != 53 || c.TargetPort != 22 || c.Enabled {
@@ -153,7 +153,7 @@ func TestOfficialDNSTTTunnelRoundTrip(t *testing.T) {
 		t.Fatalf("real DNSTT tunnel did not transmit stream: %v\nserver: %s\nclient: %s", err, sl, cl)
 	}
 	if string(payload) != string(response) {
-		t.Fatal(fmt.Sprintf("corrupted DNSTT data: got %q", response))
+		t.Fatalf("corrupted DNSTT data: got %q", response)
 	}
 }
 
@@ -168,7 +168,7 @@ func TestBinaryReadiness(t *testing.T) {
 		mode    os.FileMode
 		ready   bool
 	}{
-		{"", 0755, false}, {"binary", 0644, false}, {"binary", 0755, true},
+		{"", 0o755, false}, {"binary", 0o644, false}, {"binary", 0o755, true},
 	} {
 		if err := os.WriteFile(path, []byte(tc.content), tc.mode); err != nil {
 			t.Fatal(err)

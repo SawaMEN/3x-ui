@@ -7,9 +7,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pelletier/go-toml/v2"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/sidecaregress"
-	"github.com/pelletier/go-toml/v2"
 )
 
 func TestPingtunnelAndTrustTunnelUseCoreEgress(t *testing.T) {
@@ -56,7 +57,7 @@ func TestPingtunnelAndTrustTunnelUseCoreEgress(t *testing.T) {
 func TestPingtunnelRejectsVersionsWithDirectUDPFallback(t *testing.T) {
 	for _, version := range []string{"2.8", "3.0", "3.1"} {
 		path := filepath.Join(t.TempDir(), "pingtunnel")
-		if err := os.WriteFile(path, []byte("#!/bin/sh\necho 'pingtunnel version "+version+"'\n"), 0700); err != nil {
+		if err := os.WriteFile(path, []byte("#!/bin/sh\necho 'pingtunnel version "+version+"'\n"), 0o700); err != nil {
 			t.Fatal(err)
 		}
 		err := requirePingtunnelForwardVersion(path)

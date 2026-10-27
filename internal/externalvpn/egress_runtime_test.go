@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	stdbinary "encoding/binary"
-	"golang.org/x/net/http2"
 	"io"
 	"net"
 	"net/http"
@@ -139,12 +138,12 @@ func TestTrustTunnelPayloadUsesCoreSOCKS(t *testing.T) {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	transport := &http2.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, DialTLSContext: func(ctx context.Context, network, ignored string, cfg *tls.Config) (net.Conn, error) {
+	transport := &http.Transport{ForceAttemptHTTP2: true, TLSClientConfig: &tls.Config{InsecureSkipVerify: true, NextProtos: []string{"h2"}}, DialTLSContext: func(ctx context.Context, network, ignored string) (net.Conn, error) {
 		raw, err := (&net.Dialer{Timeout: time.Second}).DialContext(ctx, network, address)
 		if err != nil {
 			return nil, err
 		}
-		config := cfg.Clone()
+		config := &tls.Config{NextProtos: []string{"h2"}}
 		config.ServerName = "example.test"
 		config.InsecureSkipVerify = true
 		conn := tls.Client(raw, config)

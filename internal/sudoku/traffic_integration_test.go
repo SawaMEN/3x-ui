@@ -96,7 +96,7 @@ func TestOfficialSudokuTraffic(t *testing.T) {
 				t.Fatal(err)
 			}
 			clientPath := filepath.Join(dir, "client.json")
-			if err := os.WriteFile(clientPath, data, 0600); err != nil {
+			if err := os.WriteFile(clientPath, data, 0o600); err != nil {
 				t.Fatal(err)
 			}
 			client := NewProcess(clientPath, "official-traffic-client")

@@ -9,13 +9,15 @@ import (
 
 type fakeDNSLookup struct {
 	records []*net.NS
-	ips []net.IPAddr
-	nsErr error
-	ipErr error
+	ips     []net.IPAddr
+	nsErr   error
+	ipErr   error
 }
+
 func (f fakeDNSLookup) LookupNS(_ context.Context, _ string) ([]*net.NS, error) {
 	return f.records, f.nsErr
 }
+
 func (f fakeDNSLookup) LookupIPAddr(_ context.Context, _ string) ([]net.IPAddr, error) {
 	return f.ips, f.ipErr
 }
@@ -23,10 +25,10 @@ func (f fakeDNSLookup) LookupIPAddr(_ context.Context, _ string) ([]net.IPAddr, 
 func TestDNSTTDelegationVerification(t *testing.T) {
 	config := Config{Domain: "t.example.com", ServerIP: "203.0.113.2", ListenPort: 53, TargetPort: 22}
 	cases := []struct {
-		name string
+		name   string
 		lookup fakeDNSLookup
-		ready bool
-		ns bool
+		ready  bool
+		ns     bool
 	}{
 		{"ready", fakeDNSLookup{records: []*net.NS{{Host: "ns.example.com."}}, ips: []net.IPAddr{{IP: net.ParseIP("203.0.113.2")}}}, true, true},
 		{"wrong host", fakeDNSLookup{records: []*net.NS{{Host: "other.example.com."}}}, false, false},

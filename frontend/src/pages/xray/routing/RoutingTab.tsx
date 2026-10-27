@@ -470,7 +470,7 @@ export default function RoutingTab({
                     onChange={(value) => {
                       if (value != null) void applyRoutingPreset(Number(value));
                     }}
-                    dropdownRender={(menu) => (
+                    popupRender={(menu) => (
                       <>
                         {menu}
                         <div

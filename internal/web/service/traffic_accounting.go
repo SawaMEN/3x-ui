@@ -1,6 +1,7 @@
 package service
 
 import (
+	"cmp"
 	"fmt"
 	"maps"
 	"slices"
@@ -32,12 +33,6 @@ func (s *InboundService) CommitCoreTraffic(inboundTraffics []*coremodel.Traffic,
 	})
 }
 
-// CommitXrayTraffic retains the legacy method name.
-// Deprecated: use CommitCoreTraffic for shared traffic persistence.
-func (s *InboundService) CommitXrayTraffic(inboundTraffics []*coremodel.Traffic, clientTraffics []*coremodel.ClientTraffic) error {
-	return s.CommitCoreTraffic(inboundTraffics, clientTraffics)
-}
-
 // addClientTrafficStrict mirrors the accounting path but never swallows an
 // UPDATE error. Otherwise a failed client update looks like a successful
 // transaction to the Xray delta reader and those bytes are lost.
@@ -46,46 +41,21 @@ func (s *InboundService) addClientTrafficStrict(tx *gorm.DB, traffics []*coremod
 		return nil
 	}
 
-	emails := make([]string, 0, len(traffics))
-	for _, traffic := range traffics {
-		if traffic == nil || traffic.Email == "" {
-			continue
-		}
-		emails = append(emails, traffic.Email)
-	}
+	emails, trafficByEmail := aggregateClientTraffic(traffics)
 	if len(emails) == 0 {
 		return nil
 	}
-
-	dbClientTraffics := make([]*coremodel.ClientTraffic, 0, len(emails))
-	if err := tx.Model(coremodel.ClientTraffic{}).
-		Where("email IN (?)", emails).
-		Find(&dbClientTraffics).Error; err != nil {
+	dbClientTraffics, err := loadClientTrafficRows(tx, emails)
+	if err != nil {
 		return err
 	}
 	if len(dbClientTraffics) == 0 {
 		return nil
 	}
-
-	var err error
 	var convertedExpiryByEmail map[string]int64
 	dbClientTraffics, convertedExpiryByEmail, err = s.adjustTraffics(tx, dbClientTraffics)
 	if err != nil {
 		return err
-	}
-
-	trafficByEmail := make(map[string]*coremodel.ClientTraffic, len(traffics))
-	for _, traffic := range traffics {
-		if traffic == nil || traffic.Email == "" {
-			continue
-		}
-		if current, ok := trafficByEmail[traffic.Email]; ok {
-			current.Up = saturatingTrafficDelta(current.Up, traffic.Up)
-			current.Down = saturatingTrafficDelta(current.Down, traffic.Down)
-			continue
-		}
-		copyTraffic := *traffic
-		trafficByEmail[traffic.Email] = &copyTraffic
 	}
 
 	now := time.Now().UnixMilli()
@@ -105,9 +75,6 @@ func (s *InboundService) addClientTrafficStrict(tx *gorm.DB, traffics []*coremod
 		// baseline keeps rolling back to the same unacknowledged delta.
 		up := clampTrafficDeltaToStored(ct.Up, traffic.Up)
 		down := clampTrafficDeltaToStored(ct.Down, traffic.Down)
-		if up == 0 && down == 0 {
-			continue
-		}
 		if err := tx.Exec(
 			fmt.Sprintf(
 				`UPDATE client_traffics SET up = %s, down = %s, last_online = %s WHERE email = ?`,
@@ -132,14 +99,39 @@ func (s *InboundService) addClientTrafficStrict(tx *gorm.DB, traffics []*coremod
 	return nil
 }
 
-func saturatingTrafficDelta(a, b int64) int64 {
-	if b <= 0 {
-		return a
+// Aggregate before querying so duplicate sources use one SQL variable and zero
+// snapshots cannot start a delayed subscription. Never mutate adapter snapshots.
+func aggregateClientTraffic(traffics []*coremodel.ClientTraffic) ([]string, map[string]*coremodel.ClientTraffic) {
+	emails := make([]string, 0, len(traffics))
+	byEmail := make(map[string]*coremodel.ClientTraffic, len(traffics))
+	for _, traffic := range traffics {
+		if traffic == nil || traffic.Email == "" || (traffic.Up <= 0 && traffic.Down <= 0) {
+			continue
+		}
+		item := byEmail[traffic.Email]
+		if item == nil {
+			item = &coremodel.ClientTraffic{Email: traffic.Email}
+			byEmail[traffic.Email] = item
+			emails = append(emails, traffic.Email)
+		}
+		item.Up = sumTrafficDelta(item.Up, traffic.Up)
+		item.Down = sumTrafficDelta(item.Down, traffic.Down)
 	}
-	if a >= database.TrafficMax || b > database.TrafficMax-a {
-		return database.TrafficMax
+	return emails, byEmail
+}
+
+func loadClientTrafficRows(tx *gorm.DB, emails []string) ([]*coremodel.ClientTraffic, error) {
+	rows := make([]*coremodel.ClientTraffic, 0, len(emails))
+	for _, batch := range chunkStrings(emails, sqlInChunk) {
+		var page []*coremodel.ClientTraffic
+		if err := tx.Where("email IN ?", batch).Find(&page).Error; err != nil {
+			return nil, err
+		}
+		rows = append(rows, page...)
 	}
-	return a + b
+	// Consistent lock order across batches and callers prevents deadlocks.
+	slices.SortFunc(rows, func(a, b *coremodel.ClientTraffic) int { return cmp.Compare(a.Id, b.Id) })
+	return rows, nil
 }
 
 // clampTrafficDeltaToStored returns the part of delta that can still be added
@@ -174,9 +166,9 @@ func addOutboundTrafficStrict(tx *gorm.DB, traffics []*coremodel.Traffic) error 
 		}
 
 		stored.Tag = traffic.Tag
-		stored.Up = saturatingTrafficDelta(stored.Up, traffic.Up)
-		stored.Down = saturatingTrafficDelta(stored.Down, traffic.Down)
-		stored.Total = saturatingTrafficDelta(stored.Up, stored.Down)
+		stored.Up = sumTrafficDelta(stored.Up, traffic.Up)
+		stored.Down = sumTrafficDelta(stored.Down, traffic.Down)
+		stored.Total = sumTrafficDelta(stored.Up, stored.Down)
 		if err := tx.Save(&stored).Error; err != nil {
 			return err
 		}

@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useId } from 'react';
+import { useRefreshRequest } from '@/hooks/useRefreshRequest';
+import { useCallback, useMemo, useState, useId } from 'react';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { Button, Checkbox, Form, Input, Modal, Select, Tag } from 'antd';
 import { DownloadOutlined, SyncOutlined } from '@ant-design/icons';
 
-import { HttpUtil, FileManager, IntlUtil, PromiseUtil } from '@/utils';
+import { HttpUtil, FileManager, IntlUtil } from '@/utils';
 import { activateOnKey } from '@/utils/a11y';
 import { useDatepicker } from '@/hooks/useDatepicker';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -72,59 +73,28 @@ export default function XrayLogModal({ open, onClose }: XrayLogModalProps) {
   const [showBlocked, setShowBlocked] = useState(true);
   const [showProxy, setShowProxy] = useState(true);
   const [autoUpdate, setAutoUpdate] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [logs, setLogs] = useState<XrayLogEntry[]>([]);
-
+  const load = useCallback(
+    async (signal: AbortSignal) => {
+      const msg = await HttpUtil.post<XrayLogEntry[]>(
+        `/panel/api/server/xraylogs/${rows}`,
+        { filter, showDirect, showBlocked, showProxy },
+        { signal },
+      );
+      return msg?.success && Array.isArray(msg.obj)
+        ? msg.obj.filter((entry) => entry && typeof entry === 'object')
+        : undefined;
+    },
+    [rows, filter, showDirect, showBlocked, showProxy],
+  );
+  const {
+    data: logs,
+    loading,
+    refresh,
+  } = useRefreshRequest(open, load, [] as XrayLogEntry[], autoUpdate ? AUTO_UPDATE_INTERVAL : 0);
   const orderedLogs = useMemo(() => [...logs].reverse(), [logs]);
 
-  const runRefresh = useCallback(async () => {
-    try {
-      const msg = await HttpUtil.post<XrayLogEntry[]>(`/panel/api/server/xraylogs/${rows}`, {
-        filter,
-        showDirect,
-        showBlocked,
-        showProxy,
-      });
-      if (msg?.success) setLogs(msg.obj || []);
-      await PromiseUtil.sleep(300);
-    } finally {
-      setLoading(false);
-    }
-  }, [rows, filter, showDirect, showBlocked, showProxy]);
-
-  const refresh = useCallback(() => {
-    setLoading(true);
-    void runRefresh();
-  }, [runRefresh]);
-
-  const refreshRef = useRef(refresh);
-  useEffect(() => {
-    refreshRef.current = refresh;
-  });
-
-  // The spinner is raised during render so the fetch effect stays side-effect
-  // free until its response lands.
-  const refreshKey = open
-    ? `${rows}\u0000${showDirect}\u0000${showBlocked}\u0000${showProxy}`
-    : null;
-  const [loadingKey, setLoadingKey] = useState<string | null>(null);
-  if (refreshKey !== loadingKey) {
-    setLoadingKey(refreshKey);
-    if (refreshKey) setLoading(true);
-  }
-
-  useEffect(() => {
-    if (open) void runRefresh();
-  }, [open, rows, showDirect, showBlocked, showProxy, runRefresh]);
-
-  useEffect(() => {
-    if (!open || !autoUpdate) return;
-    const id = setInterval(() => refreshRef.current(), AUTO_UPDATE_INTERVAL);
-    return () => clearInterval(id);
-  }, [open, autoUpdate]);
-
   function fullDate(value?: string | number): string {
-    return IntlUtil.formatDate(value, datepicker);
+    return value ? IntlUtil.formatDate(value, datepicker) : '';
   }
 
   function download() {

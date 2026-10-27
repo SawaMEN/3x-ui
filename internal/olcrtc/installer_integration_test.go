@@ -3,6 +3,7 @@ package olcrtc
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -57,9 +58,7 @@ func TestPinnedInstallerInitializersWithoutHostnameI(t *testing.T) {
 			if err == nil {
 				t.Fatal("original initializer unexpectedly survived hostname exit 64")
 			}
-			if e, ok := err.(*exec.ExitError); ok {
-				exitErr = e
-			}
+			_ = errors.As(err, &exitErr)
 			if exitErr == nil || exitErr.ExitCode() != 64 {
 				t.Fatalf("expected 64, got %v: %s", err, out)
 			}
@@ -108,7 +107,7 @@ main
 		t.Fatalf("workspace leaked: %v, %v", files, err)
 	}
 	logPath := filepath.Join(root, "log")
-	if err := os.WriteFile(logPath, out, 0600); err != nil {
+	if err := os.WriteFile(logPath, out, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	got := installerFailure(exec.Command("bash", "-c", "exit 64").Run(), logPath).Error()
@@ -120,7 +119,7 @@ main
 func TestInstallerStageRedactsArbitraryOutput(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "log")
 	for _, line := range []string{"Password: secret", "3XUI_OLCRTC_STAGE=secret"} {
-		_ = os.WriteFile(path, []byte("3XUI_OLCRTC_STAGE=sources\n"+line+"\n"), 0600)
+		_ = os.WriteFile(path, []byte("3XUI_OLCRTC_STAGE=sources\n"+line+"\n"), 0o600)
 		got := installerFailure(fmt.Errorf("failed"), path).Error()
 		if strings.Contains(got, "secret") || !strings.Contains(got, "sources") {
 			t.Fatalf("unsafe error: %s", got)
@@ -200,13 +199,13 @@ func TestDeploymentRollbackAndRecovery(t *testing.T) {
 			bin := filepath.Join(root, "bin")
 			unit := filepath.Join(root, "unit")
 			for _, p := range []string{config, bin, unit} {
-				if err := os.Mkdir(p, 0700); err != nil {
+				if err := os.Mkdir(p, 0o700); err != nil {
 					t.Fatal(err)
 				}
 			}
 			files := []string{bin + "/olcrtc", bin + "/olcrtc-manager", config + "/config.json", config + "/panel.env", config + "/.3x-ui-revisions", unit + "/manager.service"}
 			for i, p := range files {
-				if err := os.WriteFile(p, []byte(fmt.Sprintf("old-%d", i)), 0600); err != nil {
+				if err := os.WriteFile(p, []byte(fmt.Sprintf("old-%d", i)), 0o600); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -229,7 +228,7 @@ install() { if [ "$FAILURE" = deploy ] && [ "${@: -1}" = "$MANAGED_BIN_DIR/olcrt
 manager_ready() { case "$FAILURE" in health) return 1;; crash) kill -KILL $$;; *) return 0;; esac; }
 `
 			env := append(os.Environ(), "TEST_ROOT="+root, "FAILURE="+failure, "CONFIG_DIR="+config, "CONFIG_PATH="+config+"/config.json", "PANEL_ENV_PATH="+config+"/panel.env", "MANAGED_BIN_DIR="+bin, "MANAGED_SERVICE_PATH="+files[5], "BUILT_REVISIONS_PATH="+root+"/built", "MANAGER_PATCH_PATH="+root+"/patch", "MANAGER_SAFETY_PATH="+root+"/safety", "PANEL_REF="+managerRevision, "OLCRTC_REF="+serverRevision, "PANEL_REPO=manager", "OLCRTC_REPO=server", "MANAGER_PATCH_VERSION="+managerPatchVersion)
-			_ = os.WriteFile(root+"/safety", []byte("package main"), 0600)
+			_ = os.WriteFile(root+"/safety", []byte("package main"), 0o600)
 			cmd := exec.Command("bash")
 			cmd.Env = env
 			cmd.Stdin = strings.NewReader("set -euo pipefail\n" + definitions + mocks + "\nmain\n")
@@ -271,10 +270,10 @@ func TestManagedBuildWithoutHomeOrGoCaches(t *testing.T) {
 		t.Skip("Go compiler required")
 	}
 	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.test/olcrtc-build\n\ngo 1.24\n"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.test/olcrtc-build\n\ngo 1.24\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\nfunc main() { println(\"home-independent\") }\n"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\nfunc main() { println(\"home-independent\") }\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	definitions := strings.TrimSuffix(string(installerAdapter), "main \"$@\"\n")
@@ -311,7 +310,7 @@ func TestInstallerBuildDiagnosticsDoNotExposeRawOutput(t *testing.T) {
 		"compile: signal: killed": "memory",
 		"no space left on device": "disk space",
 	} {
-		if err := os.WriteFile(path, []byte("3XUI_OLCRTC_STAGE=build-server\n"+marker+"\nPassword: secret\n"), 0600); err != nil {
+		if err := os.WriteFile(path, []byte("3XUI_OLCRTC_STAGE=build-server\n"+marker+"\nPassword: secret\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		got := installerFailure(fmt.Errorf("exit status 1"), path).Error()

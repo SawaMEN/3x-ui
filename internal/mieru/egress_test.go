@@ -4,10 +4,11 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/sidecaregress"
 	"github.com/enfein/mieru/v3/pkg/appctl"
 	pb "github.com/enfein/mieru/v3/pkg/appctl/appctlpb"
 	"google.golang.org/protobuf/encoding/protojson"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/sidecaregress"
 )
 
 func TestServerEgressContractUsesPanelForEveryDestination(t *testing.T) {

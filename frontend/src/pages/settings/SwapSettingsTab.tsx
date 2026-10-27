@@ -399,7 +399,7 @@ export default function SwapSettingsTab() {
   const installInfo = status?.zramInstall;
 
   const overviewTab = (
-    <Space direction="vertical" size={12} style={{ width: '100%' }}>
+    <Space orientation="vertical" size={12} style={{ width: '100%' }}>
       <Row gutter={[12, 12]}>
         <Col xs={24} sm={12} lg={6}>
           <Card size="small">
@@ -430,7 +430,7 @@ export default function SwapSettingsTab() {
       </Row>
 
       <Card size="small" title={t('pages.settings.swap.systemTitle')}>
-        <Space direction="vertical" size={10} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={10} style={{ width: '100%' }}>
           <Space wrap align="end" className="swap-action-row">
             <div>
               <div>{t('pages.settings.swap.swappiness')}</div>
@@ -485,7 +485,7 @@ export default function SwapSettingsTab() {
 
       {installInfo && (
         <Card size="small" title={t('pages.settings.swap.packageInfoTitle')}>
-          <Space direction="vertical" size={10} style={{ width: '100%' }}>
+          <Space orientation="vertical" size={10} style={{ width: '100%' }}>
             <Alert
               type={installInfo.supported ? 'info' : 'error'}
               showIcon
@@ -561,7 +561,7 @@ export default function SwapSettingsTab() {
 
   const swapFileTab = (
     <Card size="small" title={t('pages.settings.swap.fileTitle')}>
-      <Space direction="vertical" size={12} style={{ width: '100%' }}>
+      <Space orientation="vertical" size={12} style={{ width: '100%' }}>
         {status?.swapFileConfig.enabled && (
           <Alert
             type="success"
@@ -625,7 +625,7 @@ export default function SwapSettingsTab() {
 
   const zramTab = (
     <Card size="small" title={t('pages.settings.swap.zramTitle')}>
-      <Space direction="vertical" size={12} style={{ width: '100%' }}>
+      <Space orientation="vertical" size={12} style={{ width: '100%' }}>
         <Space wrap align="end">
           <div>
             <div>{t('pages.settings.swap.sizeMiB')}</div>

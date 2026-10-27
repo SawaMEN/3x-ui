@@ -7,6 +7,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
+	"regexp"
+	"slices"
+	"sort"
+	"strings"
+	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
@@ -17,18 +23,12 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 
-	"net"
-	"regexp"
-	"slices"
-	"sort"
-	"strings"
-	"time"
-
-	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
-	wgutil "github.com/SawaMEN/3x-ui/v3/internal/util/wireguard"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
+	wgutil "github.com/SawaMEN/3x-ui/v3/internal/util/wireguard"
 )
 
 type InboundService struct {

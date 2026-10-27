@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/sidecaregress"
 	client "github.com/enfein/mieru/v3/apis/client"
 	common "github.com/enfein/mieru/v3/apis/common"
 	model "github.com/enfein/mieru/v3/apis/model"
@@ -18,6 +17,8 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/sidecaregress"
 )
 
 func TestMieruPayloadAcrossTCPAndUDP(t *testing.T) {

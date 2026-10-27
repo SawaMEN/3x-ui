@@ -4222,31 +4222,6 @@ func fingerprintForCipherSuites(fp, cs string) string {
 	return fp
 }
 
-func deepCopyJSONValue(v any) any {
-	switch val := v.(type) {
-	case map[string]any:
-		if val == nil {
-			return val
-		}
-		out := make(map[string]any, len(val))
-		for k, item := range val {
-			out[k] = deepCopyJSONValue(item)
-		}
-		return out
-	case []any:
-		if val == nil {
-			return val
-		}
-		out := make([]any, len(val))
-		for i, item := range val {
-			out[i] = deepCopyJSONValue(item)
-		}
-		return out
-	default:
-		return v
-	}
-}
-
 func externalProxyCipherSuites(ep map[string]any) (string, bool) {
 	if cs, ok := ep["cipherSuites"].(string); ok && cs != "" {
 		return cs, true

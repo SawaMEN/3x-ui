@@ -10,9 +10,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/robfig/cron/v3"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/global"
-	"github.com/robfig/cron/v3"
 )
 
 var contractExtraRoutes = map[string]bool{

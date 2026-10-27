@@ -8,10 +8,10 @@ import (
 
 func TestNeedsNativeDNSRestart(t *testing.T) {
 	tests := []struct {
-		name string
+		name   string
 		before oxidns.Settings
-		after oxidns.Settings
-		want bool
+		after  oxidns.Settings
+		want   bool
 	}{
 		{name: "enable managed DNS", after: oxidns.Settings{Enabled: true, UseSingBox: true}, want: true},
 		{name: "change upstream only", before: oxidns.Settings{Enabled: true, UseSingBox: true, Upstream: "google"}, after: oxidns.Settings{Enabled: true, UseSingBox: true, Upstream: "yandex-safe"}, want: false},

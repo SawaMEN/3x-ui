@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Button,
@@ -127,11 +127,18 @@ const defaults: Config = {
   upstreamType: 'direct',
 };
 
-const jsonOptions = { headers: { 'Content-Type': 'application/json' } };
+const jsonOptions = { headers: { 'Content-Type': 'application/json' }, silent: true };
 
 type ServiceAction = 'start' | 'stop' | 'restart' | 'enable' | 'disable';
 
 export default function TelemtPage() {
+  const lifetime = useRef<AbortController | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    lifetime.current = controller;
+    return () => controller.abort();
+  }, []);
+  const [messageApi, messageHolder] = message.useMessage();
   const [form] = Form.useForm<Config>();
   const configuredPort = Form.useWatch('port', form);
   const [status, setStatus] = useState<Status>({
@@ -199,6 +206,7 @@ export default function TelemtPage() {
   useEffect(() => {
     if (!webProxyOpen) return;
     let active = true;
+    const controller = new AbortController();
     const timer = window.setTimeout(async () => {
       try {
         const response = await HttpUtil.post<WebPreflight>(
@@ -210,7 +218,7 @@ export default function TelemtPage() {
             carriers: webCarriersKey ? webCarriersKey.split('|') : [],
             site: webSiteKey ? (JSON.parse(webSiteKey) as TelemtWebSite) : undefined,
           },
-          { ...jsonOptions, silent: true },
+          { ...jsonOptions, silent: true, signal: controller.signal },
         );
         if (!active) return;
         if (response?.success && response.obj) {
@@ -247,6 +255,7 @@ export default function TelemtPage() {
     }, 400);
     return () => {
       active = false;
+      controller.abort();
       window.clearTimeout(timer);
     };
   }, [
@@ -260,7 +269,10 @@ export default function TelemtPage() {
   ]);
 
   const loadStatus = useCallback(async () => {
-    const r = await HttpUtil.get<Status>('/panel/api/telemt/status');
+    const signal = lifetime.current?.signal;
+    if (signal?.aborted) return;
+    const r = await HttpUtil.get<Status>('/panel/api/telemt/status', undefined, { signal });
+    if (signal?.aborted) return;
     if (r?.success && r.obj) {
       setStatus(r.obj);
       return r.obj;
@@ -268,12 +280,18 @@ export default function TelemtPage() {
   }, []);
 
   const loadConfig = useCallback(async () => {
-    const r = await HttpUtil.get<Config>('/panel/api/telemt/config');
+    const signal = lifetime.current?.signal;
+    if (signal?.aborted) return;
+    const r = await HttpUtil.get<Config>('/panel/api/telemt/config', undefined, { signal });
+    if (signal?.aborted) return;
     if (r?.success && r.obj) form.setFieldsValue({ ...defaults, ...r.obj });
   }, [form]);
 
   const loadProxies = useCallback(async () => {
-    const r = await HttpUtil.get<Proxy[]>('/panel/api/telemt/proxy');
+    const signal = lifetime.current?.signal;
+    if (signal?.aborted) return;
+    const r = await HttpUtil.get<Proxy[]>('/panel/api/telemt/proxy', undefined, { signal });
+    if (signal?.aborted) return;
     if (!r?.success || !Array.isArray(r.obj)) return;
 
     const unique = new Map<string, Proxy>();
@@ -285,13 +303,16 @@ export default function TelemtPage() {
   }, []);
 
   const refreshAll = useCallback(async () => {
+    const signal = lifetime.current?.signal;
+    if (signal?.aborted) return;
     setRefreshing(true);
     try {
       const current = await loadStatus();
+      if (signal?.aborted) return;
       if (current?.installed) await Promise.all([loadConfig(), loadProxies()]);
       else setProxies([]);
     } finally {
-      setRefreshing(false);
+      if (!signal?.aborted) setRefreshing(false);
     }
   }, [loadConfig, loadProxies, loadStatus]);
 
@@ -305,6 +326,7 @@ export default function TelemtPage() {
   }, [loadStatus, refreshAll]);
 
   const runAction = async (actionName: ServiceAction, successText: string) => {
+    const signal = lifetime.current?.signal;
     setServiceAction(actionName);
     try {
       const r = await HttpUtil.post(
@@ -312,48 +334,55 @@ export default function TelemtPage() {
         { action: actionName },
         jsonOptions,
       );
+      if (signal?.aborted) return;
       if (r?.success) {
-        message.success(successText);
+        messageApi.success(successText);
         await loadStatus();
       } else {
-        message.error(r?.msg || 'Команда не выполнена');
+        messageApi.error(r?.msg || 'Команда не выполнена');
       }
     } finally {
-      setServiceAction(null);
+      if (!signal?.aborted) setServiceAction(null);
     }
   };
 
   const save = async (values: Config) => {
+    const signal = lifetime.current?.signal;
     setConfigSaving(true);
     try {
       const r = await HttpUtil.post('/panel/api/telemt/config', values, jsonOptions);
+      if (signal?.aborted) return;
       if (r?.success) {
-        message.success(
+        messageApi.success(
           status.active
             ? 'Настройки сохранены, Telemt перезапущен автоматически'
             : 'Настройки сохранены',
         );
         await refreshAll();
       } else {
-        message.error(r?.msg || 'Не удалось сохранить конфигурацию');
+        messageApi.error(r?.msg || 'Не удалось сохранить конфигурацию');
       }
     } finally {
-      setConfigSaving(false);
+      if (!signal?.aborted) setConfigSaving(false);
     }
   };
 
   const deleteProxy = async (name: string) => {
+    const signal = lifetime.current?.signal;
     setProxyDeleting(name);
     try {
-      const r = await HttpUtil.delete('/panel/api/telemt/proxy/' + encodeURIComponent(name));
+      const r = await HttpUtil.delete('/panel/api/telemt/proxy/' + encodeURIComponent(name), {
+        silent: true,
+      });
+      if (signal?.aborted) return;
       if (r?.success) {
-        message.success('Прокси удалён');
+        messageApi.success('Прокси удалён');
         await Promise.all([loadStatus(), loadProxies()]);
       } else {
-        message.error(r?.msg || 'Не удалось удалить прокси');
+        messageApi.error(r?.msg || 'Не удалось удалить прокси');
       }
     } finally {
-      setProxyDeleting(null);
+      if (!signal?.aborted) setProxyDeleting(null);
     }
   };
 
@@ -374,43 +403,50 @@ export default function TelemtPage() {
     setWebProxyOpen(true);
   };
 
-  const enableWebProxy = webForm.handleSubmit(async (payload) => {
-    setWebProxyLoading(true);
-    try {
-      const r = await HttpUtil.post('/panel/api/telemt/webproxy/enable', payload, jsonOptions);
-      if (r?.success) {
-        message.success(status.webProxy.enabled ? 'WEB Proxy перенастроен' : 'WEB Proxy поднят');
-        setWebProxyOpen(false);
-        await loadStatus();
-      } else {
-        message.error(r?.msg || 'Не удалось поднять WEB Proxy');
-        await loadStatus();
+  const enableWebProxy = () =>
+    webForm.handleSubmit(async (payload) => {
+      const signal = lifetime.current?.signal;
+      setWebProxyLoading(true);
+      try {
+        const r = await HttpUtil.post('/panel/api/telemt/webproxy/enable', payload, jsonOptions);
+        if (signal?.aborted) return;
+        if (r?.success) {
+          messageApi.success(
+            status.webProxy.enabled ? 'WEB Proxy перенастроен' : 'WEB Proxy поднят',
+          );
+          setWebProxyOpen(false);
+          await loadStatus();
+        } else {
+          messageApi.error(r?.msg || 'Не удалось поднять WEB Proxy');
+          await loadStatus();
+        }
+      } finally {
+        if (!signal?.aborted) setWebProxyLoading(false);
       }
-    } finally {
-      setWebProxyLoading(false);
-    }
-  });
+    })();
 
   const disableWebProxy = async () => {
+    const signal = lifetime.current?.signal;
     setWebProxyLoading(true);
     try {
       const r = await HttpUtil.post('/panel/api/telemt/webproxy/disable', {}, jsonOptions);
+      if (signal?.aborted) return;
       if (r?.success) {
-        message.success('WEB Proxy отключён');
+        messageApi.success('WEB Proxy отключён');
         setWebProxyOpen(false);
         await loadStatus();
       } else {
-        message.error(r?.msg || 'Не удалось отключить WEB Proxy');
+        messageApi.error(r?.msg || 'Не удалось отключить WEB Proxy');
         await loadStatus();
       }
     } finally {
-      setWebProxyLoading(false);
+      if (!signal?.aborted) setWebProxyLoading(false);
     }
   };
 
   const generateSecret = () => {
     form.setFieldValue('secret', RandomUtil.randomSeq(32, { type: 'hex' }));
-    message.success('Новый секрет сгенерирован');
+    messageApi.success('Новый секрет сгенерирован');
   };
 
   const statusText = !status.installed
@@ -421,6 +457,7 @@ export default function TelemtPage() {
 
   return (
     <>
+      {messageHolder}
       <div className="telemt-shell telemt-integrated">
         <div className="telemt-header">
           <div className="telemt-header-main">
@@ -463,7 +500,7 @@ export default function TelemtPage() {
             className="telemt-card"
             type="warning"
             showIcon
-            message="Telemt не установлен"
+            title="Telemt не установлен"
             description="Установите актуальную сборку 3X-UI. После установки эта страница сама подхватит бинарник и службу."
           />
         )}
@@ -471,7 +508,7 @@ export default function TelemtPage() {
         <Alert
           type="info"
           showIcon
-          message="MTProto работает через Telemt автоматически"
+          title="MTProto работает через Telemt автоматически"
           description="Для обычных входящих MTProto не нужно включать отдельную службу. Создавайте входящие и управляйте клиентами через основной список. Установка, обновление и удаление движка выполняются только в системных компонентах."
         />
         <Row gutter={[16, 16]}>
@@ -621,7 +658,7 @@ export default function TelemtPage() {
                   className="telemt-alert-compact"
                   type={status.webProxy.enabled ? 'warning' : 'info'}
                   showIcon
-                  message={status.webProxy.error}
+                  title={status.webProxy.error}
                 />
               )}
               <Button
@@ -860,11 +897,11 @@ export default function TelemtPage() {
           </Button>,
         ]}
       >
-        <Space direction="vertical" size={14} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={14} style={{ width: '100%' }}>
           <Alert
             type="info"
             showIcon
-            message="Панель всё сделает сама"
+            title="Панель всё сделает сама"
             description="Панель установит выбранный HTTPS-сервер, получит сертификат и настроит локальный Telemt автоматически. Для Caddy и HAProxy используется отдельная служба панели. При переключении возможен короткий перерыв соединений."
           />
 
@@ -878,7 +915,7 @@ export default function TelemtPage() {
                 label="Домен"
                 extra={'По умолчанию: ' + (status.webProxy.defaultDomain || 'не определён')}
               >
-                <Input placeholder="web.example.com" disabled={webProxyLoading} addonAfter=":443" />
+                <Input placeholder="web.example.com" disabled={webProxyLoading} suffix=":443" />
               </FormField>
               <FormField
                 name="frontend"
@@ -962,14 +999,14 @@ export default function TelemtPage() {
             </Button>
           </Space>
           {webPreflightChecking && (
-            <Alert type="info" showIcon message="Проверяются DNS, порты, Telemt, frontend и TLS…" />
+            <Alert type="info" showIcon title="Проверяются DNS, порты, Telemt, frontend и TLS…" />
           )}
           {!webPreflightChecking && webPreflightCurrent && (
             <>
               <Alert
                 type={webPreflightCurrent.ready ? 'success' : 'error'}
                 showIcon
-                message={
+                title={
                   webPreflightCurrent.ready
                     ? 'Предварительные проверки пройдены'
                     : 'Запуск заблокирован до устранения ошибок'
@@ -993,7 +1030,7 @@ export default function TelemtPage() {
                 ))}
               </Descriptions>
               {webPreflightCurrent.warnings.map((warning) => (
-                <Alert key={warning} type="warning" showIcon message={warning} />
+                <Alert key={warning} type="warning" showIcon title={warning} />
               ))}
             </>
           )}
@@ -1017,9 +1054,7 @@ export default function TelemtPage() {
             </Descriptions.Item>
           </Descriptions>
 
-          {status.webProxy.error && (
-            <Alert type="warning" showIcon message={status.webProxy.error} />
-          )}
+          {status.webProxy.error && <Alert type="warning" showIcon title={status.webProxy.error} />}
 
           {status.webProxy.enabled && status.webProxy.link && (
             <div>

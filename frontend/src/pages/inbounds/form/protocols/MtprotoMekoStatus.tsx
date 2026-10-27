@@ -121,7 +121,7 @@ export default function MtprotoMekoStatus() {
     <Alert
       showIcon
       type={type}
-      message={russian ? 'Фактический статус Fix by MEKO' : 'Fix by MEKO firewall status'}
+      title={russian ? 'Фактический статус Fix by MEKO' : 'Fix by MEKO firewall status'}
       description={description}
       action={
         <Space size="small" wrap>

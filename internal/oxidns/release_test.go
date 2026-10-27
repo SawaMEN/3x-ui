@@ -27,7 +27,7 @@ func TestVerifiedReleaseDownload(t *testing.T) {
 		t.Fatalf("verified official download failed: %v", err)
 	}
 	path := filepath.Join(t.TempDir(), "oxidns")
-	if err := os.WriteFile(path, executable, 0755); err != nil {
+	if err := os.WriteFile(path, executable, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	output, err := exec.CommandContext(ctx, path, "--version").CombinedOutput()

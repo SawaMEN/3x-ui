@@ -124,7 +124,7 @@ export default function TelemtConnectionsCard() {
         dataIndex: 'username',
         key: 'username',
         render: (username: string, row: TelemtConnection) => (
-          <Space direction="vertical" size={0}>
+          <Space orientation="vertical" size={0}>
             <Typography.Text strong>{username}</Typography.Text>
             <Typography.Text type="secondary">
               {row.recentIPCount > 0
@@ -138,7 +138,7 @@ export default function TelemtConnectionsCard() {
         title: 'Состояние',
         key: 'connections',
         render: (_: unknown, row: TelemtConnection) => (
-          <Space direction="vertical" size={0}>
+          <Space orientation="vertical" size={0}>
             {row.active ? (
               <Tag color="green">
                 {row.currentConnections > 0 ? `${row.currentConnections} соединений` : 'Сейчас'}
@@ -154,7 +154,7 @@ export default function TelemtConnectionsCard() {
         title: 'Активные IP',
         key: 'activeIPs',
         render: (_: unknown, row: TelemtConnection) => (
-          <Space direction="vertical" size={2}>
+          <Space orientation="vertical" size={2}>
             {row.activeIPs.length > 0 ? (
               row.activeIPs.map((location) => (
                 <Typography.Text key={location.ip} code copyable={{ text: location.ip }}>
@@ -171,11 +171,11 @@ export default function TelemtConnectionsCard() {
         title: 'Геолокация',
         key: 'geo',
         render: (_: unknown, row: TelemtConnection) => (
-          <Space direction="vertical" size={0}>
+          <Space orientation="vertical" size={0}>
             {row.activeIPs.length > 0 ? (
               row.activeIPs.map((location) => (
                 <span key={location.ip}>
-                  {location.countryCode ? <Tag bordered={false}>{location.countryCode}</Tag> : null}
+                  {location.countryCode ? <Tag variant="filled">{location.countryCode}</Tag> : null}
                   {formatLocation(location) || 'Неизвестно'}
                 </span>
               ))

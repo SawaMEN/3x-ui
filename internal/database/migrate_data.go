@@ -11,12 +11,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
-	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
 
 // migrationModels is the FK-aware order in which tables are created and copied

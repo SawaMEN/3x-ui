@@ -281,7 +281,10 @@ func looksLikeSubscriptionLink(line string) bool {
 		return false
 	}
 	for i, r := range line[:colon] {
-		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (i > 0 && ((r >= '0' && r <= '9') || r == '+' || r == '-' || r == '.'))) {
+		letter := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')
+		digit := r >= '0' && r <= '9'
+		punctuation := r == '+' || r == '-' || r == '.'
+		if !letter && (i == 0 || (!digit && !punctuation)) {
 			return false
 		}
 	}

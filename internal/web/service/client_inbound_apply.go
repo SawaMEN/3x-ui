@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-
-	"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
-
 	"maps"
 	"strings"
 	"time"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
+
+	"gorm.io/gorm"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
@@ -19,7 +20,6 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/random"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/runtime"
-	"gorm.io/gorm"
 )
 
 // droppedClientNeedsRestart is what restartXrayOnClientDisable asks for: the core
@@ -352,7 +352,10 @@ func (s *ClientService) AddInboundClient(inboundSvc *InboundService, data *model
 		return false, err
 	}
 
-	interfaceClients := settings["clients"].([]any)
+	interfaceClients, ok := settings["clients"].([]any)
+	if !ok {
+		return false, common.NewError("clients must be an array")
+	}
 	nowTs := time.Now().Unix() * 1000
 	for i := range interfaceClients {
 		if cm, ok := interfaceClients[i].(map[string]any); ok {
@@ -728,7 +731,10 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 		return false, err
 	}
 
-	interfaceClients := settings["clients"].([]any)
+	interfaceClients, ok := settings["clients"].([]any)
+	if !ok {
+		return false, common.NewError("clients must be an array")
+	}
 
 	oldInbound, err := inboundSvc.GetInbound(data.Id)
 	if err != nil {
@@ -1402,10 +1408,16 @@ func (s *ClientService) SetClientTelegramUserID(inboundSvc *InboundService, traf
 	if err != nil {
 		return false, err
 	}
-	clients := settings["clients"].([]any)
+	clients, ok := settings["clients"].([]any)
+	if !ok {
+		return false, common.NewError("clients must be an array")
+	}
 	var newClients []any
 	for client_index := range clients {
-		c := clients[client_index].(map[string]any)
+		c, ok := clients[client_index].(map[string]any)
+		if !ok || c == nil {
+			continue
+		}
 		if c["email"] == clientEmail {
 			c["tgId"] = tgId
 			c["updated_at"] = time.Now().Unix() * 1000

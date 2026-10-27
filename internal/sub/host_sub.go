@@ -88,34 +88,6 @@ func (s *SubService) partitionHostFormat(inbounds []*model.Inbound, format strin
 	return
 }
 
-func (s *SubService) primeHosts(inbounds []*model.Inbound) error {
-	s.hostsByInbound = make(map[int][]*model.Host, len(inbounds))
-	ids := make([]int, 0, len(inbounds))
-	for _, inbound := range inbounds {
-		ids = append(ids, inbound.Id)
-		s.hostsByInbound[inbound.Id] = nil
-	}
-	for start := 0; start < len(ids); start += 400 {
-		var hosts []*model.Host
-		if err := database.GetDB().Where("inbound_id IN ? AND is_disabled = ?", ids[start:min(start+400, len(ids))], false).
-			Order("sort_order asc, id asc").Find(&hosts).Error; err != nil {
-			s.hostsByInbound = nil
-			return err
-		}
-		for _, host := range hosts {
-			s.hostsByInbound[host.InboundId] = append(s.hostsByInbound[host.InboundId], host)
-		}
-	}
-	managed, err := s.settingService.DomainFrontHosts(inbounds)
-	if err != nil {
-		return err
-	}
-	for id, hosts := range managed {
-		s.hostsByInbound[id] = append(s.hostsByInbound[id], hosts...)
-	}
-	return nil
-}
-
 // hostToExternalProxyMap projects a Host onto the externalProxy entry shape the
 // raw/json/clash renderers already consume. Address/port fall back to the
 // inbound's own when the host leaves them blank (override-only host).

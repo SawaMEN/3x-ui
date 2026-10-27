@@ -1003,7 +1003,7 @@ export default function SystemUpdatePanel({ section }: { section: 'components' |
             <Alert
               type="warning"
               showIcon
-              message={t('pages.settings.swap.rebootRequired')}
+              title={t('pages.settings.swap.rebootRequired')}
               description={t('pages.settings.swap.rebootAfterKernel')}
             />
           )}

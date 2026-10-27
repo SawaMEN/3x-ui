@@ -343,8 +343,7 @@ export default function SingBoxOutboundModal({
       <Row gutter={24}>
         <Field label="Протокол" tooltip={type === 'snell' ? snellHelp('type') : undefined}>
           <Select
-            showSearch
-            optionFilterProp="label"
+            showSearch={{ optionFilterProp: 'label' }}
             value={type || undefined}
             options={[...outboundProtocols, ...nativeEndpointTypes].map((protocol) => ({
               value: protocol,

@@ -3,8 +3,9 @@ package mieru
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"github.com/SawaMEN/3x-ui/v3/internal/sidecaregress"
 	"sync"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/sidecaregress"
 )
 
 // Each Mita instance enters the panel router under its original inbound tag.
@@ -13,8 +14,10 @@ func SOCKSPortForInbound(id int) int {
 	return sidecaregress.Port(id)
 }
 
-var passwordOnce sync.Once
-var password string
+var (
+	passwordOnce sync.Once
+	password     string
+)
 
 func SocksPassword() string {
 	passwordOnce.Do(func() {

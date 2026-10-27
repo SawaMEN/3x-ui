@@ -3,11 +3,12 @@ package database
 import (
 	"testing"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
-	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
 
 // AutoMigrate must create the hot-path indexes used by client filters, traffic

@@ -5,9 +5,10 @@ import (
 	"sort"
 	"time"
 
+	"gorm.io/gorm/clause"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"gorm.io/gorm/clause"
 )
 
 // Attribution excludes empty addresses and keeps each fresh IP's maximum timestamp.

@@ -48,7 +48,7 @@ func TestManagedServiceLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := atomicWrite(binaryPath, executable, 0755); err != nil {
+	if err := atomicWrite(binaryPath, executable, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := InstallOnly(ctx); err != nil {
@@ -84,7 +84,7 @@ plugins:
       entry: main
       listen: "127.0.0.1:15353"
 `
-	if err := atomicWrite(configPath, []byte(configuration), 0600); err != nil {
+	if err := atomicWrite(configPath, []byte(configuration), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	settings := Defaults()
@@ -95,7 +95,7 @@ plugins:
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := atomicWrite(statePath, data, 0600); err != nil {
+	if err := atomicWrite(statePath, data, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	check := exec.CommandContext(ctx, binaryPath, "check", "-c", configPath)
@@ -122,7 +122,7 @@ plugins:
 	// Simulate a configuration-check failure while leaving start functional.
 	// Previously enabled DNS must keep working; disabled DNS must stay off.
 	wrapper := fmt.Sprintf("#!/bin/sh\nif [ \"$1\" = \"check\" ]; then exit 42; fi\nexec %q \"$@\"\n", official)
-	if err := atomicWrite(binaryPath, []byte(wrapper), 0755); err != nil {
+	if err := atomicWrite(binaryPath, []byte(wrapper), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := Setup(ctx, Defaults(), "", ""); err == nil {
@@ -162,7 +162,7 @@ plugins:
 	if err != nil || status.Enabled || status.Running {
 		t.Fatalf("disabled service remained active: %+v %v", status, err)
 	}
-	if err := atomicWrite(binaryPath, executable, 0755); err != nil {
+	if err := atomicWrite(binaryPath, executable, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := Uninstall(ctx); err != nil {

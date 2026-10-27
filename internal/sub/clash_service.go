@@ -11,13 +11,14 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/goccy/go-json"
+	yaml "github.com/goccy/go-yaml"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/sudoku"
 	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
 	wgutil "github.com/SawaMEN/3x-ui/v3/internal/util/wireguard"
-	"github.com/goccy/go-json"
-	yaml "github.com/goccy/go-yaml"
 )
 
 type SubClashService struct {

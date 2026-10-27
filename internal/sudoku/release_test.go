@@ -58,7 +58,7 @@ func TestInstallAndStatusOfficialRelease(t *testing.T) {
 			// A previous panel build must be offered an update and replaced without
 			// changing the existing keys/configuration directory.
 			const previous = "previous executable"
-			if err := os.WriteFile(GetBinaryPath(binDir), []byte(previous), 0700); err != nil {
+			if err := os.WriteFile(GetBinaryPath(binDir), []byte(previous), 0o700); err != nil {
 				t.Fatal(err)
 			}
 			if err := writeInstalledVersion(binDir, "dev+0123456789abcdef0123456789abcdef01234567"); err != nil {
@@ -71,7 +71,7 @@ func TestInstallAndStatusOfficialRelease(t *testing.T) {
 			var archive bytes.Buffer
 			gz := gzip.NewWriter(&archive)
 			tw := tar.NewWriter(gz)
-			if err := tw.WriteHeader(&tar.Header{Name: "sudoku", Mode: 0755, Size: int64(len(payload))}); err != nil {
+			if err := tw.WriteHeader(&tar.Header{Name: "sudoku", Mode: 0o755, Size: int64(len(payload))}); err != nil {
 				t.Fatal(err)
 			}
 			if _, err := io.WriteString(tw, payload); err != nil {

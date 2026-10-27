@@ -4,6 +4,14 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"maps"
+	"net"
+	"net/url"
+	"slices"
+	"sort"
+	"strings"
+	"sync"
+	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
@@ -15,15 +23,6 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/json_util"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
-
-	"maps"
-	"net"
-	"net/url"
-	"slices"
-	"sort"
-	"strings"
-	"sync"
-	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/util/random"
 	wgutil "github.com/SawaMEN/3x-ui/v3/internal/util/wireguard"
@@ -596,7 +595,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 	nativeTLSForHiddify := hiddify && containsNativeTLSSubscription(inbounds)
 	if (!hiddify && containsSubscriptionProtocol(inbounds, model.WireGuard)) ||
 		(!nativeTLSForHiddify && slices.ContainsFunc(inbounds, func(ib *model.Inbound) bool {
-			return singBoxUnsupportedProtocol(ib.Protocol) && !(hiddify && hiddifyExtendedProtocol(ib.Protocol))
+			return singBoxUnsupportedProtocol(ib.Protocol) && (!hiddify || !hiddifyExtendedProtocol(ib.Protocol))
 		})) {
 		return "", "", errSubscriptionFormatUnsupported
 	}
