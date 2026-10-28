@@ -588,10 +588,6 @@ func normalizeTelemtWebBasePath(value string) (string, error) {
 	return path, nil
 }
 
-func telemtWebLink(domain, secret string) string {
-	return telemtWebLinkWithPath(domain, secret, "")
-}
-
 // A WEB path link uses the official 0x70 0xdd prefix and base64url encoding.
 // Links without paths preserve the historic dd+hex form byte for byte.
 func telemtWebLinkWithPath(domain, secret, basePath string) string {
