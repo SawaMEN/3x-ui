@@ -29,6 +29,9 @@ func TestSudokuSubscriptionRepairsMissingClientKey(t *testing.T) {
 	if err := os.WriteFile(sudoku.GetBinaryPath(binDir), []byte(program), 0o700); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(binDir, "sudoku.version"), []byte("fixture\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	const email, subID = "sudoku@example.com", "sudoku-sub"
 	inbound := &model.Inbound{
 		UserId: 1, Tag: "sudoku-test", Enable: true, Port: 2443, Protocol: model.Sudoku,
