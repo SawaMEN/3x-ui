@@ -1,88 +1,105 @@
 .subscription-page.sub-underground {
-  --sub-accent: #e5ad78;
-  --sub-grad-from: #e5ad78;
-  --sub-grad-to: #94b9bc;
-  --sub-ink-from: #f1c69e;
-  --sub-ink-to: #b7d2d2;
-  --sub-card-bg: rgba(18, 29, 35, 0.89);
-  --sub-card-border: rgba(153, 180, 185, 0.27);
-  --sub-card-shadow: 0 28px 90px #050d1399;
-  --sub-card-sheen: linear-gradient(145deg, #afc7c329, transparent 45%, #e5ad7826);
-  --sub-tile-bg: #9bb9bc0a;
-  --sub-tile-border: #9bb9bc29;
-  --sub-row-bg: #9bb9bc09;
-  --sub-row-border: #9bb9bc2e;
-  --sub-row-bg-hover: #e5ad780d;
-  --sub-row-border-hover: #e5ad786b;
+  --sub-accent: #e9b17e;
+  --sub-grad-from: #e9b17e;
+  --sub-grad-to: #a3c5c7;
+  --sub-ink-from: #f5d4b5;
+  --sub-ink-to: #e9b17e;
+  --sub-card-bg: #102028ed;
+  --sub-card-border: #a3c5c72e;
+  --sub-card-shadow: 0 32px 100px #020a12a6, 0 2px 8px #020a1233;
+  --sub-card-sheen: linear-gradient(145deg, #e9b17e66, #a3c5c71a 28%, transparent 65%);
+  --sub-tile-bg: #9ebfc408;
+  --sub-tile-border: #9ebfc420;
+  --sub-row-bg: #9ebfc408;
+  --sub-row-border: #9ebfc426;
+  --sub-row-bg-hover: #e9b17e0d;
+  --sub-row-border-hover: #e9b17e66;
   --sub-row-glow: transparent;
-  --sub-glass-bg: #9bb9bc0d;
-  --sub-hairline: linear-gradient(90deg, #e5ad7866, #9bb9bc26, transparent);
+  --sub-glass-bg: #9ebfc40d;
+  --sub-hairline: linear-gradient(90deg, #e9b17e66, #9ebfc420, transparent);
+  isolation: isolate;
   min-height: 100dvh;
-  background: #10191e;
+  background: #0c161b;
   color: #edf0ee;
-  font-family: 'DM Sans Variable', system-ui, sans-serif;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 
-.underground-backdrop {
-  position: fixed;
-  inset: 0;
+.sub-underground .underground-backdrop {
+  position: absolute;
+  inset: 0 0 auto;
+  height: min(1000px, 100vh);
+  min-height: 660px;
   z-index: 0;
   overflow: hidden;
   pointer-events: none;
   contain: strict;
-  background:
-    radial-gradient(ellipse at 30% 20%, #a3786145, transparent 55%),
-    linear-gradient(#29353e, #627375 58%, #15242b);
+  background: #233c43;
 }
 
-.underground-city,
-.underground-vignette {
+.sub-underground .underground-city,
+.sub-underground .underground-vignette {
   position: absolute;
   width: 100%;
   height: 100%;
   inset: 0;
 }
 
-.underground-fog {
+.sub-underground .underground-fog {
   position: absolute;
-  inset: 25% -15% -15%;
-  background:
-    radial-gradient(ellipse at 12% 35%, #b6c8c92b, transparent 48%),
-    radial-gradient(ellipse at 86% 65%, #b6c8c93b, transparent 42%),
-    linear-gradient(transparent, #9db4b51c 65%, transparent);
+  inset: 10% -15%;
+  background: radial-gradient(ellipse at 65% 35%, #c4d9d133, transparent 58%);
 }
 
-.underground-vignette {
-  background: radial-gradient(ellipse at 50% 42%, transparent 28%, #071017a6 100%);
+.sub-underground .underground-fog-near {
+  inset: 35% -15% -15%;
+  background: radial-gradient(ellipse at 20% 45%, #c4d9d126, transparent 65%);
+}
+
+.sub-underground .underground-vignette {
+  background:
+    linear-gradient(transparent 30%, #0c161b66 65%, #0c161b 100%),
+    linear-gradient(90deg, #06101a66, transparent 30% 70%, #06101a66);
 }
 
 .sub-underground .sub-content {
-  padding-block: 64px 40px;
+  padding: clamp(180px, 20vw, 250px) 24px 56px;
 }
 
 .subscription-page.sub-underground .sub-card {
-  border-radius: 8px;
-  border-top: 2px solid #e5ad7880;
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  max-width: 960px;
+  border-radius: 20px;
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
 }
 
 .sub-underground .sub-card > .ant-card-body {
-  padding: 32px;
+  padding: 36px;
+}
+
+.sub-underground .sub-header {
+  margin-bottom: 26px;
+  padding-bottom: 24px;
 }
 
 .sub-underground .sub-brand-mark {
-  border-radius: 4px;
-  border: 1px solid #e5ad7866;
-  background: #e5ad7814;
-  color: #f1c69e;
-  box-shadow: inset 3px 0 #e5ad78;
+  width: 50px;
+  height: 50px;
+  border-radius: 14px;
+  border: 1px solid #e9b17e66;
+  background: linear-gradient(135deg, #e9b17e24, #e9b17e08);
+  color: #f5d4b5;
+  box-shadow: inset 0 1px #ffe0ad1f;
 }
 
 .sub-underground .sub-brand-title {
-  font-size: 22px;
+  font-size: clamp(22px, 3vw, 28px);
   font-weight: 650;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.035em;
+}
+
+.sub-underground .sub-brand-id {
+  color: #a4b8bc;
+  margin-top: 5px;
 }
 
 .sub-underground .sub-brand-id,
@@ -91,55 +108,92 @@
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
 }
 
-.sub-underground .sub-luna-description {
-  color: #b8c4c5;
-  line-height: 1.7;
-  margin-block: -8px 20px;
+.sub-underground .sub-description {
+  max-width: 62ch;
+  color: #bbc9ca;
+  line-height: 1.75;
+  margin-block: -8px 24px;
 }
 
-.sub-underground .sub-luna-connect {
+.sub-underground .sub-connect {
   width: 100%;
-  margin-bottom: 24px;
-  min-height: 46px;
+  margin-bottom: 28px;
+  min-height: 48px;
   font-weight: 650;
-  box-shadow: 0 6px 22px #e5ad7814;
+  border-radius: 10px;
+  box-shadow: 0 6px 24px #e9b17e14;
 }
 
 .sub-underground .sub-hero {
-  border-radius: 6px;
-  background: linear-gradient(115deg, #9bb9bc0c, #e5ad7808);
+  padding: 24px;
+  gap: 28px;
+  border: 1px solid #9ebfc426;
+  border-radius: 16px;
+  background: radial-gradient(ellipse at 0% 0%, #a3c5c711, transparent 65%), #07151c66;
 }
 
 .sub-underground .sub-big-num {
-  letter-spacing: -0.055em;
+  font-size: clamp(36px, 5vw, 48px);
+  letter-spacing: -0.05em;
+}
+
+.sub-underground .sub-stats {
+  gap: 8px;
+  padding-top: 16px;
+  margin-top: 16px;
+}
+
+.sub-underground .sub-stat {
+  border-radius: 8px;
+  padding: 10px;
 }
 
 .sub-underground .sub-row,
-.sub-underground .sub-qr-card,
-.sub-underground .sub-app-card,
-.sub-underground .toolbar-btn {
-  border-radius: 5px;
+.sub-underground .sub-qr-card {
+  border-radius: 10px;
+}
+
+.sub-underground .sub-row {
+  padding: 14px;
+  gap: 12px;
 }
 
 .sub-underground .sub-row:hover {
-  box-shadow: inset 3px 0 #e5ad78;
+  box-shadow: inset 2px 0 #e9b17e;
 }
 
 .sub-underground .sub-row-tag {
-  border-radius: 3px;
+  border-radius: 5px;
+}
+
+.sub-underground .toolbar-btn {
+  border: 1px solid #9ebfc433;
+  background: #9ebfc408;
+  color: #d7e2e1;
+}
+
+.sub-underground .sub-tabs {
+  margin-top: 32px;
 }
 
 .sub-underground .sub-tabs .ant-tabs-tab {
+  padding-block: 14px;
   font-weight: 600;
 }
 
-.sub-underground .sub-tabs .ant-tabs-ink-bar {
-  background: #e5ad78;
-  box-shadow: 0 0 12px #e5ad7833;
+.sub-underground .sub-tabs.ant-tabs .ant-tabs-ink-bar {
+  background: #e9b17e;
+  height: 2px;
+  box-shadow: 0 0 12px #e9b17e33;
+}
+
+.sub-underground .sub-qr-card {
+  background: #9ebfc408;
 }
 
 .sub-underground .sub-footer {
-  color: #a4b3b6;
+  color: #a4b8bc;
+  margin-top: 28px;
 }
 
 .sub-underground :where(a, button, [tabindex]):focus-visible {
@@ -147,16 +201,76 @@
   outline-offset: 4px;
 }
 
+@supports not (backdrop-filter: blur(1px)) {
+  .subscription-page.sub-underground .sub-card {
+    background: #102028;
+  }
+}
+
 @media (max-width: 600px) {
+  .sub-underground .underground-backdrop {
+    min-height: 500px;
+    height: 620px;
+  }
+
+  .sub-underground .underground-city {
+    width: 200%;
+    max-width: none;
+    inset-inline-start: -50%;
+  }
+
   .sub-underground .sub-content {
-    padding: 24px 12px;
+    padding: 180px 12px 24px;
   }
 
   .sub-underground .sub-card > .ant-card-body {
-    padding: 20px 16px;
+    padding: 24px 16px;
   }
 
-  .sub-underground .sub-brand-title {
-    font-size: 20px;
+  .sub-underground .sub-hero {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    padding: 20px 12px;
+    gap: 20px;
+  }
+
+  .sub-underground .sub-hero-summary {
+    width: 100%;
+    text-align: center;
+  }
+
+  .sub-underground .sub-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    text-align: start;
+  }
+
+  .sub-underground .sub-row {
+    padding: 12px 10px;
+    gap: 8px;
+  }
+}
+
+@media (max-width: 600px) {
+  .sub-underground .sub-rows .sub-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    gap: 10px;
+  }
+
+  .sub-underground .sub-rows .sub-row-title {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.5;
+  }
+
+  .sub-underground .sub-rows .sub-row-actions {
+    grid-column: 2;
+    justify-content: flex-end;
+  }
+
+  .sub-underground .sub-row-actions .ant-btn {
+    min-width: 40px;
+    min-height: 40px;
   }
 }
