@@ -384,6 +384,9 @@ func enableTelemtWebProxy(ctx context.Context, domain, panelCert, panelKey strin
 		return TelemtWebProxyStatus{}, errors.New("TCP 443 занят другим сервисом")
 	}
 	oldState := state
+	// Validate and select a certificate for the *new* primary hostname, not
+	// the saved hostname of a previous WEB installation.
+	state.Domain = domain
 	state.Frontend, state.Carrier, state.Carriers = options.Frontend, options.Carrier, options.Carriers
 	if options.BasePath != nil {
 		state.BasePath = *options.BasePath
