@@ -30,7 +30,11 @@ management := map[string]bool{"GET /panel/api/setting/cores": false, "POST /pane
 			nativeRestart = true
 		}
 	}
-	for route, registered := range management { if !registered { t.Errorf("core route missing: %s", route) } }
+	for route, registered := range management {
+		if !registered {
+			t.Errorf("core route missing: %s", route)
+		}
+	}
 	if !nativeRestart {
 		t.Fatal("sole-core restart route is missing")
 	}

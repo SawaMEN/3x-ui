@@ -123,6 +123,7 @@ func TestInstallChecksAndAtomicallyPublishes(t *testing.T) {
 		}
 	}
 }
+
 func TestAssetNames(t *testing.T) {
 	for _, tc := range []struct{ core, arch, arm, want string }{
 		{"xray", "amd64", "", "Xray-linux-64.zip"}, {"xray", "arm64", "", "Xray-linux-arm64-v8a.zip"}, {"xray", "arm", "6", "Xray-linux-arm32-v6.zip"},
@@ -140,6 +141,7 @@ func TestAssetNames(t *testing.T) {
 		t.Fatal("unknown ARM accepted")
 	}
 }
+
 func TestDigestAndArchiveRejection(t *testing.T) {
 	want := strings.Repeat("a", 64)
 	got, err := xrayDigest([]byte("SHA2-256 (Xray.zip) = " + want + "\nSHA2-512 (Xray.zip) = " + strings.Repeat("b", 128)))

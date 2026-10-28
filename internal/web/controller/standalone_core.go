@@ -35,6 +35,7 @@ func (a *SettingController) coreStatuses(c *gin.Context) {
 	}
 	jsonObj(c, gin.H{"selected": selected, "cores": statuses}, nil)
 }
+
 func (a *SettingController) installStandaloneCore(c *gin.Context) {
 	coreManagementMu.Lock()
 	defer coreManagementMu.Unlock()
@@ -52,6 +53,7 @@ func (a *SettingController) installStandaloneCore(c *gin.Context) {
 	version, err := service.InstallStandaloneCore(ctx, c.Param("core"), form.Version)
 	jsonObj(c, gin.H{"version": version}, err)
 }
+
 func (a *SettingController) selectStandaloneCore(c *gin.Context) {
 	coreManagementMu.Lock()
 	defer coreManagementMu.Unlock()
