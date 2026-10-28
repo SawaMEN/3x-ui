@@ -26,6 +26,10 @@ type telemtWebReloadEnvelope struct {
 // User-only WEB profile changes can be activated by Telemt without restarting
 // the process. Changes to admission capacity remain restart-only.
 func (s TelemtService) SaveWebUsersHotReload(cfg TelemtConfig) error {
+	// Serialize with panel edits, WEB enable/disable, and ordinary proxy
+	// management so no concurrent writer can overwrite a newer config.
+	telemtWebOperationMu.Lock()
+	defer telemtWebOperationMu.Unlock()
 	rendered, err := renderTelemtConfig(cfg)
 	if err != nil {
 		return err
