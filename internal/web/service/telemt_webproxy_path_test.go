@@ -74,6 +74,9 @@ func TestTelemtWebOriginSecurity(t *testing.T) {
 	if err := validateTelemtWebSite(&TelemtWebSiteOptions{Mode: "origin", Origin: "http://127.0.0.1:8080"}); err != nil {
 		t.Fatal(err)
 	}
+	if err := validateTelemtWebSite(&TelemtWebSiteOptions{Mode: "origin", Origin: "http://127.0.0.1:8080/"}); err != nil {
+		t.Fatalf("trailing slash on local origin should be supported: %v", err)
+	}
 	if err := validateTelemtWebSite(&TelemtWebSiteOptions{Mode: "origin", Origin: "http://[::1]:18081"}); err != nil {
 		t.Fatal(err)
 	}
