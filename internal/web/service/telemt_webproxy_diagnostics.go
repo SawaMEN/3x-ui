@@ -31,14 +31,14 @@ func (TelemtService) WebProxyRuntimeDiagnostics(ctx context.Context) (TelemtWebR
 	if !state.Enabled {
 		return TelemtWebRuntimeDiagnostics{}, errors.New("WEB Proxy не включён")
 	}
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 5 * time.Second)
 	defer cancel()
 	request, err := telemtAPIRequest(http.MethodGet, "/v1/runtime/web/status")
 	if err != nil {
 		return TelemtWebRuntimeDiagnostics{}, err
 	}
 	request = request.WithContext(ctx)
-	client := &http.Client{Timeout: 5*time.Second, Transport: telemtMonitorTransport{ctx}}
+	client := &http.Client{Timeout: 5 * time.Second, Transport: telemtMonitorTransport{ctx}}
 	response, err := client.Do(request)
 	if err != nil {
 		return TelemtWebRuntimeDiagnostics{}, fmt.Errorf("Telemt WEB runtime API: %w", err)
@@ -65,7 +65,7 @@ func (TelemtService) WebProxyRuntimeDiagnostics(ctx context.Context) (TelemtWebR
 			} `json:"runtime"`
 		} `json:"data"`
 	}
-	if err := json.NewDecoder(io.LimitReader(response.Body, 256<<10)).Decode(&payload); err != nil {
+	if err := json.NewDecoder(io.LimitReader(response.Body, 256 << 10)).Decode(&payload); err != nil {
 		return TelemtWebRuntimeDiagnostics{}, fmt.Errorf("ошибка чтения WEB runtime: %w", err)
 	}
 	if !payload.OK {
@@ -77,12 +77,12 @@ func (TelemtService) WebProxyRuntimeDiagnostics(ctx context.Context) (TelemtWebR
 		sessions = &count
 	}
 	return TelemtWebRuntimeDiagnostics{
-		ActiveSessions: sessions,
-		Available: payload.Data.Available,
-		Lifecycle: payload.Data.Lifecycle,
-		Listeners: payload.Data.Listeners,
-		Capacity: payload.Data.Capacity,
+		ActiveSessions:     sessions,
+		Available:          payload.Data.Available,
+		Lifecycle:          payload.Data.Lifecycle,
+		Listeners:          payload.Data.Listeners,
+		Capacity:           payload.Data.Capacity,
 		CarrierNegotiation: payload.Data.CarrierNegotiation,
-		CheckedAt: time.Now().UTC(),
+		CheckedAt:          time.Now().UTC(),
 	}, nil
 }
