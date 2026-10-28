@@ -88,7 +88,7 @@ func validateTelemtWebSite(site *TelemtWebSiteOptions) error {
 // arbitrary remote URL, credentials, redirects, paths or DNS rebinding.
 func validateTelemtWebOrigin(raw string) error {
 	u, err := url.Parse(raw)
-	if err != nil || u.Scheme != "http" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" {
+	if err != nil || u.Scheme != "http" || u.User != nil || (u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" {
 		return errors.New("WEB origin must be http://127.0.0.1:PORT (without path, query or credentials)")
 	}
 	ip := net.ParseIP(u.Hostname())
