@@ -295,6 +295,16 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	}
 
 	if assetsFS != nil {
+		// Vite fingerprints JS/CSS/font asset names; the files are public and
+		// content-addressed. Cache them across page visits without caching the
+		// subscriber-specific HTML or subscription response bodies.
+		engine.Use(func(c *gin.Context) {
+			path := c.Request.URL.Path
+			if strings.HasPrefix(path, "/assets/") || strings.HasPrefix(path, linksPathForAssets+"/") {
+				c.Header("Cache-Control", "public, max-age=31536000, immutable")
+			}
+			c.Next()
+		})
 		engine.StaticFS("/assets", assetsFS)
 		if linksPathForAssets != "/assets" {
 			engine.StaticFS(linksPathForAssets, assetsFS)

@@ -38,7 +38,7 @@ export function lunaTheme() {
       colorBgElevated: '#1c2940',
       colorBorder: '#3b4861',
       borderRadius: 14,
-      fontFamily: '"Inter Variable", Inter, system-ui, -apple-system, sans-serif',
+      fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif",
     },
   };
 }

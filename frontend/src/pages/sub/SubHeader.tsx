@@ -7,6 +7,7 @@ import { LanguageManager } from '@/utils';
 
 interface SubHeaderProps {
   isDark: boolean;
+  isLuna?: boolean;
   title: string;
   logoURL?: string;
   sId: string;
@@ -18,6 +19,7 @@ interface SubHeaderProps {
 export default function SubHeader({
   title,
   isDark,
+  isLuna = false,
   logoURL,
   sId,
   email,
@@ -70,7 +72,7 @@ export default function SubHeader({
       </div>
       <div className="sub-toolbar">
         <Popover
-          rootClassName={isDark ? 'dark' : 'light'}
+          rootClassName={isLuna ? 'sub-luna-popover dark' : isDark ? 'dark' : 'light'}
           placement="bottomRight"
           trigger="click"
           styles={{ content: { padding: 4 } }}

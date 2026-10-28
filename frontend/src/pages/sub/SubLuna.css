@@ -1,28 +1,28 @@
-@import '@fontsource-variable/inter/index.css';
-
 .subscription-page.sub-luna {
   --sub-accent: #ead29b;
   --sub-grad-from: #ead29b;
   --sub-grad-to: #b8c8e8;
   --sub-ink-from: #f7e7c1;
   --sub-ink-to: #c8d8f3;
-  --sub-tile-bg: #182238;
-  --sub-tile-border: #2b3851;
-  --sub-row-bg: #151f33;
-  --sub-row-border: #2b3851;
-  --sub-row-bg-hover: #1d2b43;
-  --sub-row-border-hover: #7e7865;
-  --sub-glass-bg: #1b263d;
-  --sub-hairline: linear-gradient(90deg, transparent, #3b4861, transparent);
-  --sub-card-bg: #111a2c;
-  --sub-card-border: #2b3851;
-  --sub-card-shadow: 0 24px 80px #00000038;
+  /* Dark frosted glass: preserve the night sky behind cards and rows. */
+  --sub-tile-bg: rgba(27, 42, 69, 0.32);
+  --sub-tile-border: rgba(188, 208, 247, 0.17);
+  --sub-row-bg: rgba(20, 34, 57, 0.28);
+  --sub-row-border: rgba(188, 208, 247, 0.14);
+  --sub-row-bg-hover: rgba(36, 53, 82, 0.46);
+  --sub-row-border-hover: rgba(234, 210, 155, 0.38);
+  --sub-glass-bg: rgba(28, 43, 69, 0.3);
+  --sub-hairline: linear-gradient(90deg, transparent, rgba(188, 208, 247, 0.25), transparent);
+  --sub-card-bg: rgba(12, 19, 35, 0.52);
+  --sub-card-border: rgba(199, 219, 253, 0.22);
+  --sub-card-shadow: 0 20px 64px rgba(0, 0, 0, 0.32);
   --sub-row-glow: transparent;
   min-height: 100dvh;
   background: #090e1c;
   color: #f1f3fa;
-  font-family: 'Inter Variable', Inter, system-ui, -apple-system, sans-serif;
-  line-height: 1.6;
+  /* Avoid a render-blocking webfont download for the public page. */
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  line-height: 1.5;
 }
 
 .luna-backdrop {
@@ -46,12 +46,13 @@
   height: var(--star-size);
   border-radius: 50%;
   background: #d9e5ff;
-  opacity: 0.65;
-  animation: luna-twinkle var(--star-duration) var(--star-delay) ease-in-out infinite;
+  opacity: 0.78;
+  /* Only a quarter of the stars animate to reduce continuous paint work. */
 }
 .luna-stars span:nth-child(4n) {
   background: #f6d58a;
   box-shadow: 0 0 6px #f6d58a66;
+  animation: luna-twinkle var(--star-duration) var(--star-delay) ease-in-out infinite;
 }
 .luna-stars span:nth-child(7n) {
   background: #ffe9b5;
@@ -112,12 +113,13 @@
   width: 100%;
   max-width: 1000px;
   margin-inline: auto;
-  padding: 176px 28px 40px;
+  padding: clamp(28px, 5vw, 64px) 24px 36px;
 }
 .subscription-page.sub-luna .sub-card {
   max-width: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
+  /* A small blur keeps stars perceptible through the translucent card. */
+  -webkit-backdrop-filter: blur(10px) saturate(125%);
+  backdrop-filter: blur(10px) saturate(125%);
   border-radius: 24px;
 }
 .sub-luna .sub-card::before,
@@ -167,8 +169,6 @@
 .sub-luna .toolbar-btn.ant-btn {
   width: 44px;
   height: 44px;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
 }
 .sub-luna-description {
   margin: 0 0 20px;
@@ -234,15 +234,19 @@
 
 @media (max-width: 640px) {
   .sub-luna .sub-content {
-    padding: 100px 12px 24px;
+    padding: 24px 12px 24px;
   }
   .luna-moon-orbit {
     top: 16px;
     inset-inline-end: 24px;
     width: 68px;
   }
-  .luna-stars span:nth-child(n + 25) {
+  .luna-stars span:nth-child(n + 37) {
     display: none;
+  }
+  .subscription-page.sub-luna .sub-card {
+    -webkit-backdrop-filter: blur(6px) saturate(120%);
+    backdrop-filter: blur(6px) saturate(120%);
   }
   .sub-luna .sub-card {
     border-radius: 20px;
@@ -297,6 +301,17 @@
     flex-basis: 55%;
   }
 }
+/* The language popup is mounted outside the card, so frost it separately. */
+.sub-luna-popover .ant-popover-inner {
+  background: rgba(16, 26, 45, 0.72);
+  -webkit-backdrop-filter: blur(10px) saturate(125%);
+  backdrop-filter: blur(10px) saturate(125%);
+  border: 1px solid rgba(199, 219, 253, 0.2);
+}
+.sub-luna-popover .ant-menu {
+  background: transparent;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .luna-stars span,
   .luna-moon-orbit,
