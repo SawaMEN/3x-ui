@@ -77,7 +77,7 @@ func (s TelemtService) SaveWebUsersHotReload(cfg TelemtConfig) error {
 		if recoveryErr := telemtWebReloadRuntime(recoveryCtx); recoveryErr != nil {
 			// Last resort: keep the old service available.
 			if restartErr := systemctl("restart", telemtServiceName); restartErr != nil {
-				return fmt.Errorf("Telemt hot reload failed (%v); rollback reload failed (%v); restart failed: %w", err, recoveryErr, restartErr)
+				return fmt.Errorf("Telemt hot reload failed (%w); rollback reload failed (%w); restart failed: %w", err, recoveryErr, restartErr)
 			}
 		}
 		return fmt.Errorf("Telemt user/profile reload failed; previous configuration restored: %w", err)
@@ -136,7 +136,10 @@ func telemtWebReloadRuntime(ctx context.Context) error {
 	for {
 		code, status, err := perform(http.MethodGet, "/v1/system/reload/"+strconv.FormatUint(accepted.Data.ReloadID, 10))
 		if err != nil || code != http.StatusOK || !status.OK {
-			return fmt.Errorf("Telemt WEB reload status unavailable: HTTP %d, %v", code, err)
+			if err != nil {
+				return fmt.Errorf("Telemt WEB reload status unavailable (HTTP %d): %w", code, err)
+			}
+			return fmt.Errorf("Telemt WEB reload status unavailable (HTTP %d)", code)
 		}
 		switch strings.ToLower(status.Data.State) {
 		case "succeeded":
