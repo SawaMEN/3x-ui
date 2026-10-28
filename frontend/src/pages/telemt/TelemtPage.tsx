@@ -200,7 +200,14 @@ export default function TelemtPage() {
   const [webPreflight, setWebPreflight] = useState<WebPreflight | null>(null);
   const [webPreflightRefresh, setWebPreflightRefresh] = useState(0);
   const webForm = useZodForm(TelemtWebProxyRequestSchema, {
-    defaultValues: { domain: '', aliases: [], basePath: '', frontend: 'nginx', carrier: 'https', carriers: [] },
+    defaultValues: {
+      domain: '',
+      aliases: [],
+      basePath: '',
+      frontend: 'nginx',
+      carrier: 'https',
+      carriers: [],
+    },
   });
   const webProxyDomain = webForm.watch('domain');
   const webBasePath = webForm.watch('basePath');
@@ -952,7 +959,12 @@ export default function TelemtPage() {
                 label="Дополнительные WEB-домены"
                 extra="До 7 доменов. Необходим существующий сертификат SAN/wildcard на все имена."
               >
-                <Select mode="tags" tokenSeparators={[',', ' ']} placeholder="web2.example.com" disabled={webProxyLoading} />
+                <Select
+                  mode="tags"
+                  tokenSeparators={[',', ' ']}
+                  placeholder="web2.example.com"
+                  disabled={webProxyLoading}
+                />
               </FormField>
               <FormField
                 name="basePath"
@@ -1099,7 +1111,11 @@ export default function TelemtPage() {
             onClick={() => {
               setWebDiagnosticsLoading(true);
               setWebDiagnosticsError('');
-              void HttpUtil.get<WebDiagnostics>('/panel/api/telemt/webproxy/diagnostics', undefined, { silent: true })
+              void HttpUtil.get<WebDiagnostics>(
+                '/panel/api/telemt/webproxy/diagnostics',
+                undefined,
+                { silent: true },
+              )
                 .then((response) => {
                   if (response?.success && response.obj) {
                     setWebDiagnostics(response.obj);
@@ -1127,12 +1143,18 @@ export default function TelemtPage() {
               <Descriptions.Item label="Активные WEB-сессии">
                 {webDiagnostics.activeSessions ?? 'нет данных'}
               </Descriptions.Item>
-              <Descriptions.Item label="Слушатели">{webDiagnostics.listeners?.join(', ') || '—'}</Descriptions.Item>
+              <Descriptions.Item label="Слушатели">
+                {webDiagnostics.listeners?.join(', ') || '—'}
+              </Descriptions.Item>
               <Descriptions.Item label="Ёмкость">
-                <Typography.Text code>{JSON.stringify(webDiagnostics.capacity ?? {})}</Typography.Text>
+                <Typography.Text code>
+                  {JSON.stringify(webDiagnostics.capacity ?? {})}
+                </Typography.Text>
               </Descriptions.Item>
               <Descriptions.Item label="Согласование транспорта">
-                <Typography.Text code>{JSON.stringify(webDiagnostics.carrierNegotiation ?? {})}</Typography.Text>
+                <Typography.Text code>
+                  {JSON.stringify(webDiagnostics.carrierNegotiation ?? {})}
+                </Typography.Text>
               </Descriptions.Item>
             </Descriptions>
           )}
@@ -1140,18 +1162,20 @@ export default function TelemtPage() {
           {status.webProxy.enabled && status.webProxy.link && (
             <div>
               <Typography.Text strong>Ссылки для Telegram</Typography.Text>
-              {(status.webProxy.links?.length ? status.webProxy.links : [status.webProxy.link]).map((link) => (
-                <div className="telemt-link-box telemt-link-box-large" key={link}>
-                  <Typography.Text code>{link}</Typography.Text>
-                  <Button
-                    type="text"
-                    icon={<CopyOutlined />}
-                    onClick={() => void navigator.clipboard.writeText(link)}
-                  >
-                    Копировать
-                  </Button>
-                </div>
-              ))}
+              {(status.webProxy.links?.length ? status.webProxy.links : [status.webProxy.link]).map(
+                (link) => (
+                  <div className="telemt-link-box telemt-link-box-large" key={link}>
+                    <Typography.Text code>{link}</Typography.Text>
+                    <Button
+                      type="text"
+                      icon={<CopyOutlined />}
+                      onClick={() => void navigator.clipboard.writeText(link)}
+                    >
+                      Копировать
+                    </Button>
+                  </div>
+                ),
+              )}
             </div>
           )}
         </Space>
