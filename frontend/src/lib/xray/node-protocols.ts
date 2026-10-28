@@ -42,7 +42,7 @@ export interface NodeCoreInfo {
 
 function normalizeCore(value?: string | null): 'xray' | 'singbox' | '' {
   const normalized = (value ?? '').trim().toLowerCase().replaceAll('-', '');
-  if (normalized === 'hiddifycore') return 'singbox';
+  if (normalized === 'hiddifycore' || normalized === 'singboxupstream') return 'singbox';
   if (normalized === 'singbox') return 'singbox';
   if (normalized === 'xray') return 'xray';
   return '';

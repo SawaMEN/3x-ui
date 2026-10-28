@@ -109,20 +109,20 @@ test('groups host tools under additional settings instead of separate sidebar en
   expect(screen.queryByText('Proxy Core')).toBeNull();
   expect(screen.queryByText('Swap / ZRAM')).toBeNull();
   expect(screen.queryByText('API Docs')).toBeNull();
-  expect(screen.getByText('Core settings')).toBeTruthy();
+  expect(screen.getByText('Xray')).toBeTruthy();
 });
 
 test('shows only the active core configuration menu', () => {
   vi.mocked(useAllSettings).mockReturnValue({ allSetting: { coreType: 'xray' } } as never);
   const xrayView = renderWithProviders(
-    <MemoryRouter initialEntries={['/singbox#basic']}>
+    <MemoryRouter initialEntries={['/xray#basic']}>
       <AppSidebar />
     </MemoryRouter>,
   );
 
   const xrayRoot = xrayView.container.querySelector('.ant-sidebar');
   fireEvent.mouseEnter(xrayRoot!);
-  expect(screen.getByText('Core settings')).toBeTruthy();
+  expect(screen.getByText('Xray')).toBeTruthy();
   expect(screen.getAllByText('General').length).toBeGreaterThan(0);
   expect(screen.queryByText('Xray Configs')).toBeNull();
   expect(screen.queryByText('Proxy Core')).toBeNull();

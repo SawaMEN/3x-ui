@@ -239,7 +239,7 @@ func checkIPOrCIDRList(list, message string) error {
 }
 
 func (s *AllSetting) CheckValid() error {
-	if s.CoreType != "" && s.CoreType != "xray" && s.CoreType != "sing-box" && s.CoreType != "hiddify-core" {
+	if s.CoreType != "" && s.CoreType != "xray" && s.CoreType != "sing-box" && s.CoreType != "hiddify-core" && s.CoreType != "sing-box-upstream" {
 		return common.NewError("core type is not supported:", s.CoreType)
 	}
 

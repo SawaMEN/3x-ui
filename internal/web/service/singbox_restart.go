@@ -43,6 +43,14 @@ func (s *SingBoxService) ApplyPendingRestart(ctx context.Context) {
 	if ctx.Err() != nil {
 		return
 	}
+	if s.coreType() == CoreTypeXray {
+		if s.IsRunning() && s.IsNeedRestartAndSetFalse() {
+			if err := s.Restart(ctx); err != nil {
+				s.SetToNeedRestart()
+			}
+		}
+		return
+	}
 	// Another cron tick must not consume a flag raised during an in-flight apply.
 	if !nativePendingApplyMu.TryLock() {
 		return

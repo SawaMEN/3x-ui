@@ -72,6 +72,9 @@ func (s *SingBoxService) pauseGateway(ctx context.Context) (func() error, error)
 // The watchdog also repairs network state after a crash, an interrupted panel
 // restart or a failed firewall restore. It never enables an operator suspension.
 func (s *SingBoxService) ReconcileGateway(ctx context.Context) error {
+	if s.coreType() == CoreTypeXray {
+		return nil
+	}
 	singBoxApplyMu.Lock()
 	defer singBoxApplyMu.Unlock()
 	selected, err := singBoxSettingService.GetCoreType()

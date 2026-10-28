@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/hiddify"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
@@ -20,7 +21,7 @@ func assertStopped() error {
 		return err
 	}
 	configs := map[string]bool{}
-	for _, p := range []string{xray.GetConfigPath(), singbox.GetConfigPath(), hiddify.GetConfigPath()} {
+	for _, p := range []string{xray.GetConfigPath(), singbox.GetConfigPath(), hiddify.GetConfigPath(), filepath.Join(filepath.Dir(config.OwnerCoreBinaryPath()), "xray.json"), filepath.Join(filepath.Dir(config.OwnerCoreBinaryPath()), "sing-box-upstream.json")} {
 		a, err := filepath.Abs(p)
 		if err != nil {
 			return err

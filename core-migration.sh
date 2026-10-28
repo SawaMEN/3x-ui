@@ -270,7 +270,7 @@ core_migration_restore_custom_bin_files() {
         rel="${asset#"$source"/}"
         case "$rel" in
             config.json | mtg-linux-* | mtproto | mtproto/* | tuic | tuic/* | mieru | mieru/* | \
-            xray | xray-linux-* | sing-box | sing-box-* | hiddify-core-linux-* | \
+            hiddify-core-linux-* | \
             telemt | telemt-* | README.md | LICENSE) continue ;;
         esac
         # The release's updated binaries and geodata win. Restore only
@@ -326,14 +326,8 @@ core_migration_commit() {
     if [[ "${cm_had_service:-1}" == 1 && "${cm_was_enabled:-0}" == 0 ]]; then
         if [[ "$release" == alpine ]]; then rc-update del x-ui || return 1; else systemctl disable x-ui || return 1; fi
     fi
-    # Legacy executables are removed only after the owner runtime is verified.
-    # The installation snapshot keeps them available until verification.
-    local legacy root
-    for root in "$xui_folder/bin" "$XUI_BIN_FOLDER"; do
-        for legacy in "$root"/xray "$root"/xray-* "$root"/sing-box "$root"/sing-box-*; do
-            [[ ! -f "$legacy" || ! -x "$legacy" ]] || rm -f -- "$legacy" || return 1
-        done
-    done
+    # Standalone Xray and sing-box are panel-managed choices. Retain their
+    # binaries/configs across upgrades alongside the verified bundled kernel.
     cm_active=0
     cm_stopped=0
     [[ -z "${cm_stage:-}" ]] || rm -rf -- "$cm_stage"

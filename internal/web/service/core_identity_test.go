@@ -40,8 +40,8 @@ func TestOwnerSingBoxCanonicalIdentity(t *testing.T) {
 			t.Fatal("owner TUN extension lost")
 		}
 	}
-	if err := settings.SetCoreType(CoreTypeXray); err == nil {
-		t.Fatal("removed Xray engine remains selectable")
+	if err := settings.SetCoreType(CoreTypeXray); err != nil {
+		t.Fatal(err)
 	}
 	if hiddify.NewRuntime("", true).Type() != core.SingBox {
 		t.Fatal("runtime exposes wrong identity")

@@ -1,5 +1,7 @@
+import { useAllSettings } from '@/api/queries/useAllSettings';
 import SingBoxRoutePage from './singbox/SingBoxRoutePage';
-// Shared menu paths always edit the sole managed core.
+import XrayPage from './xray/XrayPage';
 export default function CoreConfigRoutePage() {
-  return <SingBoxRoutePage />;
+  const { allSetting } = useAllSettings();
+  return allSetting.coreType === 'xray' ? <XrayPage /> : <SingBoxRoutePage />;
 }

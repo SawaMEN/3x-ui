@@ -491,8 +491,9 @@ func (s *SettingService) SetWarpUpdateInterval(val int) error {
 }
 
 const (
-	CoreTypeXray    = "xray"
-	CoreTypeSingBox = "sing-box"
+	CoreTypeSingBoxUpstream = "sing-box-upstream"
+	CoreTypeXray            = "xray"
+	CoreTypeSingBox         = "sing-box"
 	// Deprecated: the owner kernel identifies as sing-box.
 	CoreTypeHiddify       = CoreTypeSingBox
 	legacyCoreTypeHiddify = "hiddify-core"
@@ -524,6 +525,13 @@ func (s *SettingService) SetCoreType(coreType string) error {
 	coreType = canonicalCoreType(coreType)
 	if !isSupportedCoreType(coreType) {
 		return common.NewError("core type is not supported:", coreType)
+	}
+	// Distinguish an explicit selection made by a standalone-capable panel
+	// from an old Xray database which still needs canonical-user migration.
+	if coreType == CoreTypeXray || coreType == CoreTypeSingBoxUpstream {
+		if err := s.setString("standaloneCoreSelection", "enabled"); err != nil {
+			return err
+		}
 	}
 	return s.setString("coreType", coreType)
 }

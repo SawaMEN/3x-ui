@@ -282,15 +282,25 @@ function AppSidebar() {
       { key: '/routing', icon: 'routing' as IconName, title: t('menu.routing') },
       { key: '/settings', icon: 'setting' as IconName, title: t('menu.settings') },
       {
-        key: '/singbox',
+        key: allSetting.coreType === 'xray' ? '/xray' : '/singbox',
         icon: 'tool' as IconName,
-        title: t('menu.singBox'),
-        children: singBoxChildren,
+        title: allSetting.coreType === 'xray' ? 'Xray' : t('menu.singBox'),
+        children:
+          allSetting.coreType === 'xray'
+            ? singBoxChildren
+                .filter(
+                  (item) =>
+                    item && !['/singbox#adblock', '/singbox#gateway'].includes(String(item.key)),
+                )
+                .map((item) =>
+                  item ? { ...item, key: String(item.key).replace('/singbox', '/xray') } : item,
+                )
+            : singBoxChildren,
       },
       { key: LOGOUT_KEY, icon: 'logout' as IconName, title: t('logout') },
     ];
     return base;
-  }, [t, singBoxChildren, olcrtcInstalled]);
+  }, [t, singBoxChildren, olcrtcInstalled, allSetting.coreType]);
 
   const navItems = useMemo(() => tabs.filter((tab) => tab.icon !== 'logout'), [tabs]);
   const utilItems = useMemo(() => tabs.filter((tab) => tab.icon === 'logout'), [tabs]);
@@ -302,7 +312,7 @@ function AppSidebar() {
   const selectedKey = settingsActive
     ? `/settings${getAdditionalSettingsTab(hash) ? '#advanced' : hash || '#general'}`
     : xrayActive
-      ? `/singbox${hash || '#basic'}`
+      ? `/xray${hash || '#basic'}`
       : singBoxActive
         ? `/singbox${hash || '#basic'}`
         : pathname === ''
@@ -314,7 +324,7 @@ function AppSidebar() {
     : settingsActive
       ? '/settings'
       : xrayActive
-        ? '/singbox'
+        ? '/xray'
         : singBoxActive
           ? '/singbox'
           : null;

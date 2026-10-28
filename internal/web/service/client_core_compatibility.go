@@ -169,7 +169,7 @@ func SyncClientCoreCompatibility(oldCore, newCore string) error {
 }
 
 func isSupportedCoreType(core string) bool {
-	return IsNativeCore(core)
+	return IsNativeCore(core) || core == CoreTypeXray
 }
 
 // CoreSupportsInboundProtocol exposes the same policy to offline migration preflight.
@@ -182,6 +182,13 @@ func coreSupportsInboundProtocol(core string, protocol model.Protocol) bool {
 	case CoreTypeXray:
 		switch protocol {
 		case model.NaiveProxy, model.MASQUE, model.Snell, model.AnyTLS, model.ShadowTLS:
+			return false
+		default:
+			return true
+		}
+	case CoreTypeSingBoxUpstream:
+		switch protocol {
+		case model.Tunnel, model.Snell, model.MASQUE:
 			return false
 		default:
 			return true

@@ -60,6 +60,7 @@ func configExecutablePath() string {
 }
 
 type ProcessOptions struct {
+	Xray             bool
 	Name             string
 	Binary           string
 	RunCommand       string
@@ -313,7 +314,11 @@ func (p *Process) Validate(ctx context.Context) error {
 	}
 	cmdCtx, cancel := context.WithTimeout(ctx, defaultCommandTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(cmdCtx, binary, "check", "-c", cfg)
+	args := []string{"check", "-c", cfg}
+	if p.profile != nil && p.profile.Xray {
+		args = []string{"run", "-test", "-c", cfg}
+	}
+	cmd := exec.CommandContext(cmdCtx, binary, args...)
 	cmd.Dir = filepath.Dir(binary)
 	cmd.Env = clientlimit.Default.Environment(os.Environ())
 	output, err := cmd.CombinedOutput()
@@ -347,7 +352,7 @@ func (p *Process) Version(ctx context.Context) (string, error) {
 			return "", fmt.Errorf("unexpected %s version output: %s", p.coreName(), strings.TrimSpace(firstLine))
 		}
 		fields := strings.Fields(strings.TrimPrefix(firstLine, p.profile.VersionPrefix))
-		if len(fields) == 0 || fields[0] != p.profile.RequiredVersion {
+		if len(fields) == 0 || (p.profile.RequiredVersion != "" && fields[0] != p.profile.RequiredVersion) {
 			return "", fmt.Errorf("expected core %s, received %s", p.profile.RequiredVersion, strings.TrimSpace(string(output)))
 		}
 		version = fields[0]

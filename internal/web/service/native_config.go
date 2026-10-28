@@ -645,6 +645,14 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot, ed
 			cfg.Log = map[string]any{"level": "info"}
 		}
 		cfg.Log["output"] = s.logPath()
+		if s.coreType() == CoreTypeSingBoxUpstream {
+			// Official release binaries omit with_v2ray_api. Do not generate
+			// an experimental service which prevents those binaries starting.
+			delete(cfg.Experimental, "v2ray_api")
+			if _, exists := cfg.Experimental["clash_api"]; !exists {
+				cfg.Experimental["clash_api"] = map[string]any{"external_controller": "127.0.0.1:10090"}
+			}
+		}
 	}
 
 	return cfg, nil

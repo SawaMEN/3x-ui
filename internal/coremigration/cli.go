@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/hiddify"
+	"github.com/SawaMEN/3x-ui/v3/internal/web/service"
 )
 
 func CLI(args []string) error { return CLIWithInitializer(args, nil) }
@@ -43,7 +44,16 @@ func CLIWithInitializer(args []string, initialize func() error) error {
 	ctx, cancel := context.WithTimeout(signalCtx, 5*time.Minute)
 	defer cancel()
 	if verifyRunning {
-		process := hiddify.NewProcess(hiddify.GetConfigPath(), false)
+		values, err := storedCoreSettings(ctx)
+		if err != nil {
+			return err
+		}
+		kind := service.CoreTypeSingBox
+		if standaloneSelected(values) {
+			kind = values["coreType"]
+		}
+		service.InitializeNativeCoreRuntime()
+		process := service.NativeCore(kind)
 		if _, err := process.Version(ctx); err != nil {
 			return err
 		}
@@ -57,7 +67,7 @@ func CLIWithInitializer(args []string, initialize func() error) error {
 			}
 			select {
 			case <-deadline.C:
-				return fmt.Errorf("restarted panel has no owner sing-box process")
+				return fmt.Errorf("restarted panel has no selected core process")
 			case <-ctx.Done():
 				return ctx.Err()
 			case <-tick.C:

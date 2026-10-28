@@ -31,7 +31,7 @@ export type SubHostSortMode = z.infer<typeof SubHostSortModeSchema>;
 
 export const AllSettingSchema = z
   .object({
-    coreType: z.enum(['xray', 'sing-box']).optional(),
+    coreType: z.enum(['xray', 'sing-box', 'sing-box-upstream']).optional(),
     webListen: z.string().optional(),
     webDomain: z.string().optional(),
     webPort: port.optional(),

@@ -16,7 +16,11 @@ import (
 // process must use the same final paths as config writers and offline migration.
 func TestHiddifyRuntimeUsesEnvironmentLoadedAfterPackageInitialization(t *testing.T) {
 	previousRuntime, previousOwner := hiddifyRuntime, hiddifyProcess
-	t.Cleanup(func() { hiddifyRuntime, hiddifyProcess = previousRuntime, previousOwner })
+	previousUpstream, previousXray := upstreamProcess, standaloneXrayProcess
+	t.Cleanup(func() {
+		hiddifyRuntime, hiddifyProcess = previousRuntime, previousOwner
+		upstreamProcess, standaloneXrayProcess = previousUpstream, previousXray
+	})
 	t.Setenv("XUI_BIN_FOLDER", t.TempDir())
 	binary := hiddify.GetBinaryPath()
 	script := fmt.Sprintf("#!/bin/sh\nprintf 'hiddify-core version %s\\nTags: with_xui_panel,with_v2ray_api,with_awg,with_quic,with_wireguard,with_clash_api,with_utls,with_masque,with_gvisor,with_naive_outbound,with_purego,tfogo_checklinkname0\\nRevision: %s\\n'\n", hiddify.TargetVersion, hiddify.TargetRevision)

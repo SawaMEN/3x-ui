@@ -2,7 +2,7 @@ import { ObjectUtil } from '@/utils';
 import type { SubProfileMode, SubHostSortMode, SubscriptionTheme } from '@/schemas/setting';
 
 export class AllSetting {
-  coreType: 'xray' | 'sing-box' = 'sing-box';
+  coreType: 'xray' | 'sing-box' | 'sing-box-upstream' = 'sing-box';
   webListen = '';
   webDomain = '';
   webPort = 2053;

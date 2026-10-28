@@ -229,6 +229,16 @@ func (r runner) run(ctx context.Context, o Options) (result error) {
 	if o.BackupOnly {
 		return nil
 	}
+	values, err := storedCoreSettings(ctx)
+	if err != nil {
+		return err
+	}
+	if standaloneSelected(values) {
+		// A panel upgrade must preserve the operator's validated standalone
+		// selection rather than converting it back to the bundled kernel.
+		m.Phase = "committed"
+		return saveManifest(dir, m)
+	}
 	if err := atomicWrite(pendingPath(), []byte(dir), 0o600); err != nil {
 		return err
 	}

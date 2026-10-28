@@ -1,72 +1,107 @@
-import { Button, Tag } from 'antd';
-import {
-  AppstoreOutlined,
-  CheckCircleOutlined,
-  CloudDownloadOutlined,
-  ClockCircleOutlined,
-  ThunderboltOutlined,
-} from '@ant-design/icons';
+import { Button, Space, Tag } from 'antd';
+import { AppstoreOutlined, CloudDownloadOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import './CoreSelection.css';
 
-export default function CoreSelection({
-  installed,
-  running,
-}: {
-  installed: boolean | null;
+export type CoreKind = 'sing-box' | 'sing-box-upstream' | 'xray';
+export interface CoreStatus {
+  type: CoreKind;
+  installed: boolean;
   running: boolean;
+  version: string;
+  selected: boolean;
+}
+export default function CoreSelection({
+  cores,
+  busy,
+  onAction,
+}: {
+  cores: CoreStatus[];
+  busy: CoreKind | null;
+  onAction: (kind: CoreKind, action: 'install' | 'select') => void;
 }) {
   const { t } = useTranslation();
-  const status =
-    installed === null
-      ? t('loading')
-      : !installed
-        ? t('pages.coreSelection.missing')
-        : t(running ? 'pages.singBox.running' : 'pages.singBox.stopped');
   return (
     <section className="core-selection" aria-label={t('pages.settings.coreType')}>
       <div className="core-selection-list">
-        <article className="core-selection-card core-selection-card-default">
-          <span className="core-selection-icon">
-            <AppstoreOutlined />
-          </span>
-          <div className="core-selection-content">
-            <div className="core-selection-name">
-              <strong>{t('pages.coreSelection.defaultTitle')}</strong>
-              <Tag color="blue">{t('pages.coreSelection.defaultBadge')}</Tag>
-            </div>
-            <p>{t('pages.coreSelection.defaultDescription')}</p>
-          </div>
-          <div className="core-selection-action" role="status">
-            <Tag
-              color={installed === null ? undefined : installed && running ? 'success' : 'warning'}
+        {(['sing-box', 'sing-box-upstream', 'xray'] as const).map((kind) => {
+          const core = cores.find((item) => item.type === kind);
+          const bundled = kind === 'sing-box';
+          const title = bundled
+            ? t('pages.coreSelection.defaultTitle')
+            : kind === 'xray'
+              ? 'Xray'
+              : 'sing-box';
+          return (
+            <article
+              className={`core-selection-card${core?.selected ? ' core-selection-card-default' : ''}`}
+              key={kind}
             >
-              <CheckCircleOutlined /> {status}
-            </Tag>
-          </div>
-        </article>
-        {['sing-box', 'Xray'].map((name) => (
-          <article className="core-selection-card" key={name}>
-            <span className="core-selection-icon">
-              {name === 'sing-box' ? <CloudDownloadOutlined /> : <ThunderboltOutlined />}
-            </span>
-            <div className="core-selection-content">
-              <div className="core-selection-name">
-                <strong dir="ltr">{name}</strong>
+              <span className="core-selection-icon">
+                {bundled ? (
+                  <AppstoreOutlined />
+                ) : kind === 'xray' ? (
+                  <ThunderboltOutlined />
+                ) : (
+                  <CloudDownloadOutlined />
+                )}
+              </span>
+              <div className="core-selection-content">
+                <div className="core-selection-name">
+                  <strong>{title}</strong>
+                  {core?.selected && <Tag color="blue">{t('pages.coreSelection.selected')}</Tag>}
+                  {core?.version && <Tag>{core.version}</Tag>}
+                  <Tag color={core?.running ? 'success' : 'default'}>
+                    {!core
+                      ? t('loading')
+                      : !core.installed
+                        ? t('pages.coreSelection.missing')
+                        : t(core.running ? 'pages.singBox.running' : 'pages.singBox.stopped')}
+                  </Tag>
+                </div>
+                <p>
+                  {t(
+                    bundled
+                      ? 'pages.coreSelection.defaultDescription'
+                      : kind === 'sing-box-upstream'
+                        ? 'pages.coreSelection.upstreamDescription'
+                        : 'pages.coreSelection.separate',
+                  )}
+                </p>
               </div>
-              <p>{t('pages.coreSelection.separate')}</p>
-            </div>
-            <div className="core-selection-action">
-              <Button disabled size="small" icon={<CloudDownloadOutlined />}>
-                {t('pages.coreSelection.installSoon')}
-              </Button>
-            </div>
-          </article>
-        ))}
+              <Space className="core-selection-action" wrap>
+                {!bundled && !core?.running && (
+                  <Button
+                    size="small"
+                    disabled={!core || busy !== null}
+                    loading={busy === kind}
+                    icon={<CloudDownloadOutlined />}
+                    onClick={() => onAction(kind, 'install')}
+                  >
+                    {t(
+                      core?.installed
+                        ? 'pages.coreSelection.update'
+                        : 'pages.coreSelection.install',
+                    )}
+                  </Button>
+                )}
+                {core?.installed && !core.selected && (
+                  <Button
+                    size="small"
+                    type="primary"
+                    disabled={busy !== null}
+                    loading={busy === kind}
+                    onClick={() => onAction(kind, 'select')}
+                  >
+                    {t('pages.coreSelection.use')}
+                  </Button>
+                )}
+              </Space>
+            </article>
+          );
+        })}
       </div>
-      <p className="core-selection-note">
-        <ClockCircleOutlined /> {t('pages.coreSelection.note')}
-      </p>
+      <p className="core-selection-note">{t('pages.coreSelection.note')}</p>
     </section>
   );
 }

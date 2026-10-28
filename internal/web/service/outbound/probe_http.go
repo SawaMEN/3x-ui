@@ -78,13 +78,7 @@ type batchProcess interface {
 	GetResult() string
 }
 
-var newBatchProcess = func(cfg *xray.Config, configPath string) batchProcess {
-	native, err := buildSingBoxBatchTestConfig(cfg)
-	if err != nil {
-		return &failedBatchProcess{err: err}
-	}
-	return newSingBoxBatchProcess(native, configPath)
-}
+var newBatchProcess = newXrayBatchProcess
 
 var egressTraceProbe = probeEgressTrace
 
@@ -296,12 +290,16 @@ func runHTTPProbeBatchForCore(items []*httpBatchItem, allOutbounds []any, testUR
 	defer os.Remove(configPath)
 
 	var proc batchProcess
-	if coreType == "sing-box" || coreType == "hiddify-core" {
-		singBoxConfig, err := buildSingBoxBatchTestConfig(cfg)
+	if coreType == "sing-box" || coreType == "hiddify-core" || coreType == "sing-box-upstream" {
+		singBoxConfig, err := buildSingBoxBatchTestConfigForCore(cfg, coreType)
 		if err != nil {
 			return true, fmt.Errorf("Build sing-box test config: %w", err)
 		}
-		proc = newSingBoxBatchProcess(singBoxConfig, configPath)
+		if coreType == "sing-box-upstream" {
+			proc = newUpstreamBatchProcess(singBoxConfig, configPath)
+		} else {
+			proc = newSingBoxBatchProcess(singBoxConfig, configPath)
+		}
 	} else {
 		proc = newBatchProcess(cfg, configPath)
 	}

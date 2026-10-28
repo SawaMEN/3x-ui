@@ -65,7 +65,7 @@ const routes: RouteObject[] = [
       { path: 'hosts', element: withSuspense(<HostsPage />) },
       { path: 'firewall', element: <Navigate to="/settings#advanced/firewall" replace /> },
       { path: 'settings', element: withSuspense(<SettingsPage />) },
-      { path: 'xray', element: <Navigate to="/singbox" replace /> },
+      { path: 'xray', element: withSuspense(<CoreConfigRoutePage />) },
       { path: 'singbox', element: withSuspense(<SingBoxPage />) },
       { path: 'outbound', element: withSuspense(<CoreConfigRoutePage />) },
       { path: 'routing', element: withSuspense(<CoreConfigRoutePage />) },

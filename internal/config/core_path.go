@@ -23,3 +23,12 @@ func OwnerCoreBinaryPath() string {
 	}
 	return filepath.Join(filepath.Dir(executable), path)
 }
+
+// StandaloneCoreBinaryPath keeps separately installed engines beside panel assets.
+func StandaloneCoreBinaryPath(engine string) string {
+	name := fmt.Sprintf("%s-%s-%s", engine, runtime.GOOS, runtime.GOARCH)
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	return filepath.Join(filepath.Dir(OwnerCoreBinaryPath()), name)
+}

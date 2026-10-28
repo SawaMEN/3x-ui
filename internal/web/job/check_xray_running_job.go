@@ -25,7 +25,7 @@ func NewCheckXrayRunningJob() *CheckXrayRunningJob {
 
 // Run checks the selected core and restarts it after it is down for 2 consecutive checks.
 func (j *CheckXrayRunningJob) Run() {
-	native := service.NativeCore(service.CoreTypeSingBox)
+	native := service.SelectedNativeCore()
 	if err := native.ReconcileGateway(context.Background()); err != nil {
 		logger.Warning("Gateway reconcile: ", err)
 	}

@@ -32,7 +32,7 @@ var subscriptionCheckCache = struct {
 // enter production. Direct stubs resolve tag references without starting any
 // tunnel or listener; dependency availability is checked separately afterwards.
 func validateSubscriptionNativeMember(row map[string]any, core string) error {
-	binary, err := filepath.Abs(singbox.GetBinaryPath())
+	binary, err := filepath.Abs(NativeCore(core).BinaryPath())
 	if err != nil {
 		return err
 	}

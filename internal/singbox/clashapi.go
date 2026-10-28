@@ -26,6 +26,7 @@ type ClashConnection struct {
 }
 
 type ClashMetadata struct {
+	InboundName     string `json:"inboundName"`
 	Network         string `json:"network"`
 	Type            string `json:"type"`
 	SourceIP        string `json:"sourceIP"`

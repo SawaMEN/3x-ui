@@ -87,6 +87,15 @@ export default function SettingsPage() {
     savePayload,
   } = useAllSettings();
 
+  useEffect(() => {
+    const onSelected = (event: Event) => {
+      const coreType = (event as CustomEvent<'xray' | 'sing-box' | 'sing-box-upstream'>).detail;
+      updateSetting({ coreType });
+    };
+    window.addEventListener('xui-core-selected', onSelected);
+    return () => window.removeEventListener('xui-core-selected', onSelected);
+  }, [updateSetting]);
+
   const initialAddress = useRef<Parameters<typeof panelUrlAfterRestart>[1] | null>(null);
   useEffect(() => {
     if (!fetched || initialAddress.current) return;

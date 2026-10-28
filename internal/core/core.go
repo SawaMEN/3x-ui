@@ -6,15 +6,16 @@ import "context"
 type Type string
 
 const (
-	Xray    Type = "xray"
-	SingBox Type = "sing-box"
+	Xray            Type = "xray"
+	SingBox         Type = "sing-box"
+	SingBoxUpstream Type = "sing-box-upstream"
 	// Hiddify is retained only for migration source compatibility.
 	Hiddify Type = SingBox
 )
 
 // Valid reports whether the core type is supported by this build.
 func (t Type) Valid() bool {
-	return t == SingBox
+	return t == SingBox || t == Xray || t == SingBoxUpstream
 }
 
 // Runtime is the common lifecycle contract for panel-managed proxy cores.

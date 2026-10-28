@@ -45,6 +45,7 @@ func SetSingBoxDependencies(inbound *InboundService, settings *SettingService) {
 }
 
 type SingBoxService struct {
+	engine                string
 	strictProtocolServers model.Protocol
 	gateway               *GatewayNetworkService
 }
@@ -125,7 +126,11 @@ func singBoxTUICInbound(ib *model.Inbound, clients []any) (map[string]any, error
 
 // GetConfig is the single generation entry point for previews, candidates and restarts.
 func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
-	cfg, err := (&HiddifyConfigGenerator{StrictProtocolServers: s.strictProtocolServers}).Generate()
+	snapshot, err := loadNativeConfigSnapshot()
+	if err != nil {
+		return nil, err
+	}
+	cfg, err := s.generateNativeConfig(snapshot)
 	if err != nil {
 		return nil, err
 	}
@@ -562,12 +567,18 @@ func (s *SingBoxService) ResetTemplate(ctx context.Context) error {
 }
 
 func (s *SingBoxService) WriteConfig() error {
+	if s.coreType() == CoreTypeXray {
+		return s.writeStandaloneXrayConfig(context.Background())
+	}
 	singBoxApplyMu.Lock()
 	defer singBoxApplyMu.Unlock()
 	return s.writeConfigCandidate(context.Background())
 }
 
 func (s *SingBoxService) Restart(ctx context.Context) error {
+	if s.coreType() == CoreTypeXray {
+		return s.restartStandaloneXray(ctx)
+	}
 	singBoxApplyMu.Lock()
 	defer singBoxApplyMu.Unlock()
 	return s.restartLocked(ctx)
@@ -756,6 +767,18 @@ func (s *SingBoxService) startLocked(ctx context.Context) (result error) {
 }
 
 func (s *SingBoxService) Stop(ctx context.Context) error {
+	if s.coreType() == CoreTypeXray {
+		singBoxApplyMu.Lock()
+		defer singBoxApplyMu.Unlock()
+		if s.IsRunning() {
+			_ = s.pollStandaloneTraffic(context.Background())
+		}
+		err := s.process().Stop()
+		if err == nil {
+			s.stoppedFlag().Store(true)
+		}
+		return err
+	}
 	singBoxApplyMu.Lock()
 	defer singBoxApplyMu.Unlock()
 	return s.stopLocked(ctx)
@@ -798,7 +821,7 @@ func (s *SingBoxService) Version(ctx context.Context) (string, error) {
 }
 
 func (s *SingBoxService) CachedVersion(ctx context.Context) (string, error) {
-	if version := s.process().GetVersion(); version != "" && version != "Unknown" {
+	if version := s.process().GetVersion(); s.coreType() == CoreTypeSingBox && version != "" && version != "Unknown" {
 		return version, nil
 	}
 	return s.process().Version(ctx)
@@ -809,6 +832,9 @@ func (s *SingBoxService) Validate(ctx context.Context) error {
 }
 
 func (s *SingBoxService) ConnectionCount(ctx context.Context) (int, error) {
+	if s.coreType() == CoreTypeXray {
+		return 0, nil
+	}
 	{
 		sessions, err := s.hiddifySessions(ctx)
 		return len(sessions), err
@@ -819,6 +845,9 @@ func (s *SingBoxService) ConnectionCount(ctx context.Context) (int, error) {
 // tags from one native API snapshot. Keeping them in the same snapshot makes
 // the node's online user and inbound indicators describe the same instant.
 func (s *SingBoxService) OnlinePresence(ctx context.Context) (map[string]map[string]struct{}, []string, error) {
+	if s.coreType() == CoreTypeXray {
+		return map[string]map[string]struct{}{}, nil, nil
+	}
 	{
 		return s.hiddifyPresence(ctx)
 	}
@@ -830,6 +859,9 @@ func (s *SingBoxService) OnlineClientIPs(ctx context.Context) (map[string]map[st
 }
 
 func (s *SingBoxService) DisconnectClientIPs(ctx context.Context, email string, ips []string) error {
+	if s.coreType() == CoreTypeXray {
+		return fmt.Errorf("session disconnection is unavailable for %s", s.coreType())
+	}
 	if email == "" || len(ips) == 0 {
 		return nil
 	}
@@ -848,6 +880,9 @@ func (s *SingBoxService) DisconnectClientIPs(ctx context.Context, email string, 
 }
 
 func (s *SingBoxService) PollTraffic(ctx context.Context) error {
+	if s.coreType() != CoreTypeSingBox {
+		return s.pollStandaloneTraffic(ctx)
+	}
 	{
 		return s.pollHiddifyTraffic(ctx)
 	}
@@ -890,10 +925,16 @@ func (s *SingBoxService) GetLogs(count string, filter string) []LogEntry {
 }
 
 func (s *SingBoxService) BinaryPath() string {
+	if s.coreType() != CoreTypeSingBox {
+		return standaloneBinaryPath(s.coreType())
+	}
 	return hiddify.GetBinaryPath()
 }
 
 func (s *SingBoxService) ProcessConfigPath() string {
+	if s.coreType() != CoreTypeSingBox {
+		return standaloneConfigPath(s.coreType())
+	}
 	return hiddify.GetConfigPath()
 }
 

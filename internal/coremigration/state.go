@@ -41,7 +41,7 @@ func storedCoreSettings(ctx context.Context) (map[string]string, error) {
 	var rows []struct{ Key, Value string }
 	values := map[string]string{}
 	if db.Migrator().HasTable("settings") {
-		if err := db.WithContext(ctx).Table("settings").Select("key, value").Where("key IN ?", []string{"coreType", "ownerCoreMigration", "xrayTemplateConfig"}).Find(&rows).Error; err != nil {
+		if err := db.WithContext(ctx).Table("settings").Select("key, value").Where("key IN ?", []string{"coreType", "ownerCoreMigration", "xrayTemplateConfig", "standaloneCoreSelection"}).Find(&rows).Error; err != nil {
 			return nil, err
 		}
 		for _, r := range rows {
@@ -65,7 +65,7 @@ func completed(ctx context.Context) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return values["coreType"] == "sing-box" && values["ownerCoreMigration"] == hiddify.TargetRevision, nil
+	return standaloneSelected(values) || (values["coreType"] == "sing-box" && values["ownerCoreMigration"] == hiddify.TargetRevision), nil
 }
 
 func checkStoredCore() error {
@@ -81,6 +81,9 @@ func checkStoredCore() error {
 		return fmt.Errorf("read core settings before startup: %w", err)
 	}
 	if values["coreType"] == "" && values["hasInbounds"] == "" && values["xrayTemplateConfig"] == "" {
+		return nil
+	}
+	if standaloneSelected(values) {
 		return nil
 	}
 	if values["coreType"] == "xray" || values["coreType"] == "" {
@@ -103,4 +106,10 @@ func CheckPanelStartup() error {
 		return err
 	}
 	return fmt.Errorf("unfinished core migration; keep panel stopped and restore snapshot %s", string(data))
+}
+
+// Old Xray databases retain the offline-migration gate. New explicit selections
+// have already passed the panel's canonical schema and binary preflight.
+func standaloneSelected(values map[string]string) bool {
+	return values["standaloneCoreSelection"] == "enabled" && (values["coreType"] == "xray" || values["coreType"] == "sing-box-upstream")
 }
