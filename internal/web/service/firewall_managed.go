@@ -175,7 +175,11 @@ func detectOwnedNativeFirewallBackend(ctx context.Context) (firewallBackend, boo
 			return b, true
 		}
 	}
-	if path, err := exec.LookPath("iptables"); err == nil {
+	for _, name := range []string{"iptables", "iptables-legacy"} {
+		path, err := exec.LookPath(name)
+		if err != nil {
+			continue
+		}
 		b := nativeFirewallBackend("iptables", path, func(ctx context.Context) (bool, error) {
 			cmd := exec.CommandContext(ctx, path, "-C", "INPUT", "-j", managedIPTablesChain)
 			cmd.Env = append(os.Environ(), "LC_ALL=C")
@@ -202,6 +206,14 @@ func detectManagedFirewallBackend(ctx context.Context) (firewallBackend, error) 
 			return legacy, nil
 		}
 	}
+	// UFW with enabled persistent policy must be repaired by the host operator;
+	// silently bypassing it with another filtering layer can block panel access.
+	if legacyErr != nil && isNftablesCompatibilityError(legacyErr) && ufwConfiguredEnabled() {
+		return firewallBackend{}, fmt.Errorf("UFW cannot use this kernel's nf_tables backend; configure matching iptables/ip6tables legacy alternatives or update the host kernel, then reload UFW: %w", legacyErr)
+	}
+	if legacyErr != nil && !isNftablesCompatibilityError(legacyErr) && !strings.Contains(legacyErr.Error(), "no supported firewall") {
+		return firewallBackend{}, legacyErr
+	}
 	if native, ok := detectOwnedNativeFirewallBackend(ctx); ok {
 		return native, nil
 	}
@@ -209,33 +221,45 @@ func detectManagedFirewallBackend(ctx context.Context) (firewallBackend, error) 
 		return legacy, nil
 	}
 
+	var probeErrors []error
 	if path, err := exec.LookPath("nft"); err == nil {
 		safe, err := nftablesSafeForManagedFirewall(ctx, path)
-		if err != nil {
-			return firewallBackend{}, err
-		}
-		if safe {
+		if err == nil && safe {
 			return nativeFirewallBackend("nftables", path, func(ctx context.Context) (bool, error) {
 				_, err := runFirewallCommand(ctx, path, "list", "table", "inet", managedNftTable)
 				return err == nil, nil
 			}), nil
 		}
-		return firewallBackend{}, errors.New("existing nftables input hooks detected; install/use UFW or firewalld, or remove the conflicting native input hook before enabling 3x-ui firewall")
+		if err == nil {
+			return firewallBackend{}, errors.New("existing nftables input hooks detected; install/use UFW or firewalld, or remove the conflicting native input hook before enabling 3x-ui firewall")
+		}
+		if !isNftablesCompatibilityError(err) {
+			return firewallBackend{}, err
+		}
+		probeErrors = append(probeErrors, err)
 	}
-	if path, err := exec.LookPath("iptables"); err == nil {
+	for _, name := range []string{"iptables", "iptables-legacy"} {
+		path, err := exec.LookPath(name)
+		if err != nil {
+			continue
+		}
+		// Read the actual ruleset: --version succeeds even on unsupported kernels.
+		if _, err := runFirewallCommand(ctx, path, "-S", "INPUT"); err != nil {
+			probeErrors = append(probeErrors, err)
+			if !isNftablesCompatibilityError(err) {
+				return firewallBackend{}, err
+			}
+			continue
+		}
 		return nativeFirewallBackend("iptables", path, func(ctx context.Context) (bool, error) {
-			cmd := exec.CommandContext(ctx, path, "-C", "INPUT", "-j", managedIPTablesChain)
-			cmd.Env = append(os.Environ(), "LC_ALL=C")
-			err := cmd.Run()
-			if err == nil {
-				return true, nil
-			}
-			var exitErr *exec.ExitError
-			if errors.As(err, &exitErr) {
-				return false, nil
-			}
-			return false, err
+			return managedIPTablesJumpExists(ctx, path)
 		}), nil
+	}
+	if len(probeErrors) > 0 {
+		return firewallBackend{}, fmt.Errorf("no usable firewall backend (nf_tables is incompatible with the host kernel; install iptables-legacy or update the host kernel): %w", errors.Join(probeErrors...))
+	}
+	if legacyErr != nil && !strings.Contains(legacyErr.Error(), "no supported firewall") {
+		return firewallBackend{}, legacyErr
 	}
 	return firewallBackend{}, errors.New("no supported firewall found (install ufw, firewalld, nftables, or iptables)")
 }
@@ -644,10 +668,14 @@ func iptablesPortExpression(rule FirewallRule) string {
 }
 
 func applyManagedIPTables(ctx context.Context, binary string, rules []FirewallRule) error {
+	ip6, err := managedIP6TablesPath(binary)
+	if err != nil {
+		return err
+	}
 	if err := applyManagedIPTablesBinary(ctx, binary, "icmp", rules); err != nil {
 		return err
 	}
-	if ip6, err := exec.LookPath("ip6tables"); err == nil {
+	if ip6 != "" {
 		if err := applyManagedIPTablesBinary(ctx, ip6, "ipv6-icmp", rules); err != nil {
 			return err
 		}
@@ -697,7 +725,7 @@ func applyManagedIPTablesBinary(ctx context.Context, binary, icmpProto string, r
 }
 
 func removeManagedIPTables(ctx context.Context, binary string) error {
-	for _, candidate := range []string{binary, "ip6tables"} {
+	for _, candidate := range []string{binary, ip6tablesBinary(binary)} {
 		path, err := exec.LookPath(candidate)
 		if err != nil {
 			continue

@@ -1,3 +1,4 @@
+import { isClientAttachableProtocol } from '@/lib/inbounds/client-attachable';
 import { isSSMultiUser } from '@/lib/xray/protocol-capabilities';
 import { coerceInboundJsonField } from '@/models/dbinbound';
 import type { HostRecord } from '@/schemas/api/host';
@@ -170,27 +171,10 @@ export function readSettings(settings: unknown): {
 }
 
 export function isInboundMultiUser(record: { protocol: string; settings: unknown }): boolean {
-  switch (record.protocol) {
-    case 'vmess':
-    case 'vless':
-    case 'trojan':
-    case 'hysteria':
-    case 'mtproto':
-    case 'wireguard':
-    case 'amneziawg':
-    case 'tuic':
-    case 'fptn':
-    case 'openflux':
-    case 'trusttunnel':
-    case 'masque':
-    case 'snell':
-    case 'vk-turn-proxy':
-      return true;
-    case 'shadowsocks':
-      return isSSMultiUser({ protocol: 'shadowsocks', settings: readSettings(record.settings) });
-    default:
-      return false;
+  if (record.protocol === 'shadowsocks') {
+    return isSSMultiUser({ protocol: 'shadowsocks', settings: readSettings(record.settings) });
   }
+  return isClientAttachableProtocol(record.protocol);
 }
 
 export function showQrCodeMenu(dbInbound: DBInboundRecord): boolean {

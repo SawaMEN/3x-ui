@@ -82,7 +82,6 @@ function useFirewallText() {
               'Отвечать на входящие ICMP Echo Request по IPv4 и IPv6. Служебный ICMP остаётся доступен. Настройка применяется, когда файрволл включён.',
             safety:
               'Порт панели, текущий внешний порт панели, порт подписок и SSH защищаются автоматически, чтобы не потерять доступ к серверу.',
-            sync: 'Синхронизировать сейчас',
             rules: 'Активные и ожидаемые правила',
             manual: 'Ручные правила',
             add: 'Добавить',
@@ -125,7 +124,6 @@ function useFirewallText() {
               'Respond to incoming ICMP Echo Requests over IPv4 and IPv6. Control ICMP remains available. This setting applies while the firewall is enabled.',
             safety:
               'Panel, current external panel port, subscription port, and SSH are protected automatically to prevent lockout.',
-            sync: 'Sync now',
             rules: 'Active and expected rules',
             manual: 'Manual rules',
             add: 'Add',
@@ -156,7 +154,6 @@ function useFirewallText() {
 export function FirewallManager() {
   const text = useFirewallText();
   const [status, setStatus] = useState<FirewallStatus | null>(null);
-  const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [action, setAction] = useState('');
   const [port, setPort] = useState<number | null>(null);
@@ -166,7 +163,12 @@ export function FirewallManager() {
   useEffect(() => {
     let cancelled = false;
 
-    void (async () => {
+    let timer: ReturnType<typeof setTimeout>;
+    const refresh = async () => {
+      if (document.hidden) {
+        timer = setTimeout(() => void refresh(), 15000);
+        return;
+      }
       try {
         const msg = await HttpUtil.get<FirewallStatus>('/panel/api/server/firewall/status');
         if (cancelled) return;
@@ -179,12 +181,14 @@ export function FirewallManager() {
       } catch {
         if (!cancelled) setLoadError(true);
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) timer = setTimeout(() => void refresh(), 15000);
       }
-    })();
+    };
+    void refresh();
 
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, []);
 
@@ -341,12 +345,6 @@ export function FirewallManager() {
           <Typography.Text strong>{status.enabled ? text.enabled : text.disabled}</Typography.Text>
         </Space>
         <Tag>{status.backend}</Tag>
-        <Button
-          loading={action === 'sync' || loading}
-          onClick={() => void post('/panel/api/server/firewall/sync', undefined, 'sync')}
-        >
-          {text.sync}
-        </Button>
       </Space>
 
       <Alert type="info" showIcon title={text.safety} />
@@ -452,7 +450,6 @@ export function FirewallManager() {
         pagination={false}
         locale={{ emptyText: text.noManual }}
       />
-      {loading ? <Typography.Text type="secondary">{text.loading}</Typography.Text> : null}
     </Space>
   );
 }
