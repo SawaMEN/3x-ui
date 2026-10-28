@@ -86,6 +86,12 @@ func validateTelemtWebSite(site *TelemtWebSiteOptions) error {
 
 // An HTTP decoy is only allowed to reach a local numeric IP literal: no
 // arbitrary remote URL, credentials, redirects, paths or DNS rebinding.
+// Telemt http_upstream only accepts an origin with no URL path, not even
+// the optional root slash accepted by browsers in operator input.
+func telemtWebCanonicalOrigin(raw string) string {
+	return strings.TrimSuffix(strings.TrimSpace(raw), "/")
+}
+
 func validateTelemtWebOrigin(raw string) error {
 	u, err := url.Parse(raw)
 	if err != nil || u.Scheme != "http" || u.User != nil || (u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" {
