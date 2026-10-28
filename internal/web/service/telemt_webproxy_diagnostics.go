@@ -19,7 +19,7 @@ type TelemtWebRuntimeDiagnostics struct {
 	Listeners          []string        `json:"listeners"`
 	Capacity           json.RawMessage `json:"capacity,omitempty"`
 	CarrierNegotiation json.RawMessage `json:"carrierNegotiation,omitempty"`
-	ActiveSessions      *int            `json:"activeSessions,omitempty"`
+	ActiveSessions     *int            `json:"activeSessions,omitempty"`
 	CheckedAt          time.Time       `json:"checkedAt"`
 }
 
@@ -58,7 +58,7 @@ func (TelemtService) WebProxyRuntimeDiagnostics(ctx context.Context) (TelemtWebR
 			Listeners          []string        `json:"listeners"`
 			Capacity           json.RawMessage `json:"capacity"`
 			CarrierNegotiation json.RawMessage `json:"carrier_negotiation"`
-			Runtime *struct {
+			Runtime            *struct {
 				Manager *struct {
 					Sessions int `json:"sessions"`
 				} `json:"manager"`
