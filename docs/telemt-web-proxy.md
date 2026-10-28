@@ -306,3 +306,66 @@ forwarding-header replacement and bidirectional WebSocket transfer with Caddy
 and HAProxy. They also run the generated carrier configuration against the
 official Telemt binary. These checks do not measure accessibility from a
 particular mobile operator.
+
+## Telemt WEB extensions in the `telemt` branch
+
+The WEB Proxy settings now optionally support:
+
+- `basePath`: a hidden URL-safe path (6–96 characters). With an empty path
+  the old `tg://webproxy?server=DOMAIN&secret=ddHEX` format is preserved.
+  Nonempty paths use the Telegram WEB `70dd` prefix and URL-safe base64 secret.
+  Changing a path requires redistributing user links.
+- `aliases`: up to seven additional public domain names on the *same* local
+  Telemt WEB process and HTTPS port. Each name has its own Telemt vhost and
+  personalized subscription link. All names must resolve appropriately and be
+  covered by one existing SAN or wildcard TLS certificate. Automatic issuance
+  of multi-SAN certificates is not implemented.
+- `site.mode = "origin"`, `site.origin = "http://127.0.0.1:PORT"`: serve
+  ordinary decoy requests through a local HTTP application. Only loopback
+  numeric IP addresses and explicit ports are accepted. External URLs, DNS
+  hostnames, URL credentials and path/query fragments are rejected.
+- A read-only `GET /panel/api/telemt/webproxy/diagnostics` API exposing
+  lifecycle, available listener/capacity information, carrier negotiation
+  and an optional count of active WEB sessions. Individual session tokens,
+  secret keys, addresses and User-Agent values are not forwarded.
+- Geometric profile capacity headroom. Telemt `web.limits` changes need a
+  restart, but unchanged capacity buckets allow user/profile-only updates to
+  use the authenticated reload endpoint, with on-disk rollback on failures.
+
+**Important:** A stable and correct `public_addr` is part of Telemt's
+inner relay destination. A hostname placed behind a rotating CDN edge
+is **not** automatically compatible merely because HTTPS/WebSockets are
+reachable. CDN use is not enabled or validated by these changes; it requires
+separate end-to-end testing against the real Telegram WEB client, plus correct
+CDN origin and client-address forwarding.
+
+These changes do **not** merge unrelated public TCP 443 protocols into
+one SNI multiplexer. One frontend can serve multiple WEB hostnames, and an
+existing Nginx listener can be reused for distinct nonconflicting virtual
+hosts. A saved panel, subscription service, or other inbound on TCP 443
+remains a hard conflict and is reported before mutating the server.
+
+### Verification before production
+
+From the repository root, on Linux with a suitable Go toolchain:
+
+```sh
+go test ./internal/web/service -run '^TestTelemtWeb' -count=1
+go test ./internal/sub -run '^TestGenMtprotoWEBProxy' -count=1
+go test ./...
+cd frontend
+npm ci
+npm run typecheck
+npm run test -- --run src/test/telemt-web-schema.test.ts
+npm run build
+```
+
+On a disposable host, also validate the rendered Telemt TOML with the actual
+installed Telemt version, check Nginx/Caddy/HAProxy configuration and reload,
+test certificate issuance and renewal, save/edit/delete user profiles without
+dropping existing sessions, and verify Telegram links on Android, Desktop and
+iOS. Reconfigure from one WEB domain to multiple and back, turn WEB off,
+and confirm rollback on a deliberately invalid certificate.
+
+No production or cross-operator connectivity guarantee is implied by a
+successful preflight or local test.
