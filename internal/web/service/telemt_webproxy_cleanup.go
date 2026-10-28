@@ -241,8 +241,8 @@ func (TelemtService) EnsureWebProxyBackend() error {
 
 	addr := net.JoinHostPort(telemtWebListenIP, strconv.Itoa(state.ListenPort))
 	client := &http.Client{
-		Timeout:   2 * time.Second,
-		Transport: &http.Transport{Proxy: nil},
+		Timeout:       2 * time.Second,
+		Transport:     &http.Transport{Proxy: nil},
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
 	deadline := time.Now().Add(30 * time.Second)
