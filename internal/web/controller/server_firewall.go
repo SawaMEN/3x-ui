@@ -63,10 +63,12 @@ func (a *FirewallController) jsonStatus(c *gin.Context, status service.FirewallM
 }
 
 func (a *FirewallController) status(c *gin.Context) {
-	if err := a.firewallService.MigrateManagedBackendIfNeeded(c.Request.Context()); err != nil {
-		jsonMsg(c, "failed to reconcile firewall backend", err)
+	// Visiting the authenticated management page initializes background sync
+	// for existing installations too, without enabling a disabled firewall.
+	if !a.initializeControl(c) {
 		return
 	}
+	service.TriggerFirewallSync()
 	status, err := a.firewallService.GetManagedStatusSafe(c.Request.Context(), firewallSafetyPort(c))
 	a.jsonStatus(c, status, err)
 }

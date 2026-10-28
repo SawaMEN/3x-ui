@@ -632,13 +632,26 @@ func detectFirewallBackend(ctx context.Context) (firewallBackend, error) {
 		}
 		candidates = append(candidates, b)
 	}
+	var usable []firewallBackend
+	var probeErrors []error
 	for _, b := range candidates {
-		if on, _ := b.enabled(ctx); on {
+		on, err := b.enabled(ctx)
+		if err != nil {
+			probeErrors = append(probeErrors, fmt.Errorf("%s: %w", b.name, err))
+			continue
+		}
+		if on {
 			return b, nil
 		}
+		usable = append(usable, b)
 	}
-	if len(candidates) > 0 {
-		return candidates[0], nil
+	// A failed probe may belong to an enabled firewall. Do not prefer an
+	// inactive alternative and accidentally start another filtering layer.
+	if len(probeErrors) > 0 {
+		return firewallBackend{}, errors.Join(probeErrors...)
+	}
+	if len(usable) > 0 {
+		return usable[0], nil
 	}
 	return firewallBackend{}, errors.New("no supported firewall found (install ufw or firewalld)")
 }

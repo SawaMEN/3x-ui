@@ -192,6 +192,21 @@ export default function DomainFrontTab({
   return (
     <Space orientation="vertical" size={20} style={{ width: '100%' }}>
       {holder}
+      <Space wrap>
+        <Button
+          type="primary"
+          loading={busy}
+          aria-label={label('apply')}
+          disabled={(!dirty && !settingsDirty) || loading}
+          onClick={() => void apply()}
+        >
+          {label('apply')}
+        </Button>
+        <Button icon={<ReloadOutlined />} onClick={() => void load()}>
+          {label('refresh')}
+        </Button>
+        {dirty && <Typography.Text type="secondary">{label('unsaved')}</Typography.Text>}
+      </Space>
       {statusQuery.error && (
         <Alert
           type="error"
@@ -600,21 +615,6 @@ export default function DomainFrontTab({
         />
       )}
 
-      <Space wrap>
-        <Button
-          type="primary"
-          loading={busy}
-          aria-label={label('apply')}
-          disabled={(!dirty && !settingsDirty) || loading}
-          onClick={() => void apply()}
-        >
-          {label('apply')}
-        </Button>
-        <Button icon={<ReloadOutlined />} onClick={() => void load()}>
-          {label('refresh')}
-        </Button>
-        {dirty && <Typography.Text type="secondary">{label('unsaved')}</Typography.Text>}
-      </Space>
       <Modal
         open={editing !== undefined}
         title={label('editor')}

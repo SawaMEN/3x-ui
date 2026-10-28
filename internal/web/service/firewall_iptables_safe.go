@@ -77,10 +77,14 @@ func resetManagedIPTablesJump(ctx context.Context, binary string) error {
 }
 
 func applyManagedIPTablesSafe(ctx context.Context, binary string, rules []FirewallRule) error {
+	ip6, err := managedIP6TablesPath(binary)
+	if err != nil {
+		return err
+	}
 	if err := applyManagedIPTablesBinarySafe(ctx, binary, "icmp", rules); err != nil {
 		return err
 	}
-	if ip6, err := exec.LookPath("ip6tables"); err == nil {
+	if ip6 != "" {
 		if err := applyManagedIPTablesBinarySafe(ctx, ip6, "ipv6-icmp", rules); err != nil {
 			return err
 		}
