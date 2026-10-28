@@ -60,9 +60,9 @@ export default function MtprotoWebStatus() {
       ? ru
         ? 'Установите или обновите Telemt в Настройки → Обновления пакетов и ядер Linux.'
         : 'Install or update Telemt in Settings → Linux package and core updates.'
-      : status?.error);
-  const portProblemAlreadyShown =
-    status?.port443Available === false && /(?:tcp|порт)\s*443/i.test(problem || '');
+      : status?.port443Available
+        ? status.error
+        : undefined);
   const defaultDomain = TelemtWebProxyRequestSchema.shape.domain.safeParse(status?.defaultDomain);
   return (
     <Space orientation="vertical" style={{ width: '100%', marginBlock: 12 }}>
@@ -116,14 +116,18 @@ export default function MtprotoWebStatus() {
           )}
         </>
       )}
-      {!loading && !error && status && !status.port443Available && !portProblemAlreadyShown && (
+      {!loading && !error && status && !status.port443Available && (
         <Alert
           type="warning"
           showIcon
           title={
             ru
-              ? `TCP 443 занят: ${status.port443Owner || 'другой сервис'}. Перенесите этот сервис на другой порт перед сохранением WEB Proxy.`
-              : `TCP 443 is occupied: ${status.port443Owner || 'another service'}. Move it to another port before saving WEB Proxy.`
+              ? status.port443Free === true
+                ? `TCP 443 зарезервирован в панели: ${status.port443Owner || 'другое подключение'}. Измените его порт перед сохранением WEB Proxy.`
+                : `TCP 443 занят: ${status.port443Owner || 'другой сервис'}. Перенесите этот сервис на другой порт перед сохранением WEB Proxy.`
+              : status.port443Free === true
+                ? `TCP 443 is reserved in the panel: ${status.port443Owner || 'another listener'}. Change its port before saving WEB Proxy.`
+                : `TCP 443 is occupied: ${status.port443Owner || 'another service'}. Move it to another port before saving WEB Proxy.`
           }
         />
       )}
