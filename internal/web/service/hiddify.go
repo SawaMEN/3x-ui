@@ -159,10 +159,20 @@ func (s *SingBoxService) hiddifySessions(ctx context.Context) ([]singbox.ActiveS
 		}
 		sessions := make([]singbox.ActiveSession, 0, len(connections))
 		for _, c := range connections {
-			sessions = append(sessions, singbox.ActiveSession{ID: c.ID, Core: s.coreType(), Inbound: c.Metadata.InboundName,
-				User: c.Metadata.User, Network: c.Metadata.Network, Source: net.JoinHostPort(c.Metadata.SourceIP, c.Metadata.SourcePort),
-				Destination: net.JoinHostPort(c.Metadata.DestinationIP, c.Metadata.DestinationPort), Domain: c.Metadata.Host,
-				CreatedAt: c.Start.Unix(), Upload: c.Upload, Download: c.Download, Chain: c.Chains})
+			sessions = append(sessions, singbox.ActiveSession{
+				ID:          c.ID,
+				Core:        s.coreType(),
+				Inbound:     c.Metadata.InboundName,
+				User:        c.Metadata.User,
+				Network:     c.Metadata.Network,
+				Source:      net.JoinHostPort(c.Metadata.SourceIP, c.Metadata.SourcePort),
+				Destination: net.JoinHostPort(c.Metadata.DestinationIP, c.Metadata.DestinationPort),
+				Domain:      c.Metadata.Host,
+				CreatedAt:   c.Start.Unix(),
+				Upload:      c.Upload,
+				Download:    c.Download,
+				Chain:       c.Chains,
+			})
 		}
 		return sessions, nil
 	}
