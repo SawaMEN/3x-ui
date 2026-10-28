@@ -74,7 +74,7 @@ func validatePresentationSettings(settings *entity.AllSetting) error {
 	}
 	settings.SubAppearanceTheme = normalizeSubscriptionTheme(settings.SubAppearanceTheme)
 	switch settings.SubAppearanceTheme {
-	case "classic", "luna", "light", "dark", "ultra-dark", "colorful", "blue-gray", "cyberpunk":
+	case "classic", "luna", "underground", "light", "dark", "ultra-dark", "colorful", "blue-gray", "cyberpunk":
 	default:
 		return fmt.Errorf("unsupported subscription theme")
 	}

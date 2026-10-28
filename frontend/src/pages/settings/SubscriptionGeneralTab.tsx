@@ -443,6 +443,7 @@ export default function SubscriptionGeneralTab({
                   options={[
                     { value: 'classic', label: t('pages.settings.subAppearanceClassic') },
                     { value: 'luna', label: t('subscription.themes.luna') },
+                    { value: 'underground', label: t('subscription.themes.underground') },
                     ...(
                       ['light', 'dark', 'ultra-dark', 'colorful', 'blue-gray', 'cyberpunk'] as const
                     ).map((value) => ({ value, label: t(`subscription.themes.${value}`) })),

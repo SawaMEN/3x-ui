@@ -112,7 +112,8 @@
       "colorful": "Colorful",
       "blue-gray": "Blue Gray",
       "cyberpunk": "Cyberpunk",
-      "luna": "Луна"
+      "luna": "Луна",
+      "underground": "Underground"
     },
     "telegramUnavailable": "Часть Telegram Proxy временно недоступна. Попробуйте обновить страницу позже.",
     "openTelegram": "Открыть в Telegram"

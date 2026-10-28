@@ -30,6 +30,9 @@ import './SubPage.css';
 import './SubLuna.css';
 import LunaBackdrop from './LunaBackdrop';
 import { lunaTheme } from './lunaTheme';
+import UndergroundBackdrop from './UndergroundBackdrop';
+import { undergroundTheme } from './undergroundTheme';
+import './SubUnderground.css';
 
 // Keep the first (links) tab eager; load larger, less-used tabs on demand.
 const SubAppsTab = lazy(() => import('./SubAppsTab'));
@@ -44,6 +47,8 @@ const subJsonUrl = subData.subJsonUrl || '';
 const subClashUrl = subData.subClashUrl || '';
 const appearance = subData.appearance?.enabled ? subData.appearance : undefined;
 const luna = ['luna', 'whitemax'].includes(subData.appearance?.theme ?? '');
+const underground = subData.appearance?.theme === 'underground';
+const customTheme = luna || underground;
 const subTitle = appearance?.title || subData.subTitle || '';
 const subSupportUrl = subData.subSupportUrl || '';
 const updateHours = Number(subData.subUpdates || 0);
@@ -224,23 +229,29 @@ export default function SubPage() {
   const direction = RTL_LANGUAGES.has(lang) ? 'rtl' : 'ltr';
   const pageClass = [
     'subscription-page',
-    (luna || isDark) && 'is-dark',
-    !luna && isUltra && 'is-ultra',
+    (customTheme || isDark) && 'is-dark',
+    !customTheme && isUltra && 'is-ultra',
     luna && 'sub-luna',
+    underground && 'sub-underground',
   ]
     .filter(Boolean)
     .join(' ');
 
   const subscriptionStyle = {
-    ...(appearance && !luna ? { '--sub-accent': appearance.accent } : {}),
-    colorScheme: luna || isDark ? 'dark' : 'light',
+    ...(appearance && !customTheme ? { '--sub-accent': appearance.accent } : {}),
+    colorScheme: customTheme || isDark ? 'dark' : 'light',
   } as React.CSSProperties;
 
   return (
-    <ConfigProvider theme={luna ? lunaTheme() : antdThemeConfig} direction={direction}>
+    <ConfigProvider
+      theme={underground ? undergroundTheme() : luna ? lunaTheme() : antdThemeConfig}
+      direction={direction}
+    >
       {messageContextHolder}
       <Layout className={pageClass} dir={direction} style={subscriptionStyle}>
-        {luna ? (
+        {underground ? (
+          <UndergroundBackdrop />
+        ) : luna ? (
           <LunaBackdrop />
         ) : (
           <div className="sub-aurora" aria-hidden="true">
@@ -251,7 +262,7 @@ export default function SubPage() {
           <Card className="sub-card">
             <SubHeader
               title={subTitle}
-              isDark={luna || isDark}
+              isDark={customTheme || isDark}
               isLuna={luna}
               logoURL={appearance?.logoURL}
               sId={sId}
@@ -264,7 +275,7 @@ export default function SubPage() {
                 {appearance.description}
               </p>
             )}
-            {(appearance || luna) && subUrl && (
+            {(appearance || customTheme) && subUrl && (
               <Button
                 type="primary"
                 size="large"
