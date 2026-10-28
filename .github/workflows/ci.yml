@@ -444,7 +444,7 @@ jobs:
       - name: Exercise shared TCP budget and real Mieru Sudoku MASQUE payloads
         env:
           MIERU_TEST_BINARY: ${{ runner.temp }}/speed-bin/mita
-          SUDOKU_TEST_BINARY: ${{ runner.temp }}/speed-bin/sudoku-tunnel
+          SUDOKU_SPEED_TEST_BINARY: ${{ runner.temp }}/speed-bin/sudoku-tunnel
           SINGBOX_TEST_BINARY: ${{ runner.temp }}/speed-core/hiddify-core-linux-amd64
           HIDDIFY_CONFIG_CHECK_BINARY: ${{ runner.temp }}/speed-core/hiddify-core-linux-amd64
         run: go test -race ./internal/clientlimit/... ./internal/mieru ./internal/sudoku ./internal/singbox ./internal/web/service -run '^TestNativeBroker|^TestMieruSpeedLimitLiveServer$|^TestSudokuSpeedLimits$|^TestMASQUESpeedLimits$|^TestClientSpeedLimit' -count=1 -timeout=5m

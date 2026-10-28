@@ -950,5 +950,3 @@ func (s *OutboundSubscriptionService) activeAutomaticSubscriptions() ([]*model.O
 	err := database.GetDB().Where("enabled = ? AND auto_balance = ?", true, true).Order("priority asc, id asc").Find(&subs).Error
 	return subs, err
 }
-
-func asNativeOutboundMap(raw any) map[string]any { object, _ := raw.(map[string]any); return object }

@@ -34,7 +34,7 @@ func TestStandaloneCoreAdapters(t *testing.T) {
 				prefix = "Xray 26.10.21"
 			}
 			script := "#!/bin/sh\ncase \"$1\" in\nversion) echo '" + prefix + "';;\ncheck) exit 0;;\nrun) if [ \"$2\" = '-test' ]; then exit 0; fi; exec sleep 60;;\n*) exit 13;;\nesac\n"
-			if err := os.WriteFile(svc.BinaryPath(), []byte(script), 0700); err != nil {
+			if err := os.WriteFile(svc.BinaryPath(), []byte(script), 0o700); err != nil {
 				t.Fatal(err)
 			}
 			if err := (&SettingService{}).SetCoreType(engine); err != nil {
@@ -91,7 +91,7 @@ func TestStandaloneReleaseConfig(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := os.WriteFile(svc.BinaryPath(), data, 0755); err != nil {
+			if err := os.WriteFile(svc.BinaryPath(), data, 0o755); err != nil {
 				t.Fatal(err)
 			}
 			if tc.engine == CoreTypeXray {
@@ -100,7 +100,7 @@ func TestStandaloneReleaseConfig(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					if err := os.WriteFile(filepath.Join(filepath.Dir(svc.BinaryPath()), name), b, 0644); err != nil {
+					if err := os.WriteFile(filepath.Join(filepath.Dir(svc.BinaryPath()), name), b, 0o644); err != nil {
 						t.Fatal(err)
 					}
 				}

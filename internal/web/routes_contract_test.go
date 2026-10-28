@@ -32,6 +32,11 @@ func isInternalUIAPI(path string) bool {
 		strings.HasPrefix(path, "/panel/api/gateway/") ||
 		strings.HasPrefix(path, "/panel/api/telemt/meko/") ||
 		strings.HasPrefix(path, "/panel/api/adblock/") ||
+		// Core selection/installation are administrative UI actions, not stable
+		// public endpoints for third-party automation.
+		path == "/panel/api/setting/cores" ||
+		path == "/panel/api/setting/cores/:core/install" ||
+		path == "/panel/api/setting/cores/:core/select" ||
 		path == "/panel/api/telemt/subscription-proxy" ||
 		path == "/panel/api/xray/outbound-subs/:id/probe"
 }

@@ -28,6 +28,15 @@ func TestSudokuSpeedLimits(t *testing.T) { testSudokuTraffic(t, true) }
 
 func testSudokuTraffic(t *testing.T, limited bool) {
 	executable := os.Getenv("SUDOKU_TEST_BINARY")
+	if limited {
+		executable = os.Getenv("SUDOKU_SPEED_TEST_BINARY")
+		if executable == "" {
+			t.Skip("set SUDOKU_SPEED_TEST_BINARY to the speed-enabled component build")
+		}
+		if err := clientlimit.CheckBrokerBinary(context.Background(), executable); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if executable == "" {
 		t.Skip("set SUDOKU_TEST_BINARY to an official release executable")
 	}

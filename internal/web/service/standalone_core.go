@@ -28,9 +28,11 @@ var (
 func standaloneBinaryPath(engine string) string {
 	return config.StandaloneCoreBinaryPath(engine)
 }
+
 func standaloneConfigPath(engine string) string {
 	return filepath.Join(filepath.Dir(config.OwnerCoreBinaryPath()), engine+".json")
 }
+
 func standaloneProcess(engine, path string, isolated bool) *singbox.Process {
 	profile := singbox.ProcessOptions{Name: engine, Binary: standaloneBinaryPath(engine), RunCommand: "run", VersionPrefix: "sing-box version "}
 	if engine == CoreTypeXray {
@@ -80,7 +82,7 @@ func (s *SingBoxService) writeStandaloneXrayConfig(ctx context.Context) error {
 		return err
 	}
 	path := s.ProcessConfigPath()
-	if err = os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+	if err = os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
 	f, err := os.CreateTemp(filepath.Dir(path), ".xray-candidate-*.json")
@@ -100,11 +102,13 @@ func (s *SingBoxService) writeStandaloneXrayConfig(ctx context.Context) error {
 	}
 	return os.Rename(f.Name(), path)
 }
+
 func (s *SingBoxService) restartStandaloneXray(ctx context.Context) error {
 	singBoxApplyMu.Lock()
 	defer singBoxApplyMu.Unlock()
 	return s.restartStandaloneXrayLocked(ctx)
 }
+
 func (s *SingBoxService) restartStandaloneXrayLocked(ctx context.Context) error {
 	old := s.process().AppliedConfig()
 	if err := s.writeStandaloneXrayConfig(ctx); err != nil {
@@ -127,6 +131,7 @@ func (s *SingBoxService) restartStandaloneXrayLocked(ctx context.Context) error 
 	s.stoppedFlag().Store(false)
 	return nil
 }
+
 func (s *SingBoxService) pollStandaloneTraffic(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, 4*time.Second)
 	defer cancel()
@@ -163,7 +168,7 @@ func (s *SingBoxService) pollStandaloneTraffic(ctx context.Context) error {
 
 func (s *SingBoxService) validateStandaloneXrayBytes(ctx context.Context, data []byte) error {
 	dir := filepath.Dir(s.ProcessConfigPath())
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
 	f, err := os.CreateTemp(dir, ".xray-check-*.json")

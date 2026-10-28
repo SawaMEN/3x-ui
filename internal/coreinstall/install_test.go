@@ -21,6 +21,7 @@ import (
 type transportFunc func(*http.Request) (*http.Response, error)
 
 func (f transportFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
 func archiveFixture(t *testing.T, name, binary string) []byte {
 	t.Helper()
 	var buf bytes.Buffer
@@ -39,7 +40,7 @@ func archiveFixture(t *testing.T, name, binary string) []byte {
 	} else {
 		g := gzip.NewWriter(&buf)
 		w := tar.NewWriter(g)
-		e := w.WriteHeader(&tar.Header{Name: strings.TrimSuffix(name, ".tar.gz") + "/" + binary, Mode: 0755, Size: 14})
+		e := w.WriteHeader(&tar.Header{Name: strings.TrimSuffix(name, ".tar.gz") + "/" + binary, Mode: 0o755, Size: 14})
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -49,13 +50,14 @@ func archiveFixture(t *testing.T, name, binary string) []byte {
 	}
 	return buf.Bytes()
 }
+
 func TestInstallChecksAndAtomicallyPublishes(t *testing.T) {
 	for _, engine := range []string{"xray", "sing-box-upstream"} {
 		for _, failure := range []string{"", "checksum", "validation", "http"} {
 			t.Run(engine+"/"+failure, func(t *testing.T) {
 				dir := t.TempDir()
 				target := filepath.Join(dir, "core")
-				os.WriteFile(target, []byte("old executable"), 0755)
+				os.WriteFile(target, []byte("old executable"), 0o755)
 				name, err := AssetName(engine, "v1.2.3", "linux", "amd64", "")
 				if err != nil {
 					t.Fatal(err)
@@ -121,10 +123,19 @@ func TestInstallChecksAndAtomicallyPublishes(t *testing.T) {
 		}
 	}
 }
+
 func TestAssetNames(t *testing.T) {
-	for _, tc := range []struct{ core, arch, arm, want string }{
-		{"xray", "amd64", "", "Xray-linux-64.zip"}, {"xray", "arm64", "", "Xray-linux-arm64-v8a.zip"}, {"xray", "arm", "6", "Xray-linux-arm32-v6.zip"},
-		{"sing-box-upstream", "arm", "7", "sing-box-1.2.3-linux-armv7.tar.gz"}, {"sing-box-upstream", "mips", "", "sing-box-1.2.3-linux-mips-softfloat.tar.gz"},
+	for _, tc := range []struct {
+		core string
+		arch string
+		arm  string
+		want string
+	}{
+		{core: "xray", arch: "amd64", want: "Xray-linux-64.zip"},
+		{core: "xray", arch: "arm64", want: "Xray-linux-arm64-v8a.zip"},
+		{core: "xray", arch: "arm", arm: "6", want: "Xray-linux-arm32-v6.zip"},
+		{core: "sing-box-upstream", arch: "arm", arm: "7", want: "sing-box-1.2.3-linux-armv7.tar.gz"},
+		{core: "sing-box-upstream", arch: "mips", want: "sing-box-1.2.3-linux-mips-softfloat.tar.gz"},
 	} {
 		got, err := AssetName(tc.core, "v1.2.3", "linux", tc.arch, tc.arm)
 		if err != nil || got != tc.want {
@@ -138,6 +149,7 @@ func TestAssetNames(t *testing.T) {
 		t.Fatal("unknown ARM accepted")
 	}
 }
+
 func TestDigestAndArchiveRejection(t *testing.T) {
 	want := strings.Repeat("a", 64)
 	got, err := xrayDigest([]byte("SHA2-256 (Xray.zip) = " + want + "\nSHA2-512 (Xray.zip) = " + strings.Repeat("b", 128)))

@@ -140,13 +140,11 @@
   },
   "pages": {
     "coreSelection": {
-      "defaultBadge": "Default",
       "missing": "Not installed",
       "defaultTitle": "Standard core",
       "defaultDescription": "Included with the panel. Updated automatically when you update 3x-ui.",
       "upstreamDescription": "Official sing-box. Its release build has no exact per-user traffic API, so traffic-volume quotas for its connections are unavailable. Use the bundled core or Xray for traffic quotas.",
       "separate": "Separate installation and updates",
-      "installSoon": "Install and activate · Coming soon",
       "note": "Install an engine, then choose Use. Switching restarts connections. If the configuration is unsupported, the panel restores the previous engine. Switch away from an active engine before updating it.",
       "settings": "Standard core settings",
       "install": "Download and install",
