@@ -685,6 +685,8 @@ func (s *ClientService) Update(inboundSvc *InboundService, id int, updated model
 			}
 		}
 	}
+	requestedGroup := strings.TrimSpace(updated.Group)
+	updated.Group = existing.Group
 	normalizeClientTrafficReset(&updated)
 	if updated.SubID == "" {
 		updated.SubID = existing.SubID
@@ -806,9 +808,7 @@ func (s *ClientService) Update(inboundSvc *InboundService, id int, updated model
 		return needRestart, applyErr
 	}
 
-	// UpdateInboundClient renames the record atomically with each inbound's
-	// settings JSON; this direct write only covers records with no inbound left.
-	if updated.Email != existing.Email {
+	if len(inboundIds) > 0 && updated.Email != existing.Email {
 		if err := database.GetDB().Model(&model.ClientRecord{}).
 			Where("id = ? AND email = ?", id, existing.Email).
 			Update("email", updated.Email).Error; err != nil {
@@ -831,9 +831,9 @@ func (s *ClientService) Update(inboundSvc *InboundService, id int, updated model
 		if err != nil {
 			return needRestart, err
 		}
-		if err := database.GetDB().Model(&model.ClientRecord{}).
-			Where("id = ?", id).
-			Updates(map[string]any{
+		if err := runSerializedTx(func(tx *gorm.DB) error {
+			if err := tx.Model(&model.ClientRecord{}).Where("id = ?", id).Updates(map[string]any{
+				"email":                updated.Email,
 				"sub_id":               merged.SubID,
 				"uuid":                 merged.UUID,
 				"password":             merged.Password,
@@ -862,6 +862,13 @@ func (s *ClientService) Update(inboundSvc *InboundService, id int, updated model
 				"traffic_reset":        merged.TrafficReset,
 				"traffic_reset_day":    merged.TrafficResetDay,
 			}).Error; err != nil {
+				return err
+			}
+			if err := inboundSvc.UpdateClientStat(tx, existing.Email, &updated); err != nil {
+				return err
+			}
+			return inboundSvc.UpdateClientIPs(tx, existing.Email, updated.Email)
+		}); err != nil {
 			return needRestart, err
 		}
 	}
@@ -878,21 +885,12 @@ func (s *ClientService) Update(inboundSvc *InboundService, id int, updated model
 		return needRestart, err
 	}
 
-	// Persist the group explicitly. SyncInbound deliberately preserves the
-	// stored group when the inbound settings carry none — so a node snapshot or a
-	// group-less settings rebuild can't wipe it (see SyncInbound + its tests).
-	// That guard also meant clearing the group in the client editor never took
-	// effect. The editor always round-trips the field, so apply it here,
-	// including the empty string that removes the client from its group.
-	if err := database.GetDB().Model(&model.ClientRecord{}).
-		Where("id = ?", id).
-		UpdateColumn("group_name", updated.Group).Error; err != nil {
+	// Move group membership through the same baseline accounting as bulk edits.
+	if _, err := s.AddToGroup([]string{updated.Email}, requestedGroup); err != nil {
 		return needRestart, err
 	}
 
-	// Same shape as the group write above: SyncInbound keeps a stored ad-tag
-	// when the incoming settings carry none, so clearing the override must be
-	// applied here, where the editor always round-trips the field.
+	// SyncInbound keeps an omitted ad-tag; the editor can explicitly clear it.
 	if err := database.GetDB().Model(&model.ClientRecord{}).
 		Where("id = ?", id).
 		UpdateColumn("ad_tag", updated.AdTag).Error; err != nil {

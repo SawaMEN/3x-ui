@@ -492,7 +492,7 @@ func (s *InboundService) autoRenewClients(tx *gorm.DB, mutationBatch *trafficMut
 					return false, 0, fmt.Errorf("renew %s: %w", email, err)
 				}
 			}
-			for traffic.ResetDay > 0 && newExpiryTime < now {
+			for traffic.ResetDay > 0 && newExpiryTime <= now {
 				if traffic.ResetMax > 0 && renewals >= traffic.ResetMax-traffic.ResetCount {
 					break
 				}

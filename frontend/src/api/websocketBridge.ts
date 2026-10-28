@@ -3,7 +3,6 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import { getSharedWebSocketClient } from '@/api/websocket';
 import { keys } from '@/api/queryKeys';
-import { isRecentLocalInvalidate } from '@/api/invalidationTracker';
 
 type Handler = (payload: unknown) => void;
 
@@ -31,7 +30,6 @@ export function useWebSocketBridge() {
         const pending = new Set(pendingInvalidations);
         pendingInvalidations.clear();
         for (const type of pending) {
-          if ((type === 'inbounds' || type === 'clients') && isRecentLocalInvalidate()) continue;
           void queryClient.invalidateQueries({ queryKey: invalidationKeys.get(type) });
         }
       }, 200);
@@ -52,6 +50,13 @@ export function useWebSocketBridge() {
       queryClient.setQueryData(keys.inbounds.slim(), payload);
     };
 
+    const onConnected: Handler = () => {
+      for (const queryKey of invalidationKeys.values()) {
+        void queryClient.invalidateQueries({ queryKey });
+      }
+    };
+
+    client.on('connected', onConnected);
     client.on('invalidate', onInvalidate);
     client.on('outbounds', onOutbounds);
     client.on('nodes', onNodes);
@@ -59,6 +64,7 @@ export function useWebSocketBridge() {
     client.connect();
 
     return () => {
+      client.off('connected', onConnected);
       client.off('invalidate', onInvalidate);
       client.off('outbounds', onOutbounds);
       client.off('nodes', onNodes);

@@ -7,6 +7,7 @@ import { DBInbound, coerceInboundJsonField } from '@/models/dbinbound';
 import type { ClientStats, DBInboundInit } from '@/models/dbinbound';
 import { Protocols } from '@/schemas/primitives';
 import { isSSMultiUser } from '@/lib/xray/protocol-capabilities';
+import { isClientAttachableProtocol } from '@/lib/inbounds/client-attachable';
 import { setDatepicker } from '@/hooks/useDatepicker';
 import { keys } from '@/api/queryKeys';
 import { SlimInboundListSchema, LastOnlineMapSchema, InboundDetailSchema } from '@/schemas/inbound';
@@ -58,23 +59,6 @@ interface ClientRollup {
   online: string[];
   comments: Map<string, string>;
 }
-
-const TRACKED_PROTOCOLS: readonly string[] = [
-  Protocols.VMESS,
-  Protocols.VLESS,
-  Protocols.TROJAN,
-  Protocols.SHADOWSOCKS,
-  Protocols.HYSTERIA,
-  Protocols.WIREGUARD,
-  Protocols.MTPROTO,
-  Protocols.AMNEZIAWG,
-  Protocols.TUIC,
-  Protocols.SNELL,
-  Protocols.TRUSTTUNNEL,
-  Protocols.FPTN,
-  Protocols.OPENFLUX,
-  Protocols.SUDOKU,
-];
 
 async function fetchSlimInbounds(): Promise<unknown[]> {
   const msg = await HttpUtil.get('/panel/api/inbounds/list/slim', undefined, { silent: true });
@@ -356,7 +340,7 @@ export function useInbounds() {
     const counts: Record<number, ClientRollup> = {};
     for (const dbInbound of dbInbounds) {
       const protocol = dbInbound.protocol;
-      if (!TRACKED_PROTOCOLS.includes(protocol)) continue;
+      if (!isClientAttachableProtocol(protocol)) continue;
       const settings = coerceInboundJsonField(dbInbound.settings) as {
         method?: string;
         clients?: Array<{ email?: string; enable?: boolean; comment?: string }>;

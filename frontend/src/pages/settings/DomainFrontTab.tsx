@@ -219,9 +219,10 @@ export default function DomainFrontTab({
                 style={{ width: '100%' }}
                 value={allSetting.rootRedirectURL}
                 options={redirectSiteOptions}
-                filterOption={(input, option) =>
-                  (option?.value ?? '').toLowerCase().includes(input.toLowerCase())
-                }
+                showSearch={{
+                  filterOption: (input, option) =>
+                    (option?.value ?? '').toLowerCase().includes(input.toLowerCase()),
+                }}
                 defaultActiveFirstOption={false}
                 allowClear
                 onChange={(value) => updateSetting({ rootRedirectURL: value })}

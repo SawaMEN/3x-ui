@@ -459,16 +459,20 @@ export default function ClientsPage() {
   }
 
   useEffect(() => {
-    localStorage.setItem(
-      FILTER_STATE_KEY,
-      JSON.stringify({
-        searchKey,
-        filters,
-        sort: sortValueFor(sortColumn, sortOrder),
-        // Only ever persist a size we actually resolved, never the render fallback.
-        pageSize: resolvedPageSize,
-      }),
-    );
+    try {
+      localStorage.setItem(
+        FILTER_STATE_KEY,
+        JSON.stringify({
+          searchKey,
+          filters,
+          sort: sortValueFor(sortColumn, sortOrder),
+          // Only ever persist a size we actually resolved, never the render fallback.
+          pageSize: resolvedPageSize,
+        }),
+      );
+    } catch {
+      // Filtering remains usable when browser storage is unavailable.
+    }
   }, [searchKey, filters, sortColumn, sortOrder, resolvedPageSize]);
 
   useEffect(() => {
