@@ -36,6 +36,7 @@ func isInternalUIAPI(path string) bool {
 		// public endpoints for third-party automation.
 		path == "/panel/api/setting/cores" ||
 		path == "/panel/api/setting/cores/:core/install" ||
+		path == "/panel/api/setting/cores/:core/select" ||
 		path == "/panel/api/telemt/subscription-proxy" ||
 		path == "/panel/api/xray/outbound-subs/:id/probe"
 }
