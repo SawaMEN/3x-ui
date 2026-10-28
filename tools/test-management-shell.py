@@ -32,6 +32,46 @@ class ManagementTests(unittest.TestCase):
                                 text=True, env=dict(os.environ, **(env or {})))
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_fresh_install_initializes_generated_credentials_and_preserves_existing_db(self):
+        for existing in (False, True):
+            with self.subTest(existing=existing), tempfile.TemporaryDirectory() as raw:
+                base = Path(raw)
+                panel = base / "x-ui"
+                panel.write_text('''#!/bin/bash
+printf '%s\\n' "$*" >> "$TEST_CALLS"
+case "$*" in
+  'setting -show true')
+    printf 'hasDefaultCredential: false\\nwebBasePath: /already-random/\\nport: 2053\\n'
+    # Settings reads create the fresh DB and a random user.
+    printf seeded > "$XUI_DB_FOLDER/x-ui.db"
+    ;;
+  'setting -getCert true') printf 'cert: \\n' ;;
+  'setting -getApiToken') printf 'apiToken: test-token\\n' ;;
+esac
+''')
+                panel.chmod(0o700)
+                if existing:
+                    (base / 'x-ui.db').write_text('existing database')
+                self.run_script(function('install.sh', 'config_after_install') + r'''
+NONINTERACTIVE=1; release=ubuntu
+xui_folder="$TEST_ROOT"
+curl() { printf '192.0.2.1\n200'; }
+gen_random_string() { printf 'randomvalue'; }
+prompt_and_setup_ssl() { SSL_SCHEME=http; SSL_HOST=192.0.2.1; }
+write_install_result() { printf '%s\n' "$*" > "$TEST_RESULT"; }
+config_after_install
+if [[ "$TEST_EXISTING" == 1 ]]; then
+    [[ ! -f "$TEST_RESULT" ]] || exit 1
+    ! grep -q -- '-username' "$TEST_CALLS" || exit 1
+else
+    grep -q -- '-username chosen -password secret -port 30443 -webBasePath accesspath' "$TEST_CALLS" || exit 1
+    [[ "$(cat "$TEST_RESULT")" == 'chosen secret 30443 accesspath http 192.0.2.1 test-token sqlite' ]] || exit 1
+fi
+''', {'TEST_ROOT': raw, 'XUI_DB_FOLDER': raw, 'XUI_DB_TYPE': 'sqlite',
+      'TEST_CALLS': str(base / 'calls'), 'TEST_RESULT': str(base / 'result'),
+      'TEST_EXISTING': '1' if existing else '0', 'XUI_USERNAME': 'chosen',
+      'XUI_PASSWORD': 'secret', 'XUI_PANEL_PORT': '30443', 'XUI_WEB_BASE_PATH': 'accesspath'})
+
     def test_install_smoke_verifies_stable_version_and_dev_commit(self):
         source = (ROOT / "deploy/test/smoke-noninteractive.sh").read_text()
         start = source.index('        if [ -n "${XUI_SMOKE_VERSION:-}" ]; then\n            installed=')

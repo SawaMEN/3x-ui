@@ -1151,11 +1151,22 @@ prompt_and_setup_ssl() {
 }
 
 config_after_install() {
+    # Reading settings initializes a fresh database with random credentials.
+    # Remember whether it existed before that read, so the first install still
+    # applies the requested credentials/port and writes install-result.env.
+    local fresh_sqlite=0
+    if [[ "${XUI_DB_TYPE:-sqlite}" != "postgres" && ! -s "${XUI_DB_FOLDER:-/etc/x-ui}/x-ui.db" ]]; then
+        fresh_sqlite=1
+    fi
     local existing_hasDefaultCredential=$("${xui_folder}"/x-ui setting -show true | grep -Eo 'hasDefaultCredential: .+' | awk '{print $2}')
     local existing_webBasePath=$("${xui_folder}"/x-ui setting -show true | grep -Eo 'webBasePath: .+' | awk '{print $2}' | sed 's#^/##')
     local existing_port=$("${xui_folder}"/x-ui setting -show true | grep -Eo 'port: .+' | awk '{print $2}')
     # Properly detect empty cert by checking if cert: line exists and has content after it
     local existing_cert=$("${xui_folder}"/x-ui setting -getCert true | grep 'cert:' | awk -F': ' '{print $2}' | tr -d '[:space:]')
+    if [[ "$fresh_sqlite" == 1 ]]; then
+        existing_hasDefaultCredential=true
+        existing_webBasePath=""
+    fi
     local URL_lists=(
         "https://api4.ipify.org"
         "https://ipv4.icanhazip.com"

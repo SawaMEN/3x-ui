@@ -6,9 +6,10 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/gin-gonic/gin"
 )
 
 func TestFirewallStatusInitializesAutoSyncWithoutEnablingFirewall(t *testing.T) {
