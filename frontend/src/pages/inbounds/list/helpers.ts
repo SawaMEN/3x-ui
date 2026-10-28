@@ -103,6 +103,7 @@ export function inboundNetworkLabels(record: {
       return ['ICMP'];
     case 'fptn':
     case 'openflux':
+    case 'vetroff':
     case 'trusttunnel':
       return ['TCP', 'UDP'];
     case 'masque': {

@@ -324,7 +324,7 @@ export default function InboundInfoModal({
     );
   }
 
-  const displayLinks = ['fptn', 'openflux', 'trusttunnel'].includes(dbInbound.protocol)
+  const displayLinks = ['fptn', 'openflux', 'trusttunnel', 'vetroff'].includes(dbInbound.protocol)
     ? (serverLinks.data ?? [])
     : links;
   const clientTab = (

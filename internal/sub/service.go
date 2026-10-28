@@ -45,7 +45,7 @@ var errSubscriptionFormatUnsupported = errors.New("subscription format cannot re
 func containsUnsupportedJSONProtocol(inbounds []*model.Inbound) bool {
 	for _, inbound := range inbounds {
 		switch inbound.Protocol {
-		case model.MASQUE, model.Snell, model.NaiveProxy, model.AnyTLS, model.ShadowTLS, model.AmneziaWG, model.TUIC, model.MTProto, model.VKTurnProxy, model.Mieru, model.Sudoku, model.TrustTunnel, model.FPTN, model.OpenFlux:
+		case model.MASQUE, model.Snell, model.NaiveProxy, model.AnyTLS, model.ShadowTLS, model.AmneziaWG, model.TUIC, model.MTProto, model.VKTurnProxy, model.Mieru, model.Sudoku, model.TrustTunnel, model.FPTN, model.VetroffProxy, model.OpenFlux:
 			return true
 		}
 	}
@@ -63,7 +63,7 @@ func containsUnsupportedSingBoxProtocol(inbounds []*model.Inbound) bool {
 
 func singBoxUnsupportedProtocol(protocol model.Protocol) bool {
 	switch protocol {
-	case model.AmneziaWG, model.MTProto, model.VKTurnProxy, model.Mieru, model.Sudoku, model.TrustTunnel, model.FPTN, model.OpenFlux:
+	case model.AmneziaWG, model.MTProto, model.VKTurnProxy, model.Mieru, model.Sudoku, model.TrustTunnel, model.FPTN, model.VetroffProxy, model.OpenFlux:
 		return true
 	}
 	return false
@@ -72,7 +72,7 @@ func singBoxUnsupportedProtocol(protocol model.Protocol) bool {
 func containsUnsupportedClashProtocol(inbounds []*model.Inbound) bool {
 	for _, inbound := range inbounds {
 		switch inbound.Protocol {
-		case model.MASQUE, model.Snell, model.NaiveProxy, model.AnyTLS, model.ShadowTLS, model.MTProto, model.VKTurnProxy, model.Mieru, model.TrustTunnel, model.FPTN, model.OpenFlux:
+		case model.MASQUE, model.Snell, model.NaiveProxy, model.AnyTLS, model.ShadowTLS, model.MTProto, model.VKTurnProxy, model.Mieru, model.TrustTunnel, model.FPTN, model.VetroffProxy, model.OpenFlux:
 			return true
 		case model.Hysteria, model.WireGuard, model.TUIC, model.AmneziaWG, model.Sudoku:
 			// These protocols have dedicated Clash/Mihomo emitters.
@@ -308,7 +308,7 @@ func (s *SubService) clientForLink(inbound *model.Inbound, email string) (model.
 // synced last (see TunnelAllowedIPsByInbound / amneziaWGClientAddresses).
 func (s *SubService) clientsForLinkExport(inbound *model.Inbound) ([]model.Client, error) {
 	if inbound.Protocol == model.WireGuard || inbound.Protocol == model.AmneziaWG ||
-		inbound.Protocol == model.Mieru || inbound.Protocol == model.Snell || inbound.Protocol == model.AnyTLS || inbound.Protocol == model.ShadowTLS || inbound.Protocol == model.Sudoku || inbound.Protocol == model.TrustTunnel || inbound.Protocol == model.FPTN || inbound.Protocol == model.OpenFlux {
+		inbound.Protocol == model.Mieru || inbound.Protocol == model.Snell || inbound.Protocol == model.AnyTLS || inbound.Protocol == model.ShadowTLS || inbound.Protocol == model.Sudoku || inbound.Protocol == model.TrustTunnel || inbound.Protocol == model.FPTN || inbound.Protocol == model.VetroffProxy || inbound.Protocol == model.OpenFlux {
 		// These protocols keep the client password in the inbound settings JSON.
 		// Prefer that source so subscriptions also work for existing rows whose
 		// normalized clients record predates password persistence.
@@ -451,7 +451,7 @@ func (s *SubService) matchingClients(inbound *model.Inbound, subId string) []mod
 		}
 	}
 
-	if inbound.Protocol == model.Mieru || inbound.Protocol == model.Snell || inbound.Protocol == model.AnyTLS || inbound.Protocol == model.ShadowTLS || inbound.Protocol == model.Sudoku || inbound.Protocol == model.FPTN || inbound.Protocol == model.OpenFlux {
+	if inbound.Protocol == model.Mieru || inbound.Protocol == model.Snell || inbound.Protocol == model.AnyTLS || inbound.Protocol == model.ShadowTLS || inbound.Protocol == model.Sudoku || inbound.Protocol == model.FPTN || inbound.Protocol == model.VetroffProxy || inbound.Protocol == model.OpenFlux {
 		if settingsClients, settingsErr := s.inboundService.GetClients(inbound); settingsErr == nil {
 			settingsByEmail := make(map[string]model.Client, len(settingsClients))
 			for _, settingsClient := range settingsClients {
@@ -1147,7 +1147,7 @@ func (s *SubService) GetLink(inbound *model.Inbound, email string) string {
 		return strings.Join(links, "\n")
 	case model.NaiveProxy:
 		return s.genNaiveLink(inbound, email)
-	case model.FPTN, model.OpenFlux:
+	case model.FPTN, model.VetroffProxy, model.OpenFlux:
 		return s.genAdditionalVPNLink(inbound, email)
 	case model.Snell:
 		return s.genSnellLink(inbound, email)
@@ -4176,7 +4176,7 @@ func (s *SubService) loadInboundsBySubId(subId string) ([]*model.Inbound, error)
 		JOIN client_inbounds ON client_inbounds.inbound_id = inbounds.id
 		JOIN clients ON clients.id = client_inbounds.client_id
 		WHERE
-			inbounds.protocol in ('vmess','vless','trojan','shadowsocks','hysteria','wireguard','amneziawg','mtproto','tuic','masque','naive','anytls','shadowtls','mieru','vk-turn-proxy','trusttunnel','sudoku','snell','fptn','openflux')
+			inbounds.protocol in ('vmess','vless','trojan','shadowsocks','hysteria','wireguard','amneziawg','mtproto','tuic','masque','naive','anytls','shadowtls','mieru','vk-turn-proxy','trusttunnel','sudoku','snell','fptn','openflux','vetroff')
 			AND clients.sub_id = ? AND inbounds.enable = ?
 	)`, subId, true).Order("sub_sort_index ASC").Order("id ASC")
 	if cached {

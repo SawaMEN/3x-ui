@@ -38,3 +38,10 @@ export const TrustTunnelInboundSettingsSchema = z
     }
   });
 export type TrustTunnelInboundSettings = z.infer<typeof TrustTunnelInboundSettingsSchema>;
+
+export const VetroffInboundSettingsSchema = z.object({
+  hostname: z.string().trim().min(1),
+  certificate: z.string().trim().min(1),
+  privateKey: z.string().trim().min(1),
+  clients: z.array(NaiveClientSchema).max(1024).default([]),
+});

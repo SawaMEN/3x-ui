@@ -838,6 +838,7 @@
         "pingtunnelForward": "Upstream proxy URL (optional)",
         "pingtunnelCongestion": "Congestion control",
         "pingtunnelNoCongestion": "Disabled",
+        "vetroffHint": "VetroffProxy binary release. A valid TLS certificate matching SNI is required. TCP and UDP use the selected port. Connection link: vetroff://. Panel traffic statistics and limits are not yet supported.",
         "trusttunnelHint": "TCP and UDP use the configured port. A self-signed TLS certificate is generated unless certificate paths are supplied. Add accounts in Clients.",
         "trusttunnelHostname": "TLS hostname",
         "trusttunnelHostnameHint": "The name verified by the client during TLS. For a self-signed certificate, the panel embeds it in the tt://? link. Do not include a scheme or port.",

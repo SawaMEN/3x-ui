@@ -562,6 +562,8 @@ export function createDefaultInboundSettings(protocol: string): AnyInboundSettin
         congestion: 'bb',
         clients: [],
       };
+    case 'vetroff':
+      return { hostname: '', certificate: '', privateKey: '', clients: [] };
     case 'trusttunnel':
       return { hostname: 'trusttunnel.local', certificate: '', privateKey: '', clients: [] };
     case 'masque':

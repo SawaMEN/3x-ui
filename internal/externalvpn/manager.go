@@ -78,6 +78,9 @@ func findBinary(protocol model.Protocol, managed bool) string {
 		name = "trusttunnel_endpoint"
 	case model.FPTN:
 		name = "fptn"
+	case model.VetroffProxy:
+		path, _ := filepath.Abs(filepath.Join(config.GetBinFolderPath(), "vetroff-bundle", "foxtunnel-necko", "vetroff"))
+		return path
 	case model.OpenFlux:
 		name = "openflux"
 	default:
@@ -195,6 +198,9 @@ func certificate(inst Instance, folder string) (string, string, error) {
 }
 
 func files(inst Instance, metricsAddr string) ([]string, error) {
+	if inst.Protocol == model.VetroffProxy {
+		return vetroffFiles(inst)
+	}
 	folder := filepath.Join(directory(), strconv.Itoa(inst.ID))
 	if err := os.MkdirAll(folder, 0o700); err != nil {
 		return nil, err
@@ -308,7 +314,7 @@ func (m *Manager) ensureLocked(inst Instance) error {
 			m.removeLocked(inst.ID)
 		}
 	}
-	if inst.Protocol == model.TrustTunnel || inst.Protocol == model.FPTN || inst.Protocol == model.OpenFlux {
+	if inst.Protocol == model.VetroffProxy || inst.Protocol == model.TrustTunnel || inst.Protocol == model.FPTN || inst.Protocol == model.OpenFlux {
 		active := false
 		for _, c := range inst.Settings.Clients {
 			active = active || c.Enable
@@ -353,6 +359,9 @@ func (m *Manager) ensureLocked(inst Instance) error {
 		}
 		ctx, cancel = context.WithCancel(context.Background())
 		cmd = exec.CommandContext(ctx, binary(inst.Protocol), args...)
+	}
+	if inst.Protocol == model.VetroffProxy {
+		cmd.Dir = filepath.Dir(binary(inst.Protocol))
 	}
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	if err := cmd.Start(); err != nil {

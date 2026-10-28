@@ -3283,6 +3283,7 @@
               "snell",
               "fptn",
               "openflux",
+              "vetroff",
               "anytls",
               "shadowtls",
               "mieru",
@@ -5993,7 +5994,7 @@
             "name": "protocol",
             "in": "path",
             "required": true,
-            "description": "Component: naiveproxy, hysteria2, sudoku, pingtunnel or trusttunnel.",
+            "description": "Component: naiveproxy, hysteria2, sudoku, pingtunnel, trusttunnel or vetroff.",
             "schema": {
               "type": "string"
             }
@@ -6034,7 +6035,7 @@
             "name": "protocol",
             "in": "path",
             "required": true,
-            "description": "Component identifier: pingtunnel, trusttunnel, hysteria2, openflux or fptn.",
+            "description": "Component identifier: pingtunnel, trusttunnel, hysteria2, openflux, vetroff or fptn.",
             "schema": {
               "type": "string"
             }

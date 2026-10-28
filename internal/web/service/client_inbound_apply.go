@@ -472,7 +472,7 @@ func (s *ClientService) AddInboundClient(inboundSvc *InboundService, data *model
 			}
 		}
 		switch oldInbound.Protocol {
-		case "trojan", "trusttunnel", "naive", "masque", "snell", "fptn", "openflux", "anytls", "shadowtls", "mieru":
+		case "trojan", "vetroff", "trusttunnel", "naive", "masque", "snell", "fptn", "openflux", "anytls", "shadowtls", "mieru":
 			if client.Password == "" {
 				return false, common.NewError("client password is required")
 			}
@@ -760,7 +760,7 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 
 	newClientId := ""
 	switch oldInbound.Protocol {
-	case "trojan", "trusttunnel", "naive", "masque", "snell", "fptn", "openflux", "anytls", "shadowtls", "mieru":
+	case "trojan", "vetroff", "trusttunnel", "naive", "masque", "snell", "fptn", "openflux", "anytls", "shadowtls", "mieru":
 		newClientId = clients[0].Password
 	case "shadowsocks":
 		newClientId = clients[0].Email

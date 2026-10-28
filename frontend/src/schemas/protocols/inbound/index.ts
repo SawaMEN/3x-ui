@@ -1,6 +1,10 @@
 import { z } from 'zod';
 
-import { PingtunnelInboundSettingsSchema, TrustTunnelInboundSettingsSchema } from './external-vpn';
+import {
+  PingtunnelInboundSettingsSchema,
+  TrustTunnelInboundSettingsSchema,
+  VetroffInboundSettingsSchema,
+} from './external-vpn';
 import { AmneziawgInboundSettingsSchema } from './amneziawg';
 import { FptnInboundSettingsSchema, OpenFluxInboundSettingsSchema } from './additional-vpn';
 import { SnellInboundSettingsSchema } from './snell';
@@ -75,6 +79,7 @@ export const InboundSettingsSchema = z.discriminatedUnion('protocol', [
   z.object({ protocol: z.literal('tuic'), settings: TuicInboundSettingsSchema }),
   z.object({ protocol: z.literal('pingtunnel'), settings: PingtunnelInboundSettingsSchema }),
   z.object({ protocol: z.literal('trusttunnel'), settings: TrustTunnelInboundSettingsSchema }),
+  z.object({ protocol: z.literal('vetroff'), settings: VetroffInboundSettingsSchema }),
   z.object({ protocol: z.literal('masque'), settings: MasqueInboundSettingsSchema }),
   z.object({ protocol: z.literal('naive'), settings: NaiveInboundSettingsSchema }),
   z.object({ protocol: z.literal('mieru'), settings: MieruInboundSettingsSchema }),

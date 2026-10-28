@@ -29,6 +29,9 @@ func RemoveProtocolComponent(ctx context.Context, component string) error {
 	case "pingtunnel":
 		protocol = model.Pingtunnel
 		path = filepath.Join(config.GetBinFolderPath(), "pingtunnel")
+	case "vetroff":
+		protocol = model.VetroffProxy
+		path = filepath.Join(config.GetBinFolderPath(), "vetroff-bundle")
 	case "trusttunnel":
 		protocol = model.TrustTunnel
 		path = filepath.Join(config.GetBinFolderPath(), "trusttunnel_endpoint")
@@ -60,10 +63,13 @@ func RemoveProtocolComponent(ctx context.Context, component string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if protocol != model.Sudoku {
+	if protocol != model.Sudoku && protocol != model.VetroffProxy {
 		if err := externalvpn.CheckManagedRemoval(protocol); err != nil {
 			return err
 		}
+	}
+	if protocol == model.VetroffProxy {
+		return externalvpn.RemoveVetroff(ctx)
 	}
 	if err := removeComponentFile(path); err != nil {
 		return err

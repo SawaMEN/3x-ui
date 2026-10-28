@@ -124,12 +124,12 @@ describe('InboundFormModal', () => {
         success: true,
         msg: '',
         obj: String(path).includes('externalvpn')
-          ? { pingtunnel: { installed }, trusttunnel: { installed } }
+          ? { pingtunnel: { installed }, trusttunnel: { installed }, vetroff: { installed } }
           : { installed },
       }));
       renderModal();
       await act(async () => {});
-      for (const protocol of ['pingtunnel', 'trusttunnel', 'sudoku']) {
+      for (const protocol of ['pingtunnel', 'trusttunnel', 'sudoku', 'vetroff']) {
         listSelectOptions('protocol');
         fireEvent.change(document.querySelector('#protocol')!, { target: { value: protocol } });
         await act(async () => {});

@@ -3257,6 +3257,7 @@ export const SCHEMAS: Record<string, unknown> = {
           "snell",
           "fptn",
           "openflux",
+          "vetroff",
           "anytls",
           "shadowtls",
           "mieru",

@@ -28,6 +28,8 @@ func parseExternalVPNProtocol(value string) (model.Protocol, error) {
 		return model.Pingtunnel, nil
 	case string(model.FPTN):
 		return model.FPTN, nil
+	case string(model.VetroffProxy):
+		return model.VetroffProxy, nil
 	case string(model.OpenFlux):
 		return model.OpenFlux, nil
 	case string(model.TrustTunnel):

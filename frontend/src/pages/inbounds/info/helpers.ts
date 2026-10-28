@@ -19,6 +19,7 @@ const LINK_PROTOCOLS: ReadonlySet<string> = new Set([
   Protocols.MTPROTO,
   Protocols.TUIC,
   Protocols.SNELL,
+  Protocols.VETROFF,
   Protocols.TRUSTTUNNEL,
   Protocols.FPTN,
   Protocols.OPENFLUX,
