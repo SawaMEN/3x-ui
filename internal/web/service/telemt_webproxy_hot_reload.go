@@ -16,10 +16,10 @@ import (
 )
 
 type telemtWebReloadEnvelope struct {
-	OK bool `json:"ok"`
+	OK   bool `json:"ok"`
 	Data struct {
 		ReloadID uint64 `json:"reload_id"`
-		State string `json:"state"`
+		State    string `json:"state"`
 	} `json:"data"`
 }
 
@@ -59,7 +59,7 @@ func (s TelemtService) SaveWebUsersHotReload(cfg TelemtConfig) error {
 	if systemctl("is-active", "--quiet", telemtServiceName) != nil {
 		return nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30 * time.Second)
 	defer cancel()
 	if err := telemtWebReloadRuntime(ctx); err == nil {
 		return nil
@@ -72,7 +72,7 @@ func (s TelemtService) SaveWebUsersHotReload(cfg TelemtConfig) error {
 		if renameErr := os.Rename(rollbackTmp, telemtConfigPath); renameErr != nil {
 			return fmt.Errorf("Telemt hot reload rejected; failed to restore old config: %w", renameErr)
 		}
-		recoveryCtx, recoveryCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		recoveryCtx, recoveryCancel := context.WithTimeout(context.Background(), 30 * time.Second)
 		defer recoveryCancel()
 		if recoveryErr := telemtWebReloadRuntime(recoveryCtx); recoveryErr != nil {
 			// Last resort: keep the old service available.
