@@ -38,7 +38,7 @@ export default function ProxyCoreTab({ active }: { active: boolean }) {
       window.removeEventListener('xui-core-settings-saved', load);
     };
   }, [active, refresh]);
-  const action = async (kind: CoreKind, operation: 'install' | 'select') => {
+  const action = async (kind: CoreKind, operation: 'install' | 'select' | 'delete') => {
     if (busy) return;
     setBusy(kind);
     setError('');

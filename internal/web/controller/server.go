@@ -251,15 +251,8 @@ func (a *ServerController) status(c *gin.Context) {
 	singBoxStatus := nativeStatus(service.CoreTypeSingBox)
 
 	runningCore := ""
-	switch {
-	case service.IsNativeCore(coreType) && service.NativeCore(coreType).IsRunning():
+	if service.NativeCore(coreType).IsRunning() {
 		runningCore = coreType
-	case coreType == service.CoreTypeXray && status.Xray.State == service.Running:
-		runningCore = service.CoreTypeXray
-	case service.NativeCore(service.CoreTypeSingBox).IsRunning():
-		runningCore = service.CoreTypeSingBox
-	case status.Xray.State == service.Running:
-		runningCore = service.CoreTypeXray
 	}
 
 	raw, err := json.Marshal(status)
@@ -275,9 +268,10 @@ func (a *ServerController) status(c *gin.Context) {
 
 	obj["panelEdition"] = "sawamen"
 	obj["singbox"] = singBoxStatus
-	selected := gin.H{"state": status.Xray.State, "errorMsg": status.Xray.ErrorMsg, "version": status.Xray.Version}
+	selected := nativeStatus(coreType)
+	obj["xray"] = nativeStatus(service.CoreTypeXray)
 	if service.IsNativeCore(coreType) {
-		selected = nativeStatus(coreType)
+		obj["singbox"] = selected
 	}
 	obj["core"] = gin.H{
 		"type": coreType, "running": runningCore,

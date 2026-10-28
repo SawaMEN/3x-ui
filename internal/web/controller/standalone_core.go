@@ -41,10 +41,10 @@ func (a *SettingController) installStandaloneCore(c *gin.Context) {
 	coreManagementMu.Lock()
 	defer coreManagementMu.Unlock()
 	var form struct {
-		Version string `json:"version"`
+		Version string `json:"version" form:"version"`
 	}
 	if c.Request.ContentLength != 0 {
-		if err := c.ShouldBindJSON(&form); err != nil {
+		if err := c.ShouldBind(&form); err != nil {
 			jsonObj(c, nil, err)
 			return
 		}
@@ -73,7 +73,10 @@ func (a *SettingController) selectStandaloneCore(c *gin.Context) {
 		return
 	}
 	if old == target {
-		jsonObj(c, gin.H{"selected": target}, nil)
+		if !service.NativeCore(target).IsRunning() {
+			err = service.NativeCore(target).Restart(c.Request.Context())
+		}
+		jsonObj(c, gin.H{"selected": target}, err)
 		return
 	}
 	if runtime.GOOS == "linux" && os.Geteuid() == 0 {
@@ -84,8 +87,26 @@ func (a *SettingController) selectStandaloneCore(c *gin.Context) {
 		}
 		defer release()
 	}
+	finishSwitch := service.BeginCoreSwitch()
+	defer finishSwitch()
 	if err = a.settingService.SetCoreType(target); err == nil {
 		err = a.switchCoreWithGateway(c.Request.Context(), old, target)
 	}
 	jsonObj(c, gin.H{"selected": target}, err)
+}
+
+func (a *SettingController) deleteStandaloneCore(c *gin.Context) {
+	coreManagementMu.Lock()
+	defer coreManagementMu.Unlock()
+	err := service.UninstallStandaloneCore(c.Request.Context(), c.Param("core"))
+	jsonObj(c, gin.H{"removed": err == nil}, err)
+}
+
+func (a *SettingController) updateStandaloneCore(c *gin.Context) {
+	coreManagementMu.Lock()
+	defer coreManagementMu.Unlock()
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Minute)
+	defer cancel()
+	version, err := service.UpdateStandaloneCore(ctx, c.Param("core"), "latest")
+	jsonObj(c, gin.H{"version": version}, err)
 }

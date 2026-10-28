@@ -23,13 +23,16 @@ func (s *SingBoxService) DidCrash() bool {
 // RecoverIfCrashed rechecks selection and manual Stop under the lifecycle lock.
 // A watchdog observation is stale as soon as an operator changes either one.
 func (s *SingBoxService) RecoverIfCrashed(ctx context.Context) error {
+	if CoreSwitchInProgress() {
+		return nil
+	}
 	singBoxApplyMu.Lock()
 	defer singBoxApplyMu.Unlock()
 	coreType, err := (&SettingService{}).GetCoreType()
 	if err != nil {
 		return err
 	}
-	if coreType != s.coreType() || !s.DidCrash() {
+	if CoreSwitchInProgress() || coreType != s.coreType() || !s.DidCrash() {
 		return nil
 	}
 	if s.coreType() == CoreTypeXray {

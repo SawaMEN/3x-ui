@@ -1,5 +1,10 @@
-import { Button, Space, Tag } from 'antd';
-import { AppstoreOutlined, CloudDownloadOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { Button, Popconfirm, Space, Tag } from 'antd';
+import {
+  AppstoreOutlined,
+  CloudDownloadOutlined,
+  ThunderboltOutlined,
+  DeleteOutlined,
+} from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import './CoreSelection.css';
 
@@ -18,7 +23,7 @@ export default function CoreSelection({
 }: {
   cores: CoreStatus[];
   busy: CoreKind | null;
-  onAction: (kind: CoreKind, action: 'install' | 'select') => void;
+  onAction: (kind: CoreKind, action: 'install' | 'select' | 'delete') => void;
 }) {
   const { t } = useTranslation();
   return (
@@ -70,7 +75,7 @@ export default function CoreSelection({
                 </p>
               </div>
               <Space className="core-selection-action" wrap>
-                {!bundled && !core?.running && (
+                {!bundled && !core?.installed && (
                   <Button
                     size="small"
                     disabled={!core || busy !== null}
@@ -78,14 +83,33 @@ export default function CoreSelection({
                     icon={<CloudDownloadOutlined />}
                     onClick={() => onAction(kind, 'install')}
                   >
-                    {t(
-                      core?.installed
-                        ? 'pages.coreSelection.update'
-                        : 'pages.coreSelection.install',
-                    )}
+                    {t('pages.coreSelection.install')}
                   </Button>
                 )}
-                {core?.installed && !core.selected && (
+                {!bundled && core?.installed && (
+                  <Popconfirm
+                    title={t('pages.coreSelection.removeConfirm')}
+                    description={t('pages.coreSelection.removeDescription')}
+                    disabled={core.selected || core.running || busy !== null}
+                    onConfirm={() => onAction(kind, 'delete')}
+                  >
+                    <Button
+                      danger
+                      size="small"
+                      icon={<DeleteOutlined />}
+                      title={
+                        core.selected || core.running
+                          ? t('pages.coreSelection.switchBeforeRemove')
+                          : undefined
+                      }
+                      disabled={core.selected || core.running || busy !== null}
+                      loading={busy === kind}
+                    >
+                      {t('pages.coreSelection.remove')}
+                    </Button>
+                  </Popconfirm>
+                )}
+                {core?.installed && (!core.selected || !core.running) && (
                   <Button
                     size="small"
                     type="primary"
@@ -93,7 +117,7 @@ export default function CoreSelection({
                     loading={busy === kind}
                     onClick={() => onAction(kind, 'select')}
                   >
-                    {t('pages.coreSelection.use')}
+                    {t(core.selected ? 'pages.coreSelection.start' : 'pages.coreSelection.use')}
                   </Button>
                 )}
               </Space>

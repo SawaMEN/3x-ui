@@ -12,6 +12,8 @@ import (
 
 // Settings have already persisted newCore. The caller serializes Gateway changes.
 func (a *SettingController) switchCoreWithGateway(ctx context.Context, oldCore, newCore string) (err error) {
+	finishSwitch := service.BeginCoreSwitch()
+	defer finishSwitch()
 	network := &service.GatewayNetworkService{}
 	snapshot := network.Status(ctx)
 	rollbackTemplate := func() error { return nil }
@@ -64,6 +66,13 @@ func (a *SettingController) switchCoreWithGateway(ctx context.Context, oldCore, 
 	if service.IsNativeCore(newCore) || newCore == service.CoreTypeXray {
 		if err = service.NativeCore(newCore).WriteConfig(); err != nil {
 			return err
+		}
+	}
+	for _, kind := range []string{service.CoreTypeSingBox, service.CoreTypeSingBoxUpstream, service.CoreTypeXray} {
+		if kind != oldCore && kind != newCore && service.NativeCore(kind).IsRunning() {
+			if err = service.NativeCore(kind).Stop(ctx); err != nil {
+				return err
+			}
 		}
 	}
 	// Mark before stopping: even a failed Stop can change the old runtime.

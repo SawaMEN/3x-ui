@@ -1,10 +1,12 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
@@ -45,6 +47,7 @@ func updateAutomaticRouting(cfg *xray.Config, subs []*model.OutboundSubscription
 		targets[autoInboundTag(sub.Id)] = target
 	}
 	found := map[string]bool{}
+	changed := false
 	for _, raw := range rules {
 		rule, ok := raw.(map[string]any)
 		if !ok {
@@ -56,6 +59,8 @@ func updateAutomaticRouting(cfg *xray.Config, subs []*model.OutboundSubscription
 		}
 		tag, _ := inbound[0].(string)
 		if target, ok := targets[tag]; ok {
+			_, balanced := rule["balancerTag"]
+			changed = changed || rule["outboundTag"] != target || balanced
 			rule["outboundTag"] = target
 			delete(rule, "balancerTag")
 			found[tag] = true
@@ -65,6 +70,9 @@ func updateAutomaticRouting(cfg *xray.Config, subs []*model.OutboundSubscription
 		if !found[tag] {
 			return nil, fmt.Errorf("automatic routing missing; reload the core after subscription changes")
 		}
+	}
+	if !changed {
+		return cfg, nil
 	}
 	encoded, err := json.Marshal(routing)
 	if err != nil {
@@ -162,8 +170,16 @@ func (s *OutboundSubscriptionService) ApplyAutomaticSelections() (int, error) {
 				}
 			}
 		}
+	} else if core == CoreTypeXray {
+		if !SelectedNativeCore().IsRunning() {
+			err = fmt.Errorf("core is stopped; selection will apply on startup")
+		} else {
+			applyCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			applied, err = applyXrayAutomaticChoices(applyCtx, subs)
+			cancel()
+		}
 	} else {
-		err = fmt.Errorf("legacy core state requires offline migration to sing-box")
+		err = fmt.Errorf("unsupported core %q", core)
 	}
 	changes := 0
 	for _, sub := range subs {
@@ -188,4 +204,36 @@ func (s *OutboundSubscriptionService) ApplyAutomaticSelections() (int, error) {
 		}
 	}
 	return changes, nil
+}
+
+func applyXrayAutomaticChoices(ctx context.Context, subs []*model.OutboundSubscription) (map[int]string, error) {
+	svc := NativeCore(CoreTypeXray)
+	var current xray.Config
+	if err := json.Unmarshal(svc.process().AppliedConfig(), &current); err != nil {
+		return nil, err
+	}
+	next, err := updateAutomaticRouting(&current, subs)
+	if err != nil {
+		return nil, err
+	}
+	if !bytes.Equal(current.RouterConfig, next.RouterConfig) {
+		if err := svc.Restart(ctx); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(svc.process().AppliedConfig(), &current); err != nil {
+			return nil, err
+		}
+		next, err = updateAutomaticRouting(&current, subs)
+		if err != nil {
+			return nil, err
+		}
+		if !bytes.Equal(current.RouterConfig, next.RouterConfig) {
+			return nil, fmt.Errorf("Xray has not acknowledged automatic routes")
+		}
+	}
+	applied := make(map[int]string, len(subs))
+	for _, sub := range subs {
+		applied[sub.Id] = autoRouteTarget(sub)
+	}
+	return applied, nil
 }

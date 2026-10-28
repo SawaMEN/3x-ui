@@ -213,7 +213,9 @@ export default function XrayPage() {
       setXraySetting(serialized);
       setTemplateSettings(clone);
     }
-    saveAll();
+    void saveAll().catch((error) =>
+      messageApi.error(error instanceof Error ? error.message : String(error)),
+    );
   }
 
   const scrollTarget = () => document.getElementById('content-layout') || window;
@@ -254,6 +256,7 @@ export default function XrayPage() {
             onShowNord={() => setNordOpen(true)}
             onShowPia={() => setPiaOpen(true)}
             onRefreshXrayData={fetchAll}
+            onSaveTemplate={saveAll}
           />
         );
       case 'balancer':

@@ -145,3 +145,21 @@ describe('DNS server form', () => {
     });
   });
 });
+
+it('replaces all connection dependencies before removing a used outbound', () => {
+  const next = removeConnection(config, 0, 'tunnel');
+  expect(referencePaths(next, 'connection', 'shared')).toEqual([]);
+  expect(next.route).toMatchObject({ final: 'tunnel' });
+  expect(next.dns).toMatchObject({ final: 'shared' });
+  expect(config.outbounds).toHaveLength(2);
+});
+
+it('rejects duplicate imported connection tags before changing the draft', () => {
+  const cfg = { outbounds: [{ type: 'direct', tag: 'direct' }] };
+  expect(() =>
+    putConnection(cfg, null, { type: 'selector', tag: 'proxy' }, [
+      { type: 'socks', tag: 'direct' },
+    ]),
+  ).toThrow();
+  expect(cfg.outbounds).toHaveLength(1);
+});

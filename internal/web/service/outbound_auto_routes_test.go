@@ -45,6 +45,15 @@ func TestAutomaticRoutingSelectionOnlyChangesRules(t *testing.T) {
 	if routing.Rules[0].Outbound != "b" || routing.Rules[1].Outbound != "api" {
 		t.Fatalf("%+v", routing)
 	}
+	pretty, err := json.MarshalIndent(json.RawMessage(next.RouterConfig), "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	next.RouterConfig = json_util.RawMessage(pretty)
+	acknowledged, err := updateAutomaticRouting(next, []*model.OutboundSubscription{sub})
+	if err != nil || acknowledged != next {
+		t.Fatal("unchanged automatic routes must not trigger a restart because of JSON formatting", err)
+	}
 	sub.SelectedTag = ""
 	next, err = updateAutomaticRouting(next, []*model.OutboundSubscription{sub})
 	if err != nil {

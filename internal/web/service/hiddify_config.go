@@ -112,6 +112,11 @@ func loadNativeConfigSnapshotForTemplate(template *string) (*nativeConfigSnapsho
 			return err
 		}
 		listIDs = append(listIDs, nativeListIDs...)
+		upstreamListIDs, err := routingListIDs(snapshot.setting("singBoxUpstreamConfigTemplate"))
+		if err != nil {
+			return err
+		}
+		listIDs = append(listIDs, upstreamListIDs...)
 		if len(listIDs) > 0 {
 			if err := tx.Where("id IN ?", listIDs).Find(&snapshot.routingLists).Error; err != nil {
 				return err

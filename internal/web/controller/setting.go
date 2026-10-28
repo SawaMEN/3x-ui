@@ -96,6 +96,8 @@ func (a *SettingController) initRouter(g *gin.RouterGroup) {
 	g.GET("/cores", a.coreStatuses)
 	g.POST("/cores/:core/install", a.installStandaloneCore)
 	g.POST("/cores/:core/select", a.selectStandaloneCore)
+	g.POST("/cores/:core/delete", a.deleteStandaloneCore)
+	g.POST("/cores/:core/update", a.updateStandaloneCore)
 	g.POST("/defaultSettings", a.getDefaultSettings)
 	g.POST("/factoryDefaults", a.getFactoryDefaults)
 	g.POST("/update", a.updateSetting)
@@ -182,6 +184,7 @@ func (a *SettingController) updateSetting(c *gin.Context) {
 	allSetting := &form.AllSetting
 	oldTwoFactor, twoFactorErr := a.settingService.GetTwoFactorEnable()
 	oldPanelOutbound, _ := a.settingService.GetPanelOutbound()
+	oldRootEnabled, oldRootURL, _ := a.settingService.GetRootRedirectSettings()
 	coreManagementMu.Lock()
 	defer coreManagementMu.Unlock()
 	oldCoreType, _ := a.settingService.GetCoreType()
@@ -209,6 +212,10 @@ func (a *SettingController) updateSetting(c *gin.Context) {
 		}
 		defer release()
 	}
+	if oldCoreType != allSetting.CoreType {
+		finishSwitch := service.BeginCoreSwitch()
+		defer finishSwitch()
+	}
 	err := a.settingService.UpdateAllSetting(allSetting, service.SecretClears{
 		TgBotToken:   form.ClearTgBotToken,
 		LdapPassword: form.ClearLdapPassword,
@@ -228,6 +235,9 @@ func (a *SettingController) updateSetting(c *gin.Context) {
 		if applyErr := a.xrayService.RestartXray(false); applyErr != nil {
 			logger.Warning("apply panel outbound change failed:", applyErr)
 		}
+	}
+	if err == nil && (oldRootEnabled != allSetting.RootRedirectEnable || oldRootURL != allSetting.RootRedirectURL) {
+		err = a.settingService.ReconcileRootRedirect(oldRootEnabled, oldRootURL)
 	}
 	// UpdateAllSetting already restored a redacted-blank token, so allSetting.TgBotToken is the effective value to compare.
 	if err == nil && reloadTgbotFunc != nil {
@@ -640,7 +650,7 @@ func (a *SettingController) hiddifyStatus(c *gin.Context) {
 }
 
 func (a *SettingController) singBoxStatus(c *gin.Context) {
-	a.nativeStatus(c, service.NativeCore(service.CoreTypeSingBox))
+	a.nativeStatus(c, service.SelectedNativeCore())
 }
 
 func (a *SettingController) nativeStatus(c *gin.Context, svc *service.SingBoxService) {

@@ -113,3 +113,36 @@ describe('useXraySetting', () => {
     expect(bodies[0].mode).toBe(want);
   });
 });
+
+it('saves an outbound candidate directly and leaves the draft intact on rejection', async () => {
+  let payload = xrayPayload({
+    xraySetting: { outbounds: [{ tag: 'direct', protocol: 'freedom' }] },
+  });
+  let rejected = true;
+  vi.spyOn(HttpUtil, 'post').mockImplementation(async (url, data) => {
+    if (url === '/panel/api/xray/') return new Msg(true, '', JSON.stringify(payload));
+    if (url === '/panel/api/xray/update') {
+      if (rejected) return new Msg(false, 'candidate invalid');
+      payload = xrayPayload({
+        xraySetting: JSON.parse(String((data as Record<string, unknown>).xraySetting)),
+      });
+    }
+    return new Msg(true, '');
+  });
+  const queryClient = makeTestQueryClient();
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
+  const { result } = renderHook(() => useXraySetting(), { wrapper });
+  await waitFor(() => expect(result.current.templateSettings?.outbounds).toHaveLength(1));
+  const candidate = { outbounds: [{ tag: 'new', protocol: 'freedom', settings: {} }] } as never;
+  await act(async () => {
+    await expect(result.current.saveAll(candidate)).rejects.toThrow('candidate invalid');
+  });
+  expect(result.current.templateSettings?.outbounds?.[0].tag).toBe('direct');
+  rejected = false;
+  await act(async () => {
+    expect(await result.current.saveAll(candidate)).toBe(true);
+  });
+  expect(result.current.templateSettings?.outbounds?.[0].tag).toBe('new');
+});
