@@ -525,7 +525,11 @@ func telemtWebWaitFrontendReady(ctx context.Context, state TelemtWebProxyState) 
 	if ip, _, err := net.SplitHostPort(state.PublicAddr); err == nil && net.ParseIP(ip) != nil && net.ParseIP(ip).To4() == nil {
 		host = "::1"
 	}
-	client := &http.Client{Timeout: 2 * time.Second, Transport: &http.Transport{Proxy: nil, TLSClientConfig: &tls.Config{RootCAs: roots, ServerName: state.Domain, MinVersion: tls.VersionTLS12}}}
+	client := &http.Client{
+		Timeout: 2 * time.Second,
+		Transport: &http.Transport{Proxy: nil, TLSClientConfig: &tls.Config{RootCAs: roots, ServerName: state.Domain, MinVersion: tls.VersionTLS12}},
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
 	defer client.CloseIdleConnections()
 	deadline, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -539,7 +543,7 @@ func telemtWebWaitFrontendReady(ctx context.Context, state TelemtWebProxyState) 
 		response, err := client.Do(req)
 		if err == nil {
 			_ = response.Body.Close()
-			if response.StatusCode == http.StatusOK {
+			if telemtWebHealthyDecoyStatus(response.StatusCode) {
 				return nil
 			}
 			err = fmt.Errorf("WEB HTTPS endpoint returned HTTP %d", response.StatusCode)
