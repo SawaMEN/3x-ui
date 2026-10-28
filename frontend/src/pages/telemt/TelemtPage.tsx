@@ -682,7 +682,7 @@ export default function TelemtPage() {
                   настраиваются автоматически.
                 </Typography.Paragraph>
               )}
-              {status.webProxy.error && (
+              {!webProxyOpen && status.webProxy.error && (
                 <Alert
                   className="telemt-alert-compact"
                   type={status.webProxy.enabled ? 'warning' : 'info'}
@@ -1097,7 +1097,6 @@ export default function TelemtPage() {
             </Descriptions.Item>
           </Descriptions>
 
-          {status.webProxy.error && <Alert type="warning" showIcon title={status.webProxy.error} />}
           <Button
             disabled={!status.webProxy.enabled}
             loading={webDiagnosticsLoading}
