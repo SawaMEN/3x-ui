@@ -244,7 +244,8 @@ var defaultValueMap = map[string]string{
 	"smtpTo":             "",
 	"smtpEncryptionType": "starttls", // no, starttls, tls
 
-	"singBoxConfigTemplate": "",
+	"singBoxUpstreamConfigTemplate": "",
+	"singBoxConfigTemplate":         "",
 }
 
 // SettingService provides business logic for application settings management.
@@ -1728,11 +1729,25 @@ func (s *SettingService) UpdateSecret(key string, value string) error {
 }
 
 func (s *SettingService) GetSingBoxConfigTemplate() (string, error) {
-	return s.getString("singBoxConfigTemplate")
+	return s.getString(SelectedNativeCore().templateKey())
 }
 
 func (s *SettingService) SetSingBoxConfigTemplate(value string) error {
-	return s.setString("singBoxConfigTemplate", value)
+	return s.setString(SelectedNativeCore().templateKey(), value)
+}
+
+func (s *SettingService) GetNativeCoreConfigTemplate(core string) (string, error) {
+	if !IsNativeCore(core) {
+		return "", fmt.Errorf("unsupported native core %q", core)
+	}
+	return s.getString(NativeCore(core).templateKey())
+}
+
+func (s *SettingService) SetNativeCoreConfigTemplate(core, value string) error {
+	if !IsNativeCore(core) {
+		return fmt.Errorf("unsupported native core %q", core)
+	}
+	return s.setString(NativeCore(core).templateKey(), value)
 }
 
 func (s *SettingService) GetDefaultXrayConfig() (any, error) {

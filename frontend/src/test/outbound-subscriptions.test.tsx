@@ -5,7 +5,14 @@ import { HttpUtil } from '@/utils';
 
 it('saves and fetches a subscription and exposes its automatic cascade tag', async () => {
   const onTagsChanged = vi.fn();
-  vi.mocked(HttpUtil.get).mockResolvedValue({ success: true, msg: '', obj: [] });
+  vi.mocked(HttpUtil.get).mockImplementation(async (path) => ({
+    success: true,
+    msg: '',
+    obj:
+      path === '/panel/api/setting/singbox/config'
+        ? { subscriptionTags: ['sub-auto-7', 'node'] }
+        : [],
+  }));
   vi.mocked(HttpUtil.post).mockImplementation(async (path) => ({
     success: true,
     msg: '',
@@ -75,7 +82,7 @@ it('keeps a saved subscription visible for retry when the first download fails',
   await screen.findByText('Download failed');
   expect(screen.getByText('Saved')).toBeTruthy();
   await waitFor(() =>
-    expect((screen.getByLabelText('URL подписки') as HTMLInputElement).value).toBe(''),
+    expect((screen.getByLabelText('Subscription URL') as HTMLInputElement).value).toBe(''),
   );
   expect(
     vi
@@ -163,4 +170,77 @@ it('groups incompatible subscription nodes instead of printing a wall of kernel 
   ).toBeTruthy();
   fireEvent.click(screen.getByText('Показать причины по подключениям'));
   expect(await screen.findByText(problems[0])).toBeTruthy();
+});
+
+it('edits the existing subscription and preserves its automatic selection settings', async () => {
+  const row = {
+    id: 7,
+    remark: 'Existing',
+    url: 'https://provider.test/old',
+    enabled: false,
+    autoBalance: true,
+    balanceMode: 'speed',
+    probeURL: 'https://probe.test/file',
+    updateInterval: 1800,
+    tagPrefix: 'custom-',
+    prepend: true,
+    outboundCount: 1,
+  };
+  vi.mocked(HttpUtil.get).mockImplementation(async (path) => ({
+    success: true,
+    msg: '',
+    obj: path.endsWith('outbound-subs') ? [row] : { subscriptionTags: [] },
+  }));
+  vi.mocked(HttpUtil.post).mockClear();
+  vi.mocked(HttpUtil.post).mockResolvedValue({ success: true, msg: '', obj: {} });
+  render(<OutboundSubscriptions open initialURL="" onClose={() => {}} onTagsChanged={() => {}} />);
+  await screen.findByText('Existing');
+  fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+  const url = screen.getByLabelText('Subscription URL');
+  fireEvent.change(url, { target: { value: 'https://provider.test/new' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Сохранить и применить' }));
+  await waitFor(() =>
+    expect(HttpUtil.post).toHaveBeenCalledWith(
+      '/panel/api/xray/outbound-subs/7',
+      expect.objectContaining({
+        url: 'https://provider.test/new',
+        enabled: false,
+        balanceMode: 'speed',
+        probeURL: 'https://probe.test/file',
+        updateInterval: 1800,
+        tagPrefix: 'custom-',
+        prepend: true,
+      }),
+      { silent: true },
+    ),
+  );
+  expect(
+    vi.mocked(HttpUtil.post).mock.calls.some(([path]) => path === '/panel/api/xray/outbound-subs'),
+  ).toBe(false);
+});
+
+it('uses the shared subscription manager for Xray without generating a sing-box config', async () => {
+  const changed = vi.fn();
+  vi.mocked(HttpUtil.get).mockResolvedValue({ success: true, msg: '', obj: [] });
+  vi.mocked(HttpUtil.get).mockClear();
+  vi.mocked(HttpUtil.post).mockImplementation(async (path) => ({
+    success: true,
+    msg: '',
+    obj: path.endsWith('outbound-subs') ? { id: 8 } : [],
+  }));
+  render(
+    <OutboundSubscriptions
+      coreType="xray"
+      open
+      initialURL="https://provider.test/sub"
+      onClose={() => {}}
+      onTagsChanged={changed}
+    />,
+  );
+  await screen.findByDisplayValue('https://provider.test/sub');
+  fireEvent.click(screen.getByRole('button', { name: 'Добавить и загрузить' }));
+  await waitFor(() => expect(changed).toHaveBeenCalledWith([]));
+  expect(
+    vi.mocked(HttpUtil.get).mock.calls.every(([path]) => path === '/panel/api/xray/outbound-subs'),
+  ).toBe(true);
 });

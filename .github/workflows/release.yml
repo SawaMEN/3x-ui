@@ -273,7 +273,8 @@ jobs:
           GOOS: linux
           GOARCH: ${{ matrix.platform }}
         run: |
-          python3 tools/build-speed-components.py --output "$PWD/x-ui/bin"
+          python3 tools/build-speed-components.py --component mieru --output "$PWD/x-ui/bin"
+          python3 tools/build-speed-components.py --component sudoku --output "$PWD/x-ui/bin/optional/sudoku"
           bash tools/build-hiddify-core.sh "$PWD/x-ui/bin"
       - name: Check panel configuration with downloaded binary
         if: matrix.platform == 'amd64'

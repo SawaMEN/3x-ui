@@ -544,7 +544,7 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot, ed
 	}
 	var nativeErr error
 	if snapshot != nil {
-		nativeErr = s.applyNativeTemplateValue(cfg, managedMASQUETags, snapshot.setting("singBoxConfigTemplate"), snapshot.routingLists)
+		nativeErr = s.applyNativeTemplateValue(cfg, managedMASQUETags, snapshot.setting(s.templateKey()), snapshot.routingLists)
 	} else {
 		nativeErr = s.applyNativeTemplate(cfg, managedMASQUETags)
 	}
@@ -555,8 +555,8 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot, ed
 		// The editor owns source policies, never the runtime's injected rules.
 		// Keep catalog references instead of freezing their expanded contents.
 		var source map[string]any
-		if snapshot != nil && strings.TrimSpace(snapshot.setting("singBoxConfigTemplate")) != "" {
-			if err := json.Unmarshal([]byte(snapshot.setting("singBoxConfigTemplate")), &source); err != nil {
+		if snapshot != nil && strings.TrimSpace(snapshot.setting(s.templateKey())) != "" {
+			if err := json.Unmarshal([]byte(snapshot.setting(s.templateKey())), &source); err != nil {
 				return nil, err
 			}
 			if route, ok := source["route"].(map[string]any); ok {

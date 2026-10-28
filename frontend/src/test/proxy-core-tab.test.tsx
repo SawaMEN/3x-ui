@@ -91,3 +91,12 @@ it('publishes the new selection only after a successful switch', async () => {
   window.removeEventListener('xui-core-selected', selected);
   view.unmount();
 });
+
+it('offers removal instead of a duplicate update action', async () => {
+  mockStatus();
+  const view = render(<ProxyCoreTab active />);
+  await act(async () => {});
+  expect(screen.getByRole('button', { name: /Delete core/ })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: /Update core/ })).toBeNull();
+  view.unmount();
+});

@@ -20,7 +20,7 @@ import type { Status } from '@/models/status';
 
 interface OverviewActionBarProps {
   status: Status;
-  coreType: 'xray' | 'sing-box';
+  coreType: 'xray' | 'sing-box' | 'sing-box-upstream';
   coreVersion: string;
   coreRunning: boolean;
   coreError: string;
@@ -96,7 +96,7 @@ export default function OverviewActionBar({
           ? 'Ошибка'
           : 'Остановлен'
       : t(XRAY_STATE_KEYS[status.xray.state] ?? 'pages.index.xrayStatusUnknown');
-  const coreName = coreType === 'xray' ? 'Xray' : coreType;
+  const coreName = coreType === 'xray' ? 'Xray' : 'sing-box';
   const displayedVersion = coreType !== 'xray' ? coreVersion : status.xray.version;
   const hasVersion = !!displayedVersion && displayedVersion !== 'Unknown';
   const size = isMobile ? ('small' as const) : ('middle' as const);

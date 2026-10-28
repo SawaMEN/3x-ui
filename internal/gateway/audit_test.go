@@ -107,3 +107,30 @@ func TestSingBoxEmptyBackupDoesNotEraseOperatorChanges(t *testing.T) {
 		t.Fatal("empty generated sections not recognized")
 	}
 }
+
+func TestGatewayNativeStoresUseTheirOwnTemplateDuringSwitch(t *testing.T) {
+	if err := database.InitDB(filepath.Join(t.TempDir(), "gateway.db")); err != nil {
+		t.Fatal(err)
+	}
+	settings := &service.SettingService{}
+	if err := settings.SetCoreType(service.CoreTypeSingBoxUpstream); err != nil {
+		t.Fatal(err)
+	}
+	owner := singBoxGatewayStore{core: service.CoreTypeSingBox}
+	upstream := singBoxGatewayStore{core: service.CoreTypeSingBoxUpstream}
+	if err := owner.saveSingBoxTemplateRaw(`{"log":{"level":"debug"}}`); err != nil {
+		t.Fatal(err)
+	}
+	if err := upstream.saveSingBoxTemplateRaw(`{"log":{"level":"warn"}}`); err != nil {
+		t.Fatal(err)
+	}
+	for store, want := range map[singBoxGatewayStore]string{owner: "debug", upstream: "warn"} {
+		raw, err := store.loadSingBoxTemplateRaw()
+		if err != nil || !strings.Contains(raw, want) {
+			t.Fatalf("wrong core template: %s %v", raw, err)
+		}
+	}
+	if owner.backupPath() == upstream.backupPath() {
+		t.Fatal("native cores share a Gateway backup")
+	}
+}

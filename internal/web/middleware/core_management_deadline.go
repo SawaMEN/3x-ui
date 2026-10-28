@@ -19,7 +19,7 @@ func CoreManagementDeadline(prefix string) gin.HandlerFunc {
 			rest, ok := strings.CutPrefix(c.Request.URL.Path, prefix)
 			if ok {
 				for _, core := range []string{"sing-box", "sing-box-upstream", "xray"} {
-					if rest == core+"/install" || rest == core+"/select" {
+					if rest == core+"/install" || rest == core+"/select" || rest == core+"/delete" || rest == core+"/update" {
 						if err := http.NewResponseController(c.Writer).SetWriteDeadline(time.Now().Add(6 * time.Minute)); err != nil && !errors.Is(err, http.ErrNotSupported) {
 							logger.Warning("core operation: extending response deadline failed:", err)
 						}

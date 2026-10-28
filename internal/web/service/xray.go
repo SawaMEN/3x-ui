@@ -1229,16 +1229,7 @@ func (s *CoreService) IsNeedRestartAndSetFalse() bool {
 // the old process running), it re-arms the flag so the next tick retries instead
 // of silently dropping the pending config change.
 func (s *CoreService) ApplyPendingRestart() {
-	if core, _ := (&SettingService{}).GetCoreType(); core != CoreTypeXray {
-		return
-	}
-	if !s.IsCoreRunning() || !s.IsNeedRestartAndSetFalse() {
-		return
-	}
-	if err := s.RestartXray(false); err != nil {
-		logger.Error("restart xray failed:", err)
-		s.SetToNeedRestart()
-	}
+	NativeCore(CoreTypeXray).ApplyPendingRestart(context.Background())
 }
 
 // liftXhttpSessionIDKeys renames the legacy XHTTP session keys

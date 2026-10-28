@@ -89,18 +89,21 @@ func GetBinaryPath(binDir string) string {
 // IsInstalled reports whether the Sudoku tunnel binary is present.
 func IsInstalled(binDir string) bool {
 	st, err := os.Stat(GetBinaryPath(binDir))
-	return err == nil && !st.IsDir()
+	return err == nil && st.Mode().IsRegular() && st.Mode()&0o111 != 0 && readInstalledVersion(binDir) != ""
 }
 
 func EnsureInstalled(ctx context.Context, binDir string) (string, error) {
 	path := GetBinaryPath(binDir)
-	if st, err := os.Stat(path); err == nil && !st.IsDir() {
+	if IsInstalled(binDir) {
 		return path, nil
 	}
 	return InstallLatest(ctx, binDir)
 }
 
 func InstallLatest(ctx context.Context, binDir string) (string, error) {
+	if path, found, err := installOptional(ctx, binDir); found || err != nil {
+		return path, err
+	}
 	rel, err := fetchLatestRelease(ctx)
 	if err != nil {
 		return "", err

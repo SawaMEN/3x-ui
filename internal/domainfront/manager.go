@@ -553,14 +553,13 @@ func (r *frontRuntime) domainHandler(d DomainFrontDomain) (http.Handler, error) 
 		if r.backend.GetRedirect != nil {
 			redirectURL, _ = r.backend.GetRedirect()
 		}
-		if req.URL.Path == "/" && redirectURL != "" && req.URL.Query().Get("panel") != "1" && (req.Method == http.MethodGet || req.Method == http.MethodHead) {
-			u, err := url.Parse(redirectURL)
-			if err == nil && !strings.EqualFold(u.Hostname(), d.Name) {
-				w.Header().Set("Referrer-Policy", "no-referrer")
-				http.Redirect(w, req, u.String(), http.StatusFound)
-				return
-			}
+		if target := RootRedirectTarget(req, redirectURL); target != "" {
+			w.Header().Set("Cache-Control", "no-store")
+			w.Header().Set("Referrer-Policy", "no-referrer")
+			http.Redirect(w, req, target, http.StatusFound)
+			return
 		}
+
 		if panel != nil && (pathWithin(req.URL.Path, r.backend.PanelPath) || req.URL.Path == "/") {
 			panel.ServeHTTP(w, req)
 			return

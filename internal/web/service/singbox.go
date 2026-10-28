@@ -161,36 +161,6 @@ type SingBoxEditorSnapshot struct {
 
 func (s *SingBoxService) GetEditorConfig(ctx context.Context) (*SingBoxEditorSnapshot, error) {
 	path := s.ProcessConfigPath()
-	data, err := os.ReadFile(path)
-	source := "disk"
-	if os.IsNotExist(err) {
-		cfg, cfgErr := s.GetConfig()
-		if cfgErr == nil {
-			data, err = cfg.Marshal()
-		} else {
-			rawTemplate, templateErr := singBoxSettingService.GetSingBoxConfigTemplate()
-			if templateErr != nil {
-				return nil, cfgErr
-			}
-			rawTemplate = strings.TrimSpace(rawTemplate)
-			if rawTemplate == "" {
-				data, err = singbox.NewConfig().Marshal()
-			} else {
-				data = []byte(rawTemplate)
-				err = nil
-			}
-		}
-		source = "generated"
-	}
-	if err != nil {
-		return nil, err
-	}
-	var raw map[string]any
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return nil, err
-	}
-	// Disk contains runtime-only sniffing, bridges and overlays. Reading it
-	// back as a template makes these rules multiply on each save/restart.
 	snapshot, err := loadNativeConfigSnapshot()
 	if err != nil {
 		return nil, err
@@ -199,6 +169,15 @@ func (s *SingBoxService) GetEditorConfig(ctx context.Context) (*SingBoxEditorSna
 	if err != nil {
 		return nil, err
 	}
+	data, err := editable.Marshal()
+	if err != nil {
+		return nil, err
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, err
+	}
+	source := "generated"
 	raw["route"] = editable.Route
 	if ox, oxErr := oxidns.Load(); oxErr != nil {
 		return nil, oxErr
@@ -368,7 +347,7 @@ func mergeManagedMASQUEEndpoints(template, generated []map[string]any, tags map[
 }
 
 func (s *SingBoxService) applyNativeTemplate(cfg *singbox.Config, managedMASQUETags map[string]bool) error {
-	rawTemplate, err := singBoxSettingService.GetSingBoxConfigTemplate()
+	rawTemplate, err := singBoxSettingService.GetNativeCoreConfigTemplate(s.coreType())
 	if err != nil {
 		return err
 	}
@@ -513,15 +492,15 @@ func (s *SingBoxService) SaveTemplate(ctx context.Context, raw string) error {
 	if err != nil {
 		return err
 	}
-	old, err := singBoxSettingService.GetSingBoxConfigTemplate()
+	old, err := singBoxSettingService.GetNativeCoreConfigTemplate(s.coreType())
 	if err != nil {
 		return err
 	}
-	if err := singBoxSettingService.SetSingBoxConfigTemplate(normalized); err != nil {
+	if err := singBoxSettingService.SetNativeCoreConfigTemplate(s.coreType(), normalized); err != nil {
 		return err
 	}
 	rollback := func() error {
-		return errors.Join(singBoxSettingService.SetSingBoxConfigTemplate(old), s.WriteConfig())
+		return errors.Join(singBoxSettingService.SetNativeCoreConfigTemplate(s.coreType(), old), s.WriteConfig())
 	}
 	// A running core's Restart prepares, validates and atomically publishes
 	// the candidate itself. Writing first would do the expensive core check
@@ -541,15 +520,15 @@ func (s *SingBoxService) SaveTemplate(ctx context.Context, raw string) error {
 func (s *SingBoxService) ResetTemplate(ctx context.Context) error {
 	singBoxTemplateMu.Lock()
 	defer singBoxTemplateMu.Unlock()
-	old, err := singBoxSettingService.GetSingBoxConfigTemplate()
+	old, err := singBoxSettingService.GetNativeCoreConfigTemplate(s.coreType())
 	if err != nil {
 		return err
 	}
-	if err := singBoxSettingService.SetSingBoxConfigTemplate(""); err != nil {
+	if err := singBoxSettingService.SetNativeCoreConfigTemplate(s.coreType(), ""); err != nil {
 		return err
 	}
 	rollback := func() error {
-		return errors.Join(singBoxSettingService.SetSingBoxConfigTemplate(old), s.WriteConfig())
+		return errors.Join(singBoxSettingService.SetNativeCoreConfigTemplate(s.coreType(), old), s.WriteConfig())
 	}
 	// A running core's Restart prepares, validates and atomically publishes
 	// the candidate itself. Writing first would do the expensive core check

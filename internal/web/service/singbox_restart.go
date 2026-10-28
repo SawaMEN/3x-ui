@@ -40,12 +40,21 @@ func (s *SingBoxService) IsNeedRestartAndSetFalse() bool {
 // currently running core. If sing-box is absent/stopped there is no
 // process to reload; a later explicit start writes the current config.
 func (s *SingBoxService) ApplyPendingRestart(ctx context.Context) {
+	if CoreSwitchInProgress() {
+		return
+	}
 	if ctx.Err() != nil {
 		return
 	}
 	if s.coreType() == CoreTypeXray {
-		if s.IsRunning() && s.IsNeedRestartAndSetFalse() {
-			if err := s.Restart(ctx); err != nil {
+		singBoxApplyMu.Lock()
+		defer singBoxApplyMu.Unlock()
+		selected, err := (&SettingService{}).GetCoreType()
+		if err != nil || selected != s.coreType() || CoreSwitchInProgress() || !s.IsRunning() {
+			return
+		}
+		if s.IsNeedRestartAndSetFalse() {
+			if err := s.restartStandaloneXrayLocked(ctx); err != nil {
 				s.SetToNeedRestart()
 			}
 		}
@@ -68,7 +77,7 @@ func (s *SingBoxService) ApplyPendingRestart(ctx context.Context) {
 		s.SetToNeedRestart()
 		return
 	}
-	if coreType != s.coreType() || !s.IsRunning() {
+	if CoreSwitchInProgress() || coreType != s.coreType() || !s.IsRunning() {
 		return
 	}
 	// Apply the final DB state under the same lock as Start/Stop/manual restart.
@@ -85,7 +94,7 @@ func (s *SingBoxService) ApplyPendingRestart(ctx context.Context) {
 		s.SetToNeedRestart()
 		return
 	}
-	if coreType != s.coreType() || !s.IsRunning() {
+	if CoreSwitchInProgress() || coreType != s.coreType() || !s.IsRunning() {
 		return
 	}
 	if batch := localConfigBatch(); batch != nil && batch.ConfigBatchActive() {

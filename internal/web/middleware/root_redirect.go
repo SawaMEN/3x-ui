@@ -2,8 +2,8 @@ package middleware
 
 import (
 	"net/http"
-	"net/url"
-	"strings"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/domainfront"
 
 	"github.com/gin-gonic/gin"
 )
@@ -17,11 +17,10 @@ func RootRedirect(target func() (string, error)) gin.HandlerFunc {
 		}
 		raw, err := target()
 		if err == nil && raw != "" {
-			parsed, parseErr := url.Parse(raw)
-			if parseErr == nil && (parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.Hostname() != "" && !strings.EqualFold(parsed.Host, c.Request.Host) {
+			if target := domainfront.RootRedirectTarget(c.Request, raw); target != "" {
 				c.Header("Cache-Control", "no-store")
 				c.Header("Referrer-Policy", "no-referrer")
-				c.Redirect(http.StatusFound, parsed.String())
+				c.Redirect(http.StatusFound, target)
 				c.Abort()
 				return
 			}

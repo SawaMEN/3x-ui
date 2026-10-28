@@ -515,6 +515,10 @@ func (a *XraySettingController) updateOutboundSub(c *gin.Context) {
 		return
 	}
 	markOutboundCoreRestart()
+	if err := a.applyOutboundSubscriptionChanges(c.Request.Context()); err != nil {
+		jsonMsg(c, "Подписка сохранена, но не применена к ядру", err)
+		return
+	}
 	jsonObj(c, "", nil)
 }
 
@@ -525,12 +529,16 @@ func (a *XraySettingController) deleteOutboundSub(c *gin.Context) {
 		jsonMsg(c, "Invalid id", err)
 		return
 	}
-	if err := a.OutboundSubscriptionService.Delete(subID); err != nil {
+	if err := a.OutboundSubscriptionService.DeleteReplacing(subID, c.PostForm("replacement")); err != nil {
 		jsonMsg(c, "Failed to delete outbound subscription", err)
 		return
 	}
 	// Signal that xray should drop this subscription's outbounds on next reload.
 	markOutboundCoreRestart()
+	if err := a.applyOutboundSubscriptionChanges(c.Request.Context()); err != nil {
+		jsonMsg(c, "Подписка сохранена, но не применена к ядру", err)
+		return
+	}
 	jsonObj(c, "", nil)
 }
 
@@ -588,13 +596,16 @@ func (a *XraySettingController) applyOutboundSubscriptionChanges(ctx context.Con
 	if err != nil {
 		return err
 	}
-	if !service.IsNativeCore(core) || !service.SelectedNativeCore().IsRunning() {
+	if !service.SelectedNativeCore().IsRunning() {
 		return nil
 	}
 	applyCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 	if err := service.SelectedNativeCore().Restart(applyCtx); err != nil {
 		return fmt.Errorf("sing-box restart: %w", err)
+	}
+	if core == service.CoreTypeXray {
+		return nil
 	}
 	if _, err := a.OutboundSubscriptionService.ApplyAutomaticSelections(); err != nil {
 		return fmt.Errorf("automatic selector acknowledgement: %w", err)

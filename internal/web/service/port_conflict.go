@@ -816,7 +816,7 @@ func (s *InboundService) tagExists(tag string, ignoreId int) (bool, error) {
 
 func gatewayTemplatePresent(db *gorm.DB) (bool, error) {
 	var rows []model.Setting
-	if err := db.Where("key IN ?", []string{"xrayTemplateConfig", "singBoxConfigTemplate"}).Find(&rows).Error; err != nil {
+	if err := db.Where("key IN ?", []string{"xrayTemplateConfig", "singBoxConfigTemplate", "singBoxUpstreamConfigTemplate"}).Find(&rows).Error; err != nil {
 		return false, err
 	}
 	for _, row := range rows {
