@@ -19,6 +19,7 @@ type TelemtWebRuntimeDiagnostics struct {
 	Listeners          []string        `json:"listeners"`
 	Capacity           json.RawMessage `json:"capacity,omitempty"`
 	CarrierNegotiation json.RawMessage `json:"carrierNegotiation,omitempty"`
+	ActiveSessions      *int            `json:"activeSessions,omitempty"`
 	CheckedAt          time.Time       `json:"checkedAt"`
 }
 
@@ -57,6 +58,11 @@ func (TelemtService) WebProxyRuntimeDiagnostics(ctx context.Context) (TelemtWebR
 			Listeners          []string        `json:"listeners"`
 			Capacity           json.RawMessage `json:"capacity"`
 			CarrierNegotiation json.RawMessage `json:"carrier_negotiation"`
+			Runtime *struct {
+				Manager *struct {
+					Sessions int `json:"sessions"`
+				} `json:"manager"`
+			} `json:"runtime"`
 		} `json:"data"`
 	}
 	if err := json.NewDecoder(io.LimitReader(response.Body, 256<<10)).Decode(&payload); err != nil {
@@ -65,7 +71,13 @@ func (TelemtService) WebProxyRuntimeDiagnostics(ctx context.Context) (TelemtWebR
 	if !payload.OK {
 		return TelemtWebRuntimeDiagnostics{}, errors.New("Telemt отклонил запрос диагностики WEB")
 	}
+	var sessions *int
+	if payload.Data.Runtime != nil && payload.Data.Runtime.Manager != nil {
+		count := payload.Data.Runtime.Manager.Sessions
+		sessions = &count
+	}
 	return TelemtWebRuntimeDiagnostics{
+		ActiveSessions: sessions,
 		Available: payload.Data.Available,
 		Lifecycle: payload.Data.Lifecycle,
 		Listeners: payload.Data.Listeners,
