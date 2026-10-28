@@ -824,4 +824,3 @@ func createTestConfigPath() (string, error) {
 	}
 	return path, nil
 }
-

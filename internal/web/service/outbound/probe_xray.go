@@ -21,12 +21,13 @@ func newXrayBatchProcess(cfg *xray.Config, path string) batchProcess {
 		Name: "Xray", Binary: config.StandaloneCoreBinaryPath("xray"), RunCommand: "run", VersionPrefix: "Xray ", Xray: true,
 	}, true), config: cfg, path: path}
 }
+
 func (p *xrayBatchProcess) Start() error {
 	data, err := json.Marshal(p.config)
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(p.path, data, 0600); err != nil {
+	if err := os.WriteFile(p.path, data, 0o600); err != nil {
 		return err
 	}
 	return p.process.Start(context.Background())

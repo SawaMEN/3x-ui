@@ -6,8 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/gin-gonic/gin"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 )
 
 // CoreManagementDeadline is registered before gzip so downloads and validated

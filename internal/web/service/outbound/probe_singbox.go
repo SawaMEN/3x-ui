@@ -18,6 +18,7 @@ import (
 func buildSingBoxBatchTestConfig(source *xray.Config) (*singbox.Config, error) {
 	return buildSingBoxBatchTestConfigForCore(source, "sing-box")
 }
+
 func buildSingBoxBatchTestConfigForCore(source *xray.Config, core string) (*singbox.Config, error) {
 	cfg := singbox.NewConfig()
 	cfg.Log = map[string]any{"level": "warn"}
