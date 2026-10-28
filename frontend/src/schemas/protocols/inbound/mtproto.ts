@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { TelemtWebBasePathSchema, TelemtWebDomainSchema, TelemtWebSiteSchema } from '@/schemas/telemt-web';
+import {
+  TelemtWebBasePathSchema,
+  TelemtWebDomainSchema,
+  TelemtWebSiteSchema,
+} from '@/schemas/telemt-web';
 
 // Legacy mtg-multi domain-fronting payload. Telemt migrates these fields to its native mask host/port;
 // keep the shape in the schema only so existing saved inbounds can round-trip
