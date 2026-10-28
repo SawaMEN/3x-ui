@@ -31,7 +31,7 @@ func (TelemtService) WebProxyRuntimeDiagnostics(ctx context.Context) (TelemtWebR
 	if !state.Enabled {
 		return TelemtWebRuntimeDiagnostics{}, errors.New("WEB Proxy не включён")
 	}
-	ctx, cancel := context.WithTimeout(ctx, 5 * time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	request, err := telemtAPIRequest(http.MethodGet, "/v1/runtime/web/status")
 	if err != nil {
@@ -65,7 +65,7 @@ func (TelemtService) WebProxyRuntimeDiagnostics(ctx context.Context) (TelemtWebR
 			} `json:"runtime"`
 		} `json:"data"`
 	}
-	if err := json.NewDecoder(io.LimitReader(response.Body, 256 << 10)).Decode(&payload); err != nil {
+	if err := json.NewDecoder(io.LimitReader(response.Body, 256<<10)).Decode(&payload); err != nil {
 		return TelemtWebRuntimeDiagnostics{}, fmt.Errorf("ошибка чтения WEB runtime: %w", err)
 	}
 	if !payload.OK {
