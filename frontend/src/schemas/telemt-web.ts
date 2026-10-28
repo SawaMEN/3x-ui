@@ -3,13 +3,16 @@ import { isTelemtWebCatalogTemplate, TelemtWebThemes } from './telemt-web-catalo
 
 export const TelemtFrontendSchema = z.enum(['nginx', 'caddy', 'haproxy']);
 export const TelemtCarrierSchema = z.enum(['https', 'https-lanes', 'websocket', 'websocket-lanes']);
-export const TelemtWebBasePathSchema = z.string().trim().refine(
-  (value) => {
+export const TelemtWebBasePathSchema = z
+  .string()
+  .trim()
+  .refine((value) => {
     const path = value.replace(/^\/+|\/+$/g, '');
-    return path === '' || (path.length >= 6 && path.length <= 96 && /^[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*$/.test(path));
-  },
-  'Путь должен содержать 6–96 символов: буквы, цифры, /, - или _',
-);
+    return (
+      path === '' ||
+      (path.length >= 6 && path.length <= 96 && /^[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*$/.test(path))
+    );
+  }, 'Путь должен содержать 6–96 символов: буквы, цифры, /, - или _');
 
 export const TelemtCarriersSchema = z
   .array(TelemtCarrierSchema)
@@ -46,11 +49,18 @@ export const TelemtWebSiteSchema = z
       try {
         const url = new URL(site.origin || '');
         const port = Number(url.port);
-        return url.protocol === 'http:' &&
+        return (
+          url.protocol === 'http:' &&
           ['127.0.0.1', '[::1]'].includes(url.hostname) &&
-          !!url.port && port > 0 && port <= 65535 &&
-          url.pathname === '/' && !url.username && !url.password &&
-          !url.search && !url.hash;
+          !!url.port &&
+          port > 0 &&
+          port <= 65535 &&
+          url.pathname === '/' &&
+          !url.username &&
+          !url.password &&
+          !url.search &&
+          !url.hash
+        );
       } catch {
         return false;
       }
@@ -64,7 +74,11 @@ export const TelemtWebSiteSchema = z
 
 export type TelemtWebSite = z.infer<typeof TelemtWebSiteSchema>;
 
-export const TelemtWebDomainSchema = z.string().trim().min(1).max(253)
+export const TelemtWebDomainSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(253)
   .regex(/^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$/);
 
 export const TelemtWebProxyRequestSchema = z.object({
