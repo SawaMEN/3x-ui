@@ -1,11 +1,64 @@
 package service
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
+	"github.com/pelletier/go-toml/v2"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
+
+func TestManagedMtprotoWebFiltersDepletedUsersAndFingerprint(t *testing.T) {
+	setupConflictDB(t)
+	settings := `{"webProxy":{"enabled":true,"domain":"web.example.com"},"clients":[{"email":"alice","enable":true,"secret":"00112233445566778899aabbccddeeff"},{"email":"bob","enable":true,"secret":"11223344556677889900aabbccddeeff"}]}`
+	seedInboundConflict(t, "web-effective", "", 443, model.MTProto, "", settings)
+	ib := loadInboundByTag(t, "web-effective")
+	seedClientTraffic(t, ib.Id, "alice", true)
+	seedClientTraffic(t, ib.Id, "bob", false)
+	state := TelemtWebProxyState{Enabled: true, ManagedInboundID: ib.Id, Domain: "web.example.com", Secret: "0123456789abcdef0123456789abcdef", PublicAddr: "203.0.113.10:443", ListenPort: 15080}
+	config, err := appendTelemtWebProxyConfig("[access.users]\nxui = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"\n", state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var parsed struct {
+		Access struct{ Users map[string]string } `toml:"access"`
+	}
+	if err := toml.Unmarshal([]byte(config), &parsed); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := parsed.Access.Users[mtprotoWebUsername(ib.Id, "bob")]; exists {
+		t.Fatal("depleted WEB client is still authenticated by the backend")
+	}
+	if parsed.Access.Users[mtprotoWebUsername(ib.Id, "alice")] != "00112233445566778899aabbccddeeff" {
+		t.Fatal("active WEB client lost its credential")
+	}
+	effective, err := (&InboundService{}).buildInboundForLocalRuntime(database.GetDB(), ib)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mtprotoWebFingerprint(effective) == mtprotoWebFingerprint(ib) {
+		t.Fatal("runtime fingerprint did not reflect the depleted user removal")
+	}
+}
+
+func TestManagedMtprotoWebFingerprintIgnoresClientOrder(t *testing.T) {
+	ib := &model.Inbound{Protocol: model.MTProto, Settings: `{"clients":[{"email":"alice","enable":true,"secret":"00112233445566778899aabbccddeeff"},{"email":"bob","enable":true,"secret":"11223344556677889900aabbccddeeff"}]}`}
+	before := mtprotoWebFingerprint(ib)
+	var payload map[string]json.RawMessage
+	_ = json.Unmarshal([]byte(ib.Settings), &payload)
+	var clients []json.RawMessage
+	_ = json.Unmarshal(payload["clients"], &clients)
+	clients[0], clients[1] = clients[1], clients[0]
+	payload["clients"], _ = json.Marshal(clients)
+	encoded, _ := json.Marshal(payload)
+	ib.Settings = string(encoded)
+	if got := mtprotoWebFingerprint(ib); got != before {
+		t.Fatalf("reordering clients must not restart WEB sessions: %s != %s", got, before)
+	}
+}
 
 func TestValidateMtprotoWebInboundSingleOwner(t *testing.T) {
 	setupConflictDB(t)

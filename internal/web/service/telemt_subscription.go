@@ -66,6 +66,8 @@ func (TelemtService) EnsureSubscriptionProxyContext(ctx context.Context, subID, 
 
 	telemtSubscriptionProfileMu.Lock()
 	defer telemtSubscriptionProfileMu.Unlock()
+	telemtWebOperationMu.Lock()
+	defer telemtWebOperationMu.Unlock()
 
 	active := systemctl("is-active", "--quiet", telemtServiceName) == nil
 	if err := ensureTelemtConfig(); err != nil {
@@ -165,6 +167,8 @@ func (TelemtService) DeleteSubscriptionProxy(subID string) error {
 
 	telemtSubscriptionProfileMu.Lock()
 	defer telemtSubscriptionProfileMu.Unlock()
+	telemtWebOperationMu.Lock()
+	defer telemtWebOperationMu.Unlock()
 
 	username := telemtSubscriptionUsername(subID)
 	active := systemctl("is-active", "--quiet", telemtServiceName) == nil
@@ -197,10 +201,12 @@ func createTelemtSubscriptionUser(username, secret string) error {
 		return err
 	}
 
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "http://127.0.0.1:9091/v1/users", bytes.NewReader(body))
+	req, err := telemtAPIRequest(http.MethodPost, "/v1/users")
 	if err != nil {
 		return fmt.Errorf("telemt: create subscription user request: %w", err)
 	}
+	req.Body = io.NopCloser(bytes.NewReader(body))
+	req.ContentLength = int64(len(body))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
 	if err != nil {
@@ -227,7 +233,7 @@ func createTelemtSubscriptionUser(username, secret string) error {
 }
 
 func deleteTelemtSubscriptionUser(username string) error {
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodDelete, "http://127.0.0.1:9091/v1/users/"+url.PathEscape(username), nil)
+	req, err := telemtAPIRequest(http.MethodDelete, "/v1/users/"+url.PathEscape(username))
 	if err != nil {
 		return fmt.Errorf("telemt: delete subscription user request: %w", err)
 	}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Alert, Button, Space, Typography } from 'antd';
-import { useFormContext } from 'react-hook-form';
+import { useFormContext, useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { HttpUtil } from '@/utils';
 import { TelemtWebProxyRequestSchema } from '@/schemas/telemt-web';
@@ -15,14 +15,73 @@ type WebStatus = {
   error?: string;
 };
 
+type WebPreflight = {
+  ready: boolean;
+  checks: { id: string; ok: boolean; message: string }[];
+  warnings: string[];
+};
+
 export default function MtprotoWebStatus() {
-  const { getValues, setValue } = useFormContext();
+  const { control, getValues, setValue } = useFormContext();
   const { i18n } = useTranslation();
   const ru = i18n.resolvedLanguage?.startsWith('ru') ?? false;
   const [status, setStatus] = useState<WebStatus>();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [attempt, setAttempt] = useState(0);
+  const proposed = useWatch({ control, name: 'settings.webProxy' });
+  const requestKey = JSON.stringify({
+    domain: proposed?.domain ?? '',
+    frontend: proposed?.frontend ?? 'nginx',
+    carrier: proposed?.carrier ?? 'https',
+    carriers: proposed?.carriers ?? [],
+    site: proposed?.site,
+  });
+  const [preflight, setPreflight] = useState<{ key: string; result: WebPreflight }>();
+  const result = preflight?.key === requestKey ? preflight.result : undefined;
+
+  useEffect(() => {
+    let active = true;
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await HttpUtil.post<WebPreflight>(
+          '/panel/api/telemt/webproxy/preflight',
+          JSON.parse(requestKey),
+          { silent: true, signal: controller.signal },
+        );
+        if (!active) return;
+        if (response?.success && response.obj) {
+          setPreflight({ key: requestKey, result: response.obj });
+        } else {
+          throw new Error(
+            response?.msg || (ru ? 'Ошибка проверки WEB Proxy' : 'WEB Proxy preflight failed'),
+          );
+        }
+      } catch (cause: unknown) {
+        if (active)
+          setPreflight({
+            key: requestKey,
+            result: {
+              ready: false,
+              checks: [
+                {
+                  id: 'request',
+                  ok: false,
+                  message: cause instanceof Error ? cause.message : String(cause),
+                },
+              ],
+              warnings: [],
+            },
+          });
+      }
+    }, 400);
+    return () => {
+      active = false;
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [requestKey, attempt, ru]);
 
   useEffect(() => {
     let cancelled = false;
@@ -131,11 +190,44 @@ export default function MtprotoWebStatus() {
           }
         />
       )}
+      {result && (
+        <Alert
+          type={result.ready ? 'success' : 'warning'}
+          showIcon
+          title={
+            result.ready
+              ? ru
+                ? 'Параметры WEB Proxy прошли проверку'
+                : 'Proposed WEB Proxy settings passed preflight'
+              : ru
+                ? 'Параметры WEB Proxy требуют исправления'
+                : 'Proposed WEB Proxy settings need attention'
+          }
+          description={
+            <ul>
+              {result.checks.map((check) => (
+                <li key={check.id}>{check.message}</li>
+              ))}
+              {result.warnings.map((warning) => (
+                <li key={warning}>{warning}</li>
+              ))}
+            </ul>
+          }
+        />
+      )}
+      {!result && (
+        <Typography.Text type="secondary">
+          {ru
+            ? 'Проверяются введённые параметры WEB Proxy…'
+            : 'Checking proposed WEB Proxy settings…'}
+        </Typography.Text>
+      )}
       <Button
         loading={loading}
         size="small"
         onClick={() => {
           setLoading(true);
+          setPreflight(undefined);
           setAttempt((value) => value + 1);
         }}
       >

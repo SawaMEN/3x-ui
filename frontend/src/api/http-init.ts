@@ -7,6 +7,7 @@ const CSRF_TIMEOUT_MS = 10_000;
 // Newer API families that bind JSON bodies must opt in here so callers cannot
 // accidentally send bracket-encoded form data to a JSON decoder.
 const JSON_ONLY_API_PREFIXES = [
+  '/panel/api/telemt/',
   '/panel/api/adblock/',
   '/panel/api/gateway/',
   '/panel/api/domains/',

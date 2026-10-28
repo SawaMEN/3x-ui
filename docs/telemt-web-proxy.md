@@ -306,3 +306,22 @@ forwarding-header replacement and bidirectional WebSocket transfer with Caddy
 and HAProxy. They also run the generated carrier configuration against the
 official Telemt binary. These checks do not measure accessibility from a
 particular mobile operator.
+
+### Client edits and quota resets
+
+WEB runtime profiles use the same effective client list as ordinary MTProto:
+clients disabled in traffic accounting are removed from authentication, and
+client edits trigger reconciliation immediately. Reordering clients keeps the
+same fingerprint and does not restart WEB sessions. Configuration writes and
+WEB reconciliation share the operation lock to prevent competing saves.
+
+Resetting traffic restores an ordinary MTProto inbound even when all its
+clients had exhausted their quota. WEB resets also call the native backend's
+per-user quota reset while preserving its cumulative traffic baseline. The inbound
+WEB form preflights its current domain, frontend, carrier order and cover site;
+late results from an earlier edit are discarded.
+
+Subscription user creation and revocation use the configured loopback API
+listener and authorization token. They share the WEB operation lock with
+configuration saves so concurrent subscription changes cannot overwrite a
+new WEB/client configuration.

@@ -21,8 +21,10 @@ import (
 	"time"
 )
 
-const telemtWebFrontUnit = "3x-ui-telemt-web-front.service"
-const telemtWebFrontDir = "/etc/x-ui/telemt-web-front"
+const (
+	telemtWebFrontUnit = "3x-ui-telemt-web-front.service"
+	telemtWebFrontDir  = "/etc/x-ui/telemt-web-front"
+)
 
 var telemtWebOperationMu sync.Mutex
 
@@ -66,6 +68,7 @@ func telemtWebFrontend(s TelemtWebProxyState) string {
 	}
 	return s.Frontend
 }
+
 func telemtWebCarrier(s TelemtWebProxyState) string {
 	if s.Carrier == "" {
 		return "https"
@@ -76,6 +79,10 @@ func telemtWebCarrier(s TelemtWebProxyState) string {
 func (s TelemtService) EnableWebProxy(ctx context.Context, domain, cert, key string, options ...TelemtWebProxyOptions) (TelemtWebProxyStatus, error) {
 	telemtWebOperationMu.Lock()
 	defer telemtWebOperationMu.Unlock()
+	return s.enableWebProxyLocked(ctx, domain, cert, key, options...)
+}
+
+func (s TelemtService) enableWebProxyLocked(ctx context.Context, domain, cert, key string, options ...TelemtWebProxyOptions) (TelemtWebProxyStatus, error) {
 	domain = normalizeTelemtWebDomain(domain)
 	if !telemtWebDomainPattern.MatchString(domain) || len(domain) > 253 {
 		return TelemtWebProxyStatus{}, errors.New("WEB Proxy requires a public FQDN")
@@ -171,12 +178,14 @@ func telemtWebFrontendActive(s TelemtWebProxyState) bool {
 	}
 	return systemctl("is-active", "--quiet", telemtWebFrontUnit) == nil
 }
+
 func telemtWebFrontendEnabled(s TelemtWebProxyState) bool {
 	if telemtWebFrontend(s) == "nginx" {
 		return telemtWebNginxEnabled()
 	}
 	return systemctl("is-enabled", "--quiet", telemtWebFrontUnit) == nil
 }
+
 func telemtWebEnsureFrontendPackage(ctx context.Context, s TelemtWebProxyState) error {
 	front := telemtWebFrontend(s)
 	if front == "nginx" {
@@ -406,6 +415,7 @@ func telemtWebValidateFrontend(s TelemtWebProxyState) error {
 	}
 	return nil
 }
+
 func telemtWebEnsureFrontendRunning(s TelemtWebProxyState) error {
 	if telemtWebFrontend(s) == "nginx" {
 		return telemtWebEnsureNginxRunning()
@@ -426,6 +436,7 @@ func telemtWebEnsureFrontendRunning(s TelemtWebProxyState) error {
 	}
 	return systemctl("enable", "--now", telemtWebFrontUnit)
 }
+
 func telemtWebReloadFrontend(s TelemtWebProxyState) error {
 	if telemtWebFrontend(s) == "nginx" {
 		return telemtWebReloadNginx()
@@ -438,6 +449,7 @@ func telemtWebReloadFrontend(s TelemtWebProxyState) error {
 	}
 	return systemctl("reload", telemtWebFrontUnit)
 }
+
 func telemtWebStopFrontend(s TelemtWebProxyState, disable bool) error {
 	if telemtWebFrontend(s) == "nginx" {
 		return telemtWebStopNginx(disable)
@@ -450,12 +462,14 @@ func telemtWebStopFrontend(s TelemtWebProxyState, disable bool) error {
 	}
 	return nil
 }
+
 func telemtWebRestoreFrontend(s TelemtWebProxyState) error {
 	if telemtWebFrontend(s) == "nginx" {
 		return telemtWebRestoreNginx(s)
 	}
 	return telemtWebStopFrontend(s, true)
 }
+
 func removeTelemtWebFrontendConfig(s TelemtWebProxyState) error {
 	if telemtWebFrontend(s) == "nginx" {
 		return removeTelemtWebNginxConfig()

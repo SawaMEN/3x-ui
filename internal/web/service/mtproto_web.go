@@ -7,7 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -142,12 +144,20 @@ func ReconcileMtprotoWebProxy(ctx context.Context) error {
 		return nil
 	}
 	defer mtprotoWebSyncMu.Unlock()
+	telemtWebOperationMu.Lock()
+	defer telemtWebOperationMu.Unlock()
 	selected, err := mtprotoWebCandidates()
 	if err != nil {
 		return err
 	}
 	if len(selected) > 1 {
 		return fmt.Errorf("mtproto web: %d enabled WEB inbounds; only one is supported", len(selected))
+	}
+	if len(selected) == 1 {
+		selected[0], err = (&InboundService{}).buildInboundForLocalRuntime(database.GetDB(), selected[0])
+		if err != nil {
+			return err
+		}
 	}
 	state, err := readTelemtWebState()
 	if err != nil {
@@ -158,7 +168,10 @@ func ReconcileMtprotoWebProxy(ctx context.Context) error {
 		if state.ManagedInboundID == 0 {
 			return nil
 		}
-		if err := (TelemtService{}).DisableWebProxy(); err != nil {
+		if err := disableTelemtWebProxy(); err != nil {
+			return err
+		}
+		if err := cleanupWebProxyBootUnit(); err != nil {
 			return err
 		}
 		return stopMtprotoWebServiceIfUnused()
@@ -183,7 +196,10 @@ func ReconcileMtprotoWebProxy(ctx context.Context) error {
 	if state.Enabled && state.ManagedInboundID != 0 && state.ManagedInboundID != ib.Id {
 		// Ownership moves in two steps: stop the old frontend first, then
 		// allow the new inbound to acquire port 443 on the next reconcile.
-		return (TelemtService{}).DisableWebProxy()
+		if err := disableTelemtWebProxy(); err != nil {
+			return err
+		}
+		return cleanupWebProxyBootUnit()
 	}
 
 	fingerprint := mtprotoWebFingerprint(ib)
@@ -196,8 +212,6 @@ func ReconcileMtprotoWebProxy(ctx context.Context) error {
 	if unchanged && state.UserFingerprint == fingerprint && svc.WebProxyTelemtActive() {
 		// Recover the HTTPS entry point even when only its process was stopped.
 		if !telemtWebFrontendActive(state) {
-			telemtWebOperationMu.Lock()
-			defer telemtWebOperationMu.Unlock()
 			if err := telemtWebEnsureFrontendRunning(state); err != nil {
 				return err
 			}
@@ -240,7 +254,7 @@ func ReconcileMtprotoWebProxy(ctx context.Context) error {
 	if err := writeTelemtWebState(state); err != nil {
 		return err
 	}
-	if _, err := svc.EnableWebProxy(ctx, domain, cert, key, normalized); err != nil {
+	if _, err := svc.enableWebProxyLocked(ctx, domain, cert, key, normalized); err != nil {
 		mtprotoWebLastError = time.Now()
 		_ = writeTelemtWebState(previousState)
 		return err
@@ -310,6 +324,35 @@ var mtprotoWebTraffic struct {
 	sync.Mutex
 	inboundID int
 	last      map[string]int64
+}
+
+func resetMtprotoWebClientQuota(inboundID int, email string) error {
+	telemtWebOperationMu.Lock()
+	defer telemtWebOperationMu.Unlock()
+	state, err := readTelemtWebState()
+	if err != nil || !state.Enabled || state.ManagedInboundID != inboundID {
+		return err
+	}
+	username := mtprotoWebUsername(inboundID, email)
+	req, err := telemtAPIRequest(http.MethodPost, "/v1/users/"+url.PathEscape(username)+"/reset-quota")
+	if err != nil {
+		return err
+	}
+	response, err := (&http.Client{Timeout: 3 * time.Second}).Do(req)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	var result struct {
+		OK bool `json:"ok"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
+		return err
+	}
+	if response.StatusCode != http.StatusOK || !result.OK {
+		return fmt.Errorf("telemt WEB quota reset rejected: HTTP %d", response.StatusCode)
+	}
+	return nil
 }
 
 // CollectMtprotoWebTraffic maps cumulative WEB backend counters back onto the
@@ -392,6 +435,7 @@ func mtprotoWebFingerprint(ib *model.Inbound) string {
 	for _, user := range inst.Secrets {
 		parts = append(parts, user.Name+":"+user.Secret+":"+fmt.Sprint(user.QuotaBytes)+":"+fmt.Sprint(user.ExpiresUnix)+":"+fmt.Sprint(user.LimitIP))
 	}
+	slices.Sort(parts)
 	fingerprint := sha256.Sum256([]byte(strings.Join(parts, "|")))
 	return fmt.Sprintf("%x", fingerprint)
 }

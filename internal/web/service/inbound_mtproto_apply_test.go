@@ -26,6 +26,26 @@ func readTelemtConfig(t *testing.T, inboundId int) string {
 	return string(data)
 }
 
+func TestResetMtprotoQuotaRestartsDepletedInbound(t *testing.T) {
+	setupConflictDB(t)
+	pidFile := installFakeMtg(t)
+	manager := mtproto.GetManager()
+	manager.StopAll()
+	t.Cleanup(manager.StopAll)
+	runtime.SetManager(runtime.NewManager(runtime.LocalDeps{APIPort: func() int { return 0 }}))
+	t.Cleanup(func() { runtime.SetManager(nil) })
+	seedInboundConflict(t, "mt-reset-depleted", "", 46109, model.MTProto, "", `{"clients":[{"email":"depleted","enable":true,"secret":"`+mtprotoTestSecretA+`"}]}`)
+	ib := loadInboundByTag(t, "mt-reset-depleted")
+	seedClientTraffic(t, ib.Id, "depleted", false)
+	if err := (&InboundService{}).ResetClientTrafficByEmail("depleted"); err != nil {
+		t.Fatal(err)
+	}
+	waitForSpawns(t, pidFile, 1)
+	if !strings.Contains(readTelemtConfig(t, ib.Id), "00112233445566778899aabbccddeeff") {
+		t.Fatal("reset did not restore the client's Telemt credential")
+	}
+}
+
 func TestUpdateInboundMtprotoUnchangedDoesNotRestart(t *testing.T) {
 	setupConflictDB(t)
 	pidFile := installFakeMtg(t)

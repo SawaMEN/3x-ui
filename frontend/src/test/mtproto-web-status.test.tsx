@@ -21,6 +21,43 @@ const ready = {
 };
 
 describe('MTProto WEB automation', () => {
+  it('preflights the edited domain and ignores an older pending result', async () => {
+    vi.mocked(HttpUtil.get).mockResolvedValue({ success: true, msg: '', obj: ready });
+    let finishOld!: (value: Awaited<ReturnType<typeof HttpUtil.post>>) => void;
+    vi.mocked(HttpUtil.post)
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishOld = resolve;
+          }),
+      )
+      .mockResolvedValue({
+        success: true,
+        msg: '',
+        obj: {
+          ready: false,
+          checks: [{ id: 'dns', ok: false, message: 'Edited domain DNS is wrong' }],
+          warnings: [],
+        },
+      });
+    render(<Harness domain="old.example.com" />);
+    await waitFor(() =>
+      expect(HttpUtil.post).toHaveBeenCalledWith(
+        '/panel/api/telemt/webproxy/preflight',
+        expect.objectContaining({ domain: 'old.example.com' }),
+        expect.any(Object),
+      ),
+    );
+    fireEvent.change(screen.getByLabelText('domain'), { target: { value: 'edited.example.com' } });
+    await screen.findByText('Edited domain DNS is wrong');
+    finishOld({ success: true, msg: '', obj: { ready: true, checks: [], warnings: [] } });
+    await waitFor(() => expect(screen.getByText('Edited domain DNS is wrong')).toBeTruthy());
+    expect(HttpUtil.post).toHaveBeenLastCalledWith(
+      '/panel/api/telemt/webproxy/preflight',
+      expect.objectContaining({ domain: 'edited.example.com' }),
+      expect.any(Object),
+    );
+  });
   it('suggests the panel domain and preserves a saved custom domain', async () => {
     vi.mocked(HttpUtil.get).mockResolvedValue({ success: true, msg: '', obj: ready });
     const first = render(<Harness />);

@@ -818,6 +818,8 @@ func (TelemtService) ListProxies() ([]TelemtProxy, error) {
 }
 
 func (TelemtService) DeleteProxy(username string) error {
+	telemtWebOperationMu.Lock()
+	defer telemtWebOperationMu.Unlock()
 	username = strings.TrimSpace(username)
 	if username == "" || username == "xui" || username == telemtWebUser || strings.ContainsAny(username, "/\\\r\n") {
 		return errors.New("telemt: invalid proxy username")

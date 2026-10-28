@@ -5,8 +5,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/gin-gonic/gin"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 )
 
 // SniScanDeadline allows the bounded bulk TLS scan to finish without extending

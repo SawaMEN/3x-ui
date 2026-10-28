@@ -175,7 +175,11 @@ func appendTelemtWebProxyConfig(base string, state TelemtWebProxyState) (string,
 		if err := database.GetDB().First(&inbound, state.ManagedInboundID).Error; err != nil {
 			return "", fmt.Errorf("telemt web proxy: load managed inbound: %w", err)
 		}
-		inst, ok := mtproto.InstanceFromInbound(&inbound)
+		effective, err := (&InboundService{}).buildInboundForLocalRuntime(database.GetDB(), &inbound)
+		if err != nil {
+			return "", fmt.Errorf("telemt web proxy: resolve active clients: %w", err)
+		}
+		inst, ok := mtproto.InstanceFromInbound(effective)
 		if !ok {
 			return "", errors.New("telemt web proxy: managed inbound has no enabled clients")
 		}

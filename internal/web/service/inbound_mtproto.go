@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
@@ -97,33 +98,46 @@ func (s *InboundService) applyLocalMtproto(inboundId int) {
 	}
 	payload := inbound
 	if inbound.Enable {
-		if built, bErr := s.buildInboundForLocalRuntime(database.GetDB(), inbound); bErr == nil {
-			payload = built
+		built, bErr := s.buildInboundForLocalRuntime(database.GetDB(), inbound)
+		if bErr != nil {
+			logger.Warning("mtproto: resolving active clients failed:", bErr)
+			return
 		}
+		payload = built
 	}
 	if err := rt.UpdateInbound(context.Background(), inbound, payload); err != nil {
 		logger.Debug("mtproto: immediate client apply failed for inbound", inboundId, ":", err)
 	}
+	if mtproto.WebProxyInbound(inbound) {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+			defer cancel()
+			if err := ReconcileMtprotoWebProxy(ctx); err != nil {
+				logger.Warning("mtproto: immediate WEB client apply failed:", err)
+			}
+		}()
+	}
 }
 
 func (s *InboundService) resetMtprotoClientQuota(email string) {
-	mgr := mtproto.GetManager()
-	if !mgr.HasRunning() {
-		return
-	}
 	id, ok := s.localMtprotoInboundIdForEmail(email)
 	if !ok {
 		return
 	}
+	inbound, err := s.GetInbound(id)
+	if err == nil && mtproto.WebProxyInbound(inbound) {
+		if err := resetMtprotoWebClientQuota(id, email); err != nil {
+			logger.Warning("mtproto: reset WEB client quota failed:", err)
+		}
+		s.applyLocalMtproto(id)
+		return
+	}
 	s.applyLocalMtproto(id)
-	mgr.ResetQuota(email)
+	mtproto.GetManager().ResetQuota(email)
 }
 
 func (s *InboundService) resetAllMtprotoQuotas() {
 	mgr := mtproto.GetManager()
-	if !mgr.HasRunning() {
-		return
-	}
 	desired, err := s.DesiredMtprotoInstances()
 	if err != nil {
 		return
@@ -133,6 +147,22 @@ func (s *InboundService) resetAllMtprotoQuotas() {
 		for _, sec := range inst.Secrets {
 			mgr.ResetQuota(sec.Name)
 		}
+	}
+	web, err := mtprotoWebCandidates()
+	if err != nil {
+		return
+	}
+	for _, ib := range web {
+		inst, ok := mtproto.InstanceFromInbound(ib)
+		if !ok {
+			continue
+		}
+		for _, sec := range inst.Secrets {
+			if err := resetMtprotoWebClientQuota(ib.Id, sec.Name); err != nil {
+				logger.Warning("mtproto: reset WEB quota failed:", err)
+			}
+		}
+		s.applyLocalMtproto(ib.Id)
 	}
 }
 

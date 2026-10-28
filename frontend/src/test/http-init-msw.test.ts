@@ -110,4 +110,25 @@ describe('httpRequest against the MSW-mocked network', () => {
     expect(contentType).toBe('application/json; charset=UTF-8');
     expect(token).toBe(CSRF_TOKEN);
   });
+
+  it.each(['webproxy/preflight', 'webproxy/enable', 'config', 'meko/config', 'action'])(
+    'sends Telemt %s settings as JSON without per-control header overrides',
+    async (action) => {
+      const payload = {
+        enabled: false,
+        domain: 'web.example.com',
+        carriers: ['websocket', 'https'],
+      };
+      let received: unknown;
+      const path = `/panel/api/telemt/${action}`;
+      server.use(
+        http.post(`${ORIGIN}${path}`, async ({ request }) => {
+          received = await request.text();
+          return HttpResponse.json({ success: true });
+        }),
+      );
+      await httpRequest('POST', path, payload);
+      expect(received).toBe(JSON.stringify(payload));
+    },
+  );
 });
