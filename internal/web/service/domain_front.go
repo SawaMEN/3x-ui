@@ -40,12 +40,16 @@ func (s *SettingService) GetDomainFrontConfig() (domainfront.DomainFrontConfig, 
 		if err != nil {
 			return cfg, err
 		}
-		return seedDomainFront(settings), nil
+		return rootRedirectDomainConfig(seedDomainFront(settings), settings), nil
 	}
 	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
 		return cfg, fmt.Errorf("domain configuration: %w", err)
 	}
-	return cfg, nil
+	settings, err := s.GetAllSetting()
+	if err != nil {
+		return cfg, err
+	}
+	return rootRedirectDomainConfig(cfg, settings), nil
 }
 
 func DomainFrontStatus() (domainfront.DomainFrontStatus, error) {

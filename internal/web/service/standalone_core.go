@@ -30,16 +30,18 @@ func standaloneBinaryPath(engine string) string {
 }
 
 func standaloneConfigPath(engine string) string {
-	return filepath.Join(filepath.Dir(config.OwnerCoreBinaryPath()), engine+".json")
+	switch engine {
+	case CoreTypeXray:
+		return filepath.Join(filepath.Dir(config.OwnerCoreBinaryPath()), "xray.json")
+	case CoreTypeSingBoxUpstream:
+		return filepath.Join(filepath.Dir(config.OwnerCoreBinaryPath()), "sing-box-upstream.json")
+	default:
+		return ""
+	}
 }
 
 func standaloneProcess(engine, path string, isolated bool) *singbox.Process {
-	profile := singbox.ProcessOptions{Name: engine, Binary: standaloneBinaryPath(engine), RunCommand: "run", VersionPrefix: "sing-box version "}
-	if engine == CoreTypeXray {
-		profile.VersionPrefix = "Xray "
-		profile.Xray = true
-	}
-	return singbox.NewProcessWithOptions(path, profile, isolated)
+	return singbox.NewProcessWithOptions(path, standaloneProfile(engine, standaloneBinaryPath(engine)), isolated)
 }
 
 func InstallStandaloneCore(ctx context.Context, engine, version string) (string, error) {
@@ -52,6 +54,19 @@ func InstallStandaloneCore(ctx context.Context, engine, version string) (string,
 	if svc.IsRunning() {
 		return "", fmt.Errorf("switch to another core before updating %s", engine)
 	}
+	return installStandaloneAt(ctx, engine, version, svc.BinaryPath())
+}
+
+func standaloneProfile(engine, binary string) singbox.ProcessOptions {
+	profile := singbox.ProcessOptions{Name: engine, Binary: binary, RunCommand: "run", VersionPrefix: "sing-box version "}
+	if engine == CoreTypeXray {
+		profile.VersionPrefix = "Xray "
+		profile.Xray = true
+	}
+	return profile
+}
+
+func installStandaloneAt(ctx context.Context, engine, version, target string) (string, error) {
 	arm := ""
 	if info, ok := debug.ReadBuildInfo(); ok {
 		for _, setting := range info.Settings {
@@ -60,12 +75,8 @@ func InstallStandaloneCore(ctx context.Context, engine, version string) (string,
 			}
 		}
 	}
-	return (coreinstall.Installer{}).Install(ctx, engine, version, runtime.GOOS, runtime.GOARCH, arm, svc.BinaryPath(), func(path string) error {
-		profile := singbox.ProcessOptions{Name: engine, Binary: path, RunCommand: "run", VersionPrefix: "sing-box version "}
-		if engine == CoreTypeXray {
-			profile.VersionPrefix = "Xray "
-			profile.Xray = true
-		}
+	return (coreinstall.Installer{}).Install(ctx, engine, version, runtime.GOOS, runtime.GOARCH, arm, target, func(path string) error {
+		profile := standaloneProfile(engine, path)
 		p := singbox.NewProcessWithOptions("", profile, true)
 		_, err := p.Version(ctx)
 		return err
@@ -185,3 +196,36 @@ func (s *SingBoxService) validateStandaloneXrayBytes(ctx context.Context, data [
 	}
 	return s.candidate(f.Name()).Validate(ctx)
 }
+
+// UninstallStandaloneCore preserves configuration and shared geodata for reinstall.
+func UninstallStandaloneCore(ctx context.Context, engine string) error {
+	if engine != CoreTypeXray && engine != CoreTypeSingBoxUpstream {
+		return fmt.Errorf("the bundled core cannot be removed")
+	}
+	singBoxApplyMu.Lock()
+	defer singBoxApplyMu.Unlock()
+	selected, err := (&SettingService{}).GetCoreType()
+	if err != nil {
+		return err
+	}
+	svc := NativeCore(engine)
+	if selected == engine || svc.IsRunning() {
+		return fmt.Errorf("switch to another core before removing %s", engine)
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := os.Remove(svc.BinaryPath()); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	svc.process().SetError(nil)
+	return nil
+}
+
+var coreSwitchInProgress atomic.Int32
+
+func BeginCoreSwitch() func() {
+	coreSwitchInProgress.Add(1)
+	return func() { coreSwitchInProgress.Add(-1) }
+}
+func CoreSwitchInProgress() bool { return coreSwitchInProgress.Load() > 0 }

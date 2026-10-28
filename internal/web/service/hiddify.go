@@ -316,3 +316,10 @@ func (s *SingBoxService) stopProcess(ctx context.Context) error {
 		return hiddifyRuntime.Stop(ctx)
 	}
 }
+
+func (s *SingBoxService) templateKey() string {
+	if s.coreType() == CoreTypeSingBoxUpstream {
+		return "singBoxUpstreamConfigTemplate"
+	}
+	return "singBoxConfigTemplate"
+}

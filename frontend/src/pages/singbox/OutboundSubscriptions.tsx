@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Alert,
   Button,
@@ -8,6 +9,7 @@ import {
   Input,
   InputNumber,
   Popconfirm,
+  Select,
   Space,
   Switch,
   Table,
@@ -22,6 +24,18 @@ type Subscription = {
   remark: string;
   url: string;
   enabled: boolean;
+  updateInterval?: number;
+  allowPrivate?: boolean;
+  allowInsecure?: boolean;
+  tagPrefix?: string;
+  userAgent?: string;
+  prepend?: boolean;
+  balanceMode?: string;
+  probeURL?: string;
+  probeInterval?: number;
+  switchInterval?: number;
+  healthInterval?: number;
+  tolerance?: number;
   autoBalance: boolean;
   outboundCount: number;
   lastError?: string;
@@ -160,12 +174,18 @@ export default function OutboundSubscriptions({
   initialURL,
   onClose,
   onTagsChanged,
+  replacementTags = [],
+  coreType = 'sing-box',
 }: {
   open: boolean;
   initialURL: string;
   onClose: () => void;
   onTagsChanged: (tags: string[]) => void;
+  replacementTags?: string[];
+  coreType?: 'xray' | 'sing-box';
 }) {
+  const { t } = useTranslation();
+  const [enabled, setEnabled] = useState(true);
   const [rows, setRows] = useState<Subscription[]>([]);
   const [url, setURL] = useState('');
   const [remark, setRemark] = useState('');
@@ -173,6 +193,8 @@ export default function OutboundSubscriptions({
   const [allowPrivate, setAllowPrivate] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [editing, setEditing] = useState<Subscription | null>(null);
+  const [replacement, setReplacement] = useState('');
   const load = useCallback(async () => {
     const result = await HttpUtil.get<Subscription[]>('/panel/api/xray/outbound-subs', undefined, {
       silent: true,
@@ -184,19 +206,27 @@ export default function OutboundSubscriptions({
     if (!open) return;
     const timer = window.setTimeout(() => {
       setURL(initialURL);
+      setRemark('');
+      setEditing(null);
+      setEnabled(true);
       setError('');
       void load().catch((e: Error) => setError(e.message));
     }, 0);
     return () => window.clearTimeout(timer);
   }, [open, initialURL, load]);
   async function syncTags() {
-    const result = await HttpUtil.post<{ subscriptionOutboundTags?: string[] }>(
-      '/panel/api/xray/',
-      undefined,
-      { silent: true },
-    );
-    if (!result.success) throw new Error(result.msg || 'Не удалось обновить подключения');
-    onTagsChanged(result.obj?.subscriptionOutboundTags || []);
+    if (coreType === 'xray') {
+      // Xray's parent refreshes its own source and subscription metadata.
+      onTagsChanged([]);
+    } else {
+      const result = await HttpUtil.get<{ subscriptionTags?: string[] }>(
+        '/panel/api/setting/singbox/config',
+        undefined,
+        { silent: true },
+      );
+      if (!result.success) throw new Error(result.msg || 'Не удалось обновить подключения');
+      onTagsChanged(result.obj?.subscriptionTags || []);
+    }
   }
   async function run(action: () => Promise<void>) {
     setBusy(true);
@@ -210,7 +240,9 @@ export default function OutboundSubscriptions({
         await load();
         await syncTags();
       } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
+        setError((current) =>
+          [current, e instanceof Error ? e.message : String(e)].filter(Boolean).join('. '),
+        );
       }
       setBusy(false);
     }
@@ -221,39 +253,51 @@ export default function OutboundSubscriptions({
     });
     if (!result.success) throw new Error(result.msg || 'Не удалось обновить подписку');
   }
+  function resetForm() {
+    setURL('');
+    setRemark('');
+    setEditing(null);
+    setEnabled(true);
+    setInterval(10);
+    setAllowPrivate(false);
+  }
   async function add() {
     const result = await HttpUtil.post<Subscription>(
-      '/panel/api/xray/outbound-subs',
+      editing ? `/panel/api/xray/outbound-subs/${editing.id}` : '/panel/api/xray/outbound-subs',
       {
         url: url.trim(),
         remark: remark.trim(),
-        enabled: true,
-        prepend: false,
+        enabled,
+        prepend: editing?.prepend ?? false,
+        tagPrefix: editing?.tagPrefix || '',
+        userAgent: editing?.userAgent || '',
+        allowInsecure: editing?.allowInsecure ?? false,
         updateInterval: interval * 60,
         allowPrivate,
-        autoBalance: true,
-        balanceMode: 'latency',
-        probeInterval: 300,
-        switchInterval: 900,
-        healthInterval: 30,
-        tolerance: 50,
+        autoBalance: editing?.autoBalance ?? true,
+        balanceMode: editing?.balanceMode || 'latency',
+        probeURL: editing?.probeURL || '',
+        probeInterval: editing?.probeInterval || 300,
+        switchInterval: editing?.switchInterval || 900,
+        healthInterval: editing?.healthInterval || 30,
+        tolerance: editing?.tolerance ?? 50,
       },
       { silent: true },
     );
-    if (!result.success || !result.obj)
-      throw new Error(result.msg || 'Не удалось добавить подписку');
+    if (!result.success) throw new Error(result.msg || 'Не удалось сохранить подписку');
+    const id = editing?.id || result.obj?.id;
+    if (!id) throw new Error('Сервер не вернул идентификатор подписки');
     // A failed first fetch remains a visible saved row for retry, without
     // duplicate subscriptions created by a second click on Add.
-    setURL('');
-    setRemark('');
-    await refresh(result.obj.id);
+    resetForm();
+    await refresh(id);
   }
   return (
     <Drawer
       destroyOnHidden
       open={open}
       onClose={onClose}
-      title="Подписки для каскада"
+      title={t('pages.xray.outboundSub.title')}
       size={760}
       zIndex={1100}
     >
@@ -261,12 +305,16 @@ export default function OutboundSubscriptions({
         <Alert
           type="info"
           showIcon
-          title="Добавьте подписку и выберите её в поле «Подключиться через»"
-          description="Рабочие подключения выбираются автоматически. Несовместимые профили сохраняются для других версий ядра; подробности скрыты до раскрытия. Обновление также применяет изменения к запущенному sing-box."
+          title="Добавьте подписку, затем используйте её в маршрутизации"
+          description="Рабочие подключения выбираются автоматически. Несовместимые профили сохраняются для других версий ядра; подробности скрыты до раскрытия. Изменения применяются к выбранному работающему ядру автоматически."
         />
         {error && <Alert type="error" showIcon title={error} />}
         <Form layout="vertical">
-          <Form.Item label="URL подписки" htmlFor="cascade-subscription-url" required>
+          <Form.Item
+            label={t('pages.xray.outboundSub.url')}
+            htmlFor="cascade-subscription-url"
+            required
+          >
             <Input
               id="cascade-subscription-url"
               value={url}
@@ -274,7 +322,7 @@ export default function OutboundSubscriptions({
               placeholder="https://example.com/sub/..."
             />
           </Form.Item>
-          <Form.Item label="Название">
+          <Form.Item label={t('pages.xray.outboundSub.remark')}>
             <Input value={remark} onChange={(e) => setRemark(e.target.value)} />
           </Form.Item>
           <Form.Item label="Обновление, минуты">
@@ -285,8 +333,11 @@ export default function OutboundSubscriptions({
               onChange={(v) => setInterval(v ?? 10)}
             />
           </Form.Item>
-          <Form.Item label="Разрешить адрес подписки в локальной сети">
+          <Form.Item label={t('pages.xray.outboundSub.allowPrivate')}>
             <Switch checked={allowPrivate} onChange={setAllowPrivate} />
+          </Form.Item>
+          <Form.Item label={t('pages.xray.outboundSub.enabled')}>
+            <Switch checked={enabled} onChange={setEnabled} />
           </Form.Item>
           <Button
             type="primary"
@@ -294,8 +345,18 @@ export default function OutboundSubscriptions({
             disabled={!url.trim()}
             onClick={() => void run(add)}
           >
-            Добавить и загрузить
+            {editing ? 'Сохранить и применить' : 'Добавить и загрузить'}
           </Button>
+          {editing && (
+            <Button
+              disabled={busy}
+              onClick={() => {
+                resetForm();
+              }}
+            >
+              {t('cancel')}
+            </Button>
+          )}
         </Form>
         <Table<Subscription>
           rowKey="id"
@@ -357,6 +418,19 @@ export default function OutboundSubscriptions({
               title: 'Действия',
               render: (_, row) => (
                 <Space wrap>
+                  <Button
+                    disabled={busy}
+                    onClick={() => {
+                      setEditing(row);
+                      setEnabled(row.enabled);
+                      setURL(row.url);
+                      setRemark(row.remark);
+                      setInterval((row.updateInterval || 600) / 60);
+                      setAllowPrivate(!!row.allowPrivate);
+                    }}
+                  >
+                    {t('edit')}
+                  </Button>
                   <Button disabled={busy} onClick={() => void run(() => refresh(row.id))}>
                     Обновить и применить
                   </Button>
@@ -388,12 +462,25 @@ export default function OutboundSubscriptions({
                     }
                   />
                   <Popconfirm
-                    title="Удалить подписку? Ссылки на её теги в каскаде нужно заменить."
+                    title={t('pages.xray.outboundSub.deleteConfirm')}
+                    description={
+                      <Space orientation="vertical">
+                        <span>Заменить ссылки на её подключения:</span>
+                        <Select
+                          aria-label="Замена удаляемой подписки"
+                          style={{ width: 240 }}
+                          value={replacement || undefined}
+                          placeholder="Выберите исходящее подключение"
+                          options={replacementTags.map((value) => ({ value, label: value }))}
+                          onChange={setReplacement}
+                        />
+                      </Space>
+                    }
                     onConfirm={() =>
                       run(async () => {
                         const result = await HttpUtil.post(
                           `/panel/api/xray/outbound-subs/${row.id}/del`,
-                          undefined,
+                          { replacement },
                           { silent: true },
                         );
                         if (!result.success)
@@ -402,7 +489,7 @@ export default function OutboundSubscriptions({
                     }
                   >
                     <Button danger disabled={busy}>
-                      Удалить
+                      {t('delete')}
                     </Button>
                   </Popconfirm>
                 </Space>

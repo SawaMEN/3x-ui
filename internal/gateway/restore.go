@@ -23,9 +23,10 @@ func RestoreForCore(core string) error {
 	case service.CoreTypeXray:
 		cfg, raw, err = loadTemplate()
 		exists, apply, create, save, remove = backupExists, applyGatewayConfig, createBackup, saveTemplate, removeBackup
-	case service.CoreTypeSingBox:
-		cfg, raw, err = loadSingBoxTemplate()
-		exists, apply, create, save, remove = singBoxBackupExists, applySingBoxGatewayConfig, createSingBoxBackup, saveSingBoxTemplate, removeSingBoxBackup
+	case service.CoreTypeSingBox, service.CoreTypeSingBoxUpstream:
+		store := singBoxGatewayStore{core: core}
+		cfg, raw, err = store.loadSingBoxTemplate()
+		exists, apply, create, save, remove = store.singBoxBackupExists, applySingBoxGatewayConfig, store.createSingBoxBackup, store.saveSingBoxTemplate, store.removeSingBoxBackup
 	default:
 		return fmt.Errorf("unsupported Gateway core %q", core)
 	}

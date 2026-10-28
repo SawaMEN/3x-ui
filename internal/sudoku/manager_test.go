@@ -25,6 +25,9 @@ exec sleep 60
 	if err := os.WriteFile(GetBinaryPath(binDir), []byte(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
+	if err := writeInstalledVersion(binDir, "fixture"); err != nil {
+		t.Fatal(err)
+	}
 	manager := &Manager{procs: make(map[int]*managed), lastErr: make(map[int]string)}
 	t.Cleanup(manager.StopAll)
 	instance := Instance{ID: 1, Tag: "sudoku-test", Config: Config{Mode: "server", LocalPort: 2443, AEAD: "none"}}

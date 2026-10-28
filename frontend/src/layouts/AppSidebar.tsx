@@ -193,19 +193,9 @@ function AppSidebar() {
         label: t('pages.singBox.sections.dns'),
       },
       {
-        key: '/singbox#routing',
-        icon: <SwapOutlined />,
-        label: t('pages.singBox.sections.route'),
-      },
-      {
         key: '/singbox#adblock',
         icon: <SafetyOutlined />,
         label: 'AdBlock',
-      },
-      {
-        key: '/singbox#outbound',
-        icon: <ExportOutlined />,
-        label: t('pages.singBox.sections.outbounds'),
       },
       {
         key: '/singbox#gateway',

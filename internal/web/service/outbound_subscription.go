@@ -389,11 +389,7 @@ func (s *OutboundSubscriptionService) Update(id int, remark, rawURL, tagPrefix, 
 
 // Delete removes a subscription.
 func (s *OutboundSubscriptionService) Delete(id int) error {
-	unlock := lockSubscription(id)
-	defer unlock()
-	subscriptionOrderMu.Lock()
-	defer subscriptionOrderMu.Unlock()
-	return database.GetDB().Delete(&model.OutboundSubscription{}, id).Error
+	return s.DeleteReplacing(id, "")
 }
 
 // GetLastOutbounds returns the last successfully fetched outbounds for a subscription

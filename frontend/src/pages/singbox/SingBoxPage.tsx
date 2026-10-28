@@ -24,7 +24,6 @@ import {
   Spin,
   Switch,
   Table,
-  Radio,
   Tag,
   Empty,
   message,
@@ -772,8 +771,8 @@ export default function SingBoxPage() {
   const SECTION_LABELS: Record<string, ReactNode> = {
     basic: 'Основные',
     dns: 'DNS',
-    routing: 'Маршрутизация',
-    outbound: 'Подключения',
+    routing: t('pages.singBox.sections.route'),
+    outbound: t('pages.singBox.sections.outbounds'),
     adblock: 'AdBlock',
     gateway: 'Режим шлюза',
     advanced: 'Дополнительно',
@@ -839,9 +838,9 @@ export default function SingBoxPage() {
     [setConfig],
   );
 
-  const save = async () => {
+  const persist = async (draft: ConfigMap): Promise<boolean> => {
     try {
-      const next: ConfigMap = { ...config };
+      const next: ConfigMap = { ...draft };
       if (asObjectArray(next.outbounds).some((item) => item.type === 'masque')) {
         const experimental = asObject(next.experimental);
         next.experimental = {
@@ -866,14 +865,22 @@ export default function SingBoxPage() {
       setSnapshot((current) => (current ? { ...current, config: next } : current));
       // Edits made during an in-flight save must remain unsaved instead of
       // being overwritten by the response from an earlier revision.
-      setConfig((current) => (JSON.stringify(current) === JSON.stringify(config) ? next : current));
+      setConfig((current) =>
+        JSON.stringify(current) === JSON.stringify(draft) ||
+        JSON.stringify(current) === JSON.stringify(config)
+          ? next
+          : current,
+      );
       messageApi.success(t('pages.singBox.saved'));
+      return true;
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : String(error));
+      return false;
     } finally {
       setSaving(false);
     }
   };
+  const save = () => persist(config);
 
   const reset = async () => {
     setSaving(true);
@@ -1339,49 +1346,35 @@ export default function SingBoxPage() {
     );
   };
 
-  const renderEndpoints = () => renderOutbounds(true);
-
-  const renderOutbounds = (onlyEndpoints = false, onlyGroups = false) => {
+  const renderOutbounds = () => {
     const items = [
       ...asObjectArray(sectionValue('outbounds', config)),
       ...asObjectArray(config.endpoints),
     ];
     const visible = items
       .map((item, index): JsonObject => ({ ...item, __index: index }))
-      .filter(
-        (item) =>
-          (onlyEndpoints
-            ? isNativeEndpoint(item)
-            : !isNativeEndpoint(item) &&
-              ['selector', 'urltest', 'balancer'].includes(asString(item.type)) === onlyGroups) &&
-          [item.tag, item.type, item.server]
-            .join(' ')
-            .toLowerCase()
-            .includes(outboundSearch.toLowerCase()),
+      .filter((item) =>
+        [item.tag, item.type, item.server]
+          .join(' ')
+          .toLowerCase()
+          .includes(outboundSearch.toLowerCase()),
       );
 
     return (
       <Card>
         <div className="singbox-section-header">
           <div>
-            <div className="singbox-section-title">
-              {onlyEndpoints
-                ? 'Туннели и endpoints'
-                : onlyGroups
-                  ? 'Балансировщики'
-                  : 'Исходящие подключения'}
-            </div>
+            <div className="singbox-section-title">Исходящие подключения</div>
             <div className="singbox-section-description">
-              {onlyEndpoints
-                ? 'Туннельные исходящие подключения sing-box.'
-                : onlyGroups
-                  ? 'Автоматический выбор и группы подключений.'
-                  : 'Серверы и прокси. Группы и туннели доступны ниже в раскрывающихся секциях.'}
+              Серверы, туннели, группы и подписки. Правила выбора выхода настраиваются в разделе
+              «Маршрутизация».
             </div>
           </div>
           <Space wrap>
             <Button
-              onClick={() => {
+              disabled={saving}
+              onClick={async () => {
+                if (dirty && !(await persist(config))) return;
                 setSubscriptionURL('');
                 setSubscriptionsOpen(true);
               }}
@@ -1391,26 +1384,14 @@ export default function SingBoxPage() {
             <Button
               icon={<PlusOutlined />}
               type="primary"
-              aria-label={
-                onlyEndpoints
-                  ? 'Добавить endpoint'
-                  : onlyGroups
-                    ? 'Добавить балансировщик'
-                    : 'Добавить outbound'
-              }
+              aria-label="Добавить outbound"
               onClick={() => {
                 setEditingOutbound(null);
-                setNewOutboundType(
-                  onlyEndpoints ? 'masque-client' : onlyGroups ? 'selector' : 'vless',
-                );
+                setNewOutboundType('vless');
                 setOutboundModalOpen(true);
               }}
             >
-              {onlyEndpoints
-                ? 'Добавить endpoint'
-                : onlyGroups
-                  ? 'Добавить балансировщик'
-                  : 'Добавить outbound'}
+              Добавить подключение
             </Button>
           </Space>
         </div>
@@ -1524,7 +1505,7 @@ export default function SingBoxPage() {
                       value={items[index]}
                       onApply={(next) => {
                         try {
-                          setConfig(putConnection(config, index, asObject(next)));
+                          void persist(putConnection(config, index, asObject(next)));
                         } catch (error) {
                           messageApi.error(error instanceof Error ? error.message : String(error));
                         }
@@ -1536,13 +1517,48 @@ export default function SingBoxPage() {
                       icon={<DeleteOutlined />}
                       onClick={() => {
                         try {
-                          const next = removeConnection(config, index);
+                          const choices = items
+                            .filter((_, i) => i !== index)
+                            .map((row) => asString(row.tag))
+                            .filter(Boolean);
+                          let replacement = choices.includes('direct') ? 'direct' : choices[0];
+                          let referenced = false;
+                          try {
+                            removeConnection(config, index);
+                          } catch {
+                            referenced = true;
+                          }
                           modalApi.confirm({
                             title: `Удалить подключение ${items[index].tag}?`,
+                            content: referenced ? (
+                              <Space orientation="vertical" style={{ width: '100%' }}>
+                                <span>
+                                  Подключение используется. Выберите замену для всех связанных
+                                  правил и групп:
+                                </span>
+                                <Select
+                                  aria-label="Замена удаляемого подключения"
+                                  style={{ width: '100%' }}
+                                  defaultValue={replacement}
+                                  options={choices.map((value) => ({ value, label: value }))}
+                                  onChange={(value) => {
+                                    replacement = value;
+                                  }}
+                                />
+                              </Space>
+                            ) : undefined,
                             okText: 'Удалить',
                             cancelText: 'Отмена',
                             okButtonProps: { danger: true },
-                            onOk: () => setConfig(next),
+                            onOk: async () => {
+                              const next = removeConnection(
+                                config,
+                                index,
+                                referenced ? replacement : undefined,
+                              );
+                              if (!(await persist(next)))
+                                throw new Error('Не удалось удалить подключение');
+                            },
                           });
                         } catch (error) {
                           messageApi.error(error instanceof Error ? error.message : String(error));
@@ -1688,6 +1704,7 @@ export default function SingBoxPage() {
             rowKey={(row) => String(row.__index)}
             dataSource={rules
               .map((rule, index): JsonObject => ({ ...rule, __index: index }))
+              .filter((rule) => !asString(rule.comment).startsWith('panel-basic:'))
               .filter((rule) =>
                 [routeRuleSummary(rule), rule.outbound, rule.action, rule.comment]
                   .join(' ')
@@ -2165,29 +2182,7 @@ export default function SingBoxPage() {
           </Space>
         );
       case 'outbound':
-        return (
-          <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-            {renderOutbounds()}
-            <Collapse
-              className="singbox-advanced-groups"
-              defaultActiveKey={
-                sectionSlug === 'balancer'
-                  ? ['groups']
-                  : sectionSlug === 'endpoints'
-                    ? ['endpoints']
-                    : []
-              }
-              items={[
-                {
-                  key: 'groups',
-                  label: 'Балансировщики и группы выбора',
-                  children: renderOutbounds(false, true),
-                },
-                { key: 'endpoints', label: 'Туннели и endpoints', children: renderEndpoints() },
-              ]}
-            />
-          </Space>
-        );
+        return renderOutbounds();
       case 'adblock':
         return <AdBlockTab />;
       case 'gateway':
@@ -2223,7 +2218,6 @@ export default function SingBoxPage() {
       okButtonProps: { danger: true },
       onOk: reset,
     });
-  const visibleSections = ['basic', 'dns', 'routing', 'outbound', 'adblock', 'gateway', 'advanced'];
 
   return (
     <ConfigProvider theme={antdThemeConfig}>
@@ -2354,20 +2348,6 @@ export default function SingBoxPage() {
                     />
                   )}
 
-                  <Card className="singbox-section-navigation" size="small">
-                    <Radio.Group
-                      value={activeSection}
-                      buttonStyle="solid"
-                      onChange={(event) =>
-                        navigate('/singbox#' + event.target.value, { preventScrollReset: true })
-                      }
-                      options={visibleSections.map((key) => ({
-                        value: key,
-                        label: SECTION_LABELS[key],
-                      }))}
-                      optionType="button"
-                    />
-                  </Card>
                   <div className="singbox-settings-body">{sectionBody}</div>
                 </Space>
               ) : (
@@ -2383,9 +2363,12 @@ export default function SingBoxPage() {
           open
           initialURL={subscriptionURL}
           onClose={() => setSubscriptionsOpen(false)}
-          onTagsChanged={(tags) =>
-            setSnapshot((current) => (current ? { ...current, subscriptionTags: tags } : current))
-          }
+          replacementTags={[...asObjectArray(config.outbounds), ...asObjectArray(config.endpoints)]
+            .map((row) => asString(row.tag))
+            .filter(Boolean)}
+          onTagsChanged={() => {
+            void refresh();
+          }}
         />
       )}
       {outboundModalOpen && (
@@ -2415,8 +2398,11 @@ export default function SingBoxPage() {
           onCancel={() => setOutboundModalOpen(false)}
           onSave={(next, additional = []) => {
             try {
-              setConfig(putConnection(config, editingOutbound, next, additional));
-              setOutboundModalOpen(false);
+              void persist(putConnection(config, editingOutbound, next, additional)).then(
+                (saved) => {
+                  if (saved) setOutboundModalOpen(false);
+                },
+              );
             } catch (error) {
               messageApi.error(error instanceof Error ? error.message : String(error));
             }

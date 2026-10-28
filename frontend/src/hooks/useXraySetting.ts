@@ -122,7 +122,7 @@ export interface UseXraySettingResult {
     mode?: string,
   ) => Promise<OutboundTestResult | null>;
   testAllOutbounds: (mode?: string) => Promise<void>;
-  saveAll: () => Promise<void>;
+  saveAll: (next?: XraySettingsValue) => Promise<boolean>;
   resetToDefault: () => Promise<void>;
 }
 
@@ -277,8 +277,8 @@ export function useXraySetting(): UseXraySettingResult {
   }, [queryClient]);
 
   const saveMut = useMutation({
-    mutationFn: async () => {
-      const sentXraySetting = xraySettingRef.current;
+    mutationFn: async (next?: XraySettingsValue) => {
+      const sentXraySetting = next ? JSON.stringify(next, null, 2) : xraySettingRef.current;
       const sentTestUrl = normalizeOutboundTestUrl(outboundTestUrlRef.current);
       const msg = await HttpUtil.post('/panel/api/xray/update', {
         xraySetting: sentXraySetting,
@@ -314,9 +314,15 @@ export function useXraySetting(): UseXraySettingResult {
     },
   });
 
-  const saveAll = useCallback(async () => {
-    await saveMut.mutateAsync();
-  }, [saveMut]);
+  const saveAll = useCallback(
+    async (next?: XraySettingsValue) => {
+      const { msg } = await saveMut.mutateAsync(next);
+      if (!msg?.success) throw new Error(msg?.msg || 'Не удалось сохранить настройки Xray');
+      if (next) setTemplateSettings(next);
+      return true;
+    },
+    [saveMut, setTemplateSettings],
+  );
   const resetOutboundsTraffic = useCallback(
     async (tag: string) => {
       await resetTrafficMut.mutateAsync(tag);

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -37,6 +38,9 @@ else
 fi
 `
 	if err := os.WriteFile(sudoku.GetBinaryPath(binDir), []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(binDir, "sudoku.version"), []byte("fixture\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	inbound := &model.Inbound{

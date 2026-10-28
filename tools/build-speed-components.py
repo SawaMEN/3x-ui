@@ -40,6 +40,8 @@ def build(output, names):
             env = dict(os.environ, CGO_ENABLED='0')
             run('go', 'build', '-trimpath', '-o', str(output / filename), entry['command'], cwd=source, env=env)
             shutil.copyfile(source / 'LICENSE', output / (name + '.LICENSE'))
+            if name == 'sudoku':
+                (output / 'sudoku.version').write_text('panel-' + entry['commit'][:12] + '\n')
             records[name] = {
                 'source': entry,
                 'patch_sha256': hashlib.sha256(patch.read_bytes()).hexdigest(),

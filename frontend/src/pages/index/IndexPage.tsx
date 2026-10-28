@@ -98,7 +98,7 @@ export default function IndexPage() {
 
   const history = useOverviewHistory(status, fetched && !fetchError, lowPower);
 
-  const coreType = 'sing-box' as const;
+  const coreType = allSetting.coreType;
   const displayCoreRunning = coreRunning;
   const displayCoreVersion = coreVersion;
   const displayCoreError = coreError;

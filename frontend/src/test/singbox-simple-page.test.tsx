@@ -201,7 +201,6 @@ describe('simple sing-box page', () => {
     fireEvent.change(await screen.findByLabelText('Поиск исходящих подключений'), {
       target: { value: 'tunnel' },
     });
-    fireEvent.click(screen.getByText('Туннели и endpoints'));
     const row = (await screen.findByText('tunnel')).closest('tr')!;
     fireEvent.click(within(row).getByRole('button', { name: 'Изменить' }));
     const dialog = await screen.findByRole('dialog');
@@ -210,7 +209,6 @@ describe('simple sing-box page', () => {
     });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Сохранить изменения' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull(), { timeout: 5000 });
-    fireEvent.click(screen.getByText('Save').closest('button')!);
     await waitFor(() => expect(HttpUtil.post).toHaveBeenCalled());
     const call = vi
       .mocked(HttpUtil.post)
@@ -221,27 +219,15 @@ describe('simple sing-box page', () => {
     expect(sent.outbounds).toEqual(config.outbounds);
   });
 
-  it('uses a single level of navigation for core, DNS, connections and Gateway', async () => {
+  it('uses sidebar routes without a duplicated section navigation', async () => {
     mount();
     await screen.findByText('Логирование');
-    expect(screen.getAllByRole('radio').map((item) => item.closest('label')?.textContent)).toEqual([
-      'Основные',
-      'DNS',
-      'Маршрутизация',
-      'Подключения',
-      'AdBlock',
-      'Режим шлюза',
-      'Дополнительно',
-    ]);
+    expect(screen.queryByRole('radio')).toBeNull();
     expect(screen.queryByText('Быстрая настройка')).toBeNull();
-    expect(screen.queryByLabelText('Расширенный режим')).toBeNull();
-    expect(screen.getByText('Save').closest('button')!.hasAttribute('disabled')).toBe(true);
   });
 
-  it('opens DNS servers directly from the main navigation', async () => {
-    mount();
-    await screen.findByText('Логирование');
-    fireEvent.click(screen.getByRole('radio', { name: 'DNS' }));
+  it('opens DNS servers directly through its sidebar route', async () => {
+    mount('/singbox#dns');
     fireEvent.click(await screen.findByText('DNS-серверы'));
     expect(await screen.findByRole('button', { name: 'Добавить DNS' })).toBeTruthy();
     expect(HttpUtil.post).not.toHaveBeenCalled();
@@ -453,8 +439,8 @@ it.each(['/outbound', '/routing'])('opens the matching native section for %s', a
   expect(
     await screen.findByText(
       path === '/outbound'
-        ? 'Standard core settings · Подключения'
-        : 'Standard core settings · Маршрутизация',
+        ? 'Standard core settings · Outbounds'
+        : 'Standard core settings · Routing',
     ),
   ).toBeTruthy();
 });

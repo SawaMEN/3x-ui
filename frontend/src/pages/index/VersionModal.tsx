@@ -4,6 +4,8 @@ import { Alert, Button, Collapse, Modal, Spin, Tag, Tooltip } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 
 import { HttpUtil } from '@/utils';
+import { useAllSettings } from '@/api/queries/useAllSettings';
+import { useQueryClient } from '@tanstack/react-query';
 import { activateOnKey } from '@/utils/a11y';
 import type { Status } from '@/models/status';
 import GeodataSection from './GeodataSection';
@@ -32,6 +34,12 @@ const GEOFILES = [
 
 export default function VersionModal({ open, onClose, onBusy }: VersionModalProps) {
   const { t } = useTranslation();
+  const { allSetting } = useAllSettings();
+  const queryClient = useQueryClient();
+  const coreType = allSetting.coreType;
+  const coreName = coreType === 'xray' ? 'Xray' : 'sing-box';
+  const [updating, setUpdating] = useState(false);
+  const [updateError, setUpdateError] = useState('');
   const [modal, modalContextHolder] = Modal.useModal();
   const [activeKey, setActiveKey] = useState<string | string[]>('1');
   const [singBoxVersion, setSingBoxVersion] = useState('');
@@ -82,12 +90,7 @@ export default function VersionModal({ open, onClose, onBusy }: VersionModalProp
 
   const activeKeyStr = Array.isArray(activeKey) ? activeKey[0] : activeKey;
   return (
-    <Modal
-      open={open}
-      title="sing-box обновляется вместе с панелью"
-      footer={null}
-      onCancel={onClose}
-    >
+    <Modal open={open} title={`${coreName} · ${t('update')}`} footer={null} onCancel={onClose}>
       {modalContextHolder}
       <Spin spinning={loading}>
         <Collapse
@@ -97,14 +100,62 @@ export default function VersionModal({ open, onClose, onBusy }: VersionModalProp
           items={[
             {
               key: '1',
-              label: 'sing-box',
+              label: coreName,
               children: (
-                <Alert
-                  type="info"
-                  showIcon
-                  title={singBoxVersion || 'sing-box'}
-                  description="Модифицированный Sing-box входит в выпуск панели. Для обновления используйте обновление панели."
-                />
+                <>
+                  <Alert
+                    type="info"
+                    showIcon
+                    title={singBoxVersion || coreName}
+                    description={
+                      coreType === 'sing-box'
+                        ? t('pages.coreSelection.bundledUpdateNote')
+                        : t('pages.coreSelection.standaloneUpdateNote')
+                    }
+                  />
+                  {updateError && (
+                    <Alert type="error" title={updateError} showIcon style={{ marginTop: 12 }} />
+                  )}
+                  {coreType !== 'sing-box' && (
+                    <Button
+                      type="primary"
+                      loading={updating}
+                      style={{ marginTop: 12 }}
+                      onClick={() =>
+                        modal.confirm({
+                          title: t('pages.coreSelection.updateConfirm', { core: coreName }),
+                          content: t('pages.coreSelection.restartConnections'),
+                          onOk: async () => {
+                            setUpdating(true);
+                            setUpdateError('');
+                            try {
+                              const result = await HttpUtil.post(
+                                `/panel/api/setting/cores/${coreType}/update`,
+                                {},
+                                { timeout: 330000 },
+                              );
+                              if (!result.success)
+                                throw new Error(
+                                  result.msg || t('pages.coreSelection.updateFailed'),
+                                );
+                              await fetchVersions();
+                              void queryClient.invalidateQueries({ queryKey: ['server'] });
+                              window.dispatchEvent(new Event('xui-core-settings-saved'));
+                            } catch (error) {
+                              setUpdateError(
+                                error instanceof Error ? error.message : String(error),
+                              );
+                            } finally {
+                              setUpdating(false);
+                            }
+                          },
+                        })
+                      }
+                    >
+                      {t('update')}
+                    </Button>
+                  )}
+                </>
               ),
             },
             {

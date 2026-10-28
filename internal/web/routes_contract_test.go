@@ -37,6 +37,8 @@ func isInternalUIAPI(path string) bool {
 		path == "/panel/api/setting/cores" ||
 		path == "/panel/api/setting/cores/:core/install" ||
 		path == "/panel/api/setting/cores/:core/select" ||
+		path == "/panel/api/setting/cores/:core/delete" ||
+		path == "/panel/api/setting/cores/:core/update" ||
 		path == "/panel/api/telemt/subscription-proxy" ||
 		path == "/panel/api/xray/outbound-subs/:id/probe"
 }

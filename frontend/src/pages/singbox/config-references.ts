@@ -30,13 +30,17 @@ function references(config: ConfigObject, kind: ReferenceKind, tag: string, repl
         paths.push(nextPath);
         result[key] = replacement;
       } else if (kind === 'connection' && key === 'outbounds' && Array.isArray(item)) {
-        result[key] = item.map((member, i) => {
-          if (member === tag) {
-            paths.push(`${nextPath}[${i}]`);
-            return replacement;
-          }
-          return visit(member, `${nextPath}[${i}]`);
-        });
+        result[key] = item
+          .map((member, i) => {
+            if (member === tag) {
+              paths.push(`${nextPath}[${i}]`);
+              return replacement;
+            }
+            return visit(member, `${nextPath}[${i}]`);
+          })
+          .filter(
+            (member, i, members) => typeof member !== 'string' || members.indexOf(member) === i,
+          );
       } else result[key] = visit(item, nextPath);
     }
     return result;
@@ -66,8 +70,12 @@ export function putConnection(
   const all = [...records(config.outbounds), ...records(config.endpoints)];
   const previous = index == null ? undefined : all[index];
   const tag = String(next.tag || '').trim();
-  if (!tag || all.some((item, i) => i !== index && item.tag === tag))
-    throw new Error('Название подключения должно быть уникальным.');
+  const used = new Set(all.filter((_, i) => i !== index).map((item) => String(item.tag)));
+  for (const item of [{ ...next, tag }, ...extra]) {
+    const name = String(item.tag || '').trim();
+    if (!name || used.has(name)) throw new Error('Название подключения должно быть уникальным.');
+    used.add(name);
+  }
   const renamed =
     previous?.tag && previous.tag !== tag
       ? replaceReferences(config, 'connection', String(previous.tag), tag)
@@ -86,7 +94,11 @@ export function putConnection(
   return { ...renamed, outbounds, endpoints };
 }
 
-export function removeConnection(config: ConfigObject, index: number): ConfigObject {
+export function removeConnection(
+  config: ConfigObject,
+  index: number,
+  replacement?: string,
+): ConfigObject {
   const outbounds = records(config.outbounds),
     endpoints = records(config.endpoints);
   const item = [...outbounds, ...endpoints][index];
@@ -96,6 +108,17 @@ export function removeConnection(config: ConfigObject, index: number): ConfigObj
   const paths = referencePaths(config, 'connection', String(item.tag)).filter(
     (path) => !path.startsWith(ownPath + '.'),
   );
+  if (paths.length && replacement) {
+    if (
+      replacement === item.tag ||
+      ![...outbounds, ...endpoints].some((row) => row.tag === replacement)
+    )
+      throw new Error('Выберите существующее подключение для замены.');
+    return removeConnection(
+      replaceReferences(config, 'connection', String(item.tag), replacement),
+      index,
+    );
+  }
   if (paths.length)
     throw new Error(
       `Подключение используется: ${paths.join(', ')}. Сначала выберите другой выход в этих настройках.`,

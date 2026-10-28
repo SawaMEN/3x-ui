@@ -26,7 +26,15 @@ func OwnerCoreBinaryPath() string {
 
 // StandaloneCoreBinaryPath keeps separately installed engines beside panel assets.
 func StandaloneCoreBinaryPath(engine string) string {
-	name := fmt.Sprintf("%s-%s-%s", engine, runtime.GOOS, runtime.GOARCH)
+	var name string
+	switch engine {
+	case "xray":
+		name = fmt.Sprintf("xray-%s-%s", runtime.GOOS, runtime.GOARCH)
+	case "sing-box-upstream":
+		name = fmt.Sprintf("sing-box-upstream-%s-%s", runtime.GOOS, runtime.GOARCH)
+	default:
+		return ""
+	}
 	if runtime.GOOS == "windows" {
 		name += ".exe"
 	}

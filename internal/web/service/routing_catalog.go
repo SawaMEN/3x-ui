@@ -237,17 +237,19 @@ func (*RoutingCatalogService) Delete(id int) error {
 			return errors.New("remove this list's routing rules and save the configuration before deleting its source")
 		}
 	}
-	native, err := (&SettingService{}).GetSingBoxConfigTemplate()
-	if err != nil {
-		return err
-	}
-	nativeIDs, err := routingListIDs(native)
-	if err != nil {
-		return err
-	}
-	for _, used := range nativeIDs {
-		if used == id {
-			return errors.New("remove this list's native routing rules and save the configuration before deleting its source")
+	for _, core := range []string{CoreTypeSingBox, CoreTypeSingBoxUpstream} {
+		native, err := (&SettingService{}).GetNativeCoreConfigTemplate(core)
+		if err != nil {
+			return err
+		}
+		nativeIDs, err := routingListIDs(native)
+		if err != nil {
+			return err
+		}
+		for _, used := range nativeIDs {
+			if used == id {
+				return errors.New("remove this list's native routing rules and save the configuration before deleting its source")
+			}
 		}
 	}
 	res := database.GetDB().Delete(&model.RoutingList{}, id)
