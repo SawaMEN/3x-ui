@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/clientlimit"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
@@ -243,6 +245,8 @@ func InstanceFromInbound(ib *model.Inbound) (Instance, bool) {
 }
 
 func (inst Instance) restartFingerprint() string {
+	revision := clientlimit.Default.Revision()
+
 	parts := []string{
 		inst.Listen,
 		strconv.Itoa(inst.MTU),
@@ -256,7 +260,7 @@ func (inst Instance) restartFingerprint() string {
 		}
 	}
 	slices.Sort(parts)
-	return strings.Join(parts, "|")
+	return revision + strings.Join(parts, "|")
 }
 
 func (inst Instance) fingerprint() string {
@@ -473,4 +477,17 @@ func (m *Manager) HasRunning() bool {
 		}
 	}
 	return false
+}
+
+func (m *Manager) Pause(id int) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if cur := m.procs[id]; cur != nil && cur.proc != nil {
+		if err := cur.proc.Stop(); err != nil {
+			return err
+		}
+		delete(m.procs, id)
+		delete(m.traffic, id)
+	}
+	return nil
 }

@@ -3,7 +3,9 @@ package sudoku
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"net"
@@ -13,12 +15,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/clientlimit"
+
 	"golang.org/x/net/proxy"
 )
 
 // Exercise the public CLI with the unmodified official server AND client.
 // Global mode ensures even loopback echo targets traverse the Sudoku tunnel.
-func TestOfficialSudokuTraffic(t *testing.T) {
+func TestOfficialSudokuTraffic(t *testing.T) { testSudokuTraffic(t, false) }
+
+func TestSudokuSpeedLimits(t *testing.T) { testSudokuTraffic(t, true) }
+
+func testSudokuTraffic(t *testing.T, limited bool) {
 	executable := os.Getenv("SUDOKU_TEST_BINARY")
 	if executable == "" {
 		t.Skip("set SUDOKU_TEST_BINARY to an official release executable")
@@ -30,6 +38,23 @@ func TestOfficialSudokuTraffic(t *testing.T) {
 	key, err := GenerateSplitKey(context.Background(), executable, private)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if limited {
+		previous := clientlimit.Default
+		clientlimit.Default = clientlimit.New("127.0.0.1:0", "127.0.0.1:0")
+		defer func() { clientlimit.Default.Close(); clientlimit.Default = previous }()
+
+		raw, err := hex.DecodeString(key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		digest := sha256.Sum256(raw)
+		finish, err := clientlimit.Default.Apply(clientlimit.Plan{Routes: []clientlimit.Route{{ID: "sudoku-speed", Email: "alice", UploadMbps: 1, DownloadMbps: 1, Aliases: []string{"sudoku:" + hex.EncodeToString(digest[:8])}}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		finish(true)
+		defer clientlimit.Default.Close()
 	}
 	tcp, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -120,12 +145,20 @@ func TestOfficialSudokuTraffic(t *testing.T) {
 				}
 				_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
 				payload := []byte("official Sudoku TCP payload")
-				if _, err := conn.Write(payload); err != nil {
-					conn.Close()
-					t.Fatal(err)
+				if limited {
+					payload = bytes.Repeat([]byte("rate"), 65536)
 				}
+				started := time.Now()
+				sent := make(chan error, 1)
+				go func() { _, err := conn.Write(payload); sent <- err }()
 				got := make([]byte, len(payload))
 				_, err = io.ReadFull(conn, got)
+				if sendErr := <-sent; sendErr != nil {
+					t.Fatal(sendErr)
+				}
+				if limited && time.Since(started) < time.Second {
+					t.Fatal("Sudoku ignored its shared 1 Mbps cap")
+				}
 				conn.Close()
 				if err != nil || !bytes.Equal(got, payload) {
 					t.Fatalf("TCP echo: %q %v", got, err)

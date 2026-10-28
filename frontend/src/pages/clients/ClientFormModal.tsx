@@ -72,6 +72,9 @@ const SPEED_LIMIT_PROTOCOLS = new Set([
   'anytls',
   'snell',
   'shadowtls',
+  'mieru',
+  'sudoku',
+  'masque',
 ]);
 
 const FLOW_OPTIONS = Object.values(TLS_FLOW_CONTROL);

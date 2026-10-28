@@ -178,3 +178,63 @@ func TestClientSpeedLimitRateEditsApplyToRunningCore(t *testing.T) {
 		}
 	}
 }
+
+func TestClientSpeedLimitNativeProtocolsSharePlan(t *testing.T) {
+	cfg := singbox.NewConfig()
+	cfg.Inbounds = []map[string]any{{"type": "vless", "tag": "vless", "users": []map[string]any{{"name": "alice"}}}}
+	key := strings.Repeat("ab", 64)
+	limit := &model.ClientSpeedLimit{Enabled: true, UploadMbps: 1, DownloadMbps: 2}
+	client := model.Client{Email: "alice", Enable: true, SpeedLimit: limit}
+	protocols := []model.Protocol{model.VLESS, model.Mieru, model.Sudoku, model.MASQUE}
+	var inbounds []*model.Inbound
+	clients := map[int][]model.Client{}
+	for i, protocol := range protocols {
+		ib := &model.Inbound{Id: i + 1, Tag: string(protocol), Protocol: protocol, Enable: true, Port: 20000 + i, Settings: `{"clients":[]}`}
+		if protocol == model.Sudoku {
+			ib.Settings = `{"clients":[{"email":"alice","sudokuPrivateKey":"` + key + `"}]}`
+		}
+		inbounds = append(inbounds, ib)
+		clients[ib.Id] = []model.Client{client}
+	}
+	if err := injectClientSpeedLimits(cfg, clients, inbounds); err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.SpeedLimitPlan.Routes) != 1 {
+		t.Fatalf("duplicated native budget: %+v", cfg.SpeedLimitPlan)
+	}
+	route := cfg.SpeedLimitPlan.Routes[0]
+	if len(route.Aliases) != 3 || route.Email != "alice" || route.UploadMbps != 1 || route.DownloadMbps != 2 {
+		t.Fatalf("missing native identities: %+v", route)
+	}
+	for _, rule := range singBoxRouteRules(cfg.Route) {
+		if row, ok := rule.(map[string]any); ok {
+			if tags, ok := row["inbound"].([]string); ok {
+				for _, tag := range tags {
+					if tag == "mieru" || tag == "sudoku" || tag == "masque" {
+						t.Fatalf("native packets are throttled twice: %v", row)
+					}
+				}
+			}
+		}
+	}
+}
+
+func TestClientSpeedLimitSnapshotIncludesSidecars(t *testing.T) {
+	setupBulkDB(t)
+	svc := &ClientService{}
+	for i, protocol := range []model.Protocol{model.Mieru, model.Sudoku} {
+		ib := mkInbound(t, 31200+i, protocol, `{"clients":[]}`)
+		c := model.Client{Email: string(protocol) + "-limited", Password: "test-password", Enable: true, SpeedLimit: &model.ClientSpeedLimit{Enabled: true, UploadMbps: 3}}
+		if err := svc.SyncInbound(nil, ib.Id, []model.Client{c}); err != nil {
+			t.Fatal(err)
+		}
+		snapshot, err := loadNativeConfigSnapshot()
+		if err != nil {
+			t.Fatal(err)
+		}
+		rows := snapshot.clients[ib.Id]
+		if len(rows) != 1 || rows[0].SpeedLimit == nil || rows[0].SpeedLimit.UploadMbps != 3 {
+			t.Fatalf("sidecar cap lost from canonical snapshot: %+v", rows)
+		}
+	}
+}

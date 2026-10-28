@@ -14,6 +14,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/clientlimit"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 )
@@ -83,6 +85,11 @@ func (p *Process) Start() error {
 	if p.IsRunning() {
 		return errors.New("mita is already running")
 	}
+	if clientlimit.Default.Requires("mieru:") {
+		if err := clientlimit.CheckBrokerBinary(context.Background(), GetBinaryPath()); err != nil {
+			return err
+		}
+	}
 	cmd := exec.CommandContext(context.Background(), GetBinaryPath(), "run")
 	socketPath := p.socketPath
 	configPath := p.configPath
@@ -93,6 +100,7 @@ func (p *Process) Start() error {
 		configPath = abs
 	}
 	cmd.Env = append(os.Environ(), "MITA_CONFIG_JSON_FILE="+configPath, "MITA_UDS_PATH="+socketPath, "MITA_INSECURE_UDS=true", "MITA_LOG_NO_TIMESTAMP=true")
+	cmd.Env = clientlimit.Default.Environment(cmd.Env)
 	lw := &logWriter{label: p.label}
 	cmd.Stdout = lw
 	cmd.Stderr = lw

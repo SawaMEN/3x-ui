@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strconv"
 	"strings"
@@ -9,10 +10,12 @@ import (
 
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawgnet"
+	"github.com/SawaMEN/3x-ui/v3/internal/clientlimit"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
 	"github.com/SawaMEN/3x-ui/v3/internal/mieru"
 	"github.com/SawaMEN/3x-ui/v3/internal/mtproto"
+	"github.com/SawaMEN/3x-ui/v3/internal/sudoku"
 	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
 )
 
@@ -58,6 +61,10 @@ func (l *Local) applyCoreChange(ctx context.Context) error {
 }
 
 func (l *Local) AddInbound(ctx context.Context, ib *model.Inbound) error {
+	if l.nativeSidecarSpeed(ib) {
+		return l.applyCoreChange(ctx)
+	}
+
 	if ib.Protocol == model.Sudoku {
 		// Sudoku is reconciled by its dedicated sidecar manager.
 		return nil
@@ -119,6 +126,13 @@ func (l *Local) AddInbound(ctx context.Context, ib *model.Inbound) error {
 }
 
 func (l *Local) DelInbound(ctx context.Context, ib *model.Inbound) error {
+	if l.nativeSidecarSpeed(ib) {
+		if err := pauseSpeedSidecar(ib); err != nil {
+			return err
+		}
+		return l.applyCoreChange(ctx)
+	}
+
 	if ib.Protocol == model.Sudoku {
 		// The Sudoku reconcile job stops disabled/removed sidecars while keeping
 		// credentials intact for a temporary disable.
@@ -161,11 +175,14 @@ func (l *Local) UpdateInbound(ctx context.Context, oldIb, newIb *model.Inbound) 
 	defer func() {
 		// Sidecar transitions can add/remove an egress bridge even when the new
 		// listener is disabled. The full native configuration must follow the DB.
-		if l.isNative() && oldIb.Protocol != newIb.Protocol {
+		if l.isNative() && (oldIb.Protocol != newIb.Protocol || (err == nil && (l.nativeSidecarSpeed(oldIb) || l.nativeSidecarSpeed(newIb)))) {
 			err = errors.Join(err, l.applyCoreChange(ctx))
 		}
 		err = errors.Join(err, finish())
 	}()
+	if oldIb.Protocol == newIb.Protocol && (l.nativeSidecarSpeed(oldIb) || l.nativeSidecarSpeed(newIb)) {
+		return pauseSpeedSidecar(oldIb)
+	}
 	if externalvpn.IsManaged(oldIb.Protocol) || externalvpn.IsManaged(newIb.Protocol) {
 		if err := l.DelInbound(ctx, oldIb); err != nil {
 			return err
@@ -317,6 +334,10 @@ func (l *Local) updateMieruInbound(ctx context.Context, oldIb, newIb *model.Inbo
 }
 
 func (l *Local) AddUser(ctx context.Context, ib *model.Inbound, userMap map[string]any) error {
+	if l.nativeSidecarSpeed(ib) {
+		return l.applyCoreChange(ctx)
+	}
+
 	if ib.Protocol == model.MTProto || ib.Protocol == model.AmneziaWG || ib.Protocol == model.Mieru || externalvpn.IsManaged(ib.Protocol) || ib.Protocol == model.Sudoku {
 		return nil
 	}
@@ -324,6 +345,13 @@ func (l *Local) AddUser(ctx context.Context, ib *model.Inbound, userMap map[stri
 }
 
 func (l *Local) RemoveUser(ctx context.Context, ib *model.Inbound, email string) error {
+	if l.nativeSidecarSpeed(ib) {
+		if err := pauseSpeedSidecar(ib); err != nil {
+			return err
+		}
+		return l.applyCoreChange(ctx)
+	}
+
 	if ib.Protocol == model.MTProto || ib.Protocol == model.AmneziaWG || ib.Protocol == model.Mieru || externalvpn.IsManaged(ib.Protocol) || ib.Protocol == model.Sudoku {
 		return nil
 	}
@@ -333,6 +361,13 @@ func (l *Local) RemoveUser(ctx context.Context, ib *model.Inbound, email string)
 func (l *Local) AddClient(ctx context.Context, ib *model.Inbound, client model.Client) error {
 	if !client.Enable {
 		return nil
+	}
+
+	if (ib.Protocol == model.Mieru || ib.Protocol == model.Sudoku) && client.SpeedLimit != nil && client.SpeedLimit.Enabled {
+		if err := pauseSpeedSidecar(ib); err != nil {
+			return err
+		}
+		return l.applyCoreChange(ctx)
 	}
 	return l.AddUser(ctx, ib, map[string]any{"email": client.Email, "id": client.ID, "security": client.Security, "flow": client.Flow, "auth": client.Auth, "password": client.Password, "publicKey": client.PublicKey, "allowedIPs": client.AllowedIPs, "preSharedKey": client.PreSharedKey, "keepAlive": wgKeepAlive(client.KeepAliveSeconds())})
 }
@@ -351,6 +386,12 @@ func (l *Local) DeleteUser(ctx context.Context, ib *model.Inbound, email string)
 }
 func (l *Local) DeleteClient(context.Context, string) error { return nil }
 func (l *Local) UpdateUser(ctx context.Context, ib *model.Inbound, oldEmail string, payload model.Client) error {
+	if l.nativeSidecarSpeed(ib) || ((ib.Protocol == model.Mieru || ib.Protocol == model.Sudoku) && payload.Enable && payload.SpeedLimit != nil && payload.SpeedLimit.Enabled) {
+		if err := pauseSpeedSidecar(ib); err != nil {
+			return err
+		}
+		return l.applyCoreChange(ctx)
+	}
 	if ib.Protocol == model.Mieru || ib.Protocol == model.Sudoku || externalvpn.IsManaged(ib.Protocol) {
 		return nil // Full state is reapplied by the protocol-specific reconciler.
 	}
@@ -386,3 +427,34 @@ func (l *Local) ResetClientTraffic(_ context.Context, _ *model.Inbound, _ string
 func (l *Local) ResetAllTraffics(_ context.Context) error { return nil }
 
 func (l *Local) ResetInboundTraffic(_ context.Context, _ *model.Inbound) error { return nil }
+
+func (l *Local) nativeSidecarSpeed(ib *model.Inbound) bool {
+	if ib == nil || (ib.Protocol != model.Mieru && ib.Protocol != model.Sudoku) {
+		return false
+	}
+	if clientlimit.Default.Requires(string(ib.Protocol) + ":") {
+		return true
+	}
+	var settings struct {
+		Clients []model.Client `json:"clients"`
+	}
+	if json.Unmarshal([]byte(ib.Settings), &settings) != nil {
+		return false
+	}
+	for _, c := range settings.Clients {
+		if c.Enable && c.SpeedLimit != nil && c.SpeedLimit.Enabled {
+			return true
+		}
+	}
+	return false
+}
+
+func pauseSpeedSidecar(ib *model.Inbound) error {
+	switch ib.Protocol {
+	case model.Mieru:
+		return mieru.GetManager().Pause(ib.Id)
+	case model.Sudoku:
+		return sudoku.GetManager().Pause(ib.Id)
+	}
+	return nil
+}

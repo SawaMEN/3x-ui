@@ -8,10 +8,14 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
 	"golang.org/x/time/rate"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/config"
 )
 
 const (
@@ -24,6 +28,7 @@ const (
 type Route struct {
 	ID, Email                string
 	UploadMbps, DownloadMbps int
+	Aliases                  []string
 }
 
 type Plan struct {
@@ -42,6 +47,9 @@ type (
 type Runtime struct {
 	mu             sync.Mutex
 	password       string
+	brokerPath     string
+	brokerRoot     func() string
+	brokerJSON     []byte
 	listen, bridge string
 	ln             net.Listener
 	entries        map[string]entry
@@ -56,7 +64,11 @@ func New(listen, bridge string) *Runtime {
 	return &Runtime{password: hex.EncodeToString(secret), listen: listen, bridge: bridge, entries: map[string]entry{}, conns: map[net.Conn]context.CancelFunc{}}
 }
 
-var Default = New(fmt.Sprintf("127.0.0.1:%d", ListenPort), fmt.Sprintf("127.0.0.1:%d", BridgePort))
+var Default = func() *Runtime {
+	s := New(fmt.Sprintf("127.0.0.1:%d", ListenPort), fmt.Sprintf("127.0.0.1:%d", BridgePort))
+	s.brokerRoot = config.GetBinFolderPath
+	return s
+}()
 
 func (s *Runtime) Password() string { return s.password }
 
@@ -71,12 +83,14 @@ func limiter(mbps int) *rate.Limiter {
 func (s *Runtime) Apply(plan Plan) (finish func(bool), err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	opened := false
 	if len(plan.Routes) > 0 && s.ln == nil {
 		ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", s.listen)
 		if err != nil {
 			return nil, fmt.Errorf("client speed limiter: %w", err)
 		}
 		s.ln = ln
+		opened = true
 		go s.accept(ln)
 	}
 	old := s.entries
@@ -93,6 +107,17 @@ func (s *Runtime) Apply(plan Plan) (finish func(bool), err error) {
 		}
 		next[r.ID] = entry{r, b}
 	}
+	path, data, err := s.stageBroker(next)
+	if err != nil {
+		if opened {
+			s.closeConnections()
+			_ = s.ln.Close()
+			s.ln = nil
+		}
+		return nil, err
+	}
+	oldPath, oldData := s.brokerPath, s.brokerJSON
+	s.brokerPath, s.brokerJSON = path, data
 	s.closeConnections()
 	s.entries = next
 	return func(commit bool) {
@@ -101,6 +126,15 @@ func (s *Runtime) Apply(plan Plan) (finish func(bool), err error) {
 		if !commit {
 			s.closeConnections()
 			s.entries = old
+			s.brokerPath, s.brokerJSON = oldPath, oldData
+			if oldPath != "" {
+				if err := writeBroker(oldPath, oldData); err != nil {
+					_ = os.Remove(oldPath)
+				}
+			} else if path != "" {
+				_ = os.Remove(path)
+				_ = os.Remove(filepath.Dir(path))
+			}
 		}
 		if len(s.entries) == 0 && s.ln != nil {
 			_ = s.ln.Close()
@@ -129,6 +163,11 @@ func (s *Runtime) Close() {
 		s.ln = nil
 	}
 	s.entries = map[string]entry{}
+	if s.brokerPath != "" {
+		_ = os.Remove(s.brokerPath)
+		_ = os.Remove(filepath.Dir(s.brokerPath))
+	}
+	s.brokerPath, s.brokerJSON = "", nil
 }
 
 func (s *Runtime) accept(ln net.Listener) {
@@ -238,6 +277,10 @@ func (s *Runtime) serve(ctx context.Context, c net.Conn) {
 	}
 	addr, err := readAddress(c, req[3])
 	if err != nil {
+		return
+	}
+	if req[1] == 0xf0 {
+		s.serveBudget(ctx, c, e.budget)
 		return
 	}
 	if req[1] != 1 && req[1] != 3 {

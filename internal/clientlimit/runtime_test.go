@@ -111,7 +111,7 @@ func tcp(t *testing.T, s *Runtime, id string) net.Conn {
 }
 
 func TestSharedBudgetAcrossConnectionsAndRoutes(t *testing.T) {
-	s := start(t, []Route{{"one", "alice", 1, 0}, {"two", "alice", 1, 0}, {"other", "bob", 0, 0}})
+	s := start(t, []Route{{"one", "alice", 1, 0, nil}, {"two", "alice", 1, 0, nil}, {"other", "bob", 0, 0, nil}})
 	connections := []net.Conn{tcp(t, s, "one"), tcp(t, s, "two"), tcp(t, s, "one")}
 	data := bytes.Repeat([]byte{'x'}, 128*1024)
 	started := time.Now()
@@ -147,7 +147,7 @@ func TestSharedBudgetAcrossConnectionsAndRoutes(t *testing.T) {
 }
 
 func TestDownloadBudgetAndCancellation(t *testing.T) {
-	s := start(t, []Route{{"one", "alice", 0, 1}})
+	s := start(t, []Route{{"one", "alice", 0, 1, nil}})
 	c := tcp(t, s, "one")
 	data := bytes.Repeat([]byte{'d'}, 256*1024)
 	started := time.Now()
@@ -173,7 +173,7 @@ func TestDownloadBudgetAndCancellation(t *testing.T) {
 }
 
 func TestAuthenticationAndRollback(t *testing.T) {
-	s := start(t, []Route{{"old", "alice", 1, 1}})
+	s := start(t, []Route{{"old", "alice", 1, 1, nil}})
 	dial, err := proxy.SOCKS5("tcp", s.Address(), &proxy.Auth{User: "old", Password: "bad"}, proxy.Direct)
 	if err != nil {
 		t.Fatal(err)
@@ -182,7 +182,7 @@ func TestAuthenticationAndRollback(t *testing.T) {
 		_ = c.Close()
 		t.Fatal("invalid credentials accepted")
 	}
-	finish, err := s.Apply(Plan{[]Route{{"new", "alice", 2, 2}}})
+	finish, err := s.Apply(Plan{[]Route{{"new", "alice", 2, 2, nil}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +198,7 @@ func TestAuthenticationAndRollback(t *testing.T) {
 }
 
 func TestUDPAssociateLimitedBothWays(t *testing.T) {
-	s := start(t, []Route{{"udp", "alice", 1, 1}})
+	s := start(t, []Route{{"udp", "alice", 1, 1, nil}})
 	c, err := net.Dial("tcp", s.Address())
 	if err != nil {
 		t.Fatal(err)

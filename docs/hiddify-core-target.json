@@ -141,7 +141,9 @@
     "runtime_dependencies_overlay": "deploy/hiddify/runtime-dependencies.patch",
     "security_dependencies": {
       "golang.org/x/net": "v0.60.0"
-    }
+    },
+    "speed_broker_overlay": "deploy/speed/masque.patch",
+    "speed_broker_sdk": "internal/clientlimit/brokerclient/client.go"
   },
   "verification": {
     "report": "hiddify-core-stage-4-verification.md",

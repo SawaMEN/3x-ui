@@ -5,7 +5,7 @@ import { ThemeProvider } from '@/hooks/useTheme';
 import ClientFormModal from '@/pages/clients/ClientFormModal';
 import type { ClientRecord, InboundOption } from '@/schemas/client';
 
-function open(limit?: ClientRecord['speedLimit']) {
+function open(limit?: ClientRecord['speedLimit'], protocol: InboundOption['protocol'] = 'vless') {
   const save = vi.fn().mockResolvedValue({ success: true });
   const query = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
@@ -21,9 +21,7 @@ function open(limit?: ClientRecord['speedLimit']) {
             enable: true,
             speedLimit: limit,
           }}
-          inbounds={[
-            { id: 1, protocol: 'vless', tag: 'in', port: 443, enable: true } as InboundOption,
-          ]}
+          inbounds={[{ id: 1, protocol, tag: 'in', port: 443, enable: true } as InboundOption]}
           attachedIds={[1]}
           save={save}
           onOpenChange={() => {}}
@@ -67,3 +65,18 @@ it('rejects enabled zero rates and saves a real directional cap', async () => {
     downloadMbps: 20,
   });
 }, 15000);
+
+it.each(['mieru', 'sudoku', 'masque'] as const)(
+  'saves a directional client speed limit for %s',
+  async (protocol) => {
+    const save = open({ enabled: true, uploadMbps: 0, downloadMbps: 10 }, protocol);
+    await screen.findByRole('spinbutton', { name: 'Download, Mbps' });
+    fireEvent.click(screen.getByRole('button', { name: /save/i }));
+    await waitFor(() => expect(save).toHaveBeenCalled());
+    expect(save.mock.calls[0][0].speedLimit).toEqual({
+      enabled: true,
+      uploadMbps: 0,
+      downloadMbps: 10,
+    });
+  },
+);
