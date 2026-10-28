@@ -1090,11 +1090,6 @@ export default function TelemtPage() {
                 ? 'существующий сертификат готов (проверьте выбранный домен выше)'
                 : 'автоматический выпуск при успешной проверке выше'}
             </Descriptions.Item>
-            <Descriptions.Item label="443">
-              {webPreflightCurrent?.checks.find((check) => check.id === 'https-port')?.ok
-                ? 'готов для выбранного frontend'
-                : 'см. предварительную проверку'}
-            </Descriptions.Item>
           </Descriptions>
 
           <Button
