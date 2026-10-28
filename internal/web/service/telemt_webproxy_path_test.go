@@ -107,3 +107,26 @@ func TestTelemtWebFrontendAliases(t *testing.T) {
 		}
 	}
 }
+
+func TestTelemtWebProfileCapacityGrowth(t *testing.T) {
+	for _, tc := range []struct {
+		users, hosts, want int
+	}{
+		{0, 1, 64},
+		{48, 1, 64},
+		{49, 1, 128},
+		{50, 1, 128},
+		{112, 1, 128},
+		{113, 1, 256},
+		{1, 8, 256},
+		{100, 8, 1024},
+	} {
+		got := telemtWebProfileCapacity(tc.users, tc.hosts)
+		if got != tc.want {
+			t.Errorf("users=%d hosts=%d: capacity %d, want %d", tc.users, tc.hosts, got, tc.want)
+		}
+		if got < tc.users*tc.hosts {
+			t.Errorf("users=%d hosts=%d: capacity too low", tc.users, tc.hosts)
+		}
+	}
+}
