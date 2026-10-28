@@ -75,6 +75,7 @@ type WebProxyStatus = {
 type WebDiagnostics = {
   available: boolean;
   lifecycle: string;
+  activeSessions?: number;
   listeners: string[];
   capacity?: Record<string, unknown>;
   carrierNegotiation?: Record<string, unknown>;
@@ -1123,6 +1124,9 @@ export default function TelemtPage() {
                 {webDiagnostics.available ? 'доступен' : 'недоступен'}
               </Descriptions.Item>
               <Descriptions.Item label="Состояние">{webDiagnostics.lifecycle}</Descriptions.Item>
+              <Descriptions.Item label="Активные WEB-сессии">
+                {webDiagnostics.activeSessions ?? 'нет данных'}
+              </Descriptions.Item>
               <Descriptions.Item label="Слушатели">{webDiagnostics.listeners?.join(', ') || '—'}</Descriptions.Item>
               <Descriptions.Item label="Ёмкость">
                 <Typography.Text code>{JSON.stringify(webDiagnostics.capacity ?? {})}</Typography.Text>
