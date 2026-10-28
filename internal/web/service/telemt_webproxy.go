@@ -255,7 +255,7 @@ func appendTelemtWebProxyConfig(base string, state TelemtWebProxyState) (string,
 	}
 	// Explicit WEB admission bounds with headroom for reconfiguration. These
 	// limits apply to the WEB listener only, not ordinary MTProto sidecars.
-	maxProfiles := max(64, (managedUserCount+16)*(len(state.Aliases)+1))
+	maxProfiles := telemtWebProfileCapacity(managedUserCount, len(state.Aliases)+1)
 	webConfig = strings.Replace(webConfig, "[web]\nenabled = true\n", fmt.Sprintf("[web]\nenabled = true\nlimits.max_profiles = %d\nlimits.max_vhosts = %d\n", maxProfiles, len(state.Aliases)+1), 1)
 	// Extra hostnames share the same loopback WEB listener and per-user
 	// profiles. Each vhost advertises its own resolved public endpoint.
