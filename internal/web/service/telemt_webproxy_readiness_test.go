@@ -6,7 +6,10 @@ import (
 )
 
 func TestTelemtWebHealthyDecoyStatus(t *testing.T) {
-	for _, tc := range []struct{ status int; want bool }{
+	for _, tc := range []struct {
+		status int
+		want   bool
+	}{
 		{http.StatusOK, true},
 		{http.StatusNoContent, true},
 		{http.StatusMovedPermanently, true},
