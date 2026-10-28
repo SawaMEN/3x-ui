@@ -81,15 +81,18 @@ func testMASQUEConnections(t *testing.T, limited bool) {
 			if version == 2 {
 				path = "/tunnel{?target,ipproto}"
 			}
-			server, err := TranslateMASQUEEndpoint(map[string]any{"protocol": "masque", "tag": "server", "listen": "127.0.0.1", "port": port, "settings": map[string]any{"version": []int{version}, "path": path, "tls": map[string]any{"certificatePath": certPath, "keyPath": keyPath}, "clients": []any{map[string]any{"email": "alice", "password": "secret", "enable": true}}}})
+			server, err := TranslateMASQUEEndpoint(map[string]any{"protocol": "masque", "tag": "server", "listen": "127.0.0.1", "port": port, "settings": map[string]any{"address": []string{"172.31.255.1/24"}, "version": []int{version}, "path": path, "tls": map[string]any{"certificatePath": certPath, "keyPath": keyPath}, "clients": []any{map[string]any{"email": "alice", "password": "secret", "enable": true}}}})
 			if err != nil {
 				t.Fatal(err)
 			}
 			serverLog := startMASQUETestProcess(t, binary, "server", map[string]any{"endpoints": []any{server}, "outbounds": []any{map[string]any{"type": "direct", "tag": "direct"}}, "route": map[string]any{"final": "direct"}})
+			// Target the server's tunnel address. Its endpoint maps that address to
+			// the host loopback echo service; dialing 127.0.0.1 directly would stay
+			// inside the client's userspace stack instead of traversing the tunnel.
 			// Explicit TLS trust and no version fallback ensure each transport is tested.
 			clientLog := startMASQUETestProcess(t, binary, "client", map[string]any{
 				"endpoints": []any{map[string]any{"type": "masque-client", "tag": "proxy", "server": "127.0.0.1", "server_port": port, "path": path, "version": version, "disable_version_fallback": true, "username": "alice", "password": "secret", "tls": map[string]any{"enabled": true, "server_name": "localhost", "certificate_path": certPath}}},
-				"inbounds":  []any{map[string]any{"type": "direct", "tag": "relay", "listen": "127.0.0.1", "listen_port": relayPort, "override_address": "127.0.0.1", "override_port": targetPort}},
+				"inbounds":  []any{map[string]any{"type": "direct", "tag": "relay", "listen": "127.0.0.1", "listen_port": relayPort, "override_address": "172.31.255.1", "override_port": targetPort}},
 				"route":     map[string]any{"final": "proxy"},
 			})
 			address := fmt.Sprintf("127.0.0.1:%d", relayPort)
