@@ -199,13 +199,6 @@ func telemtWebFrontendEnabled(s TelemtWebProxyState) bool {
 	}
 	return systemctl("is-enabled", "--quiet", telemtWebFrontUnit) == nil
 }
-func telemtWebFrontendCanOwn443(s TelemtWebProxyState) bool {
-	if telemtWebFrontend(s) == "nginx" {
-		return telemtWebNginxCanOwn443()
-	}
-	return telemtWebPortAvailable(443) || telemtWebFrontendActive(s)
-}
-
 func telemtWebEnsureFrontendPackage(ctx context.Context, s TelemtWebProxyState) error {
 	front := telemtWebFrontend(s)
 	if front == "nginx" {
