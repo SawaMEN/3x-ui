@@ -57,14 +57,14 @@ function rowsToMap(
   mode: HeaderMapMode,
 ): Record<string, string> | Record<string, string[]> {
   if (mode === 'v1') {
-    const map: Record<string, string> = {};
+    const map = Object.create(null) as Record<string, string>;
     for (const r of rows) {
       if (!r.name) continue;
       map[r.name] = r.value ?? '';
     }
     return map;
   }
-  const map: Record<string, string[]> = {};
+  const map = Object.create(null) as Record<string, string[]>;
   for (const r of rows) {
     if (!r.name) continue;
     const list = map[r.name] ?? [];

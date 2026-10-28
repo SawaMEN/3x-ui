@@ -89,3 +89,14 @@ export const LiveWireShape: Story = {
   args: { mode: 'v2', onChange: () => undefined },
   render: () => <WireShapeDemo />,
 };
+
+export const ArbitraryHeaderNames: Story = {
+  args: {
+    mode: 'v2',
+    value: Object.fromEntries([
+      ['constructor', ['value']],
+      ['__proto__', ['another value']],
+    ]),
+    onChange: () => undefined,
+  },
+};

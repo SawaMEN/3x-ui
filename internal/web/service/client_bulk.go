@@ -552,7 +552,20 @@ func (s *ClientService) BulkAdjust(inboundSvc *InboundService, emails []string, 
 			updates["total"] = entry.newTotal
 		}
 		if len(updates) > 0 {
-			if err := db.Model(coremodel.ClientTraffic{}).Where("email = ?", email).Updates(updates).Error; err != nil {
+			err := runSerializedTx(func(tx *gorm.DB) error {
+				if err := tx.Model(coremodel.ClientTraffic{}).Where("email = ?", email).Updates(updates).Error; err != nil {
+					return err
+				}
+				recordUpdates := map[string]any{"updated_at": time.Now().UnixMilli()}
+				if entry.applyExpiry {
+					recordUpdates["expiry_time"] = entry.newExpiry
+				}
+				if entry.applyTotal {
+					recordUpdates["total_gb"] = entry.newTotal
+				}
+				return tx.Model(&model.ClientRecord{}).Where("email = ?", email).Updates(recordUpdates).Error
+			})
+			if err != nil {
 				if _, already := skippedReasons[email]; !already {
 					skippedReasons[email] = err.Error()
 				}

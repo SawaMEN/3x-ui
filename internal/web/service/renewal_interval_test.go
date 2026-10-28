@@ -15,11 +15,11 @@ func TestRenewalIntervalBoundsAndAllowances(t *testing.T) {
 		steps            int
 		invalid          bool
 	}{
-		{name: "catch up", expiry: day, now: day * 10000, days: 1, want: day * 10000, steps: 9999},
+		{name: "catch up", expiry: day, now: day * 10000, days: 1, want: day * 10001, steps: 10000},
 		{name: "partial period", expiry: day, now: day*3 + 1, days: 1, want: day * 4, steps: 3},
 		{name: "cap", expiry: day, now: day * 10, days: 1, count: 2, cap: 4, want: day * 3, steps: 2},
 		{name: "spent cap", expiry: day, now: day * 10, days: 1, count: 4, cap: 4, want: day},
-		{name: "boundary", expiry: day, now: day, days: 1, want: day},
+		{name: "boundary", expiry: day, now: day, days: 1, want: day * 2, steps: 1},
 		{name: "overflow period", expiry: 1, now: day, days: math.MaxInt, invalid: true},
 		{name: "negative period", expiry: 1, now: day, days: -1, invalid: true},
 		{name: "zero period", expiry: 1, now: day, invalid: true},

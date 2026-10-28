@@ -259,6 +259,8 @@ func (q clientQuery) applyParams(tx *gorm.DB, params ClientPageParams, onlines [
 	}
 	if inboundIds := parseCSVInts(params.Inbound); len(inboundIds) > 0 {
 		where("EXISTS (SELECT 1 FROM client_inbounds ci WHERE ci.client_id = c.id AND ci.inbound_id IN ?)", inboundIds)
+	} else if strings.TrimSpace(params.Inbound) != "" {
+		where("1 = 0")
 	}
 	if buckets := parseCSVStrings(params.Filter); len(buckets) > 0 {
 		cond, args := q.bucketCond(buckets, onlines)

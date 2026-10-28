@@ -17,15 +17,12 @@ func nextIntervalRenewal(expiry, now int64, days, count, cap int) (int64, int, e
 	if expiry <= 0 {
 		return expiry, 0, fmt.Errorf("renewal deadline must be positive")
 	}
-	if expiry >= now {
+	if expiry > now {
 		return expiry, 0, nil
 	}
 	period := int64(days) * 86400000
 	difference := now - expiry
-	steps := difference / period
-	if difference%period != 0 {
-		steps++
-	}
+	steps := difference/period + 1
 	count = max(count, 0)
 	if cap > 0 {
 		steps = min(steps, int64(max(cap-count, 0)))

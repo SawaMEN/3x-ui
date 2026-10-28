@@ -762,7 +762,11 @@ export class CookieManager {
     for (let c of ca) {
       c = c.trim();
       if (c.indexOf(name) === 0) {
-        return decodeURIComponent(c.substring(name.length, c.length));
+        try {
+          return decodeURIComponent(c.substring(name.length));
+        } catch {
+          return '';
+        }
       }
     }
     return '';

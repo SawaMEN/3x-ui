@@ -80,10 +80,13 @@ func (s *XraySettingService) SaveValidatedXraySetting(ctx context.Context, raw s
 }
 
 func (s *XraySettingService) CheckXrayConfig(XrayTemplateConfig string) error {
-	xrayConfig := &xray.Config{}
-	err := json.Unmarshal([]byte(XrayTemplateConfig), xrayConfig)
+	var xrayConfig *xray.Config
+	err := json.Unmarshal([]byte(XrayTemplateConfig), &xrayConfig)
 	if err != nil {
 		return common.NewError("xray template config invalid:", err)
+	}
+	if xrayConfig == nil {
+		return common.NewError("xray template config must be an object")
 	}
 	if len(xrayConfig.OutboundConfigs) > 0 {
 		var outbounds []json.RawMessage
@@ -275,6 +278,9 @@ func EnsureStatsRouting(raw string) (string, error) {
 	var cfg map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
 		return raw, err
+	}
+	if cfg == nil {
+		return raw, common.NewError("xray template config must be an object")
 	}
 
 	var routing map[string]json.RawMessage
