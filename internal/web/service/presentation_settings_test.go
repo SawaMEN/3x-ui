@@ -54,7 +54,7 @@ func TestSubscriptionThemeAppliesWithoutCustomBranding(t *testing.T) {
 	if appearance.Enabled || appearance.Theme != "luna" {
 		t.Fatalf("appearance = %+v, want disabled branding and Luna", appearance)
 	}
-	for _, theme := range []string{"luna", "light", "dark", "ultra-dark", "colorful", "blue-gray", "cyberpunk"} {
+	for _, theme := range []string{"underground", "luna", "light", "dark", "ultra-dark", "colorful", "blue-gray", "cyberpunk"} {
 		settings := entity.AllSetting{SubAppearanceTheme: theme}
 		if err := validatePresentationSettings(&settings); err != nil {
 			t.Fatalf("theme %s: %v", theme, err)

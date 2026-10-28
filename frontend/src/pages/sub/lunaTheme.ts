@@ -10,6 +10,7 @@ export function subscriptionThemeMode(theme?: string): ThemeMode {
     case 'blue-gray':
     case 'cyberpunk':
       return theme;
+    case 'underground':
     case 'luna':
     case 'whitemax':
       return 'dark';

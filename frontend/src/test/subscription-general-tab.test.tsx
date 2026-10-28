@@ -53,6 +53,8 @@ describe('SubscriptionGeneralTab', () => {
     expect(screen.getByText('Luna')).toBeTruthy();
     chooseSelectOption('sub-appearance-theme', 'Light');
     expect(updateSetting).toHaveBeenCalledWith({ subAppearanceTheme: 'light' });
+    chooseSelectOption('sub-appearance-theme', 'Underground');
+    expect(updateSetting).toHaveBeenCalledWith({ subAppearanceTheme: 'underground' });
     page.unmount();
   });
 

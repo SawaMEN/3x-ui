@@ -112,7 +112,8 @@
       "colorful": "Colorful",
       "blue-gray": "Blue Gray",
       "cyberpunk": "Cyberpunk",
-      "luna": "Luna"
+      "luna": "Luna",
+      "underground": "Underground"
     },
     "telegramUnavailable": "Some Telegram proxies are temporarily unavailable. Try reloading this page later.",
     "openTelegram": "Open in Telegram"

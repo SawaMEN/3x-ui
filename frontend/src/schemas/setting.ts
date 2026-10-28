@@ -13,6 +13,7 @@ const absolutePath = z
 export const SubscriptionThemeSchema = z.enum([
   'classic',
   'luna',
+  'underground',
   'light',
   'dark',
   'ultra-dark',
