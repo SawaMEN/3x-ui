@@ -315,7 +315,7 @@ The WEB Proxy settings now optionally support:
   the old `tg://webproxy?server=DOMAIN&secret=ddHEX` format is preserved.
   Nonempty paths use the Telegram WEB `70dd` prefix and URL-safe base64 secret.
   Changing a path requires redistributing user links.
-- `aliases`: up to seven additional public domain names on the *same* local
+- `aliases`: up to seven additional public domain names on the _same_ local
   Telemt WEB process and HTTPS port. Each name has its own Telemt vhost and
   personalized subscription link. All names must resolve appropriately and be
   covered by one existing SAN or wildcard TLS certificate. Automatic issuance
