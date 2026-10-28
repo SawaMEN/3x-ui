@@ -4,6 +4,11 @@ on:
   pull_request:
     paths:
       - "**.go"
+      - "deploy/speed/**"
+      - "tools/build-speed-components.py"
+      - "deploy/hiddify/**"
+      - "tools/build-hiddify-core.sh"
+      - "docs/hiddify-core-target.json"
       - "go.mod"
       - "go.sum"
       - "frontend/**"
@@ -24,6 +29,11 @@ on:
       - dns
     paths:
       - "**.go"
+      - "deploy/speed/**"
+      - "tools/build-speed-components.py"
+      - "deploy/hiddify/**"
+      - "tools/build-hiddify-core.sh"
+      - "docs/hiddify-core-target.json"
       - "go.mod"
       - "go.sum"
       - "frontend/**"
@@ -416,3 +426,25 @@ jobs:
           export CADDY_TEST_BINARY=$(command -v caddy)
           export HAPROXY_TEST_BINARY=$(command -v haproxy)
           go test ./internal/web/service -run '^TestTelemtWeb(AlternativeFrontends|CarrierSelection|RenewalRebuilds|FrontendStops)' -v -count=1
+
+  native-client-speed:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build compatible protocol components and core
+        run: |
+          make dist-stub
+          python3 tools/build-speed-components.py --output "$RUNNER_TEMP/speed-bin"
+          bash tools/build-hiddify-core.sh "$RUNNER_TEMP/speed-core"
+      - name: Exercise shared TCP budget and real Mieru Sudoku MASQUE payloads
+        env:
+          MIERU_TEST_BINARY: ${{ runner.temp }}/speed-bin/mita
+          SUDOKU_TEST_BINARY: ${{ runner.temp }}/speed-bin/sudoku-tunnel
+          SINGBOX_TEST_BINARY: ${{ runner.temp }}/speed-core/hiddify-core-linux-amd64
+          HIDDIFY_CONFIG_CHECK_BINARY: ${{ runner.temp }}/speed-core/hiddify-core-linux-amd64
+        run: go test -race ./internal/clientlimit/... ./internal/mieru ./internal/sudoku ./internal/singbox ./internal/web/service -run '^TestNativeBroker|^TestMieruSpeedLimitLiveServer$|^TestSudokuSpeedLimits$|^TestMASQUESpeedLimits$|^TestClientSpeedLimit' -count=1 -timeout=5m

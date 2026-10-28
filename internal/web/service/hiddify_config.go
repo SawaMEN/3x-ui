@@ -75,10 +75,13 @@ func loadNativeConfigSnapshotForTemplate(template *string) (*nativeConfigSnapsho
 		}
 		ids := make([]int, 0, len(snapshot.inbounds))
 		for i, inbound := range snapshot.inbounds {
-			if !inbound.Enable || inbound.NodeID != nil || isLocalSidecarInbound(inbound.Protocol) {
+			if !inbound.Enable || inbound.NodeID != nil || (isLocalSidecarInbound(inbound.Protocol) && inbound.Protocol != model.Mieru && inbound.Protocol != model.Sudoku) {
 				continue
 			}
 			ids = append(ids, inbound.Id)
+			if isLocalSidecarInbound(inbound.Protocol) {
+				continue
+			}
 			built, err := singBoxInboundService.buildInboundForNodePush(tx, inbound)
 			if err != nil {
 				return fmt.Errorf("inbound %q: %w", inbound.Tag, err)

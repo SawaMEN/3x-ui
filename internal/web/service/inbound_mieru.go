@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/clientlimit"
 	"github.com/SawaMEN/3x-ui/v3/internal/coremodel"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
@@ -56,6 +57,10 @@ func (s *InboundService) DesiredMieruInstances() ([]mieru.Instance, error) {
 		Select("inbound_id", "email").Find(&disabledRows).Error; err != nil {
 		return nil, err
 	}
+	clientRows, err := s.clientService.ListForInbounds(nil, ids)
+	if err != nil {
+		return nil, err
+	}
 	disabled := make(map[int]map[string]struct{})
 	for _, row := range disabledRows {
 		if disabled[row.InboundId] == nil {
@@ -78,6 +83,16 @@ func (s *InboundService) DesiredMieruInstances() ([]mieru.Instance, error) {
 				inst.Users = users
 			}
 			if len(inst.Users) == 0 {
+				continue
+			}
+			ready := true
+			for _, c := range clientRows[ib.Id] {
+				if c.Enable && c.SpeedLimit != nil && c.SpeedLimit.Enabled && !clientlimit.Default.HasAlias("mieru:"+strings.TrimSpace(c.Email)) {
+					ready = false
+					break
+				}
+			}
+			if !ready {
 				continue
 			}
 			out = append(out, inst)

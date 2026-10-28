@@ -10,6 +10,8 @@ import (
 	"runtime"
 	"sync"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/clientlimit"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 )
@@ -265,7 +267,7 @@ func currentBinaryFingerprint(path string) string {
 
 func fingerprint(cfg Config) string {
 	b, _ := json.Marshal(cfg)
-	return string(b)
+	return string(b) + clientlimit.Default.Revision()
 }
 
 func marshalConfig(cfg Config) ([]byte, error) {
@@ -431,4 +433,16 @@ func (m *Manager) Check(desired []Instance) error {
 		}
 	}
 	return result
+}
+
+func (m *Manager) Pause(id int) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if cur := m.procs[id]; cur != nil && cur.proc != nil {
+		if !m.stopTracked(id, cur, "speed plan update") {
+			return errors.New(m.lastErr[id])
+		}
+		delete(m.procs, id)
+	}
+	return nil
 }

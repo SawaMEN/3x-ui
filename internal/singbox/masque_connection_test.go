@@ -1,6 +1,8 @@
 package singbox
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,14 +13,35 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/clientlimit"
 )
 
 // Exercise the generated server and an outgoing endpoint, not just JSON parsing.
 // Direct relay inbounds avoid relying on a platform TUN or external network.
-func TestMASQUEConnections(t *testing.T) {
+func TestMASQUEConnections(t *testing.T) { testMASQUEConnections(t, false) }
+
+func TestMASQUESpeedLimits(t *testing.T) { testMASQUEConnections(t, true) }
+
+func testMASQUEConnections(t *testing.T, limited bool) {
 	binary := os.Getenv("SINGBOX_TEST_BINARY")
 	if binary == "" {
 		t.Skip("set SINGBOX_TEST_BINARY for CONNECT-IP TCP/UDP checks")
+	}
+	if limited {
+		previous := clientlimit.Default
+		clientlimit.Default = clientlimit.New("127.0.0.1:0", "127.0.0.1:0")
+		defer func() { clientlimit.Default.Close(); clientlimit.Default = previous }()
+
+		if err := clientlimit.CheckBrokerBinary(context.Background(), binary); err != nil {
+			t.Fatal(err)
+		}
+		finish, err := clientlimit.Default.Apply(clientlimit.Plan{Routes: []clientlimit.Route{{ID: "masque-speed", Email: "alice", UploadMbps: 1, DownloadMbps: 1, Aliases: []string{"masque:server:alice"}}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		finish(true)
+		defer clientlimit.Default.Close()
 	}
 	certPath, keyPath := masqueTestCertificate(t)
 	echo, err := net.Listen("tcp", "127.0.0.1:0")
@@ -91,6 +114,31 @@ func TestMASQUEConnections(t *testing.T) {
 				}
 				time.Sleep(50 * time.Millisecond)
 			}
+			if limited {
+				conn, err := net.DialTimeout("tcp", address, time.Second)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer conn.Close()
+				_ = conn.SetDeadline(time.Now().Add(15 * time.Second))
+				payload := bytes.Repeat([]byte("rate"), 65536)
+				started := time.Now()
+				sent := make(chan error, 1)
+				go func() { _, err := conn.Write(payload); sent <- err }()
+				got := make([]byte, len(payload))
+				if _, err = io.ReadFull(conn, got); err != nil {
+					t.Fatal(err)
+				}
+				if err = <-sent; err != nil {
+					t.Fatal(err)
+				}
+				if !bytes.Equal(got, payload) {
+					t.Fatal("MASQUE shaping corrupted payload")
+				}
+				if elapsed := time.Since(started); elapsed < time.Second {
+					t.Fatalf("MASQUE ignored its shared 1 Mbps cap: %v", elapsed)
+				}
+			}
 			if err := masqueEcho(address, "udp"); err != nil {
 				t.Fatalf("UDP through MASQUE: %v", err)
 			}
@@ -147,6 +195,7 @@ func startMASQUETestProcess(t *testing.T, binary, name string, cfg map[string]an
 	}
 	cmd := exec.Command(binary, "srun", "-c", path)
 	cmd.Dir = filepath.Dir(binary)
+	cmd.Env = clientlimit.Default.Environment(os.Environ())
 	cmd.Stdout, cmd.Stderr = logFile, logFile
 	if err := cmd.Start(); err != nil {
 		logFile.Close()

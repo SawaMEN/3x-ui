@@ -14,6 +14,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/clientlimit"
+
 	gprocess "github.com/shirou/gopsutil/v4/process"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
@@ -313,6 +315,7 @@ func (p *Process) Validate(ctx context.Context) error {
 	defer cancel()
 	cmd := exec.CommandContext(cmdCtx, binary, "check", "-c", cfg)
 	cmd.Dir = filepath.Dir(binary)
+	cmd.Env = clientlimit.Default.Environment(os.Environ())
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		err = fmt.Errorf("%s config check failed: %w: %s", p.coreName(), err, strings.TrimSpace(string(output)))
@@ -329,6 +332,7 @@ func (p *Process) Version(ctx context.Context) (string, error) {
 	defer cancel()
 	cmd := exec.CommandContext(cmdCtx, binary, "version")
 	cmd.Dir = filepath.Dir(binary)
+	cmd.Env = clientlimit.Default.Environment(os.Environ())
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("%s version failed: %w: %s", p.coreName(), err, strings.TrimSpace(string(output)))
@@ -426,6 +430,7 @@ func (p *Process) startLocked(ctx context.Context) error {
 	// The core must outlive the HTTP request that started it.
 	cmd := exec.CommandContext(context.Background(), binary, p.runCommand(), "-c", cfg)
 	cmd.Dir = filepath.Dir(binary)
+	cmd.Env = clientlimit.Default.Environment(os.Environ())
 	output := &processOutput{}
 	cmd.Stdout = output
 	cmd.Stderr = output

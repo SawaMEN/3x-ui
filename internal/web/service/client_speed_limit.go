@@ -1,6 +1,8 @@
 package service
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -51,6 +53,7 @@ func injectClientSpeedLimits(cfg *singbox.Config, clients map[int][]model.Client
 	}
 	limits := map[string]*model.ClientSpeedLimit{}
 	tags := map[string][]string{}
+	aliases := map[string][]string{}
 	for _, ib := range inbounds {
 		if ib == nil || !ib.Enable || ib.NodeID != nil {
 			continue
@@ -66,6 +69,38 @@ func injectClientSpeedLimits(cfg *singbox.Config, clients map[int][]model.Client
 				return fmt.Errorf("client %q: speed limiting is not supported for %s", c.Email, ib.Protocol)
 			}
 			tag := ib.Tag
+			alias := ""
+			switch ib.Protocol {
+			case model.Mieru:
+				alias = "mieru:" + strings.TrimSpace(c.Email)
+			case model.MASQUE:
+				alias = "masque:" + tag + ":" + c.Email
+			case model.Sudoku:
+				key := c.SudokuPrivateKey
+				var settings struct {
+					Clients []model.Client `json:"clients"`
+				}
+				if err := json.Unmarshal([]byte(ib.Settings), &settings); err != nil {
+					return err
+				}
+				for _, stored := range settings.Clients {
+					if stored.Email == c.Email {
+						key = stored.SudokuPrivateKey
+						break
+					}
+				}
+				raw, err := hex.DecodeString(strings.TrimSpace(key))
+				if err != nil || (len(raw) != 32 && len(raw) != 64) {
+					return fmt.Errorf("client %q has no valid Sudoku key", c.Email)
+				}
+				digest := sha256.Sum256(raw)
+				alias = "sudoku:" + hex.EncodeToString(digest[:8])
+			}
+			if alias != "" {
+				aliases[c.Email] = append(aliases[c.Email], alias)
+				limits[c.Email] = c.SpeedLimit
+				continue
+			}
 			if !active[tag][c.Email] {
 				continue
 			}
@@ -123,7 +158,7 @@ func injectClientSpeedLimits(cfg *singbox.Config, clients map[int][]model.Client
 		// Include rates so config comparison detects edits to an existing cap.
 		id := fmt.Sprintf("%s%d_%d_%d", clientlimit.InternalPrefix, len(routes), limit.UploadMbps, limit.DownloadMbps)
 		routes[key] = id
-		cfg.SpeedLimitPlan.Routes = append(cfg.SpeedLimitPlan.Routes, clientlimit.Route{ID: id, Email: email, UploadMbps: limit.UploadMbps, DownloadMbps: limit.DownloadMbps})
+		cfg.SpeedLimitPlan.Routes = append(cfg.SpeedLimitPlan.Routes, clientlimit.Route{ID: id, Email: email, UploadMbps: limit.UploadMbps, DownloadMbps: limit.DownloadMbps, Aliases: aliases[email]})
 		cfg.Outbounds = append(cfg.Outbounds, map[string]any{"type": "socks", "tag": id, "server": "127.0.0.1", "server_port": clientlimit.ListenPort, "version": "5", "udp_over_tcp": map[string]any{"enabled": true, "version": 2}, "username": id, "password": clientlimit.Default.Password()})
 		accounts = append(accounts, map[string]any{"username": id, "password": clientlimit.Default.Password()})
 		returns = append(returns, map[string]any{"inbound": []string{bridgeTag}, "auth_user": []string{id}, "action": "route", "outbound": target})
@@ -141,6 +176,9 @@ func injectClientSpeedLimits(cfg *singbox.Config, clients map[int][]model.Client
 		target, _ := rule["outbound"].(string)
 		if (action == "" || action == "route" || action == "bypass") && target != "" && outbounds[target] != "block" {
 			for _, email := range emails {
+				if len(tags[email]) == 0 {
+					continue
+				}
 				proxy, err := proxyFor(email, target)
 				if err != nil {
 					return err
@@ -166,8 +204,18 @@ func injectClientSpeedLimits(cfg *singbox.Config, clients map[int][]model.Client
 	if final == "" && len(cfg.Outbounds) > 0 {
 		final, _ = cfg.Outbounds[0]["tag"].(string)
 	}
+	for _, email := range emails {
+		if len(aliases[email]) > 0 {
+			if _, err := proxyFor(email, final); err != nil {
+				return err
+			}
+		}
+	}
 	if outbounds[final] != "block" {
 		for _, email := range emails {
+			if len(tags[email]) == 0 {
+				continue
+			}
 			proxy, err := proxyFor(email, final)
 			if err != nil {
 				return err

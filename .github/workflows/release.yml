@@ -31,27 +31,11 @@ on:
       - ".github/workflows/build.yml"
       - "internal/config/version"
       - "deploy/hiddify/**"
+      - "deploy/speed/**"
+      - "tools/build-speed-components.py"
       - "docs/hiddify-core-target.json"
 
 jobs:
-  resolve-kernel:
-    runs-on: ubuntu-latest
-    outputs:
-      tag: ${{ steps.release.outputs.tag }}
-    steps:
-      - uses: actions/checkout@v7
-      - name: Test stable-release selection
-        run: python3 -m unittest discover -s tools -p 'test_fetch_latest_kernel.py'
-      - name: Resolve latest stable kernel release
-        id: release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          tag=$(python3 tools/fetch-latest-kernel.py --latest-tag)
-          echo "Kernel version: $tag"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-
   frontend:
     name: Build frontend once
     runs-on: ubuntu-latest
@@ -147,7 +131,7 @@ jobs:
           if-no-files-found: error
 
   build:
-    needs: [frontend, resolve-kernel, telemt, resolve-telemt]
+    needs: [frontend, telemt, resolve-telemt]
     permissions:
       contents: write
     env:
@@ -282,26 +266,15 @@ jobs:
           curl -sfLRo tuic-server "${CURL_RETRY[@]}" "https://github.com/EAimTY/tuic/releases/download/tuic-server-1.0.0/tuic-server-1.0.0-${TUIC_ARCH}"
           chmod 0755 tuic-server
 
-          MIERU_VER=$(gh api repos/enfein/mieru/releases/latest --jq '.tag_name')
-          test -n "$MIERU_VER"
-          case "${{ matrix.platform }}" in amd64) MIERU_ARCH=linux_amd64 ;; arm64) MIERU_ARCH=linux_arm64 ;; esac
-          MIERU_PKG="mita_${MIERU_VER#v}_linux_${{ matrix.platform }}.tar.gz"
-          curl -fL --show-error --retry 8 --retry-all-errors --retry-delay 5 -o "$MIERU_PKG" "https://github.com/enfein/mieru/releases/download/${MIERU_VER}/${MIERU_PKG}"
-          tar -xzf "$MIERU_PKG"
-          MITA_BIN=$(find . -type f -name mita -perm -111 | head -n1)
-          test -n "$MITA_BIN"
-          echo "Mieru asset verified: $MIERU_PKG"
-          chmod +x "$MITA_BIN"
-          rm -f "$MIERU_PKG"
-
           cd ../..
 
-      - name: Include verified latest Sing-box release
+      - name: Build compatible shared-speed protocol servers and kernel
         env:
-          GH_TOKEN: ${{ github.token }}
-          KERNEL_TAG: ${{ needs.resolve-kernel.outputs.tag }}
+          GOOS: linux
+          GOARCH: ${{ matrix.platform }}
         run: |
-          python3 tools/fetch-latest-kernel.py --arch "${{ matrix.platform }}" --tag "$KERNEL_TAG" --output "$PWD/x-ui/bin"
+          python3 tools/build-speed-components.py --output "$PWD/x-ui/bin"
+          bash tools/build-hiddify-core.sh "$PWD/x-ui/bin"
       - name: Check panel configuration with downloaded binary
         if: matrix.platform == 'amd64'
         env:
@@ -312,7 +285,7 @@ jobs:
 
       - name: Package
         run: |
-          for component in pingtunnel trusttunnel_endpoint caddy-naive hysteria sudoku-tunnel; do
+          for component in pingtunnel trusttunnel_endpoint caddy-naive hysteria; do
             test ! -e "x-ui/bin/$component"
           done
           tar -zcf x-ui-linux-${{ matrix.platform }}.tar.gz x-ui

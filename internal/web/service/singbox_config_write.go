@@ -5,8 +5,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/mieru"
+	"github.com/SawaMEN/3x-ui/v3/internal/sudoku"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/clientlimit"
+	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/protocolserver"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 )
@@ -58,6 +63,24 @@ func (s *SingBoxService) prepareConfigCandidate(ctx context.Context) (_ *nativeC
 }
 
 func (s *SingBoxService) prepareGeneratedConfigCandidate(ctx context.Context, cfg *singbox.Config) (_ *nativeConfigCandidate, err error) {
+	binaries := map[string]bool{}
+	for _, route := range cfg.SpeedLimitPlan.Routes {
+		for _, alias := range route.Aliases {
+			switch {
+			case strings.HasPrefix(alias, "mieru:"):
+				binaries[mieru.GetBinaryPath()] = true
+			case strings.HasPrefix(alias, "sudoku:"):
+				binaries[sudoku.GetBinaryPath(config.GetBinFolderPath())] = true
+			case strings.HasPrefix(alias, "masque:"):
+				binaries[singbox.GetBinaryPath()] = true
+			}
+		}
+	}
+	for binary := range binaries {
+		if err := clientlimit.CheckBrokerBinary(ctx, binary); err != nil {
+			return nil, err
+		}
+	}
 	if err := protocolserver.Check(ctx, cfg.ProtocolServers); err != nil {
 		return nil, err
 	}

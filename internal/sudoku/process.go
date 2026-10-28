@@ -14,6 +14,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/clientlimit"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 )
 
@@ -61,12 +63,18 @@ func (p *Process) Start(binary string) error {
 	if p.IsRunning() {
 		return errors.New("Sudoku is already running")
 	}
+	if clientlimit.Default.Requires("sudoku:") {
+		if err := clientlimit.CheckBrokerBinary(context.Background(), binary); err != nil {
+			return err
+		}
+	}
 	if err := validateConfig(binary, p.configPath); err != nil {
 		return err
 	}
 
 	cmd := exec.CommandContext(context.Background(), binary, "-c", p.configPath)
 	cmd.Env = append(os.Environ(), "SUDOKU_LOG_NO_TIMESTAMP=true")
+	cmd.Env = clientlimit.Default.Environment(cmd.Env)
 	lw := &logWriter{label: p.label}
 	cmd.Stdout = lw
 	cmd.Stderr = lw
@@ -103,6 +111,7 @@ func validateConfig(binary, path string) error {
 
 	cmd := exec.CommandContext(ctx, binary, "-test", "-c", path)
 	cmd.Env = append(os.Environ(), "SUDOKU_LOG_NO_TIMESTAMP=true")
+	cmd.Env = clientlimit.Default.Environment(cmd.Env)
 	output, err := cmd.CombinedOutput()
 	if ctx.Err() != nil {
 		return fmt.Errorf("Sudoku config validation timed out after %s: %w", configTestTimeout, ctx.Err())

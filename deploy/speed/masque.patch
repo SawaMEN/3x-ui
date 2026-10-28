@@ -1,0 +1,113 @@
+diff --git a/protocol/masque/server.go b/protocol/masque/server.go
+index b91985b..5d5bb06 100644
+--- a/protocol/masque/server.go
++++ b/protocol/masque/server.go
+@@ -90,6 +90,7 @@ func NewServerEndpoint(ctx context.Context, router adapter.Router, logger log.Co
+ 		localAddresses: options.Address,
+ 	}
+ 	server, err := masque.NewServer(masque.ServerOptions{
++		SpeedScope:      tag,
+ 		Context:         ctx,
+ 		Logger:          logger,
+ 		Path:            options.Path,
+diff --git a/transport/masque/server.go b/transport/masque/server.go
+index 334cd87..10c820f 100644
+--- a/transport/masque/server.go
++++ b/transport/masque/server.go
+@@ -2,6 +2,7 @@ package masque
+ 
+ import (
+ 	"context"
++	"github.com/sagernet/sing-box/internal/xuispeed"
+ 	"net"
+ 	"net/http"
+ 	"net/netip"
+@@ -25,6 +26,7 @@ type ServerHandler interface {
+ }
+ 
+ type ServerOptions struct {
++	SpeedScope      string
+ 	Context         context.Context
+ 	Logger          logger.ContextLogger
+ 	Path            string
+@@ -35,6 +37,7 @@ type ServerOptions struct {
+ }
+ 
+ type Server struct {
++	speedScope      string
+ 	ctx             context.Context
+ 	logger          logger.ContextLogger
+ 	template        *Template
+@@ -50,6 +53,7 @@ type Server struct {
+ }
+ 
+ type serverSession struct {
++	speed *brokerclient.Client
+ 	*session
+ 	server           *Server
+ 	ctx              context.Context
+@@ -68,12 +72,13 @@ func NewServer(options ServerOptions) (*Server, error) {
+ 		return nil, E.New("missing address")
+ 	}
+ 	server := &Server{
+-		ctx:       options.Context,
+-		logger:    options.Logger,
+-		template:  template,
+-		resolve:   options.Resolve,
+-		handler:   options.Handler,
+-		addresses: make(map[netip.Addr]*serverSession),
++		ctx:        options.Context,
++		logger:     options.Logger,
++		speedScope: options.SpeedScope,
++		template:   template,
++		resolve:    options.Resolve,
++		handler:    options.Handler,
++		addresses:  make(map[netip.Addr]*serverSession),
+ 	}
+ 	var builder netipx.IPSetBuilder
+ 	for _, address := range options.Address {
+@@ -148,6 +153,12 @@ func (s *Server) NewTunnelRequest(ctx context.Context, request transportHTTP.Tun
+ 		ctx:    ctx,
+ 	}
+ 	current.user, _ = auth.UserFromContext[string](ctx)
++	current.speed, err = brokerclient.New("masque:" + s.speedScope + ":" + current.user)
++	if err != nil {
++		request.Reject(http.StatusServiceUnavailable, nil)
++		return
++	}
++	defer current.speed.Close()
+ 	for _, pool := range s.pools {
+ 		address, allocated := pool.allocate()
+ 		if !allocated {
+@@ -364,7 +375,14 @@ func (s *serverSession) handleRouteAdvertisement(routes []AddressRange) error {
+ 	return nil
+ }
+ 
++func (s *serverSession) waitDownload(n int) error { return s.speed.Wait(s.session.ctx, 1, n) }
++
+ func (s *serverSession) handlePacket(buffer *buf.Buffer) {
++	if err := s.speed.Wait(s.session.ctx, 0, buffer.Len()); err != nil {
++		buffer.Release()
++		s.cancel(err)
++		return
++	}
+ 	source, destination, protocol, valid := packetAddresses(buffer.Bytes())
+ 	if !valid {
+ 		buffer.Release()
+diff --git a/transport/masque/session.go b/transport/masque/session.go
+index 49d3907..0f85803 100644
+--- a/transport/masque/session.go
++++ b/transport/masque/session.go
+@@ -220,6 +220,12 @@ func (s *session) queuePacket(buffer *buf.Buffer) {
+ }
+ 
+ func (s *session) writePacket(buffer *buf.Buffer) error {
++	if limiter, ok := s.handler.(interface{ waitDownload(int) error }); ok {
++		if err := limiter.waitDownload(buffer.Len()); err != nil {
++			buffer.Release()
++			return err
++		}
++	}
+ 	datagram := transportHTTP.PrependContextID(buffer)
+ 	if s.datagrams != nil {
+ 		err := s.datagrams.SendDatagram(datagram.Bytes())

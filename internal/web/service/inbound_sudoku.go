@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/clientlimit"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
@@ -318,6 +322,36 @@ func desiredSudokuInstances(strict bool) ([]sudoku.Instance, error) {
 			continue
 		}
 
+		canonical, err := (&ClientService{}).ListForInbound(nil, current.Id)
+		if err != nil {
+			return nil, err
+		}
+		ready := true
+		for _, c := range canonical {
+			if !c.Enable || c.SpeedLimit == nil || !c.SpeedLimit.Enabled {
+				continue
+			}
+			key := ""
+			for _, stored := range settings.Clients {
+				if stored.Email == c.Email {
+					key = stored.SudokuPrivateKey
+					break
+				}
+			}
+			raw, err := hex.DecodeString(key)
+			if err != nil || (len(raw) != 32 && len(raw) != 64) {
+				ready = false
+				break
+			}
+			digest := sha256.Sum256(raw)
+			if !clientlimit.Default.HasAlias("sudoku:" + hex.EncodeToString(digest[:8])) {
+				ready = false
+				break
+			}
+		}
+		if !ready {
+			continue
+		}
 		desired = append(desired, sudoku.Instance{
 			ID:  current.Id,
 			Tag: current.Tag,
