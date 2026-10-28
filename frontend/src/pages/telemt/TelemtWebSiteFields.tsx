@@ -94,7 +94,11 @@ export default function TelemtWebSiteFields({
                 <FormField
                   name={`${prefix}.origin`}
                   label={ru ? 'Локальный HTTP-адрес' : 'Local HTTP origin'}
-                  extra={ru ? 'Только 127.0.0.1 или ::1 с портом. Обычные запросы к WEB-домену будут направляться этому локальному сайту.' : 'Only 127.0.0.1 or ::1 with a port. Ordinary requests to the WEB domain are forwarded to this local website.'}
+                  extra={
+                    ru
+                      ? 'Только 127.0.0.1 или ::1 с портом. Обычные запросы к WEB-домену будут направляться этому локальному сайту.'
+                      : 'Only 127.0.0.1 or ::1 with a port. Ordinary requests to the WEB domain are forwarded to this local website.'
+                  }
                 >
                   <Input placeholder="http://127.0.0.1:8080" disabled={disabled} />
                 </FormField>
