@@ -271,7 +271,7 @@ export default function SubPage() {
               onLangChange={onLangChange}
             />
             {appearance?.description && (
-              <p className="sub-luna-description" dir="auto">
+              <p className="sub-description sub-luna-description" dir="auto">
                 {appearance.description}
               </p>
             )}
@@ -279,7 +279,7 @@ export default function SubPage() {
               <Button
                 type="primary"
                 size="large"
-                className="sub-luna-connect"
+                className="sub-connect sub-luna-connect"
                 icon={<LinkOutlined />}
                 onClick={() => void copy(subUrl)}
               >
