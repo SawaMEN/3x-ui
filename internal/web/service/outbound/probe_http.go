@@ -825,9 +825,3 @@ func createTestConfigPath() (string, error) {
 	return path, nil
 }
 
-type failedBatchProcess struct{ err error }
-
-func (p *failedBatchProcess) Start() error      { return p.err }
-func (p *failedBatchProcess) Stop() error       { return nil }
-func (p *failedBatchProcess) IsRunning() bool   { return false }
-func (p *failedBatchProcess) GetResult() string { return p.err.Error() }

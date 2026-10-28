@@ -21,6 +21,7 @@ import (
 type transportFunc func(*http.Request) (*http.Response, error)
 
 func (f transportFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
 func archiveFixture(t *testing.T, name, binary string) []byte {
 	t.Helper()
 	var buf bytes.Buffer
@@ -39,7 +40,7 @@ func archiveFixture(t *testing.T, name, binary string) []byte {
 	} else {
 		g := gzip.NewWriter(&buf)
 		w := tar.NewWriter(g)
-		e := w.WriteHeader(&tar.Header{Name: strings.TrimSuffix(name, ".tar.gz") + "/" + binary, Mode: 0755, Size: 14})
+		e := w.WriteHeader(&tar.Header{Name: strings.TrimSuffix(name, ".tar.gz") + "/" + binary, Mode: 0o755, Size: 14})
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -49,13 +50,14 @@ func archiveFixture(t *testing.T, name, binary string) []byte {
 	}
 	return buf.Bytes()
 }
+
 func TestInstallChecksAndAtomicallyPublishes(t *testing.T) {
 	for _, engine := range []string{"xray", "sing-box-upstream"} {
 		for _, failure := range []string{"", "checksum", "validation", "http"} {
 			t.Run(engine+"/"+failure, func(t *testing.T) {
 				dir := t.TempDir()
 				target := filepath.Join(dir, "core")
-				os.WriteFile(target, []byte("old executable"), 0755)
+				os.WriteFile(target, []byte("old executable"), 0o755)
 				name, err := AssetName(engine, "v1.2.3", "linux", "amd64", "")
 				if err != nil {
 					t.Fatal(err)

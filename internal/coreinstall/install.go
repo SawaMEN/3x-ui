@@ -10,6 +10,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -21,8 +22,10 @@ import (
 	"time"
 )
 
-const maxArchive = 128 << 20
-const maxBinary = 256 << 20
+const (
+	maxArchive = 128 << 20
+	maxBinary  = 256 << 20
+)
 
 type Asset struct {
 	Name   string `json:"name"`
@@ -192,7 +195,7 @@ func (i Installer) Install(ctx context.Context, engine, version, goos, arch, arm
 	if err != nil {
 		return "", err
 	}
-	if err = os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+	if err = os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		return "", err
 	}
 	f, err := os.CreateTemp(filepath.Dir(target), ".core-install-*")
@@ -204,7 +207,7 @@ func (i Installer) Install(ctx context.Context, engine, version, goos, arch, arm
 	if _, err = f.Write(executable); err != nil {
 		return "", err
 	}
-	if err = f.Chmod(0755); err != nil {
+	if err = f.Chmod(0o755); err != nil {
 		return "", err
 	}
 	if err = f.Sync(); err != nil {
@@ -252,6 +255,7 @@ func xrayDigest(data []byte) (string, error) {
 	}
 	return "", fmt.Errorf("missing SHA-256 in Xray digest")
 }
+
 func extract(data []byte, archive, binary string) ([]byte, error) {
 	var result []byte
 	read := func(r io.Reader) error {
@@ -295,13 +299,13 @@ func extract(data []byte, archive, binary string) ([]byte, error) {
 		t := tar.NewReader(io.LimitReader(g, maxBinary+(16<<20)))
 		for {
 			h, e := t.Next()
-			if e == io.EOF {
+			if errors.Is(e, io.EOF) {
 				break
 			}
 			if e != nil {
 				return nil, e
 			}
-			if (h.Typeflag == tar.TypeReg || h.Typeflag == tar.TypeRegA) && path.Base(h.Name) == binary && h.Name == strings.TrimSuffix(archive, ".tar.gz")+"/"+binary {
+			if h.FileInfo().Mode().IsRegular() && path.Base(h.Name) == binary && h.Name == strings.TrimSuffix(archive, ".tar.gz")+"/"+binary {
 				if e = read(t); e != nil {
 					return nil, e
 				}
@@ -347,6 +351,7 @@ func installMissingXrayGeodata(archive []byte, dir string) (created []string, er
 	}
 	return created, nil
 }
+
 func publishMissingFile(dest string, data []byte) error {
 	f, err := os.CreateTemp(filepath.Dir(dest), ".core-geodata-*")
 	if err != nil {
@@ -357,7 +362,7 @@ func publishMissingFile(dest string, data []byte) error {
 	if _, err = f.Write(data); err != nil {
 		return err
 	}
-	if err = f.Chmod(0644); err != nil {
+	if err = f.Chmod(0o644); err != nil {
 		return err
 	}
 	if err = f.Sync(); err != nil {

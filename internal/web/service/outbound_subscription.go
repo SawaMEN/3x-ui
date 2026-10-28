@@ -951,4 +951,3 @@ func (s *OutboundSubscriptionService) activeAutomaticSubscriptions() ([]*model.O
 	return subs, err
 }
 
-func asNativeOutboundMap(raw any) map[string]any { object, _ := raw.(map[string]any); return object }

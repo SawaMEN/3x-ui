@@ -89,6 +89,13 @@ func TestSyncClientCoreCompatibilitySwitchesAutomaticClientState(t *testing.T) {
 		t.Fatal(err)
 	}
 	check("wg@example", true, "")
+	// Xray does not support NaiveProxy; this client must be auto-disabled.
+	check("naive@example", false, CoreTypeXray)
+
+	// Switching back enables a client only when disabled by the previous core.
+	if err := SyncClientCoreCompatibility(CoreTypeXray, CoreTypeSingBox); err != nil {
+		t.Fatal(err)
+	}
 	check("naive@example", true, "")
 }
 
