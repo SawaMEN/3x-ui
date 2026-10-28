@@ -32,5 +32,8 @@ func (s *SingBoxService) RecoverIfCrashed(ctx context.Context) error {
 	if coreType != s.coreType() || !s.DidCrash() {
 		return nil
 	}
+	if s.coreType() == CoreTypeXray {
+		return s.restartStandaloneXrayLocked(ctx)
+	}
 	return s.restartLocked(ctx)
 }

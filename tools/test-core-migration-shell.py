@@ -142,13 +142,13 @@ if core_migration_apply; then
         [[ "$(cat "$TEST_DB")" == new-core ]]
         [[ ! -e "$cm_backup" ]] # The verified offline snapshot must not fill the VPS.
         [[ -f "$xui_folder/bin/custom-key" || -f "$XUI_BIN_FOLDER/custom-key" ]]
-        [[ ! -e "$xui_folder/bin/xray-linux-amd64" ]]
-        [[ ! -e "$xui_folder/bin/sing-box-linux-amd64" ]]
+        [[ -e "$xui_folder/bin/xray-linux-amd64" ]]
+        [[ -e "$xui_folder/bin/sing-box-linux-amd64" ]]
         [[ -f "$xui_folder/bin/hiddify-core-linux-amd64" ]]
         [[ "$(cat "$xui_folder/bin/xray-config.json")" == custom-config ]]
         [[ "$(cat "$xui_folder/bin/sing-box-config.json")" == custom-config ]]
-        [[ ! -e "$XUI_BIN_FOLDER/xray-linux-amd64" ]]
-        [[ ! -e "$XUI_BIN_FOLDER/sing-box-linux-amd64" ]]
+        [[ -e "$XUI_BIN_FOLDER/xray-linux-amd64" ]]
+        [[ -e "$XUI_BIN_FOLDER/sing-box-linux-amd64" ]]
         if [[ "$XUI_BIN_FOLDER" != "$xui_folder/bin" || -L "$xui_folder/bin" ]]; then
             [[ "$(cat "$XUI_BIN_FOLDER/custom-key")" == external-key ]]
         fi

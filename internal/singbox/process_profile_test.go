@@ -76,3 +76,32 @@ func TestProcessProfileRejectsMisleadingIdentity(t *testing.T) {
 		}
 	}
 }
+
+func TestProcessProfileXrayChecksWithRunTest(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell fixture")
+	}
+	dir := t.TempDir()
+	binary := filepath.Join(dir, "xray")
+	cfg := filepath.Join(dir, "config.json")
+	script := `#!/bin/sh
+case "$1" in
+version) echo 'Xray 26.10.21';;
+run) [ "$2" = '-test' ] && [ "$3" = '-c' ] && [ -f "$4" ];;
+*) exit 14;;
+esac
+`
+	if err := os.WriteFile(binary, []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cfg, []byte(`{}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	p := NewProcessWithOptions(cfg, ProcessOptions{Binary: binary, Name: "Xray", Xray: true, VersionPrefix: "Xray "}, true)
+	if err := p.Validate(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if p.GetVersion() != "26.10.21" {
+		t.Fatal("Xray version not parsed")
+	}
+}

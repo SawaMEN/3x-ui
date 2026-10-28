@@ -93,6 +93,9 @@ func (a *SettingController) initRouter(g *gin.RouterGroup) {
 	g = g.Group("/setting")
 
 	g.POST("/all", a.getAllSetting)
+	g.GET("/cores", a.coreStatuses)
+	g.POST("/cores/:core/install", a.installStandaloneCore)
+	g.POST("/cores/:core/select", a.selectStandaloneCore)
 	g.POST("/defaultSettings", a.getDefaultSettings)
 	g.POST("/factoryDefaults", a.getFactoryDefaults)
 	g.POST("/update", a.updateSetting)
@@ -179,6 +182,8 @@ func (a *SettingController) updateSetting(c *gin.Context) {
 	allSetting := &form.AllSetting
 	oldTwoFactor, twoFactorErr := a.settingService.GetTwoFactorEnable()
 	oldPanelOutbound, _ := a.settingService.GetPanelOutbound()
+	coreManagementMu.Lock()
+	defer coreManagementMu.Unlock()
 	oldCoreType, _ := a.settingService.GetCoreType()
 	oldTgEnable, _ := a.settingService.GetTgbotEnabled()
 	oldTgToken, _ := a.settingService.GetTgBotToken()

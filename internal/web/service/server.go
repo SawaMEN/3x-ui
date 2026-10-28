@@ -695,11 +695,18 @@ func (s *ServerService) GetStatus(lastStatus *Status) *Status {
 	if SelectedNativeCore().IsRunning() {
 		status.CoreUptime = SelectedNativeCore().process().GetUptime()
 	}
-	// Compatibility field for older peers. Xray is never a running engine.
 	status.Xray.State = Stop
-	status.Xray.Version = "Removed"
-	status.SingBox.State = (&CoreService{}).GetCoreState()
-	status.SingBox.Version = (&CoreService{}).GetCoreVersion()
+	status.SingBox.State = Stop
+	if core, _ := s.settingService.GetCoreType(); core == CoreTypeXray {
+		status.Xray.State = (&CoreService{}).GetCoreState()
+		status.Xray.Version = (&CoreService{}).GetCoreVersion()
+		if err := SelectedNativeCore().LastError(); err != nil {
+			status.Xray.ErrorMsg = err.Error()
+		}
+	} else {
+		status.SingBox.State = (&CoreService{}).GetCoreState()
+		status.SingBox.Version = (&CoreService{}).GetCoreVersion()
+	}
 	if err := SelectedNativeCore().LastError(); err != nil {
 		status.SingBox.ErrorMsg = err.Error()
 	}
@@ -1237,6 +1244,9 @@ func logEntryContains(line string, suffixes []string) bool {
 }
 
 func (s *ServerService) GetConfigJson() (any, error) {
+	if core, _ := s.settingService.GetCoreType(); core == CoreTypeXray {
+		return (&CoreService{}).GetXrayConfig()
+	}
 	config, err := SelectedNativeCore().GetConfig()
 	if err != nil {
 		return nil, err

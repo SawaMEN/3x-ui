@@ -31,14 +31,18 @@ var (
 func InitializeNativeCoreRuntime() {
 	hiddifyRuntime = hiddify.NewRuntime(hiddify.GetConfigPath(), false)
 	hiddifyProcess = hiddifyRuntime.Process
+	upstreamProcess = standaloneProcess(CoreTypeSingBoxUpstream, standaloneConfigPath(CoreTypeSingBoxUpstream), false)
+	standaloneXrayProcess = standaloneProcess(CoreTypeXray, standaloneConfigPath(CoreTypeXray), false)
 }
 
-func IsNativeCore(core string) bool { return core == CoreTypeSingBox || core == legacyCoreTypeHiddify }
+func IsNativeCore(core string) bool {
+	return core == CoreTypeSingBox || core == legacyCoreTypeHiddify || core == CoreTypeSingBoxUpstream
+}
 
 func NativeCore(core string) *SingBoxService {
 	// Both names resolve to the owner’s modified sing-box. The old name is
 	// accepted only for compatibility with persisted settings and older nodes.
-	return &SingBoxService{}
+	return &SingBoxService{engine: canonicalCoreType(core)}
 }
 
 func SelectedNativeCore() *SingBoxService {
@@ -47,37 +51,67 @@ func SelectedNativeCore() *SingBoxService {
 }
 func (s *SingBoxService) CoreType() string { return s.coreType() }
 func (s *SingBoxService) coreType() string {
+	if s.engine != "" {
+		return s.engine
+	}
 	return CoreTypeSingBox
 }
 
 func (s *SingBoxService) process() *singbox.Process {
+	if s.coreType() == CoreTypeSingBoxUpstream {
+		return upstreamProcess
+	}
+	if s.coreType() == CoreTypeXray {
+		return standaloneXrayProcess
+	}
 	return hiddifyProcess
 }
 
 func (s *SingBoxService) candidate(path string) *singbox.Process {
+	if s.coreType() != CoreTypeSingBox {
+		return standaloneProcess(s.coreType(), path, true)
+	}
 	return hiddify.NewProcess(path, true)
 }
 
 func (s *SingBoxService) translateInbound(raw map[string]any) (map[string]any, error) {
 	{
+		if s.coreType() == CoreTypeSingBoxUpstream {
+			return singbox.TranslateXrayInbound(raw)
+		}
 		return hiddify.TranslateInbound(raw)
 	}
 }
 
 func (s *SingBoxService) translateOutbound(raw map[string]any) (map[string]any, error) {
 	{
+		if s.coreType() == CoreTypeSingBoxUpstream {
+			return singbox.TranslateXrayOutbound(raw)
+		}
 		return hiddify.TranslateOutbound(raw)
 	}
 }
 
 func (s *SingBoxService) restartFlag() *atomic.Bool {
 	{
+		if s.coreType() == CoreTypeSingBoxUpstream {
+			return &upstreamNeedRestart
+		}
+		if s.coreType() == CoreTypeXray {
+			return &standaloneXrayNeedRestart
+		}
 		return &hiddifyNeedRestart
 	}
 }
 
 func (s *SingBoxService) stoppedFlag() *atomic.Bool {
 	{
+		if s.coreType() == CoreTypeSingBoxUpstream {
+			return &upstreamStopped
+		}
+		if s.coreType() == CoreTypeXray {
+			return &standaloneXrayStopped
+		}
 		return &hiddifyManuallyStopped
 	}
 }
@@ -118,6 +152,20 @@ func (s *SingBoxService) pollHiddifyTraffic(ctx context.Context) error {
 }
 
 func (s *SingBoxService) hiddifySessions(ctx context.Context) ([]singbox.ActiveSession, error) {
+	if s.coreType() == CoreTypeSingBoxUpstream {
+		connections, err := singbox.NewClashStatsClient().Connections(ctx)
+		if err != nil {
+			return nil, err
+		}
+		sessions := make([]singbox.ActiveSession, 0, len(connections))
+		for _, c := range connections {
+			sessions = append(sessions, singbox.ActiveSession{ID: c.ID, Core: s.coreType(), Inbound: c.Metadata.InboundName,
+				User: c.Metadata.User, Network: c.Metadata.Network, Source: net.JoinHostPort(c.Metadata.SourceIP, c.Metadata.SourcePort),
+				Destination: net.JoinHostPort(c.Metadata.DestinationIP, c.Metadata.DestinationPort), Domain: c.Metadata.Host,
+				CreatedAt: c.Start.Unix(), Upload: c.Upload, Download: c.Download, Chain: c.Chains})
+		}
+		return sessions, nil
+	}
 	return hiddify.ActiveSessions(ctx)
 }
 
@@ -168,6 +216,23 @@ func (s *SingBoxService) hiddifyPresence(ctx context.Context) (map[string]map[st
 }
 
 func (s *SingBoxService) disconnectHiddify(ctx context.Context, match func(singbox.ActiveSession) bool) (int, error) {
+	if s.coreType() == CoreTypeSingBoxUpstream {
+		sessions, err := s.hiddifySessions(ctx)
+		if err != nil {
+			return 0, err
+		}
+		client := singbox.NewClashStatsClient()
+		count := 0
+		for _, session := range sessions {
+			if match(session) {
+				if err := client.CloseConnection(ctx, session.ID); err != nil {
+					return count, err
+				}
+				count++
+			}
+		}
+		return count, nil
+	}
 	return hiddify.DisconnectSessions(ctx, match)
 }
 
@@ -216,18 +281,27 @@ func splitHiddifyStats(stats []singbox.V2RayStat) (inboundTraffic []*coremodel.T
 }
 
 func (s *SingBoxService) startProcess(ctx context.Context) error {
+	if s.coreType() != CoreTypeSingBox {
+		return s.process().Start(ctx)
+	}
 	{
 		return hiddifyRuntime.Start(ctx)
 	}
 }
 
 func (s *SingBoxService) restartProcess(ctx context.Context) error {
+	if s.coreType() != CoreTypeSingBox {
+		return s.process().Restart(ctx)
+	}
 	{
 		return hiddifyRuntime.Restart(ctx)
 	}
 }
 
 func (s *SingBoxService) stopProcess(ctx context.Context) error {
+	if s.coreType() != CoreTypeSingBox {
+		return s.process().Stop()
+	}
 	{
 		return hiddifyRuntime.Stop(ctx)
 	}

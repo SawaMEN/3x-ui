@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/config"
 	"github.com/SawaMEN/3x-ui/v3/internal/hiddify"
 	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 	"github.com/SawaMEN/3x-ui/v3/internal/xray"
@@ -15,6 +16,9 @@ import (
 // Reuse the batch's loopback listeners, routing and outbound context, but
 // translate the actual proxy configuration for the selected core.
 func buildSingBoxBatchTestConfig(source *xray.Config) (*singbox.Config, error) {
+	return buildSingBoxBatchTestConfigForCore(source, "sing-box")
+}
+func buildSingBoxBatchTestConfigForCore(source *xray.Config, core string) (*singbox.Config, error) {
 	cfg := singbox.NewConfig()
 	cfg.Log = map[string]any{"level": "warn"}
 	// A probe must never bind the production Clash controller.
@@ -56,7 +60,11 @@ func buildSingBoxBatchTestConfig(source *xray.Config) (*singbox.Config, error) {
 			cfg.Endpoints = append(cfg.Endpoints, endpoint)
 			continue
 		}
-		translated, err := hiddify.TranslateOutbound(outbound)
+		translate := hiddify.TranslateOutbound
+		if core == "sing-box-upstream" {
+			translate = singbox.TranslateXrayOutbound
+		}
+		translated, err := translate(outbound)
 		if err != nil {
 			return nil, err
 		}
@@ -169,4 +177,10 @@ func (s *OutboundService) TestAutomaticOutbounds(items, target, all, mode, core 
 	}
 	probe := &OutboundService{CoreType: core}
 	return probe.TestOutbounds(items, target, contextJSON, mode)
+}
+
+func newUpstreamBatchProcess(cfg *singbox.Config, path string) batchProcess {
+	return &singBoxBatchProcess{process: singbox.NewProcessWithOptions(path, singbox.ProcessOptions{
+		Name: "sing-box", Binary: config.StandaloneCoreBinaryPath("sing-box-upstream"), RunCommand: "run", VersionPrefix: "sing-box version ",
+	}, true), config: cfg, path: path}
 }

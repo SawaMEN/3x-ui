@@ -799,3 +799,33 @@ func TestSnapshotRejectsMissingAndConflictingEntries(t *testing.T) {
 		})
 	}
 }
+
+func TestExplicitStandaloneSelectionSurvivesStartupAndUpgrade(t *testing.T) {
+	for _, kind := range []string{service.CoreTypeXray, service.CoreTypeSingBoxUpstream} {
+		t.Run(kind, func(t *testing.T) {
+			r, trial, dir := fixture(t)
+			if err := (&service.SettingService{}).SetCoreType(kind); err != nil {
+				t.Fatal(err)
+			}
+			if err := CheckPanelStartup(); err != nil {
+				t.Fatalf("explicit standalone selection rejected at startup: %v", err)
+			}
+			if err := database.CloseDB(); err != nil {
+				t.Fatal(err)
+			}
+			if err := r.run(context.Background(), Options{BackupDir: dir}); err != nil {
+				t.Fatal(err)
+			}
+			values, err := storedCoreSettings(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if values["coreType"] != kind {
+				t.Fatalf("upgrade changed selection to %s", values["coreType"])
+			}
+			if trial.starts != 0 {
+				t.Fatal("upgrade started an owner migration trial for standalone selection")
+			}
+		})
+	}
+}

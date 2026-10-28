@@ -59,6 +59,20 @@ func (s *XraySettingService) SaveValidatedXraySetting(ctx context.Context, raw s
 	if value, changed, err := database.RewriteDNSOutboundQTypeZero(raw); err == nil && changed {
 		raw = value
 	}
+	if kind, _ := s.GetCoreType(); kind == CoreTypeXray {
+		cfg, err := (&CoreService{}).getXrayConfigWithTemplate(raw)
+		if err != nil {
+			return err
+		}
+		data, err := json.Marshal(cfg)
+		if err != nil {
+			return err
+		}
+		if err := NativeCore(kind).validateStandaloneXrayBytes(ctx, data); err != nil {
+			return err
+		}
+		return s.saveSetting("xrayTemplateConfig", raw)
+	}
 	singBoxTemplateMu.Lock()
 	defer singBoxTemplateMu.Unlock()
 	snapshot, err := loadNativeConfigSnapshotForTemplate(&raw)
@@ -66,7 +80,7 @@ func (s *XraySettingService) SaveValidatedXraySetting(ctx context.Context, raw s
 		return err
 	}
 	snapshot.settings["xrayTemplateConfig"] = raw
-	native := NativeCore(CoreTypeSingBox)
+	native := SelectedNativeCore()
 	cfg, err := native.generateNativeConfig(snapshot)
 	if err != nil {
 		return err
@@ -108,7 +122,11 @@ func (s *XraySettingService) CheckXrayConfig(XrayTemplateConfig string) error {
 				return fmt.Errorf("duplicate outbound tag %q", tag)
 			}
 			tags[tag] = true
-			if err := validateNativeTemplateOutbound(outbound, normalized, CoreTypeSingBox); err != nil {
+			if kind, _ := s.GetCoreType(); kind != CoreTypeXray {
+				if err := validateNativeTemplateOutbound(outbound, normalized, kind); err != nil {
+					return err
+				}
+			} else if err := xray.ValidateOutboundConfig(outbound); err != nil {
 				return err
 			}
 

@@ -75,7 +75,7 @@ func (j *XrayTrafficJob) runNonXrayTraffic() {
 	if coreErr != nil {
 		logger.Debug("get core type for traffic presence failed:", coreErr)
 	}
-	if coreErr == nil && service.IsNativeCore(core) {
+	if coreErr == nil && (service.IsNativeCore(core) || core == service.CoreTypeXray) {
 		singBoxService := service.SelectedNativeCore()
 		if !singBoxService.IsRunning() {
 			// A selected but missing/stopped sing-box has no live connections.

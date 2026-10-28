@@ -61,7 +61,7 @@ type CoreService struct {
 	nodeService    NodeService
 }
 
-// IsCoreRunning checks the sole owner sing-box runtime.
+// IsCoreRunning checks the selected engine.
 func (s *CoreService) IsCoreRunning() bool    { return SelectedNativeCore().IsRunning() }
 func (s *CoreService) GetCoreVersion() string { return SelectedNativeCore().process().GetVersion() }
 func (s *CoreService) GetCoreState() ProcessState {
@@ -99,6 +99,10 @@ func (s *CoreService) GetXrayConfig() (*xray.Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	return s.getXrayConfigWithTemplate(templateConfig)
+}
+
+func (s *CoreService) getXrayConfigWithTemplate(templateConfig string) (*xray.Config, error) {
 	routingLists, err := loadRoutingLists(templateConfig)
 	if err != nil {
 		return nil, err
@@ -1193,14 +1197,14 @@ type BalancerStatus struct {
 	Selected []string `json:"selected"`
 }
 
-// RestartXray is the legacy method name for restarting the sole owner sing-box.
+// RestartXray is the compatibility entry point for restarting the selected engine.
 func (s *CoreService) RestartXray(isForce bool) error {
 	coreType, err := (&SettingService{}).GetCoreType()
 	if err != nil {
 		return err
 	}
 	if !IsNativeCore(coreType) {
-		return fmt.Errorf("legacy database requires offline core-migrate before starting sing-box")
+		return NativeCore(CoreTypeXray).Restart(context.Background())
 	}
 	return SelectedNativeCore().Restart(context.Background())
 }
@@ -1217,7 +1221,7 @@ func (s *CoreService) SetToNeedRestart() {
 
 // IsNeedRestartAndSetFalse checks if restart is needed and resets the flag to false.
 func (s *CoreService) IsNeedRestartAndSetFalse() bool {
-	return hiddifyNeedRestart.CompareAndSwap(true, false)
+	return SelectedNativeCore().IsNeedRestartAndSetFalse()
 }
 
 // ApplyPendingRestart consumes the need-restart flag and restarts Xray. If the
@@ -1225,7 +1229,10 @@ func (s *CoreService) IsNeedRestartAndSetFalse() bool {
 // the old process running), it re-arms the flag so the next tick retries instead
 // of silently dropping the pending config change.
 func (s *CoreService) ApplyPendingRestart() {
-	if !s.IsNeedRestartAndSetFalse() {
+	if core, _ := (&SettingService{}).GetCoreType(); core != CoreTypeXray {
+		return
+	}
+	if !s.IsCoreRunning() || !s.IsNeedRestartAndSetFalse() {
 		return
 	}
 	if err := s.RestartXray(false); err != nil {

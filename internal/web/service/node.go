@@ -74,6 +74,8 @@ func normalizeNodeCoreType(value string) string {
 	switch value {
 	case "xray":
 		return CoreTypeXray
+	case "singboxupstream":
+		return CoreTypeSingBoxUpstream
 	case "hiddifycore":
 		return CoreTypeSingBox
 	case "singbox":

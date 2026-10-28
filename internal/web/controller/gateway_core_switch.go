@@ -16,6 +16,7 @@ func (a *SettingController) switchCoreWithGateway(ctx context.Context, oldCore, 
 	snapshot := network.Status(ctx)
 	rollbackTemplate := func() error { return nil }
 	compatibilityChanged, runtimeChanged := false, false
+	oldWasRunning := service.NativeCore(oldCore).IsRunning()
 	defer func() {
 		if err == nil {
 			return
@@ -33,7 +34,7 @@ func (a *SettingController) switchCoreWithGateway(ctx context.Context, oldCore, 
 		if compatibilityChanged {
 			err = errors.Join(err, service.SyncClientCoreCompatibility(newCore, oldCore))
 		}
-		if runtimeChanged {
+		if runtimeChanged && oldWasRunning {
 			if restartErr := a.startGatewayCore(recovery, oldCore); restartErr != nil {
 				err = errors.Join(err, restartErr)
 				return
@@ -60,7 +61,7 @@ func (a *SettingController) switchCoreWithGateway(ctx context.Context, oldCore, 
 		return err
 	}
 	// Check the complete candidate before giving up the old listeners.
-	if service.IsNativeCore(newCore) {
+	if service.IsNativeCore(newCore) || newCore == service.CoreTypeXray {
 		if err = service.NativeCore(newCore).WriteConfig(); err != nil {
 			return err
 		}
@@ -80,15 +81,9 @@ func (a *SettingController) switchCoreWithGateway(ctx context.Context, oldCore, 
 }
 
 func (a *SettingController) stopGatewayCore(ctx context.Context, core string) error {
-	if service.IsNativeCore(core) {
-		return service.NativeCore(core).Stop(ctx)
-	}
-	return a.xrayService.StopXray()
+	return service.NativeCore(core).Stop(ctx)
 }
 
 func (a *SettingController) startGatewayCore(ctx context.Context, core string) error {
-	if service.IsNativeCore(core) {
-		return service.NativeCore(core).Restart(ctx)
-	}
-	return a.xrayService.RestartXray(true)
+	return service.NativeCore(core).Restart(ctx)
 }

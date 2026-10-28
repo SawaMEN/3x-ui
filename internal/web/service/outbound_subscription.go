@@ -23,6 +23,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/link"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
+	"github.com/SawaMEN/3x-ui/v3/internal/xray"
 )
 
 // filterOutboundsRejectedByCore drops outbounds the vendored xray-core config
@@ -45,7 +46,7 @@ func filterOutboundsRejectedByCore(label string, outbounds []any) ([]any, []stri
 		}
 		raw, err := json.Marshal(ob)
 		if err == nil {
-			if buildErr := validateNativeTemplateOutbound(raw, asNativeOutboundMap(ob), CoreTypeSingBox); buildErr != nil {
+			if buildErr := xray.ValidateOutboundConfig(raw); buildErr != nil {
 				tag := ""
 				if m, ok := ob.(map[string]any); ok {
 					tag, _ = m["tag"].(string)
