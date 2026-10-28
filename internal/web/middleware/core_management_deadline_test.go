@@ -1,12 +1,13 @@
 package middleware
 
 import (
-	"github.com/gin-contrib/gzip"
-	"github.com/gin-gonic/gin"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/gin-contrib/gzip"
+	"github.com/gin-gonic/gin"
 )
 
 func TestCoreManagementDeadlineBeforeGzip(t *testing.T) {

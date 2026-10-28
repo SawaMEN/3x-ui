@@ -125,9 +125,17 @@ func TestInstallChecksAndAtomicallyPublishes(t *testing.T) {
 }
 
 func TestAssetNames(t *testing.T) {
-	for _, tc := range []struct{ core, arch, arm, want string }{
-		{"xray", "amd64", "", "Xray-linux-64.zip"}, {"xray", "arm64", "", "Xray-linux-arm64-v8a.zip"}, {"xray", "arm", "6", "Xray-linux-arm32-v6.zip"},
-		{"sing-box-upstream", "arm", "7", "sing-box-1.2.3-linux-armv7.tar.gz"}, {"sing-box-upstream", "mips", "", "sing-box-1.2.3-linux-mips-softfloat.tar.gz"},
+	for _, tc := range []struct {
+		core string
+		arch string
+		arm  string
+		want string
+	}{
+		{core: "xray", arch: "amd64", want: "Xray-linux-64.zip"},
+		{core: "xray", arch: "arm64", want: "Xray-linux-arm64-v8a.zip"},
+		{core: "xray", arch: "arm", arm: "6", want: "Xray-linux-arm32-v6.zip"},
+		{core: "sing-box-upstream", arch: "arm", arm: "7", want: "sing-box-1.2.3-linux-armv7.tar.gz"},
+		{core: "sing-box-upstream", arch: "mips", want: "sing-box-1.2.3-linux-mips-softfloat.tar.gz"},
 	} {
 		got, err := AssetName(tc.core, "v1.2.3", "linux", tc.arch, tc.arm)
 		if err != nil || got != tc.want {
