@@ -43,7 +43,12 @@ jobs:
         run: pnpm lint
 
       - name: Format check
-        run: pnpm format:check
+        run: |
+          if ! pnpm format:check; then
+            pnpm exec oxfmt .
+            git diff -- .
+            exit 1
+          fi
 
       - name: Test
         run: pnpm test
