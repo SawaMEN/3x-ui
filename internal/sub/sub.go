@@ -90,6 +90,14 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 		return nil, err
 	}
 
+	subFormatMode, err := s.settingService.GetSubFormatMode()
+	if err != nil {
+		return nil, err
+	}
+	subDefaultFormat, err := s.settingService.GetSubDefaultFormat()
+	if err != nil {
+		return nil, err
+	}
 	subJsonEnable, err := s.settingService.GetSubJsonEnable()
 	if err != nil {
 		return nil, err
@@ -355,6 +363,8 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 
 	s.sub = NewSUBController(g,
 		WithSUBPath(LinksPath),
+		WithSUBFormats(subFormatMode, subDefaultFormat),
+		WithSUBLiveFormats(),
 		WithSUBJsonPath(JsonPath),
 		WithSUBClashPath(ClashPath),
 		WithSUBClashAutoDetect(subClashAutoDetect),

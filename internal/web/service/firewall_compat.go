@@ -16,6 +16,7 @@ func isNftablesCompatibilityError(err error) bool {
 	}
 	text := strings.ToLower(err.Error())
 	return strings.Contains(text, "could not fetch rule set generation id: invalid argument") ||
+		strings.Contains(text, "cache initialization failed: invalid argument") ||
 		strings.Contains(text, "operation not supported") ||
 		strings.Contains(text, "protocol not supported") ||
 		strings.Contains(text, "address family not supported")

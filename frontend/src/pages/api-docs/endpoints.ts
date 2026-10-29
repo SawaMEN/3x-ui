@@ -3313,6 +3313,12 @@ export const sections: readonly Section[] = [
       },
       {
         method: 'GET',
+        path: '/panel/api/setting/cores/:core/versions',
+        summary: 'List upstream core releases with a binary compatible with this server.',
+        params: [{ name: 'core', in: 'path', type: 'string', desc: 'xray or sing-box-upstream' }],
+      },
+      {
+        method: 'GET',
         path: '/panel/api/setting/singbox/status',
         summary: 'Return sing-box installation and runtime status.',
       },

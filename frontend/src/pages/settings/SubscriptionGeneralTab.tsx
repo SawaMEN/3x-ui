@@ -99,6 +99,59 @@ export default function SubscriptionGeneralTab({
           children: (
             <>
               <SettingListItem
+                title="Форматы подписки"
+                description="Общая ссылка со всеми подключениями или отдельные JSON-конфигурации Xray и sing-box."
+              >
+                <Select
+                  aria-label="Форматы подписки"
+                  value={allSetting.subFormatMode}
+                  style={{ minWidth: 240 }}
+                  options={[
+                    { value: 'both', label: 'Все вместе + Xray + sing-box' },
+                    { value: 'xray', label: 'Только Xray JSON' },
+                    { value: 'sing-box', label: 'Только sing-box JSON' },
+                  ]}
+                  onChange={(mode) =>
+                    updateSetting({
+                      subFormatMode: mode,
+                      subDefaultFormat: mode === 'both' ? 'auto' : mode,
+                    })
+                  }
+                />
+              </SettingListItem>
+              <SettingListItem
+                title="По умолчанию по основной ссылке"
+                description="Формат ответа для VPN-клиента. Страница подписки в браузере остаётся доступна. Явный format в ссылке имеет приоритет. После сохранения применяется без перезапуска панели."
+              >
+                <Select
+                  aria-label="Формат по умолчанию"
+                  value={allSetting.subDefaultFormat}
+                  style={{ minWidth: 240 }}
+                  options={[
+                    ...(allSetting.subFormatMode === 'both'
+                      ? [
+                          { value: 'auto', label: 'Автоматически по приложению' },
+                          { value: 'links', label: 'Все подключения (список ссылок)' },
+                        ]
+                      : []),
+                    ...(allSetting.subFormatMode !== 'sing-box'
+                      ? [{ value: 'xray', label: 'Xray JSON' }]
+                      : []),
+                    ...(allSetting.subFormatMode !== 'xray'
+                      ? [{ value: 'sing-box', label: 'sing-box JSON' }]
+                      : []),
+                  ]}
+                  onChange={(value) => updateSetting({ subDefaultFormat: value })}
+                />
+              </SettingListItem>
+              <Alert
+                type="info"
+                showIcon
+                title="Отдельные ссылки"
+                description="Добавьте к основной ссылке ?format=xray, ?format=sing-box или ?format=links. На странице подписки доступны кнопки копирования и QR-коды разрешённых форматов."
+                style={{ marginBottom: 16 }}
+              />
+              <SettingListItem
                 paddings="small"
                 title={t('pages.settings.subEnable')}
                 description={t('pages.settings.subEnableDesc')}
@@ -110,8 +163,8 @@ export default function SubscriptionGeneralTab({
               </SettingListItem>
               <SettingListItem
                 paddings="small"
-                title={t('pages.settings.subJsonEnableTitle')}
-                description={t('pages.settings.subJsonEnable')}
+                title="Дополнительный JSON-адрес"
+                description="Включает отдельный путь JSON-подписки. Форматы и ответ по основной ссылке настраиваются выше."
               >
                 <Switch
                   checked={allSetting.subJsonEnable}
@@ -124,7 +177,9 @@ export default function SubscriptionGeneralTab({
                   onChange={(v) => updateSetting({ subClashEnable: v })}
                 />
               </SettingListItem>
-              {(allSetting.subJsonEnable || allSetting.subClashEnable) && (
+              {(allSetting.subFormatMode ||
+                allSetting.subJsonEnable ||
+                allSetting.subClashEnable) && (
                 <Alert
                   type="info"
                   showIcon

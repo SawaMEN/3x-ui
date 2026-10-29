@@ -66,7 +66,7 @@ func standaloneProfile(engine, binary string) singbox.ProcessOptions {
 	return profile
 }
 
-func installStandaloneAt(ctx context.Context, engine, version, target string) (string, error) {
+func standaloneARM() string {
 	arm := ""
 	if info, ok := debug.ReadBuildInfo(); ok {
 		for _, setting := range info.Settings {
@@ -75,7 +75,15 @@ func installStandaloneAt(ctx context.Context, engine, version, target string) (s
 			}
 		}
 	}
-	return (coreinstall.Installer{}).Install(ctx, engine, version, runtime.GOOS, runtime.GOARCH, arm, target, func(path string) error {
+	return arm
+}
+
+func StandaloneCoreVersions(ctx context.Context, engine string) ([]coreinstall.Version, error) {
+	return (coreinstall.Installer{}).Versions(ctx, engine, runtime.GOOS, runtime.GOARCH, standaloneARM())
+}
+
+func installStandaloneAt(ctx context.Context, engine, version, target string) (string, error) {
+	return (coreinstall.Installer{}).Install(ctx, engine, version, runtime.GOOS, runtime.GOARCH, standaloneARM(), target, func(path string) error {
 		profile := standaloneProfile(engine, path)
 		p := singbox.NewProcessWithOptions("", profile, true)
 		_, err := p.Version(ctx)

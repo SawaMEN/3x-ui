@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Alert, Button, Collapse, Modal, Spin, Tag, Tooltip } from 'antd';
+import { Alert, Button, Collapse, Modal, Select, Space, Spin, Tag, Tooltip } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 
 import { HttpUtil } from '@/utils';
@@ -37,7 +37,15 @@ export default function VersionModal({ open, onClose, onBusy }: VersionModalProp
   const { allSetting } = useAllSettings();
   const queryClient = useQueryClient();
   const coreType = allSetting.coreType;
-  const coreName = coreType === 'xray' ? 'Xray' : 'sing-box';
+  const coreName =
+    coreType === 'xray'
+      ? 'Xray'
+      : coreType === 'sing-box'
+        ? 'sing-box (ядро панели)'
+        : 'sing-box (официальное)';
+  const [versions, setVersions] = useState<{ tag: string; prerelease: boolean }[]>([]);
+  const [selectedVersion, setSelectedVersion] = useState('latest');
+  const [versionsError, setVersionsError] = useState('');
   const [updating, setUpdating] = useState(false);
   const [updateError, setUpdateError] = useState('');
   const [modal, modalContextHolder] = Modal.useModal();
@@ -46,13 +54,32 @@ export default function VersionModal({ open, onClose, onBusy }: VersionModalProp
   const [loading, setLoading] = useState(false);
 
   const fetchVersions = useCallback(async () => {
+    setLoading(true);
+    setVersionsError('');
+    setVersions([]);
+    setSelectedVersion('latest');
     try {
-      const msg = await HttpUtil.get<{ version?: string }>('/panel/api/setting/singbox/status');
-      setSingBoxVersion(msg.obj?.version || '');
+      const [status, releases] = await Promise.all([
+        HttpUtil.get<{ cores: { type: string; version: string }[] }>('/panel/api/setting/cores'),
+        coreType === 'sing-box'
+          ? Promise.resolve(null)
+          : HttpUtil.get<{ tag: string; prerelease: boolean }[]>(
+              `/panel/api/setting/cores/${coreType}/versions`,
+              undefined,
+              { silent: true },
+            ),
+      ]);
+      setSingBoxVersion(status.obj?.cores.find((core) => core.type === coreType)?.version || '');
+      if (releases) {
+        if (!releases.success) setVersionsError(releases.msg || 'Не удалось загрузить версии');
+        else setVersions(releases.obj || []);
+      }
+    } catch (error) {
+      setVersionsError(error instanceof Error ? error.message : String(error));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [coreType]);
 
   const [wasOpen, setWasOpen] = useState(false);
   if (open !== wasOpen) {
@@ -61,7 +88,7 @@ export default function VersionModal({ open, onClose, onBusy }: VersionModalProp
   }
 
   useEffect(() => {
-    if (open) void fetchVersions();
+    if (open) void Promise.resolve().then(fetchVersions);
   }, [open, fetchVersions]);
 
   function updateGeofile(fileName: string) {
@@ -117,43 +144,69 @@ export default function VersionModal({ open, onClose, onBusy }: VersionModalProp
                     <Alert type="error" title={updateError} showIcon style={{ marginTop: 12 }} />
                   )}
                   {coreType !== 'sing-box' && (
-                    <Button
-                      type="primary"
-                      loading={updating}
-                      style={{ marginTop: 12 }}
-                      onClick={() =>
-                        modal.confirm({
-                          title: t('pages.coreSelection.updateConfirm', { core: coreName }),
-                          content: t('pages.coreSelection.restartConnections'),
-                          onOk: async () => {
-                            setUpdating(true);
-                            setUpdateError('');
-                            try {
-                              const result = await HttpUtil.post(
-                                `/panel/api/setting/cores/${coreType}/update`,
-                                {},
-                                { timeout: 330000 },
-                              );
-                              if (!result.success)
-                                throw new Error(
-                                  result.msg || t('pages.coreSelection.updateFailed'),
+                    <Space orientation="vertical" style={{ width: '100%', marginTop: 12 }}>
+                      {versionsError && (
+                        <Alert
+                          type="warning"
+                          title={versionsError}
+                          action={<Button onClick={() => void fetchVersions()}>Повторить</Button>}
+                        />
+                      )}
+                      <Select
+                        aria-label="Версия ядра"
+                        value={selectedVersion}
+                        onChange={setSelectedVersion}
+                        disabled={updating}
+                        style={{ width: '100%' }}
+                        showSearch={{ optionFilterProp: 'label' }}
+                        options={[
+                          { value: 'latest', label: 'Последняя стабильная' },
+                          ...versions.map((version) => ({
+                            value: version.tag,
+                            label: `${version.tag}${version.prerelease ? ' · предварительная' : ''}${version.tag.replace(/^v/, '') === singBoxVersion.replace(/^v/, '') ? ' · установлена' : ''}`,
+                          })),
+                        ]}
+                      />
+                      <Button
+                        type="primary"
+                        loading={updating}
+                        style={{ marginTop: 12 }}
+                        onClick={() =>
+                          modal.confirm({
+                            title: t('pages.coreSelection.updateConfirm', {
+                              core: `${coreName} · ${selectedVersion}`,
+                            }),
+                            content: t('pages.coreSelection.restartConnections'),
+                            onOk: async () => {
+                              setUpdating(true);
+                              setUpdateError('');
+                              try {
+                                const result = await HttpUtil.post(
+                                  `/panel/api/setting/cores/${coreType}/update`,
+                                  { version: selectedVersion },
+                                  { timeout: 330000 },
                                 );
-                              await fetchVersions();
-                              void queryClient.invalidateQueries({ queryKey: ['server'] });
-                              window.dispatchEvent(new Event('xui-core-settings-saved'));
-                            } catch (error) {
-                              setUpdateError(
-                                error instanceof Error ? error.message : String(error),
-                              );
-                            } finally {
-                              setUpdating(false);
-                            }
-                          },
-                        })
-                      }
-                    >
-                      {t('update')}
-                    </Button>
+                                if (!result.success)
+                                  throw new Error(
+                                    result.msg || t('pages.coreSelection.updateFailed'),
+                                  );
+                                await fetchVersions();
+                                void queryClient.invalidateQueries({ queryKey: ['server'] });
+                                window.dispatchEvent(new Event('xui-core-settings-saved'));
+                              } catch (error) {
+                                setUpdateError(
+                                  error instanceof Error ? error.message : String(error),
+                                );
+                              } finally {
+                                setUpdating(false);
+                              }
+                            },
+                          })
+                        }
+                      >
+                        {t('update')}
+                      </Button>
+                    </Space>
                   )}
                 </>
               ),

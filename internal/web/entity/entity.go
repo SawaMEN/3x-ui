@@ -22,6 +22,8 @@ type Msg struct {
 }
 
 type AllSetting struct {
+	SubFormatMode            string `json:"subFormatMode" form:"subFormatMode"`
+	SubDefaultFormat         string `json:"subDefaultFormat" form:"subDefaultFormat"`
 	CoreType                 string `json:"coreType" form:"coreType"`
 	WebListen                string `json:"webListen" form:"webListen"`
 	WebDomain                string `json:"webDomain" form:"webDomain"`

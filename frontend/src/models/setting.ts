@@ -56,6 +56,8 @@ export class AllSetting {
   xrayTemplateConfig = '';
   happLinkEnable = false;
   subEnable = true;
+  subFormatMode = 'both';
+  subDefaultFormat = 'auto';
   subJsonEnable = false;
   subJsonAutoDetect = false;
   subJsonAlwaysArray = false;

@@ -87,6 +87,8 @@ export const AllSettingSchema = z
     xrayTemplateConfig: z.string().optional(),
     happLinkEnable: z.boolean().optional(),
     subEnable: z.boolean().optional(),
+    subFormatMode: z.enum(['both', 'xray', 'sing-box']).optional(),
+    subDefaultFormat: z.enum(['auto', 'links', 'xray', 'sing-box']).optional(),
     subJsonEnable: z.boolean().optional(),
     subJsonAutoDetect: z.boolean().optional(),
     subJsonAlwaysArray: z.boolean().optional(),

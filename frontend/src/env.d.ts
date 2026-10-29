@@ -21,6 +21,7 @@ interface SubPageData {
   lastOnline?: string | number;
   subUrl?: string;
   subJsonUrl?: string;
+  subFormatMode?: string;
   subClashUrl?: string;
   subTitle?: string;
   subSupportUrl?: string;

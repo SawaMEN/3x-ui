@@ -297,6 +297,9 @@
           "subClashUserAgentRegex": {
             "type": "string"
           },
+          "subDefaultFormat": {
+            "type": "string"
+          },
           "subDomain": {
             "type": "string"
           },
@@ -310,6 +313,9 @@
             "type": "boolean"
           },
           "subExpiredTemplate": {
+            "type": "string"
+          },
+          "subFormatMode": {
             "type": "string"
           },
           "subHappAlwaysHwid": {
@@ -644,11 +650,13 @@
           "subClashRules",
           "subClashURI",
           "subClashUserAgentRegex",
+          "subDefaultFormat",
           "subDomain",
           "subEnable",
           "subEnableRouting",
           "subEncrypt",
           "subExpiredTemplate",
+          "subFormatMode",
           "subHappAlwaysHwid",
           "subHappAutoConnect",
           "subHappAutoConnectType",
@@ -984,6 +992,9 @@
           "subClashUserAgentRegex": {
             "type": "string"
           },
+          "subDefaultFormat": {
+            "type": "string"
+          },
           "subDomain": {
             "type": "string"
           },
@@ -997,6 +1008,9 @@
             "type": "boolean"
           },
           "subExpiredTemplate": {
+            "type": "string"
+          },
+          "subFormatMode": {
             "type": "string"
           },
           "subHappAlwaysHwid": {
@@ -1338,11 +1352,13 @@
           "subClashRules",
           "subClashURI",
           "subClashUserAgentRegex",
+          "subDefaultFormat",
           "subDomain",
           "subEnable",
           "subEnableRouting",
           "subEncrypt",
           "subExpiredTemplate",
+          "subFormatMode",
           "subHappAlwaysHwid",
           "subHappAutoConnect",
           "subHappAutoConnectType",
@@ -20044,6 +20060,47 @@
         ],
         "summary": "Return available VK TURN proxy versions.",
         "operationId": "get_panel_api_server_vk_turn_proxy_versions",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/setting/cores/{core}/versions": {
+      "get": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "List upstream core releases with a binary compatible with this server.",
+        "operationId": "get_panel_api_setting_cores_core_versions",
+        "parameters": [
+          {
+            "name": "core",
+            "in": "path",
+            "required": true,
+            "description": "xray or sing-box-upstream",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",

@@ -96,6 +96,7 @@ func (a *SettingController) initRouter(g *gin.RouterGroup) {
 
 	g.POST("/all", a.getAllSetting)
 	g.GET("/cores", a.coreStatuses)
+	g.GET("/cores/:core/versions", a.standaloneCoreVersions)
 	g.POST("/cores/:core/install", a.installStandaloneCore)
 	g.POST("/cores/:core/select", a.selectStandaloneCore)
 	g.POST("/cores/:core/delete", a.deleteStandaloneCore)
