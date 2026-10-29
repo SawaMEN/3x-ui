@@ -370,6 +370,7 @@ func (m *Manager) ensureLocked(inst Instance) error {
 	}
 	if inst.Protocol == model.VetroffProxy {
 		cmd.Dir = filepath.Dir(binary(inst.Protocol))
+		prepareVetroffCommand(cmd)
 	}
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	if err := cmd.Start(); err != nil {
