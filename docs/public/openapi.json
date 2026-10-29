@@ -20083,6 +20083,47 @@
         }
       }
     },
+    "/panel/api/setting/cores/{core}/versions": {
+      "get": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "List upstream core releases with a binary compatible with this server.",
+        "operationId": "get_panel_api_setting_cores_core_versions",
+        "parameters": [
+          {
+            "name": "core",
+            "in": "path",
+            "required": true,
+            "description": "xray or sing-box-upstream",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/panel/api/setting/singbox/status": {
       "get": {
         "tags": [

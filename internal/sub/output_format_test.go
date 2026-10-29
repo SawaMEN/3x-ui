@@ -83,3 +83,18 @@ func TestSubscriptionOutputFormatPreservesNativeDNS(t *testing.T) {
 		t.Fatalf("%d %s", resp.Code, resp.Body.String())
 	}
 }
+
+func TestSubscriptionOutputKeepsCustomJSONAddress(t *testing.T) {
+	seedSubDB(t)
+	seedSubInbound(t, "custom-json", "vless", 4595, 1, dnsTestStream)
+	if err := database.GetDB().Create(&model.Setting{Key: "subJsonURI", Value: "https://json.example.com/custom/"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	router := gin.New()
+	NewSUBController(router.Group("/"), WithSUBJsonEnabled(true))
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, httptest.NewRequest(http.MethodGet, "/sub/custom-json?format=info", nil))
+	if resp.Code != http.StatusOK || !strings.Contains(resp.Body.String(), "https://json.example.com/custom/custom-json?format=xray") {
+		t.Fatalf("%d %s", resp.Code, resp.Body.String())
+	}
+}

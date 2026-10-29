@@ -460,7 +460,11 @@ func (a *SUBController) buildSubPageData(c *gin.Context) (PageData, bool) {
 	page.SubAnnounce = metadata.Announce
 	page.SubFormatMode = a.formatMode(c)
 	if a.formatAllowed(c, "xray") {
-		page.SubJsonUrl = appendSubscriptionFormat(subURL, "xray")
+		jsonURL := subJsonURL
+		if jsonURL == "" {
+			jsonURL = subURL
+		}
+		page.SubJsonUrl = appendSubscriptionFormat(jsonURL, "xray")
 	} else {
 		page.SubJsonUrl = ""
 	}
