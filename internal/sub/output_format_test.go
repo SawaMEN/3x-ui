@@ -71,3 +71,15 @@ func TestSubscriptionFormatsApplyWithoutServerRestart(t *testing.T) {
 		}
 	}
 }
+
+func TestSubscriptionOutputFormatPreservesNativeDNS(t *testing.T) {
+	seedSubDB(t)
+	seedSubInbound(t, "native-dns", "vless", 4594, 1, dnsTestStream)
+	router := gin.New()
+	NewSUBController(router.Group("/"), WithSUBFormats("both", "sing-box"), WithSUBJsonDns(`["9.9.9.9"]`))
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, httptest.NewRequest(http.MethodGet, "/sub/native-dns", nil))
+	if resp.Code != 200 || !strings.Contains(resp.Body.String(), "9.9.9.9") {
+		t.Fatalf("%d %s", resp.Code, resp.Body.String())
+	}
+}

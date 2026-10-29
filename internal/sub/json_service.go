@@ -438,9 +438,13 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 		return !active
 	})
 	if compatible {
+		before := len(inbounds)
 		inbounds = slices.DeleteFunc(inbounds, func(inbound *model.Inbound) bool {
 			return inbound.Protocol == model.VetroffProxy || singBoxUnsupportedProtocol(inbound.Protocol) && (!hiddify || !hiddifyExtendedProtocol(inbound.Protocol))
 		})
+		if before > 0 && len(inbounds) == 0 && len(externalLinks) == 0 {
+			return "", "", errSubscriptionFormatUnsupported
+		}
 	}
 	if len(inbounds) == 0 && len(externalLinks) == 0 {
 		emails := make([]string, 0, len(seenEmails))
@@ -643,7 +647,10 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 		if len(clients) == 0 {
 			continue
 		}
-		if (hiddify || compatible) && inbound.Protocol == model.WireGuard {
+		if compatible && !hiddify && inbound.Protocol == model.WireGuard {
+			continue
+		}
+		if hiddify && inbound.Protocol == model.WireGuard {
 			if len(wireguardEndpoints[inbound]) == 0 {
 				formatUnsupported = true
 			}
@@ -1025,10 +1032,19 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 	}
 
 	var encoded string
-	if hiddify || compatible {
+	if hiddify {
 		encoded, err = buildHiddifySingBoxSubscription(proxyConfigs)
 	} else {
-		encoded, err = buildSeparatedSingBoxSubscription(s.bakedTemplate(), proxyConfigs, alwaysReturnArray)
+		encoded, err = buildSeparatedSingBoxSubscription(s.bakedTemplate(), proxyConfigs, alwaysReturnArray || compatible && len(wireguardConfigs) > 0)
+		if err == nil && compatible && len(wireguardConfigs) > 0 {
+			var docs []json.RawMessage
+			if err = json.Unmarshal([]byte(encoded), &docs); err == nil {
+				docs = append(docs, wireguardConfigs...)
+				var body []byte
+				body, err = json.MarshalIndent(docs, "", "  ")
+				encoded = string(body)
+			}
+		}
 	}
 	if err != nil {
 		return "", header, err
