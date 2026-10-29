@@ -38,6 +38,15 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot, ed
 
 	managedOutboundTags := map[string]bool{}
 	subscriptionTags := map[string]bool{}
+	ownedSubscriptions := map[string]bool{}
+	repairedSubscriptions := false
+	if snapshot != nil {
+		subs := snapshot.allSubscriptions
+		if subs == nil {
+			subs = snapshot.subscriptions
+		}
+		ownedSubscriptions = subscriptionOwnership(subs)
+	}
 	dnsOutboundTags := make(map[string]struct{})
 	var template string
 	var templateErr error
@@ -94,6 +103,11 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot, ed
 						}
 					}
 				}
+			}
+			repaired, warnings := cleanSubscriptionSource(xrayCfg, ownedSubscriptions, subscriptionTags)
+			repairedSubscriptions = repairedSubscriptions || repaired
+			if snapshot != nil {
+				snapshot.connectionWarnings = append(snapshot.connectionWarnings, warnings...)
 			}
 			manual, _ := xrayCfg["outbounds"].([]any)
 			xrayCfg["outbounds"] = append(append(prepend, manual...), tail...)
@@ -543,34 +557,73 @@ func (s *SingBoxService) generateNativeConfig(snapshot *nativeConfigSnapshot, ed
 		}
 	}
 	var nativeErr error
+	var editorSource map[string]any
 	if snapshot != nil {
-		nativeErr = s.applyNativeTemplateValue(cfg, managedMASQUETags, snapshot.setting(s.templateKey()), snapshot.routingLists)
+		raw := snapshot.setting(s.templateKey())
+		if strings.TrimSpace(raw) != "" {
+			var patch map[string]any
+			if err := json.Unmarshal([]byte(raw), &patch); err != nil {
+				return nil, err
+			}
+			repaired, warnings := cleanSubscriptionSource(patch, ownedSubscriptions, subscriptionTags)
+			repairedSubscriptions = repairedSubscriptions || repaired
+			snapshot.connectionWarnings = append(snapshot.connectionWarnings, warnings...)
+			editorSource = patch
+			data, err := json.Marshal(patch)
+			if err != nil {
+				return nil, err
+			}
+			raw = string(data)
+		}
+		nativeErr = s.applyNativeTemplateValue(cfg, managedMASQUETags, raw, snapshot.routingLists)
 	} else {
 		nativeErr = s.applyNativeTemplate(cfg, managedMASQUETags)
 	}
 	if nativeErr != nil {
 		return nil, nativeErr
 	}
+	cfg.Outbounds = mergeSubscriptionConnections(cfg.Outbounds, protectedOutbounds, subscriptionTags)
+	cfg.Endpoints = mergeSubscriptionConnections(cfg.Endpoints, protectedEndpoints, subscriptionTags)
+	if snapshot != nil {
+		if snapshot.setting("panelOutbound") == unavailableSubscriptionTag {
+			repairedSubscriptions = true
+		}
+		for _, node := range snapshot.nodes {
+			if node.OutboundTag == unavailableSubscriptionTag {
+				repairedSubscriptions = true
+			}
+		}
+	}
+	if repairedSubscriptions {
+		found := false
+		for _, ob := range cfg.Outbounds {
+			if ob["tag"] == unavailableSubscriptionTag {
+				found = true
+			}
+		}
+		if !found {
+			cfg.Outbounds = append(cfg.Outbounds, map[string]any{"type": "block", "tag": unavailableSubscriptionTag})
+		}
+	}
 	if len(editorOnly) > 0 && editorOnly[0] {
 		// The editor owns source policies, never the runtime's injected rules.
 		// Keep catalog references instead of freezing their expanded contents.
-		var source map[string]any
-		if snapshot != nil && strings.TrimSpace(snapshot.setting(s.templateKey())) != "" {
+		source := editorSource
+		if source == nil && snapshot != nil && strings.TrimSpace(snapshot.setting(s.templateKey())) != "" {
 			if err := json.Unmarshal([]byte(snapshot.setting(s.templateKey())), &source); err != nil {
 				return nil, err
 			}
-			if route, ok := source["route"].(map[string]any); ok {
-				rawRoute, _ := json.Marshal(route)
-				if _, gatewayOnly := mergeGatewayOnlyRoute(nil, rawRoute); !gatewayOnly {
-					cfg.Route = route
-				}
+		}
+		if route, ok := source["route"].(map[string]any); ok {
+			rawRoute, _ := json.Marshal(route)
+			if _, gatewayOnly := mergeGatewayOnlyRoute(nil, rawRoute); !gatewayOnly {
+				cfg.Route = route
 			}
 		}
 		removeGeneratedSniffRules(cfg, sniffRules)
 		return cfg, nil
 	}
-	cfg.Outbounds = mergeSubscriptionConnections(cfg.Outbounds, protectedOutbounds, subscriptionTags)
-	cfg.Endpoints = mergeSubscriptionConnections(cfg.Endpoints, protectedEndpoints, subscriptionTags)
+
 	{
 		if err := configureHiddifyTunRouting(cfg, inbounds); err != nil {
 			return nil, err

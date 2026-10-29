@@ -6,6 +6,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/SawaMEN/3x-ui/v3/internal/domainfront"
 	"github.com/SawaMEN/3x-ui/v3/internal/web/entity"
 )
 
@@ -27,7 +28,11 @@ func (s *SettingService) GetRootRedirectURL() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return SanitizeHTTPURL(raw)
+	u, err := domainfront.ValidateRootRedirectURL(raw)
+	if err != nil {
+		return "", err
+	}
+	return u.String(), nil
 }
 
 func (s *SettingService) GetSubscriptionAppearance() (SubscriptionAppearance, error) {
@@ -59,6 +64,20 @@ func (s *SettingService) GetSubscriptionAppearance() (SubscriptionAppearance, er
 var appearanceColor = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 
 func validatePresentationSettings(settings *entity.AllSetting) error {
+	if strings.TrimSpace(settings.RootRedirectURL) != "" {
+		if _, err := domainfront.ValidateRootRedirectURL(settings.RootRedirectURL); err != nil {
+			return fmt.Errorf("invalid root redirect URL: %w", err)
+		}
+		if settings.RootRedirectEnable {
+			var names []string
+			for _, d := range seedDomainFront(settings).Domains {
+				names = append(names, d.Name)
+			}
+			if err := domainfront.ValidateRootRedirectDomains(settings.RootRedirectURL, names); err != nil {
+				return err
+			}
+		}
+	}
 	for key, value := range map[string]*string{
 		"root redirect URL":     &settings.RootRedirectURL,
 		"subscription logo URL": &settings.SubAppearanceLogoURL,

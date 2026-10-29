@@ -194,7 +194,7 @@ export default function OutboundSubscriptions({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [editing, setEditing] = useState<Subscription | null>(null);
-  const [replacement, setReplacement] = useState('');
+  const [replacement, setReplacement] = useState('xui-unavailable-subscription');
   const load = useCallback(async () => {
     const result = await HttpUtil.get<Subscription[]>('/panel/api/xray/outbound-subs', undefined, {
       silent: true,
@@ -465,13 +465,25 @@ export default function OutboundSubscriptions({
                     title={t('pages.xray.outboundSub.deleteConfirm')}
                     description={
                       <Space orientation="vertical">
-                        <span>Заменить ссылки на её подключения:</span>
+                        <span>Заменить ссылки во всех разделах, включая панель и узлы:</span>
                         <Select
                           aria-label="Замена удаляемой подписки"
                           style={{ width: 240 }}
                           value={replacement || undefined}
                           placeholder="Выберите исходящее подключение"
-                          options={replacementTags.map((value) => ({ value, label: value }))}
+                          options={[
+                            {
+                              value: 'xui-unavailable-subscription',
+                              label: 'Блокировать трафик (безопасно)',
+                            },
+                            ...replacementTags
+                              .filter(
+                                (value) =>
+                                  value !== `sub-auto-${row.id}` &&
+                                  !(row.tagPrefix && value.startsWith(row.tagPrefix)),
+                              )
+                              .map((value) => ({ value, label: value })),
+                          ]}
                           onChange={setReplacement}
                         />
                       </Space>

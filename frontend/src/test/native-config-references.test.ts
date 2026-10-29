@@ -163,3 +163,30 @@ it('rejects duplicate imported connection tags before changing the draft', () =>
   ).toThrow();
   expect(cfg.outbounds).toHaveLength(1);
 });
+
+it('keeps the chosen replacement as the implicit default after deleting the first connection', () => {
+  const next = removeConnection(
+    {
+      outbounds: [
+        { type: 'socks', tag: 'proxy' },
+        { type: 'direct', tag: 'direct' },
+        { type: 'block', tag: 'blocked' },
+      ],
+    },
+    0,
+    'blocked',
+  );
+  expect(next.route).toEqual({ final: 'blocked' });
+});
+it('allows replacement by a read-only subscription and prevents edits using managed tags', () => {
+  const next = removeConnection(
+    { outbounds: [{ type: 'direct', tag: 'old' }], route: { final: 'old' } },
+    0,
+    'sub-auto-3',
+    ['sub-auto-3'],
+  );
+  expect(next.route).toEqual({ final: 'sub-auto-3' });
+  expect(() =>
+    putConnection({ outbounds: [] }, null, { type: 'direct', tag: 'sub-auto-3' }),
+  ).toThrow();
+});

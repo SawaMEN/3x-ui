@@ -12,8 +12,11 @@ import (
 	"sync"
 	"time"
 
+	"gorm.io/gorm"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawgnet"
 	"github.com/SawaMEN/3x-ui/v3/internal/clientlimit"
+	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
 	"github.com/SawaMEN/3x-ui/v3/internal/hiddify"
@@ -148,6 +151,7 @@ func (s *SingBoxService) GetConfig() (*singbox.Config, error) {
 }
 
 type SingBoxEditorSnapshot struct {
+	Warnings         []string       `json:"warnings,omitempty"`
 	SubscriptionTags []string       `json:"subscriptionTags"`
 	InboundTags      []string       `json:"inboundTags"`
 	Config           map[string]any `json:"config"`
@@ -265,6 +269,7 @@ func (s *SingBoxService) GetEditorConfig(ctx context.Context) (*SingBoxEditorSna
 	}
 	return &SingBoxEditorSnapshot{
 		Config:           raw,
+		Warnings:         snapshot.connectionWarnings,
 		SubscriptionTags: subscriptionTagList,
 		InboundTags:      inboundTags,
 		Running:          s.IsRunning(),
@@ -486,9 +491,17 @@ func (s *SingBoxService) applyNativeTemplateValue(cfg *singbox.Config, managedMA
 }
 
 func (s *SingBoxService) SaveTemplate(ctx context.Context, raw string) error {
+	return s.SaveTemplateWithRemoval(ctx, raw, "", "")
+}
+
+func (s *SingBoxService) SaveTemplateWithRemoval(ctx context.Context, raw, removeTag, replacement string) error {
 	singBoxTemplateMu.Lock()
 	defer singBoxTemplateMu.Unlock()
 	normalized, err := normalizeSingBoxTemplate(raw)
+	if err != nil {
+		return err
+	}
+	normalized, err = NormalizeSubscriptionTemplate(normalized, true)
 	if err != nil {
 		return err
 	}
@@ -496,18 +509,51 @@ func (s *SingBoxService) SaveTemplate(ctx context.Context, raw string) error {
 	if err != nil {
 		return err
 	}
-	if err := singBoxSettingService.SetNativeCoreConfigTemplate(s.coreType(), normalized); err != nil {
+	var undo infrastructureUndo
+	removeTag = strings.TrimSpace(removeTag)
+	replacement = strings.TrimSpace(replacement)
+	if removeTag != "" {
+		if managedSubscriptionAlias.MatchString(removeTag) {
+			return fmt.Errorf("подключение управляется подпиской: используйте удаление подписки")
+		}
+		var patch map[string]any
+		_ = json.Unmarshal([]byte(normalized), &patch)
+		for _, key := range []string{"outbounds", "endpoints"} {
+			if rows, ok := patch[key].([]any); ok {
+				for _, v := range rows {
+					if row, ok := v.(map[string]any); ok && row["tag"] == removeTag {
+						return fmt.Errorf("удаляемое подключение осталось в новой конфигурации")
+					}
+				}
+			}
+		}
+	}
+	if err := database.GetDB().Transaction(func(tx *gorm.DB) error {
+		if removeTag != "" {
+			var err error
+			undo, err = replaceInfrastructureReferences(tx, map[string]bool{removeTag: true}, replacement)
+			if err != nil {
+				return err
+			}
+		}
+		return tx.Model(&model.Setting{}).Where("key = ?", s.templateKey()).Assign(model.Setting{Key: s.templateKey(), Value: normalized}).FirstOrCreate(&model.Setting{}).Error
+	}); err != nil {
 		return err
 	}
 	rollback := func() error {
-		return errors.Join(singBoxSettingService.SetNativeCoreConfigTemplate(s.coreType(), old), s.WriteConfig())
+		return database.GetDB().Transaction(func(tx *gorm.DB) error {
+			if err := tx.Model(&model.Setting{}).Where("key = ?", s.templateKey()).Update("value", old).Error; err != nil {
+				return err
+			}
+			return undo.restore(tx)
+		})
 	}
 	// A running core's Restart prepares, validates and atomically publishes
 	// the candidate itself. Writing first would do the expensive core check
 	// and config generation twice for every click in the settings UI.
 	if s.IsRunning() {
 		if err := s.Restart(ctx); err != nil {
-			return errors.Join(err, rollback(), s.Restart(ctx))
+			return errors.Join(err, rollback())
 		}
 		return nil
 	}
@@ -528,14 +574,14 @@ func (s *SingBoxService) ResetTemplate(ctx context.Context) error {
 		return err
 	}
 	rollback := func() error {
-		return errors.Join(singBoxSettingService.SetNativeCoreConfigTemplate(s.coreType(), old), s.WriteConfig())
+		return singBoxSettingService.SetNativeCoreConfigTemplate(s.coreType(), old)
 	}
 	// A running core's Restart prepares, validates and atomically publishes
 	// the candidate itself. Writing first would do the expensive core check
 	// and config generation twice for every click in the settings UI.
 	if s.IsRunning() {
 		if err := s.Restart(ctx); err != nil {
-			return errors.Join(err, rollback(), s.Restart(ctx))
+			return errors.Join(err, rollback())
 		}
 		return nil
 	}

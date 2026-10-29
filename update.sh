@@ -1321,6 +1321,8 @@ update_x-ui() {
     chmod +x x-ui > /dev/null 2>&1
 
     chmod +x x-ui "bin/hiddify-core-linux-${machine_arch}" || _fail "Modified Sing-box binary missing"
+    # Sudoku is downloaded explicitly from its component card.
+    rm -rf -- bin/optional/sudoku
     # Release archives may contain Telemt, but it must stay opt-in.
     if [[ "${telemt_was_installed}" == 1 ]]; then
         install -m 0755 -o root -g root "${telemt_preserved_binary}" bin/telemt || _fail "Cannot restore installed Telemt"

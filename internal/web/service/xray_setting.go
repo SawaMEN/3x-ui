@@ -47,6 +47,11 @@ func (s *XraySettingService) SaveXraySetting(newXraySettings string) error {
 // SaveXraySetting while its inbound transaction is still being committed.
 func (s *XraySettingService) SaveValidatedXraySetting(ctx context.Context, raw string) error {
 	raw = UnwrapXrayTemplateConfig(raw)
+	cleaned, err := NormalizeSubscriptionTemplate(raw, false)
+	if err != nil {
+		return err
+	}
+	raw = cleaned
 	if err := s.CheckXrayConfig(raw); err != nil {
 		return err
 	}

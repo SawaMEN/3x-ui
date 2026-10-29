@@ -301,6 +301,16 @@ func (r *frontRuntime) redirectHTTPS(w http.ResponseWriter, req *http.Request) {
 		http.NotFound(w, req)
 		return
 	}
+	redirectURL := r.backend.RedirectURL
+	if r.backend.GetRedirect != nil {
+		redirectURL, _ = r.backend.GetRedirect()
+	}
+	if target := RootRedirectTarget(req, redirectURL); target != "" {
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		http.Redirect(w, req, target, http.StatusFound)
+		return
+	}
 	host := d.Name
 	if r.cfg.PublicPort != 443 {
 		host = net.JoinHostPort(host, strconv.Itoa(r.cfg.PublicPort))

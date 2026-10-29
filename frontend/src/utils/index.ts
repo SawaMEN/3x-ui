@@ -3,6 +3,7 @@ import { httpRequest } from '@/api/http-init';
 import type { HttpResponse } from '@/api/http-init';
 import { getMessage } from './messageBus';
 import { corePortBindError } from '@/lib/core-port-error';
+import { readableMessage } from '@/lib/readable-message';
 
 type RespEnvelope = { success?: unknown; msg?: unknown; obj?: unknown };
 
@@ -13,7 +14,7 @@ export class Msg<T = unknown> {
 
   constructor(success: boolean = false, msg: string = '', obj: T | null = null) {
     this.success = success;
-    this.msg = msg;
+    this.msg = readableMessage(msg);
     this.obj = obj;
   }
 }

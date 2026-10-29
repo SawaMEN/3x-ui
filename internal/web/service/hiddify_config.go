@@ -29,13 +29,15 @@ func (g *HiddifyConfigGenerator) Generate() (*singbox.Config, error) {
 }
 
 type nativeConfigSnapshot struct {
-	inbounds      []*model.Inbound
-	clients       map[int][]model.Client
-	settings      map[string]string
-	subscriptions []*model.OutboundSubscription
-	routingLists  []model.RoutingList
-	nodes         []*model.Node
-	capturedAt    time.Time
+	inbounds           []*model.Inbound
+	clients            map[int][]model.Client
+	settings           map[string]string
+	subscriptions      []*model.OutboundSubscription
+	allSubscriptions   []*model.OutboundSubscription
+	connectionWarnings []string
+	routingLists       []model.RoutingList
+	nodes              []*model.Node
+	capturedAt         time.Time
 }
 
 func (s *nativeConfigSnapshot) setting(key string) string {
@@ -125,7 +127,15 @@ func loadNativeConfigSnapshotForTemplate(template *string) (*nativeConfigSnapsho
 		if err := tx.Select("id", "enable", "outbound_tag").Order("sort_order ASC, id ASC").Find(&snapshot.nodes).Error; err != nil {
 			return err
 		}
-		return tx.Where("enabled = ?", true).Order("priority ASC, id ASC").Find(&snapshot.subscriptions).Error
+		if err := tx.Order("priority ASC, id ASC").Find(&snapshot.allSubscriptions).Error; err != nil {
+			return err
+		}
+		for _, sub := range snapshot.allSubscriptions {
+			if sub.Enabled {
+				snapshot.subscriptions = append(snapshot.subscriptions, sub)
+			}
+		}
+		return nil
 	}, &sql.TxOptions{ReadOnly: true, Isolation: sql.LevelRepeatableRead})
 	return snapshot, err
 }

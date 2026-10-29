@@ -274,7 +274,6 @@ jobs:
           GOARCH: ${{ matrix.platform }}
         run: |
           python3 tools/build-speed-components.py --component mieru --output "$PWD/x-ui/bin"
-          python3 tools/build-speed-components.py --component sudoku --output "$PWD/x-ui/bin/optional/sudoku"
           bash tools/build-hiddify-core.sh "$PWD/x-ui/bin"
       - name: Check panel configuration with downloaded binary
         if: matrix.platform == 'amd64'
@@ -286,7 +285,7 @@ jobs:
 
       - name: Package
         run: |
-          for component in pingtunnel trusttunnel_endpoint caddy-naive hysteria; do
+          for component in pingtunnel trusttunnel_endpoint caddy-naive hysteria sudoku-tunnel sudoku.version optional/sudoku; do
             test ! -e "x-ui/bin/$component"
           done
           tar -zcf x-ui-linux-${{ matrix.platform }}.tar.gz x-ui

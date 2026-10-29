@@ -48,7 +48,9 @@ type updateSettingForm struct {
 }
 
 type singBoxConfigForm struct {
-	Config string `json:"config" form:"config"`
+	RemoveTag   string `json:"removeTag" form:"removeTag"`
+	Replacement string `json:"replacement" form:"replacement"`
+	Config      string `json:"config" form:"config"`
 }
 
 type swapCreateForm struct {
@@ -630,8 +632,8 @@ func (a *SettingController) saveSingBoxConfig(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), errors.New("sing-box config is empty"))
 		return
 	}
-	if err := service.SelectedNativeCore().SaveTemplate(c.Request.Context(), form.Config); err != nil {
-		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)
+	if err := service.SelectedNativeCore().SaveTemplateWithRemoval(c.Request.Context(), form.Config, form.RemoveTag, form.Replacement); err != nil {
+		jsonMsg(c, "Не удалось применить настройки ядра", err)
 		return
 	}
 	jsonObj(c, gin.H{"saved": true}, nil)
