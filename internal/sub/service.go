@@ -1908,8 +1908,10 @@ func (s *SubService) genMtprotoLink(inbound *model.Inbound, email string) string
 	}
 	var mode struct {
 		WebProxy struct {
-			Enabled bool   `json:"enabled"`
-			Domain  string `json:"domain"`
+			Enabled  bool     `json:"enabled"`
+			Domain   string   `json:"domain"`
+			BasePath string   `json:"basePath"`
+			Aliases  []string `json:"aliases"`
 		} `json:"webProxy"`
 	}
 	if json.Unmarshal([]byte(inbound.Settings), &mode) == nil && mode.WebProxy.Enabled {
@@ -1917,13 +1919,33 @@ func (s *SubService) genMtprotoLink(inbound *model.Inbound, email string) string
 		if len(secret) >= 34 && (strings.HasPrefix(secret, "ee") || strings.HasPrefix(secret, "dd")) {
 			secret = secret[2:34]
 		}
-		if len(secret) != 32 || strings.TrimSpace(mode.WebProxy.Domain) == "" {
+		raw, err := hex.DecodeString(secret)
+		if err != nil || len(raw) != 16 || strings.TrimSpace(mode.WebProxy.Domain) == "" {
 			return ""
 		}
-		return buildLinkWithParams("tg://webproxy", map[string]string{
-			"server": mode.WebProxy.Domain,
-			"secret": "dd" + secret,
-		}, "")
+		basePath := strings.Trim(strings.TrimSpace(mode.WebProxy.BasePath), "/")
+		linkSecret := "dd" + secret
+		if basePath != "" {
+			linkSecret = base64.RawURLEncoding.EncodeToString(append([]byte{0x70, 0xdd}, raw...))
+		}
+		hosts := append([]string{mode.WebProxy.Domain}, mode.WebProxy.Aliases...)
+		seenHosts := map[string]bool{}
+		links := make([]string, 0, len(hosts))
+		for _, host := range hosts {
+			host = strings.ToLower(strings.TrimSpace(host))
+			if host == "" || seenHosts[host] {
+				continue
+			}
+			seenHosts[host] = true
+			if basePath != "" {
+				host += "/" + basePath
+			}
+			links = append(links, buildLinkWithParams("tg://webproxy", map[string]string{
+				"server": host,
+				"secret": linkSecret,
+			}, ""))
+		}
+		return strings.Join(links, "\n")
 	}
 	links := make([]string, 0, len(endpoints))
 	for _, endpoint := range endpoints {
