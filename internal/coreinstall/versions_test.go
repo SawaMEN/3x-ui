@@ -13,7 +13,7 @@ func TestVersionsIncludeOnlyCompatibleReleaseAssets(t *testing.T) {
 		if r.URL.String() != "https://api.github.com/repos/SagerNet/sing-box/releases?per_page=100" {
 			t.Fatal(r.URL)
 		}
-		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`[
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`[
 		{"tag_name":"v1.2.0-alpha.1","prerelease":true,"assets":[{"name":"sing-box-1.2.0-alpha.1-linux-amd64.tar.gz"}]},
 		{"tag_name":"v1.1.0","assets":[{"name":"sing-box-1.1.0-linux-amd64.tar.gz"}]},
 		{"tag_name":"v1.0.0","assets":[{"name":"sing-box-1.0.0-linux-arm64.tar.gz"}]},
