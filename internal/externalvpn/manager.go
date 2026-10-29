@@ -257,6 +257,14 @@ func defaultListen(listen string) string {
 
 func fingerprint(inst Instance) string {
 	data, _ := json.Marshal(inst)
+	if inst.Protocol == model.VetroffProxy {
+		for _, path := range []string{inst.Settings.Certificate, inst.Settings.PrivateKey} {
+			if value, err := os.ReadFile(path); err == nil {
+				digest := sha256.Sum256(value)
+				data = append(data, digest[:]...)
+			}
+		}
+	}
 	hash := sha256.Sum256(data)
 	return hex.EncodeToString(hash[:])
 }

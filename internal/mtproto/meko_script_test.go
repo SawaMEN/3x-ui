@@ -130,7 +130,12 @@ case "$*" in
         sed -n 's/^add rule inet xui_telemt_meko input //p' "$MEKO_TEST_DIR/batch" | grep -v 'meter tm6_'
     else
         sed -n 's/^add rule inet xui_telemt_meko input //p' "$MEKO_TEST_DIR/batch"
-    fi | sed "s|54/minute|${MEKO_TEST_ACTUAL_RATE:-54/minute}|g; s|burst 1 packets|burst ${MEKO_TEST_ACTUAL_BURST:-1} packets|g"
+    fi | sed "s|54/minute|${MEKO_TEST_ACTUAL_RATE:-54/minute}|g; s|burst 1 packets|burst ${MEKO_TEST_ACTUAL_BURST:-1} packets|g" |
+    if [[ "${MEKO_TEST_MODERN_NFT:-0}" == "1" ]]; then
+        sed -E 's/meter (t[mi][46]_[0-9]+)/update @\1/g; s/@th,96,32 & 0x000fffff == 0x0002ffff/@th,108,20 0x2ffff/g'
+    else
+        cat
+    fi
     ;;
  '-n list set inet xui_telemt_meko ports') printf 'elements = { 443,\n 8443 }\n' ;;
  'delete table inet xui_telemt_meko') touch "$MEKO_TEST_DIR/deleted"; rm -f "$MEKO_TEST_DIR/nft-installed" ;;
@@ -225,6 +230,7 @@ esac
 		{"stale rate", "MEKO_TEST_ACTUAL_RATE=540/minute", false},
 		{"stale burst", "MEKO_TEST_ACTUAL_BURST=2", false},
 		{"equivalent hourly rate", "MEKO_TEST_ACTUAL_RATE=3240/hour", true},
+		{"nftables 1.1.6 normalized rules", "MEKO_TEST_MODERN_NFT=1", true},
 		{"unknown rate unit", "MEKO_TEST_ACTUAL_RATE=54/unknown", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

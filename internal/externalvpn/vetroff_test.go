@@ -117,6 +117,10 @@ func TestVetroffConfigurationAndLink(t *testing.T) {
 		}
 		inst.Listen, inst.Port = "127.0.0.1", listener.Addr().(*net.TCPAddr).Port
 		listener.Close()
+		nativeOptions := DefaultVetroffSettings()
+		nativeOptions.AutoTLS = false
+		nativeOptions.Padding, nativeOptions.AllowPrivate = true, true
+		inst.Settings.Vetroff = &nativeOptions
 		manager := &Manager{procs: map[int]*running{}, lastErrors: map[int]string{}}
 		t.Cleanup(func() { manager.Remove(inst.ID) })
 		if err := manager.Ensure(inst); err != nil {
@@ -302,5 +306,156 @@ func TestVetroffBinaryInstallUpdateAndDigestFailure(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "vetroff-bundle/foxtunnel-necko/lib/libnss3.so")); err != nil {
 		t.Fatal("full binary bundle was not preserved:", err)
+	}
+}
+
+func TestVetroffAllTransportProfilesAndServerOptions(t *testing.T) {
+	t.Setenv("XUI_BIN_FOLDER", t.TempDir())
+	inst := Instance{ID: 831, Protocol: model.VetroffProxy, Listen: "127.0.0.1", Port: 18443, Settings: Settings{Hostname: "vpn.example.com", Clients: []Client{{Email: "alice", Password: strings.Repeat("v", 48), Enable: true}}}}
+	folder := filepath.Join(directory(), "test-tls")
+	if err := os.MkdirAll(folder, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	cert, key, err := certificate(inst, folder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inst.Settings.Certificate, inst.Settings.PrivateKey = cert, key
+	binary := os.Getenv("VETROFF_TEST_BINARY")
+	for _, transport := range []string{"h2-connect", "h2-post", "h3-connect", "h3-post", "wss", "xhttp-stream-one", "xhttp-stream-up", "xhttp-packet-up"} {
+		t.Run(transport, func(t *testing.T) {
+			options := DefaultVetroffSettings()
+			options.AutoTLS = false
+			options.Transport = transport
+			options.ProtocolPolicy = "strict"
+			options.MaxConnections = 123
+			options.MaxTunnels = 61
+			options.XHTTPPath = "/custom-carrier/"
+			options.XHTTPHost = "front.example.com"
+			options.Balance = "least-active"
+			options.Pipeline = "4"
+			options.ConnectTimeout = "13s"
+			options.AttemptTimeout = "4s"
+			options.EgressProxy = "socks5://127.0.0.1:19080"
+			options.EgressDNS = "9.9.9.9:53"
+			options.UserPolicies = []VetroffUserPolicy{{Email: "alice", MaxRequests: 17, MaxTunnels: 9, RequestsPerSecond: 30, Burst: 60, QuotaBytes: 4096}}
+			options.FallbackServers = []string{"https://backup.example.com:18443"}
+			inst.Settings.Vetroff = &options
+			if err := inst.Validate(); err != nil {
+				t.Fatal(err)
+			}
+			args, err := vetroffFiles(inst)
+			if err != nil {
+				t.Fatal(err)
+			}
+			data, err := os.ReadFile(args[2])
+			if err != nil {
+				t.Fatal(err)
+			}
+			var conf map[string]any
+			if err := json.Unmarshal(data, &conf); err != nil {
+				t.Fatal(err)
+			}
+			if conf["max_connections"] != float64(123) || conf["max_tunnels"] != float64(61) || conf["egress_proxy"] != options.EgressProxy || conf["xhttp_host"] != options.XHTTPHost {
+				t.Fatalf("server options lost: %s", data)
+			}
+			data, err = os.ReadFile(conf["users_file"].(string))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var policy struct {
+				Users []struct {
+					MaxTunnels int `json:"max_tunnels"`
+					Quota      int `json:"quota_bytes"`
+				}
+			}
+			if err := json.Unmarshal(data, &policy); err != nil {
+				t.Fatal(err)
+			}
+			if len(policy.Users) != 1 || policy.Users[0].Quota != 4096 || policy.Users[0].MaxTunnels != 9 {
+				t.Fatalf("native policy lost: %s", data)
+			}
+			link, err := exportVetroffLink(inst, "alice", "vpn.example.com", 18443)
+			if err != nil {
+				t.Fatal(err)
+			}
+			file := filepath.Join(t.TempDir(), "connection.txt")
+			if err := os.WriteFile(file, []byte(link), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if binary != "" {
+				for _, command := range [][]string{{"check-config", "--config", args[2]}, {"check-config", "--link-file", file, "--ca-cert", cert}} {
+					if out, err := exec.Command(binary, command...).CombinedOutput(); err != nil {
+						t.Fatalf("official release rejected %s: %v: %s", transport, err, out)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestVetroffBondClusterGeneratedAndChecked(t *testing.T) {
+	t.Setenv("XUI_BIN_FOLDER", t.TempDir())
+	options := DefaultVetroffSettings()
+	options.AutoTLS = false
+	options.Bond, options.Discover, options.BondHub = true, true, true
+	inst := Instance{ID: 832, Protocol: model.VetroffProxy, Port: 18443, Settings: Settings{Hostname: "vpn.example.com", Vetroff: &options, Clients: []Client{{Email: "alice", Password: strings.Repeat("v", 48), Enable: true}}}}
+	folder := filepath.Join(directory(), "test-tls")
+	if err := os.MkdirAll(folder, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	cert, key, err := certificate(inst, folder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inst.Settings.Certificate, inst.Settings.PrivateKey = cert, key
+	if err := inst.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	args, err := vetroffFiles(inst)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(filepath.Join(directory(), "832", "vetroff-cluster.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cluster struct {
+		Nodes []struct {
+			URL    string
+			Weight int
+		}
+	}
+	if err := json.Unmarshal(raw, &cluster); err != nil {
+		t.Fatal(err)
+	}
+	if len(cluster.Nodes) != 1 || cluster.Nodes[0].URL != "https://vpn.example.com:18443" || cluster.Nodes[0].Weight != 100 {
+		t.Fatalf("automatic cluster invalid: %s", raw)
+	}
+	if binary := os.Getenv("VETROFF_TEST_BINARY"); binary != "" {
+		if out, err := exec.Command(binary, "check-config", "--config", args[2]).CombinedOutput(); err != nil {
+			t.Fatalf("official release rejected generated hub: %v: %s", err, out)
+		}
+	}
+	options.ProtocolPolicy = "strict"
+	if err := inst.Validate(); err == nil || !strings.Contains(err.Error(), "strict policy") {
+		t.Fatalf("incompatible Bond policy accepted: %v", err)
+	}
+}
+
+func TestVetroffRejectsNativeProfileAliases(t *testing.T) {
+	options := DefaultVetroffSettings()
+	options.AutoTLS, options.AutoPin = false, false
+	inst := Instance{Protocol: model.VetroffProxy, Port: 443, Settings: Settings{Hostname: "vpn.example.com", Certificate: "/cert.pem", PrivateKey: "/key.pem", Vetroff: &options, Clients: []Client{{Email: "alice", Password: strings.Repeat("v", 48), Enable: true}}}}
+	for _, fallback := range []string{"https://VPN.example.com", "https://vpn.example.com:0443/"} {
+		options.FallbackServers = []string{fallback}
+		if err := inst.Validate(); err == nil || !strings.Contains(err.Error(), "duplicate VetroffProxy server") {
+			t.Fatalf("native client would reject duplicate %q: %v", fallback, err)
+		}
+	}
+	options.FallbackServers = nil
+	inst.Settings.Hostname = "-invalid.example.com"
+	if err := inst.Validate(); err == nil || !strings.Contains(err.Error(), "requires a hostname") {
+		t.Fatalf("invalid native SNI accepted: %v", err)
 	}
 }

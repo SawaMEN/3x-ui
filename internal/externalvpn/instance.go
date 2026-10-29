@@ -27,6 +27,7 @@ type OpenFluxTransport struct {
 }
 
 type Settings struct {
+	Vetroff        *VetroffSettings    `json:"vetroff,omitempty"`
 	CertificatePEM string              `json:"certificatePEM"`
 	PrivateKeyPEM  string              `json:"privateKeyPEM"`
 	Image          string              `json:"image"`
