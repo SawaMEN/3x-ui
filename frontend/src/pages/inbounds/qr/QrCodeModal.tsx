@@ -173,7 +173,7 @@ export default function QrCodeModal({
   const serverLinks = useServerLinks(open, dbInbound?.id, dbInbound?.protocol, client?.email);
   const displayLinks = useMemo(
     () =>
-      ['fptn', 'openflux', 'trusttunnel'].includes(dbInbound?.protocol ?? '')
+      ['fptn', 'openflux', 'trusttunnel', 'vetroff'].includes(dbInbound?.protocol ?? '')
         ? (serverLinks.data ?? [])
         : links,
     [dbInbound?.protocol, serverLinks.data, links],

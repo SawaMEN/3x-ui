@@ -92,6 +92,7 @@ export function canEnableSniffing(values: { protocol: string }): boolean {
     values.protocol !== 'amneziawg' &&
     values.protocol !== 'tuic' &&
     values.protocol !== 'pingtunnel' &&
+    values.protocol !== 'vetroff' &&
     values.protocol !== 'trusttunnel' &&
     values.protocol !== 'fptn' &&
     values.protocol !== 'openflux' &&

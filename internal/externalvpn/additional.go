@@ -97,7 +97,7 @@ func PrepareAdditional(ib *model.Inbound, previous string) error {
 			raw["certificatePEM"], raw["privateKeyPEM"] = cert, key
 		}
 	} else {
-		if raw["transports"] == nil {
+		if ib.Protocol == model.OpenFlux && raw["transports"] == nil {
 			raw["transports"] = []OpenFluxTransport{{Type: "direct", Priority: 100}}
 		}
 	}
@@ -221,6 +221,9 @@ func (inst Instance) validateAdditional() error {
 // ExportAdditionalLink uses the actual upstream wire formats. In particular,
 // OpenFlux uses raw DEFLATE + base64url, whereas FPTN uses raw standard base64.
 func ExportAdditionalLink(inst Instance, email, address string, port int, remark string) (string, error) {
+	if inst.Protocol == model.VetroffProxy {
+		return exportVetroffLink(inst, email, address, port)
+	}
 	if err := inst.Validate(); err != nil {
 		return "", err
 	}

@@ -1,3 +1,4 @@
+import { VetroffFields } from './protocols/vetroff';
 import { FptnFields, OpenFluxFields } from './protocols/additional-vpn';
 import { useId, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -283,11 +284,11 @@ export default function InboundFormModal({
           silent: true,
         },
       ),
-      HttpUtil.get<{ pingtunnel?: { installed?: boolean }; trusttunnel?: { installed?: boolean } }>(
-        '/panel/api/server/externalvpn/status?local=true',
-        undefined,
-        { silent: true },
-      ),
+      HttpUtil.get<{
+        pingtunnel?: { installed?: boolean };
+        trusttunnel?: { installed?: boolean };
+        vetroff?: { installed?: boolean };
+      }>('/panel/api/server/externalvpn/status?local=true', undefined, { silent: true }),
       HttpUtil.get<{ installed?: boolean }>('/panel/api/telemt/status', undefined, {
         silent: true,
       }),
@@ -298,6 +299,8 @@ export default function InboundFormModal({
           [Protocols.SUDOKU]: sudoku.success === true && sudoku.obj?.installed === true,
           [Protocols.PINGTUNNEL]:
             external.success === true && external.obj?.pingtunnel?.installed === true,
+          [Protocols.VETROFF]:
+            external.success === true && external.obj?.vetroff?.installed === true,
           [Protocols.TRUSTTUNNEL]:
             external.success === true && external.obj?.trusttunnel?.installed === true,
         });
@@ -312,9 +315,13 @@ export default function InboundFormModal({
     () =>
       PROTOCOL_OPTIONS.filter(
         (option) =>
-          ![Protocols.MTPROTO, Protocols.SUDOKU, Protocols.PINGTUNNEL, Protocols.TRUSTTUNNEL].some(
-            (value) => value === option.value,
-          ) ||
+          ![
+            Protocols.MTPROTO,
+            Protocols.SUDOKU,
+            Protocols.PINGTUNNEL,
+            Protocols.TRUSTTUNNEL,
+            Protocols.VETROFF,
+          ].some((value) => value === option.value) ||
           installedProtocols[option.value] === true ||
           (mode === 'edit' && protocol === option.value),
       ),
@@ -354,6 +361,7 @@ export default function InboundFormModal({
     protocol !== Protocols.TUNNEL &&
     protocol !== Protocols.TUIC &&
     protocol !== Protocols.PINGTUNNEL &&
+    protocol !== Protocols.VETROFF &&
     protocol !== Protocols.TRUSTTUNNEL &&
     protocol !== Protocols.FPTN &&
     protocol !== Protocols.OPENFLUX &&
@@ -387,6 +395,7 @@ export default function InboundFormModal({
       Protocols.SUDOKU,
       Protocols.SNELL,
       Protocols.FPTN,
+      Protocols.VETROFF,
       Protocols.OPENFLUX,
       Protocols.ANYTLS,
       Protocols.SHADOWTLS,
@@ -675,6 +684,7 @@ export default function InboundFormModal({
         next === Protocols.MASQUE ||
         next === Protocols.SNELL ||
         next === Protocols.FPTN ||
+        next === Protocols.VETROFF ||
         next === Protocols.OPENFLUX ||
         next === Protocols.ANYTLS ||
         next === Protocols.SHADOWTLS
@@ -966,6 +976,7 @@ export default function InboundFormModal({
 
       {protocol === Protocols.TUIC && <TuicFields />}
       {protocol === Protocols.PINGTUNNEL && <PingtunnelFields />}
+      {protocol === Protocols.VETROFF && <VetroffFields />}
       {protocol === Protocols.TRUSTTUNNEL && <TrustTunnelFields />}
       {protocol === Protocols.MASQUE && <MasqueFields />}
       {protocol === Protocols.NAIVE && <NaiveFields />}
@@ -1367,6 +1378,7 @@ export default function InboundFormModal({
                     Protocols.AMNEZIAWG,
                     Protocols.SNELL,
                     Protocols.FPTN,
+                    Protocols.VETROFF,
                     Protocols.OPENFLUX,
                     Protocols.ANYTLS,
                     Protocols.SHADOWTLS,

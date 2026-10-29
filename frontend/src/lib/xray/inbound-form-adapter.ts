@@ -325,6 +325,7 @@ function clientSchemaForProtocol(protocol: string): z.ZodType | null {
     case 'naive':
     case 'fptn':
     case 'openflux':
+    case 'vetroff':
     case 'trusttunnel':
       return NaiveClientSchema;
     case 'mieru':

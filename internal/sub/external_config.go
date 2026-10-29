@@ -180,7 +180,7 @@ func prefixedLinkName(displayName, prefix, fallback string) string {
 // JSON `ps`; every other scheme carries it in the URL #fragment.
 func applyRemarkToLink(rawLink, remark string) string {
 	rawLink = strings.TrimSpace(rawLink)
-	if remark == "" {
+	if remark == "" || strings.HasPrefix(rawLink, "vetroff://") {
 		return rawLink
 	}
 	if strings.HasPrefix(rawLink, "vmess://") {

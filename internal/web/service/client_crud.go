@@ -449,7 +449,7 @@ func (s *ClientService) fillProtocolDefaults(c *model.Client, ib *model.Inbound)
 		if c.Password == "" {
 			c.Password = strings.ReplaceAll(uuid.NewString(), "-", "")
 		}
-	case model.MASQUE, model.Snell, model.NaiveProxy, model.Mieru, model.AnyTLS, model.ShadowTLS, model.TrustTunnel, model.FPTN, model.OpenFlux:
+	case model.MASQUE, model.Snell, model.NaiveProxy, model.Mieru, model.AnyTLS, model.ShadowTLS, model.TrustTunnel, model.FPTN, model.VetroffProxy, model.OpenFlux:
 		if c.Password == "" {
 			c.Password = strings.ReplaceAll(uuid.NewString(), "-", "")
 		}

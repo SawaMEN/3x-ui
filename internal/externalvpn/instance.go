@@ -13,9 +13,10 @@ import (
 )
 
 type Client struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-	Enable   bool   `json:"enable"`
+	ExpiryTime int64  `json:"expiryTime,omitempty"`
+	Email      string `json:"email"`
+	Password   string `json:"password"`
+	Enable     bool   `json:"enable"`
 }
 
 type OpenFluxTransport struct {
@@ -67,6 +68,11 @@ func FromInbound(ib *model.Inbound) (Instance, error) {
 	if ib == nil || !IsManaged(ib.Protocol) {
 		return Instance{}, fmt.Errorf("unsupported external VPN inbound")
 	}
+	if ib.Protocol == model.VetroffProxy {
+		if err := validateVetroffPanelLimits(ib); err != nil {
+			return Instance{}, err
+		}
+	}
 	var settings Settings
 	if err := json.Unmarshal([]byte(ib.Settings), &settings); err != nil {
 		return Instance{}, fmt.Errorf("%s settings: %w", ib.Protocol, err)
@@ -76,6 +82,9 @@ func FromInbound(ib *model.Inbound) (Instance, error) {
 }
 
 func (inst Instance) Validate() error {
+	if inst.Protocol == model.VetroffProxy {
+		return validateVetroff(inst)
+	}
 	s := inst.Settings
 	if inst.Protocol == model.FPTN || inst.Protocol == model.OpenFlux {
 		return inst.validateAdditional()
@@ -173,5 +182,5 @@ func GenerateSecret() (string, error) {
 }
 
 func IsManaged(p model.Protocol) bool {
-	return p == model.Pingtunnel || p == model.TrustTunnel || p == model.FPTN || p == model.OpenFlux
+	return p == model.VetroffProxy || p == model.Pingtunnel || p == model.TrustTunnel || p == model.FPTN || p == model.OpenFlux
 }

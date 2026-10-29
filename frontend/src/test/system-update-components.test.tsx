@@ -3,6 +3,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import SystemUpdatePanel from '@/pages/settings/SystemUpdatePanel';
 import { HttpUtil } from '@/utils';
 
+let installedVetroff = false;
 let installedHysteria = false;
 let installedOxiDNS = false;
 let naiveSupported = true;
@@ -10,6 +11,7 @@ let installedNaive = false;
 let hysteriaFallback = '';
 
 beforeEach(() => {
+  installedVetroff = false;
   installedHysteria = false;
   installedOxiDNS = false;
   hysteriaFallback = '';
@@ -32,6 +34,7 @@ beforeEach(() => {
           }
         : String(path).includes('externalvpn')
           ? {
+              vetroff: { installed: installedVetroff, latestVersion: '0.1.0' },
               pingtunnel: { installed: false, latestVersion: '2.10' },
               trusttunnel: { installed: false, latestVersion: '1.1.0' },
               hysteria2: {
@@ -55,6 +58,7 @@ beforeEach(() => {
             : { installed: false, latestVersion: '1.0.0' },
   }));
   vi.mocked(HttpUtil.post).mockImplementation(async (path) => {
+    if (String(path).endsWith('/externalvpn/update/vetroff')) installedVetroff = true;
     if (String(path).endsWith('/externalvpn/update/hysteria2')) installedHysteria = true;
     if (String(path).endsWith('/naiveproxy/update')) installedNaive = true;
     if (String(path).endsWith('/oxidns/install')) installedOxiDNS = true;
@@ -254,4 +258,19 @@ it('manages OxiDNS only as a package; setup is in sing-box DNS', async () => {
   await waitFor(() => expect(HttpUtil.post).toHaveBeenCalledWith('/panel/api/oxidns/remove'));
   expect(card('OxiDNS').queryByRole('link')).toBeNull();
   expect(card('DNSTT').queryByRole('link')).toBeNull();
+});
+
+it('installs VetroffProxy from its component card and refreshes installed status', async () => {
+  await openComponents();
+  fireEvent.click(card('VetroffProxy').getByRole('button', { name: /Установить/ }));
+  await waitFor(() =>
+    expect(HttpUtil.post).toHaveBeenCalledWith(
+      '/panel/api/server/externalvpn/update/vetroff',
+      undefined,
+      expect.objectContaining({ timeout: 600000 }),
+    ),
+  );
+  await waitFor(() =>
+    expect(card('VetroffProxy').queryByRole('button', { name: /Установить/ })).toBeNull(),
+  );
 });

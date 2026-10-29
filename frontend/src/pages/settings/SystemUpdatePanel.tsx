@@ -42,6 +42,7 @@ type DependencyKey =
   | 'hysteria2'
   | 'sudoku'
   | 'pingtunnel'
+  | 'vetroff'
   | 'trusttunnel'
   | 'oxidns'
   | 'dnstt'
@@ -83,6 +84,7 @@ type ExternalVPNStatus = {
   hysteria2?: ExternalVPNBinaryStatus;
   pingtunnel?: ExternalVPNBinaryStatus;
   trusttunnel?: ExternalVPNBinaryStatus;
+  vetroff?: ExternalVPNBinaryStatus;
 };
 
 type OlcRTCStatus = {
@@ -134,13 +136,14 @@ const isDependencyInstallable = (dependency: DependencyStatus) =>
   dependency.key === 'oxidns' ||
   dependency.key === 'dnstt' ||
   dependency.key === 'pingtunnel' ||
+  dependency.key === 'vetroff' ||
   dependency.key === 'trusttunnel' ||
   dependency.key === 'olcrtc' ||
   dependency.key === 'telemt';
 
 const dependencyNeedsAction = (dependency: DependencyStatus) => {
   // Installation remains possible when the version endpoint is unreachable.
-  if (dependency.key === 'telemt' || dependency.key === 'olcrtc') {
+  if (dependency.key === 'vetroff' || dependency.key === 'telemt' || dependency.key === 'olcrtc') {
     return !dependency.installed || dependency.updateAvailable;
   }
   if (!dependency.availableVersion) return false;
@@ -288,7 +291,7 @@ export default function SystemUpdatePanel({ section }: { section: 'components' |
       updateAvailable: false,
     }));
     const rows: DependencyStatus[] = [...bundled];
-    for (const key of ['sudoku', 'pingtunnel', 'trusttunnel'] as const) {
+    for (const key of ['sudoku', 'pingtunnel', 'trusttunnel', 'vetroff'] as const) {
       const data =
         key === 'sudoku'
           ? sudoku.success
@@ -299,7 +302,14 @@ export default function SystemUpdatePanel({ section }: { section: 'components' |
             : undefined;
       rows.push({
         key,
-        label: key === 'sudoku' ? 'Sudoku' : key === 'pingtunnel' ? 'Pingtunnel' : 'TrustTunnel',
+        label:
+          key === 'vetroff'
+            ? 'VetroffProxy'
+            : key === 'sudoku'
+              ? 'Sudoku'
+              : key === 'pingtunnel'
+                ? 'Pingtunnel'
+                : 'TrustTunnel',
         installed: data?.installed === true,
         installedVersion: data?.version || '',
         availableVersion: data?.latestVersion || '',
@@ -445,6 +455,10 @@ export default function SystemUpdatePanel({ section }: { section: 'components' |
       case 'sudoku':
         return (await HttpUtil.post('/panel/api/setting/sudoku/update', undefined, {
           timeout: 200000,
+        })) as ApiMsg<unknown>;
+      case 'vetroff':
+        return (await HttpUtil.post('/panel/api/server/externalvpn/update/vetroff', undefined, {
+          timeout: 600000,
         })) as ApiMsg<unknown>;
       case 'pingtunnel':
       case 'trusttunnel':
@@ -830,6 +844,11 @@ export default function SystemUpdatePanel({ section }: { section: 'components' |
                       <Typography.Text type="secondary" className="system-component-description">
                         Pingtunnel обновляется отдельным официальным Linux-бинарником из GitHub
                         Releases.
+                      </Typography.Text>
+                    )}
+                    {dependency.key === 'vetroff' && (
+                      <Typography.Text type="secondary" className="system-component-description">
+                        {t('pages.inbounds.form.vetroffHint')}
                       </Typography.Text>
                     )}
                     {dependency.key === 'trusttunnel' && (

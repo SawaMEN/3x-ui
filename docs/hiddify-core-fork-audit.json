@@ -44,6 +44,13 @@
   ],
   "protocols": [
     {
+      "panel_protocol": "vetroff",
+      "migration": "external",
+      "target_type": null,
+      "target_kind": null,
+      "decision": "Retain the standalone VetroffProxy binary bundle, managed TLS/users and native vetroff:// subscriptions; no sing-box server handler or panel traffic metering is advertised."
+    },
+    {
       "panel_protocol": "vmess",
       "migration": "native",
       "target_type": "vmess",

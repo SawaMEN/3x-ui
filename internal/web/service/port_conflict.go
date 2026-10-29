@@ -103,7 +103,7 @@ func inboundTransports(protocol model.Protocol, streamSettings, settings string)
 			}
 		}
 		return bits
-	case model.TrustTunnel:
+	case model.TrustTunnel, model.VetroffProxy:
 		return transportTCP | transportUDP
 	case model.Hysteria, model.WireGuard, model.AmneziaWG, model.TUIC:
 		return transportUDP

@@ -65,6 +65,7 @@ type BinaryStatus struct {
 }
 
 type UpdateStatus struct {
+	Vetroff     BinaryStatus `json:"vetroff"`
 	Hysteria2   BinaryStatus `json:"hysteria2"`
 	Pingtunnel  BinaryStatus `json:"pingtunnel"`
 	TrustTunnel BinaryStatus `json:"trusttunnel"`
@@ -72,6 +73,8 @@ type UpdateStatus struct {
 
 func releaseSpecFor(protocol model.Protocol) (releaseSpec, error) {
 	switch protocol {
+	case model.VetroffProxy:
+		return releaseSpec{protocol: protocol, api: "https://api.github.com/repos/SawaMEN/VetroffProxy/releases/latest", binaryName: "vetroff", versionArgs: []string{"version"}}, nil
 	case model.Hysteria:
 		return releaseSpec{
 			protocol:    protocol,
@@ -101,7 +104,8 @@ func releaseSpecFor(protocol model.Protocol) (releaseSpec, error) {
 func GetUpdateStatus(ctx context.Context, localOnly ...bool) UpdateStatus {
 	var status UpdateStatus
 	var wg sync.WaitGroup
-	wg.Add(3)
+	wg.Add(4)
+	go func() { defer wg.Done(); status.Vetroff = binaryStatus(ctx, model.VetroffProxy, localOnly...) }()
 	go func() {
 		defer wg.Done()
 		status.Pingtunnel = binaryStatus(ctx, model.Pingtunnel, localOnly...)
@@ -215,6 +219,9 @@ func fetchLatestRelease(ctx context.Context, spec releaseSpec) (githubRelease, e
 }
 
 func Update(ctx context.Context, protocol model.Protocol) error {
+	if protocol == model.VetroffProxy {
+		return installVetroff(ctx)
+	}
 	if protocol == model.OpenFlux {
 		return InstallOpenFlux(ctx)
 	}
@@ -328,6 +335,11 @@ func pickReleaseAsset(spec releaseSpec, release githubRelease, goarch string) (r
 	var expected string
 	version := normalizeReleaseVersion(release.TagName)
 	switch spec.protocol {
+	case model.VetroffProxy:
+		if goarch != "amd64" && goarch != "arm64" {
+			return releaseAsset{}, fmt.Errorf("VetroffProxy requires Linux amd64/arm64")
+		}
+		expected = fmt.Sprintf("vetroff_%s_linux_%s.tar.gz", version, goarch)
 	case model.Hysteria:
 		switch goarch {
 		case "amd64", "arm64":

@@ -26,31 +26,32 @@ type Protocol string
 // "hysteria2://" is independent of this and is still emitted by the
 // link generator when the stream version is 2.
 const (
-	VMESS       Protocol = "vmess"
-	VLESS       Protocol = "vless"
-	Tunnel      Protocol = "tunnel"
-	HTTP        Protocol = "http"
-	Trojan      Protocol = "trojan"
-	Shadowsocks Protocol = "shadowsocks"
-	Mixed       Protocol = "mixed"
-	WireGuard   Protocol = "wireguard"
-	Tun         Protocol = "tun"
-	Hysteria    Protocol = "hysteria"
-	MTProto     Protocol = "mtproto"
-	AmneziaWG   Protocol = "amneziawg"
-	TUIC        Protocol = "tuic"
-	Pingtunnel  Protocol = "pingtunnel"
-	TrustTunnel Protocol = "trusttunnel"
-	MASQUE      Protocol = "masque"
-	NaiveProxy  Protocol = "naive"
-	Snell       Protocol = "snell"
-	FPTN        Protocol = "fptn"
-	OpenFlux    Protocol = "openflux"
-	AnyTLS      Protocol = "anytls"
-	ShadowTLS   Protocol = "shadowtls"
-	Mieru       Protocol = "mieru"
-	VKTurnProxy Protocol = "vk-turn-proxy"
-	Sudoku      Protocol = "sudoku"
+	VMESS        Protocol = "vmess"
+	VLESS        Protocol = "vless"
+	Tunnel       Protocol = "tunnel"
+	HTTP         Protocol = "http"
+	Trojan       Protocol = "trojan"
+	Shadowsocks  Protocol = "shadowsocks"
+	Mixed        Protocol = "mixed"
+	WireGuard    Protocol = "wireguard"
+	Tun          Protocol = "tun"
+	Hysteria     Protocol = "hysteria"
+	MTProto      Protocol = "mtproto"
+	AmneziaWG    Protocol = "amneziawg"
+	TUIC         Protocol = "tuic"
+	Pingtunnel   Protocol = "pingtunnel"
+	TrustTunnel  Protocol = "trusttunnel"
+	MASQUE       Protocol = "masque"
+	NaiveProxy   Protocol = "naive"
+	Snell        Protocol = "snell"
+	FPTN         Protocol = "fptn"
+	OpenFlux     Protocol = "openflux"
+	VetroffProxy Protocol = "vetroff"
+	AnyTLS       Protocol = "anytls"
+	ShadowTLS    Protocol = "shadowtls"
+	Mieru        Protocol = "mieru"
+	VKTurnProxy  Protocol = "vk-turn-proxy"
+	Sudoku       Protocol = "sudoku"
 )
 
 // User represents a user account in the 3x-ui panel.
@@ -81,7 +82,7 @@ type Inbound struct {
 	// Xray configuration fields
 	Listen            string   `json:"listen" form:"listen"`
 	Port              int      `json:"port" form:"port" validate:"gte=0,lte=65535" example:"443"`
-	Protocol          Protocol `json:"protocol" form:"protocol" validate:"required,oneof=vmess vless trojan shadowsocks wireguard hysteria http mixed tunnel tun mtproto amneziawg tuic naive masque snell fptn openflux anytls shadowtls mieru vk-turn-proxy sudoku pingtunnel trusttunnel" example:"vless"`
+	Protocol          Protocol `json:"protocol" form:"protocol" validate:"required,oneof=vmess vless trojan shadowsocks wireguard hysteria http mixed tunnel tun mtproto amneziawg tuic naive masque snell fptn openflux vetroff anytls shadowtls mieru vk-turn-proxy sudoku pingtunnel trusttunnel" example:"vless"`
 	Settings          string   `json:"settings" form:"settings"`
 	StreamSettings    string   `json:"streamSettings" form:"streamSettings"`
 	Tag               string   `json:"tag" form:"tag" gorm:"unique" example:"in-443-tcp"`

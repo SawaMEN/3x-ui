@@ -5,7 +5,10 @@ export function useServerLinks(open: boolean, id?: number, protocol?: string, em
   return useQuery({
     queryKey: ['inbound-server-links', id, protocol, email],
     enabled:
-      open && !!id && !!email && ['fptn', 'openflux', 'trusttunnel'].includes(protocol ?? ''),
+      open &&
+      !!id &&
+      !!email &&
+      ['fptn', 'openflux', 'trusttunnel', 'vetroff'].includes(protocol ?? ''),
     queryFn: async () => {
       const response = await HttpUtil.get(
         `/panel/api/inbounds/get/${id}/links?email=${encodeURIComponent(email ?? '')}`,
