@@ -82,7 +82,7 @@ def main():
 
         # Remove only the IPv6 meter; the port set and IPv4 rule remain.
         rules = run('nft', '-a', '-n', 'list', 'chain', 'inet', 'xui_telemt_meko', 'input')
-        ipv6 = next(line for line in rules.splitlines() if 'meter tm6_7443 ' in line)
+        ipv6 = next(line for line in rules.splitlines() if re.search(r'(?:meter tm6_7443|update @tm6_7443)\s', line))
         handle = re.search(r'# handle (\d+)', ipv6).group(1)
         run('nft', 'delete', 'rule', 'inet', 'xui_telemt_meko', 'input', 'handle', handle)
         assert status()['installed'] == 'false', 'Missing IPv6 rule incorrectly verified'

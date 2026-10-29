@@ -253,7 +253,11 @@ func validateVetroffOptions(inst Instance) error {
 	}
 	primary := v.PublicServer
 	if primary == "" {
-		primary = "https://" + net.JoinHostPort(inst.Settings.Hostname, strconv.Itoa(inst.Port))
+		port := strconv.Itoa(inst.Port)
+		if strings.HasPrefix(v.Transport, "h3-") && v.H3Listen != "" {
+			_, port, _ = net.SplitHostPort(v.H3Listen)
+		}
+		primary = "https://" + net.JoinHostPort(inst.Settings.Hostname, port)
 	}
 	if _, err := vetroffServers(primary, v.FallbackServers); err != nil {
 		return err

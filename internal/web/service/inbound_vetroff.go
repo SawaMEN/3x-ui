@@ -73,20 +73,21 @@ func resolveVetroffTLS(ib *model.Inbound, settings *externalvpn.Settings) error 
 			host = candidate
 		}
 	}
-	if host == "" {
-		host = all.WebDomain
+	type tlsCandidate struct {
+		domainfront.CertificateFiles
+		hostname string
 	}
-	if host == "" {
-		host = all.SubDomain
+	candidates := []tlsCandidate{
+		{domainfront.CertificateFiles{CertFile: all.WebCertFile, KeyFile: all.WebKeyFile}, all.WebDomain},
+		{domainfront.CertificateFiles{CertFile: all.SubCertFile, KeyFile: all.SubKeyFile}, all.SubDomain},
 	}
-	candidates := []domainfront.CertificateFiles{{CertFile: all.WebCertFile, KeyFile: all.WebKeyFile}, {CertFile: all.SubCertFile, KeyFile: all.SubKeyFile}}
 	if cfg, err := svc.GetDomainFrontConfig(); err == nil {
 		files, _, err := svc.domainCertificateFiles(cfg)
 		if err == nil {
 			for _, domain := range cfg.Domains {
 				if domain.Enabled {
 					if f, ok := files[domain.Name]; ok {
-						candidates = append(candidates, f)
+						candidates = append(candidates, tlsCandidate{f, domain.Name})
 					}
 				}
 			}
@@ -105,6 +106,9 @@ func resolveVetroffTLS(ib *model.Inbound, settings *externalvpn.Settings) error 
 			continue
 		}
 		name := host
+		if name == "" {
+			name = candidate.hostname
+		}
 		if name == "" {
 			for _, dns := range cert.DNSNames {
 				if !strings.Contains(dns, "*") {

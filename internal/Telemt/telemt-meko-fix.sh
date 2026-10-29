@@ -415,7 +415,7 @@ status() {
         # All iOS signature offsets and RETURN must occur on the same rule.
         # nft may normalize masks and flag order when listing rules.
         if ! grep -F 'tcp dport @ports' <<< "$rules" |
-             grep -F '@th,96,32' | grep -F '@th,160,16' |
+             grep -E '@th,96,32 & 0x0*fffff == 0x0*2ffff|@th,108,20 0x0*2ffff' | grep -F '@th,160,16' |
              grep -F '@th,192,16' | grep -F '@th,224,24' | grep -F '@th,320,32' |
              grep -Eq 'counter( packets [0-9]+ bytes [0-9]+)? return'; then
             verified_all=false
@@ -424,16 +424,16 @@ status() {
             # Verify the actual IPv4 AND IPv6 reject rules for this port.
             # A named meter without a matching reject action is insufficient.
             if grep -F "tcp dport ${port} " <<< "$rules" |
-                   grep -F "meter tm4_${port} " | grep -F "ip saddr" | grep -F "reject with tcp reset" |
+                   grep -E "(meter tm4_${port}|update @tm4_${port}) " | grep -F "ip saddr" | grep -F "reject with tcp reset" |
                    limiter_matches_policy nftables "${desired_rates[$port]:-}" "${desired_bursts[$port]:-}" &&
                grep -F "tcp dport ${port} " <<< "$rules" |
-                   grep -F "meter tm6_${port} " | grep -F "ip6 saddr" | grep -F "reject with tcp reset" |
+                   grep -E "(meter tm6_${port}|update @tm6_${port}) " | grep -F "ip6 saddr" | grep -F "reject with tcp reset" |
                    limiter_matches_policy nftables "${desired_rates[$port]:-}" "${desired_bursts[$port]:-}" &&
                grep -F "tcp dport ${port} " <<< "$rules" |
-                   grep -F "meter ti4_${port} " | grep -F "ip saddr" | grep -F "reject with tcp reset" |
+                   grep -E "(meter ti4_${port}|update @ti4_${port}) " | grep -F "ip saddr" | grep -F "reject with tcp reset" |
                    limiter_matches_policy nftables "${desired_ios_rates[$port]:-}" "${desired_ios_bursts[$port]:-}" &&
                grep -F "tcp dport ${port} " <<< "$rules" |
-                   grep -F "meter ti6_${port} " | grep -F "ip6 saddr" | grep -F "reject with tcp reset" |
+                   grep -E "(meter ti6_${port}|update @ti6_${port}) " | grep -F "ip6 saddr" | grep -F "reject with tcp reset" |
                    limiter_matches_policy nftables "${desired_ios_rates[$port]:-}" "${desired_ios_bursts[$port]:-}"; then
                 verified_ports+=("$port")
             else

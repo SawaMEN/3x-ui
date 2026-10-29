@@ -74,3 +74,25 @@ func TestVetroffH3ListenerConflictsOnActualAddressAndPort(t *testing.T) {
 		}
 	}
 }
+
+func TestVetroffAutomaticTLSFallsBackToSubscriptionDomain(t *testing.T) {
+	setupConflictDB(t)
+	cert, key := writeTestCertificate(t)
+	svc := &SettingService{}
+	for name, value := range map[string]string{"webDomain": "panel.example.com", "subDomain": "golden-fixture.test", "subCertFile": cert, "subKeyFile": key} {
+		if err := svc.saveSetting(name, value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ib := &model.Inbound{Protocol: model.VetroffProxy, Port: 18443, Settings: `{"clients":[]}`}
+	if err := prepareExternalVPN(ib, ""); err != nil {
+		t.Fatal(err)
+	}
+	var settings externalvpn.Settings
+	if err := json.Unmarshal([]byte(ib.Settings), &settings); err != nil {
+		t.Fatal(err)
+	}
+	if settings.Hostname != "golden-fixture.test" || settings.Certificate != cert {
+		t.Fatalf("wrong TLS identity: %+v", settings)
+	}
+}
