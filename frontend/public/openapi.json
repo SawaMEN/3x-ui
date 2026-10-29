@@ -5160,6 +5160,10 @@
             "example": "auto",
             "type": "string"
           },
+          "origin": {
+            "example": "http://127.0.0.1:8080",
+            "type": "string"
+          },
           "template": {
             "example": "notes",
             "type": "string"
@@ -21084,6 +21088,37 @@
             }
           }
         },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/telemt/webproxy/diagnostics": {
+      "get": {
+        "tags": [
+          "Runtime services"
+        ],
+        "summary": "Read Telemt WEB runtime diagnostics.",
+        "operationId": "get_panel_api_telemt_webproxy_diagnostics",
+        "description": "Authenticated, bounded WEB availability, lifecycle and capacity counters. No session secrets are returned.",
         "responses": {
           "200": {
             "description": "Successful response",
