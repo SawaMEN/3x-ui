@@ -3494,6 +3494,13 @@ export const sections: readonly Section[] = [
         ],
       },
       {
+        method: 'GET',
+        path: '/panel/api/telemt/webproxy/diagnostics',
+        summary: 'Read Telemt WEB runtime diagnostics.',
+        description:
+          'Authenticated, bounded WEB availability, lifecycle and capacity counters. No session secrets are returned.',
+      },
+      {
         method: 'POST',
         path: '/panel/api/telemt/webproxy/disable',
         summary: 'Disable the Telemt Web Proxy.',
