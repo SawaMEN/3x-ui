@@ -3,11 +3,13 @@ package service
 import (
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -52,6 +54,8 @@ type TelemtWebProxyState struct {
 	Carriers           []string              `json:"carriers,omitempty"`
 	Enabled            bool                  `json:"enabled"`
 	Domain             string                `json:"domain"`
+	BasePath           string                `json:"basePath,omitempty"`
+	Aliases            []string              `json:"aliases,omitempty"`
 	Secret             string                `json:"secret"`
 	DecoyDir           string                `json:"decoyDir"`
 	ListenPort         int                   `json:"listenPort"`
@@ -73,8 +77,11 @@ type TelemtWebProxyStatus struct {
 	Enabled                     bool                  `json:"enabled"`
 	Supported                   bool                  `json:"supported"`
 	Domain                      string                `json:"domain"`
+	BasePath                    string                `json:"basePath"`
+	Aliases                     []string              `json:"aliases,omitempty"`
 	DefaultDomain               string                `json:"defaultDomain"`
 	Link                        string                `json:"link"`
+	Links                       []string              `json:"links,omitempty"`
 	NginxInstalled              bool                  `json:"nginxInstalled"`
 	NginxActive                 bool                  `json:"nginxActive"`
 	CertificateReady            bool                  `json:"certificateReady"`
@@ -169,6 +176,7 @@ func appendTelemtWebProxyConfig(base string, state TelemtWebProxyState) (string,
 	}
 	managedUsers := ""
 	managedProfiles := ""
+	managedUserCount := 0
 	var managedQuotas, managedExpirations, managedIPLimits strings.Builder
 	if state.ManagedInboundID != 0 {
 		var inbound model.Inbound
@@ -183,6 +191,7 @@ func appendTelemtWebProxyConfig(base string, state TelemtWebProxyState) (string,
 		if !ok {
 			return "", errors.New("telemt web proxy: managed inbound has no enabled clients")
 		}
+		managedUserCount = len(inst.Secrets)
 		for _, user := range inst.Secrets {
 			// Stable identities retain per-user counters across list reordering.
 			name := mtprotoWebUsername(state.ManagedInboundID, user.Name)
@@ -222,9 +231,20 @@ func appendTelemtWebProxyConfig(base string, state TelemtWebProxyState) (string,
 		listenPort = telemtWebListenPort
 	}
 	webConfig := fmt.Sprintf("\n[[server.listeners]]\nip = \"%s\"\nport = %d\ntransport = \"web\"\nproxy_protocol = false\nreuse_allow = false\nweb_client_ip_source = \"x_forwarded_for\"\nweb_trusted_proxy_cidrs = [\"127.0.0.1/32\"]\n\n[web]\nenabled = true\ncarrier = \"https\"\n\n[[web.vhosts]]\nhost = \"%s\"\npublic_addr = \"%s\"\n\n[web.vhosts.decoy]\nmode = \"static_directory\"\ndirectory = \"%s\"\nindex = \"index.html\"\n\n[[web.vhosts.profiles]]\nuser = \"%s\"\nsecret_mode = \"dd\"\n", telemtWebListenIP, listenPort, state.Domain, publicAddr, decoyDir, telemtWebUser)
-	options, err := normalizeTelemtWebOptions(TelemtWebProxyOptions{Frontend: state.Frontend, Carrier: state.Carrier, Carriers: state.Carriers})
+	options, err := normalizeTelemtWebOptions(TelemtWebProxyOptions{Frontend: state.Frontend, Carrier: state.Carrier, Carriers: state.Carriers, BasePath: &state.BasePath, Aliases: &state.Aliases})
 	if err != nil {
 		return "", err
+	}
+	if state.BasePath != "" {
+		webConfig = strings.Replace(webConfig, "public_addr = "+strconv.Quote(publicAddr), "base_path = "+strconv.Quote(state.BasePath)+"\npublic_addr = "+strconv.Quote(publicAddr), 1)
+	}
+	if err := validateTelemtWebSite(state.Site); err != nil {
+		return "", err
+	}
+	if state.Site != nil && state.Site.Mode == "origin" {
+		staticDecoy := fmt.Sprintf("[web.vhosts.decoy]\nmode = \"static_directory\"\ndirectory = %q\nindex = \"index.html\"", decoyDir)
+		originDecoy := fmt.Sprintf("[web.vhosts.decoy]\nmode = \"http_upstream\"\nupstream = %q", telemtWebCanonicalOrigin(state.Site.Origin))
+		webConfig = strings.Replace(webConfig, staticDecoy, originDecoy, 1)
 	}
 	webConfig = strings.Replace(webConfig, "carrier = \"https\"", "carrier = "+strconv.Quote(options.Carrier), 1)
 	if len(options.Carriers) > 0 {
@@ -236,6 +256,33 @@ func appendTelemtWebProxyConfig(base string, state TelemtWebProxyState) (string,
 	}
 	if state.ManagedInboundID != 0 {
 		webConfig = strings.Replace(webConfig, "\n[[web.vhosts.profiles]]\nuser = \"webproxy\"\nsecret_mode = \"dd\"\n", managedProfiles, 1)
+	}
+	// Explicit WEB admission bounds with headroom for reconfiguration. These
+	// limits apply to the WEB listener only, not ordinary MTProto sidecars.
+	maxProfiles := telemtWebProfileCapacity(managedUserCount, len(state.Aliases)+1)
+	webConfig = strings.Replace(webConfig, "[web]\nenabled = true\n", fmt.Sprintf("[web]\nenabled = true\nlimits.max_profiles = %d\nlimits.max_vhosts = %d\n", maxProfiles, len(state.Aliases)+1), 1)
+	// Extra hostnames share the same loopback WEB listener and per-user
+	// profiles. Each vhost advertises its own resolved public endpoint.
+	for _, alias := range state.Aliases {
+		aliasAddr, resolveErr := resolveTelemtWebPublicAddr(alias)
+		if resolveErr != nil {
+			return "", fmt.Errorf("WEB alias %s: %w", alias, resolveErr)
+		}
+		webConfig += fmt.Sprintf("\n[[web.vhosts]]\nhost = %q\n", alias)
+		if state.BasePath != "" {
+			webConfig += fmt.Sprintf("base_path = %q\n", state.BasePath)
+		}
+		webConfig += fmt.Sprintf("public_addr = %q\n", aliasAddr)
+		if state.Site != nil && state.Site.Mode == "origin" {
+			webConfig += fmt.Sprintf("\n[web.vhosts.decoy]\nmode = \"http_upstream\"\nupstream = %q\n", telemtWebCanonicalOrigin(state.Site.Origin))
+		} else {
+			webConfig += fmt.Sprintf("\n[web.vhosts.decoy]\nmode = \"static_directory\"\ndirectory = %q\nindex = \"index.html\"\n", decoyDir)
+		}
+		if state.ManagedInboundID != 0 {
+			webConfig += managedProfiles
+		} else {
+			webConfig += fmt.Sprintf("\n[[web.vhosts.profiles]]\nuser = %q\nsecret_mode = \"dd\"\n", telemtWebUser)
+		}
 	}
 	if state.ManagedInboundID != 0 {
 		if managedQuotas.Len() > 0 {
@@ -279,9 +326,12 @@ func (TelemtService) WebProxyStatus(defaultDomain, panelCert, panelKey string) (
 	nginxOwns443 := telemtWebNginxOwnsPort443()
 	frontendActive := state.Enabled && telemtWebFrontendActive(state) && (frontend != "nginx" || nginxOwns443)
 	port443, inspectionErr := inspectTelemtWebPort443(state, frontend)
-	status := TelemtWebProxyStatus{Site: state.Site, Frontend: frontend, FrontendActive: frontendActive, Carrier: telemtWebCarrier(state), Carriers: state.Carriers, CarrierNegotiationSupported: telemtWebVersionAtLeast(version, "3.5.4"), Enabled: state.Enabled, Supported: telemtWebVersionAtLeast(version, telemtWebMinEngine), Domain: state.Domain, DefaultDomain: defaultDomain, NginxInstalled: telemtWebCommandExists("nginx"), NginxActive: nginxActive, Port443Free: port443.Free, Port443Available: port443.Available, Port443Owner: port443.Owner, ListenPort: state.ListenPort, CertificateFile: state.CertFile}
-	if state.Enabled && state.Domain != "" && state.Secret != "" {
-		status.Link = telemtWebLink(state.Domain, state.Secret)
+	status := TelemtWebProxyStatus{Aliases: state.Aliases, Site: state.Site, Frontend: frontend, FrontendActive: frontendActive, Carrier: telemtWebCarrier(state), Carriers: state.Carriers, CarrierNegotiationSupported: telemtWebVersionAtLeast(version, "3.5.4"), Enabled: state.Enabled, Supported: telemtWebVersionAtLeast(version, telemtWebMinEngine), Domain: state.Domain, BasePath: state.BasePath, DefaultDomain: defaultDomain, NginxInstalled: telemtWebCommandExists("nginx"), NginxActive: nginxActive, Port443Free: port443.Free, Port443Available: port443.Available, Port443Owner: port443.Owner, ListenPort: state.ListenPort, CertificateFile: state.CertFile}
+	if state.Enabled && state.ManagedInboundID == 0 && state.Domain != "" && state.Secret != "" {
+		for _, host := range telemtWebHosts(state) {
+			status.Links = append(status.Links, telemtWebLinkWithPath(host, state.Secret, state.BasePath))
+		}
+		status.Link = status.Links[0]
 	}
 	if state.CertFile != "" {
 		status.CertificateReady = telemtWebCertificatePairReady(state.CertFile, state.KeyFile, state.Domain)
@@ -338,7 +388,16 @@ func enableTelemtWebProxy(ctx context.Context, domain, panelCert, panelKey strin
 		return TelemtWebProxyStatus{}, errors.New("TCP 443 занят другим сервисом")
 	}
 	oldState := state
+	// Validate and select a certificate for the *new* primary hostname, not
+	// the saved hostname of a previous WEB installation.
+	state.Domain = domain
 	state.Frontend, state.Carrier, state.Carriers = options.Frontend, options.Carrier, options.Carriers
+	if options.BasePath != nil {
+		state.BasePath = *options.BasePath
+	}
+	if options.Aliases != nil {
+		state.Aliases = *options.Aliases
+	}
 	nginxWasInstalled := telemtWebCommandExists(options.Frontend)
 	nginxWasActive := telemtWebFrontendActive(state)
 	nginxManaged := oldState.NginxManaged
@@ -383,6 +442,9 @@ func enableTelemtWebProxy(ctx context.Context, domain, panelCert, panelKey strin
 		} else if telemtWebFrontendActive(state) {
 			_ = telemtWebReloadFrontend(state)
 		}
+	}
+	if !telemtWebCertificateCoversHosts(certFile, keyFile, telemtWebHosts(state)) {
+		return TelemtWebProxyStatus{}, errors.New("Все WEB-домены должны покрываться одним действующим TLS-сертификатом (например, wildcard).")
 	}
 	state.CertFile, state.KeyFile = certFile, keyFile
 	if err := installTelemtWebRenewalHook(state); err != nil {
@@ -522,8 +584,32 @@ func normalizeTelemtWebDomain(domain string) string {
 	return strings.TrimRight(domain, "/")
 }
 
-func telemtWebLink(domain, secret string) string {
-	return fmt.Sprintf("tg://webproxy?server=%s&secret=dd%s", domain, secret)
+func normalizeTelemtWebBasePath(value string) (string, error) {
+	path := strings.Trim(strings.TrimSpace(value), "/")
+	if path == "" {
+		return "", nil
+	}
+	if len(path) < 6 || len(path) > 96 || !regexp.MustCompile(`^[A-Za-z0-9_-]+(?:/[A-Za-z0-9_-]+)*$`).MatchString(path) {
+		return "", errors.New("WEB Proxy base path must contain 6-96 URL-safe characters (letters, digits, underscores, dashes or slashes)")
+	}
+	return path, nil
+}
+
+// A WEB path link uses the official 0x70 0xdd prefix and base64url encoding.
+// Links without paths preserve the historic dd+hex form byte for byte.
+func telemtWebLinkWithPath(domain, secret, basePath string) string {
+	if basePath == "" {
+		return fmt.Sprintf("tg://webproxy?server=%s&secret=dd%s", domain, secret)
+	}
+	decoded, err := hex.DecodeString(secret)
+	if err != nil || len(decoded) != 16 {
+		return ""
+	}
+	buf := make([]byte, 0, 18)
+	buf = append(buf, 0x70, 0xdd)
+	buf = append(buf, decoded...)
+	return "tg://webproxy?server=" + url.QueryEscape(domain+"/"+basePath) +
+		"&secret=" + base64.RawURLEncoding.EncodeToString(buf)
 }
 
 func resolveTelemtWebPublicAddr(domain string) (string, error) {
@@ -612,8 +698,8 @@ func writeTelemtWebNginxConfig(state TelemtWebProxyState) error {
 	if state.CertFile == "" || state.KeyFile == "" {
 		return errors.New("WEB Proxy certificate is not configured")
 	}
-	if !telemtWebCertificatePairReady(state.CertFile, state.KeyFile, state.Domain) {
-		return fmt.Errorf("certificate does not cover domain %s", state.Domain)
+	if !telemtWebCertificateCoversHosts(state.CertFile, state.KeyFile, telemtWebHosts(state)) {
+		return errors.New("WEB certificate does not cover all configured domains")
 	}
 	listen := "listen 443 ssl;"
 	if host, _, err := net.SplitHostPort(state.PublicAddr); err == nil && net.ParseIP(host) != nil && net.ParseIP(host).To4() == nil {
@@ -623,7 +709,7 @@ func writeTelemtWebNginxConfig(state TelemtWebProxyState) error {
 	if err != nil {
 		return err
 	}
-	config := fmt.Sprintf("map $http_upgrade $xui_telemt_connection_upgrade {\n    default upgrade;\n    ''      '';\n}\n\nupstream xui_telemt_web {\n    server %s:%d;\n    keepalive 64;\n}\n\nserver {\n    %s\n    server_name %s;\n    access_log off;\n\n    ssl_certificate %s;\n    ssl_certificate_key %s;\n    ssl_protocols TLSv1.2 TLSv1.3;\n    client_max_body_size 2m;\n\n%s    location / {\n        proxy_pass http://xui_telemt_web;\n        proxy_http_version 1.1;\n        proxy_set_header Host $host;\n        proxy_set_header X-Forwarded-For $remote_addr;\n        proxy_set_header Upgrade $http_upgrade;\n        proxy_set_header Connection $xui_telemt_connection_upgrade;\n        proxy_connect_timeout 5s;\n        proxy_read_timeout 65s;\n        proxy_send_timeout 65s;\n        proxy_request_buffering off;\n        proxy_buffering off;\n        proxy_next_upstream off;\n    }\n}\n", telemtWebListenIP, state.ListenPort, listen, state.Domain, state.CertFile, state.KeyFile, locations)
+	config := fmt.Sprintf("map $http_upgrade $xui_telemt_connection_upgrade {\n    default upgrade;\n    ''      '';\n}\n\nupstream xui_telemt_web {\n    server %s:%d;\n    keepalive 64;\n}\n\nserver {\n    %s\n    server_name %s;\n    access_log off;\n\n    ssl_certificate %s;\n    ssl_certificate_key %s;\n    ssl_protocols TLSv1.2 TLSv1.3;\n    client_max_body_size 2m;\n\n%s    location / {\n        proxy_pass http://xui_telemt_web;\n        proxy_http_version 1.1;\n        proxy_set_header Host $host;\n        proxy_set_header X-Forwarded-For $remote_addr;\n        proxy_set_header Upgrade $http_upgrade;\n        proxy_set_header Connection $xui_telemt_connection_upgrade;\n        proxy_connect_timeout 5s;\n        proxy_read_timeout 65s;\n        proxy_send_timeout 65s;\n        proxy_request_buffering off;\n        proxy_buffering off;\n        proxy_next_upstream off;\n    }\n}\n", telemtWebListenIP, state.ListenPort, listen, strings.Join(telemtWebHosts(state), " "), state.CertFile, state.KeyFile, locations)
 	if err := os.MkdirAll(filepath.Dir(telemtWebNginxConf), 0o755); err != nil {
 		return err
 	}
