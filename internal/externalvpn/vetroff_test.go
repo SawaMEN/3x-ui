@@ -146,6 +146,38 @@ func TestVetroffConfigurationAndLink(t *testing.T) {
 			}
 			time.Sleep(20 * time.Millisecond)
 		}
+		previousPID := manager.procs[inst.ID].cmd.Process.Pid
+		renewal := inst
+		renewal.Settings.Certificate, renewal.Settings.PrivateKey = "", ""
+		renewedCert, renewedKey, err := certificate(renewal, t.TempDir())
+		if err != nil {
+			t.Fatal(err)
+		}
+		for target, source := range map[string]string{cert: renewedCert, key: renewedKey} {
+			contents, err := os.ReadFile(source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(target, contents, 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := manager.Ensure(inst); err != nil {
+			t.Fatal(err)
+		}
+		if manager.procs[inst.ID].cmd.Process.Pid == previousPID {
+			t.Fatal("server did not reload a renewed TLS certificate at the same path")
+		}
+		if err := manager.Ensure(inst); err != nil {
+			t.Fatal(err)
+		}
+		currentPID := manager.procs[inst.ID].cmd.Process.Pid
+		if err := manager.Ensure(inst); err != nil {
+			t.Fatal(err)
+		}
+		if manager.procs[inst.ID].cmd.Process.Pid != currentPID {
+			t.Fatal("unchanged TLS certificate caused repeated restarts")
+		}
 		inst.Settings.Clients[0].Enable = false
 		if err := manager.Ensure(inst); err != nil {
 			t.Fatal(err)
