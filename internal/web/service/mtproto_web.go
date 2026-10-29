@@ -25,6 +25,8 @@ type mtprotoWebSettings struct {
 	Site     *TelemtWebSiteOptions `json:"site,omitempty"`
 	Enabled  bool                  `json:"enabled"`
 	Domain   string                `json:"domain"`
+	BasePath string                `json:"basePath"`
+	Aliases  []string              `json:"aliases"`
 	Frontend string                `json:"frontend"`
 	Carrier  string                `json:"carrier"`
 	Carriers []string              `json:"carriers"`
@@ -92,7 +94,11 @@ func ValidateMtprotoWebInbound(ib *model.Inbound) error {
 	if !telemtWebDomainPattern.MatchString(domain) || len(domain) > 253 {
 		return errors.New("MTProto WEB Proxy requires a valid public domain")
 	}
-	if _, err := normalizeTelemtWebOptions(TelemtWebProxyOptions{Frontend: opts.Frontend, Carrier: opts.Carrier, Carriers: opts.Carriers, Site: opts.Site}); err != nil {
+	if _, err := normalizeTelemtWebAliases(domain, opts.Aliases); err != nil {
+		return err
+	}
+	normalizedSettings, err := normalizeTelemtWebOptions(TelemtWebProxyOptions{Frontend: opts.Frontend, Carrier: opts.Carrier, Carriers: opts.Carriers, Site: opts.Site, BasePath: &opts.BasePath, Aliases: &opts.Aliases})
+	if err != nil {
 		return err
 	}
 	// Persist the effective endpoint so clients, API and subscriptions agree.
@@ -105,6 +111,14 @@ func ValidateMtprotoWebInbound(ib *model.Inbound) error {
 		return err
 	}
 	webPayload["domain"], err = json.Marshal(domain)
+	if err != nil {
+		return err
+	}
+	webPayload["basePath"], err = json.Marshal(*normalizedSettings.BasePath)
+	if err != nil {
+		return err
+	}
+	webPayload["aliases"], err = json.Marshal(*normalizedSettings.Aliases)
 	if err != nil {
 		return err
 	}
@@ -186,7 +200,7 @@ func ReconcileMtprotoWebProxy(ctx context.Context) error {
 	if opts.Site == nil {
 		opts.Site = &TelemtWebSiteOptions{Mode: "auto"}
 	}
-	normalized, err := normalizeTelemtWebOptions(TelemtWebProxyOptions{Frontend: opts.Frontend, Carrier: opts.Carrier, Carriers: opts.Carriers, Site: opts.Site})
+	normalized, err := normalizeTelemtWebOptions(TelemtWebProxyOptions{Frontend: opts.Frontend, Carrier: opts.Carrier, Carriers: opts.Carriers, Site: opts.Site, BasePath: &opts.BasePath, Aliases: &opts.Aliases})
 	if err != nil {
 		return err
 	}
@@ -204,7 +218,7 @@ func ReconcileMtprotoWebProxy(ctx context.Context) error {
 
 	fingerprint := mtprotoWebFingerprint(ib)
 	unchanged := state.Enabled && state.ManagedInboundID == ib.Id &&
-		state.Domain == domain && telemtWebFrontend(state) == normalized.Frontend &&
+		state.Domain == domain && state.BasePath == *normalized.BasePath && strings.Join(state.Aliases, ",") == strings.Join(*normalized.Aliases, ",") && telemtWebFrontend(state) == normalized.Frontend &&
 		telemtWebCarrier(state) == normalized.Carrier &&
 		strings.Join(state.Carriers, ",") == strings.Join(normalized.Carriers, ",") &&
 		telemtWebSitesEqual(state.Site, normalized.Site)
@@ -224,7 +238,7 @@ func ReconcileMtprotoWebProxy(ctx context.Context) error {
 		if cfgErr != nil {
 			return cfgErr
 		}
-		if saveErr := svc.SaveConfig(cfg); saveErr != nil {
+		if saveErr := svc.SaveWebUsersHotReload(cfg); saveErr != nil {
 			return saveErr
 		}
 		state.UserFingerprint = fingerprint
