@@ -13,10 +13,10 @@ import (
 )
 
 type Client struct {
-	ExpiryTime int64 `json:"expiryTime,omitempty"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
-	Enable   bool   `json:"enable"`
+	ExpiryTime int64  `json:"expiryTime,omitempty"`
+	Email      string `json:"email"`
+	Password   string `json:"password"`
+	Enable     bool   `json:"enable"`
 }
 
 type OpenFluxTransport struct {
