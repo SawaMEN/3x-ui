@@ -163,8 +163,8 @@ export default function SubscriptionGeneralTab({
               </SettingListItem>
               <SettingListItem
                 paddings="small"
-                title={t('pages.settings.subJsonEnableTitle')}
-                description={t('pages.settings.subJsonEnable')}
+                title="Дополнительный JSON-адрес"
+                description="Включает отдельный путь JSON-подписки. Форматы и ответ по основной ссылке настраиваются выше."
               >
                 <Switch
                   checked={allSetting.subJsonEnable}
@@ -177,7 +177,9 @@ export default function SubscriptionGeneralTab({
                   onChange={(v) => updateSetting({ subClashEnable: v })}
                 />
               </SettingListItem>
-              {(allSetting.subJsonEnable || allSetting.subClashEnable) && (
+              {(allSetting.subFormatMode ||
+                allSetting.subJsonEnable ||
+                allSetting.subClashEnable) && (
                 <Alert
                   type="info"
                   showIcon
