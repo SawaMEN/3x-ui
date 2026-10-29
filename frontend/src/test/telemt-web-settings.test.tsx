@@ -71,6 +71,9 @@ describe('Telemt WEB settings', () => {
         '/panel/api/telemt/webproxy/enable',
         {
           domain: 'web.example.com',
+          aliases: [],
+          basePath: '',
+          site: undefined,
           frontend: 'caddy',
           carrier: 'https',
           carriers: ['websocket', 'websocket-lanes', 'https'],

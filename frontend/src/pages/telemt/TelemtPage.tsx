@@ -57,8 +57,11 @@ type WebProxyStatus = {
   enabled: boolean;
   supported: boolean;
   domain: string;
+  basePath: string;
+  aliases: string[];
   defaultDomain: string;
   link: string;
+  links?: string[];
   nginxInstalled: boolean;
   nginxActive: boolean;
   certificateReady: boolean;
@@ -67,6 +70,16 @@ type WebProxyStatus = {
   port443Available: boolean;
   port443Owner: string;
   error: string;
+};
+
+type WebDiagnostics = {
+  available: boolean;
+  lifecycle: string;
+  activeSessions?: number;
+  listeners: string[];
+  capacity?: Record<string, unknown>;
+  carrierNegotiation?: Record<string, unknown>;
+  checkedAt: string;
 };
 
 type WebPreflight = {
@@ -159,8 +172,11 @@ export default function TelemtPage() {
       enabled: false,
       supported: false,
       domain: '',
+      basePath: '',
+      aliases: [],
       defaultDomain: '',
       link: '',
+      links: [],
       nginxInstalled: false,
       nginxActive: false,
       certificateReady: false,
@@ -177,21 +193,36 @@ export default function TelemtPage() {
   const [configSaving, setConfigSaving] = useState(false);
   const [proxyDeleting, setProxyDeleting] = useState<string | null>(null);
   const [webProxyLoading, setWebProxyLoading] = useState(false);
+  const [webDiagnostics, setWebDiagnostics] = useState<WebDiagnostics | null>(null);
+  const [webDiagnosticsError, setWebDiagnosticsError] = useState('');
+  const [webDiagnosticsLoading, setWebDiagnosticsLoading] = useState(false);
   const [webProxyOpen, setWebProxyOpen] = useState(false);
   const [webPreflight, setWebPreflight] = useState<WebPreflight | null>(null);
   const [webPreflightRefresh, setWebPreflightRefresh] = useState(0);
   const webForm = useZodForm(TelemtWebProxyRequestSchema, {
-    defaultValues: { domain: '', frontend: 'nginx', carrier: 'https', carriers: [] },
+    defaultValues: {
+      domain: '',
+      aliases: [],
+      basePath: '',
+      frontend: 'nginx',
+      carrier: 'https',
+      carriers: [],
+    },
   });
   const webProxyDomain = webForm.watch('domain');
+  const webBasePath = webForm.watch('basePath');
+  const webAliases = webForm.watch('aliases');
   const webFrontend = webForm.watch('frontend');
   const webCarrier = webForm.watch('carrier');
   const webCarriers = webForm.watch('carriers');
   const webSite = webForm.watch('site');
   const webSiteKey = JSON.stringify(webSite);
+  const webAliasesKey = (webAliases || []).join('|');
   const webCarriersKey = (webCarriers || []).join('|');
   const webPreflightKey = JSON.stringify([
     webProxyDomain,
+    webAliasesKey,
+    webBasePath,
     webFrontend,
     webCarrier,
     webCarriersKey,
@@ -213,6 +244,8 @@ export default function TelemtPage() {
           '/panel/api/telemt/webproxy/preflight',
           {
             domain: webProxyDomain || '',
+            basePath: webBasePath || '',
+            aliases: webAliasesKey ? webAliasesKey.split('|') : [],
             frontend: webFrontend || 'nginx',
             carrier: webCarrier || 'https',
             carriers: webCarriersKey ? webCarriersKey.split('|') : [],
@@ -261,6 +294,8 @@ export default function TelemtPage() {
   }, [
     webProxyOpen,
     webProxyDomain,
+    webBasePath,
+    webAliasesKey,
     webFrontend,
     webCarrier,
     webCarriersKey,
@@ -390,6 +425,8 @@ export default function TelemtPage() {
     webForm.reset({
       site: TelemtWebSiteSchema.optional().catch(undefined).parse(status.webProxy.site),
       domain: status.webProxy.domain || status.webProxy.defaultDomain || '',
+      basePath: status.webProxy.basePath || '',
+      aliases: status.webProxy.aliases || [],
       frontend: TelemtFrontendSchema.catch('nginx').parse(status.webProxy.frontend),
       carrier: TelemtCarrierSchema.catch('https').parse(status.webProxy.carrier),
       carriers: TelemtCarriersSchema.catch([]).parse(
@@ -918,6 +955,25 @@ export default function TelemtPage() {
                 <Input placeholder="web.example.com" disabled={webProxyLoading} suffix=":443" />
               </FormField>
               <FormField
+                name="aliases"
+                label="Дополнительные WEB-домены"
+                extra="До 7 доменов. Необходим существующий сертификат SAN/wildcard на все имена."
+              >
+                <Select
+                  mode="tags"
+                  tokenSeparators={[',', ' ']}
+                  placeholder="web2.example.com"
+                  disabled={webProxyLoading}
+                />
+              </FormField>
+              <FormField
+                name="basePath"
+                label="Скрытый URL-путь (необязательно)"
+                extra="Например app/sync. Без пути старые tg://webproxy ссылки остаются прежними."
+              >
+                <Input placeholder="app/sync" disabled={webProxyLoading} />
+              </FormField>
+              <FormField
                 name="frontend"
                 label="Сервер HTTPS (frontend)"
                 extra={telemtWebFieldHelp.ru.frontend}
@@ -1049,19 +1105,77 @@ export default function TelemtPage() {
             </Descriptions.Item>
           </Descriptions>
 
+          <Button
+            disabled={!status.webProxy.enabled}
+            loading={webDiagnosticsLoading}
+            onClick={() => {
+              setWebDiagnosticsLoading(true);
+              setWebDiagnosticsError('');
+              void HttpUtil.get<WebDiagnostics>(
+                '/panel/api/telemt/webproxy/diagnostics',
+                undefined,
+                { silent: true },
+              )
+                .then((response) => {
+                  if (response?.success && response.obj) {
+                    setWebDiagnostics(response.obj);
+                  } else {
+                    setWebDiagnostics(null);
+                    setWebDiagnosticsError(response?.msg || 'Не удалось прочитать WEB runtime');
+                  }
+                })
+                .catch((cause: unknown) => {
+                  setWebDiagnostics(null);
+                  setWebDiagnosticsError(cause instanceof Error ? cause.message : String(cause));
+                })
+                .finally(() => setWebDiagnosticsLoading(false));
+            }}
+          >
+            Диагностика WEB Proxy
+          </Button>
+          {webDiagnosticsError && <Alert type="warning" showIcon title={webDiagnosticsError} />}
+          {webDiagnostics && (
+            <Descriptions bordered size="small" column={1}>
+              <Descriptions.Item label="Runtime">
+                {webDiagnostics.available ? 'доступен' : 'недоступен'}
+              </Descriptions.Item>
+              <Descriptions.Item label="Состояние">{webDiagnostics.lifecycle}</Descriptions.Item>
+              <Descriptions.Item label="Активные WEB-сессии">
+                {webDiagnostics.activeSessions ?? 'нет данных'}
+              </Descriptions.Item>
+              <Descriptions.Item label="Слушатели">
+                {webDiagnostics.listeners?.join(', ') || '—'}
+              </Descriptions.Item>
+              <Descriptions.Item label="Ёмкость">
+                <Typography.Text code>
+                  {JSON.stringify(webDiagnostics.capacity ?? {})}
+                </Typography.Text>
+              </Descriptions.Item>
+              <Descriptions.Item label="Согласование транспорта">
+                <Typography.Text code>
+                  {JSON.stringify(webDiagnostics.carrierNegotiation ?? {})}
+                </Typography.Text>
+              </Descriptions.Item>
+            </Descriptions>
+          )}
+
           {status.webProxy.enabled && status.webProxy.link && (
             <div>
-              <Typography.Text strong>Ссылка для Telegram</Typography.Text>
-              <div className="telemt-link-box telemt-link-box-large">
-                <Typography.Text code>{status.webProxy.link}</Typography.Text>
-                <Button
-                  type="text"
-                  icon={<CopyOutlined />}
-                  onClick={() => void navigator.clipboard.writeText(status.webProxy.link)}
-                >
-                  Копировать
-                </Button>
-              </div>
+              <Typography.Text strong>Ссылки для Telegram</Typography.Text>
+              {(status.webProxy.links?.length ? status.webProxy.links : [status.webProxy.link]).map(
+                (link) => (
+                  <div className="telemt-link-box telemt-link-box-large" key={link}>
+                    <Typography.Text code>{link}</Typography.Text>
+                    <Button
+                      type="text"
+                      icon={<CopyOutlined />}
+                      onClick={() => void navigator.clipboard.writeText(link)}
+                    >
+                      Копировать
+                    </Button>
+                  </div>
+                ),
+              )}
             </div>
           )}
         </Space>

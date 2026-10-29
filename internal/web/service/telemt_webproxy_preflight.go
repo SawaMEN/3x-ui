@@ -40,6 +40,11 @@ func (s TelemtService) PreflightWebProxy(ctx context.Context, domain string, opt
 		return TelemtWebPreflight{}, err
 	}
 	domain = normalizeTelemtWebDomain(domain)
+	aliasInput := state.Aliases
+	if options.Aliases != nil {
+		aliasInput = *options.Aliases
+	}
+	aliases, aliasesErr := normalizeTelemtWebAliases(domain, aliasInput)
 	result := TelemtWebPreflight{Ready: true, Domain: domain, Frontend: options.Frontend, Checks: []TelemtWebPreflightCheck{}, Warnings: []string{}}
 	check := func(id string, ok bool, message string) {
 		result.Checks = append(result.Checks, TelemtWebPreflightCheck{ID: id, OK: ok, Message: message})
@@ -48,6 +53,11 @@ func (s TelemtService) PreflightWebProxy(ctx context.Context, domain string, opt
 		}
 	}
 
+	if aliasesErr != nil {
+		check("aliases", false, aliasesErr.Error())
+	} else {
+		check("aliases", true, fmt.Sprintf("WEB-домены: %d дополнительныx", len(aliases)))
+	}
 	validDomain := len(domain) <= 253 && telemtWebDomainPattern.MatchString(domain)
 	if validDomain {
 		check("domain", true, "Публичный домен: "+domain)
@@ -62,6 +72,15 @@ func (s TelemtService) PreflightWebProxy(ctx context.Context, domain string, opt
 			// A remote firewall, DNS proxy or NAT port forwarding cannot be
 			// established by listening on local sockets alone.
 			result.Warnings = append(result.Warnings, "Проверьте, что DNS указывает непосредственно на этот сервер (без CDN), TCP 443 доступен извне, а при NAT настроена переадресация.")
+		}
+	}
+	if aliasesErr == nil {
+		for _, alias := range aliases {
+			if addr, dnsErr := resolveTelemtWebPublicAddr(alias); dnsErr != nil {
+				check("alias-dns-"+alias, false, dnsErr.Error())
+			} else {
+				check("alias-dns-"+alias, true, "WEB-домен "+alias+" разрешается в "+addr)
+			}
 		}
 	}
 	version := telemtVersion()
@@ -116,6 +135,14 @@ func (s TelemtService) PreflightWebProxy(ctx context.Context, domain string, opt
 		check("https-port", false, "TCP 443 занят другим сервисом.")
 	}
 	if options.Frontend == "nginx" && telemtWebCommandExists("nginx") {
+		for _, alias := range aliases {
+			conflict, inspectErr := telemtWebNginxHostConflict(ctx, alias)
+			if inspectErr != nil || conflict {
+				check("nginx-vhost-"+alias, false, "Nginx: дополнительный домен "+alias+" уже используется или конфигурация недоступна.")
+			} else {
+				check("nginx-vhost-"+alias, true, "Свободен Nginx vhost: "+alias)
+			}
+		}
 		conflict, inspectErr := telemtWebNginxHostConflict(ctx, domain)
 		if inspectErr == nil && !conflict {
 			check("nginx-vhost", true, "Нет конкурирующего HTTPS vhost Nginx для домена.")
@@ -144,6 +171,19 @@ func (s TelemtService) PreflightWebProxy(ctx context.Context, domain string, opt
 			telemtWebCertificatePairReady(acmeCert, acmeKey, domain)
 		if state.Enabled && state.Domain == domain {
 			certReady = certReady || telemtWebCertificatePairReady(state.CertFile, state.KeyFile, domain)
+		}
+		if aliasesErr == nil && len(aliases) > 0 {
+			allHosts := append([]string{domain}, aliases...)
+			aliasesCovered := telemtWebCertificateCoversHosts(panelCert, panelKey, allHosts) ||
+				telemtWebCertificateCoversHosts(acmeCert, acmeKey, allHosts)
+			if state.Enabled && state.Domain == domain {
+				aliasesCovered = aliasesCovered || telemtWebCertificateCoversHosts(state.CertFile, state.KeyFile, allHosts)
+			}
+			if aliasesCovered {
+				check("aliases-certificate", true, "Действующий сертификат покрывает все WEB-домены.")
+			} else {
+				check("aliases-certificate", false, "Для нескольких WEB-доменов нужен один уже установленный SAN/wildcard TLS-сертификат на все имена.")
+			}
 		}
 		if certReady {
 			check("tls", true, "Подходящий действующий TLS-сертификат будет использован повторно.")

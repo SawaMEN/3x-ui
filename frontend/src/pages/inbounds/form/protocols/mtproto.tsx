@@ -96,6 +96,28 @@ export default function MtprotoFields() {
             <Input placeholder="web.example.com" suffix=":443" />
           </FormField>
           <FormField
+            name={['settings', 'webProxy', 'aliases']}
+            label={ru ? 'Дополнительные WEB-домены' : 'Additional WEB domains'}
+            extra={
+              ru
+                ? 'До 7 дополнительных доменов. Требуется один готовый SAN/wildcard TLS-сертификат, покрывающий все имена.'
+                : 'Up to 7 domains. One existing SAN/wildcard TLS certificate must cover all hostnames.'
+            }
+          >
+            <Select mode="tags" tokenSeparators={[',', ' ']} placeholder="web2.example.com" />
+          </FormField>
+          <FormField
+            name={['settings', 'webProxy', 'basePath']}
+            label={ru ? 'Скрытый URL-путь (необязательно)' : 'Hidden URL path (optional)'}
+            extra={
+              ru
+                ? 'Оставьте пустым для прежних ссылок. Например: app/sync. Изменение пути требует обновить ссылки клиентов.'
+                : 'Leave blank to keep existing links. Example: app/sync. Changing the path requires updating client links.'
+            }
+          >
+            <Input placeholder="app/sync" />
+          </FormField>
+          <FormField
             name={['settings', 'webProxy', 'frontend']}
             label={ru ? 'Сервер HTTPS (frontend)' : 'HTTPS server (frontend)'}
             extra={help.frontend}

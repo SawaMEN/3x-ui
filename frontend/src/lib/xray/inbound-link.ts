@@ -898,15 +898,32 @@ export function genMtprotoLink(input: GenMtprotoLinkInput): string {
   const { inbound, address, port = inbound.port, clientSecret = '' } = input;
   if (inbound.protocol !== 'mtproto') return '';
   if (clientSecret.length === 0) return '';
-  const web = (inbound.settings as { webProxy?: { enabled?: boolean; domain?: string } }).webProxy;
+  const web = (
+    inbound.settings as { webProxy?: { enabled?: boolean; domain?: string; basePath?: string } }
+  ).webProxy;
   if (web?.enabled) {
     const rawSecret = /^(?:ee|dd)[0-9a-fA-F]{32}/.test(clientSecret)
       ? clientSecret.slice(2, 34)
       : clientSecret;
     if (!/^[0-9a-fA-F]{32}$/.test(rawSecret) || !web.domain) return '';
     const url = new URL('tg://webproxy');
-    url.searchParams.set('server', web.domain);
-    url.searchParams.set('secret', 'dd' + rawSecret);
+    const basePath = (web.basePath || '').replace(/^\/+|\/+$/g, '');
+    url.searchParams.set('server', web.domain + (basePath ? '/' + basePath : ''));
+    if (basePath) {
+      // Telemt WEB base_path uses 0x70 0xdd followed by the user's 16-byte secret.
+      const bytes = [
+        0x70,
+        0xdd,
+        ...(rawSecret.match(/.{2}/g) || []).map((part) => Number.parseInt(part, 16)),
+      ];
+      const encoded = btoa(String.fromCharCode(...bytes))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+      url.searchParams.set('secret', encoded);
+    } else {
+      url.searchParams.set('secret', 'dd' + rawSecret);
+    }
     return url.toString();
   }
   const url = new URL('tg://proxy');

@@ -241,8 +241,9 @@ func (TelemtService) EnsureWebProxyBackend() error {
 
 	addr := net.JoinHostPort(telemtWebListenIP, strconv.Itoa(state.ListenPort))
 	client := &http.Client{
-		Timeout:   2 * time.Second,
-		Transport: &http.Transport{Proxy: nil},
+		Timeout:       2 * time.Second,
+		Transport:     &http.Transport{Proxy: nil},
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
 	deadline := time.Now().Add(30 * time.Second)
 	var lastErr error
@@ -255,7 +256,7 @@ func (TelemtService) EnsureWebProxyBackend() error {
 				response, err = client.Do(request)
 				if err == nil {
 					_ = response.Body.Close()
-					if response.StatusCode == http.StatusOK {
+					if telemtWebHealthyDecoyStatus(response.StatusCode) {
 						return nil
 					}
 					err = fmt.Errorf("WEB listener returned HTTP %d", response.StatusCode)

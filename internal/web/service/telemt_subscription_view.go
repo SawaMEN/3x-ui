@@ -83,8 +83,8 @@ func (TelemtService) SubscriptionWebProxyLink() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if state.Enabled && state.Domain != "" && state.Secret != "" {
-		return telemtWebLink(state.Domain, state.Secret), nil
+	if state.Enabled && state.ManagedInboundID == 0 && state.Domain != "" && state.Secret != "" {
+		return telemtWebLinkWithPath(state.Domain, state.Secret, state.BasePath), nil
 	}
 	return "", nil
 }

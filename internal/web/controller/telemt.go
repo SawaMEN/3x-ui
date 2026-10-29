@@ -30,6 +30,7 @@ func NewTelemtController(g *gin.RouterGroup, settingService service.SettingServi
 	g.Use(a.requireInstalled)
 	g.POST("/remove", a.remove)
 	g.GET("/webproxy/status", a.webProxyStatus)
+	g.GET("/webproxy/diagnostics", a.webProxyDiagnostics)
 	g.POST("/webproxy/preflight", a.webProxyPreflight)
 	g.POST("/webproxy/enable", a.enableWebProxy)
 	g.POST("/webproxy/disable", a.disableWebProxy)
@@ -113,6 +114,11 @@ func (a *TelemtController) getWebProxyStatus(c *gin.Context) service.TelemtWebPr
 
 func (a *TelemtController) webProxyStatus(c *gin.Context) {
 	jsonObj(c, a.getWebProxyStatus(c), nil)
+}
+
+func (a *TelemtController) webProxyDiagnostics(c *gin.Context) {
+	status, err := a.service.WebProxyRuntimeDiagnostics(c.Request.Context())
+	jsonObj(c, status, err)
 }
 
 func (a *TelemtController) webProxyPreflight(c *gin.Context) {

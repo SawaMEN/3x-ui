@@ -72,6 +72,10 @@ export default function TelemtWebSiteFields({
                         ? 'Выбрать из готовых каталогов'
                         : 'Choose from ready-made catalogs',
                     },
+                    {
+                      value: 'origin',
+                      label: ru ? 'Локальный HTTP-сайт' : 'Local HTTP website',
+                    },
                     ...(mode === 'html'
                       ? [
                           {
@@ -86,6 +90,19 @@ export default function TelemtWebSiteFields({
                   ]}
                 />
               </FormField>
+              {mode === 'origin' && (
+                <FormField
+                  name={`${prefix}.origin`}
+                  label={ru ? 'Локальный HTTP-адрес' : 'Local HTTP origin'}
+                  extra={
+                    ru
+                      ? 'Только 127.0.0.1 или ::1 с портом. Обычные запросы к WEB-домену будут направляться этому локальному сайту.'
+                      : 'Only 127.0.0.1 or ::1 with a port. Ordinary requests to the WEB domain are forwarded to this local website.'
+                  }
+                >
+                  <Input placeholder="http://127.0.0.1:8080" disabled={disabled} />
+                </FormField>
+              )}
               {mode === 'generate' && (
                 <>
                   <FormField name={`${prefix}.theme`} label={ru ? 'Тема страницы' : 'Page theme'}>

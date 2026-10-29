@@ -10,9 +10,11 @@ describe('Telemt WEB request validation', () => {
     carriers: ['websocket', 'https'],
   };
   it('preserves carrier order and trims the domain', () => {
-    expect(TelemtWebProxyRequestSchema.parse({ ...valid, domain: ' web.example.com ' })).toEqual(
-      valid,
-    );
+    expect(TelemtWebProxyRequestSchema.parse({ ...valid, domain: ' web.example.com ' })).toEqual({
+      ...valid,
+      aliases: [],
+      basePath: '',
+    });
   });
   it.each([
     { frontend: 'shell-command' },
