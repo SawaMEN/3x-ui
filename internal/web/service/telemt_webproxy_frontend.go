@@ -32,6 +32,8 @@ type TelemtWebProxyOptions struct {
 	Site     *TelemtWebSiteOptions `json:"site,omitempty"`
 	Frontend string                `json:"frontend"`
 	Carrier  string                `json:"carrier"`
+	BasePath *string               `json:"basePath,omitempty"`
+	Aliases  *[]string             `json:"aliases,omitempty"`
 	Carriers []string              `json:"carriers"`
 }
 
@@ -44,6 +46,20 @@ func normalizeTelemtWebOptions(o TelemtWebProxyOptions) (TelemtWebProxyOptions, 
 	}
 	if o.Carrier == "" {
 		o.Carrier = "https"
+	}
+	if o.Aliases != nil {
+		aliases, err := normalizeTelemtWebAliases("", *o.Aliases)
+		if err != nil {
+			return o, err
+		}
+		o.Aliases = &aliases
+	}
+	if o.BasePath != nil {
+		path, err := normalizeTelemtWebBasePath(*o.BasePath)
+		if err != nil {
+			return o, err
+		}
+		o.BasePath = &path
 	}
 	if !slices.Contains([]string{"nginx", "caddy", "haproxy"}, o.Frontend) {
 		return o, errors.New("WEB Proxy frontend must be nginx, caddy or haproxy")
@@ -97,8 +113,14 @@ func (s TelemtService) enableWebProxyLocked(ctx context.Context, domain, cert, k
 	if err != nil {
 		return TelemtWebProxyStatus{}, err
 	}
-	o := TelemtWebProxyOptions{Frontend: old.Frontend, Carrier: old.Carrier, Carriers: old.Carriers, Site: old.Site}
+	o := TelemtWebProxyOptions{Frontend: old.Frontend, Carrier: old.Carrier, Carriers: old.Carriers, Site: old.Site, BasePath: &old.BasePath, Aliases: &old.Aliases}
 	if len(options) > 0 {
+		if options[0].Aliases != nil {
+			o.Aliases = options[0].Aliases
+		}
+		if options[0].BasePath != nil {
+			o.BasePath = options[0].BasePath
+		}
 		if options[0].Site != nil {
 			o.Site = options[0].Site
 		}
@@ -224,6 +246,21 @@ func telemtWebEnsureFrontendPackage(ctx context.Context, s TelemtWebProxyState) 
 }
 
 func telemtWebFrontendCertificate(ctx context.Context, s TelemtWebProxyState, domain, cert, key string) (string, string, error) {
+	if len(s.Aliases) > 0 {
+		hosts := telemtWebHosts(s)
+		if telemtWebCertificateCoversHosts(cert, key, hosts) {
+			return cert, key, nil
+		}
+		acmeCert := "/etc/letsencrypt/live/" + domain + "/fullchain.pem"
+		acmeKey := "/etc/letsencrypt/live/" + domain + "/privkey.pem"
+		if telemtWebCertificateCoversHosts(acmeCert, acmeKey, hosts) {
+			return acmeCert, acmeKey, nil
+		}
+		if telemtWebCertificateCoversHosts(s.CertFile, s.KeyFile, hosts) {
+			return s.CertFile, s.KeyFile, nil
+		}
+		return "", "", errors.New("additional WEB domains require an existing SAN or wildcard certificate covering every hostname")
+	}
 	if telemtWebFrontend(s) == "nginx" {
 		return telemtWebEnsureCertificate(ctx, domain, cert, key)
 	}
@@ -288,7 +325,7 @@ func telemtWebFrontendConfig(s TelemtWebProxyState, sub telemtWebSubscriptionTar
 			routes = append(routes, map[string]any{"match": []any{map[string]any{"path": sub.Paths}}, "handle": []any{proxy(sub.Upstream)}, "terminal": true})
 		}
 		routes = append(routes, map[string]any{"handle": []any{proxy("http://" + backend)}})
-		server := map[string]any{"listen": []string{":443"}, "automatic_https": map[string]any{"disable": true}, "tls_connection_policies": []any{map[string]any{}}, "routes": []any{map[string]any{"match": []any{map[string]any{"host": []string{s.Domain}}}, "handle": []any{map[string]any{"handler": "subroute", "routes": routes}}, "terminal": true}, map[string]any{"handle": []any{map[string]any{"handler": "static_response", "status_code": 404}}}}}
+		server := map[string]any{"listen": []string{":443"}, "automatic_https": map[string]any{"disable": true}, "tls_connection_policies": []any{map[string]any{}}, "routes": []any{map[string]any{"match": []any{map[string]any{"host": telemtWebHosts(s)}}, "handle": []any{map[string]any{"handler": "subroute", "routes": routes}}, "terminal": true}, map[string]any{"handle": []any{map[string]any{"handler": "static_response", "status_code": 404}}}}}
 		config := map[string]any{"admin": map[string]any{"listen": "unix//run/3x-ui-telemt-front/caddy.sock", "config": map[string]any{"persist": false}}, "apps": map[string]any{"tls": map[string]any{"certificates": map[string]any{"load_files": []any{map[string]any{"certificate": s.CertFile, "key": s.KeyFile}}}}, "http": map[string]any{"servers": map[string]any{"web": server}}}}
 		return json.MarshalIndent(config, "", "  ")
 	case "haproxy":
@@ -298,7 +335,7 @@ func telemtWebFrontendConfig(s TelemtWebProxyState, sub telemtWebSubscriptionTar
 		}
 		var b strings.Builder
 		b.WriteString("global\n    maxconn 4096\n\ndefaults\n    mode http\n    timeout connect 5s\n    timeout client 65s\n    timeout server 65s\n    timeout tunnel 1h\n\nfrontend web\n    bind " + bind + " ssl crt " + telemtWebFrontDir + "/tls.pem alpn h2,http/1.1\n")
-		fmt.Fprintf(&b, "    http-request deny deny_status 404 unless { hdr(host),field(1,:) -i %s }\n", s.Domain)
+		fmt.Fprintf(&b, "    http-request deny deny_status 404 unless { hdr(host),field(1,:) -i %s }\n", strings.Join(telemtWebHosts(s), " "))
 		b.WriteString("    http-request set-header X-Forwarded-For %[src]\n    http-request set-header X-Forwarded-Proto https\n")
 		if len(sub.Paths) > 0 {
 			for _, path := range sub.Paths {
@@ -328,8 +365,8 @@ func writeTelemtWebFrontendConfig(s TelemtWebProxyState) error {
 	if telemtWebFrontend(s) == "nginx" {
 		return writeTelemtWebNginxConfig(s)
 	}
-	if !telemtWebCertificatePairReady(s.CertFile, s.KeyFile, s.Domain) {
-		return errors.New("WEB certificate does not cover the domain")
+	if !telemtWebCertificateCoversHosts(s.CertFile, s.KeyFile, telemtWebHosts(s)) {
+		return errors.New("WEB certificate does not cover all configured domains")
 	}
 	aliases, upstream, err := telemtWebSubscriptionTargets(&SettingService{})
 	if err != nil {
@@ -495,7 +532,11 @@ func telemtWebWaitFrontendReady(ctx context.Context, state TelemtWebProxyState) 
 	if ip, _, err := net.SplitHostPort(state.PublicAddr); err == nil && net.ParseIP(ip) != nil && net.ParseIP(ip).To4() == nil {
 		host = "::1"
 	}
-	client := &http.Client{Timeout: 2 * time.Second, Transport: &http.Transport{Proxy: nil, TLSClientConfig: &tls.Config{RootCAs: roots, ServerName: state.Domain, MinVersion: tls.VersionTLS12}}}
+	client := &http.Client{
+		Timeout: 2 * time.Second,
+		Transport: &http.Transport{Proxy: nil, TLSClientConfig: &tls.Config{RootCAs: roots, ServerName: state.Domain, MinVersion: tls.VersionTLS12}},
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
 	defer client.CloseIdleConnections()
 	deadline, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -509,7 +550,7 @@ func telemtWebWaitFrontendReady(ctx context.Context, state TelemtWebProxyState) 
 		response, err := client.Do(req)
 		if err == nil {
 			_ = response.Body.Close()
-			if response.StatusCode == http.StatusOK {
+			if telemtWebHealthyDecoyStatus(response.StatusCode) {
 				return nil
 			}
 			err = fmt.Errorf("WEB HTTPS endpoint returned HTTP %d", response.StatusCode)
