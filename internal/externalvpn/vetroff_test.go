@@ -254,7 +254,7 @@ func TestOfficialVetroffBundle(t *testing.T) {
 	if err := extractVetroffBundle(archive, folder); err != nil {
 		t.Fatal(err)
 	}
-	version, err := binaryVersion(t.Context(), filepath.Join(folder, "foxtunnel-necko/vetroff"), []string{"version"})
+	version, err := binaryVersion(t.Context(), vetroffExecutable(folder), []string{"version"})
 	if err != nil || version != "0.1.0" {
 		t.Fatalf("official release: %s, %v", version, err)
 	}
