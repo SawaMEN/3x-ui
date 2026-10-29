@@ -2042,7 +2042,7 @@ install_x-ui() {
         while IFS= read -r -d '' f; do
             local rel="${f#"${custom_bin_backup}"/}"
             case "${rel}" in
-                config.json | telemt | mtg-linux-* | mtproto | mtproto/* | tuic | tuic/* | mieru | mieru/*) continue ;;
+                config.json | telemt | mtg-linux-* | mtproto | mtproto/* | tuic | tuic/* | mieru | mieru/* | optional/sudoku | optional/sudoku/*) continue ;;
             esac
             if [[ ! -e "bin/${rel}" ]]; then
                 mkdir -p "bin/$(dirname "${rel}")"
@@ -2056,6 +2056,8 @@ install_x-ui() {
             echo -e "${green}Restored custom file(s) in bin/ not shipped by this release: ${restored_custom_bin[*]}${plain}"
         fi
     fi
+    # Remove only the retired bundled payload; explicitly installed Sudoku stays intact.
+    rm -rf -- bin/optional/sudoku
     # Keep migration rollback armed until the restarted core is verified.
 
     rm -f bin/tuic-server bin/tuic-server-* > /dev/null 2>&1 || true

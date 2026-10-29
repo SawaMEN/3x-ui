@@ -101,9 +101,6 @@ func EnsureInstalled(ctx context.Context, binDir string) (string, error) {
 }
 
 func InstallLatest(ctx context.Context, binDir string) (string, error) {
-	if path, found, err := installOptional(ctx, binDir); found || err != nil {
-		return path, err
-	}
 	rel, err := fetchLatestRelease(ctx)
 	if err != nil {
 		return "", err

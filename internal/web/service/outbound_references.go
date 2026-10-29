@@ -58,7 +58,7 @@ func replaceConnectionTags(value any, removed map[string]bool, replacement, pare
 }
 
 func deleteSubscriptionAndReferences(tx *gorm.DB, sub *model.OutboundSubscription, replacement string) error {
-	removed := map[string]bool{fmt.Sprintf("sub-auto-%d", sub.Id): true}
+	removed := map[string]bool{autoOutboundTag(sub.Id): true, autoBlockedTag(sub.Id): true}
 	var nodes []map[string]any
 	if strings.TrimSpace(sub.LastFetchedOutbounds) != "" {
 		if err := json.Unmarshal([]byte(sub.LastFetchedOutbounds), &nodes); err != nil {
@@ -117,11 +117,60 @@ func deleteSubscriptionAndReferences(tx *gorm.DB, sub *model.OutboundSubscriptio
 		if err := json.Unmarshal([]byte(row.Value), &cfg); err != nil {
 			return err
 		}
-		if !replaceConnectionTags(cfg, removed, replacement, "") {
+		implicitDefault := false
+		if rows, ok := cfg["outbounds"].([]any); ok && len(rows) > 0 {
+			first, _ := rows[0].(map[string]any)
+			tag, _ := first["tag"].(string)
+			route, _ := cfg["route"].(map[string]any)
+			implicitDefault = removed[tag] && (row.Key == "xrayTemplateConfig" || route["final"] == nil || route["final"] == "")
+		}
+		definitionsChanged := false
+		for _, key := range []string{"outbounds", "endpoints"} {
+			if rows, ok := cfg[key].([]any); ok {
+				kept := make([]any, 0, len(rows))
+				for _, raw := range rows {
+					row, _ := raw.(map[string]any)
+					tag, _ := row["tag"].(string)
+					if removed[tag] {
+						definitionsChanged = true
+						continue
+					}
+					kept = append(kept, raw)
+				}
+				cfg[key] = kept
+			}
+		}
+		referenced := replaceConnectionTags(cfg, removed, replacement, "") || implicitDefault
+		if !referenced && !definitionsChanged {
 			continue
 		}
-		if replacement == "" || removed[replacement] || !available[replacement] {
+		if referenced && (replacement == "" || removed[replacement] || !available[replacement] && replacement != unavailableSubscriptionTag) {
 			return fmt.Errorf("подписка используется в настройках: выберите существующее подключение для замены")
+		}
+		if referenced && replacement == unavailableSubscriptionTag {
+			_, ownsOutbounds := cfg["outbounds"]
+			if row.Key == "xrayTemplateConfig" || ownsOutbounds {
+				addUnavailableSubscriptionOutbound(cfg, row.Key != "xrayTemplateConfig")
+			}
+		}
+		if implicitDefault {
+			if row.Key != "xrayTemplateConfig" {
+				route, _ := cfg["route"].(map[string]any)
+				if route == nil {
+					route = map[string]any{}
+					cfg["route"] = route
+				}
+				route["final"] = replacement
+			} else {
+				rows, _ := cfg["outbounds"].([]any)
+				for i, raw := range rows {
+					item, _ := raw.(map[string]any)
+					if item["tag"] == replacement {
+						cfg["outbounds"] = append([]any{raw}, append(rows[:i], rows[i+1:]...)...)
+						break
+					}
+				}
+			}
 		}
 		data, err := json.Marshal(cfg)
 		if err != nil {
@@ -130,6 +179,9 @@ func deleteSubscriptionAndReferences(tx *gorm.DB, sub *model.OutboundSubscriptio
 		if err := tx.Model(&model.Setting{}).Where("key = ?", row.Key).Update("value", string(data)).Error; err != nil {
 			return err
 		}
+	}
+	if _, err := replaceInfrastructureReferences(tx, removed, replacement); err != nil {
+		return err
 	}
 	return tx.Delete(&model.OutboundSubscription{}, sub.Id).Error
 }

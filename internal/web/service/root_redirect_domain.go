@@ -34,11 +34,20 @@ func (s *SettingService) GetRootRedirectSettings() (bool, string, error) {
 // Apply the domain listener immediately, restoring the saved option if a port
 // or certificate prevents the domain-wide redirect from becoming usable.
 func (s *SettingService) ReconcileRootRedirect(oldEnabled bool, oldURL string) error {
-	enabled, _, err := s.GetRootRedirectSettings()
+	enabled, target, err := s.GetRootRedirectSettings()
 	if err != nil {
 		return err
 	}
 	cfg, err := s.GetDomainFrontConfig()
+	if err == nil && enabled {
+		var names []string
+		for _, d := range cfg.Domains {
+			if d.Enabled {
+				names = append(names, d.Name)
+			}
+		}
+		err = domainfront.ValidateRootRedirectDomains(target, names)
+	}
 	if err == nil && enabled && len(cfg.Domains) == 0 {
 		err = fmt.Errorf("для перенаправления домена укажите домен панели или подписки в настройках домена и TLS")
 	}

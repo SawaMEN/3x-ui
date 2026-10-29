@@ -103,6 +103,11 @@ func (s *CoreService) GetXrayConfig() (*xray.Config, error) {
 }
 
 func (s *CoreService) getXrayConfigWithTemplate(templateConfig string) (*xray.Config, error) {
+	cleaned, err := NormalizeSubscriptionTemplate(templateConfig, false)
+	if err != nil {
+		return nil, err
+	}
+	templateConfig = cleaned
 	routingLists, err := loadRoutingLists(templateConfig)
 	if err != nil {
 		return nil, err
@@ -964,6 +969,24 @@ func mergeSubscriptionOutbounds(cfg *xray.Config, prepend, appendList []any) {
 			return
 		}
 	}
+	active := map[string]bool{}
+	for _, list := range [][]any{prepend, appendList} {
+		for _, raw := range list {
+			if row, ok := raw.(map[string]any); ok {
+				tag, _ := row["tag"].(string)
+				active[tag] = true
+			}
+		}
+	}
+	kept := templateOutbounds[:0]
+	for _, raw := range templateOutbounds {
+		row, _ := raw.(map[string]any)
+		tag, _ := row["tag"].(string)
+		if !active[tag] && !managedSubscriptionAlias.MatchString(tag) {
+			kept = append(kept, raw)
+		}
+	}
+	templateOutbounds = kept
 	var merged []any
 	merged = append(merged, prepend...)
 	merged = append(merged, templateOutbounds...)

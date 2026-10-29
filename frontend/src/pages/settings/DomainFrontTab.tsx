@@ -42,6 +42,7 @@ import type { AllSetting } from '@/models/setting';
 import { SettingListItem } from '@/components/ui';
 import { useInboundOptions } from '@/api/queries/useInboundOptions';
 import { redirectSiteOptions } from './redirect-sites';
+import { rootRedirectError } from './root-redirect';
 
 export default function DomainFrontTab({
   allSetting,
@@ -101,29 +102,63 @@ export default function DomainFrontTab({
   function update(patch: Partial<DomainConfigForm>) {
     setDraft((prev) => ({ ...(prev ?? defaultDomainConfig), ...patch }));
   }
+  const redirectDomains = [
+    ...new Set(
+      [
+        ...draft.domains.filter((domain) => domain.enabled).map((domain) => domain.name),
+        allSetting?.webDomain || '',
+      ].filter(Boolean),
+    ),
+  ];
+  const redirectError = allSetting?.rootRedirectEnable
+    ? rootRedirectError(allSetting.rootRedirectURL, redirectDomains)
+    : '';
   async function apply() {
+    if (redirectError) {
+      messageApi.error(redirectError);
+      return;
+    }
     const parsed = DomainConfigFormSchema.safeParse(draft);
     if (!parsed.success) {
       messageApi.error(t(parsed.error.issues[0].message));
       return;
     }
+    const domainFirst = dirty && settingsDirty && !!allSetting?.rootRedirectEnable;
+    let committed = false;
     setBusy(true);
     try {
-      if (settingsDirty && saveSettings && !(await saveSettings())) return;
-      if (!dirty) return;
+      if (!domainFirst && settingsDirty && saveSettings && !(await saveSettings())) return;
+      if (!dirty) {
+        await load();
+        messageApi.success(
+          'Перенаправление применено. Для доступа без перенаправления используйте ?panel=1.',
+        );
+        return;
+      }
       const msg = await HttpUtil.post('/panel/api/domains/apply', parsed.data, { silent: true });
       if (!msg?.success) throw new Error(msg?.msg || t('somethingWentWrong'));
       const next = DomainFrontStatusSchema.parse(msg.obj);
+      committed = true;
+      if (domainFirst && saveSettings && !(await saveSettings()))
+        throw new Error('Не удалось сохранить перенаправление.');
       const saved = DomainConfigFormSchema.parse(next.config);
       setDraft(saved);
       markSaved(saved);
       queryClient.setQueryData(keys.settings.domains(), next);
       void queryClient.invalidateQueries({ queryKey: keys.settings.defaults() });
       void queryClient.invalidateQueries({ queryKey: keys.settings.all() });
+      void load();
       messageApi.success(t('pages.settings.domains.applied'));
       if (saved.enabled && saved.subscriptionDomain) void check(saved.subscriptionDomain);
     } catch (e) {
-      messageApi.error(e instanceof Error ? e.message : t('somethingWentWrong'));
+      let detail = e instanceof Error ? e.message : t('somethingWentWrong');
+      if (domainFirst && committed && server) {
+        const rollback = await HttpUtil.post('/panel/api/domains/apply', server, { silent: true });
+        detail += rollback.success
+          ? ' Прежние настройки доменов восстановлены.'
+          : ` Не удалось восстановить домены: ${rollback.msg}`;
+      }
+      messageApi.error(detail);
       void load();
     } finally {
       setBusy(false);
@@ -197,7 +232,7 @@ export default function DomainFrontTab({
           type="primary"
           loading={busy}
           aria-label={label('apply')}
-          disabled={(!dirty && !settingsDirty) || loading}
+          disabled={(!dirty && !settingsDirty) || loading || !!redirectError}
           onClick={() => void apply()}
         >
           {label('apply')}
@@ -224,12 +259,21 @@ export default function DomainFrontTab({
           >
             <Switch
               checked={allSetting.rootRedirectEnable}
-              onChange={(v) => updateSetting({ rootRedirectEnable: v })}
+              onChange={(v) =>
+                updateSetting({
+                  rootRedirectEnable: v,
+                  ...(!v && rootRedirectError(allSetting.rootRedirectURL, redirectDomains)
+                    ? { rootRedirectURL: '' }
+                    : {}),
+                })
+              }
             />
           </SettingListItem>
           {allSetting.rootRedirectEnable && (
             <SettingListItem paddings="small" title={t('pages.settings.rootRedirectURL')}>
               <AutoComplete
+                status={redirectError ? 'error' : undefined}
+                maxLength={2048}
                 aria-label={t('pages.settings.rootRedirectURL')}
                 style={{ width: '100%' }}
                 value={allSetting.rootRedirectURL}
@@ -244,6 +288,60 @@ export default function DomainFrontTab({
                 placeholder="https://example.com/"
               />
             </SettingListItem>
+          )}
+          {allSetting.rootRedirectEnable && (
+            <Space orientation="vertical" style={{ width: '100%', marginTop: 12 }}>
+              <Alert
+                showIcon
+                type={
+                  redirectError
+                    ? 'error'
+                    : settingsDirty
+                      ? 'warning'
+                      : status?.running
+                        ? 'success'
+                        : 'warning'
+                }
+                title={
+                  redirectError ||
+                  (settingsDirty
+                    ? 'Перенаправление ещё не применено'
+                    : status?.running
+                      ? 'Доменный шлюз работает'
+                      : 'Доменный шлюз не запущен')
+                }
+                description="Перенаправляются только GET/HEAD-запросы к корню. Подписки, пути панели и ACME остаются доступны. Используется временный ответ 302 без кеширования и передачи Referer; параметры исходного запроса не передаются."
+              />
+              {!redirectDomains.length && (
+                <Alert
+                  type="warning"
+                  showIcon
+                  title="Сначала добавьте домен и настройте TLS. Для общего доступа нужны свободные порты 80 и 443."
+                />
+              )}
+              {status?.error && <Alert type="error" showIcon title={status.error} />}
+              {!redirectError &&
+                redirectDomains.map((name) => (
+                  <Space key={name} wrap>
+                    <Typography.Text code>https://{name}/</Typography.Text>
+                    <span>→</span>
+                    <Typography.Text ellipsis style={{ maxWidth: 320 }}>
+                      {allSetting.rootRedirectURL}
+                    </Typography.Text>
+                    <Typography.Link
+                      href={`https://${name}/?panel=1`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Открыть без перенаправления
+                    </Typography.Link>
+                  </Space>
+                ))}
+              <Typography.Text type="secondary">
+                При ошибке привязки портов или TLS изменение перенаправления откатывается. Сохраните
+                адрес панели перед включением.
+              </Typography.Text>
+            </Space>
           )}
         </div>
       )}

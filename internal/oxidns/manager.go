@@ -958,7 +958,7 @@ func HasManagedServer(dns map[string]any) bool {
 
 // WithSingBoxDNS leaves user DNS rules and upstreams intact, changing only the default.
 func WithSingBoxDNS(src map[string]any) (map[string]any, error) {
-	next := make(map[string]any, len(src)+2)
+	next := make(map[string]any)
 	for k, v := range src {
 		next[k] = v
 	}

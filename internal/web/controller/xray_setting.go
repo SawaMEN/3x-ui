@@ -97,6 +97,9 @@ func (a *XraySettingController) getXraySetting(c *gin.Context) {
 			xraySetting = unwrapped
 		}
 	}
+	if clean, cleanErr := service.NormalizeSubscriptionTemplate(xraySetting, false); cleanErr == nil {
+		xraySetting = clean
+	}
 	inboundTags, err := a.InboundService.GetInboundTags()
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.settings.toasts.getSettings"), err)

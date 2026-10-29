@@ -78,6 +78,7 @@ type ConfigMap = JsonObject;
 type ApiMsg<T = unknown> = { success?: boolean; msg?: string; obj?: T };
 
 type Snapshot = {
+  warnings?: string[];
   inboundTags?: string[];
   subscriptionTags?: string[];
   config: ConfigMap;
@@ -838,7 +839,10 @@ export default function SingBoxPage() {
     [setConfig],
   );
 
-  const persist = async (draft: ConfigMap): Promise<boolean> => {
+  const persist = async (
+    draft: ConfigMap,
+    removal?: { removeTag: string; replacement: string },
+  ): Promise<boolean> => {
     try {
       const next: ConfigMap = { ...draft };
       if (asObjectArray(next.outbounds).some((item) => item.type === 'masque')) {
@@ -858,6 +862,7 @@ export default function SingBoxPage() {
       setSaving(true);
       const msg = (await HttpUtil.post('/panel/api/setting/singbox/config', {
         config: JSON.stringify(next),
+        ...removal,
       })) as ApiMsg;
       if (!msg?.success) throw new Error(msg?.msg || 'Не удалось сохранить настройки sing-box');
       // The backend has already validated and published the applied settings.
@@ -1520,21 +1525,20 @@ export default function SingBoxPage() {
                           const choices = items
                             .filter((_, i) => i !== index)
                             .map((row) => asString(row.tag))
+                            .concat(snapshot?.subscriptionTags || [])
                             .filter(Boolean);
-                          let replacement = choices.includes('direct') ? 'direct' : choices[0];
-                          let referenced = false;
-                          try {
-                            removeConnection(config, index);
-                          } catch {
-                            referenced = true;
-                          }
+                          let replacement = choices.includes('blocked')
+                            ? 'blocked'
+                            : choices.includes('direct')
+                              ? 'direct'
+                              : choices[0];
                           modalApi.confirm({
                             title: `Удалить подключение ${items[index].tag}?`,
-                            content: referenced ? (
+                            content: (
                               <Space orientation="vertical" style={{ width: '100%' }}>
                                 <span>
                                   Подключение используется. Выберите замену для всех связанных
-                                  правил и групп:
+                                  правил, групп, панели и узлов:
                                 </span>
                                 <Select
                                   aria-label="Замена удаляемого подключения"
@@ -1546,7 +1550,7 @@ export default function SingBoxPage() {
                                   }}
                                 />
                               </Space>
-                            ) : undefined,
+                            ),
                             okText: 'Удалить',
                             cancelText: 'Отмена',
                             okButtonProps: { danger: true },
@@ -1554,9 +1558,15 @@ export default function SingBoxPage() {
                               const next = removeConnection(
                                 config,
                                 index,
-                                referenced ? replacement : undefined,
+                                replacement,
+                                snapshot?.subscriptionTags || [],
                               );
-                              if (!(await persist(next)))
+                              if (
+                                !(await persist(next, {
+                                  removeTag: String(items[index].tag),
+                                  replacement: replacement || '',
+                                }))
+                              )
                                 throw new Error('Не удалось удалить подключение');
                             },
                           });
@@ -2089,7 +2099,12 @@ export default function SingBoxPage() {
     { key: 'gateway', label: 'Режим шлюза', value: null, unit: 'Автоматическая настройка' },
   ];
 
-  const healthIssues = singBoxHealthIssues(config, snapshot?.subscriptionTags || []);
+  const healthIssues = [
+    ...new Set([
+      ...(snapshot?.warnings || []),
+      ...singBoxHealthIssues(config, snapshot?.subscriptionTags || []),
+    ]),
+  ];
   const dirty = !!snapshot && JSON.stringify(snapshot.config) !== JSON.stringify(config);
 
   const sectionBody = (() => {
@@ -2365,6 +2380,7 @@ export default function SingBoxPage() {
           onClose={() => setSubscriptionsOpen(false)}
           replacementTags={[...asObjectArray(config.outbounds), ...asObjectArray(config.endpoints)]
             .map((row) => asString(row.tag))
+            .concat(snapshot?.subscriptionTags || [])
             .filter(Boolean)}
           onTagsChanged={() => {
             void refresh();

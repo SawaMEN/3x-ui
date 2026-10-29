@@ -12,7 +12,7 @@ func RootRedirectTarget(req *http.Request, raw string) string {
 	if req.URL.Path != "/" || (req.Method != http.MethodGet && req.Method != http.MethodHead) || req.URL.Query().Get("panel") == "1" {
 		return ""
 	}
-	target, err := url.Parse(raw)
+	target, err := ValidateRootRedirectURL(raw)
 	if err != nil || (target.Scheme != "http" && target.Scheme != "https") || target.Hostname() == "" || target.User != nil {
 		return ""
 	}
@@ -33,7 +33,7 @@ func RootRedirectTarget(req *http.Request, raw string) string {
 		}
 		return "80"
 	}
-	if strings.EqualFold(origin.Hostname(), target.Hostname()) && origin.Scheme == target.Scheme && port(origin) == port(target) && (target.Path == "" || target.Path == "/") && target.RawQuery == req.URL.RawQuery {
+	if strings.EqualFold(strings.TrimSuffix(origin.Hostname(), "."), strings.TrimSuffix(target.Hostname(), ".")) && origin.Scheme == target.Scheme && port(origin) == port(target) && (target.Path == "" || target.Path == "/") && target.RawQuery == req.URL.RawQuery {
 		return ""
 	}
 	return target.String()

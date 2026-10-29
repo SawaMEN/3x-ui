@@ -73,6 +73,11 @@ export function putConnection(
   const used = new Set(all.filter((_, i) => i !== index).map((item) => String(item.tag)));
   for (const item of [{ ...next, tag }, ...extra]) {
     const name = String(item.tag || '').trim();
+    if (
+      name === 'xui-unavailable-subscription' ||
+      /^sub-auto-(?:block-|route-)?[1-9][0-9]*$/.test(name)
+    )
+      throw new Error('Этот тег управляется подпиской. Используйте другое название подключения.');
     if (!name || used.has(name)) throw new Error('Название подключения должно быть уникальным.');
     used.add(name);
   }
@@ -98,6 +103,7 @@ export function removeConnection(
   config: ConfigObject,
   index: number,
   replacement?: string,
+  availableTags: string[] = [],
 ): ConfigObject {
   const outbounds = records(config.outbounds),
     endpoints = records(config.endpoints);
@@ -108,16 +114,17 @@ export function removeConnection(
   const paths = referencePaths(config, 'connection', String(item.tag)).filter(
     (path) => !path.startsWith(ownPath + '.'),
   );
-  if (paths.length && replacement) {
+  if (replacement) {
     if (
       replacement === item.tag ||
-      ![...outbounds, ...endpoints].some((row) => row.tag === replacement)
+      (![...outbounds, ...endpoints].some((row) => row.tag === replacement) &&
+        !availableTags.includes(replacement))
     )
       throw new Error('Выберите существующее подключение для замены.');
-    return removeConnection(
-      replaceReferences(config, 'connection', String(item.tag), replacement),
-      index,
-    );
+    const updated = replaceReferences(config, 'connection', String(item.tag), replacement);
+    if (index === 0 && outbounds.length > 0 && !object(config.route).final)
+      updated.route = { ...object(updated.route), final: replacement };
+    return removeConnection(updated, index, undefined, availableTags);
   }
   if (paths.length)
     throw new Error(
