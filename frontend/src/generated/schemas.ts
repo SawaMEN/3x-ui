@@ -5134,6 +5134,10 @@ export const SCHEMAS: Record<string, unknown> = {
         "example": "auto",
         "type": "string"
       },
+      "origin": {
+        "example": "http://127.0.0.1:8080",
+        "type": "string"
+      },
       "template": {
         "example": "notes",
         "type": "string"
