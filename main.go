@@ -75,16 +75,7 @@ func initNodeTokenCrypto() error {
 
 // runWebServer initializes and starts the web server for the 3x-ui panel.
 func runWebServer() {
-	release, err := coremigration.AcquirePanelLease()
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer release()
-	if err := coremigration.CheckPanelStartup(); err != nil {
-		log.Fatal(err)
-	}
-	log.Printf("Starting %v %v", config.GetName(), config.GetPanelVersion())
-
+	_ = godotenv.Load()
 	switch config.GetLogLevel() {
 	case config.Debug:
 		logger.InitLogger(logging.DEBUG)
@@ -100,7 +91,19 @@ func runWebServer() {
 		log.Fatalf("Unknown log level: %v", config.GetLogLevel())
 	}
 
-	_ = godotenv.Load()
+	defer logger.CloseLogger()
+	release, err := coremigration.AcquirePanelLease()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer release()
+	if err := logger.InitRuntimeDiagnostics(); err != nil {
+		logger.Error("Runtime diagnostics unavailable: ", err)
+	}
+	if err := coremigration.CheckPanelStartup(); err != nil {
+		log.Fatal(err)
+	}
+	logger.Infof("Starting %v %v", config.GetName(), config.GetPanelVersion())
 
 	for _, line := range sys.ApplyMemoryTuning() {
 		logger.Info(line)
@@ -134,6 +137,19 @@ func runWebServer() {
 		logger.Info("Migrated imported Hiddify subscription URLs to individual clients")
 	}
 
+	sigCh := make(chan os.Signal, 8)
+	// Trap shutdown signals
+	signal.Notify(sigCh, syscall.SIGHUP, syscall.SIGTERM, sys.SIGUSR1, os.Interrupt)
+	global.SetRestartHook(func() {
+		select {
+		case sigCh <- syscall.SIGHUP:
+		default:
+		}
+	})
+
+	defer signal.Stop(sigCh)
+	defer global.SetRestartHook(nil)
+
 	service.RegisterSubLinkProvider(sub.NewLinkProvider())
 	server := web.NewServer()
 	global.SetWebServer(server)
@@ -156,15 +172,6 @@ func runWebServer() {
 	if err := service.StartDomainFront(); err != nil {
 		logger.Warning("Domain HTTPS gateway: ", err)
 	}
-	sigCh := make(chan os.Signal, 8)
-	// Trap shutdown signals
-	signal.Notify(sigCh, syscall.SIGHUP, syscall.SIGTERM, sys.SIGUSR1, os.Interrupt)
-	global.SetRestartHook(func() {
-		select {
-		case sigCh <- syscall.SIGHUP:
-		default:
-		}
-	})
 
 	var stopTunnelHealthMonitor context.CancelFunc
 	monitorCfg := tunnelmonitor.ConfigFromEnv()
@@ -176,9 +183,10 @@ func runWebServer() {
 		monitorCtx, cancel := context.WithCancel(context.Background())
 		stopTunnelHealthMonitor = cancel
 
+		restartCore := server.RestartXray
 		monitor, err := tunnelmonitor.New(monitorCfg, func(_ context.Context) error {
 			logger.Warning("Tunnel health monitor threshold reached, restarting sing-box")
-			return server.RestartXray()
+			return restartCore()
 		})
 		if err != nil {
 			logger.Warning("Tunnel health monitor disabled: ", err)
@@ -209,7 +217,7 @@ func runWebServer() {
 			if err != nil {
 				log.Fatalf("Error restarting web server: %v", err)
 			}
-			log.Println("Web server restarted successfully.")
+			logger.Info("Web server restarted successfully.")
 
 			sub.SetDistFS(web.EmbeddedDist())
 			subServer = sub.NewServer()
@@ -225,7 +233,7 @@ func runWebServer() {
 				logger.Warning("Could not update Telemt WEB subscription routes after restart: ", err)
 			}
 			if err == nil {
-				log.Println("Sub server restarted successfully.")
+				logger.Info("Sub server restarted successfully.")
 			}
 		case sys.SIGUSR1:
 			logger.Info("Received USR1 signal, restarting sing-box...")
@@ -248,7 +256,7 @@ func runWebServer() {
 				logger.Error("Server shutdown failed:", err)
 			}
 			_ = subServer.Stop()
-			log.Println("Shutting down servers.")
+			logger.Info("Shutting down servers.")
 			return
 		}
 	}

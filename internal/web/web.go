@@ -8,7 +8,6 @@ import (
 	"embed"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"net"
 	"net/http"
@@ -166,12 +165,14 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	if config.IsDebug() {
 		gin.SetMode(gin.DebugMode)
 	} else {
-		gin.DefaultWriter = io.Discard
-		gin.DefaultErrorWriter = io.Discard
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	engine := gin.Default()
+	engine := gin.New()
+	engine.Use(middleware.Recovery())
+	if config.IsDebug() {
+		engine.Use(gin.Logger())
+	}
 	directHTTPS := s.isDirectHTTPSConfigured()
 	panelPort, err := s.settingService.GetPort()
 	if err != nil {
@@ -711,6 +712,7 @@ func (s *Server) start(restartXray bool, startTgBot bool) (err error) {
 	s.listener = listener
 
 	s.httpServer = &http.Server{
+		ErrorLog:          logger.StandardLogger(),
 		Handler:           service.DomainFrontHandler(engine, listen, port, certFile != "" && keyFile != ""),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       30 * time.Second,
@@ -722,9 +724,7 @@ func (s *Server) start(restartXray bool, startTgBot bool) (err error) {
 	s.httpServer.Protocols.SetHTTP1(true)
 	s.httpServer.Protocols.SetHTTP2(true)
 
-	go func(server *http.Server) {
-		_ = network.ServeHTTP(server, listener, "Web server")
-	}(s.httpServer)
+	go s.serveHTTP(s.httpServer, listener)
 
 	// Create event bus before startTask so jobs can use it
 	s.bus = eventbus.New(eventbus.DefaultBufferSize)
