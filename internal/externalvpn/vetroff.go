@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
@@ -42,7 +43,7 @@ func vetroffFiles(inst Instance) ([]string, error) {
 	}
 	users := make([]map[string]any, 0, len(inst.Settings.Clients))
 	for _, c := range inst.Settings.Clients {
-		users = append(users, map[string]any{"id": FPTNUsername(c.Email), "username": FPTNUsername(c.Email), "password": c.Password, "disabled": !c.Enable})
+		users = append(users, map[string]any{"id": FPTNUsername(c.Email), "username": FPTNUsername(c.Email), "password": c.Password, "disabled": !c.Enable || c.ExpiryTime > 0 && c.ExpiryTime <= time.Now().UnixMilli()})
 	}
 	usersPath := filepath.Join(folder, "vetroff-users.json")
 	raw, err := json.Marshal(map[string]any{"v": 1, "users": users})
@@ -82,6 +83,9 @@ func exportVetroffLink(inst Instance, email, address string, port int) (string, 
 	}
 	for _, c := range inst.Settings.Clients {
 		if c.Enable && c.Email == email {
+			if c.ExpiryTime > 0 && c.ExpiryTime <= time.Now().UnixMilli() {
+				return "", fmt.Errorf("VetroffProxy client expired")
+			}
 			origin := (&url.URL{Scheme: "https", Host: net.JoinHostPort(address, strconv.Itoa(port))}).String()
 			raw, err := json.Marshal(map[string]any{"v": 1, "servers": []string{origin}, "username": FPTNUsername(c.Email), "password": c.Password, "sni": inst.Settings.Hostname, "transport": "h2-connect", "tls": "auto"})
 			if err != nil {

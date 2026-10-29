@@ -2,13 +2,15 @@ package sub
 
 import (
 	"strings"
+	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
 )
 
 func (s *SubService) genAdditionalVPNLink(ib *model.Inbound, email string) string {
-	if _, ok := s.clientForLink(ib, email); !ok {
+	client, ok := s.clientForLink(ib, email)
+	if !ok || ib.Protocol == model.VetroffProxy && (!client.Enable || client.ExpiryTime > 0 && client.ExpiryTime <= time.Now().UnixMilli()) {
 		return ""
 	}
 	inst, err := externalvpn.FromInbound(ib)

@@ -96,6 +96,11 @@ func TestVetroffConfigurationAndLink(t *testing.T) {
 	if _, err := exportVetroffLink(inst, "bob", "vpn.example.com", 8443); err == nil {
 		t.Fatal("disabled user exported")
 	}
+	inst.Settings.Clients[0].ExpiryTime = time.Now().Add(-time.Hour).UnixMilli()
+	if _, err := exportVetroffLink(inst, "alice", "vpn.example.com", 8443); err == nil {
+		t.Fatal("expired user exported")
+	}
+	inst.Settings.Clients[0].ExpiryTime = 0
 	if binary := os.Getenv("VETROFF_TEST_BINARY"); binary != "" {
 		cmd := exec.Command(binary, "check-config", "--config", args[2])
 		if out, err := cmd.CombinedOutput(); err != nil {

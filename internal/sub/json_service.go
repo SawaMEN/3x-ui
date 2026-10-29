@@ -592,6 +592,9 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 	// only raw links and silently drop AnyTLS (and every ShadowTLS detour).
 	// Stock sing-box still uses separated WireGuard profiles. Hiddify can
 	// merge its WireGuard/AWG endpoints with proxies in one native document.
+	if containsSubscriptionProtocol(inbounds, model.VetroffProxy) {
+		return "", "", errSubscriptionFormatUnsupported
+	}
 	nativeTLSForHiddify := hiddify && containsNativeTLSSubscription(inbounds)
 	if (!hiddify && containsSubscriptionProtocol(inbounds, model.WireGuard)) ||
 		(!nativeTLSForHiddify && slices.ContainsFunc(inbounds, func(ib *model.Inbound) bool {
