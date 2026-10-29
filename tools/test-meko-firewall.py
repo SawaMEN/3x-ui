@@ -55,7 +55,7 @@ def main():
         def healthy(port):
             actual = status()
             assert actual['backend'] == 'nftables', actual
-            assert actual['installed'] == 'true', actual
+            assert actual['installed'] == 'true', (actual, run('nft', '-n', 'list', 'chain', 'inet', 'xui_telemt_meko', 'input'))
             for key in ('ports', 'applied_ports', 'verified_ports'):
                 assert actual[key] == str(port), actual
 

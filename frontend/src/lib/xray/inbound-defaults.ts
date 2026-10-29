@@ -1,3 +1,4 @@
+import { VetroffOptionsSchema } from '@/schemas/protocols/inbound/vetroff';
 import {
   FptnInboundSettingsSchema,
   OpenFluxInboundSettingsSchema,
@@ -31,6 +32,7 @@ import type { TrojanClient, TrojanInboundSettings } from '@/schemas/protocols/in
 import type {
   PingtunnelInboundSettings,
   TrustTunnelInboundSettings,
+  VetroffInboundSettings,
 } from '@/schemas/protocols/inbound/external-vpn';
 import type { TuicClient, TuicInboundSettings } from '@/schemas/protocols/inbound/tuic';
 import type { TunInboundSettings } from '@/schemas/protocols/inbound/tun';
@@ -498,6 +500,7 @@ export type AnyInboundSettings =
   | TuicInboundSettings
   | PingtunnelInboundSettings
   | TrustTunnelInboundSettings
+  | VetroffInboundSettings
   | MasqueInboundSettings
   | NaiveInboundSettings
   | MieruInboundSettings
@@ -563,7 +566,13 @@ export function createDefaultInboundSettings(protocol: string): AnyInboundSettin
         clients: [],
       };
     case 'vetroff':
-      return { hostname: '', certificate: '', privateKey: '', clients: [] };
+      return {
+        hostname: '',
+        certificate: '',
+        privateKey: '',
+        vetroff: VetroffOptionsSchema.parse({}),
+        clients: [],
+      };
     case 'trusttunnel':
       return { hostname: 'trusttunnel.local', certificate: '', privateKey: '', clients: [] };
     case 'masque':

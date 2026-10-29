@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"strconv"
 	"strings"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawgnet"
 	"github.com/SawaMEN/3x-ui/v3/internal/database"
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/externalvpn"
 	"github.com/SawaMEN/3x-ui/v3/internal/mieru"
 	"github.com/SawaMEN/3x-ui/v3/internal/mtproto"
 	"github.com/SawaMEN/3x-ui/v3/internal/tuic"
@@ -29,6 +31,9 @@ type listenerSpan struct {
 func inboundListenerSpans(ib *model.Inbound) []listenerSpan {
 	if mtproto.WebProxyInbound(ib) {
 		return []listenerSpan{{443, 443, transportTCP}}
+	}
+	if ib.Protocol == model.VetroffProxy {
+		return []listenerSpan{{ib.Port, ib.Port, transportTCP}}
 	}
 	if ib.Protocol == model.Tun {
 		return nil
@@ -280,6 +285,11 @@ func (s *InboundService) checkPortConflict(inbound *model.Inbound, ignoreId int)
 }
 
 func checkPortConflictTx(db *gorm.DB, inbound *model.Inbound, ignoreId int) (*portConflictDetail, error) {
+	if udp := vetroffH3Listener(inbound); udp != nil {
+		if detail, err := checkPortConflictTx(db, udp, ignoreId); err != nil || detail != nil {
+			return detail, err
+		}
+	}
 	// WEB frontends bind HTTPS independently of the legacy inbound listen/port.
 	if mtproto.WebProxyInbound(inbound) {
 		copy := *inbound
@@ -445,7 +455,7 @@ func checkPortConflictTx(db *gorm.DB, inbound *model.Inbound, ignoreId int) (*po
 	var candidates []*model.Inbound
 	q := db.Model(model.Inbound{})
 	if inbound.Protocol != model.Mieru {
-		q = q.Where("port = ? OR protocol IN ?", inbound.Port, []model.Protocol{model.Mieru, model.MTProto})
+		q = q.Where("port = ? OR protocol IN ?", inbound.Port, []model.Protocol{model.Mieru, model.MTProto, model.VetroffProxy})
 	}
 	if ignoreId > 0 {
 		q = q.Where("id != ?", ignoreId)
@@ -454,30 +464,36 @@ func checkPortConflictTx(db *gorm.DB, inbound *model.Inbound, ignoreId int) (*po
 		return nil, err
 	}
 
-	for _, c := range candidates {
-		if !sameNode(c.NodeID, inbound.NodeID) {
-			continue
+	for _, candidate := range candidates {
+		listeners := []*model.Inbound{candidate}
+		if udp := vetroffH3Listener(candidate); udp != nil {
+			listeners = append(listeners, udp)
 		}
-		if mtproto.WebProxyInbound(c) {
-			copy := *c
-			copy.Listen = ""
-			c = &copy
+		for _, c := range listeners {
+			if !sameNode(c.NodeID, inbound.NodeID) {
+				continue
+			}
+			if mtproto.WebProxyInbound(c) {
+				copy := *c
+				copy.Listen = ""
+				c = &copy
+			}
+			if !listenOverlaps(c.Listen, inbound.Listen) {
+				continue
+			}
+			port, shared := spansOverlap(newSpans, inboundListenerSpans(c))
+			if shared == 0 {
+				continue
+			}
+			return &portConflictDetail{
+				InboundID:  c.Id,
+				Remark:     c.Remark,
+				Tag:        c.Tag,
+				Listen:     c.Listen,
+				Port:       port,
+				Transports: shared,
+			}, nil
 		}
-		if !listenOverlaps(c.Listen, inbound.Listen) {
-			continue
-		}
-		port, shared := spansOverlap(newSpans, inboundListenerSpans(c))
-		if shared == 0 {
-			continue
-		}
-		return &portConflictDetail{
-			InboundID:  c.Id,
-			Remark:     c.Remark,
-			Tag:        c.Tag,
-			Listen:     c.Listen,
-			Port:       port,
-			Transports: shared,
-		}, nil
 	}
 	return nil, nil
 }
@@ -833,4 +849,31 @@ func gatewayTemplatePresent(db *gorm.DB) (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+func vetroffH3Listener(ib *model.Inbound) *model.Inbound {
+	if ib == nil || ib.Protocol != model.VetroffProxy {
+		return nil
+	}
+	var settings externalvpn.Settings
+	if err := json.Unmarshal([]byte(ib.Settings), &settings); err != nil {
+		return nil
+	}
+	if settings.Vetroff != nil && !settings.Vetroff.HTTP3 {
+		return nil
+	}
+	clone := *ib
+	clone.Protocol, clone.Settings = model.Hysteria, "{}"
+	if settings.Vetroff != nil && settings.Vetroff.H3Listen != "" {
+		host, port, err := net.SplitHostPort(settings.Vetroff.H3Listen)
+		if err != nil {
+			return nil
+		}
+		number, err := strconv.Atoi(port)
+		if err != nil {
+			return nil
+		}
+		clone.Listen, clone.Port = host, number
+	}
+	return &clone
 }

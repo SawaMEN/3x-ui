@@ -20,7 +20,10 @@ func prepareExternalVPN(ib *model.Inbound, previous string) error {
 	if err := snell.Prepare(ib, previous); err != nil {
 		return err
 	}
-	if ib.Protocol == model.FPTN || ib.Protocol == model.VetroffProxy || ib.Protocol == model.OpenFlux {
+	if ib.Protocol == model.VetroffProxy {
+		return prepareVetroff(ib, previous)
+	}
+	if ib.Protocol == model.FPTN || ib.Protocol == model.OpenFlux {
 		return externalvpn.PrepareAdditional(ib, previous)
 	}
 	if !externalvpn.IsManaged(ib.Protocol) {
