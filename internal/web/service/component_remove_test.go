@@ -101,13 +101,16 @@ func TestRemoveProtocolComponentProtectsActiveTunnels(t *testing.T) {
 		name, binary string
 		protocol     model.Protocol
 	}{
-		{"sudoku", "sudoku-tunnel", model.Sudoku}, {"pingtunnel", "pingtunnel", model.Pingtunnel}, {"trusttunnel", "trusttunnel_endpoint", model.TrustTunnel},
+		{"sudoku", "sudoku-tunnel", model.Sudoku}, {"pingtunnel", "pingtunnel", model.Pingtunnel}, {"trusttunnel", "trusttunnel_endpoint", model.TrustTunnel}, {"vetroff", "vetroff-bundle/vetroff-necko/vetroff", model.VetroffProxy},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			setupBulkDB(t)
 			dir := t.TempDir()
 			t.Setenv("XUI_BIN_FOLDER", dir)
 			path := filepath.Join(dir, tc.binary)
+			if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+				t.Fatal(err)
+			}
 			if err := os.WriteFile(path, []byte("binary"), 0o700); err != nil {
 				t.Fatal(err)
 			}

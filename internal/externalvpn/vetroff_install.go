@@ -21,6 +21,9 @@ func installVetroff(ctx context.Context) error {
 	}
 	externalVPNUpdateMu.Lock()
 	defer externalVPNUpdateMu.Unlock()
+	if err := cleanupVetroffStages(config.GetBinFolderPath()); err != nil {
+		return err
+	}
 	spec, err := releaseSpecFor(model.VetroffProxy)
 	if err != nil {
 		return err
@@ -56,7 +59,7 @@ func installVetroff(ctx context.Context) error {
 	if err := extractVetroffBundle(archive, bundle); err != nil {
 		return err
 	}
-	executable := filepath.Join(bundle, "foxtunnel-necko", "vetroff")
+	executable := vetroffExecutable(bundle)
 	version, err := binaryVersion(ctx, executable, spec.versionArgs)
 	if err != nil {
 		return fmt.Errorf("validate VetroffProxy: %w", err)
@@ -115,6 +118,7 @@ func extractVetroffBundle(archive, destination string) error {
 	tr := tar.NewReader(gz)
 	seen := map[string]bool{}
 	var total int64
+	archiveRoot := ""
 	for count := 0; ; count++ {
 		h, err := tr.Next()
 		if err == io.EOF {
@@ -124,11 +128,21 @@ func extractVetroffBundle(archive, destination string) error {
 			return err
 		}
 		name := strings.TrimSuffix(h.Name, "/")
-		if name == "foxtunnel-necko/." && h.Typeflag == tar.TypeDir {
-			name = "foxtunnel-necko"
+		if (name == "foxtunnel-necko/." || name == "vetroff-necko/.") && h.Typeflag == tar.TypeDir {
+			name = strings.TrimSuffix(name, "/.")
+		}
+		memberRoot := ""
+		for _, candidate := range []string{"vetroff-necko", "foxtunnel-necko"} {
+			if name == candidate || strings.HasPrefix(name, candidate+"/") {
+				memberRoot = candidate
+				break
+			}
+		}
+		if archiveRoot == "" {
+			archiveRoot = memberRoot
 		}
 		clean := filepath.ToSlash(filepath.Clean(name))
-		if count > 50000 || !filepath.IsLocal(name) || clean != name || strings.Contains(name, "\\") || (name != "foxtunnel-necko" && !strings.HasPrefix(name, "foxtunnel-necko/")) || seen[name] || h.Mode&0o7000 != 0 {
+		if count > 50000 || !filepath.IsLocal(name) || clean != name || strings.Contains(name, "\\") || (memberRoot == "" || memberRoot != archiveRoot) || seen[name] || h.Mode&0o7000 != 0 {
 			return fmt.Errorf("unsafe VetroffProxy archive member")
 		}
 		seen[name] = true
@@ -166,14 +180,14 @@ func extractVetroffBundle(archive, destination string) error {
 			return fmt.Errorf("VetroffProxy archive links and special files are forbidden")
 		}
 	}
-	for _, name := range []string{"vetroff", "runtime/xpcshell", "foxtunnel-necko"} {
-		info, err := root.Stat(filepath.Join("foxtunnel-necko", name))
+	for _, name := range []string{"vetroff", "runtime/xpcshell", archiveRoot} {
+		info, err := root.Stat(filepath.Join(archiveRoot, name))
 		if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o111 == 0 {
 			return fmt.Errorf("VetroffProxy bundle missing executable %s", name)
 		}
 	}
 	for _, name := range []string{"lib", "runtime"} {
-		info, err := root.Stat(filepath.Join("foxtunnel-necko", name))
+		info, err := root.Stat(filepath.Join(archiveRoot, name))
 		if err != nil || !info.IsDir() {
 			return fmt.Errorf("VetroffProxy bundle missing %s", name)
 		}
@@ -195,5 +209,51 @@ func RemoveVetroff(ctx context.Context) error {
 			manager.removeLocked(id)
 		}
 	}
-	return os.RemoveAll(filepath.Join(config.GetBinFolderPath(), "vetroff-bundle"))
+	dir := config.GetBinFolderPath()
+	if err := cleanupVetroffStages(dir); err != nil {
+		return err
+	}
+	return os.RemoveAll(filepath.Join(dir, "vetroff-bundle"))
+}
+
+func vetroffExecutable(bundle string) string {
+	for _, name := range []string{"vetroff-necko", "foxtunnel-necko"} {
+		path := filepath.Join(bundle, name, "vetroff")
+		if info, err := os.Stat(path); err == nil && info.Mode().IsRegular() {
+			return path
+		}
+	}
+	return filepath.Join(bundle, "vetroff-necko", "vetroff")
+}
+
+func cleanupVetroffStages(dir string) error {
+	entries, err := os.ReadDir(dir)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	target := filepath.Join(dir, "vetroff-bundle")
+	for _, entry := range entries {
+		if !strings.HasPrefix(entry.Name(), ".vetroff-stage-") {
+			continue
+		}
+		stage := filepath.Join(dir, entry.Name())
+		// Recover a previous runtime if a crash interrupted the directory swap.
+		if entry.IsDir() {
+			previous := filepath.Join(stage, "previous")
+			if _, err := os.Lstat(target); os.IsNotExist(err) {
+				if _, err := os.Lstat(previous); err == nil {
+					if err := os.Rename(previous, target); err != nil {
+						return err
+					}
+				}
+			}
+		}
+		if err := os.RemoveAll(stage); err != nil {
+			return fmt.Errorf("remove abandoned VetroffProxy download: %w", err)
+		}
+	}
+	return nil
 }

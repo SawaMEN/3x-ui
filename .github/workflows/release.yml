@@ -285,7 +285,7 @@ jobs:
 
       - name: Package
         run: |
-          for component in pingtunnel trusttunnel_endpoint caddy-naive hysteria sudoku-tunnel sudoku.version optional/sudoku; do
+          for component in pingtunnel trusttunnel_endpoint caddy-naive hysteria sudoku-tunnel sudoku.version optional/sudoku vetroff vetroff-bundle; do
             test ! -e "x-ui/bin/$component"
           done
           tar -zcf x-ui-linux-${{ matrix.platform }}.tar.gz x-ui

@@ -189,7 +189,7 @@ func TestVetroffConfigurationAndLink(t *testing.T) {
 }
 
 func TestVetroffBundleExtraction(t *testing.T) {
-	for _, attack := range []string{"", "foxtunnel-necko/../../escape", "/tmp/escape", "foxtunnel-necko/link"} {
+	for _, attack := range []string{"", "foxtunnel-necko/../../escape", "/tmp/escape", "foxtunnel-necko/link", "vetroff-necko/vetroff"} {
 		t.Run(attack, func(t *testing.T) {
 			folder := t.TempDir()
 			archive := filepath.Join(folder, "release.tar.gz")
@@ -267,15 +267,19 @@ func TestVetroffBinaryInstallUpdateAndDigestFailure(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XUI_BIN_FOLDER", dir)
 	version := "0.1.0"
+	archiveRoot := "foxtunnel-necko"
 	var archive []byte
 	badDigest := false
 	makeArchive := func() {
 		var buf bytes.Buffer
 		gz := gzip.NewWriter(&buf)
 		tw := tar.NewWriter(gz)
-		for _, name := range []string{"vetroff", "foxtunnel-necko", "runtime/xpcshell", "lib/libnss3.so"} {
+		for _, name := range []string{"vetroff", archiveRoot, "runtime/xpcshell", "lib/libnss3.so"} {
 			data := []byte("#!/bin/sh\nprintf 'VetroffProxy v" + version + "\\n'\n")
-			if err := tw.WriteHeader(&tar.Header{Name: "foxtunnel-necko/" + name, Typeflag: tar.TypeReg, Mode: 0o755, Size: int64(len(data))}); err != nil {
+			if name == "lib/libnss3.so" {
+				data = make([]byte, 1<<20)
+			}
+			if err := tw.WriteHeader(&tar.Header{Name: archiveRoot + "/" + name, Typeflag: tar.TypeReg, Mode: 0o755, Size: int64(len(data))}); err != nil {
 				t.Fatal(err)
 			}
 			if _, err := tw.Write(data); err != nil {
@@ -307,14 +311,19 @@ func TestVetroffBinaryInstallUpdateAndDigestFailure(t *testing.T) {
 	client := &http.Client{Transport: hysteriaTestTransport{target: server.URL}}
 	externalVPNHTTPClient, externalVPNDownloadClient = client, client
 	t.Cleanup(func() { externalVPNHTTPClient, externalVPNDownloadClient = oldAPI, oldDownload })
+	if status := binaryStatus(t.Context(), model.VetroffProxy, true); status.Installed {
+		t.Fatal("optional VetroffProxy preinstalled")
+	}
 	if err := Update(t.Context(), model.VetroffProxy); err != nil {
 		t.Fatal(err)
 	}
+	assertNoVetroffStages(t, dir)
 	status := binaryStatus(t.Context(), model.VetroffProxy)
 	if !status.Installed || status.Version != version || status.UpdateAvailable || status.Error != "" {
 		t.Fatalf("installed status: %+v", status)
 	}
 	version = "0.2.0"
+	archiveRoot = "vetroff-necko"
 	makeArchive()
 	status = binaryStatus(t.Context(), model.VetroffProxy)
 	if !status.UpdateAvailable || status.LatestVersion != version {
@@ -324,6 +333,7 @@ func TestVetroffBinaryInstallUpdateAndDigestFailure(t *testing.T) {
 	if err := Update(t.Context(), model.VetroffProxy); err == nil || !strings.Contains(err.Error(), "digest mismatch") {
 		t.Fatalf("bad digest accepted: %v", err)
 	}
+	assertNoVetroffStages(t, dir)
 	status = binaryStatus(t.Context(), model.VetroffProxy)
 	if status.Version != "0.1.0" {
 		t.Fatalf("working installation lost: %+v", status)
@@ -336,9 +346,30 @@ func TestVetroffBinaryInstallUpdateAndDigestFailure(t *testing.T) {
 	if status.Version != version || status.UpdateAvailable {
 		t.Fatalf("update failed: %+v", status)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "vetroff-bundle/foxtunnel-necko/lib/libnss3.so")); err != nil {
+	if _, err := os.Stat(filepath.Join(dir, "vetroff-bundle/vetroff-necko/lib/libnss3.so")); err != nil {
 		t.Fatal("full binary bundle was not preserved:", err)
 	}
+	assertNoVetroffStages(t, dir)
+	if err := RemoveVetroff(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if status := binaryStatus(t.Context(), model.VetroffProxy, true); status.Installed {
+		t.Fatal("removed runtime still reported installed")
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("runtime or archive retained after removal: %v %v", entries, err)
+	}
+	if err := RemoveVetroff(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err := Update(t.Context(), model.VetroffProxy); err != nil {
+		t.Fatal(err)
+	}
+	if err := RemoveVetroff(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	assertNoVetroffStages(t, dir)
 }
 
 func TestVetroffAllTransportProfilesAndServerOptions(t *testing.T) {
@@ -490,4 +521,83 @@ func TestVetroffRejectsNativeProfileAliases(t *testing.T) {
 	if err := inst.Validate(); err == nil || !strings.Contains(err.Error(), "requires a hostname") {
 		t.Fatalf("invalid native SNI accepted: %v", err)
 	}
+}
+
+func assertNoVetroffStages(t *testing.T, dir string) {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".vetroff-stage-") {
+			t.Fatalf("abandoned staging data: %s", entry.Name())
+		}
+	}
+}
+
+func TestVetroffRemovalCleansInterruptedDownloadsAndPreservesOtherData(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XUI_BIN_FOLDER", dir)
+	for _, path := range []string{"vetroff-bundle/vetroff-necko/runtime/libxul.so", ".vetroff-stage-crashed/release.tar.gz", ".vetroff-stage-crashed/previous/foxtunnel-necko/vetroff"} {
+		file := filepath.Join(dir, path)
+		if err := os.MkdirAll(filepath.Dir(file), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(file, make([]byte, 1<<20), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	outside := t.TempDir()
+	outsideFile := filepath.Join(outside, "runtime.dat")
+	if err := os.WriteFile(outsideFile, []byte("keep outside"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if runtime.GOOS != "windows" {
+		if err := os.Symlink(outside, filepath.Join(dir, ".vetroff-stage-symlink")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	unrelated := filepath.Join(dir, "custom.dat")
+	if err := os.WriteFile(unrelated, []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := RemoveVetroff(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) != 1 || entries[0].Name() != "custom.dat" {
+		t.Fatalf("installation data retained or unrelated data removed: %v %v", entries, err)
+	}
+	if contents, err := os.ReadFile(outsideFile); err != nil || string(contents) != "keep outside" {
+		t.Fatalf("cleanup traversed a symlink: %q %v", contents, err)
+	}
+}
+
+func TestVetroffInterruptedInstallRecoversPreviousRuntime(t *testing.T) {
+	if runtime.GOOS != "linux" || (runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64") {
+		t.Skip("Linux binary installer")
+	}
+	dir := t.TempDir()
+	t.Setenv("XUI_BIN_FOLDER", dir)
+	previous := filepath.Join(dir, ".vetroff-stage-crashed", "previous", "foxtunnel-necko", "vetroff")
+	if err := os.MkdirAll(filepath.Dir(previous), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(previous, []byte("previous runtime"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusServiceUnavailable) }))
+	defer server.Close()
+	old := externalVPNHTTPClient
+	externalVPNHTTPClient = &http.Client{Transport: hysteriaTestTransport{target: server.URL}}
+	t.Cleanup(func() { externalVPNHTTPClient = old })
+	if err := Update(t.Context(), model.VetroffProxy); err == nil {
+		t.Fatal("unexpected installation without release")
+	}
+	path := filepath.Join(dir, "vetroff-bundle", "foxtunnel-necko", "vetroff")
+	if contents, err := os.ReadFile(path); err != nil || string(contents) != "previous runtime" {
+		t.Fatalf("recovery copy lost: %q %v", contents, err)
+	}
+	assertNoVetroffStages(t, dir)
 }

@@ -79,7 +79,7 @@ func findBinary(protocol model.Protocol, managed bool) string {
 	case model.FPTN:
 		name = "fptn"
 	case model.VetroffProxy:
-		path, _ := filepath.Abs(filepath.Join(config.GetBinFolderPath(), "vetroff-bundle", "foxtunnel-necko", "vetroff"))
+		path, _ := filepath.Abs(vetroffExecutable(filepath.Join(config.GetBinFolderPath(), "vetroff-bundle")))
 		return path
 	case model.OpenFlux:
 		name = "openflux"
