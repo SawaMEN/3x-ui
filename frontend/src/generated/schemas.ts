@@ -271,6 +271,9 @@ export const SCHEMAS: Record<string, unknown> = {
       "subClashUserAgentRegex": {
         "type": "string"
       },
+      "subDefaultFormat": {
+        "type": "string"
+      },
       "subDomain": {
         "type": "string"
       },
@@ -284,6 +287,9 @@ export const SCHEMAS: Record<string, unknown> = {
         "type": "boolean"
       },
       "subExpiredTemplate": {
+        "type": "string"
+      },
+      "subFormatMode": {
         "type": "string"
       },
       "subHappAlwaysHwid": {
@@ -618,11 +624,13 @@ export const SCHEMAS: Record<string, unknown> = {
       "subClashRules",
       "subClashURI",
       "subClashUserAgentRegex",
+      "subDefaultFormat",
       "subDomain",
       "subEnable",
       "subEnableRouting",
       "subEncrypt",
       "subExpiredTemplate",
+      "subFormatMode",
       "subHappAlwaysHwid",
       "subHappAutoConnect",
       "subHappAutoConnectType",
@@ -958,6 +966,9 @@ export const SCHEMAS: Record<string, unknown> = {
       "subClashUserAgentRegex": {
         "type": "string"
       },
+      "subDefaultFormat": {
+        "type": "string"
+      },
       "subDomain": {
         "type": "string"
       },
@@ -971,6 +982,9 @@ export const SCHEMAS: Record<string, unknown> = {
         "type": "boolean"
       },
       "subExpiredTemplate": {
+        "type": "string"
+      },
+      "subFormatMode": {
         "type": "string"
       },
       "subHappAlwaysHwid": {
@@ -1312,11 +1326,13 @@ export const SCHEMAS: Record<string, unknown> = {
       "subClashRules",
       "subClashURI",
       "subClashUserAgentRegex",
+      "subDefaultFormat",
       "subDomain",
       "subEnable",
       "subEnableRouting",
       "subEncrypt",
       "subExpiredTemplate",
+      "subFormatMode",
       "subHappAlwaysHwid",
       "subHappAutoConnect",
       "subHappAutoConnectType",

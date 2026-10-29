@@ -53,6 +53,9 @@ type cachedSubTemplate struct {
 
 // SUBController handles HTTP requests for subscription links and JSON configurations.
 type SUBController struct {
+	liveFormats         bool
+	subFormatMode       string
+	subDefaultFormat    string
 	subTitle            string
 	subSupportUrl       string
 	subProfileMode      string
@@ -93,9 +96,12 @@ type SUBController struct {
 }
 
 type subControllerConfig struct {
-	subPath      string
-	subJsonPath  string
-	subClashPath string
+	liveFormats      bool
+	subFormatMode    string
+	subDefaultFormat string
+	subPath          string
+	subJsonPath      string
+	subClashPath     string
 
 	subClashAutoDetect     bool
 	subClashUserAgentRegex string
@@ -131,6 +137,13 @@ type subControllerConfig struct {
 
 	subIncyEnableRouting bool
 	subIncyRoutingRules  string
+}
+
+func WithSUBFormats(mode, defaultFormat string) SUBControllerOption {
+	return func(config *subControllerConfig) {
+		config.subFormatMode = mode
+		config.subDefaultFormat = defaultFormat
+	}
 }
 
 type SUBControllerOption func(*subControllerConfig)
@@ -265,13 +278,15 @@ func WithSUBHappConfig(value HappConfig) SUBControllerOption {
 
 func defaultSUBControllerConfig() subControllerConfig {
 	return subControllerConfig{
-		subPath:        "/sub/",
-		subJsonPath:    "/json/",
-		subClashPath:   "/clash/",
-		subEncrypt:     true,
-		remarkTemplate: service.DefaultRemarkTemplate,
-		updateInterval: "12",
-		subProfileMode: service.SubProfileModeNone,
+		subFormatMode:    "both",
+		subDefaultFormat: "auto",
+		subPath:          "/sub/",
+		subJsonPath:      "/json/",
+		subClashPath:     "/clash/",
+		subEncrypt:       true,
+		remarkTemplate:   service.DefaultRemarkTemplate,
+		updateInterval:   "12",
+		subProfileMode:   service.SubProfileModeNone,
 	}
 }
 
@@ -288,6 +303,9 @@ func NewSUBController(g *gin.RouterGroup, options ...SUBControllerOption) *SUBCo
 	subJsonSvc.SetObservatoryConfig(config.subJsonObservatory)
 	subJsonSvc.SetDnsConfig(config.subJsonDns)
 	a := &SUBController{
+		liveFormats:         config.liveFormats,
+		subFormatMode:       config.subFormatMode,
+		subDefaultFormat:    config.subDefaultFormat,
 		subTitle:            config.subTitle,
 		subSupportUrl:       config.subSupportURL,
 		subProfileMode:      config.subProfileMode,
@@ -329,6 +347,7 @@ func NewSUBController(g *gin.RouterGroup, options ...SUBControllerOption) *SUBCo
 // initRouter registers HTTP routes for subscription links and JSON endpoints
 // on the provided router group.
 func (a *SUBController) initRouter(g *gin.RouterGroup) {
+	g.Use(a.loadSubscriptionFormats)
 	gLink := g.Group(a.subPath, setNoCacheHeaders)
 	gLink.GET(":subid", a.subs)
 	gLink.HEAD(":subid", a.subs)
@@ -439,6 +458,12 @@ func (a *SUBController) buildSubPageData(c *gin.Context) (PageData, bool) {
 	metadata := a.metadataForSubRequest(func() *SubService { return subReq }, subId, "")
 	page := subReq.BuildPageData(subId, hostHeader, traffic, lastOnline, subs, emails, subURL, subJsonURL, subClashURL, basePathStr, metadata.Title, metadata.SupportURL)
 	page.SubAnnounce = metadata.Announce
+	page.SubFormatMode = a.formatMode(c)
+	if a.formatAllowed(c, "xray") {
+		page.SubJsonUrl = appendSubscriptionFormat(subURL, "xray")
+	} else {
+		page.SubJsonUrl = ""
+	}
 	return page, true
 }
 
@@ -484,46 +509,63 @@ func (a *SUBController) subs(c *gin.Context) {
 	// Explicit native formats must take precedence over both HTML Accept
 	// headers and app-specific User-Agent guessing. This also makes the links
 	// on the subscription page directly inspectable in a browser.
-	format := strings.ToLower(c.Query("format"))
-	if format == "sing-box" || format == "hiddify" {
+	format := subscriptionFormat(c)
+	if format == "sing-box" || format == "hiddify" || format == "xray" {
 		if !a.enforceHwid(c) {
 			return
 		}
-		if !a.serveJsonBody(c, a.jsonAlwaysArray, "application/json; charset=utf-8", strings.EqualFold(c.Query("view"), "raw"), true) {
+		if !a.serveJsonBody(c, a.jsonAlwaysArray, "application/json; charset=utf-8", strings.EqualFold(c.Query("view"), "raw"), format != "xray") {
 			writeSubError(c, nil)
 		}
 		a.recordSubscriptionFetch(c)
 		logSubscriptionRoute(userAgent, format+"-json")
 		return
 	}
-	if a.maybeServeSubPage(c) {
+	if format == "" && a.maybeServeSubPage(c) {
 		logSubscriptionRoute(userAgent, "html")
 		return
 	}
 	if !a.enforceHwid(c) {
 		return
 	}
-	if strings.Contains(strings.ToLower(userAgent), "hiddify") && a.hasHiddifyNativeSubscription(c.Param("subid")) &&
-		a.serveJsonBody(c, true, "application/json; charset=utf-8", false, true) {
+	if format == "" {
+		format = a.defaultBodyFormat(c)
+		c.Set("subscriptionFormat", format)
+	}
+	if format == "xray" || format == "sing-box" {
+		if !a.serveJsonBody(c, a.jsonAlwaysArray, "application/json; charset=utf-8", strings.EqualFold(c.Query("view"), "raw"), format == "sing-box") {
+			writeSubError(c, nil)
+		}
 		a.recordSubscriptionFetch(c)
-		logSubscriptionRoute(userAgent, "hiddify-native-sing-box")
 		return
 	}
-	// MASQUE endpoints and ShadowTLS detours require native JSON for sing-box clients.
-	if wantsNativeSingBox(userAgent) && a.hasNativeSingBoxSubscription(c.Param("subid")) && a.serveJsonBody(c, true, "application/json; charset=utf-8", false, true) {
-		a.recordSubscriptionFetch(c)
-		logSubscriptionRoute(userAgent, "native-sing-box")
+	if !a.formatAllowed(c, "links") {
+		c.Status(http.StatusNotFound)
 		return
 	}
-	if shouldAutoServeClash(a.subClashAutoDetect, a.clashEnabled, false, userAgent, a.clashUserAgent) && a.serveClashBody(c, false, false) {
-		a.recordSubscriptionFetch(c)
-		logSubscriptionRoute(userAgent, "clash")
-		return
-	}
-	if shouldAutoServeJson(a.jsonAutoDetect, a.jsonEnabled, false, userAgent, a.jsonUserAgent) && a.serveJsonBody(c, true, "application/json; charset=utf-8", false, false) {
-		a.recordSubscriptionFetch(c)
-		logSubscriptionRoute(userAgent, "json")
-		return
+	if format != "links" && format != "all" {
+		if strings.Contains(strings.ToLower(userAgent), "hiddify") && a.hasHiddifyNativeSubscription(c.Param("subid")) &&
+			a.serveJsonBody(c, true, "application/json; charset=utf-8", false, true) {
+			a.recordSubscriptionFetch(c)
+			logSubscriptionRoute(userAgent, "hiddify-native-sing-box")
+			return
+		}
+		// MASQUE endpoints and ShadowTLS detours require native JSON for sing-box clients.
+		if wantsNativeSingBox(userAgent) && a.hasNativeSingBoxSubscription(c.Param("subid")) && a.serveJsonBody(c, true, "application/json; charset=utf-8", false, true) {
+			a.recordSubscriptionFetch(c)
+			logSubscriptionRoute(userAgent, "native-sing-box")
+			return
+		}
+		if shouldAutoServeClash(a.subClashAutoDetect, a.clashEnabled, false, userAgent, a.clashUserAgent) && a.serveClashBody(c, false, false) {
+			a.recordSubscriptionFetch(c)
+			logSubscriptionRoute(userAgent, "clash")
+			return
+		}
+		if shouldAutoServeJson(a.jsonAutoDetect, a.jsonEnabled, false, userAgent, a.jsonUserAgent) && a.serveJsonBody(c, true, "application/json; charset=utf-8", false, false) {
+			a.recordSubscriptionFetch(c)
+			logSubscriptionRoute(userAgent, "json")
+			return
+		}
 	}
 	logSubscriptionRoute(userAgent, "raw")
 	subId := c.Param("subid")
@@ -765,6 +807,7 @@ func (a *SUBController) subPageContext(page PageData) map[string]any {
 		"totalByte":     page.TotalByte,
 		"subUrl":        page.SubUrl,
 		"subJsonUrl":    page.SubJsonUrl,
+		"subFormatMode": page.SubFormatMode,
 		"subClashUrl":   page.SubClashUrl,
 		"subTitle":      page.SubTitle,
 		"subSupportUrl": page.SubSupportUrl,
@@ -884,7 +927,12 @@ func (a *SUBController) loadSubTemplate(themeDir string) (*template.Template, er
 // subJsons handles HTTP requests for JSON subscription configurations. The
 // device limit is enforced on every body route, ?view=raw included (#GHSA-7ww3).
 func (a *SUBController) subJsons(c *gin.Context) {
-	if strings.EqualFold(c.Query("view"), "raw") {
+	format := subscriptionFormat(c)
+	if format == "" && a.formatMode(c) != "both" && a.formatMode(c) != "" {
+		format = a.defaultBodyFormat(c)
+		c.Set("subscriptionFormat", format)
+	}
+	if format == "xray" || format == "sing-box" || format == "hiddify" || strings.EqualFold(c.Query("view"), "raw") {
 		if !a.enforceHwid(c) {
 			return
 		}
@@ -915,18 +963,22 @@ func (a *SUBController) serveJsonBody(c *gin.Context, alwaysReturnArray bool, co
 	scheme, host, hostWithPort, _ := a.subService.ResolveRequest(c)
 	var jsonSub, header string
 	var err error
-	format := strings.ToLower(c.Query("format"))
+	format := subscriptionFormat(c)
 	isHiddify := strings.Contains(strings.ToLower(c.Request.UserAgent()), "hiddify")
 	// Hiddify needs native sing-box JSON for AnyTLS and ShadowTLS even if the
 	// user imported the panel's /json/ subscription path. Plain Xray JSON
 	// cannot encode either protocol. An explicit format also works when the
 	// importing app does not identify itself in User-Agent.
-	if format == "hiddify" || (isHiddify && (forceSingBox || format == "sing-box" || a.hasHiddifyNativeSubscription(subId))) {
-		jsonSub, header, err = a.subJsonService.GetHiddifySingBoxJson(subId, host)
-	} else if forceSingBox || format == "sing-box" || (wantsNativeSingBox(c.Request.UserAgent()) && a.hasNativeSingBoxSubscription(subId)) {
-		jsonSub, header, err = a.subJsonService.GetSingBoxJson(subId, host, alwaysReturnArray)
+	native := forceSingBox || format == "sing-box" || format == "hiddify" || (format != "xray" && (isHiddify && a.hasHiddifyNativeSubscription(subId) || wantsNativeSingBox(c.Request.UserAgent()) && a.hasNativeSingBoxSubscription(subId)))
+	if native && !a.formatAllowed(c, "sing-box") || !native && !a.formatAllowed(c, "xray") {
+		return false
+	}
+	if format == "hiddify" || (isHiddify && native && format != "xray") {
+		jsonSub, header, err = a.subJsonService.getSingBoxJson(subId, host, false, true, format == "hiddify" || format == "sing-box")
+	} else if native {
+		jsonSub, header, err = a.subJsonService.getSingBoxJson(subId, host, alwaysReturnArray, false, format == "sing-box")
 	} else {
-		jsonSub, header, err = a.subJsonService.GetJson(subId, host, alwaysReturnArray)
+		jsonSub, header, err = a.subJsonService.getJson(subId, host, alwaysReturnArray, format == "xray")
 	}
 	if err != nil {
 		if errors.Is(err, errSubscriptionFormatUnsupported) {

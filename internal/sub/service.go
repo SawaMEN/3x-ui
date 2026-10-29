@@ -3938,6 +3938,7 @@ func searchHost(headers any) string {
 // PageData is a view model for subpage.html
 // PageData contains data for rendering the subscription information page.
 type PageData struct {
+	SubFormatMode string
 	Host          string
 	BasePath      string
 	SId           string

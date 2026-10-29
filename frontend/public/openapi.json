@@ -297,6 +297,9 @@
           "subClashUserAgentRegex": {
             "type": "string"
           },
+          "subDefaultFormat": {
+            "type": "string"
+          },
           "subDomain": {
             "type": "string"
           },
@@ -310,6 +313,9 @@
             "type": "boolean"
           },
           "subExpiredTemplate": {
+            "type": "string"
+          },
+          "subFormatMode": {
             "type": "string"
           },
           "subHappAlwaysHwid": {
@@ -644,11 +650,13 @@
           "subClashRules",
           "subClashURI",
           "subClashUserAgentRegex",
+          "subDefaultFormat",
           "subDomain",
           "subEnable",
           "subEnableRouting",
           "subEncrypt",
           "subExpiredTemplate",
+          "subFormatMode",
           "subHappAlwaysHwid",
           "subHappAutoConnect",
           "subHappAutoConnectType",
@@ -984,6 +992,9 @@
           "subClashUserAgentRegex": {
             "type": "string"
           },
+          "subDefaultFormat": {
+            "type": "string"
+          },
           "subDomain": {
             "type": "string"
           },
@@ -997,6 +1008,9 @@
             "type": "boolean"
           },
           "subExpiredTemplate": {
+            "type": "string"
+          },
+          "subFormatMode": {
             "type": "string"
           },
           "subHappAlwaysHwid": {
@@ -1338,11 +1352,13 @@
           "subClashRules",
           "subClashURI",
           "subClashUserAgentRegex",
+          "subDefaultFormat",
           "subDomain",
           "subEnable",
           "subEnableRouting",
           "subEncrypt",
           "subExpiredTemplate",
+          "subFormatMode",
           "subHappAlwaysHwid",
           "subHappAutoConnect",
           "subHappAutoConnectType",

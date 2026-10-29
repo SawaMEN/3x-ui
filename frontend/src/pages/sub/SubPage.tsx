@@ -78,7 +78,14 @@ const heroData = {
   datepicker: subData.datepicker || 'gregorian',
 };
 
-const apps = buildSubApps({ subUrl, sId, subTitle });
+const builtApps = buildSubApps({ subUrl, sId, subTitle });
+const apps =
+  subData.subFormatMode === 'xray'
+    ? {
+        android: builtApps.android.filter((app) => app.name !== 'Sing-box'),
+        ios: builtApps.ios.filter((app) => app.name !== 'Sing-box'),
+      }
+    : builtApps;
 const initialPlatform = detectPlatform(navigator.userAgent);
 const RTL_LANGUAGES = new Set(['fa-IR', 'ar-EG']);
 
@@ -169,6 +176,7 @@ export default function SubPage() {
           <SubLinksTab
             subUrl={subUrl}
             subJsonUrl={subJsonUrl}
+            subFormatMode={subData.subFormatMode}
             subClashUrl={subClashUrl}
             onCopy={copy}
           />

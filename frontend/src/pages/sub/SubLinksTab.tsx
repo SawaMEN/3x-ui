@@ -7,6 +7,7 @@ import SubQrButton from './SubQrButton';
 interface SubLinksTabProps {
   subUrl: string;
   subJsonUrl: string;
+  subFormatMode?: string;
   subClashUrl: string;
   onCopy: (value: string) => void;
 }
@@ -15,30 +16,43 @@ const appendRawView = (url: string) => `${url}${url.includes('?') ? '&' : '?'}vi
 const appendNativeFormat = (url: string, format: string) =>
   url ? `${url}${url.includes('?') ? '&' : '?'}format=${format}` : '';
 
-export default function SubLinksTab({ subUrl, subJsonUrl, subClashUrl, onCopy }: SubLinksTabProps) {
+export default function SubLinksTab({
+  subUrl,
+  subJsonUrl,
+  subClashUrl,
+  subFormatMode = 'both',
+  onCopy,
+}: SubLinksTabProps) {
   const { t } = useTranslation();
   const subLabel = t('pages.settings.subSettings');
   const rows = [
     { kind: 'SUB', color: 'green', url: subUrl, title: subLabel, downloadable: false },
     {
-      kind: 'JSON',
+      kind: 'ALL',
+      color: 'green',
+      url: subFormatMode === 'both' ? appendNativeFormat(subUrl, 'links') : '',
+      title: 'Все подключения',
+      downloadable: false,
+    },
+    {
+      kind: 'XRAY',
       color: 'purple',
       url: subJsonUrl,
-      title: `${subLabel} JSON`,
+      title: 'Xray JSON',
       downloadable: true,
     },
     { kind: 'CLASH', color: 'gold', url: subClashUrl, title: 'Clash / Mihomo', downloadable: true },
     {
       kind: 'SING-BOX',
       color: 'cyan',
-      url: appendNativeFormat(subUrl, 'sing-box'),
+      url: subFormatMode === 'xray' ? '' : appendNativeFormat(subUrl, 'sing-box'),
       title: 'Sing-box JSON (AnyTLS / ShadowTLS)',
       downloadable: true,
     },
     {
       kind: 'HIDDIFY',
       color: 'blue',
-      url: appendNativeFormat(subUrl, 'hiddify'),
+      url: subFormatMode === 'xray' ? '' : appendNativeFormat(subUrl, 'hiddify'),
       title: 'Hiddify JSON (AnyTLS / ShadowTLS)',
       downloadable: true,
     },

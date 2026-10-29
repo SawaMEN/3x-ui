@@ -107,6 +107,23 @@ func (a *SettingController) updateStandaloneCore(c *gin.Context) {
 	defer coreManagementMu.Unlock()
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Minute)
 	defer cancel()
-	version, err := service.UpdateStandaloneCore(ctx, c.Param("core"), "latest")
+	var form struct {
+		Version string `json:"version" form:"version"`
+	}
+	if c.Request.ContentLength != 0 {
+		if err := c.ShouldBind(&form); err != nil {
+			jsonObj(c, nil, err)
+			return
+		}
+	}
+	version, err := service.UpdateStandaloneCore(ctx, c.Param("core"), form.Version)
 	jsonObj(c, gin.H{"version": version}, err)
+}
+
+// Versions are fetched from the same upstream repository used by the installer.
+func (a *SettingController) standaloneCoreVersions(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 20*time.Second)
+	defer cancel()
+	versions, err := service.StandaloneCoreVersions(ctx, c.Param("core"))
+	jsonObj(c, versions, err)
 }

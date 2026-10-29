@@ -123,6 +123,10 @@ func (s *SubJsonService) bakedTemplate() map[string]any {
 
 // GetJson generates a JSON subscription configuration for the given subscription ID and host.
 func (s *SubJsonService) GetJson(subId string, host string, alwaysReturnArray bool) (string, string, error) {
+	return s.getJson(subId, host, alwaysReturnArray, false)
+}
+
+func (s *SubJsonService) getJson(subId string, host string, alwaysReturnArray, compatible bool) (string, string, error) {
 	subReq := s.SubService.ForRequest(host)
 	subReq.subscriptionBody = true
 	inbounds, err := subReq.getInboundsBySubId(subId)
@@ -137,6 +141,18 @@ func (s *SubJsonService) GetJson(subId string, host string, alwaysReturnArray bo
 		return "", "", nil
 	}
 
+	excludedEmails := map[string]bool{}
+	if compatible {
+		inbounds = slices.DeleteFunc(inbounds, func(inbound *model.Inbound) bool {
+			if !containsUnsupportedJSONProtocol([]*model.Inbound{inbound}) && !containsShadowTLSTransport([]*model.Inbound{inbound}) {
+				return false
+			}
+			for _, client := range subReq.matchingClients(inbound, subId) {
+				excludedEmails[client.Email] = client.Enable || excludedEmails[client.Email]
+			}
+			return true
+		})
+	}
 	// JSON uses Xray's outbound model. Refuse the whole format when any linked
 	// inbound cannot be represented, otherwise auto-detection could silently
 	// drop one connection and still return HTTP 200.
@@ -150,6 +166,10 @@ func (s *SubJsonService) GetJson(subId string, host string, alwaysReturnArray bo
 	var hasEnabledClient bool
 
 	seenEmails := make(map[string]struct{})
+	for email, enabled := range excludedEmails {
+		seenEmails[email] = struct{}{}
+		hasEnabledClient = hasEnabledClient || enabled
+	}
 	entries := make([]subConfigEntry, 0, len(inbounds))
 	var ordered []orderedSubEntry[func() subConfigEntry]
 	// Prepare Inbounds
@@ -213,6 +233,9 @@ func (s *SubJsonService) GetJson(subId string, host string, alwaysReturnArray bo
 			}
 			generated := s.getConfig(subReq, effective, client, host)
 			if len(generated) == 0 {
+				if compatible {
+					continue
+				}
 				return "", "", errSubscriptionFormatUnsupported
 			}
 			inboundConfigs = append(inboundConfigs, generated...)
@@ -279,6 +302,10 @@ func (s *SubJsonService) GetJson(subId string, host string, alwaysReturnArray bo
 		for _, el := range expandEntry(ext) {
 			outbound := parsedExternalOutbound(el.Link)
 			if outbound == nil {
+				if compatible {
+					seenEmails[ext.Email] = struct{}{}
+					continue
+				}
 				return "", "", errSubscriptionFormatUnsupported
 			}
 			seenEmails[ext.Email] = struct{}{}
@@ -337,16 +364,16 @@ func (s *SubJsonService) GetJson(subId string, host string, alwaysReturnArray bo
 // The existing /json/ format remains Xray-compatible; callers opt into this format
 // explicitly with ?format=sing-box so existing subscriptions are not changed.
 func (s *SubJsonService) GetSingBoxJson(subId string, host string, alwaysReturnArray bool) (string, string, error) {
-	return s.getSingBoxJson(subId, host, alwaysReturnArray, false)
+	return s.getSingBoxJson(subId, host, alwaysReturnArray, false, false)
 }
 
 // Hiddify expects a single JSON document with an outbounds array, including
 // the hidden ShadowTLS transport used by the visible inner proxy.
 func (s *SubJsonService) GetHiddifySingBoxJson(subId string, host string) (string, string, error) {
-	return s.getSingBoxJson(subId, host, false, true)
+	return s.getSingBoxJson(subId, host, false, true, false)
 }
 
-func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnArray, hiddify bool) (string, string, error) {
+func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnArray, hiddify, compatible bool) (string, string, error) {
 	translateOutbound := singbox.TranslateXrayOutbound
 	if hiddify {
 		translateOutbound = hiddifycore.TranslateOutbound
@@ -410,6 +437,11 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 		}
 		return !active
 	})
+	if compatible {
+		inbounds = slices.DeleteFunc(inbounds, func(inbound *model.Inbound) bool {
+			return inbound.Protocol == model.VetroffProxy || singBoxUnsupportedProtocol(inbound.Protocol) && (!hiddify || !hiddifyExtendedProtocol(inbound.Protocol))
+		})
+	}
 	if len(inbounds) == 0 && len(externalLinks) == 0 {
 		emails := make([]string, 0, len(seenEmails))
 		for email := range seenEmails {
@@ -596,7 +628,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 		return "", "", errSubscriptionFormatUnsupported
 	}
 	nativeTLSForHiddify := hiddify && containsNativeTLSSubscription(inbounds)
-	if (!hiddify && containsSubscriptionProtocol(inbounds, model.WireGuard)) ||
+	if (!hiddify && !compatible && containsSubscriptionProtocol(inbounds, model.WireGuard)) ||
 		(!nativeTLSForHiddify && slices.ContainsFunc(inbounds, func(ib *model.Inbound) bool {
 			return singBoxUnsupportedProtocol(ib.Protocol) && (!hiddify || !hiddifyExtendedProtocol(ib.Protocol))
 		})) {
@@ -611,7 +643,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 		if len(clients) == 0 {
 			continue
 		}
-		if hiddify && inbound.Protocol == model.WireGuard {
+		if (hiddify || compatible) && inbound.Protocol == model.WireGuard {
 			if len(wireguardEndpoints[inbound]) == 0 {
 				formatUnsupported = true
 			}
@@ -912,7 +944,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 		for _, el := range expandEntry(ext) {
 			outbound := parsedExternalOutbound(el.Link)
 			if outbound == nil {
-				if nativeTLSForHiddify {
+				if nativeTLSForHiddify || compatible {
 					continue
 				}
 				return "", "", errSubscriptionFormatUnsupported
@@ -941,7 +973,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 		}
 	}
 
-	if (formatUnsupported && !nativeTLSForHiddify) || (nativeTLSForHiddify && !nativeTLSGenerated) {
+	if (formatUnsupported && !nativeTLSForHiddify && !compatible) || (nativeTLSForHiddify && !nativeTLSGenerated) {
 		return "", "", errSubscriptionFormatUnsupported
 	}
 
@@ -993,7 +1025,7 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 	}
 
 	var encoded string
-	if hiddify {
+	if hiddify || compatible {
 		encoded, err = buildHiddifySingBoxSubscription(proxyConfigs)
 	} else {
 		encoded, err = buildSeparatedSingBoxSubscription(s.bakedTemplate(), proxyConfigs, alwaysReturnArray)

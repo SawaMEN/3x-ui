@@ -16,6 +16,9 @@ func TestFirewallNftCompatibilityClassification(t *testing.T) {
 	}{
 		{"iptables v1.8.13 (nf_tables): Could not fetch rule set generation id: Invalid argument", true},
 		{"netlink: Error: cache initialization failed: Operation not supported", true},
+		{"inspect nftables ruleset: netlink: Error: cache initialization failed: Invalid argument", true},
+		{"netlink: Error: cache initialization failed: Permission denied", false},
+		{"nft: syntax error: Invalid argument", false},
 		{"Could not fetch rule set generation id: Permission denied (you must be root)", false},
 		{"command timed out", false},
 	} {
@@ -35,7 +38,7 @@ func fakeFirewallBinary(t *testing.T, dir, name, body string) {
 func TestFirewallFallsBackToLegacyOnIncompatibleNft(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("PATH", dir)
-	failure := "echo 'Could not fetch rule set generation id: Invalid argument' >&2; exit 1"
+	failure := "echo 'netlink: Error: cache initialization failed: Invalid argument' >&2; exit 1"
 	fakeFirewallBinary(t, dir, "nft", failure)
 	fakeFirewallBinary(t, dir, "iptables", failure)
 	fakeFirewallBinary(t, dir, "iptables-legacy", "if [ \"$1\" = '-S' ]; then exit 0; fi; exit 1")

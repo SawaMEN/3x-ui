@@ -122,6 +122,8 @@ var defaultValueMap = map[string]string{
 	"twoFactorToken":              "",
 	"happLinkEnable":              "false",
 	"subEnable":                   "true",
+	"subFormatMode":               "both",
+	"subDefaultFormat":            "auto",
 	"subJsonEnable":               "false",
 	"subJsonAutoDetect":           "false",
 	"subJsonAlwaysArray":          "false",
@@ -1468,6 +1470,9 @@ type SecretClears struct {
 }
 
 func (s *SettingService) UpdateAllSetting(allSetting *entity.AllSetting, clears SecretClears) error {
+	if err := validateSubscriptionFormats(allSetting); err != nil {
+		return err
+	}
 	switch allSetting.SubHostSortMode {
 	case "":
 		allSetting.SubHostSortMode = "inbound-first"
@@ -1928,4 +1933,50 @@ func (s *SettingService) GetNodeDownThreshold() (int, error) {
 
 func (s *SettingService) SetNodeDownThreshold(value int) error {
 	return s.setInt("nodeDownThreshold", value)
+}
+
+func (s *SettingService) GetSubFormatMode() (string, error) { return s.getString("subFormatMode") }
+func (s *SettingService) GetSubDefaultFormat() (string, error) {
+	return s.getString("subDefaultFormat")
+}
+
+func validateSubscriptionFormats(settings *entity.AllSetting) error {
+	if settings.SubFormatMode == "" {
+		settings.SubFormatMode = "both"
+	}
+	if settings.SubDefaultFormat == "" {
+		settings.SubDefaultFormat = "auto"
+	}
+	switch settings.SubFormatMode {
+	case "both", "xray", "sing-box":
+	default:
+		return errors.New("subscription format mode must be both, xray or sing-box")
+	}
+	switch settings.SubDefaultFormat {
+	case "auto", "links", "xray", "sing-box":
+	default:
+		return errors.New("invalid default subscription format")
+	}
+	if settings.SubFormatMode != "both" && settings.SubDefaultFormat != settings.SubFormatMode {
+		return errors.New("default subscription format must be enabled")
+	}
+	return nil
+}
+
+// Read both values in one database snapshot so settings take effect together.
+func (s *SettingService) GetSubOutputFormats() (string, string, error) {
+	settings := &entity.AllSetting{SubFormatMode: "both", SubDefaultFormat: "auto"}
+	var rows []model.Setting
+	if err := database.GetDB().Where("key IN ?", []string{"subFormatMode", "subDefaultFormat"}).Find(&rows).Error; err != nil {
+		return "", "", err
+	}
+	for _, row := range rows {
+		if row.Key == "subFormatMode" {
+			settings.SubFormatMode = row.Value
+		} else {
+			settings.SubDefaultFormat = row.Value
+		}
+	}
+	err := validateSubscriptionFormats(settings)
+	return settings.SubFormatMode, settings.SubDefaultFormat, err
 }
