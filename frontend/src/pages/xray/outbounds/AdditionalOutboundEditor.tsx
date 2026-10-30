@@ -73,7 +73,10 @@ export default function AdditionalOutboundEditor({
           <Alert
             type="info"
             showIcon
-            description="VetroffProxy client: вставьте vetroff:// ссылку от входящего подключения. Локальный SOCKS5 будет автоматически добавлен к маршрутизации Xray или sing-box."
+            description={
+              'VetroffProxy client: вставьте vetroff:// ссылку от входящего подключения. ' +
+              'Локальный SOCKS5 будет автоматически добавлен к маршрутизации Xray или sing-box.'
+            }
           />
           <Form.Item label="VetroffProxy connection (vetroff://)">
             <Input.TextArea
@@ -87,7 +90,9 @@ export default function AdditionalOutboundEditor({
           <Form.Item label="UDP ASSOCIATE">
             <Switch
               checked={settings.enableUDP === true}
-              onChange={(enableUDP) => update({ enableUDP, udpStream: enableUDP ? settings.udpStream === true : false })}
+              onChange={(enableUDP) =>
+                update({ enableUDP, udpStream: enableUDP ? settings.udpStream === true : false })
+              }
             />
           </Form.Item>
           {settings.enableUDP === true && (
