@@ -42,6 +42,7 @@ func (a *NodeController) initRouter(g *gin.RouterGroup) {
 	g.POST("/inbounds", a.inbounds)
 	g.POST("/probe/:id", a.probe)
 	g.POST("/updatePanel", a.updatePanel)
+	g.GET("/updatePanelStatus/:id", a.updatePanelStatus)
 	g.POST("/reorder", a.reorder)
 	g.GET("/history/:id/:metric/:bucket", a.history)
 	g.POST("/mtls/ca", a.mtlsCa)
@@ -391,6 +392,22 @@ func (a *NodeController) updatePanel(c *gin.Context) {
 	}
 	results, err := a.nodeService.UpdatePanels(req.Ids, req.Dev)
 	jsonMsgObj(c, I18nWeb(c, "pages.nodes.toasts.updateStarted"), results, err)
+}
+
+// updatePanelStatus checks the remote installation result, not merely whether
+// the update was started. The frontend compares the returned run ID.
+func (a *NodeController) updatePanelStatus(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id <= 0 {
+		jsonMsg(c, "invalid node ID", fmt.Errorf("invalid node ID"))
+		return
+	}
+	status, err := a.nodeService.PanelUpdateStatus(id)
+	if err != nil {
+		jsonMsg(c, "failed to check remote panel update status", err)
+		return
+	}
+	jsonObj(c, status, nil)
 }
 
 func (a *NodeController) history(c *gin.Context) {
