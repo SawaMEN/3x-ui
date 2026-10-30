@@ -21,14 +21,11 @@ func validateVetroffOutbound(s OutboundSettings) error {
 	if s.UDPStream && !s.EnableUDP {
 		return fmt.Errorf("VetroffProxy UDP streaming requires enableUDP")
 	}
-	if len(s.Link) > 16<<10 || !strings.HasPrefix(s.Link, "vetroff://") || strings.ContainsAny(s.Link, "/?# \t\r\n") {
-		// The two slashes immediately after the URI scheme are expected.
-		if !strings.HasPrefix(s.Link, "vetroff://") || strings.ContainsAny(strings.TrimPrefix(s.Link, "vetroff://"), "/?# \t\r\n") || len(s.Link) > 16<<10 {
-			return fmt.Errorf("%s", bad)
-		}
+	if len(s.Link) > 16<<10 || !strings.HasPrefix(s.Link, "vetroff://") {
+		return fmt.Errorf("%s", bad)
 	}
 	encoded := strings.TrimPrefix(s.Link, "vetroff://")
-	if encoded == "" {
+	if encoded == "" || strings.ContainsAny(encoded, "/?# \t\r\n") {
 		return fmt.Errorf("%s", bad)
 	}
 	raw, err := base64.RawURLEncoding.Strict().DecodeString(encoded)
