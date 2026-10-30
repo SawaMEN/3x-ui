@@ -8,32 +8,14 @@ on:
       - update
     tags:
       - "v*.*.*"
-    paths:
-      - "**.go"
-      - "go.mod"
-      - "go.sum"
-      - "**.sh"
-      - "tools/fetch-latest-kernel.py"
-      - "tools/telemt/**"
-      - "tools/test_official_telemt.py"
-      - "frontend/**"
-      - "x-ui.service.debian"
-      - "x-ui.service.arch"
-      - "x-ui.service.rhel"
-      - "internal/Telemt/telemt.service"
-      - "internal/Telemt/telemt-update.service"
-      - "internal/Telemt/telemt-update.timer"
-      - "internal/Telemt/telemt-update.sh"
-      - "internal/Telemt/telemt.toml.example"
-      - "internal/Telemt/telemt-meko-fix.service"
-      - "internal/Telemt/telemt-meko-fix.sh"
-      - ".github/workflows/release.yml"
-      - ".github/workflows/build.yml"
-      - "internal/config/version"
-      - "deploy/hiddify/**"
-      - "deploy/speed/**"
-      - "tools/build-speed-components.py"
-      - "docs/hiddify-core-target.json"
+
+# Always build the newest main revision, including fixes to shell tests and
+# documentation that can otherwise supersede a release build while leaving
+# dev-latest permanently stale. Cancel only superseded main builds; explicit
+# version-tag builds and manually dispatched runs are never cancelled here.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
 
 jobs:
   frontend:
