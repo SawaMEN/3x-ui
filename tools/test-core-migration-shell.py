@@ -295,6 +295,31 @@ fi
             finally:
                 holder.wait(timeout=5)
 
+    def test_stable_channel_never_silently_falls_back_to_dev(self):
+        source = (ROOT / "update.sh").read_text()
+        start = source.index("select_release_tag() {")
+        end = source.index("\n}\n", start) + 3
+        select_function = source[start:end]
+        script = (
+            "set -eu\n"
+            "resolve_latest_tag() { printf 'v-stable\\n'; }\n"
+            'release_curl() { printf "%s" "$HTTP_STATUS"; }\n'
+            + select_function + "\n"
+            'if [[ "$HTTP_STATUS" == 404 ]]; then\n'
+            '  if select_release_tag "" >/dev/null 2>&1; then exit 41; fi\n'
+            '  [[ "$(select_release_tag dev)" == dev-latest ]]\n'
+            'else\n'
+            '  [[ "$(select_release_tag "")" == v-stable ]]\n'
+            'fi\n'
+        )
+        for status in ("404", "200"):
+            with self.subTest(status=status):
+                result = subprocess.run(
+                    ["bash", "-c", script], capture_output=True, text=True,
+                    env={**os.environ, "HTTP_STATUS": status},
+                )
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_alpine_rollback_after_new_service_crashes(self):
         self.run_case("verify", alpine=True)
 
