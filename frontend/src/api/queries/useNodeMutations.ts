@@ -12,7 +12,17 @@ export interface NodeUpdateResult {
   id: number;
   name?: string;
   ok: boolean;
+  runId?: string;
   error?: string;
+}
+
+export interface RemotePanelUpdateStatus {
+  runId: string;
+  state: 'pending' | 'success' | 'failed';
+  exitCode: number;
+  message?: string;
+  logFile?: string;
+  finishedAt?: number;
 }
 
 export interface RemoteInboundOption {
