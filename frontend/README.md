@@ -69,9 +69,9 @@ npm run build
 ```
 
 Outputs to `../internal/web/dist/` (HTML at the root, hashed JS/CSS under
-`assets/`). `manualChunks` splits AntD, icons, codemirror, and
-react-query into separate vendor bundles to keep the per-page
-initial JS small. The Go binary embeds this directory at compile
+`assets/`). Vite automatically splits shared dependencies and lazily imported routes.
+Avoid forced vendor chunks for Ant Design, React and related libraries: splitting
+their circular dependency graph across bundles can crash the panel at runtime. The Go binary embeds this directory at compile
 time and `internal/web/controller/dist.go` serves the per-page HTML.
 
 ### PWA mode
