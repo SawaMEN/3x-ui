@@ -5,6 +5,7 @@ from pathlib import Path
 import subprocess
 import tarfile
 import tempfile
+import time
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -199,6 +200,41 @@ fi
                     else: self.assertIn("service:start x-ui", commands)
                 if mode=="missing_service": self.assertNotIn("service:disable x-ui", commands)
                 if mode=="disabled": self.assertIn("service:disable x-ui", commands)
+
+    def test_remote_update_download_lock_reclaims_only_abandoned_artifacts(self):
+        source = (ROOT / "update.sh").read_text()
+        start = source.index("acquire_update_download_lock() {")
+        end = source.index("# Cheap pre-download guard.", start)
+        lock_functions = source[start:end]
+        with tempfile.TemporaryDirectory() as raw:
+            parent = Path(raw)
+            old_download = parent / ".x-ui-download.ABCDEF.tar.gz"
+            new_download = parent / ".x-ui-download.GHIJKL.tar.gz"
+            old_stage = parent / ".x-ui-release.MNOPQR"
+            recovery = parent / "x-ui-upgrade.STUVWX"
+            old_download.write_text("stale")
+            new_download.write_text("recent")
+            old_stage.mkdir()
+            (old_stage / "staged-panel").write_text("stale stage")
+            recovery.mkdir()
+            (recovery / "installation").mkdir()
+            (recovery / "installation" / "x-ui").write_text("recoverable")
+            six_hours_ago = time.time() - (7 * 3600)
+            os.utime(old_download, (six_hours_ago, six_hours_ago))
+            os.utime(old_stage, (six_hours_ago, six_hours_ago))
+            script = (
+                "set -eu\\n" + lock_functions +
+                '\\nacquire_update_download_lock "$1"\\n'
+                'release_update_download_lock\\n'
+            )
+            result = subprocess.run(
+                ["bash", "-c", script, "bash", raw], capture_output=True, text=True
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertFalse(old_download.exists())
+            self.assertFalse(old_stage.exists())
+            self.assertTrue(new_download.exists())
+            self.assertTrue((recovery / "installation" / "x-ui").exists())
 
     def test_alpine_rollback_after_new_service_crashes(self):
         self.run_case("verify", alpine=True)
