@@ -80,14 +80,35 @@ export function useNodeMutations() {
   });
 
   const updatePanelsMut = useMutation({
-    mutationFn: ({ ids, dev }: { ids: number[]; dev: boolean }) =>
-      HttpUtil.post<NodeUpdateResult[]>(
-        '/panel/api/nodes/updatePanel',
-        { ids, dev },
-        {
-          headers: { 'Content-Type': 'application/json' },
-        },
-      ),
+    mutationFn: async ({ ids, dev }: { ids: number[]; dev: boolean }): Promise<Msg<NodeUpdateResult[]>> => {
+      // The panel HTTP server has a 30-second WriteTimeout. Each node launch
+      // can wait up to 25 seconds, so large requests must be split into
+      // bounded fanout batches rather than timing out after the first group.
+      const results: NodeUpdateResult[] = [];
+      const batchSize = 24;
+      for (let start = 0; start < ids.length; start += batchSize) {
+        const batch = ids.slice(start, start + batchSize);
+        const response = await HttpUtil.post<NodeUpdateResult[]>(
+          '/panel/api/nodes/updatePanel',
+          { ids: batch, dev },
+          {
+            headers: { 'Content-Type': 'application/json' },
+            timeout: 28_000,
+            silent: true,
+          },
+        );
+        if (!response?.success || !Array.isArray(response.obj)) {
+          const error = response?.msg || 'Failed to start remote panel update';
+          results.push(...batch.map((id) => ({ id, ok: false, error })));
+          continue;
+        }
+        const byId = new Map(response.obj.map((result) => [result.id, result]));
+        for (const id of batch) {
+          results.push(byId.get(id) ?? { id, ok: false, error: 'Node returned no result' });
+        }
+      }
+      return new Msg<NodeUpdateResult[]>(true, '', results);
+    },
     onSuccess: (msg) => {
       if (msg?.success) invalidate();
     },
