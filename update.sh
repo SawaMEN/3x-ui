@@ -1160,7 +1160,7 @@ acquire_update_download_lock() {
         [[ -f "$old" && ! -L "$old" ]] || continue
         echo "Removing abandoned panel download: $old"
         rm -f -- "$old" || true
-    done < <(find "$parent" -mindepth 1 -maxdepth 1 -type f \\( -name '.x-ui-download.??????.tar.gz' -o -name '.x-ui-download.??????.tar.gz.sha256' -o -name '.core-migration.??????' \\) -mmin +360 -print0 2>/dev/null)
+    done < <(find "$parent" -mindepth 1 -maxdepth 1 -type f \( -name '.x-ui-download.??????.tar.gz' -o -name '.x-ui-download.??????.tar.gz.sha256' -o -name '.core-migration.??????' \) -mmin +360 -print0 2>/dev/null)
     while IFS= read -r -d '' old; do
         [[ -d "$old" && ! -L "$old" ]] || continue
         echo "Removing abandoned release staging: $old"
