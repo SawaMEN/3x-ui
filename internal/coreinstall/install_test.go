@@ -115,7 +115,7 @@ func TestInstallChecksAndAtomicallyPublishes(t *testing.T) {
 						t.Fatalf("failed install modified live binary: %s %v", got, err)
 					}
 				}
-				matches, _ := filepath.Glob(filepath.Join(dir, ".core-install-*"))
+				matches, _ := filepath.Glob(filepath.Join(dir, ".core-"+engine+"-install-*"))
 				if len(matches) > 0 {
 					t.Fatal("staged binaries leaked")
 				}

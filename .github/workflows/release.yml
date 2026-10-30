@@ -288,6 +288,9 @@ jobs:
           for component in pingtunnel trusttunnel_endpoint caddy-naive hysteria sudoku-tunnel sudoku.version optional/sudoku; do
             test ! -e "x-ui/bin/$component"
           done
+          for core in x-ui/bin/xray-* x-ui/bin/sing-box-upstream-*; do
+            test ! -e "$core" && test ! -L "$core"
+          done
           tar -zcf x-ui-linux-${{ matrix.platform }}.tar.gz x-ui
           sha256sum x-ui-linux-${{ matrix.platform }}.tar.gz > x-ui-linux-${{ matrix.platform }}.tar.gz.sha256
 

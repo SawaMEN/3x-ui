@@ -198,7 +198,7 @@ func (i Installer) Install(ctx context.Context, engine, version, goos, arch, arm
 	if err = os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		return "", err
 	}
-	f, err := os.CreateTemp(filepath.Dir(target), ".core-install-*")
+	f, err := os.CreateTemp(filepath.Dir(target), ".core-"+engine+"-install-*")
 	if err != nil {
 		return "", err
 	}
