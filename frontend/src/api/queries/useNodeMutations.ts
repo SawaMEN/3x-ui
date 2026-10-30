@@ -80,7 +80,13 @@ export function useNodeMutations() {
   });
 
   const updatePanelsMut = useMutation({
-    mutationFn: async ({ ids, dev }: { ids: number[]; dev: boolean }): Promise<Msg<NodeUpdateResult[]>> => {
+    mutationFn: async ({
+      ids,
+      dev,
+    }: {
+      ids: number[];
+      dev: boolean;
+    }): Promise<Msg<NodeUpdateResult[]>> => {
       // The panel HTTP server has a 30-second WriteTimeout. Each node launch
       // can wait up to 25 seconds, so large requests must be split into
       // bounded fanout batches rather than timing out after the first group.
