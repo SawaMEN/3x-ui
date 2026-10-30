@@ -295,7 +295,7 @@ fi
             finally:
                 holder.wait(timeout=5)
 
-    def test_stable_channel_never_silently_falls_back_to_dev(self):
+    def test_legacy_stable_falls_back_to_compatible_dev_only_by_default(self):
         source = (ROOT / "update.sh").read_text()
         start = source.index("select_release_tag() {")
         end = source.index("\n}\n", start) + 3
@@ -306,8 +306,8 @@ fi
             'release_curl() { printf "%s" "$HTTP_STATUS"; }\n'
             + select_function + "\n"
             'if [[ "$HTTP_STATUS" == 404 ]]; then\n'
-            '  if select_release_tag "" >/dev/null 2>&1; then exit 41; fi\n'
-            '  [[ "$(select_release_tag dev)" == dev-latest ]]\n'
+            '  [[ "$(select_release_tag "")" == dev-latest ]]\n'
+            '  [[ "$(select_release_tag v-old)" == v-old ]]\n'
             'else\n'
             '  [[ "$(select_release_tag "")" == v-stable ]]\n'
             'fi\n'
