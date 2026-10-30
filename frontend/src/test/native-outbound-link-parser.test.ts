@@ -2,6 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { parseNativeOutboundLink } from '@/lib/xray/native-outbound-link-parser';
 
 describe('native outbound link import', () => {
+  it('imports VetroffProxy links without losing case-sensitive base64url credentials', () => {
+    const link = 'vetroff://AbCdEF_09-Z';
+    expect(parseNativeOutboundLink(link)).toEqual({
+      protocol: 'vetroff',
+      tag: 'vetroff-out',
+      settings: { link, enableUDP: false, udpStream: false },
+    });
+  });
+
   it('imports AnyTLS credentials, uTLS, SNI and TLS options without Xray conversion', () => {
     expect(
       parseNativeOutboundLink(

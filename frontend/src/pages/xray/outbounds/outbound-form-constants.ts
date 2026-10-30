@@ -32,6 +32,7 @@ export const SINGBOX_NATIVE_OUTBOUND_PROTOCOLS = [
   'snell',
   'fptn',
   'openflux',
+  'vetroff',
   'tor',
   'ssh',
   'selector',
@@ -50,7 +51,7 @@ export const PROTOCOL_OPTIONS = [
     .map((p) => ({ value: p, label: p })),
   ...SINGBOX_NATIVE_OUTBOUND_PROTOCOLS.map((p) => ({
     value: p,
-    label: ['fptn', 'openflux'].includes(p)
+    label: ['fptn', 'openflux', 'vetroff'].includes(p)
       ? `${p} (managed)`
       : `${p.replace(/^singbox:/, '')} (sing-box)`,
   })),

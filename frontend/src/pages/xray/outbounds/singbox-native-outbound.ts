@@ -86,6 +86,9 @@ export function buildNativeSingBoxOutbound(protocol: string, tag = ''): NativeSi
     case 'fptn':
       settings = { token: '', mtu: 1400, sni: 'www.bing.com', bypass: 'sni-spoofing' };
       break;
+    case 'vetroff':
+      settings = { link: '', enableUDP: false, udpStream: false };
+      break;
     case 'openflux':
       settings = {
         secret: '',

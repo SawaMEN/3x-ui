@@ -24,6 +24,9 @@ import (
 )
 
 type OutboundSettings struct {
+	Link       string              `json:"link"`
+	EnableUDP  bool                `json:"enableUDP"`
+	UDPStream  bool                `json:"udpStream"`
 	Token      string              `json:"token"`
 	MTU        int                 `json:"mtu"`
 	SNI        string              `json:"sni"`
@@ -55,7 +58,7 @@ var (
 
 func IsAdditionalOutbound(raw map[string]any) bool {
 	p, _ := raw["protocol"].(string)
-	return strings.EqualFold(p, "fptn") || strings.EqualFold(p, "openflux")
+	return strings.EqualFold(p, "fptn") || strings.EqualFold(p, "openflux") || strings.EqualFold(p, "vetroff")
 }
 
 func ValidateAdditionalOutbound(raw map[string]any) error {
@@ -68,6 +71,9 @@ func ValidateAdditionalOutbound(raw map[string]any) error {
 		return err
 	}
 	p, _ := raw["protocol"].(string)
+	if strings.EqualFold(p, "vetroff") {
+		return validateVetroffOutbound(s)
+	}
 	if strings.EqualFold(p, "fptn") {
 		if !strings.HasPrefix(s.Token, "fptn:") {
 			return fmt.Errorf("FPTN outbound requires an upstream access token")
@@ -348,7 +354,31 @@ func startOutbound(tag string, proc *managedOutbound) error {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	proc.cancel = cancel
-	if strings.EqualFold(p, "openflux") {
+	if strings.EqualFold(p, "vetroff") {
+		connection := filepath.Join(folder, "connection.txt")
+		if err := writePrivate(connection, []byte(s.Link+"\n")); err != nil {
+			cancel()
+			return err
+		}
+		command := binary(model.VetroffProxy)
+		if _, err := os.Stat(command); err != nil {
+			cancel()
+			return fmt.Errorf("VetroffProxy outbound requires an installed VetroffProxy bundle: %w", err)
+		}
+		args := []string{"client", "--link-file", connection, "--listen", net.JoinHostPort("127.0.0.1", strconv.Itoa(proc.port))}
+		if s.EnableUDP {
+			args = append(args, "--enable-udp")
+		}
+		if s.UDPStream {
+			args = append(args, "--udp-stream")
+		}
+		proc.cmd = exec.CommandContext(ctx, command, args...)
+		proc.cmd.Dir = filepath.Dir(command)
+		// The core uses a local unauthenticated SOCKS bridge. Do not inherit
+		// unrelated host SOCKS credentials, and never expose this listener on LAN.
+		proc.cmd.Env = append(os.Environ(), "VETROFF_SOCKS_USER=", "VETROFF_SOCKS_PASSWORD=")
+		prepareVetroffCommand(proc.cmd)
+	} else if strings.EqualFold(p, "openflux") {
 		secret := filepath.Join(folder, "secret")
 		if strings.ContainsAny(secret, "\r\n#;") {
 			cancel()
@@ -492,6 +522,27 @@ func RefreshOutbounds() {
 			proc.failures = 6
 		}
 		proc.nextRetry = time.Now().Add(time.Duration(1<<proc.failures) * time.Second)
+	}
+}
+
+// RemoveOutboundProtocol stops an uninstalled sidecar and drops its plans
+// so the periodic supervisor cannot resurrect it while its executable is
+// being removed. Other managed outbound protocols are unaffected.
+func RemoveOutboundProtocol(protocol model.Protocol) {
+	outboundMu.Lock()
+	defer outboundMu.Unlock()
+	for tag, proc := range outboundProcesses {
+		p, _ := proc.raw["protocol"].(string)
+		if strings.EqualFold(p, string(protocol)) {
+			stopOutbound(proc)
+			delete(outboundProcesses, tag)
+		}
+	}
+	for tag, plan := range outboundPlans {
+		p, _ := plan.raw["protocol"].(string)
+		if strings.EqualFold(p, string(protocol)) {
+			delete(outboundPlans, tag)
+		}
 	}
 }
 

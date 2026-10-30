@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { FormField } from '@/components/form/rhf';
 import { HttpUtil } from '@/utils';
 
-export function InstallVPNButton({ protocol }: { protocol: 'fptn' | 'openflux' }) {
+export function InstallVPNButton({ protocol }: { protocol: 'fptn' | 'openflux' | 'vetroff' }) {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
   return (
@@ -31,7 +31,12 @@ export function InstallVPNButton({ protocol }: { protocol: 'fptn' | 'openflux' }
       }}
     >
       {t('pages.inbounds.form.vpnInstall', {
-        protocol: protocol === 'fptn' ? 'FPTN client' : 'OpenFlux',
+        protocol:
+          protocol === 'fptn'
+            ? 'FPTN client'
+            : protocol === 'vetroff'
+              ? 'VetroffProxy'
+              : 'OpenFlux',
       })}
     </Button>
   );
