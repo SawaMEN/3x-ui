@@ -522,6 +522,27 @@ func RefreshOutbounds() {
 	}
 }
 
+// RemoveOutboundProtocol stops an uninstalled sidecar and drops its plans
+// so the periodic supervisor cannot resurrect it while its executable is
+// being removed. Other managed outbound protocols are unaffected.
+func RemoveOutboundProtocol(protocol model.Protocol) {
+	outboundMu.Lock()
+	defer outboundMu.Unlock()
+	for tag, proc := range outboundProcesses {
+		p, _ := proc.raw["protocol"].(string)
+		if strings.EqualFold(p, string(protocol)) {
+			stopOutbound(proc)
+			delete(outboundProcesses, tag)
+		}
+	}
+	for tag, plan := range outboundPlans {
+		p, _ := plan.raw["protocol"].(string)
+		if strings.EqualFold(p, string(protocol)) {
+			delete(outboundPlans, tag)
+		}
+	}
+}
+
 func stopOutboundProtocol(protocol model.Protocol) {
 	outboundMu.Lock()
 	defer outboundMu.Unlock()
