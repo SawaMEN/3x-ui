@@ -16,6 +16,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/singbox"
 )
 
 func TestPinnedBinaryChecksGeneratedConfigurations(t *testing.T) {
@@ -163,6 +165,25 @@ func TestPinnedBinaryChecksGeneratedConfigurations(t *testing.T) {
 			t.Fatal(err)
 		}
 		checked(t, map[string]any{"inbounds": []any{inbound}})
+	})
+	t.Run("native UDP TLS cipher list at final serialization", func(t *testing.T) {
+		cfg := &singbox.Config{Inbounds: []map[string]any{{
+			"type": "hysteria2", "tag": "in-17956-udp", "listen": "127.0.0.1", "listen_port": 17956,
+			"users": []any{map[string]any{"name": "alice", "password": "test-password"}},
+			"tls": map[string]any{
+				"enabled": true, "certificate_path": cert, "key_path": key,
+				"cipher_suites": []any{"TLS_RSA_WITH_AES_128_GCM_SHA256", "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256"},
+			},
+		}}}
+		data, err := cfg.Marshal()
+		if err != nil {
+			t.Fatal(err)
+		}
+		var wire map[string]any
+		if err := json.Unmarshal(data, &wire); err != nil {
+			t.Fatal(err)
+		}
+		checked(t, wire)
 	})
 	t.Run("explicit config required", func(t *testing.T) {
 		out, err := run("check")

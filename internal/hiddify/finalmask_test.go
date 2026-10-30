@@ -59,7 +59,8 @@ func TestInboundTCPFinalMaskRejectsIncompatibleOptions(t *testing.T) {
 func TestInboundTCPFinalMaskOtherTCPProtocols(t *testing.T) {
 	for _, protocol := range []string{"shadowsocks", "http", "socks", "mixed", "trojan", "vmess"} {
 		t.Run(protocol, func(t *testing.T) {
-			raw := map[string]any{"protocol": protocol, "tag": "masked", "listen": "127.0.0.1", "port": 45971,
+			raw := map[string]any{
+				"protocol": protocol, "tag": "masked", "listen": "127.0.0.1", "port": 45971,
 				"settings":       map[string]any{"method": "chacha20-ietf-poly1305", "password": "secret", "clients": []any{map[string]any{"email": "alice", "id": "11111111-1111-4111-8111-111111111111", "password": "secret"}}},
 				"streamSettings": map[string]any{"network": "tcp", "finalmask": map[string]any{"tcp": []any{map[string]any{"type": "fragment", "settings": map[string]any{"packets": "1-3", "length": "1-4", "delay": "0"}}}}},
 			}

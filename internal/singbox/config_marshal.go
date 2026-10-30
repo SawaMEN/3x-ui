@@ -517,5 +517,8 @@ func (c *Config) MarshalJSON() ([]byte, error) {
 		clone.Endpoints = append(clone.Endpoints, endpoint)
 	}
 
+	if err := normalizeRuntimeTLSConfig(&clone); err != nil {
+		return nil, err
+	}
 	return json.Marshal(clone)
 }
