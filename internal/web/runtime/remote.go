@@ -702,10 +702,9 @@ func (r *Remote) RestartXray(ctx context.Context) error {
 // launched; the new version surfaces on the next heartbeat. When dev is true the
 // node is moved to the rolling dev channel instead of the latest stable release.
 func (r *Remote) UpdatePanel(ctx context.Context, dev bool) error {
-	var body any
-	if dev {
-		body = url.Values{"dev": {"true"}}
-	}
+	// Always send the chosen channel: omitting dev=false incorrectly falls back
+	// to the remote node's own channel preference.
+	body := url.Values{"dev": {strconv.FormatBool(dev)}}
 	_, err := r.do(ctx, http.MethodPost, "panel/api/server/updatePanel", body)
 	return err
 }
