@@ -999,7 +999,7 @@ func (s *NodeService) UpdatePanels(ids []int, dev bool) ([]NodeUpdateResult, err
 			}
 			// The remote first downloads its updater script (up to 15 s).
 			// Give that launch time to complete without a false timeout.
-			ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 			runID, updErr := remote.StartPanelUpdate(ctx, dev)
 			cancel()
 			if updErr != nil {
