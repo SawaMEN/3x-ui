@@ -1133,6 +1133,25 @@ download_release_asset() {
     download_http_status=$("${curl_bin:-curl}" -4 -fL --retry 3 --retry-delay 2 --connect-timeout 20 --max-time 900 -w '%{http_code}' -o "$dest" "$url")
 }
 
+# Cheap pre-download guard. The exact unpacked size is verified later by
+# core_migration_check_space; this prevents an obviously full disk from
+# accepting another large archive before that check can run.
+preflight_update_download_space() {
+    local parent="$1" installed_kib free_kib required_kib
+    installed_kib=$(du -sk -- "$xui_folder" 2>/dev/null | awk '{print $1}') || return 1
+    free_kib=$(df -Pk -- "$parent" | awk 'END {print $4}') || return 1
+    [[ "$installed_kib" =~ ^[0-9]+$ && "$free_kib" =~ ^[0-9]+$ ]] || return 1
+    # Budget an archive and one new working copy, plus 256 MiB for safety.
+    # This intentionally remains only a preliminary estimate; the exact
+    # disk-space guard after downloading must not be removed.
+    required_kib=$((2 * installed_kib + 262144))
+    (( required_kib >= 524288 )) || required_kib=524288
+    if (( free_kib < required_kib )); then
+        echo "Insufficient space before downloading update: need at least ${required_kib} KiB free, have ${free_kib} KiB on $parent. Nothing downloaded." >&2
+        return 1
+    fi
+}
+
 update_x-ui() {
     load_xui_env || _fail "Cannot load x-ui service environment; current installation was not changed"
     xui_folder="${XUI_MAIN_FOLDER:-/usr/local/x-ui}"
@@ -1174,6 +1193,7 @@ update_x-ui() {
 
     local machine_arch
     machine_arch="$(arch)"
+    preflight_update_download_space "$install_parent" || _fail "Release download cancelled: insufficient disk space or disk usage could not be measured. Existing installation unchanged."
     # A second web/console updater must not overwrite or remove this download.
     local archive
     archive=$(mktemp "${install_parent}/.x-ui-download.XXXXXX.tar.gz") || _fail "Cannot create release download"
