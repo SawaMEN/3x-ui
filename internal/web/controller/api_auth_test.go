@@ -69,6 +69,9 @@ func newAPIAuthTestEngine(t *testing.T) (*gin.Engine, *APIController) {
 	api.POST("/server/updatePanel", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"reached": true})
 	})
+	api.GET("/server/getUpdateStatus", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"reached": true})
+	})
 	api.POST("/clients/:email/detach", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"reached": true})
 	})
@@ -382,6 +385,39 @@ func TestPanelUpdateRequiresNodeAdminScope(t *testing.T) {
 
 			if w.Code != tc.wantCode || w.Body.String() != tc.wantBody {
 				t.Fatalf("response = %d %s, want %d %s", w.Code, w.Body.String(), tc.wantCode, tc.wantBody)
+			}
+		})
+	}
+}
+
+func TestPanelUpdateStatusRequiresNodeAdminScope(t *testing.T) {
+	engine, _ := newAPIAuthTestEngine(t)
+	cases := []struct {
+		name  string
+		scope string
+		want  int
+	}{
+		{"node sync denied", model.ApiScopeNodeSync, http.StatusForbidden},
+		{"node admin allowed", model.ApiScopeNodeAdmin, http.StatusOK},
+		{"monitor denied", model.ApiScopeMonitor, http.StatusForbidden},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			token := "update-status-" + tc.scope
+			if err := database.GetDB().Create(&model.ApiToken{
+				Name:    token,
+				Token:   crypto.HashTokenSHA256(token),
+				Enabled: true,
+				Scope:   tc.scope,
+			}).Error; err != nil {
+				t.Fatalf("seed token: %v", err)
+			}
+			req := httptest.NewRequest(http.MethodGet, "/panel/api/server/getUpdateStatus", nil)
+			req.Header.Set("Authorization", "Bearer "+token)
+			w := httptest.NewRecorder()
+			engine.ServeHTTP(w, req)
+			if w.Code != tc.want {
+				t.Fatalf("status = %d, want %d, body=%s", w.Code, tc.want, w.Body.String())
 			}
 		})
 	}
