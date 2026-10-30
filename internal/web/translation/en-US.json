@@ -1634,6 +1634,7 @@
         "updateResult": "Update triggered on {ok} node(s), {failed} failed",
         "updateInstalled": "Update installed successfully on {number} node(s)",
         "updateStatusUnknown": "Could not confirm installation on {number} node(s). Check the remote update log.",
+        "updateUntracked": "Update started on {number} older node(s), but this version cannot report installation results. Check the node update log.",
         "updateNoneEligible": "Select at least one online, enabled node",
         "saveMtls": "Save node mTLS",
         "reloadMtls": "Reload master mTLS credential"
