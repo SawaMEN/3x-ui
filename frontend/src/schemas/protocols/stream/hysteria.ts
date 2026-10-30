@@ -1,33 +1,82 @@
 import { z } from 'zod';
 
-// Hysteria stream transport. Per Xray docs (transports/hysteria.html), the
-// Xray implementation of Hysteria2's underlying QUIC transport keeps only
-// the essentials — version, auth, udpIdleTimeout, and masquerade. The
-// extended bandwidth/window/udphop knobs that earlier hysteria builds
-// exposed are not part of this transport's wire shape.
-
-// Inbound masquerade — Xray's hysteria inbound can disguise itself as an
-// HTTP/3 server. `type` is the empty string by default (serves the default
-// 404 page), and per-type config keys are only honored when their type is
-// active.
-export const HysteriaMasqueradeSchema = z.object({
-  type: z.enum(['', 'proxy', 'file', 'string']).default(''),
-  dir: z.string().default(''),
-  url: z.string().default(''),
-  rewriteHost: z.boolean().default(false),
-  xForwarded: z.boolean().optional(),
-  insecure: z.boolean().default(false),
-  content: z.string().default(''),
-  headers: z.record(z.string(), z.string()).default({}),
-  statusCode: z.number().int().min(0).default(0),
-});
+// Native Hiddify/sing-box Hysteria options. Preserve extension fields on edit:
+// older Xray-only schemas used to erase bandwidth and obfuscation settings.
+export const HysteriaMasqueradeSchema = z
+  .object({
+    type: z.enum(['', 'proxy', 'file', 'string']).default(''),
+    dir: z.string().default(''),
+    url: z.string().default(''),
+    rewriteHost: z.boolean().default(false),
+    xForwarded: z.boolean().optional(),
+    insecure: z.boolean().default(false),
+    content: z.string().default(''),
+    headers: z.record(z.string(), z.string()).default({}),
+    statusCode: z
+      .number()
+      .int()
+      .min(0)
+      .max(599)
+      .refine((n) => n === 0 || n >= 100)
+      .default(0),
+  })
+  .passthrough();
 export type HysteriaMasquerade = z.infer<typeof HysteriaMasqueradeSchema>;
 
-export const HysteriaStreamSettingsSchema = z.object({
-  version: z.literal(2).default(2),
-  auth: z.string().default(''),
-  // Xray-core rejects values outside 2-600 seconds at startup.
-  udpIdleTimeout: z.number().int().min(2).max(600).default(60),
-  masquerade: HysteriaMasqueradeSchema.optional(),
-});
+export const HysteriaObfsSchema = z
+  .object({
+    type: z.enum(['salamander', 'gecko']),
+    password: z.string().min(1),
+    minPacketSize: z.number().int().min(1).max(2048).optional(),
+    maxPacketSize: z.number().int().min(1).max(2048).optional(),
+  })
+  .passthrough()
+  .refine(
+    (obfs) =>
+      obfs.minPacketSize === undefined ||
+      obfs.maxPacketSize === undefined ||
+      obfs.minPacketSize <= obfs.maxPacketSize,
+    'Minimum packet size must not exceed maximum packet size',
+  );
+
+const HysteriaStreamSettingsBaseSchema = z
+  .object({
+    version: z.union([z.literal(1), z.literal(2)]).default(2),
+    auth: z.string().default(''),
+    udpIdleTimeout: z.number().int().min(1).max(4294967295).default(60),
+    up: z.number().int().min(0).optional(),
+    down: z.number().int().min(0).optional(),
+    ignoreClientBandwidth: z.boolean().optional(),
+    bbrProfile: z.enum(['conservative', 'standard', 'aggressive']).optional(),
+    obfs: z.union([z.string(), HysteriaObfsSchema]).optional(),
+    masquerade: HysteriaMasqueradeSchema.optional(),
+  })
+  .passthrough();
+export const HysteriaStreamSettingsSchema = z.preprocess((value) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  const next = { ...value } as Record<string, unknown>;
+  for (const [canonical, aliases] of Object.entries({
+    up: ['up_mbps', 'upMbps'],
+    down: ['down_mbps', 'downMbps'],
+    ignoreClientBandwidth: ['ignore_client_bandwidth'],
+    bbrProfile: ['bbr_profile'],
+  })) {
+    for (const alias of aliases) {
+      if (next[canonical] === undefined && next[alias] !== undefined) next[canonical] = next[alias];
+      delete next[alias];
+    }
+  }
+  if (next.obfs && typeof next.obfs === 'object') {
+    const obfs = { ...next.obfs } as Record<string, unknown>;
+    for (const [canonical, alias] of [
+      ['minPacketSize', 'min_packet_size'],
+      ['maxPacketSize', 'max_packet_size'],
+    ]) {
+      if (obfs[canonical] === undefined) obfs[canonical] = obfs[alias];
+      delete obfs[alias];
+    }
+    next.obfs = obfs;
+  }
+  return next;
+}, HysteriaStreamSettingsBaseSchema);
 export type HysteriaStreamSettings = z.infer<typeof HysteriaStreamSettingsSchema>;

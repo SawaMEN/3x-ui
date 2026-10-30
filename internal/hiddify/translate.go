@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	TargetVersion    = "sawamen-b310097c8e7a-8ffe1758cf4e-snellv5quic2"
+	TargetVersion    = "sawamen-b310097c8e7a-338f0c9457a4-xdrive"
 	TargetRevision   = "b310097c8e7a2655e1ab7ca61b7d66c4b77ebe0c"
 	StatsQueryMethod = "/v2ray.core.app.stats.command.StatsService/QueryStats"
 )
@@ -94,7 +94,7 @@ func translate(raw map[string]any, inbound bool) (map[string]any, error) {
 		delete(stream, "xhttpSettings")
 	}
 	var encryption any
-	if protocol == "vless" {
+	if protocol == "vless" && !strings.EqualFold(network, "xdrive") {
 		if inbound {
 			encryption = settings["decryption"]
 			delete(settings, "decryption")

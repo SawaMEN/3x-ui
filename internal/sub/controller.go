@@ -623,7 +623,7 @@ func (a *SUBController) hasHiddifyNativeSubscription(subID string) bool {
 		return false
 	}
 	for _, inbound := range inbounds {
-		if !hiddifyExtendedProtocol(inbound.Protocol) && inbound.Protocol != model.MASQUE && inbound.Protocol != model.WireGuard && !containsNativeTLSSubscription([]*model.Inbound{inbound}) {
+		if !hiddifyExtendedProtocol(inbound.Protocol) && inbound.Protocol != model.MASQUE && inbound.Protocol != model.WireGuard && !containsNativeTLSSubscription([]*model.Inbound{inbound}) && !usesXDriveTransport(inbound) {
 			continue
 		}
 		for _, client := range req.matchingClients(inbound, subID) {

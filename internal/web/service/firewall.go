@@ -411,6 +411,9 @@ func firewallSourcePriority(s string) int {
 }
 
 func firewallProtocolsForInbound(protocol model.Protocol, network string) []string {
+	if strings.EqualFold(strings.TrimSpace(network), "xdrive") {
+		return nil
+	}
 	switch protocol {
 	case model.WireGuard, model.AmneziaWG, model.Hysteria, model.TUIC:
 		return []string{"udp"}

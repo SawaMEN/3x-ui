@@ -631,6 +631,9 @@ func (s *SubJsonService) getSingBoxJson(subId string, host string, alwaysReturnA
 	if containsSubscriptionProtocol(inbounds, model.VetroffProxy) {
 		return "", "", errSubscriptionFormatUnsupported
 	}
+	if !hiddify && slices.ContainsFunc(inbounds, usesXDriveTransport) {
+		return "", "", errSubscriptionFormatUnsupported
+	}
 	nativeTLSForHiddify := hiddify && containsNativeTLSSubscription(inbounds)
 	if (!hiddify && !compatible && containsSubscriptionProtocol(inbounds, model.WireGuard)) ||
 		(!nativeTLSForHiddify && slices.ContainsFunc(inbounds, func(ib *model.Inbound) bool {
@@ -1710,6 +1713,16 @@ func (s *SubJsonService) genVless(subReq *SubService, inbound *model.Inbound, st
 		outbound.Mux = json_util.RawMessage(mux)
 	}
 	outbound.StreamSettings = streamSettings
+	var stream map[string]any
+	_ = json.Unmarshal(streamSettings, &stream)
+	if stream["network"] == "xdrive" {
+		client.Flow = ""
+		if subReq.nativeProfile {
+			outbound.Mux = nil
+		} else {
+			outbound.Mux = json_util.RawMessage(`{"enabled":true,"concurrency":8}`)
+		}
+	}
 
 	// Add encryption for VLESS outbound from inbound settings
 	inboundSettings := subReq.linkSettings(inbound)
@@ -2172,30 +2185,31 @@ func (s *SubJsonService) genHy(inbound *model.Inbound, newStream map[string]any,
 
 	var settings, stream map[string]any
 	_ = json.Unmarshal([]byte(inbound.Settings), &settings)
-	version, _ := settings["version"].(float64)
+	version := float64(2)
+	if stored, ok := settings["version"].(float64); ok && (stored == 1 || stored == 2) {
+		version = stored
+	}
+	_ = json.Unmarshal([]byte(inbound.StreamSettings), &stream)
+	hyStream, _ := stream["hysteriaSettings"].(map[string]any)
+	if stored, ok := hyStream["version"].(float64); ok && (stored == 1 || stored == 2) {
+		version = stored
+	}
 	outbound.Settings = map[string]any{
 		"version": int(version),
 		"address": inbound.Listen,
 		"port":    inbound.Port,
 	}
 
-	_ = json.Unmarshal([]byte(inbound.StreamSettings), &stream)
-	hyStream, _ := stream["hysteriaSettings"].(map[string]any)
 	outHyStream := map[string]any{
 		"version": int(version),
 		"auth":    client.Auth,
 	}
-	if udpIdleTimeout, ok := hyStream["udpIdleTimeout"].(float64); ok {
-		outHyStream["udpIdleTimeout"] = int(udpIdleTimeout)
-	}
-	if masquerade, ok := hyStream["masquerade"].(map[string]any); ok {
-		outHyStream["masquerade"] = masquerade
-	}
+	// UDP association expiry and HTTP masquerade are server-only.
 	for _, key := range []string{
 		"up_mbps", "down_mbps", "hop_interval", "hop_interval_max",
 		"upMbps", "downMbps", "up", "down", "hopInterval", "hopIntervalMax",
-		"bbrProfile", "disableChromeParrot", "ignoreClientBandwidth",
-		"bbr_profile", "disable_chrome_parrot", "ignore_client_bandwidth",
+		"bbrProfile", "disableChromeParrot",
+		"bbr_profile", "disable_chrome_parrot",
 	} {
 		if value, ok := hyStream[key]; ok {
 			outHyStream[key] = value

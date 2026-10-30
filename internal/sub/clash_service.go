@@ -713,6 +713,27 @@ func (s *SubClashService) buildHysteriaProxy(subReq *SubService, inbound *model.
 		proxy["ports"] = hopPorts
 	}
 
+	version := 2
+	if proxyType == "hysteria" {
+		version = 1
+	}
+	for key, value := range hysteriaNativeURIOptions(rawStream, version) {
+		switch key {
+		case "minPacketSize":
+			n, _ := strconv.Atoi(value)
+			proxy["obfs-min-packet-size"] = n
+		case "maxPacketSize":
+			n, _ := strconv.Atoi(value)
+			proxy["obfs-max-packet-size"] = n
+		case "up_mbps":
+			proxy["up"] = value
+		case "down_mbps":
+			proxy["down"] = value
+		default:
+			proxy[key] = value
+		}
+	}
+
 	return proxy
 }
 

@@ -30,7 +30,7 @@ git -C "$task_source/core" fetch --depth=1 origin "${target[2]}"
 git -C "$task_source/core" checkout -q --detach FETCH_HEAD
 git -C "$task_source/core" config submodule.hiddify-sing-box.url https://github.com/SawaMEN/hiddify-sing-box.git
 git -C "$task_source/core" config submodule.ray2sing.url https://github.com/hiddify/ray2sing.git
-git -C "$task_source/core" submodule update --init --recursive --depth=1
+git -C "$task_source/core" submodule update --init --depth=1
 # Track the independently maintained Sing-box fork even if the parent's
 # gitlink has not advanced. The lock retains the exact fetched revision.
 git -C "$task_source/core/hiddify-sing-box" fetch --depth=1 origin "${target[6]}"
@@ -114,6 +114,7 @@ if [[ "$task_goos" == "$(go env GOHOSTOS)" && "$task_goarch" == "$(go env GOHOST
   (
     cd -- "$task_source/core"
     CGO_ENABLED="$task_cgo" GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_link_flags" -tags "${target[3]}" github.com/sagernet/sing-box/experimental/clashapi/trafficontrol -run '^TestXUIPanelAuthenticatedUserIsConnectionMetadata$' -count=1
+    CGO_ENABLED="$task_cgo" GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_link_flags" -tags "${target[3]}" github.com/sagernet/sing-box/transport/v2rayxdrive -count=1 -timeout=90s
     CGO_ENABLED="$task_cgo" GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_link_flags" -tags "${target[3]}" github.com/sagernet/sing-box/protocol/snell -run '^TestSnellV[56]' -count=1 -timeout=60s
     CGO_ENABLED="$task_cgo" GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_link_flags" -tags "${target[3]}" github.com/sagernet/sing-box/option -run '^TestXUIPanelHTTP1RoundTrip$' -count=1
     CGO_ENABLED="$task_cgo" GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_link_flags" -tags "${target[3]}" github.com/sagernet/sing-box/route/rule -run '^TestXUIPanelSniffOverrideAction$' -count=1

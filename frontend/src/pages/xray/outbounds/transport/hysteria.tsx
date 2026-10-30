@@ -1,122 +1,109 @@
-import { useId } from 'react';
-import { useTranslation } from 'react-i18next';
-import { Form, Input, InputNumber, Select, Switch } from 'antd';
+import { Form, Input, InputNumber, Select } from 'antd';
 import { useFormContext, useWatch } from 'react-hook-form';
-
-import { HeaderMapEditor } from '@/components/form';
+import { useTranslation } from 'react-i18next';
 import { FormField } from '@/components/form/rhf';
 
-const MASQ = ['streamSettings', 'hysteriaSettings', 'masquerade'];
-const MASQ_DOT = 'streamSettings.hysteriaSettings.masquerade';
-
+// Masquerade and UDP association timeouts are server settings. Keep them out
+// of the outbound editor: a native Hysteria client cannot apply either option.
 export default function HysteriaForm() {
   const { t } = useTranslation();
-  const uid = useId();
   const { control, setValue } = useFormContext();
-  const masquerade = useWatch({ control, name: MASQ_DOT }) as { type?: string } | undefined;
+  const version = useWatch({ control, name: 'streamSettings.hysteriaSettings.version' }) ?? 2;
+  const obfs = useWatch({ control, name: 'streamSettings.hysteriaSettings.obfs' });
+  const set = (name: string, value: unknown) =>
+    setValue(name, value, { shouldDirty: true, shouldValidate: true });
   return (
     <>
       <FormField
-        label={t('pages.inbounds.form.version')}
         name={['streamSettings', 'hysteriaSettings', 'version']}
+        label={t('pages.inbounds.form.version')}
+        onAfterChange={(value) => {
+          set('settings.version', value);
+          set('streamSettings.hysteriaSettings.obfs', undefined);
+        }}
       >
-        <InputNumber min={2} max={2} disabled style={{ width: '100%' }} />
-      </FormField>
-      <FormField
-        label={t('pages.xray.outboundForm.authPassword')}
-        name={['streamSettings', 'hysteriaSettings', 'auth']}
-      >
-        <Input />
-      </FormField>
-      <FormField
-        label={t('pages.inbounds.form.udpIdleTimeout')}
-        name={['streamSettings', 'hysteriaSettings', 'udpIdleTimeout']}
-      >
-        <InputNumber min={2} max={600} style={{ width: '100%' }} />
-      </FormField>
-
-      <Form.Item label={t('pages.inbounds.form.masquerade')} htmlFor={`${uid}-masquerade`}>
-        <Switch
-          id={`${uid}-masquerade`}
-          checked={!!masquerade}
-          onChange={(checked) =>
-            setValue(
-              MASQ_DOT,
-              checked
-                ? {
-                    type: '',
-                    dir: '',
-                    url: '',
-                    rewriteHost: false,
-                    insecure: false,
-                    content: '',
-                    headers: {},
-                    statusCode: 0,
-                  }
-                : undefined,
-            )
-          }
+        <Select
+          options={[
+            { value: 2, label: 'Hysteria 2' },
+            { value: 1, label: 'Hysteria 1' },
+          ]}
         />
-      </Form.Item>
-      {masquerade && (
+      </FormField>
+      <FormField
+        name={['streamSettings', 'hysteriaSettings', 'auth']}
+        label={t('pages.xray.outboundForm.authPassword')}
+      >
+        <Input.Password />
+      </FormField>
+      {(['up', 'down'] as const).map((name) => (
+        <FormField
+          key={name}
+          name={['streamSettings', 'hysteriaSettings', name]}
+          label={t(`pages.inbounds.form.hy${name === 'up' ? 'Up' : 'Down'}`)}
+          tooltip={t('pages.inbounds.form.hyBandwidthHint')}
+        >
+          <InputNumber min={0} precision={0} style={{ width: '100%' }} />
+        </FormField>
+      ))}
+      {version === 2 ? (
         <>
-          <FormField label={t('pages.inbounds.form.type')} name={[...MASQ, 'type']}>
+          <FormField
+            name={['streamSettings', 'hysteriaSettings', 'bbrProfile']}
+            label={t('pages.inbounds.form.hyBbrProfile')}
+          >
             <Select
-              options={[
-                { value: '', label: 'default (404 page)' },
-                { value: 'proxy', label: 'proxy (reverse proxy)' },
-                { value: 'file', label: 'file (serve directory)' },
-                { value: 'string', label: 'string (fixed body)' },
-              ]}
+              allowClear
+              options={['conservative', 'standard', 'aggressive'].map((value) => ({
+                value,
+                label: value,
+              }))}
             />
           </FormField>
-          {masquerade.type === 'proxy' && (
-            <>
-              <FormField label={t('pages.inbounds.form.upstreamUrl')} name={[...MASQ, 'url']}>
-                <Input placeholder="https://www.example.com" />
-              </FormField>
-              <FormField
-                label={t('pages.inbounds.form.rewriteHost')}
-                name={[...MASQ, 'rewriteHost']}
-                valueProp="checked"
-              >
-                <Switch />
-              </FormField>
-              <FormField
-                label={t('pages.inbounds.form.xForwarded')}
-                name={[...MASQ, 'xForwarded']}
-                valueProp="checked"
-              >
-                <Switch />
-              </FormField>
-              <FormField
-                label={t('pages.inbounds.form.skipTlsVerify')}
-                name={[...MASQ, 'insecure']}
-                valueProp="checked"
-              >
-                <Switch />
-              </FormField>
-            </>
-          )}
-          {masquerade.type === 'file' && (
-            <FormField label={t('pages.inbounds.form.directory')} name={[...MASQ, 'dir']}>
-              <Input placeholder="/var/www/html" />
+          <Form.Item label={t('pages.inbounds.form.hyObfs')}>
+            <Select
+              value={typeof obfs === 'object' ? obfs?.type : ''}
+              options={[
+                { value: '', label: t('none') },
+                { value: 'salamander', label: 'Salamander' },
+                { value: 'gecko', label: 'Gecko' },
+              ]}
+              onChange={(type) =>
+                set(
+                  'streamSettings.hysteriaSettings.obfs',
+                  type
+                    ? { type, password: typeof obfs === 'object' ? (obfs?.password ?? '') : '' }
+                    : undefined,
+                )
+              }
+            />
+          </Form.Item>
+          {typeof obfs === 'object' && obfs?.type && (
+            <FormField
+              name={['streamSettings', 'hysteriaSettings', 'obfs', 'password']}
+              label={t('pages.inbounds.form.hyObfsPassword')}
+            >
+              <Input.Password />
             </FormField>
           )}
-          {masquerade.type === 'string' && (
-            <>
-              <FormField label={t('pages.inbounds.form.statusCode')} name={[...MASQ, 'statusCode']}>
-                <InputNumber min={0} max={599} style={{ width: '100%' }} />
+          {typeof obfs === 'object' &&
+            obfs?.type === 'gecko' &&
+            (['minPacketSize', 'maxPacketSize'] as const).map((name) => (
+              <FormField
+                key={name}
+                name={['streamSettings', 'hysteriaSettings', 'obfs', name]}
+                label={t(`pages.inbounds.form.hyPacket${name === 'minPacketSize' ? 'Min' : 'Max'}`)}
+              >
+                <InputNumber min={1} max={2048} precision={0} style={{ width: '100%' }} />
               </FormField>
-              <FormField label={t('pages.inbounds.form.body')} name={[...MASQ, 'content']}>
-                <Input.TextArea autoSize={{ minRows: 3 }} />
-              </FormField>
-              <FormField label={t('pages.inbounds.form.headers')} name={[...MASQ, 'headers']}>
-                <HeaderMapEditor mode="v1" />
-              </FormField>
-            </>
-          )}
+            ))}
         </>
+      ) : (
+        <FormField
+          name={['streamSettings', 'hysteriaSettings', 'obfs']}
+          label={t('pages.inbounds.form.hyObfsPassword')}
+        >
+          <Input.Password />
+        </FormField>
       )}
     </>
   );

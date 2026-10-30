@@ -1,4 +1,4 @@
-import { Alert, Button, Collapse, Input, InputNumber, Select, Space } from 'antd';
+import { Alert, Button, Collapse, Input, InputNumber, Select, Space, Switch } from 'antd';
 import { useFormContext, useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { FormField } from '@/components/form/rhf';
@@ -14,7 +14,11 @@ export default function MasqueFields() {
   const automatic = !certificate && !key;
   const hasHTTP2Options = versions.includes(2) || versions.includes(3);
   const advancedLabels: Record<string, string> = {
-    udp_timeout: 'UDP timeout',
+    udp_timeout: t('pages.inbounds.form.masqueUDPTimeout'),
+    initial_packet_size: t('pages.inbounds.form.masquePacketSize'),
+    max_concurrent_streams: t('pages.inbounds.form.masqueMaxStreams'),
+    udp_nat_max: t('pages.inbounds.form.masqueNATMax'),
+    routing_mark: t('pages.inbounds.form.masqueRoutingMark'),
     idle_timeout: t('pages.inbounds.form.masqueIdleTimeout'),
     keep_alive_period: t('pages.inbounds.form.masqueKeepAlive'),
     stream_receive_window: t('pages.inbounds.form.masqueStreamWindow'),
@@ -173,10 +177,21 @@ export default function MasqueFields() {
                     />
                   </FormField>
                 ))}
-                {['max_concurrent_streams', 'initial_packet_size', 'udp_nat_max'].map((name) => (
-                  <FormField key={name} name={['settings', 'advanced', name]} label={name}>
+                {[
+                  'max_concurrent_streams',
+                  'initial_packet_size',
+                  'udp_nat_max',
+                  'routing_mark',
+                ].map((name) => (
+                  <FormField
+                    key={name}
+                    name={['settings', 'advanced', name]}
+                    label={advancedLabels[name] || name}
+                  >
                     <InputNumber
                       min={name === 'initial_packet_size' ? 1200 : 0}
+                      max={name === 'initial_packet_size' ? 65527 : 4294967295}
+                      precision={0}
                       disabled={
                         name === 'initial_packet_size'
                           ? !versions.includes(3)
@@ -184,6 +199,16 @@ export default function MasqueFields() {
                       }
                       style={{ width: '100%' }}
                     />
+                  </FormField>
+                ))}
+                {['udp_fragment', 'tcp_fast_open', 'tcp_multi_path', 'reuse_addr'].map((name) => (
+                  <FormField
+                    key={name}
+                    name={['settings', 'advanced', name]}
+                    label={t(`pages.inbounds.form.masqueSocket.${name}`)}
+                    valueProp="checked"
+                  >
+                    <Switch />
                   </FormField>
                 ))}
                 <FormField

@@ -7,17 +7,20 @@
     "repository": "https://github.com/SawaMEN/hiddify-core",
     "commit": "b310097c8e7a2655e1ab7ca61b7d66c4b77ebe0c",
     "submodules": {
-      "hiddify-sing-box": "8ffe1758cf4ede3963492a9c9a488d7e01c389dd",
+      "hiddify-sing-box": "338f0c9457a41c99c7b73d929763dd7fc6b80e23",
       "ray2sing": "8757f68feff645ab63b87bddcaba88a11fba9aef"
     },
     "submodule_repositories": {
       "hiddify-sing-box": "https://github.com/SawaMEN/hiddify-sing-box",
       "ray2sing": "https://github.com/hiddify/ray2sing"
     },
-    "version": "sawamen-b310097c8e7a-8ffe1758cf4e-snellv5quic2"
+    "version": "sawamen-b310097c8e7a-338f0c9457a4-xdrive"
   },
   "runtime_contract": {
-    "raw_config_command": ["srun", "-c"],
+    "raw_config_command": [
+      "srun",
+      "-c"
+    ],
     "validation_cli_available": true,
     "stats_grpc_method": "/v2ray.core.app.stats.command.StatsService/QueryStats",
     "panel_runtime_integrated": true,
@@ -83,6 +86,10 @@
     {
       "path": "v2/hcore/hcore_service.proto",
       "contains": "rpc HotReload"
+    },
+    {
+      "path": "hiddify-sing-box/transport/v2ray/transport.go",
+      "contains": "return xdrive.NewServer"
     }
   ],
   "panel_build": {
@@ -100,9 +107,11 @@
       "with_xui_panel",
       "with_masque"
     ],
-    "sing_box_version": "sawamen-8ffe1758cf4e",
+    "sing_box_version": "sawamen-338f0c9457a4",
     "check_command_overlay": "deploy/hiddify/cmd_xui_check.go.in",
-    "runtime_dependencies": ["matching libcronet for Naive outbound"],
+    "runtime_dependencies": [
+      "matching libcronet for Naive outbound"
+    ],
     "activation_ready": false,
     "toolchain": "go1.26.9",
     "validation_cli_available": true,
