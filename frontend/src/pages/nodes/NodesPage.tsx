@@ -30,12 +30,44 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useNodesQuery } from '@/api/queries/useNodesQuery';
 import type { NodeRecord } from '@/api/queries/useNodesQuery';
 import { useNodeMutations } from '@/api/queries/useNodeMutations';
+import type { NodeUpdateResult, RemotePanelUpdateStatus } from '@/api/queries/useNodeMutations';
 import AppSidebar from '@/layouts/AppSidebar';
 import NodeList from './NodeList';
 import NodeFormModal from './NodeFormModal';
 import { setMessageInstance } from '@/utils/messageBus';
 import { HttpUtil } from '@/utils';
 import type { PanelUpdateInfo } from '../index/PanelUpdateModal';
+
+// The remote API acknowledges only the launch. Keep checking the run-specific
+// status across the service restart so a failed installation is never reported
+// as a successful update.
+async function pollRemotePanelUpdate(
+  nodeId: number,
+  runId: string,
+): Promise<RemotePanelUpdateStatus | null> {
+  const deadline = Date.now() + 3 * 60_000;
+  while (Date.now() < deadline) {
+    await new Promise<void>((resolve) => setTimeout(resolve, 5000));
+    try {
+      const response = await HttpUtil.get<RemotePanelUpdateStatus>(
+        `/panel/api/nodes/updatePanelStatus/${nodeId}`,
+        undefined,
+        { silent: true, timeout: 3500 },
+      );
+      const status = response?.obj;
+      if (
+        response?.success &&
+        status?.runId === runId &&
+        (status.state === 'success' || status.state === 'failed')
+      ) {
+        return status;
+      }
+    } catch {
+      // Expected while the node is restarting; retry until the deadline.
+    }
+  }
+  return null;
+}
 
 // Confirm-dialog body that lets the operator pick the stable or dev channel for
 // a node panel update. Reports changes via onChange so the imperative
@@ -246,8 +278,55 @@ export default function NodesPage() {
         messageApi.warning(firstError ? `${base} — ${firstError}` : base);
       }
       setSelectedIds([]);
+
+      const launched = results.filter((r): r is NodeUpdateResult & { runId: string } =>
+        r.ok && typeof r.runId === 'string' && r.runId.length > 0,
+      );
+      if (launched.length > 0) {
+        void Promise.all(
+          launched.map(async (result) => ({
+            result,
+            status: await pollRemotePanelUpdate(result.id, result.runId),
+          })),
+        ).then((outcomes) => {
+          const failures = outcomes.filter(({ status }) => status?.state === 'failed');
+          const successes = outcomes.filter(({ status }) => status?.state === 'success');
+          const unknown = outcomes.filter(({ status }) => !status);
+          if (failures.length > 0) {
+            modal.error({
+              title: t('pages.index.panelUpdateFailedTitle'),
+              content: (
+                <div>
+                  {failures.map(({ result, status }) => (
+                    <p key={result.id}>
+                      <strong>{result.name || `#${result.id}`}</strong>:{' '}
+                      {status?.message || `Exit code ${status?.exitCode}`}
+                      {status?.logFile && (
+                        <>
+                          {' — '}
+                          <code>{status.logFile}</code>
+                        </>
+                      )}
+                    </p>
+                  ))}
+                </div>
+              ),
+            });
+          }
+          if (successes.length > 0) {
+            messageApi.success(`${successes.length} node panel update(s) installed successfully`);
+          }
+          if (unknown.length > 0) {
+            messageApi.warning(
+              `Installation result could not be confirmed for ${unknown.length} node(s); check the remote update log.`,
+              10,
+            );
+          }
+          void refetch();
+        });
+      }
     },
-    [updatePanels, messageApi, t],
+    [updatePanels, messageApi, t, modal, refetch],
   );
 
   const onUpdateNode = useCallback(
