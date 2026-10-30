@@ -43,10 +43,7 @@ import type { PanelUpdateInfo } from '../index/PanelUpdateModal';
 // as a successful update.
 type RemoteUpdateCheck = { status: RemotePanelUpdateStatus | null; error?: string };
 
-async function pollRemotePanelUpdate(
-  nodeId: number,
-  runId: string,
-): Promise<RemoteUpdateCheck> {
+async function pollRemotePanelUpdate(nodeId: number, runId: string): Promise<RemoteUpdateCheck> {
   // The release fetch can spend up to 15 minutes per network attempt.
   // Do not mark a slow, otherwise healthy node as "unknown" after 3 minutes.
   const deadline = Date.now() + 40 * 60_000;
@@ -68,10 +65,7 @@ async function pollRemotePanelUpdate(
         continue;
       }
       const status = response.obj;
-      if (
-        status?.runId === runId &&
-        (status.state === 'success' || status.state === 'failed')
-      ) {
+      if (status?.runId === runId && (status.state === 'success' || status.state === 'failed')) {
         return { status };
       }
     } catch {
