@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { isChunkLoadError } from '@/lib/chunk-load-recovery';
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
 
 describe('chunk loading recovery', () => {
   it('recognizes CSS preload failures as well as missing JS chunks', () => {
@@ -40,7 +43,8 @@ describe('chunk loading recovery', () => {
     expect((await import('@/lib/chunk-load-recovery')).reloadAfterChunkLoadError()).toBe(false);
     expect(replace).toHaveBeenCalledTimes(1);
   });
-  it('keeps React.lazy suspended when Vite swallows a prevented preload error', async () => {
+  it('temporarily suspends React.lazy while reloading, but never forever', async () => {
+    vi.useFakeTimers();
     vi.resetModules();
     vi.stubGlobal('sessionStorage', { getItem: () => null, setItem: vi.fn() });
     vi.stubGlobal('window', {
@@ -50,11 +54,21 @@ describe('chunk loading recovery', () => {
     expect(recovery.reloadAfterChunkLoadError()).toBe(true);
     let settled = false;
     const result = recovery.importWithChunkRecovery(async () => undefined);
-    void result.then(() => {
-      settled = true;
-    });
+    const completed = result.then(
+      () => {
+        settled = true;
+      },
+      () => {
+        settled = true;
+      },
+    );
     await Promise.resolve();
     await Promise.resolve();
     expect(settled).toBe(false);
+    const assertion = expect(result).rejects.toThrow(/could not finish reloading/);
+    await vi.advanceTimersByTimeAsync(8_000);
+    await assertion;
+    await completed;
+    expect(settled).toBe(true);
   });
 });
