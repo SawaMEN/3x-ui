@@ -93,7 +93,11 @@ export function installChunkLoadRecovery() {
 function suspendUntilNavigation<T>(): Promise<T> {
   return new Promise<T>((_, reject) => {
     setTimeout(() => {
-      reject(new Error('The panel could not finish reloading after a failed JS chunk import. Reload the page to retry.'));
+      reject(
+        new Error(
+          'The panel could not finish reloading after a failed JS chunk import. Reload the page to retry.',
+        ),
+      );
     }, CHUNK_NAVIGATION_TIMEOUT_MS);
   });
 }
