@@ -134,7 +134,7 @@ export function VetroffFields() {
             children: (
               <>
                 {select('tlsBackend', ['auto', 'go', 'nss'])}
-                {select('protocolPolicy', ['legacy', 'strict'])}
+                {select('protocolPolicy', ['builtin', 'strict'])}
                 {toggle('autoPin')}
                 {text('pin', 'sha256/...')}
                 {toggle('padding')}
@@ -162,7 +162,7 @@ export function VetroffFields() {
                     if (value) {
                       set('bondHub', true);
                       set('discover', true);
-                      set('protocolPolicy', 'legacy');
+                      set('protocolPolicy', 'builtin');
                       set('padding', false);
                       set('balance', 'failover');
                       set('fallbackServers', []);

@@ -35,7 +35,7 @@ function clearChunkReloadParam() {
 
 export function isChunkLoadError(reason: unknown): boolean {
   const message = reason instanceof Error ? reason.message : String(reason ?? '');
-  return /Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module/i.test(
+  return /Unable to preload CSS for|Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module/i.test(
     message,
   );
 }
@@ -88,7 +88,14 @@ export function installChunkLoadRecovery() {
 
 export async function importWithChunkRecovery<T>(loader: () => Promise<T>): Promise<T> {
   try {
-    return await loader();
+    const module = await loader();
+    // When vite:preloadError is prevented, Vite resolves the import with
+    // undefined instead of rejecting it. React.lazy would then try to read
+    // undefined.default while our replacement document is still loading.
+    if (module === undefined && chunkReloadScheduled) {
+      return new Promise<T>(() => undefined);
+    }
+    return module;
   } catch (error) {
     if (isChunkLoadError(error) && reloadAfterChunkLoadError()) {
       // Navigation has already been scheduled. Keep React.lazy suspended until

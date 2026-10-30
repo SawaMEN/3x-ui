@@ -71,7 +71,7 @@ type VetroffSettings struct {
 }
 
 func DefaultVetroffSettings() VetroffSettings {
-	return VetroffSettings{AutoTLS: true, AutoPin: true, Transport: "h2-connect", TLSBackend: "auto", HTTP3: true, EnableUDP: true, ProtocolPolicy: "legacy", MaxTunnels: 256, MaxConnections: 512, Balance: "failover", Pipeline: "auto", ConnectTimeout: "15s", AttemptTimeout: "5s", FallbackServers: []string{}, Nodes: []VetroffNode{}, AttemptsPerSecond: 200, AttemptBurst: 400, AccessMaxRequests: 1024, UserPolicy: VetroffUserPolicy{MaxRequests: 128, MaxTunnels: 32, RequestsPerSecond: 100, Burst: 200}, UserPolicies: []VetroffUserPolicy{}}
+	return VetroffSettings{AutoTLS: true, AutoPin: true, Transport: "h2-connect", TLSBackend: "auto", HTTP3: true, EnableUDP: true, ProtocolPolicy: "builtin", MaxTunnels: 256, MaxConnections: 512, Balance: "failover", Pipeline: "auto", ConnectTimeout: "15s", AttemptTimeout: "5s", FallbackServers: []string{}, Nodes: []VetroffNode{}, AttemptsPerSecond: 200, AttemptBurst: 400, AccessMaxRequests: 1024, UserPolicy: VetroffUserPolicy{MaxRequests: 128, MaxTunnels: 32, RequestsPerSecond: 100, Burst: 200}, UserPolicies: []VetroffUserPolicy{}}
 }
 
 func (v *VetroffSettings) UnmarshalJSON(data []byte) error {
@@ -80,13 +80,21 @@ func (v *VetroffSettings) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &value); err != nil {
 		return err
 	}
+	// Migrate panel settings written before VetroffProxy renamed its policy.
+	if value.ProtocolPolicy == "legacy" {
+		value.ProtocolPolicy = "builtin"
+	}
 	*v = VetroffSettings(value)
 	return nil
 }
 
 func vetroffOptions(inst Instance) VetroffSettings {
 	if inst.Settings.Vetroff != nil {
-		return *inst.Settings.Vetroff
+		value := *inst.Settings.Vetroff
+		if value.ProtocolPolicy == "legacy" {
+			value.ProtocolPolicy = "builtin"
+		}
+		return value
 	}
 	value := DefaultVetroffSettings()
 	value.AutoTLS, value.AutoPin = false, false
@@ -163,7 +171,7 @@ func vetroffPin(pin string) bool {
 
 func validateVetroffOptions(inst Instance) error {
 	v := vetroffOptions(inst)
-	if v.ProtocolPolicy != "legacy" && v.ProtocolPolicy != "strict" {
+	if v.ProtocolPolicy != "builtin" && v.ProtocolPolicy != "strict" {
 		return fmt.Errorf("invalid VetroffProxy protocol policy")
 	}
 	switch v.Transport {
