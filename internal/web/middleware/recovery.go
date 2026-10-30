@@ -6,8 +6,9 @@ import (
 	"net/http"
 	"runtime/debug"
 
-	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 	"github.com/gin-gonic/gin"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/logger"
 )
 
 // Recovery keeps a failed request from terminating the connection silently.
