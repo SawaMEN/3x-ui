@@ -1632,6 +1632,8 @@
         "probeFailed": "Probe failed",
         "updateStarted": "Panel update started",
         "updateResult": "Update triggered on {ok} node(s), {failed} failed",
+        "updateInstalled": "Update installed successfully on {number} node(s)",
+        "updateStatusUnknown": "Could not confirm installation on {number} node(s). Check the remote update log.",
         "updateNoneEligible": "Select at least one online, enabled node",
         "saveMtls": "Save node mTLS",
         "reloadMtls": "Reload master mTLS credential"
