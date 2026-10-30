@@ -27,7 +27,8 @@ core_migration_check_space() {
     # overhead/runtime writes. Existing recovery copies remain intact on failure.
     required=$((2 * (expanded / 1024 + 1) + snapshot + 65536))
     if (( available < required )); then
-        echo "Insufficient disk space for a safe upgrade: need ${required} KiB, available ${available} KiB on $parent. Installation was not changed." >&2
+        xui_update_error="Insufficient disk space for a safe upgrade: need ${required} KiB, available ${available} KiB on $parent. Installation was not changed."
+        echo "$xui_update_error" >&2
         return 1
     fi
 }
