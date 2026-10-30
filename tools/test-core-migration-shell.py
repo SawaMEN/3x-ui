@@ -223,9 +223,9 @@ fi
             os.utime(old_download, (six_hours_ago, six_hours_ago))
             os.utime(old_stage, (six_hours_ago, six_hours_ago))
             script = (
-                "set -eu\\n" + lock_functions +
-                '\\nacquire_update_download_lock "$1"\\n'
-                'release_update_download_lock\\n'
+                "set -eu\n" + lock_functions +
+                '\nacquire_update_download_lock "$1"\n'
+                'release_update_download_lock\n'
             )
             result = subprocess.run(
                 ["bash", "-c", script, "bash", raw], capture_output=True, text=True
