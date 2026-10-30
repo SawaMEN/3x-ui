@@ -126,7 +126,7 @@ func TestUpdatePanelsReachesNodesConcurrently(t *testing.T) {
 				_ = gate.hold(r.Context())
 			}
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"success":true}`))
+			_, _ = w.Write([]byte(`{"success":true,"obj":{"runId":"1735689600123456789"}}`))
 		}))
 		t.Cleanup(srv.Close)
 		host, port, _ := strings.Cut(strings.TrimPrefix(srv.URL, "http://"), ":")
@@ -154,7 +154,7 @@ func TestUpdatePanelsReachesNodesConcurrently(t *testing.T) {
 		t.Fatalf("UpdatePanels returned %d results for %d nodes", len(results), len(ids))
 	}
 	for i, res := range results {
-		if res.Id != ids[i] || !res.OK {
+		if res.Id != ids[i] || !res.OK || res.RunID != "1735689600123456789" {
 			t.Fatalf("UpdatePanels result %d = %+v, want node %d updated, in request order", i, res, ids[i])
 		}
 	}
