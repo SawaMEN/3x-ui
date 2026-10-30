@@ -276,6 +276,18 @@ func (r *Remote) doWithTimeout(ctx context.Context, method, path string, body an
 	if err != nil {
 		return nil, err
 	}
+	// Proxied node clients carry a 10-second http.Client.Timeout in addition
+	// to the per-request context deadline. Keep their pooled transport but
+	// remove that shorter cap for operations needing a longer response window.
+	// Never mutate a shared cached client: another node RPC may use it now.
+	if client.Timeout > 0 && client.Timeout < timeout {
+		client = &http.Client{
+			Transport:     client.Transport,
+			CheckRedirect: client.CheckRedirect,
+			Jar:           client.Jar,
+			Timeout:       timeout,
+		}
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("%s %s: %w", method, path, err)
