@@ -374,6 +374,9 @@ func startOutbound(tag string, proc *managedOutbound) error {
 		}
 		proc.cmd = exec.CommandContext(ctx, command, args...)
 		proc.cmd.Dir = filepath.Dir(command)
+		// The core uses a local unauthenticated SOCKS bridge. Do not inherit
+		// unrelated host SOCKS credentials, and never expose this listener on LAN.
+		proc.cmd.Env = append(os.Environ(), "VETROFF_SOCKS_USER=", "VETROFF_SOCKS_PASSWORD=")
 		prepareVetroffCommand(proc.cmd)
 	} else if strings.EqualFold(p, "openflux") {
 		secret := filepath.Join(folder, "secret")
