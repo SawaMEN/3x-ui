@@ -53,7 +53,7 @@ async function pollRemotePanelUpdate(nodeId: number, runId: string): Promise<Rem
       const response = await HttpUtil.get<RemotePanelUpdateStatus>(
         `/panel/api/nodes/updatePanelStatus/${nodeId}`,
         undefined,
-        { silent: true, timeout: 3500 },
+        { silent: true, timeout: 12_000 },
       );
       // An authentication/permission failure or missing API endpoint will not
       // recover just by waiting for the node to restart. Surface it immediately.
@@ -294,6 +294,13 @@ export default function NodesPage() {
       }
       setSelectedIds([]);
 
+      const untracked = results.filter((r) => r.ok && !r.runId);
+      if (untracked.length > 0) {
+        messageApi.warning(
+          t('pages.nodes.toasts.updateUntracked', { number: untracked.length }),
+          10,
+        );
+      }
       const launched = results.filter(
         (r): r is NodeUpdateResult & { runId: string } =>
           r.ok && typeof r.runId === 'string' && r.runId.length > 0,
