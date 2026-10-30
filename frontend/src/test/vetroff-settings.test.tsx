@@ -63,8 +63,3 @@ describe('Vetroff automatic settings', () => {
     expect(screen.queryByPlaceholderText('/etc/ssl/vetroff/fullchain.pem')).toBeNull();
   });
 });
-
-it('migrates the previously saved protocol policy to the native builtin name', () => {
-  expect(VetroffOptionsSchema.parse({ protocolPolicy: 'legacy' }).protocolPolicy).toBe('builtin');
-  expect(VetroffOptionsSchema.parse({}).protocolPolicy).toBe('builtin');
-});

@@ -491,17 +491,3 @@ func TestVetroffRejectsNativeProfileAliases(t *testing.T) {
 		t.Fatalf("invalid native SNI accepted: %v", err)
 	}
 }
-
-func TestVetroffMigratesSavedProtocolPolicy(t *testing.T) {
-	var settings VetroffSettings
-	if err := json.Unmarshal([]byte(`{"protocolPolicy":"legacy"}`), &settings); err != nil {
-		t.Fatal(err)
-	}
-	if settings.ProtocolPolicy != "builtin" {
-		t.Fatalf("saved policy was not migrated: %q", settings.ProtocolPolicy)
-	}
-	inst := Instance{Settings: Settings{Vetroff: &VetroffSettings{ProtocolPolicy: "legacy"}}}
-	if got := vetroffOptions(inst).ProtocolPolicy; got != "builtin" {
-		t.Fatalf("runtime policy = %q, want builtin", got)
-	}
-}

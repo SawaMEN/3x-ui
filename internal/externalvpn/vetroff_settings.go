@@ -80,21 +80,13 @@ func (v *VetroffSettings) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &value); err != nil {
 		return err
 	}
-	// Migrate panel settings written before VetroffProxy renamed its policy.
-	if value.ProtocolPolicy == "legacy" {
-		value.ProtocolPolicy = "builtin"
-	}
 	*v = VetroffSettings(value)
 	return nil
 }
 
 func vetroffOptions(inst Instance) VetroffSettings {
 	if inst.Settings.Vetroff != nil {
-		value := *inst.Settings.Vetroff
-		if value.ProtocolPolicy == "legacy" {
-			value.ProtocolPolicy = "builtin"
-		}
-		return value
+		return *inst.Settings.Vetroff
 	}
 	value := DefaultVetroffSettings()
 	value.AutoTLS, value.AutoPin = false, false
