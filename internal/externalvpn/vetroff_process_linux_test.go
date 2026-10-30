@@ -9,33 +9,29 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
-	"unsafe"
 )
 
 func TestVetroffRuntimeStopsWhenPanelDies(t *testing.T) {
 	role := os.Getenv("XUI_TEST_VETROFF_PROCESS_ROLE")
-	if role == "runtime" {
-		var signal int32
-		_, _, errno := syscall.Syscall6(syscall.SYS_PRCTL, 2, uintptr(unsafe.Pointer(&signal)), 0, 0, 0, 0)
-		if errno != 0 || signal != int32(syscall.SIGTERM) {
-			t.Fatalf("runtime has no kernel parent-death protection: signal=%d error=%v", signal, errno)
-		}
-		if err := os.WriteFile(os.Getenv("XUI_TEST_VETROFF_PARENT_PIDFILE"), []byte(strconv.Itoa(os.Getpid())), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		time.Sleep(60 * time.Second)
-		return
-	}
 	if role == "panel" {
-		cmd := exec.Command(os.Args[0], "-test.run=^TestVetroffRuntimeStopsWhenPanelDies$")
-		cmd.Env = append(os.Environ(), "XUI_TEST_VETROFF_PROCESS_ROLE=runtime")
+		cmd := exec.Command("python3", "-c", `import ctypes, os, signal, time
+value = ctypes.c_int()
+result = ctypes.CDLL(None).prctl(2, ctypes.byref(value), 0, 0, 0)
+assert result == 0 and value.value == signal.SIGTERM, "kernel parent-death signal is not configured"
+with open(os.environ["XUI_TEST_VETROFF_PARENT_PIDFILE"], "w") as output:
+    output.write(str(os.getpid()))
+time.sleep(60)
+`)
+		cmd.Env = os.Environ()
 		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 		prepareVetroffCommand(cmd)
 		_ = cmd.Run()
 		return
+	}
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("python3 is required for a runtime helper without Go race instrumentation")
 	}
 	pidFile := filepath.Join(t.TempDir(), "runtime.pid")
 	parent := exec.Command(os.Args[0], "-test.run=^TestVetroffRuntimeStopsWhenPanelDies$")
