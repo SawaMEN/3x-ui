@@ -21,6 +21,9 @@ func installVetroff(ctx context.Context) error {
 	}
 	externalVPNUpdateMu.Lock()
 	defer externalVPNUpdateMu.Unlock()
+	if err := cleanupVetroffStages(config.GetBinFolderPath()); err != nil {
+		return err
+	}
 	spec, err := releaseSpecFor(model.VetroffProxy)
 	if err != nil {
 		return err
@@ -195,5 +198,41 @@ func RemoveVetroff(ctx context.Context) error {
 			manager.removeLocked(id)
 		}
 	}
-	return os.RemoveAll(filepath.Join(config.GetBinFolderPath(), "vetroff-bundle"))
+	dir := config.GetBinFolderPath()
+	if err := cleanupVetroffStages(dir); err != nil {
+		return err
+	}
+	return os.RemoveAll(filepath.Join(dir, "vetroff-bundle"))
+}
+
+func cleanupVetroffStages(dir string) error {
+	entries, err := os.ReadDir(dir)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	target := filepath.Join(dir, "vetroff-bundle")
+	for _, entry := range entries {
+		if !strings.HasPrefix(entry.Name(), ".vetroff-stage-") {
+			continue
+		}
+		stage := filepath.Join(dir, entry.Name())
+		// Recover a previous runtime if a crash interrupted the directory swap.
+		if entry.IsDir() {
+			previous := filepath.Join(stage, "previous")
+			if _, err := os.Lstat(target); os.IsNotExist(err) {
+				if _, err := os.Lstat(previous); err == nil {
+					if err := os.Rename(previous, target); err != nil {
+						return err
+					}
+				}
+			}
+		}
+		if err := os.RemoveAll(stage); err != nil {
+			return fmt.Errorf("remove abandoned VetroffProxy download: %w", err)
+		}
+	}
+	return nil
 }
