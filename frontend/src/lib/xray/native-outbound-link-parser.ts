@@ -62,6 +62,16 @@ function extraOptions(p: URLSearchParams): Raw | null {
   }
 }
 export function parseNativeOutboundLink(link: string): Raw | null {
+  const trimmed = link.trim();
+  // The URI payload is case-sensitive base64url: URL.hostname normalizes case.
+  // Keep the original connection link intact for the managed Vetroff client.
+  if (trimmed.startsWith('vetroff://')) {
+    return {
+      protocol: 'vetroff',
+      tag: 'vetroff-out',
+      settings: { link: trimmed, enableUDP: false, udpStream: false },
+    };
+  }
   let url: URL;
   try {
     url = new URL(link.trim());
