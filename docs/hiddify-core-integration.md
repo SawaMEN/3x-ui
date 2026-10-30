@@ -189,3 +189,28 @@ installation/database snapshot остаётся для восстановлен�
 [sing-box-protection-support.md](sing-box-protection-support.md).
 
 VLESS Reverse, транспорты mKCP, расширения XHTTP и динамические балансировщики panel6 описаны в [отчёте](sing-box-transport-balancer-support.md).
+
+## TLS cipher presets and inbound TCP FinalMask
+
+The panel build with the `mask1` runtime suffix applies
+`deploy/hiddify/inbound-finalmask.patch`. Update both the panel and its managed
+HiddifyCli binary: older binaries do not recognize inbound `final_mask`.
+
+Supported TCP listeners (including VLESS, VMess, Trojan, Shadowsocks, HTTP and
+SOCKS) apply Xray's own TCP mask manager before
+TLS and the transport handshake, including WebSocket, HTTPUpgrade, HTTP, gRPC
+and XHTTP. Mask order and settings are preserved. UDP-based transports and
+REALITY remain incompatible with TCP masks and fail validation. Protocol-native
+Hysteria UDP masks continue through the existing translator. Invalid mask
+settings are rejected by `HiddifyCli check` before opening listeners.
+
+TLS translation uses the cipher names accepted by Go's `tls.CipherSuites()`.
+Legacy panel presets containing a mixture of supported and insecure ciphers
+retain their supported subset. An unknown name or a list containing only
+insecure ciphers is rejected with instructions to replace the list or clear it
+explicitly. Saved Xray settings are preserved. The Firefox preset no longer
+adds obsolete RSA key-exchange ciphers.
+
+The build runs real VLESS client/server round trips for fragment, header-custom
+and sudoku masks, plus rejection tests. The panel's optional binary validation
+suite checks TCP FinalMask with TLS and Hysteria2 with an old mixed cipher list.

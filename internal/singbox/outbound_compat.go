@@ -286,17 +286,8 @@ func translateOutboundTLSCompatibility(out map[string]any, stream map[string]any
 	if maxVersion := strings.TrimSpace(rawString(tlsIn, "maxVersion")); maxVersion != "" {
 		tlsOut["max_version"] = maxVersion
 	}
-	if suites := strings.TrimSpace(rawString(tlsIn, "cipherSuites")); suites != "" {
-		parts := strings.FieldsFunc(suites, func(r rune) bool { return r == ':' || r == ',' })
-		values := make([]string, 0, len(parts))
-		for _, value := range parts {
-			if value = strings.TrimSpace(value); value != "" {
-				values = append(values, value)
-			}
-		}
-		if len(values) > 0 {
-			tlsOut["cipher_suites"] = values
-		}
+	if err := translateTLSCipherSuites(tlsOut, tlsIn, fmt.Sprintf("outbound %q TLS", tag)); err != nil {
+		return err
 	}
 	if curves := rawStrings(tlsIn, "curvePreferences"); len(curves) > 0 {
 		values := make([]string, 0, len(curves))

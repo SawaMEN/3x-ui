@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	TargetVersion    = "sawamen-b310097c8e7a-338f0c9457a4-xdrive"
+	TargetVersion    = "sawamen-b310097c8e7a-338f0c9457a4-mask1"
 	TargetRevision   = "b310097c8e7a2655e1ab7ca61b7d66c4b77ebe0c"
 	StatsQueryMethod = "/v2ray.core.app.stats.command.StatsService/QueryStats"
 )
@@ -63,6 +63,13 @@ func translate(raw map[string]any, inbound bool) (map[string]any, error) {
 	}
 	if !strings.HasPrefix(protocol, "singbox:") {
 		if err := singbox.ValidatePanelIntegerOptions(copy); err != nil {
+			return nil, err
+		}
+	}
+	var inboundMask map[string]any
+	if inbound {
+		inboundMask, err = takeInboundTCPFinalMask(stream, protocol, label)
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -142,6 +149,9 @@ func translate(raw map[string]any, inbound bool) (map[string]any, error) {
 	}
 	if transport != nil {
 		out["transport"] = transport
+	}
+	if inboundMask != nil {
+		out["final_mask"] = inboundMask
 	}
 	if mask != nil {
 		out["final_mask"] = mask

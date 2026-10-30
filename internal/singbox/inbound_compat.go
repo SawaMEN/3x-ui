@@ -189,8 +189,8 @@ func translateInboundTLSCompatibility(tlsOut, tlsIn map[string]any, tag string) 
 			tlsOut[native] = value
 		}
 	}
-	if suites := rawString(tlsIn, "cipherSuites"); suites != "" {
-		tlsOut["cipher_suites"] = strings.FieldsFunc(suites, func(r rune) bool { return r == ':' || r == ',' })
+	if err := translateTLSCipherSuites(tlsOut, tlsIn, label); err != nil {
+		return err
 	}
 	if curves := rawStrings(tlsIn, "curvePreferences"); len(curves) > 0 {
 		for i, curve := range curves {

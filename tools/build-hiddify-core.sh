@@ -50,6 +50,8 @@ git -C "$task_source/core" apply "$task_root/deploy/hiddify/runtime-dependencies
 git -C "$task_source/core" apply "$task_root/deploy/hiddify/clash-user.patch"
 git -C "$task_source/core" apply "$task_root/deploy/hiddify/sniff-override.patch"
 git -C "$task_source/core/hiddify-sing-box" apply "$task_root/deploy/hiddify/http1-options.patch"
+git -C "$task_source/core/hiddify-sing-box" apply "$task_root/deploy/hiddify/inbound-finalmask.patch"
+cp -- "$task_root/deploy/hiddify/inbound_finalmask_test.go.in" "$task_source/core/hiddify-sing-box/xui_inbound_finalmask_test.go"
 cp -- "$task_root/deploy/hiddify/http1_options_test.go.in" "$task_source/core/hiddify-sing-box/option/xui_panel_http1_test.go"
 cp -- "$task_root/deploy/hiddify/cmd_xui_check.go.in" "$task_source/core/cmd/cmd_xui_check.go"
 cp -- "$task_root/deploy/hiddify/clash_user_test.go.in" "$task_source/core/hiddify-sing-box/experimental/clashapi/trafficontrol/xui_panel_test.go"
@@ -114,6 +116,7 @@ if [[ "$task_goos" == "$(go env GOHOSTOS)" && "$task_goarch" == "$(go env GOHOST
   (
     cd -- "$task_source/core"
     CGO_ENABLED="$task_cgo" GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_link_flags" -tags "${target[3]}" github.com/sagernet/sing-box/experimental/clashapi/trafficontrol -run '^TestXUIPanelAuthenticatedUserIsConnectionMetadata$' -count=1
+    CGO_ENABLED="$task_cgo" GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_link_flags" -tags "${target[3]}" github.com/sagernet/sing-box -run '^TestXUIPanelInboundFinalMask' -count=1 -timeout=60s
     CGO_ENABLED="$task_cgo" GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_link_flags" -tags "${target[3]}" github.com/sagernet/sing-box/transport/v2rayxdrive -count=1 -timeout=90s
     CGO_ENABLED="$task_cgo" GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_link_flags" -tags "${target[3]}" github.com/sagernet/sing-box/protocol/snell -run '^TestSnellV[56]' -count=1 -timeout=60s
     CGO_ENABLED="$task_cgo" GOTOOLCHAIN="${target[5]}" go test -ldflags "$task_link_flags" -tags "${target[3]}" github.com/sagernet/sing-box/option -run '^TestXUIPanelHTTP1RoundTrip$' -count=1
