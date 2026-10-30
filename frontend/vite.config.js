@@ -181,8 +181,8 @@ export default defineConfig({
     target: 'es2020',
     chunkSizeWarningLimit: 1500,
     // Let Vite/Rolldown keep transitive dependencies and their initialization
-    // order together. Manual vendor/AntD/React chunks introduced circular
-    // imports and caused production crashes reading undefined.default.
+    // order together. Manual vendor/AntD/React chunks can create circular
+    // imports and crash production while reading undefined.default.
     // Route-level dynamic imports still split on demand.
     rollupOptions: {
       input: {
