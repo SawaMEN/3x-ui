@@ -348,7 +348,7 @@ export default function NodesPage() {
         title: t('pages.nodes.updateConfirmTitle', { count: 1 }),
         content: (
           <UpdateChannelChoice
-          defaultDev={defaultDevChannel}
+            defaultDev={defaultDevChannel}
             onChange={(v) => {
               devRef.current = v;
             }}
