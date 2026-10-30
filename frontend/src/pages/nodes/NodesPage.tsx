@@ -72,9 +72,15 @@ async function pollRemotePanelUpdate(
 // Confirm-dialog body that lets the operator pick the stable or dev channel for
 // a node panel update. Reports changes via onChange so the imperative
 // modal.confirm onOk can read the latest choice through a ref.
-function UpdateChannelChoice({ onChange }: { onChange: (dev: boolean) => void }) {
+function UpdateChannelChoice({
+  onChange,
+  defaultDev,
+}: {
+  onChange: (dev: boolean) => void;
+  defaultDev: boolean;
+}) {
   const { t } = useTranslation();
-  const [dev, setDev] = useState(false);
+  const [dev, setDev] = useState(defaultDev);
   return (
     <div>
       <p>{t('pages.nodes.updateConfirmContent')}</p>
@@ -122,14 +128,17 @@ export default function NodesPage() {
     updatePanels,
   } = useNodeMutations();
 
-  const { data: latestVersion = '' } = useQuery({
+  const { data: panelUpdateInfo } = useQuery({
     queryKey: ['server', 'panelUpdateInfo'],
     queryFn: async () => {
       const msg = await HttpUtil.get<PanelUpdateInfo>('/panel/api/server/getPanelUpdateInfo');
-      return msg?.obj?.latestVersion || '';
+      return msg?.obj ?? null;
     },
     staleTime: 5 * 60 * 1000,
   });
+  const latestVersion = panelUpdateInfo?.latestVersion ?? '';
+  // Match the default channel used by direct panel updates.
+  const defaultDevChannel = panelUpdateInfo?.channel === 'dev';
 
   const [formOpen, setFormOpen] = useState(false);
   const [formMode, setFormMode] = useState<'add' | 'edit'>('add');
@@ -334,11 +343,12 @@ export default function NodesPage() {
 
   const onUpdateNode = useCallback(
     (node: NodeRecord) => {
-      devRef.current = false;
+      devRef.current = defaultDevChannel;
       modal.confirm({
         title: t('pages.nodes.updateConfirmTitle', { count: 1 }),
         content: (
           <UpdateChannelChoice
+          defaultDev={defaultDevChannel}
             onChange={(v) => {
               devRef.current = v;
             }}
@@ -349,7 +359,7 @@ export default function NodesPage() {
         onOk: () => runUpdate([node.id], devRef.current),
       });
     },
-    [modal, t, runUpdate],
+    [modal, t, runUpdate, defaultDevChannel],
   );
 
   const onUpdateSelected = useCallback(() => {
@@ -360,11 +370,12 @@ export default function NodesPage() {
       messageApi.warning(t('pages.nodes.toasts.updateNoneEligible'));
       return;
     }
-    devRef.current = false;
+    devRef.current = defaultDevChannel;
     modal.confirm({
       title: t('pages.nodes.updateConfirmTitle', { count: eligible.length }),
       content: (
         <UpdateChannelChoice
+          defaultDev={defaultDevChannel}
           onChange={(v) => {
             devRef.current = v;
           }}
@@ -374,7 +385,7 @@ export default function NodesPage() {
       cancelText: t('cancel'),
       onOk: () => runUpdate(eligible, devRef.current),
     });
-  }, [modal, t, nodes, selectedIds, runUpdate, messageApi]);
+  }, [modal, t, nodes, selectedIds, runUpdate, messageApi, defaultDevChannel]);
 
   const pageClass = useMemo(() => {
     const classes = ['nodes-page'];
