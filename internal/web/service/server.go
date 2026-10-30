@@ -31,6 +31,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/amneziawg"
@@ -179,9 +180,11 @@ type ServerService struct {
 	cachedCpuSpeedMhz  float64
 	lastCpuInfoAttempt time.Time
 
-	lastStatusMu sync.RWMutex
-	lastStatus   *Status
-	coldStatusMu sync.Mutex
+	lastStatusMu         sync.RWMutex
+	lastStatus           *Status
+	coldStatusMu         sync.Mutex
+	refreshStatusMu      sync.Mutex
+	statusRefreshPending atomic.Bool
 
 	fail2banMu        sync.Mutex
 	fail2banInstalled bool
@@ -225,9 +228,16 @@ func (s *ServerService) LastStatus() *Status {
 const statusFreshnessTTL = 5 * time.Second
 
 func (s *ServerService) CurrentStatus() *Status {
-	if status := s.LastStatus(); status != nil && time.Since(status.T) <= statusFreshnessTTL {
+	if status := s.LastStatus(); status != nil {
+		if time.Since(status.T) > statusFreshnessTTL && s.statusRefreshPending.CompareAndSwap(false, true) {
+			common.GoRecover("refresh stale server status", func() {
+				defer s.statusRefreshPending.Store(false)
+				s.RefreshStatus()
+			})
+		}
 		return status
 	}
+
 	s.coldStatusMu.Lock()
 	defer s.coldStatusMu.Unlock()
 	if status := s.LastStatus(); status != nil && time.Since(status.T) <= statusFreshnessTTL {
@@ -290,6 +300,16 @@ func (s *ServerService) isFail2banInstalled() bool {
 // be nil if collection failed). Called by the background ticker; the caller is
 // responsible for any side effects (websocket broadcast, xray metrics sample).
 func (s *ServerService) RefreshStatus() *Status {
+	// Cron may fire again while a previous sample is blocked on disk or a
+	// core lock. Never accumulate collectors or race over CPU sampler state.
+	if !s.refreshStatusMu.TryLock() {
+		return s.LastStatus()
+	}
+	defer s.refreshStatusMu.Unlock()
+	watchdog := time.AfterFunc(statusFreshnessTTL, func() {
+		logger.Warning("server status collection exceeded 5s; serving the last successful snapshot")
+	})
+	defer watchdog.Stop()
 	next := s.GetStatus(s.LastStatus())
 	if next == nil {
 		return nil
@@ -543,25 +563,14 @@ func (s *ServerService) GetStatus(lastStatus *Status) *Status {
 
 		if status.CpuSpeedMhz = s.cachedCpuSpeedMhz; s.cachedCpuSpeedMhz == 0 && time.Since(s.lastCpuInfoAttempt) > 5*time.Minute {
 			s.lastCpuInfoAttempt = time.Now()
-			done := make(chan struct{})
-			go func() {
-				defer close(done)
-				cpuInfos, err := cpu.Info()
-				if err != nil {
-					logger.Warning("get cpu info failed:", err)
-					return
-				}
-				if len(cpuInfos) > 0 {
-					s.cachedCpuSpeedMhz = cpuInfos[0].Mhz
-					status.CpuSpeedMhz = s.cachedCpuSpeedMhz
-				} else {
-					logger.Warning("could not find cpu info")
-				}
-			}()
-			select {
-			case <-done:
-			case <-time.After(1500 * time.Millisecond):
-				logger.Warning("cpu info query timed out; will retry later")
+			ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
+			cpuInfos, err := cpu.InfoWithContext(ctx)
+			cancel()
+			if err != nil {
+				logger.Warning("get cpu info failed:", err)
+			} else if len(cpuInfos) > 0 {
+				s.cachedCpuSpeedMhz = cpuInfos[0].Mhz
+				status.CpuSpeedMhz = s.cachedCpuSpeedMhz
 			}
 		} else if s.cachedCpuSpeedMhz != 0 {
 			status.CpuSpeedMhz = s.cachedCpuSpeedMhz

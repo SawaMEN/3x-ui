@@ -189,7 +189,7 @@ func TestVetroffConfigurationAndLink(t *testing.T) {
 }
 
 func TestVetroffBundleExtraction(t *testing.T) {
-	for _, attack := range []string{"", "foxtunnel-necko/../../escape", "/tmp/escape", "foxtunnel-necko/link", "vetroff-necko/vetroff"} {
+	for _, attack := range []string{"", "vetroff-necko/../../escape", "/tmp/escape", "vetroff-necko/link", "foxtunnel-necko/vetroff"} {
 		t.Run(attack, func(t *testing.T) {
 			folder := t.TempDir()
 			archive := filepath.Join(folder, "release.tar.gz")
@@ -199,7 +199,7 @@ func TestVetroffBundleExtraction(t *testing.T) {
 			}
 			gz := gzip.NewWriter(f)
 			tw := tar.NewWriter(gz)
-			files := []string{"foxtunnel-necko/vetroff", "foxtunnel-necko/foxtunnel-necko", "foxtunnel-necko/runtime/xpcshell", "foxtunnel-necko/lib/libnss3.so"}
+			files := []string{"vetroff-necko/vetroff", "vetroff-necko/vetroff-necko", "vetroff-necko/runtime/xpcshell", "vetroff-necko/lib/libnss3.so"}
 			if attack != "" {
 				files = append(files, attack)
 			}
@@ -234,7 +234,7 @@ func TestVetroffBundleExtraction(t *testing.T) {
 				t.Fatal("unsafe member accepted")
 			}
 			if attack == "" {
-				if _, err := os.Stat(filepath.Join(folder, "out/foxtunnel-necko/lib/libnss3.so")); err != nil {
+				if _, err := os.Stat(filepath.Join(folder, "out/vetroff-necko/lib/libnss3.so")); err != nil {
 					t.Fatal("bundle library lost:", err)
 				}
 			}
@@ -247,14 +247,14 @@ func TestOfficialVetroffBundle(t *testing.T) {
 	if archive == "" {
 		t.Skip("set VETROFF_TEST_ARCHIVE to verify the complete official binary release")
 	}
-	if err := verifyReleaseDigest(archive, "sha256:69c72c1966ba4714fd2f3df3675ee1e8e5b4cbf500780bc1d90c6fd3bab5e041"); err != nil {
+	if err := verifyReleaseDigest(archive, "sha256:492d07be1b430d8fe8cfbe486dd4d3f006e4dcd04399ada2c7091f45380998d3"); err != nil {
 		t.Fatal(err)
 	}
 	folder := t.TempDir()
 	if err := extractVetroffBundle(archive, folder); err != nil {
 		t.Fatal(err)
 	}
-	version, err := binaryVersion(t.Context(), vetroffExecutable(folder), []string{"version"})
+	version, err := binaryVersion(t.Context(), filepath.Join(folder, "vetroff-necko/vetroff"), []string{"version"})
 	if err != nil || version != "0.1.0" {
 		t.Fatalf("official release: %s, %v", version, err)
 	}
@@ -267,19 +267,15 @@ func TestVetroffBinaryInstallUpdateAndDigestFailure(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XUI_BIN_FOLDER", dir)
 	version := "0.1.0"
-	archiveRoot := "foxtunnel-necko"
 	var archive []byte
 	badDigest := false
 	makeArchive := func() {
 		var buf bytes.Buffer
 		gz := gzip.NewWriter(&buf)
 		tw := tar.NewWriter(gz)
-		for _, name := range []string{"vetroff", archiveRoot, "runtime/xpcshell", "lib/libnss3.so"} {
+		for _, name := range []string{"vetroff", "vetroff-necko", "runtime/xpcshell", "lib/libnss3.so"} {
 			data := []byte("#!/bin/sh\nprintf 'VetroffProxy v" + version + "\\n'\n")
-			if name == "lib/libnss3.so" {
-				data = make([]byte, 1<<20)
-			}
-			if err := tw.WriteHeader(&tar.Header{Name: archiveRoot + "/" + name, Typeflag: tar.TypeReg, Mode: 0o755, Size: int64(len(data))}); err != nil {
+			if err := tw.WriteHeader(&tar.Header{Name: "vetroff-necko/" + name, Typeflag: tar.TypeReg, Mode: 0o755, Size: int64(len(data))}); err != nil {
 				t.Fatal(err)
 			}
 			if _, err := tw.Write(data); err != nil {
@@ -323,7 +319,6 @@ func TestVetroffBinaryInstallUpdateAndDigestFailure(t *testing.T) {
 		t.Fatalf("installed status: %+v", status)
 	}
 	version = "0.2.0"
-	archiveRoot = "vetroff-necko"
 	makeArchive()
 	status = binaryStatus(t.Context(), model.VetroffProxy)
 	if !status.UpdateAvailable || status.LatestVersion != version {
@@ -539,7 +534,7 @@ func assertNoVetroffStages(t *testing.T, dir string) {
 func TestVetroffRemovalCleansInterruptedDownloadsAndPreservesOtherData(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XUI_BIN_FOLDER", dir)
-	for _, path := range []string{"vetroff-bundle/vetroff-necko/runtime/libxul.so", ".vetroff-stage-crashed/release.tar.gz", ".vetroff-stage-crashed/previous/foxtunnel-necko/vetroff"} {
+	for _, path := range []string{"vetroff-bundle/vetroff-necko/runtime/libxul.so", ".vetroff-stage-crashed/release.tar.gz", ".vetroff-stage-crashed/previous/vetroff-necko/vetroff"} {
 		file := filepath.Join(dir, path)
 		if err := os.MkdirAll(filepath.Dir(file), 0o700); err != nil {
 			t.Fatal(err)
@@ -580,7 +575,7 @@ func TestVetroffInterruptedInstallRecoversPreviousRuntime(t *testing.T) {
 	}
 	dir := t.TempDir()
 	t.Setenv("XUI_BIN_FOLDER", dir)
-	previous := filepath.Join(dir, ".vetroff-stage-crashed", "previous", "foxtunnel-necko", "vetroff")
+	previous := filepath.Join(dir, ".vetroff-stage-crashed", "previous", "vetroff-necko", "vetroff")
 	if err := os.MkdirAll(filepath.Dir(previous), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -595,7 +590,7 @@ func TestVetroffInterruptedInstallRecoversPreviousRuntime(t *testing.T) {
 	if err := Update(t.Context(), model.VetroffProxy); err == nil {
 		t.Fatal("unexpected installation without release")
 	}
-	path := filepath.Join(dir, "vetroff-bundle", "foxtunnel-necko", "vetroff")
+	path := filepath.Join(dir, "vetroff-bundle", "vetroff-necko", "vetroff")
 	if contents, err := os.ReadFile(path); err != nil || string(contents) != "previous runtime" {
 		t.Fatalf("recovery copy lost: %q %v", contents, err)
 	}

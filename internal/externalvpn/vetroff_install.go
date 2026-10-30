@@ -59,7 +59,7 @@ func installVetroff(ctx context.Context) error {
 	if err := extractVetroffBundle(archive, bundle); err != nil {
 		return err
 	}
-	executable := vetroffExecutable(bundle)
+	executable := filepath.Join(bundle, "vetroff-necko", "vetroff")
 	version, err := binaryVersion(ctx, executable, spec.versionArgs)
 	if err != nil {
 		return fmt.Errorf("validate VetroffProxy: %w", err)
@@ -118,7 +118,6 @@ func extractVetroffBundle(archive, destination string) error {
 	tr := tar.NewReader(gz)
 	seen := map[string]bool{}
 	var total int64
-	archiveRoot := ""
 	for count := 0; ; count++ {
 		h, err := tr.Next()
 		if err == io.EOF {
@@ -128,21 +127,11 @@ func extractVetroffBundle(archive, destination string) error {
 			return err
 		}
 		name := strings.TrimSuffix(h.Name, "/")
-		if (name == "foxtunnel-necko/." || name == "vetroff-necko/.") && h.Typeflag == tar.TypeDir {
-			name = strings.TrimSuffix(name, "/.")
-		}
-		memberRoot := ""
-		for _, candidate := range []string{"vetroff-necko", "foxtunnel-necko"} {
-			if name == candidate || strings.HasPrefix(name, candidate+"/") {
-				memberRoot = candidate
-				break
-			}
-		}
-		if archiveRoot == "" {
-			archiveRoot = memberRoot
+		if name == "vetroff-necko/." && h.Typeflag == tar.TypeDir {
+			name = "vetroff-necko"
 		}
 		clean := filepath.ToSlash(filepath.Clean(name))
-		if count > 50000 || !filepath.IsLocal(name) || clean != name || strings.Contains(name, "\\") || (memberRoot == "" || memberRoot != archiveRoot) || seen[name] || h.Mode&0o7000 != 0 {
+		if count > 50000 || !filepath.IsLocal(name) || clean != name || strings.Contains(name, "\\") || (name != "vetroff-necko" && !strings.HasPrefix(name, "vetroff-necko/")) || seen[name] || h.Mode&0o7000 != 0 {
 			return fmt.Errorf("unsafe VetroffProxy archive member")
 		}
 		seen[name] = true
@@ -180,14 +169,14 @@ func extractVetroffBundle(archive, destination string) error {
 			return fmt.Errorf("VetroffProxy archive links and special files are forbidden")
 		}
 	}
-	for _, name := range []string{"vetroff", "runtime/xpcshell", archiveRoot} {
-		info, err := root.Stat(filepath.Join(archiveRoot, name))
+	for _, name := range []string{"vetroff", "runtime/xpcshell", "vetroff-necko"} {
+		info, err := root.Stat(filepath.Join("vetroff-necko", name))
 		if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o111 == 0 {
 			return fmt.Errorf("VetroffProxy bundle missing executable %s", name)
 		}
 	}
 	for _, name := range []string{"lib", "runtime"} {
-		info, err := root.Stat(filepath.Join(archiveRoot, name))
+		info, err := root.Stat(filepath.Join("vetroff-necko", name))
 		if err != nil || !info.IsDir() {
 			return fmt.Errorf("VetroffProxy bundle missing %s", name)
 		}
@@ -214,16 +203,6 @@ func RemoveVetroff(ctx context.Context) error {
 		return err
 	}
 	return os.RemoveAll(filepath.Join(dir, "vetroff-bundle"))
-}
-
-func vetroffExecutable(bundle string) string {
-	for _, name := range []string{"vetroff-necko", "foxtunnel-necko"} {
-		path := filepath.Join(bundle, name, "vetroff")
-		if info, err := os.Stat(path); err == nil && info.Mode().IsRegular() {
-			return path
-		}
-	}
-	return filepath.Join(bundle, "vetroff-necko", "vetroff")
 }
 
 func cleanupVetroffStages(dir string) error {
