@@ -19,7 +19,7 @@ func TestRecoveryRecordsPanicWithoutRequestSecrets(t *testing.T) {
 	router.Use(Recovery())
 	router.GET("/sub/:token", func(c *gin.Context) { panic("recovery test marker") })
 	router.GET("/healthy", func(c *gin.Context) { c.Status(http.StatusNoContent) })
-	request := httptest.NewRequest("GET", "/sub/secret-token?key=secret-query", nil)
+	request := httptest.NewRequest(http.MethodGet, "/sub/secret-token?key=secret-query", nil)
 	request.Header.Set("Authorization", "secret-authorization")
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)
@@ -38,7 +38,7 @@ func TestRecoveryRecordsPanicWithoutRequestSecrets(t *testing.T) {
 		}
 	}
 	response = httptest.NewRecorder()
-	router.ServeHTTP(response, httptest.NewRequest("GET", "/healthy", nil))
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/healthy", nil))
 	if response.Code != 204 {
 		t.Fatalf("next request failed: %d", response.Code)
 	}

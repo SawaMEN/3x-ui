@@ -2,10 +2,11 @@ package sub
 
 import (
 	"encoding/json"
+	"testing"
+
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/hiddify"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/json_util"
-	"testing"
 )
 
 func TestXDriveSubscription(t *testing.T) {

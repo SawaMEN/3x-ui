@@ -17,10 +17,7 @@
     "version": "sawamen-b310097c8e7a-338f0c9457a4-xdrive"
   },
   "runtime_contract": {
-    "raw_config_command": [
-      "srun",
-      "-c"
-    ],
+    "raw_config_command": ["srun", "-c"],
     "validation_cli_available": true,
     "stats_grpc_method": "/v2ray.core.app.stats.command.StatsService/QueryStats",
     "panel_runtime_integrated": true,
@@ -109,9 +106,7 @@
     ],
     "sing_box_version": "sawamen-338f0c9457a4",
     "check_command_overlay": "deploy/hiddify/cmd_xui_check.go.in",
-    "runtime_dependencies": [
-      "matching libcronet for Naive outbound"
-    ],
+    "runtime_dependencies": ["matching libcronet for Naive outbound"],
     "activation_ready": false,
     "toolchain": "go1.26.9",
     "validation_cli_available": true,

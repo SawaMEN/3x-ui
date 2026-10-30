@@ -2,10 +2,11 @@ package sub
 
 import (
 	"encoding/json"
-	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
-	"github.com/SawaMEN/3x-ui/v3/internal/hiddify"
 	"strings"
 	"testing"
+
+	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
+	"github.com/SawaMEN/3x-ui/v3/internal/hiddify"
 )
 
 func TestHysteriaNativeSubscriptionOmitsServerOnlySettings(t *testing.T) {

@@ -9,6 +9,7 @@ import (
 func xdriveInbound() map[string]any {
 	return map[string]any{"protocol": "vless", "tag": "cloud", "port": 443, "settings": map[string]any{"decryption": "mlkem768x25519plus.native.600s.private-key", "clients": []any{map[string]any{"id": "id", "email": "alice"}}}, "streamSettings": map[string]any{"network": "xdrive", "security": "none", "xdriveSettings": map[string]any{"service": "local", "remoteFolder": "/var/lib/xdrive", "pollIntervalMs": float64(50)}}}
 }
+
 func TestTranslateXDriveNative(t *testing.T) {
 	raw := xdriveInbound()
 	out, err := TranslateXrayInbound(raw)
@@ -26,6 +27,7 @@ func TestTranslateXDriveNative(t *testing.T) {
 		t.Fatalf("transport lost: %#v", tr)
 	}
 }
+
 func TestTranslateXDriveRejectsInvalid(t *testing.T) {
 	for _, kind := range []string{"no-encryption", "wrong-protocol", "tls", "missing-folder", "too-large", "flow"} {
 		t.Run(kind, func(t *testing.T) {
@@ -53,6 +55,7 @@ func TestTranslateXDriveRejectsInvalid(t *testing.T) {
 		})
 	}
 }
+
 func TestTranslateXDriveTemplate(t *testing.T) {
 	out := map[string]any{"tag": "cloud", "encryption": "key"}
 	stream := map[string]any{"network": "xdrive", "xdriveSettings": map[string]any{"service": "template", "remoteFolder": "folder", "template": map[string]any{"put": map[string]any{"url": "https://storage.example/{name}"}}, "secrets": []any{"secret"}}}

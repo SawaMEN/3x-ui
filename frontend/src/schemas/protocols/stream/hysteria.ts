@@ -20,7 +20,7 @@ export const HysteriaMasqueradeSchema = z
       .refine((n) => n === 0 || n >= 100)
       .default(0),
   })
-  .passthrough();
+  .loose();
 export type HysteriaMasquerade = z.infer<typeof HysteriaMasqueradeSchema>;
 
 export const HysteriaObfsSchema = z
@@ -30,7 +30,7 @@ export const HysteriaObfsSchema = z
     minPacketSize: z.number().int().min(1).max(2048).optional(),
     maxPacketSize: z.number().int().min(1).max(2048).optional(),
   })
-  .passthrough()
+  .loose()
   .refine(
     (obfs) =>
       obfs.minPacketSize === undefined ||
@@ -51,7 +51,7 @@ const HysteriaStreamSettingsBaseSchema = z
     obfs: z.union([z.string(), HysteriaObfsSchema]).optional(),
     masquerade: HysteriaMasqueradeSchema.optional(),
   })
-  .passthrough();
+  .loose();
 export const HysteriaStreamSettingsSchema = z.preprocess((value) => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
   const next = { ...value } as Record<string, unknown>;
