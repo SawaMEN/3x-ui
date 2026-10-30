@@ -701,11 +701,54 @@ func (r *Remote) RestartXray(ctx context.Context) error {
 // and restart onto the latest release. The node returns as soon as the job is
 // launched; the new version surfaces on the next heartbeat. When dev is true the
 // node is moved to the rolling dev channel instead of the latest stable release.
-func (r *Remote) UpdatePanel(ctx context.Context, dev bool) error {
-	// Always send the chosen channel: omitting dev=false incorrectly falls back
-	// to the remote node's own channel preference.
+// RemotePanelUpdateStatus is the terminal status written by the remote
+// installer. RunID distinguishes this update from a previous node update.
+type RemotePanelUpdateStatus struct {
+	RunID      string `json:"runId"`
+	State      string `json:"state"`
+	ExitCode   int    `json:"exitCode"`
+	Message    string `json:"message,omitempty"`
+	LogFile    string `json:"logFile,omitempty"`
+	FinishedAt int64  `json:"finishedAt"`
+}
+
+// StartPanelUpdate launches a remote update and returns the run identifier.
+// An accepted launch is NOT proof that the release installed successfully.
+func (r *Remote) StartPanelUpdate(ctx context.Context, dev bool) (string, error) {
 	body := url.Values{"dev": {strconv.FormatBool(dev)}}
-	_, err := r.do(ctx, http.MethodPost, "panel/api/server/updatePanel", body)
+	env, err := r.do(ctx, http.MethodPost, "panel/api/server/updatePanel", body)
+	if err != nil {
+		return "", err
+	}
+	var result struct {
+		RunID string `json:"runId"`
+	}
+	if err := json.Unmarshal(env.Obj, &result); err != nil {
+		return "", fmt.Errorf("decode remote panel update run id: %w", err)
+	}
+	if result.RunID == "" {
+		return "", fmt.Errorf("remote node accepted update without returning a run id")
+	}
+	return result.RunID, nil
+}
+
+// GetPanelUpdateStatus reads the remote updater's last status via a node-admin
+// token. The central panel must compare RunID to the requested update.
+func (r *Remote) GetPanelUpdateStatus(ctx context.Context) (*RemotePanelUpdateStatus, error) {
+	env, err := r.do(ctx, http.MethodGet, "panel/api/server/getUpdateStatus", nil)
+	if err != nil {
+		return nil, err
+	}
+	var result RemotePanelUpdateStatus
+	if err := json.Unmarshal(env.Obj, &result); err != nil {
+		return nil, fmt.Errorf("decode remote panel update status: %w", err)
+	}
+	return &result, nil
+}
+
+// UpdatePanel preserves the original launch-only contract for existing callers.
+func (r *Remote) UpdatePanel(ctx context.Context, dev bool) error {
+	_, err := r.StartPanelUpdate(ctx, dev)
 	return err
 }
 
