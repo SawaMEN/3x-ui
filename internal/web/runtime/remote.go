@@ -741,6 +741,13 @@ func (r *Remote) StartPanelUpdate(ctx context.Context, dev bool) (string, error)
 	if err != nil {
 		return "", err
 	}
+	// Old node builds acknowledge the launch with null/empty obj. They have
+	// already started the updater, so rejecting that response as an error
+	// invites repeated upgrades. We cannot poll those builds by run ID.
+	if len(env.Obj) == 0 || string(bytes.TrimSpace(env.Obj)) == "null" ||
+		string(bytes.TrimSpace(env.Obj)) == "{}" {
+		return "", nil
+	}
 	var result struct {
 		RunID string `json:"runId"`
 	}
@@ -748,7 +755,7 @@ func (r *Remote) StartPanelUpdate(ctx context.Context, dev bool) (string, error)
 		return "", fmt.Errorf("decode remote panel update run id: %w", err)
 	}
 	if result.RunID == "" {
-		return "", fmt.Errorf("remote node accepted update without returning a run id")
+		return "", fmt.Errorf("remote node returned an update response without a valid run ID")
 	}
 	return result.RunID, nil
 }
