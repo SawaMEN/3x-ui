@@ -1047,8 +1047,8 @@ resolve_latest_tag() {
     printf '%s\n' "$tag"
 }
 
-# The fork's old stable tags predate the core migration. Default commands
-# select a compatible build; explicitly requested versions are never substituted.
+# Never silently replace an explicitly selected stable update with dev-latest.
+# Older stable releases lacking migration support fail without changing the panel.
 select_release_tag() {
     local requested="${1:-}" status
     if [[ -z "$requested" ]]; then
@@ -1058,8 +1058,8 @@ select_release_tag() {
         case "$status" in
             200) ;;
             404)
-                echo "Latest stable ${requested} predates the current core; selecting the project's dev build (dev-latest)." >&2
-                requested=dev-latest ;;
+                echo "Latest stable ${requested} is incompatible with the transactional updater (core-migration.sh missing). Select the DEV channel explicitly or publish a compatible stable release. Existing installation unchanged." >&2
+                return 1 ;;
             *) echo "Cannot check compatibility of ${requested} (HTTP ${status}); installation unchanged." >&2; return 1 ;;
         esac
     fi
