@@ -967,6 +967,7 @@ type NodeUpdateResult struct {
 	Id    int    `json:"id"`
 	Name  string `json:"name"`
 	OK    bool   `json:"ok"`
+	RunID string `json:"runId,omitempty"`
 	Error string `json:"error,omitempty"`
 }
 
@@ -997,11 +998,12 @@ func (s *NodeService) UpdatePanels(ids []int, dev bool) ([]NodeUpdateResult, err
 				break
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-			updErr := remote.UpdatePanel(ctx, dev)
+			runID, updErr := remote.StartPanelUpdate(ctx, dev)
 			cancel()
 			if updErr != nil {
 				res.Error = updErr.Error()
 			} else {
+				res.RunID = runID
 				res.OK = true
 			}
 		}
@@ -1013,6 +1015,29 @@ func (s *NodeService) UpdatePanels(ids []int, dev bool) ([]NodeUpdateResult, err
 		}
 	}
 	return results, nil
+}
+
+// PanelUpdateStatus checks the actual installation result on one remote node.
+// The caller must match the returned RunID against the launched operation.
+func (s *NodeService) PanelUpdateStatus(id int) (*runtime.RemotePanelUpdateStatus, error) {
+	n, err := s.GetById(id)
+	if err != nil {
+		return nil, err
+	}
+	if n == nil {
+		return nil, fmt.Errorf("node not found")
+	}
+	mgr := runtime.GetManager()
+	if mgr == nil {
+		return nil, fmt.Errorf("runtime manager unavailable")
+	}
+	remote, err := mgr.RemoteFor(n)
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return remote.GetPanelUpdateStatus(ctx)
 }
 
 func (s *NodeService) UpdateHeartbeat(id int, p HeartbeatPatch) error {
