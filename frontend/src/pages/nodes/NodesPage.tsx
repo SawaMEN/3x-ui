@@ -45,9 +45,11 @@ async function pollRemotePanelUpdate(
   nodeId: number,
   runId: string,
 ): Promise<RemotePanelUpdateStatus | null> {
-  const deadline = Date.now() + 3 * 60_000;
+  // The release fetch can spend up to 15 minutes per network attempt.
+  // Do not mark a slow, otherwise healthy node as "unknown" after 3 minutes.
+  const deadline = Date.now() + 40 * 60_000;
   while (Date.now() < deadline) {
-    await new Promise<void>((resolve) => setTimeout(resolve, 5000));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10_000));
     try {
       const response = await HttpUtil.get<RemotePanelUpdateStatus>(
         `/panel/api/nodes/updatePanelStatus/${nodeId}`,
