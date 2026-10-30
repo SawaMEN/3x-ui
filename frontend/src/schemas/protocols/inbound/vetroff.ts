@@ -40,7 +40,7 @@ export const VetroffOptionsSchema = z.object({
   h3Listen: z.string().default(''),
   xhttpPath: z.string().default(''),
   xhttpHost: z.string().default(''),
-  protocolPolicy: z.enum(['legacy', 'strict']).default('legacy'),
+  protocolPolicy: z.enum(['builtin', 'strict']).default('builtin'),
   padding: z.boolean().default(false),
   maxTunnels: z.number().int().min(1).max(65536).default(256),
   maxConnections: z.number().int().min(1).max(65536).default(512),

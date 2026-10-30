@@ -56,7 +56,7 @@ func installVetroff(ctx context.Context) error {
 	if err := extractVetroffBundle(archive, bundle); err != nil {
 		return err
 	}
-	executable := filepath.Join(bundle, "foxtunnel-necko", "vetroff")
+	executable := filepath.Join(bundle, "vetroff-necko", "vetroff")
 	version, err := binaryVersion(ctx, executable, spec.versionArgs)
 	if err != nil {
 		return fmt.Errorf("validate VetroffProxy: %w", err)
@@ -124,11 +124,11 @@ func extractVetroffBundle(archive, destination string) error {
 			return err
 		}
 		name := strings.TrimSuffix(h.Name, "/")
-		if name == "foxtunnel-necko/." && h.Typeflag == tar.TypeDir {
-			name = "foxtunnel-necko"
+		if name == "vetroff-necko/." && h.Typeflag == tar.TypeDir {
+			name = "vetroff-necko"
 		}
 		clean := filepath.ToSlash(filepath.Clean(name))
-		if count > 50000 || !filepath.IsLocal(name) || clean != name || strings.Contains(name, "\\") || (name != "foxtunnel-necko" && !strings.HasPrefix(name, "foxtunnel-necko/")) || seen[name] || h.Mode&0o7000 != 0 {
+		if count > 50000 || !filepath.IsLocal(name) || clean != name || strings.Contains(name, "\\") || (name != "vetroff-necko" && !strings.HasPrefix(name, "vetroff-necko/")) || seen[name] || h.Mode&0o7000 != 0 {
 			return fmt.Errorf("unsafe VetroffProxy archive member")
 		}
 		seen[name] = true
@@ -166,14 +166,14 @@ func extractVetroffBundle(archive, destination string) error {
 			return fmt.Errorf("VetroffProxy archive links and special files are forbidden")
 		}
 	}
-	for _, name := range []string{"vetroff", "runtime/xpcshell", "foxtunnel-necko"} {
-		info, err := root.Stat(filepath.Join("foxtunnel-necko", name))
+	for _, name := range []string{"vetroff", "runtime/xpcshell", "vetroff-necko"} {
+		info, err := root.Stat(filepath.Join("vetroff-necko", name))
 		if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o111 == 0 {
 			return fmt.Errorf("VetroffProxy bundle missing executable %s", name)
 		}
 	}
 	for _, name := range []string{"lib", "runtime"} {
-		info, err := root.Stat(filepath.Join("foxtunnel-necko", name))
+		info, err := root.Stat(filepath.Join("vetroff-necko", name))
 		if err != nil || !info.IsDir() {
 			return fmt.Errorf("VetroffProxy bundle missing %s", name)
 		}
