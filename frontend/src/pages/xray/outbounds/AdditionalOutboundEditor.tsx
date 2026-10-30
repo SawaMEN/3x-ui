@@ -1,4 +1,4 @@
-import { Alert, Button, Form, Input, InputNumber, Select, Space } from 'antd';
+import { Alert, Button, Form, Input, InputNumber, Select, Space, Switch } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { InstallVPNButton } from '@/pages/inbounds/form/protocols/additional-vpn';
 
@@ -17,7 +17,7 @@ export default function AdditionalOutboundEditor({
     return null;
   }
   const protocol = raw?.protocol;
-  if (!['fptn', 'openflux', 'snell', 'singbox:snell'].includes(String(protocol))) return null;
+  if (!['fptn', 'openflux', 'vetroff', 'snell', 'singbox:snell'].includes(String(protocol))) return null;
   const settings = (raw.settings ?? {}) as Record<string, unknown>;
   const isSnell = protocol === 'snell' || protocol === 'singbox:snell';
   const snellVersion = Number(settings.version ?? 6) === 4 ? 4 : 6;
@@ -66,6 +66,38 @@ export default function AdditionalOutboundEditor({
           >
             {t('pages.inbounds.form.vpnMobile')}
           </Button>
+        </>
+      ) : protocol === 'vetroff' ? (
+        <>
+          <InstallVPNButton protocol="vetroff" />
+          <Alert
+            type="info"
+            showIcon
+            description="VetroffProxy client: вставьте vetroff:// ссылку от входящего подключения. Локальный SOCKS5 будет автоматически добавлен к маршрутизации Xray или sing-box."
+          />
+          <Form.Item label="VetroffProxy connection (vetroff://)">
+            <Input.TextArea
+              rows={3}
+              value={String(settings.link ?? '')}
+              onChange={(e) => update({ link: e.target.value.trim() })}
+              placeholder="vetroff://..."
+              autoComplete="off"
+            />
+          </Form.Item>
+          <Form.Item label="UDP ASSOCIATE">
+            <Switch
+              checked={settings.enableUDP === true}
+              onChange={(enableUDP) => update({ enableUDP, udpStream: enableUDP ? settings.udpStream === true : false })}
+            />
+          </Form.Item>
+          {settings.enableUDP === true && (
+            <Form.Item label="UDP streaming">
+              <Switch
+                checked={settings.udpStream === true}
+                onChange={(udpStream) => update({ udpStream })}
+              />
+            </Form.Item>
+          )}
         </>
       ) : protocol === 'openflux' ? (
         <>
