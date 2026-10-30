@@ -88,6 +88,13 @@ _report_update_exit() {
     if [[ -n "${xui_download_archive:-}" ]]; then
         rm -f -- "$xui_download_archive" "${xui_download_archive}.sha256"
     fi
+    # This lock is held while the archive is being downloaded. Release it on
+    # every normal error path, even if the migration helper was never loaded.
+    if [[ -n "${xui_download_lock_fd:-}" ]]; then
+        flock -u "$xui_download_lock_fd" 2>/dev/null || true
+        exec {xui_download_lock_fd}>&-
+        unset xui_download_lock_fd
+    fi
     if [[ "${code}" -eq 0 ]]; then
         _write_update_status "success" "0" ""
     else
@@ -1133,6 +1140,41 @@ download_release_asset() {
     download_http_status=$("${curl_bin:-curl}" -4 -fL --retry 3 --retry-delay 2 --connect-timeout 20 --max-time 900 -w '%{http_code}' -o "$dest" "$url")
 }
 
+# Hold the same upgrade lock through the entire download/preflight phase.
+# Without this, two panel-triggered updates could each download a large
+# archive before one finally failed the installation lock.
+acquire_update_download_lock() {
+    local parent="$1" old
+    command -v flock >/dev/null 2>&1 || return 1
+    exec {xui_download_lock_fd}>"$parent/.x-ui-upgrade.lock" || return 1
+    if ! flock -n "$xui_download_lock_fd"; then
+        exec {xui_download_lock_fd}>&-
+        unset xui_download_lock_fd
+        return 1
+    fi
+    # A hard kill cannot run EXIT traps. Reclaim only known temporary artifacts
+    # from runs abandoned over six hours ago. The lock protects modern runs;
+    # the age threshold also avoids touching older installers still downloading.
+    # Never remove recovery snapshots (x-ui-upgrade.*), configs or binaries.
+    while IFS= read -r -d '' old; do
+        [[ -f "$old" && ! -L "$old" ]] || continue
+        echo "Removing abandoned panel download: $old"
+        rm -f -- "$old" || true
+    done < <(find "$parent" -mindepth 1 -maxdepth 1 -type f \\( -name '.x-ui-download.??????.tar.gz' -o -name '.x-ui-download.??????.tar.gz.sha256' -o -name '.core-migration.??????' \\) -mmin +360 -print0 2>/dev/null)
+    while IFS= read -r -d '' old; do
+        [[ -d "$old" && ! -L "$old" ]] || continue
+        echo "Removing abandoned release staging: $old"
+        rm -rf -- "$old" || true
+    done < <(find "$parent" -mindepth 1 -maxdepth 1 -type d -name '.x-ui-release.??????' -mmin +360 -print0 2>/dev/null)
+}
+
+release_update_download_lock() {
+    [[ -n "${xui_download_lock_fd:-}" ]] || return 0
+    flock -u "$xui_download_lock_fd" || return 1
+    exec {xui_download_lock_fd}>&-
+    unset xui_download_lock_fd
+}
+
 # Cheap pre-download guard. The exact unpacked size is verified later by
 # core_migration_check_space; this prevents an obviously full disk from
 # accepting another large archive before that check can run.
@@ -1175,6 +1217,9 @@ update_x-ui() {
         _fail "ERROR: Current x-ui version: unknown"
     fi
 
+    # Prevent multiple launches from filling a small VPS with parallel assets.
+    # Older stage/download remnants are cleaned only after acquiring the lock.
+    acquire_update_download_lock "$install_parent" || _fail "Another panel update is in progress or the update lock is unavailable. Existing installation unchanged."
     echo -e "${green}Downloading new x-ui version...${plain}"
 
     # XUI_UPDATE_TAG lets the panel target a specific release tag (e.g. the
@@ -1258,6 +1303,10 @@ update_x-ui() {
     fi
     source "$cm_helper"
     rm -f "$cm_helper"
+    # The downloaded release's migration helper owns its own locking protocol.
+    # Drop our download-phase lock immediately before handing over, including
+    # for older release helpers that don't understand an inherited lock FD.
+    release_update_download_lock || _fail "Cannot release download-phase lock"
     core_migration_prepare_archive "$archive" || _fail "Release preflight failed (see error above); current installation was not changed"
     prepare_release_host_files "${script_ref}" || _fail "Release service/menu preflight failed; current installation was not changed"
 
