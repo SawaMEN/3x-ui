@@ -15,6 +15,16 @@ func translateTLSCipherSuites(out, in map[string]any, label string) error {
 	if raw == "" {
 		return nil
 	}
+	names := strings.FieldsFunc(raw, func(r rune) bool { return r == ':' || r == ',' })
+	values, err := compatibleTLSCipherSuites(names, label)
+	if err != nil {
+		return err
+	}
+	out["cipher_suites"] = values
+	return nil
+}
+
+func compatibleTLSCipherSuites(names []string, label string) ([]string, error) {
 	supported, insecure := map[string]bool{}, map[string]bool{}
 	for _, suite := range tls.CipherSuites() {
 		supported[suite.Name] = true
@@ -24,7 +34,7 @@ func translateTLSCipherSuites(out, in map[string]any, label string) error {
 	}
 	values := []string{}
 	seen := map[string]bool{}
-	for _, part := range strings.FieldsFunc(raw, func(r rune) bool { return r == ':' || r == ',' }) {
+	for _, part := range names {
 		name := strings.TrimSpace(part)
 		if name == "" {
 			continue
@@ -33,7 +43,7 @@ func translateTLSCipherSuites(out, in map[string]any, label string) error {
 			if insecure[name] {
 				continue
 			}
-			return fmt.Errorf("%s: unknown TLS cipher suite %q; select a supported cipher or clear cipherSuites to use core defaults", label, name)
+			return nil, fmt.Errorf("%s: unknown TLS cipher suite %q; select a supported cipher or clear cipherSuites to use core defaults", label, name)
 		}
 		if !seen[name] {
 			values = append(values, name)
@@ -41,8 +51,7 @@ func translateTLSCipherSuites(out, in map[string]any, label string) error {
 		}
 	}
 	if len(values) == 0 {
-		return fmt.Errorf("%s: cipherSuites contains no supported TLS ciphers; replace legacy ciphers or clear cipherSuites to use core defaults", label)
+		return nil, fmt.Errorf("%s: cipherSuites contains no supported TLS ciphers; replace legacy ciphers or clear cipherSuites to use core defaults", label)
 	}
-	out["cipher_suites"] = values
-	return nil
+	return values, nil
 }

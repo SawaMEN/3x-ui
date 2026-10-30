@@ -214,3 +214,10 @@ adds obsolete RSA key-exchange ciphers.
 The build runs real VLESS client/server round trips for fragment, header-custom
 and sudoku masks, plus rejection tests. The panel's optional binary validation
 suite checks TCP FinalMask with TLS and Hysteria2 with an old mixed cipher list.
+
+TLS cipher compatibility is also checked during final `Config.MarshalJSON`
+serialization, after native inputs and template overlays have been merged.
+This includes inbound, outbound, endpoint, DNS, HTTP-client and nested transport
+TLS blocks. The normalizer copies the data and leaves the saved template and
+rollback source intact. A template with an explicitly incompatible cipher list
+fails preflight with its section and connection tag before HiddifyCli runs.
