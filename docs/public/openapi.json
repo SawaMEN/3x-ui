@@ -14377,7 +14377,7 @@
         "tags": [
           "Nodes"
         ],
-        "summary": "Trigger the official panel self-updater on each given node (downloads the latest release and restarts). Only enabled, online nodes are updated; offline/disabled ones are reported as skipped. Set \"dev\": true to move the nodes to the rolling per-commit dev channel instead of the latest stable release. Returns a per-node result list.",
+        "summary": "Start the official self-updater on each enabled online node. Returns per-node launch results (including a runId), not proof of installation. Set \"dev\": true for the rolling dev channel; otherwise use stable. Poll updatePanelStatus/:id with the matching runId for completion.",
         "operationId": "post_panel_api_nodes_updatePanel",
         "requestBody": {
           "required": true,
@@ -14420,7 +14420,8 @@
                     {
                       "id": 1,
                       "name": "de-1",
-                      "ok": true
+                      "ok": true,
+                      "runId": "1735689600123456789"
                     },
                     {
                       "id": 2,
@@ -14429,6 +14430,57 @@
                       "error": "node is offline"
                     }
                   ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/nodes/updatePanelStatus/{id}": {
+      "get": {
+        "tags": [
+          "Nodes"
+        ],
+        "summary": "Read the remote panel installer status for a node. Requires a node-admin token on the remote node. Match obj.runId against the updatePanel launch response; state is pending, success or failed.",
+        "operationId": "get_panel_api_nodes_updatePanelStatus_id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Node ID.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": {
+                    "runId": "1735689600123456789",
+                    "state": "failed",
+                    "exitCode": 2,
+                    "message": "insufficient disk space",
+                    "logFile": "/var/log/x-ui/update.log"
+                  }
                 }
               }
             }
