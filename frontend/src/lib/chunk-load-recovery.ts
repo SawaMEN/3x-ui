@@ -110,8 +110,8 @@ export async function importWithChunkRecovery<T>(loader: () => Promise<T>): Prom
     return module;
   } catch (error) {
     if (isChunkLoadError(error) && reloadAfterChunkLoadError()) {
-      // Navigation has already been scheduled. Keep React.lazy suspended until
-      // the new document replaces this stale application instance.
+      // Navigation has already been scheduled. Keep React.lazy suspended while
+      // loading the replacement document, but surface a failure if it stalls.
       return suspendUntilNavigation<T>();
     }
     throw error;
