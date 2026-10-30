@@ -41,10 +41,12 @@ import type { PanelUpdateInfo } from '../index/PanelUpdateModal';
 // The remote API acknowledges only the launch. Keep checking the run-specific
 // status across the service restart so a failed installation is never reported
 // as a successful update.
+type RemoteUpdateCheck = { status: RemotePanelUpdateStatus | null; error?: string };
+
 async function pollRemotePanelUpdate(
   nodeId: number,
   runId: string,
-): Promise<RemotePanelUpdateStatus | null> {
+): Promise<RemoteUpdateCheck> {
   // The release fetch can spend up to 15 minutes per network attempt.
   // Do not mark a slow, otherwise healthy node as "unknown" after 3 minutes.
   const deadline = Date.now() + 40 * 60_000;
@@ -56,19 +58,27 @@ async function pollRemotePanelUpdate(
         undefined,
         { silent: true, timeout: 3500 },
       );
-      const status = response?.obj;
+      // An authentication/permission failure or missing API endpoint will not
+      // recover just by waiting for the node to restart. Surface it immediately.
+      if (!response?.success) {
+        const error = response?.msg ?? '';
+        if (/\b(401|403|404)\b|not permitted|unauthorized|forbidden/i.test(error)) {
+          return { status: null, error };
+        }
+        continue;
+      }
+      const status = response.obj;
       if (
-        response?.success &&
         status?.runId === runId &&
         (status.state === 'success' || status.state === 'failed')
       ) {
-        return status;
+        return { status };
       }
     } catch {
       // Expected while the node is restarting; retry until the deadline.
     }
   }
-  return null;
+  return { status: null };
 }
 
 // Confirm-dialog body that lets the operator pick the stable or dev channel for
@@ -298,25 +308,25 @@ export default function NodesPage() {
         void Promise.all(
           launched.map(async (result) => ({
             result,
-            status: await pollRemotePanelUpdate(result.id, result.runId),
+            check: await pollRemotePanelUpdate(result.id, result.runId),
           })),
         ).then((outcomes) => {
-          const failures = outcomes.filter(({ status }) => status?.state === 'failed');
-          const successes = outcomes.filter(({ status }) => status?.state === 'success');
-          const unknown = outcomes.filter(({ status }) => !status);
+          const failures = outcomes.filter(({ check }) => check.status?.state === 'failed');
+          const successes = outcomes.filter(({ check }) => check.status?.state === 'success');
+          const unknown = outcomes.filter(({ check }) => !check.status);
           if (failures.length > 0) {
             modal.error({
               title: t('pages.index.panelUpdateFailedTitle'),
               content: (
                 <div>
-                  {failures.map(({ result, status }) => (
+                  {failures.map(({ result, check }) => (
                     <p key={result.id}>
                       <strong>{result.name || `#${result.id}`}</strong>:{' '}
-                      {status?.message || `Exit code ${status?.exitCode}`}
-                      {status?.logFile && (
+                      {check.status?.message || `Exit code ${check.status?.exitCode}`}
+                      {check.status?.logFile && (
                         <>
                           {' — '}
-                          <code>{status.logFile}</code>
+                          <code>{check.status.logFile}</code>
                         </>
                       )}
                     </p>
@@ -331,10 +341,9 @@ export default function NodesPage() {
             );
           }
           if (unknown.length > 0) {
-            messageApi.warning(
-              t('pages.nodes.toasts.updateStatusUnknown', { number: unknown.length }),
-              10,
-            );
+            const diagnostic = unknown.find(({ check }) => check.error)?.check.error;
+            const base = t('pages.nodes.toasts.updateStatusUnknown', { number: unknown.length });
+            messageApi.warning(diagnostic ? `${base} — ${diagnostic}` : base, 10);
           }
           void refetch();
         });
