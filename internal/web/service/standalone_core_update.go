@@ -29,7 +29,10 @@ func updateStandaloneCore(ctx context.Context, engine string, install func(strin
 	if !svc.Installed() {
 		return "", fmt.Errorf("install the core first")
 	}
-	staged, err := os.CreateTemp(filepath.Dir(target), ".core-update-*")
+	if err := cleanupStandaloneCoreArtifacts(engine, target, false); err != nil {
+		return "", err
+	}
+	staged, err := os.CreateTemp(filepath.Dir(target), ".core-"+engine+"-update-*")
 	if err != nil {
 		return "", err
 	}
@@ -47,7 +50,7 @@ func updateStandaloneCore(ctx context.Context, engine string, install func(strin
 		}
 		_ = svc.pollStandaloneTraffic(ctx)
 	}
-	backup, err := os.CreateTemp(filepath.Dir(target), ".core-backup-*")
+	backup, err := os.CreateTemp(filepath.Dir(target), ".core-"+engine+"-backup-*")
 	if err != nil {
 		return "", err
 	}

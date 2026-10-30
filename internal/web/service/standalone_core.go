@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"debug/buildinfo"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -53,6 +54,9 @@ func InstallStandaloneCore(ctx context.Context, engine, version string) (string,
 	svc := NativeCore(engine)
 	if svc.IsRunning() {
 		return "", fmt.Errorf("switch to another core before updating %s", engine)
+	}
+	if err := cleanupStandaloneCoreArtifacts(engine, svc.BinaryPath(), false); err != nil {
+		return "", err
 	}
 	return installStandaloneAt(ctx, engine, version, svc.BinaryPath())
 }
@@ -226,7 +230,52 @@ func UninstallStandaloneCore(ctx context.Context, engine string) error {
 	if err := os.Remove(svc.BinaryPath()); err != nil && !os.IsNotExist(err) {
 		return err
 	}
+	if err := cleanupStandaloneCoreArtifacts(engine, svc.BinaryPath(), true); err != nil {
+		return err
+	}
 	svc.process().SetError(nil)
+	return nil
+}
+
+func cleanupStandaloneCoreArtifacts(engine, target string, removeBackups bool) error {
+	dir := filepath.Dir(target)
+	entries, err := os.ReadDir(dir)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	prefixes := []string{".core-" + engine + "-install-", ".core-" + engine + "-update-", ".core-install-", ".core-update-", ".core-geodata-"}
+	if removeBackups {
+		prefixes = append(prefixes, ".core-"+engine+"-backup-")
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		// Older backups have no engine in their name; inspect metadata without
+		// executing them, and retain unrecognized recovery copies.
+		if removeBackups && strings.HasPrefix(entry.Name(), ".core-backup-") {
+			file := filepath.Join(dir, entry.Name())
+			info, err := buildinfo.ReadFile(file)
+			if err == nil && ((engine == CoreTypeXray && info.Main.Path == "github.com/xtls/xray-core") || (engine == CoreTypeSingBoxUpstream && info.Main.Path == "github.com/sagernet/sing-box")) {
+				if err := os.Remove(file); err != nil && !os.IsNotExist(err) {
+					return fmt.Errorf("remove old %s backup: %w", engine, err)
+				}
+			}
+			continue
+		}
+		for _, prefix := range prefixes {
+			if !strings.HasPrefix(entry.Name(), prefix) {
+				continue
+			}
+			if err := os.Remove(filepath.Join(dir, entry.Name())); err != nil && !os.IsNotExist(err) {
+				return fmt.Errorf("remove stale %s payload: %w", engine, err)
+			}
+			break
+		}
+	}
 	return nil
 }
 
