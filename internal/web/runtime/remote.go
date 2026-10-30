@@ -737,7 +737,7 @@ func (r *Remote) StartPanelUpdate(ctx context.Context, dev bool) (string, error)
 	// The node downloads update.sh before acknowledging this request, and that
 	// downloader has a 15-second deadline. Ten seconds would report an RPC
 	// failure while the remote update may already be starting.
-	env, err := r.doWithTimeout(ctx, http.MethodPost, "panel/api/server/updatePanel", body, 30*time.Second)
+	env, err := r.doWithTimeout(ctx, http.MethodPost, "panel/api/server/updatePanel", body, 22*time.Second)
 	if err != nil {
 		return "", err
 	}
