@@ -54,13 +54,31 @@ func TestStartPanelUpdateAlwaysSendsSelectedChannel(t *testing.T) {
 	}
 }
 
-func TestStartPanelUpdateRejectsMissingRunID(t *testing.T) {
+func TestStartPanelUpdateAcceptsLegacyLaunchWithoutRunID(t *testing.T) {
+	for _, body := range []string{
+		`{"success":true,"obj":null}`,
+		`{"success":true,"obj":{}}`,
+	} {
+		t.Run(body, func(t *testing.T) {
+			remote := panelUpdateTestRemote(t, func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = fmt.Fprint(w, body)
+			})
+			runID, err := remote.StartPanelUpdate(context.Background(), false)
+			if err != nil || runID != "" {
+				t.Fatalf("legacy launch = %q, %v; expected empty run ID without error", runID, err)
+			}
+		})
+	}
+}
+
+func TestStartPanelUpdateRejectsMalformedRunID(t *testing.T) {
 	remote := panelUpdateTestRemote(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = fmt.Fprint(w, `{"success":true,"obj":{}}`)
+		_, _ = fmt.Fprint(w, `{"success":true,"obj":{"runId":12345}}`)
 	})
 	if _, err := remote.StartPanelUpdate(context.Background(), false); err == nil {
-		t.Fatal("accepted launch without run ID")
+		t.Fatal("accepted malformed run ID")
 	}
 }
 
