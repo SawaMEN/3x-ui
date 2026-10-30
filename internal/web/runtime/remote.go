@@ -194,6 +194,12 @@ func (r *Remote) baseURL() (string, error) {
 }
 
 func (r *Remote) do(ctx context.Context, method, path string, body any) (*envelope, error) {
+	return r.doWithTimeout(ctx, method, path, body, remoteHTTPTimeout)
+}
+
+// doWithTimeout allows launch operations with a bounded, longer handshake
+// without increasing the deadline of every ordinary node API call.
+func (r *Remote) doWithTimeout(ctx context.Context, method, path string, body any, timeout time.Duration) (*envelope, error) {
 	// mtls nodes authenticate via the client certificate, so a bearer token is
 	// optional for them; every other mode still requires one.
 	if r.node.ApiToken == "" && r.node.TlsVerifyMode != "mtls" {
@@ -241,7 +247,7 @@ func (r *Remote) do(ctx context.Context, method, path string, body any) (*envelo
 		reqBody = bytes.NewReader(bodyBytes)
 	}
 
-	cctx, cancel := context.WithTimeout(netsafe.ContextWithAllowPrivate(ctx, r.node.AllowPrivateAddress), remoteHTTPTimeout)
+	cctx, cancel := context.WithTimeout(netsafe.ContextWithAllowPrivate(ctx, r.node.AllowPrivateAddress), timeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(cctx, method, target, reqBody)
 	if err != nil {
@@ -716,7 +722,10 @@ type RemotePanelUpdateStatus struct {
 // An accepted launch is NOT proof that the release installed successfully.
 func (r *Remote) StartPanelUpdate(ctx context.Context, dev bool) (string, error) {
 	body := url.Values{"dev": {strconv.FormatBool(dev)}}
-	env, err := r.do(ctx, http.MethodPost, "panel/api/server/updatePanel", body)
+	// The node downloads update.sh before acknowledging this request, and that
+	// downloader has a 15-second deadline. Ten seconds would report an RPC
+	// failure while the remote update may already be starting.
+	env, err := r.doWithTimeout(ctx, http.MethodPost, "panel/api/server/updatePanel", body, 30*time.Second)
 	if err != nil {
 		return "", err
 	}
