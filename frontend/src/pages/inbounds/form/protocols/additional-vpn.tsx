@@ -31,7 +31,12 @@ export function InstallVPNButton({ protocol }: { protocol: 'fptn' | 'openflux' |
       }}
     >
       {t('pages.inbounds.form.vpnInstall', {
-        protocol: protocol === 'fptn' ? 'FPTN client' : protocol === 'vetroff' ? 'VetroffProxy' : 'OpenFlux',
+        protocol:
+          protocol === 'fptn'
+            ? 'FPTN client'
+            : protocol === 'vetroff'
+              ? 'VetroffProxy'
+              : 'OpenFlux',
       })}
     </Button>
   );
