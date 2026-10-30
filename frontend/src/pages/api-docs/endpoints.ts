@@ -2208,10 +2208,19 @@ export const sections: readonly Section[] = [
         method: 'POST',
         path: '/panel/api/nodes/updatePanel',
         summary:
-          'Trigger the official panel self-updater on each given node (downloads the latest release and restarts). Only enabled, online nodes are updated; offline/disabled ones are reported as skipped. Set "dev": true to move the nodes to the rolling per-commit dev channel instead of the latest stable release. Returns a per-node result list.',
+          'Start the official self-updater on each enabled online node. Returns per-node launch results (including a runId), not proof of installation. Set "dev": true for the rolling dev channel; otherwise use stable. Poll updatePanelStatus/:id with the matching runId for completion.',
         body: '{\n  "ids": [1, 2, 3],\n  "dev": false\n}',
         response:
-          '{\n  "success": true,\n  "obj": [\n    { "id": 1, "name": "de-1", "ok": true },\n    { "id": 2, "name": "fr-1", "ok": false, "error": "node is offline" }\n  ]\n}',
+          '{\n  "success": true,\n  "obj": [\n    { "id": 1, "name": "de-1", "ok": true, "runId": "1735689600123456789" },\n    { "id": 2, "name": "fr-1", "ok": false, "error": "node is offline" }\n  ]\n}',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/nodes/updatePanelStatus/:id',
+        summary:
+          'Read the remote panel installer status for a node. Requires a node-admin token on the remote node. Match obj.runId against the updatePanel launch response; state is pending, success or failed.',
+        params: [{ name: 'id', in: 'path', type: 'number', desc: 'Node ID.' }],
+        response:
+          '{"success":true,"obj":{"runId":"1735689600123456789","state":"failed","exitCode":2,"message":"insufficient disk space","logFile":"/var/log/x-ui/update.log"}}',
       },
       {
         method: 'GET',
