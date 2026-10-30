@@ -55,8 +55,12 @@ describe('chunk loading recovery', () => {
     let settled = false;
     const result = recovery.importWithChunkRecovery(async () => undefined);
     const completed = result.then(
-      () => { settled = true; },
-      () => { settled = true; },
+      () => {
+        settled = true;
+      },
+      () => {
+        settled = true;
+      },
     );
     await Promise.resolve();
     await Promise.resolve();
