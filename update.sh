@@ -27,6 +27,11 @@ _command_exists() {
 # Fail, log and exit script function
 _fail() {
     local msg=${1}
+    # Preserve a precise preflight diagnostic (disk sizes, paths) even if the
+    # caller adds a more general error describing which phase failed.
+    if [[ -n "${xui_update_error:-}" && "${xui_update_error}" != "$msg" ]]; then
+        msg="${xui_update_error}. ${msg}"
+    fi
     xui_update_error="${msg}"
     echo -e "${red}${msg}${plain}"
     exit 2
@@ -1189,7 +1194,8 @@ preflight_update_download_space() {
     required_kib=$((2 * installed_kib + 262144))
     (( required_kib >= 524288 )) || required_kib=524288
     if (( free_kib < required_kib )); then
-        echo "Insufficient space before downloading update: need at least ${required_kib} KiB free, have ${free_kib} KiB on $parent. Nothing downloaded." >&2
+        xui_update_error="Insufficient space before downloading update: need at least ${required_kib} KiB free, have ${free_kib} KiB on $parent. Nothing downloaded."
+        echo "$xui_update_error" >&2
         return 1
     fi
 }
