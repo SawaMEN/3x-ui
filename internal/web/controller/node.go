@@ -390,6 +390,12 @@ func (a *NodeController) updatePanel(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), fmt.Errorf("no nodes selected"))
 		return
 	}
+	// A single HTTP request must finish before the server's 30-second write
+	// deadline. The UI batches longer lists; API callers must do likewise.
+	if len(req.Ids) > 32 {
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), fmt.Errorf("at most 32 nodes per update request; split larger selections into batches"))
+		return
+	}
 	results, err := a.nodeService.UpdatePanels(req.Ids, req.Dev)
 	jsonMsgObj(c, I18nWeb(c, "pages.nodes.toasts.updateStarted"), results, err)
 }
