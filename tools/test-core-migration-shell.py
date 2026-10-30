@@ -236,6 +236,37 @@ fi
             self.assertTrue(new_download.exists())
             self.assertTrue((recovery / "installation" / "x-ui").exists())
 
+    def test_remote_update_download_lock_blocks_parallel_downloads(self):
+        source = (ROOT / "update.sh").read_text()
+        start = source.index("acquire_update_download_lock() {")
+        end = source.index("# Cheap pre-download guard.", start)
+        lock_functions = source[start:end]
+        with tempfile.TemporaryDirectory() as raw:
+            parent = Path(raw)
+            ready = parent / "lock-held"
+            holder = subprocess.Popen(
+                [
+                    "flock", "-x", str(parent / ".x-ui-upgrade.lock"),
+                    "bash", "-c", 'touch "$1"; sleep 2', "bash", str(ready),
+                ]
+            )
+            try:
+                deadline = time.monotonic() + 3
+                while not ready.exists() and time.monotonic() < deadline:
+                    time.sleep(0.02)
+                self.assertTrue(ready.exists(), "failed to acquire fixture lock")
+                script = (
+                    "set -eu\n" + lock_functions +
+                    '\nif acquire_update_download_lock "$1"; then exit 42; fi\n'
+                )
+                result = subprocess.run(
+                    ["bash", "-c", script, "bash", raw], capture_output=True,
+                    text=True, timeout=5,
+                )
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            finally:
+                holder.wait(timeout=5)
+
     def test_alpine_rollback_after_new_service_crashes(self):
         self.run_case("verify", alpine=True)
 
