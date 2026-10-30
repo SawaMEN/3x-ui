@@ -1511,6 +1511,8 @@
         "probeFailed": "Проверка не удалась",
         "updateStarted": "Обновление панели запущено",
         "updateResult": "Обновление запущено на {ok} узлах, {failed} не удалось",
+        "updateInstalled": "Обновление успешно установлено на {number} узлах",
+        "updateStatusUnknown": "Не удалось подтвердить установку на {number} узлах. Проверьте журнал обновления ноды.",
         "updateNoneEligible": "Выберите хотя бы один включённый узел в сети",
         "saveMtls": "Сохранить mTLS узла",
         "reloadMtls": "Reload master mTLS credential"
