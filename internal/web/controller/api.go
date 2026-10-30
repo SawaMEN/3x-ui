@@ -286,7 +286,8 @@ func (a *APIController) StartBackground(ctx context.Context) {
 func (a *APIController) WaitBackground() { a.backgroundWG.Wait() }
 
 var nodeAdminScopeAllow = map[string]map[string]struct{}{
-	"/server/updatePanel": {http.MethodPost: {}},
+	"/server/updatePanel":    {http.MethodPost: {}},
+	"/server/getUpdateStatus": {http.MethodGet: {}},
 }
 
 func scopeAllows(allow map[string]map[string]struct{}, path, method string) bool {
