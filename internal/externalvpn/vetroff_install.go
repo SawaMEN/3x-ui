@@ -72,6 +72,8 @@ func installVetroff(ctx context.Context) error {
 	}
 	target := filepath.Join(dir, "vetroff-bundle")
 	previous := filepath.Join(stage, "previous")
+	// Stop clients before replacing the bundle to avoid executing unlinked files.
+	stopOutboundProtocol(model.VetroffProxy)
 	manager := GetManager()
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
@@ -190,6 +192,8 @@ func RemoveVetroff(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	// The binary is going away: drop outbound plans as well as running clients.
+	RemoveOutboundProtocol(model.VetroffProxy)
 	manager := GetManager()
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
