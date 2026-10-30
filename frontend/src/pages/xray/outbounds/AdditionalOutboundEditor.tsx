@@ -17,7 +17,8 @@ export default function AdditionalOutboundEditor({
     return null;
   }
   const protocol = raw?.protocol;
-  if (!['fptn', 'openflux', 'vetroff', 'snell', 'singbox:snell'].includes(String(protocol))) return null;
+  if (!['fptn', 'openflux', 'vetroff', 'snell', 'singbox:snell'].includes(String(protocol)))
+    return null;
   const settings = (raw.settings ?? {}) as Record<string, unknown>;
   const isSnell = protocol === 'snell' || protocol === 'singbox:snell';
   const snellVersion = Number(settings.version ?? 6) === 4 ? 4 : 6;
