@@ -279,8 +279,9 @@ export default function NodesPage() {
       }
       setSelectedIds([]);
 
-      const launched = results.filter((r): r is NodeUpdateResult & { runId: string } =>
-        r.ok && typeof r.runId === 'string' && r.runId.length > 0,
+      const launched = results.filter(
+        (r): r is NodeUpdateResult & { runId: string } =>
+          r.ok && typeof r.runId === 'string' && r.runId.length > 0,
       );
       if (launched.length > 0) {
         void Promise.all(
@@ -314,7 +315,9 @@ export default function NodesPage() {
             });
           }
           if (successes.length > 0) {
-            messageApi.success(t('pages.nodes.toasts.updateInstalled', { number: successes.length }));
+            messageApi.success(
+              t('pages.nodes.toasts.updateInstalled', { number: successes.length }),
+            );
           }
           if (unknown.length > 0) {
             messageApi.warning(
