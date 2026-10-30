@@ -133,13 +133,29 @@ func TestPinnedBinaryChecksGeneratedConfigurations(t *testing.T) {
 		}
 		checked(t, map[string]any{"outbounds": []any{outbound}})
 	})
+	t.Run("TCP FinalMask inbound with legacy TLS preset", func(t *testing.T) {
+		raw := vlessInbound()
+		stream := object(raw, "streamSettings")
+		stream["network"], stream["security"] = "tcp", "tls"
+		delete(stream, "xhttpSettings")
+		stream["tlsSettings"] = map[string]any{
+			"cipherSuites": "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256:TLS_RSA_WITH_AES_128_GCM_SHA256",
+			"certificates": []any{map[string]any{"certificateFile": cert, "keyFile": key}},
+		}
+		stream["finalmask"] = map[string]any{"tcp": []any{map[string]any{"type": "fragment", "settings": map[string]any{"packets": "tlshello", "length": "10-20", "delay": "0"}}}}
+		inbound, err := TranslateInbound(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		checked(t, map[string]any{"inbounds": []any{inbound}})
+	})
 	t.Run("Hysteria2 gecko TLS", func(t *testing.T) {
 		inbound, err := TranslateInbound(map[string]any{
 			"protocol": "hysteria", "tag": "hy2", "port": 443, "listen": "127.0.0.1",
 			"settings": map[string]any{"clients": []any{map[string]any{"email": "alice", "password": "test-password"}}},
 			"streamSettings": map[string]any{
 				"network": "hysteria", "security": "tls", "hysteriaSettings": map[string]any{"version": 2},
-				"tlsSettings": map[string]any{"certificates": []any{map[string]any{"certificateFile": cert, "keyFile": key}}},
+				"tlsSettings": map[string]any{"cipherSuites": "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256:TLS_RSA_WITH_AES_128_GCM_SHA256", "certificates": []any{map[string]any{"certificateFile": cert, "keyFile": key}}},
 				"finalmask":   map[string]any{"udp": []any{map[string]any{"type": "salamander", "settings": map[string]any{"password": "test-obfs", "packetSize": "100-200"}}}},
 			},
 		})
