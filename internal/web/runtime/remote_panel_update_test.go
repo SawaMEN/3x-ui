@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 )
@@ -78,5 +79,24 @@ func TestGetPanelUpdateStatusUsesRemoteResult(t *testing.T) {
 	if status.RunID != "1735689600123456789" || status.State != "failed" ||
 		status.ExitCode != 2 || status.Message != "insufficient disk space" {
 		t.Fatalf("unexpected status: %+v", status)
+	}
+}
+
+func TestStartPanelUpdateHonorsLongerDeadlineWithCachedHTTPClient(t *testing.T) {
+	remote := panelUpdateTestRemote(t, func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(40 * time.Millisecond)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprint(w, `{"success":true,"obj":{"runId":"123"}}`)
+	})
+	// Proxy-backed clients can have their own shorter http.Client.Timeout.
+	// The updater's longer per-request deadline must override that limit
+	// without mutating the cached instance shared with other node RPCs.
+	remote.client = &http.Client{Timeout: 5 * time.Millisecond}
+	got, err := remote.StartPanelUpdate(context.Background(), false)
+	if err != nil || got != "123" {
+		t.Fatalf("launch with short cached client timeout = %q, %v", got, err)
+	}
+	if remote.client.Timeout != 5*time.Millisecond {
+		t.Fatal("shared HTTP client timeout was mutated")
 	}
 }
