@@ -314,11 +314,11 @@ export default function NodesPage() {
             });
           }
           if (successes.length > 0) {
-            messageApi.success(`${successes.length} node panel update(s) installed successfully`);
+            messageApi.success(t('pages.nodes.toasts.updateInstalled', { number: successes.length }));
           }
           if (unknown.length > 0) {
             messageApi.warning(
-              `Installation result could not be confirmed for ${unknown.length} node(s); check the remote update log.`,
+              t('pages.nodes.toasts.updateStatusUnknown', { number: unknown.length }),
               10,
             );
           }
