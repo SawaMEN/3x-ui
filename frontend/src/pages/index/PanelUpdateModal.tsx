@@ -49,7 +49,9 @@ export default function PanelUpdateModal({
 
   async function pollUpdateStatus(expectedRunId: string): Promise<UpdateOutcome> {
     await PromiseUtil.sleep(5000);
-    const deadline = Date.now() + 90_000;
+    // Installing a large release can take far longer than the initial launch.
+    // Do not show a false "unknown" result while download/rollback is ongoing.
+    const deadline = Date.now() + 40 * 60_000;
     while (Date.now() < deadline) {
       try {
         const msg = await HttpUtil.get<PanelUpdateStatus>(
