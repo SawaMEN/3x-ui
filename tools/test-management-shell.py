@@ -496,7 +496,7 @@ core_migration_resume_gateway() { :; }
                 archive = base / "release.tar.gz"
                 with tarfile.open(archive, "w:gz") as target: target.add(bundle, arcname="x-ui")
                 script = "".join(function("update.sh", name) for name in
-                    ("rewrite_release_service_paths", "prepare_release_host_files", "_install_xui_service_unit", "update_x-ui")).replace("/usr/bin/x-ui", "${TEST_ROOT}/host-cli") + r'''
+                    ("acquire_update_download_lock", "preflight_update_download_space", "rewrite_release_service_paths", "prepare_release_host_files", "_install_xui_service_unit", "update_x-ui")).replace("/usr/bin/x-ui", "${TEST_ROOT}/host-cli") + r'''
 _fail() { echo "$*" >&2; exit 2; }
 load_xui_env() { :; }
 select_release_tag() { printf dev-latest; }
