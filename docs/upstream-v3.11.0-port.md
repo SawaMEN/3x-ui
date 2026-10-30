@@ -28,7 +28,8 @@ Telemt и нативной модели клиентов; версия форк�
 
 ## Архитектурные различия
 
-- Xray v26.10.21, его gRPC pool, XDRIVE/Lua/XDNS/finalmask и TUIC→Xray relay
+- XDrive позднее реализован в собственном ядре; см. [нативный перенос](native-xdrive-and-protocol-settings.md).
+- Xray v26.10.21, его gRPC pool, Lua/XDNS/finalmask и TUIC→Xray relay
   не заменяют Hiddify-core и его маршрутизацию. Несовместимые формы,
   миграции и управление процессом Xray не включены.
 - Kernel AmneziaWG upstream рассчитан на другой runtime. Сохранён собственный

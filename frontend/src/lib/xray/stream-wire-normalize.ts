@@ -336,6 +336,17 @@ export function normalizeStreamSettingsForWire(
     out.xhttpSettings = normalizeXhttpForWire(xhttp, opts.side);
   }
 
+  if (opts.side === 'outbound' && isRecord(out.hysteriaSettings)) {
+    const hy = { ...out.hysteriaSettings };
+    for (const key of [
+      'masquerade',
+      'udpIdleTimeout',
+      'ignoreClientBandwidth',
+      'ignore_client_bandwidth',
+    ])
+      delete hy[key];
+    out.hysteriaSettings = hy;
+  }
   const tls = out.tlsSettings;
   if (isRecord(tls)) {
     out.tlsSettings = normalizeTlsForWire(tls);

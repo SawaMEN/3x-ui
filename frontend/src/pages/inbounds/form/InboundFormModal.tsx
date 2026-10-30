@@ -37,6 +37,7 @@ import { TcpStreamSettingsSchema } from '@/schemas/protocols/stream/tcp';
 import { WsStreamSettingsSchema } from '@/schemas/protocols/stream/ws';
 import { GrpcStreamSettingsSchema } from '@/schemas/protocols/stream/grpc';
 import { HttpUpgradeStreamSettingsSchema } from '@/schemas/protocols/stream/httpupgrade';
+import { XDriveStreamSettingsSchema } from '@/schemas/protocols/stream/xdrive';
 import { XHttpStreamSettingsSchema } from '@/schemas/protocols/stream/xhttp';
 import { DateTimePicker } from '@/components/form';
 import { FinalMaskField } from '@/lib/xray/forms/fields';
@@ -74,6 +75,7 @@ import {
   SockoptForm,
   WsForm,
   XhttpForm,
+  XDriveForm,
 } from './transport';
 import { RealityForm, TlsForm } from './security';
 import { useSecurityActions } from './useSecurityActions';
@@ -212,6 +214,8 @@ function newStreamSlice(n: string): Record<string, unknown> {
       return GrpcStreamSettingsSchema.parse({});
     case 'httpupgrade':
       return HttpUpgradeStreamSettingsSchema.parse({});
+    case 'xdrive':
+      return XDriveStreamSettingsSchema.parse({});
     case 'xhttp':
       return XHttpStreamSettingsSchema.parse({});
     default:
@@ -1076,6 +1080,7 @@ export default function InboundFormModal({
       'grpcSettings',
       'httpupgradeSettings',
       'xhttpSettings',
+      'xdriveSettings',
     ];
     const current = (getV('streamSettings') as Record<string, unknown>) ?? {};
     const cleaned: Record<string, unknown> = { ...current, network: next };
@@ -1083,6 +1088,12 @@ export default function InboundFormModal({
       if (k !== `${next}Settings`) delete cleaned[k];
     }
     cleaned[`${next}Settings`] = newStreamSlice(next);
+    if (next === 'xdrive') {
+      cleaned.security = 'none';
+      delete cleaned.tlsSettings;
+      delete cleaned.realitySettings;
+      delete cleaned.finalmask;
+    }
     const fm = cleaned.finalmask as Record<string, unknown> | undefined;
     if (next !== 'kcp' && fm && Array.isArray(fm.udp)) {
       cleaned.finalmask = {
@@ -1111,6 +1122,9 @@ export default function InboundFormModal({
             disabled={mode === 'edit' && dbInbound?.protocol === Protocols.SHADOWTLS}
             options={[
               { value: 'tcp', label: 'RAW' },
+              ...(protocol === Protocols.VLESS
+                ? [{ value: 'xdrive', label: 'XDrive (cloud storage)' }]
+                : []),
               ...(['vless', 'vmess', 'trojan'].includes(protocol)
                 ? [{ value: 'kcp', label: 'mKCP' }]
                 : []),
@@ -1151,6 +1165,7 @@ export default function InboundFormModal({
             {network === 'grpc' && <GrpcForm />}
 
             {network === 'xhttp' && <XhttpForm />}
+            {network === 'xdrive' && <XDriveForm />}
 
             {network === 'httpupgrade' && <HttpUpgradeForm />}
           </>

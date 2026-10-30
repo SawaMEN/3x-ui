@@ -773,6 +773,11 @@ func TranslateXrayInbound(raw map[string]any) (map[string]any, error) {
 		// destination. Deliver the stream to the encrypted Shadowsocks inbound.
 		out["detour"] = shadowTLSInnerTag(rawString(raw, "tag"))
 	}
+	if protocol == "vless" {
+		if decryption := rawString(settings, "decryption"); decryption != "" && decryption != "none" {
+			out["decryption"] = decryption
+		}
+	}
 	out["type"] = singProtocol
 	if listen := rawString(raw, "listen"); listen != "" {
 		out["listen"] = normalizeListen(listen)
@@ -993,6 +998,9 @@ func translateUsers(out map[string]any, protocol string, settings map[string]any
 }
 
 func translateStream(out map[string]any, protocol string, stream map[string]any, inbound bool) error {
+	if rawString(stream, "network") == "xdrive" {
+		return translateXDrive(out, protocol, stream, inbound)
+	}
 	security := strings.ToLower(strings.TrimSpace(rawString(stream, "security")))
 	if protocol == "hysteria" || protocol == "hysteria2" {
 		if inbound {

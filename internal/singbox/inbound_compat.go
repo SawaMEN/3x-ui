@@ -31,7 +31,7 @@ func translateInboundCompatibility(out, raw map[string]any) error {
 	settings, stream := rawObject(raw, "settings"), rawObject(raw, "streamSettings")
 	label := fmt.Sprintf("inbound %q", tag)
 	if protocol == "vless" {
-		if value := rawString(settings, "decryption"); value != "" && value != "none" {
+		if value := rawString(settings, "decryption"); value != "" && value != "none" && rawString(stream, "network") != "xdrive" {
 			return fmt.Errorf("%s: encrypted VLESS decryption cannot be represented by sing-box", label)
 		}
 		if err := rejectXrayFields(settings, label, "fallbacks"); err != nil {

@@ -49,7 +49,7 @@ describe('MASQUE automatic settings', () => {
     renderWithProviders(<Form />);
     fireEvent.click(screen.getByRole('button', { name: 'TCP / HTTP/2 compatibility' }));
     fireEvent.click(screen.getByText('Advanced tunnel settings'));
-    const packetSize = screen.getByRole('spinbutton', { name: 'initial_packet_size' });
+    const packetSize = screen.getByRole('spinbutton', { name: 'Initial packet size (bytes)' });
     expect((packetSize as HTMLInputElement).disabled).toBe(true);
     const settings = JSON.parse(screen.getByTestId('settings').textContent || '{}');
     expect(settings.advanced.initial_packet_size).toBe(1200);

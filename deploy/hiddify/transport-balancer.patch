@@ -26,10 +26,11 @@
  	case C.V2RayTransportTypeRaw:
  		v = &o.RawOptions
  	default:
-@@ -89,6 +94,7 @@
+@@ -95,7 +100,8 @@
  func (o V2RayTransportOptions) DescribeSchema(builder schema.Builder) (*schema.Node, error) {
  	return builder.Define("V2RayTransport", func() (*schema.Node, error) {
  		return schema.DiscriminatedUnion(builder, "type", true, []schema.UnionVariant{
+ 			{Value: "xdrive", StructType: reflect.TypeFor[V2RayXDriveOptions]()},
 +			{Value: "kcp", StructType: reflect.TypeFor[V2RayKCPOptions]()},
  			{Value: C.V2RayTransportTypeHTTP, StructType: reflect.TypeFor[V2RayHTTPOptions]()},
  			{Value: C.V2RayTransportTypeWebsocket, StructType: reflect.TypeFor[V2RayWebsocketOptions]()},

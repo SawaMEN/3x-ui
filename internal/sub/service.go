@@ -1098,6 +1098,9 @@ func (s *SubService) shareEndpointsForInbound(inbound *model.Inbound) []ShareEnd
 // (socks, http, mixed, dokodemo, tunnel). The returned string may contain multiple
 // `\n`-separated URLs when externalProxy/host endpoints fan out.
 func (s *SubService) GetLink(inbound *model.Inbound, email string) string {
+	if usesXDriveTransport(inbound) {
+		return ""
+	}
 	if model.ShadowTLSTransport(inbound.Settings) != nil {
 		// A plain URI cannot describe an outbound detouring through ShadowTLS.
 		return ""
@@ -2355,6 +2358,9 @@ func (s *SubService) genHysteriaLink(inbound *model.Inbound, email string) strin
 	protocol := "hysteria2"
 	if int(version) == 1 {
 		protocol = "hysteria"
+	}
+	for key, value := range hysteriaNativeURIOptions(stream, int(version)) {
+		params[key] = value
 	}
 
 	// Set before the externalProxy fan-out: a Host overrides only the
@@ -4312,4 +4318,14 @@ func (s *SubService) overlayInboundTunnelIdentity(inbound *model.Inbound, client
 		out = append(out, client)
 	}
 	return out, nil
+}
+
+func usesXDriveTransport(inbound *model.Inbound) bool {
+	if inbound == nil {
+		return false
+	}
+	var stream map[string]any
+	_ = json.Unmarshal([]byte(inbound.StreamSettings), &stream)
+	network, _ := stream["network"].(string)
+	return strings.EqualFold(strings.TrimSpace(network), "xdrive")
 }

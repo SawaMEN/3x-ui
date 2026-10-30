@@ -5,7 +5,6 @@ package sub
 import (
 	"context"
 	"crypto/tls"
-	"io"
 	"io/fs"
 	"net"
 	"net/http"
@@ -52,11 +51,10 @@ func NewServer() *Server {
 // templates and static assets and returns the ready-to-use engine.
 func (s *Server) initRouter() (*gin.Engine, error) {
 	// Always run in release mode for the subscription server
-	gin.DefaultWriter = io.Discard
-	gin.DefaultErrorWriter = io.Discard
 	gin.SetMode(gin.ReleaseMode)
 
-	engine := gin.Default()
+	engine := gin.New()
+	engine.Use(middleware.Recovery())
 
 	subDomain, err := s.settingService.GetSubDomain()
 	if err != nil {
@@ -654,7 +652,8 @@ func (s *Server) Start() (err error) {
 
 	s.routerMu.Lock()
 	s.httpServer = &http.Server{
-		Handler: service.DomainFrontHandler(engine, listen, port, certFile != "" && keyFile != ""),
+		ErrorLog: logger.StandardLogger(),
+		Handler:  service.DomainFrontHandler(engine, listen, port, certFile != "" && keyFile != ""),
 		// The subscription server is the most exposed (public) listener; without
 		// these a few slow-header connections exhaust it (Slowloris). Mirrors the
 		// panel server timeouts in internal/web/web.go.

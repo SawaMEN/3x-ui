@@ -139,6 +139,7 @@ const NETWORK_SETTINGS_KEY: Record<string, string> = {
   grpc: 'grpcSettings',
   httpupgrade: 'httpupgradeSettings',
   xhttp: 'xhttpSettings',
+  xdrive: 'xdriveSettings',
   hysteria: 'hysteriaSettings',
 };
 
@@ -446,6 +447,10 @@ export function formValuesToWirePayload(values: InboundFormValues): WireInboundP
   if (streamPruned) {
     streamPruned = normalizeStreamSettingsForWire(streamPruned, { side: 'inbound' });
     stripTlsCertUseFile(streamPruned);
+  }
+  if (values.protocol === 'hysteria' && streamPruned) {
+    const hy = streamPruned.hysteriaSettings as { version?: unknown } | undefined;
+    if (hy?.version === 1 || hy?.version === 2) settingsPruned.version = hy.version;
   }
   dropLegacyOptionalEmpties(settingsPruned, streamPruned);
   const payload: WireInboundPayload = {
