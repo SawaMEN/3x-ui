@@ -951,7 +951,16 @@ func (s *ServerService) GetLogs(count string, level string, syslog string) []str
 		if err != nil {
 			return []string{"Failed to run journalctl command! Make sure systemd is available and x-ui service is registered."}
 		}
-		lines = strings.Split(out.String(), "\n")
+		// journalctl emits oldest-first, while the panel's file and buffer
+		// viewers return newest-first. Do not expose a trailing empty line.
+		output := strings.TrimRight(out.String(), "\r\n")
+		if output == "" {
+			return []string{}
+		}
+		lines = strings.Split(output, "\n")
+		for i, j := 0, len(lines)-1; i < j; i, j = i+1, j-1 {
+			lines[i], lines[j] = lines[j], lines[i]
+		}
 	} else {
 		lines = logger.GetFileLogs(c, level)
 		if len(lines) == 0 {
