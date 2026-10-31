@@ -72,6 +72,27 @@ func TestDiagnosticUnknownFormatsAreNotSilentlyDropped(t *testing.T) {
     }
 }
 
+func TestDiagnosticSeverityWordsInUnstructuredBodiesAreNotHeaderLevels(t *testing.T) {
+    cases := []struct {
+        line string
+        want string
+    }{
+        {"uncategorized stack trace without a prefix", "UNKNOWN"},
+        {"client requested debug traces", "UNKNOWN"},
+        {"user copied a warning about an error", "UNKNOWN"},
+        {"DEBUG - explicit log header", "DEBUG"},
+        {"[ERROR] failed to connect", "ERROR"},
+        {"2026/11/01 10:20:30 INFO - trace contains an error", "INFO"},
+        {"2026-11-01T10:20:30+0200 host x-ui[42]: ERROR - broken pipe", "ERROR"},
+        {"[2026/11/01 10:20:30] xray: WARNING - retrying", "WARNING"},
+    }
+    for _, tc := range cases {
+        if got := diagnosticLevel(tc.line); got != tc.want {
+            t.Errorf("diagnosticLevel(%q) = %q, want %q", tc.line, got, tc.want)
+        }
+    }
+}
+
 func TestDiagnosticClassifiesUnlabeledCoreFailures(t *testing.T) {
     for _, line := range []string{
         "TLS handshake: invalid sudoku hint tuple",
