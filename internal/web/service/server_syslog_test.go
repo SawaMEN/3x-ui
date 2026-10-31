@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -76,8 +77,8 @@ func TestGetLogsSyslogStopsWaitingForInheritedPipe(t *testing.T) {
     if elapsed := time.Since(started); elapsed > 2*time.Second {
         t.Fatalf("legacy syslog waited %s for an orphan stdout writer", elapsed)
     }
-    if len(got) == 0 {
-        t.Fatal("legacy syslog did not respond")
+    if !slices.Equal(got, []string{"recent entry"}) {
+        t.Fatalf("legacy syslog dropped valid output on WaitDelay expiry: %#v", got)
     }
 }
 
@@ -97,8 +98,11 @@ func TestDiagnosticJournalStopsWaitingForInheritedPipe(t *testing.T) {
     if elapsed := time.Since(started); elapsed > 2*time.Second {
         t.Fatalf("structured journal waited %s for an orphan stdout writer", elapsed)
     }
-    if len(got.Warnings) == 0 && len(got.Entries) == 0 {
-        t.Fatalf("diagnostics silently lost orphaned journal status: %+v", got)
+    if len(got.Entries) != 1 || got.Entries[0].Raw != "2026-11-01T12:00:00Z ERROR - journal-orphan-marker" {
+        t.Fatalf("structured journal dropped valid output on WaitDelay expiry: %+v", got)
+    }
+    if len(got.Warnings) != 1 || !strings.Contains(got.Warnings[0], "показаны полученные строки") {
+        t.Fatalf("structured journal must warn about interrupted pipe: %+v", got.Warnings)
     }
 }
 
