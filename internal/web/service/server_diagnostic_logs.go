@@ -310,7 +310,9 @@ func (s *ServerService) GetDashboardLogsFiltered(count, level, source, query, ex
                 "--lines="+strconv.Itoa(scanLimit), "-p", "debug",
                 "-u", "x-ui.service", "-u", "telemt.service", "-u", "x-ui-oxidns.service",
                 "-u", "x-ui-vk-turn-proxy.service")
-            output, err := cmd.Output()
+            output := tail.NewRecentOutputBuffer(int(tail.DefaultTailBytes))
+            cmd.Stdout = output
+            err := cmd.Run()
             if err != nil {
                 if errors.Is(ctx.Err(), context.DeadlineExceeded) {
                     warnings = append(warnings, "journal: превышено время ожидания journalctl")
@@ -318,10 +320,15 @@ func (s *ServerService) GetDashboardLogsFiltered(count, level, source, query, ex
                     warnings = append(warnings, "journal: journalctl недоступен или чтение запрещено")
                 }
             } else {
+                if output.Truncated() {
+                    warnings = append(warnings, "journal: вывод ограничен последними 8 МиБ")
+                }
                 // journalctl writes oldest first. The UI contract is newest first.
-                lines := strings.Split(strings.TrimRight(string(bytes.TrimSpace(output)), "\n"), "\n")
-                for i,j := 0,len(lines)-1; i<j; i,j=i+1,j-1 { lines[i],lines[j]=lines[j],lines[i] }
-                appendLines("journal", lines)
+                if raw := bytes.TrimSpace(output.CompleteBytes()); len(raw) > 0 {
+                    lines := strings.Split(string(raw), "\n")
+                    for i,j := 0,len(lines)-1; i<j; i,j=i+1,j-1 { lines[i],lines[j]=lines[j],lines[i] }
+                    appendLines("journal", lines)
+                }
             }
         }
     }
