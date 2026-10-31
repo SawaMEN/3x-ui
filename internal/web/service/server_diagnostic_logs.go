@@ -148,7 +148,18 @@ func (s *ServerService) GetDashboardLogs(count, level, source, query string) Das
         // Panel messages are not restricted to the in-memory buffer's 4096
         // entries and remain available across panel restarts.
         lines := logger.GetFileLogs(scanLimit, "debug")
-        if len(lines) == 0 { lines = logger.GetLogs(scanLimit, "debug") }
+        // The file backend can have a stricter threshold than the in-memory
+        // ring (e.g. INFO on disk but DEBUG messages in memory). Merge both
+        // without duplicating records already persisted in the file.
+        persisted := make(map[string]int, len(lines))
+        for _, line := range lines { persisted[line]++ }
+        for _, line := range logger.GetLogs(scanLimit, "debug") {
+            if persisted[line] > 0 {
+                persisted[line]--
+                continue
+            }
+            lines = append(lines, line)
+        }
         appendLines("panel", lines)
     }
     if source == "all" || source == "core" || source == "access" {
