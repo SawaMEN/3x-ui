@@ -270,8 +270,6 @@ func (s *ServerService) GetDashboardLogsFiltered(count, level, source, query, ex
             seen := 0
             for _, dir := range dirs {
                 if !dir.IsDir() { continue }
-                if seen >= 64 { warnings = append(warnings, "protocol: показаны первые 64 каталога"); break }
-                seen++
                 kind := "protocol/" + dir.Name()
                 path := filepath.Join(root, dir.Name(), "server.log")
                 info, err := os.Stat(path)
@@ -284,6 +282,10 @@ func (s *ServerService) GetDashboardLogsFiltered(count, level, source, query, ex
                     warnings = append(warnings, kind+": журнал не является обычным файлом")
                     continue
                 }
+                // Empty or inactive protocol directories must not exhaust the
+                // journal cap and hide logs from active protocols sorted later.
+                if seen >= 64 { warnings = append(warnings, "protocol: показаны первые 64 журнала"); break }
+                seen++
                 lines, err := tail.ReadTailLines(path, scanLimit, tail.DefaultTailBytes)
                 if err != nil {
                     warnings = append(warnings, fmt.Sprintf("%s: не удалось прочитать журнал: %v", kind, err))
