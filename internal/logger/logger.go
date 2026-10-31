@@ -287,8 +287,11 @@ func getFileLogs(c int, logLevel logging.Level) []string {
 			if err == nil && entryLevel > logLevel {
 				continue
 			}
-			output = append(output, line)
 		}
+		// Raw panic output and imported third-party diagnostics may be only
+		// one or two words long. Do not silently discard them just because
+		// they lack our normal timestamp + severity prefix.
+		output = append(output, line)
 	}
 	return output
 }
