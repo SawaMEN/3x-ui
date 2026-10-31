@@ -942,8 +942,8 @@ func (s *ServerService) GetLogs(count string, level string, syslog string) []str
 		ctx, cancel := context.WithTimeout(context.Background(), syslogTimeout)
 		defer cancel()
 		cmd := exec.CommandContext(ctx, "journalctl", "-u", "x-ui", "--no-pager", "-n", strconv.Itoa(countInt), "-p", level)
-		var out bytes.Buffer
-		cmd.Stdout = &out
+		out := tail.NewRecentOutputBuffer(int(tail.DefaultTailBytes))
+		cmd.Stdout = out
 		err = cmd.Run()
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			return []string{"journalctl did not answer in time. Try a smaller line count or a less strict level."}
@@ -953,7 +953,7 @@ func (s *ServerService) GetLogs(count string, level string, syslog string) []str
 		}
 		// journalctl emits oldest-first, while the panel's file and buffer
 		// viewers return newest-first. Do not expose a trailing empty line.
-		output := strings.TrimRight(out.String(), "\r\n")
+		output := strings.TrimRight(string(out.CompleteBytes()), "\r\n")
 		if output == "" {
 			return []string{}
 		}
