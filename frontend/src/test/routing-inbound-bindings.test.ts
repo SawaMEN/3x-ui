@@ -16,15 +16,22 @@ describe('Xray inbound to outbound routing', () => {
     expect(rules).toHaveLength(2);
   });
   it('updates and removes only one managed inbound route', () => {
-    const original = setInboundRouteTarget(setInboundRouteTarget(rules, 'a', 'warp'), 'b', 'vetroff');
+    const original = setInboundRouteTarget(
+      setInboundRouteTarget(rules, 'a', 'warp'),
+      'b',
+      'vetroff',
+    );
     const changed = setInboundRouteTarget(original, 'a', 'direct');
     expect(inboundRouteTarget(changed, 'a')).toBe('direct');
     expect(inboundRouteTarget(changed, 'b')).toBe('vetroff');
-    expect(setInboundRouteTarget(changed, 'a', '').map((r) => r.outboundTag))
-      .toEqual(['blocked', 'vetroff', 'direct']);
+    expect(setInboundRouteTarget(changed, 'a', '').map((r) => r.outboundTag)).toEqual([
+      'blocked',
+      'vetroff',
+      'direct',
+    ]);
   });
   it('appends fallback when no generic catch-all exists', () => {
     const next = setInboundRouteTarget([rules[0]], 'a', 'warp');
-    expect(next[1]).toMatchObject({inboundTag: ['a'], outboundTag: 'warp'});
+    expect(next[1]).toMatchObject({ inboundTag: ['a'], outboundTag: 'warp' });
   });
 });
