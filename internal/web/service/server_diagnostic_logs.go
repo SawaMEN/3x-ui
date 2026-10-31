@@ -56,11 +56,23 @@ func diagnosticLevel(line string) string {
     if strings.HasPrefix(rawPrefix, "panic:") || strings.HasPrefix(rawPrefix, "runtime: panic:") {
         return "ERROR"
     }
-    // Restrict detection to the log prefix, not a URL or message discussing an error.
-    prefix := line
+    // Only treat severity words as levels when they occur in a log header.
+    // Otherwise unstructured payloads such as "stack trace" become DEBUG,
+    // and ERROR-only filtering can accidentally include unrelated messages.
+    prefix := strings.TrimSpace(line)
     if len(prefix) > 115 { prefix = prefix[:115] }
-    match := diagnosticSeverity.FindStringSubmatch(prefix)
-    if len(match) < 2 {
+    indices := diagnosticSeverity.FindStringSubmatchIndex(prefix)
+    if indices != nil && indices[0] > 0 {
+        before := strings.TrimSpace(prefix[:indices[0]])
+        timestampHead := strings.TrimLeft(before, "[(")
+        plain := diagnosticTimestamp.FindStringIndex(timestampHead)
+        iso := diagnosticISOTime.FindStringIndex(timestampHead)
+        timestamped := (plain != nil && plain[0] == 0) || (iso != nil && iso[0] == 0)
+        if before != "[" && !strings.HasSuffix(before, ":") && !timestamped {
+            indices = nil
+        }
+    }
+    if indices == nil {
         // Many third-party processes and systemd units omit an explicit
         // severity token. Recognize common failure messages so ERROR-only
         // views do not silently discard TLS handshake failures and panics.
@@ -77,7 +89,7 @@ func diagnosticLevel(line string) string {
         }
         return "UNKNOWN"
     }
-    switch strings.ToUpper(match[1]) {
+    switch strings.ToUpper(prefix[indices[2]:indices[3]]) {
     case "FATAL", "CRITICAL": return "FATAL"
     case "ERR", "ERROR": return "ERROR"
     case "WARNING", "WARN": return "WARNING"
