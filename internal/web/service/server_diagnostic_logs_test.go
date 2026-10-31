@@ -173,3 +173,39 @@ func TestDiagnosticProtocolSourceCountsDirectoriesNotFiles(t *testing.T) {
 		t.Fatalf("a single protocol directory must not trigger a 64-directory warning: %+v", out.Warnings)
 	}
 }
+
+func TestDiagnosticTimePreservesExplicitTimezone(t *testing.T) {
+	cases := []struct {
+		raw  string
+		want string
+	}{
+		{"2026-11-01T12:00:00Z panel error", "2026-11-01T12:00:00Z"},
+		{"2026-11-01T13:00:00+02:00 protocol error", "2026-11-01T11:00:00Z"},
+		{"2026-11-01T13:00:00.345+0200 journal error", "2026-11-01T11:00:00.345Z"},
+		{"2026-11-01T13:00:00.123456789+02:00 core error", "2026-11-01T11:00:00.123456789Z"},
+	}
+	for _, tc := range cases {
+		got := diagnosticTime(tc.raw)
+		if got.IsZero() || got.UTC().Format(time.RFC3339Nano) != tc.want {
+			t.Errorf("diagnosticTime(%q) = %v; want %s", tc.raw, got, tc.want)
+		}
+	}
+}
+
+func TestDiagnosticProtocolLogsSortedAcrossTimezones(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XUI_BIN_FOLDER", dir)
+	logDir := filepath.Join(dir, "protocol-servers", "test-zone")
+	if err := os.MkdirAll(logDir, 0o700); err != nil { t.Fatal(err) }
+	lines := []string{
+		"2026-11-01T12:00:00Z INFO - zone-order-newer",
+		"2026-11-01T13:00:00+02:00 INFO - zone-order-older",
+	}
+	if err := os.WriteFile(filepath.Join(logDir, "server.log"), []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got := (&ServerService{}).GetDashboardLogs("10", "debug", "protocol", "zone-order")
+	if len(got.Entries) != 2 || got.Entries[0].Raw != lines[0] || got.Entries[1].Raw != lines[1] {
+		t.Fatalf("logs sorted by wall clock instead of absolute timestamp: %+v", got)
+	}
+}
