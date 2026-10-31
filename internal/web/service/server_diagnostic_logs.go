@@ -35,6 +35,13 @@ type DashboardLogs struct {
     Warnings []string `json:"warnings"`
 }
 
+// Keep the parsed instant next to its display record so sorting a large
+// multi-source log result does not parse timestamps in every comparison.
+type sortableDashboardLog struct {
+    entry DashboardLog
+    stamp time.Time
+}
+
 const dashboardLogLimit = 2000
 
 var diagnosticSeverity = regexp.MustCompile(`(?i)\b(FATAL|CRITICAL|ERROR|ERR|WARNING|WARN|NOTICE|INFO|DEBUG|TRACE)\b`)
@@ -143,7 +150,7 @@ func (s *ServerService) GetDashboardLogsFiltered(count, level, source, query, ex
     // Fetch more than the final count for each source so filtering does not
     // hide an older matching error behind recent INFO events.
     scanLimit := dashboardLogLimit
-    entries := make([]DashboardLog, 0, limit)
+    entries := make([]sortableDashboardLog, 0, limit)
     warnings := make([]string, 0, 3)
     appendLines := func(kind string, lines []string) {
         for _, raw := range lines {
@@ -158,8 +165,8 @@ func (s *ServerService) GetDashboardLogsFiltered(count, level, source, query, ex
             }
             stamp := diagnosticTime(raw)
             item := DashboardLog{Source: kind, Level: severity, Raw: raw}
-            if !stamp.IsZero() { item.Time = stamp.Format(time.RFC3339) }
-            entries = append(entries, item)
+            if !stamp.IsZero() { item.Time = stamp.Format(time.RFC3339Nano) }
+            entries = append(entries, sortableDashboardLog{entry: item, stamp: stamp})
         }
     }
     readFile := func(kind, path string) {
@@ -283,12 +290,13 @@ func (s *ServerService) GetDashboardLogsFiltered(count, level, source, query, ex
     // Sources have independently timestamped records. Keep most recent
     // entries first while retaining relative order for equal/unknown stamps.
     sort.SliceStable(entries, func(i, j int) bool {
-        a, ea := time.Parse(time.RFC3339, entries[i].Time)
-        b, eb := time.Parse(time.RFC3339, entries[j].Time)
-        if ea != nil { return false }
-        if eb != nil { return true }
+        a, b := entries[i].stamp, entries[j].stamp
+        if a.IsZero() { return false }
+        if b.IsZero() { return true }
         return a.After(b)
     })
     if len(entries) > limit { entries = entries[:limit] }
-    return DashboardLogs{Entries: entries, Warnings: warnings}
+    result := make([]DashboardLog, len(entries))
+    for i := range entries { result[i] = entries[i].entry }
+    return DashboardLogs{Entries: result, Warnings: warnings}
 }
