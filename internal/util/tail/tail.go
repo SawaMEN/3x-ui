@@ -80,7 +80,12 @@ func ReadTailLines(path string, maxLines int, maxBytes int64) ([]string, error) 
 		remaining -= readSize
 	}
 
-	if len(carry) > 0 && (maxLines <= 0 || len(lines) < maxLines) {
+	// When the byte budget ends in the middle of a line, carry contains
+	// only a truncated prefix. Return complete records only: otherwise the
+	// dashboard can present an incomplete error or panic as a real log entry.
+	// A line without a trailing newline is still valid when we reached the
+	// beginning of the file.
+	if end == 0 && len(carry) > 0 && (maxLines <= 0 || len(lines) < maxLines) {
 		line := bytes.TrimSuffix(carry, []byte{'\r'})
 		lines = append(lines, string(line))
 	}
