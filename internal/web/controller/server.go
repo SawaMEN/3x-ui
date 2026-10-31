@@ -520,6 +520,15 @@ func (a *ServerController) restartXrayService(c *gin.Context) {
 
 // getLogs retrieves the application logs based on count, level, and syslog filters.
 func (a *ServerController) getLogs(c *gin.Context) {
+	// Opt-in structured diagnostics; keep the legacy []string response for
+	// existing clients and third-party API users.
+	if c.PostForm("format") == "structured" {
+		logs := a.serverService.GetDashboardLogsFiltered(
+			c.Param("count"), c.PostForm("level"), c.PostForm("source"),
+			c.PostForm("query"), c.PostForm("exactLevel"))
+		jsonObj(c, logs, nil)
+		return
+	}
 	logs := a.serverService.GetLogs(c.Param("count"), c.PostForm("level"), c.PostForm("syslog"))
 	jsonObj(c, logs, nil)
 }

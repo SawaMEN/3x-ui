@@ -170,3 +170,41 @@ html[data-theme='ultra-dark'] .log-container {
 .logmodal-mobile .ant-modal-body {
   padding: 12px;
 }
+
+/* Structured diagnostics show every raw log message without discarding
+   tracebacks, source identifiers or unknown formats. */
+.diagnostic-summary {
+  display: block;
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+.diagnostic-warnings {
+  margin-top: 10px;
+}
+
+.diagnostic-line {
+  padding: 7px 0;
+  border-bottom: 1px solid var(--log-divider);
+}
+
+.diagnostic-meta {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 3px;
+}
+
+.diagnostic-meta .ant-tag {
+  margin-inline-end: 0;
+  font-size: 11px;
+}
+
+.diagnostic-raw {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+  font-size: 12px;
+  line-height: 1.6;
+}

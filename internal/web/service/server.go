@@ -1,7 +1,6 @@
 package service
 
 import (
-	"bufio"
 	"bytes"
 	"cmp"
 	"context"
@@ -53,6 +52,7 @@ import (
 	"github.com/SawaMEN/3x-ui/v3/internal/database/model"
 	"github.com/SawaMEN/3x-ui/v3/internal/hiddify"
 	"github.com/SawaMEN/3x-ui/v3/internal/logger"
+	"github.com/SawaMEN/3x-ui/v3/internal/util/tail"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/common"
 	"github.com/SawaMEN/3x-ui/v3/internal/util/netsafe"
 	systemswap "github.com/SawaMEN/3x-ui/v3/internal/util/swap"
@@ -1152,66 +1152,49 @@ func (s *ServerService) GetXrayLogs(
 		Blocked
 		Proxied
 	)
-
-	countInt, _ := strconv.Atoi(count)
-	var entries []LogEntry
+	countInt, err := strconv.Atoi(count)
+	if err != nil || countInt < 1 {
+		countInt = 100
+	}
+	countInt = min(countInt, 2000)
 
 	pathToAccessLog, err := xray.GetAccessLogPath()
-	if err != nil {
+	if err != nil || pathToAccessLog == "" || pathToAccessLog == "none" {
 		return nil
 	}
-
-	file, err := os.Open(pathToAccessLog)
+	// Newest-first tailing is bounded even for multi-GB access logs, and unlike
+	// bufio.Scanner it accepts large TLS/JSON diagnostic lines without dropping
+	// the *entire* result on a 64 KiB token limit.
+	lines, err := tail.ReadTailLines(pathToAccessLog, 0, tail.DefaultTailBytes)
 	if err != nil {
+		logger.Warningf("Cannot read Xray access log %s: %v", pathToAccessLog, err)
 		return nil
 	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-
+	entries := make([]LogEntry, 0, min(countInt, len(lines)))
+	for _, raw := range lines {
+		line := strings.TrimSpace(raw)
 		if line == "" || strings.Contains(line, "api -> api") {
-			// skipping empty lines and api calls
 			continue
 		}
-
-		if filter != "" && !strings.Contains(line, filter) {
-			// applying filter if it's not empty
+		if filter != "" && !strings.Contains(strings.ToLower(line), strings.ToLower(filter)) {
 			continue
 		}
-
 		entry := parseAccessLogFields(line)
-
 		if logEntryContains(line, freedoms) {
-			if showDirect == "false" {
-				continue
-			}
+			if showDirect == "false" { continue }
 			entry.Event = Direct
 		} else if logEntryContains(line, blackholes) {
-			if showBlocked == "false" {
-				continue
-			}
+			if showBlocked == "false" { continue }
 			entry.Event = Blocked
 		} else {
-			if showProxy == "false" {
-				continue
-			}
+			if showProxy == "false" { continue }
 			entry.Event = Proxied
 		}
-
 		entries = append(entries, entry)
+		if len(entries) >= countInt { break }
 	}
-
-	if err := scanner.Err(); err != nil {
-		return nil
-	}
-
-	if len(entries) > countInt {
-		entries = entries[len(entries)-countInt:]
-	}
-
+	// The access-log modal historically expects chronological order.
+	slices.Reverse(entries)
 	return entries
 }
 
