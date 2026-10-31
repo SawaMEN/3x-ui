@@ -139,6 +139,8 @@
     "singBox": "Core settings"
   },
   "pages": {
+    "panelRecovery": {"title":"Panel page could not be displayed","message":"The web interface encountered an error. Your VPN service may still be running normally. Reload the page or return to the dashboard.","reload":"Reload page","home":"Dashboard","details":"Technical details"},
+    
     "coreSelection": {
       "missing": "Not installed",
       "defaultTitle": "Standard core",
@@ -654,6 +656,7 @@
         "addCustomOption": "Add custom option",
         "serverNameIndication": "Server Name Indication",
         "cipherSuites": "Cipher Suites",
+        "legacyCipherSuites": "Legacy ciphers (weaker security; explicit use only)",
         "autoOption": "Auto",
         "minMaxVersion": "Min/Max Version",
         "rejectUnknownSni": "Reject Unknown SNI",
@@ -2974,6 +2977,10 @@
       },
       "defaultOutbound": "Default Outbound",
       "defaultOutboundDesc": "Traffic that does not match any routing rule uses this outbound (Xray uses the first outbound in the list).",
+      "inboundOutboundTitle": "Inbound to outbound routing",
+      "inboundOutboundDescription": "Assign a separate outbound to each inbound. Earlier domain, IP and blocking rules still take priority. Clear the selection to use normal routing.",
+      "inboundOutboundDefault": "Default routing",
+      "inboundOutboundFor": "Outbound for {{tag}}",
       "routingPreset": "Routing preset",
       "saveRoutingPreset": "Save routing preset",
       "routingPresetName": "Preset name",

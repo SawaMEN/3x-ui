@@ -20,6 +20,7 @@ import { isBalancerLoopbackTag } from '../balancers/balancer-loopback';
 import { HttpUtil } from '@/utils';
 import AdBlockTab from '@/pages/adblock/AdBlockTab';
 import RoutingBasic from './RoutingBasic';
+import QuickRoutingPanel from './QuickRoutingPanel';
 import RoutingCatalogTab from './RoutingCatalogTab';
 import RouteTester from './RouteTester';
 import RuleFormModal from './RuleFormModal';
@@ -56,9 +57,11 @@ export default function RoutingTab({
   const navigate = useNavigate();
   const searchParams = new URLSearchParams(location.search);
   const requestedTab = searchParams.get('routingTab');
-  const activeTab = ['basic', 'rules', 'catalog', 'tester', 'adblock'].includes(requestedTab || '')
+  const activeTab = ['quick', 'basic', 'rules', 'catalog', 'tester', 'adblock'].includes(
+    requestedTab || '',
+  )
     ? requestedTab!
-    : 'basic';
+    : 'quick';
   const [modal, modalContextHolder] = Modal.useModal();
   const [ruleModalOpen, setRuleModalOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<RoutingRule | null>(null);
@@ -439,12 +442,32 @@ export default function RoutingTab({
         }}
         items={[
           {
+            key: 'quick',
+            label: catTabLabel(<ControlOutlined />, 'Быстрые маршруты', isMobile),
+            children: (
+              <QuickRoutingPanel
+                engine="xray"
+                rules={rules as Record<string, unknown>[]}
+                inboundTags={inboundTagOptions}
+                outboundTags={outboundTagOptions}
+                onChange={(nextRules) =>
+                  mutate((tt) => {
+                    if (!tt.routing) tt.routing = { rules: [] };
+                    tt.routing.rules = nextRules as RuleObject[];
+                  })
+                }
+              />
+            ),
+          },
+          {
             key: 'basic',
             label: catTabLabel(<ControlOutlined />, t('pages.xray.basicRouting'), isMobile),
             children: (
               <RoutingBasic
                 templateSettings={templateSettings}
                 setTemplateSettings={setTemplateSettings}
+                inboundTags={inboundTagOptions}
+                outboundTags={outboundTagOptions}
               />
             ),
           },

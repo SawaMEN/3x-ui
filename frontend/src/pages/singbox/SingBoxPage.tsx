@@ -49,6 +49,7 @@ import { useTheme } from '@/hooks/useTheme';
 import './SingBoxPage.css';
 import DnsWorkspace from './DnsWorkspace';
 import NativeRoutingBasic from './NativeRoutingBasic';
+import QuickRoutingPanel from '@/pages/xray/routing/QuickRoutingPanel';
 import { basicRuleTitle } from './native-routing-basic';
 import { putConnection, removeConnection } from './config-references';
 import { setDefaultDomainResolver } from './simple-settings';
@@ -1714,7 +1715,12 @@ export default function SingBoxPage() {
             rowKey={(row) => String(row.__index)}
             dataSource={rules
               .map((rule, index): JsonObject => ({ ...rule, __index: index }))
-              .filter((rule) => !asString(rule.comment).startsWith('panel-basic:'))
+              .filter(
+                (rule) =>
+                  !['panel-basic:', 'panel-inbound:'].some((prefix) =>
+                    asString(rule.comment).startsWith(prefix),
+                  ),
+              )
               .filter((rule) =>
                 [routeRuleSummary(rule), rule.outbound, rule.action, rule.comment]
                   .join(' ')
@@ -2147,17 +2153,58 @@ export default function SingBoxPage() {
       case 'routing':
         return (
           <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-            <Card className="singbox-item-card">
-              <NativeRoutingBasic
-                config={config}
-                onChange={setConfig}
-                subscriptionTags={snapshot?.subscriptionTags || []}
-              />
-            </Card>
-            {renderRoute()}
+            <QuickRoutingPanel
+              engine="sing-box"
+              rules={asObjectArray(asObject(config.route).rules)}
+              inboundTags={Array.from(
+                new Set(
+                  [
+                    ...asObjectArray(config.inbounds).map((row) => asString(row.tag)),
+                    ...(snapshot?.inboundTags || []),
+                  ].filter(Boolean),
+                ),
+              )}
+              outboundTags={Array.from(
+                new Set(
+                  [
+                    ...asObjectArray(config.outbounds).map((row) => asString(row.tag)),
+                    ...asObjectArray(config.endpoints).map((row) => asString(row.tag)),
+                    ...(snapshot?.subscriptionTags || []),
+                  ].filter(Boolean),
+                ),
+              )}
+              onChange={(nextRules) =>
+                setConfig((current) => ({
+                  ...current,
+                  route: { ...asObject(current.route), rules: nextRules },
+                }))
+              }
+            />
             <Collapse
               className="singbox-advanced-groups"
               items={[
+                {
+                  key: 'basic',
+                  label: 'Базовые правила: блокировки, прямые подключения и BitTorrent',
+                  children: (
+                    <NativeRoutingBasic
+                      config={config}
+                      onChange={setConfig}
+                      subscriptionTags={snapshot?.subscriptionTags || []}
+                      inboundTags={snapshot?.inboundTags || []}
+                    />
+                  ),
+                },
+              ]}
+            />
+            <Collapse
+              className="singbox-advanced-groups"
+              items={[
+                {
+                  key: 'custom-rules',
+                  label: 'Расширенные правила и порядок выполнения',
+                  children: renderRoute(),
+                },
                 {
                   key: 'catalog',
                   label: 'Каталог готовых списков',
