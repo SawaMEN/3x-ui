@@ -2183,10 +2183,14 @@ export default function SingBoxPage() {
                 },
               ]}
             />
-            {renderRoute()}
             <Collapse
               className="singbox-advanced-groups"
               items={[
+                {
+                  key: 'custom-rules',
+                  label: 'Расширенные правила и порядок выполнения',
+                  children: renderRoute(),
+                },
                 {
                   key: 'catalog',
                   label: 'Каталог готовых списков',
