@@ -3,6 +3,8 @@ package externalvpn
 import (
 	"encoding/base64"
 	"encoding/json"
+	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -68,7 +70,14 @@ func TestVetroffManagedOutboundSidecarWiring(t *testing.T) {
 	}
 	// The stub records CLI arguments and stays alive; the actual Vetroff
 	// protocol handshake is tested upstream, not simulated here.
-	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$PWD/argv.txt\"\nexec sleep 30\n"
+	// Run a minimal SOCKS5 test helper as the sidecar so apply verifies the
+	// listener handshake rather than only checking that a process exists.
+	binary, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("XUI_TEST_VETROFF_BINARY", binary)
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$PWD/argv.txt\"\nlisten=''\nwhile [ $# -gt 0 ]; do\n  if [ \"$1\" = '--listen' ]; then shift; listen=\"$1\"; fi\n  shift\ndone\nexport XUI_TEST_VETROFF_LISTEN=\"$listen\"\nexec \"$XUI_TEST_VETROFF_BINARY\" -test.run=^TestVetroffFakeSocksSidecar$\n"
 	if err := os.WriteFile(filepath.Join(bundle, "vetroff"), []byte(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -91,10 +100,14 @@ func TestVetroffManagedOutboundSidecarWiring(t *testing.T) {
 	if _, ok := outboundProcesses["vetroff-out"]; ok {
 		t.Fatal("config preview started a sidecar")
 	}
-	bridge, err := EnsureOutbound(raw)
+	finish, err := ApplyOutbounds([]map[string]any{raw})
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := finish(true); err != nil {
+		t.Fatal(err)
+	}
+	bridge := planned
 	if !OutboundsApplied([]map[string]any{raw}) {
 		t.Fatal("Vetroff outbound sidecar not tracked")
 	}
@@ -152,5 +165,34 @@ func TestVetroffManagedOutboundSidecarWiring(t *testing.T) {
 	}
 	if OutboundsApplied([]map[string]any{raw}) {
 		t.Fatal("removed client incorrectly reported as applied")
+	}
+}
+
+func TestVetroffFakeSocksSidecar(t *testing.T) {
+	address := os.Getenv("XUI_TEST_VETROFF_LISTEN")
+	if address == "" {
+		return
+	}
+	listener, err := net.Listen("tcp", address)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	for {
+		client, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		go func(conn net.Conn) {
+			defer conn.Close()
+			_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
+			hello := make([]byte, 3)
+			if _, err := io.ReadFull(conn, hello); err != nil {
+				return
+			}
+			if string(hello) == string([]byte{5, 1, 0}) {
+				_, _ = conn.Write([]byte{5, 0})
+			}
+		}(client)
 	}
 }
