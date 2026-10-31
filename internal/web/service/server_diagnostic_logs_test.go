@@ -86,3 +86,53 @@ func TestDiagnosticClassifiesUnlabeledCoreFailures(t *testing.T) {
         t.Fatalf("unlabeled success = %q, want UNKNOWN", got)
     }
 }
+
+func TestDiagnosticExactSeverityFiltersDoNotIncludeOtherLevels(t *testing.T) {
+    dir := t.TempDir()
+    t.Setenv("XUI_LOG_FOLDER", dir)
+    lines := []string{
+        "2026/11/01 11:00:01 INFO - exact-filter-unique normal operation",
+        "2026/11/01 11:00:02 WARNING - exact-filter-unique retrying",
+        "2026/11/01 11:00:03 ERROR - exact-filter-unique certificate failed",
+        "2026/11/01 11:00:04 FATAL - exact-filter-unique process crashed",
+        "2026/11/01 11:00:05 NOTICE - exact-filter-unique state changed",
+        "2026/11/01 11:00:06 DEBUG - exact-filter-unique detail",
+        "2026/11/01 11:00:07 unclassified exact-filter-unique message",
+    }
+    if err := os.WriteFile(filepath.Join(dir, logger.LogFileName), []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
+        t.Fatal(err)
+    }
+    srv := &ServerService{}
+    for _, tc := range []struct {
+        exact string
+        expected int
+        wantLevel string
+    }{
+        {"ERROR", 1, "ERROR"},
+        {"WARNING", 1, "WARNING"},
+        {"FATAL", 1, "FATAL"},
+        {"INFO", 1, "INFO"},
+        {"NOTICE", 1, "NOTICE"},
+        {"DEBUG", 1, "DEBUG"},
+        {"UNKNOWN", 1, "UNKNOWN"},
+        {"all", 7, ""},
+    } {
+        t.Run(tc.exact, func(t *testing.T) {
+            got := srv.GetDashboardLogsFiltered("200", "debug", "panel", "exact-filter-unique", tc.exact)
+            if len(got.Entries) != tc.expected {
+                t.Fatalf("exact=%q returned %d entries; want %d: %+v", tc.exact, len(got.Entries), tc.expected, got)
+            }
+            for _, entry := range got.Entries {
+                if tc.wantLevel != "" && entry.Level != tc.wantLevel {
+                    t.Fatalf("exact=%q returned unexpected level %q", tc.exact, entry.Level)
+                }
+            }
+        })
+    }
+    // Legacy threshold behavior stays unchanged for API consumers without
+    // exactLevel, and specifically includes critical, error, warning levels.
+    legacy := srv.GetDashboardLogs("200", "warning", "panel", "exact-filter-unique")
+    if len(legacy.Entries) != 3 {
+        t.Fatalf("legacy warning threshold returned %d records; want 3", len(legacy.Entries))
+    }
+}
