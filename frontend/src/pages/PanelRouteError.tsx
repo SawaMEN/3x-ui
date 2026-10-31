@@ -19,7 +19,7 @@ export default function PanelRouteError() {
       <Result
         status="error"
         title={t('pages.panelRecovery.title')}
-        subTitle={t('pages.panelRecovery.description')}
+        subTitle={t('pages.panelRecovery.message')}
         extra={[
           <Button key="reload" type="primary" onClick={() => window.location.reload()}>
             {t('pages.panelRecovery.reload')}
