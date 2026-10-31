@@ -310,6 +310,7 @@ func (s *ServerService) GetDashboardLogsFiltered(count, level, source, query, ex
                 "--lines="+strconv.Itoa(scanLimit), "-p", "debug",
                 "-u", "x-ui.service", "-u", "telemt.service", "-u", "x-ui-oxidns.service",
                 "-u", "x-ui-vk-turn-proxy.service")
+            cmd.WaitDelay = syslogWaitDelay
             output := tail.NewRecentOutputBuffer(int(tail.DefaultTailBytes))
             cmd.Stdout = output
             err := cmd.Run()
