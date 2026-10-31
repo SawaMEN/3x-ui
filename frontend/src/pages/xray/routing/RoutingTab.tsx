@@ -445,6 +445,8 @@ export default function RoutingTab({
               <RoutingBasic
                 templateSettings={templateSettings}
                 setTemplateSettings={setTemplateSettings}
+                inboundTags={inboundTagOptions}
+                outboundTags={outboundTagOptions}
               />
             ),
           },

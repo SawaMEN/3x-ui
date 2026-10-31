@@ -103,39 +103,55 @@ func applyNativeShareOptions(out map[string]any, query url.Values) error {
 			continue
 		}
 		var decoded any
-		switch catalog[path] {
-		case "string":
-			decoded = value
-		case "boolean":
-			b, err := strconv.ParseBool(value)
-			if err != nil {
-				return fmt.Errorf("invalid boolean native option %s", path)
-			}
-			decoded = b
-		case "number":
-			n, err := strconv.ParseFloat(value, 64)
-			if err != nil {
-				return fmt.Errorf("invalid numeric native option %s", path)
-			}
-			decoded = n
-		case "array":
-			if strings.HasPrefix(value, "[") {
-				if json.Unmarshal([]byte(value), &decoded) != nil {
-					return fmt.Errorf("invalid array native option %s", path)
-				}
+		// Share links commonly use ech=<base64 ECHConfigList>, not a JSON
+		// object. Preserve structured JSON when supplied, but expand scalar
+		// ECH configurations into the kernel's native TLS object.
+		if path == "tls.ech" || strings.HasSuffix(path, ".tls.ech") {
+			var object map[string]any
+			if json.Unmarshal([]byte(value), &object) == nil && object != nil {
+				decoded = object
+			} else if enabled, err := strconv.ParseBool(value); err == nil {
+				decoded = map[string]any{"enabled": enabled}
+			} else if strings.HasPrefix(value, "{") || strings.HasPrefix(value, "[") {
+				return fmt.Errorf("native option %s requires a valid ECH object", path)
 			} else {
-				decoded = strings.Split(value, ",")
+				decoded = map[string]any{"enabled": true, "config": []string{value}}
 			}
-		case "json":
-			if json.Unmarshal([]byte(value), &decoded) != nil {
+		} else {
+			switch catalog[path] {
+			case "string":
 				decoded = value
-			}
-		default:
-			if !strings.Contains(path, ".") && !strings.HasPrefix(value, "{") && !strings.HasPrefix(value, "[") {
-				continue
-			}
-			if json.Unmarshal([]byte(value), &decoded) != nil {
-				return fmt.Errorf("native option %s requires JSON", path)
+			case "boolean":
+				b, err := strconv.ParseBool(value)
+				if err != nil {
+					return fmt.Errorf("invalid boolean native option %s", path)
+				}
+				decoded = b
+			case "number":
+				n, err := strconv.ParseFloat(value, 64)
+				if err != nil {
+					return fmt.Errorf("invalid numeric native option %s", path)
+				}
+				decoded = n
+			case "array":
+				if strings.HasPrefix(value, "[") {
+					if json.Unmarshal([]byte(value), &decoded) != nil {
+						return fmt.Errorf("invalid array native option %s", path)
+					}
+				} else {
+					decoded = strings.Split(value, ",")
+				}
+			case "json":
+				if json.Unmarshal([]byte(value), &decoded) != nil {
+					decoded = value
+				}
+			default:
+				if !strings.Contains(path, ".") && !strings.HasPrefix(value, "{") && !strings.HasPrefix(value, "[") {
+					continue
+				}
+				if json.Unmarshal([]byte(value), &decoded) != nil {
+					return fmt.Errorf("native option %s requires JSON", path)
+				}
 			}
 		}
 		target := out

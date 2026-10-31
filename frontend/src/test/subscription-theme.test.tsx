@@ -41,7 +41,7 @@ describe('subscription theme selection', () => {
       </ThemeProvider>,
     );
     expect(screen.getByTestId('panel-primary').textContent).toBe('#0071e3');
-    expect(screen.getByTestId('subscription-primary').textContent).toBe('#c9996e');
+    expect(screen.getByTestId('subscription-primary').textContent).toBe('#8ca8ff');
     expect(screen.getByTestId('panel-surface').classList.contains('xui')).toBe(true);
     expect(screen.getByTestId('subscription-surface').className).toContain(
       'subscription-underground',
