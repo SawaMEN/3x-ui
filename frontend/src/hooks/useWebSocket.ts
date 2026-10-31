@@ -14,14 +14,18 @@ export function useWebSocket(handlers: Record<string, Handler>) {
 
   useEffect(() => {
     const client = getSharedWebSocketClient();
-    const entries = eventNames ? eventNames.split('\u0000').map((event) => {
-      const handler = (payload: unknown) => latestHandlers.current[event]?.(payload);
-      client.on(event, handler);
-      return [event, handler] as const;
-    }) : [];
+    const entries = eventNames
+      ? eventNames.split('\u0000').map((event) => {
+          const handler = (payload: unknown) => latestHandlers.current[event]?.(payload);
+          client.on(event, handler);
+          return [event, handler] as const;
+        })
+      : [];
     client.connect();
     return () => {
-      for (const [event, handler] of entries) client.off(event, handler);
+      for (const [event, handler] of entries) {
+        client.off(event, handler);
+      }
     };
   }, [eventNames]);
 }
