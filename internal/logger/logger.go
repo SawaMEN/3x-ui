@@ -282,7 +282,12 @@ func getFileLogs(c int, logLevel logging.Level) []string {
 			continue
 		}
 		fields := strings.Fields(line)
-		if len(fields) >= 3 {
+		// Only panel-formatted records have "date time LEVEL - message".
+		// Unstructured crash output can mention DEBUG/INFO as its third word
+		// without being a log entry of that severity; never filter it as such.
+		if len(fields) >= 4 && len(fields[0]) == len("2006/01/02") &&
+			strings.Count(fields[0], "/") == 2 && strings.Count(fields[1], ":") == 2 &&
+			fields[3] == "-" {
 			entryLevel, err := logging.LogLevel(strings.ToLower(fields[2]))
 			if err == nil && entryLevel > logLevel {
 				continue
