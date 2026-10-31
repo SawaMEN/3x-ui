@@ -329,3 +329,15 @@ func TestDiagnosticProtocolDoesNotCountInactiveDirectories(t *testing.T) {
         t.Fatalf("one real journal must not hit the 64-journal cap: %+v", out.Warnings)
     }
 }
+
+func TestDiagnosticPanelWarnsWhenJournalPathIsDirectory(t *testing.T) {
+    dir := t.TempDir()
+    t.Setenv("XUI_LOG_FOLDER", dir)
+    if err := os.MkdirAll(filepath.Join(dir, logger.LogFileName), 0o700); err != nil {
+        t.Fatal(err)
+    }
+    out := (&ServerService{}).GetDashboardLogs("10", "debug", "panel", "missing-marker-for-directory")
+    if len(out.Warnings) != 1 || !strings.Contains(out.Warnings[0], "panel: путь журнала не является обычным файлом") {
+        t.Fatalf("invalid panel log path was silently presented as empty: %+v", out.Warnings)
+    }
+}
