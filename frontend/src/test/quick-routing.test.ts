@@ -146,6 +146,27 @@ describe('sing-box reject action', () => {
     expect(rule.rule).toMatchObject({ action: 'reject', inbound: ['in-a', 'in-b'] });
     expect(rule.rule.outbound).toBeUndefined();
   });
+  it('upsert into reject removes a previously configured native outbound', () => {
+    const first = compileQuickRoute(draft(), 'sing-box', OUTBOUNDS, INBOUNDS);
+    const reject = compileQuickRoute(draft({ target: '@reject' }), 'sing-box', OUTBOUNDS, INBOUNDS);
+    const updated = putQuickRoute([first.rule], reject, 'sing-box');
+    expect(updated.replaced).toBe(true);
+    expect(updated.rules).toHaveLength(1);
+    expect(updated.rules[0].action).toBe('reject');
+    expect(updated.rules[0].outbound).toBeUndefined();
+  });
+  it('validates IPv6 addresses instead of accepting malformed literals', () => {
+    const good = compileQuickRoute(
+      draft({ match: 'ip', values: '2001:db8::/32' }),
+      'sing-box', OUTBOUNDS, INBOUNDS,
+    );
+    expect(good.rule.ip_cidr).toEqual(['2001:db8::/32']);
+    expect(() => compileQuickRoute(
+      draft({ match: 'ip', values: '2001:::bad/32' }),
+      'sing-box', OUTBOUNDS, INBOUNDS,
+    )).toThrow();
+  });
+
   it('does not invent a synthetic rejection destination in Xray', () => {
     expect(() => compileQuickRoute(draft({ target: '@reject' }), 'xray', OUTBOUNDS, INBOUNDS)).toThrow();
   });
