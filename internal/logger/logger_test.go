@@ -3,6 +3,7 @@ package logger
 import (
 	"fmt"
 	"os"
+	"reflect"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -76,4 +77,23 @@ func TestInitLoggerConcurrentWithLogging(t *testing.T) {
 	}
 	close(stop)
 	logging.Wait()
+}
+
+func TestGetFileLogsRetainsShortUnstructuredDiagnostics(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XUI_LOG_FOLDER", dir)
+	lines := []string{
+		"2026/11/01 12:00:00 DEBUG - discarded at error level",
+		"panic: SIGSEGV",
+		"goroutine",
+		"2026/11/01 12:00:01 ERROR - retained structured entry",
+	}
+	if err := os.WriteFile(filepath.Join(dir, logFileName), []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got := GetFileLogs(10, "error")
+	want := []string{lines[3], lines[2], lines[1]}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("short raw crash lines were lost or severity filter regressed: got %#v, want %#v", got, want)
+	}
 }
