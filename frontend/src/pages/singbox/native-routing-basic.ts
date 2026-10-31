@@ -36,5 +36,15 @@ export function setBasicRule(config: ConfigObject, id: string, fields: ConfigObj
 
 export function basicRuleTitle(comment: string): string {
   if (comment === 'panel-basic:torrent') return 'Блокировать BitTorrent';
+  if (comment.startsWith('panel-quick:')) {
+    const kind = comment.split(':')[1];
+    const labels: Record<string, string> = {
+      inbound: 'Быстрый маршрут · Входящие',
+      domain: 'Быстрый маршрут · Домены',
+      ip: 'Быстрый маршрут · IP / CIDR',
+      port: 'Быстрый маршрут · Порты',
+    };
+    return labels[kind] || 'Быстрый маршрут';
+  }
   return basicRouteFields.find((field) => comment === `panel-basic:${field.id}`)?.title || comment;
 }
