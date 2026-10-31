@@ -168,19 +168,18 @@ export default function QuickRoutingPanel({ engine, rules, inboundTags, outbound
           <Select
             aria-label="Входящие подключения для маршрута"
             mode="multiple"
-            showSearch
+            showSearch={{ optionFilterProp: 'label' }}
             allowClear
             className="quick-routing-select"
             placeholder={draft.match === 'inbound' ? 'Выберите одно или несколько входящих' : 'Любое входящее (необязательно)'}
             value={draft.inboundTags}
             onChange={(inboundTags) => setDraft((current) => ({ ...current, inboundTags }))}
             options={inTags.map((value) => ({ value, label: formatInboundTag(value, remarkByTag) }))}
-            optionFilterProp="label"
           />
 
           <Typography.Text className="quick-routing-field">3. Куда направлять</Typography.Text>
           <Select
-            showSearch
+            showSearch={{ optionFilterProp: 'label' }}
             allowClear
             className="quick-routing-select"
             aria-label="Исходящее подключение"
@@ -188,10 +187,9 @@ export default function QuickRoutingPanel({ engine, rules, inboundTags, outbound
             value={draft.target || undefined}
             onChange={(target) => setDraft((current) => ({ ...current, target: target || '' }))}
             options={targetOptions}
-            optionFilterProp="label"
           />
           <div className="quick-routing-flow-preview">
-            <Tag bordered={false}>{draft.match === 'inbound'
+            <Tag variant="filled">{draft.match === 'inbound'
               ? (draft.inboundTags.length ? draft.inboundTags.join(', ') : 'Входящий')
               : (draft.values.trim() || 'Условие')}</Tag>
             <ArrowRightOutlined aria-hidden="true" />
@@ -234,13 +232,12 @@ export default function QuickRoutingPanel({ engine, rules, inboundTags, outbound
                         <span>#{index + 1}</span>
                         <Select
                           size="small"
-                          showSearch
+                          showSearch={{ optionFilterProp: 'label' }}
                           aria-label={'Исходящее маршрута #' + (index + 1)}
                           value={rule.action === 'reject' && engine === 'sing-box' ? '@reject' : String(destination || '')}
                           style={{ minWidth: 105, flex: 1, maxWidth: 230 }}
                           options={targetOptions}
-                          optionFilterProp="label"
-                          onChange={(target) => onChange(setQuickRouteTarget(rules, marker, target, engine, tags))}
+                                        onChange={(target) => onChange(setQuickRouteTarget(rules, marker, target, engine, tags))}
                         />
                         <Space size={5}>
                           <Switch
