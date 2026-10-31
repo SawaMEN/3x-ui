@@ -136,3 +136,40 @@ func TestDiagnosticExactSeverityFiltersDoNotIncludeOtherLevels(t *testing.T) {
         t.Fatalf("legacy warning threshold returned %d records; want 3", len(legacy.Entries))
     }
 }
+
+func TestDiagnosticPanelWarnsWhenPersistentLogIsUnavailable(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XUI_LOG_FOLDER", dir)
+
+	out := (&ServerService{}).GetDashboardLogs("10", "debug", "panel", "missing-panel-log-check")
+	if len(out.Warnings) != 1 || !strings.Contains(out.Warnings[0], "panel: файл журнала отсутствует") {
+		t.Fatalf("missing panel file must be reported, got %+v", out.Warnings)
+	}
+}
+
+func TestDiagnosticProtocolSourceCountsDirectoriesNotFiles(t *testing.T) {
+	binDir := t.TempDir()
+	t.Setenv("XUI_BIN_FOLDER", binDir)
+	root := filepath.Join(binDir, "protocol-servers")
+	if err := os.MkdirAll(filepath.Join(root, "zz-live"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 64; i++ {
+		path := filepath.Join(root, fmt.Sprintf("a-%02d.tmp", i))
+		if err := os.WriteFile(path, []byte("not a protocol directory"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	const raw = "2026/11/01 11:30:00 ERROR - audit-protocol-visibility-marker"
+	if err := os.WriteFile(filepath.Join(root, "zz-live", "server.log"), []byte(raw+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	out := (&ServerService{}).GetDashboardLogsFiltered("10", "debug", "protocol", "audit-protocol-visibility-marker", "ERROR")
+	if len(out.Entries) != 1 || out.Entries[0].Raw != raw || out.Entries[0].Source != "protocol/zz-live" {
+		t.Fatalf("unrelated files hid the active protocol log: %+v", out)
+	}
+	if len(out.Warnings) != 0 {
+		t.Fatalf("a single protocol directory must not trigger a 64-directory warning: %+v", out.Warnings)
+	}
+}

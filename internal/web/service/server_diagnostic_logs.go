@@ -181,6 +181,13 @@ func (s *ServerService) GetDashboardLogsFiltered(count, level, source, query, ex
     if source == "all" || source == "panel" {
         // Panel messages are not restricted to the in-memory buffer's 4096
         // entries and remain available across panel restarts.
+        if _, err := os.Stat(filepath.Join(config.GetLogFolder(), logger.LogFileName)); err != nil {
+            if errors.Is(err, os.ErrNotExist) {
+                warnings = append(warnings, "panel: файл журнала отсутствует (логирование может быть отключено)")
+            } else {
+                warnings = append(warnings, fmt.Sprintf("panel: не удалось проверить журнал: %v", err))
+            }
+        }
         lines := logger.GetFileLogs(scanLimit, "debug")
         // The file backend can have a stricter threshold than the in-memory
         // ring (e.g. INFO on disk but DEBUG messages in memory). Merge both
@@ -232,9 +239,11 @@ func (s *ServerService) GetDashboardLogsFiltered(count, level, source, query, ex
         root := filepath.Join(config.GetBinFolderPath(), "protocol-servers")
         dirs, err := os.ReadDir(root)
         if err == nil {
-            for idx, dir := range dirs {
-                if idx >= 64 { warnings = append(warnings, "protocol: показаны первые 64 каталога"); break }
+            seen := 0
+            for _, dir := range dirs {
                 if !dir.IsDir() { continue }
+                if seen >= 64 { warnings = append(warnings, "protocol: показаны первые 64 каталога"); break }
+                seen++
                 path := filepath.Join(root, dir.Name(), "server.log")
                 lines, err := tail.ReadTailLines(path, scanLimit, tail.DefaultTailBytes)
                 if err == nil { appendLines("protocol/"+dir.Name(), lines) }
