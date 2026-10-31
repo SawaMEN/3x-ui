@@ -139,6 +139,8 @@
     "singBox": "Core settings"
   },
   "pages": {
+    "panelRecovery": {"title":"Panel page could not be displayed","description":"The web interface encountered an error. Your VPN service may still be running normally. Reload the page or return to the dashboard.","reload":"Reload page","home":"Dashboard","details":"Technical details"},
+    
     "coreSelection": {
       "missing": "Not installed",
       "defaultTitle": "Standard core",
