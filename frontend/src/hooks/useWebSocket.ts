@@ -7,7 +7,9 @@ type Handler = (payload: unknown) => void;
 // use current props/state rather than the closures from the first render.
 export function useWebSocket(handlers: Record<string, Handler>) {
   const latestHandlers = useRef(handlers);
-  latestHandlers.current = handlers;
+  useEffect(() => {
+    latestHandlers.current = handlers;
+  }, [handlers]);
   const eventNames = Object.keys(handlers).sort().join('\u0000');
 
   useEffect(() => {
