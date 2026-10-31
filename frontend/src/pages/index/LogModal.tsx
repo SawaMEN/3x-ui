@@ -178,7 +178,7 @@ export default function LogModal({ open, onClose }: LogModalProps) {
           ? `Найдено: ${logs.length}. Доступны только записи, сохранённые настройками журналирования сервера.`
           : `Found: ${logs.length}. Availability depends on the server's logging and retention settings.`}
       </Typography.Text>
-      {data.warnings?.length > 0 && (
+      {(data.warnings?.length ?? 0) > 0 && (
         <Alert
           className="diagnostic-warnings"
           type="warning"
