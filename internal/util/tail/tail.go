@@ -60,7 +60,7 @@ func ReadTailLines(path string, maxLines int, maxBytes int64) ([]string, error) 
 
 		start := end - readSize
 		chunk := make([]byte, int(readSize))
-		if _, err := file.ReadAt(chunk, start); err != nil && err != io.EOF {
+		if err := readTailChunk(file, chunk, start); err != nil {
 			return nil, err
 		}
 
@@ -97,4 +97,18 @@ func ReadTailLines(path string, maxLines int, maxBytes int64) ([]string, error) 
 	}
 
 	return lines, nil
+}
+
+// readTailChunk must never accept a short read as a complete log chunk.
+// A rotating or concurrently truncated file can shrink after Stat; treating
+// io.EOF as success would append zero-filled bytes as counterfeit log content.
+func readTailChunk(reader io.ReaderAt, chunk []byte, offset int64) error {
+	n, err := reader.ReadAt(chunk, offset)
+	if n != len(chunk) {
+		if err != nil && err != io.EOF {
+			return err
+		}
+		return io.ErrUnexpectedEOF
+	}
+	return err
 }
