@@ -11,7 +11,7 @@ import { useInboundOptions } from '@/api/queries/useInboundOptions';
 import { buildRemarkByTag, formatInboundTag } from './helpers';
 import {
   compileQuickRoute, diagnoseRouting, isQuickRule, putQuickRoute,
-  removeQuickRoute, setQuickRouteEnabled,
+  removeQuickRoute, setQuickRouteEnabled, setQuickRouteTarget,
   type QuickDomainMode, type QuickMatch, type QuickRouteDraft,
   type RouteRecord, type RoutingEngine,
 } from './quick-routing';
@@ -232,7 +232,16 @@ export default function QuickRoutingPanel({ engine, rules, inboundTags, outbound
                     <div className="quick-routing-managed-item" key={marker + ':' + index}>
                       <div className="quick-routing-managed-title">
                         <span>#{index + 1}</span>
-                        <Tag color={destination === 'Блокировать' || destination === 'blocked' ? 'red' : 'blue'}>{String(destination || '—')}</Tag>
+                        <Select
+                          size="small"
+                          showSearch
+                          aria-label={'Исходящее маршрута #' + (index + 1)}
+                          value={rule.action === 'reject' && engine === 'sing-box' ? '@reject' : String(destination || '')}
+                          style={{ minWidth: 105, flex: 1, maxWidth: 230 }}
+                          options={targetOptions}
+                          optionFilterProp="label"
+                          onChange={(target) => onChange(setQuickRouteTarget(rules, marker, target, engine, tags))}
+                        />
                         <Space size={5}>
                           <Switch
                             size="small"
