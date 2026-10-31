@@ -116,16 +116,25 @@ func initFileBackend() logging.Backend {
 	}
 
 	logPath := filepath.Join(logDir, logFileName)
-	rotate := &lumberjack.Logger{
-		Filename:   logPath,
-		MaxSize:    maxLogFileMB,
-		MaxBackups: maxLogBackups,
-		MaxAge:     maxLogAgeDays,
-		LocalTime:  true,
-		Compress:   compressRotated,
-	}
 	fileRotateMu.Lock()
-	fileRotate = rotate
+	rotate := fileRotate
+	if rotate == nil || rotate.Filename != logPath {
+		// InitLogger can run repeatedly, including when a logging level is
+		// changed. Reusing the existing writer avoids leaking an open
+		// file descriptor on every reconfiguration.
+		if rotate != nil {
+			_ = rotate.Close()
+		}
+		rotate = &lumberjack.Logger{
+			Filename:   logPath,
+			MaxSize:    maxLogFileMB,
+			MaxBackups: maxLogBackups,
+			MaxAge:     maxLogAgeDays,
+			LocalTime:  true,
+			Compress:   compressRotated,
+		}
+		fileRotate = rotate
+	}
 	fileRotateMu.Unlock()
 
 	backend := logging.NewLogBackend(rotate, "", 0)
