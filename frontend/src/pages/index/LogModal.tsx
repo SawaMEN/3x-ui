@@ -29,12 +29,18 @@ const AUTO_UPDATE_INTERVAL = 5000;
 function levelColor(level: string): string {
   switch (level) {
     case 'FATAL':
-    case 'ERROR': return 'red';
-    case 'WARNING': return 'orange';
-    case 'NOTICE': return 'cyan';
-    case 'INFO': return 'green';
-    case 'DEBUG': return 'blue';
-    default: return 'default';
+    case 'ERROR':
+      return 'red';
+    case 'WARNING':
+      return 'orange';
+    case 'NOTICE':
+      return 'cyan';
+    case 'INFO':
+      return 'green';
+    case 'DEBUG':
+      return 'blue';
+    default:
+      return 'default';
   }
 }
 
@@ -66,7 +72,10 @@ export default function LogModal({ open, onClose }: LogModalProps) {
     [rows, source, severity, query],
   );
   const { data, loading, refresh } = useRefreshRequest(
-    open, load, EMPTY_DIAGNOSTICS, autoUpdate ? AUTO_UPDATE_INTERVAL : 0,
+    open,
+    load,
+    EMPTY_DIAGNOSTICS,
+    autoUpdate ? AUTO_UPDATE_INTERVAL : 0,
   );
   const logs = data.entries ?? [];
   const sources = [
@@ -130,7 +139,10 @@ export default function LogModal({ open, onClose }: LogModalProps) {
               size="small"
               style={{ width: 90 }}
               onChange={setRows}
-              options={['50', '100', '200', '500', '1000', '2000'].map((value) => ({ value, label: value }))}
+              options={['50', '100', '200', '500', '1000', '2000'].map((value) => ({
+                value,
+                label: value,
+              }))}
             />
             <Select
               aria-label={ru ? 'Точный уровень события' : 'Exact event severity'}
@@ -187,19 +199,35 @@ export default function LogModal({ open, onClose }: LogModalProps) {
           type="warning"
           showIcon
           message={ru ? 'Недоступные источники' : 'Unavailable sources'}
-          description={<div>{data.warnings.map((warning, index) => <div key={index}>{warning}</div>)}</div>}
+          description={
+            <div>
+              {data.warnings.map((warning, index) => (
+                <div key={index}>{warning}</div>
+              ))}
+            </div>
+          }
         />
       )}
-      <div className={`log-container ${isMobile ? 'log-container-mobile' : ''}`} role="log" aria-live="off">
+      <div
+        className={`log-container ${isMobile ? 'log-container-mobile' : ''}`}
+        role="log"
+        aria-live="off"
+      >
         {logs.length === 0 ? (
           <div className="log-empty">
-            {ru ? 'Нет записей по фильтрам. Проверьте источник и уровень журналирования.' : 'No matching records. Check the source and log level.'}
+            {ru
+              ? 'Нет записей по фильтрам. Проверьте источник и уровень журналирования.'
+              : 'No matching records. Check the source and log level.'}
           </div>
         ) : (
           logs.map((entry, idx) => (
             <div key={idx} className={isMobile ? 'log-card' : 'log-line diagnostic-line'}>
               <div className="diagnostic-meta">
-                {entry.time && <span className="log-stamp" title={entry.time}>{new Date(entry.time).toLocaleString()}</span>}
+                {entry.time && (
+                  <span className="log-stamp" title={entry.time}>
+                    {new Date(entry.time).toLocaleString()}
+                  </span>
+                )}
                 <Tag className="diagnostic-source">{entry.source}</Tag>
                 <Tag color={levelColor(entry.level)}>{entry.level}</Tag>
               </div>
