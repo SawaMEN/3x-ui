@@ -325,7 +325,9 @@ func (s *ServerService) GetDashboardLogsFiltered(count, level, source, query, ex
                     warnings = append(warnings, "journal: вывод ограничен последними 8 МиБ")
                 }
                 // journalctl writes oldest first. The UI contract is newest first.
-                if raw := bytes.TrimSpace(output.CompleteBytes()); len(raw) > 0 {
+                // Trim only trailing line terminators. TrimSpace would remove
+                // leading indentation from the oldest retained stack frame.
+                if raw := bytes.TrimRight(output.CompleteBytes(), "\r\n"); len(raw) > 0 {
                     lines := strings.Split(string(raw), "\n")
                     for i,j := 0,len(lines)-1; i<j; i,j=i+1,j-1 { lines[i],lines[j]=lines[j],lines[i] }
                     appendLines("journal", lines)
