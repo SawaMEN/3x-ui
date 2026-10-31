@@ -29,6 +29,11 @@ const ROUTE_MATCH_FIELDS = [
   'routingListId', 'routingListCategory', 'rule_set', 'attrs', 'process',
   'process_name', 'process_path', 'localIP', 'localPort', 'localOS', 'vlessRoute',
   'client', 'ip_version', 'invert', 'rules', 'mode', 'action',
+  'source_port_range', 'ip_is_private', 'source_ip_is_private', 'source_mac_address',
+  'process_path_regex', 'package_name', 'user_id', 'clash_mode',
+  'wifi_ssid', 'wifi_bssid', 'interface_address', 'default_interface_address',
+  'network_type', 'network_is_expensive', 'network_is_constrained', 'preferred_by',
+  'local_ip', 'source_ip_cidr', 'http_client',
 ] as const;
 
 function uniqueSorted(values: string[]): string[] {
@@ -49,13 +54,13 @@ function validIP(value: string): boolean {
   const [host, cidr, extra] = value.split('/');
   if (!host || extra !== undefined) return false;
   if (host.includes(':')) {
-    // Restrict IPv6 to literal address characters, not zones or hostnames.
-    // A compressed literal has at least two colons. A fuller address is
-    // validated by the core on save; the quick form never guesses a hostname.
-    if (!/^[0-9a-f:.]+$/i.test(host) || !host.includes('::') && host.split(':').length !== 8)
+    // URL's IPv6 host parser rejects malformed compressed IPv6 literals.
+    // It is available in the browser and Node test runtime.
+    try {
+      new URL('http://[' + host + ']/');
+    } catch {
       return false;
-    if (!/^([0-9a-f]{0,4}:){2,8}[0-9a-f]{0,4}$/i.test(host) && !host.includes('::'))
-      return false;
+    }
     return cidr === undefined || /^\d+$/.test(cidr) && +cidr <= 128;
   }
   const parts = host.split('.');
@@ -208,6 +213,31 @@ export function setQuickRouteEnabled(rules: RouteRecord[], marker: string, enabl
   if (!marker.startsWith(QUICK_PREFIX)) return rules;
   return rules.map((rule) => (engine === 'xray' ? rule.ruleTag : rule.comment) === marker
     ? { ...rule, enabled } : rule);
+}
+
+// Change the destination of an existing managed rule without rebuilding its
+// conditions, moving its priority, or modifying unrelated configuration.
+export function setQuickRouteTarget(
+  rules: RouteRecord[], marker: string, target: string,
+  engine: RoutingEngine, outbounds: string[],
+): RouteRecord[] {
+  if (!marker.startsWith(QUICK_PREFIX) || !target ||
+      (target !== '@reject' && !outbounds.includes(target)) ||
+      (engine === 'xray' && target === '@reject')) return rules;
+  return rules.map((rule) => {
+    const key = engine === 'xray' ? rule.ruleTag : rule.comment;
+    if (key !== marker) return rule;
+    if (engine === 'xray') return { ...rule, outboundTag: target };
+    const next = { ...rule };
+    if (target === '@reject') {
+      next.action = 'reject';
+      delete next.outbound;
+    } else {
+      next.action = 'route';
+      next.outbound = target;
+    }
+    return next;
+  });
 }
 
 export interface RoutingWarning { code: 'missing-target' | 'catch-all' | 'duplicate' | 'unconditional'; detail: string; }
