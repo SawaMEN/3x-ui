@@ -243,3 +243,13 @@ func TestDiagnosticPanelPreservesShortPanicMessage(t *testing.T) {
 		t.Fatalf("short panic entry lost from structured diagnostics: %+v", got)
 	}
 }
+
+func TestDiagnosticTimeIgnoresTimestampInsideMessage(t *testing.T) {
+	line := "2026/11/01 10:00:00 INFO - certificate renews at 2027-01-01T00:00:00Z"
+	got := diagnosticTime(line)
+	want, err := time.ParseInLocation("2006/01/02 15:04:05", "2026/11/01 10:00:00", time.Local)
+	if err != nil { t.Fatal(err) }
+	if !got.Equal(want) {
+		t.Fatalf("message date replaced the log timestamp: got %v, want %v", got, want)
+	}
+}
