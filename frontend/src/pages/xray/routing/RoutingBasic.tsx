@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, Select, Switch } from 'antd';
+import { inboundRouteTarget, setInboundRouteTarget } from './inbound-bindings';
 
 import { SettingListItem } from '@/components/ui';
 import type { XraySettingsValue, SetTemplate } from '@/hooks/useXraySetting';
@@ -24,9 +25,13 @@ import {
 interface RoutingBasicProps {
   templateSettings: XraySettingsValue | null;
   setTemplateSettings: SetTemplate;
+  inboundTags: string[];
+  outboundTags: string[];
 }
 
-export default function RoutingBasic({ templateSettings, setTemplateSettings }: RoutingBasicProps) {
+export default function RoutingBasic({
+  templateSettings, setTemplateSettings, inboundTags, outboundTags,
+}: RoutingBasicProps) {
   const { t } = useTranslation();
 
   const mutate = useCallback(
@@ -58,6 +63,14 @@ export default function RoutingBasic({ templateSettings, setTemplateSettings }: 
     return [...tags].map((value) => ({ label: value, value }));
   }, [templateSettings?.outbounds]);
 
+  const inboundOptions = useMemo(
+    () => [...new Set(inboundTags.filter(Boolean))], [inboundTags],
+  );
+  const selectableOutbounds = useMemo(
+    () => [...new Set(outboundTags.filter(Boolean))].map((tag) => ({ label: tag, value: tag })),
+    [outboundTags],
+  );
+
   return (
     <>
       <Alert
@@ -80,6 +93,42 @@ export default function RoutingBasic({ templateSettings, setTemplateSettings }: 
           />
         }
       />
+
+      {inboundOptions.length > 0 && (
+        <section aria-label="Inbound outbound bindings" style={{ marginBottom: 24 }}>
+          <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 6 }}>
+            Привязка входящих к исходящим
+          </div>
+          <p style={{ opacity: 0.75, marginBottom: 12 }}>
+            Выберите выход для каждого входящего. Правила доменов, IP и блокировок,
+            расположенные выше этих назначений, сохраняют приоритет.
+            Пустой выбор использует обычную маршрутизацию.
+          </p>
+          {inboundOptions.map((tag) => (
+            <SettingListItem
+              key={tag}
+              title={tag}
+              paddings="small"
+              control={
+                <Select
+                  aria-label={`Исходящее для ${tag}`}
+                  allowClear
+                  placeholder="По умолчанию"
+                  style={{ width: '100%' }}
+                  value={inboundRouteTarget(templateSettings?.routing?.rules || [], tag)}
+                  options={selectableOutbounds}
+                  onChange={(value?: string) =>
+                    mutate((tt) => {
+                      if (!tt.routing) tt.routing = { rules: [] };
+                      tt.routing.rules = setInboundRouteTarget(tt.routing.rules || [], tag, value || '');
+                    })
+                  }
+                />
+              }
+            />
+          ))}
+        </section>
+      )}
 
       <SettingListItem
         title={t('pages.xray.Torrent')}
