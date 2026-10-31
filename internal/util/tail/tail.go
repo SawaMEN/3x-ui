@@ -39,7 +39,13 @@ func ReadTailLines(path string, maxLines int, maxBytes int64) ([]string, error) 
 		remaining = info.Size()
 	}
 
-	lines := make([]string, 0, min(maxLines, 256))
+	// Non-positive maxLines means unlimited. A negative value must not
+	// become a negative slice capacity (which would panic).
+	capacity := 256
+	if maxLines > 0 && maxLines < capacity {
+		capacity = maxLines
+	}
+	lines := make([]string, 0, capacity)
 	var carry []byte
 	end := info.Size()
 
