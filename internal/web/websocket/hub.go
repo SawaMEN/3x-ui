@@ -24,11 +24,11 @@ const (
 	MessageTypeClientStats  MessageType = "client_stats"
 	MessageTypeClients      MessageType = "clients"
 	MessageTypeInvalidate   MessageType = "invalidate"
-	maxMessageSize                      = 4 * 1024 * 1024 // 4MB; larger payloads fall back to REST invalidation.
+	maxMessageSize                      = 2 * 1024 * 1024 // 2 MiB; oversized state uses REST invalidation.
 
 	enqueueTimeout       = 100 * time.Millisecond
-	clientSendQueue      = 64  // Slow clients are evicted sooner to cap retained payloads.
-	hubBroadcastQueue    = 256 // Bounded burst buffer; REST invalidation handles oversized state pushes.
+	clientSendQueue      = 16 // Slow browsers must not retain dozens of multi-MiB snapshots.
+	hubBroadcastQueue    = 32 // Prevent burst fanout from retaining hundreds of MiB.
 	hubOpsQueue          = 32  // Small lifecycle backlog is enough for page/disconnect bursts.
 	minBroadcastInterval = 250 * time.Millisecond
 	hubRestartAttempts   = 3
