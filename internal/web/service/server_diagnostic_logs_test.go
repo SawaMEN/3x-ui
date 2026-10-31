@@ -70,3 +70,19 @@ func TestDiagnosticUnknownFormatsAreNotSilentlyDropped(t *testing.T) {
         t.Fatalf("wrong journal timestamp: %v", journalTime)
     }
 }
+
+func TestDiagnosticClassifiesUnlabeledCoreFailures(t *testing.T) {
+    for _, line := range []string{
+        "TLS handshake: invalid sudoku hint tuple",
+        "tls: bad certificate",
+        "Failed to start x-ui.service",
+        "panic: runtime error",
+    } {
+        if got := diagnosticLevel(line); got != "ERROR" {
+            t.Errorf("missing severity for %q: got %q", line, got)
+        }
+    }
+    if got := diagnosticLevel("Connection established"); got != "UNKNOWN" {
+        t.Fatalf("unlabeled success = %q, want UNKNOWN", got)
+    }
+}
