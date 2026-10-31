@@ -82,6 +82,24 @@ export const TLS_CIPHER_OPTION = Object.freeze({
   ECDHE_RSA_CHACHA20_POLY1305: 'TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256',
 });
 
+// Go's crypto/tls offers these legacy suites only when explicitly configured.
+// They are not part of the secure default set; retain them for interoperability
+// with legacy clients without silently enabling them.
+export const TLS_LEGACY_CIPHER_OPTION = Object.freeze({
+  RSA_RC4_128: 'TLS_RSA_WITH_RC4_128_SHA',
+  RSA_3DES: 'TLS_RSA_WITH_3DES_EDE_CBC_SHA',
+  RSA_AES_128_CBC: 'TLS_RSA_WITH_AES_128_CBC_SHA',
+  RSA_AES_256_CBC: 'TLS_RSA_WITH_AES_256_CBC_SHA',
+  RSA_AES_128_CBC_SHA256: 'TLS_RSA_WITH_AES_128_CBC_SHA256',
+  RSA_AES_128_GCM: 'TLS_RSA_WITH_AES_128_GCM_SHA256',
+  RSA_AES_256_GCM: 'TLS_RSA_WITH_AES_256_GCM_SHA384',
+  ECDHE_ECDSA_RC4_128: 'TLS_ECDHE_ECDSA_WITH_RC4_128_SHA',
+  ECDHE_RSA_RC4_128: 'TLS_ECDHE_RSA_WITH_RC4_128_SHA',
+  ECDHE_RSA_3DES: 'TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA',
+  ECDHE_ECDSA_AES_128_CBC_SHA256: 'TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256',
+  ECDHE_RSA_AES_128_CBC_SHA256: 'TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256',
+});
+
 // Whole ordered client lists (PattN's presets): the order is part of the ClientHello,
 // and clients apply them only under the uTLS fingerprint "unsafe".
 export const TLS_CIPHER_PRESETS = Object.freeze({
