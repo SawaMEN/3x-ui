@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -262,14 +263,56 @@ func waitOutboundStartup(tag string, proc *managedOutbound) error {
 	if proc == nil || proc.done == nil {
 		return fmt.Errorf("managed outbound %q disappeared during apply", tag)
 	}
-	timer := time.NewTimer(500 * time.Millisecond)
-	defer timer.Stop()
-	select {
-	case <-proc.done:
-		return fmt.Errorf("managed outbound %q exited during startup: %s", tag, proc.cmd.ProcessState)
-	case <-timer.C:
-		return nil
+	protocol, _ := proc.raw["protocol"].(string)
+	if !strings.EqualFold(protocol, "vetroff") {
+		timer := time.NewTimer(500 * time.Millisecond)
+		defer timer.Stop()
+		select {
+		case <-proc.done:
+			return fmt.Errorf("managed outbound %q exited during startup: %s", tag, proc.cmd.ProcessState)
+		case <-timer.C:
+			return nil
+		}
 	}
+	// Vetroff prepares its TLS/Necko runtime before binding the local SOCKS
+	// listener. Being alive for 500 ms does not mean the outbound is usable.
+	deadline := time.NewTimer(10 * time.Second)
+	defer deadline.Stop()
+	poll := time.NewTicker(100 * time.Millisecond)
+	defer poll.Stop()
+	for {
+		select {
+		case <-proc.done:
+			return fmt.Errorf("VetroffProxy outbound %q exited before SOCKS was ready: %s", tag, proc.cmd.ProcessState)
+		case <-deadline.C:
+			return fmt.Errorf("VetroffProxy outbound %q did not start its loopback SOCKS listener", tag)
+		case <-poll.C:
+			if vetroffSocksReady(proc.port) {
+				return nil
+			}
+		}
+	}
+}
+
+// A SOCKS5 no-auth greeting checks the local bridge, without attempting to
+// reach a third-party site or transmitting the outbound's connection secret.
+func vetroffSocksReady(port int) bool {
+	conn, err := (&net.Dialer{Timeout: 200 * time.Millisecond}).DialContext(context.Background(), "tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
+	if err != nil {
+		return false
+	}
+	defer conn.Close()
+	if err := conn.SetDeadline(time.Now().Add(250 * time.Millisecond)); err != nil {
+		return false
+	}
+	if _, err := conn.Write([]byte{0x05, 0x01, 0x00}); err != nil {
+		return false
+	}
+	response := make([]byte, 2)
+	if _, err := io.ReadFull(conn, response); err != nil {
+		return false
+	}
+	return response[0] == 0x05 && response[1] == 0x00
 }
 
 func EnsureOutbound(raw map[string]any) (map[string]any, error) { return ensureOutbound(raw, false) }

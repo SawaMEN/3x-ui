@@ -1715,7 +1715,12 @@ export default function SingBoxPage() {
             rowKey={(row) => String(row.__index)}
             dataSource={rules
               .map((rule, index): JsonObject => ({ ...rule, __index: index }))
-              .filter((rule) => !asString(rule.comment).startsWith('panel-basic:'))
+              .filter(
+                (rule) =>
+                  !['panel-basic:', 'panel-inbound:'].some((prefix) =>
+                    asString(rule.comment).startsWith(prefix),
+                  ),
+              )
               .filter((rule) =>
                 [routeRuleSummary(rule), rule.outbound, rule.action, rule.comment]
                   .join(' ')
@@ -2178,6 +2183,7 @@ export default function SingBoxPage() {
                       config={config}
                       onChange={setConfig}
                       subscriptionTags={snapshot?.subscriptionTags || []}
+                      inboundTags={snapshot?.inboundTags || []}
                     />
                   ),
                 },

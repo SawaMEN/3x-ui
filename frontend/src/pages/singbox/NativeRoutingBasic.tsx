@@ -2,15 +2,18 @@ import { Select, Switch } from 'antd';
 import { SettingListItem } from '@/components/ui';
 import { object, records, setDefaultOutbound, type ConfigObject } from './simple-settings';
 import { basicRouteFields, basicRule, setBasicRule } from './native-routing-basic';
+import { nativeInboundRouteTarget, setNativeInboundRouteTarget } from './native-inbound-bindings';
 
 export default function NativeRoutingBasic({
   config,
   onChange,
   subscriptionTags,
+  inboundTags,
 }: {
   config: ConfigObject;
   onChange: (config: ConfigObject) => void;
   subscriptionTags: string[];
+  inboundTags: string[];
 }) {
   const route = object(config.route);
   const tags = Array.from(
@@ -25,6 +28,14 @@ export default function NativeRoutingBasic({
     (row) => row.type === 'direct' && typeof row.tag === 'string' && row.tag,
   );
   const torrent = basicRule(config, 'torrent');
+  const availableInbounds = Array.from(
+    new Set(
+      [
+        ...records(config.inbounds).map((inbound) => String(inbound.tag || '')),
+        ...inboundTags,
+      ].filter(Boolean),
+    ),
+  );
   return (
     <div>
       <SettingListItem
@@ -42,6 +53,32 @@ export default function NativeRoutingBasic({
           onChange={(value) => onChange(setDefaultOutbound(config, value))}
         />
       </SettingListItem>
+      {availableInbounds.length > 0 && (
+        <section aria-label="Привязка входящих к исходящим">
+          <div style={{ fontWeight: 600, fontSize: 16, margin: '20px 0 6px' }}>
+            Привязка входящих к исходящим
+          </div>
+          <p style={{ opacity: 0.75, marginBottom: 12 }}>
+            Для каждого входящего можно назначить отдельный выход. Предшествующие правила
+            маршрутизации сохраняют приоритет.
+          </p>
+          {availableInbounds.map((tag) => (
+            <SettingListItem key={tag} title={tag}>
+              <Select
+                aria-label={`Исходящее для ${tag}`}
+                allowClear
+                placeholder="Использовать маршрут по умолчанию"
+                style={{ width: '100%' }}
+                value={nativeInboundRouteTarget(config, tag) || undefined}
+                options={tags.map((value) => ({ value, label: value }))}
+                onChange={(value: string | undefined) =>
+                  onChange(setNativeInboundRouteTarget(config, tag, value || ''))
+                }
+              />
+            </SettingListItem>
+          ))}
+        </section>
+      )}
       <SettingListItem title="Блокировать BitTorrent">
         <Switch
           checked={

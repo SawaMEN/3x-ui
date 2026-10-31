@@ -43,6 +43,23 @@ describe('chunk loading recovery', () => {
     expect((await import('@/lib/chunk-load-recovery')).reloadAfterChunkLoadError()).toBe(false);
     expect(replace).toHaveBeenCalledTimes(1);
   });
+
+  it('reloads on an undefined lazy import even without a preloadError event', async () => {
+    vi.useFakeTimers();
+    vi.resetModules();
+    const replace = vi.fn();
+    vi.stubGlobal('sessionStorage', { getItem: () => null, setItem: vi.fn() });
+    vi.stubGlobal('window', {
+      location: { href: 'https://panel.example/secret/panel/clients', replace },
+    });
+    const recovery = await import('@/lib/chunk-load-recovery');
+    const result = recovery.importWithChunkRecovery(async () => undefined);
+    await Promise.resolve();
+    expect(replace).toHaveBeenCalledTimes(1);
+    const assertion = expect(result).rejects.toThrow(/could not finish reloading/);
+    await vi.advanceTimersByTimeAsync(8_000);
+    await assertion;
+  });
   it('temporarily suspends React.lazy while reloading, but never forever', async () => {
     vi.useFakeTimers();
     vi.resetModules();

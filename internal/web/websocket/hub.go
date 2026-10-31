@@ -24,11 +24,11 @@ const (
 	MessageTypeClientStats  MessageType = "client_stats"
 	MessageTypeClients      MessageType = "clients"
 	MessageTypeInvalidate   MessageType = "invalidate"
-	maxMessageSize                      = 4 * 1024 * 1024 // 4MB; larger payloads fall back to REST invalidation.
+	maxMessageSize                      = 2 * 1024 * 1024 // 2 MiB; oversized state uses REST invalidation.
 
 	enqueueTimeout       = 100 * time.Millisecond
-	clientSendQueue      = 64  // Slow clients are evicted sooner to cap retained payloads.
-	hubBroadcastQueue    = 256 // Bounded burst buffer; REST invalidation handles oversized state pushes.
+	clientSendQueue      = 16 // Slow browsers must not retain dozens of multi-MiB snapshots.
+	hubBroadcastQueue    = 32 // Prevent burst fanout from retaining hundreds of MiB.
 	hubOpsQueue          = 32  // Small lifecycle backlog is enough for page/disconnect bursts.
 	minBroadcastInterval = 250 * time.Millisecond
 	hubRestartAttempts   = 3
@@ -136,6 +136,11 @@ func (h *Hub) Run() {
 		}
 	}
 	logger.Error("WebSocket hub stopped after exhausting restart attempts")
+	// Release read-pump waiters and their buffers if the hub can no longer
+	// consume lifecycle events. Leaving ctx open would strand connections in
+	// Register/Unregister after a terminal hub failure.
+	h.Stop()
+	h.shutdown()
 }
 
 // runOnce drives the event loop once and returns true if the hub stopped
@@ -340,18 +345,17 @@ func (h *Hub) Register(c *Client) {
 // goroutine is processed in program order — otherwise an unregister could
 // land in the map before its register and silently no-op, leaking the entry.
 //
-// On a saturated ops channel (disconnect storm) we fall back to a bounded
-// timeout drop rather than direct removal: a direct delete on a not-yet-
-// registered client is precisely the ordering bug we fix here. Stragglers
-// get evicted by fanout when their Send buffer fills.
+// Never drop unregister on a busy ops queue. Doing so leaks clients that
+// already disconnected, along with their buffered messages, until a later
+// broadcast happens to evict them. Waiting here only parks this connection's
+// read-pump goroutine; the hub continues processing operations in FIFO order.
+// Shutdown unblocks waiters via h.ctx.Done().
 func (h *Hub) Unregister(c *Client) {
 	if h == nil || c == nil {
 		return
 	}
 	select {
 	case h.ops <- clientOp{kind: opUnregister, c: c}:
-	case <-time.After(enqueueTimeout):
-		logger.Warningf("WebSocket ops channel full, dropping unregister for %s", c.ID)
 	case <-h.ctx.Done():
 	}
 }
