@@ -907,6 +907,10 @@ func (s *ServerService) RestartXrayService() error {
 // syslogTimeout keeps a stalled journalctl from hanging the Syslog request (#6629).
 var syslogTimeout = 15 * time.Second
 
+// Even after journalctl exits, a stray descendant may keep its stdout pipe
+// open. Limit that drain wait so a log request cannot hang indefinitely.
+var syslogWaitDelay = 2 * time.Second
+
 func (s *ServerService) GetLogs(count string, level string, syslog string) []string {
 	c, _ := strconv.Atoi(count)
 	var lines []string
@@ -942,6 +946,7 @@ func (s *ServerService) GetLogs(count string, level string, syslog string) []str
 		ctx, cancel := context.WithTimeout(context.Background(), syslogTimeout)
 		defer cancel()
 		cmd := exec.CommandContext(ctx, "journalctl", "-u", "x-ui", "--no-pager", "-n", strconv.Itoa(countInt), "-p", level)
+		cmd.WaitDelay = syslogWaitDelay
 		out := tail.NewRecentOutputBuffer(int(tail.DefaultTailBytes))
 		cmd.Stdout = out
 		err = cmd.Run()
