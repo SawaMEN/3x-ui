@@ -366,3 +366,18 @@ func TestDiagnosticJournalBoundsOversizedCommandOutput(t *testing.T) {
         t.Fatalf("journal truncation must be reported: %+v", out.Warnings)
     }
 }
+
+func TestDiagnosticSidecarWarnsForDirectoryInsteadOfJournal(t *testing.T) {
+    binDir := t.TempDir()
+    t.Setenv("XUI_BIN_FOLDER", binDir)
+    if err := os.Mkdir(filepath.Join(binDir, "caddy-naive.log"), 0o700); err != nil {
+        t.Fatal(err)
+    }
+    got := (&ServerService{}).GetDashboardLogsFiltered("10", "debug", "naive", "", "")
+    if len(got.Entries) != 0 {
+        t.Fatalf("directory should not produce synthetic log entries: %+v", got.Entries)
+    }
+    if len(got.Warnings) != 1 || !strings.Contains(got.Warnings[0], "naive: журнал не является обычным файлом") {
+        t.Fatalf("broken sidecar log path silently ignored: %+v", got.Warnings)
+    }
+}
