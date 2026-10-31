@@ -110,7 +110,7 @@ func (s *ServerService) GetDashboardLogs(count, level, source, query string) Das
     search := strings.ToLower(strings.TrimSpace(query))
     // Fetch more than the final count for each source so filtering does not
     // hide an older matching error behind recent INFO events.
-    scanLimit := min(dashboardLogLimit, max(limit * 4, 500))
+    scanLimit := dashboardLogLimit
     entries := make([]DashboardLog, 0, limit)
     warnings := make([]string, 0, 3)
     appendLines := func(kind string, lines []string) {
