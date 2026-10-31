@@ -40,3 +40,53 @@ func TestReadTailLinesHonorsByteBudget(t *testing.T) {
 		t.Fatalf("got %d lines; expected a bounded tail", len(got))
 	}
 }
+
+func TestReadTailLinesDiscardsTruncatedOldestLine(t *testing.T) {
+	cases := []struct {
+		name    string
+		content string
+		budget  int64
+		want    []string
+	}{
+		{
+			name:    "newline terminated",
+			content: "old-prefix-12345\nlast\n",
+			budget:  int64(len("345\nlast\n")),
+			want:    []string{"last"},
+		},
+		{
+			name:    "unterminated final line",
+			content: "abcdefghij\nlast",
+			budget:  int64(len("ij\nlast")),
+			want:    []string{"last"},
+		},
+		{
+			name:    "no complete line within budget",
+			content: "abcdefghij",
+			budget:  4,
+			want:    []string{},
+		},
+		{
+			name:    "unlimited budget retains unterminated first line",
+			content: "first\nsecond",
+			budget:  int64(len("first\nsecond")),
+			want:    []string{"second", "first"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "test.log")
+			if err := os.WriteFile(path, []byte(tc.content), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			got, err := ReadTailLines(path, 0, tc.budget)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("ReadTailLines() = %#v, want %#v", got, tc.want)
+			}
+		})
+	}
+}
