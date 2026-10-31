@@ -1,6 +1,8 @@
 package tail
 
 import (
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -114,4 +116,26 @@ func TestReadTailLinesNegativeLimitMeansUnlimited(t *testing.T) {
 	if want := []string{"two", "one"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("negative maxLines panicked or truncated logs: got %#v, want %#v", got, want)
 	}
+}
+
+func TestReadTailChunkRejectsShortReadsAfterRotation(t *testing.T) {
+    // After Stat, a file can be truncated before its tail chunks are read.
+    // ReadAt then returns partial data + io.EOF; accepting the bytes would
+    // expose NUL-filled bogus log entries to the dashboard.
+    reader := strings.NewReader("short")
+    buf := make([]byte, 16)
+    if err := readTailChunk(reader, buf, 0); !errors.Is(err, io.ErrUnexpectedEOF) {
+        t.Fatalf("short read: got error %v, want io.ErrUnexpectedEOF", err)
+    }
+}
+
+func TestReadTailChunkAcceptsCompleteRead(t *testing.T) {
+    reader := strings.NewReader("first line\nlast line\n")
+    buf := make([]byte, len("last line\n"))
+    if err := readTailChunk(reader, buf, int64(len("first line\n"))); err != nil {
+        t.Fatalf("complete read unexpectedly failed: %v", err)
+    }
+    if string(buf) != "last line\n" {
+        t.Fatalf("incomplete read: %q", buf)
+    }
 }
