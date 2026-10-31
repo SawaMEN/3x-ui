@@ -81,15 +81,20 @@ func diagnosticLevel(line string) string {
 }
 
 func diagnosticTime(line string) time.Time {
-    // Preserve explicit timezone offsets from journalctl and RFC3339 logs.
-    // Treating +02:00 or Z as local time misorders messages from different sources.
-    if match := diagnosticISOTime.FindString(line); match != "" {
+    // Prefer the earliest timestamp in the record. An ordinary panel log
+    // may mention an RFC3339 date in its message; that later date must not
+    // replace the actual "YYYY/MM/DD HH:MM:SS" log prefix.
+    plain := diagnosticTimestamp.FindStringIndex(line)
+    zoned := diagnosticISOTime.FindStringIndex(line)
+    if zoned != nil && (plain == nil || zoned[0] <= plain[0]) {
+        match := line[zoned[0]:zoned[1]]
+        // Preserve explicit timezone offsets from journalctl/RFC3339 records.
         for _, layout := range []string{time.RFC3339Nano, "2006-01-02T15:04:05.999999999-0700"} {
             if t, err := time.Parse(layout, match); err == nil { return t }
         }
     }
-    match := diagnosticTimestamp.FindString(line)
-    if match == "" { return time.Time{} }
+    if plain == nil { return time.Time{} }
+    match := line[plain[0]:plain[1]]
     for _, layout := range []string{"2006/01/02 15:04:05", "2006-01-02 15:04:05", "2006-01-02T15:04:05"} {
         if t, err := time.ParseInLocation(layout, match, time.Local); err == nil { return t }
     }
