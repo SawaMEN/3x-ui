@@ -30,7 +30,10 @@ interface RoutingBasicProps {
 }
 
 export default function RoutingBasic({
-  templateSettings, setTemplateSettings, inboundTags, outboundTags,
+  templateSettings,
+  setTemplateSettings,
+  inboundTags,
+  outboundTags,
 }: RoutingBasicProps) {
   const { t } = useTranslation();
 
@@ -63,9 +66,7 @@ export default function RoutingBasic({
     return [...tags].map((value) => ({ label: value, value }));
   }, [templateSettings?.outbounds]);
 
-  const inboundOptions = useMemo(
-    () => [...new Set(inboundTags.filter(Boolean))], [inboundTags],
-  );
+  const inboundOptions = useMemo(() => [...new Set(inboundTags.filter(Boolean))], [inboundTags]);
   const selectableOutbounds = useMemo(
     () => [...new Set(outboundTags.filter(Boolean))].map((tag) => ({ label: tag, value: tag })),
     [outboundTags],
@@ -118,7 +119,11 @@ export default function RoutingBasic({
                   onChange={(value?: string) =>
                     mutate((tt) => {
                       if (!tt.routing) tt.routing = { rules: [] };
-                      tt.routing.rules = setInboundRouteTarget(tt.routing.rules || [], tag, value || '');
+                      tt.routing.rules = setInboundRouteTarget(
+                        tt.routing.rules || [],
+                        tag,
+                        value || '',
+                      );
                     })
                   }
                 />
