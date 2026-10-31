@@ -45,7 +45,7 @@ type sortableDashboardLog struct {
 const dashboardLogLimit = 2000
 
 var diagnosticSeverity = regexp.MustCompile(`(?i)\b(FATAL|CRITICAL|ERROR|ERR|WARNING|WARN|NOTICE|INFO|DEBUG|TRACE)\b`)
-var diagnosticTimestamp = regexp.MustCompile(`\d{4}[-/]\d{2}[-/]\d{2}[ T]\d{2}:\d{2}:\d{2}`)
+var diagnosticTimestamp = regexp.MustCompile(`\d{4}[-/]\d{2}[-/]\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?`)
 var diagnosticISOTime = regexp.MustCompile(`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})`)
 
 func diagnosticLevel(line string) string {
@@ -102,7 +102,11 @@ func diagnosticTime(line string) time.Time {
     }
     if plain == nil { return time.Time{} }
     match := line[plain[0]:plain[1]]
-    for _, layout := range []string{"2006/01/02 15:04:05", "2006-01-02 15:04:05", "2006-01-02T15:04:05"} {
+    for _, layout := range []string{
+        "2006/01/02 15:04:05.999999999",
+        "2006-01-02 15:04:05.999999999",
+        "2006-01-02T15:04:05.999999999",
+    } {
         if t, err := time.ParseInLocation(layout, match, time.Local); err == nil { return t }
     }
     return time.Time{}
