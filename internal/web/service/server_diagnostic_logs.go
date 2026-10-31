@@ -45,7 +45,23 @@ func diagnosticLevel(line string) string {
     prefix := line
     if len(prefix) > 115 { prefix = prefix[:115] }
     match := diagnosticSeverity.FindStringSubmatch(prefix)
-    if len(match) < 2 { return "UNKNOWN" }
+    if len(match) < 2 {
+        // Many third-party processes and systemd units omit an explicit
+        // severity token. Recognize common failure messages so ERROR-only
+        // views do not silently discard TLS handshake failures and panics.
+        lower := strings.ToLower(line)
+        for _, symptom := range []string{
+            "panic:", "fatal:", "failed to ", "failure:", "permission denied",
+            "connection refused", "bad certificate", "tls handshake:",
+            "invalid sudoku hint", "unexpected eof", "segmentation fault",
+        } {
+            if strings.Contains(lower, symptom) { return "ERROR" }
+        }
+        for _, symptom := range []string{"retrying", "not ready", "timed out", "timeout"} {
+            if strings.Contains(lower, symptom) { return "WARNING" }
+        }
+        return "UNKNOWN"
+    }
     switch strings.ToUpper(match[1]) {
     case "FATAL", "CRITICAL": return "FATAL"
     case "ERR", "ERROR": return "ERROR"
