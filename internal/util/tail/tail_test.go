@@ -139,3 +139,43 @@ func TestReadTailChunkAcceptsCompleteRead(t *testing.T) {
         t.Fatalf("incomplete read: %q", buf)
     }
 }
+
+func TestRecentOutputBufferKeepsOnlyCompleteLatestRecords(t *testing.T) {
+    buf := NewRecentOutputBuffer(12)
+    for _, chunk := range []string{"older\n", "newer\n", "latest\n"} {
+        n, err := buf.Write([]byte(chunk))
+        if n != len(chunk) || err != nil {
+            t.Fatalf("Write(%q) = %d, %v", chunk, n, err)
+        }
+    }
+    if !buf.Truncated() {
+        t.Fatal("expected bounded stdout to discard oldest bytes")
+    }
+    if got := string(buf.CompleteBytes()); got != "latest\n" {
+        t.Fatalf("truncated oldest row leaked into stdout: got %q", got)
+    }
+}
+
+func TestRecentOutputBufferHandlesSingleOversizedWrite(t *testing.T) {
+    buf := NewRecentOutputBuffer(8)
+    input := strings.Repeat("x", 64) + "\nlast\n"
+    if _, err := buf.Write([]byte(input)); err != nil {
+        t.Fatal(err)
+    }
+    if got := string(buf.CompleteBytes()); got != "last\n" {
+        t.Fatalf("oversized write corrupted the newest complete record: got %q", got)
+    }
+    if len(buf.data) > 8 || !buf.Truncated() {
+        t.Fatalf("output exceeded the byte budget: len=%d, truncated=%v", len(buf.data), buf.Truncated())
+    }
+}
+
+func TestRecentOutputBufferPreservesCompleteUntruncatedOutput(t *testing.T) {
+    buf := NewRecentOutputBuffer(64)
+    if _, err := buf.Write([]byte("old\nnew\n")); err != nil {
+        t.Fatal(err)
+    }
+    if buf.Truncated() || string(buf.CompleteBytes()) != "old\nnew\n" {
+        t.Fatalf("normal journal capture changed: %q, truncated=%v", buf.CompleteBytes(), buf.Truncated())
+    }
+}
