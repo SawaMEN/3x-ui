@@ -483,7 +483,7 @@ flock -u "$cm_lock"
 exec {cm_lock}>&-
 ''')
 
-    def test_verified_update_prunes_old_complete_recoveries_but_keeps_latest(self):
+    def test_verified_update_never_discards_unverified_recovery_history(self):
         with tempfile.TemporaryDirectory() as raw:
             base = Path(raw)
             backup_names = ("AAA111", "BBB222", "CCC333")
@@ -509,15 +509,14 @@ exec {cm_lock}>&-
             self.run_script(base, r'''
 xui_folder="$TEST_ROOT/x-ui"
 cm_backup="$TEST_ROOT/x-ui-upgrade.CURRENT"
-# No lock: verified snapshots may be pruned, but unmarked backup history stays.
-core_migration_prune_recovery_history
+# An unrelated verified update must not delete any unverified recovery.
 [[ -d "$TEST_ROOT/x-ui-upgrade.AAA111" ]]
 exec {cm_lock}>"$TEST_ROOT/.x-ui-upgrade.lock"
 flock -n "$cm_lock"
 core_migration_prune_snapshots
 [[ ! -e "$TEST_ROOT/x-ui-upgrade.CURRENT" ]]
-[[ ! -e "$TEST_ROOT/x-ui-upgrade.AAA111" ]]
-[[ ! -e "$TEST_ROOT/x-ui-upgrade.BBB222" ]]
+[[ -f "$TEST_ROOT/x-ui-upgrade.AAA111/data/database" ]]
+[[ -f "$TEST_ROOT/x-ui-upgrade.BBB222/data/database" ]]
 [[ -f "$TEST_ROOT/x-ui-upgrade.CCC333/data/database" ]]
 [[ -f "$TEST_ROOT/x-ui-upgrade.OTHER1/private-data" ]]
 [[ -f "$TEST_ROOT/x-ui-upgrade.FAILED/installation/x-ui" ]]
@@ -662,8 +661,14 @@ core_migration_normalize_paths
 class CoreVersionSelectionTests(unittest.TestCase):
     run_script = UpgradeStorageTests.run_script
     def test_core_selection_and_installation(self):
-        for location in ['internal', 'external', 'symlink']:
-            for state in ['same', 'different', 'broken', 'missing-library', 'incompatible']:
+        # Identical versions are not identical binaries: rebuilds, native
+        # libraries, checksum files and manifests must all trigger upgrades.
+        states = (
+            'identical', 'same', 'different', 'broken', 'missing-library',
+            'incompatible', 'changed-library', 'changed-manifest', 'changed-checksum'
+        )
+        for location in ('internal', 'external', 'symlink'):
+            for state in states:
                 with self.subTest(location=location, state=state), tempfile.TemporaryDirectory() as raw:
                     base = Path(raw)
                     old = base / 'x-ui' / 'bin'
@@ -677,18 +682,30 @@ class CoreVersionSelectionTests(unittest.TestCase):
                         if location == 'symlink':
                             (base / 'x-ui' / 'bin').symlink_to('../external-bin')
                     binary = 'hiddify-core-linux-amd64'
-                    for folder, version, marker in [(old, 'v1', 'old'), (incoming, 'v2' if state == 'different' else 'v1', 'new')]:
+                    for folder in (old, incoming):
+                        current = folder == old
+                        version = 'v2' if state == 'different' and not current else 'v1'
+                        marker = 'new' if not current and state in ('same', 'different', 'broken') else 'old'
                         code = '#!/bin/bash\n'
-                        code += 'exit 1\n' if state == 'broken' and folder == old else f'echo "hiddify-core version {version} (linux)"\n# {marker}\n'
+                        code += 'exit 1\n' if state == 'broken' and current else (
+                            f'echo "hiddify-core version {version} (linux)"\n# {marker}\n'
+                        )
                         (folder / binary).write_text(code)
                         (folder / binary).chmod(0o755)
-                        (folder / 'target.json').write_text(marker + '-manifest')
-                        if not (state == 'missing-library' and folder == old):
-                            (folder / 'libcronet.so').write_text(marker + '-library')
+                        manifest = 'new' if state == 'changed-manifest' and not current else marker
+                        (folder / 'target.json').write_text(manifest + '-manifest')
+                        checksum = 'new' if state == 'changed-checksum' and not current else marker
+                        (folder / (binary + '.sha256')).write_text(checksum + '-checksum')
+                        if not (state == 'missing-library' and current):
+                            lib = 'new' if state == 'changed-library' and not current else marker
+                            (folder / 'libcronet.so').write_text(lib + '-library')
                     panel = incoming.parent / 'x-ui'
-                    panel.write_text('#!/bin/bash\n' + ('[[ "$XUI_BIN_FOLDER" == */stage/x-ui/bin ]]\n' if state == 'incompatible' else 'exit 0\n'))
+                    panel.write_text(
+                        '#!/bin/bash\n' +
+                        ('[[ "$XUI_BIN_FOLDER" == */stage/x-ui/bin ]]\n' if state == 'incompatible' else 'exit 0\n')
+                    )
                     panel.chmod(0o755)
-                    self.run_script(base, r'''
+                    self.run_script(base, 'CASE=' + state + '\n' + r'''
 xui_folder="$TEST_ROOT/x-ui"
 cm_stage="$TEST_ROOT/stage"
 arch() { printf amd64; }
@@ -696,10 +713,9 @@ if [[ -d "$TEST_ROOT/external-bin" && ! -L "$xui_folder/bin" ]]; then
     XUI_BIN_FOLDER="$TEST_ROOT/external-bin"
 fi
 core_migration_select_core
-if [[ "$(cat "$cm_stage/x-ui/bin/target.json")" == old-manifest ]]; then
+if [[ "$CASE" == identical ]]; then
     [[ "$cm_reuse_core" == 1 ]]
     [[ ${#cm_core_tar_args[@]} == 5 ]]
-    # Simulate removal of the installation during install.sh.
     if [[ ! -L "$xui_folder/bin" && ! -d "$TEST_ROOT/external-bin" ]]; then
         rm -rf "$xui_folder/bin"
     fi
@@ -711,7 +727,16 @@ if [[ "$(cat "$cm_stage/x-ui/bin/target.json")" == old-manifest ]]; then
 else
     [[ "$cm_reuse_core" == 0 ]]
     [[ ${#cm_core_tar_args[@]} == 0 ]]
-    [[ "$(cat "$cm_stage/x-ui/bin/target.json")" == new-manifest ]]
+    [[ -e "$cm_stage/x-ui/bin/hiddify-core-linux-amd64" ]]
+    if [[ "$CASE" == same ]]; then
+        grep -q '# new' "$cm_stage/x-ui/bin/hiddify-core-linux-amd64"
+    fi
+    if [[ "$CASE" == changed-library ]]; then
+        [[ "$(cat "$cm_stage/x-ui/bin/libcronet.so")" == new-library ]]
+    fi
+    if [[ "$CASE" == changed-manifest ]]; then
+        [[ "$(cat "$cm_stage/x-ui/bin/target.json")" == new-manifest ]]
+    fi
 fi
 ''')
 
