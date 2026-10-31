@@ -174,7 +174,10 @@ func (s *ServerService) GetDashboardLogsFiltered(count, level, source, query, ex
             warnings = append(warnings, kind+": журнал отключён в конфигурации")
             return
         }
-        lines, err := tail.ReadTailLines(path, 0, tail.DefaultTailBytes)
+        // Read only the newest scanLimit records. Previously this read up to
+        // 8 MiB of every source before discarding all but 2000 lines,
+        // multiplying memory and I/O when dozens of protocols are enabled.
+        lines, err := tail.ReadTailLines(path, scanLimit, tail.DefaultTailBytes)
         if err != nil {
             if errors.Is(err, os.ErrNotExist) {
                 warnings = append(warnings, kind+": файл журнала отсутствует (логирование может быть отключено)")
