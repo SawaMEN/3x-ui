@@ -4,6 +4,7 @@ import (
     "fmt"
     "os"
     "path/filepath"
+    "runtime"
     "strings"
     "testing"
     "time"
@@ -339,5 +340,29 @@ func TestDiagnosticPanelWarnsWhenJournalPathIsDirectory(t *testing.T) {
     out := (&ServerService{}).GetDashboardLogs("10", "debug", "panel", "missing-marker-for-directory")
     if len(out.Warnings) != 1 || !strings.Contains(out.Warnings[0], "panel: путь журнала не является обычным файлом") {
         t.Fatalf("invalid panel log path was silently presented as empty: %+v", out.Warnings)
+    }
+}
+
+func TestDiagnosticJournalBoundsOversizedCommandOutput(t *testing.T) {
+    if runtime.GOOS == "windows" { t.Skip("journalctl requires a Unix shell") }
+    dir := t.TempDir()
+    const newest = "2026-11-01T15:00:01Z ERROR - journal-memory-cap-marker"
+    sourcePath := filepath.Join(dir, "journal-output")
+    hugeOutput := strings.Repeat("x", (8<<20)+1024) + "\n" + newest + "\n"
+    if err := os.WriteFile(sourcePath, []byte(hugeOutput), 0o600); err != nil {
+        t.Fatal(err)
+    }
+    script := "#!/bin/sh\ncat \"$XUI_TEST_JOURNAL_OUTPUT\"\n"
+    if err := os.WriteFile(filepath.Join(dir, "journalctl"), []byte(script), 0o755); err != nil {
+        t.Fatal(err)
+    }
+    t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+    t.Setenv("XUI_TEST_JOURNAL_OUTPUT", sourcePath)
+    out := (&ServerService{}).GetDashboardLogsFiltered("10", "debug", "journal", "journal-memory-cap-marker", "ERROR")
+    if len(out.Entries) != 1 || out.Entries[0].Raw != newest {
+        t.Fatalf("bounded journal lost the newest complete error: %+v", out)
+    }
+    if len(out.Warnings) != 1 || !strings.Contains(out.Warnings[0], "journal: вывод ограничен последними 8 МиБ") {
+        t.Fatalf("journal truncation must be reported: %+v", out.Warnings)
     }
 }
