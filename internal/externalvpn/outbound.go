@@ -297,7 +297,7 @@ func waitOutboundStartup(tag string, proc *managedOutbound) error {
 // A SOCKS5 no-auth greeting checks the local bridge, without attempting to
 // reach a third-party site or transmitting the outbound's connection secret.
 func vetroffSocksReady(port int) bool {
-	conn, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)), 200*time.Millisecond)
+	conn, err := (&net.Dialer{Timeout: 200 * time.Millisecond}).DialContext(context.Background(), "tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
 	if err != nil {
 		return false
 	}
