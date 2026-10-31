@@ -3,9 +3,7 @@ import { TLS_CIPHER_OPTION, TLS_LEGACY_CIPHER_OPTION } from '@/schemas/primitive
 
 describe('explicit legacy TLS cipher options', () => {
   it('exposes RSA GCM suite from the reported core failure', () => {
-    expect(Object.values(TLS_LEGACY_CIPHER_OPTION)).toContain(
-      'TLS_RSA_WITH_AES_128_GCM_SHA256',
-    );
+    expect(Object.values(TLS_LEGACY_CIPHER_OPTION)).toContain('TLS_RSA_WITH_AES_128_GCM_SHA256');
   });
 
   it('keeps unsafe suites separate from secure defaults and has no duplicates', () => {
