@@ -230,3 +230,16 @@ func TestDiagnosticProtocolLogsKeepSubsecondOrdering(t *testing.T) {
 		t.Fatalf("subsecond timestamps were truncated: %+v", got.Entries)
 	}
 }
+
+func TestDiagnosticPanelPreservesShortPanicMessage(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XUI_LOG_FOLDER", dir)
+	const line = "panic: SIGSEGV"
+	if err := os.WriteFile(filepath.Join(dir, logger.LogFileName), []byte(line+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got := (&ServerService{}).GetDashboardLogsFiltered("10", "debug", "panel", "SIGSEGV", "ERROR")
+	if len(got.Entries) != 1 || got.Entries[0].Raw != line || got.Entries[0].Level != "ERROR" {
+		t.Fatalf("short panic entry lost from structured diagnostics: %+v", got)
+	}
+}
