@@ -43,7 +43,7 @@ export default function LogModal({ open, onClose }: LogModalProps) {
   const { isMobile } = useMediaQuery();
   const ru = i18n.language.startsWith('ru');
   const [rows, setRows] = useState('200');
-  const [level, setLevel] = useState('debug');
+  const [severity, setSeverity] = useState('all');
   const [source, setSource] = useState('all');
   const [query, setQuery] = useState('');
   const [autoUpdate, setAutoUpdate] = useState(false);
@@ -51,7 +51,7 @@ export default function LogModal({ open, onClose }: LogModalProps) {
     async (signal: AbortSignal) => {
       const msg = await HttpUtil.post<DiagnosticResponse>(
         `/panel/api/server/logs/${rows}`,
-        { format: 'structured', source, level, query },
+        { format: 'structured', source, level: 'debug', exactLevel: severity, query },
         { signal },
       );
       return msg?.success && msg.obj && Array.isArray(msg.obj.entries)
@@ -63,7 +63,7 @@ export default function LogModal({ open, onClose }: LogModalProps) {
           }
         : undefined;
     },
-    [rows, source, level, query],
+    [rows, source, severity, query],
   );
   const { data, loading, refresh } = useRefreshRequest(
     open, load, EMPTY_DIAGNOSTICS, autoUpdate ? AUTO_UPDATE_INTERVAL : 0,
@@ -133,17 +133,20 @@ export default function LogModal({ open, onClose }: LogModalProps) {
               options={['50', '100', '200', '500', '1000', '2000'].map((value) => ({ value, label: value }))}
             />
             <Select
-              aria-label={t('pages.xray.logLevel')}
-              value={level}
+              aria-label={ru ? 'Точный уровень события' : 'Exact event severity'}
+              value={severity}
               size="small"
-              style={{ minWidth: 110 }}
-              onChange={setLevel}
+              style={{ minWidth: 155 }}
+              onChange={setSeverity}
               options={[
-                { value: 'debug', label: t('pages.index.logLevelDebug') },
-                { value: 'info', label: t('pages.index.logLevelInfo') },
-                { value: 'notice', label: t('pages.index.logLevelNotice') },
-                { value: 'warning', label: t('pages.index.logLevelWarning') },
-                { value: 'error', label: t('pages.index.logLevelError') },
+                { value: 'all', label: ru ? 'Все уровни' : 'All levels' },
+                { value: 'ERROR', label: ru ? 'Только ошибки' : 'Errors only' },
+                { value: 'WARNING', label: ru ? 'Только предупреждения' : 'Warnings only' },
+                { value: 'FATAL', label: ru ? 'Только критические' : 'Critical only' },
+                { value: 'NOTICE', label: ru ? 'Только уведомления' : 'Notices only' },
+                { value: 'INFO', label: ru ? 'Только информация' : 'Info only' },
+                { value: 'DEBUG', label: ru ? 'Только отладка' : 'Debug only' },
+                { value: 'UNKNOWN', label: ru ? 'Без уровня' : 'Unclassified' },
               ]}
             />
           </Space.Compact>
