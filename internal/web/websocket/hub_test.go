@@ -3,6 +3,7 @@ package websocket
 import (
 	"encoding/json"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -289,6 +290,34 @@ func TestHub_UnregisterWaitsForFullQueueWithoutLeaking(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("disconnected client's send channel remained open")
+	}
+}
+
+func TestHub_OversizedBroadcastUsesSmallInvalidateMessage(t *testing.T) {
+	h := NewHub()
+	defer h.Stop()
+	go h.Run()
+
+	c := NewClient("client")
+	h.Register(c)
+	waitClientCount(t, h, 1)
+
+	// A large snapshot must not be retained in the hub's buffered channel.
+	h.Broadcast(MessageTypeInbounds, strings.Repeat("x", maxMessageSize))
+	select {
+	case raw := <-c.Send:
+		if len(raw) > 1024 {
+			t.Fatalf("oversized message was sent to websocket client (%d bytes)", len(raw))
+		}
+		var m Message
+		if err := json.Unmarshal(raw, &m); err != nil {
+			t.Fatal(err)
+		}
+		if m.Type != MessageTypeInvalidate {
+			t.Fatalf("expected invalidate, got %s", m.Type)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("missing REST invalidation on oversized websocket snapshot")
 	}
 }
 
