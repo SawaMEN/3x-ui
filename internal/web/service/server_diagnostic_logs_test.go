@@ -15,14 +15,14 @@ func TestDiagnosticPanelIncludesAllLevelsAndFullRaw(t *testing.T) {
     dir := t.TempDir()
     t.Setenv("XUI_LOG_FOLDER", dir)
     lines := []string{
-        "2026/11/01 01:20:00 INFO - connected",
-        "2026/11/01 01:20:01 WARNING - retrying connection",
-        "2026/11/01 01:20:02 ERROR - nested TLS failure: bad certificate",
-        "2026/11/01 01:20:03 DEBUG - packet details",
+        "2026/11/01 01:20:00 INFO - diag-unique connected",
+        "2026/11/01 01:20:01 WARNING - diag-unique retrying connection",
+        "2026/11/01 01:20:02 ERROR - diag-unique nested TLS failure: bad certificate",
+        "2026/11/01 01:20:03 DEBUG - diag-unique packet details",
     }
     if err := os.WriteFile(filepath.Join(dir, logger.LogFileName), []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil { t.Fatal(err) }
 
-    out := (&ServerService{}).GetDashboardLogs("50", "debug", "panel", "")
+    out := (&ServerService{}).GetDashboardLogs("50", "debug", "panel", "diag-unique")
     if len(out.Entries) != 4 || len(out.Warnings) != 0 { t.Fatalf("all entries: %+v", out) }
     if out.Entries[0].Raw != lines[3] || out.Entries[2].Raw != lines[1] { t.Fatalf("incorrect order/raw: %+v", out.Entries) }
     for _, e := range out.Entries {
@@ -33,7 +33,7 @@ func TestDiagnosticPanelIncludesAllLevelsAndFullRaw(t *testing.T) {
     if len(errors.Entries) != 1 || errors.Entries[0].Raw != lines[2] {
         t.Fatalf("error filter silently dropped raw details: %+v", errors)
     }
-    notice := (&ServerService{}).GetDashboardLogs("50", "notice", "panel", "")
+    notice := (&ServerService{}).GetDashboardLogs("50", "notice", "panel", "diag-unique")
     if len(notice.Entries) != 2 { t.Fatalf("notice filter = %+v", notice) }
 }
 
@@ -50,7 +50,7 @@ func TestDiagnosticLogsBoundedAndSearchesBeyondDisplayLimit(t *testing.T) {
     if len(result.Entries) != 1 || !strings.Contains(result.Entries[0].Raw, "message-095") {
         t.Fatalf("search missed older matching line: %+v", result)
     }
-    result = srv.GetDashboardLogs("9999999", "debug", "panel", "")
+    result = srv.GetDashboardLogs("9999999", "debug", "panel", "message-")
     if len(result.Entries) != 600 { t.Fatalf("bounded count = %d", len(result.Entries)) }
     if dashboardLogCount("-1") != 100 || dashboardLogCount("9999999") != dashboardLogLimit {
         t.Fatal("unbounded or invalid count")
@@ -61,7 +61,7 @@ func TestDiagnosticUnknownFormatsAreNotSilentlyDropped(t *testing.T) {
     t.Setenv("XUI_LOG_FOLDER", t.TempDir())
     raw := "uncategorized stack trace without a prefix"
     if err := os.WriteFile(filepath.Join(os.Getenv("XUI_LOG_FOLDER"), logger.LogFileName), []byte(raw+"\n"), 0o600); err != nil { t.Fatal(err) }
-    out := (&ServerService{}).GetDashboardLogs("20", "debug", "panel", "")
+    out := (&ServerService{}).GetDashboardLogs("20", "debug", "panel", raw)
     if len(out.Entries) != 1 || out.Entries[0].Raw != raw || out.Entries[0].Level != "UNKNOWN" {
         t.Fatalf("lost unstructured log: %+v", out)
     }
