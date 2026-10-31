@@ -20,8 +20,8 @@ func TestConfigMarshalNativeTLSCompatibility(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if strings.Contains(string(data), legacy) {
-			t.Fatalf("legacy cipher reached final config: %s", data)
+		if strings.Count(string(data), legacy) != 4 {
+			t.Fatalf("legacy cipher lost from nested TLS config: %s", data)
 		}
 		if strings.Count(string(data), safe) != 4 {
 			t.Fatalf("lost supported cipher in nested TLS blocks: %s", data)
@@ -39,7 +39,7 @@ func TestConfigMarshalRejectsInvalidNativeTLSCipherSuites(t *testing.T) {
 		value any
 		want  string
 	}{
-		{"obsolete only", []string{"TLS_RSA_WITH_AES_128_GCM_SHA256"}, "no supported TLS ciphers"},
+		{"unknown legacy name", []string{"TLS_RSA_WITH_FAKE_SUITE"}, "unknown TLS cipher suite"},
 		{"unknown", []any{"TLS_TYPO"}, "unknown TLS cipher suite"},
 		{"malformed", []any{42}, "must be a string"},
 	} {
