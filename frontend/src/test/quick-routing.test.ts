@@ -5,6 +5,7 @@ import {
   putQuickRoute,
   removeQuickRoute,
   setQuickRouteEnabled,
+  setQuickRouteTarget,
   type QuickRouteDraft,
   type RouteRecord,
   type RoutingEngine,
@@ -84,6 +85,15 @@ describe.each<RoutingEngine>(['xray', 'sing-box'])('quick routing on %s', (engin
     }
   });
 
+  it('reassigns a managed outbound without changing matchers or priority', () => {
+    const original = compileQuickRoute(draft(), engine, OUTBOUNDS, INBOUNDS);
+    const legacy = { comment: 'untouched', inboundTag: ['api'], outboundTag: 'api' };
+    const changed = setQuickRouteTarget([legacy, original.rule], original.id, 'direct', engine, OUTBOUNDS);
+    expect(changed[0]).toEqual(legacy);
+    expect(changed[1][engine === 'xray' ? 'outboundTag' : 'outbound']).toBe('direct');
+    expect(setQuickRouteTarget(changed, original.id, 'missing', engine, OUTBOUNDS)).toBe(changed);
+  });
+
   it('never deletes or toggles unmanaged rules', () => {
     const special = { custom: { keep: true }, action: 'route', inbound: ['in-a'], outbound: 'direct' };
     const managed = compileQuickRoute(draft(), engine, OUTBOUNDS, INBOUNDS);
@@ -122,6 +132,15 @@ describe.each<RoutingEngine>(['xray', 'sing-box'])('quick routing on %s', (engin
 });
 
 describe('sing-box reject action', () => {
+  it('supports toggling direct routes into rejects and back', () => {
+    const compiled = compileQuickRoute(draft(), 'sing-box', OUTBOUNDS, INBOUNDS);
+    const rejected = setQuickRouteTarget([compiled.rule], compiled.id, '@reject', 'sing-box', OUTBOUNDS);
+    expect(rejected[0]).toMatchObject({ action: 'reject' });
+    expect(rejected[0].outbound).toBeUndefined();
+    const restored = setQuickRouteTarget(rejected, compiled.id, 'proxy', 'sing-box', OUTBOUNDS);
+    expect(restored[0]).toMatchObject({ action: 'route', outbound: 'proxy' });
+  });
+
   it('allows explicit rejection without fake outbound', () => {
     const rule = compileQuickRoute(draft({ target: '@reject' }), 'sing-box', OUTBOUNDS, INBOUNDS);
     expect(rule.rule).toMatchObject({ action: 'reject', inbound: ['in-a', 'in-b'] });
