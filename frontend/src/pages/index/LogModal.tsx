@@ -198,7 +198,7 @@ export default function LogModal({ open, onClose }: LogModalProps) {
           className="diagnostic-warnings"
           type="warning"
           showIcon
-          message={ru ? 'Недоступные источники' : 'Unavailable sources'}
+          title={ru ? 'Недоступные источники' : 'Unavailable sources'}
           description={
             <div>
               {data.warnings.map((warning, index) => (
