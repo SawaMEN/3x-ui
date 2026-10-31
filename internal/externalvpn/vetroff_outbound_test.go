@@ -72,7 +72,11 @@ func TestVetroffManagedOutboundSidecarWiring(t *testing.T) {
 	// protocol handshake is tested upstream, not simulated here.
 	// Run a minimal SOCKS5 test helper as the sidecar so apply verifies the
 	// listener handshake rather than only checking that a process exists.
-	t.Setenv("XUI_TEST_VETROFF_BINARY", os.Args[0])
+	binary, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("XUI_TEST_VETROFF_BINARY", binary)
 	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$PWD/argv.txt\"\nlisten=''\nwhile [ $# -gt 0 ]; do\n  if [ \"$1\" = '--listen' ]; then shift; listen=\"$1\"; fi\n  shift\ndone\nexport XUI_TEST_VETROFF_LISTEN=\"$listen\"\nexec \"$XUI_TEST_VETROFF_BINARY\" -test.run=^TestVetroffFakeSocksSidecar$\n"
 	if err := os.WriteFile(filepath.Join(bundle, "vetroff"), []byte(script), 0o700); err != nil {
 		t.Fatal(err)
