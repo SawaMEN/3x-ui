@@ -536,8 +536,8 @@ func TestHiddifyNativeTemplateTLSCipherCompatibility(t *testing.T) {
 		t.Fatal(err)
 	}
 	data := checkGeneratedHiddifyConfig(t, cfg)
-	if strings.Contains(string(data), "TLS_RSA_WITH_AES_128_GCM_SHA256") {
-		t.Fatal("native template bypassed final cipher validation")
+	if !strings.Contains(string(data), "TLS_RSA_WITH_AES_128_GCM_SHA256") {
+		t.Fatal("explicit legacy TLS suite was silently removed")
 	}
 	if !strings.Contains(string(data), "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256") {
 		t.Fatal("supported cipher was lost")

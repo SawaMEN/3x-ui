@@ -6,10 +6,11 @@ import (
 	"strings"
 )
 
-// Hiddify resolves cipher names through tls.CipherSuites, excluding the
-// legacy RSA/RC4/CBC-SHA256 suites in tls.InsecureCipherSuites. Old panel
-// presets mixed both lists. Keep their supported subset without changing the
-// saved Xray configuration, but never widen an explicit list to defaults.
+// Translate the operator's explicit cipher suites without silently changing
+// the TLS policy. Go's tls.CipherSuites excludes legacy RSA key-exchange,
+// CBC-SHA256, RC4 and 3DES suites from its safe defaults, but the modified
+// sing-box core accepts those entries when they are explicitly configured.
+// An unset list continues to use secure defaults.
 func translateTLSCipherSuites(out, in map[string]any, label string) error {
 	raw := strings.TrimSpace(rawString(in, "cipherSuites"))
 	if raw == "" {
@@ -25,33 +26,28 @@ func translateTLSCipherSuites(out, in map[string]any, label string) error {
 }
 
 func compatibleTLSCipherSuites(names []string, label string) ([]string, error) {
-	supported, insecure := map[string]bool{}, map[string]bool{}
+	known := make(map[string]bool)
 	for _, suite := range tls.CipherSuites() {
-		supported[suite.Name] = true
+		known[suite.Name] = true
 	}
 	for _, suite := range tls.InsecureCipherSuites() {
-		insecure[suite.Name] = true
+		known[suite.Name] = true
 	}
-	values := []string{}
-	seen := map[string]bool{}
+
+	values := make([]string, 0, len(names))
+	seen := make(map[string]bool)
 	for _, part := range names {
 		name := strings.TrimSpace(part)
 		if name == "" {
 			continue
 		}
-		if !supported[name] {
-			if insecure[name] {
-				continue
-			}
-			return nil, fmt.Errorf("%s: unknown TLS cipher suite %q; select a supported cipher or clear cipherSuites to use core defaults", label, name)
+		if !known[name] {
+			return nil, fmt.Errorf("%s: unknown TLS cipher suite %q; select a cipher supported by the Go TLS runtime", label, name)
 		}
 		if !seen[name] {
 			values = append(values, name)
 			seen[name] = true
 		}
-	}
-	if len(values) == 0 {
-		return nil, fmt.Errorf("%s: cipherSuites contains no supported TLS ciphers; replace legacy ciphers or clear cipherSuites to use core defaults", label)
 	}
 	return values, nil
 }
