@@ -101,3 +101,17 @@ func TestDiagnosticJournalStopsWaitingForInheritedPipe(t *testing.T) {
         t.Fatalf("diagnostics silently lost orphaned journal status: %+v", got)
     }
 }
+
+func TestDiagnosticJournalPreservesLeadingStackIndentation(t *testing.T) {
+    dir := t.TempDir()
+    script := "#!/bin/sh\nprintf '    at diagnostic-stack-marker\\n'\n"
+    if err := os.WriteFile(filepath.Join(dir, "journalctl"), []byte(script), 0o755); err != nil {
+        t.Fatal(err)
+    }
+    t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+    out := (&ServerService{}).GetDashboardLogs("10", "debug", "journal", "diagnostic-stack-marker")
+    if len(out.Entries) != 1 || out.Entries[0].Raw != "    at diagnostic-stack-marker" {
+        t.Fatalf("structured journal removed stack-frame indentation: %+v", out)
+    }
+}
