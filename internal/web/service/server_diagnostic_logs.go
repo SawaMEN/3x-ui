@@ -110,7 +110,21 @@ func dashboardLogCount(raw string) int {
 // debug/access logging automatically (which can expose user traffic or secrets).
 // Sources are explicitly identified; unavailable files are reported, never
 // silently mistaken for an empty or healthy runtime.
+// GetDashboardLogs keeps the original threshold filtering behavior for callers
+// that don't request exact severity matching.
 func (s *ServerService) GetDashboardLogs(count, level, source, query string) DashboardLogs {
+    return s.GetDashboardLogsFiltered(count, level, source, query, "")
+}
+
+// GetDashboardLogsFiltered also accepts an exact, normalized severity selection.
+// The "all" choice leaves the existing minimum-severity behavior unchanged.
+func (s *ServerService) GetDashboardLogsFiltered(count, level, source, query, exactLevel string) DashboardLogs {
+    exactLevel = strings.ToUpper(strings.TrimSpace(exactLevel))
+    switch exactLevel {
+    case "FATAL", "ERROR", "WARNING", "NOTICE", "INFO", "DEBUG", "UNKNOWN":
+    default:
+        exactLevel = ""
+    }
     limit := dashboardLogCount(count)
     source = strings.ToLower(strings.TrimSpace(source))
     if source != "panel" && source != "core" && source != "access" && source != "journal" && source != "protocol" && source != "naive" && source != "update" && source != "ip-limit" && source != "all" {
@@ -135,7 +149,11 @@ func (s *ServerService) GetDashboardLogs(count, level, source, query string) Das
             if strings.TrimSpace(raw) == "" { continue }
             if search != "" && !strings.Contains(strings.ToLower(raw), search) { continue }
             severity := diagnosticLevel(raw)
-            if diagnosticRank(severity) > levelRank { continue }
+            if exactLevel != "" {
+                if severity != exactLevel { continue }
+            } else if diagnosticRank(severity) > levelRank {
+                continue
+            }
             stamp := diagnosticTime(raw)
             item := DashboardLog{Source: kind, Level: severity, Raw: raw}
             if !stamp.IsZero() { item.Time = stamp.Format(time.RFC3339) }
