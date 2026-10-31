@@ -78,35 +78,6 @@ core_migration_prune_arch_package_cache() {
     paccache -rk2 || echo "Arch package cache cleanup failed; panel update remains valid." >&2
 }
 
-# Once a newer installation has been *verified*, older complete snapshots
-# are redundant. Keep the newest recoverable (unmarked) snapshot; leave unknown
-# or partially written directories untouched rather than guessing their value.
-core_migration_prune_recovery_history() {
-    local parent="${xui_folder%/*}" old newest="" marker=".x-ui-upgrade-verified"
-    [[ -n "${cm_lock:-}" && -d "$parent" && ! -L "$parent" ]] || return 0
-    for old in "$parent"/x-ui-upgrade.??????; do
-        [[ "$old" != "${cm_backup:-}" && -d "$old" && ! -L "$old" ]] || continue
-        [[ ! -e "$old/$marker" && ! -L "$old/$marker" ]] || continue
-        [[ -d "$old/installation" && ! -L "$old/installation" ]] || continue
-        [[ -f "$old/installation/x-ui" && ! -L "$old/installation/x-ui" ]] || continue
-        [[ -d "$old/data" && ! -L "$old/data" ]] || continue
-        # Keep at least one complete, most recent recovery snapshot.
-        if [[ -z "$newest" || "$old" -nt "$newest" ]]; then
-            newest="$old"
-        fi
-    done
-    [[ -n "$newest" ]] || return 0
-    for old in "$parent"/x-ui-upgrade.??????; do
-        [[ "$old" != "$newest" && "$old" != "${cm_backup:-}" && -d "$old" && ! -L "$old" ]] || continue
-        [[ ! -e "$old/$marker" && ! -L "$old/$marker" ]] || continue
-        [[ -d "$old/installation" && ! -L "$old/installation" ]] || continue
-        [[ -f "$old/installation/x-ui" && ! -L "$old/installation/x-ui" ]] || continue
-        [[ -d "$old/data" && ! -L "$old/data" ]] || continue
-        echo "Removing obsolete recovery snapshot (newest retained at $newest): $old"
-        rm -rf -- "$old" || echo "Cannot remove obsolete recovery snapshot: $old" >&2
-    done
-}
-
 core_migration_prune_snapshots() {
     local old marker=".x-ui-upgrade-verified"
     [[ -n "${cm_backup:-}" && -d "$cm_backup" ]] || return 0
@@ -123,7 +94,8 @@ core_migration_prune_snapshots() {
     # the VPS disk usage. Once the new panel and core are confirmed running,
     # discard this transaction's large offline snapshot as well.
     rm -rf -- "$cm_backup" || return 1
-    core_migration_prune_recovery_history
+    # Failed or unverified backups may be the only recovery path. Never prune
+    # them automatically; only snapshots explicitly marked verified are removed.
 }
 
 # Compare executable identities, rather than panel versions or file timestamps.
@@ -145,9 +117,17 @@ core_migration_select_core() {
     installed_version=$(core_migration_core_version "$current/$binary") || return 0
     release_version=$(core_migration_core_version "$incoming/$binary") || return 0
     [[ -n "$installed_version" && "$installed_version" == "$release_version" ]] || return 0
-    # Cronet belongs to the executable. Never mix an existing core with a new
-    # library or preserve a core whose required library is missing.
-    [[ ! -f "$incoming/libcronet.so" || -s "$current/libcronet.so" ]] || return 0
+    # Release rebuilds can share a version string while containing security
+    # fixes or a different Cronet/target manifest. Reuse only byte-identical
+    # assets; otherwise the verified release must replace the installed core.
+    # Check presence as well, to avoid dropping a newly required library.
+    for asset in "$binary" "$binary.sha256" libcronet.so libcronet.so.sha256 target.json; do
+        if [[ -f "$incoming/$asset" ]]; then
+            [[ -f "$current/$asset" ]] && cmp -s -- "$current/$asset" "$incoming/$asset" || return 0
+        else
+            [[ ! -e "$current/$asset" && ! -L "$current/$asset" ]] || return 0
+        fi
+    done
     # The same version must still satisfy this panel's runtime contract.
     # If not, use the already validated bundled build instead of blocking an update.
     if ! XUI_BIN_FOLDER="$current" "$cm_stage/x-ui/x-ui" core-migrate --check-binary; then
