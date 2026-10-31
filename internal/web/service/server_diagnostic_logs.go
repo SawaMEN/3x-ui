@@ -39,6 +39,7 @@ const dashboardLogLimit = 2000
 
 var diagnosticSeverity = regexp.MustCompile(`(?i)\b(FATAL|CRITICAL|ERROR|ERR|WARNING|WARN|NOTICE|INFO|DEBUG|TRACE)\b`)
 var diagnosticTimestamp = regexp.MustCompile(`\d{4}[-/]\d{2}[-/]\d{2}[ T]\d{2}:\d{2}:\d{2}`)
+var diagnosticISOTime = regexp.MustCompile(`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})`)
 
 func diagnosticLevel(line string) string {
     // Restrict detection to the log prefix, not a URL or message discussing an error.
@@ -73,10 +74,11 @@ func diagnosticLevel(line string) string {
 }
 
 func diagnosticTime(line string) time.Time {
-    if len(line) >= 24 && strings.HasPrefix(line[4:], "-") {
-        // journalctl -o short-iso: 2026-11-01T12:34:56+0200
-        if t, err := time.Parse("2006-01-02T15:04:05-0700", line[:24]); err == nil {
-            return t
+    // Preserve explicit timezone offsets from journalctl and RFC3339 logs.
+    // Treating +02:00 or Z as local time misorders messages from different sources.
+    if match := diagnosticISOTime.FindString(line); match != "" {
+        for _, layout := range []string{time.RFC3339Nano, "2006-01-02T15:04:05.999999999-0700"} {
+            if t, err := time.Parse(layout, match); err == nil { return t }
         }
     }
     match := diagnosticTimestamp.FindString(line)
