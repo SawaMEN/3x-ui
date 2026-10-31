@@ -108,8 +108,12 @@ export async function importWithChunkRecovery<T>(loader: () => Promise<T>): Prom
     // When vite:preloadError is prevented, Vite resolves the import with
     // undefined instead of rejecting it. React.lazy would then try to read
     // undefined.default while our replacement document is still loading.
-    if (module === undefined && chunkReloadScheduled) {
-      return suspendUntilNavigation<T>();
+    if (module === undefined) {
+      // A cached Vite preload may silently resolve undefined, even if
+      // vite:preloadError was swallowed by a browser extension or proxy.
+      // Recover before React.lazy attempts undefined.default.
+      if (reloadAfterChunkLoadError()) return suspendUntilNavigation<T>();
+      throw new Error('Panel JavaScript chunk was missing after a recent reload.');
     }
     return module;
   } catch (error) {
