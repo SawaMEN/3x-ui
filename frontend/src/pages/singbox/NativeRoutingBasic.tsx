@@ -28,10 +28,14 @@ export default function NativeRoutingBasic({
     (row) => row.type === 'direct' && typeof row.tag === 'string' && row.tag,
   );
   const torrent = basicRule(config, 'torrent');
-  const availableInbounds = Array.from(new Set([
-    ...records(config.inbounds).map((inbound) => String(inbound.tag || '')),
-    ...inboundTags,
-  ].filter(Boolean)));
+  const availableInbounds = Array.from(
+    new Set(
+      [
+        ...records(config.inbounds).map((inbound) => String(inbound.tag || '')),
+        ...inboundTags,
+      ].filter(Boolean),
+    ),
+  );
   return (
     <div>
       <SettingListItem
@@ -55,8 +59,8 @@ export default function NativeRoutingBasic({
             Привязка входящих к исходящим
           </div>
           <p style={{ opacity: 0.75, marginBottom: 12 }}>
-            Для каждого входящего можно назначить отдельный выход.
-            Предшествующие правила маршрутизации сохраняют приоритет.
+            Для каждого входящего можно назначить отдельный выход. Предшествующие правила
+            маршрутизации сохраняют приоритет.
           </p>
           {availableInbounds.map((tag) => (
             <SettingListItem key={tag} title={tag}>
