@@ -188,6 +188,11 @@ export function putQuickRoute(
   const updated = [...rules];
   if (existing !== -1) {
     updated[existing] = { ...updated[existing], ...next.rule };
+    // A native reject has no outbound. Do not retain an old destination when
+    // converting a previously-routed managed rule into a reject.
+    if (engine === 'sing-box' && next.rule.action === 'reject') {
+      delete updated[existing].outbound;
+    }
     // An existing managed rule keeps its current priority and extra fields.
     return { rules: updated, replaced: true, shadowed: false };
   }
