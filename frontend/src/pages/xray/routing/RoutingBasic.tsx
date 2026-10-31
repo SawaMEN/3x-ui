@@ -97,12 +97,10 @@ export default function RoutingBasic({
       {inboundOptions.length > 0 && (
         <section aria-label="Inbound outbound bindings" style={{ marginBottom: 24 }}>
           <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 6 }}>
-            Привязка входящих к исходящим
+            {t('pages.xray.inboundOutboundTitle')}
           </div>
           <p style={{ opacity: 0.75, marginBottom: 12 }}>
-            Выберите выход для каждого входящего. Правила доменов, IP и блокировок,
-            расположенные выше этих назначений, сохраняют приоритет.
-            Пустой выбор использует обычную маршрутизацию.
+            {t('pages.xray.inboundOutboundDescription')}
           </p>
           {inboundOptions.map((tag) => (
             <SettingListItem
@@ -111,9 +109,9 @@ export default function RoutingBasic({
               paddings="small"
               control={
                 <Select
-                  aria-label={`Исходящее для ${tag}`}
+                  aria-label={t('pages.xray.inboundOutboundFor', { tag })}
                   allowClear
-                  placeholder="По умолчанию"
+                  placeholder={t('pages.xray.inboundOutboundDefault')}
                   style={{ width: '100%' }}
                   value={inboundRouteTarget(templateSettings?.routing?.rules || [], tag)}
                   options={selectableOutbounds}
