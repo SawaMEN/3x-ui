@@ -90,3 +90,14 @@ func TestReadTailLinesDiscardsTruncatedOldestLine(t *testing.T) {
 		})
 	}
 }
+
+func TestReadTailLinesLineLimitPreservesNewestRecords(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "test.log")
+	content := "first\nsecond\nthird\nfourth\n"
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil { t.Fatal(err) }
+	got, err := ReadTailLines(path, 2, DefaultTailBytes)
+	if err != nil { t.Fatal(err) }
+	if want := []string{"fourth", "third"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("ReadTailLines maxLines=2 = %#v, want %#v", got, want)
+	}
+}
